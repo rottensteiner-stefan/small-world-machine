@@ -1,10 +1,10 @@
 import { registerGltfExtension } from "../GltfExtensionRegistry.js";
 import { khrLightsPunctual } from "./KhrLightsPunctual.js";
-import { swPrefabInstance } from "./SwPrefabInstance.js";
-import { swStageZone } from "./SwStageZone.js";
+import { swmPrefabInstance } from "./SwmPrefabInstance.js";
+import { swmStageZone } from "./SwmStageZone.js";
 
 registerGltfExtension(khrLightsPunctual);
-registerGltfExtension(swPrefabInstance);
-registerGltfExtension(swStageZone);
+registerGltfExtension(swmPrefabInstance);
+registerGltfExtension(swmStageZone);
 
-export { khrLightsPunctual, swPrefabInstance, swStageZone };
+export { khrLightsPunctual, swmPrefabInstance, swmStageZone };

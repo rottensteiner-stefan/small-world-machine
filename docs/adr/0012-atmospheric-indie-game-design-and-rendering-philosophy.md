@@ -35,7 +35,7 @@ Small World Machine ist darauf ausgelegt, **echte, substanzielle, narrative und 
 
 ### 4. Reibungsloses visuelles Erstellen (Maker)
 - Weltkomposition, Level-Design und das Zusammensetzen von Prefabs geschehen in **Maker** (`public/tools/maker.html`) direkt im Browser.
-- Nutzt die native File System Access API und offene glTF-2.0-Standards (`SW_*`-Metadaten-Erweiterungen), ohne schwergewichtige Desktop-Installationen oder Cloud-Abonnements zu verlangen.
+- Nutzt die native File System Access API und offene glTF-2.0-Standards (`SWM_*`-Metadaten-Erweiterungen), ohne schwergewichtige Desktop-Installationen oder Cloud-Abonnements zu verlangen.
 
 ## Konsequenzen
 

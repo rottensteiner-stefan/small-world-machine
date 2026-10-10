@@ -1,5 +1,5 @@
-<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>Collision | Small World Machine API Reference - v0.78.00</title><meta name="description" content="Documentation for Small World Machine API Reference"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
-<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Small World Machine API Reference - v0.78.00</a>
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>Collision | Small World Machine API Reference - v0.103.0</title><meta name="description" content="Documentation for Small World Machine API Reference"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Small World Machine API Reference - v0.103.0</a>
 <div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
 <ul role="listbox" id="tsd-search-results"></ul>
 <div id="tsd-search-status" aria-live="polite" aria-atomic="true">
@@ -14,7 +14,7 @@
 <div class="tsd-comment tsd-typography"><p>Static class for collision detection and resolution.</p>
 </div></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L12">physix/Collision.ts:12</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L24">physix/Collision.ts:24</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -26,12 +26,25 @@
 </div></section>
 <section class="tsd-index-section">
 <h3 class="tsd-index-heading tsd-anchor-link" id="methods">Methods<a href="#methods" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-index-list"><a href="#resolveboxbox" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Box<wbr/>Box</span></a>
+<div class="tsd-index-list"><a href="#resolve" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve</span></a>
+<a href="#resolveboxbox" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Box<wbr/>Box</span></a>
 <a href="#resolveboxobb" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Box<wbr/>Obb</span></a>
+<a href="#resolvehullbox" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Hull<wbr/>Box</span></a>
+<a href="#resolvehullhull" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Hull<wbr/>Hull</span></a>
+<a href="#resolvehullobb" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Hull<wbr/>Obb</span></a>
+<a href="#resolvehullsphere" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Hull<wbr/>Sphere</span></a>
 <a href="#resolveobbobb" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Obb<wbr/>Obb</span></a>
 <a href="#resolvespherebox" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Sphere<wbr/>Box</span></a>
 <a href="#resolvesphereobb" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Sphere<wbr/>Obb</span></a>
 <a href="#resolvespheresphere" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Sphere<wbr/>Sphere</span></a>
+<a href="#sweep" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep</span></a>
+<a href="#sweepboxbox" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Box<wbr/>Box</span></a>
+<a href="#sweepboxobb" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Box<wbr/>Obb</span></a>
+<a href="#sweepboxsphere" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Box<wbr/>Sphere</span></a>
+<a href="#sweepobbbox" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Obb<wbr/>Box</span></a>
+<a href="#sweepobbobb" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Obb<wbr/>Obb</span></a>
+<a href="#sweepobbsphere" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Obb<wbr/>Sphere</span></a>
+<a href="#sweeprayvolume" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Ray<wbr/>Volume</span></a>
 <a href="#sweepspherebox" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Sphere<wbr/>Box</span></a>
 <a href="#sweepsphereobb" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Sphere<wbr/>Obb</span></a>
 <a href="#sweepspheresphere" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Sphere<wbr/>Sphere</span></a>
@@ -50,6 +63,31 @@
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="methods-1">Methods<a href="#methods-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
 <section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="resolve"><code class="tsd-tag">Static</code><span>resolve</span><a href="#resolve" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="resolve-1"><span class="tsd-kind-call-signature">resolve</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">result</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><a href="#resolve-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Resolves collision between two bounding volumes, computing the minimum translation vector (MTV)
+stored in <code>result</code> pointing in the direction to push volume <code>a</code> out of volume <code>b</code>.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a></span>
+<div class="tsd-comment tsd-typography"><p>The first bounding volume.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a></span>
+<div class="tsd-comment tsd-typography"><p>The second bounding volume.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">result</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Out vector storing the correction to push <code>a</code> away from <code>b</code>.</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><p>True if the volumes are intersecting and MTV was computed, false otherwise.</p>
+<aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L136">physix/Collision.ts:136</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="resolveboxbox"><code class="tsd-tag">Static</code><span>resolve<wbr/>Box<wbr/>Box</span><a href="#resolveboxbox" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -73,7 +111,7 @@
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><p>True if collision was resolved.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L173">physix/Collision.ts:173</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L296">physix/Collision.ts:296</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="resolveboxobb"><code class="tsd-tag">Static</code><span>resolve<wbr/>Box<wbr/>Obb</span><a href="#resolveboxobb" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -97,7 +135,86 @@
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><p>True if collision was resolved.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L203">physix/Collision.ts:203</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L326">physix/Collision.ts:326</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="resolvehullbox"><code class="tsd-tag">Static</code><span>resolve<wbr/>Hull<wbr/>Box</span><a href="#resolvehullbox" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="resolvehullbox-1"><span class="tsd-kind-call-signature">resolveHullBox</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">h</span><span class="tsd-signature-symbol">:</span> <a href="ConvexHull.html" class="tsd-signature-type tsd-kind-class">ConvexHull</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="BoundingBox.html" class="tsd-signature-type tsd-kind-class">BoundingBox</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">result</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><a href="#resolvehullbox-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Resolves collision between a convex hull and an axis-aligned box, returning a
+correction vector (points from the box towards the hull).</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">h</span>: <a href="ConvexHull.html" class="tsd-signature-type tsd-kind-class">ConvexHull</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="BoundingBox.html" class="tsd-signature-type tsd-kind-class">BoundingBox</a></span></li>
+<li><span><span class="tsd-kind-parameter">result</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L486">physix/Collision.ts:486</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="resolvehullhull"><code class="tsd-tag">Static</code><span>resolve<wbr/>Hull<wbr/>Hull</span><a href="#resolvehullhull" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="resolvehullhull-1"><span class="tsd-kind-call-signature">resolveHullHull</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="ConvexHull.html" class="tsd-signature-type tsd-kind-class">ConvexHull</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="ConvexHull.html" class="tsd-signature-type tsd-kind-class">ConvexHull</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">result</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><a href="#resolvehullhull-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Resolves collision between two convex hulls via the Separating Axis Theorem,
+returning the minimum-translation-vector correction.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="ConvexHull.html" class="tsd-signature-type tsd-kind-class">ConvexHull</a></span>
+<div class="tsd-comment tsd-typography"><p>The first hull.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="ConvexHull.html" class="tsd-signature-type tsd-kind-class">ConvexHull</a></span>
+<div class="tsd-comment tsd-typography"><p>The second hull.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">result</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Vector to store the correction (points from b to a, along the axis of least penetration).</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><p>True if collision was resolved.</p>
+<aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L478">physix/Collision.ts:478</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="resolvehullobb"><code class="tsd-tag">Static</code><span>resolve<wbr/>Hull<wbr/>Obb</span><a href="#resolvehullobb" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="resolvehullobb-1"><span class="tsd-kind-call-signature">resolveHullObb</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">h</span><span class="tsd-signature-symbol">:</span> <a href="ConvexHull.html" class="tsd-signature-type tsd-kind-class">ConvexHull</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">o</span><span class="tsd-signature-symbol">:</span> <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">result</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><a href="#resolvehullobb-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Resolves collision between a convex hull and an OBB, returning a correction
+vector (points from the OBB towards the hull).</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">h</span>: <a href="ConvexHull.html" class="tsd-signature-type tsd-kind-class">ConvexHull</a></span></li>
+<li><span><span class="tsd-kind-parameter">o</span>: <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a></span></li>
+<li><span><span class="tsd-kind-parameter">result</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L495">physix/Collision.ts:495</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="resolvehullsphere"><code class="tsd-tag">Static</code><span>resolve<wbr/>Hull<wbr/>Sphere</span><a href="#resolvehullsphere" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="resolvehullsphere-1"><span class="tsd-kind-call-signature">resolveHullSphere</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">h</span><span class="tsd-signature-symbol">:</span> <a href="ConvexHull.html" class="tsd-signature-type tsd-kind-class">ConvexHull</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">s</span><span class="tsd-signature-symbol">:</span> <a href="BoundingSphere.html" class="tsd-signature-type tsd-kind-class">BoundingSphere</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">result</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><a href="#resolvehullsphere-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Resolves collision between a convex hull and a sphere, returning a correction
+vector (points from the sphere towards the hull).</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">h</span>: <a href="ConvexHull.html" class="tsd-signature-type tsd-kind-class">ConvexHull</a></span></li>
+<li><span><span class="tsd-kind-parameter">s</span>: <a href="BoundingSphere.html" class="tsd-signature-type tsd-kind-class">BoundingSphere</a></span></li>
+<li><span><span class="tsd-kind-parameter">result</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L504">physix/Collision.ts:504</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="resolveobbobb"><code class="tsd-tag">Static</code><span>resolve<wbr/>Obb<wbr/>Obb</span><a href="#resolveobbobb" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -122,7 +239,7 @@ returning the minimum-translation-vector correction.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><p>True if collision was resolved.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L285">physix/Collision.ts:285</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L408">physix/Collision.ts:408</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="resolvespherebox"><code class="tsd-tag">Static</code><span>resolve<wbr/>Sphere<wbr/>Box</span><a href="#resolvespherebox" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -146,7 +263,7 @@ returning the minimum-translation-vector correction.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><p>True if collision was resolved.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L84">physix/Collision.ts:84</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L207">physix/Collision.ts:207</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="resolvesphereobb"><code class="tsd-tag">Static</code><span>resolve<wbr/>Sphere<wbr/>Obb</span><a href="#resolvesphereobb" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -170,7 +287,7 @@ returning the minimum-translation-vector correction.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><p>True if collision was resolved.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L216">physix/Collision.ts:216</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L339">physix/Collision.ts:339</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="resolvespheresphere"><code class="tsd-tag">Static</code><span>resolve<wbr/>Sphere<wbr/>Sphere</span><a href="#resolvespheresphere" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -194,7 +311,199 @@ returning the minimum-translation-vector correction.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><p>True if collision was resolved.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L140">physix/Collision.ts:140</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L263">physix/Collision.ts:263</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="sweep"><code class="tsd-tag">Static</code><span>sweep</span><a href="#sweep" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="sweep-1"><span class="tsd-kind-call-signature">sweep</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">moving</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">delta</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">target</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#sweep-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Universal sweep dispatcher: sweeps any moving bounding volume from origin with displacement delta against any static volume.
+Supports both 3-arg (moving, delta, target) and 4-arg (moving, origin, delta, target) forms.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">moving</span>: <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a></span>
+<div class="tsd-comment tsd-typography"><p>The moving bounding volume.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">delta</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">target</span>: <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>Time of impact in [0, 1] or -1 if no impact.</p>
+<aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L865">physix/Collision.ts:865</a></li></ul></aside></div></li>
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="sweep-2"><span class="tsd-kind-call-signature">sweep</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">moving</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">origin</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">delta</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">target</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#sweep-2" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Universal sweep dispatcher: sweeps any moving bounding volume from origin with displacement delta against any static volume.
+Supports both 3-arg (moving, delta, target) and 4-arg (moving, origin, delta, target) forms.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">moving</span>: <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a></span>
+<div class="tsd-comment tsd-typography"><p>The moving bounding volume.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">origin</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">delta</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">target</span>: <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>Time of impact in [0, 1] or -1 if no impact.</p>
+<aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L866">physix/Collision.ts:866</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="sweepboxbox"><code class="tsd-tag">Static</code><span>sweep<wbr/>Box<wbr/>Box</span><a href="#sweepboxbox" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="sweepboxbox-1"><span class="tsd-kind-call-signature">sweepBoxBox</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">origin</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">delta</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">halfExtents</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="BoundingBox.html" class="tsd-signature-type tsd-kind-class">BoundingBox</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#sweepboxbox-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Sweeps a moving AABB against a static AABB for CCD.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">origin</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Center of moving box at the start of the step.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">delta</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Displacement vector of the moving box.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">halfExtents</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Half-extents of the moving box.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="BoundingBox.html" class="tsd-signature-type tsd-kind-class">BoundingBox</a></span>
+<div class="tsd-comment tsd-typography"><p>The static box to sweep against.</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>Time of impact in [0, 1] or -1 if no impact.</p>
+<aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L650">physix/Collision.ts:650</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="sweepboxobb"><code class="tsd-tag">Static</code><span>sweep<wbr/>Box<wbr/>Obb</span><a href="#sweepboxobb" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="sweepboxobb-1"><span class="tsd-kind-call-signature">sweepBoxObb</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">origin</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">delta</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">halfExtents</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">o</span><span class="tsd-signature-symbol">:</span> <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#sweepboxobb-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Sweeps a moving AABB against a static OBB for CCD.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">origin</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Center of moving box at the start of the step.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">delta</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Displacement vector of the moving box.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">halfExtents</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Half-extents of the moving box.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">o</span>: <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a></span>
+<div class="tsd-comment tsd-typography"><p>The static OBB to sweep against.</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>Time of impact in [0, 1] or -1 if no impact.</p>
+<aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L697">physix/Collision.ts:697</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="sweepboxsphere"><code class="tsd-tag">Static</code><span>sweep<wbr/>Box<wbr/>Sphere</span><a href="#sweepboxsphere" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="sweepboxsphere-1"><span class="tsd-kind-call-signature">sweepBoxSphere</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">origin</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">delta</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">halfExtents</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">s</span><span class="tsd-signature-symbol">:</span> <a href="BoundingSphere.html" class="tsd-signature-type tsd-kind-class">BoundingSphere</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#sweepboxsphere-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Sweeps a moving AABB against a static sphere for CCD.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">origin</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Center of moving box at the start of the step.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">delta</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Displacement vector of the moving box.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">halfExtents</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Half-extents of the moving box.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">s</span>: <a href="BoundingSphere.html" class="tsd-signature-type tsd-kind-class">BoundingSphere</a></span>
+<div class="tsd-comment tsd-typography"><p>The static sphere to sweep against.</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>Time of impact in [0, 1] or -1 if no impact.</p>
+<aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L674">physix/Collision.ts:674</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="sweepobbbox"><code class="tsd-tag">Static</code><span>sweep<wbr/>Obb<wbr/>Box</span><a href="#sweepobbbox" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="sweepobbbox-1"><span class="tsd-kind-call-signature">sweepObbBox</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">origin</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">delta</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">o</span><span class="tsd-signature-symbol">:</span> <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="BoundingBox.html" class="tsd-signature-type tsd-kind-class">BoundingBox</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#sweepobbbox-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Sweeps a moving OBB against a static AABB for CCD.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">origin</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">delta</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">o</span>: <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="BoundingBox.html" class="tsd-signature-type tsd-kind-class">BoundingBox</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L772">physix/Collision.ts:772</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="sweepobbobb"><code class="tsd-tag">Static</code><span>sweep<wbr/>Obb<wbr/>Obb</span><a href="#sweepobbobb" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="sweepobbobb-1"><span class="tsd-kind-call-signature">sweepObbObb</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">origin</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">delta</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">oA</span><span class="tsd-signature-symbol">:</span> <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">oB</span><span class="tsd-signature-symbol">:</span> <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#sweepobbobb-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Sweeps a moving OBB against a static OBB for CCD.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">origin</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">delta</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">oA</span>: <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a></span></li>
+<li><span><span class="tsd-kind-parameter">oB</span>: <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L804">physix/Collision.ts:804</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="sweepobbsphere"><code class="tsd-tag">Static</code><span>sweep<wbr/>Obb<wbr/>Sphere</span><a href="#sweepobbsphere" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="sweepobbsphere-1"><span class="tsd-kind-call-signature">sweepObbSphere</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">origin</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">delta</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">o</span><span class="tsd-signature-symbol">:</span> <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">s</span><span class="tsd-signature-symbol">:</span> <a href="BoundingSphere.html" class="tsd-signature-type tsd-kind-class">BoundingSphere</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#sweepobbsphere-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Sweeps a moving OBB against a static sphere for CCD.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">origin</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">delta</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">o</span>: <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a></span></li>
+<li><span><span class="tsd-kind-parameter">s</span>: <a href="BoundingSphere.html" class="tsd-signature-type tsd-kind-class">BoundingSphere</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L739">physix/Collision.ts:739</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="sweeprayvolume"><code class="tsd-tag">Static</code><span>sweep<wbr/>Ray<wbr/>Volume</span><a href="#sweeprayvolume" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="sweeprayvolume-1"><span class="tsd-kind-call-signature">sweepRayVolume</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">origin</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">delta</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">volume</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#sweeprayvolume-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Sweeps a mathematical ray / fast projectile from origin with displacement delta against any volume.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">origin</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">delta</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span></li>
+<li><span><span class="tsd-kind-parameter">volume</span>: <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L840">physix/Collision.ts:840</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="sweepspherebox"><code class="tsd-tag">Static</code><span>sweep<wbr/>Sphere<wbr/>Box</span><a href="#sweepspherebox" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -223,7 +532,7 @@ true Minkowski sum would round the box's edges/corners, which this cheap version
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>The time-of-impact as a fraction of <code>delta</code> in <code>[0, 1]</code>, or -1 if no impact.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L398">physix/Collision.ts:398</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L592">physix/Collision.ts:592</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="sweepsphereobb"><code class="tsd-tag">Static</code><span>sweep<wbr/>Sphere<wbr/>Obb</span><a href="#sweepsphereobb" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -252,7 +561,7 @@ OBB's local space (where it becomes an axis-aligned sphere-vs-box sweep, same ap
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>The time-of-impact as a fraction of <code>delta</code> in <code>[0, 1]</code>, or -1 if no impact.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L424">physix/Collision.ts:424</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L618">physix/Collision.ts:618</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="sweepspheresphere"><code class="tsd-tag">Static</code><span>sweep<wbr/>Sphere<wbr/>Sphere</span><a href="#sweepspheresphere" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -284,7 +593,7 @@ during this sweep (including if the two spheres already overlap at <code>origin<
 pre-existing overlap the discrete resolver already handles, not a new tunneling event).</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L360">physix/Collision.ts:360</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L554">physix/Collision.ts:554</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="test"><code class="tsd-tag">Static</code><span>test</span><a href="#test" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -300,7 +609,7 @@ pre-existing overlap the discrete resolver already handles, not a new tunneling 
 <li><span><span class="tsd-kind-parameter">b</span>: <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Collision.ts#L41">physix/Collision.ts:41</a></li></ul></aside></div></li></ul></section></section></details></div>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Collision.ts#L71">physix/Collision.ts:71</a></li></ul></aside></div></li></ul></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -319,9 +628,9 @@ pre-existing overlap the discrete resolver already handles, not a new tunneling 
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Constructors"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Constructors</summary>
 <div><a href="#constructor"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Constructor"><use href="../assets/icons.svg#icon-512"></use></svg><span>constructor</span></a></div></details>
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Methods</summary>
-<div><a href="#resolveboxbox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Box<wbr/>Box</span></a><a href="#resolveboxobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Box<wbr/>Obb</span></a><a href="#resolveobbobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Obb<wbr/>Obb</span></a><a href="#resolvespherebox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Sphere<wbr/>Box</span></a><a href="#resolvesphereobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Sphere<wbr/>Obb</span></a><a href="#resolvespheresphere"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Sphere<wbr/>Sphere</span></a><a href="#sweepspherebox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Sphere<wbr/>Box</span></a><a href="#sweepsphereobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Sphere<wbr/>Obb</span></a><a href="#sweepspheresphere"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Sphere<wbr/>Sphere</span></a><a href="#test"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>test</span></a></div></details></div></details></div>
+<div><a href="#resolve"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve</span></a><a href="#resolveboxbox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Box<wbr/>Box</span></a><a href="#resolveboxobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Box<wbr/>Obb</span></a><a href="#resolvehullbox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Hull<wbr/>Box</span></a><a href="#resolvehullhull"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Hull<wbr/>Hull</span></a><a href="#resolvehullobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Hull<wbr/>Obb</span></a><a href="#resolvehullsphere"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Hull<wbr/>Sphere</span></a><a href="#resolveobbobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Obb<wbr/>Obb</span></a><a href="#resolvespherebox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Sphere<wbr/>Box</span></a><a href="#resolvesphereobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Sphere<wbr/>Obb</span></a><a href="#resolvespheresphere"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>resolve<wbr/>Sphere<wbr/>Sphere</span></a><a href="#sweep"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep</span></a><a href="#sweepboxbox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Box<wbr/>Box</span></a><a href="#sweepboxobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Box<wbr/>Obb</span></a><a href="#sweepboxsphere"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Box<wbr/>Sphere</span></a><a href="#sweepobbbox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Obb<wbr/>Box</span></a><a href="#sweepobbobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Obb<wbr/>Obb</span></a><a href="#sweepobbsphere"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Obb<wbr/>Sphere</span></a><a href="#sweeprayvolume"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Ray<wbr/>Volume</span></a><a href="#sweepspherebox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Sphere<wbr/>Box</span></a><a href="#sweepsphereobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Sphere<wbr/>Obb</span></a><a href="#sweepspheresphere"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>sweep<wbr/>Sphere<wbr/>Sphere</span></a><a href="#test"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>test</span></a></div></details></div></details></div>
 <div class="site-menu">
-<nav class="tsd-navigation"><a href="../index.html">Small World Machine API Reference - v0.78.00</a>
+<nav class="tsd-navigation"><a href="../index.html">Small World Machine API Reference - v0.103.0</a>
 <ul class="tsd-small-nested-navigation" id="tsd-nav-container">
 <li>Loading...</li></ul></nav></div></div></div><footer>
 <p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>

@@ -2,7 +2,7 @@
 
 ## Kontext & Problem
 
-Mit ADR 0017 wurde die `GltfExtensionPlugin`-Registry eingeführt. Diese deckte primär **Szenengraph-/Node-Ebene-Extensions** ab (`readNode`, `applyNode`, `writeNode`, `finalizeWrite`), wie `KHR_lights_punctual`, `SW_prefab_instance` und `SW_stage_zone`.
+Mit ADR 0017 wurde die `GltfExtensionPlugin`-Registry eingeführt. Diese deckte primär **Szenengraph-/Node-Ebene-Extensions** ab (`readNode`, `applyNode`, `writeNode`, `finalizeWrite`), wie `KHR_lights_punctual`, `SWM_prefab_instance` und `SWM_stage_zone`.
 
 Moderne 3D-Web-Workflows und Indie-Games verlangen jedoch nach datenkomprimierten Formaten:
 1. **`KHR_draco_mesh_compression`** (Google Draco Geometrie-Dekompression)

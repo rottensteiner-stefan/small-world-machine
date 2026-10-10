@@ -475,7 +475,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 #### 1. `KHR_materials_ior` — Index of Refraction & Fresnel Baseline ($F_0$)
 
-- **File:** `apps/sample-apps/the-whisper/scenes/character-diorama/OilSlickMaterial.ts`, `packages/engine/src/core/materials/StandardMaterial.ts`, `packages/engine/src/core/materials/GlassMaterial.ts`
+- **File:** `packages/liquid-extras/src/materials/OilSlick/OilSlickMaterial.ts`, `packages/engine/src/core/materials/StandardMaterial.ts`, `packages/engine/src/core/materials/GlassMaterial.ts`
 - **Authors/Gurus:** Khronos 3D Formats Working Group
 - **Source:** [Khronos glTF Extension: `KHR_materials_ior`](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_ior)
 - **Formulas:**
@@ -485,7 +485,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 #### 2. `KHR_materials_volume` — Beer-Lambert Volumetric Absorption
 
-- **File:** `packages/engine/src/core/materials/GlassMaterial.ts`, `packages/engine/src/core/materials/OpenWaterMaterial.ts`, `apps/sample-apps/the-whisper/scenes/character-diorama/OilSlickMaterial.ts`
+- **File:** `packages/engine/src/core/materials/GlassMaterial.ts`, `packages/engine/src/core/materials/OpenWaterMaterial.ts`, `packages/liquid-extras/src/materials/OilSlick/OilSlickMaterial.ts`
 - **Authors/Gurus:** Khronos 3D Formats Working Group
 - **Source:** [Khronos glTF Extension: `KHR_materials_volume`](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_volume)
 - **Formulas:**
@@ -494,7 +494,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 #### 3. `KHR_materials_iridescence` — Two-Beam Thin-Film Interference
 
-- **File:** `apps/sample-apps/the-whisper/scenes/character-diorama/OilSlickMaterial.ts`, `apps/sample-apps/the-whisper/scenes/character-diorama/OilSlick.frag.glsl`, `apps/sample-apps/the-whisper/scenes/character-diorama/OilSlick.frag.glsl100`, `apps/sample-apps/the-whisper/scenes/character-diorama/OilSlick.frag.wgsl`
+- **File:** `packages/liquid-extras/src/shading/thinFilm/thinFilm.ts`, `packages/liquid-extras/src/materials/OilSlick/OilSlickMaterial.ts`, `packages/liquid-extras/src/materials/OilPuddle/OilPuddle.frag.glsl`, `packages/liquid-extras/src/materials/OilPuddle/OilPuddle.frag.glsl100`, `packages/liquid-extras/src/materials/OilPuddle/OilPuddle.frag.wgsl`
 - **Authors/Gurus:** Laurent Belcour & Pascal Barla (2017), Khronos 3D Formats Working Group
 - **Source:**
   - [Khronos glTF Extension: `KHR_materials_iridescence`](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_iridescence)

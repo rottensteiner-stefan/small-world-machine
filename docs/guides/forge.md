@@ -15,7 +15,7 @@ Small World Machine ships with several built-in Forge tools to speed up your wor
 1. **[Pixler](/guides/pixler):** A retro 2D pixel-art editor for drawing sprites directly in-game. Offers a full UI toolbar with pencil, bucket fill, color picker, and line tool. Supports symmetry mode (X/Y axis), automatic edge trimming, canvas panning, mirroring, and full undo/redo history.
 2. **[Xtractor](/guides/xtractor):** An image cropping/slicing tool that can hand crops directly to Pixler. Includes a mock AI-assistant UI as a starting point for integrating a real vision-model backend.
 3. **[Map Generator](/guides/map-generator):** A visual grid editor for painting generic maps/levels and exporting them as `GridLevelBuilder`-compatible ASCII strings.
-4. **[Maker](/guides/maker):** A standalone 3D world and scene editor with glTF 2.0 + `SW_*` persistence, transform gizmos, snapping, prefabs, and full undo/redo.
+4. **[Maker](/guides/maker):** A standalone 3D world and scene editor with glTF 2.0 + `SWM_*` persistence, transform gizmos, snapping, prefabs, and full undo/redo.
 5. **[Material Studio](/guides/material-studio):** A PBR texture map generator that derives normal/roughness/AO/etc. maps from a single diffuse image and previews them on a sample mesh.
 
 ::: tip Standalone tool pages

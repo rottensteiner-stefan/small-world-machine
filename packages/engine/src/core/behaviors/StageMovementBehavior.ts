@@ -16,7 +16,7 @@ export interface StageWorldPlacement {
  * Declarative description of how a zone's normalized (u, v) stage-space maps to a 3D world
  * position -- see ADR 0016. `"flat-plane"` is a fixed linear formula (the only shape every scene
  * shipped so far actually needs) and, unlike an arbitrary function, is real data: it round-trips
- * through `SW_stage_zone`'s sibling data on `StageMovementBehavior` via glTF/Maker. `"custom"` is
+ * through `SWM_stage_zone`'s sibling data on `StageMovementBehavior` via glTF/Maker. `"custom"` is
  * the deliberate escape hatch for a projection that can't be described this way -- see
  * `StageMovementBehaviorOptions.customUvToWorld`; a `"custom"` scene stays loadable but can't be
  * saved back out with its original projection intact (ADR 0016 Konsequenzen).

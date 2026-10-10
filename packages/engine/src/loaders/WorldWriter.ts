@@ -14,7 +14,7 @@ import {
   GltfBufferViewJson,
 } from "./gltf/writerTypes.js";
 // Side-effect import: registers the built-in extension plugins (KHR_lights_punctual,
-// SW_prefab_instance, SW_stage_zone) -- see ADR 0017.
+// SWM_prefab_instance, SWM_stage_zone) -- see ADR 0017.
 import "./gltf/extensions/index.js";
 
 export type { GltfDocument, GltfNodeJson } from "./gltf/writerTypes.js";
@@ -24,13 +24,13 @@ const COMPONENT_TYPE_FLOAT = 5126;
 /**
  * Serializes a live `Object3D` tree into a minimal glTF 2.0 JSON document -- the write-side
  * counterpart to `GltfLoader`. See docs/adr/0010-maker-editor-architecture.md for why glTF +
- * an `SW_*` extension namespace, rather than a bespoke format, and ADR 0017 for how individual
+ * an `SWM_*` extension namespace, rather than a bespoke format, and ADR 0017 for how individual
  * extensions (light, prefab, stage zone, ...) plug into this writer via a registry instead of
  * being hardcoded here.
  *
  * Phase 0 scope only:
  * - Node hierarchy and transforms (Euler or quaternion, whichever the object actually has set).
- * - One mesh's material, via native `pbrMetallicRoughness` -- no `SW_*` extension needed yet
+ * - One mesh's material, via native `pbrMetallicRoughness` -- no `SWM_*` extension needed yet
  *   since `StandardMaterial`'s fields map onto it directly.
  * - Geometry export covers `POSITION` only (no normals/uvs/indices) -- enough to prove the
  *   round-trip mechanism end to end; richer attribute export is a later phase once Maker

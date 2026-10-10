@@ -1,7 +1,7 @@
 /**
  * Minimal glTF 2.0 JSON document shape `WorldWriter` produces -- deliberately not the full spec,
  * only the subset exercised by the World Format's round-trip (node hierarchy, one mesh's
- * material, lights, and the `SW_*` vendor extensions). Kept in its own module (rather than
+ * material, lights, and the `SWM_*` vendor extensions). Kept in its own module (rather than
  * defined inline in `WorldWriter.ts`) so `GltfExtensionPlugin` implementations can reference
  * these types without an import cycle back through `WorldWriter.ts` itself. See
  * docs/adr/0010-maker-editor-architecture.md and docs/adr/0017-gltf-extension-plugin-registry.md.
@@ -29,8 +29,8 @@ export interface GltfNodeJson {
   mesh?: number;
   extensions?: {
     KHR_lights_punctual?: { light: number };
-    SW_prefab_instance?: { source: string };
-    SW_stage_zone?: { displayName?: string; points: { u: number; v: number; scale: number }[] };
+    SWM_prefab_instance?: { source: string };
+    SWM_stage_zone?: { displayName?: string; points: { u: number; v: number; scale: number }[] };
   };
 }
 

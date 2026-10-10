@@ -19,7 +19,7 @@ import {
 import { getGltfExtensions } from "./gltf/GltfExtensionRegistry.js";
 import { GltfReadContext } from "./gltf/GltfExtensionPlugin.js";
 // Side-effect import: registers the built-in extension plugins (KHR_lights_punctual,
-// SW_prefab_instance, SW_stage_zone) -- see ADR 0017.
+// SWM_prefab_instance, SWM_stage_zone) -- see ADR 0017.
 import "./gltf/extensions/index.js";
 
 /**
@@ -180,7 +180,7 @@ export class GltfLoader extends AbstractLoader<Object3D> {
 
     // 3. Create node objects (Bone if joint, otherwise whatever the first matching extension
     // plugin decides -- e.g. PointLight for KHR_lights_punctual, StageZoneMarker for
-    // SW_stage_zone -- falling back to a plain Object3D)
+    // SWM_stage_zone -- falling back to a plain Object3D)
     const nodeObjects: Object3D[] = [];
     if (json.nodes) {
       for (let i = 0; i < json.nodes.length; i++) {

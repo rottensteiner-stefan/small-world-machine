@@ -6,7 +6,7 @@ import { StageZone } from "./StageZone.js";
  * The scene-graph presence for a `StageZone`: a non-renderable marker node (no geometry/material
  * -- consistent with how Maker represents other non-renderable helpers) that carries a `StageZone`
  * instance so it can be selected, listed in Maker's hierarchy panel, and round-tripped through
- * glTF as an `SW_stage_zone` extension (see ADR 0016). Composition rather than
+ * glTF as an `SWM_stage_zone` extension (see ADR 0016). Composition rather than
  * `StageZone extends Object3D`: `StageZone` itself stays a pure data/math class consumed at
  * runtime purely through `containsPoint`/`getScaleAt`/`getLocalAxes` (never through a transform
  * or children), matching `StageMovementBehaviorOptions.zones: StageZone[]`'s existing shape.

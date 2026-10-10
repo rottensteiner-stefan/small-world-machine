@@ -1,5 +1,5 @@
-<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>Ray | Small World Machine API Reference - v0.78.00</title><meta name="description" content="Documentation for Small World Machine API Reference"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
-<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Small World Machine API Reference - v0.78.00</a>
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>Ray | Small World Machine API Reference - v0.103.0</title><meta name="description" content="Documentation for Small World Machine API Reference"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Small World Machine API Reference - v0.103.0</a>
 <div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
 <ul role="listbox" id="tsd-search-results"></ul>
 <div id="tsd-search-status" aria-live="polite" aria-atomic="true">
@@ -14,7 +14,7 @@
 <div class="tsd-comment tsd-typography"><p>Represents a mathematical ray in 3D space.</p>
 </div></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Ray.ts#L8">physix/Ray.ts:8</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L11">physix/Ray.ts:11</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -33,7 +33,10 @@
 <h3 class="tsd-index-heading tsd-anchor-link" id="methods">Methods<a href="#methods" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-index-list"><a href="#at" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>at</span></a>
 <a href="#intersectsbox" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersects<wbr/>Box</span></a>
+<a href="#intersectsobb" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersects<wbr/>OBB</span></a>
 <a href="#intersectssphere" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersects<wbr/>Sphere</span></a>
+<a href="#intersectvolume" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersect<wbr/>Volume</span></a>
+<a href="#intersectvolumedetailed" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersect<wbr/>Volume<wbr/>Detailed</span></a>
 <a href="#set" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>set</span></a>
 </div></section></div></details></section></section>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Constructors"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -58,7 +61,7 @@
 </div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <a href="" class="tsd-signature-type tsd-kind-class">Ray</a></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Ray.ts#L14">physix/Ray.ts:14</a></li></ul></aside></div></li></ul></section></section></details>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L17">physix/Ray.ts:17</a></li></ul></aside></div></li></ul></section></section></details>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="properties-1">Properties<a href="#properties-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
 <section>
@@ -68,14 +71,14 @@
 <div class="tsd-comment tsd-typography"><p>The normalized direction vector of the ray.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Ray.ts#L16">physix/Ray.ts:16</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L19">physix/Ray.ts:19</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="origin"><span>origin</span><a href="#origin" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">origin</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol"> = ...</span></div>
 <div class="tsd-comment tsd-typography"><p>The origin point of the ray.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Ray.ts#L15">physix/Ray.ts:15</a></li></ul></aside></section></section></details>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L18">physix/Ray.ts:18</a></li></ul></aside></section></section></details>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="methods-1">Methods<a href="#methods-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
 <section>
@@ -99,7 +102,7 @@
 <h4 class="tsd-returns-title">Returns <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></h4><p>The computed point.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Ray.ts#L37">physix/Ray.ts:37</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L40">physix/Ray.ts:40</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="intersectsbox"><span>intersects<wbr/>Box</span><a href="#intersectsbox" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -118,7 +121,26 @@ Uses the slab method.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>The distance <code>t</code> to the intersection, or -1 if no intersection.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Ray.ts#L47">physix/Ray.ts:47</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L50">physix/Ray.ts:50</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="intersectsobb"><span>intersects<wbr/>OBB</span><a href="#intersectsobb" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="intersectsobb-1"><span class="tsd-kind-call-signature">intersectsOBB</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">obb</span><span class="tsd-signature-symbol">:</span> <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#intersectsobb-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Tests whether this ray intersects the given OBB.
+Uses the slab method projected onto the OBB's local axes.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">obb</span>: <a href="OBB.html" class="tsd-signature-type tsd-kind-class">OBB</a></span>
+<div class="tsd-comment tsd-typography"><p>The oriented bounding box.</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>The distance <code>t</code> to the nearest intersection, or -1 if no intersection.</p>
+<aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L127">physix/Ray.ts:127</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="intersectssphere"><span>intersects<wbr/>Sphere</span><a href="#intersectssphere" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -136,7 +158,49 @@ Uses the slab method.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>The distance <code>t</code> to the nearest intersection, or -1 if no intersection.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Ray.ts#L93">physix/Ray.ts:93</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L96">physix/Ray.ts:96</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="intersectvolume"><span>intersect<wbr/>Volume</span><a href="#intersectvolume" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="intersectvolume-1"><span class="tsd-kind-call-signature">intersectVolume</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">volume</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#intersectvolume-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Tests whether this ray intersects any bounding volume (Sphere, Box, OBB).</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">volume</span>: <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a></span>
+<div class="tsd-comment tsd-typography"><p>Target bounding volume.</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>Distance t to the nearest intersection, or -1 if no intersection.</p>
+<aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L213">physix/Ray.ts:213</a></li></ul></aside></div></li></ul></section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="intersectvolumedetailed"><span>intersect<wbr/>Volume<wbr/>Detailed</span><a href="#intersectvolumedetailed" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="intersectvolumedetailed-1"><span class="tsd-kind-call-signature">intersectVolumeDetailed</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">volume</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">outPoint</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">outNormal</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#intersectvolumedetailed-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Tests whether this ray intersects any bounding volume, computing the exact world hit point and outward surface normal.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">volume</span>: <a href="../interfaces/BoundingVolume.html" class="tsd-signature-type tsd-kind-interface">BoundingVolume</a></span>
+<div class="tsd-comment tsd-typography"><p>Target bounding volume.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">outPoint</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Vector3D receiving the computed world hit position.</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">outNormal</span>: <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a></span>
+<div class="tsd-comment tsd-typography"><p>Vector3D receiving the outward-pointing surface normal.</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><p>Distance t to the nearest intersection, or -1 if no intersection.</p>
+<aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L231">physix/Ray.ts:231</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="set"><span>set</span><a href="#set" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -157,7 +221,7 @@ Uses the slab method.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">this</span></h4><p>This ray instance.</p>
 <aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/physix/Ray.ts#L25">physix/Ray.ts:25</a></li></ul></aside></div></li></ul></section></section></details></div>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/physix/Ray.ts#L28">physix/Ray.ts:28</a></li></ul></aside></div></li></ul></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -178,9 +242,9 @@ Uses the slab method.</p>
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Properties</summary>
 <div><a href="#direction"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>direction</span></a><a href="#origin"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>origin</span></a></div></details>
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Methods</summary>
-<div><a href="#at"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>at</span></a><a href="#intersectsbox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersects<wbr/>Box</span></a><a href="#intersectssphere"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersects<wbr/>Sphere</span></a><a href="#set"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>set</span></a></div></details></div></details></div>
+<div><a href="#at"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>at</span></a><a href="#intersectsbox"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersects<wbr/>Box</span></a><a href="#intersectsobb"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersects<wbr/>OBB</span></a><a href="#intersectssphere"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersects<wbr/>Sphere</span></a><a href="#intersectvolume"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersect<wbr/>Volume</span></a><a href="#intersectvolumedetailed"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>intersect<wbr/>Volume<wbr/>Detailed</span></a><a href="#set"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>set</span></a></div></details></div></details></div>
 <div class="site-menu">
-<nav class="tsd-navigation"><a href="../index.html">Small World Machine API Reference - v0.78.00</a>
+<nav class="tsd-navigation"><a href="../index.html">Small World Machine API Reference - v0.103.0</a>
 <ul class="tsd-small-nested-navigation" id="tsd-nav-container">
 <li>Loading...</li></ul></nav></div></div></div><footer>
 <p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>

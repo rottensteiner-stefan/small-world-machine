@@ -171,7 +171,7 @@ describe("WorldWriter <-> GltfLoader round trip", () => {
     expect(liveParent.children).toContain(obj);
   });
 
-  it("round-trips prefabSource via the SW_prefab_instance extension", async () => {
+  it("round-trips prefabSource via the SWM_prefab_instance extension", async () => {
     const obj = new Object3D("Instance");
     obj.prefabSource = "OilBarrel";
 
@@ -181,7 +181,7 @@ describe("WorldWriter <-> GltfLoader round trip", () => {
     expect(parsedRoot.children[0]!.prefabSource).toBe("OilBarrel");
   });
 
-  it("round-trips a 4-point StageZoneMarker via the SW_stage_zone extension", async () => {
+  it("round-trips a 4-point StageZoneMarker via the SWM_stage_zone extension", async () => {
     const marker = new StageZoneMarker(
       new StageZone({
         id: "zone_a",
@@ -196,7 +196,7 @@ describe("WorldWriter <-> GltfLoader round trip", () => {
     );
 
     const doc = new WorldWriter().writeSingle(marker);
-    expect(doc.extensionsUsed).toContain("SW_stage_zone");
+    expect(doc.extensionsUsed).toContain("SWM_stage_zone");
 
     const parsedRoot = await parseDocument(doc);
     const parsed = parsedRoot.children[0]!;
@@ -207,7 +207,7 @@ describe("WorldWriter <-> GltfLoader round trip", () => {
     expect(parsedMarker.zone.points).toEqual(marker.zone.points);
   });
 
-  it("round-trips a 6-point (non-quad) StageZoneMarker via SW_stage_zone", async () => {
+  it("round-trips a 6-point (non-quad) StageZoneMarker via SWM_stage_zone", async () => {
     const marker = new StageZoneMarker(
       new StageZone({
         id: "zone_hex",

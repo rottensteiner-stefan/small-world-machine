@@ -42,7 +42,7 @@ We reject that bloat. **Great 3D experiences are made of:**
 
 ### 6. Visual Scene Authoring via Maker
 **The Problem:** Authoring 3D scenes purely in code is tedious, while traditional desktop editors isolate developers behind heavy installers and separate build steps.
-**Our Solution:** **Maker** (`public/tools/maker.html`) — a dedicated, zero-install, in-browser 3D world editor. Powered by the native File System Access API, Maker offers camera-cardinal keyboard transformation, dynamic grid stepping, marquee selection, isolated 3D prefab rendering, and continuous glTF 2.0 autosave with non-destructive `SW_*` extensions. You design visually, save directly to your repository, and run immediately in engine.
+**Our Solution:** **Maker** (`public/tools/maker.html`) — a dedicated, zero-install, in-browser 3D world editor. Powered by the native File System Access API, Maker offers camera-cardinal keyboard transformation, dynamic grid stepping, marquee selection, isolated 3D prefab rendering, and continuous glTF 2.0 autosave with non-destructive `SWM_*` extensions. You design visually, save directly to your repository, and run immediately in engine.
 
 ---
 

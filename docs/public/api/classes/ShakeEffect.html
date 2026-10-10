@@ -1,5 +1,5 @@
-<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>ShakeEffect | Small World Machine API Reference - v0.78.00</title><meta name="description" content="Documentation for Small World Machine API Reference"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
-<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Small World Machine API Reference - v0.78.00</a>
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>ShakeEffect | Small World Machine API Reference - v0.103.0</title><meta name="description" content="Documentation for Small World Machine API Reference"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Small World Machine API Reference - v0.103.0</a>
 <div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
 <ul role="listbox" id="tsd-search-results"></ul>
 <div id="tsd-search-status" aria-live="polite" aria-atomic="true">
@@ -15,15 +15,17 @@
 (trauma^2 envelope, per Squirrel Eiserloh's GDC talk &quot;Juicing Your Cameras With Math&quot;)
 and continuous simplex noise instead of per-frame white noise, so the shake reads as a
 smooth wobble rather than a jittery flicker.</p>
+<p>Shakes the camera's pitch/yaw (view direction) rather than its position: rotating the
+camera can never push it through level geometry, unlike a positional offset.</p>
 </div></section>
-<section class="tsd-panel tsd-hierarchy" data-refl="1891">
+<section class="tsd-panel tsd-hierarchy" data-refl="1999">
 <h4>Hierarchy (<a href="../hierarchy.html#ShakeEffect">View Summary</a>)</h4>
 <ul class="tsd-hierarchy">
 <li class="tsd-hierarchy-item"><a href="AbstractCameraEffect.html" class="tsd-signature-type tsd-kind-class">AbstractCameraEffect</a>
 <ul class="tsd-hierarchy">
 <li class="tsd-hierarchy-item"><span class="tsd-hierarchy-target">ShakeEffect</span></li></ul></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/cameras/effects/ShakeEffect.ts#L11">core/cameras/effects/ShakeEffect.ts:11</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/ShakeEffect.ts#L15">core/cameras/effects/ShakeEffect.ts:15</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -35,14 +37,19 @@ smooth wobble rather than a jittery flicker.</p>
 </div></section>
 <section class="tsd-index-section">
 <h3 class="tsd-index-heading tsd-anchor-link" id="properties">Properties<a href="#properties" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-index-list"><a href="#isfinished" class="tsd-index-link tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>is<wbr/>Finished</span></a>
+<div class="tsd-index-list"><a href="#flashcolor" class="tsd-index-link tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>flash<wbr/>Color</span></a>
+<a href="#flashintensity" class="tsd-index-link tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>flash<wbr/>Intensity</span></a>
+<a href="#isfinished" class="tsd-index-link tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>is<wbr/>Finished</span></a>
 <a href="#offset" class="tsd-index-link tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>offset</span></a>
+<a href="#pitchoffset" class="tsd-index-link tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>pitch<wbr/>Offset</span></a>
 <a href="#targetoffset" class="tsd-index-link tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>target<wbr/>Offset</span></a>
 <a href="#type" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>type</span></a>
+<a href="#yawoffset" class="tsd-index-link tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>yaw<wbr/>Offset</span></a>
 </div></section>
 <section class="tsd-index-section">
 <h3 class="tsd-index-heading tsd-anchor-link" id="methods">Methods<a href="#methods" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-index-list"><a href="#update" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>update</span></a>
+<div class="tsd-index-list"><a href="#merge" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>merge</span></a>
+<a href="#update" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>update</span></a>
 </div></section></div></details></section></section>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Constructors"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="constructors-1">Constructors<a href="#constructors-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
@@ -59,18 +66,34 @@ smooth wobble rather than a jittery flicker.</p>
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li><span><span class="tsd-kind-parameter">intensity</span>: <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> = 0.5</span></span>
-<div class="tsd-comment tsd-typography"><p>The maximum intensity of the shake.</p>
+<div class="tsd-comment tsd-typography"><p>The maximum rotation intensity of the shake (scaled internally to radians).</p>
 </div></li>
 <li><span><span class="tsd-kind-parameter">duration</span>: <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> = 0.5</span></span>
-<div class="tsd-comment tsd-typography"><p>The duration of the shake in seconds.</p>
+<div class="tsd-comment tsd-typography"><p>The approximate duration of the shake in seconds (controls trauma decay rate).</p>
 </div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <a href="" class="tsd-signature-type tsd-kind-class">ShakeEffect</a></h4><aside class="tsd-sources">
 <p>Overrides <a href="AbstractCameraEffect.html">AbstractCameraEffect</a>.<a href="AbstractCameraEffect.html#constructor">constructor</a></p>
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/cameras/effects/ShakeEffect.ts#L28">core/cameras/effects/ShakeEffect.ts:28</a></li></ul></aside></div></li></ul></section></section></details>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/ShakeEffect.ts#L38">core/cameras/effects/ShakeEffect.ts:38</a></li></ul></aside></div></li></ul></section></section></details>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="properties-1">Properties<a href="#properties-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
 <section>
+<section class="tsd-panel tsd-member tsd-is-inherited">
+<h3 class="tsd-anchor-link" id="flashcolor"><code class="tsd-tag">Readonly</code><span>flash<wbr/>Color</span><a href="#flashcolor" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">flashColor</span><span class="tsd-signature-symbol">:</span> <a href="Color.html" class="tsd-signature-type tsd-kind-class">Color</a><span class="tsd-signature-symbol"> = ...</span></div>
+<div class="tsd-comment tsd-typography"><p>Tint color for this effect's flash contribution.</p>
+</div><aside class="tsd-sources">
+<p>Inherited from <a href="AbstractCameraEffect.html">AbstractCameraEffect</a>.<a href="AbstractCameraEffect.html#flashcolor">flashColor</a></p>
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/AbstractCameraEffect.ts#L31">core/cameras/effects/AbstractCameraEffect.ts:31</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member tsd-is-inherited">
+<h3 class="tsd-anchor-link" id="flashintensity"><span>flash<wbr/>Intensity</span><a href="#flashintensity" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">flashIntensity</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> = 0</span></div>
+<div class="tsd-comment tsd-typography"><p>This effect's contribution to the post-processing screen flash, in [0, 1].</p>
+</div><aside class="tsd-sources">
+<p>Inherited from <a href="AbstractCameraEffect.html">AbstractCameraEffect</a>.<a href="AbstractCameraEffect.html#flashintensity">flashIntensity</a></p>
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/AbstractCameraEffect.ts#L28">core/cameras/effects/AbstractCameraEffect.ts:28</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-inherited">
 <h3 class="tsd-anchor-link" id="isfinished"><span>is<wbr/>Finished</span><a href="#isfinished" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">isFinished</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> = false</span></div>
@@ -78,7 +101,7 @@ smooth wobble rather than a jittery flicker.</p>
 </div><aside class="tsd-sources">
 <p>Inherited from <a href="AbstractCameraEffect.html">AbstractCameraEffect</a>.<a href="AbstractCameraEffect.html#isfinished">isFinished</a></p>
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/cameras/effects/AbstractCameraEffect.ts#L12">core/cameras/effects/AbstractCameraEffect.ts:12</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/AbstractCameraEffect.ts#L13">core/cameras/effects/AbstractCameraEffect.ts:13</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-inherited">
 <h3 class="tsd-anchor-link" id="offset"><code class="tsd-tag">Readonly</code><span>offset</span><a href="#offset" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">offset</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol"> = ...</span></div>
@@ -86,7 +109,15 @@ smooth wobble rather than a jittery flicker.</p>
 </div><aside class="tsd-sources">
 <p>Inherited from <a href="AbstractCameraEffect.html">AbstractCameraEffect</a>.<a href="AbstractCameraEffect.html#offset">offset</a></p>
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/cameras/effects/AbstractCameraEffect.ts#L15">core/cameras/effects/AbstractCameraEffect.ts:15</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/AbstractCameraEffect.ts#L16">core/cameras/effects/AbstractCameraEffect.ts:16</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member tsd-is-inherited">
+<h3 class="tsd-anchor-link" id="pitchoffset"><span>pitch<wbr/>Offset</span><a href="#pitchoffset" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">pitchOffset</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> = 0</span></div>
+<div class="tsd-comment tsd-typography"><p>Pitch (X-axis) rotation offset in radians, applied to the view direction.</p>
+</div><aside class="tsd-sources">
+<p>Inherited from <a href="AbstractCameraEffect.html">AbstractCameraEffect</a>.<a href="AbstractCameraEffect.html#pitchoffset">pitchOffset</a></p>
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/AbstractCameraEffect.ts#L22">core/cameras/effects/AbstractCameraEffect.ts:22</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-inherited">
 <h3 class="tsd-anchor-link" id="targetoffset"><code class="tsd-tag">Readonly</code><span>target<wbr/>Offset</span><a href="#targetoffset" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">targetOffset</span><span class="tsd-signature-symbol">:</span> <a href="Vector3D.html" class="tsd-signature-type tsd-kind-class">Vector3D</a><span class="tsd-signature-symbol"> = ...</span></div>
@@ -94,7 +125,7 @@ smooth wobble rather than a jittery flicker.</p>
 </div><aside class="tsd-sources">
 <p>Inherited from <a href="AbstractCameraEffect.html">AbstractCameraEffect</a>.<a href="AbstractCameraEffect.html#targetoffset">targetOffset</a></p>
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/cameras/effects/AbstractCameraEffect.ts#L18">core/cameras/effects/AbstractCameraEffect.ts:18</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/AbstractCameraEffect.ts#L19">core/cameras/effects/AbstractCameraEffect.ts:19</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="type"><code class="tsd-tag">Readonly</code><span>type</span><a href="#type" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">type</span><span class="tsd-signature-symbol">:</span> <a href="../types/CameraEffectType.html" class="tsd-signature-type tsd-kind-type-alias">CameraEffectType</a><span class="tsd-signature-symbol"> = CameraEffectType.SHAKE</span></div>
@@ -102,10 +133,34 @@ smooth wobble rather than a jittery flicker.</p>
 </div><aside class="tsd-sources">
 <p>Overrides <a href="AbstractCameraEffect.html">AbstractCameraEffect</a>.<a href="AbstractCameraEffect.html#type">type</a></p>
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/cameras/effects/ShakeEffect.ts#L13">core/cameras/effects/ShakeEffect.ts:13</a></li></ul></aside></section></section></details>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/ShakeEffect.ts#L17">core/cameras/effects/ShakeEffect.ts:17</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member tsd-is-inherited">
+<h3 class="tsd-anchor-link" id="yawoffset"><span>yaw<wbr/>Offset</span><a href="#yawoffset" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">yawOffset</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> = 0</span></div>
+<div class="tsd-comment tsd-typography"><p>Yaw (Y-axis) rotation offset in radians, applied to the view direction.</p>
+</div><aside class="tsd-sources">
+<p>Inherited from <a href="AbstractCameraEffect.html">AbstractCameraEffect</a>.<a href="AbstractCameraEffect.html#yawoffset">yawOffset</a></p>
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/AbstractCameraEffect.ts#L25">core/cameras/effects/AbstractCameraEffect.ts:25</a></li></ul></aside></section></section></details>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="methods-1">Methods<a href="#methods-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
 <section>
+<section class="tsd-panel tsd-member">
+<h3 class="tsd-anchor-link" id="merge"><span>merge</span><a href="#merge" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="merge-1"><span class="tsd-kind-call-signature">merge</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">other</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/CameraEffect.html" class="tsd-signature-type tsd-kind-interface">CameraEffect</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><a href="#merge-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">other</span>: <a href="../interfaces/CameraEffect.html" class="tsd-signature-type tsd-kind-interface">CameraEffect</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4>
+<div class="tsd-comment tsd-typography">
+<div class="tsd-tag-inheritDoc">
+<h4 class="tsd-anchor-link" id="inherit-doc">Inherit Doc<a href="#inherit-doc" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h4></div></div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/ShakeEffect.ts#L67">core/cameras/effects/ShakeEffect.ts:67</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="update"><span>update</span><a href="#update" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -123,7 +178,7 @@ smooth wobble rather than a jittery flicker.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
 <p>Overrides <a href="AbstractCameraEffect.html">AbstractCameraEffect</a>.<a href="AbstractCameraEffect.html#update">update</a></p>
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/cameras/effects/ShakeEffect.ts#L37">core/cameras/effects/ShakeEffect.ts:37</a></li></ul></aside></div></li></ul></section></section></details></div>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/cameras/effects/ShakeEffect.ts#L48">core/cameras/effects/ShakeEffect.ts:48</a></li></ul></aside></div></li></ul></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -142,11 +197,11 @@ smooth wobble rather than a jittery flicker.</p>
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Constructors"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Constructors</summary>
 <div><a href="#constructor"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Constructor"><use href="../assets/icons.svg#icon-512"></use></svg><span>constructor</span></a></div></details>
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Properties</summary>
-<div><a href="#isfinished" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>is<wbr/>Finished</span></a><a href="#offset" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>offset</span></a><a href="#targetoffset" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>target<wbr/>Offset</span></a><a href="#type"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>type</span></a></div></details>
+<div><a href="#flashcolor" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>flash<wbr/>Color</span></a><a href="#flashintensity" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>flash<wbr/>Intensity</span></a><a href="#isfinished" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>is<wbr/>Finished</span></a><a href="#offset" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>offset</span></a><a href="#pitchoffset" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>pitch<wbr/>Offset</span></a><a href="#targetoffset" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>target<wbr/>Offset</span></a><a href="#type"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>type</span></a><a href="#yawoffset" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Property"><use href="../assets/icons.svg#icon-1024"></use></svg><span>yaw<wbr/>Offset</span></a></div></details>
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Methods</summary>
-<div><a href="#update"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>update</span></a></div></details></div></details></div>
+<div><a href="#merge"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>merge</span></a><a href="#update"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>update</span></a></div></details></div></details></div>
 <div class="site-menu">
-<nav class="tsd-navigation"><a href="../index.html">Small World Machine API Reference - v0.78.00</a>
+<nav class="tsd-navigation"><a href="../index.html">Small World Machine API Reference - v0.103.0</a>
 <ul class="tsd-small-nested-navigation" id="tsd-nav-container">
 <li>Loading...</li></ul></nav></div></div></div><footer>
 <p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>

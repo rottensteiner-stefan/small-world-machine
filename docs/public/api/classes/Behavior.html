@@ -1,5 +1,5 @@
-<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>Behavior | Small World Machine API Reference - v0.78.00</title><meta name="description" content="Documentation for Small World Machine API Reference"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
-<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Small World Machine API Reference - v0.78.00</a>
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>Behavior | Small World Machine API Reference - v0.103.0</title><meta name="description" content="Documentation for Small World Machine API Reference"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">Small World Machine API Reference - v0.103.0</a>
 <div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
 <ul role="listbox" id="tsd-search-results"></ul>
 <div id="tsd-search-status" aria-live="polite" aria-atomic="true">
@@ -9,11 +9,15 @@
 <div class="tsd-page-title">
 <ul class="tsd-breadcrumb" aria-label="Breadcrumb">
 <li><a href="" aria-current="page">Behavior</a></li></ul>
-<h1>Class Behavior<code class="tsd-tag">Abstract</code></h1></div>
+<h1>Class Behavior&lt;TTarget&gt;<code class="tsd-tag">Abstract</code></h1></div>
 <section class="tsd-panel tsd-comment">
 <div class="tsd-comment tsd-typography"><p>Base class for all behaviors attached to an Object3D.</p>
 </div></section>
-<section class="tsd-panel tsd-hierarchy" data-refl="2026">
+<section class="tsd-panel">
+<h4>Type Parameters</h4>
+<ul class="tsd-type-parameter-list">
+<li><span id="ttarget"><span class="tsd-kind-type-parameter">TTarget</span> <span class="tsd-signature-keyword">extends</span> <a href="Object3D.html" class="tsd-signature-type tsd-kind-class">Object3D</a> <span class="tsd-signature-symbol">|</span> <a href="../interfaces/CameraInterfaceData.html" class="tsd-signature-type tsd-kind-interface">CameraInterfaceData</a> = <a href="Object3D.html" class="tsd-signature-type tsd-kind-class">Object3D</a> <span class="tsd-signature-symbol">|</span> <a href="../interfaces/CameraInterfaceData.html" class="tsd-signature-type tsd-kind-interface">CameraInterfaceData</a></span></li></ul></section>
+<section class="tsd-panel tsd-hierarchy" data-refl="2143">
 <h4>Hierarchy (<a href="../hierarchy.html#Behavior">View Summary</a>)</h4>
 <ul class="tsd-hierarchy">
 <li class="tsd-hierarchy-item"><span class="tsd-hierarchy-target">Behavior</span>
@@ -44,9 +48,10 @@
 <li class="tsd-hierarchy-item"><a href="ExternalShaderUniformBehavior.html" class="tsd-signature-type tsd-kind-class">ExternalShaderUniformBehavior</a></li>
 <li class="tsd-hierarchy-item"><a href="SquashStretchBehavior.html" class="tsd-signature-type tsd-kind-class">SquashStretchBehavior</a></li>
 <li class="tsd-hierarchy-item"><a href="StageMovementBehavior.html" class="tsd-signature-type tsd-kind-class">StageMovementBehavior</a></li>
+<li class="tsd-hierarchy-item"><a href="FollowCameraBehavior.html" class="tsd-signature-type tsd-kind-class">FollowCameraBehavior</a></li>
 <li class="tsd-hierarchy-item"><a href="RatGroomingBehavior.html" class="tsd-signature-type tsd-kind-class">RatGroomingBehavior</a></li></ul></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/behaviors/Behavior.ts#L15">core/behaviors/Behavior.ts:15</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/behaviors/Behavior.ts#L15">core/behaviors/Behavior.ts:15</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -77,9 +82,13 @@
 <h3 class="tsd-anchor-link" id="constructor"><span>constructor</span><a href="#constructor" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
 <li class="">
-<div class="tsd-signature tsd-anchor-link" id="constructorbehavior"><span class="tsd-signature-keyword">new</span> <span class="tsd-kind-constructor-signature">Behavior</span><span class="tsd-signature-symbol">()</span><span class="tsd-signature-symbol">:</span> <a href="" class="tsd-signature-type tsd-kind-class">Behavior</a><a href="#constructorbehavior" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-signature tsd-anchor-link" id="constructorbehavior"><span class="tsd-signature-keyword">new</span> <span class="tsd-kind-constructor-signature">Behavior</span><span class="tsd-signature-symbol">&lt;</span><br/>    <a class="tsd-signature-type tsd-kind-type-parameter" href="#constructorbehaviorttarget">TTarget</a> <span class="tsd-signature-keyword">extends</span><br/>        <a href="../interfaces/CameraInterfaceData.html" class="tsd-signature-type tsd-kind-interface">CameraInterfaceData</a><br/>        <span class="tsd-signature-symbol">|</span> <a href="Object3D.html" class="tsd-signature-type tsd-kind-class">Object3D</a> <span class="tsd-signature-symbol">=</span> <a href="../interfaces/CameraInterfaceData.html" class="tsd-signature-type tsd-kind-interface">CameraInterfaceData</a> <span class="tsd-signature-symbol">|</span> <a href="Object3D.html" class="tsd-signature-type tsd-kind-class">Object3D</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">()</span><span class="tsd-signature-symbol">:</span> <a href="" class="tsd-signature-type tsd-kind-class">Behavior</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#ttarget">TTarget</a><span class="tsd-signature-symbol">&gt;</span><a href="#constructorbehavior" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<h4 class="tsd-returns-title">Returns <a href="" class="tsd-signature-type tsd-kind-class">Behavior</a></h4></div></li></ul></section></section></details>
+<section class="tsd-panel">
+<h4>Type Parameters</h4>
+<ul class="tsd-type-parameter-list">
+<li><span id="constructorbehaviorttarget"><span class="tsd-kind-type-parameter">TTarget</span> <span class="tsd-signature-keyword">extends</span> <a href="../interfaces/CameraInterfaceData.html" class="tsd-signature-type tsd-kind-interface">CameraInterfaceData</a> <span class="tsd-signature-symbol">|</span> <a href="Object3D.html" class="tsd-signature-type tsd-kind-class">Object3D</a> = <a href="../interfaces/CameraInterfaceData.html" class="tsd-signature-type tsd-kind-interface">CameraInterfaceData</a> <span class="tsd-signature-symbol">|</span> <a href="Object3D.html" class="tsd-signature-type tsd-kind-class">Object3D</a></span></li></ul></section>
+<h4 class="tsd-returns-title">Returns <a href="" class="tsd-signature-type tsd-kind-class">Behavior</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#ttarget">TTarget</a><span class="tsd-signature-symbol">&gt;</span></h4></div></li></ul></section></section></details>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Properties"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="properties-1">Properties<a href="#properties-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
 <section>
@@ -87,24 +96,24 @@
 <h3 class="tsd-anchor-link" id="isactive"><span>is<wbr/>Active</span><a href="#isactive" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">isActive</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> = true</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/behaviors/Behavior.ts#L19">core/behaviors/Behavior.ts:19</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/behaviors/Behavior.ts#L21">core/behaviors/Behavior.ts:21</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="target"><span>target</span><a href="#target" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">target</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/CameraInterfaceData.html" class="tsd-signature-type tsd-kind-interface">CameraInterfaceData</a> <span class="tsd-signature-symbol">|</span> <a href="Object3D.html" class="tsd-signature-type tsd-kind-class">Object3D</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> = undefined</span></div>
+<div class="tsd-signature"><span class="tsd-kind-property">target</span><span class="tsd-signature-symbol">:</span> <a class="tsd-signature-type tsd-kind-type-parameter" href="#ttarget">TTarget</a> <span class="tsd-signature-symbol">|</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> = undefined</span></div>
 <div class="tsd-comment tsd-typography"><p>The object this behavior is attached to. Set automatically.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/behaviors/Behavior.ts#L22">core/behaviors/Behavior.ts:22</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/behaviors/Behavior.ts#L24">core/behaviors/Behavior.ts:24</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="uuid"><code class="tsd-tag">Readonly</code><span>uuid</span><a href="#uuid" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">uuid</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span><span class="tsd-signature-symbol"> = ...</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/behaviors/Behavior.ts#L18">core/behaviors/Behavior.ts:18</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/behaviors/Behavior.ts#L20">core/behaviors/Behavior.ts:20</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="inspector"><code class="tsd-tag">Static</code> <code class="tsd-tag">Optional</code> <code class="tsd-tag">Readonly</code><span>inspector</span><a href="#inspector" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">inspector</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">Record</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">,</span> <a href="../interfaces/InspectorField.html" class="tsd-signature-type tsd-kind-interface">InspectorField</a><span class="tsd-signature-symbol">&gt;</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/behaviors/Behavior.ts#L16">core/behaviors/Behavior.ts:16</a></li></ul></aside></section></section></details>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/behaviors/Behavior.ts#L18">core/behaviors/Behavior.ts:18</a></li></ul></aside></section></section></details>
 <details class="tsd-panel-group tsd-member-group tsd-accordion" open><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
 <h2 class="tsd-anchor-link" id="methods-1">Methods<a href="#methods-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h2></summary>
 <section>
@@ -112,15 +121,15 @@
 <h3 class="tsd-anchor-link" id="clone"><span>clone</span><a href="#clone" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
 <li class="">
-<div class="tsd-signature tsd-anchor-link" id="clone-1"><span class="tsd-kind-call-signature">clone</span><span class="tsd-signature-symbol">()</span><span class="tsd-signature-symbol">:</span> <a href="" class="tsd-signature-type tsd-kind-class">Behavior</a><a href="#clone-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-signature tsd-anchor-link" id="clone-1"><span class="tsd-kind-call-signature">clone</span><span class="tsd-signature-symbol">()</span><span class="tsd-signature-symbol">:</span> <a href="" class="tsd-signature-type tsd-kind-class">Behavior</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#ttarget">TTarget</a><span class="tsd-signature-symbol">&gt;</span><a href="#clone-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>Returns an independent copy of this behavior (own <code>uuid</code>, <code>target</code> cleared -- the caller is
 expected to <code>attachBehavior()</code> it onto the new host, which sets <code>target</code> correctly via
 <code>onAttach()</code>). Used by <code>Object3D.clone()</code> (Maker's Duplicate command).</p>
 </div>
-<h4 class="tsd-returns-title">Returns <a href="" class="tsd-signature-type tsd-kind-class">Behavior</a></h4><aside class="tsd-sources">
+<h4 class="tsd-returns-title">Returns <a href="" class="tsd-signature-type tsd-kind-class">Behavior</a><span class="tsd-signature-symbol">&lt;</span><a class="tsd-signature-type tsd-kind-type-parameter" href="#ttarget">TTarget</a><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/behaviors/Behavior.ts#L43">core/behaviors/Behavior.ts:43</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/behaviors/Behavior.ts#L45">core/behaviors/Behavior.ts:45</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="onattach"><span>on<wbr/>Attach</span><a href="#onattach" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -135,7 +144,7 @@ expected to <code>attachBehavior()</code> it onto the new host, which sets <code
 <li><span><span class="tsd-kind-parameter">target</span>: <a href="../interfaces/CameraInterfaceData.html" class="tsd-signature-type tsd-kind-interface">CameraInterfaceData</a> <span class="tsd-signature-symbol">|</span> <a href="Object3D.html" class="tsd-signature-type tsd-kind-class">Object3D</a></span></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/behaviors/Behavior.ts#L27">core/behaviors/Behavior.ts:27</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/behaviors/Behavior.ts#L29">core/behaviors/Behavior.ts:29</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="ondetach"><span>on<wbr/>Detach</span><a href="#ondetach" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -146,7 +155,7 @@ expected to <code>attachBehavior()</code> it onto the new host, which sets <code
 </div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/behaviors/Behavior.ts#L34">core/behaviors/Behavior.ts:34</a></li></ul></aside></div></li></ul></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/behaviors/Behavior.ts#L36">core/behaviors/Behavior.ts:36</a></li></ul></aside></div></li></ul></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="update"><code class="tsd-tag">Abstract</code><span>update</span><a href="#update" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -163,7 +172,7 @@ expected to <code>attachBehavior()</code> it onto the new host, which sets <code
 </div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/698881528b03d7fd4036d0deb8fd0203bce2419e/packages/engine/src/core/behaviors/Behavior.ts#L53">core/behaviors/Behavior.ts:53</a></li></ul></aside></div></li></ul></section></section></details></div>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a1529d225df4da92317ddabe689378e12401c310/packages/engine/src/core/behaviors/Behavior.ts#L55">core/behaviors/Behavior.ts:55</a></li></ul></aside></div></li></ul></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -186,7 +195,7 @@ expected to <code>attachBehavior()</code> it onto the new host, which sets <code
 <details open class="tsd-accordion tsd-page-navigation-section"><summary class="tsd-accordion-summary" data-key="section-Methods"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>Methods</summary>
 <div><a href="#clone"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>clone</span></a><a href="#onattach"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>on<wbr/>Attach</span></a><a href="#ondetach"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>on<wbr/>Detach</span></a><a href="#update"><svg class="tsd-kind-icon" viewBox="0 0 24 24" aria-label="Method"><use href="../assets/icons.svg#icon-2048"></use></svg><span>update</span></a></div></details></div></details></div>
 <div class="site-menu">
-<nav class="tsd-navigation"><a href="../index.html">Small World Machine API Reference - v0.78.00</a>
+<nav class="tsd-navigation"><a href="../index.html">Small World Machine API Reference - v0.103.0</a>
 <ul class="tsd-small-nested-navigation" id="tsd-nav-container">
 <li>Loading...</li></ul></nav></div></div></div><footer>
 <p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>

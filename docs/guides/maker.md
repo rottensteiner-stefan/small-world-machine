@@ -180,14 +180,14 @@ Paste your text layout into the ASCII import dialog to instantly generate a 3D l
 
 ---
 
-## 9. Persistence & the glTF 2.0 `SW_*` extension engine
+## 9. Persistence & the glTF 2.0 `SWM_*` extension engine
 
 Maker uses the browser's native **File System Access API** (`showDirectoryPicker`) for direct local workspace binding, without uploading data to external servers.
 
 - **Frictionless autosave:** every edit (transform change, color adjustment, hierarchy reorder, prefab creation) triggers a debounced (~500ms) write-through directly to `scene.gltf`.
-- **`SW_*` glTF metadata extensions:** non-standard engine data is stored cleanly in glTF 2.0's `extensions` vendor namespace via a pluggable extension registry (see `docs/adr/0017-gltf-extension-plugin-registry.md`). Currently implemented:
-  - `SW_prefab_instance`: provenance-only record of which Maker prefab a node was instantiated from.
-  - `SW_stage_zone`: a 2.5D `StageZone`'s points and display name (see `docs/adr/0016-2-5d-stage-zones-as-a-gltf-extension.md`), giving it a scene-graph presence via `StageZoneMarker`.
+- **`SWM_*` glTF metadata extensions:** non-standard engine data is stored cleanly in glTF 2.0's `extensions` vendor namespace via a pluggable extension registry (see `docs/adr/0017-gltf-extension-plugin-registry.md`). Currently implemented:
+  - `SWM_prefab_instance`: provenance-only record of which Maker prefab a node was instantiated from.
+  - `SWM_stage_zone`: a 2.5D `StageZone`'s points and display name (see `docs/adr/0016-2-5d-stage-zones-as-a-gltf-extension.md`), giving it a scene-graph presence via `StageZoneMarker`.
   - A node's material is written through native glTF `pbrMetallicRoughness` rather than a custom extension, since `StandardMaterial`'s fields map onto it directly. Behaviors and physics data are not currently round-tripped through the glTF file (`WorldWriter`'s scope is still Phase 0: hierarchy, transforms, one material per mesh, and position-only geometry).
 - **Portability:** the generated `scene.gltf` files can be opened directly in Blender, Babylon.js, Three.js, or loaded straight into the Small World Machine game runtime via `GltfLoader`.
 

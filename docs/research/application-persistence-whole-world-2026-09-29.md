@@ -66,7 +66,7 @@ Und drei **Zustandsformen**, die jede reife Engine trennt (siehe Abschnitt 3, 4)
 | Rohdaten der Figuren | `apps/…/the-whisper/raw/` | 31 MB | `.fbx`, `.glb`, `.obj`, Mixamo-ZIPs |
 | Konzept/Story/Log | `apps/…/the-whisper/docs/` | — | `story.md`, `concept-dossier.html`, `log.md` |
 | Kit-Builder (Code-Bauteile) | `apps/…/the-whisper/builder/{FlakturmKit,BunkerKit}.ts` | — | prozedurale Kit-Bauer, historisch |
-| glTF-Vendor-Extensions | `packages/gltf-extensions` | `SW_prefab_instance`, `SW_stage_zone`, `SW_stage_vanishing_point` | [ADR 0016–0018](../adr/index.md) |
+| glTF-Vendor-Extensions | `packages/gltf-extensions` | `SWM_prefab_instance`, `SWM_stage_zone`, `SWM_stage_vanishing_point` | [ADR 0016–0018](../adr/index.md) |
 | Repo-Größe | `.git` **1,6 GB**, **685** Dateien in Git LFS | | `.gitattributes` routet `.glb/.png/.jpg/.webp/.fbx/.wav` in LFS |
 | Speicherstand | — | — | in The Whisper nichts; nur `yad` nutzt `localStorage` |
 
@@ -75,7 +75,7 @@ Und drei **Zustandsformen**, die jede reife Engine trennt (siehe Abschnitt 3, 4)
 - **Zweistufige Trennung Prefab ↔ Instanz** ist da: `meta.json` (Defaults, Sockets) ↔ `*.level.json` (Overrides). Das ist genau das Muster, das Unity, Bitsquid und Our Machinery unabhängig voneinander gefunden haben (Abschnitt 3/4).
 - **Namespaced IDs** existieren im Kleinen: `<kit-id>/<slug>` (`flakturm/bunker_blast_door`).
 - **JSON-Schema + Validierungstests** für Kit, Prop-Meta und Level (`AssetKitValidation.test.ts`, `LevelValidation.test.ts`).
-- **glTF + `SW_*`-Extensions** als Weltformat ([ADR 0010](../adr/0010-maker-editor-architecture.md)) — das Web-Ökosystem bestätigt die Richtung (Needle Engine, Abschnitt 6).
+- **glTF + `SWM_*`-Extensions** als Weltformat ([ADR 0010](../adr/0010-maker-editor-architecture.md)) — das Web-Ökosystem bestätigt die Richtung (Needle Engine, Abschnitt 6).
 - **App-First-Regel** ([ADR 0015](../adr/0015-app-first-genre-code-extraction-rule.md)) entspricht Casey Muratoris „erst nach der zweiten Wiederholung abstrahieren" (Abschnitt 4).
 - **Kein Singleton**, mehrere Engine-Instanzen pro Seite — das macht spätere Sandbox-/Mod-Szenarien überhaupt erst möglich.
 
@@ -234,7 +234,7 @@ Zusammenfassung der Engine-Recherche. **[V]** = Primärquelle geprüft, **[K]** 
 - **glTF hat Vorwärtskompatibilität eingebaut:** Extensions tragen Vendor-Präfix; unbekannte, nur in `extensionsUsed` gelistete werden ignoriert, in `extensionsRequired` gelistete dürfen **nicht** ignoriert werden. **[V]** ([glTF Spec](https://github.com/KhronosGroup/glTF))
 - **Rive** nutzt „skippable typed property records" (unbekannte Property-Keys werden übersprungen) — ein robustes Versionierungsmuster. **[S]** ([Rive Format](https://rive.app/docs/runtimes/advanced-topic/format))
 
-> **Konsequenz:** `*.level.json` bekommt eine explizite `schemaVersion` **plus eine Kette von Migrationen** (alt lesen, neu schreiben); IDs werden **nie wiederverwendet** (Analogon zu `reserved`); unbekannte Felder beim Laden **ignorieren** (alte Engine überlebt neue Dateien); `SW_*`-Extensions standardmäßig optional, nur bei bedeutungsloser Ohne-Extension-Darstellung in `extensionsRequired`.
+> **Konsequenz:** `*.level.json` bekommt eine explizite `schemaVersion` **plus eine Kette von Migrationen** (alt lesen, neu schreiben); IDs werden **nie wiederverwendet** (Analogon zu `reserved`); unbekannte Felder beim Laden **ignorieren** (alte Engine überlebt neue Dateien); `SWM_*`-Extensions standardmäßig optional, nur bei bedeutungsloser Ohne-Extension-Darstellung in `extensionsRequired`.
 
 ### 5.3 Content-Addressable Storage, Event Sourcing, Undo
 
@@ -250,7 +250,7 @@ Zusammenfassung der Engine-Recherche. **[V]** = Primärquelle geprüft, **[K]** 
 - **Cockburn, Hexagonal Architecture (2005):** Kernlogik wird über Ports/Adapter getrieben und ist ohne UI/DB entwickel- und testbar. **[V]** ([Cockburn](https://alistair.cockburn.us/hexagonal-architecture/))
 - **Parnas (1972):** Module verbergen Entwurfsentscheidungen, die sich ändern könnten. **[U]**
 
-> **Konsequenz:** `packages/*` + `apps/*` als npm-Workspaces-Monorepo folgt dem Monorepo-Argument (eine Version, atomare Querschnittsänderungen). Die ESLint-Grenzregel ist Parnas-artiges Information Hiding. **Das Dateiformat (`level.json` + `SW_*`) ist die eigentliche öffentliche API** und sollte *getrennt* vom npm-SemVer versioniert werden. Ports & Adapter passt für Speicher: ein abstrakter `LevelStore`/`AssetSource` mit Adaptern für `fetch`, File System Access und IndexedDB, damit Maker und Runtime die Kernlogik teilen.
+> **Konsequenz:** `packages/*` + `apps/*` als npm-Workspaces-Monorepo folgt dem Monorepo-Argument (eine Version, atomare Querschnittsänderungen). Die ESLint-Grenzregel ist Parnas-artiges Information Hiding. **Das Dateiformat (`level.json` + `SWM_*`) ist die eigentliche öffentliche API** und sollte *getrennt* vom npm-SemVer versioniert werden. Ports & Adapter passt für Speicher: ein abstrakter `LevelStore`/`AssetSource` mit Adaptern für `fetch`, File System Access und IndexedDB, damit Maker und Runtime die Kernlogik teilen.
 
 ### 5.5 Versionskontrolle großer Binärdaten
 
@@ -275,7 +275,7 @@ Zusammenfassung der Engine-Recherche. **[V]** = Primärquelle geprüft, **[K]** 
 
 ### 6.1 glTF als Kern — und seine Grenzen
 
-- **Namensregeln:** `PREFIX_scope_feature`, snake_case. `KHR` = Khronos-ratifiziert, `EXT` = Multi-Vendor, sonstige Präfixe pro Firma reserviert; **jeder** (nicht nur Mitglieder) kann ein Präfix per GitHub-Issue beantragen. **[V]** ([Khronos Extensions README](https://github.com/KhronosGroup/glTF/blob/main/extensions/README.md)). → **`SW_*` ist legitim, aber ungeschützt, solange das Präfix nicht registriert ist.** *Prüfen, ob eine Registrierung sinnvoll ist.*
+- **Namensregeln:** `PREFIX_scope_feature`, snake_case. `KHR` = Khronos-ratifiziert, `EXT` = Multi-Vendor, sonstige Präfixe pro Firma reserviert; **jeder** (nicht nur Mitglieder) kann ein Präfix per GitHub-Issue beantragen. **[V]** ([Khronos Extensions README](https://github.com/KhronosGroup/glTF/blob/main/extensions/README.md)). → **`SWM_*` ist legitim, aber ungeschützt, solange das Präfix nicht registriert ist.** *Prüfen, ob eine Registrierung sinnvoll ist.*
 - **`extras` vs. `extensions`:** `extras` = anwendungsspezifisch ohne Schema/Interop-Garantie; `extensions` = benannt, schema-behaftet, in `extensionsUsed`/`extensionsRequired` deklarierbar. **[U]** → Alles, was Rendering oder Semantik ändert, gehört in eine Extension; `extras` nur für reine Editor-Hinweise.
 - **Status relevanter Extensions (laut Registry-README):**
 
@@ -327,7 +327,7 @@ Zusammenfassung der Engine-Recherche. **[V]** = Primärquelle geprüft, **[K]** 
 
 ### 6.6 Ökosysteme (Lehren)
 
-- **Needle Engine** ist der nächste Präzedenzfall für unser Modell (`SW_*` + glTF + Vite): per-Node-Komponentendaten in einer Vendor-Extension **funktionieren**; Skripte sind normale Vite-TS-Module. **[S]** ([Needle Docs](https://engine.needle.tools/docs/explanation/exporting-to-gltf))
+- **Needle Engine** ist der nächste Präzedenzfall für unser Modell (`SWM_*` + glTF + Vite): per-Node-Komponentendaten in einer Vendor-Extension **funktionieren**; Skripte sind normale Vite-TS-Module. **[S]** ([Needle Docs](https://engine.needle.tools/docs/explanation/exporting-to-gltf))
 - **PlayCanvas:** sauberer Schnitt zwischen Editor-Projektspeicher und eigenständig deploybarem Build; Engine ohne Editor nutzbar. **[S]**
 - **three.js:** Editor-JSON „Object Scene format 4" — nah an unserem `*.level.json`; **Schema von Tag 1 versionieren** (`metadata.version`), Migrationscode einplanen. **[S]** ([ObjectLoader](https://threejs.org/docs/#api/en/loaders/ObjectLoader))
 - **Wonderland Engine:** ein gepacktes, streambares `.bin` mit Build-Schritt und separater Editor-Projektdatei. **[S]**
@@ -361,7 +361,7 @@ Sparring-Hut („critical architect") auf, Branchen-Benchmark angewendet:
 
 | | **A. Nur Konvention** | **B. App-Manifest + Pack-Layering** | **C. Alles in glTF** | **D. Archiv (`.swapp`) als Primärformat** |
 | :--- | :--- | :--- | :--- | :--- |
-| Idee | Ordnerlayout pro App + Doku, sonst nichts | `app.json` benennt Levels, Figuren, Code-Einstieg, Kits; IDs `ns:path`; Schichten | ganze App als eine große glTF mit `SW_*` | ZIP/PCK-artiger Container mit Manifest (Godot PCK / id pk3) |
+| Idee | Ordnerlayout pro App + Doku, sonst nichts | `app.json` benennt Levels, Figuren, Code-Einstieg, Kits; IDs `ns:path`; Schichten | ganze App als eine große glTF mit `SWM_*` | ZIP/PCK-artiger Container mit Manifest (Godot PCK / id pk3) |
 | Vorbild | Godot „project organization", Allar-Style-Guide | Unity `manifest.json`, `.uproject`, Minecraft `pack.mcmeta`, Godot `project.godot` | Needle (`NEEDLE_components`) — aber nur je *Szene* | Godot, Quake 3, Wonderland |
 | Stärken | null Aufwand, sofort | löst Schmerzpunkte 1–3, 5; Maker/Runtime/CI teilen ein Objekt; Diff-freundlich | ein Format | Auslieferung trivial, integritätsprüfbar (`sv_pure`-Idee) |
 | Schwächen | löst *nichts*, nur Disziplin | Aufwand, Gefahr der Überabstraktion | glTF ist Austausch-, kein App-Format; keine Abhängigkeiten/Code; `.glb` nicht streambar | Web liebt viele kleine gehashte Dateien; Blob blockiert inkrementelle Updates (Unity-WebGL-Lehre); Debugging schlechter |
@@ -519,7 +519,7 @@ Diese Punkte ändern die Empfehlung — bitte entscheiden:
 3. **Maker-Rolle:** Soll Maker eine **ganze App** (Manifest, Figuren, Levels) editieren oder weiter nur **einzelne Levels**? — Bestimmt, ob `app.json` von Maker mitgeschrieben werden muss.
 4. **Speicherstand:** Ist ein Savegame für *The Whisper* geplant (Adventure-Fortschritt) oder bleibt es eine lineare Demo? — Bestimmt Schritt 7.
 5. **Kits:** Sind die Kits (1,4 GB, v. a. `bunker`) **Eigenproduktionen** (z. B. Tripo3D) oder **fremdlizenziert**? — Lizenz-Metadaten im `kit.json` sind schon vorgesehen (`license`), aber die Auslagerung hängt an der Antwort.
-6. **`SW_`-Präfix:** Soll der Präfix bei Khronos **registriert** werden (Registrierung per Issue, [V]) oder bleibt er informell?
+6. **`SWM_`-Präfix:** Soll der Präfix bei Khronos **registriert** werden (Registrierung per Issue, [V]) oder bleibt er informell?
 7. **Lokalisierung:** Ist Mehrsprachigkeit (de/en) denkbar? — Dann Schritt 9 früher.
 8. **Wunschformat für Weitergabe:** Genügt ein statischer Ordner/URL, oder wird ein **einzelnes Datei-Artefakt** (z. B. für Offline-Demo, Messe) gebraucht? — Entscheidet, ob `.swapp` überhaupt als Export gebaut wird.
 
@@ -536,7 +536,7 @@ Alle acht Fragen aus Abschnitt 12 sind beantwortet.
 | 3 | **Maker editiert ganze Apps.** | `app.json` und `character.json` müssen **von Maker les- und schreibbar** sein: Schema-getrieben (`additionalProperties: false`), **stabile Schlüsselreihenfolge** und Pretty-Print für saubere Git-Diffs, Änderungen als Befehle `(id, path, old, new)` im Undo-Stack (Abschnitt 4.4). Maker braucht eine **Projekt-Ebene** oberhalb der Level-Ebene. Passend: `showDirectoryPicker` bindet ohnehin einen Projektordner (ADR 0010, Chromium-only). Das Manifest ist damit Maker-Vertrag, nicht nur Build-Eingabe. |
 | 4 | **Savegame: ja.** | Schritt 7 rückt in die **erste Runde**. Savegame-Format v1 wird *vor* dem ersten Speichern-Feature entworfen: nur ID-Referenzen, `schemaVersion`, Migrationskette, Ablage in IndexedDB/OPFS. **„IDs werden nie wiederverwendet"** wird damit zur harten Regel (ADR-Kandidat). |
 | 5 | **Kits sind Eigenproduktionen.** | Lizenz ist kein Blocker für die Auslagerung (Schritt 8). Es bleibt eine Wahl, unter welcher Lizenz sie veröffentlicht werden (`kit.json` trägt `license` bereits). |
-| 6 | **`SW_`-Präfix: vorerst nicht registrieren.** | Bleibt informell. Empfehlung: vor der ersten **externen Veröffentlichung** von Level-/Kit-Dateien erneut entscheiden, weil dann Dritte `SW_*`-Dateien sehen können. |
+| 6 | **`SWM_`-Präfix: vorerst nicht registrieren.** | Bleibt informell. Empfehlung: vor der ersten **externen Veröffentlichung** von Level-/Kit-Dateien erneut entscheiden, weil dann Dritte `SWM_*`-Dateien sehen können. |
 | 7 | **Lokalisierung: ja.** | Schritt 9 (Texte als Daten) ist **gesetzt** und wird vorgezogen. Alle Spielertexte (Dialoge, Terminal, Hotspot-Beschriftungen) bekommen **stabile Text-IDs** und liegen in `content/<sprache>.json`; der Code referenziert nur IDs. Das Savegame speichert die gewählte Sprache nicht als Inhalt, sondern als Einstellung. Text-IDs unterliegen derselben Regel wie alle IDs: **nie wiederverwenden**. Sprachdateien werden im Test gegeneinander auf fehlende/überzählige Schlüssel geprüft (analog `AssetKitValidation.test.ts`). Maker (Entscheidung 3) sollte Texte per ID anzeigen und editieren können. |
 | 8 | **Kein Einzeldatei-Artefakt nötig.** | `.swapp` entfällt auch als Export. Auslieferung bleibt der statische Ordner mit gehashten Dateien (Abschnitt 9.8). Spart die gesamte Archiv-/Integritätsprüfungs-Diskussion. |
 
@@ -740,15 +740,15 @@ Offizielle Statusangaben aus dem glTF-Extensions-Registry-README (raw.githubuser
 
 | Punkt | Stand in §6.1 (Papier) | Heute 2026-09-29 | Folge |
 | :--- | :--- | :--- | :--- |
-| `KHR_interactivity` | Widerspruch „Registry: Ratified" vs. Pressemeldung „Submitted for ratification" | **Ratified** (in der Registry-Liste der ratifizierten Khronos-Extensions) | Widerspruch ist aufgelöst; §11-Beobachtung entfällt. Verhaltensgraphen als glTF-Standard sind jetzt reif — für uns aber weiter optional (eigenes `SW_*`-Design bleibt zulässig) |
+| `KHR_interactivity` | Widerspruch „Registry: Ratified" vs. Pressemeldung „Submitted for ratification" | **Ratified** (in der Registry-Liste der ratifizierten Khronos-Extensions) | Widerspruch ist aufgelöst; §11-Beobachtung entfällt. Verhaltensgraphen als glTF-Standard sind jetzt reif — für uns aber weiter optional (eigenes `SWM_*`-Design bleibt zulässig) |
 | `KHR_node_visibility` / `KHR_node_selectability` / `KHR_node_hoverability` | nicht erwähnt | **Ratified (neu)** | Direkt relevant für Maker: genau die Anzeige-/Auswahl-/Hover-Semantik für Nicht-Mesh-Nodes, für die wir heute eigene Helfer bauen — **vor weiterem Eigenbau prüfen, ob die Standard-Extension reicht** (beobachten, nicht übernehmen) |
 | `KHR_gaussian_splatting`, `EXT_texture_webp` | — | Ratified (neu) | WebP-Texturpfad jetzt als Extension standardisiert; für Kits beobachtenswert |
 | `KHR_audio_graph` | — | **Proposal** (PR #2421) | §15.2: nicht darauf bauen |
 | `KHR_physics_rigid_bodies` | Review Draft (PR #2424) | Review Draft (PR #2424) | unverändert; §11-Beobachtung bleibt |
 | glTF External References (glXF) | „Cross-File-Referenzen sind noch Proposal" | **Proposal**; eigenes Khronos-Repo `glTF-External-Reference`; explizit „not currently a specification"; 2022er-Spec-Dokumente sind obsolet, Ersatzdokumente erst für 2H2025 angekündigt | §6.1-Schluss **bestätigt**: nicht warten; die Aufteilung „Level-Datei referenziert Kit-glTFs" bleibt fürs Erste das richtige Muster |
-| Vendor-Prefix-Registrierung | „jeder kann per GitHub-Issue einen Präfix beantragen" | bestätigt (README; Ablauf: Name, Firma, URL/Kontakt per Issue) | Entscheidung 6 (SW_ vorerst informell) unverändert; erneute Abwägung weiterhin nur vor externer Veröffentlichung |
+| Vendor-Prefix-Registrierung | „jeder kann per GitHub-Issue einen Präfix beantragen" | bestätigt (README; Ablauf: Name, Firma, URL/Kontakt per Issue) | Entscheidung 6 (SWM_ vorerst informell) unverändert; erneute Abwägung weiterhin nur vor externer Veröffentlichung |
 
-Zusätzlich bestätigt [V]: `extensionsUsed`/`extensionsRequired`-Mechanik unverändert; „Extensions can't remove existing glTF properties or redefine existing glTF properties to mean something else" — unsere `SW_*`-Hygiene sowie die Entscheidung, `SW_*` standardmäßig in `extensionsUsed` (nicht `extensionsRequired`) zu halten (§5.2), bleiben konform.
+Zusätzlich bestätigt [V]: `extensionsUsed`/`extensionsRequired`-Mechanik unverändert; „Extensions can't remove existing glTF properties or redefine existing glTF properties to mean something else" — unsere `SWM_*`-Hygiene sowie die Entscheidung, `SWM_*` standardmäßig in `extensionsUsed` (nicht `extensionsRequired`) zu halten (§5.2), bleiben konform.
 
 **Browser-Speicher [S]** (MDN OPFS + web.dev): Status unverändert — OPFS breit verfügbar und standardisiert, `showOpenFilePicker` weiterhin Chromium-only. §6.3-Fallback-Empfehlung (OPFS als Arbeitsspeicher, ZIP-Import/Export, Chromium-only-Autor-Modus als akzeptierter Kompromiss) bleibt heute unverändert gültig. Kein Handlungsbedarf.
 
@@ -760,7 +760,7 @@ Diese Ergänzung stützt und präzisiert; sie reißt keine Entscheidung auf.
 - **Entscheidung 2 (kein Mod-System):** bestätigt durch §15.1 — Content-Pack-/Patch-Mechanismen (SMAPI, Content Patcher, meta.lsx) sind reife Vorlagen, bleiben aber bewusst ungebaut, bis ein zweiter Konsument sie verlangt (Invariante 10). Wenn es je kommt: Content Patcher ist das strukturelle Vorbild für die „replace/merge je Patch"-Semantik.
 - **Entscheidung 3 (Maker editiert ganze Apps):** Roblox-Packages zeigen, dass Instanz-Override-Erhalt industrieüblich und technisch machbar ist; Makers Undo als `(id, path, old, new)` (§12a-3) ist mit dem Roblox-Modell konsistent. Kein Widerspruch.
 - **Entscheidung 7 (Lokalisierung):** SMAPI-Content-Pack-`i18n` und BG3-`.loca` bestätigen das Text-ID-Modell als Produktionsstandard. **Neu abgeleitet (braucht Zustimmung):** Sprache betrifft nicht nur Text, sondern auch **Stimme** — `content/<sprache>.json` bekommt früher oder später ein `content/<sprache>/vo/…`. Einplanen, aber erst umsetzen, wenn die erste Sprachdatei real entsteht (kein Vorratsbau).
-- **Entscheidung 6 (`SW_`-Präfix):** unverändert; Khronos-Prozess bestätigt. Zusätzlich beobachten: `KHR_node_visibility/_selectability/_hoverability` als möglicher künftiger Standardersatz für eigene Maker-Helfer-Semantik.
+- **Entscheidung 6 (`SWM_`-Präfix):** unverändert; Khronos-Prozess bestätigt. Zusätzlich beobachten: `KHR_node_visibility/_selectability/_hoverability` als möglicher künftiger Standardersatz für eigene Maker-Helfer-Semantik.
 - **Entscheidung 1 (Referenzbeispiel „mit allem, was wir bieten"):** Audio ist eine der sichtbarsten Lücken eines Referenzbeispiels; §15.2 hält fest, dass nur das **ID-Layout** jetzt nötig ist — die Scope-Creep-Warnung aus §12a-1 bleibt die maßgebliche Gegenlese.
 
 **Kein Anpassungsbedarf** in §9/§10: Die Ergänzung ist zu den dortigen Weichen konsistent. §10-Schritt 7 (Savegame-Format-Entwurf) rückt laut §12a ohnehin vor Entscheidung in der ersten Runde — §15.3 liefert dafür die Belege, nicht neue Schritte.
@@ -806,7 +806,7 @@ Metapher des Auftraggebers: „Das ist wie die Reise zum Mars — und wir wissen
 
 1. **App-Grenze als Package:** Alles, was zum Spiel gehört und nicht Teil der allgemeinen Engine ist, wird ausgelagert — als Package, z. B. **`@small-world-machine/the-whisper`**. **Kits und Assets gehören dorthin** (Schmerzpunkte 2 und 3, §2.3).
 2. **Kit-Frage (weicht von §9.4/ADR 0011 Phase 2 ab):** Kits **physisch in den App-Baum**, aber `kit.json`-Manifeste intakt lassen — eine spätere Ausgliederung bleibt dann ein Ordner-Umzug, kein Re-Architect. Heute spricht §12a-2 (ein Konsument) dafür; bewusste **Scope-Reduktion** von ADR 0011, *noch keine formale Entscheidung*. Verbindlich wird es erst mit der ersten Umsetzung.
-3. **Package-Form:** Workspace-Package mit `private: true` — **keine publishbare npm-Lib** (niemand konsumiert Whisper-Code per `npm i`). Öffentliche API sind die Dateiformate (`app.json`, `level.json`, `SW_*`); Versionierung läuft über die Formate, nicht npm-SemVer (§5.4). Ein „eigenes Repo/eigene CI" bleibt als späterer reiner Ordner-Umzug möglich.
+3. **Package-Form:** Workspace-Package mit `private: true` — **keine publishbare npm-Lib** (niemand konsumiert Whisper-Code per `npm i`). Öffentliche API sind die Dateiformate (`app.json`, `level.json`, `SWM_*`); Versionierung läuft über die Formate, nicht npm-SemVer (§5.4). Ein „eigenes Repo/eigene CI" bleibt als späterer reiner Ordner-Umzug möglich.
 4. **Eine Zielform heute:** statischer Ordner + Host. Andere Formen (Offline, Messe, Weitergabe) bleiben **dokumentierte spätere Optionen**, kein Bauvorhaben.
 
 ### 16.3 Wie machen es andere? (Praxis-Nachweis)

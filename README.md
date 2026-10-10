@@ -184,7 +184,7 @@ Small World Machine includes a comprehensive suite of standalone, browser-based 
 
 ### 🌟 Maker — World & Scene Editor (`public/tools/maker.html`)
 The engine's flagship standalone 3D scene composer and level editor ([User Guide](docs/guides/maker.md)):
-- **Direct glTF 2.0 Persistence & Autosave:** Debounced (500ms) write-through directly into standard `scene.gltf` projects with vendor-namespaced `SW_*` extensions for Small World Machine behaviors, physics, and custom material parameters.
+- **Direct glTF 2.0 Persistence & Autosave:** Debounced (500ms) write-through directly into standard `scene.gltf` projects with vendor-namespaced `SWM_*` extensions for Small World Machine behaviors, physics, and custom material parameters.
 - **High-Speed Keyboard Nudging & Transformation:** Camera-perspective-aware directional nudging ($\leftarrow, \rightarrow, \uparrow, \downarrow$ on XZ ground), elevation adjustments (`Shift` + $\uparrow / \downarrow$, `PageUp`/`PageDown`), and **Snap to Ground** (<kbd>End</kbd> / `⬇ Ground`) to align bounding boxes flush with $Y = 0$.
 - **Dynamic Snapping & Grid Stepping:** Enabled by default with instant grid resolution stepping via <kbd>[</kbd> (finer) and <kbd>]</kbd> (coarser) across `0.1m` to `2.0m`, $15^\circ$ angle quantization, and $0.25$ scale steps (Toggle: <kbd>X</kbd>).
 - **Multi-Selection & Pivot-Relative Clusters:** 2D screen-space Marquee box selection, Cyan/Amber primary/secondary hierarchy highlights, and pivot-relative multi-object group transformations.

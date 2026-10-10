@@ -45,7 +45,7 @@ export interface GltfWriteContext extends GltfWriteState {
  * A single glTF vendor/community extension's read+write behavior, registered via
  * `registerGltfExtension()` (see `GltfExtensionRegistry.ts`) instead of being hardcoded as an
  * if/else branch inside `GltfLoader`/`WorldWriter` -- see ADR 0017. All hooks are optional; a
- * plugin implements only the ones its extension actually needs (e.g. `SW_prefab_instance` only
+ * plugin implements only the ones its extension actually needs (e.g. `SWM_prefab_instance` only
  * ever sets a plain field, so it has no `prepareRead`/`finalizeWrite`).
  */
 export interface GltfExtensionPlugin {
@@ -58,7 +58,7 @@ export interface GltfExtensionPlugin {
    * need to re-scan the root extension data for every node. */
   prepareRead?(ctx: GltfReadContext): void;
   /** Decide the concrete `Object3D` subclass for a node from this extension's data, e.g. a
-   * `PointLight` for `KHR_lights_punctual` or a `StageZoneMarker` for `SW_stage_zone`. Return
+   * `PointLight` for `KHR_lights_punctual` or a `StageZoneMarker` for `SWM_stage_zone`. Return
    * `undefined` to defer to the next plugin (or the plain `Object3D` fallback) -- plugins are
    * tried in registration order and the first non-`undefined` result wins. */
   readNode?(
@@ -68,7 +68,7 @@ export interface GltfExtensionPlugin {
     ctx: GltfReadContext,
   ): Object3D | undefined;
   /** Apply this extension's data as plain fields onto an already-constructed node (e.g.
-   * `SW_prefab_instance` setting `obj.prefabSource`) -- called for every node, after its class
+   * `SWM_prefab_instance` setting `obj.prefabSource`) -- called for every node, after its class
    * has already been decided. */
   applyNode?(obj: Object3D, nodeDef: GltfNodeDef, ctx: GltfReadContext): void;
   /** Mutate `node.extensions` for `obj` during `WorldWriter`'s node tree walk, if relevant. */

@@ -3,13 +3,13 @@
 ## Kontext & Problem
 
 `GltfLoader`/`WorldWriter` kennen bislang genau zwei Vendor-/Community-Extensions —
-`KHR_lights_punctual` (Khronos-ratifiziert) und `SW_prefab_instance` (eigene Vendor-Extension,
+`KHR_lights_punctual` (Khronos-ratifiziert) und `SWM_prefab_instance` (eigene Vendor-Extension,
 ADR 0010) — jeweils als direkt in die Klassen einprogrammierte if/else-Zweige: ein Pre-Pass im
 Loader, der `KHR_lights_punctual.lights[]` indiziert, eine Entscheidung in der
 Node-Erzeugungsschleife, welche `Object3D`-Unterklasse instanziiert wird, und im Writer ein
 `instanceof`-Zweig plus ein Root-Level-Array-Akkumulator.
 
-ADR 0016 fügt mit `SW_stage_zone` eine dritte Extension hinzu. Ein dritter hartkodierter Zweig
+ADR 0016 fügt mit `SWM_stage_zone` eine dritte Extension hinzu. Ein dritter hartkodierter Zweig
 wäre die billigste Lösung gewesen, aber sie skaliert nicht: glTFs eigenes Erweiterungsmodell ist
 genau dafür gemacht, dass beliebig viele Parteien eigene `EXT_*`/herstellerspezifische
 Extensions definieren, ohne dass Khronos oder irgendein zentraler Maintainer sie kennen muss —
@@ -36,8 +36,8 @@ interface GltfExtensionPlugin {
 `registerGltfExtension(plugin)` (`GltfExtensionRegistry.ts`) trägt ein Plugin in eine einfache
 Liste ein; `GltfLoader`/`WorldWriter` iterieren über diese Liste statt über eigene if/else-Ketten.
 Drei eingebaute Plugins (`packages/engine/src/loaders/gltf/extensions/`) registrieren sich per
-Seiteneffekt-Import selbst: `KhrLightsPunctual.ts`, `SwPrefabInstance.ts` (beide 1:1 aus dem
-vorherigen hartkodierten Code migriert) und `SwStageZone.ts` (neu, ADR 0016).
+Seiteneffekt-Import selbst: `KhrLightsPunctual.ts`, `SwmPrefabInstance.ts` (beide 1:1 aus dem
+vorherigen hartkodierten Code migriert) und `SwmStageZone.ts` (neu, ADR 0016).
 
 **Zwei Kontext-Typen statt einem**, weil `writeNode` pro Node während des rekursiven
 Tree-Walks läuft — bevor das fertige Dokument überhaupt existiert —, während `finalizeWrite`
@@ -58,7 +58,7 @@ zwei längst bestehenden Extensions. `WorldWriter._finalize()` sammelt jetzt die
 
 ## Verworfene Alternativen
 
-- **Dritter hartkodierter if/else-Zweig für `SW_stage_zone`.** Billigste Lösung für genau diesen
+- **Dritter hartkodierter if/else-Zweig für `SWM_stage_zone`.** Billigste Lösung für genau diesen
   einen Fall, verschiebt aber dasselbe Problem auf jede künftige Extension — inkonsistent mit
   glTFs eigenem Erweiterungsmodell, das explizit auf Parteien ausgelegt ist, die Khronos nicht
   kennt.

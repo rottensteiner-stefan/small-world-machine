@@ -23,9 +23,9 @@ verbindlich, keine Abweichung mehr zulässig. Erwogen und verworfen:
 - `manifest.json` -- keine harte Kollision (kein PWA-Manifest, kein Vite-Build-Manifest im
   Projekt referenziert), aber der Name ist im Web-Kontext stark mit PWA-/Browser-Extension-
   Manifesten assoziiert -- unnötige Verwechslungsgefahr ohne echten Zugewinn.
-- `sw.json` -- kollidiert real mit dem projekteigenen glTF-Vendor-Namensraum `SW_*`
-  (`SW_prefab_instance`, `SW_stage_zone`, siehe ADR 0016/0017); neben einer `model.glb` läge ein
-  `sw.json` nahe, es für einen Export der `SW_*`-Extension-Daten dieses Modells zu halten.
+- `sw.json` -- kollidiert real mit dem projekteigenen glTF-Vendor-Namensraum `SWM_*`
+  (`SWM_prefab_instance`, `SWM_stage_zone`, siehe ADR 0016/0017); neben einer `model.glb` läge ein
+  `sw.json` nahe, es für einen Export der `SWM_*`-Extension-Daten dieses Modells zu halten.
 
 **Verbindliches Schema (validiert durch
 [`AssetKitValidation.test.ts`](../../packages/engine/tests/loaders/AssetKitValidation.test.ts),

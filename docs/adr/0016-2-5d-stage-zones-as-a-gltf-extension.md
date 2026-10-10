@@ -1,10 +1,10 @@
-# 2.5D-Bühnen-Zonen: Eine neue `SW_stage_zone`-glTF-Erweiterung, kein zweites Format
+# 2.5D-Bühnen-Zonen: Eine neue `SWM_stage_zone`-glTF-Erweiterung, kein zweites Format
 
 ## Kontext & Problem
 
 `StageZone` und `StageMovementBehavior` (hinzugefügt beim Bau von "And Now?"s Szenen `flakturm-tunnel` und `character-diorama`, siehe `docs/guides/2-5d-scenes.md`) lassen eine Szene einen gemalten oder echten Boden als Handvoll `(u, v, scale)`-Polygonpunkte definieren, aus denen die Blickrichtung einer Figur auf dem Bildschirm und ihre erzwungene Perspektivgröße zur Laufzeit abgeleitet werden. Heute bedeutet das Erstellen einer Zone, `DEFAULT_ZONE_POINTS`-Literale direkt in der `showcase.ts` einer Szene von Hand zu schreiben und sie im Browser-Tab gegen die Hintergrundkunst über den Daumen zu peilen — es gibt kein visuelles Werkzeug, und nichts an einer Zone kann außerhalb des TypeScript-Quellcodes gespeichert oder neu geladen werden.
 
-Maker (ADR 0010) hat die allgemeine Version dieses Problems für 3D-Welten bereits gelöst: glTF 2.0 als Basisformat, Engine-spezifische Daten (Behaviors, Physik-Konfiguration, Nicht-PBR-Materialfelder) in `SW_*`-Vendor-Erweiterungen transportiert, `WorldWriter`/`GltfLoader` als Lese-/Schreib-Paar. Die Frage, die dieser ADR beantwortet, ist enger gefasst: Wie fügen sich 2.5D-Bühnen-Erstellungsdaten — die überhaupt kein glTF-Äquivalent haben — in dieselbe Pipeline ein, ohne sie in ein zweites, paralleles Speicherformat zu verzweigen.
+Maker (ADR 0010) hat die allgemeine Version dieses Problems für 3D-Welten bereits gelöst: glTF 2.0 als Basisformat, Engine-spezifische Daten (Behaviors, Physik-Konfiguration, Nicht-PBR-Materialfelder) in `SWM_*`-Vendor-Erweiterungen transportiert, `WorldWriter`/`GltfLoader` als Lese-/Schreib-Paar. Die Frage, die dieser ADR beantwortet, ist enger gefasst: Wie fügen sich 2.5D-Bühnen-Erstellungsdaten — die überhaupt kein glTF-Äquivalent haben — in dieselbe Pipeline ein, ohne sie in ein zweites, paralleles Speicherformat zu verzweigen.
 
 Drei Dinge an der heutigen Laufzeit-Form passen nicht direkt:
 
@@ -14,7 +14,7 @@ Drei Dinge an der heutigen Laufzeit-Form passen nicht direkt:
 
 ## Entscheidung
 
-### 1. Jede `StageZone` wird zu einem leichtgewichtigen glTF-Node, der `SW_stage_zone` trägt
+### 1. Jede `StageZone` wird zu einem leichtgewichtigen glTF-Node, der `SWM_stage_zone` trägt
 
 Eine Zone erhält ihren eigenen Marker-Node in der glTF-Node-Hierarchie (kein Mesh, passend dazu, wie Maker bereits nicht renderbare Helfer darstellt), mit:
 
@@ -22,7 +22,7 @@ Eine Zone erhält ihren eigenen Marker-Node in der glTF-Node-Hierarchie (kein Me
 {
   "name": "zone_a",
   "extensions": {
-    "SW_stage_zone": {
+    "SWM_stage_zone": {
       "displayName": "ZONE A: HAUPTBÜHNE (VORPLATZ)",
       "points": [
         { "u": 0.459, "v": 0.895, "scale": 1.0 },
@@ -64,7 +64,7 @@ type StageProjection =
 
 ### 5. Fluchtpunkt-Referenzlinien werden ebenfalls gespeichert, nicht nur als flüchtiger Editor-Zustand
 
-Das interaktive Fluchtpunkt-Werkzeug (zwei Referenzlinien zeichnen, ihren Schnittpunkt erhalten — siehe die praktischen Schritte in `docs/guides/2-5d-scenes.md` §4) erzeugt genau die Art Begründung, die die eigene Praxis eines ADRs wertschätzt: *warum* eine Zonenkante dort sitzt, wo sie sitzt. Sie beim Schließen zu verwerfen würde bedeuten, sie jedes Mal, wenn eine Zone erneut geprüft werden muss, wieder von Auge herzuleiten (wie es für den Zone-C-Fix in dieser Sitzung von Hand geschah). Eine kleine `SW_stage_vanishing_point`-Erweiterung (Referenzlinien-Endpunkte + der berechnete Punkt) reitet auf ihrem eigenen Marker-Node, genauso wie Zonen — optional, additiv und zur Laufzeit rein eine Provenienz-/Nachprüfungshilfe (nichts liest sie außerhalb des Editors).
+Das interaktive Fluchtpunkt-Werkzeug (zwei Referenzlinien zeichnen, ihren Schnittpunkt erhalten — siehe die praktischen Schritte in `docs/guides/2-5d-scenes.md` §4) erzeugt genau die Art Begründung, die die eigene Praxis eines ADRs wertschätzt: *warum* eine Zonenkante dort sitzt, wo sie sitzt. Sie beim Schließen zu verwerfen würde bedeuten, sie jedes Mal, wenn eine Zone erneut geprüft werden muss, wieder von Auge herzuleiten (wie es für den Zone-C-Fix in dieser Sitzung von Hand geschah). Eine kleine `SWM_stage_vanishing_point`-Erweiterung (Referenzlinien-Endpunkte + der berechnete Punkt) reitet auf ihrem eigenen Marker-Node, genauso wie Zonen — optional, additiv und zur Laufzeit rein eine Provenienz-/Nachprüfungshilfe (nichts liest sie außerhalb des Editors).
 
 ### Verworfene Alternativen
 
@@ -77,7 +77,7 @@ Das interaktive Fluchtpunkt-Werkzeug (zwei Referenzlinien zeichnen, ihren Schnit
 ### Stufenweise Umsetzung
 
 0. **Engine-Voraussetzung** — `StageZone.points` erweitert sich von einem festen 4-Tupel zu `StagePoint2D[]` (§2), `getScaleAt` verallgemeinert sich zu einem `n - 2`-Dreiecks-Fächer (§2), `getLocalAxes()` wird durch die Skalierungs-Gradienten-Richtung pro Punkt ersetzt (§3), `uvToWorld` wird zur `StageProjection`-Union (§4). `StageMovementBehavior` erhält einen befüllten `static inspector` (erster echter Nutzer des Reflection-Vertrags, den ADR 0010 §1 definiert hat, den aber bisher keine konkrete `Behavior`-Unterklasse tatsächlich befüllt). `flakturm-tunnel` und `character-diorama` werden auf `"flat-plane"` portiert; beide durchlaufen jeden verallgemeinerten Algorithmus oben mit identischem Ergebnis, da beide bereits der Fall `n = 4` sind.
-1. **Format** — `SW_stage_zone`-Lesen/Schreiben in `GltfLoader`/`WorldWriter`, Roundtrip-Test gegen eine von Hand geschriebene Fixture (ein Viereck und ein 6-Punkte-Polygon, um den allgemeinen Fall zu prüfen).
+1. **Format** — `SWM_stage_zone`-Lesen/Schreiben in `GltfLoader`/`WorldWriter`, Roundtrip-Test gegen eine von Hand geschriebene Fixture (ein Viereck und ein 6-Punkte-Polygon, um den allgemeinen Fall zu prüfen).
 2. **Maker-UI** — ein Hintergrundbild auf eine `Plane` importieren, Zonenpolygone direkt darauf zeichnen (Punkt 1, 2, 3, … *n* anklicken, schließt sich automatisch), `scale`-Feld pro Punkt, Zonen im Hierarchie-Panel wie jeder andere Node gelistet und auswählbar.
 3. **Perspektiv-Werkzeuge** — das interaktive Fluchtpunkt-Werkzeug (§5 oben) und optionales Snapping (auf eine Fluchtlinie, auf die Tiefe einer benachbarten Zone, auf waagerecht), aufgebaut auf 1-2.
 4. **KI-Chat-Panel.** Für diesen ADR explizit außerhalb des Umfangs — ein szenen-bewusstes Assistenz-Panel ist ein eigenes Anliegen (UI-Oberfläche + sein eigener Tool-Aufruf-Vertrag), das auf einem funktionierenden Speicherformat aufbaut, keine Voraussetzung dafür.
@@ -87,7 +87,7 @@ Das interaktive Fluchtpunkt-Werkzeug (zwei Referenzlinien zeichnen, ihren Schnit
 - **Bahnbrechende Änderung an `StageMovementBehaviorOptions`.** Jede Szene, die `uvToWorld` für etwas nutzt, das die `"flat-plane"`-Form nicht ausdrücken kann, braucht die `"custom"`-Fluchtluke (ein von Hand geschriebener Callback, genau wie heute, nur explizit gewählt) — akzeptiert, da beide heute existierenden Szenen exakt in `"flat-plane"` passen, ohne Verhaltensverlust.
 - **Szenen im `"custom"`-Modus bleiben außerhalb von Makers Roundtrip.** Eine Szene, die die Fluchtluke nutzt, kann von der Engine *geladen*, aber von Maker nicht originalgetreu *neu gespeichert* werden (die Closure sind keine Daten) — eine explizite, benannte Einschränkung statt einer stillen.
 - **Ein neuer, nicht renderbarer Node-Typ in Makers Hierarchie.** Zonen- und Fluchtpunkt-Marker brauchen ihr eigenes Icon und eine eigene Picking-Behandlung (sie haben kein Mesh) — eine kleine, eingegrenzte Ergänzung zu Makers bestehender Node-Typ-Behandlung, kein neues Subsystem.
-- **Erweiterungs-Namensraum-Disziplin, genau wie ADR 0010 §5.** `SW_stage_zone`/`SW_stage_vanishing_point` folgen derselben additiven, sorgfältig namensraum-getrennten Vendor-Erweiterungs-Hygiene, die bereits etabliert ist; keine neue Risikoklasse eingeführt.
+- **Erweiterungs-Namensraum-Disziplin, genau wie ADR 0010 §5.** `SWM_stage_zone`/`SWM_stage_vanishing_point` folgen derselben additiven, sorgfältig namensraum-getrennten Vendor-Erweiterungs-Hygiene, die bereits etabliert ist; keine neue Risikoklasse eingeführt.
 - **Kein Regressionsrisiko durch die Polygon-/Gradienten-Verallgemeinerung.** Jede Algorithmus-Änderung (§2, §3) ist eine strikte Verallgemeinerung, die sich bei `n = 4` auf das exakte heutige Verhalten reduziert; beide bestehenden Szenen sind dieser Fall, daher wird das mit einem Roundtrip-/Ausgabe-Gleichheitstest gegen sie ausgeliefert, statt sich allein auf Durchsicht zu verlassen.
 
 **Status (2026-09-12):** Phase 0 und Phase 1 umgesetzt und verifiziert (`tsc`/`eslint`/`vitest`
@@ -99,10 +99,10 @@ Hintergrundwand-Mapping). `character-diorama` läuft daher weiterhin über `proj
 "custom"}` mit seiner bestehenden Closure als `customUvToWorld` — funktional unverändert, aber
 (noch) nicht Maker-roundtrip-fähig, genau die in den Konsequenzen benannte Einschränkung für
 `"custom"`-Szenen. Nur `flakturm-tunnel` läuft über `"flat-plane"`.
-Zusätzlich (User-Wunsch während der Umsetzung, nicht ursprünglich Teil dieser ADR): `SW_stage_zone`
+Zusätzlich (User-Wunsch während der Umsetzung, nicht ursprünglich Teil dieser ADR): `SWM_stage_zone`
 wurde nicht als dritter hartkodierter if/else-Zweig in `GltfLoader`/`WorldWriter` ergänzt, sondern
 über einen neuen generischen Extension-Plugin-Mechanismus, der auch `KHR_lights_punctual` und
-`SW_prefab_instance` migriert hat — siehe ADR 0017.
+`SWM_prefab_instance` migriert hat — siehe ADR 0017.
 **Update (2026-09-12, später am selben Tag):** Phase 2 (Maker-UI) ebenfalls umgesetzt und
 live verifiziert — `StageZoneGizmoManager` (Anzeige/Auswahl, direktes Vorbild
 `LightGizmoManager`), ein Punktlisten-Editor im PropertyPanel, `BackgroundPlane`/

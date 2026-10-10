@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.103.0] - 2026-10-10
+
+### "The name that can be named is not the eternal name." - Lao Tzu
+
+- **Architecture & Bugfixes:**
+  - *glTF vendor prefix `SW_*` -> `SWM_*`*: `SWM_stage_zone`, `SWM_stage_vanishing_point` and `SWM_prefab_instance` follow the re-brand (engine loaders/writers, tests, ADRs, guides, README). Level files written with the old `SW_*` names are no longer read. Historical changelog and log entries keep the old names.
+  - *Extension classes*: `SwStageZone` -> `SwmStageZone`, `SwPrefabInstance` -> `SwmPrefabInstance` (files renamed accordingly).
+- **Housekeeping & Docs:**
+  - *Version alignment*: `packages/engine`, `packages/gltf-extensions`, `apps/sample-apps` and `apps/showcases` (previously `0.78.00` / `0.79.03`) are lifted to the root version; `ENGINE_VERSION`, `package-lock.json` and the generated API reference (`docs/public/api`, now regenerated) all read `0.103.0`.
+  - *Re-brand audit of `docs/`*: product name, class names, paths and repository URLs verified; ADR 0015 now names `the-whisper` instead of the former `and-now` app.
+  - *`REFERENCES.md`*: the Khronos material entries (`KHR_materials_ior`, `_volume`, `_iridescence`) point to the relocated `packages/liquid-extras` sources (`OilSlick`, `OilPuddle`, `shading/thinFilm`) instead of the removed `the-whisper` files.
+  - Verified: library build and the full test suite green.
+
 ## [0.102.0] - 2026-10-10
 
 ### "What's in a name? that which we call a rose / By any other name would smell as sweet" - William Shakespeare

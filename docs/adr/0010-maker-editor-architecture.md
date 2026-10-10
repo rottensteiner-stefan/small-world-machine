@@ -21,9 +21,9 @@ Getrennt davon existiert nirgends im Engine-Kern eine Serialisierungsschicht —
 
 Das bei `Behavior` bereits bewährte `InspectorField`/`static inspector`-Muster wird zum gemeinsamen Vertrag für jede editierbare Klasse: `AbstractMaterial`, `AbstractLight`, Geometrien und `Object3D` selbst (dessen Transform-/Sichtbarkeits-/Schatten-Felder von hartkodierten UI-Aufrufen zu einem deklarativen Basis-Schema wechseln). Ein generischer Panel-Renderer ersetzt die heutige Dreiteilung aus hartkodierter/duck-typed/deklarativer Eigenschaften-Offenlegung. Das ist additiv und abwärtskompatibel — bestehende `Behavior.inspector`-Deklarationen funktionieren unverändert weiter.
 
-### 2. Weltformat = glTF 2.0 + ein `SW_*`-Erweiterungs-Namensraum, kein neues Format von Grund auf
+### 2. Weltformat = glTF 2.0 + ein `SWM_*`-Erweiterungs-Namensraum, kein neues Format von Grund auf
 
-Szenen werden als glTF-2.0-JSON persistiert (Node-Hierarchie, Transforms, PBR-Materialien, `KHR_lights_punctual`-Lichter, Kameras), wobei `packages/engine/src/loaders/GltfLoader.ts` als Lese-seitiges Fundament wiederverwendet wird — es parst bereits das `extensions`-Objekt (aktuell nur `KHR_materials_emissive_strength`). Small-World-Machine-spezifische Daten ohne glTF-Äquivalent (Behaviors und ihre Parameter, Physik-Konfiguration, Nicht-PBR-Materialfelder) werden in Vendor-Extension-Objekten unter einem `SW_*`-Präfix transportiert — genau der Mechanismus, den Khronos für diesen Fall vorgesehen hat. Ein begleitender `WorldWriter` wird neben `GltfLoader` ergänzt, um den lebenden `Scene`/`Object3D`-Graph zurück in diese Form zu serialisieren.
+Szenen werden als glTF-2.0-JSON persistiert (Node-Hierarchie, Transforms, PBR-Materialien, `KHR_lights_punctual`-Lichter, Kameras), wobei `packages/engine/src/loaders/GltfLoader.ts` als Lese-seitiges Fundament wiederverwendet wird — es parst bereits das `extensions`-Objekt (aktuell nur `KHR_materials_emissive_strength`). Small-World-Machine-spezifische Daten ohne glTF-Äquivalent (Behaviors und ihre Parameter, Physik-Konfiguration, Nicht-PBR-Materialfelder) werden in Vendor-Extension-Objekten unter einem `SWM_*`-Präfix transportiert — genau der Mechanismus, den Khronos für diesen Fall vorgesehen hat. Ein begleitender `WorldWriter` wird neben `GltfLoader` ergänzt, um den lebenden `Scene`/`Object3D`-Graph zurück in diese Form zu serialisieren.
 
 Verworfene Alternativen:
 - **Ein eigens entworfenes, individuelles JSON-Schema**: mehr Kontrolle, erfindet aber ein Szenengraph-Format neu, das die Branche längst standardisiert hat, verzichtet auf Interop mit Blender/DCC-Tools und verlangt einen von Grund auf gebauten Parser/Writer statt der Erweiterung von `GltfLoader`.
@@ -45,7 +45,7 @@ Das Auswahl-→-Eigenschaftspanel-Interaktionsmodell von `GadgetInspector` ist k
 
 ### Stufenweise Umsetzung
 
-0. **Fundament** — verallgemeinerte Reflection-Metadaten über Materialien/Lichter/Geometrie/`Object3D`; minimaler glTF+`SW_*`-Roundtrip (Transform-Baum + ein Material + ein Licht) mit Tests.
+0. **Fundament** — verallgemeinerte Reflection-Metadaten über Materialien/Lichter/Geometrie/`Object3D`; minimaler glTF+`SWM_*`-Roundtrip (Transform-Baum + ein Material + ein Licht) mit Tests.
 1. **Maker MVP** — eigenständige Seite, Edit-Mode-Kamera, Hierarchie-Panel mit echtem Reparenting, generisches Eigenschaftspanel, Objekterzeugungs-Palette (bestehender Geometrie-/Material-/Licht-/Behavior-Katalog, nichts Neues zu bauen), File-System-Access-Autosave, Undo/Redo.
 2. **Umgebungs-Maßstab** — Viewport-Transform-Gizmos (Translate-/Rotate-/Scale-Handles, nicht nur numerische Felder), verschachtelte/instanzierte Unterszenen (Prefab-Äquivalent, z. B. eine wiederverwendbare Flakturm-Zone oder das Diorama-Requisiten-Set), eine Brücke zu `MapGenerator`s bestehender ASCII-/`GridLevelBuilder`-Pipeline.
 
@@ -55,6 +55,6 @@ Das Auswahl-→-Eigenschaftspanel-Interaktionsmodell von `GadgetInspector` ist k
 
 - **Autosave nur unter Chromium.** Die File System Access API hat heute keine Firefox-/Safari-Unterstützung. Akzeptiert als bewusster Umfangs-Trade-off für ein Entwickler-Werkzeug, kein Blocker — Maker funktioniert dort weiterhin über manuellen Export, wo die API fehlt.
 - **glTF-Ausführlichkeit.** glTFs Schema ist auf Asset-Austausch optimiert, nicht darauf, dass "der Editor alle 500 ms ein minimales Diff schreibt" — es ist starrer/ausführlicher, als es ein eigens entworfenes Schema wäre. Akzeptiert im Austausch für die Wiederverwendung von `GltfLoader` und kostenlose Interop mit Blender und anderen DCC-Tools.
-- **Erweiterungs-Namensraum-Disziplin erforderlich.** `SW_*`-Erweiterungsschlüssel müssen additiv und sorgfältig namensraum-getrennt gehalten werden, sonst könnte eine künftige glTF-Spec-Revision mit Vendor-Daten kollidieren — Standard-glTF-Erweiterungshygiene, keine neue Risikoklasse.
+- **Erweiterungs-Namensraum-Disziplin erforderlich.** `SWM_*`-Erweiterungsschlüssel müssen additiv und sorgfältig namensraum-getrennt gehalten werden, sonst könnte eine künftige glTF-Spec-Revision mit Vendor-Daten kollidieren — Standard-glTF-Erweiterungshygiene, keine neue Risikoklasse.
 - **Migrationskosten für bestehende, von Hand verfasste Szenen.** Showcases/Apps, die direkt in TypeScript gebaut sind, sind nicht betroffen (Maker ist additives Tooling); nur Inhalte, die *durch* Maker verfasst werden, nutzen das neue Format.
 - **`GadgetInspector` abgeschaltet.** Vollständig durch Maker ersetzt. Szeneninspektion und -erstellung teilen sich jetzt eine einzige, vereinheitlichte Reflection-Schicht (`Inspectable`) und einen gemeinsamen Workflow.
