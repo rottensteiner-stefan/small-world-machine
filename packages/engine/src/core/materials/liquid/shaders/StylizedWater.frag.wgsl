@@ -107,8 +107,8 @@ fn aaStepMask(edge: f32, value: f32, softness: f32) -> f32 {
     var baseWaterColor = mix(deepColor, underwaterLighting, transmittance);
 
     if (USE_RAMP_LUT) {
-        // Ramp LUT (ADR 0026 route a): artist gradient replaces the hard-coded ramp, constant weight, no rampSoftness gate.
-        const RAMP_LUT_WEIGHT: f32 = 0.6;
+        // Ramp LUT (ADR 0026 route a): artist gradient replaces the hard-coded ramp at full weight (end colours reached exactly), no rampSoftness gate.
+        const RAMP_LUT_WEIGHT: f32 = 1.0;
         let rampT = clamp(effDepth / 4.0, 0.0, 1.0);
         let lutColor = sRGBToLinear(textureSampleLevel(u_rampMap, s, vec2<f32>((rampT * 255.0 + 0.5) / 256.0, 0.5), 0.0).rgb);
         baseWaterColor = mix(baseWaterColor, lutColor, RAMP_LUT_WEIGHT);

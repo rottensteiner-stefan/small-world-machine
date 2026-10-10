@@ -7,7 +7,11 @@ import fragGLSL100 from "./shaders/StylizedWater.frag.glsl100?raw";
 import { LiquidWaveMaterial } from "./LiquidWaveMaterial.js";
 import { Color } from "../../colors/index.js";
 import { MaterialType } from "../../../enums/index.js";
-import { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
+import {
+  RAMP_LUT_FLAG,
+  RenderManifest,
+  ShaderDefinition,
+} from "../../../renderers/shaders/index.js";
 import { Texture } from "../../textures/index.js";
 
 export interface StylizedWaterExtensionHooks {
@@ -83,7 +87,7 @@ export interface StylizedWaterMaterialOptions {
   style?: StylizedWaterStyle;
   /**
    * Optional 256x1 depth-to-colour ramp (see `RampLUT`). While set, it replaces the shallow/mid/deep
-   * blend at a constant weight and `rampSoftness` is ignored (ADR 0026 route (a)).
+   * blend at full weight and `rampSoftness` is ignored (ADR 0026 route (a)).
    */
   rampMap?: Texture;
 }
@@ -207,7 +211,7 @@ export class StylizedWaterMaterial extends LiquidWaveMaterial {
   private readonly _deepWithCaustic: number[] = [0, 0, 0, 0];
   /** The `u_styleB` lane; subclasses may overwrite entries after `super.getRenderManifest()`. */
   protected readonly _styleBArray: number[] = [0, 0, 0, 0];
-  private readonly _flagsWithRamp: string[] = ["USE_RAMP_LUT"];
+  private readonly _flagsWithRamp: string[] = [RAMP_LUT_FLAG];
   private readonly _flagsNoRamp: string[] = [];
 
   constructor(

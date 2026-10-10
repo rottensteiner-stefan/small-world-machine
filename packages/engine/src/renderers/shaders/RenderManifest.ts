@@ -7,6 +7,31 @@ import { BlendingMode, CullMode, Topology } from "../../enums/index.js";
 export const VERTEX_COLOR_FLAG = "USE_VERTEX_COLOR";
 
 /**
+ * Manifest flag for materials whose colour comes from a bound ramp texture (`StylizedWaterMaterial.rampMap`).
+ * With `quality.disableTextures` every texture reads white, so renderers drop this flag and the shader
+ * falls back to its built-in colour path instead of painting the surface white.
+ */
+export const RAMP_LUT_FLAG = "USE_RAMP_LUT";
+
+const _flagsWithoutTextures: WeakMap<string[], string[]> = new WeakMap();
+
+/** Returns the flags a renderer should compile with: texture-only flags are dropped when textures are disabled. Allocation-free after the first call per input array. */
+export function resolveManifestFlags(
+  flags: string[] | undefined,
+  disableTextures: boolean | undefined,
+): string[] | undefined {
+  if (!disableTextures || undefined === flags || !flags.includes(RAMP_LUT_FLAG)) {
+    return flags;
+  }
+  let resolved = _flagsWithoutTextures.get(flags);
+  if (undefined === resolved) {
+    resolved = flags.filter((f: string): boolean => f !== RAMP_LUT_FLAG);
+    _flagsWithoutTextures.set(flags, resolved);
+  }
+  return resolved;
+}
+
+/**
  * The RenderManifest is the "order sheet" that a material
  * passes to the renderer to describe its requirements.
  */

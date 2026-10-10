@@ -32,6 +32,11 @@ erzeugen.
 - ℹ️ **Offene Punkte (Stand heute)** siehe unten — u.a. S1 Wellen-Sonde (Abnahme), Golden-Baseline-Neuaufnahme,
   WebGPU-Block-Artefakt (Showcase 29, Root Cause offen), Mond-Spiegelung (Showcase 16, GL2), StylizedWater
   Phase B (Freigabe), `bunker_blast_door` (Asset-QS).
+- ✅ **Korrektur der Liste oben (2026-10-10, nach Prüfung):** erledigt bzw. veraltet waren S1, Showcase-29-Artefakt
+  (auf SwiftShader nicht reproduzierbar, Metal ungeprüft), Mond-Spiegelung (nicht reproduzierbar), WebGL1-`finalLight`
+  (seit `5f132f5e` behoben), StylizedWater Phase B (seit v0.96.0) samt Ramp-LUT-Restpunkten, `bunker_blast_door`
+  (Doku korrigiert, neues Prop `bunker_blast_door_leaf` gesourct), `stairs_down` (Clip-Timing). Offen bleibt die
+  Golden-Baseline-Neuaufnahme (siehe Eintrag unten).
 
 - 📋 **Golden-Baseline: Stand 2026-10-10 (korrigiert die Einträge vom 06.–08.10.):** Die Baseline wurde am 8.10. neu
   aufgenommen (Commit `28767d10`, Chrome 152, 12 Pools × 2 Views = 24 Zellen). Compare auf HEAD (GL2, gleiche
@@ -141,6 +146,13 @@ erzeugen.
   per Bounding-Volume + Vertex-Normalen gemessen). In der Szene als statische Panzertür verarbeitet
   (Vorderfläche bündig, Überlauf-Tiefe in den nicht-modellierten Flur). Für eine **animierbare**
   Tür später: Asset neu skalieren/re-exportieren oder ein schlankes Einzeltürblatt sourcen.
+  - *Statuskorrektur 2026-10-10:* Befund bestätigt (GLB-Bounds 0.0092×0.0100×0.0094 × Node-Scale 100 ≈ 0.92×1.0×0.94m).
+    `meta.json`-Dimensionen auf die gemessenen Werte korrigiert (war 1.8×2.2×0.25); Szene (`prologue.ts`) nutzt
+    bereits die gemessenen Maße. Offen bleibt nur das schlanke Türblatt für eine animierbare Tür (Tripo, Rückfrage).
+  - *Nachtrag 2026-10-10:* Schlankes Türblatt gesourct: neues Kit-Prop `flakturm/bunker_blast_door_leaf`
+    (`public/assets/kits/flakturm/props/bunker_blast_door_leaf/`, 1 Tripo-Text-to-Model-Generierung, v3.1, 11.3k Tris).
+    Roh-Bounds 0.42×1.0×0.96 (Tripo normiert auf 1 m Höhe, fast quadratisch) → per Node-TRS auf 1.6×2.0×0.25 m skaliert,
+    Breite entlang X gedreht, Ursprung unten mittig, Radseite +Z, Scharnier-Kante -X. Alter Block bleibt unverändert.
 - 💡 **Nächste Asset-Pipeline-Ideen aus dieser Runde (unbewertet):** Kit-Prop für Leichen-
   Schubladen-Wandschrank (ersetzt das prozedurale 3×3-Rack in K-42), ggf. Decken-Prop für die
   Kältekammer-Kaltleuchte konsolidieren (aktuell Kit-`ceiling_lamp` mit kaltem Light-Override).
@@ -211,6 +223,14 @@ erzeugen.
   `WebGL2Renderer.renderBatch()` (deaktiviert Directional-Shadow-Sampling explizit für
   Offscreen-Targets, fällt in den bestehenden "Shadow aus"-Uniform-Pfad). Kompiliert/lint/Tests
   grün (1180/1180), keine Regression in der Hauptkamera-Ansicht.
+- ✅ **Korrektur 2026-10-10 — nicht mehr reproduzierbar (Eintrag unten bleibt als Historie).** Showcase 16 per Vite-Dev-Server +
+  headless Chrome (SwiftShader, `?rendererType=WEB_GL2` vs `WEB_GPU`) geprüft: WebGPU und WebGL2 zeigen identische, normale
+  Mond-Spiegelungen (kleine Flecken, kein riesiger schwarzer Fleck). 20 Frames à ~0,9 s nach 30 s Warm-up auf GL2: kein einziger
+  Frame mit dunklem Bereich (Schwarzanteil 0 %). Schwarze Flecken (Cube-Face-förmig, auf allen 3 Kugeln gleichzeitig) traten nur
+  in den ersten Sekunden auf: `DynamicReflectionProbe` aktualisiert 1 Face/Frame, noch nicht gerenderte Faces sind schwarz
+  (unter SwiftShader mit niedriger FPS sichtbar lang). Das ist Warm-up, kein Moon-/Renderer-Bug; vermutlich haben die späteren
+  Fixes (Face-Orientierung GL, Offscreen-Shadow) das ursprüngliche Symptom bereits behoben. Kein Code-Fix nötig. Optional:
+  beim ersten `updateReflection` alle 6 Faces rendern, um das Warm-up-Schwarz zu vermeiden.
 - 📋 **Offen — Mond-Spiegelung in Showcase 16 zeigt in WebGL2 (nicht WebGPU) einen riesigen,
   komplett schwarzen Fleck**, wenn ein naher Orbit-Mond auf einer der 3 großen Spiegelkugeln
   reflektiert wird. **Per kontrolliertem Vergleich bei identischem `_time`-Wert (deterministische
@@ -648,6 +668,12 @@ erzeugen.
 Status: Material-Fix umgesetzt, `tsc` grün, noch **nicht committed**. `stairs_down`-Clip-Länge
 weiterhin offen.
 
+> **Statuskorrektur 2026-10-10:** `stairs_down`-Clip-Länge ist code-seitig behoben — Clip-Datei
+> (0.375s, verifiziert per GLB-Dump) bleibt unverändert, aber `_playAnimation()` setzt jetzt
+> `action.timeScale` über `resolveClipTimeScale()` (`flakturm-tunnel/clipTiming.ts`, Ziel-Zyklus
+> 1.0s → timeScale 0.375). Test: `tests/ClipTiming.test.ts`. Ziel-Zyklus 1.0s ist ein Schätzwert,
+> visuell abnehmen. Nicht committed.
+
 ---
 
 ## 2026-09-10 — And Now?: Szene-2-Review (Flakturm-Tunnel Bewegung & Animation)
@@ -697,6 +723,9 @@ Content-/Kalibrierungsfragen als Bugs, einer bleibt offen für den gemeinsamen B
   2026-09-10: Bestätigt — nach dem Tempo-Fix auf `0.09` berichtet der Nutzer erstmals erkennbare
   Beinbewegungen. Der extrem kurze `stairs_down`-Clip (0.375s, siehe oben) bleibt als separater,
   ungeprüfter Rest-Verdacht für Zucken speziell beim Treppe-Runtergehen stehen.
+  > Statuskorrektur 2026-10-10: Rest-Verdacht `stairs_down` per timeScale entschärft (siehe
+  > Eintrag 2026-09-11). Treppenanimation (`stairs_up`, 1.33s) bei Tempo 0.09 bereits ok; Zonen-
+  > Clamping und „Figur oben klein“ bleiben Design-/Kalibrierfragen (Bühnen-Editor), nicht angefasst.
 - ✅ **„Beim seitlichen Laufen/Rücken-zur-Kamera fehlt ein Bein" — geklärt (reine geometrische
   Selbstverdeckung, kein Mesh-/Rig-/Culling-Bug) UND im Flakturm-Tunnel per Start-Rotations-Nudge
   entschärft.** Bewusst chronologisch dokumentiert statt überschrieben, weil sich der Stand
@@ -984,6 +1013,21 @@ Entstanden während der Jagd nach grün/blauen Block-Artefakten auf den Sponza-V
   mit Noir-Paket als erste Extension, `sparkle` in der Engine, „Ghibli" nur intern. Erster Schritt der
   Umsetzung: V0-Baseline aller drei Backends vor jeder Shader-Änderung. Nichts davon ist in der Engine
   gerendert; Budgets sind aus Quelltext geschätzt.
+  - ✅ **Status-Klärung (2026-10-10):** Phase B ist seit v0.96.0 (2026-10-04) umgesetzt (ADR 0025 akzeptiert,
+    `liquid-extras`, `soft`/`sparkle`, `u_styleA/B`+`styleId`; danach ADR 0027, Ramp LUT 0.99.0). Der Titel „wartet auf
+    Freigabe" ist veraltet. Echt offen nur: Ramp-LUT-Gewicht 0.6 (Endfarben 79–89 %, Designfrage), Flag an nur auf
+    1 von 5 Pools verifiziert, `quality.disableTextures` färbt Rampe weiß, WebGL1-Rampe per Fresnel statt Tiefe,
+    Golden-Neuaufnahme (CI/Moderator).
+  - ✅ **Ramp-LUT-Restpunkte erledigt (2026-10-10, nicht committet):** (1) `RAMP_LUT_WEIGHT` 0.6 → 1.0 in GLSL100/GLSL300/WGSL,
+    LUT-Endfarben jetzt voll erreicht; ohne Rampe unverändert (Toggle-Off-Frame == Kontrolle, 0,0000 % Diff auf allen Backends).
+    Kein Golden-Pool bindet eine Rampe → **keine Golden-Zelle ändert sich visuell durch Punkt 1**, Baseline unberührt.
+    (2) `USE_RAMP_LUT` auf allen 5 StylizedWater-Pools (toon-water, bold-anime, soft-watercolor, painterly-sparkle, dredge) ×
+    WebGL1/WebGL2/WebGPU geprüft: 8/8 Checks je Pool/Backend grün (`.agents/scratches/ramp-lut-verify.mjs`, Ausgabe
+    `.agents/scratches/ramp-lut-v2/`, Screenshots gesichtet). (3) `quality.disableTextures`: Renderer streichen das Flag über
+    `resolveManifestFlags()` (`renderers/shaders/RenderManifest.ts`, in WebGL1/WebGL2/WebGPU-Renderer) → alter Tiefe→Farbe-Mix
+    statt weißem Wasser. (4) WebGL1 bleibt bei Fresnel-Indizierung, begründet: kein Tiefen-Input (`WEBGL_depth_texture` ungenutzt,
+    `copyToOpaqueDepthTexture` ist No-op), im Shader steht keine Wassertiefe pro Pixel zur Verfügung; Dokumentation im Shader,
+    Guide und Test statt Hack.
 
 - ✅ **Entscheidung: Copyright ist im ganzen Projekt irrelevant (2026-10-05, Moderator-Vorgabe, auf alles ausgeweitet):**
   Der User trägt am Ende die Verantwortung für das, was er in seine lokalen Tools füttert, nicht der Agent.
@@ -1003,6 +1047,7 @@ Entstanden während der Jagd nach grün/blauen Block-Artefakten auf den Sponza-V
 - ✅ **Belege:** GL2-Goldens mit Flag aus 24/24 byte-identisch zu `pre-p2`; Flag an (Rot/Blau-Extreme, Farbflip, Aus-Schalter, Re-Bake) auf WebGL1/WebGL2/WebGPU 8/8, nur toon-water/top. Tests, `tsc`, Lane-Scan grün. Session `next.md`: Konsens P2 (Alice/Bob/Charly), `[ABNAHME_ERTEILT: Charly]`, pid `terminated`.
 - ⚠️ **Bekannte Grenzen:** konstantes Gewicht 0.6 ⇒ Endfarben der LUT werden nur zu ca. 79–89 % erreicht (Designfrage, ggf. neuer Vorschlag); Flag an nur auf einem der fünf StylizedWater-Pools geprüft; `quality.disableTextures` färbt eine gebundene Rampe weiß; WebGL1 indiziert die Rampe per Fresnel statt Tiefe.
 - 📋 **Offen:** Die committete Golden-Baseline ist auf HEAD schon unabhängig davon rot (toon-water, bold-anime, painterly-sparkle, wave-rider, je top > 0,5 %) — Neuaufnahme ist Moderator-Entscheidung. WebGL1 hat einen alten Shader-Fehler (`finalLight` undeclared, Link-Fehler), nicht StylizedWater.
+  - ✅ **Korrektur 2026-10-10 — nicht mehr reproduzierbar (Eintrag oben bleibt als Historie):** GL1-Smoke (`capture.js --matrix gl1`, frischer Build) 32/32 Zellen OK, 0 Konsolenfehler. Der `finalLight`-Fehler war Lambert.frag.glsl100 ohne `[LIGHT_CALC]`, behoben 2026-10-08 (5f132f5e), abgesichert durch `Glsl100LightCalc.test.ts`. Kein Code-Fix nötig.
 - ℹ️ Session `liquid-roadmap` ist ebenfalls `terminated` (siehe deren Abschluss-Block); ihr einziger offener Punkt (formale Abnahme/G6 im CI-Verbund) ist ein externes CI-Gate, keine Session-Arbeit.
 
 ## 2026-10-08 — Engine-vs-AI-Vergleich Showcase 10 auf 12 Pools erweitert

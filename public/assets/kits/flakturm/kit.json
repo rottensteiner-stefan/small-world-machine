@@ -14,6 +14,14 @@
       "meta": "props/bunker_blast_door/meta.json"
     },
     {
+      "id": "flakturm/bunker_blast_door_leaf",
+      "name": "Flakturm Single Blast Door Leaf (animatable)",
+      "category": "doors",
+      "path": "props/bunker_blast_door_leaf/model.glb",
+      "preview": "props/bunker_blast_door_leaf/preview.jpg",
+      "meta": "props/bunker_blast_door_leaf/meta.json"
+    },
+    {
       "id": "flakturm/debris_rubble_pile",
       "name": "Concrete Rubble & Rebar Debris Pile",
       "category": "debris",

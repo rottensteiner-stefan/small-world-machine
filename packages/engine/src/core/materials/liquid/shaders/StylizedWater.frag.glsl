@@ -139,8 +139,8 @@ void main() {
 
 #ifdef USE_RAMP_LUT
     {
-        // Ramp LUT (ADR 0026 route a): artist gradient replaces the hard-coded ramp, constant weight, no rampSoftness gate.
-        const float RAMP_LUT_WEIGHT = 0.6;
+        // Ramp LUT (ADR 0026 route a): artist gradient replaces the hard-coded ramp at full weight (end colours reached exactly), no rampSoftness gate.
+        const float RAMP_LUT_WEIGHT = 1.0;
         float rampT = clamp(effDepth / 4.0, 0.0, 1.0);
         vec3 lutColor = sRGBToLinear(texture(u_rampMap, vec2((rampT * 255.0 + 0.5) / 256.0, 0.5)).rgb);
         baseWaterColor = mix(baseWaterColor, lutColor, RAMP_LUT_WEIGHT);

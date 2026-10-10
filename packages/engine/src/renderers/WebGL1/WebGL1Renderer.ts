@@ -3,7 +3,7 @@ import { WebGLMainPass } from "../passes/WebGLMainPass.js";
 import { WebGLPostProcessPass } from "../passes/WebGLPostProcessPass.js";
 import { PostProcessPassGL, BloomPassGL } from "../post/passes/index.js";
 import { CubeTexture, Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
-import { StandardWebGPULayout } from "../shaders/index.js";
+import { StandardWebGPULayout, resolveManifestFlags } from "../shaders/index.js";
 import { DeviceLimit, InstancedMesh, Object3D, Scene } from "../../core/index.js";
 import {
   EngineOptions,
@@ -784,7 +784,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     const mat = firstObj.material!;
     const manifest = mat.getRenderManifest();
     const texs = manifest.textures;
-    const flags = manifest.flags ?? [];
+    const flags = resolveManifestFlags(manifest.flags, this._quality.disableTextures) ?? [];
 
     const programKey = this._programCacheKey(shaderId, isInstanced, flags);
     const cache = this._getProgram(shaderId, isInstanced, flags);

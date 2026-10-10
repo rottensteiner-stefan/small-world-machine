@@ -14,9 +14,9 @@
     "roughness_metallic"
   ],
   "dimensions": {
-    "width": 1.8,
-    "height": 2.2,
-    "depth": 0.25
+    "width": 0.92,
+    "height": 1.0,
+    "depth": 0.94
   },
   "recommendedScale": 1.0,
   "author": "Small World Machine Studio",

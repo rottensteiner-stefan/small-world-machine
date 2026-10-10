@@ -23,6 +23,7 @@ import { GltfLoader } from "@small-world-machine/engine/loaders/GltfLoader.js";
 import { Bone } from "@small-world-machine/engine/core/animation/index.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
 import { BunkerKit } from "../../builder/BunkerKit.js";
+import { resolveClipTimeScale } from "./clipTiming.js";
 
 /** The background plane's world extent -- the only place a (u, v) stage coordinate is ever
  * turned into a 3D position. Fed directly into `StageMovementBehavior`'s `"flat-plane"`
@@ -845,6 +846,7 @@ class AndNowScene2 extends AbstractShowcase {
         : undefined;
     const toAction = this._mixer.clipAction(clip);
     toAction.setLoop(opts?.loop ?? true);
+    toAction.timeScale = resolveClipTimeScale(name, clip.duration);
     toAction.weight = 0;
     toAction.reset();
     toAction.play();

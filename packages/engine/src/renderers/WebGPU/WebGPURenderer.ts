@@ -9,7 +9,12 @@ import {
   isSkinnedMesh,
 } from "../../core/index.js";
 import { RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
-import { RenderManifest, UniformPacker, VERTEX_COLOR_FLAG } from "../shaders/index.js";
+import {
+  RenderManifest,
+  UniformPacker,
+  VERTEX_COLOR_FLAG,
+  resolveManifestFlags,
+} from "../shaders/index.js";
 import { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 
 import {
@@ -1589,6 +1594,8 @@ export class WebGPURenderer extends AbstractRenderer {
     const mat = objects[0]?.material;
     if (!mat) return;
     const manifest = mat.getRenderManifest();
+    const resolvedFlags = resolveManifestFlags(manifest.flags, this._quality.disableTextures);
+    if (resolvedFlags) manifest.flags = resolvedFlags;
 
     let topologyStr: GPUPrimitiveTopology = Topology.DEFAULT;
     if (batch.topology === Topology.POINT_LIST) topologyStr = Topology.POINT_LIST;

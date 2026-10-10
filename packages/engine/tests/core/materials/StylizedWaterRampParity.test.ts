@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { composeStylizedWaterSources } from "../../../src/core/materials/liquid/StylizedWaterMaterial.js";
+import { RAMP_LUT_FLAG, resolveManifestFlags } from "../../../src/renderers/shaders/index.js";
 
 // Source lint: asserts the three backends spell the ramp LUT identically (substring checks on the
 // shader text). It cannot prove the shaders compile or render alike; see LiquidUniformNameParity.test.ts
@@ -46,8 +47,24 @@ describe("StylizedWater ramp LUT source parity (P2 verification, A4)", () => {
     expect(glsl300).toContain("RAMP_LUT_WEIGHT");
     expect(glsl100).toContain("RAMP_LUT_WEIGHT");
     expect(wgsl).toContain("RAMP_LUT_WEIGHT");
-    expect(glsl300).toMatch(/RAMP_LUT_WEIGHT\s*=\s*0\.6\s*;/);
-    expect(glsl100).toMatch(/RAMP_LUT_WEIGHT\s*=\s*0\.6\s*;/);
-    expect(wgsl).toMatch(/RAMP_LUT_WEIGHT:\s*f32\s*=\s*0\.6\s*;/);
+    expect(glsl300).toMatch(/RAMP_LUT_WEIGHT\s*=\s*1\.0\s*;/);
+    expect(glsl100).toMatch(/RAMP_LUT_WEIGHT\s*=\s*1\.0\s*;/);
+    expect(wgsl).toMatch(/RAMP_LUT_WEIGHT:\s*f32\s*=\s*1\.0\s*;/);
+  });
+
+  it("drops the ramp flag only when textures are disabled", () => {
+    const flags = [RAMP_LUT_FLAG];
+    expect(resolveManifestFlags(flags, false)).toBe(flags);
+    expect(resolveManifestFlags(undefined, true)).toBeUndefined();
+    const stripped = resolveManifestFlags(flags, true);
+    expect(stripped).toEqual([]);
+    expect(resolveManifestFlags(flags, true)).toBe(stripped);
+    const other = ["USE_AO_MAP"];
+    expect(resolveManifestFlags(other, true)).toBe(other);
+  });
+
+  it("keeps WebGL1 on the Fresnel index because it has no depth source", () => {
+    expect(glsl100).toContain("float rampT = clamp(fresnel * 3.0 + washNoise, 0.0, 1.0);");
+    expect(glsl100).not.toContain("u_opaqueDepthMap");
   });
 });

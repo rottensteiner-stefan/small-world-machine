@@ -113,8 +113,9 @@ void main() {
 
 #ifdef USE_RAMP_LUT
     {
-        // Ramp LUT (ADR 0026 route a): artist gradient replaces the hard-coded ramp, constant weight, no rampSoftness gate.
-        const float RAMP_LUT_WEIGHT = 0.6;
+        // Ramp LUT (ADR 0026 route a): artist gradient replaces the hard-coded ramp at full weight (end colours reached exactly), no rampSoftness gate.
+        const float RAMP_LUT_WEIGHT = 1.0;
+        // WebGL1 deliberately indexes by Fresnel, not depth: WEBGL_depth_texture is unused here (copyToOpaqueDepthTexture is a no-op), so no per-pixel water depth exists.
         float rampT = clamp(fresnel * 3.0 + washNoise, 0.0, 1.0);
         vec3 lutColor = pow(texture2D(u_rampMap, vec2((rampT * 255.0 + 0.5) / 256.0, 0.5)).rgb, vec3(2.2));
         baseColor = mix(baseColor, lutColor, RAMP_LUT_WEIGHT);

@@ -162,10 +162,10 @@ In compliance with **ADR 0026**, the per-object uniform buffer (`ObjectUniforms`
 
 Route (a) of ADR 0026: a 256×1 colour ramp texture instead of more uniforms. Build it with `new RampLUT(stops)` (sRGB stops, baked by the pure function `bakeRamp`) and assign `material.rampMap = lut.texture`; `lut.setStops(...)` re-bakes in place. Notes:
 
-- While a ramp is bound (`USE_RAMP_LUT`), it replaces the shallow/mid/deep blend at a constant weight of 0.6 and `rampSoftness` is ignored. Without a ramp the shader output is unchanged.
+- While a ramp is bound (`USE_RAMP_LUT`), it replaces the shallow/mid/deep blend at full weight (the LUT end colours are reached exactly) and `rampSoftness` is ignored. Without a ramp the shader output is unchanged.
 - Sampled at texel centres; filtering is always linear, wrapping always clamp (WebGPU shares one sampler per material).
-- WebGL1 indexes the ramp by a view-angle (Fresnel) term, WebGL2/WebGPU by water depth, so the look differs between WebGL1 and the others by design.
-- `quality.disableTextures` turns every texture white, so a bound ramp renders bleached there.
+- WebGL1 indexes the ramp by a view-angle (Fresnel) term, WebGL2/WebGPU by water depth, so the look differs between WebGL1 and the others by design: WebGL1 has no depth source (no depth texture, `copyToOpaqueDepthTexture` is a no-op).
+- `quality.disableTextures` turns every texture white, so the renderers drop `USE_RAMP_LUT` (`resolveManifestFlags`) and the built-in depth-to-colour blend is used instead.
 - WebGPU: `u_rampMap` always occupies binding 18 (white fallback when unset); OpenWater ignores it.
 
 ---

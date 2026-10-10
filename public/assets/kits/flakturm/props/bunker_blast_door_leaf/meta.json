@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../../../schemas/prop-meta.schema.json",
+  "id": "flakturm/bunker_blast_door_leaf",
+  "name": "Flakturm Single Blast Door Leaf (animatable)",
+  "category": "doors",
+  "kit": "flakturm",
+  "version": "1.0.0",
+  "description": "Slim single riveted steel bunker door leaf with central lock wheel, observation slit and hinge knuckles on the -X edge. Origin at bottom centre, wheel side faces +Z. Intended for animated doors (rotate around the -X edge).",
+  "triangles": 11333,
+  "materials": 1,
+  "textures": [
+    "diffuse",
+    "normal",
+    "roughness_metallic"
+  ],
+  "dimensions": {
+    "width": 1.6,
+    "height": 2.0,
+    "depth": 0.25
+  },
+  "recommendedScale": 1.0,
+  "author": "Small World Machine Studio",
+  "license": "CC0-1.0"
+}
