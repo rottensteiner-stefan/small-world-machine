@@ -1,11 +1,5 @@
-import {
-  DeviceCaps,
-  DeviceLimit,
-  Object3D,
-  RenderManifest,
-  ShaderRegistry,
-  VERTEX_COLOR_FLAG,
-} from "../../../core/index.js";
+import { DeviceCaps, DeviceLimit, Object3D } from "../../../core/index.js";
+import { RenderManifest, ShaderRegistry, VERTEX_COLOR_FLAG } from "../../shaders/index.js";
 import { BlendingMode, CullMode } from "../../../enums/index.js";
 
 export interface WebGPUPipelineCacheEntry {

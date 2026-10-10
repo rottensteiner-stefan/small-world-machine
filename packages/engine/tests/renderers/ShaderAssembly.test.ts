@@ -19,7 +19,7 @@ import {
   DepthMaterial,
   ShaderRegistry,
 } from "../../src/index.js";
-import { ShaderBootstrap } from "../../src/core/renderers/shaders/ShaderBootstrap.js";
+import { ShaderBootstrap } from "../../src/renderers/shaders/ShaderBootstrap.js";
 
 describe("Shader Assembly & Linter", () => {
   beforeAll(async () => {

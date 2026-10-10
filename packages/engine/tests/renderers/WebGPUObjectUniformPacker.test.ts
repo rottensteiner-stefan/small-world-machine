@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { UniformPacker } from "../../src/core/renderers/shaders/UniformPacker.js";
+import { UniformPacker } from "../../src/renderers/shaders/UniformPacker.js";
 import { ShaderPropertyType } from "../../src/enums/index.js";
 import { Color } from "../../src/core/colors/Color.js";
 import { Matrix4 } from "../../src/math/index.js";
@@ -89,7 +89,7 @@ describe("WebGPU Object Uniform MAT4 alignment (WGSL/std140 spec compliance)", (
 describe("StandardWebGPULayout ObjectUniforms 512-byte budget and style slots", () => {
   it("packs StandardWebGPULayout into exactly 128 floats (512 bytes) with u_styleA at float 56, u_styleB at float 60 and u_matParam0 at float 64", async () => {
     const { StandardWebGPULayout } =
-      await import("../../src/core/renderers/shaders/StandardWebGPULayout.js");
+      await import("../../src/renderers/shaders/StandardWebGPULayout.js");
     const targetBuffer = new Float32Array(128);
     const dummyValues: Record<string, unknown> = {
       u_model: new Matrix4(),

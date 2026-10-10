@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   StylizedWaterMaterial,
   composeStylizedWaterSources,
-} from "../../src/core/materials/StylizedWaterMaterial.js";
+} from "../../src/core/materials/liquid/StylizedWaterMaterial.js";
 import { Color } from "../../src/core/colors/Color.js";
 import { Texture } from "../../src/core/textures/index.js";
 

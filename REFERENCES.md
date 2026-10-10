@@ -276,7 +276,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Octree Spatial Partitioning
 
-- **File:** `packages/engine/src/core/Octree.ts`
+- **File:** `packages/engine/src/core/culling/Octree.ts`
 - **Authors/Gurus:** Donald Meagher (1980)
 - **Source:** [Octree Encoding: A New Solid Representation for Computer Graphics](https://rpi.edu/)
 - **Usage:** Used as the fundamental spatial acceleration structure for the engine. It recursively divides 3D space into eight octants, allowing collision detection, frustum culling, and raycasting (picking) to operate in $O(\log n)$ time instead of $O(n)$, drastically improving performance in scenes with many objects.
@@ -375,7 +375,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 ## Physics & Collision Detection
 
 ### Gravitational Lensing (Black Hole Shadow & Einstein Ring)
-- **File:** `packages/engine/src/core/materials/shaders/PostProcess.frag.glsl`, `apps/showcases/21/showcase.ts`
+- **File:** `packages/engine/src/renderers/post/shaders/PostProcess.frag.glsl`, `apps/showcases/21/showcase.ts`
 - **Inspiration:** Dr. Katie Bouman, Dr. Sara Issaoun, and the Event Horizon Telescope (EHT) Collaboration (2019, 2022)
 - **Source:** First imaging of M87* and Sagittarius A* (Sgr A*).
 - **Usage:** The visual representation of the Super Massive Black Hole in Showcase 21 is profoundly inspired by the groundbreaking imaging work of the EHT team. The custom post-processing shader approximates the gravitational lensing, deflecting light rays near the simulated event horizon to recreate the iconic asymmetric glowing ring and the absolute black shadow at its core.
@@ -463,7 +463,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Cook-Torrance Microfacet BRDF (GGX / Smith / Schlick)
 
-- **File:** `packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/pbr_math.wgsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl`
+- **File:** `packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/pbr_math.wgsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl`
 - **Authors/Gurus:** Robert L. Cook & Kenneth E. Torrance (1982), Bruce Walter et al. (GGX/Trowbridge-Reitz, 2007), Christophe Schlick (1994)
 - **Source:**
   - [Cook & Torrance: "A Reflectance Model for Computer Graphics" (1982)](https://dl.acm.org/doi/10.1145/357290.357293)
@@ -475,7 +475,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 #### 1. `KHR_materials_ior` — Index of Refraction & Fresnel Baseline ($F_0$)
 
-- **File:** `packages/liquid-extras/src/materials/OilSlick/OilSlickMaterial.ts`, `packages/engine/src/core/materials/StandardMaterial.ts`, `packages/engine/src/core/materials/GlassMaterial.ts`
+- **File:** `packages/liquid-extras/src/materials/OilSlick/OilSlickMaterial.ts`, `packages/engine/src/core/materials/surface/StandardMaterial.ts`, `packages/engine/src/core/materials/glass/GlassMaterial.ts`
 - **Authors/Gurus:** Khronos 3D Formats Working Group
 - **Source:** [Khronos glTF Extension: `KHR_materials_ior`](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_ior)
 - **Formulas:**
@@ -485,7 +485,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 #### 2. `KHR_materials_volume` — Beer-Lambert Volumetric Absorption
 
-- **File:** `packages/engine/src/core/materials/GlassMaterial.ts`, `packages/engine/src/core/materials/OpenWaterMaterial.ts`, `packages/liquid-extras/src/materials/OilSlick/OilSlickMaterial.ts`
+- **File:** `packages/engine/src/core/materials/glass/GlassMaterial.ts`, `packages/engine/src/core/materials/liquid/OpenWaterMaterial.ts`, `packages/liquid-extras/src/materials/OilSlick/OilSlickMaterial.ts`
 - **Authors/Gurus:** Khronos 3D Formats Working Group
 - **Source:** [Khronos glTF Extension: `KHR_materials_volume`](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_volume)
 - **Formulas:**
@@ -506,7 +506,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 #### 4. `KHR_materials_clearcoat` — Second-Layer Dielectric Specular Lobe
 
-- **File:** `packages/engine/src/core/materials/StandardMaterial.ts`, `packages/engine/src/core/materials/shaders/Standard.frag.glsl`, `packages/engine/src/loaders/gltf/GltfMaterialParser.ts`
+- **File:** `packages/engine/src/core/materials/surface/StandardMaterial.ts`, `packages/engine/src/core/materials/surface/shaders/Standard.frag.glsl`, `packages/engine/src/loaders/gltf/GltfMaterialParser.ts`
 - **Authors/Gurus:** Brent Burley (Disney Principled BRDF 2012), Sébastien Lagarde (Frostbite), Khronos 3D Formats Working Group
 - **Source:**
   - [Khronos glTF Extension: `KHR_materials_clearcoat`](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_clearcoat)
@@ -520,7 +520,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 #### 5. `KHR_materials_sheen` — Charlie Microfiber Grazing-Angle Specular BRDF
 
-- **File:** `packages/engine/src/core/materials/StandardMaterial.ts`, `packages/engine/src/core/materials/shaders/Standard.frag.glsl`, `packages/engine/src/loaders/gltf/GltfMaterialParser.ts`
+- **File:** `packages/engine/src/core/materials/surface/StandardMaterial.ts`, `packages/engine/src/core/materials/surface/shaders/Standard.frag.glsl`, `packages/engine/src/loaders/gltf/GltfMaterialParser.ts`
 - **Authors/Gurus:** Stephen Estevez & Toshiya Hachisuka (Sony Pictures Imageworks 2017), Aleksandr Neubelt & Matt Pettineo (Ready at Dawn 2013), Khronos 3D Formats Working Group
 - **Source:**
   - [Khronos glTF Extension: `KHR_materials_sheen`](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_sheen)
@@ -532,7 +532,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 #### 6. `KHR_materials_transmission` — Specular Light Transmission & Screen-Space Refraction
 
-- **File:** `packages/engine/src/core/materials/GlassMaterial.ts`, `packages/engine/src/core/materials/StandardMaterial.ts`, `packages/engine/src/loaders/gltf/GltfMaterialParser.ts`
+- **File:** `packages/engine/src/core/materials/glass/GlassMaterial.ts`, `packages/engine/src/core/materials/surface/StandardMaterial.ts`, `packages/engine/src/loaders/gltf/GltfMaterialParser.ts`
 - **Authors/Gurus:** Bruce Walter, Stephen R. Marschner, Hongsong Li, Kenneth E. Torrance (2007), Khronos 3D Formats Working Group
 - **Source:**
   - [Khronos glTF Extension: `KHR_materials_transmission`](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_transmission)
@@ -584,21 +584,21 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Percentage-Closer Filtering (PCF) for Soft Shadows
 
-- **File:** `packages/engine/src/renderers/WebGL2/WebGL2Renderer.ts`, `packages/engine/src/core/materials/shaders/Phong.frag.glsl`, `packages/engine/src/core/materials/shaders/Standard.frag.glsl`
+- **File:** `packages/engine/src/renderers/WebGL2/WebGL2Renderer.ts`, `packages/engine/src/core/materials/surface/shaders/Phong.frag.glsl`, `packages/engine/src/core/materials/surface/shaders/Standard.frag.glsl`
 - **Authors/Gurus:** William T. Reeves, David H. Salesin, and Robert L. Cook (1987)
 - **Source:** [Rendering antialiased shadows with depth maps (SIGGRAPH 1987)](https://dl.acm.org/doi/10.1145/37402.37425)
 - **Usage:** The foundational technique for generating soft edges on shadow maps. By sampling the depth map multiple times around the target fragment and averaging the binary visibility results, jagged aliased shadows become smoothly blurred (especially when combined with hardware `sampler2DShadow`).
 
 ### Percentage-Closer Soft Shadows (PCSS)
 
-- **File:** `packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/light_calc.frag.glsl`, `packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/pbr_math.wgsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/lighting.wgsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl`, `packages/engine/src/renderers/WebGL2/WebGL2Renderer.ts`
+- **File:** `packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc.frag.glsl`, `packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/pbr_math.wgsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting.wgsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl`, `packages/engine/src/renderers/WebGL2/WebGL2Renderer.ts`
 - **Authors/Gurus:** Randima Fernando (NVIDIA)
 - **Source:** ["Percentage-Closer Soft Shadows"](https://download.nvidia.com/developer/presentations/2005/I3D/I3D_05_Percentage_Closer_Soft_Shadows.pdf) — SIGGRAPH 2005
 - **Usage:** Upgrades the directional-light PCF pass to a variable-radius filter: a blocker search over a small ring of raw (non-comparison) depth reads estimates how far the average occluder sits below the receiver, which then scales the PCF sample radius so contact shadows stay sharp while shadows further from their caster soften — contact-hardening soft shadows from a single shadow map, no extra light samples or pre-pass needed.
 
 ### Clustered / Tiled Forward+ Lighting (Light Culling)
 
-- **File:** `packages/engine/src/renderers/passes/WebGLClusterCullPass.ts`, `packages/engine/src/renderers/passes/ClusterCullPassGPU.ts`, `packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/lights.frag.glsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/lighting.wgsl`; architecture decisions in `docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md`
+- **File:** `packages/engine/src/renderers/passes/WebGLClusterCullPass.ts`, `packages/engine/src/renderers/passes/ClusterCullPassGPU.ts`, `packages/engine/src/renderers/shaders/source/web_gl2/chunks/lights.frag.glsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting.wgsl`; architecture decisions in `docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md`
 - **Authors/Gurus:** Emil Persson (humus.name); comparative research against three.js `ClusteredLighting`, Godot renderer docs and Babylon.js clustered lighting (see `docs/research/aaa-engine-techniques.md`)
 - **Source:**
   - [Practical Clustered Shading (Emil Persson)](https://www.humus.name/Articles/PracticalClusteredShading.pdf)
@@ -607,21 +607,21 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Image-Space Horizon-Based Ambient Occlusion (HBAO)
 
-- **File:** `packages/engine/src/core/materials/shaders/AO.frag.glsl`, `packages/engine/src/core/materials/shaders/AO.frag.wgsl`, `packages/engine/src/renderers/post/passes/AOPassGL.ts`, `packages/engine/src/renderers/post/passes/AOPassGPU.ts`, `packages/engine/src/renderers/post/elements/HbaoElement.ts`
+- **File:** `packages/engine/src/renderers/post/shaders/AO.frag.glsl`, `packages/engine/src/renderers/post/shaders/AO.frag.wgsl`, `packages/engine/src/renderers/post/passes/AOPassGL.ts`, `packages/engine/src/renderers/post/passes/AOPassGPU.ts`, `packages/engine/src/renderers/post/elements/HbaoElement.ts`
 - **Authors/Gurus:** Louis Bavoil, Miguel Sainz, Rouslan Dimitrov (NVIDIA)
 - **Source:** ["Image-Space Horizon-Based Ambient Occlusion"](https://developer.download.nvidia.com/presentations/2008/SIGGRAPH/HBAO_SIG08b.pdf) — SIGGRAPH 2008
 - **Usage:** The reference for our screen-space ambient occlusion pass (`HbaoElement` in code) — marching a handful of screen-space directions per pixel and taking `dot(directionToSample, normal)` as the sine of that direction's horizon elevation angle, then darkening by how much of the hemisphere those horizons block. Simplified relative to the paper: a single max-sample per direction instead of true horizon-angle accumulation via the sine-integration formula, and no per-pixel direction rotation or bilateral blur pass to turn banding into noise.
 
 ### Normal-Offset Shadow Bias
 
-- **File:** `packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/light_calc.frag.glsl`, `packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl`, `packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/base_vertex_main.vert.glsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/lighting.wgsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl`
+- **File:** `packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc.frag.glsl`, `packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl`, `packages/engine/src/renderers/shaders/source/web_gl2/chunks/base_vertex_main.vert.glsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting.wgsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl`
 - **Authors/Gurus:** Jasper Flick (Catlike Coding)
 - **Source:** [Directional Shadows (Custom SRP) — Catlike Coding](https://catlikecoding.com/unity/tutorials/custom-srp/directional-shadows/)
 - **Usage:** The reference for offsetting the shadow-map sample position along the surface normal (scaled by NdotL) before the light-space transform, instead of only biasing the compared depth value. Separates the fix for shadow acne from depth manipulation, reducing both acne and peter-panning simultaneously across our directional and spot light shadows.
 
 ### Temporal Supersampling / TAA (Jitter + History Blend)
 
-- **File:** `packages/engine/src/core/materials/shaders/HistoryBlend.frag.glsl`, `packages/engine/src/core/materials/shaders/HistoryBlend.frag.wgsl`, `packages/engine/src/renderers/post/passes/HistoryBlendPassGL.ts`, `packages/engine/src/renderers/post/passes/HistoryBlendPassGPU.ts`, `packages/engine/src/renderers/post/elements/TaaElement.ts`, `packages/engine/src/core/Camera.ts`, `packages/engine/src/core/SmallWorldMachine.ts`
+- **File:** `packages/engine/src/renderers/post/shaders/HistoryBlend.frag.glsl`, `packages/engine/src/renderers/post/shaders/HistoryBlend.frag.wgsl`, `packages/engine/src/renderers/post/passes/HistoryBlendPassGL.ts`, `packages/engine/src/renderers/post/passes/HistoryBlendPassGPU.ts`, `packages/engine/src/renderers/post/elements/TaaElement.ts`, `packages/engine/src/core/cameras/Camera.ts`, `packages/engine/src/core/SmallWorldMachine.ts`
 - **Authors/Gurus:** Brian Karis (Epic Games)
 - **Source:** ["High-Quality Temporal Supersampling"](http://advances.realtimerendering.com/s2014/#_HIGH-QUALITY_TEMPORAL_SUPERSAMPLING) — SIGGRAPH 2014, Advances in Real-Time Rendering
 - **Usage:** The canonical reference for sub-pixel camera jitter (we use a Halton(2,3) sequence, cycling 16 samples) combined with a history buffer accumulated across frames to reconstruct anti-aliased detail beyond a single frame's sample rate. We implement only the simplified half of the technique — jitter plus an exponential history blend, no motion-vector reprojection or neighborhood clamping — which smooths edges in static/slow scenes but visibly ghosts on fast movement, an accepted trade-off documented in `docs/research/aaa-engine-techniques.md`.
@@ -635,7 +635,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Dual Kawase Bloom (Post-Processing)
 
-- **File:** `packages/engine/src/core/materials/shaders/BloomDownsample.frag.wgsl`, `packages/engine/src/core/materials/shaders/BloomUpsample.frag.wgsl`, `packages/engine/src/renderers/passes/PostProcessPass.ts`
+- **File:** `packages/engine/src/renderers/post/shaders/BloomDownsample.frag.wgsl`, `packages/engine/src/renderers/post/shaders/BloomUpsample.frag.wgsl`, `packages/engine/src/renderers/passes/PostProcessPass.ts`
 - **Authors/Gurus:** Masaki Kawase (2003) and Marius Bjørge (2014)
 - **Source:** [Bandwidth-Efficient Rendering (ARM)](https://community.arm.com/cfs-file/__key/communityserver-blogs-components-weblogfiles/00-00-00-20-66/siggraph2015_2D00_mmg_2D00_marius_2D00_notes.pdf)
 - **Usage:** Used as the high-performance WebGPU bloom filter. By downsampling using a 13-tap filter and upsampling using a 9-tap tent filter across a mip-chain, this technique produces extremely soft, high-quality glows spanning large screen areas at a fraction of the cost of a traditional Gaussian blur.
@@ -648,7 +648,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### ACES Filmic Tone Mapping (Narkowicz Analytic Fit)
 
-- **File:** `packages/engine/src/core/materials/shaders/PostProcess.frag.glsl`, `packages/engine/src/core/materials/shaders/PostProcess.frag.wgsl`, `packages/engine/src/core/materials/shaders/PostProcess100.frag.glsl`, `packages/engine/src/renderers/post/elements/ToneMappingElement.ts`
+- **File:** `packages/engine/src/renderers/post/shaders/PostProcess.frag.glsl`, `packages/engine/src/renderers/post/shaders/PostProcess.frag.wgsl`, `packages/engine/src/renderers/post/shaders/PostProcess100.frag.glsl`, `packages/engine/src/renderers/post/elements/ToneMappingElement.ts`
 - **Authors/Gurus:** Krzysztof Narkowicz (2015), Academy of Motion Picture Arts and Sciences (AMPAS)
 - **Source:** [ACES Filmic Tone Mapping Curve (Krzysztof Narkowicz)](https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/)
 - **Formulas:**
@@ -848,7 +848,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Raymarching & SDFs
 
-- **File:** `packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/sdf_math.glsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/sdf_math.wgsl`, `apps/showcases/24/showcase.ts`
+- **File:** `packages/engine/src/renderers/shaders/source/web_gl2/chunks/sdf_math.glsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/sdf_math.wgsl`, `apps/showcases/24/showcase.ts`
 - **Authors/Gurus:** Inigo Quilez
 - **Source:** [Inigo Quilez - Computer Graphics, Mathematics, Shaders](https://iquilezles.org/)
 - **Usage:** Provides core Signed Distance Field (SDF) mathematical primitives (sphere, box, torus, cylinder, capsule, plane), polynomial smooth CSG operators (smooth union, subtraction, intersection), and domain modifiers (twist, repetition, rotation). Standardizes raymarching and procedural distance evaluations across WebGL2 and WebGPU shaders.
@@ -860,7 +860,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Stylized 3D Water Shader (Vertex Waves, Depth Fade, Foam)
 
-- **File:** `packages/engine/src/core/materials/OpenWaterMaterial.ts`, `packages/engine/src/core/materials/shaders/OpenWater.vert.glsl`, `packages/engine/src/core/materials/shaders/OpenWater.frag.glsl`, `packages/engine/src/core/materials/shaders/OpenWater.frag.wgsl`
+- **File:** `packages/engine/src/core/materials/liquid/OpenWaterMaterial.ts`, `packages/engine/src/core/materials/liquid/shaders/OpenWater.vert.glsl`, `packages/engine/src/core/materials/liquid/shaders/OpenWater.frag.glsl`, `packages/engine/src/core/materials/liquid/shaders/OpenWater.frag.wgsl`
 - **Authors/Gurus:** gameidea (gameidea.org, also active as `gameidea-studio` on itch.io and Patreon)
 - **Source:** ["Creating a Stylized 3D Water Shader"](https://gameidea.org/2026/02/01/creating-a-stylized-3d-water-shader/) — gameidea, published 2026-02-01
 - **Usage:** Reference for the stylized (Sea of Thieves-inspired) open-water look: simple sine/noise-based Gerstner-like vertex wave displacement combined with fragment-side depth fade (mixing toward an underwater fog color with scene depth) and screen-space foam near intersections with other geometry, instead of a physically simulated ocean (no FFT).
@@ -878,7 +878,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Smooth-Min Voronoi Caustics Network ($F_1 - \text{Smooth}F_1$)
 
-- **File:** `packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/liquid_caustics.glsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/liquid_caustics.wgsl`
+- **File:** `packages/engine/src/renderers/shaders/source/web_gl2/chunks/liquid_caustics.glsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/liquid_caustics.wgsl`
 - **Authors/Gurus:** Inigo Quilez (Smooth Voronoi / Cellular Noise)
 - **Source:** [Inigo Quilez - Smooth Voronoi](https://iquilezles.org/articles/smoothvoronoi/)
 - **Formulas:**
@@ -889,7 +889,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Stepped-Time Star Billboard Glint & Sparkle Lattice
 
-- **File:** `packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/liquid_glint.glsl`, `packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/liquid_glint.wgsl`
+- **File:** `packages/engine/src/renderers/shaders/source/web_gl2/chunks/liquid_glint.glsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/liquid_glint.wgsl`
 - **Authors/Gurus:** Traditional Japanese Limited Animation (Studio Ghibli aesthetic cadence)
 - **Formulas:**
   - Stepped Time Quantization: $t_{\text{step}} = \frac{\lfloor t \cdot \text{fps} \rfloor}{\text{fps}}$ (e.g. 8 or 12 FPS)
@@ -899,7 +899,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Stylized Lava Surface & Subtractive Fissure Shading
 
-- **File:** `packages/engine/src/core/materials/StylizedLavaMaterial.ts`, `packages/engine/src/core/materials/shaders/StylizedLava.{vert,frag}.{glsl,glsl100,wgsl}`, `scripts/gen-lava-textures.mjs` (stand-ins for the shader's two input textures)
+- **File:** `packages/engine/src/core/materials/liquid/StylizedLavaMaterial.ts`, `packages/engine/src/core/materials/liquid/shaders/StylizedLava.{vert,frag}.{glsl,glsl100,wgsl}`, `scripts/gen-lava-textures.mjs` (stand-ins for the shader's two input textures)
 - **Authors/Gurus:** Joyce / MinionsArt (Joyce[MinionsArt] on Patreon / Twitter / Bluesky)
 - **Source:**
   - ["Stylized Lava Shader" (Patreon Post 32245619)](https://www.patreon.com/posts/stylized-lava-32245619)

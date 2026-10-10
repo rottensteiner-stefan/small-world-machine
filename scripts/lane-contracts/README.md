@@ -46,7 +46,7 @@ Zuordnung Shader <-> Material prüft `LiquidUniformNameParity.test.ts`.
 ```bash
 node scripts/lane-contracts/scan.js
 ```
-Der Scanner wird von `packages/engine/tests/core/renderers/shaders/LiquidLaneContracts.test.ts`
+Der Scanner wird von `packages/engine/tests/renderers/shaders/LiquidLaneContracts.test.ts`
 und `packages/liquid-extras/tests/LaneTransport.test.ts` referenziert (Stichprobe gegen reale
 Quellen). S2-Splat-Lane und S3-Wall-Contract sind als `reserved` registriert und müssen vor
 Umsetzung durch diesen Registry-Pass.

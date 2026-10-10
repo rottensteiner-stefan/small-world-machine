@@ -8,7 +8,7 @@ import {
   RenderManifest,
   ShaderDefinition,
   StandardWebGPULayout,
-} from "../renderers/shaders/index.js";
+} from "../../renderers/shaders/index.js";
 
 /**
  * Modes supported by RetroScreenMaterial.

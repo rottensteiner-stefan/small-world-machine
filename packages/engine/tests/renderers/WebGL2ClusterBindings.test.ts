@@ -5,7 +5,7 @@ import * as path from "path";
 describe("WebGL2 clustered lighting bindings", () => {
   const lightsPath = path.resolve(
     __dirname,
-    "../../src/core/renderers/shaders/source/web_gl2/chunks/lights.frag.glsl",
+    "../../src/renderers/shaders/source/web_gl2/chunks/lights.frag.glsl",
   );
   const lightsContent = fs.readFileSync(lightsPath, "utf-8");
 
@@ -30,7 +30,7 @@ describe("WebGL2 clustered lighting bindings", () => {
   for (const file of ["light_calc.frag.glsl", "light_calc_pbr.frag.glsl"]) {
     it(`${file} looks up the cluster grid instead of looping 0..numLights`, () => {
       const content = fs.readFileSync(
-        path.resolve(__dirname, `../../src/core/renderers/shaders/source/web_gl2/chunks/${file}`),
+        path.resolve(__dirname, `../../src/renderers/shaders/source/web_gl2/chunks/${file}`),
         "utf-8",
       );
       expect(content).toContain("fetchPointClusterGridEntry(clusterCellIndex)");

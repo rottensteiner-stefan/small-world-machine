@@ -10,6 +10,20 @@ This guide is aimed at engine contributors: it explains how to add a new materia
 
 The rest of this guide covers the second path - it's also what `CustomShaderMaterial` does internally, just without a dedicated class wrapping it.
 
+## Where Material Files Live
+
+`packages/engine/src/core/materials/` is grouped by family; a family folder holds its material classes plus a
+`shaders/` subfolder with the `.glsl` / `.glsl100` / `.wgsl` sources (imported as `./shaders/X.frag.glsl?raw`):
+
+| Folder | Materials |
+| --- | --- |
+| `surface/` | `Basic`, `Lambert`, `Phong`, `Standard` |
+| `glass/` | `Glass`, `Frostglass` |
+| `liquid/` | `OpenWater`, `StylizedWater`, `LiquidWave`, `FluidSurface`, `Slime`, `Lava`, `StylizedLava` |
+| *(root)* | `AbstractMaterial`, `CustomShaderMaterial`, single-purpose materials (`Depth`, `Skybox`, `Sprite`, `Terrain`, `Wireframe`, `World`, `RetroScreen`) and `shaders/chunks/` shared by several materials |
+
+Post-processing shaders belong to the renderer, not to a material: `packages/engine/src/renderers/post/shaders/`.
+
 ## The Two Methods Every Material Implements
 
 `AbstractMaterial` (`packages/engine/src/core/materials/AbstractMaterial.ts`) requires exactly two methods:

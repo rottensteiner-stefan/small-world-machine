@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { attachBehavior, detachBehavior } from "../../../src/core/behaviors/Behavior.js";
 import { DraggableBehavior } from "../../../src/core/behaviors/DraggableBehavior.js";
 import { Object3D } from "../../../src/core/Object3D.js";
-import { Camera } from "../../../src/core/Camera.js";
+import { Camera } from "../../../src/core/cameras/Camera.js";
 import { PerspectiveProjection } from "../../../src/math/projections/PerspectiveProjection.js";
 import { Ray } from "../../../src/physix/index.js";
 import { Vector3D } from "../../../src/math/index.js";

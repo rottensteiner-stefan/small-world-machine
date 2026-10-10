@@ -22,9 +22,9 @@ import {
   Torus,
   Vector3D,
 } from "@small-world-machine/engine";
-import fragWGSL from "@small-world-machine/engine/core/materials/shaders/Standard.frag.wgsl?raw";
-import fragGLSL from "@small-world-machine/engine/core/materials/shaders/Standard.frag.glsl?raw";
-import fragGLSL100 from "@small-world-machine/engine/core/materials/shaders/Standard.frag.glsl100?raw";
+import fragWGSL from "@small-world-machine/engine/core/materials/surface/shaders/Standard.frag.wgsl?raw";
+import fragGLSL from "@small-world-machine/engine/core/materials/surface/shaders/Standard.frag.glsl?raw";
+import fragGLSL100 from "@small-world-machine/engine/core/materials/surface/shaders/Standard.frag.glsl100?raw";
 import { MarbleController } from "./MarbleController.js";
 import { DroneController } from "./DroneController.js";
 

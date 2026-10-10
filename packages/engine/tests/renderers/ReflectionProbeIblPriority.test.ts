@@ -13,13 +13,13 @@ import * as path from "path";
 describe("Per-object reflection probe takes priority over scene-level IBL", () => {
   const glsl2Path = path.resolve(
     __dirname,
-    "../../src/core/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl",
+    "../../src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl",
   );
   const glsl2Content = fs.readFileSync(glsl2Path, "utf-8");
 
   const wgslPath = path.resolve(
     __dirname,
-    "../../src/core/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl",
+    "../../src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl",
   );
   const wgslContent = fs.readFileSync(wgslPath, "utf-8");
 

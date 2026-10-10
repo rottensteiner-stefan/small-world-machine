@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fs from "fs";
 import { ShaderRegistry } from "@small-world-machine/engine";
-import { ShaderBootstrap } from "@small-world-machine/engine/core/renderers/shaders/ShaderBootstrap.js";
+import { ShaderBootstrap } from "@small-world-machine/engine/renderers/shaders/ShaderBootstrap.js";
 import { NoirWaterMaterial } from "../src/materials/NoirWater/NoirWaterMaterial.js";
 import { OilSlickMaterial } from "../src/materials/OilSlick/OilSlickMaterial.js";
 

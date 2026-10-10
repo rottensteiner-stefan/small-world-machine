@@ -6,7 +6,7 @@ import { Object3D } from "../../src/core/Object3D.js";
 import { PointLight } from "../../src/core/lights/PointLight.js";
 import { SpotLight } from "../../src/core/lights/SpotLight.js";
 import { DirectionalLight } from "../../src/core/lights/DirectionalLight.js";
-import { StandardMaterial } from "../../src/core/materials/StandardMaterial.js";
+import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import { KitManifest, PropMeta } from "../../src/loaders/kit/KitTypes.js";
 
 describe("KitRegistry", () => {

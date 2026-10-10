@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { Input, isEditingTextInput } from "../../src/core/Input.js";
+import { Input, isEditingTextInput } from "../../src/core/input/Input.js";
 import { Keys } from "../../src/enums/Keys.js";
 
 describe("Input Gamepad Support", () => {

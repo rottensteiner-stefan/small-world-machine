@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { FollowCameraBehavior } from "../../../src/core/behaviors/FollowCameraBehavior.js";
 import { Object3D } from "../../../src/core/Object3D.js";
-import { Camera } from "../../../src/core/Camera.js";
+import { Camera } from "../../../src/core/cameras/Camera.js";
 import { PerspectiveProjection } from "../../../src/math/projections/PerspectiveProjection.js";
 import { Vector3D } from "../../../src/math/Vector3D.js";
 

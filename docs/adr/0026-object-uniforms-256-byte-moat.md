@@ -4,7 +4,7 @@
 
 ## Kontext & Problem
 
-Der `ObjectUniforms`-Uniformblock (`packages/engine/src/core/renderers/shaders/StandardWebGPULayout.ts`,
+Der `ObjectUniforms`-Uniformblock (`packages/engine/src/renderers/shaders/StandardWebGPULayout.ts`,
 gespiegelt in `structs.wgsl`) packt pro Objekt Matrizen, Farben, Materialkennwerte und die
 Liquid-Style-Lanes (`u_styleA`, `u_styleB`) in genau **256 Byte** (16 `vec4`). Der Slot ist
 **voll**: Die Style-Lanes transportieren bereits per Lane-Reuse (z. B. `u_styleA.w` mit drei

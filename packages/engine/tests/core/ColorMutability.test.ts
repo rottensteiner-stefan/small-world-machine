@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { Color } from "../../src/core/colors/Color.js";
-import { StandardMaterial } from "../../src/core/materials/StandardMaterial.js";
-import { PhongMaterial } from "../../src/core/materials/PhongMaterial.js";
-import { LambertMaterial } from "../../src/core/materials/LambertMaterial.js";
+import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
+import { PhongMaterial } from "../../src/core/materials/surface/PhongMaterial.js";
+import { LambertMaterial } from "../../src/core/materials/surface/LambertMaterial.js";
 import { TerrainMaterial } from "../../src/core/materials/TerrainMaterial.js";
 import { SkyboxMaterial } from "../../src/core/materials/SkyboxMaterial.js";
 import { WireframeMaterial } from "../../src/core/materials/WireframeMaterial.js";

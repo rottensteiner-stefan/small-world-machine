@@ -3,8 +3,8 @@ import { RenderTarget, RenderTargetCube } from "../../../core/textures/index.js"
 import { QualityConfig } from "../../../interfaces/index.js";
 import { CompressedTextureFormat, TextureFilter, TextureWrap } from "../../../enums/index.js";
 import { GPUFallbackResources } from "./GPUFallbackResources.js";
-import mipDownsampleWGSL from "../../../core/materials/shaders/MipDownsample.frag.wgsl?raw";
-import fullscreenVertWGSL from "../../../core/materials/shaders/PostProcess.vert.wgsl?raw";
+import mipDownsampleWGSL from "../../post/shaders/MipDownsample.frag.wgsl?raw";
+import fullscreenVertWGSL from "../../post/shaders/PostProcess.vert.wgsl?raw";
 
 /**
  * Uploaded-texture GPU state: per-`Texture`/`CubeTexture` view caches (with refcounting so a

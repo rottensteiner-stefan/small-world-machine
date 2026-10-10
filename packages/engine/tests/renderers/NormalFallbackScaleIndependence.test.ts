@@ -14,7 +14,7 @@ function read(relativePath: string): string {
 }
 
 const VERTEX_CHUNK =
-  "packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/base_vertex_main.vert.glsl";
+  "packages/engine/src/renderers/shaders/source/web_gl2/chunks/base_vertex_main.vert.glsl";
 
 describe("WebGL2 vertex normal fallback", () => {
   it("tests the local normal, not only the model-matrix-scaled one, for the +Y fallback", () => {
@@ -45,15 +45,15 @@ describe("WebGL2 vertex normal fallback", () => {
 describe("PBR F0 stays within [0, 1]", () => {
   const cases: Array<[string, RegExp]> = [
     [
-      "packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl",
+      "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl",
       /var F0 = clamp\(mix\(vec3f\(f0_dielectric\), albedo, metallic\), vec3f\(0\.0\), vec3f\(1\.0\)\);/,
     ],
     [
-      "packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl",
+      "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl",
       /F0 = clamp\(mix\(F0, albedo, metallic\), vec3\(0\.0\), vec3\(1\.0\)\);/,
     ],
     [
-      "packages/engine/src/core/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl",
+      "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl",
       /F0 = clamp\(mix\(F0, albedo, metallic\), vec3\(0\.0\), vec3\(1\.0\)\);/,
     ],
   ];

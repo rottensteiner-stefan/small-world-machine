@@ -1,5 +1,5 @@
-import FULLSCREEN_VERT_WGSL from "../../core/materials/shaders/PostProcess.vert.wgsl?raw";
-import POST_PROCESS_FRAG_WGSL from "../../core/materials/shaders/PostProcess.frag.wgsl?raw";
+import FULLSCREEN_VERT_WGSL from "../post/shaders/PostProcess.vert.wgsl?raw";
+import POST_PROCESS_FRAG_WGSL from "../post/shaders/PostProcess.frag.wgsl?raw";
 import { Scene } from "../../core/index.js";
 import { WebGPURenderer } from "../WebGPU/index.js";
 import { RenderPass } from "../index.js";
@@ -10,7 +10,7 @@ import {
   TextureWrap,
   Topology,
 } from "../../enums/index.js";
-import { ShaderRegistry } from "../../core/renderers/shaders/index.js";
+import { ShaderRegistry } from "../shaders/index.js";
 
 /**
  * Full-screen post-processing pass (Uber-Shader).

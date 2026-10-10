@@ -7,7 +7,7 @@ import {
   GrainElement,
 } from "../../src/index.js";
 import { PostProcessingEffectType } from "../../src/enums/index.js";
-import { CoreShaderChunks } from "../../src/core/renderers/shaders/CoreShaderChunks.js";
+import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -67,7 +67,7 @@ describe("Post-Processing Shader Chunks & Groups", () => {
   it("should assemble GLSL post-processing fragment shader resolving all chunks", () => {
     const glslPath = path.resolve(
       process.cwd(),
-      "packages/engine/src/core/materials/shaders/PostProcess.frag.glsl",
+      "packages/engine/src/renderers/post/shaders/PostProcess.frag.glsl",
     );
     const glslRaw = fs.readFileSync(glslPath, "utf-8");
 
@@ -91,7 +91,7 @@ describe("Post-Processing Shader Chunks & Groups", () => {
   it("should assemble WGSL post-processing fragment shader resolving all chunks", () => {
     const wgslPath = path.resolve(
       process.cwd(),
-      "packages/engine/src/core/materials/shaders/PostProcess.frag.wgsl",
+      "packages/engine/src/renderers/post/shaders/PostProcess.frag.wgsl",
     );
     const wgslRaw = fs.readFileSync(wgslPath, "utf-8");
 
@@ -156,7 +156,7 @@ describe("Post-Processing Shader Chunks & Groups", () => {
     // instead and must never appear in the compiled shader text.
     const wgslPath = path.resolve(
       process.cwd(),
-      "packages/engine/src/core/materials/shaders/PostProcess.frag.wgsl",
+      "packages/engine/src/renderers/post/shaders/PostProcess.frag.wgsl",
     );
     const wgslSource = fs.readFileSync(wgslPath, "utf-8");
     let assembledWgsl = ShaderRegistry.instance.assemble(wgslSource, "wgsl");
@@ -218,7 +218,7 @@ describe("Post-Processing Shader Chunks & Groups", () => {
     // Simulate GLSL string replacement in PostProcessPassGL
     const glslPath = path.resolve(
       process.cwd(),
-      "packages/engine/src/core/materials/shaders/PostProcess.frag.glsl",
+      "packages/engine/src/renderers/post/shaders/PostProcess.frag.glsl",
     );
     const glslSource = fs.readFileSync(glslPath, "utf-8");
     let assembledGlsl = ShaderRegistry.instance.assemble(glslSource, "glsl300");

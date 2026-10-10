@@ -9,7 +9,7 @@ import {
   RenderManifest,
   ShaderDefinition,
   StandardWebGPULayout,
-} from "../renderers/shaders/index.js";
+} from "../../renderers/shaders/index.js";
 
 /**
  * Configuration options for terrain material.

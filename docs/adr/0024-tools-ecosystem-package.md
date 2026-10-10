@@ -27,3 +27,8 @@ Der eigentliche Knoten: `SmallWorldMachine.ts` (Kern) importiert selbst dynamisc
 - **Breaking Change:** Jede bestehende App, die sich bisher auf `enableInspector: true` allein verlassen hat, um automatisch Forge + die vier Tools zu bekommen, muss beim Umsetzen auf den expliziten `attachDevTools(app)`-Aufruf umgestellt werden. Das ist eine bewusste, nicht stillschweigende Migration.
 - Löst die bereits dokumentierte `small-world-machine/tools`-Subpath-Lücke: `@small-world-machine/tools` wird ein echtes, eigenständig auflösbares Paket mit eigenem `package.json`/`exports`.
 - Folgeaufwand bei Umsetzung: die vier `public/tools/*.html`-Importpfade, `packages/engine/src/tools/index.ts`-Barrel entsprechend kürzen, neue `packages/tools/package.json` + `tests/`-Verzeichnis (bestehende Maker-/MaterialStudio-Tests wandern mit).
+
+## Revision 2026-10-10
+
+- Der IBL-Generator (`ibl-gen.ts`, `ibl-gen-core.ts`, `IBLShaders.ts`) war entgegen Punkt 3 reines Offline-Werkzeug ohne Engine-Laufzeitnutzung und wanderte nach `packages/tools/src/ibl-gen/` (Export über `@small-world-machine/tools`).
+- Das Verzeichnis `packages/engine/src/tools/` entfällt: `ForgeTool` liegt jetzt in `core/forge/`, `GridLevelBuilder` in `geometry/procgen/`. Beide bleiben Teil des Engine-Barrels, API-Namen unverändert.

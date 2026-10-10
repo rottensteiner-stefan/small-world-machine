@@ -1,7 +1,7 @@
 import { Behavior } from "./Behavior.js";
 import { InspectorField } from "../Inspectable.js";
 import { Object3D } from "../Object3D.js";
-import { InputInterface } from "../Input.js";
+import { InputInterface } from "../input/Input.js";
 import { StageZone } from "../stage/StageZone.js";
 import { Keys } from "../../enums/index.js";
 

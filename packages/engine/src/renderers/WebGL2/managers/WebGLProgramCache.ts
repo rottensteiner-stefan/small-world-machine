@@ -1,5 +1,5 @@
 import { Object3D } from "../../../core/index.js";
-import { ShaderRegistry } from "../../../core/renderers/shaders/index.js";
+import { ShaderRegistry } from "../../shaders/index.js";
 import { WebGL2UniformBuffer } from "../WebGL2UniformBuffer.js";
 import { VERTEX_COLOR_LOCATION } from "../../Mesh.js";
 

@@ -4,7 +4,7 @@ import { AbstractWebGLRenderer } from "../../src/renderers/AbstractWebGLRenderer
 import { type WebGLRenderPass } from "../../src/renderers/WebGLRenderPass.js";
 import { Scene } from "../../src/core/Scene.js";
 import { DirectionalLight } from "../../src/core/lights/DirectionalLight.js";
-import { FluidSurfaceMaterial } from "../../src/core/materials/FluidSurfaceMaterial.js";
+import { FluidSurfaceMaterial } from "../../src/core/materials/liquid/FluidSurfaceMaterial.js";
 import { MaterialType, RendererType } from "../../src/enums/index.js";
 
 // Dummy implementation of the abstract base class

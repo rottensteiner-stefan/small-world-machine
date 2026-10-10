@@ -1,5 +1,5 @@
-import { CoreShaderChunks } from "../../src/core/renderers/shaders/CoreShaderChunks.js";
-import { ShaderRegistry } from "../../src/core/renderers/shaders/ShaderRegistry.js";
+import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
+import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 
 describe("SDF & Raymarching Shader Chunks", () => {
   beforeAll(async () => {

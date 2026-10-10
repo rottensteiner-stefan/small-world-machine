@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { collectInspectorSchema } from "../../src/core/Inspectable.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { PointLight } from "../../src/core/lights/PointLight.js";
-import { StandardMaterial } from "../../src/core/materials/StandardMaterial.js";
-import { PhongMaterial } from "../../src/core/materials/PhongMaterial.js";
+import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
+import { PhongMaterial } from "../../src/core/materials/surface/PhongMaterial.js";
 
 describe("collectInspectorSchema", () => {
   it("exposes Object3D's own base schema for a plain Object3D", () => {

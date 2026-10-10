@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { StandardMaterial } from "../../src/core/materials/StandardMaterial.js";
+import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import { getOptionalMaterialTextureBindings } from "../../src/renderers/WebGPU/managers/GPUPipelineCache.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -29,7 +29,7 @@ describe("WebGPU Shader Bindings & Layouts", () => {
     // Read the WebGPU structs definition
     const wgslPath = path.resolve(
       __dirname,
-      "../../src/core/renderers/shaders/source/web_gpu/chunks/structs.wgsl",
+      "../../src/renderers/shaders/source/web_gpu/chunks/structs.wgsl",
     );
     const wgslContent = fs.readFileSync(wgslPath, "utf-8");
 
@@ -46,7 +46,7 @@ describe("WebGPU Shader Bindings & Layouts", () => {
   it("should have matching @binding(18) for u_rampMap in structs.wgsl and the optional texture table", () => {
     const wgslPath = path.resolve(
       __dirname,
-      "../../src/core/renderers/shaders/source/web_gpu/chunks/structs.wgsl",
+      "../../src/renderers/shaders/source/web_gpu/chunks/structs.wgsl",
     );
     const wgslContent = fs.readFileSync(wgslPath, "utf-8");
     expect(wgslContent).toContain("@group(1) @binding(18) var u_rampMap: texture_2d<f32>;");
@@ -59,7 +59,7 @@ describe("WebGPU Shader Bindings & Layouts", () => {
   it("should have matching @binding(19) for u_distortMap in structs.wgsl and the optional texture table", () => {
     const wgslPath = path.resolve(
       __dirname,
-      "../../src/core/renderers/shaders/source/web_gpu/chunks/structs.wgsl",
+      "../../src/renderers/shaders/source/web_gpu/chunks/structs.wgsl",
     );
     const wgslContent = fs.readFileSync(wgslPath, "utf-8");
     expect(wgslContent).toContain("@group(1) @binding(19) var u_distortMap: texture_2d<f32>;");
@@ -72,7 +72,7 @@ describe("WebGPU Shader Bindings & Layouts", () => {
   it("should correctly rewrite base.vert.wgsl for instanced rendering without corrupting parameters", () => {
     const wgslPath = path.resolve(
       __dirname,
-      "../../src/core/renderers/shaders/source/web_gpu/base.vert.wgsl",
+      "../../src/renderers/shaders/source/web_gpu/base.vert.wgsl",
     );
     let code = fs.readFileSync(wgslPath, "utf-8");
 

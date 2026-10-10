@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { OpenWaterMaterial } from "../../../src/core/materials/OpenWaterMaterial.js";
-import { StylizedWaterMaterial } from "../../../src/core/materials/StylizedWaterMaterial.js";
-import { OpenWaterSurfaceProbe } from "../../../src/core/materials/OpenWaterSurfaceProbe.js";
+import { OpenWaterMaterial } from "../../../src/core/materials/liquid/OpenWaterMaterial.js";
+import { StylizedWaterMaterial } from "../../../src/core/materials/liquid/StylizedWaterMaterial.js";
+import { OpenWaterSurfaceProbe } from "../../../src/core/materials/liquid/OpenWaterSurfaceProbe.js";
 
 // Golden values: hand-evaluated in f64 from the OpenWater.vert.glsl formulas for the default
 // OpenWaterMaterial lanes (independent of the probe code). Splat: ring at the origin spawned at

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { FluidSurfaceMaterial } from "../../../src/core/materials/FluidSurfaceMaterial.js";
-import { LavaMaterial } from "../../../src/core/materials/LavaMaterial.js";
-import { SlimeMaterial } from "../../../src/core/materials/SlimeMaterial.js";
+import { FluidSurfaceMaterial } from "../../../src/core/materials/liquid/FluidSurfaceMaterial.js";
+import { LavaMaterial } from "../../../src/core/materials/liquid/LavaMaterial.js";
+import { SlimeMaterial } from "../../../src/core/materials/liquid/SlimeMaterial.js";
 
 describe("FluidSurfaceMaterial depth pre-pass opt-out", () => {
   it("skips the depth pre-pass for opaque displaced surfaces (lava)", () => {

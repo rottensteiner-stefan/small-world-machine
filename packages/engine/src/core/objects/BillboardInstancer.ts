@@ -1,4 +1,4 @@
-import { Camera } from "../Camera.js";
+import { Camera } from "../cameras/Camera.js";
 import { InstancedMesh } from "../InstancedMesh.js";
 import { AbstractMaterial, StandardMaterial } from "../materials/index.js";
 import { Color } from "../colors/index.js";

@@ -2,7 +2,7 @@ import {
   UniversalGamepadController,
   StandardGamepadDevice,
   JoyConGamepadDevice,
-} from "../../src/core/UniversalGamepadController.js";
+} from "../../src/core/input/UniversalGamepadController.js";
 import type { JoyConLeft, JoyConRight } from "joy-con-webhid";
 
 describe("UniversalGamepadController", () => {

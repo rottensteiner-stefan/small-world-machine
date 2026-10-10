@@ -4,7 +4,7 @@ import {
   RenderManifest,
   ShaderDefinition,
   registerMaterialShaderProvider,
-} from "../renderers/shaders/index.js";
+} from "../../renderers/shaders/index.js";
 import { ShaderProvider } from "../../interfaces/index.js";
 import { MathUtils } from "../../math/index.js";
 import { InspectorField } from "../Inspectable.js";

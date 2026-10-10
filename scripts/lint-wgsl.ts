@@ -2,9 +2,15 @@ import fs from "fs/promises";
 import path from "path";
 import { WgslReflect } from "wgsl_reflect/wgsl_reflect.module.js";
 
-const chunksDir = path.resolve("packages/engine/src/core/renderers/shaders/source/web_gpu/chunks");
+const chunksDir = path.resolve("packages/engine/src/renderers/shaders/source/web_gpu/chunks");
 const localChunksDir = path.resolve("packages/engine/src/core/materials/shaders/chunks");
-const materialsDir = path.resolve("packages/engine/src/core/materials/shaders");
+const shaderDirs = [
+  "packages/engine/src/core/materials/shaders",
+  "packages/engine/src/core/materials/liquid/shaders",
+  "packages/engine/src/core/materials/surface/shaders",
+  "packages/engine/src/core/materials/glass/shaders",
+  "packages/engine/src/renderers/post/shaders",
+].map((d) => path.resolve(d));
 
 async function loadChunksFromDir(dir: string, chunks: Map<string, string>) {
   try {
@@ -58,13 +64,16 @@ async function loadChunks() {
 
 async function lintWgsl() {
   const chunks = await loadChunks();
-  const files = await fs.readdir(materialsDir);
+  const entries: { file: string; filePath: string }[] = [];
+  for (const dir of shaderDirs) {
+    for (const file of await fs.readdir(dir))
+      entries.push({ file, filePath: path.join(dir, file) });
+  }
   let hasErrors = false;
 
-  for (const file of files) {
+  for (const { file, filePath } of entries) {
     if (!file.endsWith(".wgsl")) continue;
 
-    const filePath = path.join(materialsDir, file);
     let code = await fs.readFile(filePath, "utf8");
 
     // Simple regex to replace chunks like [WGSL_PBR_LIGHTING]

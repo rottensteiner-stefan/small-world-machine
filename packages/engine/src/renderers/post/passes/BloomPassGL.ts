@@ -1,10 +1,10 @@
-import FULLSCREEN_VERT_GLSL from "../../../core/materials/shaders/PostProcess.vert.glsl?raw";
-import FULLSCREEN_VERT_GLSL100 from "../../../core/materials/shaders/PostProcess100.vert.glsl?raw";
+import FULLSCREEN_VERT_GLSL from "../shaders/PostProcess.vert.glsl?raw";
+import FULLSCREEN_VERT_GLSL100 from "../shaders/PostProcess100.vert.glsl?raw";
 
-import BLOOM_DOWNSAMPLE_FRAG_GLSL from "../../../core/materials/shaders/BloomDownsample.frag.glsl?raw";
-import BLOOM_UPSAMPLE_FRAG_GLSL from "../../../core/materials/shaders/BloomUpsample.frag.glsl?raw";
-import BLOOM_DOWNSAMPLE_FRAG_GLSL100 from "../../../core/materials/shaders/BloomDownsample.frag.glsl100?raw";
-import BLOOM_UPSAMPLE_FRAG_GLSL100 from "../../../core/materials/shaders/BloomUpsample.frag.glsl100?raw";
+import BLOOM_DOWNSAMPLE_FRAG_GLSL from "../shaders/BloomDownsample.frag.glsl?raw";
+import BLOOM_UPSAMPLE_FRAG_GLSL from "../shaders/BloomUpsample.frag.glsl?raw";
+import BLOOM_DOWNSAMPLE_FRAG_GLSL100 from "../shaders/BloomDownsample.frag.glsl100?raw";
+import BLOOM_UPSAMPLE_FRAG_GLSL100 from "../shaders/BloomUpsample.frag.glsl100?raw";
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import { BloomElement } from "../elements/index.js";

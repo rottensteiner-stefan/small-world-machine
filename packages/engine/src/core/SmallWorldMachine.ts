@@ -1,11 +1,11 @@
-import { Camera } from "./Camera.js";
+import { Camera } from "./cameras/Camera.js";
 import { Scene } from "./Scene.js";
-import { Input } from "./Input.js";
-import { InteractionManager } from "./InteractionManager.js";
+import { Input } from "./input/Input.js";
+import { InteractionManager } from "./input/InteractionManager.js";
 import { AudioSystem } from "../audio/AudioSystem.js";
 import { EventDispatcherImpl } from "./events/EventDispatcherImpl.js";
 import { DeviceFeature, DeviceLimit } from "./DeviceCaps.js";
-import { FrustumCuller } from "./FrustumCuller.js";
+import { FrustumCuller } from "./culling/FrustumCuller.js";
 import {
   AbstractProjection,
   ObliqueProjection,
@@ -21,12 +21,12 @@ import {
 } from "../interfaces/index.js";
 import { ProjectionType, RendererType, PostProcessingEffectType } from "../enums/index.js";
 import { RendererFactory } from "../renderers/index.js";
-import { ShaderBootstrap } from "./renderers/shaders/index.js";
+import { ShaderBootstrap } from "../renderers/shaders/index.js";
 import { CollisionVisualizer, OctreeVisualizer } from "../utils/index.js";
 import { PhysicsSystem } from "../physix/PhysicsSystem.js";
 
 /** The current engine version. */
-export const ENGINE_VERSION = "0.103.0";
+export const ENGINE_VERSION = "0.104.0";
 
 /**
  * Halton low-discrepancy sequence, used for TAA's per-frame sub-pixel camera jitter -- covers

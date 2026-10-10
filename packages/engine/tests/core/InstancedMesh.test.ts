@@ -1,6 +1,6 @@
 import { InstancedMesh } from "../../src/core/InstancedMesh.js";
 import { Matrix4 } from "../../src/math/Matrix4.js";
-import { StandardMaterial } from "../../src/core/materials/StandardMaterial.js";
+import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import { GeometryDataInterface, BoundingVolume } from "../../src/interfaces/index.js";
 import { describe, it, expect } from "vitest";
 

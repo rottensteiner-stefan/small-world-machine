@@ -38,3 +38,4 @@ export * from "./Rhombus.js";
 export * from "./TriStar.js";
 export * from "./CylindricalArch.js";
 export * from "./HollowTruncatedCone.js";
+export * from "./procgen/index.js";

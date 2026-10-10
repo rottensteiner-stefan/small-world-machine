@@ -5,7 +5,7 @@ import * as path from "path";
 describe("WebGPU clustered lighting bindings", () => {
   const wgslPath = path.resolve(
     __dirname,
-    "../../src/core/renderers/shaders/source/web_gpu/chunks/structs.wgsl",
+    "../../src/renderers/shaders/source/web_gpu/chunks/structs.wgsl",
   );
   const wgslContent = fs.readFileSync(wgslPath, "utf-8");
 
@@ -34,7 +34,7 @@ describe("WebGPU clustered lighting bindings", () => {
   it("declares the cullLights compute entry point", () => {
     const computePath = path.resolve(
       __dirname,
-      "../../src/core/renderers/shaders/source/web_gpu/compute/cluster_cull.wgsl",
+      "../../src/renderers/shaders/source/web_gpu/compute/cluster_cull.wgsl",
     );
     const computeContent = fs.readFileSync(computePath, "utf-8");
     expect(computeContent).toContain("@compute @workgroup_size(4, 4, 4)");

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.104.0] - 2026-10-10
+
+### "Order is Heaven's first law." - Alexander Pope
+
+- **Architecture & Bugfixes:**
+  - *Engine source re-organization* (public barrel API unchanged):
+    - `core/materials/` is grouped by family: `surface/` (Basic, Lambert, Phong, Standard), `glass/` (Glass, Frostglass), `liquid/` (OpenWater, StylizedWater, LiquidWave, FluidSurface, Slime, Lava, StylizedLava); each family carries its own `shaders/` folder, shared chunks stay in `core/materials/shaders/chunks`.
+    - Renderer layers merged: `core/renderers/` is dissolved, the shader infrastructure lives in `renderers/shaders/`; post-processing shaders (`AO`, `Bloom*`, `PostProcess*`, `HistoryBlend`, `MipDownsample`) moved to `renderers/post/shaders/`.
+    - `engine/src/tools/` is dissolved: `ForgeTool` -> `core/forge/`, `GridLevelBuilder` -> `geometry/procgen/`.
+    - Loose `core/` files grouped into `input/`, `culling/`, `reflection/`, `sky/`, `cameras/` and `sprites/`.
+  - *IBL generator moved to `@small-world-machine/tools`* (`packages/tools/src/ibl-gen/`, exported from the package barrel); it is an offline tool without engine runtime use (ADR 0024 revised).
+  - *`presentation.ts`* moved from the engine to `apps/showcases/presentation/`.
+- **Housekeeping & Docs:**
+  - `scripts/lint-wgsl.ts` scans all family shader folders and the post-processing folder; `Glsl100LightCalc.test.ts` searches shader sources recursively (same four shaders covered as before).
+  - ADR 0024 revision note, ADR 0015/`REFERENCES.md` paths, new "Where Material Files Live" section in `docs/guides/adding-materials.md`; API reference regenerated (`v0.104.0`).
+  - Verified: typecheck, lint, `lint:wgsl`, library and showcase builds and the full test suite (1628 tests) green.
+
 ## [0.103.0] - 2026-10-10
 
 ### "The name that can be named is not the eternal name." - Lao Tzu

@@ -20,7 +20,7 @@ import { AbstractLight } from "../../core/lights/index.js";
 import { MAX_AREA_LIGHTS } from "../../core/lights/AreaLight.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
 import { CubeTexture, Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
-import { RenderManifest } from "../../core/renderers/shaders/index.js";
+import { RenderManifest } from "../shaders/index.js";
 import { Color } from "../../core/colors/index.js";
 import { DeviceLimit, InstancedMesh, Object3D, Scene, TextureArray } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";

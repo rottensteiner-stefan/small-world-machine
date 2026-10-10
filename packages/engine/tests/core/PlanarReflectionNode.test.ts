@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { Camera } from "../../src/core/Camera.js";
+import { Camera } from "../../src/core/cameras/Camera.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { PerspectiveProjection } from "../../src/math/index.js";
-import { PlanarReflectionNode } from "../../src/core/PlanarReflectionNode.js";
+import { PlanarReflectionNode } from "../../src/core/reflection/PlanarReflectionNode.js";
 import { Scene } from "../../src/core/Scene.js";
 import { Renderer } from "../../src/interfaces/Renderer.js";
 

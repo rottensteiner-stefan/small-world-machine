@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { shallowCloneWithValueTypes } from "../../src/core/CloneUtils.js";
 import { Vector2D, Vector3D, Quaternion } from "../../src/math/index.js";
 import { Color } from "../../src/core/colors/Color.js";
-import { StandardMaterial } from "../../src/core/materials/StandardMaterial.js";
+import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import { TerrainMaterial } from "../../src/core/materials/TerrainMaterial.js";
 
 describe("CloneUtils.shallowCloneWithValueTypes", () => {

@@ -1,7 +1,6 @@
 // Removed Fog import
 import {
   CubeTexture,
-  RenderManifest,
   InstancedMesh,
   Object3D,
   Scene,
@@ -10,6 +9,7 @@ import {
   isSkinnedMesh,
 } from "../../core/index.js";
 import { RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
+import { RenderManifest, UniformPacker, VERTEX_COLOR_FLAG } from "../shaders/index.js";
 import { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 
 import {
@@ -22,10 +22,10 @@ import {
   DEFAULT_CLUSTER_Z_SLICES,
   DEFAULT_MAX_LIGHTS_PER_CLUSTER,
 } from "../../math/index.js";
-import clusterCullWGSL from "../../core/renderers/shaders/source/web_gpu/compute/cluster_cull.wgsl?raw";
-import hzbCopyDepthWGSL from "../../core/renderers/shaders/source/web_gpu/compute/hzb_copy_depth.wgsl?raw";
-import hzbDownsampleMaxWGSL from "../../core/renderers/shaders/source/web_gpu/compute/hzb_downsample_max.wgsl?raw";
-import hzbVisibilityTestWGSL from "../../core/renderers/shaders/source/web_gpu/compute/hzb_visibility_test.wgsl?raw";
+import clusterCullWGSL from "../shaders/source/web_gpu/compute/cluster_cull.wgsl?raw";
+import hzbCopyDepthWGSL from "../shaders/source/web_gpu/compute/hzb_copy_depth.wgsl?raw";
+import hzbDownsampleMaxWGSL from "../shaders/source/web_gpu/compute/hzb_downsample_max.wgsl?raw";
+import hzbVisibilityTestWGSL from "../shaders/source/web_gpu/compute/hzb_visibility_test.wgsl?raw";
 import { RendererType, Topology, PostProcessingEffectType } from "../../enums/index.js";
 import { AbstractRenderer } from "../AbstractRenderer.js";
 import { RenderPass } from "../RenderPass.js";
@@ -48,7 +48,6 @@ import {
   HzbOcclusionPassGPU,
 } from "../passes/index.js";
 import { BloomPassGPU, AOPassGPU, HistoryBlendPassGPU } from "../post/passes/index.js";
-import { UniformPacker, VERTEX_COLOR_FLAG } from "../../core/renderers/shaders/index.js";
 import { SkinnedMesh, Skeleton, MAX_SKINNED_BONES } from "../../core/animation/index.js";
 
 /**

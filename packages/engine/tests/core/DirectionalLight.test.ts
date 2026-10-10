@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { OrthographicProjection, PerspectiveProjection } from "../../src/math/projections/index.js";
 import { Vector3D, Matrix4 } from "../../src/math/index.js";
 import { DirectionalLight } from "../../src/core/lights/DirectionalLight.js";
-import { Camera } from "../../src/core/Camera.js";
+import { Camera } from "../../src/core/cameras/Camera.js";
 
 describe("DirectionalLight.updateCascades", () => {
   it("updates cascades for an orthographic (ISOMETRIC) camera instead of early-returning", () => {

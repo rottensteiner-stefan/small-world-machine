@@ -14,8 +14,8 @@ function readWgsl(relativePath: string): string {
 
 describe("WebGPU spot-light shadows use PCSS", () => {
   const files = [
-    "packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/lighting.wgsl",
-    "packages/engine/src/core/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl",
+    "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting.wgsl",
+    "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl",
   ];
 
   for (const file of files) {
@@ -41,8 +41,8 @@ describe("WebGPU spot-light shadows use PCSS", () => {
   }
 
   const glslFiles = [
-    "packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/light_calc.frag.glsl",
-    "packages/engine/src/core/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl",
+    "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc.frag.glsl",
+    "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl",
   ];
 
   for (const file of glslFiles) {

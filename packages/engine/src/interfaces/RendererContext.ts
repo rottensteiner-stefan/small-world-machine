@@ -1,5 +1,5 @@
 import { DeviceCaps } from "../core/DeviceCaps.js";
-import { ShaderRegistry } from "../core/renderers/shaders/ShaderRegistry.js";
+import { ShaderRegistry } from "../renderers/shaders/ShaderRegistry.js";
 import { AssetManager } from "../loaders/AssetManager.js";
 
 /**

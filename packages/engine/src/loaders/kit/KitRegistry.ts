@@ -5,7 +5,7 @@ import { SpotLight } from "../../core/lights/SpotLight.js";
 import { DirectionalLight } from "../../core/lights/DirectionalLight.js";
 import { AmbientLight } from "../../core/lights/AmbientLight.js";
 import { Color } from "../../core/colors/Color.js";
-import { StandardMaterial } from "../../core/materials/StandardMaterial.js";
+import { StandardMaterial } from "../../core/materials/surface/StandardMaterial.js";
 import { Vector3D } from "../../math/Vector3D.js";
 import { AssetManager } from "../AssetManager.js";
 import { GltfLoader } from "../GltfLoader.js";

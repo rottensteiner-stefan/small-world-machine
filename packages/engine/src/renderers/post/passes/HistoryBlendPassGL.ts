@@ -1,5 +1,5 @@
-import FULLSCREEN_VERT_GLSL from "../../../core/materials/shaders/PostProcess.vert.glsl?raw";
-import HISTORY_BLEND_FRAG_GLSL from "../../../core/materials/shaders/HistoryBlend.frag.glsl?raw";
+import FULLSCREEN_VERT_GLSL from "../shaders/PostProcess.vert.glsl?raw";
+import HISTORY_BLEND_FRAG_GLSL from "../shaders/HistoryBlend.frag.glsl?raw";
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
 

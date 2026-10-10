@@ -33,7 +33,7 @@ eines einzigen Spiels Sinn ergibt.
 Die Aufgabe der Engine ist es, die *Primitive* bereitzustellen, aus denen diese gebaut werden,
 nicht die Genre-Mechanik selbst — z. B. für einen Seitenscroll-Plattformer: das `Behavior`-System
 für den Charakter-Controller selbst, `BillboardInstancer`/`Sprite` für 2D-in-3D-Rendering,
-`GridLevelBuilder` (`tools/procgen`) für kachelbasierte Level-Daten, und die
+`GridLevelBuilder` (`geometry/procgen`) für kachelbasierte Level-Daten, und die
 `CameraStrategy`-Architektur als die Nahtstelle, an der eine neue Seitenscroll-Folge-Strategie
 andockt (eine neue Strategie-Klasse, die dem bestehenden Muster folgt, kein neues Kernkonzept).
 

@@ -14,8 +14,8 @@
 
 import { describe, it, expect } from "vitest";
 import fs from "fs";
-import { StylizedWaterMaterial } from "../../../src/core/materials/StylizedWaterMaterial.js";
-import { RenderManifest } from "../../../src/core/renderers/shaders/RenderManifest.js";
+import { StylizedWaterMaterial } from "../../../src/core/materials/liquid/StylizedWaterMaterial.js";
+import { RenderManifest } from "../../../src/renderers/shaders/RenderManifest.js";
 
 const REGISTRY_JSON = new URL(
   "../../../../../scripts/lane-contracts/lane-contracts.json",

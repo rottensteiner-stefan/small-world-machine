@@ -603,7 +603,7 @@ describe("PhysicsSystem", () => {
     s2.rigidBody.velocity.set(-1, 0, 0);
 
     // Mock Octree to reject s2, forcing it into _broadphaseFallback
-    const { Octree } = await import("../../src/core/Octree.js");
+    const { Octree } = await import("../../src/core/culling/Octree.js");
     const originalInsert = Octree.prototype.insert;
     Octree.prototype.insert = function (
       obj: import("../../src/interfaces/index.js").Collidable,

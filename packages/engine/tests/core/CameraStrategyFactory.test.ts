@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { CameraStrategyFactory } from "../../src/core/cameras/CameraStrategyFactory.js";
 import { CameraStrategyType } from "../../src/enums/CameraStrategyType.js";
-import { Camera } from "../../src/core/Camera.js";
+import { Camera } from "../../src/core/cameras/Camera.js";
 import { PerspectiveProjection, Vector3D } from "../../src/math/index.js";
 
 describe("CameraStrategyFactory", () => {

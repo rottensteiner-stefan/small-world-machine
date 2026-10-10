@@ -3,7 +3,7 @@ import { WebGLMainPass } from "../passes/WebGLMainPass.js";
 import { WebGLPostProcessPass } from "../passes/WebGLPostProcessPass.js";
 import { PostProcessPassGL, BloomPassGL } from "../post/passes/index.js";
 import { CubeTexture, Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
-import { StandardWebGPULayout } from "../../core/renderers/shaders/index.js";
+import { StandardWebGPULayout } from "../shaders/index.js";
 import { DeviceLimit, InstancedMesh, Object3D, Scene } from "../../core/index.js";
 import {
   EngineOptions,

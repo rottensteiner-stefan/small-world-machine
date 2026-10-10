@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AxesHelper } from "../../../src/core/helpers/AxesHelper.js";
 import { Color } from "../../../src/core/colors/Color.js";
-import { BasicMaterial } from "../../../src/core/materials/BasicMaterial.js";
+import { BasicMaterial } from "../../../src/core/materials/surface/BasicMaterial.js";
 import { SpriteMaterial } from "../../../src/core/materials/SpriteMaterial.js";
-import { Sprite } from "../../../src/core/Sprite.js";
+import { Sprite } from "../../../src/core/sprites/Sprite.js";
 
 // Mock Canvas API for TextTexture
 const mockMeasureText = vi.fn().mockReturnValue({ width: 50 });

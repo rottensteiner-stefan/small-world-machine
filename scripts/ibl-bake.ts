@@ -4,7 +4,7 @@
  *
  * Drives the REAL engine WebGL2 pipeline (IBLBaker) in a throw-away headless
  * Chromium page via Puppeteer, with a seed-deterministic generated input panorama
- * (pure core, packages/engine/src/tools/ibl-gen-core.ts). All hashing/manifest
+ * (pure core, packages/tools/src/ibl-gen/ibl-gen-core.ts). All hashing/manifest
  * assembly happens in Node — the browser only returns PNG payloads. Same seed +
  * options -> identical output bytes and identical manifest hashes (measurement).
  *
@@ -26,7 +26,7 @@ import {
   resolveIblGenOptions,
   type IblGenOptions,
   type IblBakeManifest,
-} from "../packages/engine/src/tools/ibl-gen-core.js";
+} from "../packages/tools/src/ibl-gen/ibl-gen-core.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");

@@ -21,17 +21,17 @@ const ROOT = path.join(__dirname, "..", "..");
 
 const REGISTRY_PATH = path.join(ROOT, "scripts", "lane-contracts", "lane-contracts.json");
 const SCAN_TARGETS = {
-  stylizedTs: path.join(ROOT, "packages", "engine", "src", "core", "materials", "StylizedWaterMaterial.ts"),
-  fragGlsl300: path.join(ROOT, "packages", "engine", "src", "core", "materials", "shaders", "StylizedWater.frag.glsl"),
-  fragGlsl100: path.join(ROOT, "packages", "engine", "src", "core", "materials", "shaders", "StylizedWater.frag.glsl100"),
-  fragWgsl: path.join(ROOT, "packages", "engine", "src", "core", "materials", "shaders", "StylizedWater.frag.wgsl"),
-  layout: path.join(ROOT, "packages", "engine", "src", "core", "renderers", "shaders", "StandardWebGPULayout.ts"),
+  stylizedTs: path.join(ROOT, "packages", "engine", "src", "core", "materials", "liquid", "StylizedWaterMaterial.ts"),
+  fragGlsl300: path.join(ROOT, "packages", "engine", "src", "core", "materials", "liquid", "shaders", "StylizedWater.frag.glsl"),
+  fragGlsl100: path.join(ROOT, "packages", "engine", "src", "core", "materials", "liquid", "shaders", "StylizedWater.frag.glsl100"),
+  fragWgsl: path.join(ROOT, "packages", "engine", "src", "core", "materials", "liquid", "shaders", "StylizedWater.frag.wgsl"),
+  layout: path.join(ROOT, "packages", "engine", "src", "renderers", "shaders", "StandardWebGPULayout.ts"),
   noir: path.join(ROOT, "packages", "liquid-extras", "src", "materials", "NoirWater", "NoirWaterMaterial.ts"),
   oil: path.join(ROOT, "packages", "liquid-extras", "src", "materials", "OilSlick", "OilSlickMaterial.ts"),
-  openWaterTs: path.join(ROOT, "packages", "engine", "src", "core", "materials", "OpenWaterMaterial.ts"),
-  vertGlsl300: path.join(ROOT, "packages", "engine", "src", "core", "materials", "shaders", "OpenWater.vert.glsl"),
-  vertGlsl100: path.join(ROOT, "packages", "engine", "src", "core", "materials", "shaders", "OpenWater.vert.glsl100"),
-  vertWgsl: path.join(ROOT, "packages", "engine", "src", "core", "materials", "shaders", "OpenWater.vert.wgsl"),
+  openWaterTs: path.join(ROOT, "packages", "engine", "src", "core", "materials", "liquid", "OpenWaterMaterial.ts"),
+  vertGlsl300: path.join(ROOT, "packages", "engine", "src", "core", "materials", "liquid", "shaders", "OpenWater.vert.glsl"),
+  vertGlsl100: path.join(ROOT, "packages", "engine", "src", "core", "materials", "liquid", "shaders", "OpenWater.vert.glsl100"),
+  vertWgsl: path.join(ROOT, "packages", "engine", "src", "core", "materials", "liquid", "shaders", "OpenWater.vert.wgsl"),
 };
 
 // meaning -> required source marker(s). Every registry lane with a known meaning must have all

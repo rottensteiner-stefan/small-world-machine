@@ -1,9 +1,9 @@
 import "../../src/index.js";
 import { describe, expect, it, vi, beforeAll } from "vitest";
 import { WebGLProgramCache } from "../../src/renderers/WebGL2/managers/WebGLProgramCache.js";
-import { CoreShaderChunks } from "../../src/core/renderers/shaders/CoreShaderChunks.js";
-import { ShaderRegistry } from "../../src/core/renderers/shaders/ShaderRegistry.js";
-import { BasicMaterial } from "../../src/core/materials/BasicMaterial.js";
+import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
+import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
+import { BasicMaterial } from "../../src/core/materials/surface/BasicMaterial.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { MaterialType } from "../../src/enums/index.js";
 

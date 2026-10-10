@@ -1,10 +1,10 @@
-import FULLSCREEN_VERT_GLSL from "../../../core/materials/shaders/PostProcess.vert.glsl?raw";
-import POST_PROCESS_FRAG_GLSL from "../../../core/materials/shaders/PostProcess.frag.glsl?raw";
+import FULLSCREEN_VERT_GLSL from "../shaders/PostProcess.vert.glsl?raw";
+import POST_PROCESS_FRAG_GLSL from "../shaders/PostProcess.frag.glsl?raw";
 
-import FULLSCREEN_VERT_GLSL100 from "../../../core/materials/shaders/PostProcess100.vert.glsl?raw";
-import POST_PROCESS_FRAG_GLSL100 from "../../../core/materials/shaders/PostProcess100.frag.glsl?raw";
+import FULLSCREEN_VERT_GLSL100 from "../shaders/PostProcess100.vert.glsl?raw";
+import POST_PROCESS_FRAG_GLSL100 from "../shaders/PostProcess100.frag.glsl?raw";
 import { PostProcessingEffectType } from "../../../enums/index.js";
-import { ShaderRegistry } from "../../../core/renderers/shaders/index.js";
+import { ShaderRegistry } from "../../shaders/index.js";
 
 /**
  * Handles post-processing blit for WebGL1 and WebGL2.

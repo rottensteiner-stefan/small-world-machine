@@ -2,7 +2,7 @@ import { Object3D } from "../Object3D.js";
 import { Color } from "../colors/index.js";
 import { BasicMaterial, SpriteMaterial } from "../materials/index.js";
 import { Cylinder, Cone } from "../../geometry/index.js";
-import { Sprite } from "../Sprite.js";
+import { Sprite } from "../sprites/Sprite.js";
 import { TextTexture } from "../text/index.js";
 
 /**

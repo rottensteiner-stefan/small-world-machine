@@ -1,5 +1,5 @@
 import { Object3D } from "./Object3D.js";
-import { Octree, OctreeOptions } from "./Octree.js";
+import { Octree, OctreeOptions } from "./culling/Octree.js";
 import { Fog } from "./Fog.js";
 import { Vector3D } from "../math/index.js";
 import { BoundingBox, SpatialHash, Joint } from "../physix/index.js";

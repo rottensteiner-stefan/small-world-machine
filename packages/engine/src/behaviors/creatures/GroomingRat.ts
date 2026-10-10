@@ -3,7 +3,7 @@ import { Color } from "../../core/colors/Color.js";
 import { Sphere } from "../../geometry/Sphere.js";
 import { Cube } from "../../geometry/Cube.js";
 import { Cylinder } from "../../geometry/Cylinder.js";
-import { StandardMaterial } from "../../core/materials/StandardMaterial.js";
+import { StandardMaterial } from "../../core/materials/surface/StandardMaterial.js";
 import { RatGroomingBehavior, RatGroomingBehaviorOptions } from "./RatGroomingBehavior.js";
 
 export interface GroomingRatOptions {

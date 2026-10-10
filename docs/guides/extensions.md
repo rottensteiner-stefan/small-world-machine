@@ -24,12 +24,12 @@ Each extras package extends central public engine contracts (`AbstractGeometry`,
    Weather, atmospheric particle systems (`WeatherEmitter`), sky systems, and liquid surfaces.
 3. **Tier 3 — Behaviors & simulation (`packages/engine/src/core/behaviors/`, `packages/engine/src/behaviors/`):**
    Controllers, sensors, animation loops, and ambient creature life (`RatGroomingBehavior`, `GroomingRat`).
-4. **Tier 4 — ProcGen & tool extension point (`packages/engine/src/tools/procgen/`, `packages/engine/src/tools/forge/ForgeTool.ts`):**
+4. **Tier 4 — ProcGen & tool extension point (`packages/engine/src/geometry/procgen/`, `packages/engine/src/core/forge/ForgeTool.ts`):**
    Procedural level generators (`GridLevelBuilder`) and the `ForgeTool` interface. The concrete authoring tools themselves (`MakerApp`, `MapGenerator`, `Pixler`, `Xtractor`, `Forge`) have lived in their own `@small-world-machine/tools` package since [ADR 0024](/adr/0024-tools-ecosystem-package), no longer in the core.
 
 ## Example: Procedural grid generation (`GridLevelBuilder`)
 
-`GridLevelBuilder` lives in `packages/engine/src/tools/procgen/` (exported through the `@small-world-machine/engine` tooling surface, a genuine runtime feature rather than a development tool) and lets you define 3D levels from ASCII grids.
+`GridLevelBuilder` lives in `packages/engine/src/geometry/procgen/` (exported through the `@small-world-machine/engine` tooling surface, a genuine runtime feature rather than a development tool) and lets you define 3D levels from ASCII grids.
 
 ### Usage
 

@@ -1,5 +1,5 @@
 import type { Object3D } from "../core/Object3D.js";
-import type { StandardMaterial } from "../core/materials/StandardMaterial.js";
+import type { StandardMaterial } from "../core/materials/surface/StandardMaterial.js";
 import type { AssetManager } from "../loaders/AssetManager.js";
 
 /**

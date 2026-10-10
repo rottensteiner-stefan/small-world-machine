@@ -1,6 +1,6 @@
 import { AmbientLight } from "../../core/lights/AmbientLight.js";
 import { DirectionalLight } from "../../core/lights/DirectionalLight.js";
-import { Camera } from "../../core/Camera.js";
+import { Camera } from "../../core/cameras/Camera.js";
 import { Object3D } from "../../core/Object3D.js";
 import { Scene } from "../../core/Scene.js";
 import { Color } from "../../core/colors/Color.js";

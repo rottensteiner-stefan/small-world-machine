@@ -24,7 +24,7 @@ import {
 import {
   GridLevelBuilder,
   GridLegend,
-} from "@small-world-machine/engine/tools/procgen/GridLevelBuilder.js";
+} from "@small-world-machine/engine/geometry/procgen/GridLevelBuilder.js";
 import { AudioSystem } from "@small-world-machine/engine/audio/index.js";
 import { EnemyBehavior } from "./behaviors/EnemyBehavior.js";
 import {

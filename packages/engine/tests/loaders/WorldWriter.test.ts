@@ -4,7 +4,7 @@ import { GltfLoader } from "../../src/loaders/GltfLoader.js";
 import { GltfData } from "../../src/loaders/gltf/index.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { PointLight } from "../../src/core/lights/PointLight.js";
-import { StandardMaterial } from "../../src/core/materials/StandardMaterial.js";
+import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import { Color } from "../../src/core/colors/Color.js";
 import { Matrix4, Vector3D, Quaternion } from "../../src/math/index.js";
 import { GeometryDataInterface } from "../../src/interfaces/index.js";

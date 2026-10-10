@@ -2,7 +2,7 @@ import { EnemyBehavior } from "../../../core/behaviors/EnemyBehavior.js";
 import { ObjectTags } from "../../../enums/ObjectTags.js";
 import { Object3D } from "@small-world-machine/engine/core/Object3D.js";
 import { Scene } from "@small-world-machine/engine/core/Scene.js";
-import { Camera } from "@small-world-machine/engine/core/Camera.js";
+import { Camera } from "@small-world-machine/engine/core/cameras/Camera.js";
 import { PerspectiveProjection, Vector3D } from "@small-world-machine/engine/math/index.js";
 import { Cube } from "@small-world-machine/engine/geometry/index.js";
 import { BoundingBox } from "@small-world-machine/engine/physix/index.js";

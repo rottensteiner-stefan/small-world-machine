@@ -1,4 +1,4 @@
-import { OpenWaterMaterial } from "../../src/core/materials/OpenWaterMaterial.js";
+import { OpenWaterMaterial } from "../../src/core/materials/liquid/OpenWaterMaterial.js";
 import { MaterialType } from "../../src/enums/index.js";
 import { Color } from "../../src/core/colors/index.js";
 

@@ -1,7 +1,7 @@
 import {
   StandardMaterial,
   StandardMaterialOptions,
-} from "../../src/core/materials/StandardMaterial.js";
+} from "../../src/core/materials/surface/StandardMaterial.js";
 import { Color } from "../../src/core/colors/Color.js";
 import { Texture } from "../../src/core/textures/Texture.js";
 import { BlendingMode, MaterialType } from "../../src/enums/index.js";

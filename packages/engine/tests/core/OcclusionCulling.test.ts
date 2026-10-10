@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Scene } from "../../src/core/Scene.js";
 import { Object3D } from "../../src/core/Object3D.js";
-import { FrustumCuller } from "../../src/core/FrustumCuller.js";
+import { FrustumCuller } from "../../src/core/culling/FrustumCuller.js";
 import { Cube } from "../../src/geometry/index.js";
 import { StandardMaterial } from "../../src/core/materials/index.js";
 import { Matrix4, Vector3D } from "../../src/math/index.js";

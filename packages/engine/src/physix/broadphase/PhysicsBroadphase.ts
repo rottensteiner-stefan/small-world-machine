@@ -1,4 +1,4 @@
-import { Octree } from "../../core/Octree.js";
+import { Octree } from "../../core/culling/Octree.js";
 import { Vector3D } from "../../math/index.js";
 import { Collidable, BoundingVolume } from "../../interfaces/index.js";
 import { BoundingBox } from "../BoundingBox.js";

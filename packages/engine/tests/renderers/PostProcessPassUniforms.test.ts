@@ -7,7 +7,7 @@ import {
   ColorGradingElement,
 } from "../../src/index.js";
 import { PostProcessingEffectType } from "../../src/enums/index.js";
-import { CoreShaderChunks } from "../../src/core/renderers/shaders/CoreShaderChunks.js";
+import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
 
 (globalThis as unknown as { GPUShaderStage: Record<string, number> }).GPUShaderStage ??= {
   VERTEX: 0x1,

@@ -1,6 +1,6 @@
 import { Object3D } from "../core/Object3D.js";
 import { AbstractMaterial } from "../core/materials/AbstractMaterial.js";
-import { StandardMaterial } from "../core/materials/StandardMaterial.js";
+import { StandardMaterial } from "../core/materials/surface/StandardMaterial.js";
 import { Matrix4, Vector3D, Quaternion } from "../math/index.js";
 import { GeometryDataInterface } from "../interfaces/index.js";
 import { getGltfExtensions } from "./gltf/GltfExtensionRegistry.js";

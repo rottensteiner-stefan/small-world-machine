@@ -16,3 +16,4 @@ export * from "./WebGL2/index.js";
 export * from "./WebGPU/index.js";
 export * from "./passes/index.js";
 export * from "./imposter/index.js";
+export * from "./shaders/index.js";

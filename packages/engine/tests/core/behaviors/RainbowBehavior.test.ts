@@ -1,6 +1,6 @@
 import { RainbowBehavior } from "../../../src/core/behaviors/RainbowBehavior.js";
 import { Object3D } from "../../../src/core/Object3D.js";
-import { StandardMaterial } from "../../../src/core/materials/StandardMaterial.js";
+import { StandardMaterial } from "../../../src/core/materials/surface/StandardMaterial.js";
 import { PointLight } from "../../../src/core/lights/PointLight.js";
 import { Color } from "../../../src/core/colors/Color.js";
 

@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { Octree } from "../../src/core/Octree.js";
+import { Octree } from "../../src/core/culling/Octree.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { BoundingBox } from "../../src/physix/BoundingBox.js";
 import { Vector3D } from "../../src/math/Vector3D.js";
 import { Cube } from "../../src/geometry/Cube.js";
-import { Sprite } from "../../src/core/Sprite.js";
+import { Sprite } from "../../src/core/sprites/Sprite.js";
 
 describe("Octree", () => {
   it("should return true when inserting an object within bounds", () => {

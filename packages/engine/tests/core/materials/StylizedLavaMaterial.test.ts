@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { StylizedLavaMaterial } from "../../../src/core/materials/StylizedLavaMaterial.js";
+import { StylizedLavaMaterial } from "../../../src/core/materials/liquid/StylizedLavaMaterial.js";
 import { Texture } from "../../../src/core/textures/index.js";
-import { VERTEX_COLOR_FLAG } from "../../../src/core/renderers/shaders/index.js";
+import { VERTEX_COLOR_FLAG } from "../../../src/renderers/shaders/index.js";
 import { TextureWrap } from "../../../src/enums/index.js";
 
-const SHADER_DIR = path.resolve(__dirname, "../../../src/core/materials/shaders");
+const SHADER_DIR = path.resolve(__dirname, "../../../src/core/materials/liquid/shaders");
 
 function repeatingTexture(): Texture {
   return Texture.empty({ addressModeU: TextureWrap.REPEAT, addressModeV: TextureWrap.REPEAT });

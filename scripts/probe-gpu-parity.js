@@ -45,15 +45,15 @@ try {
 
   const report = await evaluateWithRetry(async () => {
     const vsRaw = (
-      await import("/packages/engine/src/core/materials/shaders/OpenWater.vert.glsl?raw")
+      await import("/packages/engine/src/core/materials/liquid/shaders/OpenWater.vert.glsl?raw")
     ).default;
     const chunk = (
       await import("/packages/engine/src/core/materials/shaders/chunks/liquid_gerstner_wave.glsl?raw")
     ).default;
     const { OpenWaterMaterial } =
-      await import("/packages/engine/src/core/materials/OpenWaterMaterial.ts");
+      await import("/packages/engine/src/core/materials/liquid/OpenWaterMaterial.ts");
     const { OpenWaterSurfaceProbe } =
-      await import("/packages/engine/src/core/materials/OpenWaterSurfaceProbe.ts");
+      await import("/packages/engine/src/core/materials/liquid/OpenWaterSurfaceProbe.ts");
 
     const gl = document.createElement("canvas").getContext("webgl2");
     if (!gl) return { error: "no webgl2" };

@@ -1,5 +1,5 @@
-import FULLSCREEN_VERT_WGSL from "../../../core/materials/shaders/PostProcess.vert.wgsl?raw";
-import HISTORY_BLEND_FRAG_WGSL from "../../../core/materials/shaders/HistoryBlend.frag.wgsl?raw";
+import FULLSCREEN_VERT_WGSL from "../shaders/PostProcess.vert.wgsl?raw";
+import HISTORY_BLEND_FRAG_WGSL from "../shaders/HistoryBlend.frag.wgsl?raw";
 import { TextureFilter, TextureWrap, Topology } from "../../../enums/index.js";
 
 /**

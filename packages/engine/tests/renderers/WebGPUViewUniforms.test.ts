@@ -12,8 +12,8 @@ import { GPUPipelineCache } from "../../src/renderers/WebGPU/managers/GPUPipelin
 import { GPUObjectRingBuffer } from "../../src/renderers/WebGPU/managers/GPUObjectRingBuffer.js";
 import { GPUGeometryCache } from "../../src/renderers/WebGPU/managers/GPUGeometryCache.js";
 import { Object3D } from "../../src/core/Object3D.js";
-import { ShaderRegistry } from "../../src/core/renderers/shaders/ShaderRegistry.js";
-import { RenderManifest } from "../../src/core/renderers/shaders/RenderManifest.js";
+import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
+import { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
 import { GeometryDataInterface } from "../../src/interfaces/index.js";
 import { Matrix4 } from "../../src/math/index.js";
 

@@ -3,7 +3,7 @@
 // surface.
 //
 // Sources of truth, audited op-for-op (see OpenWaterSurfaceProbe.ts):
-//   - packages/engine/src/core/materials/shaders/OpenWater.vert.glsl lines 85-107
+//   - packages/engine/src/core/materials/liquid/shaders/OpenWater.vert.glsl lines 85-107
 //   - packages/engine/src/core/materials/shaders/chunks/liquid_gerstner_wave.glsl
 //     (the WGSL chunk liquid_gerstner_wave.wgsl is byte-equivalent in behavior: plain
 //     normalize, same constants, same left-assoc `w * speed * time`)
@@ -34,8 +34,8 @@
 // (w1-only, see below).
 
 import { describe, it, expect } from "vitest";
-import { OpenWaterMaterial } from "../../../src/core/materials/OpenWaterMaterial.js";
-import { OpenWaterSurfaceProbe } from "../../../src/core/materials/OpenWaterSurfaceProbe.js";
+import { OpenWaterMaterial } from "../../../src/core/materials/liquid/OpenWaterMaterial.js";
+import { OpenWaterSurfaceProbe } from "../../../src/core/materials/liquid/OpenWaterSurfaceProbe.js";
 
 type WaveLane = readonly [number, number, number, number];
 interface WaveLaneSet {

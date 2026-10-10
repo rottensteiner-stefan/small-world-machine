@@ -12,3 +12,6 @@ export * from "./attachDevTools.js";
 export * from "./common/io/index.js";
 export * from "./common/ai/index.js";
 export * from "./common/image/index.js";
+export * from "./ibl-gen/IBLShaders.js";
+export * from "./ibl-gen/ibl-gen-core.js";
+export * from "./ibl-gen/ibl-gen.js";

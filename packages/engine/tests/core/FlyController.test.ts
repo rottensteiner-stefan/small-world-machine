@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { FlyController } from "../../src/core/controllers/FlyController.js";
-import { Camera } from "../../src/core/Camera.js";
+import { Camera } from "../../src/core/cameras/Camera.js";
 import { Scene } from "../../src/core/Scene.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Cube } from "../../src/geometry/Cube.js";
 import { Keys } from "../../src/enums/Keys.js";
 import { CameraStrategyType } from "../../src/enums/CameraStrategyType.js";
 import { Vector3D, PerspectiveProjection } from "../../src/math/index.js";
-import { Octree } from "../../src/core/Octree.js";
+import { Octree } from "../../src/core/culling/Octree.js";
 import { BoundingBox } from "../../src/physix/BoundingBox.js";
-import { InputInterface, MouseState } from "../../src/core/Input.js";
+import { InputInterface, MouseState } from "../../src/core/input/Input.js";
 
 // Mock InputInterface
 class MockInput implements InputInterface {
