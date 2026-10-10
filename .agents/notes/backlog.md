@@ -37,6 +37,9 @@ erzeugen.
   (seit `5f132f5e` behoben), StylizedWater Phase B (seit v0.96.0) samt Ramp-LUT-Restpunkten, `bunker_blast_door`
   (Doku korrigiert, neues Prop `bunker_blast_door_leaf` gesourct), `stairs_down` (Clip-Timing). Offen bleibt die
   Golden-Baseline-Neuaufnahme (siehe Eintrag unten).
+- ✅ **Golden-Baseline neu aufgenommen (2026-10-10):** aus CI-Artefakt `liquid-goldens` (Run 38078644281, HEAD `7c9eff85`,
+  Chrome 152, Linux), 16 Pools × 2 Views = 32 Zellen inkl. `dead-sea` und `lava-*`. Gesichtet: noir-graphic/top,
+  wave-rider/top, clear-water/oblique; übrige Zellen ungesichtet. Der noir-Look (weiße Wirbel auf Grau) ist jetzt Referenz.
 
 - 📋 **Golden-Baseline: Stand 2026-10-10 (korrigiert die Einträge vom 06.–08.10.):** Die Baseline wurde am 8.10. neu
   aufgenommen (Commit `28767d10`, Chrome 152, 12 Pools × 2 Views = 24 Zellen). Compare auf HEAD (GL2, gleiche

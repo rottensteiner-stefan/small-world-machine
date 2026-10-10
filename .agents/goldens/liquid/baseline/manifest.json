@@ -10,12 +10,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 46.537,
+    "stddev": 50.6387,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "0f87b93398d456863272a5c07c5051a40b159ac208352d94c923e71ad4651f18",
+    "sha256": "28bd21cbcbb3921bde986f9f01a4e0bb3352fd9d8a75a8017276a258738ef6d0",
     "ok": true
   },
   {
@@ -29,12 +29,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 44.8133,
+    "stddev": 47.5188,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "312d6b1ab2786b287f02089da0c0ffd39f0fb5f1e2be797c2e7d8e9cfe9388d1",
+    "sha256": "ba4504812a359af11ea793c4ccba7d3e472d96d508a1b4bc828e608952588eaf",
     "ok": true
   },
   {
@@ -48,12 +48,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 44.0553,
+    "stddev": 42.1414,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "d679ed993686ca0b99c349d9c0cdedcddd56f476f65d26ef764651a088b185fe",
+    "sha256": "5d5bed04ce71a93a431a3102cafcf19829bfb9f43e76c47ec4bfe568c96fa688",
     "ok": true
   },
   {
@@ -67,12 +67,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 41.6067,
+    "stddev": 38.8598,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "559169654293babee7639790e6e41ed205bc34f7ab5042e3191373551eff449f",
+    "sha256": "1424f4ce289b8264a4072f5be70d3b41dbca4fa57d723f5e91d20291aeeab84f",
     "ok": true
   },
   {
@@ -86,12 +86,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 48.3014,
+    "stddev": 46.9963,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "36c65a0224a991670e62e48b37938873b58a9dd788b6c41b7c0c4f8f69034185",
+    "sha256": "b2ac02316d994a9293e8aba70de18f065e50c99ff18fce9dbca5f90a868f3f26",
     "ok": true
   },
   {
@@ -105,12 +105,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 41.8608,
+    "stddev": 39.8997,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "58d4f3ea3242914e553b1cafceba2801c9bc8beb9c930a42f5faced23ba5e27b",
+    "sha256": "c498b1eb5c5f289b815e97dda522156b3298565f7146e10e1f3e86ac472b1d65",
     "ok": true
   },
   {
@@ -124,12 +124,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 34.7273,
+    "stddev": 31.1616,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "e708e70621554079c8bc3b328c6003290015f71b2153dbb7e9c2323d9410b0e1",
+    "sha256": "9b021aece223656d55c39ace955e0a109125ed097ee3489a89fd6f500902c6ee",
     "ok": true
   },
   {
@@ -143,14 +143,13 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 42.5073,
+    "stddev": 41.0311,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "c46f14f8baca83ca5fd844a462d6c225c665a7aef83d04ce944cabe90e1c0ac9",
-    "ok": true,
-    "attempts": 2
+    "sha256": "184f859df9c1898e410c91fd401ba0c8216c004d259267cb386c2664f76c455e",
+    "ok": true
   },
   {
     "poolKey": "painterly-sparkle",
@@ -163,12 +162,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 36.5173,
+    "stddev": 32.5705,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "36b7d8de35101c7cf87b73fcd9fdd3c831e2ba183b81f2daaa01d4c305ea50c0",
+    "sha256": "49c268258ce01ee59ba02254dc06383c25f548af512fc90d29e7a9b3c79eaafe",
     "ok": true
   },
   {
@@ -182,12 +181,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 44.8947,
+    "stddev": 43.7648,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "b5cfcd9dc0fceadd72684be971b1bbebded654df52ac4efb37181b3069ec27c6",
+    "sha256": "7f8293975f1a62f8a7205b2990af1dbfad154ba550a1371552955fb888b8d2b2",
     "ok": true
   },
   {
@@ -201,12 +200,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 19.1542,
+    "stddev": 18.0109,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "c0024ce52967b4526d652f7590d7045f9991a7e2072ff1bab9b1c1af677e89ae",
+    "sha256": "649f6c5d6c79af31d59e0a539ce42aaab44213e9c73aadcf8e41139055cb9012",
     "ok": true
   },
   {
@@ -220,12 +219,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 31.0812,
+    "stddev": 31.1146,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "d67f9e83fe770b99b85b287c65d2bddb94db8b0769a6dc8a6b420d9042cf251c",
+    "sha256": "f90a824b44395558da1b354d106364b8e6e042dd518d0f12a640570ef2050948",
     "ok": true
   },
   {
@@ -239,12 +238,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 58.2913,
+    "stddev": 50.5807,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "c3f61eeead9fc55682bbcf0a2dc89586832fde2da062bfa617eac3d86f4dbdc9",
+    "sha256": "59fc3732e05651c2c36c316c7b0e1018cd480e390aa3200c7933257217dcfeed",
     "ok": true
   },
   {
@@ -258,12 +257,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 49.9314,
+    "stddev": 61.7789,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "21d6c2098034bc517d24c2040033b6b3e18be4d8152fda62795664c7cad021b1",
+    "sha256": "ce55cf64ab838e36461685f6c889ea4df634fae981337fdf746e422ac263efef",
     "ok": true
   },
   {
@@ -277,12 +276,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 35.5913,
+    "stddev": 35.5991,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "ed3bae84ef65bf6aa67c568ce7c1e9bb53b2383bac165b7fdcf371f7fd2a9578",
+    "sha256": "66d21511933508e47aa7e3717da9572c129aa755463fc89cc0d4af61c6731b29",
     "ok": true
   },
   {
@@ -296,12 +295,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 41.0294,
+    "stddev": 40.9285,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "98f011dd48e2c1439c28da75278a2026b8f44b5ff3df57a696c358776b472e40",
+    "sha256": "c379e7ed187c839a88912ca69784ccf2ea4663c2753cad5feee508648aea66c6",
     "ok": true
   },
   {
@@ -315,12 +314,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 31.6245,
+    "stddev": 31.9471,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "a13c552eb28a044997cc211f69afd72d8ddcca5e7754c853e2722873b7cdcc35",
+    "sha256": "ec01ee924c3a3092c910c8768ed50ea48abebec62596babfbd68f9e64c8d831f",
     "ok": true
   },
   {
@@ -334,12 +333,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 28.6491,
+    "stddev": 28.1022,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "ab2a202c610f618bb64ff48ce273d1f917c78c503c2582b0ce1e782f6ab93b02",
+    "sha256": "4962abc6f46b6e31fba7df41cdb491b4206a9b32845c55d253bf1856a19f70a6",
     "ok": true
   },
   {
@@ -353,12 +352,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 8.8346,
+    "stddev": 9.4992,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "7299e13d913c1e0566bbc4ac477dd325b738416480bc2526b25391dbf3510027",
+    "sha256": "e5ae5b0c3ba0f79affbc5026f6fecd2ea31042da2d2edc7fbfc3554a0f411bd5",
     "ok": true
   },
   {
@@ -372,12 +371,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 29.4795,
+    "stddev": 30.1393,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "e9b0fb63f15c5920c81754f47e8e81f1ab42f222d654ed6c27c94fc7fdcbbfd8",
+    "sha256": "294af1f35f35f4ecc019b45d4899cc31d607d5efa890537808c95ff9aee0599d",
     "ok": true
   },
   {
@@ -391,12 +390,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 45.4163,
+    "stddev": 56.7561,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "bcfe9fdb8f6acf16a0942cc90dff08e788cb58e2d02a0459e63c42886298dd02",
+    "sha256": "6663b13f5c39c171e7d4b361c36ab2443442b182fb91c7eb0736b9f4ab387c26",
     "ok": true
   },
   {
@@ -410,12 +409,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 45.1739,
+    "stddev": 50.2283,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "a494935687612f27fa8403dd81f4ba4a2c7f7ae75e31486e541ee2b61c9380fe",
+    "sha256": "fc3b3652fa5b6a1c19898f2d02af074d6c172eb0dfe9c11d4d962a31acf9873b",
     "ok": true
   },
   {
@@ -429,12 +428,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 48.9473,
+    "stddev": 48.5759,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "b19049513d9295df18886f0d42ee25ea6871b9508a4b829bcb5e2c063d5b7ac6",
+    "sha256": "d3800c57668bc09d1a546b9d4eead96ea5590dc26697b794dad09538c8439914",
     "ok": true
   },
   {
@@ -448,12 +447,164 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 51.7383,
+    "stddev": 51.9868,
     "blank": false,
     "consoleErrors": [],
     "width": 1024,
     "height": 576,
-    "sha256": "3b0b9f903e5159b2fc4e9e5d8e8a39be07c6654f553a07fb3fe87b31a9c3e4d2",
+    "sha256": "4dce70338f07895461f9097c12d53778c3b97cd44f6ee1e8f60f07e5f962d2b9",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-volcanic",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "lava-volcanic__top.png",
+    "meta": {
+      "poolKey": "lava-volcanic",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 68.5854,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "657f17a39ae7fe5816d9e32595280f1d5a32575ffa37e71729f0c741eaafa875",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-volcanic",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "lava-volcanic__oblique.png",
+    "meta": {
+      "poolKey": "lava-volcanic",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 45.8108,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "d181c42709dd1c8d3ada31dc29caf4f7b98617b0e52c6f6e06ba568de7c194dd",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-infernal",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "lava-infernal__top.png",
+    "meta": {
+      "poolKey": "lava-infernal",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 70.2835,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "f52042bd3cc43538447ab0556ac65013af3f6221e62990aa5c8c81eff0763a42",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-infernal",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "lava-infernal__oblique.png",
+    "meta": {
+      "poolKey": "lava-infernal",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 48.2401,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "40916347bc48176a8aacc329cb03b1445adb4b04c90b85cdcd19f770bcae717f",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-plasma",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "lava-plasma__top.png",
+    "meta": {
+      "poolKey": "lava-plasma",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 72.6333,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "f9cc3908485fcc067262d91e4c2357908f76f9b47ed3d79e1a3937f166a670bc",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-plasma",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "lava-plasma__oblique.png",
+    "meta": {
+      "poolKey": "lava-plasma",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 51.0281,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "612f77e592decab5b17f48117d4bd7249d0bf5f52a8ea212ae24d547084c6d60",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-toxic",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "lava-toxic__top.png",
+    "meta": {
+      "poolKey": "lava-toxic",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 70.9957,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "980da54aba623d1e27c99f0cf13fe4a9d609afb0f3e5531ffc207541e06a74e6",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-toxic",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "lava-toxic__oblique.png",
+    "meta": {
+      "poolKey": "lava-toxic",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 50.3215,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "79073dcf72b45b2d38be8280dd30b3faaf6028f02d4271e321812650dbcacb02",
     "ok": true
   }
 ]
