@@ -20,6 +20,19 @@ erzeugen.
 
 ---
 
+## 2026-10-10 — Rebrand „Small World" → „Small World Machine" verifiziert & Memory-Updates
+
+- ✅ **Memory-Aufnahme:** Session-Neustart nach Rebrand (0.102.0/0.103.0/0.104.0). Verifikation: keinerlei verbliebene
+  „Small World"-Referenzen im Quelltext, Docs, ADRs, Guides, Skills, CI oder `CONTEXT.md`/`REFERENCES.md`
+  (Ausnahme: absichtlich konservierte historische CHANGELOG/Backlog-Einträge). Klassen-Präfix `SW_*` → `SWM_*`,
+  Engine-Einstieg ist `SmallWorldMachine` (`packages/engine/src/core/SmallWorldMachine.ts`), npm-Scopes
+  `@small-world-machine/*`, Remote-URL `rottensteiner-stefan/small-world-machine`, Root-Version 0.104.0.
+- ℹ️ **Hinweis:** Der Qdrant/GitLab-Projektwissens-Store (hgcloud) kennt dieses lokale Repo nicht — projektweites
+  Memory bleibt in `AGENTS.md`, `CONTEXT.md`, `backlog.md` und den App-`log.md`-Dateien.
+- ℹ️ **Offene Punkte (Stand heute)** siehe unten — u.a. S1 Wellen-Sonde (Abnahme), Golden-Baseline-Neuaufnahme,
+  WebGPU-Block-Artefakt (Showcase 29, Root Cause offen), Mond-Spiegelung (Showcase 16, GL2), StylizedWater
+  Phase B (Freigabe), `bunker_blast_door` (Asset-QS).
+
 ## 2026-10-09 — ADR 0027: `ObjectUniforms` auf 512 Byte + improve-noir Abschluss
 
 - ✅ **Umgesetzt (volles Programm):** ADR 0027 (`docs/adr/0027-object-uniforms-512-byte-expansion.md`) — `ObjectUniforms`-Puffer auf 512 Byte erweitert, gekaperte Semantik-Slots (`u_isSkinned`, `u_boneOffset`, `u_pad1..3`, PBR/Env-Slots) in `LiquidWaveMaterial`/`StylizedWaterMaterial` auf semantische `matParam0..2` (UBO/WebGPU-Puffer) entflochten; Shader-Parität GLSL100/GLSL300/WGSL für OpenWater + StylizedWater, `StandardWebGPULayout.ts`, `structs.wgsl`, `GPUObjectRingBuffer`, `GPUPipelineCache`; WebGPU-Tests angepasst.
