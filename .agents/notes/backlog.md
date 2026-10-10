@@ -33,6 +33,22 @@ erzeugen.
   WebGPU-Block-Artefakt (Showcase 29, Root Cause offen), Mond-Spiegelung (Showcase 16, GL2), StylizedWater
   Phase B (Freigabe), `bunker_blast_door` (Asset-QS).
 
+- 📋 **Golden-Baseline: Stand 2026-10-10 (korrigiert die Einträge vom 06.–08.10.):** Die Baseline wurde am 8.10. neu
+  aufgenommen (Commit `28767d10`, Chrome 152, 12 Pools × 2 Views = 24 Zellen). Compare auf HEAD (GL2, gleiche
+  Browser-Version): **24/24 Zellen über 0,5 %**, nicht nur vier. Top/oblique u. a.: noir-graphic 41,3/8,0 %,
+  wave-rider 34,1/10,5 %, clear-water 20,1/6,3 %, bold-anime 14,0/5,7 %, painterly-sparkle 13,5/5,6 %, toon-water
+  12,9/4,8 %, dead-sea 9,3/3,8 %, soft-watercolor 9,4/4,9 %, toxic-slime 4,6/2,4 %, dredge 4,0/2,1 %, petroleum-oil
+  3,1/2,8 %, molten-lava 3,0/1,7 %. Gesichtet (clear-water, noir-graphic, je top): Baseline = dunkle untexturierte
+  Kisten, HEAD = texturierte Holzkisten + Schaum; noir-graphic sichtbar anderer Look. Spricht für Inhalt (459 Dateien
+  seit der Baseline, u. a. `3323fd5f`). **Nicht bewiesen:** Gegenprobe (Worktree `28767d10` rendern), 22 Zellen
+  ungesehen, Plattformanteil (Baseline = Linux-CI, lokal Mac 0/24), Regression im noir-Look nicht ausgeschlossen.
+  `scripts/goldens/config.json` führt 16 Pools (zusätzlich `lava-volcanic/-infernal/-plasma/-toxic`), die Baseline
+  nur 12 → voller Compare meldet die 4 als Fehler. Neuaufnahmen liegen in `.agents/scratches/goldens/current/`.
+  **Offen (Entscheidung User):** Bilder prüfen, dann Baseline per CI-Artefakt `liquid-goldens` inkl. lava-Pools im
+  selben Commit wie die Änderung neu aufnehmen.
+- ✅ **S1 Wellen-Sonde und Showcase-29-Artefakt geprüft:** S1 war schon umgesetzt (siehe korrigierter Eintrag unten);
+  Showcase-29-Artefakt auf HEAD unter SwiftShader/WebGPU nicht reproduzierbar, Metal-GPU ungeprüft.
+
 ## 2026-10-09 — ADR 0027: `ObjectUniforms` auf 512 Byte + improve-noir Abschluss
 
 - ✅ **Umgesetzt (volles Programm):** ADR 0027 (`docs/adr/0027-object-uniforms-512-byte-expansion.md`) — `ObjectUniforms`-Puffer auf 512 Byte erweitert, gekaperte Semantik-Slots (`u_isSkinned`, `u_boneOffset`, `u_pad1..3`, PBR/Env-Slots) in `LiquidWaveMaterial`/`StylizedWaterMaterial` auf semantische `matParam0..2` (UBO/WebGPU-Puffer) entflochten; Shader-Parität GLSL100/GLSL300/WGSL für OpenWater + StylizedWater, `StandardWebGPULayout.ts`, `structs.wgsl`, `GPUObjectRingBuffer`, `GPUPipelineCache`; WebGPU-Tests angepasst.
@@ -91,14 +107,16 @@ erzeugen.
   Seegang gemessen (mit der ersten, steileren Einstellung); `goldens/config.json` hat jetzt 12 Pools, die Baseline kennt die
   zwei neuen Zellen nicht, und alle Positionen haben sich verschoben, also ist eine Neuaufnahme nötig.
 
-- 📋 **S1 Wellen-Sonde CPU ↔ Auftriebswahrheit** (Roadmap §8.2 Block S, Entscheidung D5 = Pflicht; Bob: Math-Mirror +
-  Paritäts-Test, Dave: Ingestion-Vertrag + Integrationstest). Code liegt vor, ist aber noch nicht committet:
-  `OpenWaterSurfaceProbe` (alle 6 Wellen als f32-Spiegel), Hook `FluidVolume.surfaceHeightAt`, Sampling im
-  `BuoyancySolver`. **Abnahme offen:** (1) Probe == Shader-Feld auf GL2/GPU in Toleranz (bisher nur Konstantengleichheit
-  und Selbstkonsistenz, kein Vergleich gegen echte Shader-Ausgabe), (2) `FluidVolume` in mindestens einem Showcase
-  verdrahtet + Integrationstest (schließt G6; bisher nur Unit-Test), (3) Auswertung an der verschobenen Position statt
-  an der Ruheposition (Gerstner verschiebt horizontal). Fallback laut D5, falls (1) nicht ehrlich konstruierbar:
-  Probe als Debug-Hilfe neutral führen und G6 neu zuschneiden.
+- ✅ **S1 Wellen-Sonde CPU ↔ Auftriebswahrheit** (Roadmap §8.2 Block S, D5 = Pflicht). Korrektur 2026-10-10: Der frühere
+  Eintrag („nicht committet, 3 Abnahmepunkte offen") war veraltet; alles ist committet (`ad9eb8db`, `5481d826`).
+  `OpenWaterSurfaceProbe` (f32-Spiegel aller 6 Wellen), `FluidVolume.surfaceHeightAt`, Sampling im `BuoyancySolver`.
+  Abnahme: (1) Probe == echter Shader: `npm run probe:gpu-parity` (`scripts/probe-gpu-parity.js`, Headless-Chrome,
+  Transform Feedback auf dem echten Vertex-Shader; SwiftShader ≤ 0,12 mm, echte GPU 0,3–13 µm; braucht Dev-Server, läuft
+  nicht in vitest/CI) plus Golden-Vector-Regression mit Per-Vektor-Toleranz und G2-Konstanten-Manifest;
+  (2) Showcase 10 (Pools `wave-rider`, `dead-sea`) verdrahtet, Integrationstest `ShowcaseBuoyancyIntegration.test.ts`;
+  (3) Weltpunkt-Abfrage per Newton mit analytischer Jacobi-Matrix (Gerstner horizontal invertiert), getestet.
+  D5-Fallback nicht nötig. **Offen:** Paritätsskript nicht in CI; bei sehr steilen Lane-Sets (Σ Steilheit ≈ 2,2)
+  ist die Weltpunkt-Abfrage mehrdeutig (im Code dokumentiert); G6-Bestätigung im CI-Verbund.
 - 📋 **Golden-Baseline M1 ist veraltet — Drift ist Inhalt, nicht Chrome:** Die Baseline (6.10., 12:19) zeigt die Szene
   vor dem Showcase-10-Umbau (Kachelraster, Texturen, lit `WorldMaterial`, Schatten, Pokéball-Kugeln). Nachweis
   (2026-10-07): Der Baseline-Commit `9223d305`, mit der heutigen Pipeline gerendert (Chrome for Testing 152,
@@ -792,6 +810,7 @@ Entstanden während der Jagd nach grün/blauen Block-Artefakten auf den Sponza-V
   `GPUTextureResourceCache.ts`.
   💡 Idee dazu: echtes GPU-Capture-Tool ranziehen (Chrome WebGPU-Tracing, Dawn-Debug-Layer /
   RenderDoc-artiges Tooling) — JS-Konsolen-Instrumentierung ist an ihrer Grenze.
+  🔎 **2026-10-10 Re-Check auf HEAD:** Showcase 29 per Vite + headless Chrome (WebGPU-Kontext bestätigt, SwiftShader/Vulkan, 25 s Laufzeit, 1280x800) — Vorhänge rot/grün/blau korrekt (Sponza-Original), kein Block-Artefakt, keine Dawn-/Uncaptured-Errors in der Konsole. Auf aktuellem HEAD (nach ADR 0027 u.a.) **nicht reproduzierbar** (SwiftShader; echte GPU/Metal auf Nutzer-Maschine nicht verifiziert). Bei erneutem Auftreten bitte melden.
 
 - ✅ **WebGPU-Textur-Lifecycle: zwei echte Bugs gefixt.** `acquireTextures` mergte Manifeste
   fälschlich statt sie zusammenzuführen (spurious release+recreate über Passes hinweg);
