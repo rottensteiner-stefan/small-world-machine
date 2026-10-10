@@ -1,6 +1,6 @@
 # State Machines (FSM)
 
-Small World provides a built-in, type-safe, allocation-free **finite state machine (FSM)** tool. This framework decouples actor logic, physics update ticks, and phase transitions into clean, isolated classes.
+Small World Machine provides a built-in, type-safe, allocation-free **finite state machine (FSM)** tool. This framework decouples actor logic, physics update ticks, and phase transitions into clean, isolated classes.
 
 Every FSM callback (`onEnter`/`onUpdate`/`onExit`) receives a **state data** object - the self-defined payload shared by every state of that machine. Not to be confused with the `Context Object` (the engine's constructor-injected dependency container) or the `State` itself (the FSM's current mode, e.g. `"idle"`/`"patrolling"`) - state data is a third, distinct concept: simply the data that a given machine's states read and mutate.
 
@@ -15,7 +15,7 @@ Every FSM callback (`onEnter`/`onUpdate`/`onExit`) receives a **state data** obj
 Below is an example of declaring states, configuring enter/update triggers, and mapping auto-transitions.
 
 ```typescript
-import { StateMachine, StateMachineBehavior, Object3D } from "@small-world/engine";
+import { StateMachine, StateMachineBehavior, Object3D } from "@small-world-machine/engine";
 
 // 1. Declare the FSM's state data type
 interface ActorStateData {

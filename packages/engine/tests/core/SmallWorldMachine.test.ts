@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { SmallWorld } from "../../src/core/index.js";
+import { SmallWorldMachine } from "../../src/core/index.js";
 import { RendererType } from "../../src/enums/index.js";
 import type { Renderer } from "../../src/interfaces/index.js";
 import { PostProcessingGroup } from "../../src/renderers/post/index.js";
 import { makeMockAudioContext } from "../audio/mockAudioContext.js";
 
-class TestSmallWorld extends SmallWorld {
+class TestSmallWorldMachine extends SmallWorldMachine {
   public readonly recordedDeltaTimes: number[] = [];
   public readonly updatePayloads: string[] = [];
 
@@ -27,11 +27,11 @@ class TestSmallWorld extends SmallWorld {
 const attachedCanvases: HTMLCanvasElement[] = [];
 let origAudioContext: unknown;
 
-// jsdom has no GPU and `SmallWorld` only acquires its real canvas/renderer in `start()`, so the
+// jsdom has no GPU and `SmallWorldMachine` only acquires its real canvas/renderer in `start()`, so the
 // step hook is run against a stubbed canvas + renderer. The body requires a canvas with a real
 // size and a renderer with a post-processing group; the shuffled canvas is appended to the DOM
 // so the `_loop` "canvas removed" guard keeps running instead of auto-destroying.
-function attachTestRuntime(app: TestSmallWorld): void {
+function attachTestRuntime(app: TestSmallWorldMachine): void {
   const canvas = document.createElement("canvas");
   document.body.appendChild(canvas);
   Object.defineProperty(canvas, "clientWidth", { configurable: true, value: 320 });
@@ -47,7 +47,7 @@ function attachTestRuntime(app: TestSmallWorld): void {
   } as unknown as Renderer;
 }
 
-describe("SmallWorld public step(deltaTime) hook", () => {
+describe("SmallWorldMachine public step(deltaTime) hook", () => {
   beforeEach(() => {
     origAudioContext = (window as unknown as { AudioContext: unknown }).AudioContext;
     (window as unknown as { AudioContext: unknown }).AudioContext = class {
@@ -65,7 +65,7 @@ describe("SmallWorld public step(deltaTime) hook", () => {
   });
 
   it("calls update exactly once, forwarding the exact deltaTime of step(1/60)", () => {
-    const app = new TestSmallWorld();
+    const app = new TestSmallWorldMachine();
     attachTestRuntime(app);
 
     app.step(1 / 60);
@@ -74,8 +74,8 @@ describe("SmallWorld public step(deltaTime) hook", () => {
   });
 
   it("produces identical recorded state across fresh instances for an identical step sequence", () => {
-    const a = new TestSmallWorld();
-    const b = new TestSmallWorld();
+    const a = new TestSmallWorldMachine();
+    const b = new TestSmallWorldMachine();
     attachTestRuntime(a);
     attachTestRuntime(b);
 
@@ -89,7 +89,7 @@ describe("SmallWorld public step(deltaTime) hook", () => {
   });
 
   it("still executes the frame body after stop() and never toggles the run state (golden path)", () => {
-    const app = new TestSmallWorld();
+    const app = new TestSmallWorldMachine();
     attachTestRuntime(app);
 
     app.stop();
@@ -102,7 +102,7 @@ describe("SmallWorld public step(deltaTime) hook", () => {
   });
 
   it("routes a realtime frame through step via the RAF callback (loop wiring)", () => {
-    const app = new TestSmallWorld();
+    const app = new TestSmallWorldMachine();
     attachTestRuntime(app);
 
     const rafCalls: FrameRequestCallback[] = [];
@@ -138,7 +138,7 @@ describe("SmallWorld public step(deltaTime) hook", () => {
   });
 
   it("fails fast on negative / NaN deltaTime and after destroy()", () => {
-    const app = new TestSmallWorld();
+    const app = new TestSmallWorldMachine();
     attachTestRuntime(app);
 
     expect(() => app.step(-0.1)).toThrow(/deltaTime/);

@@ -1,6 +1,6 @@
 # 2.5D Scenes & Backgrounds
 
-2.5D is not a special rendering mode — it's a family of old, well-proven tricks for faking depth cheaply. This guide walks end-to-end through building a 2.5D scene with Small World: matching a background image to a camera, defining where a character is allowed to walk, choosing the right camera strategy, scenes with more than one vanishing point, and a handful of real bugs this engine's own reference game ("The Whisper") ran into along the way.
+2.5D is not a special rendering mode — it's a family of old, well-proven tricks for faking depth cheaply. This guide walks end-to-end through building a 2.5D scene with Small World Machine: matching a background image to a camera, defining where a character is allowed to walk, choosing the right camera strategy, scenes with more than one vanishing point, and a handful of real bugs this engine's own reference game ("The Whisper") ran into along the way.
 
 > **Related:** The basic mechanics of background planes — UVs, `flipY`, aspect ratio — are covered in [2.5D Backgrounds & Texture Orientation](/guides/coordinate-system#_2-5d-backgrounds-texture-orientation) in the coordinate system guide. This guide builds on that with perspective matching, movement zones, and camera-strategy trade-offs. For every class and option mentioned below, see the **[API reference](/api/index.html)**. For an illustrated fundamentals explainer ("how 2.5D works"), see `.agents/notes/reference/2-5d-grundlagen.html` in the repo.
 
@@ -119,9 +119,9 @@ The basic question of every 2.5D scene: **exactly where is the character allowed
 |---|---|---|
 | **Walk mask (bitmap)** | A second, invisible black-and-white image — white = walkable. Very old, very simple, but pixel-accurate and tedious to maintain. | classic LucasArts adventures |
 | **Navmesh (3D)** | A triangle mesh over real 3D geometry, usually baked automatically from level geometry. The standard in real 3D games. | practically every modern 3D game |
-| **Normalized polygon zones** | A handful of `(u, v)` points, drawn directly on the image, draggable in an editor. Lightweight, artist-friendly, no bitmap needed. | Small World's own `StageZone` system |
+| **Normalized polygon zones** | A handful of `(u, v)` points, drawn directly on the image, draggable in an editor. Lightweight, artist-friendly, no bitmap needed. | Small World Machine's own `StageZone` system |
 
-Small World uses the third approach. In `flakturm-tunnel/showcase.ts`: `DEFAULT_ZONE_POINTS`, three named zones (`zone_a` / `zone_b` / `zone_c`), each a polygon of four `(u, v)` points with its own `scale` value. `StageMovementBehavior._resolveMove()` checks on every move whether the new position is still inside a polygon, and otherwise clamps it to the nearest valid edge — that's the entire "collision" model. The built-in editor (key `[E]`) lets you drag these points directly with the mouse on the image, instead of typing coordinates.
+Small World Machine uses the third approach. In `flakturm-tunnel/showcase.ts`: `DEFAULT_ZONE_POINTS`, three named zones (`zone_a` / `zone_b` / `zone_c`), each a polygon of four `(u, v)` points with its own `scale` value. `StageMovementBehavior._resolveMove()` checks on every move whether the new position is still inside a polygon, and otherwise clamps it to the nearest valid edge — that's the entire "collision" model. The built-in editor (key `[E]`) lets you drag these points directly with the mouse on the image, instead of typing coordinates.
 
 ### Setting up a zone in practice
 1. **Find the ground line in the image.** Not the walls or ceiling — the surface feet would stand on. In the tunnel background: the cobblestones, not the tunnel vault above.

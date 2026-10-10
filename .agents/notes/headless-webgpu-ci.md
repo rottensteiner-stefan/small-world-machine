@@ -10,7 +10,7 @@ Container-Umgebungen — ohne Display/Xvfb — über:
   - `--enable-features=Vulkan`
 - sowie dem **SwiftShader/Vulkan-Software-Backend** als Rendering-Backend (CPU-Fallback).
 
-**Konsequenz für Small World:** Damit sind echte GPU-Pipeline-Tests (
+**Konsequenz für Small World Machine:** Damit sind echte GPU-Pipeline-Tests (
 WebGL2- und WebGPU-Pfade) in CI/Containern möglich, ohne eine echte GPU oder einen
 virtuellen Display (wie `xvfb-run`). Kein `--use-gl=swiftshader`-Hack o.ä. mehr nötig.
 

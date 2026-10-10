@@ -8,8 +8,8 @@ import {
   BoundingType,
   BoundingBox,
   KitRegistry,
-} from "@small-world/engine";
-import type { KitSocket } from "@small-world/engine";
+} from "@small-world-machine/engine";
+import type { KitSocket } from "@small-world-machine/engine";
 import type { CameraFrame, InspectedAssetInfo } from "../types.js";
 
 export interface PropViewResult {

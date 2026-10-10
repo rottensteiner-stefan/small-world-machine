@@ -23,7 +23,7 @@ import {
   Texture,
   TextureFilter,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 interface Ball {
   position: { x: number; y: number; z: number };

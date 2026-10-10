@@ -12,7 +12,7 @@ import {
   InspectorField,
   collectInspectorSchema,
   StageZoneMarker,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { UndoStack } from "./UndoStack.js";
 
 /** Minimal shape shared by Tweakpane binding/blade APIs this panel actually calls -- mirrors

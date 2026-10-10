@@ -1,7 +1,7 @@
 {
-  "name": "@small-world/tools",
+  "name": "@small-world-machine/tools",
   "version": "0.1.0",
-  "description": "Standalone development and diagnostic tools for the Small World 3D engine (Maker world editor, Material Studio, Pixler, Xtractor, Map Generator, Forge window manager).",
+  "description": "Standalone development and diagnostic tools for the Small World Machine 3D engine (Maker world editor, Material Studio, Pixler, Xtractor, Map Generator, Forge window manager).",
   "type": "module",
   "license": "MIT",
   "exports": {
@@ -9,7 +9,7 @@
     "./*": "./src/*"
   },
   "dependencies": {
-    "@small-world/engine": "*",
+    "@small-world-machine/engine": "*",
     "@kitschpatrol/tweakpane-plugin-camerakit": "^0.3.1-beta.3",
     "fflate": "^0.8.2",
     "tweakpane": "^4.0.5"

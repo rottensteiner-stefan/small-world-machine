@@ -1,11 +1,11 @@
-# Small World Core Context
+# Small World Machine Core Context
 
-The foundational domain model for the Small World 3D engine. It defines the core architectural concepts for the hybrid WebGL/WebGPU rendering and entity logic system.
+The foundational domain model for the Small World Machine 3D engine. It defines the core architectural concepts for the hybrid WebGL/WebGPU rendering and entity logic system.
 
 ## Language
 
 **Anime Fluid Family**:
-The unified stylized liquid and fluid pipeline within Small World (`StylizedWaterMaterial`) covering toon, Ghibli-soft, painterly sparkle, dredge, and other stylized looks via parameter vectors and compile-time extension hooks.
+The unified stylized liquid and fluid pipeline within Small World Machine (`StylizedWaterMaterial`) covering toon, Ghibli-soft, painterly sparkle, dredge, and other stylized looks via parameter vectors and compile-time extension hooks.
 _Avoid_: Ghibli Water Subsystem, Liquid Fork — Ghibli is one preset on the continuous Anime continuum; non-water fluids (lava, slime, dark oil) reuse the identical shader core.
 
 **Asset Kit**:
@@ -53,7 +53,7 @@ A JSON-Schema-validated scene description format (`level.schema.json`, `*.level.
 _Avoid_: Scene File (ambiguous with raw glTF `scene.gltf`).
 
 **Event Bus**:
-The typed, per-`SmallWorld`-instance event dispatcher (`app.events`) that replaces DOM `CustomEvent` for engine-internal notifications.
+The typed, per-`SmallWorldMachine`-instance event dispatcher (`app.events`) that replaces DOM `CustomEvent` for engine-internal notifications.
 _Avoid_: Global Event Bus, Universal EventBus — rejected under Context Object; this bus is scoped to one engine instance, never a shared global.
 
 **Forge / ForgeTool**:

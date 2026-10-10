@@ -76,7 +76,7 @@ export class WorldWriter {
 
   private _finalize(rootIndices: number[]): GltfDocument {
     const doc: GltfDocument = {
-      asset: { version: "2.0", generator: "small-world-maker" },
+      asset: { version: "2.0", generator: "small-world-machine-maker" },
       scene: 0,
       scenes: [{ nodes: rootIndices }],
       nodes: this._nodes,

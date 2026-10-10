@@ -4,30 +4,34 @@ import {
   Sprite,
   InstancedMesh,
   EventDispatcherImpl,
-} from "@small-world/engine/core/index.js";
-import { Vector3D, Matrix4 } from "@small-world/engine/math/index.js";
-import { Cube, Sphere } from "@small-world/engine/geometry/index.js";
+} from "@small-world-machine/engine/core/index.js";
+import { Vector3D, Matrix4 } from "@small-world-machine/engine/math/index.js";
+import { Cube, Sphere } from "@small-world-machine/engine/geometry/index.js";
 import {
   StandardMaterial,
   FluidSurfaceMaterial,
   SpriteMaterial,
-} from "@small-world/engine/core/materials/index.js";
-import { PointLight } from "@small-world/engine/core/lights/index.js";
-import { Color } from "@small-world/engine/core/colors/index.js";
-import { Texture, TextureArray } from "@small-world/engine/core/textures/index.js";
-import { CullMode, TextureFilter, TextureWrap } from "@small-world/engine/enums/index.js";
-import { CameraInterfaceData } from "@small-world/engine/interfaces/index.js";
+} from "@small-world-machine/engine/core/materials/index.js";
+import { PointLight } from "@small-world-machine/engine/core/lights/index.js";
+import { Color } from "@small-world-machine/engine/core/colors/index.js";
+import { Texture, TextureArray } from "@small-world-machine/engine/core/textures/index.js";
+import { CullMode, TextureFilter, TextureWrap } from "@small-world-machine/engine/enums/index.js";
+import { CameraInterfaceData } from "@small-world-machine/engine/interfaces/index.js";
 import {
   ProximitySensorBehavior,
   BobbingBehavior,
-} from "@small-world/engine/core/behaviors/index.js";
+} from "@small-world-machine/engine/core/behaviors/index.js";
 import {
   GridLevelBuilder,
   GridLegend,
-} from "@small-world/engine/tools/procgen/GridLevelBuilder.js";
-import { AudioSystem } from "@small-world/engine/audio/index.js";
+} from "@small-world-machine/engine/tools/procgen/GridLevelBuilder.js";
+import { AudioSystem } from "@small-world-machine/engine/audio/index.js";
 import { EnemyBehavior } from "./behaviors/EnemyBehavior.js";
-import { BoundingBox, SpatialHash, StaticCollider } from "@small-world/engine/physix/index.js";
+import {
+  BoundingBox,
+  SpatialHash,
+  StaticCollider,
+} from "@small-world-machine/engine/physix/index.js";
 import { ObjectTags } from "../enums/ObjectTags.js";
 import { Events } from "../Events.js";
 

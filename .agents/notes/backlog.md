@@ -216,13 +216,13 @@ erzeugen.
 
 ## 2026-09-27 — ADR 0024: Entwicklungswerkzeuge als eigenes Ökosystem-Paket
 
-- 📋 **`@small-world/tools`-Paket beschlossen** (`docs/adr/0024-tools-ecosystem-package.md`).
+- 📋 **`@small-world-machine/tools`-Paket beschlossen** (`docs/adr/0024-tools-ecosystem-package.md`).
   Auslöser: User-Frage, ob es Sinn ergibt, die Tools (Maker, MaterialStudio, Pixler, Xtractor,
-  MapGenerator, Forge) aus `@small-world/engine` auszulagern, da eine ausgelieferte App sie zur
+  MapGenerator, Forge) aus `@small-world-machine/engine` auszulagern, da eine ausgelieferte App sie zur
   Laufzeit nie braucht. Bundle-Größe war bereits über dynamische `import()` + unvollständigen
   Barrel-Export gelöst — das eigentliche Problem ist Paket-/Abhängigkeitsgraph-Klarheit und die
-  bereits bekannte Lücke, dass `small-world/tools` kein sauber auflösbarer Package-Export ist.
-  Kernknoten: `SmallWorld.ts` importiert selbst hartkodiert 5 Tools dynamisch für die
+  bereits bekannte Lücke, dass `small-world-machine/tools` kein sauber auflösbarer Package-Export ist.
+  Kernknoten: `SmallWorldMachine.ts` importiert selbst hartkodiert 5 Tools dynamisch für die
   `enableInspector`-Verdrahtung — ein reiner Umzug hätte das in eine verbotene Kern→Tools-
   Abhängigkeit verwandelt (spiegelbildlich zu ADR 0021s Ein-Weg-Regel). Entscheidung: diese
   Verdrahtung ersatzlos aus dem Kern raus, stattdessen `attachDevTools(app)` aus dem neuen Paket,
@@ -233,7 +233,7 @@ erzeugen.
   erhalten): `maker/` (19 Dateien + `docs/`), `material-studio/`, `MaterialStudio.ts`,
   `Pixler.ts`, `Xtractor.ts`, `MapGenerator.ts`, `common/` (TextureFilters/CanvasOperations),
   `forge/{Forge,ForgeWindow,ForgeTheme}.ts` — ~25 Dateien von tiefen Relativimporten auf flaches
-  `@small-world/engine` umgestellt (Konvention wie `geometry-extras`). `SmallWorld.ts` verliert
+  `@small-world-machine/engine` umgestellt (Konvention wie `geometry-extras`). `SmallWorldMachine.ts` verliert
   `forge`-Property, den kompletten `enableInspector`-Block und `_onKeyDown` (war ausschließlich
   Forge-Toggle) samt `destroy()`-Cleanup; `EngineOptions.enableInspector` entfernt.
   `attachDevTools(app)` repliziert die alte Verdrahtung 1:1 (Forge + 4 Tool-Fenster, YAD-Map-
@@ -258,7 +258,7 @@ erzeugen.
   zwei — beide Verantwortlichkeiten teilen sich denselben mutablen State und riefen sich
   gegenseitig auf, eine erzwungene Trennung wäre nur Getter/Setter-Weiterreichung gewesen).
   `MaterialStudioApp` unverändert (harter externer Vertrag: `public/tools/pbr-gen.html`,
-  `SmallWorld.ts`). tsc/eslint sauber, 92 Tests grün.
+  `SmallWorldMachine.ts`). tsc/eslint sauber, 92 Tests grün.
 - ✅ **`MakerApp.ts`** 2175 → 1698 Zeilen (−22%). Neu: `MakerPrefabPipeline.ts`,
   `MakerImportAndZoneTools.ts`, `MakerToolbarBuilder.ts`. Bleibt bewusst über 1000 Zeilen —
   Selection/Gizmo-Drag/Pointer-Picking/undo-gestützte Szenenbearbeitung teilen sich durchgängig
@@ -475,7 +475,7 @@ erzeugen.
   (`registerGltfExtension()`), die zwei bestehenden Extensions dorthin migriert (verhaltens-
   identisch, alle 29 vorherigen Loader-Tests unverändert grün), `SW_stage_zone` als dritter,
   sauberer Registry-Eintrag. Neue ADR 0017 dokumentiert die Entscheidung inkl. der verworfenen
-  Alternative "eigenes `@small-world/gltf-extensions`-Package für diese drei" (Zirkelabhängigkeit
+  Alternative "eigenes `@small-world-machine/gltf-extensions`-Package für diese drei" (Zirkelabhängigkeit
   — sie sind Default-Verhalten und brauchen zwingend Engine-Typen; ein externes Package bleibt
   aber der richtige Ort für spätere, echt optionale Community-Extensions).
   - `StageZoneMarker` (aus Phase 0) ist jetzt über `SW_stage_zone` roundtrip-fähig — 4-Punkte- UND
@@ -539,11 +539,11 @@ erzeugen.
   Maker-Arbeit.
   - `src/` aufgelöst: Engine-Code (core, environment, behaviors, geometry, math, physix, renderers,
     audio, enums, interfaces, loaders, utils, tools, global.d.ts, presentation.ts) →
-    `packages/engine/src/`, eigenes Package `@small-world/engine` mit
+    `packages/engine/src/`, eigenes Package `@small-world-machine/engine` mit
     `exports: {".": "./src/index.ts", "./*": "./src/*"}` (Apps importieren nur noch per
     Package-Name, nie mehr über relative Pfade, die den Package-Root verlassen).
   - Die drei Apps (`and-now`, `yad`, `light-cycle-arena`) → `apps/*`, je eigenes Package
-    (`@small-world/and-now` usw.), `dependencies: {"@small-world/engine": "*"}`.
+    (`@small-world-machine/and-now` usw.), `dependencies: {"@small-world-machine/engine": "*"}`.
   - Bonus (User-Idee mid-flight): `showcases/yad/` und `showcases/light-cycle-arena/` (HTML +
     Assets) ebenfalls nach `apps/yad/` bzw. `apps/light-cycle-arena/` verschoben, damit sie wie
     `and-now` konsistent bei ihrem eigenen App-Package liegen statt in den generischen
@@ -915,7 +915,7 @@ Entstanden während der Jagd nach grün/blauen Block-Artefakten auf den Sponza-V
     geprüft und als oberflächliche statt echte Überschneidung verworfen).
 
 - ✅ **Asset Kit Inspector (T-09) implementiert (2026-09-28):** Neues vollwertiges Entwickler- und
-  Inspektionswerkzeug unter `public/tools/kit-inspector.html` und `@small-world/tools/kit-inspector`:
+  Inspektionswerkzeug unter `public/tools/kit-inspector.html` und `@small-world-machine/tools/kit-inspector`:
   - Interaktives Durchsuchen aller modularen Kits (`bunker`, `flakturm`, `industrial`), Props, PBR-
     Texturen und Decals über `KitRegistry` und `public/assets/kits/index.json`.
   - 3D-Viewport mit Orbit-Steuerung (L-Drag Rotate, R-Drag/Wheel Pan & Zoom, `[F]` Focus/Reset,
@@ -948,7 +948,7 @@ Entstanden während der Jagd nach grün/blauen Block-Artefakten auf den Sponza-V
 - 📋 **Stilisiertes Wasser (Richtung `soft`/`sparkle`, Referenzen Spirited Away + Dredge), Phase B wartet auf Freigabe (2026-10-03):**
   Analysen, Board-Exporte, ADR-0025-Entwurf und Aufgabenplan B0–B8 liegen in
   `docs/research/stylized-water/` (Einstieg: `README.md`). Proposal P1 einstimmig (5/5), Entscheidungen des
-  Moderators: `toon` unverändert (kein Löschen des alten Kaustik-Pfads), Paket `@small-world/liquid-extras`
+  Moderators: `toon` unverändert (kein Löschen des alten Kaustik-Pfads), Paket `@small-world-machine/liquid-extras`
   mit Noir-Paket als erste Extension, `sparkle` in der Engine, „Ghibli" nur intern. Erster Schritt der
   Umsetzung: V0-Baseline aller drei Backends vor jeder Shader-Änderung. Nichts davon ist in der Engine
   gerendert; Budgets sind aus Quelltext geschätzt.
@@ -999,7 +999,7 @@ Entstanden während der Jagd nach grün/blauen Block-Artefakten auf den Sponza-V
 
 ## 2026-10-08 — "Synthetische Augen": vision-image.mjs (Bilder für text-only Modelle)
 
-- ✅ **`.agents/vision-image.mjs` angelegt:** Bild → externe Vision-API → Text-Beschreibung als stdin, damit das text-only
+- ✅ **`../skills/vision-image/vision-image.mjs` angelegt:** Bild → externe Vision-API → Text-Beschreibung als stdin, damit das text-only
   Modell (Deepseek V4 Flash auf lokalem Spark, einziger aktiver opencode-Provider) "sehen" kann. **Standard: Gemini**
   (`gemini-3.8-flash`, env `GEMINI_API_KEY` — verifiziert funktionierend); `--provider openai` ist opt-in (`gpt-4o-mini`,
   `OPENAI_API_KEY` in dieser Shell aktuell 401/ungültig). Nutzung: `node .agents/vision-image.mjs <bild> [--prompt ...]`.

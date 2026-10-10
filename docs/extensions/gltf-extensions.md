@@ -1,18 +1,18 @@
-# glTF-Erweiterungen (`@small-world/gltf-extensions`)
+# glTF-Erweiterungen (`@small-world-machine/gltf-extensions`)
 
-Das Paket `@small-world/gltf-extensions` implementiert die datenkomprimierenden Erweiterungen des offiziellen Khronos glTF 2.0 Standards (`KHR_draco_mesh_compression` und `KHR_texture_basisu`).
+Das Paket `@small-world-machine/gltf-extensions` implementiert die datenkomprimierenden Erweiterungen des offiziellen Khronos glTF 2.0 Standards (`KHR_draco_mesh_compression` und `KHR_texture_basisu`).
 
 ## Installation & Registrierung
 
 ```bash
-npm install @small-world/gltf-extensions
+npm install @small-world-machine/gltf-extensions
 ```
 
 Um alle glTF-Erweiterungen automatisch in der `GltfLoader`-Plugin-Registry zu registrieren, genügt ein einziger Side-Effect-Import vor dem Laden von Modellen:
 
 ```typescript
-import "@small-world/gltf-extensions/register";
-import { GltfLoader } from "@small-world/engine";
+import "@small-world-machine/gltf-extensions/register";
+import { GltfLoader } from "@small-world-machine/engine";
 
 const loader = new GltfLoader();
 const scene = await loader.load("model-compressed.glb");

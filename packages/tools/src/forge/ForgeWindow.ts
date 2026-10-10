@@ -1,4 +1,4 @@
-import { ForgeTool } from "@small-world/engine";
+import { ForgeTool } from "@small-world-machine/engine";
 
 export class ForgeWindow {
   public static _maxZIndex: number = 10;
@@ -139,6 +139,7 @@ export class ForgeWindow {
     } else {
       this._windowEl.style.display = "flex";
       this.bringToFront();
+      this._clampIntoViewport();
     }
     localStorage.setItem(`swf_win_${this._persistenceKey}`, nextState ? "1" : "0");
   }
@@ -150,6 +151,23 @@ export class ForgeWindow {
     } else {
       this.toggleVisibility(false);
     }
+  }
+
+  /**
+   * Pulls the window back on screen when its saved or default position puts the right edge (and
+   * with it the close button) or the header below the visible area. The CSS caps the size; this
+   * keeps the position consistent with it.
+   */
+  private _clampIntoViewport(): void {
+    const el = this._windowEl;
+    const margin = 8;
+    const taskbar = 44;
+    const maxLeft = Math.max(0, window.innerWidth - el.offsetWidth - margin);
+    const maxTop = Math.max(0, window.innerHeight - taskbar - el.offsetHeight);
+    const left = parseInt(el.style.left || "0", 10);
+    const top = parseInt(el.style.top || "0", 10);
+    el.style.left = `${Math.min(Math.max(left, 0), maxLeft)}px`;
+    el.style.top = `${Math.min(Math.max(top, 0), maxTop)}px`;
   }
 
   public bringToFront(): void {

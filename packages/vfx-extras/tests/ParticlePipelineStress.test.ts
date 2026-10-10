@@ -5,7 +5,7 @@ import { AccretionDiskEmitter } from "../src/AccretionDiskEmitter.js";
 import { PointAttractorAffector } from "../src/affectors/PointAttractorAffector.js";
 import { VortexAffector } from "../src/affectors/VortexAffector.js";
 import { PlanarSpringAffector } from "../src/affectors/PlanarSpringAffector.js";
-import { Sphere, BasicMaterial, Vector3D, Matrix4, Quaternion } from "@small-world/engine";
+import { Sphere, BasicMaterial, Vector3D, Matrix4, Quaternion } from "@small-world-machine/engine";
 
 describe("Particle Pipeline Stress & Buffer Parity", () => {
   it("sustains thousands of particles with multiple combined affectors without memory allocation leaks", () => {

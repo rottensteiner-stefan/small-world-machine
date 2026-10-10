@@ -26,7 +26,7 @@ import {
   Texture,
   KitRegistry,
   LevelHotspotDef,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { BunkerKit } from "../../builder/BunkerKit.js";
 import { FlakturmKit } from "../../builder/FlakturmKit.js";
 import { TerminalModal } from "../../ui/TerminalModal.js";

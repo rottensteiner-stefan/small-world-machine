@@ -1,7 +1,7 @@
 {
-  "name": "@small-world/geometry-extras",
+  "name": "@small-world-machine/geometry-extras",
   "version": "0.1.0",
-  "description": "Exotic and procedural geometries for the Small World 3D engine (supershapes, torus knots, and more).",
+  "description": "Exotic and procedural geometries for the Small World Machine 3D engine (supershapes, torus knots, and more).",
   "type": "module",
   "license": "MIT",
   "exports": {
@@ -9,6 +9,6 @@
     "./*": "./src/*"
   },
   "dependencies": {
-    "@small-world/engine": "*"
+    "@small-world-machine/engine": "*"
   }
 }

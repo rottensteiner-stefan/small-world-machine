@@ -19,7 +19,7 @@ import {
   StandardMaterial,
   Texture,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 class Showcase13 extends AbstractShowcase {
   private _helmet?: Object3D;

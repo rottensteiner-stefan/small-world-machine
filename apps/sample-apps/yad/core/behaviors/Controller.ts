@@ -3,13 +3,13 @@ import {
   FirstPersonControllerOptions,
   Object3D,
   EventDispatcherImpl,
-} from "@small-world/engine/core/index.js";
-import { CameraInterfaceData, Collidable } from "@small-world/engine/interfaces/index.js";
-import { Keys } from "@small-world/engine/enums/index.js";
+} from "@small-world-machine/engine/core/index.js";
+import { CameraInterfaceData, Collidable } from "@small-world-machine/engine/interfaces/index.js";
+import { Keys } from "@small-world-machine/engine/enums/index.js";
 import { Events } from "../../Events.js";
-import { Raycaster } from "@small-world/engine/physix/index.js";
-import { Vector2D } from "@small-world/engine/math/index.js";
-import { AudioSystem } from "@small-world/engine/audio/index.js";
+import { Raycaster } from "@small-world-machine/engine/physix/index.js";
+import { Vector2D } from "@small-world-machine/engine/math/index.js";
+import { AudioSystem } from "@small-world-machine/engine/audio/index.js";
 import { ObjectTags } from "../../enums/ObjectTags.js";
 
 /**

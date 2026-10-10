@@ -1,12 +1,12 @@
-# @small-world/physics-extras
+# @small-world-machine/physics-extras
 
-> Physics-side extensions for the **Small World 3D Engine** that legitimately need both `@small-world/engine`'s physics _and_ a geometry package -- so they can't live in a geometry-only package without giving it a physics dependency, and don't belong in the engine core either.
+> Physics-side extensions for the **Small World Machine 3D Engine** that legitimately need both `@small-world-machine/engine`'s physics _and_ a geometry package -- so they can't live in a geometry-only package without giving it a physics dependency, and don't belong in the engine core either.
 
 ---
 
 ## 📦 Overview
 
-`@small-world/geometry-extras`'s `VoronoiCells` is an obvious fit for physics-based destruction (each cell as its own rigid body), but that needs the engine's physics on top of pure geometry. This package is where that combination lives instead, following the same decoupled extension pattern as `@small-world/gltf-extensions` and `@small-world/geometry-extras`.
+`@small-world-machine/geometry-extras`'s `VoronoiCells` is an obvious fit for physics-based destruction (each cell as its own rigid body), but that needs the engine's physics on top of pure geometry. This package is where that combination lives instead, following the same decoupled extension pattern as `@small-world-machine/gltf-extensions` and `@small-world-machine/geometry-extras`.
 
 Currently included:
 
@@ -19,8 +19,8 @@ This relies on `packages/engine/src/physix/ConvexHull.ts` -- a generic convex-po
 ## 🚀 Installation & Usage
 
 ```typescript
-import { fractureObject } from "@small-world/physics-extras";
-import { Object3D, Cube, StandardMaterial, PhysicsSystem } from "@small-world/engine";
+import { fractureObject } from "@small-world-machine/physics-extras";
+import { Object3D, Cube, StandardMaterial, PhysicsSystem } from "@small-world-machine/engine";
 
 const vase = new Object3D("Vase");
 vase.geometry = new Cube({ size: 2 }).getGeometryData();
@@ -39,6 +39,6 @@ const shards = fractureObject(vase, {
 // PhysicsSystem picks the new RigidBody/ConvexHull-bounded shards up next step.
 ```
 
-`fractureObject()` derives its clipping bounds from `target.geometry.getBoundingVolume()` by default (override with `bounds`), reuses `@small-world/geometry-extras`'s seed-point generation (including Lloyd relaxation and power-diagram `weights`), and gives each shard's local origin its own center of mass rather than the original object's origin -- required for its `ConvexHull` and `RigidBody` rotation to behave correctly once it's independent.
+`fractureObject()` derives its clipping bounds from `target.geometry.getBoundingVolume()` by default (override with `bounds`), reuses `@small-world-machine/geometry-extras`'s seed-point generation (including Lloyd relaxation and power-diagram `weights`), and gives each shard's local origin its own center of mass rather than the original object's origin -- required for its `ConvexHull` and `RigidBody` rotation to behave correctly once it's independent.
 
 See [`REFERENCES.md`](../../REFERENCES.md) for the underlying technique.

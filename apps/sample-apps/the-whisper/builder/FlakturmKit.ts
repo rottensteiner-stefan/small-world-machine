@@ -6,7 +6,7 @@ import {
   Color,
   PointLight,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 export interface FluorescentLampOptions {
   name?: string;

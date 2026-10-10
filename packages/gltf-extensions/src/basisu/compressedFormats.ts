@@ -1,4 +1,4 @@
-import { CompressedTextureFormat } from "@small-world/engine";
+import { CompressedTextureFormat } from "@small-world-machine/engine";
 import { BasisDecodedImage, BasisTranscoderFormat, BasisTranscoderFormatId } from "./basisTypes.js";
 
 /**

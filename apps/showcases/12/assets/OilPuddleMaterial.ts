@@ -3,7 +3,7 @@ import {
   RenderManifest,
   ShaderDefinition,
   StandardWebGPULayout,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 const vertWGSL = `
 [WGSL_STRUCTS]

@@ -30,7 +30,7 @@ import {
   ToneMappingMode,
   Vector3D,
   VignetteElement,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 interface CameraPreset {
   name: string;

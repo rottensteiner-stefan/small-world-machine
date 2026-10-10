@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Object3D, Cube, ConvexHull, StandardMaterial } from "@small-world/engine";
+import { Object3D, Cube, ConvexHull, StandardMaterial } from "@small-world-machine/engine";
 import { fractureObject } from "../src/VoronoiFracture.js";
 
 function makeTarget(): Object3D {

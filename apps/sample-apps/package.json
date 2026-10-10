@@ -1,9 +1,9 @@
 {
-  "name": "@small-world/sample-apps",
+  "name": "@small-world-machine/sample-apps",
   "private": true,
   "version": "0.78.00",
   "type": "module",
   "dependencies": {
-    "@small-world/engine": "*"
+    "@small-world-machine/engine": "*"
   }
 }

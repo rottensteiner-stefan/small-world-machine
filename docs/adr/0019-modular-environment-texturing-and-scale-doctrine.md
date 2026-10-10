@@ -11,11 +11,11 @@ Wird eine einzelne PBR-Kacheltextur (z. B. Brettschalungsbeton) naiv über groß
 
 ## Entscheidung: Das 4-Säulen-Prinzip
 
-Wir etablieren für alle zukünftigen modularen Level- und Raum-Assets in Small World die **4-Säulen-Textur- und Skalierungs-Doktrin**:
+Wir etablieren für alle zukünftigen modularen Level- und Raum-Assets in Small World Machine die **4-Säulen-Textur- und Skalierungs-Doktrin**:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│               4-Säulen-Architektur für modulare Umgebungen (Small World)               │
+│               4-Säulen-Architektur für modulare Umgebungen (Small World Machine)               │
 ├────────────────────────────┬─────────────────────────────┬─────────────────────────────┤
 │ 1. Multizonale PBR-Palette │ 2. Architektonisches Raster │ 3. Duales Decal-System      │
 │  • concrete_board          │  • Wandpfeiler (Pilasters)  │  • Makro-Wandbrecher        │
@@ -52,4 +52,4 @@ Beim Instanziieren von Wand- und Bodenelementen wird die `offset`-Eigenschaft de
 - **Unendliche Skalierbarkeit:** Räume beliebiger Größe bleiben gestochen scharf und abwechslungsreich.
 - **Minimaler VRAM-Footprint:** 4 bis 5 geteilte 2K-PBR-Textursets reichen für ein gesamtes, 5-stöckiges Flakturm-Level.
 - **Modulare Wiederverwendbarkeit:** Alle Pfeiler, Träger und Texturen können für Koje 42, Kältekammer K-42, Schleusen und spätere DLC-Schauplätze wiederverwendet werden.
-- **Standard für alle Entwickler:** Gilt ab sofort als verbindliche Norm für alle Small-World-Szenen und -Kits.
+- **Standard für alle Entwickler:** Gilt ab sofort als verbindliche Norm für alle Small-World-Machine-Szenen und -Kits.

@@ -1,10 +1,10 @@
 # Gamification & Interactions
 
-The Small World Engine provides a built-in interaction layer via the `InteractionManager`. This system lets you react to mouse and touch events directly on 3D objects in the scene, through a performance-optimized, octree-based raycasting pipeline.
+The Small World Machine provides a built-in interaction layer via the `InteractionManager`. This system lets you react to mouse and touch events directly on 3D objects in the scene, through a performance-optimized, octree-based raycasting pipeline.
 
 ## 1. Setup
 
-The `InteractionManager` is instantiated automatically during the `SmallWorld` lifecycle and is available as `this.interactionManager`.
+The `InteractionManager` is instantiated automatically during the `SmallWorldMachine` lifecycle and is available as `this.interactionManager`.
 
 To make an object respond to pointer events, you only need to mark it as pickable and assign your event callbacks:
 
@@ -34,7 +34,7 @@ this.scene.add(mesh);
 
 ## 2. Octree Acceleration (Performance)
 
-A naive raycaster iterates over all $O(n)$ objects in the scene every frame, which tanks the frame rate in large scenes. Small World accelerates interactions via a spatially partitioning **octree** that rejects most objects with cheap bounds checks instead of a full linear pass.
+A naive raycaster iterates over all $O(n)$ objects in the scene every frame, which tanks the frame rate in large scenes. Small World Machine accelerates interactions via a spatially partitioning **octree** that rejects most objects with cheap bounds checks instead of a full linear pass.
 
 To use octree acceleration, initialize the scene's octrees and declare your static objects:
 
@@ -56,14 +56,14 @@ Once an octree is present, the `InteractionManager` automatically uses `Octree.q
 
 ## 3. Ready-Made Behaviors
 
-Small World includes built-in behaviors you can attach directly to objects for rapid prototyping.
+Small World Machine includes built-in behaviors you can attach directly to objects for rapid prototyping.
 
 ### HoverBehavior
 
 Smoothly scales an object up on hover and makes it glow in a neon color.
 
 ```typescript
-import { HoverBehavior } from "@small-world/engine";
+import { HoverBehavior } from "@small-world-machine/engine";
 
 // Scales up to 1.5x on hover
 const hover = new HoverBehavior(1.5);
@@ -75,7 +75,7 @@ mesh.addBehavior(hover);
 Allows objects to be freely dragged and dropped in 3D space. The object moves along a plane that is perfectly aligned with the camera.
 
 ```typescript
-import { DraggableBehavior } from "@small-world/engine";
+import { DraggableBehavior } from "@small-world-machine/engine";
 
 // Requires the active camera to compute the drag plane
 const draggable = new DraggableBehavior(this.camera);

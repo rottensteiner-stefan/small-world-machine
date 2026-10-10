@@ -1,4 +1,4 @@
-import { Color, Vector3D } from "@small-world/engine";
+import { Color, Vector3D } from "@small-world-machine/engine";
 import { Particle } from "../Particle.js";
 import { ParticleAffector } from "../ParticleAffector.js";
 

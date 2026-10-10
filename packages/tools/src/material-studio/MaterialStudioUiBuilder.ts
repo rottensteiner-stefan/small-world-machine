@@ -414,7 +414,7 @@ export function buildMaterialStudioUI(container: HTMLElement): void {
               <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
               <line x1="12" y1="22.08" x2="12" y2="12" />
             </svg>
-            Small World Engine Preview
+            Small World Machine Preview
           </button>
         </div>
 
@@ -578,13 +578,13 @@ export function buildMaterialStudioUI(container: HTMLElement): void {
               <button class="tool-tab geom-btn" data-geom="plane">Plane</button>
             </div>
             <div class="preview3d-stage">
-              <canvas id="SmallWorldPreview" width="512" height="384"></canvas>
+              <canvas id="SmallWorldMachinePreview" width="512" height="384"></canvas>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Load SmallWorld 3D Preview Engine Entry -->`;
+    <!-- Load SmallWorldMachine 3D Preview Engine Entry -->`;
   container.appendChild(wrapper);
 }

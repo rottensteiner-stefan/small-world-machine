@@ -1,7 +1,7 @@
 import {
   ForgeTool,
   ForgeToolOptions,
-  SmallWorld,
+  SmallWorldMachine,
   Object3D,
   Sphere,
   Cube,
@@ -16,12 +16,12 @@ import {
   CameraStrategyType,
   Vector2D,
   GeometryDataInterface,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { MATERIAL_STUDIO_CSS } from "./material-studio/materialStudioStyles.js";
 import { buildMaterialStudioUI } from "./material-studio/MaterialStudioUiBuilder.js";
 import { MaterialStudioController } from "./material-studio/MaterialStudioController.js";
 
-export class MaterialStudioApp extends SmallWorld {
+export class MaterialStudioApp extends SmallWorldMachine {
   private _previewObject!: Object3D;
   private _pbrMaterial!: StandardMaterial;
   private _time: number = 0;
@@ -115,7 +115,7 @@ export class MaterialStudioApp extends SmallWorld {
       this._pbrMaterial.metallic = metallicValue;
       this._pbrMaterial.roughness = roughnessValue;
     } catch (err) {
-      console.error("Error updating 3D textures in SmallWorld:", err);
+      console.error("Error updating 3D textures in SmallWorldMachine:", err);
     }
   }
 
@@ -186,9 +186,9 @@ export class MaterialStudio extends ForgeTool {
     super.mount(container);
 
     // Check if the canvas exists in our HTML
-    this._canvas = this._container.querySelector("#SmallWorldPreview") as HTMLCanvasElement;
+    this._canvas = this._container.querySelector("#SmallWorldMachinePreview") as HTMLCanvasElement;
     if (this._canvas) {
-      this._app = new MaterialStudioApp("SmallWorldPreview");
+      this._app = new MaterialStudioApp("SmallWorldMachinePreview");
       this._controller.setApp(this._app);
       this._app.start().catch((err) => {
         console.error("Failed to start MaterialStudio engine:", err);

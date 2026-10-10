@@ -1,4 +1,4 @@
-# Small World 3D: Next Research & Development Horizons
+# Small World Machine 3D: Next Research & Development Horizons
 **Dokumenttyp:** Strategischer Architektur- und Technologiebericht  
 **Stand:** Oktober 2026  
 **Ziel:** Evaluierung zukünftiger Fluid-, Wellen- und Rendering-Technologien jenseits der Gerstner- & Splat-Baseline.
@@ -35,7 +35,7 @@ Hier ist die detaillierte Aufschlüsselung aller vorgeschlagenen und diskutierte
 
 ```mermaid
 graph TD
-    A[Small World Liquid Horizons] --> B[Wellen- & Ozeanmodelle]
+    A[Small World Machine Liquid Horizons] --> B[Wellen- & Ozeanmodelle]
     A --> C[Oberflächeninteraktion & Physik]
     A --> D[Geometrie & LOD-Techniken]
     A --> E[Beleuchtung & Reflexionen]
@@ -71,7 +71,7 @@ graph TD
   - **WebGPU:** Extrem performant via 2D IFFT Compute Shader (Stockham FFT, Radix-4) direkt in Storage Buffers / Displace-Maps.
   - **WebGL2:** Machbar via 2-Pass Ping-Pong RTT Shader ($O(N \log N)$ mit $\log_2 N$ Pässen für Butterfly-Kerne).
 * **Aufwand:** **Mittel – Hoch** (~3–4 Wochen).
-* **Sinnhaftigkeit für Small World:**
+* **Sinnhaftigkeit für Small World Machine:**
   - 🟢 *Hoch* für Seefahrts- und Open-World-Demos.
   - 🟡 *Optional* für stilisierte Low-Poly- oder Dioramen-Szenen (hier reicht der erweiterte 6-Wellen-Gerstner-Standard völlig aus).
 
@@ -90,7 +90,7 @@ graph TD
 * **Machbarkeit in TypeScript / Web:**
   - **WebGPU / WebGL2:** Extrem einfach und schnell (<0.1 ms GPU-Zeit). 1 Render-Pass pro Substep. CPU injiziert nur Splat-Koordinaten / Objekt-Masken als Draw-Calls oder Buffer-Uploads.
 * **Aufwand:** **Gering – Mittel** (~1–2 Wochen).
-* **Sinnhaftigkeit für Small World:**
+* **Sinnhaftigkeit für Small World Machine:**
   - 🟢 **Sehr hoch!** Perfekte Ergänzung zum bestehenden S2-Splatting: Bietet eine volldynamische Alternative für begrenzte Szenen (Teiche, Brunnen, Hallenbäder, Labore).
 
 ---
@@ -107,7 +107,7 @@ graph TD
 * **Machbarkeit in TypeScript / Web:**
   - Rein analytischer Vertex-Shader / Fragment-Shader Offset. Nahezu 0 CPU-Kosten.
 * **Aufwand:** **Gering** (~3–5 Tage).
-* **Sinnhaftigkeit für Small World:**
+* **Sinnhaftigkeit für Small World Machine:**
   - 🟢 **Sehr hoch.** Minimaler Code, drastischer visueller Gewinn bei bewegten Booten/Charakteren.
 
 ---
@@ -127,8 +127,8 @@ graph TD
   - **WebGL2:** Sehr komplex, da GPGPU-Partikelsortierung ohne Storage Buffers/Atomics über Textur-Multipass extrem zäh ist.
   - **TypeScript CPU:** Nur für Mini-Partikelzahlen ($<1.000$) geeignet.
 * **Aufwand:** **Sehr hoch** (~6–10 Wochen).
-* **Sinnhaftigkeit für Small World:**
-  - 🟡 **Nische / Spezialmodul.** Für ein leichtgewichtiges 3D-Framework zu schwergewichtig als Core-Feature; idealerweise als separates Add-on Package (`@small-world/fluids-sph`) bei WebGPU-Fokus.
+* **Sinnhaftigkeit für Small World Machine:**
+  - 🟡 **Nische / Spezialmodul.** Für ein leichtgewichtiges 3D-Framework zu schwergewichtig als Core-Feature; idealerweise als separates Add-on Package (`@small-world-machine/fluids-sph`) bei WebGPU-Fokus.
 
 ---
 
@@ -146,7 +146,7 @@ graph TD
   - Universell kompatibel für WebGL1, WebGL2 und WebGPU.
   - Ring-Meshes werden einmal statisch auf der CPU generiert; Vertex-Shader snap-t die Gitterpunkte ans Raster (`floor(pos / step) * step`).
 * **Aufwand:** **Mittel** (~1–2 Wochen).
-* **Sinnhaftigkeit für Small World:**
+* **Sinnhaftigkeit für Small World Machine:**
   - 🟢 **Sehr hoch.** Ermöglicht nahtlose Open-World-Flächen bei minimalem Speicherbedarf.
 
 ---
@@ -164,7 +164,7 @@ graph TD
   - **Planar:** Universell in WebGL1/2/WebGPU via `RenderTarget`.
   - **SSR:** WebGL2 / WebGPU via Hi-Z Depth Buffer Trace oder DDA-Raymarch.
 * **Aufwand:** **Mittel** (Planar: 4–6 Tage, SSR: 2–3 Wochen).
-* **Sinnhaftigkeit für Small World:**
+* **Sinnhaftigkeit für Small World Machine:**
   - 🟢 *Planar Reflections:* Sofortiger No-Brainer für Showcase-Qualität.
   - 🟡 *SSR:* Für komplexere, nicht-planare Flüssigkeiten sinnvoll.
 
@@ -181,7 +181,7 @@ graph TD
 * **Machbarkeit in TypeScript / Web:**
   - Hervorragend via DOM/Canvas UI oder WebGL-Graph-Library.
 * **Aufwand:** **Hoch** (~4–6 Wochen).
-* **Sinnhaftigkeit für Small World:**
+* **Sinnhaftigkeit für Small World Machine:**
   - 🟡 **Späterer Meilenstein.** Zunächst sind robuste, code-basierte Materialien und standardisierte Presets wichtiger.
 
 ---
@@ -195,7 +195,7 @@ graph TD
 * **Machbarkeit in TypeScript / Web:**
   - Generierung von $256 \times 1$ `DataTexture` / `RGBAFormat` per TypeScript beim Initialisieren.
 * **Aufwand:** **Gering – Mittel** (~1 Woche).
-* **Sinnhaftigkeit für Small World:**
+* **Sinnhaftigkeit für Small World Machine:**
   - 🟢 **Sofortige Priorität (Architektur-konform).**
 
 ---
@@ -216,7 +216,7 @@ graph TD
 
 ---
 
-## 4. Konkrete Roadmap-Empfehlung für Small World
+## 4. Konkrete Roadmap-Empfehlung für Small World Machine
 
 1. **Sprint 1 (Quick Wins & Polish):**
    - **Planar Reflection Component:** Eine `PlanarReflector`-Entity, die eine gespiegelte Szene rendert und als `u_reflectionMap` in `OpenWaterMaterial` und `StylizedWaterMaterial` einspeist.

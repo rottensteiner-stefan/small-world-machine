@@ -413,11 +413,14 @@ describe("Vision AI Multi-Provider System", () => {
 
   describe("AiConfigStorage validation", () => {
     it("ignores unknown providers and non-string fields", () => {
-      localStorage.setItem("smallworld_ai_config", JSON.stringify({ provider: "evil", model: 5 }));
+      localStorage.setItem(
+        "smallworldmachine_ai_config",
+        JSON.stringify({ provider: "evil", model: 5 }),
+      );
       expect(AiConfigStorage.load().provider).toBe("gemini");
 
       localStorage.setItem(
-        "smallworld_ai_config",
+        "smallworldmachine_ai_config",
         JSON.stringify({ provider: "claude", model: 5, apiKey: 7 }),
       );
       const loaded = AiConfigStorage.load();
@@ -427,7 +430,7 @@ describe("Vision AI Multi-Provider System", () => {
     });
 
     it("falls back to defaults on corrupt JSON", () => {
-      localStorage.setItem("smallworld_ai_config", "{not json");
+      localStorage.setItem("smallworldmachine_ai_config", "{not json");
       expect(AiConfigStorage.load().provider).toBe("gemini");
     });
   });

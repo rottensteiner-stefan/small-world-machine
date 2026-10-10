@@ -1,13 +1,13 @@
-// `SmallWorld` deliberately comes from the `@small-world/engine` package root, not a deep import
-// of `SmallWorld.ts` (or its `core/index.js` barrel) directly: the whole renderer pipeline
+// `SmallWorldMachine` deliberately comes from the `@small-world-machine/engine` package root, not a deep import
+// of `SmallWorldMachine.ts` (or its `core/index.js` barrel) directly: the whole renderer pipeline
 // (WebGL1/2, WebGPU, most render passes) imports the engine's own barrels itself, so touching
-// `SmallWorld.ts` as the very first module in the graph can re-enter those barrels mid-evaluation
-// and reach `AbstractShowcase.ts`'s `extends SmallWorld` before `SmallWorld`'s own class
+// `SmallWorldMachine.ts` as the very first module in the graph can re-enter those barrels mid-evaluation
+// and reach `AbstractShowcase.ts`'s `extends SmallWorldMachine` before `SmallWorldMachine`'s own class
 // declaration has run (a real, previously-latent TDZ crash, not a hypothetical one -- hit and
 // confirmed live in-browser while building this). Importing from the package root avoids it by
 // construction, same as every existing showcase/app.
 import {
-  SmallWorld,
+  SmallWorldMachine,
   Object3D,
   Behavior,
   attachBehavior,
@@ -36,7 +36,7 @@ import {
   Texture,
   KitRegistry,
   CullMode,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 import { OrbitCameraController, OrbitCameraView } from "./OrbitCameraController.js";
 import { UndoStack } from "./UndoStack.js";
@@ -92,14 +92,14 @@ interface MarqueeState {
  * mirrors `GizmoDragState`'s "collect state during the drag, push exactly one undo command at
  * `pointerup`" pattern, applied to a `(u, v)` pair instead of a transform. */
 interface ZonePointDragState {
-  marker: import("@small-world/engine").StageZoneMarker;
+  marker: import("@small-world-machine/engine").StageZoneMarker;
   index: number;
   before: { u: number; v: number };
 }
 
 /**
  * Maker's orchestrating application class -- see docs/adr/0010-maker-editor-architecture.md.
- * Owns the viewport (a plain `SmallWorld` instance with a manual orbit camera), selection +
+ * Owns the viewport (a plain `SmallWorldMachine` instance with a manual orbit camera), selection +
  * picking, the undo stack, and wiring between the three panels (Hierarchy/Palette/Property)
  * and the live scene graph. Deliberately does not touch `GadgetInspector` -- see the ADR's
  * "retire only after parity" decision.
@@ -111,7 +111,7 @@ interface ZonePointDragState {
  * `_undo`/`_selection`/`_propertyPanel`/`_project` state tightly enough that splitting them
  * further would only replace that coupling with equivalent constructor-injected callbacks.
  */
-export class MakerApp extends SmallWorld {
+export class MakerApp extends SmallWorldMachine {
   private readonly _orbit = new OrbitCameraController();
   private readonly _undo = new UndoStack();
   private readonly _project = new ProjectBinding();

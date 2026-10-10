@@ -11,7 +11,7 @@ import {
   Skydome,
   Texture,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 /**
  * Showcase 8: Clean rebuild with Skydome, Reference Cubes, WASD/QE movement.

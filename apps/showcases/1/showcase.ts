@@ -11,7 +11,7 @@ import {
   OrbitController,
   PerspectiveProjection,
   PhongMaterial,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 class Showcase1 extends AbstractShowcase {
   private _myCube!: Object3D;

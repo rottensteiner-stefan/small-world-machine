@@ -1,10 +1,19 @@
 {
-  "name": "small-world",
+  "name": "small-world-machine",
   "private": true,
-  "version": "0.101.0",
+  "version": "0.102.0",
   "description": "A lightweight 3D engine for hybrid WebGL/WebGPU rendering pipelines.",
   "type": "module",
   "license": "MIT",
+  "author": {
+    "name": "Stefan Rottensteiner",
+    "email": "rottensteiner.stefan@gmx.de"
+  },
+  "contributors": [
+    "Deepseek",
+    "Google Gemini",
+    "Anthropic Code Claude"
+  ],
   "workspaces": [
     "packages/*",
     "apps/*"

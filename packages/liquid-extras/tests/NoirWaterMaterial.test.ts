@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { NoirWaterMaterial } from "../src/materials/NoirWaterMaterial.js";
+import { NoirWaterMaterial } from "../src/materials/NoirWater/NoirWaterMaterial.js";
 
 describe("NoirWaterMaterial Hook-Based Extension", () => {
   it("instantiates cleanly with noir palette and custom type", () => {

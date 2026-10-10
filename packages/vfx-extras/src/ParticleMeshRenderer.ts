@@ -5,7 +5,7 @@ import {
   Matrix4,
   Vector3D,
   Quaternion,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { ParticleSystem } from "./ParticleSystem.js";
 
 export interface ParticleMeshRendererOptions {

@@ -1,18 +1,18 @@
 # Modular Ecosystem & Domain Layering
 
-Per **ADR 0014**, Small World follows a strict 4-tier domain architecture instead of a generic catch-all folder.
+Per **ADR 0014**, Small World Machine follows a strict 4-tier domain architecture instead of a generic catch-all folder.
 
 ## Package landscape
 
-Since the npm-workspaces restructuring, the engine lives in a single package (`@small-world/engine`, `packages/engine/`), and optional, domain-specific code is factored out into **separate ecosystem packages** that depend exclusively on `@small-world/engine` — never the other way around. This keeps the core lean and lets third-party developers contribute their own packages following the same pattern.
+Since the npm-workspaces restructuring, the engine lives in a single package (`@small-world-machine/engine`, `packages/engine/`), and optional, domain-specific code is factored out into **separate ecosystem packages** that depend exclusively on `@small-world-machine/engine` — never the other way around. This keeps the core lean and lets third-party developers contribute their own packages following the same pattern.
 
 | Package | Directory | Purpose |
 | --- | --- | --- |
-| `@small-world/gltf-extensions` | `packages/gltf-extensions/` | Data-level glTF extensions (Draco, BasisU/KTX2) — see ADR 0017/0018 |
-| `@small-world/geometry-extras` | `packages/geometry-extras/` | Exotic & procedural geometries (supershapes, torus knots, lathe, Platonic solids, parametric surfaces, filled polygons, Voronoi cells, marching cubes) outside the core primitive catalog |
-| `@small-world/physics-extras` | `packages/physics-extras/` | Higher-level physics building blocks (e.g. Voronoi fractures with `ConvexHull` colliders) |
-| `@small-world/vfx-extras` | `packages/vfx-extras/` | GPU-instanced particle/VFX pipeline (`ParticleSystem`, `ParticleMeshRenderer`, `AccretionDiskEmitter`, force-field affectors such as `PointAttractorAffector`/`VortexAffector`/`TurbulenceAffector`) — see [ADR 0022](/adr/0022-gpu-instanced-vfx-pipeline-and-extras-package) |
-| `@small-world/tools` | `packages/tools/` | Development tools (Maker, Material Studio, Pixler, Xtractor, Map Generator, Forge) — see [ADR 0024](/adr/0024-tools-ecosystem-package) |
+| `@small-world-machine/gltf-extensions` | `packages/gltf-extensions/` | Data-level glTF extensions (Draco, BasisU/KTX2) — see ADR 0017/0018 |
+| `@small-world-machine/geometry-extras` | `packages/geometry-extras/` | Exotic & procedural geometries (supershapes, torus knots, lathe, Platonic solids, parametric surfaces, filled polygons, Voronoi cells, marching cubes) outside the core primitive catalog |
+| `@small-world-machine/physics-extras` | `packages/physics-extras/` | Higher-level physics building blocks (e.g. Voronoi fractures with `ConvexHull` colliders) |
+| `@small-world-machine/vfx-extras` | `packages/vfx-extras/` | GPU-instanced particle/VFX pipeline (`ParticleSystem`, `ParticleMeshRenderer`, `AccretionDiskEmitter`, force-field affectors such as `PointAttractorAffector`/`VortexAffector`/`TurbulenceAffector`) — see [ADR 0022](/adr/0022-gpu-instanced-vfx-pipeline-and-extras-package) |
+| `@small-world-machine/tools` | `packages/tools/` | Development tools (Maker, Material Studio, Pixler, Xtractor, Map Generator, Forge) — see [ADR 0024](/adr/0024-tools-ecosystem-package) |
 
 Each extras package extends central public engine contracts (`AbstractGeometry`, `GltfExtensionPlugin`, ...) and is independently testable — the same extension principle that ADR 0018 establishes for the glTF data level and ADR 0021 establishes for geometry/physics.
 
@@ -25,16 +25,16 @@ Each extras package extends central public engine contracts (`AbstractGeometry`,
 3. **Tier 3 — Behaviors & simulation (`packages/engine/src/core/behaviors/`, `packages/engine/src/behaviors/`):**
    Controllers, sensors, animation loops, and ambient creature life (`RatGroomingBehavior`, `GroomingRat`).
 4. **Tier 4 — ProcGen & tool extension point (`packages/engine/src/tools/procgen/`, `packages/engine/src/tools/forge/ForgeTool.ts`):**
-   Procedural level generators (`GridLevelBuilder`) and the `ForgeTool` interface. The concrete authoring tools themselves (`MakerApp`, `MapGenerator`, `Pixler`, `Xtractor`, `Forge`) have lived in their own `@small-world/tools` package since [ADR 0024](/adr/0024-tools-ecosystem-package), no longer in the core.
+   Procedural level generators (`GridLevelBuilder`) and the `ForgeTool` interface. The concrete authoring tools themselves (`MakerApp`, `MapGenerator`, `Pixler`, `Xtractor`, `Forge`) have lived in their own `@small-world-machine/tools` package since [ADR 0024](/adr/0024-tools-ecosystem-package), no longer in the core.
 
 ## Example: Procedural grid generation (`GridLevelBuilder`)
 
-`GridLevelBuilder` lives in `packages/engine/src/tools/procgen/` (exported through the `@small-world/engine` tooling surface, a genuine runtime feature rather than a development tool) and lets you define 3D levels from ASCII grids.
+`GridLevelBuilder` lives in `packages/engine/src/tools/procgen/` (exported through the `@small-world-machine/engine` tooling surface, a genuine runtime feature rather than a development tool) and lets you define 3D levels from ASCII grids.
 
 ### Usage
 
 ```typescript
-import { GridLevelBuilder, GridLevelConfig, Object3D } from "@small-world/engine";
+import { GridLevelBuilder, GridLevelConfig, Object3D } from "@small-world-machine/engine";
 
 const builder = new GridLevelBuilder();
 

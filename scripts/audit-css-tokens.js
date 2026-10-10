@@ -96,7 +96,7 @@ function auditFile(filePath) {
 }
 
 console.log('════════════════════════════════════════════════════════════════════');
-console.log(' 🎨 Small World CSS Design Token Audit & Hardcoded Literal Scanner');
+console.log(' 🎨 Small World Machine CSS Design Token Audit & Hardcoded Literal Scanner');
 console.log('════════════════════════════════════════════════════════════════════\n');
 
 let totalIssues = 0;

@@ -53,7 +53,7 @@ import {
   Vector3D,
   WireframeMaterial,
   ZoomController,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import {
   computeCellFaces,
   FilledPolygon,
@@ -67,8 +67,8 @@ import {
   TorusKnot,
   VoronoiCells,
   VoronoiShardGeometry,
-} from "@small-world/geometry-extras";
-import { attachDevTools } from "@small-world/tools";
+} from "@small-world-machine/geometry-extras";
+import { attachDevTools } from "@small-world-machine/tools";
 
 /**
  * Showcase 6: Geometry Showcase.

@@ -13,7 +13,7 @@ import {
   Sphere,
   Vector3D,
   WireframeMaterial,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 /**
  * Showcase 5: Grid-based Movement with Enemies.

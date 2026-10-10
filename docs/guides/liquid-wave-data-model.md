@@ -1,12 +1,12 @@
 # Liquid Wave Data Model & Surface Simulation
 
-This document provides the canonical specification for the wave data model, mathematical formulations, shader architecture, CPU surface probing, interactive splat propagation, and physics buoyancy integration across Small World.
+This document provides the canonical specification for the wave data model, mathematical formulations, shader architecture, CPU surface probing, interactive splat propagation, and physics buoyancy integration across Small World Machine.
 
 ---
 
 ## 1. Mathematical Foundation: Gerstner Wave Cascade
 
-Small World implements an analytical Gerstner wave cascade formulation supporting true 3-backend parity (**GLSL 3.00 ES / WebGL2**, **GLSL 1.00 ES / WebGL1**, and **WGSL / WebGPU**).
+Small World Machine implements an analytical Gerstner wave cascade formulation supporting true 3-backend parity (**GLSL 3.00 ES / WebGL2**, **GLSL 1.00 ES / WebGL1**, and **WGSL / WebGPU**).
 
 ### 1.1 Deep-Water Dispersion Relation
 

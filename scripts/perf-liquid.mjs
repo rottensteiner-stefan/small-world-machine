@@ -4,10 +4,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const distPath = path.resolve(__dirname, "../dist/small-world.js");
+const distPath = path.resolve(__dirname, "../dist/small-world-machine.js");
 
 if (!fs.existsSync(distPath)) {
-  console.log("📦 dist/small-world.js not found. Running build:lib first...");
+  console.log("📦 dist/small-world-machine.js not found. Running build:lib first...");
   const { execSync } = await import("child_process");
   execSync("npm run build:lib", { stdio: "inherit" });
 }
@@ -23,11 +23,11 @@ const {
   UniformPacker,
   ShaderBootstrap,
   ShaderRegistry,
-} = await import("../dist/small-world.js");
+} = await import("../dist/small-world-machine.js");
 
 async function runBenchmarks() {
   console.log("🌊 ========================================================");
-  console.log("🌊 Small World - Liquid Materials & Packing Perf Benchmark");
+  console.log("🌊 Small World Machine - Liquid Materials & Packing Perf Benchmark");
   console.log("🌊 ========================================================\n");
 
   await ShaderBootstrap.init();

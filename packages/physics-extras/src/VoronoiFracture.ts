@@ -7,7 +7,7 @@ import {
   BoundingType,
   BoundingBox,
   BoundingSphere,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import {
   VoronoiCells,
   computeCellFaces,
@@ -15,7 +15,7 @@ import {
   VoronoiShardGeometry,
   Vec3Like,
   BoxBounds,
-} from "@small-world/geometry-extras";
+} from "@small-world-machine/geometry-extras";
 
 /**
  * Configuration options for `fractureObject`.
@@ -27,7 +27,7 @@ export interface VoronoiFractureOptions {
   pointCount?: number;
   /** Seed for the deterministic random point generator. Defaults to 1. */
   seed?: number;
-  /** Per-point power-diagram weights (see `@small-world/geometry-extras`'s `VoronoiCells`). */
+  /** Per-point power-diagram weights (see `@small-world-machine/geometry-extras`'s `VoronoiCells`). */
   weights?: readonly number[];
   /** Lloyd relaxation rounds applied to the seed points before clipping. Defaults to 1. */
   relaxationIterations?: number;

@@ -1,4 +1,4 @@
-import { Vector3D } from "@small-world/engine";
+import { Vector3D } from "@small-world-machine/engine";
 import { ParticleSystem } from "./ParticleSystem.js";
 import { PointAttractorAffector } from "./affectors/PointAttractorAffector.js";
 import { PlanarSpringAffector } from "./affectors/PlanarSpringAffector.js";

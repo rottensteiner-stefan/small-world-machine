@@ -43,7 +43,7 @@ jobs:
 
       - name: Build Showcases
         run: |
-          npx vite build --base=/small-world/showcases/
+          npx vite build --base=/small-world-machine/showcases/
           cp -a dist/public/. dist/
           rm -rf dist/public
           mv dist docs/.vitepress/dist/showcases

@@ -7,7 +7,7 @@ import {
   Texture,
   StandardMaterial,
   CompressedTextureFormat,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { khrTextureBasisu } from "../src/basisu/KhrTextureBasisu.js";
 import { BasisTranscoder } from "../src/basisu/BasisTranscoder.js";
 

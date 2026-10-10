@@ -1,18 +1,18 @@
 # Configuration (EngineOptions)
 
-Small World is designed for extensive configurability. Passing an `EngineOptions` object to the `SmallWorld` constructor lets you fine-tune rendering capabilities, post-processing pipelines, quality limits, and physics.
+Small World Machine is designed for extensive configurability. Passing an `EngineOptions` object to the `SmallWorldMachine` constructor lets you fine-tune rendering capabilities, post-processing pipelines, quality limits, and physics.
 
-> **Note:** The engine used to attempt loading `small-world.json` at runtime via an internal HTTP request. This was removed in favor of **Inversion of Control (IoC)**. Configuration must now be passed explicitly.
+> **Note:** The engine used to attempt loading `small-world-machine.json` at runtime via an internal HTTP request. This was removed in favor of **Inversion of Control (IoC)**. Configuration must now be passed explicitly.
 
 ## Basic setup
 
 In modern build tools like Vite or Webpack, the JSON file can simply be imported and passed to the engine.
 
 ```typescript
-import config from "./config/small-world.json"; // The bundler handles this automatically
-import { SmallWorld } from "@small-world/engine";
+import config from "./config/small-world-machine.json"; // The bundler handles this automatically
+import { SmallWorldMachine } from "@small-world-machine/engine";
 
-class MyGame extends SmallWorld {
+class MyGame extends SmallWorldMachine {
   constructor() {
     super(config); // Inject configuration
   }
@@ -97,7 +97,7 @@ Every field is optional and only overrides that specific value on top of the eff
 
 ```json
 {
-  "canvasId": "SmallWorld",
+  "canvasId": "SmallWorldMachine",
   "rendererType": "BEST",
   "projectionType": "PERSPECTIVE",
   "fullscreen": true,

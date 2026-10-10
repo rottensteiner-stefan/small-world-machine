@@ -17,7 +17,7 @@ import {
   Texture,
   TextureFilter,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 /**
  * Showcase 9: A classic 2.5D Jump & Run with pure code physics and collision!

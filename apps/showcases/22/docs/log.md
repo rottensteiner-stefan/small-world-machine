@@ -28,23 +28,23 @@
   - Asymmetrisches Doppler-Beaming: Entgegenkommende Materie wird verstärkt und blauverschoben ($[0.8, 1.0, 1.4]$), abfließende Materie wird abgedunkelt und rotverschoben ($[1.2, 0.6, 0.4]$).
   - Dynamischer Einstein-Ring mit kubischem Glow-Falloff.
 - **SkyDome Background:**
-  - Einbindung des ESO-Milchstraßen-Panoramas ([`eso0932a.jpg`](file:///Users/srottensteiner/PhpstormProjects/small-world/apps/showcases/22/assets/eso0932a.jpg)) und Eintrag in [`REFERENCES.md`](file:///Users/srottensteiner/PhpstormProjects/small-world/REFERENCES.md).
+  - Einbindung des ESO-Milchstraßen-Panoramas ([`eso0932a.jpg`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/apps/showcases/22/assets/eso0932a.jpg)) und Eintrag in [`REFERENCES.md`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/REFERENCES.md).
 
 ---
 
-## 2026-09-26 — Strategischer Architektur-Umbau & Ökosystem-Extraktion (`@small-world/vfx-extras`)
+## 2026-09-26 — Strategischer Architektur-Umbau & Ökosystem-Extraktion (`@small-world-machine/vfx-extras`)
 
 - **Paket-Extraktion:**
-  - Gründung des Ökosystem-Pakets [`@small-world/vfx-extras`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/vfx-extras/) (ADR 0022).
-  - Implementierung von [`ParticleMeshRenderer`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/vfx-extras/src/ParticleMeshRenderer.ts) zur GPU-Instanzierung: Tausende Partikel laufen bei 60 FPS in **1 Draw Call**.
+  - Gründung des Ökosystem-Pakets [`@small-world-machine/vfx-extras`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/vfx-extras/) (ADR 0022).
+  - Implementierung von [`ParticleMeshRenderer`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/vfx-extras/src/ParticleMeshRenderer.ts) zur GPU-Instanzierung: Tausende Partikel laufen bei 60 FPS in **1 Draw Call**.
   - Erstellung von 10 universellen Kraftfeld- und VFX-Affektoren (`PointAttractorAffector`, `VortexAffector`, `PlanarSpringAffector`, `ThermalCoolingAffector`, `FadeOutZoneAffector`, `TurbulenceAffector`, `DragAffector`, `ColorOverLifeAffector`, `SizeOverLifeAffector`, `BouncePlaneAffector`).
-  - Implementierung des [`AccretionDiskEmitter`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/vfx-extras/src/AccretionDiskEmitter.ts) für gebrauchsfertige Akkretionsscheiben-Simulationen.
+  - Implementierung des [`AccretionDiskEmitter`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/vfx-extras/src/AccretionDiskEmitter.ts) für gebrauchsfertige Akkretionsscheiben-Simulationen.
 - **Kern-Erweiterungen:**
-  - [`Color.blackbody()`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/engine/src/core/colors/Color.ts) und [`Color.fromTemperature()`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/engine/src/core/colors/Color.ts) (analytischer Planckian Locus Fit).
-  - [`GravitationalLensingElement`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/engine/src/renderers/post/elements/GravitationalLensingElement.ts) mit vollständiger Shader-Parität zwischen WebGL2 und WebGPU (160-Byte-Puffer).
-  - [`FollowCameraBehavior`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/engine/src/core/behaviors/FollowCameraBehavior.ts) für weiche Kameraverfolgung.
+  - [`Color.blackbody()`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/core/colors/Color.ts) und [`Color.fromTemperature()`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/core/colors/Color.ts) (analytischer Planckian Locus Fit).
+  - [`GravitationalLensingElement`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/renderers/post/elements/GravitationalLensingElement.ts) mit vollständiger Shader-Parität zwischen WebGL2 und WebGPU (160-Byte-Puffer).
+  - [`FollowCameraBehavior`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/core/behaviors/FollowCameraBehavior.ts) für weiche Kameraverfolgung.
 - **Showcase 22 Upgrade:**
-  - Vollständiger Umbau von [`showcase.ts`](file:///Users/srottensteiner/PhpstormProjects/small-world/apps/showcases/22/showcase.ts) auf die hochdichte Instanz-Pipeline.
+  - Vollständiger Umbau von [`showcase.ts`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/apps/showcases/22/showcase.ts) auf die hochdichte Instanz-Pipeline.
 - **Testabdeckung & Parität:**
   - 1034 Unit- und Paritäts-Tests verifiziert.
 
@@ -90,18 +90,18 @@
   - Zero-Allocation Trigger- und Collision-Lifecycle-Events: `physics:trigger-enter`, `physics:trigger-stay`, `physics:trigger-exit`, `physics:collision-enter`, `physics:collision-stay`, `physics:collision-exit` (sowie abwärtskompatibles `physics:trigger` und `physics:collision`).
   - Trigger-Immunität in CCD (`SweptVolumeCCD`), um Sensorvolumen ohne physisches Stoppen zu durchdringen.
 - **Physics Raycast & Query API (Option B):**
-  - Neues Schnittstellen-Interface [`RaycastHit`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/engine/src/physix/RaycastHit.ts) (`distance`, `point`, `normal`, `collider`, `object`).
+  - Neues Schnittstellen-Interface [`RaycastHit`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/RaycastHit.ts) (`distance`, `point`, `normal`, `collider`, `object`).
   - Analytische Ray-Intersection-Methoden `Ray.intersectVolume` und `Ray.intersectVolumeDetailed` für `BoundingSphere`, `BoundingBox` und `OBB` zur exakten Berechnung von Trefferpunkt und Oberflächennormale.
   - High-Level-APIs auf `PhysicsSystem`: `physics.raycast(...)`, `physics.raycastAll(...)`, `physics.sphereCast(...)` mit Layer-Masken-Filterung.
 - **Außermittiger Stoß, Drehmoment & 3D-Trägheitstensor (Punkt 5):**
   - Erweiterung von `RigidBody` um 3D-Hauptträgheitsachsen (`inertiaTensor: Vector3D`, `inverseInertiaTensor: Vector3D`), Form-Helfer (`setInertiaForBox`, `setInertiaForSphere`, `setInertiaForCylinder`) und außermittige Impuls-/Kraftbeaufschlagung (`applyImpulseAtPoint`, `applyForceAtPoint`).
   - Upgrade des Impuls-Solvers in `PhysicsSystem._resolveCollisions` um exakte Kontaktpunkt- und Hebelarm-Geometrie ($\vec{r}_A, \vec{r}_B$), Kontaktoberflächengeschwindigkeiten ($\vec{v} + \vec{\omega} \times \vec{r}$), 3D-Rotations-Effektivmassen ($K_N, K_T$) und reaktive Coulomb-Drehmomente (z. B. realistisches Abrollen und Taumeln von Kantenkontakten).
 - **Physics Constraints & Joint System (Option C):**
-  - Abstrakte Basisklasse [`Joint`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/engine/src/physix/joints/Joint.ts) (`bodyA`, `bodyB`, `anchorA`, `anchorB`, `breakForce`, `collideConnected`).
-  - [`DistanceJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/engine/src/physix/joints/DistanceJoint.ts): PGS-Geschwindigkeits- und Positionsprojektions-Constraint für feste oder elastisch begrenzte Abstände (z. B. Pendel, Seile, Stangen).
-  - [`SpringJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/engine/src/physix/joints/SpringJoint.ts): Dämpfungsfähiges Hooke'sches Federkraft-Constraint für elastische Aufhängungen und Bungees.
-  - [`BallSocketJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/engine/src/physix/joints/BallSocketJoint.ts): 3-DOF Kugelgelenk / Punkt-zu-Punkt-Constraint zur Fixierung von Ankerpunkten bei freier 3D-Rotation.
-  - [`HingeJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world/packages/engine/src/physix/joints/HingeJoint.ts): 1-DOF Drehgelenk / Scharnier mit Achsen-Constraint, Winkel-Limits (`minAngle`, `maxAngle`) und bidirektionalem Motor (`motorSpeed`, `maxMotorTorque`).
+  - Abstrakte Basisklasse [`Joint`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/joints/Joint.ts) (`bodyA`, `bodyB`, `anchorA`, `anchorB`, `breakForce`, `collideConnected`).
+  - [`DistanceJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/joints/DistanceJoint.ts): PGS-Geschwindigkeits- und Positionsprojektions-Constraint für feste oder elastisch begrenzte Abstände (z. B. Pendel, Seile, Stangen).
+  - [`SpringJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/joints/SpringJoint.ts): Dämpfungsfähiges Hooke'sches Federkraft-Constraint für elastische Aufhängungen und Bungees.
+  - [`BallSocketJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/joints/BallSocketJoint.ts): 3-DOF Kugelgelenk / Punkt-zu-Punkt-Constraint zur Fixierung von Ankerpunkten bei freier 3D-Rotation.
+  - [`HingeJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/joints/HingeJoint.ts): 1-DOF Drehgelenk / Scharnier mit Achsen-Constraint, Winkel-Limits (`minAngle`, `maxAngle`) und bidirektionalem Motor (`motorSpeed`, `maxMotorTorque`).
   - Nahtlose Integration in `Scene.joints` und `PhysicsSystem` PGS-Solver iterations & force pass.
 - **Testsuite & Stabilität:**
   - 190 Test-Suites mit 1090 bestandenen Tests (100% Pass-Rate).

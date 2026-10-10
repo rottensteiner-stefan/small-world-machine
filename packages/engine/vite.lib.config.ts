@@ -9,8 +9,8 @@ export default defineConfig({
     target: "esnext",
     lib: {
       entry: "src/index.ts",
-      name: "SmallWorld",
-      fileName: () => "small-world.js",
+      name: "SmallWorldMachine",
+      fileName: () => "small-world-machine.js",
       formats: ["es"],
     },
     terserOptions: {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { OilSlickMaterial } from "../src/materials/OilSlickMaterial.js";
+import { OilSlickMaterial } from "../src/materials/OilSlick/OilSlickMaterial.js";
 
 describe("OilSlickMaterial Hook-Based Extension", () => {
   it("instantiates cleanly with petroleum pitch palette and custom type", () => {
@@ -25,7 +25,7 @@ describe("OilSlickMaterial Hook-Based Extension", () => {
       shaderDef.sources.glsl100?.fs,
       shaderDef.sources.wgsl,
     ]) {
-      expect(src).toContain("thinFilmRainbow");
+      expect(src).toContain("oilFilmThinFilm");
       expect(src).toContain("oilFlowNoise");
     }
   });

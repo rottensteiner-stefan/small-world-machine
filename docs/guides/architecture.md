@@ -1,6 +1,6 @@
 # Architecture & Code Showcases
 
-Small World Engine has a modular design and favors composition over deep inheritance. Below is an overview of the key classes, interfaces, and parameters you'll work with day to day, along with concrete code examples to get started.
+Small World Machine has a modular design and favors composition over deep inheritance. Below is an overview of the key classes, interfaces, and parameters you'll work with day to day, along with concrete code examples to get started.
 
 ::: tip API Reference
 For a complete list of _all_ classes, methods, and type declarations (including constructor parameters), open the auto-generated **[API Reference](/api/index.html)**.
@@ -15,7 +15,7 @@ The heart of the engine is the `Object3D` class. Everything that exists in the w
 ### Showcase: Creating and placing an object
 
 ```typescript
-import { Object3D, Cube, StandardMaterial, Color } from "@small-world/engine";
+import { Object3D, Cube, StandardMaterial, Color } from "@small-world-machine/engine";
 
 const player = new Object3D("Player");
 
@@ -52,7 +52,7 @@ The engine uses a unified camera architecture. The base `Camera` is parameterize
 ### Showcase: Camera with controller and shake effect
 
 ```typescript
-import { Camera, PerspectiveProjection, FirstPersonController, ShakeEffect } from "@small-world/engine";
+import { Camera, PerspectiveProjection, FirstPersonController, ShakeEffect } from "@small-world-machine/engine";
 
 // Create a camera with a perspective projection
 const camera = new Camera(new PerspectiveProjection({ fov: 60, near: 0.1, far: 1000 }));
@@ -73,7 +73,7 @@ camera.addEffect(new ShakeEffect(0.5, 0.5));
 
 ## 3. Materials & Shaders (PBR & built-in presets)
 
-Small World uses a hybrid rendering pipeline (WebGPU, WebGL2, WebGL1) built on the Cook-Torrance BRDF model with linear color space and sRGB gamma correction.
+Small World Machine uses a hybrid rendering pipeline (WebGPU, WebGL2, WebGL1) built on the Cook-Torrance BRDF model with linear color space and sRGB gamma correction.
 
 ### Key material families
 
@@ -90,7 +90,7 @@ Small World uses a hybrid rendering pipeline (WebGPU, WebGL2, WebGL1) built on t
 ### Showcase: Lava material with emissive glow
 
 ```typescript
-import { LavaMaterial, Color, Object3D, Plane } from "@small-world/engine";
+import { LavaMaterial, Color, Object3D, Plane } from "@small-world-machine/engine";
 
 const lava = new Object3D("LavaLake");
 lava.geometry = new Plane({ width: 50, height: 50, widthSegments: 32, heightSegments: 32 }).getGeometryData();
@@ -113,7 +113,7 @@ Complex logic should not be crammed into one giant `update()` loop. Instead, use
 ### Showcase: A Pulse behavior
 
 ```typescript
-import { Behavior, Object3D } from "@small-world/engine";
+import { Behavior, Object3D } from "@small-world-machine/engine";
 
 export class PulseBehavior extends Behavior {
   private _speed: number;
@@ -153,7 +153,7 @@ As states grow more complex (e.g. `IDLE` -> `WALK` -> `ATTACK`), use the built-i
 
 ## 5. Resource Management & Garbage Collection
 
-Unlike older graphics engines, where `dispose()` must be called manually on geometries, textures, and materials to avoid GPU memory leaks, **Small World uses automated internal reference counting**.
+Unlike older graphics engines, where `dispose()` must be called manually on geometries, textures, and materials to avoid GPU memory leaks, **Small World Machine uses automated internal reference counting**.
 
 ### How it works
 Every geometry buffer, shader program, and texture is tracked by the active renderer (WebGL1, WebGL2, or WebGPU).

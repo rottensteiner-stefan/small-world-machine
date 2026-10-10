@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ParticleSystem } from "../src/ParticleSystem.js";
-import { Vector3D } from "@small-world/engine";
+import { Vector3D } from "@small-world-machine/engine";
 
 describe("ParticleSystem", () => {
   it("emits and updates particles with integration", () => {

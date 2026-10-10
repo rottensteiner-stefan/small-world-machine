@@ -1,4 +1,4 @@
-import { AbstractGeometry, Vector3D } from "@small-world/engine";
+import { AbstractGeometry, Vector3D } from "@small-world-machine/engine";
 
 /**
  * Configuration options for filled (triangulated) polygon geometry.

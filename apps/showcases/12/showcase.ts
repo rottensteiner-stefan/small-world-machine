@@ -38,8 +38,8 @@ import {
   Vector2D,
   Vector3D,
   VignetteElement,
-} from "@small-world/engine";
-import { attachDevTools } from "@small-world/tools";
+} from "@small-world-machine/engine";
+import { attachDevTools } from "@small-world-machine/tools";
 import { WorkbenchTable } from "./assets/objects/WorkbenchTable.js";
 import { ErlenmeyerFlask } from "./assets/objects/ErlenmeyerFlask.js";
 import { ApothecaryBottle } from "./assets/objects/ApothecaryBottle.js";

@@ -80,7 +80,7 @@ export enum DeviceLimit {
 
 /**
  * Per-instance hardware and browser feature detection. Construct one per engine instance (see
- * `RendererContext.deviceCaps`) so multiple `SmallWorld`s on one page each get their own, correctly
+ * `RendererContext.deviceCaps`) so multiple `SmallWorldMachine`s on one page each get their own, correctly
  * probed capabilities instead of sharing a single process-wide result.
  */
 export class DeviceCaps {
@@ -184,7 +184,7 @@ export class DeviceCaps {
     // 2. Check WebGL support & limits
     // WebGL 1 -- this probe context is purely throwaway (created only to read GPU limits/
     // extensions), so it MUST be explicitly released via WEBGL_lose_context in a `finally` right
-    // after reading it, rather than left for the GC to reclaim eventually: every `SmallWorld`
+    // after reading it, rather than left for the GC to reclaim eventually: every `SmallWorldMachine`
     // instance gets its own private `DeviceCaps` (see `RendererContext`), so a page creating
     // several engine instances at once (e.g. a comparison showcase running N side-by-side
     // instances) previously leaked 2 never-released contexts per instance until the browser's

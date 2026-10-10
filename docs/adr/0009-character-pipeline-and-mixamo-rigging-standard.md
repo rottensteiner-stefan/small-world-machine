@@ -2,14 +2,14 @@
 
 ## Kontext & Problem
 
-Aus 2D-Konzepten spielbare 3D-Charaktere für die Small World Engine zu erzeugen, braucht eine
+Aus 2D-Konzepten spielbare 3D-Charaktere für die Small World Machine zu erzeugen, braucht eine
 verlässliche, mehrstufige Pipeline über 2D-Turnarounds, 3D-Mesh-Erzeugung, Skelett-Rigging,
 Bewegungsclips und Engine-Einbindung hinweg.
 
 In frühen Iterationen erwies sich automatisiertes End-to-End-Rigging über Tripo3D
 (`tripo anim rig`) als grundlegend ungeeignet für den Produktiveinsatz:
 1. **Bone-Explosion (>64 Bones):** Native Tripo-Rigs erzeugten 66–113 Gelenke (durch
-   unkontrollierte dynamische Spring-Bones für Mantel-/Haarfalten). Small Worlds
+   unkontrollierte dynamische Spring-Bones für Mantel-/Haarfalten). Small World Machines
    WebGL2-Skinning-Shader alloziert `u_boneMatrices[64]`. Gelenke mit Index $\ge 64$ deformierten
    im Shader nicht, was eingefrorene oder stark verzerrte Gliedmaßen verursachte.
 2. **Inkonsistente Hierarchien & Benennung:** Selbst mit `--spec mixamo` erzeugte Tripo

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { EventDispatcherImpl } from "@small-world/engine";
+import { EventDispatcherImpl } from "@small-world-machine/engine";
 import { Xtractor } from "../../src/Xtractor.js";
 
 const SOURCES = [

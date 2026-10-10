@@ -2,7 +2,7 @@
 
 ## Kontext
 
-Small World ist eine universelle 3D-Engine. Jede neue Projektidee (ein Doom-artiger Shooter, eine
+Small World Machine ist eine universelle 3D-Engine. Jede neue Projektidee (ein Doom-artiger Shooter, eine
 Lichtzyklus-Arena, ein postapokalyptisches Erkundungsspiel, und jetzt ein hypothetischer
 Yoshi-artiger Plattformer) verleitet zu einer naheliegenden Abkürzung: die genre-spezifische
 Mechanik — ein Flatter-Sprung-Charakter-Controller, ein Ei-Wurf-Projektil, eine Seitenscroll-
@@ -64,9 +64,9 @@ innerhalb dieses Repositorys getan haben.
 **Update (2026-09-12):** Die hypothetische dritte Extraktionsstufe ("oder irgendwann ein
 eigenständiges Plugin-Paket") ist jetzt technisch real: Mit der npm-Workspaces-Restrukturierung
 sind die Apps (`and-now`, `yad`, `light-cycle-arena`) zu Unterordnern des gemeinsamen
-Workspace-Package `@small-world/sample-apps` (`apps/sample-apps/and-now`,
+Workspace-Package `@small-world-machine/sample-apps` (`apps/sample-apps/and-now`,
 `apps/sample-apps/yad`, `apps/sample-apps/light-cycle-arena`) zusammengefasst, das die Engine
-als `@small-world/engine`-Package-Abhängigkeit konsumiert. Die Kernregel bleibt unverändert —
+als `@small-world-machine/engine`-Package-Abhängigkeit konsumiert. Die Kernregel bleibt unverändert —
 neuer genre-spezifischer Code beginnt weiterhin in der jeweiligen App, Extraktion nach
 `packages/engine/src/math`/`src/core` (statt `src/math`/`src/core`) erfolgt weiterhin erst beim
 echten zweiten Bedarf.

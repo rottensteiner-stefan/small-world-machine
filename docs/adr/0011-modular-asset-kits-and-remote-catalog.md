@@ -2,7 +2,7 @@
 
 ## Kontext & Problem
 
-Während das Small-World-Ökosystem um reichhaltigere Diorama-Szenen, Charaktere, Animationen und 3D-Requisiten wächst (etwa die per Tripo3D generierten Industrie-Schott-Wandlampen, Holzkisten, Wellblech-Ölfässer, polygonalen Schutthaufen und humanoiden Biped-Rigs), wächst das Volumen binärer Assets rasant.
+Während das Small-World-Machine-Ökosystem um reichhaltigere Diorama-Szenen, Charaktere, Animationen und 3D-Requisiten wächst (etwa die per Tripo3D generierten Industrie-Schott-Wandlampen, Holzkisten, Wellblech-Ölfässer, polygonalen Schutthaufen und humanoiden Biped-Rigs), wächst das Volumen binärer Assets rasant.
 
 Große Binär-Assets (`.glb`-Modelle, 2K/4K-PBR-Texturkarten, Skelett-Bewegungsclips, Audio) direkt in das Git-Repository des Kern-Engines einzuchecken, verursacht grundlegende Probleme:
 1. **Repository-Aufblähung:** Git verfolgt binäre Delta-Historien ineffizient. Die Größe des `.git`-Repositorys wächst monoton und verlangsamt `git clone`, CI-Builds und `npm install` für Entwickler, die nur die TypeScript-Rendering-/Mathe-Laufzeit benötigen.
@@ -57,7 +57,7 @@ prüft -- nicht mehr nur `industrial/` wie zuvor):
     "decals": [                    // optional: einzelne PNG-Sticker ohne eigenes meta.json
       { "id": "flakturm/sign_koje42", "name": "...", "file": "sign_koje42.png" }
     ],
-    "author": "Small World Studio",
+    "author": "Small World Machine Studio",
     "license": "CC0-1.0"
   }
   ```
@@ -84,7 +84,7 @@ Validierungstest nicht erkennen konnte.
 [`public/schemas/kit.schema.json`](../../public/schemas/kit.schema.json) für `kit.json`,
 [`public/schemas/prop-meta.schema.json`](../../public/schemas/prop-meta.schema.json) für
 `meta.json` -- unter `public/schemas/`, nicht neben den Kits selbst, weil beide Schemas eine
-`"$id"` von der Form `https://small-world.dev/schemas/<name>.schema.json` tragen; sobald
+`"$id"` von der Form `https://small-world-machine.dev/schemas/<name>.schema.json` tragen; sobald
 `public/` unter dieser Domain ausgeliefert wird, referenziert die `$id` exakt den Pfad, unter dem
 die Datei tatsächlich liegt, statt eine URL zu behaupten, die nirgendwo real bedient wird. Jede
 echte `kit.json`/`meta.json` trägt ein `"$schema"`-Feld (relativer Pfad zu `public/schemas/`), das
@@ -120,11 +120,11 @@ Alle Kit-Props folgen daher verbindlich dem **4-Tier-Budget-Rezept** nach Objekt
 - **Status (2026-10-07):** Festgelegt als verbindlicher Standard für alle neuen Kit- und Prop-Erstellungen. Bestehende Original-Assets wurden unverändert beibehalten.
 
 ### 2. Phase 2: Out-of-Tree-Repository & CDN-Distribution
-- **Dediziertes Asset-Repository (`small-world-assets`):** Binäre Produktions-Assets, rohe DCC-Dateien und Kit-Bündel werden in einem dedizierten Repository oder Git-LFS-Speicher untergebracht.
+- **Dediziertes Asset-Repository (`small-world-machine-assets`):** Binäre Produktions-Assets, rohe DCC-Dateien und Kit-Bündel werden in einem dedizierten Repository oder Git-LFS-Speicher untergebracht.
 - **CDN-Distribution:** Assets werden auf ein schnelles CDN veröffentlicht (über GitHub Releases, jsDelivr oder Cloudflare), sodass Szenen Standard-Assets über Remote-URIs referenzieren können, ohne den lokalen Datenträger aufzublähen.
 
 **Status:** nicht umgesetzt. Kit-Binärdateien (z. B. `model.glb` mit 1,2 MB) liegen aktuell direkt
-im Haupt-Repository, ohne Git-LFS-Filter und ohne dediziertes `small-world-assets`-Repo -- exakt
+im Haupt-Repository, ohne Git-LFS-Filter und ohne dediziertes `small-world-machine-assets`-Repo -- exakt
 das Anti-Pattern aus dem Kontext-Abschnitt oben, das diese Phase verhindern sollte.
 
 ### 3. Phase 3: Laufzeit-Katalog-Ingest & CLI-Tooling
@@ -135,16 +135,16 @@ das Anti-Pattern aus dem Kontext-Abschnitt oben, das diese Phase verhindern soll
   ```
 - **CLI-Download-Hilfsprogramm:** Entwickler können Kit-Bündel optional bei Bedarf in ihren lokalen Arbeitsbereich herunterladen:
   ```bash
-  npx small-world add kit industrial
-  npx small-world add prop industrial/wall_lamp
+  npx small-world-machine add kit industrial
+  npx small-world-machine add prop industrial/wall_lamp
   ```
 
-**Status:** nicht umgesetzt. Weder `GltfLoader.loadFromCatalog()` noch die `small-world`-CLI
+**Status:** nicht umgesetzt. Weder `GltfLoader.loadFromCatalog()` noch die `small-world-machine`-CLI
 existieren im Code -- setzt ohnehin Phase 2 (ein echtes Remote-Katalog-Ziel) voraus.
 
 ## Konsequenzen
 
-- **Leichtgewichtiger Kern-Engine:** Das Kern-Repository von `small-world` bleibt schlank, schnell zu klonen und frei von schwerem binärem Ballast.
+- **Leichtgewichtiger Kern-Engine:** Das Kern-Repository von `small-world-machine` bleibt schlank, schnell zu klonen und frei von schwerem binärem Ballast.
 - **Modularität:** Ersteller können in sich geschlossene, thematische Asset-Pakete veröffentlichen und konsumieren (z. B. *Graphic Noir Sewer Kit*, *Industrial Bunker Kit*, *Character Starter Kit*).
 - **Tooling-Kompatibilität:** `Maker` (Nachfolger von `GadgetInspector`, siehe ADR 0010),
   `MaterialStudio` und künftige In-Game-Szeneneditoren können Asset-Auswahl-Paletten dynamisch

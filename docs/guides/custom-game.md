@@ -1,22 +1,22 @@
 # Building Your Own Game
 
-The **Small World Engine** is designed to scale from simple rotating cubes to fully-fledged game loops with custom logic, controllers, and UI.
+The **Small World Machine** is designed to scale from simple rotating cubes to fully-fledged game loops with custom logic, controllers, and UI.
 
 ## The Architecture of a Game
 
 A typical project should be split into the following modular parts:
-1. **The app (`MyGameApp.ts`)**: Extends `SmallWorld`. Builds the scene, loads textures, and initializes the camera and UI.
+1. **The app (`MyGameApp.ts`)**: Extends `SmallWorldMachine`. Builds the scene, loads textures, and initializes the camera and UI.
 2. **The level builder**: Uses `GridLevelBuilder` or generates the scene graph procedurally.
 3. **The controller (`MyController.ts`)**: Extends `FirstPersonController` or `OrbitController`. This is the core logic for input and movement.
 4. **The UI (`MyHud.ts`)**: A decoupled HTML overlay that listens to `Events`.
 
 ## 1. Creating Your Own Controller
 
-In Small World, controllers are simply `Behavior` components attached to a camera or an object. The built-in controllers can be extended to add game-specific logic such as shooting, raycasting, or item pickup.
+In Small World Machine, controllers are simply `Behavior` components attached to a camera or an object. The built-in controllers can be extended to add game-specific logic such as shooting, raycasting, or item pickup.
 
 ```typescript
-import { FirstPersonController, FirstPersonControllerOptions } from "@small-world/engine";
-import { Keys } from "@small-world/engine";
+import { FirstPersonController, FirstPersonControllerOptions } from "@small-world-machine/engine";
+import { Keys } from "@small-world-machine/engine";
 
 export class MyController extends FirstPersonController {
   constructor(options: FirstPersonControllerOptions = {}) {
@@ -41,14 +41,14 @@ export class MyController extends FirstPersonController {
 
 ## 2. Starting the Application (Bootstrapping)
 
-Now let's wire up the controller, scene, and UI in our `SmallWorld` subclass.
+Now let's wire up the controller, scene, and UI in our `SmallWorldMachine` subclass.
 
 ```typescript
-import { SmallWorld } from "@small-world/engine";
+import { SmallWorldMachine } from "@small-world-machine/engine";
 import { MyController } from "./MyController.js";
 import { MyHud } from "./MyHud.js";
 
-export class MyGameApp extends SmallWorld {
+export class MyGameApp extends SmallWorldMachine {
   private _hud!: MyHud;
 
   protected async setupScene(): Promise<void> {
@@ -80,7 +80,7 @@ This code structure keeps game logic (controller), rendering logic (app/scene), 
 
 ## Reference Implementation: YAD (Yet Another Dungeon)
 
-The Small World Engine includes a complete, working showcase called **YAD (Yet Another Dungeon)**, located at `apps/sample-apps/yad`. YAD is the canonical reference architecture for building a real game.
+The Small World Machine includes a complete, working showcase called **YAD (Yet Another Dungeon)**, located at `apps/sample-apps/yad`. YAD is the canonical reference architecture for building a real game.
 
 YAD demonstrates:
 1. **Seamless tool integration:** How standalone tools (`Pixler`, `MapGenerator`, `Xtractor`) communicate with the game via `app.events` without interrupting the render loop - no Forge overlay required.

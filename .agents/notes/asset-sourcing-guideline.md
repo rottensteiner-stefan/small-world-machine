@@ -1,4 +1,4 @@
-# Asset-Sourcing & Textur-Doktrin für Small World & The Whisper
+# Asset-Sourcing & Textur-Doktrin für Small World Machine & The Whisper
 
 ## 1. Grundsatz: Open Sources & Tripo3D API („Handvoll-Regel“)
 

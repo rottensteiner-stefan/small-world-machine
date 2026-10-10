@@ -1,6 +1,6 @@
 # Materials & Shaders
 
-Small World uses a flexible, physically-based rendering (PBR) foundation with a strong focus on custom shader integration.
+Small World Machine uses a flexible, physically-based rendering (PBR) foundation with a strong focus on custom shader integration.
 
 ## Core materials
 
@@ -15,7 +15,7 @@ Small World uses a flexible, physically-based rendering (PBR) foundation with a 
 
 ## Fluid & liquid surfaces (ADR 0013)
 
-Per **ADR 0013**, Small World provides a unified architecture for liquids, split into two main families that share optimized shader chunks (`liquid_gerstner_wave`, `liquid_worley_noise`):
+Per **ADR 0013**, Small World Machine provides a unified architecture for liquids, split into two main families that share optimized shader chunks (`liquid_gerstner_wave`, `liquid_worley_noise`):
 
 ### 1. Wave family (transparent & refractive)
 
@@ -25,7 +25,7 @@ Driven by mathematical Gerstner wave displacement in the vertex shader and Worle
 - `StylizedWaterMaterial`: Lightweight toon/anime water with sharp foam bands and cel-shading tint parameters.
 
 ```typescript
-import { Object3D, Plane, OpenWaterMaterial, Color } from "@small-world/engine";
+import { Object3D, Plane, OpenWaterMaterial, Color } from "@small-world-machine/engine";
 
 const ocean = new Object3D("Ocean");
 ocean.geometry = new Plane({
@@ -54,7 +54,7 @@ Driven by procedural noise flow and distortion on the surface, supports opaque d
 - `SlimeMaterial`: Translucent, dripping toxic slime with ambient edge glow and high surface viscosity.
 
 ```typescript
-import { Object3D, Plane, LavaMaterial, Color } from "@small-world/engine";
+import { Object3D, Plane, LavaMaterial, Color } from "@small-world-machine/engine";
 
 const lavaPool = new Object3D("LavaPool");
 lavaPool.geometry = new Plane({ width: 30, height: 30 }).getGeometryData();

@@ -1,4 +1,4 @@
-import { CameraInterfaceData, Input, Vector3D } from "@small-world/engine";
+import { CameraInterfaceData, Input, Vector3D } from "@small-world-machine/engine";
 
 export interface OrbitCameraOptions {
   target?: Vector3D;

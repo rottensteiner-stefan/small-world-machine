@@ -10,7 +10,7 @@ import { DragAffector } from "../src/affectors/DragAffector.js";
 import { ColorOverLifeAffector } from "../src/affectors/ColorOverLifeAffector.js";
 import { SizeOverLifeAffector } from "../src/affectors/SizeOverLifeAffector.js";
 import { BouncePlaneAffector } from "../src/affectors/BouncePlaneAffector.js";
-import { Vector3D, Color } from "@small-world/engine";
+import { Vector3D, Color } from "@small-world-machine/engine";
 
 describe("Affectors", () => {
   it("PointAttractorAffector pulls particles towards center", () => {

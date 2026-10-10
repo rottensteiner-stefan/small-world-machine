@@ -12,7 +12,7 @@ for (const file of htmlFiles) {
 
   // Extract <title>
   const titleMatch = content.match(/<title>(.*?)<\/title>/s);
-  const title = titleMatch ? titleMatch[1].trim() : `Small World Tool`;
+  const title = titleMatch ? titleMatch[1].trim() : `Small World Machine Tool`;
 
   // Extract <style> blocks
   const styles = [];
@@ -79,7 +79,7 @@ for (const file of htmlFiles) {
     
     ${bodyContent}
 
-    <footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World</footer>
+    <footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World Machine</footer>
 
     ${scripts.join('\n    ')}
   </body>

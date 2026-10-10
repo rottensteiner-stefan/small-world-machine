@@ -37,7 +37,7 @@ import {
   Vector2D,
   Vector3D,
   WireframeMaterial,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 class BobbingBehavior extends Behavior {
   private _timeOffset: number = Math.random() * Math.PI * 2;

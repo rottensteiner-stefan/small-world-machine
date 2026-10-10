@@ -36,7 +36,7 @@ const PUBLISHED_STYLES: Array<{ name: StyleName; styleId: number }> = [
 
 // Minimal extension stub mirroring the Noir/Oil carve-out pattern (styleId 3.0 overrides
 // u_styleA.w after the base pack). Kept local so the test does not couple the engine suite
-// to the @small-world/liquid-extras package.
+// to the @small-world-machine/liquid-extras package.
 const EXTENSION_LANE_VALUE = 6;
 class ExtensionStubMaterial extends StylizedWaterMaterial {
   constructor() {

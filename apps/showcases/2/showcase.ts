@@ -13,7 +13,7 @@ import {
   PhongMaterial,
   WireframeMaterial,
   ZoomController,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 /**
  * Showcase 2: Interactive camera (FPS-style) and keyboard input.

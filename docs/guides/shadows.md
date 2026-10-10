@@ -1,6 +1,6 @@
 # Shadows
 
-Small World renders real-time shadows via shadow mapping: Cascaded Shadow Maps (CSM) for
+Small World Machine renders real-time shadows via shadow mapping: Cascaded Shadow Maps (CSM) for
 `DirectionalLight`, and single shadow maps for `SpotLight`. Both are implemented only on
 **WebGL2 and WebGPU** — WebGL1 has no shadow-mapping path at all today; shadow-related
 properties there are simply ignored.
@@ -10,7 +10,7 @@ properties there are simply ignored.
 Any light can cast shadows, and any object can receive and/or cast them:
 
 ```typescript
-import { DirectionalLight, Object3D, Color } from "@small-world/engine";
+import { DirectionalLight, Object3D, Color } from "@small-world-machine/engine";
 
 const sun = new DirectionalLight({ color: Color.WHITE, intensity: 1.0 });
 sun.direction.set(-1, -1, -1);

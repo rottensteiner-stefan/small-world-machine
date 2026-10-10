@@ -8,7 +8,7 @@ describe("ZipAssetSink & ZipAssetSource roundtrip", () => {
   it("should write files to ZipAssetSink, build archive, and read back via ZipAssetSource", async () => {
     const sink = new ZipAssetSink();
 
-    const textData = new TextEncoder().encode("Hello Small World Asset IO!");
+    const textData = new TextEncoder().encode("Hello Small World Machine Asset IO!");
     const jsonData = new TextEncoder().encode(
       JSON.stringify({ version: "1.0.0", name: "test-kit" }),
     );
@@ -29,7 +29,7 @@ describe("ZipAssetSink & ZipAssetSource roundtrip", () => {
     expect(fileList.sort()).toEqual(["data.bin", "info.txt", "sub/manifest.json"]);
 
     const readText = await source.read("info.txt");
-    expect(new TextDecoder().decode(readText)).toBe("Hello Small World Asset IO!");
+    expect(new TextDecoder().decode(readText)).toBe("Hello Small World Machine Asset IO!");
 
     const readJson = await source.read("sub/manifest.json");
     expect(JSON.parse(new TextDecoder().decode(readJson))).toEqual({

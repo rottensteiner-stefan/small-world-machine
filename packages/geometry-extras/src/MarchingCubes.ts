@@ -1,4 +1,4 @@
-import { AbstractGeometry } from "@small-world/engine";
+import { AbstractGeometry } from "@small-world-machine/engine";
 import { Vec3Like } from "./Vec3Like.js";
 
 /** A single metaball (blobby sphere) contributing to a scalar field. */

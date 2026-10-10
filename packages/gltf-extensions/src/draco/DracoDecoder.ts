@@ -1,4 +1,4 @@
-import { GeometryDataInterface, ModelGeometry } from "@small-world/engine";
+import { GeometryDataInterface, ModelGeometry } from "@small-world-machine/engine";
 
 export type DracoAttributeMapping = Record<string, number>;
 
@@ -71,7 +71,7 @@ export class DracoDecoder {
   }
 
   /**
-   * Decodes a Draco compressed buffer into a Small World GeometryDataInterface.
+   * Decodes a Draco compressed buffer into a Small World Machine GeometryDataInterface.
    */
   public static async decode(
     buffer: ArrayBuffer,

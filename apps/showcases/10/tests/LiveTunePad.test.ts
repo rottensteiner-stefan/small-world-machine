@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { StylizedWaterMaterial } from "@small-world/engine";
+import { StylizedWaterMaterial } from "@small-world-machine/engine";
 import { DEFAULT_TUNE_PARAMETERS, LiveTunePad } from "../LiveTunePad.js";
 
 describe("LiveTunePad (D4)", () => {

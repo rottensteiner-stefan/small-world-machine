@@ -11,8 +11,8 @@ import {
   StylizedLavaMaterialOptions,
   StylizedWaterMaterial,
   Texture,
-} from "@small-world/engine";
-import { NoirWaterMaterial, OilSlickMaterial } from "@small-world/liquid-extras";
+} from "@small-world-machine/engine";
+import { NoirWaterMaterial, OilSlickMaterial } from "@small-world-machine/liquid-extras";
 import { PoolKey, POOL_SIZE, WALL_THICKNESS, poolWorldPosition } from "./PoolLayout.js";
 import type { BarrelType, PropSpec, Rgb } from "./PoolProps.js";
 import type { TilePaletteName } from "./PoolTextures.js";

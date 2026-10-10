@@ -36,8 +36,8 @@ import {
   WorldMaterial,
   ZoomController,
   FluidVolume,
-} from "@small-world/engine";
-import { NoirWaterMaterial } from "@small-world/liquid-extras";
+} from "@small-world-machine/engine";
+import { NoirWaterMaterial } from "@small-world-machine/liquid-extras";
 import {
   GoldenCapture,
   GoldenSpec,
@@ -131,7 +131,7 @@ export class Showcase10 extends AbstractShowcase {
 
   constructor(options: EngineOptions = {}) {
     super({
-      canvasId: "SmallWorld",
+      canvasId: "SmallWorldMachine",
       rendererType: RendererType.BEST,
       fullscreen: true,
       enablePhysics: true, // the buoyancy pools (FluidVolume) need the physics step

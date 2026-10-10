@@ -26,7 +26,7 @@ import {
   ToneMappingMode,
   Torus,
   VignetteElement,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 // ============================================================================
 // 1. Shared Simulation State
@@ -1014,15 +1014,15 @@ class Showcase14 extends AbstractShowcase {
 // 5. Bootstrapping
 // ============================================================================
 
-const cleanApp = new Showcase14("SmallWorld-1", "clean");
-const nvApp = new Showcase14("SmallWorld-2", "nightvision");
-const noirApp = new Showcase14("SmallWorld-3", "noir");
-const cyberApp = new Showcase14("SmallWorld-4", "cyber");
-const tapeApp = new Showcase14("SmallWorld-5", "tape");
-const amberApp = new Showcase14("SmallWorld-6", "underworld");
-const projectorApp = new Showcase14("SmallWorld-7", "projector");
-const thermalApp = new Showcase14("SmallWorld-8", "thermal");
-const comicApp = new Showcase14("SmallWorld-9", "comic");
+const cleanApp = new Showcase14("SmallWorldMachine-1", "clean");
+const nvApp = new Showcase14("SmallWorldMachine-2", "nightvision");
+const noirApp = new Showcase14("SmallWorldMachine-3", "noir");
+const cyberApp = new Showcase14("SmallWorldMachine-4", "cyber");
+const tapeApp = new Showcase14("SmallWorldMachine-5", "tape");
+const amberApp = new Showcase14("SmallWorldMachine-6", "underworld");
+const projectorApp = new Showcase14("SmallWorldMachine-7", "projector");
+const thermalApp = new Showcase14("SmallWorldMachine-8", "thermal");
+const comicApp = new Showcase14("SmallWorldMachine-9", "comic");
 
 const apps: Showcase14[] = [
   cleanApp,

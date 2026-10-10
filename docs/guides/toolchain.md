@@ -1,6 +1,6 @@
 # Recommended external toolchain
 
-While the **Small World** engine and its Node/Vite ecosystem handle core rendering and logic, building a complete 3D/2.5D game needs a supporting ecosystem of external art and asset tools.
+While the **Small World Machine** engine and its Node/Vite ecosystem handle core rendering and logic, building a complete 3D/2.5D game needs a supporting ecosystem of external art and asset tools.
 
 Here's the recommended toolchain for working efficiently with the engine:
 
@@ -39,7 +39,7 @@ Here's the recommended toolchain for working efficiently with the engine:
 ## 5. FBX-to-GLTF conversion: fbx2gltf / web converters
 * **Role:** Format conversion for 3D assets.
 * **Usage:**
-  * Small World exclusively uses the open `glTF/GLB` standard via `GltfLoader`.
+  * Small World Machine exclusively uses the open `glTF/GLB` standard via `GltfLoader`.
   * When downloading `.fbx` files (e.g. from Mixamo), they need to be converted. This can be done via the `fbx2gltf` CLI tool or quickly via web converters like [AnyConv](https://anyconv.com/fbx-to-glb-converter/).
 * **Status:** Necessary auxiliary tool.
 

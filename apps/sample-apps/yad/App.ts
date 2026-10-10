@@ -1,28 +1,28 @@
 import { LevelBuilder } from "./core/LevelBuilder.js";
 import { Controller } from "./core/behaviors/Controller.js";
 import { Hud } from "./core/Hud.js";
-import { SmallWorld } from "@small-world/engine/core/index.js";
+import { SmallWorldMachine } from "@small-world-machine/engine/core/index.js";
 import {
   AmbientLight,
   DirectionalLight,
   PointLight,
-} from "@small-world/engine/core/lights/index.js";
-import { CameraStrategyType } from "@small-world/engine/enums/index.js";
-import { Color } from "@small-world/engine/core/colors/index.js";
-import { MathUtils, Vector3D } from "@small-world/engine/math/index.js";
-import { PerspectiveProjection } from "@small-world/engine/math/projections/index.js";
-import { Texture } from "@small-world/engine/core/textures/index.js";
-import { ZoomController } from "@small-world/engine/core/controllers/index.js";
-import { FluidSurfaceMaterial } from "@small-world/engine/core/materials/index.js";
-import { QuantizeElement } from "@small-world/engine/renderers/post/elements/index.js";
-import { TextLoader } from "@small-world/engine/loaders/index.js";
-import { BoundingBox } from "@small-world/engine/physix/index.js";
+} from "@small-world-machine/engine/core/lights/index.js";
+import { CameraStrategyType } from "@small-world-machine/engine/enums/index.js";
+import { Color } from "@small-world-machine/engine/core/colors/index.js";
+import { MathUtils, Vector3D } from "@small-world-machine/engine/math/index.js";
+import { PerspectiveProjection } from "@small-world-machine/engine/math/projections/index.js";
+import { Texture } from "@small-world-machine/engine/core/textures/index.js";
+import { ZoomController } from "@small-world-machine/engine/core/controllers/index.js";
+import { FluidSurfaceMaterial } from "@small-world-machine/engine/core/materials/index.js";
+import { QuantizeElement } from "@small-world-machine/engine/renderers/post/elements/index.js";
+import { TextLoader } from "@small-world-machine/engine/loaders/index.js";
+import { BoundingBox } from "@small-world-machine/engine/physix/index.js";
 
 /**
  * YAD (Yet Another Dungeon)
  * Building a grid-based level from a text file.
  */
-export class App extends SmallWorld {
+export class App extends SmallWorldMachine {
   constructor() {
     super({ fullscreen: false });
   }

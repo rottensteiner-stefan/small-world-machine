@@ -1,7 +1,7 @@
 {
-  "name": "@small-world/physics-extras",
+  "name": "@small-world-machine/physics-extras",
   "version": "0.1.0",
-  "description": "Physics-side extensions for the Small World 3D engine that need both @small-world/engine and one of its geometry packages (e.g. Voronoi fracture).",
+  "description": "Physics-side extensions for the Small World Machine 3D engine that need both @small-world-machine/engine and one of its geometry packages (e.g. Voronoi fracture).",
   "type": "module",
   "license": "MIT",
   "exports": {
@@ -9,7 +9,7 @@
     "./*": "./src/*"
   },
   "dependencies": {
-    "@small-world/engine": "*",
-    "@small-world/geometry-extras": "*"
+    "@small-world-machine/engine": "*",
+    "@small-world-machine/geometry-extras": "*"
   }
 }

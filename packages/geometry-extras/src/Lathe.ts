@@ -1,4 +1,4 @@
-import { AbstractGeometry, MathUtils, Vector3D } from "@small-world/engine";
+import { AbstractGeometry, MathUtils, Vector3D } from "@small-world-machine/engine";
 
 /**
  * Configuration options for lathe (revolution) geometry.

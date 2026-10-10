@@ -2,7 +2,7 @@
 
 Ablage der Analysen und Aufgaben zweier `/collaborate`-Sessions (Blackboard, 4 Agenten + Moderator). Historischer Stand, kein lebender Standard; die Entscheidungen werden mit ADR 0025 (Entwurf unten) verbindlich.
 
-> **Update 2026-10-04:** Die hier geplante Phase B ist inzwischen umgesetzt (v0.96.0, vom Moderator in einer eigenen Session: Architektur A = 2-Familien-System `OpenWaterMaterial` + universeller stilisierter Kern, Paket `@small-world/liquid-extras`). Die Abschnitte zu Phase B und zu offenen Fragen unten beschreiben den Planungsstand vom 2026-10-03 und sind **historisch**. Eine harte Qualitätsanalyse des umgesetzten Showcase 10 (10 Pools, Noten 1 bis 5, Vergleichsbilder, Vorhersagen) und die anschließende Fix-Runde liegen lokal unter `.agents/collaborate/scratches/water/` (git-ignoriert; Einstieg `showcase10-quality.md`, `showcase10-fixes-requirements.md`). Ergebnis der Analyse: Klarwasser 1/5, Stylized 2 bis 3/5, Noir und Öl je 2/5, Lava und Slime je 3/5, Galerie 2,5/5. Gemeinsame Ursache des hellen Flecks war der enge Toon-Specular-Kegel (`nDotH > 0.99`), Ursache der WebGPU-Lava-Streifen die fehlende Wellenverschiebung im Depth-Pre-Pass.
+> **Update 2026-10-04:** Die hier geplante Phase B ist inzwischen umgesetzt (v0.96.0, vom Moderator in einer eigenen Session: Architektur A = 2-Familien-System `OpenWaterMaterial` + universeller stilisierter Kern, Paket `@small-world-machine/liquid-extras`). Die Abschnitte zu Phase B und zu offenen Fragen unten beschreiben den Planungsstand vom 2026-10-03 und sind **historisch**. Eine harte Qualitätsanalyse des umgesetzten Showcase 10 (10 Pools, Noten 1 bis 5, Vergleichsbilder, Vorhersagen) und die anschließende Fix-Runde liegen lokal unter `.agents/collaborate/scratches/water/` (git-ignoriert; Einstieg `showcase10-quality.md`, `showcase10-fixes-requirements.md`). Ergebnis der Analyse: Klarwasser 1/5, Stylized 2 bis 3/5, Noir und Öl je 2/5, Lava und Slime je 3/5, Galerie 2,5/5. Gemeinsame Ursache des hellen Flecks war der enge Toon-Specular-Kegel (`nDotH > 0.99`), Ursache der WebGPU-Lava-Streifen die fehlende Wellenverschiebung im Depth-Pre-Pass.
 
 ## Inhalt dieses Ordners
 
@@ -39,7 +39,7 @@ Vier Pools in Showcase 10 (Klarwasser, Stylized, Slime, Lava) überarbeitet, ohn
 ### Entscheidungen des Moderators (verbindlich)
 1. Referenzen: *Spirited Away*, *Dredge*. Fokus: stilisiertes Wasser, Ghibli-Richtung.
 2. `toon` bleibt unverändert und pixelgleich; **kein** Löschen des alten Kaustik-Pfads (weitere Beispiele folgen).
-3. Extension-Paket: `@small-world/liquid-extras`.
+3. Extension-Paket: `@small-world-machine/liquid-extras`.
 4. Erste Extension: Noir-Paket (ohne Assets, Beweis des Hook-Mechanismus). `sparkle` gehört in die **Engine**.
 5. „Ghibli" nur intern; öffentliche IDs `soft`/`sparkle`.
 
@@ -57,7 +57,7 @@ Jede Aufgabe hat eigene Dateien; Reihenfolge B0 → B1 → (B2 ‖ B3 ‖ B4 ‖
 | B2 | Bob | Chunk `liquid_caustics` (GLSL300/GLSL100/WGSL), noch ohne Einbau |
 | B3 | Charly | Chunks Rampe, Wash, Schaumweichheit, gestufte Zeit, Nebelpaar; Presets `soft`, `sparkle` (inkl. Dredge-Stimmung) |
 | B4 | Erin | Chunk `liquid_glint` |
-| B5 | Dave | Paket `@small-world/liquid-extras` mit Noir-Paket |
+| B5 | Dave | Paket `@small-world-machine/liquid-extras` mit Noir-Paket |
 | B6 | Charly (Review: Bob, Erin) | Einbau in `StylizedWater.frag.*`; Toon bleibt über `styleId == 0` pixelgleich |
 | B7 | Erin | Verifikation V1–V8 und mit dem Moderator H1 (Leiter und Stimmung), H2 (Standbilder), H3 (Bewegung 8 fps vs. glatt), H4 (Toon-Regression, 3-Backend-Kontaktkarte) |
 | B8 | Alice | ADR 0025, Guides, `REFERENCES.md`, `CONTEXT.md`, Changelog, Release |

@@ -17,7 +17,7 @@ import {
   SpotLight,
   AmbientLight,
   SpawnPoint,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 export type ContentAssetType = "prop" | "texture" | "decal" | "primitive" | "light" | "prefab";
 
@@ -638,7 +638,7 @@ export class ContentDrawer {
       // Drag data transfer
       card.addEventListener("dragstart", (e) => {
         if (e.dataTransfer) {
-          e.dataTransfer.setData("application/x-smallworld-asset", JSON.stringify(asset));
+          e.dataTransfer.setData("application/x-smallworldmachine-asset", JSON.stringify(asset));
           e.dataTransfer.effectAllowed = "copy";
         }
       });
@@ -731,7 +731,7 @@ export class ContentDrawer {
 
     canvas.addEventListener("drop", (e) => {
       e.preventDefault();
-      const rawData = e.dataTransfer?.getData("application/x-smallworld-asset");
+      const rawData = e.dataTransfer?.getData("application/x-smallworldmachine-asset");
       if (!rawData) return;
 
       try {

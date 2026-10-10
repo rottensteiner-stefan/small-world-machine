@@ -3,7 +3,7 @@ import {
   GltfPrimitiveDef,
   GltfReadContext,
   GeometryDataInterface,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { DracoDecoder, DracoAttributeMapping } from "./DracoDecoder.js";
 
 export interface DracoExtensionDef {
@@ -14,7 +14,7 @@ export interface DracoExtensionDef {
 /**
  * `KHR_draco_mesh_compression` -- Khronos standard extension for Draco geometry compression.
  * Intercepts primitive parsing via the `decodeGeometry` hook and decompresses the bitstream
- * into a Small World `GeometryDataInterface`.
+ * into a Small World Machine `GeometryDataInterface`.
  */
 export const khrDracoMeshCompression: GltfExtensionPlugin = {
   name: "KHR_draco_mesh_compression",

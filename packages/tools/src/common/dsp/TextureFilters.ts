@@ -1,4 +1,4 @@
-import { NormalMapFormat } from "@small-world/engine";
+import { NormalMapFormat } from "@small-world-machine/engine";
 
 /**
  * WHY: the 4-neighbour Laplacian returns roughly trowel-scale values; this fixed gain lifts

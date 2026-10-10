@@ -33,7 +33,7 @@ export const DEFAULT_AI_CONFIGS: Record<AiProviderType, AiConfig> = {
   },
 };
 
-const STORAGE_KEY = "smallworld_ai_config";
+const STORAGE_KEY = "smallworldmachine_ai_config";
 
 function isProviderType(value: unknown): value is AiProviderType {
   return "string" === typeof value && Object.hasOwn(DEFAULT_AI_CONFIGS, value);

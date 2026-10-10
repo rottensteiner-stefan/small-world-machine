@@ -1,11 +1,11 @@
 ---
 name: character-pipeline
-description: End-to-end workflow from 2D concept sketch to game-ready, rigged 3D character in Small World.
+description: End-to-end workflow from 2D concept sketch to game-ready, rigged 3D character in Small World Machine.
 ---
 
 # 2D to 3D Character Pipeline — Das vollständige Rezeptbuch
 
-Dieses Dokument definiert den verbindlichen, praxiserprobten End-to-End-Workflow zur Erstellung spielbarer, geriggter und sauber animierter 3D-Charaktere für die **Small World Engine**.
+Dieses Dokument definiert den verbindlichen, praxiserprobten End-to-End-Workflow zur Erstellung spielbarer, geriggter und sauber animierter 3D-Charaktere für die **Small World Machine**.
 
 ---
 
@@ -38,7 +38,7 @@ Dieses Dokument definiert den verbindlichen, praxiserprobten End-to-End-Workflow
   - Fixierte Handhaltung für getragene Ausrüstung (Laterne, Waffe)
                         │
                         ▼
-[ 5. Small World Runtime-Integration ]
+[ 5. Small World Machine Runtime-Integration ]
   - 🤖 AUTOMATISCH: Multiplikativer `_characterRig` Wrapper (1.80m Skalierungsschutz)
   - PBR-Sanitizing (`clampMetallic`) / Graphic-Noir `BasicMaterial`
   - Semantischer Hand-Socket (Laterne: (0.01, 0.09, 0.02), Z = π/2)
@@ -87,7 +87,7 @@ Dieser Vertrag definiert für jeden Schritt exakt:
 > - `front.jpg` (Isolierte Frontalfigur): Dient als präziser Eingabevektor für Tripo3D.
 
 ### 1. Das Albedo-First-Mandat (Unabdingbare 3D-Regel)
-* **Keine Richtungsschatten oder Lichtkegel:** Schatten und Glanzlichter werden zur Laufzeit von Small World in Echtzeit berechnet (`PointLight`, `DirectionalLight`, `OutlineElement`).
+* **Keine Richtungsschatten oder Lichtkegel:** Schatten und Glanzlichter werden zur Laufzeit von Small World Machine in Echtzeit berechnet (`PointLight`, `DirectionalLight`, `OutlineElement`).
 * **Pflicht-Keywords für alle Turnaround-Prompts:**
   > *„Pure unshaded flat Albedo diffuse reference, neutral diffuse color map, perfectly even flat ambient studio lighting, ZERO cast shadows, ZERO highlights, solid pure white background (#FFFFFF).“*
 
@@ -142,7 +142,7 @@ tripo make src/apps/<app>/raw/mannequin/<char>/front.jpg --for game-mobile --par
 
 ## 🍳 Rezept 3: Skeletal Rigging & Skinning (Adobe Mixamo Standard)
 
-> **Architektur-Entscheidung:** Für alle spielbaren Charaktere in Small World ist **Adobe Mixamo der einzige verbindliche Rigging-Standard**. Tripo Auto-Rigging wird nicht verwendet, da es zu Knochen-Explosionen (>64 Bones), nicht-standardisierten Benennungen und zerreißenden Gliedmaßen führt.
+> **Architektur-Entscheidung:** Für alle spielbaren Charaktere in Small World Machine ist **Adobe Mixamo der einzige verbindliche Rigging-Standard**. Tripo Auto-Rigging wird nicht verwendet, da es zu Knochen-Explosionen (>64 Bones), nicht-standardisierten Benennungen und zerreißenden Gliedmaßen führt.
 
 ### 1. Manueller User-Schritt (Mixamo Web-UI)
 1. Die generierte Zip-Datei [`src/apps/<app>/raw/mannequin/<char>/<char>_mixamo.zip`](src/apps/and-now/raw/mannequin/) in [Adobe Mixamo](https://www.mixamo.com/) hochladen (Drag & Drop).
@@ -165,7 +165,7 @@ fbx2gltf -b -i src/apps/<app>/raw/mannequin/<char>/character_rigged.fbx -o publi
 ```
 **Post-Processing & Validierung:**
 1. **Höhen-Normalisierung auf $1.0\text{m}$:** Mixamo-FBX exportiert in cm ($0.01$ Skalierungsfaktor), wodurch das Modell nach `fbx2gltf` nur $0.018\text{m}$ (1.8 cm) groß wäre. Der Root-Knoten (`Node 0`) wird skaliert, sodass die Netto-Höhe exakt $1.0\text{m}$ beträgt (damit `character.scale.set(1.8, 1.8, 1.8)` in der Engine exakt $1.80\text{m}$ Mensch-Höhe ergibt).
-2. **Entfernen des statischen 1-Frame-Mixamo-Clips:** `fbx2gltf` bittet einen Dummy-Clip namens `"mixamo.com"` ein. Dieser wird entfernt, damit Small World automatisch die Shared Studio Mocap Clips lädt.
+2. **Entfernen des statischen 1-Frame-Mixamo-Clips:** `fbx2gltf` bittet einen Dummy-Clip namens `"mixamo.com"` ein. Dieser wird entfernt, damit Small World Machine automatisch die Shared Studio Mocap Clips lädt.
 3. **Knochen-Check:** $\le 65$ Joints, saubere `mixamorig:*` Nomenklatur.
 
 ---
@@ -174,7 +174,7 @@ fbx2gltf -b -i src/apps/<app>/raw/mannequin/<char>/character_rigged.fbx -o publi
 
 1. **In-Place Mandat:**
    * Animationen müssen immer **In-Place** sein (`--animate-in-place` bei Tripo, Checkbox *„In Place“* bei Mixamo).
-   * *Grund:* Bewegung und Positionsfortschritt werden von Small World Behaviors (`StageMovementBehavior`, `FPSController`) gesteuert. Root-Motion im Clip führt zu Glitches.
+   * *Grund:* Bewegung und Positionsfortschritt werden von Small World Machine Behaviors (`StageMovementBehavior`, `FPSController`) gesteuert. Root-Motion im Clip führt zu Glitches.
 2. **Prop-Tragehaltung (Laterne, Fackel, Waffe):**
    * Verwende für Figuren mit Ausrüstung dedizierte Studio-Mocap-Clips mit fixiertem Tragearm (z. B. `idle_torch.glb`, `walk_torch.glb`, `ascending_stairs.glb`).
    * Generische AI-Walk-Zyklen schwingen oft wild mit den Armen, was zu taumelnden Props führt.
@@ -183,15 +183,15 @@ fbx2gltf -b -i src/apps/<app>/raw/mannequin/<char>/character_rigged.fbx -o publi
 
 ---
 
-## 🍳 Rezept 5: Small World Engine-Integration
+## 🍳 Rezept 5: Small World Machine-Integration
 
 ### 1. Skalierung & der Rig-Wrapper (Kritischer Bug-Schutz)
 > **🚨 GOLDENE REGEL:** Niemals `character.scale.set(1.8, 1.8, 1.8)` auf dem Objekt setzen, an dem ein `StageMovementBehavior` hängt! Das Behavior überschreibt `.scale` im Tick mit dem Zonen-Faktor (0.5–1.0).
 
 **Das korrekte Wrapper-Pattern:**
 ```typescript
-import { Object3D, StageMovementBehavior } from "small-world";
-import { GltfLoader } from "small-world/loaders/GltfLoader";
+import { Object3D, StageMovementBehavior } from "small-world-machine";
+import { GltfLoader } from "small-world-machine/loaders/GltfLoader";
 
 const gltfLoader = new GltfLoader({
   clampMetallic: 0.2,   // Drosselt überhöhte Tripo-PBR Metallic-Werte
@@ -215,7 +215,7 @@ scene.add(characterRig);
 ### 2. Shading & Graphic Noir Look
 Für 2.5D Comic/Noir Szenen ohne volles IBL-Environment:
 ```typescript
-import { BasicMaterial, Color, Object3D } from "small-world";
+import { BasicMaterial, Color, Object3D } from "small-world-machine";
 
 function applyGraphicNoirMaterial(obj: Object3D): void {
   if (obj.material) {
@@ -288,7 +288,7 @@ Um maximale Bildschärfe und Texturqualität bei Mixamo-gestützten Charakteren 
 
 ### 4. AnimationMixer & Cross-Fading
 ```typescript
-import { AnimationMixer, AnimationClip, AnimationAction } from "small-world";
+import { AnimationMixer, AnimationClip, AnimationAction } from "small-world-machine";
 
 const mixer = new AnimationMixer(character);
 

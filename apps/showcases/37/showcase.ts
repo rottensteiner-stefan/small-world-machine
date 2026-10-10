@@ -25,7 +25,7 @@ import {
   ToneMappingMode,
   Vector3D,
   VignetteElement,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 class Showcase37 extends AbstractShowcase {
   private _refCamPos = new Vector3D(0.65, 1.15, 2.45);

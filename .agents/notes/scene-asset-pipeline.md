@@ -40,7 +40,7 @@
 - Property-Assignment: Batch aus mehreren Settern ok; werfen erst beim aktiven Verarbeiten.
 - Commit: reine Zitate ohne Autor/Prefix, nie wiederverwenden (`git log` prüfen); CHANGELOG H3
   `"…" – Autor` + exakt 3 Kategorien; Versions-Sync via `node scripts/update-version.js`
-  (bumpt `package.json` + ENGINE_VERSION in `SmallWorld.ts`).
+  (bumpt `package.json` + ENGINE_VERSION in `SmallWorldMachine.ts`).
 - Pre-commit-Hook (husky) = typecheck + prebuild + prettier + eslint auf Staged-Dateien; unter
   Last kann er >120s brauchen — Commits mit großzügigem Bash-Timeout fahren, nicht abbrechen.
 - App-Logs: `apps/<app>/docs/log.md` append-only **unten** anhängen (deutsch);

@@ -16,11 +16,11 @@ import {
   StageMovementBehavior,
   StageZone,
   MathPool,
-} from "@small-world/engine";
-import { AbstractShowcase } from "@small-world/engine/core/index.js";
-import { attachDevTools } from "@small-world/tools";
-import { GltfLoader } from "@small-world/engine/loaders/GltfLoader.js";
-import { Bone } from "@small-world/engine/core/animation/index.js";
+} from "@small-world-machine/engine";
+import { AbstractShowcase } from "@small-world-machine/engine/core/index.js";
+import { attachDevTools } from "@small-world-machine/tools";
+import { GltfLoader } from "@small-world-machine/engine/loaders/GltfLoader.js";
+import { Bone } from "@small-world-machine/engine/core/animation/index.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
 import { BunkerKit } from "../../builder/BunkerKit.js";
 

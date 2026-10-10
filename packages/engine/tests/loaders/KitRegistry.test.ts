@@ -33,7 +33,7 @@ describe("KitRegistry", () => {
         meta: "metal_desk/meta.json",
       },
     ],
-    author: "Small World",
+    author: "Small World Machine",
     license: "CC0-1.0",
   };
 
@@ -61,7 +61,7 @@ describe("KitRegistry", () => {
         },
       },
     ],
-    author: "Small World",
+    author: "Small World Machine",
     license: "CC0-1.0",
   };
 
@@ -77,7 +77,7 @@ describe("KitRegistry", () => {
     textures: ["diffuse", "normal"],
     dimensions: { width: 1.2, height: 0.78, depth: 0.7 },
     recommendedScale: 0.75,
-    author: "Small World",
+    author: "Small World Machine",
     license: "CC0-1.0",
   };
 

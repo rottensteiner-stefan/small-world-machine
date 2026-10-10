@@ -1,6 +1,6 @@
 # Guides
 
-Practical, in-depth guides for each subsystem and tool of the Small World engine. For the design decisions behind them, see [Architecture Decision Records (ADRs)](/adr/); for vocabulary, see [`CONTEXT.md`](https://github.com/rottensteiner-stefan/small-world/blob/main/CONTEXT.md) in the repo root.
+Practical, in-depth guides for each subsystem and tool of the Small World Machine engine. For the design decisions behind them, see [Architecture Decision Records (ADRs)](/adr/); for vocabulary, see [`CONTEXT.md`](https://github.com/rottensteiner-stefan/small-world-machine/blob/main/CONTEXT.md) in the repo root.
 
 ## Getting Started
 

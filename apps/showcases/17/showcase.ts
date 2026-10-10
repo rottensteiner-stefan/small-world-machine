@@ -9,7 +9,7 @@ import {
   StandardMaterial,
   ThreadPool,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 class Showcase17 extends AbstractShowcase {
   private _cubes: Object3D[] = [];

@@ -16,7 +16,7 @@ export interface GroomingRatOptions {
 }
 
 /**
- * Reusable articulated 3D Grooming Rat for Small World.
+ * Reusable articulated 3D Grooming Rat for Small World Machine.
  * Features realistic posture, shiny ruby eyes, pink snout/ears/paws,
  * and an integrated RatGroomingBehavior that drives a 3-phase grooming
  * state machine (face scrubbing, alert sniffing, ear cleaning).

@@ -6,7 +6,7 @@ import {
   Texture,
   CullMode,
   KitRegistry,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import type { CameraFrame, InspectedAssetInfo } from "../types.js";
 
 export interface DecalViewResult {

@@ -4,7 +4,7 @@ import { ShaderPropertyType } from "../../../enums/index.js";
 
 /**
  * Importer for Compute.toys (WGSL).
- * Compute.toys uses WebGPU compute shaders. Since SmallWorld's CustomShaderMaterial
+ * Compute.toys uses WebGPU compute shaders. Since SmallWorldMachine's CustomShaderMaterial
  * operates in the fragment pipeline, this importer uses heuristics to translate
  * `textureStore(screen, ...)` into fragment outputs, and provides the `custom` uniform struct.
  */
@@ -73,7 +73,7 @@ fn fs(in: Out) -> @location(0) vec4f {
     // We map the billboard's UVs to this resolution to keep it local to the geometry
     let clampedUV = clamp(in.uv, vec2f(0.0), vec2f(1.0));
     let id_x = u32(clampedUV.x * custom.resolution.x);
-    let id_y = u32(clampedUV.y * custom.resolution.y); // UV.y is 0 at bottom, 1 at top in Small World Plane
+    let id_y = u32(clampedUV.y * custom.resolution.y); // UV.y is 0 at bottom, 1 at top in Small World Machine Plane
     let id = vec3<u32>(id_x, id_y, 0u);
     return compute_toys_main(id);
 }

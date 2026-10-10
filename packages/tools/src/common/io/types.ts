@@ -1,5 +1,5 @@
 /**
- * Unified I/O contracts for Small World tools.
+ * Unified I/O contracts for Small World Machine tools.
  * Symmetrical AssetSource (input) and AssetSink (output) abstractions.
  */
 

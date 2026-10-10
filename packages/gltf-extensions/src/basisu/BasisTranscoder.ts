@@ -1,4 +1,4 @@
-import { Texture } from "@small-world/engine";
+import { Texture } from "@small-world-machine/engine";
 import { BasisWasmTranscoder } from "./BasisWasmTranscoder.js";
 import { BasisDecodeResult, BasisTranscoderFormat, BasisTranscoderFormatId } from "./basisTypes.js";
 import {
@@ -66,7 +66,7 @@ export class BasisTranscoder {
   }
 
   /**
-   * Transcodes a Basis Universal or KTX2 buffer into a Small World Texture.
+   * Transcodes a Basis Universal or KTX2 buffer into a Small World Machine Texture.
    */
   public static async transcode(
     buffer: ArrayBuffer,

@@ -5,7 +5,7 @@ import {
   Keys,
   Object3D,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 /**
  * Controller to move a physics-based marble using WASD.

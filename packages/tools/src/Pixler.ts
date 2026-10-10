@@ -4,7 +4,7 @@ import {
   ToolEvents,
   EventDispatcherImpl,
   isEditingTextInput,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import {
   bresenhamLine,
   floodFill,

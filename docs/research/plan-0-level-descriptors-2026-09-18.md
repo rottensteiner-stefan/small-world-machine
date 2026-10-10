@@ -42,10 +42,10 @@ Im Architektur-Sparring wurden drei fundamentale Einsprüche und Leitprinzipien 
 
 ---
 
-## 3. Architektur-Grundgesetze für Small World
+## 3. Architektur-Grundgesetze für Small World Machine
 
 1. **Instanzbasierte `KitRegistry` (Kein Singleton):**
-   - Gemäß Kern-Architekturregel von Small World gibt es keine globalen Singletons.
+   - Gemäß Kern-Architekturregel von Small World Machine gibt es keine globalen Singletons.
    - `KitRegistry` wird via Constructor Injection oder Scene-Context bereitgestellt.
 2. **Standardisierte Schemas & Validierung:**
    - Jedes Level-Config folgt einem formalen JSON-Schema (`public/schemas/level.schema.json`).
@@ -89,7 +89,7 @@ flowchart TD
 
 ### Detaillierte Arbeitspakete für Phase 1 (Aktueller Fokus)
 
-#### Schritt 1.1: `KitRegistry` im `@small-world/engine`
+#### Schritt 1.1: `KitRegistry` im `@small-world-machine/engine`
 - **Pfad:** `packages/engine/src/loaders/kit/KitRegistry.ts`
 - **Verantwortlichkeit:**
   - Auflösen von Kit-IDs (`<kit>/<prop>`) zu `model.glb` und `meta.json`.
@@ -153,7 +153,7 @@ flowchart LR
 - **Matsch-Geometrie:** Wird ein ganzer Raum mit allen Wänden, Möbeln und Böden in ein 3D-Netzwerk (z. B. Tripo3D) geworfen, entsteht eine einzige zusammenhängende, geschmolzene "Gummizelle". Tische verschmelzen mit dem Boden, Stühle mit den Wänden.
 - **Eingebranntes Licht:** Schatten und Lichtreflexionen der Konzeptgrafik werden fest in die Textur gebacken. Ein dynamisches Bewegen von Lichtquellen (z. B. Novotnys Laterne oder flackernde Deckenlampen) ist unmöglich.
 - **Fehlende Interaktivität:** Man kann keine Schublade öffnen, kein Lüftungsgitter abschrauben und keine Kollisionsboxen für einzelne Objekte definieren.
-- **Die Small-World-Doktrin:** 
+- **Die Small-World-Machine-Doktrin:** 
   $$\text{2D-Raum} \implies \text{Modularer Raum-Shell (PBR-Kacheln)} + \text{Isolierte Requisiten (Tripo3D)} + \text{In-Engine-Assemblierung}.$$
 
 ---
@@ -169,9 +169,9 @@ flowchart LR
 
 ---
 
-### Frage 3: Sind Decals in Small World nur flache „Aufkleber“ oder haben sie echte Materialeigenschaften?
+### Frage 3: Sind Decals in Small World Machine nur flache „Aufkleber“ oder haben sie echte Materialeigenschaften?
 **Antwort & Begründung:**
-- Decals in Small World sind **keine** unbeleuchteten, flachen 2D-Sticker.
+- Decals in Small World Machine sind **keine** unbeleuchteten, flachen 2D-Sticker.
 - Sie werden als vollwertige `StandardMaterial`-Instanzen auf Polygon-Trägern gerendert und besitzen:
   - **Diffuse Map:** Albedo-Farbkanal mit Alphatransparenz für nahtlose Kanten.
   - **Normal Map:** Echte Oberflächennormalen für Risse, abgeplatzten Putz, Nieten und Kantenabplatzungen (wirft bei flachem Lichteinfall plastische Schatten).

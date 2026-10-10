@@ -1,6 +1,6 @@
 # Engine-Recherche & Technische Untersuchungen
 
-Tiefgehende technische Untersuchungen, Rendering-Studien, architektonische Nachbetrachtungen und Technologie-Benchmarks, die im Laufe der Entwicklung der Small World Engine entstanden sind.
+Tiefgehende technische Untersuchungen, Rendering-Studien, architektonische Nachbetrachtungen und Technologie-Benchmarks, die im Laufe der Entwicklung der Small World Machine entstanden sind.
 
 ## Recherche-Papiere & Studien
 

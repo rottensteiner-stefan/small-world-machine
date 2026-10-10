@@ -12,7 +12,7 @@ import {
   PhongMaterial,
   SkyboxMaterial,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 /**
  * Showcase 7: Skybox & FPS Controls.

@@ -1,11 +1,11 @@
-# VFX Extras (`@small-world/vfx-extras`)
+# VFX Extras (`@small-world-machine/vfx-extras`)
 
-Das Paket `@small-world/vfx-extras` bietet eine hochperformante, speicherallocationsfreie Partikel- und Kraftfeld-Pipeline für Small World. Es ermöglicht komplexe astrophysikalische Phänomene, Magieeffekte, Feuer, Rauch und dichte Partikelschwärme mit tausenden Instanzen bei 60 FPS in einem einzigen GPU Draw Call.
+Das Paket `@small-world-machine/vfx-extras` bietet eine hochperformante, speicherallocationsfreie Partikel- und Kraftfeld-Pipeline für Small World Machine. Es ermöglicht komplexe astrophysikalische Phänomene, Magieeffekte, Feuer, Rauch und dichte Partikelschwärme mit tausenden Instanzen bei 60 FPS in einem einzigen GPU Draw Call.
 
 ## Installation & Import
 
 ```bash
-npm install @small-world/vfx-extras
+npm install @small-world-machine/vfx-extras
 ```
 
 ```typescript
@@ -20,7 +20,7 @@ import {
   ColorOverLifeAffector,
   SizeOverLifeAffector,
   BouncePlaneAffector,
-} from "@small-world/vfx-extras";
+} from "@small-world-machine/vfx-extras";
 ```
 
 ---
@@ -47,7 +47,7 @@ Schlägt die Brücke zwischen dem CPU-Partikelsystem und der GPU-Instanzierung (
 * **Instanz-Kollaps:** Tote oder unsichtbare Partikel ($\alpha \approx 0$) werden auf eine Matrix-Skalierung von $0$ gesetzt und belasten die GPU nicht.
 
 ```typescript
-import { Sphere, StandardMaterial } from "@small-world/engine";
+import { Sphere, StandardMaterial } from "@small-world-machine/engine";
 
 const renderer = new ParticleMeshRenderer({
   system,

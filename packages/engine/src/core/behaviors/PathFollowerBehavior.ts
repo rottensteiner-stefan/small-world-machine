@@ -72,7 +72,7 @@ export class PathFollowerBehavior extends Behavior {
       const dy = this._scratchTangent.y;
       const dz = this._scratchTangent.z;
 
-      // Small World Engine uses Right-Handed coordinates with -Z forward.
+      // Small World Machine uses Right-Handed coordinates with -Z forward.
       const yaw = Math.atan2(dx, -dz);
       const pitch = Math.atan2(-dy, Math.sqrt(dx * dx + dz * dz));
 

@@ -1,4 +1,4 @@
-import { Behavior, BoundingBox, BoundingSphere, Object3D } from "@small-world/engine";
+import { Behavior, BoundingBox, BoundingSphere, Object3D } from "@small-world-machine/engine";
 
 const HOME_STIFFNESS = 3.0; // 1/s^2, soft spring back to the pool column
 const HOME_DAMPING = 1.6; // 1/s, calms horizontal drift

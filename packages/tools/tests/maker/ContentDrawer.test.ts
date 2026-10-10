@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Object3D, Vector3D } from "@small-world/engine";
+import { Object3D, Vector3D } from "@small-world-machine/engine";
 import { ContentDrawer, ContentDrawerCallbacks } from "../../src/maker/ContentDrawer.js";
 
 describe("ContentDrawer (Unreal Content Browser in Maker)", () => {
@@ -119,7 +119,7 @@ describe("ContentDrawer (Unreal Content Browser in Maker)", () => {
     dropEvent.clientY = 100;
     dropEvent.dataTransfer = {
       getData: (type: string): string =>
-        type === "application/x-smallworld-asset" ? dragData : "",
+        type === "application/x-smallworldmachine-asset" ? dragData : "",
     };
 
     canvas.dispatchEvent(dropEvent);
@@ -155,7 +155,7 @@ describe("ContentDrawer (Unreal Content Browser in Maker)", () => {
     dropEvent.clientY = 50;
     dropEvent.dataTransfer = {
       getData: (type: string): string =>
-        type === "application/x-smallworld-asset" ? JSON.stringify(mockTexAsset) : "",
+        type === "application/x-smallworldmachine-asset" ? JSON.stringify(mockTexAsset) : "",
     };
 
     canvas.dispatchEvent(dropEvent);

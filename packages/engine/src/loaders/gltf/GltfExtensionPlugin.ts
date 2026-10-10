@@ -90,7 +90,7 @@ export interface GltfExtensionPlugin {
   ): Promise<GeometryDataInterface | null | undefined> | GeometryDataInterface | null | undefined;
 
   /**
-   * Optional hook to resolve a texture definition into a Small World `Texture` (e.g. `KHR_texture_basisu`).
+   * Optional hook to resolve a texture definition into a Small World Machine `Texture` (e.g. `KHR_texture_basisu`).
    * Return resolved `Texture` or `undefined` / `null` to defer to standard texture resolution.
    */
   resolveTexture?(

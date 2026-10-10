@@ -1,17 +1,17 @@
-# @small-world/gltf-extensions
+# @small-world-machine/gltf-extensions
 
-> Official community & advanced data-level glTF extensions for the **Small World 3D Engine**. Also serves as the **canonical reference implementation & tutorial** for third-party developers extending glTF loading and serialization in Small World.
+> Official community & advanced data-level glTF extensions for the **Small World Machine 3D Engine**. Also serves as the **canonical reference implementation & tutorial** for third-party developers extending glTF loading and serialization in Small World Machine.
 
 ---
 
 ## 📦 Overview
 
-Small World features a decoupled, modular **glTF Extension Plugin Architecture** ([ADR 0017](https://github.com/rottensteiner-stefan/small-world/blob/main/docs/adr/0017-gltf-extension-plugin-registry.md)). This package provides plugins for industry-standard compression and transcode formats:
+Small World Machine features a decoupled, modular **glTF Extension Plugin Architecture** ([ADR 0017](https://github.com/rottensteiner-stefan/small-world-machine/blob/main/docs/adr/0017-gltf-extension-plugin-registry.md)). This package provides plugins for industry-standard compression and transcode formats:
 
 1. **`KHR_draco_mesh_compression`**: Google Draco 3D geometry decompression.
 2. **`KHR_texture_basisu`**: Basis Universal & KTX2 supercompressed textures.
 
-By isolating heavy WebAssembly decoders from the core engine (`@small-world/engine`), the engine maintains its ultra-lightweight, zero-dependency philosophy while allowing projects to opt into heavy compression pipelines on demand.
+By isolating heavy WebAssembly decoders from the core engine (`@small-world-machine/engine`), the engine maintains its ultra-lightweight, zero-dependency philosophy while allowing projects to opt into heavy compression pipelines on demand.
 
 ---
 
@@ -22,8 +22,8 @@ By isolating heavy WebAssembly decoders from the core engine (`@small-world/engi
 Import the side-effect register module at your application entry point:
 
 ```typescript
-import "@small-world/gltf-extensions/register";
-import { GltfLoader } from "@small-world/engine";
+import "@small-world-machine/gltf-extensions/register";
+import { GltfLoader } from "@small-world-machine/engine";
 
 // GltfLoader now automatically decodes Draco meshes and Basis textures!
 const loader = new GltfLoader();
@@ -35,9 +35,9 @@ const scene = await loader.load("assets/models/compressed-model.glb");
 If you only need a specific extension or want full control over registration order:
 
 ```typescript
-import { registerGltfExtension, GltfLoader } from "@small-world/engine";
-import { khrDracoMeshCompression, DracoDecoder } from "@small-world/gltf-extensions/draco";
-import { khrTextureBasisu, BasisTranscoder } from "@small-world/gltf-extensions/basisu";
+import { registerGltfExtension, GltfLoader } from "@small-world-machine/engine";
+import { khrDracoMeshCompression, DracoDecoder } from "@small-world-machine/gltf-extensions/draco";
+import { khrTextureBasisu, BasisTranscoder } from "@small-world-machine/gltf-extensions/basisu";
 
 // Optional: configure WebAssembly worker paths
 DracoDecoder.setConfig({ decoderPath: "/draco/" });
@@ -52,7 +52,7 @@ registerGltfExtension(khrTextureBasisu);
 
 ## 🛠️ Developer Guide: Writing Your Own glTF Extension
 
-Small World's [`GltfExtensionPlugin`](https://github.com/rottensteiner-stefan/small-world/blob/main/packages/engine/src/loaders/gltf/GltfExtensionPlugin.ts) interface lets you intercept reading and writing at every stage of the pipeline without modifying engine internals.
+Small World Machine's [`GltfExtensionPlugin`](https://github.com/rottensteiner-stefan/small-world-machine/blob/main/packages/engine/src/loaders/gltf/GltfExtensionPlugin.ts) interface lets you intercept reading and writing at every stage of the pipeline without modifying engine internals.
 
 ### The `GltfExtensionPlugin` Interface
 
@@ -69,7 +69,7 @@ import {
   GeometryDataInterface,
   Texture,
   AssetManager,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 export interface GltfExtensionPlugin {
   /** The unique glTF extension identifier, e.g. "MY_vendor_extension" */
@@ -115,7 +115,7 @@ export interface GltfExtensionPlugin {
 To attach spatial audio sources directly in glTF scenes:
 
 ```typescript
-import { GltfExtensionPlugin, Object3D, registerGltfExtension } from "@small-world/engine";
+import { GltfExtensionPlugin, Object3D, registerGltfExtension } from "@small-world-machine/engine";
 
 export const khrAudioEmitter: GltfExtensionPlugin = {
   name: "KHR_audio_emitter",
@@ -155,7 +155,7 @@ registerGltfExtension(khrAudioEmitter);
 To decompress custom binary payloads during mesh parsing:
 
 ```typescript
-import { GltfExtensionPlugin, ModelGeometry, registerGltfExtension } from "@small-world/engine";
+import { GltfExtensionPlugin, ModelGeometry, registerGltfExtension } from "@small-world-machine/engine";
 
 export const extMeshoptCompression: GltfExtensionPlugin = {
   name: "EXT_meshopt_compression",
@@ -187,7 +187,7 @@ Use Vitest with `GltfLoader` to verify end-to-end decoding:
 
 ```typescript
 import { describe, it, expect } from "vitest";
-import { GltfLoader, registerGltfExtension } from "@small-world/engine";
+import { GltfLoader, registerGltfExtension } from "@small-world-machine/engine";
 import { myCustomExtension } from "./MyCustomExtension.js";
 
 describe("MyCustomExtension", () => {
@@ -205,4 +205,4 @@ describe("MyCustomExtension", () => {
 
 ## 📄 License
 
-MIT © Stefan Rottensteiner // Small World Engine
+MIT © Stefan Rottensteiner // Small World Machine

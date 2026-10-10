@@ -1,12 +1,12 @@
 {
-  "name": "@small-world/showcases",
+  "name": "@small-world-machine/showcases",
   "private": true,
   "version": "0.78.00",
   "type": "module",
   "dependencies": {
-    "@small-world/engine": "*",
-    "@small-world/geometry-extras": "*",
-    "@small-world/liquid-extras": "*",
-    "@small-world/tools": "*"
+    "@small-world-machine/engine": "*",
+    "@small-world-machine/geometry-extras": "*",
+    "@small-world-machine/liquid-extras": "*",
+    "@small-world-machine/tools": "*"
   }
 }

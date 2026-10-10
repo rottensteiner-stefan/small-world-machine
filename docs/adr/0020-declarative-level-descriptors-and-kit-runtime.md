@@ -28,7 +28,7 @@ Wir führen eine zweistufige, deklarative Level-Pipeline im Engine-Kern ein:
 ```
 
 ### 1. Instanzbasierte `KitRegistry` (Kein globaler Singleton)
-- Entsprechend der Kern-Architekturregel von Small World gibt es keine globalen Singletons.
+- Entsprechend der Kern-Architekturregel von Small World Machine gibt es keine globalen Singletons.
 - `KitRegistry` wird via Constructor Injection oder Scene Context instanziiert (`new KitRegistry({ basePath, assetManager, gltfLoader })`).
 - `loadProp("bunker/kerosene_lantern")` lädt asynchron das glTF-Modell, liest `meta.json`, wendet `recommendedScale` an und instanziiert automatisch `PointLight`- oder `SpotLight`-Instanzen an definierten `sockets[]`.
 

@@ -23,7 +23,7 @@ Wir haben verglichen, wie branchenführende 3D-Engines Kern- vs. optionale/Ökos
 
 ## Entscheidung
 
-Wir **lösen `src/extensions/` vollständig auf** und etablieren ein striktes 4-Stufen-Domänen-Schichtungsmodell für Small World:
+Wir **lösen `src/extensions/` vollständig auf** und etablieren ein striktes 4-Stufen-Domänen-Schichtungsmodell für Small World Machine:
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
@@ -48,7 +48,7 @@ Wir **lösen `src/extensions/` vollständig auf** und etablieren ein striktes 4-
 | `src/extensions/billboard/BillboardInstancer.ts` | `src/core/objects/BillboardInstancer.ts` (oder `src/core/entities/`) | Kern-Szenengraph-Primitiv, das `InstancedMesh` für kamerazugewandte Quads direkt umhüllt. |
 | `src/extensions/imposter/ImposterBaker.ts` | `src/renderers/imposter/ImposterBaker.ts` | Spezialisiertes Renderer-Werkzeug / LOD-Generierungsmechanismus. |
 | `src/extensions/weather/WeatherEmitter.ts` | `src/environment/weather/WeatherEmitter.ts` | Atmosphärisches Umgebungssystem (Regen, Schnee, Umgebungspartikel). |
-| `src/extensions/creatures/RatGroomingBehavior.ts` | `src/behaviors/creatures/RatGroomingBehavior.ts` | Standard-Small-World-`Behavior`, an Entitäten für Umgebungsleben angehängt. |
+| `src/extensions/creatures/RatGroomingBehavior.ts` | `src/behaviors/creatures/RatGroomingBehavior.ts` | Standard-Small-World-Machine-`Behavior`, an Entitäten für Umgebungsleben angehängt. |
 | `src/extensions/creatures/GroomingRat.ts` | `src/behaviors/creatures/GroomingRat.ts` (oder Beispiel-Kreatur-Entität) | Entitäts-Komposition, die ein Mesh mit seinem Pflege-Behavior bündelt. |
 | `src/extensions/grid-builder/GridLevelBuilder.ts` | `src/tools/procgen/GridLevelBuilder.ts` | High-Level-Level-Builder / Kartengenerierungs-Werkzeug für rasterbasierte Szenen. |
 
@@ -77,4 +77,4 @@ Tests) aktualisiert, volle Testsuite (744 Tests) grün.
 - **Architektonische Skalierbarkeit:** Künftige Ergänzungen (z. B. Boids, Bewuchssysteme, Terrain-Generatoren) haben ein klares, vordefiniertes architektonisches Zuhause.
 - **Migrationskosten:** Erfordert die Aktualisierung von Importen über bestehende Showcases (`showcase 32`, `showcase 34`), Tests (`tests/extensions/`) und Werkzeuge (`MakerApp`, `AsciiMapLegend`) hinweg.
 
-**Update (2026-09-12):** Diese ADR beschreibt die Domänen-Schichtung *innerhalb* eines einzigen Pakets. Seit der npm-Workspaces-Restrukturierung (`packages/engine` + `apps/*`) gilt dieses Tier-Modell konkret für `packages/engine/src/`; die drei Apps (`and-now`, `yad`, `light-cycle-arena`) sind jetzt Unterordner des gemeinsamen Workspace-Package `@small-world/sample-apps` unter `apps/sample-apps/`, das die Engine nur noch über den Package-Namen `@small-world/engine` importiert, nie mehr über relative Pfade. Die Namensraum-Regeln oben (Export-Oberfläche, keine Auffangordner) gelten unverändert für `packages/engine`.
+**Update (2026-09-12):** Diese ADR beschreibt die Domänen-Schichtung *innerhalb* eines einzigen Pakets. Seit der npm-Workspaces-Restrukturierung (`packages/engine` + `apps/*`) gilt dieses Tier-Modell konkret für `packages/engine/src/`; die drei Apps (`and-now`, `yad`, `light-cycle-arena`) sind jetzt Unterordner des gemeinsamen Workspace-Package `@small-world-machine/sample-apps` unter `apps/sample-apps/`, das die Engine nur noch über den Package-Namen `@small-world-machine/engine` importiert, nie mehr über relative Pfade. Die Namensraum-Regeln oben (Export-Oberfläche, keine Auffangordner) gelten unverändert für `packages/engine`.

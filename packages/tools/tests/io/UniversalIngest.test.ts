@@ -136,21 +136,21 @@ describe("Universal Ingestion Engine", () => {
     const router = new UniversalIngestRouter();
 
     it("routes raw JSON string to kind json", async () => {
-      const jsonStr = JSON.stringify({ author: "SmallWorld", entities: [1, 2, 3] });
+      const jsonStr = JSON.stringify({ author: "SmallWorldMachine", entities: [1, 2, 3] });
       const res = await router.routeText(jsonStr, "test_config");
       expect(res.kind).toBe("json");
       if (res.kind === "json") {
-        expect((res.data as { author: string }).author).toBe("SmallWorld");
+        expect((res.data as { author: string }).author).toBe("SmallWorldMachine");
         expect(res.name).toBe("test_config.json");
       }
     });
 
     it("routes raw plain text to kind text", async () => {
-      const text = "Hello Small World 3D!";
+      const text = "Hello Small World Machine 3D!";
       const res = await router.routeText(text, "greeting");
       expect(res.kind).toBe("text");
       if (res.kind === "text") {
-        expect(res.text).toBe("Hello Small World 3D!");
+        expect(res.text).toBe("Hello Small World Machine 3D!");
       }
     });
 

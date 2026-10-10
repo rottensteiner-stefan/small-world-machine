@@ -1,4 +1,4 @@
-import { ForgeTool, ForgeToolOptions } from "@small-world/engine";
+import { ForgeTool, ForgeToolOptions } from "@small-world-machine/engine";
 import { UniversalIngestDropzone } from "./common/io/ui/UniversalIngestDropzone.js";
 import type { IngestResult } from "./common/io/UniversalIngestTypes.js";
 
@@ -118,6 +118,9 @@ export class MapGenerator extends ForgeTool {
         background: repeating-conic-gradient(rgba(30, 41, 59, 0.5) 0% 25%, rgba(15, 23, 42, 0.5) 0% 50%) 50% / 20px 20px;
       }
       .mapgen-canvas {
+        /* shared.css sizes every canvas to 100vw x 100vh; the grid's own size must win here. */
+        width: auto;
+        height: auto;
         box-shadow: var(--swf-shadow);
         cursor: crosshair;
         background: #1a1a1a;
@@ -303,11 +306,25 @@ export class MapGenerator extends ForgeTool {
       }
     });
 
-    this._container.querySelector("#mapgen-btn-clear")?.addEventListener("click", () => {
-      if (confirm("Are you sure?")) {
-        this._initGrid();
-        this._render();
+    // Clearing needs a second click within a few seconds instead of a blocking confirm() dialog
+    // (which would also freeze the scene underneath a Forge window).
+    const clearBtn = this._container.querySelector<HTMLButtonElement>("#mapgen-btn-clear");
+    let disarm: ReturnType<typeof setTimeout> | undefined;
+    clearBtn?.addEventListener("click", () => {
+      if (undefined === disarm) {
+        const label = clearBtn.textContent;
+        clearBtn.textContent = "Wirklich löschen? (nochmal klicken)";
+        disarm = setTimeout(() => {
+          clearBtn.textContent = label;
+          disarm = undefined;
+        }, 3000);
+        return;
       }
+      clearTimeout(disarm);
+      disarm = undefined;
+      clearBtn.textContent = "Clear Map";
+      this._initGrid();
+      this._render();
     });
 
     this._container.querySelector("#mapgen-btn-resize")?.addEventListener("click", () => {

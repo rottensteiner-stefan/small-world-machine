@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { GltfLoader, registerGltfExtension } from "@small-world/engine";
+import { GltfLoader, registerGltfExtension } from "@small-world-machine/engine";
 import { khrDracoMeshCompression } from "../src/draco/KhrDracoMeshCompression.js";
 import { DracoDecoder } from "../src/draco/DracoDecoder.js";
 

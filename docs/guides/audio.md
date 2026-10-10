@@ -1,13 +1,13 @@
 # Audio
 
-The Small World Engine ships a lightweight `AudioSystem` that wraps the Web Audio API: sample loading and playback (global or 3D-spatial), a small mixer (master/SFX/music buses plus a send-effect reverb), camera-synced listener positioning, and a set of procedurally synthesized sound effects that need no audio assets at all.
+The Small World Machine ships a lightweight `AudioSystem` that wraps the Web Audio API: sample loading and playback (global or 3D-spatial), a small mixer (master/SFX/music buses plus a send-effect reverb), camera-synced listener positioning, and a set of procedurally synthesized sound effects that need no audio assets at all.
 
 ## Accessing the Audio System
 
-Like the render and physics systems, `AudioSystem` is instance-bound - every `SmallWorld` application gets its own via `this.audio`, so multiple engine instances on one page (editors, minimaps, split-screen) never share audio state.
+Like the render and physics systems, `AudioSystem` is instance-bound - every `SmallWorldMachine` application gets its own via `this.audio`, so multiple engine instances on one page (editors, minimaps, split-screen) never share audio state.
 
 ```typescript
-// Inside a SmallWorld subclass
+// Inside a SmallWorldMachine subclass
 protected override async setupScene(): Promise<void> {
   await this.audio.load("./assets/explosion.wav", "explosion");
 }

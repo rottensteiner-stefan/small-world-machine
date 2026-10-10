@@ -1,4 +1,4 @@
-import { Texture } from "@small-world/engine";
+import { Texture } from "@small-world-machine/engine";
 import { GROUT_THICKNESS_PX } from "./PoolLayout.js";
 
 /** Random source for procedural textures; golden mode injects a seeded one so tiles reproduce. */

@@ -24,7 +24,7 @@ export interface BasisWasmConfig {
  * re-implementing it.
  */
 export class BasisWasmTranscoder {
-  // Cached per binary reference, not globally: several SmallWorld sessions on one page may each
+  // Cached per binary reference, not globally: several SmallWorldMachine sessions on one page may each
   // configure their own `wasmBinary`, and a single shared static slot would let one session's
   // `getModule()` call invalidate/replace the module another session is still using (the old
   // `_modulePromise`/`_wasmBinary` pair had exactly this cross-instance clobbering). The default

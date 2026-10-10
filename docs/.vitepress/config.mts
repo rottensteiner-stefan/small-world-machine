@@ -1,8 +1,8 @@
 import { defineConfig } from "vitepress";
 
 export default defineConfig({
-  base: "/small-world/",
-  title: "Small World Engine",
+  base: "/small-world-machine/",
+  title: "Small World Machine",
   description:
     "Eine leichtgewichtige, hochperformante, modulare 3D-Game-Engine für das Web, gebaut mit TypeScript.",
   themeConfig: {
@@ -33,10 +33,10 @@ export default defineConfig({
           text: "Erweiterungen & Ökosystem",
           items: [
             { text: "Ökosystem-Überblick", link: "/extensions/" },
-            { text: "VFX Extras (@small-world/vfx-extras)", link: "/extensions/vfx-extras" },
-            { text: "Geometrie Extras (@small-world/geometry-extras)", link: "/extensions/geometry-extras" },
-            { text: "Physik Extras (@small-world/physics-extras)", link: "/extensions/physics-extras" },
-            { text: "glTF Erweiterungen (@small-world/gltf-extensions)", link: "/extensions/gltf-extensions" },
+            { text: "VFX Extras (@small-world-machine/vfx-extras)", link: "/extensions/vfx-extras" },
+            { text: "Geometrie Extras (@small-world-machine/geometry-extras)", link: "/extensions/geometry-extras" },
+            { text: "Physik Extras (@small-world-machine/physics-extras)", link: "/extensions/physics-extras" },
+            { text: "glTF Erweiterungen (@small-world-machine/gltf-extensions)", link: "/extensions/gltf-extensions" },
           ],
         },
       ],
@@ -127,7 +127,7 @@ export default defineConfig({
         },
       ],
     },
-    socialLinks: [{ icon: "github", link: "https://github.com/rottensteiner-stefan/small-world" }],
+    socialLinks: [{ icon: "github", link: "https://github.com/rottensteiner-stefan/small-world-machine" }],
     footer: {
       message: "Veröffentlicht unter der MIT-Lizenz.",
       copyright: "Copyright © 2026 Stefan Rottensteiner",

@@ -14,7 +14,7 @@ import {
   ProjectionType,
   Sphere,
   WireframeMaterial,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 /**
  * Showcase 11: Orientation

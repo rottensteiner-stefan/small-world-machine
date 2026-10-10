@@ -7,7 +7,7 @@ import {
   StandardMaterial,
   TrailRendererBehavior,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 // Static round-robin counter to ensure all 4 corners spawn drones equally
 let cornerSpawnIndex = 0;

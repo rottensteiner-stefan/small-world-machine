@@ -1,6 +1,6 @@
 # Umsetzungsphase (Modus `plan`) — Verifikations-Disziplin
 
-Ausgelagert aus `SKILL.md` Abschnitt 9. Gilt nur im Modus `plan` nach `consensus.reached: true`. Beispiele (Shader, WebGPU) stammen aus Small World; die Regeln sind generisch. Querverweise („Abschnitt N“) beziehen sich auf `SKILL.md`; die Nummerierung 9.x bleibt zur Rückwärtskompatibilität erhalten.
+Ausgelagert aus `SKILL.md` Abschnitt 9. Gilt nur im Modus `plan` nach `consensus.reached: true`. Beispiele (Shader, WebGPU) stammen aus Small World Machine; die Regeln sind generisch. Querverweise („Abschnitt N“) beziehen sich auf `SKILL.md`; die Nummerierung 9.x bleibt zur Rückwärtskompatibilität erhalten.
 
 ## 9. Verifikations-Disziplin (Konsens über den Plan ≠ funktionierende Umsetzung)
 

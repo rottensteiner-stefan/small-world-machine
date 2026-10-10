@@ -1,6 +1,6 @@
 # Commercial Indie Game Roadmap & Publisher Strategy
 
-> **Small World Engine Guide:** From atmospheric prototype to commercial release on Steam, PlayStation & Xbox — specifically designed for solo developers and small indie teams.
+> **Small World Machine Guide:** From atmospheric prototype to commercial release on Steam, PlayStation & Xbox — specifically designed for solo developers and small indie teams.
 
 ---
 
@@ -41,10 +41,10 @@ For a solo developer with a day job, choosing the playtime is the most important
 
 ## 2. The technical path: from TypeScript/WebGPU to Steam & consoles
 
-Small World is built in **TypeScript** for **WebGPU / WebGL 2**. How does this code get onto Steam and consoles as a native `.exe`?
+Small World Machine is built in **TypeScript** for **WebGPU / WebGL 2**. How does this code get onto Steam and consoles as a native `.exe`?
 
 ```
-                              [ Small World Game Code ]
+                              [ Small World Machine Game Code ]
                                (TypeScript / WebGPU / PBR)
                                          │
                  ┌───────────────────────┴───────────────────────┐
@@ -181,4 +181,4 @@ Platform holders (Sony TRC, Microsoft XRR, Nintendo Lotcheck) demand strict beha
 
 ---
 
-*This document is part of the Small World Developer Guides (`docs/guides/commercial-indie-roadmap.md`).*
+*This document is part of the Small World Machine Developer Guides (`docs/guides/commercial-indie-roadmap.md`).*

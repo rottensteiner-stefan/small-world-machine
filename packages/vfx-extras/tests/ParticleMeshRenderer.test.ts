@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ParticleSystem } from "../src/ParticleSystem.js";
 import { ParticleMeshRenderer } from "../src/ParticleMeshRenderer.js";
-import { Sphere, BasicMaterial, Vector3D } from "@small-world/engine";
+import { Sphere, BasicMaterial, Vector3D } from "@small-world-machine/engine";
 
 describe("ParticleMeshRenderer", () => {
   it("synchronizes particle transforms and colors into InstancedMesh buffers", () => {

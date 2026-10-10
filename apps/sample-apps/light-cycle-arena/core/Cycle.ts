@@ -1,9 +1,9 @@
-import { Object3D, Scene, InstancedMesh } from "@small-world/engine/core/index.js";
-import { StandardMaterial } from "@small-world/engine/core/materials/index.js";
-import { Color } from "@small-world/engine/core/colors/index.js";
-import { GridMovementBehavior } from "@small-world/engine/core/behaviors/index.js";
-import { Cube } from "@small-world/engine/geometry/index.js";
-import { Vector3D, Matrix4 } from "@small-world/engine/math/index.js";
+import { Object3D, Scene, InstancedMesh } from "@small-world-machine/engine/core/index.js";
+import { StandardMaterial } from "@small-world-machine/engine/core/materials/index.js";
+import { Color } from "@small-world-machine/engine/core/colors/index.js";
+import { GridMovementBehavior } from "@small-world-machine/engine/core/behaviors/index.js";
+import { Cube } from "@small-world-machine/engine/geometry/index.js";
+import { Vector3D, Matrix4 } from "@small-world-machine/engine/math/index.js";
 
 export interface CycleOptions {
   scene: Scene;

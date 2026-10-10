@@ -1,20 +1,20 @@
 # Getting Started
 
-Small World is a lightweight, high-performance, modular 3D game engine for the web, built with TypeScript.
+Small World Machine is a lightweight, high-performance, modular 3D game engine for the web, built with TypeScript.
 
 ## Installation
 
-The engine is not yet published to the npm registry. Clone the repository and install dependencies locally, then import the engine package (`@small-world/engine`) from within the workspace:
+The engine is not yet published to the npm registry. Clone the repository and install dependencies locally, then import the engine package (`@small-world-machine/engine`) from within the workspace:
 
 ```bash
-git clone https://github.com/rottensteiner-stefan/small-world.git
-cd small-world
+git clone https://github.com/rottensteiner-stefan/small-world-machine.git
+cd small-world-machine
 npm install
 ```
 
 ## Basic setup
 
-The engine uses a strategy-based lifecycle. You derive from `SmallWorld` (or from `AbstractShowcase`, which adds a few demo/debugging conveniences on top of `SmallWorld`) and override the `setupScene` and `update` lifecycle methods.
+The engine uses a strategy-based lifecycle. You derive from `SmallWorldMachine` (or from `AbstractShowcase`, which adds a few demo/debugging conveniences on top of `SmallWorldMachine`) and override the `setupScene` and `update` lifecycle methods.
 
 ### 1. Basic showcase implementation
 
@@ -28,7 +28,7 @@ import {
   Object3D,
   RendererType,
   StandardMaterial,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 class MyFirstWorld extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {
@@ -67,13 +67,13 @@ const app = new MyFirstWorld({
 });
 
 app.start().then(() => {
-  console.log("Small World initialized!");
+  console.log("Small World Machine initialized!");
 });
 ```
 
 ### 2. SPA & framework integration (React / Vue / Angular)
 
-When Small World is embedded in a single-page application (SPA), the browser doesn't automatically refresh on route changes. To prevent memory leaks or multiple render loops running concurrently in the background, the engine must be cleanly destroyed when its host component unmounts.
+When Small World Machine is embedded in a single-page application (SPA), the browser doesn't automatically refresh on route changes. To prevent memory leaks or multiple render loops running concurrently in the background, the engine must be cleanly destroyed when its host component unmounts.
 
 Simply call the `destroy()` method. This immediately stops the `requestAnimationFrame` loop, removes all global window event listeners, and frees WebGPU/WebGL memory.
 
@@ -89,7 +89,7 @@ export function GameComponent() {
     
     if (canvasRef.current) {
       app = new MyFirstWorld({
-        canvasId: "SmallWorldCanvas"
+        canvasId: "SmallWorldMachineCanvas"
       });
       app.start();
     }
@@ -102,7 +102,7 @@ export function GameComponent() {
     };
   }, []);
 
-  return <canvas id="SmallWorldCanvas" ref={canvasRef} />;
+  return <canvas id="SmallWorldMachineCanvas" ref={canvasRef} />;
 }
 ```
 

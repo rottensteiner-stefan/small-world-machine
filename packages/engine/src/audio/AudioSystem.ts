@@ -27,7 +27,7 @@ export class AudioSystem {
   private _activeEndlessSounds: Set<SoundHandle> = new Set();
 
   /** Optional per-instance event bus for non-fatal audio lifecycle events (e.g. `AUDIO_LOADED`).
-   * Injected (never a global) by the owning `SmallWorld` instance. */
+   * Injected (never a global) by the owning `SmallWorldMachine` instance. */
   private readonly _events: Events | undefined;
 
   /**
@@ -243,7 +243,7 @@ export class AudioSystem {
     const posZ = camera.position.z;
 
     // Calculate forward vector (assuming right-handed system: -Z is forward, but rotation depends on theta/phi)
-    // SmallWorld uses: theta for Y-axis rotation, phi for X-axis
+    // SmallWorldMachine uses: theta for Y-axis rotation, phi for X-axis
     const sinTheta = Math.sin(camera.theta);
     const cosTheta = Math.cos(camera.theta);
     const sinPhi = Math.sin(camera.phi);

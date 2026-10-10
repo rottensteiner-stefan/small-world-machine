@@ -29,7 +29,7 @@ class PresentationDemoApp extends AbstractShowcase {
     // Disable fullscreen to fit inside the cinematic container card,
     // and specify canvasId matching public/presentation.html
     super({
-      canvasId: "SmallWorldCanvas",
+      canvasId: "SmallWorldMachineCanvas",
       fullscreen: false,
       rendererType: RendererType.DEFAULT,
     });

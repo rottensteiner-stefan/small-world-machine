@@ -7,7 +7,7 @@ import {
   StandardMaterial,
   Color,
   Texture,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 export interface HeldLanternOptions {
   name?: string;

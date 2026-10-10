@@ -1,4 +1,4 @@
-import { Object3D, StageMovementBehavior, Ray } from "@small-world/engine";
+import { Object3D, StageMovementBehavior, Ray } from "@small-world-machine/engine";
 import { BackgroundPlane } from "./BackgroundPlane.js";
 
 /** A resolved way to turn a zone's normalized (u, v) stage coordinate into a world position for

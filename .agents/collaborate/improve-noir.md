@@ -1,8 +1,8 @@
-# Small World 3D: Dark Graphic Novel Pool Shader & Style Overhaul (Showcase 10)
+# Small World Machine 3D: Dark Graphic Novel Pool Shader & Style Overhaul (Showcase 10)
 
 **Dokumenttyp:** Kollaboratives Anforderungs- & Umsetzungsdokument (`collaborate` Modus `plan`)  
 **Stand:** Oktober 2026  
-**Ziel:** 1:1 Übertragung des Graphic-Novel-Tuschestils (KI-Referenzbild) auf den Echtzeit-WebGPU/WebGL-Renderer in Small World Showcase 10.
+**Ziel:** 1:1 Übertragung des Graphic-Novel-Tuschestils (KI-Referenzbild) auf den Echtzeit-WebGPU/WebGL-Renderer in Small World Machine Showcase 10.
 
 ---
 
@@ -66,7 +66,7 @@ graph TD
 
 ## 3. Subsystem-Architektur & Zuständigkeiten
 
-Die Implementierung verteilt sich sauber auf bestehende Pakete in Small World:
+Die Implementierung verteilt sich sauber auf bestehende Pakete in Small World Machine:
 
 ### 3.1 `packages/liquid-extras` (`NoirWaterMaterial.ts`)
 - **Pfad:** `packages/liquid-extras/src/materials/NoirWaterMaterial.ts`
@@ -183,7 +183,7 @@ Zur parallelen bzw. überschneidungsfreien Bearbeitung durch Sub-Agenten:
     let ringMask = step(1.0 - 0.15 * strokeWeight, waveRing) * step(d, 1.6) * (1.0 - smoothstep(0.4, 1.6, d));
     ```
   - This reproduces the thick-and-thin linework and tapered gaps seen in Comic / Manga water splash lines.
-- **Uniform Data Transport:** I propose using `u_styleB` (vec4) or dedicated `u_rippleParams` in `NoirWaterMaterial` (`x, y`: focus floater center in world-space XZ, `z`: wave speed/frequency, `w`: max expansion radius). This fits perfectly into standard Small World uniform buffer layouts without buffer bloat.
+- **Uniform Data Transport:** I propose using `u_styleB` (vec4) or dedicated `u_rippleParams` in `NoirWaterMaterial` (`x, y`: focus floater center in world-space XZ, `z`: wave speed/frequency, `w`: max expansion radius). This fits perfectly into standard Small World Machine uniform buffer layouts without buffer bloat.
 
 #### 2. Stance on Proposal P1
 - **Status:** **[AGREED]** on P1 goals, task breakdown, and non-negotiables.

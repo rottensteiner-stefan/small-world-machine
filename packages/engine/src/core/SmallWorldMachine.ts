@@ -26,7 +26,7 @@ import { CollisionVisualizer, OctreeVisualizer } from "../utils/index.js";
 import { PhysicsSystem } from "../physix/PhysicsSystem.js";
 
 /** The current engine version. */
-export const ENGINE_VERSION = "0.101.0";
+export const ENGINE_VERSION = "0.102.0";
 
 /**
  * Halton low-discrepancy sequence, used for TAA's per-frame sub-pixel camera jitter -- covers
@@ -47,9 +47,9 @@ function halton(index: number, base: number): number {
 }
 
 /**
- * Base class for applications built with the SmallWorld engine.
+ * Base class for applications built with the SmallWorldMachine engine.
  */
-export abstract class SmallWorld {
+export abstract class SmallWorldMachine {
   /** The engine configuration. */
   public config: EngineOptions;
   /** The current scene. */
@@ -89,12 +89,12 @@ export abstract class SmallWorld {
   private _taaFrameIndex: number = 0;
 
   /**
-   * Creates a new SmallWorld application.
+   * Creates a new SmallWorldMachine application.
    * @param userConfig Optional configuration to override defaults.
    */
   protected constructor(userConfig: EngineOptions = {}) {
     this.config = {
-      canvasId: "SmallWorld",
+      canvasId: "SmallWorldMachine",
       rendererType: RendererType.DEFAULT,
       projectionType: ProjectionType.DEFAULT,
       fullscreen: true,
@@ -213,7 +213,7 @@ export abstract class SmallWorld {
 
       if (!this.canvas) {
         throw new Error(
-          `[SmallWorld] Canvas element with ID '${this.config.canvasId}' not found in DOM.`,
+          `[SmallWorldMachine] Canvas element with ID '${this.config.canvasId}' not found in DOM.`,
         );
       }
       if (this.config.fullscreen) {
@@ -238,14 +238,14 @@ export abstract class SmallWorld {
 
       this.renderer.setSize(this.canvas.width, this.canvas.height);
 
-      if (!(window as unknown as Record<string, boolean>)["__SMALLWORLD_BANNER__"]) {
-        (window as unknown as Record<string, boolean>)["__SMALLWORLD_BANNER__"] = true;
+      if (!(window as unknown as Record<string, boolean>)["__SMALLWORLDMACHINE_BANNER__"]) {
+        (window as unknown as Record<string, boolean>)["__SMALLWORLDMACHINE_BANNER__"] = true;
         const bannerStyle1 =
           "font-size: 24px; font-weight: bold; font-family: sans-serif; color: #B000FF; text-shadow: 0 0 10px rgba(176, 0, 255, 0.5); line-height: 30px;";
 
         const bannerStyle3 = "font-size: 12px; font-family: sans-serif; color: #aaa;";
         console.log(
-          `%c Small World Engine, v${ENGINE_VERSION} %c\n\n%c A very small 3D engine focusing on raw WebGL performance.\n https://github.com/rottensteiner-stefan/small-world\n\n`,
+          `%c Small World Machine, v${ENGINE_VERSION} %c\n\n%c A very small 3D engine focusing on raw WebGL performance.\n https://github.com/rottensteiner-stefan/small-world-machine\n\n`,
           bannerStyle1,
           "",
           bannerStyle3,
@@ -340,10 +340,12 @@ export abstract class SmallWorld {
    */
   public step(deltaTime: number): void {
     if (this._isDestroyed) {
-      throw new Error("[SmallWorld] step() called after destroy().");
+      throw new Error("[SmallWorldMachine] step() called after destroy().");
     }
     if (!Number.isFinite(deltaTime) || 0 > deltaTime) {
-      throw new Error(`[SmallWorld] step() requires a finite deltaTime >= 0, got ${deltaTime}.`);
+      throw new Error(
+        `[SmallWorldMachine] step() requires a finite deltaTime >= 0, got ${deltaTime}.`,
+      );
     }
     let gameplayDeltaTime: number = deltaTime;
     if (0 < this._hitStopRemaining) {
@@ -504,7 +506,7 @@ export abstract class SmallWorld {
     }
 
     if (this.canvas && !document.body.contains(this.canvas)) {
-      console.warn("[SmallWorld] Canvas removed from DOM. Auto-destroying engine.");
+      console.warn("[SmallWorldMachine] Canvas removed from DOM. Auto-destroying engine.");
       this.destroy();
       return;
     }

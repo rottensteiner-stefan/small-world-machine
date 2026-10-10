@@ -99,7 +99,7 @@ export interface ProjectionOptions {
  * Global engine configuration options.
  */
 export interface EngineOptions {
-  /** The ID of the canvas element in the DOM. Defaults to "SmallWorld". */
+  /** The ID of the canvas element in the DOM. Defaults to "SmallWorldMachine". */
   canvasId?: string;
   /** Whether the engine should automatically resize the canvas to full screen. */
   fullscreen?: boolean;

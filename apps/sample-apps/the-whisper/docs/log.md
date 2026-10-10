@@ -187,7 +187,7 @@ befüllen.
     *   Mit FFmpeg als Full-HD-Video (`1920x1080 @ 25fps`) gerendert (`prologue_cinematic_preview.mp4`).
     *   Enthält fließende Zoom-Pan-Kameradynamik von der 2.5D-Bühnenszene zur Terminal-Nahaufnahme.
     *   Liegt dauerhaft unter `src/apps/and-now/docs/assets/prologue_cinematic_preview.mp4`.
-26. **Echtzeit-3D-Prolog-Szene in Small World Engine (`src/apps/and-now/scenes/prologue/`):**
+26. **Echtzeit-3D-Prolog-Szene in Small World Machine (`src/apps/and-now/scenes/prologue/`):**
     *   Vollständige 3D-Implementierung des 2.5D-Bühnenschnitts in TypeScript ([`PrologueScene.ts`](src/apps/and-now/scenes/prologue/PrologueScene.ts)) und HTML ([`index.html`](src/apps/and-now/scenes/prologue/index.html)).
     *   *Features*: Animierte aufschwingende Panzertür, dynamischer Flurlicht-Spotkegel, schwebende Staubpartikel, Stockbett, Messing-Kaffeemühle, flackerndes CRT-Terminal mit First-Person-Kamerafahrt und interaktive Multiple-Choice-Abfrage mit Hawelka.
     *   Nutzt die PostProcessing-Pipeline (*Outline*, *Bloom*, *Vignette*, *Grain*, *ToneMapping*).
@@ -336,7 +336,7 @@ befüllen.
 ## 43. Tripo3D API & CLI Pipeline Automation (2026-08-26)
 - **Skill-Update:** [`.agents/skills/character-pipeline/SKILL.md`](.agents/skills/character-pipeline/SKILL.md) von manuellen Web-UI-Schritten vollständig auf die skriptbare `tripo-cli` & API umgestellt:
   - Rekonstruktion: `tripo make` für Multi-View Orthographics & Text-Prompts (`--for game-mobile`).
-  - Skeletal Auto-Rigging: `tripo anim rig` mit `--spec mixamo` für 100% Small-World-kompatible Bone-Hierarchien.
+  - Skeletal Auto-Rigging: `tripo anim rig` mit `--spec mixamo` für 100% Small-World-Machine-kompatible Bone-Hierarchien.
 ## 44. Novotny (Männlich) Asset-Ingestion & Showcase-Integration (2026-08-27)
 - **Asset-Pipeline:**
   - 3 T-Pose-Turnarounds (Front, Profil, Back mit exakter Symmetrie, sichtbarem Gesicht, herabhängender Kapuze und Schal um den Hals) erzeugt (`src/apps/and-now/docs/assets/`).
@@ -352,7 +352,7 @@ befüllen.
   - Modell liegt fertig geriggt und texturiert in [`public/assets/and-now/mannequin/novotny-male.glb`](public/assets/and-now/mannequin/novotny-male.glb).
 - **Skill-Vorgaben (`character-pipeline`):**
   - Strikte Web-Performance-Regeln verankert: `--for game-mobile`, `--param face_limit=15000`, 2K Textur-Standard (`--param texture_quality=standard`), **strikt kein 4K/8K** für VRAM-Schonung im Browser.
-  - Metrische 1.8x-Skalierung für normalisierte Tripo-Modelle in Small World dokumentiert.
+  - Metrische 1.8x-Skalierung für normalisierte Tripo-Modelle in Small World Machine dokumentiert.
 ## 46. Upgrade des Character-Pipeline Skills auf Studio-Standard (2026-08-27)
 - **5 Profi-Optimierungen verankert ([`character-pipeline`](.agents/skills/character-pipeline/SKILL.md)):**
   1. *Albedo-First Mandat:* Verpflichtend reine Albedo-Farbfelder in 2D-Prompts ohne gebackene Richtungs-Schatten.
@@ -852,8 +852,8 @@ befüllen.
   - Entkopplung von Engine-Core und Binär-Assets (3D-Meshes, 2K/4K-Texturen, Audio, Mocap-Clips) zur Vermeidung von Git-Repo-Bloat.
   - 3-Phasen-Strategie:
     1. *Stufe 1:* Einheitliche Kit-Struktur (`public/assets/kits/<kit>/` mit `model.glb`, `preview.webp`, `meta.json`).
-    2. *Stufe 2:* Auslagerung in dediziertes Asset-Repo (`small-world-assets`) mit CDN-Verteilung.
-    3. *Stufe 3:* On-Demand Engine Ingest (`GltfLoader.loadFromCatalog()`) & CLI (`npx small-world add kit <name>`).
+    2. *Stufe 2:* Auslagerung in dediziertes Asset-Repo (`small-world-machine-assets`) mit CDN-Verteilung.
+    3. *Stufe 3:* On-Demand Engine Ingest (`GltfLoader.loadFromCatalog()`) & CLI (`npx small-world-machine add kit <name>`).
   - Nukleus des Starter-Kits: `wall_lamp.glb`, Holzkisten, Ölfass, Schutt-Polygonberg, Noir-Materialien und Mocap-Locomotion-Pool.
 - **Status:** 95 Testsuiten, 542 Tests, Build/Lint 100% grün.
 
@@ -888,7 +888,7 @@ befüllen.
 
 ## 95. Wiederverwendbare `GroomingRat` & `RatGroomingBehavior` Extension (2026-08-30)
 - **Modulare Creature-Extension ([`src/extensions/creatures/`](src/extensions/creatures/)):**
-  - `RatGroomingBehavior.ts`: Kapselt die 3-Phasen-Putz-FSM (Face-Washing, Sniffing, Ear-Cleaning) und Spline-Wellen-Kinematik als standardmäßiges Small-World `Behavior` mit Inspector-Reflexion.
+  - `RatGroomingBehavior.ts`: Kapselt die 3-Phasen-Putz-FSM (Face-Washing, Sniffing, Ear-Cleaning) und Spline-Wellen-Kinematik als standardmäßiges Small-World-Machine `Behavior` mit Inspector-Reflexion.
   - `GroomingRat.ts`: Vorgefertigtes artikuliertes 3D-Prefab mit Farb-/Skalierungs-Optionen und automatischer Behavior-Anbindung.
   - Re-exportiert über `src/extensions/index.ts` und Engine-Root `src/index.ts`.
 - **Showcase & Tests:**
@@ -1116,9 +1116,9 @@ befüllen.
   Monat alles nochmal umzubauen (siehe `.agents/notes/backlog.md`, Eintrag vom selben Datum, für
   die volle technische Begründung/Alternativen-Abwägung).
 - **Was sich für and-now konkret ändert:** `src/apps/and-now/` → `apps/and-now/` (eigenes
-  Package `@small-world/and-now`, `dependencies: {"@small-world/engine": "*"}`). Alle Importe in
+  Package `@small-world-machine/and-now`, `dependencies: {"@small-world-machine/engine": "*"}`). Alle Importe in
   `showcase.ts`/`prologue.ts`/`OilSlickMaterial.ts` gehen jetzt über den Package-Namen
-  `@small-world/engine` statt relativer Pfade in ein gemeinsames `src/`.
+  `@small-world-machine/engine` statt relativer Pfade in ein gemeinsames `src/`.
 - **Verhalten unverändert:** keine funktionale Änderung an Flakturm-Tunnel, Character-Diorama oder
   Prologue — reine Struktur-/Import-Migration, live im Browser nachverifiziert (alle drei Szenen
   laden fehlerfrei, HUD/Bewegung/Rendering wie zuvor).
@@ -1324,7 +1324,7 @@ befüllen.
 
 ## 121. GitHub Pages Deployment & AssetManager Base-URL Resolution (2026-09-14)
 - **Problem & Ursachenanalyse:**
-  - Beim Deployment der Dokumentation und Showcases auf GitHub Pages unter dem Subpfad `/small-world/showcases/` schlugen Asset-Requests für Texturen (`wall_tiles.jpg`), 3D-Modelle (`wall_lamp.glb`, `character.glb`) und UI-Kartenbilder mit einem HTTP 404 fehl.
+  - Beim Deployment der Dokumentation und Showcases auf GitHub Pages unter dem Subpfad `/small-world-machine/showcases/` schlugen Asset-Requests für Texturen (`wall_tiles.jpg`), 3D-Modelle (`wall_lamp.glb`, `character.glb`) und UI-Kartenbilder mit einem HTTP 404 fehl.
   - Root-relative Pfade (`/assets/...`) wurden vom Browser relativ zur Domain-Root (`rottensteiner-stefan.github.io/assets/...`) statt zum Vite-Base-Pfad aufgelöst.
 - **Zentrale Architektur-Lösung:**
   - [`AssetManager`](packages/engine/src/loaders/AssetManager.ts) um die Kern-Methode `resolveUrl(url: string): string` erweitert:
@@ -1334,16 +1334,16 @@ befüllen.
   - [`ViennaMapModal.ts`](apps/sample-apps/and-now/ui/ViennaMapModal.ts): UI-Karten, Vignetten und Archetyp-Vorschaubilder mit `resolveAssetUrl` angebunden.
 - **Verifikation:**
   - Neue Vitest-Suite [`AssetManagerResolveUrl.test.ts`](packages/engine/tests/loaders/AssetManagerResolveUrl.test.ts) hinzugefügt.
-  - Alle 142 Testsuiten (782 Tests), `npm run typecheck`, `npm run lint:fix`, `npm run build:lib` und Vite-Build mit `--base=/small-world/showcases/` **100% grün**.
+  - Alle 142 Testsuiten (782 Tests), `npm run typecheck`, `npm run lint:fix`, `npm run build:lib` und Vite-Build mit `--base=/small-world-machine/showcases/` **100% grün**.
 
 ---
 
 ## 122. VitePress Documentation Base Path Link Alignment (2026-09-14)
 - **Problem & Ursachenanalyse:**
   - In der VitePress-Dokumentation (`docs/apps/*.md`) verlinkten Markdown-Tabellen für interaktive Szenen und Konzept-Dossiers direkt auf `/showcases/...` mit `{target="_blank"}`.
-  - Da VitePress bei externen Links mit benutzerdefinierten Attributen den konfigurierten `base: "/small-world/"` nicht automatisch voranstellt, löste der Browser den Link gegen die GitHub-Pages-Wurzel (`https://rottensteiner-stefan.github.io/showcases/...`) auf und lieferte einen 404-Fehler.
+  - Da VitePress bei externen Links mit benutzerdefinierten Attributen den konfigurierten `base: "/small-world-machine/"` nicht automatisch voranstellt, löste der Browser den Link gegen die GitHub-Pages-Wurzel (`https://rottensteiner-stefan.github.io/showcases/...`) auf und lieferte einen 404-Fehler.
 - **Lösung:**
-  - Alle direkten Showcase- und Dossier-Links in [`docs/apps/and-now.md`](docs/apps/and-now.md), [`docs/apps/maker.md`](docs/apps/maker.md), [`docs/apps/yad.md`](docs/apps/yad.md) und [`docs/apps/light-cycle-arena.md`](docs/apps/light-cycle-arena.md) auf den vollen GitHub-Pages-Subpfad `/small-world/showcases/...` aktualisiert.
+  - Alle direkten Showcase- und Dossier-Links in [`docs/apps/and-now.md`](docs/apps/and-now.md), [`docs/apps/maker.md`](docs/apps/maker.md), [`docs/apps/yad.md`](docs/apps/yad.md) und [`docs/apps/light-cycle-arena.md`](docs/apps/light-cycle-arena.md) auf den vollen GitHub-Pages-Subpfad `/small-world-machine/showcases/...` aktualisiert.
 - **Verifikation:**
   - `npm run docs:build` ausgeführt und die generierten HTML-Dateien in `docs/.vitepress/dist/apps/` erfolgreich auf korrekte Pfadauflösung geprüft.
 
@@ -1504,49 +1504,49 @@ befüllen.
   - **Stockbett (Koje 42):**
     - 3 Konzept-Kandidaten generiert (*Military Angle-Iron*, *Industrial Bolted Frame*, *Flakturm Standard Tier Bunk*).
     - Sieger-Modell: *Flakturm Standard Tier Bunk* mit geschweißtem Stahlrahmen, dünnen Matratzen, Militär-Wolldecken und Ausrüstungsregal.
-    - Generiert via Tripo3D API und konvertiert via `fbx2gltf` nach [`public/assets/kits/bunker/bunk_bed/model.glb`](file:///Users/srottensteiner/PhpstormProjects/small-world/public/assets/kits/bunker/bunk_bed/model.glb) (1.57 MB).
+    - Generiert via Tripo3D API und konvertiert via `fbx2gltf` nach [`public/assets/kits/bunker/bunk_bed/model.glb`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/public/assets/kits/bunker/bunk_bed/model.glb) (1.57 MB).
   - **Kältekammer Leichenschublade K-42 (Sektor 0):**
     - 3 Konzept-Kandidaten generiert (*Cold Storage Drawer K-42*, *Autopsy Wheeled Gurney*, *Brutalist Shrouded Tray*).
     - Sieger-Modell: *Cold Storage Drawer K-42* mit gebürstetem Edelstahl, gefrorener Kondensation, Leichen-Silhouette und forensischem Zehen-Anhänger `K-42`.
-    - Generiert via Tripo3D API und konvertiert via `fbx2gltf` nach [`public/assets/kits/bunker/morgue_tray/model.glb`](file:///Users/srottensteiner/PhpstormProjects/small-world/public/assets/kits/bunker/morgue_tray/model.glb) (1.14 MB).
-- **Runtime-Ingestion in Prologue-Szene ([`prologue.ts`](file:///Users/srottensteiner/PhpstormProjects/small-world/apps/sample-apps/and-now/scenes/prologue/prologue.ts)):**
+    - Generiert via Tripo3D API und konvertiert via `fbx2gltf` nach [`public/assets/kits/bunker/morgue_tray/model.glb`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/public/assets/kits/bunker/morgue_tray/model.glb) (1.14 MB).
+- **Runtime-Ingestion in Prologue-Szene ([`prologue.ts`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/apps/sample-apps/and-now/scenes/prologue/prologue.ts)):**
   - Automatischer Austausch der prozeduralen Whitebox-Primitive durch die neuen glTF-Kits in `_loadPropKits()`.
   - PBR-Shader-Tuning (`roughness`, `metallic`) abgestimmt auf Graphic-Noir Outline- & Chiaroscuro-PostProcessing.
-  - Manifest [`public/assets/kits/bunker/kit.json`](file:///Users/srottensteiner/PhpstormProjects/small-world/public/assets/kits/bunker/kit.json) und Metadaten aktualisiert.
+  - Manifest [`public/assets/kits/bunker/kit.json`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/public/assets/kits/bunker/kit.json) und Metadaten aktualisiert.
 - **QA:** 144 Testsuiten (793 Tests) 100% grün, `npm run typecheck`, `npm run lint` und `npm run build:lib` fehlerfrei.
 
 ---
 
 ## 135. Vienna Flakturm PBR Kit: Texturen, Stencils, Decals & Modulare Requisiten (2026-09-16)
-- **Vollständige PBR-Textur-Sets ([`public/assets/kits/flakturm/textures/`](file:///Users/srottensteiner/PhpstormProjects/small-world/public/assets/kits/flakturm/textures/)):**
+- **Vollständige PBR-Textur-Sets ([`public/assets/kits/flakturm/textures/`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/public/assets/kits/flakturm/textures/)):**
   - `concrete_board`: Brettschalungs-Beton mit horizontalen Holzmaserungen, Schalungsfugen und Poren (Albedo, Normal, Roughness, AO).
   - `brick_aged`: Altwiener Ziegelmauerwerk mit Mörtelfugen und Kalkausblühungen (Albedo, Normal, Roughness, AO).
   - `concrete_weathered`: Monumentaler Außenbeton mit vertikalen Wassernasen & Rußstreifen (Albedo, Normal, Roughness, AO).
   - `steel_corroded`: Korrodierter Walz- und Panzerstahl mit Rostflecken (Albedo, Normal, Roughness, Metalness, AO).
   - `steel_painted`: Lackierter olivgrauer Bunker-Stahl mit Kratzern & Nieten (Albedo, Normal, Roughness, Metalness, AO).
-- **Decals & Stencils ([`public/assets/kits/flakturm/decals/`](file:///Users/srottensteiner/PhpstormProjects/small-world/public/assets/kits/flakturm/decals/)):**
+- **Decals & Stencils ([`public/assets/kits/flakturm/decals/`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/public/assets/kits/flakturm/decals/)):**
   - `sign_hausangehoerige.png`: Typografischer Stencil *"NUR FÜR HAUSANGEHÖRIGE!"* (authentische historische Vorlage).
   - `sign_sektor0.png`: AZS-Dienstplakette *"SEKTOR 0 — KÄLTEKAMMER / ZUTRITT STRENGSTENS UNTERSAGT"*.
   - `sign_koje42.png`: Zonen-Kennzeichnung *"KOJE 42 / FLAKTURM ARENBERG"*.
   - `hazard_stripes.png`: 45°-Gelb/Schwarz-Sicherheits-Warnstreifen mit Kantenabplatzungen.
   - `guide_stripe_glow.png`: Phosphoreszierender Leitstreifen für Orientierung bei Bunkerausfall.
   - `rebar_damage.png`: Wanddurchbruch mit herausragenden Bewehrungsschlaufen (Moniereisen).
-- **3D-Modelle & Modulare Generatoren ([`FlakturmKit.ts`](file:///Users/srottensteiner/PhpstormProjects/small-world/apps/sample-apps/and-now/builder/FlakturmKit.ts)):**
-  - [`bunker_blast_door/model.glb`](file:///Users/srottensteiner/PhpstormProjects/small-world/public/assets/kits/flakturm/props/bunker_blast_door/model.glb) (1.03 MB): Zweiflügelige schwere Panzer-Stahltür mit Querverriegelung und Sehschlitzen.
-  - [`debris_rubble_pile/model.glb`](file:///Users/srottensteiner/PhpstormProjects/small-world/public/assets/kits/flakturm/props/debris_rubble_pile/model.glb) (1.57 MB): Haufen aus zerbrochenem Beton, Ziegelbrocken und Moniereisen.
+- **3D-Modelle & Modulare Generatoren ([`FlakturmKit.ts`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/apps/sample-apps/and-now/builder/FlakturmKit.ts)):**
+  - [`bunker_blast_door/model.glb`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/public/assets/kits/flakturm/props/bunker_blast_door/model.glb) (1.03 MB): Zweiflügelige schwere Panzer-Stahltür mit Querverriegelung und Sehschlitzen.
+  - [`debris_rubble_pile/model.glb`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/public/assets/kits/flakturm/props/debris_rubble_pile/model.glb) (1.57 MB): Haufen aus zerbrochenem Beton, Ziegelbrocken und Moniereisen.
   - `FlakturmKit.createFluorescentLamp`: Modulare Industrie-Leuchtstoffleuchten (Käfig-Wannenleuchte & nackte Röhre) mit integriertem Licht und Flackern.
   - `FlakturmKit.createConduitRun`: Modulare Aufputzkabel mit Bakelit-Verteilerdosen und Wandschellen.
-- **QA:** 145 Testsuiten (797 Tests) 100% grün, Testsuite [`FlakturmKit.test.ts`](file:///Users/srottensteiner/PhpstormProjects/small-world/apps/sample-apps/and-now/tests/FlakturmKit.test.ts) hinzugefügt.
+- **QA:** 145 Testsuiten (797 Tests) 100% grün, Testsuite [`FlakturmKit.test.ts`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/apps/sample-apps/and-now/tests/FlakturmKit.test.ts) hinzugefügt.
 
 ---
 
 ## 136. Flakturm Gitter-Schachttür (Ventilation & Escape Mesh Hatch) (2026-09-16)
-- **Analyse & Asset-Herkunft ([`flakturm_ref_18.jpg`](file:///Users/srottensteiner/PhpstormProjects/small-world/.agents/scratches/Flaktum/flakturm_ref_18.jpg)):**
+- **Analyse & Asset-Herkunft ([`flakturm_ref_18.jpg`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/.agents/scratches/Flaktum/flakturm_ref_18.jpg)):**
   - Entdeckung der charakteristischen, in Brusthöhe in die Ziegelwand eingelassenen quadratischen Stahl-Gitterklappe mit Drahtgeflecht, die in einen dunklen Schleich-/Versorgungsschacht führt.
 - **Asset-Umsetzung:**
-  - **3D glTF Modell:** [`bunker_vent_hatch/model.glb`](file:///Users/srottensteiner/PhpstormProjects/small-world/public/assets/kits/flakturm/props/bunker_vent_hatch/model.glb) (995 KB) via Tripo3D & `fbx2gltf` erstellt.
-  - **Prozeduraler Generator:** `FlakturmKit.createVentHatch({ width, height, openAngle })` in [`FlakturmKit.ts`](file:///Users/srottensteiner/PhpstormProjects/small-world/apps/sample-apps/and-now/builder/FlakturmKit.ts) mit animierbarem Scharnier (`DoorHinge`), Wandzarge, Riegel und Drahtgitter-Geflecht implementiert.
-  - Manifest [`public/assets/kits/flakturm/kit.json`](file:///Users/srottensteiner/PhpstormProjects/small-world/public/assets/kits/flakturm/kit.json) und Tests aktualisiert.
+  - **3D glTF Modell:** [`bunker_vent_hatch/model.glb`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/public/assets/kits/flakturm/props/bunker_vent_hatch/model.glb) (995 KB) via Tripo3D & `fbx2gltf` erstellt.
+  - **Prozeduraler Generator:** `FlakturmKit.createVentHatch({ width, height, openAngle })` in [`FlakturmKit.ts`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/apps/sample-apps/and-now/builder/FlakturmKit.ts) mit animierbarem Scharnier (`DoorHinge`), Wandzarge, Riegel und Drahtgitter-Geflecht implementiert.
+  - Manifest [`public/assets/kits/flakturm/kit.json`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/public/assets/kits/flakturm/kit.json) und Tests aktualisiert.
 - **QA:** 145 Testsuiten (798 Tests) 100% grün.
 
 ---

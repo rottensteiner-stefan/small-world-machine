@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Particle } from "../src/Particle.js";
-import { Vector3D, Color } from "@small-world/engine";
+import { Vector3D, Color } from "@small-world-machine/engine";
 import {
   PointAttractorAffector,
   VortexAffector,

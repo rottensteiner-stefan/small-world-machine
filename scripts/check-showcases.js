@@ -194,7 +194,7 @@ async function checkShowcase(browser, { showcase, rendererType }) {
     await sleep(1000);
 
     // Union bounding box of every <canvas> on the page (most showcases have one
-    // #SmallWorld canvas, but e.g. showcase 23 renders multiple monitor canvases).
+    // #SmallWorldMachine canvas, but e.g. showcase 23 renders multiple monitor canvases).
     const canvasRect = await page.evaluate(() => {
       // eslint-disable-next-line no-undef -- runs inside the page (browser context via Puppeteer), not Node
       const canvases = Array.from(document.querySelectorAll("canvas"));

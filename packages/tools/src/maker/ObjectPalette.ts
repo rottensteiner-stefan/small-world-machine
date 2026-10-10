@@ -23,7 +23,7 @@ import {
   Cone,
   Torus,
   Pyramid,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 export interface PaletteCallbacks {
   /** Adds a freshly-built object as a child of the current scene root. */

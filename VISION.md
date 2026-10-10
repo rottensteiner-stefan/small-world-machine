@@ -1,8 +1,8 @@
-# The Small World Vision
+# The Small World Machine Vision
 
-**Small World** is built on a clear conviction: **Atmosphere, art direction, and game feel beat brute-force hardware specs every single time.**
+**Small World Machine** is built on a clear conviction: **Atmosphere, art direction, and game feel beat brute-force hardware specs every single time.**
 
-We are the "Preact of 3D Engines" — lean, agile, and architecturally pure. But Small World is neither a toy nor a compromise for tiny tech demos. It is built to power **real, ambitious, deeply atmospheric games and immersive interactive worlds** — in the spirit of indie masterpieces like *Stray*, *Inside*, or *Journey* — without requiring a $2,000 graphics card or a 50GB download.
+We are the "Preact of 3D Engines" — lean, agile, and architecturally pure. But Small World Machine is neither a toy nor a compromise for tiny tech demos. It is built to power **real, ambitious, deeply atmospheric games and immersive interactive worlds** — in the spirit of indie masterpieces like *Stray*, *Inside*, or *Journey* — without requiring a $2,000 graphics card or a 50GB download.
 
 ---
 
@@ -22,7 +22,7 @@ We reject that bloat. **Great 3D experiences are made of:**
 
 ### 1. The Monolithic Engine Tax vs. High-Performance Indie Gaming
 **The Problem:** Enterprise 3D engines are massive behemoths. Even a blank scene pulls megabytes of un-treeshakable runtime overhead, while desktop engines demand multi-gigabyte installs and steep licensing models.
-**Our Solution:** Small World delivers a complete game engine architecture (Hybrid WebGPU/WebGL 2 PBR renderer, physics, spatial audio, behavior systems, FSMs) in a razor-thin footprint with zero external dependencies in the rendering core. It scales effortlessly from instant playable experiences up to full-featured, narrative 3D titles.
+**Our Solution:** Small World Machine delivers a complete game engine architecture (Hybrid WebGPU/WebGL 2 PBR renderer, physics, spatial audio, behavior systems, FSMs) in a razor-thin footprint with zero external dependencies in the rendering core. It scales effortlessly from instant playable experiences up to full-featured, narrative 3D titles.
 
 ### 2. Real Game Engine Architecture (Not Just a "Renderer")
 **The Problem:** Most lightweight web 3D tools are mere rendering libraries. They leave game loops, actor state, physics, spatial sound, and input handling as an exercise for the developer, forcing teams to duct-tape mismatched libraries together or drag heavy DOM reconciliation frameworks into a 60FPS loop.
@@ -54,6 +54,6 @@ We reject that bloat. **Great 3D experiences are made of:**
 4. **Open & Portable:** Standard glTF 2.0, standard web APIs, zero cloud lock-in.
 5. **No Compromises on Architecture:** Strict typing, decoupled event systems, robust lifecycles, and predictable memory management.
 
-Small World is the engine for developers and digital artists who want to craft captivating, atmospheric, and truly memorable 3D games for the open web.
+Small World Machine is the engine for developers and digital artists who want to craft captivating, atmospheric, and truly memorable 3D games for the open web.
 
 

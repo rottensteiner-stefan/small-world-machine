@@ -1,15 +1,15 @@
-# Physik-Extras (`@small-world/physics-extras`)
+# Physik-Extras (`@small-world-machine/physics-extras`)
 
-Das Paket `@small-world/physics-extras` kombiniert die Kern-Physik-Engine (`@small-world/engine`) mit prozeduraler Geometriezerlegung (`@small-world/geometry-extras`), um dynamische Zerstörung, Brucheffekte und Trümmersimulationen bereitzustellen.
+Das Paket `@small-world-machine/physics-extras` kombiniert die Kern-Physik-Engine (`@small-world-machine/engine`) mit prozeduraler Geometriezerlegung (`@small-world-machine/geometry-extras`), um dynamische Zerstörung, Brucheffekte und Trümmersimulationen bereitzustellen.
 
 ## Installation & Import
 
 ```bash
-npm install @small-world/physics-extras
+npm install @small-world-machine/physics-extras
 ```
 
 ```typescript
-import { fractureObject, VoronoiFractureOptions } from "@small-world/physics-extras";
+import { fractureObject, VoronoiFractureOptions } from "@small-world-machine/physics-extras";
 ```
 
 ---
@@ -30,8 +30,8 @@ import { fractureObject, VoronoiFractureOptions } from "@small-world/physics-ext
 ### Beispiel
 
 ```typescript
-import { Object3D, Cube, StandardMaterial, Vector3D } from "@small-world/engine";
-import { fractureObject } from "@small-world/physics-extras";
+import { Object3D, Cube, StandardMaterial, Vector3D } from "@small-world-machine/engine";
+import { fractureObject } from "@small-world-machine/physics-extras";
 
 // 1. Zu zerstörendes Objekt
 const pillar = new Object3D("Pillar", new Cube({ width: 1, height: 4, depth: 1 }), new StandardMaterial());

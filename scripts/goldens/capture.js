@@ -4,7 +4,7 @@
 // apps/showcases/10/showcase.ts:
 //   URL:  .../index.html?rendererType=<BACKEND>&__golden=<poolKey>&__goldenView=<view>&__goldenFrames=<N>
 //   Ready: window.__goldenReady === true, window.__goldenMeta = { poolKey, view, frames, rendererType, error? }
-// The app steps the engine deterministically (fixed timestep, see SmallWorld.step) and freezes
+// The app steps the engine deterministically (fixed timestep, see SmallWorldMachine.step) and freezes
 // the presented frame, so the same cell renders byte-identically across runs. See README.md.
 
 import puppeteer from "puppeteer";

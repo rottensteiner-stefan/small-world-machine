@@ -989,7 +989,7 @@ export class WebGPURenderer extends AbstractRenderer {
    * The candidate list is derived from `scene.lastFrustumVisibleObjects` (`isVisible && inFrustum`,
    * same condition `FrustumCuller`'s own fallback path uses -- see `_collectHzbCandidates()`)
    * rather than reading any of `FrustumCuller`'s output fields: this renderer only holds a
-   * `scene`, not the owning `SmallWorld`'s private culler instance. Reading `scene`'s own
+   * `scene`, not the owning `SmallWorldMachine`'s private culler instance. Reading `scene`'s own
    * per-instance list keeps the candidate list scoped to the scene actually being rendered, without
    * coupling the renderer to whichever culler instance drove this frame.
    *

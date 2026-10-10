@@ -1,4 +1,4 @@
-import { AbstractGeometry, MathUtils } from "@small-world/engine";
+import { AbstractGeometry, MathUtils } from "@small-world-machine/engine";
 
 /**
  * Configuration options for torus knot geometry.

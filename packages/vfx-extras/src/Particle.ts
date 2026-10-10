@@ -1,4 +1,4 @@
-import { Vector3D, Color } from "@small-world/engine";
+import { Vector3D, Color } from "@small-world-machine/engine";
 
 export interface ParticleOptions {
   position?: Vector3D;

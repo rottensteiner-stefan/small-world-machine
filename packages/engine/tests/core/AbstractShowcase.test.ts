@@ -4,7 +4,7 @@ import {
   AbstractShowcase,
   SHOWCASE_READY_EVENT,
 } from "../../src/core/showcase/AbstractShowcase.js";
-import { SmallWorld } from "../../src/core/index.js";
+import { SmallWorldMachine } from "../../src/core/index.js";
 import { RendererType } from "../../src/enums/index.js";
 import { makeMockAudioContext } from "../audio/mockAudioContext.js";
 
@@ -91,7 +91,7 @@ describe("AbstractShowcase Scene-Ready Signal", () => {
 
     // Avoid spinning up a real renderer (needs a WebGL context): the base `start()` only needs
     // to resolve so the showcase-level readiness logic runs.
-    startSpy = vi.spyOn(SmallWorld.prototype, "start").mockResolvedValue(undefined);
+    startSpy = vi.spyOn(SmallWorldMachine.prototype, "start").mockResolvedValue(undefined);
   });
 
   afterEach(() => {

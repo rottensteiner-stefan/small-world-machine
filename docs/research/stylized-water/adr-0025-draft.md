@@ -49,7 +49,7 @@ dunklere/neblige Stimmung nach Referenz-Spiel "Dredge" ist ein *Preset* von soft
 und **sparkle** (Kaustik-Netz + Glint + gestufte Zeit). Oeffentliche Style-IDs neutral; "Ghibli" nur intern
 in Docs/Kommentaren (Marke — R5). Geteilte Engine-Chunks: `liquid_caustics` (F1-SmoothF1), `liquid_glint`,
 Rampe/Wash, gestufte Zeit. Sparkle ist per E2/E3 Engine (kein Pass/Sampler/Asset noetig — R4).
-Extension (`@small-world/liquid-extras`, R3): erster Inhalt ist das **noir-Pack** (Hook-basiert, Posterize/
+Extension (`@small-world-machine/liquid-extras`, R3): erster Inhalt ist das **noir-Pack** (Hook-basiert, Posterize/
 Tintenwasch ueber `[WATER_EXT_SURFACE]`, keine Assets — R4); es beweist zugleich den Mechanismus.
 Asset-basierte Packs (Papier-/Pinselkorn, X2) spaeter. Semi-real bleibt `OpenWaterMaterial`.
 

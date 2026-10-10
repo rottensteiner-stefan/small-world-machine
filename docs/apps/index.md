@@ -1,6 +1,6 @@
 # Spiele & Welten
 
-Produktions-Vertical-Slices und Beispielspiele, die auf der Small World Engine aufbauen. Jede App hat zusätzlich einen eigenen `docs/`-Unterordner im Repo (`concept-dossier.html` + `log.md`, siehe `.agents/notes/app-docs-convention.md`) als lebendes Entwicklungstagebuch.
+Produktions-Vertical-Slices und Beispielspiele, die auf der Small World Machine aufbauen. Jede App hat zusätzlich einen eigenen `docs/`-Unterordner im Repo (`concept-dossier.html` + `log.md`, siehe `.agents/notes/app-docs-convention.md`) als lebendes Entwicklungstagebuch.
 
 | App | Beschreibung |
 |---|---|

@@ -1,7 +1,7 @@
 {
-  "name": "@small-world/gltf-extensions",
+  "name": "@small-world-machine/gltf-extensions",
   "version": "0.79.03",
-  "description": "Community and data-level glTF extensions for Small World 3D engine.",
+  "description": "Community and data-level glTF extensions for Small World Machine 3D engine.",
   "type": "module",
   "license": "MIT",
   "exports": {
@@ -12,6 +12,6 @@
     "./*": "./src/*"
   },
   "dependencies": {
-    "@small-world/engine": "*"
+    "@small-world-machine/engine": "*"
   }
 }

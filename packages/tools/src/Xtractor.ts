@@ -1,4 +1,9 @@
-import { ForgeTool, ForgeToolOptions, ToolEvents, EventDispatcherImpl } from "@small-world/engine";
+import {
+  ForgeTool,
+  ForgeToolOptions,
+  ToolEvents,
+  EventDispatcherImpl,
+} from "@small-world-machine/engine";
 import { AiConfigStorage, createVisionAiProvider } from "./common/ai/index.js";
 import {
   detectSpriteBounds,

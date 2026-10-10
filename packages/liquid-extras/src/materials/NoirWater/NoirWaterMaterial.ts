@@ -5,7 +5,7 @@ import {
   composeStylizedWaterSources,
   ShaderDefinition,
   RenderManifest,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 export interface NoirWaterMaterialOptions extends StylizedWaterMaterialOptions {
   /** Number of ink tone levels, 2 = pure black/white, 3-6 = comic ink (default 4). Clamped to 2..8. */

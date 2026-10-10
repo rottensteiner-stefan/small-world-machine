@@ -1,4 +1,4 @@
-import { SmallWorld } from "@small-world/engine";
+import { SmallWorldMachine } from "@small-world-machine/engine";
 import { Forge } from "./forge/Forge.js";
 import { MapGenerator } from "./MapGenerator.js";
 import { Pixler } from "./Pixler.js";
@@ -12,12 +12,12 @@ export interface DevToolsHandle {
 
 /**
  * Wires the Forge window manager and the standard tool suite (Map Generator, Pixler, Xtractor,
- * Material Studio) into a running `SmallWorld` app, and registers the Alt+Ctrl/Meta+G hotkey to
- * toggle Forge's visibility. This used to be hardcoded inside `SmallWorld`'s `enableInspector`
+ * Material Studio) into a running `SmallWorldMachine` app, and registers the Alt+Ctrl/Meta+G hotkey to
+ * toggle Forge's visibility. This used to be hardcoded inside `SmallWorldMachine`'s `enableInspector`
  * handling; apps that want the in-game dev overlay now call this explicitly instead (ADR 0024),
  * so the engine core never depends on a concrete tool implementation.
  */
-export function attachDevTools(app: SmallWorld): DevToolsHandle {
+export function attachDevTools(app: SmallWorldMachine): DevToolsHandle {
   const forge = new Forge();
 
   const mapGen = new MapGenerator();

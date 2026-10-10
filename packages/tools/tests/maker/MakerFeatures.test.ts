@@ -17,7 +17,7 @@ import {
   BoundingBox,
   BoundingType,
   collectInspectorSchema,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { TransformGizmo } from "../../src/maker/TransformGizmo.js";
 import { UndoStack } from "../../src/maker/UndoStack.js";
 import { OrbitCameraController } from "../../src/maker/OrbitCameraController.js";

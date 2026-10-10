@@ -8,7 +8,7 @@ import {
   Sphere,
   Texture,
   WorldMaterial,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { createBuoyTexture, createWoodCrateTexture } from "./PoolTextures.js";
 
 export type BarrelType = "hazard" | "oil" | "chemical";

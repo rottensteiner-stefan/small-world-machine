@@ -16,14 +16,14 @@ Meisterwerke des Indie-Genres wie *Stray*, *Inside*, *Journey* und *Firewatch* b
 
 ## Entscheidung
 
-Wir etablieren **das Streuner-Prinzip** als Small Worlds grundlegende Design- und Rendering-Philosophie:
+Wir etablieren **das Streuner-Prinzip** als Small World Machines grundlegende Design- und Rendering-Philosophie:
 
 ### 1. Atmosphäre & Kunstrichtung > Brute-Force-Pixelzählerei
-- Visuelle Wirkung in Small World wird angetrieben von **Lichtstimmung, stimmungsvollem volumetrischem Nebel, filmischem Post-Processing (Bloom, Tone-Mapping, Color-Grading), markanten Silhouetten und stilisierten PBR-Materialien**, statt von 8K-Textur-Aufblähung oder hardware-schmelzendem Path-Tracing.
+- Visuelle Wirkung in Small World Machine wird angetrieben von **Lichtstimmung, stimmungsvollem volumetrischem Nebel, filmischem Post-Processing (Bloom, Tone-Mapping, Color-Grading), markanten Silhouetten und stilisierten PBR-Materialien**, statt von 8K-Textur-Aufblähung oder hardware-schmelzendem Path-Tracing.
 - Wir entwerfen Rendering-Techniken bewusst so, dass sie auf Standard-WebGL-2- und WebGPU-Hardware reichhaltige, hochwertige visuelle Ästhetik liefern, ohne übermäßigen Rechenaufwand.
 
 ### 2. Vollwertige Indie-Game-Engine-Architektur
-Small World ist darauf ausgelegt, **echte, substanzielle, narrative und interaktive Spiele sowie reichhaltige 3D-Anwendungen** zu unterstützen, nicht bloß isolierte Rendering-Schnipsel. Die Engine stellt einen vollständigen, einheitlichen Laufzeit-Stack bereit:
+Small World Machine ist darauf ausgelegt, **echte, substanzielle, narrative und interaktive Spiele sowie reichhaltige 3D-Anwendungen** zu unterstützen, nicht bloß isolierte Rendering-Schnipsel. Die Engine stellt einen vollständigen, einheitlichen Laufzeit-Stack bereit:
 - Komponentenbasiertes **Behavior-System** und typsichere, allokationsfreie **Zustandsautomaten (FSM)**.
 - Eingebaute **Impuls-Physik** (SAT-Kollisionserkennung, Auftrieb, Continuous Collision Detection).
 - 3D-**räumliches Audio** (HRTF-Positionierung, prozedurale Synthesizer, Audio-Mischung).

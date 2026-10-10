@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: "Small World"
+  name: "Small World Machine"
   text: "3D Engine"
   tagline: "High-performance hybrid WebGL/WebGPU rendering pipeline built in strict TypeScript."
   actions:
@@ -11,7 +11,7 @@ hero:
       link: /guides/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/rottensteiner-stefan/small-world
+      link: https://github.com/rottensteiner-stefan/small-world-machine
     - theme: alt
       text: Showcases
       link: /showcases/index.html

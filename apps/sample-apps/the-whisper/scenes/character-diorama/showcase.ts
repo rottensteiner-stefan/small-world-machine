@@ -20,16 +20,16 @@ import {
   Texture,
   TextureWrap,
   Torus,
-} from "@small-world/engine";
-import { OrbitController } from "@small-world/engine/core/controllers/OrbitController.js";
-import { OilSlickMaterial } from "./OilSlickMaterial.js";
-import { Vector2D, Vector3D } from "@small-world/engine/math/index.js";
+} from "@small-world-machine/engine";
+import { OrbitController } from "@small-world-machine/engine/core/controllers/OrbitController.js";
+import { OilPuddleMaterial } from "@small-world-machine/liquid-extras";
+import { Vector2D, Vector3D } from "@small-world-machine/engine/math/index.js";
 import {
   AnimationAction,
   AnimationClip,
   AnimationMixer,
   Bone,
-} from "@small-world/engine/core/animation/index.js";
+} from "@small-world-machine/engine/core/animation/index.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
 
 type CharacterType = "male" | "female" | "yoshi";
@@ -94,7 +94,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
   private _lanternPointLight: PointLight | undefined;
   private _lanternOn: boolean = true;
   private _turntableActive: boolean = false;
-  private _oilSlickMaterial: OilSlickMaterial | undefined;
+  private _oilSlickMaterial: OilPuddleMaterial | undefined;
   /** Held state for the SHIFT+arrow-key character-rotation controls (continuous, not a per-press
    * toggle) -- see `_initHUD()`'s keydown/keyup listeners and the `update()` rotation step. Only
    * active while SHIFT is held; plain arrows/WASD walk instead (see `_movementBehavior`), same
@@ -135,6 +135,8 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
   private _lblNoir!: HTMLElement;
   private _mapModal!: ViennaMapModal;
   private _animButtons: HTMLButtonElement[] = [];
+  private _hudBoxes: HTMLElement[] = [];
+  private _hudVisible: boolean = false;
 
   // Articulated Grooming & Diorama Rats
   private _rat2Head: Object3D | undefined;
@@ -1227,8 +1229,9 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
     // Dicke, schmierige Öllache am Fassboden -- gemutete Dünnschicht-Iridiszenz + ein echtes,
     // dynamisches Glanzlicht (aus den vorhandenen Wandlaternen) plus ein fixer warmer Glimmfleck
     // am Auslaufpunkt. Bewusst ohne Wellen-/Fließanimation: eine träge, fast stehende Lache statt
-    // eines bewegten Gewässers (siehe OilSlickMaterial-Doku).
-    this._oilSlickMaterial = new OilSlickMaterial({
+    // eines bewegten Gewässers. Erste-Klasse-Material aus @small-world-machine/liquid-extras (die frühere
+    // app-lokale OilSlickMaterial-Kopie in diesem Ordner wurde zugunsten dieses Material entfernt).
+    this._oilSlickMaterial = new OilPuddleMaterial({
       highlightPoint: new Vector2D(0.5, 0.68),
       splatterBaseRadius: 0.4,
       meniscusStrength: 0.9,
@@ -1700,6 +1703,11 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
   }
 
   private _initHUD(): void {
+    // The giant keyboard-shortcut boxes (`.info-badge` + `.deck-panel`, see index.html) cover the
+    // barrel and the oil puddle -- hidden by default; [H] brings them back for interactive sessions.
+    this._hudBoxes = Array.from(document.querySelectorAll<HTMLElement>(".info-badge, .deck-panel"));
+    this._setHudVisible(false);
+
     this._mapModal = new ViennaMapModal("character_diorama");
     this._lblChar = document.getElementById("lbl-char")!;
     this._lblTorch = document.getElementById("lbl-torch")!;
@@ -1732,6 +1740,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
       if (k === "C") this._cycleCharacter();
       else if (k === "L") this._toggleTorch();
       else if (k === "N") this._toggleNoir();
+      else if (k === "H") this._setHudVisible(!this._hudVisible);
       else if (k === " ") {
         e.preventDefault();
         this._toggleTurntable();
@@ -1763,6 +1772,13 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
       this._rotateLeftHeld = false;
       this._rotateRightHeld = false;
     });
+  }
+
+  private _setHudVisible(visible: boolean): void {
+    this._hudVisible = visible;
+    for (const el of this._hudBoxes) {
+      el.style.display = visible ? "" : "none";
+    }
   }
 
   private _cycleCharacter(): void {

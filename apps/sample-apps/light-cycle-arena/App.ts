@@ -1,17 +1,20 @@
-import { SmallWorld, Object3D } from "@small-world/engine/core/index.js";
-import { AmbientLight } from "@small-world/engine/core/lights/index.js";
-import { Color } from "@small-world/engine/core/colors/index.js";
-import { StandardMaterial, WireframeMaterial } from "@small-world/engine/core/materials/index.js";
-import { Cube, Ground, Grid as GridGeometry } from "@small-world/engine/geometry/index.js";
-import { Vector3D } from "@small-world/engine/math/index.js";
-import { OrthographicProjection } from "@small-world/engine/math/projections/index.js";
+import { SmallWorldMachine, Object3D } from "@small-world-machine/engine/core/index.js";
+import { AmbientLight } from "@small-world-machine/engine/core/lights/index.js";
+import { Color } from "@small-world-machine/engine/core/colors/index.js";
+import {
+  StandardMaterial,
+  WireframeMaterial,
+} from "@small-world-machine/engine/core/materials/index.js";
+import { Cube, Ground, Grid as GridGeometry } from "@small-world-machine/engine/geometry/index.js";
+import { Vector3D } from "@small-world-machine/engine/math/index.js";
+import { OrthographicProjection } from "@small-world-machine/engine/math/projections/index.js";
 import {
   CameraStrategyType,
   CameraEffectType,
   PostProcessingEffectType,
   Keys,
-} from "@small-world/engine/enums/index.js";
-import { BloomElement } from "@small-world/engine/renderers/post/elements/index.js";
+} from "@small-world-machine/engine/enums/index.js";
+import { BloomElement } from "@small-world-machine/engine/renderers/post/elements/index.js";
 import { ArenaGrid } from "./core/ArenaGrid.js";
 import { Cycle } from "./core/Cycle.js";
 import { CycleAI } from "./core/CycleAI.js";
@@ -48,7 +51,7 @@ const AI_COLOR = new Color(1.0, 0.35, 0.55);
  * `update()` for how that's implemented (manually-driven `GridMovementBehavior.update()` calls
  * with a scaled deltaTime, bypassing `Scene`'s automatic per-behavior update pass entirely).
  */
-export class App extends SmallWorld {
+export class App extends SmallWorldMachine {
   private _grid!: ArenaGrid;
   private _player!: Cycle;
   private _ai!: Cycle;

@@ -4,11 +4,11 @@
 
 ## Enabling it
 
-Call `attachDevTools(app)` from `@small-world/tools`, and Pixler opens as one of the docked Forge windows:
+Call `attachDevTools(app)` from `@small-world-machine/tools`, and Pixler opens as one of the docked Forge windows:
 
 ```typescript
-import { SmallWorld } from "@small-world/engine";
-import { attachDevTools } from "@small-world/tools";
+import { SmallWorldMachine } from "@small-world-machine/engine";
+import { attachDevTools } from "@small-world-machine/tools";
 
 const app = new MyGame();
 attachDevTools(app);

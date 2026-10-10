@@ -5,7 +5,7 @@ description: Defines the strict formatting rules for CHANGELOG.md entries and Gi
 
 # Changelog & Release Standards
 
-Small World uses a highly stylized, poetic approach to version releases. Every new version is accompanied by a profound quote (philosophical, mathematical, scientific, or literary) that loosely reflects the nature of the update.
+Small World Machine uses a highly stylized, poetic approach to version releases. Every new version is accompanied by a profound quote (philosophical, mathematical, scientific, or literary) that loosely reflects the nature of the update.
 
 ## 1. CHANGELOG.md Format
 

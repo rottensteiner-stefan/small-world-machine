@@ -69,7 +69,7 @@ jobs:
         run: npm run test:showcases
 
   # M1 core gate ("Blocking-Comparator"): deterministic Liquid goldens.
-  # Engine stepping is driven by the fixed-step `SmallWorld.step(dt)` hook, so the
+  # Engine stepping is driven by the fixed-step `SmallWorldMachine.step(dt)` hook, so the
   # GL2 captures are fully reproducible and this job is BLOCKING for merges.
   liquid-goldens:
     runs-on: ubuntu-latest

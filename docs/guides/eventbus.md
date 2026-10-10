@@ -1,15 +1,15 @@
 # EventBus & Game Loop
 
-In modern 3D applications, UI coupled directly to the 3D engine or the game loop produces spaghetti code and performance bottlenecks. The **Small World Engine** provides a built-in, type-safe, allocation-free **EventBus** (`EventDispatcherImpl`) to cleanly decouple systems.
+In modern 3D applications, UI coupled directly to the 3D engine or the game loop produces spaghetti code and performance bottlenecks. The **Small World Machine** provides a built-in, type-safe, allocation-free **EventBus** (`EventDispatcherImpl`) to cleanly decouple systems.
 
 ## The application EventBus
 
-Because Small World enforces strict multi-instantiation (no global singletons), the EventBus is attached to your own `SmallWorld` application instance.
+Because Small World Machine enforces strict multi-instantiation (no global singletons), the EventBus is attached to your own `SmallWorldMachine` application instance.
 
 Access it via `app.events` (or pass it via constructor injection):
 
 ```typescript
-// Assuming `app` is your own SmallWorld instance
+// Assuming `app` is your own SmallWorldMachine instance
 app.events.dispatchEvent("MyEvent", { data: 123 });
 ```
 
@@ -54,7 +54,7 @@ UI components (e.g. a HUD) or other decoupled systems can simply take the `Event
 ```typescript
 import { MyGameEvents } from "./events.js";
 
-export function buildHUD(app: SmallWorld) {
+export function buildHUD(app: SmallWorldMachine) {
   const healthLabel = document.createElement("div");
 
   // The UI listens for application-level events
@@ -68,4 +68,4 @@ export function buildHUD(app: SmallWorld) {
 
 ## Why not native DOM events?
 
-Native `CustomEvent` objects in the browser are tightly bound to the DOM tree and consume memory that the garbage collector eventually has to clean up. By using a plain, generic TypeScript `EventDispatcher`, the **Small World Engine** ensures core logic stays decoupled from the browser environment — enabling predictable performance and potentially running your own logic in Web Workers.
+Native `CustomEvent` objects in the browser are tightly bound to the DOM tree and consume memory that the garbage collector eventually has to clean up. By using a plain, generic TypeScript `EventDispatcher`, the **Small World Machine** ensures core logic stays decoupled from the browser environment — enabling predictable performance and potentially running your own logic in Web Workers.

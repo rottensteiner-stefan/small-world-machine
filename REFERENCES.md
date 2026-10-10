@@ -1,6 +1,6 @@
 # Sources & References
 
-This document serves to record external sources, algorithms, mathematical derivations, and inspirations that flowed into the development of **small-world**.
+This document serves to record external sources, algorithms, mathematical derivations, and inspirations that flowed into the development of **small-world-machine**.
 
 ## Geometry & Mathematics
 
@@ -259,13 +259,13 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 - **File:** Mainly affects `packages/engine/src/math/Matrix4.ts`, `packages/engine/src/math/Quaternion.ts`, `packages/engine/src/math/Matrix3.ts` as well as cameras/projections.
 - **Source:** [Mathematische Grundlagen der 3D-Grafik (David Nadlinger, 2008/2009)](https://klickverbot.at/science/3d-mathematics/3d-mathematics.pdf)
-- **Usage:** An excellent and compact German summary of the underlying 3D mathematics. Contains derivations for rotations (avoiding gimbal lock via quaternions), view matrix, and projection matrix (incl. frustum and clipping). Serves as a general reference for the engine's math, since `small-world` uses the OpenGL convention (right-handed system, column vectors) as described there.
+- **Usage:** An excellent and compact German summary of the underlying 3D mathematics. Contains derivations for rotations (avoiding gimbal lock via quaternions), view matrix, and projection matrix (incl. frustum and clipping). Serves as a general reference for the engine's math, since `small-world-machine` uses the OpenGL convention (right-handed system, column vectors) as described there.
 
 ### Introduction to 3D Graphics and Rendering Pipeline (David Scherfgen)
 
 - **File:** Affects the general architecture of the engine (e.g., lighting, shaders, geometry buffers, cameras).
 - **Source:** [Einführung in die 3D-Grafik (David Scherfgen)](https://www.david-scherfgen.de/downloads/neues-buch-kapitel-3d-grafik.pdf)
-- **Usage:** This book chapter provides a phenomenal overview of the entire rendering pipeline (from vector to pixel on the screen). It details topics such as the Phong lighting model (Ambient, Diffuse, Specular), shading types (Flat, Gouraud, Phong), texturing (MIP-mapping, Anti-Aliasing), and the Z-Buffer. **Note:** In contrast to `small-world` (OpenGL convention), this script primarily uses the Direct3D convention (left-handed coordinate system, row vectors).
+- **Usage:** This book chapter provides a phenomenal overview of the entire rendering pipeline (from vector to pixel on the screen). It details topics such as the Phong lighting model (Ambient, Diffuse, Specular), shading types (Flat, Gouraud, Phong), texturing (MIP-mapping, Anti-Aliasing), and the Z-Buffer. **Note:** In contrast to `small-world-machine` (OpenGL convention), this script primarily uses the Direct3D convention (left-handed coordinate system, row vectors).
 
 ### Fast, Minimum Storage Ray/Triangle Intersection (Möller-Trumbore)
 
@@ -295,7 +295,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Formulas:**
   - $r(\theta) = \left( \left|\frac{\cos(m\theta/4)}{a}\right|^{n_2} + \left|\frac{\sin(m\theta/4)}{b}\right|^{n_3} \right)^{-1/n_1}$
   - 3D supershape surface combines two independent profiles $r_1(\theta)$ (longitude) and $r_2(\phi)$ (latitude): $x = r_1 \cos\theta \cdot r_2 \cos\phi$, $y = r_2 \sin\phi$, $z = r_1 \sin\theta \cdot r_2 \cos\phi$.
-- **Usage:** Drives the exotic `Supershape` geometry in the `@small-world/geometry-extras` package. A single closed-form formula, parametrized by two independent superformula profiles, produces a huge family of closed surfaces (spheres, starfish, gemstones, organic blobs) without any bespoke per-shape code.
+- **Usage:** Drives the exotic `Supershape` geometry in the `@small-world-machine/geometry-extras` package. A single closed-form formula, parametrized by two independent superformula profiles, produces a huge family of closed surfaces (spheres, starfish, gemstones, organic blobs) without any bespoke per-shape code.
 
 ### (p,q) Torus Knot Parametrization
 
@@ -406,7 +406,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **File:** `packages/engine/src/physix/PhysicsSystem.ts`
 - **Authors/Gurus:** Glenn Fiedler (Gaffer On Games)
 - **Source:** ["Fix Your Timestep!"](https://gafferongames.com/post/fix_your_timestep/)
-- **Usage:** The canonical explanation of why a fixed-timestep physics accumulator needs to hand rendering an interpolated blend (`alpha = accumulator / fixedTimeStep`) between the two most recent physics states, rather than snapping to the latest completed step. Used as the basis for decoupling `small-world`'s variable render framerate from its fixed physics tick, eliminating visual stutter/judder.
+- **Usage:** The canonical explanation of why a fixed-timestep physics accumulator needs to hand rendering an interpolated blend (`alpha = accumulator / fixedTimeStep`) between the two most recent physics states, rather than snapping to the latest completed step. Used as the basis for decoupling `small-world-machine`'s variable render framerate from its fixed physics tick, eliminating visual stutter/judder.
 
 ### Real-Time Collision Detection
 
@@ -417,13 +417,13 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 - **File:** `packages/engine/src/physix/ConvexHull.ts`, `packages/engine/src/physix/Collision.ts`
 - **Authors/Gurus:** Christer Ericson (Real-Time Collision Detection); same underlying theorem as the engine's existing OBB-OBB SAT (`Collision._obbObb`/`resolveObbObb`)
-- **Usage:** Generalizes the engine's existing 3+3+9-axis OBB-OBB SAT to an arbitrary convex polyhedron: every face normal of both shapes, plus every pairwise cross product of their edge directions, is a candidate separating axis (`Collision._satPolytopes`). `BoundingBox`/`OBB` are adapted to this same generic test as ad-hoc 8-vertex hulls (`_boxAsHull`/`_obbAsHull`) rather than duplicating the axis logic per shape pair, so `HULL` collides correctly against `SPHERE`/`BOX`/`OBB`/`HULL` alike. Added specifically to give Voronoi fracture shards (`@small-world/physics-extras`'s `fractureObject()`) their own correctly-shaped collider instead of a crude box/sphere approximation.
+- **Usage:** Generalizes the engine's existing 3+3+9-axis OBB-OBB SAT to an arbitrary convex polyhedron: every face normal of both shapes, plus every pairwise cross product of their edge directions, is a candidate separating axis (`Collision._satPolytopes`). `BoundingBox`/`OBB` are adapted to this same generic test as ad-hoc 8-vertex hulls (`_boxAsHull`/`_obbAsHull`) rather than duplicating the axis logic per shape pair, so `HULL` collides correctly against `SPHERE`/`BOX`/`OBB`/`HULL` alike. Added specifically to give Voronoi fracture shards (`@small-world-machine/physics-extras`'s `fractureObject()`) their own correctly-shaped collider instead of a crude box/sphere approximation.
 
 ### Voronoi Fracture (Physics-Based Destruction)
 
 - **File:** `packages/physics-extras/src/VoronoiFracture.ts`
 - **Concept:** Common game/VFX destruction technique: partition an object into convex Voronoi cells (see `VoronoiCells` above) and give each cell its own rigid body, so an impact "shatters" the object into physically simulated fragments instead of a scripted animation.
-- **Usage:** `fractureObject()` computes each shard as its own clipped cell (reusing `@small-world/geometry-extras`'s `computeCellFaces`/`cellCentroid`), builds a `ConvexHull` collider from it, and gives it a `RigidBody` with an evenly-split share of the original object's mass -- optionally with an initial outward impulse from an `impactPoint`, for a "shatter" kick rather than inert pieces.
+- **Usage:** `fractureObject()` computes each shard as its own clipped cell (reusing `@small-world-machine/geometry-extras`'s `computeCellFaces`/`cellCentroid`), builds a `ConvexHull` collider from it, and gives it a `RigidBody` with an evenly-split share of the original object's mass -- optionally with an initial outward impulse from an `impactPoint`, for a "shatter" kick rather than inert pieces.
 
 ### Advanced Collision Detection and Simulation
 
@@ -446,7 +446,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Hit-Stop / Freeze-Frame
 
-- **File:** `packages/engine/src/core/SmallWorld.ts`
+- **File:** `packages/engine/src/core/SmallWorldMachine.ts`
 - **Authors/Gurus:** common technique across fighting/action games (e.g. Street Fighter, Bayonetta)
 - **Source:** ["Juice It or Lose It"](https://www.gdcvault.com/play/1016487/Juice-It-or-Lose) — Martin Jonasson & Petri Purho, GDC Europe 2012
 - **Usage:** Briefly scales down gameplay-facing deltaTime (app update, physics step, scene behaviors) on impact while the camera keeps updating at full speed, so its shake/flash effects still play — sells the weight of a hit without pausing the whole engine loop.
@@ -621,7 +621,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Temporal Supersampling / TAA (Jitter + History Blend)
 
-- **File:** `packages/engine/src/core/materials/shaders/HistoryBlend.frag.glsl`, `packages/engine/src/core/materials/shaders/HistoryBlend.frag.wgsl`, `packages/engine/src/renderers/post/passes/HistoryBlendPassGL.ts`, `packages/engine/src/renderers/post/passes/HistoryBlendPassGPU.ts`, `packages/engine/src/renderers/post/elements/TaaElement.ts`, `packages/engine/src/core/Camera.ts`, `packages/engine/src/core/SmallWorld.ts`
+- **File:** `packages/engine/src/core/materials/shaders/HistoryBlend.frag.glsl`, `packages/engine/src/core/materials/shaders/HistoryBlend.frag.wgsl`, `packages/engine/src/renderers/post/passes/HistoryBlendPassGL.ts`, `packages/engine/src/renderers/post/passes/HistoryBlendPassGPU.ts`, `packages/engine/src/renderers/post/elements/TaaElement.ts`, `packages/engine/src/core/Camera.ts`, `packages/engine/src/core/SmallWorldMachine.ts`
 - **Authors/Gurus:** Brian Karis (Epic Games)
 - **Source:** ["High-Quality Temporal Supersampling"](http://advances.realtimerendering.com/s2014/#_HIGH-QUALITY_TEMPORAL_SUPERSAMPLING) — SIGGRAPH 2014, Advances in Real-Time Rendering
 - **Usage:** The canonical reference for sub-pixel camera jitter (we use a Halton(2,3) sequence, cycling 16 samples) combined with a history buffer accumulated across frames to reconstruct anti-aliased detail beyond a single frame's sample rate. We implement only the simplified half of the technique — jitter plus an exponential history blend, no motion-vector reprojection or neighborhood clamping — which smooths edges in static/slow scenes but visibly ghosts on fast movement, an accepted trade-off documented in `docs/research/aaa-engine-techniques.md`.
@@ -663,7 +663,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 ### Component & Behavior Architecture
 
 - **Concepts:** Component-based programming, Unity Behaviors.
-- **Usage:** Small World uses a strict behavior-driven architecture where logical components (`Behavior`) are attached directly to nodes like `Object3D` or `Camera` via `.addBehavior()`. This eliminates rigid inheritance structures for controllers (like `OrbitController` or `FPSController`), allowing them to be dynamically composed at runtime.
+- **Usage:** Small World Machine uses a strict behavior-driven architecture where logical components (`Behavior`) are attached directly to nodes like `Object3D` or `Camera` via `.addBehavior()`. This eliminates rigid inheritance structures for controllers (like `OrbitController` or `FPSController`), allowing them to be dynamically composed at runtime.
 
 ### Asynchronous Asset Loading
 
@@ -671,7 +671,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### AAA Rendering Techniques (Research Sources, 2026-09-27)
 
-- **Source:** [AAA-Rendering-Techniken — Wunschliste & Bestand (`docs/research/aaa-engine-techniques.md`)](https://github.com/rottensteiner-stefan/small-world/blob/main/docs/research/aaa-engine-techniques.md)
+- **Source:** [AAA-Rendering-Techniken — Wunschliste & Bestand (`docs/research/aaa-engine-techniques.md`)](https://github.com/rottensteiner-stefan/small-world-machine/blob/main/docs/research/aaa-engine-techniques.md)
 - **Authors/Gurus (named in research):** Emil Persson (humus.name, clustered shading), Sébastien Hillaire & Frostbite (volumetric rendering, SIGGRAPH 2015), "therealmjp" (shadow-map sampling), Alex Tardif (cascaded shadow maps with soft shadows), XeGTAO/Intel GameDev (ground-truth AO), Valdemir D. (game feel on the web), plus Unreal/Unity/Godot/Babylon.js/three.js documentation.
 - **Usage:** Consolidated research on forward lighting, shadows, occlusion culling, volumetric fog and post-processing compared against industry engines. Verified against the live engine on 2026-09-27: implemented items are fixed bestand (clustered lighting, PCSS, CSM polishing, HBAO, simplified TAA, HZB occlusion culling, game feel), remaining items are a maintained wishlist (froxel volumetric fog, full GTAO, LOD, full TAA). The full source list lives in the document's "Quellen" appendix.
 
@@ -910,7 +910,7 @@ This document serves to record external sources, algorithms, mathematical deriva
   - Diagonal vertex wave (object space): $\Delta y = \sin(2t \cdot \omega + x \cdot z \cdot k) \cdot A \cdot r$
   - Depth edge: $e_{\text{line}} = 1 - \text{sat}\big(E\,(z_{\text{scene}} - z_{\text{frag}})\big)$, $M_{\text{edge}} = \text{smoothstep}(1-c,\,1-c+b_e,\,e_{\text{line}})$, $M_{\text{top}} = \text{smoothstep}(c_{\text{cut}},\,c_{\text{cut}}+b_t,\,c)\,r$
   - Non-Overlapping Subtractive Isolation: $\big(\text{lerp}(C_1, C_2, c\,o)\,S\,(1 - M_{\text{edge}})(1 - M_{\text{top}})\,r\big) + M_{\text{edge}} C_{\text{edge}} S_{\text{top}} + M_{\text{top}} C_{\text{top}} S_{\text{top}}$
-- **Usage:** A massive heartfelt thank-you to Joyce (MinionsArt) for pioneering this stylized NPR lava paradigm! Her step-by-step breakdown (dual-frequency noise UV perturbation, a cellular crust texture, vertex-color painting, Scene Depth edge subtraction for organic shoreline burns, and mathematically clean subtractive cutout algebra that eliminates HDR bloom blowout) serves as the primary artistic and mathematical foundation for Small World's `StylizedLavaMaterial`.
+- **Usage:** A massive heartfelt thank-you to Joyce (MinionsArt) for pioneering this stylized NPR lava paradigm! Her step-by-step breakdown (dual-frequency noise UV perturbation, a cellular crust texture, vertex-color painting, Scene Depth edge subtraction for organic shoreline burns, and mathematically clean subtractive cutout algebra that eliminates HDR bloom blowout) serves as the primary artistic and mathematical foundation for Small World Machine's `StylizedLavaMaterial`.
 
 ## AI Coding & Architecture Assistants
 
@@ -919,13 +919,13 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 - **Authors/Gurus:** Google DeepMind
 - **Source:** [Gemini 2.5 Pro | Gemini API (Google AI for Developers)](https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro)
-- **Usage:** The flagship reasoning/thinking model used as a reference for solving complex engineering problems in `small-world` — analyzing large codebases, long-context reasoning over the engine architecture, and drafting architectural decisions. Serves as a counterpart to human review for high-level design and code-quality judgement.
+- **Usage:** The flagship reasoning/thinking model used as a reference for solving complex engineering problems in `small-world-machine` — analyzing large codebases, long-context reasoning over the engine architecture, and drafting architectural decisions. Serves as a counterpart to human review for high-level design and code-quality judgement.
 
 ### Claude Sonnet (Anthropic Claude Sonnet 5)
 
 - **Authors/Gurus:** Anthropic
 - **Source:** [Claude Models (Anthropic)](https://docs.anthropic.com/en/docs/about-claude/models/overview)
-- **Usage:** The reference agentic coding assistant used as a second pair of eyes on cross-cutting architectural decisions and large multi-file refactors in `small-world`. Consulted for architecture reviews (e.g., renderer abstraction seams between WebGL2 and WebGPU, behavior-driven component design) and for writing/refactoring TypeScript code along the project's coding standards.
+- **Usage:** The reference agentic coding assistant used as a second pair of eyes on cross-cutting architectural decisions and large multi-file refactors in `small-world-machine`. Consulted for architecture reviews (e.g., renderer abstraction seams between WebGL2 and WebGPU, behavior-driven component design) and for writing/refactoring TypeScript code along the project's coding standards.
 
 ### DeepSeek V4 Flash
 

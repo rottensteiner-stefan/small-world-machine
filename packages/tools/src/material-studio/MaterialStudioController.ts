@@ -1,5 +1,5 @@
 import type { MaterialStudioApp } from "../MaterialStudio.js";
-import { NormalMapFormat } from "@small-world/engine";
+import { NormalMapFormat } from "@small-world-machine/engine";
 import {
   generateHeightMap,
   generateNormalMap,

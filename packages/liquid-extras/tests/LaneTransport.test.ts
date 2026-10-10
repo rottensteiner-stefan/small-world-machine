@@ -9,10 +9,10 @@
 
 import { describe, it, expect, beforeAll } from "vitest";
 import fs from "fs";
-import { ShaderRegistry } from "@small-world/engine";
-import { ShaderBootstrap } from "@small-world/engine/core/renderers/shaders/ShaderBootstrap.js";
-import { NoirWaterMaterial } from "../src/materials/NoirWaterMaterial.js";
-import { OilSlickMaterial } from "../src/materials/OilSlickMaterial.js";
+import { ShaderRegistry } from "@small-world-machine/engine";
+import { ShaderBootstrap } from "@small-world-machine/engine/core/renderers/shaders/ShaderBootstrap.js";
+import { NoirWaterMaterial } from "../src/materials/NoirWater/NoirWaterMaterial.js";
+import { OilSlickMaterial } from "../src/materials/OilSlick/OilSlickMaterial.js";
 
 const REGISTRY_JSON = new URL(
   "../../../scripts/lane-contracts/lane-contracts.json",
@@ -73,7 +73,7 @@ describe("Liquid extension shader transport (T3)", () => {
     for (const [backend, source] of backends) {
       const assembled = registry.assemble(source, backend);
       expect(assembled).not.toMatch(/\[[A-Z][A-Z0-9_]+\]/);
-      expect(assembled).toContain("oilRainbow");
+      expect(assembled).toContain("oilFilmThinFilm");
     }
   });
 

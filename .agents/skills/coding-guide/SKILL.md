@@ -3,9 +3,9 @@ name: coding-guide
 description: Coding standards, TypeScript templates, guard clauses, hot-path performance rules, and shader math optimization references.
 ---
 
-# Small World Coding Guide
+# Small World Machine Coding Guide
 
-This guide provides templates, clean code standards, and shader optimization patterns for the Small World Engine.
+This guide provides templates, clean code standards, and shader optimization patterns for the Small World Machine.
 
 ---
 
@@ -221,7 +221,7 @@ Ensure CPU-side memory mapping (`Float32Array` or `DataView`) matches this layou
 
 ### D. Shader Template Chunks & Pre-Processor Token Discipline
 
-Small World replaces template tokens (z. B. `[WGSL_LIGHTING]`, `[CHUNK_NAME]`) string-basiert zur Compile-Zeit.
+Small World Machine replaces template tokens (z. B. `[WGSL_LIGHTING]`, `[CHUNK_NAME]`) string-basiert zur Compile-Zeit.
 - **Keine Makro-Tokens in Kommentaren:** Schreibe niemals Template-Tokens wörtlich in erklärende Kommentare (z. B. `// [WGSL_LIGHTING] computes...`). Der String-Replacer ersetzt alle Vorkommnisse blindlings, was mehrzeiligen Shader-Code in eine Kommentarzeile injiziert und Syntax-Fehler verursacht.
 - **Eindeutige Token-Präfixe:** Template-Slots müssen immer in eckigen Klammern und eindeutigem Schema definiert sein (z. B. `// [HOOK_LIGHTING]`).
 

@@ -298,7 +298,7 @@ export const MATERIAL_STUDIO_CSS = `
         justify-content: center;
       }
 
-      .swf-ms-container #SmallWorldPreview {
+      .swf-ms-container #SmallWorldMachinePreview {
         max-width: 100%;
         max-height: 60vh;
         background: var(--tool-bg);

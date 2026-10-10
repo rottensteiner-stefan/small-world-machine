@@ -53,7 +53,7 @@ Und drei **Zustandsformen**, die jede reife Engine trennt (siehe Abschnitt 3, 4)
 
 ---
 
-## 2. Ist-Zustand in Small World (Aufnahme 2026-09-29)
+## 2. Ist-Zustand in Small World Machine (Aufnahme 2026-09-29)
 
 ### 2.1 Wo liegt was?
 
@@ -224,7 +224,7 @@ Zusammenfassung der Engine-Recherche. **[V]** = Primärquelle geprüft, **[K]** 
 - **Nystrom, *Game Programming Patterns*:** Command-Kapitel — Undo entsteht, wenn jeder Befehl seinen Vorzustand hält und eine Liste mit „current"-Zeiger Mehrfach-Undo/Redo liefert; Replay über aufgezeichnete Befehle statt Zustands-Snapshots; Nystrom implementierte das nach eigener Aussage zuerst „in a level editor". **[V]** ([Command](https://gameprogrammingpatterns.com/command.html))
 - **Anderson, Engel, Comninos, McLoughlin (2008), „The Case for Research in Game Engine Architecture" (Future Play):** fordert Forschung zu Engine-Architektur, listet offene Fragen. **[V]**. Die von der Recherche gesuchten Titel „Deconstructing Game Engines"/„Toward a Taxonomy" konnten **nicht** bestätigt werden **[U]**.
 
-> **Konsequenz für Small World:** Die Engine hat schon Gregorys Bausteine: `*.level.json` ≙ *World Chunk Data Format*, Kit-Katalog ≙ *Resource Manager*, Maker ≙ *World Editor*. **Streaming-Einheiten früh festlegen** — dort wird ein Levelformat später eingeschränkt.
+> **Konsequenz für Small World Machine:** Die Engine hat schon Gregorys Bausteine: `*.level.json` ≙ *World Chunk Data Format*, Kit-Katalog ≙ *Resource Manager*, Maker ≙ *World Editor*. **Streaming-Einheiten früh festlegen** — dort wird ein Levelformat später eingeschränkt.
 
 ### 5.2 Serialisierungstheorie: Schema-Evolution
 
@@ -355,7 +355,7 @@ Was *alle* Quellen — Engine, Legende, Theorie, Web — auf verschiedenen Wegen
 
 ---
 
-## 8. Architekturoptionen für Small World
+## 8. Architekturoptionen für Small World Machine
 
 Sparring-Hut („critical architect") auf, Branchen-Benchmark angewendet:
 
@@ -794,7 +794,7 @@ Alle Angaben nach demselben Schlüssel wie §0; `[V]` = Seite am 2026-09-29 gele
 
 ### 16.1 Die leitende Frage
 
-Small World ist eine Engine; der Name trägt die Idee, dass man sich seine Welt baut. In unserem Sinn: **The Whisper** als Spiel, das von der Engine angetrieben wird. Damit verschiebt sich die eigentliche Frage gegenüber Abschnitt 1:
+Small World Machine ist eine Engine; der Name trägt die Idee, dass man sich seine Welt baut. In unserem Sinn: **The Whisper** als Spiel, das von der Engine angetrieben wird. Damit verschiebt sich die eigentliche Frage gegenüber Abschnitt 1:
 
 > **Wie konfigurieren/bauen wir ein fertiges Spiel aus Engine-Bausteinen zusammen — und was ist am Ende das auslieferbare Ding?**
 
@@ -804,7 +804,7 @@ Metapher des Auftraggebers: „Das ist wie die Reise zum Mars — und wir wissen
 
 ### 16.2 Auftraggeber-Positionen (Ideensammlung, nicht verbindlich)
 
-1. **App-Grenze als Package:** Alles, was zum Spiel gehört und nicht Teil der allgemeinen Engine ist, wird ausgelagert — als Package, z. B. **`@small-world/the-whisper`**. **Kits und Assets gehören dorthin** (Schmerzpunkte 2 und 3, §2.3).
+1. **App-Grenze als Package:** Alles, was zum Spiel gehört und nicht Teil der allgemeinen Engine ist, wird ausgelagert — als Package, z. B. **`@small-world-machine/the-whisper`**. **Kits und Assets gehören dorthin** (Schmerzpunkte 2 und 3, §2.3).
 2. **Kit-Frage (weicht von §9.4/ADR 0011 Phase 2 ab):** Kits **physisch in den App-Baum**, aber `kit.json`-Manifeste intakt lassen — eine spätere Ausgliederung bleibt dann ein Ordner-Umzug, kein Re-Architect. Heute spricht §12a-2 (ein Konsument) dafür; bewusste **Scope-Reduktion** von ADR 0011, *noch keine formale Entscheidung*. Verbindlich wird es erst mit der ersten Umsetzung.
 3. **Package-Form:** Workspace-Package mit `private: true` — **keine publishbare npm-Lib** (niemand konsumiert Whisper-Code per `npm i`). Öffentliche API sind die Dateiformate (`app.json`, `level.json`, `SW_*`); Versionierung läuft über die Formate, nicht npm-SemVer (§5.4). Ein „eigenes Repo/eigene CI" bleibt als späterer reiner Ordner-Umzug möglich.
 4. **Eine Zielform heute:** statischer Ordner + Host. Andere Formen (Offline, Messe, Weitergabe) bleiben **dokumentierte spätere Optionen**, kein Bauvorhaben.
@@ -827,8 +827,8 @@ Alle untersuchten Werkzeuge folgen demselben Skelett: **eigenes Composition-/Pro
 ### 16.4 Analyse: Was ist universell, was ist anders
 
 - **Universell (deckt Invariante 2, §7-2):** Die Trennung Authored/Composition ≠ Cooked/Build ≠ Runtime ist bei allen identisch. Der Weg ist „derselbe", **weil es die einzige funktionierende Architektur ist** — das ist Physik, kein Kopieren.
-- **Nicht übertragbar, Punkt (a) — die Plattform-Matrix:** Godot/Unity exportieren in 10+ Ziele; Small World hat **genau ein** natiches Ziel (statische Web-Dateien). Die „gleiche Spur" kollabiert hier zu: *ein* Composition-Format + *eine* Build-Pipeline (Vite) + optionaler Trivial-ZIP-Transport. **Kein Export-Framework, keine Ziel-Registry, kein Adapter-Pattern als Vorsorge.**
-- **Nicht übertragbar, Punkt (b) — Player-Runtime bündeln:** Jeder Vergleich packt eine *eigene Engine-Runtime* ins Artefakt (Godot-WASM, Construct-, Defold-, RPG-Maker-Laufzeit). Small Worlds Engine *ist* bereits der Browser-Code — das Artefakt enthält nur **Inhalt + Erst-Partei-Code über Vite**. Wir sind um eine ganze Schicht billiger; genau deshalb bleibt der Export trivial.
+- **Nicht übertragbar, Punkt (a) — die Plattform-Matrix:** Godot/Unity exportieren in 10+ Ziele; Small World Machine hat **genau ein** natiches Ziel (statische Web-Dateien). Die „gleiche Spur" kollabiert hier zu: *ein* Composition-Format + *eine* Build-Pipeline (Vite) + optionaler Trivial-ZIP-Transport. **Kein Export-Framework, keine Ziel-Registry, kein Adapter-Pattern als Vorsorge.**
+- **Nicht übertragbar, Punkt (b) — Player-Runtime bündeln:** Jeder Vergleich packt eine *eigene Engine-Runtime* ins Artefakt (Godot-WASM, Construct-, Defold-, RPG-Maker-Laufzeit). Small World Machines Engine *ist* bereits der Browser-Code — das Artefakt enthält nur **Inhalt + Erst-Partei-Code über Vite**. Wir sind um eine ganze Schicht billiger; genau deshalb bleibt der Export trivial.
 
 ### 16.5 Verhältnis zu bestehenden Entscheidungen
 

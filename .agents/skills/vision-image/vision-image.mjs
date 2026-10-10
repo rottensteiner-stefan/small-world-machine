@@ -5,7 +5,7 @@
 // non-multimodal agent can "see" an image through the returned description.
 //
 // Usage:
-//   node .agents/vision-image.mjs <image-path> [--prompt "<task>" ] [--provider openai|gemini]
+//   node .agents/skills/vision-image/vision-image.mjs <image-path> [--prompt "<task>" ] [--provider openai|gemini]
 //
 // Providers (default: gemini — the verified-working bridge; openai is opt-in via --provider):
 //   gemini  -> gemini-3.8-flash     (env GEMINI_API_KEY, default)
@@ -24,7 +24,7 @@ const provIdx = args.findIndex((a) => a === "--provider");
 const provider = provIdx >= 0 ? args[provIdx + 1] : "gemini";
 
 if (!fileArg) {
-  console.error("usage: node .agents/vision-image.mjs <image-path> [--prompt <task>] [--provider openai|gemini]");
+  console.error("usage: node .agents/skills/vision-image/vision-image.mjs <image-path> [--prompt <task>] [--provider openai|gemini]");
   process.exit(1);
 }
 if (provider === "openai" && !process.env.OPENAI_API_KEY) {

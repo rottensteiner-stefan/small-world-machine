@@ -13,13 +13,13 @@ import {
   StandardMaterial,
   Texture,
   Vector3D,
-} from "@small-world/engine";
-import { attachDevTools } from "@small-world/tools";
+} from "@small-world-machine/engine";
+import { attachDevTools } from "@small-world-machine/tools";
 
 class Showcase19 extends AbstractShowcase {
   constructor(options: EngineOptions = {}) {
     super({
-      canvasId: "SmallWorld",
+      canvasId: "SmallWorldMachine",
       rendererType: RendererType.BEST,
       fullscreen: true,
       ...options,

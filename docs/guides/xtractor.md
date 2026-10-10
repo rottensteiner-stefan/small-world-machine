@@ -4,11 +4,11 @@ Pulling sprites out of a reference sheet or screenshot usually means a detour th
 
 ## Enabling it
 
-Like the other built-in dev tools, Xtractor is wired up automatically as soon as you call `attachDevTools(app)` from `@small-world/tools` (see [The Forge](/guides/forge#integrating-the-forge-into-your-own-app)):
+Like the other built-in dev tools, Xtractor is wired up automatically as soon as you call `attachDevTools(app)` from `@small-world-machine/tools` (see [The Forge](/guides/forge#integrating-the-forge-into-your-own-app)):
 
 ```typescript
-import { SmallWorld } from "@small-world/engine";
-import { attachDevTools } from "@small-world/tools";
+import { SmallWorldMachine } from "@small-world-machine/engine";
+import { attachDevTools } from "@small-world-machine/tools";
 
 const app = new MyGame();
 attachDevTools(app);
@@ -22,7 +22,7 @@ Xtractor is also available as a self-contained page at `/tools/xtractor.html`. N
 :::
 
 ::: tip Own package since ADR 0024
-`Xtractor` lives in `@small-world/tools` (`packages/tools/`), a separate workspace package layered on top of `@small-world/engine` — see [ADR 0024](/adr/0024-tools-ecosystem-package).
+`Xtractor` lives in `@small-world-machine/tools` (`packages/tools/`), a separate workspace package layered on top of `@small-world-machine/engine` — see [ADR 0024](/adr/0024-tools-ecosystem-package).
 :::
 
 ## Loading an image

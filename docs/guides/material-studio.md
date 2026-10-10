@@ -6,11 +6,11 @@ The name suggests a material *editor* — something that lets you tweak a `Stand
 
 ## Enabling it
 
-Call `attachDevTools(app)` from `@small-world/tools`, and Material Studio opens as one of the docked Forge windows:
+Call `attachDevTools(app)` from `@small-world-machine/tools`, and Material Studio opens as one of the docked Forge windows:
 
 ```typescript
-import { SmallWorld } from "@small-world/engine";
-import { attachDevTools } from "@small-world/tools";
+import { SmallWorldMachine } from "@small-world-machine/engine";
+import { attachDevTools } from "@small-world-machine/tools";
 
 const app = new MyGame();
 attachDevTools(app);
@@ -47,7 +47,7 @@ Normal maps come from a Sobel gradient over the height map's luminance, not a re
 
 ## Preview and export
 
-Switch between tabs to view a single map, the full grid of all seven, or a **"Small World Engine Preview"** — a live, auto-rotating sphere/cube/torus/plane, rendered with your generated maps on a `StandardMaterial`, in Material Studio's own isolated preview scene (it has nothing to do with your game's actual scene or objects).
+Switch between tabs to view a single map, the full grid of all seven, or a **"Small World Machine Preview"** — a live, auto-rotating sphere/cube/torus/plane, rendered with your generated maps on a `StandardMaterial`, in Material Studio's own isolated preview scene (it has nothing to do with your game's actual scene or objects).
 
 Export is plain PNG, no bundling:
 

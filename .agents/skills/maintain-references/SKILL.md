@@ -26,7 +26,7 @@ Every new entry in `REFERENCES.md` MUST follow this exact structure (using an `H
 - **File:** `path/to/the/affected_file.ts`
 - **Authors/Gurus:** {Name of the authors, researchers, or creators, if known}
 - **Source:** [{Title of the Source/Paper/Site}]({URL})
-- **Usage:** {A brief, precise explanation of how and why this concept is used inside the small-world engine. What does it solve?}
+- **Usage:** {A brief, precise explanation of how and why this concept is used inside the small-world-machine engine. What does it solve?}
 ```
 
 ## Guardrails

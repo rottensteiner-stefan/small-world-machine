@@ -1,11 +1,11 @@
-# Exotische Geometrien (`@small-world/geometry-extras`)
+# Exotische Geometrien (`@small-world-machine/geometry-extras`)
 
-Das Paket `@small-world/geometry-extras` erweitert den Kern-Primitiven-Katalog (`Cube`, `Sphere`, `Plane`, `Cylinder`, `Tube`) um eine umfangreiche Sammlung prozeduraler, parametrischer und mathematisch exotischer 3D-Geometrien.
+Das Paket `@small-world-machine/geometry-extras` erweitert den Kern-Primitiven-Katalog (`Cube`, `Sphere`, `Plane`, `Cylinder`, `Tube`) um eine umfangreiche Sammlung prozeduraler, parametrischer und mathematisch exotischer 3D-Geometrien.
 
 ## Installation & Import
 
 ```bash
-npm install @small-world/geometry-extras
+npm install @small-world-machine/geometry-extras
 ```
 
 ```typescript
@@ -19,7 +19,7 @@ import {
   FilledPolygon,
   VoronoiShardGeometry,
   MarchingCubes,
-} from "@small-world/geometry-extras";
+} from "@small-world-machine/geometry-extras";
 ```
 
 ---

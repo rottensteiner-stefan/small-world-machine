@@ -1,4 +1,4 @@
-import { SmallWorld } from "../index.js";
+import { SmallWorldMachine } from "../index.js";
 import { EngineOptions } from "../../interfaces/index.js";
 import { CameraStrategyType, Keys, RendererType } from "../../enums/index.js";
 import { Vector3D } from "../../math/index.js";
@@ -11,7 +11,7 @@ import { FlyController, OrbitController } from "../controllers/index.js";
  * delay. The event's `detail` carries the resolved renderer type, so consumers can also verify
  * which backend actually came up.
  */
-export const SHOWCASE_READY_EVENT = "small-world:scene-ready";
+export const SHOWCASE_READY_EVENT = "small-world-machine:scene-ready";
 
 /**
  * Reads a `?rendererType=` override from the page URL (e.g. `?rendererType=WEB_GL2`),
@@ -44,7 +44,7 @@ const VALID_SHOWCASE_IDS = [
   29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
 ];
 
-export abstract class AbstractShowcase extends SmallWorld {
+export abstract class AbstractShowcase extends SmallWorldMachine {
   /**
    * Renderer-switch hotkeys: Option/Alt+1 opens WebGL1, +2 WebGL2, +3 WebGPU. The digits are
    * matched by `event.code` (top-row digit keys) so the combo works on any keyboard layout.

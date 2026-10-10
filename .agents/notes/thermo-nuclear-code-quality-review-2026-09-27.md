@@ -1,7 +1,7 @@
 # Thermo-Nuclear Code Quality Review (2026-09-27) — verifizierte Neuauflage
 
 > **Modus:** Unbarmherzig, analytisch, tiefgehend. Fokus auf mathematischer Exaktheit, physikalischer Konsistenz, Zero-Allocation im Hot-Path und kompromissloser Runtime-Performance.
-> **Prüfgegenstand:** Small World Core (`packages/engine`), Math, Physix, Renderer & Passes, Shader (GLSL/WGSL), Post-Processing sowie Dokumentations- & ADR-Abgleich.
+> **Prüfgegenstand:** Small World Machine Core (`packages/engine`), Math, Physix, Renderer & Passes, Shader (GLSL/WGSL), Post-Processing sowie Dokumentations- & ADR-Abgleich.
 > **Hinweis:** Diese Fassung ist die *verifizierte* Neuauflage. Jeder Claim des Erstberichts wurde gegen den Code/Shader unabhängig nachgerechnet und mit Status gekennzeichnet ((CHECK) = bestätigt, (KORRIGIERT) = in Punkten korrigiert, (WIDERLEGT) = nicht haltbar). Persönliche, über den Erstbericht hinausgehende Befunde sind als `[NEU]` gekennzeichnet.
 
 ---

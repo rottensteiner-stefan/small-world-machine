@@ -62,11 +62,11 @@ zwei längst bestehenden Extensions. `WorldWriter._finalize()` sammelt jetzt die
   einen Fall, verschiebt aber dasselbe Problem auf jede künftige Extension — inkonsistent mit
   glTFs eigenem Erweiterungsmodell, das explizit auf Parteien ausgelegt ist, die Khronos nicht
   kennt.
-- **Die eingebauten drei Extensions in ein separates `@small-world/gltf-extensions`-Package
+- **Die eingebauten drei Extensions in ein separates `@small-world-machine/gltf-extensions`-Package
   auslagern.** Erzeugt eine echte Zirkelabhängigkeit: Diese drei sind Default-Verhalten, das
   `GltfLoader`/`WorldWriter` selbst beim Laden/Schreiben brauchen (ein Licht/Prefab/eine Zone
   soll ohne Zusatzschritt korrekt erkannt werden), brauchen aber zwingend Engine-interne Typen
-  (`Object3D`, `PointLight`, `StageZone`). Ein separates Package müsste von `@small-world/engine`
+  (`Object3D`, `PointLight`, `StageZone`). Ein separates Package müsste von `@small-world-machine/engine`
   abhängen; die Engine müsste umgekehrt das Package importieren, um ihre eigenen Defaults zu
   registrieren — Zirkel. Ein externes Package bleibt der richtige Ort für echt optionale,
   nicht-Default-Extensions (z. B. eine spätere Handvoll bekannter `EXT_*`-Community-Extensions

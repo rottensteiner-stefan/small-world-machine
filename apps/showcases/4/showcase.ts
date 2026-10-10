@@ -15,7 +15,7 @@ import {
   TextureGenerator,
   Vector3D,
   WASDController,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 const CAR_SPEED: number = 10.0; // The car's speed
 

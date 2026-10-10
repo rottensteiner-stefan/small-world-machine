@@ -1,5 +1,5 @@
 import { ForgeWindow } from "./ForgeWindow.js";
-import { ForgeTool } from "@small-world/engine";
+import { ForgeTool } from "@small-world-machine/engine";
 import { FORGE_THEME_CSS } from "./ForgeTheme.js";
 
 export interface ForgeOptions {

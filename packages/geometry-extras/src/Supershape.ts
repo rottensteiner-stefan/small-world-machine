@@ -1,4 +1,4 @@
-import { AbstractGeometry, MathUtils } from "@small-world/engine";
+import { AbstractGeometry, MathUtils } from "@small-world-machine/engine";
 
 /**
  * Parameters for one 2D superformula profile (Johan Gielis' generalization of the

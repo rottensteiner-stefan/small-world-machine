@@ -4,7 +4,7 @@ import {
   GltfReadContext,
   Texture,
   AssetManager,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { BasisTranscoder } from "./BasisTranscoder.js";
 
 export interface KhrTextureBasisuDef {

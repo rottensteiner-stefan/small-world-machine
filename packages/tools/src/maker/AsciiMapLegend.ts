@@ -5,7 +5,7 @@ import {
   StandardMaterial,
   Color,
   Cube,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 /** Character -> (label, color) for Maker's default ASCII-import legend -- deliberately its own
  * small palette, not an import of `MapGenerator`'s internal `_palette` field: this is Maker's own

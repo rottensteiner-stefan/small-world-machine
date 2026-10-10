@@ -1,6 +1,6 @@
 # Hit-Stop skaliert die Gameplay-Zeit global, nicht pro Entität
 
-`SmallWorld.triggerHitStop()` skaliert die einzelne `gameplayDeltaTime`, die an das `update()`,
+`SmallWorldMachine.triggerHitStop()` skaliert die einzelne `gameplayDeltaTime`, die an das `update()`,
 `physics.step()` und `scene.update()` der App übergeben wird — jede Entität in der Szene wird
 gemeinsam verlangsamt, nicht nur die getroffene. Das war nicht das ideale Design, sondern das, was
 die Engine tatsächlich hergibt: `RigidBody` hat kein eigenes Zeitskalierungs-Feld pro Körper, und

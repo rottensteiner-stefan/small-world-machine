@@ -1,4 +1,4 @@
-import { AbstractMaterial, Cylinder, Object3D } from "@small-world/engine";
+import { AbstractMaterial, Cylinder, Object3D } from "@small-world-machine/engine";
 
 export interface ErlenmeyerFlaskOptions {
   radius?: number;

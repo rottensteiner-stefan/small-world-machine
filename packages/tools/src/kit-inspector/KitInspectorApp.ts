@@ -1,5 +1,5 @@
 import {
-  SmallWorld,
+  SmallWorldMachine,
   Object3D,
   Grid,
   DirectionalLight,
@@ -10,8 +10,8 @@ import {
   KitRegistry,
   CameraStrategyType,
   PerspectiveProjection,
-} from "@small-world/engine";
-import type { KitManifest } from "@small-world/engine";
+} from "@small-world-machine/engine";
+import type { KitManifest } from "@small-world-machine/engine";
 import {
   type IAssetSource,
   type ValidationReport,
@@ -42,7 +42,7 @@ export type {
  * Provides interactive orbital navigation, studio lighting presets, wireframe and
  * socket inspection, as well as PBR material previewing on standard test primitives.
  */
-export class KitInspectorApp extends SmallWorld {
+export class KitInspectorApp extends SmallWorldMachine {
   private _kitRegistry: KitRegistry;
   private readonly _presetRegistry: KitRegistry;
   private readonly _onAssetLoaded: ((info: InspectedAssetInfo) => void) | undefined;

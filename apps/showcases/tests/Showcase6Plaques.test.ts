@@ -42,7 +42,7 @@ HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
   arc: vi.fn(),
 }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
-import { BoundingBox, Texture } from "@small-world/engine";
+import { BoundingBox, Texture } from "@small-world-machine/engine";
 
 describe("Showcase 6 - Complete Plaque & Geometry Verification", () => {
   let Showcase6Class: typeof import("../6/showcase.js").Showcase6;

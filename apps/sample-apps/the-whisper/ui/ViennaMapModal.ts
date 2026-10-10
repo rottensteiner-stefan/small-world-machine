@@ -1,4 +1,4 @@
-import { isEditingTextInput } from "@small-world/engine";
+import { isEditingTextInput } from "@small-world-machine/engine";
 
 export type MapLocationStatus = "available" | "current" | "locked" | "in_development" | "target";
 
@@ -239,7 +239,7 @@ export const VIENNA_LOCATIONS: MapLocation[] = [
     title: "Character Diorama Studio",
     district: "Entwickler-Labor",
     subtitle: "Szene 3 // 3D-Bühne, PBR-Materialien & Ratten-FSM",
-    faction: "Small-World Engine Studio",
+    faction: "Small-World-Machine Engine Studio",
     factionColor: "#38bdf8",
     xPercent: 12,
     yPercent: 88,

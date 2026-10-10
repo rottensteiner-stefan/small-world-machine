@@ -18,7 +18,7 @@ for (const dir of dirs) {
 
   // Extract <title>
   const titleMatch = content.match(/<title>(.*?)<\/title>/s);
-  const title = titleMatch ? titleMatch[1].trim() : `Small World Engine - Showcase ${dir}`;
+  const title = titleMatch ? titleMatch[1].trim() : `Small World Machine - Showcase ${dir}`;
 
   // Extract <style> if any
   const styleMatch = content.match(/<style>(.*?)<\/style>/s);

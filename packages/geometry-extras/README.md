@@ -1,12 +1,12 @@
-# @small-world/geometry-extras
+# @small-world-machine/geometry-extras
 
-> Exotic and procedural geometries for the **Small World 3D Engine**: shapes that are legitimately useful for someone, somewhere, but too niche to justify a permanent slot in the engine core.
+> Exotic and procedural geometries for the **Small World Machine 3D Engine**: shapes that are legitimately useful for someone, somewhere, but too niche to justify a permanent slot in the engine core.
 
 ---
 
 ## 📦 Overview
 
-The engine core (`@small-world/engine`) ships a lean, general-purpose set of primitives (`Cube`, `Sphere`, `Torus`, `Cylinder`, ...). This package is the home for everything more exotic, following the same decoupled extension pattern as `@small-world/gltf-extensions`: it depends on the engine, never the other way around, and the core stays untouched.
+The engine core (`@small-world-machine/engine`) ships a lean, general-purpose set of primitives (`Cube`, `Sphere`, `Torus`, `Cylinder`, ...). This package is the home for everything more exotic, following the same decoupled extension pattern as `@small-world-machine/gltf-extensions`: it depends on the engine, never the other way around, and the core stays untouched.
 
 Every geometry here extends the engine's `AbstractGeometry` and only implements `generateGeometryData()` -- the same extension point any third-party geometry package would use.
 
@@ -41,8 +41,8 @@ import {
   FilledPolygon,
   VoronoiCells,
   MarchingCubes,
-} from "@small-world/geometry-extras";
-import { Object3D, StandardMaterial } from "@small-world/engine";
+} from "@small-world-machine/geometry-extras";
+import { Object3D, StandardMaterial } from "@small-world-machine/engine";
 
 const knot = new Object3D("Knot");
 knot.geometry = new TorusKnot({ p: 3, q: 7, tube: 0.15 }).getGeometryData();
@@ -57,7 +57,7 @@ Each geometry takes a single options object (see the exported `*Options` interfa
 
 ## 🧭 Adding a new exotic geometry
 
-1. Extend `AbstractGeometry` from `@small-world/engine`.
+1. Extend `AbstractGeometry` from `@small-world-machine/engine`.
 2. Implement `protected generateGeometryData(): void`, filling `_vertices`/`_indices`/`_uvs` (normals/tangents/wireframe are derived automatically by the base class if omitted).
 3. Export it from `src/index.ts`.
 4. Add a NaN-guard test under `tests/` (zero segments, zero/degenerate parameters) following the existing tests.
@@ -65,4 +65,4 @@ Each geometry takes a single options object (see the exported `*Options` interfa
 
 ## ⚠️ Why there's no "Voronoi fracture" here
 
-`VoronoiCells` is an obvious fit for physics-based destruction (each cell as its own rigid body). That deliberately isn't built here: it needs both `@small-world/engine`'s physics _and_ this package's geometry, so it lives in its own separate package, `@small-world/physics-extras`, instead of adding a physics dependency to a geometry-only one. `VoronoiShardGeometry` (a single already-clipped cell as its own renderable `AbstractGeometry`) and the `computeCellFaces`/`cellCentroid` building blocks that package uses to get there both live here.
+`VoronoiCells` is an obvious fit for physics-based destruction (each cell as its own rigid body). That deliberately isn't built here: it needs both `@small-world-machine/engine`'s physics _and_ this package's geometry, so it lives in its own separate package, `@small-world-machine/physics-extras`, instead of adding a physics dependency to a geometry-only one. `VoronoiShardGeometry` (a single already-clipped cell as its own renderable `AbstractGeometry`) and the `computeCellFaces`/`cellCentroid` building blocks that package uses to get there both live here.

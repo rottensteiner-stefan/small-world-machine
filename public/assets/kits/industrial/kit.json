@@ -3,7 +3,7 @@
   "id": "industrial",
   "name": "Underground & Industrial Kit",
   "version": "1.0.0",
-  "description": "Standard modular kit of industrial and underground bunker assets with authentic ADR/GHS hazard labeling for Small World Engine.",
+  "description": "Standard modular kit of industrial and underground bunker assets with authentic ADR/GHS hazard labeling for Small World Machine.",
   "items": [
     {
       "id": "industrial/wall_lamp",
@@ -41,6 +41,6 @@
       "meta": "barrel_chemical_blue/meta.json"
     }
   ],
-  "author": "Small World Studio",
+  "author": "Small World Machine Studio",
   "license": "CC0-1.0"
 }

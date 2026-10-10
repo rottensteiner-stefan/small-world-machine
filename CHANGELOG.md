@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.102.0] - 2026-10-10
+
+### "What's in a name? that which we call a rose / By any other name would smell as sweet" - William Shakespeare
+
+- **Features:**
+  - *`OilPuddleMaterial`*: a new Graphic-Noir petroleum material in `@small-world-machine/liquid-extras` with six established looks (`mutedSheen`, `tar`, `chiaroscuro`, `tarSkin`, `whaleOil`, `posterRings`) and three fluid tunings (`crude`, `petrol`, `diesel`). Canvas-wide it runs on all three shader backends (GLSL300, GLSL100, WGSL). The underlying thin-film interference model lives once in the canonical shared module `shading/thinFilm/thinFilm.ts` (mutED, desaturated re-mix by design; pure functions without samplers or uniforms, injectable through the `composeStylizedWaterSources` hooks or standalone fragment shaders).
+- **Architecture & Bugfixes:**
+  - *Re-brand `Small World` to `Small World Machine`*: the engine entry point is renamed `SmallWorld` -> `SmallWorldMachine` (`packages/engine/src/core/SmallWorldMachine.ts`), the package scopes are `@small-world/*` -> `@small-world-machine/*`, the API pages, the documentation, the guides, ADRs, research docs, skills, CI, husky hooks, `CONTEXT.md`, `REFERENCES.md`, `VISION.md` and the `Makefile` all speak of Small World Machine only. Historical entries in changelogs and logs are preserved.
+  - *Liquid material re-organization*: `NoirWater` and `OilSlick` move into their own folders under `packages/liquid-extras/src/materials/`; the `OilSlick` material is extracted from `the-whisper`'s character diorama and now ships in the extension package together with the shared thin-film module.
+- **Housekeeping & Docs:**
+  - *Vision skill canonicalization*: the `vision-image` skill and its script move into `.agents/skills/vision-image/` with a proper `SKILL.md`; the moved API doc page replaces `SmallWorld` with `SmallWorldMachine`.
+  - *Tooling*: new `scripts/forge-tools-e2e.mjs` and `scripts/lib/forge-page.mjs` for the Forge tool browser tests; root `package.json` gains `author` and `contributors` metadata.
+  - Verified: lint, library build and the full test suite green.
+
 ## [0.101.0] - 2026-10-10
 
 ### "Nothing endures but change." - Heraclitus
@@ -13,7 +27,7 @@
   - *Stylized Lava failed on two backends before*: the WebGL2 program did not link (interface block `int` precision differed between the stages) and the WebGPU shader did not compile without maps (`USE_*` constants). The wave also moved vertices sideways inside a vertical `Plane`.
   - *WebGPU stylized water*: `StylizedWater.frag.wgsl` still read legacy uniform slots (`shininess`, `pad2`, `useReflectionMap`), which broke refraction and caustics on WebGPU for stylized, Noir and OilSlick water. New `LiquidUniformNameParity` test forbids legacy slots and checks every read field against what the manifest writes.
   - *Water surface probe*: `OpenWaterSurfaceProbe` mirrors the splat ring and the wall reflection (clapotis) of the vertex shader and reads the lanes live; new `OpenWaterMaterial.poolHalfExtent` (default 4.0, 0 = off) replaces the hard-coded wall distance. `emitSplat` lives on `OpenWaterMaterial`.
-  - *Renderers*: the WebGL1 HDR target is no longer re-allocated on every bind; pipeline flags are sorted, de-duplicated and validated; the object ring buffer no longer leaks on a double grow and grows on overflow instead of reusing the last slot; pending destroys are drained on resize; `SmallWorld.step` fails fast after `destroy()` and on invalid `dt`; `World.frag.glsl100` matches GLSL300/WGSL (blend weights, sRGB).
+  - *Renderers*: the WebGL1 HDR target is no longer re-allocated on every bind; pipeline flags are sorted, de-duplicated and validated; the object ring buffer no longer leaks on a double grow and grows on overflow instead of reusing the last slot; pending destroys are drained on resize; `SmallWorldMachine.step` fails fast after `destroy()` and on invalid `dt`; `World.frag.glsl100` matches GLSL300/WGSL (blend weights, sRGB).
   - *Tools security and robustness*: zip and gzip ingest is size-limited before unpacking (zip bomb, zip slip); the Gemini key moves from the URL to a header; AI and error texts are no longer written with `innerHTML`; all AI requests have a timeout and can be cancelled; undo history has a 256 MB budget; `HttpVisionProvider` replaces four copies of the same request scaffold; OpenAI GPT-5 and o-series use `max_completion_tokens`.
   - *Scripts*: `goldens/compare.js` can no longer report a green result without a current capture or with missing cells; `capture.js` retries only blank frames and fails hard on console errors; `webgpu-resize-stress.js` fails when WebGPU is not active; `ibl-bake` passes its options through.
 - **Housekeeping & Docs:**
@@ -42,7 +56,7 @@
 - **Features:**
   - *Map Generator on universal ingest*: [`MapGenerator`](packages/tools/src/MapGenerator.ts) now uses the shared `UniversalIngestDropzone` instead of its own text/file/URL panel: drag and drop (window-wide), file and folder picker, URL import and `Cmd+V`. ASCII maps (`.map`, `.txt`), JSON level descriptions (`map`, `ascii` or `grid` fields, or a plain string array), ZIP archives and image or SVG sprites (rasterised to the grid, palette-matched) all load through one route. New `loadFromImage()`. Covered by new tests in `MapGenerator.test.ts`.
 - **Housekeeping & Docs:**
-  - *Showcase imports*: all showcases import from the package names (`@small-world/engine`, `@small-world/tools`) instead of long relative `packages/.../src` paths; duplicate imports from one module are merged, names sorted. Only the shared audio test mock stays relative.
+  - *Showcase imports*: all showcases import from the package names (`@small-world-machine/engine`, `@small-world-machine/tools`) instead of long relative `packages/.../src` paths; duplicate imports from one module are merged, names sorted. Only the shared audio test mock stays relative.
   - *Asset budgets*: ADR 0011 section 1.1 and the asset sourcing guideline fix a four-tier polycount budget by object size (clutter 800-1.5k, props 2.5-4.5k, furniture 6-10k, hero/architecture 10-16k triangles), set upstream at modelling or export.
   - Verified: `tsc` clean, 245 test files, 1499 tests; showcase build green. The Map Generator's drop routes were covered by unit tests only, not clicked through in a browser.
 
@@ -113,8 +127,8 @@
 
 - **Features:**
   - *Showcase 10 gallery*: ten pools side by side (clear water, toon, bold, soft, sparkle, dredge, noir, lava, slime, oil). The start camera now fits the near row to the aspect ratio (FOV 64°, pitch -28°), signs stand beside their own pool, dredge/noir/lava/slime/oil get dark tile frames, the sky has a clear colour plus linear horizon fog, the subtitle lists all ten pools, and public labels carry no trademark names.
-  - *Noir ink look* (`@small-world/liquid-extras`): the hook posterises in gamma space and draws constant-frequency pen hatching (8 lines per unit) whose line thickness follows tone from hairline to solid; cross-hatching only in the darkest band; `posterizeSteps` (2..8) is wired through `u_styleA.w`; thin broken foam rim.
-  - *OilSlickMaterial* (`@small-world/liquid-extras`): dark, viscous oil with a sparse rainbow sheen (smooth domain-warped flow noise instead of cell noise, sheen tied to fresnel and the sun, `iridescenceStrength` wired, absorption 1.8/1.5/1.2). Class docs no longer claim thin-film interference.
+  - *Noir ink look* (`@small-world-machine/liquid-extras`): the hook posterises in gamma space and draws constant-frequency pen hatching (8 lines per unit) whose line thickness follows tone from hairline to solid; cross-hatching only in the darkest band; `posterizeSteps` (2..8) is wired through `u_styleA.w`; thin broken foam rim.
+  - *OilSlickMaterial* (`@small-world-machine/liquid-extras`): dark, viscous oil with a sparse rainbow sheen (smooth domain-warped flow noise instead of cell noise, sheen tied to fresnel and the sun, `iridescenceStrength` wired, absorption 1.8/1.5/1.2). Class docs no longer claim thin-film interference.
 - **Architecture & Bugfixes:**
   - *Bright patch root cause*: the toon specular term `aaStepMask(0.99, nDotH, ...)` is a +-8 degree cone, but wave slopes are smooth over metres, so one cone covered about 20% of a pool. The cone is now narrow for all stylized styles (`aaStepMask(0.9993, nDotH, 0.0005)`, `smoothstep(0.9988, 0.9997, ...)` in GLSL100).
   - *WebGPU lava stripes*: `DepthPrePassGPU` drew opaque waved liquids with the flat shared `DepthMaterial` (no wave displacement), so displaced troughs failed the later less-equal depth test and the clear colour showed through. [`FluidSurfaceMaterial.getRenderManifest()`](packages/engine/src/core/materials/FluidSurfaceMaterial.ts) now sets `state.skipDepthPrePass` for opaque liquids with wave amplitude above 0 (unit test added).
@@ -148,13 +162,13 @@
 - **Features:**
   - *Anime Fluid Pipeline & Preset Ladder*: Unified `StylizedWaterMaterial` into a modular stylized fluid shader core supporting presets (`flat`, `toon`, `bold`, `soft`, `sparkle`, `dredge`, `custom`) for water, magma, toxic slime, and oil.
   - *Stepped Star Glint & Smooth Voronoi Caustics*: Introduced procedural $F_1-\text{Smooth}F_1$ Voronoi caustic networks and quantized 4-point astroid star glints (8/12 FPS cadence for traditional animation feel) across WebGL1, WebGL2, and WebGPU.
-  - *Modular Liquid Extensions*: Created `@small-world/liquid-extras` package and compile-time injection hooks (`[WATER_EXT_DECL]`, `[WATER_EXT_SURFACE]`) enabling external look extensions (e.g. `NoirWaterMaterial`) with zero engine core overhead.
+  - *Modular Liquid Extensions*: Created `@small-world-machine/liquid-extras` package and compile-time injection hooks (`[WATER_EXT_DECL]`, `[WATER_EXT_SURFACE]`) enabling external look extensions (e.g. `NoirWaterMaterial`) with zero engine core overhead.
 - **Architecture & Bugfixes:**
   - *Std140 Uniform Layout Alignment*: Added `u_styleA` and `u_styleB` (vec4) to `ObjectUniforms` (float offsets 56 and 60) within the 256-byte budget in `StandardWebGPULayout` and `structs.wgsl`.
   - *Architectural Decision Record*: Documented engine core vs. extension boundaries in ADR 0025 (`0025-stylized-liquid-looks-engine-vs-extension.md`).
 - **Housekeeping & Docs:**
   - *Domain Modeling & Mathematical References*: Documented anime fluid family concepts in `CONTEXT.md` and mathematical derivations in `REFERENCES.md`.
-  - *ESLint Engine Isolation*: Enforced boundary rule preventing `@small-world/engine` from importing extension packages.
+  - *ESLint Engine Isolation*: Enforced boundary rule preventing `@small-world-machine/engine` from importing extension packages.
   - All 216 test suites (1278 unit tests) passing green with 0 lint errors.
 
 ## [0.95.2] - 2026-10-03
@@ -277,7 +291,7 @@
 ### "Order is not pressure which is put on things from without, but salvation which comes from within." - Josiah Royce
 
 - **Features:**
-  - *Unified Tool I/O Architecture*: Symmetrical `IAssetSource` (input) and `IAssetSink` (output) contract across `packages/tools`, establishing standardized ZIP archives, local directory access, drag-and-drop, and native file pickers for Small World tools.
+  - *Unified Tool I/O Architecture*: Symmetrical `IAssetSource` (input) and `IAssetSink` (output) contract across `packages/tools`, establishing standardized ZIP archives, local directory access, drag-and-drop, and native file pickers for Small World Machine tools.
   - *Kit Inspector Custom Kit Import & Export*: Direct drag-and-drop support for Kit ZIP archives and folder hierarchies with dual-registry architecture (`_presetRegistry` and `_kitRegistry`), strict/tolerant manifest validation (`KitManifestValidator`), live prop loading via `sw-asset://`, and 1-click full ZIP export.
   - *Material Studio & PBR Map Generator Modernization*: Complete removal of blocking browser `alert()` popups in favor of `ToastManager` notifications, added `ToolDropOverlay`, high-efficiency keyboard shortcuts, and full 7-map canvas + `pbr-profile.json` ZIP pack export generation.
   - *Xtractor Sprite Slicing & ZIP Export*: Seamless sprite image dropping, unified tool shortcut bindings, and instant 1-click sprite sheet slice export as structured ZIP archives.
@@ -338,7 +352,7 @@
   - *8 New Standard Geometry Primitives*: Added `OpenFrame`, `LShape`, `Rhombus`, `TriStar`, `CylindricalArch`, and `HollowTruncatedCone` as first-class standard engine primitives ([`packages/engine/src/geometry/`](packages/engine/src/geometry/)), plus enhanced analytical formula methods on `Cone` and `Capsule`. All shapes include fully outward-facing normals, UV maps, and correct winding order for both 2D planar and 3D volumetric representations.
   - *Showcase 6 — Full Geometry Catalogue (48 Entries)*: All 48 known geometries are now on display in [`apps/showcases/6/showcase.ts`](apps/showcases/6/showcase.ts). 3D bodies show as a triplet (Wireframe + Random PBR Solid + Fireplace-Brick PBR), 2D planar shapes as a pair (Wireframe + Solid), 1D primitives as a single Wireframe. Every booth has a white ground plaque with navy-blue text showing the English geometry name.
 - **Architecture & Bugfixes:**
-  - *Outward-Facing Normal Guarantee*: Introduced a dot-product self-verifying `addQuad` convention across all new geometry classes, ensuring 100% outward normals in the Small World right-handed (+Y-up, -Z-forward) coordinate system.
+  - *Outward-Facing Normal Guarantee*: Introduced a dot-product self-verifying `addQuad` convention across all new geometry classes, ensuring 100% outward normals in the Small World Machine right-handed (+Y-up, -Z-forward) coordinate system.
   - *WebGL2 Shader-Churn Stutter Elimination (P1)*: Removed the per-object DEPTH-program acquire in the shadow pass ([`WebGL2Renderer.ts`](packages/engine/src/renderers/WebGL2/WebGL2Renderer.ts)), which flip-flopped every caster's refcount key between shadow and material programs each frame and deleted+recompiled the *shared* programs (~12 links + 12 deletes/frame) — the root cause of the ~14.5 FPS WebGL2 stutter while WebGL1 stayed smooth. After fix: 0 links / 0 compiles / 0 deletes, ~120 FPS (≈8×). Verified pre-existing via A/B against base code.
   - *Native WebGL2 Vertex Array Objects (P2)*: Fixed attribute-location reservations (0-5, instancing 6-9/10) bound before linking in [`WebGLProgramCache.ts`](packages/engine/src/renderers/WebGL2/managers/WebGLProgramCache.ts) enable a cached per-mesh VAO ([`Mesh.bindVAO`](packages/engine/src/renderers/Mesh.ts)) restoring all vertex pointers via a single `bindVertexArray`; standard and depth passes use it (WebGL1 and instancing keep the manual `Mesh.bind` path). Reduces 6-8 driver calls per draw to 1 bind.
 - **Housekeeping & Docs:**
@@ -399,13 +413,13 @@
 ### "It's not what you don't know that gets you into trouble. It's what you know for sure that just ain't so." - Mark Twain
 
 - **Features:**
-  - *Real Post-Processing Camera Flash*: [`FlashEffect`](packages/engine/src/core/cameras/effects/FlashEffect.ts) now drives an actual full-screen flash overlay through a new `PostProcessingEffectType.FLASH` / [`FlashElement`](packages/engine/src/renderers/post/elements/FlashElement.ts), wired per-frame from the camera into the renderer ([`SmallWorld.ts`](packages/engine/src/core/SmallWorld.ts)) across WebGPU (`DynUniforms` extended to 11×vec4f) and both WebGL shader pipelines — previously it only produced a camera-position jolt, never an actual screen flash.
-  - *`@small-world/tools` Ecosystem Package (ADR 0024)*: Maker, MaterialStudio, Pixler, Xtractor, MapGenerator, and Forge moved out of the core engine into their own package (`packages/tools/`), reachable via `attachDevTools(app)` instead of the removed `EngineOptions.enableInspector` — a breaking change for any app that relied on that flag; 12 showcases and 1 sample app migrated to the new call.
+  - *Real Post-Processing Camera Flash*: [`FlashEffect`](packages/engine/src/core/cameras/effects/FlashEffect.ts) now drives an actual full-screen flash overlay through a new `PostProcessingEffectType.FLASH` / [`FlashElement`](packages/engine/src/renderers/post/elements/FlashElement.ts), wired per-frame from the camera into the renderer ([`SmallWorldMachine.ts`](packages/engine/src/core/SmallWorldMachine.ts)) across WebGPU (`DynUniforms` extended to 11×vec4f) and both WebGL shader pipelines — previously it only produced a camera-position jolt, never an actual screen flash.
+  - *`@small-world-machine/tools` Ecosystem Package (ADR 0024)*: Maker, MaterialStudio, Pixler, Xtractor, MapGenerator, and Forge moved out of the core engine into their own package (`packages/tools/`), reachable via `attachDevTools(app)` instead of the removed `EngineOptions.enableInspector` — a breaking change for any app that relied on that flag; 12 showcases and 1 sample app migrated to the new call.
 - **Architecture & Bugfixes:**
   - *Camera Shake Rewrite*: [`ShakeEffect`](packages/engine/src/core/cameras/effects/ShakeEffect.ts) now shakes pitch/yaw rotation instead of position (rotating the view direction can never clip the camera through geometry, unlike a positional offset) and uses a single clamped trauma value (Eiserloh's model) via a new optional `CameraEffect.merge()` hook, instead of stacking unboundedly many independent shake instances on repeated triggers.
   - *Camera Cancel API*: [`Camera`](packages/engine/src/core/Camera.ts) gained `removeEffect()`/`clearEffects()`; `applyEffect()`/`addEffect()` now return the resulting effect.
 - **Housekeeping & Docs:**
-  - *`docs/guides/` Fully Translated to English*: All 25 guides converted from German to English and verified line-by-line against the current codebase, fixing real staleness found along the way (wrong class names, moved file paths, a non-existent `AppEvents` construct, an invented ASCII-legend, a duplicated section number, dead anchor links, and inconsistent `"small-world"` import examples unified to the actually-working `@small-world/engine` specifier).
+  - *`docs/guides/` Fully Translated to English*: All 25 guides converted from German to English and verified line-by-line against the current codebase, fixing real staleness found along the way (wrong class names, moved file paths, a non-existent `AppEvents` construct, an invented ASCII-legend, a duplicated section number, dead anchor links, and inconsistent `"small-world-machine"` import examples unified to the actually-working `@small-world-machine/engine` specifier).
   - *Research Archive Cleanup*: The `thermo-nuclear` code-quality review (`docs/research/codebase-review-2026-09-18-thermo-nuclear.md`) closed and removed — all findings resolved except a deliberately out-of-scope group of four >1000-line files, tracked in `.agents/notes/backlog.md` instead. `aaa-engine-techniques.md` and `showcase-feature-audit.md` rebuilt as maintainable wishlists of open items instead of point-in-time snapshots.
 
 ## [0.83.2] - 2026-09-27
@@ -413,7 +427,7 @@
 ### "Divide each difficulty into as many parts as is feasible." - René Descartes
 
 - **Architecture & Bugfixes:**
-  - *MakerApp & MaterialStudio Monolith Split (MAJ-10)*: [`MakerApp.ts`](packages/engine/src/tools/maker/MakerApp.ts) (2,147 → 1,698 lines) split into three focused domain services — [`MakerPrefabPipeline`](packages/engine/src/tools/maker/MakerPrefabPipeline.ts) (prefab save/instantiate + thumbnail capture), [`MakerImportAndZoneTools`](packages/engine/src/tools/maker/MakerImportAndZoneTools.ts) (ASCII/background-image import + click-to-draw stage-zone tooling), and [`MakerToolbarBuilder`](packages/engine/src/tools/maker/MakerToolbarBuilder.ts) (palette/gizmo/snap/camera-bookmark toolbar wiring). `MakerApp` retains only selection, the gizmo drag loop, pointer picking/marqueeing, and the undo-backed scene-edit operations that all three extracted services route back through via constructor-injected callbacks; it stays above 1k lines by design (that remaining core shares `_undo`/`_selection`/`_propertyPanel`/`_project` too tightly to split further without turning into callback-passing wrappers). [`MaterialStudio.ts`](packages/engine/src/tools/MaterialStudio.ts) (2,189 → 218 lines) split into [`materialStudioStyles`](packages/engine/src/tools/material-studio/materialStudioStyles.ts) (CSS), [`MaterialStudioUiBuilder`](packages/engine/src/tools/material-studio/MaterialStudioUiBuilder.ts) (DOM construction), and [`MaterialStudioController`](packages/engine/src/tools/material-studio/MaterialStudioController.ts) (PBR-map orchestration + UI event wiring, kept as one class since both share the same mutable state); `MaterialStudioApp` is untouched (external contract for `public/tools/pbr-gen.html` and `SmallWorld.ts`).
+  - *MakerApp & MaterialStudio Monolith Split (MAJ-10)*: [`MakerApp.ts`](packages/engine/src/tools/maker/MakerApp.ts) (2,147 → 1,698 lines) split into three focused domain services — [`MakerPrefabPipeline`](packages/engine/src/tools/maker/MakerPrefabPipeline.ts) (prefab save/instantiate + thumbnail capture), [`MakerImportAndZoneTools`](packages/engine/src/tools/maker/MakerImportAndZoneTools.ts) (ASCII/background-image import + click-to-draw stage-zone tooling), and [`MakerToolbarBuilder`](packages/engine/src/tools/maker/MakerToolbarBuilder.ts) (palette/gizmo/snap/camera-bookmark toolbar wiring). `MakerApp` retains only selection, the gizmo drag loop, pointer picking/marqueeing, and the undo-backed scene-edit operations that all three extracted services route back through via constructor-injected callbacks; it stays above 1k lines by design (that remaining core shares `_undo`/`_selection`/`_propertyPanel`/`_project` too tightly to split further without turning into callback-passing wrappers). [`MaterialStudio.ts`](packages/engine/src/tools/MaterialStudio.ts) (2,189 → 218 lines) split into [`materialStudioStyles`](packages/engine/src/tools/material-studio/materialStudioStyles.ts) (CSS), [`MaterialStudioUiBuilder`](packages/engine/src/tools/material-studio/MaterialStudioUiBuilder.ts) (DOM construction), and [`MaterialStudioController`](packages/engine/src/tools/material-studio/MaterialStudioController.ts) (PBR-map orchestration + UI event wiring, kept as one class since both share the same mutable state); `MaterialStudioApp` is untouched (external contract for `public/tools/pbr-gen.html` and `SmallWorldMachine.ts`).
 - **Housekeeping & Docs:**
   - *Hot-Path TypeScript Performance Standard*: Added a new section to the `coding-guide` skill codifying zero-allocation rules for the render/update loop (scratch objects instead of `new`, classic `for` loops over iterator chains, typed arrays, stable object shapes, hoisted lookups), scoped explicitly to hot-path code rather than setup/editor code.
 
@@ -540,7 +554,7 @@
 ### "A bridge is a promise between two shores." - Mehmet Murat Ildan
 
 - **Housekeeping & Docs:**
-  - Prefixed direct showcase, tool, and concept-dossier links with `/small-world/showcases/...` across documentation files ([`docs/apps/and-now.md`](docs/apps/and-now.md), [`docs/apps/maker.md`](docs/apps/maker.md), [`docs/apps/yad.md`](docs/apps/yad.md), [`docs/apps/light-cycle-arena.md`](docs/apps/light-cycle-arena.md)), ensuring correct path resolution on GitHub Pages when opening links in new browser tabs.
+  - Prefixed direct showcase, tool, and concept-dossier links with `/small-world-machine/showcases/...` across documentation files ([`docs/apps/and-now.md`](docs/apps/and-now.md), [`docs/apps/maker.md`](docs/apps/maker.md), [`docs/apps/yad.md`](docs/apps/yad.md), [`docs/apps/light-cycle-arena.md`](docs/apps/light-cycle-arena.md)), ensuring correct path resolution on GitHub Pages when opening links in new browser tabs.
   - Added entry 122 to *And Now?* dev log ([`apps/sample-apps/and-now/docs/log.md`](apps/sample-apps/and-now/docs/log.md)).
 
 ## [0.79.11] - 2026-09-14
@@ -570,7 +584,7 @@
 
 - **Architecture & Bugfixes:**
   - Added centralized base-URL resolution to [`AssetManager`](packages/engine/src/loaders/AssetManager.ts) via `resolveUrl(url: string): string`, automatically prepending the Vite base path (`import.meta.env.BASE_URL`) or custom `_baseUrl` to root-relative asset requests (`/assets/...`) across all loaders (`Texture.fromUrl`, `GltfLoader`, `ObjLoader`, `TextLoader`, `streamBinary`).
-  - Resolved GitHub Pages subpath deployment (`/small-world/showcases/`) HTTP 404 errors for textures and 3D models across all showcases, tools, and sample apps while preserving explicit relative paths (`./`, `../`) and absolute URLs.
+  - Resolved GitHub Pages subpath deployment (`/small-world-machine/showcases/`) HTTP 404 errors for textures and 3D models across all showcases, tools, and sample apps while preserving explicit relative paths (`./`, `../`) and absolute URLs.
   - Added `resolveAssetUrl` helper in [`ViennaMapModal.ts`](apps/sample-apps/and-now/ui/ViennaMapModal.ts) for dynamically constructed DOM `<img>` elements.
 - **Housekeeping & Docs:**
   - Added comprehensive unit test suite [`AssetManagerResolveUrl.test.ts`](packages/engine/tests/loaders/AssetManagerResolveUrl.test.ts) covering absolute, relative, and base-path URL transformations.
@@ -581,7 +595,7 @@
 ### "The doors of wisdom are never shut." - Benjamin Franklin
 
 - **Features:**
-  - Upgraded central launcher into an All-in-One Small World Portal (`public/index.html`) featuring real-time search, category filtering, spotlight game cards, and direct links to tools, show-scenes, and concept dossiers.
+  - Upgraded central launcher into an All-in-One Small World Machine Portal (`public/index.html`) featuring real-time search, category filtering, spotlight game cards, and direct links to tools, show-scenes, and concept dossiers.
   - Added dedicated "Spiele & Welten" navigation to VitePress documentation portal with complete narrative profiles for *And Now? (Wien 2100)*, *YAD*, *Light Cycle Arena*, and *Maker*.
   - Configured full asset and documentation pipeline in `vite.config.ts` to package and serve all concept dossiers, maps, and markdown docs across production bundles and GitHub Pages.
 - **Architecture & Bugfixes:**
@@ -660,7 +674,7 @@
 ### "A place for everything, and everything in its place." - Benjamin Franklin
 
 - **Architecture & Bugfixes:**
-  - `and-now`, `yad`, and `light-cycle-arena` folded from three separate workspace packages into one `@small-world/sample-apps` package (`apps/sample-apps/<app>/`); all 34 numbered showcases folded into a new `@small-world/showcases` package (`apps/showcases/<n>/`).
+  - `and-now`, `yad`, and `light-cycle-arena` folded from three separate workspace packages into one `@small-world-machine/sample-apps` package (`apps/sample-apps/<app>/`); all 34 numbered showcases folded into a new `@small-world-machine/showcases` package (`apps/showcases/<n>/`).
   - Fixed `AbstractShowcase`'s PREV/NEXT navigation, which silently assumed a contiguous `1..35` range: it now walks an explicit list of the showcase IDs that actually exist, correctly skipping the intentional gap at 25 (absorbed into Showcase 10 earlier) instead of navigating to a dead URL -- and Showcase 36 (previously unreachable, since the old bound was one short) is reachable again too.
   - Fixed the `showcase-layout` Vite plugin's header/subtitle injection, which silently failed for any showcase using multi-line HTML attribute formatting (Showcases 29-31 rendered with no header at all).
   - Fixed vitest's `apps/*/tests/**/*.test.ts` include glob, which stopped matching anything once app tests moved one directory level deeper into `apps/sample-apps/<app>/tests/` -- silently dropped 2 test files (10 tests) from every run with no error.
@@ -692,10 +706,10 @@
     Development Hub".
 - **Architecture & Bugfixes:**
   - Repository restructured into an npm-workspaces monorepo: `src/` became `packages/engine/`
-    (its own `@small-world/engine` package, `exports` mapping both the root barrel and every
+    (its own `@small-world-machine/engine` package, `exports` mapping both the root barrel and every
     subpath), and the three apps (`and-now`, `yad`, `light-cycle-arena`) moved from
     `src/apps/<app>/` to top-level `apps/<app>/`, each its own package depending on
-    `@small-world/engine`. `yad` and `light-cycle-arena`'s HTML entry points and assets moved
+    `@small-world-machine/engine`. `yad` and `light-cycle-arena`'s HTML entry points and assets moved
     from `showcases/yad`/`showcases/light-cycle-arena` into their own app folders, matching
     `and-now`'s existing layout.
   - New ESLint rule enforces the boundary the engine/apps split exists for: nothing under
@@ -967,16 +981,16 @@
 - **Architecture & Bugfixes:**
   - Removed the last of the review's identified dead or speculative code paths: deleted the never-wired `GeometryWorkerProcessor` (which duplicated `AbstractGeometry`'s normal/tangent formulas) and the unused `PrologueScene`; dropped `Scene`'s `_scratchFrustum` working state that computed a frustum on every cull call but was never read.
   - `MathUtils.fastSin`/`fastCos` replaced the lookup-table path (whose `init()` was never called, so the tables silently returned 0) with a direct `Math.sin`/`Math.cos`; the public API and its tests are unchanged.
-  - `FrustumCuller` is no longer a bag of page-wide `static` state: its `_frustum`, `_queryHits`, `lastIntersectedNodes`, and `lastVisibleCount` became per-instance members, and `SmallWorld` owns a private culler. A second concurrently running `SmallWorld` instance (e.g. GadgetInspector's `MaterialStudioApp` preview) could previously clobber the shared fields mid-frame.
+  - `FrustumCuller` is no longer a bag of page-wide `static` state: its `_frustum`, `_queryHits`, `lastIntersectedNodes`, and `lastVisibleCount` became per-instance members, and `SmallWorldMachine` owns a private culler. A second concurrently running `SmallWorldMachine` instance (e.g. GadgetInspector's `MaterialStudioApp` preview) could previously clobber the shared fields mid-frame.
   - Loader robustness: `GltfSkinParser` now validates each `skin.joints` index and throws a clear `Skin ${i} references invalid joint node ${jIdx}` instead of passing `undefined` through a blind cast; `ObjLoader` wraps `mtlLoader.load()` in `try/catch` and falls back to neutral default materials when the referenced `.mtl` is missing or broken, so the geometry still loads and renders.
-  - `AudioSystem.load()` no longer swallows load/decode failures -- it now throws, giving callers an explicit error path consistent with the rest of the loaders. It also gained an optional injected, per-instance event bus and dispatches the new `EventType.AUDIO_LOADED` after a successful decode; `SmallWorld` wires its own `app.events` into it. (The error case intentionally stays a throw rather than an event.)
+  - `AudioSystem.load()` no longer swallows load/decode failures -- it now throws, giving callers an explicit error path consistent with the rest of the loaders. It also gained an optional injected, per-instance event bus and dispatches the new `EventType.AUDIO_LOADED` after a successful decode; `SmallWorldMachine` wires its own `app.events` into it. (The error case intentionally stays a throw rather than an event.)
   - Zero-allocation animation blending in `AnimationMixer`: per-frame weighted contributions no longer allocate fresh sample lists; state is folded incrementally into reused accumulator objects, with a generation stamp distinguishing first-from-later contributions within a frame.
   - `Skeleton.invert()` no longer re-applies a singular mesh-world matrix twice on a zero-scale "pop-in" spawn -- it falls back to identity when the matrix can't be inverted.
   - `DirectionalLight.updateCascades()` now drives cascaded shadows for orthographic (ISOMETRIC) cameras too, adding an orthographic frustum-corner path and linear cascade splits instead of early-returning for non-perspective cameras.
   - Renderer robustness: WebGL2 init now falls back to WebGL1 when the context reports `WEBGL1` capability; the WebGL1 texture path keeps first-upload and `needsUpdate` in lockstep via a shared sampler-params helper (power-of-two mipmaps, NPOT `CLAMP_TO_EDGE`); `WebGLTextureManager` centralized its otherwise divergent filter/wrap state the same way and fixed a `needsUpdate`-path divergence.
   - `ShaderRegistry` now warns with an actionable message on a cache miss that silently falls back from the instance registry to the global singleton.
   - `PropertyPanel` context menus now remove their `pointerdown` listener on every close path (menu item click included) via a shared `closeMenu()`, fixing a listener leak; `AsciiMapLegend` fixed a module-level mutable marker counter shared across legend builders by scoping it per legend.
-  - Removed the `gadget:audio:*` window-event coupling from the `SmallWorld` constructor now that the audio system has a proper injected event bus.
+  - Removed the `gadget:audio:*` window-event coupling from the `SmallWorldMachine` constructor now that the audio system has a proper injected event bus.
 
 ## [0.77.13] - 2026-09-04
 
@@ -1052,7 +1066,7 @@
 ### "Mirrors would do well to reflect a little more before sending back images." - Jean Cocteau
 
 - **Architecture & Bugfixes:**
-  - **Core:** Fixed `DeviceCaps.init()` leaking two never-released throwaway WebGL1/WebGL2 probe contexts on every call -- each `SmallWorld` instance gets its own private `DeviceCaps`, so pages creating several engine instances at once (e.g. Showcase 14's 9-way comparison wall) could hit the browser's per-page WebGL context cap and start losing live rendering contexts. Now explicitly released via `WEBGL_lose_context` right after reading limits.
+  - **Core:** Fixed `DeviceCaps.init()` leaking two never-released throwaway WebGL1/WebGL2 probe contexts on every call -- each `SmallWorldMachine` instance gets its own private `DeviceCaps`, so pages creating several engine instances at once (e.g. Showcase 14's 9-way comparison wall) could hit the browser's per-page WebGL context cap and start losing live rendering contexts. Now explicitly released via `WEBGL_lose_context` right after reading limits.
   - **Rendering:** Fixed `PlanarReflectionNode` rendering its own reflective surface (e.g. a mirror floor sampling `renderTarget` as `reflectionMap`) into that same texture during its own reflection sub-render -- invalid on WebGPU (a texture can't be a `RenderAttachment` and a `TextureBinding` in the same pass) and semantically wrong on every backend. Added `excludedObjects` to hide any object sampling the reflection texture during its own render; wired up in Showcases 15 and 16.
   - **Assets:** Fixed a stale `.png` texture reference in Showcases 3/4's `vehicle-racer.mtl` left over from an earlier `.webp` conversion pass (404 on load).
   - **Showcase 6:** Fixed a mislabeled geometry entry silently rendering `Ground` under the "Plane" label instead of the actual `Plane` class; added the previously-missing `Octahedron` and `Line` primitives to the gallery.
@@ -1100,9 +1114,9 @@
 
 - **Architecture & Bugfixes:**
   - **Loaders:** Migrated `GltfLoader`, `ObjLoader`, `ImageLoader`, `MtlLoader`, `TextLoader`, `SkyboxLoader`, `BinaryStreamLoader`, and `GltfMaterialParser` off the deprecated process-wide `AssetManager` singleton onto an injectable, per-loader instance (`LoaderOptions.assetManager`), closing the last leg of the instance-based `RendererContext` migration.
-  - **Audio:** `SynthSFX.startDrone()`/`startFire()` now return a `SoundHandle` that stops and disconnects their endless oscillator/noise graphs; `AudioSystem` tracks active handles and gained a `dispose()` that stops them all and closes the `AudioContext`, now wired into `SmallWorld.destroy()`.
+  - **Audio:** `SynthSFX.startDrone()`/`startFire()` now return a `SoundHandle` that stops and disconnects their endless oscillator/noise graphs; `AudioSystem` tracks active handles and gained a `dispose()` that stops them all and closes the `AudioContext`, now wired into `SmallWorldMachine.destroy()`.
   - **Light Cycle Arena:** Fixed `ArenaGrid.isFree()` treating a cycle's own trail cells as permanently free, which let it survive looping back into itself -- removed the `ownerId` exception entirely.
-  - **Forge:** `ForgeWindow`'s drag/resize handlers and `ResizeObserver` are now torn down in `destroy()` instead of leaking 10 permanent `window` listeners per window; `Forge` gained its own `destroy()` (closing every window plus its own `keydown`/`paste` listeners), wired into `SmallWorld.destroy()`.
+  - **Forge:** `ForgeWindow`'s drag/resize handlers and `ResizeObserver` are now torn down in `destroy()` instead of leaking 10 permanent `window` listeners per window; `Forge` gained its own `destroy()` (closing every window plus its own `keydown`/`paste` listeners), wired into `SmallWorldMachine.destroy()`.
 - **Housekeeping & Docs:**
   - Added unit test suites for all 4 resolved review findings above.
   - Updated full review dossiers (`.agents/notes/full-review-2026-09-03/`).
@@ -1131,7 +1145,7 @@
     - `barrel_oil_black`: Rusted 200L steel drum with 2×3 corrugated reinforcement bands and black oil residue (ADR Class 3).
     - `barrel_hazard_yellow`: Caution yellow steel drum with diagonal hazard stripes and toxic skull decal (ADR Class 6.1 / GHS06).
     - `barrel_chemical_blue`: Dark teal-blue chemical barrel with flammable red diamond and German stencil typography (ADR Class 3).
-  - Added **Small World Maker** (`src/tools/maker/`, `public/tools/maker.html`): Interactive visual 3D Level & Scene Editor with hierarchy tree, transform gizmos, object palette, undo/redo stack, and live project scene binding.
+  - Added **Small World Machine Maker** (`src/tools/maker/`, `public/tools/maker.html`): Interactive visual 3D Level & Scene Editor with hierarchy tree, transform gizmos, object palette, undo/redo stack, and live project scene binding.
   - Added `WorldWriter` serializer (`src/loaders/WorldWriter.ts`): Standalone binary glTF and JSON scene serializer capturing hierarchy, PBR materials, lights, and custom behavior parameters.
 - **Architecture & Bugfixes:**
   - Added `docs/adr/0010-maker-editor-architecture.md` defining the embedded visual level-building architecture.
@@ -1148,7 +1162,7 @@
 ### "The map is not the territory." - Alfred Korzybski
 
 - **Architecture & Bugfixes:**
-  - Fixed two bugs found while re-verifying Showcase 33's Hierarchical-Z occlusion culling (0.76.32) live in the browser. `FrustumCuller.lastVisibleObjects`/`lastVisibleCount` are `static` and shared page-wide, so GadgetInspector's `MaterialStudioApp` preview panel (itself a `SmallWorld` instance running its own `cull()` on its own scene every frame) was silently overwriting them before `HzbOcclusionPassGPU` ever read them -- it now derives its candidate list by walking the actual rendered `Scene` directly instead of trusting that shared static state.
+  - Fixed two bugs found while re-verifying Showcase 33's Hierarchical-Z occlusion culling (0.76.32) live in the browser. `FrustumCuller.lastVisibleObjects`/`lastVisibleCount` are `static` and shared page-wide, so GadgetInspector's `MaterialStudioApp` preview panel (itself a `SmallWorldMachine` instance running its own `cull()` on its own scene every frame) was silently overwriting them before `HzbOcclusionPassGPU` ever read them -- it now derives its candidate list by walking the actual rendered `Scene` directly instead of trusting that shared static state.
   - `applyPendingOcclusionResults()` relied on `mapAsync()`'s promise resolving to learn when a staging buffer was readable; when that promise didn't fire reliably, the two-slot ping-pong buffer deadlocked permanently after its first cycle (confirmed via real `used in submit while mapped` WebGPU validation errors flooding the console). It now polls `GPUBuffer.mapState` directly every frame instead -- the GPU's own ground truth, which can't get stuck the same way a dropped promise callback can.
 - **Housekeeping & Docs:**
   - Updated `docs/adr/0008-hzb-occlusion-culling-webgpu-only.md` with both findings and the `mapState`-polling design rationale.
@@ -1161,7 +1175,7 @@
   - Added Hierarchical-Z (HZB) occlusion culling, opt-in via `EngineOptions.enableOcclusionCulling` (WebGPU-only, no-op on WebGL1/WebGL2 -- see `docs/adr/0008-hzb-occlusion-culling-webgpu-only.md`). Implements AAA research item #14: a new `HzbOcclusionPassGPU` builds a max-reduction depth pyramid from each frame's opaque depth, tests every frustum-visible object's bounding sphere against it via compute, and reads the results back asynchronously (`mapAsync`, necessarily one frame stale) to skip drawing objects that were fully hidden behind other geometry.
   - Added Showcase 33 ("Hidden City"): an occluding wall hides a dense field of individually-drawn objects behind it, with a console readout (`frustum-visible`/`occlusion-culled`/`rendered`) proving the pipeline is doing real work.
 - **Architecture & Bugfixes:**
-  - New `Object3D.occlusionCulled` flag and a second gate in `Scene._collectVisible()` (after the existing frustum check), `FrustumCuller.lastVisibleObjects` (a byproduct of the culling walk it already does, feeding the occlusion test's candidate list with no extra scene traversal), and `Renderer.applyPendingOcclusionResults()` (optional interface method, WebGPU-only override) wired into `SmallWorld`'s per-frame loop.
+  - New `Object3D.occlusionCulled` flag and a second gate in `Scene._collectVisible()` (after the existing frustum check), `FrustumCuller.lastVisibleObjects` (a byproduct of the culling walk it already does, feeding the occlusion test's candidate list with no extra scene traversal), and `Renderer.applyPendingOcclusionResults()` (optional interface method, WebGPU-only override) wired into `SmallWorldMachine`'s per-frame loop.
 - **Housekeeping & Docs:**
   - Added unit test coverage for the new WGSL dispatch/AABB-packing logic (mocked `GPUCommandEncoder`, matching `ClusterCullPassGPU.test.ts`'s style) and the `Scene`/`FrustumCuller` occlusion bookkeeping.
   - Registered Showcase 33 in `vite.config.ts`, the `public/index.html` gallery, and `scripts/check-showcases.js`'s smoke-test list; re-threaded the showcase navigation chain (32 → 33 → 34 → yad); fixed `AbstractShowcase`'s hardcoded `totalShowcases` prev/next-wraparound constant, stale since showcase 27 (was still 26).
@@ -1306,7 +1320,7 @@
   - Removed two real dead fields surfaced by the visibility tightening (TypeScript only flags unused *private* members): `WebGPURenderer._blackTexView` (created, never read) and `WebGL1Renderer`/`WebGL2Renderer._opaqueTextureWrapper` (write-only bookkeeping; the actual cache-key object was already used locally without it).
   - Removed two genuinely unused dependencies, `gl-matrix` and `jpeg-js`, from `package.json` -- neither was imported anywhere in `src/` or `scripts/`, directly contradicting `VISION.md`/`README.md`'s own "no external math libraries like glMatrix" claim.
 - **Housekeeping & Docs:**
-  - Corrected several stale/false claims in `README.md` and `VISION.md`, caught by a verification pass against the actual repo state: a nonexistent `Application` base class (twice in `README.md`), shadow mapping described as WebGL2-only (WebGPU has equal support), an unqualified "zero dependencies" claim, an `npm install small-world` instruction that can't work against a `"private": true` package, `examples/`/`public/engine/` paths that don't exist (real: `showcases/`, `public/assets`/`resources`/`tools`), "IXtractor" (real name: `Xtractor`), a hardcoded `~` toggle key that's actually configurable, and an overstated "WebGPU compute shaders are standard" claim (the engine's first-ever compute shader shipped this same session, for Clustered Lighting only).
+  - Corrected several stale/false claims in `README.md` and `VISION.md`, caught by a verification pass against the actual repo state: a nonexistent `Application` base class (twice in `README.md`), shadow mapping described as WebGL2-only (WebGPU has equal support), an unqualified "zero dependencies" claim, an `npm install small-world-machine` instruction that can't work against a `"private": true` package, `examples/`/`public/engine/` paths that don't exist (real: `showcases/`, `public/assets`/`resources`/`tools`), "IXtractor" (real name: `Xtractor`), a hardcoded `~` toggle key that's actually configurable, and an overstated "WebGPU compute shaders are standard" claim (the engine's first-ever compute shader shipped this same session, for Clustered Lighting only).
   - Added `.husky/pre-commit`'s missing `npm run typecheck` step -- `npm run build:lib` (esbuild-based transpilation) does not reliably catch cross-file type errors like private-field access from another module; only `tsc --noEmit` (already run in CI via `ci.yml`, just not locally pre-commit) catches them before a wasted push-and-fail CI round-trip.
 
 ## [0.76.19] - 2026-08-20
@@ -1314,7 +1328,7 @@
 ### "The first principle is that you must not fool yourself -- and you are the easiest person to fool." - Richard Feynman
 
 - **Housekeeping & Docs:**
-  - Corrected several stale/false claims in `README.md`, caught by a verification pass against the actual repo state: a nonexistent `Application` base class (the real one is `SmallWorld`, as the README's own code samples already showed) in two places; "Shadow Mapping (WebGL 2)" narrowed out WebGPU's equally real Cascaded/Spot shadow passes; "WebGPU Compute Shaders ... including workgroup memory" was never true (the engine's very first compute shader, this session's `cluster_cull.wgsl`, doesn't use `var<workgroup>` either); `npm install small-world` can't work against a `"private": true` package that was never prepared for publishing (replaced with git-clone setup instructions); `examples/` and `public/engine/` don't exist (real paths: `showcases/`, `public/assets`/`public/resources`/`public/tools`); the Xtractor tool was misspelled "IXtractor"; and the Forge overlay's toggle key was stated as a fixed `~` when it's actually a configurable option.
+  - Corrected several stale/false claims in `README.md`, caught by a verification pass against the actual repo state: a nonexistent `Application` base class (the real one is `SmallWorldMachine`, as the README's own code samples already showed) in two places; "Shadow Mapping (WebGL 2)" narrowed out WebGPU's equally real Cascaded/Spot shadow passes; "WebGPU Compute Shaders ... including workgroup memory" was never true (the engine's very first compute shader, this session's `cluster_cull.wgsl`, doesn't use `var<workgroup>` either); `npm install small-world-machine` can't work against a `"private": true` package that was never prepared for publishing (replaced with git-clone setup instructions); `examples/` and `public/engine/` don't exist (real paths: `showcases/`, `public/assets`/`public/resources`/`public/tools`); the Xtractor tool was misspelled "IXtractor"; and the Forge overlay's toggle key was stated as a fixed `~` when it's actually a configurable option.
   - Added README features that existed in code but were missing from the feature list entirely: Clustered/Tiled Forward+ Lighting, physics CCD/fixed-timestep sub-stepping/`FluidVolume`, and the HBAO/TAA/MotionTrail post-processing effects.
   - `CONTEXT.md`: added HBAO, MotionTrail, Post-Processing (Pipeline), and TAA (Simplified) -- each chosen because it either collides with a similar in-project term or deliberately falls short of (or renames away from) the textbook version of the technique, not because the acronym itself is project-specific. Explicitly declined five further candidates (PBR Rendering, RigidBodies, Tone-Mapping, sRGB Gamma Correction, Automated GPU Memory Management) as generic industry/CS terms with no project-specific naming nuance to resolve.
 
@@ -1349,7 +1363,7 @@
 
 - **Housekeeping & Docs:**
   - Started recording architectural decisions as ADRs (`docs/adr/`, lightweight single-paragraph format per `.agents/skills/domain-modeling/ADR-FORMAT.md`). First six: config shape uses named keys instead of `{ type, ... }` arrays when order isn't semantically meaningful (0001); TAA jitter is baked into the shared view-projection matrix rather than a separate one (0002); hit-stop scales gameplay time globally, not per entity (0003); the point/spot light cap is global, not per-object nearest-N selection (0004); CCD covers sphere bodies only (0005); PCSS covers directional lights only, spot lights stay fixed-radius PCF (0006).
-  - Added short pointer comments at each decision's actual code site (`Camera.ts`, `SmallWorld.ts`, `PointLight.ts`/`SpotLight.ts`, `PhysicsSystem.ts`, `light_calc.frag.glsl`, `EngineOptions.ts`) referencing the relevant ADR, and trimmed the fuller inline explanations that used to live only in those comments — the ADR is now the canonical "why", the code just points to it.
+  - Added short pointer comments at each decision's actual code site (`Camera.ts`, `SmallWorldMachine.ts`, `PointLight.ts`/`SpotLight.ts`, `PhysicsSystem.ts`, `light_calc.frag.glsl`, `EngineOptions.ts`) referencing the relevant ADR, and trimmed the fuller inline explanations that used to live only in those comments — the ADR is now the canonical "why", the code just points to it.
 
 ## [0.76.15] - 2026-08-20
 
@@ -1398,7 +1412,7 @@
   - Implemented CSM polish (item #7): texel-snapping rounds each cascade's light-space center to the shadow-map's own texel grid, eliminating sub-pixel shimmer as the camera moves, and cascade blending fades between adjacent cascades near their boundary instead of a hard cut.
   - Implemented a simplified screen-space ambient occlusion pass (item #8) — honestly named `HbaoElement`/HBAO in code, not GTAO: per-direction horizon search reconstructs view-space position and normal from the existing opaque-depth buffer and estimates occlusion from `dot(sampleDirection, normal)`. Still missing relative to real HBAO: proper horizon-angle accumulation, per-pixel direction rotation, and a bilateral blur pass. Still missing relative to GTAO on top of that: cosine-weighted arc integration, multi-bounce approximation, thin-object handling, and temporal filtering. WebGL2 and WebGPU only. Fixed a real pre-existing bug along the way: opaque-depth capture only ever ran when a scene had transparent objects (for underwater refraction) — never for an opaque-only scene, which is exactly what this new pass needed every frame it's enabled.
   - Implemented simplified TAA (item #9): a Halton(2,3) sub-pixel camera jitter baked directly into the view-projection matrix, resolved via an exponential history blend (ping-ponged, no copy) against the previous frame — no motion vectors or reprojection, so it smooths static/slow scenes but visibly ghosts under fast movement, an accepted trade-off for a smaller engine. Runs before Bloom/HBAO/the final post-process pass so everything downstream reacts to the temporally-smoothed color, not the raw per-frame jittered one.
-  - Implemented cheap "game feel" (item #11): `ShakeEffect` now decays through a trauma² envelope sampled via continuous simplex noise instead of per-frame white noise; `SmallWorld.triggerHitStop()` briefly scales gameplay deltaTime while the camera keeps running at full speed, so its shake/flash effects still sell the impact; a new `SquashStretchBehavior` applies a damped-spring squash/stretch impulse. Wired into Neon Labyrinth's existing impact moments (Wisp strikes, fall resets) and its spawned impact shards.
+  - Implemented cheap "game feel" (item #11): `ShakeEffect` now decays through a trauma² envelope sampled via continuous simplex noise instead of per-frame white noise; `SmallWorldMachine.triggerHitStop()` briefly scales gameplay deltaTime while the camera keeps running at full speed, so its shake/flash effects still sell the impact; a new `SquashStretchBehavior` applies a damped-spring squash/stretch impulse. Wired into Neon Labyrinth's existing impact moments (Wisp strikes, fall resets) and its spawned impact shards.
 - **Architecture & Bugfixes:**
   - Audited GPU-instancing usage (item #10): Disc Wars and Neon Labyrinth already batch all repeated maze geometry (walls, floors, ceilings, seams) through `InstancedMesh` correctly — no code changes needed.
   - `Renderer.render()` gained an optional trailing `projMatrix` parameter (the camera's raw perspective matrix), needed for HBAO's view-space reconstruction; `AbstractWebGLRenderer` now stashes it alongside near/far per frame so `flushPostProcess()` can read it later in the same frame.
@@ -1422,7 +1436,7 @@
 ### "Nature uses only the longest threads to weave her patterns, so each small piece of her fabric reveals the organization of the entire tapestry." - Richard Feynman
 
 - **Features:**
-  - Implemented fixed-timestep render interpolation (item #3 of `docs/research/aaa-engine-techniques.md`): `RigidBody` now snapshots `prevPosition`/`prevRotation` before each physics substep, and `PhysicsSystem.applyRenderInterpolation()` blends each tracked body's rendered transform between its previous and current physics state (`interpolationAlpha = accumulator / fixedTimeStep`), instead of snapping straight to the latest completed substep. Eliminates visual stutter whenever the render framerate doesn't line up evenly with `fixedTimeStep`. Rotation interpolates via shortest-path angle blending across the ±π wraparound. Wired into `SmallWorld._loop()` after `FrustumCuller.cull()` and before rendering, gated by `config.enablePhysics`.
+  - Implemented fixed-timestep render interpolation (item #3 of `docs/research/aaa-engine-techniques.md`): `RigidBody` now snapshots `prevPosition`/`prevRotation` before each physics substep, and `PhysicsSystem.applyRenderInterpolation()` blends each tracked body's rendered transform between its previous and current physics state (`interpolationAlpha = accumulator / fixedTimeStep`), instead of snapping straight to the latest completed substep. Eliminates visual stutter whenever the render framerate doesn't line up evenly with `fixedTimeStep`. Rotation interpolates via shortest-path angle blending across the ±π wraparound. Wired into `SmallWorldMachine._loop()` after `FrustumCuller.cull()` and before rendering, gated by `config.enablePhysics`.
 - **Housekeeping & Docs:**
   - Added a `REFERENCES.md` entry crediting Glenn Fiedler's "Fix Your Timestep!" as the source technique.
 
@@ -1432,7 +1446,7 @@
 
 - **Housekeeping & Docs:**
   - Added `docs/research/aaa-engine-techniques.md`: a prioritized survey of rendering/physics techniques from Unreal, Babylon.js, three.js, and Godot that are realistically adoptable here (clustered/tiled lighting against our 4-point/4-spot-light cap, PCSS and CSM polish on top of our existing shadows, ACES tonemapping, fixed-timestep render interpolation, GPU-instancing usage audit, and more), cross-checked against a fresh grounding pass over our own current renderer/physics code.
-  - Added `docs/research/xdp-game-networking.md`: notes on XDP/eBPF Linux kernel packet processing for game servers, parked for reference since `small-world` is a client-only engine with no networking layer today.
+  - Added `docs/research/xdp-game-networking.md`: notes on XDP/eBPF Linux kernel packet processing for game servers, parked for reference since `small-world-machine` is a client-only engine with no networking layer today.
 
 ## [0.76.7] - 2026-08-19
 
@@ -1712,7 +1726,7 @@
 - **Housekeeping & Docs:**
   - **Showcases Cleanup:** Removed outdated `script.ts` files across all showcases in favor of a centralized approach, updating `index.html` and `showcase.ts` files accordingly.
   - **Git Optimization:** Removed heavy builds, unit tests, and showcase tests from the local `.husky/pre-commit` hook to dramatically speed up local commit times, shifting this responsibility fully to CI.
-  - **Docs & Configs:** Updated `getting-started.md` and cleaned up unused configuration files (`small-world.json`).
+  - **Docs & Configs:** Updated `getting-started.md` and cleaned up unused configuration files (`small-world-machine.json`).
 
 ## [0.70.2] - 2026-07-27
 
@@ -1756,7 +1770,7 @@
 - **Features:**
   - **Tron Navigation:** Centralized the UI panel for showcase navigation into `AbstractShowcase`, rolling out consistent neon-styled ◀ / ▶ buttons across all showcases.
 - **Housekeeping & Docs:**
-  - **Showcase Restructuring:** Renamed branching paths (15_v1 and 15_v2) into a linear sequence (15 through 24). Replaced raw `SmallWorld` instantiation with `AbstractShowcase` in later examples to inherit the new UI.
+  - **Showcase Restructuring:** Renamed branching paths (15_v1 and 15_v2) into a linear sequence (15 through 24). Replaced raw `SmallWorldMachine` instantiation with `AbstractShowcase` in later examples to inherit the new UI.
 ## [0.69.7] - 2026-07-25
 
 ### "The details are not the details. They make the design." - Charles Eames
@@ -1798,7 +1812,7 @@
 - **Architecture & Bugfixes:**
   - **Singleton Eradication (Audio & Input):** Removed the final remaining global singletons `Input.instance` and `AudioSystem.instance`.
   - **Dependency Injection Enforcement:** Controllers (`FirstPersonController`, `FPSController`, `YadController`) and Behaviors (`EnemyBehavior`) now strictly require `input` and `audio` dependencies via their constructor options.
-  - Refactored `GadgetInspector` to communicate audio changes via native browser `CustomEvent` dispatching (`gadget:audio:master`, etc.) to the `SmallWorld` application context to maintain loose coupling.
+  - Refactored `GadgetInspector` to communicate audio changes via native browser `CustomEvent` dispatching (`gadget:audio:master`, etc.) to the `SmallWorldMachine` application context to maintain loose coupling.
 - **Housekeeping & Docs:**
   - `custom-game.md` updated to showcase the dependency injection pattern in controllers.
   - `Input.test.ts` updated to remove all Singleton references.
@@ -1808,7 +1822,7 @@
 ### "Read, not to contradict and confute; nor to believe and take for granted; nor to find talk and discourse; but to weigh and consider." - Francis Bacon
 
 - **Architecture & Bugfixes:**
-  - **Inversion of Control (IoC) for Configuration:** Removed internal asynchronous loading of `small-world.json` via `fetch`. The engine now accepts configuration synchronously via its constructor (`new SmallWorld(config)`). This removes network waterfalls during startup and improves bundler compatibility.
+  - **Inversion of Control (IoC) for Configuration:** Removed internal asynchronous loading of `small-world-machine.json` via `fetch`. The engine now accepts configuration synchronously via its constructor (`new SmallWorldMachine(config)`). This removes network waterfalls during startup and improves bundler compatibility.
   - Implemented exact `devicePixelRatio` clamping via `quality.maxPixelRatio` (defaults to 2). Rendering now cleanly handles 3x mobile displays without sacrificing exact resolutions for Retro modes.
   - Enhanced `quality.autoDowngrade` to be optionally toggleable.
 - **Housekeeping & Docs:**
@@ -1819,7 +1833,7 @@
 
 - **Architecture & Bugfixes:**
   - **UniversalEventBus Removal:** Eradicated the global `UniversalEventBus` singleton to strictly enforce the "No Global Singletons" architecture and support proper multi-instancing.
-  - **EventBus Injection:** The engine base class (`SmallWorld`) now manages its own local `this.events: EventDispatcherImpl`. This instance is strictly propagated via dependency injection to all subsystems (`PhysicsSystem`), Tools (`Pixler`, `Xtractor`), and Application logic (`YadController`, `YadHud`), ensuring total isolation between engine contexts.
+  - **EventBus Injection:** The engine base class (`SmallWorldMachine`) now manages its own local `this.events: EventDispatcherImpl`. This instance is strictly propagated via dependency injection to all subsystems (`PhysicsSystem`), Tools (`Pixler`, `Xtractor`), and Application logic (`YadController`, `YadHud`), ensuring total isolation between engine contexts.
   - Updated documentation (`custom-game.md`, `eventbus.md`) to reflect the new dependency injection pattern.
 
 ## [0.69.1] - 2026-07-23
@@ -1850,7 +1864,7 @@
   - **DeviceOrientationController:** Created a new behavior to translate physical smartphone orientation (`alpha`, `beta`, `gamma` Euler angles) directly into engine `theta`/`phi` polar coordinates, enabling gyroscope/accelerometer-based camera and object rotation.
 - **Architecture & Bugfixes:**
   - **DeviceCaps Modernization:** Completely replaced the legacy `DeviceDetector` (User-Agent sniffing) with robust API feature detection inside `DeviceCaps` (Async, Wasm, Workers, Sensors, Touch Media Queries).
-  - **Auto-Destroy Lifecycle:** Added `destroy()` logic to `SmallWorld` engine base class. Hooked it to `window.pagehide` and added a DOM detachment check (`!document.body.contains(this.canvas)`) in the `_loop` to automatically free GPU memory and halt RAF when frontend frameworks (React/Vue) destroy the canvas node.
+  - **Auto-Destroy Lifecycle:** Added `destroy()` logic to `SmallWorldMachine` engine base class. Hooked it to `window.pagehide` and added a DOM detachment check (`!document.body.contains(this.canvas)`) in the `_loop` to automatically free GPU memory and halt RAF when frontend frameworks (React/Vue) destroy the canvas node.
 
 
 ## [0.67.0] - 2026-07-19
@@ -1891,9 +1905,9 @@
 - **Architecture & Bugfixes:**
   - **PhysicsSystem Memory Leak:** Fixed the rotation-integration branch leaking 4 pooled vectors per frame for bodies with angular velocity; all `MathPool` vectors acquired during `compose`/`decompose` are now correctly released, restoring the true zero-allocation guarantee.
   - **WGSL Reserved Keywords:** Fixed two shader-creation errors in the new Showcase 23 compute shaders caused by using `target` and `active` as identifiers — both are reserved words in the WGSL spec.
-  - **`small-world/tools` Barrel Exports:** Added the missing `Forge`, `ForgeTool`, `Xtractor`, and `MapGenerator` exports to `src/tools/index.ts`.
+  - **`small-world-machine/tools` Barrel Exports:** Added the missing `Forge`, `ForgeTool`, `Xtractor`, and `MapGenerator` exports to `src/tools/index.ts`.
 - **Housekeeping & Docs:**
-  - **Documentation Accuracy Audit:** Cross-checked all 10 files in `docs/guides/` against the actual source. Corrected references to a non-existent `Application` class (use `SmallWorld`), fabricated `GlassMaterial`/`GridLevelBuilder` API options, a wrong `FPSController` option name, a sign error in the look-direction formula, an overstated Octree complexity claim, and clarified that the `small-world/tools` subpath isn't a resolvable package export yet.
+  - **Documentation Accuracy Audit:** Cross-checked all 10 files in `docs/guides/` against the actual source. Corrected references to a non-existent `Application` class (use `SmallWorldMachine`), fabricated `GlassMaterial`/`GridLevelBuilder` API options, a wrong `FPSController` option name, a sign error in the look-direction formula, an overstated Octree complexity claim, and clarified that the `small-world-machine/tools` subpath isn't a resolvable package export yet.
   - **Commit Convention:** `AGENTS.md` now explicitly forbids reusing a commit-message quote already present in `git log`.
 
 ## [0.64.0] - 2026-07-18
@@ -2015,7 +2029,7 @@
 - **Housekeeping & Docs:**
   - Introduced **Object Pooling** (`_spherePool`) in `Showcase20` to prevent real-time `StandardMaterial` instantiations, completely eliminating WebGPU shader recompilation stuttering during the simulation loop.
   - Reduced dynamic object count in showcases to drastically improve `O(N^2)` collision detection performance.
-  - Disabled the `GadgetInspector` by default (`enableInspector: false` in `SmallWorld` base class) to prevent unnecessary background overhead and unwanted asset loading (e.g. `rock.png`) in simple showcases.
+  - Disabled the `GadgetInspector` by default (`enableInspector: false` in `SmallWorldMachine` base class) to prevent unnecessary background overhead and unwanted asset loading (e.g. `rock.png`) in simple showcases.
 
 ## [0.55.0] - 2026-07-13
 
@@ -2083,7 +2097,7 @@
   - Removed "prop-drilling" of the core `EventDispatcher` through deeply nested constructors (e.g. `FirstPersonControllerOptions`, `ForgeToolOptions`).
   - Introduced `UniversalEventBus`, a globally exported singleton instance of `EventDispatcherImpl` residing in `src/core/events`.
   - Replaced all legacy `this.events` and `this._options.events` usages in `YadController`, `YadHud`, `IXtractor`, and `Pixler` with direct `UniversalEventBus` imports.
-  - Eliminated the `events` property from the `SmallWorld` base class entirely to enforce the pure "1 Engine Instance per Page" architecture.
+  - Eliminated the `events` property from the `SmallWorldMachine` base class entirely to enforce the pure "1 Engine Instance per Page" architecture.
 - **Housekeeping & Docs:**
   - Rewrote the EventBus guide (`eventbus.md`) to reflect the new `UniversalEventBus` singleton pattern.
   - Added "Universal Singletons" to the official engine architectural patterns in `AGENTS.md`.
@@ -2128,7 +2142,7 @@
 - **Architecture & Bugfixes:**
   - Abstracted the core logic of the Dungeon clone showcase (YAD) into a reusable `GridLevelBuilder` extension, genericizing ASCII-based level map generation.
   - Extracted the FPS-style logic out of `YadController` and introduced a dedicated `FirstPersonController` inside the engine core (`src/core/behaviors`), promoting reuse for custom FPS or adventure games.
-  - Implemented a unified `EventBus` (`EventDispatcherImpl`) injected globally into `SmallWorld` instances as `this.events`. Removed direct `window.addEventListener` and DOM-coupled custom events, fully separating the UI, gameloop, and game behaviors.
+  - Implemented a unified `EventBus` (`EventDispatcherImpl`) injected globally into `SmallWorldMachine` instances as `this.events`. Removed direct `window.addEventListener` and DOM-coupled custom events, fully separating the UI, gameloop, and game behaviors.
 
 ## [0.48.0] - 2026-07-08
 
@@ -2162,7 +2176,7 @@
   - Added a global toggle switch `disableTextures` inside the `Renderer Settings` folder, which overrides rendering on all backends (WebGL1/2, WebGPU) with a 1x1 fallback texture to visually debug geometry and lighting instantly.
 - **Architecture & Bugfixes:**
   - Changed `drop_console` to `false` in the Terser minification config. `console.log` statements are now properly preserved in production, ensuring engine initialization logs and performance tier reports are visible in deployed builds.
-  - Fixed a 404 error when loading `small-world.json` on GitHub Pages by adapting the fetch logic to first probe the correct repository sub-path (`/small-world/config/small-world.json`) before falling back to local domain root.
+  - Fixed a 404 error when loading `small-world-machine.json` on GitHub Pages by adapting the fetch logic to first probe the correct repository sub-path (`/small-world-machine/config/small-world-machine.json`) before falling back to local domain root.
   - Responsive design logic injected into the showcase templates. Navigation UI automatically scales down and drops verbose text labels on smartphones (`max-width: 768px`), leaving only arrows and improving viewport clarity.
 
 ## [0.46.1] - 2026-07-05
@@ -2194,7 +2208,7 @@
 ### "Simplicity is the soul of efficiency." - Austin Freeman
 
 - **Features:**
-  - **InteractionManager**: Added a built-in interaction layer to `SmallWorld` that listens to mouse and touch events and projects them into the 3D scene.
+  - **InteractionManager**: Added a built-in interaction layer to `SmallWorldMachine` that listens to mouse and touch events and projects them into the 3D scene.
   - **Object Events**: `Object3D` now natively supports `onPointerEnter`, `onPointerLeave`, `onPointerClick`, `onPointerDown`, `onPointerUp`, and `onPointerMove`.
   - **Behaviors**: Introduced `HoverBehavior` (scales and emits neon glow on hover) and `DraggableBehavior` (allows free 3D drag & drop aligned with the camera's viewing plane).
   - **Octree Acceleration**: Integrated $O(\log n)$ Raycasting via the engine's `Octree`. The `InteractionManager` will automatically use the `staticOctree` and `dynamicOctree` if present to skip thousands of intersections.
@@ -2227,7 +2241,7 @@
 ### "Clean code always looks like it was written by someone who cares." - Robert C. Martin
 
 - **Terrain WGSL Fix**: Fixed an issue in `Terrain.frag.wgsl` where `thresholds.w` was incorrectly used as a hard upper bound instead of the softness blend width for the `smoothstep` transition. Restored slope blending for rock textures on steep surfaces.
-- **Engine Capabilities Logging**: Added a nice startup banner to `SmallWorld.ts` which prints the engine version, active renderer, and full hardware capabilities via `console.table`.
+- **Engine Capabilities Logging**: Added a nice startup banner to `SmallWorldMachine.ts` which prints the engine version, active renderer, and full hardware capabilities via `console.table`.
 - **GadgetInspector**: Integrated a comprehensive "Capabilities" folder in the Tweakpane UI overlay (`CMD+ALT+G`) to view device capability limits live across all examples.
 
 ## [0.42.0] - 2026-07-02
@@ -2323,7 +2337,7 @@
   - Implemented static parameter injection for post-processing shaders, compiling settings (Vignette offset/roundness/darkness, Film Grain intensity, Bloom threshold/intensity, ToneMapping mode) directly into shader pipelines.
   - Configured dynamic shader recompilation triggered automatically when the post-processing configuration signature changes (providing optimal production performance while retaining developer flexibility in the inspector).
   - Reduced per-frame uniform updates to write only the dynamic `time` uniform, saving CPU cycles and GPU uniform register bandwidth.
-  - Added global `postProcessing` configuration schema to `small-world.json` and `EngineOptions` types to enable app-wide default parameters.
+  - Added global `postProcessing` configuration schema to `small-world-machine.json` and `EngineOptions` types to enable app-wide default parameters.
 
 ## [0.35.1] - 2026-06-24
 
@@ -2347,14 +2361,14 @@
   - Implemented 8 distinct, premium post-processing configurations (Aces Filmic, phosphor-green Night Vision with scrolling scanlines and luma flickering, Noir Film with warm highlights and cool shadows with edge chromatic aberration, Cyber Glitch with cyan/magenta neon tint and blocky line offset shifts, VHS Tape with signal tracking distortion, desaturated colors and line noise, Underworld with warm sepia amber contrast, Old Projector with screen vertical jumps, white vertical scratches and hair/dirt spots, and Thermal Sensor heat map vision).
   - Toggled monitor power saving: Clicking on any of the 8 monitor green LEDs turns it red and pauses the respective 3D rendering loop (`app.stop()`) saving CPU/GPU execution cycles, while applying a smooth CSS fade-out transition.
   - Created a robust unit test suite in `tests/renderers/PostProcessing.test.ts` verifying that `filterMode` registers successfully, shader chunks contain correct keywords, and the post-processing shader template assembles correctly in WebGL2 and WebGPU.
-  - Bumped engine minor version to `0.35.0` in `package.json` (propagated to `SmallWorld.ts` via the prebuild build-step).
+  - Bumped engine minor version to `0.35.0` in `package.json` (propagated to `SmallWorldMachine.ts` via the prebuild build-step).
 
 ## [0.34.0] - 2026-06-23
 
 ### "There is nothing quite so permanent as a quick fix." - Anonymous
 
 - **Features:**
-  - Developed a custom, premium 5-slide HTML presentation for the Small World at `public/presentation.html`.
+  - Developed a custom, premium 5-slide HTML presentation for the Small World Machine at `public/presentation.html`.
   - Implemented responsive keyboard and mouse controls for slide transitions (Space, Arrow keys, PageUp/PageDown, and previous/next buttons).
   - Designed the presentation with a modern glassmorphism aesthetic using high-end dark-themed HSL gradients and Outfit/Inter typography.
   - Implemented a resource-friendly activation system that automatically starts the 3D rendering loop only when the showcase slide is active and stops it when leaving the slide.
@@ -2406,7 +2420,7 @@
         - **Ambient Occlusion Map**: Calculated using discrete Laplacian cavity operators (`4 * center - sum(neighbors)`) to map micro-crevices, combined with blurred height values.
         - **Roughness & Height Maps**: Generated from intensity mappings with adjustable box blur and inversion filters.
   - Added material presets (Default, Stone, Wood, Metal) for quick parameters adjustment.
-  - Developed `PbrPreviewApp` in `src/tools/pbr-preview.ts` which extends `SmallWorld` to render a rotating mesh (Sphere, Cube, Torus, Plane) with custom-generated PBR textures in real-time.
+  - Developed `PbrPreviewApp` in `src/tools/pbr-preview.ts` which extends `SmallWorldMachine` to render a rotating mesh (Sphere, Cube, Torus, Plane) with custom-generated PBR textures in real-time.
   - Resolved initialization blank-screen bug: Replaced `display: none` tab toggles with absolute offscreen rendering (`position: absolute; left: -9999px`) to maintain client dimensions and avoid `NaN` camera aspect ratios during WebGL setup.
   - Added real-time property bindings (Normal strength, Metallic, Roughness slider updates) dynamically linked to the preview shader.
   - Registered `pbrgen` in `vite.config.ts` rollup options to include the tool in production builds.
@@ -2419,7 +2433,7 @@
 ### "Without requirements or design, programming is the art of adding bugs to an empty text file." - Louis Srygley
 
 - **Features:**
-  - Centralized the `GadgetInspector` overlay directly inside the `SmallWorld` base class.
+  - Centralized the `GadgetInspector` overlay directly inside the `SmallWorldMachine` base class.
   - Added `enableInspector` property to `EngineOptions` (defaulting to `true` globally since the panel starts hidden).
   - Used type-only compile-time imports combined with asynchronous runtime dynamic imports (`import()`) to avoid circular dependencies between the tools and the core scene graph.
   - Removed manual inspector boilerplate code (imports, properties, instantiation, and manual updates) from Showcase 1, Showcase 6, Showcase 10, and Showcase 13.
@@ -2994,7 +3008,7 @@
 
 ### "It is impossible to make anything foolproof because fools are so ingenious." - Arthur Bloch
 
-- Implement renderer configuration in small-world.json to support context attributes
+- Implement renderer configuration in small-world-machine.json to support context attributes
 - Update Renderer interface to accept optional attributes during initialization
 - Pass renderer-specific attributes to WebGL1, WebGL2 and WebGPU contexts
 

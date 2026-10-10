@@ -1,6 +1,6 @@
 export { Object3D } from "./Object3D.js";
 export { SpawnPoint } from "./SpawnPoint.js";
-export { SmallWorld } from "./SmallWorld.js";
+export { SmallWorldMachine } from "./SmallWorldMachine.js";
 export { Camera } from "./Camera.js";
 export * from "./Inspectable.js";
 export * from "./DeviceCaps.js";

@@ -4,7 +4,7 @@ import {
   Cylinder,
   GeometryDataInterface,
   Object3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 const applyBoxUVs = (
   geo: GeometryDataInterface,

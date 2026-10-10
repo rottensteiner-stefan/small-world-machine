@@ -1,6 +1,6 @@
 # Adding a New Material
 
-This guide is aimed at engine contributors: it explains how to add a new material to Small World, not how to use the built-in ones (see [Materials & Shaders](/guides/materials) for that).
+This guide is aimed at engine contributors: it explains how to add a new material to Small World Machine, not how to use the built-in ones (see [Materials & Shaders](/guides/materials) for that).
 
 ## Two Ways to Add a Material
 

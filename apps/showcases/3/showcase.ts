@@ -14,7 +14,7 @@ import {
   ProjectionType,
   Vector3D,
   WireframeMaterial,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 class Showcase3 extends AbstractShowcase {
   private _carModel: Object3D | undefined;

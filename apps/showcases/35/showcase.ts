@@ -13,8 +13,8 @@ import {
   RendererType,
   Sphere,
   StandardMaterial,
-} from "@small-world/engine";
-import { attachDevTools } from "@small-world/tools";
+} from "@small-world-machine/engine";
+import { attachDevTools } from "@small-world-machine/tools";
 
 const GRID_SIZE = 7;
 const SPHERE_RADIUS = 0.55;
@@ -31,7 +31,7 @@ const SPACING = 1.4;
 class Showcase35 extends AbstractShowcase {
   constructor(options: EngineOptions = {}) {
     super({
-      canvasId: "SmallWorld",
+      canvasId: "SmallWorldMachine",
       rendererType: RendererType.BEST,
       fullscreen: true,
       ...options,

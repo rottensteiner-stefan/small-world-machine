@@ -55,9 +55,9 @@ ist.
 `_dispatchHzbTest()` leitet seine Kandidatenliste ab, indem es die ihm übergebene `Scene` direkt
 durchläuft (`isVisible && inFrustum && bounds`), statt ein `static`-Feld auf `FrustumCuller` zu
 lesen — zum Zeitpunkt dieser Entscheidung führte `FrustumCuller` genau ein solches Nebenprodukt-Feld
-(`lastVisibleObjects`). `FrustumCuller`s Felder sind `static`, geteilt über jede `SmallWorld`-Instanz
+(`lastVisibleObjects`). `FrustumCuller`s Felder sind `static`, geteilt über jede `SmallWorldMachine`-Instanz
 auf der Seite; damals lief `GadgetInspector`s `MaterialStudioApp`-Materialvorschau-Panel selbst als
-eigene `SmallWorld`-Instanz mit eigener `_loop()` (und damit eigenem `FrustumCuller.cull()`) auf
+eigene `SmallWorldMachine`-Instanz mit eigener `_loop()` (und damit eigenem `FrustumCuller.cull()`) auf
 einer winzigen Vorschau-Szene nebenher, wann immer der Showcase-Modus, der es hostete, aktiv war
 (`enableInspector: true`, nie Engine-Standard, aber von etlichen Showcases explizit gesetzt) — ein
 statisches Feld zu lesen hieß in diesem Fall, zu testen, welcher Szene `cull()` zuletzt lief, fast

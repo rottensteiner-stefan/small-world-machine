@@ -1,7 +1,7 @@
 # Lane-Contract-Registry (T3)
 
 Kanonisches, test-deklariertes Verzeichnis aller repurposed `ObjectUniforms`-Lanes des
-Liquid-Style-Structs — **Engine ↔ `@small-world/liquid-extras` (Noir/Oil)**.
+Liquid-Style-Structs — **Engine ↔ `@small-world-machine/liquid-extras` (Noir/Oil)**.
 
 Teil von **T3** der Flüssigkeits-Roadmap: `.agents/collaborate/liquid-roadmap.md` §8.2/T3.
 Es ist ein **hartes Gate vor Block S**: Jede neue Lane (z.B. S2-Splat-Lane, S3-Wall-Contract)

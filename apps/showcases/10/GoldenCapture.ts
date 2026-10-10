@@ -5,9 +5,9 @@ import {
   PerspectiveProjection,
   RampLUT,
   RampStop,
-  SmallWorld,
+  SmallWorldMachine,
   StylizedWaterMaterial,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { LIQUID_Y, POOL_CELLS, PoolKey, PoolPosition, poolWorldPosition } from "./PoolLayout.js";
 import type { RandomSource } from "./PoolTextures.js";
 
@@ -153,7 +153,7 @@ export class GoldenCapture {
    * @param _resetSimulation Puts the showcase clock and physics bodies back to their pristine state.
    */
   constructor(
-    private readonly _host: SmallWorld,
+    private readonly _host: SmallWorldMachine,
     private readonly _resetSimulation: () => void,
   ) {}
 

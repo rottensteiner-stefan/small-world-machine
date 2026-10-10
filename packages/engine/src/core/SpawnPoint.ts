@@ -35,7 +35,7 @@ export class SpawnPoint extends Object3D {
     this.geometry = new Capsule({ radius: 0.35, length: 1.1 }).getGeometryData();
     this.material = new WireframeMaterial(new Color(0.1, 0.95, 0.45)); // Emerald Green
 
-    // Forward direction cone pointing along -Z (Small World forward vector)
+    // Forward direction cone pointing along -Z (Small World Machine forward vector)
     const arrow = new Object3D("SpawnDirection");
     arrow.geometry = new Cone({ radius: 0.12, height: 0.35 }).getGeometryData();
     arrow.material = new BasicMaterial({ color: new Color(0.1, 0.95, 0.45) });

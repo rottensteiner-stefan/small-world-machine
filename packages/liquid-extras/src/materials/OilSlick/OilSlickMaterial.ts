@@ -5,7 +5,8 @@ import {
   composeStylizedWaterSources,
   ShaderDefinition,
   RenderManifest,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
+import { THIN_FILM_GLSL_DECL, THIN_FILM_WGSL_DECL } from "../../shading/thinFilm/thinFilm.js";
 
 export interface OilSlickMaterialOptions extends StylizedWaterMaterialOptions {
   /** Strength of the rainbow sheen patches on the oil film, 0 = pure black oil (default 0.6, clamped to 0..1). */
@@ -15,10 +16,13 @@ export interface OilSlickMaterialOptions extends StylizedWaterMaterialOptions {
 /**
  * OilSlickMaterial implements a dark, viscous crude oil / petroleum surface on top of
  * StylizedWaterMaterial via compile-time extension hooks (ADR 0025). A smooth, domain-warped
- * flow noise drives sparse rainbow sheen patches (a cosine palette, an artistic approximation of
- * thin-film colours, not a physical thin-film interference model). The sheen is strongest at
- * grazing angles and around the sun reflection, so it behaves like a glossy film instead of a
- * decal. Hook-based sheen is suppressed inside shoreline foam.
+ * flow noise drives the sparsely placed sheen patches through the canonical muted thin-film
+ * interference model (`../../shading/thinFilm/thinFilm.ts`, KHR_materials_iridescence style, two-beam
+ * approximation, desaturated via `strength` — see the style contract in that module). Only the
+ * desaturated chroma of the physical tint leaks through, so the film stays dark and tar-like
+ * instead of showing a bright saturated rainbow (Graphic-Noir style limit v2). The sheen is
+ * strongest at grazing angles and around the sun reflection, so it behaves like a glossy film
+ * instead of a decal. Hook-based sheen is suppressed inside shoreline foam.
  *
  * Uniform lane reuse (the style struct is full): `iridescenceStrength` travels in `u_styleA.w`
  * (lineWidth), ripple lines (lineDensity) and glitter are forced off. `specularStrength` is
@@ -99,12 +103,7 @@ export class OilSlickMaterial extends StylizedWaterMaterial {
 
   protected override _getLiquidWaveShaderSources(): ShaderDefinition["sources"] {
     const glslDecl = `
-    // Cosine rainbow palette used for the oil film sheen
-    vec3 thinFilmRainbow(float phase) {
-        vec3 c1 = vec3(1.0, 1.0, 1.0);
-        vec3 c2 = vec3(0.0, 0.333, 0.667);
-        return clamp(0.5 + 0.5 * cos(6.2831853 * (c1 * phase + c2)), 0.0, 1.0);
-    }
+    ${THIN_FILM_GLSL_DECL}
     float oilValueNoise(vec2 p) {
         vec2 c = floor(p);
         vec2 f = fract(p);
@@ -121,24 +120,24 @@ export class OilSlickMaterial extends StylizedWaterMaterial {
     `;
 
     const glslSurface = `
-    // Dark oil film: sparse rainbow sheen tied to fresnel and the sun reflection
+    // Dark oil film: muted physical thin-film sheen tied to fresnel and the sun reflection
     vec3 oilView = normalize(u_viewPos - v_worldPos);
     float oilCos = clamp(dot(v_normal, oilView), 0.0, 1.0);
     float oilFlow = oilFlowNoise(v_worldPos.xz * 0.6, u_time);
     float oilShadow = sampleDirShadow(v_worldPos, v_normal);
     float oilSun = pow(clamp(dot(reflect(-oilView, v_normal), normalize(u_dirLightDir)), 0.0, 1.0), 6.0) * oilShadow;
-    vec3 oilRainbow = thinFilmRainbow(oilFlow * 1.6 + (1.0 - oilCos) * 0.8);
+    vec3 oilSheen = oilFilmThinFilm(oilCos, oilFlow, u_styleA.w);
+    float oilSheenLum = dot(oilSheen, vec3(0.299, 0.587, 0.114));
+    // Chroma-leak only: amplify the desaturated physical tint gently so it reads on the
+    // near-black film without flooding it; luma is dropped to keep the tar body dark.
+    vec3 oilTint = max(oilSheen - oilSheenLum, 0.0) * 5.0;
     float oilMask = smoothstep(0.45, 0.8, oilFlow) * (0.2 + 0.8 * pow(1.0 - oilCos, 2.0) + 0.6 * oilSun);
-    finalColor = mix(finalColor, oilRainbow * 0.5, clamp(oilMask, 0.0, 1.0) * u_styleA.w * 0.7 * (1.0 - finalShoreFoam));
+    finalColor = mix(finalColor, finalColor + oilTint, clamp(oilMask, 0.0, 1.0) * u_styleA.w * (1.0 - finalShoreFoam));
     finalColor *= mix(0.5, 1.0, oilShadow);
     `;
 
     const wgslDecl = `
-    fn thinFilmRainbow(phase: f32) -> vec3<f32> {
-        let c1 = vec3<f32>(1.0, 1.0, 1.0);
-        let c2 = vec3<f32>(0.0, 0.333, 0.667);
-        return clamp(0.5 + 0.5 * cos(6.2831853 * (c1 * phase + c2)), vec3<f32>(0.0), vec3<f32>(1.0));
-    }
+    ${THIN_FILM_WGSL_DECL}
     fn oilValueNoise(p: vec2<f32>) -> f32 {
         let c = floor(p);
         var f = fract(p);
@@ -159,9 +158,13 @@ export class OilSlickMaterial extends StylizedWaterMaterial {
     let oilFlow = oilFlowNoise(i.wp.xz * 0.6, obj.time);
     let oilShadow = sampleDirShadow(i.wp, i.n);
     let oilSun = pow(clamp(dot(reflect(-oilView, i.n), normalize(global.dirLightDir.xyz)), 0.0, 1.0), 6.0) * oilShadow;
-    let oilRainbow = thinFilmRainbow(oilFlow * 1.6 + (1.0 - oilCos) * 0.8);
+    let oilSheen = oilFilmThinFilm(oilCos, oilFlow, obj.styleA.w);
+    let oilSheenLum = dot(oilSheen, vec3<f32>(0.299, 0.587, 0.114));
+    // Chroma-leak only: amplify the desaturated physical tint gently so it reads on the
+    // near-black film without flooding it; luma is dropped to keep the tar body dark.
+    let oilTint = max(oilSheen - oilSheenLum, vec3<f32>(0.0)) * 5.0;
     let oilMask = smoothstep(0.45, 0.8, oilFlow) * (0.2 + 0.8 * pow(1.0 - oilCos, 2.0) + 0.6 * oilSun);
-    finalColor = mix(finalColor, oilRainbow * 0.5, clamp(oilMask, 0.0, 1.0) * obj.styleA.w * 0.7 * (1.0 - finalShoreFoam));
+    finalColor = mix(finalColor, finalColor + oilTint, clamp(oilMask, 0.0, 1.0) * obj.styleA.w * (1.0 - finalShoreFoam));
     finalColor = finalColor * mix(0.5, 1.0, oilShadow);
     `;
     const baseSources = composeStylizedWaterSources({

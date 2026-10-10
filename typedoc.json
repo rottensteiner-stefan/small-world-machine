@@ -2,7 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": ["packages/engine/src/index.ts"],
   "out": "docs/public/api",
-  "name": "Small World Engine API Reference",
+  "name": "Small World Machine API Reference",
   "includeVersion": true,
   "exclude": ["node_modules", "tests", "examples"]
 }

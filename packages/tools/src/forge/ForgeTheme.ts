@@ -110,6 +110,10 @@ export const FORGE_THEME_CSS = `
     box-shadow: var(--swf-shadow);
     pointer-events: auto;
     overflow: hidden;
+    /* Never larger than the screen: the header (and its close button) must stay reachable.
+       The reserved strip at the bottom is the taskbar. */
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 44px);
     backdrop-filter: blur(12px);
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }

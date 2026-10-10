@@ -1,8 +1,8 @@
-# Small World Engine
+# Small World Machine
 
-<img align="right" width="280" alt="Small World Engine" src="public/assets/logo_vector.svg" />
+<img align="right" width="280" alt="Small World Machine" src="public/assets/logo_vector.svg" />
 
-**Small World Engine** is the "Preact of 3D Engines". It is an ultra-lightweight, high-performance, and strict TypeScript 3D game engine for the web. Built for the era of WebGPU and Playable Ads, it provides a modern Physically Based Rendering (PBR) pipeline and a robust Behavior System—delivering the architectural elegance of a real game engine at a fraction of the bundle size of traditional frameworks.
+**Small World Machine** is the "Preact of 3D Engines". It is an ultra-lightweight, high-performance, and strict TypeScript 3D game engine for the web. Built for the era of WebGPU and Playable Ads, it provides a modern Physically Based Rendering (PBR) pipeline and a robust Behavior System—delivering the architectural elegance of a real game engine at a fraction of the bundle size of traditional frameworks.
 
 Read our full [Vision & Strategy](VISION.md).
 
@@ -35,7 +35,7 @@ Read our full [Vision & Strategy](VISION.md).
 ### ⚡ Under the Hood (Hardcore Engineering)
 
 - **Zero-Allocation Render Loop:** The critical path is strictly structured to ensure **zero memory allocations** (garbage) during the main render loop. This eliminates unpredictable Garbage Collection (GC) pauses, guaranteeing consistently smooth framerates.
-- **Custom Math Engine from Scratch:** We don't rely on massive external math libraries like `glMatrix`. Small World features a bespoke, highly-optimized mathematics library for vectors and matrices, tailored exactly for our right-handed coordinate system.
+- **Custom Math Engine from Scratch:** We don't rely on massive external math libraries like `glMatrix`. Small World Machine features a bespoke, highly-optimized mathematics library for vectors and matrices, tailored exactly for our right-handed coordinate system.
 - **Advanced Rendering & Post-Processing:** Consistent linear space math through the entire pipeline, featuring a highly efficient, unified final pass for Tone-Mapping, Color-Grading, Vignette, and sRGB Gamma Correction.
 - **Advanced Materials & Fluid Surfaces (ADR 0013):** Built-in PBR, Retro Screen, and unified liquid shaders (Wave family: `OpenWaterMaterial`/`StylizedWaterMaterial` with Gerstner waves and depth-fade; Flow family: `LavaMaterial`/`SlimeMaterial` with noise flow and emissive glow).
 - **WebGPU Compute Shaders:** Real compute-shader usage, not just the graphics pipeline — e.g. the Clustered Forward+ Lighting pass culls every light against the frustum grid on the GPU before the main render pass runs.
@@ -48,23 +48,23 @@ This package is private and not published to the NPM registry yet. Clone the rep
 dependencies locally:
 
 ```bash
-git clone https://github.com/rottensteiner-stefan/small-world.git
-cd small-world
+git clone https://github.com/rottensteiner-stefan/small-world-machine.git
+cd small-world-machine
 npm install
 ```
 
 ## 🎮 Quick Start
 
-The engine provides a `SmallWorld` base class that handles the render loop and hardware initialization automatically.
+The engine provides a `SmallWorldMachine` base class that handles the render loop and hardware initialization automatically.
 
 ### 1. Configuration
 
 You can configure the engine by passing an options object to the constructor. In modern bundlers (like Vite), you can also import a JSON file directly.
 
 ```typescript
-import config from "./config/small-world.json";
+import config from "./config/small-world-machine.json";
 
-class MyGame extends SmallWorld {
+class MyGame extends SmallWorldMachine {
   constructor() {
     // Pass the configuration to the engine
     super(config);
@@ -75,9 +75,9 @@ class MyGame extends SmallWorld {
 ### 2. Implementation Showcase
 
 ```typescript
-import { SmallWorld, Cube, Color, StandardMaterial, Object3D, OrbitController, Texture } from "small-world";
+import { SmallWorldMachine, Cube, Color, StandardMaterial, Object3D, OrbitController, Texture } from "small-world-machine";
 
-class MyGame extends SmallWorld {
+class MyGame extends SmallWorldMachine {
   constructor() {
     super(); // Or pass config here
   }
@@ -149,11 +149,11 @@ For an isolated development environment, this project includes a **Dev Container
 
 ## 📂 Project Structure
 
-Small World is organized as a lightweight TypeScript monorepo (`packages/*`, `apps/*`, `public/*`):
+Small World Machine is organized as a lightweight TypeScript monorepo (`packages/*`, `apps/*`, `public/*`):
 
 ### `packages/` — Engine & Extensions
-- **`packages/engine`**: Core 3D engine (`@small-world/engine`).
-  - `src/core`: Core lifecycle (`SmallWorld`), Scene Graph (`Object3D`, `Scene`), `Input`, `Color`, and `EventBus`.
+- **`packages/engine`**: Core 3D engine (`@small-world-machine/engine`).
+  - `src/core`: Core lifecycle (`SmallWorldMachine`), Scene Graph (`Object3D`, `Scene`), `Input`, `Color`, and `EventBus`.
   - `src/core/behaviors`: Modular behavior components (e.g. `OrbitController`, `HoverBehavior`, `DraggableBehavior`, Proximity Sensors).
   - `src/core/cameras`: Camera projections (Perspective, Orthographic), strategies, and camera effects.
   - `src/core/fsm`: Type-safe, zero-allocation Finite State Machine framework.
@@ -180,11 +180,11 @@ Small World is organized as a lightweight TypeScript monorepo (`packages/*`, `ap
 
 ## 🧰 Tools & Authoring Suite
 
-Small World includes a comprehensive suite of standalone, browser-based creative and diagnostic tools (`public/tools/`), running entirely client-side via the File System Access API without external server dependencies or build-step friction:
+Small World Machine includes a comprehensive suite of standalone, browser-based creative and diagnostic tools (`public/tools/`), running entirely client-side via the File System Access API without external server dependencies or build-step friction:
 
 ### 🌟 Maker — World & Scene Editor (`public/tools/maker.html`)
 The engine's flagship standalone 3D scene composer and level editor ([User Guide](docs/guides/maker.md)):
-- **Direct glTF 2.0 Persistence & Autosave:** Debounced (500ms) write-through directly into standard `scene.gltf` projects with vendor-namespaced `SW_*` extensions for Small World behaviors, physics, and custom material parameters.
+- **Direct glTF 2.0 Persistence & Autosave:** Debounced (500ms) write-through directly into standard `scene.gltf` projects with vendor-namespaced `SW_*` extensions for Small World Machine behaviors, physics, and custom material parameters.
 - **High-Speed Keyboard Nudging & Transformation:** Camera-perspective-aware directional nudging ($\leftarrow, \rightarrow, \uparrow, \downarrow$ on XZ ground), elevation adjustments (`Shift` + $\uparrow / \downarrow$, `PageUp`/`PageDown`), and **Snap to Ground** (<kbd>End</kbd> / `⬇ Ground`) to align bounding boxes flush with $Y = 0$.
 - **Dynamic Snapping & Grid Stepping:** Enabled by default with instant grid resolution stepping via <kbd>[</kbd> (finer) and <kbd>]</kbd> (coarser) across `0.1m` to `2.0m`, $15^\circ$ angle quantization, and $0.25$ scale steps (Toggle: <kbd>X</kbd>).
 - **Multi-Selection & Pivot-Relative Clusters:** 2D screen-space Marquee box selection, Cyan/Amber primary/secondary hierarchy highlights, and pivot-relative multi-object group transformations.

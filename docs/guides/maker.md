@@ -1,10 +1,10 @@
 # Maker (World & Scene Editor) — Pro Guide & Reference
 
-**Maker** is Small World's standalone, browser-based 3D scene and environment editor (`/tools/maker.html`). Built specifically for digital artists and power users, Maker closes the gap between procedural engine development and visual scene composition — no more hand-written scene layout files, just a low-latency, keyboard-driven workflow.
+**Maker** is Small World Machine's standalone, browser-based 3D scene and environment editor (`/tools/maker.html`). Built specifically for digital artists and power users, Maker closes the gap between procedural engine development and visual scene composition — no more hand-written scene layout files, just a low-latency, keyboard-driven workflow.
 
 ```
 +-------------------------------------------------------------------------------------------------------+
-|  Header: [Maker - Small World]   [📷1][📷2]..[📷9]   [🧲 0.50m][[][]]   [⬇ Floor]   [Save/Status]      |
+|  Header: [Maker - Small World Machine]   [📷1][📷2]..[📷9]   [🧲 0.50m][[][]]   [⬇ Floor]   [Save/Status]      |
 +-------------------+---------------------------------------------------------------+-------------------+
 | Hierarchy & Add   | Viewport & interactive tools                                  | Inspector         |
 | - Scene tree      | - Orbit camera & 9 quick view bookmarks (1-9 / Ctrl+1-9)      | - Transform       |
@@ -189,7 +189,7 @@ Maker uses the browser's native **File System Access API** (`showDirectoryPicker
   - `SW_prefab_instance`: provenance-only record of which Maker prefab a node was instantiated from.
   - `SW_stage_zone`: a 2.5D `StageZone`'s points and display name (see `docs/adr/0016-2-5d-stage-zones-as-a-gltf-extension.md`), giving it a scene-graph presence via `StageZoneMarker`.
   - A node's material is written through native glTF `pbrMetallicRoughness` rather than a custom extension, since `StandardMaterial`'s fields map onto it directly. Behaviors and physics data are not currently round-tripped through the glTF file (`WorldWriter`'s scope is still Phase 0: hierarchy, transforms, one material per mesh, and position-only geometry).
-- **Portability:** the generated `scene.gltf` files can be opened directly in Blender, Babylon.js, Three.js, or loaded straight into the Small World game runtime via `GltfLoader`.
+- **Portability:** the generated `scene.gltf` files can be opened directly in Blender, Babylon.js, Three.js, or loaded straight into the Small World Machine game runtime via `GltfLoader`.
 
 ---
 

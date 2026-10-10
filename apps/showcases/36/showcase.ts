@@ -20,7 +20,7 @@ import {
   ToneMappingElement,
   ToneMappingMode,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 class Showcase36 extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {

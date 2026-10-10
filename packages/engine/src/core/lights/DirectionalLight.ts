@@ -194,7 +194,7 @@ export class DirectionalLight extends AbstractLight {
       ortho.bottom = minY - padding;
       ortho.top = maxY + padding;
 
-      // small-world uses right-handed system (looking down -Z)
+      // small-world-machine uses right-handed system (looking down -Z)
       // minZ is the most negative (farthest), maxZ is the least negative (nearest)
       ortho.near = -maxZ - 200;
       ortho.far = -minZ + 200;

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://small-world.dev/schemas/prop-meta.schema.json",
-  "title": "Small World Asset Kit — Prop Meta",
+  "$id": "https://small-world-machine.dev/schemas/prop-meta.schema.json",
+  "title": "Small World Machine Asset Kit — Prop Meta",
   "description": "Schema for one item's meta.json (the spec sheet next to its model.glb) — see docs/adr/0011-modular-asset-kits-and-remote-catalog.md. Validated by packages/engine/tests/loaders/AssetKitValidation.test.ts, which also cross-checks that `id`/`kit` actually match the owning kit.json.",
   "type": "object",
   "required": [

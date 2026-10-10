@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { getGltfExtensions } from "@small-world/engine";
+import { getGltfExtensions } from "@small-world-machine/engine";
 import "../src/register.js";
 
-describe("@small-world/gltf-extensions register", () => {
+describe("@small-world-machine/gltf-extensions register", () => {
   it("registers both KHR_draco_mesh_compression and KHR_texture_basisu in the global engine registry", () => {
     const extensions = getGltfExtensions();
     const names = extensions.map((ext) => ext.name);
@@ -12,7 +12,7 @@ describe("@small-world/gltf-extensions register", () => {
   });
 
   it("deduplicates glTF extensions when registered multiple times [MAJ-08]", async () => {
-    const { registerGltfExtension } = await import("@small-world/engine");
+    const { registerGltfExtension } = await import("@small-world-machine/engine");
     const dummyPlugin = { name: "TEST_duplicate_plugin" };
     registerGltfExtension(dummyPlugin);
     registerGltfExtension(dummyPlugin);

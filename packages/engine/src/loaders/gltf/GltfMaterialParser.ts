@@ -22,7 +22,7 @@ export class GltfMaterialParser {
   }
 
   /**
-   * Resolves a glTF material definition into a Small World StandardMaterial.
+   * Resolves a glTF material definition into a Small World Machine StandardMaterial.
    */
   public static async parseMaterial(
     m: NonNullable<GltfJson["materials"]>[number],
@@ -277,7 +277,7 @@ export class GltfMaterialParser {
   }
 
   /**
-   * Resolves a texture index to a Small World Texture instance.
+   * Resolves a texture index to a Small World Machine Texture instance.
    */
   public static async resolveTexture(
     texIdx: number,

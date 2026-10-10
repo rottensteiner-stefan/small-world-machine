@@ -29,8 +29,8 @@ import {
   Texture,
   Torus,
   Vector2D,
-} from "@small-world/engine";
-import { attachDevTools } from "@small-world/tools";
+} from "@small-world-machine/engine";
+import { attachDevTools } from "@small-world-machine/tools";
 
 // ----------------------------------------------------------------------------
 // Real prism optics: Snell's law at both surfaces of the equilateral-triangle prism, with a
@@ -180,7 +180,7 @@ class Showcase28 extends AbstractShowcase {
 
   constructor(options: EngineOptions = {}) {
     super({
-      canvasId: "SmallWorld",
+      canvasId: "SmallWorldMachine",
       rendererType: RendererType.BEST,
       fullscreen: true,
       ...options,

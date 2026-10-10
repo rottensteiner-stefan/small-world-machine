@@ -1,10 +1,14 @@
-import { Behavior } from "@small-world/engine/core/behaviors/index.js";
-import { Object3D, Scene } from "@small-world/engine/core/index.js";
-import { CameraInterfaceData, Collidable } from "@small-world/engine/interfaces/index.js";
-import { BoundingBox, BoundingSphere, Collision } from "@small-world/engine/physix/index.js";
-import { MathPool } from "@small-world/engine/math/index.js";
-import { AudioSystem } from "@small-world/engine/audio/index.js";
-import { BoundingType } from "@small-world/engine/enums/index.js";
+import { Behavior } from "@small-world-machine/engine/core/behaviors/index.js";
+import { Object3D, Scene } from "@small-world-machine/engine/core/index.js";
+import { CameraInterfaceData, Collidable } from "@small-world-machine/engine/interfaces/index.js";
+import {
+  BoundingBox,
+  BoundingSphere,
+  Collision,
+} from "@small-world-machine/engine/physix/index.js";
+import { MathPool } from "@small-world-machine/engine/math/index.js";
+import { AudioSystem } from "@small-world-machine/engine/audio/index.js";
+import { BoundingType } from "@small-world-machine/engine/enums/index.js";
 import { ObjectTags } from "../../enums/ObjectTags.js";
 
 export interface EnemyBehaviorOptions {

@@ -7,7 +7,7 @@
  * or bumps render as dents.
  */
 export const NormalMapFormat = {
-  /** Green up (+Y). Web/glTF default; the Small World engine's convention. */
+  /** Green up (+Y). Web/glTF default; the Small World Machine engine's convention. */
   OPENGL: "opengl",
   /** Green down (-Y). Required by some desktop DCC tools and legacy engines. */
   DIRECTX: "directx",

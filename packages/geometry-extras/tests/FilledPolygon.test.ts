@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { FilledPolygon } from "../src/FilledPolygon.js";
-import { Vector3D } from "@small-world/engine";
+import { Vector3D } from "@small-world-machine/engine";
 
 function assertNoNaN(poly: FilledPolygon, name: string): void {
   const data = poly.getGeometryData();

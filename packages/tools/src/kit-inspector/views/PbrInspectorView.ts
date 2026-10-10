@@ -5,7 +5,7 @@ import {
   Color,
   Texture,
   KitRegistry,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import type { CameraFrame, InspectedAssetInfo } from "../types.js";
 
 export interface PbrViewResult {

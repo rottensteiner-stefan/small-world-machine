@@ -76,7 +76,7 @@ export class DeviceOrientationController extends Behavior {
     if (isCamera) {
       target.theta = this._alpha;
       // beta is usually 90 degrees (PI/2) when holding the phone upright.
-      // Small World's phi expects 0 when looking straight forward.
+      // Small World Machine's phi expects 0 when looking straight forward.
       target.phi = this._beta - Math.PI / 2.0;
     } else {
       const obj = target as Object3D;

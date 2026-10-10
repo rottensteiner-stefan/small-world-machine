@@ -19,7 +19,7 @@ import {
   Sphere,
   StandardMaterial,
   Vector3D,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 /**
  * A pentatonic scale for musical physical collisions.

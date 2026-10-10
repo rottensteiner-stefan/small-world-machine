@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { HotspotManager, HotspotAction } from "../ui/HotspotManager.js";
-import { Vector3D } from "@small-world/engine";
+import { Vector3D } from "@small-world-machine/engine";
 
 describe("HotspotManager", () => {
   let manager: HotspotManager;

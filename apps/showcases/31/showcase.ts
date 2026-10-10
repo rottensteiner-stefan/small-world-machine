@@ -28,8 +28,8 @@ import {
   Torus,
   Vector3D,
   VignetteElement,
-} from "@small-world/engine";
-import { attachDevTools } from "@small-world/tools";
+} from "@small-world-machine/engine";
+import { attachDevTools } from "@small-world-machine/tools";
 
 const PLATFORM_HALF_WIDTH = 3.2;
 const PLATFORM_LENGTH = 34;
@@ -61,7 +61,7 @@ class Showcase31 extends AbstractShowcase {
 
   constructor(options: EngineOptions = {}) {
     super({
-      canvasId: "SmallWorld",
+      canvasId: "SmallWorldMachine",
       rendererType: RendererType.BEST,
       fullscreen: true,
       ...options,

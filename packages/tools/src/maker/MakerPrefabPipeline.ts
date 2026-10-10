@@ -8,7 +8,7 @@ import {
   BoundingType,
   Vector3D,
   BoundingVolume,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { OrbitCameraController } from "./OrbitCameraController.js";
 import { TransformGizmo } from "./TransformGizmo.js";
 import { LightGizmoManager } from "./LightGizmoManager.js";

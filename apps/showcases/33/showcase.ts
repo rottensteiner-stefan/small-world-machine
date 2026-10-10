@@ -13,8 +13,8 @@ import {
   RendererType,
   Sphere,
   StandardMaterial,
-} from "@small-world/engine";
-import { attachDevTools } from "@small-world/tools";
+} from "@small-world-machine/engine";
+import { attachDevTools } from "@small-world-machine/tools";
 
 const WALL_HALF_WIDTH = 5;
 const FIELD_Z = -10;
@@ -37,7 +37,7 @@ class Showcase33 extends AbstractShowcase {
 
   constructor(options: EngineOptions = {}) {
     super({
-      canvasId: "SmallWorld",
+      canvasId: "SmallWorldMachine",
       rendererType: RendererType.BEST,
       fullscreen: true,
       enableOcclusionCulling: true,

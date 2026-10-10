@@ -16,12 +16,12 @@ import {
   Skydome,
   Sphere,
   Texture,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import {
   AccretionDiskEmitter,
   ParticleMeshRenderer,
   TurbulenceAffector,
-} from "@small-world/vfx-extras";
+} from "@small-world-machine/vfx-extras";
 
 class Showcase22 extends AbstractShowcase {
   private _accretionDisk!: AccretionDiskEmitter;
@@ -110,7 +110,7 @@ class Showcase22 extends AbstractShowcase {
     });
     this.scene.add(singularity);
 
-    // 4. High-Density Accretion Disk Simulation (via @small-world/vfx-extras)
+    // 4. High-Density Accretion Disk Simulation (via @small-world-machine/vfx-extras)
     let particleCount = 3000;
     if (tier === PerformanceTier.LOW) particleCount = 800;
     else if (tier === PerformanceTier.MEDIUM) particleCount = 1600;

@@ -6,7 +6,7 @@ Teil von **M1** der Flüssigkeits-Roadmap (`.agents/collaborate/liquid-roadmap.m
 Jede ausgabeändernde Shader-Änderung darf das Wasserbild nicht unbemerkt verändern. Diese Tools
 fangen beides ab: **sichtbare Regressionen** (Bild weicht von der committeten Baseline ab) und
 **stille Regressionen** (Canvas bleibt leer). Die Capture ist deterministisch: Showcase 10 läuft
-im Golden-Mode (`?__golden=…`), der die Engine mit festem Timestep (`SmallWorld.step(1/60)`)
+im Golden-Mode (`?__golden=…`), der die Engine mit festem Timestep (`SmallWorldMachine.step(1/60)`)
 schrittweise rendert und den letzten Frame einfriert — derselbe Zustand ergibt zweimal exakt
 dieselben Pixel (kein WallClock-`performance.now()`-Drift).
 
@@ -62,7 +62,7 @@ Baseline, ist die Umgebung ausgeschlossen und die Drift ist Inhalt.
 
 ```bash
 git worktree add --detach <dir> <baseline-commit>
-# node_modules im Worktree: Einträge des Hauptbaums verlinken, aber node_modules/@small-world/*
+# node_modules im Worktree: Einträge des Hauptbaums verlinken, aber node_modules/@small-world-machine/*
 # auf die Pakete des WORKTREES zeigen lassen -- sonst lädt die Seite zwei Engine-Kopien.
 (cd <dir> && npx vite --host --port 4173 --strictPort) &
 (cd <dir> && node scripts/goldens/capture.js --matrix gl2 --out <out> --skip-spawn --pool clear-water)

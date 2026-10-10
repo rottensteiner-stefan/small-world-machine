@@ -93,6 +93,23 @@ describe("ForgeWindow", () => {
     expect(win.isVisible).toBe(false);
   });
 
+  it("pulls a window back on screen when it is shown at an off-screen position", () => {
+    const win = new ForgeWindow("My Tool", parent, 5000, 4000);
+    win.toggleVisibility(true);
+    const el = win.getElement();
+    expect(parseInt(el.style.left, 10)).toBeLessThan(window.innerWidth);
+    expect(parseInt(el.style.top, 10)).toBeLessThan(window.innerHeight);
+    expect(parseInt(el.style.left, 10)).toBeGreaterThanOrEqual(0);
+    expect(parseInt(el.style.top, 10)).toBeGreaterThanOrEqual(0);
+  });
+
+  it("keeps a window that is already on screen where it is", () => {
+    const win = new ForgeWindow("My Tool", parent, 40, 60);
+    win.toggleVisibility(true);
+    expect(win.getElement().style.left).toBe("40px");
+    expect(win.getElement().style.top).toBe("60px");
+  });
+
   it("closes on a click of the close button, not on the mousedown", () => {
     const win = new ForgeWindow("My Tool", parent);
     win.toggleVisibility(true);

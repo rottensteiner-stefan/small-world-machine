@@ -11,7 +11,7 @@ import {
   Cone,
   Cylinder,
   Camera,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 interface LightGizmoEntry {
   light: AbstractLight;

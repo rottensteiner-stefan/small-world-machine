@@ -1,5 +1,5 @@
 {
-  "name": "@small-world/engine",
+  "name": "@small-world-machine/engine",
   "private": true,
   "version": "0.78.00",
   "description": "A lightweight 3D engine for hybrid WebGL/WebGPU rendering pipelines.",

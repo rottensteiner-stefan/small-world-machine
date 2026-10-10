@@ -10,7 +10,7 @@ import {
   Vector2D,
   Vector3D,
   CameraInterfaceData,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 
 export type GizmoMode = "translate" | "rotate" | "scale";
 export type GizmoAxis = "x" | "y" | "z";

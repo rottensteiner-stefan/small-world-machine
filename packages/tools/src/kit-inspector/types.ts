@@ -1,4 +1,4 @@
-import type { EngineOptions, KitSocket } from "@small-world/engine";
+import type { EngineOptions, KitSocket } from "@small-world-machine/engine";
 import type { ValidationReport } from "../common/io/index.js";
 
 export interface KitMountResult {

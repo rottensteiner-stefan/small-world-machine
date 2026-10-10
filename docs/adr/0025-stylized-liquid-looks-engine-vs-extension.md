@@ -24,7 +24,7 @@ Belegte Randbedingungen:
 3. **Modulare Chunks & Injection Hooks:**
    - Kern-Chunks: `liquid_caustics` ($F_1-\text{Smooth}F_1$ Voronoi-Zellnetz) und `liquid_glint` (Stern-Glitzer mit gestufter Framerate).
    - Shader-Hooks: `[WATER_EXT_DECL]`, `[WATER_EXT_SURFACE]` für Compile-Time-Erweiterbarkeit via `composeStylizedWaterSources()`.
-4. **Extension-Paket `@small-world/liquid-extras`:**
+4. **Extension-Paket `@small-world-machine/liquid-extras`:**
    - Beherbergt spezialisierte Art-Direction-Packs (wie `NoirWaterMaterial`), ohne den Engine-Kern zu forken.
 
 ## Konsequenzen

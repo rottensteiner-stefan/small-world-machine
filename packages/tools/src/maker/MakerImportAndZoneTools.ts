@@ -13,7 +13,7 @@ import {
   StageZoneMarker,
   Texture,
   GridLevelBuilder,
-} from "@small-world/engine";
+} from "@small-world-machine/engine";
 import { resolveStageProjection } from "./StageProjectionResolver.js";
 import { BackgroundPlane } from "./BackgroundPlane.js";
 import { defaultAsciiMapLegend } from "./AsciiMapLegend.js";

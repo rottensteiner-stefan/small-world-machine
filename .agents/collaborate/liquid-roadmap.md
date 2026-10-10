@@ -37,7 +37,7 @@
 **Echt vorhanden & verifiziert (Code, Tests, Nutzung):**
 - 2-Familien-Architektur: `LiquidWaveMaterial` (abstrakt; `OpenWaterMaterial`, `StylizedWaterMaterial`) + `FluidSurfaceMaterial` (`LavaMaterial`, `SlimeMaterial` als Presets) — alle Klassen existieren, öffentlich exportiert, in Apps genutzt (showcases 10, 31; yad; the-whisper).
 - Voller 3-Backend-Shader-Satz (GLSL300/GLSL100/WGSL) für FluidSurface/OpenWater/StylizedWater (18 Dateien) + 10 `liquid_*`-Chunks; `ShaderRegistry.registerChunk`/`[TOKEN]`-Mechanismus echt.
-- Erweiterungsmechanismus in **Produktion**: `composeStylizedWaterSources()` + Hooks `[WATER_EXT_DECL]`/`[WATER_EXT_SURFACE]`, genutzt von `@small-world/liquid-extras` (NoirWaterMaterial, OilSlickMaterial; Tests vorhanden). `[VERIFIED: packages/engine/src/core/materials/StylizedWaterMaterial.ts:17; test=StylizedWaterMaterial.test.ts]`
+- Erweiterungsmechanismus in **Produktion**: `composeStylizedWaterSources()` + Hooks `[WATER_EXT_DECL]`/`[WATER_EXT_SURFACE]`, genutzt von `@small-world-machine/liquid-extras` (NoirWaterMaterial, OilSlickMaterial; Tests vorhanden). `[VERIFIED: packages/engine/src/core/materials/StylizedWaterMaterial.ts:17; test=StylizedWaterMaterial.test.ts]`
 - OpenWater: **6-Wellen-Kaskade** + Tiefwasser-Dispersion `sqrt(g·k)` (Chunk) + **analytische Jacobi-Kamm-Schaum** (`J = t.x·b.z − t.z·b.x`), 3 Backends. `[VERIFIED: packages/engine/src/core/materials/shaders/OpenWater.vert.glsl:91; test=OpenWaterMaterial.test.ts]`
 - Brechung über Captured Opaque Color/Depth; Screen-Space-Ansatz; WebGL1 dokumentierter Depth-Gap.
 - Physics-Baustein: `FluidVolume` + `BuoyancySolver` (Archimedes) — **existiert, aber rendering-setitg entkoppelt und in keiner App verdrahtet**.
@@ -267,11 +267,11 @@ Die Roadmap behandelte Wellen, Schaum und Interaktion, aber nicht, wie Flüssigk
 
 ## 12. Industrie-Vergleich (konsolidiert aus allen Blättern)
 
-> **Belegqualität:** Die Spalte *Small World* ist im Repo belegt (`[VERIFIED]` mit Datei und Zeile, siehe §13 und §16). Die Aussagen zu Godot, Unreal, Unity/Crest und Three.js stammen aus dem Fachwissen der Agenten und sind **nicht** gegen Dokumentation geprüft (`[JUDGMENT]`). Sie taugen als Richtungsurteil, nicht als Zitat. Zeilenanker in `apps/showcases/10/showcase.ts` sind seit dem Umbau vom 2026-10-07 veraltet.
+> **Belegqualität:** Die Spalte *Small World Machine* ist im Repo belegt (`[VERIFIED]` mit Datei und Zeile, siehe §13 und §16). Die Aussagen zu Godot, Unreal, Unity/Crest und Three.js stammen aus dem Fachwissen der Agenten und sind **nicht** gegen Dokumentation geprüft (`[JUDGMENT]`). Sie taugen als Richtungsurteil, nicht als Zitat. Zeilenanker in `apps/showcases/10/showcase.ts` sind seit dem Umbau vom 2026-10-07 veraltet.
 
 ### 12.1 Vergleichstabelle
 
-| Achse | Godot | Unreal | Unity (Crest) | Three.js | Small World (Ist) | Urteil |
+| Achse | Godot | Unreal | Unity (Crest) | Three.js | Small World Machine (Ist) | Urteil |
 |---|---|---|---|---|---|---|
 | **Wasser als Subsystem** | Kein First-Party-Wasser, kein Pass; `ShaderMaterial` plus Community; Reflexion und Refraktion per `SubViewport`/`BackBufferCopy` selbst gebaut | Water-Plugin: `UWaterBody` erzeugt eigene Quad-Gitter, eigenes Wasser-Shading-Model, Buoyancy-Splatmaps, eigene Reflexionsbehandlung | HDRP Water System als eine PBR-Wasserpipeline mit Buoyancy-Hooks; URP nur Shader Graph und Community | Kein Wasser im Core; `Water.js`/`Ocean.js` sind Demos; keine erzwungene Erweiterungsgrenze | Zwei Familien: `LiquidWaveMaterial` → OpenWater/StylizedWater, `FluidSurfaceMaterial` → Lava/Slime; zwei Hook-Tokens (ADR 0025); kein Wasser-Pass, keine erzeugte Geometrie | Struktur gut, Wasser-Schicht (Pass, Geometrie, Physik) fehlt |
 | **Wellenmodell** | Community-Gerstner; kein offizieller Ozean | Mehrere Oktaven Gerstner mit Layered Normals; FFT über Drittanbieter | HDRP Spektral/Gerstner-Hybrid; Crest GPU-Compute-Kaskaden | `OceanShaderMesh` mit echtem Tessendorf-FFT (JONSWAP, Ping-Pong, Jacobi); `Water.js` Plane mit Normalmaps | 6 analytische Gerstner-Terme, Tiefwasser-Dispersion `ω = √(g·k)`, Komposition 2+1+2+1; räumlich uniform, kein Spektrum | Mathematik korrekt, Detail und Spektrum fehlen |

@@ -100,7 +100,7 @@ page.on("dialog", async (d) => {
 
 await page.evaluateOnNewDocument((endpoint) => {
   localStorage.setItem(
-    "smallworld_ai_config",
+    "smallworldmachine_ai_config",
     JSON.stringify({ provider: "custom", apiKey: "", model: "m", endpoint }),
   );
 }, `http://localhost:${MOCK_PORT}/v1/chat/completions`);

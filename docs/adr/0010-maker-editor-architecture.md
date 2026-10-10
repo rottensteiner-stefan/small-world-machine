@@ -2,7 +2,7 @@
 
 ## Kontext & Problem
 
-Small World hat sich ein reichhaltiges Laufzeit-Objektmodell erarbeitet (19 Geometrie-Primitive, 16 Materialien, 5 Lichttypen, ~20 Behaviors), aber es gibt keine Möglichkeit, eine Szene zu *komponieren* oder zu *persistieren*, außer TypeScript von Hand zu schreiben. `GadgetInspector` (`src/tools/GadgetInspector.ts`) ist das bislang nächstliegende Werkzeug — ein Tweakpane-basiertes Overlay, das per Raycast ein Live-Objekt auswählt und dessen Transform-/Material-/Licht-/Behavior-Eigenschaften bearbeitet —, aber seine eigene Dokumentation (`docs/guides/gadget-inspector.md`) listet genau die Lücken auf, die ihn daran hindern, ein echter Editor zu werden:
+Small World Machine hat sich ein reichhaltiges Laufzeit-Objektmodell erarbeitet (19 Geometrie-Primitive, 16 Materialien, 5 Lichttypen, ~20 Behaviors), aber es gibt keine Möglichkeit, eine Szene zu *komponieren* oder zu *persistieren*, außer TypeScript von Hand zu schreiben. `GadgetInspector` (`src/tools/GadgetInspector.ts`) ist das bislang nächstliegende Werkzeug — ein Tweakpane-basiertes Overlay, das per Raycast ein Live-Objekt auswählt und dessen Transform-/Material-/Licht-/Behavior-Eigenschaften bearbeitet —, aber seine eigene Dokumentation (`docs/guides/gadget-inspector.md`) listet genau die Lücken auf, die ihn daran hindern, ein echter Editor zu werden:
 
 - **Keine Persistenz** — `getState()`/`setState()` sind explizite No-Op-Stubs; Bearbeitungen verschwinden beim Neuladen.
 - **Kein Export** — keine Möglichkeit, eine Szene wieder als Daten auszugeben.
@@ -23,7 +23,7 @@ Das bei `Behavior` bereits bewährte `InspectorField`/`static inspector`-Muster 
 
 ### 2. Weltformat = glTF 2.0 + ein `SW_*`-Erweiterungs-Namensraum, kein neues Format von Grund auf
 
-Szenen werden als glTF-2.0-JSON persistiert (Node-Hierarchie, Transforms, PBR-Materialien, `KHR_lights_punctual`-Lichter, Kameras), wobei `packages/engine/src/loaders/GltfLoader.ts` als Lese-seitiges Fundament wiederverwendet wird — es parst bereits das `extensions`-Objekt (aktuell nur `KHR_materials_emissive_strength`). Small-World-spezifische Daten ohne glTF-Äquivalent (Behaviors und ihre Parameter, Physik-Konfiguration, Nicht-PBR-Materialfelder) werden in Vendor-Extension-Objekten unter einem `SW_*`-Präfix transportiert — genau der Mechanismus, den Khronos für diesen Fall vorgesehen hat. Ein begleitender `WorldWriter` wird neben `GltfLoader` ergänzt, um den lebenden `Scene`/`Object3D`-Graph zurück in diese Form zu serialisieren.
+Szenen werden als glTF-2.0-JSON persistiert (Node-Hierarchie, Transforms, PBR-Materialien, `KHR_lights_punctual`-Lichter, Kameras), wobei `packages/engine/src/loaders/GltfLoader.ts` als Lese-seitiges Fundament wiederverwendet wird — es parst bereits das `extensions`-Objekt (aktuell nur `KHR_materials_emissive_strength`). Small-World-Machine-spezifische Daten ohne glTF-Äquivalent (Behaviors und ihre Parameter, Physik-Konfiguration, Nicht-PBR-Materialfelder) werden in Vendor-Extension-Objekten unter einem `SW_*`-Präfix transportiert — genau der Mechanismus, den Khronos für diesen Fall vorgesehen hat. Ein begleitender `WorldWriter` wird neben `GltfLoader` ergänzt, um den lebenden `Scene`/`Object3D`-Graph zurück in diese Form zu serialisieren.
 
 Verworfene Alternativen:
 - **Ein eigens entworfenes, individuelles JSON-Schema**: mehr Kontrolle, erfindet aber ein Szenengraph-Format neu, das die Branche längst standardisiert hat, verzichtet auf Interop mit Blender/DCC-Tools und verlangt einen von Grund auf gebauten Parser/Writer statt der Erweiterung von `GltfLoader`.
@@ -33,7 +33,7 @@ Verworfene Alternativen:
 
 ### 3. Maker erscheint als eigenständige Seite, nicht als angedocktes Forge-Werkzeug
 
-Dem bestehenden Vorbild von `public/tools/pixler.html`, `map-gen.html` und `xtractor.html` folgend (eigenständige Asset-Bearbeitungs-Workflows, die keine laufende Spiel-Canvas benötigen), erhält Maker `public/tools/maker.html`. Das entspricht seinem tatsächlichen Umfang — das Komponieren ganzer Umgebungen, nicht nur das Live-Anpassen einer bereits laufenden Szene — und erfordert nicht, dass zuerst eine `SmallWorld`-Instanz existiert.
+Dem bestehenden Vorbild von `public/tools/pixler.html`, `map-gen.html` und `xtractor.html` folgend (eigenständige Asset-Bearbeitungs-Workflows, die keine laufende Spiel-Canvas benötigen), erhält Maker `public/tools/maker.html`. Das entspricht seinem tatsächlichen Umfang — das Komponieren ganzer Umgebungen, nicht nur das Live-Anpassen einer bereits laufenden Szene — und erfordert nicht, dass zuerst eine `SmallWorldMachine`-Instanz existiert.
 
 ### 4. Kein expliziter Speichern-Button — Autosave, Undo-first-UX
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ParametricSurface } from "../src/ParametricSurface.js";
-import { Vector3D } from "@small-world/engine";
+import { Vector3D } from "@small-world-machine/engine";
 
 function assertNoNaN(geom: ParametricSurface, name: string): void {
   const data = geom.getGeometryData();

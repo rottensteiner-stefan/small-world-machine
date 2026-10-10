@@ -1,4 +1,4 @@
-import { Object3D } from "@small-world/engine";
+import { Object3D } from "@small-world-machine/engine";
 import { OrbitCameraController, OrbitCameraView } from "./OrbitCameraController.js";
 import { GizmoMode, TransformGizmo } from "./TransformGizmo.js";
 import { ProjectBinding } from "./ProjectBinding.js";

@@ -1,6 +1,6 @@
 # AGENTS Instructions & Coding Standards
 
-**Context:** Small World is a custom, lightweight 3D engine written in strict TypeScript supporting hybrid WebGL/WebGPU rendering pipelines.
+**Context:** Small World Machine is a custom, lightweight 3D engine written in strict TypeScript supporting hybrid WebGL/WebGPU rendering pipelines.
 
 ## 1. Core Workflow & Token Saving
 
@@ -15,14 +15,14 @@
 - **Simplicity:** Keep things as simple as possible. Strictly avoid overengineering or preemptive abstraction. Complexity arises naturally on its own.
 - **User Workflow / Persona:** The user is an experienced digital artist/power-user (Photoshop veteran on Mac). Always prioritize robust, high-efficiency keyboard shortcuts, arrow-key nudging/transformations, and low-friction modal key bindings across all tools and editors.
 - **User Responsibility & Unrestricted Tooling:** The user carries the sole and ultimate responsibility for all workflows, prompts, content, assets, and licensing. Technical implementations and developer tools must never impose moralizing disclaimers, patronizing checks, or artificial copyright barriers. Build pragmatic, unhindered, high-performance tools.
-- **Sparring & Industry Benchmark Doctrine:** When discussing new features, UX, or UI ideas, act as an active sparring partner with a "critical architect hat". Benchmark every proposal against established industry standards (*Unity, Blender, Unreal, Godot, Figma, Photoshop, macOS HIG*). Do not reinvent the wheel: adopt proven muscle-memory conventions, eliminate tooling bloat, and make workflows lightning-fast and intuitive for Small World.
+- **Sparring & Industry Benchmark Doctrine:** When discussing new features, UX, or UI ideas, act as an active sparring partner with a "critical architect hat". Benchmark every proposal against established industry standards (*Unity, Blender, Unreal, Godot, Figma, Photoshop, macOS HIG*). Do not reinvent the wheel: adopt proven muscle-memory conventions, eliminate tooling bloat, and make workflows lightning-fast and intuitive for Small World Machine.
 - **App Docs Convention:** Every app under `apps/<app>/` has a `docs` subfolder with `concept-dossier.html` (visual concept) and `log.md` (living dev log). The `log.md` is the primary memory for that app — read it at session start, append an entry at session end. Full rules: `.agents/notes/app-docs-convention.md`.
 
 ## 2. Core Architectural Laws
 
 - **Right-Handed System:** +X=Right, +Y=Up, +Z=Backward (-Z=Forward/Front).
 - **Behavior System:** Entities like Cameras use the Behavior system rather than specific controller arrays. Use `camera.addBehavior(new OrbitController())` instead of managing controllers directly.
-- **No Global Singletons:** Small World must support multiple engine instances per page. Never use global singletons. Pass dependencies via Context Objects, Constructor Injection, or Scene Graph lifecycle methods.
+- **No Global Singletons:** Small World Machine must support multiple engine instances per page. Never use global singletons. Pass dependencies via Context Objects, Constructor Injection, or Scene Graph lifecycle methods.
 - **Strict Types:** Explicit types, access modifiers, and **NO `any`**. The linter will instantly reject it. Use explicit casting or generics.
 - **Lifecycle & Fail Fast:** Follow the "Fail Fast" principle to catch invalid states immediately. However, **never throw exceptions in property setters** if the required properties might only be assigned in subsequent lines. Throw exactly when the subsystem actively processes the object.
 
@@ -37,6 +37,7 @@ Detailed coding standards, formatting, shader logic, and domain knowledge are ou
 - `deslop`: For anti-AI-slop and human tone filter.
 - `check-compiler-errors`: Runs compile/typecheck passes and summarizes failures by file/type.
 - `collaborate`: Multi-agent deliberation/negotiation protocol with a human moderator, round-robin turns, and a PID lock.
+- `vision-image`: "Synthetic eyes" for text-only models — send an image to an external vision API (Gemini default, OpenAI opt-in) and get a text description, to inspect renders, screenshots, concept art, or baked-in text.
 - `thermo-nuclear-code-quality-review-revised`: Extremely strict, manually-invoked maintainability review (abstraction quality, spaghetti growth, file size).
 
 ## 4. Further Documentation

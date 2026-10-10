@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Object3D, Cube, StandardMaterial } from "@small-world/engine";
+import { Object3D, Cube, StandardMaterial } from "@small-world-machine/engine";
 import {
   ProjectBinding,
   FileSystemDirectoryHandleLike,

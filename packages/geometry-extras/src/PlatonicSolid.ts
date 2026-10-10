@@ -1,4 +1,4 @@
-import { AbstractGeometry } from "@small-world/engine";
+import { AbstractGeometry } from "@small-world-machine/engine";
 
 /** The five regular convex polyhedra; only the trivalent solids are enumerated here (the
  *  cube already exists in the engine core as `Cube`). */

@@ -262,7 +262,7 @@
         justify-content: center;
       }
 
-      #SmallWorldPreview {
+      #SmallWorldMachinePreview {
         max-width: 100%;
         max-height: 60vh;
         background: var(--tool-bg);
@@ -785,7 +785,7 @@
               <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
               <line x1="12" y1="22.08" x2="12" y2="12" />
             </svg>
-            Small World Engine Preview
+            Small World Machine Preview
           </button>
         </div>
 
@@ -949,16 +949,16 @@
               <button class="tool-tab geom-btn" data-geom="plane">Plane</button>
             </div>
             <div class="preview3d-stage">
-              <canvas id="SmallWorldPreview" width="512" height="384"></canvas>
+              <canvas id="SmallWorldMachinePreview" width="512" height="384"></canvas>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Load SmallWorld 3D Preview Engine Entry -->
+    <!-- Load SmallWorldMachine 3D Preview Engine Entry -->
 
-    <footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World</footer>
+    <footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World Machine</footer>
 
     <script type="module">
       import { MaterialStudioApp } from "/packages/tools/src/MaterialStudio.ts";
@@ -972,7 +972,7 @@
         UniversalIngestDropzone,
       } from "/packages/tools/src/common/io/index.ts";
 
-      const previewApp = new MaterialStudioApp("SmallWorldPreview");
+      const previewApp = new MaterialStudioApp("SmallWorldMachinePreview");
       previewApp.start().catch((err) => console.error("Failed to start preview:", err));
 
       const ioToast = new ToastManager();

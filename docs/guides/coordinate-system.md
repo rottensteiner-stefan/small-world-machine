@@ -4,7 +4,7 @@ Understanding the engine's spatial orientation and camera strategies is essentia
 
 ## Right-Handed Coordinate System
 
-Small World uses a **right-handed coordinate system**:
+Small World Machine uses a **right-handed coordinate system**:
 
 - **X axis (+X):** Right
 - **Y axis (+Y):** Up

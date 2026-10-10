@@ -14,7 +14,7 @@ RESET := \033[0m
 all: help
 
 help: ## Zeigt diese Hilfe an
-	@echo "Verfügbare Befehle für Small World:"
+	@echo "Verfügbare Befehle für Small World Machine:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(BLUE)%-20s$(RESET) %s\n", $$1, $$2}'
 
 install: $(NODE_MODULES) ## Installiert Abhängigkeiten

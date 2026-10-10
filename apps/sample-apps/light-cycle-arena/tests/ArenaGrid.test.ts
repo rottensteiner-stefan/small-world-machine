@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ArenaGrid } from "../core/ArenaGrid.js";
 import { CycleAI } from "../core/CycleAI.js";
-import { Vector3D } from "@small-world/engine/math/index.js";
+import { Vector3D } from "@small-world-machine/engine/math/index.js";
 
 describe("ArenaGrid", () => {
   it("reports an unclaimed cell as free", () => {

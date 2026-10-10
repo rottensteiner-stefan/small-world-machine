@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { FlakturmKit } from "../builder/FlakturmKit.js";
-import { Vector3D, PointLight } from "@small-world/engine";
+import { Vector3D, PointLight } from "@small-world-machine/engine";
 
 describe("FlakturmKit Prop & Material Builder", () => {
   it("creates a caged industrial fluorescent lamp with light source", () => {

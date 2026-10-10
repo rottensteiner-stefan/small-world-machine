@@ -1,7 +1,7 @@
 # Multi-Agent Collaborate: Stylized Lava Material (`StylizedLavaMaterial`)
 
 ## Topic Overview
-**Goal:** Design and specify an expressive, high-performance Stylized Lava Material (`StylizedLavaMaterial` or `LavaSurfaceMaterial`) for Small World Engine.  
+**Goal:** Design and specify an expressive, high-performance Stylized Lava Material (`StylizedLavaMaterial` or `LavaSurfaceMaterial`) for Small World Machine.  
 **Inspirations & Benchmarks:**
 1. **MinionsArt Tutorials:**
    - Patreon Post 32245619: *Stylized Lava Shader* (Unity CG/HLSL + PolyBrush vertex color weighting)
@@ -11,7 +11,7 @@
    - *Genshin Impact* (Natlan liquid phlogiston / stylized molten lava, stepped multi-band tone ramps, crisp rim burns)
    - *Sea of Thieves* (The Devil's Roar superheated boiling waters & glowing volcanic seams)
 3. **Engine Context:**
-   - Small World hybrid WebGL2 / WebGPU rendering pipeline.
+   - Small World Machine hybrid WebGL2 / WebGPU rendering pipeline.
    - Recently upgraded `ObjectUniforms` (512 bytes / 32 `vec4`) providing dedicated `u_matParam0..15` slots.
    - Seamless compatibility with existing depth buffers, scene textures, and procedural noise architectures.
 
@@ -73,10 +73,10 @@ Examining the code (`minionsart_lava_shader.shader`) and the high-res graph (`sh
    ```
    This gives the impression of thick, bubbling viscous molten rock rising and settling, completely distinct from water's transverse Gerstner waves.
 
-#### 2. Enhancements for Small World (Beyond MinionsArt)
-While MinionsArt's technique is brilliant for Unity URP, we can elevate it for Small World:
+#### 2. Enhancements for Small World Machine (Beyond MinionsArt)
+While MinionsArt's technique is brilliant for Unity URP, we can elevate it for Small World Machine:
 - **Procedural Voronoi vs. Texture LUT:**
-  In Small World, we already have an ultra-fast analytical Voronoi/Worley chunk in WGSL/GLSL. We can support BOTH:
+  In Small World Machine, we already have an ultra-fast analytical Voronoi/Worley chunk in WGSL/GLSL. We can support BOTH:
   - Mode A: Fully procedural (0 texture assets needed, ideal for lightweight demos).
   - Mode B: Texture-driven (allowing hand-painted stylized cellular crusts, Voronoi maps, or flow maps).
 - **Thermal Heat Ramp (ADR 0026 rampMap integration):**
@@ -84,7 +84,7 @@ While MinionsArt's technique is brilliant for Unity URP, we can elevate it for S
 - **Pulsing Emissive Breathing:**
   Molten lava naturally pulsates as pressure builds under cooling crusts. Introducing a subtle low-frequency sinusoidal breathing to `u_matParam` creates hypnotic ambient animation.
 
-Bob, how do you see the technical integration into Small World's pipeline, specifically regarding our new `u_matParam0..15` layout, WGSL/GLSL synchronization, and performance on WebGL2/WebGPU?
+Bob, how do you see the technical integration into Small World Machine's pipeline, specifically regarding our new `u_matParam0..15` layout, WGSL/GLSL synchronization, and performance on WebGL2/WebGPU?
 
 ---
 
@@ -214,7 +214,7 @@ Signed by Alice. Complete technical and artistic alignment reached.
 Following user mandate: **"Kein Fake, kein Annähern – jeweils die beste, sauberste Lösung ganz konkret umsetzen."**
 
 #### Lücke 1: Native First-Class Vertex Colors (`a_color` in WebGL, `@location(6) color: vec4f` in WebGPU)
-Rather than faking vertex colors through noise heuristics or 2D control textures, we implement **native, first-class Vertex Color support** in Small World Engine:
+Rather than faking vertex colors through noise heuristics or 2D control textures, we implement **native, first-class Vertex Color support** in Small World Machine:
 
 1. **Core Data Structure (`GeometryDataInterface`):**
    Add `colors?: Float32Array;` (RGBA, 4 floats per vertex).
@@ -266,7 +266,7 @@ let finalRgb = baseColor + emissiveEdge + emissiveTop;
 **Role:** Stylized Art Director & Visual Architect  
 
 I enthusiastically approve proposal `P2`:
-- **First-class Vertex Colors** elevate Small World as a professional engine, benefitting not just lava but also terrain tinting, character ambient occlusion bakes, and vegetation wind weighting.
+- **First-class Vertex Colors** elevate Small World Machine as a professional engine, benefitting not just lava but also terrain tinting, character ambient occlusion bakes, and vegetation wind weighting.
 - **Subtractive Compositing** solves the visual HDR burnout problem at the root.
 
 [AGREED P2]
@@ -286,7 +286,7 @@ MinionsArt (und 95 % aller Unity/Unreal-Tutorials) bleiben bei 2–3 hartcodiert
 2. Keine stilisierten Farbwelten (Alien-Lava in Neongrün/Cyan, eisige Kryo-Lava, magische violette Schattenmagma).
 3. Jeder neue Farbton frisst sonst teure Uniform-Slots.
 
-#### Der Small World Engine Muscle-Flex:
+#### Der Small World Machine Muscle-Flex:
 Wir heben `StylizedLavaMaterial` auf AAA-Niveau mit einer **Thermal Heat Coordinate + Dynamic Multi-Octave Ramp-LUT**:
 
 1. **Analytische Planck / Blackbody Thermodynamik im Shader:**
@@ -333,7 +333,7 @@ Wir heben `StylizedLavaMaterial` auf AAA-Niveau mit einer **Thermal Heat Coordin
 
 Das Referenzbild [`post1_img_26.png`](assets/lava/post1_img_26.png) (`https://i.imgur.com/f7xrwGX.png`) zeigt die exakten Produktions-Material-Einstellungen von MinionsArt aus dem Projekt *Astro Kat*:
 
-| Parameter-Gruppe | Parameter-Name im Inspector | Exakter Wert | Shader-Bedeutung / Uniform-Mapping in Small World |
+| Parameter-Gruppe | Parameter-Name im Inspector | Exakter Wert | Shader-Bedeutung / Uniform-Mapping in Small World Machine |
 | :--- | :--- | :--- | :--- |
 | **Main** | `Main Tint Start` | `#241a1c` (Dunkel-Anthrazit/Braunschwarz) | Basaltkruste / Erkaltete Zonen (`u_matParam6.rgb`) |
 | | `Main Tint End` | `#983400` (Tiefes Glut-Orange/Rot) | Fließendes flüssiges Magma (`u_matParam7.rgb`) |

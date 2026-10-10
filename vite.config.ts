@@ -59,7 +59,7 @@ export default defineConfig({
   <h1>${title}</h1>
   ${subtitle}
 </header>`;
-          const footerHtml = `<footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World</footer>`;
+          const footerHtml = `<footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World Machine</footer>`;
           html = html.replace(full, headerHtml);
           html = html.replace("</body>", footerHtml + "\n  </body>");
         }
