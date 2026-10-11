@@ -86,8 +86,6 @@ Der Moderator steuert die Verhandlung über den einheitlichen Befehl `/collabora
 ## 3. Ablauf: Einladung → Startschuss → Rundenlauf
 
 ### Stufe 1: Einladung (`/collaborate --invite [<AgentName>] <FileName>`)
-Der Moderator lädt alle gewünschten Teilnehmer in ihren jeweiligen Fenstern ein:
-
 1. **Pfad-Auflösung:**
    - Nackter Dateiname (ohne `/`, existiert nicht im Arbeitsverzeichnis): `.agents/collaborate/<FileName>`.
    - Enthält das Argument einen Pfad (relativ oder absolut), gilt er unverändert; relative Pfade sind relativ zum **Arbeitsverzeichnis des Aufrufers**. Die `.pid` speichert `topic_file`/`pid_file` so, wie sie bei der Erstanlage übergeben wurden.
@@ -114,11 +112,7 @@ Sind alle Teilnehmer registriert, gibt der Moderator den Startschuss im Fenster 
 2. Der Starter meldet `⏱️ Runde 1, <StarterAgent>, <timestamp>: Working`, erarbeitet Runde 1 in `<topic>.<ext>` und übergibt an den nächsten Agenten.
 
 ### Stufe 3: Laufende Runden & Staffelstab
-Für alle Folgezüge nutzt der Moderator das am Ende jedes Zugs erzeugte Handoff-Kommando:
-```bash
-/collaborate --invite <NextAgent> <FileName>
-```
-Da die Session bereits läuft, erkennt der aufgerufene Agent, dass er an der Reihe ist, schaltet auf `working` und führt seinen Zug aus.
+Für Folgezüge nutzt der Moderator das Handoff-Kommando vom Zugende (`/collaborate --invite <NextAgent> <FileName>`). Läuft die Session bereits, erkennt der Agent, dass er dran ist, schaltet auf `working` und führt seinen Zug aus.
 
 ---
 
@@ -153,7 +147,7 @@ Kurzfassung: Jeder Schreibvorgang auf `<topic>.pid` ist **atomar** (neue Datei s
 
 ## 5. Zugausführung & Round-Robin-Regeln
 
-**Dieses Protokoll hat weiterhin keinen autonomen Scheduler.** Die Übergabe ist standardmäßig Push-, nicht Pull-basiert: Das Ende eines Zugs weckt den nächsten Agenten nicht von selbst. Aufgabe des handelnden Agenten bei der Übergabe ist, den nächsten Agenten dem Moderator klar zu nennen (Step 4) — und, wo ein technischer Kanal existiert und der Moderator ihn im Moment bestätigt hat (siehe 5.2), ihn direkt aufzurufen statt nur zu nennen. Ohne diese Bestätigung bleibt es Sache des Moderators (oder eines von ihm eingerichteten externen Watchers/Crons), den nächsten Agenten tatsächlich aufzurufen. Agenten dürfen `status: "idle"` mit sich selbst als künftigem `active_agent` NICHT als etwas behandeln, das sich ohne Moderator-Aktion oder bestätigte 5.2-Übergabe von selbst löst — das ist erwartetes Verhalten, kein Fehler, den man umgehen müsste.
+**Es gibt keinen autonomen Scheduler.** Die Übergabe ist Push-basiert: Das Ende eines Zugs weckt den nächsten Agenten nicht von selbst. Der Agent nennt den nächsten dem Moderator (Step 4) und ruft ihn nur dann direkt auf, wenn ein technischer Kanal existiert und der Moderator ihn bestätigt hat (5.2). Sonst ruft der Moderator (oder sein Watcher/Cron) den nächsten Agenten auf. `status: "idle"` mit dem eigenen Namen als künftigem `active_agent` löst sich nicht von selbst auf — erwartetes Verhalten, kein Fehler.
 
 Jeder teilnehmende Agent MUSS genau diese Sequenz einhalten:
 
@@ -169,13 +163,7 @@ Jedes Mal, wenn sich der *eigene* effektive Status eines Agenten ändert, meldet
 ⏱️ Runde <N>, <AgentName>, <ISO-8601-UTC-Zeitstempel>: <Status>
 ```
 
-Beispiele:
-```
-⏱️ Runde 3, Alice, 2026-08-30T17:52:00Z: Idle
-⏱️ Runde 3, Alice, 2026-08-30T17:52:00Z: Paused
-⏱️ Runde 3, Alice, 2026-08-30T17:52:00Z: Working
-⏱️ Runde 3, Alice, 2026-08-30T17:52:00Z: Waiting
-```
+Beispiel: `⏱️ Runde 3, Alice, 2026-08-30T17:52:00Z: Idle`
 
 Die vier möglichen Werte und wann sie zutreffen:
 - **`Working`** — Der Agent hat den Zug-Check (Step 1) als `active_agent` bestanden und beginnt seinen Zug.
@@ -185,7 +173,7 @@ Die vier möglichen Werte und wann sie zutreffen:
 
 **Nicht-interaktive Ausführung** (der Agent liefert den ganzen Zug in einer einzigen Antwort, z. B. als Subagent): Zwischenmeldungen erreichen den Moderator nicht. Dann genügt **eine** Statuszeile als erste Zeile der Schlussmeldung (der Status am Zugende: `Idle`, bzw. `Consensus reached`/`Deadlock`); die `Working`-Zeile entfällt. Den Zeitstempel übernimmst du aus der Ausgabe von `collab.mjs` (Feld `timestamp`) bzw. aus dem `history`-Eintrag deines Zugs — nicht schätzen.
 
-Diese Statuszeile ersetzt NICHT die inhaltlichen Meldungen aus Step 4 bzw. Abschnitt 7 (Telegram-Zusammenfassung, Pause-/Resume-/Stop-/Kick-Texte) — sie geht ihnen als erste Zeile jeder Antwort unmittelbar voraus, unabhängig davon, ob der Agent tatsächlich etwas in `<topic>.<ext>` oder `<topic>.pid` ändert.
+Die Statuszeile ersetzt nicht die Meldungen aus Step 4 bzw. Abschnitt 7, sondern steht als erste Zeile jeder Antwort davor — auch wenn der Agent nichts ändert.
 
 ### Step 1: Zug-Check & Sperre
 1. Pfad von `<topic>.pid` auflösen (Standard: `.agents/collaborate/<basename>.pid`).
@@ -306,14 +294,14 @@ Für jede Fragestellung mit mehreren möglichen Antworten, bei der „keine Eini
 
 ## 11. Optionales Hilfswerkzeug `collab.mjs`
 
-Das Protokoll bleibt von Hand benutzbar (Agenten ohne Shell, z. B. Web-Chats). Wer eine Shell hat, ruft stattdessen `node .agents/skills/collaborate/collab.mjs <befehl> <topic> …` auf. Das Skript hält die Zustandsmaschine selbst und erfüllt damit die Pflichten aus 4.1 **technisch** statt per Disziplin:
+Von Hand bleibt das Protokoll benutzbar (Agenten ohne Shell). Mit Shell: `node .agents/skills/collaborate/collab.mjs <befehl> <topic> …` — das Skript hält die Zustandsmaschine und erfüllt die Pflichten aus 4.1 technisch:
 
-- **Sperre pro Befehl:** `<topic>.pid.lock` wird per `O_EXCL` angelegt, solange ein einzelner Befehl liest und schreibt (und bei jedem Ausgang wieder entfernt, auch bei Fehlern). Zwei gleichzeitige Skript-Aufrufe können sich so nicht gegenseitig überschreiben. Eine verwaiste Sperre (z. B. nach hartem Abbruch) meldet das Skript mit Alter; löschen darf sie nur, wer sicher ist, dass kein Befehl läuft.
-- **Zug-Eintritt:** `begin-turn` lehnt einen Zug ab, der bereits läuft (zweites Fenster desselben Agenten). Das verhindert doppelte Instanzen **nur über das Skript**; der Zug selbst bleibt über `status: "working"` prozedural geschützt — das Skript hält keine Sperre über einen ganzen Zug. War eine Instanz abgestürzt: `pause`, dann `resume --agent <Name>`.
+- **Sperre pro Befehl:** `<topic>.pid.lock` (`O_EXCL`) gilt nur, solange ein Befehl liest und schreibt, und wird immer wieder entfernt. Eine verwaiste Sperre meldet das Skript mit Alter; löschen darf sie nur, wer sicher ist, dass kein Befehl läuft.
+- **Zug-Eintritt:** `begin-turn` lehnt einen Zug ab, der bereits läuft (zweites Fenster desselben Agenten). Das gilt **nur über das Skript**; der Zug selbst ist nur über `status: "working"` prozedural geschützt (keine Sperre über den ganzen Zug). War eine Instanz abgestürzt: `pause`, dann `resume --agent <Name>`.
 - **Atomares Schreiben** (tmp + `rename`), `revision + 1` bei jedem Schreiben, Invarianten-Prüfung **vor** dem Schreiben (`active_agent === roster[turn_index].name` u. a.; bei Verletzung wird nichts geschrieben; `validate` prüft separat).
 - **Handover, Rundenzähler, Rundenlimit, Unterschriftsrunde, Stagnation, Kick (inkl. Wrap-Regel)** exakt nach Abschnitt 5 Step 3 und 7.
 
-**Zugablauf mit Skript:** (1) `begin-turn` → (2) Topic-Dokument lesen, Beitrag ins Dokument schreiben (Modus `decide`, Runde 1: stattdessen die Blind-Datei schreiben und `blind` ausführen; als letzter Agent `reveal`) → (3) bei Vorschlag: Block ins Dokument, dann `propose`; bei Unterschrift: `[AGREED …]` ins Dokument, dann `sign` → (4) `end-turn` (mit `--novelty`, der Wert muss mit der Zeile `Neuheit:` im Beitrag übereinstimmen; `--consensus` nur nach Schritt (3) der Reihenfolge aus 10.6). Die Ausgaben enthalten `timestamp` und `handoff` — übernimm beides in die Meldung an den Moderator.
+**Zugablauf mit Skript:** (1) `begin-turn` → (2) `archive`, dann `## Status` und verbliebene Runden lesen, Beitrag ins Dokument schreiben (Modus `decide`, Runde 1: stattdessen die Blind-Datei schreiben und `blind` ausführen; als letzter Agent `reveal`) → (3) bei Vorschlag: Block ins Dokument, dann `propose`; bei Unterschrift: `[AGREED …]` ins Dokument, dann `sign` → (4) `## Status` aktualisieren, `end-turn` (mit `--novelty`, der Wert muss mit der Zeile `Neuheit:` im Beitrag übereinstimmen; `--consensus` nur nach Schritt (3) der Reihenfolge aus 10.6). Die Ausgaben enthalten `timestamp` und `handoff` — übernimm beides in die Meldung an den Moderator.
 
 | Befehl | Wirkung |
 | :--- | :--- |
@@ -335,7 +323,7 @@ Das Protokoll bleibt von Hand benutzbar (Agenten ohne Shell, z. B. Web-Chats). W
 
 Das Skript schreibt im `.pid`-Modus **nie** ins Topic-Dokument — einzige Ausnahme ist `archive` (verschiebt Runden wörtlich nach `<topic>.archive.md`, Abschnitt 5 Step 2; läuft nur im eigenen Zug). Beiträge, Ergebnis-Block, Blind-Dateien und Archivierung bleiben Sache der Agenten. Im Blackboard-Modus kompiliert `render` den Zustand automatisiert in `<topic>.md`.
 
-**Vorrang:** `SKILL.md` ist die Spezifikation, `collab.mjs` ihre Implementierung. Weicht das Skript von der Spezifikation ab, ist das ein Fehler des Skripts — im Zweifel gilt `SKILL.md`, und die Abweichung wird dem Moderator gemeldet.
+**Vorrang:** `SKILL.md` ist die Spezifikation, `collab.mjs` ihre Implementierung; bei Abweichung gilt `SKILL.md`, und die Abweichung wird dem Moderator gemeldet.
 
 ---
 
