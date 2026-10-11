@@ -715,6 +715,53 @@ const commands = {
     out(s, extra);
   },
 
+  // Rolling Archive (SKILL.md Abschnitt 5, Step 2): verschiebt `## Round <n>`-Abschnitte mit n <= --upto
+  // (Standard: current_round - 2) wörtlich nach <topic>.archive.md und lässt eine Stub-Zeile stehen.
+  // Verbatim und idempotent; der Abschnitt mit dem offenen Vorschlag bleibt stehen (zum Unterschreiben).
+  // Läuft nur im eigenen Zug des aktiven Agenten (nach begin-turn) — dann schreibt sonst niemand ins Dokument.
+  archive(pidPath, pos, opt) {
+    const s = load(pidPath);
+    const topicPath = s.topic_file;
+    if (!fs.existsSync(topicPath)) fail(`${topicPath} existiert nicht.`);
+    const upto = opt.upto === undefined ? s.current_round - 2 : Number(opt.upto);
+    if (!Number.isInteger(upto)) fail('--upto <N> erwartet eine ganze Zahl.');
+    const c = s.consensus;
+    const openId = c.proposal_id && !c.reached ? c.proposal_id : null;
+    const openProposal = openId && new RegExp(`\\[(CONSENSUS|DECISION)_PROPOSAL: ?${openId}\\b`);
+
+    const lines = fs.readFileSync(topicPath, 'utf8').split('\n');
+    const sections = []; // { start, end } je `## `-Abschnitt; Fences (```) werden übersprungen
+    let fence = false;
+    lines.forEach((l, i) => {
+      if (/^\s*```/.test(l)) fence = !fence;
+      if (!fence && /^## /.test(l)) sections.push({ start: i, end: lines.length });
+      if (sections.length > 1 && sections.at(-1).start === i) sections.at(-2).end = i;
+    });
+
+    const archiveName = path.basename(topicPath).replace(/\.[^./]+$/, '') + '.archive.md';
+    const archivePath = path.join(path.dirname(topicPath), archiveName);
+    const moved = [];
+    const kept = [];
+    let cursor = 0;
+    for (const sec of sections) {
+      const m = /^## Round (\d+):/.exec(lines[sec.start]);
+      const body = lines.slice(sec.start, sec.end);
+      if (!m || Number(m[1]) > upto || (openProposal && openProposal.test(body.join('\n')))) continue;
+      kept.push(...lines.slice(cursor, sec.start), `## [ARCHIVED] ${lines[sec.start].slice(3)} → ${archiveName}`, '');
+      moved.push({ heading: lines[sec.start], body });
+      cursor = sec.end;
+    }
+    if (!moved.length) return out(s, { archived: 0, note: `nichts zu archivieren (upto=${upto})` });
+    kept.push(...lines.slice(cursor));
+
+    const header = fs.existsSync(archivePath) ? '' : `# Archive — ${path.basename(topicPath)}\n\nWörtlich aus dem Topic-Dokument verschobene Runden (collab.mjs archive). Beweiskräftig für [AGREED]/[OBJECTION] wie im Original.\n\n`;
+    fs.appendFileSync(archivePath, header + moved.map((x) => x.body.join('\n').replace(/\n+$/, '')).join('\n\n') + '\n\n');
+    const tmp = `${topicPath}.tmp`;
+    fs.writeFileSync(tmp, kept.join('\n'));
+    fs.renameSync(tmp, topicPath);
+    out(s, { archived: moved.length, sections: moved.map((x) => x.heading), bytes_moved: moved.reduce((n, x) => n + Buffer.byteLength(x.body.join('\n')), 0), archive: archivePath });
+  },
+
   validate(pidPath) {
     const errs = validate(load(pidPath));
     if (errs.length) {
@@ -1161,7 +1208,7 @@ const BOARD_COMMANDS = new Set([
   'board', 'render', 'board-watch',
 ]);
 
-const READ_ONLY_COMMANDS = new Set(['validate', 'watch', 'status', 'board', 'render', 'board-watch']);
+const READ_ONLY_COMMANDS = new Set(['validate', 'watch', 'status', 'board', 'render', 'board-watch', 'archive']); // archive schreibt nur das Topic-Dokument, nie die .pid
 
 const { pos, opt } = parseArgs(process.argv.slice(2));
 const [cmd, topic, ...rest] = pos;

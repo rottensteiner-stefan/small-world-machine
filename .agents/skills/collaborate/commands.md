@@ -2,6 +2,27 @@
 
 Ausgelagert aus `SKILL.md` Abschnitt 7 (dort steht auch der Hinweis zur Idempotenz — er gilt für alle Befehle hier). Querverweise („Abschnitt N“, „Step N“) beziehen sich auf `SKILL.md`.
 
+## Befehlstabelle
+
+### Steuerungs- & Notfall-Kommandos
+| Befehl | Aktion | Beschreibung & Wirkung |
+| :--- | :--- | :--- |
+| `/collaborate --pause [<FileName>]` | **Pause** | Friert die Session sofort ein, setzt `status: "paused"` und merkt `paused_agent`. |
+| `/collaborate --resume [<FileName>]` | **Fortsetzen** | Nimmt die pausierte Session wieder auf; der `paused_agent` arbeitet weiter. |
+| `/collaborate --stop [--outcome NO_CONSENSUS\|MAJORITY_WITH_DISSENT] [<FileName>]` | **Beenden** | Beendet die Session endgültig, setzt `status: "terminated"` und hängt einen Abschluss-Block ans Topic-Dokument. Im Modus `decide` legt `--outcome` das Ergebnis fest (Voraussetzungen siehe 10.6); andere Outcomes sind über `--stop` nicht setzbar (`MODERATOR_DECISION` nur über `--decide`, `CONSENSUS` nur über die Unterschriften der Agenten). |
+| `/collaborate --kick <AgentName> [<FileName>]` | **Hängenden Agenten entfernen** | Entfernt `<AgentName>` aus dem `roster`. War er `active_agent`, rückt der nächste im Round-Robin nach (`current_round` steigt nur, wenn die Rotation dabei über das Roster-Ende auf Index 0 umbricht). Siehe Abschnitt 7 & 8. |
+| `/collaborate --note "<Text>" [<FileName>]` | **Moderator-Hinweis ins Dokument** | Der angesprochene Agent schreibt den Text **wörtlich** als `[MODERATOR_NOTE <ISO-Zeitstempel>] <Text>` ins Topic-Dokument und trägt `action: "moderator_note"` in `history` ein (`revision + 1`). Nur Notes mit passendem `history`-Eintrag gelten als echt (8.2). Kein Zustands- und kein Zugwechsel. |
+| `/collaborate --decide "<Entscheidung>" [<FileName>]` | **Moderator-Entscheidung (Tie-Break)** | Zulässig in jedem Status außer `terminated`. Setzt `outcome: "MODERATOR_DECISION"`, `status: "terminated"` und schreibt den Ergebnis-Block (10.6) mit der Entscheidung und den bis dahin dokumentierten Positionen. |
+| `/collaborate --approve [P<n>] [<FileName>]` | **Moderator-Bestätigung (nur Selbst-Planung)** | Nur im Modus `plan` mit **genau 1 Agent**: bestätigt den offenen Vorschlag `P<n>` (Standard: der aktuelle). Der angesprochene Agent schreibt `[MODERATOR_APPROVAL P<n> <ISO-Zeitstempel>]` ins Topic-Dokument, trägt `action: "moderator_approval"` (mit `proposal`) in `history` ein und ergänzt `"moderator"` in `consensus.signatures` (`revision + 1`). In allen anderen Konstellationen ablehnen — dort unterschreiben die Agenten selbst. |
+| `/collaborate --extend <Rounds> [<FileName>]` | **Rundenlimit erweitern** | Erhöht `max_rounds` um `<Rounds>`, setzt `deadlock` zurück auf `idle`/`working` und ermöglicht weitere Runden. |
+
+### Diagnose
+| Befehl | Aktion | Beschreibung & Wirkung |
+| :--- | :--- | :--- |
+| `/collaborate --status` | **Registrierungs- & Status-Abfrage** | Prüft, an welchen Themen der aufgerufene Agent (bzw. die Session) beteiligt oder registriert ist. Durchsucht `.agents/collaborate/*.pid` und gibt eine Tabelle mit Thema, Name/Rolle, Status, Runde und Ballbesitz aus. |
+
+---
+
 ### ⏸️ `/collaborate --pause`
 - **Ablauf beim angesprochenen Agenten:**
   1. Agent liest `<topic>.pid`. Steht der Status auf `"waiting_for_moderator"`, gibt es nichts zu pausieren: Befehl ablehnen (erst `--start`), sonst würde ein späteres `--resume` den Startschuss umgehen.

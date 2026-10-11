@@ -7,11 +7,19 @@ Ausgelagert aus `SKILL.md` (Abschnitt 5 Step 2 und Abschnitt 10.2–10.5). Gilt 
 ## Teil A — Diskussionszug (beide Modi)
 
 ### Überlegung & Beitrag zum Topic (Step 2)
-1. Das gesamte `<topic>.<ext>` lesen, um den vollen Kontext aller bisherigen Runden und Argumente zu haben.
-   - **Wachstumsgrenze — zweiphasig, nie unilateral:** Jedes Mal das *ganze* Dokument zu lesen skaliert nicht, denn jede Runde fügt nur Text hinzu. Komprimieren würde aber das wörtliche Protokoll verändern, deshalb darf ein einzelner Agent nicht allein entscheiden, dass das unbedenklich ist. Überschreitet das Topic-Dokument etwa 10 Runden (oder wird es spürbar teuer/unhandlich zu lesen), läuft es in zwei Phasen, statt sofort etwas zusammenzuschieben:
-     - **Phase 1 (vorschlagender Agent):** Einen Block `## [COMPACTION_PROPOSAL] Runden 1–<N>` anhängen mit dem vorgeschlagenen Text für `## Kompakte Zusammenfassung` (nur wichtige Entscheidungen, offene Fragen, weiterhin gültige Einwände, offene `[TEAM_QUESTION]`s und die aktuellen Evidenz-Tags) — die ursprünglichen `## Round <n>`-Abschnitte bleiben unverändert stehen. Einen ungelösten `[OBJECTION]`/`[VETO]` nie so einarbeiten, als wäre er erledigt — er muss wörtlich in der vorgeschlagenen Zusammenfassung erscheinen.
-     - **Phase 2 (jeder andere Agent, in seinem nächsten Zug):** Den offenen `[COMPACTION_PROPOSAL]` ausdrücklich prüfen, bevor etwas anderes geschrieben wird. Entweder mit `[COMPACTION_AGREED: <AgentName>]` unterschreiben (nichts Wesentliches geht verloren) oder mit `[COMPACTION_OBJECTION: <AgentName>] <Grund>` ablehnen (Wesentliches ginge verloren) — eine Ablehnung bricht den Vorschlag ab; die Originalrunden bleiben, und niemand darf dieselbe Zusammenfassung unverändert erneut vorschlagen.
-     - Erst wenn **jedes** andere Roster-Mitglied `[COMPACTION_AGREED]` unterschrieben hat, darf der *nächste* schreibende Agent die ursprünglichen `## Round <n>`-Abschnitte im Topic-Dokument durch die vereinbarte Zusammenfassung ersetzen. **Die Originalrunden werden dabei nie gelöscht, sondern unverändert nach `<topic>.archive.md` (gleiches Verzeichnis) verschoben** — das wörtliche Protokoll bleibt erhalten, nur der Leseaufwand pro Zug sinkt. Die Zusammenfassung verweist auf die Archivdatei. Bis dahin wird weiter jedes Mal das ganze Dokument gelesen — ein offener Komprimierungsvorschlag ist kein Grund, irgendetwas auszulassen.
+1. **Lesen: `## Status` + offene Runden.** Das Topic-Dokument bleibt klein, weil alte Runden ausgelagert werden (Rolling Archive, unten). Lies `## Status` und alle `## Round`-Abschnitte, die noch im Dokument stehen — das reicht. `<topic>.archive.md` wird nur geöffnet, wenn der Status-Block auf eine archivierte Stelle verweist oder du ein Detail prüfen musst (Fälschungsschutz, wörtliches Zitat).
+   - **Rolling Archive (Mechanik):** Direkt nach `begin-turn` führt der aktive Agent `node .agents/skills/collaborate/collab.mjs archive <topic>` aus. Das Skript verschiebt alle `## Round <n>`-Abschnitte mit `n ≤ current_round − 2` **wörtlich** nach `<topic>.archive.md` und lässt je eine Stub-Zeile `## [ARCHIVED] Round <n>: … → <topic>.archive.md` stehen; der Abschnitt mit dem offenen Vorschlag bleibt liegen, bis er entschieden ist. Es geht nichts verloren und es ist keine Abstimmung nötig, denn der Text wird nur verschoben, nicht verändert; `[AGREED]`/`[OBJECTION]` im Archiv zählen wie im Original (Fälschungsschutz, `SKILL.md` Abschnitt 6, `history` bleibt der Beleg). Ohne Shell (Web-Chat): überspringen — der Status-Block trägt dann allein.
+   - **Status-Block (Pflicht):** Direkt unter dem Titel steht `## Status (live)`, höchstens ~40 Zeilen. Jeder Agent aktualisiert ihn am Ende seines Zugs **an Ort und Stelle** (ersetzen, nicht anhängen); es ist der einzige Abschnitt, den mehrere Agenten bearbeiten. Er ist eine abgeleitete Übersicht und kein Beweismittel: maßgeblich bleiben die Rundenabschnitte, `<topic>.pid` und `history`. Inhalt:
+     ```markdown
+     ## Status (live)
+     - Ziel / Frage: <ein Satz>
+     - Gelockt: D1 <Entscheidung> (Round n, Agent) · D2 …
+     - Offen: [OBJECTION Agent R<n>] <wörtlich> · [TEAM_QUESTION: Titel R<n>] · [OVERLAP …]
+     - Vorschlag: P<n> von <Agent>, Unterschriften <Liste>
+     - Als Nächstes: <Agent> soll <was>
+     ```
+     Offene `[OBJECTION]`/`[VETO]`/`[TEAM_QUESTION]`/`[OVERLAP]` stehen dort wörtlich und mit Quelle (Agent, Runde) und werden nie stillschweigend entfernt — nur mit Verweis auf die Runde, in der sie geklärt wurden. Fehlt der Block (ältere Session), legt ihn der erste Agent an, der das bemerkt.
+   - **Altverfahren `[COMPACTION_PROPOSAL]`:** entfällt für neue Sessions (Rolling Archive und Status-Block ersetzen es). Bereits offene Vorschläge in laufenden Sessions werden wie bisher unterschrieben oder abgelehnt.
 2. Beitrag formulieren:
    - Ungültige Annahmen mit konstruktivem Widerspruch hinterfragen.
    - Konkrete Fragen früherer Agenten und offene Fragen an die Runde beantworten.
@@ -38,6 +46,13 @@ Ausgelagert aus `SKILL.md` (Abschnitt 5 Step 2 und Abschnitt 10.2–10.5). Gilt 
    Im Modus `decide` gelten stattdessen die Strukturen aus Abschnitt 10.
 
    **Überschriftsebenen (Pflicht):** Der Beitragsabschnitt trägt `##`, **alle Unterabschnitte `###`** (nie `##`). Ein Abschnitt endet an der nächsten `## `-Zeile; nur so ist die Zuordnung von `[AGREED]`/`[OBJECTION]` zum Autor eindeutig (SKILL.md Abschnitt 6, Fälschungsschutz). *(Entscheidung P2 aus der Testsession vom 2026-10-01: Option B — das Skript schreibt weiterhin nie ins Topic-Dokument — plus diese Regel; ein `scaffold`/`check`-Befehl wird erst bei wiederholten Formfehlern neu geprüft.)*
+
+**Beitragsdisziplin (Token-Budget, gilt für jeden Beitrag):**
+- **Länge:** Richtwert ≤ 2 KB (~500 Tokens) pro Beitrag. Runde 1 bzw. eine Erstanalyse darf bis ~6 KB. Zustimmungs- und Übergabezüge ≤ 10 Zeilen. Wer mehr braucht (Messreihen, Code, Inventare), legt es in eine Anlage `<topic>.ref.<AgentName>.md` und nennt im Beitrag nur Ergebnis und Link.
+- **Nicht wiederholen:** Frühere Beiträge nie zitieren oder nacherzählen, sondern verweisen (`→ Round 2, Bob, §2`). Nur das Neue schreiben: Antwort, Einwand, Beleg, Entscheidung.
+- **Kein Beiwerk:** kein Lob, keine Einleitung, keine Zusammenfassung des eigenen Beitrags am Ende.
+- **Markdown sparsam:** Fettdruck nur für Protokoll-Marker (`[AGREED]` usw.), keine Trennlinien oder Emojis im Beitrag. Tabellen nur für echte Aufzählungsdaten (mindestens 3 Zeilen × 3 Spalten), sonst Stichpunkte.
+- **Sprache:** Beiträge, Anlagen und Agent-Nachrichten sind Englisch (`SKILL.md`, Kommunikationssprache). Abweichen nur, wenn der Moderator es für dieses Topic ausdrücklich anordnet (`--note`).
 
 
 
