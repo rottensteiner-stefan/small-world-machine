@@ -61,6 +61,10 @@ export class MakerImportAndZoneTools {
     return undefined !== this._zoneDrawState;
   }
 
+  public isZonePreview(obj: Object3D): boolean {
+    return obj === this._zoneDrawState?.previewRoot;
+  }
+
   /** Bridges MapGenerator's ASCII/`GridLevelBuilder` pipeline into Maker (ADR 0010 Phase 2C):
    * builds the map directly into the live scene, then wraps whatever `GridLevelBuilder` added as
    * a single undo step -- it adds objects via `scene.add()` itself, so there is nothing to defer

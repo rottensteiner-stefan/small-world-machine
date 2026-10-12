@@ -186,6 +186,7 @@ export class MakerApp extends SmallWorldMachine {
    * (not tied to a fixed object) -- reused across `_syncHighlight()` calls so selecting N
    * objects doesn't allocate N new meshes every frame. */
   private readonly _highlightMeshes: Object3D[] = [];
+  private readonly _editorGrid: Object3D = new Object3D("EditorGrid");
   private static readonly _PRIMARY_HIGHLIGHT_COLOR = new Color(0, 1, 1);
   private static readonly _SECONDARY_HIGHLIGHT_COLOR = new Color(1, 0.7, 0);
   private _hierarchyPanel!: HierarchyPanel;
@@ -205,8 +206,20 @@ export class MakerApp extends SmallWorldMachine {
     super(_makerOptions);
   }
 
+  /** Editor-only scene children: hidden in the hierarchy and never written to `scene.gltf`. */
+  private _isEditorHelper(obj: Object3D): boolean {
+    return (
+      this._highlightMeshes.includes(obj) ||
+      obj === this._gizmo.root ||
+      this._lightGizmos.isHelperMesh(obj) ||
+      this._stageZoneGizmos.isHelperMesh(obj) ||
+      this._decalStamp.isGhost(obj) ||
+      this._importTools.isZonePreview(obj)
+    );
+  }
+
   protected override async setupScene(): Promise<void> {
-    const grid = new Object3D("EditorGrid");
+    const grid = this._editorGrid;
     grid.geometry = new Grid({ size: 40, divisions: 40 }).getGeometryData();
     grid.material = new WireframeMaterial(new Color(0.3, 0.3, 0.35));
     grid.isVisible = true;
@@ -253,7 +266,8 @@ export class MakerApp extends SmallWorldMachine {
         this._makerOptions.statusContainer.textContent = message;
       },
     });
-    this._project.excludeFromSave = (obj): boolean => this._decalStamp.isGhost(obj);
+    this._project.excludeFromSave = (obj): boolean =>
+      obj === this._editorGrid || this._isEditorHelper(obj);
 
     this._hierarchyPanel = new HierarchyPanel(
       this._makerOptions.hierarchyContainer,
@@ -266,12 +280,7 @@ export class MakerApp extends SmallWorldMachine {
         onReparent: (obj, newParent): void => this.reparent(obj, newParent),
         onRename: (obj, newName): void => this.renameObject(obj, newName),
       },
-      (obj) =>
-        this._highlightMeshes.includes(obj) ||
-        obj === this._gizmo.root ||
-        this._lightGizmos.isHelperMesh(obj) ||
-        this._stageZoneGizmos.isHelperMesh(obj) ||
-        this._decalStamp.isGhost(obj),
+      (obj) => this._isEditorHelper(obj),
     );
     new ObjectPalette(this._makerOptions.paletteContainer, {
       createObject: (factory): void => this.addObject(factory()),
