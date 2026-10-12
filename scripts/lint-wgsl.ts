@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { WgslReflect } from "wgsl_reflect/wgsl_reflect.module.js";
+import { wrapFragmentWithNormalOutput } from "../packages/engine/src/renderers/WebGPU/managers/NormalOutputWrapper.js";
 
 const chunksDir = path.resolve("packages/engine/src/renderers/shaders/source/web_gpu/chunks");
 const localChunksDir = path.resolve("packages/engine/src/core/materials/shaders/chunks");
@@ -94,6 +95,10 @@ async function lintWgsl() {
     try {
       new WgslReflect(code);
       console.log(`✅ ${file} passed validation.`);
+      if (filePath.includes("/core/materials/") && !file.startsWith("Depth.")) {
+        new WgslReflect(wrapFragmentWithNormalOutput(code));
+        console.log(`✅ ${file} passed validation with the normal-buffer wrapper.`);
+      }
     } catch (err: unknown) {
       console.error(`❌ ${file} validation failed:`);
       console.error((err as Error).message || err);

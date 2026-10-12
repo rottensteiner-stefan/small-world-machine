@@ -31,7 +31,13 @@ import clusterCullWGSL from "../shaders/source/web_gpu/compute/cluster_cull.wgsl
 import hzbCopyDepthWGSL from "../shaders/source/web_gpu/compute/hzb_copy_depth.wgsl?raw";
 import hzbDownsampleMaxWGSL from "../shaders/source/web_gpu/compute/hzb_downsample_max.wgsl?raw";
 import hzbVisibilityTestWGSL from "../shaders/source/web_gpu/compute/hzb_visibility_test.wgsl?raw";
-import { RendererType, Topology, PostProcessingEffectType } from "../../enums/index.js";
+import {
+  RendererType,
+  Topology,
+  PostProcessingEffectType,
+  NormalTargetMode,
+} from "../../enums/index.js";
+import { NORMAL_TARGET_FORMAT } from "./managers/NormalOutputWrapper.js";
 import { AbstractRenderer } from "../AbstractRenderer.js";
 import { RenderPass } from "../RenderPass.js";
 import { GPUFallbackResources } from "./managers/GPUFallbackResources.js";
@@ -293,6 +299,8 @@ export class WebGPURenderer extends AbstractRenderer {
   public get hdrTexture(): GPUTexture | undefined {
     return this._hdrTexture;
   }
+  private _normalTexture: GPUTexture | undefined = undefined;
+  private _normalTextureView: GPUTextureView | undefined = undefined;
   private _hdrTextureView: GPUTextureView | undefined = undefined;
   public get hdrTextureView(): GPUTextureView | undefined {
     return this._hdrTextureView;
@@ -384,6 +392,15 @@ export class WebGPURenderer extends AbstractRenderer {
   ): void {
     this._activeRenderTarget = target;
     this._activeCubeFace = activeCubeFace ?? 0;
+  }
+
+  /**
+   * The normal buffer (ADR 0028) the main pass writes alongside its color target, or undefined
+   * while `quality.normalBuffer` is off or a custom RenderTarget is active (offscreen passes
+   * keep their single color target).
+   */
+  public get activeNormalView(): GPUTextureView | undefined {
+    return this._activeRenderTarget ? undefined : this._normalTextureView;
   }
 
   public get activeDepthView(): GPUTextureView {
@@ -1285,6 +1302,8 @@ export class WebGPURenderer extends AbstractRenderer {
       this._hdrTextureView = undefined;
     }
 
+    this._syncNormalTexture();
+
     let renderTargetView: GPUTextureView;
     let isOffscreen = false;
 
@@ -1567,10 +1586,42 @@ export class WebGPURenderer extends AbstractRenderer {
     ]);
   }
 
+  private _syncNormalTexture(): void {
+    const width = this._context.canvas.width;
+    const height = this._context.canvas.height;
+    const wanted = this._quality.normalBuffer === true && width > 0 && height > 0;
+
+    if (!wanted) {
+      if (this._normalTexture) this._fallback.deferDestroyTexture(this._normalTexture);
+      this._normalTexture = undefined;
+      this._normalTextureView = undefined;
+      return;
+    }
+    if (
+      this._normalTexture &&
+      this._normalTexture.width === width &&
+      this._normalTexture.height === height
+    ) {
+      return;
+    }
+
+    if (this._normalTexture) this._fallback.deferDestroyTexture(this._normalTexture);
+    this._normalTexture = this._device!.createTexture({
+      size: [width, height],
+      format: NORMAL_TARGET_FORMAT,
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT |
+        GPUTextureUsage.TEXTURE_BINDING |
+        GPUTextureUsage.COPY_SRC,
+    });
+    this._normalTextureView = this._normalTexture.createView();
+  }
+
   public _renderBatch(
     rp: GPURenderPassEncoder,
     batch: import("../../core/Scene.js").RenderBatch,
     vMat?: Float32Array,
+    normalMode: NormalTargetMode = NormalTargetMode.DEFAULT,
   ): void {
     const objects = batch.objects;
     if (objects.length === 0) return;
@@ -1616,6 +1667,7 @@ export class WebGPURenderer extends AbstractRenderer {
         vMat,
         topologyStr,
         batch.wireframeMode,
+        normalMode,
       );
     }
 
@@ -1630,6 +1682,7 @@ export class WebGPURenderer extends AbstractRenderer {
         vMat,
         topologyStr,
         batch.wireframeMode,
+        normalMode,
       );
     }
   }
@@ -1644,14 +1697,22 @@ export class WebGPURenderer extends AbstractRenderer {
     vMat?: Float32Array,
     topology: GPUPrimitiveTopology = Topology.DEFAULT,
     wireframeMode?: "structural" | "triangles",
+    normalMode: NormalTargetMode = NormalTargetMode.DEFAULT,
   ): void {
     const targetFormat = this.currentColorTargetFormat;
-    const cache = this._pipelineCache.getPipeline(manifest, topology, isInstanced, targetFormat);
+    const cache = this._pipelineCache.getPipeline(
+      manifest,
+      topology,
+      isInstanced,
+      targetFormat,
+      normalMode,
+    );
     const pipelineKey = this._pipelineCache.pipelineCacheKey(
       manifest,
       topology,
       isInstanced,
       targetFormat,
+      normalMode,
     );
     rp.setPipeline(cache.pipeline);
 
@@ -2261,6 +2322,9 @@ export class WebGPURenderer extends AbstractRenderer {
     this._depthTexture?.destroy();
     this._opaqueDepthTexture?.destroy();
     this._hdrTexture?.destroy();
+    this._normalTexture?.destroy();
+    this._normalTexture = undefined;
+    this._normalTextureView = undefined;
     this._hzbTexture?.destroy();
     this._hzbAabbBuffer?.destroy();
     this._hzbResultsBuffer?.destroy();

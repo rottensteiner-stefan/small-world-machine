@@ -1,6 +1,7 @@
 import { DeviceCaps, DeviceLimit, Object3D } from "../../../core/index.js";
 import { RenderManifest, ShaderRegistry, VERTEX_COLOR_FLAG } from "../../shaders/index.js";
-import { BlendingMode, CullMode } from "../../../enums/index.js";
+import { BlendingMode, CullMode, NormalTargetMode } from "../../../enums/index.js";
+import { NORMAL_TARGET_FORMAT, wrapFragmentWithNormalOutput } from "./NormalOutputWrapper.js";
 
 export interface WebGPUPipelineCacheEntry {
   pipeline: GPURenderPipeline;
@@ -330,6 +331,7 @@ export class GPUPipelineCache {
     topology: GPUPrimitiveTopology,
     isInstanced: boolean,
     targetFormat: GPUTextureFormat,
+    normalMode: NormalTargetMode = NormalTargetMode.DEFAULT,
   ): string {
     const shaderId = manifest.shaderId;
     const flags = normalizeShaderFlags(manifest.flags || []);
@@ -349,6 +351,7 @@ export class GPUPipelineCache {
       (state.depthTest !== false) +
       "_" +
       targetFormat +
+      (normalMode === NormalTargetMode.NONE ? "" : "_nrm-" + normalMode) +
       (isInstanced ? "_instanced" : "") +
       flagKey
     );
@@ -359,14 +362,20 @@ export class GPUPipelineCache {
     topology: GPUPrimitiveTopology,
     isInstanced: boolean,
     targetFormat: GPUTextureFormat,
+    normalMode: NormalTargetMode = NormalTargetMode.DEFAULT,
   ): WebGPUPipelineCacheEntry {
     const shaderId = manifest.shaderId;
     const flags = manifest.flags || [];
     const state = manifest.state || {};
-    const key = this.pipelineCacheKey(manifest, topology, isInstanced, targetFormat);
+    const key = this.pipelineCacheKey(manifest, topology, isInstanced, targetFormat, normalMode);
     let cache = this._pipelines.get(key);
     if (!cache) {
-      const sm = this.getShaderModule(shaderId, isInstanced, flags);
+      const sm = this.getShaderModule(
+        shaderId,
+        isInstanced,
+        flags,
+        normalMode !== NormalTargetMode.NONE,
+      );
       const materialBGL = this.getMaterialBGL(shaderId, flags);
       const pipelineLayout = this._device.createPipelineLayout({
         bindGroupLayouts: [this._globalBGL, materialBGL, this._objectBGL, this._viewBGL],
@@ -432,6 +441,12 @@ export class GPUPipelineCache {
           alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
         };
       }
+      if (normalMode !== NormalTargetMode.NONE) {
+        targets.push({
+          format: NORMAL_TARGET_FORMAT,
+          writeMask: normalMode === NormalTargetMode.MASKED ? 0 : GPUColorWrite.ALL,
+        });
+      }
       const pipeline = this._device.createRenderPipeline({
         layout: pipelineLayout,
         vertex: { module: sm, entryPoint: "vs", buffers: vertexBuffers },
@@ -491,10 +506,14 @@ export class GPUPipelineCache {
     shaderId: string,
     isInstanced: boolean = false,
     flags: string[] = [],
+    withNormalOutput: boolean = false,
   ): GPUShaderModule {
     flags = normalizeShaderFlags(flags);
     const flagKey = flags.length > 0 ? "_" + flags.join("|") : "";
-    const key = isInstanced ? `${shaderId}_instanced${flagKey}` : `${shaderId}${flagKey}`;
+    const normalKey = withNormalOutput ? "_nrm" : "";
+    const key = isInstanced
+      ? `${shaderId}_instanced${normalKey}${flagKey}`
+      : `${shaderId}${normalKey}${flagKey}`;
     let sm = this._shaderModules.get(key);
     if (!sm) {
       const def = this._shaderRegistry.get(shaderId);
@@ -569,6 +588,8 @@ export class GPUPipelineCache {
       } else {
         code = code.replace(/return\s+o;/g, "o.texIndex = 0.0;\n    return o;");
       }
+
+      if (withNormalOutput) code = wrapFragmentWithNormalOutput(code);
 
       sm = this._device.createShaderModule({ code });
 

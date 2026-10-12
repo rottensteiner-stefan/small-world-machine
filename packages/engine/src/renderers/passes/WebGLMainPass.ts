@@ -42,6 +42,8 @@ export class WebGLMainPass implements WebGLRenderPass {
     gl.depthMask(true);
     (renderer as AbstractWebGLRenderer).resetStateCache();
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const writesNormals = renderer.hasNormalTarget;
+    if (writesNormals) renderer.clearNormalTarget();
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -71,7 +73,9 @@ export class WebGLMainPass implements WebGLRenderPass {
     }
     gl.depthMask(true);
 
-    // 4. Render Opaque
+    // 4. Render Opaque (the only phase that writes the normal buffer: skybox and transparents
+    // leave it untouched, matching WebGPU's MASKED mode)
+    if (writesNormals) renderer.setNormalWriteEnabled(true);
     for (let i = 0; i < renderList.opaqueBatches.length; i++) {
       const batch = renderList.opaqueBatches[i];
       if (batch!.shaderId !== MaterialType.SKYBOX && batch!.objects.length > 0) {
@@ -85,6 +89,8 @@ export class WebGLMainPass implements WebGLRenderPass {
         );
       }
     }
+
+    if (writesNormals) renderer.setNormalWriteEnabled(false);
 
     // HBAO needs the opaque depth buffer every frame it's enabled, not just when there happen
     // to be transparent objects (the only other consumer of this capture, for refraction).

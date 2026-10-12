@@ -17,6 +17,9 @@ if (dot(N, N) < 0.0001) {
 }
 N = normalize(N);
 #endif
+#ifdef USE_NORMAL_OUT
+g_shadingNormal = N;
+#endif
 float dotNV = max(dot(N, V), 0.0001);
 
 // Base Reflectivity for non-metals from IOR (KHR_materials_ior)

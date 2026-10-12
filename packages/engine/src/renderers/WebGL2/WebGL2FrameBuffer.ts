@@ -10,6 +10,18 @@ export interface WebGL2FrameBufferOptions {
   format?: number;
   /** Pixel data type, e.g. gl.HALF_FLOAT. Defaults to gl.UNSIGNED_BYTE. */
   type?: number;
+  /**
+   * Optional second color attachment (COLOR_ATTACHMENT1), e.g. the normal buffer of ADR 0028.
+   * Draw buffers stay on COLOR_ATTACHMENT0 only until `setSecondaryWriteEnabled(true)`.
+   */
+  secondary?: WebGL2FrameBufferAttachmentOptions | undefined;
+}
+
+/** Storage description of an additional color attachment. */
+export interface WebGL2FrameBufferAttachmentOptions {
+  internalFormat: number;
+  format: number;
+  type: number;
 }
 
 /**
@@ -25,6 +37,8 @@ export class WebGL2FrameBuffer {
   private readonly _internalFormat: number;
   private _format: number;
   private _type: number;
+  private readonly _secondary: WebGL2FrameBufferAttachmentOptions | undefined;
+  private readonly _secondaryTexture: WebGLTexture | undefined;
 
   /**
    * Creates a new WebGL2FrameBuffer.
@@ -38,6 +52,7 @@ export class WebGL2FrameBuffer {
     this._internalFormat = options.internalFormat ?? gl.RGBA;
     this._format = options.format ?? gl.RGBA;
     this._type = options.type ?? gl.UNSIGNED_BYTE;
+    this._secondary = options.secondary;
 
     this._framebuffer = gl.createFramebuffer()!;
     gl.bindFramebuffer(gl.FRAMEBUFFER, this._framebuffer);
@@ -63,6 +78,18 @@ export class WebGL2FrameBuffer {
 
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._texture, 0);
 
+    if (this._secondary) {
+      this._secondaryTexture = gl.createTexture()!;
+      this._allocateSecondary(this._secondaryTexture, this._width, this._height);
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT1,
+        gl.TEXTURE_2D,
+        this._secondaryTexture,
+        0,
+      );
+    }
+
     // Depth and stencil renderbuffer
     this._renderbuffer = gl.createRenderbuffer()!;
     gl.bindRenderbuffer(gl.RENDERBUFFER, this._renderbuffer);
@@ -82,6 +109,43 @@ export class WebGL2FrameBuffer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.bindRenderbuffer(gl.RENDERBUFFER, null);
     gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  private _allocateSecondary(texture: WebGLTexture, width: number, height: number): void {
+    const gl = this._gl;
+    const secondary = this._secondary!;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      secondary.internalFormat,
+      width,
+      height,
+      0,
+      secondary.format,
+      secondary.type,
+      null,
+    );
+    // Neighbouring texels are not meaningful normals/sentinels to blend, so sample exactly.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+
+  /** The second color attachment's texture, if the framebuffer was created with one. */
+  public get secondaryTexture(): WebGLTexture | undefined {
+    return this._secondaryTexture;
+  }
+
+  /**
+   * Routes fragment output 1 to the second attachment (or discards it). The framebuffer must
+   * be bound; draw buffer state belongs to the framebuffer, so it persists until changed.
+   */
+  public setSecondaryWriteEnabled(enabled: boolean): void {
+    if (!this._secondaryTexture) return;
+    const gl = this._gl;
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, enabled ? gl.COLOR_ATTACHMENT1 : gl.NONE]);
   }
 
   public get width(): number {
@@ -130,6 +194,11 @@ export class WebGL2FrameBuffer {
     );
     this._gl.bindTexture(this._gl.TEXTURE_2D, null);
 
+    if (this._secondaryTexture) {
+      this._allocateSecondary(this._secondaryTexture, width, height);
+      this._gl.bindTexture(this._gl.TEXTURE_2D, null);
+    }
+
     this._gl.bindRenderbuffer(this._gl.RENDERBUFFER, this._renderbuffer);
     this._gl.renderbufferStorage(this._gl.RENDERBUFFER, this._gl.DEPTH24_STENCIL8, width, height);
   }
@@ -162,5 +231,6 @@ export class WebGL2FrameBuffer {
     this._gl.deleteFramebuffer(this._framebuffer);
     this._gl.deleteRenderbuffer(this._renderbuffer);
     this._gl.deleteTexture(this._texture);
+    if (this._secondaryTexture) this._gl.deleteTexture(this._secondaryTexture);
   }
 }

@@ -2,6 +2,7 @@ import { Object3D } from "../../../core/index.js";
 import { ShaderRegistry } from "../../shaders/index.js";
 import { WebGL2UniformBuffer } from "../WebGL2UniformBuffer.js";
 import { VERTEX_COLOR_LOCATION } from "../../Mesh.js";
+import { NORMAL_OUTPUT_FLAG, wrapFragmentWithNormalOutputGL } from "./NormalOutputWrapperGL.js";
 
 export interface WebGL2ProgramCacheEntry {
   prog: WebGLProgram;
@@ -99,6 +100,8 @@ export class WebGLProgramCache {
 
       let vs = this._shaderRegistry.assemble(def.sources.glsl300.vs, "glsl300");
       let fs = this._shaderRegistry.assemble(def.sources.glsl300.fs, "glsl300");
+
+      if (flags.includes(NORMAL_OUTPUT_FLAG)) fs = wrapFragmentWithNormalOutputGL(fs);
 
       let defines = "";
       if (isInstanced) defines += "#define USE_INSTANCING 1\n";

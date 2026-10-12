@@ -177,3 +177,20 @@ struct AreaLight {
 
 @group(3) @binding(0) var<uniform> view: ViewUniforms;
 
+
+// Shading normal (world space) the normal-buffer wrapper writes; lit chunks overwrite it with
+// the normal-mapped result, everything else leaves it at the geometry normal.
+var<private> g_shadingNormal: vec3f = vec3f(0.0, 1.0, 0.0);
+
+fn octEncode(n: vec3f) -> vec2f {
+    let p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
+    let folded = (vec2f(1.0) - abs(p.yx)) * select(vec2f(-1.0), vec2f(1.0), p >= vec2f(0.0));
+    return select(p, folded, n.z < 0.0);
+}
+
+fn octDecode(e: vec2f) -> vec3f {
+    let n = vec3f(e.x, e.y, 1.0 - abs(e.x) - abs(e.y));
+    let folded = (vec2f(1.0) - abs(n.yx)) * select(vec2f(-1.0), vec2f(1.0), n.xy >= vec2f(0.0));
+    let xy = select(n.xy, folded, n.z < 0.0);
+    return normalize(vec3f(xy, n.z));
+}

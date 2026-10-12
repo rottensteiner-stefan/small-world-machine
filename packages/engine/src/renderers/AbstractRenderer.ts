@@ -40,6 +40,7 @@ export abstract class AbstractRenderer implements Renderer {
     gamma: 2.2,
     exposure: 1.0,
     disableTextures: false,
+    normalBuffer: false,
   };
 
   /** The global post processing volume/group. */

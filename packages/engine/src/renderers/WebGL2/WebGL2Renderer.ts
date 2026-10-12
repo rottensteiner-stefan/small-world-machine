@@ -4,6 +4,7 @@ import { WebGLTextureManager } from "./managers/WebGLTextureManager.js";
 import { WebGLBufferManager } from "./managers/WebGLBufferManager.js";
 import { WebGL2DepthFrameBuffer } from "./WebGL2DepthFrameBuffer.js";
 import { WebGL2FrameBuffer } from "./WebGL2FrameBuffer.js";
+import { NORMAL_OUTPUT_FLAG } from "./managers/NormalOutputWrapperGL.js";
 import { WebGL2CubeFrameBuffer } from "./WebGL2CubeFrameBuffer.js";
 import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
 import { WebGLShadowPass } from "../passes/WebGLShadowPass.js";
@@ -44,6 +45,9 @@ import {
   DEFAULT_CLUSTER_Z_SLICES,
   DEFAULT_MAX_LIGHTS_PER_CLUSTER,
 } from "../../math/index.js";
+
+/** Out-of-range clear value (octahedral encodings live in [-1, 1]): "no normal" -- see ADR 0028. */
+const NORMAL_TARGET_CLEAR: Float32Array = new Float32Array([-2, -2, 0, 0]);
 
 /**
  * WebGL 2.0 implementation of the renderer.
@@ -365,9 +369,38 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     return this._activeRenderTarget !== null;
   }
 
+  /** @inheritdoc */
+  public override get hasNormalTarget(): boolean {
+    return (
+      !this._activeRenderTarget &&
+      this.postProcessing.enabled &&
+      this._hdrFbo?.secondaryTexture !== undefined
+    );
+  }
+
+  /** The normal buffer texture (ADR 0028), or undefined while it is not being written. */
+  public get normalTexture(): WebGLTexture | undefined {
+    return this.hasNormalTarget ? this._hdrFbo!.secondaryTexture : undefined;
+  }
+
+  /** @inheritdoc */
+  public override setNormalWriteEnabled(enabled: boolean): void {
+    this._hdrFbo?.setSecondaryWriteEnabled(enabled);
+  }
+
+  /** @inheritdoc */
+  public override clearNormalTarget(): void {
+    const fbo = this._hdrFbo;
+    if (!fbo?.secondaryTexture) return;
+    fbo.setSecondaryWriteEnabled(true);
+    this.gl.clearBufferfv(this.gl.COLOR, 1, NORMAL_TARGET_CLEAR);
+    fbo.setSecondaryWriteEnabled(false);
+  }
+
   public bindMainRenderTarget(): boolean {
     let isOffscreen = false;
     this._ensurePostProcessFbo();
+    this._warnIfNormalBufferUnavailable();
 
     if (this._activeRenderTarget) {
       isOffscreen = true;
@@ -943,6 +976,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         }
       }
     }
+
+    if (this._quality.normalBuffer) shaderFlags.push(NORMAL_OUTPUT_FLAG);
 
     const cache = this._programCache.getProgram(manifest.shaderId, isInst, shaderFlags);
     const programKey = this._programCache.programCacheKey(manifest.shaderId, isInst, shaderFlags);
@@ -1606,6 +1641,19 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     ubo.update();
   }
 
+  private _warnedNormalBufferUnavailable = false;
+
+  private _warnIfNormalBufferUnavailable(): void {
+    if (this._warnedNormalBufferUnavailable || this._quality.normalBuffer !== true) return;
+    if (this._activeRenderTarget || this._hdrFbo?.secondaryTexture) return;
+
+    this._warnedNormalBufferUnavailable = true;
+    console.warn(
+      "[WebGL2Renderer] quality.normalBuffer needs postProcessing.enabled and EXT_color_buffer_float; " +
+        "no normal buffer is written (consumers fall back to depth-derived normals).",
+    );
+  }
+
   /**
    * Lazily creates or tears down the HDR post-processing framebuffer and passes to match
    * the current `postProcessing.enabled` state and canvas dimensions.
@@ -1621,12 +1669,17 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       // checkFramebufferStatus() throws. Fall back to an UNSIGNED_BYTE target (WebGL1Renderer
       // always uses RGBA8 because half-float targets silently drop draws on some drivers).
       const supportsFloatColorBuffer = this.gl.getExtension("EXT_color_buffer_float") !== null;
+      // The normal buffer (ADR 0028) needs the same float-renderable extension as the HDR color.
+      const wantsNormalBuffer = this._quality.normalBuffer === true && supportsFloatColorBuffer;
       this._hdrFbo = new WebGL2FrameBuffer(this.gl, {
         width: this.gl.canvas.width,
         height: this.gl.canvas.height,
         internalFormat: supportsFloatColorBuffer ? this.gl.RGBA16F : this.gl.RGBA8,
         format: this.gl.RGBA,
         type: supportsFloatColorBuffer ? this.gl.HALF_FLOAT : this.gl.UNSIGNED_BYTE,
+        secondary: wantsNormalBuffer
+          ? { internalFormat: this.gl.RG16F, format: this.gl.RG, type: this.gl.HALF_FLOAT }
+          : undefined,
       });
       this._postPassGL ??= new PostProcessPassGL(this.gl, true);
       this._bloomPassGL ??= new BloomPassGL(this.gl, true);

@@ -117,6 +117,20 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
    */
   public abstract get isOffscreenRenderTarget(): boolean;
 
+  /**
+   * True while the main pass can write the normal buffer (ADR 0028): only WebGL2 with
+   * `quality.normalBuffer` and post-processing, rendering to the main target.
+   */
+  public get hasNormalTarget(): boolean {
+    return false;
+  }
+
+  /** Routes fragment output 1 to the normal buffer or discards it. No-op without a normal target. */
+  public setNormalWriteEnabled(_enabled: boolean): void {}
+
+  /** Clears the normal buffer to the "no normal" sentinel. No-op without a normal target. */
+  public clearNormalTarget(): void {}
+
   public abstract bindMainRenderTarget(): boolean;
   public abstract bindPostProcessRenderTarget(): void;
   public abstract copyToOpaqueTexture(): void;

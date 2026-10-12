@@ -6,6 +6,7 @@ var rawNormal = textureSample(u_normalMap, s, i.uv).rgb * 2.0 - 1.0;
 rawNormal.x *= obj.extraParams.z;
 rawNormal.y *= obj.extraParams.w;
 let N = normalize(TBN * rawNormal);
+g_shadingNormal = N;
 let dotNV = max(dot(N, V), 0.0001);
 
 let ior = select(1.5, obj.liquidParams.x, obj.liquidParams.x > 0.0);

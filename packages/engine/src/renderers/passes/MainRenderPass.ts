@@ -1,6 +1,12 @@
 import { Scene } from "../../core/index.js";
 import { RenderBatch } from "../../core/Scene.js";
-import { MaterialType, Topology, PostProcessingEffectType } from "../../enums/index.js";
+import {
+  MaterialType,
+  Topology,
+  PostProcessingEffectType,
+  NormalTargetMode,
+} from "../../enums/index.js";
+import { NORMAL_TARGET_CLEAR } from "../WebGPU/managers/NormalOutputWrapper.js";
 import { WebGPURenderer } from "../WebGPU/index.js";
 import { RenderPass } from "../index.js";
 import { Vector3D } from "../../math/index.js";
@@ -33,15 +39,28 @@ export class MainRenderPass implements RenderPass {
   ): void {
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
 
+    const normalView = renderer.activeNormalView;
+    const colorAttachments: GPURenderPassColorAttachment[] = [
+      {
+        view: targetView,
+        clearValue: renderer.clearColor,
+        loadOp: "clear",
+        storeOp: "store",
+      },
+    ];
+    if (normalView) {
+      colorAttachments.push({
+        view: normalView,
+        clearValue: NORMAL_TARGET_CLEAR,
+        loadOp: "clear",
+        storeOp: "store",
+      });
+    }
+    const opaqueMode = normalView ? NormalTargetMode.WRITE : NormalTargetMode.NONE;
+    const maskedMode = normalView ? NormalTargetMode.MASKED : NormalTargetMode.NONE;
+
     const rp = ce.beginRenderPass({
-      colorAttachments: [
-        {
-          view: targetView,
-          clearValue: renderer.clearColor,
-          loadOp: "clear",
-          storeOp: "store",
-        },
-      ],
+      colorAttachments,
       depthStencilAttachment: {
         // DepthPrePassGPU already cleared and populated this depth buffer with the frontmost
         // depth for every opaque object this frame -- "load" instead of "clear" builds on top
@@ -57,7 +76,7 @@ export class MainRenderPass implements RenderPass {
     for (let i = 0; i < renderList.opaqueBatches.length; i++) {
       const batch = renderList.opaqueBatches[i];
       if (batch!.shaderId === MaterialType.SKYBOX && batch!.objects.length > 0) {
-        renderer._renderBatch(rp, batch!, vMat);
+        renderer._renderBatch(rp, batch!, vMat, maskedMode);
       }
     }
 
@@ -65,7 +84,7 @@ export class MainRenderPass implements RenderPass {
     for (let i = 0; i < renderList.opaqueBatches.length; i++) {
       const batch = renderList.opaqueBatches[i];
       if (batch!.shaderId !== MaterialType.SKYBOX && batch!.objects.length > 0) {
-        renderer._renderBatch(rp, batch!, vMat);
+        renderer._renderBatch(rp, batch!, vMat, opaqueMode);
       }
     }
 
@@ -79,14 +98,18 @@ export class MainRenderPass implements RenderPass {
       renderer.captureOpaqueDepth(ce);
 
       // Start transparent pass
+      const transparentAttachments: GPURenderPassColorAttachment[] = [
+        {
+          view: targetView,
+          loadOp: "load",
+          storeOp: "store",
+        },
+      ];
+      if (normalView) {
+        transparentAttachments.push({ view: normalView, loadOp: "load", storeOp: "store" });
+      }
       const rpTransparent = ce.beginRenderPass({
-        colorAttachments: [
-          {
-            view: targetView,
-            loadOp: "load",
-            storeOp: "store",
-          },
-        ],
+        colorAttachments: transparentAttachments,
         depthStencilAttachment: {
           view: renderer.activeDepthView,
           depthLoadOp: "load",
@@ -108,7 +131,7 @@ export class MainRenderPass implements RenderPass {
         this._scratchTransparentBatch.matUuid = obj.material!.uuid;
         this._scratchTransparentObjects[0] = obj;
 
-        renderer._renderBatch(rpTransparent, this._scratchTransparentBatch, vMat);
+        renderer._renderBatch(rpTransparent, this._scratchTransparentBatch, vMat, maskedMode);
       }
       rpTransparent.end();
     } else {

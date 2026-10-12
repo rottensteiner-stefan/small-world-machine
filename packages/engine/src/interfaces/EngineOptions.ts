@@ -78,6 +78,12 @@ export interface QualityConfig {
   maxPixelRatio?: number;
   /** Clustered/tiled forward+ light culling settings (WebGL2/WebGPU only). */
   clusteredLighting?: ClusteredLightingConfig;
+  /**
+   * Write the shading normal (world space, octahedral `rg16float`) into a second render target
+   * of the main pass for decals, AO and post effects (ADR 0028). WebGPU only for now. Defaults
+   * to false.
+   */
+  normalBuffer?: boolean;
 }
 
 /**

@@ -53,3 +53,6 @@ uniform vec4 u_cascadeSplits;
 uniform vec4 u_dirShadowInfo; // x=bias, y=normalBias, z=castShadow, w=numCascades
 
 out vec4 fragColor;
+#ifdef USE_NORMAL_OUT
+vec3 g_shadingNormal = vec3(0.0, 1.0, 0.0);
+#endif
