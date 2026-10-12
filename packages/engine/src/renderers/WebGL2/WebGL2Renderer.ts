@@ -180,6 +180,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     if (config?.quality) {
       this._quality = { ...this._quality, ...config.quality };
     }
+    this._resolveNormalBufferOption();
     if (config?.postProcessing) {
       this.postProcessing.loadConfig(config.postProcessing);
     }
@@ -757,7 +758,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     // SpotLights
     for (const light of lights.sLights) {
-      if (!light.castShadow || !light.shadowCamera) continue;
+      if (!light.castShadow) continue;
+      // Creates the shadow camera on first use (castShadow may be switched on after construction)
+      // and keeps it on the light, as SpotShadowPassGPU does for WebGPU.
+      light.updateShadowCamera();
+      const shadowCamera = light.shadowCamera;
+      if (!shadowCamera) continue;
 
       let fbo = this._shadowMaps.get(light);
       if (!fbo) {
@@ -772,11 +778,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
 
       // Update Global UBO with light's camera
-      this.updateGlobalUBO(
-        light.shadowCamera.viewProjectionMatrix,
-        light.shadowCamera.position,
-        emptyLights,
-      );
+      this.updateGlobalUBO(shadowCamera.viewProjectionMatrix, shadowCamera.position, emptyLights);
 
       // Keep FRONT culling enabled for the shadow pass to prevent shadow acne!
       this.gl.enable(this.gl.CULL_FACE);
@@ -1726,6 +1728,20 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     ubo.setVec2(152, near, far);
     ubo.update();
+  }
+
+  /**
+   * Auto-enable (ADR 0028): the HDR FBO was created without the secondary attachment, so drop it
+   * here and let `_ensurePostProcessFbo` rebuild it. Programs recompile through the new
+   * `USE_NORMAL_OUT` flag. One-time hitch.
+   */
+  public override requestNormalBuffer(): boolean {
+    const switched = super.requestNormalBuffer();
+    if (switched && this._hdrFbo && !this._hdrFbo.secondaryTexture) {
+      this._hdrFbo.destroy();
+      this._hdrFbo = undefined;
+    }
+    return switched;
   }
 
   private _warnedNormalBufferUnavailable = false;

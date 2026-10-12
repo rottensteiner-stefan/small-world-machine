@@ -40,8 +40,11 @@ export abstract class AbstractRenderer implements Renderer {
     gamma: 2.2,
     exposure: 1.0,
     disableTextures: false,
-    normalBuffer: false,
+    normalBuffer: "auto",
   };
+
+  /** True while `quality.normalBuffer` was `"auto"` and no consumer has requested it yet. */
+  protected _normalBufferAuto: boolean = false;
 
   /** The global post processing volume/group. */
   public postProcessing: PostProcessingGroup = new PostProcessingGroup();
@@ -117,6 +120,27 @@ export abstract class AbstractRenderer implements Renderer {
   /** @inheritdoc */
   public get quality(): QualityConfig {
     return this._quality;
+  }
+
+  /**
+   * Turns `quality.normalBuffer: "auto"` into the effective boolean (off until requested). Call
+   * after merging the user's quality config.
+   */
+  protected _resolveNormalBufferOption(): void {
+    this._normalBufferAuto = this._quality.normalBuffer === "auto";
+    if (this._normalBufferAuto) this._quality.normalBuffer = false;
+  }
+
+  /**
+   * Asks for the normal buffer (ADR 0028) because a consumer (a visible decal) needs it. Only
+   * acts under `normalBuffer: "auto"`; once on it stays on (no thrashing).
+   * @returns True when this call switched it on.
+   */
+  public requestNormalBuffer(): boolean {
+    if (!this._normalBufferAuto) return false;
+    this._normalBufferAuto = false;
+    this._quality.normalBuffer = true;
+    return true;
   }
 
   /**

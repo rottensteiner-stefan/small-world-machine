@@ -12,14 +12,17 @@ import {
   Object3D,
   OrbitController,
   PerspectiveProjection,
+  SpotLight,
   StandardMaterial,
   Texture,
+  Vector3D,
 } from "@small-world-machine/engine";
 
 /**
  * Decal probe: box-projected decals on a floor, a wall and a pedestal. Query params:
- * `?nb=1` turns the normal buffer on, `?pp=1` enables post-processing (WebGL2 needs it for the
- * normal buffer), `?rendererType=WEB_GPU|WEB_GL2` picks the backend.
+ * `?nb=1`/`?nb=0` force the normal buffer on/off (default: auto, on while decals are visible), `?pp=1` enables post-processing (WebGL2 needs it for the
+ * normal buffer), `?spot=1` swaps the sun for a shadow-casting spot light with an occluder whose shadow crosses the
+ * FloorStripes decal edge, `?rendererType=WEB_GPU|WEB_GL2` picks the backend.
  */
 /** 2x2 quadrants, image top-left red, top-right green, bottom-left blue, bottom-right yellow. */
 function quadrantTexture(): Texture {
@@ -50,6 +53,14 @@ function solidTexture(r: number, g: number, b: number, a: number): Texture {
   return Texture.fromCanvas(canvas);
 }
 
+/** `?nb=1` forces the normal buffer on, `?nb=0` off, no `nb` leaves the engine default ("auto"). */
+function normalBufferMode(): boolean | "auto" {
+  const nb = new URLSearchParams(location.search).get("nb");
+  if (nb === "1") return true;
+  if (nb === "0") return false;
+  return "auto";
+}
+
 class DecalProbe extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {
     const aspect: number = window.innerWidth / window.innerHeight;
@@ -65,16 +76,18 @@ class DecalProbe extends AbstractShowcase {
       this.renderer.postProcessing.enabled = true;
     }
 
-    const sun = new DirectionalLight({ color: Color.WHITE, intensity: 1.1 });
+    const spotShadows: boolean = new URLSearchParams(location.search).get("spot") === "1";
+    const sun = new DirectionalLight({ color: Color.WHITE, intensity: spotShadows ? 0 : 1.1 });
     sun.direction.set(-0.4, -1, -0.3);
     this.scene.add(sun);
-    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.25 }));
+    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: spotShadows ? 0.05 : 0.25 }));
 
     const concrete = new StandardMaterial({ color: new Color(0.55, 0.55, 0.58), roughness: 0.9 });
 
     const floor = new Object3D("Floor");
     floor.geometry = new Ground({ width: 24, depth: 24 }).getGeometryData();
     floor.material = concrete;
+    floor.receiveShadow = true;
     this.scene.add(floor);
 
     const wall = new Object3D("Wall").setPosition(0, 1.5, -3).setScale(8, 3, 0.4);
@@ -149,9 +162,38 @@ class DecalProbe extends AbstractShowcase {
       .setScale(1, 0.4, 1);
     this.scene.add(quadrantDecal);
 
+    if (spotShadows) {
+      const spot = new SpotLight({
+        color: Color.WHITE,
+        intensity: 40,
+        distance: 20,
+        decay: 2,
+        angle: (40 * Math.PI) / 180,
+        penumbra: 0.2,
+        direction: new Vector3D(0, -1, 0),
+        castShadow: true,
+        shadowBias: 0.002,
+        shadowResolution: 2048,
+      });
+      spot.position.set(-1.6, 6, 0.6);
+      this.scene.add(spot);
+
+      // Its shadow straddles the right edge of FloorStripes (x = -0.1): plain floor and decal both lit by the spot.
+      const occluder = new Object3D("Occluder").setPosition(-0.4, 2.4, 0.6).setScale(1.5, 0.2, 0.8);
+      occluder.geometry = new Cube({ size: 1 }).getGeometryData();
+      occluder.material = concrete;
+      occluder.castShadow = true;
+      this.scene.add(occluder);
+
+      // WebGPU rebuilds the shadow camera every frame; WebGL2 only uses the one created at
+      // construction, so give it the final world position once (the light never moves).
+      this.scene.update();
+      spot.updateShadowCamera();
+    }
+
     this.camera.setStrategy(CameraStrategyType.SMOOTH);
-    this.camera.position.set(0, 3.2, 6);
-    this.camera.target.set(0, 0.8, -1);
+    this.camera.position.set(0, spotShadows ? 6 : 3.2, spotShadows ? 4 : 6);
+    this.camera.target.set(spotShadows ? -0.5 : 0, spotShadows ? 0 : 0.8, spotShadows ? 0.6 : -1);
     this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
     this.camera.updateViewMatrix();
   }
@@ -162,7 +204,7 @@ class DecalProbe extends AbstractShowcase {
 }
 
 const app = new DecalProbe({
-  quality: { normalBuffer: new URLSearchParams(location.search).get("nb") === "1" },
+  quality: { normalBuffer: normalBufferMode() },
 });
 (window as unknown as { app: DecalProbe }).app = app;
 app.start().catch((err: unknown) => console.error("[DecalProbe] Failed to start:", err));

@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.105.0] - 2026-10-12
+
+### "The greatest enemy of knowledge is not ignorance, it is the illusion of knowledge." - Daniel J. Boorstin
+
+- **Features:**
+  - *Box-projected decals* (`Decal`, `DecalMaterial`; WebGPU and WebGL2, WebGL1 ignores them): a unit box that draws only where it intersects the already-rendered opaque geometry. Depth is unprojected into box space, the decal is lit with the clustered lights and blended with its own normal map onto the receiver's normal (reoriented via the normal buffer), with edge and angle fade, camera-inside-box support and a static stacking order (`priority`, then volume, then creation order). Decals get their own pass after the opaque and before the transparent pass, so refractive materials see them. Normals and UV derivatives come from three depth taps per axis, so silhouettes no longer smear and distant decals sample the right mip. Decals never act as colliders or raycast targets, and negative scale is not supported.
+  - *Normal buffer* (ADR 0028): a thin world-space octahedral `rg16float` second render target of the main pass, on WebGPU and WebGL2 (WebGL2 needs post-processing). `quality.normalBuffer` is `boolean | "auto"`, default `"auto"`: the buffer switches itself on as soon as a decal is visible and stays on; with no decals nothing is allocated or compiled.
+  - *Decal probe page* `apps/showcases/decal-probe` and `npm run test:decals` (`scripts/check-decals.mjs`): 23 numeric GPU assertions on both backends (no validation/GL errors, normal-buffer integrity, decal normal blending, backend parity, forced and automatic normal buffer).
+- **Architecture & Bugfixes:**
+  - *HBAO was wrong at high resolution:* the depth-derived normal used an absolute threshold that rejected every cross product on large canvases (the camera axis became the normal for all pixels, open floor darkened to 0.61 instead of 1.0) and pointed away from the camera. The threshold is now relative to the edge lengths and the normal faces the camera. HBAO reads the normal buffer when present (normal-mapped, no silhouette artifacts) and falls back to the depth-derived normal otherwise.
+  - *HBAO radius in world units:* the sample steps followed fixed pixel distances, so `radius` shrank with resolution. The marching distance is now `clamp(radius * projScaleY * (H/2) / linearZ, 4, 128)` pixels; the affected fringe stays about the same between 2800 and 5600 px widths.
+  - *Spot-light shadows:* the shadow camera is created on first use and kept on the light on both backends. WebGL2 never updated it, so a light whose `castShadow` was switched on after construction cast no shadow and a moving light's shadow never followed it.
+  - Compute modules that include the shared structs chunk (cluster culling, HZB test) now declare the per-pipeline constant the chunk's sampling helpers reference.
+  - Fragment-output wrappers (`NormalOutputWrapper`, `NormalOutputWrapperGL`) add the normal output without touching any material shader; the second output carries the fragment alpha so decals blend their normal.
+- **Housekeeping & Docs:**
+  - ADR 0028 (thin normal buffer as MRT, no G-buffer, velocity separate); `lint:wgsl` also validates every material fragment shader through the normal-buffer wrapper.
+  - Verified: typecheck, lint, `lint:wgsl`, library build, the full suite (1689 tests in 263 files) and `test:decals` on a real GPU. Not verified: other GPUs, mobile/tile-based GPUs, per-GPU decal cost beyond the probe measurements. API reference regenerated (`v0.105.0`).
+  - A dev-server pitfall found on the way: starting a second `vite` dev server while one is running (port in use) wipes `node_modules/.vite/deps`, after which the running server answers 504 for every pre-bundled dependency (e.g. `fflate`) and every page importing `@small-world-machine/tools` stays black until the server is restarted.
+
 ## [0.104.0] - 2026-10-10
 
 ### "Order is Heaven's first law." - Alexander Pope

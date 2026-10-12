@@ -546,6 +546,7 @@ export class WebGPURenderer extends AbstractRenderer {
     if (config?.quality) {
       this._quality = { ...this._quality, ...config.quality };
     }
+    this._resolveNormalBufferOption();
     if (config?.postProcessing) {
       this.postProcessing.loadConfig(config.postProcessing);
     }
@@ -1303,6 +1304,9 @@ export class WebGPURenderer extends AbstractRenderer {
       this._hdrTextureView = undefined;
     }
 
+    if (!this._activeRenderTarget && scene.getVisibleObjectsSorted(vp, camPos).decals.length > 0) {
+      this.requestNormalBuffer();
+    }
     this._syncNormalTexture();
 
     let renderTargetView: GPUTextureView;

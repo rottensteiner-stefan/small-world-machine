@@ -136,9 +136,10 @@ const short = (e) => {
 const near = (a, b, tol) => a.every((v, i) => Math.abs(v - b[i]) <= tol);
 const fmt = (v) => (v ? `(${v.map((x) => x.toFixed(3)).join(", ")})` : "null");
 
-async function normalsFor(browser, backend) {
+async function normalsFor(browser, backend, auto = false) {
+  const tag = auto ? `${backend} (auto)` : backend;
   const blocking = backend === "WEB_GL2";
-  const q = `rendererType=${backend}&nb=1${backend === "WEB_GL2" ? "&pp=1" : ""}`;
+  const q = `rendererType=${backend}${auto ? "" : "&nb=1"}${backend === "WEB_GL2" ? "&pp=1" : ""}`;
   const { page, errors } = await openProbe(browser, q);
   let res = null;
   try {
@@ -151,22 +152,22 @@ async function normalsFor(browser, backend) {
     log(
       !errors.length,
       blocking,
-      `${backend}: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+      `${tag}: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
     );
     log(
       !floor.sentinel && near(floor.n, [0, 1, 0], 0.02),
       blocking,
-      `${backend}: floor normal ${fmt(floor.n)} ~ (0,1,0)`,
+      `${tag}: floor normal ${fmt(floor.n)} ~ (0,1,0)`,
     );
-    log(sky.sentinel, blocking, `${backend}: sky is sentinel (enc ${fmt(sky.enc)})`);
+    log(sky.sentinel, blocking, `${tag}: sky is sentinel (enc ${fmt(sky.enc)})`);
     const p = probe.n;
     log(
       !!p && p[0] > 0.2 && p[0] < 0.6 && p[1] > 0.8 && p[1] < 0.97,
       blocking,
-      `${backend}: NormalProbe ${fmt(p)} between floor and decal normal (x in (0.2,0.6), y in (0.8,0.97))`,
+      `${tag}: NormalProbe ${fmt(p)} between floor and decal normal (x in (0.2,0.6), y in (0.8,0.97))`,
     );
   } catch (e) {
-    log(false, blocking, `${backend}: normal readback threw: ${e.message}`);
+    log(false, blocking, `${tag}: normal readback threw: ${e.message}`);
   }
   await page.close();
   return res;
@@ -244,6 +245,7 @@ let gl2, gpu;
 try {
   gl2 = await normalsFor(browser, "WEB_GL2");
   await colourCheck(browser, "WEB_GL2");
+  await normalsFor(browser, "WEB_GL2", true);
 
   const why = await webGpuUsable(browser);
   if (why) {
@@ -253,6 +255,7 @@ try {
   } else {
     gpu = await normalsFor(browser, "WEB_GPU");
     await colourCheck(browser, "WEB_GPU");
+    await normalsFor(browser, "WEB_GPU", true);
     if (gl2 && gpu) {
       for (const k of ["floor", "probe"]) {
         const ok = gl2[k].n && gpu[k].n && near(gl2[k].n, gpu[k].n, 0.02);

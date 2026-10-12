@@ -80,10 +80,13 @@ export interface QualityConfig {
   clusteredLighting?: ClusteredLightingConfig;
   /**
    * Write the shading normal (world space, octahedral `rg16float`) into a second render target
-   * of the main pass for decals, AO and post effects (ADR 0028). WebGPU only for now. Defaults
-   * to false.
+   * of the main pass for decals, AO and post effects (ADR 0028). `"auto"` (default) switches it
+   * on, once and for good, the first time a decal is visible (costs nothing before that; WebGL2
+   * recreates its HDR framebuffer and recompiles programs once). `true` forces it on from the
+   * start, `false` keeps it off (decals use the depth-derived normal). WebGL2 needs
+   * post-processing for it.
    */
-  normalBuffer?: boolean;
+  normalBuffer?: boolean | "auto";
 }
 
 /**

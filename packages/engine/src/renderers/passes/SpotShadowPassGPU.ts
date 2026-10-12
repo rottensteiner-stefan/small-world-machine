@@ -111,10 +111,12 @@ export class SpotShadowPassGPU implements RenderPass {
 
     for (let j = 0; j < maxShadowedSpotLights; j++) {
       const sLight = lights.sLights[j]!;
-      if (!sLight.castShadow || !sLight.shadowCamera) continue;
+      if (!sLight.castShadow) continue;
 
+      // Also creates the shadow camera when castShadow was switched on after construction.
       sLight.updateShadowCamera();
       const shadowCam = sLight.shadowCamera;
+      if (!shadowCam) continue;
 
       const tempMat = MathPool.acquireMatrix();
       tempMat.data.set(shadowCam.viewProjectionMatrix);

@@ -84,12 +84,18 @@ void main() {
     dirs[4] = vec2(-0.5, -0.866025);
     dirs[5] = vec2(0.5, -0.866025);
 
+    // March distance follows the world-space radius: radius * projScaleY * (height / 2) / linearZ
+    // is the radius projected to pixels. Min 4 px keeps contact AO alive at distance (steps would
+    // collapse onto the centre texel); max 128 px bounds the texture-fetch cost of close-ups.
+    float pixelRadius = clamp(u_radius * u_projScale.y * 0.5 / (u_texelSize.y * linearZ), 4.0, 128.0);
+    float stepPixels = pixelRadius / 4.0;
+
     const int STEPS = 4;
     float occlusion = 0.0;
     for (int d = 0; d < DIR_COUNT; d++) {
         float maxHorizonSin = 0.0;
         for (int s = 1; s <= STEPS; s++) {
-            vec2 sampleUv = v_uv + dirs[d] * u_texelSize * float(s) * 4.0;
+            vec2 sampleUv = v_uv + dirs[d] * u_texelSize * float(s) * stepPixels;
             if (sampleUv.x < 0.0 || sampleUv.x > 1.0 || sampleUv.y < 0.0 || sampleUv.y > 1.0) {
                 continue;
             }

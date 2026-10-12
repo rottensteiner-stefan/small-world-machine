@@ -91,11 +91,17 @@ fn computeHBAO(pixelCoord: vec2i, dims: vec2i) -> f32 {
         vec2f(-1.0, 0.0), vec2f(-0.5, -0.866025), vec2f(0.5, -0.866025),
     );
 
+    // March distance follows the world-space radius: radius * projScaleY * (height / 2) / linearZ
+    // is the radius projected to pixels. Min 4 px keeps contact AO alive at distance (steps would
+    // collapse onto the centre texel); max 128 px bounds the cache-miss cost of close-ups.
+    let pixelRadius = clamp(u.radius * u.projScaleY * f32(dims.y) * 0.5 / linearZ, 4.0, 128.0);
+    let stepPixels = pixelRadius / 4.0;
+
     var occlusion = 0.0;
     for (var d = 0; d < 6; d++) {
         var maxHorizonSin = 0.0;
         for (var s = 1; s <= 4; s++) {
-            let sampleCoord = centerCoord + vec2i(dirs[d] * f32(s) * 4.0);
+            let sampleCoord = centerCoord + vec2i(dirs[d] * f32(s) * stepPixels);
             if (sampleCoord.x < 0 || sampleCoord.x > maxCoord.x || sampleCoord.y < 0 || sampleCoord.y > maxCoord.y) {
                 continue;
             }

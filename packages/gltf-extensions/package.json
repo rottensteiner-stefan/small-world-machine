@@ -1,6 +1,6 @@
 {
   "name": "@small-world-machine/gltf-extensions",
-  "version": "0.104.0",
+  "version": "0.105.0",
   "description": "Community and data-level glTF extensions for Small World Machine 3D engine.",
   "type": "module",
   "license": "MIT",
