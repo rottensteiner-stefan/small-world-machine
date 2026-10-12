@@ -423,7 +423,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   /**
    * Copies the normal buffer (COLOR_ATTACHMENT1 of the HDR framebuffer) into a texture decals can
    * sample: reading it while it is still attached to the bound framebuffer would be a feedback loop.
-   * @inheritdoc
    */
   public override copyToOpaqueNormalTexture(): void {
     const gl = this.gl;
