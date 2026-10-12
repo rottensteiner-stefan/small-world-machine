@@ -17,6 +17,7 @@ export * from "./InstancedMesh.js";
 export * from "./objects/BillboardInstancer.js";
 export * from "./objects/Decal.js";
 export * from "./decals/DecalMath.js";
+export * from "./decals/DecalMeshBaker.js";
 
 export { Scene } from "./Scene.js";
 export * from "./sky/Skybox.js";

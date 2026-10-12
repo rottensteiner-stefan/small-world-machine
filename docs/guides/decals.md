@@ -119,7 +119,7 @@ priority, opacity, edge fade and angle fade.
 - **No decals on transparents.** The decal only sees the opaque depth.
 - **No decals in offscreen targets** (reflections, probes, imposters). Decals count only in
   frames of the main target.
-- **WebGL1 ignores decals** (see above).
+- **WebGL1 ignores decal boxes**; bake them to meshes instead (see "WebGL1: baked mesh decals").
 - No shadow casting, no collision, no picking.
 
 ## `quality.normalBuffer`
@@ -138,6 +138,57 @@ the engine quality options:
 - **WebGL2:** needs **post-processing** enabled (only then there is an FBO). Without it you get
   a warning and the depth-derived fallback. Turning the buffer on rebuilds the HDR target and
   recompiles programs once, which can cause a one-time hitch.
+
+## WebGL1: baked mesh decals
+
+WebGL1 has no depth sampling and no MRT, so it ignores `Decal` boxes. For it, decals are baked once
+at load time into ordinary transparent meshes (ADR 0029, phase 5):
+
+```ts
+import { bakeSceneDecals, bakeDecalMesh } from "@small-world-machine/engine";
+
+// after the scene is built, only when the renderer is WebGL1 (otherwise the box would draw twice)
+if (renderer.type === RendererType.WEB_GL1) bakeSceneDecals(scene.root);
+
+// or per decal against chosen receivers:
+const mesh: Object3D | undefined = bakeDecalMesh(decal, [floor, wall], { normalOffset: 0.002 });
+```
+
+- `bakeDecalMesh(decal, receivers: readonly Object3D[], options?: { normalOffset?: number }): Object3D | undefined`
+  clips every receiver triangle against the unit box (Sutherland-Hodgman), maps UV = `(box.x + 0.5, box.z + 0.5)`
+  (the same orientation as the box decal), lifts the result `normalOffset` (default 0.002 m) along the flat
+  receiver triangle normal and returns one mesh, or `undefined` when nothing is covered. World matrices must be
+  current. The mesh's origin sits at the decal's world position; add it to a parent with identity transform
+  (the scene root).
+- `bakeSceneDecals(root, { normalOffset?, hideBakedDecals? = true }): Object3D[]` collects all visible `Decal`s
+  and all visible non-transparent triangle meshes under `root`, bakes in stacking order (`compareDecals`), adds
+  the meshes to `root` and hides the baked boxes. It is not called by the engine automatically: it has to run
+  after the scene exists and only on WebGL1. The decal probe does it with `?bake=1`.
+- The pure clipping core `clipTrianglesToDecalBox` works on plain arrays and a `Matrix4` and is unit-tested.
+- Material: `DecalMaterial` maps to a `StandardMaterial` (diffuse, normal, ORM bound to AO/roughness/metallic maps,
+  emissive, roughness, metallic, `color.a` as opacity), or to `BasicMaterial` for `unlit` decals. It is
+  `transparent`, `depthWrite = false`, `cullMode = NONE`.
+
+Limits (decided simplification):
+
+- **Static receivers only**, baked once; skinned, instanced, non-triangle and geometry-less receivers are skipped
+  with a `console.warn`. Moving a receiver or the decal afterwards does not update the mesh.
+- **No edge fade and no angle fade.** Triangles facing away from the decal's up axis, or beyond `angleFadeEnd`,
+  are cut hard; the texture alpha defines the edge. Steep walls inside the box therefore end on a triangle edge.
+- **Flat normals** (the receiver triangle normal), so a decal on a curved receiver is faceted, and the receiver's
+  own normal map is not blended into the decal (the decal's `normalMap` is used with tangents computed from the
+  UVs; that tangent convention is not verified against a normal-mapped probe).
+- **Lighting differs from the box decal** (regular material path, receiver shadows via `receiveShadow`, no
+  normal-buffer blending); `unlit` is honoured through `BasicMaterial`.
+- **Stacking:** baked meshes sort among the transparents by distance of the decal centre, not by `priority`.
+  Overlapping decals on one surface can therefore blend in either order.
+- **Cost:** CPU at load time proportional to receiver triangles whose bounds touch a box (whole receivers outside
+  are rejected by bounds), plus a transparent mesh per decal at run time. Large, finely tessellated receivers
+  under many big boxes are the expensive case.
+
+Checked on the probe (`npm run test:decals`, headless WebGL1 via SwiftShader): with `?bake=1` the stripe pixel
+differs from the floor by 82 (max channel), and from the WebGL2 box decal by 9 at the same pixel; edge fade is
+the visible difference.
 
 ## Cost guidance
 
@@ -180,6 +231,7 @@ normal probes. Query parameters:
 - `?pp=1` enables post-processing (needed for the normal buffer on WebGL2)
 - `?spot=1` swaps the sun for a shadow-casting spot light across a decal edge
 - `?rendererType=WEB_GPU` or `WEB_GL2` picks the backend
+- `?bake=1` bakes all decals to meshes before the first frame (use with `?rendererType=WEB_GL1`)
 - `?mip=1` (+ `?mipbias=<n>`) swaps in the mip-sharpness comparison scene
 
 `npm run test:decals` (`scripts/check-decals.mjs`) drives that page in a headless browser and

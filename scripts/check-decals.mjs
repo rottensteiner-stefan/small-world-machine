@@ -103,11 +103,33 @@ async function readNormals(page, backend, points) {
   );
 }
 
+/** Pending GL error codes of the page's WebGL context (drained, so nothing is left behind). */
+async function drainGlErrors(page) {
+  return page.evaluate(() => {
+    const gl = window.app.renderer.gl;
+    const found = [];
+    for (let i = 0; i < 16; i++) {
+      const code = gl.getError();
+      if (code === gl.NO_ERROR) break;
+      found.push(`0x${code.toString(16)}`);
+    }
+    return found;
+  });
+}
+
 async function openProbe(browser, query) {
   const page = await browser.newPage();
   await page.setViewport({ width: 960, height: 540 });
   const errors = [];
+  const glWarnings = [];
   page.on("console", (m) => {
+    // Chrome reports GL errors such as INVALID_ENUM from drawElements as warnings, not as errors.
+    if (
+      m.type() === "warning" &&
+      /GL_INVALID|GL ERROR|INVALID_(ENUM|OPERATION|VALUE)/i.test(m.text())
+    ) {
+      glWarnings.push(m.text());
+    }
     if (m.type() !== "error") return;
     const t = m.text();
     if (t.includes("favicon")) return;
@@ -126,7 +148,7 @@ async function openProbe(browser, query) {
     FRAMES,
   );
   await new Promise((r) => setTimeout(r, 500));
-  return { page, errors };
+  return { page, errors, glWarnings };
 }
 
 const short = (e) => {
@@ -435,6 +457,62 @@ async function webGl1Check(browser) {
   await page.close();
 }
 
+/** Screenshot of the probe canvas decoded to a PNG. */
+async function canvasPng(page) {
+  const rect = await page.evaluate(() => {
+    const r = document.querySelector("canvas").getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
+  return PNG.sync.read(Buffer.from(await page.screenshot({ clip: rect })));
+}
+
+const pngPixel = (png, [fx, fy]) => {
+  const i = (png.width * Math.floor(fy * png.height) + Math.floor(fx * png.width)) * 4;
+  return [png.data[i], png.data[i + 1], png.data[i + 2]];
+};
+
+/** WebGL1 + `?bake=1`: the decals are baked into meshes, so the stripe must show where the plain WebGL1 run shows floor. */
+async function bakeCheck(browser) {
+  const { page, errors, glWarnings } = await openProbe(browser, "rendererType=WEB_GL1&bake=1");
+  const type = await page.evaluate(() => window.app.renderer.type);
+  const glErrors = await drainGlErrors(page);
+  const png = await canvasPng(page);
+  (await import("fs")).mkdirSync(".agents/scratches", { recursive: true });
+  (await import("fs")).writeFileSync(
+    ".agents/scratches/decal-check-WEB_GL1-bake.png",
+    PNG.sync.write(png),
+  );
+  const a = pngPixel(png, STRIPE);
+  const b = pngPixel(png, FLOOR);
+  const diff = Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+  log(type === "WEB_GL1", true, `WEB_GL1 bake: renderer is WebGL1 (${type})`);
+  log(
+    !errors.length,
+    true,
+    `WEB_GL1 bake: no console errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+  );
+  log(
+    !glErrors.length && !glWarnings.length,
+    true,
+    `WEB_GL1 bake: no GL errors (getError ${glErrors.join(",") || "none"}, console ${glWarnings.length})${glWarnings.length ? ` -> ${short(glWarnings)}` : ""}`,
+  );
+  log(
+    diff > 30,
+    true,
+    `WEB_GL1 bake: stripe rgb(${a}) vs floor rgb(${b}), max channel diff ${diff} (>30)`,
+  );
+  await page.close();
+
+  // Informational: the baked stripe against the WebGL2 box decal at the same pixel (no fade, other lighting path).
+  const gl2 = await openProbe(browser, "rendererType=WEB_GL2&nb=0");
+  const ref = pngPixel(await canvasPng(gl2.page), STRIPE);
+  await gl2.page.close();
+  const refDiff = Math.max(...a.map((v, i) => Math.abs(v - ref[i])));
+  console.log(
+    `INFO  WEB_GL1 bake: stripe rgb(${a}) vs WebGL2 box decal rgb(${ref}), max channel diff ${refDiff}`,
+  );
+}
+
 /** Unlit decals draw flat albedo and must not touch the normal buffer (they would otherwise blend a made-up normal). */
 async function unlitCheck(browser, backend) {
   const blocking = backend === "WEB_GL2";
@@ -532,6 +610,7 @@ try {
   await unlitCheck(browser, "WEB_GL2");
   await ormChecks(browser, "WEB_GL2");
   await webGl1Check(browser);
+  await bakeCheck(browser);
 
   const why = await webGpuUsable(browser);
   if (why) {

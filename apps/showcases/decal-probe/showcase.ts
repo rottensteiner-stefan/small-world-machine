@@ -1,6 +1,7 @@
 import {
   AbstractShowcase,
   AmbientLight,
+  bakeSceneDecals,
   CameraStrategyType,
   Color,
   Cube,
@@ -26,7 +27,7 @@ import { setupOrmScene } from "./ormScene.js";
  * Decal probe: box-projected decals on a floor, a wall and a pedestal. Query params:
  * `?nb=1`/`?nb=0` force the normal buffer on/off (default: auto, on while decals are visible), `?pp=1` enables post-processing, `?hbao=1` enables HBAO (and post-processing), `?unlit=1` draws the decals unlit (WebGL2 needs it for the
  * normal buffer), `?bump=1|2` gives the floor a normal map, `?spot=1` swaps the sun for a shadow-casting spot light with an occluder whose shadow crosses the
- * FloorStripes decal edge, `?rendererType=WEB_GPU|WEB_GL2` picks the backend.
+ * FloorStripes decal edge, `?bake=1` bakes every decal into a mesh before the first frame (the WebGL1 path, see docs/guides/decals.md), `?rendererType=WEB_GPU|WEB_GL2|WEB_GL1` picks the backend.
  */
 /** 2x2 quadrants, image top-left red, top-right green, bottom-left blue, bottom-right yellow. */
 function quadrantTexture(): Texture {
@@ -249,6 +250,10 @@ class DecalProbe extends AbstractShowcase {
       // construction, so give it the final world position once (the light never moves).
       this.scene.update();
       spot.updateShadowCamera();
+    }
+
+    if (new URLSearchParams(location.search).get("bake") === "1") {
+      bakeSceneDecals(this.scene.root);
     }
 
     this.camera.setStrategy(CameraStrategyType.SMOOTH);

@@ -49,7 +49,7 @@ Jede Phase endet mit `npm run lint:fix`, `build:lib`, `test`, `lint:wgsl` und `n
 | 2 | Qualität: Mip-Schärfe gemessen (`mipBias` bleibt bei 0), `USE_DECAL_UNLIT` (`unlit`), normal-mapped Empfänger in der Probe gemessen; offen: Anisotropie der Decal-Texturen, ms-Budget auf Zielgeräten | weitgehend erledigt |
 | 3 | Daten: `KitDecalItem` (size, normal, orm, emission), `LevelDescriptor.decals[]`, Schema, Validator, `loadLevel`, Migration der 6 Prolog-Decals | offen |
 | 4 | Maker-Stempelwerkzeug (modal: `D` an, Klick stempelt, `R` dreht, Pfeile schieben, `Shift` skaliert, `Esc` aus), Speicherung über `SWM_decal` | offen |
-| 5 | Mesh-Decal-Baker (Load-Zeit, CPU, Sutherland-Hodgman gegen die Box, statische Empfänger) für WebGL1 | offen |
+| 5 | Mesh-Decal-Baker (Load-Zeit, CPU, Sutherland-Hodgman gegen die Box, statische Empfänger) für WebGL1 | umgesetzt |
 | 6 | Plane-Fit, Nässe-Overlay (neu zu bewerten, siehe unten), Decal-Sockets, Akkumulator | offen |
 
 ## Phase 3: Hinweise für die Umsetzung
