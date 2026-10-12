@@ -15,3 +15,14 @@ describe("HBAO world-space radius", () => {
     });
   }
 });
+
+describe("HBAO normal source", () => {
+  for (const file of ["AO.frag.wgsl", "AO.frag.glsl"]) {
+    it(`${file} reconstructs the flat normal with neighbour selection and never reads the normal buffer`, () => {
+      const src = readFileSync(resolve(dir, file), "utf8");
+      expect(src).toContain("neighbourViewPos");
+      expect(src).toMatch(/abs\(right\.w - linearZ\)/);
+      expect(src).not.toMatch(/normalMap|u_normalMap|octDecode|viewRot|useNormalBuffer/);
+    });
+  }
+});

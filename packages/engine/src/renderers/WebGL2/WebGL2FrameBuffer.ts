@@ -39,6 +39,8 @@ export class WebGL2FrameBuffer {
   private _type: number;
   private readonly _secondary: WebGL2FrameBufferAttachmentOptions | undefined;
   private readonly _secondaryTexture: WebGLTexture | undefined;
+  /** Mirrors the draw-buffer state (default: COLOR_ATTACHMENT0 only) to skip redundant calls. */
+  private _secondaryWriteEnabled: boolean = false;
 
   /**
    * Creates a new WebGL2FrameBuffer.
@@ -143,7 +145,8 @@ export class WebGL2FrameBuffer {
    * be bound; draw buffer state belongs to the framebuffer, so it persists until changed.
    */
   public setSecondaryWriteEnabled(enabled: boolean): void {
-    if (!this._secondaryTexture) return;
+    if (!this._secondaryTexture || enabled === this._secondaryWriteEnabled) return;
+    this._secondaryWriteEnabled = enabled;
     const gl = this._gl;
     gl.drawBuffers([gl.COLOR_ATTACHMENT0, enabled ? gl.COLOR_ATTACHMENT1 : gl.NONE]);
   }

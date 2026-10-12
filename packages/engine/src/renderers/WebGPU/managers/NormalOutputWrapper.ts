@@ -6,12 +6,18 @@ export const NORMAL_TARGET_CLEAR: number[] = [-2, -2, 0, 0];
 const FRAGMENT_ENTRY =
   /@fragment\s*fn\s+fs\s*\(\s*(\w+)\s*:\s*(\w+)\s*\)\s*->\s*@location\(0\)\s*vec4(?:f|<f32>)\s*\{/;
 
+/** True when `wrapFragmentWithNormalOutput` can rewrite this shader's `fs` entry point. */
+export function canWrapFragmentWithNormalOutput(code: string): boolean {
+  return FRAGMENT_ENTRY.test(code);
+}
+
 /**
  * Renames a material's `fs` to `fs_color` and appends an `fs` that also writes the world-space
  * shading normal to `@location(1)` (see ADR 0028). Only entry points taking the shared vertex
  * `Out` struct know a geometry normal; any other input type writes the out-of-range sentinel so
  * the pipeline's second target stays valid. Shaders without a matching entry point are returned
- * unchanged. The second output's w component carries the fragment alpha so a pipeline in
+ * unchanged (callers check `canWrapFragmentWithNormalOutput` and must then not let the pipeline
+ * write target 1, see `GPUPipelineCache.getPipeline`). The second output's w component carries the fragment alpha so a pipeline in
  * `NormalTargetMode.BLEND` (decals) can blend its normal onto the buffer; plain writes ignore it.
  */
 export function wrapFragmentWithNormalOutput(code: string): string {

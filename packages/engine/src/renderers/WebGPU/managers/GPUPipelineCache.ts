@@ -1,7 +1,11 @@
 import { DeviceCaps, DeviceLimit, Object3D } from "../../../core/index.js";
 import { RenderManifest, ShaderRegistry, VERTEX_COLOR_FLAG } from "../../shaders/index.js";
 import { BlendingMode, CullMode, NormalTargetMode } from "../../../enums/index.js";
-import { NORMAL_TARGET_FORMAT, wrapFragmentWithNormalOutput } from "./NormalOutputWrapper.js";
+import {
+  NORMAL_TARGET_FORMAT,
+  canWrapFragmentWithNormalOutput,
+  wrapFragmentWithNormalOutput,
+} from "./NormalOutputWrapper.js";
 
 export interface WebGPUPipelineCacheEntry {
   pipeline: GPURenderPipeline;
@@ -236,8 +240,17 @@ export class GPUPipelineCache {
 
   private _pipelines = new Map<string, WebGPUPipelineCacheEntry>();
   private _shaderModules = new Map<string, GPUShaderModule>();
+  /** Normal-output modules whose `fs` could not be wrapped (no @location(1) output). */
+  private _unwrappedNormalModules = new WeakSet<GPUShaderModule>();
   private _materialBGLCache = new Map<string, GPUBindGroupLayout>();
-  private _lastKnownPipelineKey = new WeakMap<Object3D, string>();
+  /**
+   * Every pipeline key an object is currently counted in. An object is drawn into several targets
+   * per frame (main pass, planar reflection, probe faces), each with its own key; tracking only the
+   * last key made each pass release the previous pass's pipeline, which was then deleted at
+   * refCount 0 and rebuilt on the next draw, every frame. Keys stay counted until the object
+   * itself is released (bounded by the number of pipeline variants).
+   */
+  private _pipelineKeysByObject = new WeakMap<Object3D, Set<string>>();
   /** `shaderId`s already warned about in `_checkSampledTextureBudget`'s budget guard. */
   private _warnedMaterialTextureBudget = new Set<string>();
 
@@ -386,6 +399,13 @@ export class GPUPipelineCache {
         flags,
         normalMode !== NormalTargetMode.NONE,
       );
+      // A shader the wrapper could not rewrite has no @location(1) output. WebGPU rejects a
+      // pipeline whose second target has a non-zero writeMask without such an output, but the
+      // 2-attachment main pass still needs the second target slot, so it runs masked (no write).
+      const effectiveNormalMode =
+        normalMode !== NormalTargetMode.NONE && this._unwrappedNormalModules.has(sm)
+          ? NormalTargetMode.MASKED
+          : normalMode;
       const materialBGL = this.getMaterialBGL(shaderId, flags);
       const pipelineLayout = this._device.createPipelineLayout({
         bindGroupLayouts: [this._globalBGL, materialBGL, this._objectBGL, this._viewBGL],
@@ -451,12 +471,12 @@ export class GPUPipelineCache {
           alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
         };
       }
-      if (normalMode !== NormalTargetMode.NONE) {
+      if (effectiveNormalMode !== NormalTargetMode.NONE) {
         const normalTarget: GPUColorTargetState = {
           format: NORMAL_TARGET_FORMAT,
-          writeMask: normalMode === NormalTargetMode.MASKED ? 0 : GPUColorWrite.ALL,
+          writeMask: effectiveNormalMode === NormalTargetMode.MASKED ? 0 : GPUColorWrite.ALL,
         };
-        if (normalMode === NormalTargetMode.BLEND) {
+        if (effectiveNormalMode === NormalTargetMode.BLEND) {
           // The fragment alpha rides in the normal output's w component (see NormalOutputWrapper).
           normalTarget.blend = {
             color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
@@ -494,29 +514,34 @@ export class GPUPipelineCache {
    * typically shared by many objects at once.
    */
   public acquirePipeline(obj: Object3D, key: string): void {
-    const lastKey = this._lastKnownPipelineKey.get(obj);
-    if (lastKey === key) return;
-    if (lastKey) this.releasePipelineFor(obj);
+    let keys = this._pipelineKeysByObject.get(obj);
+    if (!keys) {
+      keys = new Set();
+      this._pipelineKeysByObject.set(obj, keys);
+    }
+    if (keys.has(key)) return;
 
+    keys.add(key);
     const cache = this._pipelines.get(key);
     if (cache) cache.refCount++;
-    this._lastKnownPipelineKey.set(obj, key);
   }
 
-  /** Releases the pipeline this object was referencing, if its refCount drops to zero. */
+  /** Releases every pipeline this object was counted in; each is dropped once its refCount hits zero. */
   public releasePipelineFor(obj: Object3D): void {
-    const key = this._lastKnownPipelineKey.get(obj);
-    if (!key) return;
-    this._lastKnownPipelineKey.delete(obj);
+    const keys = this._pipelineKeysByObject.get(obj);
+    if (!keys) return;
+    this._pipelineKeysByObject.delete(obj);
 
-    const cache = this._pipelines.get(key);
-    if (!cache) return;
-    cache.refCount--;
-    if (cache.refCount <= 0) {
-      // GPURenderPipeline has no explicit destroy(); dropping the cache entry (and all
-      // other references) lets it be garbage-collected. The dependent GPUPipelineLayout
-      // has no destroy() either.
-      this._pipelines.delete(key);
+    for (const key of keys) {
+      const cache = this._pipelines.get(key);
+      if (!cache) continue;
+      cache.refCount--;
+      if (cache.refCount <= 0) {
+        // GPURenderPipeline has no explicit destroy(); dropping the cache entry (and all
+        // other references) lets it be garbage-collected. The dependent GPUPipelineLayout
+        // has no destroy() either.
+        this._pipelines.delete(key);
+      }
     }
   }
 
@@ -612,7 +637,15 @@ export class GPUPipelineCache {
         code = code.replace(/return\s+o;/g, "o.texIndex = 0.0;\n    return o;");
       }
 
-      if (withNormalOutput) code = wrapFragmentWithNormalOutput(code);
+      const unwrapped = withNormalOutput && !canWrapFragmentWithNormalOutput(code);
+      if (unwrapped) {
+        console.warn(
+          `[WebGPU] ${shaderId}: fragment entry point does not match the normal-buffer wrapper ` +
+            "(expected `@fragment fn fs(x: T) -> @location(0) vec4f`); it will not write the normal buffer.",
+        );
+      } else if (withNormalOutput) {
+        code = wrapFragmentWithNormalOutput(code);
+      }
 
       sm = this._device.createShaderModule({ code });
 
@@ -627,6 +660,7 @@ export class GPUPipelineCache {
         }
       });
 
+      if (unwrapped) this._unwrappedNormalModules.add(sm);
       this._shaderModules.set(key, sm);
     }
     return sm;

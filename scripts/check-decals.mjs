@@ -173,6 +173,139 @@ async function normalsFor(browser, backend, auto = false) {
   return res;
 }
 
+/** AO texture stats of the probe with HBAO on: share of texels below 0.9 and the open-floor mean. */
+async function aoStats(page, backend) {
+  return page.evaluate(async (be) => {
+    const r = window.app.renderer;
+    let px, w, h, rowStride, channelStride;
+    if (be === "WEB_GPU") {
+      const dev = r._device;
+      const tex = r._hbaoPassGPU?._aoTexture;
+      if (!tex) return null;
+      w = tex.width;
+      h = tex.height;
+      rowStride = Math.ceil((w * 4) / 256) * 256;
+      const buf = dev.createBuffer({
+        size: rowStride * h,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      const ce = dev.createCommandEncoder();
+      ce.copyTextureToBuffer({ texture: tex }, { buffer: buf, bytesPerRow: rowStride }, [w, h, 1]);
+      dev.queue.submit([ce.finish()]);
+      await buf.mapAsync(GPUMapMode.READ);
+      px = new Uint8Array(buf.getMappedRange().slice(0));
+      buf.unmap();
+      channelStride = 4;
+    } else {
+      const gl = r.gl;
+      const tex = r._hbaoPassGL?._target?.texture;
+      if (!tex) return null;
+      w = gl.canvas.width;
+      h = gl.canvas.height;
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      px = new Uint8Array(w * h * 4);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteFramebuffer(fb);
+      rowStride = w * 4;
+      channelStride = 4;
+    }
+    const topRow = (fy) => (be === "WEB_GPU" ? Math.floor(h * fy) : Math.floor(h * (1 - fy)));
+    let below = 0;
+    let n = 0;
+    for (let y = 0; y < h; y += 5) {
+      for (let x = 0; x < w; x += 5) {
+        n++;
+        if (px[y * rowStride + x * channelStride] < 230) below++;
+      }
+    }
+    let floorSum = 0;
+    let floorN = 0;
+    for (let fy = 0.88; fy < 0.97; fy += 0.01) {
+      for (let fx = 0.1; fx < 0.9; fx += 0.02) {
+        floorSum += px[topRow(fy) * rowStride + Math.floor(w * fx) * channelStride] / 255;
+        floorN++;
+      }
+    }
+    return { fractionBelow: below / n, floorMean: floorSum / floorN };
+  }, backend);
+}
+
+/** HBAO must not depend on the normal buffer: its AO has to be the same with the buffer forced on/off. */
+async function hbaoIndependence(browser, backend) {
+  const blocking = backend === "WEB_GL2";
+  const pp = backend === "WEB_GL2" ? "&pp=1" : "";
+  const stats = {};
+  for (const nb of [0, 1]) {
+    const { page, errors } = await openProbe(
+      browser,
+      `rendererType=${backend}&nb=${nb}&hbao=1${pp}`,
+    );
+    stats[nb] = await aoStats(page, backend);
+    log(
+      !errors.length,
+      blocking,
+      `${backend} hbao nb=${nb}: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+    );
+    await page.close();
+  }
+  const [off, on] = [stats[0], stats[1]];
+  if (!off || !on) {
+    log(false, blocking, `${backend} hbao: AO texture unavailable`);
+    return;
+  }
+  log(
+    off.floorMean > 0.97,
+    blocking,
+    `${backend} hbao: open floor stays unoccluded (mean ${off.floorMean.toFixed(3)} > 0.97)`,
+  );
+  log(
+    off.fractionBelow > 0.005 && off.fractionBelow < 0.2,
+    blocking,
+    `${backend} hbao: contact occlusion present (${(off.fractionBelow * 100).toFixed(2)} % of texels below 0.9)`,
+  );
+  log(
+    Math.abs(off.fractionBelow - on.fractionBelow) < 0.002 &&
+      Math.abs(off.floorMean - on.floorMean) < 0.002,
+    blocking,
+    `${backend} hbao: identical with normal buffer off/on (below-0.9 share ${off.fractionBelow.toFixed(4)} vs ${on.fractionBelow.toFixed(4)})`,
+  );
+}
+
+/** WebGL1 has no decal pass: a scene with decals must render without errors and simply omit them. */
+async function webGl1Check(browser) {
+  const { page, errors } = await openProbe(browser, "rendererType=WEB_GL1");
+  const type = await page.evaluate(() => window.app.renderer.type);
+  const rect = await page.evaluate(() => {
+    const r = document.querySelector("canvas").getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
+  const png = PNG.sync.read(Buffer.from(await page.screenshot({ clip: rect })));
+  const px = ([fx, fy]) => {
+    const x = Math.floor(fx * png.width);
+    const y = Math.floor(fy * png.height);
+    const i = (png.width * y + x) * 4;
+    return [png.data[i], png.data[i + 1], png.data[i + 2]];
+  };
+  const a = px(STRIPE);
+  const b = px(FLOOR);
+  const diff = Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+  log(type === "WEB_GL1", true, `WEB_GL1: renderer is WebGL1 (${type})`);
+  log(
+    !errors.length,
+    true,
+    `WEB_GL1: no console errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+  );
+  log(
+    diff <= 20,
+    true,
+    `WEB_GL1: decals are omitted, stripe rgb(${a}) ~ floor rgb(${b}), max channel diff ${diff} (<=20)`,
+  );
+  await page.close();
+}
+
 async function colourCheck(browser, backend) {
   const blocking = backend === "WEB_GL2";
   const { page, errors } = await openProbe(browser, `rendererType=${backend}&nb=0`);
@@ -246,6 +379,8 @@ try {
   gl2 = await normalsFor(browser, "WEB_GL2");
   await colourCheck(browser, "WEB_GL2");
   await normalsFor(browser, "WEB_GL2", true);
+  await hbaoIndependence(browser, "WEB_GL2");
+  await webGl1Check(browser);
 
   const why = await webGpuUsable(browser);
   if (why) {
@@ -256,6 +391,7 @@ try {
     gpu = await normalsFor(browser, "WEB_GPU");
     await colourCheck(browser, "WEB_GPU");
     await normalsFor(browser, "WEB_GPU", true);
+    await hbaoIndependence(browser, "WEB_GPU");
     if (gl2 && gpu) {
       for (const k of ["floor", "probe"]) {
         const ok = gl2[k].n && gpu[k].n && near(gl2[k].n, gpu[k].n, 0.02);

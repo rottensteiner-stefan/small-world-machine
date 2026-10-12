@@ -8,10 +8,12 @@ import {
   DecalMaterial,
   DirectionalLight,
   Ground,
+  HbaoElement,
   Plane,
   Object3D,
   OrbitController,
   PerspectiveProjection,
+  PostProcessingEffectType,
   SpotLight,
   StandardMaterial,
   Texture,
@@ -20,7 +22,7 @@ import {
 
 /**
  * Decal probe: box-projected decals on a floor, a wall and a pedestal. Query params:
- * `?nb=1`/`?nb=0` force the normal buffer on/off (default: auto, on while decals are visible), `?pp=1` enables post-processing (WebGL2 needs it for the
+ * `?nb=1`/`?nb=0` force the normal buffer on/off (default: auto, on while decals are visible), `?pp=1` enables post-processing, `?hbao=1` enables HBAO (and post-processing) (WebGL2 needs it for the
  * normal buffer), `?spot=1` swaps the sun for a shadow-casting spot light with an occluder whose shadow crosses the
  * FloorStripes decal edge, `?rendererType=WEB_GPU|WEB_GL2` picks the backend.
  */
@@ -74,6 +76,13 @@ class DecalProbe extends AbstractShowcase {
 
     if (new URLSearchParams(location.search).get("pp") === "1") {
       this.renderer.postProcessing.enabled = true;
+    }
+    if (new URLSearchParams(location.search).get("hbao") === "1") {
+      this.renderer.postProcessing.enabled = true;
+      const hbao = this.renderer.postProcessing.get<HbaoElement>(PostProcessingEffectType.HBAO)!;
+      hbao.enabled = true;
+      hbao.radius = 0.5;
+      hbao.intensity = 1.5;
     }
 
     const spotShadows: boolean = new URLSearchParams(location.search).get("spot") === "1";

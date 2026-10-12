@@ -33,3 +33,4 @@ Dieser Abschnitt enthält die Architekturentscheidungs-Protokolle, die signifika
 - **[ADR 0027: Erweiterung des `ObjectUniforms`-Puffers auf 512 Byte & Entflechtung der Semantik-Slots](./0027-object-uniforms-512-byte-expansion.md)** — Überwindung des 256-Byte-Flaschenhalses; Entflechtung der gekaperten Uniform-Slots (`u_isSkinned`, etc.) durch Einführung von `matParam0..15` (512 Byte UBO / WebGPU-Puffer) bei voller WebGL1-Kompatibilität.
 
 - **[ADR 0028: Dünner Normal-Buffer als MRT im Main Pass](./0028-thin-normal-buffer-mrt.md)** — Kein G-Buffer/Deferred; opt-in `RG16F`-Normal-Ziel (inkl. Normal-Map) für Decals, AO und Post, nur WebGL2/WebGPU; Velocity separat.
+- **[ADR 0029: Decal-System](./0029-decal-system.md)** — Projizierte Box-Decals als eigene Lit-Stufe nach Opaque (Tiefe + Normal-Buffer, TBN-Normalenblend), statische Sortierung, WebGL1 nur später per Mesh-Decal; Datenpfad `LevelDescriptor.decals[]` entschieden, noch nicht umgesetzt.

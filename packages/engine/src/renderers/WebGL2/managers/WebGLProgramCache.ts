@@ -2,7 +2,11 @@ import { Object3D } from "../../../core/index.js";
 import { ShaderRegistry } from "../../shaders/index.js";
 import { WebGL2UniformBuffer } from "../WebGL2UniformBuffer.js";
 import { VERTEX_COLOR_LOCATION } from "../../Mesh.js";
-import { NORMAL_OUTPUT_FLAG, wrapFragmentWithNormalOutputGL } from "./NormalOutputWrapperGL.js";
+import {
+  NORMAL_OUTPUT_FLAG,
+  canWrapFragmentWithNormalOutputGL,
+  wrapFragmentWithNormalOutputGL,
+} from "./NormalOutputWrapperGL.js";
 
 export interface WebGL2ProgramCacheEntry {
   prog: WebGLProgram;
@@ -12,6 +16,12 @@ export interface WebGL2ProgramCacheEntry {
   samplerUnits: Map<string, number>;
   /** GL sampler type (SAMPLER_2D/SAMPLER_CUBE/...) of each active sampler uniform in THIS program. */
   samplerTypes: Map<string, number>;
+  /**
+   * True when the fragment shader writes output 1 (the ADR 0028 normal buffer). False for shaders
+   * the wrapper could not rewrite: draw buffer 1 must be disabled for them, otherwise they write
+   * undefined values into the normal buffer.
+   */
+  writesNormalOutput: boolean;
   /** Number of live Object3D instances currently referencing this compiled program. */
   refCount: number;
 }
@@ -101,7 +111,9 @@ export class WebGLProgramCache {
       let vs = this._shaderRegistry.assemble(def.sources.glsl300.vs, "glsl300");
       let fs = this._shaderRegistry.assemble(def.sources.glsl300.fs, "glsl300");
 
-      if (flags.includes(NORMAL_OUTPUT_FLAG)) fs = wrapFragmentWithNormalOutputGL(fs);
+      const writesNormalOutput =
+        flags.includes(NORMAL_OUTPUT_FLAG) && canWrapFragmentWithNormalOutputGL(fs);
+      if (writesNormalOutput) fs = wrapFragmentWithNormalOutputGL(fs);
 
       let defines = "";
       if (isInstanced) defines += "#define USE_INSTANCING 1\n";
@@ -193,7 +205,15 @@ export class WebGLProgramCache {
         }
       }
 
-      cache = { prog, uniforms, attributes, samplerUnits, samplerTypes, refCount: 0 };
+      cache = {
+        prog,
+        uniforms,
+        attributes,
+        samplerUnits,
+        samplerTypes,
+        writesNormalOutput,
+        refCount: 0,
+      };
       this._programs.set(key, cache);
     }
     return cache;

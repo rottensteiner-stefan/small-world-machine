@@ -1505,8 +1505,6 @@ export class WebGPURenderer extends AbstractRenderer {
             far,
             projMatrix,
             hbaoNode,
-            vMat,
-            this.activeNormalView,
           ) ?? undefined;
       } else if (isPostProcessPass) {
         this._hbaoTextureView = undefined;

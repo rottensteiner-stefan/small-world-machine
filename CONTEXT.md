@@ -48,6 +48,14 @@ _Avoid_: Global Singleton, Universal EventBus
 Cheaply discarding candidates before expensive work runs on the survivors. This engine has two unrelated cullings — visibility culling (`FrustumCuller`, discards whole objects) and light culling (builds a Cluster's Per-Cell Light List, discards lights) — always name which one is meant.
 _Avoid_: using "culling" bare when the subsystem isn't already obvious from context — say "visibility culling" or "light culling".
 
+**Decal**:
+A lit surface layer projected from a Decal-Box onto the opaque geometry behind it, drawn in its own sub-pass between opaque and transparent (ADR 0029).
+_Avoid_: Sticker, Overlay — a Decal is a projection volume, not a mesh laid onto a surface. Does not land on transparents.
+
+**Decal-Box**:
+The unit-cube volume of a Decal in its local space; its local -Y axis is the projection direction, and it bounds size, depth, and fade.
+_Avoid_: Projector (the Decal itself is the projector; the box is only its volume).
+
 **Declarative Level Descriptor**:
 A JSON-Schema-validated scene description format (`level.schema.json`, `*.level.json`) specifying camera configuration, lighting, post-processing, and placed kit nodes (with socket light mountings and behavior bindings) without imperative scene setup code (ADR 0020).
 _Avoid_: Scene File (ambiguous with raw glTF `scene.gltf`).
@@ -92,6 +100,18 @@ _Avoid_: Temp Vector, Scratch Buffer — informal; MathPool is the one canonical
 A deliberate ghost/afterimage post-processing effect, reusing TAA's exact history-blend mechanism with no camera jitter and a much higher feedback value.
 _Avoid_: confusing it with TAA — same underlying machinery (`HistoryBlendPass`), opposite intent: TAA hides its own feedback artifact, MotionTrail maximizes it on purpose.
 
+**Normal-Buffer**:
+The thin world-space, octahedral-encoded normal target written as a second render target by the main pass (shading normal, incl. normal map), switched on automatically when a Decal is visible (ADR 0028).
+_Avoid_: G-Buffer — there is no albedo/material data and no deferred lighting.
+
+**Normal Sentinel**:
+The value (-2, -2) in the Normal-Buffer that marks "no normal here" (sky, untouched pixels); it lies outside the valid octahedral range.
+_Avoid_: Null normal, empty normal.
+
+**NormalTargetMode**:
+The per-pipeline variant that says how a draw treats the Normal-Buffer: `none` (no target), `write`, `masked` (attached but write-masked, e.g. transparents, skybox), `blend` (alpha-blended, used by Decals).
+_Avoid_: Normal pass mode — it selects a pipeline variant, not a render pass.
+
 **Per-Cell Light List**:
 The stored data a Cluster reads at lookup time: an offset+count into a flat list of light indices. The read-side counterpart to Light Coverage, which is the write-side view (from a light's perspective, which cells it reaches).
 _Avoid_: Light Grid (ambiguous with "Cluster grid", the whole 3D structure, rather than one cell's list)
@@ -108,7 +128,6 @@ _Avoid_: World Map, Entity List
 A named transform node attached as a child to a specific skeletal bone (`mixamorig:LeftHand`, `mixamorig:RightHand`) with standardized local offsets and rotations to host props (Lanterns, Torches, Weapons) with zero jitter during animation playback.
 _Avoid_: Prop Constraint (informal)
 
-
 **State Data**:
 The user-defined payload object passed into a Finite State Machine's `onEnter`/`onUpdate`/`onExit` callbacks.
 _Avoid_: Context, FSM Context — collides with Context Object, an unrelated DI concept; "State" is already the FSM's node/mode (`idle`, `patrolling`, ...), so State Data is deliberately a third, distinct word rather than overloading either.
@@ -124,4 +143,3 @@ _Avoid_: "TAA" unqualified when precision matters — the missing reprojection s
 **Zero-Allocation (Hot Path)**:
 The design rule that per-frame code (physics step, event dispatch, FSM update) must not allocate new objects, so it never triggers a GC pause.
 _Avoid_: Performance Optimization (generic) — this is a specific, named commitment repeated verbatim across the physics, event bus, and FSM docs, not a vague performance goal.
-

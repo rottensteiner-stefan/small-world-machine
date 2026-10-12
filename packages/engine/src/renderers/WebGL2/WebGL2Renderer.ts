@@ -99,6 +99,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   /** Set when no depth format could be blitted from the default framebuffer. */
   private _opaqueDepthUnsupported: boolean = false;
   protected _hdrFbo: WebGL2FrameBuffer | undefined = undefined;
+  /** True while the main pass wants fragment output 1 routed into the normal buffer. */
+  private _normalWriteRequested: boolean = false;
   protected _postPassGL: PostProcessPassGL | undefined = undefined;
   protected _bloomPassGL: BloomPassGL | undefined = undefined;
   protected _hbaoPassGL: AOPassGL | undefined = undefined;
@@ -464,6 +466,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
   /** @inheritdoc */
   public override setNormalWriteEnabled(enabled: boolean): void {
+    this._normalWriteRequested = enabled;
     this._hdrFbo?.setSecondaryWriteEnabled(enabled);
   }
 
@@ -728,8 +731,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             this._frameFar,
             this._frameProjMatrix,
             hbaoNode,
-            this._frameViewMatrix,
-            this.normalTexture,
           );
         }
       }
@@ -1064,6 +1065,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     const cache = this._programCache.getProgram(manifest.shaderId, isInst, shaderFlags);
     const programKey = this._programCache.programCacheKey(manifest.shaderId, isInst, shaderFlags);
     this.gl.useProgram(cache.prog);
+    // A program the normal wrapper could not rewrite has no output 1; routing the draw buffer to
+    // it would write undefined values into the normal buffer.
+    if (this._normalWriteRequested) {
+      this._hdrFbo?.setSecondaryWriteEnabled(cache.writesNormalOutput);
+    }
 
     this._bindDummyShadowMaps(cache);
 

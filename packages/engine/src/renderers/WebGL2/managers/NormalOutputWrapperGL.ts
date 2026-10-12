@@ -12,15 +12,21 @@ const OCT_ENCODE = `vec2 octEncode(vec3 n) {
   return n.z < 0.0 ? (1.0 - abs(p.yx)) * s : p;
 }`;
 
+/** True when `wrapFragmentWithNormalOutputGL` can rewrite this shader (`fragColor` + `main`). */
+export function canWrapFragmentWithNormalOutputGL(code: string): boolean {
+  return FRAG_COLOR_OUT.test(code) && MAIN_ENTRY.test(code);
+}
+
 /**
  * GLSL300 counterpart of the WebGPU `wrapFragmentWithNormalOutput` (ADR 0028): pins `fragColor`
  * to location 0, adds a location 1 world-space normal output, and renames the shader's `main`
  * to `swm_main` so a generated `main` can run it and then encode `g_shadingNormal`.
  * Shaders without a `v_normal` varying write the out-of-range sentinel. Shaders lacking the
- * `fragColor` output or a `main` entry are returned unchanged.
+ * `fragColor` output or a `main` entry are returned unchanged and have no output 1: the renderer
+ * must keep that draw buffer disabled for them (`WebGL2ProgramCacheEntry.writesNormalOutput`).
  */
 export function wrapFragmentWithNormalOutputGL(code: string): string {
-  if (!FRAG_COLOR_OUT.test(code) || !MAIN_ENTRY.test(code)) return code;
+  if (!canWrapFragmentWithNormalOutputGL(code)) return code;
 
   const hasGeometryNormal = VARYING_NORMAL.test(code);
   const declareShadingNormal = SHADING_NORMAL_DECLARATION.test(code)

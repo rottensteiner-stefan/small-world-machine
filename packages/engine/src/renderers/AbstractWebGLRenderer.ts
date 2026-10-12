@@ -50,7 +50,6 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   protected _frameNear: number = 0.1;
   protected _frameFar: number = 1000;
   protected _frameProjMatrix: Float32Array | undefined = undefined;
-  protected _frameViewMatrix: Float32Array | undefined = undefined;
   /** Inverse of this frame's view-projection: decals unproject opaque depth with it. */
   protected readonly _frameInvViewProj: Matrix4 = new Matrix4();
   private readonly _frameViewProj: Matrix4 = new Matrix4();
@@ -74,7 +73,6 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     this._frameNear = near ?? 0.1;
     this._frameFar = far ?? 1000;
     this._frameProjMatrix = projMatrix;
-    this._frameViewMatrix = vMat;
     this._frameViewProj.data.set(vp);
     Matrix4.invert(this._frameViewProj, this._frameInvViewProj);
     const extractedLights = this.extractLights(scene);

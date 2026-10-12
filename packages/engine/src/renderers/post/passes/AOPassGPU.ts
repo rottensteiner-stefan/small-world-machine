@@ -9,14 +9,12 @@ export class AOPassGPU {
   private _device: GPUDevice;
   private _pipeline!: GPUComputePipeline;
   private _uniformBuffer!: GPUBuffer;
-  private _uniformData: Float32Array = new Float32Array(20);
+  private _uniformData: Float32Array = new Float32Array(8);
 
   private _aoTexture?: GPUTexture;
   private _aoTextureView?: GPUTextureView;
   private _bindGroup?: GPUBindGroup;
   private _builtDepthView?: GPUTextureView;
-  private _builtNormalView: GPUTextureView | undefined = undefined;
-  private _dummyNormalView!: GPUTextureView;
   private _width = 0;
   private _height = 0;
 
@@ -27,7 +25,7 @@ export class AOPassGPU {
 
   private _buildPipeline(): void {
     this._uniformBuffer = this._device.createBuffer({
-      size: 80, // AOUniforms: 8 x f32 + 3 x vec4f view rotation columns
+      size: 32, // AOUniforms: 8 x f32
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -40,18 +38,8 @@ export class AOPassGPU {
           visibility: GPUShaderStage.COMPUTE,
           storageTexture: { access: "write-only", format: "rgba8unorm" },
         },
-        {
-          binding: 3,
-          visibility: GPUShaderStage.COMPUTE,
-          texture: { sampleType: "unfilterable-float" },
-        },
       ],
     });
-
-    // Bound in place of the real normal buffer while it is off (the shader skips it then).
-    this._dummyNormalView = this._device
-      .createTexture({ size: [1, 1], format: "rg16float", usage: GPUTextureUsage.TEXTURE_BINDING })
-      .createView();
 
     const layout = this._device.createPipelineLayout({ bindGroupLayouts: [bgl] });
     const module = this._device.createShaderModule({ code: AO_WGSL });
@@ -65,18 +53,12 @@ export class AOPassGPU {
     });
   }
 
-  private _resize(
-    width: number,
-    height: number,
-    depthView: GPUTextureView,
-    normalView: GPUTextureView | undefined,
-  ): void {
+  private _resize(width: number, height: number, depthView: GPUTextureView): void {
     if (
       this._aoTexture &&
       this._width === width &&
       this._height === height &&
-      this._builtDepthView === depthView &&
-      this._builtNormalView === normalView
+      this._builtDepthView === depthView
     ) {
       return;
     }
@@ -85,7 +67,6 @@ export class AOPassGPU {
     this._width = width;
     this._height = height;
     this._builtDepthView = depthView;
-    this._builtNormalView = normalView;
 
     this._aoTexture = this._device.createTexture({
       size: [width, height],
@@ -104,7 +85,6 @@ export class AOPassGPU {
         { binding: 0, resource: depthView },
         { binding: 1, resource: { buffer: this._uniformBuffer } },
         { binding: 2, resource: this._aoTextureView },
-        { binding: 3, resource: normalView ?? this._dummyNormalView },
       ],
     });
   }
@@ -119,8 +99,6 @@ export class AOPassGPU {
    * @param far Camera far plane.
    * @param projMatrixData The camera's raw perspective projection matrix.
    * @param hbao The HBAO effect parameters (radius, intensity).
-   * @param viewMatrix The camera's view matrix; rotates the world-space normal buffer into view space.
-   * @param normalView The world-space normal buffer (ADR 0028), or undefined to derive normals from depth.
    * @returns A view of the single-channel AO texture (R = occlusion factor), or null if unavailable.
    */
   public execute(
@@ -132,11 +110,8 @@ export class AOPassGPU {
     far: number,
     projMatrixData: Float32Array,
     hbao: HbaoElement,
-    viewMatrix: Float32Array | undefined,
-    normalView: GPUTextureView | undefined,
   ): GPUTextureView | null {
-    const useNormals = normalView !== undefined && viewMatrix !== undefined;
-    this._resize(width, height, depthView, useNormals ? normalView : undefined);
+    this._resize(width, height, depthView);
     if (!this._aoTexture || !this._aoTextureView || !this._bindGroup) return null;
 
     // Perspective matrix diagonal scale terms (see Matrix4.perspective): data[0]=A, data[5]=B.
@@ -146,17 +121,6 @@ export class AOPassGPU {
     this._uniformData[3] = projMatrixData[5]!;
     this._uniformData[4] = hbao.radius;
     this._uniformData[5] = hbao.intensity;
-    this._uniformData[6] = useNormals ? 1 : 0;
-    if (useNormals) {
-      // Column-major view matrix: rotation columns are elements 0-2, 4-6 and 8-10.
-      for (let c = 0; c < 3; c++) {
-        const out = 8 + c * 4;
-        this._uniformData[out] = viewMatrix[c * 4]!;
-        this._uniformData[out + 1] = viewMatrix[c * 4 + 1]!;
-        this._uniformData[out + 2] = viewMatrix[c * 4 + 2]!;
-        this._uniformData[out + 3] = 0;
-      }
-    }
     this._device.queue.writeBuffer(this._uniformBuffer, 0, this._uniformData);
 
     const pass = ce.beginComputePass({ label: "AOPassGPU" });

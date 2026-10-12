@@ -1,6 +1,6 @@
 # Dünner Normal-Buffer als MRT im Main Pass: kein G-Buffer, Velocity getrennt
 
-Status: angenommen. WebGPU und WebGL2 umgesetzt und auf echter GPU geprüft (Boden, Würfelflächen, Sentinel am Himmel); HBAO nutzt den Buffer auf beiden Backends (Fallback: depth-abgeleitete Normale). Decals schalten ihn bei Bedarf automatisch ein.
+Status: angenommen. WebGPU und WebGL2 umgesetzt und auf echter GPU geprüft (Boden, Würfelflächen, Sentinel am Himmel); HBAO nutzt den Buffer bewusst nicht (geometrische Normale, siehe Abschnitt „Befund beim HBAO-Anschluss“). Decals schalten ihn bei Bedarf automatisch ein.
 
 Die Engine rendert Forward mit Clustered Lighting ([0007](0007-clustered-lighting-webgl2-webgpu-only.md)) und hat bewusst keinen G-Buffer. Es gibt auch keinen Normal- oder Velocity-Buffer. Dieser ADR führt einen dünnen Normal-Buffer ein, geschrieben als zweites Render-Ziel (MRT) des Main Pass, damit Decals die Normal-Map der Unterlage übernehmen können. Ein G-Buffer und Deferred bleiben ausgeschlossen.
 
@@ -35,10 +35,12 @@ Die Engine rendert Forward mit Clustered Lighting ([0007](0007-clustered-lightin
 7. **Rekonstruktion bleibt als Fallback.** Ist der Buffer aus, nutzen HBAO und Decals weiter `dFdx/dFdy` aus der Tiefe.
 8. **Velocity getrennt.** Er wird nur angelegt, wenn TAA-Ghosting an bewegten Objekten im Spiel stört. Er braucht die vorherige Matrix pro Objekt und damit Platz im `ObjectUniforms`-Slot ([0027](0027-object-uniforms-512-byte-expansion.md)). Das ist ein eigener ADR.
 
+**Nicht umschreibbare Shader (Befund auf echter GPU).** Findet der Wrapper keinen passenden `fs`/`main`, bleibt der Shader unverändert und hat keine zweite Ausgabe. WebGPU: Eine Pipeline mit zweitem Target und `writeMask != 0` ohne `@location(1)` ist ein Validierungsfehler; ein Target mit `writeMask: 0` ist erlaubt, und eine Ein-Target-Pipeline passt nicht zu einem Pass mit zwei Attachments. Deshalb läuft ein solcher Shader automatisch als `masked` (Warnung in der Konsole). WebGL2: Eine fehlende Ausgabe bei aktivem Draw-Buffer schreibt undefinierte Werte; das Programm trägt `writesNormalOutput = false`, und der Renderer schaltet für dieses Programm Draw-Buffer 1 ab. Der Buffer behält dort den Sentinel.
+
 ## Verbraucher und Nutzen
 
 - Decals (siehe Decal-Plan): echte Normale, bessere Winkel-Fades. Phase 1 nutzt Rekonstruktion.
-- HBAO/SSAO: bessere Normalen an Kanten, schmalere Artefakte.
+- HBAO/SSAO: ursprünglich als Verbraucher vorgesehen, nach Prüfung verworfen: AO marschiert gegen flache Tiefe und braucht die geometrische Normale (siehe Befund). Der Buffer bringt dort keinen Vorteil.
 - Noir-Looks: Outlines, Kantenerkennung.
 - Später: SSR, Contact Shadows, Soft Particles.
 
@@ -52,7 +54,9 @@ Die Engine rendert Forward mit Clustered Lighting ([0007](0007-clustered-lightin
 
 ## Befund beim HBAO-Anschluss
 
-Die depth-abgeleitete Normale war auf hochauflösenden Canvases wirkungslos: Der absolute Schwellwert `lenSq > 0.000001` verwarf jedes Kreuzprodukt (Nachbarpixel liegen dort nur winzige Schritte auseinander), und die Kamera-Achse diente als Normale für alle Pixel. Der Test zeigte auf 5600x2968 px eine Boden-AO von 0,61 statt 1,0. Der Schwellwert ist jetzt relativ zu den Kantenlängen, und die Normale zeigt zur Kamera (+z im View-Space; vorher zeigte sie davon weg). Mit Normal-Buffer ist das AO an Kontaktlinien korrekt (Würfelfuß 0,12, offener Boden 1,0). Bekannte Restschwäche: Die Suchschritte sind feste Pixelabstände (4 bis 16 px), `radius` wirkt bei hoher Auflösung nur noch auf einen schmalen Kontaktsaum.
+Die depth-abgeleitete Normale war auf hochauflösenden Canvases wirkungslos: Der absolute Schwellwert `lenSq > 0.000001` verwarf jedes Kreuzprodukt (Nachbarpixel liegen dort nur winzige Schritte auseinander), und die Kamera-Achse diente als Normale für alle Pixel. Der Test zeigte auf 5600x2968 px eine Boden-AO von 0,61 statt 1,0. Der Schwellwert ist jetzt relativ zu den Kantenlängen, und die Normale zeigt zur Kamera (+z im View-Space; vorher zeigte sie davon weg). Die Suchschritte folgen inzwischen dem Weltradius (`clamp(radius * projScaleY * H/2 / linearZ, 4, 128)` Pixel).
+
+**Entscheidung: HBAO liest den Normal-Buffer nicht.** Eine erste Umsetzung ließ HBAO die Buffer-Normale dekodieren. Turánszki („Improved normal reconstruction from depth“, 2019) warnt davor: Die Buffer-Normale enthält die Normal-Map des Empfängers, AO marschiert aber gegen die flache Tiefe, sodass Horizont-Strahlen unter die Oberfläche tauchen und zu stark abdunkeln. Außerdem änderte sich das AO-Bild allein dadurch, dass ein Decal sichtbar wurde und der Buffer automatisch einschaltete. HBAO rekonstruiert deshalb immer die flache Normale aus der Tiefe, jetzt mit der Nachbarwahl aus dem Artikel (pro Achse der Nachbar mit der näher liegenden Tiefe, Himmel zählt als unendlich weit) statt der naiven Vorwärtsdifferenz, die an Objektkanten versagt. Gemessen auf echter GPU: AO mit und ohne Buffer identisch, offener Boden 1,0 (WebGPU) bzw. 0,993 (WebGL2), 2,8 bis 3,1 % der Texel unter 0,9 (Kontaktsaum). Nicht gemessen: ein stark normal-mapped Empfänger (die Probe hat keinen).
 
 ## Das hier überdenken, wenn
 
