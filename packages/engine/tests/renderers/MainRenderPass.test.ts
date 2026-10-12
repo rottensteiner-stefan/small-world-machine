@@ -18,7 +18,7 @@ function makeMockRenderer(): Internals {
 
 function makeMockScene(): Internals {
   return {
-    getVisibleObjectsSorted: vi.fn(() => ({ opaqueBatches: [], transparent: [] })),
+    getVisibleObjectsSorted: vi.fn(() => ({ opaqueBatches: [], transparent: [], decals: [] })),
   };
 }
 
@@ -68,6 +68,7 @@ describe("MainRenderPass", () => {
       getVisibleObjectsSorted: vi.fn(() => ({
         opaqueBatches: [],
         transparent: [mockMesh],
+        decals: [],
       })),
     };
     const rp = { end: vi.fn(), setBindGroup: vi.fn() };
@@ -105,6 +106,7 @@ describe("MainRenderPass", () => {
         getVisibleObjectsSorted: vi.fn(() => ({
           opaqueBatches: [opaque(MaterialType.SKYBOX), opaque("standard")],
           transparent: [transparentMesh],
+          decals: [],
         })),
       };
       const rp = { end: vi.fn() };
@@ -154,6 +156,81 @@ describe("MainRenderPass", () => {
       expect(ce.beginRenderPass.mock.calls[0][0].colorAttachments).toHaveLength(1);
       const modes = renderer._renderBatch.mock.calls.map((c: unknown[]) => c[3]);
       expect(new Set(modes)).toEqual(new Set([NormalTargetMode.NONE]));
+    });
+  });
+
+  describe("decal sub-pass", () => {
+    function run(options: { canDrawDecals: boolean; normalView?: unknown; transparent?: number }): {
+      ce: Internals;
+      renderer: Internals;
+    } {
+      const renderer = {
+        ...makeMockRenderer(),
+        canDrawDecals: options.canDrawDecals,
+        activeNormalView: options.normalView,
+        activeColorTexture: {},
+        captureOpaqueTexture: vi.fn(),
+        captureOpaqueDepth: vi.fn(),
+        captureOpaqueNormal: vi.fn(),
+      };
+      const decal = {
+        material: {
+          uuid: "decal-mat",
+          getRenderManifest: vi.fn(() => ({ shaderId: "DecalMaterial" })),
+        },
+      };
+      const transparentMesh = {
+        material: {
+          uuid: "glass",
+          getRenderManifest: vi.fn(() => ({ shaderId: "glass", state: { topology: 3 } })),
+        },
+        geometry: { topology: 3 },
+      };
+      const scene = {
+        getVisibleObjectsSorted: vi.fn(() => ({
+          opaqueBatches: [],
+          transparent: options.transparent ? [transparentMesh] : [],
+          decals: [decal],
+        })),
+      };
+      const rp = { end: vi.fn() };
+      const ce = { beginRenderPass: vi.fn(() => rp) };
+
+      new MainRenderPass().execute(
+        renderer,
+        scene as never,
+        ce as never,
+        { mock: "targetView" } as never,
+        new Float32Array(16),
+        new Vector3D(0, 0, 0),
+      );
+      return { ce, renderer };
+    }
+
+    it("draws decals in their own pass after capturing depth and the normal copy, blending normals", () => {
+      const normalView = { mock: "normalView" };
+      const { ce, renderer } = run({ canDrawDecals: true, normalView });
+
+      expect(renderer.captureOpaqueDepth).toHaveBeenCalledTimes(1);
+      expect(renderer.captureOpaqueNormal).toHaveBeenCalledTimes(1);
+      const decalPass = ce.beginRenderPass.mock.calls[1][0];
+      expect(decalPass.colorAttachments).toHaveLength(2);
+      expect(decalPass.colorAttachments[1]).toMatchObject({ view: normalView, loadOp: "load" });
+      expect(renderer._renderBatch.mock.calls[0][3]).toBe(NormalTargetMode.BLEND);
+    });
+
+    it("captures the opaque depth only once when transparents follow the decals", () => {
+      const { renderer } = run({ canDrawDecals: true, normalView: undefined, transparent: 1 });
+
+      expect(renderer.captureOpaqueDepth).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips decals on targets that cannot draw them (offscreen render targets)", () => {
+      const { ce, renderer } = run({ canDrawDecals: false });
+
+      expect(renderer.captureOpaqueDepth).not.toHaveBeenCalled();
+      expect(renderer._renderBatch).not.toHaveBeenCalled();
+      expect(ce.beginRenderPass).toHaveBeenCalledTimes(1);
     });
   });
 });

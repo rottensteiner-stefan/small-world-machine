@@ -97,7 +97,7 @@ describe("WebGLClusterCullPass (BLK-R1 Regression)", () => {
         vp,
         new Vector3D(0, 0, 0),
         undefined,
-        { opaqueLookup: new Map(), opaqueBatches: [], transparent: [] },
+        { opaqueLookup: new Map(), opaqueBatches: [], transparent: [], decals: [] },
         extractedLights,
         0.1,
         100,

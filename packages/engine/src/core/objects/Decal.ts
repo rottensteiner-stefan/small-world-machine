@@ -1,0 +1,44 @@
+import { Object3D } from "../Object3D.js";
+import { Cube } from "../../geometry/index.js";
+import { OBB } from "../../physix/index.js";
+import type { AbstractMaterial } from "../materials/index.js";
+import type { GeometryDataInterface } from "../../interfaces/index.js";
+
+let _sharedBox: GeometryDataInterface | undefined;
+let _nextSequence = 0;
+
+/**
+ * A box-projected decal. The unit box spans [-0.5, 0.5] on every axis and `scale` is its world
+ * size; the projection axis is local -Y (+Y is the decal's "up", i.e. the receiving surface's
+ * normal) and the decal texture maps onto box x/z. The material (`DecalMaterial`) reads the
+ * already-rendered opaque depth and draws only where the box intersects that geometry.
+ */
+export class Decal extends Object3D {
+  /** Explicit stacking override: higher values draw later, i.e. on top of lower ones. */
+  public priority: number = 0;
+  /** Creation order, the deterministic last tie-break of the stacking order. */
+  public readonly sequence: number = _nextSequence++;
+
+  constructor(material: AbstractMaterial, name: string = "Decal") {
+    super(name);
+    _sharedBox ??= new Cube({ size: 1 }).getGeometryData();
+    this.geometry = _sharedBox;
+    this.material = material;
+    // A decal is neither a physics collider nor a raycast target. Its OBB bounds below exist only
+    // so frustum culling and the octree work; with `isCollidable = false` the base class would
+    // leave `bounds` undefined and the decal would never be culled.
+    this.isCollidable = false;
+    this.castShadow = false;
+    this.receiveShadow = false;
+  }
+
+  /** @inheritdoc */
+  public override computeBounds(): this {
+    const obb = this.bounds instanceof OBB ? this.bounds : new OBB();
+    obb.setLocalCenter(0, 0, 0);
+    obb.setLocalHalfExtents(0.5, 0.5, 0.5);
+    obb.transform(this.worldMatrix);
+    this.bounds = obb;
+    return this;
+  }
+}

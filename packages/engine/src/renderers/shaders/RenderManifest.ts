@@ -65,6 +65,11 @@ export interface RenderManifest {
     transparent?: boolean;
     /** Whether this object should be treated as a camera-facing sprite (billboarding). */
     isSprite?: boolean;
+    /**
+     * Whether this object is a box-projected decal: the scene routes it to `RenderList.decals`
+     * (drawn after the opaque pass, before transparents) instead of the opaque or transparent list.
+     */
+    isDecal?: boolean;
     /** The primitive topology (e.g., TRIANGLE_LIST or LINE_LIST). Defaults to TRIANGLE_LIST. */
     topology?: Topology;
     /** The wireframe mode. Defaults to "structural". */

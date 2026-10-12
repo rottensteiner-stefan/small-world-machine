@@ -2,6 +2,7 @@ export { AbstractMaterial } from "./AbstractMaterial.js";
 export * from "./surface/BasicMaterial.js";
 export * from "./surface/LambertMaterial.js";
 export * from "./surface/StandardMaterial.js";
+export * from "./surface/DecalMaterial.js";
 export * from "./glass/GlassMaterial.js";
 export * from "./glass/FrostglassMaterial.js";
 export * from "./TerrainMaterial.js";

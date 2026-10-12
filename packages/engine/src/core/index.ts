@@ -15,6 +15,8 @@ export * from "./reflection/PlanarReflectionNode.js";
 export * from "./reflection/DynamicReflectionProbe.js";
 export * from "./InstancedMesh.js";
 export * from "./objects/BillboardInstancer.js";
+export * from "./objects/Decal.js";
+export * from "./decals/DecalMath.js";
 
 export { Scene } from "./Scene.js";
 export * from "./sky/Skybox.js";

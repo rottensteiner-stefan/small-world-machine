@@ -172,6 +172,7 @@ struct AreaLight {
 @group(1) @binding(17) var u_aoMap: texture_2d<f32>;
 @group(1) @binding(18) var u_rampMap: texture_2d<f32>;
 @group(1) @binding(19) var u_distortMap: texture_2d<f32>;
+@group(1) @binding(20) var u_normalBufferMap: texture_2d<f32>;
 
 @group(2) @binding(0) var<uniform> obj: ObjectUniforms;
 

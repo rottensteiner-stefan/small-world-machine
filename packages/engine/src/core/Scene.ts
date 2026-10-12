@@ -7,6 +7,8 @@ import { BoundingType, Topology } from "../enums/index.js";
 import { DirectionalLight } from "./lights/index.js";
 import { SkinnedMesh } from "./animation/SkinnedMesh.js";
 import { Collidable } from "../interfaces/index.js";
+import { compareDecals } from "./decals/DecalMath.js";
+import type { Decal } from "./objects/Decal.js";
 
 export interface RenderBatch {
   shaderId: string;
@@ -20,6 +22,8 @@ export interface RenderList {
   opaqueLookup: Map<string, Map<Topology, Map<string, RenderBatch>>>;
   opaqueBatches: RenderBatch[];
   transparent: Object3D[];
+  /** Box-projected decals, drawn after the opaque pass and before the transparent pass. */
+  decals: Object3D[];
 }
 
 /**
@@ -74,6 +78,7 @@ export class Scene {
     opaqueLookup: new Map(),
     opaqueBatches: [],
     transparent: [],
+    decals: [],
   };
 
   // Objects (plus their full descendant subtree) removed since the last time a
@@ -282,6 +287,7 @@ export class Scene {
 
     // Clear the persistent list without destroying the structures (Monomorphism/GC optimization)
     this._renderList.transparent.length = 0;
+    this._renderList.decals.length = 0;
     const batches = this._renderList.opaqueBatches;
     for (let i = 0; i < batches.length; i++) {
       batches[i]!.objects.length = 0;
@@ -290,6 +296,8 @@ export class Scene {
     this.lastFrustumVisibleObjects.length = 0;
 
     this._collectVisible(this.root, this._renderList);
+
+    (this._renderList.decals as Decal[]).sort(compareDecals);
 
     // Sort transparent objects back-to-front
     this._renderList.transparent.sort((a, b) => {
@@ -338,7 +346,9 @@ export class Scene {
     ) {
       const manifest = obj.material.getRenderManifest();
 
-      if (manifest.state?.transparent) {
+      if (manifest.state?.isDecal) {
+        renderList.decals.push(obj);
+      } else if (manifest.state?.transparent) {
         renderList.transparent.push(obj);
       } else {
         const shaderId = manifest.shaderId;

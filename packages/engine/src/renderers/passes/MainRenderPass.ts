@@ -28,6 +28,15 @@ export class MainRenderPass implements RenderPass {
     objects: this._scratchTransparentObjects,
   };
 
+  // Same reuse as the transparent batch above: one single-object batch per decal.
+  private readonly _scratchDecalObjects: Object3D[] = [];
+  private readonly _scratchDecalBatch: RenderBatch = {
+    shaderId: "",
+    topology: Topology.DEFAULT,
+    matUuid: "",
+    objects: this._scratchDecalObjects,
+  };
+
   public execute(
     renderer: WebGPURenderer,
     scene: Scene,
@@ -88,14 +97,49 @@ export class MainRenderPass implements RenderPass {
       }
     }
 
-    if (renderList.transparent.length > 0) {
-      // End opaque pass
+    // Decals read the finished opaque depth/normals, so they get their own pass right after the
+    // opaque one (and before the transparents, which then see them in their refraction capture).
+    const drawDecals = renderList.decals.length > 0 && renderer.canDrawDecals;
+    let opaquePassEnded = false;
+    let depthCaptured = false;
+    if (drawDecals) {
       rp.end();
+      opaquePassEnded = true;
+      renderer.captureOpaqueDepth(ce);
+      depthCaptured = true;
+      if (normalView) renderer.captureOpaqueNormal(ce);
+
+      const decalAttachments: GPURenderPassColorAttachment[] = [
+        { view: targetView, loadOp: "load", storeOp: "store" },
+      ];
+      if (normalView) {
+        decalAttachments.push({ view: normalView, loadOp: "load", storeOp: "store" });
+      }
+      const rpDecal = ce.beginRenderPass({
+        colorAttachments: decalAttachments,
+        depthStencilAttachment: {
+          view: renderer.activeDepthView,
+          depthLoadOp: "load",
+          depthStoreOp: "store",
+        },
+      });
+      const decalMode = normalView ? NormalTargetMode.BLEND : NormalTargetMode.NONE;
+      for (const decal of renderList.decals) {
+        this._scratchDecalObjects[0] = decal;
+        this._scratchDecalBatch.shaderId = decal.material!.getRenderManifest().shaderId;
+        this._scratchDecalBatch.matUuid = decal.material!.uuid;
+        renderer._renderBatch(rpDecal, this._scratchDecalBatch, vMat, decalMode);
+      }
+      rpDecal.end();
+    }
+
+    if (renderList.transparent.length > 0) {
+      if (!opaquePassEnded) rp.end();
 
       // Capture opaque texture for transparent materials (like glass)
       const targetTex = renderer.activeColorTexture;
       renderer.captureOpaqueTexture(ce, targetTex);
-      renderer.captureOpaqueDepth(ce);
+      if (!depthCaptured) renderer.captureOpaqueDepth(ce);
 
       // Start transparent pass
       const transparentAttachments: GPURenderPassColorAttachment[] = [
@@ -135,14 +179,14 @@ export class MainRenderPass implements RenderPass {
       }
       rpTransparent.end();
     } else {
-      rp.end();
+      if (!opaquePassEnded) rp.end();
 
       // HBAO needs the opaque depth buffer every frame it's enabled, not just when there
       // happen to be transparent objects (the only other consumer of this capture).
       const hbaoNode = renderer.postProcessing.get<import("../post/index.js").HbaoElement>(
         PostProcessingEffectType.HBAO,
       );
-      if (hbaoNode && hbaoNode.enabled) {
+      if (hbaoNode && hbaoNode.enabled && !depthCaptured) {
         renderer.captureOpaqueDepth(ce);
       }
     }

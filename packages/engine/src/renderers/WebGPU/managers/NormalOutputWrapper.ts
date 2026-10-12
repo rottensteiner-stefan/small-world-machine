@@ -11,7 +11,8 @@ const FRAGMENT_ENTRY =
  * shading normal to `@location(1)` (see ADR 0028). Only entry points taking the shared vertex
  * `Out` struct know a geometry normal; any other input type writes the out-of-range sentinel so
  * the pipeline's second target stays valid. Shaders without a matching entry point are returned
- * unchanged.
+ * unchanged. The second output's w component carries the fragment alpha so a pipeline in
+ * `NormalTargetMode.BLEND` (decals) can blend its normal onto the buffer; plain writes ignore it.
  */
 export function wrapFragmentWithNormalOutput(code: string): string {
   const match = FRAGMENT_ENTRY.exec(code);
@@ -30,14 +31,14 @@ export function wrapFragmentWithNormalOutput(code: string): string {
 
 struct FragOutNormal {
   @location(0) color: vec4f,
-  @location(1) normal: vec2f,
+  @location(1) normal: vec4f,
 }
 
 @fragment
 fn fs(${paramName}: ${paramType}) -> FragOutNormal {
   ${geometryNormal}
   let color = fs_color(${paramName});
-  return FragOutNormal(color, ${encoded});
+  return FragOutNormal(color, vec4f(${encoded}, 0.0, color.a));
 }
 `;
 }

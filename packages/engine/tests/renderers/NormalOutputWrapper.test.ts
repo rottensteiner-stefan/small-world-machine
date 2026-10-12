@@ -30,7 +30,7 @@ describe("wrapFragmentWithNormalOutput", () => {
     expect(wrapped).toContain("fn fs_color(i: Out) -> vec4f {");
     expect(wrapped).toContain("g_shadingNormal = normalize(i.n);");
     expect(wrapped).toContain("octEncode(g_shadingNormal)");
-    expect(wrapped).toContain("@location(1) normal: vec2f");
+    expect(wrapped).toContain("@location(1) normal: vec4f");
   });
 
   it("matches multi-line entry points and the vec4<f32> spelling", () => {
@@ -76,7 +76,7 @@ describe("GPUPipelineCache.pipelineCacheKey normal mode", () => {
   } as unknown as RenderManifest;
   const cache = Object.create(GPUPipelineCache.prototype) as GPUPipelineCache;
 
-  it("separates write, masked and plain variants", () => {
+  it("separates write, masked, blend and plain variants", () => {
     const key = (mode: NormalTargetMode): string =>
       cache.pipelineCacheKey(manifest, "triangle-list", false, "rgba16float", mode);
 
@@ -84,9 +84,10 @@ describe("GPUPipelineCache.pipelineCacheKey normal mode", () => {
       key(NormalTargetMode.NONE),
       key(NormalTargetMode.WRITE),
       key(NormalTargetMode.MASKED),
+      key(NormalTargetMode.BLEND),
     ]);
 
-    expect(keys.size).toBe(3);
+    expect(keys.size).toBe(4);
     expect(cache.pipelineCacheKey(manifest, "triangle-list", false, "rgba16float")).toBe(
       key(NormalTargetMode.NONE),
     );

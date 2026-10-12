@@ -154,6 +154,15 @@ export function getOptionalMaterialTextureBindings(): Record<
           texture: { viewDimension: "2d", sampleType: "float" },
         },
       },
+      // Per-frame copy of the ADR 0028 normal buffer, read by decals via textureLoad.
+      u_normalBufferMap: {
+        binding: 20,
+        layoutEntry: {
+          binding: 20,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { viewDimension: "2d", sampleType: "unfilterable-float" },
+        },
+      },
     };
   }
   return _optionalMaterialTextureBindings;
@@ -442,10 +451,18 @@ export class GPUPipelineCache {
         };
       }
       if (normalMode !== NormalTargetMode.NONE) {
-        targets.push({
+        const normalTarget: GPUColorTargetState = {
           format: NORMAL_TARGET_FORMAT,
           writeMask: normalMode === NormalTargetMode.MASKED ? 0 : GPUColorWrite.ALL,
-        });
+        };
+        if (normalMode === NormalTargetMode.BLEND) {
+          // The fragment alpha rides in the normal output's w component (see NormalOutputWrapper).
+          normalTarget.blend = {
+            color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
+            alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
+          };
+        }
+        targets.push(normalTarget);
       }
       const pipeline = this._device.createRenderPipeline({
         layout: pipelineLayout,

@@ -6,6 +6,8 @@ export const NormalTargetMode = {
   NONE: "none",
   /** The pipeline writes the shading normal into the second color target. */
   WRITE: "write",
+  /** Like `WRITE`, but alpha-blended by the fragment alpha (decals blending their normal onto the buffer). */
+  BLEND: "blend",
   /** The pass has a normal attachment, but this pipeline must leave it untouched (transparents). */
   MASKED: "masked",
   /** The mode assumed when none is specified. */

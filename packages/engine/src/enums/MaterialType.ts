@@ -14,6 +14,8 @@ export const MaterialType = {
   PHONG: "PhongMaterial",
   /** Material for skyboxes. */
   SKYBOX: "SkyboxMaterial",
+  /** Box-projected decal that is lit on top of the opaque image (see `Decal`). */
+  DECAL: "DecalMaterial",
   /** Specialized terrain material. */
   TERRAIN: "TerrainMaterial",
   /** Physically based rendering material. */

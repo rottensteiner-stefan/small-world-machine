@@ -7,6 +7,7 @@ import {
   Texture,
   MAX_CLUSTERED_LIGHTS_PER_TYPE,
   isSkinnedMesh,
+  computeClipToBox,
 } from "../../core/index.js";
 import { RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
 import {
@@ -1558,8 +1559,55 @@ export class WebGPURenderer extends AbstractRenderer {
     ]);
   }
 
+  /** Inverse of this frame's GL (non zero-to-one) view-projection; decals unproject depth with it. */
+  private readonly _frameInvViewProj: Matrix4 = new Matrix4();
+  private readonly _scratchClipToBox: Matrix4 = new Matrix4();
+  private readonly _decalColumns: Float32Array[] = [
+    new Float32Array(4),
+    new Float32Array(4),
+    new Float32Array(4),
+    new Float32Array(4),
+  ];
+  private readonly _decalFlags: Float32Array = new Float32Array(4);
+
   private _opaqueDepthTexture?: GPUTexture;
   private _opaqueDepthTextureView?: GPUTextureView;
+  private _opaqueNormalTexture?: GPUTexture;
+  private _opaqueNormalTextureView?: GPUTextureView;
+
+  /** Decals read the opaque depth beneath them, which only exists for the main camera target. */
+  public get canDrawDecals(): boolean {
+    return !this._activeRenderTarget;
+  }
+
+  /**
+   * Copies the normal buffer into a sampleable texture: it cannot be read while it is still a
+   * render attachment of the pass that wrote it. No-op while the buffer is off.
+   */
+  public captureOpaqueNormal(ce: GPUCommandEncoder): void {
+    const src = this._normalTexture;
+    if (!src) return;
+
+    if (
+      !this._opaqueNormalTexture ||
+      this._opaqueNormalTexture.width !== src.width ||
+      this._opaqueNormalTexture.height !== src.height
+    ) {
+      if (this._opaqueNormalTexture) this._fallback.deferDestroyTexture(this._opaqueNormalTexture);
+      this._opaqueNormalTexture = this._device!.createTexture({
+        size: [src.width, src.height],
+        format: src.format,
+        usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      this._opaqueNormalTextureView = this._opaqueNormalTexture.createView();
+    }
+
+    ce.copyTextureToTexture({ texture: src }, { texture: this._opaqueNormalTexture }, [
+      src.width,
+      src.height,
+      1,
+    ]);
+  }
 
   public captureOpaqueDepth(ce: GPUCommandEncoder): void {
     const srcTex = this.activeDepthTexture;
@@ -1906,6 +1954,8 @@ export class WebGPURenderer extends AbstractRenderer {
       values["u_color"] = this._scratchColorArray;
     }
 
+    if (state?.isDecal) this._packDecalUniforms(o, values);
+
     if (isSkinnedMesh(o) && o.skeleton) {
       values["u_isSkinned"] = 1.0;
       values["u_boneOffset"] = this._getBoneMatrixOffset(o);
@@ -1916,6 +1966,21 @@ export class WebGPURenderer extends AbstractRenderer {
 
     UniformPacker.packInto(shaderDef.layout, values, this._scratchObjBufferData);
     return true;
+  }
+
+  /** Decal-only per-object values: the clip-space -> box-space matrix (as four vec4 columns) in
+   * matParam0..3 and the "normal buffer copy is bound" flag in matParam5.y. */
+  private _packDecalUniforms(o: Object3D, values: Record<string, unknown>): void {
+    const clipToBox = this._scratchClipToBox;
+    if (computeClipToBox(o.worldMatrix, this._frameInvViewProj, clipToBox)) {
+      for (let c = 0; c < 4; c++) {
+        const column = this._decalColumns[c]!;
+        for (let r = 0; r < 4; r++) column[r] = clipToBox.data[c * 4 + r]!;
+        values[`u_matParam${c}`] = column;
+      }
+    }
+    this._decalFlags[1] = this._opaqueNormalTextureView && this.activeNormalView ? 1 : 0;
+    values["u_matParam5"] = this._decalFlags;
   }
 
   protected _getBoneMatrixOffset(skinnedMesh: SkinnedMesh): number {
@@ -1953,6 +2018,9 @@ export class WebGPURenderer extends AbstractRenderer {
       return m.textures["u_opaqueDepthMap"]
         ? this._textures.getTextureView(m.textures["u_opaqueDepthMap"] as Texture, this._quality)
         : this._opaqueDepthTextureView || this._fallback.dummyDepthTextureView;
+    }
+    if ("u_normalBufferMap" === name) {
+      return this._opaqueNormalTextureView || this._fallback.whiteTextureView;
     }
     return this._textures.getTextureView(m.textures[name] as Texture, this._quality);
   }
@@ -2036,6 +2104,7 @@ export class WebGPURenderer extends AbstractRenderer {
     const correctedVp = MathPool.acquireMatrix();
     const originalVp = MathPool.acquireMatrix();
     originalVp.data.set(vp);
+    Matrix4.invert(originalVp, this._frameInvViewProj);
 
     // WebGPU uses [0, 1] depth range, but our projection matrices use [-1, 1] (OpenGL standard).
     // Apply ZO (Zero-to-One) correction matrix to fix clipping without modifying shaders.
