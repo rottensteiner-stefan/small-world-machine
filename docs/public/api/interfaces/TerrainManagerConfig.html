@@ -15,7 +15,7 @@
 </div></section>
 <div class="tsd-signature"><span class="tsd-signature-keyword">interface</span> <span class="tsd-kind-interface">TerrainManagerConfig</span> <span class="tsd-signature-symbol">{</span><br/>    <a class="tsd-kind-property" href="#algorithm">algorithm</a><span class="tsd-signature-symbol">?:</span> <a href="../types/TerrainAlgorithm.html" class="tsd-signature-type tsd-kind-type-alias">TerrainAlgorithm</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#chunksize">chunkSize</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#gridsize">gridSize</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#heightmapdetail">heightmapDetail</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#heightmaproughness">heightmapRoughness</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#material">material</a><span class="tsd-signature-symbol">?:</span> <a href="../classes/TerrainMaterial.html" class="tsd-signature-type tsd-kind-class">TerrainMaterial</a><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#maxheight">maxHeight</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#meshsegments">meshSegments</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <a class="tsd-kind-property" href="#onrebuild">onRebuild</a><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/c89b4a262dc8de63f3974468663af6e988edda85/packages/engine/src/geometry/TerrainManager.ts#L16">geometry/TerrainManager.ts:16</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a7759617ffcabca4689c24a80b2d0dc3973a9139/packages/engine/src/geometry/TerrainManager.ts#L16">geometry/TerrainManager.ts:16</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-accordion" open><summary class="tsd-accordion-summary tsd-index-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
@@ -42,63 +42,63 @@
 <div class="tsd-comment tsd-typography"><p>Generation algorithm to use. Defaults to &quot;Perlin&quot;.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/c89b4a262dc8de63f3974468663af6e988edda85/packages/engine/src/geometry/TerrainManager.ts#L32">geometry/TerrainManager.ts:32</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a7759617ffcabca4689c24a80b2d0dc3973a9139/packages/engine/src/geometry/TerrainManager.ts#L32">geometry/TerrainManager.ts:32</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="chunksize"><code class="tsd-tag">Optional</code><span>chunk<wbr/>Size</span><a href="#chunksize" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">chunkSize</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>Size of a single terrain chunk in world units. Defaults to 80.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/c89b4a262dc8de63f3974468663af6e988edda85/packages/engine/src/geometry/TerrainManager.ts#L18">geometry/TerrainManager.ts:18</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a7759617ffcabca4689c24a80b2d0dc3973a9139/packages/engine/src/geometry/TerrainManager.ts#L18">geometry/TerrainManager.ts:18</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="gridsize"><code class="tsd-tag">Optional</code><span>grid<wbr/>Size</span><a href="#gridsize" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">gridSize</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>Number of chunks in the active grid (edge length). Defaults to 3 (3x3).</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/c89b4a262dc8de63f3974468663af6e988edda85/packages/engine/src/geometry/TerrainManager.ts#L28">geometry/TerrainManager.ts:28</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a7759617ffcabca4689c24a80b2d0dc3973a9139/packages/engine/src/geometry/TerrainManager.ts#L28">geometry/TerrainManager.ts:28</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="heightmapdetail"><code class="tsd-tag">Optional</code><span>heightmap<wbr/>Detail</span><a href="#heightmapdetail" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">heightmapDetail</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>Detail level for the heightmap (2^n + 1). Defaults to 7 (129x129).</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/c89b4a262dc8de63f3974468663af6e988edda85/packages/engine/src/geometry/TerrainManager.ts#L22">geometry/TerrainManager.ts:22</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a7759617ffcabca4689c24a80b2d0dc3973a9139/packages/engine/src/geometry/TerrainManager.ts#L22">geometry/TerrainManager.ts:22</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="heightmaproughness"><code class="tsd-tag">Optional</code><span>heightmap<wbr/>Roughness</span><a href="#heightmaproughness" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">heightmapRoughness</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>Roughness factor for the DiamondSquare algorithm. Defaults to 0.55.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/c89b4a262dc8de63f3974468663af6e988edda85/packages/engine/src/geometry/TerrainManager.ts#L24">geometry/TerrainManager.ts:24</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a7759617ffcabca4689c24a80b2d0dc3973a9139/packages/engine/src/geometry/TerrainManager.ts#L24">geometry/TerrainManager.ts:24</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="material"><code class="tsd-tag">Optional</code><span>material</span><a href="#material" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">material</span><span class="tsd-signature-symbol">?:</span> <a href="../classes/TerrainMaterial.html" class="tsd-signature-type tsd-kind-class">TerrainMaterial</a></div>
 <div class="tsd-comment tsd-typography"><p>Material to use for all terrain chunks.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/c89b4a262dc8de63f3974468663af6e988edda85/packages/engine/src/geometry/TerrainManager.ts#L30">geometry/TerrainManager.ts:30</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a7759617ffcabca4689c24a80b2d0dc3973a9139/packages/engine/src/geometry/TerrainManager.ts#L30">geometry/TerrainManager.ts:30</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="maxheight"><code class="tsd-tag">Optional</code><span>max<wbr/>Height</span><a href="#maxheight" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">maxHeight</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>Maximum height of the terrain. Defaults to 6.0.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/c89b4a262dc8de63f3974468663af6e988edda85/packages/engine/src/geometry/TerrainManager.ts#L26">geometry/TerrainManager.ts:26</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a7759617ffcabca4689c24a80b2d0dc3973a9139/packages/engine/src/geometry/TerrainManager.ts#L26">geometry/TerrainManager.ts:26</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="meshsegments"><code class="tsd-tag">Optional</code><span>mesh<wbr/>Segments</span><a href="#meshsegments" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">meshSegments</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
 <div class="tsd-comment tsd-typography"><p>Resolution of the mesh subdivisions per chunk. Defaults to 64.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/c89b4a262dc8de63f3974468663af6e988edda85/packages/engine/src/geometry/TerrainManager.ts#L20">geometry/TerrainManager.ts:20</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a7759617ffcabca4689c24a80b2d0dc3973a9139/packages/engine/src/geometry/TerrainManager.ts#L20">geometry/TerrainManager.ts:20</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member">
 <h3 class="tsd-anchor-link" id="onrebuild"><code class="tsd-tag">Optional</code><span>on<wbr/>Rebuild</span><a href="#onrebuild" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">onRebuild</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-symbol">()</span> <span class="tsd-signature-symbol">=&gt;</span> <span class="tsd-signature-type">void</span></div>
 <div class="tsd-comment tsd-typography"><p>Callback triggered when chunks are added or removed.</p>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/c89b4a262dc8de63f3974468663af6e988edda85/packages/engine/src/geometry/TerrainManager.ts#L34">geometry/TerrainManager.ts:34</a></li></ul></aside></section></section></details></div>
+<li>Defined in <a href="https://github.com/rottensteiner-stefan/small-world-machine/blob/a7759617ffcabca4689c24a80b2d0dc3973a9139/packages/engine/src/geometry/TerrainManager.ts#L34">geometry/TerrainManager.ts:34</a></li></ul></aside></section></section></details></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
