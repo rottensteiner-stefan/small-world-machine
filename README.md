@@ -229,7 +229,7 @@ This project provides comprehensive developer documentation, engine guides, and 
 
 ## 🤝 Contributors
 
-See [CONTRIBUTORS.md](CONTRIBUTORS.md).
+The majority of the codebase was developed in close collaboration with the three AI models listed in [CONTRIBUTORS.md](CONTRIBUTORS.md) (Google Gemini, Anthropic Claude Code, and DeepSeek). See [CONTRIBUTORS.md](CONTRIBUTORS.md) for details on contributors and roles.
 
 ## 📄 License
 

@@ -10,9 +10,9 @@
     "email": "rottensteiner.stefan@gmx.de"
   },
   "contributors": [
-    "Deepseek",
     "Google Gemini",
-    "Anthropic Code Claude"
+    "Anthropic Code Claude",
+    "DeepSeek"
   ],
   "workspaces": [
     "packages/*",
