@@ -23,6 +23,10 @@ export class AOPassGL {
   private _uRadius: WebGLUniformLocation | null = null;
   private _uIntensity: WebGLUniformLocation | null = null;
   private _uTexelSize: WebGLUniformLocation | null = null;
+  private _uNormalMap: WebGLUniformLocation | null = null;
+  private _uUseNormalBuffer: WebGLUniformLocation | null = null;
+  private _uViewRot: WebGLUniformLocation | null = null;
+  private readonly _viewRot: Float32Array = new Float32Array(9);
 
   private _target?: WebGL2FrameBuffer;
   private _width: number = 0;
@@ -68,6 +72,9 @@ export class AOPassGL {
     this._uRadius = gl.getUniformLocation(this._prog, "u_radius");
     this._uIntensity = gl.getUniformLocation(this._prog, "u_intensity");
     this._uTexelSize = gl.getUniformLocation(this._prog, "u_texelSize");
+    this._uNormalMap = gl.getUniformLocation(this._prog, "u_normalMap");
+    this._uUseNormalBuffer = gl.getUniformLocation(this._prog, "u_useNormalBuffer");
+    this._uViewRot = gl.getUniformLocation(this._prog, "u_viewRot");
 
     this._vao = gl.createVertexArray()!;
   }
@@ -95,6 +102,8 @@ export class AOPassGL {
    * @param far Camera far plane.
    * @param projMatrixData The camera's raw perspective projection matrix.
    * @param hbao The HBAO effect parameters (radius, intensity).
+   * @param viewMatrix The camera's view matrix; rotates the world-space normal buffer into view space.
+   * @param normalTexture The world-space normal buffer (ADR 0028), or undefined to derive normals from depth.
    * @returns The single-channel AO texture (R = occlusion factor, 1.0 = fully lit), or null if unavailable.
    */
   public execute(
@@ -105,6 +114,8 @@ export class AOPassGL {
     far: number,
     projMatrixData: Float32Array,
     hbao: HbaoElement,
+    viewMatrix: Float32Array | undefined,
+    normalTexture: WebGLTexture | undefined,
   ): WebGLTexture | null {
     if (!this._prog) return null;
 
@@ -127,6 +138,23 @@ export class AOPassGL {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, depthTexture);
     gl.uniform1i(this._uDepthMap, 0);
+
+    const useNormals = normalTexture !== undefined && viewMatrix !== undefined;
+    gl.uniform1f(this._uUseNormalBuffer, useNormals ? 1 : 0);
+    // Unit 1 always needs a sampler2D-compatible texture, even while the shader ignores it.
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, useNormals ? normalTexture : depthTexture);
+    gl.uniform1i(this._uNormalMap, 1);
+    if (useNormals) {
+      // Column-major view matrix: rotation columns are elements 0-2, 4-6 and 8-10.
+      for (let c = 0; c < 3; c++) {
+        this._viewRot[c * 3] = viewMatrix[c * 4]!;
+        this._viewRot[c * 3 + 1] = viewMatrix[c * 4 + 1]!;
+        this._viewRot[c * 3 + 2] = viewMatrix[c * 4 + 2]!;
+      }
+      gl.uniformMatrix3fv(this._uViewRot, false, this._viewRot);
+    }
+    gl.activeTexture(gl.TEXTURE0);
 
     gl.uniform1f(this._uNear, near);
     gl.uniform1f(this._uFar, far);

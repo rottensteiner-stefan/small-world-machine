@@ -7,10 +7,23 @@ struct AOUniforms {
     projScaleY: f32,
     radius: f32,
     intensity: f32,
-    pad0: f32,
+    useNormalBuffer: f32,
     pad1: f32,
+    // Columns of the view matrix's rotation part, world -> view (xyz used, w padding).
+    viewRot0: vec4f,
+    viewRot1: vec4f,
+    viewRot2: vec4f,
 }
 @group(0) @binding(1) var<uniform> u: AOUniforms;
+@group(0) @binding(3) var normalMap: texture_2d<f32>;
+
+// Same octahedral decode as structs.wgsl (this shader is compiled standalone).
+fn octDecode(e: vec2f) -> vec3f {
+    let n = vec3f(e.x, e.y, 1.0 - abs(e.x) - abs(e.y));
+    let folded = (vec2f(1.0) - abs(n.yx)) * select(vec2f(-1.0), vec2f(1.0), n.xy >= vec2f(0.0));
+    let xy = select(n.xy, folded, n.z < 0.0);
+    return normalize(vec3f(xy, n.z));
+}
 
 // See AO.frag.glsl for the full algorithm rationale -- same simplified HBAO approach, adapted
 // to WGSL's texel-fetch-only depth read (no sampler needed for a plain `texture_depth_2d`).
@@ -48,9 +61,29 @@ fn computeHBAO(pixelCoord: vec2i, dims: vec2i) -> f32 {
     let dPosDy = reconstructViewPos(uv + vec2f(0.0, texelSize.y), linearZU) - viewPos;
     let crossN = cross(dPosDx, dPosDy);
     let lenSq = dot(crossN, crossN);
-    var normal = select(vec3f(0.0, 0.0, -1.0), normalize(crossN), lenSq > 0.000001);
-    if (normal.z > 0.0) {
+    // Judged relative to the edge lengths (sin^2 of the angle between them): an absolute
+    // threshold rejected every cross product on high-resolution canvases, where neighbouring
+    // pixels are tiny steps apart, and left the camera-axis fallback as the normal everywhere.
+    let edgeScaleSq = dot(dPosDx, dPosDx) * dot(dPosDy, dPosDy);
+    let validNormal = edgeScaleSq > 0.0 && lenSq > 0.0001 * edgeScaleSq;
+    var normal = select(vec3f(0.0, 0.0, 1.0), normalize(crossN), validNormal);
+    // Face the camera (+z in view space): the horizon test measures occluders above the surface.
+    if (normal.z < 0.0) {
         normal = -normal;
+    }
+
+    // ADR 0028: prefer the normal buffer (normal-mapped, no faceting or silhouette artifacts).
+    // The sentinel (|x| > 1) marks pixels nothing wrote to, which keep the depth-derived normal.
+    if (u.useNormalBuffer > 0.5) {
+        let encoded = textureLoad(normalMap, centerCoord, 0).xy;
+        if (abs(encoded.x) <= 1.0 && abs(encoded.y) <= 1.0) {
+            let rot = mat3x3f(u.viewRot0.xyz, u.viewRot1.xyz, u.viewRot2.xyz);
+            var viewNormal = rot * octDecode(encoded);
+            // This pass reconstructs positions with uv.y pointing down, i.e. in a y-mirrored
+            // view space; mirror the buffer normal into the same frame.
+            viewNormal.y = -viewNormal.y;
+            normal = select(viewNormal, -viewNormal, viewNormal.z < 0.0);
+        }
     }
 
     let dirs = array<vec2f, 6>(

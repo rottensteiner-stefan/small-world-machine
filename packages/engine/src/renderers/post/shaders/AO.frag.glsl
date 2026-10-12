@@ -11,6 +11,16 @@ uniform vec2 u_projScale; // (A, B) = the perspective projection matrix's [0] an
 uniform float u_radius;
 uniform float u_intensity;
 uniform vec2 u_texelSize;
+uniform sampler2D u_normalMap; // world-space octahedral normals (ADR 0028), only read when u_useNormalBuffer
+uniform float u_useNormalBuffer;
+uniform mat3 u_viewRot; // world -> view rotation
+
+// Same octahedral decode as the WebGPU shaders.
+vec3 octDecode(vec2 e) {
+    vec3 n = vec3(e.x, e.y, 1.0 - abs(e.x) - abs(e.y));
+    vec2 folded = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    return normalize(vec3(n.z < 0.0 ? folded : n.xy, n.z));
+}
 
 // Standard OpenGL depth-buffer -> linear view-space distance conversion, using this engine's
 // perspective matrix layout (see Matrix4.perspective): depth [0,1] -> NDC z [-1,1] -> linear Z.
@@ -44,8 +54,22 @@ void main() {
     vec3 dY = dFdy(viewPos);
     vec3 crossN = cross(dX, dY);
     float lenSq = dot(crossN, crossN);
-    vec3 normal = (lenSq > 0.000001) ? normalize(crossN) : vec3(0.0, 0.0, -1.0);
-    if (normal.z > 0.0) normal = -normal; // Ensure it points back towards the camera
+    // Judged relative to the edge lengths: an absolute threshold rejected every cross product on
+    // high-resolution canvases (see AO.frag.wgsl) and left the camera-axis fallback everywhere.
+    float edgeScaleSq = dot(dX, dX) * dot(dY, dY);
+    bool validNormal = edgeScaleSq > 0.0 && lenSq > 0.0001 * edgeScaleSq;
+    vec3 normal = validNormal ? normalize(crossN) : vec3(0.0, 0.0, 1.0);
+    if (normal.z < 0.0) normal = -normal; // Face the camera (+z in view space)
+
+    // ADR 0028: prefer the normal buffer (normal-mapped, no faceting or silhouette artifacts).
+    // The sentinel (|x| > 1) marks pixels nothing wrote to, which keep the depth-derived normal.
+    if (u_useNormalBuffer > 0.5) {
+        vec2 encoded = texture(u_normalMap, v_uv).rg;
+        if (abs(encoded.x) <= 1.0 && abs(encoded.y) <= 1.0) {
+            vec3 viewNormal = u_viewRot * octDecode(encoded);
+            normal = viewNormal.z < 0.0 ? -viewNormal : viewNormal;
+        }
+    }
 
     // Simplified HBAO: march a small ring of directions, find the steepest (highest-sine)
     // horizon angle visible along each, and average -- the same core idea as full HBAO's

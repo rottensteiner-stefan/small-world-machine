@@ -649,6 +649,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             this._frameFar,
             this._frameProjMatrix,
             hbaoNode,
+            this._frameViewMatrix,
+            this.normalTexture,
           );
         }
       }
