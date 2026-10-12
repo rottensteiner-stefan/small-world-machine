@@ -274,6 +274,66 @@ async function hbaoIndependence(browser, backend) {
   );
 }
 
+/** Normal-mapped floor (?bump=1): buffer must carry the map, decals must blend onto it, HBAO must ignore it. */
+async function bumpChecks(browser, backend) {
+  const blocking = backend === "WEB_GL2";
+  const pp = backend === "WEB_GL2" ? "&pp=1" : "";
+  const res = {};
+  for (const bump of [0, 1]) {
+    const { page, errors } = await openProbe(
+      browser,
+      `rendererType=${backend}&nb=1&bump=${bump}${pp}`,
+    );
+    try {
+      const [floor, probe] = await readNormals(page, backend, [FLOOR, PROBE]);
+      res[bump] = { floor: floor.n, probe: probe.n };
+    } catch (e) {
+      log(false, blocking, `${backend} bump=${bump}: normal readback threw: ${e.message}`);
+    }
+    log(
+      !errors.length,
+      blocking,
+      `${backend} bump=${bump}: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+    );
+    await page.close();
+  }
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  if (res[0] && res[1] && res[0].floor && res[1].floor && res[0].probe && res[1].probe) {
+    const d1 = dist(res[1].floor, [0, 1, 0]);
+    log(
+      d1 > 0.05,
+      blocking,
+      `${backend} bump: floor buffer normal ${fmt(res[1].floor)} differs from (0,1,0) by ${d1.toFixed(3)} (>0.05)`,
+    );
+    const d2 = dist(res[1].probe, res[0].probe);
+    log(
+      d2 > 0.03,
+      blocking,
+      `${backend} bump: NormalProbe over bumped ${fmt(res[1].probe)} vs flat ${fmt(res[0].probe)} differ by ${d2.toFixed(3)} (>0.03)`,
+    );
+  }
+  const stats = {};
+  for (const bump of [0, 1]) {
+    const { page } = await openProbe(
+      browser,
+      `rendererType=${backend}&nb=1&hbao=1&bump=${bump}${pp}`,
+    );
+    stats[bump] = await aoStats(page, backend);
+    await page.close();
+  }
+  if (stats[0] && stats[1]) {
+    log(
+      Math.abs(stats[0].fractionBelow - stats[1].fractionBelow) < 0.002 &&
+        Math.abs(stats[0].floorMean - stats[1].floorMean) < 0.002,
+      blocking,
+      `${backend} bump: HBAO independent of receiver normal map (below-0.9 ${stats[0].fractionBelow.toFixed(4)} vs ${stats[1].fractionBelow.toFixed(4)}, floor mean ${stats[0].floorMean.toFixed(4)} vs ${stats[1].floorMean.toFixed(4)})`,
+    );
+  } else {
+    log(false, blocking, `${backend} bump: AO texture unavailable`);
+  }
+  return res[1] ?? null;
+}
+
 /** WebGL1 has no decal pass: a scene with decals must render without errors and simply omit them. */
 async function webGl1Check(browser) {
   const { page, errors } = await openProbe(browser, "rendererType=WEB_GL1");
@@ -302,6 +362,25 @@ async function webGl1Check(browser) {
     diff <= 20,
     true,
     `WEB_GL1: decals are omitted, stripe rgb(${a}) ~ floor rgb(${b}), max channel diff ${diff} (<=20)`,
+  );
+  await page.close();
+}
+
+/** Unlit decals draw flat albedo and must not touch the normal buffer (they would otherwise blend a made-up normal). */
+async function unlitCheck(browser, backend) {
+  const blocking = backend === "WEB_GL2";
+  const pp = backend === "WEB_GL2" ? "&pp=1" : "";
+  const { page, errors } = await openProbe(browser, `rendererType=${backend}&unlit=1&nb=1${pp}`);
+  const [floor, probe] = await readNormals(page, backend, [FLOOR, PROBE]);
+  log(
+    !errors.length,
+    blocking,
+    `${backend} unlit: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+  );
+  log(
+    !!floor.n && !!probe.n && near(floor.n, probe.n, 0.03),
+    blocking,
+    `${backend} unlit: NormalProbe ${fmt(probe.n)} equals the floor normal ${fmt(floor.n)} (decal leaves the normal buffer alone)`,
   );
   await page.close();
 }
@@ -374,12 +453,14 @@ const browser = await puppeteer.launch({
     "--enable-unsafe-webgpu",
   ],
 });
-let gl2, gpu;
+let gl2, gpu, bumpGl2, bumpGpu;
 try {
   gl2 = await normalsFor(browser, "WEB_GL2");
   await colourCheck(browser, "WEB_GL2");
   await normalsFor(browser, "WEB_GL2", true);
   await hbaoIndependence(browser, "WEB_GL2");
+  bumpGl2 = await bumpChecks(browser, "WEB_GL2");
+  await unlitCheck(browser, "WEB_GL2");
   await webGl1Check(browser);
 
   const why = await webGpuUsable(browser);
@@ -392,6 +473,15 @@ try {
     await colourCheck(browser, "WEB_GPU");
     await normalsFor(browser, "WEB_GPU", true);
     await hbaoIndependence(browser, "WEB_GPU");
+    await unlitCheck(browser, "WEB_GPU");
+    bumpGpu = await bumpChecks(browser, "WEB_GPU");
+    if (bumpGl2?.floor && bumpGpu?.floor) {
+      log(
+        near(bumpGl2.floor, bumpGpu.floor, 0.03),
+        false,
+        `backends agree on bumped floor normal: GL2 ${fmt(bumpGl2.floor)} vs GPU ${fmt(bumpGpu.floor)} (0.03)`,
+      );
+    }
     if (gl2 && gpu) {
       for (const k of ["floor", "probe"]) {
         const ok = gl2[k].n && gpu[k].n && near(gl2[k].n, gpu[k].n, 0.02);

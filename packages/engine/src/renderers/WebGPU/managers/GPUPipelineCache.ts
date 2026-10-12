@@ -202,6 +202,7 @@ const ALWAYS_DECLARED_FLAGS: ReadonlySet<string> = new Set([
   "USE_RAMP_LUT",
   "USE_INSTANCING",
   "USE_DECAL_GRADIENTS",
+  "USE_DECAL_UNLIT",
 ]);
 const SHADER_FLAG_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
@@ -597,6 +598,9 @@ export class GPUPipelineCache {
       } else {
         wgslConstants += "const USE_RAMP_LUT: bool = false;\n";
       }
+      wgslConstants += flags.includes("USE_DECAL_UNLIT")
+        ? "const USE_DECAL_UNLIT: bool = true;\n"
+        : "const USE_DECAL_UNLIT: bool = false;\n";
       if (flags.includes("USE_DECAL_GRADIENTS")) {
         wgslConstants += "const USE_DECAL_GRADIENTS: bool = true;\n";
       } else {

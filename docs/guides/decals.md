@@ -23,16 +23,18 @@ target and casts/receives no shadows; its bounds exist only for frustum culling.
 
 ## `DecalMaterial` options
 
-| Option           | Default | Meaning                                                                                   |
-| ---------------- | ------- | ----------------------------------------------------------------------------------------- |
-| `color`          | white   | Tint multiplied onto the albedo; its alpha scales the whole decal.                        |
-| `diffuseMap`     | none    | Albedo (rgb, sRGB) and coverage (a).                                                      |
-| `normalMap`      | none    | Tangent-space normal map, applied on top of the receiver's normal.                        |
-| `roughness`      | `0.8`   | PBR roughness (clamped to 0.05..1 in the shader).                                         |
-| `metallic`       | `0`     | PBR metallic.                                                                             |
-| `edgeFade`       | `0.1`   | Fraction of the box (0..0.5) over which the decal fades out towards its edges.            |
-| `angleFadeStart` | `60`    | Angle in degrees between the receiver normal and the decal's up axis where fading starts. |
-| `angleFadeEnd`   | `85`    | Angle in degrees where the decal is fully faded out.                                      |
+| Option           | Default | Meaning                                                                                       |
+| ---------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `color`          | white   | Tint multiplied onto the albedo; its alpha scales the whole decal.                            |
+| `diffuseMap`     | none    | Albedo (rgb, sRGB) and coverage (a).                                                          |
+| `normalMap`      | none    | Tangent-space normal map, applied on top of the receiver's normal.                            |
+| `roughness`      | `0.8`   | PBR roughness (clamped to 0.05..1 in the shader).                                             |
+| `metallic`       | `0`     | PBR metallic.                                                                                 |
+| `edgeFade`       | `0.1`   | Fraction of the box (0..0.5) over which the decal fades out towards its edges.                |
+| `angleFadeStart` | `60`    | Angle in degrees between the receiver normal and the decal's up axis where fading starts.     |
+| `angleFadeEnd`   | `85`    | Angle in degrees where the decal is fully faded out.                                          |
+| `mipBias`        | `0`     | LOD bias in mip levels on the finite-difference UV gradients (negative = sharper).            |
+| `unlit`          | `false` | Flat albedo, no lighting: about half the cost of a lit decal; leaves the normal buffer alone. |
 
 The angle fade is what keeps a floor decal from smearing up the vertical sides of an object
 that pokes through its box.
@@ -113,14 +115,29 @@ the boxes** times the lighting cost, not with the number of decals as such.
 
 Measured with the decal probe on real GPU:
 
-- Stress case, 32 large, overlapping, lit decals at 5600x2968: about **172-211 ms** per frame.
+- Stress case, 32 large, overlapping, lit decals at 5600x2968: between **96 and 374 ms** per frame in
+  different runs of the same scene (the test machine's GPU clock/load varies by up to 4x), so absolute
+  milliseconds are not reliable.
+- Within one session the ratio is stable: an **unlit** decal costs about **0.5x** of a lit one
+  (52 vs 96 ms, 188 vs 374 ms).
 - A typical scene with a few decals: not measurable against frame time.
 
-Budget guideline: keep the summed screen coverage of lit decals at about **2 fullscreen
-equivalents at 1080p**. This is a rule of thumb extrapolated from the stress number and has
-**not been verified on other GPUs**; on tile-based mobile GPUs the normal buffer is a known
-risk (see ADR 0028) and needs its own measurement. Keep boxes tight, and prefer few larger
-textures over many overlapping layers.
+Budget guideline (qualitative, no millisecond threshold yet): cost is proportional to the summed
+screen area of the boxes. Keep boxes tight, avoid stacking large overlapping layers, and make
+large overlapping decals (dirt, stains) `unlit`. A real threshold needs measurements on target
+devices; on tile-based mobile GPUs the normal buffer is a known risk (see ADR 0028) and needs
+its own measurement.
+
+## Mip sharpness (`mipBias`)
+
+Decals sample with explicit gradients from three depth taps per axis. `?mip=1` in the probe puts a
+Plane mesh (hardware mips) and a Decal with the same 256x256 line texture side by side at a
+grazing angle; `node scripts/measure-decal-mips.mjs` compares a normalised gradient sharpness
+(decal / plane) per depth band on WebGL2 and WebGPU. With `mipBias = 0` the ratio is 0.99-1.06
+across the mid and far bands (0.89 in the nearest, magnified band), so the decal is not measurably
+blurrier. A negative bias over-sharpens (-0.25: up to 1.3x, -0.5: up to 1.6x, mid-distance) and
+the frame-to-frame shimmer proxy grows to 1.5-1.9x the plane's. Default stays 0; use a small
+negative value only for deliberately crisp, nearby decals.
 
 ## Decal probe and tests
 
@@ -131,6 +148,7 @@ normal probes. Query parameters:
 - `?pp=1` enables post-processing (needed for the normal buffer on WebGL2)
 - `?spot=1` swaps the sun for a shadow-casting spot light across a decal edge
 - `?rendererType=WEB_GPU` or `WEB_GL2` picks the backend
+- `?mip=1` (+ `?mipbias=<n>`) swaps in the mip-sharpness comparison scene
 
 `npm run test:decals` (`scripts/check-decals.mjs`) drives that page in a headless browser and
 asserts on GPU readbacks (normal buffer contents, decal pixels). WebGL2 results are blocking;
@@ -141,3 +159,5 @@ overrides the dev-server origin (default `https://localhost:5173`).
 
 - **ORM map (planned):** channel order matches the rest of the engine / glTF: R = AO, G = roughness, B = metallic (`Standard.frag.wgsl:8-10`, `Standard.frag.glsl:90,96,102`). The glTF loader binds one texture to both `metallicMap` and `roughnessMap` (`GltfMaterialParser.ts:61-73`). Kit textures are separate greyscale files. `DecalMaterial` has no ORM map yet (`Decal.frag.wgsl:89-90`, `Decal.frag.glsl:133-134` use scalars only).
 - **Vertex alpha:** vertex colour is RGBA (`Mesh.ts:4,256`, `GPUPipelineCache.ts:426-437`) behind `USE_VERTEX_COLOR`, not combinable with instancing. Only `StylizedLava` consumes it; Standard/Decal shaders and the glTF loader (`COLOR_0`) do not. A baker must add the consumer side itself.
+
+> Normal-mapped receivers: `?bump=1` on the decal probe tilts the floor normal map; `npm run test:decals` checks the normal buffer carries it, decals blend onto it, and HBAO (flat depth normal) ignores it.

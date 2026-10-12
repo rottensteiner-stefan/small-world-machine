@@ -22,7 +22,7 @@ Decals (Schilder, Schmutz, Einschläge) sollen auf beliebiger Opaque-Geometrie s
 
 ## Gemessen (eine GPU, WebGPU, 5600x2968)
 
-3 Decals: kein messbarer Mehraufwand (Rauschen ca. 2 ms). Stress mit 32 großen, überlappenden Lit-Decals: 211 ms, 172 ms mit frühem Discard; Kosten wachsen mit abgedeckten Pixeln mal Überlappung (ca. 0,9 ns pro Lit-Fragment). **UNVERIFIED auf anderen GPUs:** Budget-Richtlinie von höchstens etwa 2 Vollbild-Äquivalenten summierter Box-Abdeckung bei 1080p (ca. 4 ms, extrapoliert), darüber `USE_DECAL_UNLIT`. Ebenfalls UNVERIFIED: sichtbare Wirkung der per-Pixel neu berechneten Spot-Schatten-Varyings auf WebGL2.
+3 Decals: kein messbarer Mehraufwand (Rauschen ca. 2 ms). Stress mit 32 großen, überlappenden Lit-Decals bei 5600×2968: Kosten wachsen mit abgedeckten Pixeln mal Überlappung. **Die absoluten Zeiten sind auf der Testmaschine nicht belastbar:** dieselbe Szene lag zwischen Läufen bei 96 bis 374 ms (Faktor 4, vermutlich GPU-Takt und Last). Belastbar ist nur das Verhältnis innerhalb einer Sitzung: ein unlit-Decal (`USE_DECAL_UNLIT`) kostet etwa **0,5 ×** eines beleuchteten (52 gegen 96 ms und 188 gegen 374 ms). Der frühe Discard sparte etwa 18 % (einmalige Messung). **Es gibt deshalb keine verbindliche Budget-Zahl in ms.** Richtlinie nur qualitativ: Kosten ∝ Summe der Box-Bildschirmflächen, enge Boxen, und große überlappende Flächen (Schmutz, Flecken) unlit oder gar nicht überlappend. Eine ms-Schwelle braucht Messungen auf Zielgeräten. Ebenfalls UNVERIFIED: sichtbare Wirkung der per-Pixel neu berechneten Spot-Schatten-Varyings auf WebGL2.
 
 ## Verworfen
 

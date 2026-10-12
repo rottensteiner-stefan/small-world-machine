@@ -28,6 +28,14 @@ export interface DecalMaterialOptions {
   angleFadeStart?: number;
   /** Surface angle (degrees) where the decal has faded out completely. Defaults to 85. */
   angleFadeEnd?: number;
+  /** LOD bias in mip levels applied to the finite-difference gradients (negative = sharper). Defaults to 0. */
+  mipBias?: number;
+  /**
+   * Skip lighting: the decal draws its flat albedo, shaded like nothing else in the scene. Far
+   * cheaper for large overlapping decals (no light loop per covered pixel), meant for emissive or
+   * painted signs and evenly lit scenes. Defaults to false (lit).
+   */
+  unlit?: boolean;
 }
 
 /**
@@ -42,6 +50,8 @@ export class DecalMaterial extends AbstractMaterial {
   public edgeFade: number;
   public angleFadeStart: number;
   public angleFadeEnd: number;
+  public mipBias: number;
+  public unlit: boolean;
 
   private readonly _fadeParams: Float32Array = new Float32Array(4);
 
@@ -55,6 +65,8 @@ export class DecalMaterial extends AbstractMaterial {
     this.edgeFade = options.edgeFade ?? 0.1;
     this.angleFadeStart = options.angleFadeStart ?? 60;
     this.angleFadeEnd = options.angleFadeEnd ?? 85;
+    this.mipBias = options.mipBias ?? 0;
+    this.unlit = options.unlit ?? false;
   }
 
   /** @inheritdoc */
@@ -87,9 +99,9 @@ export class DecalMaterial extends AbstractMaterial {
     props["u_decalFade"] = fade;
     manifest.textures["u_diffuseMap"] = this.diffuseMap;
     manifest.textures["u_normalMap"] = this.normalMap;
-    manifest.flags = this.normalMap
-      ? ["USE_NORMAL_MAP", "USE_DECAL_GRADIENTS"]
-      : ["USE_DECAL_GRADIENTS"];
+    manifest.flags = ["USE_DECAL_GRADIENTS"];
+    if (this.normalMap) manifest.flags.push("USE_NORMAL_MAP");
+    if (this.unlit) manifest.flags.push("USE_DECAL_UNLIT");
     return manifest;
   }
 
@@ -98,6 +110,7 @@ export class DecalMaterial extends AbstractMaterial {
     this._fadeParams[0] = this.edgeFade;
     this._fadeParams[1] = toCos(this.angleFadeStart);
     this._fadeParams[2] = toCos(this.angleFadeEnd);
+    this._fadeParams[3] = Math.pow(2, this.mipBias);
     return this._fadeParams;
   }
 

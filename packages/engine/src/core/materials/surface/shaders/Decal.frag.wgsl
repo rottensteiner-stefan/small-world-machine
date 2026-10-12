@@ -47,8 +47,8 @@ fn decalNeighbourDelta(centre: vec4f, forward: vec4f, backward: vec4f) -> vec3f 
         decalUnproject(min(px + vec2i(0, 1), last), clipToBox),
         decalUnproject(max(px - vec2i(0, 1), vec2i(0, 0)), clipToBox)
     );
-    g_uvGradX = stepX.xz;
-    g_uvGradY = stepY.xz;
+    g_uvGradX = stepX.xz * obj.matParam4.w; // w = exp2(mipBias)
+    g_uvGradY = stepY.xz * obj.matParam4.w;
 
     let surfaceWorld = (obj.model * vec4f(boxPos, 1.0)).xyz;
     let viewDir = normalize(global.viewPos.xyz - surfaceWorld);
@@ -89,8 +89,17 @@ fn decalNeighbourDelta(centre: vec4f, forward: vec4f, backward: vec4f) -> vec3f 
     let metallic = obj.metallic;
     let roughness = clamp(obj.roughness, 0.05, 1.0);
     let ao = 1.0;
-    [WGSL_PBR_LIGHTING]
 
+    // Unlit decals keep the flat albedo; lit ones run the clustered PBR chunk inside this block
+    // (its locals, including `color`, stay scoped to it).
+    var shaded = albedo;
+    g_shadingNormal = baseNormal;
+    if (!USE_DECAL_UNLIT) {
+        [WGSL_PBR_LIGHTING]
+        shaded = color;
+    }
+
+    var color = shaded;
     color *= global.exposure;
     if (global.gamma != 1.0) {
         color = color / (color + vec3f(1.0)); // Reinhard

@@ -86,7 +86,9 @@ describe("WebGPU DeviceCaps Limits & Hardening", () => {
     ).toBeGreaterThanOrEqual(32768);
   });
 
-  it("should correctly report isContextLost on WebGPURenderer", async () => {
+  // The first dynamic import transforms the whole renderer module graph (shader `?raw` imports
+  // included); under the parallel full suite that alone can exceed vitest's default 5 s.
+  it("should correctly report isContextLost on WebGPURenderer", { timeout: 30000 }, async () => {
     const { WebGPURenderer } = await import("../../src/renderers/WebGPU/WebGPURenderer.js");
     const renderer = new WebGPURenderer();
     expect(renderer.isContextLost).toBe(false);

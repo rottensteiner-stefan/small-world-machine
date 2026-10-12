@@ -42,7 +42,7 @@ uniform float u_time;
 
 uniform mat4 u_model;
 uniform mat4 u_decalClipToBox;
-uniform vec4 u_decalFade; // [edgeFade, cosStart, cosEnd, unused]
+uniform vec4 u_decalFade; // [edgeFade, cosStart, cosEnd, exp2(mipBias)]
 uniform float u_decalHasNormalBuffer;
 uniform sampler2D u_opaqueDepthMap;
 uniform sampler2D u_normalBufferMap;
@@ -88,8 +88,8 @@ void main() {
     vec3 stepY = decalNeighbourDelta(centre,
         decalUnproject(min(px + ivec2(0, 1), last), size),
         decalUnproject(max(px - ivec2(0, 1), ivec2(0)), size));
-    g_uvGradX = stepX.xz;
-    g_uvGradY = stepY.xz;
+    g_uvGradX = stepX.xz * u_decalFade.w; // w = exp2(mipBias)
+    g_uvGradY = stepY.xz * u_decalFade.w;
 
     vec3 surfaceWorld = (u_model * vec4(boxPos, 1.0)).xyz;
     vec3 viewDir = normalize(u_viewPos - surfaceWorld);
@@ -134,7 +134,16 @@ void main() {
     float roughness = clamp(u_roughness, 0.05, 1.0);
     float ao = u_extraParams.x;
 
+#ifdef USE_DECAL_UNLIT
+    // Flat albedo, with the same output transform the lit chunk applies at its end.
+    vec3 color = albedo * u_exposure;
+    if (u_gamma != 1.0) {
+        color = color / (color + vec3(1.0)); // Reinhard
+    }
+    fragColor = vec4(linearToSRGB(color), u_color.a * texColor.a);
+#else
     [LIGHT_CALC_PBR]
+#endif
 
     [FOG_CALC]
 }

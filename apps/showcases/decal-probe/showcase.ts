@@ -19,11 +19,12 @@ import {
   Texture,
   Vector3D,
 } from "@small-world-machine/engine";
+import { setupMipScene } from "./mipScene.js";
 
 /**
  * Decal probe: box-projected decals on a floor, a wall and a pedestal. Query params:
- * `?nb=1`/`?nb=0` force the normal buffer on/off (default: auto, on while decals are visible), `?pp=1` enables post-processing, `?hbao=1` enables HBAO (and post-processing) (WebGL2 needs it for the
- * normal buffer), `?spot=1` swaps the sun for a shadow-casting spot light with an occluder whose shadow crosses the
+ * `?nb=1`/`?nb=0` force the normal buffer on/off (default: auto, on while decals are visible), `?pp=1` enables post-processing, `?hbao=1` enables HBAO (and post-processing), `?unlit=1` draws the decals unlit (WebGL2 needs it for the
+ * normal buffer), `?bump=1|2` gives the floor a normal map, `?spot=1` swaps the sun for a shadow-casting spot light with an occluder whose shadow crosses the
  * FloorStripes decal edge, `?rendererType=WEB_GPU|WEB_GL2` picks the backend.
  */
 /** 2x2 quadrants, image top-left red, top-right green, bottom-left blue, bottom-right yellow. */
@@ -55,6 +56,19 @@ function solidTexture(r: number, g: number, b: number, a: number): Texture {
   return Texture.fromCanvas(canvas);
 }
 
+/** Tangent-space normal map with alternating strongly tilted stripes (bump pattern). */
+function bumpPatternTexture(): Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  for (let x = 0; x < 64; x += 8) {
+    ctx.fillStyle = (x / 8) % 2 === 0 ? "rgb(200,128,200)" : "rgb(56,128,200)";
+    ctx.fillRect(x, 0, 8, 64);
+  }
+  return Texture.fromCanvas(canvas);
+}
+
 /** `?nb=1` forces the normal buffer on, `?nb=0` off, no `nb` leaves the engine default ("auto"). */
 function normalBufferMode(): boolean | "auto" {
   const nb = new URLSearchParams(location.search).get("nb");
@@ -62,6 +76,9 @@ function normalBufferMode(): boolean | "auto" {
   if (nb === "0") return false;
   return "auto";
 }
+
+/** `?unlit=1` makes every probe decal unlit (flat albedo, no light loop). */
+const UNLIT = new URLSearchParams(location.search).get("unlit") === "1";
 
 class DecalProbe extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {
@@ -73,6 +90,12 @@ class DecalProbe extends AbstractShowcase {
       far: 100,
     });
     this.camera.updateProjectionMatrix();
+
+    if (new URLSearchParams(location.search).get("mip") === "1") {
+      this.defaultCameraController = "none";
+      setupMipScene(this.scene, this.camera);
+      return;
+    }
 
     if (new URLSearchParams(location.search).get("pp") === "1") {
       this.renderer.postProcessing.enabled = true;
@@ -95,7 +118,18 @@ class DecalProbe extends AbstractShowcase {
 
     const floor = new Object3D("Floor");
     floor.geometry = new Ground({ width: 24, depth: 24 }).getGeometryData();
-    floor.material = concrete;
+    // `?bump=1`: floor gets a strong constant tangent-space tilt; `?bump=2`: a stripe bump pattern.
+    // Ground has UVs and auto-computed tangents, so the shading normal clearly differs from (0,1,0).
+    const bump: string | null = new URLSearchParams(location.search).get("bump");
+    if (bump === "1" || bump === "2") {
+      floor.material = new StandardMaterial({
+        color: new Color(0.55, 0.55, 0.58),
+        roughness: 0.9,
+        normalMap: bump === "1" ? solidTexture(200, 128, 200, 255) : bumpPatternTexture(),
+      });
+    } else {
+      floor.material = concrete;
+    }
     floor.receiveShadow = true;
     this.scene.add(floor);
 
@@ -112,12 +146,15 @@ class DecalProbe extends AbstractShowcase {
     const stripes = await Texture.fromUrl("/assets/kits/flakturm/decals/hazard_stripes.png");
     const sign = await Texture.fromUrl("/assets/kits/flakturm/decals/sign_koje42.png");
 
-    const floorStripes = new Decal(new DecalMaterial({ diffuseMap: stripes }), "FloorStripes");
+    const floorStripes = new Decal(
+      new DecalMaterial({ unlit: UNLIT, diffuseMap: stripes }),
+      "FloorStripes",
+    );
     floorStripes.setPosition(-1.6, 0, 0.6).setScale(3, 0.8, 1);
     this.scene.add(floorStripes);
 
     // Local +Y is the decal's up axis, so tipping the box by 90 degrees about X aims it at the wall's +Z face.
-    const wallSign = new Decal(new DecalMaterial({ diffuseMap: sign }), "WallSign");
+    const wallSign = new Decal(new DecalMaterial({ unlit: UNLIT, diffuseMap: sign }), "WallSign");
     wallSign
       .setPosition(0, 1.8, -2.8)
       .setRotation(Math.PI / 2, 0, 0)
@@ -126,7 +163,10 @@ class DecalProbe extends AbstractShowcase {
 
     // A box wider than the pedestal base: stripes land on the floor around it, the pedestal's
     // vertical sides must fade out through the angle fade instead of smearing.
-    const aroundPedestal = new Decal(new DecalMaterial({ diffuseMap: stripes }), "AroundPedestal");
+    const aroundPedestal = new Decal(
+      new DecalMaterial({ unlit: UNLIT, diffuseMap: stripes }),
+      "AroundPedestal",
+    );
     aroundPedestal.setPosition(2.2, 0, -0.5).setScale(3.4, 1.2, 3.4);
     this.scene.add(aroundPedestal);
 
@@ -134,6 +174,7 @@ class DecalProbe extends AbstractShowcase {
     // it must end up between the floor normal and the decal normal (alpha-blended).
     const normalProbe = new Decal(
       new DecalMaterial({
+        unlit: UNLIT,
         diffuseMap: solidTexture(255, 255, 255, 128),
         normalMap: solidTexture(230, 128, 200, 255),
       }),
@@ -155,7 +196,7 @@ class DecalProbe extends AbstractShowcase {
     signPlane.geometry = new Plane({ width: 1.2, height: 0.3 }).getGeometryData();
     signPlane.material = signPlaneMaterial;
     this.scene.add(signPlane);
-    const signDecal = new Decal(new DecalMaterial({ diffuseMap: sign }), "SignDecal");
+    const signDecal = new Decal(new DecalMaterial({ unlit: UNLIT, diffuseMap: sign }), "SignDecal");
     signDecal
       .setPosition(3, 0.45, -2.8)
       .setRotation(Math.PI / 2, 0, 0)
@@ -164,7 +205,10 @@ class DecalProbe extends AbstractShowcase {
     controlPlane.material = controlMaterial;
     this.scene.add(controlPlane);
 
-    const quadrantDecal = new Decal(new DecalMaterial({ diffuseMap: quadrants }), "QuadrantDecal");
+    const quadrantDecal = new Decal(
+      new DecalMaterial({ unlit: UNLIT, diffuseMap: quadrants }),
+      "QuadrantDecal",
+    );
     quadrantDecal
       .setPosition(3, 1.4, -2.8)
       .setRotation(Math.PI / 2, 0, 0)
