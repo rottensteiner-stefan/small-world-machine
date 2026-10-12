@@ -1,4 +1,5 @@
 import { Object3D } from "../core/Object3D.js";
+import { Decal } from "../core/objects/Decal.js";
 import { AbstractMaterial } from "../core/materials/AbstractMaterial.js";
 import { StandardMaterial } from "../core/materials/surface/StandardMaterial.js";
 import { Matrix4, Vector3D, Quaternion } from "../math/index.js";
@@ -130,7 +131,8 @@ export class WorldWriter {
     const writeState: GltfWriteState = { state: this._extensionState };
     for (const plugin of getGltfExtensions()) plugin.writeNode?.(obj, node, writeState);
 
-    if (obj.geometry && obj.material) {
+    // A Decal's unit box is shared engine geometry, not scene content: SWM_decal describes it.
+    if (obj.geometry && obj.material && !(obj instanceof Decal)) {
       node.mesh = this._writeMesh(obj.geometry, obj.material);
     }
 

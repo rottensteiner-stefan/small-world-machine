@@ -43,6 +43,23 @@ target and casts/receives no shadows; its bounds exist only for frustum culling.
 The angle fade is what keeps a floor decal from smearing up the vertical sides of an object
 that pokes through its box.
 
+## Persisting decals in glTF (`SWM_decal`)
+
+`WorldWriter` writes every `Decal` that has `kitDecal` set as a node with the extension
+`SWM_decal`; `GltfLoader` reads it back (ADR 0029). The payload is a `LevelDecalPlacement`
+without `id`, `position`, `rotation` and `parent`: id is the node name, the transform and
+hierarchy come from the node. `size` (`[width, height, depth]`) in the payload is authoritative;
+the node scale is written as `(width, depth, height)` for other viewers and rewritten from `size`
+on read. The loaded decal has no textures (`readNode` is synchronous): hydrate it afterwards.
+
+```typescript
+const root = await new GltfLoader().load("/maker/scene.gltf");
+await kitRegistry.resolveLevelDecals(root); // or kitRegistry.hydrateDecal(decal)
+```
+
+Unknown kit decals and failed map loads warn and leave the decal invisible; an invalid payload
+(size, opacity, tags) throws while reading.
+
 ## Orientation rules
 
 - Local **+Y is the surface normal** ("up" of the decal); the projection axis is **-Y**.
@@ -73,6 +90,17 @@ scene.add(sign);
 Overlapping decals stack deterministically (independent of the camera): higher `decal.priority`
 draws later (on top); on equal priority the larger world volume draws first (broad grime below
 small details); then creation order decides.
+
+## Stamping decals in Maker
+
+Maker has a modal stamp tool (<kbd>D</kbd>, see the [Maker guide](/guides/maker)): double-click a
+kit decal in the Content Drawer to arm it, move over a surface (a ghost decal with half opacity
+shows the result), click to stamp. The decal's +Y is aligned to the surface normal (from
+`Raycaster`'s `Intersection.normal`), <kbd>R</kbd> spins it about the normal, arrows nudge it in
+the surface plane, <kbd>Shift</kbd> + arrows scale it. Each stamp is one undo step and is
+autosaved as `SWM_decal`; on load Maker calls `kitRegistry.resolveLevelDecals(root)`. Stamped
+decals are not raycast-pickable, so select them in the hierarchy panel; the inspector offers
+priority, opacity, edge fade and angle fade.
 
 ## How it renders
 

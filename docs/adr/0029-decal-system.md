@@ -1,6 +1,6 @@
 # Decal-System: projizierte Decals als eigene Lit-Layer-Stufe nach Opaque
 
-Status: angenommen. Kern auf WebGPU und WebGL2 umgesetzt und mit `apps/showcases/decal-probe` (`npm run test:decals`, 15 Assertions) auf echter GPU geprüft. Datenpfad: Level-Deskriptor und Kit-Decal-Laden (`KitRegistry.loadLevel`, `level.schema.json`) **implementiert** (Phase 3); Maker (`SWM_decal`) ist entschieden, aber **noch nicht implementiert**. Messwerte stammen von einer GPU und sind auf anderen **UNVERIFIED**.
+Status: angenommen. Kern auf WebGPU und WebGL2 umgesetzt und mit `apps/showcases/decal-probe` (`npm run test:decals`, 15 Assertions) auf echter GPU geprüft. Datenpfad: Level-Deskriptor und Kit-Decal-Laden (`KitRegistry.loadLevel`, `level.schema.json`) **implementiert** (Phase 3); glTF-Plugin `SWM_decal` (Lesen/Schreiben, `KitRegistry.hydrateDecal`) **implementiert** (Phase 4a); das Maker-Stamp-Tool (`D`, `DecalStampTool`; Phase 4b) ist **implementiert** und persistiert über das Plugin. Messwerte stammen von einer GPU und sind auf anderen **UNVERIFIED**.
 
 Decals (Schilder, Schmutz, Einschläge) sollen auf beliebiger Opaque-Geometrie sitzen, Licht empfangen und die Normal-Map der Unterlage übernehmen. Dieser ADR hält fest, wie, aufbauend auf dem Normal-Buffer ([0028](0028-thin-normal-buffer-mrt.md)) und dem Clustered Lighting ([0007](0007-clustered-lighting-webgl2-webgpu-only.md)).
 
@@ -18,6 +18,7 @@ Decals (Schilder, Schmutz, Einschläge) sollen auf beliebiger Opaque-Geometrie s
 ## Datenpfad (ENTSCHIEDEN, NOCH NICHT IMPLEMENTIERT)
 
 - Primär: `LevelDescriptor.decals[]` (Instanz: Transform, Größe, Fade, Opazität, Priorität, Tags, Parent) plus Kit-Decal-Eintrag (Prefab: Maps, Standardgröße), im Schema mit `additionalProperties: false` ([0020](0020-declarative-level-descriptors-and-kit-runtime.md)).
+- `SWM_decal` (`gltf/extensions/SwmDecal.ts`): Payload = `LevelDecalPlacement` ohne `id` (Node-Name), `position`/`rotation` (Node-TRS) und `parent` (Node-Hierarchie). **Größe: `size` im Payload ist maßgeblich**; die Node-Scale wird zusätzlich als `(w, depth, h)` geschrieben, damit andere glTF-Viewer die Box sehen, und beim Lesen aus `size` überschrieben. `readNode` ist synchron, daher kommt das Decal textur-los zurück; `KitRegistry.hydrateDecal(decal)` / `resolveLevelDecals(root)` laden danach Maps und `unlit` über denselben Codepfad wie `loadLevel`. Unbekannte `kitDecal` oder Ladefehler warnen und überspringen, ein ungültiger Payload (Größe, Opazität, Tags) wirft beim Lesen.
 - Maker persistiert über eine glTF-Erweiterung `SWM_decal` mit demselben Payload ([0010](0010-maker-editor-architecture.md), [0017](0017-gltf-extension-plugin-registry.md)); `level.json` bleibt führend für handgeschriebene Level.
 
 ## Gemessen (eine GPU, WebGPU, 5600x2968)

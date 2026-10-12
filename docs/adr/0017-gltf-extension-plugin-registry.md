@@ -37,7 +37,7 @@ interface GltfExtensionPlugin {
 Liste ein; `GltfLoader`/`WorldWriter` iterieren über diese Liste statt über eigene if/else-Ketten.
 Drei eingebaute Plugins (`packages/engine/src/loaders/gltf/extensions/`) registrieren sich per
 Seiteneffekt-Import selbst: `KhrLightsPunctual.ts`, `SwmPrefabInstance.ts` (beide 1:1 aus dem
-vorherigen hartkodierten Code migriert) und `SwmStageZone.ts` (neu, ADR 0016).
+vorherigen hartkodierten Code migriert) und `SwmStageZone.ts` (neu, ADR 0016). Später kommt `SwmDecal.ts` hinzu (ADR 0029): sein `readNode` liefert ein textur-loses `Decal`, die Maps lädt asynchron `KitRegistry.hydrateDecal`, weil `readNode` synchron bleibt.
 
 **Zwei Kontext-Typen statt einem**, weil `writeNode` pro Node während des rekursiven
 Tree-Walks läuft — bevor das fertige Dokument überhaupt existiert —, während `finalizeWrite`

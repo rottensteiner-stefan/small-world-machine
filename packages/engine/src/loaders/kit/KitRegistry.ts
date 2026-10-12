@@ -6,6 +6,7 @@ import { DirectionalLight } from "../../core/lights/DirectionalLight.js";
 import { AmbientLight } from "../../core/lights/AmbientLight.js";
 import { Color } from "../../core/colors/Color.js";
 import { Decal } from "../../core/objects/Decal.js";
+import { createDecalShell } from "./DecalShell.js";
 import { DecalMaterial } from "../../core/materials/surface/DecalMaterial.js";
 import { Texture } from "../../core/textures/index.js";
 import { StandardMaterial } from "../../core/materials/surface/StandardMaterial.js";
@@ -452,55 +453,76 @@ export class KitRegistry {
     return Texture.fromImage(img);
   }
 
-  /** Builds one decal from its placement and the kit decal it references. */
-  private async _createDecal(placement: LevelDecalPlacement): Promise<Decal> {
-    const kitId = placement.kitDecal.split("/")[0] ?? "";
+  /** Finds the kit decal entry behind a namespaced id, loading the kit manifest on demand. */
+  private async _findKitDecal(kitDecal: string, decalId: string): Promise<KitDecalItem> {
+    const kitId = kitDecal.split("/")[0] ?? "";
     const manifest = await this.getKitManifest(kitId);
-    const item: KitDecalItem | undefined = (manifest.decals ?? []).find(
-      (it) => it.id === placement.kitDecal,
-    );
+    const item = (manifest.decals ?? []).find((it) => it.id === kitDecal);
     if (!item) {
       throw new Error(
-        `[KitRegistry] Decal '${placement.id}': kit decal '${placement.kitDecal}' not found in kit '${kitId}'.`,
+        `[KitRegistry] Decal '${decalId}': kit decal '${kitDecal}' not found in kit '${kitId}'.`,
       );
     }
+    return item;
+  }
 
+  /** Loads the kit decal's maps into the decal's material (shared by level loading and `hydrateDecal`). */
+  private async _loadDecalMaps(decal: Decal, item: KitDecalItem): Promise<void> {
+    const kitId = item.id.split("/")[0] ?? "";
     const [diffuseMap, normalMap, ormMap, emissiveMap] = await Promise.all([
       this._loadDecalTexture(kitId, item.file),
       item.normal ? this._loadDecalTexture(kitId, item.normal) : undefined,
       item.orm ? this._loadDecalTexture(kitId, item.orm) : undefined,
       item.emission ? this._loadDecalTexture(kitId, item.emission) : undefined,
     ]);
+    const material = decal.material as DecalMaterial;
+    material.diffuseMap = diffuseMap;
+    material.normalMap = normalMap;
+    material.ormMap = ormMap;
+    material.emissiveMap = emissiveMap;
+    material.unlit = item.unlit ?? false;
+  }
 
-    const fade = placement.fade;
-    const material = new DecalMaterial({
-      diffuseMap,
-      normalMap,
-      ormMap,
-      emissiveMap,
-      unlit: item.unlit ?? false,
-    });
-    if (fade?.angleStart !== undefined) material.angleFadeStart = fade.angleStart;
-    if (fade?.angleEnd !== undefined) material.angleFadeEnd = fade.angleEnd;
-    if (fade?.edge !== undefined) material.edgeFade = fade.edge;
-    material.color.a = placement.opacity ?? 1;
-
-    const decal = new Decal(material, placement.id);
+  /** Builds one decal from its placement and the kit decal it references. */
+  private async _createDecal(placement: LevelDecalPlacement): Promise<Decal> {
+    const item = await this._findKitDecal(placement.kitDecal, placement.id);
     const size = placement.size ?? item.size ?? [1, 1, 1];
-    if (!size.every((v) => Number.isFinite(v) && v > 0)) {
-      throw new Error(
-        `[KitRegistry] Decal '${placement.id}': kit decal '${item.id}' has an invalid size [${size.join(", ")}].`,
-      );
-    }
-    decal.scale.set(size[0], size[2], size[1]); // [width, height, depth]: the projection axis is local Y, the image height runs along Z
-    if (placement.position) {
-      decal.position.set(placement.position[0], placement.position[1], placement.position[2]);
-    }
-    if (placement.rotation) {
-      decal.rotation.set(placement.rotation[0], placement.rotation[1], placement.rotation[2]);
-    }
-    decal.priority = placement.priority ?? 0;
-    decal.userData["tags"] = placement.tags ? [...placement.tags] : [];
+    const decal = createDecalShell({ ...placement, size });
+    await this._loadDecalMaps(decal, item);
     return decal;
+  }
+
+  /**
+   * Fills a texture-less decal (e.g. one read from `SWM_decal`) with the maps and `unlit` flag of
+   * its kit decal. Geometry, size, fade and opacity stay as they are. A decal without `kitDecal`,
+   * with an unknown kit decal or with unloadable maps is skipped with a warning (it stays
+   * invisible) and `false` is returned; it never throws.
+   */
+  public async hydrateDecal(decal: Decal): Promise<boolean> {
+    if (decal.kitDecal === undefined) {
+      console.warn(`[KitRegistry] Cannot hydrate decal '${decal.name}': it has no kitDecal.`);
+      return false;
+    }
+    try {
+      const item = await this._findKitDecal(decal.kitDecal, decal.name);
+      await this._loadDecalMaps(decal, item);
+      return true;
+    } catch (err) {
+      console.warn(
+        `[KitRegistry] Failed to hydrate decal '${decal.name}' (${decal.kitDecal}):`,
+        err,
+      );
+      return false;
+    }
+  }
+
+  /** `hydrateDecal` for every `Decal` below `root` (e.g. a freshly loaded Maker scene); returns how many were hydrated. */
+  public async resolveLevelDecals(root: Object3D): Promise<number> {
+    const decals: Decal[] = [];
+    root.traverse((o) => {
+      if (o instanceof Decal) decals.push(o);
+    });
+    const results = await Promise.all(decals.map((d) => this.hydrateDecal(d)));
+    return results.filter(Boolean).length;
   }
 }

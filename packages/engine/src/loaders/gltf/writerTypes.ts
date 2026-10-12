@@ -1,3 +1,5 @@
+import type { SwmDecalPayload } from "../kit/DecalShell.js";
+
 /**
  * Minimal glTF 2.0 JSON document shape `WorldWriter` produces -- deliberately not the full spec,
  * only the subset exercised by the World Format's round-trip (node hierarchy, one mesh's
@@ -30,6 +32,7 @@ export interface GltfNodeJson {
   extensions?: {
     KHR_lights_punctual?: { light: number };
     SWM_prefab_instance?: { source: string };
+    SWM_decal?: SwmDecalPayload;
     SWM_stage_zone?: { displayName?: string; points: { u: number; v: number; scale: number }[] };
   };
 }
