@@ -28,6 +28,13 @@ vec2 g_uvGradY;
 #define SAMPLE_NORMAL_MAP(uv) textureGrad(u_normalMap, uv, g_uvGradX, g_uvGradY)
 #define SAMPLE_EMISSIVE_MAP(uv) textureGrad(u_emissiveMap, uv, g_uvGradX, g_uvGradY)
 
+#ifdef USE_DECAL_ORM
+uniform sampler2D u_aoMap; // packed ORM: R = AO, G = roughness, B = metallic
+#endif
+#ifdef USE_EMISSIVE_MAP
+uniform sampler2D u_emissiveMap;
+#endif
+
 uniform float u_metallic;
 uniform float u_roughness;
 uniform vec4 u_liquidParams;
@@ -130,9 +137,14 @@ void main() {
     vec4 texColor = textureGrad(u_diffuseMap, g_uv, g_uvGradX, g_uvGradY);
     texColor.a *= angleFade * edgeFade;
     vec3 albedo = sRGBToLinear(texColor.rgb) * sRGBToLinear(u_color.rgb);
-    float metallic = u_metallic;
-    float roughness = clamp(u_roughness, 0.05, 1.0);
-    float ao = u_extraParams.x;
+#ifdef USE_DECAL_ORM
+    vec3 orm = textureGrad(u_aoMap, g_uv, g_uvGradX, g_uvGradY).rgb;
+#else
+    vec3 orm = vec3(1.0);
+#endif
+    float metallic = u_metallic * orm.b;
+    float roughness = clamp(u_roughness * orm.g, 0.05, 1.0);
+    float ao = u_extraParams.x * orm.r;
 
 #ifdef USE_DECAL_UNLIT
     // Flat albedo, with the same output transform the lit chunk applies at its end.

@@ -99,4 +99,62 @@ describe("KitManifestValidator", () => {
     expect(report.issues.some((i) => i.path === "id")).toBe(true);
     expect(report.issues.some((i) => i.path === "version")).toBe(true);
   });
+
+  describe("decal extras", () => {
+    const base = {
+      id: "kit",
+      name: "Kit",
+      version: "1.0.0",
+      description: "d",
+      author: "a",
+      license: "CC0",
+    };
+    const decal = (extra: Record<string, unknown>): Record<string, unknown> => ({
+      ...base,
+      decals: [{ id: "kit/d", name: "D", file: "d.png", ...extra }],
+    });
+
+    it("accepts valid normal/orm/emission/size/unlit", () => {
+      const report = validateKitManifestStructure(
+        decal({
+          normal: "d_n.png",
+          orm: "d_orm.png",
+          emission: "d_e.png",
+          size: [1, 0.5, 0.25],
+          unlit: true,
+        }),
+      );
+      expect(report.issues.filter((i) => i.severity === "error")).toHaveLength(0);
+    });
+
+    it("rejects invalid decal extras", () => {
+      const report = validateKitManifestStructure(
+        decal({ normal: 3, orm: "x.jpg", size: [1, 0, 1], unlit: "yes" }),
+      );
+      const paths = report.issues.map((i) => i.path);
+      expect(report.valid).toBe(false);
+      expect(paths).toContain("decals[0].normal");
+      expect(paths).toContain("decals[0].orm");
+      expect(paths).toContain("decals[0].size");
+      expect(paths).toContain("decals[0].unlit");
+    });
+
+    it("rejects size with wrong length", () => {
+      const report = validateKitManifestStructure(decal({ size: [1, 1] }));
+      expect(report.issues.some((i) => i.path === "decals[0].size")).toBe(true);
+    });
+
+    it("warns about missing extra map files", async () => {
+      const sink = new ZipAssetSink();
+      await sink.write(
+        "kit.json",
+        new TextEncoder().encode(JSON.stringify(decal({ normal: "d_n.png" }))),
+      );
+      await sink.write("decals/d.png", new Uint8Array([0]));
+      const source = await ZipAssetSource.fromBytes(await sink.build());
+      const { report } = await validateKitManifest(source);
+      expect(report.issues.some((i) => i.path === "decals[0].normal")).toBe(true);
+      expect(report.issues.some((i) => i.path === "decals[0].file")).toBe(false);
+    });
+  });
 });

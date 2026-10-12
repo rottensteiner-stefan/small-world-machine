@@ -66,7 +66,18 @@ export interface KitTextureItem {
 export interface KitDecalItem {
   id: string;
   name: string;
+  /** Albedo (RGBA, alpha = coverage), a PNG in `decals/`. */
   file: string;
+  /** Optional tangent-space normal map (PNG in `decals/`). */
+  normal?: string;
+  /** Optional packed map, engine convention: R = ambient occlusion, G = roughness, B = metallic. */
+  orm?: string;
+  /** Optional emission map (PNG in `decals/`). */
+  emission?: string;
+  /** Default box size in metres: [width, height, projection depth]. */
+  size?: [number, number, number];
+  /** Draw flat albedo without lighting (about half the cost of a lit decal). Defaults to false. */
+  unlit?: boolean;
 }
 
 /** The `kit.json` manifest (ADR 0011). */
@@ -191,6 +202,32 @@ export interface LevelPropPlacement {
   materialOverrides?: KitMaterialOverride;
 }
 
+/**
+ * A decal instance in a level (ADR 0029). The kit decal (`kitDecal`) carries the maps and the
+ * default size; the placement only carries instance data.
+ */
+export interface LevelDecalPlacement {
+  id: string;
+  /** Namespaced kit decal id, e.g. `flakturm/sign_koje42`. */
+  kitDecal: string;
+  /** Box centre. Local to `parent` when that is set, otherwise level space. */
+  position?: [number, number, number];
+  /** Euler angles in radians (same convention as props). The decal's up axis (+Y) is the surface normal. */
+  rotation?: [number, number, number];
+  /** Box size [width, height, projection depth] in metres, overriding the kit decal's default. */
+  size?: [number, number, number];
+  /** Fade towards grazing surfaces (degrees against the decal's up axis) and towards the box edges (0..0.5). */
+  fade?: { angleStart?: number; angleEnd?: number; edge?: number };
+  /** Multiplies the decal's alpha, 0..1. Defaults to 1. */
+  opacity?: number;
+  /** Stacking order of overlapping decals: higher draws later (on top). Defaults to 0. */
+  priority?: number;
+  /** Free-form labels for game-side filtering (kept in `userData.tags`). */
+  tags?: string[];
+  /** Id of a prop in the same level: the decal becomes its child and moves with it. */
+  parent?: string;
+}
+
 export interface LevelLightDef {
   name: string;
   type: "spot" | "point" | "directional" | "ambient";
@@ -225,6 +262,7 @@ export interface LevelDescriptor {
     surfaces?: LevelEnvironmentSurface[];
   };
   props: LevelPropPlacement[];
+  decals?: LevelDecalPlacement[];
   lights?: LevelLightDef[];
   hotspots?: LevelHotspotDef[];
   stageZone?: {
@@ -238,6 +276,7 @@ export interface LevelInstance {
   descriptor: LevelDescriptor;
   root: import("../../core/Object3D.js").Object3D;
   props: Map<string, KitPropInstance>;
+  decals: Map<string, import("../../core/objects/Decal.js").Decal>;
   lights: Map<string, import("../../core/lights/AbstractLight.js").AbstractLight>;
   hotspots: LevelHotspotDef[];
 }

@@ -5,6 +5,9 @@ import { SpotLight } from "../../core/lights/SpotLight.js";
 import { DirectionalLight } from "../../core/lights/DirectionalLight.js";
 import { AmbientLight } from "../../core/lights/AmbientLight.js";
 import { Color } from "../../core/colors/Color.js";
+import { Decal } from "../../core/objects/Decal.js";
+import { DecalMaterial } from "../../core/materials/surface/DecalMaterial.js";
+import { Texture } from "../../core/textures/index.js";
 import { StandardMaterial } from "../../core/materials/surface/StandardMaterial.js";
 import { Vector3D } from "../../math/Vector3D.js";
 import { AssetManager } from "../AssetManager.js";
@@ -14,6 +17,8 @@ import {
   assertPropMeta,
   type KitManifest,
   type KitManifestItem,
+  type KitDecalItem,
+  type LevelDecalPlacement,
   type PropMeta,
   type LoadPropOptions,
   type KitPropInstance,
@@ -268,6 +273,9 @@ export class KitRegistry {
     const levelRoot = new Object3D(descriptor.id || "LevelRoot");
     const propInstances = new Map<string, KitPropInstance>();
     const lightInstances = new Map<string, AbstractLight>();
+    const decalInstances = new Map<string, Decal>();
+
+    this._validateDecalPlacements(descriptor);
 
     // 1. Load Props in parallel
     const propPromises = descriptor.props.map(async (p) => {
@@ -379,6 +387,32 @@ export class KitRegistry {
 
     await Promise.all(propPromises);
 
+    // 3. Decals (ADR 0029): after the props so `parent` can resolve to a prop instance root.
+    for (const placement of descriptor.decals ?? []) {
+      // Like props, a decal that cannot be built is skipped with a warning; it never takes the level down.
+      let parentRoot: Object3D = levelRoot;
+      if (placement.parent !== undefined) {
+        const parentInst = propInstances.get(placement.parent);
+        if (!parentInst) {
+          console.warn(
+            `[KitRegistry] Skipping decal '${placement.id}': parent prop '${placement.parent}' failed to load.`,
+          );
+          continue;
+        }
+        parentRoot = parentInst.root;
+      }
+      try {
+        const decal = await this._createDecal(placement);
+        parentRoot.add(decal);
+        decalInstances.set(placement.id, decal);
+      } catch (err) {
+        console.warn(
+          `[KitRegistry] Failed to load level decal '${placement.id}' (${placement.kitDecal}):`,
+          err,
+        );
+      }
+    }
+
     if (targetScene) {
       targetScene.add(levelRoot);
     }
@@ -387,8 +421,86 @@ export class KitRegistry {
       descriptor,
       root: levelRoot,
       props: propInstances,
+      decals: decalInstances,
       lights: lightInstances,
       hotspots: descriptor.hotspots ?? [],
     };
+  }
+
+  /** Fails fast on placements that can never load: duplicate ids, bad size, unknown parent. */
+  private _validateDecalPlacements(descriptor: LevelDescriptor): void {
+    const propIds = new Set(descriptor.props.map((p) => p.id));
+    const decalIds = new Set<string>();
+    for (const d of descriptor.decals ?? []) {
+      if (decalIds.has(d.id)) {
+        throw new Error(`[KitRegistry] Duplicate decal id '${d.id}' in level '${descriptor.id}'.`);
+      }
+      decalIds.add(d.id);
+      if (d.size && !d.size.every((v) => Number.isFinite(v) && v > 0)) {
+        throw new Error(
+          `[KitRegistry] Decal '${d.id}': size must be positive and finite, got [${d.size.join(", ")}].`,
+        );
+      }
+      if (d.parent !== undefined && !propIds.has(d.parent)) {
+        throw new Error(`[KitRegistry] Decal '${d.id}': unknown parent prop '${d.parent}'.`);
+      }
+    }
+  }
+
+  private async _loadDecalTexture(kitId: string, file: string): Promise<Texture> {
+    const img = await this._assetManager.loadImage(`${this._basePath}${kitId}/decals/${file}`);
+    return Texture.fromImage(img);
+  }
+
+  /** Builds one decal from its placement and the kit decal it references. */
+  private async _createDecal(placement: LevelDecalPlacement): Promise<Decal> {
+    const kitId = placement.kitDecal.split("/")[0] ?? "";
+    const manifest = await this.getKitManifest(kitId);
+    const item: KitDecalItem | undefined = (manifest.decals ?? []).find(
+      (it) => it.id === placement.kitDecal,
+    );
+    if (!item) {
+      throw new Error(
+        `[KitRegistry] Decal '${placement.id}': kit decal '${placement.kitDecal}' not found in kit '${kitId}'.`,
+      );
+    }
+
+    const [diffuseMap, normalMap, ormMap, emissiveMap] = await Promise.all([
+      this._loadDecalTexture(kitId, item.file),
+      item.normal ? this._loadDecalTexture(kitId, item.normal) : undefined,
+      item.orm ? this._loadDecalTexture(kitId, item.orm) : undefined,
+      item.emission ? this._loadDecalTexture(kitId, item.emission) : undefined,
+    ]);
+
+    const fade = placement.fade;
+    const material = new DecalMaterial({
+      diffuseMap,
+      normalMap,
+      ormMap,
+      emissiveMap,
+      unlit: item.unlit ?? false,
+    });
+    if (fade?.angleStart !== undefined) material.angleFadeStart = fade.angleStart;
+    if (fade?.angleEnd !== undefined) material.angleFadeEnd = fade.angleEnd;
+    if (fade?.edge !== undefined) material.edgeFade = fade.edge;
+    material.color.a = placement.opacity ?? 1;
+
+    const decal = new Decal(material, placement.id);
+    const size = placement.size ?? item.size ?? [1, 1, 1];
+    if (!size.every((v) => Number.isFinite(v) && v > 0)) {
+      throw new Error(
+        `[KitRegistry] Decal '${placement.id}': kit decal '${item.id}' has an invalid size [${size.join(", ")}].`,
+      );
+    }
+    decal.scale.set(size[0], size[1], size[2]);
+    if (placement.position) {
+      decal.position.set(placement.position[0], placement.position[1], placement.position[2]);
+    }
+    if (placement.rotation) {
+      decal.rotation.set(placement.rotation[0], placement.rotation[1], placement.rotation[2]);
+    }
+    decal.priority = placement.priority ?? 0;
+    decal.userData["tags"] = placement.tags ? [...placement.tags] : [];
+    return decal;
   }
 }

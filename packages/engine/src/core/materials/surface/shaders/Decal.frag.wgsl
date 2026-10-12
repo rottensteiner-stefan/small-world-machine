@@ -86,9 +86,15 @@ fn decalNeighbourDelta(centre: vec4f, forward: vec4f, backward: vec4f) -> vec3f 
 
     let diffuseTex = textureSampleGrad(u_diffuseMap, s, i.uv, g_uvGradX, g_uvGradY);
     let albedo = sRGBToLinear(diffuseTex.rgb) * sRGBToLinear(obj.color.rgb);
-    let metallic = obj.metallic;
-    let roughness = clamp(obj.roughness, 0.05, 1.0);
-    let ao = 1.0;
+    // ORM (R = AO, G = roughness, B = metallic) lives in the shared u_aoMap slot; matParam6.x says
+    // whether one is bound (an unbound slot would read the white fallback, i.e. 1 everywhere).
+    var orm = vec3f(1.0);
+    if (obj.matParam6.x > 0.5) {
+        orm = textureSampleGrad(u_aoMap, s, i.uv, g_uvGradX, g_uvGradY).rgb;
+    }
+    let metallic = obj.metallic * orm.b;
+    let roughness = clamp(obj.roughness * orm.g, 0.05, 1.0);
+    let ao = orm.r;
 
     // Unlit decals keep the flat albedo; lit ones run the clustered PBR chunk inside this block
     // (its locals, including `color`, stay scoped to it).

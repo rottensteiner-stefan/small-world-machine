@@ -111,6 +111,51 @@ describe("Level Schema & Level Manifest Validation", () => {
           }
         }
       });
+
+      it("references existing kit decals and their map files", () => {
+        levelData = JSON.parse(rawContent) as LevelDescriptor;
+        const kitsRoot = path.join(repoRoot, "public", "assets", "kits");
+        const propIds = new Set(levelData.props.map((prop) => prop.id));
+
+        for (const decal of levelData.decals ?? []) {
+          if (decal.parent !== undefined) {
+            expect(
+              propIds.has(decal.parent),
+              `Decal '${decal.id}' has unknown parent prop '${decal.parent}'`,
+            ).toBe(true);
+          }
+          const [kitId] = decal.kitDecal.split("/");
+          const kitManifestPath = path.join(kitsRoot, kitId!, "kit.json");
+          expect(
+            fs.existsSync(kitManifestPath),
+            `Kit '${kitId}' of decal '${decal.id}' does not exist at ${kitManifestPath}`,
+          ).toBe(true);
+
+          const kitManifest = JSON.parse(fs.readFileSync(kitManifestPath, "utf8")) as {
+            decals?: Array<{
+              id: string;
+              file: string;
+              normal?: string;
+              orm?: string;
+              emission?: string;
+            }>;
+          };
+          const item = (kitManifest.decals ?? []).find((it) => it.id === decal.kitDecal);
+          expect(
+            item,
+            `Decal '${decal.kitDecal}' not declared in kit manifest ${kitManifestPath}`,
+          ).toBeDefined();
+
+          for (const file of [item?.file, item?.normal, item?.orm, item?.emission]) {
+            if (file === undefined) continue;
+            const mapPath = path.join(kitsRoot, kitId!, "decals", file);
+            expect(
+              fs.existsSync(mapPath),
+              `Map '${file}' of decal '${decal.kitDecal}' missing at ${mapPath}`,
+            ).toBe(true);
+          }
+        }
+      });
     });
   }
 });

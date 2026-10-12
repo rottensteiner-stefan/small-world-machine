@@ -23,18 +23,22 @@ target and casts/receives no shadows; its bounds exist only for frustum culling.
 
 ## `DecalMaterial` options
 
-| Option           | Default | Meaning                                                                                       |
-| ---------------- | ------- | --------------------------------------------------------------------------------------------- |
-| `color`          | white   | Tint multiplied onto the albedo; its alpha scales the whole decal.                            |
-| `diffuseMap`     | none    | Albedo (rgb, sRGB) and coverage (a).                                                          |
-| `normalMap`      | none    | Tangent-space normal map, applied on top of the receiver's normal.                            |
-| `roughness`      | `0.8`   | PBR roughness (clamped to 0.05..1 in the shader).                                             |
-| `metallic`       | `0`     | PBR metallic.                                                                                 |
-| `edgeFade`       | `0.1`   | Fraction of the box (0..0.5) over which the decal fades out towards its edges.                |
-| `angleFadeStart` | `60`    | Angle in degrees between the receiver normal and the decal's up axis where fading starts.     |
-| `angleFadeEnd`   | `85`    | Angle in degrees where the decal is fully faded out.                                          |
-| `mipBias`        | `0`     | LOD bias in mip levels on the finite-difference UV gradients (negative = sharper).            |
-| `unlit`          | `false` | Flat albedo, no lighting: about half the cost of a lit decal; leaves the normal buffer alone. |
+| Option              | Default | Meaning                                                                                                  |
+| ------------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| `color`             | white   | Tint multiplied onto the albedo; its alpha scales the whole decal.                                       |
+| `diffuseMap`        | none    | Albedo (rgb, sRGB) and coverage (a).                                                                     |
+| `normalMap`         | none    | Tangent-space normal map, applied on top of the receiver's normal.                                       |
+| `ormMap`            | none    | Packed map: R = AO, G = roughness, B = metallic (linear). Multiplied with the scalars; R scales ambient. |
+| `emissiveMap`       | none    | Emissive texture (sRGB), times `emissiveColor` x `emissiveIntensity`. Lit decals only.                   |
+| `emissiveColor`     | black   | Emissive tint; black means no emission, even with an `emissiveMap`.                                      |
+| `emissiveIntensity` | `1`     | Emissive strength.                                                                                       |
+| `roughness`         | `0.8`   | PBR roughness (clamped to 0.05..1 in the shader).                                                        |
+| `metallic`          | `0`     | PBR metallic.                                                                                            |
+| `edgeFade`          | `0.1`   | Fraction of the box (0..0.5) over which the decal fades out towards its edges.                           |
+| `angleFadeStart`    | `60`    | Angle in degrees between the receiver normal and the decal's up axis where fading starts.                |
+| `angleFadeEnd`      | `85`    | Angle in degrees where the decal is fully faded out.                                                     |
+| `mipBias`           | `0`     | LOD bias in mip levels on the finite-difference UV gradients (negative = sharper).                       |
+| `unlit`             | `false` | Flat albedo, no lighting: about half the cost of a lit decal; leaves the normal buffer alone.            |
 
 The angle fade is what keeps a floor decal from smearing up the vertical sides of an object
 that pokes through its box.
@@ -157,7 +161,7 @@ overrides the dev-server origin (default `https://localhost:5173`).
 
 ## Notes (verified)
 
-- **ORM map (planned):** channel order matches the rest of the engine / glTF: R = AO, G = roughness, B = metallic (`Standard.frag.wgsl:8-10`, `Standard.frag.glsl:90,96,102`). The glTF loader binds one texture to both `metallicMap` and `roughnessMap` (`GltfMaterialParser.ts:61-73`). Kit textures are separate greyscale files. `DecalMaterial` has no ORM map yet (`Decal.frag.wgsl:89-90`, `Decal.frag.glsl:133-134` use scalars only).
+- **ORM map:** channel order matches the rest of the engine / glTF: R = AO, G = roughness, B = metallic (`Standard.frag.wgsl:8-10`, `Standard.frag.glsl:90,96,102`). `DecalMaterial.ormMap` binds to the shared `u_aoMap` slot because the WebGPU material bind group has a fixed binding table (`GPUPipelineCache.getOptionalMaterialTextureBindings`) and WGSL flag constants are hardcoded in `GPUPipelineCache`; WGSL gates the tap with `matParam6.x`, GLSL with `USE_DECAL_ORM`. Both sample with `g_uvGradX/Y`. Emissive reuses the lit chunk's `u_specColor` x `u_emissiveMap` path (gradient sampling already wired); unlit decals skip it.
 - **Vertex alpha:** vertex colour is RGBA (`Mesh.ts:4,256`, `GPUPipelineCache.ts:426-437`) behind `USE_VERTEX_COLOR`, not combinable with instancing. Only `StylizedLava` consumes it; Standard/Decal shaders and the glTF loader (`COLOR_0`) do not. A baker must add the consumer side itself.
 
 > Normal-mapped receivers: `?bump=1` on the decal probe tilts the floor normal map; `npm run test:decals` checks the normal buffer carries it, decals blend onto it, and HBAO (flat depth normal) ignores it.

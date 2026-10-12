@@ -220,6 +220,37 @@ export function validateKitManifestStructure(json: unknown): ValidationReport {
             error(`decal #${index} field 'file' must end with .png.`, `decals[${index}].file`),
           );
         }
+        for (const prop of ["normal", "orm", "emission"]) {
+          const value = entry[prop];
+          if (value === undefined) continue;
+          if (typeof value !== "string" || !PNG_PATTERN.test(value)) {
+            issues.push(
+              error(
+                `decal #${index} field '${prop}' must be a string ending with .png.`,
+                `decals[${index}].${prop}`,
+              ),
+            );
+          }
+        }
+        const size = entry["size"];
+        if (
+          size !== undefined &&
+          (!Array.isArray(size) ||
+            size.length !== 3 ||
+            !size.every((n) => typeof n === "number" && Number.isFinite(n) && n > 0))
+        ) {
+          issues.push(
+            error(
+              `decal #${index} field 'size' must be an array of 3 positive numbers.`,
+              `decals[${index}].size`,
+            ),
+          );
+        }
+        if (entry["unlit"] !== undefined && typeof entry["unlit"] !== "boolean") {
+          issues.push(
+            error(`decal #${index} field 'unlit' must be a boolean.`, `decals[${index}].unlit`),
+          );
+        }
       });
     }
   }
@@ -316,14 +347,15 @@ export async function validateKitManifest(source: IAssetSource): Promise<{
   if (Array.isArray(parsed["decals"])) {
     for (const [i, decal] of (parsed["decals"] as unknown[]).entries()) {
       if (!isRecord(decal)) continue;
-      const file = decal["file"];
-      if (typeof file === "string") {
+      for (const prop of ["file", "normal", "orm", "emission"]) {
+        const file = decal[prop];
+        if (typeof file !== "string") continue;
         const path = prefix(`decals/${file}`);
         if (!(await source.has(path))) {
           warns.push(
             warning(
-              `decal #${i}: referenced file '${String(file)}' is missing (${path}).`,
-              `decals[${i}].file`,
+              `decal #${i}: referenced ${prop} '${file}' is missing (${path}).`,
+              `decals[${i}].${prop}`,
             ),
           );
         }

@@ -18,6 +18,19 @@ export interface DecalMaterialOptions {
   diffuseMap?: Texture | undefined;
   /** Tangent-space normal map of the decal, rotated onto the surface normal beneath it. */
   normalMap?: Texture | undefined;
+  /**
+   * Packed occlusion/roughness/metallic map (engine convention, same as glTF): R = ambient
+   * occlusion, G = roughness, B = metallic. Multiplied with `roughness` / `metallic`; R scales the
+   * ambient term. Linear data. Bound to the shared `u_aoMap` slot (the WebGPU material bind group
+   * has no dedicated ORM binding).
+   */
+  ormMap?: Texture | undefined;
+  /** Emissive texture (rgb, sRGB), multiplied with `emissiveColor` and `emissiveIntensity`. Lit decals only. */
+  emissiveMap?: Texture | undefined;
+  /** Emissive tint. Defaults to black (no emission, also with an `emissiveMap`). */
+  emissiveColor?: Color;
+  /** Emissive strength multiplier. Defaults to 1. */
+  emissiveIntensity?: number;
   /** PBR roughness. Defaults to 0.8. */
   roughness?: number;
   /** PBR metallic. Defaults to 0. */
@@ -45,6 +58,10 @@ export interface DecalMaterialOptions {
 export class DecalMaterial extends AbstractMaterial {
   public diffuseMap: Texture | undefined;
   public normalMap: Texture | undefined;
+  public ormMap: Texture | undefined;
+  public emissiveMap: Texture | undefined;
+  public emissiveColor: Color;
+  public emissiveIntensity: number;
   public roughness: number;
   public metallic: number;
   public edgeFade: number;
@@ -54,12 +71,17 @@ export class DecalMaterial extends AbstractMaterial {
   public unlit: boolean;
 
   private readonly _fadeParams: Float32Array = new Float32Array(4);
+  private readonly _ormParams: Float32Array = new Float32Array(4);
 
   constructor(options: DecalMaterialOptions = {}) {
     super(MaterialType.DECAL);
     this.color = options.color ?? new Color(1, 1, 1, 1);
     this.diffuseMap = options.diffuseMap;
     this.normalMap = options.normalMap;
+    this.ormMap = options.ormMap;
+    this.emissiveMap = options.emissiveMap;
+    this.emissiveColor = options.emissiveColor ?? new Color(0, 0, 0, 1);
+    this.emissiveIntensity = options.emissiveIntensity ?? 1;
     this.roughness = options.roughness ?? 0.8;
     this.metallic = options.metallic ?? 0;
     this.edgeFade = options.edgeFade ?? 0.1;
@@ -94,12 +116,23 @@ export class DecalMaterial extends AbstractMaterial {
     props["u_color"] = this.color.toFloat32Array();
     props["u_metallic"] = this.metallic;
     props["u_roughness"] = this.roughness;
+    const emissive = props["u_specColor"] as Float32Array;
+    emissive[0] = this.emissiveColor.r;
+    emissive[1] = this.emissiveColor.g;
+    emissive[2] = this.emissiveColor.b;
+    emissive[3] = this.emissiveIntensity;
+    props["u_matParam6"] = this._ormParams; // x = ORM map present (WGSL has no per-flag constant)
+    this._ormParams[0] = this.ormMap ? 1 : 0;
     const fade = this._packFadeParams();
     props["u_matParam4"] = fade;
     props["u_decalFade"] = fade;
     manifest.textures["u_diffuseMap"] = this.diffuseMap;
     manifest.textures["u_normalMap"] = this.normalMap;
+    manifest.textures["u_aoMap"] = this.ormMap;
+    manifest.textures["u_emissiveMap"] = this.emissiveMap;
     manifest.flags = ["USE_DECAL_GRADIENTS"];
+    if (this.ormMap) manifest.flags.push("USE_DECAL_ORM");
+    if (this.emissiveMap) manifest.flags.push("USE_EMISSIVE_MAP");
     if (this.normalMap) manifest.flags.push("USE_NORMAL_MAP");
     if (this.unlit) manifest.flags.push("USE_DECAL_UNLIT");
     return manifest;
@@ -131,6 +164,7 @@ export class DecalMaterial extends AbstractMaterial {
           u_diffuseMap: { type: ShaderPropertyType.TEXTURE },
           u_normalMap: { type: ShaderPropertyType.TEXTURE },
           u_emissiveMap: { type: ShaderPropertyType.TEXTURE },
+          u_aoMap: { type: ShaderPropertyType.TEXTURE },
           u_opaqueDepthMap: { type: ShaderPropertyType.TEXTURE },
           u_normalBufferMap: { type: ShaderPropertyType.TEXTURE },
         },

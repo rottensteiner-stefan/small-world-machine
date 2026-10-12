@@ -80,7 +80,17 @@
       "properties": {
         "id": { "$ref": "#/$defs/namespacedId" },
         "name": { "type": "string", "minLength": 1 },
-        "file": { "type": "string", "pattern": "\\.png$" }
+        "file": { "type": "string", "pattern": "\\.png$" },
+        "normal": { "type": "string", "pattern": "\\.png$" },
+        "orm": { "type": "string", "pattern": "\\.png$" },
+        "emission": { "type": "string", "pattern": "\\.png$" },
+        "size": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number", "exclusiveMinimum": 0 }
+        },
+        "unlit": { "type": "boolean" }
       }
     }
   }

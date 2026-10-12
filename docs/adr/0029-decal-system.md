@@ -1,6 +1,6 @@
 # Decal-System: projizierte Decals als eigene Lit-Layer-Stufe nach Opaque
 
-Status: angenommen. Kern auf WebGPU und WebGL2 umgesetzt und mit `apps/showcases/decal-probe` (`npm run test:decals`, 15 Assertions) auf echter GPU geprüft. Datenpfad (Level-Deskriptor, Maker) ist entschieden, aber **noch nicht implementiert**. Messwerte stammen von einer GPU und sind auf anderen **UNVERIFIED**.
+Status: angenommen. Kern auf WebGPU und WebGL2 umgesetzt und mit `apps/showcases/decal-probe` (`npm run test:decals`, 15 Assertions) auf echter GPU geprüft. Datenpfad: Level-Deskriptor und Kit-Decal-Laden (`KitRegistry.loadLevel`, `level.schema.json`) **implementiert** (Phase 3); Maker (`SWM_decal`) ist entschieden, aber **noch nicht implementiert**. Messwerte stammen von einer GPU und sind auf anderen **UNVERIFIED**.
 
 Decals (Schilder, Schmutz, Einschläge) sollen auf beliebiger Opaque-Geometrie sitzen, Licht empfangen und die Normal-Map der Unterlage übernehmen. Dieser ADR hält fest, wie, aufbauend auf dem Normal-Buffer ([0028](0028-thin-normal-buffer-mrt.md)) und dem Clustered Lighting ([0007](0007-clustered-lighting-webgl2-webgpu-only.md)).
 

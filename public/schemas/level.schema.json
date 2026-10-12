@@ -31,6 +31,11 @@
       "description": "Kit props instantiated in the level.",
       "items": { "$ref": "#/$defs/propPlacement" }
     },
+    "decals": {
+      "type": "array",
+      "description": "Box-projected decals (ADR 0029) referencing kit decals.",
+      "items": { "$ref": "#/$defs/decalPlacement" }
+    },
     "lights": {
       "type": "array",
       "description": "Free or narrative scene lights not tied to a single prop socket.",
@@ -89,6 +94,40 @@
       "minItems": 2,
       "maxItems": 2,
       "items": { "type": "number" }
+    },
+    "decalPlacement": {
+      "type": "object",
+      "required": ["id", "kitDecal"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kitDecal": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*/[a-z][a-z0-9_]*$",
+          "description": "Namespaced kit decal id, e.g. 'flakturm/sign_koje42'."
+        },
+        "position": { "$ref": "#/$defs/vec3" },
+        "rotation": { "$ref": "#/$defs/vec3" },
+        "size": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number", "exclusiveMinimum": 0 }
+        },
+        "fade": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "angleStart": { "type": "number", "minimum": 0, "maximum": 90 },
+            "angleEnd": { "type": "number", "minimum": 0, "maximum": 90 },
+            "edge": { "type": "number", "minimum": 0, "maximum": 0.5 }
+          }
+        },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "priority": { "type": "integer" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "parent": { "type": "string", "minLength": 1 }
+      }
     },
     "propPlacement": {
       "type": "object",

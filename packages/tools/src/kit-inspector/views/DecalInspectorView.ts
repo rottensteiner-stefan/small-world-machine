@@ -19,6 +19,11 @@ export interface DecalItem {
   id: string;
   name: string;
   file: string;
+  normal?: string;
+  orm?: string;
+  emission?: string;
+  size?: [number, number, number];
+  unlit?: boolean;
 }
 
 export async function buildDecalView(
@@ -58,13 +63,23 @@ export async function buildDecalView(
   decalQuad.position.set(0, 0.85, 0);
 
   const manifest = await reg.getKitManifest(kitId);
+  const maps = [
+    decalItem.normal ? "Normal" : "",
+    decalItem.orm ? "ORM" : "",
+    decalItem.emission ? "Emission" : "",
+  ].filter((m) => m !== "");
+  const details = [
+    maps.length > 0 ? `Maps: ${maps.join(", ")}` : "",
+    decalItem.size ? `Größe: ${decalItem.size.join(" x ")} m` : "",
+    decalItem.unlit ? "unlit" : "",
+  ].filter((d) => d !== "");
   const info: InspectedAssetInfo = {
     type: "decal",
     id: decalItem.id,
     kitId,
     name: decalItem.name,
     category: "decals",
-    description: `Grafischer Decal-Sticker aus dem Kit '${kitId}'.`,
+    description: `Grafischer Decal-Sticker aus dem Kit '${kitId}'.${details.length > 0 ? ` ${details.join(" | ")}` : ""}`,
     author: manifest.author,
     license: manifest.license,
     version: manifest.version,
