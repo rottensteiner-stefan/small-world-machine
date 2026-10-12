@@ -1,0 +1,272 @@
+/* global window, document, requestAnimationFrame, GPUBufferUsage, GPUMapMode -- used inside page.evaluate (browser context) */
+// GPU assertions for the decal system (apps/showcases/decal-probe).
+// Usage: npm run test:decals   (env: DECAL_ORIGIN=https://localhost:5173, DECAL_REQUIRE_WEBGPU=1)
+// WebGL2 is the blocking set; WebGPU is informational unless DECAL_REQUIRE_WEBGPU=1.
+import puppeteer from "puppeteer";
+import { PNG } from "pngjs";
+
+const ORIGIN = process.env.DECAL_ORIGIN || "https://localhost:5173";
+const PAGE = `${ORIGIN}/apps/showcases/decal-probe/index.html`;
+const FRAMES = 20;
+const FLOOR = [0.5, 0.9];
+const SKY = [0.5, 0.03];
+const PROBE = [0.12, 0.8];
+const STRIPE = [0.33, 0.68]; // left stripe decal; brief said (0.33,0.62) which is plain floor in the current camera
+
+const failures = { blocking: 0, info: 0 };
+const log = (ok, blocking, msg) => {
+  console.log(`${ok ? "PASS" : blocking ? "FAIL" : "WARN"}  ${msg}`);
+  if (!ok) failures[blocking ? "blocking" : "info"]++;
+};
+
+/** Runs in the page: returns decoded octahedral normals (or raw enc) at the given fractions. */
+async function readNormals(page, backend, points) {
+  return page.evaluate(
+    async (backend, points) => {
+      const app = window.app;
+      const r = app.renderer;
+      const halfToFloat = (h) => {
+        const s = h & 0x8000 ? -1 : 1;
+        const e = (h >> 10) & 0x1f;
+        const f = h & 0x3ff;
+        if (e === 0) return s * Math.pow(2, -14) * (f / 1024);
+        if (e === 31) return f ? NaN : s * Infinity;
+        return s * Math.pow(2, e - 15) * (1 + f / 1024);
+      };
+      const decode = (x, y) => {
+        const z = 1 - Math.abs(x) - Math.abs(y);
+        let nx = x,
+          ny = y;
+        if (z < 0) {
+          nx = (1 - Math.abs(y)) * (x >= 0 ? 1 : -1);
+          ny = (1 - Math.abs(x)) * (y >= 0 ? 1 : -1);
+        }
+        const l = Math.hypot(nx, ny, z) || 1;
+        return [nx / l, ny / l, z / l];
+      };
+      let w, h, get;
+      if (backend === "WEB_GPU") {
+        const dev = r._device;
+        const tex = r._normalTexture;
+        if (!tex) throw new Error("no _normalTexture");
+        w = tex.width;
+        h = tex.height;
+        const bpr = Math.ceil((w * 8) / 256) * 256; // rg16f = 4 B, but be safe w/ rgba16f
+        const bytesPer = tex.format === "rg16float" ? 4 : 8;
+        const bprow = Math.ceil((w * bytesPer) / 256) * 256;
+        void bpr;
+        const buf = dev.createBuffer({
+          size: bprow * h,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        const enc = dev.createCommandEncoder();
+        enc.copyTextureToBuffer({ texture: tex }, { buffer: buf, bytesPerRow: bprow }, [w, h]);
+        dev.queue.submit([enc.finish()]);
+        await buf.mapAsync(GPUMapMode.READ);
+        const u16 = new Uint16Array(buf.getMappedRange().slice(0));
+        buf.unmap();
+        get = (px, py) => {
+          const i = (py * bprow + px * bytesPer) / 2;
+          return [halfToFloat(u16[i]), halfToFloat(u16[i + 1])];
+        };
+      } else {
+        const gl = r.gl;
+        if (!r.hasNormalTarget) throw new Error("hasNormalTarget=false");
+        const tex = r.normalTexture;
+        const fbo = r._hdrFbo;
+        w = fbo.width ?? gl.drawingBufferWidth;
+        h = fbo.height ?? gl.drawingBufferHeight;
+        const f = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
+          throw new Error("normal FBO incomplete");
+        const out = new Float32Array(w * h * 4);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.FLOAT, out);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.deleteFramebuffer(f);
+        const err = gl.getError();
+        if (err) throw new Error(`readPixels GL error 0x${err.toString(16)}`);
+        get = (px, py) => {
+          const i = ((h - 1 - py) * w + px) * 4;
+          return [out[i], out[i + 1]];
+        };
+      }
+      return points.map(([fx, fy]) => {
+        const [ex, ey] = get(Math.floor(fx * w), Math.floor(fy * h));
+        const sentinel = Math.abs(ex) > 1 || Math.abs(ey) > 1;
+        return { enc: [ex, ey], sentinel, n: sentinel ? null : decode(ex, ey) };
+      });
+    },
+    backend,
+    points,
+  );
+}
+
+async function openProbe(browser, query) {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 960, height: 540 });
+  const errors = [];
+  page.on("console", (m) => {
+    if (m.type() !== "error") return;
+    const t = m.text();
+    if (t.includes("favicon")) return;
+    errors.push(t);
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(`${PAGE}?${query}`, { waitUntil: "load", timeout: 30000 });
+  await page.waitForFunction(() => !!window.app?.renderer, { timeout: 20000 });
+  await page.evaluate(
+    (n) =>
+      new Promise((res) => {
+        let c = 0;
+        const tick = () => (++c >= n ? res() : requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+      }),
+    FRAMES,
+  );
+  await new Promise((r) => setTimeout(r, 500));
+  return { page, errors };
+}
+
+const short = (e) => {
+  const u = [...new Set(e.map((s) => s.split("\n")[0].slice(0, 160)))];
+  return `${e.length} err, first: ${u.slice(0, 2).join(" / ")}`;
+};
+const near = (a, b, tol) => a.every((v, i) => Math.abs(v - b[i]) <= tol);
+const fmt = (v) => (v ? `(${v.map((x) => x.toFixed(3)).join(", ")})` : "null");
+
+async function normalsFor(browser, backend) {
+  const blocking = backend === "WEB_GL2";
+  const q = `rendererType=${backend}&nb=1${backend === "WEB_GL2" ? "&pp=1" : ""}`;
+  const { page, errors } = await openProbe(browser, q);
+  let res = null;
+  try {
+    if (backend === "WEB_GL2") {
+      const glErr = await page.evaluate(() => window.app.renderer.gl.getError());
+      if (glErr) errors.push(`GL error 0x${glErr.toString(16)}`);
+    }
+    const [floor, sky, probe] = await readNormals(page, backend, [FLOOR, SKY, PROBE]);
+    res = { floor, sky, probe };
+    log(
+      !errors.length,
+      blocking,
+      `${backend}: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+    );
+    log(
+      !floor.sentinel && near(floor.n, [0, 1, 0], 0.02),
+      blocking,
+      `${backend}: floor normal ${fmt(floor.n)} ~ (0,1,0)`,
+    );
+    log(sky.sentinel, blocking, `${backend}: sky is sentinel (enc ${fmt(sky.enc)})`);
+    const p = probe.n;
+    log(
+      !!p && p[0] > 0.2 && p[0] < 0.6 && p[1] > 0.8 && p[1] < 0.97,
+      blocking,
+      `${backend}: NormalProbe ${fmt(p)} between floor and decal normal (x in (0.2,0.6), y in (0.8,0.97))`,
+    );
+  } catch (e) {
+    log(false, blocking, `${backend}: normal readback threw: ${e.message}`);
+  }
+  await page.close();
+  return res;
+}
+
+async function colourCheck(browser, backend) {
+  const blocking = backend === "WEB_GL2";
+  const { page, errors } = await openProbe(browser, `rendererType=${backend}&nb=0`);
+  const rect = await page.evaluate(() => {
+    const r = document.querySelector("canvas").getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
+  const shot = Buffer.from(await page.screenshot({ clip: rect }));
+  (await import("fs")).mkdirSync(".agents/scratches", { recursive: true });
+  (await import("fs")).writeFileSync(`.agents/scratches/decal-check-${backend}.png`, shot);
+  const png = PNG.sync.read(shot);
+  const px = ([fx, fy]) => {
+    const x = Math.floor(fx * png.width),
+      y = Math.floor(fy * png.height);
+    const i = (png.width * y + x) * 4;
+    return [png.data[i], png.data[i + 1], png.data[i + 2]];
+  };
+  const a = px(STRIPE),
+    b = px(FLOOR);
+  const diff = Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+  log(
+    diff > 30,
+    blocking,
+    `${backend} nb=0: stripe rgb(${a}) vs floor rgb(${b}), max channel diff ${diff} (>30)`,
+  );
+  log(
+    !errors.length,
+    blocking,
+    `${backend} nb=0: no console errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+  );
+  await page.close();
+}
+
+async function webGpuUsable(browser) {
+  const page = await browser.newPage();
+  try {
+    await page.goto(`${ORIGIN}/`, { waitUntil: "load", timeout: 20000 });
+    return await page.evaluate(async () => {
+      if (!navigator.gpu) return "navigator.gpu undefined";
+      const a = await navigator.gpu.requestAdapter();
+      if (!a) return "no adapter";
+      await a.requestDevice();
+      return "";
+    });
+  } catch (e) {
+    return e.message;
+  } finally {
+    await page.close();
+  }
+}
+
+const browser = await puppeteer.launch({
+  headless: true,
+  acceptInsecureCerts: true,
+  protocolTimeout: 60000,
+  args: [
+    "--no-sandbox",
+    "--ignore-certificate-errors",
+    "--use-gl=angle",
+    "--use-angle=swiftshader",
+    "--enable-webgl",
+    "--enable-unsafe-swiftshader",
+    "--ignore-gpu-blocklist",
+    "--disable-gpu-sandbox",
+    "--enable-features=Vulkan",
+    "--enable-unsafe-webgpu",
+  ],
+});
+let gl2, gpu;
+try {
+  gl2 = await normalsFor(browser, "WEB_GL2");
+  await colourCheck(browser, "WEB_GL2");
+
+  const why = await webGpuUsable(browser);
+  if (why) {
+    const req = !!process.env.DECAL_REQUIRE_WEBGPU;
+    console.log(`SKIP  WEB_GPU: unusable (${why})${req ? " but DECAL_REQUIRE_WEBGPU set" : ""}`);
+    if (req) failures.blocking++;
+  } else {
+    gpu = await normalsFor(browser, "WEB_GPU");
+    await colourCheck(browser, "WEB_GPU");
+    if (gl2 && gpu) {
+      for (const k of ["floor", "probe"]) {
+        const ok = gl2[k].n && gpu[k].n && near(gl2[k].n, gpu[k].n, 0.02);
+        log(
+          !!ok,
+          false,
+          `backends agree on ${k} normal: GL2 ${fmt(gl2[k].n)} vs GPU ${fmt(gpu[k].n)}`,
+        );
+      }
+      log(gl2.sky.sentinel === gpu.sky.sentinel, false, "backends agree on sky sentinel");
+    }
+  }
+} finally {
+  await browser.close();
+}
+console.log(`\nblocking failures: ${failures.blocking}, informational warnings: ${failures.info}`);
+process.exit(failures.blocking ? 1 : 0);

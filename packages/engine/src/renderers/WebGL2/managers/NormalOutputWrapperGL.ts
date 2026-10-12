@@ -30,7 +30,7 @@ export function wrapFragmentWithNormalOutputGL(code: string): string {
   const wrapped = code
     .replace(
       FRAG_COLOR_OUT,
-      `layout(location = 0) out vec4 fragColor;\nlayout(location = 1) out vec2 o_normal;\n${declareShadingNormal}`,
+      `layout(location = 0) out vec4 fragColor;\nlayout(location = 1) out vec4 o_normal;\n${declareShadingNormal}`,
     )
     .replace(MAIN_ENTRY, "void swm_main() {");
 
@@ -46,7 +46,7 @@ ${OCT_ENCODE}
 void main() {
   ${seedNormal}
   swm_main();
-  o_normal = ${encoded};
+  o_normal = vec4(${encoded}, 0.0, fragColor.a);
 }
 `;
 }

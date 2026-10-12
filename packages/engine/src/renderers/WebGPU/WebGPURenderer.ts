@@ -682,7 +682,7 @@ export class WebGPURenderer extends AbstractRenderer {
 
     const clusterCullModule = this._device!.createShaderModule({
       code:
-        (this.context.shaderRegistry.getChunk("WGSL_STRUCTS", "wgsl") ?? "") +
+        this._computeStructsChunk() +
         "\n" +
         (this.context.shaderRegistry.getChunk("WGSL_SCREEN_FOOTPRINT", "wgsl") ?? "") +
         "\n" +
@@ -806,7 +806,7 @@ export class WebGPURenderer extends AbstractRenderer {
       });
       const hzbTestModule = this._device!.createShaderModule({
         code:
-          (this.context.shaderRegistry.getChunk("WGSL_STRUCTS", "wgsl") ?? "") +
+          this._computeStructsChunk() +
           "\n" +
           (this.context.shaderRegistry.getChunk("WGSL_SCREEN_FOOTPRINT", "wgsl") ?? "") +
           "\n" +
@@ -1634,6 +1634,18 @@ export class WebGPURenderer extends AbstractRenderer {
       srcTex.height,
       1,
     ]);
+  }
+
+  /**
+   * The shared structs chunk for the compute shaders that include it directly (cluster culling, HZB
+   * visibility test). Render pipelines get their per-pipeline constants from `GPUPipelineCache`;
+   * the chunk's sampling helpers reference `USE_DECAL_GRADIENTS`, so compute modules declare it too.
+   */
+  private _computeStructsChunk(): string {
+    return (
+      "const USE_DECAL_GRADIENTS: bool = false;\n" +
+      (this.context.shaderRegistry.getChunk("WGSL_STRUCTS", "wgsl") ?? "")
+    );
   }
 
   private _syncNormalTexture(): void {

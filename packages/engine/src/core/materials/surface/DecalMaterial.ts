@@ -1,4 +1,5 @@
 import fragWGSL from "./shaders/Decal.frag.wgsl?raw";
+import fragGLSL from "./shaders/Decal.frag.glsl?raw";
 import { AbstractMaterial } from "../AbstractMaterial.js";
 import { Texture } from "../../textures/index.js";
 import { BlendingMode, CullMode, MaterialType, ShaderPropertyType } from "../../../enums/index.js";
@@ -81,10 +82,14 @@ export class DecalMaterial extends AbstractMaterial {
     props["u_color"] = this.color.toFloat32Array();
     props["u_metallic"] = this.metallic;
     props["u_roughness"] = this.roughness;
-    props["u_matParam4"] = this._packFadeParams();
+    const fade = this._packFadeParams();
+    props["u_matParam4"] = fade;
+    props["u_decalFade"] = fade;
     manifest.textures["u_diffuseMap"] = this.diffuseMap;
     manifest.textures["u_normalMap"] = this.normalMap;
-    manifest.flags = this.normalMap ? ["USE_NORMAL_MAP"] : [];
+    manifest.flags = this.normalMap
+      ? ["USE_NORMAL_MAP", "USE_DECAL_GRADIENTS"]
+      : ["USE_DECAL_GRADIENTS"];
     return manifest;
   }
 
@@ -101,6 +106,10 @@ export class DecalMaterial extends AbstractMaterial {
     return {
       id: this.type,
       sources: {
+        glsl300: {
+          vs: "[BASE_VERTEX_HEADER][BASE_VERTEX_MAIN]",
+          fs: fragGLSL,
+        },
         wgsl: `[WGSL_STRUCTS]\n[WGSL_PBR_MATH]\n[WGSL_VS]\n${fragWGSL}`,
       },
       layout: {

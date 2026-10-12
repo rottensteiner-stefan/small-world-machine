@@ -2,7 +2,7 @@ import { AbstractRenderer } from "./AbstractRenderer.js";
 import { Color } from "../core/colors/index.js";
 import { Scene } from "../core/Scene.js";
 import { Object3D } from "../core/Object3D.js";
-import { Vector3D } from "../math/index.js";
+import { Matrix4, Vector3D } from "../math/index.js";
 import { LightDataInterface } from "../interfaces/index.js";
 import { WebGLRenderPass } from "./WebGLRenderPass.js";
 import { Texture, RenderTarget } from "../core/textures/index.js";
@@ -51,6 +51,9 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   protected _frameFar: number = 1000;
   protected _frameProjMatrix: Float32Array | undefined = undefined;
   protected _frameViewMatrix: Float32Array | undefined = undefined;
+  /** Inverse of this frame's view-projection: decals unproject opaque depth with it. */
+  protected readonly _frameInvViewProj: Matrix4 = new Matrix4();
+  private readonly _frameViewProj: Matrix4 = new Matrix4();
 
   public addPass(pass: WebGLRenderPass): void {
     this._passes.push(pass);
@@ -72,6 +75,8 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     this._frameFar = far ?? 1000;
     this._frameProjMatrix = projMatrix;
     this._frameViewMatrix = vMat;
+    this._frameViewProj.data.set(vp);
+    Matrix4.invert(this._frameViewProj, this._frameInvViewProj);
     const extractedLights = this.extractLights(scene);
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
 
@@ -126,6 +131,14 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   public get hasNormalTarget(): boolean {
     return false;
   }
+
+  /** True while the main pass can draw box-projected decals: the main camera target on WebGL2. */
+  public get canDrawDecals(): boolean {
+    return false;
+  }
+
+  /** Copies the normal buffer into a sampleable texture for decals. No-op without a normal target. */
+  public copyToOpaqueNormalTexture(): void {}
 
   /** Routes fragment output 1 to the normal buffer or discards it. No-op without a normal target. */
   public setNormalWriteEnabled(_enabled: boolean): void {}

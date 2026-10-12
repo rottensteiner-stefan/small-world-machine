@@ -33,7 +33,7 @@ describe("WebGLMainPass depth clear", () => {
       copyToOpaqueTexture: vi.fn(),
       postProcessing: { get: vi.fn(() => undefined) },
     };
-    const renderList: Internals = { opaqueBatches: [], transparent: [] };
+    const renderList: Internals = { opaqueBatches: [], transparent: [], decals: [] };
 
     new WebGLMainPass().execute(
       renderer,

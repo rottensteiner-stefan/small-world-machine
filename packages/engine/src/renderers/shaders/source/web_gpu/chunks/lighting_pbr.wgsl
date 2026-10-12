@@ -2,7 +2,7 @@
 
 let V = normalize(global.viewPos.xyz - i.wp);
 let TBN = mat3x3f(normalize(i.t), normalize(i.b), normalize(i.n));
-var rawNormal = textureSample(u_normalMap, s, i.uv).rgb * 2.0 - 1.0;
+var rawNormal = sampleNormalMap(i.uv).rgb * 2.0 - 1.0;
 rawNormal.x *= obj.extraParams.z;
 rawNormal.y *= obj.extraParams.w;
 let N = normalize(TBN * rawNormal);
@@ -328,5 +328,5 @@ if (dot(irradiance, irradiance) < 1e-6) {
 var color = ambient + Lo;
 
 // Emissive
-let emissive = sRGBToLinear(textureSample(u_emissiveMap, s, i.uv).rgb) * sRGBToLinear(obj.specColor.rgb) * obj.specColor.a;
+let emissive = sRGBToLinear(sampleEmissiveMap(i.uv).rgb) * sRGBToLinear(obj.specColor.rgb) * obj.specColor.a;
 color += emissive;

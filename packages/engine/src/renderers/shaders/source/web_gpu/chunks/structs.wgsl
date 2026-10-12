@@ -179,6 +179,26 @@ struct AreaLight {
 @group(3) @binding(0) var<uniform> view: ViewUniforms;
 
 
+// Explicit UV derivatives for materials that shade from a depth-reconstructed UV (decals): their
+// implicit derivatives are garbage across depth discontinuities. USE_DECAL_GRADIENTS is a constant
+// per pipeline, so the branch below stays in uniform control flow.
+var<private> g_uvGradX: vec2f = vec2f(0.0);
+var<private> g_uvGradY: vec2f = vec2f(0.0);
+
+fn sampleNormalMap(uv: vec2f) -> vec4f {
+    if (USE_DECAL_GRADIENTS) {
+        return textureSampleGrad(u_normalMap, s, uv, g_uvGradX, g_uvGradY);
+    }
+    return textureSample(u_normalMap, s, uv);
+}
+
+fn sampleEmissiveMap(uv: vec2f) -> vec4f {
+    if (USE_DECAL_GRADIENTS) {
+        return textureSampleGrad(u_emissiveMap, s, uv, g_uvGradX, g_uvGradY);
+    }
+    return textureSample(u_emissiveMap, s, uv);
+}
+
 // Shading normal (world space) the normal-buffer wrapper writes; lit chunks overwrite it with
 // the normal-mapped result, everything else leaves it at the geometry normal.
 var<private> g_shadingNormal: vec3f = vec3f(0.0, 1.0, 0.0);

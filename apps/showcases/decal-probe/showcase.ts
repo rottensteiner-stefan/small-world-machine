@@ -8,6 +8,7 @@ import {
   DecalMaterial,
   DirectionalLight,
   Ground,
+  Plane,
   Object3D,
   OrbitController,
   PerspectiveProjection,
@@ -17,8 +18,38 @@ import {
 
 /**
  * Decal probe: box-projected decals on a floor, a wall and a pedestal. Query params:
- * `?nb=1` turns the normal buffer on, `?rendererType=WEB_GPU` picks the backend.
+ * `?nb=1` turns the normal buffer on, `?pp=1` enables post-processing (WebGL2 needs it for the
+ * normal buffer), `?rendererType=WEB_GPU|WEB_GL2` picks the backend.
  */
+/** 2x2 quadrants, image top-left red, top-right green, bottom-left blue, bottom-right yellow. */
+function quadrantTexture(): Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  const quadrants: [number, number, string][] = [
+    [0, 0, "#ff0000"],
+    [32, 0, "#00ff00"],
+    [0, 32, "#0000ff"],
+    [32, 32, "#ffff00"],
+  ];
+  for (const [x, y, color] of quadrants) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, 32, 32);
+  }
+  return Texture.fromCanvas(canvas);
+}
+
+function solidTexture(r: number, g: number, b: number, a: number): Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 4;
+  canvas.height = 4;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+  ctx.fillRect(0, 0, 4, 4);
+  return Texture.fromCanvas(canvas);
+}
+
 class DecalProbe extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {
     const aspect: number = window.innerWidth / window.innerHeight;
@@ -29,6 +60,10 @@ class DecalProbe extends AbstractShowcase {
       far: 100,
     });
     this.camera.updateProjectionMatrix();
+
+    if (new URLSearchParams(location.search).get("pp") === "1") {
+      this.renderer.postProcessing.enabled = true;
+    }
 
     const sun = new DirectionalLight({ color: Color.WHITE, intensity: 1.1 });
     sun.direction.set(-0.4, -1, -0.3);
@@ -72,6 +107,47 @@ class DecalProbe extends AbstractShowcase {
     const aroundPedestal = new Decal(new DecalMaterial({ diffuseMap: stripes }), "AroundPedestal");
     aroundPedestal.setPosition(2.2, 0, -0.5).setScale(3.4, 1.2, 3.4);
     this.scene.add(aroundPedestal);
+
+    // Half-transparent decal with a strongly tilted tangent-space normal: the normal buffer beneath
+    // it must end up between the floor normal and the decal normal (alpha-blended).
+    const normalProbe = new Decal(
+      new DecalMaterial({
+        diffuseMap: solidTexture(255, 255, 255, 128),
+        normalMap: solidTexture(230, 128, 200, 255),
+      }),
+      "NormalProbe",
+    );
+    normalProbe.setPosition(-4, 0, 2).setScale(1.5, 1, 1.5);
+    this.scene.add(normalProbe);
+
+    // UV orientation check: a Plane mesh (left) and a Decal (right) carrying the same quadrant
+    // texture on the wall must show the quadrants in the same arrangement.
+    const quadrants = quadrantTexture();
+    const controlMaterial = new StandardMaterial({ roughness: 1 });
+    controlMaterial.diffuseMap = quadrants;
+    const controlPlane = new Object3D("QuadrantPlane").setPosition(-3, 1.4, -2.78);
+    controlPlane.geometry = new Plane({ width: 1, height: 1 }).getGeometryData();
+    const signPlaneMaterial = new StandardMaterial({ roughness: 1 });
+    signPlaneMaterial.diffuseMap = sign;
+    const signPlane = new Object3D("SignPlane").setPosition(-3, 0.45, -2.78);
+    signPlane.geometry = new Plane({ width: 1.2, height: 0.3 }).getGeometryData();
+    signPlane.material = signPlaneMaterial;
+    this.scene.add(signPlane);
+    const signDecal = new Decal(new DecalMaterial({ diffuseMap: sign }), "SignDecal");
+    signDecal
+      .setPosition(3, 0.45, -2.8)
+      .setRotation(Math.PI / 2, 0, 0)
+      .setScale(1.2, 0.4, 0.3);
+    this.scene.add(signDecal);
+    controlPlane.material = controlMaterial;
+    this.scene.add(controlPlane);
+
+    const quadrantDecal = new Decal(new DecalMaterial({ diffuseMap: quadrants }), "QuadrantDecal");
+    quadrantDecal
+      .setPosition(3, 1.4, -2.8)
+      .setRotation(Math.PI / 2, 0, 0)
+      .setScale(1, 0.4, 1);
+    this.scene.add(quadrantDecal);
 
     this.camera.setStrategy(CameraStrategyType.SMOOTH);
     this.camera.position.set(0, 3.2, 6);

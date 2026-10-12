@@ -53,7 +53,7 @@ function run(opts: {
     new Float32Array(16),
     new Vector3D(0, 0, 0),
     undefined,
-    { opaqueBatches: [], transparent } as Internals,
+    { opaqueBatches: [], transparent, decals: [] } as Internals,
     {} as Internals,
   );
   return { depth, color };

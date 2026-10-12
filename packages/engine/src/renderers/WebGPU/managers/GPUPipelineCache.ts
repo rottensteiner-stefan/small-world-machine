@@ -197,6 +197,7 @@ const ALWAYS_DECLARED_FLAGS: ReadonlySet<string> = new Set([
   "USE_NORMAL_MAP",
   "USE_RAMP_LUT",
   "USE_INSTANCING",
+  "USE_DECAL_GRADIENTS",
 ]);
 const SHADER_FLAG_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
@@ -570,6 +571,11 @@ export class GPUPipelineCache {
         wgslConstants += "const USE_RAMP_LUT: bool = true;\n";
       } else {
         wgslConstants += "const USE_RAMP_LUT: bool = false;\n";
+      }
+      if (flags.includes("USE_DECAL_GRADIENTS")) {
+        wgslConstants += "const USE_DECAL_GRADIENTS: bool = true;\n";
+      } else {
+        wgslConstants += "const USE_DECAL_GRADIENTS: bool = false;\n";
       }
       // Inject any arbitrary user/material flags (e.g. STYLE_TOON, STYLE_BOLD, STYLE_SPARKLE, etc.)
       for (const flag of flags) {

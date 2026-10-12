@@ -53,6 +53,9 @@ uniform vec4 u_cascadeSplits;
 uniform vec4 u_dirShadowInfo; // x=bias, y=normalBias, z=castShadow, w=numCascades
 
 out vec4 fragColor;
+// Sampling hooks of the lit chunk; Decal.frag.glsl redefines them to use explicit derivatives.
+#define SAMPLE_NORMAL_MAP(uv) texture(u_normalMap, uv)
+#define SAMPLE_EMISSIVE_MAP(uv) texture(u_emissiveMap, uv)
 #ifdef USE_NORMAL_OUT
 vec3 g_shadingNormal = vec3(0.0, 1.0, 0.0);
 #endif

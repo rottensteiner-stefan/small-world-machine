@@ -37,6 +37,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:showcases": "node scripts/check-showcases.js",
+    "test:decals": "node scripts/check-decals.mjs",
     "probe:gpu-parity": "node scripts/probe-gpu-parity.js",
     "perf:liquid": "node scripts/perf-liquid.mjs",
     "webgpu:resize-stress": "node scripts/webgpu-resize-stress.js",

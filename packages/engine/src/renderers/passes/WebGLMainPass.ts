@@ -21,6 +21,15 @@ export class WebGLMainPass implements WebGLRenderPass {
     objects: this._scratchTransparentObjects,
   };
 
+  // Same reuse as the transparent batch above: one single-object batch per decal.
+  private readonly _scratchDecalObjects: Object3D[] = [];
+  private readonly _scratchDecalBatch: RenderBatch = {
+    shaderId: "",
+    topology: Topology.DEFAULT,
+    matUuid: "",
+    objects: this._scratchDecalObjects,
+  };
+
   public execute(
     renderer: AbstractWebGLRenderer,
     scene: Scene,
@@ -92,12 +101,42 @@ export class WebGLMainPass implements WebGLRenderPass {
 
     if (writesNormals) renderer.setNormalWriteEnabled(false);
 
+    // Decals read the finished opaque depth (and normal copy) and are drawn before the
+    // transparents, which then see them in their refraction capture. The depth copy made here is
+    // reused below instead of blitting it a second time.
+    let depthCaptured = false;
+    if (renderList.decals.length > 0 && renderer.canDrawDecals) {
+      renderer.copyToOpaqueDepthTexture();
+      depthCaptured = true;
+      if (writesNormals) {
+        renderer.copyToOpaqueNormalTexture();
+        renderer.setNormalWriteEnabled(true);
+      }
+      gl.depthMask(false);
+      for (const decal of renderList.decals) {
+        const manifest = decal.material!.getRenderManifest();
+        this._scratchDecalObjects[0] = decal;
+        this._scratchDecalBatch.shaderId = manifest.shaderId;
+        this._scratchDecalBatch.matUuid = decal.material!.uuid;
+        (renderer as AbstractWebGLRenderer).renderBatch(
+          this._scratchDecalBatch,
+          vMat,
+          vp,
+          camPos,
+          extractedLights,
+          scene,
+        );
+      }
+      gl.depthMask(true);
+      if (writesNormals) renderer.setNormalWriteEnabled(false);
+    }
+
     // HBAO needs the opaque depth buffer every frame it's enabled, not just when there happen
     // to be transparent objects (the only other consumer of this capture, for refraction).
     const hbaoNode = renderer.postProcessing.get<import("../post/index.js").HbaoElement>(
       PostProcessingEffectType.HBAO,
     );
-    if (renderList.transparent.length === 0 && hbaoNode && hbaoNode.enabled) {
+    if (renderList.transparent.length === 0 && hbaoNode && hbaoNode.enabled && !depthCaptured) {
       renderer.copyToOpaqueDepthTexture();
     }
 
@@ -111,7 +150,7 @@ export class WebGLMainPass implements WebGLRenderPass {
         const mat = renderList.transparent[i]!.material;
         if (mat) needsDepth = renderer.requiresOpaqueDepth(mat.getRenderManifest().shaderId);
       }
-      if (needsDepth) renderer.copyToOpaqueDepthTexture();
+      if (needsDepth && !depthCaptured) renderer.copyToOpaqueDepthTexture();
 
       for (const obj of renderList.transparent) {
         if (!obj.material) continue;

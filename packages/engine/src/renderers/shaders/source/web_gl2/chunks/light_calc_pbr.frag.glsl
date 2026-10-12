@@ -1,6 +1,6 @@
 vec3 V = normalize(u_viewPos - v_worldPos);
 #ifdef USE_NORMAL_MAP
-vec3 rawNormal = texture(u_normalMap, v_uv).rgb * 2.0 - 1.0;
+vec3 rawNormal = SAMPLE_NORMAL_MAP(v_uv).rgb * 2.0 - 1.0;
 rawNormal.xy *= u_extraParams.zw;
 vec3 N = v_tbn * rawNormal;
 if (dot(N, N) < 0.0001) {
@@ -511,7 +511,7 @@ vec3 color = ambient + Lo;
 
 // Emissive
 #ifdef USE_EMISSIVE_MAP
-vec3 emissive = sRGBToLinear(texture(u_emissiveMap, v_uv).rgb) * sRGBToLinear(u_specColor.rgb) * u_specColor.a;
+vec3 emissive = sRGBToLinear(SAMPLE_EMISSIVE_MAP(v_uv).rgb) * sRGBToLinear(u_specColor.rgb) * u_specColor.a;
 #else
 vec3 emissive = sRGBToLinear(u_specColor.rgb) * u_specColor.a;
 #endif

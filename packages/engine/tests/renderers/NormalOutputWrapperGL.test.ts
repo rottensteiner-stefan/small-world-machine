@@ -23,6 +23,7 @@ import {
   RetroScreenMaterial,
   WireframeMaterial,
   WorldMaterial,
+  DecalMaterial,
 } from "../../src/core/materials/index.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -40,9 +41,11 @@ describe("wrapFragmentWithNormalOutputGL", () => {
     const wrapped = wrapFragmentWithNormalOutputGL(LIT_SHADER);
 
     expect(wrapped).toContain("layout(location = 0) out vec4 fragColor;");
-    expect(wrapped).toContain("layout(location = 1) out vec2 o_normal;");
+    expect(wrapped).toContain("layout(location = 1) out vec4 o_normal;");
     expect(wrapped).toContain("void swm_main() {");
-    expect(wrapped).toMatch(/void main\(\) \{[\s\S]*swm_main\(\);[\s\S]*o_normal = octEncode\(/);
+    expect(wrapped).toMatch(
+      /void main\(\) \{[\s\S]*swm_main\(\);[\s\S]*o_normal = vec4\(octEncode\(/,
+    );
   });
 
   it("writes the out-of-range sentinel when the shader has no v_normal varying", () => {
@@ -50,7 +53,7 @@ describe("wrapFragmentWithNormalOutputGL", () => {
       "#version 300 es\nout vec4 fragColor;\nvoid main() { fragColor = vec4(1.0); }",
     );
 
-    expect(wrapped).toContain("o_normal = vec2(-2.0, -2.0);");
+    expect(wrapped).toContain("o_normal = vec4(vec2(-2.0, -2.0), 0.0, fragColor.a);");
     expect(wrapped).not.toContain("normalize(v_normal)");
   });
 
@@ -98,6 +101,7 @@ describe("wrapFragmentWithNormalOutputGL on shipped shaders", () => {
     new RetroScreenMaterial(),
     new WireframeMaterial(),
     new WorldMaterial(),
+    new DecalMaterial(),
   ];
 
   for (const material of materials) {
@@ -109,7 +113,7 @@ describe("wrapFragmentWithNormalOutputGL on shipped shaders", () => {
 
       const wrapped = wrapFragmentWithNormalOutputGL(fs);
 
-      expect(wrapped).toContain("layout(location = 1) out vec2 o_normal;");
+      expect(wrapped).toContain("layout(location = 1) out vec4 o_normal;");
       expect(wrapped).toContain("void swm_main() {");
     });
   }
@@ -149,7 +153,7 @@ describe("WebGLMainPass normal target phases", () => {
       new Float32Array(16),
       new Vector3D(0, 0, 0),
       undefined,
-      { opaqueBatches: [batch], transparent: [] } as Internals,
+      { opaqueBatches: [batch], transparent: [], decals: [] } as Internals,
       {} as Internals,
     );
     return calls;
@@ -167,5 +171,74 @@ describe("WebGLMainPass normal target phases", () => {
 
   it("never touches the normal target when the renderer has none", () => {
     expect(run(false)).toEqual(["clear", "opaqueBatch"]);
+  });
+});
+describe("WebGLMainPass decal phase", () => {
+  function run(options: { canDrawDecals: boolean; hasNormalTarget: boolean }): string[] {
+    const calls: string[] = [];
+    const gl = {
+      COLOR_BUFFER_BIT: 0x4000,
+      DEPTH_BUFFER_BIT: 0x100,
+      BLEND: 0xbe2,
+      SRC_ALPHA: 0x302,
+      ONE_MINUS_SRC_ALPHA: 0x303,
+      clear: vi.fn(),
+      depthMask: vi.fn((on: boolean) => calls.push(`depthMask:${on}`)),
+      enable: vi.fn(),
+      blendFunc: vi.fn(),
+    };
+    const decal = {
+      material: { uuid: "decal", getRenderManifest: vi.fn(() => ({ shaderId: "DecalMaterial" })) },
+    };
+    const renderer: Internals = {
+      webglContext: gl,
+      hasNormalTarget: options.hasNormalTarget,
+      canDrawDecals: options.canDrawDecals,
+      bindMainRenderTarget: vi.fn(),
+      resetStateCache: vi.fn(),
+      clearNormalTarget: vi.fn(),
+      setNormalWriteEnabled: vi.fn((on: boolean) => calls.push(`normalWrite:${on}`)),
+      renderBatch: vi.fn(() => calls.push("decalBatch")),
+      copyToOpaqueDepthTexture: vi.fn(() => calls.push("copyDepth")),
+      copyToOpaqueNormalTexture: vi.fn(() => calls.push("copyNormal")),
+      copyToOpaqueTexture: vi.fn(),
+      postProcessing: { enabled: false, get: vi.fn(() => undefined) },
+    };
+
+    new WebGLMainPass().execute(
+      renderer,
+      {} as Internals,
+      new Float32Array(16),
+      new Vector3D(0, 0, 0),
+      undefined,
+      { opaqueBatches: [], transparent: [], decals: [decal] } as Internals,
+      {} as Internals,
+    );
+    return calls;
+  }
+
+  it("copies depth and the normal buffer, then draws decals with normal writes and no depth writes", () => {
+    const calls = run({ canDrawDecals: true, hasNormalTarget: true });
+
+    expect(calls).toEqual(
+      expect.arrayContaining(["copyDepth", "copyNormal", "decalBatch", "normalWrite:true"]),
+    );
+    expect(calls.indexOf("copyDepth")).toBeLessThan(calls.indexOf("decalBatch"));
+    expect(calls.indexOf("copyNormal")).toBeLessThan(calls.indexOf("decalBatch"));
+    expect(calls.lastIndexOf("normalWrite:false")).toBeGreaterThan(calls.indexOf("decalBatch"));
+  });
+
+  it("skips the normal copy without a normal target but still draws decals", () => {
+    const calls = run({ canDrawDecals: true, hasNormalTarget: false });
+
+    expect(calls).toContain("decalBatch");
+    expect(calls).not.toContain("copyNormal");
+  });
+
+  it("draws no decals where the renderer cannot (offscreen targets, WebGL1)", () => {
+    const calls = run({ canDrawDecals: false, hasNormalTarget: true });
+
+    expect(calls).not.toContain("decalBatch");
+    expect(calls).not.toContain("copyDepth");
   });
 });

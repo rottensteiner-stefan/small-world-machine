@@ -23,7 +23,14 @@ import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js"
 import { CubeTexture, Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
 import { RenderManifest, resolveManifestFlags } from "../shaders/index.js";
 import { Color } from "../../core/colors/index.js";
-import { DeviceLimit, InstancedMesh, Object3D, Scene, TextureArray } from "../../core/index.js";
+import {
+  DeviceLimit,
+  InstancedMesh,
+  Object3D,
+  Scene,
+  TextureArray,
+  computeClipToBox,
+} from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
 import { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 import {
@@ -37,6 +44,7 @@ import {
 import {
   Vector3D,
   ClusterGridDims,
+  Matrix4,
   computeClusterCounts,
   CLUSTER_TEX_WIDTH,
   CLUSTER_GRID_UNIT,
@@ -81,6 +89,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private _opaqueTexture?: WebGLTexture;
   private _opaqueDepthTexture?: WebGLTexture;
   private _opaqueDepthFbo?: WebGLFramebuffer;
+  private _opaqueNormalTexture: WebGLTexture | undefined = undefined;
+  private _opaqueNormalFbo: WebGLFramebuffer | undefined = undefined;
+  private _opaqueNormalWidth = 0;
+  private _opaqueNormalHeight = 0;
   private _opaqueDepthWidth: number = 0;
   private _opaqueDepthHeight: number = 0;
   private _opaqueDepthFormat: number = 0;
@@ -381,6 +393,72 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   /** The normal buffer texture (ADR 0028), or undefined while it is not being written. */
   public get normalTexture(): WebGLTexture | undefined {
     return this.hasNormalTarget ? this._hdrFbo!.secondaryTexture : undefined;
+  }
+
+  private readonly _scratchClipToBox: Matrix4 = new Matrix4();
+
+  /** Decal-only per-object uniforms: clip -> box matrix and whether the normal buffer copy is bound. */
+  private _setDecalUniforms(u: Map<string, WebGLUniformLocation | undefined>, o: Object3D): void {
+    const uClipToBox = u.get("u_decalClipToBox");
+    if (
+      uClipToBox &&
+      computeClipToBox(o.worldMatrix, this._frameInvViewProj, this._scratchClipToBox)
+    ) {
+      this.gl.uniformMatrix4fv(uClipToBox, false, this._scratchClipToBox.data);
+    }
+    const uHasNormals = u.get("u_decalHasNormalBuffer");
+    if (uHasNormals) {
+      this.gl.uniform1f(uHasNormals, this._opaqueNormalTexture && this.hasNormalTarget ? 1 : 0);
+    }
+  }
+
+  /** @inheritdoc */
+  public override get canDrawDecals(): boolean {
+    return null === this._activeRenderTarget;
+  }
+
+  /**
+   * Copies the normal buffer (COLOR_ATTACHMENT1 of the HDR framebuffer) into a texture decals can
+   * sample: reading it while it is still attached to the bound framebuffer would be a feedback loop.
+   * @inheritdoc
+   */
+  public override copyToOpaqueNormalTexture(): void {
+    const gl = this.gl;
+    const hdr = this._hdrFbo;
+    if (!this.hasNormalTarget || !hdr?.secondaryTexture) return;
+
+    const w = gl.canvas.width;
+    const h = gl.canvas.height;
+    if (!this._opaqueNormalTexture) {
+      this._opaqueNormalTexture = gl.createTexture()!;
+      this._opaqueNormalFbo = gl.createFramebuffer()!;
+    }
+    if (this._opaqueNormalWidth !== w || this._opaqueNormalHeight !== h) {
+      gl.bindTexture(gl.TEXTURE_2D, this._opaqueNormalTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, w, h, 0, gl.RG, gl.HALF_FLOAT, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this._opaqueNormalFbo!);
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        this._opaqueNormalTexture,
+        0,
+      );
+      this._opaqueNormalWidth = w;
+      this._opaqueNormalHeight = h;
+    }
+
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, hdr.framebuffer);
+    gl.readBuffer(gl.COLOR_ATTACHMENT1);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this._opaqueNormalFbo!);
+    gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, hdr.framebuffer);
+    gl.readBuffer(gl.COLOR_ATTACHMENT0);
+    hdr.bind();
   }
 
   /** @inheritdoc */
@@ -1351,6 +1429,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             this.gl.bindTexture(this.gl.TEXTURE_2D, this.defaultSpecularMap);
           } else if (uniformName === "u_opaqueMap" && !t) {
             this.gl.bindTexture(this.gl.TEXTURE_2D, this._opaqueTexture ?? this.defaultTexture);
+          } else if (uniformName === "u_normalBufferMap" && !t) {
+            this.gl.bindTexture(
+              this.gl.TEXTURE_2D,
+              this._opaqueNormalTexture ?? this.defaultTexture,
+            );
           } else if (uniformName === "u_opaqueDepthMap" && !t) {
             this.gl.bindTexture(
               this.gl.TEXTURE_2D,
@@ -1502,6 +1585,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         }
         const uModel = u.get("u_model");
         if (uModel) this.gl.uniformMatrix4fv(uModel, false, this._scratchModelMatrix);
+
+        if (state?.isDecal) this._setDecalUniforms(u, o);
 
         if (isSkinnedMesh(o) && o.skeleton) {
           const skel = o.skeleton;
@@ -1771,6 +1856,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._dummyShadowMap?.destroy();
       if (this._rawDepthSampler) gl.deleteSampler(this._rawDepthSampler);
       this._hdrFbo?.destroy();
+      if (this._opaqueNormalTexture) this.gl.deleteTexture(this._opaqueNormalTexture);
+      if (this._opaqueNormalFbo) this.gl.deleteFramebuffer(this._opaqueNormalFbo);
+      this._opaqueNormalTexture = undefined;
+      this._opaqueNormalFbo = undefined;
       this._postPassGL?.destroy(gl);
       this._bloomPassGL?.destroy();
       this._hbaoPassGL?.destroy();
