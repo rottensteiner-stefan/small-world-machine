@@ -94,8 +94,8 @@ describe("KitRegistry level decals (ADR 0029)", () => {
     expect(decal).toBeInstanceOf(Decal);
     expect(decal?.parent).toBe(inst.root);
     expect(decal?.scale.x).toBeCloseTo(0.5);
-    expect(decal?.scale.y).toBeCloseTo(0.25);
-    expect(decal?.scale.z).toBeCloseTo(0.2);
+    expect(decal?.scale.y).toBeCloseTo(0.2);
+    expect(decal?.scale.z).toBeCloseTo(0.25);
     expect(decal?.userData["tags"]).toEqual([]);
     expect(loadImage).toHaveBeenCalledTimes(1);
     expect(loadImage.mock.calls[0]?.[0]).toBe("/assets/kits/bunker/decals/sign.png");
@@ -126,7 +126,8 @@ describe("KitRegistry level decals (ADR 0029)", () => {
     expect(loadImage).toHaveBeenCalledTimes(4);
     expect(decal.position.y).toBeCloseTo(2);
     expect(decal.rotation.x).toBeCloseTo(0.5);
-    expect(decal.scale.y).toBeCloseTo(3);
+    expect(decal.scale.y).toBeCloseTo(0.4);
+    expect(decal.scale.z).toBeCloseTo(3);
     expect(decal.priority).toBe(3);
     expect(decal.userData["tags"]).toEqual(["dirt"]);
     const mat = decal.material as DecalMaterial;

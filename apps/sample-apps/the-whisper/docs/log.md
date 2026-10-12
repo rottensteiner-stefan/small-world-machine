@@ -1946,3 +1946,11 @@ befüllen.
 - **Offen:** Sichtbarkeit der offenen Tür im Beat-Frame (Standard-Beat-Kamera blickt auf
   x≈−1,2; die geöffnete Tür liegt bei x≈−2,4 weit links — Kamera-/Inszenierungsentscheidung),
   Peer-Review des Assets, doppelseitige Variante [OPEN].
+
+## 145. Prologue: sechs Plane-Decals → echte Decals (ADR 0029) (2026-10-12)
+
+- **Migration:** die sechs `StandardMaterial`-Planes aus `_placeSceneDecals` (Koje-42-Stencil, „Nur für Hausangehörige", Sektor-0-Plakette, Rebar-Schaden, Warnzone, Leucht-Guidance) sind jetzt `decals[]` in `koje42.level.json` / `kaeltekammer.level.json` (Kältekammer relativ zur Morgue-Gruppe). `_createDecalPlane`/`_placeSceneDecals` und der `Plane`-Import entfallen. Standardgrößen (`size` = [Breite, Höhe, Tiefe]) stehen in `flakturm/kit.json`.
+- **Ausrichtung:** Wand-Decals `rotation [π/2, yaw, 0]` (Normale +Z bzw. +X), Boden-Decals ohne Rotation, Guidance-Streifen `[0, π/2, 0]`. `flipX()` am Koje-Stencil entfällt (Decal-UV ist aufrecht); Texture-Repeat/Offset werden ignoriert.
+- **Sicht geprüft** (Prologue im Browser, `window.__prologue`): alle sechs Decals im Decal-Pfad (`renderList.decals` = 6), „KOJE 42", „NUR FÜR HAUSANGEHÖRIGE" und „AZS · SEKTOR 0" aufrecht und nicht gespiegelt, Streifen läuft entlang der Raumachse. Warnzone/Rebar nur grob gesichtet, kein Pixelvergleich mit dem Altzustand.
+- **Loader-Fix:** `KitRegistry` setzte `scale` aus `size` als (w, h, d); die Projektionsachse ist aber Y. Jetzt (w, d, h).
+- **Offen:** Tiefe 0,5 m an den Wänden projiziert auch auf Props nahe der Wand (Regal vor dem Hausangehörigen-Schild); bei Bedarf Tiefe pro Platzierung verkleinern.

@@ -14,7 +14,6 @@ import {
   MathUtils,
   Object3D,
   OutlineElement,
-  Plane,
   PointLight,
   PostProcessingEffectType,
   SpotLight,
@@ -185,7 +184,6 @@ export class PrologueScene extends AbstractShowcase {
       await this._loadKaeltekammerProps();
       await this._buildPlayerCharacter();
       await this._applyKitTextures();
-      await this._placeSceneDecals();
     })();
 
     // 7. UI & Keyboard Handlers
@@ -792,87 +790,6 @@ export class PrologueScene extends AbstractShowcase {
       );
     } catch (e) {
       console.error("[Prologue] KAELTEKAMMER: Kit-Props nicht ladbar:", e);
-    }
-  }
-
-  /**
-   * Transparente Decal-Ebene aus einem Kit-Decal-Asset. Die Engine hat kein eigenes
-   * Decal-System — Decals sind Ebenen mit durchsichtigem StandardMaterial und deaktiviertem
-   * Depth-Write (wird von `transparent` implizit gesetzt), daher compositen sie sauber über
-   * Wänden/Böden, ohne zu verdeckeln.
-   */
-  private _createDecalPlane(
-    texture: Texture,
-    width: number,
-    height: number,
-    name: string,
-  ): Object3D {
-    const decal = new Object3D(name);
-    decal.geometry = new Plane({ width, height }).getGeometryData();
-    const material = new StandardMaterial({ color: Color.WHITE, roughness: 1.0, metallic: 0.0 });
-    material.diffuseMap = texture;
-    material.alphaMap = texture;
-    material.transparent = true;
-    material.cullMode = CullMode.NONE;
-    decal.material = material;
-    return decal;
-  }
-
-  /**
-   * Beschriftung & Materialschäden als echte Kit-Decals statt prozeduralen Details —
-   * erzählen die Räume über die vorhandenen Flakturm-Decal-Assets (Beschilderung, Warnzone,
-   * Leucht-Guidance, Betonschaden). Alle Stellen sind statisch, fail-fast mit Log.
-   */
-  private async _placeSceneDecals(): Promise<void> {
-    try {
-      const kojeSign = await Texture.fromUrl("/assets/kits/flakturm/decals/sign_koje42.png");
-      kojeSign.flipX(); // Plattenrotation um +Y spiegelt den Stencil — so liest er wieder korrekt.
-      const stencil = this._createDecalPlane(kojeSign, 0.55, 0.275, "Decal_Koje42Sign");
-      stencil.position.set(-2.34, 1.75, 1.0);
-      stencil.rotation.y = Math.PI / 2;
-      this.scene.add(stencil);
-
-      const hausang = await Texture.fromUrl(
-        "/assets/kits/flakturm/decals/sign_hausangehoerige.png",
-      );
-      const notice = this._createDecalPlane(hausang, 0.5, 0.25, "Decal_Hausang");
-      notice.position.set(-1.1, 1.85, -1.34);
-      this.scene.add(notice);
-    } catch (e) {
-      console.error("[Prologue] KOJE 42: Wand-Decals nicht ladbar:", e);
-    }
-
-    if (!this._morgueGroup) return;
-
-    try {
-      const sektor0 = await Texture.fromUrl("/assets/kits/flakturm/decals/sign_sektor0.png");
-      const badge = this._createDecalPlane(sektor0, 0.5, 0.25, "Decal_Sektor0");
-      badge.position.set(-1.8, 2.75, -2.34);
-      this._morgueGroup.add(badge);
-
-      const rebar = await Texture.fromUrl("/assets/kits/flakturm/decals/rebar_damage.png");
-      const damage = this._createDecalPlane(rebar, 0.55, 0.55, "Decal_RebarDamage");
-      damage.position.set(2.5, 1.7, -2.34);
-      this._morgueGroup.add(damage);
-
-      const hazard = await Texture.fromUrl("/assets/kits/flakturm/decals/hazard_stripes.png");
-      const hazardZone = this._createDecalPlane(hazard, 0.8, 0.8, "Decal_HazardZone");
-      hazardZone.position.set(-0.85, 0.006, -1.6);
-      hazardZone.rotation.x = -Math.PI / 2;
-      this._morgueGroup.add(hazardZone);
-
-      // Leucht-Guidance-Streifen entlang des Mittelgangs Richtung Ausgang: Die Textur ist
-      // quer (4:1), daher wird die lange Streifenachse per gekapselter Rotation auf Z gelegt.
-      const guide = await Texture.fromUrl("/assets/kits/flakturm/decals/guide_stripe_glow.png");
-      const stripeRoot = new Object3D("Decal_GuideStripe");
-      stripeRoot.position.set(0, 0.006, -0.9);
-      stripeRoot.rotation.x = -Math.PI / 2;
-      const stripe = this._createDecalPlane(guide, 2.0, 0.5, "Decal_GuideGlow");
-      stripe.rotation.z = Math.PI / 2;
-      stripeRoot.add(stripe);
-      this._morgueGroup.add(stripeRoot);
-    } catch (e) {
-      console.error("[Prologue] KAELTEKAMMER: Decals nicht ladbar:", e);
     }
   }
 

@@ -492,7 +492,7 @@ export class KitRegistry {
         `[KitRegistry] Decal '${placement.id}': kit decal '${item.id}' has an invalid size [${size.join(", ")}].`,
       );
     }
-    decal.scale.set(size[0], size[1], size[2]);
+    decal.scale.set(size[0], size[2], size[1]); // [width, height, depth]: the projection axis is local Y, the image height runs along Z
     if (placement.position) {
       decal.position.set(placement.position[0], placement.position[1], placement.position[2]);
     }
