@@ -20,6 +20,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 import { setupMipScene } from "./mipScene.js";
+import { setupOrmScene } from "./ormScene.js";
 
 /**
  * Decal probe: box-projected decals on a floor, a wall and a pedestal. Query params:
@@ -94,6 +95,12 @@ class DecalProbe extends AbstractShowcase {
     if (new URLSearchParams(location.search).get("mip") === "1") {
       this.defaultCameraController = "none";
       setupMipScene(this.scene, this.camera);
+      return;
+    }
+
+    if (new URLSearchParams(location.search).get("orm") === "1") {
+      this.defaultCameraController = "none";
+      setupOrmScene(this.scene, this.camera);
       return;
     }
 

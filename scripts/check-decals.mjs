@@ -334,6 +334,58 @@ async function bumpChecks(browser, backend) {
   return res[1] ?? null;
 }
 
+/** ORM and emissive maps (?orm=1): AO darkens, a neutral ORM changes nothing, emission adds colour on lit decals only. */
+async function ormChecks(browser, backend) {
+  const blocking = backend === "WEB_GL2";
+  const pp = backend === "WEB_GL2" ? "&pp=1" : "";
+  const { page, errors } = await openProbe(browser, `rendererType=${backend}&orm=1&nb=0${pp}`);
+  const rect = await page.evaluate(() => {
+    const r = document.querySelector("canvas").getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
+  const png = PNG.sync.read(Buffer.from(await page.screenshot({ clip: rect })));
+  // Camera straight above the origin, 60 degree vertical fov, height 8, decals at x = -6, -3, 0, 3, 6.
+  const halfWidth = 8 * Math.tan(Math.PI / 6) * (png.width / png.height);
+  const px = (worldX) => {
+    const x = Math.floor((0.5 + worldX / (2 * halfWidth)) * png.width);
+    const y = Math.floor(png.height / 2);
+    const i = (png.width * y + x) * 4;
+    return [png.data[i], png.data[i + 1], png.data[i + 2]];
+  };
+  const [control, ao, neutral, emissive, unlitEmissive] = [-6, -3, 0, 3, 6].map(px);
+  const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const tag = `${backend} orm`;
+  console.log(
+    `INFO  ${tag}: control ${control} ao ${ao} neutral ${neutral} emissive ${emissive} unlit+emissive ${unlitEmissive}`,
+  );
+  log(
+    !errors.length,
+    blocking,
+    `${tag}: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+  );
+  log(
+    lum(ao) < lum(control) - 8,
+    blocking,
+    `${tag}: ORM with AO 0 is darker than the control (luma ${lum(ao).toFixed(0)} < ${lum(control).toFixed(0)} - 8)`,
+  );
+  log(
+    Math.max(...neutral.map((v, i) => Math.abs(v - control[i]))) <= 3,
+    blocking,
+    `${tag}: neutral ORM equals the control (${neutral} vs ${control})`,
+  );
+  log(
+    emissive[0] - control[0] >= 20 && Math.abs(emissive[1] - control[1]) <= 4,
+    blocking,
+    `${tag}: red emissive map adds red only (${emissive} vs ${control})`,
+  );
+  log(
+    Math.abs(unlitEmissive[0] - unlitEmissive[1]) <= 4,
+    blocking,
+    `${tag}: unlit decal ignores the emissive map (${unlitEmissive})`,
+  );
+  await page.close();
+}
+
 /** WebGL1 has no decal pass: a scene with decals must render without errors and simply omit them. */
 async function webGl1Check(browser) {
   const { page, errors } = await openProbe(browser, "rendererType=WEB_GL1");
@@ -461,6 +513,7 @@ try {
   await hbaoIndependence(browser, "WEB_GL2");
   bumpGl2 = await bumpChecks(browser, "WEB_GL2");
   await unlitCheck(browser, "WEB_GL2");
+  await ormChecks(browser, "WEB_GL2");
   await webGl1Check(browser);
 
   const why = await webGpuUsable(browser);
@@ -474,6 +527,7 @@ try {
     await normalsFor(browser, "WEB_GPU", true);
     await hbaoIndependence(browser, "WEB_GPU");
     await unlitCheck(browser, "WEB_GPU");
+    await ormChecks(browser, "WEB_GPU");
     bumpGpu = await bumpChecks(browser, "WEB_GPU");
     if (bumpGl2?.floor && bumpGpu?.floor) {
       log(
