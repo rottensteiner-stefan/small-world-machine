@@ -15,6 +15,10 @@ export interface Intersection {
   distance: number;
   /** The intersected object. */
   object: Object3D;
+  /** World-space hit point. */
+  point: Vector3D;
+  /** Unit world-space surface normal at the hit, flipped to face the ray origin. For hits resolved by the broad phase only (no triangle geometry) it is the negated ray direction. */
+  normal: Vector3D;
 }
 
 /**
@@ -94,10 +98,7 @@ export class Raycaster {
           // collapses to a point in world space, so there is no well-defined local ray to test
           // against. Fall back to the broad-phase distance (same path as objects without
           // triangle geometry below) instead of silently dropping the object from picking.
-          intersects.push({
-            distance: broadT,
-            object: obj,
-          });
+          intersects.push(this._broadPhaseHit(broadT, obj));
           continue;
         }
 
@@ -115,6 +116,7 @@ export class Raycaster {
         const vertices = geoData.vertices;
         const indices = geoData.indices;
         let closestT = Infinity;
+        let closestTri = -1;
 
         for (let i = 0; i < indices.length; i += 3) {
           const i0 = (indices[i] ?? 0) * 3;
@@ -137,24 +139,24 @@ export class Raycaster {
 
           if (tTri >= 0 && tTri < closestT) {
             closestT = tTri;
+            closestTri = i;
           }
         }
 
         MathPool.releaseVector(localOrigin);
         MathPool.releaseVector(localDirection);
-        MathPool.releaseMatrix(invWorld);
 
         if (closestT !== Infinity) {
           intersects.push({
             distance: closestT,
             object: obj,
+            point: this.ray.at(closestT),
+            normal: this._worldTriangleNormal(vertices, indices, closestTri, invWorld),
           });
         }
+        MathPool.releaseMatrix(invWorld);
       } else {
-        intersects.push({
-          distance: broadT,
-          object: obj,
-        });
+        intersects.push(this._broadPhaseHit(broadT, obj));
       }
     }
 
@@ -163,6 +165,55 @@ export class Raycaster {
     }
 
     return intersects;
+  }
+
+  private _broadPhaseHit(distance: number, object: Object3D): Intersection {
+    const d = this.ray.direction;
+    return {
+      distance,
+      object,
+      point: this.ray.at(distance),
+      normal: new Vector3D(-d.x, -d.y, -d.z),
+    };
+  }
+
+  /**
+   * World-space normal of the triangle starting at `indices[tri]`: the local face normal goes
+   * through the inverse-transpose of the world matrix (correct under non-uniform scale), then is
+   * flipped to face the ray.
+   */
+  private _worldTriangleNormal(
+    vertices: ArrayLike<number>,
+    indices: ArrayLike<number>,
+    tri: number,
+    invWorld: Matrix4,
+  ): Vector3D {
+    const i0 = (indices[tri] ?? 0) * 3;
+    const i1 = (indices[tri + 1] ?? 0) * 3;
+    const i2 = (indices[tri + 2] ?? 0) * 3;
+    const e1x = (vertices[i1] ?? 0) - (vertices[i0] ?? 0);
+    const e1y = (vertices[i1 + 1] ?? 0) - (vertices[i0 + 1] ?? 0);
+    const e1z = (vertices[i1 + 2] ?? 0) - (vertices[i0 + 2] ?? 0);
+    const e2x = (vertices[i2] ?? 0) - (vertices[i0] ?? 0);
+    const e2y = (vertices[i2 + 1] ?? 0) - (vertices[i0 + 1] ?? 0);
+    const e2z = (vertices[i2 + 2] ?? 0) - (vertices[i0 + 2] ?? 0);
+    const nx = e1y * e2z - e1z * e2y;
+    const ny = e1z * e2x - e1x * e2z;
+    const nz = e1x * e2y - e1y * e2x;
+
+    const m = invWorld.data;
+    const wx = m[0]! * nx + m[1]! * ny + m[2]! * nz;
+    const wy = m[4]! * nx + m[5]! * ny + m[6]! * nz;
+    const wz = m[8]! * nx + m[9]! * ny + m[10]! * nz;
+    const len = Math.hypot(wx, wy, wz);
+    if (len < 1e-12) {
+      const d = this.ray.direction;
+      return new Vector3D(-d.x, -d.y, -d.z);
+    }
+    const d = this.ray.direction;
+    const sign = wx * d.x + wy * d.y + wz * d.z > 0 ? -1 : 1;
+    const k = sign / len;
+    return new Vector3D(wx * k, wy * k, wz * k);
   }
 
   /**

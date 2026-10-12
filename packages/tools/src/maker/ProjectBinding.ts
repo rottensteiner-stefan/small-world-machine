@@ -43,6 +43,8 @@ export class ProjectBinding {
   private _directory: FileSystemDirectoryHandleLike | undefined;
   private _debounceTimer: ReturnType<typeof setTimeout> | undefined;
   private _dirtyListener: ((dirty: boolean) => void) | undefined;
+  /** Top-level scene children that are editor-only (e.g. the decal stamp ghost) and must not end up in `scene.gltf`. */
+  public excludeFromSave: (obj: Object3D) => boolean = () => false;
 
   public get isBound(): boolean {
     return undefined !== this._directory;
@@ -112,9 +114,23 @@ export class ProjectBinding {
     }, AUTOSAVE_DEBOUNCE_MS);
   }
 
+  /** Serializes `root` with the excluded direct children temporarily taken out of its child list
+   * (synchronously, so nothing can observe the gap). */
+  private _writeWithout(root: Object3D): ReturnType<WorldWriter["write"]> {
+    const kept = root.children.filter((child) => !this.excludeFromSave(child));
+    if (kept.length === root.children.length) return new WorldWriter().write(root);
+    const all = root.children;
+    root.children = kept;
+    try {
+      return new WorldWriter().write(root);
+    } finally {
+      root.children = all;
+    }
+  }
+
   private async _save(root: Object3D): Promise<void> {
     if (!this._directory) return;
-    const doc = new WorldWriter().write(root);
+    const doc = this._writeWithout(root);
     const fileHandle = await this._directory.getFileHandle(SCENE_FILE_NAME, { create: true });
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(doc, null, 2));

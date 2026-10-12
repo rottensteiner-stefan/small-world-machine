@@ -138,4 +138,80 @@ describe("Raycaster", () => {
     // Ray origin at z=0, mesh at z=10 -> world distance is 10
     expect(hits[0]!.distance).toBeCloseTo(10);
   });
+
+  describe("hit point and normal", () => {
+    /** A 2x2 quad in the local XY plane facing +Z. */
+    const makeQuad = (): Object3D => {
+      const obj = new Object3D("Quad");
+      obj.geometry = {
+        vertices: new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]),
+        indices: new Uint16Array([0, 1, 2, 0, 2, 3]),
+        getBoundingVolume: (): BoundingBox =>
+          new BoundingBox(new Vector3D(-1, -1, 0), new Vector3D(1, 1, 0)),
+      };
+      return obj;
+    };
+
+    it("returns the world hit point and a ray-facing unit normal", () => {
+      const raycaster = new Raycaster();
+      const quad = makeQuad();
+      quad.position.set(1, 2, 5);
+      quad.updateMatrixWorld();
+      quad.bounds = new BoundingBox(new Vector3D(0, 1, 4), new Vector3D(2, 3, 6));
+
+      raycaster.ray.set(new Vector3D(1.5, 2.25, 0), new Vector3D(0, 0, 1));
+      const front = raycaster.intersectObjects([quad])[0]!;
+      expect(front.point.x).toBeCloseTo(1.5);
+      expect(front.point.y).toBeCloseTo(2.25);
+      expect(front.point.z).toBeCloseTo(5);
+      expect(front.normal.z).toBeCloseTo(-1); // faces the ray, so towards -Z
+
+      raycaster.ray.set(new Vector3D(1.5, 2.25, 10), new Vector3D(0, 0, -1));
+      const back = raycaster.intersectObjects([quad])[0]!;
+      expect(back.normal.z).toBeCloseTo(1);
+    });
+
+    it("transforms the normal with the inverse transpose under non-uniform scale", () => {
+      const raycaster = new Raycaster();
+      // A quad in XY, scaled (4, 1, 1) and rotated about Z by 45 degrees: the plane is still
+      // z = 0, so its normal must stay +Z (towards the ray).
+      const quad = makeQuad();
+      quad.scale.set(4, 1, 1);
+      quad.rotation.set(0, 0, Math.PI / 4);
+      quad.updateMatrixWorld();
+      quad.bounds = new BoundingBox(new Vector3D(-5, -5, 0), new Vector3D(5, 5, 0));
+      raycaster.ray.set(new Vector3D(0, 0, 3), new Vector3D(0, 0, -1));
+      const hit = raycaster.intersectObjects([quad])[0]!;
+      expect(hit.normal.x).toBeCloseTo(0);
+      expect(hit.normal.y).toBeCloseTo(0);
+      expect(hit.normal.z).toBeCloseTo(1);
+
+      // Tilted plane under non-uniform scale: the normal must be unit length and perpendicular
+      // to the transformed surface tangents.
+      const tilted = makeQuad();
+      tilted.scale.set(1, 3, 1);
+      tilted.rotation.set(Math.PI / 4, 0, 0);
+      tilted.updateMatrixWorld();
+      tilted.bounds = new BoundingBox(new Vector3D(-5, -5, -5), new Vector3D(5, 5, 5));
+      raycaster.ray.set(new Vector3D(0, 0, 10), new Vector3D(0, 0, -1));
+      const t = raycaster.intersectObjects([tilted])[0]!;
+      const len = Math.hypot(t.normal.x, t.normal.y, t.normal.z);
+      expect(len).toBeCloseTo(1);
+      expect(t.normal.z).toBeGreaterThan(0);
+      // Perpendicular to the transformed surface tangents (world X and the scaled, tilted Y).
+      const tangentY = new Vector3D(0, 3 * Math.cos(Math.PI / 4), 3 * Math.sin(Math.PI / 4));
+      expect(t.normal.x).toBeCloseTo(0);
+      expect(t.normal.y * tangentY.y + t.normal.z * tangentY.z).toBeCloseTo(0);
+    });
+
+    it("falls back to the negated ray direction for broad-phase-only hits", () => {
+      const raycaster = new Raycaster();
+      raycaster.ray.set(new Vector3D(0, 0, 0), new Vector3D(1, 0, 0));
+      const box = new Object3D("Box");
+      box.bounds = new BoundingBox(new Vector3D(5, -1, -1), new Vector3D(7, 1, 1));
+      const hit = raycaster.intersectObjects([box])[0]!;
+      expect(hit.point.x).toBeCloseTo(5);
+      expect(hit.normal.x).toBeCloseTo(-1);
+    });
+  });
 });

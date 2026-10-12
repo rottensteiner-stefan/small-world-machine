@@ -42,6 +42,14 @@ The arrow keys adapt dynamically to the active gizmo mode or keyboard modifier:
 | **Move mode (<kbd>W</kbd>)** (default) | Shift position (XZ / Y with Shift) | Current grid snap (`0.1m` – `2.0m`) |
 | **Rotate mode (<kbd>E</kbd>)** or <kbd>Alt + arrows</kbd> | Rotate yaw (Y) / pitch (X) | Angle snap ($15^\circ$ / $\pi / 12$) |
 | **Scale mode (<kbd>R</kbd>)** or <kbd>Alt + Shift + arrows</kbd> | Scale object (uniform / axis) | Scale snap ($0.25$) |
+| **Decal stamp mode (<kbd>D</kbd>)** | <kbd>R</kbd> / <kbd>Shift+R</kbd> spin the stamp about the surface normal; arrows nudge in the surface plane; <kbd>Shift</kbd> + arrows scale the stamp; <kbd>Esc</kbd> leaves | $15^\circ$ / grid snap / scale snap |
+
+While the stamp mode is on, <kbd>R</kbd> belongs to the stamp (it is the Scale gizmo again as soon as you leave the mode).
+
+### Decal stamp mode (<kbd>D</kbd>)
+Double-click a decal in the Content Drawer's *Decals* pill (or press <kbd>D</kbd> or the `Stamp Decal` button after that) to arm the tool: a semi-transparent ghost decal follows the mouse over the surface (scene geometry, otherwise the $Y = 0$ floor), its local +Y on the surface normal. A left click stamps the decal there as one undo step; the mode stays on for the next stamp, <kbd>Esc</kbd> or <kbd>D</kbd> leaves it. <kbd>R</kbd> / <kbd>Shift+R</kbd> spin the stamp by $15^\circ$ about the normal (kept between stamps), the arrow keys nudge it in the surface plane by the grid snap (the nudge resets when the mouse moves), <kbd>Shift</kbd> + arrows scale it uniformly by the scale snap. Stamped decals are saved in `scene.gltf` (`SWM_decal`) and get their textures back on reload. <kbd>Ctrl/Cmd+D</kbd> stays Duplicate.
+
+Limitation: decals are not raycast targets, so a click in the viewport cannot select a stamped decal; select it in the hierarchy panel (the inspector then offers priority, opacity, edge fade and angle fade).
 
 ### Snap to floor (<kbd>End</kbd> / `⬇ Floor`)
 Pressing <kbd>End</kbd> (or clicking `⬇ Floor`) computes the exact lower world-space bounding-box bound (`min.y`) for the entire current selection (single object or multi-selection cluster) and moves it vertically so its bottom edge sits exactly flush with `Y = 0` (the world floor plane).
@@ -211,6 +219,10 @@ All scene mutations are tracked on an atomic `UndoStack`:
 | | <kbd>X</kbd> | Toggle snapping on/off |
 | | <kbd>[</kbd> | Decrease grid snap step (finer: $0.1\text{m}$) |
 | | <kbd>]</kbd> | Increase grid snap step (coarser: $2.0\text{m}$) |
+| | <kbd>D</kbd> | Decal stamp mode on/off (<kbd>Ctrl/Cmd+D</kbd> is Duplicate) |
+| | <kbd>R</kbd> / <kbd>Shift+R</kbd> *(stamp mode)* | Spin the stamp $\pm 15^\circ$ about the surface normal |
+| | arrows / <kbd>Shift</kbd> + arrows *(stamp mode)* | Nudge the stamp in the surface plane / scale it |
+| | <kbd>Esc</kbd> *(stamp mode)* | Leave stamp mode |
 | **Transform & nudge** | $\leftarrow$ $\rightarrow$ $\uparrow$ $\downarrow$ | Move selection along the camera-cardinal XZ plane |
 | | <kbd>Shift</kbd> + $\uparrow$ / $\downarrow$ or <kbd>PageUp</kbd> / <kbd>PageDown</kbd> | Move selection along the Y axis (height) |
 | | <kbd>Alt</kbd> + arrows | Rotate selection by angle snap ($15^\circ$) |

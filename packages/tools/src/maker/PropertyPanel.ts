@@ -371,6 +371,20 @@ export class PropertyPanel {
     return { host, propKey: parts[parts.length - 1]! };
   }
 
+  /** Reports an edit of the inspected object, or of its material (also reached through a path such as
+   * `material.color.a`), so the host can autosave. Behavior fields are not reported. */
+  private _notifyChanged(host: Record<string, unknown>, propKey: string, value: unknown): void {
+    const obj = this._currentObj;
+    if (!obj) return;
+    const isObject = host === (obj as unknown as Record<string, unknown>);
+    const material = obj.material as unknown as { color?: unknown } | undefined;
+    if (!isObject && host !== (material as unknown) && host !== (material?.color as unknown)) {
+      return;
+    }
+    if (isObject && "name" === propKey) this._updateTitle();
+    this._callbacks?.onPropertyChanged?.(obj, propKey, value);
+  }
+
   private _bindField(
     folder: FolderApi,
     target: Record<string, unknown>,
@@ -447,13 +461,7 @@ export class PropertyPanel {
             host[propKey] = to;
           }
           binding.refresh();
-          if (
-            this._currentObj &&
-            host === (this._currentObj as unknown as Record<string, unknown>)
-          ) {
-            if ("name" === propKey) this._updateTitle();
-            this._callbacks?.onPropertyChanged?.(this._currentObj, propKey, to);
-          }
+          this._notifyChanged(host, propKey, to);
         },
         undo: () => {
           if (typeof host[propKey] === "object" && null !== host[propKey]) {
@@ -462,19 +470,10 @@ export class PropertyPanel {
             host[propKey] = from;
           }
           binding.refresh();
-          if (
-            this._currentObj &&
-            host === (this._currentObj as unknown as Record<string, unknown>)
-          ) {
-            if ("name" === propKey) this._updateTitle();
-            this._callbacks?.onPropertyChanged?.(this._currentObj, propKey, from);
-          }
+          this._notifyChanged(host, propKey, from);
         },
       });
-      if (this._currentObj && host === (this._currentObj as unknown as Record<string, unknown>)) {
-        if ("name" === propKey) this._updateTitle();
-        this._callbacks?.onPropertyChanged?.(this._currentObj, propKey, to);
-      }
+      this._notifyChanged(host, propKey, to);
       before = to;
     });
     this._blades.push(binding);

@@ -31,11 +31,13 @@ import {
   Vector2D,
   Vector3D,
   MathPool,
-  Plane,
   StandardMaterial,
   Texture,
   KitRegistry,
-  CullMode,
+  Quaternion,
+  Matrix4,
+  type OBB,
+  type KitDecalItem,
 } from "@small-world-machine/engine";
 
 import { OrbitCameraController, OrbitCameraView } from "./OrbitCameraController.js";
@@ -54,6 +56,7 @@ import { MapImportPanel } from "./MapImportPanel.js";
 import { MakerPrefabPipeline } from "./MakerPrefabPipeline.js";
 import { MakerImportAndZoneTools } from "./MakerImportAndZoneTools.js";
 import { MakerToolbarBuilder } from "./MakerToolbarBuilder.js";
+import { DecalStampTool, type DecalStampHit } from "./DecalStampTool.js";
 import { ContentDrawer } from "./ContentDrawer.js";
 
 export interface MakerAppOptions extends EngineOptions {
@@ -131,6 +134,7 @@ export class MakerApp extends SmallWorldMachine {
 
   private _prefabPipeline!: MakerPrefabPipeline;
   private _importTools!: MakerImportAndZoneTools;
+  private _decalStamp!: DecalStampTool;
   private _toolbars!: MakerToolbarBuilder;
 
   /** Insertion-ordered so "the last thing clicked/toggled" (via `Array.from(...).at(-1)`) is
@@ -238,6 +242,19 @@ export class MakerApp extends SmallWorldMachine {
         this.setMaterialOnObject(obj, material);
       },
     });
+    this._decalStamp = new DecalStampTool({
+      raycast: (canvasX, canvasY): DecalStampHit | undefined => this._pickSurface(canvasX, canvasY),
+      scene: this.scene,
+      hydrate: (decal): Promise<boolean> => this._kitRegistry.hydrateDecal(decal),
+      addObject: (decal): void => this.addObject(decal),
+      getNudgeStep: (): number => (this._gizmo.snap.enabled ? this._gizmo.snap.translate : 0.5),
+      getScaleStep: (): number => (this._gizmo.snap.enabled ? this._gizmo.snap.scale : 0.25),
+      setStatus: (message): void => {
+        this._makerOptions.statusContainer.textContent = message;
+      },
+    });
+    this._project.excludeFromSave = (obj): boolean => this._decalStamp.isGhost(obj);
+
     this._hierarchyPanel = new HierarchyPanel(
       this._makerOptions.hierarchyContainer,
       () => this.scene.root,
@@ -253,7 +270,8 @@ export class MakerApp extends SmallWorldMachine {
         this._highlightMeshes.includes(obj) ||
         obj === this._gizmo.root ||
         this._lightGizmos.isHelperMesh(obj) ||
-        this._stageZoneGizmos.isHelperMesh(obj),
+        this._stageZoneGizmos.isHelperMesh(obj) ||
+        this._decalStamp.isGhost(obj),
     );
     new ObjectPalette(this._makerOptions.paletteContainer, {
       createObject: (factory): void => this.addObject(factory()),
@@ -318,7 +336,15 @@ export class MakerApp extends SmallWorldMachine {
       duplicateSelection: (): void => this.duplicateSelection(),
       groupSelection: (): void => this.groupSelection(),
       snapSelectionToGround: (): void => this.snapSelectionToGround(),
-      toggleZoneDrawMode: (): void => this._importTools.toggle(),
+      toggleZoneDrawMode: (): void => {
+        this._decalStamp.disable();
+        this._importTools.toggle();
+      },
+      toggleDecalStamp: (): void => {
+        this._importTools.cancel();
+        this._decalStamp.toggle();
+      },
+      resolveDecals: (root): Promise<number> => this._kitRegistry.resolveLevelDecals(root),
     });
     this._toolbars.setupProjectToolbar();
     this._toolbars.setupSelectionToolbar();
@@ -326,6 +352,8 @@ export class MakerApp extends SmallWorldMachine {
     this._toolbars.setupGizmoToolbar();
     if (this._toolbars.zoneDrawButton)
       this._importTools.setZoneDrawButton(this._toolbars.zoneDrawButton);
+    if (this._toolbars.decalStampButton)
+      this._decalStamp.setButton(this._toolbars.decalStampButton);
 
     const drawerContainer =
       this._makerOptions.contentDrawerContainer ?? this.canvas.parentElement ?? document.body;
@@ -381,27 +409,17 @@ export class MakerApp extends SmallWorldMachine {
             console.error("[Maker] Failed to apply texture:", err);
           }
         },
-        createDecal: async (kitId, decalItem, worldPos): Promise<void> => {
-          try {
-            const decal = decalItem as { file: string; name: string };
-            const fileUrl = `${this._kitRegistry.basePath}${kitId}/decals/${decal.file}`;
-            const tex = await Texture.fromUrl(fileUrl, { flipY: true });
-            const quad = new Object3D(decal.name ?? "Decal");
-            quad.geometry = new Plane({ width: 1, height: 1 }).getGeometryData();
-            const mat = new StandardMaterial({
-              color: Color.WHITE,
-              diffuseMap: tex,
-              roughness: 0.8,
-            });
-            mat.transparent = true;
-            mat.cullMode = CullMode.NONE;
-            quad.material = mat;
-            if (worldPos) quad.position.copyFrom(worldPos);
-            this.addObject(quad);
-            this.selectObject(quad);
-          } catch (err) {
-            console.error("[Maker] Failed to create decal:", err);
-          }
+        createDecal: (_kitId, decalItem): Promise<void> => {
+          // A click on a kit decal arms the stamp tool (no decal is created until the user clicks
+          // in the viewport), so there is no world position to use here.
+          const item = decalItem as KitDecalItem;
+          this._importTools.cancel();
+          this._decalStamp.arm({
+            kitDecal: item.id,
+            name: item.name,
+            size: item.size ?? [1, 1, 0.5],
+          });
+          return Promise.resolve();
         },
         instantiatePrefab: async (name, worldPos): Promise<void> => {
           this._prefabPipeline.instantiatePrefab(name);
@@ -413,36 +431,11 @@ export class MakerApp extends SmallWorldMachine {
           screenX,
           screenY,
         ): { position: Vector3D; targetObject?: Object3D; normal?: Vector3D } => {
-          const rect = this.canvas.getBoundingClientRect();
-          const ndcX = (screenX / rect.width) * 2 - 1;
-          const ndcY = -(screenY / rect.height) * 2 + 1;
-          const ndc = new Vector2D(ndcX, ndcY);
-          this._raycaster.setFromCamera(ndc, this.camera);
-
-          // 1. Raycast scene objects first
-          const pickable: Object3D[] = [];
-          this._collectPickable(this.scene.root, pickable);
-          const hits = this._raycaster.intersectObjects(pickable, true);
-          if (hits.length > 0 && hits[0]) {
-            const hit = hits[0];
-            const hitPos = this._raycaster.ray.at(hit.distance);
-            return {
-              position: hitPos,
-              targetObject: hit.object,
-            };
-          }
-
-          // 2. Fallback to Y=0 ground plane
-          const ray = this._raycaster.ray;
-          if (Math.abs(ray.direction.y) > 1e-4) {
-            const t = -ray.origin.y / ray.direction.y;
-            if (t > 0 && t < 1000) {
-              return {
-                position: ray.at(t),
-              };
-            }
-          }
-          return { position: new Vector3D(0, 0, 0) };
+          const hit = this._pickSurface(screenX, screenY);
+          if (!hit) return { position: new Vector3D(0, 0, 0) };
+          return hit.object
+            ? { position: hit.point, targetObject: hit.object, normal: hit.normal }
+            : { position: hit.point, normal: hit.normal };
         },
       },
     });
@@ -1107,6 +1100,11 @@ export class MakerApp extends SmallWorldMachine {
       -((event.clientY - rect.top) / rect.height) * 2 + 1,
     );
 
+    if (this._decalStamp.isActive) {
+      void this._decalStamp.handlePointerDown(event.clientX - rect.left, event.clientY - rect.top);
+      return; // Stamp mode consumes every click -- no gizmo/selection while active.
+    }
+
     if (this._importTools.isDrawingZone) {
       if (this._stageProjection) {
         this._raycaster.setFromCamera(ndc, this.camera);
@@ -1190,6 +1188,14 @@ export class MakerApp extends SmallWorldMachine {
   }
 
   private _onWindowPointerMove(event: PointerEvent): void {
+    if (this._decalStamp.isActive && !this._cameraDrag) {
+      if (event.target === this.canvas) {
+        const rect = this.canvas.getBoundingClientRect();
+        this._decalStamp.handlePointerMove(event.clientX - rect.left, event.clientY - rect.top);
+      } else {
+        this._decalStamp.handlePointerLeave();
+      }
+    }
     if (this._cameraDrag) {
       const dx = event.clientX - this._cameraDrag.lastX;
       const dy = event.clientY - this._cameraDrag.lastY;
@@ -1370,6 +1376,33 @@ export class MakerApp extends SmallWorldMachine {
     return !(objMaxX < minX || objMinX > maxX || objMaxY < minY || objMinY > maxY);
   }
 
+  /** Ray-picks the surface under a canvas-relative position: scene geometry first (never the
+   * editor grid, helper meshes or the stamp ghost), then the Y=0 ground plane with a +Y normal. */
+  private _pickSurface(
+    canvasX: number,
+    canvasY: number,
+  ): (DecalStampHit & { object?: Object3D }) | undefined {
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = new Vector2D((canvasX / rect.width) * 2 - 1, -(canvasY / rect.height) * 2 + 1);
+    this._raycaster.setFromCamera(ndc, this.camera);
+
+    const pickable: Object3D[] = [];
+    this._collectPickable(this.scene.root, pickable);
+    const hits = this._raycaster.intersectObjects(
+      pickable.filter((o) => "EditorGrid" !== o.name),
+      true,
+    );
+    const hit = hits[0];
+    if (hit) return { point: hit.point, normal: hit.normal, object: hit.object };
+
+    const ray = this._raycaster.ray;
+    if (Math.abs(ray.direction.y) > 1e-4) {
+      const t = -ray.origin.y / ray.direction.y;
+      if (t > 0 && t < 1000) return { point: ray.at(t), normal: new Vector3D(0, 1, 0) };
+    }
+    return undefined;
+  }
+
   /** Mirrors `GadgetInspector`'s own picking scope (visible objects only, own helper meshes
    * excluded) so Maker and the still-live GadgetInspector behave consistently while both exist. */
   private _collectPickable(parent: Object3D, out: Object3D[]): void {
@@ -1377,7 +1410,8 @@ export class MakerApp extends SmallWorldMachine {
       this._highlightMeshes.includes(parent) ||
       parent === this._gizmo.root ||
       this._lightGizmos.isHelperMesh(parent) ||
-      this._stageZoneGizmos.isHelperMesh(parent)
+      this._stageZoneGizmos.isHelperMesh(parent) ||
+      this._decalStamp.isGhost(parent)
     ) {
       return;
     }
@@ -1410,7 +1444,20 @@ export class MakerApp extends SmallWorldMachine {
       const box = obj.bounds as BoundingBox;
       const size = new Vector3D().copyFrom(box.max).sub(box.min).add(epsilon);
       mesh.position.copyFrom(box.center);
+      mesh.rotation.set(0, 0, 0);
       mesh.scale.copyFrom(size);
+      mesh.updateMatrixWorld();
+      return true;
+    }
+    if (BoundingType.OBB === obj.bounds.type) {
+      // Oriented bounds (e.g. a Decal's box): the pooled cube takes the box's rotation, too.
+      const obb = obj.bounds as OBB;
+      const [ax, ay, az] = obb.axes;
+      const basis = new Matrix4();
+      basis.data.set([ax.x, ax.y, ax.z, 0, ay.x, ay.y, ay.z, 0, az.x, az.y, az.z, 0, 0, 0, 0, 1]);
+      new Quaternion().setFromRotationMatrix(basis).toEuler(mesh.rotation);
+      mesh.position.copyFrom(obb.center);
+      mesh.scale.copyFrom(obb.halfExtents).scale(2).add(epsilon);
       mesh.updateMatrixWorld();
       return true;
     }
@@ -1419,6 +1466,7 @@ export class MakerApp extends SmallWorldMachine {
       const diameter = sphere.radius * 2;
       const size = new Vector3D(diameter, diameter, diameter).add(epsilon);
       mesh.position.copyFrom(sphere.center);
+      mesh.rotation.set(0, 0, 0);
       mesh.scale.copyFrom(size);
       mesh.updateMatrixWorld();
       return true;
@@ -1465,6 +1513,13 @@ export class MakerApp extends SmallWorldMachine {
       this._hierarchyDirty = true;
       return;
     }
+    if (this._decalStamp.isActive || "d" === event.key.toLowerCase()) {
+      if (this._isEditingField(event.target)) return;
+      if (this._importTools.isDrawingZone) this._importTools.cancel();
+      // Plain `D` toggles stamp mode; while it is on, R/arrows/Esc belong to the stamp, not to
+      // the Scale gizmo or selection nudging.
+      if (this._decalStamp.handleKeyDown(event)) return;
+    }
     if (this._importTools.isDrawingZone) {
       if ("Escape" === event.key) {
         event.preventDefault();
@@ -1481,6 +1536,7 @@ export class MakerApp extends SmallWorldMachine {
     if ("z" === event.key.toLowerCase() && !event.ctrlKey && !event.metaKey && !event.altKey) {
       if (this._isEditingField()) return;
       event.preventDefault();
+      this._decalStamp.disable();
       this._importTools.toggle();
       return;
     }

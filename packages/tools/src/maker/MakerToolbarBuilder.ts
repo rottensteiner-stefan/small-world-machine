@@ -15,6 +15,9 @@ export interface MakerToolbarContext {
   groupSelection: () => void;
   snapSelectionToGround: () => void;
   toggleZoneDrawMode: () => void;
+  toggleDecalStamp: () => void;
+  /** Hydrates the decals of a freshly loaded scene (kit textures are not part of the glTF). */
+  resolveDecals: (root: Object3D) => Promise<number>;
 }
 
 /**
@@ -30,6 +33,7 @@ export class MakerToolbarBuilder {
   private _gizmoButtons: Record<GizmoMode, HTMLButtonElement> | undefined;
   private _snapButton: HTMLButtonElement | undefined;
   private _zoneDrawButton: HTMLButtonElement | undefined;
+  private _decalStampButton: HTMLButtonElement | undefined;
 
   constructor(private readonly _ctx: MakerToolbarContext) {}
 
@@ -41,6 +45,10 @@ export class MakerToolbarBuilder {
    * the "active" highlight on the button this class builds. */
   public get zoneDrawButton(): HTMLButtonElement | undefined {
     return this._zoneDrawButton;
+  }
+
+  public get decalStampButton(): HTMLButtonElement | undefined {
+    return this._decalStampButton;
   }
 
   public setupProjectToolbar(): void {
@@ -58,6 +66,8 @@ export class MakerToolbarBuilder {
         // reopen a project" flow (clearing existing content first) is a later-phase concern.
         const loadedRoot = await this._ctx.project.load();
         if (loadedRoot) {
+          // Before addObject: textures assigned after the first render may not rebuild pipelines.
+          await this._ctx.resolveDecals(loadedRoot);
           for (const child of [...loadedRoot.children]) {
             this._ctx.addObject(child);
           }
@@ -193,6 +203,15 @@ export class MakerToolbarBuilder {
     drawZoneBtn.addEventListener("click", (): void => this._ctx.toggleZoneDrawMode());
     row.appendChild(drawZoneBtn);
     this._zoneDrawButton = drawZoneBtn;
+
+    const stampBtn = document.createElement("button");
+    stampBtn.className = "maker-palette-btn";
+    stampBtn.textContent = "🔖 Stamp Decal (D)";
+    stampBtn.title =
+      "Pick a decal in the Content Drawer, click to stamp. R rotates (Shift+R reverse), arrows nudge, Shift+arrows scale, Esc leaves.";
+    stampBtn.addEventListener("click", (): void => this._ctx.toggleDecalStamp());
+    row.appendChild(stampBtn);
+    this._decalStampButton = stampBtn;
 
     this._ctx.paletteContainer.prepend(row);
     this.setGizmoMode("translate");
