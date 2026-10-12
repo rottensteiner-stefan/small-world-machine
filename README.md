@@ -227,6 +227,10 @@ This project provides comprehensive developer documentation, engine guides, and 
     npm run docs:dev
     ```
 
+## 🤝 Contributors
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md).
+
 ## 📄 License
 
 This project is licensed under the MIT License.
