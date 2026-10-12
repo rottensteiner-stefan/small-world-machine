@@ -78,6 +78,7 @@ function projectBoard(events) {
     mode: 'plan',
     status: 'active',
     coordinator: null,
+    max_agents: null,
     created_at: null,
     resolved_at: null,
     outcome: null,
@@ -96,6 +97,7 @@ function projectBoard(events) {
         state.topic = ev.topic;
         state.mode = ev.mode ?? 'plan';
         state.coordinator = ev.coordinator ?? null;
+        state.max_agents = ev.max_agents ? Number(ev.max_agents) : null;
         state.created_at = ev.timestamp;
         if (ev.coordinator) {
           state.roster[ev.coordinator] = {
@@ -104,6 +106,21 @@ function projectBoard(events) {
             stance: null,
             joinedAt: ev.timestamp,
           };
+        }
+        break;
+
+      case 'board_limit_set':
+        state.max_agents = Number(ev.limit);
+        break;
+
+      case 'agent_evicted':
+        delete state.roster[ev.agent];
+        for (const task of Object.values(state.tasks)) {
+          if (task.assignedTo === ev.agent && task.status !== 'completed') {
+            task.assignedTo = null;
+            task.status = 'open';
+            task.claimedAt = null;
+          }
         }
         break;
 
@@ -238,7 +255,8 @@ function renderBoardToMarkdown(state, topicPath) {
   const lines = [];
   const title = path.basename(topicPath).replace(/\.[^./]+$/, '');
   lines.push(`# Blackboard: ${title}\n`);
-  lines.push(`> **Mode:** \`${state.mode}\` | **Status:** \`${state.status}\` | **Coordinator:** ${state.coordinator ? `**${state.coordinator}**` : '—'} | **Events:** ${state.eventCount}`);
+  const maxInfo = state.max_agents ? ` | **Max Agents:** ${state.max_agents}` : '';
+  lines.push(`> **Mode:** \`${state.mode}\` | **Status:** \`${state.status}\` | **Coordinator:** ${state.coordinator ? `**${state.coordinator}**` : '—'}${maxInfo} | **Events:** ${state.eventCount}`);
   if (state.resolved_at) {
     lines.push(`> **Outcome:** \`${state.outcome}\` | **Resolved At:** ${state.resolved_at}`);
   }
@@ -897,11 +915,13 @@ const commands = {
     const coordinator = pos[0] ?? opt.coordinator ?? null;
     const mode = opt.mode ?? 'plan';
     const topic = path.basename(boardPath).replace(/\.board\.jsonl$/, '');
+    const max_agents = opt['max-agents'] ? Number(opt['max-agents']) : null;
     appendBoardEvent(boardPath, {
       type: 'board_initialized',
       topic,
       coordinator,
       mode,
+      ...(max_agents ? { max_agents } : {}),
     });
     if (coordinator && opt.role) {
       appendBoardEvent(boardPath, {
@@ -916,14 +936,71 @@ const commands = {
       status: state.status,
       mode: state.mode,
       coordinator: state.coordinator,
+      max_agents: state.max_agents,
       board: boardPath,
       events: state.eventCount,
+    }, null, 2));
+  },
+
+  'board-limit'(boardPath, pos, opt) {
+    const rawLimit = pos[0] ?? opt.limit;
+    if (!rawLimit) fail('board-limit <topic> <N>');
+    const limit = Number(rawLimit);
+    if (!Number.isInteger(limit) || limit < 1) fail('board-limit: N muss eine positive ganze Zahl sein.');
+
+    const events = readBoardEvents(boardPath);
+    const state = projectBoard(events);
+    const rosterList = Object.keys(state.roster);
+
+    appendBoardEvent(boardPath, {
+      type: 'board_limit_set',
+      limit,
+    });
+
+    const evicted = [];
+    const reallocatedTasks = [];
+
+    if (rosterList.length > limit) {
+      // Keep coordinator if possible, evict most recently joined agents beyond limit
+      const candidates = rosterList.filter((name) => name !== state.coordinator);
+      const toRemoveCount = rosterList.length - limit;
+      const agentsToEvict = candidates.slice(-toRemoveCount);
+
+      for (const agent of agentsToEvict) {
+        appendBoardEvent(boardPath, {
+          type: 'agent_evicted',
+          agent,
+          reason: `Reduced team limit to ${limit}`,
+        });
+        evicted.push(agent);
+      }
+
+      // Check tasks previously assigned to evicted agents that need reassignment
+      for (const t of Object.values(state.tasks)) {
+        if (agentsToEvict.includes(t.assignedTo) && t.status !== 'completed') {
+          reallocatedTasks.push(t.id);
+        }
+      }
+    }
+
+    const updatedState = projectBoard(readBoardEvents(boardPath));
+    console.log(JSON.stringify({
+      status: 'limit_updated',
+      max_agents: limit,
+      active_agents: Object.keys(updatedState.roster),
+      evicted,
+      tasks_reopened_for_reassignment: reallocatedTasks,
     }, null, 2));
   },
 
   'board-join'(boardPath, pos, opt) {
     const agent = pos[0];
     if (!agent) fail('board-join <topic> <Agent> [--role <Role>] [--stance <Stance>]');
+    const events = readBoardEvents(boardPath);
+    const state = projectBoard(events);
+    if (state.max_agents && Object.keys(state.roster).length >= state.max_agents && !state.roster[agent]) {
+      fail(`Team-Limit (${state.max_agents} Agenten) bereits erreicht.`);
+    }
     appendBoardEvent(boardPath, {
       type: 'agent_joined',
       agent,
@@ -1072,6 +1149,7 @@ const commands = {
         status: state.status,
         mode: state.mode,
         coordinator: state.coordinator,
+        max_agents: state.max_agents,
         roster: Object.keys(state.roster),
         tasks_total: tasks.length,
         tasks_open: openTasks.map((t) => ({ id: t.id, title: t.title, assignedTo: t.assignedTo, status: t.status })),
@@ -1203,7 +1281,7 @@ const commands = {
 // ---- Einstieg ------------------------------------------------------------------------------
 
 const BOARD_COMMANDS = new Set([
-  'board-init', 'board-join', 'post-task', 'claim-task', 'complete-task',
+  'board-init', 'board-limit', 'board-join', 'post-task', 'claim-task', 'complete-task',
   'post-finding', 'post-proposal', 'post-vote', 'resolve-board',
   'board', 'render', 'board-watch',
 ]);

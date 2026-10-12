@@ -20,6 +20,18 @@ erzeugen.
 
 ---
 
+## 2026-10-12 — Fog & Volumetric Lighting Roadmap (Stufe 1 bis 3)
+
+- ✅ **Stufe 1 (Klassischer Distanz- & Höhennebel):** Bereits im Bestand (`Fog.ts`, `fog_calc.glsl`, `WebGPURenderer`, `WebGL1Renderer`, `WebGL2Renderer`). Unterstützt `FogMode` (LINEAR, EXP, EXP2) sowie analytischen Height-Falloff über alle drei Backends.
+- 📋 **Stufe 2 (Light Shafts / God Rays — Screen-Space / Shadow-Map):**
+  - Post-Processing Radial Blur / Screen-Space Sun Shafts oder Half-Res Raymarch gegen die Directional Light Shadow Map.
+  - Günstiger atmosphärischer Effekt für WebGL1/2 und WebGPU ohne 3D-Texturen.
+- 📋 **Stufe 3 (Volumetric Froxel Fog — WebGPU Compute):**
+  - Echter 3D-Volumeneffekt via Frustum-aligned Voxel Grid (Froxels, z. B. 160×90×64) nach Bart Wronski / Frostbite / Godot 4 / Doom 2016 (knüpft an Wunschliste W1 in `docs/research/aaa-engine-techniques.md` an).
+  - Nutzt bestehende Clustered-Forward+-Infrastruktur (#5 / ADR 0007): Light Injection pro Zelle (Point, Spot, Directional + Shadows) mit Phasenfunktion (Mie/Henyey-Greenstein).
+  - Raymarching-/Z-Integrations-Pass im Compute Shader + Compositing-Lookup im Forward-Pass.
+- ❌ **Voxel Cone Tracing (VCT / VXGI):** Bewusst als überholt/inadäquat für Small World Machine verworfen. Zu hohe VRAM-Last ($O(N^3)$), massives Aliasing/Leaking bei dynamischer Geometrie, untragbar im Web- und Mobil-Umfeld.
+
 ## 2026-10-10 — Rebrand „Small World" → „Small World Machine" verifiziert & Memory-Updates
 
 - ✅ **Memory-Aufnahme:** Session-Neustart nach Rebrand (0.102.0/0.103.0/0.104.0). Verifikation: keinerlei verbliebene

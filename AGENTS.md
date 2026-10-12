@@ -36,7 +36,7 @@ Detailed coding standards, formatting, shader logic, and domain knowledge are ou
 - `character-pipeline`: For the end-to-end 2D sketch to rigged 3D game-ready character workflow.
 - `deslop`: For anti-AI-slop and human tone filter.
 - `check-compiler-errors`: Runs compile/typecheck passes and summarizes failures by file/type.
-- `collaborate`: Multi-agent deliberation/negotiation protocol with a human moderator, round-robin turns, and a PID lock.
+- `collaborate`: Multi-agent problem-solving and deliberation protocol with human moderator. Standard: Parallel execution with 4 default agents (1 coordinator, 3 workers) on Blackboard/tasks.
 - `vision-image`: "Synthetic eyes" for text-only models — send an image to an external vision API (Gemini default, OpenAI opt-in) and get a text description, to inspect renders, screenshots, concept art, or baked-in text.
 - `thermo-nuclear-code-quality-review-revised`: Extremely strict, manually-invoked maintainability review (abstraction quality, spaghetti growth, file size).
 

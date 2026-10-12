@@ -1,39 +1,41 @@
-# Umsetzungsphase (Modus `plan`) — Verifikations-Disziplin
+# Implementation Phase (`plan` Mode) — Verification Discipline
 
-Ausgelagert aus `SKILL.md` Abschnitt 9. Gilt nur im Modus `plan` nach `consensus.reached: true`. Beispiele (Shader, WebGPU) stammen aus Small World Machine; die Regeln sind generisch. Querverweise („Abschnitt N“) beziehen sich auf `SKILL.md`; die Nummerierung 9.x bleibt zur Rückwärtskompatibilität erhalten.
+Extracted from `SKILL.md` Section 9. Applies exclusively to `plan` mode after `consensus.reached: true`. Cross-references refer to `SKILL.md`.
 
-## 9. Verifikations-Disziplin (Konsens über den Plan ≠ funktionierende Umsetzung)
+---
 
-Ein aus der Praxis gelernter Punkt: `status: "consensus_reached"` (Abschnitt 6) bestätigt nur, dass sich alle Teilnehmer auf einen Plan geeinigt haben — es sagt nichts darüber aus, ob die anschließende Umsetzung dieses Plans tatsächlich funktioniert. Diese beiden Dinge dürfen nicht verwechselt werden, weder im Status-Feld noch in der Kommunikation der Agenten untereinander.
+## 9. Verification Discipline (Consensus on Plan $\neq$ Working Implementation)
 
-### 9.1 "Grün" bei Build/Lint/Unit-Tests ist keine Verifikation von Laufzeitverhalten
+A lesson from production: `status: "consensus_reached"` (Section 6) confirms only that participants agreed upon a plan—it does not indicate whether the subsequent implementation works. These two states must never be conflated, neither in status fields nor in inter-agent communication.
 
-Ein Agent darf eine Umsetzung nur dann als **„✅ VERIFIZIERT"** oder **„✅ ERLEDIGT"** kennzeichnen, wenn die Behauptung durch das tatsächlich zuständige Prüfmittel bestätigt wurde — nicht durch benachbarte, aber unzureichende Prüfungen. Konkret:
-- `npm run build`/`lint`/`test` (oder Äquivalente) verifizieren nur das, was sie tatsächlich ausführen. Bei Code, der erst zur Laufzeit in einer anderen Umgebung ausgeführt/kompiliert wird (Shader-Quelltext, generierte Queries, Konfigurationsdateien, die von einem externen Prozess geparst werden, GPU-Pipelines, Browser-Runtime-Verhalten) sagt ein grüner Build/Test **nichts** darüber aus, ob dieser Code dort tatsächlich lauffähig ist.
-- Ein Agent, der eine solche Änderung vornimmt, formuliert seinen Status ehrlich und spezifisch: **„Build/Lint/Test grün, Laufzeitverhalten noch nicht getestet"** statt eines pauschalen `✅ VERIFIZIERT`. Der Statustext soll immer benennen, *welches* Prüfmittel die Aussage stützt (z. B. „✅ Live im Browser gerendert, keine Konsolenfehler" statt nur „✅ fertig").
-- Der Agent, der die Abnahme/Verifikation im Plan zugewiesen bekommen hat (z. B. Look-Dev, Integration, QA-Rolle), prüft mit dem für die jeweilige Behauptung tatsächlich aussagekräftigen Mittel nach — und vertraut nicht blind auf `✅`-Labels anderer Teilnehmer (siehe auch 8.2). Ein wiederholtes Nachprüfen trotz `✅`-Meldung ist kein Misstrauen gegenüber dem Teilnehmer, sondern Protokoll-Pflicht.
+### 9.1 Green Build/Lint/Unit Tests is NOT Runtime Behavior Verification
 
-### 9.2 Der `[VERIFICATION_FAILED]`-Marker
+An agent may only mark an implementation item as **"✅ VERIFIED"** or **"✅ COMPLETED"** if validated by the tool truly responsible for the runtime target:
+- `npm run build` / `lint` / `test` only verify static types and unit invariants. For code compiled/executed dynamically at runtime (shaders, generated queries, GPU pipelines, browser DOM lifecycle), a passing build says **nothing** about runtime validity.
+- The agent making the change must state status specifically: **"Build/Lint/Test passing, runtime behavior not yet verified"** rather than a blanket `✅ VERIFIED`. Always name the tool validating the claim (e.g. "✅ Rendered in browser, zero console warnings").
+- The QA/Reviewer agent assigned in the plan verifies independently using actual runtime tools rather than trusting green labels from peers.
 
-Stellt der für die Abnahme zuständige Agent fest, dass eine als erledigt gemeldete Umsetzung eines bereits vereinbarten `[CONSENSUS_PROPOSAL]` die Akzeptanzkriterien nicht erfüllt (Compile-Fehler, falsches Verhalten, Abweichung vom vereinbarten Ziel), gelten dieselben Grundregeln wie bei `[OVERLAP]` (siehe „Konfliktauflösung bei Überschneidungen"), übertragen auf die Umsetzungsphase:
+### 9.2 The `[VERIFICATION_FAILED]` Marker
 
-1. **Explizit markieren:** `[VERIFICATION_FAILED: <PrüfenderAgent>] <Kurzbeschreibung des Fehlers, mit konkretem Fehlertext/Log-Auszug wo möglich>` im Topic-Dokument, direkt bei der geprüften Behauptung oder im eigenen Rundenbeitrag.
-2. **Keine unilaterale Fehlerbehebung:** Der prüfende Agent behebt den Fehler nicht selbst, wenn die Zuständigkeit laut Plan bei einem anderen Teilnehmer liegt — er meldet nur den Befund und übergibt an den zuständigen Agenten.
-3. **Konsens bleibt bestehen, Umsetzung gilt als offen:** `consensus.reached`/`status: "consensus_reached"` werden durch ein `[VERIFICATION_FAILED]` NICHT zurückgesetzt — der Plan selbst ist weiterhin einstimmig beschlossen. Es wird lediglich vermerkt, dass die Umsetzung dieses Plans noch nicht abgenommen ist (z. B. durch Durchstreichen eines vorherigen `✅ ERLEDIGT`-Eintrags in der Aufgabenliste mit Verweis auf die Fundstelle).
-4. **Jeder Fix braucht eine neue, echte Verifikation:** Ein Fix-Vorschlag des zuständigen Agenten darf sich selbst nicht erneut als `✅ VERIFIZIERT` bezeichnen (siehe 9.1) — er beschreibt die vorgenommene Änderung und übergibt zurück an den prüfenden Agenten. Erst nach erneuter, tatsächlicher Prüfung markiert dieser entweder `[VERIFICATION_PASSED: <PrüfenderAgent>]` oder — falls derselbe oder ein neuer Fehler auftritt — ein neues `[VERIFICATION_FAILED]`. Diese Schleife kann mehrfach durchlaufen werden, bis die Abnahme tatsächlich besteht.
-5. **Zählt gegen das Rundenlimit, aber ist kein Deadlock-Grund per se:** Jede Runde in dieser Schleife ist eine normale Runde im Sinne von `max_rounds` (Abschnitt 4). Reicht das Limit nicht, ist `/collaborate --extend` das vorgesehene Mittel — ein wiederholt fehlschlagender `[VERIFICATION_FAILED]`-Zyklus ist ein Qualitätsproblem der Umsetzung, kein Verhandlungs-Deadlock im Sinne widersprüchlicher Positionen.
+If the reviewer determines that an implementation does not meet acceptance criteria (runtime error, shader crash, visual glitch, specification drift):
+1. **Mark Explicitly:** Post `[VERIFICATION_FAILED: <ReviewerAgent>] <Summary of issue with exact error stack/log>` in the topic document or blackboard finding.
+2. **No Unilateral Fixes:** The reviewer does not fix the code unilaterally if assigned to another worker—report the finding and route it to the assigned developer.
+3. **Plan Consensus Remains Intact:** `consensus.reached` remains `true`—the architectural plan itself is agreed upon. Only implementation completion is marked as open.
+4. **Fixes Require Re-Verification:** A fix proposed by the developer is not automatically verified—it requires re-verification by the reviewer until `[VERIFICATION_PASSED: <ReviewerAgent>]` is confirmed.
+5. **Counts Against Limits:** Implementation turns count toward round limits (`max_rounds`). If limits are reached, use `/collaborate --extend <N>`.
 
-### 9.3 Umsetzungs-Runden & Finaler Abschluss (`[ABNAHME_ERTEILT]` $\rightarrow$ `/collaborate --stop`)
+### 9.3 Implementation Turns & Formal Handover (`[ABNAHME_ERTEILT]` $\rightarrow$ `/collaborate --stop`)
 
-Nach Erreichen des Konsens (`status: "consensus_reached"`) endet das Protokoll nicht sofort, sondern geht in die Umsetzungs- und Review-Schleife über:
-1. **Umsetzung im Round-Robin:** Der zuständige Entwickler-Agent implementiert den vereinbarten Code und meldet die Fertigstellung an den Reviewer/Tester.
-2. **Review & Runtime-Prüfung:** Der zuständige Peer führt die Runtime-Prüfung durch (Look-Dev, Shader-Kompilierung, Browser-Konsole, WebGPU/WebGL-Parität).
-3. **Formale Abnahme (`[ABNAHME_ERTEILT]`):**
-   Sobald alle Punkte verifiziert sind (`[VERIFICATION_PASSED]`), dokumentiert der prüfende Agent:
+After consensus, the protocol moves into the implementation and review cycle:
+1. **Implementation:** The assigned developer agent implements the agreed code.
+2. **Review & Runtime Verification:** The assigned reviewer performs runtime verification (look-dev, shader compilation, console inspection, WebGPU/WebGL parity).
+3. **Formal Approval (`[ABNAHME_ERTEILT]`):**
+   Once all criteria are verified (`[VERIFICATION_PASSED]`), the reviewer documents:
    ```markdown
-   [ABNAHME_ERTEILT: <PrüfenderAgent>]
-   - Alle Akzeptanzkriterien erfüllt.
-   - Laufzeitverhalten fehlerfrei verifiziert.
-   - Empfehlung an Moderator: Beenden via `/collaborate --stop`.
+   [ABNAHME_ERTEILT: <ReviewerAgent>]
+   - All acceptance criteria satisfied.
+   - Runtime behavior verified without errors.
+   - Recommendation to Moderator: Close via `/collaborate --stop`.
    ```
-4. **Beenden durch den Moderator:** Erst nach erteilter Abnahme ruft der Moderator `/collaborate --stop` auf, um die Session formal zu terminieren (`status: "terminated"`).
+4. **Closure by Moderator:** Only after approval is granted does the moderator execute `/collaborate --stop` to terminate the session (`status: "terminated"`).
+
