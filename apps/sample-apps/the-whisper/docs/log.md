@@ -1954,3 +1954,29 @@ befüllen.
 - **Sicht geprüft** (Prologue im Browser, `window.__prologue`): alle sechs Decals im Decal-Pfad (`renderList.decals` = 6), „KOJE 42", „NUR FÜR HAUSANGEHÖRIGE" und „AZS · SEKTOR 0" aufrecht und nicht gespiegelt, Streifen läuft entlang der Raumachse. Warnzone/Rebar nur grob gesichtet, kein Pixelvergleich mit dem Altzustand.
 - **Loader-Fix:** `KitRegistry` setzte `scale` aus `size` als (w, h, d); die Projektionsachse ist aber Y. Jetzt (w, d, h).
 - **Offen:** Tiefe 0,5 m an den Wänden projiziert auch auf Props nahe der Wand (Regal vor dem Hausangehörigen-Schild); bei Bedarf Tiefe pro Platzierung verkleinern.
+
+## 146. Tür-Aufräumrunde: Beat-Kamera-Nudge, [OPEN]-Schluss, T1-Peer-Review, Schild-Befund (2026-10-12)
+
+- **Item 1 (Beat-2-Kamera):** Look-Ziel des Tür-open-Beats (Phase 2) von `(-1.2, 1.2, 0)` auf
+  `(-2.05, 1.1, 0.0)` gedreht (Kamera-Position unverändert). Hintergrund: Der Open-Moment lag
+  vorher außerhalb des Bildes — die echte Flügel-Animation wäre unsichtbar geblieben. Live
+  verifiziert: Panzertür im Beat-Frame (links/mitte-links, ca. halbe Rahmenhöhe), Beam spielt
+  ein, Raumkontext (Charakter, Schreibtisch, Betten) bleibt sichtbar.
+- **Item 2 (doppelseitige Tür [OPEN] geschlossen):** Live bestimmt: beide Leaf-Materialien
+  `cullMode="none"` UND `getRenderManifest().state.culling="none"`; `WebGL2Renderer` deaktiviert
+  bei NONE-Culling `GL_CULL_FACE` beim Draw (Z. 1316 ff.) → Rückseiten werden rastiert. Die
+  flache, unbelichtete Rückseite ist die dokumentierte Moderator-Konzession, kein Culling-Fehler.
+  Pixel-Okklusionstests waren wegen des unmodellierten (schwarzen) Flurs nicht trennend.
+- **Item 3 (T1-Peer-Review PASS):** Unabhängige Dateiprüfung `model.glb`: glTF2, Länge 2.231.512 B
+  == deklariert, 1 Node/1 Mesh/1 Material/3 eingebettete Texturen (keine externen URIs), 0 Anim/
+  Skins; 22.779 Indizes/3 = exakt 7.593 Tris (Tier-3), 10.036 Vertices, POSITION/NORMAL/
+  TEXCOORD_0; Primitive-min `[-0.177, -0.499, -0.333]` = HingePivot-Socket verankert, Maße
+  deckungsgleich mit `meta.json`. Review-Punkt aus Log 143 aufgelöst.
+- **Item 4 (gespiegeltes Schild):** Diagnose (Lesen, keine Fremddatei-Beschreibung): Der Koje-42-
+  Schild las geradeaus normal, schräg/fern spiegelig und erschien in Nahaufnahme nicht am
+  deklarierten Level-Punkt — Artefakt der laufenden Decal-Migration des Kollegen (uncommitteter
+  Größen-Mapping-Fix + Platzierung). Durch **Log 145** (bbfe9c19) behoben; Besitzer bestätigte
+  alle Decals aufrecht. Formaler Board-Schluss unter Verweis auf 145.
+- **Verifikation:** `lint:fix`, `typecheck`, `build:lib`, 267 Dateien / 1726 Tests grün;
+  Commit `648b3772` (Nudge, path-scoped); Session-Mailbox aktiv (Koordination, Claims des
+  Kollegen respektiert, Item-4-Handoff).
