@@ -344,19 +344,21 @@ async function ormChecks(browser, backend) {
     return { x: r.x, y: r.y, width: r.width, height: r.height };
   });
   const png = PNG.sync.read(Buffer.from(await page.screenshot({ clip: rect })));
-  // Camera straight above the origin, 60 degree vertical fov, height 8, decals at x = -6, -3, 0, 3, 6.
-  const halfWidth = 8 * Math.tan(Math.PI / 6) * (png.width / png.height);
+  // Camera straight above the origin, 60 degree vertical fov, height 12; decal x positions as in ormScene.ts.
+  const halfWidth = 12 * Math.tan(Math.PI / 6) * (png.width / png.height);
   const px = (worldX) => {
     const x = Math.floor((0.5 + worldX / (2 * halfWidth)) * png.width);
     const y = Math.floor(png.height / 2);
     const i = (png.width * y + x) * 4;
     return [png.data[i], png.data[i + 1], png.data[i + 2]];
   };
-  const [control, ao, neutral, emissive, unlitEmissive] = [-6, -3, 0, 3, 6].map(px);
+  const [control, ao, neutral, smooth, emissive, unlitEmissive, metal, metalOff] = [
+    -10.5, -7.5, -4.5, -1.5, 1.5, 4.5, 7.5, 10.5,
+  ].map((x) => px(x === -1.5 ? -0.5 : x)); // the smooth decal is sampled near the centre, where the sun's peak points at the camera
   const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   const tag = `${backend} orm`;
   console.log(
-    `INFO  ${tag}: control ${control} ao ${ao} neutral ${neutral} emissive ${emissive} unlit+emissive ${unlitEmissive}`,
+    `INFO  ${tag}: control ${control} ao ${ao} neutral ${neutral} smooth ${smooth} emissive ${emissive} unlit+emissive ${unlitEmissive} metal ${metal} metal-off ${metalOff}`,
   );
   log(
     !errors.length,
@@ -382,6 +384,21 @@ async function ormChecks(browser, backend) {
     Math.abs(unlitEmissive[0] - unlitEmissive[1]) <= 4,
     blocking,
     `${tag}: unlit decal ignores the emissive map (${unlitEmissive})`,
+  );
+  log(
+    Math.abs(lum(smooth) - lum(control)) > 5,
+    blocking,
+    `${tag}: ORM G = 0.4 changes the result against the rough control (luma ${lum(smooth).toFixed(0)} vs ${lum(control).toFixed(0)}); only the G channel differs, the direction is not asserted`,
+  );
+  log(
+    Math.abs(lum(metal) - lum(control)) > 8,
+    blocking,
+    `${tag}: metallic 1 with a neutral ORM differs from the control (luma ${lum(metal).toFixed(0)} vs ${lum(control).toFixed(0)})`,
+  );
+  log(
+    Math.max(...metalOff.map((v, i) => Math.abs(v - control[i]))) <= 3,
+    blocking,
+    `${tag}: ORM B = 0 switches metallic 1 off again (${metalOff} vs ${control})`,
   );
   await page.close();
 }
