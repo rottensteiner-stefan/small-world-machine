@@ -80,6 +80,99 @@ const propMetaSchema = JSON.parse(
 const validateKit: ValidateFunction = ajv.compile(kitSchema);
 const validatePropMeta: ValidateFunction = ajv.compile(propMetaSchema);
 
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// ADR 0011 §1.1 — 4-Tier Geometrie- & Polycount-Budget-Doktrin. Verbindlich für alle Kit-Props.
+//
+// Der formale Schema-Check oben kann keine Zahlenkreuzbeziehungen ausdrücken (Tier hängt von den
+// Dimensions ab). Diese Blöcke übersetzen die Doktrin in harte Tests und lesen die WIRKLICHEN
+// Dreieckszahlen direkt aus den GLB-Index-Accessoren (das `meta.triangles`-Feld der Tripo-Ausgabe
+// lügt erfahrungsgemäß: meldet „12000", das GLB trägt in Wahrheit >1,4 Mio).
+//
+// Status laut ADR (2026-10-07): bestehende Original-Assets bleiben unverändert (grandfathered);
+// die Doktrin gilt strikt für NEUE Props. Da die bestehende Flotte die Tier-Budgets in Summe
+// übersteigt, wird sie gegen ihre gemessene Ist-Baseline (2026-10-11, per
+// `.agents/scratches/audit-prop-budgets.mjs` ermittelt) geprüft: Regression verboten, keine
+// harte Rückwirkung. Alle NICHT-grandfathered Props (ab jetzt) brechen hart bei Überschreitung.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+const MAX_GLB_BYTES = 3 * 1024 * 1024; // ~1,2 MB Referenz laut ADR, Schranke großzügig
+
+interface TierBudget {
+  tier: string;
+  maxL: number; // inklusive Obergrenze der Bounding-Box (m)
+  maxTris: number;
+}
+
+// Inklusive Obergrenzen je Tier (ADR 0011 §1.1, Tabelle).
+const TIER_BUDGETS: readonly TierBudget[] = [
+  { tier: "T1", maxL: 0.35, maxTris: 1500 },
+  { tier: "T2", maxL: 1.0, maxTris: 4500 },
+  { tier: "T3", maxL: 2.5, maxTris: 10000 },
+  { tier: "T4", maxL: Number.POSITIVE_INFINITY, maxTris: 16000 },
+];
+
+function tierBudgetFor(maxL: number): TierBudget {
+  const budget = TIER_BUDGETS.find((b) => maxL <= b.maxL);
+  if (!budget) throw new Error(`No tier budget for Lmax ${maxL}`);
+  return budget;
+}
+
+/**
+ * Liest die echte Dreieckszahl aus einem GLB (Summe über alle Index-Primitives). Liest nur den
+ * JSON-Chunk, nicht den Binary-Chunk — bleibt damit auch für 40 MB-Assets schnell.
+ */
+function readGlbTriangleCount(glbPath: string): number {
+  const b = fs.readFileSync(glbPath);
+  const jsonLen = b.readUInt32LE(12);
+  if (b.length < 20 + jsonLen) throw new Error(`GLB zu klein/unvollständig: ${glbPath}`);
+  const json = JSON.parse(b.slice(20, 20 + jsonLen).toString()) as {
+    accessors?: Array<{ count?: number }>;
+    meshes?: Array<{ primitives?: Array<{ indices?: number }> }>;
+  };
+  let tris = 0;
+  for (const mesh of json.meshes ?? []) {
+    for (const prim of mesh.primitives ?? []) {
+      if (prim.indices != null) {
+        const acc = json.accessors?.[prim.indices];
+        if (acc?.count) tris += acc.count / 3;
+      }
+    }
+  }
+  return Math.round(tris);
+}
+
+// Grandfathered Ist-Baselines (gemessen 2026-10-11): id → { tris, bytes, tier }. Props, die die
+// Tier-Budgets STRIKT erfüllen würden, brauchen keinen Eintrag — sie laufen ohnehin grün. Hier
+// stehen nur die messbar Über-Budget-Assets, damit sie dokumentiert werden und ihre Baseline
+// nicht regressiert.
+interface LegacyBaseline {
+  tris: number;
+  bytes: number;
+}
+const GRANDFATHERED_BASELINES: Record<string, LegacyBaseline> = {
+  "industrial/barrel_chemical_blue": { tris: 10337, bytes: 1243524 },
+  "industrial/barrel_hazard_yellow": { tris: 9401, bytes: 1106412 },
+  "industrial/barrel_oil_black": { tris: 10416, bytes: 1201256 },
+  "industrial/wall_lamp": { tris: 11183, bytes: 1214388 },
+  "bunker/coffee_grinder": { tris: 13955, bytes: 1420404 },
+  "bunker/bunk_bed": { tris: 13057, bytes: 1570644 },
+  "bunker/terminal_2100": { tris: 14143, bytes: 1775648 },
+  "flakturm/debris_rubble_pile": { tris: 13453, bytes: 1567968 },
+  "flakturm/bunker_blast_door": { tris: 13092, bytes: 1027688 },
+  "flakturm/bunker_vent_hatch": { tris: 11356, bytes: 995216 },
+  "flakturm/bunker_blast_door_leaf": { tris: 7593, bytes: 2231512 },
+  "flakturm/ceiling_lamp": { tris: 1414382, bytes: 42776748 },
+  "flakturm/vent_wall_breach": { tris: 1466018, bytes: 46578688 },
+  "bunker/worn_rug": { tris: 1419192, bytes: 45862084 },
+  "bunker/mess_tin_set": { tris: 1484142, bytes: 45659992 },
+  "bunker/combat_boots": { tris: 1463204, bytes: 45569680 },
+  "bunker/metal_desk": { tris: 1474454, bytes: 44589736 },
+  "bunker/wall_shelf_supplies": { tris: 1414562, bytes: 44127964 },
+  "bunker/kerosene_lantern": { tris: 1431926, bytes: 43914768 },
+  "bunker/hanging_towels": { tris: 1425404, bytes: 43848436 },
+  "bunker/metal_stool": { tris: 1386108, bytes: 41635080 },
+};
+
 function formatAjvErrors(validate: ValidateFunction): string {
   return JSON.stringify(validate.errors, null, 2);
 }
@@ -154,6 +247,53 @@ describe("Asset Kits & Metadata Standards (ADR 0011)", () => {
 
         expect(fs.statSync(glbPath).size).toBeGreaterThan(10000);
         expect(fs.statSync(previewPath).size).toBeGreaterThan(1000);
+      }
+    });
+
+    it("every item adheres to the ADR 0011 §1.1 4-Tier polycount doctrine (new assets: hard) and its grandfathered legacy baseline (existing: no regression)", () => {
+      for (const item of manifest.items ?? []) {
+        const meta: PropMeta = JSON.parse(fs.readFileSync(path.join(kitDir, item.meta), "utf-8"));
+        const glbPath = path.join(kitDir, item.path);
+        const fileBytes = fs.statSync(glbPath).size;
+        const realTris = readGlbTriangleCount(glbPath);
+
+        const dims = meta.dimensions as unknown as {
+          width?: number;
+          height: number;
+          depth?: number;
+          radius?: number;
+        };
+        // Box- (width/height/depth) oder Zylinder- (radius/height) Beschreibung; L_max ist die
+        // größte physische Ausdehnung. (Die beiden Formen sind im Schema oneOf exklusiv.)
+        const lMax =
+          "radius" in dims
+            ? Math.max((dims.radius ?? 0) * 2, dims.height)
+            : Math.max(dims.width ?? 0, dims.height, dims.depth ?? 0);
+        const budget = tierBudgetFor(lMax);
+        const legacy = GRANDFATHERED_BASELINES[item.id];
+
+        // Grandfathered Bestand: Baseline nicht überschreiten (Regression verhindern).
+        if (legacy) {
+          expect(
+            realTris,
+            `${item.id}: Treppe/-Tris ${realTris} über grandfathered Baseline ${legacy.tris} (ADR 0011 §1.1 Tier ${budget.tier} wäre ${budget.maxTris})`,
+          ).toBeLessThanOrEqual(legacy.tris);
+          expect(
+            fileBytes,
+            `${item.id}: GLB ${fileBytes}B über grandfathered Baseline ${legacy.bytes}B`,
+          ).toBeLessThanOrEqual(legacy.bytes);
+          continue;
+        }
+
+        // Neue Props: Doktrin HART.
+        expect(
+          realTris,
+          `${item.id}: Tier ${budget.tier} (Lmax ${lMax.toFixed(2)}m) — ${realTris} Tris über Budget ${budget.maxTris} (ADR 0011 §1.1, '${budget.tier}' verbindlich für neue Props)`,
+        ).toBeLessThanOrEqual(budget.maxTris);
+        expect(
+          fileBytes,
+          `${item.id}: GLB ${fileBytes}B über Max ${MAX_GLB_BYTES}B (~1,2 MB Referenz laut ADR)`,
+        ).toBeLessThanOrEqual(MAX_GLB_BYTES);
       }
     });
 

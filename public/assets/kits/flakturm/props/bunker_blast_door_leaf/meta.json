@@ -1,12 +1,12 @@
 {
   "$schema": "../../../../../schemas/prop-meta.schema.json",
   "id": "flakturm/bunker_blast_door_leaf",
-  "name": "Flakturm Single Blast Door Leaf (animatable)",
+  "name": "Flakturm Single Blast Door Leaf (animatable, rebuilt)",
   "category": "doors",
   "kit": "flakturm",
-  "version": "1.0.0",
-  "description": "Slim single riveted steel bunker door leaf with central lock wheel, observation slit and hinge knuckles on the -X edge. Origin at bottom centre, wheel side faces +Z. Intended for animated doors (rotate around the -X edge).",
-  "triangles": 11333,
+  "version": "2.0.0",
+  "description": "T1 rebuild (2026-10-12): single riveted steel bunker door leaf by image-seeded Tripo regeneration. Straight hard-surface edges, isolated leaf without merged frame, 4-spoke lock wheel (protruding hub), observation slit, hinge knuckles on the -X (outer) edge. FILE units are 0.5x the placed size: measured 0.354 x 0.998 x 0.666 m (depth includes wheel-hub protrusion; slab itself ~0.15-0.2 m). Place at recommendedScale 2.0 -> ~0.708 x 1.996 m door leaf and squash depth via non-uniform Z scale (approx 0.25-0.5) so the slab sinks into the wall; front hardware faces the room. Mirror for the right leaf via scale.x = -1 (HingePivot socket mirrors with it -> hinges stay on the outer edges). Animate the leaf by rotating around the HingePivot socket (x = -0.177 file units, = -0.354 placed), i.e. rotation about the -X outer edge. Front-face hardware only; double-sided read for corridor-level use is an OPEN follow-up. Replaces the 9.6 MB v1 leaf (7593 tris, 2.2 MB GLB, Tier-3 <3 MB compliant).",
+  "triangles": 7593,
   "materials": 1,
   "textures": [
     "diffuse",
@@ -14,11 +14,17 @@
     "roughness_metallic"
   ],
   "dimensions": {
-    "width": 1.6,
-    "height": 2.0,
-    "depth": 0.25
+    "width": 0.354,
+    "height": 0.998,
+    "depth": 0.666
   },
-  "recommendedScale": 1.0,
+  "recommendedScale": 2.0,
+  "sockets": [
+    {
+      "name": "HingePivot",
+      "position": [-0.177, 0, 0]
+    }
+  ],
   "author": "Small World Machine Studio",
   "license": "CC0-1.0"
 }

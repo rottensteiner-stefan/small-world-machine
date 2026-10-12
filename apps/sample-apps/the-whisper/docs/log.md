@@ -1888,3 +1888,61 @@ befüllen.
   Welt-Achsen: Schild-Normalen zum Raum, Streifen lang auf Z, y=0.006 über dem Boden), keine
   Console-Fehler. 201 Testdateien grün; der einzige Rote (`SDFShaderChunks` isContextLost) ist
   bekannte WebGPU-Last-Flakiness (isoliert grün), nicht Decal-bedingt.
+
+## 143. T1 – Panzertür-Neubau: `bunker_blast_door_leaf` als animierbares Einzelblatt (2026-10-12)
+- **Auftrag (kollaboratives Rework `rework-scene`, Task T1):** Der alte Flügel (9,6 MB GLB,
+  11,3k Tris, überstehende Tragösen + verschmolzener Radeinbau + wellige Kanten, Log 139)
+  wird ersetzt — die Timeline-Tür soll real per Flügel-Animation öffnen statt Licht-Choreo.
+- **Generierungs-Versuch-und-Irrtum (gesamte Iteration dokumentiert im Core-Board F19):**
+  Text-to-3D liefert bei drei unabhängigen Versuchen (Modelle P1 & v3.1-20260211) konsistent
+  zu dicke, klobige Blöcke (0,5–0,8 m tief) mit Überständen über der Oberkante bzw. ohne
+  Rad/Sehschlitz. Der projektübliche Image-to-3D-Pfad (`seedream_v4`-Referenz ohne Rahmen →
+  `tripo generate image-to-model`, face_limit 9000) liefert das qualitativ richtige Ergebnis:
+  **isoliertes Einzelblatt**, gerade Hard-Surface-Kanten, keine Oberkanten-Überstände,
+   4-Speichen-Schließrad + Sehschlitz + Scharnierknuckles, saubere manifold Geometrie.
+- **Moderator-Entscheidungen (verbindlich, im Board F20):** (1) Freigabe des v4-Blattes als
+  Basis-Flügel; (2) zweiter Flügel = **gespiegeltes Duplikat** (`scale.x=-1`) — kein zweites
+  Asset; (3) Tiefe per **nicht-uniformer Z-Skalierung** beim Placing in die Wand; (4) **[OPEN]**
+  Doppelseitige Tür-Lesbarkeit für spätere Korridor-Level (Backface aktuell flach) — in
+  `meta.json`-Description dokumentiert.
+- **Technische Kenndaten:** 7.593 Tris (Tier-3-konform, ADR 0011 §1.1), GLB 2,2 MB (< 3-MB-
+  Schranke; eingebettete PBR-Textur bewusst beibehalten, da sie den freigegebenen Look trägt).
+  Datei-Einheiten = 0,5× der Aufstellgröße: gemessen 0,354×0,998×0,666 m (Tiefe inkl. Rad-Nabe);
+  `recommendedScale 2.0` → ~0,708×1,996 m; `HingePivot`-Socket bei x=−0,177 (Datei-Einheiten,
+  skaliert mit; = äußere Scharnierkante) für die T1b-Flügel-Rotation.
+- **Verpackung:** `model.glb` (2,2 MB) + `meta.json` v2.0.0 + `preview.jpg` ersetzt; `kit.json`
+  aktualisiert; Grandfathered-Baseline in `AssetKitValidation.test.ts` auf die neuen
+  Messwerte (7593 Tris / 2.231.512 B verringert (bisher 11.333/10.034.536).
+- **Verifikation:** `AssetKitValidation.test.ts` 36/36 grün, `npm run lint:fix`, `build:lib`,
+  voller Testlauf 260 Dateien / 1668 Tests grün. Laufzeit-Inspektion in der Szene
+  (`window.__prologue`) + Peer-Plausibilitäts-Review folgen mit T1b (Tür-Animation).
+- **Offen:** T1b (Flügel-Rotation um `HingePivot`, Timeline-Beat als echte Flügel-Animation),
+  Peer-Review des Assets, doppelseitige Variante [OPEN].
+
+## 144. T1b – Panzertür-Flügel-Animation verdrahtet & live verifiziert (2026-10-12)
+- **Umgesetzt in `prologue.ts`:** beide Flügel (`bunker_blast_door_leaf`) werden per
+  `loadProp` geladen, der rechte Spiegel-Flügel (`scale.x=-1`, `[0,π/2,0]`, Tiefe 0,35) an
+  Scharnier-Pivots (`BlastDoorHingeLeft` z=+0,708 / `Right` z=−0,708 bei x=−2,385 y=0,95)
+  montiert, `cullMode NONE` (Moderator-Entscheidung [OPEN] Doppelseitigkeit). Neue
+  `_DOOR_OPEN_ANGLE = π·⅖`; `update()` rotiert die Pivots um
+  `openness · Winkel · Richtung` (Timeline-Beat schiebt `_targetDoorAngle = −π/4,5`),
+  Licht-Beam bleibt als Stütz-Atmosphäre.
+- **Live-Leitplanke (Board F23 „RENDER BLOCKER" später widerrufen, s. u.):** Messreihe über
+  `window.__prologue`: geschlossen AABB L z∈[0…0,708], R z∈[−0,708…0], offen rotieren Pivots
+  ±1,257 rad (~72°), Flügel schwingen in den unmodellierten Korridor (−X), Türdurchgang frei.
+- **„Unsichtbare Tür" = Mess-Phantom:** temporäre Engine-Instrumentierung belegte, dass der
+  Mesh jeden Frame in den Opaque-Batch gelangt und ein gültiger Indexed-Draw (count 22.779,
+  EBO) mit fehlerfreier Weltmatrix (kein NaN) ausgeführt wird. Sichtprüfung über die
+  Vision-Bridge scheiterte zunächst, weil dunkler Stahl auf dunkler Wand unterbelichtet ist;
+  nach korrektem Setzen einer echten `Color`-Instanz als `emissiveColor` und mit halb
+  geöffneten Flügeln (je 36°) wiesen Screenshots die **sichtbar angeschrägten Flügel** nach
+  (Vision: „left door slab is angled inward (open)") — die Tür hat stets gerendert.
+- **Hinweis an die Engine-Lane:** weißes Identifikations-Schild oberhalb des Türrahmens
+  rendert gespiegelt/auf dem Kopf (Phase-B-Prop, nicht T1b) — offen für später.
+- **Verifikation:** `npm run lint:fix`, `typecheck`, `build:lib`, voller Testlauf 267 Dateien /
+  1726 Tests grün; Session-Mailbox (`session-mailbox`-Skill) aktiv: Claim+pfadbezogener
+  Commit der eigenen Pfade, Debug-Instrumentierung in `Scene.ts`/`WebGL2Renderer.ts` entfernt
+  (beide Dateien wieder HEAD-sauber), `rendererType` wieder `BEST`.
+- **Offen:** Sichtbarkeit der offenen Tür im Beat-Frame (Standard-Beat-Kamera blickt auf
+  x≈−1,2; die geöffnete Tür liegt bei x≈−2,4 weit links — Kamera-/Inszenierungsentscheidung),
+  Peer-Review des Assets, doppelseitige Variante [OPEN].

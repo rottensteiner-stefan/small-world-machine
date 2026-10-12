@@ -15,7 +15,7 @@
     },
     {
       "id": "flakturm/bunker_blast_door_leaf",
-      "name": "Flakturm Single Blast Door Leaf (animatable)",
+      "name": "Flakturm Single Blast Door Leaf (animatable, rebuilt)",
       "category": "doors",
       "path": "props/bunker_blast_door_leaf/model.glb",
       "preview": "props/bunker_blast_door_leaf/preview.jpg",

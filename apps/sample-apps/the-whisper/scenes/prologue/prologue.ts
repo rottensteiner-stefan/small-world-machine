@@ -10,6 +10,7 @@ import {
   Cylinder,
   DirectionalLight,
   EngineOptions,
+  GltfLoader,
   MathUtils,
   Object3D,
   OutlineElement,
@@ -39,7 +40,8 @@ export class PrologueScene extends AbstractShowcase {
   private _kitRegistry = new KitRegistry();
 
   // 3D Objects & Lights (Koje 42)
-  private _bunkerDoor: Object3D | null = null;
+  private static readonly _DOOR_OPEN_ANGLE = (Math.PI * 2) / 5;
+  private _doorPivots: { pivot: Object3D; direction: 1 | -1 }[] = [];
   private _doorSpot: SpotLight | null = null;
   private _screenGlow: PointLight | null = null;
   private _dustParticles: Object3D[] = [];
@@ -62,7 +64,6 @@ export class PrologueScene extends AbstractShowcase {
   private _playerPos: Vector3D = new Vector3D(0, 0, 0.2);
   private _playerFacingAngle: number = 0;
   private _isMoving: boolean = false;
-  private _playerLanternLight: PointLight | null = null;
 
   // Modals & Systems
   private _terminalModal: TerminalModal | null = null;
@@ -107,7 +108,7 @@ export class PrologueScene extends AbstractShowcase {
       if (outline) {
         outline.enabled = true;
         outline.thickness = 1.0;
-        outline.sensitivity = 0.5;
+        outline.sensitivity = 0.12;
         outline.color = new Color(0.04, 0.05, 0.08);
       }
 
@@ -171,7 +172,6 @@ export class PrologueScene extends AbstractShowcase {
     // 4. Build 3D Geometries
     this._buildBunkerRoom();
     this._buildKaeltekammer();
-    this._buildPlayerCharacter();
     this._buildDustParticles();
 
     // 5. Initialize Modals & Systems
@@ -183,6 +183,7 @@ export class PrologueScene extends AbstractShowcase {
     void (async (): Promise<void> => {
       await this._loadLevelProps();
       await this._loadKaeltekammerProps();
+      await this._buildPlayerCharacter();
       await this._applyKitTextures();
       await this._placeSceneDecals();
     })();
@@ -242,6 +243,21 @@ export class PrologueScene extends AbstractShowcase {
     ];
   }
 
+  private _mountDoorLeaf(
+    root: Object3D,
+    centerY: number,
+    hingeX: number,
+    hingeZ: number,
+    closedOffsetZ: number,
+  ): Object3D {
+    const pivot = new Object3D(hingeZ > 0 ? "BlastDoorHingeLeft" : "BlastDoorHingeRight");
+    pivot.position.set(hingeX, centerY, hingeZ);
+    pivot.add(root);
+    root.position.set(0, 0, closedOffsetZ);
+    this.scene.add(pivot);
+    return pivot;
+  }
+
   private async _loadLevelProps(): Promise<void> {
     // Koje 42: Alle Möbel & Requisiten kommen ausschließlich aus dem deklarativen
     // Level-Deskriptor (echte Kit-gltF-Props). Kein prozeduraler Fallback mehr — fehlt
@@ -277,7 +293,7 @@ export class PrologueScene extends AbstractShowcase {
     // Amts-Terminal 2100 — Kit-Prop mit prozeduralem Nietenkranz (dekoratives Detail).
     try {
       const termInst = await this._kitRegistry.loadProp("bunker/terminal_2100", {
-        position: [0, 0.95, 0.8],
+        position: [0, 0.2, 0.8],
         rotation: [-Math.PI / 6, 0, 0],
         scale: 0.42,
         materialOverrides: { roughness: 0.78, metallic: 0.3 },
@@ -303,27 +319,49 @@ export class PrologueScene extends AbstractShowcase {
       console.error("[Prologue] KOJE 42: Amts-Terminal 2100 nicht ladbar:", e);
     }
 
-    // 🚪 Heavy Blast Door — echtes Kit-Prop. Das Tripo3D-Modell rendert als massiver
-    // Tür-Festungsblock (Breite ≈ Höhe ≈ Tiefe), daher wird die überzählige Tiefe bewusst
-    // in den nicht-modellierten Flur verlegt: Die Vorderfläche bleibt bündig zur
-    // Innenwand, der Innenraum sieht eine geschlossene Panzertür. Das "Öffnen" der
-    // Timeline wird als Lichtstrahl-Choreografie erzählt (siehe `update`), nicht als
-    // Drehbewegung.
+    // 🚪 Heavy Blast Door — zwei neu gebaute Einzelblätter (T1/T1b). Jedes Blatt ist der
+    // freigegebene Image-seeded-Tripo-Rebuild (`flakturm/bunker_blast_door_leaf`, 7,593 Tris,
+    // 2,2 MB); das rechte Blatt ist laut Moderator-Entscheidung das gespiegelte Duplikat via
+    // `scale.x = -1`. Die Blätter werden auf vertikalen Scharnier-Pivots an den äußeren
+    // Rahmenkanten montiert (HingePivot-Socket = Datei-Einheit x -0,177 → -0,354 platziert)
+    // und öffnen sich im Timeline-Beat als ECHTE Drehung in den nicht-modellierten Flur
+    // (-X). So präsentiert sich die flache (ungewallte) Rückseite nie dem Raum — die
+    // Front-Hardware zeigt Richtung Innenraum. Die Blatttiefe wird über nicht-uniforme
+    // Z-Skalierung (0,35) in die Wand gequetscht; die Rad-Nabe bleibt als Griff vor der
+    // Wandlinie stehen. Winding wird auf beiden Blättern via `cullMode NONE` neutralisiert
+    // (deckt auch die [OPEN]-Doppelseiten-Lesbarkeit ab).
     try {
-      const doorScale = 1.9; // Kit rendert bei dieser Skala ~1.74m breit × ~1.9m hoch
-      const halfDepth = 0.472 * doorScale;
-      const halfHeight = 0.499 * doorScale;
+      const leafCenterY = 0.95;
+      const hingeX = -2.385;
+      const leafSquash = 0.35;
 
-      const doorInst = await this._kitRegistry.loadProp("flakturm/bunker_blast_door", {
-        position: [-3.26, halfHeight, 0],
-        scale: doorScale,
-        materialOverrides: { roughness: 0.55, metallic: 0.75 },
+      const leftLeaf = await this._kitRegistry.loadProp("flakturm/bunker_blast_door_leaf", {
+        position: [hingeX, leafCenterY, 0.354],
+        rotation: [0, Math.PI / 2, 0],
+        scale: [2, 2, leafSquash],
       });
-      doorInst.root.position.x = -2.36 - halfDepth;
-      this.scene.add(doorInst.root);
-      this._bunkerDoor = doorInst.root;
+      const rightLeaf = await this._kitRegistry.loadProp("flakturm/bunker_blast_door_leaf", {
+        position: [hingeX, leafCenterY, -0.354],
+        rotation: [0, Math.PI / 2, 0],
+        scale: [-2, 2, leafSquash],
+      });
+
+      for (const leafRoot of [leftLeaf.root, rightLeaf.root]) {
+        leafRoot.traverse((child) => {
+          if (child.material instanceof StandardMaterial) {
+            child.material.cullMode = CullMode.NONE;
+          }
+        });
+      }
+
+      const mountLeft = this._mountDoorLeaf(leftLeaf.root, leafCenterY, hingeX, 0.708, -0.354);
+      const mountRight = this._mountDoorLeaf(rightLeaf.root, leafCenterY, hingeX, -0.708, 0.354);
+      this._doorPivots = [
+        { pivot: mountLeft, direction: 1 },
+        { pivot: mountRight, direction: -1 },
+      ];
     } catch (e) {
-      console.error("[Prologue] KOJE 42: Blast-Door-Kit-Prop nicht ladbar:", e);
+      console.error("[Prologue] KOJE 42: Blast-Door-Blätter (T1/T1b) nicht ladbar:", e);
     }
 
     // Kältekammer Leichenschublade K-42 ID plate decal
@@ -371,14 +409,21 @@ export class PrologueScene extends AbstractShowcase {
     };
 
     try {
-      const [concreteBoard, brickAged, concreteDampEfflorescence, steelCorroded, steelPainted] =
-        await Promise.all([
-          loadSet("concrete_board", false),
-          loadSet("brick_aged", false),
-          loadSet("concrete_damp_efflorescence", false),
-          loadSet("steel_corroded", true),
-          loadSet("steel_painted", true),
-        ]);
+      const [
+        concreteBoard,
+        brickAged,
+        concreteDampEfflorescence,
+        concretePanelSmooth,
+        steelCorroded,
+        steelPainted,
+      ] = await Promise.all([
+        loadSet("concrete_board", false),
+        loadSet("brick_aged", false),
+        loadSet("concrete_damp_efflorescence", false),
+        loadSet("concrete_panel_smooth", false),
+        loadSet("steel_corroded", true),
+        loadSet("steel_painted", true),
+      ]);
 
       // Each surface gets its own cloned Texture instances (same decoded image, independent
       // `repeat`) so a small wall and a large wall using the same kit material can each tile
@@ -425,6 +470,9 @@ export class PrologueScene extends AbstractShowcase {
       // shared `frostTileMat` instance).
       applyPbr(matOf("MorgueFloor", this._morgueGroup), concreteDampEfflorescence, 7, 4);
       applyPbr(matOf("MorgueBackWall", this._morgueGroup), concreteDampEfflorescence, 7, 2.5);
+      // 2.5D-Bühnen-Schnitt (T3/F7): Stub-Wände + Decken-Segment bekommen das glatte
+      // Kassetten-Panel-Set (shared `cutPanelMat` instance → ein Aufruf texturiert alle drei).
+      applyPbr(matOf("MorgueLeftWall", this._morgueGroup), concretePanelSmooth, 3, 2);
       // Closed drawer rack — painted steel cabinetry (shared `coldSteelMat` instance).
       applyPbr(matOf("Drawer_K40", this._morgueGroup), steelPainted, 1, 1);
       // Pulled-out tray — light and dark steel parts (both internal to BunkerKit, not shared
@@ -592,6 +640,37 @@ export class PrologueScene extends AbstractShowcase {
     mBackWall.position.set(0, 1.75, -2.5);
     morgueGroup.add(mBackWall);
 
+    // 2.5D-Bühnen-Schnitt (Staging-Baseline F7, Charly): Die Kältekammer ist eine
+    // Peepshow-Box, offen zur Kamera (+Z). Minimale Seitenwand-Stubs + Deckensegment
+    // rahmen die Fächer/Morgue-Zone; eigener Material-Instance, damit Bob (T4) sie
+    // unabhängig mit `concrete_panel_smooth` texturieren kann (Flächenkatalog F11).
+    const cutPanelMat = new StandardMaterial({
+      color: new Color(0.22, 0.26, 0.3),
+      roughness: 0.8,
+      metallic: 0.1,
+    });
+
+    const mLeftWall = new Object3D("MorgueLeftWall");
+    mLeftWall.geometry = cubeGeo;
+    mLeftWall.material = cutPanelMat;
+    mLeftWall.scale.set(0.3, 3.5, 5.0);
+    mLeftWall.position.set(-3.5, 1.75, 0);
+    morgueGroup.add(mLeftWall);
+
+    const mRightWall = new Object3D("MorgueRightWall");
+    mRightWall.geometry = cubeGeo;
+    mRightWall.material = cutPanelMat;
+    mRightWall.scale.set(0.3, 3.5, 5.0);
+    mRightWall.position.set(3.5, 1.75, 0);
+    morgueGroup.add(mRightWall);
+
+    const mCeiling = new Object3D("MorgueCeiling");
+    mCeiling.geometry = cubeGeo;
+    mCeiling.material = cutPanelMat;
+    mCeiling.scale.set(7.0, 0.3, 5.0);
+    mCeiling.position.set(0, 3.35, 0);
+    morgueGroup.add(mCeiling);
+
     // Freezing Ammonia Pipes
     const ammoniaPipe = new Object3D("AmmoniaPipe");
     ammoniaPipe.geometry = cylGeo;
@@ -674,13 +753,15 @@ export class PrologueScene extends AbstractShowcase {
     this._cyanideSpotLight.lookAt(new Vector3D(-1.8, 0.9, -1.3));
     morgueGroup.add(this._cyanideSpotLight);
 
-    for (let i = 0; i < 25; i++) {
+    const frostGeo = new Cube({ size: 0.008 }).getGeometryData();
+    for (let i = 0; i < 12; i++) {
       const p = new Object3D(`FrostParticle_${i}`);
-      p.geometry = cubeGeo;
+      p.geometry = frostGeo;
       p.material = new StandardMaterial({
-        color: new Color(0.7, 0.9, 1.0),
-        roughness: 0.1,
-        metallic: 0.1,
+        color: new Color(0.7, 0.9, 1.0, 0.22),
+        roughness: 1.0,
+        metallic: 0.0,
+        transparent: true,
       });
       p.position.set(
         (Math.random() - 0.5) * 5.0,
@@ -795,104 +876,53 @@ export class PrologueScene extends AbstractShowcase {
     }
   }
 
-  private _buildPlayerCharacter(): void {
-    const cubeGeo = new Cube({ size: 1.0 }).getGeometryData();
-    const cylGeo = new Cylinder({
-      radiusTop: 0.5,
-      radiusBottom: 0.5,
-      height: 1.0,
-      radialSegments: 16,
-    }).getGeometryData();
+  /**
+   * Minecraft-style Cube-Manekin wird durch das geriggte, Mixamo-konforme
+   * Novotny Female-Character-Rig ersetzt (`public/assets/the-whisper/mannequin/
+   * player-female/character.glb`, aus der character-pipeline). Matte Clothing-
+   * Oberflächen wie im Diorama (verhindert Latex-Glanz); keine Laterne an der
+   * Spielerin (Moderator-Entscheid F13/Plan §1.3) — Szenen-Licht kommt aus den
+   * Raum-Props. Erfolgt async, damit der GLB-Load fail-fast an dieser Stelle wirkt.
+   */
+  private async _buildPlayerCharacter(): Promise<void> {
+    try {
+      const gltfLoader = new GltfLoader();
+      const player = await gltfLoader.load(
+        "/assets/the-whisper/mannequin/player-female/character.glb",
+      );
+      player.name = "PlayerNovotny";
+      player.scale.set(1.7, 1.7, 1.7);
+      player.position.set(this._playerPos.x, this._playerPos.y, this._playerPos.z);
 
-    // Stylized Graphic Noir Mannequin Avatar
-    const playerGroup = new Object3D("PlayerNovotny");
-    playerGroup.position.set(this._playerPos.x, this._playerPos.y, this._playerPos.z);
+      const adjustCharacterMaterials = (obj: Object3D): void => {
+        if (obj.material && obj.material instanceof StandardMaterial) {
+          obj.material.roughness = 0.92;
+          obj.material.metallic = 0.02;
+          obj.material.metallicMap = undefined;
+        }
+        for (const child of obj.children) {
+          adjustCharacterMaterials(child);
+        }
+      };
+      adjustCharacterMaterials(player);
 
-    const coatMat = new StandardMaterial({
-      color: new Color(0.15, 0.16, 0.18),
-      roughness: 0.9,
-      metallic: 0.05,
-    });
-    const scarfMat = new StandardMaterial({
-      color: new Color(0.7, 0.5, 0.25),
-      roughness: 0.85,
-    });
-
-    // Body
-    const body = new Object3D("CoatTorso");
-    body.geometry = cubeGeo;
-    body.material = coatMat;
-    body.scale.set(0.45, 0.7, 0.3);
-    body.position.set(0, 0.85, 0);
-    playerGroup.add(body);
-
-    // Head / Hood
-    const head = new Object3D("HoodHead");
-    head.geometry = cubeGeo;
-    head.material = coatMat;
-    head.scale.set(0.32, 0.35, 0.32);
-    head.position.set(0, 1.35, 0);
-    playerGroup.add(head);
-
-    // Scarf
-    const scarf = new Object3D("Scarf");
-    scarf.geometry = cubeGeo;
-    scarf.material = scarfMat;
-    scarf.scale.set(0.36, 0.12, 0.36);
-    scarf.position.set(0, 1.15, 0);
-    playerGroup.add(scarf);
-
-    // Legs
-    const legL = new Object3D("LegL");
-    legL.geometry = cubeGeo;
-    legL.material = coatMat;
-    legL.scale.set(0.16, 0.6, 0.18);
-    legL.position.set(-0.12, 0.3, 0);
-    playerGroup.add(legL);
-
-    const legR = new Object3D("LegR");
-    legR.geometry = cubeGeo;
-    legR.material = coatMat;
-    legR.scale.set(0.16, 0.6, 0.18);
-    legR.position.set(0.12, 0.3, 0);
-    playerGroup.add(legR);
-
-    // 🏮 Lantern in Left Hand
-    const lantern = new Object3D("PlayerLantern");
-    lantern.position.set(-0.32, 0.65, 0.2);
-
-    const lanternCage = new Object3D("LanternCage");
-    lanternCage.geometry = cylGeo;
-    lanternCage.material = new StandardMaterial({
-      color: new Color(0.95, 0.65, 0.2),
-      roughness: 0.2,
-      metallic: 0.8,
-    });
-    lanternCage.scale.set(0.12, 0.2, 0.12);
-    lantern.add(lanternCage);
-
-    this._playerLanternLight = new PointLight({
-      name: "NovotnyLanternLight",
-      color: new Color(1.0, 0.72, 0.35),
-      intensity: 3.5,
-      distance: 6.0,
-    });
-    lantern.add(this._playerLanternLight);
-    playerGroup.add(lantern);
-
-    this.scene.add(playerGroup);
-    this._playerObject = playerGroup;
+      this.scene.add(player);
+      this._playerObject = player;
+    } catch (e) {
+      console.error("[Prologue] Spielerin Novotny Female (character.glb) nicht ladbar:", e);
+    }
   }
 
   private _buildDustParticles(): void {
-    const cubeGeo = new Cube({ size: 0.02 }).getGeometryData();
+    const cubeGeo = new Cube({ size: 0.008 }).getGeometryData();
     const dustMat = new StandardMaterial({
-      color: new Color(1.0, 0.9, 0.7),
-      roughness: 0.1,
+      color: new Color(0.78, 0.72, 0.62, 0.2),
+      roughness: 1.0,
       metallic: 0.0,
+      transparent: true,
     });
 
-    for (let i = 0; i < 35; i++) {
+    for (let i = 0; i < 12; i++) {
       const p = new Object3D(`DustParticle_${i}`);
       p.geometry = cubeGeo;
       p.material = dustMat;
@@ -1142,10 +1172,10 @@ export class PrologueScene extends AbstractShowcase {
     this.camera.target.lerp(this._targetCameraLook, Math.min(1.0, deltaTime * 2.5));
     this.camera.updateViewMatrix();
 
-    // 5. Door Animation — the armoured blast door is a static Kit asset, so the cutscene's
-    //    "door opens / slams shut" beats are told as hallway-beam choreography: the corridor
-    //    spotlight spills wider and brighter as the door "opens", plus a subtle forward
-    //    creak-nudge of the door block.
+    // 5. Door Animation — die Einzelblätter sind animierbare Kit-Props auf Scharnier-Pivots
+    //    an den äußeren Rahmenkanten. Der „Tür öffnet/schließt"-Beat steuert jetzt echte
+    //    Flügeldrehung (nach außen in den nicht-modellierten Flur, vom Raum weg) plus die
+    //    Flur-Spot-Choreografie als unterstützenden Lichtschein.
     this._doorOpenAngle = MathUtils.lerp(
       this._doorOpenAngle,
       this._targetDoorAngle,
@@ -1156,8 +1186,9 @@ export class PrologueScene extends AbstractShowcase {
       this._doorSpot.intensity = 18.0 + openness * 10.0;
       this._doorSpot.angle = (Math.PI / 4.5) * (1 + openness * 0.35);
     }
-    if (this._bunkerDoor) {
-      this._bunkerDoor.position.x = -3.26 + openness * 0.04;
+    const leafAngle = openness * PrologueScene._DOOR_OPEN_ANGLE;
+    for (const door of this._doorPivots) {
+      door.pivot.rotation.y = leafAngle * door.direction;
     }
 
     // 6. Dust & Frost Particles
@@ -1176,11 +1207,7 @@ export class PrologueScene extends AbstractShowcase {
       }
     }
 
-    // 7. Dynamic Lantern & Colorkey Effects
-    if (this._playerLanternLight) {
-      const bob = this._isMoving ? Math.sin(this._currentTime * 12.0) * 0.4 : 0;
-      this._playerLanternLight.intensity = 3.5 + bob + (Math.random() - 0.5) * 0.15;
-    }
+    // 7. Dynamic Colorkey Effects
     if (this._lanternFlameLight) {
       const flicker =
         0.95 + Math.sin(this._currentTime * 18.0) * 0.05 + (Math.random() - 0.5) * 0.08;
@@ -1238,13 +1265,14 @@ export class PrologueScene extends AbstractShowcase {
       this._playerPos.x += nx;
       this._playerPos.z += nz;
 
-      // Area Boundaries
+      // Area Boundaries — Staging-Baseline F7 (Charly, 2026-10-11): Koje 5.0×3.5 m →
+      // Clamp x[−2.35,2.35] z[−1.55,1.7]; Kältekammer → x[−3.3,3.3] z[−11.6,−7.4].
       if (this._currentArea === "koje_42") {
-        this._playerPos.x = MathUtils.clamp(this._playerPos.x, -2.1, 2.1);
-        this._playerPos.z = MathUtils.clamp(this._playerPos.z, -1.1, 1.2);
+        this._playerPos.x = MathUtils.clamp(this._playerPos.x, -2.35, 2.35);
+        this._playerPos.z = MathUtils.clamp(this._playerPos.z, -1.55, 1.7);
       } else if (this._currentArea === "kaeltekammer") {
-        this._playerPos.x = MathUtils.clamp(this._playerPos.x, -2.8, 2.8);
-        this._playerPos.z = MathUtils.clamp(this._playerPos.z, -10.5, -7.5);
+        this._playerPos.x = MathUtils.clamp(this._playerPos.x, -3.3, 3.3);
+        this._playerPos.z = MathUtils.clamp(this._playerPos.z, -11.6, -7.4);
       }
 
       this._playerFacingAngle = Math.atan2(moveX, moveZ);
