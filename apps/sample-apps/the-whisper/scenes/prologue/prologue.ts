@@ -1222,7 +1222,7 @@ export class PrologueScene extends AbstractShowcase {
       if (speaker) speaker.innerText = "Herr Hawelka (AZS-Blockwart)";
       if (sub) sub.innerText = "„Novotny... psst! Mach keinen Lärm. Nimm das. Schnell!“";
       this._targetCameraPos.set(-0.8, 1.4, 3.0);
-      this._targetCameraLook.set(-1.2, 1.2, 0);
+      this._targetCameraLook.set(-2.05, 1.1, 0.0);
     } else if (time >= 10.0 && time < 20.0 && this._currentPhase === 2) {
       this._currentPhase = 3;
       if (speaker) speaker.innerText = "Herr Hawelka";
