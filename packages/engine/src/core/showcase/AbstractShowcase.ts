@@ -16,9 +16,10 @@ export const SHOWCASE_READY_EVENT = "small-world-machine:scene-ready";
 /**
  * Reads a `?rendererType=` override from the page URL (e.g. `?rendererType=WEB_GL2`),
  * matched case-insensitively against `RendererType`'s members and common aliases. Lets any showcase's
- * renderer be swapped from the address bar or UI switcher without touching its source.
+ * renderer be swapped from the address bar or UI switcher without touching its source. Exported for
+ * apps that extend `SmallWorldMachine` directly instead of `AbstractShowcase` (yad).
  */
-function getRendererTypeFromQuery(): RendererType | undefined {
+export function getRendererTypeFromQuery(): RendererType | undefined {
   if (typeof window === "undefined" || !window.location) return undefined;
   const params = new URLSearchParams(window.location.search);
   const raw = params.get("rendererType");

@@ -69,8 +69,8 @@ const numberedShowcases = [
 // happens to auto-select in this environment. Without this, a broken WebGPU path can silently
 // fall back to WebGL2 in headless Chrome and never actually get exercised (this is exactly how a
 // WebGPU-only sampled-texture-budget bug went undetected: CI never ran the WebGPU code path at
-// all). `yad` has no `showcase.ts`/AbstractShowcase, so it has no override to test and is only
-// checked once, at its default renderer.
+// all). `yad` extends `SmallWorldMachine` directly but reads the same `?rendererType=` override, so it is
+// checked under all three backends too.
 const RENDERER_TYPES = ["WEB_GL1", "WEB_GL2", "WEB_GPU"];
 const targetArg = process.argv[2] || process.env.SHOWCASE_TARGET;
 
@@ -99,7 +99,7 @@ const testCases = [
   ...numberedShowcases.flatMap((n) =>
     RENDERER_TYPES.map((rendererType) => ({ showcase: n, rendererType })),
   ),
-  { showcase: "yad", rendererType: null },
+  ...RENDERER_TYPES.map((rendererType) => ({ showcase: "yad", rendererType })),
 ]
   .filter((tc) => !targetArg || tc.showcase === targetArg)
   .filter((tc) => !skipWebGpu || "WEB_GPU" !== tc.rendererType)

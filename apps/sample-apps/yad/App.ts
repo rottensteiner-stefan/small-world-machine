@@ -1,7 +1,10 @@
 import { LevelBuilder } from "./core/LevelBuilder.js";
 import { Controller } from "./core/behaviors/Controller.js";
 import { Hud } from "./core/Hud.js";
-import { SmallWorldMachine } from "@small-world-machine/engine/core/index.js";
+import {
+  SmallWorldMachine,
+  getRendererTypeFromQuery,
+} from "@small-world-machine/engine/core/index.js";
 import {
   AmbientLight,
   DirectionalLight,
@@ -24,7 +27,9 @@ import { BoundingBox } from "@small-world-machine/engine/physix/index.js";
  */
 export class App extends SmallWorldMachine {
   constructor() {
-    super({ fullscreen: false });
+    // Same `?rendererType=` override as every showcase, so the smoke test can pin the backend (CI has no GPU).
+    const rendererType = getRendererTypeFromQuery();
+    super(rendererType ? { fullscreen: false, rendererType } : { fullscreen: false });
   }
 
   private _time: number = 0;
