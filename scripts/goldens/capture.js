@@ -21,6 +21,7 @@ import {
   waitForServer,
 } from "../lib/preview-utils.js";
 import config from "./config.json" with { type: "json" };
+import { parseShard, poolsForShard } from "./shard.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,6 +32,7 @@ function parseArgs(argv) {
     matrix: "gl2",
     out: null,
     pool: null,
+    shard: null,
     view: null,
     frames: null,
     skipSpawn: false,
@@ -50,6 +52,10 @@ function parseArgs(argv) {
         break;
       case "--pool":
         args.pool = value;
+        i++;
+        break;
+      case "--shard":
+        args.shard = parseShard(value);
         i++;
         break;
       case "--view":
@@ -105,8 +111,10 @@ function canvasRect(page) {
 
 function buildCells() {
   const cells = [];
+  const shardPools = args.shard ? poolsForShard(config.poolKeys, args.shard) : null;
   for (const poolKey of config.poolKeys) {
     if (args.pool && poolKey !== args.pool) continue;
+    if (shardPools && !shardPools.includes(poolKey)) continue;
     for (const view of config.views) {
       if (args.view && view !== args.view) continue;
       cells.push({ poolKey, view });

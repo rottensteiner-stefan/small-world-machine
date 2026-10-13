@@ -12,11 +12,11 @@ dieselben Pixel (kein WallClock-`performance.now()`-Drift).
 
 ## Was wird geprüft
 
-| Matrix | Umfang | Verbindlichkeit |
-| --- | --- | --- |
-| GL2 | 10 Pools × top/oblique = 20 Baseline-Bilder | **blockierend** (Merges halten an) |
-| GPU | gleiche 20 Zellen | nur informational (SwiftShader-Flakyness) |
-| GL1 | gleiche 20 Zellen als Smoke (lädt, 0 Konsolenfehler, nicht leer) | kein Bildvergleich |
+| Matrix | Umfang                                                           | Verbindlichkeit                                                   |
+| ------ | ---------------------------------------------------------------- | ----------------------------------------------------------------- |
+| GL2    | 16 Pools × top/oblique = 32 Baseline-Bilder                      | verbindlich beim manuellen CI-Lauf (läuft nicht mehr automatisch) |
+| GPU    | gleiche 32 Zellen                                                | nur informational (SwiftShader-Flakyness)                         |
+| GL1    | gleiche 32 Zellen als Smoke (lädt, 0 Konsolenfehler, nicht leer) | kein Bildvergleich                                                |
 
 Die committete Baseline liegt unter `.agents/goldens/liquid/baseline/` (GL2-Bilder + `manifest.json`).
 
@@ -29,7 +29,17 @@ npm run goldens:compare -- --baseline .agents/goldens/liquid/baseline \
   --current .agents/goldens/liquid/baseline
 ```
 
-CI ruft Capture+Compare als blockierenden Job `liquid-goldens` auf (`ref: .github/workflows/ci.yml`).
+Die CI startet Capture+Compare **nur auf Anforderung**: Actions → „CI" → „Run workflow" (Schalter `goldens`; `smoke` ist
+der Showcase-Smoke-Test, `gpu-goldens` die informationelle WebGPU-Aufnahme). Push und Pull Request laufen nur durch `verify`.
+Der Job `liquid-goldens` ist in vier Shards geteilt (`--shard i/4`, 4 Pools je Shard): die Zellen sind unabhängig und
+deterministisch, die Bilder ändern sich dadurch nicht, ein Lauf dauert etwa 5 statt 14 Minuten
+(`ref: .github/workflows/ci.yml`).
+
+### Shards
+
+`capture.js` und `compare.js` kennen `--shard i/N` (1-basiert, Pools reihum verteilt, siehe `shard.js`). Beim Vergleich
+eines Shards gelten nur dessen Zellen; Baseline-Zellen der anderen Shards zählen nicht als „fehlend". Ohne `--shard` bleibt
+alles wie vorher (alle 32 Zellen).
 
 ## Regelmäßiger Ablauf
 
@@ -40,11 +50,13 @@ CI ruft Capture+Compare als blockierenden Job `liquid-goldens` auf (`ref: .githu
    Review die neuen Bilder nach `.agents/goldens/liquid/baseline/` kopieren und die
    `manifest.json` aktualisieren (Capture schreibt sie mit), committen.
 3. **Regeneration der Baseline:** `npm run goldens:capture -- --matrix gl2 --out .agents/goldens/liquid/baseline`.
-   **Wichtig (Stand 2026-10-08):** Der blockierende Vergleich läuft im CI (Linux-Runner). Eine lokal auf dem Mac
+   **Wichtig (Stand 2026-10-08):** Der Vergleich ist nur im CI (Linux-Runner) verbindlich. Eine lokal auf dem Mac
    aufgenommene Baseline wich dort in vielen `oblique`-Zellen um 0,6 bis 1,8 % ab, obwohl lokal alles grün war.
-   Die Baseline daher aus dem CI-Artefakt `liquid-goldens` (Ordner `current/`) übernehmen:
-   `gh run download <run-id> -n liquid-goldens -D <dir>` und die PNGs samt `manifest.json`/`summary.json` nach
-   `.agents/goldens/liquid/baseline/` kopieren. Der Capture wiederholt eine leere Zelle bis zu dreimal (SwiftShader
+   Die Baseline daher aus den CI-Artefakten übernehmen. Der Lauf ist geteilt, es gibt vier Artefakte `liquid-goldens-1`
+   bis `liquid-goldens-4` (je Ordner `current/`); zusammenführen und in die Baseline legen:
+   `gh run download <run-id> -p 'liquid-goldens-*' -D <dir>`, dann
+   `node scripts/goldens/merge-shards.js --out .agents/goldens/liquid/baseline <dir>/liquid-goldens-*/current`
+   (kopiert alle PNGs, fasst `manifest.json`/`summary.json` zusammen und bricht ab, wenn eine Zelle doppelt vorkommt). Der Capture wiederholt eine leere Zelle bis zu dreimal (SwiftShader
    liefert auf einem ausgelasteten Runner gelegentlich ein leeres Bild); eine Zelle mit Konsolenfehlern wird nie wiederholt.
    Der Preview-Port ist per `PREVIEW_PORT` (Default 4173) einstellbar.
 

@@ -10,6 +10,7 @@ import path from "path";
 import { PNG } from "pngjs";
 import pixelmatch from "pixelmatch";
 import config from "./config.json" with { type: "json" };
+import { parseShard, poolsForShard } from "./shard.js";
 
 function parseArgs(argv) {
   const args = {
@@ -19,6 +20,7 @@ function parseArgs(argv) {
     report: null,
     threshold: null,
     pool: null,
+    shard: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -42,6 +44,10 @@ function parseArgs(argv) {
         break;
       case "--pool":
         args.pool = value;
+        i++;
+        break;
+      case "--shard":
+        args.shard = parseShard(value);
         i++;
         break;
       case "--report":
@@ -90,6 +96,7 @@ async function main() {
     }
   }
 
+  const shardPools = args.shard ? poolsForShard(config.poolKeys, args.shard) : null;
   const manifest = await readManifest(args.current);
   const cells = manifest ? [...manifest] : [];
   const cellFile = (cell) => cell.file ?? `${cell.poolKey}__${cell.view}.png`;
@@ -97,6 +104,8 @@ async function main() {
   // A baseline cell the current run never produced must surface as an error, not vanish.
   for (const f of Object.keys(baselineFiles)) {
     if (args.pool && !f.startsWith(`${args.pool}__`)) continue;
+    // A sharded run only produced its own pools; the other shards' baseline cells are not "missing".
+    if (shardPools && !shardPools.some((pool) => f.startsWith(`${pool}__`))) continue;
     if (!knownFiles.has(f)) cells.push({ file: f });
   }
 
