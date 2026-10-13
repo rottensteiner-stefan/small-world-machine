@@ -189,6 +189,13 @@
       "size": [2.0, 0.5, 0.3]
     },
     {
+      "id": "flakturm/wet_puddle",
+      "name": "Wet Patch (dark, glossy overlay)",
+      "file": "wet_puddle.png",
+      "orm": "wet_puddle_orm.png",
+      "size": [1.6, 1.6, 0.3]
+    },
+    {
       "id": "flakturm/rebar_damage",
       "name": "Concrete Spalling & Exposed Rebar Claws",
       "file": "rebar_damage.png",

@@ -425,6 +425,54 @@ async function ormChecks(browser, backend) {
   await page.close();
 }
 
+/** The kit's wet-puddle preset (`?wet=1`): dark albedo plus ORM roughness against a dark-only twin and the bare floor. */
+async function wetChecks(browser, backend) {
+  const blocking = backend === "WEB_GL2";
+  const pp = backend === "WEB_GL2" ? "&pp=1" : "";
+  const { page, errors } = await openProbe(browser, `rendererType=${backend}&wet=1&nb=0${pp}`);
+  const rect = await page.evaluate(() => {
+    const r = document.querySelector("canvas").getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
+  const png = PNG.sync.read(Buffer.from(await page.screenshot({ clip: rect })));
+  // Camera straight above the origin, 60 degree vertical fov, height 12, up = -Z (screen y grows with +Z); decal x as in wetScene.ts.
+  const halfHeight = 12 * Math.tan(Math.PI / 6);
+  const halfWidth = halfHeight * (png.width / png.height);
+  const px = (worldX, worldZ) => {
+    const x = Math.floor((0.5 + worldX / (2 * halfWidth)) * png.width);
+    const y = Math.floor((0.5 + worldZ / (2 * halfHeight)) * png.height);
+    const i = (png.width * y + x) * 4;
+    return [png.data[i], png.data[i + 1], png.data[i + 2]];
+  };
+  const wet = px(-0.8, 0);
+  const dark = px(0.8, 0);
+  const control = px(0.8, 4);
+  const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const tag = `${backend} wet`;
+  console.log(`INFO  ${tag}: bare floor ${control} dark-only ${dark} wet preset ${wet}`);
+  log(
+    !errors.length,
+    blocking,
+    `${tag}: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+  );
+  log(
+    lum(dark) < lum(control) - 8,
+    blocking,
+    `${tag}: the dark albedo darkens the floor (luma ${lum(dark).toFixed(0)} < ${lum(control).toFixed(0)} - 8)`,
+  );
+  log(
+    lum(wet) > lum(dark) + 3,
+    blocking,
+    `${tag}: ORM roughness 0.05 adds a specular highlight on top of the darkening (luma ${lum(wet).toFixed(0)} > ${lum(dark).toFixed(0)} + 3)`,
+  );
+  log(
+    lum(wet) < lum(control) + 40,
+    false,
+    `${tag}: the wet patch stays a dark overlay, not a bright glare (luma ${lum(wet).toFixed(0)} vs bare floor ${lum(control).toFixed(0)})`,
+  );
+  await page.close();
+}
+
 /** WebGL1 has no decal pass: a scene with decals must render without errors and simply omit them. */
 async function webGl1Check(browser) {
   const { page, errors } = await openProbe(browser, "rendererType=WEB_GL1");
@@ -609,6 +657,7 @@ try {
   bumpGl2 = await bumpChecks(browser, "WEB_GL2");
   await unlitCheck(browser, "WEB_GL2");
   await ormChecks(browser, "WEB_GL2");
+  await wetChecks(browser, "WEB_GL2");
   await webGl1Check(browser);
   await bakeCheck(browser);
 
@@ -624,6 +673,7 @@ try {
     await hbaoIndependence(browser, "WEB_GPU");
     await unlitCheck(browser, "WEB_GPU");
     await ormChecks(browser, "WEB_GPU");
+    await wetChecks(browser, "WEB_GPU");
     bumpGpu = await bumpChecks(browser, "WEB_GPU");
     if (bumpGl2?.floor && bumpGpu?.floor) {
       log(

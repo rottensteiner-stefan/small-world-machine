@@ -102,6 +102,15 @@ autosaved as `SWM_decal`; on load Maker calls `kitRegistry.resolveLevelDecals(ro
 decals are not raycast-pickable, so select them in the hierarchy panel; the inspector offers
 priority, opacity, edge fade and angle fade.
 
+**Plane fit.** The stamp does not trust the single hit under the pointer: it casts four rays at
+the corners of the decal's footprint and fits one plane to the surface under it (`fitDecalPlane` in
+`DecalPlaneFit.ts`, the normal is the cross product of the footprint diagonals), so a decal lies
+flush on a bumpy or gently curved receiver instead of floating on one triangle's normal. The box
+grows deeper when the corners differ in height, so the whole patch stays inside it. If fewer than
+three corners hit, or any hit's own normal is more than 35 degrees off the fitted plane (the
+footprint straddles a corner, an edge or a step), the tool falls back to the single-hit normal and
+says so in the status line. Hold <kbd>Alt</kbd> while moving or clicking to skip the fit.
+
 ## How it renders
 
 1. The opaque pass runs as usual; its depth is copied so it can be sampled.
@@ -113,6 +122,17 @@ priority, opacity, edge fade and angle fade.
    clustered lights and shadows, then alpha-blended over the opaque image.
 4. The receiver normal comes from the normal buffer if present (it includes the receiver's
    normal map), otherwise it is reconstructed from the depth neighbours.
+
+## Wet surfaces
+
+A decal cannot overwrite the roughness of the surface below it (forward renderer, no G-buffer), so
+"wet" is a dark, glossy overlay: the kit decal `flakturm/wet_puddle` is a soft dark patch (albedo
+about 0.14, alpha 0.7 in the middle) with an ORM map of roughness 0.05. The darkening is the main
+effect; the gloss adds a sharper specular highlight on top. Measured in the probe (`?wet=1`, sun
+intensity 0.4, camera 12 m above): bare floor luma 120, dark-only twin 57 (WebGL2) / 63 (WebGPU),
+wet preset 62 / 69, i.e. the highlight is a few luma steps at this weak light and grows with
+brighter lights or IBL. There is no engine "wetness" parameter: author more variants as kit
+decals (other shapes or tints) with the same recipe, a dark albedo plus ORM G near 0.05.
 
 ## What a decal does not do
 
@@ -233,6 +253,7 @@ normal probes. Query parameters:
 - `?rendererType=WEB_GPU` or `WEB_GL2` picks the backend
 - `?bake=1` bakes all decals to meshes before the first frame (use with `?rendererType=WEB_GL1`)
 - `?mip=1` (+ `?mipbias=<n>`) swaps in the mip-sharpness comparison scene
+- `?wet=1` shows the kit's wet-puddle preset against a dark-only twin on a rough floor
 
 `npm run test:decals` (`scripts/check-decals.mjs`) drives that page in a headless browser and
 asserts on GPU readbacks (normal buffer contents, decal pixels). WebGL2 results are blocking;
