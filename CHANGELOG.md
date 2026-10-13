@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - **Architecture & Bugfixes:**
+  - *YAD takes the `?rendererType=` override like the showcases:* `yad` extended `SmallWorldMachine` directly and had no override, so the CI smoke test ran it on whatever renderer came up best, WebGPU on the GPU-less runner, and it failed there with the same `[WebGPU Device Lost]` errors as the WebGPU legs. `getRendererTypeFromQuery` is now exported from `AbstractShowcase.ts` and `yad` uses it; `scripts/check-showcases.js` checks `yad` under WebGL1, WebGL2 and WebGPU like every showcase.
   - *Anisotropic filtering is now actually applied*: `EXT_texture_filter_anisotropic` was detected but never exercised, so `quality.maxAnisotropy` and `Texture.anisotropy` did nothing. The WebGL2 and WebGL1 texture upload paths now call `texParameterf(TEXTURE_MAX_ANISOTROPY_EXT)` on mipmapped 2D textures, and the WebGPU material sampler path sets `GPUSamplerDescriptor.maxAnisotropy` on fully-linear samplers (both clamped to 16), resolving `Texture.anisotropy` against the engine-wide `quality.maxAnisotropy` cap (default `anisotropy` 1 inherits the engine level, `0` disables). Semantics live in one place (`renderers/anisotropy.ts`, `applyAnisotropy`/`resolveAnisotropicLevel`) with unit tests covering resolution and application; the WebGL1/WebGL2/WebGPU paths stay in lockstep through it.
 
 ## [0.105.0] - 2026-10-12
