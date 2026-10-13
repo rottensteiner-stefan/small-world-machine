@@ -88,6 +88,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache mkcert (certificate tool of `vite preview`)
+        # Without the cache every fresh runner downloads mkcert from GitHub at server start; with many jobs
+        # starting at once that request occasionally fails (ECONNRESET) and the preview server never comes up.
+        uses: actions/cache@v4
+        with:
+          path: ~/.vite-plugin-mkcert
+          key: mkcert-${{ runner.os }}-v1
+
       - name: Build
         run: npm run build
 
@@ -98,6 +106,10 @@ jobs:
           # The runner has no real GPU: every WebGPU leg fails there (and is retried), so leave them to local
           # runs (`npm run test:showcases`, `npm run test:decals`).
           SHOWCASE_SKIP_WEBGPU: "1"
+          # One page at a time: the software GPU (SwiftShader) shares the runner's 4 vCPUs, and parallel pages starve each
+          # other. Measured on the runner, 76 checks per shard set: concurrency 4 failed 21 to 33 checks on the first try
+          # and needed 206 to 276 s; concurrency 1 failed 0 to 2 and needed 76 to 105 s.
+          SHOWCASE_TEST_CONCURRENCY: "1"
 
   # Deterministic Liquid goldens (M1). Engine stepping is driven by the fixed-step
   # `SmallWorldMachine.step(dt)` hook, so the GL2 captures are fully reproducible. Run on request only (see
@@ -127,6 +139,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Cache mkcert (certificate tool of `vite preview`)
+        # Without the cache every fresh runner downloads mkcert from GitHub at server start; with many jobs
+        # starting at once that request occasionally fails (ECONNRESET) and the preview server never comes up.
+        uses: actions/cache@v4
+        with:
+          path: ~/.vite-plugin-mkcert
+          key: mkcert-${{ runner.os }}-v1
 
       - name: Build
         run: npm run build
@@ -175,6 +195,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Cache mkcert (certificate tool of `vite preview`)
+        # Without the cache every fresh runner downloads mkcert from GitHub at server start; with many jobs
+        # starting at once that request occasionally fails (ECONNRESET) and the preview server never comes up.
+        uses: actions/cache@v4
+        with:
+          path: ~/.vite-plugin-mkcert
+          key: mkcert-${{ runner.os }}-v1
 
       - name: Build
         run: npm run build
