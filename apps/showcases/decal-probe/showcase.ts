@@ -27,7 +27,7 @@ import { setupWetScene } from "./wetScene.js";
 
 /**
  * Decal probe: box-projected decals on a floor, a wall and a pedestal. Query params:
- * `?pool=1` drives a `DecalPool` from the check script (`poolChecks`), `?wet=1` shows the kit's wet-puddle preset against a dark-only twin (`wetChecks`), `?nb=1`/`?nb=0` force the normal buffer on/off (default: auto, on while decals are visible), `?pp=1` enables post-processing, `?hbao=1` enables HBAO (and post-processing), `?unlit=1` draws the decals unlit (WebGL2 needs it for the
+ * `?pool=1` (+ `&shoot=1` for real clicks) drives a `DecalPool` from the check script (`poolChecks`), `?wet=1` shows the kit's wet-puddle preset against a dark-only twin (`wetChecks`), `?nb=1`/`?nb=0` force the normal buffer on/off (default: auto, on while decals are visible), `?pp=1` enables post-processing, `?hbao=1` enables HBAO (and post-processing), `?unlit=1` draws the decals unlit (WebGL2 needs it for the
  * normal buffer), `?bump=1|2` gives the floor a normal map, `?spot=1` swaps the sun for a shadow-casting spot light with an occluder whose shadow crosses the
  * FloorStripes decal edge, `?bake=1` bakes every decal into a mesh before the first frame (the WebGL1 path, see docs/guides/decals.md), `?rendererType=WEB_GPU|WEB_GL2|WEB_GL1` picks the backend.
  */

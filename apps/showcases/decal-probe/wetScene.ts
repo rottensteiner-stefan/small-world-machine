@@ -24,9 +24,14 @@ const KIT_DECALS = "/assets/kits/flakturm/decals";
  * overhead sun and seen from straight above (the sun's mirror peak points at the camera near the
  * screen centre, as in `?orm=1`). Left: the full preset (dark albedo + ORM roughness 0.05).
  * Right: the same albedo with a neutral ORM, so the darkening and the gloss can be told apart.
+ * `?sun=<intensity>` overrides the sun (default 0.4) to see how much gloss a brighter light adds.
  */
 export async function setupWetScene(scene: Scene, camera: Camera): Promise<void> {
-  const sun = new DirectionalLight({ color: Color.WHITE, intensity: 0.4 });
+  const sunParam = Number(new URLSearchParams(location.search).get("sun"));
+  const sun = new DirectionalLight({
+    color: Color.WHITE,
+    intensity: Number.isFinite(sunParam) && sunParam > 0 ? sunParam : 0.4,
+  });
   sun.direction.set(0, -1, 0);
   scene.add(sun);
   scene.add(new AmbientLight({ color: Color.WHITE, intensity: 1.0 }));

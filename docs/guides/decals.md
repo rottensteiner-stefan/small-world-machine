@@ -171,11 +171,13 @@ creates it, there is no global instance.
 Limits: spawned decals are drawn by the decal pass, so on WebGL1 (no decal pass) they draw
 nothing, because the baker only handles static decals. Cost follows the covered screen area times
 overlap like any decal, so keep `capacity` and `size` small and prefer `unlit` for large soft marks.
-`?pool=1` in the decal probe and `poolChecks` / `poolRaycastChecks` in `npm run test:decals` check
+`?pool=1` in the decal probe and `poolChecks` / `poolRaycastChecks` / `poolClickChecks` in `npm run test:decals` check
 recycling order, restacking and fading from pixels on WebGL2 and WebGPU. The raycaster variant
 shoots down onto a floor, a slab tilted 30 degrees and a box with the engine's real `Raycaster`
 and verifies the hit normal, the decal's up axis, the pixels at and around the hit, and that
-`attachTo` makes the decal follow the box when it moves and turns.
+`attachTo` makes the decal follow the box when it moves and turns. The click variant (`&shoot=1`)
+drives the pool with real `page.mouse.click` events: the page casts a camera ray through the clicked
+pixel and the decal must appear under the cursor, on the floor, on the tilted slab and on the box.
 
 ## Wet surfaces
 
@@ -184,8 +186,9 @@ A decal cannot overwrite the roughness of the surface below it (forward renderer
 about 0.14, alpha 0.7 in the middle) with an ORM map of roughness 0.05. The darkening is the main
 effect; the gloss adds a sharper specular highlight on top. Measured in the probe (`?wet=1`, sun
 intensity 0.4, camera 12 m above): bare floor luma 120, dark-only twin 57 (WebGL2) / 63 (WebGPU),
-wet preset 62 / 69, i.e. the highlight is a few luma steps at this weak light and grows with
-brighter lights or IBL. There is no engine "wetness" parameter: author more variants as kit
+wet preset 62 / 69, i.e. the highlight is a few luma steps at this weak light. It scales with the
+light: at sun intensity 3 (`?wet=1&sun=3`) the bare floor is 146, the dark-only twin 75 / 82 and the
+wet preset 94 / 105, a gloss gain of about 19 / 23 luma. (IBL was not measured.) There is no engine "wetness" parameter: author more variants as kit
 decals (other shapes or tints) with the same recipe, a dark albedo plus ORM G near 0.05.
 
 ## What a decal does not do
@@ -307,8 +310,8 @@ normal probes. Query parameters:
 - `?rendererType=WEB_GPU` or `WEB_GL2` picks the backend
 - `?bake=1` bakes all decals to meshes before the first frame (use with `?rendererType=WEB_GL1`)
 - `?mip=1` (+ `?mipbias=<n>`) swaps in the mip-sharpness comparison scene
-- `?pool=1` drives a `DecalPool` from the check script (recycling, restacking, fade)
-- `?wet=1` shows the kit's wet-puddle preset against a dark-only twin on a rough floor
+- `?pool=1` drives a `DecalPool` from the check script (recycling, restacking, fade); `&shoot=1` lets real pointer clicks cast a camera ray and spawn a decal at the hit
+- `?wet=1` (+ `&sun=<intensity>`) shows the kit's wet-puddle preset against a dark-only twin on a rough floor
 
 `npm run test:decals` (`scripts/check-decals.mjs`) drives that page in a headless browser and
 asserts on GPU readbacks (normal buffer contents, decal pixels). WebGL2 results are blocking;

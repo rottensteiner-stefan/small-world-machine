@@ -426,10 +426,13 @@ async function ormChecks(browser, backend) {
 }
 
 /** The kit's wet-puddle preset (`?wet=1`): dark albedo plus ORM roughness against a dark-only twin and the bare floor. */
-async function wetChecks(browser, backend) {
+async function wetChecks(browser, backend, sun = 0.4) {
   const blocking = backend === "WEB_GL2";
   const pp = backend === "WEB_GL2" ? "&pp=1" : "";
-  const { page, errors } = await openProbe(browser, `rendererType=${backend}&wet=1&nb=0${pp}`);
+  const { page, errors } = await openProbe(
+    browser,
+    `rendererType=${backend}&wet=1&sun=${sun}&nb=0${pp}`,
+  );
   const rect = await page.evaluate(() => {
     const r = document.querySelector("canvas").getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };
@@ -448,7 +451,7 @@ async function wetChecks(browser, backend) {
   const dark = px(0.8, 0);
   const control = px(0.8, 4);
   const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-  const tag = `${backend} wet`;
+  const tag = `${backend} wet (sun ${sun})`;
   console.log(`INFO  ${tag}: bare floor ${control} dark-only ${dark} wet preset ${wet}`);
   log(
     !errors.length,
@@ -660,6 +663,74 @@ async function poolRaycastChecks(browser, backend) {
   await page.close();
 }
 
+/**
+ * The pool driven by real pointer events (`?pool=1&shoot=1`): `page.mouse.click` fires a click, the page casts a camera
+ * ray through that pixel with the engine's `Raycaster` and spawns a decal at the hit, which must show up under the
+ * cursor on the GPU. The slab sits at a different height than the floor, so a wrong hit point would miss the pixel.
+ */
+async function poolClickChecks(browser, backend) {
+  const blocking = backend === "WEB_GL2";
+  const pp = backend === "WEB_GL2" ? "&pp=1" : "";
+  const { page, errors } = await openProbe(
+    browser,
+    `rendererType=${backend}&pool=1&shoot=1&nb=0${pp}`,
+  );
+  const settle = () =>
+    page.evaluate(
+      () =>
+        new Promise((res) => {
+          let c = 0;
+          const tick = () => (++c >= 6 ? res() : requestAnimationFrame(tick));
+          requestAnimationFrame(tick);
+        }),
+    );
+  const rect = await page.evaluate(() => {
+    const r = document.querySelector("canvas").getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
+  // Pixels on the floor (left of centre, clear of the objects), on the 30 degree slab and on the box top.
+  const spots = {
+    floor: [0.5, 0.74],
+    slab: [0.71, 0.5],
+    box: [0.27, 0.5],
+  };
+  const colourAt = async (fx, fy) => {
+    const png = PNG.sync.read(Buffer.from(await page.screenshot({ clip: rect })));
+    const i = (png.width * Math.floor(fy * png.height) + Math.floor(fx * png.width)) * 4;
+    return [png.data[i], png.data[i + 1], png.data[i + 2]];
+  };
+  const tag = `${backend} pool+click`;
+  const before = {};
+  for (const [name, [fx, fy]] of Object.entries(spots)) before[name] = await colourAt(fx, fy);
+  const slotColours = { floor: "red", slab: "green", box: "blue" };
+  for (const [name, [fx, fy]] of Object.entries(spots)) {
+    await page.mouse.click(rect.x + fx * rect.width, rect.y + fy * rect.height);
+    await settle();
+  }
+  const after = {};
+  for (const [name, [fx, fy]] of Object.entries(spots)) after[name] = await colourAt(fx, fy);
+  const is = {
+    red: (c) => c[0] > 150 && c[1] < 80 && c[2] < 80,
+    green: (c) => c[1] > 150 && c[0] < 80 && c[2] < 80,
+    blue: (c) => c[2] > 150 && c[0] < 80 && c[1] < 80,
+  };
+  for (const [name, colour] of Object.entries(slotColours)) {
+    log(
+      is[colour](after[name]) && !is[colour](before[name]),
+      blocking,
+      `${tag}: a real click on the ${name} spawns the ${colour} slot's decal under the cursor (${before[name]} -> ${after[name]})`,
+    );
+  }
+  const count = await page.evaluate(() => window.__decalPool.activeCount);
+  log(count === 3, blocking, `${tag}: three clicks leave three decals alive (${count})`);
+  log(
+    !errors.length,
+    blocking,
+    `${tag}: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+  );
+  await page.close();
+}
+
 /** WebGL1 has no decal pass: a scene with decals must render without errors and simply omit them. */
 async function webGl1Check(browser) {
   const { page, errors } = await openProbe(browser, "rendererType=WEB_GL1");
@@ -845,8 +916,10 @@ try {
   await unlitCheck(browser, "WEB_GL2");
   await ormChecks(browser, "WEB_GL2");
   await wetChecks(browser, "WEB_GL2");
+  await wetChecks(browser, "WEB_GL2", 3);
   await poolChecks(browser, "WEB_GL2");
   await poolRaycastChecks(browser, "WEB_GL2");
+  await poolClickChecks(browser, "WEB_GL2");
   await webGl1Check(browser);
   await bakeCheck(browser);
 
@@ -863,8 +936,10 @@ try {
     await unlitCheck(browser, "WEB_GPU");
     await ormChecks(browser, "WEB_GPU");
     await wetChecks(browser, "WEB_GPU");
+    await wetChecks(browser, "WEB_GPU", 3);
     await poolChecks(browser, "WEB_GPU");
     await poolRaycastChecks(browser, "WEB_GPU");
+    await poolClickChecks(browser, "WEB_GPU");
     bumpGpu = await bumpChecks(browser, "WEB_GPU");
     if (bumpGl2?.floor && bumpGpu?.floor) {
       log(

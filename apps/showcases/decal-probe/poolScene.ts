@@ -13,6 +13,7 @@ import {
   Scene,
   StandardMaterial,
   Texture,
+  Vector2D,
   Vector3D,
 } from "@small-world-machine/engine";
 
@@ -125,6 +126,26 @@ export function setupPoolScene(scene: Scene, camera: Camera): DecalPool {
   hooks.__decalPoolMoveReceiver = (x, yaw): void => {
     receiver.setPosition(x, 0.5, 0).setRotation(0, yaw, 0);
   };
+
+  // `?shoot=1`: a real pointer click casts a ray from the camera through the pixel and spawns a decal at the hit,
+  // the way a game would shoot (checked with real mouse events in scripts/check-decals.mjs `poolClickChecks`).
+  if (new URLSearchParams(location.search).get("shoot") === "1") {
+    const canvas = document.querySelector("canvas")!;
+    canvas.addEventListener("pointerdown", (event: PointerEvent): void => {
+      const rect = canvas.getBoundingClientRect();
+      const ndc = new Vector2D(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      for (const target of targets) {
+        target.updateMatrixWorld(true);
+        target.computeBounds();
+      }
+      raycaster.setFromCamera(ndc, camera);
+      const hit = raycaster.intersectObjects(targets)[0];
+      if (hit) pool.spawn(hit.point, hit.normal);
+    });
+  }
 
   camera.setStrategy(CameraStrategyType.SMOOTH);
   camera.position.set(0, POOL_CAMERA_HEIGHT, 0);
