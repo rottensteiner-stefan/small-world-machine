@@ -1107,3 +1107,9 @@ Entstanden während der Jagd nach grün/blauen Block-Artefakten auf den Sponza-V
 - ✅ **typedoc:** 17 Warnungen auf 0 (Overload-`@param`s in `Collision.sweep`, `UniformPacker.packInto`, `SynthSFX`, fehlende Type-Exports, `@inheritdoc` ohne Ziel).
 - ✅ **Docs-Deploy:** toter Link `../../REFERENCES` im Decal-Plan entfernt (VitePress-Build brach daran).
 - 📋 **Weiter offen:** `stairs_down`-Clip (0.375 s) in The-Whisper, asset-seitig.
+
+## 2026-10-13 — Maker-Checks (Stempeln, Reload)
+
+- ✅ **Stempeln im Browser** (Maker auf :5173, Cube als Boden/Schräge/Decke, `_pickSurface` + `DecalStampTool.handlePointerDown`): Normale und gestempelte Decal-Orientierung stimmen auf Oberseite (0,1,0), 30°-Schräge (0,0.866,0.5) und Unterseite (0,-1,0); Decal-Position = Hit-Punkt. Nur programmatisch ausgelöst, keine echten Mausklicks.
+- ✅ **Alte `scene.gltf` mit Gizmo-/Helper-Nodes:** `ProjectBinding.load()` verwirft jetzt Top-Level-Nodes mit Editor-Helper-Namen (Test in `ProjectBinding.test.ts`).
+- ⚠️ **Befund `SunLight`/`Fill`:** werden nicht dupliziert, weil sie gar nicht gespeichert werden: `KhrLightsPunctual.writeNode` schreibt nur `PointLight`. Directional-, Spot- und Ambient-Lichter (auch aus der Palette) gehen beim Reload verloren. 📋 Offen, Design-Entscheidung (KHR_lights_punctual kennt directional/spot, Ambient nicht).

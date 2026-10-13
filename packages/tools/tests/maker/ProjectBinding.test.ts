@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Object3D, Cube, StandardMaterial } from "@small-world-machine/engine";
+import { Object3D, Cube, StandardMaterial, PointLight } from "@small-world-machine/engine";
 import {
   ProjectBinding,
   FileSystemDirectoryHandleLike,
@@ -164,6 +164,26 @@ describe("ProjectBinding", () => {
     // GltfLoader attaches geometry to a synthetic "<name>_mesh" child, not the node itself.
     expect(loadedCube.children).toHaveLength(1);
     expect(loadedCube.children[0]!.geometry?.vertices.length).toBeGreaterThan(0);
+  });
+
+  it("load() keeps scene lights but drops editor helper nodes from older scene files", async () => {
+    const { directory, writes } = fakeDirectory();
+    const binding = new ProjectBinding();
+    binding.bindTo(directory);
+
+    const root = new Object3D("Root");
+    root.add(new PointLight({ name: "Lamp" }));
+    root.add(new Object3D("MakerGizmo"));
+    root.add(new Object3D("Helper_Lamp"));
+    root.add(new Object3D("Crate"));
+
+    binding.scheduleAutosave(() => root);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(writes).toHaveLength(1);
+
+    const loaded = await binding.load();
+    expect(loaded!.children.map((c) => c.name)).toEqual(["Lamp", "Crate"]);
+    expect(loaded!.children[0]).toBeInstanceOf(PointLight);
   });
 
   describe("prefabs", () => {

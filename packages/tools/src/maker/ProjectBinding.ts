@@ -2,6 +2,10 @@ import { Object3D, WorldWriter, GltfLoader, GltfData } from "@small-world-machin
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
 const SCENE_FILE_NAME = "scene.gltf";
+/** Editor helpers (gizmos, highlights, zone previews, grid) that `scene.gltf` files written before
+ * the editor-only exclusion still contain at the top level. */
+const LEGACY_EDITOR_NODE =
+  /^(MakerGizmo|MakerLightGizmos|MakerStageZoneGizmos|EditorGrid|MakerTrash|Helper_|Range_|Cone_|ZoneOutline_|ZoneFill_|ZoneHandle_)/;
 const PREFABS_DIR_NAME = "prefabs";
 const PREFAB_EXT = ".gltf";
 /** Sidecar file holding `{ dataUrl }` next to a prefab's `.gltf` -- a small JSON wrapper rather
@@ -90,7 +94,9 @@ export class ProjectBinding {
     const file = await fileHandle.getFile();
     const json = JSON.parse(await file.text()) as GltfData["json"];
     const loader = new GltfLoader();
-    return loader.parse({ json, buffers: ProjectBinding._decodeBuffers(json) }, "");
+    const root = await loader.parse({ json, buffers: ProjectBinding._decodeBuffers(json) }, "");
+    root.children = root.children.filter((child) => !LEGACY_EDITOR_NODE.test(child.name));
+    return root;
   }
 
   /** `WorldWriter` embeds every buffer as a `data:` URI (see its own doc comment on why) -- a
