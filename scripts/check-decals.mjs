@@ -473,6 +473,84 @@ async function wetChecks(browser, backend) {
   await page.close();
 }
 
+/** `DecalPool` (`?pool=1`): recycling, restacking and fading, read back from pixels. */
+async function poolChecks(browser, backend) {
+  const blocking = backend === "WEB_GL2";
+  const pp = backend === "WEB_GL2" ? "&pp=1" : "";
+  const { page, errors } = await openProbe(browser, `rendererType=${backend}&pool=1&nb=0${pp}`);
+  const settle = () =>
+    page.evaluate(
+      () =>
+        new Promise((res) => {
+          let c = 0;
+          const tick = () => (++c >= 6 ? res() : requestAnimationFrame(tick));
+          requestAnimationFrame(tick);
+        }),
+    );
+  const centre = async () => {
+    const rect = await page.evaluate(() => {
+      const r = document.querySelector("canvas").getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    });
+    const png = PNG.sync.read(Buffer.from(await page.screenshot({ clip: rect })));
+    const i = (png.width * Math.floor(png.height / 2) + Math.floor(png.width / 2)) * 4;
+    return [png.data[i], png.data[i + 1], png.data[i + 2]];
+  };
+  const tag = `${backend} pool`;
+  const floor = await centre();
+
+  // Six spawns at one spot into a pool of four: slots 0 and 1 (red, green) get recycled, in that order.
+  const counts = await page.evaluate(() => {
+    const pool = window.__decalPool;
+    for (let i = 0; i < 6; i++) {
+      window.__decalPoolSpawn(0, 0);
+      pool.update(0.1);
+    }
+    return { active: pool.activeCount, capacity: pool.capacity };
+  });
+  await settle();
+  const top = await centre();
+  log(
+    counts.active === 4 && counts.capacity === 4,
+    blocking,
+    `${tag}: six spawns into four slots leave four alive (${counts.active}/${counts.capacity})`,
+  );
+  log(
+    top[1] > 150 && top[0] < 60 && top[2] < 60,
+    blocking,
+    `${tag}: the newest decal (recycled green slot) is on top, not the highest-numbered slot (${top})`,
+  );
+
+  // A decal with a 4 s lifetime and the default 1 s fade: half faded at 3.5 s, gone at 4.1 s.
+  await page.evaluate(() => {
+    window.__decalPool.clear();
+    window.__decalPoolSpawn(0, 0, 4);
+    window.__decalPool.update(3.5);
+  });
+  await settle();
+  const half = await centre();
+  const redStrength = (c) => c[0] - c[1];
+  log(
+    redStrength(half) > redStrength(floor) + 40 && redStrength(half) < 235,
+    blocking,
+    `${tag}: a decal halfway through its fade is partly blended (red minus green ${redStrength(half)}, floor ${redStrength(floor)}, full 255)`,
+  );
+  await page.evaluate(() => window.__decalPool.update(0.6));
+  await settle();
+  const gone = await centre();
+  log(
+    Math.max(...gone.map((v, i) => Math.abs(v - floor[i]))) <= 3,
+    blocking,
+    `${tag}: the expired decal is gone and the floor shows again (${gone} vs ${floor})`,
+  );
+  log(
+    !errors.length,
+    blocking,
+    `${tag}: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+  );
+  await page.close();
+}
+
 /** WebGL1 has no decal pass: a scene with decals must render without errors and simply omit them. */
 async function webGl1Check(browser) {
   const { page, errors } = await openProbe(browser, "rendererType=WEB_GL1");
@@ -658,6 +736,7 @@ try {
   await unlitCheck(browser, "WEB_GL2");
   await ormChecks(browser, "WEB_GL2");
   await wetChecks(browser, "WEB_GL2");
+  await poolChecks(browser, "WEB_GL2");
   await webGl1Check(browser);
   await bakeCheck(browser);
 
@@ -674,6 +753,7 @@ try {
     await unlitCheck(browser, "WEB_GPU");
     await ormChecks(browser, "WEB_GPU");
     await wetChecks(browser, "WEB_GPU");
+    await poolChecks(browser, "WEB_GPU");
     bumpGpu = await bumpChecks(browser, "WEB_GPU");
     if (bumpGl2?.floor && bumpGpu?.floor) {
       log(

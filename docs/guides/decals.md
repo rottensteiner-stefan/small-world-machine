@@ -123,6 +123,40 @@ says so in the status line. Hold <kbd>Alt</kbd> while moving or clicking to skip
 4. The receiver normal comes from the normal buffer if present (it includes the receiver's
    normal map), otherwise it is reconstructed from the depth neighbours.
 
+## Runtime decals: `DecalPool`
+
+For marks that appear while the game runs (bullet holes, blood, scorch marks) use a `DecalPool`
+instead of creating decals per hit:
+
+```ts
+const pool = new DecalPool(scene.root, {
+  capacity: 32,
+  size: [0.3, 0.3, 0.3],
+  lifetime: 20, // seconds; omit to keep a decal until it is recycled
+  createMaterial: () => new DecalMaterial({ diffuseMap: holeTexture, ormMap: holeOrm }),
+});
+// per hit (the caller finds point and normal, e.g. with a Raycaster):
+pool.spawn(hit.point, hit.normal, { spin: Math.random() * Math.PI * 2 });
+// once per frame:
+pool.update(deltaSeconds);
+```
+
+All decals exist from the start and are only toggled visible, so a spawn allocates nothing and the
+GPU resources stay put (removing a node from the scene would release them). `createMaterial` runs
+once per slot because every decal fades with its own `color.a`; share the textures, not the
+material. A full pool recycles the oldest decal and `Decal.restack()`s it, so the newest mark
+always lands on top of overlapping older ones (the stacking order breaks ties by creation
+order). The last `fadeSeconds` (default 1) of a lifetime ramp the opacity to 0, then the slot is
+free. `attachTo: receiver` re-parents the decal under a moving object and keeps its world pose;
+the decal is returned to the pool root when its slot is released. The pool is owned by whoever
+creates it, there is no global instance.
+
+Limits: spawned decals are drawn by the decal pass, so on WebGL1 (no decal pass) they draw
+nothing, because the baker only handles static decals. Cost follows the covered screen area times
+overlap like any decal, so keep `capacity` and `size` small and prefer `unlit` for large soft marks.
+`?pool=1` in the decal probe and `poolChecks` in `npm run test:decals` check recycling order,
+restacking and fading from pixels on WebGL2 and WebGPU.
+
 ## Wet surfaces
 
 A decal cannot overwrite the roughness of the surface below it (forward renderer, no G-buffer), so
@@ -253,6 +287,7 @@ normal probes. Query parameters:
 - `?rendererType=WEB_GPU` or `WEB_GL2` picks the backend
 - `?bake=1` bakes all decals to meshes before the first frame (use with `?rendererType=WEB_GL1`)
 - `?mip=1` (+ `?mipbias=<n>`) swaps in the mip-sharpness comparison scene
+- `?pool=1` drives a `DecalPool` from the check script (recycling, restacking, fade)
 - `?wet=1` shows the kit's wet-puddle preset against a dark-only twin on a rough floor
 
 `npm run test:decals` (`scripts/check-decals.mjs`) drives that page in a headless browser and

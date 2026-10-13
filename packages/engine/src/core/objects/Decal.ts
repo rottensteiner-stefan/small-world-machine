@@ -54,8 +54,11 @@ export class Decal extends Object3D {
 
   /** Explicit stacking override: higher values draw later, i.e. on top of lower ones. */
   public priority: number = 0;
-  /** Creation order, the deterministic last tie-break of the stacking order. */
-  public readonly sequence: number = _nextSequence++;
+  private _sequence: number = _nextSequence++;
+  /** Creation order (or the last `restack()`), the deterministic last tie-break of the stacking order. */
+  public get sequence(): number {
+    return this._sequence;
+  }
   /** Namespaced kit decal id (`kit/id`) this decal was placed from; what `SWM_decal` persists and `KitRegistry.hydrateDecal` resolves. */
   public kitDecal: string | undefined;
 
@@ -70,6 +73,11 @@ export class Decal extends Object3D {
     this.isCollidable = false;
     this.castShadow = false;
     this.receiveShadow = false;
+  }
+
+  /** Moves this decal to the top of its stacking tier, as if it had just been created (a recycled `DecalPool` decal must land above the newer ones). */
+  public restack(): void {
+    this._sequence = _nextSequence++;
   }
 
   /** @inheritdoc */

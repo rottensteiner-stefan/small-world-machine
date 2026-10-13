@@ -19,6 +19,7 @@ export * from "./objects/BillboardInstancer.js";
 export * from "./objects/Decal.js";
 export * from "./decals/DecalMath.js";
 export * from "./decals/DecalMeshBaker.js";
+export * from "./decals/DecalPool.js";
 
 export { Scene } from "./Scene.js";
 export type { RenderBatch, RenderList } from "./Scene.js";

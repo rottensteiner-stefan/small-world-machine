@@ -1,4 +1,11 @@
-import { Decal, Quaternion, Vector3D, createDecalShell } from "@small-world-machine/engine";
+import {
+  Decal,
+  Quaternion,
+  Vector3D,
+  createDecalShell,
+  decalEulerFromNormal,
+  quaternionFromNormal,
+} from "@small-world-machine/engine";
 import type { Object3D } from "@small-world-machine/engine";
 import { fitDecalPlane, type DecalPlaneFit } from "./DecalPlaneFit.js";
 
@@ -52,31 +59,7 @@ function rotateVector(q: Quaternion, v: Vector3D): Vector3D {
   );
 }
 
-/** Shortest-arc rotation taking the decal's up axis (+Y) onto `normal`. */
-export function quaternionFromNormal(normal: Vector3D): Quaternion {
-  const len = normal.length();
-  if (len < 1e-9) return new Quaternion(0, 0, 0, 1);
-  const nx = normal.x / len;
-  const ny = normal.y / len;
-  const nz = normal.z / len;
-  // Antiparallel: the cross product vanishes, any axis in the XZ plane is a valid half-turn.
-  if (ny < -0.999999) return new Quaternion(1, 0, 0, 0);
-  // axis = Y x n = (nz, 0, -nx), w = 1 + dot(Y, n); normalizing yields the half-angle quaternion.
-  const q = new Quaternion(nz, 0, -nx, 1 + ny);
-  const qLen = Math.hypot(q.x, q.y, q.z, q.w);
-  return new Quaternion(q.x / qLen, q.y / qLen, q.z / qLen, q.w / qLen);
-}
-
-/**
- * Orientation of a decal whose +Y is `normal`, additionally spun by `spin` radians about that
- * normal. Returned as the Euler angles (YXZ, like `Object3D.rotation`) so the Maker's gizmo and
- * inspector keep working on the stamped decal; no quaternion is attached to it.
- */
-export function decalEulerFromNormal(normal: Vector3D, spin: number): Vector3D {
-  const q = quaternionFromNormal(normal);
-  q.multiply(new Quaternion(0, Math.sin(spin / 2), 0, Math.cos(spin / 2)));
-  return q.toEuler();
-}
+export { quaternionFromNormal, decalEulerFromNormal };
 
 /**
  * Modal decal stamp tool (ADR 0029, Maker Phase 4b): a ghost decal follows the mouse over the
