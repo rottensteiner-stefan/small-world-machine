@@ -50,7 +50,7 @@ The default is the shared checkout under the `session-mailbox` rules (claims, pa
 
 **Granularity: one worktree (one branch) per session, never per worker.** The workers of a session share it and coordinate through the board and claims. A worktree per worker would turn live coordination into merge conflicts and cost a checkout and an install each.
 
-Recipe (names are examples):
+One command does all of this: `npm run worktree:new -- <topic>` (`scripts/worktree-new.mjs`; `--dry-run` shows the plan, `--no-install` skips `npm ci`, `--base <ref>` and `--dir <path>` override the defaults). It works from inside another worktree too and always places the new one next to the main checkout. By hand (names are examples):
 ```bash
 git worktree add ../<repo>-<topic> -b <topic>
 cd ../<repo>-<topic> && npm ci
@@ -62,7 +62,7 @@ Run a dev server there on its own port.
 Rules:
 - **Stay current:** `git merge main` at milestone boundaries. Bring the branch back to `main` only after `[ABNAHME_ERTEILT]`, by merge or fast-forward. Pushing the branch needs the human's go like any other push.
 - **Moving uncommitted work** out of the shared checkout needs the owner, with their agents and editors stopped: `git stash push -u -m <topic>-wip` there, check `git stash list` (yours must be `stash@{0}`), then `git stash pop stash@{0}` in the worktree. Never move someone else's files yourself.
-- **Hot shared files** (`CHANGELOG.md`, `backlog.md`, `CONTEXT.md`, ADR index) conflict at merge time. That is expected: resolve it at the merge, do not edit them on `main` to get ahead.
+- **Hot shared files** (`CHANGELOG.md`, `CONTEXT.md`, ADR index) conflict at merge time. That is expected: resolve it at the merge, do not edit them on `main` to get ahead. `backlog.md` and the app `docs/log.md` journals are append-only and use git's `merge=union` (`.gitattributes`): parallel appends merge without a conflict, but skim the result (a clashing in-place edit is kept twice, and two entries added at the same spot may share a number).
 - **Keep the claim:** the mailbox claim still names the paths the session owns.
 - **Clean up** when the session is terminated: `git worktree remove ../<repo>-<topic>`, and delete the branch after the merge.
 

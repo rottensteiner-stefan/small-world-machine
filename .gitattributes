@@ -12,3 +12,10 @@
 *.zip filter=lfs diff=lfs merge=lfs -text
 *.hdr filter=lfs diff=lfs merge=lfs -text
 *.exr filter=lfs diff=lfs merge=lfs -text
+
+# Append-only journals: several branches or worktrees appending entries merge without a conflict, because git's
+# built-in union driver keeps the lines of both sides. Two caveats: an in-place edit that clashes with another change to
+# the same lines is kept twice instead of conflicting, and two entries added at the same spot lose the blank line
+# between them and may share a number. Skim the merge result of these files. Not for CHANGELOG.md (ordered sections).
+.agents/notes/backlog.md merge=union
+**/docs/log.md merge=union
