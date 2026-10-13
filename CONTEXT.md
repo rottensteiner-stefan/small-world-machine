@@ -72,6 +72,10 @@ _Avoid_: Panel, Plugin — Tool names a specific contract (the `ForgeTool` class
 The screen-space ambient occlusion pass actually shipped (`HbaoElement`): a single max-dot-per-direction horizon search, no cosine-weighted integration, no temporal filtering.
 _Avoid_: GTAO — an earlier draft was named `GtaoElement`, but that overstates what's implemented. Renamed once the gap was pointed out; the code should never claim the more accurate name it doesn't earn.
 
+**Headless Operation**:
+A pure data or transform operation on the shared headless core (`core/*`) that runs identically in the browser UI and the CLI, free of DOM, GL, and browser dependencies.
+_Avoid_: CLI Operation — the CLI is only one consumer; the identical operation also powers the web UI. Browser Operation, Standalone Tool Logic.
+
 **Kit Registry**:
 The engine subsystem (`KitRegistry`) that discovers, caches, instantiates, and manages procedural kit fallbacks and prop assemblies for declarative level descriptors.
 _Avoid_: Asset Manager — `AssetManager` handles low-level glTF/texture downloads and caching; `KitRegistry` resolves higher-level modular kit nodes, sockets, and metadata (ADR 0020).
@@ -83,6 +87,10 @@ _Avoid_: Light Bounds, Footprint
 **Liquid Extension Hook**:
 Compile-time shader injection slots (`[WATER_EXT_DECL]`, `[WATER_EXT_SURFACE]`) allowing extension packages (such as `liquid-extras`) to inject custom procedural looks (e.g. Noir comic-book ink) without modifying or branching engine core shaders (ADR 0025).
 _Avoid_: Dynamic Shader Patching, Runtime Shader Interception.
+
+**Maker Mode / ToolHost**:
+The merged-app mode lifecycle: every authoring tool is hosted as a Maker Mode module, mounted and unmounted by the ToolHost inside the Maker app shell; a mode is neither a standalone page nor a Forge window.
+_Avoid_: ForgeTool (the in-game overlay contract, stays strictly in-game; ADR 0024), Standalone Tool Page (the ADR 0010 §3 decision that ADR 0030 amends), Panel/Plugin (informal).
 
 **Mannequin (Asset Root)**:
 The canonical folder structure (`public/assets/<app>/mannequin/<character>/` and `raw/mannequin/`) organizing game-ready rigged characters and shared mocap pools per character namespace rather than by asset type.
@@ -139,6 +147,10 @@ _Avoid_: Spec-Chasing, Tech-Demo First, 8K-Photorealism
 **TAA (Simplified)**:
 Sub-pixel camera jitter plus an exponential history blend — deliberately without motion-vector reprojection.
 _Avoid_: "TAA" unqualified when precision matters — the missing reprojection step is the actual, documented trade-off (visible ghosting under fast movement), not an implementation detail to gloss over.
+
+**Workspace/Project**:
+The planned shared project-folder concept of the merged Maker — one project folder per session as the common workspace root from which all tools draw their `assets/` substructure (planned; not yet implemented, today tools bind their own folders).
+_Avoid_: Project Folder (generic, not namespaced), Content Folder; over-claiming — this names a future concept, not a shipped one (ADR 0030, F6).
 
 **Zero-Allocation (Hot Path)**:
 The design rule that per-frame code (physics step, event dispatch, FSM update) must not allocate new objects, so it never triggers a GC pause.

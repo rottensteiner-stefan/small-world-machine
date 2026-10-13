@@ -34,3 +34,6 @@ Dieser Abschnitt enthält die Architekturentscheidungs-Protokolle, die signifika
 
 - **[ADR 0028: Dünner Normal-Buffer als MRT im Main Pass](./0028-thin-normal-buffer-mrt.md)** — Kein G-Buffer/Deferred; opt-in `RG16F`-Normal-Ziel (inkl. Normal-Map) für Decals, AO und Post, nur WebGL2/WebGPU; Velocity separat.
 - **[ADR 0029: Decal-System](./0029-decal-system.md)** — Projizierte Box-Decals als eigene Lit-Stufe nach Opaque (Tiefe + Normal-Buffer, TBN-Normalenblend), statische Sortierung, WebGL1 nur später per Mesh-Decal; Datenpfad `LevelDescriptor.decals[]` entschieden, noch nicht umgesetzt.
+
+- **[ADR 0030: Big Merge — vereinheitlichte Maker-Architektur für Entwicklungswerkzeuge](./0030-big-merge-unified-tool-architecture.md)** — *(DRAFT)* Maker wird die App-Shell; alle Autoren-Werkzeuge werden `ToolMode`-Module über einen dedizierten Lifecycle (nicht `ForgeTool`); Entry-Aliases statt Dokument-Swap; Forge bleibt In-Game; [AMEND] ADR 0010 §3/§4, Erweiterung ADR 0024.
+- **[ADR 0031: Headless-Kern & CLI-Grenze (`swm` boundary)](./0031-headless-core-cli-boundary.md)** — *(DRAFT)* `core/*` ist framework-agnostisch (keine harte DOM/GL/Browser-Abhängigkeit); Raster-I/O nur über `RasterIO`-Schnittstelle; CLI als bewusste, dokumentierte Teilmenge; interaktive Gizmo-/Tastatur-/Viewport-Logik explizit „nicht abgebildet".

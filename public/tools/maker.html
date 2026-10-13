@@ -698,11 +698,60 @@
         color: var(--tool-text-muted);
         font-size: 0.85rem;
       }
+      header.tool-header.maker-fused-header {
+        justify-content: flex-start;
+        gap: 0.75rem;
+      }
+      .maker-mode-launcher {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 0.25rem;
+      }
+      .maker-header-spacer {
+        flex: 1;
+      }
+      .maker-mode-btn {
+        background: var(--tool-card);
+        color: var(--tool-text);
+        border: 1px solid var(--tool-border);
+        border-radius: var(--tool-radius-sm);
+        padding: 3px 10px;
+        font-family: inherit;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .maker-mode-btn:hover:not(:disabled):not(.active) {
+        border-color: var(--tool-accent2);
+        color: var(--tool-text-bright);
+      }
+      .maker-mode-btn.active {
+        border-color: var(--tool-accent2);
+        color: var(--tool-accent2);
+        background: var(--tool-accent2-glow);
+      }
+      .maker-mode-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
     </style>
   </head>
-    <header class="tool-header">
-      <h1>Maker — Scene & Level Editor</h1>
-      <button class="tool-close-btn" id="toolCloseBtn" title="Close Window" onclick="if (window.parent && window.parent !== window) { window.parent.postMessage({ type: 'close-tool' }, '*'); } try { window.close(); } catch(e) {}">✕</button>
+    <header class="tool-header maker-fused-header">
+      <h1>Maker — Scene &amp; Level Editor</h1>
+      <nav class="maker-mode-launcher" id="makerModeLauncher" role="tablist" aria-label="Tool modes">
+        <button class="maker-mode-btn active" data-mode="world" role="tab" aria-selected="true">World</button>
+        <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">Xtractor</button>
+        <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">Pixler</button>
+        <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">Map</button>
+        <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">Material</button>
+        <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">IBL</button>
+        <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">Kit</button>
+      </nav>
+      <span class="maker-header-spacer" aria-hidden="true"></span>
+      <button class="tool-close-btn" id="toolCloseBtn" title="Close Window" onclick="if (window.parent && window.parent !== window) { window.parent.postMessage({ type: 'close-tool' }, '*'); } try { window.close(); } catch(e) {}">&#x2715;</button>
     </header>
     <script>if (window.self !== window.top || window.opener) document.body.classList.add("in-window");</script>
 
@@ -742,6 +791,17 @@
 
       window.makerApp = app;
       app.start();
+
+      const modeLauncher = document.getElementById("makerModeLauncher");
+      if (modeLauncher) {
+        modeLauncher.addEventListener("click", (event) => {
+          const btn = event.target;
+          if (btn instanceof HTMLElement) {
+            const mode = btn.getAttribute("data-mode");
+            if (mode) app.launchMode(mode);
+          }
+        });
+      }
     </script>
   </body>
 </html>

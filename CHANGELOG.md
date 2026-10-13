@@ -5,6 +5,15 @@
 - **Architecture & Bugfixes:**
   - *Anisotropic filtering is now actually applied*: `EXT_texture_filter_anisotropic` was detected but never exercised, so `quality.maxAnisotropy` and `Texture.anisotropy` did nothing. The WebGL2 and WebGL1 texture upload paths now call `texParameterf(TEXTURE_MAX_ANISOTROPY_EXT)` on mipmapped 2D textures, and the WebGPU material sampler path sets `GPUSamplerDescriptor.maxAnisotropy` on fully-linear samplers (both clamped to 16), resolving `Texture.anisotropy` against the engine-wide `quality.maxAnisotropy` cap (default `anisotropy` 1 inherits the engine level, `0` disables). Semantics live in one place (`renderers/anisotropy.ts`, `applyAnisotropy`/`resolveAnisotropicLevel`) with unit tests covering resolution and application; the WebGL1/WebGL2/WebGPU paths stay in lockstep through it.
 
+## [0.106.0] - 2026-10-13 (Entwurf / im Bau — Big Merge, M1/M2)
+
+### "We shape our tools, and thereafter our tools shape us." - John M. Culkin
+
+- **Housekeeping & Docs:**
+  - *Big Merge started* (plan in `.agents/collaborate/big-merge.md`, consensus 4/4): the standalone authoring tools begin to merge into a single Maker app shell. M1 adds the dedicated `ToolMode` lifecycle contract plus the mode/hash router and panel host in `MakerApp` (no tool moves, no page changes); M2 starts the headless-core extraction (`core/*` slices, shared `core/pipeline/` with `RasterIO`, purge of `MapGenerator.loadFromImage`, DOM-free grep gate). Backward-compatible re-exports keep all pages and Forge working; this is implementation scaffolding with no behaviour change yet.
+  - ADRs **0030** (unified Maker architecture, dedicated `ToolMode` not `ForgeTool`, entry aliases) and **0031** (headless core & CLI boundary) added as **DRAFT**; `CONTEXT.md` gains `Maker Mode`/`ToolHost`, `Workspace/Project` (planned, not yet implemented) and `Headless Operation`; Maker `log.md` and `backlog.md` session entries appended.
+  - Runtime browser verification is explicitly pending until the milestone gates (no live QA in this round).
+
 ## [0.105.0] - 2026-10-12
 
 ### "The greatest enemy of knowledge is not ignorance, it is the illusion of knowledge." - Daniel J. Boorstin

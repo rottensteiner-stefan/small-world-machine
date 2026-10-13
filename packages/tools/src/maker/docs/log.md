@@ -489,6 +489,32 @@ Erster Baustein eines industrietauglichen Asset-Workflows im Maker, angelehnt an
 - **Flakturm:** Neues `travertine`-PBR-Set (albedo/ao/normal/roughness) über den reworkten `pbr.sh`; `brick_aged` mit nachgeschärftem AO regeneriert.
 - **Status:** 201 Test-Dateien, 1191 Tests, Build & Lint 100% grün.
 
+---
+
+## 2026-10-13 — Big Merge: Implementierungsstart (M1 Shell-Bootstrap & M2 Headless-Core)
+
+Der Umsetzungsplan **`.agents/collaborate/big-merge.md`** (Konsens 4/4, Findings F1–F6 verbindlich) ist
+freigegeben und die Implementierung beginnt. Der Maker wird die eine App-Shell für alle Autoren-Werkzeuge;
+diese Session legt dafür die Grundlagen — die Werkzeug-Verschmelzung selbst (M3+) folgt in späteren
+Meilensteinen.
+
+- **M1 — Shell-Bootstrap (parallel, Implementierungs-Agent):** Dedizierter `ToolMode`-Lifecycle-Vertrag
+  (mount/unmount/state) plus Mode-/Hash-Router und Panel-Host in `MakerApp`; `maker.html` erhält einen
+  Mode-Launcher. Keine Tool-Datei-Umzüge, keine Seitenänderungen — Legacy-URLs funktionieren unverändert.
+- **M2 — Headless-Core-Extraktion (parallel, Implementierungs-Agent):** Per-Tool-`core/*`-Slices (Sprite,
+  Pixler-Ops, Map-Def-Converter, Material-Map-Pipeline) ohne Verhaltensänderung,
+  gemeinsame `core/pipeline/`-Infrastruktur mit `RasterIO` (Codec-Grenze F5), Purge
+  `MapGenerator.loadFromImage` (F1) und Grep-Gate (0 Treffer `getContext|document\.|window\.` unter
+  `core/`). Barrels re-exportieren kompatibel weiter.
+- **Dokumentations-/Domain-Anteil (diese Session):** ADR-Entwürfe **0030** (Maker-App-Shell, `ToolMode`
+  statt `ForgeTool`, Entry-Aliases) und **0031** (Headless-Kern & CLI-Grenze) als DRAFT angelegt;
+  `CONTEXT.md` um die Begriffe **Maker-Mode/ToolHost**, **Workspace/Project** (noch nicht implementiert)
+  und **Headless Operation** ergänzt; CHANGELOG-Impl-Notiz und `backlog.md`-Sessioneintrag angehängt.
+- **Abnahmevermerk:** Die Runtime-Browser-Verifikation steht für diese Meilensteine noch aus — sie erfolgt
+  erst über die meilensteinübergreifenden Gates/Abnahme (Plan §9, Verifikationsstrategie §8), nicht in dieser
+  Session. Implementations-Arbeitsstand ist code-seitig, Live-Browser-Verhalten (Mode-Router, Re-Export-
+  Kompatibilität) ist erst in den Gates zu prüfen.
+
 
 
 

@@ -20,6 +20,22 @@ erzeugen.
 
 ---
 
+## 2026-10-13 — Big Merge: Implementierungs-Session M1/M2 (Dokumentations-/Domain-Anteil)
+
+- 📋 **„Big Merge"-Umsetzung gestartet** (Plan `.agents/collaborate/big-merge.md`, Konsens 4/4, Findings
+  F1–F6 verbindlich). Koordinierte Multi-Agent-Session `big-merge-impl`: M1 (Shell-Bootstrap:
+  `ToolMode`-Lifecycle-Vertrag + Mode-/Hash-Router + Panel-Host in `MakerApp`, `maker.html`-Launcher) und
+  M2 (Headless-Core-Extraktion: `core/*`-Slices, `core/pipeline/` + `RasterIO`, Purge
+  `MapGenerator.loadFromImage`, Grep-Gate F1) laufen parallel; dieser Eintrag deckt den Dokumentations-/
+  Domain-Anteil ab (ADR-Entwürfe 0030/0031 DRAFT, CONTEXT-Begriffe Maker-Mode/ToolHost, Workspace/Project,
+  Headless Operation, Maker-`log.md`, CHANGELOG-Impl-Notiz). Browser-Runtime-Verifikation steht aus bis zu
+  den Meilenstein-Gates/Abnahme.
+- 🔜 **M7 „Input-Deletion" explizit Nicht-Ziel:** Alle `public/tools/*.html`-Vite-Inputs werden in dieser
+  Migration bewusst NICHT gelöscht (sie bleiben als Entry-Aliases erhalten); die eigentliche De-Merge ist
+  ein späteres, trennbares Vorhaben.
+- 💡 **GLB-Container-Writer als Backlog-Item** (bewusst kein ADR-Thema): Phase A bleibt `.gltf` mit
+  Data-URIs; ein GLB-Packer ist ein eigenes, späteres Vorhaben, das `swm`-Flag `--binary` bleibt reserviert.
+
 ## 2026-10-12 — Fog & Volumetric Lighting Roadmap (Stufe 1 bis 3)
 
 - ✅ **Stufe 1 (Klassischer Distanz- & Höhennebel):** Bereits im Bestand (`Fog.ts`, `fog_calc.glsl`, `WebGPURenderer`, `WebGL1Renderer`, `WebGL2Renderer`). Unterstützt `FogMode` (LINEAR, EXP, EXP2) sowie analytischen Height-Falloff über alle drei Backends.
