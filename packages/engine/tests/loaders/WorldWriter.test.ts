@@ -13,6 +13,8 @@ import { Matrix4, Vector3D, Quaternion } from "../../src/math/index.js";
 import { GeometryDataInterface } from "../../src/interfaces/index.js";
 import { StageZone } from "../../src/core/stage/StageZone.js";
 import { StageZoneMarker } from "../../src/core/stage/StageZoneMarker.js";
+import { Cube } from "../../src/geometry/index.js";
+import { Raycaster } from "../../src/physix/Raycaster.js";
 
 /** Mirrors `GltfLoader`'s own private `_decodeBase64` -- decoding here is test setup, not
  * something the writer/loader pair needs to expose publicly. */
@@ -296,5 +298,56 @@ describe("WorldWriter <-> GltfLoader round trip", () => {
     expect(pFill.name).toBe("Fill");
     expect(pFill.intensity).toBeCloseTo(0.4);
     expect(pFill.color.b).toBeCloseTo(0.4);
+  });
+
+  it("round-trips a real mesh with indices, normals and uvs, so the reloaded mesh renders and can be raycast", async () => {
+    const source = new Object3D("Crate");
+    source.geometry = new Cube({ size: 1 }).getGeometryData();
+    source.material = new StandardMaterial();
+    source.setPosition(0, 0.5, 0).setScale(6, 1, 6);
+    const root = new Object3D("Root");
+    root.add(source);
+
+    const doc = new WorldWriter().write(root);
+    const primitive = doc.meshes![0]!.primitives[0]!;
+    expect(Object.keys(primitive.attributes).sort()).toEqual(["NORMAL", "POSITION", "TEXCOORD_0"]);
+    expect(primitive.indices).toBeDefined();
+    // Every buffer view starts on a 4-byte boundary, as glTF requires.
+    expect(doc.bufferViews!.every((v) => 0 === v.byteOffset % 4)).toBe(true);
+
+    const parsedRoot = await parseDocument(doc);
+    const mesh = parsedRoot.children[0]!.children[0]!;
+    const before = source.geometry;
+    const after = mesh.geometry!;
+    expect(Array.from(after.vertices)).toEqual(Array.from(before.vertices));
+    expect(Array.from(after.indices!)).toEqual(Array.from(before.indices!));
+    expect(Array.from(after.normals!)).toEqual(Array.from(before.normals!));
+    expect(Array.from(after.uvs!)).toEqual(Array.from(before.uvs!));
+
+    // The old failure mode: no indices meant no triangles to test, so a ray fell straight through.
+    parsedRoot.updateMatrixWorld(true);
+    mesh.computeBounds();
+    const raycaster = new Raycaster();
+    raycaster.ray.origin.set(0.3, 5, -0.9);
+    raycaster.ray.direction.set(0, -1, 0);
+    const hit = raycaster.intersectObjects([mesh])[0];
+    expect(hit).toBeDefined();
+    expect(hit!.point.y).toBeCloseTo(1, 5);
+    expect(hit!.normal.y).toBeCloseTo(1, 5);
+  });
+
+  it("pads buffer views so an odd-length index buffer cannot misalign the next attribute", () => {
+    const tri = new Object3D("Tri");
+    tri.geometry = {
+      vertices: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+      indices: new Uint16Array([0, 1, 2]), // 6 bytes: not a multiple of 4
+      normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+      getBoundingVolume: () => {
+        throw new Error("not needed for this test");
+      },
+    } as unknown as GeometryDataInterface;
+    tri.material = new StandardMaterial();
+    const doc = new WorldWriter().writeSingle(tri);
+    expect(doc.bufferViews!.every((v) => 0 === v.byteOffset % 4)).toBe(true);
   });
 });

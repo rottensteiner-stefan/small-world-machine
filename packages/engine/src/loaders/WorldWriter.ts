@@ -21,6 +21,8 @@ import "./gltf/extensions/index.js";
 export type { GltfDocument, GltfNodeJson } from "./gltf/writerTypes.js";
 
 const COMPONENT_TYPE_FLOAT = 5126;
+const COMPONENT_TYPE_USHORT = 5123;
+const COMPONENT_TYPE_UINT = 5125;
 
 /**
  * Serializes a live `Object3D` tree into a minimal glTF 2.0 JSON document -- the write-side
@@ -33,9 +35,10 @@ const COMPONENT_TYPE_FLOAT = 5126;
  * - Node hierarchy and transforms (Euler or quaternion, whichever the object actually has set).
  * - One mesh's material, via native `pbrMetallicRoughness` -- no `SWM_*` extension needed yet
  *   since `StandardMaterial`'s fields map onto it directly.
- * - Geometry export covers `POSITION` only (no normals/uvs/indices) -- enough to prove the
- *   round-trip mechanism end to end; richer attribute export is a later phase once Maker
- *   actually needs textured/lit preview meshes.
+ * - Geometry export covers `POSITION`, `NORMAL`, `TEXCOORD_0` and the index buffer (a mesh that
+ *   comes back without its indices has the wrong triangles and cannot be raycast, which broke
+ *   every Maker project on reload). Tangents, vertex colours, skinning data and material textures
+ *   are not written yet.
  */
 export class WorldWriter {
   private _nodes: GltfNodeJson[] = [];
@@ -144,54 +147,88 @@ export class WorldWriter {
   }
 
   private _writeMesh(geo: GeometryDataInterface, mat: AbstractMaterial): number {
-    const accessorIndex = this._writePositionAccessor(geo.vertices);
-    const materialIndex = this._materials.length;
+    const vertexCount = geo.vertices.length / 3;
+    const attributes: Record<string, number> = {
+      POSITION: this._writeAccessor(geo.vertices, "VEC3", COMPONENT_TYPE_FLOAT, vertexCount, true),
+    };
+    // Only attributes that line up with the vertex list are written; a half-filled one would
+    // shift every later vertex on reload.
+    if (geo.normals && geo.normals.length === geo.vertices.length) {
+      attributes["NORMAL"] = this._writeAccessor(
+        geo.normals,
+        "VEC3",
+        COMPONENT_TYPE_FLOAT,
+        vertexCount,
+        false,
+      );
+    }
+    if (geo.uvs && geo.uvs.length === vertexCount * 2) {
+      attributes["TEXCOORD_0"] = this._writeAccessor(
+        geo.uvs,
+        "VEC2",
+        COMPONENT_TYPE_FLOAT,
+        vertexCount,
+        false,
+      );
+    }
+    const primitive: GltfMeshJson["primitives"][number] = { attributes };
+    if (geo.indices && 0 < geo.indices.length) {
+      primitive.indices = this._writeAccessor(
+        geo.indices,
+        "SCALAR",
+        geo.indices instanceof Uint32Array ? COMPONENT_TYPE_UINT : COMPONENT_TYPE_USHORT,
+        geo.indices.length,
+        false,
+      );
+    }
+    primitive.material = this._materials.length;
     this._materials.push(WorldWriter._writeMaterial(mat));
 
     const meshIndex = this._meshes.length;
-    this._meshes.push({
-      primitives: [{ attributes: { POSITION: accessorIndex }, material: materialIndex }],
-    });
+    this._meshes.push({ primitives: [primitive] });
     return meshIndex;
   }
 
-  private _writePositionAccessor(vertices: Float32Array): number {
+  /** Appends `data` to the shared buffer (4-byte aligned, as glTF requires of every buffer view) and returns the new accessor's index. */
+  private _writeAccessor(
+    data: Float32Array | Uint16Array | Uint32Array,
+    type: string,
+    componentType: number,
+    count: number,
+    withBounds: boolean,
+  ): number {
     const bufferViewIndex = this._bufferViews.length;
     const byteOffset = this._bufferChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
     // Copy the bytes out: the source TypedArray is live engine state that may be mutated (or
     // its buffer reused) after `write()` returns, but our accumulated chunks must stay stable
     // until `_writeCombinedBuffer()` concatenates them.
-    const bytes = new Uint8Array(vertices.buffer, vertices.byteOffset, vertices.byteLength).slice();
-    this._bufferChunks.push(bytes);
+    const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice();
+    const padded = new Uint8Array(Math.ceil(bytes.byteLength / 4) * 4);
+    padded.set(bytes);
+    this._bufferChunks.push(padded);
     this._bufferViews.push({ buffer: 0, byteOffset, byteLength: bytes.byteLength });
 
-    let minX = Infinity,
-      minY = Infinity,
-      minZ = Infinity;
-    let maxX = -Infinity,
-      maxY = -Infinity,
-      maxZ = -Infinity;
-    for (let i = 0; i < vertices.length; i += 3) {
-      const x = vertices[i]!,
-        y = vertices[i + 1]!,
-        z = vertices[i + 2]!;
-      minX = Math.min(minX, x);
-      maxX = Math.max(maxX, x);
-      minY = Math.min(minY, y);
-      maxY = Math.max(maxY, y);
-      minZ = Math.min(minZ, z);
-      maxZ = Math.max(maxZ, z);
-    }
-
-    const accessorIndex = this._accessors.length;
-    this._accessors.push({
+    const accessor: GltfAccessorJson = {
       bufferView: bufferViewIndex,
-      componentType: COMPONENT_TYPE_FLOAT,
-      count: vertices.length / 3,
-      type: "VEC3",
-      min: [minX, minY, minZ],
-      max: [maxX, maxY, maxZ],
-    });
+      componentType,
+      count,
+      type,
+    };
+    if (withBounds) {
+      const min = [Infinity, Infinity, Infinity];
+      const max = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < data.length; i += 3) {
+        for (let axis = 0; axis < 3; axis++) {
+          const v = data[i + axis]!;
+          min[axis] = Math.min(min[axis]!, v);
+          max[axis] = Math.max(max[axis]!, v);
+        }
+      }
+      accessor.min = min;
+      accessor.max = max;
+    }
+    const accessorIndex = this._accessors.length;
+    this._accessors.push(accessor);
     return accessorIndex;
   }
 

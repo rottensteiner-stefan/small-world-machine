@@ -39,7 +39,7 @@ export interface GltfNodeJson {
 }
 
 export interface GltfMeshJson {
-  primitives: { attributes: { POSITION: number }; material?: number }[];
+  primitives: { attributes: Record<string, number>; indices?: number; material?: number }[];
 }
 
 export interface GltfMaterialJson {
@@ -57,8 +57,8 @@ export interface GltfAccessorJson {
   componentType: number;
   count: number;
   type: string;
-  min: number[];
-  max: number[];
+  min?: number[];
+  max?: number[];
 }
 
 export interface GltfBufferViewJson {
