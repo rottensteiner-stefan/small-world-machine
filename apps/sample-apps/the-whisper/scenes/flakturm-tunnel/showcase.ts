@@ -23,7 +23,6 @@ import { GltfLoader } from "@small-world-machine/engine/loaders/GltfLoader.js";
 import { Bone } from "@small-world-machine/engine/core/animation/index.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
 import { BunkerKit } from "../../builder/BunkerKit.js";
-import { resolveClipTimeScale } from "./clipTiming.js";
 
 /** The background plane's world extent -- the only place a (u, v) stage coordinate is ever
  * turned into a 3D position. Fed directly into `StageMovementBehavior`'s `"flat-plane"`
@@ -89,7 +88,9 @@ const ANIMATION_CLIP_URLS: Record<string, string> = {
   run_torch: "/assets/the-whisper/mannequin/shared/anim/running_torch.glb",
   // Stairs
   stairs_up: "/assets/the-whisper/mannequin/shared/anim/ascending_stairs.glb",
-  stairs_down: "/assets/the-whisper/mannequin/shared/anim/descending_stairs.glb",
+  // No usable descending clip: Mixamo's stair-descent clips are a 0.4s run fragment and a one-step
+  // crouch, neither loops. The neutral walk loops cleanly; the stairs geometry supplies the drop.
+  stairs_down: "/assets/the-whisper/mannequin/shared/anim/walking.glb",
 };
 
 const ANIMATION_FADE_SECONDS = 0.25;
@@ -846,7 +847,6 @@ class AndNowScene2 extends AbstractShowcase {
         : undefined;
     const toAction = this._mixer.clipAction(clip);
     toAction.setLoop(opts?.loop ?? true);
-    toAction.timeScale = resolveClipTimeScale(name, clip.duration);
     toAction.weight = 0;
     toAction.reset();
     toAction.play();

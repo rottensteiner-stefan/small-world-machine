@@ -1980,3 +1980,10 @@ befüllen.
 - **Verifikation:** `lint:fix`, `typecheck`, `build:lib`, 267 Dateien / 1726 Tests grün;
   Commit `648b3772` (Nudge, path-scoped); Session-Mailbox aktiv (Koordination, Claims des
   Kollegen respektiert, Item-4-Handoff).
+
+## 147. `stairs_down` auf den Walk-Clip umgestellt, Zeit-Override entfernt (2026-10-13)
+
+- **Befund:** `descending_stairs.glb` (0.375 s, 10 Keys) ist schon im FBX-Original ein Fragment (13 Keys, 0.4 s, Mixamo „Running Down A Set Of Stairs"), Start- und Endpose unterscheiden sich, die Pose sprang bei jedem Loop. Die Dehnung auf 1 s (`clipTiming.ts`) verlangsamte nur den Sprung (und gab ~10 fps).
+- **Mixamo-Alternativen geprüft:** Der einzige andere Treffer („Walking Down A Set Of Stairs", 29 Frames, 0.917 s, In Place, heruntergeladen und konvertiert) ist keine Schleife: Hüfte sinkt von 0.98 auf 0.45 m (Hocke), Endpose bis 92° (Knie) neben der Startpose. Sonst gibt es nur Aufwärts-Clips. Quelle liegt nur lokal in `.agents/scratches/fbxcheck/`.
+- **Entscheidung (Stefan):** `stairs_down` nutzt `walking.glb` (1.0 s, sauberer Loop); die Treppengeometrie liefert die Höhe. `clipTiming.ts` und `ClipTiming.test.ts` entfernt, im Tunnel-Showcase entfällt `timeScale`; Diorama zeigt jetzt ebenfalls auf `walking.glb`. `descending_stairs.glb/.fbx` bleiben unbenutzt im Repo.
+- **Verifikation:** `lint:fix`, `tsc`, 270 Dateien / 1777 Tests grün; Diorama lädt, Taste `0` aktiviert `stairs_down`, 0 Konsolenfehler. Nicht visuell am Treppen-Zone-C im Tunnel geprüft.

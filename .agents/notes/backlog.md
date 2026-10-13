@@ -1106,7 +1106,7 @@ Entstanden während der Jagd nach grün/blauen Block-Artefakten auf den Sponza-V
 - ✅ **Ramp-LUT:** Gewicht 0.6 war schon am 2026-10-10 auf 1.0 gesetzt (`7c9eff85`). Flag an/aus jetzt auf allen fünf StylizedWater-Pools (toon-water, bold-anime, soft-watercolor, painterly-sparkle, dredge) mit `ramp-lut-verify.mjs`: je 24/24 Checks auf GL1/GL2/WebGPU.
 - ✅ **typedoc:** 17 Warnungen auf 0 (Overload-`@param`s in `Collision.sweep`, `UniformPacker.packInto`, `SynthSFX`, fehlende Type-Exports, `@inheritdoc` ohne Ziel).
 - ✅ **Docs-Deploy:** toter Link `../../REFERENCES` im Decal-Plan entfernt (VitePress-Build brach daran).
-- 📋 **Weiter offen:** `stairs_down`-Clip (0.375 s) in The-Whisper, asset-seitig.
+- ✅ **`stairs_down` (2026-10-13):** Clip war schon im Mixamo-FBX ein Fragment, Mixamo hat keinen brauchbaren Ersatz; jetzt `walking.glb`, Override entfernt (Log 147 der-whisper).
 
 ## 2026-10-13 — Maker-Checks (Stempeln, Reload)
 

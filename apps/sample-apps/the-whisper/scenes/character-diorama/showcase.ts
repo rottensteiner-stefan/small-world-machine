@@ -72,7 +72,7 @@ const ANIMATION_CLIPS: Record<string, string> = {
   run_2: "/assets/the-whisper/mannequin/shared/anim/running_2.glb",
   run_torch: "/assets/the-whisper/mannequin/shared/anim/running_torch.glb",
   stairs_up: "/assets/the-whisper/mannequin/shared/anim/ascending_stairs.glb",
-  stairs_down: "/assets/the-whisper/mannequin/shared/anim/descending_stairs.glb",
+  stairs_down: "/assets/the-whisper/mannequin/shared/anim/walking.glb",
 };
 
 function findNodeByName(root: Object3D, name: string): Object3D | undefined {
