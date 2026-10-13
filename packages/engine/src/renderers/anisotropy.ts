@@ -1,6 +1,11 @@
 import type { QualityConfig } from "../interfaces/EngineOptions.js";
 import type { Texture } from "../core/textures/Texture.js";
 
+/** WebGPU's `GPUSamplerDescriptor.maxAnisotropy` upper bound. The platform clamps to its own
+ * maximum (1..16 on all current implementations), and no WebGPU limit query exposes it, so 16
+ * is the safe cap for the WebGPU backend. */
+export const MAX_ANISOTROPY_LEVEL = 16;
+
 const ANISOTROPY_EXTENSIONS = [
   "EXT_texture_filter_anisotropic",
   "WEBKIT_EXT_texture_filter_anisotropic",
@@ -26,8 +31,9 @@ const capsByContext = new WeakMap<
  * Resolves the effective anisotropic-filtering level for `tex`, clamped to the engine-wide
  * `quality.maxAnisotropy` cap and the device maximum. `tex.anisotropy` sentinels: `0` disables,
  * the default `1` inherits the engine level, `> 1` is taken literally (still capped). Never
- * below 1 (filtering off). This is the single source of truth for the level -- both WebGL
- * backends call it so their semantics cannot drift.
+ * below 1 (filtering off). This is the single source of truth for the level -- every backend
+ * (WebGL1, WebGL2, WebGPU) resolves through it so their semantics cannot drift. WebGL callers
+ * pass the device limit from the extension; the WebGPU caller passes `MAX_ANISOTROPY_LEVEL`.
  */
 export function resolveAnisotropicLevel(
   tex: Texture,

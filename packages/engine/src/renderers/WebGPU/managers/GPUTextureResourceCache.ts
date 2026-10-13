@@ -3,6 +3,7 @@ import { RenderTarget, RenderTargetCube } from "../../../core/textures/index.js"
 import { QualityConfig } from "../../../interfaces/index.js";
 import { CompressedTextureFormat, TextureFilter, TextureWrap } from "../../../enums/index.js";
 import { GPUFallbackResources } from "./GPUFallbackResources.js";
+import { MAX_ANISOTROPY_LEVEL, resolveAnisotropicLevel } from "../../anisotropy.js";
 import mipDownsampleWGSL from "../../post/shaders/MipDownsample.frag.wgsl?raw";
 import fullscreenVertWGSL from "../../post/shaders/PostProcess.vert.wgsl?raw";
 
@@ -97,7 +98,7 @@ export class GPUTextureResourceCache {
     });
   }
 
-  public getSampler(tex: Texture | undefined): GPUSampler {
+  public getSampler(tex: Texture | undefined, quality: QualityConfig | undefined): GPUSampler {
     const mag =
       tex?.magFilter === TextureFilter.NEAREST ? TextureFilter.NEAREST : TextureFilter.LINEAR;
     const min =
@@ -109,7 +110,15 @@ export class GPUTextureResourceCache {
     };
     const u = mapWrap(tex?.addressModeU);
     const v = mapWrap(tex?.addressModeV);
-    const key = mag + "_" + min + "_" + u + "_" + v;
+    // WebGPU's `maxAnisotropy > 1` is only valid when magFilter, minFilter AND mipmapFilter are
+    // all 'linear' (mipmapFilter is always linear here), so nearest or non-mipmapped samplers
+    // stay at 1. The platform clamps to its own maximum -- intentionally capped at
+    // `MAX_ANISOTROPY_LEVEL` because no WebGPU limit query exposes the device value.
+    const aniso =
+      tex !== undefined && mag === TextureFilter.LINEAR && min === TextureFilter.LINEAR
+        ? resolveAnisotropicLevel(tex, quality, MAX_ANISOTROPY_LEVEL)
+        : 1;
+    const key = mag + "_" + min + "_" + u + "_" + v + "_" + aniso;
     let s = this._samplerCache.get(key);
     if (!s) {
       s = this._device.createSampler({
@@ -118,12 +127,10 @@ export class GPUTextureResourceCache {
         addressModeU: u,
         addressModeV: v,
         mipmapFilter: TextureFilter.LINEAR,
+        ...(aniso > 1 ? { maxAnisotropy: aniso } : {}),
       });
       this._samplerCache.set(key, s);
     }
-    // Anisotropic filtering is intentionally not applied here: WebGPU's core `GPUSamplerDescriptor`
-    // has no `maxAnisotropy` field (the API dropped WebGL's AF extension), so this backend stays at
-    // level 1. The WebGL backends enforce `Texture.anisotropy`/`quality.maxAnisotropy` instead.
     return s;
   }
 

@@ -1134,7 +1134,7 @@ export class WebGPURenderer extends AbstractRenderer {
     const brdfView = scene?.brdfLUT
       ? this._textures.getTextureView(scene.brdfLUT, this._quality)
       : this._fallback.defaultBrdfTextureView!;
-    const sampler = this._textures.getSampler(scene?.brdfLUT); // Use default sampler for global maps
+    const sampler = this._textures.getSampler(scene?.brdfLUT, undefined); // Use default sampler for global maps
 
     return this._device!.createBindGroup({
       layout: this._globalBGL,
@@ -2045,7 +2045,7 @@ export class WebGPURenderer extends AbstractRenderer {
     const envOrSkybox = m.textures["u_skybox"] || m.textures["u_envMap"];
     const bindings: number[] = [1, 3, 11, 12];
     const resources: GPUBindingResource[] = [
-      this._textures.getSampler(m.textures["u_diffuseMap"] as Texture),
+      this._textures.getSampler(m.textures["u_diffuseMap"] as Texture, this._quality),
       this._textures.getNormalTextureView(m.textures["u_normalMap"] as Texture),
       this._textures.getCubeTextureView(envOrSkybox as CubeTexture, this._quality),
       this._textures.getTextureView(m.textures["u_emissiveMap"] as Texture, this._quality),
