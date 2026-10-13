@@ -124,6 +124,25 @@ describe("Level Schema & Level Manifest Validation", () => {
               `Decal '${decal.id}' has unknown parent prop '${decal.parent}'`,
             ).toBe(true);
           }
+          if (decal.socket !== undefined) {
+            expect(
+              decal.parent,
+              `Decal '${decal.id}' names socket '${decal.socket}' but has no parent`,
+            ).toBeDefined();
+            const parentProp = levelData.props.find((prop) => prop.id === decal.parent)!;
+            const [propKit] = parentProp.kitProp.split("/");
+            const propManifest = JSON.parse(
+              fs.readFileSync(path.join(kitsRoot, propKit!, "kit.json"), "utf8"),
+            ) as { items?: Array<{ id: string; meta: string }> };
+            const propItem = (propManifest.items ?? []).find((it) => it.id === parentProp.kitProp);
+            const meta = JSON.parse(
+              fs.readFileSync(path.join(kitsRoot, propKit!, propItem!.meta), "utf8"),
+            ) as { sockets?: Array<{ name: string }> };
+            expect(
+              (meta.sockets ?? []).map((s) => s.name),
+              `Decal '${decal.id}': prop '${decal.parent}' has no socket '${decal.socket}'`,
+            ).toContain(decal.socket);
+          }
           const [kitId] = decal.kitDecal.split("/");
           const kitManifestPath = path.join(kitsRoot, kitId!, "kit.json");
           expect(

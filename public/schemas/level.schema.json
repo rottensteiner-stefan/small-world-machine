@@ -126,8 +126,14 @@
         "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
         "priority": { "type": "integer" },
         "tags": { "type": "array", "items": { "type": "string" } },
-        "parent": { "type": "string", "minLength": 1 }
-      }
+        "parent": { "type": "string", "minLength": 1 },
+        "socket": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of a socket on the parent prop (meta.sockets); position and rotation are then offsets local to it."
+        }
+      },
+      "dependentRequired": { "socket": ["parent"] }
     },
     "propPlacement": {
       "type": "object",

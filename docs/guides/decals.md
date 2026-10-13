@@ -21,6 +21,23 @@ A `Decal` is an `Object3D` with a shared unit cube as geometry. The box spans [-
 each axis and `scale` is its world size. It is never a physics collider, never a raycast
 target and casts/receives no shadows; its bounds exist only for frustum culling.
 
+## Decals on props: `parent` and `socket`
+
+In a level descriptor a decal with `parent: "<prop id>"` becomes a child of that prop and moves with
+it; `position` and `rotation` are then local to the prop. To pin a decal to a named spot on the
+prop (a sign on a door leaf) add `socket: "<socket name>"`: the decal is attached to the prop's
+`Socket_<name>` anchor, and `position`/`rotation` are offsets local to the socket. A `socket`
+needs a `parent`.
+
+Sockets are the `sockets` list of the prop's `meta.json` (`name`, `position`, and now an optional
+`rotation` in radians; the lights of `recommendedLight` use the same anchors). For a decal the
+anchor's local +Y axis is the surface normal, so give a socket on a vertical face a `rotation`
+that turns +Y outward, for example `[1.5708, 0, 0]` for a face looking down +Z. A decal then
+needs no rotation of its own. Asking for a socket the prop does not have throws on load and
+fails the level validation test (`LevelValidation.test.ts` reads the prop's `meta.json`);
+`level.schema.json` rejects a `socket` without a `parent`. `SWM_decal` (Maker) does not store
+sockets: a stamped decal keeps its node hierarchy, which already carries the anchor.
+
 ## `DecalMaterial` options
 
 | Option              | Default | Meaning                                                                                                  |

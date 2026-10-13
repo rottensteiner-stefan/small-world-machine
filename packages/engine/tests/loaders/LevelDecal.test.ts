@@ -58,6 +58,10 @@ const deskMeta: PropMeta = {
   textures: [],
   dimensions: { width: 1, height: 1, depth: 1 },
   recommendedScale: 1,
+  sockets: [
+    { name: "SignMount", position: [0, 1, 0.5], rotation: [Math.PI / 2, 0, 0] },
+    { name: "Plain", position: [1, 0, 0] },
+  ],
   author: "t",
   license: "CC0-1.0",
 };
@@ -147,6 +151,55 @@ describe("KitRegistry level decals (ADR 0029)", () => {
     expect(inst.decals.get("d1")?.parent).toBe(inst.props.get("Desk1")?.root);
   });
 
+  it("attaches a decal to a socket of its parent prop; position and rotation become offsets local to the socket", async () => {
+    const { registry } = createRegistry();
+    const inst = await registry.loadLevel(
+      level([
+        {
+          id: "d1",
+          kitDecal: "bunker/sign",
+          parent: "Desk1",
+          socket: "SignMount",
+          position: [0.1, 0, 0],
+        },
+      ]),
+    );
+    const decal = inst.decals.get("d1") as Decal;
+    const anchor = inst.props
+      .get("Desk1")!
+      .root.children.find((c) => c.name === "Socket_SignMount")!;
+    expect(decal.parent).toBe(anchor);
+    expect(decal.position.x).toBeCloseTo(0.1);
+    // The socket's pose is what the decal inherits: 1 m up, 0.5 m out, +Y turned to +Z.
+    inst.root.updateMatrixWorld(true);
+    const m = decal.worldMatrix.data;
+    expect([m[12], m[13], m[14]].map((v) => +v!.toFixed(4))).toEqual([0.1, 1, 0.5]);
+    const len = Math.hypot(m[4]!, m[5]!, m[6]!);
+    expect([m[4]! / len, m[5]! / len, m[6]! / len].map((v) => +v.toFixed(4))).toEqual([0, 0, 1]);
+  });
+
+  it("a socket without rotation leaves the anchor unturned", async () => {
+    const { registry } = createRegistry();
+    const inst = await registry.loadLevel(
+      level([{ id: "d1", kitDecal: "bunker/sign", parent: "Desk1", socket: "Plain" }]),
+    );
+    const anchor = inst.props.get("Desk1")!.root.children.find((c) => c.name === "Socket_Plain")!;
+    expect([anchor.rotation.x, anchor.rotation.y, anchor.rotation.z]).toEqual([0, 0, 0]);
+    expect(inst.decals.get("d1")?.parent).toBe(anchor);
+  });
+
+  it("rejects a socket without a parent and a socket the prop does not have", async () => {
+    const { registry } = createRegistry();
+    await expect(
+      registry.loadLevel(level([{ id: "d1", kitDecal: "bunker/sign", socket: "SignMount" }])),
+    ).rejects.toThrow(/needs a parent/);
+    await expect(
+      registry.loadLevel(
+        level([{ id: "d1", kitDecal: "bunker/sign", parent: "Desk1", socket: "Nope" }]),
+      ),
+    ).rejects.toThrow(/no socket 'Nope' \(available: SignMount, Plain\)/);
+  });
+
   it("loads levels without decals", async () => {
     const { registry } = createRegistry();
     const { decals: _omit, ...withoutDecals } = level([]);
@@ -218,6 +271,7 @@ describe("level.schema.json decals", () => {
             priority: 1,
             tags: ["sign"],
             parent: "Desk1",
+            socket: "SignMount",
           },
         ],
       }),
@@ -231,6 +285,8 @@ describe("level.schema.json decals", () => {
     ["opacity > 1", { id: "d", kitDecal: "a/b", opacity: 2 }],
     ["edge > 0.5", { id: "d", kitDecal: "a/b", fade: { edge: 0.9 } }],
     ["bad kitDecal id", { id: "d", kitDecal: "nonamespace" }],
+    ["socket without parent", { id: "d", kitDecal: "a/b", socket: "Mount" }],
+    ["empty socket name", { id: "d", kitDecal: "a/b", parent: "p", socket: "" }],
   ])("rejects %s", (_name, decal) => {
     expect(validate({ ...base, decals: [decal] })).toBe(false);
   });

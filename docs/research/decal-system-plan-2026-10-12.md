@@ -50,7 +50,7 @@ Jede Phase endet mit `npm run lint:fix`, `build:lib`, `test`, `lint:wgsl` und `n
 | 3 | Daten: `KitDecalItem` (size, normal, orm, emission), `LevelDescriptor.decals[]`, Schema, Validator, `loadLevel`, Migration der 6 Prolog-Decals | offen |
 | 4 | Maker-Stempelwerkzeug (modal: `D` an, Klick stempelt, `R` dreht, Pfeile schieben, `Shift` skaliert, `Esc` aus), Speicherung über `SWM_decal` | offen |
 | 5 | Mesh-Decal-Baker (Load-Zeit, CPU, Sutherland-Hodgman gegen die Box, statische Empfänger) für WebGL1 | umgesetzt |
-| 6 | 6a Plane-Fit (Maker, `DecalPlaneFit.ts`), 6b Nässe als Kit-Decal `flakturm/wet_puddle` (kein Engine-Feature), 6c Laufzeit-`DecalPool`; 6d Decal-Sockets bewusst zurückgestellt | umgesetzt (2026-10-13) |
+| 6 | 6a Plane-Fit (Maker, `DecalPlaneFit.ts`), 6b Nässe als Kit-Decal `flakturm/wet_puddle` (kein Engine-Feature), 6c Laufzeit-`DecalPool`; 6d Decal-Sockets (`LevelDecalPlacement.socket`, `KitSocket.rotation`) | umgesetzt (2026-10-13) |
 
 ## Phase 3: Hinweise für die Umsetzung
 
@@ -65,7 +65,7 @@ Jede Phase endet mit `npm run lint:fix`, `build:lib`, `test`, `lint:wgsl` und `n
 - **6a Plane-Fit:** Vier Rays an den Footprint-Ecken, Normale als Kreuzprodukt der Diagonalen, Box-Tiefe wächst um die Höhenstreuung. Rückfall auf die Einzel-Normale bei weniger als drei Treffern oder einer Abweichung über 35 Grad (Ecke, Kante, Stufe); `Alt` schaltet den Fit pro Klick aus. Nur Maker, kein Engine-Code.
 - **6b Nässe:** Ein ORM-Decal kann die Roughness der Unterlage nicht überschreiben (Forward-Lit), deshalb ein dunkles, glänzendes Overlay als Kit-Decal. Gemessen im Probe (`?wet=1`): bare floor Luma 120, dunkel allein 57/63 (WebGL2/WebGPU), mit ORM-Roughness 0,05 62/69. Der Glanz ist bei schwachem Licht klein.
 - **6c Akkumulator:** `DecalPool` (feste Slots, nur `isVisible` wird umgeschaltet, ältestes Decal wird recycelt, `Decal.restack()`, Fade am Lebensende, `attachTo`). Probe `?pool=1` plus `poolChecks`.
-- **6d Decal-Sockets:** zurückgestellt. `meta.sockets` hat nur `position` und gilt für Lichter; ein Türschild lässt sich heute mit `parent` plus Offset setzen. Wieder aufgreifen, sobald ein Prop das braucht.
+- **6d Decal-Sockets:** erst zurückgestellt, dann doch umgesetzt (Wunsch des Nutzers). `LevelDecalPlacement.socket` (braucht `parent`) hängt das Decal an den vorhandenen Socket-Anker des Props, `position`/`rotation` sind Offsets zum Socket; `KitSocket.rotation` ist neu und optional, für Decals zeigt die lokale +Y-Achse des Sockets aus der Fläche. Schema (`dependentRequired`), Level-Validierung und `loadLevel` prüfen es; kein bestehender Prop nutzt es bisher, ein Beispiel-Socket mit Rotation fehlt im Content.
 
 ## Bewusst vertagt oder offen
 

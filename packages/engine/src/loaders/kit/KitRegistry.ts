@@ -211,6 +211,9 @@ export class KitRegistry {
       for (const socket of meta.sockets) {
         const socketAnchor = new Object3D(`Socket_${socket.name}`);
         socketAnchor.position.set(socket.position[0], socket.position[1], socket.position[2]);
+        if (socket.rotation) {
+          socketAnchor.rotation.set(socket.rotation[0], socket.rotation[1], socket.rotation[2]);
+        }
         root.add(socketAnchor);
 
         const override = options.lightOverrides?.[socket.name];
@@ -401,6 +404,17 @@ export class KitRegistry {
           continue;
         }
         parentRoot = parentInst.root;
+        if (placement.socket !== undefined) {
+          // A socket that the loaded prop does not have is an authoring error, not a load failure.
+          const anchor = parentRoot.children.find((c) => c.name === `Socket_${placement.socket}`);
+          if (!anchor) {
+            const available = (parentInst.meta.sockets ?? []).map((s) => s.name).join(", ");
+            throw new Error(
+              `[KitRegistry] Decal '${placement.id}': prop '${placement.parent}' has no socket '${placement.socket}' (available: ${available || "none"}).`,
+            );
+          }
+          parentRoot = anchor;
+        }
       }
       try {
         const decal = await this._createDecal(placement);
@@ -428,7 +442,7 @@ export class KitRegistry {
     };
   }
 
-  /** Fails fast on placements that can never load: duplicate ids, bad size, unknown parent. */
+  /** Fails fast on placements that can never load: duplicate ids, bad size, unknown parent, a socket without a parent. */
   private _validateDecalPlacements(descriptor: LevelDescriptor): void {
     const propIds = new Set(descriptor.props.map((p) => p.id));
     const decalIds = new Set<string>();
@@ -444,6 +458,9 @@ export class KitRegistry {
       }
       if (d.parent !== undefined && !propIds.has(d.parent)) {
         throw new Error(`[KitRegistry] Decal '${d.id}': unknown parent prop '${d.parent}'.`);
+      }
+      if (d.socket !== undefined && d.parent === undefined) {
+        throw new Error(`[KitRegistry] Decal '${d.id}': socket '${d.socket}' needs a parent prop.`);
       }
     }
   }

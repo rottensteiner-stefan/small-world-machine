@@ -15,6 +15,8 @@ export interface KitSocketLightConfig {
 export interface KitSocket {
   name: string;
   position: [number, number, number];
+  /** Euler angles in radians (same convention as props). For a decal socket the local +Y axis is the surface normal. Defaults to none. */
+  rotation?: [number, number, number];
   recommendedLight?: KitSocketLightConfig;
 }
 
@@ -226,6 +228,8 @@ export interface LevelDecalPlacement {
   tags?: string[];
   /** Id of a prop in the same level: the decal becomes its child and moves with it. */
   parent?: string;
+  /** Name of a socket on the `parent` prop (`meta.sockets`): the decal is attached to that socket instead of the prop root, and `position`/`rotation` become offsets local to the socket. Requires `parent`. */
+  socket?: string;
 }
 
 export interface LevelLightDef {

@@ -80,6 +80,13 @@
             "minItems": 3,
             "maxItems": 3
           },
+          "rotation": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Euler angles in radians; for a decal socket the local +Y axis is the surface normal."
+          },
           "recommendedLight": {
             "type": "object",
             "required": ["type", "color", "intensity", "distance"],
