@@ -5,9 +5,26 @@ on:
     branches:
       - main
   pull_request:
+  # The visual jobs (liquid goldens, showcase smoke test) are heavy and need software rendering, so they
+  # run only when asked for: Actions tab > CI > "Run workflow". Push and pull requests run `verify` only.
+  workflow_dispatch:
+    inputs:
+      goldens:
+        description: 'Liquid goldens: GL2, 4 shards, compared against the committed baseline'
+        type: boolean
+        default: true
+      smoke:
+        description: 'Showcase smoke test: WebGL1/WebGL2, 4 shards'
+        type: boolean
+        default: true
+      gpu-goldens:
+        description: 'Also capture the informational WebGPU goldens (always fails on the GPU-less runner)'
+        type: boolean
+        default: false
 
+# One group per event type, so a manual visual run is not cancelled by a push (and does not cancel one).
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -41,6 +58,7 @@ jobs:
         run: npm run build
 
   showcases-smoke-test:
+    if: github.event_name == 'workflow_dispatch' && inputs.smoke
     name: showcases-smoke-test (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -81,12 +99,20 @@ jobs:
           # runs (`npm run test:showcases`, `npm run test:decals`).
           SHOWCASE_SKIP_WEBGPU: "1"
 
-  # M1 core gate ("Blocking-Comparator"): deterministic Liquid goldens.
-  # Engine stepping is driven by the fixed-step `SmallWorldMachine.step(dt)` hook, so the
-  # GL2 captures are fully reproducible and this job is BLOCKING for merges.
+  # Deterministic Liquid goldens (M1). Engine stepping is driven by the fixed-step
+  # `SmallWorldMachine.step(dt)` hook, so the GL2 captures are fully reproducible. Run on request only (see
+  # `workflow_dispatch` above); a failing run still fails the job, but nothing starts it automatically.
+  # The 16 pools are split over 4 parallel jobs (`--shard`): the cells are independent, so the pixels do not
+  # change, only the wall-clock time (about 5 instead of 14 minutes).
   liquid-goldens:
+    if: github.event_name == 'workflow_dispatch' && inputs.goldens
+    name: liquid-goldens (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -105,25 +131,25 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Capture the authoritative GL2 matrix: 10 pools x 2 views = 20 deterministic
-      # screenshots. GL2 is the binding comparison backend. Should a single run still
+      # Capture this shard of the authoritative GL2 matrix (16 pools x 2 views = 32 deterministic
+      # screenshots in total). GL2 is the binding comparison backend. Should a single run still
       # flake on the SwiftShader software-GL2 up-load despite the deterministic
       # fixed-step, a rescue option is to re-run only that pool via a single
       # `--pool <key>` retry -- deliberately NOT implemented here (keep it minimal).
       - name: Capture Liquid GL2 goldens
-        run: npm run goldens:capture -- --matrix gl2 --out "${{ runner.temp }}/liquid-goldens/current"
+        run: npm run goldens:capture -- --matrix gl2 --shard ${{ matrix.shard }}/4 --out "${{ runner.temp }}/liquid-goldens/current"
 
       # Compare against the committed baseline. No continue-on-error: any cell above
       # the drift threshold, or a technical/blank error, fails the build.
       - name: Compare Liquid GL2 goldens against baseline
-        run: npm run goldens:compare -- --baseline .agents/goldens/liquid/baseline --current "${{ runner.temp }}/liquid-goldens/current"
+        run: npm run goldens:compare -- --baseline .agents/goldens/liquid/baseline --current "${{ runner.temp }}/liquid-goldens/current" --shard ${{ matrix.shard }}/4
 
       # Diagnostic artifact (current captures + manifest/summary), kept even on failure.
       - name: Upload Liquid goldens diagnostic artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: liquid-goldens
+          name: liquid-goldens-${{ matrix.shard }}
           path: ${{ runner.temp }}/liquid-goldens
           if-no-files-found: warn
 
@@ -131,6 +157,7 @@ jobs:
   # so GPU goldens never block merges. No GPU baseline is committed or compared here --
   # we only capture, log a summary and upload as diagnostics.
   liquid-goldens-gpu:
+    if: github.event_name == 'workflow_dispatch' && inputs.gpu-goldens
     runs-on: ubuntu-latest
     timeout-minutes: 45
     continue-on-error: true
