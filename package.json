@@ -47,6 +47,7 @@
     "sync-templates": "node scripts/sync-templates.js",
     "sync-tools": "node scripts/sync-tools.js",
     "worktree:new": "node scripts/worktree-new.mjs",
+    "aniso:compare": "node scripts/aniso-compare.mjs",
     "start": "npm run build && npx serve dist",
     "prepare": "husky",
     "docs:dev": "vitepress dev docs --port 5174",

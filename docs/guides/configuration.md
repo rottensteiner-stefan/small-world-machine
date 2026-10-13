@@ -55,6 +55,8 @@ These control the engine's graphical fidelity.
 - `maxPixelRatio` (number, default: 2): Caps `window.devicePixelRatio`. Extremely high-resolution displays (like modern smartphones with a DPR of 3.0 or 4.0) can cause massive GPU bottlenecks. Capping this at `2` or `1.5` keeps framerates smooth without a noticeable loss of quality.
 - `msaa` (number): Multisample anti-aliasing level (0, 2, 4, 8).
 - `maxAnisotropy` (number): Anisotropic filtering level (1, 4, 8, 16) for sharper textures at shallow viewing angles. Enforced on mipmapped linear-filtered 2D textures on all backends (WebGL1/WebGL2 via the extension, WebGPU via `GPUSamplerDescriptor.maxAnisotropy`, both clamped to 16). A texture's `anisotropy` option inherits this engine level by default; `0` on a texture disables it for that texture.
+
+  **Checking it by eye:** Showcase 10 accepts `?aniso=N` (cap at N, `1` = off; without it the engine default of 4 applies), and `npm run build && npm run aniso:compare` renders its oblique view at several levels on both GL2 and WebGPU, writes the images, a difference image and sharpness numbers to `.agents/scratches/aniso/report.html`, and prints the GPU it ran on (run it on a real GPU, not in software rendering). On an Apple M4 Pro the detail in the far field rose by about 20 % from level 1 to 4, by 4 % more from 4 to 8 and by 1 % from 8 to 16, on both backends.
 - `hdr` (boolean): Enables high-dynamic-range (Float16) rendering pipelines.
 - `toneMapping` (string): The tone mapping algorithm to use (e.g. `aces`, `reinhard`, `none`).
 - `maxShadowResolution` (number): Maximum texture size for shadow maps.
