@@ -63,3 +63,16 @@ Plan with the phase table: `docs/research/decal-system-plan-2026-10-12.md`.
 3. Decide with the human whether to close the open questions above (cheap ones first: Maker floor/slant stamping in the browser, `SunLight`/`Fill` reload duplicates).
 4. Phase 6 (see plan): plane-fit, wetness overlay, sockets, accumulator. Needs a short plan agreement with the human first (feature-sized).
 5. Release 0.105.0 is not tagged; backup branch `backup/pre-history-fix` can be deleted once the human trusts the history repair.
+
+## Update 2026-10-13: Phase 5 committed, Phase 6 done (everything above is the 2026-10-12 state)
+
+- Phase 5 (baker) is committed and pushed (`c280d41f`). The uncommitted-files list above no longer applies.
+- **Phase 6 is implemented** (plan: `docs/research/decal-system-plan-2026-10-12.md`, "Phase 6: Umsetzung"):
+  - 6a plane fit in the Maker stamp (`packages/tools/src/maker/DecalPlaneFit.ts`, `Alt` skips it);
+  - 6b wet overlay as kit decal `flakturm/wet_puddle` (no engine feature), probe `?wet=1`;
+  - 6c runtime `DecalPool` (`packages/engine/src/core/decals/DecalPool.ts`, `Decal.restack()`), probe `?pool=1`, GPU checks `poolChecks` and `poolRaycastChecks` (real `Raycaster` hits, `attachTo` on a moving box);
+  - 6d decal sockets (`LevelDecalPlacement.socket`, `KitSocket.rotation`).
+- `quaternionFromNormal` / `decalEulerFromNormal` now live in the engine (`DecalMath.ts`); `DecalStampTool.ts` re-exports them.
+- Release 0.105.0 is still not tagged; `backup/pre-history-fix` is still around (human decisions).
+- Still unverified: costs on other GPUs / mobile, anisotropy of decal textures, a pool fed by real gameplay events, `attachTo` to a bone of a skinned receiver (it attaches to the node), no content uses `socket` yet.
+- Dev server on :5173 was restarted in the 2026-10-13 session (log `.agents/scratches/vite.log`).
