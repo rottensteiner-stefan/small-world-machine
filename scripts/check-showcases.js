@@ -73,12 +73,37 @@ const numberedShowcases = [
 // checked once, at its default renderer.
 const RENDERER_TYPES = ["WEB_GL1", "WEB_GL2", "WEB_GPU"];
 const targetArg = process.argv[2] || process.env.SHOWCASE_TARGET;
+
+// SHOWCASE_SHARD="i/N" (1-based) runs every N-th showcase, so CI can spread the checks over N parallel
+// jobs. Showcases (not single checks) are dealt round-robin, which keeps a showcase's backends together
+// and spreads the heavy ones; `yad` is dealt like the last showcase.
+function parseShard(value) {
+  if (!value) return undefined;
+  const match = /^(\d+)\/(\d+)$/.exec(value);
+  const index = match ? Number(match[1]) : 0;
+  const total = match ? Number(match[2]) : 0;
+  if (!match || index < 1 || index > total) {
+    throw new Error(`SHOWCASE_SHARD must look like "2/4" (1 <= i <= N), got "${value}"`);
+  }
+  return { index, total };
+}
+const shard = parseShard(process.env.SHOWCASE_SHARD);
+const showcaseOrder = [...numberedShowcases, "yad"];
+// SHOWCASE_SKIP_WEBGPU=1 leaves out the WEB_GPU legs up front (they would otherwise start a page, fail and
+// be retried): CI runners have no real GPU, so every WebGPU leg fails there. Skipped, not failed.
+const skipWebGpu = Boolean(process.env.SHOWCASE_SKIP_WEBGPU);
+if (skipWebGpu && process.env.SHOWCASE_REQUIRE_WEBGPU) {
+  throw new Error("SHOWCASE_SKIP_WEBGPU and SHOWCASE_REQUIRE_WEBGPU contradict each other");
+}
 const testCases = [
   ...numberedShowcases.flatMap((n) =>
     RENDERER_TYPES.map((rendererType) => ({ showcase: n, rendererType })),
   ),
   { showcase: "yad", rendererType: null },
-].filter((tc) => !targetArg || tc.showcase === targetArg);
+]
+  .filter((tc) => !targetArg || tc.showcase === targetArg)
+  .filter((tc) => !skipWebGpu || "WEB_GPU" !== tc.rendererType)
+  .filter((tc) => !shard || showcaseOrder.indexOf(tc.showcase) % shard.total === shard.index - 1);
 
 async function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));

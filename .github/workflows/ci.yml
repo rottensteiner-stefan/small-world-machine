@@ -41,8 +41,16 @@ jobs:
         run: npm run build
 
   showcases-smoke-test:
+    name: showcases-smoke-test (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Four parallel shards of the same checks (SHOWCASE_SHARD): wall-clock time is the slowest shard instead of
+    # the sum. The job name now carries the shard, so no branch rule may require the old plain name (it is
+    # informational and never blocks anyway).
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     # Informational only: headless Chrome in CI can't reliably init WebGPU pipelines
     # (software-rendering texture-limit issues), so this job is expected to be flaky
     # for WebGPU-path showcases. Never block merges on it.
@@ -67,6 +75,11 @@ jobs:
 
       - name: Showcase visual smoke test
         run: npm run test:showcases
+        env:
+          SHOWCASE_SHARD: ${{ matrix.shard }}/4
+          # The runner has no real GPU: every WebGPU leg fails there (and is retried), so leave them to local
+          # runs (`npm run test:showcases`, `npm run test:decals`).
+          SHOWCASE_SKIP_WEBGPU: "1"
 
   # M1 core gate ("Blocking-Comparator"): deterministic Liquid goldens.
   # Engine stepping is driven by the fixed-step `SmallWorldMachine.step(dt)` hook, so the
