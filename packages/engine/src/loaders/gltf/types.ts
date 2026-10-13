@@ -65,6 +65,7 @@ export interface GltfJson {
     extensions?: {
       KHR_lights_punctual?: { light: number };
       SWM_prefab_instance?: { source: string };
+      SWM_lights_ambient?: { color?: number[]; intensity?: number };
       SWM_stage_zone?: { displayName?: string; points: { u: number; v: number; scale?: number }[] };
       [key: string]: unknown;
     };
@@ -81,6 +82,8 @@ export interface GltfJson {
         color?: number[];
         intensity?: number;
         range?: number;
+        spot?: { innerConeAngle?: number; outerConeAngle?: number };
+        extras?: Record<string, unknown>;
         name?: string;
       }[];
     };

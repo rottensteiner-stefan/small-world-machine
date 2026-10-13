@@ -15,6 +15,7 @@ import {
   DirectionalLight,
   PointLight,
   SpotLight,
+  AbstractLight,
   AmbientLight,
   AbstractMaterial,
   WireframeMaterial,
@@ -354,6 +355,16 @@ export class MakerApp extends SmallWorldMachine {
         this._decalStamp.toggle();
       },
       resolveDecals: (root): Promise<number> => this._kitRegistry.resolveLevelDecals(root),
+      replaceLightsWith: (loaded): void => {
+        for (const child of loaded) {
+          if (!(child instanceof AbstractLight)) continue;
+          const existing = this.scene.root.children.find(
+            (c) => c instanceof AbstractLight && c.name === child.name,
+          );
+          if (existing) this.scene.remove(existing);
+        }
+        this._hierarchyDirty = true;
+      },
     });
     this._toolbars.setupProjectToolbar();
     this._toolbars.setupSelectionToolbar();

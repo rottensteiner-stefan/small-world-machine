@@ -4,6 +4,9 @@ import { GltfLoader } from "../../src/loaders/GltfLoader.js";
 import { GltfData } from "../../src/loaders/gltf/index.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { PointLight } from "../../src/core/lights/PointLight.js";
+import { DirectionalLight } from "../../src/core/lights/DirectionalLight.js";
+import { SpotLight } from "../../src/core/lights/SpotLight.js";
+import { AmbientLight } from "../../src/core/lights/AmbientLight.js";
 import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import { Color } from "../../src/core/colors/Color.js";
 import { Matrix4, Vector3D, Quaternion } from "../../src/math/index.js";
@@ -230,5 +233,68 @@ describe("WorldWriter <-> GltfLoader round trip", () => {
     expect(parsedMarker.zone.id).toBe("zone_hex");
     expect(parsedMarker.zone.points).toHaveLength(6);
     expect(parsedMarker.zone.points).toEqual(marker.zone.points);
+  });
+
+  it("round-trips directional, spot and ambient lights", async () => {
+    const sun = new DirectionalLight({
+      name: "SunLight",
+      color: new Color(1, 0.9, 0.7),
+      intensity: 2.5,
+      direction: new Vector3D(0.3, -0.9, 0.1).normalize(),
+      castShadow: true,
+      shadowResolution: 2048,
+      shadowBias: 0.002,
+      numCascades: 3,
+      cascadeSplitLambda: 0.7,
+    });
+    const spot = new SpotLight({
+      name: "Torch",
+      intensity: 4,
+      direction: new Vector3D(1, 0, 0),
+      distance: 12,
+      angle: 0.6,
+      penumbra: 0.25,
+      decay: 1.5,
+    });
+    spot.position.set(1, 2, 3);
+    const fill = new AmbientLight({
+      name: "Fill",
+      color: new Color(0.2, 0.3, 0.4),
+      intensity: 0.4,
+    });
+
+    const root = new Object3D("Root");
+    root.add(sun, spot, fill);
+    const doc = new WorldWriter().write(root);
+    expect(doc.extensionsUsed).toEqual(
+      expect.arrayContaining(["KHR_lights_punctual", "SWM_lights_ambient"]),
+    );
+    const parsedRoot = await parseDocument(doc);
+
+    const [pSun, pSpot, pFill] = parsedRoot.children as [DirectionalLight, SpotLight, AmbientLight];
+    expect(pSun).toBeInstanceOf(DirectionalLight);
+    expect(pSun.name).toBe("SunLight");
+    expect(pSun.intensity).toBeCloseTo(2.5);
+    expect(pSun.color.g).toBeCloseTo(0.9);
+    expect(pSun.direction.x).toBeCloseTo(sun.direction.x);
+    expect(pSun.direction.y).toBeCloseTo(sun.direction.y);
+    expect(pSun.castShadow).toBe(true);
+    expect(pSun.shadowResolution).toBe(2048);
+    expect(pSun.shadowBias).toBeCloseTo(0.002);
+    expect(pSun.numCascades).toBe(3);
+    expect(pSun.cascadeSplitLambda).toBeCloseTo(0.7);
+
+    expect(pSpot).toBeInstanceOf(SpotLight);
+    expect(pSpot.position.z).toBeCloseTo(3);
+    expect(pSpot.direction.x).toBeCloseTo(1);
+    expect(pSpot.distance).toBeCloseTo(12);
+    expect(pSpot.angle).toBeCloseTo(0.6);
+    expect(pSpot.penumbra).toBeCloseTo(0.25);
+    expect(pSpot.decay).toBeCloseTo(1.5);
+
+    expect(pFill).toBeInstanceOf(AmbientLight);
+    expect(pFill.name).toBe("Fill");
+    expect(pFill.intensity).toBeCloseTo(0.4);
+    expect(pFill.color.b).toBeCloseTo(0.4);
   });
 });

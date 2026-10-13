@@ -10,6 +10,8 @@ export interface MakerToolbarContext {
   orbit: OrbitCameraController;
   gizmo: TransformGizmo;
   addObject: (obj: Object3D) => void;
+  /** Removes the scene lights that a freshly loaded scene brings its own same-named copy of (the default SunLight/Fill). */
+  replaceLightsWith: (loaded: readonly Object3D[]) => void;
   refreshPrefabList: () => Promise<void>;
   duplicateSelection: () => void;
   groupSelection: () => void;
@@ -68,6 +70,7 @@ export class MakerToolbarBuilder {
         if (loadedRoot) {
           // Before addObject: textures assigned after the first render may not rebuild pipelines.
           await this._ctx.resolveDecals(loadedRoot);
+          this._ctx.replaceLightsWith(loadedRoot.children);
           for (const child of [...loadedRoot.children]) {
             this._ctx.addObject(child);
           }

@@ -31,6 +31,7 @@ export interface GltfNodeJson {
   mesh?: number;
   extensions?: {
     KHR_lights_punctual?: { light: number };
+    SWM_lights_ambient?: { color: number[]; intensity: number };
     SWM_prefab_instance?: { source: string };
     SWM_decal?: SwmDecalPayload;
     SWM_stage_zone?: { displayName?: string; points: { u: number; v: number; scale: number }[] };
@@ -67,8 +68,12 @@ export interface GltfBufferViewJson {
 }
 
 export interface GltfLightJson {
-  type: "point";
+  type: "point" | "directional" | "spot";
   color?: number[];
   intensity?: number;
   range?: number;
+  /** Spot only (KHR_lights_punctual): cone angles in radians. */
+  spot?: { innerConeAngle: number; outerConeAngle: number };
+  /** Engine-specific light fields that KHR_lights_punctual has no slot for (direction, shadows, decay). */
+  extras?: Record<string, unknown>;
 }

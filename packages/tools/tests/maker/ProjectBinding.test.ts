@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Object3D, Cube, StandardMaterial, PointLight } from "@small-world-machine/engine";
+import {
+  Object3D,
+  Cube,
+  StandardMaterial,
+  PointLight,
+  DirectionalLight,
+  AmbientLight,
+} from "@small-world-machine/engine";
 import {
   ProjectBinding,
   FileSystemDirectoryHandleLike,
@@ -173,6 +180,8 @@ describe("ProjectBinding", () => {
 
     const root = new Object3D("Root");
     root.add(new PointLight({ name: "Lamp" }));
+    root.add(new DirectionalLight({ name: "SunLight", intensity: 2 }));
+    root.add(new AmbientLight({ name: "Fill", intensity: 0.3 }));
     root.add(new Object3D("MakerGizmo"));
     root.add(new Object3D("Helper_Lamp"));
     root.add(new Object3D("Crate"));
@@ -182,8 +191,10 @@ describe("ProjectBinding", () => {
     expect(writes).toHaveLength(1);
 
     const loaded = await binding.load();
-    expect(loaded!.children.map((c) => c.name)).toEqual(["Lamp", "Crate"]);
+    expect(loaded!.children.map((c) => c.name)).toEqual(["Lamp", "SunLight", "Fill", "Crate"]);
     expect(loaded!.children[0]).toBeInstanceOf(PointLight);
+    expect((loaded!.children[1] as DirectionalLight).intensity).toBe(2);
+    expect(loaded!.children[2]).toBeInstanceOf(AmbientLight);
   });
 
   describe("prefabs", () => {
