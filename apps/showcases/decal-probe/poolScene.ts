@@ -3,11 +3,13 @@ import {
   Camera,
   CameraStrategyType,
   Color,
+  Cube,
   DecalMaterial,
   DecalPool,
   DirectionalLight,
   Ground,
   Object3D,
+  Raycaster,
   Scene,
   StandardMaterial,
   Texture,
@@ -15,6 +17,20 @@ import {
 } from "@small-world-machine/engine";
 
 export const POOL_CAPACITY = 4;
+/** World layout of the real-geometry targets, shared with scripts/check-decals.mjs (`poolChecks`). */
+export const POOL_SLAB_X = 6;
+export const POOL_RECEIVER_X = -6;
+export const POOL_SLAB_TILT = Math.PI / 6;
+/** Result of `window.__decalPoolShoot`: what the engine's `Raycaster` found and how the spawned decal ended up. */
+export interface PoolShot {
+  hit: boolean;
+  point: [number, number, number];
+  normal: [number, number, number];
+  /** World-space +Y axis of the spawned decal (must equal `normal`). */
+  decalUp: [number, number, number];
+  /** Name of the object that was hit. */
+  object: string;
+}
 export const POOL_CAMERA_HEIGHT = 12;
 /** Slot colours, in creation order: red, green, blue, yellow (checked in scripts/check-decals.mjs `poolChecks`). */
 const SLOT_COLORS: readonly [number, number, number][] = [
@@ -63,10 +79,51 @@ export function setupPoolScene(scene: Scene, camera: Camera): DecalPool {
   const hooks = window as unknown as {
     __decalPool?: DecalPool;
     __decalPoolSpawn?: (x: number, z: number, lifetime?: number) => void;
+    __decalPoolShoot?: (x: number, z: number, attach: boolean) => PoolShot;
+    __decalPoolMoveReceiver?: (x: number, yaw: number) => void;
   };
   hooks.__decalPool = pool;
   hooks.__decalPoolSpawn = (x, z, lifetime): void => {
     pool.spawn(new Vector3D(x, 0, z), new Vector3D(0, 1, 0), lifetime ? { lifetime } : {});
+  };
+
+  // Real geometry for the Raycaster: a slab tilted 30 degrees about X (right) and a flat box that can move (left).
+  const slab = new Object3D("Slab");
+  slab.geometry = new Cube({ size: 1 }).getGeometryData();
+  slab.material = new StandardMaterial({ color: new Color(0.5, 0.5, 0.5), roughness: 1 });
+  slab.setPosition(POOL_SLAB_X, 1, 0).setRotation(POOL_SLAB_TILT, 0, 0).setScale(4, 1, 4);
+  scene.add(slab);
+  const receiver = new Object3D("Receiver");
+  receiver.geometry = new Cube({ size: 1 }).getGeometryData();
+  receiver.material = new StandardMaterial({ color: new Color(0.5, 0.5, 0.5), roughness: 1 });
+  receiver.setPosition(POOL_RECEIVER_X, 0.5, 0).setScale(3, 1, 3);
+  scene.add(receiver);
+  const targets = [floor, slab, receiver];
+  const raycaster = new Raycaster();
+  hooks.__decalPoolShoot = (x, z, attach): PoolShot => {
+    for (const target of targets) {
+      target.updateMatrixWorld(true);
+      target.computeBounds();
+    }
+    raycaster.ray.origin.set(x, 20, z);
+    raycaster.ray.direction.set(0, -1, 0);
+    const hit = raycaster.intersectObjects(targets)[0];
+    if (!hit) {
+      return { hit: false, point: [0, 0, 0], normal: [0, 0, 0], decalUp: [0, 0, 0], object: "" };
+    }
+    const decal = pool.spawn(hit.point, hit.normal, attach ? { attachTo: hit.object } : {});
+    decal.updateMatrixWorld(true);
+    const m = decal.worldMatrix.data;
+    return {
+      hit: true,
+      point: [hit.point.x, hit.point.y, hit.point.z],
+      normal: [hit.normal.x, hit.normal.y, hit.normal.z],
+      decalUp: [m[4]!, m[5]!, m[6]!],
+      object: hit.object.name,
+    };
+  };
+  hooks.__decalPoolMoveReceiver = (x, yaw): void => {
+    receiver.setPosition(x, 0.5, 0).setRotation(0, yaw, 0);
   };
 
   camera.setStrategy(CameraStrategyType.SMOOTH);

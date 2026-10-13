@@ -551,6 +551,115 @@ async function poolChecks(browser, backend) {
   await page.close();
 }
 
+/**
+ * `DecalPool` fed by the engine's real `Raycaster` (`?pool=1`): shots from above onto the floor, a slab tilted
+ * 30 degrees and a box. Checks the hit normal, that the decal's up axis equals it, that the decal shows up on the
+ * GPU at the hit point and nowhere near it, and that `attachTo` makes it follow a receiver that moves and turns.
+ */
+async function poolRaycastChecks(browser, backend) {
+  const blocking = backend === "WEB_GL2";
+  const pp = backend === "WEB_GL2" ? "&pp=1" : "";
+  const { page, errors } = await openProbe(browser, `rendererType=${backend}&pool=1&nb=0${pp}`);
+  const settle = () =>
+    page.evaluate(
+      () =>
+        new Promise((res) => {
+          let c = 0;
+          const tick = () => (++c >= 6 ? res() : requestAnimationFrame(tick));
+          requestAnimationFrame(tick);
+        }),
+    );
+  const shoot = (x, z, attach = false) =>
+    page.evaluate((x, z, attach) => window.__decalPoolShoot(x, z, attach), x, z, attach);
+  /** Pixel under a world point seen by the overhead camera (height 12, fov 60, up = -Z). */
+  const pixelAt = async (wx, wy, wz) => {
+    const rect = await page.evaluate(() => {
+      const r = document.querySelector("canvas").getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    });
+    const png = PNG.sync.read(Buffer.from(await page.screenshot({ clip: rect })));
+    const halfHeight = (12 - wy) * Math.tan(Math.PI / 6);
+    const halfWidth = halfHeight * (png.width / png.height);
+    const x = Math.floor((0.5 + wx / (2 * halfWidth)) * png.width);
+    const y = Math.floor((0.5 + wz / (2 * halfHeight)) * png.height);
+    const i = (png.width * y + x) * 4;
+    return [png.data[i], png.data[i + 1], png.data[i + 2]];
+  };
+  const isRed = (c) => c[0] > 150 && c[1] < 80 && c[2] < 80;
+  const isGreen = (c) => c[1] > 150 && c[0] < 80 && c[2] < 80;
+  const close = (a, b, tol) => a.every((v, i) => Math.abs(v - b[i]) <= tol);
+  const tag = `${backend} pool+raycaster`;
+  const tilt = Math.PI / 6;
+
+  // Shots onto a tilted slab and the floor: slot 0 (red) and slot 1 (green).
+  await page.evaluate(() => window.__decalPool.clear());
+  const slab = await shoot(6, 0);
+  const floor = await shoot(0, 4);
+  await settle();
+  log(
+    slab.hit &&
+      slab.object === "Slab" &&
+      close(slab.normal, [0, Math.cos(tilt), Math.sin(tilt)], 0.02),
+    blocking,
+    `${tag}: the Raycaster hits the tilted slab with its real normal (${slab.object} ${slab.normal.map((v) => v.toFixed(3))})`,
+  );
+  log(
+    close(slab.decalUp, slab.normal, 0.02) &&
+      floor.hit &&
+      floor.object === "Floor" &&
+      close(floor.decalUp, [0, 1, 0], 0.02),
+    blocking,
+    `${tag}: the spawned decals' up axes equal the hit normals (slab ${slab.decalUp.map((v) => v.toFixed(3))}, floor ${floor.decalUp.map((v) => v.toFixed(3))})`,
+  );
+  const onSlab = await pixelAt(...slab.point);
+  const nearSlab = await pixelAt(slab.point[0] + 1.7, slab.point[1], slab.point[2]);
+  const onFloor = await pixelAt(...floor.point);
+  const nearFloor = await pixelAt(floor.point[0] + 1.7, floor.point[1], floor.point[2]);
+  log(
+    isRed(onSlab),
+    blocking,
+    `${tag}: the decal shows on the tilted slab at the hit point (${onSlab})`,
+  );
+  log(
+    isGreen(onFloor),
+    blocking,
+    `${tag}: the decal shows on the floor at the hit point (${onFloor})`,
+  );
+  log(
+    !isRed(nearSlab) && !isGreen(nearFloor),
+    blocking,
+    `${tag}: the decals stay inside their footprint (slab +1.7 m ${nearSlab}, floor +1.7 m ${nearFloor})`,
+  );
+
+  // attachTo: a decal on the box follows it when it moves and turns (the shot sits 1 m right of the box centre).
+  await page.evaluate(() => window.__decalPool.clear());
+  const box = await shoot(-5, 0, true);
+  await settle();
+  const before = await pixelAt(...box.point);
+  await page.evaluate(() => window.__decalPoolMoveReceiver(-3, Math.PI / 2));
+  await settle();
+  // The offset (+1, 0, 0) from the box centre turns into (0, 0, -1) under a +90 degree yaw about Y.
+  const followed = await pixelAt(-3, box.point[1], -1);
+  const oldSpot = await pixelAt(box.point[0], box.point[1], box.point[2]);
+  const unturned = await pixelAt(-2, box.point[1], 0);
+  log(
+    box.hit && box.object === "Receiver" && isRed(before),
+    blocking,
+    `${tag}: the decal on the box shows at the hit point before it moves (${box.object} ${before})`,
+  );
+  log(
+    isRed(followed) && !isRed(oldSpot) && !isRed(unturned),
+    blocking,
+    `${tag}: attachTo makes the decal follow the box as it moves and turns (new spot ${followed}, old spot ${oldSpot}, un-turned spot ${unturned})`,
+  );
+  log(
+    !errors.length,
+    blocking,
+    `${tag}: no console/validation/GL errors${errors.length ? ` -> ${short(errors)}` : ""}`,
+  );
+  await page.close();
+}
+
 /** WebGL1 has no decal pass: a scene with decals must render without errors and simply omit them. */
 async function webGl1Check(browser) {
   const { page, errors } = await openProbe(browser, "rendererType=WEB_GL1");
@@ -737,6 +846,7 @@ try {
   await ormChecks(browser, "WEB_GL2");
   await wetChecks(browser, "WEB_GL2");
   await poolChecks(browser, "WEB_GL2");
+  await poolRaycastChecks(browser, "WEB_GL2");
   await webGl1Check(browser);
   await bakeCheck(browser);
 
@@ -754,6 +864,7 @@ try {
     await ormChecks(browser, "WEB_GPU");
     await wetChecks(browser, "WEB_GPU");
     await poolChecks(browser, "WEB_GPU");
+    await poolRaycastChecks(browser, "WEB_GPU");
     bumpGpu = await bumpChecks(browser, "WEB_GPU");
     if (bumpGl2?.floor && bumpGpu?.floor) {
       log(

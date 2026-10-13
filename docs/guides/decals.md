@@ -154,8 +154,11 @@ creates it, there is no global instance.
 Limits: spawned decals are drawn by the decal pass, so on WebGL1 (no decal pass) they draw
 nothing, because the baker only handles static decals. Cost follows the covered screen area times
 overlap like any decal, so keep `capacity` and `size` small and prefer `unlit` for large soft marks.
-`?pool=1` in the decal probe and `poolChecks` in `npm run test:decals` check recycling order,
-restacking and fading from pixels on WebGL2 and WebGPU.
+`?pool=1` in the decal probe and `poolChecks` / `poolRaycastChecks` in `npm run test:decals` check
+recycling order, restacking and fading from pixels on WebGL2 and WebGPU. The raycaster variant
+shoots down onto a floor, a slab tilted 30 degrees and a box with the engine's real `Raycaster`
+and verifies the hit normal, the decal's up axis, the pixels at and around the hit, and that
+`attachTo` makes the decal follow the box when it moves and turns.
 
 ## Wet surfaces
 
