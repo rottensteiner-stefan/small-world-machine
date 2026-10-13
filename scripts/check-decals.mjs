@@ -703,7 +703,7 @@ async function poolClickChecks(browser, backend) {
   const before = {};
   for (const [name, [fx, fy]] of Object.entries(spots)) before[name] = await colourAt(fx, fy);
   const slotColours = { floor: "red", slab: "green", box: "blue" };
-  for (const [name, [fx, fy]] of Object.entries(spots)) {
+  for (const [, [fx, fy]] of Object.entries(spots)) {
     await page.mouse.click(rect.x + fx * rect.width, rect.y + fy * rect.height);
     await settle();
   }

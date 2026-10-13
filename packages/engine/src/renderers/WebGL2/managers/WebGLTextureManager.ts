@@ -2,6 +2,7 @@ import { CubeTexture, Object3D, TextureArray, Texture } from "../../../core/inde
 import { RenderTarget, RenderTargetCube } from "../../../core/textures/index.js";
 import { QualityConfig } from "../../../interfaces/index.js";
 import { CompressedTextureFormat, TextureFilter, TextureWrap } from "../../../enums/index.js";
+import { applyAnisotropy } from "../../anisotropy.js";
 
 /**
  * Uploaded-texture GPU state: 2D/cube `WebGLTexture` upload + re-upload (`needsUpdate`), and
@@ -58,7 +59,12 @@ export class WebGLTextureManager {
 
   /** Applies the texture's mag/min filter and wrap state for `target`. Kept in one place so the
    * first-upload and `needsUpdate` paths stay in lockstep -- see the `needsUpdate` branch below. */
-  private _setSamplerParams(target: number, tex: Texture, useMipmaps: boolean): void {
+  private _setSamplerParams(
+    target: number,
+    tex: Texture,
+    useMipmaps: boolean,
+    quality: QualityConfig | undefined,
+  ): void {
     this._gl.texParameteri(
       target,
       this._gl.TEXTURE_MAG_FILTER,
@@ -90,6 +96,10 @@ export class WebGLTextureManager {
           : this._gl.CLAMP_TO_EDGE;
     this._gl.texParameteri(target, this._gl.TEXTURE_WRAP_S, wrapS);
     this._gl.texParameteri(target, this._gl.TEXTURE_WRAP_T, wrapT);
+
+    // Anisotropic filtering requires a bound target and only sharpens mip-selected sampling --
+    // same gating (mipmaps on) as the min filter above.
+    applyAnisotropy(this._gl, target, tex, quality, useMipmaps);
   }
 
   /** Uploads (or re-uploads, on `needsUpdate`) every layer of a `TextureArray` into `glTex`.
@@ -137,7 +147,7 @@ export class WebGLTextureManager {
     const useMipmaps = quality?.mipmapping && texArray.generateMipmaps;
     if (useMipmaps) this._gl.generateMipmap(this._gl.TEXTURE_2D_ARRAY);
 
-    this._setSamplerParams(this._gl.TEXTURE_2D_ARRAY, texArray, Boolean(useMipmaps));
+    this._setSamplerParams(this._gl.TEXTURE_2D_ARRAY, texArray, Boolean(useMipmaps), quality);
   }
 
   /**
@@ -232,7 +242,7 @@ export class WebGLTextureManager {
         this._uploadTextureArray(tex as TextureArray, glTex, quality);
       } else if (tex.compressedImage) {
         this._uploadCompressedTexture(tex, glTex);
-        this._setSamplerParams(this._gl.TEXTURE_2D, tex, false);
+        this._setSamplerParams(this._gl.TEXTURE_2D, tex, false, quality);
       } else {
         this._gl.bindTexture(this._gl.TEXTURE_2D, glTex);
         this._gl.texImage2D(
@@ -249,7 +259,7 @@ export class WebGLTextureManager {
         const useMipmaps = quality?.mipmapping && tex.generateMipmaps;
         if (useMipmaps) this._gl.generateMipmap(this._gl.TEXTURE_2D);
 
-        this._setSamplerParams(this._gl.TEXTURE_2D, tex, Boolean(useMipmaps));
+        this._setSamplerParams(this._gl.TEXTURE_2D, tex, Boolean(useMipmaps), quality);
       }
 
       this._texCache.set(tex, glTex);
@@ -275,6 +285,7 @@ export class WebGLTextureManager {
           this._gl.TEXTURE_2D,
           tex,
           Boolean(quality?.mipmapping && tex.generateMipmaps),
+          quality,
         );
       }
       tex.needsUpdate = false;

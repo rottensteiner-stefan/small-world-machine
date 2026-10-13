@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- **Architecture & Bugfixes:**
+  - *Anisotropic filtering is now actually applied*: `EXT_texture_filter_anisotropic` was detected but never exercised, so `quality.maxAnisotropy` and `Texture.anisotropy` did nothing. The WebGL2 and WebGL1 texture upload paths now call `texParameterf(TEXTURE_MAX_ANISOTROPY_EXT)` on mipmapped 2D textures, resolving `Texture.anisotropy` against the engine-wide `quality.maxAnisotropy` cap and the device maximum (default `anisotropy` 1 inherits the engine level, `0` disables). WebGPU intentionally stays at level 1 (the core spec has no sampler `maxAnisotropy`). Semantics live in one place (`renderers/anisotropy.ts`, `applyAnisotropy`/`resolveAnisotropicLevel`) with unit tests covering resolution and application; the WebGL1 and WebGL2 paths stay in lockstep through it.
+
 ## [0.105.0] - 2026-10-12
 
 ### "The greatest enemy of knowledge is not ignorance, it is the illusion of knowledge." - Daniel J. Boorstin

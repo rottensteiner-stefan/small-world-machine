@@ -49,6 +49,8 @@ function makeMockGl(): WebGL2RenderingContext {
     generateMipmap: vi.fn(),
     compressedTexImage2D: vi.fn(),
     getExtension: vi.fn(() => null),
+    getParameter: vi.fn(() => 16),
+    texParameterf: vi.fn(),
     TEXTURE_2D: 1,
     RGBA: 2,
     UNSIGNED_BYTE: 3,

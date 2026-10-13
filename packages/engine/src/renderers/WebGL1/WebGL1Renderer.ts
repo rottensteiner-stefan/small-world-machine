@@ -5,6 +5,7 @@ import { PostProcessPassGL, BloomPassGL } from "../post/passes/index.js";
 import { CubeTexture, Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
 import { StandardWebGPULayout, resolveManifestFlags } from "../shaders/index.js";
 import { DeviceLimit, InstancedMesh, Object3D, Scene } from "../../core/index.js";
+import { applyAnisotropy } from "../anisotropy.js";
 import {
   EngineOptions,
   GeometryDataInterface,
@@ -370,6 +371,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
       this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
     }
+    // Anisotropic filtering sharpens mip-selected sampling -- same mipmap gate as the min filter.
+    applyAnisotropy(this.gl, this.gl.TEXTURE_2D, tex, this._quality, Boolean(useMipmaps));
   }
 
   private _getWebGLTexture(tex: Texture): WebGLTexture {

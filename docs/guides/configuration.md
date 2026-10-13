@@ -54,7 +54,7 @@ These control the engine's graphical fidelity.
 - `autoDowngrade` (boolean, default: true): When `true`, the engine automatically overrides expensive settings (such as MSAA or HDR) once it detects a low-power device (e.g. smartphones).
 - `maxPixelRatio` (number, default: 2): Caps `window.devicePixelRatio`. Extremely high-resolution displays (like modern smartphones with a DPR of 3.0 or 4.0) can cause massive GPU bottlenecks. Capping this at `2` or `1.5` keeps framerates smooth without a noticeable loss of quality.
 - `msaa` (number): Multisample anti-aliasing level (0, 2, 4, 8).
-- `maxAnisotropy` (number): Anisotropic filtering level (1, 4, 8, 16) for sharper textures at shallow viewing angles.
+- `maxAnisotropy` (number): Anisotropic filtering level (1, 4, 8, 16) for sharper textures at shallow viewing angles. Enforced on mipmapped 2D textures (WebGL1 and WebGL2); WebGPU has no anisotropic filtering in its core spec and ignores it. A texture's `anisotropy` option inherits this engine level by default; `0` on a texture disables it for that texture.
 - `hdr` (boolean): Enables high-dynamic-range (Float16) rendering pipelines.
 - `toneMapping` (string): The tone mapping algorithm to use (e.g. `aces`, `reinhard`, `none`).
 - `maxShadowResolution` (number): Maximum texture size for shadow maps.

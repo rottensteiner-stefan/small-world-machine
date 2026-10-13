@@ -121,6 +121,9 @@ export class GPUTextureResourceCache {
       });
       this._samplerCache.set(key, s);
     }
+    // Anisotropic filtering is intentionally not applied here: WebGPU's core `GPUSamplerDescriptor`
+    // has no `maxAnisotropy` field (the API dropped WebGL's AF extension), so this backend stays at
+    // level 1. The WebGL backends enforce `Texture.anisotropy`/`quality.maxAnisotropy` instead.
     return s;
   }
 

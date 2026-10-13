@@ -14,7 +14,9 @@ export interface TextureOptions {
   addressModeV?: TextureWrap;
   /** Whether to generate mipmaps. Defaults to true. */
   generateMipmaps?: boolean;
-  /** Requested anisotropic filtering level. Defaults to 1. */
+  /** Anisotropic filtering level for this texture. Defaults to 1, which inherits the engine-wide
+   * `quality.maxAnisotropy` level; `0` disables filtering and `> 1` requests an explicit level
+   * (never above the engine cap or the device limit). Only mipmapped textures are affected. */
   anisotropy?: number;
   /** Whether the image should be flipped vertically during loading. Defaults to false. */
   flipY?: boolean;
@@ -68,7 +70,8 @@ export class Texture {
   public addressModeV: TextureWrap = TextureWrap.DEFAULT;
   /** Whether mipmaps should be generated for this texture. */
   public generateMipmaps: boolean = true;
-  /** Desired anisotropic filtering level for this texture. */
+  /** Desired anisotropic filtering level for this texture. Defaults to 1 (inherits the
+   * engine-wide level; see `TextureOptions.anisotropy`). */
   public anisotropy: number = 1;
 
   /** The UV offset. */
