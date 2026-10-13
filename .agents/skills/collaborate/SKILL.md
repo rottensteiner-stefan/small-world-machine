@@ -91,7 +91,7 @@ The human moderator controls the session via commands detailed in `commands.md`:
 
 ## 6. Implementation & Verification Phase
 
-Upon reaching consensus, the session shifts to parallel implementation. Builds and unit tests alone do not prove runtime validity. Follow verification discipline in **`implementation-phase.md`** until `[ABNAHME_ERTEILT]` is granted.
+Upon reaching consensus, the session shifts to parallel implementation. Builds and unit tests alone do not prove runtime validity. Follow verification discipline in **`implementation-phase.md`** until `[ABNAHME_ERTEILT]` is granted. Long or disruptive implementations run in their own git worktree, one per session and never per worker (`implementation-phase.md` §9.4).
 
 ---
 

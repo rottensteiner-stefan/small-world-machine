@@ -39,3 +39,30 @@ After consensus, the protocol moves into the implementation and review cycle:
    ```
 4. **Closure by Moderator:** Only after approval is granted does the moderator execute `/collaborate --stop` to terminate the session (`status: "terminated"`).
 
+### 9.4 Where the Implementation Runs: One Worktree per Session
+
+The default is the shared checkout under the `session-mailbox` rules (claims, path-scoped commits). Use a **git worktree** instead when at least one of these holds:
+- the work spans several milestones or sessions and may leave the tree red (lint, tests, build) for a while;
+- it touches many shared files or tools that other people or sessions use at the same time;
+- it is done by someone other than the moderator, or by another tool or agent family working in parallel.
+
+`plan` and `decide` sessions only write board files and stay in the shared checkout.
+
+**Granularity: one worktree (one branch) per session, never per worker.** The workers of a session share it and coordinate through the board and claims. A worktree per worker would turn live coordination into merge conflicts and cost a checkout and an install each.
+
+Recipe (names are examples):
+```bash
+git worktree add ../<repo>-<topic> -b <topic>
+cd ../<repo>-<topic> && npm ci
+ln -s <main-checkout>/.agents/scratches .agents/scratches        # keeps the mailbox shared
+echo '.agents/scratches' >> "$(git rev-parse --git-common-dir)/info/exclude"
+```
+Run a dev server there on its own port.
+
+Rules:
+- **Stay current:** `git merge main` at milestone boundaries. Bring the branch back to `main` only after `[ABNAHME_ERTEILT]`, by merge or fast-forward. Pushing the branch needs the human's go like any other push.
+- **Moving uncommitted work** out of the shared checkout needs the owner, with their agents and editors stopped: `git stash push -u -m <topic>-wip` there, check `git stash list` (yours must be `stash@{0}`), then `git stash pop stash@{0}` in the worktree. Never move someone else's files yourself.
+- **Hot shared files** (`CHANGELOG.md`, `backlog.md`, `CONTEXT.md`, ADR index) conflict at merge time. That is expected: resolve it at the merge, do not edit them on `main` to get ahead.
+- **Keep the claim:** the mailbox claim still names the paths the session owns.
+- **Clean up** when the session is terminated: `git worktree remove ../<repo>-<topic>`, and delete the branch after the merge.
+
