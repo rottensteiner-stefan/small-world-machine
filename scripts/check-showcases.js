@@ -114,6 +114,31 @@ async function sleep(ms) {
 // this env var if a CI runner's software-rendering pipeline gets overwhelmed under load.
 const CONCURRENCY = Number(process.env.SHOWCASE_TEST_CONCURRENCY) || 4;
 
+// Time budgets. The first pass runs several pages against one software-rendered GPU, where a stalled
+// screenshot or a slow navigation is nearly always contention: the sequential retry (no contention)
+// passes the same check in seconds. So the first pass fails fast and hands the check to the retry
+// instead of holding a worker for the whole protocol timeout, and the retry is patient.
+// SHOWCASE_FIRST_PASS_TIMEOUT_MS overrides the first-pass values (used to force the stall path in tests).
+const FIRST_PASS_TIMEOUT_MS = Number(process.env.SHOWCASE_FIRST_PASS_TIMEOUT_MS) || 20000;
+const FIRST_PASS = { navigationMs: FIRST_PASS_TIMEOUT_MS, screenshotMs: FIRST_PASS_TIMEOUT_MS };
+const RETRY_PASS = { navigationMs: 60000, screenshotMs: 60000 };
+// Showcase 14 (video wall with post-processing) alone needs 12 to 15 s until `load` with software
+// rendering on a fast machine, so even the first pass gets a longer navigation budget for it.
+const SLOW_SHOWCASE_NAVIGATION_MS = { 14: 60000 };
+
+/** Rejects if `promise` has not settled after `ms` (the underlying call keeps running until the page closes). */
+async function withTimeout(promise, ms, what) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} stalled for ${ms} ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Runs `worker` over every item in `items`, with at most `concurrency` calls in flight at once.
  * @param {unknown[]} items
@@ -183,9 +208,10 @@ async function probeWebGpu(browser) {
  * interleaved writes would garble the log.
  * @param {import('puppeteer').Browser} browser
  * @param {{ showcase: string, rendererType: string | null }} testCase
+ * @param {{ navigationMs: number, screenshotMs: number }} budget
  * @returns {Promise<{ passed: boolean, lines: string[] }>}
  */
-async function checkShowcase(browser, { showcase, rendererType }) {
+async function checkShowcase(browser, { showcase, rendererType }, budget) {
   const label = rendererType ? `${showcase} [${rendererType}]` : showcase;
   const lines = [];
   const page = await browser.newPage();
@@ -213,7 +239,8 @@ async function checkShowcase(browser, { showcase, rendererType }) {
       showcase === "yad" ? `apps/sample-apps/${showcase}` : `apps/showcases/${showcase}`;
     const url = `${PREVIEW_ORIGIN}/${basePath}/index.html${query}`;
 
-    await page.goto(url, { waitUntil: "load", timeout: 20000 });
+    const navigationMs = Math.max(budget.navigationMs, SLOW_SHOWCASE_NAVIGATION_MS[showcase] ?? 0);
+    await page.goto(url, { waitUntil: "load", timeout: navigationMs });
 
     // Give it 1 second of actual running time to catch runtime loops/render errors
     await sleep(1000);
@@ -246,14 +273,18 @@ async function checkShowcase(browser, { showcase, rendererType }) {
         SCREENSHOT_DIR,
         `showcase_${showcase}${rendererType ? `_${rendererType}` : ""}.png`,
       );
-      const buffer = await page.screenshot({
-        clip: {
-          x: Math.max(0, Math.round(canvasRect.x)),
-          y: Math.max(0, Math.round(canvasRect.y)),
-          width: Math.max(1, Math.round(canvasRect.width)),
-          height: Math.max(1, Math.round(canvasRect.height)),
-        },
-      });
+      const buffer = await withTimeout(
+        page.screenshot({
+          clip: {
+            x: Math.max(0, Math.round(canvasRect.x)),
+            y: Math.max(0, Math.round(canvasRect.y)),
+            width: Math.max(1, Math.round(canvasRect.width)),
+            height: Math.max(1, Math.round(canvasRect.height)),
+          },
+        }),
+        budget.screenshotMs,
+        "Page.screenshot",
+      );
       fs.writeFileSync(screenshotPath, buffer);
 
       const { blank, stddev } = detectBlankCanvas(buffer);
@@ -351,8 +382,9 @@ async function run() {
     `Running ${activeCases.length} showcase checks with concurrency ${Math.min(CONCURRENCY, activeCases.length)}...`,
   );
 
+  const checksStartedAt = Date.now();
   const firstPass = await runWithConcurrency(activeCases, CONCURRENCY, async (testCase) => {
-    const result = await checkShowcase(browser, testCase);
+    const result = await checkShowcase(browser, testCase, FIRST_PASS);
     console.log(result.lines.join("\n"));
     return { testCase, ...result };
   });
@@ -364,16 +396,23 @@ async function run() {
   // contention -- separates that flakiness from real regressions without masking anything: a case
   // that fails twice in a row is reported as a real failure either way.
   let hasErrors = false;
+  let recovered = 0;
   for (const first of firstPass) {
     if (first.passed) continue;
     const label = first.testCase.rendererType
       ? `${first.testCase.showcase} [${first.testCase.rendererType}]`
       : first.testCase.showcase;
     console.log(`Retrying Showcase ${label} (transient failure on first attempt)...`);
-    const retry = await checkShowcase(browser, first.testCase);
+    const retry = await checkShowcase(browser, first.testCase, RETRY_PASS);
     console.log(retry.lines.join("\n"));
-    if (!retry.passed) hasErrors = true;
+    if (retry.passed) recovered++;
+    else hasErrors = true;
   }
+  const firstPassFailures = firstPass.filter((r) => !r.passed).length;
+  // One machine-readable line per run, so CI experiments can compare shards and settings.
+  console.log(
+    `SUMMARY checks=${activeCases.length} concurrency=${Math.min(CONCURRENCY, activeCases.length)} firstPassFailures=${firstPassFailures} recoveredByRetry=${recovered} failed=${firstPassFailures - recovered} checksSeconds=${Math.round((Date.now() - checksStartedAt) / 1000)}`,
+  );
 
   console.log("Closing browser...");
   await browser.close();
