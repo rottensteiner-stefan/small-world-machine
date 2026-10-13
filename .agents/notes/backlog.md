@@ -1099,3 +1099,11 @@ Entstanden während der Jagd nach grün/blauen Block-Artefakten auf den Sponza-V
   rein monochrom, harte Posterization, reines Weiß nur an Kanten/Kamm, inkl. AI-Artefakte (wackelnde Fliesenlinien,
   schwarze Fliesen ohne Logik, mehrdeutige Schatten). Engine-Ist `noir_pool_engine_ist.png` = "close", aber Unterschied:
   mechanische diagonale Stripes + weiches Kugel-Shading statt dynamischer Comic-Ink-Schraffur/posterisierter Steps.
+
+## 2026-10-13 — Altlasten-Check (Goldens, Ramp-LUT, typedoc, Docs-Deploy)
+
+- ✅ **Golden-Baseline:** CI-Gate `liquid-goldens` (GL2, blockierend) ist auf HEAD grün (Run 38385660823); der Eintrag „Baseline rot" vom 2026-10-07 ist überholt, keine Neuaufnahme nötig. `liquid-goldens-gpu` und `showcases-smoke-test` (WebGPU) schlagen im CI-Runner fehl (leere Canvas / „Instance dropped"), sind nicht blockierend; Ursache nicht untersucht.
+- ✅ **Ramp-LUT:** Gewicht 0.6 war schon am 2026-10-10 auf 1.0 gesetzt (`7c9eff85`). Flag an/aus jetzt auf allen fünf StylizedWater-Pools (toon-water, bold-anime, soft-watercolor, painterly-sparkle, dredge) mit `ramp-lut-verify.mjs`: je 24/24 Checks auf GL1/GL2/WebGPU.
+- ✅ **typedoc:** 17 Warnungen auf 0 (Overload-`@param`s in `Collision.sweep`, `UniformPacker.packInto`, `SynthSFX`, fehlende Type-Exports, `@inheritdoc` ohne Ziel).
+- ✅ **Docs-Deploy:** toter Link `../../REFERENCES` im Decal-Plan entfernt (VitePress-Build brach daran).
+- 📋 **Weiter offen:** `stairs_down`-Clip (0.375 s) in The-Whisper, asset-seitig.

@@ -17,11 +17,11 @@ export interface SoundHandle {
  */
 export class SynthSFX {
   /**
-   * @param context The shared Web Audio context.
-   * @param sfxGain The SFX bus every generated sound is routed into.
-   * @param musicGain The music bus (used by `startDrone`, which is more music-bed than SFX).
-   * @param reverbNode The shared reverb send.
-   * @param resume Called before generating a sound, to resume the context on browsers that
+   * @param _context The shared Web Audio context.
+   * @param _sfxGain The SFX bus every generated sound is routed into.
+   * @param _musicGain The music bus (used by `startDrone`, which is more music-bed than SFX).
+   * @param _reverbNode The shared reverb send.
+   * @param _resume Called before generating a sound, to resume the context on browsers that
    * suspend it until a user interaction.
    */
   constructor(

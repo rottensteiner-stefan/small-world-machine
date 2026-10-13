@@ -1091,9 +1091,7 @@ export class WebGPURenderer extends AbstractRenderer {
     this._hzbStagingSlot = slot === 0 ? 1 : 0;
   }
 
-  /** @inheritdoc
-   *
-   * Polls `buffer.mapState === "mapped"` on each pending slot directly, rather than reacting to
+  /** Polls `buffer.mapState === "mapped"` on each pending slot directly, rather than reacting to
    * `mapAsync()`'s own promise resolving -- deliberately, not as a simplification. That promise
    * is only guaranteed to resolve *eventually*; nothing requires it to fire within any bounded
    * number of frames, and if it's ever delayed or dropped (slow GPU, a throttled/backgrounded

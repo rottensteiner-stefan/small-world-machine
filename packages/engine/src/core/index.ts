@@ -1,5 +1,6 @@
 export { Object3D } from "./Object3D.js";
 export { SpawnPoint } from "./SpawnPoint.js";
+export type { SpawnPointOptions } from "./SpawnPoint.js";
 export { SmallWorldMachine } from "./SmallWorldMachine.js";
 export { Camera } from "./cameras/Camera.js";
 export * from "./Inspectable.js";
@@ -20,6 +21,7 @@ export * from "./decals/DecalMath.js";
 export * from "./decals/DecalMeshBaker.js";
 
 export { Scene } from "./Scene.js";
+export type { RenderBatch, RenderList } from "./Scene.js";
 export * from "./sky/Skybox.js";
 export * from "./sky/Skydome.js";
 export * from "./sprites/Sprite.js";

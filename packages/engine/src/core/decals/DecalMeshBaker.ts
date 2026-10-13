@@ -44,7 +44,7 @@ export interface BakedDecalGeometry {
 
 const DEFAULT_NORMAL_OFFSET = 0.002;
 const DEG2RAD = Math.PI / 180;
-type Vec3 = [number, number, number];
+export type Vec3 = [number, number, number];
 
 /** Clips a convex polygon against the half-space `sign * p[axis] <= 0.5` (Sutherland-Hodgman, one plane). */
 function clipPlane(poly: Vec3[], axis: 0 | 1 | 2, sign: 1 | -1): Vec3[] {

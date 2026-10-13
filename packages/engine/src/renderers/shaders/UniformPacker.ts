@@ -11,7 +11,7 @@ export class UniformPacker {
    * Packs properties into a pre-allocated buffer.
    * @param layout The shader layout defining the sequence.
    * @param values The actual values to pack.
-   * @param targetArray The Float32Array to write into.
+   * @param data The Float32Array to write into.
    * @returns The same Float32Array for chaining.
    */
   public static packInto(

@@ -2,7 +2,7 @@
 
 > **Status:** Phase 0 und 1 umgesetzt und auf echter GPU geprüft (WebGPU und WebGL2, WebGL1 ignoriert Decals). Phase 2 in Arbeit, Phasen 3 bis 6 offen.
 > **Datum:** 2026-10-12
-> **Referenzen:** [ADR 0028 (Normal-Buffer)](../adr/0028-thin-normal-buffer-mrt.md), [ADR 0029 (Decal-System)](../adr/0029-decal-system.md), [Decal-Guide](../guides/decals.md), [REFERENCES.md](../../REFERENCES.md), Probe `apps/showcases/decal-probe`, Prüfskript `npm run test:decals`.
+> **Referenzen:** [ADR 0028 (Normal-Buffer)](../adr/0028-thin-normal-buffer-mrt.md), [ADR 0029 (Decal-System)](../adr/0029-decal-system.md), [Decal-Guide](../guides/decals.md), `REFERENCES.md`, Probe `apps/showcases/decal-probe`, Prüfskript `npm run test:decals`.
 
 Ursprung ist ein `/collaborate`-Board mit vier Rollen (Board `.agents/collaborate/decal-system.md`, Konsens 3/3). Dieses Dokument ersetzt die lokalen Arbeitsnotizen. Die getroffenen Architekturentscheidungen stehen im ADR 0029, hier stehen Fahrplan, Messwerte und offene Punkte.
 

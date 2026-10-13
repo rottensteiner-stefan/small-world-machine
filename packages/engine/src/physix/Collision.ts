@@ -857,12 +857,19 @@ export class Collision {
    * Universal sweep dispatcher: sweeps any moving bounding volume from origin with displacement delta against any static volume.
    * Supports both 3-arg (moving, delta, target) and 4-arg (moving, origin, delta, target) forms.
    * @param moving The moving bounding volume.
-   * @param originOrDelta Center/origin at start of step OR delta vector if 3 args passed.
-   * @param deltaOrTarget Displacement vector OR target volume if 3 args passed.
-   * @param targetParam Target static bounding volume if 4 args passed.
+   * @param delta Displacement vector.
+   * @param target Target static bounding volume.
    * @returns Time of impact in [0, 1] or -1 if no impact.
    */
   public static sweep(moving: BoundingVolume, delta: Vector3D, target: BoundingVolume): number;
+  /**
+   * 4-arg form of {@link Collision.sweep}: sweeps from an explicit origin.
+   * @param moving The moving bounding volume.
+   * @param origin Center/origin at start of step.
+   * @param delta Displacement vector.
+   * @param target Target static bounding volume.
+   * @returns Time of impact in [0, 1] or -1 if no impact.
+   */
   public static sweep(
     moving: BoundingVolume,
     origin: Vector3D,
