@@ -1,5 +1,6 @@
 import { Decal, Quaternion, Vector3D, createDecalShell } from "@small-world-machine/engine";
 import type { Object3D } from "@small-world-machine/engine";
+import { fitDecalPlane, type DecalPlaneFit } from "./DecalPlaneFit.js";
 
 /** A surface hit in world space; `normal` is the unit surface normal facing the viewer. */
 export interface DecalStampHit {
@@ -11,6 +12,8 @@ export interface DecalStampHit {
 export interface DecalStampContext {
   /** Ray-picks the surface under a canvas-relative pointer position (the ghost is not pickable). */
   raycast: (canvasX: number, canvasY: number) => DecalStampHit | undefined;
+  /** Ray-picks along a world-space ray (plane fit samples the footprint corners with it). Without it the tool stamps with the single-hit normal. */
+  raycastRay?: (origin: Vector3D, direction: Vector3D) => DecalStampHit | undefined;
   /** The ghost lives in the scene root while it follows the mouse. */
   scene: { add: (obj: Object3D) => void; remove: (obj: Object3D) => void };
   /** Loads the kit decal's textures into `decal.material` (KitRegistry.hydrateDecal). */
@@ -33,6 +36,8 @@ export interface ArmedDecal {
 const SPIN_STEP = Math.PI / 12; // 15 degrees
 const GHOST_OPACITY = 0.5;
 const MIN_WIDTH = 0.05;
+/** Extra box depth (metres) beyond the measured height spread of a fitted footprint. */
+const FIT_DEPTH_MARGIN = 0.02;
 const GHOST_NAME = "DecalStampGhost";
 
 /** Rotates `v` by the unit quaternion `q` (v + 2w(q x v) + 2 q x (q x v)). */
@@ -86,6 +91,10 @@ export class DecalStampTool {
   private _ghost: Decal | undefined;
   private _ghostInScene = false;
   private _hit: DecalStampHit | undefined;
+  /** Plane fitted to the surface under the footprint; undefined = single-hit normal (Alt held, corner, or no `raycastRay`). */
+  private _fit: DecalPlaneFit | undefined;
+  private _fitNote = "";
+  private _altHeld = false;
   private _spin = 0;
   private _size: [number, number, number] = [1, 1, 0.5];
   /** Nudge offset along the surface tangent axes (x, z of the unspun decal frame), in metres. */
@@ -142,6 +151,7 @@ export class DecalStampTool {
     this._active = false;
     this._generation++;
     this._hit = undefined;
+    this._fit = undefined;
     this._disposeGhost();
     this._syncButton();
   }
@@ -165,6 +175,7 @@ export class DecalStampTool {
     if ("r" === key) {
       event.preventDefault();
       this._spin += event.shiftKey ? -SPIN_STEP : SPIN_STEP;
+      this._refit();
       this._updateGhost();
       return true;
     }
@@ -177,11 +188,13 @@ export class DecalStampTool {
     return false;
   }
 
-  public handlePointerMove(canvasX: number, canvasY: number): void {
+  public handlePointerMove(canvasX: number, canvasY: number, altKey = false): void {
     if (!this._active) return;
+    this._altHeld = altKey;
     this._hit = this._ctx.raycast(canvasX, canvasY);
     this._offsetX = 0;
     this._offsetZ = 0;
+    this._refit();
     this._updateGhost();
   }
 
@@ -192,16 +205,22 @@ export class DecalStampTool {
   }
 
   /** Stamps at the ghost's current pose. @returns Whether the click was consumed by the tool. */
-  public async handlePointerDown(canvasX: number, canvasY: number): Promise<boolean> {
+  public async handlePointerDown(
+    canvasX: number,
+    canvasY: number,
+    altKey = false,
+  ): Promise<boolean> {
     if (!this._active) return false;
     if (!this._armed) {
       this._ctx.setStatus("Decal stamp: pick a decal in the Content Drawer first");
       return true;
     }
     if (this._stamping) return true;
+    this._altHeld = altKey;
     this._hit = this._ctx.raycast(canvasX, canvasY);
     this._offsetX = 0;
     this._offsetZ = 0;
+    this._refit();
     if (!this._hit) return true;
 
     this._stamping = true;
@@ -211,7 +230,7 @@ export class DecalStampTool {
       const decal = createDecalShell({
         id: `${armed.name}_${++this._stampCount}`,
         kitDecal: armed.kitDecal,
-        size: [...this._size],
+        size: this._effectiveSize(),
         position: [pose.position.x, pose.position.y, pose.position.z],
         rotation: [pose.rotation.x, pose.rotation.y, pose.rotation.z],
       });
@@ -257,7 +276,56 @@ export class DecalStampTool {
     this._updateGhost();
   }
 
+  /** Size to stamp: the fitted footprint may need a deeper box than the armed decal's own depth. */
+  private _effectiveSize(): [number, number, number] {
+    const [w, h, depth] = this._size;
+    if (!this._fit) return [w, h, depth];
+    return [w, h, Math.max(depth, 2 * (this._fit.spread + FIT_DEPTH_MARGIN))];
+  }
+
+  /** Fits a plane to the footprint under the current hit (see `fitDecalPlane`); no-op fallback to the single-hit normal. */
+  private _refit(): void {
+    this._fit = undefined;
+    const hit = this._hit;
+    const pick = this._ctx.raycastRay;
+    if (!hit || !pick || this._altHeld) return;
+
+    const [w, h, depth] = this._size;
+    const q = quaternionFromNormal(hit.normal);
+    q.multiply(new Quaternion(0, Math.sin(this._spin / 2), 0, Math.cos(this._spin / 2)));
+    const tx = rotateVector(q, new Vector3D(1, 0, 0));
+    const tz = rotateVector(q, new Vector3D(0, 0, 1));
+    const down = hit.normal.clone().scale(-1);
+    const lift = Math.max(depth, 0.25);
+    const corners = (
+      [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ] as const
+    ).map(([sx, sz]) => {
+      const onSurface = hit.point
+        .clone()
+        .add(tx.clone().scale((sx * w) / 2))
+        .add(tz.clone().scale((sz * h) / 2));
+      const origin = onSurface.add(hit.normal.clone().scale(lift));
+      const found = pick(origin, down);
+      if (!found) return undefined;
+      // A hit further than the ray's reach is some unrelated surface, not this patch.
+      return found.point.clone().sub(origin).length() <= 2 * lift ? found : undefined;
+    });
+
+    this._fit = fitDecalPlane(hit, corners);
+    const note = this._fit ? "" : "Decal stamp: footprint straddles a corner, single-hit normal";
+    if (note !== this._fitNote) {
+      this._fitNote = note;
+      if (note) this._ctx.setStatus(note);
+    }
+  }
+
   private _pose(hit: DecalStampHit): { position: Vector3D; rotation: Vector3D } {
+    if (this._fit) hit = { point: this._fit.point, normal: this._fit.normal };
     const frame = quaternionFromNormal(hit.normal);
     const tangentX = rotateVector(frame, new Vector3D(1, 0, 0));
     const tangentZ = rotateVector(frame, new Vector3D(0, 0, 1));
@@ -279,7 +347,8 @@ export class DecalStampTool {
     const pose = this._pose(this._hit);
     ghost.position.copyFrom(pose.position);
     ghost.rotation.copyFrom(pose.rotation);
-    ghost.scale.set(this._size[0], this._size[2], this._size[1]);
+    const [w, h, depth] = this._effectiveSize();
+    ghost.scale.set(w, depth, h);
     if (!this._ghostInScene) {
       this._ctx.scene.add(ghost);
       this._ghostInScene = true;
@@ -311,6 +380,7 @@ export class DecalStampTool {
     const next = Math.max(MIN_WIDTH, width + direction * this._ctx.getScaleStep());
     const ratio = next / width;
     this._size = [next, this._size[1] * ratio, this._size[2] * ratio];
+    this._refit();
     this._updateGhost();
   }
 }

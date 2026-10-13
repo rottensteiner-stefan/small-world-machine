@@ -255,4 +255,86 @@ describe("DecalStampTool", () => {
     expect(tool.isGhost(new Object3D("other"))).toBe(false);
     expect(ghost.isCollidable).toBe(false);
   });
+
+  describe("plane fit", () => {
+    /** A receiver plane through `p0` with unit normal `n`; rays hit it from either side. */
+    const planeRay =
+      (p0: Vector3D, n: Vector3D) =>
+      (origin: Vector3D, direction: Vector3D): DecalStampHit | undefined => {
+        const denom = direction.dot(n);
+        if (Math.abs(denom) < 1e-9) return undefined;
+        const t = p0.clone().sub(origin).dot(n) / denom;
+        if (t < 0) return undefined;
+        return { point: origin.clone().add(direction.clone().scale(t)), normal: n.clone() };
+      };
+
+    const slope = new Vector3D(0, 1, -0.5).normalize();
+
+    beforeEach(() => {
+      // The pointer hit carries a skewed normal, as a bumpy mesh triangle would.
+      hit = { point: new Vector3D(0, 0, 0), normal: new Vector3D(0.15, 1, -0.3).normalize() };
+      ctx.raycastRay = vi.fn(planeRay(new Vector3D(0, 0, 0), slope));
+    });
+
+    const stampOnce = async (alt = false): Promise<Decal> => {
+      tool.arm(armed);
+      await flush();
+      await tool.handlePointerDown(5, 5, alt);
+      return added[0]!;
+    };
+
+    it("stamps with the fitted plane normal instead of the single hit's", async () => {
+      const decal = await stampOnce();
+      const up = worldUp(decal.rotation);
+      expect(up.x).toBeCloseTo(slope.x, 4);
+      expect(up.y).toBeCloseTo(slope.y, 4);
+      expect(up.z).toBeCloseTo(slope.z, 4);
+    });
+
+    it("Alt keeps the single-hit normal", async () => {
+      const decal = await stampOnce(true);
+      const up = worldUp(decal.rotation);
+      expect(up.x).toBeCloseTo(hit!.normal.x, 4);
+      expect(up.z).toBeCloseTo(hit!.normal.z, 4);
+      expect(ctx.raycastRay).not.toHaveBeenCalled();
+    });
+
+    it("keeps the armed depth on a flat patch", async () => {
+      const decal = await stampOnce();
+      expect(decal.scale.y).toBeCloseTo(0.5);
+    });
+
+    it("deepens the box to cover an uneven patch", async () => {
+      const flat = planeRay(new Vector3D(0, 0, 0), slope);
+      let call = 0;
+      // A saddle: two opposite corners sit 0.6 m proud, so the fitted normal stays put but the patch is 0.3 m uneven.
+      ctx.raycastRay = vi.fn((o: Vector3D, d: Vector3D) => {
+        const h = flat(o, d)!;
+        if (0 === call % 4 || 2 === call % 4) h.point.add(slope.clone().scale(0.6));
+        call++;
+        return h;
+      });
+      const decal = await stampOnce();
+      expect(decal.scale.y).toBeGreaterThan(0.5);
+    });
+
+    it("falls back to the single-hit normal and says so when the footprint straddles a corner", async () => {
+      const wall = new Vector3D(0, 0, 1);
+      const floor = planeRay(new Vector3D(0, 0, 0), new Vector3D(0, 1, 0));
+      const wallRay = planeRay(new Vector3D(0, 0, 0), wall);
+      ctx.raycastRay = vi.fn((o: Vector3D, d: Vector3D) => (o.z > 0 ? wallRay(o, d) : floor(o, d)));
+      hit = { point: new Vector3D(0, 0, 0), normal: new Vector3D(0, 1, 0) };
+      tool.arm(armed);
+      await flush();
+      tool.handlePointerMove(5, 5);
+      expect(ctx.setStatus).toHaveBeenCalledWith(expect.stringContaining("corner"));
+    });
+
+    it("without raycastRay the tool stamps exactly as before", async () => {
+      delete ctx.raycastRay;
+      const decal = await stampOnce();
+      const up = worldUp(decal.rotation);
+      expect(up.x).toBeCloseTo(hit!.normal.x, 4);
+    });
+  });
 });

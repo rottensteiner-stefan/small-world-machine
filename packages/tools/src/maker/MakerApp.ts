@@ -258,6 +258,8 @@ export class MakerApp extends SmallWorldMachine {
     });
     this._decalStamp = new DecalStampTool({
       raycast: (canvasX, canvasY): DecalStampHit | undefined => this._pickSurface(canvasX, canvasY),
+      raycastRay: (origin, direction): DecalStampHit | undefined =>
+        this._pickRay(origin, direction),
       scene: this.scene,
       hydrate: (decal): Promise<boolean> => this._kitRegistry.hydrateDecal(decal),
       addObject: (decal): void => this.addObject(decal),
@@ -1121,7 +1123,11 @@ export class MakerApp extends SmallWorldMachine {
     );
 
     if (this._decalStamp.isActive) {
-      void this._decalStamp.handlePointerDown(event.clientX - rect.left, event.clientY - rect.top);
+      void this._decalStamp.handlePointerDown(
+        event.clientX - rect.left,
+        event.clientY - rect.top,
+        event.altKey,
+      );
       return; // Stamp mode consumes every click -- no gizmo/selection while active.
     }
 
@@ -1211,7 +1217,11 @@ export class MakerApp extends SmallWorldMachine {
     if (this._decalStamp.isActive && !this._cameraDrag) {
       if (event.target === this.canvas) {
         const rect = this.canvas.getBoundingClientRect();
-        this._decalStamp.handlePointerMove(event.clientX - rect.left, event.clientY - rect.top);
+        this._decalStamp.handlePointerMove(
+          event.clientX - rect.left,
+          event.clientY - rect.top,
+          event.altKey,
+        );
       } else {
         this._decalStamp.handlePointerLeave();
       }
@@ -1418,6 +1428,25 @@ export class MakerApp extends SmallWorldMachine {
     const ray = this._raycaster.ray;
     if (Math.abs(ray.direction.y) > 1e-4) {
       const t = -ray.origin.y / ray.direction.y;
+      if (t > 0 && t < 1000) return { point: ray.at(t), normal: new Vector3D(0, 1, 0) };
+    }
+    return undefined;
+  }
+
+  /** World-space ray pick with the same scope and ground-plane fallback as `_pickSurface`. */
+  private _pickRay(origin: Vector3D, direction: Vector3D): DecalStampHit | undefined {
+    const ray = this._raycaster.ray;
+    ray.origin.copyFrom(origin);
+    ray.direction.copyFrom(direction);
+    const pickable: Object3D[] = [];
+    this._collectPickable(this.scene.root, pickable);
+    const hit = this._raycaster.intersectObjects(
+      pickable.filter((o) => "EditorGrid" !== o.name),
+      true,
+    )[0];
+    if (hit) return { point: hit.point, normal: hit.normal };
+    if (Math.abs(direction.y) > 1e-4) {
+      const t = -origin.y / direction.y;
       if (t > 0 && t < 1000) return { point: ray.at(t), normal: new Vector3D(0, 1, 0) };
     }
     return undefined;
