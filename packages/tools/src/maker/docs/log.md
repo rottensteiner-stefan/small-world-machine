@@ -514,6 +514,14 @@ Meilensteinen.
   erst über die meilensteinübergreifenden Gates/Abnahme (Plan §9, Verifikationsstrategie §8), nicht in dieser
   Session. Implementations-Arbeitsstand ist code-seitig, Live-Browser-Verhalten (Mode-Router, Re-Export-
   Kompatibilität) ist erst in den Gates zu prüfen.
+- **Review & Abnahme (Round 2 nach Umzug ins Worktree `small-world-machine-bigmerge`):** Alle Implementierungs-
+  Gates grün (lint, typecheck, build:lib, 283 Dateien/1889 Tests) auch im Worktree; Grep-Gate F1 `core/` DOM-frei.
+  Unabhängige Review-Runde (Dave, Checkliste `big-merge-review-checklist.md`): `[VERIFICATION_PASSED]`, 0 P0/P1,
+  nur 2 P2 (P2-F1 Splatter-Core-Angabe in der M2-Bullet korrigiert; P2-F2 Web-`RasterIO`-Adapter auf M5
+  verschoben). Board `big-merge-impl` resolved (Konsens 4/4), `[ABNAHME_ERTEILT]`. Mit Patch `80baf2a8`
+  ("Every tool carries with it the spirit by which it has been created.") auf Branch `big-merge` committet.
+  Runtime-Browser-Verifikation im Worktree-Dev-Server erledigt: Maker-Seite mit verschmolzenem Header und
+  Mode-Launcher (World aktiv, übrige Modes disabled bis M3+), Router schaltet auf `#world`, 0 Fehler/0 Warnungen.
 
 
 
