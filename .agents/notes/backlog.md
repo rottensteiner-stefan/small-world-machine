@@ -23,9 +23,12 @@ erzeugen.
 ## 2026-10-12 — Fog & Volumetric Lighting Roadmap (Stufe 1 bis 3)
 
 - ✅ **Stufe 1 (Klassischer Distanz- & Höhennebel):** Bereits im Bestand (`Fog.ts`, `fog_calc.glsl`, `WebGPURenderer`, `WebGL1Renderer`, `WebGL2Renderer`). Unterstützt `FogMode` (LINEAR, EXP, EXP2) sowie analytischen Height-Falloff über alle drei Backends.
-- 📋 **Stufe 2 (Light Shafts / God Rays — Screen-Space / Shadow-Map):**
-  - Post-Processing Radial Blur / Screen-Space Sun Shafts oder Half-Res Raymarch gegen die Directional Light Shadow Map.
-  - Günstiger atmosphärischer Effekt für WebGL1/2 und WebGPU ohne 3D-Texturen.
+- ✅ **Stufe 2 (Light Shafts / God Rays — Screen-Space / Shadow-Map):**
+  - Umgesetzt als 2-stufige Hybrid-Architektur über WebGL1, WebGL2 und WebGPU (siehe ADR 0030).
+  - WebGL1 (Tier 1): 2D Screen-Space Radial Pull-Blur mit Sky-/Luminanz-Maske und Camera-Z-Inversions-Schutz ($clipW > 0$).
+  - WebGL2 & WebGPU (Tier 2): Half-Resolution Raymarch gegen Directional Cascaded Shadow Maps (CSM Atlas, 0 extra Shadow Passes), Schlick (1993) Phasenfunktion ($k \approx 1.55g - 0.55g^3$), Interleaved Gradient Noise (IGN) Jittering und 2x2 Depth-Aware Cross-Bilateral Upsampling gegen Silhouetten-Bleeding.
+  - Integration in PostProcessingGroup (`LightShaftsElement`), parity-geprüft über alle 3 Backends.
+  - → Update 2026-10-14: Vollständig implementiert, mit 1848 Tests verifiziert und mit ADR 0030 dokumentiert.
 - 📋 **Stufe 3 (Volumetric Froxel Fog — WebGPU Compute):**
   - Echter 3D-Volumeneffekt via Frustum-aligned Voxel Grid (Froxels, z. B. 160×90×64) nach Bart Wronski / Frostbite / Godot 4 / Doom 2016 (knüpft an Wunschliste W1 in `docs/research/aaa-engine-techniques.md` an).
   - Nutzt bestehende Clustered-Forward+-Infrastruktur (#5 / ADR 0007): Light Injection pro Zelle (Point, Spot, Directional + Shadows) mit Phasenfunktion (Mie/Henyey-Greenstein).

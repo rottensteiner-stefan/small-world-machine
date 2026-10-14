@@ -10,6 +10,7 @@ import {
   OutlineElement,
   GravitationalLensingElement,
   FlashElement,
+  LightShaftsElement,
 } from "../../src/renderers/post/elements/index.js";
 import { PostProcessingEffectType } from "../../src/enums/index.js";
 import { PostProcessPassGL } from "../../src/renderers/post/passes/PostProcessPassGL.js";
@@ -217,10 +218,24 @@ describe("Post-Processing Renderer Parity (WebGL2 vs WebGPU)", () => {
     flash.color.set(1.0, 0.3, 0.2);
     flash.intensity = 0.65;
 
+    const shafts = group.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS)!;
+    shafts.enabled = true;
+    shafts.intensity = 1.8;
+    shafts.density = 0.9;
+    shafts.asymmetry = 0.75;
+    shafts.color.set(1.0, 0.9, 0.7);
+
     // 1. Execute WebGL2 Pass
     const { gl, uniforms } = createMockGL();
     const glPass = new PostProcessPassGL(gl, true);
-    glPass.execute(gl, {} as WebGLTexture, group, {} as WebGLTexture, {} as WebGLTexture);
+    glPass.execute(
+      gl,
+      {} as WebGLTexture,
+      group,
+      {} as WebGLTexture,
+      {} as WebGLTexture,
+      {} as WebGLTexture,
+    );
 
     // 2. Execute WebGPU Pass
     const { device, getWrittenUniforms, makeRenderer } = createMockGPU();
@@ -233,7 +248,7 @@ describe("Post-Processing Renderer Parity (WebGL2 vs WebGPU)", () => {
 
     const gpuData = getWrittenUniforms();
     expect(gpuData).toBeDefined();
-    expect(gpuData!.length).toBe(44); // 11 x vec4f (176 bytes)
+    expect(gpuData!.length).toBe(52); // 13 x vec4f (208 bytes)
 
     // === VERIFY 1:1 UNIFORM PARITY ===
 
@@ -330,6 +345,16 @@ describe("Post-Processing Renderer Parity (WebGL2 vs WebGPU)", () => {
     expect(gpuData![42]).toBeCloseTo(flash.color.b);
     expect(uniforms.get("u_flashIntensity")).toBeCloseTo(flash.intensity);
     expect(gpuData![43]).toBeCloseTo(flash.intensity);
+
+    // Light Shafts
+    expect(uniforms.get("u_lightShaftsIntensity")).toBeCloseTo(shafts.intensity);
+    expect(gpuData![44]).toBeCloseTo(shafts.intensity);
+    expect(gpuData![45]).toBeCloseTo(shafts.density);
+    expect(gpuData![46]).toBeCloseTo(0.0);
+    expect(gpuData![47]).toBeCloseTo(0.0);
+    expect(gpuData![48]).toBeCloseTo(shafts.color.r);
+    expect(gpuData![49]).toBeCloseTo(shafts.color.g);
+    expect(gpuData![50]).toBeCloseTo(shafts.color.b);
   });
 
   it("correctly propagates singularity sentinel (Z = -2 behind camera) to bypass lensing in both pipelines", () => {

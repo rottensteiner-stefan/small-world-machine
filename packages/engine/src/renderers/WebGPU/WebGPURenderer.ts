@@ -59,7 +59,12 @@ import {
   DepthPrePassGPU,
   HzbOcclusionPassGPU,
 } from "../passes/index.js";
-import { BloomPassGPU, AOPassGPU, HistoryBlendPassGPU } from "../post/passes/index.js";
+import {
+  BloomPassGPU,
+  AOPassGPU,
+  HistoryBlendPassGPU,
+  LightShaftsPassGPU,
+} from "../post/passes/index.js";
 import { SkinnedMesh, Skeleton, MAX_SKINNED_BONES } from "../../core/animation/index.js";
 
 /**
@@ -315,6 +320,11 @@ export class WebGPURenderer extends AbstractRenderer {
   private _hbaoTextureView: GPUTextureView | undefined = undefined;
   public get hbaoTextureView(): GPUTextureView | undefined {
     return this._hbaoTextureView;
+  }
+  private _lightShaftsPassGPU: LightShaftsPassGPU | undefined = undefined;
+  private _lightShaftsTextureView: GPUTextureView | undefined = undefined;
+  public get lightShaftsTextureView(): GPUTextureView | undefined {
+    return this._lightShaftsTextureView;
   }
   private _taaPassGPU: HistoryBlendPassGPU | undefined = undefined;
   /** This frame's TAA-resolved color view, if TAA is enabled -- read by PostProcessPass instead
@@ -1508,6 +1518,33 @@ export class WebGPURenderer extends AbstractRenderer {
         this._hbaoTextureView = undefined;
       }
 
+      const shaftsNode = this.postProcessing.get<import("../post/index.js").LightShaftsElement>(
+        PostProcessingEffectType.LIGHT_SHAFTS,
+      );
+      if (
+        isPostProcessPass &&
+        shaftsNode &&
+        shaftsNode.enabled &&
+        this._opaqueDepthTextureView &&
+        lights.dLight
+      ) {
+        this._lightShaftsPassGPU ??= new LightShaftsPassGPU(this._device);
+        this._lightShaftsTextureView =
+          this._lightShaftsPassGPU.execute(
+            this,
+            ce,
+            this._opaqueDepthTextureView,
+            this._context.canvas.width,
+            this._context.canvas.height,
+            vp,
+            camPos,
+            lights.dLight,
+            shaftsNode,
+          ) ?? undefined;
+      } else if (isPostProcessPass) {
+        this._lightShaftsTextureView = undefined;
+      }
+
       // Re-widen to the RenderPass interface: TS's control-flow analysis narrows `pass` towards
       // `PostProcessPass` from the `isPostProcessPass` checks above, which would otherwise
       // resolve this call against PostProcessPass's own (shorter, vMat-less) execute() overload
@@ -2420,6 +2457,7 @@ export class WebGPURenderer extends AbstractRenderer {
     }
     this._bloomPassGPU?.destroy();
     this._hbaoPassGPU?.destroy();
+    this._lightShaftsPassGPU?.destroy();
     this._taaPassGPU?.destroy();
     this._motionTrailPassGPU?.destroy();
 

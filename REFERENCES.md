@@ -715,6 +715,32 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Authors/Gurus (named in research):** Emil Persson (humus.name, clustered shading), Sébastien Hillaire & Frostbite (volumetric rendering, SIGGRAPH 2015), "therealmjp" (shadow-map sampling), Alex Tardif (cascaded shadow maps with soft shadows), XeGTAO/Intel GameDev (ground-truth AO), Valdemir D. (game feel on the web), plus Unreal/Unity/Godot/Babylon.js/three.js documentation.
 - **Usage:** Consolidated research on forward lighting, shadows, occlusion culling, volumetric fog and post-processing compared against industry engines. Verified against the live engine on 2026-09-27: implemented items are fixed bestand (clustered lighting, PCSS, CSM polishing, HBAO, simplified TAA, HZB occlusion culling, game feel), remaining items are a maintained wishlist (froxel volumetric fog, full GTAO, LOD, full TAA). The full source list lives in the document's "Quellen" appendix.
 
+### Schlick Phase Function (Henyey-Greenstein Approximation)
+
+- **File:** `packages/engine/src/renderers/post/shaders/LightShafts.frag.glsl`, `packages/engine/src/renderers/post/shaders/LightShafts.frag.wgsl`
+- **Authors/Gurus:** Christophe Schlick (1993, *A customizable reflectance model for everyday rendering*)
+- **Formulas:**
+  - Parameter remapping: $k \approx 1.55 g - 0.55 g^3$
+  - Phase function: $p(\theta, k) = \frac{1 - k^2}{4\pi (1 - k \cos\theta)^2}$
+- **Usage:** Replaces the computationally heavy Henyey-Greenstein phase function (which requires expensive `pow(..., 1.5)` evaluations per raymarching step). Matches Henyey-Greenstein forward scattering behavior within 10% on atmospheric aerosols ($g \in [0.6, 0.8]$) using solely basic arithmetic.
+
+### Interleaved Gradient Noise (IGN)
+
+- **File:** `packages/engine/src/renderers/post/shaders/LightShafts.frag.glsl`, `packages/engine/src/renderers/post/shaders/LightShafts.frag.wgsl`
+- **Authors/Gurus:** Jorge Jimenez (2014, Activision Blizzard, *Next Generation Post Processing in Call of Duty: Advanced Warfare*, SIGGRAPH 2014)
+- **Formulas:**
+  - $\text{IGN}(x, y) = \text{fract}\left(52.9829189 \cdot \text{fract}(0.06711056 x + 0.00583715 y)\right)$
+- **Usage:** High-frequency, deterministic spatio-temporal dither noise used to jitter raymarching starting offsets per pixel. Converts regular step banding artifacts into high-frequency noise that easily blends out with cross-bilateral upsampling and TAA without temporal crawling.
+
+### Depth-Aware Cross-Bilateral Upsampling for Volumetrics
+
+- **File:** `packages/engine/src/renderers/post/shaders/LightShaftsBilateral.frag.glsl`, `packages/engine/src/renderers/post/shaders/LightShaftsBilateral.frag.wgsl`
+- **Authors/Gurus:** Johannes Kopf et al. (2007, *Joint Bilateral Upsampling*), Bart Wronski (2014, *Volumetric Fog: Unified, compute shader based solution to atmospheric scattering*, Crytek)
+- **Formulas:**
+  - Depth weight: $w_i = \exp\left(-\frac{|\Delta z_i|}{\tau}\right)$
+  - Edge fallback: If $\sum w_i < \epsilon$, select nearest depth sample: $i_{\text{nearest}} = \arg\min_i |\Delta z_i|$
+- **Usage:** Upsamples half-resolution volumetric scattering to full resolution without causing light-bleeding or bright halos across foreground object silhouettes. When sampling across depth discontinuities, foreground pixels reject background fog taps and fall back to the closest depth sample.
+
 ## Graphics APIs (WebGPU / WebGL)
 
 ### W3C WebGPU Specification

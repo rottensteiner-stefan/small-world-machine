@@ -18,6 +18,9 @@ export class PostProcessPassGL {
   private _uHdrTexture: WebGLUniformLocation | null = null;
   private _uBloomTexture: WebGLUniformLocation | null = null;
   private _uHbaoTexture: WebGLUniformLocation | null = null;
+  private _uLightShaftsTexture: WebGLUniformLocation | null = null;
+  private _uLightShaftsEnabled: WebGLUniformLocation | null = null;
+  private _uLightShaftsIntensity: WebGLUniformLocation | null = null;
   private _uTime: WebGLUniformLocation | null = null;
 
   private _uBloomIntensity: WebGLUniformLocation | null = null;
@@ -71,6 +74,9 @@ export class PostProcessPassGL {
       PostProcessingEffectType.QUANTIZE,
     );
     const hbao = group.get<import("../index.js").HbaoElement>(PostProcessingEffectType.HBAO);
+    const shafts = group.get<import("../index.js").LightShaftsElement>(
+      PostProcessingEffectType.LIGHT_SHAFTS,
+    );
     const outline = group.get<import("../index.js").OutlineElement>(
       PostProcessingEffectType.OUTLINE,
     );
@@ -91,6 +97,7 @@ export class PostProcessPassGL {
       grade && grade.enabled ? 1 : 0,
       quant && quant.enabled ? 1 : 0,
       hbao && hbao.enabled ? 1 : 0,
+      shafts && shafts.enabled ? 1 : 0,
       outline && outline.enabled ? 1 : 0,
       flash && flash.enabled ? 1 : 0,
     ].join("|");
@@ -209,6 +216,9 @@ export class PostProcessPassGL {
     this._uHdrTexture = gl.getUniformLocation(p, "u_hdrTexture");
     this._uBloomTexture = gl.getUniformLocation(p, "u_bloomTexture");
     this._uHbaoTexture = gl.getUniformLocation(p, "u_hbaoTexture");
+    this._uLightShaftsTexture = gl.getUniformLocation(p, "u_lightShaftsTexture");
+    this._uLightShaftsEnabled = gl.getUniformLocation(p, "u_lightShaftsEnabled");
+    this._uLightShaftsIntensity = gl.getUniformLocation(p, "u_lightShaftsIntensity");
     this._uTime = gl.getUniformLocation(p, "u_time");
 
     this._uBloomIntensity = gl.getUniformLocation(p, "u_bloomIntensity");
@@ -261,6 +271,7 @@ export class PostProcessPassGL {
     group: import("../index.js").PostProcessingGroup,
     bloomTexture: WebGLTexture | null = null,
     hbaoTexture: WebGLTexture | null = null,
+    lightShaftsTexture: WebGLTexture | null = null,
   ): void {
     const sig = this._getSignature(group);
     if (!this._prog || sig !== this._compiledSignature) {
@@ -297,6 +308,20 @@ export class PostProcessPassGL {
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, hbaoTexture);
       gl.uniform1i(this._uHbaoTexture, 2);
+    }
+
+    // Light Shafts
+    const shafts = group.get<import("../index.js").LightShaftsElement>(
+      PostProcessingEffectType.LIGHT_SHAFTS,
+    );
+    if (shafts && shafts.enabled && lightShaftsTexture) {
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, lightShaftsTexture);
+      if (this._uLightShaftsTexture) gl.uniform1i(this._uLightShaftsTexture, 3);
+      if (this._uLightShaftsEnabled) gl.uniform1i(this._uLightShaftsEnabled, 1);
+      if (this._uLightShaftsIntensity) gl.uniform1f(this._uLightShaftsIntensity, shafts.intensity);
+    } else {
+      if (this._uLightShaftsEnabled) gl.uniform1i(this._uLightShaftsEnabled, 0);
     }
 
     // Continuous Uniform Updates

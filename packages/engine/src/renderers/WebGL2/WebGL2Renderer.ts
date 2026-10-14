@@ -16,6 +16,7 @@ import {
   BloomPassGL,
   AOPassGL,
   HistoryBlendPassGL,
+  LightShaftsPassGL,
 } from "../post/passes/index.js";
 import { AbstractLight } from "../../core/lights/index.js";
 import { MAX_AREA_LIGHTS } from "../../core/lights/AreaLight.js";
@@ -104,6 +105,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   protected _postPassGL: PostProcessPassGL | undefined = undefined;
   protected _bloomPassGL: BloomPassGL | undefined = undefined;
   protected _hbaoPassGL: AOPassGL | undefined = undefined;
+  protected _lightShaftsPassGL: LightShaftsPassGL | undefined = undefined;
   protected _taaPassGL: HistoryBlendPassGL | undefined = undefined;
   protected _motionTrailPassGL: HistoryBlendPassGL | undefined = undefined;
 
@@ -734,7 +736,36 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         }
       }
 
-      this._postPassGL.execute(this.gl, colorTex, this.postProcessing, bloomTex, hbaoTex);
+      let lightShaftsTex: WebGLTexture | null = null;
+      if (this._lightShaftsPassGL && this._frameLights?.dLight) {
+        const shaftsNode = this.postProcessing.get<import("../post/index.js").LightShaftsElement>(
+          PostProcessingEffectType.LIGHT_SHAFTS,
+        );
+        if (shaftsNode && shaftsNode.enabled && this._opaqueDepthTexture) {
+          const dLight = this._frameLights.dLight;
+          const shadowFbo = this._shadowMaps.get(dLight);
+          lightShaftsTex = this._lightShaftsPassGL.execute(
+            this._opaqueDepthTexture,
+            colorTex,
+            this.gl.canvas.width,
+            this.gl.canvas.height,
+            this._frameViewProj.data,
+            this._frameCamPos,
+            dLight,
+            shadowFbo?.texture ?? null,
+            shaftsNode,
+          );
+        }
+      }
+
+      this._postPassGL.execute(
+        this.gl,
+        colorTex,
+        this.postProcessing,
+        bloomTex,
+        hbaoTex,
+        lightShaftsTex,
+      );
     }
   }
 
@@ -1792,12 +1823,14 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._postPassGL ??= new PostProcessPassGL(this.gl, true);
       this._bloomPassGL ??= new BloomPassGL(this.gl, true);
       this._hbaoPassGL ??= new AOPassGL(this.gl);
+      this._lightShaftsPassGL ??= new LightShaftsPassGL(this.gl, true);
       this._taaPassGL ??= new HistoryBlendPassGL(this.gl);
       this._motionTrailPassGL ??= new HistoryBlendPassGL(this.gl);
     } else if (!this.postProcessing.enabled && this._hdrFbo) {
       this._postPassGL?.destroy?.(this.gl);
       this._bloomPassGL?.destroy();
       this._hbaoPassGL?.destroy();
+      this._lightShaftsPassGL?.destroy();
       this._taaPassGL?.destroy();
       this._motionTrailPassGL?.destroy();
       this._hdrFbo.destroy();
@@ -1805,6 +1838,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._postPassGL = undefined;
       this._bloomPassGL = undefined;
       this._hbaoPassGL = undefined;
+      this._lightShaftsPassGL = undefined;
       this._taaPassGL = undefined;
       this._motionTrailPassGL = undefined;
     }
@@ -1884,6 +1918,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._postPassGL?.destroy(gl);
       this._bloomPassGL?.destroy();
       this._hbaoPassGL?.destroy();
+      this._lightShaftsPassGL?.destroy();
       this._taaPassGL?.destroy();
       this._motionTrailPassGL?.destroy();
       this._globalUBO?.destroy();
@@ -1897,6 +1932,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._hdrFbo = undefined;
     this._postPassGL = undefined;
     this._bloomPassGL = undefined;
+    this._lightShaftsPassGL = undefined;
 
     super.destroy();
   }

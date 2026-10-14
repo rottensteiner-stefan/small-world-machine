@@ -5,3 +5,5 @@ export * from "./AOPassGL.js";
 export * from "./AOPassGPU.js";
 export * from "./HistoryBlendPassGL.js";
 export * from "./HistoryBlendPassGPU.js";
+export * from "./LightShaftsPassGL.js";
+export * from "./LightShaftsPassGPU.js";

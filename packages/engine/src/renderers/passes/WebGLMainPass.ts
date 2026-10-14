@@ -131,12 +131,16 @@ export class WebGLMainPass implements WebGLRenderPass {
       if (writesNormals) renderer.setNormalWriteEnabled(false);
     }
 
-    // HBAO needs the opaque depth buffer every frame it's enabled, not just when there happen
+    // HBAO and LightShafts need the opaque depth buffer every frame they're enabled, not just when there happen
     // to be transparent objects (the only other consumer of this capture, for refraction).
     const hbaoNode = renderer.postProcessing.get<import("../post/index.js").HbaoElement>(
       PostProcessingEffectType.HBAO,
     );
-    if (renderList.transparent.length === 0 && hbaoNode && hbaoNode.enabled && !depthCaptured) {
+    const shaftsNode = renderer.postProcessing.get<import("../post/index.js").LightShaftsElement>(
+      PostProcessingEffectType.LIGHT_SHAFTS,
+    );
+    const needsDepth = (hbaoNode && hbaoNode.enabled) || (shaftsNode && shaftsNode.enabled);
+    if (renderList.transparent.length === 0 && needsDepth && !depthCaptured) {
       renderer.copyToOpaqueDepthTexture();
     }
 

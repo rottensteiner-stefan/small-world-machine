@@ -2,6 +2,7 @@
 @group(0) @binding(1) var hdrTexture: texture_2d<f32>;
 @group(0) @binding(3) var bloomTexture: texture_2d<f32>;
 @group(0) @binding(4) var hbaoTexture: texture_2d<f32>;
+@group(0) @binding(5) var lightShaftsTexture: texture_2d<f32>;
 
 // Structural constants (overwritten at compilation time) -- these gate real code paths (branch
 // taken / sample count), unlike the continuous tuning values below, which live in `dyn` instead
@@ -12,6 +13,7 @@ const u_vignetteEnabled: u32 = 0u;
 const u_grainEnabled: u32 = 0u;
 const u_bloomEnabled: u32 = 0u;
 const u_hbaoEnabled: u32 = 0u;
+const u_lightShaftsEnabled: u32 = 0u;
 const u_quantizeEnabled: u32 = 0u;
 const u_outlineEnabled: u32 = 0u;
 const u_flashEnabled: u32 = 0u;
@@ -33,6 +35,8 @@ struct DynUniforms {
     singularityPos: vec4f, // [screenPosX, screenPosY, screenPosZ, eventHorizonRadius]
     lensingParams: vec4f, // [strength, spaghettification, relativisticBeaming, ringGlowIntensity]
     flashParams: vec4f, // [color.r, color.g, color.b, intensity]
+    shaftsParams: vec4f, // [intensity, density, 0, 0]
+    shaftsColor: vec4f, // [r, g, b, 1.0]
 }
 @group(0) @binding(2) var<uniform> dyn: DynUniforms;
 
@@ -254,6 +258,14 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
         }
 
         hdr += bloom * u_bloomIntensity * u_bloomColor;
+    }
+
+    // Volumetric Light Shafts (In-Scattering) -- additive linear HDR lighting
+    if (1u == u_lightShaftsEnabled) {
+        let shafts = textureSample(lightShaftsTexture, hdrSampler, distortUv).rgb;
+        if (shafts.r == shafts.r) {
+            hdr += shafts * dyn.shaftsParams.x * dyn.shaftsColor.rgb;
+        }
     }
 
     // Ambient Occlusion (HBAO) -- darkens the linear scene color before tonemapping, since it

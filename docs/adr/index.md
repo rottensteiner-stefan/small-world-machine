@@ -34,3 +34,4 @@ Dieser Abschnitt enthält die Architekturentscheidungs-Protokolle, die signifika
 
 - **[ADR 0028: Dünner Normal-Buffer als MRT im Main Pass](./0028-thin-normal-buffer-mrt.md)** — Kein G-Buffer/Deferred; opt-in `RG16F`-Normal-Ziel (inkl. Normal-Map) für Decals, AO und Post, nur WebGL2/WebGPU; Velocity separat.
 - **[ADR 0029: Decal-System](./0029-decal-system.md)** — Projizierte Box-Decals als eigene Lit-Stufe nach Opaque (Tiefe + Normal-Buffer, TBN-Normalenblend), statische Sortierung, WebGL1 nur später per Mesh-Decal; Datenpfad `LevelDescriptor.decals[]` entschieden, noch nicht umgesetzt.
+- **[ADR 0030: Volumetrische Light Shafts (God Rays)](./0030-volumetric-light-shafts.md)** — 2-stufige Hybrid-Architektur (WebGL1 Screen-Space Radial Blur mit Inversions-Schutz; WebGL2 & WebGPU Half-Res Raymarching gegen Directional CSM mit Schlick-Phasenfunktion, IGN-Jitter und 2x2 Depth-Aware Cross-Bilateral Upsampling).

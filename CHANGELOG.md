@@ -1,10 +1,16 @@
 # Changelog
 
-## [Unreleased]
+## [0.106.0] - 2026-10-14
 
+### "All the variety, all the charm, all the beauty of life is made up of light and shadow." - Leo Tolstoy
+
+- **Features:**
+  - *Volumetric Light Shafts (God Rays)* (`LightShaftsElement`, `LightShaftsPassGL`, `LightShaftsPassGPU`; ADR 0030): Hybrid crepuscular sun rays across all three backends. WebGL2 and WebGPU perform half-resolution raymarching through participating media against the Directional Cascaded Shadow Map (CSM atlas, 0 extra shadow passes) with the Schlick (1993) phase function ($k \approx 1.55g - 0.55g^3$) and Interleaved Gradient Noise (IGN) jittering, upsampled to full resolution via a 2x2 depth-aware cross-bilateral filter that completely eliminates silhouette edge bleeding. WebGL1 falls back to a 2D screen-space radial pull-blur with sky/depth luminance masking and a camera-Z inversion guard ($clipW > 0$) preventing ray-flipping when looking away from the sun. The volumetric in-scattering texture composites additively into scene HDR before tone mapping and color grading.
 - **Architecture & Bugfixes:**
   - *YAD takes the `?rendererType=` override like the showcases:* `yad` extended `SmallWorldMachine` directly and had no override, so the CI smoke test ran it on whatever renderer came up best, WebGPU on the GPU-less runner, and it failed there with the same `[WebGPU Device Lost]` errors as the WebGPU legs. `getRendererTypeFromQuery` is now exported from `AbstractShowcase.ts` and `yad` uses it; `scripts/check-showcases.js` checks `yad` under WebGL1, WebGL2 and WebGPU like every showcase.
   - *Anisotropic filtering is now actually applied*: `EXT_texture_filter_anisotropic` was detected but never exercised, so `quality.maxAnisotropy` and `Texture.anisotropy` did nothing. The WebGL2 and WebGL1 texture upload paths now call `texParameterf(TEXTURE_MAX_ANISOTROPY_EXT)` on mipmapped 2D textures, and the WebGPU material sampler path sets `GPUSamplerDescriptor.maxAnisotropy` on fully-linear samplers (both clamped to 16), resolving `Texture.anisotropy` against the engine-wide `quality.maxAnisotropy` cap (default `anisotropy` 1 inherits the engine level, `0` disables). Semantics live in one place (`renderers/anisotropy.ts`, `applyAnisotropy`/`resolveAnisotropicLevel`) with unit tests covering resolution and application; the WebGL1/WebGL2/WebGPU paths stay in lockstep through it.
+- **Housekeeping & Docs:**
+  - *ADR 0030 & Volumetric Math References:* Documented the 2-tier hybrid volumetric lighting architecture in ADR 0030; added citations for the Schlick phase function, Interleaved Gradient Noise (IGN), and joint bilateral upsampling in `REFERENCES.md`; updated post-processing sequence in `CONTEXT.md`; marked Step 2 in Fog & Volumetric Lighting Roadmap in `backlog.md` as completed.
 
 ## [0.105.0] - 2026-10-12
 

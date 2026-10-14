@@ -39,12 +39,13 @@ export class PostProcessPass implements RenderPass {
   private _bindGroup?: GPUBindGroup;
   private _uniformBuffer?: GPUBuffer;
   private _sampler?: GPUSampler;
-  /** 44 floats (176 bytes): DynUniforms in PostProcess.frag.wgsl -- time + the continuous tuning
-   * parameters (incl. color grading, gravitational lensing & flash), packed as 11x vec4f. */
-  private _uniformData: Float32Array = new Float32Array(44);
+  /** 52 floats (208 bytes): DynUniforms in PostProcess.frag.wgsl -- time + the continuous tuning
+   * parameters (incl. color grading, gravitational lensing, flash & light shafts), packed as 13x vec4f. */
+  private _uniformData: Float32Array = new Float32Array(52);
   private _builtTextureView?: GPUTextureView;
   private _builtBloomTextureView?: GPUTextureView;
   private _builtHbaoTextureView?: GPUTextureView;
+  private _builtShaftsTextureView?: GPUTextureView;
   private _compiledSignature?: string;
 
   private _getSignature(group: import("../post/index.js").PostProcessingGroup): string {
@@ -67,6 +68,9 @@ export class PostProcessPass implements RenderPass {
       PostProcessingEffectType.QUANTIZE,
     );
     const hbao = group.get<import("../post/index.js").HbaoElement>(PostProcessingEffectType.HBAO);
+    const shafts = group.get<import("../post/index.js").LightShaftsElement>(
+      PostProcessingEffectType.LIGHT_SHAFTS,
+    );
     const outline = group.get<import("../post/index.js").OutlineElement>(
       PostProcessingEffectType.OUTLINE,
     );
@@ -91,6 +95,7 @@ export class PostProcessPass implements RenderPass {
       grade && grade.enabled ? 1 : 0,
       quant && quant.enabled ? 1 : 0,
       hbao && hbao.enabled ? 1 : 0,
+      shafts && shafts.enabled ? 1 : 0,
       outline && outline.enabled ? 1 : 0,
       flash && flash.enabled ? 1 : 0,
     ].join("|");
@@ -108,7 +113,7 @@ export class PostProcessPass implements RenderPass {
     });
 
     this._uniformBuffer ??= device.createBuffer({
-      size: 176, // DynUniforms: 11 x vec4f
+      size: 208, // DynUniforms: 13 x vec4f
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -119,6 +124,7 @@ export class PostProcessPass implements RenderPass {
         { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
         { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
         { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+        { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
       ],
     });
 
@@ -163,6 +169,9 @@ export class PostProcessPass implements RenderPass {
     const flash = group.get<import("../post/index.js").FlashElement>(
       PostProcessingEffectType.FLASH,
     );
+    const shafts = group.get<import("../post/index.js").LightShaftsElement>(
+      PostProcessingEffectType.LIGHT_SHAFTS,
+    );
 
     const tmEnabled = tm && tm.enabled;
     const vigEnabled = vig && vig.enabled;
@@ -171,6 +180,7 @@ export class PostProcessPass implements RenderPass {
     const gradeEnabled = grade && grade.enabled;
     const quantEnabled = quant && quant.enabled;
     const hbaoEnabled = hbao && hbao.enabled;
+    const shaftsEnabled = shafts && shafts.enabled;
     const outlineEnabled = outline && outline.enabled;
     const flashEnabled = flash && flash.enabled;
 
@@ -211,6 +221,10 @@ export class PostProcessPass implements RenderPass {
       `const u_hbaoEnabled: u32 = ${hbaoEnabled ? 1 : 0}u;`,
     );
     assembledFrag = assembledFrag.replace(
+      "const u_lightShaftsEnabled: u32 = 0u;",
+      `const u_lightShaftsEnabled: u32 = ${shaftsEnabled ? 1 : 0}u;`,
+    );
+    assembledFrag = assembledFrag.replace(
       "const u_outlineEnabled: u32 = 0u;",
       `const u_outlineEnabled: u32 = ${outlineEnabled ? 1 : 0}u;`,
     );
@@ -245,6 +259,7 @@ export class PostProcessPass implements RenderPass {
     colorView: GPUTextureView,
     bloomActiveView: GPUTextureView,
     hbaoActiveView: GPUTextureView,
+    shaftsActiveView: GPUTextureView,
   ): void {
     const device = renderer.gpuDevice!;
     this._ensureResources(device);
@@ -257,6 +272,7 @@ export class PostProcessPass implements RenderPass {
         { binding: 2, resource: { buffer: this._uniformBuffer! } },
         { binding: 3, resource: bloomActiveView },
         { binding: 4, resource: hbaoActiveView },
+        { binding: 5, resource: shaftsActiveView },
       ],
     });
   }
@@ -292,6 +308,14 @@ export class PostProcessPass implements RenderPass {
         ? renderer.hbaoTextureView
         : renderer.whiteTextureView;
 
+    const shafts = group.get<import("../post/index.js").LightShaftsElement>(
+      PostProcessingEffectType.LIGHT_SHAFTS,
+    );
+    const shaftsActiveView =
+      shafts && shafts.enabled && renderer.lightShaftsTextureView
+        ? renderer.lightShaftsTextureView
+        : renderer.whiteTextureView;
+
     const sig = this._getSignature(group);
 
     // Rebuild pipeline ONLY if the structural shader signature changed
@@ -305,12 +329,14 @@ export class PostProcessPass implements RenderPass {
       !this._bindGroup ||
       this._builtTextureView !== colorView ||
       this._builtBloomTextureView !== bloomActiveView ||
-      this._builtHbaoTextureView !== hbaoActiveView
+      this._builtHbaoTextureView !== hbaoActiveView ||
+      this._builtShaftsTextureView !== shaftsActiveView
     ) {
-      this._buildBindGroup(renderer, colorView, bloomActiveView, hbaoActiveView);
+      this._buildBindGroup(renderer, colorView, bloomActiveView, hbaoActiveView, shaftsActiveView);
       this._builtTextureView = colorView;
       this._builtBloomTextureView = bloomActiveView;
       this._builtHbaoTextureView = hbaoActiveView;
+      this._builtShaftsTextureView = shaftsActiveView;
     }
 
     // Write the continuous tuning values every frame, independent of the rebuild guard above --
@@ -389,6 +415,15 @@ export class PostProcessPass implements RenderPass {
     d[41] = flash ? flash.color.g : 1.0; // flashParams.y: color.g
     d[42] = flash ? flash.color.b : 1.0; // flashParams.z: color.b
     d[43] = flash ? flash.intensity : 0.0; // flashParams.w: intensity
+
+    d[44] = shafts ? shafts.intensity : 1.0; // shaftsParams.x: intensity
+    d[45] = shafts ? shafts.density : 0.05; // shaftsParams.y: density
+    d[46] = 0;
+    d[47] = 0;
+    d[48] = shafts ? shafts.color.r : 1.0; // shaftsColor.r
+    d[49] = shafts ? shafts.color.g : 1.0; // shaftsColor.g
+    d[50] = shafts ? shafts.color.b : 1.0; // shaftsColor.b
+    d[51] = 1.0;
 
     renderer.gpuDevice!.queue.writeBuffer(this._uniformBuffer!, 0, d);
 

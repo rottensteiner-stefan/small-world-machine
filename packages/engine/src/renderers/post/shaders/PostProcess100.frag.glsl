@@ -4,6 +4,9 @@ varying vec2 v_uv;
 uniform sampler2D u_hdrTexture;
 uniform sampler2D u_bloomTexture;
 uniform int u_bloomEnabled;
+uniform sampler2D u_lightShaftsTexture;
+uniform int u_lightShaftsEnabled;
+uniform float u_lightShaftsIntensity;
 uniform float u_bloomIntensity;
 uniform vec3 u_bloomColor;
 uniform float u_exposure;
@@ -75,6 +78,12 @@ void main() {
     if (u_bloomEnabled == 1) {
         vec3 bloom = texture2D(u_bloomTexture, uv).rgb;
         hdr += bloom * u_bloomIntensity * u_bloomColor;
+    }
+
+    // Volumetric Light Shafts (In-Scattering)
+    if (u_lightShaftsEnabled == 1) {
+        vec3 shafts = texture2D(u_lightShaftsTexture, uv).rgb;
+        hdr += shafts * u_lightShaftsIntensity;
     }
 
     vec3 tonemapped = hdr * u_exposure;

@@ -9,6 +9,9 @@ uniform sampler2D u_bloomTexture;
 uniform int u_bloomEnabled;
 uniform sampler2D u_hbaoTexture;
 uniform int u_hbaoEnabled;
+uniform sampler2D u_lightShaftsTexture;
+uniform int u_lightShaftsEnabled;
+uniform float u_lightShaftsIntensity;
 uniform float u_bloomIntensity;
 uniform vec3 u_bloomColor;
 uniform float u_exposure;
@@ -238,6 +241,14 @@ void main() {
             }
         }
         hdr += bloom * u_bloomIntensity * u_bloomColor;
+    }
+
+    // Volumetric Light Shafts (In-Scattering) -- additive linear HDR lighting
+    if (u_lightShaftsEnabled == 1) {
+        vec3 shafts = texture(u_lightShaftsTexture, distortUv).rgb;
+        if (!isnan(shafts.r) && !isinf(shafts.r)) {
+            hdr += shafts * u_lightShaftsIntensity;
+        }
     }
 
     // Ambient Occlusion (HBAO) -- darkens the linear scene color before tonemapping, since it

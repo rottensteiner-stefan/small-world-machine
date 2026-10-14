@@ -14,4 +14,5 @@ export enum PostProcessingEffectType {
   OUTLINE = "Outline",
   GRAVITATIONAL_LENSING = "GravitationalLensing",
   FLASH = "Flash",
+  LIGHT_SHAFTS = "LightShafts",
 }

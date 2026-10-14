@@ -224,6 +224,18 @@ export interface PostProcessingEffectsConfig {
     relativisticBeaming?: number;
     ringGlowIntensity?: number;
   };
+  /** Atmospheric crepuscular rays / god rays. Supports Half-Res CSM raymarching (WebGL2/WebGPU) and 2D radial blur (WebGL1). */
+  lightShafts?: {
+    enabled?: boolean;
+    intensity?: number;
+    density?: number;
+    asymmetry?: number;
+    maxDistance?: number;
+    samples?: number;
+    decay?: number;
+    weight?: number;
+    color?: { r: number; g: number; b: number } | [number, number, number];
+  };
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   OutlineElement,
   GravitationalLensingElement,
   FlashElement,
+  LightShaftsElement,
 } from "./elements/index.js";
 import { PostProcessingEffectType } from "../../enums/index.js";
 import { Vector3D } from "../../math/index.js";
@@ -54,6 +55,7 @@ export class PostProcessingGroup {
     this.add(new OutlineElement());
     this.add(new GravitationalLensingElement());
     this.add(new FlashElement());
+    this.add(new LightShaftsElement());
   }
 
   /**
@@ -243,6 +245,29 @@ export class PostProcessingGroup {
             flash.color.set(col[0], col[1], col[2]);
           } else if (typeof col === "object" && col !== null) {
             flash.color.set(col.r, col.g, col.b);
+          }
+        }
+      }
+    }
+
+    if (effects.lightShafts) {
+      const shafts = this.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS);
+      if (shafts) {
+        const ls = effects.lightShafts;
+        if (ls.enabled !== undefined) shafts.enabled = ls.enabled;
+        if (ls.intensity !== undefined) shafts.intensity = ls.intensity;
+        if (ls.density !== undefined) shafts.density = ls.density;
+        if (ls.asymmetry !== undefined) shafts.asymmetry = ls.asymmetry;
+        if (ls.maxDistance !== undefined) shafts.maxDistance = ls.maxDistance;
+        if (ls.samples !== undefined) shafts.samples = ls.samples;
+        if (ls.decay !== undefined) shafts.decay = ls.decay;
+        if (ls.weight !== undefined) shafts.weight = ls.weight;
+        if (ls.color !== undefined) {
+          const col = ls.color;
+          if (Array.isArray(col)) {
+            shafts.color.set(col[0], col[1], col[2]);
+          } else if (typeof col === "object" && col !== null) {
+            shafts.color.set(col.r, col.g, col.b);
           }
         }
       }

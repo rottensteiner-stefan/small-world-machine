@@ -1,7 +1,7 @@
 import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
 import { WebGLMainPass } from "../passes/WebGLMainPass.js";
 import { WebGLPostProcessPass } from "../passes/WebGLPostProcessPass.js";
-import { PostProcessPassGL, BloomPassGL } from "../post/passes/index.js";
+import { PostProcessPassGL, BloomPassGL, LightShaftsPassGL } from "../post/passes/index.js";
 import { CubeTexture, Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
 import { StandardWebGPULayout, resolveManifestFlags } from "../shaders/index.js";
 import { DeviceLimit, InstancedMesh, Object3D, Scene } from "../../core/index.js";
@@ -97,6 +97,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   private _hdrH: number = 0;
   protected _postPassGL: PostProcessPassGL | undefined = undefined;
   protected _bloomPassGL: BloomPassGL | undefined = undefined;
+  protected _lightShaftsPassGL: LightShaftsPassGL | undefined = undefined;
 
   protected _activeRenderTarget: RenderTarget | RenderTargetCube | null = null;
   private _activeCubeFace: number = 0;
@@ -719,7 +720,36 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
           );
         }
       }
-      this._postPassGL.execute(this.gl, this._hdrTexture, this.postProcessing, bloomTex);
+
+      let lightShaftsTex: WebGLTexture | null = null;
+      if (this._lightShaftsPassGL && this._frameLights?.dLight) {
+        const shaftsNode = this.postProcessing.get<import("../post/index.js").LightShaftsElement>(
+          PostProcessingEffectType.LIGHT_SHAFTS,
+        );
+        if (shaftsNode && shaftsNode.enabled) {
+          const dLight = this._frameLights.dLight;
+          lightShaftsTex = this._lightShaftsPassGL.execute(
+            null,
+            this._hdrTexture,
+            this.gl.canvas.width,
+            this.gl.canvas.height,
+            this._frameViewProj.data,
+            this._frameCamPos,
+            dLight,
+            null,
+            shaftsNode,
+          );
+        }
+      }
+
+      this._postPassGL.execute(
+        this.gl,
+        this._hdrTexture,
+        this.postProcessing,
+        bloomTex,
+        null,
+        lightShaftsTex,
+      );
     }
   }
 
@@ -1142,9 +1172,11 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
 
       this._postPassGL ??= new PostProcessPassGL(this.gl, false);
       this._bloomPassGL ??= new BloomPassGL(this.gl, false);
+      this._lightShaftsPassGL ??= new LightShaftsPassGL(this.gl, false);
     } else if (this._hdrFbo) {
       this._postPassGL?.destroy(this.gl);
       this._bloomPassGL?.destroy();
+      this._lightShaftsPassGL?.destroy();
       this.gl.deleteFramebuffer(this._hdrFbo);
       this.gl.deleteTexture(this._hdrTexture!);
       this.gl.deleteRenderbuffer(this._hdrRenderBuffer!);
@@ -1155,6 +1187,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       this._hdrH = 0;
       this._postPassGL = undefined;
       this._bloomPassGL = undefined;
+      this._lightShaftsPassGL = undefined;
     }
   }
 
@@ -1340,6 +1373,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       if (this._hdrRenderBuffer) gl.deleteRenderbuffer(this._hdrRenderBuffer);
       this._postPassGL?.destroy(gl);
       this._bloomPassGL?.destroy();
+      this._lightShaftsPassGL?.destroy();
     }
 
     this._programs.clear();
@@ -1356,6 +1390,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._hdrRenderBuffer = undefined;
     this._postPassGL = undefined;
     this._bloomPassGL = undefined;
+    this._lightShaftsPassGL = undefined;
 
     super.destroy();
   }
