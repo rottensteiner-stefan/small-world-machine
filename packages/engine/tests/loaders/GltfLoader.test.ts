@@ -173,3 +173,43 @@ describe("GltfLoader node-parsing options", () => {
     expect(receivedRoot?.getObjectByName("A")).toBeDefined();
   });
 });
+
+describe("GltfLoader validation and fail-fast", () => {
+  it("should throw when glTF version is unsupported (< 2.0)", async () => {
+    const loader = new GltfLoader();
+    await expect(
+      loader.parse({ json: { asset: { version: "1.0" } }, buffers: [] }, ""),
+    ).rejects.toThrow(/Unsupported glTF version/);
+  });
+
+  it("should throw when extensionsRequired contains unsupported extension", async () => {
+    const loader = new GltfLoader();
+    await expect(
+      loader.parse(
+        {
+          json: {
+            asset: { version: "2.0" },
+            extensionsRequired: ["KHR_draco_mesh_compression"],
+          },
+          buffers: [],
+        },
+        "",
+      ),
+    ).rejects.toThrow(/Unsupported required extension/);
+  });
+
+  it("should not throw when extensionsRequired contains supported extensions", async () => {
+    const loader = new GltfLoader();
+    const root = await loader.parse(
+      {
+        json: {
+          asset: { version: "2.0" },
+          extensionsRequired: ["KHR_materials_variants"],
+        },
+        buffers: [],
+      },
+      "",
+    );
+    expect(root).toBeDefined();
+  });
+});

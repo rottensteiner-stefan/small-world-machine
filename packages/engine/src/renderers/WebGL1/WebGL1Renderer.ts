@@ -473,6 +473,16 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   }
 
   /** @inheritdoc */
+  public get activeRenderTarget(): RenderTarget | RenderTargetCube | null {
+    return this._activeRenderTarget;
+  }
+
+  /** @inheritdoc */
+  public get activeCubeFace(): number {
+    return this._activeCubeFace;
+  }
+
+  /** @inheritdoc */
   public override get isOffscreenRenderTarget(): boolean {
     return this._activeRenderTarget !== null;
   }
@@ -854,8 +864,13 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
 
     // --- Bind Lights ---
     // WebGL1 has no clustering (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md) and only
-    // ever had 16 uniform slots -- clamp explicitly now that the scene-wide cap is 64.
-    const numPointLights = Math.min(lights.pLights.length, 16);
+    // has 16 uniform slots -- fail-fast if more than 16 are supplied.
+    if (lights.pLights.length > 16) {
+      throw new Error(
+        `[WebGL1Renderer] Point light count exceeds limit of 16: ${lights.pLights.length}`,
+      );
+    }
+    const numPointLights = lights.pLights.length;
     const uNumPointLights = u.get("u_numPointLights");
     if (uNumPointLights) this.gl.uniform1i(uNumPointLights, numPointLights);
     for (let i = 0; i < numPointLights; i++) {
@@ -1032,6 +1047,22 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
 
         if (isInstanced) {
           const instMesh = o as InstancedMesh;
+          if (instMesh.instanceCount < 0) {
+            throw new Error(`[WebGL1Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
+          }
+          if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
+            throw new Error(
+              `[WebGL1Renderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
+            );
+          }
+          if (
+            instMesh.instanceData &&
+            instMesh.instanceData.byteLength < instMesh.instanceCount * 16
+          ) {
+            throw new Error(
+              `[WebGL1Renderer] InstancedMesh instanceData buffer too small: required at least ${instMesh.instanceCount * 16} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceData.byteLength} bytes.`,
+            );
+          }
           const ext = this._instancedArraysExt!;
 
           const uModel = u.get("u_model");

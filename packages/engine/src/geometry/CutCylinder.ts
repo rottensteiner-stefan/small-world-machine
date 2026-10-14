@@ -125,12 +125,14 @@ export class CutCylinder extends AbstractGeometry {
     const lateral = this.getLateralArea();
     const bottomCap = this.openEnded ? 0 : fraction * Math.PI * this.radius ** 2;
     const topCap = this.openEnded ? 0 : fraction * Math.PI * this.radius * this.getSemiMajorAxis();
+    const avgH = (this.heightMin + this.heightMax) / 2;
     const sideCaps =
       this.thetaLength < MathUtils.TWO_PI
-        ? 2 *
-          0.5 *
+        ? 0.5 *
           this.radius *
-          (this.getHeightAt(this.thetaStart) + this.getHeightAt(this.thetaStart + this.thetaLength))
+          (2 * avgH +
+            this.getHeightAt(this.thetaStart) +
+            this.getHeightAt(this.thetaStart + this.thetaLength))
         : 0;
     return lateral + bottomCap + topCap + sideCaps;
   }
@@ -245,11 +247,12 @@ export class CutCylinder extends AbstractGeometry {
 
         for (let y = 0; y <= this.heightSegments; y++) {
           const vCoord = y / this.heightSegments;
-          const yPos = vCoord * topH - yCenterOffset;
+          const yPosAxis = vCoord * avgH - yCenterOffset;
+          const yPosPerimeter = vCoord * topH - yCenterOffset;
 
-          v.push(0, yPos, 0); // Axis point
+          v.push(0, yPosAxis, 0); // Axis point matching lid center
           uv.push(0, vCoord);
-          v.push(this.radius * sin, yPos, this.radius * cos); // Perimeter point
+          v.push(this.radius * sin, yPosPerimeter, this.radius * cos); // Perimeter point matching lid perimeter
           uv.push(1, vCoord);
         }
 

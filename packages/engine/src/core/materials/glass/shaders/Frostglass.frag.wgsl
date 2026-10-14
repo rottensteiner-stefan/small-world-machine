@@ -20,9 +20,7 @@
     var N = normalize(i.n);
     if (USE_NORMAL_MAP) {
         let TBN = mat3x3f(normalize(i.t), normalize(i.b), normalize(i.n));
-        var rawNormal = textureSample(u_normalMap, s, i.uv).rgb * 2.0 - 1.0;
-        rawNormal.x *= obj.extraParams.z;
-        rawNormal.y *= obj.extraParams.w;
+        let rawNormal = textureSample(u_normalMap, s, i.uv).rgb * 2.0 - 1.0;
         N = normalize(TBN * rawNormal);
     }
     let dotNV = max(dot(N, V), 0.0001);

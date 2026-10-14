@@ -178,18 +178,44 @@ export class ObjLoader extends AbstractLoader<Object3D> {
     tempVN: number[],
     group: MaterialGroup,
   ): number {
-    if (group.vertexCache.has(faceStr)) {
-      return group.vertexCache.get(faceStr)!;
-    }
-
     const parts: string[] = faceStr.split("/");
 
     // 1. Position (Mandatory)
-    const vRaw: number = parseInt(parts[0]!);
     // OBJ indices are 1-based; negative indices are relative to the last vertex parsed so far
     // (e.g. -1 == most recently defined vertex), commonly emitted by Blender's exporter.
-    const vIdx: number = vRaw < 0 ? tempV.length + vRaw * 3 : (vRaw - 1) * 3;
-    if (!Number.isFinite(vRaw) || vRaw === 0 || vIdx < 0 || vIdx + 2 >= tempV.length) {
+    const vRaw: number = parseInt(parts[0]!);
+    const totalV = tempV.length / 3;
+    const absV: number = vRaw < 0 ? totalV + vRaw + 1 : vRaw;
+    const vIdx: number = (absV - 1) * 3;
+
+    // 2. UV Coordinates (Optional)
+    let absVT = 0;
+    let vtIdx = -1;
+    if (parts.length > 1 && parts[1] !== "") {
+      const vtRaw = parseInt(parts[1]!);
+      const totalVT = tempVT.length / 2;
+      absVT = vtRaw < 0 ? totalVT + vtRaw + 1 : vtRaw;
+      vtIdx = (absVT - 1) * 2;
+    }
+
+    // 3. Normals (Optional)
+    let absVN = 0;
+    let vnIdx = -1;
+    if (parts.length > 2 && parts[2] !== "") {
+      const vnRaw = parseInt(parts[2]!);
+      const totalVN = tempVN.length / 3;
+      absVN = vnRaw < 0 ? totalVN + vnRaw + 1 : vnRaw;
+      vnIdx = (absVN - 1) * 3;
+    }
+
+    // Key cache on resolved absolute indices so negative relative indices (e.g. -1) referring
+    // to different vertices across time do not collide.
+    const cacheKey = `${absV}/${absVT || ""}/${absVN || ""}`;
+    if (group.vertexCache.has(cacheKey)) {
+      return group.vertexCache.get(cacheKey)!;
+    }
+
+    if (!Number.isFinite(vRaw) || absV <= 0 || vIdx < 0 || vIdx + 2 >= tempV.length) {
       console.warn(
         `[ObjLoader] Malformed face vertex index "${parts[0]}" in "${faceStr}", using (0,0,0).`,
       );
@@ -198,40 +224,25 @@ export class ObjLoader extends AbstractLoader<Object3D> {
       group.outVertices.push(tempV[vIdx]!, tempV[vIdx + 1]!, tempV[vIdx + 2]!);
     }
 
-    // 2. UV Coordinates (Optional)
-    if (parts.length > 1 && parts[1] !== "") {
-      const vtIdx: number = (parseInt(parts[1]!) - 1) * 2;
-      // Safety check for bounds
-      if (vtIdx >= 0 && vtIdx + 1 < tempVT.length) {
-        group.outUVs.push(tempVT[vtIdx]!, tempVT[vtIdx + 1]!);
-      } else {
-        group.outUVs.push(0, 0);
-      }
+    if (absVT > 0 && vtIdx >= 0 && vtIdx + 1 < tempVT.length) {
+      group.outUVs.push(tempVT[vtIdx]!, tempVT[vtIdx + 1]!);
     } else {
       group.outUVs.push(0, 0);
     }
 
-    // 3. Normals (Optional)
-    if (parts.length > 2 && parts[2] !== "") {
-      const vnIdx: number = (parseInt(parts[2]!) - 1) * 3;
-      if (vnIdx >= 0 && vnIdx + 2 < tempVN.length) {
-        group.outNormals.push(tempVN[vnIdx]!, tempVN[vnIdx + 1]!, tempVN[vnIdx + 2]!);
-        group.hasExplicitNormals = true;
-      } else {
-        // Push a placeholder to keep outNormals aligned 1:1 with outVertices, matching the UV
-        // branch above -- otherwise a face-vertex with a missing/out-of-range vn shifts every
-        // subsequent vertex's normal by one slot. `parse()` discards this array entirely (falling
-        // back to auto-computed normals) unless `hasExplicitNormals` is true for the group.
-        group.outNormals.push(0, 0, 0);
-      }
+    if (absVN > 0 && vnIdx >= 0 && vnIdx + 2 < tempVN.length) {
+      group.outNormals.push(tempVN[vnIdx]!, tempVN[vnIdx + 1]!, tempVN[vnIdx + 2]!);
+      group.hasExplicitNormals = true;
     } else {
-      // No vn segment at all on this face-vertex (e.g. "f 1/1 2/2 3/3") -- same alignment
-      // requirement as above.
+      // Push a placeholder to keep outNormals aligned 1:1 with outVertices, matching the UV
+      // branch above -- otherwise a face-vertex with a missing/out-of-range vn shifts every
+      // subsequent vertex's normal by one slot. `parse()` discards this array entirely (falling
+      // back to auto-computed normals) unless `hasExplicitNormals` is true for the group.
       group.outNormals.push(0, 0, 0);
     }
 
     const newIndex: number = group.indexCounter++;
-    group.vertexCache.set(faceStr, newIndex);
+    group.vertexCache.set(cacheKey, newIndex);
     return newIndex;
   }
 }

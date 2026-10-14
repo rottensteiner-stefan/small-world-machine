@@ -6,14 +6,21 @@ in vec2 v_uv;
 
 uniform sampler2D u_lowResShaftsMap;
 uniform sampler2D u_fullResDepthMap;
-uniform sampler2D u_lowResDepthMap;
 uniform vec2 u_lowResTexelSize;
 uniform float u_depthThreshold; // default: 0.05
 
 out vec4 fragColor;
 
+float linearizeDepth(float d) {
+    float near = 0.1;
+    float far = 1000.0;
+    float z = d * 2.0 - 1.0;
+    return (2.0 * near * far) / max(far + near - z * (far - near), 0.00001);
+}
+
 void main() {
     float fullDepth = texture(u_fullResDepthMap, v_uv).r;
+    float fullLinear = linearizeDepth(fullDepth);
 
     // 4 nearest half-resolution texel centers
     vec2 offsets[4] = vec2[](
@@ -30,10 +37,12 @@ void main() {
 
     for (int i = 0; i < 4; i++) {
         vec2 tapUV = v_uv + offsets[i] * u_lowResTexelSize;
-        float lowDepth = texture(u_lowResDepthMap, tapUV).r;
+        float lowDepth = texture(u_fullResDepthMap, tapUV).r;
+        float lowLinear = linearizeDepth(lowDepth);
         vec3 color = texture(u_lowResShaftsMap, tapUV).rgb;
 
-        float depthDiff = abs(fullDepth - lowDepth);
+        // Relative linearized depth difference to prevent premature occluder rejection
+        float depthDiff = abs(fullLinear - lowLinear) / max(fullLinear, 0.001);
         if (depthDiff < minDepthDiff) {
             minDepthDiff = depthDiff;
             nearestColor = color;

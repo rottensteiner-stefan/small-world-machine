@@ -170,6 +170,7 @@ export class OBB implements BoundingVolume {
   public clone(): OBB {
     const copy = new OBB();
     copy.center.copyFrom(this.center);
+    copy._localCenter.copyFrom(this._localCenter);
     copy.halfExtents.copyFrom(this.halfExtents);
     copy._localHalfExtents.copyFrom(this._localHalfExtents);
     copy.axes[0].copyFrom(this.axes[0]);

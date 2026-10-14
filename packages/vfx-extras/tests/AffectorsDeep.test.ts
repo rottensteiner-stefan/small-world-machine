@@ -32,10 +32,10 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
       attractor.apply(p1, 0.1);
 
       // Force = G * M * r / (r^2 + eps^2)^(3/2)
-      // For r=1.0, eps=0.25: denom = (1.0 + 0.25)^1.5 = 1.25^1.5 = 1.39754
-      // pull = 100 * 1.0 / 1.39754 = 71.55
+      // For r=1.0, eps=0.25 (eps^2 = 0.0625): denom = (1.0 + 0.0625)^1.5 = 1.0625^1.5 = 1.09519
+      // pull = 100 * 1.0 / 1.09519 = 91.31
       expect(p1.acceleration.x).toBeLessThan(0); // Accelerated inward towards origin
-      expect(p1.acceleration.x).toBeCloseTo(-71.55, 1);
+      expect(p1.acceleration.x).toBeCloseTo(-91.31, 1);
       expect(p1.acceleration.y).toBe(0);
       expect(p1.acceleration.z).toBe(0);
     });

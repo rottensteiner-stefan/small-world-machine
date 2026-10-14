@@ -10,6 +10,7 @@ import { BoundingBox } from "../../src/physix/BoundingBox.js";
 import { OBB } from "../../src/physix/OBB.js";
 import { StaticCollider } from "../../src/physix/StaticCollider.js";
 import { EventDispatcherImpl } from "../../src/core/events/EventDispatcherImpl.js";
+import { pairKey } from "../../src/physix/solvers/ContactSolver.js";
 
 describe("PhysicsSystem", () => {
   let system: PhysicsSystem;
@@ -692,6 +693,37 @@ describe("PhysicsSystem", () => {
 
       // True rotation must be restored afterward.
       expect(obj.rotation.y).toBeCloseTo(-Math.PI + 0.1, 10);
+    });
+
+    it("discards leftover accumulator beyond maxSubSteps to prevent extrapolation (alpha < 1)", () => {
+      system.fixedTimeStep = 1 / 60;
+      system.maxSubSteps = 3;
+      system.maxDeltaTime = 1.0;
+
+      // Pass large dt that would require 10 steps (exceeding maxSubSteps=3)
+      system.step(scene, 10 * (1 / 60) + 0.5 * (1 / 60));
+
+      // After stepping, interpolationAlpha must be strictly in [0, 1)
+      expect(system.interpolationAlpha).toBeLessThan(1.0);
+      expect(system.interpolationAlpha).toBeGreaterThanOrEqual(0.0);
+    });
+
+    it("generates collision-free, symmetric pair keys for IDs above 2^21", () => {
+      const idA = 100000000;
+      const idB = 100000001;
+      const key1 = pairKey(idA, idB);
+      const key2 = pairKey(idB, idA);
+      expect(key1).toBe(key2);
+
+      const idC = 100000002;
+      const key3 = pairKey(idA, idC);
+      expect(key1).not.toBe(key3);
+
+      const map = new Map<bigint, string>();
+      map.set(key1, "AB");
+      map.set(key3, "AC");
+      expect(map.get(key2)).toBe("AB");
+      expect(map.size).toBe(2);
     });
   });
 });

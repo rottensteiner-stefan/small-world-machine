@@ -41,71 +41,80 @@ export class PlanarReflectionNode extends Object3D {
     this.mirrorCamera.aspect = mainCamera.aspect;
     this.mirrorCamera.projection = mainCamera.projection;
 
-    // 1. Calculate mirror plane based on this object's world matrix. Only ever read within this
-    // method (recomputed fresh every call from the current world matrix), so these live as local
-    // MathPool-backed scratch values rather than instance fields.
+    const prevRenderTarget = renderer.activeRenderTarget ?? null;
+    const prevCubeFace = renderer.activeCubeFace;
     const pos = MathPool.acquireVector().set(0, 0, 0);
-    this.worldMatrix.transformVector(pos);
-
     const planeNormal = MathPool.acquireVector().set(0, 1, 0);
-    this.worldMatrix.transformVector(planeNormal);
-    planeNormal.sub(pos).normalize();
-    const planeConstant = -planeNormal.dot(pos);
 
-    // 2. Mirror the camera position
-    const camPos = mainCamera.position;
-    const dist = planeNormal.dot(camPos) + planeConstant;
-    this.mirrorCamera.position.set(
-      camPos.x - 2.0 * planeNormal.x * dist,
-      camPos.y - 2.0 * planeNormal.y * dist,
-      camPos.z - 2.0 * planeNormal.z * dist,
-    );
-
-    // 3. Mirror the camera target
-    const targetPos = mainCamera.target;
-    const distTarget = planeNormal.dot(targetPos) + planeConstant;
-    this.mirrorCamera.target.set(
-      targetPos.x - planeNormal.x * 2 * distTarget,
-      targetPos.y - planeNormal.y * 2 * distTarget,
-      targetPos.z - planeNormal.z * 2 * distTarget,
-    );
-
-    // 4. Mirror the camera UP vector (must be set BEFORE updateViewMatrix)
-    const up = mainCamera.up;
-    const upDist = planeNormal.dot(up);
-    this.mirrorCamera.up.set(
-      up.x - 2.0 * planeNormal.x * upDist,
-      up.y - 2.0 * planeNormal.y * upDist,
-      up.z - 2.0 * planeNormal.z * upDist,
-    );
-
-    // Update view and projection internally
-    this.mirrorCamera.updateViewMatrix();
-
-    MathPool.releaseVector(pos);
-    MathPool.releaseVector(planeNormal);
-
-    // 5. Hide this reflection node (and its children) so it doesn't occlude the reflection
     const wasVisible = this.isVisible;
-    this.isVisible = false;
+    let excludedWasVisible: boolean[] = [];
 
-    // 5b. Also hide every object that samples `renderTarget` in its own material -- see
-    // `excludedObjects`'s doc comment for why this can't be inferred from the scene graph.
-    const excludedWasVisible: boolean[] = this.excludedObjects.map((obj) => obj.isVisible);
-    for (const obj of this.excludedObjects) obj.isVisible = false;
+    try {
+      // 1. Calculate mirror plane based on this object's world matrix. Only ever read within this
+      // method (recomputed fresh every call from the current world matrix), so these live as local
+      // MathPool-backed scratch values rather than instance fields.
+      this.worldMatrix.transformVector(pos);
 
-    // 6. Render to target
-    renderer.setRenderTarget(this.renderTarget);
-    renderer.render(
-      scene,
-      this.mirrorCamera.viewProjectionMatrix,
-      this.mirrorCamera.position,
-      this.mirrorCamera.viewMatrix,
-    );
-    renderer.setRenderTarget(null);
+      this.worldMatrix.transformVector(planeNormal);
+      planeNormal.sub(pos).normalize();
+      const planeConstant = -planeNormal.dot(pos);
 
-    // Restore visibility
-    this.isVisible = wasVisible;
-    this.excludedObjects.forEach((obj, i) => (obj.isVisible = excludedWasVisible[i]!));
+      // 2. Mirror the camera position
+      const camPos = mainCamera.position;
+      const dist = planeNormal.dot(camPos) + planeConstant;
+      this.mirrorCamera.position.set(
+        camPos.x - 2.0 * planeNormal.x * dist,
+        camPos.y - 2.0 * planeNormal.y * dist,
+        camPos.z - 2.0 * planeNormal.z * dist,
+      );
+
+      // 3. Mirror the camera target
+      const targetPos = mainCamera.target;
+      const distTarget = planeNormal.dot(targetPos) + planeConstant;
+      this.mirrorCamera.target.set(
+        targetPos.x - planeNormal.x * 2 * distTarget,
+        targetPos.y - planeNormal.y * 2 * distTarget,
+        targetPos.z - planeNormal.z * 2 * distTarget,
+      );
+
+      // 4. Mirror the camera UP vector (must be set BEFORE updateViewMatrix)
+      const up = mainCamera.up;
+      const upDist = planeNormal.dot(up);
+      this.mirrorCamera.up.set(
+        up.x - 2.0 * planeNormal.x * upDist,
+        up.y - 2.0 * planeNormal.y * upDist,
+        up.z - 2.0 * planeNormal.z * upDist,
+      );
+
+      // Update view and projection internally
+      this.mirrorCamera.updateViewMatrix();
+
+      // 5. Hide this reflection node (and its children) so it doesn't occlude the reflection
+      this.isVisible = false;
+
+      // 5b. Also hide every object that samples `renderTarget` in its own material -- see
+      // `excludedObjects`'s doc comment for why this can't be inferred from the scene graph.
+      excludedWasVisible = this.excludedObjects.map((obj) => obj.isVisible);
+      for (const obj of this.excludedObjects) obj.isVisible = false;
+
+      // 6. Render to target
+      renderer.setRenderTarget(this.renderTarget);
+      renderer.render(
+        scene,
+        this.mirrorCamera.viewProjectionMatrix,
+        this.mirrorCamera.position,
+        this.mirrorCamera.viewMatrix,
+      );
+    } finally {
+      MathPool.releaseVector(pos);
+      MathPool.releaseVector(planeNormal);
+      renderer.setRenderTarget(prevRenderTarget, prevCubeFace);
+
+      // Restore visibility
+      this.isVisible = wasVisible;
+      if (excludedWasVisible.length > 0) {
+        this.excludedObjects.forEach((obj, i) => (obj.isVisible = excludedWasVisible[i]!));
+      }
+    }
   }
 }

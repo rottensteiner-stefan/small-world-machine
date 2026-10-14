@@ -119,8 +119,9 @@ void main() {
     }
 
     // --- Screen Space Refraction (Fallback) ---
+    vec2 baseScreenUv = v_clipPos.xy / v_clipPos.w * 0.5 + 0.5;
     vec3 refrDir = refract(-V, N, 1.0 / ior);
-    vec2 screenUv = v_uv + refrDir.xy * thickness * 0.05;
+    vec2 screenUv = baseScreenUv + refrDir.xy * thickness * 0.05;
     screenUv = clamp(screenUv, vec2(0.001), vec2(0.999));
     
     // WebGL1 expects texture2D, approximate linear conversion

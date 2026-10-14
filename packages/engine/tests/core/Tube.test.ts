@@ -8,8 +8,9 @@ describe("Tube Geometry", () => {
     const tube = new Tube({ radialSegments, heightSegments });
     const data = tube.getGeometryData();
 
-    // Vertices: (radialSegments + 1) * (heightSegments + 1) * 2 (inner/outer)
-    const expectedVertices = (radialSegments + 1) * (heightSegments + 1) * 2;
+    // Vertices: (radialSegments + 1) * (heightSegments + 1) * 2 (inner/outer) + (radialSegments + 1) * 4 (unshared caps)
+    const expectedVertices =
+      (radialSegments + 1) * (heightSegments + 1) * 2 + (radialSegments + 1) * 4;
     expect(data.vertices.length / 3).toBe(expectedVertices);
     // Indices:
     // Outer surface: radialSegments * heightSegments * 6

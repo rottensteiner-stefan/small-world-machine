@@ -589,6 +589,53 @@ export class Collision {
    * @param b The static box to sweep against.
    * @returns The time-of-impact as a fraction of `delta` in `[0, 1]`, or -1 if no impact.
    */
+  /**
+   * Internal sweep kernel: intersects a ray against an axis-aligned box representing an inflated
+   * swept target. If the ray starts inside the box (containsPoint or tmin < 0), returns -1
+   * (indicating pre-existing overlap / invalid TOI, rather than returning the exit TOI).
+   */
+  private static _sweepRayBox(ray: Ray, box: BoundingBox): number {
+    if (box.containsPoint(ray.origin)) {
+      return -1;
+    }
+
+    let tmin = -Infinity;
+    let tmax = Infinity;
+
+    const dirX = ray.direction.x;
+    const dirY = ray.direction.y;
+    const dirZ = ray.direction.z;
+
+    const oriX = ray.origin.x;
+    const oriY = ray.origin.y;
+    const oriZ = ray.origin.z;
+
+    const invDirX = 1.0 / (0 === dirX ? 1e-10 : dirX);
+    const invDirY = 1.0 / (0 === dirY ? 1e-10 : dirY);
+    const invDirZ = 1.0 / (0 === dirZ ? 1e-10 : dirZ);
+
+    let t1 = (box.min.x - oriX) * invDirX;
+    let t2 = (box.max.x - oriX) * invDirX;
+    tmin = Math.max(tmin, Math.min(t1, t2));
+    tmax = Math.min(tmax, Math.max(t1, t2));
+
+    t1 = (box.min.y - oriY) * invDirY;
+    t2 = (box.max.y - oriY) * invDirY;
+    tmin = Math.max(tmin, Math.min(t1, t2));
+    tmax = Math.min(tmax, Math.max(t1, t2));
+
+    t1 = (box.min.z - oriZ) * invDirZ;
+    t2 = (box.max.z - oriZ) * invDirZ;
+    tmin = Math.max(tmin, Math.min(t1, t2));
+    tmax = Math.min(tmax, Math.max(t1, t2));
+
+    if (tmin < 0 || tmin > tmax) {
+      return -1;
+    }
+
+    return tmin <= 1 ? tmin : -1;
+  }
+
   public static sweepSphereBox(
     origin: Vector3D,
     delta: Vector3D,
@@ -601,8 +648,7 @@ export class Collision {
     box.max.set(b.max.x + radius, b.max.y + radius, b.max.z + radius);
     ray.origin.copyFrom(origin);
     ray.direction.copyFrom(delta);
-    const t = ray.intersectsBox(box);
-    return t >= 0 && t <= 1 ? t : -1;
+    return this._sweepRayBox(ray, box);
   }
 
   /**
@@ -635,8 +681,7 @@ export class Collision {
 
     box.min.set(-o.halfExtents.x - radius, -o.halfExtents.y - radius, -o.halfExtents.z - radius);
     box.max.set(o.halfExtents.x + radius, o.halfExtents.y + radius, o.halfExtents.z + radius);
-    const t = ray.intersectsBox(box);
-    return t >= 0 && t <= 1 ? t : -1;
+    return this._sweepRayBox(ray, box);
   }
 
   /**
@@ -659,8 +704,7 @@ export class Collision {
     box.max.set(b.max.x + halfExtents.x, b.max.y + halfExtents.y, b.max.z + halfExtents.z);
     ray.origin.copyFrom(origin);
     ray.direction.copyFrom(delta);
-    const t = ray.intersectsBox(box);
-    return t >= 0 && t <= 1 ? t : -1;
+    return this._sweepRayBox(ray, box);
   }
 
   /**
@@ -729,8 +773,7 @@ export class Collision {
     box.min.set(-o.halfExtents.x - r0, -o.halfExtents.y - r1, -o.halfExtents.z - r2);
     box.max.set(o.halfExtents.x + r0, o.halfExtents.y + r1, o.halfExtents.z + r2);
 
-    const t = ray.intersectsBox(box);
-    return t >= 0 && t <= 1 ? t : -1;
+    return this._sweepRayBox(ray, box);
   }
 
   /**
@@ -762,8 +805,7 @@ export class Collision {
     );
     box.max.set(o.halfExtents.x + s.radius, o.halfExtents.y + s.radius, o.halfExtents.z + s.radius);
 
-    const t = ray.intersectsBox(box);
-    return t >= 0 && t <= 1 ? t : -1;
+    return this._sweepRayBox(ray, box);
   }
 
   /**
@@ -794,8 +836,7 @@ export class Collision {
     box.min.set(-o.halfExtents.x - r0, -o.halfExtents.y - r1, -o.halfExtents.z - r2);
     box.max.set(o.halfExtents.x + r0, o.halfExtents.y + r1, o.halfExtents.z + r2);
 
-    const t = ray.intersectsBox(box);
-    return t >= 0 && t <= 1 ? t : -1;
+    return this._sweepRayBox(ray, box);
   }
 
   /**
@@ -830,8 +871,7 @@ export class Collision {
     box.min.set(-oB.halfExtents.x - r0, -oB.halfExtents.y - r1, -oB.halfExtents.z - r2);
     box.max.set(oB.halfExtents.x + r0, oB.halfExtents.y + r1, oB.halfExtents.z + r2);
 
-    const t = ray.intersectsBox(box);
-    return t >= 0 && t <= 1 ? t : -1;
+    return this._sweepRayBox(ray, box);
   }
 
   /**
@@ -842,15 +882,30 @@ export class Collision {
     ray.origin.copyFrom(origin);
     ray.direction.copyFrom(delta);
 
-    let t = -1;
     if (BoundingType.SPHERE === volume.type) {
-      t = ray.intersectsSphere(volume as BoundingSphere);
+      const s = volume as BoundingSphere;
+      if (origin.distanceToSq(s.center) <= s.radius * s.radius) {
+        return -1;
+      }
+      const t = ray.intersectsSphere(s);
+      return t >= 0 && t <= 1 ? t : -1;
     } else if (BoundingType.BOX === volume.type) {
-      t = ray.intersectsBox(volume as BoundingBox);
+      return this._sweepRayBox(ray, volume as BoundingBox);
     } else if (BoundingType.OBB === volume.type) {
-      t = ray.intersectsOBB(volume as OBB);
+      const o = volume as OBB;
+      const box = (this._sweepScratchBox ??= new BoundingBox(new Vector3D(), new Vector3D()));
+      const rel = MathPool.acquireVector().copyFrom(origin).sub(o.center);
+      const u0 = MathUtils.at(o.axes, 0);
+      const u1 = MathUtils.at(o.axes, 1);
+      const u2 = MathUtils.at(o.axes, 2);
+      ray.origin.set(rel.dot(u0), rel.dot(u1), rel.dot(u2));
+      MathPool.releaseVector(rel);
+      ray.direction.set(delta.dot(u0), delta.dot(u1), delta.dot(u2));
+      box.min.set(-o.halfExtents.x, -o.halfExtents.y, -o.halfExtents.z);
+      box.max.set(o.halfExtents.x, o.halfExtents.y, o.halfExtents.z);
+      return this._sweepRayBox(ray, box);
     }
-    return t >= 0 && t <= 1 ? t : -1;
+    return -1;
   }
 
   /**

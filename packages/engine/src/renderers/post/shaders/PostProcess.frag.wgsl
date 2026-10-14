@@ -264,7 +264,7 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
     if (1u == u_lightShaftsEnabled) {
         let shafts = textureSample(lightShaftsTexture, hdrSampler, distortUv).rgb;
         if (shafts.r == shafts.r) {
-            hdr += shafts * dyn.shaftsParams.x * dyn.shaftsColor.rgb;
+            hdr += shafts * dyn.shaftsParams.x;
         }
     }
 

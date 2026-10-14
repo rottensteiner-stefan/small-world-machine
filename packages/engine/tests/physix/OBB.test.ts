@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { OBB } from "../../src/physix/OBB.js";
 import { Frustum } from "../../src/math/Frustum.js";
+import { Matrix4 } from "../../src/math/Matrix4.js";
 
 describe("OBB Frustum Culling", () => {
   it("should return false when the bounding sphere intersects but actual corners do not (False Positive fix)", () => {
@@ -26,5 +27,20 @@ describe("OBB Frustum Culling", () => {
     // The conservative check (using getBroadRadius) would have returned TRUE.
     // The new 8-corner projection check MUST return FALSE.
     expect(obb.intersectsFrustum(frustum)).toBe(false);
+  });
+
+  it("clone() should preserve _localCenter when transformed by matrix", () => {
+    const obb = new OBB();
+    obb.setLocalCenter(2, 3, 4);
+    const cloned = obb.clone();
+
+    const m = new Matrix4();
+    Matrix4.translate(10, 20, 30, m);
+    cloned.transform(m);
+
+    // cloned.center should be transformed localCenter: (2+10, 3+20, 4+30) = (12, 23, 34)
+    expect(cloned.center.x).toBeCloseTo(12);
+    expect(cloned.center.y).toBeCloseTo(23);
+    expect(cloned.center.z).toBeCloseTo(34);
   });
 });

@@ -9,7 +9,8 @@ export interface MakerToolbarContext {
   project: ProjectBinding;
   orbit: OrbitCameraController;
   gizmo: TransformGizmo;
-  addObject: (obj: Object3D) => void;
+  addObject: (obj: Object3D, options?: { spawn?: boolean }) => void;
+  loadProjectObjects: (children: Object3D[]) => void;
   /** Removes the scene lights that a freshly loaded scene brings its own same-named copy of (the default SunLight/Fill). */
   replaceLightsWith: (loaded: readonly Object3D[]) => void;
   refreshPrefabList: () => Promise<void>;
@@ -68,12 +69,10 @@ export class MakerToolbarBuilder {
         // reopen a project" flow (clearing existing content first) is a later-phase concern.
         const loadedRoot = await this._ctx.project.load();
         if (loadedRoot) {
-          // Before addObject: textures assigned after the first render may not rebuild pipelines.
+          // Before adding objects: textures assigned after the first render may not rebuild pipelines.
           await this._ctx.resolveDecals(loadedRoot);
           this._ctx.replaceLightsWith(loadedRoot.children);
-          for (const child of [...loadedRoot.children]) {
-            this._ctx.addObject(child);
-          }
+          this._ctx.loadProjectObjects([...loadedRoot.children]);
         }
         await this._ctx.refreshPrefabList();
         this._ctx.statusContainer.textContent = "Saved";

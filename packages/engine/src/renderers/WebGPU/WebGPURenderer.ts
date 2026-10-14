@@ -405,6 +405,16 @@ export class WebGPURenderer extends AbstractRenderer {
     this._activeCubeFace = activeCubeFace ?? 0;
   }
 
+  /** The currently active off-screen render target, or null if rendering to the default framebuffer. */
+  public get activeRenderTarget(): RenderTarget | RenderTargetCube | null {
+    return this._activeRenderTarget;
+  }
+
+  /** The currently active cube face index (0-5) if rendering to a RenderTargetCube. */
+  public get activeCubeFace(): number {
+    return this._activeCubeFace;
+  }
+
   /**
    * The normal buffer (ADR 0028) the main pass writes alongside its color target, or undefined
    * while `quality.normalBuffer` is off or a custom RenderTarget is active (offscreen passes
@@ -1842,6 +1852,15 @@ export class WebGPURenderer extends AbstractRenderer {
 
       if (isInstanced) {
         const instMesh = obj as InstancedMesh;
+        if (instMesh.instanceCount < 0) {
+          throw new Error(`[WebGPURenderer] Invalid instanceCount: ${instMesh.instanceCount}`);
+        }
+        if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
+          throw new Error(
+            `[WebGPURenderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
+          );
+        }
+
         let instanceBuf = this._gpuInstanceBuffers.get(instMesh);
         const matrixByteLength = instMesh.instanceMatrices.byteLength;
 
@@ -1865,6 +1884,11 @@ export class WebGPURenderer extends AbstractRenderer {
 
         // Instance Data
         if (instMesh.instanceData) {
+          if (instMesh.instanceData.byteLength < instMesh.instanceCount * 16) {
+            throw new Error(
+              `[WebGPURenderer] InstancedMesh instanceData buffer too small: required at least ${instMesh.instanceCount * 16} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceData.byteLength} bytes.`,
+            );
+          }
           let instanceDataBuf = this._gpuInstanceDataBuffers.get(instMesh);
           const dataByteLength = instMesh.instanceData.byteLength;
 
@@ -1884,7 +1908,7 @@ export class WebGPURenderer extends AbstractRenderer {
           }
           rp.setVertexBuffer(7, instanceDataBuf);
         } else {
-          this._fallback.ensureDummyBufferSize(16);
+          this._fallback.ensureDummyBufferSize(instMesh.instanceCount);
           rp.setVertexBuffer(7, this._fallback.dummyUvBuffer);
         }
 
@@ -2040,6 +2064,11 @@ export class WebGPURenderer extends AbstractRenderer {
     if (cached !== undefined) return cached;
 
     const numMatrices = Math.min(skel.bones.length, MAX_SKINNED_BONES);
+    if (this._gpuBoneMatricesOffset + numMatrices > 2048) {
+      throw new Error(
+        `[WebGPURenderer] Bone matrices buffer capacity exceeded: cannot allocate ${numMatrices} matrices (offset ${this._gpuBoneMatricesOffset}, capacity 2048)`,
+      );
+    }
     const offset = this._gpuBoneMatricesOffset;
 
     const floatsToCopy = Math.min(skel.boneMatrices.length, numMatrices * 16);
@@ -2139,6 +2168,21 @@ export class WebGPURenderer extends AbstractRenderer {
     far: number = 1000,
     projMatrix?: Float32Array,
   ): void {
+    if (lights.pLights.length > MAX_CLUSTERED_LIGHTS_PER_TYPE) {
+      throw new Error(
+        `[WebGPURenderer] Point light count exceeds limit of ${MAX_CLUSTERED_LIGHTS_PER_TYPE}: ${lights.pLights.length}`,
+      );
+    }
+    if (lights.sLights.length > MAX_CLUSTERED_LIGHTS_PER_TYPE) {
+      throw new Error(
+        `[WebGPURenderer] Spot light count exceeds limit of ${MAX_CLUSTERED_LIGHTS_PER_TYPE}: ${lights.sLights.length}`,
+      );
+    }
+    if (lights.aLights.length > 42) {
+      throw new Error(
+        `[WebGPURenderer] Area light count exceeds limit of 42: ${lights.aLights.length}`,
+      );
+    }
     if (
       this._currentIrradianceMap !== scene.irradianceMap ||
       this._currentPrefilterMap !== scene.prefilterMap ||

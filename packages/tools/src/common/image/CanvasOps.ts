@@ -178,12 +178,21 @@ export function flipImage(src: ImageData, horizontal = true, vertical = false): 
   return out;
 }
 
+export const MAX_CANVAS_EDGE = 4096;
+export const MAX_PIXELS = 4096 * 4096;
+
 /**
  * Rotates image by 90, 180, or 270 degrees.
  */
 export function rotateImage(src: ImageData, angleDeg: number): ImageData {
   const angle = ((angleDeg % 360) + 360) % 360;
   if (angle === 0) return makeImageData(src.width, src.height, new Uint8ClampedArray(src.data));
+
+  if (angle !== 90 && angle !== 180 && angle !== 270) {
+    throw new Error(
+      `rotateImage only supports right-angle rotations (0, 90, 180, 270 degrees), got ${angleDeg}°`,
+    );
+  }
 
   const w = src.width;
   const h = src.height;
@@ -229,6 +238,11 @@ export function scaleImage(src: ImageData, factor: number): ImageData {
   const safeFactor = Math.max(0.1, Math.min(16, factor));
   const outW = Math.max(1, Math.round(src.width * safeFactor));
   const outH = Math.max(1, Math.round(src.height * safeFactor));
+  if (outW > MAX_CANVAS_EDGE || outH > MAX_CANVAS_EDGE || outW * outH > MAX_PIXELS) {
+    throw new Error(
+      `scaleImage: target dimensions ${outW}x${outH} (${outW * outH} pixels) exceed maximum allowed canvas size (max edge: ${MAX_CANVAS_EDGE}, max pixels: ${MAX_PIXELS})`,
+    );
+  }
   const out = makeImageData(outW, outH);
   const sData = src.data;
   const dData = out.data;
@@ -697,9 +711,7 @@ export interface ParsedAiAction {
   type: string;
   label: string;
   icon: string;
-  apply: (
-    src: ImageData,
-  ) =>
+  apply: (src: ImageData) =>
     | ImageData
     | {
         newWidth: number;

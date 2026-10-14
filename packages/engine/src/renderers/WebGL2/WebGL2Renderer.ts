@@ -18,7 +18,7 @@ import {
   HistoryBlendPassGL,
   LightShaftsPassGL,
 } from "../post/passes/index.js";
-import { AbstractLight } from "../../core/lights/index.js";
+import { AbstractLight, MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../core/lights/index.js";
 import { MAX_AREA_LIGHTS } from "../../core/lights/AreaLight.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
 import { CubeTexture, Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
@@ -379,6 +379,16 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   ): void {
     this._activeRenderTarget = target;
     this._activeCubeFace = activeCubeFace ?? 0;
+  }
+
+  /** @inheritdoc */
+  public get activeRenderTarget(): RenderTarget | RenderTargetCube | null {
+    return this._activeRenderTarget;
+  }
+
+  /** @inheritdoc */
+  public get activeCubeFace(): number {
+    return this._activeCubeFace;
   }
 
   /** @inheritdoc */
@@ -1501,6 +1511,22 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
       if (isInstanced) {
         const instMesh = o as InstancedMesh;
+        if (instMesh.instanceCount < 0) {
+          throw new Error(`[WebGL2Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
+        }
+        if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
+          throw new Error(
+            `[WebGL2Renderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
+          );
+        }
+        if (
+          instMesh.instanceData &&
+          instMesh.instanceData.byteLength < instMesh.instanceCount * 16
+        ) {
+          throw new Error(
+            `[WebGL2Renderer] InstancedMesh instanceData buffer too small: required at least ${instMesh.instanceCount * 16} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceData.byteLength} bytes.`,
+          );
+        }
 
         // Instanced draws configure their base attributes + instance-matrices manually and reset
         // them again afterwards, so they run on the DEFAULT VAO -- never on a mesh's cached VAO,
@@ -1673,6 +1699,21 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     near: number = 0.1,
     far: number = 1000,
   ): void {
+    if (lights.pLights.length > MAX_CLUSTERED_LIGHTS_PER_TYPE) {
+      throw new Error(
+        `[WebGL2Renderer] Point light count exceeds limit of ${MAX_CLUSTERED_LIGHTS_PER_TYPE}: ${lights.pLights.length}`,
+      );
+    }
+    if (lights.sLights.length > MAX_CLUSTERED_LIGHTS_PER_TYPE) {
+      throw new Error(
+        `[WebGL2Renderer] Spot light count exceeds limit of ${MAX_CLUSTERED_LIGHTS_PER_TYPE}: ${lights.sLights.length}`,
+      );
+    }
+    if (lights.aLights.length > 42) {
+      throw new Error(
+        `[WebGL2Renderer] Area light count exceeds limit of 42: ${lights.aLights.length}`,
+      );
+    }
     const ubo = this._globalUBO;
     ubo.setMatrix(0, vp);
     ubo.setVec3(64, camPos.x, camPos.y, camPos.z);

@@ -227,4 +227,26 @@ Here is my analysis of your character sprite:
     expect(ids).toContain("depth_map");
     expect(ids).toContain("slice_6");
   });
+
+  it("rejects conversational natural text without bracketed tokens in parseActionChips", () => {
+    const conversationalText = `
+      Was ist eine Normal Map?
+      Can you please trim the border, remove background and calculate ambient occlusion?
+      Also rotate and flip horizontally.
+    `;
+    const chips = parseActionChips(conversationalText);
+    expect(chips).toHaveLength(0);
+  });
+
+  it("throws error for non-orthogonal rotation angles in rotateImage", () => {
+    const src = createTestImage(4, 4, [100, 100, 100, 255]);
+    expect(() => rotateImage(src, 45)).toThrow(/only supports right-angle rotations/);
+    expect(() => rotateImage(src, 120)).toThrow(/only supports right-angle rotations/);
+  });
+
+  it("throws fail-fast error when scaled image exceeds MAX_CANVAS_EDGE or MAX_PIXELS", () => {
+    const src = createTestImage(2048, 2048, [50, 50, 50, 255]);
+    // 2048 * 4 = 8192 > 4096
+    expect(() => scaleImage(src, 4)).toThrow(/exceed maximum allowed canvas size/);
+  });
 });

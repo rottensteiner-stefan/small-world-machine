@@ -107,6 +107,39 @@ describe("SweptVolumeCCD & Continuous Collision Detection Expansion", () => {
       const toi = Collision.sweepBoxBox(origin, delta, halfExtents, targetBox);
       expect(toi).toBe(-1);
     });
+
+    it("returns -1 when mover or ray starts inside target volume instead of returning exit TOI", () => {
+      const origin = new Vector3D(0, 0, 0);
+      const delta = new Vector3D(10, 0, 0);
+      const halfExtents = new Vector3D(0.5, 0.5, 0.5);
+
+      // Target volume surrounding origin [-2, 2]
+      const targetBox = new BoundingBox(new Vector3D(-2, -2, -2), new Vector3D(2, 2, 2));
+      const targetSphere = new BoundingSphere(new Vector3D(0, 0, 0), 2.0);
+      const targetObb = new OBB(new Vector3D(0, 0, 0), new Vector3D(2, 2, 2));
+      const movingObb = new OBB(new Vector3D(0, 0, 0), new Vector3D(0.5, 0.5, 0.5));
+
+      // Sphere vs Box
+      expect(Collision.sweepSphereBox(origin, delta, 1.0, targetBox)).toBe(-1);
+      // Sphere vs OBB
+      expect(Collision.sweepSphereObb(origin, delta, 1.0, targetObb)).toBe(-1);
+      // Box vs Box
+      expect(Collision.sweepBoxBox(origin, delta, halfExtents, targetBox)).toBe(-1);
+      // Box vs Sphere
+      expect(Collision.sweepBoxSphere(origin, delta, halfExtents, targetSphere)).toBe(-1);
+      // Box vs OBB
+      expect(Collision.sweepBoxObb(origin, delta, halfExtents, targetObb)).toBe(-1);
+      // OBB vs Box
+      expect(Collision.sweepObbBox(origin, delta, movingObb, targetBox)).toBe(-1);
+      // OBB vs Sphere
+      expect(Collision.sweepObbSphere(origin, delta, movingObb, targetSphere)).toBe(-1);
+      // OBB vs OBB
+      expect(Collision.sweepObbObb(origin, delta, movingObb, targetObb)).toBe(-1);
+      // Ray vs Box / Sphere / OBB
+      expect(Collision.sweepRayVolume(origin, delta, targetBox)).toBe(-1);
+      expect(Collision.sweepRayVolume(origin, delta, targetSphere)).toBe(-1);
+      expect(Collision.sweepRayVolume(origin, delta, targetObb)).toBe(-1);
+    });
   });
 
   describe("SweptVolumeCCD resolver in physics step", () => {

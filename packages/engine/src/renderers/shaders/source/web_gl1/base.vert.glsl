@@ -16,6 +16,7 @@ varying vec3 v_worldPos;
 varying vec3 v_normal;
 varying vec2 v_uv;
 varying mat3 v_tbn;
+varying vec4 v_clipPos;
 
 mat3 extractMat3(mat4 m) {
     return mat3(m[0].xyz, m[1].xyz, m[2].xyz);
@@ -49,4 +50,5 @@ void main() {
     v_tbn = mat3(T, B, N);
 
     gl_Position = u_vp * wp;
+    v_clipPos = gl_Position;
 }

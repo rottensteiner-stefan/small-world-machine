@@ -2,10 +2,17 @@ import { Object3D, WorldWriter, GltfLoader, GltfData } from "@small-world-machin
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
 const SCENE_FILE_NAME = "scene.gltf";
-/** Editor helpers (gizmos, highlights, zone previews, grid) that `scene.gltf` files written before
- * the editor-only exclusion still contain at the top level. */
-const LEGACY_EDITOR_NODE =
+export const CURRENT_SCHEMA_VERSION = 2;
+
+/** Editor helpers (gizmos, highlights, zone previews, grid) in legacy v1 scene files written
+ * before schema versioning and editor-only exclusion. */
+const LEGACY_V1_EDITOR_NODE =
   /^(MakerGizmo|MakerLightGizmos|MakerStageZoneGizmos|EditorGrid|MakerTrash|Helper_|Range_|Cone_|ZoneOutline_|ZoneFill_|ZoneHandle_)/;
+
+/** Editor helper roots in modern (v2+) scene files -- user objects starting with Helper_, Range_, Cone_,
+ * Zone_ are intentionally preserved in v2+. */
+const MODERN_EDITOR_ROOT_NODE =
+  /^(MakerGizmo|MakerLightGizmos|MakerStageZoneGizmos|EditorGrid|MakerTrash)$/;
 const PREFABS_DIR_NAME = "prefabs";
 const PREFAB_EXT = ".gltf";
 /** Sidecar file holding `{ dataUrl }` next to a prefab's `.gltf` -- a small JSON wrapper rather
@@ -95,7 +102,14 @@ export class ProjectBinding {
     const json = JSON.parse(await file.text()) as GltfData["json"];
     const loader = new GltfLoader();
     const root = await loader.parse({ json, buffers: ProjectBinding._decodeBuffers(json) }, "");
-    root.children = root.children.filter((child) => !LEGACY_EDITOR_NODE.test(child.name));
+    const assetObj = json.asset as Record<string, unknown> | undefined;
+    const assetExtras = assetObj?.["extras"] as { schemaVersion?: number } | undefined;
+    const schemaVersion = assetExtras?.schemaVersion ?? 1;
+    if (schemaVersion < 2) {
+      root.children = root.children.filter((child) => !LEGACY_V1_EDITOR_NODE.test(child.name));
+    } else {
+      root.children = root.children.filter((child) => !MODERN_EDITOR_ROOT_NODE.test(child.name));
+    }
     return root;
   }
 
@@ -137,6 +151,17 @@ export class ProjectBinding {
   private async _save(root: Object3D): Promise<void> {
     if (!this._directory) return;
     const doc = this._writeWithout(root);
+    const docRecord = doc as unknown as {
+      asset: { version: string; generator: string; extras?: Record<string, unknown> };
+    };
+    const prevExtras = docRecord.asset.extras;
+    docRecord.asset = {
+      ...docRecord.asset,
+      extras: {
+        ...prevExtras,
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+      },
+    };
     const fileHandle = await this._directory.getFileHandle(SCENE_FILE_NAME, { create: true });
     const writable = await fileHandle.createWritable();
     await writable.write(JSON.stringify(doc, null, 2));

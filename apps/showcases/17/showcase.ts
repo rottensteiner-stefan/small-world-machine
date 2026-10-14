@@ -73,8 +73,6 @@ class Showcase17 extends AbstractShowcase {
       cube.rotation.y += 2.0 * deltaTime;
       cube.rotation.x += 1.0 * deltaTime;
     }
-
-    this.scene.update(deltaTime);
   }
 
   // --- HEAVY CALCULATION LOGIC ---

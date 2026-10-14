@@ -613,7 +613,11 @@ export class PropertyPanel {
     propKey: string,
     label: string,
   ): RefreshableBinding & DisposableBlade {
-    const colorObj = host[propKey] as Color;
+    const colorObj = host[propKey] as Color | undefined;
+    if (!colorObj || typeof colorObj.r !== "number") {
+      return { refresh: () => {}, dispose: () => {} } as unknown as RefreshableBinding &
+        DisposableBlade;
+    }
     const proxy = { value: { r: colorObj.r * 255, g: colorObj.g * 255, b: colorObj.b * 255 } };
     let before = { ...proxy.value };
 
@@ -639,6 +643,7 @@ export class PropertyPanel {
           colorObj.b = to.b / 255;
           proxy.value = { ...to };
           binding.refresh();
+          this._notifyChanged(host, propKey, to);
         },
         undo: () => {
           colorObj.r = from.r / 255;
@@ -646,8 +651,10 @@ export class PropertyPanel {
           colorObj.b = from.b / 255;
           proxy.value = { ...from };
           binding.refresh();
+          this._notifyChanged(host, propKey, from);
         },
       });
+      this._notifyChanged(host, propKey, to);
       before = to;
     });
     this._blades.push(binding);

@@ -19,6 +19,7 @@ describe("LightShaftsElement", () => {
     expect(elem.color.r).toBeCloseTo(1.0);
     expect(elem.color.g).toBeCloseTo(0.95);
     expect(elem.color.b).toBeCloseTo(0.85);
+    expect(elem.depthThreshold).toBeCloseTo(0.05);
   });
 
   it("updates atmospheric and scattering parameters dynamically", () => {
@@ -32,6 +33,7 @@ describe("LightShaftsElement", () => {
     elem.samples = 24;
     elem.decay = 0.92;
     elem.weight = 0.65;
+    elem.depthThreshold = 0.15;
     elem.color.set(1.0, 0.8, 0.4);
 
     expect(elem.enabled).toBe(true);
@@ -42,6 +44,7 @@ describe("LightShaftsElement", () => {
     expect(elem.samples).toBe(24);
     expect(elem.decay).toBeCloseTo(0.92);
     expect(elem.weight).toBeCloseTo(0.65);
+    expect(elem.depthThreshold).toBeCloseTo(0.15);
     expect(elem.color.r).toBeCloseTo(1.0);
     expect(elem.color.g).toBeCloseTo(0.8);
     expect(elem.color.b).toBeCloseTo(0.4);

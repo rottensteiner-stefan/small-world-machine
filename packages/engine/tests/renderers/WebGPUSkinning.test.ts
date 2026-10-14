@@ -121,6 +121,18 @@ describe("WebGPU GPU Skinning", () => {
     expect(offset2).toBe(2);
   });
 
+  it("throws when bone matrices exceed capacity limit of 2048", () => {
+    const { renderer } = makeRenderer();
+    renderer._gpuBoneMatricesOffset = 2040;
+    const mesh = new SkinnedMesh("OverflowChar");
+    const bones = Array.from({ length: 10 }, (_, i) => new Bone(`B${i}`));
+    mesh.bind(new Skeleton(bones));
+
+    expect(() => renderer._getBoneMatrixOffset(mesh)).toThrow(
+      /Bone matrices buffer capacity exceeded/,
+    );
+  });
+
   it("creates jb and wb GPU buffers in GPUGeometryCache.getGeoCache when geometry has skinning joints and weights", () => {
     const { renderer, device } = makeRenderer();
     const geo = new ModelGeometry(

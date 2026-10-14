@@ -169,8 +169,8 @@ export class Annulus extends AbstractGeometry {
         const c = grid[p + 1]![t + 1]!;
         const d = grid[p]![t + 1]!;
 
-        indices.push(a, b, d);
-        indices.push(b, c, d);
+        indices.push(a, d, b);
+        indices.push(b, d, c);
 
         wireIndices.push(a, b, a, d);
         if (t === tSegs - 1) wireIndices.push(d, c);

@@ -343,7 +343,8 @@ export class MakerApp extends SmallWorldMachine {
       project: this._project,
       orbit: this._orbit,
       gizmo: this._gizmo,
-      addObject: (obj): void => this.addObject(obj),
+      addObject: (obj, opts): void => this.addObject(obj, opts),
+      loadProjectObjects: (children): void => this.loadProjectObjects(children),
       refreshPrefabList: (): Promise<void> => this._prefabPipeline.refreshPrefabList(),
       duplicateSelection: (): void => this.duplicateSelection(),
       groupSelection: (): void => this.groupSelection(),
@@ -782,8 +783,13 @@ export class MakerApp extends SmallWorldMachine {
     this.scene.remove(obj);
   }
 
-  public addObject(obj: Object3D): void {
-    if (0 === obj.position.x && 0 === obj.position.y && 0 === obj.position.z) {
+  public addObject(obj: Object3D, options: { spawn?: boolean } = {}): void {
+    if (
+      options.spawn !== false &&
+      0 === obj.position.x &&
+      0 === obj.position.y &&
+      0 === obj.position.z
+    ) {
       const smartPos = this._computeSmartSpawnPosition(obj);
       obj.position.copyFrom(smartPos);
     }
@@ -804,6 +810,19 @@ export class MakerApp extends SmallWorldMachine {
       },
       discard: () => this._disposeTrashedObject(obj),
     });
+  }
+
+  /**
+   * Inserts loaded project objects into the scene graph without smart-spawn repositioning,
+   * without flooding the undo stack, and clears the undo stack for the freshly loaded project.
+   */
+  public loadProjectObjects(children: Object3D[]): void {
+    for (const child of children) {
+      this.scene.add(child);
+    }
+    this._hierarchyDirty = true;
+    this.selectObject(undefined);
+    this._undo.clear();
   }
 
   /** Filters the current selection to only return root nodes whose ancestors are not also selected,

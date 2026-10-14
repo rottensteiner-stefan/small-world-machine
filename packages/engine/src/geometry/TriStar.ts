@@ -289,8 +289,8 @@ export class TriStar extends AbstractGeometry {
 
         const dx = x1 - x0;
         const dz = z1 - z0;
-        const nx = -dz;
-        const nz = dx;
+        const nx = dz;
+        const nz = -dx;
         const nlen = Math.sqrt(nx * nx + nz * nz) || 1;
 
         addQuad(

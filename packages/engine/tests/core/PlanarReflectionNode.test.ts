@@ -5,6 +5,7 @@ import { PerspectiveProjection } from "../../src/math/index.js";
 import { PlanarReflectionNode } from "../../src/core/reflection/PlanarReflectionNode.js";
 import { Scene } from "../../src/core/Scene.js";
 import { Renderer } from "../../src/interfaces/Renderer.js";
+import { RenderTarget } from "../../src/core/textures/index.js";
 
 class MockRenderer {
   public renderTargetParams: unknown[] = [];
@@ -144,6 +145,35 @@ describe("PlanarReflectionNode", () => {
         reflectionNode.updateReflection(scene, mainCamera, renderer as unknown as Renderer),
       ).not.toThrow();
       expect(renderer.renderCalls).toBe(1);
+    });
+
+    it("restores visibility and render target in finally block when renderer.render throws", () => {
+      const reflectionNode = new PlanarReflectionNode("Mirror", 512, 512);
+      reflectionNode.updateMatrixWorld();
+
+      const floor = new Object3D("Floor");
+      floor.isVisible = true;
+      reflectionNode.excludedObjects.push(floor);
+
+      const mainCamera = new Camera(new PerspectiveProjection());
+      const scene = new Scene();
+      const prevTarget = {} as unknown as RenderTarget;
+      const renderer = {
+        activeRenderTarget: prevTarget,
+        activeCubeFace: undefined,
+        setRenderTarget: vi.fn(),
+        render: vi.fn(() => {
+          throw new Error("Render pipeline error");
+        }),
+      } as unknown as Renderer;
+
+      expect(() => reflectionNode.updateReflection(scene, mainCamera, renderer)).toThrow(
+        "Render pipeline error",
+      );
+
+      expect(reflectionNode.isVisible).toBe(true);
+      expect(floor.isVisible).toBe(true);
+      expect(renderer.setRenderTarget).toHaveBeenLastCalledWith(prevTarget, undefined);
     });
   });
 });

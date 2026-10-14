@@ -73,6 +73,11 @@ export class ParticleSystem {
   public update(dt: number): void {
     const total = this.particles.length;
 
+    // Per-frame hook for time-dependent state (must not accumulate per particle).
+    for (const affector of this.affectors) {
+      affector.beginFrame?.(dt);
+    }
+
     for (let i = total - 1; i >= 0; i--) {
       const p = this.particles[i]!;
 

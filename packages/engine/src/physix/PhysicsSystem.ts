@@ -13,7 +13,7 @@ import { BuoyancySolver } from "./fluids/BuoyancySolver.js";
 import { PhysicsBroadphase } from "./broadphase/PhysicsBroadphase.js";
 import { SweptVolumeCCD } from "./ccd/SweptSphereCCD.js";
 import { EulerIntegrator } from "./solvers/EulerIntegrator.js";
-import { ContactSolver } from "./solvers/ContactSolver.js";
+import { ContactSolver, pairKey } from "./solvers/ContactSolver.js";
 import type { ContactPair } from "./solvers/ContactSolver.js";
 import { SpatialQueries } from "./solvers/SpatialQueries.js";
 import { Ray } from "./Ray.js";
@@ -54,7 +54,7 @@ export class PhysicsSystem {
 
   private _pairPool: ContactPair[] = [];
   private _activePairs: ContactPair[] = [];
-  private _seenPairKeys = new Set<number>();
+  private _seenPairKeys = new Set<bigint>();
   private _collidableIdMap = new WeakMap<Collidable, number>();
   private _nextInternalId: number = 100000000;
 
@@ -230,6 +230,10 @@ export class PhysicsSystem {
       this._internalStep(bodies, allColliders, allJoints, this.fixedTimeStep);
       this._accumulator -= this.fixedTimeStep;
       subSteps++;
+    }
+
+    if (this._accumulator >= this.fixedTimeStep) {
+      this._accumulator %= this.fixedTimeStep;
     }
 
     for (const obj of bodies) {
@@ -423,10 +427,10 @@ export class PhysicsSystem {
         const first = idDyn < idOther ? dynObj : otherObj;
         const second = idDyn < idOther ? otherObj : dynObj;
 
-        // 64-bit pair key: zero allocations, bit-exact pairing up to 4 billion entities
-        const pairKey = idA * 4294967296 + idB;
-        if (this._seenPairKeys.has(pairKey)) continue;
-        this._seenPairKeys.add(pairKey);
+        // 64-bit pair key using BigInt to prevent precision loss / collisions above 2^21
+        const pairKeyValue = pairKey(idA, idB);
+        if (this._seenPairKeys.has(pairKeyValue)) continue;
+        this._seenPairKeys.add(pairKeyValue);
 
         this._activePairs.push(this._acquirePair(first, second, idA, idB));
       }

@@ -46,7 +46,7 @@ export class Tube extends AbstractGeometry {
       heightSegments = 1,
     } = options;
     this.radius = Math.max(0, radius);
-    this.innerRadius = Math.max(0, innerRadius);
+    this.innerRadius = Math.max(0, Math.min(innerRadius, this.radius));
     this.height = Math.max(0, height);
     this.radialSegments = Math.max(3, Math.floor(radialSegments));
     this.heightSegments = Math.max(1, Math.floor(heightSegments));
@@ -74,7 +74,7 @@ export class Tube extends AbstractGeometry {
           const uCoord: number = x / this.radialSegments;
           const theta: number = uCoord * MathUtils.TWO_PI;
           v.push(r * Math.sin(theta), yPos, r * Math.cos(theta));
-          uv.push(uCoord, vCoord);
+          uv.push(uCoord, 1 - vCoord);
         }
       }
 
@@ -107,21 +107,45 @@ export class Tube extends AbstractGeometry {
     // Inner surface
     buildSurface(this.innerRadius, true);
 
-    const verticesPerSurface = (this.heightSegments + 1) * (this.radialSegments + 1);
-
     /**
-     * Connects inner and outer surfaces with caps.
+     * Connects inner and outer surfaces with separate cap vertices so computeNormals()
+     * does not average normals across the 90-degree edge.
      */
     const connectCaps = (isTop: boolean): void => {
-      const outerOffset: number = isTop ? this.heightSegments * (this.radialSegments + 1) : 0;
-      const innerOffset: number =
-        verticesPerSurface + (isTop ? this.heightSegments * (this.radialSegments + 1) : 0);
+      const yPos = isTop ? hh : -hh;
+      const capOffset = v.length / 3;
 
-      for (let x: number = 0; x < this.radialSegments; x++) {
-        const o1: number = outerOffset + x;
-        const o2: number = outerOffset + x + 1;
-        const i1: number = innerOffset + x;
-        const i2: number = innerOffset + x + 1;
+      // 1. Outer ring vertices for this cap
+      for (let x = 0; x <= this.radialSegments; x++) {
+        const uCoord = x / this.radialSegments;
+        const theta = uCoord * MathUtils.TWO_PI;
+        v.push(this.radius * Math.sin(theta), yPos, this.radius * Math.cos(theta));
+        uv.push(
+          0.5 + Math.sin(theta) * 0.5,
+          isTop ? 0.5 + Math.cos(theta) * 0.5 : 0.5 - Math.cos(theta) * 0.5,
+        );
+      }
+
+      // 2. Inner ring vertices for this cap
+      const rRatio = this.radius > 0 ? this.innerRadius / this.radius : 0;
+      for (let x = 0; x <= this.radialSegments; x++) {
+        const uCoord = x / this.radialSegments;
+        const theta = uCoord * MathUtils.TWO_PI;
+        v.push(this.innerRadius * Math.sin(theta), yPos, this.innerRadius * Math.cos(theta));
+        uv.push(
+          0.5 + Math.sin(theta) * 0.5 * rRatio,
+          isTop ? 0.5 + Math.cos(theta) * 0.5 * rRatio : 0.5 - Math.cos(theta) * 0.5 * rRatio,
+        );
+      }
+
+      const outerOffset = capOffset;
+      const innerOffset = capOffset + (this.radialSegments + 1);
+
+      for (let x = 0; x < this.radialSegments; x++) {
+        const o1 = outerOffset + x;
+        const o2 = outerOffset + x + 1;
+        const i1 = innerOffset + x;
+        const i2 = innerOffset + x + 1;
 
         if (isTop) {
           idx.push(o1, o2, i1);

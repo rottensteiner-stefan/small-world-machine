@@ -440,6 +440,36 @@ describe("Maker Phase 2 Features", () => {
       expect(changedProp).toBeNull();
     });
 
+    it("PropertyPanel notifies onPropertyChanged on color edit", () => {
+      const container = document.createElement("div");
+      const undo = new UndoStack();
+      let changedProp: { obj: Object3D; key: string; val: unknown } | null = null;
+
+      const panel = new PropertyPanel(container, undo, {
+        onPropertyChanged: (obj, key, val): void => {
+          changedProp = { obj, key, val };
+        },
+      });
+
+      const obj = new Object3D("LightTarget");
+      obj.material = new StandardMaterial();
+      panel.setSelection(obj);
+
+      (
+        panel as unknown as {
+          _notifyChanged: (host: Record<string, unknown>, key: string, val: unknown) => void;
+        }
+      )._notifyChanged(obj.material as unknown as Record<string, unknown>, "color", {
+        r: 255,
+        g: 0,
+        b: 0,
+      });
+
+      expect(changedProp).not.toBeNull();
+      expect(changedProp!.obj).toBe(obj);
+      expect(changedProp!.key).toBe("color");
+    });
+
     it("filters hierarchy tree in real time and selects first match on Enter", () => {
       const container = document.createElement("div");
       const root = new Object3D("Root");

@@ -47,11 +47,8 @@ export function parseActionChips(text: string): CanvasActionChip[] {
     }
   }
 
-  // 1. [REMBG] or background removal mentions
-  if (
-    text.includes("[REMBG]") ||
-    /hintergrund entfernen|transparent freistellen|remove background/i.test(text)
-  ) {
+  // 1. [REMBG]
+  if (/\[REMBG\]/i.test(text)) {
     addChip({
       id: "rembg",
       label: "Hintergrund entfernen",
@@ -62,7 +59,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 2. [AUTOCROP] or [TRIM]
-  if (/\[AUTOCROP\]|\[TRIM\]|transparenten rand abschneiden|trim/i.test(text)) {
+  if (/\[AUTOCROP\]|\[TRIM\]/i.test(text)) {
     addChip({
       id: "autocrop",
       label: "Transparenten Rand trimmen",
@@ -89,7 +86,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 4. [FLIP_H] / [FLIP_V]
-  if (text.includes("[FLIP_H]") || /horizontal spiegeln|flip horizontally/i.test(text)) {
+  if (/\[FLIP_H\]/i.test(text)) {
     addChip({
       id: "flip_h",
       label: "Horizontal spiegeln",
@@ -98,7 +95,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
       execute: (src) => flipImage(src, true, false),
     });
   }
-  if (text.includes("[FLIP_V]") || /vertikal spiegeln|flip vertically/i.test(text)) {
+  if (/\[FLIP_V\]/i.test(text)) {
     addChip({
       id: "flip_v",
       label: "Vertikal spiegeln",
@@ -135,7 +132,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 7. [PAD_POT] (Power of Two)
-  if (text.includes("[PAD_POT]") || /power of two|pot padding/i.test(text)) {
+  if (/\[PAD_POT\]/i.test(text)) {
     addChip({
       id: "pad_pot",
       label: "Auf Power of 2 erweitern",
@@ -189,7 +186,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 10. [GRAYSCALE]
-  if (text.includes("[GRAYSCALE]") || /in graustufen|schwarz weiß konvertieren/i.test(text)) {
+  if (/\[GRAYSCALE\]/i.test(text)) {
     addChip({
       id: "grayscale",
       label: "In Graustufen umwandeln",
@@ -200,7 +197,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 11. [INVERT]
-  if (text.includes("[INVERT]") || /farben invertieren/i.test(text)) {
+  if (/\[INVERT\]/i.test(text)) {
     addChip({
       id: "invert",
       label: "Farben invertieren",
@@ -211,7 +208,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 12. [SEPIA]
-  if (text.includes("[SEPIA]")) {
+  if (/\[SEPIA\]/i.test(text)) {
     addChip({
       id: "sepia",
       label: "Sepia Retro-Ton",
@@ -235,7 +232,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 14. [AUTO_LEVELS]
-  if (text.includes("[AUTO_LEVELS]") || /kontrast optimieren|auto levels/i.test(text)) {
+  if (/\[AUTO_LEVELS\]/i.test(text)) {
     addChip({
       id: "auto_levels",
       label: "Auto-Kontrast & Dynamik",
@@ -274,7 +271,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 17. [DESPECKLE]
-  if (text.includes("[DESPECKLE]") || /rauschen entfernen|noise entfernen/i.test(text)) {
+  if (/\[DESPECKLE\]/i.test(text)) {
     addChip({
       id: "despeckle",
       label: "Isolierte Pixel bereinigen",
@@ -285,10 +282,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 18. [AUTO_SPRITES]
-  if (
-    text.includes("[AUTO_SPRITES]") ||
-    /sprites automatisch erkennen|sheet segmentieren/i.test(text)
-  ) {
+  if (/\[AUTO_SPRITES\]/i.test(text)) {
     addChip({
       id: "auto_sprites",
       label: "Sprites automatisch erkennen",
@@ -299,9 +293,9 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 19. [SLICE: N]
-  const sliceMatch = text.match(/(?:\[SLICE:\s*(\d+)\]|unterteile in\s*(\d+)\s*segmente)/i);
+  const sliceMatch = text.match(/\[SLICE:\s*(\d+)\]/i);
   if (sliceMatch) {
-    const count = parseInt(sliceMatch[1] || sliceMatch[2] || "4", 10);
+    const count = parseInt(sliceMatch[1]!, 10);
     addChip({
       id: `slice_${count}`,
       label: `In ${count} Segmente zerschneiden`,
@@ -312,7 +306,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 20. [NORMAL_MAP]
-  if (text.includes("[NORMAL_MAP]") || /normal map/i.test(text)) {
+  if (/\[NORMAL_MAP\]/i.test(text)) {
     addChip({
       id: "normal_map",
       label: "Normal Map berechnen",
@@ -323,7 +317,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 21. [DEPTH_MAP]
-  if (text.includes("[DEPTH_MAP]") || /depth map|tiefenkarte/i.test(text)) {
+  if (/\[DEPTH_MAP\]/i.test(text)) {
     addChip({
       id: "depth_map",
       label: "Depth Map berechnen",
@@ -334,7 +328,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 22. [EMISSIVE_MAP]
-  if (text.includes("[EMISSIVE_MAP]") || /emissive map|leuchtmaske/i.test(text)) {
+  if (/\[EMISSIVE_MAP\]/i.test(text)) {
     addChip({
       id: "emissive_map",
       label: "Emissive / Glow Map",
@@ -345,7 +339,7 @@ export function parseActionChips(text: string): CanvasActionChip[] {
   }
 
   // 23. [AO_MAP]
-  if (text.includes("[AO_MAP]") || /ambient occlusion/i.test(text)) {
+  if (/\[AO_MAP\]/i.test(text)) {
     addChip({
       id: "ao_map",
       label: "Ambient Occlusion Map",

@@ -20,7 +20,7 @@ uniform int u_samples;
 
 uniform mat4 u_cascadeMatrices[4];
 uniform vec4 u_cascadeSplits;
-uniform vec4 u_dirShadowInfo; // x=bias, y=normalBias, z=castShadow, w=numCascades
+uniform vec4 u_dirShadowInfo; // x=bias, y=unused, z=castShadow, w=numCascades
 
 out vec4 fragColor;
 
@@ -109,5 +109,6 @@ void main() {
         accumulatedLight += shadow * u_sunColor * phase * transmittance * stepOpticalDepth;
     }
 
-    fragColor = vec4(accumulatedLight * u_intensity, 1.0);
+    // In-scattered light is scaled cleanly once by u_lightShaftsIntensity in composite pass
+    fragColor = vec4(accumulatedLight, 1.0);
 }

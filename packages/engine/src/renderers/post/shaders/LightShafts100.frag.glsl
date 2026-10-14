@@ -42,6 +42,7 @@ void main() {
         illuminationDecay *= u_decay;
     }
 
-    vec3 result = accumulatedColor * u_shaftColor * u_intensity * camZFactor;
+    // Scaled cleanly once by u_lightShaftsIntensity in PostProcess100 composite
+    vec3 result = accumulatedColor * u_shaftColor * camZFactor;
     gl_FragColor = vec4(result, 1.0);
 }

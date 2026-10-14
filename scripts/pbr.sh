@@ -309,8 +309,14 @@ run_pipeline() {
         for ov in "${OVERRIDES[@]}"; do
             local KEY="${ov%%=*}"
             local VAL="${ov#*=}"
-            eval "$KEY=\"$VAL\""
-            echo "$LOG_PREFIX  -> $KEY = $VAL"
+            # Nur gültige Shell-Variablennamen akzeptieren, dann ohne eval setzen --
+            # ein ungeprüftes eval führte sonst $(...) im Wert aus oder überschrieb globale Variablen.
+            if [[ "$KEY" =~ ^[A-Z_]+$ ]]; then
+                printf -v "$KEY" '%s' "$VAL"
+                echo "$LOG_PREFIX  -> $KEY = $VAL"
+            else
+                echo "$LOG_PREFIX  -> Überspringe ungültigen Parameter '$KEY' (erlaubt: [A-Z_])"
+            fi
         done
     fi
 
@@ -342,6 +348,13 @@ run_pipeline() {
 }
 
 # --- 3. LOGIK ---
+
+# --help/-h muss ohne vorhandene Dependencies (ImageMagick etc.) funktionieren
+for arg in "$@"; do
+    case $arg in
+        --help|-h) usage ;;
+    esac
+done
 
 check_deps
 
@@ -389,10 +402,12 @@ done
 
 # Wenn JSON übergeben wurde: parse via Python3 und führe Job(s) aus
 if [ -n "$JSON_INPUT" ]; then
-    python3 -c "
+    # JSON über Env-Variable übergeben statt in Python-Quelltext einzusetzen —
+    # ein ''' (oder US-ASCII-Sonderzeichen) im JSON wäre sonst Python-Injection.
+    PBR_JSON_INPUT="$JSON_INPUT" python3 -c "
 import sys, json, os, subprocess
 
-raw = '''$JSON_INPUT'''
+raw = os.environ['PBR_JSON_INPUT']
 if raw.startswith('@'):
     with open(raw[1:], 'r') as f:
         data = json.load(f)

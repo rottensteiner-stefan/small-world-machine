@@ -148,6 +148,37 @@ export class GltfLoader extends AbstractLoader<Object3D> {
     const { json, buffers } = gltf;
     const folderPath = GltfLoader.getFolderPath(baseUrl);
 
+    // Validate glTF version
+    if (json.asset?.version !== undefined) {
+      const versionStr = String(json.asset.version);
+      if (!versionStr.startsWith("2.")) {
+        throw new Error(
+          `[GltfLoader] Unsupported glTF version "${versionStr}". Only glTF 2.x is supported.`,
+        );
+      }
+    }
+
+    // Fail-fast on unsupported required extensions
+    if (json.extensionsRequired && json.extensionsRequired.length > 0) {
+      const supportedExtensions = new Set<string>([
+        ...getGltfExtensions().map((p) => p.name),
+        "KHR_materials_variants",
+        "KHR_materials_emissive_strength",
+        "KHR_materials_clearcoat",
+        "KHR_materials_sheen",
+        "KHR_materials_transmission",
+        "KHR_materials_volume",
+        "KHR_materials_ior",
+      ]);
+
+      const unsupported = json.extensionsRequired.filter((ext) => !supportedExtensions.has(ext));
+      if (unsupported.length > 0) {
+        throw new Error(
+          `[GltfLoader] Unsupported required extension(s): ${unsupported.join(", ")}. Supported extensions: ${Array.from(supportedExtensions).join(", ")}`,
+        );
+      }
+    }
+
     // 0. Initialize read context and let registered extension plugins pre-pass the document
     // (e.g. indexing KHR_lights_punctual.lights[] by node) -- see ADR 0017.
     const readCtx: GltfReadContext = { json, state: new Map() };

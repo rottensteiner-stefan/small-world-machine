@@ -40,9 +40,12 @@ export class FadeOutZoneAffector implements ParticleAffector {
       const span = Math.max(0.001, this.fadeStartRadius - this.fadeEndRadius);
       const factor = Math.max(0.0, Math.min(1.0, (dist - this.fadeEndRadius) / span));
 
-      particle.alpha = factor;
+      // Scale alpha/size multiplicatively instead of overwriting absolutely -- an absolute
+      // assignment snapped a 0.1-sized AccretionDisk particle back to ~1.0 on zone entry and
+      // clobbered any ColorOverLife alpha state.
+      particle.alpha *= factor;
       if (this.shrinkSize) {
-        particle.size = factor;
+        particle.size *= factor;
       }
       if (dist <= this.fadeEndRadius) {
         particle.dead = true;

@@ -26,7 +26,7 @@ export interface DecalStampContext {
   /** Loads the kit decal's textures into `decal.material` (KitRegistry.hydrateDecal). */
   hydrate: (decal: Decal) => Promise<boolean>;
   /** Commits a stamped decal as one undo step (MakerApp.addObject). */
-  addObject: (decal: Decal) => void;
+  addObject: (decal: Decal, options?: { spawn?: boolean }) => void;
   /** Translation nudge step in metres, and scale nudge step, following the grid snap. */
   getNudgeStep: () => number;
   getScaleStep: () => number;
@@ -223,7 +223,7 @@ export class DecalStampTool {
       }
       // Textures must be there before the first render, otherwise the pipeline may not rebuild.
       await this._ctx.hydrate(decal);
-      if (this._active) this._ctx.addObject(decal);
+      if (this._active) this._ctx.addObject(decal, { spawn: false });
     } finally {
       this._stamping = false;
     }

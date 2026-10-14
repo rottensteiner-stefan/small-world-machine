@@ -78,60 +78,70 @@ export class DynamicReflectionProbe extends Object3D {
     const wasVisible = this.isVisible;
     this.isVisible = false;
 
-    // Also hide parent if it's not the scene, to avoid the object reflecting itself from the inside
+    // Also hide parent if it's not the scene root, to avoid the object reflecting itself from the inside.
+    // Note: Scene.root is an Object3D, not a Scene instance. We guard against hiding scene.root when
+    // the probe is attached directly to the scene.
+    const isParentSceneRoot =
+      !this.parent || this.parent === scene.root || this.parent.parent === undefined;
     let parentWasVisible = true;
-    if (this.parent && !(this.parent instanceof Scene)) {
+    const hideParent = !isParentSceneRoot;
+    if (hideParent && this.parent) {
       parentWasVisible = this.parent.isVisible;
       this.parent.isVisible = false;
     }
 
-    // Get world position of this probe
+    const prevRenderTarget = renderer.activeRenderTarget ?? null;
+    const prevCubeFace = renderer.activeCubeFace;
     const pos = MathPool.acquireVector().set(0, 0, 0);
-    this.worldMatrix.transformVector(pos);
-    this.probeCamera.position.copyFrom(pos);
 
-    // Update faces based on time-slicing
-    const facesToUpdate = MathUtils.clamp(this.facesPerFrame, 1, 6);
-    const isWebGL =
-      renderer.type === RendererType.WEB_GL1 || renderer.type === RendererType.WEB_GL2;
-    const faceDirections = isWebGL
-      ? DynamicReflectionProbe._FACE_DIRECTIONS_GL
-      : DynamicReflectionProbe._FACE_DIRECTIONS;
+    try {
+      // Get world position of this probe
+      this.worldMatrix.transformVector(pos);
+      this.probeCamera.position.copyFrom(pos);
 
-    for (let i = 0; i < facesToUpdate; i++) {
-      const faceIndex = this._currentFace;
-      const dirInfo = faceDirections[faceIndex]!;
+      // Update faces based on time-slicing
+      const facesToUpdate = MathUtils.clamp(this.facesPerFrame, 1, 6);
+      const isWebGL =
+        renderer.type === RendererType.WEB_GL1 || renderer.type === RendererType.WEB_GL2;
+      const faceDirections = isWebGL
+        ? DynamicReflectionProbe._FACE_DIRECTIONS_GL
+        : DynamicReflectionProbe._FACE_DIRECTIONS;
 
-      // Set camera lookAt and up
-      this.probeCamera.target.set(
-        pos.x + dirInfo.dir.x,
-        pos.y + dirInfo.dir.y,
-        pos.z + dirInfo.dir.z,
-      );
-      this.probeCamera.up.copyFrom(dirInfo.up);
+      for (let i = 0; i < facesToUpdate; i++) {
+        const faceIndex = this._currentFace;
+        const dirInfo = faceDirections[faceIndex]!;
 
-      this.probeCamera.updateViewMatrix();
+        // Set camera lookAt and up
+        this.probeCamera.target.set(
+          pos.x + dirInfo.dir.x,
+          pos.y + dirInfo.dir.y,
+          pos.z + dirInfo.dir.z,
+        );
+        this.probeCamera.up.copyFrom(dirInfo.up);
 
-      // Render to specific cube face
-      renderer.setRenderTarget(this.renderTarget, faceIndex);
-      renderer.render(
-        scene,
-        this.probeCamera.viewProjectionMatrix,
-        this.probeCamera.position,
-        this.probeCamera.viewMatrix,
-      );
+        this.probeCamera.updateViewMatrix();
 
-      // Advance face counter
-      this._currentFace = (this._currentFace + 1) % 6;
-    }
+        // Render to specific cube face
+        renderer.setRenderTarget(this.renderTarget, faceIndex);
+        renderer.render(
+          scene,
+          this.probeCamera.viewProjectionMatrix,
+          this.probeCamera.position,
+          this.probeCamera.viewMatrix,
+        );
 
-    MathPool.releaseVector(pos);
-    renderer.setRenderTarget(null);
+        // Advance face counter
+        this._currentFace = (this._currentFace + 1) % 6;
+      }
+    } finally {
+      MathPool.releaseVector(pos);
+      renderer.setRenderTarget(prevRenderTarget, prevCubeFace);
 
-    // Restore visibility
-    this.isVisible = wasVisible;
-    if (this.parent && !(this.parent instanceof Scene)) {
-      this.parent.isVisible = parentWasVisible;
+      // Restore visibility
+      this.isVisible = wasVisible;
+      if (hideParent && this.parent) {
+        this.parent.isVisible = parentWasVisible;
+      }
     }
   }
 }

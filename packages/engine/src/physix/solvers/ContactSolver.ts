@@ -39,9 +39,11 @@ export interface ContactSolverContext {
   syncTransform: (obj: Object3D, posCorr: Vector3D) => void;
 }
 
-/** 64-bit pair key combining two ids without allocations. */
-function pairKey(idA: number, idB: number): number {
-  return idA * 4294967296 + idB;
+/** 64-bit pair key combining two ids using BigInt to prevent precision loss above 2^21. */
+export function pairKey(idA: number, idB: number): bigint {
+  const a = idA < idB ? idA : idB;
+  const b = idA < idB ? idB : idA;
+  return (BigInt(a) << 32n) | BigInt(b);
 }
 
 /**
@@ -55,11 +57,11 @@ function pairKey(idA: number, idB: number): number {
 export class ContactSolver {
   private readonly _pairStatePool: ContactPairState[] = [];
 
-  private _currentTriggerPairs = new Map<number, ContactPairState>();
-  private _prevTriggerPairs = new Map<number, ContactPairState>();
+  private _currentTriggerPairs = new Map<bigint, ContactPairState>();
+  private _prevTriggerPairs = new Map<bigint, ContactPairState>();
 
-  private _currentCollisionPairs = new Map<number, ContactPairState>();
-  private _prevCollisionPairs = new Map<number, ContactPairState>();
+  private _currentCollisionPairs = new Map<bigint, ContactPairState>();
+  private _prevCollisionPairs = new Map<bigint, ContactPairState>();
 
   private _acquirePairState(): ContactPairState {
     const s = this._pairStatePool.pop();
@@ -79,6 +81,8 @@ export class ContactSolver {
   }
 
   private _releasePairState(state: ContactPairState): void {
+    state.objectA = undefined as unknown as Collidable;
+    state.objectB = undefined as unknown as Collidable;
     this._pairStatePool.push(state);
   }
 
@@ -620,8 +624,8 @@ export class ContactSolver {
           objectA: state.objectA,
           objectB: state.objectB,
         });
-        this._releasePairState(state);
       }
+      this._releasePairState(state);
     }
     this._prevTriggerPairs.clear();
     const tempTrig = this._prevTriggerPairs;
@@ -634,8 +638,8 @@ export class ContactSolver {
           objectA: state.objectA,
           objectB: state.objectB,
         });
-        this._releasePairState(state);
       }
+      this._releasePairState(state);
     }
     this._prevCollisionPairs.clear();
     const tempColl = this._prevCollisionPairs;

@@ -104,6 +104,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
   private static readonly _ROTATE_SPEED = 1.5; // radians per second
   private _movementBehavior: StageMovementBehavior | undefined;
   private _stageZone: StageZone | undefined;
+  private _isSwitchingChar: boolean = false;
 
   private _mixer: AnimationMixer | undefined;
   private _clips: Map<string, AnimationClip> = new Map();
@@ -1449,6 +1450,10 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
       const isFirstLoad = !this._movementBehavior;
       const currentUv = this._movementBehavior?.uv ?? { u: 0.526, v: 0.526 }; // ~(0.1, 0.1) world
 
+      if (this._movementBehavior) {
+        this._playerRig.removeBehavior(this._movementBehavior);
+      }
+
       this._movementBehavior = new StageMovementBehavior({
         input: this.input,
         speed: 0.28,
@@ -1489,8 +1494,9 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
             });
             this._clips.set(name, clip);
           }
-        } catch {
+        } catch (err) {
           // Ignore missing clip gracefully
+          console.warn("[CharacterDiorama] Failed to load animation clip:", name, err);
         }
       }
 
@@ -1782,9 +1788,19 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
   }
 
   private _cycleCharacter(): void {
-    if (this._characterType === "male") this._loadCharacter("female");
-    else if (this._characterType === "female") this._loadCharacter("yoshi");
-    else this._loadCharacter("male");
+    if (this._isSwitchingChar) return;
+    this._isSwitchingChar = true;
+    const next: CharacterType =
+      this._characterType === "male"
+        ? "female"
+        : this._characterType === "female"
+          ? "yoshi"
+          : "male";
+    this._loadCharacter(next)
+      .catch((err: unknown) => console.error("[CharacterDiorama] Character switch failed:", err))
+      .finally(() => {
+        this._isSwitchingChar = false;
+      });
   }
 
   private _toggleTorch(): void {

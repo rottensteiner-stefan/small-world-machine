@@ -30,6 +30,42 @@ export class VortexAffector implements ParticleAffector {
   }
 
   public apply(particle: Particle, _dt: number): void {
+    if (this.axis === "x") {
+      const dy = particle.position.y - this.center.y;
+      const dz = particle.position.z - this.center.z;
+      const r = Math.sqrt(dy * dy + dz * dz) || 0.001;
+
+      // Tangential direction around X: (-z, 0, y) mapped to (0, -z, y)
+      const tangY = -dz / r;
+      const tangZ = dy / r;
+
+      // Centripetal inward suction direction: (-y, 0, -z)
+      const inY = -dy / r;
+      const inZ = -dz / r;
+
+      particle.acceleration.y += (tangY * this.strength + inY * this.inwardSuction) / particle.mass;
+      particle.acceleration.z += (tangZ * this.strength + inZ * this.inwardSuction) / particle.mass;
+      return;
+    }
+
+    if (this.axis === "z") {
+      const dx = particle.position.x - this.center.x;
+      const dy = particle.position.y - this.center.y;
+      const r = Math.sqrt(dx * dx + dy * dy) || 0.001;
+
+      // Tangential direction around Z: (x, -y, 0) mapped to (-y, x, 0)
+      const tangX = -dy / r;
+      const tangY = dx / r;
+
+      // Centripetal inward suction direction: (-x, -y, 0)
+      const inX = -dx / r;
+      const inY = -dy / r;
+
+      particle.acceleration.x += (tangX * this.strength + inX * this.inwardSuction) / particle.mass;
+      particle.acceleration.y += (tangY * this.strength + inY * this.inwardSuction) / particle.mass;
+      return;
+    }
+
     if (this.axis === "y") {
       const dx = particle.position.x - this.center.x;
       const dz = particle.position.z - this.center.z;

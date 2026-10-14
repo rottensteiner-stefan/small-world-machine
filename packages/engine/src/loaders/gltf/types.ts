@@ -1,15 +1,17 @@
-export type TypedArray = Uint8Array | Uint16Array | Uint32Array | Float32Array;
+export type TypedArray =
+  Int8Array | Uint8Array | Int16Array | Uint16Array | Uint32Array | Float32Array;
 
 export interface GltfJson {
   asset?: { version?: string; generator?: string; [key: string]: unknown };
   buffers?: { uri?: string }[];
-  bufferViews?: { buffer: number; byteOffset?: number; byteLength: number }[];
+  bufferViews?: { buffer: number; byteOffset?: number; byteLength: number; byteStride?: number }[];
   accessors?: {
     bufferView?: number;
     byteOffset?: number;
     componentType: number;
     count: number;
     type: string;
+    normalized?: boolean;
   }[];
   meshes?: {
     name?: string;
@@ -17,6 +19,7 @@ export interface GltfJson {
       attributes: { [key: string]: number };
       indices?: number;
       material?: number;
+      mode?: number;
       extensions?: {
         KHR_draco_mesh_compression?: {
           bufferView: number;

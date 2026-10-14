@@ -68,8 +68,6 @@ class Showcase1 extends AbstractShowcase {
     // Rotate the cube around all axes every frame
     this._myCube.rotation.x += deltaTime;
     this._myCube.rotation.y += 1.5 * deltaTime;
-
-    this.scene.update();
   }
 }
 

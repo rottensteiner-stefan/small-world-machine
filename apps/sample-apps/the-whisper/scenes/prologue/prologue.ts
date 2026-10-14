@@ -1017,13 +1017,7 @@ export class PrologueScene extends AbstractShowcase {
   private _initKeyboardListeners(): void {
     window.addEventListener("keydown", (e) => {
       this._keysDown.add(e.key.toLowerCase());
-      if (e.key === "m" || e.key === "M") {
-        this._mapModal?.toggle();
-      } else if (
-        e.key === " " &&
-        !this._isExplorationMode &&
-        !this._hotspotManager?.isMonologueOpen
-      ) {
+      if (e.key === " " && !this._isExplorationMode && !this._hotspotManager?.isMonologueOpen) {
         this.startExplorationMode();
       }
     });
@@ -1158,8 +1152,6 @@ export class PrologueScene extends AbstractShowcase {
       const str = (s < 10 ? "0" : "") + s;
       timerEl.innerText = `00:${str} / 01:00`;
     }
-
-    this.scene.update(deltaTime);
   }
 
   private _handlePlayerMovement(deltaTime: number): void {

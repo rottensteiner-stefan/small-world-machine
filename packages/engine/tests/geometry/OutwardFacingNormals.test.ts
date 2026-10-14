@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  Annulus,
   Cube,
   Sphere,
   Cone,
@@ -166,4 +167,104 @@ describe("Winding & Outward-Facing Normal Verification", () => {
       ).toBe(0);
     });
   }
+
+  describe("Specific Geometry Defect Remediation Tests", () => {
+    it("Annulus top faces have CCW cross-product pointing strictly in +Y direction", () => {
+      const annulus = new Annulus({
+        innerRadius: 1.0,
+        outerRadius: 2.0,
+        thetaSegments: 16,
+        phiSegments: 4,
+      });
+      const data = annulus.getGeometryData();
+      const v = data.vertices;
+      const idx = data.indices!;
+
+      for (let i = 0; i < idx.length; i += 3) {
+        const i0 = idx[i]! * 3;
+        const i1 = idx[i + 1]! * 3;
+        const i2 = idx[i + 2]! * 3;
+
+        const e1x = v[i1]! - v[i0]!;
+        const e1z = v[i1 + 2]! - v[i0 + 2]!;
+        const e2x = v[i2]! - v[i0]!;
+        const e2z = v[i2 + 2]! - v[i0 + 2]!;
+
+        // Cross product: (e1x, 0, e1z) x (e2x, 0, e2z) -> Y component = e1z * e2x - e1x * e2z
+        const fny = e1z * e2x - e1x * e2z;
+        expect(fny).toBeGreaterThan(0);
+      }
+    });
+
+    it("Tube unshares cap vertices from mantle and mirrors UV V coordinate", () => {
+      const tube = new Tube({
+        radius: 2.0,
+        innerRadius: 1.0,
+        height: 4.0,
+        radialSegments: 16,
+        heightSegments: 2,
+      });
+      const data = tube.getGeometryData();
+      const v = data.vertices;
+      const n = data.normals!;
+      const uv = data.uvs!;
+
+      // Check mantle UV V coordinates:
+      // At y = -hh (y=0 in loop), vCoord should be 1 - 0 = 1
+      // At y = +hh (y=heightSegments in loop), vCoord should be 1 - 1 = 0
+      const hh = 2.0;
+      for (let i = 0; i < v.length; i += 3) {
+        const y = v[i + 1]!;
+        const vCoord = uv[(i / 3) * 2 + 1]!;
+        if (Math.abs(y - hh) < 1e-4 && (Math.abs(n[i]!) > 0.1 || Math.abs(n[i + 2]!) > 0.1)) {
+          // Mantle vertex at top should have V = 0
+          expect(vCoord).toBeCloseTo(0);
+        }
+      }
+
+      // Check cap normals:
+      // Vertices on the top cap (y = hh) that have ny > 0.5 must have ny close to 1.0 (not tilted by mantle)
+      for (let i = 0; i < v.length; i += 3) {
+        const ny = n[i + 1]!;
+        if (ny > 0.5) {
+          expect(ny).toBeCloseTo(1.0, 3);
+          expect(Math.hypot(n[i]!, n[i + 2]!)).toBeCloseTo(0, 3);
+        } else if (ny < -0.5) {
+          expect(ny).toBeCloseTo(-1.0, 3);
+          expect(Math.hypot(n[i]!, n[i + 2]!)).toBeCloseTo(0, 3);
+        }
+      }
+    });
+
+    it("CutCylinder side cap axis top point equals avgH - yCenterOffset (eliminating wedge gap)", () => {
+      const cut = new CutCylinder({
+        radius: 2.0,
+        heightMin: 2.0,
+        heightMax: 6.0,
+        thetaStart: 0,
+        thetaLength: Math.PI, // partial sector with side caps
+        radialSegments: 16,
+        heightSegments: 4,
+      });
+
+      const data = cut.getGeometryData();
+      const v = data.vertices;
+
+      const avgH = (2.0 + 6.0) / 2; // 4.0
+      const yCenterOffset = avgH / 2; // 2.0
+      const expectedAxisTopY = avgH - yCenterOffset; // 2.0
+
+      // Find axis vertices (x = 0, z = 0) with maximum Y
+      let maxAxisY = -Infinity;
+      for (let i = 0; i < v.length; i += 3) {
+        if (Math.abs(v[i]!) < 1e-5 && Math.abs(v[i + 2]!) < 1e-5) {
+          if (v[i + 1]! > maxAxisY) {
+            maxAxisY = v[i + 1]!;
+          }
+        }
+      }
+
+      expect(maxAxisY).toBeCloseTo(expectedAxisTopY, 4);
+    });
+  });
 });

@@ -129,6 +129,33 @@ describe("Light Shafts Shader Mathematics & Algorithms", () => {
       // Total weight is below 0.001, triggering nearest depth tap fallback in shader
       expect(totalWeight).toBeLessThan(0.001);
     });
+
+    it("linearizes depth comparison to preserve continuous surfaces at any distance", () => {
+      function linearizeDepthGL(d: number, near = 0.1, far = 1000.0): number {
+        const z = d * 2.0 - 1.0;
+        return (2.0 * near * far) / Math.max(far + near - z * (far - near), 0.00001);
+      }
+
+      function relativeBilateralWeight(fullD: number, tapD: number, threshold: number): number {
+        const fullLin = linearizeDepthGL(fullD);
+        const tapLin = linearizeDepthGL(tapD);
+        const diff = Math.abs(fullLin - tapLin) / Math.max(fullLin, 0.001);
+        return Math.exp(-diff / Math.max(threshold, 0.0001));
+      }
+
+      // Close range: 1.0m vs 1.01m
+      // Non-linear depth difference at close range is non-trivial, but relative linear diff is only 1%
+      const nearFull = 0.9;
+      const nearTap = 0.901;
+      const wNear = relativeBilateralWeight(nearFull, nearTap, 0.05);
+      expect(wNear).toBeGreaterThan(0.8);
+
+      // Distant range with clear silhouette (e.g. 50m vs 80m, relative step > 30%)
+      const farFull = 0.998;
+      const farTap = 0.999;
+      const wFarSilhouette = relativeBilateralWeight(farFull, farTap, 0.05);
+      expect(wFarSilhouette).toBeLessThan(0.01);
+    });
   });
 
   describe("Screen-Space Behind-the-Camera Inversion Guard (WebGL1 Tier 1)", () => {

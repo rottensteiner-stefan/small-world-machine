@@ -74,16 +74,27 @@ export class GltfBinaryParser {
       return null;
     }
 
-    const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0);
-    const count = accessor.count * this.getComponentCount(accessor.type);
+    const accessorByteOffset = accessor.byteOffset || 0;
+    const viewByteOffset = bufferView.byteOffset || 0;
+    const byteOffset = viewByteOffset + accessorByteOffset;
+    const numComponents = this.getComponentCount(accessor.type);
+    const count = accessor.count * numComponents;
 
     let bytesPerElement: number;
     let ctor: new (buffer: ArrayBuffer, byteOffset: number, length: number) => TypedArray;
 
     switch (accessor.componentType) {
+      case 5120:
+        bytesPerElement = 1;
+        ctor = Int8Array;
+        break;
       case 5121:
         bytesPerElement = 1;
         ctor = Uint8Array;
+        break;
+      case 5122:
+        bytesPerElement = 2;
+        ctor = Int16Array;
         break;
       case 5123:
         bytesPerElement = 2;
@@ -101,26 +112,109 @@ export class GltfBinaryParser {
         return null;
     }
 
-    const totalBytes = count * bytesPerElement;
-    if (byteOffset + totalBytes > buffer.byteLength) {
-      // Out-of-bounds access is a corrupt-file data error, not "this accessor legitimately has no
-      // data" (which is what `null` means above, for missing accessor/bufferView/componentType).
-      // Throwing surfaces it as a load failure (GltfLoader turns it into LOADER_ERROR) instead of
-      // silently dropping positions/indices/keys and loading a visibly broken asset.
+    const elementByteSize = numComponents * bytesPerElement;
+    const stride =
+      bufferView.byteStride !== undefined && bufferView.byteStride !== 0
+        ? bufferView.byteStride
+        : elementByteSize;
+
+    if (stride < elementByteSize) {
       throw new Error(
-        `[GltfBinaryParser] Accessor ${accessor.bufferView} (componentType ${accessor.componentType}, ` +
-          `count ${accessor.count}) exceeds buffer: ${byteOffset + totalBytes} > ${buffer.byteLength} bytes`,
+        `[GltfBinaryParser] Invalid byteStride ${stride} < element size ${elementByteSize}`,
       );
     }
 
-    if (byteOffset % bytesPerElement === 0) {
-      return new ctor(buffer, byteOffset, count);
+    const requiredBytes = accessor.count > 0 ? (accessor.count - 1) * stride + elementByteSize : 0;
+
+    if (byteOffset + requiredBytes > buffer.byteLength) {
+      throw new Error(
+        `[GltfBinaryParser] Accessor ${accessor.bufferView} (componentType ${accessor.componentType}, ` +
+          `count ${accessor.count}) exceeds buffer: ${byteOffset + requiredBytes} > ${buffer.byteLength} bytes`,
+      );
     }
 
-    // When byteOffset is unaligned (e.g. byteOffset % 4 !== 0), creating a TypedArray view directly
-    // on `buffer` throws a JavaScript RangeError. Copy the unaligned slice into an aligned ArrayBuffer.
-    const unalignedSlice = buffer.slice(byteOffset, byteOffset + totalBytes);
-    return new ctor(unalignedSlice, 0, count);
+    if (
+      bufferView.byteLength !== undefined &&
+      accessorByteOffset + requiredBytes > bufferView.byteLength
+    ) {
+      throw new Error(
+        `[GltfBinaryParser] Accessor ${accessor.bufferView} exceeds bufferView byteLength: ` +
+          `${accessorByteOffset + requiredBytes} > ${bufferView.byteLength} bytes`,
+      );
+    }
+
+    if (accessor.normalized) {
+      const result = new Float32Array(count);
+      const view = new DataView(buffer, byteOffset, requiredBytes);
+      for (let i = 0; i < accessor.count; i++) {
+        const elemOffset = i * stride;
+        for (let c = 0; c < numComponents; c++) {
+          const compOffset = elemOffset + c * bytesPerElement;
+          const outIdx = i * numComponents + c;
+          switch (accessor.componentType) {
+            case 5120:
+              result[outIdx] = Math.max(view.getInt8(compOffset) / 127.0, -1.0);
+              break;
+            case 5121:
+              result[outIdx] = view.getUint8(compOffset) / 255.0;
+              break;
+            case 5122:
+              result[outIdx] = Math.max(view.getInt16(compOffset, true) / 32767.0, -1.0);
+              break;
+            case 5123:
+              result[outIdx] = view.getUint16(compOffset, true) / 65535.0;
+              break;
+            case 5125:
+              result[outIdx] = view.getUint32(compOffset, true) / 4294967295.0;
+              break;
+            case 5126:
+              result[outIdx] = view.getFloat32(compOffset, true);
+              break;
+          }
+        }
+      }
+      return result;
+    }
+
+    if (stride === elementByteSize) {
+      if (byteOffset % bytesPerElement === 0) {
+        return new ctor(buffer, byteOffset, count);
+      }
+      const unalignedSlice = buffer.slice(byteOffset, byteOffset + requiredBytes);
+      return new ctor(unalignedSlice, 0, count);
+    }
+
+    // Interleaved accessor: unpack from strided layout into dense typed array
+    const output = new (ctor as unknown as new (length: number) => TypedArray)(count);
+    const view = new DataView(buffer, byteOffset, requiredBytes);
+    for (let i = 0; i < accessor.count; i++) {
+      const elemOffset = i * stride;
+      for (let c = 0; c < numComponents; c++) {
+        const compOffset = elemOffset + c * bytesPerElement;
+        const outIdx = i * numComponents + c;
+        switch (accessor.componentType) {
+          case 5120:
+            (output as Int8Array)[outIdx] = view.getInt8(compOffset);
+            break;
+          case 5121:
+            (output as Uint8Array)[outIdx] = view.getUint8(compOffset);
+            break;
+          case 5122:
+            (output as Int16Array)[outIdx] = view.getInt16(compOffset, true);
+            break;
+          case 5123:
+            (output as Uint16Array)[outIdx] = view.getUint16(compOffset, true);
+            break;
+          case 5125:
+            (output as Uint32Array)[outIdx] = view.getUint32(compOffset, true);
+            break;
+          case 5126:
+            (output as Float32Array)[outIdx] = view.getFloat32(compOffset, true);
+            break;
+        }
+      }
+    }
+    return output;
   }
 
   /**
@@ -136,10 +230,14 @@ export class GltfBinaryParser {
         return 3;
       case "VEC4":
         return 4;
+      case "MAT2":
+        return 4;
+      case "MAT3":
+        return 9;
       case "MAT4":
         return 16;
       default:
-        return 1;
+        throw new Error(`[GltfBinaryParser] Unsupported accessor type "${type}".`);
     }
   }
 }

@@ -32,8 +32,8 @@ build: install ## Erstellt Library und Demo (Produktion)
 build-lib: install ## Erstellt nur die Library
 	$(NPM) run build:lib
 
-build-demo: install ## Erstellt nur die Demo
-	$(NPM) run build:demo
+build-demo: install ## Erstellt die Demo (Showcases)
+	$(NPM) run build:showcases
 
 test: install ## Führt alle Tests einmalig aus
 	$(NPM) run test

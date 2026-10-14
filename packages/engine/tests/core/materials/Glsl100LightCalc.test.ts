@@ -28,4 +28,18 @@ describe("GLSL100 fragment shaders declare finalLight via [LIGHT_CALC]", () => {
       expect(chunkAt).toBeLessThan(source.indexOf("finalLight"));
     });
   }
+
+  it("Glass and Frostglass GLSL100 shaders derive screen UV from v_clipPos", () => {
+    const glassSrc = readFileSync(
+      join(SRC_DIR, "core/materials/glass/shaders/Glass.frag.glsl100"),
+      "utf8",
+    );
+    const frostSrc = readFileSync(
+      join(SRC_DIR, "core/materials/glass/shaders/Frostglass.frag.glsl100"),
+      "utf8",
+    );
+
+    expect(glassSrc).toContain("v_clipPos.xy / v_clipPos.w");
+    expect(frostSrc).toContain("v_clipPos.xy / v_clipPos.w");
+  });
 });

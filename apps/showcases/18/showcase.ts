@@ -74,8 +74,6 @@ class Showcase18 extends AbstractShowcase {
       c.rotation.y += 2.0 * deltaTime;
       c.rotation.x += 1.5 * deltaTime;
     }
-
-    this.scene.update(deltaTime);
   }
 
   /**

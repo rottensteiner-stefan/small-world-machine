@@ -28,6 +28,13 @@ export class GltfGeometryParser {
       }
     }
 
+    // Check for supported primitive mode (glTF default is 4 = TRIANGLES)
+    if (primitive.mode !== undefined && primitive.mode !== 4) {
+      throw new Error(
+        `[GltfGeometryParser] Unsupported primitive mode ${primitive.mode}. Only TRIANGLES (mode 4) is currently supported.`,
+      );
+    }
+
     // 2. Standard uncompressed buffer accessor path
     const attributes = primitive.attributes;
     if (!attributes || attributes["POSITION"] === undefined || !json.accessors) return null;
@@ -60,15 +67,58 @@ export class GltfGeometryParser {
         ? GltfBinaryParser.getBufferData(json.accessors[attributes["WEIGHTS_0"]], json, buffers)
         : undefined;
 
+    let finalIndices: Uint16Array | Uint32Array;
+    if (indices) {
+      if (indices instanceof Uint8Array) {
+        finalIndices = new Uint16Array(indices);
+      } else if (indices instanceof Uint16Array || indices instanceof Uint32Array) {
+        finalIndices = indices;
+      } else {
+        throw new Error(
+          `[GltfGeometryParser] Invalid index component type: indices must be unsigned integer (Uint8Array, Uint16Array, or Uint32Array).`,
+        );
+      }
+    } else {
+      finalIndices = new Uint16Array(0);
+    }
+
+    let finalJoints: Float32Array | Uint16Array | undefined;
+    if (joints) {
+      if (joints instanceof Uint8Array) {
+        finalJoints = new Uint16Array(joints);
+      } else if (joints instanceof Uint16Array || joints instanceof Float32Array) {
+        finalJoints = joints;
+      } else {
+        finalJoints = new Uint16Array(joints);
+      }
+    }
+
+    let finalWeights: Float32Array | undefined;
+    if (weights) {
+      finalWeights = weights instanceof Float32Array ? weights : new Float32Array(weights);
+    }
+
+    const posArray = positions instanceof Float32Array ? positions : new Float32Array(positions);
+    const uvArray = uvs
+      ? uvs instanceof Float32Array
+        ? uvs
+        : new Float32Array(uvs)
+      : new Float32Array(0);
+    const normArray = normals
+      ? normals instanceof Float32Array
+        ? normals
+        : new Float32Array(normals)
+      : new Float32Array(0);
+
     return new ModelGeometry(
-      positions as Float32Array,
-      uvs ? (uvs as Float32Array) : new Float32Array(0),
-      normals ? (normals as Float32Array) : new Float32Array(0),
-      indices ? (indices as Uint16Array | Uint32Array) : new Uint16Array(0),
-      joints || weights
+      posArray,
+      uvArray,
+      normArray,
+      finalIndices,
+      finalJoints || finalWeights
         ? {
-            joints: joints ? (joints as Float32Array | Uint16Array) : undefined,
-            weights: weights ? (weights as Float32Array) : undefined,
+            joints: finalJoints,
+            weights: finalWeights,
           }
         : undefined,
     ).getGeometryData();

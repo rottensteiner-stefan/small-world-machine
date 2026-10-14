@@ -57,4 +57,10 @@ export class LightShaftsElement extends PostProcessingElement {
    * Sunlight color tint applied to the in-scattered light shafts (default: warm sunlight).
    */
   public color: Color = new Color(1.0, 0.95, 0.85);
+
+  /**
+   * Relative depth discontinuity threshold for the 2x2 depth-aware cross-bilateral upsample filter (default: 0.05).
+   * Edges with relative depth steps greater than this threshold are preserved to eliminate edge bleeding.
+   */
+  public depthThreshold: number = 0.05;
 }

@@ -40,8 +40,10 @@ export class PointAttractorAffector implements ParticleAffector {
 
     let forceMag: number;
     if (this.plummer) {
-      // Plummer softened gravity: F = (GM * r) / (r^2 + eps^2)^1.5
-      forceMag = (this.strength * dist) / Math.pow(distSq + this.softening, 1.5);
+      // Plummer softened gravity: F = (GM * r) / (r^2 + eps^2)^1.5 -- eps is squared, matching
+      // the non-Plummer branch below and the Kepler velocity used by AccretionDiskEmitter.
+      const plummerDenom = distSq + this.softening * this.softening;
+      forceMag = (this.strength * dist) / (plummerDenom * Math.sqrt(plummerDenom));
     } else {
       // Newtonian with minimum cutoff
       forceMag = this.strength / (distSq + this.softening * this.softening);

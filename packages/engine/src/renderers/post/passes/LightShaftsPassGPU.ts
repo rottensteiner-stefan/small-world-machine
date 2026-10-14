@@ -80,15 +80,14 @@ export class LightShaftsPassGPU {
     // 1. Raymarch Pipeline
     this._bglRaymarch = device.createBindGroupLayout({
       entries: [
-        { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
-        { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
+        { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
         {
-          binding: 2,
+          binding: 1,
           visibility: GPUShaderStage.FRAGMENT,
           texture: { sampleType: "depth", viewDimension: "2d-array" },
         },
-        { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "comparison" } },
-        { binding: 4, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+        { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "comparison" } },
+        { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
       ],
     });
 
@@ -113,8 +112,7 @@ export class LightShaftsPassGPU {
         { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
         { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
         { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
-        { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
-        { binding: 4, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+        { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
       ],
     });
 
@@ -202,11 +200,10 @@ export class LightShaftsPassGPU {
       this._bindGroupRaymarch = this._device.createBindGroup({
         layout: this._bglRaymarch,
         entries: [
-          { binding: 0, resource: this._sampler! },
-          { binding: 1, resource: depthView },
-          { binding: 2, resource: shadowView },
-          { binding: 3, resource: this._shadowSampler! },
-          { binding: 4, resource: { buffer: this._uniformBufferRaymarch } },
+          { binding: 0, resource: depthView },
+          { binding: 1, resource: shadowView },
+          { binding: 2, resource: this._shadowSampler! },
+          { binding: 3, resource: { buffer: this._uniformBufferRaymarch } },
         ],
       });
 
@@ -216,8 +213,7 @@ export class LightShaftsPassGPU {
           { binding: 0, resource: this._sampler! },
           { binding: 1, resource: this._halfTextureView! },
           { binding: 2, resource: depthView },
-          { binding: 3, resource: depthView },
-          { binding: 4, resource: { buffer: this._uniformBufferBilateral } },
+          { binding: 3, resource: { buffer: this._uniformBufferBilateral } },
         ],
       });
     }
@@ -244,12 +240,12 @@ export class LightShaftsPassGPU {
     d[24] = element.color.r * dirLight.intensity;
     d[25] = element.color.g * dirLight.intensity;
     d[26] = element.color.b * dirLight.intensity;
-    d[27] = element.intensity; // sunColor.w
+    d[27] = 1.0; // sunColor.w (intensity is cleanly applied in PostProcess composite)
 
     d[28] = element.density;
     d[29] = element.samples;
-    d[30] = 0.1; // near
-    d[31] = 1000.0; // far
+    d[30] = 0.0; // pad
+    d[31] = 0.0; // pad
 
     const numCascades = Math.min(dirLight.numCascades, 4);
     d[32] = dirLight.cascadeSplits[0] ?? 10.0;
@@ -258,7 +254,7 @@ export class LightShaftsPassGPU {
     d[35] = dirLight.cascadeSplits[3] ?? 100.0;
 
     d[36] = dirLight.shadowBias;
-    d[37] = dirLight.shadowNormalBias;
+    d[37] = 0.0; // unused normalBias
     d[38] = dirLight.castShadow ? 1.0 : 0.0;
     d[39] = numCascades;
 
@@ -274,7 +270,7 @@ export class LightShaftsPassGPU {
     // Populate bilateral uniform data
     this._uniformDataBilateral[0] = 1.0 / halfW;
     this._uniformDataBilateral[1] = 1.0 / halfH;
-    this._uniformDataBilateral[2] = 0.05; // depthThreshold
+    this._uniformDataBilateral[2] = element.depthThreshold;
     this._uniformDataBilateral[3] = 0.0;
     this._device.queue.writeBuffer(this._uniformBufferBilateral, 0, this._uniformDataBilateral);
 
@@ -318,5 +314,9 @@ export class LightShaftsPassGPU {
     this._fullTexture?.destroy();
     this._uniformBufferRaymarch?.destroy();
     this._uniformBufferBilateral?.destroy();
+    this._bindGroupRaymarch = undefined;
+    this._bindGroupBilateral = undefined;
+    this._cachedDepthView = undefined;
+    this._cachedShadowView = undefined;
   }
 }

@@ -21,10 +21,10 @@ export class LightShaftsPassGL {
   private readonly _isWebGL2: boolean;
 
   // WebGL2 programs & VAOs
-  private _progShafts?: WebGLProgram;
-  private _progBilateral?: WebGLProgram;
-  private _vaoSrafts?: WebGLVertexArrayObject;
-  private _vaoBilateral?: WebGLVertexArrayObject;
+  private _progShafts?: WebGLProgram | undefined;
+  private _progBilateral?: WebGLProgram | undefined;
+  private _vaoShafts?: WebGLVertexArrayObject | undefined;
+  private _vaoBilateral?: WebGLVertexArrayObject | undefined;
 
   // Uniform locations: Raymarching
   private _uDepthMapLoc: WebGLUniformLocation | null = null;
@@ -45,12 +45,11 @@ export class LightShaftsPassGL {
   // Uniform locations: Bilateral upsample
   private _uLowResShaftsLoc: WebGLUniformLocation | null = null;
   private _uFullResDepthLoc: WebGLUniformLocation | null = null;
-  private _uLowResDepthLoc: WebGLUniformLocation | null = null;
   private _uLowResTexelSizeLoc: WebGLUniformLocation | null = null;
   private _uDepthThresholdLoc: WebGLUniformLocation | null = null;
 
   // WebGL1 program & locations
-  private _prog100?: WebGLProgram;
+  private _prog100?: WebGLProgram | undefined;
   private _uSceneColor100Loc: WebGLUniformLocation | null = null;
   private _uSunScreenPos100Loc: WebGLUniformLocation | null = null;
   private _uSunCameraZ100Loc: WebGLUniformLocation | null = null;
@@ -60,16 +59,16 @@ export class LightShaftsPassGL {
   private _uIntensity100Loc: WebGLUniformLocation | null = null;
   private _uShaftColor100Loc: WebGLUniformLocation | null = null;
   private _aPos100: number = -1;
-  private _vb100?: WebGLBuffer;
+  private _vb100?: WebGLBuffer | undefined;
 
   // Render targets
   private _width: number = 0;
   private _height: number = 0;
-  private _halfColorFbo?: WebGL2FrameBuffer;
-  private _fullShaftsFbo?: WebGL2FrameBuffer;
+  private _halfColorFbo?: WebGL2FrameBuffer | undefined;
+  private _fullShaftsFbo?: WebGL2FrameBuffer | undefined;
 
-  private _gl1Fbo?: WebGLFramebuffer;
-  private _gl1Texture?: WebGLTexture;
+  private _gl1Fbo?: WebGLFramebuffer | undefined;
+  private _gl1Texture?: WebGLTexture | undefined;
 
   // Scratch memory for zero allocations during render loop
   private readonly _scratchInvViewProj: Matrix4 = new Matrix4();
@@ -98,21 +97,47 @@ export class LightShaftsPassGL {
     return shader;
   }
 
+  private _createProgram(vertSrc: string, fragSrc: string, name: string): WebGLProgram | null {
+    const gl = this._gl;
+    const vert = this._compileShader(gl.VERTEX_SHADER, vertSrc);
+    if (!vert) return null;
+    const frag = this._compileShader(gl.FRAGMENT_SHADER, fragSrc);
+    if (!frag) {
+      gl.deleteShader(vert);
+      return null;
+    }
+    const prog = gl.createProgram();
+    if (!prog) {
+      gl.deleteShader(vert);
+      gl.deleteShader(frag);
+      return null;
+    }
+    gl.attachShader(prog, vert);
+    gl.attachShader(prog, frag);
+    gl.linkProgram(prog);
+    gl.deleteShader(vert);
+    gl.deleteShader(frag);
+
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error(
+        `[LightShaftsPassGL] Program Link Error (${name}):`,
+        gl.getProgramInfoLog(prog),
+      );
+      gl.deleteProgram(prog);
+      return null;
+    }
+    return prog;
+  }
+
   private _build(): void {
     const gl = this._gl;
 
     if (this._isWebGL2) {
       const gl2 = gl as WebGL2RenderingContext;
       // 1. Raymarching program
-      const vert = this._compileShader(gl.VERTEX_SHADER, FULLSCREEN_VERT_GLSL);
-      const fragShafts = this._compileShader(gl.FRAGMENT_SHADER, SHAFTS_FRAG_GLSL);
-      if (vert && fragShafts) {
-        this._progShafts = gl.createProgram()!;
-        gl.attachShader(this._progShafts, vert);
-        gl.attachShader(this._progShafts, fragShafts);
-        gl.linkProgram(this._progShafts);
-        gl.deleteShader(fragShafts);
-
+      this._progShafts =
+        this._createProgram(FULLSCREEN_VERT_GLSL, SHAFTS_FRAG_GLSL, "Raymarch") ?? undefined;
+      if (this._progShafts) {
         this._uDepthMapLoc = gl.getUniformLocation(this._progShafts, "u_opaqueDepthMap");
         this._uDirShadowMapLoc = gl.getUniformLocation(this._progShafts, "u_dirShadowMap");
         this._uInvViewProjLoc = gl.getUniformLocation(this._progShafts, "u_invViewProj");
@@ -128,22 +153,15 @@ export class LightShaftsPassGL {
         this._uCascadeSplitsLoc = gl.getUniformLocation(this._progShafts, "u_cascadeSplits");
         this._uDirShadowInfoLoc = gl.getUniformLocation(this._progShafts, "u_dirShadowInfo");
 
-        this._vaoSrafts = gl2.createVertexArray()!;
+        this._vaoShafts = gl2.createVertexArray()!;
       }
 
       // 2. Bilateral upsampling program
-      const fragBilateral = this._compileShader(gl.FRAGMENT_SHADER, BILATERAL_FRAG_GLSL);
-      if (vert && fragBilateral) {
-        this._progBilateral = gl.createProgram()!;
-        gl.attachShader(this._progBilateral, vert);
-        gl.attachShader(this._progBilateral, fragBilateral);
-        gl.linkProgram(this._progBilateral);
-        gl.deleteShader(vert);
-        gl.deleteShader(fragBilateral);
-
+      this._progBilateral =
+        this._createProgram(FULLSCREEN_VERT_GLSL, BILATERAL_FRAG_GLSL, "Bilateral") ?? undefined;
+      if (this._progBilateral) {
         this._uLowResShaftsLoc = gl.getUniformLocation(this._progBilateral, "u_lowResShaftsMap");
         this._uFullResDepthLoc = gl.getUniformLocation(this._progBilateral, "u_fullResDepthMap");
-        this._uLowResDepthLoc = gl.getUniformLocation(this._progBilateral, "u_lowResDepthMap");
         this._uLowResTexelSizeLoc = gl.getUniformLocation(this._progBilateral, "u_lowResTexelSize");
         this._uDepthThresholdLoc = gl.getUniformLocation(this._progBilateral, "u_depthThreshold");
 
@@ -151,16 +169,10 @@ export class LightShaftsPassGL {
       }
     } else {
       // WebGL1 radial blur program
-      const vert100 = this._compileShader(gl.VERTEX_SHADER, FULLSCREEN_VERT_100);
-      const frag100 = this._compileShader(gl.FRAGMENT_SHADER, SHAFTS_100_FRAG_GLSL);
-      if (vert100 && frag100) {
-        this._prog100 = gl.createProgram()!;
-        gl.attachShader(this._prog100, vert100);
-        gl.attachShader(this._prog100, frag100);
-        gl.linkProgram(this._prog100);
-        gl.deleteShader(vert100);
-        gl.deleteShader(frag100);
-
+      this._prog100 =
+        this._createProgram(FULLSCREEN_VERT_100, SHAFTS_100_FRAG_GLSL, "RadialBlur100") ??
+        undefined;
+      if (this._prog100) {
         this._uSceneColor100Loc = gl.getUniformLocation(this._prog100, "u_sceneColor");
         this._uSunScreenPos100Loc = gl.getUniformLocation(this._prog100, "u_sunScreenPos");
         this._uSunCameraZ100Loc = gl.getUniformLocation(this._prog100, "u_sunCameraZ");
@@ -341,7 +353,7 @@ export class LightShaftsPassGL {
       if (this._uDirShadowInfoLoc)
         gl2.uniform4fv(this._uDirShadowInfoLoc, this._scratchDirShadowInfo);
 
-      gl2.bindVertexArray(this._vaoSrafts!);
+      gl2.bindVertexArray(this._vaoShafts!);
       gl2.drawArrays(gl2.TRIANGLES, 0, 3);
       gl2.bindVertexArray(null);
 
@@ -361,16 +373,11 @@ export class LightShaftsPassGL {
       gl2.bindTexture(gl2.TEXTURE_2D, depthTexture);
       if (this._uFullResDepthLoc) gl2.uniform1i(this._uFullResDepthLoc, 1);
 
-      // Low-res depth map -> Unit 2 (sampling depthTexture at low-res UVs)
-      gl2.activeTexture(gl2.TEXTURE2);
-      gl2.bindTexture(gl2.TEXTURE_2D, depthTexture);
-      if (this._uLowResDepthLoc) gl2.uniform1i(this._uLowResDepthLoc, 2);
-
       if (this._uLowResTexelSizeLoc) {
         gl2.uniform2f(this._uLowResTexelSizeLoc, 1.0 / halfW, 1.0 / halfH);
       }
       if (this._uDepthThresholdLoc) {
-        gl2.uniform1f(this._uDepthThresholdLoc, 0.05);
+        gl2.uniform1f(this._uDepthThresholdLoc, element.depthThreshold);
       }
 
       gl2.bindVertexArray(this._vaoBilateral!);
@@ -450,7 +457,7 @@ export class LightShaftsPassGL {
       const gl2 = gl as WebGL2RenderingContext;
       this._halfColorFbo?.destroy();
       this._fullShaftsFbo?.destroy();
-      if (this._vaoSrafts) gl2.deleteVertexArray(this._vaoSrafts);
+      if (this._vaoShafts) gl2.deleteVertexArray(this._vaoShafts);
       if (this._vaoBilateral) gl2.deleteVertexArray(this._vaoBilateral);
       if (this._progShafts) gl.deleteProgram(this._progShafts);
       if (this._progBilateral) gl.deleteProgram(this._progBilateral);

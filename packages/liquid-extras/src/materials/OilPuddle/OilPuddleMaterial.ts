@@ -323,11 +323,11 @@ export class OilPuddleMaterial extends AbstractMaterial {
     const resolvedTimeScale =
       timeScale !== undefined ? timeScale : base.timeScale * fluid.timeScale;
 
-    this.color = color ?? base.color;
-    this.highlightColor = highlightColor ?? base.highlightColor;
+    this.color = (color ?? base.color).clone();
+    this.highlightColor = (highlightColor ?? base.highlightColor).clone();
     this.shininess = explicit.shininess ?? base.shininess;
     this.iridescenceStrength = resolvedIridescence;
-    this.highlightPoint = highlightPoint ?? base.highlightPoint;
+    this.highlightPoint = (highlightPoint ?? base.highlightPoint).clone();
     this.highlightRadius = explicit.highlightRadius ?? base.highlightRadius;
     this.highlightIntensity = explicit.highlightIntensity ?? base.highlightIntensity;
     this.splatterBaseRadius = explicit.splatterBaseRadius ?? base.splatterBaseRadius;
@@ -337,7 +337,7 @@ export class OilPuddleMaterial extends AbstractMaterial {
     this.meniscusStrength = explicit.meniscusStrength ?? base.meniscusStrength;
     this.rimDarkening = explicit.rimDarkening ?? base.rimDarkening;
     this.floorVisibility = explicit.floorVisibility ?? base.floorVisibility;
-    this.envColor = envColor ?? base.envColor;
+    this.envColor = (envColor ?? base.envColor).clone();
     this.envReflectivity = explicit.envReflectivity ?? base.envReflectivity;
     this.timeScale = resolvedTimeScale;
     this.wrinkleStrength = explicit.wrinkleStrength ?? base.wrinkleStrength;

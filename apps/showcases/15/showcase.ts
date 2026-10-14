@@ -523,9 +523,6 @@ export class Showcase15 extends AbstractShowcase {
       this._balls[i]!.stateMachine.update(deltaTime);
     }
 
-    // 2. Scene update (matrix calculations of normal static / non-instanced objects)
-    this.scene.update(deltaTime);
-
     // 3. Construct and upload instance matrices
     const active = this._activeBallCount;
     for (let i = 0; i < Showcase15.MAX_BALLS; i++) {

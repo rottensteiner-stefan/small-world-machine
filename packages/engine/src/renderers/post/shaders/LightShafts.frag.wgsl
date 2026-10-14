@@ -7,18 +7,17 @@ struct LightShaftsUniforms {
     invViewProj: mat4x4f,
     camPos: vec4f,          // xyz: camPos, w: maxDistance
     sunDir: vec4f,          // xyz: sunDir, w: asymmetry (Schlick k)
-    sunColor: vec4f,        // xyz: sunColor, w: intensity
-    params: vec4f,          // x: density, y: samples, z: near, w: far
+    sunColor: vec4f,        // xyz: sunColor, w: unused
+    params: vec4f,          // x: density, y: samples, z: pad, w: pad
     cascadeSplits: vec4f,
-    dirShadowInfo: vec4f,   // x: bias, y: normalBias, z: castShadow, w: numCascades
+    dirShadowInfo: vec4f,   // x: bias, y: unused, z: castShadow, w: numCascades
     cascadeMatrices: array<mat4x4f, 4>,
 };
 
-@group(0) @binding(0) var linearSampler: sampler;
-@group(0) @binding(1) var opaqueDepthMap: texture_depth_2d;
-@group(0) @binding(2) var dirShadowMap: texture_depth_2d_array;
-@group(0) @binding(3) var shadowSampler: sampler_comparison;
-@group(0) @binding(4) var<uniform> u: LightShaftsUniforms;
+@group(0) @binding(0) var opaqueDepthMap: texture_depth_2d;
+@group(0) @binding(1) var dirShadowMap: texture_depth_2d_array;
+@group(0) @binding(2) var shadowSampler: sampler_comparison;
+@group(0) @binding(3) var<uniform> u: LightShaftsUniforms;
 
 fn getIGN(screenPos: vec2f) -> f32 {
     let magic = vec3f(0.06711056, 0.00583715, 52.9829189);
@@ -108,6 +107,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         accumulatedLight += shadow * sunColor * phase * transmittance * stepOpticalDepth;
     }
 
-    let intensity = u.sunColor.w;
-    return vec4f(accumulatedLight * intensity, 1.0);
+    // In-scattered light is scaled cleanly once in PostProcess composite
+    return vec4f(accumulatedLight, 1.0);
 }

@@ -4,6 +4,7 @@ varying vec3 v_worldPos;
 varying vec3 v_normal;
 varying vec2 v_uv;
 varying mat3 v_tbn;
+varying vec4 v_clipPos;
 
 uniform vec4 u_color;
 uniform vec4 u_specColor;

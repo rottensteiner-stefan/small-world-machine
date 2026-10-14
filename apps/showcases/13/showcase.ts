@@ -198,6 +198,8 @@ class Showcase13 extends AbstractShowcase {
   protected override update(deltaTime: number): void {
     super.update(deltaTime);
 
+    this._time += deltaTime;
+
     // Slowly rotate the helmet to show off dynamic shadows, PBR reflections, and normal maps
     if (this._helmet) {
       this._helmet.rotation.y += deltaTime * 0.4;

@@ -56,6 +56,15 @@ export interface Renderer {
     activeCubeFace?: number,
   ): void;
 
+  /** The currently active off-screen render target, or null if rendering to the default framebuffer. */
+  readonly activeRenderTarget?:
+    | import("../core/textures/index.js").RenderTarget
+    | import("../core/textures/index.js").RenderTargetCube
+    | null;
+
+  /** The currently active cube face index (0-5) if rendering to a RenderTargetCube. */
+  readonly activeCubeFace?: number;
+
   /**
    * Sets the clear color of the renderer.
    */

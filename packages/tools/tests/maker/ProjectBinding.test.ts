@@ -6,6 +6,7 @@ import {
   PointLight,
   DirectionalLight,
   AmbientLight,
+  WorldWriter,
 } from "@small-world-machine/engine";
 import {
   ProjectBinding,
@@ -186,15 +187,40 @@ describe("ProjectBinding", () => {
     root.add(new Object3D("Helper_Lamp"));
     root.add(new Object3D("Crate"));
 
-    binding.scheduleAutosave(() => root);
-    await vi.advanceTimersByTimeAsync(600);
-    expect(writes).toHaveLength(1);
+    // Simulate an older v1 scene file written without schemaVersion metadata
+    const doc = new WorldWriter().write(root);
+    writes.push(JSON.stringify(doc));
 
     const loaded = await binding.load();
     expect(loaded!.children.map((c) => c.name)).toEqual(["Lamp", "SunLight", "Fill", "Crate"]);
     expect(loaded!.children[0]).toBeInstanceOf(PointLight);
     expect((loaded!.children[1] as DirectionalLight).intensity).toBe(2);
     expect(loaded!.children[2]).toBeInstanceOf(AmbientLight);
+  });
+
+  it("load() preserves user-created nodes named Helper_*, Range_*, Cone_*, Zone_* in modern (v2+) scene files", async () => {
+    const { directory, writes } = fakeDirectory();
+    const binding = new ProjectBinding();
+    binding.bindTo(directory);
+
+    const root = new Object3D("Root");
+    root.add(new Object3D("Helper_NPC"));
+    root.add(new Object3D("Range_Sensor"));
+    root.add(new Object3D("Cone_Vision"));
+    root.add(new Object3D("Zone_Trigger"));
+    root.add(new Object3D("MakerGizmo")); // editor helper root should still be excluded
+
+    binding.scheduleAutosave(() => root);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(writes).toHaveLength(1);
+
+    const loaded = await binding.load();
+    expect(loaded!.children.map((c) => c.name)).toEqual([
+      "Helper_NPC",
+      "Range_Sensor",
+      "Cone_Vision",
+      "Zone_Trigger",
+    ]);
   });
 
   describe("prefabs", () => {

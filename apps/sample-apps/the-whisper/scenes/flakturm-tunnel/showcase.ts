@@ -288,6 +288,7 @@ class AndNowScene2 extends AbstractShowcase {
 
     if (this._movementBehavior) {
       currentUv = this._movementBehavior.uv;
+      this._playerRig.removeBehavior(this._movementBehavior);
     }
 
     if (this._player) {
@@ -982,7 +983,6 @@ class AndNowScene2 extends AbstractShowcase {
       this._mixer.update(deltaTime);
     }
 
-    this.scene.update(deltaTime);
     this._syncLanternTransform();
 
     // Status-Anzeige der Spielfigur -- fix am oberen Bildschirmrand (CSS in index.html), folgt

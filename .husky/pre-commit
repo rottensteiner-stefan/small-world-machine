@@ -1,4 +1,3 @@
 npm run typecheck
 npm run prebuild
-git add packages/engine/src/core/SmallWorldMachine.ts
 npx lint-staged

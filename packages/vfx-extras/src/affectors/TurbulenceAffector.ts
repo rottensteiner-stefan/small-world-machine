@@ -26,8 +26,7 @@ export class TurbulenceAffector implements ParticleAffector {
     this.evolutionSpeed = options.evolutionSpeed ?? 1.0;
   }
 
-  public apply(particle: Particle, dt: number): void {
-    this._time += dt * this.evolutionSpeed * 0.001;
+  public apply(particle: Particle, _dt: number): void {
     const f = this.frequency;
     const t = this._time;
 
@@ -43,5 +42,9 @@ export class TurbulenceAffector implements ParticleAffector {
     particle.acceleration.x += (fx * this.strength) / particle.mass;
     particle.acceleration.y += (fy * this.strength) / particle.mass;
     particle.acceleration.z += (fz * this.strength) / particle.mass;
+  }
+
+  public beginFrame(dt: number): void {
+    this._time += dt * this.evolutionSpeed;
   }
 }

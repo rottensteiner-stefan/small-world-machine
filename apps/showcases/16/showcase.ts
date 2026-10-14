@@ -384,9 +384,6 @@ export class Showcase16 extends AbstractShowcase {
     }
     */
 
-    // 2. Scene update (matrix calculations of normal static / non-instanced objects)
-    this.scene.update(deltaTime);
-
     // 3. Construct and upload instance matrices
     /*
     const active = this._activeBallCount;
