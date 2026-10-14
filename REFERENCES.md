@@ -845,7 +845,14 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Authors/Gurus:** Serge Brunier, Frédéric Tapissier / European Southern Observatory (ESO)
 - **Source:** [ESO - 360-degree Panorama of the Southern Sky (eso0932a)](https://www.eso.org/public/images/eso0932a/)
 - **License:** [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
-- **Usage:** Used as the high-resolution equirectangular background texture for the `Skydome` in Showcase 22 (Accretion Disk & Magnetic Singularity simulation), providing an astronomically accurate $360^\circ$ panoramic backdrop that is dynamically distorted by the gravitational lensing and relativistic beaming post-processing shaders.
+
+### ambientCG Marble006 & Metal008 (Showcase 27 PBR Textures)
+
+- **File:** `apps/showcases/27/assets/marble_black_*.webp`, `apps/showcases/27/assets/bronze_*.webp`
+- **Authors/Gurus:** Lennart Demes / ambientCG
+- **Source:** [ambientCG - Marble006](https://ambientcg.com/view?id=Marble006) and [ambientCG - Metal008](https://ambientcg.com/view?id=Metal008)
+- **License:** [CC0 (Creative Commons Zero)](https://creativecommons.org/publicdomain/zero/1.0/) — Public Domain Dedication.
+- **Usage:** Provides CC0 photorealistic PBR texture sets (diffuse, normal, roughness, and metalness maps) for Showcase 27 ("Shadow Sanctuary"): `Marble006` creates the dark polished temple floor and central pedestal with gold veins; `Metal008` gives the armillary sphere authentic warm bronze metallic reflections under clustered spotlights and IBL.
 
 ### Dungeon Font (Yet Another Dungeon HUD)
 

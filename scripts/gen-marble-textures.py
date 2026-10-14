@@ -56,34 +56,38 @@ feather = fbm(2, 12)  # fine jitter along the vein edges
 stripes = 2 * np.pi * (1 * X + 2 * Y)
 field_a = stripes + 3.2 * turb + 0.6 * feather
 field_b = 2 * np.pi * (2 * X + 3 * Y) + 2.2 * turb + 0.8 * feather
-field_g = field_a + 0.45  # gold runs beside the main veins, like mineral seeping along a crack
+field_g = field_a + 0.35  # gold runs beside the main veins, like mineral seeping along a crack
 
 # Low-frequency masks so veins swell and fade like in real stone.
 mask_main = np.clip(0.35 + 1.4 * fbm(2, 1), 0, 1)
-mask_gold = np.clip(0.55 + 1.4 * fbm(2, 1), 0, 1)
+mask_gold = np.clip(0.60 + 1.4 * fbm(2, 1), 0, 1)
 
 main = ridge(field_a, 16) + 0.5 * ridge(field_a, 4)  # sharp core plus soft shadowy halo
 main = np.clip(main, 0, 1) * mask_main
-cross = ridge(field_b, 30) * 0.7 * np.clip(0.4 + fbm(2, 2), 0, 1)
-gold = np.clip((ridge(field_g, 9) + 0.5 * ridge(field_g, 3) * 0.5 + 0.9 * ridge(field_b + 0.5, 18)) * mask_gold, 0, 1)
+cross = ridge(field_b, 24) * 0.7 * np.clip(0.4 + fbm(2, 2), 0, 1)
+
+# Richer gold inlays: bold seam adjacent to grey veins, plus secondary branch and shimmering filigree
+gold_a = ridge(field_g, 6) * 1.0 + 0.6 * ridge(field_g, 2.5) * 0.7
+gold_b = ridge(field_b + 0.35, 8) * 0.8 + 0.5 * ridge(field_a - 0.3, 5) * 0.6
+gold = np.clip((gold_a + gold_b) * mask_gold, 0, 1)
 
 # Soft translucent clouds inside the stone.
 cloud = 0.5 + 0.5 * fbm(5, 1, gain=0.6)
-base = np.array([0.93, 0.92, 0.90])[None, None, :] * (0.94 + 0.06 * cloud[..., None])
-base = base * (1 - 0.06 * cloud[..., None] * np.array([0.0, 0.2, 0.5]))  # faint cool haze
+base = np.array([0.94, 0.93, 0.91])[None, None, :] * (0.94 + 0.06 * cloud[..., None])
+base = base * (1 - 0.05 * cloud[..., None] * np.array([0.0, 0.2, 0.4]))  # faint cool haze
 
-grey_vein = np.array([0.36, 0.37, 0.40])
-gold_color = np.array([0.95, 0.68, 0.22])
-vein = np.clip(main + 0.6 * cross, 0, 1)[..., None]
+grey_vein = np.array([0.34, 0.35, 0.38])
+gold_color = np.array([1.0, 0.78, 0.26])  # Vibrant 24K radiant gold
+vein = np.clip(main + 0.5 * cross, 0, 1)[..., None]
 color = base * (1 - vein) + grey_vein * vein
 color = color * (1 - gold[..., None]) + gold_color * gold[..., None]
 
-# Polished stone: low roughness, a bit rougher inside the veins. Gold is metallic.
-roughness = np.clip(0.16 + 0.12 * vein[..., 0] + 0.08 * cloud, 0, 1)
-metalness = np.clip(gold * 1.2, 0, 1)
+# Polished stone: low roughness, slightly rougher in stone veins, highly reflective for gold
+roughness = np.clip(0.18 + 0.10 * vein[..., 0] + 0.06 * cloud - 0.12 * gold, 0.06, 1)
+metalness = np.clip(gold * 1.4, 0, 1)
 
-# Normal map: veins sit a hair lower than the polished surface.
-height = -0.012 * (main + 0.5 * cross + gold)
+# Normal map: veins sit slightly lower; gold has subtle beveled micro-relief
+height = -0.012 * (main + 0.5 * cross) + 0.005 * gold
 dx = (np.roll(height, -1, axis=1) - np.roll(height, 1, axis=1)) * SIZE * 0.5
 dy = (np.roll(height, -1, axis=0) - np.roll(height, 1, axis=0)) * SIZE * 0.5
 normal = np.stack([-dx, dy, np.ones_like(dx)], axis=-1)  # GL convention (+Y up)

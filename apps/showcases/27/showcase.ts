@@ -174,7 +174,7 @@ class Showcase27 extends AbstractShowcase {
       this.scene.brdfLUT = brdfTexture;
       this.scene.irradianceMap = irradianceTexture;
       this.scene.prefilterMap = prefilterTexture;
-      this.scene.environmentIntensity = 1.0;
+      this.scene.environmentIntensity = 0.5;
 
       whiteMarble = textures.slice(0, 4) as Texture[];
       blackMarble = textures.slice(4, 7) as Texture[];
@@ -255,12 +255,12 @@ class Showcase27 extends AbstractShowcase {
       // Narrow warm uplight aimed at the pillar so the gold veins catch the light (a spot, not a point
       // light: a point light mirrors as a bright orb in the polished floor).
       const uplight = new SpotLight({
-        color: new Color(1.0, 0.72, 0.38),
-        intensity: 7.0,
+        color: new Color(1.0, 0.74, 0.35),
+        intensity: 8.5,
         direction: new Vector3D(Math.sin(angle) * 1.4, 2.6, Math.cos(angle) * 1.4),
-        angle: Math.PI / 9,
-        penumbra: 0.7,
-        distance: 9.0,
+        angle: Math.PI / 8.5,
+        penumbra: 0.6,
+        distance: 10.0,
       });
       uplight.position.set(
         Math.sin(angle) * (colonnadeRadius - 1.4),
