@@ -16,6 +16,8 @@ export interface IblBakeConfig {
   pngBase64: string;
   /** Bake resolutions; the same values end up in the manifest, so they must be what is baked. */
   options: IblGenDefaults;
+  /** Export linear values instead of gamma-encoded ones (the engine encodes at the end of the pipeline). */
+  linear?: boolean;
 }
 
 declare global {
@@ -37,6 +39,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
 
 window.__swIblBake = async (config: IblBakeConfig): Promise<{ outputs: IblBakeOutput[] }> => {
   const { options } = config;
+  const linear = config.linear ?? false;
   const baker = new IBLBaker(options);
 
   const raw = atob(config.pngBase64);
@@ -58,13 +61,13 @@ window.__swIblBake = async (config: IblBakeConfig): Promise<{ outputs: IblBakeOu
       {
         name: "env.png",
         base64: await blobToBase64(
-          await baker.exportCubemapToCross(envCube, options.envResolution, 0),
+          await baker.exportCubemapToCross(envCube, options.envResolution, 0, linear),
         ),
       },
       {
         name: "irradiance.png",
         base64: await blobToBase64(
-          await baker.exportCubemapToCross(irrCube, options.irradianceResolution, 0),
+          await baker.exportCubemapToCross(irrCube, options.irradianceResolution, 0, linear),
         ),
       },
       {
@@ -77,7 +80,9 @@ window.__swIblBake = async (config: IblBakeConfig): Promise<{ outputs: IblBakeOu
     for (let mip = 0; mip < options.prefilterMips; mip++) {
       outputs.push({
         name: `prefilter/mip${mip}.png`,
-        base64: await blobToBase64(await baker.exportCubemapToCross(prefCube, prefilterSize, mip)),
+        base64: await blobToBase64(
+          await baker.exportCubemapToCross(prefCube, prefilterSize, mip, linear),
+        ),
       });
       prefilterSize = Math.floor(prefilterSize / 2);
     }

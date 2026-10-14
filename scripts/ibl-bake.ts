@@ -37,6 +37,8 @@ interface CliArgs {
   width: number;
   height: number;
   dumpHtml: boolean;
+  input: string | undefined;
+  linear: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -46,6 +48,8 @@ function parseArgs(argv: string[]): CliArgs {
     width: 512,
     height: 256,
     dumpHtml: false,
+    input: undefined,
+    linear: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
@@ -67,12 +71,20 @@ function parseArgs(argv: string[]): CliArgs {
       case "--height":
         args.height = Number(next());
         break;
+      case "--linear":
+        args.linear = true;
+        break;
+      case "--input":
+        args.input = path.resolve(next());
+        break;
       case "--dump-html":
         args.dumpHtml = true;
         break;
       case "--help":
-        console.log(`Usage: tsx scripts/ibl-bake.ts --seed <n> [--out <dir>] [--width W] [--height H]
+        console.log(`Usage: tsx scripts/ibl-bake.ts --seed <n> [--out <dir>] [--width W] [--height H] [--input pano.png] [--linear]
   Headless IBL bake with a seed-deterministic generated input panorama (P1 proof).
+  --input bakes your own equirect PNG instead of the generated one (width/height come from the file).
+  --linear exports linear values instead of gamma-encoded ones (what the engine's linear pipeline expects).
   Writes env.png, irradiance.png, brdf_lut.png, prefilter/mipN.png + manifest.json.`);
         process.exit(0);
         break;
@@ -104,6 +116,19 @@ async function bundleHarness(): Promise<string> {
     logLevel: "silent",
     plugins: [
       {
+        name: "raw-text-imports",
+        setup(build) {
+          build.onResolve({ filter: /\?raw$/ }, (args) => ({
+            path: path.resolve(args.resolveDir, args.path.replace(/\?raw$/, "")),
+            namespace: "raw-text",
+          }));
+          build.onLoad({ filter: /.*/, namespace: "raw-text" }, (args) => ({
+            contents: `export default ${JSON.stringify(fs.readFileSync(args.path, "utf8"))};`,
+            loader: "js",
+          }));
+        },
+      },
+      {
         name: "ts-js-resolve",
         setup(build) {
           build.onResolve({ filter: /\.js$/ }, (args) => {
@@ -127,6 +152,7 @@ async function runBakeInBrowser(
   bundleText: string,
   pngBase64: string,
   options: IblGenOptions,
+  linear: boolean,
 ): Promise<Map<string, Buffer>> {
   const tmpUserDir = fs.mkdtempSync(path.join(os.tmpdir(), "sw-ibl-bake-"));
   const browser = await puppeteer.launch({
@@ -153,8 +179,12 @@ async function runBakeInBrowser(
     await page.goto(pageUrl, { waitUntil: "networkidle0" });
     await page.waitForFunction(() => typeof window.__swIblBake === "function");
     const result = await page.evaluate(
-      async (b64, bakeOptions) => {
-        const { outputs } = await window.__swIblBake({ pngBase64: b64, options: bakeOptions });
+      async (b64, bakeOptions, linearExport) => {
+        const { outputs } = await window.__swIblBake({
+          pngBase64: b64,
+          options: bakeOptions,
+          linear: linearExport,
+        });
         return outputs;
       },
       pngBase64,
@@ -165,6 +195,7 @@ async function runBakeInBrowser(
         prefilterMips: options.prefilterMips,
         brdfResolution: options.brdfResolution,
       },
+      linear,
     );
 
     const files = new Map<string, Buffer>();
@@ -197,18 +228,24 @@ async function writeHarnessPage(bundleText: string, options: IblGenOptions): Pro
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const customInput = args.input ? PNG.sync.read(fs.readFileSync(args.input)) : undefined;
   const options: IblGenOptions = resolveIblGenOptions({
     seed: args.seed,
-    width: args.width,
-    height: args.height,
+    width: customInput?.width ?? args.width,
+    height: customInput?.height ?? args.height,
   });
 
   fs.mkdirSync(args.out, { recursive: true });
 
   console.log(`[ibl-bake] seed=${options.seed} ${options.width}x${options.height} -> ${args.out}`);
 
-  const rgba = generateTestEquirect(options.seed, options.width, options.height);
-  const inputPng = encodePng(options.width, options.height, rgba);
+  const inputPng = customInput
+    ? fs.readFileSync(args.input!)
+    : encodePng(
+        options.width,
+        options.height,
+        generateTestEquirect(options.seed, options.width, options.height),
+      );
   const inputSha256 = sha256Hex(inputPng);
 
   console.log(`[ibl-bake] input.png ${inputPng.length} bytes, sha256 ${inputSha256.slice(0, 16)}…`);
@@ -220,7 +257,12 @@ async function main(): Promise<void> {
     console.log(`[ibl-bake] harness dumped to ${dump}`);
   }
 
-  const files = await runBakeInBrowser(bundleText, inputPng.toString("base64"), options);
+  const files = await runBakeInBrowser(
+    bundleText,
+    inputPng.toString("base64"),
+    options,
+    args.linear,
+  );
 
   const manifest: IblBakeManifest = {
     tool: "ibl-bake",

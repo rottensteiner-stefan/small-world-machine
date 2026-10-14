@@ -134,8 +134,12 @@ export class IBLBaker {
     fileOrBlob: Blob | File | ImageBitmap,
   ): Promise<WebGLTexture> {
     const gl = this._gl;
+    // The sampler expects GL convention (row 0 = bottom); decoded images start at the top row.
+    // UNPACK_FLIP_Y is ignored for ImageBitmap, so the flip has to happen at decode time.
     const bitmap =
-      fileOrBlob instanceof ImageBitmap ? fileOrBlob : await createImageBitmap(fileOrBlob);
+      fileOrBlob instanceof ImageBitmap
+        ? fileOrBlob
+        : await createImageBitmap(fileOrBlob, { imageOrientation: "flipY" });
     const tex = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
@@ -522,7 +526,16 @@ export class IBLBaker {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
-  public exportCubemapToCross(texture: WebGLTexture, size: number, mip: number = 0): Promise<Blob> {
+  /**
+   * Exports a cubemap as a horizontal-cross PNG. By default the float data is gamma-encoded (1/2.2) so the
+   * PNG looks right; pass `linear` to keep linear values, which is what the engine's linear pipeline expects.
+   */
+  public exportCubemapToCross(
+    texture: WebGLTexture,
+    size: number,
+    mip: number = 0,
+    linear: boolean = false,
+  ): Promise<Blob> {
     return new Promise((resolve) => {
       const gl = this._gl;
       const crossCanvas = document.createElement("canvas");
@@ -557,9 +570,11 @@ export class IBLBaker {
           let g = pixels[i * 4 + 1]!;
           let b = pixels[i * 4 + 2]!;
           // Simple gamma correction for export so it looks right in PNG
-          r = Math.pow(r, 1.0 / 2.2);
-          g = Math.pow(g, 1.0 / 2.2);
-          b = Math.pow(b, 1.0 / 2.2);
+          if (!linear) {
+            r = Math.pow(r, 1.0 / 2.2);
+            g = Math.pow(g, 1.0 / 2.2);
+            b = Math.pow(b, 1.0 / 2.2);
+          }
           imgData.data[i * 4] = MathUtils.clamp(r * 255, 0, 255);
           imgData.data[i * 4 + 1] = MathUtils.clamp(g * 255, 0, 255);
           imgData.data[i * 4 + 2] = MathUtils.clamp(b * 255, 0, 255);
