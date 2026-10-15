@@ -11,11 +11,12 @@ import {
   Cylinder,
   DirectionalLight,
   EngineOptions,
+  GlassMaterial,
+  GrainElement,
   HbaoElement,
   Keys,
   MathUtils,
   Object3D,
-  Octahedron,
   Optics,
   OrbitController,
   PerspectiveProjection,
@@ -27,8 +28,12 @@ import {
   SpotLight,
   StandardMaterial,
   Texture,
+  TextureFilter,
+  TextureWrap,
+  ToneMappingElement,
   Torus,
   Vector2D,
+  VignetteElement,
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 
@@ -48,26 +53,31 @@ const PRISM_RADIUS = 1.2; // matches the CentralPrism Cylinder's radiusTop/radiu
 // Chosen so every spectral color refracts back out through the far face without hitting total
 // internal reflection there (critical angle ~36-38 degrees for the dispersion range below), while
 // still landing safely inside the entry face's 120-degree angular span, clear of its edges, across
-// the turntable's +-0.25 rad wobble (see update()). A shallower incidence angle (closer to the old,
-// buggy edge-on 30 degrees) looks safer geometrically but is *not* -- it makes every color total-
-// internally-reflect at the far face instead of exiting as a visible spectrum.
-const NOMINAL_INCIDENCE_ANGLE = MathUtils.degToRad(44);
+// the turntable's +-0.12 rad wobble (see update()). Re-tuned from the old 44deg/+-0.25 rad per plan
+// P0-2: a numeric range scan over the FULL new wobble window proves all 7 bands stay valid at EVERY
+// angle in [-0.12, +0.12] only for NOMINAL in the upper part of the plan's 48-50deg band -- 50deg
+// keeps a ~+-0.13 rad symmetric 7/7 margin, so NOMINAL=50deg was chosen (see apps/showcases/28/docs/log.md).
+const NOMINAL_INCIDENCE_ANGLE = MathUtils.degToRad(50);
 const SPECTRAL_RAY_LENGTH = 4.8;
 
 interface SpectrumBand {
   name: string;
   color: Color;
   wavelengthNm: number;
+  /** Per-band emissive gain (CIE-luminosity compensation): the loud yellow/green middle is pulled
+   * down and the dim red/blue/violet extremes pushed up so every spectral band reads at comparable
+   * brightness on the dark detector (plan P0-3: "even red->violet read"). */
+  luminosity: number;
 }
 
 const SPECTRUM: SpectrumBand[] = [
-  { name: "Red", color: new Color(1.0, 0.05, 0.05), wavelengthNm: 700 },
-  { name: "Orange", color: new Color(1.0, 0.45, 0.0), wavelengthNm: 620 },
-  { name: "Yellow", color: new Color(1.0, 0.9, 0.05), wavelengthNm: 580 },
-  { name: "Green", color: new Color(0.1, 1.0, 0.2), wavelengthNm: 530 },
-  { name: "Cyan", color: new Color(0.05, 0.9, 1.0), wavelengthNm: 490 },
-  { name: "Blue", color: new Color(0.1, 0.3, 1.0), wavelengthNm: 460 },
-  { name: "Violet", color: new Color(0.7, 0.1, 1.0), wavelengthNm: 400 },
+  { name: "Red", color: new Color(1.0, 0.05, 0.05), wavelengthNm: 700, luminosity: 1.15 },
+  { name: "Orange", color: new Color(1.0, 0.45, 0.0), wavelengthNm: 620, luminosity: 0.95 },
+  { name: "Yellow", color: new Color(1.0, 0.9, 0.05), wavelengthNm: 580, luminosity: 0.7 },
+  { name: "Green", color: new Color(0.1, 1.0, 0.2), wavelengthNm: 530, luminosity: 0.6 },
+  { name: "Cyan", color: new Color(0.05, 0.9, 1.0), wavelengthNm: 490, luminosity: 0.75 },
+  { name: "Blue", color: new Color(0.1, 0.3, 1.0), wavelengthNm: 460, luminosity: 0.95 },
+  { name: "Violet", color: new Color(0.7, 0.1, 1.0), wavelengthNm: 400, luminosity: 1.1 },
 ];
 
 /** Outward normal of edge `a`-`b`, for a convex polygon centred on the origin (true here: the
@@ -79,6 +89,11 @@ function outwardFaceNormal(a: Vector2D, b: Vector2D): Vector2D {
 interface SpectralRay {
   name: string;
   color: Color;
+  /** Real intersection of the beam with the prism's entry face (world XZ). */
+  entryPoint: Vector2D;
+  /** Real exit point on the prism's far face (world XZ) -- the start of the free-flight segment. */
+  exitPoint: Vector2D;
+  /** Start of the free-flight segment. */
   origin: Vector2D;
   direction: Vector2D;
 }
@@ -155,7 +170,14 @@ function computeSpectralRays(prismRotation: number): (SpectralRay | undefined)[]
       continue;
     }
 
-    rays.push({ name: band.name, color: band.color, origin: exitPoint, direction: exitDir });
+    rays.push({
+      name: band.name,
+      color: band.color,
+      entryPoint,
+      exitPoint,
+      origin: exitPoint,
+      direction: exitDir,
+    });
   }
   return rays;
 }
@@ -169,14 +191,69 @@ function computeSpectralRays(prismRotation: number): (SpectralRay | undefined)[]
 class Showcase28 extends AbstractShowcase {
   private _turntable!: Object3D;
   private _prismMesh!: Object3D;
-  private _gemMesh!: Object3D;
   private _laserLight!: SpotLight;
   private _spectralRays: Object3D[] = [];
+  /** P0-5: ONE faint white internal segment linking the average entry point to the average exit
+   * point inside the glass, so the beam visibly *passes through* the prism (a single segment per
+   * band would stack 7x over the nearly-identical path and blow the glass interior). */
+  private _internalPath!: Object3D;
+  /** P0-3: the continuous red->violet spectrum band laid on the detector panel -- a single smear
+   * mesh whose ENTIRE emissive comes from a runtime-generated canvas gradient texture (the same
+   * `Texture.fromCanvas` + `emissiveMap` path the engine itself uses for RampLUTs, so it is
+   * WebGL1/WebGL2/WebGPU-safe). One smooth multi-color ramp, no hue stepping, and the texture's
+   * 8-bit per-channel ceiling structurally forbids the white-hot core the discrete HDR materials
+   * produced. Pinned at the real red and violet impact points every frame. */
+  private _bandMesh: Object3D | undefined;
+
+  /** Bakes the calibrated red->violet spectral ramp into a 1D emissive map. */
+  private _createBandGradientTexture(): Texture {
+    const width = 256;
+    const height = 8;
+    const cv = document.createElement("canvas");
+    cv.width = width;
+    cv.height = height;
+    const ctx = cv.getContext("2d");
+    if (!ctx) throw new Error("[Showcase28] 2D canvas context unavailable for the band gradient.");
+    const grad = ctx.createLinearGradient(0, 0, width, 0);
+    for (let i = 0; i < SPECTRUM.length; i++) {
+      const c = SPECTRUM[i]!.color;
+      // Saturation boost: the raw piecewise rgb() stops wash out through white-ish mixes in the
+      // mid-spectrum once drawn as a canvas gradient, so exaggerate each stop around its luma to
+      // keep every channel under 1 and the band's chromatic identity intact (no white/pink core).
+      const gray = (c.r + c.g + c.b) / 3;
+      const sat = 1.7;
+      const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
+      const sr = clamp01(gray + (c.r - gray) * sat);
+      const sg = clamp01(gray + (c.g - gray) * sat);
+      const sb = clamp01(gray + (c.b - gray) * sat);
+      grad.addColorStop(
+        i / (SPECTRUM.length - 1),
+        `rgb(${Math.round(sr * 255)}, ${Math.round(sg * 255)}, ${Math.round(sb * 255)})`,
+      );
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+    return Texture.fromCanvas(cv, {
+      generateMipmaps: false,
+      magFilter: TextureFilter.LINEAR,
+      minFilter: TextureFilter.LINEAR,
+      addressModeU: TextureWrap.CLAMP_TO_EDGE,
+      addressModeV: TextureWrap.CLAMP_TO_EDGE,
+    });
+  }
   private _time = 0;
   // Secret manual-control mode: Ctrl+T pauses the automatic wobble and lets LEFT/RIGHT spin
   // the turntable by hand instead.
   private _manualTurntableControl = false;
   private _manualTurntableAngle = 0;
+  /** One-shot guard: the P0-4 hero pose is applied once on the first frame (see update()). */
+  private _heroPoseApplied = false;
+  // Detector panel plane (world XZ), derived in setupScene() from the resting exit fan: center,
+  // unit travel direction (normal) and the tangent used to lay out the spectrum band.
+  private _screenFaceX = 0;
+  private _screenFaceZ = 0;
+  private _screenDirX = 1;
+  private _screenDirZ = 0;
 
   constructor(options: EngineOptions = {}) {
     super({
@@ -188,20 +265,49 @@ class Showcase28 extends AbstractShowcase {
   }
 
   protected override async setupScene(): Promise<void> {
-    // Post-Processing: Vivid HDR Bloom for laser and dispersed spectral rays
+    // Post-Processing: Vivid HDR Bloom for laser and dispersed spectral rays. Plan P0-1 exposure
+    // rebalance: dark cleanroom first, spectrum reads as light; bloom threshold raised well above
+    // the lit geometry so only the laser/fan/band glow blooms.
     this.renderer.postProcessing.enabled = true;
     const bloom = this.renderer.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
     if (bloom) {
       bloom.enabled = true;
-      bloom.intensity = 1.4;
-      bloom.threshold = 0.75;
+      bloom.intensity = 0.35;
+      bloom.threshold = 1.05;
+      bloom.softThreshold = 0.05;
+      bloom.radius = 0.6;
     }
 
     const hbao = this.renderer.postProcessing.get<HbaoElement>(PostProcessingEffectType.HBAO);
     if (hbao) {
-      hbao.enabled = true;
-      hbao.radius = 0.6;
-      hbao.intensity = 1.0;
+      // Disabled: on the WebGPU path the HBAO pass read as blotchy denoiser smudges over the dark
+      // anodized bench. Vignette + the dark grade carry the contact mood instead (graceful no-op
+      // on WebGL1 either way).
+      hbao.enabled = false;
+    }
+
+    const vignette = this.renderer.postProcessing.get<VignetteElement>(
+      PostProcessingEffectType.VIGNETTE,
+    );
+    if (vignette) {
+      vignette.enabled = true;
+      vignette.offset = 0.78;
+      vignette.darkness = 0.4;
+    }
+
+    const grain = this.renderer.postProcessing.get<GrainElement>(PostProcessingEffectType.GRAIN);
+    if (grain) {
+      grain.enabled = true;
+      grain.intensity = 0.015;
+    }
+
+    // ACES_FILMIC tone mapping kept; exposure lightly lifted off pure-neutral as the last grade
+    // knob after the P0-1 rebalance (plan: 0.9-1.1 tuned last).
+    const toneMap = this.renderer.postProcessing.get<ToneMappingElement>(
+      PostProcessingEffectType.TONE_MAPPING,
+    );
+    if (toneMap) {
+      toneMap.exposure = 1.08;
     }
 
     // Camera setup
@@ -216,21 +322,24 @@ class Showcase28 extends AbstractShowcase {
       this.camera.updateProjectionMatrix();
     }
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
-    this.camera.position.set(0, 5.5, 11);
-    this.camera.target.set(0, 1.2, 0);
+    // P0-4 hero reframe: low-three-quarter cinematic pose holding prism + full exit fan +
+    // continuous detector band in one composition (beam path as leading line). Re-derived after
+    // P0-2 moved the resting pose. User can still orbit via OrbitController / Ctrl+T.
+    this.camera.position.set(5.4, 3.4, -4.6);
+    this.camera.target.set(1.4, 1.45, 2.6);
     this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
 
-    // Ambient Optical Environment (Dark cleanroom lab aesthetic)
+    // Ambient Optical Environment (Dark cleanroom lab aesthetic) -- P0-1 rebalanced down
     const ambientLight = new AmbientLight({
       color: new Color(0.04, 0.05, 0.08),
-      intensity: 0.8,
+      intensity: 0.12,
     });
     this.scene.add(ambientLight);
 
     // Laboratory Overhead Soft Light
     const overheadLight = new DirectionalLight({
       color: new Color(0.9, 0.95, 1.0),
-      intensity: 0.5,
+      intensity: 0.25,
     });
     overheadLight.direction.set(0.3, -1, -0.4);
     this.scene.add(overheadLight);
@@ -241,7 +350,13 @@ class Showcase28 extends AbstractShowcase {
       await envTexture.loadFrom("./assets/ibl/env.webp", CubeLayout.CROSS_HORIZONTAL);
       const skybox = new Object3D("Skybox");
       skybox.geometry = new Cube({ size: 1000 }).getGeometryData();
-      skybox.material = new SkyboxMaterial({ cubeMap: envTexture });
+      // The raw env panorama is a bright studio HDR plate; shown undimmed it floods the dark
+      // cleanroom look with haze and blows the frame (it is ALSO the IBL light source, so keep
+      // the texture, only darken the visible sky to a near-black lab backdrop).
+      skybox.material = new SkyboxMaterial({
+        cubeMap: envTexture,
+        color: new Color(0.03, 0.035, 0.05),
+      });
       skybox.frustumCulled = false;
       this.scene.add(skybox);
     } catch (e) {
@@ -270,7 +385,7 @@ class Showcase28 extends AbstractShowcase {
       this.scene.brdfLUT = brdfTexture;
       this.scene.irradianceMap = irradianceTexture;
       this.scene.prefilterMap = prefilterTexture;
-      this.scene.environmentIntensity = 1.5;
+      this.scene.environmentIntensity = 0.34;
     } catch (e) {
       console.warn("IBL maps not loaded:", e);
     }
@@ -286,18 +401,18 @@ class Showcase28 extends AbstractShowcase {
     try {
       steelDiffuse = await Texture.fromUrl("../shared/assets/scratched_steel_diffuse.webp");
       if (steelDiffuse) {
-        steelDiffuse.repeat.x = 4;
-        steelDiffuse.repeat.y = 3;
+        steelDiffuse.repeat.x = 1.5;
+        steelDiffuse.repeat.y = 1.5;
       }
       steelNormal = await Texture.fromUrl("../shared/assets/scratched_steel_normal.webp");
       if (steelNormal) {
-        steelNormal.repeat.x = 4;
-        steelNormal.repeat.y = 3;
+        steelNormal.repeat.x = 1.5;
+        steelNormal.repeat.y = 1.5;
       }
       steelRoughness = await Texture.fromUrl("../shared/assets/scratched_steel_roughness.webp");
       if (steelRoughness) {
-        steelRoughness.repeat.x = 4;
-        steelRoughness.repeat.y = 3;
+        steelRoughness.repeat.x = 1.5;
+        steelRoughness.repeat.y = 1.5;
       }
 
       brassDiffuse = await Texture.fromUrl("../shared/assets/rusty_brass_diffuse.webp");
@@ -307,15 +422,15 @@ class Showcase28 extends AbstractShowcase {
       console.warn("Could not load PBR textures:", e);
     }
 
-    // 1. Heavy Optical Isolation Bench (Anodized Aluminum Slab)
+    // 1. Heavy Optical Isolation Bench (dark anodized aluminum slab, plan P1-2: grounded, matte)
     const tableMat = new StandardMaterial({
-      color: new Color(0.2, 0.22, 0.25),
+      color: new Color(0.14, 0.15, 0.17),
       diffuseMap: steelDiffuse,
       normalMap: steelNormal,
       roughnessMap: steelRoughness,
-      metallic: 0.95,
-      roughness: 0.35,
-      envMap: envTexture,
+      metallic: 0.5,
+      roughness: 0.6,
+      normalScale: new Vector2D(0.35, 0.35),
     });
     const benchTop = new Object3D("BenchTop");
     benchTop.geometry = new Cube({
@@ -327,19 +442,19 @@ class Showcase28 extends AbstractShowcase {
     benchTop.receiveShadow = true;
     this.scene.add(benchTop);
 
-    // Rotary Optical Stage (Center turntable)
+    // Rotary Optical Stage (Center turntable) -- P1-2: dark anodized like the bench
     this._turntable = new Object3D("TurntableStage");
     this._turntable.position.set(0, 0, 0);
     this.scene.add(this._turntable);
 
     const stageMat = new StandardMaterial({
-      color: new Color(0.3, 0.32, 0.36),
+      color: new Color(0.15, 0.16, 0.18),
       diffuseMap: steelDiffuse,
       normalMap: steelNormal,
       roughnessMap: steelRoughness,
-      metallic: 0.95,
-      roughness: 0.2,
-      envMap: envTexture,
+      metallic: 0.6,
+      roughness: 0.55,
+      normalScale: new Vector2D(0.3, 0.3),
     });
     const stagePlate = new Object3D("StagePlate");
     stagePlate.geometry = new Cylinder({
@@ -353,36 +468,39 @@ class Showcase28 extends AbstractShowcase {
     stagePlate.receiveShadow = true;
     this._turntable.add(stagePlate);
 
-    // Brass Scale Ring around turntable
+    // Brass Scale Ring around turntable -- P1-2: re-seated ON the plate's top face (radius 2.18 is
+    // inside the stagePlate top radius of 2.2, so the torus no longer clips the plate's sloped
+    // edge), slightly proud of the surface with a near-zero contact gap for HBAO contact shading.
     const brassRingMat = new StandardMaterial({
-      color: new Color(0.85, 0.7, 0.3),
+      color: new Color(0.7, 0.55, 0.25),
       diffuseMap: brassDiffuse,
       normalMap: brassNormal,
       roughnessMap: brassRoughness,
       metallic: 0.9,
-      roughness: 0.25,
-      envMap: envTexture,
+      roughness: 0.35,
     });
     const dialRing = new Object3D("DialRing");
     dialRing.geometry = new Torus({
-      radius: 2.3,
-      tube: 0.04,
+      radius: 2.18,
+      tube: 0.03,
       radialSegments: 32,
       tubularSegments: 64,
     }).getGeometryData();
     dialRing.material = brassRingMat;
     dialRing.rotation.x = Math.PI / 2;
-    dialRing.position.set(0, 0.15, 0);
+    dialRing.position.set(0, 0.181, 0);
     this._turntable.add(dialRing);
 
-    // The Central Optical Prism (Equilateral triangular cylinder, n = 1.65 flint glass)
-    const glassMat = new StandardMaterial({
-      color: new Color(0.92, 0.96, 1.0),
-      metallic: 0.1,
-      roughness: 0.05,
-      transparent: true,
-      emissiveColor: new Color(0.1, 0.2, 0.35),
-      emissiveIntensity: 0.3,
+    // The Central Optical Prism (Equilateral triangular cylinder, n = 1.65 flint glass).
+    // P1-1: verified crystalline GlassMaterial path (3-backend, no StandardMaterial.transmission
+    // WebGPU-only trap), no self-glow emissive -- the only light on the glass is the tight key
+    // SpotLight below, which raises sharp facet glints instead of a milky self-luminous bulb.
+    const glassMat = new GlassMaterial({
+      color: new Color(0.85, 0.95, 1.0),
+      ior: 1.65,
+      thickness: 0.8,
+      transmission: 1.0,
+      roughness: 0.04,
     });
     this._prismMesh = new Object3D("CentralPrism");
     this._prismMesh.geometry = new Cylinder({
@@ -401,23 +519,21 @@ class Showcase28 extends AbstractShowcase {
     this._prismMesh.castShadow = true;
     this._turntable.add(this._prismMesh);
 
-    // Secondary Floating Diamond Polyhedron
-    const diamondMat = new StandardMaterial({
-      color: new Color(1.0, 0.95, 1.0),
-      metallic: 0.2,
-      roughness: 0.02,
-      transparent: true,
-      emissiveColor: new Color(0.3, 0.15, 0.4),
-      emissiveIntensity: 0.4,
+    // P1-1: one tight specular key SpotLight for crisp glass facet glints (GlassMaterial is
+    // IBL-blind, so this is its only specular drive). Non-shadow to stay clear of the hard scene
+    // cap of <= 3 SpotLights (laser + key = 2). Kept WIDE and WEAK so it shades facets softly
+    // instead of throwing the harsh circular hotspot the earlier tight 6.0 cone left on the glass.
+    const keyGlintSpot = new SpotLight({
+      color: new Color(1.0, 1.0, 1.0),
+      intensity: 2.5,
+      distance: 9,
+      angle: Math.PI / 6,
+      penumbra: 0.5,
     });
-    this._gemMesh = new Object3D("DiamondOctahedron");
-    this._gemMesh.geometry = new Octahedron({
-      radius: 0.65,
-    }).getGeometryData();
-    this._gemMesh.material = diamondMat;
-    this._gemMesh.position.set(2.8, 1.5, -1.2);
-    this._gemMesh.castShadow = true;
-    this.scene.add(this._gemMesh);
+    keyGlintSpot.position.set(5.0, 4.6, -1.6);
+    keyGlintSpot.direction.set(-0.805, -0.499, 0.322).normalize();
+    keyGlintSpot.castShadow = false;
+    this.scene.add(keyGlintSpot);
 
     // Laser Emitter Pillar & Housing
     const emitterPillar = new Object3D("EmitterPillar");
@@ -448,11 +564,11 @@ class Showcase28 extends AbstractShowcase {
     laserHousing.position.set(-4.5, 1.8, 0);
     this.scene.add(laserHousing);
 
-    // Glowing Laser Lens Aperture
+    // Glowing Laser Lens Aperture -- kept modest so it doesn't flood the frame with HDR bloom
     const laserLensMat = new StandardMaterial({
       color: new Color(1, 1, 1),
-      emissiveColor: new Color(1.5, 1.5, 1.5),
-      emissiveIntensity: 3.0,
+      emissiveColor: new Color(1.2, 1.2, 1.2),
+      emissiveIntensity: 1.6,
       roughness: 0.1,
     });
     const laserEmitterMesh = new Object3D("LaserLens");
@@ -467,11 +583,11 @@ class Showcase28 extends AbstractShowcase {
     laserEmitterMesh.position.set(-4.08, 1.8, 0);
     this.scene.add(laserEmitterMesh);
 
-    // Coherent Incident White Laser Beam
+    // Coherent Incident White Laser Beam -- bright but not overdriven
     const incidentBeamMat = new StandardMaterial({
       color: new Color(1.0, 1.0, 1.0),
-      emissiveColor: new Color(2.5, 2.5, 2.5),
-      emissiveIntensity: 4.0,
+      emissiveColor: new Color(1.5, 1.5, 1.5),
+      emissiveIntensity: 0.9,
       transparent: true,
     });
     const incidentBeam = new Object3D("IncidentBeam");
@@ -538,10 +654,12 @@ class Showcase28 extends AbstractShowcase {
     avgDirZ /= avgDirLength;
     const SCREEN_DISTANCE = 4; // the live spot wanders ~1.2 units across this plane over the full wobble -- comfortably inside the panel's 2.5-unit width below
 
+    // P1-2: the detector is a matte dark absorber panel -- NOT a white phosphor lamp. The only
+    // light on it must be the spectrum band (P0-3) the fan terminates into.
     const screenMat = new StandardMaterial({
-      color: new Color(0.9, 0.92, 0.95),
-      metallic: 0.05,
-      roughness: 0.85,
+      color: new Color(0.05, 0.05, 0.065),
+      metallic: 0.0,
+      roughness: 0.95,
     });
     const screenPanel = new Object3D("PhosphorScreen");
     screenPanel.geometry = new Cube({
@@ -561,47 +679,268 @@ class Showcase28 extends AbstractShowcase {
     screenPanel.receiveShadow = true;
     this.scene.add(screenPanel);
 
+    // P1-3: faint static measurement graticule on the instrument face -- a canvas-baked emissive
+    // map on a hair-thin panel (the same Texture.fromCanvas + emissiveMap path as the band ramp),
+    // so the thin dark-grid read is WebGL1/WebGL2/WebGPU-safe and the hand-drawn grid is data-free.
+    // The spectrum band still wins the light battle: maximum emission is emissiveColor(0.28) *
+    // emissiveIntensity(0.3) ~ 0.08, well below the band's floor.
+    const graticuleCanvas = document.createElement("canvas");
+    graticuleCanvas.width = 512;
+    graticuleCanvas.height = 640;
+    const gCtx = graticuleCanvas.getContext("2d");
+    if (gCtx) {
+      gCtx.clearRect(0, 0, 512, 640);
+      gCtx.strokeStyle = "rgba(255,255,255,0.55)";
+      gCtx.lineWidth = 1;
+      const gridN = 6;
+      const gridM = 8;
+      for (let i = 1; i < gridN; i++) {
+        gCtx.beginPath();
+        gCtx.moveTo((i / gridN) * 512, 0);
+        gCtx.lineTo((i / gridN) * 512, 640);
+        gCtx.stroke();
+      }
+      for (let j = 1; j < gridM; j++) {
+        gCtx.beginPath();
+        gCtx.moveTo(0, (j / gridM) * 640);
+        gCtx.lineTo(512, (j / gridM) * 640);
+        gCtx.stroke();
+      }
+      gCtx.lineWidth = 2;
+      gCtx.beginPath();
+      gCtx.moveTo(256, 0);
+      gCtx.lineTo(256, 640);
+      gCtx.moveTo(0, 320);
+      gCtx.lineTo(512, 320);
+      gCtx.stroke();
+      const graticuleTex = Texture.fromCanvas(graticuleCanvas, {
+        generateMipmaps: false,
+        magFilter: TextureFilter.LINEAR,
+        minFilter: TextureFilter.LINEAR,
+        addressModeU: TextureWrap.CLAMP_TO_EDGE,
+        addressModeV: TextureWrap.CLAMP_TO_EDGE,
+      });
+      const graticule = new Object3D("DetectorGraticule");
+      graticule.geometry = new Cube({ size: 1 }).getGeometryData();
+      graticule.material = new StandardMaterial({
+        color: screenMat.color,
+        emissiveColor: new Color(0.55, 0.55, 0.55),
+        emissiveIntensity: 0.5,
+        emissiveMap: graticuleTex,
+      });
+      // max emission ~0.28 -- a readable faint instrument scale, still far below the band's floor.
+      graticule.scale.set(0.02, 3.0, 2.3);
+      // Local +X is the panel's outward face; riding 0.17 units proud of the absorber keeps the
+      // graticule above the face while never intersecting the panel body or the incoming rays.
+      graticule.position.set(0.17, 0, 0);
+      graticule.receiveShadow = true;
+      screenPanel.add(graticule);
+    }
+
+    // Store the detector's RECEIVING face plane (world XZ) for live ray termination: the surface
+    // the beam physically hits is the panel face pointing back toward the fan (center minus half
+    // the 0.3 thickness along the travel axis).
+    this._screenFaceX = avgExitX + avgDirX * SCREEN_DISTANCE - avgDirX * 0.15;
+    this._screenFaceZ = avgExitZ + avgDirZ * SCREEN_DISTANCE - avgDirZ * 0.15;
+    this._screenDirX = avgDirX;
+    this._screenDirZ = avgDirZ;
+
     // One mesh per SPECTRUM band, always -- update() toggles `isVisible` per-frame rather than
     // creating/destroying meshes, since which colors are valid changes every frame as the
     // turntable wobbles.
     for (let i = 0; i < SPECTRUM.length; i++) {
       const band = SPECTRUM[i]!;
-      const ray = initialRays[i];
 
+      // P0-3: thin tapered exit ray, CIE-luminosity-compensated emissive so the full band reads
+      // (red is not visually lost against yellow/green). The ray is terminated per-frame at its
+      // real detector-plane intersection (scale.y = remaining segment length).
+      const emissive = new Color(
+        band.color.r * 2.2 * band.luminosity,
+        band.color.g * 2.2 * band.luminosity,
+        band.color.b * 2.2 * band.luminosity,
+      );
       const rayMat = new StandardMaterial({
-        color: band.color,
-        emissiveColor: new Color(band.color.r * 2.2, band.color.g * 2.2, band.color.b * 2.2),
-        emissiveIntensity: 3.5,
+        color: new Color(0.9, 0.9, 0.9, 0.35),
+        emissiveColor: emissive,
+        emissiveIntensity: 0.15,
         transparent: true,
       });
 
       const rayMesh = new Object3D(`SpectralRay_${band.name}`);
       rayMesh.geometry = new Cylinder({
-        radiusTop: 0.02,
-        radiusBottom: 0.04,
+        radiusTop: 0.01,
+        radiusBottom: 0.016,
         height: SPECTRAL_RAY_LENGTH,
         radialSegments: 12,
       }).getGeometryData();
       rayMesh.material = rayMat;
       rayMesh.rotation.z = Math.PI / 2;
-      rayMesh.isVisible = undefined !== ray;
-      if (ray) this._positionSpectralRay(rayMesh, ray);
+      rayMesh.isVisible = false;
       this.scene.add(rayMesh);
       this._spectralRays.push(rayMesh);
     }
+
+    // P0-5: ONE faint white internal segment (average entry -> average exit path), visible only
+    // while the full band is valid. A separate segment per band would stack ~7x over the
+    // near-identical internal path and blow out the glass interior.
+    this._internalPath = new Object3D("InternalBeamPath");
+    this._internalPath.geometry = new Cylinder({
+      radiusTop: 0.011,
+      radiusBottom: 0.011,
+      height: 1,
+      radialSegments: 8,
+    }).getGeometryData();
+    this._internalPath.material = new StandardMaterial({
+      color: new Color(1.0, 1.0, 1.0, 0.1),
+      emissiveColor: new Color(0.25, 0.25, 0.25),
+      emissiveIntensity: 0.6,
+      transparent: true,
+    });
+    this._internalPath.rotation.z = Math.PI / 2;
+    this._internalPath.isVisible = false;
+    this.scene.add(this._internalPath);
+
+    // P0-3: the spectrum terminates as ONE continuous red->violet gradient band on the detector,
+    // generated as an emissive canvas texture (see _createBandGradientTexture) so it renders as a
+    // single smooth smear -- no discrete hue blocks, and the 8-bit ceil forbids any white core.
+    this._bandMesh = new Object3D("Band_Gradient");
+    this._bandMesh.geometry = new Cube({ size: 1 }).getGeometryData();
+    this._bandMesh.material = new StandardMaterial({
+      color: new Color(1.0, 1.0, 1.0),
+      emissiveColor: new Color(1.0, 1.0, 1.0),
+      emissiveIntensity: 0.95,
+      emissiveMap: this._createBandGradientTexture(),
+      transparent: true,
+    });
+    this._bandMesh.isVisible = false;
+    this.scene.add(this._bandMesh);
+
+    // Coherent first frame; update() re-derives and repositions everything every frame.
+    this._updateSpectralVisuals(initialRays);
   }
 
-  /** Positions/orients `rayMesh` to match `ray`'s computed exit point/direction. `rotation.z` above
-   * points the cylinder's local +Y (height) axis along local +X; a further rotation.y by theta
-   * turns that into world direction (cos theta, -sin theta) in (x, z) -- solve for theta given the
-   * exit direction (see the module doc comment: `.y` on a `Vector2D` here stores world Z). */
-  private _positionSpectralRay(rayMesh: Object3D, ray: SpectralRay): void {
-    rayMesh.rotation.y = Math.atan2(-ray.direction.y, ray.direction.x);
-    rayMesh.position.set(
-      ray.origin.x + ray.direction.x * (SPECTRAL_RAY_LENGTH / 2),
-      1.8,
-      ray.origin.y + ray.direction.y * (SPECTRAL_RAY_LENGTH / 2),
+  /** Intersection of an exit ray with the detector's receiving face plane (world XZ), or
+   * `undefined` when the ray runs parallel/away and never hits within SPECTRAL_RAY_LENGTH. The
+   * returned point is where the band/fan actually terminates on the instrument. */
+  private _detectorImpact(ray: SpectralRay): Vector2D | undefined {
+    const denom = ray.direction.x * this._screenDirX + ray.direction.y * this._screenDirZ;
+    if (Math.abs(denom) < 1e-6) return undefined;
+    const t =
+      ((this._screenFaceX - ray.origin.x) * this._screenDirX +
+        (this._screenFaceZ - ray.origin.y) * this._screenDirZ) /
+      denom;
+    if (t <= 1e-4) return undefined;
+    if (t > SPECTRAL_RAY_LENGTH) return undefined;
+    return new Vector2D(ray.origin.x + ray.direction.x * t, ray.origin.y + ray.direction.y * t);
+  }
+
+  /** Positions/orients `mesh` centered on MIDPOINT of a segment of `length` running from
+   * (originX, originZ) along unit (dirX, dirZ) at beam height, WITHOUT touching scale (callers
+   * set scale.y relative to the mesh's own geometry height). `rotation.z` points the
+   * cylinder/cube length axis along local +X; a further rotation.y by theta turns that into world
+   * direction (cos theta, -sin theta) in (x, z) -- solve for theta given the direction (see the
+   * module doc comment: `.y` on a `Vector2D` here stores world Z). */
+  private _positionOrientedMesh(
+    mesh: Object3D,
+    originX: number,
+    originZ: number,
+    dirX: number,
+    dirZ: number,
+    length: number,
+  ): void {
+    mesh.rotation.y = Math.atan2(-dirZ, dirX);
+    mesh.position.set(originX + dirX * (length / 2), 1.8, originZ + dirZ * (length / 2));
+  }
+
+  /** Per-frame re-derivation of every beam-path visual mesh from the LIVE spectral ray data:
+   * exit rays (terminated at the detector face), internal glass segments, and the continuous
+   * detector band. Called from `update()` each frame with the freshly re-traced rays. */
+  private _updateSpectralVisuals(rays: (SpectralRay | undefined)[]): void {
+    const impacts: (Vector2D | undefined)[] = rays.map((r) =>
+      r ? this._detectorImpact(r) : undefined,
     );
+
+    for (let i = 0; i < this._spectralRays.length; i++) {
+      const ray = rays[i];
+      const impact = impacts[i];
+      const valid = undefined !== ray && undefined !== impact;
+      const rayMesh = this._spectralRays[i]!;
+      rayMesh.isVisible = valid;
+      if (!valid) continue;
+
+      // exit ray terminates exactly where it physically lands on the detector face -- the rays are
+      // dim enough now that no bright tip stacks onto the band (the earlier blown-out white core
+      // came from the old 2.2-HDR tips; truncating early only created a visible air-gap instead).
+      const t = Math.hypot(impact!.x - ray!.origin.x, impact!.y - ray!.origin.y);
+      this._positionOrientedMesh(
+        rayMesh,
+        ray!.origin.x,
+        ray!.origin.y,
+        ray!.direction.x,
+        ray!.direction.y,
+        t,
+      );
+      rayMesh.scale.set(1, t / SPECTRAL_RAY_LENGTH, 1);
+    }
+
+    // P0-5: faint single internal segment following the average entry -> exit path
+    let validCount = 0;
+    let avgEntryX = 0;
+    let avgEntryZ = 0;
+    let avgExitX = 0;
+    let avgExitZ = 0;
+    for (const ray of rays) {
+      if (!ray) continue;
+      validCount++;
+      avgEntryX += ray.entryPoint.x;
+      avgEntryZ += ray.entryPoint.y;
+      avgExitX += ray.exitPoint.x;
+      avgExitZ += ray.exitPoint.y;
+    }
+    if (validCount > 0 && this._internalPath) {
+      avgEntryX /= validCount;
+      avgEntryZ /= validCount;
+      avgExitX /= validCount;
+      avgExitZ /= validCount;
+      const dx = avgExitX - avgEntryX;
+      const dz = avgExitZ - avgEntryZ;
+      const len = Math.hypot(dx, dz);
+      if (len > 1e-4) {
+        this._positionOrientedMesh(
+          this._internalPath,
+          avgEntryX,
+          avgEntryZ,
+          dx / len,
+          dz / len,
+          len,
+        );
+        this._internalPath.scale.set(1, len, 1);
+        this._internalPath.isVisible = true;
+      } else {
+        this._internalPath.isVisible = false;
+      }
+    } else if (this._internalPath) {
+      this._internalPath.isVisible = false;
+    }
+
+    // P0-3: one continuous gradient band laid from the red impact to the violet impact. The ramp
+    // texture's left edge (red) maps to local +X, so rotating the smear along the red->violet
+    // chord guarantees the spectrum order is physically correct at the endpoints.
+    if (this._bandMesh) {
+      const first = impacts[0];
+      const last = impacts[impacts.length - 1];
+      const dx = undefined !== first && undefined !== last ? last.x - first.x : 0;
+      const dz = undefined !== first && undefined !== last ? last.y - first.y : 0;
+      const bandLen = Math.hypot(dx, dz);
+      if (undefined !== first && undefined !== last && bandLen > 1e-4) {
+        this._bandMesh.rotation.y = Math.atan2(-dz, dx);
+        this._bandMesh.position.set((first.x + last.x) / 2, 1.8, (first.y + last.y) / 2);
+        this._bandMesh.scale.set(bandLen, 0.36, 0.03);
+        this._bandMesh.isVisible = true;
+      } else {
+        this._bandMesh.isVisible = false;
+      }
+    }
   }
 
   /** Secret shortcut: Ctrl+T toggles manual turntable control (see `update()`'s LEFT/RIGHT handling). */
@@ -619,6 +958,16 @@ class Showcase28 extends AbstractShowcase {
   protected override update(deltaTime: number): void {
     this._time += deltaTime * 0.5;
 
+    // P0-4 hero framing, re-asserted exactly once on the first frame: the HybridSync camera
+    // strategy derives its orbit state from the camera pose it sees at its first update (and can
+    // be nudged by spurious input deltas), so a one-shot deterministic re-frame keeps the agreed
+    // low-three-quarter composition stable for pinned captures instead of drifting.
+    if (!this._heroPoseApplied) {
+      this._heroPoseApplied = true;
+      this.camera.position.set(6.8, 4.6, -1.8);
+      this.camera.target.set(2.0, 1.5, 2.9);
+    }
+
     if (this._turntable) {
       if (this._manualTurntableControl) {
         // Manual mode: auto-wobble is paused, LEFT/RIGHT spin the turntable by hand.
@@ -631,41 +980,32 @@ class Showcase28 extends AbstractShowcase {
         }
         this._turntable.rotation.y = this._manualTurntableAngle;
       } else {
-        // Gentle slow turntable rotation showcasing prism facets and refraction shifts
-        this._turntable.rotation.y = Math.sin(this._time * 0.6) * 0.25;
+        // Gentle slow turntable rotation showcasing prism facets and refraction shifts. P0-2:
+        // amplitude narrowed to +-0.12 rad, the verified full-spectrum window (all 7 bands stay
+        // valid at every angle in it -- numeric gate over the whole range).
+        this._turntable.rotation.y = Math.sin(this._time * 0.6) * 0.12;
       }
     }
 
     // The spectral rays must track the turntable's live wobble: the prism's actual world
     // rotation (base + wobble) determines the entry incidence angle, which determines every
     // downstream Snell's-law refraction -- exit point, exit direction, and whether a given color
-    // clears the far face's critical angle at all. It doesn't: the wobble's +-0.25 rad swing is
-    // wider than this flint-glass prism's total-internal-reflection-free window, so roughly the
-    // upper half of each swing genuinely has no exit ray for one or more colors -- confirmed by
-    // scanning the full wobble range, not a bug to "fix" by clamping the angle.
+    // clears the far face's critical angle at all. With the re-tuned 50deg/+-0.12 rad resting
+    // window all 7 bands are valid throughout (verified by a full-range scan), so the per-frame
+    // re-derivation below always produces the complete fan, spectrum band and internal path.
     if (this._turntable && this._prismMesh) {
       const liveRays = computeSpectralRays(this._prismMesh.rotation.y + this._turntable.rotation.y);
-      for (let i = 0; i < this._spectralRays.length; i++) {
-        const rayMesh = this._spectralRays[i]!;
-        const ray = liveRays[i];
-        rayMesh.isVisible = undefined !== ray;
-        if (ray) this._positionSpectralRay(rayMesh, ray);
-      }
+      this._updateSpectralVisuals(liveRays);
     }
 
-    // Floating gem levitation & counter-spin
-    if (this._gemMesh) {
-      this._gemMesh.rotation.x = this._time * 0.8;
-      this._gemMesh.rotation.y = this._time * 1.1;
-      this._gemMesh.position.y = 1.5 + Math.sin(this._time * 2.0) * 0.15;
-    }
+    // Floating gem removed per plan P1-4 (default remove).
 
-    // Dynamic spectral pulse oscillation
+    // Dynamic spectral pulse oscillation (thickness only -- scale.y carries the live ray length)
     for (let i = 0; i < this._spectralRays.length; i++) {
       const ray = this._spectralRays[i];
-      if (ray) {
+      if (ray && ray.isVisible) {
         const pulse = 0.95 + Math.sin(this._time * 4.0 + i * 0.5) * 0.08;
-        ray.scale.set(pulse, 1.0, pulse);
+        ray.scale.set(pulse, ray.scale.y, pulse);
       }
     }
   }
@@ -676,4 +1016,11 @@ class Showcase28 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 const app = new Showcase28();
 attachDevTools(app);
+// QA instrumentation hook for the browser capture scripts. Set unconditionally -- the example is
+// browser-only, the property is inert, and the repo typechecks without "vite/client" in the
+// tsconfig "types", so an import.meta.env guard would only trip the compiler for no gain here.
+if (typeof window !== "undefined") {
+  const w = window as Window & { __showcase28?: Showcase28 };
+  w.__showcase28 = app;
+}
 app.start().catch((err: unknown) => console.error("[Showcase28] Failed to start:", err));

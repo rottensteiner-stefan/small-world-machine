@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showcase 28 – The Quantum Refraction Lab / Optical Prism – Concept Dossier</title>
+<style>
+  :root {
+    --bg: #0b0d11;
+    --fg: #e2e8f0;
+    --muted: #7e8b9b;
+    --card: #13171f;
+    --border: #232b38;
+    --accent: #38bdf8;
+    --laser: #ffffff;
+    --c-red: #ff2a2a;
+    --c-orange: #ff7700;
+    --c-yellow: #ffdd00;
+    --c-green: #22e655;
+    --c-cyan: #00e1ff;
+    --c-blue: #2255ff;
+    --c-violet: #a822ff;
+  }
+  body {
+    margin: 0;
+    padding: 40px 20px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+    color: #fff;
+  }
+  p.lead {
+    font-size: 17px;
+    color: var(--muted);
+    margin-top: 0;
+    margin-bottom: 28px;
+  }
+  h2 {
+    font-size: 19px;
+    font-weight: 600;
+    margin-top: 36px;
+    margin-bottom: 12px;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin: 16px 0;
+  }
+  .spectrum-bar {
+    height: 36px;
+    border-radius: 6px;
+    background: linear-gradient(90deg,
+      var(--c-red) 0%,
+      var(--c-orange) 16%,
+      var(--c-yellow) 33%,
+      var(--c-green) 50%,
+      var(--c-cyan) 67%,
+      var(--c-blue) 84%,
+      var(--c-violet) 100%
+    );
+    margin: 14px 0 8px;
+    box-shadow: 0 0 24px rgba(56, 189, 248, 0.25);
+  }
+  .swatches {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 12px 0;
+  }
+  .sw {
+    flex: 1;
+    min-width: 90px;
+    height: 48px;
+    border-radius: 5px;
+    font-size: 11px;
+    display: flex;
+    align-items: flex-end;
+    padding: 4px 6px;
+    box-sizing: border-box;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  }
+  .pill-list {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 10px 0;
+  }
+  .pill {
+    background: #1c2331;
+    border: 1px solid #2e3a4e;
+    color: #94a3b8;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+  }
+  .pill.alert {
+    background: #3b1717;
+    border-color: #6d2424;
+    color: #fca5a5;
+  }
+  .pill.ok {
+    background: #143522;
+    border-color: #1e5c35;
+    color: #86efac;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  th, td {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+  }
+  th {
+    background: #161c26;
+    color: #cbd5e1;
+  }
+  td code {
+    background: #1a2230;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #38bdf8;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>The Quantum Refraction Lab / Optical Prism</h1>
+  <p class="lead">Showcase 28 benchmark &amp; aesthetic dossier: Coherent laser dispersion, real Snell's-law Cauchy flint-glass optics, dark cleanroom optical isolation bench.</p>
+
+  <h2>1. Visual Vision &amp; Core Aesthetic Principle</h2>
+  <div class="card">
+    <p><strong>"Darkness is the only way light reads as light."</strong></p>
+    <p>The showcase represents a cinematic, precision photonics cleanroom. The physical centerpiece is the genuine Cauchy optical dispersion through an equilateral dense flint-glass prism (n &approx; 1.629&ndash;1.688). Real physics is truth; the dramatic presentation must serve this truth instead of drowning it in flat washed-out exposure.</p>
+    <div class="spectrum-bar"></div>
+    <div class="swatches">
+      <div class="sw" style="background:#ff2a2a">Red 700nm</div>
+      <div class="sw" style="background:#ff7700">Orange 620nm</div>
+      <div class="sw" style="background:#ffdd00; color:#000; text-shadow:none">Yellow 580nm</div>
+      <div class="sw" style="background:#22e655; color:#000; text-shadow:none">Green 530nm</div>
+      <div class="sw" style="background:#00e1ff; color:#000; text-shadow:none">Cyan 490nm</div>
+      <div class="sw" style="background:#2255ff">Blue 460nm</div>
+      <div class="sw" style="background:#a822ff">Violet 400nm</div>
+    </div>
+  </div>
+
+  <h2>2. Aesthetic Diagnosis (The "Fehlerbild")</h2>
+  <div class="card">
+    <div class="pill-list">
+      <span class="pill alert">Exposure &amp; Bloom Blown Out</span>
+      <span class="pill alert">Milky Self-Luminous Prism</span>
+      <span class="pill alert">White Slab Phosphor Screen</span>
+      <span class="pill alert">Stippled Metal Floor Noise</span>
+      <span class="pill alert">TIR Wobble Truncation</span>
+    </div>
+    <ul>
+      <li><strong>Milky Self-Luminous Prism:</strong> The prism uses a semi-opaque <code>StandardMaterial</code> with <code>emissiveColor</code> and self-glow, completely hiding facet edges and reading like a plastic lightbulb rather than clear refractive glass.</li>
+      <li><strong>Blown-Out Atmosphere:</strong> Excessive environment intensity (1.5) and low bloom threshold (0.75) with high intensity (1.4) bleach the whole frame. The incident beam clips to a harsh white bar.</li>
+      <li><strong>Phosphor Screen as Detached Flare:</strong> The white receiver panel acts like a competing light emitter rather than a dark absorption detector where the spectrum lands.</li>
+      <li><strong>TIR Truncation Bug:</strong> The turntable oscillation (&plusmn;0.25 rad) at 44&deg; incidence repeatedly pushes rays past the critical angle, causing spectral bands (especially violet/blue) to abruptly disappear during normal playback.</li>
+      <li><strong>Bench Surface &amp; Brass Ring:</strong> Noisy reflections on scratched steel, brass clip slicing into the turntable without contact shadow or mount recess.</li>
+    </ul>
+  </div>
+
+  <h2>3. The Joint Multi-Agent Recovery Plan (v1.0 Consensus)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Phase</th>
+        <th>Target</th>
+        <th>Technical Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>P0-1</strong></td>
+        <td>Luminance Hierarchy</td>
+        <td><code>environmentIntensity &rarr; 0.35</code>, <code>AmbientLight &rarr; 0.12</code>, <code>Bloom threshold &ge; 1.05 / intensity 0.6</code>, ACES ToneMapping preserved.</td>
+      </tr>
+      <tr>
+        <td><strong>P0-2</strong></td>
+        <td>Spectral Stability</td>
+        <td>Re-tune <code>NOMINAL_INCIDENCE_ANGLE</code> to 48&ndash;50&deg;, wobble to &plusmn;0.12 rad. 100% of all 7 spectral bands remain visible and vibrant at all times.</td>
+      </tr>
+      <tr>
+        <td><strong>P0-3</strong></td>
+        <td>Continuous Readout</td>
+        <td>Per-band CIE luminosity weighting; terminate exit fan as ONE continuous, uninterrupted chromatic smear on the detector panel.</td>
+      </tr>
+      <tr>
+        <td><strong>P0-4</strong></td>
+        <td>Hero Camera</td>
+        <td>Low-three-quarter composition holding laser source, prism refraction, internal path, and detector readout in one glance.</td>
+      </tr>
+      <tr>
+        <td><strong>P0-5</strong></td>
+        <td>Internal Refraction Path</td>
+        <td>Visible faint ray path connecting entry and exit faces inside the glass — physically revealing the refractive medium.</td>
+      </tr>
+      <tr>
+        <td><strong>P1-1</strong></td>
+        <td>GlassMaterial Prism</td>
+        <td>Switch to <code>GlassMaterial</code> (IOR 1.65, zero emissive) with 1 tight specular key spot for crisp glass facet glints.</td>
+      </tr>
+      <tr>
+        <td><strong>P1-2</strong></td>
+        <td>Instrument Bench</td>
+        <td>Matte dark anodized benchtop (color ~0.15, roughness ~0.5), calibrated brass dial mount, dark absorber spectrometer target.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>4. Reference Architecture &amp; Backends</h2>
+  <div class="card">
+    <p>Ensures full multi-backend parity (WebGL1, WebGL2, WebGPU). <code>GlassMaterial</code> is selected over <code>StandardMaterial.transmission</code> (which suffers from a WebGPU-only limitation in the engine). Spot light budgets are capped at &le; 3 scene spots to stay within forward-shader per-material loop ceilings.</p>
+  </div>
+</main>
+</body>
+</html>
