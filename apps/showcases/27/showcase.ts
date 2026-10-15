@@ -232,7 +232,41 @@ class Showcase27 extends AbstractShowcase {
     floor.position.set(0, -0.15, 0);
     this.scene.add(floor);
 
-    // 5. Surrounding Pillar Colonnade (Casting Shadow Arrays)
+    // 5. Surrounding Pillar Colonnade (Classical Doric/Tuscan Order with Base & Capital)
+    // Shared geometries instantiated once for optimal GPU buffer reuse across all 12 columns.
+    const plinthGeom = new Cube().getGeometryData();
+    const lowerTorusGeom = new Cylinder({
+      radiusTop: 0.52,
+      radiusBottom: 0.55,
+      height: 0.1,
+      radialSegments: 32,
+    }).getGeometryData();
+    const upperTorusGeom = new Cylinder({
+      radiusTop: 0.43,
+      radiusBottom: 0.48,
+      height: 0.08,
+      radialSegments: 32,
+    }).getGeometryData();
+    const shaftGeom = new Cylinder({
+      radiusTop: 0.35,
+      radiusBottom: 0.4,
+      height: 4.6,
+      radialSegments: 32,
+    }).getGeometryData();
+    const neckRingGeom = new Cylinder({
+      radiusTop: 0.38,
+      radiusBottom: 0.38,
+      height: 0.06,
+      radialSegments: 32,
+    }).getGeometryData();
+    const echinusGeom = new Cylinder({
+      radiusTop: 0.52,
+      radiusBottom: 0.36,
+      height: 0.2,
+      radialSegments: 32,
+    }).getGeometryData();
+    const abacusGeom = new Cube().getGeometryData();
+
     const pillarCount = 12;
     const colonnadeRadius = 9.5;
     for (let i = 0; i < pillarCount; i++) {
@@ -240,17 +274,73 @@ class Showcase27 extends AbstractShowcase {
       const x = Math.sin(angle) * colonnadeRadius;
       const z = Math.cos(angle) * colonnadeRadius;
 
-      const pillar = new Object3D(`Pillar_${i}`);
-      pillar.geometry = new Cylinder({
-        radiusTop: 0.35,
-        radiusBottom: 0.4,
-        height: 5.5,
-        radialSegments: 24,
-      }).getGeometryData();
-      pillar.material = marbleWhite;
-      pillar.position.set(x, 2.75, z);
-      pillar.castShadow = true;
-      this.scene.add(pillar);
+      const colGroup = new Object3D(`Pillar_${i}`);
+      colGroup.position.set(x, 0, z);
+      colGroup.rotation.y = angle;
+
+      // Base (Plinth + Stepped Torus Moldings)
+      const plinth = new Object3D(`Pillar_${i}_Plinth`);
+      plinth.geometry = plinthGeom;
+      plinth.material = marbleWhite;
+      plinth.scale.set(1.1, 0.16, 1.1);
+      plinth.position.set(0, 0.08, 0);
+      plinth.castShadow = true;
+      colGroup.add(plinth);
+
+      const lowerTorus = new Object3D(`Pillar_${i}_LowerTorus`);
+      lowerTorus.geometry = lowerTorusGeom;
+      lowerTorus.material = marbleWhite;
+      lowerTorus.position.set(0, 0.21, 0);
+      lowerTorus.castShadow = true;
+      colGroup.add(lowerTorus);
+
+      const upperTorus = new Object3D(`Pillar_${i}_UpperTorus`);
+      upperTorus.geometry = upperTorusGeom;
+      upperTorus.material = marbleWhite;
+      upperTorus.position.set(0, 0.3, 0);
+      upperTorus.castShadow = true;
+      colGroup.add(upperTorus);
+
+      // Shaft
+      const shaft = new Object3D(`Pillar_${i}_Shaft`);
+      shaft.geometry = shaftGeom;
+      shaft.material = marbleWhite;
+      shaft.position.set(0, 2.64, 0);
+      shaft.castShadow = true;
+      colGroup.add(shaft);
+
+      // Capital (Astragal Neck Ring + Flared Echinus + Stepped Abacus Slab)
+      const neckRing = new Object3D(`Pillar_${i}_NeckRing`);
+      neckRing.geometry = neckRingGeom;
+      neckRing.material = marbleWhite;
+      neckRing.position.set(0, 4.97, 0);
+      neckRing.castShadow = true;
+      colGroup.add(neckRing);
+
+      const echinus = new Object3D(`Pillar_${i}_Echinus`);
+      echinus.geometry = echinusGeom;
+      echinus.material = marbleWhite;
+      echinus.position.set(0, 5.1, 0);
+      echinus.castShadow = true;
+      colGroup.add(echinus);
+
+      const abacusLower = new Object3D(`Pillar_${i}_AbacusLower`);
+      abacusLower.geometry = abacusGeom;
+      abacusLower.material = marbleWhite;
+      abacusLower.scale.set(1.02, 0.1, 1.02);
+      abacusLower.position.set(0, 5.25, 0);
+      abacusLower.castShadow = true;
+      colGroup.add(abacusLower);
+
+      const abacusUpper = new Object3D(`Pillar_${i}_AbacusUpper`);
+      abacusUpper.geometry = abacusGeom;
+      abacusUpper.material = marbleWhite;
+      abacusUpper.scale.set(1.1, 0.08, 1.1);
+      abacusUpper.position.set(0, 5.34, 0);
+      abacusUpper.castShadow = true;
+      colGroup.add(abacusUpper);
+
+      this.scene.add(colGroup);
 
       // Narrow warm uplight aimed at the pillar so the gold veins catch the light (a spot, not a point
       // light: a point light mirrors as a bright orb in the polished floor).
