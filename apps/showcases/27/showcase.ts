@@ -12,6 +12,7 @@ import {
   EngineOptions,
   HbaoElement,
   Object3D,
+  Octahedron,
   OrbitController,
   PerspectiveProjection,
   PostProcessingEffectType,
@@ -29,6 +30,8 @@ import { attachDevTools } from "@small-world-machine/tools";
 class Showcase27 extends AbstractShowcase {
   private _ringGroup!: Object3D;
   private _innerRings: Object3D[] = [];
+  private _planetOrbit!: Object3D;
+  private _orbitingOctahedron!: Object3D;
   private _keySpotLightA!: SpotLight;
   private _keySpotLightB!: SpotLight;
   private _sunLight!: DirectionalLight;
@@ -392,6 +395,18 @@ class Showcase27 extends AbstractShowcase {
     this._ringGroup.add(ring1);
     this._innerRings.push(ring1);
 
+    // Orbiting Octahedron: rides the outer ring and slides along it like a planet on its orbit
+    // (the ring itself is the orbit, so the pivot sits on the ring centerline)
+    this._planetOrbit = new Object3D("OctahedronOrbit");
+    this._planetOrbit.position.set(2.0, 0, 0);
+    ring1.add(this._planetOrbit);
+
+    this._orbitingOctahedron = new Object3D("OrbitingOctahedron");
+    this._orbitingOctahedron.geometry = new Octahedron({ radius: 0.42 }).getGeometryData();
+    this._orbitingOctahedron.material = bronzeMetal;
+    this._orbitingOctahedron.castShadow = true;
+    this._planetOrbit.add(this._orbitingOctahedron);
+
     // Ring 2 (Middle Ring - Perpendicular)
     const ring2 = new Object3D("ArmillaryRing2");
     ring2.geometry = new Torus({
@@ -449,6 +464,14 @@ class Showcase27 extends AbstractShowcase {
     }
     if (this._innerRings[2]) {
       this._innerRings[2].rotation.y += deltaTime * 0.6;
+    }
+
+    // Slide the octahedron slowly along the outer ring (the ring itself is its orbit)
+    if (this._planetOrbit) {
+      this._planetOrbit.rotation.y += deltaTime * 0.35;
+    }
+    if (this._orbitingOctahedron) {
+      this._orbitingOctahedron.rotation.y += deltaTime * 0.6;
     }
 
     // Orbit the two Spotlights in opposite directions to cast dual chromatic shadows
