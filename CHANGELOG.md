@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.107.0] - 2026-10-15
+
+### "I have loved the stars too fondly to be fearful of the night." - Sarah Williams
+
+- **Features:**
+  - *Showcase 27 — an octahedron gliding along its ring orbit:* the outermost bronze ring of the armillary sphere is now the orbital path of an octahedron (`Octahedron`, same pitted bronze material, shadow-casting) that slides slowly along the ring like a planet on its course; its diameter was tripled on request. The orbit pivot rides the ring's centerline as a child of the ring itself, so the body stays threaded on the ring no matter how the gimbal rings tumble. It also rotates dezently around itself and drags a wandering shadow cell through the lattice.
+- **Housekeeping & Docs:**
+  - `.agents/notes/`, `.agents/collaborate/` and `.agents/skills/` are local working material, not part of the repository: the previously tracked contents were removed (the directories are kept via `.gitkeep`), the `.gitignore` keeps all future local files untracked, and `AGENTS.md` now documents that these references are workspace-local and must not be treated as canonical elsewhere.
+
 ## [0.106.0] - 2026-10-14
 
 ### "All the variety, all the charm, all the beauty of life is made up of light and shadow." - Leo Tolstoy
