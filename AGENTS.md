@@ -43,6 +43,7 @@ Detailed coding standards, formatting, shader logic, and domain knowledge are ou
 ## 4. Further Documentation
 
 None of this is pre-loaded — open the relevant file when the task touches that area. This applies to every agent reading this file (Claude Code, Gemini CLI, or any generic AGENTS.md-consuming tool), not only ones with a "Skill" auto-loader:
+- **Local-only files:** Everything under `.agents/notes/`, `.agents/collaborate/` and `.agents/skills/` is local working material, not part of the repository (see `.gitignore`). While the following references are canonical in this workspace, a fresh clone or another machine may lack them — always check existence before opening, and never assume a build or task failed just because one of these files is missing.
 - `CONTEXT.md` (repo root): Canonical domain vocabulary/glossary. Read before naming a new concept or touching cross-subsystem code; kept up to date via the `domain-modeling` skill.
 - `docs/adr/` (start at `docs/adr/index.md`): Architecture Decision Records — the "why" behind hard-to-reverse design calls. Check for an existing ADR before revisiting one of these decisions.
 - `docs/guides/` (start at `docs/guides/index.md`): Per-subsystem deep-dive guides (materials, physics, tools, coordinate system, etc.). Read the guide for the subsystem you're touching.

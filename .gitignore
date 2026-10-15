@@ -27,4 +27,10 @@ docs/.vitepress/cache/
 /.agents/scratches/
 .tripo/
 /.playwright-mcp/
-!/.agents/collaborate/
+
+# Local working dirs (.agents/collaborate, .agents/notes): only the directories
+# themselves belong in the repo (kept via .gitkeep); all contents stay local.
+/.agents/collaborate/*
+!/.agents/collaborate/.gitkeep
+/.agents/notes/*
+!/.agents/notes/.gitkeep

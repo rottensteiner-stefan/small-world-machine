@@ -1,4 +1,0 @@
-# Session lock and temp files only; topic docs, .pid state and archives are tracked.
-*.lock
-*.tmp
-*.blind.*
