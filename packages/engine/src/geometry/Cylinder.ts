@@ -21,6 +21,8 @@ export interface CylinderOptions {
   thetaLength?: number;
   /** Whether the cylinder ends are open (no top and bottom caps). Defaults to false. */
   openEnded?: boolean;
+  /** UV repeat factor for the side surface [uRepeat, vRepeat]. Defaults to [1, 1]. */
+  sideUvRepeat?: [number, number];
 }
 
 /**
@@ -45,6 +47,8 @@ export class Cylinder extends AbstractGeometry {
   public thetaLength: number;
   /** Whether the cylinder ends are open (no caps). */
   public openEnded: boolean;
+  /** UV repeat factor for the side surface [uRepeat, vRepeat]. */
+  public sideUvRepeat: [number, number];
 
   /**
    * Creates a new Cylinder geometry.
@@ -61,6 +65,7 @@ export class Cylinder extends AbstractGeometry {
       thetaStart = 0,
       thetaLength = MathUtils.TWO_PI,
       openEnded = false,
+      sideUvRepeat = [1, 1],
     } = options;
 
     this.radiusTop = Math.max(0, radiusTop);
@@ -71,6 +76,7 @@ export class Cylinder extends AbstractGeometry {
     this.thetaStart = thetaStart;
     this.thetaLength = thetaLength;
     this.openEnded = openEnded;
+    this.sideUvRepeat = [sideUvRepeat[0], sideUvRepeat[1]];
 
     this.generateGeometryData();
   }
@@ -93,7 +99,7 @@ export class Cylinder extends AbstractGeometry {
         const uCoord: number = x / this.radialSegments;
         const theta: number = this.thetaStart + uCoord * this.thetaLength;
         v.push(radius * Math.sin(theta), yPos, radius * Math.cos(theta));
-        uv.push(uCoord, 1.0 - vCoord);
+        uv.push(uCoord * this.sideUvRepeat[0], (1.0 - vCoord) * this.sideUvRepeat[1]);
       }
     }
 

@@ -367,6 +367,7 @@ class Showcase27 extends AbstractShowcase {
       radiusBottom: 2.2,
       height: 1.2,
       radialSegments: 48,
+      sideUvRepeat: [10, 1],
     }).getGeometryData();
     centralPedestal.material = blackMarbleMaterial;
     centralPedestal.position.set(0, 0.6, 0);
