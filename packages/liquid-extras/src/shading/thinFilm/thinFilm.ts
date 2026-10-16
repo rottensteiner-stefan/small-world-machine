@@ -9,7 +9,7 @@
  * hook of `StylizedWaterMaterial` (the `composeStylizedWaterSources` extension hooks) or into a
  * standalone `AbstractMaterial` fragment shader.
  *
- * Style contract (from the Graphic-Noir art direction, see `.agents/collaborate/oil-puddles.md`):
+ * Style contract (from the Graphic-Noir art direction, see `docs/research/oil-puddle-shader-technique.md` § 7):
  * iridescence must stay MUTED. `strength` drives the desaturation re-mix towards luminance, so
  * the default physical path is a restrained sheen, never a bright saturated rainbow. The
  * `oilFilmRainbow` helper is the intentionally desaturated alternative for material authors who

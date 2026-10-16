@@ -63,9 +63,11 @@ pass exists — the directional shadowing reuses the existing CSM of Stage 2 (AD
 
 ## Notes & roadmap
 
-- **WebGL2 tier (P2):** CPU culling + data-texture lookup on the *same* grid formula is the
-  documented parity path; `froxel.ts` is the single source of truth both backends mirror.
-- **Performance gate:** the full volumetric path targets ≤ ~1.5–2 ms on desktop GPU (P3);
-  grid resolution follows the cluster grid screen tiles in V1.
-- **Rejected:** Voxel Cone Tracing (VCT/VXGI) — too much VRAM (`O(N³)`), aliasing/leaking on
-  dynamic geometry, unsuitable for web/mobile.
+- **V1 (Current):** WebGPU Option R Clustered Froxel Injection (`froxel_inject.wgsl`) + Raymarch Integration (`VolumetricFog.frag.wgsl`) + Additive Pre-Tonemapping Composite.
+- **Phase 1 (v0.109 / WebGPU Quality & Performance):** In-Register Z-Integration (`froxel_integrate.wgsl` with `@workgroup_size(8,8,1)` prefix-sum) turning screen composite into a single trilinear sample; 3D Ping-Pong History (`historyA`/`historyB`) with sub-voxel jitter and 3D AABB variance clamping; Decima Powder Effect.
+- **Phase 2 (v0.110 / WebGL2 Parity):** `VolumetricFogPassGL` via Half-Resolution Screen-Space Raymarching + 2×2 Depth-Aware Cross-Bilateral Upsampling (`BilateralPassGL`), avoiding TBDR tile-flush hazards.
+- **Phase 3 (v0.111 / Dynamic FogVolumes):** `FogVolume` nodes (Box/Sphere/Cylinder SDF) with Godot's 3-uint32 atomic injection for negative density carving (clearing interior bunker rooms/vaults).
+- **Performance gate:** The full volumetric path targets ≤ ~1.5–2 ms on desktop GPU; grid resolution follows the cluster grid screen tiles.
+- **Rejected:** Voxel Cone Tracing (VCT/VXGI) — too much VRAM (`O(N³)`), aliasing/leaking on dynamic geometry, unsuitable for web/mobile.
+- **Multi-Agent Dossier:** Full research analysis, math formulations, and engine benchmarks are documented in `.agents/collaborate/froxel-volumetric-fog/dossier.md`.
+
