@@ -34,7 +34,7 @@ _Avoid_: Direct Mesh Scaling on movement behaviors — always wrap in a dedicate
 
 **Cluster**:
 A single cell of the 3D frustum-aligned grid used to narrow which lights a fragment needs to evaluate, instead of testing every light in the scene.
-_Avoid_: Tile (tiled forward+ is a 2D-only variant of this idea that we don't use — our grid is depth-sliced), Cell (used informally in code, but "Cluster" is the term that carries architectural weight across docs/ADRs). Deliberately does NOT claim "Froxel" either, even though the underlying grid math is the same kind of structure — Froxel is reserved for the not-yet-built volumetric fog subsystem, which will reuse this grid but is a distinct future consumer, not another name for the same concept.
+_Avoid_: Tile (tiled forward+ is a 2D-only variant of this idea that we don't use — our grid is depth-sliced), Cell (used informally in code, but "Cluster" is the term that carries architectural weight across docs/ADRs). Deliberately does NOT claim "Froxel" either, even though the underlying grid math is the same kind of structure — the Froxel volumetric fog subsystem reuses this exact grid layout (Option R, ADR 0031) but represents a distinct consumer accumulating participating medium and scattering rather than light assignment indices.
 
 **Clustered/Tiled Forward+ Lighting**:
 The overall technique: culling lights per Cluster so each fragment only evaluates the lights in its own cell's Per-Cell Light List, instead of testing every light in the scene.
@@ -64,9 +64,17 @@ _Avoid_: Scene File (ambiguous with raw glTF `scene.gltf`).
 The typed, per-`SmallWorldMachine`-instance event dispatcher (`app.events`) that replaces DOM `CustomEvent` for engine-internal notifications.
 _Avoid_: Global Event Bus, Universal EventBus — rejected under Context Object; this bus is scoped to one engine instance, never a shared global.
 
+**FogVolume / Interior Carving**:
+An analytical geometric volume (`FogVolume`: Box, Sphere, Cylinder) placed into the 3D scene graph that injects localized scattering, emission, or negative density into the global Froxel grid or raymarching volume. Negative density values carve out fog from interior spaces (e.g. rooms, vaults, caverns) without requiring complex geometry meshes or stencil cuts ($\text{extinction} = \max(0.0, \text{extinction} + \text{volDensity})$).
+_Avoid_: Fog Mesh, Stencil Volume — carving is achieved through continuous analytical SDF evaluation and additive density clamping in shaders, not geometry clipping.
+
 **Forge / ForgeTool**:
 Forge is the dockable window-manager overlay; a ForgeTool is a single mini-app hosted inside it (e.g. Gadget Inspector, Pixler, Material Studio).
 _Avoid_: Panel, Plugin — Tool names a specific contract (the `ForgeTool` class), not a generic panel.
+
+**Froxel (Volumetric Fog)**:
+A single cell ("frustum voxel") within the 3D camera-frustum grid ($160 \times 90 \times 64$ in WebGPU, or screen-depth tiles in WebGL2) that stores participating medium properties (scattering, extinction, phase function parameters) and in-scattered light accumulated along camera rays (ADR 0031).
+_Avoid_: Screen-Space God Rays (Stufe 2 / `LightShaftsElement` handles crepuscular rays), Voxel Grid (froxels are frustum-aligned with exponential near-to-far logarithmic slicing, not uniform world-axis AABB voxels).
 
 **HBAO**:
 The screen-space ambient occlusion pass actually shipped (`HbaoElement`): a single max-dot-per-direction horizon search, no cosine-weighted integration, no temporal filtering.

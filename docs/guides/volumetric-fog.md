@@ -5,8 +5,7 @@ a frustum-aligned 3D volume that accumulates in-scattering against local and dir
 and composites it into the scene *before* tonemapping. Design and decisions: ADR 0031; the
 binding grid formula lives in `packages/engine/src/math/froxel.ts`.
 
-This effect is **opt-in and WebGPU-only in V1**. WebGL2 (CPU culling + data texture, same
-formula) is a planned follow-up (P2); WebGL1 stays on the analytic fog of `Scene.fog`.
+This effect is **opt-in** and supported with full parity across both **WebGPU** (3D compute injection, temporal reprojection, in-register integration, and single-tap trilinear composite) and **WebGL2** (half-resolution screen-space raymarching with depth-aware cross-bilateral upsampling). WebGL1 stays on the analytic fog of `Scene.fog`.
 
 ## Relationship to the other fog layers
 
@@ -14,7 +13,7 @@ formula) is a planned follow-up (P2); WebGL1 stays on the analytic fog of `Scene
 |---|---|---|
 | `Scene.fog` (analytic) | Stufe 1 distance/height fog, always available | WebGL1 / WebGL2 / WebGPU |
 | `LightShaftsElement` | Stufe 2 crepuscular rays against CSM | All (hybrid tiers) |
-| `VolumetricFogElement` | Stufe 3 true 3D volume, local + directional light | WebGPU only (V1) |
+| `VolumetricFogElement` | Stufe 3 true 3D volume, local + directional light | WebGPU & WebGL2 |
 
 The analytic fog stays active in parallel; the volumetric contribution is **strictly additive**
 to it, never a replacement.
@@ -32,42 +31,118 @@ fog.intensity = 1.0;       // overall in-scattering multiplier
 app.postProcessing.add(fog);
 ```
 
-## Parameters
+## Parameters (`VolumetricFogElement`)
 
 | Property | Default | Meaning |
 |---|---|---|
-| `density` | `0.02` | Scattering/extinction coefficient; denser volume = more pronounced shafts. |
-| `height` | `0.0` | World-space baseline of the fog layer; density falls off above it. |
+| `density` | `0.02` | Global baseline scattering/extinction coefficient; denser volume = more pronounced shafts. |
+| `height` | `0.0` | World-space baseline of the exponential fog layer; density falls off above it. |
 | `heightFalloff` | `1.0` | Exponential height falloff coefficient (`0` = uniform density volume). |
 | `maxDistance` | `80.0` | Max world-space evaluation distance (clamped to the far plane). |
 | `intensity` | `1.0` | Overall multiplier of the accumulated in-scattering. |
-| `asymmetry` | `0.4` | Henyey-Greenstein `g`, `-1..1`. Positive = forward scattering towards the light. |
+| `asymmetry` | `0.4` | Henyey-Greenstein asymmetry factor $g \in (-1, 1)$. Positive = forward scattering towards the light. |
 | `castDirectionalShadow` | `true` | Directional (sun/moon) self-shadowing through the existing CSM. |
-| `color` | white | Tint of the in-scattered light (multiplied by each light's color). |
-| `jitter` | `0.25` | Interleaved gradient noise strength to break raymarch banding (`0` disables). |
+| `color` | `Color(1, 1, 1)` | Tint of the in-scattered light (multiplied by each light's color). |
+| `jitter` | `0.25` | Sub-voxel jitter / Interleaved Gradient Noise strength to eliminate raymarching slice aliasing. |
+| `historyBlend` | `0.85` | Exponential temporal accumulation weight across camera frames ($0.0$ disables TAA, $0.95$ max smooth). |
+| `powderExponent` | `1.0` | Decima powder effect exponent ($1 - e^{-2\tau}$) simulating multi-scattering highlights at cloud boundaries. |
 
-## How it works (V1 data flow)
+---
 
-1. **Injection (compute)** — every froxel cell takes its density (analytic height falloff) and
-   accumulates local-light in-scattering from the light list the *same* cluster cell already
-   culls (ADR 0007 / Option R). Grid and volume can never disagree about which lights reach a cell.
-2. **Integration (ray-march)** — per pixel, from near to the opaque surface depth (or
-   `maxDistance`), with the directional contribution and **CSM self-shadowing** evaluated per
-   step. Interleaved gradient noise breaks up banding.
-3. **Composite** — the integrated scattering texture adds into the HDR buffer **before
-   tonemapping** through the dedicated post-processing composite (same pattern as
-   `u_lightShaftsEnabled`).
+## Dynamic Fog Volumes (`FogVolume`)
 
-Because the volume reuses the cluster grid, neither a second culling pass nor any extra shadow
-pass exists — the directional shadowing reuses the existing CSM of Stage 2 (ADR 0030).
+`FogVolume` objects are scene-graph nodes (`Object3D`) that inject localized analytical participating media into the 3D froxel grid (WebGPU) or screen-space raymarch volume (WebGL2).
 
-## Notes & roadmap
+```ts
+import { FogVolume, FogVolumeShape, Vector3, Color } from '@small-world-machine/engine';
 
-- **V1 (Current):** WebGPU Option R Clustered Froxel Injection (`froxel_inject.wgsl`) + Raymarch Integration (`VolumetricFog.frag.wgsl`) + Additive Pre-Tonemapping Composite.
-- **Phase 1 (v0.109 / WebGPU Quality & Performance):** In-Register Z-Integration (`froxel_integrate.wgsl` with `@workgroup_size(8,8,1)` prefix-sum) turning screen composite into a single trilinear sample; 3D Ping-Pong History (`historyA`/`historyB`) with sub-voxel jitter and 3D AABB variance clamping; Decima Powder Effect.
-- **Phase 2 (v0.110 / WebGL2 Parity):** `VolumetricFogPassGL` via Half-Resolution Screen-Space Raymarching + 2×2 Depth-Aware Cross-Bilateral Upsampling (`BilateralPassGL`), avoiding TBDR tile-flush hazards.
-- **Phase 3 (v0.111 / Dynamic FogVolumes):** `FogVolume` nodes (Box/Sphere/Cylinder SDF) with Godot's 3-uint32 atomic injection for negative density carving (clearing interior bunker rooms/vaults).
-- **Performance gate:** The full volumetric path targets ≤ ~1.5–2 ms on desktop GPU; grid resolution follows the cluster grid screen tiles.
-- **Rejected:** Voxel Cone Tracing (VCT/VXGI) — too much VRAM (`O(N³)`), aliasing/leaking on dynamic geometry, unsuitable for web/mobile.
-- **Multi-Agent Dossier:** Full research analysis, math formulations, and engine benchmarks are documented in `.agents/collaborate/froxel-volumetric-fog/dossier.md`.
+// Positive mist volume with procedural turbulence
+const mist = new FogVolume({
+  shape: FogVolumeShape.Sphere,
+  size: new Vector3(8, 8, 8),
+  density: 0.15,
+  albedo: new Color(0.2, 0.7, 0.9),
+  edgeFade: 0.25,
+  noiseScale: 0.35,
+  noiseAmount: 0.6,
+  noiseSpeed: 0.25,
+});
+mist.position.set(0, 1.5, -12);
+scene.add(mist);
+```
+
+### FogVolume Parameters
+
+| Property | Default | Meaning |
+|---|---|---|
+| `shape` | `FogVolumeShape.Box` | Analytical SDF primitive: `Box`, `Sphere`, or `Cylinder`. |
+| `size` | `Vector3(2, 2, 2)` | Extents / dimensions in local space (width, height, depth). |
+| `density` | `1.0` | Local extinction coefficient. **Negative values carve out fog!** |
+| `edgeFade` | `0.1` | Fraction of volume radius/half-extents over which boundary softly fades to zero. |
+| `albedo` | `Color(1, 1, 1)` | Single-scattering albedo color tint. |
+| `emission` | `Color(0, 0, 0)` | Self-luminous volumetric emission color (e.g. fire, glowing braziers, neon portals). |
+| `noiseScale` | `0.0` | World-space frequency of the 3D procedural value noise / fBm. |
+| `noiseAmount` | `0.0` | Modulation amplitude of 3D turbulence ($0.0$ = smooth medium, $1.0$ = deep billowy clouds). |
+| `noiseSpeed` | `0.0` | Velocity of time-based wind drift through the noise field. |
+
+### Interior Carving (Negative Density)
+
+To keep interior spaces (such as indoor vaults, underground bunkers, crypts, or caves) completely fog-free without requiring expensive geometry clipping or stencil passes, simply place a `FogVolume` with negative density encompassing the room:
+
+```ts
+// Interior room carving: zeroes out participating extinction
+const interiorCarver = new FogVolume({
+  shape: FogVolumeShape.Box,
+  size: new Vector3(12, 6, 16),
+  density: -1.2, // Clamps extinction: max(0.0, globalExtinction + volDensity)
+  edgeFade: 0.05,
+});
+interiorCarver.position.set(0, 3, -25);
+scene.add(interiorCarver);
+```
+
+Both backends clamp participating medium extinction via $\text{extinction} = \max(0.0, \text{extinction} + \text{volDensity})$, cleanly eroding all global fog and shafts within the volume bounds.
+
+---
+
+## How It Works
+
+### WebGPU (Compute Tier)
+1. **Froxel Injection (`froxel_inject.wgsl`):**
+   - Dispatches over the 3D grid ($160 \times 90 \times 64$ cells).
+   - Injects exponential height-falloff media and evaluates analytical `FogVolume` SDFs with 3D procedural noise.
+   - Accumulates in-scattered light from Clustered Forward+ light lists (ADR 0007 / Option R) and evaluates Henyey-Greenstein phase against 4-cascade CSM shadows.
+2. **3D Temporal Reprojection (`froxel_reproject.wgsl`):**
+   - Applies sub-voxel jitter $(j_x, j_y, j_z)$ per frame.
+   - Reprojects previous frame samples using inverse camera view-projection matrices.
+   - Evaluates a 7-tap 3D neighborhood to construct a tight AABB and clamps history with 5% hysteresis, eliminating camera-motion ghosting while suppressing spatial aliasing.
+3. **In-Register Z-Integration (`froxel_integrate.wgsl`):**
+   - Dispatches one workgroup per screen tile (`@workgroup_size(8, 8, 1)`).
+   - Accumulates front-to-back optical depth $\tau$, transmittance $T = e^{-\tau}$, and in-scattered radiance along camera depth slices using workgroup registers.
+   - Applies Decima powder scattering ($1 - e^{-2\tau}$) at medium boundaries.
+4. **Fullscreen Composite (`VolumetricFog.frag.wgsl`):**
+   - Performs a single $O(1)$ trilinear texture sample into the 3D integrated volume at the fragment's reconstructed screen-space view depth.
+   - Composites additively into the HDR scene color buffer *before* tonemapping (`PostProcess.frag.wgsl`).
+
+### WebGL2 (Fragment Tier)
+1. **Half-Resolution Raymarching (`VolumetricFogPassGL`, `VolumetricFog.frag.glsl`):**
+   - Raymarches 16–24 logarithmic steps between camera near and opaque depth buffer.
+   - Uses Interleaved Gradient Noise (IGN) jitter to disperse step banding.
+   - Evaluates directional CSM self-shadowing and analytical `FogVolume` SDFs (including negative density carving).
+2. **Depth-Aware Cross-Bilateral Upsampling (`VolumetricFogBilateral.frag.glsl`):**
+   - Reconstructs full-resolution fog using depth-weighted bilateral cross-filtering.
+   - Prevents haloing and bleeding across high-frequency geometry silhouettes.
+3. **Composite:**
+   - Adds in-scattering pre-tonemapping through `PostProcess.frag.glsl`.
+
+---
+
+## Interactive Showcase
+
+Check out **Showcase 39 ("Atmospheric Sanctum")** at [`apps/showcases/39/`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/showcases/39/):
+- Monumental colonnade nave with high clerestory skylight casting sharp 4-cascade CSM shafts.
+- Swirling cyan mist with rolling 3D noise turbulence at the altar.
+- Warm amber emissive brazier sphere.
+- Negative density interior carving volume ($Z = -21$, density = -1.2) keeping the rear vaulted sanctuary crystal clear.
+- Interactive controls: `[F]` toggle fog, `[C]` toggle interior carving, `[N]` toggle 3D noise, `[1]`/`[2]` rotate sun angle, `[V]` switch fly/orbit camera.
 
