@@ -1,6 +1,7 @@
 # ADR 0026: `ObjectUniforms` 256-Byte-Slot als MOAT — kein blindes Aufblähen
 
-> Status: ACCEPTED (Moderator im T-Block der Flüssigkeits-Roadmap, 2026-10-06)
+> Status: **SUPERSEDED** — durch ADR 0027 auf 512 Byte erweitert. Dieser Eintrag bleibt als
+> historische Begründung der ursprünglichen 256-Byte-Moat erhalten (ursprünglich ACCEPTED, 2026-10-06).
 
 ## Kontext & Problem
 

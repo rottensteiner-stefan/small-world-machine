@@ -3,11 +3,20 @@
   "copyright": "Lane-Contract-Registry: canonical mapping of every repurposed ObjectUniforms lane for the liquid style struct. Engine <-> liquid-extras (Noir/Oil). Part of T3 of the liquid roadmap (see .agents/collaborate/liquid-roadmap.md §8.2 T3).",
   "uniformSlot": {
     "id": "ObjectUniforms",
-    "sizeBytes": 256,
-    "note": "Full. No free vec4. New parameters travel via repurposed lanes or per-style constants.",
+    "sizeBytes": 512,
+    "note": "512 bytes (ADR 0027, supersedes the 256-byte moat of ADR 0026). Base lanes u_styleA/u_styleB stay; semantic/material lanes ride u_matParam0..15. New parameters travel via repurposed lanes or per-style constants.",
     "structMembers": {
-      "u_styleA": ["x=rampSoftness", "y=washAmount", "z=lineDensity", "w=lineWidth(base)"],
-      "u_styleB": ["w=styleId (float selector)", "xyz=(reserved/doc)"]
+      "u_styleA": [
+        "x=rampSoftness",
+        "y=washAmount",
+        "z=lineDensity",
+        "w=lineWidth(base)"
+      ],
+      "u_styleB": [
+        "w=styleId (float selector)",
+        "xyz=(reserved/doc)"
+      ],
+      "u_matParam0..15": "vec4 semantic material lanes, per-preset (e.g. OpenWater poolHalfExtent in u_matParam2.w)"
     },
     "baseMeanings": {
       "u_styleA.w": "lineWidth (style 0,1,2,4,5)",
@@ -18,8 +27,16 @@
     {
       "lane": "u_styleA.x",
       "meaning": "rampSoftness",
-      "materialTypes": ["StylizedWaterMaterial"],
-      "styleIds": [0, 1, 2, 4, 5],
+      "materialTypes": [
+        "StylizedWaterMaterial"
+      ],
+      "styleIds": [
+        0,
+        1,
+        2,
+        4,
+        5
+      ],
       "writeOrder": "base:pack",
       "range": "0..1 softness",
       "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)"
@@ -27,8 +44,16 @@
     {
       "lane": "u_styleA.y",
       "meaning": "washAmount",
-      "materialTypes": ["StylizedWaterMaterial"],
-      "styleIds": [0, 1, 2, 4, 5],
+      "materialTypes": [
+        "StylizedWaterMaterial"
+      ],
+      "styleIds": [
+        0,
+        1,
+        2,
+        4,
+        5
+      ],
       "writeOrder": "base:pack",
       "range": "0..1 painterly wash",
       "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)"
@@ -36,8 +61,16 @@
     {
       "lane": "u_styleA.z",
       "meaning": "lineDensity",
-      "materialTypes": ["StylizedWaterMaterial"],
-      "styleIds": [0, 1, 2, 4, 5],
+      "materialTypes": [
+        "StylizedWaterMaterial"
+      ],
+      "styleIds": [
+        0,
+        1,
+        2,
+        4,
+        5
+      ],
       "writeOrder": "base:pack",
       "range": "0..1 stroke density",
       "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)"
@@ -45,8 +78,16 @@
     {
       "lane": "u_styleA.w",
       "meaning": "lineWidth",
-      "materialTypes": ["StylizedWaterMaterial"],
-      "styleIds": [0, 1, 2, 4, 5],
+      "materialTypes": [
+        "StylizedWaterMaterial"
+      ],
+      "styleIds": [
+        0,
+        1,
+        2,
+        4,
+        5
+      ],
       "writeOrder": "base:pack",
       "range": "stroke width / ripple frequency",
       "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)"
@@ -54,8 +95,19 @@
     {
       "lane": "u_styleB.w",
       "meaning": "styleId (float selector)",
-      "materialTypes": ["StylizedWaterMaterial", "NoirWaterMaterial", "OilSlickMaterial"],
-      "styleIds": [0, 1, 2, 3, 4, 5],
+      "materialTypes": [
+        "StylizedWaterMaterial",
+        "NoirWaterMaterial",
+        "OilSlickMaterial"
+      ],
+      "styleIds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
       "writeOrder": "base:pack",
       "range": "integer-valued float [0..5]; 3.0 = isExtension",
       "evictionPolicy": "never evicted; selector lane"
@@ -63,8 +115,12 @@
     {
       "lane": "u_styleA.w",
       "meaning": "posterizeSteps (extension carve-out)",
-      "materialTypes": ["NoirWaterMaterial"],
-      "styleIds": [3],
+      "materialTypes": [
+        "NoirWaterMaterial"
+      ],
+      "styleIds": [
+        3
+      ],
       "writeOrder": "extension:override (after base pack in same instance)",
       "range": "2..8 integer-valued float",
       "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)",
@@ -73,18 +129,23 @@
     {
       "lane": "u_styleA.w",
       "meaning": "iridescenceStrength (extension carve-out)",
-      "materialTypes": ["OilSlickMaterial"],
-      "styleIds": [3],
+      "materialTypes": [
+        "OilSlickMaterial"
+      ],
+      "styleIds": [
+        3
+      ],
       "writeOrder": "extension:override (after base pack in same instance)",
       "range": "0..1",
       "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)",
       "collision": "overrides base lineWidth meaning; valid ONLY because styleId==3.0 dispatches extension branch"
-    }
-,
+    },
     {
       "lane": "u_styleA.xyzw",
       "meaning": "splat (OpenWater impact ring)",
-      "materialTypes": ["OpenWaterMaterial"],
+      "materialTypes": [
+        "OpenWaterMaterial"
+      ],
       "styleIds": [],
       "writeOrder": "hook:_packVariantLanes (after base pack)",
       "range": "[x, z, spawnTime, energy]; ring active for 0..4 s after spawnTime when energy > 0",
@@ -93,7 +154,9 @@
     {
       "lane": "u_matParam2.w",
       "meaning": "poolHalfExtent (OpenWater clapotis walls)",
-      "materialTypes": ["OpenWaterMaterial"],
+      "materialTypes": [
+        "OpenWaterMaterial"
+      ],
       "styleIds": [],
       "writeOrder": "hook:_packVariantLanes (after base pack)",
       "range": "world units, > 0 enables wall reflection, 0 = off; default 4.0",

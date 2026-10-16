@@ -8,7 +8,7 @@ Es ist ein **hartes Gate vor Block S**: Jede neue Lane (z.B. S2-Splat-Lane, S3-W
 muss vor der Implementierung hier registriert sein. Eviction einer Lane ⇒ **Re-Homing auf
 Per-Style-Konstante, nie silent delete** (G3).
 
-## Dategröße
+## Dateigröße
 - `lane-contracts.json` — das deklarative Artefakt (Schema stabil, siehe unten).
 - `scan.js` — statischer Scanner: prüft die realen Shader-/TS-Quellen gegen die Registry und
   meldet Kollisionen/Writing-Drift. Exit 0 ok · 1 Verletzung · 2 technisch.
@@ -16,13 +16,14 @@ Per-Style-Konstante, nie silent delete** (G3).
 
 ## Schema (stabil — neue Einträge nur als zusätzliche Objekte)
 Jede Lane-Zeile: `lane`, `meaning`, `materialTypes`, `styleIds`, `writeOrder`,
-`range`, `evictionPolicy`, optional `collision`. Zusätzlich `registration[]` für future lanes
-(status `reserved`). Konsumenten (T4-Style-Dispatch-Test, CI) LESEN dieses File; der Scanner
-schreibt nichts zurück.
+`range`, `evictionPolicy`, optional `collision`. Zusätzlich `registration[]` für proaktive
+Lane-Reservierungen bzw. aktive Contracts (Status `active`, `reserved` gemäß JSON). Konsumenten
+(T4-Style-Dispatch-Test, CI) LESEN dieses File; der Scanner schreibt nichts zurück.
 
 ## Wichtige Fakten (verifiziert gegen HEAD)
-- Uniform-Slot `ObjectUniforms` ist **voll** (256 B) — neue Parameter nur per repurposed Lane
-  oder Per-Style-Konstanten.
+- Uniform-Slot `ObjectUniforms` hat ein **512-Byte-Budget (ADR 0027; ersetzt die frühere
+  256-Byte-Moat aus ADR 0026)**. Freie Regisierblock: `u_matParam0..15` (semantische Preset-Lanes);
+  neue Parameter nur per repurposed Lane oder Per-Style-Konstanten.
 - Basis-Lanes (StylizedWaterMaterial, Styles 0/1/2/4/5): `u_styleA = [rampSoftness, washAmount,
   lineDensity, lineWidth]`, `u_styleB.w = styleId`.
 - **`u_styleA.w`-Kollision (3 verifikationen, je Materialtyp):** Basis = `lineWidth`;
@@ -48,5 +49,5 @@ node scripts/lane-contracts/scan.js
 ```
 Der Scanner wird von `packages/engine/tests/renderers/shaders/LiquidLaneContracts.test.ts`
 und `packages/liquid-extras/tests/LaneTransport.test.ts` referenziert (Stichprobe gegen reale
-Quellen). S2-Splat-Lane und S3-Wall-Contract sind als `reserved` registriert und müssen vor
-Umsetzung durch diesen Registry-Pass.
+Quellen). S2-Splat-Lane und S3-Wall-Contract sind als `active` registriert (sowie S1-Surface-Probe)
+und damit Teil des permanenten Registry-Stands.

@@ -75,7 +75,7 @@ class MyGame extends SmallWorldMachine {
 ### 2. Implementation Showcase
 
 ```typescript
-import { SmallWorldMachine, Cube, Color, StandardMaterial, Object3D, OrbitController, Texture } from "small-world-machine";
+import { SmallWorldMachine, Cube, Color, StandardMaterial, Object3D, OrbitController, Texture } from "@small-world-machine/engine";
 
 class MyGame extends SmallWorldMachine {
   constructor() {
@@ -86,7 +86,7 @@ class MyGame extends SmallWorldMachine {
     const albedoTex = await Texture.fromUrl("./assets/textures/diffuse.png");
     const geometry = new Cube({ size: 2 }).getGeometryData();
     const material = new StandardMaterial({
-      map: albedoTex,
+      diffuseMap: albedoTex,
       color: Color.DODGERBLUE,
       metallic: 0.7,
       roughness: 0.2,
@@ -164,13 +164,13 @@ Small World Machine is organized as a lightweight TypeScript monorepo (`packages
   - `src/loaders`: Asset loading pipeline (glTF 2.0, Declarative Level Descriptors / `KitRegistry`, OBJ/MTL, Textures).
   - `src/physix`: Physics system, colliders, bounding boxes (AABB/OBB), and solvers.
   - `src/renderers`: Hybrid WebGPU, WebGL 2, and WebGL 1 rendering backends.
-  - `src/tools`: Integrated engine tools (`Maker`, `Forge`, `Xtractor`, `Pixler`, `MapGen`, `MaterialStudio`).
+- **`packages/tools`**: Standalone browser tools (`Maker`, `Forge`, `Xtractor`, `Pixler`, `MapGen`, `MaterialStudio`) as well as dev/production helpers (`attachDevTools`).
 - **`packages/gltf-extensions`**: Extended glTF capabilities including `KHR_texture_basisu` (WASM-based Basis Universal / KTX2 GPU texture transcoding).
 - **`packages/geometry-extras`**: Procedural and parametric geometry extensions (`Lathe`, Platonic solids, Filled polygons).
 - **`packages/physics-extras`**: Advanced physics solvers, convex hulls, and geometric algorithms.
 
 ### `apps/` — Showcases & Sample Games
-- **`apps/showcases`**: 38 interactive functional showcases demonstrating engine features (PBR, IBL, Glass transmission, Post-processing, Clustered lighting, Spatial audio, etc.).
+- **`apps/showcases`**: 37 numbered interactive showcases (1–38, #25 is intentionally absent) demonstrating engine features (PBR, IBL, Glass transmission, Post-processing, Clustered lighting, Spatial audio, etc.), plus the `decal-probe` and `presentation` apps.
 - **`apps/sample-apps`**: Production vertical slices and games (*The Whisper — A Viennese Requiem*, *Light Cycle Arena*, etc.).
 
 ### `public/` — Assets & Tools
@@ -203,6 +203,7 @@ The engine's flagship standalone 3D scene composer and level editor ([User Guide
 - **T-06: Pixler** (`public/tools/pixler.html`): Retro 2D pixel-art editor to draw, animate, and export sprites.
 - **T-07: Map Generator** (`public/tools/map-gen.html`): Visual grid editor to author ASCII layouts for the `GridLevelBuilder`.
 - **T-08: Maker** (`public/tools/maker.html`): Standalone 3D scene and world composition environment.
+- **T-09: Kit Inspector** (`public/tools/kit-inspector.html`): Inspect modular asset kit metadata, registries, and runtime kit state.
 
 ### In-Game Overlay
 - **The Forge:** A built-in floating window manager providing runtime inspection, diagnostics, and integrated tooling directly inside your running game (toggleable via configurable shortcut, e.g. `~` or `F12`).

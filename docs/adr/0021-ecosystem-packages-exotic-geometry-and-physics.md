@@ -16,7 +16,7 @@ Dieselbe Realität ergibt sich für den Geometrie- und Physikbereich:
    - **Kern-Engine** (`@small-world-machine/engine`) bleibt der einzige Ort für Universelles (Math, Szenengraph, Renderer, Kern-Primitive, Kern-Physik).
    - **Optionale, domänenspezifische Pakete** (`@small-world-machine/gltf-extensions`, `@small-world-machine/geometry-extras`, `@small-world-machine/physics-extras`, ...) hängen ausschließlich von `@small-world-machine/engine` ab — nie umgekehrt.
 2. **`@small-world-machine/geometry-extras` (`packages/geometry-extras/`)** ist das Zuhause für alles Exotische, das durch das öffentliche `AbstractGeometry`-Erweiterungsprinzip eingehakt wird (jede Geometrie implementiert nur `generateGeometryData()`). Tree-Shaking hält ungenutzte Formen aus dem Verbraucher-Bundle; eine Registrierung wie bei gltf-Extensions ist dafür bewusst **nicht** nötig, da Geometrien als direkte Klassen konsumiert werden (`new Lathe({...}).getGeometryData()`).
-3. **`@small-world-machine/physics-extras` (`packages/physics-extras/`)** ist das Zuhause für Kombinationen aus Kern-Physik und Geometrie-Paketen (z. B. `fractureObject()` unter Wiederverwendung des Kernteen-`ConvexHull`-Kolliders).
+3. **`@small-world-machine/physics-extras` (`packages/physics-extras/`)** ist das Zuhause für Kombinationen aus Kern-Physik und Geometrie-Paketen (z. B. `fractureObject()` unter Wiederverwendung des Kern-`ConvexHull`-Kolliders).
 4. **Dokumentation & Tests bleiben kolokal:** jedes Ökosystem-Paket hat ein eigenes `README.md`, eigene `tests/` und pflegt seine Formeln/Inspirationen in der Root-`REFERENCES.md` (vgl. ADR 0018, gleiche Anforderung).
 
 ## Konsequenzen

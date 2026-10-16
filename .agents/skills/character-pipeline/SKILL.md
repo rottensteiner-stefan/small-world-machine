@@ -41,7 +41,7 @@ Dieses Dokument definiert den verbindlichen, praxiserprobten End-to-End-Workflow
 [ 5. Small World Machine Runtime-Integration ]
   - 🤖 AUTOMATISCH: Multiplikativer `_characterRig` Wrapper (1.80m Skalierungsschutz)
   - PBR-Sanitizing (`clampMetallic`) / Graphic-Noir `BasicMaterial`
-  - Semantischer Hand-Socket (Laterne: (0.01, 0.09, 0.02), Z = π/2)
+  - Ausrüstung per World-Space-Tracking `_syncLanternTransform()` (kein Bone-Child-Socket, s. ADR 0009)
   - AnimationMixer mit Cross-Fading
 ```
 
@@ -58,9 +58,9 @@ Dieser Vertrag definiert für jeden Schritt exakt:
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                   ÜBERSICHT ALLER PFADE & ORDNER                                 │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 1. 2D-Konzepte & Dossier:    src/apps/<app>/docs/assets/<character>/                            │
-│ 2. DCC- & Authoring-Daten:   src/apps/<app>/raw/mannequin/<character>/                          │
-│ 3. Shared Raw Mocap (.fbx):  src/apps/<app>/raw/mannequin/shared/                              │
+│ 1. 2D-Konzepte & Dossier:    apps/sample-apps/<app>/docs/assets/<character>/                            │
+│ 2. DCC- & Authoring-Daten:   apps/sample-apps/<app>/raw/mannequin/<character>/                          │
+│ 3. Shared Raw Mocap (.fbx):  apps/sample-apps/<app>/raw/mannequin/shared/                              │
 │ 4. Runtime-Charakter (.glb): public/assets/<app>/mannequin/<character>/character.glb           │
 │ 5. Runtime-Mocap (.glb):     public/assets/<app>/mannequin/shared/anim/*.glb                    │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -70,13 +70,13 @@ Dieser Vertrag definiert für jeden Schritt exakt:
 
 | Stufe | Modus | Input-Pfad (Erwartet) | Output-Pfad (Erzeugt) | Ausführendes Tool / Aktion |
 | :--- | :---: | :--- | :--- | :--- |
-| **1. 2D-Vorlagen** | `🤖` / `👤` | `src/apps/<app>/docs/assets/<char>/hoodie.jpg` | `src/apps/<app>/raw/mannequin/<char>/model_sheet.jpg`<br>`src/apps/<app>/raw/mannequin/<char>/front.jpg` | Gemini API / `generate_image` + `sips` Crop |
-| **2. 3D-Mesh & Atlas** | `🤖` | `src/apps/<app>/raw/mannequin/<char>/front.jpg` | `src/apps/<app>/raw/mannequin/<char>/base_model.glb` | `tripo make front.jpg --for game-mobile` |
-| **2.5. Mixamo-Paket** | `🤖` | `src/apps/<app>/raw/mannequin/<char>/base_model.glb` | `src/apps/<app>/raw/mannequin/<char>/<char>_mixamo.zip` | Automatischer Node-Export (`model.obj` + `texture.jpg` ➔ `.zip`) |
-| **3. Mixamo Rigging** | `👤` *(User)* | `src/apps/<app>/raw/mannequin/<char>/<char>_mixamo.zip` | `src/apps/<app>/raw/mannequin/<char>/character_rigged.fbx` | User zieht `.zip` in [Mixamo Web](https://mixamo.com), setzt 5 Marker & lädt T-Pose `.fbx` |
-| **3.5. GLB-Export** | `🤖` *(Agent)*| `src/apps/<app>/raw/mannequin/<char>/character_rigged.fbx` | `public/assets/<app>/mannequin/<char>/character.glb` | Konvertierung FBX ➔ GLB (gltf-transform / FBX2glTF) |
-| **4. Shared Mocap** | `🤖` / `👤` | `src/apps/<app>/raw/mannequin/shared/*.fbx` | `public/assets/<app>/mannequin/shared/anim/*.glb` | In-Place Studio-Clips (`idle_torch`, `walk_torch`, `ascending_stairs`) |
-| **5. Engine-Ingest** | `🤖` *(Agent)*| `public/assets/<app>/mannequin/<char>/character.glb`<br>`public/assets/<app>/mannequin/shared/anim/*.glb` | `src/apps/<app>/scenes/<scene>/` | `GltfLoader` + `_characterRig` Wrapper + Sockets + `AnimationMixer` |
+| **1. 2D-Vorlagen** | `🤖` / `👤` | `apps/sample-apps/<app>/docs/assets/<char>/hoodie.jpg` | `apps/sample-apps/<app>/raw/mannequin/<char>/model_sheet.jpg`<br>`apps/sample-apps/<app>/raw/mannequin/<char>/front.jpg` | Gemini API / `generate_image` + `sips` Crop |
+| **2. 3D-Mesh & Atlas** | `🤖` | `apps/sample-apps/<app>/raw/mannequin/<char>/front.jpg` | `apps/sample-apps/<app>/raw/mannequin/<char>/base_model.glb` | `tripo make front.jpg --for game-mobile` |
+| **2.5. Mixamo-Paket** | `🤖` | `apps/sample-apps/<app>/raw/mannequin/<char>/base_model.glb` | `apps/sample-apps/<app>/raw/mannequin/<char>/<char>_mixamo.zip` | Automatischer Node-Export (`model.obj` + `texture.jpg` ➔ `.zip`) |
+| **3. Mixamo Rigging** | `👤` *(User)* | `apps/sample-apps/<app>/raw/mannequin/<char>/<char>_mixamo.zip` | `apps/sample-apps/<app>/raw/mannequin/<char>/character_rigged.fbx` | User zieht `.zip` in [Mixamo Web](https://mixamo.com), setzt 5 Marker & lädt T-Pose `.fbx` |
+| **3.5. GLB-Export** | `🤖` *(Agent)*| `apps/sample-apps/<app>/raw/mannequin/<char>/character_rigged.fbx` | `public/assets/<app>/mannequin/<char>/character.glb` | Konvertierung FBX ➔ GLB (gltf-transform / FBX2glTF) |
+| **4. Shared Mocap** | `🤖` / `👤` | `apps/sample-apps/<app>/raw/mannequin/shared/*.fbx` | `public/assets/<app>/mannequin/shared/anim/*.glb` | In-Place Studio-Clips (`idle_torch`, `walk_torch`, `ascending_stairs`) |
+| **5. Engine-Ingest** | `🤖` *(Agent)*| `public/assets/<app>/mannequin/<char>/character.glb`<br>`public/assets/<app>/mannequin/shared/anim/*.glb` | `apps/sample-apps/<app>/scenes/<scene>/` | `GltfLoader` + `_characterRig` Wrapper + World-Space-Tracking + `AnimationMixer` |
 
 ---
 
@@ -114,7 +114,7 @@ Dieser Vertrag definiert für jeden Schritt exakt:
 ### 3. Extraktion der isolierten Frontansicht (`front.jpg`)
 Aus dem erzeugten Model-Sheet wird die Frontansicht ohne Textüberschriften sauber via `sips` freigestellt:
 ```bash
-sips -c 670 460 --cropOffset 45 10 src/apps/<app>/raw/mannequin/<char>/model_sheet.jpg --out src/apps/<app>/raw/mannequin/<char>/front.jpg
+sips -c 670 460 --cropOffset 45 10 apps/sample-apps/<app>/raw/mannequin/<char>/model_sheet.jpg --out apps/sample-apps/<app>/raw/mannequin/<char>/front.jpg
 ```
 
 ---
@@ -125,7 +125,7 @@ Tripo3D wird **ausschließlich für die 3D-Geometrie und den Texturatlas** einge
 
 ### 1. Ausführung via `tripo-cli` (aus `front.jpg`)
 ```bash
-tripo make src/apps/<app>/raw/mannequin/<char>/front.jpg --for game-mobile --param face_limit=15000 -o src/apps/<app>/raw/mannequin/<char>/tripo-out --json --yes
+tripo make apps/sample-apps/<app>/raw/mannequin/<char>/front.jpg --for game-mobile --param face_limit=15000 -o apps/sample-apps/<app>/raw/mannequin/<char>/tripo-out --json --yes
 ```
 
 ### 2. Automatisches Mixamo-Packaging (`base_model.glb` ➔ `.zip`)
@@ -145,7 +145,7 @@ tripo make src/apps/<app>/raw/mannequin/<char>/front.jpg --for game-mobile --par
 > **Architektur-Entscheidung:** Für alle spielbaren Charaktere in Small World Machine ist **Adobe Mixamo der einzige verbindliche Rigging-Standard**. Tripo Auto-Rigging wird nicht verwendet, da es zu Knochen-Explosionen (>64 Bones), nicht-standardisierten Benennungen und zerreißenden Gliedmaßen führt.
 
 ### 1. Manueller User-Schritt (Mixamo Web-UI)
-1. Die generierte Zip-Datei [`src/apps/<app>/raw/mannequin/<char>/<char>_mixamo.zip`](src/apps/and-now/raw/mannequin/) in [Adobe Mixamo](https://www.mixamo.com/) hochladen (Drag & Drop).
+1. Die generierte Zip-Datei [`apps/sample-apps/<app>/raw/mannequin/<char>/<char>_mixamo.zip`](apps/sample-apps/the-whisper/raw/mannequin/) in [Adobe Mixamo](https://www.mixamo.com/) hochladen (Drag & Drop).
 2. **Auto-Rigger Marker platzieren:**
    - `Chin` (Kinn)
    - `Wrists` (Handgelenke)
@@ -155,13 +155,13 @@ tripo make src/apps/<app>/raw/mannequin/<char>/front.jpg --for game-mobile --par
 3. **Skeleton LOD:** Standard `Standard Skeleton (65 Bones)` oder `No Fingers (52 Bones)` wählen. Beide liegen sicher unter dem 64- bzw. Shader-Limit und besitzen saubere Edge-Loop-Gewichtungen.
 4. Nach erfolgreichem Rigging als **FBX (.fbx) mit T-Pose** herunterladen.
 5. Datei ablegen unter:
-   `src/apps/<app>/raw/mannequin/<char>/character_rigged.fbx`
+   `apps/sample-apps/<app>/raw/mannequin/<char>/character_rigged.fbx`
 
 ### 2. Automatischer Agent-Schritt (GLB-Konvertierung, Skalierung & Validierung)
 Sobald die geriggte `.fbx` in `raw/` liegt, konvertiert der Agent das Modell nach `.glb` und deployt es ins Runtime-Verzeichnis:
 ```bash
 # 1. Konvertierung via fbx2gltf
-fbx2gltf -b -i src/apps/<app>/raw/mannequin/<char>/character_rigged.fbx -o public/assets/<app>/mannequin/<char>/character
+fbx2gltf -b -i apps/sample-apps/<app>/raw/mannequin/<char>/character_rigged.fbx -o public/assets/<app>/mannequin/<char>/character
 ```
 **Post-Processing & Validierung:**
 1. **Höhen-Normalisierung auf $1.0\text{m}$:** Mixamo-FBX exportiert in cm ($0.01$ Skalierungsfaktor), wodurch das Modell nach `fbx2gltf` nur $0.018\text{m}$ (1.8 cm) groß wäre. Der Root-Knoten (`Node 0`) wird skaliert, sodass die Netto-Höhe exakt $1.0\text{m}$ beträgt (damit `character.scale.set(1.8, 1.8, 1.8)` in der Engine exakt $1.80\text{m}$ Mensch-Höhe ergibt).
@@ -179,7 +179,7 @@ fbx2gltf -b -i src/apps/<app>/raw/mannequin/<char>/character_rigged.fbx -o publi
    * Verwende für Figuren mit Ausrüstung dedizierte Studio-Mocap-Clips mit fixiertem Tragearm (z. B. `idle_torch.glb`, `walk_torch.glb`, `ascending_stairs.glb`).
    * Generische AI-Walk-Zyklen schwingen oft wild mit den Armen, was zu taumelnden Props führt.
 3. **Knochen-Präfix Aliasing:**
-   * [`AnimationMixer.ts`](src/core/animation/AnimationMixer.ts) normalisiert automatisch Präfixe (`mixamorig:`, `mixamorig1:`), sodass Clips universell binden.
+   * [`AnimationMixer.ts`](packages/engine/src/core/animation/AnimationMixer.ts) normalisiert automatisch Präfixe (`mixamorig:`, `mixamorig1:`), sodass Clips universell binden.
 
 ---
 
@@ -199,7 +199,7 @@ const gltfLoader = new GltfLoader({
 });
 
 // 1. Charakter laden und lokale 1.80m Skalierung setzen
-const character = await gltfLoader.load("/assets/and-now/mannequin/novotny-male/character.glb");
+const character = await gltfLoader.load("/assets/the-whisper/mannequin/player-male/character.glb");
 character.scale.set(1.8, 1.8, 1.8);
 
 // 2. Rig-Wrapper erstellen (Position & Behavior hier anhängen)
@@ -232,34 +232,38 @@ function applyGraphicNoirMaterial(obj: Object3D): void {
 applyGraphicNoirMaterial(character);
 ```
 
-### 3. Semantischer Prop-Socket (z. B. Laterne in linker Hand)
+### 3. Ausrüstung ist kein Bone-Child — World-Space-Verfolgung (verbindlich seit ADR 0009 Update)
+
+> **🚨 SUPERSEDES das alte Bone-Child-Socket-Muster:** `handBone.add(propSocket)` mit fixem
+> Local-Offset `(0.01, 0.09, 0.02)` und `rotation.set(0, 0, Math.PI / 2)` wurde ersetzt. Diese
+> Variante litt unter ~100x cm/m-Maßstab-Artefakten des Bone-Scale und einer Rotation, die nie
+> ausgewertet wurde — das Prop blieb relativ zum Knochen stehen. Referenz des aktuellen Musters:
+> `apps/sample-apps/the-whisper/scenes/flakturm-tunnel/showcase.ts` `_syncLanternTransform()`.
+
 ```typescript
-const HAND_BONES = [
-  "mixamorig:LeftHand",
-  "mixamorig1:LeftHand",
-  "L_Hand",
-  "tripo::0_Left_Limb_2",
-  "tripo::0_Left_Limb_3",
-];
+// In update(): Knochen-Weltposition in die Prop-Weltposition übertragen — NICHT als Kind in den
+// Bone hängen. Der per-Knochen-Typ abhängige Offset wird durch die Bone-Scale dividiert (FBX-cm
+// → m-Artefakt); die Rotation wird nie auf ein Bone-Child angewendet.
+private _syncLanternTransform(): void {
+  const bone = this._lanternHandBone;
+  if (!bone || !this._lanternGroup) return;
 
-let handBone: Object3D | undefined;
-for (const name of HAND_BONES) {
-  const found = character.getObjectByName(name);
-  if (found) {
-    handBone = found;
-    break;
-  }
-}
+  const isFingerBone =
+    bone.name.includes("Middle") || bone.name.includes("Index") || bone.name.includes("Limb_3");
+  const boneScale = bone.getAccumulatedWorldScale();
+  const localOffset = MathPool.acquireVector().set(
+    0,
+    (isFingerBone ? 0.01 : 0.08) / boneScale,
+    (isFingerBone ? 0.0 : 0.01) / boneScale,
+  );
+  const worldPos = MathPool.acquireVector();
+  bone.worldMatrix.transformVector(localOffset, worldPos);
 
-if (handBone) {
-  const propSocket = new Object3D("LanternSocket");
-  // Offset in die Handfläche & 90° Z-Drehung, damit Laterne senkrecht zum Boden hängt
-  propSocket.position.set(0.01, 0.09, 0.02);
-  propSocket.rotation.set(0, 0, Math.PI / 2);
-  
-  propSocket.add(lanternMesh);
-  propSocket.add(pointLight);
-  handBone.add(propSocket);
+  this._lanternGroup.position.copyFrom(worldPos);
+  this._lanternGroup.updateMatrixWorld();
+
+  MathPool.releaseVector(localOffset);
+  MathPool.releaseVector(worldPos);
 }
 ```
 
@@ -286,7 +290,7 @@ Um maximale Bildschärfe und Texturqualität bei Mixamo-gestützten Charakteren 
 
 ---
 
-### 4. AnimationMixer & Cross-Fading
+### 5. AnimationMixer & Cross-Fading
 ```typescript
 import { AnimationMixer, AnimationClip, AnimationAction } from "small-world-machine";
 
@@ -295,7 +299,7 @@ const mixer = new AnimationMixer(character);
 // Eingebettete Clips bevorzugen, ansonsten Studio-Clips aus shared/anim/ laden
 let walkClip = character.animations?.find(a => a.name === "preset:walk");
 if (!walkClip) {
-  const loaded = await gltfLoader.loadAnimations("/assets/and-now/mannequin/shared/anim/walk_torch.glb");
+  const loaded = await gltfLoader.loadAnimations("/assets/the-whisper/mannequin/shared/anim/walk_torch.glb");
   walkClip = loaded[0];
 }
 
@@ -313,15 +317,15 @@ function play(clip: AnimationClip, fadeSec: number = 0.25): void {
 
 ---
 
-## 🍳 Rezept 6: Dateistruktur & Namenskonventionen
+## 🍳 Rezept 7: Dateistruktur & Namenskonventionen
 
 Strikte Trennung nach **Figuren-Ordnern** statt nach Asset-Typen:
 
 ```text
 public/assets/<app>/mannequin/
-├── novotny-male/
+├── player-male/
 │   └── character.glb                 # Geriggtes Laufzeit-Modell (inkl. Textur)
-├── novotny-female/
+├── player-female/
 │   └── character.glb
 └── shared/
     └── anim/                         # Figurenübergreifende Mocap-Clips
@@ -329,22 +333,22 @@ public/assets/<app>/mannequin/
         ├── walk_torch.glb
         └── ascending_stairs.glb
 
-src/apps/<app>/raw/mannequin/
-├── novotny-male/                     # .gitkeep, DCC-Quellen, task.json
-├── novotny-female/
+apps/sample-apps/<app>/raw/mannequin/
+├── player-male/                     # .gitkeep, DCC-Quellen, task.json
+├── player-female/
 ├── spacegirl/                        # Konzeptbilder & Model-Sheets
 └── shared/                           # Original .fbx Mocap-Dateien
 ```
-*Regel:* Dateinamen wiederholen den Figurennamen **nicht** im Dateinamen (`character.glb`, nicht `novotny-male.glb`).
+*Regel:* Dateinamen wiederholen den Figurennamen **nicht** im Dateinamen (`character.glb`, nicht `player-male.glb`).
 
 ---
 
-## 🛠️ Rezept 7: Troubleshooting Runbook
+## 🛠️ Rezept 8: Troubleshooting Runbook
 
 | Symptom | Ursache | Sofort-Lösung |
 | :--- | :--- | :--- |
 | **Figur winzig / Puppenhaltung** | `StageMovementBehavior` hat die 1.8er Skalierung überschrieben. | Charakter in `_characterRig` (`Object3D`) einbetten und Behavior auf das Rig setzen. |
-| **Laterne schwebt waagerecht** | Hand-Bone hat $X$-Achse Richtung Boden, Laterne fehlt Ausrichtungs-Offset. | Socket mit `position.set(0.01, 0.09, 0.02)` und `rotation.set(0, 0, Math.PI / 2)` versehen. |
+| **Laterne schwebt waagerecht** | Alter Bone-Child-Socket mit fixem Offset: Hand-Bone hat $X$-Achse Richtung Boden, Kind hängt relativ stehen. | Prop per World-Space-Tracking positionieren (siehe Rezept 5.3, `_syncLanternTransform()`); keine Rotation auf ein Bone-Child setzen. |
 | **Gliedmaßen reißen beim Gehen ab** | Rig hat Twist-Hilfsknochen, die im Motion-Clip fehlen und einfrieren. | Mixamo-Standard-Rig nutzen oder Tripo-Retarget direkt gegen das native Tripo-Rig fahren. |
 | **Körperteile bewegen sich nicht / verzerren** | Skelett überschreitet das 64-Bone-Limit des WebGL2-Shaders (`u_boneMatrices[64]`). | Rig auf $\le 64$ Bones reduzieren (Spring-Bones auf übergeordnete Joints binden). |
 | **Figur ist komplett pechschwarz** | Tripo exportiert PBR mit `metallic: 1.0` ohne passendes IBL/HDRI. | Im `GltfLoader` `clampMetallic: 0.2` setzen oder auf `BasicMaterial` mit `diffuseMap` umstellen. |
@@ -359,7 +363,7 @@ src/apps/<app>/raw/mannequin/
 - [ ] **Budget:** Mesh $\le 25.000$ Triangles, Texturatlas $\le 2048\times 2048$ (2K).
 - [ ] **Rig:** Entweder sauberes Mixamo-Rig oder Tripo-Rig auf $\le 64$ Bones gestutzt.
 - [ ] **Motion:** Locomotion-Clips laufen **In-Place** (`--animate-in-place`).
-- [ ] **Props:** Ausrüstung sitzt stabil im Hand-Socket ohne Taumeln.
+- [ ] **Props:** Ausrüstung folgt der Hand per World-Space-Tracking (`_syncLanternTransform()`) ohne Taumeln.
 - [ ] **Skalierung:** 1.80m Human Scale ist über `_characterRig` gekapselt.
-- [ ] **Pfade:** Runtime unter `public/assets/`, DCC-Quellen unter `src/apps/<app>/raw/`.
+- [ ] **Pfade:** Runtime unter `public/assets/`, DCC-Quellen unter `apps/sample-apps/<app>/raw/`.
 

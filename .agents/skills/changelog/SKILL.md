@@ -31,7 +31,13 @@ Every entry in the `CHANGELOG.md` MUST strictly follow this exact structure:
 
 ## 2. Git Commit Rule
 
-**CRITICAL MANDATE: NEVER make a commit or push without explicit user request. Do NOT even ask for permission to commit. Either the user explicitly requests a commit, or no commit happens.**
+**CRITICAL MANDATE — Git Commit Rule (reconciled with AGENTS.md):** Do NOT commit or push after
+every single micro-edit, and do NOT commit on pure speculation. The controlling rule in this repo
+is AGENTS.md: *the agent is explicitly authorized to run git operations without asking*, but only
+commits when a feature or milestone is cohesively rounded off (or the user signals a commit).
+(ORIGINAL text of this skill — superseded by AGENTS.md: "NEVER make a commit or push without
+explicit user request... Either the user explicitly requests a commit, or no commit happens." —)
+Micro-edits stay uncommitted until a milestone is done.
 
 EVERY single Git commit (not just version bumps) MUST use this unconventional format.
 The commit message MUST be **exactly a quote**, but **WITHOUT the author** and **WITHOUT the surrounding quotation marks**. Do NOT use standard Conventional Commits (like `feat: added something` or `docs: fixed typo`).

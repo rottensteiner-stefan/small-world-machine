@@ -19,14 +19,14 @@ Showcase 22 (Akkretionsscheibe um ein supermassives Schwarzes Loch) führte komp
    - Unsichtbare oder tote Partikel kollabieren auf Skalierung 0, wodurch keine CPU-Reallocations im Render-Loop entstehen.
 
 3. **Kern-Erweiterungen mit universellem Mehrwert:**
-   - [`Color.blackbody()`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/core/colors/Color.ts) und [`Color.fromTemperature()`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/core/colors/Color.ts) wandern in den Kern als allgemeine Farb- und Strahlungs-Utilities.
-   - [`GravitationalLensingElement`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/renderers/post/elements/GravitationalLensingElement.ts) entkoppelt dynamische Linsenparameter (`eh`, `strength`, `spaghettification`, `beaming`, `ringGlow`) synchron in GLSL und WGSL (160-Byte-Puffer).
-   - [`FollowCameraBehavior`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/core/behaviors/FollowCameraBehavior.ts) bietet weiche Zielverfolgung über das Behavior-System.
+   - [`Color.blackbody()`](../../packages/engine/src/core/colors/Color.ts) und [`Color.fromTemperature()`](../../packages/engine/src/core/colors/Color.ts) wandern in den Kern als allgemeine Farb- und Strahlungs-Utilities.
+   - [`GravitationalLensingElement`](../../packages/engine/src/renderers/post/elements/GravitationalLensingElement.ts) entkoppelt dynamische Linsenparameter (`eh`, `strength`, `spaghettification`, `beaming`, `ringGlow`) synchron in GLSL und WGSL (160-Byte-Puffer).
+   - [`FollowCameraBehavior`](../../packages/engine/src/core/behaviors/FollowCameraBehavior.ts) bietet weiche Zielverfolgung über das Behavior-System.
 
 4. **Wissenschaftliche & Mathematische Verankerung:**
    - Plummer-Potential ($1911$) zur Vermeidung von Polstellen bei $r \to 0$.
    - Plancksche Strahlung & Farbtemperatur nach Tanner Helland ($2012$).
-   - Vollständige Erfassung in [`REFERENCES.md`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/REFERENCES.md).
+   - Vollständige Erfassung in [`REFERENCES.md`](../../REFERENCES.md).
 
 ## Konsequenzen
 

@@ -61,7 +61,7 @@ const camera = new Camera(new PerspectiveProjection({ fov: 60, near: 0.1, far: 1
 camera.addBehavior(
   new FirstPersonController({
     moveSpeed: 10.0,
-    lookSensitivity: 0.002,
+    rotationSpeed: 2.0,
   })
 );
 

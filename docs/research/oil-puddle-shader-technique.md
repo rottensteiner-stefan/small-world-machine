@@ -1,6 +1,6 @@
 # Fahrplan: OilSlickMaterial an AAA-Niveau annähern
 
-**Kontext:** Aufbauend auf externer Recherche zu Unreal/Godot-Pfützen-Shadern und einem verifizierten Code-Abgleich der `OilSlickMaterial` (`apps/and-now/scenes/character-diorama/OilSlickMaterial.ts`) gegen dieses Feature-Set. Ziel: die Lücken schließen, die sich mit vertretbarem Aufwand lohnen — nicht alles um jeden Preis nachbauen.
+**Kontext:** Aufbauend auf externer Recherche zu Unreal/Godot-Pfützen-Shadern und einem verifizierten Code-Abgleich der `OilSlickMaterial` (`apps/sample-apps/the-whisper/scenes/character-diorama/OilSlickMaterial.ts`) gegen dieses Feature-Set. Ziel: die Lücken schließen, die sich mit vertretbarem Aufwand lohnen — nicht alles um jeden Preis nachbauen.
 
 > **Hinweis (2026-09-26):** Pfad oben ist veraltet — die Datei liegt inzwischen unter
 > `apps/sample-apps/the-whisper/scenes/character-diorama/OilSlickMaterial.ts` (App umbenannt/

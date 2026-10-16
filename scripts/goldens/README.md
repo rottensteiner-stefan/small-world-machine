@@ -112,6 +112,7 @@ per-Pool-Toleranzen in `poolOverrides` (z.B. bei bekannten Rauschartefakten eine
   siehe `manifest.json`-`blank`-Flag. Kappe: `blankStddevThreshold`.
 - **Port 4173 belegt** → bestehender `vite preview` läuft; mit `--skip-spawn` gegen diesen
   arbeiten oder Prozess beenden.
-- **SwiftShader-Flakiness** → deterministisches Stepping minimiert das; falls eine einzelne
-  Zelle abweicht, im CI log nach `--pool`-Zelle und Diff-Größe suchen (keine automatische
-  Retry-Schleife — bewusst simpel gehalten).
+- **SwiftShader-Flakiness** → deterministisches Stepping minimiert das; der Capture wiederholt eine
+  leere Zelle (Blank) bis zu dreimal (siehe Abschnitt „Baseline erzeugen“), eine Zelle mit
+  Konsolenfehlern wird nie wiederholt. Für Diff-Ursachen im CI log nach `--pool`-Zelle und
+  Diff-Größe suchen.

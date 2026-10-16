@@ -856,9 +856,9 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Dungeon Font (Yet Another Dungeon HUD)
 
-- **File:** `apps/sample-apps/yad/assets/fonts/Dungeon.ttf`
+- **File:** `apps/sample-apps/yad/assets/fonts/Dungeon.woff2`
 - **Source:** [DooM Font auf DaFont](https://www.dafont.com/doom.font)
-- **Usage:** Used to render the iconic red numbers and UI text in the YAD (Yet Another Dungeon) showcase. A huge thanks to the unknown author who originally created and shared this authentic TTF replica!
+- **Usage:** Used to render the iconic red numbers and UI text in the YAD (Yet Another Dungeon) showcase. A huge thanks to the unknown author who originally created and shared this authentic font replica (im Repo als WOFF2 eingebettet)!
   _Note: While the project uses the name "Yet Another Dungeon" (YAD), its aesthetic and assets are deeply inspired by the legendary DOOM (1993)._
 
 ### Retro Dungeon Texture & Sprite Pack

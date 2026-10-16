@@ -34,7 +34,11 @@ import { Object3D, Cube, StandardMaterial, Vector3D } from "@small-world-machine
 import { fractureObject } from "@small-world-machine/physics-extras";
 
 // 1. Zu zerstörendes Objekt
-const pillar = new Object3D("Pillar", new Cube({ width: 1, height: 4, depth: 1 }), new StandardMaterial());
+// Hinweis: Object3D akzeptiert nur einen Namen als Konstruktor-Argument; Geometrie und
+// Material werden danach explizit zugewiesen (Cube nimmt ausschließlich `size` entgegen).
+const pillar = new Object3D("Pillar");
+pillar.geometry = new Cube({ size: 1 }).getGeometryData();
+pillar.material = new StandardMaterial();
 pillar.position.set(0, 2, 0);
 scene.add(pillar);
 

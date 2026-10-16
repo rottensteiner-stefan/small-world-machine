@@ -2,6 +2,11 @@
 
 Dieser Abschnitt enthält die Architekturentscheidungs-Protokolle, die signifikante Architekturentscheidungen, Trade-offs und Designprinzipien in Small World Machine dokumentieren.
 
+> **Status-Hinweis zu diesem Index:** Die folgenden Einträge sind Kurzzusammenfassungen.
+> Maßgeblich für Status/Implementierungsgrad (Akzeptiert, Umgesetzt, Abgelöst) ist jeweils der
+> `Status:`-Block im jeweiligen ADR-Dokument selbst. ADRs sind Entscheidungsprotokollen und bleiben
+> als History erhalten, auch wenn eine spätere Entscheidung sie abgelöst hat.
+
 ## Index der Entscheidungen
 
 - **[ADR 0001: Config-Form (benannte Schlüssel)](./0001-config-shape-named-keys-not-tagged-arrays.md)** — Config-Unterstrukturen nutzen benannte Schlüssel, keine `{ type, ... }`-Arrays.
@@ -19,7 +24,7 @@ Dieser Abschnitt enthält die Architekturentscheidungs-Protokolle, die signifika
 - **[ADR 0013: Vereinheitlichte Flüssigkeits-Materialien](./0013-unified-liquid-surface-material.md)** — Gemeinsame Flüssigkeits-Shader-Chunks: Wellen-Familie (Ozean/Wasser) und Fluss-Familie (Lava/Schleim).
 - **[ADR 0014: Modulares Ökosystem & Domänen-Schichtung](./0014-modular-ecosystem-and-domain-layering.md)** — Auflösung von `extensions/` in domänenspezifische Namensräume (`physix`, `environment`, `geometry`, `audio`).
 - **[ADR 0015: App-First-Regel für Genre-Code](./0015-app-first-genre-code-extraction-rule.md)** — Genre-spezifischer Gameplay-Code bleibt in Apps, bis ein zweites Projekt die Extraktion in den Kern verlangt.
-- **[ADR 0016: 2.5D-Bühnen-Zonen als glTF-Erweiterung](./0016-2-5d-stage-zones-as-a-gltf-extension.md)** — `SWM_stage_zone`/`SWM_stage_vanishing_point` erweitern Makers bestehendes Format statt ein zweites zu schaffen; beliebige-*n*-Eck-Zonen und ein datengetriebenes `uvToWorld`.
+- **[ADR 0016: 2.5D-Bühnen-Zonen als glTF-Erweiterung](./0016-2-5d-stage-zones-as-a-gltf-extension.md)** — `SWM_stage_zone` erweitert Makers bestehendes Format statt ein zweites zu schaffen; beliebige-*n*-Eck-Zonen und ein datengetriebenes `uvToWorld`. (`SWM_stage_vanishing_point` ist als Phase-3-Ziel angedacht und **noch nicht umgesetzt**.)
 - **[ADR 0017: glTF-Extension-Plugin-Registry](./0017-gltf-extension-plugin-registry.md)** — `GltfLoader`/`WorldWriter` lesen/schreiben Vendor-Extensions über eine registrierbare Plugin-Liste statt hartkodierter if/else-Zweige.
 - **[ADR 0018: glTF Data-Level-Extensions & `@small-world-machine/gltf-extensions`](./0018-gltf-data-level-extensions-and-ecosystem-package.md)** — Erweiterung der Registry um `decodeGeometry`/`resolveTexture`-Hooks und Auslagerung von Draco- und BasisU-Unterstützung in ein separates Ökosystem-Paket.
 - **[ADR 0019: Modulare Environment-Texturierung & 4-Säulen-Skalierungs-Doktrin](./0019-modular-environment-texturing-and-scale-doctrine.md)** — Multizonale PBR-Paletten, modulares 3m/5m-Bunker-Raster (Pfeiler/Unterzüge), duale Decal-Hierarchie und deterministischer UV-Jitter gegen Tiling-Artefakte.
@@ -33,5 +38,5 @@ Dieser Abschnitt enthält die Architekturentscheidungs-Protokolle, die signifika
 - **[ADR 0027: Erweiterung des `ObjectUniforms`-Puffers auf 512 Byte & Entflechtung der Semantik-Slots](./0027-object-uniforms-512-byte-expansion.md)** — Überwindung des 256-Byte-Flaschenhalses; Entflechtung der gekaperten Uniform-Slots (`u_isSkinned`, etc.) durch Einführung von `matParam0..15` (512 Byte UBO / WebGPU-Puffer) bei voller WebGL1-Kompatibilität.
 
 - **[ADR 0028: Dünner Normal-Buffer als MRT im Main Pass](./0028-thin-normal-buffer-mrt.md)** — Kein G-Buffer/Deferred; opt-in `RG16F`-Normal-Ziel (inkl. Normal-Map) für Decals, AO und Post, nur WebGL2/WebGPU; Velocity separat.
-- **[ADR 0029: Decal-System](./0029-decal-system.md)** — Projizierte Box-Decals als eigene Lit-Stufe nach Opaque (Tiefe + Normal-Buffer, TBN-Normalenblend), statische Sortierung, WebGL1 nur später per Mesh-Decal; Datenpfad `LevelDescriptor.decals[]` entschieden, noch nicht umgesetzt.
+- **[ADR 0029: Decal-System](./0029-decal-system.md)** — Projizierte Box-Decals als eigene Lit-Stufe nach Opaque (Tiefe + Normal-Buffer, TBN-Normalenblend), statische Sortierung, WebGL1 nur später per Mesh-Decal; Datenpfad `LevelDescriptor.decals[]` umgesetzt (`SWM_decal`, DecalStampTool, `decal-probe`).
 - **[ADR 0030: Volumetrische Light Shafts (God Rays)](./0030-volumetric-light-shafts.md)** — 2-stufige Hybrid-Architektur (WebGL1 Screen-Space Radial Blur mit Inversions-Schutz; WebGL2 & WebGPU Half-Res Raymarching gegen Directional CSM mit Schlick-Phasenfunktion, IGN-Jitter und 2x2 Depth-Aware Cross-Bilateral Upsampling).

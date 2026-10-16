@@ -123,9 +123,11 @@ Alle Kit-Props folgen daher verbindlich dem **4-Tier-Budget-Rezept** nach Objekt
 - **Dediziertes Asset-Repository (`small-world-machine-assets`):** Binäre Produktions-Assets, rohe DCC-Dateien und Kit-Bündel werden in einem dedizierten Repository oder Git-LFS-Speicher untergebracht.
 - **CDN-Distribution:** Assets werden auf ein schnelles CDN veröffentlicht (über GitHub Releases, jsDelivr oder Cloudflare), sodass Szenen Standard-Assets über Remote-URIs referenzieren können, ohne den lokalen Datenträger aufzublähen.
 
-**Status:** nicht umgesetzt. Kit-Binärdateien (z. B. `model.glb` mit 1,2 MB) liegen aktuell direkt
-im Haupt-Repository, ohne Git-LFS-Filter und ohne dediziertes `small-world-machine-assets`-Repo -- exakt
-das Anti-Pattern aus dem Kontext-Abschnitt oben, das diese Phase verhindern sollte.
+**Status:** teilweise umgesetzt. Binäre Kit- und Goldens-Dateien sind seit 2026-10 per
+Git-LFS-Filter im `.gitattributes` erfasst (`.glb/.fbx/.jpg/.png/... → filter=lfs`) und werden als
+LFS-Objekte getrackt — das „LFS-Anti-Pattern“ ist also bereits behoben. Was weiterhin **nicht**
+umgesetzt ist: das dedizierte Out-of-Tree-Repository `small-world-machine-assets` samt CDN-
+Distribution (Remote-URIs) und damit der eigentliche entfernte Katalog-Ingest.
 
 ### 3. Phase 3: Laufzeit-Katalog-Ingest & CLI-Tooling
 - **`GltfLoader`-Katalog-Auflösung:** `GltfLoader` um Katalog-Alias-Auflösung erweitern:

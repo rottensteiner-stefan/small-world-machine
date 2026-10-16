@@ -61,7 +61,12 @@ When the user states how something works, check whether the code agrees. If you 
 
 When a term is resolved, update `CONTEXT.md` right there. Don't batch these up — capture them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
 
-`CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
+`CONTEXT.md` is a glossary and nothing more — not a spec, not a scratch pad, not a repository for
+implementation decisions. It should stay free of prose, decisions, and rationale. A terse,
+bestand-instead-of-concepts exception is tolerated: when a glossary term *is* a concrete engine
+API/identifier (e.g. a class or config key), naming that identifier in the term's definition helps
+disambiguation and is fine — but implementation details, trade-offs, and decisions belong in ADRs,
+not here.
 
 ### Offer ADRs sparingly
 

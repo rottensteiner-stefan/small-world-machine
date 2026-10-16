@@ -15,7 +15,7 @@ Decals (Schilder, Schmutz, Einschläge) sollen auf beliebiger Opaque-Geometrie s
 6. **UV-Konvention:** Das Decal zeigt Texturen aufrecht (`uv = box.xz + 0.5`). Eine `Plane` mit `StandardMaterial` zeigt sie vertikal gespiegelt; das Decal übernimmt diese Spiegelung bewusst **nicht**. Bei der Migration der Prolog-Planes verschwindet der `flipX`-Hack, Wand-Decals bekommen Rotation (PI/2, Yaw, 0). Texture-Repeat/Offset gelten für Decals nicht. **Negative Skalierung wird abgelehnt** (`computeBounds`), weil sie die Windungsrichtung dreht.
 7. **Decals auf Transparenten sind ausgeschlossen** (siehe 0028 Punkt 5).
 
-## Datenpfad (ENTSCHIEDEN, NOCH NICHT IMPLEMENTIERT)
+## Datenpfad (UMSGESETZT)
 
 - Primär: `LevelDescriptor.decals[]` (Instanz: Transform, Größe, Fade, Opazität, Priorität, Tags, Parent) plus Kit-Decal-Eintrag (Prefab: Maps, Standardgröße), im Schema mit `additionalProperties: false` ([0020](0020-declarative-level-descriptors-and-kit-runtime.md)).
 - `SWM_decal` (`gltf/extensions/SwmDecal.ts`): Payload = `LevelDecalPlacement` ohne `id` (Node-Name), `position`/`rotation` (Node-TRS) und `parent` (Node-Hierarchie). **Größe: `size` im Payload ist maßgeblich**; die Node-Scale wird zusätzlich als `(w, depth, h)` geschrieben, damit andere glTF-Viewer die Box sehen, und beim Lesen aus `size` überschrieben. `readNode` ist synchron, daher kommt das Decal textur-los zurück; `KitRegistry.hydrateDecal(decal)` / `resolveLevelDecals(root)` laden danach Maps und `unlit` über denselben Codepfad wie `loadLevel`. Unbekannte `kitDecal` oder Ladefehler warnen und überspringen, ein ungültiger Payload (Größe, Opazität, Tags) wirft beim Lesen.

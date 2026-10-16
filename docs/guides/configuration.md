@@ -82,6 +82,10 @@ Configures the post-processing pipeline. General pipeline settings (`enabled`, `
 }
 ```
 
+> **Hinweis — nicht vollständig:** Das `effects`-Schema oben ist eine *Auswahl*; dieselbe flache
+> `effects`-Struktur enthält weitere Effekte (`flash`, `colorGrading`, `gravitationalLensing`,
+> `lightShafts`), die optional im selben Stil konfigurierbar sind.
+
 Every field is optional and only overrides that specific value on top of the effect's own defaults — fields that shouldn't be changed don't need to be specified.
 
 - **`bloom`** — soft glow around bright areas via dual-Kawase blur filtering (see `REFERENCES.md`). `color` can also be set as `{ "r", "g", "b" }` or a 3-element array.

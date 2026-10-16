@@ -2,7 +2,7 @@
 
 ## Kontext & Problem
 
-Small World Machine hat sich ein reichhaltiges Laufzeit-Objektmodell erarbeitet (19 Geometrie-Primitive, 16 Materialien, 5 Lichttypen, ~20 Behaviors), aber es gibt keine Möglichkeit, eine Szene zu *komponieren* oder zu *persistieren*, außer TypeScript von Hand zu schreiben. `GadgetInspector` (`src/tools/GadgetInspector.ts`) ist das bislang nächstliegende Werkzeug — ein Tweakpane-basiertes Overlay, das per Raycast ein Live-Objekt auswählt und dessen Transform-/Material-/Licht-/Behavior-Eigenschaften bearbeitet —, aber seine eigene Dokumentation (`docs/guides/gadget-inspector.md`) listet genau die Lücken auf, die ihn daran hindern, ein echter Editor zu werden:
+Small World Machine hat sich ein reichhaltiges Laufzeit-Objektmodell erarbeitet (19 Geometrie-Primitive, 16 Materialien, 5 Lichttypen, ~20 Behaviors), aber es gibt keine Möglichkeit, eine Szene zu *komponieren* oder zu *persistieren*, außer TypeScript von Hand zu schreiben. `GadgetInspector` (`packages/engine/src/tools/GadgetInspector.ts`, damaliger Stand vor ADR 0024) ist das bislang nächstliegende Werkzeug — ein Tweakpane-basiertes Overlay, das per Raycast ein Live-Objekt auswählt und dessen Transform-/Material-/Licht-/Behavior-Eigenschaften bearbeitet —, aber seine (inzwischen entfernte) Dokumentation listete genau die Lücken auf, die ihn daran hindern, ein echter Editor zu werden (GadgetInspector wurde nach ADR 0024 vollständig durch `Maker` ersetzt, siehe [`docs/guides/maker.md`](../guides/maker.md)):
 
 - **Keine Persistenz** — `getState()`/`setState()` sind explizite No-Op-Stubs; Bearbeitungen verschwinden beim Neuladen.
 - **Kein Export** — keine Möglichkeit, eine Szene wieder als Daten auszugeben.

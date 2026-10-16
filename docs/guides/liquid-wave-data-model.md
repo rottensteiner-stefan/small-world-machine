@@ -139,28 +139,22 @@ $$\mathbf{x}_{n+1} = \mathbf{x}_n - \mathbf{J}^{-1}(\mathbf{x}_n) \cdot (\mathbf
 
 ---
 
-## 5. 256-Byte Uniform Moat & Memory Layout
+## 5. 512-Byte Uniform Moat & Memory Layout
 
-In compliance with **ADR 0026**, the per-object uniform buffer (`ObjectUniforms`) is capped at exactly 256 bytes (16 `vec4` registers).
+Per **ADR 0027** (which supersedes ADR 0026), the per-object uniform buffer (`ObjectUniforms`) now has a 512-byte budget (32 `vec4` registers). The block is organised as register blocks; exact lane packing lives in `StandardWebGPULayout.ts` (and `structs.wgsl`), and the per-preset semantics in each preset's `_packVariantLanes()` hook:
 
-| Reg | Offset | Name | Type | OpenWater Semantic | StylizedWater Semantic | FluidSurface Semantic |
-|---|---|---|---|---|---|---|
-| `0..3` | `0..63` | `u_modelMatrix` | `mat4` | World Transform Matrix | World Transform Matrix | World Transform Matrix |
-| `4..7` | `64..127` | `u_normalMatrix` | `mat4` | Normal Transform Matrix | Normal Transform Matrix | Normal Transform Matrix |
-| `8` | `128..143` | `u_color` | `vec4` | `shallowWaterColor` (RGB) + $\alpha$ | `shallowWaterColor` (RGB) + specMult | `baseColor` (RGBA) |
-| `9` | `144..159` | `u_specColor` | `vec4` | `deepWaterColor` (RGB) + $\alpha$ | `deepWaterColor` (RGB) + causticStrength | `specularColor` (RGBA) |
-| `10` | `160..175` | `u_texOffsetRepeat` | `vec4` | `[edgeColor.rg, edgeColor.b, edgeSoftness]` | `[edgeColor.rg, edgeColor.b, edgeSoftness]` | `[uvOffset.xy, uvRepeat.xy]` |
-| `11` | `176..191` | `u_matParamsA` | `vec4` | `[refrStr, abs.r, abs.g, abs.b]` | `[refrStr, abs.r, abs.g, abs.b]` | `[shininess, emissiveMask, pulseAmp, pulseSpeed]` |
-| `12` | `192..207` | `u_matParamsB` | `vec4` | `[foam.r, foam.g, foam.b, foamCutoff]` | `[foam.r, foam.g, foam.b, foamCutoff]` | `[softness, shadeStr, normalStr, absorption]` |
-| `13` | `208..223` | `u_matParamsC` | `vec4` | `[foamScale, foamSpeed, foamDist, pad]` | `[foamScale, foamSpeed, foamDist, pad]` | `[rimStr, specStr, normalScale, pad]` |
-| `14` | `224..239` | `u_styleA` | `vec4` | `[splatX, splatZ, spawnTime, splatEnergy]` | `[rampSoft, washAmt, lineDensity, lineWidth/splat]` | `[emissive.r, time, flowSpeed, noiseScale]` |
-| `15` | `240..255` | `u_styleB` | `vec4` | `[pad0, pad1, pad2, pad3]` | `[foamSoft, skyTint, glitterStr, styleId]` | `[pad0, pad1, emissive.g, emissive.b]` |
+| Block | Register | Type | Nutzung |
+|---|---|---|---|
+| Transforms | `u_modelMatrix` … `u_normalMatrix` | `mat4` | Welt- & Normal-Transformationsmatrizen |
+| Core Surface | `u_color`, `u_specColor`, `u_texOffset`, … | `vec4`/`vec2` | Farb-, Textur- & Materialflächen |
+| Pipeline & Animation | `u_extraParams` … `u_styleB` | `vec4` | Pipeline-/Surface-Tuning |
+| Semantic Material Parameters | `u_matParam0` … `u_matParam15` | `vec4` | Preset-Lanes; OpenWater legt z. B. `poolHalfExtent` in `u_matParam2.w` ab |
 
-`matParam2.w` is free for presets: OpenWater uses it for `poolHalfExtent`, other presets leave it 0. Presets write their own lanes in the `_packVariantLanes()` hook of `LiquidWaveMaterial`.
+`u_matParam2.w` ist damit ein repurposable Preset-Lane: OpenWater nutzt es für `poolHalfExtent`, andere Presets lassen es `0`. Presets schreiben ihre eigenen Lanes im `_packVariantLanes()`-Hook von `LiquidWaveMaterial`.
 
 ### 5.1 Ramp LUT (`StylizedWaterMaterial.rampMap`)
 
-Route (a) of ADR 0026: a 256×1 colour ramp texture instead of more uniforms. Build it with `new RampLUT(stops)` (sRGB stops, baked by the pure function `bakeRamp`) and assign `material.rampMap = lut.texture`; `lut.setStops(...)` re-bakes in place. Notes:
+Route (a) of ADR 0026 (Ramp-LUT statt weiterer Uniform-Lanes; die Moat-Kapazität folgt heute ADR 0027/512 B): eine 256×1 Colour-Ramp-Texture statt mehr Uniforms. Build it with `new RampLUT(stops)` (sRGB stops, baked by the pure function `bakeRamp`) and assign `material.rampMap = lut.texture`; `lut.setStops(...)` re-bakes in place. Notes:
 
 - While a ramp is bound (`USE_RAMP_LUT`), it replaces the shallow/mid/deep blend at full weight (the LUT end colours are reached exactly) and `rampSoftness` is ignored. Without a ramp the shader output is unchanged.
 - Sampled at texel centres; filtering is always linear, wrapping always clamp (WebGPU shares one sampler per material).
@@ -172,9 +166,9 @@ Route (a) of ADR 0026: a 256×1 colour ramp texture instead of more uniforms. Bu
 
 ## 6. Architectural Guardrails & Invariants
 
-1. **256-Byte Uniform Moat (ADR 0026):**
-   - The per-object uniform buffer is strictly capped at 256 bytes (16 `vec4` registers) to guarantee WebGL1 fragment uniform compliance.
-   - Any parameter addition must pass through registered lane repurposing or compile-time shader constants.
+1. **512-Byte Uniform Moat (ADR 0027):**
+   - The per-object uniform buffer is capped at 512 bytes / 32 `vec4` registers (ADR 0027, which supersedes the earlier 256-byte cap of ADR 0026).
+   - Any parameter addition must pass through registered lane repurposing (`u_matParam0..15`) or compile-time shader constants.
 2. **Zero-Allocation Manifests:**
    - Calling `getRenderManifest()` on any `LiquidWaveMaterial` or `FluidSurfaceMaterial` executes without heap allocations on hot render loops (`LiquidZeroAlloc.test.ts`).
 3. **No Global State:**
