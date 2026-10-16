@@ -17,6 +17,7 @@ import {
   AOPassGL,
   HistoryBlendPassGL,
   LightShaftsPassGL,
+  VolumetricFogPassGL,
 } from "../post/passes/index.js";
 import { AbstractLight, MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../core/lights/index.js";
 import { MAX_AREA_LIGHTS } from "../../core/lights/AreaLight.js";
@@ -106,6 +107,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   protected _bloomPassGL: BloomPassGL | undefined = undefined;
   protected _hbaoPassGL: AOPassGL | undefined = undefined;
   protected _lightShaftsPassGL: LightShaftsPassGL | undefined = undefined;
+  protected _volumetricFogPassGL: VolumetricFogPassGL | undefined = undefined;
   protected _taaPassGL: HistoryBlendPassGL | undefined = undefined;
   protected _motionTrailPassGL: HistoryBlendPassGL | undefined = undefined;
 
@@ -768,6 +770,29 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         }
       }
 
+      let volumetricFogTex: WebGLTexture | null = null;
+      if (this._volumetricFogPassGL) {
+        const volFogNode = this.postProcessing.get<import("../post/index.js").VolumetricFogElement>(
+          PostProcessingEffectType.VOLUMETRIC_FOG,
+        );
+        if (volFogNode && volFogNode.enabled && this._opaqueDepthTexture) {
+          const dLight = this._frameLights?.dLight;
+          const shadowFbo = dLight ? this._shadowMaps.get(dLight) : undefined;
+          volumetricFogTex = this._volumetricFogPassGL.execute(
+            this._opaqueDepthTexture,
+            this.gl.canvas.width,
+            this.gl.canvas.height,
+            this._frameViewProj.data,
+            this._frameCamPos,
+            this._frameNear,
+            this._frameFar,
+            dLight,
+            shadowFbo?.texture ?? null,
+            volFogNode,
+          );
+        }
+      }
+
       this._postPassGL.execute(
         this.gl,
         colorTex,
@@ -775,6 +800,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         bloomTex,
         hbaoTex,
         lightShaftsTex,
+        volumetricFogTex,
       );
     }
   }
@@ -1865,6 +1891,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._bloomPassGL ??= new BloomPassGL(this.gl, true);
       this._hbaoPassGL ??= new AOPassGL(this.gl);
       this._lightShaftsPassGL ??= new LightShaftsPassGL(this.gl, true);
+      this._volumetricFogPassGL ??= new VolumetricFogPassGL(this.gl, true);
       this._taaPassGL ??= new HistoryBlendPassGL(this.gl);
       this._motionTrailPassGL ??= new HistoryBlendPassGL(this.gl);
     } else if (!this.postProcessing.enabled && this._hdrFbo) {
@@ -1872,6 +1899,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._bloomPassGL?.destroy();
       this._hbaoPassGL?.destroy();
       this._lightShaftsPassGL?.destroy();
+      this._volumetricFogPassGL?.destroy();
       this._taaPassGL?.destroy();
       this._motionTrailPassGL?.destroy();
       this._hdrFbo.destroy();
@@ -1880,6 +1908,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._bloomPassGL = undefined;
       this._hbaoPassGL = undefined;
       this._lightShaftsPassGL = undefined;
+      this._volumetricFogPassGL = undefined;
       this._taaPassGL = undefined;
       this._motionTrailPassGL = undefined;
     }
@@ -1960,6 +1989,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._bloomPassGL?.destroy();
       this._hbaoPassGL?.destroy();
       this._lightShaftsPassGL?.destroy();
+      this._volumetricFogPassGL?.destroy();
       this._taaPassGL?.destroy();
       this._motionTrailPassGL?.destroy();
       this._globalUBO?.destroy();
@@ -1974,6 +2004,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._postPassGL = undefined;
     this._bloomPassGL = undefined;
     this._lightShaftsPassGL = undefined;
+    this._volumetricFogPassGL = undefined;
 
     super.destroy();
   }

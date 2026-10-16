@@ -21,6 +21,7 @@ export class PostProcessPassGL {
   private _uLightShaftsTexture: WebGLUniformLocation | null = null;
   private _uLightShaftsEnabled: WebGLUniformLocation | null = null;
   private _uLightShaftsIntensity: WebGLUniformLocation | null = null;
+  private _uVolumetricFogTexture: WebGLUniformLocation | null = null;
   private _uTime: WebGLUniformLocation | null = null;
 
   private _uBloomIntensity: WebGLUniformLocation | null = null;
@@ -77,6 +78,9 @@ export class PostProcessPassGL {
     const shafts = group.get<import("../index.js").LightShaftsElement>(
       PostProcessingEffectType.LIGHT_SHAFTS,
     );
+    const volFog = group.get<import("../index.js").VolumetricFogElement>(
+      PostProcessingEffectType.VOLUMETRIC_FOG,
+    );
     const outline = group.get<import("../index.js").OutlineElement>(
       PostProcessingEffectType.OUTLINE,
     );
@@ -98,6 +102,7 @@ export class PostProcessPassGL {
       quant && quant.enabled ? 1 : 0,
       hbao && hbao.enabled ? 1 : 0,
       shafts && shafts.enabled ? 1 : 0,
+      volFog && volFog.enabled ? 1 : 0,
       outline && outline.enabled ? 1 : 0,
       flash && flash.enabled ? 1 : 0,
     ].join("|");
@@ -137,6 +142,12 @@ export class PostProcessPassGL {
       PostProcessingEffectType.QUANTIZE,
     );
     const hbao = group.get<import("../index.js").HbaoElement>(PostProcessingEffectType.HBAO);
+    const shafts = group.get<import("../index.js").LightShaftsElement>(
+      PostProcessingEffectType.LIGHT_SHAFTS,
+    );
+    const volFog = group.get<import("../index.js").VolumetricFogElement>(
+      PostProcessingEffectType.VOLUMETRIC_FOG,
+    );
     const outline = group.get<import("../index.js").OutlineElement>(
       PostProcessingEffectType.OUTLINE,
     );
@@ -149,6 +160,8 @@ export class PostProcessPassGL {
     const gradeEnabled = grade && grade.enabled;
     const quantEnabled = quant && quant.enabled;
     const hbaoEnabled = hbao && hbao.enabled;
+    const shaftsEnabled = shafts && shafts.enabled;
+    const volFogEnabled = volFog && volFog.enabled;
     const outlineEnabled = outline && outline.enabled;
     const flashEnabled = flash && flash.enabled;
 
@@ -180,6 +193,14 @@ export class PostProcessPassGL {
     frag = frag.replace(
       "uniform int u_hbaoEnabled;",
       `#define u_hbaoEnabled ${hbaoEnabled ? 1 : 0}`,
+    );
+    frag = frag.replace(
+      "uniform int u_lightShaftsEnabled;",
+      `#define u_lightShaftsEnabled ${shaftsEnabled ? 1 : 0}`,
+    );
+    frag = frag.replace(
+      "uniform int u_volumetricFogEnabled;",
+      `#define u_volumetricFogEnabled ${volFogEnabled ? 1 : 0}`,
     );
     frag = frag.replace(
       "uniform int u_outlineEnabled;",
@@ -219,6 +240,7 @@ export class PostProcessPassGL {
     this._uLightShaftsTexture = gl.getUniformLocation(p, "u_lightShaftsTexture");
     this._uLightShaftsEnabled = gl.getUniformLocation(p, "u_lightShaftsEnabled");
     this._uLightShaftsIntensity = gl.getUniformLocation(p, "u_lightShaftsIntensity");
+    this._uVolumetricFogTexture = gl.getUniformLocation(p, "u_volumetricFogTexture");
     this._uTime = gl.getUniformLocation(p, "u_time");
 
     this._uBloomIntensity = gl.getUniformLocation(p, "u_bloomIntensity");
@@ -272,6 +294,7 @@ export class PostProcessPassGL {
     bloomTexture: WebGLTexture | null = null,
     hbaoTexture: WebGLTexture | null = null,
     lightShaftsTexture: WebGLTexture | null = null,
+    volumetricFogTexture: WebGLTexture | null = null,
   ): void {
     const sig = this._getSignature(group);
     if (!this._prog || sig !== this._compiledSignature) {
@@ -322,6 +345,16 @@ export class PostProcessPassGL {
       if (this._uLightShaftsIntensity) gl.uniform1f(this._uLightShaftsIntensity, shafts.intensity);
     } else {
       if (this._uLightShaftsEnabled) gl.uniform1i(this._uLightShaftsEnabled, 0);
+    }
+
+    // Volumetric Fog
+    const volFog = group.get<import("../index.js").VolumetricFogElement>(
+      PostProcessingEffectType.VOLUMETRIC_FOG,
+    );
+    if (volFog && volFog.enabled && volumetricFogTexture) {
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, volumetricFogTexture);
+      if (this._uVolumetricFogTexture) gl.uniform1i(this._uVolumetricFogTexture, 4);
     }
 
     // Continuous Uniform Updates

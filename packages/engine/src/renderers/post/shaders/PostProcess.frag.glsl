@@ -12,6 +12,8 @@ uniform int u_hbaoEnabled;
 uniform sampler2D u_lightShaftsTexture;
 uniform int u_lightShaftsEnabled;
 uniform float u_lightShaftsIntensity;
+uniform sampler2D u_volumetricFogTexture;
+uniform int u_volumetricFogEnabled;
 uniform float u_bloomIntensity;
 uniform vec3 u_bloomColor;
 uniform float u_exposure;
@@ -248,6 +250,14 @@ void main() {
         vec3 shafts = texture(u_lightShaftsTexture, distortUv).rgb;
         if (!isnan(shafts.r) && !isinf(shafts.r)) {
             hdr += shafts * u_lightShaftsIntensity;
+        }
+    }
+
+    // Volumetric Fog (In-Scattering, Phase 2) -- additive linear HDR lighting
+    if (u_volumetricFogEnabled == 1) {
+        vec3 fog = texture(u_volumetricFogTexture, distortUv).rgb;
+        if (!isnan(fog.r) && !isinf(fog.r)) {
+            hdr += fog;
         }
     }
 
