@@ -8,8 +8,7 @@ Showcase 28 tests coherent optical laser dispersion, Snell's law refraction thro
 
 Key components:
 - `computeSpectralRays(prismRotation)`: Analytic 2D ray tracer in world XZ for 7 discrete wavelengths (700nm Red to 400nm Violet).
-- Post-processing pipeline: BloomElement, HbaoElement, ACES ToneMapping.
-- Input controls: Standard OrbitController, plus secret manual mode (`Ctrl+T` + Left/Right arrows) for turntable inspection.
+- Input controls: Standard OrbitController, direct manual turntable rotation via Left/Right arrows (with Shift acceleration), plus Space / T to toggle auto-wobble.
 
 ---
 
@@ -111,3 +110,82 @@ broken, all historical entries above preserved.
   (no white core/dots) and subtle ray traces on the final capture.
 - Known limitation documented: `GlassMaterial` via ANGLE/Metal WebGPU reads frosted/milky, not
   crystalline — accepted for 3-backend parity (worker-2 audit); premium glass is future work.
+
+---
+
+## 2026-10-15 – Manual Turntable Control & Optical Aesthetic Polish
+- Restored and polished manual turntable manipulation via arrow keys:
+  - Arrow Left / Arrow Right: immediately takes over rotation without needing a hidden `Ctrl+T` toggle.
+  - Holding Shift rotates at accelerated speed (3.0 rad/s vs normal 1.2 rad/s).
+  - Space / T: toggles auto-wobble back on / toggles manual control, smoothly aligning phase to prevent angular pops.
+  - Graceful TIR handling: as wavelengths exceed the critical angle under manual angle exploration, the detector band contracts rather than abruptly vanishing.
+  - Updated showcase UI subtitle with control hint.
+- Optical polish & aesthetic corrections:
+  - Added soft dynamic chromatic caustic spill on the black anodized bench surface (`_floorCausticMesh`), grounding the ray bundle to the table.
+  - Tuned `GlassMaterial` thickness (0.55) and roughness (0.02) with tightened key glint SpotLight (intensity 3.2, angle &pi;/7, penumbra 0.25) for razor-sharp prism facet glints.
+  - Corrected spectral ray and band luminescence (emissiveIntensity 0.65 for rays, 1.35 for detector band) so rays gently catch bloom without blowing out, avoiding the dull "plastic thread" look.
+  - Enhanced detector absorber panel graticule with spectrograph wavelength ticks and markings (`400nm`, `550nm`, `700nm`).
+  - Corrected detector absorber panel graticule orientation: counteracted the canvas-to-texture vertical inversion so the black plate, grid, and spectrograph wavelength markings render right-side up.
+
+---
+
+## 2026-10-15 – Movable 50:50 Beam Splitter & Auxiliary Reference Detector
+- **50:50 Beam Splitter on Optical Dovetail Rail:**
+  - Placed an anodized optical rail on the bench along X ($x \in [-3.5, -1.0]$) with laser-etched scale markings.
+  - Built a kinematic mirror carriage holding a 45° semi-reflective plate (`_splitterCarriage`).
+  - Interactive navigation via `↑` / `↓` arrow keys (with `Shift` acceleration); slides carriage smoothly along the rail.
+  - `M` key toggles splitter bypass (switches between 50% split and 100% full laser transmission).
+- **Auxiliary Reference Photodetector Instrument:**
+  - Mounted a dedicated instrument chassis at $z = -2.35$ with a calibrated photodetector strip (`AUX REF PHOTODETECTOR | 50.0% BEAM SPLIT`).
+  - The 90°-reflected beam hits the sensor strip with a luminous target spot (`_refSensorSpot`) that tracks the beam splitter position in real time along the linear detector scale.
+- **Dynamic Split Beams:**
+  - Segments dynamically scale and bridge from laser emitter $\rightarrow$ beam splitter $\rightarrow$ prism entry $\rightarrow$ reference sensor with zero GC allocations per frame.
+
+---
+
+## 2026-10-15 – 3-Face Refraction, Inset Sensor Bezel & In-Viewport Inspector / Maker
+- **Omnidirectional 3-Face Prism Refraction (360° Rotation):**
+  - Generalized `computeSpectralRays()` from hardcoded edge `[1, 2]` to dynamic exterior ray-tracing across all 3 equilateral prism polygon edges.
+  - When the turntable rotates by ~120° or ~240°, the newly exposed prism facet catches the incident laser beam, refracts inside the glass, and disperses the spectrum out through the second facet.
+  - In `_updateSpectralVisuals()`, exit rays no longer vanish when rotated past the detector; they project into free flight across the lab at full length, with the floor caustic wash tracking them dynamically.
+- **Physical Sensor Bezel & Absorber Integration:**
+  - Added an anodized aluminum bezel (`DetectorBezel`) framing the graticule sensor window on the front face of `screenPanel`, visually establishing the large dark block as the heavy absorber beam dump chassis and the graticule as the precision sensor module.
+- **In-Viewport Lab Inspector & Maker Suite:**
+  - Integrated a collapsible dark-theme Inspector drawer (`I` key shortcut or top-right `⚙ Inspector` button).
+  - Quick Lab Knobs (Tweakpane): Live sliders for Turntable Angle, Auto-Wobble, Beam Splitter X, Splitter Toggle, Glass IOR/Roughness/Thickness, and Laser/Bloom Intensity.
+  - Scene Hierarchy: Powered by `HierarchyPanel`, displays live scene graph tree with real-time filtering and selection.
+  - Deep Property Reflection: Powered by `PropertyPanel`, inspects and modifies transforms, materials, and lights on any selected object.
+  - Direct 1-click launch buttons for Forge DevTools (`Alt+Cmd+G`) and the standalone Maker Scene Editor (`/tools/maker.html`).
+- **Precision Nudging:**
+  - Halved the manual turntable rotation speed (1.2 $\rightarrow$ 0.6 rad/s, Shift 3.0 $\rightarrow$ 1.5 rad/s) for ultra-fine facet alignment.
+
+---
+
+## 2026-10-15 – 3D Viewport Raycast Picking & Streamlined Lab Inspector
+- **Viewport 3D Raycast Object Picking:**
+  - Connected `Raycaster` to canvas pointer interactions when the Inspector drawer is open.
+  - Distinguishes stationary clicks from orbit drags (`Math.hypot(dx, dy) <= 5px`), ensuring smooth camera navigation without accidental selection.
+  - Clicking any visible component in the 3D scene (Prism, Turntable, Beam Splitter, Laser Housing, Rail, Detector Bezel, Absorber, Bench) selects it immediately.
+  - Traces down through `computeBounds()` to exact world-space bounding boxes/spheres, displaying a cyan wireframe highlight box that moves dynamically with animated or user-manipulated hardware.
+  - Selection is automatically synchronized across both the `HierarchyPanel` tree and `PropertyPanel` inspector.
+- **Streamlined Inspector UI:**
+  - Removed Forge and Maker buttons/links for a clean, distraction-free in-viewport lab experience.
+  - Moved the `⚙ Lab Inspector (I)` toggle button into the persistent application footer (`bottom: 5px; right: 14px;`), providing an unobtrusive, always-accessible dock handle.
+  - Adjusted inspector drawer height to `calc(100vh - 36px)`, perfectly resting above the footer bar without covering it.
+  - Fixed hierarchy row flexbox compression: enforced `flex-shrink: 0`, 24px row height and monospace font so scene tree items never get vertically crushed.
+  - Retained full `HierarchyPanel` outliner with quick search filtering, drag-and-drop reparenting, and row selection.
+  - Retained `PropertyPanel` for full live property editing and undoable tweaks.
+
+---
+
+## 2026-10-15 – Unified Footer Drawer Handles & Watertight Input Isolation
+- **Unified Footer Drawer Design (Showcase 28 & 29):**
+  - Removed textual button labels in both Showcase 28 and Showcase 29, replacing them with a crisp 26×26px square gear icon button (`⚙`, `.swm-inspector-btn`) docked in the bottom-right footer (`bottom: 5px; right: 14px;`).
+  - Standardized both panels (Showcase 28 Lab Inspector and Showcase 29 Sponza Lighting Lab) to slide in from the right with `height: calc(100vh - 36px)`, matching backdrop blur, close buttons, and keyboard shortcut `I` (`KeyI`).
+- **Input Leak Isolation (Sliders & Wheel):**
+  - Fixed camera orbit, zoom, and nudge key leakage when interacting with inspector/tuning sliders or scrolling panels.
+  - Stopped event propagation (`stopPropagation()`) on drawer and hud containers for `mousedown`, `mouseup`, `mousemove`, `pointerdown`, `pointerup`, `pointermove`, `wheel`, `touchstart`, `touchmove`, `touchend`, and keyboard events.
+  - Reset accumulated `Input` mouse zoom/deltas on wheel events inside drawers.
+  - Dynamically disabled `OrbitController` (Showcase 28) and `FlyController` (Showcase 29) on `pointerenter` / `pointerdown`, preventing sliders or scroll gestures from rotating or zooming the 3D scene. Re-enabled smoothly on `pointerleave` / `pointerup` and drawer close.
+  - Guarded scene keyboard shortcuts (arrow keys for rail movement / manual turntable rotation, scene presets) so they are suppressed while interacting with panel controls.
+

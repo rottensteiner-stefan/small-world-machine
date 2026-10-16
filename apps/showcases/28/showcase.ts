@@ -2,6 +2,9 @@ import {
   AbstractShowcase,
   AmbientLight,
   BloomElement,
+  BoundingBox,
+  BoundingSphere,
+  BoundingType,
   CameraStrategyType,
   CauchyMaterials,
   Color,
@@ -23,6 +26,7 @@ import {
   PostProcessingEffectType,
   ProjectionType,
   Ray2D,
+  Raycaster,
   RendererType,
   SkyboxMaterial,
   SpotLight,
@@ -33,9 +37,17 @@ import {
   ToneMappingElement,
   Torus,
   Vector2D,
+  Vector3D,
   VignetteElement,
+  WireframeMaterial,
 } from "@small-world-machine/engine";
-import { attachDevTools } from "@small-world-machine/tools";
+import {
+  attachDevTools,
+  HierarchyPanel,
+  PropertyPanel,
+  UndoStack,
+} from "@small-world-machine/tools";
+import { Pane } from "tweakpane";
 
 // ----------------------------------------------------------------------------
 // Real prism optics: Snell's law at both surfaces of the equilateral-triangle prism, with a
@@ -119,19 +131,46 @@ function computeSpectralRays(prismRotation: number): (SpectralRay | undefined)[]
     const theta = (k * 2 * Math.PI) / 3 + prismRotation;
     return new Vector2D(PRISM_RADIUS * Math.sin(theta), PRISM_RADIUS * Math.cos(theta));
   });
-  const entryA = vertices[1]!;
-  const entryB = vertices[2]!;
-  const otherFaces: [Vector2D, Vector2D][] = [
+
+  const faces: [Vector2D, Vector2D][] = [
     [vertices[0]!, vertices[1]!],
+    [vertices[1]!, vertices[2]!],
     [vertices[2]!, vertices[0]!],
   ];
 
-  // The beam travels along z = 0; intersect that line with the entry edge to get the real entry
-  // point instead of assuming one.
-  const tEntry = (0 - entryA.y) / (entryB.y - entryA.y);
-  const entryPoint = new Vector2D(entryA.x + tEntry * (entryB.x - entryA.x), 0);
-  const entryNormal = outwardFaceNormal(entryA, entryB);
+  // The incident laser beam travels from the optical rail (-10, 0) along +X at z = 0.
+  // Test all 3 polygon edges to find which face faces the incoming beam and gets struck.
+  const incidentOrigin = new Vector2D(-10, 0);
   const incidentDir = new Vector2D(1, 0);
+  const incidentRay = new Ray2D(incidentOrigin, incidentDir);
+
+  let bestEntryHit: Vector2D | undefined;
+  let bestEntryFaceIdx = -1;
+  let bestEntryNormal: Vector2D | undefined;
+  let minT = Infinity;
+
+  for (let i = 0; i < 3; i++) {
+    const face = faces[i]!;
+    const hit = incidentRay.intersectSegment(face[0], face[1]);
+    if (!hit) continue;
+    const normal = outwardFaceNormal(face[0], face[1]);
+    // Beam strikes the exterior face only when outward normal opposes beam direction
+    if (normal.x * incidentDir.x + normal.y * incidentDir.y >= 0) continue;
+    const t = hit.x - incidentOrigin.x;
+    if (t < minT) {
+      minT = t;
+      bestEntryHit = hit;
+      bestEntryFaceIdx = i;
+      bestEntryNormal = normal;
+    }
+  }
+
+  if (!bestEntryHit || bestEntryFaceIdx === -1) {
+    return SPECTRUM.map(() => undefined);
+  }
+
+  const otherFaceIndices = [0, 1, 2].filter((i) => i !== bestEntryFaceIdx);
+  const otherFaces = otherFaceIndices.map((i) => faces[i]!);
 
   const rays: (SpectralRay | undefined)[] = [];
   for (const band of SPECTRUM) {
@@ -139,7 +178,7 @@ function computeSpectralRays(prismRotation: number): (SpectralRay | undefined)[]
     // "n = 1.65 flint glass" comment on the prism material (real n ranges ~1.629 red to ~1.688
     // violet with this preset).
     const n = Optics.cauchyIndex(band.wavelengthNm, CauchyMaterials.FLINT_GLASS);
-    const internalDir = Optics.refract(incidentDir, entryNormal, 1.0, n);
+    const internalDir = Optics.refract(incidentDir, bestEntryNormal!, 1.0, n);
     if (!internalDir) {
       rays.push(undefined);
       continue;
@@ -147,7 +186,7 @@ function computeSpectralRays(prismRotation: number): (SpectralRay | undefined)[]
 
     let exitPoint: Vector2D | undefined;
     let exitFace: [Vector2D, Vector2D] | undefined;
-    const internalRay = new Ray2D(entryPoint, internalDir);
+    const internalRay = new Ray2D(bestEntryHit, internalDir);
     for (const face of otherFaces) {
       const hit = internalRay.intersectSegment(face[0], face[1]);
       if (hit) {
@@ -173,7 +212,7 @@ function computeSpectralRays(prismRotation: number): (SpectralRay | undefined)[]
     rays.push({
       name: band.name,
       color: band.color,
-      entryPoint,
+      entryPoint: bestEntryHit,
       exitPoint,
       origin: exitPoint,
       direction: exitDir,
@@ -204,6 +243,56 @@ class Showcase28 extends AbstractShowcase {
    * 8-bit per-channel ceiling structurally forbids the white-hot core the discrete HDR materials
    * produced. Pinned at the real red and violet impact points every frame. */
   private _bandMesh: Object3D | undefined;
+  /** Soft chromatic caustic reflection wash on the anodized bench top under the spectral rays. */
+  private _floorCausticMesh: Object3D | undefined;
+
+  /** Bakes a soft chromatic caustic reflection texture for the bench surface under the rays. */
+  private _createCausticGradientTexture(): Texture {
+    const width = 256;
+    const height = 128;
+    const cv = document.createElement("canvas");
+    cv.width = width;
+    cv.height = height;
+    const ctx = cv.getContext("2d");
+    if (!ctx) throw new Error("[Showcase28] 2D canvas context unavailable for caustic.");
+
+    // Base horizontal spectrum gradient
+    const grad = ctx.createLinearGradient(0, 0, width, 0);
+    for (let i = 0; i < SPECTRUM.length; i++) {
+      const c = SPECTRUM[i]!.color;
+      grad.addColorStop(
+        i / (SPECTRUM.length - 1),
+        `rgb(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)})`,
+      );
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Apply soft gaussian-like vertical falloff and longitudinal attenuation
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+    const halfH = height / 2;
+    for (let y = 0; y < height; y++) {
+      const dy = (y - halfH) / halfH;
+      const vertFalloff = Math.max(0, 1 - dy * dy);
+      for (let x = 0; x < width; x++) {
+        const u = x / width;
+        const horizFalloff = Math.sin(u * Math.PI);
+        const alpha = vertFalloff * vertFalloff * horizFalloff * 0.45;
+        const idx = (y * width + x) * 4;
+        data[idx + 3] = Math.round(alpha * 255);
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    return Texture.fromCanvas(cv, {
+      generateMipmaps: false,
+      magFilter: TextureFilter.LINEAR,
+      minFilter: TextureFilter.LINEAR,
+      addressModeU: TextureWrap.CLAMP_TO_EDGE,
+      addressModeV: TextureWrap.CLAMP_TO_EDGE,
+    });
+  }
 
   /** Bakes the calibrated red->violet spectral ramp into a 1D emissive map. */
   private _createBandGradientTexture(): Texture {
@@ -241,6 +330,94 @@ class Showcase28 extends AbstractShowcase {
       addressModeV: TextureWrap.CLAMP_TO_EDGE,
     });
   }
+
+  private _splitterCarriage: Object3D | undefined;
+  private _splitterX = -2.3;
+  private _splitterActive = true;
+  private _incidentBeamBefore: Object3D | undefined;
+  private _incidentBeamAfter: Object3D | undefined;
+  private _reflectedBeam: Object3D | undefined;
+  private _refSensorSpot: Object3D | undefined;
+
+  // Lab Inspector integration
+  private _inspectorDrawer: HTMLElement | undefined;
+  private _inspectorToggleBtn: HTMLButtonElement | undefined = undefined;
+  private _inspectorOpen = false;
+  private _isHoveringInspector = false;
+  private _isDraggingInspector = false;
+  private _orbitController: OrbitController | undefined = undefined;
+  private _undo = new UndoStack();
+  private _hierarchyPanel: HierarchyPanel | undefined = undefined;
+  private _propertyPanel: PropertyPanel | undefined = undefined;
+  private _selectedObject: Object3D | undefined = undefined;
+  private _selection = new Set<Object3D>();
+  private _highlightMesh: Object3D | undefined = undefined;
+  private readonly _raycaster = new Raycaster();
+  private _pointerDownPos: { x: number; y: number } | null = null;
+
+  /** Bakes the calibrated auxiliary reference detector readout scale texture. */
+  private _createRefSensorTexture(): Texture {
+    const width = 512;
+    const height = 128;
+    const cv = document.createElement("canvas");
+    cv.width = width;
+    cv.height = height;
+    const ctx = cv.getContext("2d");
+    if (!ctx) throw new Error("[Showcase28] 2D canvas context unavailable for ref sensor.");
+
+    // Dark instrument display background
+    ctx.fillStyle = "#0a0e14";
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle measurement border & center rail
+    ctx.strokeStyle = "rgba(0, 210, 255, 0.45)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(8, 8, width - 16, height - 16);
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(16, 64);
+    ctx.lineTo(width - 16, 64);
+    ctx.stroke();
+
+    // Scale ticks and labels along X
+    ctx.fillStyle = "rgba(0, 220, 255, 0.85)";
+    ctx.font = "bold 13px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("AUX REF PHOTODETECTOR  |  50.0% BEAM SPLIT", 256, 28);
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.font = "11px monospace";
+    for (let x = 32; x <= width - 32; x += 32) {
+      ctx.beginPath();
+      ctx.moveTo(x, 56);
+      ctx.lineTo(x, 72);
+      ctx.stroke();
+      const val = Math.round((x - 256) / 3.2);
+      ctx.fillText(`${val > 0 ? "+" : ""}${val}mm`, x, 92);
+    }
+
+    // Invert vertically so that texture mapping on the 3D detector face renders right-side up
+    const flippedCanvas = document.createElement("canvas");
+    flippedCanvas.width = width;
+    flippedCanvas.height = height;
+    const fCtx = flippedCanvas.getContext("2d");
+    if (fCtx) {
+      fCtx.translate(0, height);
+      fCtx.scale(1, -1);
+      fCtx.drawImage(cv, 0, 0);
+    }
+
+    return Texture.fromCanvas(flippedCanvas, {
+      generateMipmaps: false,
+      magFilter: TextureFilter.LINEAR,
+      minFilter: TextureFilter.LINEAR,
+      addressModeU: TextureWrap.CLAMP_TO_EDGE,
+      addressModeV: TextureWrap.CLAMP_TO_EDGE,
+    });
+  }
+
   private _time = 0;
   // Secret manual-control mode: Ctrl+T pauses the automatic wobble and lets LEFT/RIGHT spin
   // the turntable by hand instead.
@@ -324,10 +501,12 @@ class Showcase28 extends AbstractShowcase {
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     // P0-4 hero reframe: low-three-quarter cinematic pose holding prism + full exit fan +
     // continuous detector band in one composition (beam path as leading line). Re-derived after
-    // P0-2 moved the resting pose. User can still orbit via OrbitController / Ctrl+T.
+    // P0-2 moved the resting pose. User can still orbit via OrbitController.
     this.camera.position.set(5.4, 3.4, -4.6);
     this.camera.target.set(1.4, 1.45, 2.6);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    const orbit = new OrbitController({ input: this.input, audio: this.audio });
+    this._orbitController = orbit;
+    this.camera.addBehavior(orbit);
 
     // Ambient Optical Environment (Dark cleanroom lab aesthetic) -- P0-1 rebalanced down
     const ambientLight = new AmbientLight({
@@ -496,11 +675,11 @@ class Showcase28 extends AbstractShowcase {
     // WebGPU-only trap), no self-glow emissive -- the only light on the glass is the tight key
     // SpotLight below, which raises sharp facet glints instead of a milky self-luminous bulb.
     const glassMat = new GlassMaterial({
-      color: new Color(0.85, 0.95, 1.0),
+      color: new Color(0.96, 0.98, 1.0),
       ior: 1.65,
-      thickness: 0.8,
+      thickness: 0.55,
       transmission: 1.0,
-      roughness: 0.04,
+      roughness: 0.02,
     });
     this._prismMesh = new Object3D("CentralPrism");
     this._prismMesh.geometry = new Cylinder({
@@ -521,14 +700,14 @@ class Showcase28 extends AbstractShowcase {
 
     // P1-1: one tight specular key SpotLight for crisp glass facet glints (GlassMaterial is
     // IBL-blind, so this is its only specular drive). Non-shadow to stay clear of the hard scene
-    // cap of <= 3 SpotLights (laser + key = 2). Kept WIDE and WEAK so it shades facets softly
-    // instead of throwing the harsh circular hotspot the earlier tight 6.0 cone left on the glass.
+    // cap of <= 3 SpotLights (laser + key = 2). Tightened angle and penumbra ensure razor-sharp
+    // specular reflections on prism facet edges during manual and auto rotation.
     const keyGlintSpot = new SpotLight({
       color: new Color(1.0, 1.0, 1.0),
-      intensity: 2.5,
-      distance: 9,
-      angle: Math.PI / 6,
-      penumbra: 0.5,
+      intensity: 3.2,
+      distance: 10,
+      angle: Math.PI / 7,
+      penumbra: 0.25,
     });
     keyGlintSpot.position.set(5.0, 4.6, -1.6);
     keyGlintSpot.direction.set(-0.805, -0.499, 0.322).normalize();
@@ -583,24 +762,193 @@ class Showcase28 extends AbstractShowcase {
     laserEmitterMesh.position.set(-4.08, 1.8, 0);
     this.scene.add(laserEmitterMesh);
 
-    // Coherent Incident White Laser Beam -- bright but not overdriven
+    // --- 50:50 Beam Splitter System & Auxiliary Reference Detector ---
+    // 1. Dovetail Optical Rail on the bench along X
+    const railMat = new StandardMaterial({
+      color: new Color(0.12, 0.14, 0.16),
+      metallic: 0.85,
+      roughness: 0.35,
+    });
+    const rail = new Object3D("OpticalRail");
+    rail.geometry = new Cube({ size: 1 }).getGeometryData();
+    rail.scale.set(2.4, 0.04, 0.22);
+    rail.position.set(-2.25, 0.02, 0);
+    rail.receiveShadow = true;
+    this.scene.add(rail);
+
+    // 2. Sliding Beam Splitter Carriage
+    this._splitterCarriage = new Object3D("SplitterCarriage");
+    this._splitterCarriage.position.set(this._splitterX, 0, 0);
+
+    const carriageBase = new Object3D("CarriageBase");
+    carriageBase.geometry = new Cube({ size: 1 }).getGeometryData();
+    carriageBase.scale.set(0.32, 0.08, 0.28);
+    carriageBase.material = railMat;
+    carriageBase.position.set(0, 0.06, 0);
+    this._splitterCarriage.add(carriageBase);
+
+    // Vertical mounting post
+    const postMat = new StandardMaterial({
+      color: new Color(0.18, 0.2, 0.22),
+      metallic: 0.9,
+      roughness: 0.25,
+    });
+    const post = new Object3D("MountingPost");
+    post.geometry = new Cylinder({
+      radiusTop: 0.045,
+      radiusBottom: 0.045,
+      height: 1.72,
+      radialSegments: 16,
+    }).getGeometryData();
+    post.material = postMat;
+    post.position.set(0, 0.94, 0);
+    this._splitterCarriage.add(post);
+
+    // 45-degree kinematic mirror mount bracket at beam height
+    const mirrorBracket = new Object3D("MirrorBracket");
+    mirrorBracket.geometry = new Cylinder({
+      radiusTop: 0.18,
+      radiusBottom: 0.18,
+      height: 0.05,
+      radialSegments: 24,
+    }).getGeometryData();
+    mirrorBracket.material = postMat;
+    mirrorBracket.rotation.y = Math.PI / 4;
+    mirrorBracket.rotation.z = Math.PI / 2;
+    mirrorBracket.position.set(0, 1.8, 0);
+    this._splitterCarriage.add(mirrorBracket);
+
+    // Half-silvered semi-reflective mirror plate (50:50)
+    const mirrorMat = new StandardMaterial({
+      color: new Color(0.9, 0.95, 1.0, 0.55),
+      metallic: 0.8,
+      roughness: 0.05,
+      transparent: true,
+      emissiveColor: new Color(0.3, 0.35, 0.4),
+      emissiveIntensity: 0.2,
+    });
+    const mirrorPlate = new Object3D("BeamSplitterMirror");
+    mirrorPlate.geometry = new Cylinder({
+      radiusTop: 0.15,
+      radiusBottom: 0.15,
+      height: 0.015,
+      radialSegments: 24,
+    }).getGeometryData();
+    mirrorPlate.material = mirrorMat;
+    mirrorPlate.rotation.y = Math.PI / 4;
+    mirrorPlate.rotation.z = Math.PI / 2;
+    mirrorPlate.position.set(0, 1.8, 0);
+    this._splitterCarriage.add(mirrorPlate);
+
+    this.scene.add(this._splitterCarriage);
+
+    // 3. Auxiliary Reference Photodetector Instrument on the bench at z = -2.35
+    const refDetectorStand = new Object3D("RefDetectorStand");
+    refDetectorStand.geometry = new Cylinder({
+      radiusTop: 0.08,
+      radiusBottom: 0.14,
+      height: 1.5,
+      radialSegments: 16,
+    }).getGeometryData();
+    refDetectorStand.material = railMat;
+    refDetectorStand.position.set(-2.25, 0.75, -2.35);
+    this.scene.add(refDetectorStand);
+
+    const refDetectorHousing = new Object3D("RefDetectorHousing");
+    refDetectorHousing.geometry = new Cube({ size: 1 }).getGeometryData();
+    refDetectorHousing.scale.set(2.6, 0.7, 0.28);
+    refDetectorHousing.material = new StandardMaterial({
+      color: new Color(0.06, 0.07, 0.085),
+      metallic: 0.4,
+      roughness: 0.85,
+    });
+    refDetectorHousing.position.set(-2.25, 1.8, -2.35);
+    refDetectorHousing.receiveShadow = true;
+    this.scene.add(refDetectorHousing);
+
+    // Calibrated sensor display face facing +Z (towards the incoming reflected beam)
+    const refSensorFace = new Object3D("RefSensorFace");
+    refSensorFace.geometry = new Cube({ size: 1 }).getGeometryData();
+    refSensorFace.scale.set(2.45, 0.58, 0.02);
+    refSensorFace.material = new StandardMaterial({
+      color: new Color(0.04, 0.06, 0.08),
+      emissiveColor: new Color(0.7, 0.85, 0.95),
+      emissiveIntensity: 0.7,
+      emissiveMap: this._createRefSensorTexture(),
+    });
+    refSensorFace.position.set(-2.25, 1.8, -2.2);
+    this.scene.add(refSensorFace);
+
+    // Luminous impact spot on reference detector sensor strip
+    const refSpotMat = new StandardMaterial({
+      color: new Color(1.0, 1.0, 1.0),
+      emissiveColor: new Color(1.5, 1.5, 1.5),
+      emissiveIntensity: 1.8,
+    });
+    this._refSensorSpot = new Object3D("RefSensorSpot");
+    this._refSensorSpot.geometry = new Cylinder({
+      radiusTop: 0.035,
+      radiusBottom: 0.035,
+      height: 0.03,
+      radialSegments: 16,
+    }).getGeometryData();
+    this._refSensorSpot.material = refSpotMat;
+    this._refSensorSpot.rotation.x = Math.PI / 2;
+    this._refSensorSpot.position.set(this._splitterX, 1.8, -2.18);
+    this.scene.add(this._refSensorSpot);
+
+    // 4. Split Laser Beams (Pre-Splitter, Post-Splitter, Reflected)
     const incidentBeamMat = new StandardMaterial({
       color: new Color(1.0, 1.0, 1.0),
       emissiveColor: new Color(1.5, 1.5, 1.5),
-      emissiveIntensity: 0.9,
+      emissiveIntensity: 1.1,
       transparent: true,
     });
-    const incidentBeam = new Object3D("IncidentBeam");
-    incidentBeam.geometry = new Cylinder({
+    this._incidentBeamBefore = new Object3D("IncidentBeam_Before");
+    this._incidentBeamBefore.geometry = new Cylinder({
       radiusTop: 0.03,
       radiusBottom: 0.03,
-      height: 3.8,
+      height: 1.0,
       radialSegments: 16,
     }).getGeometryData();
-    incidentBeam.material = incidentBeamMat;
-    incidentBeam.rotation.z = Math.PI / 2;
-    incidentBeam.position.set(-2.2, 1.8, 0);
-    this.scene.add(incidentBeam);
+    this._incidentBeamBefore.material = incidentBeamMat;
+    this._incidentBeamBefore.rotation.z = Math.PI / 2;
+    this.scene.add(this._incidentBeamBefore);
+
+    const transmittedBeamMat = new StandardMaterial({
+      color: new Color(1.0, 1.0, 1.0),
+      emissiveColor: new Color(1.4, 1.4, 1.4),
+      emissiveIntensity: 0.65,
+      transparent: true,
+    });
+    this._incidentBeamAfter = new Object3D("IncidentBeam_After");
+    this._incidentBeamAfter.geometry = new Cylinder({
+      radiusTop: 0.026,
+      radiusBottom: 0.026,
+      height: 1.0,
+      radialSegments: 16,
+    }).getGeometryData();
+    this._incidentBeamAfter.material = transmittedBeamMat;
+    this._incidentBeamAfter.rotation.z = Math.PI / 2;
+    this.scene.add(this._incidentBeamAfter);
+
+    const reflectedBeamMat = new StandardMaterial({
+      color: new Color(1.0, 1.0, 1.0),
+      emissiveColor: new Color(1.4, 1.4, 1.4),
+      emissiveIntensity: 0.65,
+      transparent: true,
+    });
+    this._reflectedBeam = new Object3D("ReflectedBeam_90Deg");
+    this._reflectedBeam.geometry = new Cylinder({
+      radiusTop: 0.026,
+      radiusBottom: 0.026,
+      height: 2.2,
+      radialSegments: 16,
+    }).getGeometryData();
+    this._reflectedBeam.material = reflectedBeamMat;
+    this._reflectedBeam.rotation.x = Math.PI / 2;
+    this._reflectedBeam.position.set(this._splitterX, 1.8, -1.1);
+    this.scene.add(this._reflectedBeam);
 
     // SpotLight collinear with the incident laser
     this._laserLight = new SpotLight({
@@ -690,7 +1038,7 @@ class Showcase28 extends AbstractShowcase {
     const gCtx = graticuleCanvas.getContext("2d");
     if (gCtx) {
       gCtx.clearRect(0, 0, 512, 640);
-      gCtx.strokeStyle = "rgba(255,255,255,0.55)";
+      gCtx.strokeStyle = "rgba(255,255,255,0.35)";
       gCtx.lineWidth = 1;
       const gridN = 6;
       const gridM = 8;
@@ -707,13 +1055,40 @@ class Showcase28 extends AbstractShowcase {
         gCtx.stroke();
       }
       gCtx.lineWidth = 2;
+      gCtx.strokeStyle = "rgba(255,255,255,0.6)";
       gCtx.beginPath();
       gCtx.moveTo(256, 0);
       gCtx.lineTo(256, 640);
       gCtx.moveTo(0, 320);
       gCtx.lineTo(512, 320);
       gCtx.stroke();
-      const graticuleTex = Texture.fromCanvas(graticuleCanvas, {
+
+      // Precision spectrograph wavelength ticks & micro-labels
+      gCtx.fillStyle = "rgba(255,255,255,0.45)";
+      gCtx.font = "14px monospace";
+      gCtx.textAlign = "center";
+      gCtx.fillText("700nm", 100, 345);
+      gCtx.fillText("550nm", 256, 345);
+      gCtx.fillText("400nm", 412, 345);
+      for (let t = 40; t <= 472; t += 16) {
+        gCtx.beginPath();
+        gCtx.moveTo(t, 315);
+        gCtx.lineTo(t, 325);
+        gCtx.stroke();
+      }
+
+      // Flip canvas vertically so that texture mapping on the 3D detector plate renders right-side up
+      const flippedCanvas = document.createElement("canvas");
+      flippedCanvas.width = 512;
+      flippedCanvas.height = 640;
+      const fCtx = flippedCanvas.getContext("2d");
+      if (fCtx) {
+        fCtx.translate(0, 640);
+        fCtx.scale(1, -1);
+        fCtx.drawImage(graticuleCanvas, 0, 0);
+      }
+
+      const graticuleTex = Texture.fromCanvas(flippedCanvas, {
         generateMipmaps: false,
         magFilter: TextureFilter.LINEAR,
         minFilter: TextureFilter.LINEAR,
@@ -730,18 +1105,30 @@ class Showcase28 extends AbstractShowcase {
       });
       // max emission ~0.28 -- a readable faint instrument scale, still far below the band's floor.
       graticule.scale.set(0.02, 3.0, 2.3);
-      // Local +X is the panel's outward face; riding 0.17 units proud of the absorber keeps the
-      // graticule above the face while never intersecting the panel body or the incoming rays.
-      graticule.position.set(0.17, 0, 0);
+      // Local -X is the panel's receiving front face pointing back toward the incident beam.
+      // Riding 0.165 units forward keeps the graticule slightly proud of the absorber face.
+      graticule.position.set(-0.165, 0, 0);
       graticule.receiveShadow = true;
       screenPanel.add(graticule);
+
+      // Precision anodized bezel framing the sensor window inside the absorber housing
+      const bezelMat = new StandardMaterial({
+        color: new Color(0.18, 0.2, 0.23),
+        metallic: 0.85,
+        roughness: 0.35,
+      });
+      const bezel = new Object3D("DetectorBezel");
+      bezel.geometry = new Cube({ size: 1 }).getGeometryData();
+      bezel.scale.set(0.04, 3.12, 2.42);
+      bezel.material = bezelMat;
+      bezel.position.set(-0.152, 0, 0);
+      screenPanel.add(bezel);
     }
 
     // Store the detector's RECEIVING face plane (world XZ) for live ray termination: the surface
-    // the beam physically hits is the panel face pointing back toward the fan (center minus half
-    // the 0.3 thickness along the travel axis).
-    this._screenFaceX = avgExitX + avgDirX * SCREEN_DISTANCE - avgDirX * 0.15;
-    this._screenFaceZ = avgExitZ + avgDirZ * SCREEN_DISTANCE - avgDirZ * 0.15;
+    // the beam physically hits is the panel face pointing back toward the fan.
+    this._screenFaceX = avgExitX + avgDirX * SCREEN_DISTANCE - avgDirX * 0.165;
+    this._screenFaceZ = avgExitZ + avgDirZ * SCREEN_DISTANCE - avgDirZ * 0.165;
     this._screenDirX = avgDirX;
     this._screenDirZ = avgDirZ;
 
@@ -762,7 +1149,7 @@ class Showcase28 extends AbstractShowcase {
       const rayMat = new StandardMaterial({
         color: new Color(0.9, 0.9, 0.9, 0.35),
         emissiveColor: emissive,
-        emissiveIntensity: 0.15,
+        emissiveIntensity: 0.65,
         transparent: true,
       });
 
@@ -791,9 +1178,9 @@ class Showcase28 extends AbstractShowcase {
       radialSegments: 8,
     }).getGeometryData();
     this._internalPath.material = new StandardMaterial({
-      color: new Color(1.0, 1.0, 1.0, 0.1),
-      emissiveColor: new Color(0.25, 0.25, 0.25),
-      emissiveIntensity: 0.6,
+      color: new Color(1.0, 1.0, 1.0, 0.15),
+      emissiveColor: new Color(0.85, 0.9, 0.95),
+      emissiveIntensity: 0.95,
       transparent: true,
     });
     this._internalPath.rotation.z = Math.PI / 2;
@@ -808,15 +1195,34 @@ class Showcase28 extends AbstractShowcase {
     this._bandMesh.material = new StandardMaterial({
       color: new Color(1.0, 1.0, 1.0),
       emissiveColor: new Color(1.0, 1.0, 1.0),
-      emissiveIntensity: 0.95,
+      emissiveIntensity: 1.35,
       emissiveMap: this._createBandGradientTexture(),
       transparent: true,
     });
     this._bandMesh.isVisible = false;
     this.scene.add(this._bandMesh);
 
+    // Soft chromatic caustic reflection wash on the anodized bench surface
+    const causticMat = new StandardMaterial({
+      color: new Color(1.0, 1.0, 1.0),
+      emissiveColor: new Color(0.9, 0.95, 1.0),
+      emissiveIntensity: 0.35,
+      emissiveMap: this._createCausticGradientTexture(),
+      transparent: true,
+      roughness: 0.9,
+    });
+    this._floorCausticMesh = new Object3D("BenchCausticSpill");
+    this._floorCausticMesh.geometry = new Cube({ size: 1 }).getGeometryData();
+    this._floorCausticMesh.material = causticMat;
+    this._floorCausticMesh.position.set(0, 0.005, 0);
+    this._floorCausticMesh.isVisible = false;
+    this.scene.add(this._floorCausticMesh);
+
     // Coherent first frame; update() re-derives and repositions everything every frame.
     this._updateSpectralVisuals(initialRays);
+
+    // Wire up in-viewport Inspector and Maker integration
+    this._setupInspector();
   }
 
   /** Intersection of an exit ray with the detector's receiving face plane (world XZ), or
@@ -863,15 +1269,16 @@ class Showcase28 extends AbstractShowcase {
     for (let i = 0; i < this._spectralRays.length; i++) {
       const ray = rays[i];
       const impact = impacts[i];
-      const valid = undefined !== ray && undefined !== impact;
+      const valid = undefined !== ray;
       const rayMesh = this._spectralRays[i]!;
       rayMesh.isVisible = valid;
       if (!valid) continue;
 
-      // exit ray terminates exactly where it physically lands on the detector face -- the rays are
-      // dim enough now that no bright tip stacks onto the band (the earlier blown-out white core
-      // came from the old 2.2-HDR tips; truncating early only created a visible air-gap instead).
-      const t = Math.hypot(impact!.x - ray!.origin.x, impact!.y - ray!.origin.y);
+      // When the exit ray hits the detector face, it terminates cleanly on the panel.
+      // If the turntable rotates and the ray misses the panel, it casts into free flight.
+      const t = impact
+        ? Math.hypot(impact.x - ray!.origin.x, impact.y - ray!.origin.y)
+        : SPECTRAL_RAY_LENGTH;
       this._positionOrientedMesh(
         rayMesh,
         ray!.origin.x,
@@ -923,40 +1330,185 @@ class Showcase28 extends AbstractShowcase {
       this._internalPath.isVisible = false;
     }
 
-    // P0-3: one continuous gradient band laid from the red impact to the violet impact. The ramp
-    // texture's left edge (red) maps to local +X, so rotating the smear along the red->violet
-    // chord guarantees the spectrum order is physically correct at the endpoints.
+    // Continuous gradient band laid between the lowest and highest valid spectrum impacts.
+    // Graceful TIR handling: as wavelengths exceed the critical angle at extreme turntable rotations,
+    // the band gracefully contracts rather than abruptly blinking out completely.
     if (this._bandMesh) {
-      const first = impacts[0];
-      const last = impacts[impacts.length - 1];
-      const dx = undefined !== first && undefined !== last ? last.x - first.x : 0;
-      const dz = undefined !== first && undefined !== last ? last.y - first.y : 0;
-      const bandLen = Math.hypot(dx, dz);
-      if (undefined !== first && undefined !== last && bandLen > 1e-4) {
-        this._bandMesh.rotation.y = Math.atan2(-dz, dx);
-        this._bandMesh.position.set((first.x + last.x) / 2, 1.8, (first.y + last.y) / 2);
-        this._bandMesh.scale.set(bandLen, 0.36, 0.03);
-        this._bandMesh.isVisible = true;
+      let firstValidIdx = -1;
+      let lastValidIdx = -1;
+      for (let i = 0; i < impacts.length; i++) {
+        if (impacts[i]) {
+          if (firstValidIdx === -1) firstValidIdx = i;
+          lastValidIdx = i;
+        }
+      }
+
+      if (firstValidIdx !== -1 && lastValidIdx !== -1 && firstValidIdx !== lastValidIdx) {
+        const first = impacts[firstValidIdx]!;
+        const last = impacts[lastValidIdx]!;
+        const dx = last.x - first.x;
+        const dz = last.y - first.y;
+        const bandLen = Math.hypot(dx, dz);
+        if (bandLen > 1e-4) {
+          this._bandMesh.rotation.y = Math.atan2(-dz, dx);
+          this._bandMesh.position.set((first.x + last.x) / 2, 1.8, (first.y + last.y) / 2);
+          this._bandMesh.scale.set(bandLen, 0.36, 0.03);
+          this._bandMesh.isVisible = true;
+        } else {
+          this._bandMesh.isVisible = false;
+        }
       } else {
         this._bandMesh.isVisible = false;
       }
     }
+
+    // Floor caustic spill: subtle chromatic wash on the anodized bench surface under the rays
+    if (this._floorCausticMesh) {
+      if (validCount > 0) {
+        let avgImpactX = 0;
+        let avgImpactZ = 0;
+        let impactCount = 0;
+        for (const imp of impacts) {
+          if (!imp) continue;
+          avgImpactX += imp.x;
+          avgImpactZ += imp.y;
+          impactCount++;
+        }
+        if (impactCount > 0) {
+          avgImpactX /= impactCount;
+          avgImpactZ /= impactCount;
+          const dx = avgImpactX - avgExitX;
+          const dz = avgImpactZ - avgExitZ;
+          const len = Math.hypot(dx, dz);
+          if (len > 1e-4) {
+            this._floorCausticMesh.rotation.y = Math.atan2(-dz, dx);
+            this._floorCausticMesh.position.set(
+              (avgExitX + avgImpactX) / 2,
+              0.005,
+              (avgExitZ + avgImpactZ) / 2,
+            );
+            this._floorCausticMesh.scale.set(len, 0.002, 1.6);
+            this._floorCausticMesh.isVisible = true;
+          } else {
+            this._floorCausticMesh.isVisible = false;
+          }
+        } else {
+          // Free-flight caustics across the bench
+          let avgDirX = 0;
+          let avgDirZ = 0;
+          for (const ray of rays) {
+            if (!ray) continue;
+            avgDirX += ray.direction.x;
+            avgDirZ += ray.direction.y;
+          }
+          const dirLen = Math.hypot(avgDirX, avgDirZ);
+          if (dirLen > 1e-4) {
+            avgDirX /= dirLen;
+            avgDirZ /= dirLen;
+            const reach = 3.6;
+            this._floorCausticMesh.rotation.y = Math.atan2(-avgDirZ, avgDirX);
+            this._floorCausticMesh.position.set(
+              avgExitX + avgDirX * (reach / 2),
+              0.005,
+              avgExitZ + avgDirZ * (reach / 2),
+            );
+            this._floorCausticMesh.scale.set(reach, 0.002, 1.6);
+            this._floorCausticMesh.isVisible = true;
+          } else {
+            this._floorCausticMesh.isVisible = false;
+          }
+        }
+      } else {
+        this._floorCausticMesh.isVisible = false;
+      }
+    }
   }
 
-  /** Secret shortcut: Ctrl+T toggles manual turntable control (see `update()`'s LEFT/RIGHT handling). */
+  /** Keyboard shortcuts:
+   *  - Arrow Left / Arrow Right: immediately engages manual turntable rotation (pauses auto-wobble).
+   *  - Arrow Up / Arrow Down: moves 50:50 Beam Splitter along the optical dovetail rail.
+   *  - Shift + Arrow: high-speed nudging / fast translation & rotation.
+   *  - M: toggles Beam Splitter bypass (active vs full 100% laser pass-through).
+   *  - Space: toggles between manual turntable control and automatic oscillation.
+   *  - I: toggles Lab Inspector.
+   */
   protected override onKeyDown(event: KeyboardEvent): void {
+    if (
+      document.activeElement &&
+      ("INPUT" === document.activeElement.tagName || "TEXTAREA" === document.activeElement.tagName)
+    ) {
+      return;
+    }
+    const isInspectorActive =
+      this._inspectorOpen &&
+      (this._isHoveringInspector ||
+        this._isDraggingInspector ||
+        (undefined !== this._inspectorDrawer &&
+          this._inspectorDrawer.contains(document.activeElement)));
+    if (isInspectorActive) {
+      if ("KeyI" === event.code) {
+        event.preventDefault();
+        this._toggleInspector();
+      }
+      return;
+    }
     super.onKeyDown(event);
-    if (Keys.T === event.code && event.ctrlKey) {
+    if ("KeyI" === event.code) {
+      event.preventDefault();
+      this._toggleInspector();
+      return;
+    }
+    if (Keys.LEFT === event.code || Keys.RIGHT === event.code) {
+      event.preventDefault();
+      if (!this._manualTurntableControl && this._turntable) {
+        this._manualTurntableControl = true;
+        this._manualTurntableAngle = this._turntable.rotation.y;
+      }
+    } else if (Keys.UP === event.code || Keys.DOWN === event.code) {
+      event.preventDefault();
+    } else if ("KeyM" === event.code) {
+      event.preventDefault();
+      this._splitterActive = !this._splitterActive;
+    } else if (Keys.SPACE === event.code) {
       event.preventDefault();
       this._manualTurntableControl = !this._manualTurntableControl;
       if (this._manualTurntableControl && this._turntable) {
         this._manualTurntableAngle = this._turntable.rotation.y;
+      } else if (!this._manualTurntableControl && this._turntable) {
+        // Re-align auto-wobble phase with current angle to avoid jump
+        const clampedRatio = Math.max(-0.999, Math.min(0.999, this._turntable.rotation.y / 0.12));
+        this._time = Math.asin(clampedRatio) / 0.6;
       }
     }
   }
 
   protected override update(deltaTime: number): void {
     this._time += deltaTime * 0.5;
+
+    const isInspectorActive =
+      this._inspectorOpen &&
+      (this._isHoveringInspector ||
+        this._isDraggingInspector ||
+        (undefined !== this._inspectorDrawer &&
+          this._inspectorDrawer.contains(document.activeElement)));
+
+    // 50:50 Beam Splitter navigation on optical rail (UP/DOWN arrow keys)
+    const isUp = !isInspectorActive && this.input.isPressed(Keys.UP);
+    const isDown = !isInspectorActive && this.input.isPressed(Keys.DOWN);
+    if (isUp || isDown) {
+      const isShift = this.input.isPressed(Keys.SHIFT_L) || this.input.isPressed(Keys.SHIFT_R);
+      const railSpeed = isShift ? 2.4 : 1.1; // units/s
+      if (isUp) {
+        this._splitterX = Math.min(-1.15, this._splitterX + railSpeed * deltaTime);
+      }
+      if (isDown) {
+        this._splitterX = Math.max(-3.35, this._splitterX - railSpeed * deltaTime);
+      }
+    }
+
+    if (this._splitterCarriage) {
+      this._splitterCarriage.position.x = this._splitterX;
+    }
 
     // P0-4 hero framing, re-asserted exactly once on the first frame: the HybridSync camera
     // strategy derives its orbit state from the camera pose it sees at its first update (and can
@@ -969,36 +1521,74 @@ class Showcase28 extends AbstractShowcase {
     }
 
     if (this._turntable) {
+      const isLeft = !isInspectorActive && this.input.isPressed(Keys.LEFT);
+      const isRight = !isInspectorActive && this.input.isPressed(Keys.RIGHT);
+
+      if (isLeft || isRight) {
+        if (!this._manualTurntableControl) {
+          this._manualTurntableControl = true;
+          this._manualTurntableAngle = this._turntable.rotation.y;
+        }
+      }
+
       if (this._manualTurntableControl) {
         // Manual mode: auto-wobble is paused, LEFT/RIGHT spin the turntable by hand.
-        const manualSpeed = 1.5; // rad/s
-        if (this.input.isPressed(Keys.LEFT)) {
+        const isShift = this.input.isPressed(Keys.SHIFT_L) || this.input.isPressed(Keys.SHIFT_R);
+        const manualSpeed = isShift ? 1.5 : 0.6; // rad/s (halved for fine precision control)
+        if (isLeft) {
           this._manualTurntableAngle -= manualSpeed * deltaTime;
         }
-        if (this.input.isPressed(Keys.RIGHT)) {
+        if (isRight) {
           this._manualTurntableAngle += manualSpeed * deltaTime;
         }
         this._turntable.rotation.y = this._manualTurntableAngle;
       } else {
-        // Gentle slow turntable rotation showcasing prism facets and refraction shifts. P0-2:
-        // amplitude narrowed to +-0.12 rad, the verified full-spectrum window (all 7 bands stay
-        // valid at every angle in it -- numeric gate over the whole range).
+        // Gentle slow turntable rotation showcasing prism facets and refraction shifts.
         this._turntable.rotation.y = Math.sin(this._time * 0.6) * 0.12;
       }
     }
 
-    // The spectral rays must track the turntable's live wobble: the prism's actual world
-    // rotation (base + wobble) determines the entry incidence angle, which determines every
-    // downstream Snell's-law refraction -- exit point, exit direction, and whether a given color
-    // clears the far face's critical angle at all. With the re-tuned 50deg/+-0.12 rad resting
-    // window all 7 bands are valid throughout (verified by a full-range scan), so the per-frame
-    // re-derivation below always produces the complete fan, spectrum band and internal path.
-    if (this._turntable && this._prismMesh) {
-      const liveRays = computeSpectralRays(this._prismMesh.rotation.y + this._turntable.rotation.y);
-      this._updateSpectralVisuals(liveRays);
+    // Trace real spectral rays dynamically across all 3 prism faces based on live rotation
+    const liveRays =
+      this._turntable && this._prismMesh
+        ? computeSpectralRays(this._prismMesh.rotation.y + this._turntable.rotation.y)
+        : [];
+    const firstValidRay = liveRays.find((r) => undefined !== r);
+    const prismEntryX = firstValidRay ? firstValidRay.entryPoint.x : -0.62;
+
+    // Dynamic beam segments around the beam splitter
+    const emitterX = -4.08;
+    const splitX = this._splitterX;
+
+    if (this._incidentBeamBefore) {
+      const lenBefore = splitX - emitterX;
+      this._incidentBeamBefore.position.set((emitterX + splitX) / 2, 1.8, 0);
+      this._incidentBeamBefore.scale.set(1, lenBefore, 1);
     }
 
-    // Floating gem removed per plan P1-4 (default remove).
+    if (this._incidentBeamAfter) {
+      const lenAfter = Math.max(0.01, prismEntryX - splitX);
+      this._incidentBeamAfter.position.set((splitX + prismEntryX) / 2, 1.8, 0);
+      this._incidentBeamAfter.scale.set(1, lenAfter, 1);
+      (this._incidentBeamAfter.material as StandardMaterial).emissiveIntensity = this
+        ._splitterActive
+        ? 0.65
+        : 1.1;
+    }
+
+    if (this._reflectedBeam) {
+      this._reflectedBeam.position.set(splitX, 1.8, -1.1);
+      this._reflectedBeam.isVisible = this._splitterActive;
+    }
+
+    if (this._refSensorSpot) {
+      this._refSensorSpot.position.set(splitX, 1.8, -2.18);
+      this._refSensorSpot.isVisible = this._splitterActive;
+    }
+
+    if (this._turntable && this._prismMesh) {
+      this._updateSpectralVisuals(liveRays);
+    }
 
     // Dynamic spectral pulse oscillation (thickness only -- scale.y carries the live ray length)
     for (let i = 0; i < this._spectralRays.length; i++) {
@@ -1008,6 +1598,588 @@ class Showcase28 extends AbstractShowcase {
         ray.scale.set(pulse, ray.scale.y, pulse);
       }
     }
+
+    if (this._inspectorOpen && this._selectedObject) {
+      this._syncHighlight();
+    }
+  }
+
+  private _isExcludedFromHierarchy(obj: Object3D): boolean {
+    return (
+      obj === this._highlightMesh ||
+      obj.name === "EditorHighlight" ||
+      obj.name.startsWith("SpectralRay_") ||
+      obj.name.startsWith("IncidentBeam_") ||
+      obj.name === "ReflectedBeam_90Deg" ||
+      obj.name === "RefSensorSpot" ||
+      obj.name === "InternalBeamPath" ||
+      obj.name === "Band_Gradient" ||
+      obj.name === "BenchCausticSpill" ||
+      obj.name === "Skybox"
+    );
+  }
+
+  private _collectPickable(parent: Object3D, out: Object3D[]): void {
+    if (this._isExcludedFromHierarchy(parent)) return;
+    if (parent.isVisible && parent.geometry) {
+      parent.computeBounds();
+      out.push(parent);
+    }
+    for (const child of parent.children) {
+      this._collectPickable(child, out);
+    }
+  }
+
+  private _pickFromScreen(clientX: number, clientY: number): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = new Vector2D(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    this._raycaster.setFromCamera(ndc, this.camera);
+    const pickables: Object3D[] = [];
+    this._collectPickable(this.scene.root, pickables);
+    const hits = this._raycaster.intersectObjects(pickables, true);
+    const hitObj = hits.length > 0 ? hits[0]!.object : undefined;
+    this._selectObject(hitObj);
+  }
+
+  private _selectObject(obj: Object3D | undefined): void {
+    this._selection.clear();
+    if (obj) {
+      this._selection.add(obj);
+    }
+    this._selectedObject = obj;
+    this._propertyPanel?.setSelection(obj);
+    this._hierarchyPanel?.setSelected(this._selection);
+    this._syncHighlight();
+  }
+
+  private _syncHighlight(): void {
+    if (!this._highlightMesh) {
+      const hl = new Object3D("EditorHighlight");
+      hl.geometry = new Cube({ size: 1 }).getGeometryData();
+      hl.material = new WireframeMaterial(new Color(0, 0.85, 1));
+      hl.isVisible = false;
+      this.scene.add(hl);
+      this._highlightMesh = hl;
+    }
+    const hl = this._highlightMesh;
+    if (!this._inspectorOpen || !this._selectedObject) {
+      hl.isVisible = false;
+      return;
+    }
+    const obj = this._selectedObject;
+    if (obj.geometry) {
+      obj.computeBounds();
+    }
+    if (!obj.bounds) {
+      hl.isVisible = false;
+      return;
+    }
+    const epsilon = new Vector3D(0.015, 0.015, 0.015);
+    if (BoundingType.BOX === obj.bounds.type) {
+      const box = obj.bounds as BoundingBox;
+      const size = new Vector3D().copyFrom(box.max).sub(box.min).add(epsilon);
+      hl.position.copyFrom(box.center);
+      hl.rotation.set(0, 0, 0);
+      hl.scale.copyFrom(size);
+      hl.updateMatrixWorld();
+      hl.isVisible = true;
+    } else if (BoundingType.SPHERE === obj.bounds.type) {
+      const sphere = obj.bounds as BoundingSphere;
+      const diameter = sphere.radius * 2;
+      const size = new Vector3D(diameter, diameter, diameter).add(epsilon);
+      hl.position.copyFrom(sphere.center);
+      hl.rotation.set(0, 0, 0);
+      hl.scale.copyFrom(size);
+      hl.updateMatrixWorld();
+      hl.isVisible = true;
+    } else {
+      hl.isVisible = false;
+    }
+  }
+
+  private _toggleInspector(force?: boolean): void {
+    this._inspectorOpen = undefined !== force ? force : !this._inspectorOpen;
+    if (!this._inspectorOpen) {
+      this._isHoveringInspector = false;
+      this._isDraggingInspector = false;
+      if (this._orbitController) {
+        this._orbitController.enabled = true;
+      }
+    }
+    if (this._inspectorToggleBtn) {
+      if (this._inspectorOpen) {
+        this._inspectorToggleBtn.classList.add("active");
+      } else {
+        this._inspectorToggleBtn.classList.remove("active");
+      }
+    }
+    if (this._inspectorDrawer) {
+      if (this._inspectorOpen) {
+        this._inspectorDrawer.classList.add("open");
+        this._hierarchyPanel?.refresh();
+        this._syncHighlight();
+      } else {
+        this._inspectorDrawer.classList.remove("open");
+        if (this._highlightMesh) {
+          this._highlightMesh.isVisible = false;
+        }
+      }
+    }
+  }
+
+  private _setupInspector(): void {
+    if (typeof document === "undefined") return;
+
+    // Inject styling for the Lab Inspector drawer and hierarchy panel
+    const styleId = "swm-showcase28-inspector-styles";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+        .swm-inspector-btn {
+          position: fixed;
+          bottom: 5px;
+          right: 14px;
+          width: 26px;
+          height: 26px;
+          z-index: 10001;
+          pointer-events: auto;
+          background: var(--tool-card, rgba(22, 29, 45, 0.85));
+          color: var(--tool-text, #f8fafc);
+          border: 1px solid var(--tool-border, rgba(148, 163, 184, 0.25));
+          border-radius: var(--tool-radius-sm, 4px);
+          padding: 0;
+          font-size: 0.95rem;
+          cursor: pointer;
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        }
+        .swm-inspector-btn:hover {
+          border-color: var(--tool-accent, #ffb84d);
+          color: var(--tool-accent, #ffb84d);
+          box-shadow: 0 0 10px var(--tool-accent-glow, rgba(255, 184, 77, 0.3));
+        }
+        .swm-inspector-btn.active {
+          background: rgba(255, 184, 77, 0.15);
+          border-color: var(--tool-accent, #ffb84d);
+          color: var(--tool-accent, #ffb84d);
+          box-shadow: 0 0 8px var(--tool-accent-glow, rgba(255, 184, 77, 0.25));
+        }
+        .swm-inspector-drawer {
+          position: fixed;
+          top: 0;
+          right: 0;
+          width: 320px;
+          height: calc(100vh - 36px);
+          background: var(--tool-panel, rgba(14, 18, 28, 0.95));
+          backdrop-filter: blur(16px);
+          border-left: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
+          border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
+          color: var(--tool-text, #f8fafc);
+          z-index: 10000;
+          display: flex;
+          flex-direction: column;
+          box-shadow: -6px 0 32px rgba(0, 0, 0, 0.6);
+          transform: translateX(100%);
+          transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          font-family: var(--tool-font-ui, sans-serif);
+        }
+        .swm-inspector-drawer.open {
+          transform: translateX(0);
+        }
+        .swm-inspector-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 14px;
+          border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.15));
+          background: var(--tool-panel-solid, #0e121c);
+        }
+        .swm-inspector-title {
+          font-size: 0.9rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: var(--tool-text, #f8fafc);
+          margin: 0;
+        }
+        .swm-inspector-close-btn {
+          background: none;
+          border: none;
+          color: var(--tool-text-muted, #94a3b8);
+          font-size: 1.1rem;
+          cursor: pointer;
+          padding: 2px 6px;
+          line-height: 1;
+        }
+        .swm-inspector-close-btn:hover {
+          color: var(--tool-danger, #ef4444);
+        }
+        .swm-inspector-body {
+          flex: 1;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+        }
+        .swm-inspector-section {
+          border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.15));
+          display: flex;
+          flex-direction: column;
+        }
+        .swm-inspector-section-header {
+          font-size: 0.72rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.8px;
+          padding: 8px 12px 6px;
+          color: var(--tool-accent, #ffb84d);
+          background: rgba(255, 255, 255, 0.02);
+          border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .swm-inspector-pane-wrap {
+          padding: 6px;
+        }
+        .swm-inspector-hierarchy-wrap {
+          padding: 6px;
+          background: rgba(10, 14, 22, 0.6);
+        }
+        .maker-hierarchy {
+          display: flex;
+          flex-direction: column;
+        }
+        .maker-hierarchy-search-wrapper {
+          margin-bottom: 6px;
+        }
+        .maker-hierarchy-search-input {
+          width: 100%;
+          box-sizing: border-box;
+          background: rgba(15, 23, 42, 0.8);
+          border: 1px solid rgba(148, 163, 184, 0.25);
+          border-radius: 4px;
+          color: #f8fafc;
+          padding: 4px 8px;
+          font-size: 0.78rem;
+          font-family: inherit;
+        }
+        .maker-hierarchy-search-input:focus {
+          outline: none;
+          border-color: var(--tool-accent, #ffb84d);
+        }
+        .maker-hierarchy-tree {
+          overflow-y: auto;
+          max-height: 260px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding-right: 2px;
+        }
+        .maker-hierarchy-row {
+          flex-shrink: 0;
+          height: 24px;
+          line-height: 24px;
+          padding-top: 0;
+          padding-bottom: 0;
+          padding-right: 8px;
+          font-family: var(--tool-font-mono, monospace);
+          font-size: 0.8rem;
+          color: #cbd5e1;
+          cursor: pointer;
+          user-select: none;
+          border-radius: 3px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          box-sizing: border-box;
+          display: flex;
+          align-items: center;
+        }
+        .maker-hierarchy-row:hover {
+          background: rgba(255, 255, 255, 0.08);
+          color: #fff;
+        }
+        .maker-hierarchy-row.selected {
+          background: rgba(255, 184, 77, 0.22);
+          color: var(--tool-accent, #ffb84d);
+          font-weight: 600;
+        }
+        .maker-hierarchy-rename-input {
+          background: rgba(15, 23, 42, 0.95);
+          border: 1px solid var(--tool-accent, #ffb84d);
+          border-radius: 3px;
+          color: #fff;
+          padding: 2px 6px;
+          font-size: 0.8rem;
+          font-family: var(--tool-font-mono, monospace);
+          width: 100%;
+          height: 22px;
+          box-sizing: border-box;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Toggle button in Footer
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "swm-inspector-btn";
+    toggleBtn.innerHTML = "<span>⚙</span>";
+    toggleBtn.title = "Toggle Lab Inspector Panel (Key: I)";
+    toggleBtn.onclick = (): void => {
+      this._toggleInspector();
+    };
+    this._inspectorToggleBtn = toggleBtn;
+
+    const footer = document.querySelector(".app-footer");
+    if (footer) {
+      footer.appendChild(toggleBtn);
+    } else {
+      document.body.appendChild(toggleBtn);
+    }
+
+    // Inspector Drawer
+    const drawer = document.createElement("aside");
+    drawer.className = "swm-inspector-drawer";
+    this._inspectorDrawer = drawer;
+
+    drawer.innerHTML = `
+      <header class="swm-inspector-header">
+        <h3 class="swm-inspector-title">Lab Inspector</h3>
+        <button id="swmInspectorClose" class="swm-inspector-close-btn" title="Close Inspector">✕</button>
+      </header>
+      <div class="swm-inspector-body">
+        <div class="swm-inspector-section">
+          <div class="swm-inspector-section-header">Lab Parameters</div>
+          <div id="swmInspectorParams" class="swm-inspector-pane-wrap"></div>
+        </div>
+        <div class="swm-inspector-section">
+          <div class="swm-inspector-section-header">Scene Hierarchy</div>
+          <div id="swmInspectorHierarchy" class="swm-inspector-hierarchy-wrap"></div>
+        </div>
+        <div class="swm-inspector-section">
+          <div class="swm-inspector-section-header">Selected Object</div>
+          <div id="swmInspectorProps" class="swm-inspector-pane-wrap"></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(drawer);
+
+    // Isolate mouse, wheel, touch, and pointer events inside drawer so camera orbit and zoom are never triggered
+    const stopEvents = [
+      "mousedown",
+      "mouseup",
+      "mousemove",
+      "pointerdown",
+      "pointerup",
+      "pointermove",
+      "wheel",
+      "touchstart",
+      "touchmove",
+      "touchend",
+      "keydown",
+      "keyup",
+      "click",
+      "dblclick",
+      "contextmenu",
+    ];
+    for (const ev of stopEvents) {
+      drawer.addEventListener(
+        ev,
+        (e) => {
+          e.stopPropagation();
+          if ("wheel" === ev) {
+            this.input.mouse.zoom = 0;
+            this.input.mouse.wheelX = 0;
+            this.input.mouse.wheelY = 0;
+          }
+        },
+        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
+      );
+    }
+
+    drawer.addEventListener("pointerenter", () => {
+      this._isHoveringInspector = true;
+      if (this._orbitController) {
+        this._orbitController.enabled = false;
+      }
+    });
+
+    drawer.addEventListener("pointerleave", (e: PointerEvent) => {
+      if (0 === e.buttons && !this._isDraggingInspector) {
+        this._isHoveringInspector = false;
+        if (this._orbitController) {
+          this._orbitController.enabled = true;
+        }
+      }
+    });
+
+    drawer.addEventListener("pointerdown", () => {
+      this._isHoveringInspector = true;
+      this._isDraggingInspector = true;
+      if (this._orbitController) {
+        this._orbitController.enabled = false;
+      }
+      this.input.mouse.dx = 0;
+      this.input.mouse.dy = 0;
+      this.input.mouse.zoom = 0;
+      this.input.mouse.left = false;
+    });
+
+    window.addEventListener("pointerup", () => {
+      this._isDraggingInspector = false;
+      if (!this._inspectorDrawer?.matches(":hover")) {
+        this._isHoveringInspector = false;
+        if (this._orbitController) {
+          this._orbitController.enabled = true;
+        }
+      }
+    });
+
+    drawer.querySelector("#swmInspectorClose")?.addEventListener("click", (): void => {
+      this._toggleInspector(false);
+    });
+
+    // Lab quick params pane
+    const paramsContainer = drawer.querySelector("#swmInspectorParams") as HTMLElement;
+    if (paramsContainer) {
+      const pane = new Pane({ container: paramsContainer });
+
+      const fTurntable = pane.addFolder({ title: "Prism & Turntable", expanded: true });
+      const currentDeg = this._turntable ? MathUtils.radToDeg(this._turntable.rotation.y) : 0;
+      fTurntable
+        .addBinding({ angleDeg: currentDeg }, "angleDeg", {
+          min: -180,
+          max: 180,
+          step: 0.5,
+          label: "Stage Angle",
+        })
+        .on("change", (ev) => {
+          if (!this._manualTurntableControl) {
+            this._manualTurntableControl = true;
+          }
+          this._manualTurntableAngle = MathUtils.degToRad(ev.value);
+          if (this._turntable) this._turntable.rotation.y = this._manualTurntableAngle;
+        });
+
+      fTurntable
+        .addBinding({ autoWobble: !this._manualTurntableControl }, "autoWobble", {
+          label: "Auto-Wobble",
+        })
+        .on("change", (ev) => {
+          this._manualTurntableControl = !ev.value;
+          if (this._manualTurntableControl && this._turntable) {
+            this._manualTurntableAngle = this._turntable.rotation.y;
+          }
+        });
+
+      const fSplitter = pane.addFolder({ title: "50:50 Beam Splitter", expanded: true });
+      fSplitter
+        .addBinding({ splitterX: this._splitterX }, "splitterX", {
+          min: -3.35,
+          max: -1.15,
+          step: 0.05,
+          label: "Rail Pos X",
+        })
+        .on("change", (ev) => {
+          this._splitterX = ev.value;
+        });
+
+      fSplitter
+        .addBinding({ active: this._splitterActive }, "active", {
+          label: "Splitter Engaged",
+        })
+        .on("change", (ev) => {
+          this._splitterActive = ev.value;
+        });
+
+      const fOptics = pane.addFolder({ title: "Optics & Glass", expanded: false });
+      if (this._prismMesh && this._prismMesh.material instanceof GlassMaterial) {
+        const gm = this._prismMesh.material;
+        fOptics.addBinding(gm, "ior", { min: 1.1, max: 2.2, step: 0.01, label: "Prism IOR" });
+        fOptics.addBinding(gm, "roughness", {
+          min: 0.0,
+          max: 0.35,
+          step: 0.01,
+          label: "Roughness",
+        });
+        fOptics.addBinding(gm, "thickness", { min: 0.1, max: 1.5, step: 0.05, label: "Thickness" });
+      }
+
+      const fLight = pane.addFolder({ title: "Laser & Bloom", expanded: false });
+      if (this._laserLight) {
+        fLight.addBinding(this._laserLight, "intensity", {
+          min: 0.5,
+          max: 6.0,
+          step: 0.1,
+          label: "Laser Power",
+        });
+      }
+      const bloom = this.renderer.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
+      if (bloom) {
+        fLight.addBinding(bloom, "intensity", {
+          min: 0.0,
+          max: 1.2,
+          step: 0.05,
+          label: "Bloom Glow",
+        });
+      }
+    }
+
+    // Hierarchy Panel integration
+    const hierarchyContainer = drawer.querySelector("#swmInspectorHierarchy") as HTMLElement;
+    if (hierarchyContainer) {
+      this._hierarchyPanel = new HierarchyPanel(
+        hierarchyContainer,
+        () => this.scene.root,
+        {
+          onSelect: (obj): void => {
+            this._selectObject(obj);
+          },
+          onReparent: (): void => {},
+          onRename: (obj, newName): void => {
+            obj.name = newName;
+            this._hierarchyPanel?.refresh();
+          },
+        },
+        (obj): boolean => this._isExcludedFromHierarchy(obj),
+      );
+    }
+
+    // Property Panel integration
+    const propsContainer = drawer.querySelector("#swmInspectorProps") as HTMLElement;
+    if (propsContainer) {
+      this._propertyPanel = new PropertyPanel(propsContainer, this._undo, {
+        onPropertyChanged: (_obj, propKey): void => {
+          if ("name" === propKey) {
+            this._hierarchyPanel?.refresh();
+          }
+        },
+      });
+    }
+
+    // Viewport 3D object picking on canvas pointer interaction
+    this.canvas.addEventListener("pointerdown", (event: PointerEvent) => {
+      if (0 === event.button) {
+        this._pointerDownPos = { x: event.clientX, y: event.clientY };
+      }
+    });
+
+    this.canvas.addEventListener("pointerup", (event: PointerEvent) => {
+      if (!this._inspectorOpen || 0 !== event.button || !this._pointerDownPos) {
+        return;
+      }
+      const dx = event.clientX - this._pointerDownPos.x;
+      const dy = event.clientY - this._pointerDownPos.y;
+      this._pointerDownPos = null;
+      if (Math.hypot(dx, dy) > 5) {
+        return;
+      }
+      this._pickFromScreen(event.clientX, event.clientY);
+    });
   }
 }
 
