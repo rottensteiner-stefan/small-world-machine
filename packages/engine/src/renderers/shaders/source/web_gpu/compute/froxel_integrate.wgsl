@@ -138,9 +138,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         }
 
         // Reconstruct world position for directional lighting and shadow sampling.
-        let clipZ = (2.0 * near * far - zMid * (far + near)) / max(zMid * (near - far), 1e-6);
-        let ndcZ = clipZ * 0.5 + 0.5;
-        let clipPos = vec4f(ndcX, ndcY, ndcZ, 1.0);
+        let clipZ = ((far + near) * zMid - 2.0 * near * far) / max(zMid * (far - near), 1e-6);
+        let clipPos = vec4f(ndcX, ndcY, clipZ, 1.0);
         let worldH = uni.invViewProj * clipPos;
         let worldPos = worldH.xyz / max(worldH.w, 1e-6);
         let viewDir = normalize(worldPos - uni.camPos.xyz);

@@ -80,9 +80,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let ndcY = 1.0 - (f32(y) + 0.5 + jitter.y) / f32(dims.y) * 2.0;
     let zMid = sliceDepth(f32(z) + jitter.z, near, far, slices);
 
-    let clipZ = (2.0 * near * far - zMid * (far + near)) / max(zMid * (near - far), 1e-6);
-    let ndcZ = clipZ * 0.5 + 0.5;
-    let clipPos = vec4f(ndcX, ndcY, ndcZ, 1.0);
+    let clipZ = ((far + near) * zMid - 2.0 * near * far) / max(zMid * (far - near), 1e-6);
+    let clipPos = vec4f(ndcX, ndcY, clipZ, 1.0);
     let worldH = uni.invViewProj * clipPos;
     let worldPos = worldH.xyz / max(worldH.w, 1e-6);
 

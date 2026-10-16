@@ -28,8 +28,9 @@ struct FogVolumeData {
 struct FroxelUniforms {
     invView: mat4x4f,        // camera rotation inverse (world from view), for cell direction
     params: vec4f,           // [density, height, heightFalloff, maxWorldDistance]
-    phase: vec4f,            // [asymmetry g, intensity, jitter, numVolumes]
+    phase: vec4f,            // [asymmetry g, intensity, unused, numVolumes]
     nearFar: vec4f,          // [near, far, sliceCount, pad]
+    jitter: vec4f,           // [jitterX, jitterY, jitterZ, pad]
     volumes: array<FogVolumeData, 16>,
 }
 
@@ -68,12 +69,12 @@ fn sliceCenterDepth(slice: f32, near: f32, far: f32, slices: f32) -> f32 {
 }
 
 // World position of a froxel cell centre: camera position + the flashed NDC ray times the slice
-// centre depth. Uses the camera rotation only -- the projection cancels through projScale.
+// centre depth. Incorporates sub-voxel temporal jitter to eliminate slice banding and IGN noise.
 fn cellWorldPos(cell: vec3f, dims: vec3f, camPos: vec3f) -> vec3f {
-    let ndcX = (cell.x + 0.5) / dims.x * 2.0 - 1.0;
+    let ndcX = (cell.x + 0.5 + froxel.jitter.x) / dims.x * 2.0 - 1.0;
     // Flip Y: cluster grid Y grows downward (screen space), world Y grows upward.
-    let ndcY = 1.0 - ((cell.y + 0.5) / dims.y * 2.0);
-    let viewZ = sliceCenterDepth(cell.z, froxel.nearFar.x, froxel.nearFar.y, froxel.nearFar.z);
+    let ndcY = 1.0 - ((cell.y + 0.5 + froxel.jitter.y) / dims.y * 2.0);
+    let viewZ = sliceCenterDepth(cell.z + froxel.jitter.z, froxel.nearFar.x, froxel.nearFar.y, froxel.nearFar.z);
     var viewDir = vec3f(
         ndcX / global.projScale.x,
         ndcY / global.projScale.y,

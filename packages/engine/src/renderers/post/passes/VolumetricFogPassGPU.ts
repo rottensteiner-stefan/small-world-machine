@@ -47,8 +47,8 @@ export class VolumetricFogPassGPU {
   private _injectPipeline?: GPUComputePipeline;
   private _injectBGL!: GPUBindGroupLayout;
   private _injectUniformBuffer!: GPUBuffer;
-  /** 540 floats: FroxelUniforms in froxel_inject.wgsl (invView + 3x vec4f + 16x FogVolumeData). */
-  private readonly _injectUniformData: Float32Array = new Float32Array(28 + 16 * 32);
+  /** 544 floats: FroxelUniforms in froxel_inject.wgsl (invView + 4x vec4f + 16x FogVolumeData). */
+  private readonly _injectUniformData: Float32Array = new Float32Array(32 + 16 * 32);
 
   // --- 2. Reprojection Compute Pipeline (Temporal Filtering) ---
   private _reprojectPipeline!: GPUComputePipeline;
@@ -137,7 +137,7 @@ export class VolumetricFogPassGPU {
 
     // Uniform buffers
     this._injectUniformBuffer = device.createBuffer({
-      size: (28 + 16 * 32) * 4, // 540 x f32 = 2160 bytes
+      size: (32 + 16 * 32) * 4, // 544 x f32 = 2176 bytes
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this._reprojectUniformBuffer = device.createBuffer({
@@ -472,7 +472,7 @@ export class VolumetricFogPassGPU {
     const numVols = Math.min(fogVolumes.length, 16);
     inj[20] = element.asymmetry;
     inj[21] = element.intensity;
-    inj[22] = element.jitter;
+    inj[22] = 0.0;
     inj[23] = numVols;
 
     inj[24] = near;
@@ -480,7 +480,12 @@ export class VolumetricFogPassGPU {
     inj[26] = dims.z;
     inj[27] = 0.0;
 
-    let offset = 28;
+    inj[28] = jx;
+    inj[29] = jy;
+    inj[30] = jz;
+    inj[31] = 0.0;
+
+    let offset = 32;
     for (let v = 0; v < 16; v++) {
       if (v < numVols) {
         const vol = fogVolumes[v]!;
