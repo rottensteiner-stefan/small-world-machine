@@ -49,6 +49,10 @@ class Showcase29 extends AbstractShowcase {
   private _bloom: BloomElement | undefined = undefined;
   private _hbao: HbaoElement | undefined = undefined;
   private _vignette: VignetteElement | undefined = undefined;
+  private _lightingLabBtn: HTMLButtonElement | undefined = undefined;
+  private _flyController: FlyController | undefined = undefined;
+  private _isHoveringLab = false;
+  private _isDraggingLab = false;
   private _time = 0;
 
   constructor(options: EngineOptions = {}) {
@@ -124,16 +128,16 @@ class Showcase29 extends AbstractShowcase {
     this.camera.theta = -1.506;
     this.camera.phi = 0.04;
     this.camera.target.set(7.844, 1.267, -0.516);
-    this.camera.addBehavior(
-      new FlyController({
-        input: this.input,
-        audio: this.audio,
-        moveSpeed: 6.0,
-        fastMultiplier: 2.2,
-        slowMultiplier: 0.35,
-        enableCollision: false,
-      }),
-    );
+    const fly = new FlyController({
+      input: this.input,
+      audio: this.audio,
+      moveSpeed: 6.0,
+      fastMultiplier: 2.2,
+      slowMultiplier: 0.35,
+      enableCollision: false,
+    });
+    this._flyController = fly;
+    this.camera.addBehavior(fly);
 
     // 2. Multi-Tiered Mediterranean Lighting & Crytek-Grade Chiaroscuro
     // A. Deep Ambient Shadow: Low ambient creates dark, moody shaded arcade corridors
@@ -326,8 +330,25 @@ class Showcase29 extends AbstractShowcase {
 
   private _setupKeyboardShortcuts(): void {
     window.addEventListener("keydown", (e: KeyboardEvent) => {
-      // Ignore if focus is in an input element
-      if (document.activeElement?.tagName === "INPUT") return;
+      // Ignore if focus is in an input or textarea element
+      const activeTag = document.activeElement?.tagName;
+      if (activeTag === "INPUT" || activeTag === "TEXTAREA") return;
+
+      const hud = document.getElementById("sponzaTuningHud");
+      const isHudActive =
+        (hud?.classList.contains("open") ?? false) &&
+        (this._isHoveringLab ||
+          this._isDraggingLab ||
+          (null !== hud && hud.contains(document.activeElement)));
+
+      if (e.code === "KeyI") {
+        this._toggleLightingLab();
+        return;
+      }
+
+      if (isHudActive) {
+        return;
+      }
 
       if (e.code === "KeyH") {
         if (this._hbao) {
@@ -350,13 +371,27 @@ class Showcase29 extends AbstractShowcase {
           b.intensity = this._giEnabled ? (b instanceof SpotLight ? 32.0 : 18.0) : 0.0;
         }
         this._updateUIFromState();
-      } else if (e.code === "KeyO") {
-        const hud = document.getElementById("sponzaTuningHud");
-        if (hud) {
-          hud.classList.toggle("collapsed");
-        }
       }
     });
+  }
+
+  private _toggleLightingLab(force?: boolean): void {
+    const hud = document.getElementById("sponzaTuningHud");
+    if (!hud) return;
+    const isCurrentlyOpen = hud.classList.contains("open");
+    const open = undefined !== force ? force : !isCurrentlyOpen;
+    if (open) {
+      hud.classList.add("open");
+      this._lightingLabBtn?.classList.add("active");
+    } else {
+      hud.classList.remove("open");
+      this._lightingLabBtn?.classList.remove("active");
+      this._isHoveringLab = false;
+      this._isDraggingLab = false;
+      if (this._flyController) {
+        this._flyController.enabled = true;
+      }
+    }
   }
 
   private _createLiveTuningUI(): void {
@@ -368,26 +403,61 @@ class Showcase29 extends AbstractShowcase {
     style.textContent = `
       #sponzaTuningHud {
         position: fixed;
-        top: 16px;
-        right: 16px;
+        top: 0;
+        right: 0;
         width: 320px;
-        max-height: calc(100vh - 32px);
+        height: calc(100vh - 36px);
         overflow-y: auto;
-        background: rgba(15, 18, 24, 0.90);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 12px;
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
-        backdrop-filter: blur(14px);
-        -webkit-backdrop-filter: blur(14px);
+        background: var(--tool-panel, rgba(14, 18, 28, 0.95));
+        border-left: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
+        border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
+        box-shadow: -6px 0 32px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         color: #e2e8f0;
         font-family: var(--font-ui, "Rajdhani", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
         font-size: 12px;
-        z-index: 99999;
+        z-index: 10000;
         user-select: none;
-        transition: transform 0.25s ease, opacity 0.25s ease;
+        transform: translateX(100%);
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        flex-direction: column;
       }
-      #sponzaTuningHud.collapsed .hud-body {
-        display: none;
+      #sponzaTuningHud.open {
+        transform: translateX(0);
+      }
+      .swm-inspector-btn {
+        position: fixed;
+        bottom: 5px;
+        right: 14px;
+        width: 26px;
+        height: 26px;
+        z-index: 10001;
+        pointer-events: auto;
+        background: var(--tool-card, rgba(22, 29, 45, 0.85));
+        color: var(--tool-text, #f8fafc);
+        border: 1px solid var(--tool-border, rgba(148, 163, 184, 0.25));
+        border-radius: var(--tool-radius-sm, 4px);
+        padding: 0;
+        font-size: 0.95rem;
+        cursor: pointer;
+        backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+      }
+      .swm-inspector-btn:hover {
+        border-color: var(--tool-accent, #ffb84d);
+        color: var(--tool-accent, #ffb84d);
+        box-shadow: 0 0 10px var(--tool-accent-glow, rgba(255, 184, 77, 0.3));
+      }
+      .swm-inspector-btn.active {
+        background: rgba(255, 184, 77, 0.15);
+        border-color: var(--tool-accent, #ffb84d);
+        color: var(--tool-accent, #ffb84d);
+        box-shadow: 0 0 8px var(--tool-accent-glow, rgba(255, 184, 77, 0.25));
       }
       #sponzaTuningHud .hud-header {
         display: flex;
@@ -396,7 +466,6 @@ class Showcase29 extends AbstractShowcase {
         padding: 10px 14px;
         background: rgba(255, 255, 255, 0.04);
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        cursor: pointer;
       }
       #sponzaTuningHud .hud-title {
         font-weight: 700;
@@ -507,7 +576,10 @@ class Showcase29 extends AbstractShowcase {
         <div class="hud-title">
           <span>🏛️</span> Sponza Lighting Lab
         </div>
-        <span class="hud-badge">[O] Toggle</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="hud-badge">[I] Toggle</span>
+          <button id="sponzaHudClose" title="Close Panel" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;padding:0 4px;line-height:1;">✕</button>
+        </div>
       </div>
       <div class="hud-body">
         <!-- Preset Row -->
@@ -605,15 +677,98 @@ class Showcase29 extends AbstractShowcase {
     `;
     document.body.appendChild(hud);
 
-    // Isolate pointer events inside the overlay so spectator fly mode is not interrupted
-    const stopEvents = ["mousedown", "pointerdown", "mouseup", "mousemove", "click", "keydown"];
-    for (const ev of stopEvents) {
-      hud.addEventListener(ev, (e) => e.stopPropagation());
+    // Footer toggle button
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "swm-inspector-btn";
+    toggleBtn.innerHTML = "<span>⚙</span>";
+    toggleBtn.title = "Toggle Sponza Lighting Lab (Key: I)";
+    toggleBtn.onclick = (): void => {
+      this._toggleLightingLab();
+    };
+    this._lightingLabBtn = toggleBtn;
+
+    const footer = document.querySelector(".app-footer");
+    if (footer) {
+      footer.appendChild(toggleBtn);
+    } else {
+      document.body.appendChild(toggleBtn);
     }
 
-    // Header click to collapse/expand
-    document.getElementById("hudHeader")?.addEventListener("click", () => {
-      hud.classList.toggle("collapsed");
+    // Isolate pointer, mouse, wheel, touch events inside the overlay so spectator fly mode is not interrupted
+    const stopEvents = [
+      "mousedown",
+      "mouseup",
+      "mousemove",
+      "pointerdown",
+      "pointerup",
+      "pointermove",
+      "wheel",
+      "touchstart",
+      "touchmove",
+      "touchend",
+      "keydown",
+      "keyup",
+      "click",
+      "dblclick",
+      "contextmenu",
+    ];
+    for (const ev of stopEvents) {
+      hud.addEventListener(
+        ev,
+        (e) => {
+          e.stopPropagation();
+          if ("wheel" === ev) {
+            this.input.mouse.zoom = 0;
+            this.input.mouse.wheelX = 0;
+            this.input.mouse.wheelY = 0;
+          }
+        },
+        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
+      );
+    }
+
+    hud.addEventListener("pointerenter", () => {
+      this._isHoveringLab = true;
+      if (this._flyController) {
+        this._flyController.enabled = false;
+      }
+    });
+
+    hud.addEventListener("pointerleave", (e: PointerEvent) => {
+      if (0 === e.buttons && !this._isDraggingLab) {
+        this._isHoveringLab = false;
+        if (this._flyController) {
+          this._flyController.enabled = true;
+        }
+      }
+    });
+
+    hud.addEventListener("pointerdown", () => {
+      this._isHoveringLab = true;
+      this._isDraggingLab = true;
+      if (this._flyController) {
+        this._flyController.enabled = false;
+      }
+      this.input.mouse.dx = 0;
+      this.input.mouse.dy = 0;
+      this.input.mouse.zoom = 0;
+      this.input.mouse.left = false;
+    });
+
+    window.addEventListener("pointerup", () => {
+      this._isDraggingLab = false;
+      const curHud = document.getElementById("sponzaTuningHud");
+      if (!curHud?.matches(":hover")) {
+        this._isHoveringLab = false;
+        if (this._flyController) {
+          this._flyController.enabled = true;
+        }
+      }
+    });
+
+    // Close button
+    document.getElementById("sponzaHudClose")?.addEventListener("click", () => {
+      this._toggleLightingLab(false);
     });
 
     // Wire up sliders
