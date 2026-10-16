@@ -21,7 +21,7 @@
  * Fresnel reflectance at both film interfaces (air->film, film->base), Snell refraction into the
  * film, optical path difference and per-RGB-wavelength phase combined via the classic
  * interference formula `I = R1 + R2 + 2·sqrt(R1·R2)·cos(phase)`. Not the Belcour & Barla (2017)
- * spectral/Airy-sum model; see `.agents/notes/oil-shader-roadmap.md` Abschnitt 6.3.
+ * spectral/Airy-sum model; see `docs/research/oil-puddle-shader-technique.md` § 6.3a.
  */
 
 /** GLSL function declarations (valid for GLSL ES 1.00 and 3.00). */

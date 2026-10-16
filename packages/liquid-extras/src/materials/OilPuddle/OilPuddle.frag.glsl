@@ -119,7 +119,7 @@ void main() {
     vec3 baseColor = mix(coreColor, edgeColor, smoothstep(0.1, 0.95, radialFactor) * rimDarkening);
 
     // Subtle thin-film shimmer: two independently-scrolling noise layers (opposite directions/
-    // speeds, per the Godot reference in .agents/notes/oil.md) combined into the thickness
+    // speeds, per the Godot reference in docs/research/oil-puddle-shader-technique.md) combined into the thickness
     // variation, giving the shimmer a wandering "wave" structure instead of a single static-
     // frequency drift. Colour-only -- no spatial animation; timeScale = volatility (petrol/diesel).
     vec2 waveUvA = v_worldPos.xz * 4.0 + time * vec2(0.02, 0.015) * timeScale;
