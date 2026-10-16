@@ -43,6 +43,9 @@ describe("FogVolume", () => {
       expect(vol.albedo.g).toBe(1);
       expect(vol.albedo.b).toBe(1);
       expect(vol.emissionIntensity).toBe(0.0);
+      expect(vol.noiseScale).toBe(0.0);
+      expect(vol.noiseAmount).toBe(0.0);
+      expect(vol.noiseSpeed).toBe(0.0);
       expect(vol.enabled).toBe(true);
     });
 
@@ -56,6 +59,9 @@ describe("FogVolume", () => {
         albedo: new Color(0.2, 0.4, 0.8),
         emission: new Color(1.0, 0.5, 0.0),
         emissionIntensity: 2.5,
+        noiseScale: 0.8,
+        noiseAmount: 0.6,
+        noiseSpeed: 0.25,
         enabled: true,
       });
 
@@ -65,6 +71,9 @@ describe("FogVolume", () => {
       expect(vol.density).toBeCloseTo(-0.8);
       expect(vol.edgeFade).toBeCloseTo(0.35);
       expect(vol.emissionIntensity).toBeCloseTo(2.5);
+      expect(vol.noiseScale).toBeCloseTo(0.8);
+      expect(vol.noiseAmount).toBeCloseTo(0.6);
+      expect(vol.noiseSpeed).toBeCloseTo(0.25);
     });
   });
 

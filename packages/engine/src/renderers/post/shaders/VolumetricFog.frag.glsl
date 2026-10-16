@@ -33,6 +33,7 @@ struct FogVolumeData {
 
 uniform int u_numFogVolumes;
 uniform FogVolumeData u_fogVolumes[16];
+uniform float u_time;
 
 out vec4 fragColor;
 
@@ -48,6 +49,36 @@ float sphereSDF(vec3 p, float r) {
 float cylinderSDF(vec3 p, float r, float h) {
     vec2 d = vec2(length(p.xz), abs(p.y)) - vec2(r, h);
     return min(max(d.x, d.y), 0.0) + length(max(d, vec2(0.0)));
+}
+
+// Analytical procedural 3D noise for animated rolling mist and billowy cloud pockets.
+float hash13(vec3 p) {
+    vec3 q = fract(p * 0.1031);
+    float d = dot(q, q.zyx + vec3(31.32));
+    return fract((q.x + q.y) * q.z * d);
+}
+
+float valueNoise3D(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    vec3 u = f * f * (3.0 - 2.0 * f);
+
+    float n000 = hash13(i + vec3(0.0, 0.0, 0.0));
+    float n100 = hash13(i + vec3(1.0, 0.0, 0.0));
+    float n010 = hash13(i + vec3(0.0, 1.0, 0.0));
+    float n110 = hash13(i + vec3(1.0, 1.0, 0.0));
+    float n001 = hash13(i + vec3(0.0, 0.0, 1.0));
+    float n101 = hash13(i + vec3(1.0, 0.0, 1.0));
+    float n011 = hash13(i + vec3(0.0, 1.0, 1.0));
+    float n111 = hash13(i + vec3(1.0, 1.0, 1.0));
+
+    float nx0 = mix(mix(n000, n100, u.x), mix(n010, n110, u.x), u.y);
+    float nx1 = mix(mix(n001, n101, u.x), mix(n011, n111, u.x), u.y);
+    return mix(nx0, nx1, u.z);
+}
+
+float fbm3D(vec3 p) {
+    return 0.65 * valueNoise3D(p) + 0.35 * valueNoise3D(p * 2.05 + vec3(1.7, 3.2, 5.1));
 }
 
 float getIGN(vec2 screenPos) {
@@ -152,6 +183,16 @@ void main() {
                 falloff = falloff * falloff * (3.0 - 2.0 * falloff);
 
                 float volDensity = u_fogVolumes[v].params.y * falloff;
+
+                float noiseAmount = u_fogVolumes[v].emission.w;
+                float noiseScale = u_fogVolumes[v].albedo.w;
+                if (noiseAmount > 0.0 && noiseScale > 0.0 && volDensity > 0.0) {
+                    vec3 drift = vec3(1.0, 0.15, 0.4) * (u_fogVolumes[v].size.w * u_time);
+                    vec3 pNoise = pLocal * noiseScale - drift;
+                    float turb = fbm3D(pNoise);
+                    volDensity = volDensity * mix(1.0, clamp(turb * 1.8, 0.0, 3.0), noiseAmount);
+                }
+
                 localDensity = max(0.0, localDensity + volDensity);
                 if (volDensity > 0.0) {
                     localEmission += u_fogVolumes[v].emission.rgb * u_fogVolumes[v].params.w * falloff;

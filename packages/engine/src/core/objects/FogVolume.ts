@@ -13,16 +13,20 @@ export interface FogVolumeOptions {
   albedo?: Color;
   emission?: Color;
   emissionIntensity?: number;
+  noiseScale?: number;
+  noiseAmount?: number;
+  noiseSpeed?: number;
   enabled?: boolean;
 }
 
 /**
- * A localized volumetric fog volume (Option R Phase 3).
+ * A localized volumetric fog volume (Option R Phase 3 & Phase 5).
  *
  * Supports analytical Signed Distance Fields (SDF) for Box, Sphere, and Cylinder shapes.
  * Positive `density` injects localized mist, smoke, or cloud bodies with custom albedo and emission.
  * Negative `density` (e.g. -1.0) carves out fog from overlapping volumes or global height fog,
  * allowing clear interiors in caves, bunkers, and indoor rooms.
+ * Procedural 3D noise (`noiseScale`, `noiseAmount`, `noiseSpeed`) creates rolling, animated mist.
  */
 export class FogVolume extends Object3D {
   public shape: FogVolumeShape;
@@ -37,6 +41,12 @@ export class FogVolume extends Object3D {
   public emission: Color;
   /** Volumetric emission intensity multiplier. */
   public emissionIntensity: number;
+  /** Spatial frequency of procedural 3D noise (0 = uniform fog). */
+  public noiseScale: number;
+  /** Modulation strength of 3D noise (0.0 = none, 1.0 = full turbulence). */
+  public noiseAmount: number;
+  /** Drift velocity of rolling mist in world units/sec. */
+  public noiseSpeed: number;
   /** Whether this fog volume actively injects into the froxel/raymarch passes. */
   public enabled: boolean;
 
@@ -52,6 +62,9 @@ export class FogVolume extends Object3D {
     this.albedo = options.albedo ? options.albedo.clone() : new Color(1, 1, 1);
     this.emission = options.emission ? options.emission.clone() : new Color(0, 0, 0);
     this.emissionIntensity = options.emissionIntensity ?? 0.0;
+    this.noiseScale = options.noiseScale ?? 0.0;
+    this.noiseAmount = options.noiseAmount ?? 0.0;
+    this.noiseSpeed = options.noiseSpeed ?? 0.0;
     this.enabled = options.enabled ?? true;
 
     this.isCollidable = false;

@@ -472,7 +472,7 @@ export class VolumetricFogPassGPU {
     const numVols = Math.min(fogVolumes.length, 16);
     inj[20] = element.asymmetry;
     inj[21] = element.intensity;
-    inj[22] = 0.0;
+    inj[22] = performance.now() * 0.001; // elapsed time in seconds for rolling mist
     inj[23] = numVols;
 
     inj[24] = near;
@@ -498,15 +498,15 @@ export class VolumetricFogPassGPU {
         inj[offset + 20] = vol.albedo.r;
         inj[offset + 21] = vol.albedo.g;
         inj[offset + 22] = vol.albedo.b;
-        inj[offset + 23] = 0.0;
+        inj[offset + 23] = vol.noiseScale;
         inj[offset + 24] = vol.emission.r;
         inj[offset + 25] = vol.emission.g;
         inj[offset + 26] = vol.emission.b;
-        inj[offset + 27] = 0.0;
+        inj[offset + 27] = vol.noiseAmount;
         inj[offset + 28] = vol.size.x;
         inj[offset + 29] = vol.size.y;
         inj[offset + 30] = vol.size.z;
-        inj[offset + 31] = 0.0;
+        inj[offset + 31] = vol.noiseSpeed;
       } else {
         inj.fill(0, offset, offset + 32);
       }

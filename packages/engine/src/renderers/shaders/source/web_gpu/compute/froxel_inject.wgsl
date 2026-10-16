@@ -51,6 +51,36 @@ fn cylinderSDF(p: vec3f, r: f32, h: f32) -> f32 {
     return min(max(d.x, d.y), 0.0) + length(max(d, vec2f(0.0)));
 }
 
+// Analytical procedural 3D noise for animated rolling mist and billowy cloud pockets.
+fn hash13(p: vec3f) -> f32 {
+    let q = fract(p * 0.1031);
+    let d = dot(q, q.zyx + vec3f(31.32));
+    return fract((q.x + q.y) * q.z * d);
+}
+
+fn valueNoise3D(p: vec3f) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+
+    let n000 = hash13(i + vec3f(0.0, 0.0, 0.0));
+    let n100 = hash13(i + vec3f(1.0, 0.0, 0.0));
+    let n010 = hash13(i + vec3f(0.0, 1.0, 0.0));
+    let n110 = hash13(i + vec3f(1.0, 1.0, 0.0));
+    let n001 = hash13(i + vec3f(0.0, 0.0, 1.0));
+    let n101 = hash13(i + vec3f(1.0, 0.0, 1.0));
+    let n011 = hash13(i + vec3f(0.0, 1.0, 1.0));
+    let n111 = hash13(i + vec3f(1.0, 1.0, 1.0));
+
+    let nx0 = mix(mix(n000, n100, u.x), mix(n010, n110, u.x), u.y);
+    let nx1 = mix(mix(n001, n101, u.x), mix(n011, n111, u.x), u.y);
+    return mix(nx0, nx1, u.z);
+}
+
+fn fbm3D(p: vec3f) -> f32 {
+    return 0.65 * valueNoise3D(p) + 0.35 * valueNoise3D(p * 2.05 + vec3f(1.7, 3.2, 5.1));
+}
+
 // Henyey-Greenstein phase function (Wronski/Frostbite family). g: -1..1.
 fn hgPhase(cosTheta: f32, g: f32) -> f32 {
     let g2 = g * g;
@@ -128,7 +158,19 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
             var falloff = clamp(-sdf / fadeDist, 0.0, 1.0);
             falloff = falloff * falloff * (3.0 - 2.0 * falloff);
 
-            let volDensity = vol.params.y * falloff;
+            var volDensity = vol.params.y * falloff;
+
+            // 3D Procedural Noise Modulation (Rolling Mist)
+            let noiseAmount = vol.emission.w;
+            let noiseScale = vol.albedo.w;
+            if (noiseAmount > 0.0 && noiseScale > 0.0 && volDensity > 0.0) {
+                let time = froxel.phase.z;
+                let drift = vec3f(1.0, 0.15, 0.4) * (vol.size.w * time);
+                let pNoise = pLocal * noiseScale - drift;
+                let turb = fbm3D(pNoise);
+                volDensity = volDensity * mix(1.0, clamp(turb * 1.8, 0.0, 3.0), noiseAmount);
+            }
+
             extinction = max(0.0, extinction + volDensity);
 
             if (volDensity > 0.0) {

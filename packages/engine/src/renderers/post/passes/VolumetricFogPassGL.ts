@@ -51,6 +51,7 @@ export class VolumetricFogPassGL {
   private _uCascadeMatricesLoc: WebGLUniformLocation | null = null;
   private _uCascadeSplitsLoc: WebGLUniformLocation | null = null;
   private _uDirShadowInfoLoc: WebGLUniformLocation | null = null;
+  private _uTimeLoc: WebGLUniformLocation | null = null;
   private _uNumFogVolumesLoc: WebGLUniformLocation | null = null;
   private readonly _uFogVolumeLocs: FogVolumeUniformLocations[] = [];
 
@@ -150,6 +151,7 @@ export class VolumetricFogPassGL {
       this._uCascadeMatricesLoc = gl.getUniformLocation(this._progFog, "u_cascadeMatrices");
       this._uCascadeSplitsLoc = gl.getUniformLocation(this._progFog, "u_cascadeSplits");
       this._uDirShadowInfoLoc = gl.getUniformLocation(this._progFog, "u_dirShadowInfo");
+      this._uTimeLoc = gl.getUniformLocation(this._progFog, "u_time");
       this._uNumFogVolumesLoc = gl.getUniformLocation(this._progFog, "u_numFogVolumes");
 
       this._uFogVolumeLocs.length = 0;
@@ -340,6 +342,10 @@ export class VolumetricFogPassGL {
       gl2.uniform4fv(this._uDirShadowInfoLoc, this._scratchDirShadowInfo);
     }
 
+    if (this._uTimeLoc) {
+      gl2.uniform1f(this._uTimeLoc, performance.now() * 0.001);
+    }
+
     const numVols = Math.min(fogVolumes.length, 16);
     if (this._uNumFogVolumesLoc) gl2.uniform1i(this._uNumFogVolumesLoc, numVols);
 
@@ -352,10 +358,17 @@ export class VolumetricFogPassGL {
         if (loc.invTransform) gl2.uniformMatrix4fv(loc.invTransform, false, invMat.data);
         if (loc.params)
           gl2.uniform4f(loc.params, vol.shape, vol.density, vol.edgeFade, vol.emissionIntensity);
-        if (loc.albedo) gl2.uniform4f(loc.albedo, vol.albedo.r, vol.albedo.g, vol.albedo.b, 0.0);
+        if (loc.albedo)
+          gl2.uniform4f(loc.albedo, vol.albedo.r, vol.albedo.g, vol.albedo.b, vol.noiseScale);
         if (loc.emission)
-          gl2.uniform4f(loc.emission, vol.emission.r, vol.emission.g, vol.emission.b, 0.0);
-        if (loc.size) gl2.uniform4f(loc.size, vol.size.x, vol.size.y, vol.size.z, 0.0);
+          gl2.uniform4f(
+            loc.emission,
+            vol.emission.r,
+            vol.emission.g,
+            vol.emission.b,
+            vol.noiseAmount,
+          );
+        if (loc.size) gl2.uniform4f(loc.size, vol.size.x, vol.size.y, vol.size.z, vol.noiseSpeed);
       }
     }
 
