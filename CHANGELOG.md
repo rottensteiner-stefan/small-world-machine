@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.108.0] - 2026-10-16
+
+### "The noblest pleasure is the joy of understanding." - Leonardo da Vinci
+
+- **Features:**
+  - *Showcase 28 – Quantum Refraction Lab: in-viewport Lab Inspector & Maker suite:* a collapsible dark-theme inspector drawer (`I` shortcut or footer gear button) with Tweakpane Lab Knobs (turntable angle, auto-wobble, beam-splitter X, splitter toggle, glass IOR/roughness/thickness, laser/bloom intensity), a live `HierarchyPanel` scene graph, deep `PropertyPanel` editing (transform, materials, lights) and 1-click launchers for Forge DevTools and the standalone Maker Scene Editor. Canvas raycast picking (stationary clicks vs. orbit drags distinguished by a 5 px motion threshold) selects any visible lab component and highlights its dynamic world-space bounds with a cyan wireframe; selection stays synchronized across hierarchy and property panels.
+  - *Showcase 28 – omnidirectional 3-face prism refraction:* `computeSpectralRays()` generalized from the hardcoded edge to dynamic exterior ray-tracing across all three equilateral prism faces, so rotation around ~120°/~240° exposes a new facet that catches, refracts and disperses the laser; exit rays beyond the detector project into free flight with a tracked chromatic caustic wash on the bench. A physical anodized aluminum sensor bezel frames the graticule window, and manual turntable control was halved (0.6 rad/s, Shift 1.5) for fine facet alignment.
+  - *Showcase 28 – manual turntable, movable 50:50 beam splitter and auxiliary reference detector:* arrow keys drive the turntable directly (Shift accelerates, Space/T toggle auto-wobble with phase alignment, graceful TIR band contraction), `↑`/`↓` (Shift to speed up) slide a kinematic beam-splitter carriage along an anodized dovetail rail, `M` toggles splitter bypass, and a calibrated AUX REF photodetector strip with a tracking luminous target spot images the 90°-reflected reference beam; split beam segments bridge emitter → splitter → prism entry → reference sensor with zero GC allocations. Graticule luminance re-tuned (rays 0.65, detector band 1.35), detector absorber graticule orientation corrected, GlassMaterial thickness/roughness and key-glint spot tuned for razor-sharp prism facets.
+  - *Showcase 29 – Sponza Lighting Lab:* a unified right-side inspector drawer (same `I` shortcut and footer gear dock as Showcase 28) with slider-based lighting controls and live scene state, plus `FlyController` reserved for the lab instead of camera motion, and sliders/scroll fully isolated from camera input.
+  - *`@small-world-machine/tools` public exports:* `PropertyPanel`, `HierarchyPanel` and `UndoStack` are now exported from the tools package (previously internal), enabling the showcase inspectors.
+- **Architecture & Bugfixes:**
+  - *Input leak isolation for editor drawers:* orbit/fly camera no longer rotates, zooms or nudges while interacting with inspector/tuning sliders or scrolling panels. Drawer and HUD containers stop propagation for mouse/pointer/wheel/touch and keyboard events, accumulated input deltas are reset on wheel events, and `OrbitController` (28) / `FlyController` (29) are dynamically disabled on pointer enter/down and re-enabled on leave/up; scene shortcuts are suppressed while panel controls have focus.
+- **Housekeeping & Docs:**
+  - *Showcase 28 concept dossier & dev log:* `concept-dossier.html` (visual concept) and log entries through the inspector/picking rollout, keeping the app docs convention; Showcase 29 stays log-less.
+  - *Documentation audit follow-up:* all unambiguous findings of the full-read audit of every tracked `*.md` were fixed in the preceding documentation commit (README import specifiers and showcase count, `src/tools` → `packages/tools`, lane contracts on ADR 0027's 512 B size, goldens README contradiction, ADR statuses, guides, character-pipeline skill).
+
 ## [0.107.0] - 2026-10-15
 
 ### "I have loved the stars too fondly to be fearful of the night." - Sarah Williams
