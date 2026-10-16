@@ -46,6 +46,7 @@ export class PostProcessPass implements RenderPass {
   private _builtBloomTextureView?: GPUTextureView;
   private _builtHbaoTextureView?: GPUTextureView;
   private _builtShaftsTextureView?: GPUTextureView;
+  private _builtVolumetricFogTextureView?: GPUTextureView;
   private _compiledSignature?: string;
 
   private _getSignature(group: import("../post/index.js").PostProcessingGroup): string {
@@ -125,6 +126,7 @@ export class PostProcessPass implements RenderPass {
         { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
         { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
         { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+        { binding: 6, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
       ],
     });
 
@@ -183,6 +185,10 @@ export class PostProcessPass implements RenderPass {
     const shaftsEnabled = shafts && shafts.enabled;
     const outlineEnabled = outline && outline.enabled;
     const flashEnabled = flash && flash.enabled;
+    const volFog = group.get<import("../post/index.js").VolumetricFogElement>(
+      PostProcessingEffectType.VOLUMETRIC_FOG,
+    );
+    const volFogEnabled = volFog && volFog.enabled;
 
     // Inject only STRUCTURAL parameters as WGSL constants -- these gate real code paths (branch
     // taken, sample count), so changing them legitimately needs a rebuild. Continuous tuning
@@ -225,6 +231,10 @@ export class PostProcessPass implements RenderPass {
       `const u_lightShaftsEnabled: u32 = ${shaftsEnabled ? 1 : 0}u;`,
     );
     assembledFrag = assembledFrag.replace(
+      "const u_volumetricFogEnabled: u32 = 0u;",
+      `const u_volumetricFogEnabled: u32 = ${volFogEnabled ? 1 : 0}u;`,
+    );
+    assembledFrag = assembledFrag.replace(
       "const u_outlineEnabled: u32 = 0u;",
       `const u_outlineEnabled: u32 = ${outlineEnabled ? 1 : 0}u;`,
     );
@@ -260,6 +270,7 @@ export class PostProcessPass implements RenderPass {
     bloomActiveView: GPUTextureView,
     hbaoActiveView: GPUTextureView,
     shaftsActiveView: GPUTextureView,
+    volumetricFogActiveView: GPUTextureView,
   ): void {
     const device = renderer.gpuDevice!;
     this._ensureResources(device);
@@ -273,6 +284,7 @@ export class PostProcessPass implements RenderPass {
         { binding: 3, resource: bloomActiveView },
         { binding: 4, resource: hbaoActiveView },
         { binding: 5, resource: shaftsActiveView },
+        { binding: 6, resource: volumetricFogActiveView },
       ],
     });
   }
@@ -316,6 +328,14 @@ export class PostProcessPass implements RenderPass {
         ? renderer.lightShaftsTextureView
         : renderer.whiteTextureView;
 
+    const volFog = group.get<import("../post/index.js").VolumetricFogElement>(
+      PostProcessingEffectType.VOLUMETRIC_FOG,
+    );
+    const volFogActiveView =
+      volFog && volFog.enabled && renderer.volumetricFogTextureView
+        ? renderer.volumetricFogTextureView
+        : renderer.whiteTextureView;
+
     const sig = this._getSignature(group);
 
     // Rebuild pipeline ONLY if the structural shader signature changed
@@ -330,13 +350,22 @@ export class PostProcessPass implements RenderPass {
       this._builtTextureView !== colorView ||
       this._builtBloomTextureView !== bloomActiveView ||
       this._builtHbaoTextureView !== hbaoActiveView ||
-      this._builtShaftsTextureView !== shaftsActiveView
+      this._builtShaftsTextureView !== shaftsActiveView ||
+      this._builtVolumetricFogTextureView !== volFogActiveView
     ) {
-      this._buildBindGroup(renderer, colorView, bloomActiveView, hbaoActiveView, shaftsActiveView);
+      this._buildBindGroup(
+        renderer,
+        colorView,
+        bloomActiveView,
+        hbaoActiveView,
+        shaftsActiveView,
+        volFogActiveView,
+      );
       this._builtTextureView = colorView;
       this._builtBloomTextureView = bloomActiveView;
       this._builtHbaoTextureView = hbaoActiveView;
       this._builtShaftsTextureView = shaftsActiveView;
+      this._builtVolumetricFogTextureView = volFogActiveView;
     }
 
     // Write the continuous tuning values every frame, independent of the rebuild guard above --

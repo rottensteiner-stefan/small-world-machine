@@ -120,7 +120,6 @@ fn fs_main(@builtin(position) fragPos: vec4f) -> @location(0) vec4f {
     var transmittance = 1.0;
 
     let volDims = vec3f(textureDimensions(volume, 0));
-    let volMax = max(volDims.x, max(volDims.y, volDims.z));
     let sunActive = uni.sunColorIntensity.w > 0.0;
     let g = uni.params.z;
     let sunDir = normalize(uni.sunDir.xyz);
@@ -135,7 +134,11 @@ fn fs_main(@builtin(position) fragPos: vec4f) -> @location(0) vec4f {
         let cellY = clamp(floor(uv.y * volDims.y), 0.0, volDims.y - 1.0);
         let sliceF = sliceFromViewDepth(t, uni.nearFar.x, uni.nearFar.y, volDims.z);
         let cell = vec3f(cellX, cellY, min(sliceF, volDims.z - 1.0));
-        let vol = textureSampleLevel(volume, volumeSampler, (cell + vec3f(0.5)) / volMax * 0.9999, 0.0);
+        // Component-wise normalization (NOT /max-dim): cell coords are in [0, dim-1], so centering
+        // and dividing by the per-axis dimension maps the sample position onto the correct cell
+        // in every dimension -- a single max-dimension divisor would fold Y/Z cells onto wrong
+        // texture slices. `(cell + 0.5) / dim < 1` holds for every axis by construction.
+        let vol = textureSampleLevel(volume, volumeSampler, (cell + vec3f(0.5)) / volDims, 0.0);
 
         let density = max(vol.a, 0.0);
         let extinctionStep = density * stepLen;

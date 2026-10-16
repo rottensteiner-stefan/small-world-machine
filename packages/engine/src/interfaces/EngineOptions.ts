@@ -236,6 +236,19 @@ export interface PostProcessingEffectsConfig {
     weight?: number;
     color?: { r: number; g: number; b: number } | [number, number, number];
   };
+  /** True 3D volumetric fog (froxel grid, WebGPU-only in V1, see ADR 0031). */
+  volumetricFog?: {
+    enabled?: boolean;
+    density?: number;
+    height?: number;
+    heightFalloff?: number;
+    maxDistance?: number;
+    intensity?: number;
+    asymmetry?: number;
+    castDirectionalShadow?: boolean;
+    jitter?: number;
+    color?: { r: number; g: number; b: number } | [number, number, number];
+  };
 }
 
 /**

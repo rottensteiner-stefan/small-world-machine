@@ -64,6 +64,7 @@ import {
   AOPassGPU,
   HistoryBlendPassGPU,
   LightShaftsPassGPU,
+  VolumetricFogPassGPU,
 } from "../post/passes/index.js";
 import { SkinnedMesh, Skeleton, MAX_SKINNED_BONES } from "../../core/animation/index.js";
 
@@ -326,6 +327,14 @@ export class WebGPURenderer extends AbstractRenderer {
   public get lightShaftsTextureView(): GPUTextureView | undefined {
     return this._lightShaftsTextureView;
   }
+  private _volumetricFogPassGPU: VolumetricFogPassGPU | undefined = undefined;
+  private _volumetricFogTextureView: GPUTextureView | undefined = undefined;
+  /** Full-screen in-scattering target of the volumetric-fog raymarch pass, consumed additively
+   * (before tonemapping) by PostProcessPass. Recomputed fresh every frame; undefined when the
+   * `VolumetricFogElement` is disabled or inputs are missing. */
+  public get volumetricFogTextureView(): GPUTextureView | undefined {
+    return this._volumetricFogTextureView;
+  }
   private _taaPassGPU: HistoryBlendPassGPU | undefined = undefined;
   /** This frame's TAA-resolved color view, if TAA is enabled -- read by PostProcessPass instead
    * of `_hdrTextureView` for its color input. Recomputed fresh every frame; `_hdrTextureView`
@@ -389,6 +398,14 @@ export class WebGPURenderer extends AbstractRenderer {
   }
   public set globalBindGroup(bindGroup: GPUBindGroup) {
     this._globalBindGroup = bindGroup;
+  }
+  /**
+   * Shared bind-group layout behind `globalBindGroup` -- exposed so additional compute passes
+   * (e.g. the volumetric-fog froxel injection) can declare the engine's bind group 0 alongside
+   * their own bindings without duplicating the layout. Read-only; see `globalBindGroup`.
+   */
+  public get globalBGL(): GPUBindGroupLayout {
+    return this._globalBGL;
   }
   private _globalBGL!: GPUBindGroupLayout;
   private _objectBGL!: GPUBindGroupLayout;
@@ -1555,6 +1572,33 @@ export class WebGPURenderer extends AbstractRenderer {
         this._lightShaftsTextureView = undefined;
       }
 
+      // Volumetric fog: inject the froxel volume (compute), then ray-march per pixel with
+      // directional/CSM self-shadowing -- composed additively before tonemapping by
+      // PostProcessPass. WebGPU-only in V1 (ADR 0031); WebGL2 stays on analytic fog.
+      const volFogNode = this.postProcessing.get<import("../post/index.js").VolumetricFogElement>(
+        PostProcessingEffectType.VOLUMETRIC_FOG,
+      );
+      if (isPostProcessPass && volFogNode && volFogNode.enabled && this._opaqueDepthTextureView) {
+        this._volumetricFogPassGPU ??= new VolumetricFogPassGPU(this._device);
+        this._volumetricFogTextureView =
+          this._volumetricFogPassGPU.execute(
+            this,
+            ce,
+            this._opaqueDepthTextureView,
+            this._context.canvas.width,
+            this._context.canvas.height,
+            vp,
+            vMat,
+            camPos,
+            near,
+            far,
+            lights.dLight,
+            volFogNode,
+          ) ?? undefined;
+      } else if (isPostProcessPass) {
+        this._volumetricFogTextureView = undefined;
+      }
+
       // Re-widen to the RenderPass interface: TS's control-flow analysis narrows `pass` towards
       // `PostProcessPass` from the `isPostProcessPass` checks above, which would otherwise
       // resolve this call against PostProcessPass's own (shorter, vMat-less) execute() overload
@@ -1693,6 +1737,12 @@ export class WebGPURenderer extends AbstractRenderer {
       "const USE_DECAL_GRADIENTS: bool = false;\n" +
       (this.context.shaderRegistry.getChunk("WGSL_STRUCTS", "wgsl") ?? "")
     );
+  }
+
+  /** Public access to the shared compute-structs chunk (global bindings + structs), for
+   * renderer-owned extra compute passes such as the volumetric-fog injection. */
+  public get computeStructsChunk(): string {
+    return this._computeStructsChunk();
   }
 
   private _syncNormalTexture(): void {
@@ -2502,6 +2552,7 @@ export class WebGPURenderer extends AbstractRenderer {
     this._bloomPassGPU?.destroy();
     this._hbaoPassGPU?.destroy();
     this._lightShaftsPassGPU?.destroy();
+    this._volumetricFogPassGPU?.destroy();
     this._taaPassGPU?.destroy();
     this._motionTrailPassGPU?.destroy();
 

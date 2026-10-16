@@ -3,6 +3,7 @@
 @group(0) @binding(3) var bloomTexture: texture_2d<f32>;
 @group(0) @binding(4) var hbaoTexture: texture_2d<f32>;
 @group(0) @binding(5) var lightShaftsTexture: texture_2d<f32>;
+@group(0) @binding(6) var volumetricFogTexture: texture_2d<f32>;
 
 // Structural constants (overwritten at compilation time) -- these gate real code paths (branch
 // taken / sample count), unlike the continuous tuning values below, which live in `dyn` instead
@@ -14,6 +15,7 @@ const u_grainEnabled: u32 = 0u;
 const u_bloomEnabled: u32 = 0u;
 const u_hbaoEnabled: u32 = 0u;
 const u_lightShaftsEnabled: u32 = 0u;
+const u_volumetricFogEnabled: u32 = 0u;
 const u_quantizeEnabled: u32 = 0u;
 const u_outlineEnabled: u32 = 0u;
 const u_flashEnabled: u32 = 0u;
@@ -265,6 +267,17 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
         let shafts = textureSample(lightShaftsTexture, hdrSampler, distortUv).rgb;
         if (shafts.r == shafts.r) {
             hdr += shafts * dyn.shaftsParams.x;
+        }
+    }
+
+    // Volumetric Fog (true 3D froxel in-scattering, ADR 0031) -- additive linear HDR, kept fully
+    // separate from the analytic `Scene.fog` on top, exactly like the light shafts above. The
+    // shader writes rgba16float with scattering in rgb and transmittance in a; only rgb is
+    // composited (self-shadowed directional contribution is already baked in at injection).
+    if (1u == u_volumetricFogEnabled) {
+        let fog = textureSample(volumetricFogTexture, hdrSampler, distortUv).rgb;
+        if (fog.r == fog.r) {
+            hdr += fog;
         }
     }
 

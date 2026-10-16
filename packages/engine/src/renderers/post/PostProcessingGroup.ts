@@ -13,6 +13,7 @@ import {
   GravitationalLensingElement,
   FlashElement,
   LightShaftsElement,
+  VolumetricFogElement,
 } from "./elements/index.js";
 import { PostProcessingEffectType } from "../../enums/index.js";
 import { Vector3D } from "../../math/index.js";
@@ -56,6 +57,7 @@ export class PostProcessingGroup {
     this.add(new GravitationalLensingElement());
     this.add(new FlashElement());
     this.add(new LightShaftsElement());
+    this.add(new VolumetricFogElement());
   }
 
   /**
@@ -268,6 +270,33 @@ export class PostProcessingGroup {
             shafts.color.set(col[0], col[1], col[2]);
           } else if (typeof col === "object" && col !== null) {
             shafts.color.set(col.r, col.g, col.b);
+          }
+        }
+      }
+    }
+
+    if (effects.volumetricFog) {
+      const volFog = this.get<import("./elements/index.js").VolumetricFogElement>(
+        PostProcessingEffectType.VOLUMETRIC_FOG,
+      );
+      if (volFog) {
+        const vf = effects.volumetricFog;
+        if (vf.enabled !== undefined) volFog.enabled = vf.enabled;
+        if (vf.density !== undefined) volFog.density = vf.density;
+        if (vf.height !== undefined) volFog.height = vf.height;
+        if (vf.heightFalloff !== undefined) volFog.heightFalloff = vf.heightFalloff;
+        if (vf.maxDistance !== undefined) volFog.maxDistance = vf.maxDistance;
+        if (vf.intensity !== undefined) volFog.intensity = vf.intensity;
+        if (vf.asymmetry !== undefined) volFog.asymmetry = vf.asymmetry;
+        if (vf.castDirectionalShadow !== undefined)
+          volFog.castDirectionalShadow = vf.castDirectionalShadow;
+        if (vf.jitter !== undefined) volFog.jitter = vf.jitter;
+        if (vf.color !== undefined) {
+          const col = vf.color;
+          if (Array.isArray(col)) {
+            volFog.color.set(col[0], col[1], col[2]);
+          } else if (typeof col === "object" && col !== null) {
+            volFog.color.set(col.r, col.g, col.b);
           }
         }
       }

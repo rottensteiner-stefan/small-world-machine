@@ -12,7 +12,10 @@
 // Bindings:
 //   @group(0): reuses the engine's global bind group (structs.wgsl) -- global uniforms, light
 //              lists and the clustered light grid/index buffers (COMPUTE-visibility).
-//   @group(1): volumetric-fog-owned bindings (invView rotation, parameters, 3D storage texture).
+//   @group(4): volumetric-fog-owned bindings (invView rotation, parameters, 3D storage texture).
+//              Group 4 (not 1) because the assembled shader prepends structs.wgsl, which already
+//              claims @group(1..3) for material/object/view bindings -- WebGPU pipeline layouts
+//              tolerate sparse entries, so the own bind group sits at the free index 4.
 
 struct FroxelUniforms {
     invView: mat4x4f,        // camera rotation inverse (world from view), for cell direction
@@ -21,8 +24,8 @@ struct FroxelUniforms {
     nearFar: vec4f,          // [near, far, sliceCount, pad]
 }
 
-@group(1) @binding(0) var<uniform> froxel: FroxelUniforms;
-@group(1) @binding(1) var volume: texture_storage_3d<rgba16float, write>;
+@group(4) @binding(0) var<uniform> froxel: FroxelUniforms;
+@group(4) @binding(1) var volume: texture_storage_3d<rgba16float, write>;
 
 // Henyey-Greenstein phase function (Wronski/Frostbite family). g: -1..1.
 fn hgPhase(cosTheta: f32, g: f32) -> f32 {
@@ -56,15 +59,6 @@ fn cellWorldPos(cell: vec3f, dims: vec3f, camPos: vec3f) -> vec3f {
     viewDir = normalize(viewDir);
     let worldDir = (froxel.invView * vec4f(viewDir, 0.0)).xyz;
     return camPos + worldDir * viewZ;
-}
-
-// Validates a cell's light list entry belongs to this exact cell (WebGPU storage reads are safe
-// for out-of-range indices; we never read outside the allocated capacity, so the guard is only
-// against a stale grid/count mismatch).
-fn inCell(cell: vec3f, cov: array<vec2f, 3>) -> bool {
-    return cell.x >= cov[0].x && cell.x <= cov[0].y &&
-           cell.y >= cov[1].x && cell.y <= cov[1].y &&
-           cell.z >= cov[2].x && cell.z <= cov[2].y;
 }
 
 @compute @workgroup_size(4, 4, 1)

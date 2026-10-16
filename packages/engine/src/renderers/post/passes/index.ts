@@ -7,3 +7,4 @@ export * from "./HistoryBlendPassGL.js";
 export * from "./HistoryBlendPassGPU.js";
 export * from "./LightShaftsPassGL.js";
 export * from "./LightShaftsPassGPU.js";
+export * from "./VolumetricFogPassGPU.js";
