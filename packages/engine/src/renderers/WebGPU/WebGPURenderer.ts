@@ -1735,10 +1735,9 @@ export class WebGPURenderer extends AbstractRenderer {
    * the chunk's sampling helpers reference `USE_DECAL_GRADIENTS`, so compute modules declare it too.
    */
   private _computeStructsChunk(): string {
-    return (
-      "const USE_DECAL_GRADIENTS: bool = false;\n" +
-      (this.context.shaderRegistry.getChunk("WGSL_STRUCTS", "wgsl") ?? "")
-    );
+    const raw = this.context.shaderRegistry.getChunk("WGSL_STRUCTS", "wgsl") ?? "";
+    const group0Only = raw.split("@group(1)")[0] ?? raw;
+    return "const USE_DECAL_GRADIENTS: bool = false;\n" + group0Only;
   }
 
   /** Public access to the shared compute-structs chunk (global bindings + structs), for

@@ -258,7 +258,7 @@ export class VolumetricFogPassGPU {
     const layout = renderer.globalBGL;
     this._injectPipeline = this._device.createComputePipeline({
       layout: this._device.createPipelineLayout({
-        bindGroupLayouts: [layout, null, null, null, this._injectBGL],
+        bindGroupLayouts: [layout, this._injectBGL],
       }),
       compute: {
         module: this._device.createShaderModule({
@@ -267,7 +267,6 @@ export class VolumetricFogPassGPU {
         entryPoint: "injectFog",
       },
     });
-    this._injectBindGroup = undefined;
   }
 
   private _resizeTargets(
@@ -300,31 +299,35 @@ export class VolumetricFogPassGPU {
 
       this._injectedTexture = this._device.createTexture({
         size: volDims,
+        dimension: "3d",
         format: "rgba16float",
         usage: usage3D,
       });
-      this._injectedView = this._injectedTexture.createView();
+      this._injectedView = this._injectedTexture.createView({ dimension: "3d" });
 
       this._historyTextureA = this._device.createTexture({
         size: volDims,
+        dimension: "3d",
         format: "rgba16float",
         usage: usage3D,
       });
-      this._historyViewA = this._historyTextureA.createView();
+      this._historyViewA = this._historyTextureA.createView({ dimension: "3d" });
 
       this._historyTextureB = this._device.createTexture({
         size: volDims,
+        dimension: "3d",
         format: "rgba16float",
         usage: usage3D,
       });
-      this._historyViewB = this._historyTextureB.createView();
+      this._historyViewB = this._historyTextureB.createView({ dimension: "3d" });
 
       this._integratedTexture = this._device.createTexture({
         size: volDims,
+        dimension: "3d",
         format: "rgba16float",
         usage: usage3D,
       });
-      this._integratedView = this._integratedTexture.createView();
+      this._integratedView = this._integratedTexture.createView({ dimension: "3d" });
 
       this._fogTexture = this._device.createTexture({
         size: [width, height, 1],
@@ -445,8 +448,8 @@ export class VolumetricFogPassGPU {
     const shadowView = renderer.defaultDirShadowTextureView;
     if (!shadowView) return null;
 
-    this._resizeTargets(renderer, width, height, depthView, shadowView);
     this._ensureInjectionLayout(renderer);
+    this._resizeTargets(renderer, width, height, depthView, shadowView);
 
     const dims = renderer.clusterDims;
     this._frameCounter++;
@@ -519,7 +522,7 @@ export class VolumetricFogPassGPU {
     const cpInject = ce.beginComputePass({ label: "VolumetricFogInject" });
     cpInject.setPipeline(this._injectPipeline!);
     cpInject.setBindGroup(0, renderer.globalBindGroup);
-    cpInject.setBindGroup(4, this._injectBindGroup!);
+    cpInject.setBindGroup(1, this._injectBindGroup!);
     cpInject.dispatchWorkgroups(Math.ceil(dims.x / 4), Math.ceil(dims.y / 4), dims.z);
     cpInject.end();
 

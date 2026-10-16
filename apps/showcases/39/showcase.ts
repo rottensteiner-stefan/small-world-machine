@@ -592,4 +592,5 @@ class Showcase39 extends AbstractShowcase {
   }
 }
 
-new Showcase39();
+const app = new Showcase39();
+app.start().catch((err: unknown) => console.error("[Showcase39] Failed to start:", err));

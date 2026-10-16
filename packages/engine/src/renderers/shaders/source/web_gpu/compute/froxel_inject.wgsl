@@ -34,8 +34,8 @@ struct FroxelUniforms {
     volumes: array<FogVolumeData, 16>,
 }
 
-@group(4) @binding(0) var<uniform> froxel: FroxelUniforms;
-@group(4) @binding(1) var volume: texture_storage_3d<rgba16float, write>;
+@group(1) @binding(0) var<uniform> froxel: FroxelUniforms;
+@group(1) @binding(1) var volume: texture_storage_3d<rgba16float, write>;
 
 fn boxSDF(p: vec3f, b: vec3f) -> f32 {
     let q = abs(p) - b;
