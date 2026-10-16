@@ -6,6 +6,7 @@ import FROXEL_INTEGRATE_WGSL from "../../shaders/source/web_gpu/compute/froxel_i
 
 import { VolumetricFogElement } from "../elements/index.js";
 import { DirectionalLight } from "../../../core/lights/index.js";
+import { FogVolume } from "../../../core/objects/FogVolume.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
 import { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
@@ -46,8 +47,8 @@ export class VolumetricFogPassGPU {
   private _injectPipeline?: GPUComputePipeline;
   private _injectBGL!: GPUBindGroupLayout;
   private _injectUniformBuffer!: GPUBuffer;
-  /** 28 floats: FroxelUniforms in froxel_inject.wgsl (invView + 3x vec4f). */
-  private readonly _injectUniformData: Float32Array = new Float32Array(28);
+  /** 540 floats: FroxelUniforms in froxel_inject.wgsl (invView + 3x vec4f + 16x FogVolumeData). */
+  private readonly _injectUniformData: Float32Array = new Float32Array(28 + 16 * 32);
 
   // --- 2. Reprojection Compute Pipeline (Temporal Filtering) ---
   private _reprojectPipeline!: GPUComputePipeline;
@@ -136,7 +137,7 @@ export class VolumetricFogPassGPU {
 
     // Uniform buffers
     this._injectUniformBuffer = device.createBuffer({
-      size: 112, // 28 x f32
+      size: (28 + 16 * 32) * 4, // 540 x f32 = 2160 bytes
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this._reprojectUniformBuffer = device.createBuffer({
@@ -435,6 +436,7 @@ export class VolumetricFogPassGPU {
     far: number,
     dirLight: DirectionalLight | undefined,
     element: VolumetricFogElement,
+    fogVolumes: FogVolume[] = [],
   ): GPUTextureView | null {
     if (!element.enabled || width <= 0 || height <= 0) {
       return null;
@@ -467,15 +469,44 @@ export class VolumetricFogPassGPU {
     inj[18] = element.heightFalloff;
     inj[19] = Math.min(element.maxDistance, far);
 
+    const numVols = Math.min(fogVolumes.length, 16);
     inj[20] = element.asymmetry;
     inj[21] = element.intensity;
     inj[22] = element.jitter;
-    inj[23] = 0.0;
+    inj[23] = numVols;
 
     inj[24] = near;
     inj[25] = far;
     inj[26] = dims.z;
     inj[27] = 0.0;
+
+    let offset = 28;
+    for (let v = 0; v < 16; v++) {
+      if (v < numVols) {
+        const vol = fogVolumes[v]!;
+        const invMat = vol.getInverseWorldMatrix();
+        inj.set(invMat.data, offset);
+        inj[offset + 16] = vol.shape;
+        inj[offset + 17] = vol.density;
+        inj[offset + 18] = vol.edgeFade;
+        inj[offset + 19] = vol.emissionIntensity;
+        inj[offset + 20] = vol.albedo.r;
+        inj[offset + 21] = vol.albedo.g;
+        inj[offset + 22] = vol.albedo.b;
+        inj[offset + 23] = 0.0;
+        inj[offset + 24] = vol.emission.r;
+        inj[offset + 25] = vol.emission.g;
+        inj[offset + 26] = vol.emission.b;
+        inj[offset + 27] = 0.0;
+        inj[offset + 28] = vol.size.x;
+        inj[offset + 29] = vol.size.y;
+        inj[offset + 30] = vol.size.z;
+        inj[offset + 31] = 0.0;
+      } else {
+        inj.fill(0, offset, offset + 32);
+      }
+      offset += 32;
+    }
 
     this._device.queue.writeBuffer(this._injectUniformBuffer, 0, inj);
 

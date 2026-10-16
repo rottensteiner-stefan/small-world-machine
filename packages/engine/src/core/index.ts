@@ -17,6 +17,7 @@ export * from "./reflection/DynamicReflectionProbe.js";
 export * from "./InstancedMesh.js";
 export * from "./objects/BillboardInstancer.js";
 export * from "./objects/Decal.js";
+export * from "./objects/FogVolume.js";
 export * from "./decals/DecalMath.js";
 export * from "./decals/DecalMeshBaker.js";
 export * from "./decals/DecalPool.js";

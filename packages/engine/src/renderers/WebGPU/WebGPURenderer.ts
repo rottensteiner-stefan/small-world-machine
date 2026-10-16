@@ -1580,6 +1580,7 @@ export class WebGPURenderer extends AbstractRenderer {
       );
       if (isPostProcessPass && volFogNode && volFogNode.enabled && this._opaqueDepthTextureView) {
         this._volumetricFogPassGPU ??= new VolumetricFogPassGPU(this._device);
+        const fogVolumes = this.extractFogVolumes(scene);
         this._volumetricFogTextureView =
           this._volumetricFogPassGPU.execute(
             this,
@@ -1594,6 +1595,7 @@ export class WebGPURenderer extends AbstractRenderer {
             far,
             lights.dLight,
             volFogNode,
+            fogVolumes,
           ) ?? undefined;
       } else if (isPostProcessPass) {
         this._volumetricFogTextureView = undefined;

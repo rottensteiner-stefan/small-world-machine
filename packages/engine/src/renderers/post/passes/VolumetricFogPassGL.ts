@@ -5,12 +5,22 @@ import BILATERAL_FRAG_GLSL from "../shaders/VolumetricFogBilateral.frag.glsl?raw
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import { VolumetricFogElement } from "../elements/index.js";
 import { DirectionalLight } from "../../../core/lights/index.js";
+import { FogVolume } from "../../../core/objects/FogVolume.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 
+interface FogVolumeUniformLocations {
+  invTransform: WebGLUniformLocation | null;
+  params: WebGLUniformLocation | null;
+  albedo: WebGLUniformLocation | null;
+  emission: WebGLUniformLocation | null;
+  size: WebGLUniformLocation | null;
+}
+
 /**
- * Executes volumetric fog on WebGL2 (Phase 2 parity fallback):
+ * Executes volumetric fog on WebGL2 (Phase 2 parity fallback & Phase 3 interior carving):
  * - Pass 1: Half-resolution screen-space raymarching against depth buffer and CSM directional shadows
- *   with Schlick (1993) phase function, Interleaved Gradient Noise (IGN) jitter, and Decima powder highlights.
+ *   with Schlick (1993) phase function, Interleaved Gradient Noise (IGN) jitter, Decima powder highlights,
+ *   and analytical FogVolume SDF evaluation with interior carving (negative density).
  * - Pass 2: Full-resolution depth-aware cross-bilateral upsampling to preserve crisp geometric silhouettes.
  *
  * WebGL1 degrades gracefully (returns null, relying on Scene.fog analytical distance fog).
@@ -41,6 +51,8 @@ export class VolumetricFogPassGL {
   private _uCascadeMatricesLoc: WebGLUniformLocation | null = null;
   private _uCascadeSplitsLoc: WebGLUniformLocation | null = null;
   private _uDirShadowInfoLoc: WebGLUniformLocation | null = null;
+  private _uNumFogVolumesLoc: WebGLUniformLocation | null = null;
+  private readonly _uFogVolumeLocs: FogVolumeUniformLocations[] = [];
 
   // Uniform locations: Bilateral upsample
   private _uLowResFogLoc: WebGLUniformLocation | null = null;
@@ -138,6 +150,18 @@ export class VolumetricFogPassGL {
       this._uCascadeMatricesLoc = gl.getUniformLocation(this._progFog, "u_cascadeMatrices");
       this._uCascadeSplitsLoc = gl.getUniformLocation(this._progFog, "u_cascadeSplits");
       this._uDirShadowInfoLoc = gl.getUniformLocation(this._progFog, "u_dirShadowInfo");
+      this._uNumFogVolumesLoc = gl.getUniformLocation(this._progFog, "u_numFogVolumes");
+
+      this._uFogVolumeLocs.length = 0;
+      for (let i = 0; i < 16; i++) {
+        this._uFogVolumeLocs.push({
+          invTransform: gl.getUniformLocation(this._progFog, `u_fogVolumes[${i}].invTransform`),
+          params: gl.getUniformLocation(this._progFog, `u_fogVolumes[${i}].params`),
+          albedo: gl.getUniformLocation(this._progFog, `u_fogVolumes[${i}].albedo`),
+          emission: gl.getUniformLocation(this._progFog, `u_fogVolumes[${i}].emission`),
+          size: gl.getUniformLocation(this._progFog, `u_fogVolumes[${i}].size`),
+        });
+      }
 
       this._vaoFog = gl2.createVertexArray()!;
     }
@@ -201,6 +225,7 @@ export class VolumetricFogPassGL {
     dirLight: DirectionalLight | undefined,
     dirShadowTexture: WebGLTexture | null,
     element: VolumetricFogElement,
+    fogVolumes: FogVolume[] = [],
   ): WebGLTexture | null {
     if (!this._isWebGL2 || !element.enabled || width <= 0 || height <= 0) {
       return null;
@@ -313,6 +338,25 @@ export class VolumetricFogPassGL {
     }
     if (this._uDirShadowInfoLoc) {
       gl2.uniform4fv(this._uDirShadowInfoLoc, this._scratchDirShadowInfo);
+    }
+
+    const numVols = Math.min(fogVolumes.length, 16);
+    if (this._uNumFogVolumesLoc) gl2.uniform1i(this._uNumFogVolumesLoc, numVols);
+
+    for (let i = 0; i < 16; i++) {
+      const loc = this._uFogVolumeLocs[i];
+      if (!loc) continue;
+      if (i < numVols) {
+        const vol = fogVolumes[i]!;
+        const invMat = vol.getInverseWorldMatrix();
+        if (loc.invTransform) gl2.uniformMatrix4fv(loc.invTransform, false, invMat.data);
+        if (loc.params)
+          gl2.uniform4f(loc.params, vol.shape, vol.density, vol.edgeFade, vol.emissionIntensity);
+        if (loc.albedo) gl2.uniform4f(loc.albedo, vol.albedo.r, vol.albedo.g, vol.albedo.b, 0.0);
+        if (loc.emission)
+          gl2.uniform4f(loc.emission, vol.emission.r, vol.emission.g, vol.emission.b, 0.0);
+        if (loc.size) gl2.uniform4f(loc.size, vol.size.x, vol.size.y, vol.size.z, 0.0);
+      }
     }
 
     gl2.bindVertexArray(this._vaoFog!);

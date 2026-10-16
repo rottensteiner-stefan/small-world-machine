@@ -789,6 +789,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             dLight,
             shadowFbo?.texture ?? null,
             volFogNode,
+            this._fogVolumes,
           );
         }
       }

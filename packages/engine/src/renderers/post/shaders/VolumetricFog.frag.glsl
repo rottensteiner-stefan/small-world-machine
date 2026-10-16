@@ -23,7 +23,32 @@ uniform mat4 u_cascadeMatrices[4];
 uniform vec4 u_cascadeSplits;
 uniform vec4 u_dirShadowInfo; // x=bias, y=unused, z=castShadow, w=numCascades
 
+struct FogVolumeData {
+    mat4 invTransform;
+    vec4 params;   // [shape, density, edgeFade, emissionIntensity]
+    vec4 albedo;   // [r, g, b, pad]
+    vec4 emission; // [r, g, b, pad]
+    vec4 size;     // [size.x, size.y, size.z, pad]
+};
+
+uniform int u_numFogVolumes;
+uniform FogVolumeData u_fogVolumes[16];
+
 out vec4 fragColor;
+
+float boxSDF(vec3 p, vec3 b) {
+    vec3 q = abs(p) - b;
+    return length(max(q, vec3(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+float sphereSDF(vec3 p, float r) {
+    return length(p) - r;
+}
+
+float cylinderSDF(vec3 p, float r, float h) {
+    vec2 d = vec2(length(p.xz), abs(p.y)) - vec2(r, h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, vec2(0.0)));
+}
 
 float getIGN(vec2 screenPos) {
     vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
@@ -103,7 +128,39 @@ void main() {
         vec3 samplePos = u_camPos + rayDir * t;
         float shadow = sampleShadow(samplePos);
 
-        float stepOpticalDepth = u_density * dt;
+        float localDensity = u_density;
+        vec3 localEmission = vec3(0.0);
+        vec3 localAlbedo = u_fogColor;
+
+        for (int v = 0; v < 16; v++) {
+            if (v >= u_numFogVolumes) break;
+            vec3 pLocal = (u_fogVolumes[v].invTransform * vec4(samplePos, 1.0)).xyz;
+            int shape = int(u_fogVolumes[v].params.x);
+            float sdf = 1.0;
+            if (shape == 0) {
+                sdf = boxSDF(pLocal, u_fogVolumes[v].size.xyz);
+            } else if (shape == 1) {
+                sdf = sphereSDF(pLocal, u_fogVolumes[v].size.x);
+            } else if (shape == 2) {
+                sdf = cylinderSDF(pLocal, u_fogVolumes[v].size.x, u_fogVolumes[v].size.y);
+            }
+
+            if (sdf <= 0.0) {
+                float minDim = min(u_fogVolumes[v].size.x, min(u_fogVolumes[v].size.y, u_fogVolumes[v].size.z));
+                float fadeDist = max(minDim * u_fogVolumes[v].params.z, 0.0001);
+                float falloff = clamp(-sdf / fadeDist, 0.0, 1.0);
+                falloff = falloff * falloff * (3.0 - 2.0 * falloff);
+
+                float volDensity = u_fogVolumes[v].params.y * falloff;
+                localDensity = max(0.0, localDensity + volDensity);
+                if (volDensity > 0.0) {
+                    localEmission += u_fogVolumes[v].emission.rgb * u_fogVolumes[v].params.w * falloff;
+                    localAlbedo = mix(localAlbedo, u_fogVolumes[v].albedo.rgb, clamp(falloff, 0.0, 1.0));
+                }
+            }
+        }
+
+        float stepOpticalDepth = localDensity * dt;
         float stepTau = clamp(stepOpticalDepth, 0.0, 10.0);
         float stepTransmittance = exp(-stepTau);
 
@@ -112,7 +169,7 @@ void main() {
 
         // Sunlight in-scattering + ambient base fog scattering
         vec3 sunScattering = shadow * u_sunColor * phase * powder;
-        vec3 ambientScattering = u_fogColor * 0.15;
+        vec3 ambientScattering = localAlbedo * 0.15 + localEmission;
         vec3 stepLight = sunScattering + ambientScattering;
 
         accumulatedLight += transmittance * stepLight * (1.0 - stepTransmittance);

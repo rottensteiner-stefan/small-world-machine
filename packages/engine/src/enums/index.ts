@@ -22,4 +22,5 @@ export * from "./Topology.js";
 export * from "./OscillatorType.js";
 export * from "./ToneMappingMode.js";
 export * from "./PostProcessingEffectType.js";
+export * from "./FogVolumeShape.js";
 export * from "./ToolEvents.js";

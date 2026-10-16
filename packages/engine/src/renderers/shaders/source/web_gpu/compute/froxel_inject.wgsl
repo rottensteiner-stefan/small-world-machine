@@ -17,15 +17,38 @@
 //              claims @group(1..3) for material/object/view bindings -- WebGPU pipeline layouts
 //              tolerate sparse entries, so the own bind group sits at the free index 4.
 
+struct FogVolumeData {
+    invTransform: mat4x4f,
+    params: vec4f,        // [shape, density, edgeFade, emissionIntensity]
+    albedo: vec4f,        // [r, g, b, pad]
+    emission: vec4f,      // [r, g, b, pad]
+    size: vec4f,          // [size.x, size.y, size.z, pad]
+}
+
 struct FroxelUniforms {
     invView: mat4x4f,        // camera rotation inverse (world from view), for cell direction
     params: vec4f,           // [density, height, heightFalloff, maxWorldDistance]
-    phase: vec4f,            // [asymmetry g, intensity, jitter, pad]
+    phase: vec4f,            // [asymmetry g, intensity, jitter, numVolumes]
     nearFar: vec4f,          // [near, far, sliceCount, pad]
+    volumes: array<FogVolumeData, 16>,
 }
 
 @group(4) @binding(0) var<uniform> froxel: FroxelUniforms;
 @group(4) @binding(1) var volume: texture_storage_3d<rgba16float, write>;
+
+fn boxSDF(p: vec3f, b: vec3f) -> f32 {
+    let q = abs(p) - b;
+    return length(max(q, vec3f(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+fn sphereSDF(p: vec3f, r: f32) -> f32 {
+    return length(p) - r;
+}
+
+fn cylinderSDF(p: vec3f, r: f32, h: f32) -> f32 {
+    let d = vec2f(length(p.xz), abs(p.y)) - vec2f(r, h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, vec2f(0.0)));
+}
 
 // Henyey-Greenstein phase function (Wronski/Frostbite family). g: -1..1.
 fn hgPhase(cosTheta: f32, g: f32) -> f32 {
@@ -82,6 +105,38 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
     }
 
     var inScatter = vec3f(0.0);
+
+    // Evaluate localized FogVolume instances (positive density & interior carving)
+    let numVolumes = min(u32(froxel.phase.w), 16u);
+    for (var v = 0u; v < numVolumes; v++) {
+        let vol = froxel.volumes[v];
+        let pLocal = (vol.invTransform * vec4f(worldPos, 1.0)).xyz;
+        let shape = u32(vol.params.x);
+        var sdf = 1.0;
+        if (shape == 0u) {
+            sdf = boxSDF(pLocal, vol.size.xyz);
+        } else if (shape == 1u) {
+            sdf = sphereSDF(pLocal, vol.size.x);
+        } else if (shape == 2u) {
+            sdf = cylinderSDF(pLocal, vol.size.x, vol.size.y);
+        }
+
+        if (sdf <= 0.0) {
+            let minDim = min(vol.size.x, min(vol.size.y, vol.size.z));
+            let fadeDist = max(minDim * vol.params.z, 1e-4);
+            var falloff = clamp(-sdf / fadeDist, 0.0, 1.0);
+            falloff = falloff * falloff * (3.0 - 2.0 * falloff);
+
+            let volDensity = vol.params.y * falloff;
+            extinction = max(0.0, extinction + volDensity);
+
+            if (volDensity > 0.0) {
+                let emission = vol.emission.rgb * vol.params.w;
+                inScatter += (vol.albedo.rgb * volDensity + emission * falloff) * froxel.phase.y;
+            }
+        }
+    }
+
     if (extinction > 0.0) {
         let cellIndex = u32(gid.x) + u32(global.clusterDims.x) * (u32(gid.y) + u32(global.clusterDims.y) * u32(gid.z));
         let maxPerCluster = u32(global.clusterDims.w);

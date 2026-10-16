@@ -80,6 +80,7 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     Matrix4.invert(this._frameViewProj, this._frameInvViewProj);
     const extractedLights = this.extractLights(scene);
     this._frameLights = extractedLights;
+    this.extractFogVolumes(scene);
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
     if (renderList.decals.length > 0 && !this.isOffscreenRenderTarget) this.requestNormalBuffer();
 

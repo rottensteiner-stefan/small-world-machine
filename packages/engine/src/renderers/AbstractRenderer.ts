@@ -11,6 +11,7 @@ import {
 } from "../interfaces/index.js";
 import { RendererType } from "../enums/index.js";
 import { Object3D } from "../core/Object3D.js";
+import { FogVolume } from "../core/objects/FogVolume.js";
 import { Scene } from "../core/Scene.js";
 import { Vector3D } from "../math/index.js";
 import { PostProcessingGroup } from "./post/PostProcessingGroup.js";
@@ -177,6 +178,29 @@ export abstract class AbstractRenderer implements Renderer {
     if (undefined !== node.children) {
       for (const child of node.children) {
         this._traverseLights(child);
+      }
+    }
+  }
+
+  protected readonly _fogVolumes: FogVolume[] = [];
+
+  /**
+   * Recursively extracts active FogVolume instances from the scene graph.
+   */
+  public extractFogVolumes(scene: Scene): FogVolume[] {
+    this._fogVolumes.length = 0;
+    this._traverseFogVolumes(scene.root);
+    return this._fogVolumes;
+  }
+
+  private _traverseFogVolumes(node: Object3D): void {
+    if (node instanceof FogVolume && node.isVisible && node.enabled) {
+      this._fogVolumes.push(node);
+    }
+
+    if (undefined !== node.children) {
+      for (const child of node.children) {
+        this._traverseFogVolumes(child);
       }
     }
   }
