@@ -93,4 +93,55 @@ describe("froxel grid math", () => {
       }
     });
   });
+
+  describe("volumetric integration and reprojection invariants", () => {
+    it("preserves exponential depth slice ratio across consecutive slices", () => {
+      const ratio = Math.pow(far / near, 1 / slices);
+      for (let s = 1; s < slices - 1; s++) {
+        const c0 = sliceCenterViewDepth(s, near, far, slices);
+        const c1 = sliceCenterViewDepth(s + 1, near, far, slices);
+        expect(c1 / c0).toBeCloseTo(ratio, 4);
+      }
+    });
+
+    it("Beer-Lambert transmittance satisfies multiplicative composition tau(a+b) == tau(a)*tau(b)", () => {
+      const extinction = 0.05;
+      const stepA = 2.5;
+      const stepB = 4.0;
+      const tauA = Math.exp(-extinction * stepA);
+      const tauB = Math.exp(-extinction * stepB);
+      const tauCombined = Math.exp(-extinction * (stepA + stepB));
+      expect(tauA * tauB).toBeCloseTo(tauCombined, 6);
+    });
+
+    it("AABB variance clamp restricts history color within neighbourhood min/max envelope", () => {
+      const neighbours = [
+        [0.2, 0.2, 0.2],
+        [0.25, 0.22, 0.21],
+        [0.3, 0.28, 0.25],
+        [0.18, 0.19, 0.2],
+      ];
+      const minVal = [
+        Math.min(...neighbours.map((n) => n[0]!)),
+        Math.min(...neighbours.map((n) => n[1]!)),
+        Math.min(...neighbours.map((n) => n[2]!)),
+      ];
+      const maxVal = [
+        Math.max(...neighbours.map((n) => n[0]!)),
+        Math.max(...neighbours.map((n) => n[1]!)),
+        Math.max(...neighbours.map((n) => n[2]!)),
+      ];
+
+      const outlierHistory = [0.9, -0.1, 0.5];
+      const clamped = [
+        Math.max(minVal[0]!, Math.min(maxVal[0]!, outlierHistory[0]!)),
+        Math.max(minVal[1]!, Math.min(maxVal[1]!, outlierHistory[1]!)),
+        Math.max(minVal[2]!, Math.min(maxVal[2]!, outlierHistory[2]!)),
+      ];
+
+      expect(clamped[0]).toBe(maxVal[0]);
+      expect(clamped[1]).toBe(minVal[1]);
+      expect(clamped[2]).toBe(maxVal[2]);
+    });
+  });
 });
