@@ -18,6 +18,7 @@ Practical, in-depth guides for each subsystem and tool of the Small World Machin
 | [Liquid Simulation & Waves](./liquid-wave-data-model.md) | Wave data model, Gerstner cascade, splats, clapotis, and buoyancy probing. |
 | [Shadows](./shadows.md) | Shadow mapping, CSM, PCSS. |
 | [Decals](./decals.md) | Box-projected decals, orientation rules, normal buffer, cost. |
+| [Volumetric Fog](./volumetric-fog.md) | Froxel-based true 3D volume fog (WebGPU, Stufe 3), additive composite. |
 | [Adding a New Material](./adding-materials.md) | Step-by-step recipe for new materials across all renderers. |
 | [Shader Importers](./shader-importers.md) | WGSL/GLSL chunk assembly. |
 | [Configuration & Setup](./configuration.md) | `EngineOptions` and engine setup. |

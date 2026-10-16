@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### "The fog comes on little cat feet." - Carl Sandburg
+
+- **Features:**
+  - *Volumetric Froxel Fog (Stufe 3, WebGPU V1)* (`VolumetricFogElement`, `froxel.ts` grid formula; ADR 0031): true 3D volumetric in-scattering against point/spot/directional lights, building on the Step 1 analytic fog and Step 2 Light Shafts (ADR 0030). The frustum-aligned froxel grid **is** the clustered light grid (Option R, ADR 0007) — per-cell light lists are shared, so the volume and the light culling can never disagree; the directional contribution is CSM self-shadowed through the existing Stufe-2 cascaded shadow map (zero extra shadow passes). A compute injection pass writes the density/in-scattering volume, a ray-march integration pass walks camera rays to the opaque surface (IGN jitter against banding), and the integrated scattering composites additively into HDR before tone mapping via the dedicated post-processing composite. Off by default (opt-in); WebGL2 tier (CPU culling + data texture on the same formula) is a documented follow-up (P2), WebGL1 stays on analytic fog.
+- **Architecture & Bugfixes:**
+  - *`PostProcessingEffectType.VOLUMETRIC_FOG`* added and `VolumetricFogElement` registered in the post-processing group surface.
+- **Housekeeping & Docs:**
+  - *ADR 0031 & Volumetric Fog guide:* documented the Stage-3 decision (Option R grid reuse, WebGPU-only V1, CSM shadowing in V1, dedicated-composite instead of forward-pass lookup) in ADR 0031 and added the practical `volumetric-fog` guide; marked Stufe 3 in the Fog & Volumetric Lighting Roadmap (backlog.md) as in implementation.
+
 ## [0.108.0] - 2026-10-16
 
 ### "The noblest pleasure is the joy of understanding." - Leonardo da Vinci
