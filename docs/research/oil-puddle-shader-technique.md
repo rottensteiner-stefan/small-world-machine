@@ -172,3 +172,14 @@ Die volle Belcour-&-Barla-Formel (spektrale Integration über XYZ-Sensitivitäts
 - [KHR_materials_ior](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_ior)
 - [KHR_materials_volume](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_volume)
 - [KHR_materials_iridescence](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_iridescence)
+
+## 7. Stilgrenze (verbindlich, konsolidiert 2026-10-16 aus `collaborate/oil-puddles.md` — Quelle danach gelöscht)
+
+Das kanonische Dünnschicht-Modul und die Materialien setzen eine bewusst **gedämpfte Irideszenz** um — kein heller Regenbogen-Flood:
+
+- `thinFilm.ts` (`oilFilmThinFilm`): physikalisches Zwei-Strahl-Modell (KHR-Style, IOR 1.3, baseF0 0.0204, OPD, Per-RGB-Phase), Desaturation via `strength` als primärer Stilregler. `oilFilmRainbow` ist der bewusst desaturierte künstlerische Fallback (`oilFilmRainbow(strength 0.45)` für Ringfarbe), der klassische Regenbogen-Look ist absichtlich nicht das Ziel.
+- `OilPuddleMaterial` (v2-Stilbruch behoben): Chroma-Leak-only (`max(sheen-lum,0)*5.0`), Luma-Body bleibt teer-schwarz; `look`-Presets v1–v6 (`mutedSheen`/`tar`/`chiaroscuro`/`tarSkin`/`whaleOil`/`posterRings`), `fluidType` crude/petrol/diesel (Volatilität via `timeScale` + Irideszenz-Dach, ohne Nutzerwerte zu überschreiben).
+- **Messung (non-quant.):** Sättigung in der geänderten Fläche bleibt gedämpft (~0.21–0.23 von 1.0; oblique +0.011), kein Regenbogen-Flood; GPU vs. GL2 mean-abs-Δ ≈ 3.75/255, nur ~0.5 % pixel hell & gesättigt (warme Laternen-Glanzlichter, gewollt). Backend-Parität GL1/GL2/GPU verifiziert.
+- Offen (bewusst vertagt): WP-4 echtes Reflexions-Routing (Env/Planar statt analytischem Env-Term), WP-6 WebGL-Fallback + Goldens-Framework, WP-7 ADR/REFERENCES/Einträge. Der Shear in der `petroleum-oil`-Zelle ist bewusst subtil — ästhetische Nachjustierung bleibt reine Kunstentscheidung.
+
+**Hinweis Baseline:** `petroleum-oil`-Golden ändert sich durch die neue Optik erwartungsgemäß — beim nächsten Golden-Refresh als gewollte Änderung dokumentieren.
