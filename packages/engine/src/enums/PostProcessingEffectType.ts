@@ -15,4 +15,5 @@ export enum PostProcessingEffectType {
   GRAVITATIONAL_LENSING = "GravitationalLensing",
   FLASH = "Flash",
   LIGHT_SHAFTS = "LightShafts",
+  VOLUMETRIC_FOG = "VolumetricFog",
 }
