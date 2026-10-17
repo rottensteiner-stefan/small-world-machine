@@ -1,6 +1,7 @@
 import type { JointOptions } from "./Joint.js";
 import { Joint } from "./Joint.js";
 import { MathPool } from "../../math/MathPool.js";
+import { RigidBodyMath } from "../RigidBodyMath.js";
 
 /**
  * Configuration options for DistanceJoint.
@@ -18,6 +19,8 @@ export interface DistanceJointOptions extends JointOptions {
  * Distance Joint maintaining a fixed or bounded distance between two anchor points.
  */
 export class DistanceJoint extends Joint {
+  private readonly _math = new RigidBodyMath();
+
   /** Target equilibrium distance. */
   public distance: number;
   /** Optional minimum distance bound. */
@@ -91,82 +94,50 @@ export class DistanceJoint extends Joint {
       return;
     }
 
-    // Lever arms
-    const rAx = pA.x - centerA.x;
-    const rAy = pA.y - centerA.y;
-    const rAz = pA.z - centerA.z;
+    const rA = MathPool.acquireVector();
+    const rB = MathPool.acquireVector();
+    rA.set(pA.x - centerA.x, pA.y - centerA.y, pA.z - centerA.z);
+    rB.set(pB.x - centerB.x, pB.y - centerB.y, pB.z - centerB.z);
 
-    const rBx = pB.x - centerB.x;
-    const rBy = pB.y - centerB.y;
-    const rBz = pB.z - centerB.z;
+    // Point velocities at the anchors: v + w x r (world-space kinematics)
+    const velA = MathPool.acquireVector();
+    const velB = MathPool.acquireVector();
+    if (rbA && invMassA > 0) {
+      this._math.pointVelocity(rbA, rA, velA);
+    } else {
+      velA.set(0, 0, 0);
+    }
+    if (rbB && invMassB > 0) {
+      this._math.pointVelocity(rbB, rB, velB);
+    } else {
+      velB.set(0, 0, 0);
+    }
 
-    // Velocities at anchor points
-    const vAx = rbA && invMassA > 0 ? rbA.velocity.x : 0;
-    const vAy = rbA && invMassA > 0 ? rbA.velocity.y : 0;
-    const vAz = rbA && invMassA > 0 ? rbA.velocity.z : 0;
-
-    const wAx = rbA && invMassA > 0 ? rbA.angularVelocity.x : 0;
-    const wAy = rbA && invMassA > 0 ? rbA.angularVelocity.y : 0;
-    const wAz = rbA && invMassA > 0 ? rbA.angularVelocity.z : 0;
-
-    const vpAx = vAx + (wAy * rAz - wAz * rAy);
-    const vpAy = vAy + (wAz * rAx - wAx * rAz);
-    const vpAz = vAz + (wAx * rAy - wAy * rAx);
-
-    const vBx = rbB && invMassB > 0 ? rbB.velocity.x : 0;
-    const vBy = rbB && invMassB > 0 ? rbB.velocity.y : 0;
-    const vBz = rbB && invMassB > 0 ? rbB.velocity.z : 0;
-
-    const wBx = rbB && invMassB > 0 ? rbB.angularVelocity.x : 0;
-    const wBy = rbB && invMassB > 0 ? rbB.angularVelocity.y : 0;
-    const wBz = rbB && invMassB > 0 ? rbB.angularVelocity.z : 0;
-
-    const vpBx = vBx + (wBy * rBz - wBz * rBy);
-    const vpBy = vBy + (wBz * rBx - wBx * rBz);
-    const vpBz = vBz + (wBx * rBy - wBy * rBx);
-
-    const relVx = vpBx - vpAx;
-    const relVy = vpBy - vpAy;
-    const relVz = vpBz - vpAz;
+    const relVx = velB.x - velA.x;
+    const relVy = velB.y - velA.y;
+    const relVz = velB.z - velA.z;
 
     const relVAlongNormal = relVx * ux + relVy * uy + relVz * uz;
 
-    // Effective rotational inertia term
+    // Effective rotational inertia term, through the body's world-rotated inertia
+    // (unchanged for axis-aligned bodies).
+    const dir = MathPool.acquireVector().set(ux, uy, uz);
     let kRot = 0;
     if (invMassA > 0 && rbA) {
-      const tauAx = rAy * uz - rAz * uy;
-      const tauAy = rAz * ux - rAx * uz;
-      const tauAz = rAx * uy - rAy * ux;
-
-      const dWx = tauAx * rbA.inverseInertiaTensor.x;
-      const dWy = tauAy * rbA.inverseInertiaTensor.y;
-      const dWz = tauAz * rbA.inverseInertiaTensor.z;
-
-      const dVx = dWy * rAz - dWz * rAy;
-      const dVy = dWz * rAx - dWx * rAz;
-      const dVz = dWx * rAy - dWy * rAx;
-
-      kRot += dVx * ux + dVy * uy + dVz * uz;
+      kRot += this._math.effectiveInvMass(rbA, this.bodyA.rotation, rA, dir);
     }
 
-    if (invMassB > 0 && rbB) {
-      const tauBx = rBy * uz - rBz * uy;
-      const tauBy = rBz * ux - rBx * uz;
-      const tauBz = rBx * uy - rBy * ux;
-
-      const dWx = tauBx * rbB.inverseInertiaTensor.x;
-      const dWy = tauBy * rbB.inverseInertiaTensor.y;
-      const dWz = tauBz * rbB.inverseInertiaTensor.z;
-
-      const dVx = dWy * rBz - dWz * rBy;
-      const dVy = dWz * rBx - dWx * rBz;
-      const dVz = dWx * rBy - dWy * rBx;
-
-      kRot += dVx * ux + dVy * uy + dVz * uz;
+    if (invMassB > 0 && rbB && this.bodyB) {
+      kRot += this._math.effectiveInvMass(rbB, this.bodyB.rotation, rB, dir);
     }
 
     const effInvMass = totalInvMass + kRot;
     if (effInvMass <= 0) {
+      MathPool.releaseVector(dir);
+      MathPool.releaseVector(velB);
+      MathPool.releaseVector(velA);
+      MathPool.releaseVector(rB);
+      MathPool.releaseVector(rA);
       MathPool.releaseVector(pA);
       MathPool.releaseVector(pB);
       return;
@@ -179,6 +150,11 @@ export class DistanceJoint extends Joint {
     if (Math.abs(jMag) > this.breakForce) {
       this.isBroken = true;
       this.enabled = false;
+      MathPool.releaseVector(dir);
+      MathPool.releaseVector(velB);
+      MathPool.releaseVector(velA);
+      MathPool.releaseVector(rB);
+      MathPool.releaseVector(rA);
       MathPool.releaseVector(pA);
       MathPool.releaseVector(pB);
       return;
@@ -188,16 +164,21 @@ export class DistanceJoint extends Joint {
       const impulse = MathPool.acquireVector().set(ux * jMag, uy * jMag, uz * jMag);
 
       if (invMassA > 0 && rbA) {
-        rbA.applyImpulseAtPoint(impulse, pA, centerA);
+        rbA.applyImpulseAtPoint(impulse, pA, centerA, this.bodyA.rotation);
       }
-      if (invMassB > 0 && rbB) {
+      if (invMassB > 0 && rbB && this.bodyB) {
         impulse.scale(-1);
-        rbB.applyImpulseAtPoint(impulse, pB, centerB);
+        rbB.applyImpulseAtPoint(impulse, pB, centerB, this.bodyB.rotation);
       }
 
       MathPool.releaseVector(impulse);
     }
 
+    MathPool.releaseVector(dir);
+    MathPool.releaseVector(velB);
+    MathPool.releaseVector(velA);
+    MathPool.releaseVector(rB);
+    MathPool.releaseVector(rA);
     MathPool.releaseVector(pA);
     MathPool.releaseVector(pB);
   }

@@ -17,4 +17,6 @@ export * from "./ccd/SweptSphereCCD.js";
 export * from "./solvers/EulerIntegrator.js";
 export * from "./solvers/ContactSolver.js";
 export * from "./solvers/SpatialQueries.js";
+export * from "./PairTracker.js";
+export * from "./RigidBodyMath.js";
 export * from "./joints/index.js";

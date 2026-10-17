@@ -1,4 +1,5 @@
 import { Vector3D, MathPool } from "../math/index.js";
+import { RigidBodyMath } from "./RigidBodyMath.js";
 
 /**
  * A component that adds Newtonian physics capabilities to an Object3D.
@@ -51,6 +52,8 @@ export class RigidBody {
   public inertiaTensor: Vector3D = new Vector3D(1, 1, 1);
   /** Precalculated inverse principal inertia components (1/Ix, 1/Iy, 1/Iz). */
   public inverseInertiaTensor: Vector3D = new Vector3D(1, 1, 1);
+
+  private readonly _math = new RigidBodyMath();
 
   private _inertia: number;
   private _inverseInertia: number;
@@ -262,11 +265,15 @@ export class RigidBody {
    * @param impulse The impulse vector J.
    * @param worldPoint The world-space point where impulse is applied.
    * @param centerOfMass Center of mass in world space (e.g. obj.position or bounds.center).
+   * @param rotation Optional world rotation (Euler radians) of the body. When given, the angular
+   * response uses the world-rotated inverse inertia (`R·I⁻¹·Rᵀ`); when omitted the legacy
+   * body-frame per-axis scaling is applied (bit-identical for non-rotated bodies).
    */
   public applyImpulseAtPoint(
     impulse: Vector3D,
     worldPoint: Vector3D,
     centerOfMass: Vector3D,
+    rotation?: Vector3D,
   ): void {
     if (this.inverseMass === 0) return;
     if (this.isSleeping) {
@@ -282,6 +289,15 @@ export class RigidBody {
     const ry = worldPoint.y - centerOfMass.y;
     const rz = worldPoint.z - centerOfMass.z;
 
+    if (rotation) {
+      // Physically correct angular response through the world-rotated inertia.
+      const rVec = MathPool.acquireVector().set(rx, ry, rz);
+      this._math.applyAngularImpulse(this, rotation, rVec, impulse);
+      MathPool.releaseVector(rVec);
+      return;
+    }
+
+    // Legacy body-frame response: torque in the local inertia frame.
     // Torque impulse: tau = r x J
     const tauX = ry * impulse.z - rz * impulse.y;
     const tauY = rz * impulse.x - rx * impulse.z;

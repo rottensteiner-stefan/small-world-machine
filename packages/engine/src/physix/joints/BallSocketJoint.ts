@@ -1,6 +1,7 @@
 import type { JointOptions } from "./Joint.js";
 import { Joint } from "./Joint.js";
 import { MathPool } from "../../math/MathPool.js";
+import { RigidBodyMath } from "../RigidBodyMath.js";
 
 /**
  * Configuration options for BallSocketJoint.
@@ -11,6 +12,8 @@ export type BallSocketJointOptions = JointOptions;
  * Spherical 3-DOF Point-to-Point constraint locking two anchor points together while permitting free 3D rotation.
  */
 export class BallSocketJoint extends Joint {
+  private readonly _math = new RigidBodyMath();
+
   private static readonly _scratchAxes = [
     { ux: 1, uy: 0, uz: 0, relV: 0, err: 0 },
     { ux: 0, uy: 1, uz: 0, relV: 0, err: 0 },
@@ -42,43 +45,28 @@ export class BallSocketJoint extends Joint {
     const centerA = this.bodyA.position;
     const centerB = this.bodyB ? this.bodyB.position : pB;
 
-    // Lever arms
-    const rAx = pA.x - centerA.x;
-    const rAy = pA.y - centerA.y;
-    const rAz = pA.z - centerA.z;
+    const rA = MathPool.acquireVector();
+    const rB = MathPool.acquireVector();
+    rA.set(pA.x - centerA.x, pA.y - centerA.y, pA.z - centerA.z);
+    rB.set(pB.x - centerB.x, pB.y - centerB.y, pB.z - centerB.z);
 
-    const rBx = pB.x - centerB.x;
-    const rBy = pB.y - centerB.y;
-    const rBz = pB.z - centerB.z;
+    // Point velocities at the anchors: v + w x r (world-space kinematics)
+    const velA = MathPool.acquireVector();
+    const velB = MathPool.acquireVector();
+    if (rbA && invMassA > 0) {
+      this._math.pointVelocity(rbA, rA, velA);
+    } else {
+      velA.set(0, 0, 0);
+    }
+    if (rbB && invMassB > 0) {
+      this._math.pointVelocity(rbB, rB, velB);
+    } else {
+      velB.set(0, 0, 0);
+    }
 
-    // Point velocities: v + w x r
-    const vAx = rbA && invMassA > 0 ? rbA.velocity.x : 0;
-    const vAy = rbA && invMassA > 0 ? rbA.velocity.y : 0;
-    const vAz = rbA && invMassA > 0 ? rbA.velocity.z : 0;
-
-    const wAx = rbA && invMassA > 0 ? rbA.angularVelocity.x : 0;
-    const wAy = rbA && invMassA > 0 ? rbA.angularVelocity.y : 0;
-    const wAz = rbA && invMassA > 0 ? rbA.angularVelocity.z : 0;
-
-    const vpAx = vAx + (wAy * rAz - wAz * rAy);
-    const vpAy = vAy + (wAz * rAx - wAx * rAz);
-    const vpAz = vAz + (wAx * rAy - wAy * rAx);
-
-    const vBx = rbB && invMassB > 0 ? rbB.velocity.x : 0;
-    const vBy = rbB && invMassB > 0 ? rbB.velocity.y : 0;
-    const vBz = rbB && invMassB > 0 ? rbB.velocity.z : 0;
-
-    const wBx = rbB && invMassB > 0 ? rbB.angularVelocity.x : 0;
-    const wBy = rbB && invMassB > 0 ? rbB.angularVelocity.y : 0;
-    const wBz = rbB && invMassB > 0 ? rbB.angularVelocity.z : 0;
-
-    const vpBx = vBx + (wBy * rBz - wBz * rBy);
-    const vpBy = vBy + (wBz * rBx - wBx * rBz);
-    const vpBz = vBz + (wBx * rBy - wBy * rBx);
-
-    const relVx = vpBx - vpAx;
-    const relVy = vpBy - vpAy;
-    const relVz = vpBz - vpAz;
+    const relVx = velB.x - velA.x;
+    const relVy = velB.y - velA.y;
+    const relVz = velB.z - velA.z;
 
     // Positional error for Baumgarte stabilization
     const errX = pB.x - pA.x;
@@ -95,43 +83,22 @@ export class BallSocketJoint extends Joint {
     axes[2]!.relV = relVz;
     axes[2]!.err = errZ;
 
+    const dir = MathPool.acquireVector();
     let totalImpulseSq = 0;
     const impulse = MathPool.acquireVector();
 
     for (let i = 0; i < 3; i++) {
       const axis = axes[i]!;
+      dir.set(axis.ux, axis.uy, axis.uz);
+
+      // Rotational inverse mass through the body's world-rotated inertia (unchanged for axis-aligned bodies).
       let kRot = 0;
-
       if (invMassA > 0 && rbA) {
-        const tauAx = rAy * axis.uz - rAz * axis.uy;
-        const tauAy = rAz * axis.ux - rAx * axis.uz;
-        const tauAz = rAx * axis.uy - rAy * axis.ux;
-
-        const dWx = tauAx * rbA.inverseInertiaTensor.x;
-        const dWy = tauAy * rbA.inverseInertiaTensor.y;
-        const dWz = tauAz * rbA.inverseInertiaTensor.z;
-
-        const dVx = dWy * rAz - dWz * rAy;
-        const dVy = dWz * rAx - dWx * rAz;
-        const dVz = dWx * rAy - dWy * rAx;
-
-        kRot += dVx * axis.ux + dVy * axis.uy + dVz * axis.uz;
+        kRot += this._math.effectiveInvMass(rbA, this.bodyA.rotation, rA, dir);
       }
 
-      if (invMassB > 0 && rbB) {
-        const tauBx = rBy * axis.uz - rBz * axis.uy;
-        const tauBy = rBz * axis.ux - rBx * axis.uz;
-        const tauBz = rBx * axis.uy - rBy * axis.ux;
-
-        const dWx = tauBx * rbB.inverseInertiaTensor.x;
-        const dWy = tauBy * rbB.inverseInertiaTensor.y;
-        const dWz = tauBz * rbB.inverseInertiaTensor.z;
-
-        const dVx = dWy * rBz - dWz * rBy;
-        const dVy = dWz * rBx - dWx * rBz;
-        const dVz = dWx * rBy - dWy * rBx;
-
-        kRot += dVx * axis.ux + dVy * axis.uy + dVz * axis.uz;
+      if (invMassB > 0 && rbB && this.bodyB) {
+        kRot += this._math.effectiveInvMass(rbB, this.bodyB.rotation, rB, dir);
       }
 
       const effInvMass = totalInvMass + kRot;
@@ -139,13 +106,13 @@ export class BallSocketJoint extends Joint {
       if (effInvMass > 0 && Math.abs(j) > 1e-8) {
         totalImpulseSq += j * j;
 
-        impulse.set(axis.ux * j, axis.uy * j, axis.uz * j);
+        impulse.set(dir.x * j, dir.y * j, dir.z * j);
         if (invMassA > 0 && rbA) {
-          rbA.applyImpulseAtPoint(impulse, pA, centerA);
+          rbA.applyImpulseAtPoint(impulse, pA, centerA, this.bodyA.rotation);
         }
-        if (invMassB > 0 && rbB) {
+        if (invMassB > 0 && rbB && this.bodyB) {
           impulse.scale(-1);
-          rbB.applyImpulseAtPoint(impulse, pB, centerB);
+          rbB.applyImpulseAtPoint(impulse, pB, centerB, this.bodyB.rotation);
         }
       }
     }
@@ -155,7 +122,12 @@ export class BallSocketJoint extends Joint {
       this.enabled = false;
     }
 
+    MathPool.releaseVector(dir);
     MathPool.releaseVector(impulse);
+    MathPool.releaseVector(velB);
+    MathPool.releaseVector(velA);
+    MathPool.releaseVector(rB);
+    MathPool.releaseVector(rA);
     MathPool.releaseVector(pA);
     MathPool.releaseVector(pB);
   }

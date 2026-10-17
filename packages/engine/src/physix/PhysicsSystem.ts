@@ -13,8 +13,8 @@ import { BuoyancySolver } from "./fluids/BuoyancySolver.js";
 import { PhysicsBroadphase } from "./broadphase/PhysicsBroadphase.js";
 import { SweptVolumeCCD } from "./ccd/SweptSphereCCD.js";
 import { EulerIntegrator } from "./solvers/EulerIntegrator.js";
-import { ContactSolver, pairKey } from "./solvers/ContactSolver.js";
-import type { ContactPair } from "./solvers/ContactSolver.js";
+import { ContactSolver } from "./solvers/ContactSolver.js";
+import { PairTracker } from "./PairTracker.js";
 import { SpatialQueries } from "./solvers/SpatialQueries.js";
 import type { Ray } from "./Ray.js";
 import type { RaycastHit } from "./RaycastHit.js";
@@ -52,13 +52,11 @@ export class PhysicsSystem {
   private _broadphaseQueryHits: Collidable[] = [];
   private _warnedObjects = new Set<Object3D>();
 
-  private _pairPool: ContactPair[] = [];
-  private _activePairs: ContactPair[] = [];
-  private _seenPairKeys = new Set<bigint>();
   private _collidableIdMap = new WeakMap<Collidable, number>();
   private _nextInternalId: number = 100000000;
 
   private readonly _contactSolver = new ContactSolver();
+  private readonly _tracker = new PairTracker();
   private readonly _spatialQueries = new SpatialQueries(this._broadphase);
 
   /**
@@ -75,40 +73,8 @@ export class PhysicsSystem {
     return id;
   }
 
-  private _acquirePair(
-    first: Collidable,
-    second: Collidable,
-    idA: number,
-    idB: number,
-  ): ContactPair {
-    const pair = this._pairPool.pop();
-    if (pair) {
-      pair.first = first;
-      pair.second = second;
-      pair.idA = idA;
-      pair.idB = idB;
-      pair.colliding = false;
-      pair.normal.set(0, 0, 0);
-      pair.depth = 0;
-      return pair;
-    }
-    return {
-      first,
-      second,
-      idA,
-      idB,
-      colliding: false,
-      normal: new Vector3D(),
-      depth: 0,
-    };
-  }
-
   private _releasePairs(): void {
-    for (let i = 0; i < this._activePairs.length; i++) {
-      this._pairPool.push(this._activePairs[i]!);
-    }
-    this._activePairs.length = 0;
-    this._seenPairKeys.clear();
+    this._tracker.releasePairs();
   }
 
   /**
@@ -388,6 +354,7 @@ export class PhysicsSystem {
     }
 
     this._releasePairs();
+    this._tracker.beginDiscovery();
 
     for (let i = 0; i < bodies.length; i++) {
       const dynObj = bodies[i]!;
@@ -427,23 +394,25 @@ export class PhysicsSystem {
         const first = idDyn < idOther ? dynObj : otherObj;
         const second = idDyn < idOther ? otherObj : dynObj;
 
-        // 64-bit pair key using BigInt to prevent precision loss / collisions above 2^21
-        const pairKeyValue = pairKey(idA, idB);
-        if (this._seenPairKeys.has(pairKeyValue)) continue;
-        this._seenPairKeys.add(pairKeyValue);
+        // The PairTracker owns the 64-bit pair key and the per-step discovery dedup, so the
+        // same unordered pair can never be pushed twice within one step.
+        if (!this._tracker.markDiscovered(idA, idB)) continue;
 
-        this._activePairs.push(this._acquirePair(first, second, idA, idB));
+        this._tracker.acquirePair(first, second, idA, idB);
       }
     }
 
     // Deterministic canonical sorting by (idA, idB)
-    this._activePairs.sort((p1, p2) => (p1.idA !== p2.idA ? p1.idA - p2.idA : p1.idB - p2.idB));
+    this._tracker.activePairs.sort((p1, p2) =>
+      p1.idA !== p2.idA ? p1.idA - p2.idA : p1.idB - p2.idB,
+    );
 
-    this._contactSolver.solve(this._activePairs, allJoints, {
+    this._contactSolver.solve(this._tracker.activePairs, allJoints, {
       events: this.events,
       fixedTimeStep: dt,
       gravityLength: this.gravity.length(),
       solverIterations: this.solverIterations,
+      tracker: this._tracker,
       syncTransform: (obj, posCorr) => this._syncObjectTransformAndBounds(obj, posCorr),
     });
   }
@@ -454,7 +423,7 @@ export class PhysicsSystem {
   public clear(): void {
     this._broadphase.clear();
     this._releasePairs();
-    this._contactSolver.clear();
+    this._tracker.clear();
     this._bodies.length = 0;
     this._allColliders.length = 0;
     this._accumulator = 0;
