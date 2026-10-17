@@ -64,7 +64,7 @@ sessions):
    scattering ($\sigma_s = \omega \cdot \sigma_t$) and absorption ($\sigma_a = (1 - \omega) \cdot \sigma_t$),
    governed by single-scattering albedo $\omega \in [0.0, 1.0]$ (`VolumetricFogElement.scatteringAlbedo`).
    Enables physically realistic dark smoke, soot, and dust that darken background scenes without glowing.
-8. **Ambient In-Scattering (`ambientInject`):** Scene ambient light and diffuse sky IBL irradiance
+8. **Ambient In-Scattering (`ambientInject`):** Scene ambient light and diffuse IBL irradiance (mean of the cube over its six axis directions, since the fog scatters isotropically)
    (`Scene.irradianceMap`) scatter directly within the medium. On WebGPU, global bind group bindings 4 and 7
    (irradiance cube & sampler) are exposed to compute pipelines (`@group(0) @binding(4/7)`), lifting shadows
    inside thick fog banks. On WebGL2, `VolumetricFogPassGL` samples `Scene.irradianceMap` directly.

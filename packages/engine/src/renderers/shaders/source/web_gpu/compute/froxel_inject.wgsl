@@ -276,7 +276,16 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
 
         // Ambient inject: scene ambient colour plus the IBL irradiance from above, scaled by density.
         if (froxel.phase.y > 0.0) {
-            let sky = textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 1.0, 0.0), 0.0).rgb;
+            // Isotropic scattering sees the whole sphere: mean of the (low-frequency) irradiance cube over
+            // the six axis directions approximates its L0 term; sampling straight up would only see the zenith.
+            let sky = (
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(1.0, 0.0, 0.0), 0.0).rgb +
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(-1.0, 0.0, 0.0), 0.0).rgb +
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 1.0, 0.0), 0.0).rgb +
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, -1.0, 0.0), 0.0).rgb +
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, 1.0), 0.0).rgb +
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, -1.0), 0.0).rgb
+            ) * (1.0 / 6.0);
             let ambient = global.ambientColor.rgb + sky * global.envIntensity;
             inScatter += ambient * froxel.scatterTint.rgb * (froxel.phase.y * extinction);
         }
