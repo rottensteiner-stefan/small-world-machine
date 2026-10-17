@@ -28,6 +28,8 @@ export interface LightOptions {
   shadowResolution?: number;
   /** A small offset to prevent shadow acne. Defaults to 0.005. */
   shadowBias?: number;
+  /** How much this light contributes to volumetric fog (0 = none). Defaults to 1.0. */
+  volumetricIntensity?: number;
   /** An offset along the surface normal to prevent shadow acne. Defaults to 0.0. */
   shadowNormalBias?: number;
 }
@@ -42,6 +44,13 @@ export abstract class AbstractLight extends Object3D {
   public static override readonly inspector: Record<string, InspectorField> = {
     color: { type: "color", label: "Color" },
     intensity: { type: "number", label: "Intensity", min: 0, max: 200, step: 0.01 },
+    volumetricIntensity: {
+      type: "number",
+      label: "Volumetric Intensity",
+      min: 0,
+      max: 10,
+      step: 0.01,
+    },
     shadowBias: { type: "number", label: "Shadow Bias", min: 0, max: 0.05, step: 0.0001 },
     shadowNormalBias: {
       type: "number",
@@ -60,6 +69,13 @@ export abstract class AbstractLight extends Object3D {
 
   /** The intensity of the light. */
   public intensity: number;
+
+  /**
+   * Multiplier of this light's in-scattering in volumetric fog (like Unreal's Volumetric Scattering
+   * Intensity, Godot's per-light volumetric fog energy). 0 removes the light from the fog entirely,
+   * which is useful for short-lived flashes that would ghost in the temporal filter.
+   */
+  public volumetricIntensity: number;
 
   /** Whether the light casts shadows. */
   public override castShadow: boolean;
@@ -95,10 +111,12 @@ export abstract class AbstractLight extends Object3D {
       shadowResolution = 512,
       shadowBias = 0.005,
       shadowNormalBias = 0.0,
+      volumetricIntensity = 1.0,
     } = options;
     super(name);
     this.color = Object.isFrozen(color) ? color.clone() : color;
     this.intensity = intensity;
+    this.volumetricIntensity = volumetricIntensity;
     this.castShadow = castShadow;
     this.shadowResolution = shadowResolution;
     this.shadowBias = shadowBias;

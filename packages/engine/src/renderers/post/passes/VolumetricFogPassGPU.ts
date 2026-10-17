@@ -5,7 +5,12 @@ import FROXEL_REPROJECT_WGSL from "../../shaders/source/web_gpu/compute/froxel_r
 import FROXEL_INTEGRATE_WGSL from "../../shaders/source/web_gpu/compute/froxel_integrate.wgsl?raw";
 
 import { VolumetricFogElement } from "../elements/index.js";
-import { DirectionalLight } from "../../../core/lights/index.js";
+import {
+  DirectionalLight,
+  PointLight,
+  SpotLight,
+  MAX_CLUSTERED_LIGHTS_PER_TYPE,
+} from "../../../core/lights/index.js";
 import { FogVolume } from "../../../core/objects/FogVolume.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
@@ -13,6 +18,12 @@ import { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
 
 /** Uniform-array capacity of FogVolumes per pass (matches `FogVolumeData[16]` in the shaders). */
 const MAX_FOG_VOLUMES = 16;
+
+/** Float offset of the per-light scale arrays in FroxelUniforms (after the 16 FogVolumeData). */
+const LIGHT_SCALE_OFFSET = 32 + MAX_FOG_VOLUMES * 32;
+
+/** Total floats of FroxelUniforms: base + volumes + 64 point + 64 spot light scales. */
+const INJECT_UNIFORM_FLOATS = LIGHT_SCALE_OFFSET + 2 * MAX_CLUSTERED_LIGHTS_PER_TYPE;
 
 /**
  * Interleaved-Gradient-Noise-style hash (after Jorge Jimenez 2014) for the temporal sub-voxel jitter.
@@ -51,8 +62,8 @@ export class VolumetricFogPassGPU {
   private _injectPipeline?: GPUComputePipeline;
   private _injectBGL!: GPUBindGroupLayout;
   private _injectUniformBuffer!: GPUBuffer;
-  /** 544 floats: FroxelUniforms in froxel_inject.wgsl (invView + 4x vec4f + 16x FogVolumeData). */
-  private readonly _injectUniformData: Float32Array = new Float32Array(32 + 16 * 32);
+  /** FroxelUniforms in froxel_inject.wgsl: invView + 4x vec4f + 16x FogVolumeData + 2x per-light scale arrays. */
+  private readonly _injectUniformData: Float32Array = new Float32Array(INJECT_UNIFORM_FLOATS);
 
   // --- 2. Reprojection Compute Pipeline (Temporal Filtering) ---
   private _reprojectPipeline!: GPUComputePipeline;
@@ -141,7 +152,7 @@ export class VolumetricFogPassGPU {
 
     // Uniform buffers
     this._injectUniformBuffer = device.createBuffer({
-      size: (32 + 16 * 32) * 4, // 544 x f32 = 2176 bytes
+      size: INJECT_UNIFORM_FLOATS * 4,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this._reprojectUniformBuffer = device.createBuffer({
@@ -444,6 +455,8 @@ export class VolumetricFogPassGPU {
     dirLight: DirectionalLight | undefined,
     element: VolumetricFogElement,
     fogVolumes: FogVolume[] = [],
+    pointLights: readonly PointLight[] = [],
+    spotLights: readonly SpotLight[] = [],
   ): GPUTextureView | null {
     if (!element.enabled || width <= 0 || height <= 0) {
       return null;
@@ -524,6 +537,13 @@ export class VolumetricFogPassGPU {
         inj.fill(0, offset, offset + 32);
       }
       offset += 32;
+    }
+
+    // Per-light volumetric intensity, indexed like the renderer's light buffers.
+    for (let i = 0; i < MAX_CLUSTERED_LIGHTS_PER_TYPE; i++) {
+      inj[LIGHT_SCALE_OFFSET + i] = pointLights[i]?.volumetricIntensity ?? 0.0;
+      inj[LIGHT_SCALE_OFFSET + MAX_CLUSTERED_LIGHTS_PER_TYPE + i] =
+        spotLights[i]?.volumetricIntensity ?? 0.0;
     }
 
     this._device.queue.writeBuffer(this._injectUniformBuffer, 0, inj);
@@ -609,9 +629,10 @@ export class VolumetricFogPassGPU {
     intg[30] = this._scratchSunDir.z;
     intg[31] = 0.0;
 
-    intg[32] = element.color.r * (sunActive ? dirLight!.intensity : 0.0);
-    intg[33] = element.color.g * (sunActive ? dirLight!.intensity : 0.0);
-    intg[34] = element.color.b * (sunActive ? dirLight!.intensity : 0.0);
+    const sunScale = sunActive ? dirLight!.intensity * dirLight!.volumetricIntensity : 0.0;
+    intg[32] = element.color.r * sunScale;
+    intg[33] = element.color.g * sunScale;
+    intg[34] = element.color.b * sunScale;
     intg[35] = sunActive ? 1.0 : 0.0;
 
     const numCascades = Math.min(dirLight?.numCascades ?? 0, 4);

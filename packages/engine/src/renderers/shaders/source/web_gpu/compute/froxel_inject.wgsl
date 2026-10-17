@@ -34,6 +34,8 @@ struct FroxelUniforms {
     nearFar: vec4f,          // [near, far, sliceCount, pad]
     jitter: vec4f,           // [jitterX, jitterY, jitterZ, pad]
     volumes: array<FogVolumeData, 16>,
+    pointFogScale: array<vec4f, 16>,   // per point light (index = light index) volumetric intensity, 4 per vec4
+    spotFogScale: array<vec4f, 16>,    // same for spot lights
 }
 
 @group(1) @binding(0) var<uniform> froxel: FroxelUniforms;
@@ -211,7 +213,8 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
             let ratio = lightDist / max(light.pos.w, 0.001);
             let window = clamp(1.0 - ratio * ratio * ratio * ratio, 0.0, 1.0);
             let atten = window * window / (1.0 + lightDist * lightDist);
-            lightScatter += light.col.rgb * atten * phase;
+            let fogScale = froxel.pointFogScale[lightIdx / 4u][lightIdx % 4u];
+            lightScatter += light.col.rgb * atten * phase * fogScale;
         }
 
         // Spot lights: cone from params.x (cos outer) / params.y (cos inner), range params.z.
@@ -232,7 +235,8 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
             if (maxDist > 0.0) {
                 atten *= pow(clamp(1.0 - lightDist / maxDist, 0.0, 1.0), max(light.params.w, 1.0));
             }
-            lightScatter += light.col.rgb * atten * cone * phase;
+            let fogScale = froxel.spotFogScale[lightIdx / 4u][lightIdx % 4u];
+            lightScatter += light.col.rgb * atten * cone * phase * fogScale;
         }
 
         // Scattering coefficient sigma_s == extinction (albedo 1). Intensity is applied once, in

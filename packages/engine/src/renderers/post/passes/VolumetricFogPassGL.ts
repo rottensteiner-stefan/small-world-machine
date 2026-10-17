@@ -298,12 +298,13 @@ export class VolumetricFogPassGL {
       );
     }
 
+    const sunScale = sunActive ? dirLight!.intensity * dirLight!.volumetricIntensity : 0.0;
     if (this._uSunColorLoc) {
       gl2.uniform3f(
         this._uSunColorLoc,
-        sunActive ? element.color.r * dirLight!.intensity : 0.0,
-        sunActive ? element.color.g * dirLight!.intensity : 0.0,
-        sunActive ? element.color.b * dirLight!.intensity : 0.0,
+        sunActive ? element.color.r * sunScale : 0.0,
+        sunActive ? element.color.g * sunScale : 0.0,
+        sunActive ? element.color.b * sunScale : 0.0,
       );
     }
 

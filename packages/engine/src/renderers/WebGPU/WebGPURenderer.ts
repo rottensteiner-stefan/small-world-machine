@@ -1596,6 +1596,8 @@ export class WebGPURenderer extends AbstractRenderer {
             lights.dLight,
             volFogNode,
             fogVolumes,
+            lights.pLights,
+            lights.sLights,
           ) ?? undefined;
       } else if (isPostProcessPass) {
         this._volumetricFogTextureView = undefined;
