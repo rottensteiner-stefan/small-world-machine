@@ -30,7 +30,8 @@ async function runBenchmarks() {
   console.log("🌊 Small World Machine - Liquid Materials & Packing Perf Benchmark");
   console.log("🌊 ========================================================\n");
 
-  await ShaderBootstrap.init();
+  const shaderRegistry = new ShaderRegistry();
+  await ShaderBootstrap.init(shaderRegistry);
 
   const materials = [
     { name: "FluidSurfaceMaterial", instance: new FluidSurfaceMaterial() },
@@ -95,7 +96,8 @@ async function runBenchmarks() {
     obj.position.set(12, 34, 56);
     obj.updateMatrixWorld();
 
-    const shaderDef = ShaderRegistry.instance.get(instance.type);
+    shaderRegistry.ensureProvider(instance.type, instance);
+    const shaderDef = shaderRegistry.get(instance.type);
     if (!shaderDef) {
       console.warn(`Shader definition missing for ${instance.type}`);
       continue;

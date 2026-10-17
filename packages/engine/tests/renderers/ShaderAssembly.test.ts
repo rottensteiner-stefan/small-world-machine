@@ -21,9 +21,11 @@ import {
 } from "../../src/index.js";
 import { ShaderBootstrap } from "../../src/renderers/shaders/ShaderBootstrap.js";
 
+const testShaderRegistry = new ShaderRegistry();
+
 describe("Shader Assembly & Linter", () => {
   beforeAll(async () => {
-    await ShaderBootstrap.init();
+    await ShaderBootstrap.init(testShaderRegistry);
   });
 
   const checkDuplicates = (shaderCode: string, materialName: string, shaderType: string): void => {
@@ -151,8 +153,8 @@ describe("Shader Assembly & Linter", () => {
         return; // Skip materials without glsl300
       }
 
-      const finalVs = ShaderRegistry.instance.assemble(vs, "glsl300");
-      const finalFs = ShaderRegistry.instance.assemble(fs, "glsl300");
+      const finalVs = testShaderRegistry.assemble(vs, "glsl300");
+      const finalFs = testShaderRegistry.assemble(fs, "glsl300");
       checkDuplicates(finalVs, matName, "Vertex Shader");
       checkDuplicates(finalFs, matName, "Fragment Shader");
     });
@@ -166,7 +168,7 @@ describe("Shader Assembly & Linter", () => {
         return;
       }
 
-      const finalWgsl = ShaderRegistry.instance.assemble(wgsl, "wgsl");
+      const finalWgsl = testShaderRegistry.assemble(wgsl, "wgsl");
       checkDuplicatesWGSL(finalWgsl, matName, "Combined Shader");
     });
   }

@@ -1,13 +1,15 @@
 import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
 import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 
+const testShaderRegistry = new ShaderRegistry();
+
 describe("SDF & Raymarching Shader Chunks", () => {
   beforeAll(async () => {
-    await CoreShaderChunks.init();
+    await CoreShaderChunks.init(testShaderRegistry);
   });
 
   it("should register SDF_MATH chunk for GLSL 300 and GLSL 100", () => {
-    const registry = ShaderRegistry.instance;
+    const registry = testShaderRegistry;
     const glsl300 = registry.getChunk("SDF_MATH", "glsl300");
     const glsl100 = registry.getChunk("SDF_MATH", "glsl100");
 
@@ -24,7 +26,7 @@ describe("SDF & Raymarching Shader Chunks", () => {
   });
 
   it("should register WGSL_SDF_MATH chunk for WebGPU", () => {
-    const registry = ShaderRegistry.instance;
+    const registry = testShaderRegistry;
     const wgsl = registry.getChunk("WGSL_SDF_MATH", "wgsl");
 
     expect(wgsl).toBeDefined();
@@ -39,7 +41,7 @@ describe("SDF & Raymarching Shader Chunks", () => {
   });
 
   it("should assemble SDF math without syntax errors in custom shader strings", () => {
-    const registry = ShaderRegistry.instance;
+    const registry = testShaderRegistry;
     const glslChunk = registry.getChunk("SDF_MATH", "glsl300")!;
     const wgslChunk = registry.getChunk("WGSL_SDF_MATH", "wgsl")!;
 

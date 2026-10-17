@@ -11,24 +11,11 @@ export type ShaderLanguage = "glsl300" | "glsl100" | "wgsl";
  * Central registry for shader definitions.
  */
 export class ShaderRegistry {
-  private static _instance: ShaderRegistry;
   private _shaders: Map<string, ShaderDefinition> = new Map();
   private _providers: Map<string, ShaderProvider> = new Map();
   private _chunks: Map<string, Map<ShaderLanguage, string>> = new Map();
 
   constructor() {}
-
-  /**
-   * Gets the process-wide default ShaderRegistry instance.
-   * @deprecated Use an instance via `RendererContext.shaderRegistry` instead. Removal target: v1.0.0.
-   * @returns The instance.
-   */
-  public static get instance(): ShaderRegistry {
-    if (!this._instance) {
-      this._instance = new ShaderRegistry();
-    }
-    return this._instance;
-  }
 
   /**
    * Registers a new shader definition.
@@ -79,14 +66,6 @@ export class ShaderRegistry {
       }
     }
 
-    if (!def && this !== ShaderRegistry._instance && ShaderRegistry._instance) {
-      console.warn(
-        `[ShaderRegistry] Cache miss on instance registry for "${id}" -- falling back to the global ` +
-          "singleton. Register this shader on a RendererContext-scoped registry instead.",
-      );
-      def = ShaderRegistry._instance.get(id);
-    }
-
     return def;
   }
 
@@ -112,13 +91,6 @@ export class ShaderRegistry {
   public getChunk(id: string, lang: ShaderLanguage): string | undefined {
     CoreShaderChunks.init(this);
     const chunk = this._chunks.get(id)?.get(lang);
-    if (undefined === chunk && this !== ShaderRegistry._instance && ShaderRegistry._instance) {
-      console.warn(
-        `[ShaderRegistry] Chunk "${id}" not cached on instance registry -- falling back to the global ` +
-          "singleton. Register this chunk on a RendererContext-scoped registry instead.",
-      );
-      return ShaderRegistry._instance.getChunk(id, lang);
-    }
     return chunk;
   }
 

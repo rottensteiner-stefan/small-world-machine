@@ -26,6 +26,8 @@ import {
   DecalMaterial,
 } from "../../src/core/materials/index.js";
 
+const testShaderRegistry = new ShaderRegistry();
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Internals = any;
 
@@ -80,7 +82,7 @@ void main() { fragColor = vec4(1.0); }`,
 
 describe("wrapFragmentWithNormalOutputGL on shipped shaders", () => {
   beforeAll(async () => {
-    await ShaderBootstrap.init();
+    await ShaderBootstrap.init(testShaderRegistry);
   });
 
   const materials = [
@@ -109,7 +111,7 @@ describe("wrapFragmentWithNormalOutputGL on shipped shaders", () => {
     it(`wraps the assembled ${name} fragment shader`, () => {
       const source = material.getShaderDefinition().sources.glsl300;
       if (!source) return;
-      const fs = ShaderRegistry.instance.assemble(source.fs, "glsl300");
+      const fs = testShaderRegistry.assemble(source.fs, "glsl300");
 
       const wrapped = wrapFragmentWithNormalOutputGL(fs);
 

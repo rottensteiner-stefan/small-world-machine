@@ -9,6 +9,9 @@ import {
 } from "../../../src/index.js";
 import type { AbstractMaterial } from "../../../src/index.js";
 import { NoirWaterMaterial, OilSlickMaterial } from "../../../../liquid-extras/src/index.js";
+import { ShaderRegistry } from "../../../src/renderers/shaders/ShaderRegistry.js";
+
+const testShaderRegistry = new ShaderRegistry();
 
 /**
  * Cross-checks the uniform names a liquid shader READS against what its material actually WRITES.
@@ -66,7 +69,7 @@ function glslUniforms(source: string): { plain: Set<string>; samplers: Set<strin
 
 describe("Liquid shader <-> material uniform name parity", () => {
   beforeAll(async () => {
-    await ShaderBootstrap.init();
+    await ShaderBootstrap.init(testShaderRegistry);
   });
 
   describe.each(WAVE_FAMILY)("%s WGSL", (_name, create) => {

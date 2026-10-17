@@ -1,6 +1,6 @@
 # 0032: Per-Engine Shader Registry (No Process-Wide Shader State)
 
-- **Status:** Accepted, implementation in phases (see below)
+- **Status:** Accepted & Implemented (phases 1 to 3, 2026-10-17)
 - **Date:** 2026-10-17
 - **Decision Makers:** Small World Machine Architecture Team
 

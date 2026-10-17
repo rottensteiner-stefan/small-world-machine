@@ -72,7 +72,7 @@ public override getRenderManifest(): RenderManifest {
 
 `AbstractMaterial._createBaseManifest()`/`_syncBaseManifestState()` already pre-fill the properties every material shares (color, culling, blending, fog parameters, ...) - call them first and override only what your material actually adds.
 
-The tokens `[BASE_VERTEX_HEADER]`, `[WGSL_PBR_MATH]`, etc. are shared shader building blocks, registered in `CoreShaderChunks.ts` and expanded by `ShaderRegistry.instance.assemble()`. Reuse them instead of re-deriving lighting/fog/PBR math by hand.
+The tokens `[BASE_VERTEX_HEADER]`, `[WGSL_PBR_MATH]`, etc. are shared shader building blocks, registered in `CoreShaderChunks.ts` and expanded by the engine's `ShaderRegistry.assemble()` (`RendererContext.shaderRegistry`, one per engine). A material does not register its shader anywhere itself: the renderer hands it to its registry the first time it draws it (ADR 0032). Reuse them instead of re-deriving lighting/fog/PBR math by hand.
 
 ## The Three Shader Dialects
 

@@ -6,6 +6,8 @@ import { PostProcessingGroup } from "../../src/index.js";
 import { PostProcessingEffectType } from "../../src/enums/index.js";
 import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
 
+const testShaderRegistry = new ShaderRegistry();
+
 (globalThis as unknown as { GPUShaderStage: Record<string, number> }).GPUShaderStage ??= {
   VERTEX: 0x1,
   FRAGMENT: 0x2,
@@ -83,7 +85,7 @@ function makeGroup(): PostProcessingGroup {
 
 describe("PostProcessPass: continuous tuning values never rebuild the pipeline", () => {
   beforeAll(async () => {
-    await CoreShaderChunks.init();
+    await CoreShaderChunks.init(testShaderRegistry);
   });
 
   it("does not rebuild the pipeline when only continuous values change", () => {

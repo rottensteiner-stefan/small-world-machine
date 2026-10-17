@@ -22,9 +22,11 @@ import {
   WorldMaterial,
 } from "../../../src/core/materials/index.js";
 
+const testShaderRegistry = new ShaderRegistry();
+
 describe("ShaderValidation & Contract Suite", () => {
   beforeAll(async () => {
-    await ShaderBootstrap.init();
+    await ShaderBootstrap.init(testShaderRegistry);
   });
 
   const materials = [
@@ -52,7 +54,7 @@ describe("ShaderValidation & Contract Suite", () => {
     materials.forEach(({ name, instance }) => {
       it(`should completely resolve all chunks for ${name} without unparsed [CHUNK_ID] placeholders`, () => {
         const def = instance.getShaderDefinition();
-        const registry = ShaderRegistry.instance;
+        const registry = testShaderRegistry;
 
         if (def.sources.glsl300) {
           const vs = registry.assemble(def.sources.glsl300.vs, "glsl300");
@@ -80,7 +82,7 @@ describe("ShaderValidation & Contract Suite", () => {
 
   describe("GlobalUniforms UBO Parity in GLSL300", () => {
     it("should have identical GlobalUniforms fields in vertex header and lights fragment chunk", () => {
-      const registry = ShaderRegistry.instance;
+      const registry = testShaderRegistry;
       const vsHeader = registry.getChunk("BASE_VERTEX_HEADER", "glsl300");
       const lightDefs = registry.getChunk("LIGHT_DEFS", "glsl300");
 
@@ -160,7 +162,7 @@ describe("ShaderValidation & Contract Suite", () => {
         const def = instance.getShaderDefinition();
         if (!def.sources.glsl300) return;
 
-        const registry = ShaderRegistry.instance;
+        const registry = testShaderRegistry;
         let fs = registry.assemble(def.sources.glsl300.fs, "glsl300");
 
         // Strip comments first

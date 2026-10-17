@@ -1,4 +1,5 @@
 import "../../src/index.js";
+import { createDefaultRendererContext } from "../../src/interfaces/index.js";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   WebGPURenderer,
@@ -16,6 +17,8 @@ import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import type { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
 import type { GeometryDataInterface } from "../../src/interfaces/index.js";
 import { Matrix4 } from "../../src/math/index.js";
+
+const testShaderRegistry = new ShaderRegistry();
 
 // Node/vitest has no WebGPU global; @webgpu/types only provides ambient TS types,
 // not a runtime value. Stub the bit-flag constants this renderer actually reads.
@@ -78,7 +81,10 @@ function makeMockDevice(): GPUDevice {
 
 function makeRenderer(): { renderer: RendererInternals; device: GPUDevice } {
   const device = makeMockDevice();
-  const renderer = new WebGPURenderer() as RendererInternals;
+  const renderer = new WebGPURenderer({
+    ...createDefaultRendererContext(),
+    shaderRegistry: testShaderRegistry,
+  }) as RendererInternals;
   renderer._device = device;
   renderer._fallback = new GPUFallbackResources(device);
   renderer._textures = new GPUTextureResourceCache(device, renderer._fallback);
@@ -109,7 +115,7 @@ function makeRenderer(): { renderer: RendererInternals; device: GPUDevice } {
 const SHADER_ID = "test/view-uniforms-shader";
 
 function registerTestShader(): void {
-  ShaderRegistry.instance.register({
+  testShaderRegistry.register({
     id: SHADER_ID,
     sources: { wgsl: "@vertex fn vs() -> Out { var o: Out; return o; }" },
     layout: { uniforms: {}, uniformLayout: [], textures: {} },

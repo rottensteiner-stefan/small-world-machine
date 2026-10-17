@@ -1,4 +1,5 @@
 import "../../src/index.js";
+import { createDefaultRendererContext } from "../../src/interfaces/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
 import { GPUFallbackResources } from "../../src/renderers/WebGPU/managers/GPUFallbackResources.js";
@@ -14,6 +15,8 @@ import { Object3D } from "../../src/core/Object3D.js";
 import { Scene } from "../../src/core/Scene.js";
 import { Vector3D, Matrix4 } from "../../src/math/index.js";
 import { BoundingSphere } from "../../src/physix/index.js";
+
+const testShaderRegistry = new ShaderRegistry();
 
 // Node/vitest has no WebGPU global; @webgpu/types only provides ambient TS types, not a runtime
 // value. Stub the bit-flag constants the code under test actually reads.
@@ -78,7 +81,10 @@ function makeMockDevice(): GPUDevice {
 
 function makeRenderer(): { renderer: Internals; device: GPUDevice } {
   const device = makeMockDevice();
-  const renderer = new WebGPURenderer() as Internals;
+  const renderer = new WebGPURenderer({
+    ...createDefaultRendererContext(),
+    shaderRegistry: testShaderRegistry,
+  }) as Internals;
   renderer._device = device;
   renderer._format = "bgra8unorm";
   renderer._fallback = new GPUFallbackResources(device);
@@ -107,8 +113,8 @@ function makeRenderer(): { renderer: Internals; device: GPUDevice } {
 const SHADER_ID = "test/offscreen-target-format-shader";
 
 function registerTestShader(): void {
-  if (ShaderRegistry.instance.get(SHADER_ID)) return;
-  ShaderRegistry.instance.register({
+  if (testShaderRegistry.get(SHADER_ID)) return;
+  testShaderRegistry.register({
     id: SHADER_ID,
     sources: { wgsl: "@vertex fn vs() -> Out { var o: Out; return o; }" },
     layout: { uniforms: {}, uniformLayout: [], textures: {} },

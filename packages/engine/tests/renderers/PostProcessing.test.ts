@@ -6,9 +6,11 @@ import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.j
 import * as fs from "fs";
 import * as path from "path";
 
+const testShaderRegistry = new ShaderRegistry();
+
 describe("Post-Processing Shader Chunks & Groups", () => {
   beforeAll(async () => {
-    await CoreShaderChunks.init();
+    await CoreShaderChunks.init(testShaderRegistry);
   });
 
   it("should successfully initialize filterMode with default value 0", () => {
@@ -32,7 +34,7 @@ describe("Post-Processing Shader Chunks & Groups", () => {
   });
 
   it("should register the post-processing filter chunks in ShaderRegistry", () => {
-    const registry = ShaderRegistry.instance;
+    const registry = testShaderRegistry;
 
     const glitchGLSL = registry.getChunk("FILTER_GLITCH_DISTORT", "glsl300");
     const glitchWGSL = registry.getChunk("FILTER_GLITCH_DISTORT", "wgsl");
@@ -71,7 +73,7 @@ describe("Post-Processing Shader Chunks & Groups", () => {
     expect(glslRaw).toContain("[FILTER_VHS_DISTORT]");
     expect(glslRaw).toContain("[FILTER_COLOR_GRADING]");
 
-    const glslAssembled = ShaderRegistry.instance.assemble(glslRaw, "glsl300");
+    const glslAssembled = testShaderRegistry.assemble(glslRaw, "glsl300");
 
     // Ensure placeholders have been replaced and code injected
     expect(glslAssembled).not.toContain("[FILTER_GLITCH_DISTORT]");
@@ -95,7 +97,7 @@ describe("Post-Processing Shader Chunks & Groups", () => {
     expect(wgslRaw).toContain("[FILTER_VHS_DISTORT]");
     expect(wgslRaw).toContain("[FILTER_COLOR_GRADING]");
 
-    const wgslAssembled = ShaderRegistry.instance.assemble(wgslRaw, "wgsl");
+    const wgslAssembled = testShaderRegistry.assemble(wgslRaw, "wgsl");
 
     // Ensure placeholders have been replaced and code injected
     expect(wgslAssembled).not.toContain("[FILTER_GLITCH_DISTORT]");
@@ -154,7 +156,7 @@ describe("Post-Processing Shader Chunks & Groups", () => {
       "packages/engine/src/renderers/post/shaders/PostProcess.frag.wgsl",
     );
     const wgslSource = fs.readFileSync(wgslPath, "utf-8");
-    let assembledWgsl = ShaderRegistry.instance.assemble(wgslSource, "wgsl");
+    let assembledWgsl = testShaderRegistry.assemble(wgslSource, "wgsl");
 
     const tmEnabled = tm && tm.enabled;
     const vigEnabled = vig && vig.enabled;
@@ -192,7 +194,7 @@ describe("Post-Processing Shader Chunks & Groups", () => {
         grain: { enabled: true, intensity: 0.5 },
       },
     });
-    let assembledWgslB = ShaderRegistry.instance.assemble(wgslSource, "wgsl");
+    let assembledWgslB = testShaderRegistry.assemble(wgslSource, "wgsl");
     const tmB = groupB.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING)!;
     const vigB = groupB.get<VignetteElement>(PostProcessingEffectType.VIGNETTE)!;
     const grainB = groupB.get<GrainElement>(PostProcessingEffectType.GRAIN)!;
@@ -216,7 +218,7 @@ describe("Post-Processing Shader Chunks & Groups", () => {
       "packages/engine/src/renderers/post/shaders/PostProcess.frag.glsl",
     );
     const glslSource = fs.readFileSync(glslPath, "utf-8");
-    let assembledGlsl = ShaderRegistry.instance.assemble(glslSource, "glsl300");
+    let assembledGlsl = testShaderRegistry.assemble(glslSource, "glsl300");
 
     assembledGlsl = assembledGlsl.replace(
       "uniform float u_exposure;",

@@ -11,9 +11,11 @@ import {
   ShaderRegistry,
 } from "../../src/index.js";
 
+const testShaderRegistry = new ShaderRegistry();
+
 describe("Liquid Materials Zero-Allocation Guarantees", () => {
   beforeAll(async () => {
-    await ShaderBootstrap.init();
+    await ShaderBootstrap.init(testShaderRegistry);
   });
 
   const liquidMaterials = [

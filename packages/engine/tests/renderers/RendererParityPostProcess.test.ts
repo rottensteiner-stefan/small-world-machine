@@ -18,6 +18,8 @@ import { PostProcessPassGL } from "../../src/renderers/post/passes/PostProcessPa
 import { PostProcessPass } from "../../src/renderers/passes/PostProcessPass.js";
 import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
 
+const testShaderRegistry = new ShaderRegistry();
+
 (globalThis as unknown as { GPUShaderStage: Record<string, number> }).GPUShaderStage ??= {
   VERTEX: 0x1,
   FRAGMENT: 0x2,
@@ -156,7 +158,7 @@ function createMockGPU(): {
 
 describe("Post-Processing Renderer Parity (WebGL2 vs WebGPU)", () => {
   beforeAll(async () => {
-    await CoreShaderChunks.init();
+    await CoreShaderChunks.init(testShaderRegistry);
   });
 
   it("ensures exact 1:1 parity of all post-process uniform values across WebGL2 and WebGPU", () => {

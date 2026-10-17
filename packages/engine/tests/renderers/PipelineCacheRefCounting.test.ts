@@ -5,6 +5,8 @@ import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import type { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
 import { Object3D } from "../../src/core/Object3D.js";
 
+const testShaderRegistry = new ShaderRegistry();
+
 (globalThis as unknown as { GPUShaderStage: Record<string, number> }).GPUShaderStage ??= {
   VERTEX: 0x1,
   FRAGMENT: 0x2,
@@ -24,8 +26,8 @@ function makeCache(): { cache: GPUPipelineCache; createRenderPipeline: ReturnTyp
     createRenderPipeline,
     limits: { maxSampledTexturesPerShaderStage: 16 },
   } as unknown as GPUDevice;
-  if (!ShaderRegistry.instance.get(SHADER_ID)) {
-    ShaderRegistry.instance.register({
+  if (!testShaderRegistry.get(SHADER_ID)) {
+    testShaderRegistry.register({
       id: SHADER_ID,
       sources: { wgsl: "@vertex fn vs() -> Out { var o: Out; return o; }" },
       layout: { uniforms: {}, uniformLayout: [], textures: {} },
@@ -37,7 +39,7 @@ function makeCache(): { cache: GPUPipelineCache; createRenderPipeline: ReturnTyp
     {} as GPUBindGroupLayout,
     {} as GPUBindGroupLayout,
     {} as GPUBindGroupLayout,
-    ShaderRegistry.instance,
+    testShaderRegistry,
   );
   return { cache, createRenderPipeline };
 }

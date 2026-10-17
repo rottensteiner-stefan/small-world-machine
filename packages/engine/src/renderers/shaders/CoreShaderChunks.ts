@@ -61,7 +61,7 @@ import wgslFogCalc from "./source/web_gpu/chunks/fog_calc.wgsl?raw";
 import wgslSdfMath from "./source/web_gpu/chunks/sdf_math.wgsl?raw";
 import wgslScreenFootprint from "./source/web_gpu/chunks/screen_footprint.wgsl?raw";
 import wgslBaseVs from "./source/web_gpu/base.vert.wgsl?raw";
-import { ShaderRegistry } from "./ShaderRegistry.js";
+import type { ShaderRegistry } from "./ShaderRegistry.js";
 
 /**
  * Utility to load and register all standard shader chunks used by the engine.
@@ -71,8 +71,9 @@ export class CoreShaderChunks {
 
   /**
    * Initializes the registry with all standard chunks for all supported languages.
+   * @param registry The engine's registry (`RendererContext.shaderRegistry`).
    */
-  public static init(registry: ShaderRegistry = ShaderRegistry.instance): void {
+  public static init(registry: ShaderRegistry): void {
     if (this._bootstrapped.has(registry)) {
       return;
     }

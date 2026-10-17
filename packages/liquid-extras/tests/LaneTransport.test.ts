@@ -14,12 +14,14 @@ import { ShaderBootstrap } from "@small-world-machine/engine/renderers/shaders/S
 import { NoirWaterMaterial } from "../src/materials/NoirWater/NoirWaterMaterial.js";
 import { OilSlickMaterial } from "../src/materials/OilSlick/OilSlickMaterial.js";
 
+const testShaderRegistry = new ShaderRegistry();
+
 const REGISTRY_JSON = new URL(
   "../../../scripts/lane-contracts/lane-contracts.json",
   import.meta.url,
 );
 
-const registry = ShaderRegistry.instance;
+const registry = testShaderRegistry;
 
 function quantize(v: number, posterizeSteps: number): number {
   const inkSteps = Math.max(posterizeSteps - 1, 1);
@@ -28,7 +30,7 @@ function quantize(v: number, posterizeSteps: number): number {
 
 describe("Liquid extension shader transport (T3)", () => {
   beforeAll(async () => {
-    await ShaderBootstrap.init();
+    await ShaderBootstrap.init(testShaderRegistry);
   });
 
   it("assembles Noir across glsl300/glsl100/wgsl and transports the posterize block", () => {
