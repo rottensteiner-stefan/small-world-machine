@@ -109,7 +109,7 @@ class Showcase31 extends AbstractShowcase {
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     this.camera.position.set(0.5, 3.4, 13.5);
     this.camera.target.set(0, 1.8, -1.5);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // Dank, cool underground ambient fill -- there is no sky here, only whatever the breach lets in.
     this.scene.add(new AmbientLight({ color: new Color(0.07, 0.09, 0.08), intensity: 0.55 }));

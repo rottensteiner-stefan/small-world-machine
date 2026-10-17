@@ -1396,7 +1396,6 @@ class Showcase12 extends AbstractShowcase {
     // Add WASD/Mouse controller with collisions
     const fpsController = new FPSController({
       input: this.input,
-      audio: this.audio,
       moveSpeed: 5.0,
       enableCollision: true,
       scene: this.scene,

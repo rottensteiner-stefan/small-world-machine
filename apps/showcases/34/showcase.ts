@@ -114,7 +114,7 @@ class Showcase34 extends AbstractShowcase {
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     this.camera.position.set(0, 2.2, 8);
     this.camera.target.set(0, 1.5, -10);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // No skybox in this glade -- match the clear color to a soft sky tone instead of black.
     this.renderer.setClearColor(new Color(0.55, 0.72, 0.85));

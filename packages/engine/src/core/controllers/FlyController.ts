@@ -2,7 +2,6 @@ import { Behavior } from "../behaviors/Behavior.js";
 import { CameraInterfaceData, isCameraTarget } from "../../interfaces/index.js";
 import { Object3D, InputInterface, Scene } from "../index.js";
 import { Keys } from "../../enums/index.js";
-import { AudioSystem } from "../../audio/AudioSystem.js";
 import { BoundingSphere } from "../../physix/index.js";
 import { resolveSphereCollisions } from "../behaviors/CollisionResolution.js";
 import { MathUtils } from "../../math/index.js";
@@ -35,8 +34,6 @@ export interface FlyControllerOptions {
   scene?: Scene;
   /** Input source. Required. */
   input?: InputInterface;
-  /** Audio system reference. Optional. */
-  audio?: AudioSystem;
 }
 
 /**
@@ -53,10 +50,9 @@ export interface FlyControllerOptions {
  */
 export class FlyController extends Behavior {
   public enabled: boolean = true;
-  private _options: Required<Omit<FlyControllerOptions, "scene" | "input" | "audio">> & {
+  private _options: Required<Omit<FlyControllerOptions, "scene" | "input">> & {
     scene?: Scene;
     input: InputInterface;
-    audio?: AudioSystem;
   };
   private _collider?: BoundingSphere;
 
@@ -75,7 +71,6 @@ export class FlyController extends Behavior {
       flyInLookDirection: options.flyInLookDirection ?? true,
       input: options.input as InputInterface,
       ...(options.scene !== undefined && { scene: options.scene }),
-      ...(options.audio !== undefined && { audio: options.audio }),
     };
     if (!this._options.input) {
       throw new Error("FlyController requires an 'input' option.");

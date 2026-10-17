@@ -2,7 +2,6 @@ import { Behavior } from "../behaviors/Behavior.js";
 import { CameraInterfaceData, isCameraTarget } from "../../interfaces/index.js";
 import { Object3D, InputInterface, Scene } from "../index.js";
 import { InputMode, Keys } from "../../enums/index.js";
-import { AudioSystem } from "../../audio/AudioSystem.js";
 import { BoundingSphere } from "../../physix/index.js";
 import { resolveSphereCollisions } from "../behaviors/CollisionResolution.js";
 import { MathUtils } from "../../math/index.js";
@@ -31,8 +30,6 @@ export interface FPSControllerOptions {
   scene?: Scene;
   /** Input source. Required — no global fallback. */
   input?: InputInterface;
-  /** Audio system reference. Required — no global fallback. */
-  audio?: AudioSystem;
 }
 
 /**
@@ -63,7 +60,6 @@ export class FPSController extends Behavior {
       collisionRadius: options.collisionRadius ?? 0.5,
       scene: options.scene,
       input: options.input as InputInterface,
-      audio: options.audio as AudioSystem,
     };
     if (!this._options.input) {
       throw new Error("FPSController requires an 'input' option.");

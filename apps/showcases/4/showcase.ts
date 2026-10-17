@@ -102,7 +102,6 @@ export class Showcase4 extends AbstractShowcase {
       this._car.addBehavior(
         new WASDController({
           input: this.input,
-          audio: this.audio,
           moveSpeed: CAR_SPEED,
         }),
       );

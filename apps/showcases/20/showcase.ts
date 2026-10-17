@@ -222,7 +222,7 @@ class Showcase20 extends AbstractShowcase {
     this.camera.setStrategy(CameraStrategyType.SMOOTH);
     this.camera.position.set(0, 8, 20);
     this.camera.target.set(0, 3, 0);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     this.canvas.addEventListener("click", (): void => {
       if (!this.input.isPointerLocked) {

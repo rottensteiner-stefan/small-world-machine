@@ -54,11 +54,10 @@ export class Showcase2 extends AbstractShowcase {
     this.camera.addBehavior(
       new FPSController({
         input: this.input,
-        audio: this.audio,
         moveSpeed: this._moveSpeed,
       }),
     );
-    this.camera.addBehavior(new ZoomController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new ZoomController({ input: this.input }));
 
     // 3. Add light
     const sun: DirectionalLight = new DirectionalLight({ color: Color.WHITE, intensity: 0.8 });

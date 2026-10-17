@@ -273,7 +273,7 @@ class DecalProbe extends AbstractShowcase {
     this.camera.setStrategy(CameraStrategyType.SMOOTH);
     this.camera.position.set(0, spotShadows ? 6 : 3.2, spotShadows ? 4 : 6);
     this.camera.target.set(spotShadows ? -0.5 : 0, spotShadows ? 0 : 0.8, spotShadows ? 0.6 : -1);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
     this.camera.updateViewMatrix();
   }
 

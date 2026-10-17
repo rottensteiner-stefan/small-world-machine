@@ -37,7 +37,7 @@ class Showcase3 extends AbstractShowcase {
     // at the middle of the grid, matching the pre-migration behavior.
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     this.camera.target.set(0, 0, 0);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     const ambientLight: AmbientLight = new AmbientLight({ color: Color.WHITE, intensity: 0.3 });
     this.scene.add(ambientLight);

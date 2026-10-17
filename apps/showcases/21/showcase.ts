@@ -75,7 +75,7 @@ class Showcase21 extends AbstractShowcase {
     // 2. Camera Setup
     this.camera.position.set(0, 15, 30);
     this.camera.target.set(0, 5, 0);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // 3. Environment: The Plinko/Galton Board
     const glassMaterial = new GlassMaterial({

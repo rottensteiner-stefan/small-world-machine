@@ -42,7 +42,7 @@ class Showcase11 extends AbstractShowcase {
     this.camera.position.set(20, 20, 40);
 
     // Re-add OrbitController to handle rotation via mouse
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // Create the ground grid (size 20x20)
     // Absolute (0,0,0) is in the middle of this grid.

@@ -152,13 +152,11 @@ class Showcase39 extends AbstractShowcase {
 
     this._orbitController = new OrbitController({
       input: this.input,
-      audio: this.audio,
     });
     this.camera.addBehavior(this._orbitController);
 
     this._flyController = new FlyController({
       input: this.input,
-      audio: this.audio,
       moveSpeed: 8.0,
     });
     this._flyController.enabled = false;

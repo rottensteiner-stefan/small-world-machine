@@ -100,7 +100,7 @@ class Showcase30 extends AbstractShowcase {
     // above the plane (0.485 vs 0.16) for the reflection to read.
     this.camera.position.set(0, 0.18, 5.5);
     this.camera.target.set(0, 0.3, -1.0);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // 1. Dark Rainy Night Ambient
     const ambientLight = new AmbientLight({

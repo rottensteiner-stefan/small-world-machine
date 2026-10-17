@@ -12,6 +12,11 @@ import { Vector2D } from "@small-world-machine/engine/math/index.js";
 import { AudioSystem } from "@small-world-machine/engine/audio/index.js";
 import { ObjectTags } from "../../enums/ObjectTags.js";
 
+export interface ControllerOptions extends FirstPersonControllerOptions {
+  /** Audio system for footstep, shot and hurt sounds. */
+  audio?: AudioSystem;
+}
+
 /**
  * A retro style controller for forward/backward movement and left/right rotation.
  * It extends FirstPersonController and adds shooting, weapon selection, and damage logic.
@@ -32,11 +37,12 @@ export class Controller extends FirstPersonController {
    */
   constructor(
     private events: EventDispatcherImpl,
-    options: FirstPersonControllerOptions = {},
+    options: ControllerOptions = {},
   ) {
     // Force retro tank controls for Dungeon feel
-    super({ ...options, retroTankControls: true });
-    this._audio = options.audio;
+    const { audio, ...baseOptions } = options;
+    super({ ...baseOptions, retroTankControls: true });
+    this._audio = audio;
     if (!options.input) throw new Error("Controller requires an 'input' option.");
   }
 

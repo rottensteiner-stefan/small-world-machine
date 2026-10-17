@@ -115,7 +115,7 @@ class Showcase32 extends AbstractShowcase {
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     this.camera.position.set(0, 2.4, 22);
     this.camera.target.set(0, 3.5, HOT_ZONE_Z);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // Sickly, radiation-haze atmosphere -- EXP2 falloff hides the far street end in murk, and
     // doubles as a cheap depth cue since the scene has no volumetric fog (see AAA research #13).

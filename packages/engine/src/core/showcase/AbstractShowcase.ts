@@ -170,7 +170,6 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
         this.camera.addBehavior(
           new FlyController({
             input: this.input,
-            audio: this.audio,
             moveSpeed: this.defaultMoveSpeed,
             ...(this.defaultFlyCollision ? { scene: this.scene } : {}),
           }),
@@ -180,7 +179,6 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
         this.camera.addBehavior(
           new OrbitController({
             input: this.input,
-            audio: this.audio,
           }),
         );
       }

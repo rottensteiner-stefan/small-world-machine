@@ -183,7 +183,7 @@ class Showcase28 extends AbstractShowcase implements LabInspectorHost {
     // P0-2 moved the resting pose. User can still orbit via OrbitController.
     this.camera.position.set(5.4, 3.4, -4.6);
     this.camera.target.set(1.4, 1.45, 2.6);
-    const orbit = new OrbitController({ input: this.input, audio: this.audio });
+    const orbit = new OrbitController({ input: this.input });
     this._orbitController = orbit;
     this.camera.addBehavior(orbit);
   }

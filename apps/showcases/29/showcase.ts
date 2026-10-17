@@ -130,7 +130,6 @@ class Showcase29 extends AbstractShowcase {
     this.camera.target.set(7.844, 1.267, -0.516);
     const fly = new FlyController({
       input: this.input,
-      audio: this.audio,
       moveSpeed: 6.0,
       fastMultiplier: 2.2,
       slowMultiplier: 0.35,

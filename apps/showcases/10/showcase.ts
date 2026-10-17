@@ -224,10 +224,8 @@ export class Showcase10 extends AbstractShowcase {
       near: 70.0,
       far: 260.0,
     });
-    this.camera.addBehavior(
-      new FPSController({ input: this.input, audio: this.audio, moveSpeed: this._moveSpeed }),
-    );
-    this.camera.addBehavior(new ZoomController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new FPSController({ input: this.input, moveSpeed: this._moveSpeed }));
+    this.camera.addBehavior(new ZoomController({ input: this.input }));
 
     this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.35 }));
     const sun = new DirectionalLight({

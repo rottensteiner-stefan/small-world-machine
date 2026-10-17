@@ -60,7 +60,7 @@ class Showcase1 extends AbstractShowcase {
     this.camera.setStrategy(CameraStrategyType.SMOOTH);
     this.camera.position.set(0, 3, 6);
     this.camera.target.set(0, 0, 0);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
     this.camera.updateViewMatrix();
   }
 

@@ -55,7 +55,7 @@ class Showcase35 extends AbstractShowcase {
     // showcase-layout's title/subtitle overlay at the top and the copyright bar at the bottom.
     this.camera.position.set(center, center, 20);
     this.camera.target.set(center, center, 0);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     this.renderer.setClearColor(new Color(0.05, 0.05, 0.07));
 

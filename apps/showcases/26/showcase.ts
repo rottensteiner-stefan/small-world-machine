@@ -19,7 +19,7 @@ class Showcase26 extends AbstractShowcase {
     this.camera.position.set(0, 1.5, 6);
     this.renderer.setClearColor(new Color(0.1, 0.1, 0.15));
     this.camera.target.set(0, 1.5, 0);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     this._textTexture = new TextTexture({
       text: "Starting System...\nVGA Compatible ROM BIOS\nCopyright (C) 2026",

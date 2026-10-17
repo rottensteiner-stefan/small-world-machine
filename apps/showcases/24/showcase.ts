@@ -211,7 +211,6 @@ class Showcase24 extends AbstractShowcase {
 
     const fps = new FPSController({
       input: this.input,
-      audio: this.audio,
       enableMovement: false,
       enableVertical: false,
       enableCollision: false,

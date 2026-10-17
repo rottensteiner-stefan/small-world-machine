@@ -174,7 +174,6 @@ class Showcase38 extends AbstractShowcase {
 
     const flyCtrl = new FlyController({
       input: this.input,
-      audio: this.audio,
       moveSpeed: 4.5,
       fastMultiplier: 2.5,
       slowMultiplier: 0.35,

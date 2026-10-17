@@ -93,7 +93,7 @@ class Showcase27 extends AbstractShowcase {
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     this.camera.position.set(0, 4.5, 7.5);
     this.camera.target.set(0, 2.2, 0);
-    this.camera.addBehavior(new OrbitController({ input: this.input, audio: this.audio }));
+    this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // 1. Ambient Light (Low for sharp shadow contrast)
     this.scene.add(
