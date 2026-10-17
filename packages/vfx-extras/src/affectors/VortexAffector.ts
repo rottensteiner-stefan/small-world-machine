@@ -83,4 +83,67 @@ export class VortexAffector implements ParticleAffector {
       particle.acceleration.z += (tangZ * this.strength + inZ * this.inwardSuction) / particle.mass;
     }
   }
+
+  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+    const centerX = this.center.x;
+    const centerY = this.center.y;
+    const centerZ = this.center.z;
+    const axis = this.axis;
+    const strength = this.strength;
+    const inwardSuction = this.inwardSuction;
+
+    for (let i = 0; i < count; i++) {
+      const particle = particles[i]!;
+      if (particle.dead) {
+        continue;
+      }
+
+      if (axis === "x") {
+        const dy = particle.position.y - centerY;
+        const dz = particle.position.z - centerZ;
+        const r = Math.sqrt(dy * dy + dz * dz) || 0.001;
+
+        const tangY = -dz / r;
+        const tangZ = dy / r;
+
+        const inY = -dy / r;
+        const inZ = -dz / r;
+
+        particle.acceleration.y += (tangY * strength + inY * inwardSuction) / particle.mass;
+        particle.acceleration.z += (tangZ * strength + inZ * inwardSuction) / particle.mass;
+        continue;
+      }
+
+      if (axis === "z") {
+        const dx = particle.position.x - centerX;
+        const dy = particle.position.y - centerY;
+        const r = Math.sqrt(dx * dx + dy * dy) || 0.001;
+
+        const tangX = -dy / r;
+        const tangY = dx / r;
+
+        const inX = -dx / r;
+        const inY = -dy / r;
+
+        particle.acceleration.x += (tangX * strength + inX * inwardSuction) / particle.mass;
+        particle.acceleration.y += (tangY * strength + inY * inwardSuction) / particle.mass;
+        continue;
+      }
+
+      if (axis === "y") {
+        const dx = particle.position.x - centerX;
+        const dz = particle.position.z - centerZ;
+        const r = Math.sqrt(dx * dx + dz * dz) || 0.001;
+
+        const tangX = -dz / r;
+        const tangZ = dx / r;
+
+        const inX = -dx / r;
+        const inZ = -dz / r;
+
+        particle.acceleration.x += (tangX * strength + inX * inwardSuction) / particle.mass;
+        particle.acceleration.z += (tangZ * strength + inZ * inwardSuction) / particle.mass;
+      }
+    }
+  }
 }

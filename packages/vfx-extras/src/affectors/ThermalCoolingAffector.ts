@@ -58,4 +58,39 @@ export class ThermalCoolingAffector implements ParticleAffector {
       Color.blackbody(t, particle.color);
     }
   }
+
+  public applyBatch(particles: readonly Particle[], count: number, dt: number): void {
+    const centerX = this.heatCenter.x;
+    const centerY = this.heatCenter.y;
+    const centerZ = this.heatCenter.z;
+    const compressionRadius = this.compressionRadius;
+    const compressionHeatingRate = this.compressionHeatingRate;
+    const coolingRate = this.coolingRate;
+    const maxHeat = this.maxHeat;
+    const updateColor = this.updateColor;
+
+    for (let i = 0; i < count; i++) {
+      const particle = particles[i]!;
+      if (particle.dead) {
+        continue;
+      }
+
+      const dx = particle.position.x - centerX;
+      const dy = particle.position.y - centerY;
+      const dz = particle.position.z - centerZ;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      if (dist < compressionRadius) {
+        particle.heat += (compressionRadius - dist) * compressionHeatingRate * dt;
+      }
+
+      particle.heat -= coolingRate * dt;
+      particle.heat = Math.max(0, Math.min(maxHeat, particle.heat));
+
+      if (updateColor) {
+        const t = Math.min(1.0, particle.heat / (maxHeat * 0.8));
+        Color.blackbody(t, particle.color);
+      }
+    }
+  }
 }

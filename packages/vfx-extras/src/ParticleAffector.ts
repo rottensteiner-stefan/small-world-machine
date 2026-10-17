@@ -20,4 +20,16 @@ export interface ParticleAffector {
    * @param total Total number of active particles.
    */
   apply(particle: Particle, dt: number, index: number, total: number): void;
+
+  /**
+   * Optional batch entry point for the hot path. When present, ParticleSystem.update calls this
+   * exactly once per affector per tick instead of dispatching apply() per particle. Implementations
+   * operate on particles[0 .. count), MUST skip dead particles, and MUST stay bit-identical to
+   * calling apply() on each particle individually. Third-party affectors without this method keep
+   * working through the per-particle fallback.
+   * @param particles The particle pool. May contain dead slots that must be skipped.
+   * @param count Number of slots in `particles` to consider.
+   * @param dt Delta time in seconds.
+   */
+  applyBatch?(particles: readonly Particle[], count: number, dt: number): void;
 }

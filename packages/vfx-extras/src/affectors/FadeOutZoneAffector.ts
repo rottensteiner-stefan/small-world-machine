@@ -52,4 +52,38 @@ export class FadeOutZoneAffector implements ParticleAffector {
       }
     }
   }
+
+  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+    const centerX = this.center.x;
+    const centerY = this.center.y;
+    const centerZ = this.center.z;
+    const fadeStartRadius = this.fadeStartRadius;
+    const fadeEndRadius = this.fadeEndRadius;
+    const shrinkSize = this.shrinkSize;
+
+    for (let i = 0; i < count; i++) {
+      const particle = particles[i]!;
+      if (particle.dead) {
+        continue;
+      }
+
+      const dx = particle.position.x - centerX;
+      const dy = particle.position.y - centerY;
+      const dz = particle.position.z - centerZ;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      if (dist < fadeStartRadius) {
+        const span = Math.max(0.001, fadeStartRadius - fadeEndRadius);
+        const factor = Math.max(0.0, Math.min(1.0, (dist - fadeEndRadius) / span));
+
+        particle.alpha *= factor;
+        if (shrinkSize) {
+          particle.size *= factor;
+        }
+        if (dist <= fadeEndRadius) {
+          particle.dead = true;
+        }
+      }
+    }
+  }
 }

@@ -32,4 +32,27 @@ export class DragAffector implements ParticleAffector {
     particle.acceleration.y -= (vy * dragCoeff) / particle.mass;
     particle.acceleration.z -= (vz * dragCoeff) / particle.mass;
   }
+
+  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+    const drag = this.drag;
+    const quadraticDrag = this.quadraticDrag;
+
+    for (let i = 0; i < count; i++) {
+      const particle = particles[i]!;
+      if (particle.dead) {
+        continue;
+      }
+
+      const vx = particle.velocity.x;
+      const vy = particle.velocity.y;
+      const vz = particle.velocity.z;
+
+      const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+      const dragCoeff = drag + quadraticDrag * speed;
+
+      particle.acceleration.x -= (vx * dragCoeff) / particle.mass;
+      particle.acceleration.y -= (vy * dragCoeff) / particle.mass;
+      particle.acceleration.z -= (vz * dragCoeff) / particle.mass;
+    }
+  }
 }

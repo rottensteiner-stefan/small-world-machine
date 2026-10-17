@@ -39,4 +39,29 @@ export class ColorOverLifeAffector implements ParticleAffector {
       particle.alpha = this.startColor.a + (this.endColor.a - this.startColor.a) * progress;
     }
   }
+
+  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+    const startColor = this.startColor;
+    const endColor = this.endColor;
+    const interpolateAlpha = this.interpolateAlpha;
+
+    for (let i = 0; i < count; i++) {
+      const particle = particles[i]!;
+      if (particle.dead) {
+        continue;
+      }
+      if (particle.maxLife <= 0 || !isFinite(particle.maxLife)) {
+        continue;
+      }
+
+      const progress = Math.max(0, Math.min(1, particle.life / particle.maxLife));
+      particle.color.r = startColor.r + (endColor.r - startColor.r) * progress;
+      particle.color.g = startColor.g + (endColor.g - startColor.g) * progress;
+      particle.color.b = startColor.b + (endColor.b - startColor.b) * progress;
+
+      if (interpolateAlpha) {
+        particle.alpha = startColor.a + (endColor.a - startColor.a) * progress;
+      }
+    }
+  }
 }

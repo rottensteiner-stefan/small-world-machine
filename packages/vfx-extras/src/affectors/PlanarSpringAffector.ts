@@ -46,4 +46,35 @@ export class PlanarSpringAffector implements ParticleAffector {
       particle.acceleration.z += (springForce + dampingForce) / particle.mass;
     }
   }
+
+  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+    const axis = this.axis;
+    const planePosition = this.planePosition;
+    const stiffness = this.stiffness;
+    const damping = this.damping;
+
+    for (let i = 0; i < count; i++) {
+      const particle = particles[i]!;
+      if (particle.dead) {
+        continue;
+      }
+
+      if (axis === "y") {
+        const dy = particle.position.y - planePosition;
+        const springForce = -stiffness * dy;
+        const dampingForce = -damping * particle.velocity.y;
+        particle.acceleration.y += (springForce + dampingForce) / particle.mass;
+      } else if (axis === "x") {
+        const dx = particle.position.x - planePosition;
+        const springForce = -stiffness * dx;
+        const dampingForce = -damping * particle.velocity.x;
+        particle.acceleration.x += (springForce + dampingForce) / particle.mass;
+      } else if (axis === "z") {
+        const dz = particle.position.z - planePosition;
+        const springForce = -stiffness * dz;
+        const dampingForce = -damping * particle.velocity.z;
+        particle.acceleration.z += (springForce + dampingForce) / particle.mass;
+      }
+    }
+  }
 }

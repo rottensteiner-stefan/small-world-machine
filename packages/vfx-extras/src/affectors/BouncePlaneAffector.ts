@@ -52,4 +52,41 @@ export class BouncePlaneAffector implements ParticleAffector {
       }
     }
   }
+
+  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+    const axis = this.axis;
+    const planePosition = this.planePosition;
+    const restitution = this.restitution;
+    const friction = this.friction;
+
+    for (let i = 0; i < count; i++) {
+      const particle = particles[i]!;
+      if (particle.dead) {
+        continue;
+      }
+
+      if (axis === "y") {
+        if (particle.position.y <= planePosition && particle.velocity.y < 0) {
+          particle.position.y = planePosition;
+          particle.velocity.y = -particle.velocity.y * restitution;
+          particle.velocity.x *= friction;
+          particle.velocity.z *= friction;
+        }
+      } else if (axis === "x") {
+        if (particle.position.x <= planePosition && particle.velocity.x < 0) {
+          particle.position.x = planePosition;
+          particle.velocity.x = -particle.velocity.x * restitution;
+          particle.velocity.y *= friction;
+          particle.velocity.z *= friction;
+        }
+      } else if (axis === "z") {
+        if (particle.position.z <= planePosition && particle.velocity.z < 0) {
+          particle.position.z = planePosition;
+          particle.velocity.z = -particle.velocity.z * restitution;
+          particle.velocity.x *= friction;
+          particle.velocity.y *= friction;
+        }
+      }
+    }
+  }
 }

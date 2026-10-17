@@ -44,6 +44,31 @@ export class TurbulenceAffector implements ParticleAffector {
     particle.acceleration.z += (fz * this.strength) / particle.mass;
   }
 
+  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+    const t = this._time;
+    const f = this.frequency;
+    const strength = this.strength;
+
+    for (let i = 0; i < count; i++) {
+      const particle = particles[i]!;
+      if (particle.dead) {
+        continue;
+      }
+
+      const px = particle.position.x * f;
+      const py = particle.position.y * f;
+      const pz = particle.position.z * f;
+
+      const fx = Math.sin(py + t) * Math.cos(pz + t * 0.7);
+      const fy = Math.sin(pz + t) * Math.cos(px + t * 0.7);
+      const fz = Math.sin(px + t) * Math.cos(py + t * 0.7);
+
+      particle.acceleration.x += (fx * strength) / particle.mass;
+      particle.acceleration.y += (fy * strength) / particle.mass;
+      particle.acceleration.z += (fz * strength) / particle.mass;
+    }
+  }
+
   public beginFrame(dt: number): void {
     this._time += dt * this.evolutionSpeed;
   }

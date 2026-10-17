@@ -57,4 +57,42 @@ export class PointAttractorAffector implements ParticleAffector {
     particle.acceleration.y += fy / particle.mass;
     particle.acceleration.z += fz / particle.mass;
   }
+
+  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+    const centerX = this.center.x;
+    const centerY = this.center.y;
+    const centerZ = this.center.z;
+    const strength = this.strength;
+    const softening = this.softening;
+    const plummer = this.plummer;
+
+    for (let i = 0; i < count; i++) {
+      const particle = particles[i]!;
+      if (particle.dead) {
+        continue;
+      }
+
+      const dx = centerX - particle.position.x;
+      const dy = centerY - particle.position.y;
+      const dz = centerZ - particle.position.z;
+      const distSq = dx * dx + dy * dy + dz * dz;
+      const dist = Math.sqrt(distSq) || 0.001;
+
+      let forceMag: number;
+      if (plummer) {
+        const plummerDenom = distSq + softening * softening;
+        forceMag = (strength * dist) / (plummerDenom * Math.sqrt(plummerDenom));
+      } else {
+        forceMag = strength / (distSq + softening * softening);
+      }
+
+      const fx = (dx / dist) * forceMag;
+      const fy = (dy / dist) * forceMag;
+      const fz = (dz / dist) * forceMag;
+
+      particle.acceleration.x += fx / particle.mass;
+      particle.acceleration.y += fy / particle.mass;
+      particle.acceleration.z += fz / particle.mass;
+    }
+  }
 }

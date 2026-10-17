@@ -28,4 +28,22 @@ export class SizeOverLifeAffector implements ParticleAffector {
     const progress = Math.max(0, Math.min(1, particle.life / particle.maxLife));
     particle.size = this.startScale + (this.endScale - this.startScale) * progress;
   }
+
+  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+    const startScale = this.startScale;
+    const endScale = this.endScale;
+
+    for (let i = 0; i < count; i++) {
+      const particle = particles[i]!;
+      if (particle.dead) {
+        continue;
+      }
+      if (particle.maxLife <= 0 || !isFinite(particle.maxLife)) {
+        continue;
+      }
+
+      const progress = Math.max(0, Math.min(1, particle.life / particle.maxLife));
+      particle.size = startScale + (endScale - startScale) * progress;
+    }
+  }
 }
