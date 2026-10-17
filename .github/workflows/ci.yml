@@ -5,7 +5,7 @@ on:
     branches:
       - main
   pull_request:
-  # The visual jobs (liquid goldens, showcase smoke test) are heavy and need software rendering, so they
+  # The visual jobs (liquid goldens, showcase smoke test, capture determinism) are heavy and need software rendering, so they
   # run only when asked for: Actions tab > CI > "Run workflow". Push and pull requests run `verify` only.
   workflow_dispatch:
     inputs:
@@ -21,6 +21,10 @@ on:
         description: 'Also capture the informational WebGPU goldens (always fails on the GPU-less runner)'
         type: boolean
         default: false
+      capture:
+        description: 'Capture-mode determinism: Showcases 39 + 28, WebGL1/WebGL2, two fresh loads compared'
+        type: boolean
+        default: true
 
 # One group per event type, so a manual visual run is not cancelled by a push (and does not cancel one).
 concurrency:
@@ -110,6 +114,47 @@ jobs:
           # other. Measured on the runner, 76 checks per shard set: concurrency 4 failed 21 to 33 checks on the first try
           # and needed 206 to 276 s; concurrency 1 failed 0 to 2 and needed 76 to 105 s.
           SHOWCASE_TEST_CONCURRENCY: "1"
+
+  # Capture-mode determinism (`?captureFps=60`): each showcase is loaded twice in fresh pages and the canvas
+  # hashes at frames 10/30/120 must match. Hashes are only compared within this one runner (SwiftShader), never
+  # against another machine. The build is frozen by construction (`vite preview` over the job's own `dist/`),
+  # which is what makes the comparison meaningful: a dev server serving an edited tree does not.
+  # Informational for now: it has been verified locally on WebGL1/WebGL2/WebGPU but not yet on a runner; flip
+  # `continue-on-error` off after a few green runs.
+  capture-determinism:
+    if: github.event_name == 'workflow_dispatch' && inputs.capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache mkcert (certificate tool of `vite preview`)
+        uses: actions/cache@v4
+        with:
+          path: ~/.vite-plugin-mkcert
+          key: mkcert-${{ runner.os }}-v1
+
+      - name: Build
+        run: npm run build
+
+      - name: Capture-mode determinism check
+        run: npm run test:fog-capture
+        env:
+          # No real GPU on the runner: WebGPU is skipped here and covered by local runs.
+          SHOWCASE_SKIP_WEBGPU: "1"
 
   # Deterministic Liquid goldens (M1). Engine stepping is driven by the fixed-step
   # `SmallWorldMachine.step(dt)` hook, so the GL2 captures are fully reproducible. Run on request only (see

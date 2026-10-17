@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### "In God we trust; all others must bring data." - W. Edwards Deming
+
+- **Features:**
+  - *Capture determinism in CI:* the manual CI workflow has a new `capture` input and `capture-determinism` job (`npm run test:fog-capture`) that loads Showcases 39 and 28 twice in fresh pages on WebGL1/WebGL2 and fails when the hashes at frames 10/30/120 differ. Informational (`continue-on-error`) until verified on a runner.
+  - *`scripts/check-fog-capture.js` covers several showcases* (`--showcases 39,28`, default both; needs a `window.__showcase<id>` hook). Verified locally on a frozen build: WebGL1, WebGL2 and WebGPU identical for both showcases.
+- **Housekeeping & Docs:**
+  - *Showcase 39:* the altar and brazier point lights use `volumetricIntensity: 6.0` so their glow visibly scatters in the fog on WebGL2 and WebGPU.
+
 ## [0.111.0] - 2026-10-17
 
 ### "One accurate measurement is worth more than a thousand expert opinions." - Grace Hopper

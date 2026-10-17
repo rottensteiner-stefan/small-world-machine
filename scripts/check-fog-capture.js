@@ -1,9 +1,12 @@
 /**
- * Checks that capture mode (`?captureFps=60`) is deterministic: showcase 39 is loaded in fresh pages
+ * Checks that capture mode (`?captureFps=60`) is deterministic: each showcase is loaded in fresh pages
  * per run and per backend, the canvas is hashed at fixed frame indices, and the hashes are compared
- * frame by frame across runs.
+ * frame by frame across runs. Showcase 39 covers the volumetric fog and its temporal history, 28 the
+ * glass/transmission and emissive-texture paths. Hashes are only compared between runs of the SAME
+ * environment (device, driver, browser); they are not expected to match across machines.
  *
- * Usage: node scripts/check-fog-capture.js [--backends gl1,gl2,gpu] [--runs 2] [--frames 10,30,120]
+ * Usage: node scripts/check-fog-capture.js [--showcases 39,28] [--backends gl1,gl2,gpu] [--runs 2] [--frames 10,30,120]
+ * A showcase needs a `window.__showcase<id>` QA hook (set by apps/showcases/<id>/showcase.ts).
  * Env:   BASE_URL (default: spawn `vite preview` over dist/ like the other scripts; never builds),
  *        SHOWCASE_SKIP_WEBGPU=1 skips WebGPU, SHOWCASE_REQUIRE_WEBGPU=1 fails if it is unusable.
  * Exit:  1 if any non-skipped backend has a DIFF (or a run fails), else 0 (unusable WebGPU = SKIPPED).
@@ -25,17 +28,19 @@ const opt = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : fallback;
 };
+const showcases = opt("showcases", "39,28").split(",");
 const backends = opt("backends", "gl1,gl2,gpu").split(",");
 const runs = Number(opt("runs", "2"));
 const frames = opt("frames", "10,30,120").split(",").map(Number);
 const lastFrame = Math.max(...frames);
 for (const b of backends) if (!BACKENDS[b]) throw new Error(`Unknown backend "${b}"`);
+for (const id of showcases) if (!/^\d+$/.test(id)) throw new Error(`Unknown showcase "${id}"`);
 
 /** Runs inside every new document: hooks the app the moment the showcase assigns it. */
-function installHook(targets, last) {
+function installHook(targets, last, hookName) {
   let app;
   window.__caps = {};
-  Object.defineProperty(window, "__showcase39", {
+  Object.defineProperty(window, hookName, {
     configurable: true,
     get: () => app,
     set(value) {
@@ -89,12 +94,12 @@ async function probeWebGpu(browser, origin) {
   }
 }
 
-async function captureRun(browser, origin, rendererType) {
+async function captureRun(browser, origin, showcase, rendererType) {
   const page = await browser.newPage();
   try {
     await page.setViewport({ width: 640, height: 360, deviceScaleFactor: 1 });
-    await page.evaluateOnNewDocument(installHook, frames, lastFrame);
-    const url = `${origin}/apps/showcases/39/index.html?rendererType=${rendererType}&captureFps=60`;
+    await page.evaluateOnNewDocument(installHook, frames, lastFrame, `__showcase${showcase}`);
+    const url = `${origin}/apps/showcases/${showcase}/index.html?rendererType=${rendererType}&captureFps=60`;
     await page.goto(url, { waitUntil: "load", timeout: 60000 });
     await page.waitForFunction("window.__done === true", { timeout: RUN_TIMEOUT_MS, polling: 100 });
     return await page.evaluate(() => window.__caps);
@@ -130,52 +135,56 @@ async function main() {
   });
   let failed = false;
   const summary = [];
+  let gpuReason; // probed once, `null` = usable
   try {
-    for (const key of backends) {
-      console.log(`\n== ${key} (${BACKENDS[key]}) ==`);
-      if (key === "gpu") {
-        const reason = process.env.SHOWCASE_SKIP_WEBGPU
-          ? "SHOWCASE_SKIP_WEBGPU set"
-          : await probeWebGpu(browser, origin);
-        if (reason) {
-          if (process.env.SHOWCASE_REQUIRE_WEBGPU && !process.env.SHOWCASE_SKIP_WEBGPU)
-            failed = true;
-          console.log(`SKIPPED (${reason})`);
-          summary.push(`${key}=SKIPPED`);
+    for (const id of showcases)
+      for (const key of backends) {
+        const label = `${id}/${key}`;
+        console.log(`\n== showcase ${id}: ${key} (${BACKENDS[key]}) ==`);
+        if (key === "gpu") {
+          gpuReason ??= process.env.SHOWCASE_SKIP_WEBGPU
+            ? "SHOWCASE_SKIP_WEBGPU set"
+            : await probeWebGpu(browser, origin);
+          const reason = gpuReason;
+          if (reason) {
+            if (process.env.SHOWCASE_REQUIRE_WEBGPU && !process.env.SHOWCASE_SKIP_WEBGPU)
+              failed = true;
+            console.log(`SKIPPED (${reason})`);
+            summary.push(`${label}=SKIPPED`);
+            continue;
+          }
+        }
+        const results = [];
+        try {
+          for (let r = 0; r < runs; r++)
+            results.push(await captureRun(browser, origin, id, BACKENDS[key]));
+        } catch (err) {
+          console.log(
+            /Waiting failed/.test(err.message)
+              ? `TIMEOUT after ${RUN_TIMEOUT_MS} ms`
+              : `FAILED: ${err.message}`,
+          );
+          failed = true;
+          summary.push(`${label}=ERROR`);
           continue;
         }
-      }
-      const results = [];
-      try {
-        for (let r = 0; r < runs; r++)
-          results.push(await captureRun(browser, origin, BACKENDS[key]));
-      } catch (err) {
+        let diffs = 0;
         console.log(
-          /Waiting failed/.test(err.message)
-            ? `TIMEOUT after ${RUN_TIMEOUT_MS} ms`
-            : `FAILED: ${err.message}`,
+          `frame  ${results.map((_, i) => `run${i + 1}`.padEnd(9)).join("")} size       time      result`,
         );
-        failed = true;
-        summary.push(`${key}=ERROR`);
-        continue;
+        for (const f of frames) {
+          const caps = results.map((res) => res[f]);
+          const hashes = caps.map((c) => c?.hash ?? "missing");
+          const match = hashes.every((h) => h !== "missing" && h === hashes[0]);
+          if (!match) diffs++;
+          const c = caps[0] ?? {};
+          console.log(
+            `${String(f).padEnd(7)}${hashes.map((h) => h.padEnd(9)).join("")} ${`${c.width}x${c.height}`.padEnd(10)} ${(c.time?.toFixed(6) ?? "?").padEnd(9)} ${match ? "MATCH" : "DIFF"}`,
+          );
+        }
+        if (diffs) failed = true;
+        summary.push(`${label}=${diffs ? `DIFF(${diffs})` : "OK"}`);
       }
-      let diffs = 0;
-      console.log(
-        `frame  ${results.map((_, i) => `run${i + 1}`.padEnd(9)).join("")} size       time      result`,
-      );
-      for (const f of frames) {
-        const caps = results.map((res) => res[f]);
-        const hashes = caps.map((c) => c?.hash ?? "missing");
-        const match = hashes.every((h) => h !== "missing" && h === hashes[0]);
-        if (!match) diffs++;
-        const c = caps[0] ?? {};
-        console.log(
-          `${String(f).padEnd(7)}${hashes.map((h) => h.padEnd(9)).join("")} ${`${c.width}x${c.height}`.padEnd(10)} ${(c.time?.toFixed(6) ?? "?").padEnd(9)} ${match ? "MATCH" : "DIFF"}`,
-        );
-      }
-      if (diffs) failed = true;
-      summary.push(`${key}=${diffs ? `DIFF(${diffs})` : "OK"}`);
-    }
   } finally {
     await browser.close();
     if (server) process.kill(-server.pid);
