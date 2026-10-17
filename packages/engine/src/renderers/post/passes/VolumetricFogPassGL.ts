@@ -308,7 +308,8 @@ export class VolumetricFogPassGL {
       );
     }
 
-    const sunScale = sunActive ? dirLight!.intensity * dirLight!.volumetricIntensity : 0.0;
+    const albedo = Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0);
+    const sunScale = sunActive ? dirLight!.intensity * dirLight!.volumetricIntensity * albedo : 0.0;
     if (this._uSunColorLoc) {
       gl2.uniform3f(
         this._uSunColorLoc,
@@ -330,7 +331,8 @@ export class VolumetricFogPassGL {
         ambientColor.b * ambientIntensity,
       );
     }
-    if (this._uAmbientInjectLoc) gl2.uniform1f(this._uAmbientInjectLoc, element.ambientInject);
+    if (this._uAmbientInjectLoc)
+      gl2.uniform1f(this._uAmbientInjectLoc, element.ambientInject * albedo);
 
     if (this._uIntensityLoc) gl2.uniform1f(this._uIntensityLoc, element.intensity);
     if (this._uDensityLoc) gl2.uniform1f(this._uDensityLoc, element.density);

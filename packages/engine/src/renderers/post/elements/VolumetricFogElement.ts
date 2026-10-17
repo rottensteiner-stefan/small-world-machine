@@ -62,6 +62,14 @@ export class VolumetricFogElement extends PostProcessingElement {
   public castDirectionalShadow: boolean = true;
 
   /**
+   * Single-scattering albedo omega = sigma_s / sigma_t (0..1, default: 1). The fraction of the
+   * extinction that scatters light towards the camera; the rest is absorbed. 1 is a pure scattering
+   * mist (light shafts glow), lower values make smoke or dust that darkens what is behind it without
+   * brightening itself, 0 is pure absorption.
+   */
+  public scatteringAlbedo: number = 1.0;
+
+  /**
    * How strongly the scene's ambient light (ambient colour and, on WebGPU, the IBL irradiance from
    * above) scatters in the fog (default: 0 = off), like Godot's Ambient Inject. Lifts fog that lies in
    * shadow, which otherwise goes black. Scaled by the local density.
@@ -69,8 +77,8 @@ export class VolumetricFogElement extends PostProcessingElement {
   public ambientInject: number = 0.0;
 
   /**
-   * Tint color applied to the accumulated in-scattering (default: neutral white). Multiplied by
-   * each contributing light's own color and intensity.
+   * Tint of the scattered light (default: neutral white), applied to the sun, local lights and ambient
+   * on top of each light's own colour and intensity.
    */
   public color: Color = new Color(1.0, 1.0, 1.0);
 

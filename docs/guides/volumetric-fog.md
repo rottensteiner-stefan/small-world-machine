@@ -39,13 +39,13 @@ app.postProcessing.add(fog);
 | `height` | `0.0` | World-space baseline of the exponential fog layer; density falls off above it. |
 | `heightFalloff` | `1.0` | Exponential height falloff coefficient (`0` = uniform density volume). |
 | `maxDistance` | `80.0` | Max world-space evaluation distance (clamped to the far plane). |
-| `intensity` | `1.0` | Overall multiplier of the accumulated in-scattering. |
+| `intensity` | `1.0` | Multiplier of the accumulated in-scattering, applied once in the composite pass (transmittance is unaffected). |
+| `scatteringAlbedo` | `1.0` | Single-scattering albedo $\omega = \sigma_s / \sigma_t$ (0..1). Lower values absorb more of the extinction: smoke and dust that darken instead of glow. |
+| `ambientInject` | `0.0` | How strongly scene ambient light (and, on WebGPU, the IBL irradiance from above) scatters in the fog; lifts fog in shadow (like Godot's Ambient Inject). |
 | `asymmetry` | `0.4` | Henyey-Greenstein asymmetry factor $g \in (-1, 1)$. Positive = forward scattering towards the light. |
 | `castDirectionalShadow` | `true` | Directional (sun/moon) self-shadowing through the existing CSM. |
-| `color` | `Color(1, 1, 1)` | Tint of the in-scattered light (multiplied by each light's color). |
-| `jitter` | `0.25` | Sub-voxel jitter / Interleaved Gradient Noise strength to eliminate raymarching slice aliasing. |
-| `historyBlend` | `0.85` | Exponential temporal accumulation weight across camera frames ($0.0$ disables TAA, $0.95$ max smooth). |
-| `powderExponent` | `1.0` | Decima powder effect exponent ($1 - e^{-2\tau}$) simulating multi-scattering highlights at cloud boundaries. |
+| `color` | `Color(1, 1, 1)` | Tint of the scattered light (sun, local lights and ambient), on top of each light's own colour. |
+| `jitter` | `0.25` | Sub-voxel jitter strength. `0` disables jitter *and* the temporal filter (history weight 0.9 while jittering, 0 otherwise). |
 
 ---
 
@@ -109,9 +109,9 @@ Both backends clamp participating medium extinction via $\text{extinction} = \ma
 
 ### WebGPU (Compute Tier)
 1. **Froxel Injection (`froxel_inject.wgsl`):**
-   - Dispatches over the 3D grid ($160 \times 90 \times 64$ cells).
+   - Dispatches over the clustered light grid itself (16 px screen tiles, log-staggered depth slices), one froxel per cluster cell.
    - Injects exponential height-falloff media and evaluates analytical `FogVolume` SDFs with 3D procedural noise.
-   - Accumulates in-scattered light from Clustered Forward+ light lists (ADR 0007 / Option R) and evaluates Henyey-Greenstein phase against 4-cascade CSM shadows.
+   - Accumulates in-scattered light $\sigma_s \cdot L$ from the Clustered Forward+ light lists (ADR 0007 / Option R) with a Henyey-Greenstein phase, scaled per light by `AbstractLight.volumetricIntensity`, plus optional ambient inject. Local lights are unshadowed; only the sun is shadowed (CSM, in the integration pass).
 2. **3D Temporal Reprojection (`froxel_reproject.wgsl`):**
    - Applies sub-voxel jitter $(j_x, j_y, j_z)$ per frame.
    - Reprojects previous frame samples using inverse camera view-projection matrices.
@@ -119,10 +119,10 @@ Both backends clamp participating medium extinction via $\text{extinction} = \ma
 3. **In-Register Z-Integration (`froxel_integrate.wgsl`):**
    - Dispatches one workgroup per screen tile (`@workgroup_size(8, 8, 1)`).
    - Accumulates front-to-back optical depth $\tau$, transmittance $T = e^{-\tau}$, and in-scattered radiance along camera depth slices using workgroup registers.
-   - Applies Decima powder scattering ($1 - e^{-2\tau}$) at medium boundaries.
+   - Adds the sun ($\sigma_s \cdot L_{sun} \cdot$ CSM shadow $\cdot$ phase) and applies a Decima-style powder term to the in-scattered light only; the transmittance stays plain Beer-Lambert. The value stored per slice is the integral up to the slice centre.
 4. **Fullscreen Composite (`VolumetricFog.frag.wgsl`):**
    - Performs a single $O(1)$ trilinear texture sample into the 3D integrated volume at the fragment's reconstructed screen-space view depth.
-   - Composites additively into the HDR scene color buffer *before* tonemapping (`PostProcess.frag.wgsl`).
+   - `PostProcess.frag.wgsl` attenuates the HDR scene by the transmittance and adds the in-scattering *before* tonemapping.
 
 ### WebGL2 (Fragment Tier)
 1. **Half-Resolution Raymarching (`VolumetricFogPassGL`, `VolumetricFog.frag.glsl`):**
@@ -133,7 +133,7 @@ Both backends clamp participating medium extinction via $\text{extinction} = \ma
    - Reconstructs full-resolution fog using depth-weighted bilateral cross-filtering.
    - Prevents haloing and bleeding across high-frequency geometry silhouettes.
 3. **Composite:**
-   - Adds in-scattering pre-tonemapping through `PostProcess.frag.glsl`.
+   - Attenuates the scene by the transmittance and adds the in-scattering pre-tonemapping through `PostProcess.frag.glsl`. The WebGL2 path is a per-pixel raymarch, so the look is close to, but not identical with, WebGPU (no local-light scattering, no IBL ambient).
 
 ---
 
@@ -146,3 +146,8 @@ Check out **Showcase 39 ("Atmospheric Sanctum")** at [`apps/showcases/39/`](file
 - Negative density interior carving volume ($Z = -21$, density = -1.2) keeping the rear vaulted sanctuary crystal clear.
 - Interactive controls: `[F]` toggle fog, `[C]` toggle interior carving, `[N]` toggle 3D noise, `[1]`/`[2]` rotate sun angle, `[V]` switch fly/orbit camera.
 
+---
+
+## Time and frame context
+
+Everything that animates (mist drift, jitter) reads `renderer.frameInfo` (`FrameInfo`), written by `SmallWorldMachine.step()`: gameplay `time` (hit-stop scaled, drives the fog), `realTime` (unscaled, drives post effects such as grain) and `frameIndex`. Set `SmallWorldMachine.captureFrameRate` (e.g. `60`) to advance the realtime loop by a fixed `1 / captureFrameRate` per frame for reproducible recordings; call `step()` a few frames first so the temporal history converges.

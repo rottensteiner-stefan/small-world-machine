@@ -19,8 +19,11 @@ import { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
 /** Uniform-array capacity of FogVolumes per pass (matches `FogVolumeData[16]` in the shaders). */
 const MAX_FOG_VOLUMES = 16;
 
-/** Float offset of the per-light scale arrays in FroxelUniforms (after the 16 FogVolumeData). */
-const LIGHT_SCALE_OFFSET = 32 + MAX_FOG_VOLUMES * 32;
+/** Float offset of `scatterTint` (vec4) in FroxelUniforms, right after the 16 FogVolumeData. */
+const SCATTER_TINT_OFFSET = 32 + MAX_FOG_VOLUMES * 32;
+
+/** Float offset of the per-light scale arrays, after `scatterTint`. */
+const LIGHT_SCALE_OFFSET = SCATTER_TINT_OFFSET + 4;
 
 /** Total floats of FroxelUniforms: base + volumes + 64 point + 64 spot light scales. */
 const INJECT_UNIFORM_FLOATS = LIGHT_SCALE_OFFSET + 2 * MAX_CLUSTERED_LIGHTS_PER_TYPE;
@@ -539,6 +542,12 @@ export class VolumetricFogPassGPU {
       offset += 32;
     }
 
+    const albedo = Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0);
+    inj[SCATTER_TINT_OFFSET] = element.color.r * albedo;
+    inj[SCATTER_TINT_OFFSET + 1] = element.color.g * albedo;
+    inj[SCATTER_TINT_OFFSET + 2] = element.color.b * albedo;
+    inj[SCATTER_TINT_OFFSET + 3] = 0.0;
+
     // Per-light volumetric intensity, indexed like the renderer's light buffers.
     for (let i = 0; i < MAX_CLUSTERED_LIGHTS_PER_TYPE; i++) {
       inj[LIGHT_SCALE_OFFSET + i] = pointLights[i]?.volumetricIntensity ?? 0.0;
@@ -629,7 +638,11 @@ export class VolumetricFogPassGPU {
     intg[30] = this._scratchSunDir.z;
     intg[31] = 0.0;
 
-    const sunScale = sunActive ? dirLight!.intensity * dirLight!.volumetricIntensity : 0.0;
+    const sunScale = sunActive
+      ? dirLight!.intensity *
+        dirLight!.volumetricIntensity *
+        Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0)
+      : 0.0;
     intg[32] = element.color.r * sunScale;
     intg[33] = element.color.g * sunScale;
     intg[34] = element.color.b * sunScale;

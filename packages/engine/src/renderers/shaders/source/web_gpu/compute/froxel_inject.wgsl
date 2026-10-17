@@ -34,6 +34,7 @@ struct FroxelUniforms {
     nearFar: vec4f,          // [near, far, sliceCount, pad]
     jitter: vec4f,           // [jitterX, jitterY, jitterZ, pad]
     volumes: array<FogVolumeData, 16>,
+    scatterTint: vec4f,                // [rgb = fog tint * scattering albedo (sigma_s / sigma_t), unused]
     pointFogScale: array<vec4f, 16>,   // per point light (index = light index) volumetric intensity, 4 per vec4
     spotFogScale: array<vec4f, 16>,    // same for spot lights
 }
@@ -241,13 +242,13 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
 
         // Scattering coefficient sigma_s == extinction (albedo 1). Intensity is applied once, in
         // the composite pass.
-        inScatter += lightScatter * extinction;
+        inScatter += lightScatter * froxel.scatterTint.rgb * extinction;
 
         // Ambient inject: scene ambient colour plus the IBL irradiance from above, scaled by density.
         if (froxel.phase.y > 0.0) {
             let sky = textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 1.0, 0.0), 0.0).rgb;
             let ambient = global.ambientColor.rgb + sky * global.envIntensity;
-            inScatter += ambient * (froxel.phase.y * extinction);
+            inScatter += ambient * froxel.scatterTint.rgb * (froxel.phase.y * extinction);
         }
     }
 
