@@ -28,6 +28,10 @@ _Avoid_: Coarse/Fine pass — this project's docs consistently say Broadphase/Na
 The pattern (e.g. STIFF, SMOOTH, FPS, ISOMETRIC) that governs how a camera's transform updates each frame.
 _Avoid_: Controller — a Controller is a Behavior that drives input; Strategy is the update math itself, a different layer on the same camera.
 
+**Capture-Frame-Rate (`captureFrameRate`)**:
+A deterministic simulation mode (`SmallWorldMachine.captureFrameRate`) in which the main loop advances gameplay and animation by an exact fixed timestep $\Delta t = 1.0 / \text{captureFrameRate}$ per frame, completely decoupled from wall-clock execution duration (analogous to Unity's `Time.captureFramerate` or Godot's `--fixed-fps`). Guarantees bit-exact reproducible video rendering, screenshot baselines, and temporal accumulation convergence in offline recording.
+_Avoid_: Fixed Timestep (ambiguous: physics has an internal fixed sub-step, whereas capture frame rate locks the outer engine step and frame clock for recording).
+
 **Character Rig (Wrapper)**:
 The parent `Object3D` node that encapsulates a humanoid model (scaled to 1.80m) to isolate its intrinsic geometry scale from runtime perspective scaling behaviors (such as `StageMovementBehavior`).
 _Avoid_: Direct Mesh Scaling on movement behaviors — always wrap in a dedicated Rig object.
@@ -67,6 +71,10 @@ _Avoid_: Global Event Bus, Universal EventBus — rejected under Context Object;
 **FogVolume / Interior Carving**:
 An analytical geometric volume (`FogVolume`: Box, Sphere, Cylinder) placed into the 3D scene graph that injects localized scattering, emission, or negative density into the global Froxel grid or raymarching volume. Negative density values carve out fog from interior spaces (e.g. rooms, vaults, caverns) without requiring complex geometry meshes or stencil cuts ($\text{extinction} = \max(0.0, \text{extinction} + \text{volDensity})$).
 _Avoid_: Fog Mesh, Stencil Volume — carving is achieved through continuous analytical SDF evaluation and additive density clamping in shaders, not geometry clipping.
+
+**Frame-Kontext (`FrameInfo`)**:
+The unified, immutable per-frame timing and sequence descriptor (`FrameInfo`, accessible via `renderer.frameInfo` and `app.frameInfo`) written exclusively by `SmallWorldMachine.step()`. Encapsulates hit-stop/time-scale-adjusted gameplay time (`time`, `deltaTime`), unscaled wall-clock time (`realTime`, `realDeltaTime`), and a monotonically increasing `frameIndex`. Subsystems, post-processing passes, and compute shaders (such as volumetric fog noise advection and temporal jitter) read from this context instead of querying `performance.now()`.
+_Avoid_: Engine Time, Delta Time (loose globals; `FrameInfo` is a structured context object passed per frame to enforce determinism and avoid global singletons).
 
 **Forge / ForgeTool**:
 Forge is the dockable window-manager overlay; a ForgeTool is a single mini-app hosted inside it (e.g. Gadget Inspector, Pixler, Material Studio).
@@ -143,6 +151,10 @@ _Avoid_: Context, FSM Context — collides with Context Object, an unrelated DI 
 **Story-First (The Stray Principle)**:
 The foundational design commitment that emotional resonance, lighting atmosphere, worldbuilding, and narrative depth precede and drive all technical features. Technical architecture serves the story, never the reverse.
 _Avoid_: Spec-Chasing, Tech-Demo First, 8K-Photorealism
+
+**Streualbedo (`scatteringAlbedo`)**:
+The single-scattering albedo parameter ($\omega = \sigma_s / \sigma_t \in [0.0, 1.0]$ on `VolumetricFogElement`) defining the ratio of the scattering coefficient $\sigma_s$ to the total extinction coefficient $\sigma_t = \sigma_s + \sigma_a$. A value of $1.0$ represents purely scattering media (bright mist, steam), while lower values introduce absorption $\sigma_a = (1.0 - \omega) \cdot \sigma_t$ to accurately simulate dark, light-attenuating media (smoke, soot, dust) that darken background geometry without self-illuminating.
+_Avoid_: Fog Darkness, Fog Absorption (informal; Streualbedo is the physically-based single-scattering ratio $\sigma_s / \sigma_t$).
 
 **TAA (Simplified)**:
 Sub-pixel camera jitter plus an exponential history blend — deliberately without motion-vector reprojection.

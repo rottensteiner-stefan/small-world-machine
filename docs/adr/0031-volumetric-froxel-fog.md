@@ -1,8 +1,8 @@
 # 0031: Volumetric Froxel Fog (Stufe 3, WebGPU Compute & WebGL2 Parity)
 
 - **Status:** Accepted & Implemented
-- **Date:** 2026-10-16
-- **Status of:** *[2026-10-16 Complete]* 3-Tier Fog Standard, Stufe 3
+- **Date:** 2026-10-16 (Updated 2026-10-17 for v0.110.0)
+- **Status of:** *[2026-10-16 Complete, 2026-10-17 v0.110.0 Refinements]* 3-Tier Fog Standard, Stufe 3
 - **Decision Makers:** Small World Machine Architecture Team (human-approved 2026-10-16)
 
 ---
@@ -49,16 +49,34 @@ sessions):
 3. **CSM self-shadowing:** Local-light and media in-scattering considers directional-light shadow
    self-occlusion through the existing Directional CSM of Stufe 2 (ADR 0030) — zero extra
    shadow passes.
-4. **Compositing = dedicated composite pass:** The integrated in-scattering texture is
-   composited additively **before tonemapping** through the existing post-processing composite
-   (`PostProcess.frag.wgsl` and `PostProcess.frag.glsl`, LightShafts pattern). This keeps
-   all material shaders untouched and minimizes regression risk. The analytic distance/height fog
-   (Stufe 1) stays active in parallel; the volumetric part is strictly additive.
+4. **Compositing = dedicated composite pass with transmittance attenuation:** The integrated
+   in-scattering texture is composited **before tonemapping** through the existing post-processing
+   composite (`PostProcess.frag.wgsl` and `PostProcess.frag.glsl`, LightShafts pattern). This keeps
+   all material shaders untouched and minimizes regression risk. Background scene radiance is
+   attenuated by media transmittance ($L_{\text{final}} = L_{\text{scene}} \cdot T + L_{\text{fog}}$,
+   where $T = e^{-\tau}$), while the analytic distance/height fog (Stufe 1) stays active in parallel.
 5. **Dynamic FogVolumes & Interior Carving:** Analytical geometric shapes (`FogVolumeShape`: Box,
    Sphere, Cylinder) evaluated via continuous SDFs. Negative density values carve out participating
    medium from interior rooms, bunkers, or vaults without geometry clipping ($\text{extinction} = \max(0.0, \text{extinction} + \text{volDensity})$).
 6. **3D Procedural Noise & Rolling Mist:** Fast analytical 3D value noise and fractional Brownian motion (fBm)
    evaluated in shader space with time-based wind drift, packed into uniform buffer padding with zero GC.
+7. **Single-Scattering Albedo (`scatteringAlbedo`) & Absorption:** Extinction is decomposed into
+   scattering ($\sigma_s = \omega \cdot \sigma_t$) and absorption ($\sigma_a = (1 - \omega) \cdot \sigma_t$),
+   governed by single-scattering albedo $\omega \in [0.0, 1.0]$ (`VolumetricFogElement.scatteringAlbedo`).
+   Enables physically realistic dark smoke, soot, and dust that darken background scenes without glowing.
+8. **Ambient In-Scattering (`ambientInject`):** Scene ambient light and diffuse sky IBL irradiance
+   (`Scene.irradianceMap`) scatter directly within the medium. On WebGPU, global bind group bindings 4 and 7
+   (irradiance cube & sampler) are exposed to compute pipelines (`@group(0) @binding(4/7)`), lifting shadows
+   inside thick fog banks. On WebGL2, `VolumetricFogPassGL` samples `Scene.irradianceMap` directly.
+9. **Per-Light Volumetric Scaling (`volumetricIntensity`):** Configurable per-light multiplier
+   (`AbstractLight.volumetricIntensity`, defaulting to `1.0`) controlling in-scattering for Point, Spot,
+   and Directional Sun lights. Setting to `0.0` completely eliminates a light's volumetric presence while
+   preserving surface illumination on opaque geometry.
+10. **Deterministic Frame Context (`FrameInfo`, `captureFrameRate`):** Eliminates uncoordinated
+    `performance.now()` calls in passes and shaders. Passes receive `renderer.frameInfo` (`time`, `realTime`,
+    `deltaTime`, `frameIndex`) driven strictly by `SmallWorldMachine.step()`. Enabling
+    `SmallWorldMachine.captureFrameRate` advances simulation by constant $\Delta t = 1.0 / \text{captureFrameRate}$,
+    enabling frame-accurate offline recording and bit-exact reproducibility.
 
 ### Data & resource flow
 
@@ -66,33 +84,42 @@ sessions):
 ```
 [Main Pass] → [Opaque Depth]
             → [Froxel Injection (compute)]:
-                3D Froxel Grid (160×90×64), local lights (Cluster lists) + CSM directional
+                3D Froxel Grid (160×90×64), local lights (Cluster lists) + CSM directional,
+                ambient injection from Scene.irradianceMap (@group(0) bindings 4 & 7)
             → [3D Temporal Reprojection (compute)]:
-                Sub-voxel jitter (jx, jy, jz), inverse VP reprojection, 7-tap 3D AABB clamping, ping-pong history
+                Sub-voxel jitter (jx, jy, jz) via FrameInfo, inverse VP reprojection,
+                7-tap 3D AABB clamping, ping-pong history
             → [In-Register Z-Integration (compute)]:
-                Workgroup (8×8×1) prefix-sum accumulation along depth slices, Decima powder effect
+                Workgroup (8×8×1) prefix-sum accumulation along depth slices, Decima powder effect,
+                slice-center depth integration, optical depth tau and transmittance T = exp(-tau)
             → [Composite (fullscreen fragment)]:
-                Single-tap O(1) 3D trilinear texture sample, additive pre-tonemapping into HDR scene
+                Single-tap O(1) 3D trilinear texture sample, attenuates scene by T and adds L_fog
+                pre-tonemapping into HDR scene buffer
 ```
 
 #### WebGL2 Pipeline
 ```
 [Main Pass] → [Opaque Depth]
             → [Half-Resolution Raymarch (fragment)]:
-                16–24 depth-steps with IGN jitter, analytical FogVolumes & 3D noise
+                16–24 depth-steps with IGN jitter, analytical FogVolumes & 3D noise,
+                Scene.irradianceMap ambient injection, height & heightFalloff evaluation
             → [Depth-Aware Cross-Bilateral Upsampling (fragment)]:
                 2×2 high-res bilateral filter preventing edge bleeding across silhouettes
             → [Composite (fullscreen fragment)]:
-                Additive pre-tonemapping composite into HDR scene buffer
+                Attenuates scene by transmittance T and adds L_fog pre-tonemapping into HDR scene buffer
 ```
 
 ### Implemented Surface
-- `packages/engine/src/math/froxel.ts` — single source of truth for logarithmic froxel depth slicing and unprojection formulas.
+- `packages/engine/src/math/froxel.ts` — single source of truth for logarithmic froxel depth slicing and unprojection formulas (`sliceCenterViewDepth`).
+- `packages/engine/src/interfaces/FrameInfo.ts` — frame context timing contract (`time`, `realTime`, `deltaTime`, `realDeltaTime`, `frameIndex`).
+- `packages/engine/src/core/SmallWorldMachine.ts` — `frameInfo` writer and `captureFrameRate` fixed-step clock.
+- `packages/engine/src/core/lights/AbstractLight.ts` — `volumetricIntensity` per-light in-scattering multiplier.
 - `packages/engine/src/core/objects/FogVolume.ts` & `FogVolumeShape.ts` — scene-graph node supporting Box, Sphere, Cylinder analytical SDFs, density/albedo/emission/falloff, and 3D noise parameters.
-- `VolumetricFogElement.ts` — post-processing configuration element controlling density, height, height falloff, asymmetry (Henyey-Greenstein g), CSM shadowing, jitter, and history blend.
+- `VolumetricFogElement.ts` — post-processing configuration element controlling density, height, height falloff, asymmetry (Henyey-Greenstein g), CSM shadowing, jitter, history blend, `scatteringAlbedo`, and `ambientInject`.
 - `froxel_inject.wgsl`, `froxel_reproject.wgsl`, `froxel_integrate.wgsl`, `VolumetricFog.frag.wgsl` — WebGPU compute and composite pipeline.
 - `VolumetricFogPassGPU.ts` & `VolumetricFogPassGL.ts` — backend pass orchestrators for WebGPU and WebGL2.
 - `VolumetricFog.frag.glsl` & `VolumetricFogBilateral.frag.glsl` — WebGL2 raymarching and cross-bilateral upsampling shaders.
+- `PostProcess.frag.wgsl` & `PostProcess.frag.glsl` — pre-tonemapping composite with transmittance scene attenuation.
 - `apps/showcases/39/` ("Atmospheric Sanctum") — architectural showcase demonstrating CSM light shafts, swirling volumetric mist, positive brazier glow, and negative interior vault carving.
 
 ---
@@ -103,8 +130,10 @@ sessions):
 - Zero redundant light-culling and zero extra shadow passes; grid and light lists never disagree per cell.
 - Single-tap 3D trilinear fullscreen composite on WebGPU replaces per-pixel screen-space raymarching with an $O(1)$ texture lookup.
 - 3D TAA reprojection with sub-voxel jittering suppresses temporal flicker and raymarching slice aliasing while maintaining sharp silhouettes via 3D-AABB clamping.
-- WebGL2 achieves full visual parity without 3D FBO writing hazards on mobile TBDR architectures.
-- Dedicated additive composite keeps all material shaders untouched and zero-risk for existing scenes.
+- WebGL2 achieves visual parity without 3D FBO writing hazards on mobile TBDR architectures.
+- Transmittance-aware compositing physically attenuates background objects behind dense media, eliminating over-bright milky blowouts.
+- Single-scattering albedo and ambient inject provide full artistic control between bright glowing mist and dark absorbing smoke.
+- Deterministic frame context decouples rendering and simulation from wall-clock variance, enabling bit-exact video capture and reproducible test suites.
 - Negative density `FogVolume` nodes enable instant interior carving for buildings, caves, and bunkers.
 
 ### Negative / trade-offs
