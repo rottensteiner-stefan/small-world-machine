@@ -1,6 +1,5 @@
 export interface ForgeToolOptions {
   parent?: HTMLElement;
-  initialState?: unknown;
 }
 
 export abstract class ForgeTool {

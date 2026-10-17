@@ -454,22 +454,6 @@ export function posterizeImage(src: ImageData, levels = 4): ImageData {
 }
 
 /**
- * Thresholds image to 1-bit high-contrast black & white.
- */
-export function thresholdImage(src: ImageData, threshold = 128): ImageData {
-  const out = makeImageData(src.width, src.height, new Uint8ClampedArray(src.data));
-  const data = out.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const lum = 0.2126 * data[i]! + 0.7152 * data[i + 1]! + 0.0722 * data[i + 2]!;
-    const val = lum >= threshold ? 255 : 0;
-    data[i] = val;
-    data[i + 1] = val;
-    data[i + 2] = val;
-  }
-  return out;
-}
-
-/**
  * Auto-levels histogram expansion (normalizes dynamic range).
  */
 export function autoLevelsImage(src: ImageData): ImageData {

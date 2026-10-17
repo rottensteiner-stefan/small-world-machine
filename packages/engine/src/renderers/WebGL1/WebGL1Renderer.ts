@@ -86,7 +86,6 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   private _texCubeRefCounts: Map<CubeTexture, number> = new Map();
   private _lastKnownTextures: WeakMap<Object3D, Record<string, Texture | CubeTexture | undefined>> =
     new WeakMap();
-  private _scratchTransparentMap: Map<string, Object3D[]> = new Map();
 
   private _opaqueTexture?: WebGLTexture;
 
@@ -1417,7 +1416,6 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._texCubeRefCounts.clear();
     this._renderTargetFbos.clear();
     this._renderTargetDepthBuffers.clear();
-    this._scratchTransparentMap.clear();
     this._hdrFbo = undefined;
     this._hdrTexture = undefined;
     this._hdrRenderBuffer = undefined;

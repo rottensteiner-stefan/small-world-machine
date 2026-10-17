@@ -76,7 +76,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
   private _instanceBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
   private _instanceDataBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
-  private _scratchTransparentMap: Map<string, Object3D[]> = new Map();
 
   private _scratchFloat4: Float32Array = new Float32Array(4);
 
@@ -2027,7 +2026,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._renderTargetFbos.clear();
     this._renderTargetCubeFbos.clear();
     this._shadowMaps.clear();
-    this._scratchTransparentMap.clear();
     this._hdrFbo = undefined;
     this._postPassGL = undefined;
     this._bloomPassGL = undefined;
