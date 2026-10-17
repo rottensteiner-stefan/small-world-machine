@@ -25,6 +25,7 @@
 - **No Global Singletons:** Small World Machine must support multiple engine instances per page. Never use global singletons. Pass dependencies via Context Objects, Constructor Injection, or Scene Graph lifecycle methods.
 - **Strict Types:** Explicit types, access modifiers, and **NO `any`**. The linter will instantly reject it. Use explicit casting or generics.
 - **Lifecycle & Fail Fast:** Follow the "Fail Fast" principle to catch invalid states immediately. However, **never throw exceptions in property setters** if the required properties might only be assigned in subsequent lines. Throw exactly when the subsystem actively processes the object.
+- **Tiered Renderer Autonomy (Never Degrade WebGPU):** WebGPU must NEVER be degraded, constrained, or stripped of features (e.g. compute pipelines, 3D froxel grids, clustered light lists, 3D temporal reprojection, storage textures) to achieve parity with WebGL2 or WebGL1. Every renderer operates at its maximal capabilities. Lower tiers (WebGL2, WebGL1) implement the best possible fallback tailored to their hardware/API constraints (e.g. half-res raymarching + bilateral upsampling in WebGL2, analytical fog in WebGL1), sharing mathematical and optical concepts where possible, but never holding WebGPU back to a least common denominator.
 
 ## 3. Detailed Skills
 
