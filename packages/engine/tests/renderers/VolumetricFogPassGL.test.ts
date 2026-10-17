@@ -153,6 +153,7 @@ describe("VolumetricFogPassGL", () => {
       uniform1f: (loc: unknown, val: number) => {
         uniformCalls[String(loc)] = val;
       },
+      uniform1iv: () => {},
       uniform2f: () => {},
       uniform3f: (loc: unknown, x: number, y: number, z: number) => {
         uniformCalls[String(loc)] = [x, y, z];

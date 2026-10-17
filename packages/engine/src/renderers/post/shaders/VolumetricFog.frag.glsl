@@ -51,7 +51,39 @@ uniform vec4 u_spotLightDir[16];    // xyz: direction, w: decay
 uniform vec4 u_spotLightColor[16];  // rgb: color * intensity * volumetricIntensity * tint * albedo, w: pad
 uniform vec4 u_spotLightParams[16]; // x: cosOuter, y: cosInner, z: distance (range), w: decay
 
+// Spot shadow maps of the first 4 spot lights (the engine only has 4), index = spot list index.
+uniform sampler2DShadow u_spotShadowMap[4];
+uniform mat4 u_spotShadowMatrix[4];
+uniform vec4 u_spotShadowInfo[4]; // x: bias, z: 1 when this spot shadows the fog
+
 out vec4 fragColor;
+
+// Shadow term of spot `s` at a point in the air: 2x2 hardware PCF, same projection/depth convention as
+// the lit surfaces in light_calc.frag.glsl, no normal offset (the sample is not on a surface). Points
+// outside the map count as lit. Sampler arrays need constant indices, hence the if-chain.
+float spotFogShadow(int s, vec3 pos) {
+    if (s >= 4 || u_spotShadowInfo[s].z < 0.5) return 1.0;
+    vec4 clip = u_spotShadowMatrix[s] * vec4(pos, 1.0);
+    if (clip.w <= 0.0) return 1.0;
+    vec3 proj = clip.xyz / clip.w * 0.5 + 0.5;
+    if (proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0 || proj.z > 1.0) return 1.0;
+    float depthRef = proj.z - u_spotShadowInfo[s].x;
+    vec2 texel;
+    if (s == 0) texel = 0.5 / vec2(textureSize(u_spotShadowMap[0], 0));
+    else if (s == 1) texel = 0.5 / vec2(textureSize(u_spotShadowMap[1], 0));
+    else if (s == 2) texel = 0.5 / vec2(textureSize(u_spotShadowMap[2], 0));
+    else texel = 0.5 / vec2(textureSize(u_spotShadowMap[3], 0));
+    float lit = 0.0;
+    for (int k = 0; k < 4; k++) {
+        vec2 o = vec2((k & 1) == 0 ? -texel.x : texel.x, (k & 2) == 0 ? -texel.y : texel.y);
+        vec3 c = vec3(proj.xy + o, depthRef);
+        if (s == 0) lit += texture(u_spotShadowMap[0], c);
+        else if (s == 1) lit += texture(u_spotShadowMap[1], c);
+        else if (s == 2) lit += texture(u_spotShadowMap[2], c);
+        else lit += texture(u_spotShadowMap[3], c);
+    }
+    return lit * 0.25;
+}
 
 float boxSDF(vec3 p, vec3 b) {
     vec3 q = abs(p) - b;
@@ -266,7 +298,7 @@ void main() {
             if (maxDist > 0.0) {
                 atten *= pow(clamp(1.0 - lightDist / maxDist, 0.0, 1.0), max(u_spotLightParams[s].w, 1.0));
             }
-            localLightScatter += u_spotLightColor[s].rgb * atten * cone * phase;
+            localLightScatter += u_spotLightColor[s].rgb * atten * cone * phase * spotFogShadow(s, samplePos);
         }
 
         float stepOpticalDepth = localDensity * dt;

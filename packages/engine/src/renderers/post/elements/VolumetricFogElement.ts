@@ -70,6 +70,15 @@ export class VolumetricFogElement extends PostProcessingElement {
   public scatteringAlbedo: number = 1.0;
 
   /**
+   * Whether spot lights that cast shadows are shadowed inside the fog, so objects cut shafts and
+   * dark wedges out of their light cone (default: true). Reuses the lights' existing spot shadow
+   * maps (at most 4, see `SpotLight.castShadow`), costs one shadow-map lookup per froxel and
+   * shadowed spot, and needs no extra render pass. Point lights have no shadow maps in the engine,
+   * so they scatter unshadowed.
+   */
+  public localLightShadows: boolean = true;
+
+  /**
    * How strongly the scene's ambient light (ambient colour and, on WebGPU, the IBL irradiance from
    * above) scatters in the fog (default: 0 = off), like Godot's Ambient Inject. Lifts fog that lies in
    * shadow, which otherwise goes black. Scaled by the local density.

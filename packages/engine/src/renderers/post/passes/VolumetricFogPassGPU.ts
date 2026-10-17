@@ -546,7 +546,7 @@ export class VolumetricFogPassGPU {
     inj[SCATTER_TINT_OFFSET] = element.color.r * albedo;
     inj[SCATTER_TINT_OFFSET + 1] = element.color.g * albedo;
     inj[SCATTER_TINT_OFFSET + 2] = element.color.b * albedo;
-    inj[SCATTER_TINT_OFFSET + 3] = 0.0;
+    inj[SCATTER_TINT_OFFSET + 3] = element.localLightShadows ? 1.0 : 0.0;
 
     // Per-light volumetric intensity, indexed like the renderer's light buffers.
     for (let i = 0; i < MAX_CLUSTERED_LIGHTS_PER_TYPE; i++) {

@@ -41,6 +41,7 @@ app.postProcessing.add(fog);
 | `maxDistance` | `80.0` | Max world-space evaluation distance (clamped to the far plane). |
 | `intensity` | `1.0` | Multiplier of the accumulated in-scattering, applied once in the composite pass (transmittance is unaffected). |
 | `scatteringAlbedo` | `1.0` | Single-scattering albedo $\omega = \sigma_s / \sigma_t$ (0..1). Lower values absorb more of the extinction: smoke and dust that darken instead of glow. |
+| `localLightShadows` | `true` | Spot lights that cast shadows also shadow their fog in-scattering (objects cut shafts and dark wedges out of the cones). Reuses the existing spot shadow maps, at most 4, no extra render pass. Point lights have no shadow maps in the engine and scatter unshadowed. |
 | `ambientInject` | `0.0` | How strongly scene ambient light and the IBL irradiance from above (`Scene.irradianceMap`, both backends) scatter in the fog; lifts fog in shadow (like Godot's Ambient Inject). |
 | `asymmetry` | `0.4` | Henyey-Greenstein asymmetry factor $g \in (-1, 1)$. Positive = forward scattering towards the light. |
 | `castDirectionalShadow` | `true` | Directional (sun/moon) self-shadowing through the existing CSM. |

@@ -77,6 +77,16 @@ sessions):
     `deltaTime`, `frameIndex`) driven strictly by `SmallWorldMachine.step()`. Enabling
     `SmallWorldMachine.captureFrameRate` advances simulation by constant $\Delta t = 1.0 / \text{captureFrameRate}$,
     enabling frame-accurate offline recording with reproducible simulation input (the rendered pixels are equal only on the same device and driver, and temporal effects need a few warm-up `step()` frames to converge).
+11. **Local-light (spot) shadows in the fog (`localLightShadows`, default on):** Spot lights that cast a
+    shadow also shadow their in-scattering. The existing spot shadow maps are reused (no extra render pass):
+    WebGPU samples them in `froxel_inject.wgsl` (4-tap PCF, bind group 0 bindings 9 and 10 made visible to
+    compute), WebGL2 in the raymarch (`sampler2DShadow` on texture units 3 to 6, 2x2 hardware PCF). The
+    engine has at most 4 spot shadow maps, indexed like the lit surfaces (light index < 4), and **no shadow
+    maps for point lights**, so point lights still scatter unshadowed; shadows for point lights would need a
+    new shadow system and are a separate decision. Cost: one shadow-map lookup per froxel (WebGPU) or per
+    raymarch step (WebGL2) and shadowed spot. Alternative considered: Unreal's separate volume shadow
+    textures per light (about three times the cost of an unshadowed light), rejected because the existing
+    maps are enough at the froxel resolution.
 
 ### Data & resource flow
 

@@ -34,7 +34,7 @@ struct FroxelUniforms {
     nearFar: vec4f,          // [near, far, sliceCount, pad]
     jitter: vec4f,           // [jitterX, jitterY, jitterZ, pad]
     volumes: array<FogVolumeData, 16>,
-    scatterTint: vec4f,                // [rgb = fog tint * scattering albedo (sigma_s / sigma_t), unused]
+    scatterTint: vec4f,                // [rgb = fog tint * scattering albedo (sigma_s / sigma_t), localLightShadows (0/1)]
     pointFogScale: array<vec4f, 16>,   // per point light (index = light index) volumetric intensity, 4 per vec4
     spotFogScale: array<vec4f, 16>,    // same for spot lights
 }
@@ -84,6 +84,32 @@ fn valueNoise3D(p: vec3f) -> f32 {
 
 fn fbm3D(p: vec3f) -> f32 {
     return 0.65 * valueNoise3D(p) + 0.35 * valueNoise3D(p * 2.05 + vec3f(1.7, 3.2, 5.1));
+}
+
+// Shadow term of spot light `slot` (< 4, the engine only has 4 spot shadow maps) at a point in the air:
+// 4-tap PCF on the light's shadow map, the same projection/flip/depth convention as getShadowPCSS in
+// pbr_math.wgsl. Points outside the map count as lit; no normal offset (the sample is not on a surface).
+fn spotFogShadow(slot: u32, worldPos: vec3f) -> f32 {
+    let info = global.spotShadowInfo[slot];
+    if (info.z < 0.5) {
+        return 1.0;
+    }
+    let clip = global.spotShadowMatrices[slot] * vec4f(worldPos, 1.0);
+    let ndc = clip.xyz / max(clip.w, 1e-6);
+    let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if (clip.w <= 0.0 || uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || ndc.z > 1.0 || ndc.z < 0.0) {
+        return 1.0;
+    }
+    let dims = vec2f(textureDimensions(u_spotShadowMap));
+    let o = 0.5 / dims;
+    let depthRef = ndc.z - info.x;
+    let layer = i32(slot);
+    var lit = 0.0;
+    lit += textureSampleCompareLevel(u_spotShadowMap, shadowSampler, uv + vec2f(-o.x, -o.y), layer, depthRef);
+    lit += textureSampleCompareLevel(u_spotShadowMap, shadowSampler, uv + vec2f(o.x, -o.y), layer, depthRef);
+    lit += textureSampleCompareLevel(u_spotShadowMap, shadowSampler, uv + vec2f(-o.x, o.y), layer, depthRef);
+    lit += textureSampleCompareLevel(u_spotShadowMap, shadowSampler, uv + vec2f(o.x, o.y), layer, depthRef);
+    return lit * 0.25;
 }
 
 // Henyey-Greenstein phase function (Wronski/Frostbite family). g: -1..1.
@@ -237,7 +263,11 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
                 atten *= pow(clamp(1.0 - lightDist / maxDist, 0.0, 1.0), max(light.params.w, 1.0));
             }
             let fogScale = froxel.spotFogScale[lightIdx / 4u][lightIdx % 4u];
-            lightScatter += light.col.rgb * atten * cone * phase * fogScale;
+            var shadow = 1.0;
+            if (froxel.scatterTint.w > 0.5 && lightIdx < 4u) {
+                shadow = spotFogShadow(lightIdx, worldPos);
+            }
+            lightScatter += light.col.rgb * atten * cone * phase * fogScale * shadow;
         }
 
         // Scattering coefficient sigma_s == extinction (albedo 1). Intensity is applied once, in

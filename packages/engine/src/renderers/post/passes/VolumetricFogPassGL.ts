@@ -77,6 +77,9 @@ export class VolumetricFogPassGL {
   private _uSpotLightDirLoc: WebGLUniformLocation | null = null;
   private _uSpotLightColorLoc: WebGLUniformLocation | null = null;
   private _uSpotLightParamsLoc: WebGLUniformLocation | null = null;
+  private _uSpotShadowMapLoc: WebGLUniformLocation | null = null;
+  private _uSpotShadowMatrixLoc: WebGLUniformLocation | null = null;
+  private _uSpotShadowInfoLoc: WebGLUniformLocation | null = null;
 
   // Uniform locations: Bilateral upsample
   private _uLowResFogLoc: WebGLUniformLocation | null = null;
@@ -103,6 +106,10 @@ export class VolumetricFogPassGL {
   private readonly _scratchSpotLightDir: Float32Array = new Float32Array(16 * 4);
   private readonly _scratchSpotLightColor: Float32Array = new Float32Array(16 * 4);
   private readonly _scratchSpotLightParams: Float32Array = new Float32Array(16 * 4);
+  private readonly _scratchSpotShadowMatrix: Float32Array = new Float32Array(4 * 16);
+  private readonly _scratchSpotShadowInfo: Float32Array = new Float32Array(4 * 4);
+  /** Texture units of the 4 spot shadow samplers (0 = depth, 1 = sun shadow, 2 = irradiance). */
+  private readonly _spotShadowUnits: Int32Array = new Int32Array([3, 4, 5, 6]);
 
   constructor(gl: WebGLRenderingContext | WebGL2RenderingContext, isWebGL2: boolean) {
     this._gl = gl;
@@ -197,6 +204,9 @@ export class VolumetricFogPassGL {
       this._uSpotLightDirLoc = gl.getUniformLocation(this._progFog, "u_spotLightDir");
       this._uSpotLightColorLoc = gl.getUniformLocation(this._progFog, "u_spotLightColor");
       this._uSpotLightParamsLoc = gl.getUniformLocation(this._progFog, "u_spotLightParams");
+      this._uSpotShadowMapLoc = gl.getUniformLocation(this._progFog, "u_spotShadowMap");
+      this._uSpotShadowMatrixLoc = gl.getUniformLocation(this._progFog, "u_spotShadowMatrix");
+      this._uSpotShadowInfoLoc = gl.getUniformLocation(this._progFog, "u_spotShadowInfo");
 
       this._uFogVolumeLocs.length = 0;
       for (let i = 0; i < 16; i++) {
@@ -279,6 +289,8 @@ export class VolumetricFogPassGL {
     envIntensity: number = 0,
     pointLights: PointLight[] = [],
     spotLights: SpotLight[] = [],
+    spotShadowTextures: readonly (WebGLTexture | null)[] = [],
+    fallbackShadowTexture: WebGLTexture | null = null,
   ): WebGLTexture | null {
     if (!this._isWebGL2 || !element.enabled || width <= 0 || height <= 0) {
       return null;
@@ -523,6 +535,39 @@ export class VolumetricFogPassGL {
       gl2.uniform4fv(this._uSpotLightColorLoc, this._scratchSpotLightColor);
     if (this._uSpotLightParamsLoc)
       gl2.uniform4fv(this._uSpotLightParamsLoc, this._scratchSpotLightParams);
+
+    // Spot shadow maps of the first 4 spots -> units 3..6. A slot without a (shadow-casting) spot
+    // binds the fallback depth texture and is switched off in the shader via its info.z flag.
+    for (let i = 0; i < 4; i++) {
+      const sl = i < numSpots ? spotLights[i] : undefined;
+      const tex = spotShadowTextures[i] ?? null;
+      const active =
+        element.localLightShadows &&
+        tex !== null &&
+        sl !== undefined &&
+        sl.castShadow &&
+        sl.shadowCamera !== undefined;
+      gl2.activeTexture(gl2.TEXTURE0 + 3 + i);
+      gl2.bindTexture(gl2.TEXTURE_2D, active ? tex : fallbackShadowTexture);
+      const info = i * 4;
+      if (active) {
+        this._scratchSpotShadowMatrix.set(sl.shadowCamera!.viewProjectionMatrix, i * 16);
+        this._scratchSpotShadowInfo[info] = sl.shadowBias;
+        this._scratchSpotShadowInfo[info + 2] = 1.0;
+      } else {
+        this._scratchSpotShadowMatrix.fill(0, i * 16, i * 16 + 16);
+        this._scratchSpotShadowInfo[info] = 0.0;
+        this._scratchSpotShadowInfo[info + 2] = 0.0;
+      }
+    }
+    gl2.activeTexture(gl2.TEXTURE0);
+    if (this._uSpotShadowMapLoc) gl2.uniform1iv(this._uSpotShadowMapLoc, this._spotShadowUnits);
+    if (this._uSpotShadowMatrixLoc) {
+      gl2.uniformMatrix4fv(this._uSpotShadowMatrixLoc, false, this._scratchSpotShadowMatrix);
+    }
+    if (this._uSpotShadowInfoLoc) {
+      gl2.uniform4fv(this._uSpotShadowInfoLoc, this._scratchSpotShadowInfo);
+    }
 
     gl2.bindVertexArray(this._vaoFog!);
     gl2.drawArrays(gl2.TRIANGLES, 0, 3);

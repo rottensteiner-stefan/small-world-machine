@@ -24,6 +24,7 @@ import {
   Texture,
   Torus,
   Vector3D,
+  VolumetricFogElement,
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 
@@ -61,6 +62,20 @@ class Showcase27 extends AbstractShowcase {
       bloom.enabled = true;
       bloom.intensity = 0.6;
       bloom.threshold = 1.0;
+    }
+
+    // Volumetric fog: the two moving shadow-casting spot lights cut shafts out of the mist and the
+    // columns/octahedron carve dark wedges into the cones (`localLightShadows`, on by default).
+    const fog = this.renderer.postProcessing.get<VolumetricFogElement>(
+      PostProcessingEffectType.VOLUMETRIC_FOG,
+    );
+    if (fog) {
+      fog.enabled = true;
+      fog.density = 0.1;
+      fog.heightFalloff = 0.0;
+      fog.maxDistance = 45.0;
+      fog.asymmetry = 0.5;
+      fog.ambientInject = 0.5;
     }
 
     // Camera setup
@@ -109,6 +124,7 @@ class Showcase27 extends AbstractShowcase {
       angle: Math.PI / 4,
       penumbra: 0.4,
       distance: 30.0,
+      volumetricIntensity: 22.0, // the two key spots carry the visible shafts in the fog
     });
     this._keySpotLightA.position.set(-4, 7, 3);
     this._keySpotLightA.castShadow = true;
@@ -124,6 +140,7 @@ class Showcase27 extends AbstractShowcase {
       angle: Math.PI / 4.2,
       penumbra: 0.35,
       distance: 30.0,
+      volumetricIntensity: 22.0,
     });
     this._keySpotLightB.position.set(4, 6, -3);
     this._keySpotLightB.castShadow = true;
@@ -511,3 +528,8 @@ class Showcase27 extends AbstractShowcase {
 const app = new Showcase27();
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase27] Failed to start:", err));
+// QA instrumentation hook for the browser capture scripts (same convention as Showcases 28/39).
+if (typeof window !== "undefined") {
+  const w = window as Window & { __showcase27?: Showcase27 };
+  w.__showcase27 = app;
+}

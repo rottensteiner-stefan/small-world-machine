@@ -149,6 +149,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
   private _shadowMaps: Map<AbstractLight, WebGL2DepthFrameBuffer> = new Map();
   private _dummyShadowMap!: WebGL2DepthFrameBuffer;
+  /** Scratch: shadow depth textures of the first 4 spot lights for the volumetric fog pass. */
+  private readonly _fogSpotShadowTextures: (WebGLTexture | null)[] = [null, null, null, null];
 
   /**
    * Dedicated black cube fallback for `u_irradianceMap`/`u_prefilterMap` when a scene has no real
@@ -676,6 +678,19 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._opaqueDepthFormat = internalFormat;
   }
 
+  /** Shadow depth textures of the first 4 spot lights (null = no shadow), the slots the fog samples. */
+  private _collectFogSpotShadowTextures(): readonly (WebGLTexture | null)[] {
+    const spots = this._frameLights?.sLights ?? [];
+    for (let i = 0; i < 4; i++) {
+      const light = spots[i];
+      this._fogSpotShadowTextures[i] =
+        light !== undefined && light.castShadow && light.shadowCamera !== undefined
+          ? (this._shadowMaps.get(light)?.texture ?? null)
+          : null;
+    }
+    return this._fogSpotShadowTextures;
+  }
+
   public flushPostProcess(): void {
     const isOffscreen = this._activeRenderTarget !== null;
     if (!isOffscreen && this.postProcessing.enabled && this._hdrFbo && this._postPassGL) {
@@ -799,6 +814,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             this._frameScene?.environmentIntensity ?? 0,
             this._frameLights?.pLights ?? [],
             this._frameLights?.sLights ?? [],
+            this._collectFogSpotShadowTextures(),
+            this._dummyShadowMap.texture,
           );
         }
       }

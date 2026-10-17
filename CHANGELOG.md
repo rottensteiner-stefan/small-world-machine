@@ -5,9 +5,11 @@
 ### "In God we trust; all others must bring data." - W. Edwards Deming
 
 - **Features:**
+  - *Spot-light shadows in the volumetric fog* (`VolumetricFogElement.localLightShadows`, default on): spot lights with `castShadow` shadow their fog in-scattering on WebGPU (`froxel_inject.wgsl`, 4-tap PCF on the existing spot shadow map; bindings 9 and 10 of the global bind group are now also visible to compute) and on WebGL2 (raymarch, `sampler2DShadow` on units 3 to 6). At most 4 spot shadow maps exist in the engine; point lights have none and still scatter unshadowed. **Look change:** scenes with fog and shadow-casting spots now show shadowed shafts; set `localLightShadows = false` for the old look.
   - *Capture determinism in CI:* the manual CI workflow has a new `capture` input and `capture-determinism` job (`npm run test:fog-capture`) that loads Showcases 39 and 28 twice in fresh pages on WebGL1/WebGL2 and fails when the hashes at frames 10/30/120 differ. Verified on a GitHub runner (WebGL1 and WebGL2, Showcases 39 and 28: all identical; WebGPU is skipped there); the per-run limit is 300 s because Showcase 39 on WebGL2 needs more than the default 60 s on the runner's software GPU. Still informational (`continue-on-error`) until it has a few more green runs.
   - *`scripts/check-fog-capture.js` covers several showcases* (`--showcases 39,28`, default both; needs a `window.__showcase<id>` hook). Verified locally on a frozen build: WebGL1, WebGL2 and WebGPU identical for both showcases.
 - **Housekeeping & Docs:**
+  - *Showcase 27 has volumetric fog* (density 0.1, the two shadow-casting key spots with `volumetricIntensity` 22) and a `window.__showcase27` QA hook: the moving spots cut shaft-and-shadow wedges through the mist. `check-fog-capture.js --showcases 27` is deterministic on all backends, but needs `RUN_TIMEOUT_MS=300000` (the scene is heavy on a software GPU), so it is not in the default list.
   - *Showcase 39:* the altar and brazier point lights use `volumetricIntensity: 6.0` so their glow visibly scatters in the fog on WebGL2 and WebGPU.
 
 ## [0.111.0] - 2026-10-17

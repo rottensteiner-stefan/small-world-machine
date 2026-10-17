@@ -687,12 +687,17 @@ export class WebGPURenderer extends AbstractRenderer {
           visibility: GPUShaderStage.FRAGMENT,
           texture: { viewDimension: "2d-array", sampleType: "depth" },
         },
+        // Spot shadow map + comparison sampler: also read by the volumetric fog injection (compute).
         {
           binding: 9,
-          visibility: GPUShaderStage.FRAGMENT,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
           texture: { viewDimension: "2d-array", sampleType: "depth" },
         },
-        { binding: 10, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "comparison" } },
+        {
+          binding: 10,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+          sampler: { type: "comparison" },
+        },
         // Clustered light culling (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md):
         // ClusterCullPassGPU (compute) writes these, the main fragment shader only reads them.
         {
