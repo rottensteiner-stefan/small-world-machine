@@ -2,6 +2,7 @@
 precision highp float;
 precision highp sampler2D;
 precision highp sampler2DShadow;
+precision highp sampler3D;
 
 in vec2 v_uv;
 
@@ -286,7 +287,18 @@ void main() {
                 float volAlbedoFactor = 1.0;
                 if (u_fogVolumeMaskInfo[v].x > 0.5) {
                     vec3 maskUv = clamp(pLocal / max(u_fogVolumes[v].size.xyz, 0.0001) * 0.5 + 0.5, 0.0, 1.0);
-                    vec4 maskSample = texture(u_fogVolumeMasks[int(u_fogVolumeMaskInfo[v].y + 0.5)], maskUv);
+                    // GLSL ES 3.00 requires constant-index samplers: branch the 8 slots explicitly
+                    // (sampler arrays indexed with a runtime value are rejected by SwiftShader/ANGLE).
+                    int maskIdx = int(u_fogVolumeMaskInfo[v].y + 0.5);
+                    vec4 maskSample = vec4(1.0);
+                    if (maskIdx == 0) maskSample = texture(u_fogVolumeMasks[0], maskUv);
+                    else if (maskIdx == 1) maskSample = texture(u_fogVolumeMasks[1], maskUv);
+                    else if (maskIdx == 2) maskSample = texture(u_fogVolumeMasks[2], maskUv);
+                    else if (maskIdx == 3) maskSample = texture(u_fogVolumeMasks[3], maskUv);
+                    else if (maskIdx == 4) maskSample = texture(u_fogVolumeMasks[4], maskUv);
+                    else if (maskIdx == 5) maskSample = texture(u_fogVolumeMasks[5], maskUv);
+                    else if (maskIdx == 6) maskSample = texture(u_fogVolumeMasks[6], maskUv);
+                    else maskSample = texture(u_fogVolumeMasks[7], maskUv);
                     volDensity *= maskSample.r;
                     volAlbedoFactor = clamp(maskSample.g, 0.0, 1.0);
                 }
