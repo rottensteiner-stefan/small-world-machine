@@ -86,7 +86,7 @@ sessions):
     new shadow system and are a separate decision. Cost: one shadow-map lookup per froxel (WebGPU) or per
     raymarch step (WebGL2) and shadowed spot. Alternative considered: Unreal's separate volume shadow
     textures per light (about three times the cost of an unshadowed light), rejected because the existing
-    maps are enough at the froxel resolution.
+    maps are enough at the froxel resolution. Limitation: shadow casters outside the camera frustum are not rendered into any spot shadow map (both shadow passes use the camera's visible-object list, on WebGL2 and WebGPU, for lit surfaces as well), so an off-screen occluder does not cut visible fog; set `frustumCulled = false` on such an object to include it.
 
 ### Data & resource flow
 
