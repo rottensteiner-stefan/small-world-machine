@@ -37,6 +37,7 @@ import {
   Topology,
   PostProcessingEffectType,
   NormalTargetMode,
+  WireframeMode,
 } from "../../enums/index.js";
 import { NORMAL_TARGET_FORMAT } from "./managers/NormalOutputWrapper.js";
 import { AbstractRenderer } from "../AbstractRenderer.js";
@@ -1871,7 +1872,7 @@ export class WebGPURenderer extends AbstractRenderer {
     viewOffset: number,
     vMat?: Float32Array,
     topology: GPUPrimitiveTopology = Topology.DEFAULT,
-    wireframeMode?: "structural" | "triangles",
+    wireframeMode?: WireframeMode,
     normalMode: NormalTargetMode = NormalTargetMode.DEFAULT,
   ): void {
     const targetFormat = this.currentColorTargetFormat;
@@ -1979,7 +1980,7 @@ export class WebGPURenderer extends AbstractRenderer {
         }
 
         if (topology === Topology.LINE_LIST) {
-          if (wireframeMode === "structural" && gCache.wib) {
+          if (wireframeMode === WireframeMode.STRUCTURAL && gCache.wib) {
             rp.setIndexBuffer(gCache.wib, gCache.format!);
             rp.drawIndexed(gCache.wireframeIndexCount, instMesh.instanceCount);
           } else if (gCache.ib) {
@@ -1998,7 +1999,7 @@ export class WebGPURenderer extends AbstractRenderer {
         }
       } else {
         if (topology === Topology.LINE_LIST) {
-          if (wireframeMode === "structural" && gCache.wib) {
+          if (wireframeMode === WireframeMode.STRUCTURAL && gCache.wib) {
             rp.setIndexBuffer(gCache.wib, gCache.format!);
             rp.drawIndexed(gCache.wireframeIndexCount);
           } else if (gCache.ib) {

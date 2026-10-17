@@ -4,6 +4,7 @@ import { BasicMaterial, SpriteMaterial } from "../materials/index.js";
 import { Cylinder, Cone } from "../../geometry/index.js";
 import { Sprite } from "../sprites/Sprite.js";
 import { TextTexture } from "../text/index.js";
+import { TextAlign } from "../../enums/index.js";
 
 /**
  * Configuration options for the AxesHelper coordinate cross.
@@ -180,7 +181,7 @@ export class AxesHelper extends Object3D {
       fontWeight: 800,
       fontFamily: "monospace, sans-serif",
       color: colorHex,
-      align: "center",
+      align: TextAlign.CENTER,
       background: "transparent",
       padding: 12,
       outline: { color: "#000000", width: 8 },

@@ -3,7 +3,7 @@ import { Octree, OctreeOptions } from "./culling/Octree.js";
 import { Fog } from "./Fog.js";
 import { Vector3D } from "../math/index.js";
 import { BoundingBox, SpatialHash, Joint } from "../physix/index.js";
-import { BoundingType, Topology } from "../enums/index.js";
+import { BoundingType, Topology, WireframeMode } from "../enums/index.js";
 import { DirectionalLight } from "./lights/index.js";
 import { SkinnedMesh } from "./animation/SkinnedMesh.js";
 import { Collidable } from "../interfaces/index.js";
@@ -14,7 +14,7 @@ export interface RenderBatch {
   shaderId: string;
   topology: Topology;
   matUuid: string;
-  wireframeMode?: "structural" | "triangles";
+  wireframeMode?: WireframeMode;
   objects: Object3D[];
 }
 
@@ -357,7 +357,7 @@ export class Scene {
         // guessing from index count (a 2-index geometry isn't reliably a line).
         const topology = manifest.state?.topology || obj.geometry?.topology || Topology.DEFAULT;
         const matUuid = obj.material.uuid;
-        const wireframeMode = manifest.state?.wireframeMode || "structural";
+        const wireframeMode = manifest.state?.wireframeMode || WireframeMode.DEFAULT;
 
         if (!renderList.opaqueLookup.has(shaderId))
           renderList.opaqueLookup.set(shaderId, new Map());

@@ -173,6 +173,7 @@ class Showcase34 extends AbstractShowcase {
     // Dense grass field across the whole glade.
     this._grass = new BillboardInstancer("Grass", {
       count: 260,
+      seed: 34, // fixed field, so capture mode and goldens see the same grass
       scatterArea: { width: 34, depth: 34, center: new Vector3D(0, 0, -8) },
       size: [0.35, 0.65],
       axisLocked: true,

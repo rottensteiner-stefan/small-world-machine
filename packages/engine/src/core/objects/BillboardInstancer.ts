@@ -5,6 +5,7 @@ import { Color } from "../colors/index.js";
 import { Plane } from "../../geometry/index.js";
 import { Matrix4, Vector3D } from "../../math/index.js";
 import { GeometryDataInterface } from "../../interfaces/index.js";
+import { mulberry32 } from "../../utils/SeededRandom.js";
 
 export interface BillboardScatterArea {
   width: number;
@@ -19,6 +20,9 @@ export interface BillboardInstancerOptions {
   positions?: Vector3D[];
   /** Random placement within a flat rectangle, used when `positions` is omitted. */
   scatterArea?: BillboardScatterArea;
+  /** Seed for the random scatter positions and scales: the same seed gives the same field (capture mode,
+   * tests). Omitted, every instancer scatters differently (`Math.random`). */
+  seed?: number;
   /** [min, max] uniform quad scale. Defaults to [0.6, 1.2]. */
   size?: [number, number];
   /** Only yaw (Y-axis) rotates to face the camera -- vegetation doesn't tilt with camera pitch.
@@ -33,8 +37,8 @@ export interface BillboardInstancerOptions {
 const DEFAULT_COUNT = 300;
 const DEFAULT_SIZE: [number, number] = [0.6, 1.2];
 
-function randRange(min: number, max: number): number {
-  return min + Math.random() * (max - min);
+function randRange(rng: () => number, min: number, max: number): number {
+  return min + rng() * (max - min);
 }
 
 /**
@@ -64,6 +68,7 @@ export class BillboardInstancer {
     const positions = options.positions;
     const count = positions ? positions.length : (options.count ?? DEFAULT_COUNT);
     const sizeRange = options.size ?? DEFAULT_SIZE;
+    const rng: () => number = options.seed !== undefined ? mulberry32(options.seed) : Math.random;
 
     const geometry = options.geometry ?? new Plane({ width: 1, height: 1 }).getGeometryData();
     const material =
@@ -87,16 +92,16 @@ export class BillboardInstancer {
         this._positions[i * 3 + 0] = p.x;
         this._positions[i * 3 + 1] = p.y;
         this._positions[i * 3 + 2] = p.z;
-        this._scales[i] = randRange(sizeRange[0], sizeRange[1]);
+        this._scales[i] = randRange(rng, sizeRange[0], sizeRange[1]);
       }
     } else {
       const area = options.scatterArea ?? { width: 10, depth: 10 };
       const center = area.center ?? new Vector3D(0, 0, 0);
       for (let i = 0; i < count; i++) {
-        this._positions[i * 3 + 0] = center.x + (Math.random() - 0.5) * area.width;
+        this._positions[i * 3 + 0] = center.x + (rng() - 0.5) * area.width;
         this._positions[i * 3 + 1] = center.y;
-        this._positions[i * 3 + 2] = center.z + (Math.random() - 0.5) * area.depth;
-        this._scales[i] = randRange(sizeRange[0], sizeRange[1]);
+        this._positions[i * 3 + 2] = center.z + (rng() - 0.5) * area.depth;
+        this._scales[i] = randRange(rng, sizeRange[0], sizeRange[1]);
       }
     }
   }

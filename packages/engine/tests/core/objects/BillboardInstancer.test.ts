@@ -88,4 +88,19 @@ describe("BillboardInstancer", () => {
     instancer.update(makeCamera(0, 0, 5));
     expect(instancer.mesh.instanceMatrixNeedsUpdate).toBe(true);
   });
+
+  it("scatters the same field for the same seed and a different one for another seed", () => {
+    const scatter = (seed: number | undefined): Float32Array => {
+      const instancer = new BillboardInstancer("Seeded", {
+        count: 16,
+        scatterArea: { width: 10, depth: 10 },
+        ...(seed !== undefined && { seed }),
+      });
+      instancer.update(makeCamera(0, 0, 5));
+      return instancer.mesh.instanceMatrices.slice();
+    };
+    expect(scatter(7)).toEqual(scatter(7));
+    expect(scatter(7)).not.toEqual(scatter(8));
+    expect(scatter(undefined)).not.toEqual(scatter(undefined));
+  });
 });

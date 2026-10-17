@@ -1,4 +1,5 @@
 import { GeometryDataInterface } from "../interfaces/index.js";
+import { WireframeMode } from "../enums/index.js";
 
 /** Fixed WebGL2 attribute location of `a_color` (see `WebGLProgramCache`). */
 export const VERTEX_COLOR_LOCATION = 11;
@@ -279,8 +280,8 @@ export class Mesh {
    * Draws the mesh using the appropriate GL call.
    * @param mode The draw mode (e.g. TRIANGLES, LINES).
    */
-  public draw(mode: number, wireframeMode: "structural" | "triangles" = "structural"): void {
-    if (mode === this._gl.LINES && wireframeMode === "structural" && this.webo) {
+  public draw(mode: number, wireframeMode: WireframeMode = WireframeMode.DEFAULT): void {
+    if (mode === this._gl.LINES && wireframeMode === WireframeMode.STRUCTURAL && this.webo) {
       this._gl.bindBuffer(this._gl.ELEMENT_ARRAY_BUFFER, this.webo);
       this._gl.drawElements(mode, this.wireframeCount, this.wireframeIndexType, 0);
     } else if (this.isIndexed) {

@@ -2,7 +2,7 @@ import fragGLSL from "./shaders/Wireframe.frag.glsl?raw";
 import fragGLSL100 from "./shaders/Wireframe.frag.glsl100?raw";
 import fragWGSL from "./shaders/Wireframe.frag.wgsl?raw";
 import { AbstractMaterial } from "./AbstractMaterial.js";
-import { MaterialType, CullMode, Topology } from "../../enums/index.js";
+import { MaterialType, CullMode, Topology, WireframeMode } from "../../enums/index.js";
 import { Color } from "../colors/index.js";
 import {
   RenderManifest,
@@ -18,7 +18,7 @@ export interface WireframeMaterialOptions {
   /** The wireframe line color. Defaults to white. */
   color?: Color;
   /** Wireframe rendering mode ("structural" or "triangles"). Defaults to "structural". */
-  wireframeMode?: "structural" | "triangles";
+  wireframeMode?: WireframeMode;
 }
 
 /**
@@ -34,7 +34,7 @@ export class WireframeMaterial extends AbstractMaterial {
     },
   };
 
-  public wireframeMode: "structural" | "triangles" = "structural";
+  public wireframeMode: WireframeMode = WireframeMode.DEFAULT;
 
   /**
    * @param optionsOrColor Line colour, or an options object (`color`, `wireframeMode`). Defaults to white.
@@ -42,7 +42,7 @@ export class WireframeMaterial extends AbstractMaterial {
    */
   constructor(
     optionsOrColor: WireframeMaterialOptions | Color = new Color(1, 1, 1, 1),
-    wireframeMode: "structural" | "triangles" = "structural",
+    wireframeMode: WireframeMode = WireframeMode.DEFAULT,
   ) {
     super(MaterialType.WIREFRAME);
     if (null === optionsOrColor || "object" !== typeof optionsOrColor) {
@@ -54,7 +54,7 @@ export class WireframeMaterial extends AbstractMaterial {
       optionsOrColor instanceof Color ? { color: optionsOrColor, wireframeMode } : optionsOrColor;
     const color = options.color ?? new Color(1, 1, 1, 1);
     this.color = Object.isFrozen(color) ? color.clone() : color;
-    this.wireframeMode = options.wireframeMode ?? "structural";
+    this.wireframeMode = options.wireframeMode ?? WireframeMode.DEFAULT;
   }
 
   /** @inheritdoc */

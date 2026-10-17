@@ -1,5 +1,5 @@
 import { Texture, CubeTexture } from "../../core/textures/index.js";
-import { BlendingMode, CullMode, Topology } from "../../enums/index.js";
+import { BlendingMode, CullMode, Topology, WireframeMode } from "../../enums/index.js";
 /**
  * Manifest flag for materials that read per-vertex colors (`a_color`, RGBA, white when the mesh
  * has none). The renderers bind the color stream only for programs/pipelines compiled with it.
@@ -73,7 +73,7 @@ export interface RenderManifest {
     /** The primitive topology (e.g., TRIANGLE_LIST or LINE_LIST). Defaults to TRIANGLE_LIST. */
     topology?: Topology;
     /** The wireframe mode. Defaults to "structural". */
-    wireframeMode?: "structural" | "triangles";
+    wireframeMode?: WireframeMode;
     /**
      * Opt-out of the GPU depth pre-pass (see DepthPrePassGPU). Materials whose custom shading the
      * shared depth pipeline cannot faithfully reproduce (custom shaders with world-space vertex

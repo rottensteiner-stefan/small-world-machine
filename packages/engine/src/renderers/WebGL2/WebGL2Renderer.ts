@@ -42,6 +42,7 @@ import {
   RendererType,
   Topology,
   PostProcessingEffectType,
+  WireframeMode,
 } from "../../enums/index.js";
 import {
   Vector3D,
@@ -1117,7 +1118,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     topology: Topology = Topology.DEFAULT,
     lights?: LightDataInterface,
     scene?: Scene,
-    wireframeMode?: "structural" | "triangles",
+    wireframeMode?: WireframeMode,
   ): void {
     // --- 3. Build & Bind Shader ---
     const isInst =

@@ -1,4 +1,5 @@
 import { Noise } from "./Noise.js";
+import { mulberry32 } from "./SeededRandom.js";
 
 /**
  * Utility class for heightmap generation using various algorithms.
@@ -52,9 +53,7 @@ export class HeightmapGenerator {
     const max: number = size - 1;
     const map: Float32Array = new Float32Array(size * size);
 
-    const rng: () => number = seed
-      ? this._mulberry32(this._cyrb128(seed))
-      : (): number => Math.random();
+    const rng: () => number = seed ? mulberry32(this._cyrb128(seed)) : (): number => Math.random();
 
     const set = (x: number, y: number, val: number): void => {
       map[y * size + x] = val;
@@ -240,14 +239,5 @@ export class HeightmapGenerator {
       h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
     }
     return h1 >>> 0;
-  }
-
-  private static _mulberry32(a: number): () => number {
-    return function (): number {
-      let t: number = (a += 0x6d2b79f5);
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
   }
 }

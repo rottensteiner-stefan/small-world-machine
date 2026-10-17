@@ -1,4 +1,5 @@
 import { Texture } from "../textures/index.js";
+import { GradientDirection, TextAlign } from "../../enums/index.js";
 
 /**
  * Outline (stroke) styling for text drawn by a TextTexture.
@@ -32,8 +33,8 @@ export interface TextGradientOptions {
   from: string;
   /** Gradient end color as a CSS color string. */
   to: string;
-  /** Gradient direction. Defaults to "horizontal". */
-  direction?: "horizontal" | "vertical";
+  /** Gradient direction. Defaults to `GradientDirection.DEFAULT` (horizontal). */
+  direction?: GradientDirection;
 }
 
 /**
@@ -64,8 +65,8 @@ export interface TextTextureOptions {
   color?: string;
   /** Background fill as a CSS color string, or "transparent". Defaults to "transparent". */
   background?: string;
-  /** Horizontal text alignment. Defaults to "center". */
-  align?: "left" | "center" | "right";
+  /** Horizontal text alignment. Defaults to `TextAlign.DEFAULT` (center). */
+  align?: TextAlign;
   /** Padding around the text in pixels. Defaults to 24. */
   padding?: number;
   /** Maximum line width in pixels before wrapping. Unset means no wrapping. */
@@ -212,7 +213,7 @@ export class TextTexture {
     const padding = o.padding ?? 24;
     const fontSize = o.fontSize ?? 48;
     const lineHeightPx = fontSize * (o.lineHeight ?? 1.2);
-    const align = o.align ?? "center";
+    const align = o.align ?? TextAlign.DEFAULT;
 
     const ctx = this._ctx;
     ctx.font = this._buildFontString();
@@ -262,7 +263,7 @@ export class TextTexture {
     if (o.gradient) {
       const g = o.gradient;
       const grad =
-        "vertical" === g.direction
+        GradientDirection.VERTICAL === g.direction
           ? ctx.createLinearGradient(0, padding, 0, this._cssHeight - padding)
           : ctx.createLinearGradient(padding, 0, this._cssWidth - padding, 0);
       grad.addColorStop(0, g.from);
@@ -273,9 +274,9 @@ export class TextTexture {
     }
 
     const x =
-      "left" === align
+      TextAlign.LEFT === align
         ? padding
-        : "right" === align
+        : TextAlign.RIGHT === align
           ? this._cssWidth - padding
           : this._cssWidth / 2;
 

@@ -3,7 +3,7 @@ import { InspectorField } from "../Inspectable.js";
 import { Object3D } from "../Object3D.js";
 import { InputInterface } from "../input/Input.js";
 import { StageZone } from "../stage/StageZone.js";
-import { Keys } from "../../enums/index.js";
+import { Keys, StageFacing } from "../../enums/index.js";
 
 /** A world-space position for a given (u, v) stage coordinate -- see `StageProjection`. */
 export interface StageWorldPlacement {
@@ -69,7 +69,7 @@ export interface StageMovementBehaviorOptions {
    * observing which one actually shows the character's front. Defaults to 0 (no correction
    * needed) for a rig that IS authored facing -Z. */
   facingOffset?: number;
-  startFacing?: "left" | "right" | "front" | "back";
+  startFacing?: StageFacing;
   /**
    * Extra radians added only to the INITIAL facing angle (on top of `startFacing`/`facingOffset`),
    * never to angles computed from movement. Purely cosmetic: a `startFacing` that lands the
@@ -158,7 +158,7 @@ export class StageMovementBehavior extends Behavior {
   private _input: InputInterface;
   private _u: number;
   private _v: number;
-  private _startFacing: "left" | "right" | "front" | "back";
+  private _startFacing: StageFacing;
   private _startFacingNudge: number;
   private _state: "IDLE" | "WALK" | "RUN" = "IDLE";
   private _targetAngle: number = 0;
@@ -181,7 +181,7 @@ export class StageMovementBehavior extends Behavior {
     this.customUvToWorld = options.customUvToWorld;
     this._u = options.startUV?.u ?? 0.5;
     this._v = options.startUV?.v ?? 0.5;
-    this._startFacing = options.startFacing ?? "front";
+    this._startFacing = options.startFacing ?? StageFacing.DEFAULT;
     this._startFacingNudge = options.startFacingNudge ?? 0;
     this.onStateChange = options.onStateChange;
     this.onZoneChange = options.onZoneChange;
@@ -207,11 +207,11 @@ export class StageMovementBehavior extends Behavior {
       this._initialized = true;
       this.activeZone = this._findZone(this._u, this._v) ?? this.zones[0];
       this._applyPlacement(obj);
-      if (this._startFacing === "left") {
+      if (this._startFacing === StageFacing.LEFT) {
         this._targetAngle = this.facingOffset + Math.PI / 2;
-      } else if (this._startFacing === "right") {
+      } else if (this._startFacing === StageFacing.RIGHT) {
         this._targetAngle = this.facingOffset - Math.PI / 2;
-      } else if (this._startFacing === "back") {
+      } else if (this._startFacing === StageFacing.BACK) {
         this._targetAngle = this.facingOffset;
       } else {
         this._targetAngle = Math.PI + this.facingOffset;
