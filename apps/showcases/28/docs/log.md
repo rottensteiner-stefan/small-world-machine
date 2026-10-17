@@ -227,3 +227,22 @@ broken, all historical entries above preserved.
 - `showcase.ts` is now 1417 lines. The biggest remaining block is `setupScene()` (~800 lines of scene construction), which assigns many showcase fields and was left as is on purpose.
 
 Verified: typecheck, lint, 1927 unit tests, `check-showcases 28` on WebGL1/WebGL2/WebGPU; browser comparison of the WebGPU frame against the pre-split frame (identical), Inspector open/close, hierarchy selection and highlight.
+
+---
+
+## 2026-10-17 – `setupScene()` split into scene building blocks (pure refactor)
+
+`setupScene()` (~800 lines, assigning dozens of showcase fields) now only orchestrates; each block is a builder function that takes the `Scene` (plus the few values it needs) and **returns** the meshes/lights the showcase drives per frame:
+
+| Builder (file) | Builds | Returns |
+|---|---|---|
+| `configurePostProcessing` (`postProcessing.ts`) | bloom/vignette/grain/tone map grade | -- |
+| `buildEnvironment` (`buildEnvironment.ts`) | ambient + overhead light, skybox, IBL, steel/brass PBR textures | `LabSurfaceTextures` |
+| `buildBench`, `buildLaserEmitter` (`buildBench.ts`) | bench, rotary stage, brass ring, glass prism, key glint spot; laser pillar/housing/lens | `LabBench` |
+| `buildBeamSplitter`, `buildBeams` (`buildBeamSplitter.ts`) | rail, carriage, reference detector; the three beam meshes + laser SpotLight | `LabBeamSplitter`, `LabBeams` |
+| `buildDetector` (`buildDetector.ts`) | resting exit fan, absorber panel, graticule, bezel, receiving-face plane | `LabDetector` |
+| `buildSpectrum` (`buildSpectrum.ts`) | per-band ray meshes, internal path, detector band, bench caustic, bounce light | `LabSpectrum` |
+
+The camera/orbit block became `Showcase28._setupCamera()`. Object creation and `scene.add` order are unchanged (the inspector hierarchy lists the same order). `showcase.ts` is now 661 lines (was 2421 before the two splits today).
+
+Verified: typecheck, lint, 1927 unit tests, `check-showcases 28` on WebGL1/WebGL2/WebGPU, WebGPU frame identical to the pre-split frame, same inspector hierarchy order.
