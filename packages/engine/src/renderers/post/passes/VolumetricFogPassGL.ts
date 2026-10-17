@@ -49,6 +49,12 @@ export class VolumetricFogPassGL {
   private _uFogColorLoc: WebGLUniformLocation | null = null;
   private _uAmbientLightLoc: WebGLUniformLocation | null = null;
   private _uAmbientInjectLoc: WebGLUniformLocation | null = null;
+  private _uFogHeightLoc: WebGLUniformLocation | null = null;
+  private _uFogHeightFalloffLoc: WebGLUniformLocation | null = null;
+  private _uIrradianceMapLoc: WebGLUniformLocation | null = null;
+  private _uEnvIntensityLoc: WebGLUniformLocation | null = null;
+  /** 1x1 black cube bound when the scene has no irradiance map (an unbound cube sampler is invalid). */
+  private _blackCube: WebGLTexture | null = null;
   private _uIntensityLoc: WebGLUniformLocation | null = null;
   private _uDensityLoc: WebGLUniformLocation | null = null;
   private _uAsymmetryLoc: WebGLUniformLocation | null = null;
@@ -152,6 +158,10 @@ export class VolumetricFogPassGL {
       this._uFogColorLoc = gl.getUniformLocation(this._progFog, "u_fogColor");
       this._uAmbientLightLoc = gl.getUniformLocation(this._progFog, "u_ambientLight");
       this._uAmbientInjectLoc = gl.getUniformLocation(this._progFog, "u_ambientInject");
+      this._uFogHeightLoc = gl.getUniformLocation(this._progFog, "u_fogHeight");
+      this._uFogHeightFalloffLoc = gl.getUniformLocation(this._progFog, "u_fogHeightFalloff");
+      this._uIrradianceMapLoc = gl.getUniformLocation(this._progFog, "u_irradianceMap");
+      this._uEnvIntensityLoc = gl.getUniformLocation(this._progFog, "u_envIntensity");
       this._uIntensityLoc = gl.getUniformLocation(this._progFog, "u_intensity");
       this._uDensityLoc = gl.getUniformLocation(this._progFog, "u_density");
       this._uAsymmetryLoc = gl.getUniformLocation(this._progFog, "u_asymmetry");
@@ -240,6 +250,8 @@ export class VolumetricFogPassGL {
     time: number = 0,
     ambientColor: Color = NO_AMBIENT,
     ambientIntensity: number = 0,
+    irradianceMap: WebGLTexture | null = null,
+    envIntensity: number = 0,
   ): WebGLTexture | null {
     if (!this._isWebGL2 || !element.enabled || width <= 0 || height <= 0) {
       return null;
@@ -274,6 +286,12 @@ export class VolumetricFogPassGL {
       gl2.bindTexture(gl2.TEXTURE_2D, dirShadowTexture);
     }
     if (this._uDirShadowMapLoc) gl2.uniform1i(this._uDirShadowMapLoc, 1);
+
+    // IBL irradiance cube -> Unit 2
+    gl2.activeTexture(gl2.TEXTURE2);
+    gl2.bindTexture(gl2.TEXTURE_CUBE_MAP, irradianceMap ?? this._getBlackCube(gl2));
+    if (this._uIrradianceMapLoc) gl2.uniform1i(this._uIrradianceMapLoc, 2);
+    if (this._uEnvIntensityLoc) gl2.uniform1f(this._uEnvIntensityLoc, envIntensity);
 
     // Inverse View Projection Matrix
     this._scratchInvViewProj.data.set(viewProjMatrix);
@@ -336,6 +354,10 @@ export class VolumetricFogPassGL {
 
     if (this._uIntensityLoc) gl2.uniform1f(this._uIntensityLoc, element.intensity);
     if (this._uDensityLoc) gl2.uniform1f(this._uDensityLoc, element.density);
+    if (this._uFogHeightLoc) gl2.uniform1f(this._uFogHeightLoc, element.height);
+    if (this._uFogHeightFalloffLoc) {
+      gl2.uniform1f(this._uFogHeightFalloffLoc, element.heightFalloff);
+    }
     if (this._uAsymmetryLoc) gl2.uniform1f(this._uAsymmetryLoc, element.asymmetry);
     if (this._uMaxDistLoc) {
       gl2.uniform1f(this._uMaxDistLoc, Math.min(element.maxDistance, far));
@@ -441,10 +463,38 @@ export class VolumetricFogPassGL {
     return this._fullFogFbo!.texture;
   }
 
+  private _getBlackCube(gl2: WebGL2RenderingContext): WebGLTexture {
+    if (!this._blackCube) {
+      const tex = gl2.createTexture();
+      gl2.bindTexture(gl2.TEXTURE_CUBE_MAP, tex);
+      for (let face = 0; face < 6; face++) {
+        gl2.texImage2D(
+          gl2.TEXTURE_CUBE_MAP_POSITIVE_X + face,
+          0,
+          gl2.RGBA8,
+          1,
+          1,
+          0,
+          gl2.RGBA,
+          gl2.UNSIGNED_BYTE,
+          new Uint8Array([0, 0, 0, 255]),
+        );
+      }
+      gl2.texParameteri(gl2.TEXTURE_CUBE_MAP, gl2.TEXTURE_MIN_FILTER, gl2.NEAREST);
+      gl2.texParameteri(gl2.TEXTURE_CUBE_MAP, gl2.TEXTURE_MAG_FILTER, gl2.NEAREST);
+      this._blackCube = tex;
+    }
+    return this._blackCube!;
+  }
+
   public destroy(): void {
     if (!this._isWebGL2) return;
     const gl = this._gl;
     const gl2 = gl as WebGL2RenderingContext;
+    if (this._blackCube) {
+      gl2.deleteTexture(this._blackCube);
+      this._blackCube = null;
+    }
     this._halfColorFbo?.destroy();
     this._fullFogFbo?.destroy();
     if (this._vaoFog) gl2.deleteVertexArray(this._vaoFog);

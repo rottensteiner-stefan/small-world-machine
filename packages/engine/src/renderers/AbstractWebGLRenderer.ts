@@ -52,6 +52,8 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   protected _frameProjMatrix: Float32Array | undefined = undefined;
   protected _frameCamPos: Vector3D = Vector3D.ZERO;
   protected _frameLights?: LightDataInterface;
+  /** The scene of the current frame, for post passes that need scene-level data (e.g. IBL). */
+  protected _frameScene?: Scene;
   /** Inverse of this frame's view-projection: decals unproject opaque depth with it. */
   protected readonly _frameInvViewProj: Matrix4 = new Matrix4();
   protected readonly _frameViewProj: Matrix4 = new Matrix4();
@@ -80,6 +82,7 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     Matrix4.invert(this._frameViewProj, this._frameInvViewProj);
     const extractedLights = this.extractLights(scene);
     this._frameLights = extractedLights;
+    this._frameScene = scene;
     this.extractFogVolumes(scene);
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
     if (renderList.decals.length > 0 && !this.isOffscreenRenderTarget) this.requestNormalBuffer();

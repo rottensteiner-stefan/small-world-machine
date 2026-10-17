@@ -793,6 +793,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             this.frameInfo.time,
             this._frameLights?.aCol,
             this._frameLights?.aIntensity,
+            this._frameScene?.irradianceMap
+              ? this._textures.getWebGLCubeTexture(this._frameScene.irradianceMap, this._quality)
+              : this._blackCubeTexture,
+            this._frameScene?.environmentIntensity ?? 0,
           );
         }
       }

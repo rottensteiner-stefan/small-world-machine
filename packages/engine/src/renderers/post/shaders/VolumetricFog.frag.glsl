@@ -15,6 +15,10 @@ uniform vec3 u_sunColor;
 uniform vec3 u_fogColor;
 uniform vec3 u_ambientLight; // scene ambient colour * intensity
 uniform float u_ambientInject;
+uniform float u_fogHeight;        // baseline of the exponential height layer
+uniform float u_fogHeightFalloff; // falloff above the baseline (0 = uniform)
+uniform samplerCube u_irradianceMap; // IBL diffuse irradiance (black cube when the scene has none)
+uniform float u_envIntensity;
 uniform float u_intensity;
 uniform float u_density;
 uniform float u_asymmetry;
@@ -149,6 +153,12 @@ void main() {
     float denom = 1.0 - k * cosTheta;
     float phase = (1.0 - k * k) / (12.566370614359172 * max(denom * denom, 0.0001));
 
+    // Ambient inject: scene ambient colour plus the IBL irradiance from above (same as WebGPU).
+    vec3 skyAmbient = u_ambientLight;
+    if (u_ambientInject > 0.0) {
+        skyAmbient += texture(u_irradianceMap, vec3(0.0, 1.0, 0.0)).rgb * u_envIntensity;
+    }
+
     float jitter = getIGN(gl_FragCoord.xy);
     vec3 accumulatedLight = vec3(0.0);
     float transmittance = 1.0;
@@ -161,7 +171,8 @@ void main() {
         vec3 samplePos = u_camPos + rayDir * t;
         float shadow = sampleShadow(samplePos);
 
-        float localDensity = u_density;
+        float localDensity =
+            u_density * exp(-u_fogHeightFalloff * max(samplePos.y - u_fogHeight, 0.0));
         vec3 localEmission = vec3(0.0);
         vec3 localAlbedo = u_fogColor;
 
@@ -212,7 +223,7 @@ void main() {
 
         // Sunlight in-scattering + ambient base fog scattering
         vec3 sunScattering = shadow * u_sunColor * phase * powder;
-        vec3 ambientScattering = localAlbedo * u_ambientLight * u_ambientInject + localEmission;
+        vec3 ambientScattering = localAlbedo * skyAmbient * u_ambientInject + localEmission;
         vec3 stepLight = sunScattering + ambientScattering;
 
         accumulatedLight += transmittance * stepLight * (1.0 - stepTransmittance);

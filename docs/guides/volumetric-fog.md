@@ -41,7 +41,7 @@ app.postProcessing.add(fog);
 | `maxDistance` | `80.0` | Max world-space evaluation distance (clamped to the far plane). |
 | `intensity` | `1.0` | Multiplier of the accumulated in-scattering, applied once in the composite pass (transmittance is unaffected). |
 | `scatteringAlbedo` | `1.0` | Single-scattering albedo $\omega = \sigma_s / \sigma_t$ (0..1). Lower values absorb more of the extinction: smoke and dust that darken instead of glow. |
-| `ambientInject` | `0.0` | How strongly scene ambient light (and, on WebGPU, the IBL irradiance from above) scatters in the fog; lifts fog in shadow (like Godot's Ambient Inject). |
+| `ambientInject` | `0.0` | How strongly scene ambient light and the IBL irradiance from above (`Scene.irradianceMap`, both backends) scatter in the fog; lifts fog in shadow (like Godot's Ambient Inject). |
 | `asymmetry` | `0.4` | Henyey-Greenstein asymmetry factor $g \in (-1, 1)$. Positive = forward scattering towards the light. |
 | `castDirectionalShadow` | `true` | Directional (sun/moon) self-shadowing through the existing CSM. |
 | `color` | `Color(1, 1, 1)` | Tint of the scattered light (sun, local lights and ambient), on top of each light's own colour. |
@@ -133,7 +133,7 @@ Both backends clamp participating medium extinction via $\text{extinction} = \ma
    - Reconstructs full-resolution fog using depth-weighted bilateral cross-filtering.
    - Prevents haloing and bleeding across high-frequency geometry silhouettes.
 3. **Composite:**
-   - Attenuates the scene by the transmittance and adds the in-scattering pre-tonemapping through `PostProcess.frag.glsl`. The WebGL2 path is a per-pixel raymarch, so the look is close to, but not identical with, WebGPU (no local-light scattering, no IBL ambient).
+   - Attenuates the scene by the transmittance and adds the in-scattering pre-tonemapping through `PostProcess.frag.glsl`. The WebGL2 path is a per-pixel raymarch, so the look is close to, but not identical with, WebGPU (no local-light scattering).
 
 ---
 
