@@ -455,6 +455,7 @@ class Showcase39 extends AbstractShowcase {
       color: new Color(0.15, 0.95, 0.75),
       intensity: 1.8,
       distance: 9.0,
+      volumetricIntensity: 6.0, // makes the altar glow visibly scatter in the fog (WebGPU and WebGL2)
     });
     this._altarLight.position.set(0, 1.8, -4);
     this.scene.add(this._altarLight);
@@ -464,6 +465,7 @@ class Showcase39 extends AbstractShowcase {
       color: new Color(1.0, 0.55, 0.15),
       intensity: 2.2,
       distance: 8.0,
+      volumetricIntensity: 6.0, // makes the brazier glow visibly scatter in the fog (WebGPU and WebGL2)
     });
     this._brazierLight.position.set(-4.5, 2.1, 4.0);
     this.scene.add(this._brazierLight);

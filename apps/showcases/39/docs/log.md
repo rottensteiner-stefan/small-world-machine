@@ -35,3 +35,9 @@ Recalibrate Showcase 39 after the v0.110.0 volumetric shader overhaul to elimina
   - Replaced uncoordinated wall-clock sampling with `renderer.frameInfo.time` and `frameInfo.deltaTime` for smooth, deterministic wind advection in procedural 3D mist noise.
   - Checked on WebGPU (in-register prefix-sum froxels) and WebGL2 (bilateral upsampled raymarch) with `check-showcases 39`; the looks are close but not identical (the WebGL2 path does not scatter local lights). No performance measurement was taken.
 
+
+---
+
+## 2026-10-17 – Local light fog intensity
+
+With the WebGL2 fog now scattering local lights (v0.111.0) the altar and brazier point lights barely showed up in the fog at the default `volumetricIntensity` of 1 (frozen-frame difference vs. off: mean 0.025/255, max 6/255 on WebGL2). Both lights now use `volumetricIntensity: 6`, which makes their glow visibly scatter on WebGL2 and WebGPU without blowing out (checked by eye on both backends at 60 % screenshot size; no numbers taken for the new value). Surface lighting is unchanged, `volumetricIntensity` only scales the fog contribution.
