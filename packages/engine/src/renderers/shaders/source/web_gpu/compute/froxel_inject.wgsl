@@ -12,10 +12,11 @@
 // Bindings:
 //   @group(0): reuses the engine's global bind group (structs.wgsl) -- global uniforms, light
 //              lists and the clustered light grid/index buffers (COMPUTE-visibility).
-//   @group(4): volumetric-fog-owned bindings (invView rotation, parameters, 3D storage texture).
-//              Group 4 (not 1) because the assembled shader prepends structs.wgsl, which already
-//              claims @group(1..3) for material/object/view bindings -- WebGPU pipeline layouts
-//              tolerate sparse entries, so the own bind group sits at the free index 4.
+//   @group(1): volumetric-fog-owned bindings (invView rotation, parameters, 3D storage texture).
+//              Group 1 is free here because the inject compute pipeline is laid out as
+//              [globalBGL, injectBGL] -- structs.wgsl also declares material/object/view bindings
+//              at @group(1..3), but those are never referenced by this compute entry point, and
+//              WebGPU validates only the resources a pipeline actually uses, so no conflict.
 
 struct FogVolumeData {
     invTransform: mat4x4f,
