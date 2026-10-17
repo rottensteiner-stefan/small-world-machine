@@ -1,4 +1,5 @@
 import FULLSCREEN_VERT_GLSL from "../shaders/PostProcess.vert.glsl?raw";
+import { compileProgram } from "../../compileProgram.js";
 import POST_PROCESS_FRAG_GLSL from "../shaders/PostProcess.frag.glsl?raw";
 
 import FULLSCREEN_VERT_GLSL100 from "../shaders/PostProcess100.vert.glsl?raw";
@@ -212,26 +213,7 @@ export class PostProcessPassGL {
     );
     frag = frag.replace("uniform int u_filterMode;", `#define u_filterMode ${group.filterMode}`);
 
-    const v = gl.createShader(gl.VERTEX_SHADER)!;
-    gl.shaderSource(v, vert);
-    gl.compileShader(v);
-    if (!gl.getShaderParameter(v, gl.COMPILE_STATUS)) {
-      console.error("[PostProcessPassGL] Vertex Shader:", gl.getShaderInfoLog(v));
-    }
-
-    const f = gl.createShader(gl.FRAGMENT_SHADER)!;
-    gl.shaderSource(f, frag);
-    gl.compileShader(f);
-    if (!gl.getShaderParameter(f, gl.COMPILE_STATUS)) {
-      console.error("[PostProcessPassGL] Fragment Shader:", gl.getShaderInfoLog(f));
-    }
-
-    const p = gl.createProgram()!;
-    gl.attachShader(p, v);
-    gl.attachShader(p, f);
-    gl.linkProgram(p);
-    gl.deleteShader(v);
-    gl.deleteShader(f);
+    const p = compileProgram(gl, vert, frag, "PostProcessPassGL");
 
     this._prog = p;
     this._uHdrTexture = gl.getUniformLocation(p, "u_hdrTexture");

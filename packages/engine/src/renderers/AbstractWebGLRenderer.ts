@@ -1,4 +1,5 @@
 import { AbstractRenderer } from "./AbstractRenderer.js";
+import { compileProgram } from "./compileProgram.js";
 import type { Color } from "../core/colors/index.js";
 import type { Scene } from "../core/Scene.js";
 import type { Object3D } from "../core/Object3D.js";
@@ -221,40 +222,12 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     this.gl.clearColor(color.r, color.g, color.b, color.a);
   }
 
-  // Compiles and links a shader program
+  // Compiles and links a shader program (throws on a compile or link error)
   protected createShaderProgram(vSrc: string, fSrc: string): WebGLProgram {
     if (!this.gl) {
       throw new Error("[WebGL] Cannot create shader program, context is undefined.");
     }
-    const v: WebGLShader = this.gl.createShader(this.gl.VERTEX_SHADER)!;
-    this.gl.shaderSource(v, vSrc);
-    this.gl.compileShader(v);
-
-    if (!this.gl.getShaderParameter(v, this.gl.COMPILE_STATUS)) {
-      console.error("[WebGL] Vertex Shader Error:", this.gl.getShaderInfoLog(v));
-    }
-
-    const f: WebGLShader = this.gl.createShader(this.gl.FRAGMENT_SHADER)!;
-    this.gl.shaderSource(f, fSrc);
-    this.gl.compileShader(f);
-
-    if (!this.gl.getShaderParameter(f, this.gl.COMPILE_STATUS)) {
-      console.error("[WebGL] Fragment Shader Error:", this.gl.getShaderInfoLog(f));
-    }
-
-    const p: WebGLProgram = this.gl.createProgram()!;
-    this.gl.attachShader(p, v);
-    this.gl.attachShader(p, f);
-    this.gl.linkProgram(p);
-
-    if (!this.gl.getProgramParameter(p, this.gl.LINK_STATUS)) {
-      console.error("[WebGL] Program Link Error:", this.gl.getProgramInfoLog(p));
-    }
-
-    // Free memory
-    this.gl.deleteShader(v);
-    this.gl.deleteShader(f);
-    return p;
+    return compileProgram(this.gl, vSrc, fSrc, "AbstractWebGLRenderer");
   }
 
   // Builds the white/blue fallback textures

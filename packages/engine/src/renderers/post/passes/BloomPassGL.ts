@@ -1,4 +1,5 @@
 import FULLSCREEN_VERT_GLSL from "../shaders/PostProcess.vert.glsl?raw";
+import { tryCompileProgram } from "../../compileProgram.js";
 import FULLSCREEN_VERT_GLSL100 from "../shaders/PostProcess100.vert.glsl?raw";
 
 import BLOOM_DOWNSAMPLE_FRAG_GLSL from "../shaders/BloomDownsample.frag.glsl?raw";
@@ -57,20 +58,6 @@ export class BloomPassGL {
     this._build();
   }
 
-  private _compileShader(type: number, src: string): WebGLShader | null {
-    const gl = this._gl;
-    const shader = gl.createShader(type);
-    if (!shader) return null;
-    gl.shaderSource(shader, src);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      console.error("[BloomPassGL] Shader Compile Error:", gl.getShaderInfoLog(shader));
-      gl.deleteShader(shader);
-      return null;
-    }
-    return shader;
-  }
-
   private _build(): void {
     const gl = this._gl;
 
@@ -81,13 +68,9 @@ export class BloomPassGL {
     const upsampleFrag = this._isWebGL2 ? BLOOM_UPSAMPLE_FRAG_GLSL : BLOOM_UPSAMPLE_FRAG_GLSL100;
 
     // Build Downsample Program
-    const vDown = this._compileShader(gl.VERTEX_SHADER, vert);
-    const fDown = this._compileShader(gl.FRAGMENT_SHADER, downsampleFrag);
-    if (vDown && fDown) {
-      this._downsampleProg = gl.createProgram()!;
-      gl.attachShader(this._downsampleProg, vDown);
-      gl.attachShader(this._downsampleProg, fDown);
-      gl.linkProgram(this._downsampleProg);
+    const downsampleProg = tryCompileProgram(gl, vert, downsampleFrag, "BloomPassGL (downsample)");
+    if (downsampleProg) {
+      this._downsampleProg = downsampleProg;
       this._uDownTexture = gl.getUniformLocation(this._downsampleProg, "u_texture");
       this._uDownParams = gl.getUniformLocation(this._downsampleProg, "u_params");
       this._uDownThreshold = gl.getUniformLocation(this._downsampleProg, "u_thresholdParams");
@@ -97,13 +80,9 @@ export class BloomPassGL {
     }
 
     // Build Upsample Program
-    const vUp = this._compileShader(gl.VERTEX_SHADER, vert);
-    const fUp = this._compileShader(gl.FRAGMENT_SHADER, upsampleFrag);
-    if (vUp && fUp) {
-      this._upsampleProg = gl.createProgram()!;
-      gl.attachShader(this._upsampleProg, vUp);
-      gl.attachShader(this._upsampleProg, fUp);
-      gl.linkProgram(this._upsampleProg);
+    const upsampleProg = tryCompileProgram(gl, vert, upsampleFrag, "BloomPassGL (upsample)");
+    if (upsampleProg) {
+      this._upsampleProg = upsampleProg;
       this._uUpTexture = gl.getUniformLocation(this._upsampleProg, "u_texture");
       this._uUpParams = gl.getUniformLocation(this._upsampleProg, "u_params");
       if (!this._isWebGL2) {

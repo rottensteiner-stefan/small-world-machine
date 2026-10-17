@@ -1,4 +1,5 @@
 import FULLSCREEN_VERT_GLSL from "../shaders/PostProcess.vert.glsl?raw";
+import { tryCompileProgram } from "../../compileProgram.js";
 import FULLSCREEN_VERT_100 from "../shaders/PostProcess100.vert.glsl?raw";
 import SHAFTS_FRAG_GLSL from "../shaders/LightShafts.frag.glsl?raw";
 import BILATERAL_FRAG_GLSL from "../shaders/LightShaftsBilateral.frag.glsl?raw";
@@ -83,50 +84,8 @@ export class LightShaftsPassGL {
     this._build();
   }
 
-  private _compileShader(type: number, src: string): WebGLShader | null {
-    const gl = this._gl;
-    const shader = gl.createShader(type);
-    if (!shader) return null;
-    gl.shaderSource(shader, src);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      console.error("[LightShaftsPassGL] Shader Compile Error:", gl.getShaderInfoLog(shader));
-      gl.deleteShader(shader);
-      return null;
-    }
-    return shader;
-  }
-
   private _createProgram(vertSrc: string, fragSrc: string, name: string): WebGLProgram | null {
-    const gl = this._gl;
-    const vert = this._compileShader(gl.VERTEX_SHADER, vertSrc);
-    if (!vert) return null;
-    const frag = this._compileShader(gl.FRAGMENT_SHADER, fragSrc);
-    if (!frag) {
-      gl.deleteShader(vert);
-      return null;
-    }
-    const prog = gl.createProgram();
-    if (!prog) {
-      gl.deleteShader(vert);
-      gl.deleteShader(frag);
-      return null;
-    }
-    gl.attachShader(prog, vert);
-    gl.attachShader(prog, frag);
-    gl.linkProgram(prog);
-    gl.deleteShader(vert);
-    gl.deleteShader(frag);
-
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      console.error(
-        `[LightShaftsPassGL] Program Link Error (${name}):`,
-        gl.getProgramInfoLog(prog),
-      );
-      gl.deleteProgram(prog);
-      return null;
-    }
-    return prog;
+    return tryCompileProgram(this._gl, vertSrc, fragSrc, `LightShaftsPassGL (${name})`);
   }
 
   private _build(): void {

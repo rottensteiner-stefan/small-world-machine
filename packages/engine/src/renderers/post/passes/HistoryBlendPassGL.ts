@@ -1,4 +1,5 @@
 import FULLSCREEN_VERT_GLSL from "../shaders/PostProcess.vert.glsl?raw";
+import { tryCompileProgram } from "../../compileProgram.js";
 import HISTORY_BLEND_FRAG_GLSL from "../shaders/HistoryBlend.frag.glsl?raw";
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
@@ -33,33 +34,17 @@ export class HistoryBlendPassGL {
     this._build();
   }
 
-  private _compileShader(type: number, src: string): WebGLShader | null {
-    const gl = this._gl;
-    const shader = gl.createShader(type);
-    if (!shader) return null;
-    gl.shaderSource(shader, src);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      console.error("[HistoryBlendPassGL] Shader Compile Error:", gl.getShaderInfoLog(shader));
-      gl.deleteShader(shader);
-      return null;
-    }
-    return shader;
-  }
-
   private _build(): void {
     const gl = this._gl;
 
-    const vert = this._compileShader(gl.VERTEX_SHADER, FULLSCREEN_VERT_GLSL);
-    const frag = this._compileShader(gl.FRAGMENT_SHADER, HISTORY_BLEND_FRAG_GLSL);
-    if (!vert || !frag) return;
-
-    this._prog = gl.createProgram()!;
-    gl.attachShader(this._prog, vert);
-    gl.attachShader(this._prog, frag);
-    gl.linkProgram(this._prog);
-    gl.deleteShader(vert);
-    gl.deleteShader(frag);
+    const prog = tryCompileProgram(
+      gl,
+      FULLSCREEN_VERT_GLSL,
+      HISTORY_BLEND_FRAG_GLSL,
+      "HistoryBlendPassGL",
+    );
+    if (!prog) return;
+    this._prog = prog;
 
     this._uCurrentTexture = gl.getUniformLocation(this._prog, "u_currentTexture");
     this._uHistoryTexture = gl.getUniformLocation(this._prog, "u_historyTexture");

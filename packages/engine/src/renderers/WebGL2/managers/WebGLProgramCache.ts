@@ -1,4 +1,5 @@
 import type { Object3D } from "../../../core/index.js";
+import { compileProgram } from "../../compileProgram.js";
 import type { ShaderRegistry } from "../../shaders/index.js";
 import type { WebGL2UniformBuffer } from "../WebGL2UniformBuffer.js";
 import { VERTEX_COLOR_LOCATION } from "../../Mesh.js";
@@ -136,7 +137,13 @@ export class WebGLProgramCache {
 
       vs = vs.trimStart();
       fs = fs.trimStart();
-      const prog = this._createShaderProgram(vs, fs);
+      const prog = compileProgram(
+        this._gl,
+        vs,
+        fs,
+        "WebGLProgramCache",
+        WebGLProgramCache._FIXED_ATTRIBUTE_LOCATIONS,
+      );
 
       const uniforms = new Map<string, WebGLUniformLocation | undefined>();
       const attributes = new Map<string, number>();
@@ -249,43 +256,6 @@ export class WebGLProgramCache {
       this._gl.deleteProgram(cache.prog);
       this._programs.delete(key);
     }
-  }
-
-  // Compiles and links a shader program -- same logic as `AbstractWebGLRenderer.createShaderProgram()`,
-  // duplicated here (rather than depending on the renderer's inheritance chain) since this class
-  // has no other reason to reference the renderer at all.
-  private _createShaderProgram(vSrc: string, fSrc: string): WebGLProgram {
-    const v: WebGLShader = this._gl.createShader(this._gl.VERTEX_SHADER)!;
-    this._gl.shaderSource(v, vSrc);
-    this._gl.compileShader(v);
-
-    if (!this._gl.getShaderParameter(v, this._gl.COMPILE_STATUS)) {
-      console.error("[WebGL] Vertex Shader Error:", this._gl.getShaderInfoLog(v));
-    }
-
-    const f: WebGLShader = this._gl.createShader(this._gl.FRAGMENT_SHADER)!;
-    this._gl.shaderSource(f, fSrc);
-    this._gl.compileShader(f);
-
-    if (!this._gl.getShaderParameter(f, this._gl.COMPILE_STATUS)) {
-      console.error("[WebGL] Fragment Shader Error:", this._gl.getShaderInfoLog(f));
-    }
-
-    const p: WebGLProgram = this._gl.createProgram()!;
-    this._gl.attachShader(p, v);
-    this._gl.attachShader(p, f);
-    for (const [location, name] of WebGLProgramCache._FIXED_ATTRIBUTE_LOCATIONS) {
-      this._gl.bindAttribLocation(p, location, name);
-    }
-    this._gl.linkProgram(p);
-
-    if (!this._gl.getProgramParameter(p, this._gl.LINK_STATUS)) {
-      console.error("[WebGL] Program Link Error:", this._gl.getProgramInfoLog(p));
-    }
-
-    this._gl.deleteShader(v);
-    this._gl.deleteShader(f);
-    return p;
   }
 
   public dispose(): void {

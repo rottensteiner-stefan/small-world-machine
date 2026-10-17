@@ -1,33 +1,19 @@
-import { Matrix4, Vector3D, PerspectiveProjection, MathUtils } from "@small-world-machine/engine";
+import {
+  Matrix4,
+  Vector3D,
+  PerspectiveProjection,
+  MathUtils,
+  compileProgram,
+} from "@small-world-machine/engine";
 import { IBLShaders } from "./IBLShaders.js";
 import { IBL_GEN_DEFAULTS, type IblGenDefaults } from "./ibl-gen-core.js";
-
-// Utility for WebGL2
-function compileShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
-  const shader = gl.createShader(type)!;
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    throw new Error("Shader compile error: " + gl.getShaderInfoLog(shader));
-  }
-  return shader;
-}
 
 function createProgram(
   gl: WebGL2RenderingContext,
   vsSource: string,
   fsSource: string,
 ): WebGLProgram {
-  const vs = compileShader(gl, gl.VERTEX_SHADER, vsSource);
-  const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
-  const prog = gl.createProgram()!;
-  gl.attachShader(prog, vs);
-  gl.attachShader(prog, fs);
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-    throw new Error("Program link error: " + gl.getProgramInfoLog(prog));
-  }
-  return prog;
+  return compileProgram(gl, vsSource, fsSource, "ibl-gen");
 }
 
 // 3D Cube geometry for sampling (rendering the inside of a cube to cover view)

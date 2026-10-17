@@ -2,6 +2,7 @@ export { AbstractRenderer } from "./AbstractRenderer.js";
 export { AbstractWebGLRenderer } from "./AbstractWebGLRenderer.js";
 export type { WebGLRenderPass } from "./WebGLRenderPass.js";
 export * from "./Mesh.js";
+export * from "./compileProgram.js";
 export * from "./RendererFactory.js";
 export * from "./WebGL1/WebGL1Renderer.js";
 export * from "./WebGL2/WebGL2Renderer.js";
