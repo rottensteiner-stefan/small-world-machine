@@ -1,15 +1,23 @@
 # Changelog
 
-## [Unreleased]
+## [0.109.0] - 2026-10-17
 
-### "The fog comes on little cat feet." - Carl Sandburg
+### "The clearest way into the Universe is through a forest wilderness." - John Muir
 
 - **Features:**
-  - *Volumetric Froxel Fog (Stufe 3, WebGPU V1)* (`VolumetricFogElement`, `froxel.ts` grid formula; ADR 0031): true 3D volumetric in-scattering against point/spot/directional lights, building on the Step 1 analytic fog and Step 2 Light Shafts (ADR 0030). The frustum-aligned froxel grid **is** the clustered light grid (Option R, ADR 0007) — per-cell light lists are shared, so the volume and the light culling can never disagree; the directional contribution is CSM self-shadowed through the existing Stufe-2 cascaded shadow map (zero extra shadow passes). A compute injection pass writes the density/in-scattering volume, a ray-march integration pass walks camera rays to the opaque surface (IGN jitter against banding), and the integrated scattering composites additively into HDR before tone mapping via the dedicated post-processing composite. Off by default (opt-in); WebGL2 tier (CPU culling + data texture on the same formula) is a documented follow-up (P2), WebGL1 stays on analytic fog.
+  - *Volumetric Froxel Fog (Stufe 3, WebGPU & WebGL2 parity)* (`VolumetricFogElement`, `VolumetricFogPassGPU`, `VolumetricFogPassGL`, `froxel.ts`; ADR 0031): true 3D volumetric in-scattering against point, spot, and directional lights. On WebGPU, executes an in-register prefix-sum Z-integration compute shader (`froxel_integrate.wgsl`) evaluating Beer-Lambert extinction ($\tau = \sigma_t \cdot \Delta z$) and Decima powder effect ($1 - e^{-2\tau}$) with single-tap 3D trilinear reconstruction (`VolumetricFog.frag.wgsl`). On WebGL2, delivers parity via half-resolution raymarching through participating media with Interleaved Gradient Noise (IGN) jitter and a 2×2 depth-aware cross-bilateral filter (`VolumetricFogBilateral.frag.glsl`) to eliminate edge-bleeding against geometry silhouettes.
+  - *3D Temporal Reprojection & Sub-Voxel Jitter* (`froxel_reproject.wgsl`): temporal accumulation across camera movement with sub-voxel Halton jitter synchronized via 16-byte aligned uniform buffers. Uses 3D-AABB 7-tap variance clamping with 5% hysteresis ($\alpha = 0.95$ stable, $\alpha = 0.0$ on scene cut/disocclusion) to suppress ghosting and eradicate raymarching slice slicing.
+  - *Dynamic Fog Volumes & Interior Carving* (`FogVolume`, `FogVolumeShape`, `fog_volume.wgsl`): local participating media volumes supporting Box, Sphere, and Cylinder analytical signed distance fields with edge feathering and negative density interior carving ($\text{extinction} = \max(0, \text{extinction} + \text{volDensity})$), enabling clear subterranean chambers, crypts, and hollow spaces inside dense global fog banks.
+  - *3D Procedural Value Noise & Rolling Mist* (`noise3d.wgsl`, `noise3d.glsl`): analytical 3D value noise and 2-octave fBm with temporal wind advection (`windSpeed`, `windDirection`, `noiseScale`, `noiseStrength`) for rolling ground fog and dynamic atmospheric turbulence with zero runtime allocations.
+  - *Showcase 39 – Atmospheric Sanctum:* an interactive cathedral showcase in `apps/showcases/39/` demonstrating warm candlelit point lights, a cool moonlight spot light with anisotropic Mie scattering ($g = 0.4$), dynamic hollowed-out crypts via negative `FogVolume` nodes, and live Tweakpane controls for density, scattering, height falloff, and wind turbulence across WebGPU, WebGL2, and WebGL1.
 - **Architecture & Bugfixes:**
-  - *`PostProcessingEffectType.VOLUMETRIC_FOG`* added and `VolumetricFogElement` registered in the post-processing group surface.
+  - *WebGPU 3D Storage Texture Dimension Compliance:* explicitly specified `dimension: "3d"` on both `device.createTexture` and `texture.createView` in `VolumetricFogPassGPU.ts`, resolving WebGPU validation failures where descriptors defaulted to 2D texture arrays (`TextureViewDimension::e2DArray`).
+  - *WebGPU Max Bind Groups Limit Compliance:* stripped `@group(1..3)` material bindings from compute pipelines in `WebGPURenderer.ts` to strictly adhere to the WebGPU specification limit (`maxBindGroups = 4`), routing compute resources cleanly through `@group(0)` and `@group(1)`.
+  - *NDC Clip-Z Depth Reconstruction:* corrected the perspective unprojection formula in `froxel_reproject.wgsl` ensuring accurate world-position history reprojection regardless of projection matrix configuration.
+  - *Showcase Test Harness & Startup Integration:* added explicit `app.start()` startup lifecycle call and registered Showcase 39 in `VALID_SHOWCASE_IDS` (`AbstractShowcase.ts`), `scripts/check-showcases.js`, and `vite.config.ts`, achieving 100% green parity across WebGL1, WebGL2, and WebGPU backends.
 - **Housekeeping & Docs:**
-  - *ADR 0031 & Volumetric Fog guide:* documented the Stage-3 decision (Option R grid reuse, WebGPU-only V1, CSM shadowing in V1, dedicated-composite instead of forward-pass lookup) in ADR 0031 and added the practical `volumetric-fog` guide; marked Stufe 3 in the Fog & Volumetric Lighting Roadmap (backlog.md) as in implementation.
+  - *ADR 0031 & Living Guides:* promoted ADR 0031 to Accepted & Implemented; published the comprehensive `docs/guides/volumetric-fog.md` living guide detailing the hybrid pipeline, mathematical derivations (Henyey-Greenstein phase function, exponential distribution, Beer-Lambert integration), and WebGL2 bilateral fallback; updated `CONTEXT.md` glossary (`Cluster`, `FogVolume`, `Froxel`) and marked Stufe 3 completed in `backlog.md`.
+
 
 ## [0.108.0] - 2026-10-16
 

@@ -72,6 +72,9 @@ export class PostProcessPass implements RenderPass {
     const shafts = group.get<import("../post/index.js").LightShaftsElement>(
       PostProcessingEffectType.LIGHT_SHAFTS,
     );
+    const volFog = group.get<import("../post/index.js").VolumetricFogElement>(
+      PostProcessingEffectType.VOLUMETRIC_FOG,
+    );
     const outline = group.get<import("../post/index.js").OutlineElement>(
       PostProcessingEffectType.OUTLINE,
     );
@@ -97,6 +100,7 @@ export class PostProcessPass implements RenderPass {
       quant && quant.enabled ? 1 : 0,
       hbao && hbao.enabled ? 1 : 0,
       shafts && shafts.enabled ? 1 : 0,
+      volFog && volFog.enabled ? 1 : 0,
       outline && outline.enabled ? 1 : 0,
       flash && flash.enabled ? 1 : 0,
     ].join("|");
