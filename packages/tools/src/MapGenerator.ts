@@ -2,6 +2,7 @@ import type { ForgeToolOptions } from "@small-world-machine/engine";
 import { ForgeTool } from "@small-world-machine/engine";
 import { UniversalIngestDropzone } from "./common/io/ui/UniversalIngestDropzone.js";
 import type { IngestResult } from "./common/io/UniversalIngestTypes.js";
+import { quantizeImageToGrid, stringToMap } from "./core/map.js";
 
 export class MapGenerator extends ForgeTool {
   private _gridWidth = 40;
@@ -469,28 +470,15 @@ export class MapGenerator extends ForgeTool {
   }
 
   public loadMapString(mapStr: string): void {
-    if (!mapStr.trim()) return;
-    const normalized =
-      mapStr.includes("\\n") && !mapStr.includes("\n") ? mapStr.replace(/\\n/g, "\n") : mapStr;
-    const lines = normalized
-      .trim()
-      .split(/\r?\n/)
-      .map((l) => l.trim());
-    if (lines.length > 0) {
-      this._gridHeight = lines.length;
-      this._gridWidth = lines[0]!.length;
-      this._inputW.value = this._gridWidth.toString();
-      this._inputH.value = this._gridHeight.toString();
+    const grid = stringToMap(mapStr);
+    if (grid.length === 0) return;
+    this._gridHeight = grid.length;
+    this._gridWidth = grid[0]!.length;
+    this._inputW.value = this._gridWidth.toString();
+    this._inputH.value = this._gridHeight.toString();
 
-      this._grid = [];
-      for (let y = 0; y < this._gridHeight; y++) {
-        const row = lines[y]!.split("");
-        // Pad if needed
-        while (row.length < this._gridWidth) row.push(".");
-        this._grid.push(row);
-      }
-      this._render();
-    }
+    this._grid = grid;
+    this._render();
   }
 
   public getState(): unknown {
@@ -612,67 +600,20 @@ export class MapGenerator extends ForgeTool {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // (b of Finding F1): browser-side drawImage stays for SCALING only; the RGBA result
+    // feeds the pure quantize loop in `core/map.ts` (loaded image does not become a grid here).
     ctx.drawImage(img, 0, 0, targetW, targetH);
     const imgData = ctx.getImageData(0, 0, targetW, targetH);
-    const data = imgData.data;
 
     this._gridWidth = targetW;
     this._gridHeight = targetH;
     this._inputW.value = targetW.toString();
     this._inputH.value = targetH.toString();
-    this._grid = [];
 
-    const paletteRgb: Array<{ char: string; r: number; g: number; b: number }> = [];
-    for (const [char, meta] of Object.entries(this._palette)) {
-      if (char === ".") continue;
-      const hex = meta.color.replace("#", "");
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      if (hex.length === 6) {
-        r = parseInt(hex.substring(0, 2), 16);
-        g = parseInt(hex.substring(2, 4), 16);
-        b = parseInt(hex.substring(4, 6), 16);
-      }
-      paletteRgb.push({ char, r, g, b });
-    }
-
-    for (let y = 0; y < targetH; y++) {
-      const row: string[] = [];
-      for (let x = 0; x < targetW; x++) {
-        const idx = (y * targetW + x) * 4;
-        const r = data[idx] ?? 0;
-        const g = data[idx + 1] ?? 0;
-        const b = data[idx + 2] ?? 0;
-        const a = data[idx + 3] ?? 0;
-
-        if (a < 64) {
-          row.push(".");
-          continue;
-        }
-
-        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-        let bestChar = lum < 120 ? "W" : ".";
-        let bestDist = Infinity;
-        for (const p of paletteRgb) {
-          const dr = r - p.r;
-          const dg = g - p.g;
-          const db = b - p.b;
-          const dist = dr * dr + dg * dg + db * db;
-          if (dist < bestDist) {
-            bestDist = dist;
-            bestChar = p.char;
-          }
-        }
-
-        if (lum > 200 && bestDist > 2000) {
-          row.push(".");
-        } else {
-          row.push(bestChar);
-        }
-      }
-      this._grid.push(row);
-    }
+    this._grid = quantizeImageToGrid(
+      { width: targetW, height: targetH, data: imgData.data },
+      this._palette,
+    );
 
     this._render();
   }

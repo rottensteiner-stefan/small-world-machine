@@ -15,6 +15,17 @@ import {
   blobToDataUrl,
 } from "./common/io/ingestResultHelpers.js";
 
+// Backward-compatible surface: the pure RGBA pixel ops now live headless in
+// `core/pixler.ts`; re-exported here so existing Pixler module consumers keep working.
+export {
+  computeTrimBounds,
+  flipRgba,
+  floodFill,
+  mirrorRgba,
+  panRgba,
+  trimRgba,
+} from "./core/pixler.js";
+
 export const PIXLER_PALETTES = {
   DEFAULT: [
     "#000000",

@@ -1,3 +1,5 @@
+import { detectSpriteBoundsRgba } from "../../core/sprite.js";
+
 export interface SpriteBoundingBox {
   x: number;
   y: number;
@@ -14,106 +16,16 @@ export interface SpriteDetectionOptions {
 
 /**
  * Connected-Component Labeling (CCL) to detect isolated opaque sprite islands on a canvas/sprite sheet.
+ * Pure implementation lives in `core/sprite.ts` (`detectSpriteBoundsRgba`).
  */
 export function detectSpriteBounds(
   imageData: ImageData,
   options: SpriteDetectionOptions = {},
 ): SpriteBoundingBox[] {
-  const width = imageData.width;
-  const height = imageData.height;
-  const data = imageData.data;
-  const alphaThreshold = options.alphaThreshold ?? 10;
-  const minW = options.minWidth ?? 8;
-  const minH = options.minHeight ?? 8;
-  const padding = options.padding ?? 0;
-
-  const visited = new Uint8Array(width * height);
-  const boxes: SpriteBoundingBox[] = [];
-
-  const queueX = new Int32Array(width * height);
-  const queueY = new Int32Array(width * height);
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-      if (visited[idx]) continue;
-      const alpha = data[idx * 4 + 3]!;
-      if (alpha <= alphaThreshold) {
-        visited[idx] = 1;
-        continue;
-      }
-
-      // BFS to flood connected component
-      let qHead = 0;
-      let qTail = 0;
-      queueX[qTail] = x;
-      queueY[qTail] = y;
-      qTail++;
-      visited[idx] = 1;
-
-      let minX = x;
-      let maxX = x;
-      let minY = y;
-      let maxY = y;
-
-      while (qHead < qTail) {
-        const cx = queueX[qHead]!;
-        const cy = queueY[qHead]!;
-        qHead++;
-
-        if (cx < minX) minX = cx;
-        if (cx > maxX) maxX = cx;
-        if (cy < minY) minY = cy;
-        if (cy > maxY) maxY = cy;
-
-        // 8-way neighbors
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = cx + dx;
-            const ny = cy + dy;
-
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-              const nIdx = ny * width + nx;
-              if (!visited[nIdx]) {
-                visited[nIdx] = 1;
-                if (data[nIdx * 4 + 3]! > alphaThreshold) {
-                  queueX[qTail] = nx;
-                  queueY[qTail] = ny;
-                  qTail++;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      const w = maxX - minX + 1;
-      const h = maxY - minY + 1;
-
-      if (w >= minW && h >= minH) {
-        const clampedX = Math.max(0, minX - padding);
-        const clampedY = Math.max(0, minY - padding);
-        const clampedW = Math.min(width - clampedX, w + padding * 2);
-        const clampedH = Math.min(height - clampedY, h + padding * 2);
-
-        boxes.push({
-          x: clampedX,
-          y: clampedY,
-          w: clampedW,
-          h: clampedH,
-        });
-      }
-    }
-  }
-
-  // Sort boxes top-to-bottom, left-to-right (standard sprite sheet order)
-  return boxes.sort((a, b) => {
-    if (Math.abs(a.y - b.y) > 16) {
-      return a.y - b.y;
-    }
-    return a.x - b.x;
-  });
+  return detectSpriteBoundsRgba(
+    { width: imageData.width, height: imageData.height, data: imageData.data },
+    options,
+  );
 }
 
 /**

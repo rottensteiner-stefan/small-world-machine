@@ -1,3 +1,5 @@
+import { autocropRgba, cropRgba, flipRgba, padToPowerOfTwoRgba } from "../../core/sprite.js";
+
 export interface AdjustOptions {
   brightness?: number; // Multiplier, 1.0 is default (e.g. 1.2 = +20%)
   contrast?: number; // Multiplier, 1.0 is default (e.g. 1.2 = +20%)
@@ -95,87 +97,34 @@ export function hsvToRgb(h: number, s: number, v: number): [number, number, numb
 
 /**
  * Crops an ImageData to the specified rectangle.
+ * Pure implementation lives in `core/sprite.ts` (`cropRgba`).
  */
 export function cropImage(src: ImageData, x: number, y: number, w: number, h: number): ImageData {
-  const startX = Math.max(0, Math.min(src.width, Math.floor(x)));
-  const startY = Math.max(0, Math.min(src.height, Math.floor(y)));
-  const endX = Math.max(startX, Math.min(src.width, Math.floor(x + w)));
-  const endY = Math.max(startY, Math.min(src.height, Math.floor(y + h)));
-  const outW = Math.max(1, endX - startX);
-  const outH = Math.max(1, endY - startY);
-
-  const out = makeImageData(outW, outH);
-  const srcData = src.data;
-  const dstData = out.data;
-
-  for (let row = 0; row < outH; row++) {
-    for (let col = 0; col < outW; col++) {
-      const srcIdx = ((startY + row) * src.width + (startX + col)) * 4;
-      const dstIdx = (row * outW + col) * 4;
-      dstData[dstIdx] = srcData[srcIdx]!;
-      dstData[dstIdx + 1] = srcData[srcIdx + 1]!;
-      dstData[dstIdx + 2] = srcData[srcIdx + 2]!;
-      dstData[dstIdx + 3] = srcData[srcIdx + 3]!;
-    }
-  }
-  return out;
+  const out = cropRgba({ width: src.width, height: src.height, data: src.data }, x, y, w, h);
+  return makeImageData(out.width, out.height, out.data);
 }
 
 /**
  * Autocrops transparent padding around the image.
  */
 export function autocropImage(src: ImageData, alphaThreshold = 10): ImageData {
-  const w = src.width;
-  const h = src.height;
-  const data = src.data;
-
-  let minX = w,
-    minY = h,
-    maxX = -1,
-    maxY = -1;
-
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const a = data[(y * w + x) * 4 + 3]!;
-      if (a > alphaThreshold) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-    }
-  }
-
-  if (maxX < minX || maxY < minY) {
-    return makeImageData(1, 1);
-  }
-
-  return cropImage(src, minX, minY, maxX - minX + 1, maxY - minY + 1);
+  const out = autocropRgba(
+    { width: src.width, height: src.height, data: src.data },
+    alphaThreshold,
+  );
+  return makeImageData(out.width, out.height, out.data);
 }
 
 /**
  * Flips image horizontally and/or vertically.
  */
 export function flipImage(src: ImageData, horizontal = true, vertical = false): ImageData {
-  const w = src.width;
-  const h = src.height;
-  const out = makeImageData(w, h);
-  const sData = src.data;
-  const dData = out.data;
-
-  for (let y = 0; y < h; y++) {
-    const srcY = vertical ? h - 1 - y : y;
-    for (let x = 0; x < w; x++) {
-      const srcX = horizontal ? w - 1 - x : x;
-      const sIdx = (srcY * w + srcX) * 4;
-      const dIdx = (y * w + x) * 4;
-      dData[dIdx] = sData[sIdx]!;
-      dData[dIdx + 1] = sData[sIdx + 1]!;
-      dData[dIdx + 2] = sData[sIdx + 2]!;
-      dData[dIdx + 3] = sData[sIdx + 3]!;
-    }
-  }
-  return out;
+  const out = flipRgba(
+    { width: src.width, height: src.height, data: src.data },
+    horizontal,
+    vertical,
+  );
+  return makeImageData(out.width, out.height, out.data);
 }
 
 export const MAX_CANVAS_EDGE = 4096;
@@ -266,36 +215,11 @@ export function scaleImage(src: ImageData, factor: number): ImageData {
 
 /**
  * Pads canvas to next Power-of-Two dimensions (e.g. 64, 128, 256, 512, 1024, 2048).
+ * Pure implementation lives in `core/sprite.ts` (`padToPowerOfTwoRgba`).
  */
 export function padToPowerOfTwo(src: ImageData): ImageData {
-  function nextPot(n: number): number {
-    let p = 1;
-    while (p < n) p <<= 1;
-    return p;
-  }
-  const potW = nextPot(src.width);
-  const potH = nextPot(src.height);
-  if (potW === src.width && potH === src.height) {
-    return makeImageData(src.width, src.height, new Uint8ClampedArray(src.data));
-  }
-
-  const out = makeImageData(potW, potH);
-  const dData = out.data;
-  const sData = src.data;
-  const offsetX = Math.floor((potW - src.width) / 2);
-  const offsetY = Math.floor((potH - src.height) / 2);
-
-  for (let y = 0; y < src.height; y++) {
-    for (let x = 0; x < src.width; x++) {
-      const sIdx = (y * src.width + x) * 4;
-      const dIdx = ((y + offsetY) * potW + (x + offsetX)) * 4;
-      dData[dIdx] = sData[sIdx]!;
-      dData[dIdx + 1] = sData[sIdx + 1]!;
-      dData[dIdx + 2] = sData[sIdx + 2]!;
-      dData[dIdx + 3] = sData[sIdx + 3]!;
-    }
-  }
-  return out;
+  const out = padToPowerOfTwoRgba({ width: src.width, height: src.height, data: src.data });
+  return makeImageData(out.width, out.height, out.data);
 }
 
 /**

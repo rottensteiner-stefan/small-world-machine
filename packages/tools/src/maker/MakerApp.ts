@@ -63,6 +63,9 @@ import { MakerImportAndZoneTools } from "./MakerImportAndZoneTools.js";
 import { MakerToolbarBuilder } from "./MakerToolbarBuilder.js";
 import { DecalStampTool, type DecalStampHit } from "./DecalStampTool.js";
 import { ContentDrawer } from "./ContentDrawer.js";
+import { ToolModeHost } from "./ToolModeHost.js";
+import { ModeHashRouter } from "./ModeHashRouter.js";
+import { WorldModeAdapter } from "./WorldModeAdapter.js";
 
 export interface MakerAppOptions extends EngineOptions {
   hierarchyContainer: HTMLElement;
@@ -70,6 +73,8 @@ export interface MakerAppOptions extends EngineOptions {
   paletteContainer: HTMLElement;
   statusContainer: HTMLElement;
   contentDrawerContainer?: HTMLElement;
+  /** Element secondary tool modes mount into; defaults to `document.body` until a layout slot exists. */
+  modeHostContainer?: HTMLElement;
 }
 
 interface ObjectTransformSnapshot {
@@ -180,6 +185,17 @@ export class MakerApp extends SmallWorldMachine {
   public get kitRegistry(): KitRegistry {
     return this._kitRegistry;
   }
+  public get modeHost(): ToolModeHost {
+    return this._modeHost;
+  }
+  public get modeRouter(): ModeHashRouter {
+    return this._modeRouter;
+  }
+
+  /** Launcher hook for the mode-switcher UI (see `maker.html`): in-app mode switch, never navigation. */
+  public launchMode(modeId: string): void {
+    this._modeRouter.navigate(modeId);
+  }
 
   private readonly _kitRegistry = new KitRegistry();
   private _contentDrawer!: ContentDrawer;
@@ -207,8 +223,15 @@ export class MakerApp extends SmallWorldMachine {
   private _thumbnailCaptureActive = false;
   private _abortController = new AbortController();
 
+  private readonly _modeHost: ToolModeHost;
+  private readonly _modeRouter: ModeHashRouter;
+
   constructor(private readonly _makerOptions: MakerAppOptions) {
     super(_makerOptions);
+    this._modeHost = new ToolModeHost(this._makerOptions.modeHostContainer ?? document.body);
+    this._modeHost.register(new WorldModeAdapter());
+    this._modeRouter = new ModeHashRouter(this._modeHost);
+    this._modeRouter.start();
   }
 
   /** Editor-only scene children: hidden in the hierarchy and never written to `scene.gltf`. */
@@ -1963,6 +1986,7 @@ export class MakerApp extends SmallWorldMachine {
   public override destroy(): void {
     this._abortController.abort();
     this._abortController = new AbortController();
+    this._modeRouter.stop();
     this._trashBin.remove(...this._trashBin.children);
     this._undo.clear();
     super.destroy();

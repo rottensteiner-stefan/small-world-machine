@@ -1,13 +1,10 @@
 import type { MaterialStudioApp } from "../MaterialStudio.js";
-import { NormalMapFormat } from "@small-world-machine/engine";
+import type { NormalMapFormat } from "@small-world-machine/engine";
 import {
-  generateHeightMap,
-  generateNormalMap,
-  generateSpecularMap,
-  generateRoughnessMap,
-  generateAOMap,
-  generateEdgeMap,
-} from "../common/dsp/TextureFilters.js";
+  derivePbrMaps,
+  MATERIAL_STUDIO_PRESETS,
+  type MaterialStudioMapParams,
+} from "../core/material.js";
 import { UniversalIngestDropzone } from "../common/io/ui/UniversalIngestDropzone.js";
 import type { IngestResult } from "../common/io/UniversalIngestTypes.js";
 import {
@@ -16,107 +13,13 @@ import {
   firstImageItem,
 } from "../common/io/ingestResultHelpers.js";
 
-interface MaterialStudioPreset {
-  heightBlur: number;
-  heightContrast: number;
-  heightInvert: boolean;
-  normalStrength: number;
-  normalFormat: NormalMapFormat;
-  normalInvertR: boolean;
-  specContrast: number;
-  specThresh: number;
-  specInvert: boolean;
-  roughGamma: number;
-  roughInvert: boolean;
-  aoSoft: number;
-  aoFine: number;
-  aoLevel: number;
-  edgeThresh: number;
-  edgeThick: number;
-  edgeInvert: boolean;
-}
+// The pure derivation + presets live headless in `core/material.ts` (single source for
+// web UI and future `swm material gen`). These aliases keep the UI-side naming local.
+type MaterialStudioPreset = MaterialStudioMapParams;
+const PRESETS = MATERIAL_STUDIO_PRESETS;
 
 type MaterialStudioMapKey =
   "original" | "height" | "normal" | "specular" | "roughness" | "ao" | "edge";
-
-const PRESETS: Record<"default" | "stone" | "metal" | "wood", MaterialStudioPreset> = {
-  default: {
-    heightBlur: 0,
-    heightContrast: 1.0,
-    heightInvert: false,
-    normalStrength: 100,
-    normalFormat: NormalMapFormat.OPENGL,
-    normalInvertR: false,
-    specContrast: 10,
-    specThresh: 50,
-    specInvert: false,
-    roughGamma: 1.2,
-    roughInvert: false,
-    aoSoft: 15,
-    aoFine: 1.0,
-    aoLevel: 30,
-    edgeThresh: 90,
-    edgeThick: 1,
-    edgeInvert: true,
-  },
-  stone: {
-    heightBlur: 1,
-    heightContrast: 1.2,
-    heightInvert: false,
-    normalStrength: 180,
-    normalFormat: NormalMapFormat.OPENGL,
-    normalInvertR: false,
-    specContrast: 5,
-    specThresh: 40,
-    specInvert: false,
-    roughGamma: 0.7,
-    roughInvert: false,
-    aoSoft: 25,
-    aoFine: 1.5,
-    aoLevel: 20,
-    edgeThresh: 85,
-    edgeThick: 2,
-    edgeInvert: true,
-  },
-  metal: {
-    heightBlur: 0,
-    heightContrast: 0.8,
-    heightInvert: false,
-    normalStrength: 50,
-    normalFormat: NormalMapFormat.OPENGL,
-    normalInvertR: false,
-    specContrast: 25,
-    specThresh: 60,
-    specInvert: false,
-    roughGamma: 1.8,
-    roughInvert: false,
-    aoSoft: 5,
-    aoFine: 0.5,
-    aoLevel: 40,
-    edgeThresh: 95,
-    edgeThick: 1,
-    edgeInvert: true,
-  },
-  wood: {
-    heightBlur: 1,
-    heightContrast: 1.1,
-    heightInvert: false,
-    normalStrength: 200,
-    normalFormat: NormalMapFormat.OPENGL,
-    normalInvertR: false,
-    specContrast: 0,
-    specThresh: 40,
-    specInvert: false,
-    roughGamma: 1.5,
-    roughInvert: false,
-    aoSoft: 20,
-    aoFine: 1.2,
-    aoLevel: 20,
-    edgeThresh: 85,
-    edgeThick: 1,
-    edgeInvert: true,
-  },
-};
 
 /**
  * Owns every piece of DOM-bound PBR-Studio behaviour that used to live in `MaterialStudio._bindLogic()`:
@@ -559,10 +462,22 @@ export class MaterialStudioController {
         }
       };
 
+      function writeToCanvas(
+        canvas: HTMLCanvasElement,
+        img: { width: number; height: number; data: Uint8ClampedArray },
+      ): void {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const idata = ctx.createImageData(img.width, img.height);
+        idata.data.set(img.data);
+        ctx.putImageData(idata, 0, 0);
+      }
+
       function generatePBRMaps(): void {
         const w = loadedData!.width;
         const h = loadedData!.height;
-        const pixels = loadedData!.data;
 
         const heightBlur = parseInt(
           (document.getElementById("height-blur-slider") as HTMLInputElement).value,
@@ -573,10 +488,9 @@ export class MaterialStudioController {
         );
         const heightInvert = (document.getElementById("height-invert") as HTMLInputElement).checked;
 
-        const normalStrength =
-          parseFloat(
-            (document.getElementById("normal-strength-slider") as HTMLInputElement).value,
-          ) / 100.0;
+        const normalStrength = parseFloat(
+          (document.getElementById("normal-strength-slider") as HTMLInputElement).value,
+        );
         const normalFormat = (document.getElementById("normal-format") as HTMLInputElement)
           .value as NormalMapFormat;
         const normalInvertR = (document.getElementById("normal-invert-r") as HTMLInputElement)
@@ -586,9 +500,10 @@ export class MaterialStudioController {
           (document.getElementById("spec-contrast-slider") as HTMLInputElement).value,
           10,
         );
-        const specThresh =
-          parseInt((document.getElementById("spec-thresh-slider") as HTMLInputElement).value, 10) /
-          100.0;
+        const specThresh = parseInt(
+          (document.getElementById("spec-thresh-slider") as HTMLInputElement).value,
+          10,
+        );
         const specInvert = (document.getElementById("spec-invert") as HTMLInputElement).checked;
 
         const roughGamma = parseFloat(
@@ -603,84 +518,51 @@ export class MaterialStudioController {
         const aoFine = parseFloat(
           (document.getElementById("ao-fine-slider") as HTMLInputElement).value,
         );
-        const aoLevel =
-          parseInt((document.getElementById("ao-level-slider") as HTMLInputElement).value, 10) /
-          100.0;
+        const aoLevel = parseInt(
+          (document.getElementById("ao-level-slider") as HTMLInputElement).value,
+          10,
+        );
 
-        const edgeThresh =
-          parseInt((document.getElementById("edge-thresh-slider") as HTMLInputElement).value, 10) /
-          100.0;
+        const edgeThresh = parseInt(
+          (document.getElementById("edge-thresh-slider") as HTMLInputElement).value,
+          10,
+        );
         const edgeThick = parseInt(
           (document.getElementById("edge-thick-slider") as HTMLInputElement).value,
           10,
         );
         const edgeInvert = (document.getElementById("edge-invert") as HTMLInputElement).checked;
 
-        // 1. HEIGHT MAP
-        const heightCtx = canvases.height.getContext("2d");
-        const heightData = heightCtx!.createImageData(w, h);
-        heightData.data.set(
-          generateHeightMap(pixels, w, h, {
-            blur: heightBlur,
-            contrast: heightContrast,
-            invert: heightInvert,
-          }),
+        // 1.-6. DERIVE ALL MAPS via the headless pipeline (single source, byte-identical
+        // to the former inline TextureFilters chain). The diffuse stays on the original canvas.
+        const maps = derivePbrMaps(
+          { width: w, height: h, data: loadedData!.data },
+          {
+            heightBlur,
+            heightContrast,
+            heightInvert,
+            normalStrength,
+            normalFormat,
+            normalInvertR,
+            specContrast,
+            specThresh,
+            specInvert,
+            roughGamma,
+            roughInvert,
+            aoSoft,
+            aoFine,
+            aoLevel,
+            edgeThresh,
+            edgeThick,
+            edgeInvert,
+          },
         );
-        heightCtx!.putImageData(heightData, 0, 0);
-        const hPixels = heightData.data;
-
-        // 2. NORMAL MAP
-        const normalCtx = canvases.normal.getContext("2d");
-        const normalData = normalCtx!.createImageData(w, h);
-        normalData.data.set(
-          generateNormalMap(hPixels, w, h, {
-            strength: normalStrength,
-            format: normalFormat,
-            invertR: normalInvertR,
-          }),
-        );
-        normalCtx!.putImageData(normalData, 0, 0);
-
-        // 3. SPECULAR MAP
-        const specCtx = canvases.specular.getContext("2d");
-        const specData = specCtx!.createImageData(w, h);
-        specData.data.set(
-          generateSpecularMap(hPixels, {
-            contrast: specContrast,
-            threshold: specThresh,
-            invert: specInvert,
-          }),
-        );
-        specCtx!.putImageData(specData, 0, 0);
-        const sPixels = specData.data;
-
-        // 4. ROUGHNESS MAP
-        const roughCtx = canvases.roughness.getContext("2d");
-        const roughData = roughCtx!.createImageData(w, h);
-        roughData.data.set(
-          generateRoughnessMap(sPixels, { gamma: roughGamma, invert: roughInvert }),
-        );
-        roughCtx!.putImageData(roughData, 0, 0);
-
-        // 5. AO MAP
-        const aoCtx = canvases.ao.getContext("2d");
-        const aoData = aoCtx!.createImageData(w, h);
-        aoData.data.set(
-          generateAOMap(hPixels, w, h, { soft: aoSoft, fine: aoFine, level: aoLevel }),
-        );
-        aoCtx!.putImageData(aoData, 0, 0);
-
-        // 6. EDGE MAP
-        const edgeCtx = canvases.edge.getContext("2d");
-        const edgeData = edgeCtx!.createImageData(w, h);
-        edgeData.data.set(
-          generateEdgeMap(hPixels, w, h, {
-            threshold: edgeThresh,
-            thickness: edgeThick,
-            invert: edgeInvert,
-          }),
-        );
-        edgeCtx!.putImageData(edgeData, 0, 0);
+        writeToCanvas(canvases.height, maps.height);
+        writeToCanvas(canvases.normal, maps.normal);
+        writeToCanvas(canvases.specular, maps.specular);
+        writeToCanvas(canvases.roughness, maps.roughness);
+        writeToCanvas(canvases.ao, maps.ao);
+        writeToCanvas(canvases.edge, maps.edge);
 
         // 7. DRAW TO VIEWPORTS
         for (const key in displays) {
@@ -716,3 +598,6 @@ export class MaterialStudioController {
     }
   }
 }
+
+export { MATERIAL_STUDIO_PRESETS } from "../core/material.js";
+export type { MaterialStudioMapParams } from "../core/material.js";
