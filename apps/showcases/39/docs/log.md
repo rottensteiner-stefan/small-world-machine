@@ -27,11 +27,11 @@ Recalibrate Showcase 39 after the v0.110.0 volumetric shader overhaul to elimina
 ### Visual & Physical Retuning
 - **Transmittance Scene Attenuation:** With the post-processing composite now attenuating background scene radiance by fog transmittance $T = e^{-\tau}$ (instead of purely additive blending), the original density of 0.08 caused an overly bright, milky haze across the nave.
 - **Calibrated Parameters:**
-  - `fog.density`: Re-tuned from 0.08 down to `0.025` for crisp cathedral depth and clear silhouette contrast.
+  - `fog.density`: Re-tuned from 0.07 (with `intensity` 1.2) down to `0.025` for crisp cathedral depth and clear silhouette contrast.
   - `fog.intensity`: Set to `1.0` (applied once in the composite pass, resolving the previous double-squared intensity on local lights and volumes).
   - `fog.ambientInject`: Set to `1.5`, scattering scene ambient light and the upper IBL irradiance map (`Scene.irradianceMap`) into the participating medium to naturally lift shadows inside the cathedral without flattening contrast.
   - `fog.scatteringAlbedo`: Kept at `1.0` for pure atmospheric moisture, while the warm brazier and moonlight spot preserve per-light `volumetricIntensity = 1.0`.
 - **Frame-Kontext Integration:**
   - Replaced uncoordinated wall-clock sampling with `renderer.frameInfo.time` and `frameInfo.deltaTime` for smooth, deterministic wind advection in procedural 3D mist noise.
-  - Verified full visual consistency and performance across WebGPU (in-register prefix-sum froxels) and WebGL2 (bilateral upsampled raymarch).
+  - Checked on WebGPU (in-register prefix-sum froxels) and WebGL2 (bilateral upsampled raymarch) with `check-showcases 39`; the looks are close but not identical (the WebGL2 path does not scatter local lights). No performance measurement was taken.
 

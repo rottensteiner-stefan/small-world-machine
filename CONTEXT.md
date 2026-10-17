@@ -29,7 +29,7 @@ The pattern (e.g. STIFF, SMOOTH, FPS, ISOMETRIC) that governs how a camera's tra
 _Avoid_: Controller — a Controller is a Behavior that drives input; Strategy is the update math itself, a different layer on the same camera.
 
 **Capture-Frame-Rate (`captureFrameRate`)**:
-A deterministic simulation mode (`SmallWorldMachine.captureFrameRate`) in which the main loop advances gameplay and animation by an exact fixed timestep $\Delta t = 1.0 / \text{captureFrameRate}$ per frame, completely decoupled from wall-clock execution duration (analogous to Unity's `Time.captureFramerate` or Godot's `--fixed-fps`). Guarantees bit-exact reproducible video rendering, screenshot baselines, and temporal accumulation convergence in offline recording.
+A deterministic simulation mode (`SmallWorldMachine.captureFrameRate`) in which the main loop advances gameplay and animation by an exact fixed timestep $\Delta t = 1.0 / \text{captureFrameRate}$ per frame, completely decoupled from wall-clock execution duration (analogous to Unity's `Time.captureFramerate` or Godot's `--fixed-fps`). Makes recordings and screenshot baselines reproducible on the same device and driver; temporal effects (fog history, TAA) additionally need a few warm-up `step()` frames to converge.
 _Avoid_: Fixed Timestep (ambiguous: physics has an internal fixed sub-step, whereas capture frame rate locks the outer engine step and frame clock for recording).
 
 **Character Rig (Wrapper)**:
@@ -69,11 +69,11 @@ The typed, per-`SmallWorldMachine`-instance event dispatcher (`app.events`) that
 _Avoid_: Global Event Bus, Universal EventBus — rejected under Context Object; this bus is scoped to one engine instance, never a shared global.
 
 **FogVolume / Interior Carving**:
-An analytical geometric volume (`FogVolume`: Box, Sphere, Cylinder) placed into the 3D scene graph that injects localized scattering, emission, or negative density into the global Froxel grid or raymarching volume. Negative density values carve out fog from interior spaces (e.g. rooms, vaults, caverns) without requiring complex geometry meshes or stencil cuts ($\text{extinction} = \max(0.0, \text{extinction} + \text{volDensity})$).
+An analytical geometric volume (`FogVolume`: Box, Sphere, Cylinder) placed into the 3D scene graph that injects localized scattering, emission, or negative density into the global Froxel grid or raymarching volume. Negative density values carve out fog from interior spaces (e.g. rooms, vaults, caverns) without requiring complex geometry meshes or stencil cuts ($\text{extinction} = \max(0.0, \text{global} + \sum \text{positive} + \sum \text{negative})$, so carving does not depend on volume order).
 _Avoid_: Fog Mesh, Stencil Volume — carving is achieved through continuous analytical SDF evaluation and additive density clamping in shaders, not geometry clipping.
 
 **Frame-Kontext (`FrameInfo`)**:
-The unified, immutable per-frame timing and sequence descriptor (`FrameInfo`, accessible via `renderer.frameInfo` and `app.frameInfo`) written exclusively by `SmallWorldMachine.step()`. Encapsulates hit-stop/time-scale-adjusted gameplay time (`time`, `deltaTime`), unscaled wall-clock time (`realTime`, `realDeltaTime`), and a monotonically increasing `frameIndex`. Subsystems, post-processing passes, and compute shaders (such as volumetric fog noise advection and temporal jitter) read from this context instead of querying `performance.now()`.
+The unified per-frame timing and sequence descriptor (`FrameInfo`, accessible via `renderer.frameInfo` and `app.frameInfo`) written exclusively by `SmallWorldMachine.step()`. Encapsulates hit-stop/time-scale-adjusted gameplay time (`time`, `deltaTime`), unscaled wall-clock time (`realTime`, `realDeltaTime`), and a monotonically increasing `frameIndex`. Subsystems, post-processing passes, and compute shaders (such as volumetric fog noise advection and temporal jitter) read from this context instead of querying `performance.now()`.
 _Avoid_: Engine Time, Delta Time (loose globals; `FrameInfo` is a structured context object passed per frame to enforce determinism and avoid global singletons).
 
 **Forge / ForgeTool**:
@@ -81,7 +81,7 @@ Forge is the dockable window-manager overlay; a ForgeTool is a single mini-app h
 _Avoid_: Panel, Plugin — Tool names a specific contract (the `ForgeTool` class), not a generic panel.
 
 **Froxel (Volumetric Fog)**:
-A single cell ("frustum voxel") within the 3D camera-frustum grid ($160 \times 90 \times 64$ in WebGPU, or screen-depth tiles in WebGL2) that stores participating medium properties (scattering, extinction, phase function parameters) and in-scattered light accumulated along camera rays (ADR 0031).
+A single cell ("frustum voxel") within the 3D camera-frustum grid (on WebGPU the clustered light grid itself: 16 px screen tiles x 24 log-spaced depth slices; WebGL2 raymarches the same medium per pixel instead) that stores participating medium properties (scattering, extinction, phase function parameters) and in-scattered light accumulated along camera rays (ADR 0031).
 _Avoid_: Screen-Space God Rays (Stufe 2 / `LightShaftsElement` handles crepuscular rays), Voxel Grid (froxels are frustum-aligned with exponential near-to-far logarithmic slicing, not uniform world-axis AABB voxels).
 
 **HBAO**:

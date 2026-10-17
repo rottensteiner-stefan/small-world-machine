@@ -76,7 +76,7 @@ sessions):
     `performance.now()` calls in passes and shaders. Passes receive `renderer.frameInfo` (`time`, `realTime`,
     `deltaTime`, `frameIndex`) driven strictly by `SmallWorldMachine.step()`. Enabling
     `SmallWorldMachine.captureFrameRate` advances simulation by constant $\Delta t = 1.0 / \text{captureFrameRate}$,
-    enabling frame-accurate offline recording and bit-exact reproducibility.
+    enabling frame-accurate offline recording with reproducible simulation input (the rendered pixels are equal only on the same device and driver, and temporal effects need a few warm-up `step()` frames to converge).
 
 ### Data & resource flow
 
@@ -84,7 +84,7 @@ sessions):
 ```
 [Main Pass] → [Opaque Depth]
             → [Froxel Injection (compute)]:
-                3D Froxel Grid (160×90×64), local lights (Cluster lists) + CSM directional,
+                3D Froxel Grid (= clustered light grid: 16 px screen tiles x 24 log depth slices), local lights (Cluster lists) + CSM directional,
                 ambient injection from Scene.irradianceMap (@group(0) bindings 4 & 7)
             → [3D Temporal Reprojection (compute)]:
                 Sub-voxel jitter (jx, jy, jz) via FrameInfo, inverse VP reprojection,
@@ -115,7 +115,7 @@ sessions):
 - `packages/engine/src/core/SmallWorldMachine.ts` — `frameInfo` writer and `captureFrameRate` fixed-step clock.
 - `packages/engine/src/core/lights/AbstractLight.ts` — `volumetricIntensity` per-light in-scattering multiplier.
 - `packages/engine/src/core/objects/FogVolume.ts` & `FogVolumeShape.ts` — scene-graph node supporting Box, Sphere, Cylinder analytical SDFs, density/albedo/emission/falloff, and 3D noise parameters.
-- `VolumetricFogElement.ts` — post-processing configuration element controlling density, height, height falloff, asymmetry (Henyey-Greenstein g), CSM shadowing, jitter, history blend, `scatteringAlbedo`, and `ambientInject`.
+- `VolumetricFogElement.ts` — post-processing configuration element controlling density, height, height falloff, asymmetry (Henyey-Greenstein g), CSM shadowing, jitter, `scatteringAlbedo`, and `ambientInject`.
 - `froxel_inject.wgsl`, `froxel_reproject.wgsl`, `froxel_integrate.wgsl`, `VolumetricFog.frag.wgsl` — WebGPU compute and composite pipeline.
 - `VolumetricFogPassGPU.ts` & `VolumetricFogPassGL.ts` — backend pass orchestrators for WebGPU and WebGL2.
 - `VolumetricFog.frag.glsl` & `VolumetricFogBilateral.frag.glsl` — WebGL2 raymarching and cross-bilateral upsampling shaders.
@@ -133,11 +133,11 @@ sessions):
 - WebGL2 achieves visual parity without 3D FBO writing hazards on mobile TBDR architectures.
 - Transmittance-aware compositing physically attenuates background objects behind dense media, eliminating over-bright milky blowouts.
 - Single-scattering albedo and ambient inject provide full artistic control between bright glowing mist and dark absorbing smoke.
-- Deterministic frame context decouples rendering and simulation from wall-clock variance, enabling bit-exact video capture and reproducible test suites.
+- Deterministic frame context decouples rendering and simulation from wall-clock variance, enabling frame-accurate video capture and reproducible test inputs (pixel equality is only expected on the same device and driver).
 - Negative density `FogVolume` nodes enable instant interior carving for buildings, caves, and bunkers.
 
 ### Negative / trade-offs
-- Double-buffered 3D history textures (`rgba16float`, $160 \times 90 \times 64 \times 8$ bytes $\approx 7.37$ MB each) require ~15 MB VRAM on WebGPU.
+- Four cluster-grid-sized `rgba16float` volumes on WebGPU (inject, two history textures, integrated; ~1.6 MB each at 1920x1080 = 120x68x24 cells) plus one full-resolution `rgba16float` fog target (~16.6 MB), i.e. ~23 MB VRAM.
 - Extreme camera velocity can cause brief clamping disocclusion until temporal history reconverges.
 
 ### Performance Verification
