@@ -1,4 +1,5 @@
 import {
+  AbstractGeometry,
   AbstractShowcase,
   AmbientLight,
   BloomElement,
@@ -11,9 +12,11 @@ import {
   Cube,
   CubeLayout,
   CubeTexture,
+  CullMode,
   Cylinder,
   DirectionalLight,
   EngineOptions,
+  GeometryDataInterface,
   GlassMaterial,
   GrainElement,
   HbaoElement,
@@ -222,6 +225,68 @@ function computeSpectralRays(prismRotation: number): (SpectralRay | undefined)[]
 }
 
 /**
+ * Dynamic 2D planar fan geometry on the laboratory bench surface (XZ plane at y = 0.005),
+ * representing the continuous chromatic caustic dispersion wash connecting the prism exit face
+ * directly to the detector graticule impact or free-flight trajectory (Plan P2-1).
+ *
+ * 8 boundary generators (indices 0..7) define 7 contiguous quads corresponding 1:1 to the 7
+ * spectral wavelengths (Red, Orange, Yellow, Green, Cyan, Blue, Violet).
+ * Total: 16 vertices, 7 quads = 14 triangles = 42 indices.
+ */
+class CausticFanGeometry extends AbstractGeometry {
+  constructor() {
+    super();
+    this.generateGeometryData();
+  }
+
+  protected override generateGeometryData(): void {
+    // 8 boundaries * 2 vertices (exit and end) = 16 vertices
+    this._vertices = new Float32Array(16 * 3);
+    this._normals = new Float32Array(16 * 3);
+    this._uvs = new Float32Array(16 * 2);
+
+    // Initial normals pointing straight up (+Y)
+    for (let i = 0; i < 16; i++) {
+      this._normals[i * 3 + 1] = 1.0;
+    }
+
+    // Fixed UV layout:
+    // u across boundaries [0..1]
+    // v along length [0 = exit at prism base, 1 = endpoint on detector/bench]
+    for (let k = 0; k < 8; k++) {
+      const u = k / 7.0;
+      const vExit = 2 * k;
+      const vEnd = 2 * k + 1;
+      this._uvs[vExit * 2] = u;
+      this._uvs[vExit * 2 + 1] = 0.0;
+      this._uvs[vEnd * 2] = u;
+      this._uvs[vEnd * 2 + 1] = 1.0;
+    }
+
+    // 7 quads = 14 triangles = 42 indices
+    const indices = new Uint16Array(7 * 6);
+    let ptr = 0;
+    for (let q = 0; q < 7; q++) {
+      const v0 = 2 * q; // Left exit
+      const v1 = 2 * q + 1; // Left end
+      const v2 = 2 * (q + 1); // Right exit
+      const v3 = 2 * (q + 1) + 1; // Right end
+
+      // Triangle 1
+      indices[ptr++] = v0;
+      indices[ptr++] = v1;
+      indices[ptr++] = v2;
+
+      // Triangle 2
+      indices[ptr++] = v2;
+      indices[ptr++] = v1;
+      indices[ptr++] = v3;
+    }
+    this._indices = indices;
+  }
+}
+
+/**
  * Showcase 28: "The Quantum Refraction Lab / Optical Prism"
  *
  * Benchmark testing transmission, optical dispersion, spectral split,
@@ -243,42 +308,67 @@ class Showcase28 extends AbstractShowcase {
    * 8-bit per-channel ceiling structurally forbids the white-hot core the discrete HDR materials
    * produced. Pinned at the real red and violet impact points every frame. */
   private _bandMesh: Object3D | undefined;
-  /** Soft chromatic caustic reflection wash on the anodized bench top under the spectral rays. */
+  /** P2-1: live-derived chromatic caustic dispersion fan on the anodized bench surface. */
   private _floorCausticMesh: Object3D | undefined;
+  private _causticGeometryData: GeometryDataInterface | undefined;
+  private _causticPositions = new Float32Array(16 * 3);
+  /** P2-2: soft chromatic bounce SpotLight grounding the dispersed fan on the bench and bezel. */
+  private _chromaticBounceLight: SpotLight | undefined;
+  private _causticIntensity: number = 0.65;
+  private _chromaticBounceIntensity: number = 1.2;
 
-  /** Bakes a soft chromatic caustic reflection texture for the bench surface under the rays. */
+  /** Bakes a high-resolution chromatic caustic dispersion texture for the bench surface under the rays (P2-1). */
   private _createCausticGradientTexture(): Texture {
-    const width = 256;
-    const height = 128;
+    const width = 512;
+    const height = 256;
     const cv = document.createElement("canvas");
     cv.width = width;
     cv.height = height;
     const ctx = cv.getContext("2d");
     if (!ctx) throw new Error("[Showcase28] 2D canvas context unavailable for caustic.");
 
-    // Base horizontal spectrum gradient
+    // Base horizontal spectrum gradient across the 7 wavelengths
     const grad = ctx.createLinearGradient(0, 0, width, 0);
     for (let i = 0; i < SPECTRUM.length; i++) {
       const c = SPECTRUM[i]!.color;
+      const uCenter = (i + 0.5) / SPECTRUM.length;
       grad.addColorStop(
-        i / (SPECTRUM.length - 1),
+        Math.min(1.0, Math.max(0.0, uCenter)),
         `rgb(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)})`,
       );
     }
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
-    // Apply soft gaussian-like vertical falloff and longitudinal attenuation
+    // Apply optical dispersion falloff and longitudinal attenuation
     const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
-    const halfH = height / 2;
     for (let y = 0; y < height; y++) {
-      const dy = (y - halfH) / halfH;
-      const vertFalloff = Math.max(0, 1 - dy * dy);
+      const v = y / (height - 1); // 0 at prism exit, 1 at detector impact
+      // Longitudinal envelope: smooth quadratic emergence from prism base, bright core, gentle fade at boundary
+      const leadIn = Math.min(1.0, v / 0.08);
+      const leadInFalloff = leadIn * (2 - leadIn);
+      const tailOff = v < 0.75 ? 1.0 : Math.max(0.0, 1.0 - (v - 0.75) / 0.25);
+      const tailFalloff = tailOff * tailOff;
+      const vProfile = leadInFalloff * tailFalloff;
+
       for (let x = 0; x < width; x++) {
-        const u = x / width;
-        const horizFalloff = Math.sin(u * Math.PI);
-        const alpha = vertFalloff * vertFalloff * horizFalloff * 0.45;
+        const u = x / (width - 1); // 0 (Red) -> 1 (Violet)
+        // High-frequency optical caustic striations / micro-refraction filaments
+        const striations = 0.88 + 0.12 * Math.sin(u * 140.0 + v * 8.0);
+        // Intra-band caustic focus core: peaks gently along each ray centerline
+        const quadFrac = (u * 7.0) % 1.0;
+        const quadCenter = 1.0 - 4.0 * (quadFrac - 0.5) * (quadFrac - 0.5);
+        const corePeak = 0.75 + 0.25 * Math.max(0.0, quadCenter);
+
+        // Edge fade at the extreme outer flanks of Red and Violet
+        const uFlank = Math.sin(u * Math.PI);
+        const flankFade = Math.min(1.0, uFlank * 4.0);
+
+        const alpha = Math.min(
+          1.0,
+          Math.max(0.0, vProfile * striations * corePeak * flankFade * 0.72),
+        );
         const idx = (y * width + x) * 4;
         data[idx + 3] = Math.round(alpha * 255);
       }
@@ -1202,21 +1292,42 @@ class Showcase28 extends AbstractShowcase {
     this._bandMesh.isVisible = false;
     this.scene.add(this._bandMesh);
 
-    // Soft chromatic caustic reflection wash on the anodized bench surface
+    // P2-1: Live-derived continuous chromatic caustic dispersion fan on the anodized bench surface
+    const causticGeo = new CausticFanGeometry();
+    this._causticGeometryData = causticGeo.getGeometryData();
+    this._causticPositions.set(this._causticGeometryData.vertices);
+
     const causticMat = new StandardMaterial({
-      color: new Color(1.0, 1.0, 1.0),
-      emissiveColor: new Color(0.9, 0.95, 1.0),
-      emissiveIntensity: 0.35,
+      color: new Color(0.0, 0.0, 0.0),
+      emissiveColor: new Color(1.0, 1.0, 1.0),
+      emissiveIntensity: this._causticIntensity,
       emissiveMap: this._createCausticGradientTexture(),
       transparent: true,
       roughness: 0.9,
     });
+    causticMat.cullMode = CullMode.NONE;
+    causticMat.depthWrite = false;
+
     this._floorCausticMesh = new Object3D("BenchCausticSpill");
-    this._floorCausticMesh.geometry = new Cube({ size: 1 }).getGeometryData();
+    this._floorCausticMesh.geometry = this._causticGeometryData;
     this._floorCausticMesh.material = causticMat;
-    this._floorCausticMesh.position.set(0, 0.005, 0);
+    this._floorCausticMesh.frustumCulled = false;
+    this._floorCausticMesh.position.set(0, 0, 0);
     this._floorCausticMesh.isVisible = false;
     this.scene.add(this._floorCausticMesh);
+
+    // P2-2: Chromatic bounce SpotLight near the exit fan (cap <= 3 spots total in scene)
+    this._chromaticBounceLight = new SpotLight({
+      name: "ChromaticBounceSpot",
+      color: new Color(0.2, 0.8, 0.85),
+      intensity: this._chromaticBounceIntensity,
+      distance: 6.5,
+      angle: Math.PI / 4,
+      penumbra: 0.85,
+      decay: 1.5,
+      castShadow: false,
+    });
+    this.scene.add(this._chromaticBounceLight);
 
     // Coherent first frame; update() re-derives and repositions everything every frame.
     this._updateSpectralVisuals(initialRays);
@@ -1362,64 +1473,148 @@ class Showcase28 extends AbstractShowcase {
       }
     }
 
-    // Floor caustic spill: subtle chromatic wash on the anodized bench surface under the rays
-    if (this._floorCausticMesh) {
+    // P2-1: Live-derived continuous chromatic caustic dispersion fan on the anodized bench surface
+    if (this._floorCausticMesh && this._causticGeometryData) {
       if (validCount > 0) {
-        let avgImpactX = 0;
-        let avgImpactZ = 0;
-        let impactCount = 0;
-        for (const imp of impacts) {
-          if (!imp) continue;
-          avgImpactX += imp.x;
-          avgImpactZ += imp.y;
-          impactCount++;
-        }
-        if (impactCount > 0) {
-          avgImpactX /= impactCount;
-          avgImpactZ /= impactCount;
-          const dx = avgImpactX - avgExitX;
-          const dz = avgImpactZ - avgExitZ;
-          const len = Math.hypot(dx, dz);
-          if (len > 1e-4) {
-            this._floorCausticMesh.rotation.y = Math.atan2(-dz, dx);
-            this._floorCausticMesh.position.set(
-              (avgExitX + avgImpactX) / 2,
-              0.005,
-              (avgExitZ + avgImpactZ) / 2,
-            );
-            this._floorCausticMesh.scale.set(len, 0.002, 1.6);
-            this._floorCausticMesh.isVisible = true;
-          } else {
-            this._floorCausticMesh.isVisible = false;
+        // Collect exit and end coordinates for all 7 spectral bands
+        const exitPts: (Vector2D | undefined)[] = [];
+        const endPts: (Vector2D | undefined)[] = [];
+        let firstValid = -1;
+        let lastValid = -1;
+
+        for (let i = 0; i < 7; i++) {
+          const ray = rays[i];
+          if (ray) {
+            if (firstValid === -1) firstValid = i;
+            lastValid = i;
+            const exitP = ray.exitPoint;
+            const imp = impacts[i];
+            const endP = imp
+              ? imp
+              : new Vector2D(
+                  exitP.x + ray.direction.x * SPECTRAL_RAY_LENGTH,
+                  exitP.y + ray.direction.y * SPECTRAL_RAY_LENGTH,
+                );
+            exitPts[i] = exitP;
+            endPts[i] = endP;
           }
-        } else {
-          // Free-flight caustics across the bench
-          let avgDirX = 0;
-          let avgDirZ = 0;
+        }
+
+        // Fill invalid bands by clamping to nearest valid ray (graceful TIR contraction)
+        for (let i = 0; i < 7; i++) {
+          if (!exitPts[i]) {
+            const nearest = i < firstValid ? firstValid : lastValid;
+            if (nearest !== -1 && exitPts[nearest]) {
+              exitPts[i] = exitPts[nearest];
+              endPts[i] = endPts[nearest];
+            } else {
+              exitPts[i] = new Vector2D(0, 0);
+              endPts[i] = new Vector2D(0, 0);
+            }
+          }
+        }
+
+        // Compute 8 boundary points from the 7 band centers
+        const boundaryExit: Vector2D[] = [];
+        const boundaryEnd: Vector2D[] = [];
+
+        // Boundary 0: extrapolated outer flank of Red
+        boundaryExit[0] = new Vector2D(
+          exitPts[0]!.x - (exitPts[1]!.x - exitPts[0]!.x) * 0.5,
+          exitPts[0]!.y - (exitPts[1]!.y - exitPts[0]!.y) * 0.5,
+        );
+        boundaryEnd[0] = new Vector2D(
+          endPts[0]!.x - (endPts[1]!.x - endPts[0]!.x) * 0.5,
+          endPts[0]!.y - (endPts[1]!.y - endPts[0]!.y) * 0.5,
+        );
+
+        // Boundaries 1..6: midpoints between adjacent rays
+        for (let k = 1; k < 7; k++) {
+          boundaryExit[k] = new Vector2D(
+            (exitPts[k - 1]!.x + exitPts[k]!.x) * 0.5,
+            (exitPts[k - 1]!.y + exitPts[k]!.y) * 0.5,
+          );
+          boundaryEnd[k] = new Vector2D(
+            (endPts[k - 1]!.x + endPts[k]!.x) * 0.5,
+            (endPts[k - 1]!.y + endPts[k]!.y) * 0.5,
+          );
+        }
+
+        // Boundary 7: extrapolated outer flank of Violet
+        boundaryExit[7] = new Vector2D(
+          exitPts[6]!.x + (exitPts[6]!.x - exitPts[5]!.x) * 0.5,
+          exitPts[6]!.y + (exitPts[6]!.y - exitPts[5]!.y) * 0.5,
+        );
+        boundaryEnd[7] = new Vector2D(
+          endPts[6]!.x + (endPts[6]!.x - endPts[5]!.x) * 0.5,
+          endPts[6]!.y + (endPts[6]!.y - endPts[5]!.y) * 0.5,
+        );
+
+        // Write positions into typed buffer (16 vertices = 48 floats)
+        const pos = this._causticPositions;
+        for (let k = 0; k < 8; k++) {
+          const vExit = 2 * k;
+          const vEnd = 2 * k + 1;
+          const bExit = boundaryExit[k]!;
+          const bEnd = boundaryEnd[k]!;
+
+          pos[vExit * 3] = bExit.x;
+          pos[vExit * 3 + 1] = 0.005;
+          pos[vExit * 3 + 2] = bExit.y;
+
+          pos[vEnd * 3] = bEnd.x;
+          pos[vEnd * 3 + 1] = 0.005;
+          pos[vEnd * 3 + 2] = bEnd.y;
+        }
+
+        this._causticGeometryData.vertices.set(pos);
+        this._causticGeometryData.needsUpdate = true;
+        this._floorCausticMesh.position.set(0, 0, 0);
+        this._floorCausticMesh.rotation.set(0, 0, 0);
+        this._floorCausticMesh.scale.set(1, 1, 1);
+        this._floorCausticMesh.isVisible = true;
+
+        // P2-2: Chromatic bounce light tracking the active dispersion fan
+        if (this._chromaticBounceLight) {
+          let avgImpactX = 0;
+          let avgImpactZ = 0;
+          let impactCount = 0;
+          for (const imp of impacts) {
+            if (!imp) continue;
+            avgImpactX += imp.x;
+            avgImpactZ += imp.y;
+            impactCount++;
+          }
+          const endX = impactCount > 0 ? avgImpactX / impactCount : avgExitX + 2.5;
+          const endZ = impactCount > 0 ? avgImpactZ / impactCount : avgExitZ + 1.2;
+
+          const midX = (avgExitX + endX) * 0.5;
+          const midZ = (avgExitZ + endZ) * 0.5;
+          this._chromaticBounceLight.position.set(midX, 0.75, midZ);
+          this._chromaticBounceLight.direction.set(0, -1, 0);
+          this._chromaticBounceLight.intensity =
+            this._chromaticBounceIntensity * (validCount / 7.0);
+
+          let sumR = 0;
+          let sumG = 0;
+          let sumB = 0;
           for (const ray of rays) {
             if (!ray) continue;
-            avgDirX += ray.direction.x;
-            avgDirZ += ray.direction.y;
+            sumR += ray.color.r;
+            sumG += ray.color.g;
+            sumB += ray.color.b;
           }
-          const dirLen = Math.hypot(avgDirX, avgDirZ);
-          if (dirLen > 1e-4) {
-            avgDirX /= dirLen;
-            avgDirZ /= dirLen;
-            const reach = 3.6;
-            this._floorCausticMesh.rotation.y = Math.atan2(-avgDirZ, avgDirX);
-            this._floorCausticMesh.position.set(
-              avgExitX + avgDirX * (reach / 2),
-              0.005,
-              avgExitZ + avgDirZ * (reach / 2),
-            );
-            this._floorCausticMesh.scale.set(reach, 0.002, 1.6);
-            this._floorCausticMesh.isVisible = true;
-          } else {
-            this._floorCausticMesh.isVisible = false;
-          }
+          this._chromaticBounceLight.color.set(
+            sumR / validCount,
+            sumG / validCount,
+            sumB / validCount,
+          );
         }
       } else {
         this._floorCausticMesh.isVisible = false;
+        if (this._chromaticBounceLight) {
+          this._chromaticBounceLight.intensity = 0.0;
+        }
       }
     }
   }
@@ -1615,6 +1810,8 @@ class Showcase28 extends AbstractShowcase {
       obj.name === "InternalBeamPath" ||
       obj.name === "Band_Gradient" ||
       obj.name === "BenchCausticSpill" ||
+      obj.name === "ChromaticBounceSpot" ||
+      obj === this._chromaticBounceLight ||
       obj.name === "Skybox"
     );
   }
@@ -2127,6 +2324,32 @@ class Showcase28 extends AbstractShowcase {
           label: "Bloom Glow",
         });
       }
+
+      const fCaustics = pane.addFolder({ title: "Caustics & Atmosphere (P2)", expanded: false });
+      fCaustics
+        .addBinding({ intensity: this._causticIntensity }, "intensity", {
+          min: 0.0,
+          max: 1.5,
+          step: 0.05,
+          label: "Caustic Power",
+        })
+        .on("change", (ev) => {
+          this._causticIntensity = ev.value;
+          if (this._floorCausticMesh?.material instanceof StandardMaterial) {
+            this._floorCausticMesh.material.emissiveIntensity = this._causticIntensity;
+          }
+        });
+
+      fCaustics
+        .addBinding({ bounce: this._chromaticBounceIntensity }, "bounce", {
+          min: 0.0,
+          max: 2.5,
+          step: 0.1,
+          label: "Chromatic Bounce",
+        })
+        .on("change", (ev) => {
+          this._chromaticBounceIntensity = ev.value;
+        });
     }
 
     // Hierarchy Panel integration

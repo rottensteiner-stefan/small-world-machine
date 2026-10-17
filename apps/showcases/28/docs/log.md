@@ -189,3 +189,27 @@ broken, all historical entries above preserved.
   - Dynamically disabled `OrbitController` (Showcase 28) and `FlyController` (Showcase 29) on `pointerenter` / `pointerdown`, preventing sliders or scroll gestures from rotating or zooming the 3D scene. Re-enabled smoothly on `pointerleave` / `pointerup` and drawer close.
   - Guarded scene keyboard shortcuts (arrow keys for rail movement / manual turntable rotation, scene presets) so they are suppressed while interacting with panel controls.
 
+---
+
+## 2026-10-17 – Phase 2: Live-Derived Caustic Dispersion Fan & Chromatic Ambient Bounce
+- **Live-Derived Continuous Caustic Fan Mesh (`CausticFanGeometry`):**
+  - Replaced the legacy rectangular box (`Cube`) with a custom 2D planar fan geometry (`CausticFanGeometry` extending `AbstractGeometry`) placed on the laboratory bench surface ($y = 0.005$) with `cullMode: CullMode.NONE` and `depthWrite: false`.
+  - Constructed an 8-boundary piecewise ribbon defining 7 contiguous quads corresponding 1:1 to the 7 spectral wavelengths (Red $\to$ Violet).
+  - Every frame, boundary vertices are mathematically computed from the live Snell's law refraction and Cauchy dispersion rays:
+    - At the prism exit face, the ribbon tightly conforms to the prism facet.
+    - Along the path, the ribbon expands with the exact physical dispersion angle.
+    - At the detector or in free flight, each quad terminates precisely at that spectral ray's impact/reach coordinate.
+  - Graceful TIR handling: when extreme turntable rotation pushes individual wavelengths past the critical angle, invalid outer quads gracefully collapse into zero-width lines without popping or buffer reallocation.
+- **High-Resolution Chromatic Caustic Dispersion Texture:**
+  - Baked a $512 \times 256$ texture with smooth quadratic emergence from the prism base, longitudinal attenuation towards the detector, intra-band caustic focus cores, and optical micro-striations.
+- **Chromatic Ambient Bounce Light (P2-2):**
+  - Mounted a soft non-shadow `SpotLight` (`ChromaticBounceSpot`, intensity 1.2, angle $\pi/4$, penumbra 0.85) centered above the active dispersion fan.
+  - Dynamically tracks the midpoint of the caustic wash, casting diffuse chromatic illumination over the dark anodized bench top and detector bezel matching the real-time average wavelength color.
+  - Strictly preserves the engine forward-pass budget ($\le 3$ SpotLights total in scene).
+- **Lab Inspector Knobs:**
+  - Added a dedicated Tweakpane folder `"Caustics & Atmosphere (P2)"` with live tuning sliders for `Caustic Power` and `Chromatic Bounce`.
+- **Verification:**
+  - Multi-backend headless verification passed 100% green across WebGL1, WebGL2, and WebGPU (`scripts/check-showcases.js 28`).
+  - Unit tests: 283 suites / 1928 tests all passing.
+
+
