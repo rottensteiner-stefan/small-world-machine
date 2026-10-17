@@ -84,8 +84,6 @@ export enum DeviceLimit {
  * probed capabilities instead of sharing a single process-wide result.
  */
 export class DeviceCaps {
-  private static _default: DeviceCaps | undefined;
-
   private _isInitialized: boolean = false;
 
   // Renderers
@@ -619,85 +617,5 @@ export class DeviceCaps {
     if (score >= 4) return PerformanceTier.HIGH;
     if (score >= 2) return PerformanceTier.MEDIUM;
     return PerformanceTier.LOW;
-  }
-
-  private static get _sharedDefault(): DeviceCaps {
-    return (this._default ??= new DeviceCaps());
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static init(): void {
-    this._sharedDefault.init();
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static updateLimits(limits: Parameters<DeviceCaps["updateLimits"]>[0]): void {
-    this._sharedDefault.updateLimits(limits);
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static hasFeature(feature: DeviceFeature): boolean {
-    return this._sharedDefault.hasFeature(feature);
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static getLimit(limit: DeviceLimit): number {
-    return this._sharedDefault.getLimit(limit);
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static getGuaranteedMinimum(limit: DeviceLimit): number {
-    return this._sharedDefault.getGuaranteedMinimum(limit);
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static get gpuModel(): string {
-    return this._sharedDefault.gpuModel;
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static get gpuVendor(): string {
-    return this._sharedDefault.gpuVendor;
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static get networkInfo():
-    { effectiveType: string; downlink: number; saveData: boolean } | undefined {
-    return this._sharedDefault.networkInfo;
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static isMobile(): boolean {
-    return this._sharedDefault.isMobile();
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static get cores(): number {
-    return this._sharedDefault.cores;
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static get memoryGB(): number {
-    return this._sharedDefault.memoryGB;
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static get pixelRatio(): number {
-    return this._sharedDefault.pixelRatio;
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static get screenWidth(): number {
-    return this._sharedDefault.screenWidth;
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static get screenHeight(): number {
-    return this._sharedDefault.screenHeight;
-  }
-
-  /** @deprecated Use an instance via `RendererContext.deviceCaps` instead. Removal target: v1.0.0. */
-  public static getPerformanceTier(): PerformanceTier {
-    return this._sharedDefault.getPerformanceTier();
   }
 }

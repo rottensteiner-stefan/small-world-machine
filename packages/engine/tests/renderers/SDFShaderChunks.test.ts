@@ -59,30 +59,32 @@ describe("SDF & Raymarching Shader Chunks", () => {
 describe("WebGPU DeviceCaps Limits & Hardening", () => {
   it("should have correct spec guaranteed minimums for WebGPU limits", async () => {
     const { DeviceCaps, DeviceLimit } = await import("../../src/core/DeviceCaps.js");
-    expect(
-      DeviceCaps.getGuaranteedMinimum(DeviceLimit.WEBGPU_MAX_STORAGE_BUFFER_BINDING_SIZE),
-    ).toBe(134217728);
-    expect(
-      DeviceCaps.getGuaranteedMinimum(DeviceLimit.WEBGPU_MAX_COMPUTE_WORKGROUP_STORAGE_SIZE),
-    ).toBe(16384);
-    expect(
-      DeviceCaps.getGuaranteedMinimum(DeviceLimit.WEBGPU_MAX_UNIFORM_BUFFER_BINDING_SIZE),
-    ).toBe(65536);
-    expect(DeviceCaps.getGuaranteedMinimum(DeviceLimit.WEBGPU_MAX_TEXTURE_DIMENSION_2D)).toBe(8192);
+    const caps = new DeviceCaps();
+    expect(caps.getGuaranteedMinimum(DeviceLimit.WEBGPU_MAX_STORAGE_BUFFER_BINDING_SIZE)).toBe(
+      134217728,
+    );
+    expect(caps.getGuaranteedMinimum(DeviceLimit.WEBGPU_MAX_COMPUTE_WORKGROUP_STORAGE_SIZE)).toBe(
+      16384,
+    );
+    expect(caps.getGuaranteedMinimum(DeviceLimit.WEBGPU_MAX_UNIFORM_BUFFER_BINDING_SIZE)).toBe(
+      65536,
+    );
+    expect(caps.getGuaranteedMinimum(DeviceLimit.WEBGPU_MAX_TEXTURE_DIMENSION_2D)).toBe(8192);
   });
 
   it("should update DeviceCaps limits when provided with WebGPU device limits", async () => {
     const { DeviceCaps, DeviceLimit } = await import("../../src/core/DeviceCaps.js");
-    DeviceCaps.updateLimits({
+    const caps = new DeviceCaps();
+    caps.updateLimits({
       webgpuMaxStorageBufferBindingSize: 268435456,
       webgpuMaxComputeWorkgroupStorageSize: 32768,
     });
 
     expect(
-      DeviceCaps.getLimit(DeviceLimit.WEBGPU_MAX_STORAGE_BUFFER_BINDING_SIZE),
+      caps.getLimit(DeviceLimit.WEBGPU_MAX_STORAGE_BUFFER_BINDING_SIZE),
     ).toBeGreaterThanOrEqual(268435456);
     expect(
-      DeviceCaps.getLimit(DeviceLimit.WEBGPU_MAX_COMPUTE_WORKGROUP_STORAGE_SIZE),
+      caps.getLimit(DeviceLimit.WEBGPU_MAX_COMPUTE_WORKGROUP_STORAGE_SIZE),
     ).toBeGreaterThanOrEqual(32768);
   });
 
