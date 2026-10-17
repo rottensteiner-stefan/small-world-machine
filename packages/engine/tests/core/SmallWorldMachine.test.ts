@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { SmallWorldMachine } from "../../src/core/index.js";
 import { RendererType } from "../../src/enums/index.js";
-import type { Renderer } from "../../src/interfaces/index.js";
+import { createFrameInfo, type Renderer } from "../../src/interfaces/index.js";
 import { PostProcessingGroup } from "../../src/renderers/post/index.js";
 import { makeMockAudioContext } from "../audio/mockAudioContext.js";
 
@@ -42,6 +42,7 @@ function attachTestRuntime(app: TestSmallWorldMachine): void {
   app.renderer = {
     type: RendererType.WEB_GL2,
     postProcessing: new PostProcessingGroup(),
+    frameInfo: createFrameInfo(),
     render: (): void => {},
     setSize: (): void => {},
   } as unknown as Renderer;
@@ -147,5 +148,63 @@ describe("SmallWorldMachine public step(deltaTime) hook", () => {
 
     app.destroy();
     expect(() => app.step(1 / 60)).toThrow(/after destroy/);
+  });
+
+  it("accumulates gameplay time, real time and frame index, and hands the context to the renderer", () => {
+    const app = new TestSmallWorldMachine();
+    attachTestRuntime(app);
+
+    app.step(0.25);
+    app.step(0.25);
+
+    expect(app.frameInfo.frameIndex).toBe(2);
+    expect(app.frameInfo.time).toBeCloseTo(0.5, 6);
+    expect(app.frameInfo.realTime).toBeCloseTo(0.5, 6);
+    expect(app.frameInfo.deltaTime).toBeCloseTo(0.25, 6);
+    expect(app.renderer.frameInfo).toBe(app.frameInfo);
+  });
+
+  it("scales gameplay time by hit-stop but not real time", () => {
+    const app = new TestSmallWorldMachine();
+    attachTestRuntime(app);
+
+    app.triggerHitStop(1.0, 0.5);
+    app.step(0.1);
+
+    expect(app.frameInfo.time).toBeCloseTo(0.05, 6);
+    expect(app.frameInfo.realTime).toBeCloseTo(0.1, 6);
+    expect(app.frameInfo.realDeltaTime).toBeCloseTo(0.1, 6);
+  });
+
+  it("advances the realtime loop by exactly 1 / captureFrameRate regardless of wall-clock time", () => {
+    const app = new TestSmallWorldMachine();
+    attachTestRuntime(app);
+    app.captureFrameRate = 30;
+
+    const windowRef = window as unknown as {
+      requestAnimationFrame?: (cb: FrameRequestCallback) => number;
+    };
+    const origRaf = windowRef.requestAnimationFrame;
+    windowRef.requestAnimationFrame = (): number => 1;
+
+    try {
+      const internal = app as unknown as {
+        _isRunning: boolean;
+        _lastTime: number;
+        _loop(currentTime: number): void;
+      };
+      internal._isRunning = true;
+      internal._lastTime = 1000;
+      internal._loop(9999); // a long hitch: wall-clock must not leak into the capture
+      internal._loop(10001);
+
+      expect(app.recordedDeltaTimes).toEqual([1 / 30, 1 / 30]);
+    } finally {
+      if (origRaf === undefined) {
+        delete windowRef.requestAnimationFrame;
+      } else {
+        windowRef.requestAnimationFrame = origRaf;
+      }
+    }
   });
 });

@@ -10,6 +10,7 @@ import {
   createDefaultRendererContext,
 } from "../interfaces/index.js";
 import { RendererType } from "../enums/index.js";
+import { FrameInfo, createFrameInfo } from "../interfaces/FrameInfo.js";
 import { Object3D } from "../core/Object3D.js";
 import { FogVolume } from "../core/objects/FogVolume.js";
 import { Scene } from "../core/Scene.js";
@@ -49,6 +50,9 @@ export abstract class AbstractRenderer implements Renderer {
 
   /** The global post processing volume/group. */
   public postProcessing: PostProcessingGroup = new PostProcessingGroup();
+
+  /** @inheritdoc */
+  public frameInfo: FrameInfo = createFrameInfo();
 
   /** Optional callback triggered when the GPU context is lost. */
   public onContextLost?: ((info: { reason?: string; message?: string }) => void) | undefined;

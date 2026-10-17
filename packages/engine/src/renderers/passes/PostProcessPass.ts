@@ -398,7 +398,7 @@ export class PostProcessPass implements RenderPass {
     );
 
     const d = this._uniformData;
-    d[0] = (performance.now() % 100000) / 1000.0; // a.x: time
+    d[0] = renderer.frameInfo.realTime % 100.0; // a.x: time (real time: effects like grain must not freeze in hit-stop)
     d[1] = tm ? tm.exposure : 1.0; // a.y: exposure
     d[2] = tm ? 1.0 / tm.gamma : 1.0; // a.z: inverseGamma
     d[3] = vig ? vig.offset : 0.8; // a.w: vignetteOffset

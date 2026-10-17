@@ -759,6 +759,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         bloomTex,
         null,
         lightShaftsTex,
+        null,
+        this.frameInfo.realTime,
       );
     }
   }

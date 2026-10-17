@@ -229,6 +229,7 @@ export class VolumetricFogPassGL {
     dirShadowTexture: WebGLTexture | null,
     element: VolumetricFogElement,
     fogVolumes: FogVolume[] = [],
+    time: number = 0,
   ): WebGLTexture | null {
     if (!this._isWebGL2 || !element.enabled || width <= 0 || height <= 0) {
       return null;
@@ -344,7 +345,7 @@ export class VolumetricFogPassGL {
     }
 
     if (this._uTimeLoc) {
-      gl2.uniform1f(this._uTimeLoc, performance.now() * 0.001);
+      gl2.uniform1f(this._uTimeLoc, time);
     }
 
     if (fogVolumes.length > 16 && !this._warnedVolumeLimit) {

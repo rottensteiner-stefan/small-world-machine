@@ -18,6 +18,8 @@ import {
   Renderer,
   RendererContext,
   createDefaultRendererContext,
+  FrameInfo,
+  createFrameInfo,
 } from "../interfaces/index.js";
 import { ProjectionType, RendererType, PostProcessingEffectType } from "../enums/index.js";
 import { RendererFactory } from "../renderers/index.js";
@@ -87,6 +89,19 @@ export abstract class SmallWorldMachine {
   private _hitStopRemaining: number = 0;
   private _hitStopScale: number = 1;
   private _taaFrameIndex: number = 0;
+  private readonly _frameInfo: FrameInfo = createFrameInfo();
+
+  /**
+   * Fixed capture frame rate (like Unity's `Time.captureFramerate`, Godot's `--fixed-fps`). When
+   * greater than 0 the realtime loop advances by exactly `1 / captureFrameRate` seconds per frame,
+   * independent of wall-clock time, so recordings and golden runs are reproducible. 0 = off.
+   */
+  public captureFrameRate: number = 0;
+
+  /** Timing context of the last stepped frame (gameplay and real time, frame index). */
+  public get frameInfo(): Readonly<FrameInfo> {
+    return this._frameInfo;
+  }
 
   /**
    * Creates a new SmallWorldMachine application.
@@ -353,6 +368,14 @@ export abstract class SmallWorldMachine {
       this._hitStopRemaining -= deltaTime;
     }
 
+    const frame = this._frameInfo;
+    frame.deltaTime = gameplayDeltaTime;
+    frame.realDeltaTime = deltaTime;
+    frame.time += gameplayDeltaTime;
+    frame.realTime += deltaTime;
+    frame.frameIndex++;
+    this.renderer.frameInfo = frame;
+
     this.input.update();
     this.update(gameplayDeltaTime);
 
@@ -511,7 +534,10 @@ export abstract class SmallWorldMachine {
       return;
     }
 
-    const deltaTime: number = Math.max(0, Math.min((currentTime - this._lastTime) / 1000.0, 0.1));
+    const deltaTime: number =
+      0 < this.captureFrameRate
+        ? 1.0 / this.captureFrameRate
+        : Math.max(0, Math.min((currentTime - this._lastTime) / 1000.0, 0.1));
     this._lastTime = currentTime;
 
     this.step(deltaTime);

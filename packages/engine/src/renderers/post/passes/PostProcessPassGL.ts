@@ -295,6 +295,7 @@ export class PostProcessPassGL {
     hbaoTexture: WebGLTexture | null = null,
     lightShaftsTexture: WebGLTexture | null = null,
     volumetricFogTexture: WebGLTexture | null = null,
+    realTime: number = 0,
   ): void {
     const sig = this._getSignature(group);
     if (!this._prog || sig !== this._compiledSignature) {
@@ -449,7 +450,7 @@ export class PostProcessPassGL {
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
     if (this._uTime !== null) {
-      gl.uniform1f(this._uTime, (performance.now() % 100000) / 1000.0);
+      gl.uniform1f(this._uTime, realTime % 100.0);
     }
 
     if (this._isWebGL2) {

@@ -3,6 +3,7 @@ import { Scene } from "../core/index.js";
 import { Color } from "../core/colors/index.js";
 import { Vector3D } from "../math/index.js";
 import { RendererType } from "../enums/index.js";
+import { FrameInfo } from "./FrameInfo.js";
 
 /**
  * Interface for all renderer implementations.
@@ -10,6 +11,9 @@ import { RendererType } from "../enums/index.js";
 export interface Renderer {
   /** The type of the renderer. */
   readonly type: RendererType;
+
+  /** Timing context of the current frame, written by the application before `render()`. */
+  frameInfo: FrameInfo;
 
   /** The global post-processing volume/group. */
   postProcessing: import("../renderers/post/index.js").PostProcessingGroup;

@@ -117,7 +117,6 @@ export class VolumetricFogPassGPU {
   private readonly _scratchInvView: Matrix4 = new Matrix4();
   private readonly _scratchInvViewProj: Matrix4 = new Matrix4();
   private readonly _scratchSunDir: Vector3D = new Vector3D();
-  private _frameCounter: number = 0;
   private _warnedVolumeLimit: boolean = false;
 
   constructor(device: GPUDevice) {
@@ -457,12 +456,12 @@ export class VolumetricFogPassGPU {
     this._resizeTargets(renderer, width, height, depthView, shadowView);
 
     const dims = renderer.clusterDims;
-    this._frameCounter++;
+    const frameIndex = renderer.frameInfo.frameIndex;
 
     // Sub-voxel temporal jitter
-    const jx = (ign(0, 1, this._frameCounter) - 0.5) * element.jitter;
-    const jy = (ign(2, 3, this._frameCounter) - 0.5) * element.jitter;
-    const jz = (ign(4, 5, this._frameCounter) - 0.5) * element.jitter;
+    const jx = (ign(0, 1, frameIndex) - 0.5) * element.jitter;
+    const jy = (ign(2, 3, frameIndex) - 0.5) * element.jitter;
+    const jz = (ign(4, 5, frameIndex) - 0.5) * element.jitter;
 
     // --- 1. Injection uniform data (FroxelUniforms) ---
     const view = this._scratchView;
@@ -486,7 +485,7 @@ export class VolumetricFogPassGPU {
     const numVols = Math.min(fogVolumes.length, MAX_FOG_VOLUMES);
     inj[20] = element.asymmetry;
     inj[21] = 0.0; // unused: `intensity` is applied once, in the composite pass
-    inj[22] = performance.now() * 0.001; // elapsed time in seconds for rolling mist
+    inj[22] = renderer.frameInfo.time; // gameplay time in seconds for rolling mist
     inj[23] = numVols;
 
     inj[24] = near;

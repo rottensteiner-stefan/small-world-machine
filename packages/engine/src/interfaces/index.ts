@@ -5,6 +5,7 @@ export * from "./CameraInterfaceData.js";
 export * from "./CameraStrategy.js";
 export * from "./EngineOptions.js";
 export * from "./Events.js";
+export * from "./FrameInfo.js";
 export * from "./Geometry.js";
 export * from "./GeometryData.js";
 export * from "./LoaderOptions.js";

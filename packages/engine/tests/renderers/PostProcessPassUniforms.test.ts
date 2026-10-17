@@ -58,6 +58,7 @@ function makeMockDevice(): {
 function makeMockRenderer(device: GPUDevice, group: PostProcessingGroup): PassInternals {
   return {
     postProcessing: group,
+    frameInfo: { time: 0, deltaTime: 0, realTime: 0, realDeltaTime: 0, frameIndex: 0 },
     hdrTextureView: {},
     motionTrailResolvedView: undefined,
     taaResolvedView: undefined,

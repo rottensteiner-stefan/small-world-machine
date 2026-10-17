@@ -790,6 +790,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             shadowFbo?.texture ?? null,
             volFogNode,
             this._fogVolumes,
+            this.frameInfo.time,
           );
         }
       }
@@ -802,6 +803,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         hbaoTex,
         lightShaftsTex,
         volumetricFogTex,
+        this.frameInfo.realTime,
       );
     }
   }

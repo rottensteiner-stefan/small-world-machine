@@ -133,6 +133,7 @@ function createMockGPU(): {
 
   const makeRenderer = (group: PostProcessingGroup): unknown => ({
     postProcessing: group,
+    frameInfo: { time: 0, deltaTime: 0, realTime: 0, realDeltaTime: 0, frameIndex: 0 },
     hdrTextureView: {},
     motionTrailResolvedView: undefined,
     taaResolvedView: undefined,
