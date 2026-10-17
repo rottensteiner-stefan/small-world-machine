@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.111.0] - 2026-10-17
+
+### "One accurate measurement is worth more than a thousand expert opinions." - Grace Hopper
+
+- **Features:**
+  - *Capture mode for every showcase* (`AbstractShowcase`, `getCaptureFrameRateFromQuery`): `?captureFps=N` sets `SmallWorldMachine.captureFrameRate` before the first frame, so the realtime loop advances by exactly `1 / N` seconds per frame. Showcase 39 exposes `window.__showcase39` as a QA hook (same convention as Showcase 28).
+  - *Fog capture determinism check* (`npm run test:fog-capture`, `scripts/check-fog-capture.js`): loads Showcase 39 in two fresh pages per backend (WebGL1, WebGL2, WebGPU; WebGPU is skipped if unusable), hashes the canvas at frames 10, 30 and 120 and fails on any difference (about 40 s). Measured: identical on all three backends on a frozen build, and a negative control with a varying `captureFps` is reported as DIFF.
+  - *WebGL2 volumetric fog scatters local lights* (`VolumetricFogPassGL`, `VolumetricFog.frag.glsl`): up to 16 point and 16 spot lights are evaluated along the half-resolution raymarch with their range, decay and cone, scaled by `AbstractLight.volumetricIntensity`, the fog tint and the scattering albedo, so the WebGL2 fog now reacts to local lights like the WebGPU path (WebGPU keeps its own clustered, shadowed pipeline).
+- **Architecture & Bugfixes:**
+  - *Look change (WebGL2):* fog around local lights is brighter than in 0.110.0; retune `volumetricIntensity` or `density` if a scene relied on the old look. No breaking API changes in this release.
+- **Housekeeping & Docs:**
+  - *ADR 0031, `CONTEXT.md` and the volumetric fog guide* document the frame context, capture frame rate, scattering albedo, ambient inject and per-light fog intensity; claims that contradicted the code were corrected (the fog grid is the clustered light grid, not 160x90x64; capture mode gives reproducible inputs, not bit-exact pixels across devices; `FrameInfo` is not immutable; carving is order independent).
+  - *Testing rule:* reproducibility tests must run against a frozen build, not a dev server serving a tree that is being edited (a live-edited tree made WebGL2 look non-deterministic); documented in the guide.
+  - *Showcase 39 log* records the 0.110.0 retuning.
+
 ## [0.110.0] - 2026-10-17
 
 ### "Nothing is built on stone; all is built on sand, but we must build as if the sand were stone." - Jorge Luis Borges
