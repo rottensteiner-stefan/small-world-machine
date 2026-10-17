@@ -26,7 +26,7 @@ Showcase 22 (Akkretionsscheibe um ein supermassives Schwarzes Loch) führte komp
 4. **Wissenschaftliche & Mathematische Verankerung:**
    - Plummer-Potential ($1911$) zur Vermeidung von Polstellen bei $r \to 0$.
    - Plancksche Strahlung & Farbtemperatur nach Tanner Helland ($2012$).
-   - Vollständige Erfassung in [`REFERENCES.md`](../../REFERENCES.md).
+   - Vollständige Erfassung in [`REFERENCES.md`](https://github.com/rottensteiner-stefan/small-world-machine/blob/main/REFERENCES.md).
 
 ## Konsequenzen
 
