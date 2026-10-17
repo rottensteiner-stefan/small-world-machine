@@ -4,7 +4,7 @@ import BILATERAL_FRAG_GLSL from "../shaders/VolumetricFogBilateral.frag.glsl?raw
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import { VolumetricFogElement } from "../elements/index.js";
-import { DirectionalLight } from "../../../core/lights/index.js";
+import { DirectionalLight, PointLight, SpotLight } from "../../../core/lights/index.js";
 import { FogVolume } from "../../../core/objects/FogVolume.js";
 import { Color } from "../../../core/colors/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
@@ -68,6 +68,16 @@ export class VolumetricFogPassGL {
   private _uNumFogVolumesLoc: WebGLUniformLocation | null = null;
   private readonly _uFogVolumeLocs: FogVolumeUniformLocations[] = [];
 
+  // Local lights uniform locations
+  private _uNumPointLightsLoc: WebGLUniformLocation | null = null;
+  private _uPointLightPosLoc: WebGLUniformLocation | null = null;
+  private _uPointLightColorLoc: WebGLUniformLocation | null = null;
+  private _uNumSpotLightsLoc: WebGLUniformLocation | null = null;
+  private _uSpotLightPosLoc: WebGLUniformLocation | null = null;
+  private _uSpotLightDirLoc: WebGLUniformLocation | null = null;
+  private _uSpotLightColorLoc: WebGLUniformLocation | null = null;
+  private _uSpotLightParamsLoc: WebGLUniformLocation | null = null;
+
   // Uniform locations: Bilateral upsample
   private _uLowResFogLoc: WebGLUniformLocation | null = null;
   private _uFullResDepthLoc: WebGLUniformLocation | null = null;
@@ -87,6 +97,12 @@ export class VolumetricFogPassGL {
   private readonly _scratchCascadeSplits: Float32Array = new Float32Array(4);
   private readonly _scratchDirShadowInfo: Float32Array = new Float32Array(4);
   private readonly _scratchSunDir: Vector3D = new Vector3D();
+  private readonly _scratchPointLightPos: Float32Array = new Float32Array(16 * 4);
+  private readonly _scratchPointLightColor: Float32Array = new Float32Array(16 * 4);
+  private readonly _scratchSpotLightPos: Float32Array = new Float32Array(16 * 4);
+  private readonly _scratchSpotLightDir: Float32Array = new Float32Array(16 * 4);
+  private readonly _scratchSpotLightColor: Float32Array = new Float32Array(16 * 4);
+  private readonly _scratchSpotLightParams: Float32Array = new Float32Array(16 * 4);
 
   constructor(gl: WebGLRenderingContext | WebGL2RenderingContext, isWebGL2: boolean) {
     this._gl = gl;
@@ -173,6 +189,15 @@ export class VolumetricFogPassGL {
       this._uTimeLoc = gl.getUniformLocation(this._progFog, "u_time");
       this._uNumFogVolumesLoc = gl.getUniformLocation(this._progFog, "u_numFogVolumes");
 
+      this._uNumPointLightsLoc = gl.getUniformLocation(this._progFog, "u_numPointLights");
+      this._uPointLightPosLoc = gl.getUniformLocation(this._progFog, "u_pointLightPos");
+      this._uPointLightColorLoc = gl.getUniformLocation(this._progFog, "u_pointLightColor");
+      this._uNumSpotLightsLoc = gl.getUniformLocation(this._progFog, "u_numSpotLights");
+      this._uSpotLightPosLoc = gl.getUniformLocation(this._progFog, "u_spotLightPos");
+      this._uSpotLightDirLoc = gl.getUniformLocation(this._progFog, "u_spotLightDir");
+      this._uSpotLightColorLoc = gl.getUniformLocation(this._progFog, "u_spotLightColor");
+      this._uSpotLightParamsLoc = gl.getUniformLocation(this._progFog, "u_spotLightParams");
+
       this._uFogVolumeLocs.length = 0;
       for (let i = 0; i < 16; i++) {
         this._uFogVolumeLocs.push({
@@ -252,6 +277,8 @@ export class VolumetricFogPassGL {
     ambientIntensity: number = 0,
     irradianceMap: WebGLTexture | null = null,
     envIntensity: number = 0,
+    pointLights: PointLight[] = [],
+    spotLights: SpotLight[] = [],
   ): WebGLTexture | null {
     if (!this._isWebGL2 || !element.enabled || width <= 0 || height <= 0) {
       return null;
@@ -331,9 +358,9 @@ export class VolumetricFogPassGL {
     if (this._uSunColorLoc) {
       gl2.uniform3f(
         this._uSunColorLoc,
-        sunActive ? element.color.r * sunScale : 0.0,
-        sunActive ? element.color.g * sunScale : 0.0,
-        sunActive ? element.color.b * sunScale : 0.0,
+        sunActive ? dirLight!.color.r * element.color.r * sunScale : 0.0,
+        sunActive ? dirLight!.color.g * element.color.g * sunScale : 0.0,
+        sunActive ? dirLight!.color.b * element.color.b * sunScale : 0.0,
       );
     }
 
@@ -424,6 +451,78 @@ export class VolumetricFogPassGL {
         if (loc.size) gl2.uniform4f(loc.size, vol.size.x, vol.size.y, vol.size.z, vol.noiseSpeed);
       }
     }
+
+    // Upload local point lights
+    const numPts = Math.min(pointLights.length, 16);
+    if (this._uNumPointLightsLoc) gl2.uniform1i(this._uNumPointLightsLoc, numPts);
+    for (let i = 0; i < 16; i++) {
+      const base = i * 4;
+      if (i < numPts) {
+        const pl = pointLights[i]!;
+        const mat = pl.worldMatrix.data;
+        this._scratchPointLightPos[base] = mat[12]!;
+        this._scratchPointLightPos[base + 1] = mat[13]!;
+        this._scratchPointLightPos[base + 2] = mat[14]!;
+        this._scratchPointLightPos[base + 3] = pl.distance;
+
+        const pScale = pl.intensity * pl.volumetricIntensity * albedo;
+        this._scratchPointLightColor[base] = pl.color.r * pScale * element.color.r;
+        this._scratchPointLightColor[base + 1] = pl.color.g * pScale * element.color.g;
+        this._scratchPointLightColor[base + 2] = pl.color.b * pScale * element.color.b;
+        this._scratchPointLightColor[base + 3] = pl.decay;
+      } else {
+        this._scratchPointLightPos.fill(0, base, base + 4);
+        this._scratchPointLightColor.fill(0, base, base + 4);
+      }
+    }
+    if (this._uPointLightPosLoc)
+      gl2.uniform4fv(this._uPointLightPosLoc, this._scratchPointLightPos);
+    if (this._uPointLightColorLoc)
+      gl2.uniform4fv(this._uPointLightColorLoc, this._scratchPointLightColor);
+
+    // Upload local spot lights
+    const numSpots = Math.min(spotLights.length, 16);
+    if (this._uNumSpotLightsLoc) gl2.uniform1i(this._uNumSpotLightsLoc, numSpots);
+    for (let i = 0; i < 16; i++) {
+      const base = i * 4;
+      if (i < numSpots) {
+        const sl = spotLights[i]!;
+        const mat = sl.worldMatrix.data;
+        const dir = sl.direction;
+        const dirLen = Math.sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z) || 1.0;
+        this._scratchSpotLightPos[base] = mat[12]!;
+        this._scratchSpotLightPos[base + 1] = mat[13]!;
+        this._scratchSpotLightPos[base + 2] = mat[14]!;
+        this._scratchSpotLightPos[base + 3] = sl.distance;
+
+        this._scratchSpotLightDir[base] = dir.x / dirLen;
+        this._scratchSpotLightDir[base + 1] = dir.y / dirLen;
+        this._scratchSpotLightDir[base + 2] = dir.z / dirLen;
+        this._scratchSpotLightDir[base + 3] = sl.decay;
+
+        const sScale = sl.intensity * sl.volumetricIntensity * albedo;
+        this._scratchSpotLightColor[base] = sl.color.r * sScale * element.color.r;
+        this._scratchSpotLightColor[base + 1] = sl.color.g * sScale * element.color.g;
+        this._scratchSpotLightColor[base + 2] = sl.color.b * sScale * element.color.b;
+        this._scratchSpotLightColor[base + 3] = 0.0;
+
+        this._scratchSpotLightParams[base] = Math.cos(sl.angle);
+        this._scratchSpotLightParams[base + 1] = Math.cos(sl.angle * (1.0 - sl.penumbra));
+        this._scratchSpotLightParams[base + 2] = sl.distance;
+        this._scratchSpotLightParams[base + 3] = sl.decay;
+      } else {
+        this._scratchSpotLightPos.fill(0, base, base + 4);
+        this._scratchSpotLightDir.fill(0, base, base + 4);
+        this._scratchSpotLightColor.fill(0, base, base + 4);
+        this._scratchSpotLightParams.fill(0, base, base + 4);
+      }
+    }
+    if (this._uSpotLightPosLoc) gl2.uniform4fv(this._uSpotLightPosLoc, this._scratchSpotLightPos);
+    if (this._uSpotLightDirLoc) gl2.uniform4fv(this._uSpotLightDirLoc, this._scratchSpotLightDir);
+    if (this._uSpotLightColorLoc)
+      gl2.uniform4fv(this._uSpotLightColorLoc, this._scratchSpotLightColor);
+    if (this._uSpotLightParamsLoc)
+      gl2.uniform4fv(this._uSpotLightParamsLoc, this._scratchSpotLightParams);
 
     gl2.bindVertexArray(this._vaoFog!);
     gl2.drawArrays(gl2.TRIANGLES, 0, 3);

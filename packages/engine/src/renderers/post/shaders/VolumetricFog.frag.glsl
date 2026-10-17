@@ -41,6 +41,16 @@ uniform int u_numFogVolumes;
 uniform FogVolumeData u_fogVolumes[16];
 uniform float u_time;
 
+uniform int u_numPointLights;
+uniform vec4 u_pointLightPos[16];   // xyz: position, w: distance (range)
+uniform vec4 u_pointLightColor[16]; // rgb: color * intensity * volumetricIntensity * tint * albedo, w: decay
+
+uniform int u_numSpotLights;
+uniform vec4 u_spotLightPos[16];    // xyz: position, w: distance (range)
+uniform vec4 u_spotLightDir[16];    // xyz: direction, w: decay
+uniform vec4 u_spotLightColor[16];  // rgb: color * intensity * volumetricIntensity * tint * albedo, w: pad
+uniform vec4 u_spotLightParams[16]; // x: cosOuter, y: cosInner, z: distance (range), w: decay
+
 out vec4 fragColor;
 
 float boxSDF(vec3 p, vec3 b) {
@@ -146,12 +156,8 @@ void main() {
     int steps = clamp(u_samples, 4, 32);
     float dt = marchDist / float(steps);
 
-    // Schlick (1993) phase function approximation of Henyey-Greenstein
+    // Henyey-Greenstein phase function for participating media scattering (matching WebGPU froxel_inject / froxel_integrate)
     float g = clamp(u_asymmetry, -0.95, 0.95);
-    float k = 1.55 * g - 0.55 * (g * g * g);
-    float cosTheta = dot(rayDir, normalize(u_sunDir));
-    float denom = 1.0 - k * cosTheta;
-    float phase = (1.0 - k * k) / (12.566370614359172 * max(denom * denom, 0.0001));
 
     // Ambient inject: scene ambient colour plus the IBL irradiance from above (same as WebGPU).
     vec3 skyAmbient = u_ambientLight;
@@ -173,8 +179,10 @@ void main() {
 
         float localDensity =
             u_density * exp(-u_fogHeightFalloff * max(samplePos.y - u_fogHeight, 0.0));
-        vec3 localEmission = vec3(0.0);
-        vec3 localAlbedo = u_fogColor;
+        float baseExtinction = localDensity;
+        float posDensity = 0.0;
+        float negDensity = 0.0;
+        vec3 volumeScatter = vec3(0.0);
 
         for (int v = 0; v < 16; v++) {
             if (v >= u_numFogVolumes) break;
@@ -206,12 +214,59 @@ void main() {
                     volDensity = volDensity * mix(1.0, clamp(turb * 1.8, 0.0, 3.0), noiseAmount);
                 }
 
-                localDensity = max(0.0, localDensity + volDensity);
                 if (volDensity > 0.0) {
-                    localEmission += u_fogVolumes[v].emission.rgb * u_fogVolumes[v].params.w * falloff;
-                    localAlbedo = mix(localAlbedo, u_fogVolumes[v].albedo.rgb, clamp(falloff, 0.0, 1.0));
+                    posDensity += volDensity;
+                    volumeScatter += u_fogVolumes[v].albedo.rgb * volDensity + u_fogVolumes[v].emission.rgb * u_fogVolumes[v].params.w * falloff;
+                } else {
+                    negDensity += volDensity;
                 }
             }
+        }
+
+        float uncarved = baseExtinction + posDensity;
+        localDensity = max(0.0, uncarved + negDensity);
+        if (uncarved > 0.00001) {
+            volumeScatter *= (localDensity / uncarved);
+        } else {
+            volumeScatter = vec3(0.0);
+        }
+
+        // Local Point Lights in-scattering
+        vec3 localLightScatter = vec3(0.0);
+        for (int p = 0; p < 16; p++) {
+            if (p >= u_numPointLights) break;
+            vec3 toLight = u_pointLightPos[p].xyz - samplePos;
+            float lightDist = max(length(toLight), 0.0001);
+            float maxRange = u_pointLightPos[p].w;
+            if (maxRange > 0.0 && lightDist >= maxRange) continue;
+            vec3 ldir = toLight / lightDist;
+            float phase = (1.0 - g * g) / (12.566370614359172 * max(pow(1.0 + g * g - 2.0 * g * dot(ldir, rayDir), 1.5), 0.00001));
+            float ratio = lightDist / max(maxRange, 0.001);
+            float window = clamp(1.0 - ratio * ratio * ratio * ratio, 0.0, 1.0);
+            float atten = (window * window) / (1.0 + lightDist * lightDist);
+            localLightScatter += u_pointLightColor[p].rgb * atten * phase;
+        }
+
+        // Local Spot Lights in-scattering
+        for (int s = 0; s < 16; s++) {
+            if (s >= u_numSpotLights) break;
+            vec3 toLight = u_spotLightPos[s].xyz - samplePos;
+            float lightDist = max(length(toLight), 0.0001);
+            float maxDist = u_spotLightParams[s].z;
+            if (maxDist > 0.0 && lightDist >= maxDist) continue;
+            vec3 ldir = toLight / lightDist;
+            vec3 spotDir = u_spotLightDir[s].xyz;
+            float theta = dot(-ldir, spotDir);
+            float cosOuter = u_spotLightParams[s].x;
+            float cosInner = u_spotLightParams[s].y;
+            if (theta <= cosOuter) continue;
+            float cone = smoothstep(cosOuter, cosInner, theta);
+            float phase = (1.0 - g * g) / (12.566370614359172 * max(pow(1.0 + g * g - 2.0 * g * dot(ldir, rayDir), 1.5), 0.00001));
+            float atten = 1.0 / (1.0 + lightDist * lightDist);
+            if (maxDist > 0.0) {
+                atten *= pow(clamp(1.0 - lightDist / maxDist, 0.0, 1.0), max(u_spotLightParams[s].w, 1.0));
+            }
+            localLightScatter += u_spotLightColor[s].rgb * atten * cone * phase;
         }
 
         float stepOpticalDepth = localDensity * dt;
@@ -219,12 +274,16 @@ void main() {
         float stepTransmittance = exp(-stepTau);
 
         // Decima Powder effect: forward-scattering highlights along edges
-        float powder = 1.0 - exp(-stepTau * 2.0);
+        float powder = mix(1.0, 1.0 - exp(-stepTau * 2.0), 0.35);
 
-        // Sunlight in-scattering + ambient base fog scattering
-        vec3 sunScattering = shadow * u_sunColor * phase * powder;
-        vec3 ambientScattering = localAlbedo * skyAmbient * u_ambientInject + localEmission;
-        vec3 stepLight = sunScattering + ambientScattering;
+        // Directional sunlight in-scattering
+        float cosSun = dot(rayDir, normalize(u_sunDir));
+        float sunPhase = (1.0 - g * g) / (12.566370614359172 * max(pow(1.0 + g * g - 2.0 * g * cosSun, 1.5), 0.00001));
+        vec3 sunScattering = shadow * u_sunColor * sunPhase;
+
+        vec3 directScattering = (localLightScatter + sunScattering) * powder;
+        vec3 ambientScattering = skyAmbient * (u_ambientInject * u_fogColor) + volumeScatter;
+        vec3 stepLight = directScattering + ambientScattering;
 
         accumulatedLight += transmittance * stepLight * (1.0 - stepTransmittance);
         transmittance *= stepTransmittance;
