@@ -1572,9 +1572,9 @@ export class WebGPURenderer extends AbstractRenderer {
         this._lightShaftsTextureView = undefined;
       }
 
-      // Volumetric fog: inject the froxel volume (compute), then ray-march per pixel with
-      // directional/CSM self-shadowing -- composed additively before tonemapping by
-      // PostProcessPass. WebGPU-only in V1 (ADR 0031); WebGL2 stays on analytic fog.
+      // Volumetric fog: froxel inject -> temporal reprojection -> in-register integration (incl.
+      // directional/CSM sunlight) -> single-tap composite; PostProcessPass attenuates the scene by
+      // the transmittance and adds the in-scattering before tonemapping (ADR 0031).
       const volFogNode = this.postProcessing.get<import("../post/index.js").VolumetricFogElement>(
         PostProcessingEffectType.VOLUMETRIC_FOG,
       );

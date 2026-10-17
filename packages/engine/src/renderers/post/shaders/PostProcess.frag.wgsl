@@ -270,14 +270,13 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
         }
     }
 
-    // Volumetric Fog (true 3D froxel in-scattering, ADR 0031) -- additive linear HDR, kept fully
-    // separate from the analytic `Scene.fog` on top, exactly like the light shafts above. The
-    // shader writes rgba16float with scattering in rgb and transmittance in a; only rgb is
-    // composited (self-shadowed directional contribution is already baked in at injection).
+    // Volumetric Fog (true 3D froxel, ADR 0031) -- linear HDR, kept fully separate from the
+    // analytic `Scene.fog` on top. The pass writes in-scattering in rgb and transmittance in a:
+    // the scene is attenuated by the transmittance, then the scattered light is added.
     if (1u == u_volumetricFogEnabled) {
-        let fog = textureSample(volumetricFogTexture, hdrSampler, distortUv).rgb;
-        if (fog.r == fog.r) {
-            hdr += fog;
+        let fog = textureSample(volumetricFogTexture, hdrSampler, distortUv);
+        if (fog.r == fog.r && fog.a == fog.a) {
+            hdr = hdr * clamp(fog.a, 0.0, 1.0) + fog.rgb;
         }
     }
 

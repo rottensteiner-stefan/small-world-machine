@@ -144,37 +144,40 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         let worldPos = worldH.xyz / max(worldH.w, 1e-6);
         let viewDir = normalize(worldPos - uni.camPos.xyz);
 
-        // Directional Sun Light In-Scattering
+        // Directional sun in-scattering: sigma_s * L, with sigma_s == extinction (same convention
+        // as the local lights in froxel_inject.wgsl), so the sun scales with density.
         var sunScatter = vec3f(0.0);
         if (sunActive && extinction > 0.0) {
             let cosTheta = dot(-viewDir, sunDir);
             let phase = hgPhase(cosTheta, asymmetry);
             let shadow = sampleCascadeShadow(worldPos, zMid);
-            sunScatter = sunColor * (shadow * phase);
+            sunScatter = sunColor * (shadow * phase * extinction);
         }
 
-        // Decima / Nubis Powder Effect modifier to Beer's law:
-        // Multiplies extinction by an inverse exponential term to soften backfaces and brighten edges.
-        let powder = 1.0 - exp(-2.0 * stepLen * max(extinction, 1e-4));
-        let effectiveStepExtinction = extinction * mix(1.0, powder, 0.35);
-
-        // Optical depth and step transmittance (Beer-Lambert law)
-        let stepTau = effectiveStepExtinction * stepLen;
+        // Beer-Lambert transmittance. The Decima/Nubis powder term only brightens thin edges of
+        // the in-scattered light; it must not alter the transmittance.
+        let stepTau = extinction * stepLen;
         let stepTransmittance = exp(-stepTau);
+        let halfTransmittance = exp(-0.5 * stepTau);
+        let powder = mix(1.0, 1.0 - exp(-2.0 * stepTau), 0.35);
 
-        // In-scattered radiance over the step (analytic integral)
-        let totalScatter = localInScatter + sunScatter;
-        var stepRadiance = vec3f(0.0);
+        // Analytic in-scatter integral S * (1 - T) / sigma_t over the full step and its first half.
+        let totalScatter = (localInScatter + sunScatter) * powder;
+        var stepRadiance = totalScatter * stepLen;
+        var halfRadiance = totalScatter * (0.5 * stepLen);
         if (extinction > 1e-5) {
             stepRadiance = totalScatter * ((1.0 - stepTransmittance) / extinction);
-        } else {
-            stepRadiance = totalScatter * stepLen;
+            halfRadiance = totalScatter * ((1.0 - halfTransmittance) / extinction);
         }
 
+        // The stored value is the integral up to the slice CENTRE (where the composite samples
+        // it), not the far slice boundary.
+        textureStore(
+            integratedVolume,
+            coord,
+            vec4f(accumulatedRadiance + accumulatedTransmittance * halfRadiance, accumulatedTransmittance * halfTransmittance),
+        );
         accumulatedRadiance += accumulatedTransmittance * stepRadiance;
         accumulatedTransmittance *= stepTransmittance;
-
-        // Store accumulated values into 3D integrated volume.
-        textureStore(integratedVolume, coord, vec4f(accumulatedRadiance, accumulatedTransmittance));
     }
 }

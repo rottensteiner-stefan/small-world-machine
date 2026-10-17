@@ -11,8 +11,12 @@ import { Matrix4, Vector3D } from "../../../math/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
 import { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
 
+/** Uniform-array capacity of FogVolumes per pass (matches `FogVolumeData[16]` in the shaders). */
+const MAX_FOG_VOLUMES = 16;
+
 /**
- * Interleaved Gradient Noise (Jorge Jimenez 2014) for temporal sub-voxel jitter calculation.
+ * Interleaved-Gradient-Noise-style hash (after Jorge Jimenez 2014) for the temporal sub-voxel jitter.
+ * Called with constant (x, y) per axis it is a per-frame pseudo-random sequence, not a screen pattern.
  */
 function ign(x: number, y: number, frame: number): number {
   const magic = 52.9829189 * (((0.06711056 * x + 0.00583715 * y + 0.00583715 * frame) % 1.0) + 1.0);
@@ -26,8 +30,8 @@ function ign(x: number, y: number, frame: number): number {
  * depth slices).
  *
  * Phase 1 Multi-Pass Pipeline:
- *  1. Injection (Compute, `froxel_inject.wgsl`): Injects per-froxel in-scattering from the
- *     clustered light lists into a transient 3D volume texture `_injectedTexture` (rgba16float).
+ *  1. Injection (Compute, `froxel_inject.wgsl`): Injects per-froxel in-scattering (sigma_s * L) and
+ *     extinction from the clustered light lists and FogVolumes into a transient 3D volume texture `_injectedTexture` (rgba16float).
  *  2. Reprojection & TAA (Compute, `froxel_reproject.wgsl`): Blends current frame with previous
  *     frame's history volume using 3D AABB 7-tap variance clamping and sub-voxel jitter to
  *     eliminate IGN noise and slice stepping.
@@ -114,6 +118,7 @@ export class VolumetricFogPassGPU {
   private readonly _scratchInvViewProj: Matrix4 = new Matrix4();
   private readonly _scratchSunDir: Vector3D = new Vector3D();
   private _frameCounter: number = 0;
+  private _warnedVolumeLimit: boolean = false;
 
   constructor(device: GPUDevice) {
     this._device = device;
@@ -472,9 +477,15 @@ export class VolumetricFogPassGPU {
     inj[18] = element.heightFalloff;
     inj[19] = Math.min(element.maxDistance, far);
 
-    const numVols = Math.min(fogVolumes.length, 16);
+    if (fogVolumes.length > MAX_FOG_VOLUMES && !this._warnedVolumeLimit) {
+      this._warnedVolumeLimit = true;
+      console.warn(
+        `[VolumetricFog] ${fogVolumes.length} FogVolumes in the scene, only the first ${MAX_FOG_VOLUMES} are evaluated.`,
+      );
+    }
+    const numVols = Math.min(fogVolumes.length, MAX_FOG_VOLUMES);
     inj[20] = element.asymmetry;
-    inj[21] = element.intensity;
+    inj[21] = 0.0; // unused: `intensity` is applied once, in the composite pass
     inj[22] = performance.now() * 0.001; // elapsed time in seconds for rolling mist
     inj[23] = numVols;
 
@@ -547,8 +558,9 @@ export class VolumetricFogPassGPU {
     rep[38] = dims.z;
     rep[39] = 0.0;
 
-    // Temporal blend factor alpha: 0.90 default EMA, 0.0 on first frame
-    rep[40] = this._hasHistory ? Math.max(0.85, 1.0 - element.jitter * 0.25) : 0.0;
+    // History weight of the temporal EMA: 0.9 while jittering (the filter resolves the jitter), 0 without
+    // jitter or on the first frame (nothing to resolve, and history would only smear moving lights).
+    rep[40] = this._hasHistory && element.jitter > 0.0 ? 0.9 : 0.0;
     rep[41] = jx;
     rep[42] = jy;
     rep[43] = jz;
@@ -652,7 +664,7 @@ export class VolumetricFogPassGPU {
           view: this._fogTextureView!,
           loadOp: "clear",
           storeOp: "store",
-          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          clearValue: { r: 0, g: 0, b: 0, a: 1 }, // a = transmittance: clear == no fog
         },
       ],
     });

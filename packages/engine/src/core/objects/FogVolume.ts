@@ -24,12 +24,17 @@ export interface FogVolumeOptions {
  *
  * Supports analytical Signed Distance Fields (SDF) for Box, Sphere, and Cylinder shapes.
  * Positive `density` injects localized mist, smoke, or cloud bodies with custom albedo and emission.
- * Negative `density` (e.g. -1.0) carves out fog from overlapping volumes or global height fog,
- * allowing clear interiors in caves, bunkers, and indoor rooms.
+ * Negative `density` (e.g. -1.0) carves out fog from overlapping volumes or global height fog
+ * (independent of scene order), allowing clear interiors in caves, bunkers, and indoor rooms.
+ * At most 16 enabled volumes are evaluated (a warning is logged beyond that).
  * Procedural 3D noise (`noiseScale`, `noiseAmount`, `noiseSpeed`) creates rolling, animated mist.
  */
 export class FogVolume extends Object3D {
   public shape: FogVolumeShape;
+  /**
+   * Half extents (Box), radius in `x` (Sphere), radius in `x` and half height in `y` (Cylinder), all in
+   * local space (the world matrix scale applies on top). The bounds use the full vector as half extents.
+   */
   public size: Vector3D;
   /** Density multiplier. Negative density carves out fog. */
   public density: number;

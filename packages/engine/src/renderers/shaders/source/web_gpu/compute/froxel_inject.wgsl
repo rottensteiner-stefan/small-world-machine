@@ -5,9 +5,10 @@
 // disagree about which lights reach a cell.
 //
 // Output: one 3D froxel cell per cluster grid cell, written as rgba16float:
-//   rgb = accumulated forward-scattered in-scattering (against local lights)
-//   a   = extinction * density-factor for the ray-march integration pass
-// The integration (fragment) pass applies directional CSM self-shadowing per march step.
+//   rgb = in-scattered radiance per unit length (local lights + FogVolume albedo/emission)
+//   a   = extinction sigma_t (1/m, unclamped) for the integration pass
+// The integration compute pass adds directional CSM sunlight and integrates along depth;
+// `intensity` is applied once, in the composite pass.
 //
 // Bindings:
 //   @group(0): reuses the engine's global bind group (structs.wgsl) -- global uniforms, light
@@ -21,15 +22,15 @@
 struct FogVolumeData {
     invTransform: mat4x4f,
     params: vec4f,        // [shape, density, edgeFade, emissionIntensity]
-    albedo: vec4f,        // [r, g, b, pad]
-    emission: vec4f,      // [r, g, b, pad]
-    size: vec4f,          // [size.x, size.y, size.z, pad]
+    albedo: vec4f,        // [r, g, b, noiseScale]
+    emission: vec4f,      // [r, g, b, noiseAmount]
+    size: vec4f,          // [size.x, size.y, size.z, noiseSpeed]
 }
 
 struct FroxelUniforms {
     invView: mat4x4f,        // camera rotation inverse (world from view), for cell direction
     params: vec4f,           // [density, height, heightFalloff, maxWorldDistance]
-    phase: vec4f,            // [asymmetry g, intensity, unused, numVolumes]
+    phase: vec4f,            // [asymmetry g, unused, time (s), numVolumes]
     nearFar: vec4f,          // [near, far, sliceCount, pad]
     jitter: vec4f,           // [jitterX, jitterY, jitterZ, pad]
     volumes: array<FogVolumeData, 16>,
@@ -136,9 +137,13 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
         extinction = 0.0;
     }
 
-    var inScatter = vec3f(0.0);
+    // Evaluate localized FogVolume instances. Positive and negative densities are accumulated
+    // separately and combined afterwards, so carving does not depend on the array order.
+    let baseExtinction = extinction;
+    var posDensity = 0.0;
+    var negDensity = 0.0;
+    var volumeScatter = vec3f(0.0);  // ambient albedo + emission, already per-unit-length radiance
 
-    // Evaluate localized FogVolume instances (positive density & interior carving)
     let numVolumes = min(u32(froxel.phase.w), 16u);
     for (var v = 0u; v < numVolumes; v++) {
         let vol = froxel.volumes[v];
@@ -161,7 +166,8 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
 
             var volDensity = vol.params.y * falloff;
 
-            // 3D Procedural Noise Modulation (Rolling Mist)
+            // 3D Procedural Noise Modulation (Rolling Mist). The noise parameters ride in the
+            // spare .w lanes of albedo/emission/size (see FogVolumeData).
             let noiseAmount = vol.emission.w;
             let noiseScale = vol.albedo.w;
             if (noiseAmount > 0.0 && noiseScale > 0.0 && volDensity > 0.0) {
@@ -172,20 +178,28 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
                 volDensity = volDensity * mix(1.0, clamp(turb * 1.8, 0.0, 3.0), noiseAmount);
             }
 
-            extinction = max(0.0, extinction + volDensity);
-
             if (volDensity > 0.0) {
-                let emission = vol.emission.rgb * vol.params.w;
-                inScatter += (vol.albedo.rgb * volDensity + emission * falloff) * froxel.phase.y;
+                posDensity += volDensity;
+                volumeScatter += vol.albedo.rgb * volDensity + vol.emission.rgb * vol.params.w * falloff;
+            } else {
+                negDensity += volDensity;
             }
         }
     }
 
+    let uncarved = baseExtinction + posDensity;
+    extinction = max(0.0, uncarved + negDensity);
+    // Carving also removes the ambient/emissive contribution of the volumes it cuts through.
+    volumeScatter *= select(0.0, extinction / uncarved, uncarved > 1e-5);
+
+    var inScatter = volumeScatter;
+
     if (extinction > 0.0) {
         let cellIndex = u32(gid.x) + u32(global.clusterDims.x) * (u32(gid.y) + u32(global.clusterDims.y) * u32(gid.z));
-        let maxPerCluster = u32(global.clusterDims.w);
+        let viewDir = normalize(worldPos - camPos);
+        var lightScatter = vec3f(0.0);
 
-        // Point lights in this cell's light list.
+        // Point lights in this cell's light list (same range window as lighting.wgsl).
         let pt = pointClusterGrid[cellIndex];
         for (var i = 0u; i < pt.y; i++) {
             let lightIdx = pointClusterIndices[pt.x + i];
@@ -193,14 +207,14 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
             let toLight = light.pos.xyz - worldPos;
             let lightDist = max(length(toLight), 1e-4);
             let ldir = toLight / lightDist;
-            let viewDir = normalize(worldPos - camPos);
-            let cosTheta = max(dot(ldir, viewDir), -1.0);
-            let phase = hgPhase(cosTheta, froxel.phase.x);
-            let atten = 1.0 / (1.0 + lightDist * lightDist);
-            inScatter += light.col.rgb * atten * phase;
+            let phase = hgPhase(dot(ldir, viewDir), froxel.phase.x);
+            let ratio = lightDist / max(light.pos.w, 0.001);
+            let window = clamp(1.0 - ratio * ratio * ratio * ratio, 0.0, 1.0);
+            let atten = window * window / (1.0 + lightDist * lightDist);
+            lightScatter += light.col.rgb * atten * phase;
         }
 
-        // Spot lights -- same list, same phase; cone falloff via params.z = max distance.
+        // Spot lights: cone from params.x (cos outer) / params.y (cos inner), range params.z.
         let st = spotClusterGrid[cellIndex];
         for (var j = 0u; j < st.y; j++) {
             let lightIdx = spotClusterIndices[st.x + j];
@@ -208,22 +222,28 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
             let toLight = light.pos.xyz - worldPos;
             let lightDist = max(length(toLight), 1e-4);
             let ldir = toLight / lightDist;
-            let viewDir = normalize(worldPos - camPos);
-            let cosTheta = max(dot(ldir, viewDir), -1.0);
-            let phase = hgPhase(cosTheta, froxel.phase.x);
-            let coneDir = normalize(light.dir.xyz);
-            let cosAngle = dot(ldir, coneDir);
-            let spotIntensity = smoothstep(1.0, 0.0, (1.0 - cosAngle) / max(light.params.z, 1e-4));
-            let atten = 1.0 / (1.0 + lightDist * lightDist);
-            inScatter += light.col.rgb * atten * spotIntensity * phase;
+            let maxDist = light.params.z;
+            if (maxDist > 0.0 && lightDist >= maxDist) { continue; }
+            let theta = dot(-ldir, normalize(light.dir.xyz));
+            if (theta <= light.params.x) { continue; }
+            let cone = smoothstep(light.params.x, light.params.y, theta);
+            let phase = hgPhase(dot(ldir, viewDir), froxel.phase.x);
+            var atten = 1.0 / (1.0 + lightDist * lightDist);
+            if (maxDist > 0.0) {
+                atten *= pow(clamp(1.0 - lightDist / maxDist, 0.0, 1.0), max(light.params.w, 1.0));
+            }
+            lightScatter += light.col.rgb * atten * cone * phase;
         }
 
-        inScatter *= extinction * froxel.phase.y;
+        // Scattering coefficient sigma_s == extinction (albedo 1). Intensity is applied once, in
+        // the composite pass.
+        inScatter += lightScatter * extinction;
     }
 
+    // rgb = in-scattered radiance per unit length, a = extinction sigma_t (unclamped, 1/m).
     textureStore(
         volume,
         vec3u(gid),
-        vec4f(inScatter, clamp(extinction, 0.0, 1.0)),
+        vec4f(inScatter, extinction),
     );
 }

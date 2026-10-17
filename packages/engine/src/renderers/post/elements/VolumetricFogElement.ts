@@ -5,11 +5,10 @@ import { Color } from "../../../core/colors/index.js";
 /**
  * True 3D volumetric fog ("Froxel Stage 3") parameters.
  *
- * V1 is WebGPU-only (compute-based 3D in-scattering against point/spot/directional lights with
- * cascaded-shadow-map self-shadowing), reusing the clustered light grid as the froxel grid
- * (Option R, see ADR 0031 / `.agents/scratches/volumetric-froxel-step3-plan.md`). WebGL2 support
- * (CPU-culling + data texture) is a separate follow-up step; WebGL1 stays with the analytic fog
- * of `Scene.fog`.
+ * WebGPU: compute-based froxel pipeline (inject -> temporal reprojection -> in-register integration
+ * with cascaded-shadow-map sunlight -> single-tap composite), reusing the clustered light grid as the
+ * froxel grid (Option R, ADR 0031). WebGL2: per-pixel raymarch of the same parameters (a different
+ * algorithm, so the look is close but not identical). WebGL1 stays with the analytic fog of `Scene.fog`.
  *
  * Opt-in post-processing effect, off by default just like `LightShaftsElement`.
  */
@@ -44,8 +43,8 @@ export class VolumetricFogElement extends PostProcessingElement {
   public maxDistance: number = 80.0;
 
   /**
-   * Overall intensity multiplier applied to the accumulated in-scattering before compositing
-   * (default: 1.0).
+   * Intensity multiplier of the accumulated in-scattering, applied once in the composite pass
+   * (default: 1.0). Transmittance is not affected.
    */
   public intensity: number = 1.0;
 
@@ -57,8 +56,8 @@ export class VolumetricFogElement extends PostProcessingElement {
   public asymmetry: number = 0.4;
 
   /**
-   * Whether directional (sun/moon) light contributes to the in-scattering volume through the
-   * cascaded shadow map, giving volumetric self-shadowing in V1 (default: true).
+   * Whether directional (sun/moon) light is shadowed by the cascaded shadow map inside the volume
+   * (default: true).
    */
   public castDirectionalShadow: boolean = true;
 

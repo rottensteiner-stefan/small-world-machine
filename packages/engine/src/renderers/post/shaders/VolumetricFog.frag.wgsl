@@ -2,8 +2,8 @@
 // Replaces the per-pixel 32-step raymarch loop with a single hardware-trilinear 3D texture sample
 // into the pre-integrated froxel volume (Option R).
 //
-// Output: rgba16float target with integrated in-scattering (rgb), composited additively into the
-// HDR buffer before tonemapping (see PostProcess.frag.wgsl).
+// Output: rgba16float target with integrated in-scattering (rgb) and transmittance (a); the HDR
+// buffer is attenuated by `a` and the scattering added before tonemapping (see PostProcess.frag.wgsl).
 
 @group(0) @binding(0) var opaqueDepth: texture_depth_2d;
 @group(0) @binding(1) var volumeSampler: sampler;
@@ -12,7 +12,7 @@
 
 struct FroxelCompositeSettings {
     nearFar: vec4f,          // [near, far, screenW, screenH]
-    params: vec4f,           // [density, maxWorldDistance, sliceCount, intensity]
+    params: vec4f,           // [density, maxWorldDistance, sliceCount, intensity] (density/sliceCount unused)
 }
 
 struct VertexOutput {
@@ -26,12 +26,12 @@ fn projInvDepth(ndcZ: f32, near: f32, far: f32) -> f32 {
     return (2.0 * near * far) / max(far + near - z * (far - near), 1e-6);
 }
 
-// Reuses the cluster grid's log-staggered slicing (matches froxel.ts / ClusterGrid.zSliceFromViewDepth).
-fn sliceFromViewDepth(viewZ: f32, near: f32, far: f32, slices: f32) -> f32 {
+// Continuous froxel depth coordinate in [0, 1]. The integrated volume stores, for slice i, the
+// value at that slice's geometric centre (n * (f/n)^((i+0.5)/N)), which is exactly texel centre
+// (i+0.5)/N of the log mapping -- so no floor()/snapping, the hardware trilinear filter does the work.
+fn volumeDepthCoord(viewZ: f32, near: f32, far: f32) -> f32 {
     let clampedZ = clamp(viewZ, near, far);
-    let logRatio = log(far / near);
-    let slice = floor(log(clampedZ / near) * slices / max(logRatio, 1e-6));
-    return clamp(slice, 0.0, slices - 1.0);
+    return clamp(log(clampedZ / near) / max(log(far / near), 1e-6), 0.0, 1.0);
 }
 
 @fragment
@@ -39,7 +39,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let near = uni.nearFar.x;
     let far = uni.nearFar.y;
     let maxDist = uni.params.y;
-    let slices = uni.params.z;
     let intensity = uni.params.w;
 
     let dims = textureDimensions(opaqueDepth);
@@ -53,9 +52,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     }
     sceneDepth = min(sceneDepth, maxDist);
 
-    // Calculate continuous normalized slice depth coordinate w in [0.0, 1.0].
-    let sliceIdx = sliceFromViewDepth(sceneDepth, near, far, slices);
-    let w = clamp((sliceIdx + 0.5) / slices, 0.0, 1.0);
+    let w = volumeDepthCoord(sceneDepth, near, far);
 
     // Single hardware-trilinear 3D sample from the integrated volume.
     let fog = textureSampleLevel(integratedVolume, volumeSampler, vec3f(in.uv, w), 0.0);

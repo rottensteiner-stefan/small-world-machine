@@ -52,6 +52,7 @@ export class VolumetricFogPassGL {
   private _uCascadeSplitsLoc: WebGLUniformLocation | null = null;
   private _uDirShadowInfoLoc: WebGLUniformLocation | null = null;
   private _uTimeLoc: WebGLUniformLocation | null = null;
+  private _warnedVolumeLimit: boolean = false;
   private _uNumFogVolumesLoc: WebGLUniformLocation | null = null;
   private readonly _uFogVolumeLocs: FogVolumeUniformLocations[] = [];
 
@@ -346,6 +347,12 @@ export class VolumetricFogPassGL {
       gl2.uniform1f(this._uTimeLoc, performance.now() * 0.001);
     }
 
+    if (fogVolumes.length > 16 && !this._warnedVolumeLimit) {
+      this._warnedVolumeLimit = true;
+      console.warn(
+        `[VolumetricFog] ${fogVolumes.length} FogVolumes in the scene, only the first 16 are evaluated.`,
+      );
+    }
     const numVols = Math.min(fogVolumes.length, 16);
     if (this._uNumFogVolumesLoc) gl2.uniform1i(this._uNumFogVolumesLoc, numVols);
 

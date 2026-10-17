@@ -253,11 +253,11 @@ void main() {
         }
     }
 
-    // Volumetric Fog (In-Scattering, Phase 2) -- additive linear HDR lighting
+    // Volumetric Fog -- scene attenuated by the transmittance (a), then in-scattering (rgb) added
     if (u_volumetricFogEnabled == 1) {
-        vec3 fog = texture(u_volumetricFogTexture, distortUv).rgb;
-        if (!isnan(fog.r) && !isinf(fog.r)) {
-            hdr += fog;
+        vec4 fog = texture(u_volumetricFogTexture, distortUv);
+        if (!isnan(fog.r) && !isinf(fog.r) && !isnan(fog.a)) {
+            hdr = hdr * clamp(fog.a, 0.0, 1.0) + fog.rgb;
         }
     }
 
