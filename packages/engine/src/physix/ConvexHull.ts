@@ -1,5 +1,6 @@
-import { Vector3D, Matrix4, Matrix3 } from "../math/index.js";
-import { BoundingVolume, FrustumInterface } from "../interfaces/index.js";
+import type { Matrix4 } from "../math/index.js";
+import { Vector3D, Matrix3 } from "../math/index.js";
+import type { BoundingVolume, FrustumInterface } from "../interfaces/index.js";
 import { BoundingType } from "../enums/index.js";
 import { Collision } from "./Collision.js";
 

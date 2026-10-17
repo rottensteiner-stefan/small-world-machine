@@ -1,7 +1,9 @@
-import { CubeTexture, Object3D, TextureArray, Texture } from "../../../core/index.js";
+import type { Object3D, TextureArray, Texture } from "../../../core/index.js";
+import { CubeTexture } from "../../../core/index.js";
 import { RenderTarget, RenderTargetCube } from "../../../core/textures/index.js";
-import { QualityConfig } from "../../../interfaces/index.js";
-import { CompressedTextureFormat, TextureFilter, TextureWrap } from "../../../enums/index.js";
+import type { QualityConfig } from "../../../interfaces/index.js";
+import type { CompressedTextureFormat } from "../../../enums/index.js";
+import { TextureFilter, TextureWrap } from "../../../enums/index.js";
 import { applyAnisotropy } from "../../anisotropy.js";
 
 /**

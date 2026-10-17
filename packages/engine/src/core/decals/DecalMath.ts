@@ -1,4 +1,5 @@
-import { Matrix4, MathPool, Quaternion, Vector3D } from "../../math/index.js";
+import type { Vector3D } from "../../math/index.js";
+import { Matrix4, MathPool, Quaternion } from "../../math/index.js";
 import type { Decal } from "../objects/Decal.js";
 
 /** Absolute determinant of the world matrix's 3x3 part: the volume of the unit decal box in world space. */

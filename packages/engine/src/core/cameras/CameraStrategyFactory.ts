@@ -8,7 +8,7 @@ import {
   StiffStrategy,
   IsometricStrategy,
 } from "./strategies/index.js";
-import { CameraStrategy } from "../../interfaces/index.js";
+import type { CameraStrategy } from "../../interfaces/index.js";
 
 export class CameraStrategyFactory {
   /**

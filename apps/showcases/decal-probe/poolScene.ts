@@ -1,6 +1,6 @@
+import type { Camera, Scene } from "@small-world-machine/engine";
 import {
   AmbientLight,
-  Camera,
   CameraStrategyType,
   Color,
   Cube,
@@ -10,7 +10,6 @@ import {
   Ground,
   Object3D,
   Raycaster,
-  Scene,
   StandardMaterial,
   Texture,
   Vector2D,

@@ -1,4 +1,4 @@
-import { PostProcessingEffectType } from "../../enums/index.js";
+import type { PostProcessingEffectType } from "../../enums/index.js";
 
 /**
  * Base class for a post-processing element (effect).

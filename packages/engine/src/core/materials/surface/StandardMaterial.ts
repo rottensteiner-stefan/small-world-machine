@@ -4,14 +4,11 @@ import fragWGSL from "./shaders/Standard.frag.wgsl?raw";
 import { AbstractMaterial } from "../AbstractMaterial.js";
 import { Color } from "../../colors/index.js";
 import { MaterialType, ShaderPropertyType, BlendingMode } from "../../../enums/index.js";
-import { Texture, CubeTexture } from "../../textures/index.js";
-import {
-  RenderManifest,
-  ShaderDefinition,
-  StandardWebGPULayout,
-} from "../../../renderers/shaders/index.js";
+import type { Texture, CubeTexture } from "../../textures/index.js";
+import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
+import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
 import { Vector2D } from "../../../math/index.js";
-import { InspectorField } from "../../Inspectable.js";
+import type { InspectorField } from "../../Inspectable.js";
 
 /**
  * Configuration options for StandardMaterial.

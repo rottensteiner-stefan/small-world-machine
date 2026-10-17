@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GPUGeometryCache } from "../../src/renderers/WebGPU/managers/GPUGeometryCache.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Scene } from "../../src/core/Scene.js";
-import { GeometryDataInterface } from "../../src/interfaces/index.js";
+import type { GeometryDataInterface } from "../../src/interfaces/index.js";
 
 // Node/vitest has no WebGPU global; @webgpu/types only provides ambient TS types,
 // not a runtime value. Stub the bit-flag constants this class actually reads.

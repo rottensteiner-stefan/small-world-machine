@@ -1,6 +1,6 @@
 import { Vector3D } from "@small-world-machine/engine";
-import { Particle } from "../Particle.js";
-import { ParticleAffector } from "../ParticleAffector.js";
+import type { Particle } from "../Particle.js";
+import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface FadeOutZoneOptions {
   /** Center of the absorption zone. Defaults to (0, 0, 0). */

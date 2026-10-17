@@ -1,10 +1,11 @@
 import { InstancedMesh } from "../../core/InstancedMesh.js";
-import { Object3D } from "../../core/Object3D.js";
-import { AbstractMaterial, StandardMaterial } from "../../core/materials/index.js";
+import type { Object3D } from "../../core/Object3D.js";
+import type { AbstractMaterial } from "../../core/materials/index.js";
+import { StandardMaterial } from "../../core/materials/index.js";
 import { Color } from "../../core/colors/index.js";
 import { Sphere } from "../../geometry/index.js";
 import { Matrix4, Vector3D } from "../../math/index.js";
-import { GeometryDataInterface } from "../../interfaces/index.js";
+import type { GeometryDataInterface } from "../../interfaces/index.js";
 
 export interface WeatherEmitterSpawnArea {
   /** Extent along X, centered on `center.x`. */

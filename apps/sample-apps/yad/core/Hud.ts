@@ -1,6 +1,7 @@
 import { Events } from "../Events.js";
-import { EventDispatcherImpl } from "@small-world-machine/engine/core/index.js";
-import { generateSpriteFontChars, sliceFaceSprites, SpriteFontVariant } from "./SpriteAtlas.js";
+import type { EventDispatcherImpl } from "@small-world-machine/engine/core/index.js";
+import type { SpriteFontVariant } from "./SpriteAtlas.js";
+import { generateSpriteFontChars, sliceFaceSprites } from "./SpriteAtlas.js";
 
 interface DamagePayload {
   amount: number;

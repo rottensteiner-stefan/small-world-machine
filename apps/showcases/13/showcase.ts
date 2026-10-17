@@ -1,7 +1,7 @@
+import type { BloomElement } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
-  BloomElement,
   Color,
   Cube,
   CubeLayout,

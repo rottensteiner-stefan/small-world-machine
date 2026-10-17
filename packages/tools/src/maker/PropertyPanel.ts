@@ -1,19 +1,22 @@
-import { Pane, FolderApi } from "tweakpane";
-import {
+import type { FolderApi } from "tweakpane";
+import { Pane } from "tweakpane";
+import type {
   Object3D,
   Behavior,
   AbstractMaterial,
+  Color,
+  InspectorField,
+} from "@small-world-machine/engine";
+import {
   StandardMaterial,
   BasicMaterial,
   WireframeMaterial,
   GlassMaterial,
   PhongMaterial,
-  Color,
-  InspectorField,
   collectInspectorSchema,
   StageZoneMarker,
 } from "@small-world-machine/engine";
-import { UndoStack } from "./UndoStack.js";
+import type { UndoStack } from "./UndoStack.js";
 
 /** Minimal shape shared by Tweakpane binding/blade APIs this panel actually calls -- mirrors
  * `GadgetInspector`'s own minimal interfaces rather than depending on Tweakpane's full types. */

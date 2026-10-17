@@ -1,9 +1,9 @@
+import type { EngineOptions } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   Color,
   Cube,
   DirectionalLight,
-  EngineOptions,
   ModelGeometry,
   Object3D,
   RendererType,

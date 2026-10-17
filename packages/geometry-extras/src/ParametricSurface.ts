@@ -1,4 +1,5 @@
-import { AbstractGeometry, Vector3D } from "@small-world-machine/engine";
+import type { Vector3D } from "@small-world-machine/engine";
+import { AbstractGeometry } from "@small-world-machine/engine";
 
 /**
  * A user-supplied parametric surface evaluator. `u` and `v` traverse the domains

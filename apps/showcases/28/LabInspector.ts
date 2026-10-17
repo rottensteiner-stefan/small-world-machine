@@ -1,25 +1,27 @@
-import {
+import type {
   BloomElement,
   BoundingBox,
   BoundingSphere,
+  OrbitController,
+  SpotLight,
+  Scene,
+  Camera,
+  Input,
+  Renderer,
+} from "@small-world-machine/engine";
+import {
   BoundingType,
   Color,
   Cube,
   GlassMaterial,
   MathUtils,
   Object3D,
-  OrbitController,
   PostProcessingEffectType,
   Raycaster,
-  SpotLight,
   StandardMaterial,
   Vector2D,
   Vector3D,
   WireframeMaterial,
-  Scene,
-  Camera,
-  Input,
-  Renderer,
 } from "@small-world-machine/engine";
 import { HierarchyPanel, PropertyPanel, UndoStack } from "@small-world-machine/tools";
 import { Pane } from "tweakpane";

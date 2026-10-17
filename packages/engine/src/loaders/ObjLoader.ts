@@ -4,7 +4,7 @@ import { EventType } from "../enums/index.js";
 import { ModelGeometry } from "../geometry/index.js";
 import { Object3D } from "../core/index.js";
 import { PhongMaterial } from "../core/materials/index.js";
-import { LoaderOptions } from "../interfaces/index.js";
+import type { LoaderOptions } from "../interfaces/index.js";
 
 // Helper class to sort geometry parts by material
 class MaterialGroup {

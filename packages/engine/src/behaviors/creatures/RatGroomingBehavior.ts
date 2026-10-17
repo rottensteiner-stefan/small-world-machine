@@ -1,5 +1,6 @@
-import { Behavior, InspectorField } from "../../core/behaviors/Behavior.js";
-import { Object3D } from "../../core/Object3D.js";
+import type { InspectorField } from "../../core/behaviors/Behavior.js";
+import { Behavior } from "../../core/behaviors/Behavior.js";
+import type { Object3D } from "../../core/Object3D.js";
 
 export enum RatGroomingState {
   FACE_WASHING = "face_washing",

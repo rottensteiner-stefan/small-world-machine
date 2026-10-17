@@ -1,4 +1,4 @@
-import { CustomShaderMaterialOptions } from "../CustomShaderMaterial.js";
+import type { CustomShaderMaterialOptions } from "../CustomShaderMaterial.js";
 
 /**
  * Interface for all external shader importers.

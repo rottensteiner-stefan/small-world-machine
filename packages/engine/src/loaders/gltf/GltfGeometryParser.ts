@@ -1,9 +1,9 @@
-import { GltfJson } from "./types.js";
+import type { GltfJson } from "./types.js";
 import { GltfBinaryParser } from "./GltfBinaryParser.js";
-import { GeometryDataInterface } from "../../interfaces/index.js";
+import type { GeometryDataInterface } from "../../interfaces/index.js";
 import { ModelGeometry } from "../../geometry/index.js";
 import { getGltfExtensions } from "./GltfExtensionRegistry.js";
-import { GltfPrimitiveDef, GltfReadContext } from "./GltfExtensionPlugin.js";
+import type { GltfPrimitiveDef, GltfReadContext } from "./GltfExtensionPlugin.js";
 
 /**
  * Parser for glTF primitive vertex attributes and index buffers into ModelGeometry.

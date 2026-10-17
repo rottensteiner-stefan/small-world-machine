@@ -1,7 +1,7 @@
-import { Object3D } from "../index.js";
-import { CameraInterfaceData } from "../../interfaces/index.js";
+import type { Object3D } from "../index.js";
+import type { CameraInterfaceData } from "../../interfaces/index.js";
 import { MathUtils } from "../../math/index.js";
-import { InspectorField } from "../Inspectable.js";
+import type { InspectorField } from "../Inspectable.js";
 import { shallowCloneWithValueTypes } from "../CloneUtils.js";
 
 /** Re-exported for existing callers that import it from here (e.g. individual Behavior

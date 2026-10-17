@@ -1,20 +1,18 @@
-import {
-  AbstractLight,
+import type {
   Camera,
   Object3D,
   Scene,
   BoundingBox,
   BoundingSphere,
-  BoundingType,
-  Vector3D,
   BoundingVolume,
 } from "@small-world-machine/engine";
-import { OrbitCameraController } from "./OrbitCameraController.js";
-import { TransformGizmo } from "./TransformGizmo.js";
-import { LightGizmoManager } from "./LightGizmoManager.js";
-import { StageZoneGizmoManager } from "./StageZoneGizmoManager.js";
-import { PrefabPalette } from "./PrefabPalette.js";
-import { ProjectBinding } from "./ProjectBinding.js";
+import { AbstractLight, BoundingType, Vector3D } from "@small-world-machine/engine";
+import type { OrbitCameraController } from "./OrbitCameraController.js";
+import type { TransformGizmo } from "./TransformGizmo.js";
+import type { LightGizmoManager } from "./LightGizmoManager.js";
+import type { StageZoneGizmoManager } from "./StageZoneGizmoManager.js";
+import type { PrefabPalette } from "./PrefabPalette.js";
+import type { ProjectBinding } from "./ProjectBinding.js";
 
 export interface MakerPrefabPipelineContext {
   scene: Scene;

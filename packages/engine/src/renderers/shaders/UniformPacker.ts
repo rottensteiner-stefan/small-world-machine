@@ -1,4 +1,4 @@
-import { ShaderLayout } from "./ShaderDefinition.js";
+import type { ShaderLayout } from "./ShaderDefinition.js";
 import { ShaderPropertyType } from "../../enums/index.js";
 import { Vector3D, Matrix4 } from "../../math/index.js";
 import { Color } from "../../core/colors/index.js";

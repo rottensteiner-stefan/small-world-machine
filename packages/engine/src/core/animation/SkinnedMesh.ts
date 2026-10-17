@@ -1,5 +1,5 @@
 import { Object3D } from "../Object3D.js";
-import { Skeleton } from "./Skeleton.js";
+import type { Skeleton } from "./Skeleton.js";
 import { Matrix4 } from "../../math/Matrix4.js";
 
 /**

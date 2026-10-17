@@ -1,8 +1,9 @@
-import { Object3D } from "../Object3D.js";
-import { Scene } from "../Scene.js";
-import { OctreeNode } from "./Octree.js";
-import { Frustum, Matrix4 } from "../../math/index.js";
-import { Collidable } from "../../interfaces/index.js";
+import type { Object3D } from "../Object3D.js";
+import type { Scene } from "../Scene.js";
+import type { OctreeNode } from "./Octree.js";
+import type { Matrix4 } from "../../math/index.js";
+import { Frustum } from "../../math/index.js";
+import type { Collidable } from "../../interfaces/index.js";
 
 /**
  * Handles frustum culling for objects in a scene.

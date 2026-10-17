@@ -1,5 +1,5 @@
-import { Particle } from "../Particle.js";
-import { ParticleAffector } from "../ParticleAffector.js";
+import type { Particle } from "../Particle.js";
+import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface TurbulenceOptions {
   /** Frequency / spatial scale of the turbulence field. Defaults to 1.0. */

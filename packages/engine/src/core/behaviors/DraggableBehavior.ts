@@ -1,7 +1,8 @@
 import { Behavior } from "./Behavior.js";
-import { Object3D, Camera } from "../index.js";
+import type { Camera } from "../index.js";
+import { Object3D } from "../Object3D.js";
 import { MathPool, Vector3D } from "../../math/index.js";
-import { Ray } from "../../physix/index.js";
+import type { Ray } from "../../physix/index.js";
 
 /**
  * Allows an object to be dragged around in 3D space.

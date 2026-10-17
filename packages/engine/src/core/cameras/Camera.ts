@@ -1,14 +1,16 @@
-import { AbstractProjection } from "../../math/projections/index.js";
+import type { AbstractProjection } from "../../math/projections/index.js";
 import { MathPool, Matrix4, Quaternion, Vector3D } from "../../math/index.js";
 import { CameraEffectFactory, CameraStrategyFactory } from "./index.js";
-import { CameraEffectType, CameraStrategyType } from "../../enums/index.js";
-import {
+import type { CameraEffectType } from "../../enums/index.js";
+import { CameraStrategyType } from "../../enums/index.js";
+import type {
   CameraConstraints,
   CameraEffect,
   CameraInterfaceData,
   CameraStrategy,
 } from "../../interfaces/index.js";
-import { Behavior, attachBehavior, detachBehavior } from "../behaviors/Behavior.js";
+import type { Behavior } from "../behaviors/Behavior.js";
+import { attachBehavior, detachBehavior } from "../behaviors/Behavior.js";
 import { Color } from "../colors/index.js";
 
 /**

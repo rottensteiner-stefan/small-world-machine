@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { FPSController } from "../../src/core/controllers/FPSController.js";
 import { Camera } from "../../src/core/cameras/Camera.js";
 import { PerspectiveProjection } from "../../src/math/index.js";
-import { InputInterface, MouseState } from "../../src/core/input/Input.js";
+import type { InputInterface, MouseState } from "../../src/core/input/Input.js";
 import { Keys } from "../../src/enums/Keys.js";
 import { CameraStrategyType } from "../../src/enums/index.js";
 

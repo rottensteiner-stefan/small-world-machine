@@ -1,9 +1,9 @@
-import { WebGLRenderPass } from "../WebGLRenderPass.js";
-import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
-import { Scene } from "../../core/index.js";
-import { Vector3D } from "../../math/index.js";
-import { LightDataInterface } from "../../interfaces/index.js";
-import { RenderList } from "../../core/Scene.js";
+import type { WebGLRenderPass } from "../WebGLRenderPass.js";
+import type { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
+import type { Scene } from "../../core/index.js";
+import type { Vector3D } from "../../math/index.js";
+import type { LightDataInterface } from "../../interfaces/index.js";
+import type { RenderList } from "../../core/Scene.js";
 
 export class WebGLPostProcessPass implements WebGLRenderPass {
   public name = "WebGLPostProcessPass";

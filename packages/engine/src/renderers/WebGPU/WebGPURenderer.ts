@@ -1,29 +1,23 @@
 // Removed Fog import
+import type { CubeTexture, Object3D, Scene, Texture } from "../../core/index.js";
 import {
-  CubeTexture,
   InstancedMesh,
-  Object3D,
-  Scene,
-  Texture,
   MAX_CLUSTERED_LIGHTS_PER_TYPE,
   isSkinnedMesh,
   computeClipToBox,
 } from "../../core/index.js";
-import { RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
-import {
-  RenderManifest,
-  UniformPacker,
-  VERTEX_COLOR_FLAG,
-  resolveManifestFlags,
-} from "../shaders/index.js";
-import { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
+import type { RenderTarget } from "../../core/textures/index.js";
+import { RenderTargetCube } from "../../core/textures/index.js";
+import type { RenderManifest } from "../shaders/index.js";
+import { UniformPacker, VERTEX_COLOR_FLAG, resolveManifestFlags } from "../shaders/index.js";
+import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 
+import type { ClusterGridDims } from "../../math/index.js";
 import {
   MathPool,
   Vector3D,
   Matrix4,
   computeClusterCounts,
-  ClusterGridDims,
   DEFAULT_CLUSTER_TILE_SIZE,
   DEFAULT_CLUSTER_Z_SLICES,
   DEFAULT_MAX_LIGHTS_PER_CLUSTER,
@@ -41,7 +35,7 @@ import {
 } from "../../enums/index.js";
 import { NORMAL_TARGET_FORMAT } from "./managers/NormalOutputWrapper.js";
 import { AbstractRenderer } from "../AbstractRenderer.js";
-import { RenderPass } from "../RenderPass.js";
+import type { RenderPass } from "../RenderPass.js";
 import { GPUFallbackResources } from "./managers/GPUFallbackResources.js";
 import { GPUTextureResourceCache } from "./managers/GPUTextureResourceCache.js";
 import {
@@ -67,7 +61,8 @@ import {
   LightShaftsPassGPU,
   VolumetricFogPassGPU,
 } from "../post/passes/index.js";
-import { SkinnedMesh, Skeleton, MAX_SKINNED_BONES } from "../../core/animation/index.js";
+import type { SkinnedMesh, Skeleton } from "../../core/animation/index.js";
+import { MAX_SKINNED_BONES } from "../../core/animation/index.js";
 
 /**
  * Dynamic-offset slot layout for the per-draw view-projection uniform (group 3, `view.vp` in

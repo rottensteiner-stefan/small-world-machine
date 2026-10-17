@@ -1,3 +1,4 @@
+import type { EngineOptions } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -6,7 +7,6 @@ import {
   Cube,
   DirectionalLight,
   DraggableBehavior,
-  EngineOptions,
   HoverBehavior,
   Object3D,
   RendererType,

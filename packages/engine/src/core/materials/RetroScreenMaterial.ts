@@ -3,12 +3,9 @@ import fragGLSL100 from "./shaders/RetroScreen.frag.glsl100?raw";
 import fragWGSL from "./shaders/RetroScreen.frag.wgsl?raw";
 import { AbstractMaterial } from "./AbstractMaterial.js";
 import { MaterialType, ShaderPropertyType } from "../../enums/index.js";
-import { Texture } from "../textures/index.js";
-import {
-  RenderManifest,
-  ShaderDefinition,
-  StandardWebGPULayout,
-} from "../../renderers/shaders/index.js";
+import type { Texture } from "../textures/index.js";
+import type { RenderManifest, ShaderDefinition } from "../../renderers/shaders/index.js";
+import { StandardWebGPULayout } from "../../renderers/shaders/index.js";
 
 /**
  * Modes supported by RetroScreenMaterial.

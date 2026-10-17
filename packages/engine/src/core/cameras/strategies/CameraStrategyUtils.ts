@@ -1,5 +1,5 @@
-import { CameraConstraints } from "../../../interfaces/index.js";
-import { Vector3D } from "../../../math/index.js";
+import type { CameraConstraints } from "../../../interfaces/index.js";
+import type { Vector3D } from "../../../math/index.js";
 
 /**
  * Clamps a vector in-place against optional min/max constraints.

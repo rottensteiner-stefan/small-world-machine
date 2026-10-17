@@ -1,5 +1,5 @@
-import { Matrix4 } from "./Matrix4.js";
-import { Vector } from "../interfaces/index.js";
+import type { Matrix4 } from "./Matrix4.js";
+import type { Vector } from "../interfaces/index.js";
 
 /**
  * A class representing a 3D vector.

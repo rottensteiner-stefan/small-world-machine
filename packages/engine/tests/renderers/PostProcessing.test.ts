@@ -1,11 +1,6 @@
 import { describe, expect, it, beforeAll } from "vitest";
-import {
-  PostProcessingGroup,
-  ShaderRegistry,
-  ToneMappingElement,
-  VignetteElement,
-  GrainElement,
-} from "../../src/index.js";
+import type { ToneMappingElement, VignetteElement, GrainElement } from "../../src/index.js";
+import { PostProcessingGroup, ShaderRegistry } from "../../src/index.js";
 import { PostProcessingEffectType } from "../../src/enums/index.js";
 import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
 import * as fs from "fs";

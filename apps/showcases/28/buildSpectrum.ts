@@ -1,13 +1,12 @@
+import type { GeometryDataInterface, Scene } from "@small-world-machine/engine";
 import {
   Color,
   Cube,
   CullMode,
   Cylinder,
-  GeometryDataInterface,
   Object3D,
   SpotLight,
   StandardMaterial,
-  Scene,
 } from "@small-world-machine/engine";
 import { CausticFanGeometry } from "./CausticFanGeometry.js";
 import { createBandGradientTexture, createCausticGradientTexture } from "./textures.js";

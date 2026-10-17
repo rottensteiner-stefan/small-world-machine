@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import { PostProcessingGroup } from "../../src/renderers/post/PostProcessingGroup.js";
-import {
+import type {
   ToneMappingElement,
   VignetteElement,
   GrainElement,

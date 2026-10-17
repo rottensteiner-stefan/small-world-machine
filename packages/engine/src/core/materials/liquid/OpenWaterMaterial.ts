@@ -7,7 +7,7 @@ import fragGLSL100 from "./shaders/OpenWater.frag.glsl100?raw";
 import { LiquidWaveMaterial } from "./LiquidWaveMaterial.js";
 import { Color } from "../../colors/index.js";
 import { MaterialType } from "../../../enums/index.js";
-import { ShaderDefinition } from "../../../renderers/shaders/index.js";
+import type { ShaderDefinition } from "../../../renderers/shaders/index.js";
 
 export interface OpenWaterMaterialOptions {
   waterColor?: Color;

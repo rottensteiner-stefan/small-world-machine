@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { VolumetricFogPassGPU } from "../../src/renderers/post/passes/VolumetricFogPassGPU.js";
 import { VolumetricFogElement } from "../../src/renderers/post/elements/VolumetricFogElement.js";
-import { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
+import type { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
 import { DirectionalLight } from "../../src/core/lights/index.js";
 import { FogVolume } from "../../src/core/objects/FogVolume.js";
 import { VolumetricTexture } from "../../src/core/textures/index.js";

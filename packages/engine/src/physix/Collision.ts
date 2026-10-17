@@ -1,9 +1,9 @@
 import { BoundingBox } from "./BoundingBox.js";
-import { BoundingSphere } from "./BoundingSphere.js";
-import { OBB } from "./OBB.js";
-import { ConvexHull } from "./ConvexHull.js";
+import type { BoundingSphere } from "./BoundingSphere.js";
+import type { OBB } from "./OBB.js";
+import type { ConvexHull } from "./ConvexHull.js";
 import { Ray } from "./Ray.js";
-import { BoundingVolume } from "../interfaces/index.js";
+import type { BoundingVolume } from "../interfaces/index.js";
 import { Vector3D, MathPool, MathUtils } from "../math/index.js";
 import { BoundingType } from "../enums/index.js";
 

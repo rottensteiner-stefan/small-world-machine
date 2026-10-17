@@ -1,5 +1,5 @@
 import { SmallWorldMachine } from "../index.js";
-import { EngineOptions } from "../../interfaces/index.js";
+import type { EngineOptions } from "../../interfaces/index.js";
 import { CameraStrategyType, Keys, RendererType } from "../../enums/index.js";
 import { Vector3D } from "../../math/index.js";
 import { FlyController, OrbitController } from "../controllers/index.js";

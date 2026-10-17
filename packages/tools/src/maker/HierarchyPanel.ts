@@ -1,4 +1,4 @@
-import { Object3D } from "@small-world-machine/engine";
+import type { Object3D } from "@small-world-machine/engine";
 
 export interface HierarchyCallbacks {
   /** `toggle` mirrors the click's Shift/Ctrl/Cmd modifier state -- add/remove `obj` from the

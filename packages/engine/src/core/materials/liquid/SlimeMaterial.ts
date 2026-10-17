@@ -1,4 +1,5 @@
-import { FluidSurfaceMaterial, FluidSurfaceMaterialOptions } from "./FluidSurfaceMaterial.js";
+import type { FluidSurfaceMaterialOptions } from "./FluidSurfaceMaterial.js";
+import { FluidSurfaceMaterial } from "./FluidSurfaceMaterial.js";
 import { Color } from "../../colors/index.js";
 import { MaterialType } from "../../../enums/index.js";
 

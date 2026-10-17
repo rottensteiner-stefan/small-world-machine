@@ -14,7 +14,7 @@ import { AbstractShowcase } from "@small-world-machine/engine/core/showcase/inde
 import { Cube } from "@small-world-machine/engine/geometry/index.js";
 import { SkyboxMaterial } from "@small-world-machine/engine/core/materials/index.js";
 import { GltfLoader } from "@small-world-machine/engine/loaders/index.js";
-import { BloomElement } from "@small-world-machine/engine/renderers/post/elements/index.js";
+import type { BloomElement } from "@small-world-machine/engine/renderers/post/elements/index.js";
 // ============================================================================
 // 2. Interactive 3D App for Slide 5
 // ============================================================================

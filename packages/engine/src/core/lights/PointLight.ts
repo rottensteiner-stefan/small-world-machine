@@ -1,7 +1,8 @@
-import { AbstractLight, LightOptions, MAX_CLUSTERED_LIGHTS_PER_TYPE } from "./AbstractLight.js";
+import type { LightOptions } from "./AbstractLight.js";
+import { AbstractLight, MAX_CLUSTERED_LIGHTS_PER_TYPE } from "./AbstractLight.js";
 import { LightType } from "../../enums/index.js";
-import { LightDataInterface } from "../../interfaces/index.js";
-import { InspectorField } from "../Inspectable.js";
+import type { LightDataInterface } from "../../interfaces/index.js";
+import type { InspectorField } from "../Inspectable.js";
 
 /**
  * Configuration options for point light.

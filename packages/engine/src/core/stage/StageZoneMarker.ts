@@ -1,5 +1,5 @@
 import { Object3D } from "../Object3D.js";
-import { InspectorField } from "../Inspectable.js";
+import type { InspectorField } from "../Inspectable.js";
 import { StageZone } from "./StageZone.js";
 
 /**

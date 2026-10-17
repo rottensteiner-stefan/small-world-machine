@@ -1,6 +1,6 @@
 import { Color } from "@small-world-machine/engine";
-import { Particle } from "../Particle.js";
-import { ParticleAffector } from "../ParticleAffector.js";
+import type { Particle } from "../Particle.js";
+import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface ColorOverLifeOptions {
   /** Particle color at birth (life = 0). */

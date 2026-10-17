@@ -5,8 +5,8 @@ import BILATERAL_FRAG_GLSL from "../shaders/LightShaftsBilateral.frag.glsl?raw";
 import SHAFTS_100_FRAG_GLSL from "../shaders/LightShafts100.frag.glsl?raw";
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
-import { LightShaftsElement } from "../elements/index.js";
-import { DirectionalLight } from "../../../core/lights/index.js";
+import type { LightShaftsElement } from "../elements/index.js";
+import type { DirectionalLight } from "../../../core/lights/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 
 /**

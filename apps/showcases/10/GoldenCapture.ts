@@ -1,14 +1,12 @@
-import {
-  Color,
-  MathUtils,
+import type {
   Object3D,
-  PerspectiveProjection,
-  RampLUT,
   RampStop,
   SmallWorldMachine,
   StylizedWaterMaterial,
 } from "@small-world-machine/engine";
-import { LIQUID_Y, POOL_CELLS, PoolKey, PoolPosition, poolWorldPosition } from "./PoolLayout.js";
+import { Color, MathUtils, PerspectiveProjection, RampLUT } from "@small-world-machine/engine";
+import type { PoolKey, PoolPosition } from "./PoolLayout.js";
+import { LIQUID_Y, POOL_CELLS, poolWorldPosition } from "./PoolLayout.js";
 import type { RandomSource } from "./PoolTextures.js";
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────

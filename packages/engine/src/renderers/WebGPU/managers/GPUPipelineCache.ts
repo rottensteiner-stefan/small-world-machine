@@ -1,5 +1,7 @@
-import { DeviceCaps, DeviceLimit, Object3D } from "../../../core/index.js";
-import { RenderManifest, ShaderRegistry, VERTEX_COLOR_FLAG } from "../../shaders/index.js";
+import type { DeviceCaps, Object3D } from "../../../core/index.js";
+import { DeviceLimit } from "../../../core/index.js";
+import type { RenderManifest, ShaderRegistry } from "../../shaders/index.js";
+import { VERTEX_COLOR_FLAG } from "../../shaders/index.js";
 import { BlendingMode, CullMode, NormalTargetMode } from "../../../enums/index.js";
 import {
   NORMAL_TARGET_FORMAT,

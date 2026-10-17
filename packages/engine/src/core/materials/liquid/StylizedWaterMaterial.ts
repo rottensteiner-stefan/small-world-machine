@@ -7,12 +7,9 @@ import fragGLSL100 from "./shaders/StylizedWater.frag.glsl100?raw";
 import { LiquidWaveMaterial } from "./LiquidWaveMaterial.js";
 import { Color } from "../../colors/index.js";
 import { MaterialType } from "../../../enums/index.js";
-import {
-  RAMP_LUT_FLAG,
-  RenderManifest,
-  ShaderDefinition,
-} from "../../../renderers/shaders/index.js";
-import { Texture } from "../../textures/index.js";
+import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
+import { RAMP_LUT_FLAG } from "../../../renderers/shaders/index.js";
+import type { Texture } from "../../textures/index.js";
 
 export interface StylizedWaterExtensionHooks {
   decl?: string;

@@ -1,6 +1,6 @@
-import { Vector3D } from "../math/index.js";
-import { Collidable } from "../interfaces/index.js";
-import { Object3D } from "../core/Object3D.js";
+import type { Vector3D } from "../math/index.js";
+import type { Collidable } from "../interfaces/index.js";
+import type { Object3D } from "../core/Object3D.js";
 
 /**
  * Result structure returned from a physics raycast or shape-cast query.

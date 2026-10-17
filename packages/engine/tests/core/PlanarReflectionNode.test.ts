@@ -4,8 +4,8 @@ import { Object3D } from "../../src/core/Object3D.js";
 import { PerspectiveProjection } from "../../src/math/index.js";
 import { PlanarReflectionNode } from "../../src/core/reflection/PlanarReflectionNode.js";
 import { Scene } from "../../src/core/Scene.js";
-import { Renderer } from "../../src/interfaces/Renderer.js";
-import { RenderTarget } from "../../src/core/textures/index.js";
+import type { Renderer } from "../../src/interfaces/Renderer.js";
+import type { RenderTarget } from "../../src/core/textures/index.js";
 
 class MockRenderer {
   public renderTargetParams: unknown[] = [];

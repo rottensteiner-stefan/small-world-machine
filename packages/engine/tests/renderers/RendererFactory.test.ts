@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { RendererFactory } from "../../src/renderers/RendererFactory.js";
 import { RendererType } from "../../src/enums/index.js";
 import { DeviceFeature, DeviceCaps } from "../../src/core/DeviceCaps.js";
-import { RendererContext } from "../../src/interfaces/index.js";
+import type { RendererContext } from "../../src/interfaces/index.js";
 import { WebGPURenderer } from "../../src/renderers/WebGPU/index.js";
 import { WebGL2Renderer } from "../../src/renderers/WebGL2/index.js";
 import { WebGL1Renderer } from "../../src/renderers/WebGL1/index.js";

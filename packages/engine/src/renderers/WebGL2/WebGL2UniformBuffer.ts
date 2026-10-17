@@ -1,4 +1,4 @@
-import { Vector3D } from "../../math/index.js";
+import type { Vector3D } from "../../math/index.js";
 
 /**
  * Wrapper for a WebGL2 Uniform Buffer Object (UBO).

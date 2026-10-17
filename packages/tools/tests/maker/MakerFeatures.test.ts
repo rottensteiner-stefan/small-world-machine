@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
+import type { Behavior, BoundingBox } from "@small-world-machine/engine";
 import {
   Object3D,
   Vector3D,
   Matrix4,
-  Behavior,
   RotatorBehavior,
   attachBehavior,
   detachBehavior,
@@ -14,7 +14,6 @@ import {
   StandardMaterial,
   WireframeMaterial,
   Cube,
-  BoundingBox,
   BoundingType,
   collectInspectorSchema,
 } from "@small-world-machine/engine";

@@ -1,3 +1,4 @@
+import type { EngineOptions } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -7,7 +8,6 @@ import {
   CustomShaderMaterial,
   Cylinder,
   EmissivePulseBehavior,
-  EngineOptions,
   HoverBehavior,
   MathUtils,
   Object3D,

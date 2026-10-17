@@ -1,6 +1,7 @@
-import { Collidable, BoundingVolume } from "../../interfaces/index.js";
+import type { Collidable, BoundingVolume } from "../../interfaces/index.js";
 import { BoundingBox, Collision } from "../../physix/index.js";
-import { Frustum, MathPool, Vector3D } from "../../math/index.js";
+import type { Frustum } from "../../math/index.js";
+import { MathPool, Vector3D } from "../../math/index.js";
 
 /**
  * Configuration options for an octree node.

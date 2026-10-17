@@ -1,5 +1,5 @@
-import { ProjectionType, RendererType, InputMode, ToneMappingMode } from "../enums/index.js";
-import { AbstractProjection } from "../math/projections/index.js";
+import type { ProjectionType, RendererType, InputMode, ToneMappingMode } from "../enums/index.js";
+import type { AbstractProjection } from "../math/projections/index.js";
 /**
  * Configuration for a single renderer backend.
  */

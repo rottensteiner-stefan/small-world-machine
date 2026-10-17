@@ -1,4 +1,4 @@
-import { Vector3D } from "../math/index.js";
+import type { Vector3D } from "../math/index.js";
 
 /** A handle to an endlessly-looping/never-auto-stopping sound graph, returned so its caller can
  * later tear it down. Unlike the one-shot `playX()` methods (which schedule their own `stop()`

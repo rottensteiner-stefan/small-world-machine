@@ -1,4 +1,4 @@
-import { Collidable, BoundingVolume } from "../interfaces/index.js";
+import type { Collidable, BoundingVolume } from "../interfaces/index.js";
 
 let _nextColliderId = 10000000;
 

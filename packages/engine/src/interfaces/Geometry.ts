@@ -1,5 +1,5 @@
-import { BoundingVolume } from "./BoundingVolume.js";
-import { GeometryDataInterface } from "./GeometryData.js";
+import type { BoundingVolume } from "./BoundingVolume.js";
+import type { GeometryDataInterface } from "./GeometryData.js";
 
 /**
  * Interface for all geometry types (Cube, Sphere, Plane, etc.).

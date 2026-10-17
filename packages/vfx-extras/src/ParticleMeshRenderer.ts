@@ -1,12 +1,6 @@
-import {
-  InstancedMesh,
-  GeometryDataInterface,
-  AbstractMaterial,
-  Matrix4,
-  Vector3D,
-  Quaternion,
-} from "@small-world-machine/engine";
-import { ParticleSystem } from "./ParticleSystem.js";
+import type { GeometryDataInterface, AbstractMaterial } from "@small-world-machine/engine";
+import { InstancedMesh, Matrix4, Vector3D, Quaternion } from "@small-world-machine/engine";
+import type { ParticleSystem } from "./ParticleSystem.js";
 
 export interface ParticleMeshRendererOptions {
   /** Name of the underlying InstancedMesh. Defaults to "ParticleMeshRenderer". */

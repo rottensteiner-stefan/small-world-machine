@@ -1,7 +1,7 @@
 import BLOOM_DOWNSAMPLE_WGSL from "../shaders/BloomDownsample.frag.wgsl?raw";
 import BLOOM_UPSAMPLE_WGSL from "../shaders/BloomUpsample.frag.wgsl?raw";
 import FULLSCREEN_VERT_WGSL from "../shaders/PostProcess.vert.wgsl?raw";
-import { BloomElement } from "../elements/index.js";
+import type { BloomElement } from "../elements/index.js";
 import { TextureFilter, TextureWrap, Topology } from "../../../enums/index.js";
 
 /**

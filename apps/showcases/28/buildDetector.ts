@@ -1,3 +1,4 @@
+import type { Scene } from "@small-world-machine/engine";
 import {
   Color,
   Cube,
@@ -6,9 +7,9 @@ import {
   Texture,
   TextureFilter,
   TextureWrap,
-  Scene,
 } from "@small-world-machine/engine";
-import { SpectralRay, computeSpectralRays } from "./optics.js";
+import type { SpectralRay } from "./optics.js";
+import { computeSpectralRays } from "./optics.js";
 
 /** Result of placing the detector: the resting spectral rays and the detector's receiving face plane. */
 export interface LabDetector {

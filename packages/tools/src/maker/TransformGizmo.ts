@@ -1,3 +1,4 @@
+import type { Vector2D, CameraInterfaceData } from "@small-world-machine/engine";
 import {
   Object3D,
   Color,
@@ -7,9 +8,7 @@ import {
   Cube,
   Torus,
   Raycaster,
-  Vector2D,
   Vector3D,
-  CameraInterfaceData,
 } from "@small-world-machine/engine";
 
 export type GizmoMode = "translate" | "rotate" | "scale";

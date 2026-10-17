@@ -1,3 +1,4 @@
+import type { GeometryDataInterface } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   BoundingBox,
@@ -7,7 +8,6 @@ import {
   CullMode,
   Cylinder,
   DirectionalLight,
-  GeometryDataInterface,
   GltfLoader,
   GroomingRat,
   Object3D,
@@ -24,12 +24,11 @@ import {
 import { OrbitController } from "@small-world-machine/engine/core/controllers/OrbitController.js";
 import { OilPuddleMaterial } from "@small-world-machine/liquid-extras";
 import { Vector2D, Vector3D } from "@small-world-machine/engine/math/index.js";
-import {
+import type {
   AnimationAction,
   AnimationClip,
-  AnimationMixer,
-  Bone,
 } from "@small-world-machine/engine/core/animation/index.js";
+import { AnimationMixer, Bone } from "@small-world-machine/engine/core/animation/index.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
 
 type CharacterType = "male" | "female" | "yoshi";

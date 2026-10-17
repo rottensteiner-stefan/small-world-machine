@@ -1,4 +1,4 @@
-import { GeometryDataInterface } from "../interfaces/index.js";
+import type { GeometryDataInterface } from "../interfaces/index.js";
 import { WireframeMode } from "../enums/index.js";
 
 /** Fixed WebGL2 attribute location of `a_color` (see `WebGLProgramCache`). */

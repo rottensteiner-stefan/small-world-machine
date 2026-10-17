@@ -1,5 +1,5 @@
-import { ShaderImporter } from "./ShaderImporter.js";
-import { CustomShaderMaterialOptions } from "../CustomShaderMaterial.js";
+import type { ShaderImporter } from "./ShaderImporter.js";
+import type { CustomShaderMaterialOptions } from "../CustomShaderMaterial.js";
 import { ShaderPropertyType } from "../../../enums/index.js";
 
 /**

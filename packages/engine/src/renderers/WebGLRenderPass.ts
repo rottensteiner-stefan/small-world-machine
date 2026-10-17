@@ -1,7 +1,7 @@
-import { AbstractWebGLRenderer } from "./AbstractWebGLRenderer.js";
-import { Scene, RenderList } from "../core/Scene.js";
-import { Vector3D } from "../math/index.js";
-import { LightDataInterface } from "../interfaces/index.js";
+import type { AbstractWebGLRenderer } from "./AbstractWebGLRenderer.js";
+import type { Scene, RenderList } from "../core/Scene.js";
+import type { Vector3D } from "../math/index.js";
+import type { LightDataInterface } from "../interfaces/index.js";
 
 /**
  * Ein einheitliches Interface für WebGL-Passes (WebGL1 und WebGL2).

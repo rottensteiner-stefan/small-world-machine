@@ -1,3 +1,4 @@
+import type { EngineOptions } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -7,7 +8,6 @@ import {
   Color,
   Cylinder,
   DirectionalLight,
-  EngineOptions,
   Ground,
   ImposterSprite,
   Object3D,

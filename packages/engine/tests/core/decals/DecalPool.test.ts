@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Object3D } from "../../../src/core/Object3D.js";
-import { Decal } from "../../../src/core/objects/Decal.js";
+import type { Decal } from "../../../src/core/objects/Decal.js";
 import { DecalPool } from "../../../src/core/decals/DecalPool.js";
 import { compareDecals } from "../../../src/core/decals/DecalMath.js";
 import { DecalMaterial } from "../../../src/core/materials/index.js";

@@ -1,10 +1,11 @@
-import { BoundingBox } from "./BoundingBox.js";
-import { BoundingSphere } from "./BoundingSphere.js";
-import { OBB } from "./OBB.js";
+import type { BoundingBox } from "./BoundingBox.js";
+import type { BoundingSphere } from "./BoundingSphere.js";
+import type { OBB } from "./OBB.js";
 import { Ray } from "./Ray.js";
-import { Vector2D, Vector3D, MathPool, Matrix4 } from "../math/index.js";
-import { CameraInterfaceData } from "../interfaces/index.js";
-import { Object3D } from "../core/Object3D.js";
+import type { Vector2D, Matrix4 } from "../math/index.js";
+import { Vector3D, MathPool } from "../math/index.js";
+import type { CameraInterfaceData } from "../interfaces/index.js";
+import type { Object3D } from "../core/Object3D.js";
 import { BoundingType } from "../enums/index.js";
 
 /**

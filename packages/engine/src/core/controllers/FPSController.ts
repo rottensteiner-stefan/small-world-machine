@@ -1,6 +1,7 @@
 import { Behavior } from "../behaviors/Behavior.js";
-import { CameraInterfaceData, isCameraTarget } from "../../interfaces/index.js";
-import { Object3D, InputInterface, Scene } from "../index.js";
+import type { CameraInterfaceData } from "../../interfaces/index.js";
+import { isCameraTarget } from "../../interfaces/index.js";
+import type { Object3D, InputInterface, Scene } from "../index.js";
 import { InputMode, Keys } from "../../enums/index.js";
 import { BoundingSphere } from "../../physix/index.js";
 import { resolveSphereCollisions } from "../behaviors/CollisionResolution.js";

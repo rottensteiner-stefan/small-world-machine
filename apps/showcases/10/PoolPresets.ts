@@ -1,19 +1,22 @@
-import {
-  Color,
+import type {
   FluidSurfaceMaterial,
   GeometryDataInterface,
+  StylizedLavaMaterialOptions,
+  Texture,
+} from "@small-world-machine/engine";
+import {
+  Color,
   Ground,
   LavaMaterial,
   OpenWaterMaterial,
   RampLUT,
   SlimeMaterial,
   StylizedLavaMaterial,
-  StylizedLavaMaterialOptions,
   StylizedWaterMaterial,
-  Texture,
 } from "@small-world-machine/engine";
 import { NoirWaterMaterial, OilSlickMaterial } from "@small-world-machine/liquid-extras";
-import { PoolKey, POOL_SIZE, WALL_THICKNESS, poolWorldPosition } from "./PoolLayout.js";
+import type { PoolKey } from "./PoolLayout.js";
+import { POOL_SIZE, WALL_THICKNESS, poolWorldPosition } from "./PoolLayout.js";
 import type { BarrelType, PropSpec, Rgb } from "./PoolProps.js";
 import type { TilePaletteName } from "./PoolTextures.js";
 

@@ -1,10 +1,11 @@
 import { Object3D } from "../../core/Object3D.js";
-import { Scene } from "../../core/Scene.js";
+import type { Scene } from "../../core/Scene.js";
 import { Sprite } from "../../core/sprites/Sprite.js";
 import { Vector3D } from "../../math/Vector3D.js";
 import { Cube, Ground } from "../index.js";
-import { StandardMaterial, AbstractMaterial, SpriteMaterial } from "../../core/materials/index.js";
-import { Texture } from "../../core/textures/index.js";
+import type { AbstractMaterial } from "../../core/materials/index.js";
+import { StandardMaterial, SpriteMaterial } from "../../core/materials/index.js";
+import type { Texture } from "../../core/textures/index.js";
 
 export type GridTileType = "block" | "floor" | "sprite" | "custom";
 

@@ -1,12 +1,12 @@
-import { GltfJson } from "./types.js";
+import type { GltfJson } from "./types.js";
 import { StandardMaterial } from "../../core/materials/index.js";
 import { Color } from "../../core/colors/index.js";
 import { Texture } from "../../core/textures/index.js";
-import { AssetManager } from "../AssetManager.js";
+import type { AssetManager } from "../AssetManager.js";
 import { CullMode } from "../../enums/index.js";
-import { GltfLoaderOptions } from "../../interfaces/index.js";
+import type { GltfLoaderOptions } from "../../interfaces/index.js";
 import { getGltfExtensions } from "./GltfExtensionRegistry.js";
-import { GltfReadContext } from "./GltfExtensionPlugin.js";
+import type { GltfReadContext } from "./GltfExtensionPlugin.js";
 
 /**
  * Parser for glTF PBR materials and textures.

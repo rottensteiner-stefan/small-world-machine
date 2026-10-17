@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { RenderTarget, SpriteMaterial } from "../../src/index.js";
 import {
   bakeImposter,
   Camera,
@@ -7,11 +8,9 @@ import {
   ImposterSprite,
   Object3D,
   PerspectiveProjection,
-  RenderTarget,
-  SpriteMaterial,
   StandardMaterial,
 } from "../../src/index.js";
-import { Renderer } from "../../src/interfaces/index.js";
+import type { Renderer } from "../../src/interfaces/index.js";
 
 class MockRenderer {
   public renderTargetParams: unknown[] = [];

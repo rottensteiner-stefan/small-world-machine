@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { Object3D, Vector3D, CameraInterfaceData } from "@small-world-machine/engine";
+import type { CameraInterfaceData } from "@small-world-machine/engine";
+import { Object3D, Vector3D } from "@small-world-machine/engine";
 import { TransformGizmo } from "../../src/maker/TransformGizmo.js";
 
 /** Only the fields `TransformGizmo` actually reads: `update()`/`computeAxisDelta()` never touch

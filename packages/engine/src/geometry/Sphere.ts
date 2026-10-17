@@ -1,7 +1,7 @@
 import { AbstractGeometry } from "./AbstractGeometry.js";
 import { MathUtils, Vector3D } from "../math/index.js";
 import { BoundingSphere } from "../physix/BoundingSphere.js";
-import { BoundingVolume } from "../interfaces/index.js";
+import type { BoundingVolume } from "../interfaces/index.js";
 
 /**
  * Configuration options for sphere geometry.

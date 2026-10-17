@@ -1,6 +1,6 @@
 import { Object3D } from "../../core/Object3D.js";
 import { Vector3D, MathPool } from "../../math/index.js";
-import { Collidable } from "../../interfaces/index.js";
+import type { Collidable } from "../../interfaces/index.js";
 import { BoundingBox } from "../BoundingBox.js";
 import { Collision } from "../Collision.js";
 import { PhysicsBroadphase } from "../broadphase/PhysicsBroadphase.js";

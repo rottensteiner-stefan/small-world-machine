@@ -1,4 +1,5 @@
-import { Object3D, Plane, BasicMaterial, Texture } from "@small-world-machine/engine";
+import type { Texture } from "@small-world-machine/engine";
+import { Object3D, Plane, BasicMaterial } from "@small-world-machine/engine";
 
 export interface BackgroundPlaneOptions {
   name?: string;

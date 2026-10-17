@@ -1,5 +1,5 @@
-import { EventType } from "../../enums/index.js";
-import { Events, EventHandler } from "../../interfaces/index.js";
+import type { EventType } from "../../enums/index.js";
+import type { Events, EventHandler } from "../../interfaces/index.js";
 
 /**
  * Standard implementation of the Events interface with zero-allocation dispatch.

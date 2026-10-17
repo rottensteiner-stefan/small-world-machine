@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { UndoStack, UndoCommand } from "../../src/maker/UndoStack.js";
+import type { UndoCommand } from "../../src/maker/UndoStack.js";
+import { UndoStack } from "../../src/maker/UndoStack.js";
 
 describe("UndoStack (ADR 0010 Maker Command History)", () => {
   it("should execute command immediately and push to undo history", () => {

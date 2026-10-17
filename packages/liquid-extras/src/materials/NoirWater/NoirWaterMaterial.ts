@@ -1,10 +1,12 @@
+import type {
+  StylizedWaterMaterialOptions,
+  ShaderDefinition,
+  RenderManifest,
+} from "@small-world-machine/engine";
 import {
   Color,
   StylizedWaterMaterial,
-  StylizedWaterMaterialOptions,
   composeStylizedWaterSources,
-  ShaderDefinition,
-  RenderManifest,
 } from "@small-world-machine/engine";
 
 export interface NoirWaterMaterialOptions extends StylizedWaterMaterialOptions {

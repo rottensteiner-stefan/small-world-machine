@@ -1,11 +1,8 @@
 import { AbstractMaterial } from "../AbstractMaterial.js";
-import { Color } from "../../colors/index.js";
+import type { Color } from "../../colors/index.js";
 import { ShaderPropertyType } from "../../../enums/index.js";
-import {
-  RenderManifest,
-  ShaderDefinition,
-  StandardWebGPULayout,
-} from "../../../renderers/shaders/index.js";
+import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
+import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
 
 /**
  * Fully-resolved construction values shared by every wave-displaced, refractive liquid surface

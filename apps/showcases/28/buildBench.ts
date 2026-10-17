@@ -1,3 +1,4 @@
+import type { Scene } from "@small-world-machine/engine";
 import {
   Color,
   Cube,
@@ -8,7 +9,6 @@ import {
   StandardMaterial,
   Torus,
   Vector2D,
-  Scene,
 } from "@small-world-machine/engine";
 import { NOMINAL_INCIDENCE_ANGLE } from "./optics.js";
 import type { LabSurfaceTextures } from "./buildEnvironment.js";

@@ -2,11 +2,11 @@ import FULLSCREEN_VERT_WGSL from "../shaders/PostProcess.vert.wgsl?raw";
 import SHAFTS_FRAG_WGSL from "../shaders/LightShafts.frag.wgsl?raw";
 import BILATERAL_FRAG_WGSL from "../shaders/LightShaftsBilateral.frag.wgsl?raw";
 
-import { LightShaftsElement } from "../elements/index.js";
-import { DirectionalLight } from "../../../core/lights/index.js";
+import type { LightShaftsElement } from "../elements/index.js";
+import type { DirectionalLight } from "../../../core/lights/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
-import { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
+import type { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
 
 /**
  * WebGPU implementation of atmospheric volumetric light shafts (God Rays):

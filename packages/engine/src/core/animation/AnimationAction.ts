@@ -1,5 +1,5 @@
-import { AnimationClip } from "./AnimationClip.js";
-import { AnimationMixer } from "./AnimationMixer.js";
+import type { AnimationClip } from "./AnimationClip.js";
+import type { AnimationMixer } from "./AnimationMixer.js";
 
 /**
  * Controls the playback of a specific AnimationClip within an AnimationMixer.

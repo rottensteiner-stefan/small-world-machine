@@ -14,7 +14,7 @@ import {
   PostProcessingEffectType,
   Keys,
 } from "@small-world-machine/engine/enums/index.js";
-import { BloomElement } from "@small-world-machine/engine/renderers/post/elements/index.js";
+import type { BloomElement } from "@small-world-machine/engine/renderers/post/elements/index.js";
 import { ArenaGrid } from "./core/ArenaGrid.js";
 import { Cycle } from "./core/Cycle.js";
 import { CycleAI } from "./core/CycleAI.js";

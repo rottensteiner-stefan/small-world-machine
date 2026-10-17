@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Object3D, Vector3D } from "@small-world-machine/engine";
-import { ContentDrawer, ContentDrawerCallbacks } from "../../src/maker/ContentDrawer.js";
+import type { ContentDrawerCallbacks } from "../../src/maker/ContentDrawer.js";
+import { ContentDrawer } from "../../src/maker/ContentDrawer.js";
 
 describe("ContentDrawer (Unreal Content Browser in Maker)", () => {
   let container: HTMLDivElement;

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { VolumetricFogPassGPU } from "../../src/renderers/post/passes/VolumetricFogPassGPU.js";
 import { VolumetricFogElement } from "../../src/renderers/post/elements/VolumetricFogElement.js";
-import { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
+import type { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
 import { Color } from "../../src/core/colors/index.js";
 import { Vector3D } from "../../src/math/index.js";
 import { createFrameInfo } from "../../src/interfaces/index.js";

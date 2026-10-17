@@ -1,4 +1,4 @@
-import { OpenWaterMaterial } from "./OpenWaterMaterial.js";
+import type { OpenWaterMaterial } from "./OpenWaterMaterial.js";
 
 type WaveLane = [number, number, number, number];
 

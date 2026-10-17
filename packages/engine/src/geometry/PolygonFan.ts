@@ -1,5 +1,5 @@
 import { AbstractGeometry } from "./AbstractGeometry.js";
-import { Vector3D } from "../math/index.js";
+import type { Vector3D } from "../math/index.js";
 
 /**
  * Configuration options for polygon-fan geometry.

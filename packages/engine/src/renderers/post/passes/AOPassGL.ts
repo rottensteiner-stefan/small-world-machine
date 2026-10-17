@@ -2,7 +2,7 @@ import FULLSCREEN_VERT_GLSL from "../shaders/PostProcess.vert.glsl?raw";
 import AO_FRAG_GLSL from "../shaders/AO.frag.glsl?raw";
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
-import { HbaoElement } from "../elements/index.js";
+import type { HbaoElement } from "../elements/index.js";
 
 /**
  * Generates the HBAO texture for WebGL2 -- reconstructs view-space position/normal from the

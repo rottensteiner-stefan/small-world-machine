@@ -2,14 +2,11 @@ import fragGLSL from "./shaders/Sprite.frag.glsl?raw";
 import fragGLSL100 from "./shaders/Sprite.frag.glsl100?raw";
 import fragWGSL from "./shaders/Sprite.frag.wgsl?raw";
 import { AbstractMaterial } from "./AbstractMaterial.js";
-import { Color } from "../colors/index.js";
+import type { Color } from "../colors/index.js";
 import { MaterialType, BlendingMode, ShaderPropertyType, CullMode } from "../../enums/index.js";
 import { Texture } from "../textures/index.js";
-import {
-  RenderManifest,
-  ShaderDefinition,
-  StandardWebGPULayout,
-} from "../../renderers/shaders/index.js";
+import type { RenderManifest, ShaderDefinition } from "../../renderers/shaders/index.js";
+import { StandardWebGPULayout } from "../../renderers/shaders/index.js";
 
 /**
  * Configuration options for SpriteMaterial.

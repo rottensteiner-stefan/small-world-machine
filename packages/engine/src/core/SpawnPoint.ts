@@ -1,5 +1,5 @@
 import { Object3D } from "./Object3D.js";
-import { InspectorField } from "./Inspectable.js";
+import type { InspectorField } from "./Inspectable.js";
 import { Capsule, Cone } from "../geometry/index.js";
 import { WireframeMaterial, BasicMaterial } from "./materials/index.js";
 import { Color } from "./colors/index.js";

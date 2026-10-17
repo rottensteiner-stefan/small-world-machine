@@ -1,14 +1,11 @@
 import fragWGSL from "./shaders/Decal.frag.wgsl?raw";
 import fragGLSL from "./shaders/Decal.frag.glsl?raw";
 import { AbstractMaterial } from "../AbstractMaterial.js";
-import { Texture } from "../../textures/index.js";
+import type { Texture } from "../../textures/index.js";
 import { BlendingMode, CullMode, MaterialType, ShaderPropertyType } from "../../../enums/index.js";
 import { Color } from "../../colors/index.js";
-import {
-  RenderManifest,
-  ShaderDefinition,
-  StandardWebGPULayout,
-} from "../../../renderers/shaders/index.js";
+import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
+import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
 
 /** Configuration options for `DecalMaterial`. */
 export interface DecalMaterialOptions {

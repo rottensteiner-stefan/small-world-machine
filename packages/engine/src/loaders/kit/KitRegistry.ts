@@ -1,5 +1,5 @@
 import { Object3D } from "../../core/Object3D.js";
-import { AbstractLight } from "../../core/lights/AbstractLight.js";
+import type { AbstractLight } from "../../core/lights/AbstractLight.js";
 import { PointLight } from "../../core/lights/PointLight.js";
 import { SpotLight } from "../../core/lights/SpotLight.js";
 import { DirectionalLight } from "../../core/lights/DirectionalLight.js";
@@ -7,7 +7,7 @@ import { AmbientLight } from "../../core/lights/AmbientLight.js";
 import { Color } from "../../core/colors/Color.js";
 import { Decal } from "../../core/objects/Decal.js";
 import { createDecalShell } from "./DecalShell.js";
-import { DecalMaterial } from "../../core/materials/surface/DecalMaterial.js";
+import type { DecalMaterial } from "../../core/materials/surface/DecalMaterial.js";
 import { Texture } from "../../core/textures/index.js";
 import { StandardMaterial } from "../../core/materials/surface/StandardMaterial.js";
 import { Vector3D } from "../../math/Vector3D.js";

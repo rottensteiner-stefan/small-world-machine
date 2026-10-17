@@ -34,6 +34,17 @@ export default [
         { allowExpressions: false, allowHigherOrderFunctions: true },
       ],
 
+      // Type-only imports are written `import type` so they vanish at runtime and cannot form import cycles
+      // through the barrel files (`npm run check:cycles`).
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+          fixStyle: "separate-type-imports",
+          disallowTypeAnnotations: false,
+        },
+      ],
+
       // 2) Verbote & Best Practices
       "@typescript-eslint/no-explicit-any": "error",
       "prefer-const": "error",
@@ -66,7 +77,7 @@ export default [
 
       // 5) ESM-Imports benötigen .js-Endung (Packages sind ausgenommen)
       "import/extensions": ["error", "ignorePackages"],
-      
+
       // Combine multiple imports from the same module
       "import/no-duplicates": "error",
 

@@ -1,6 +1,6 @@
-import { Color } from "../core/colors/index.js";
-import { Vector3D } from "../math/index.js";
-import { PointLight, SpotLight, AreaLight, DirectionalLight } from "../core/lights/index.js";
+import type { Color } from "../core/colors/index.js";
+import type { Vector3D } from "../math/index.js";
+import type { PointLight, SpotLight, AreaLight, DirectionalLight } from "../core/lights/index.js";
 
 /**
  * Interface representing the data for all lights in a scene.

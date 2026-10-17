@@ -1,9 +1,10 @@
-import {
+import type {
   CameraConstraints,
   CameraStrategy,
   CameraInterfaceData,
 } from "../../../interfaces/index.js";
-import { Vector3D, MathPool } from "../../../math/index.js";
+import type { Vector3D } from "../../../math/index.js";
+import { MathPool } from "../../../math/index.js";
 import { CameraStrategyType } from "../../../enums/index.js";
 import { OrthographicProjection } from "../../../math/projections/index.js";
 /**

@@ -1,12 +1,12 @@
 import BasisGlue from "../../vendor/basis/basis_transcoder.js?raw";
 import basisWasmUrl from "../../vendor/basis/basis_transcoder.wasm?url";
-import {
+import type {
   BasisDecodeResult,
   BasisModule,
-  BasisTranscoderFormat,
   BasisTranscoderFormatId,
   KTX2File,
 } from "./basisTypes.js";
+import { BasisTranscoderFormat } from "./basisTypes.js";
 
 export interface BasisWasmConfig {
   /** Optional alternate .wasm bytes to load instead of the vendored copy. */

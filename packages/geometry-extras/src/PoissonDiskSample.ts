@@ -1,5 +1,6 @@
-import { Vec3Like } from "./Vec3Like.js";
-import { BoxBounds, mulberry32 } from "./VoronoiCells.js";
+import type { Vec3Like } from "./Vec3Like.js";
+import type { BoxBounds } from "./VoronoiCells.js";
+import { mulberry32 } from "./VoronoiCells.js";
 
 /**
  * Configuration options for 3D Poisson disk sampling.

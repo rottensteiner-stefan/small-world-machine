@@ -1,4 +1,5 @@
-import { Behavior, InspectorField } from "./Behavior.js";
+import type { InspectorField } from "./Behavior.js";
+import { Behavior } from "./Behavior.js";
 import { OscillatorType } from "../../enums/index.js";
 import { Noise } from "../../utils/index.js";
 

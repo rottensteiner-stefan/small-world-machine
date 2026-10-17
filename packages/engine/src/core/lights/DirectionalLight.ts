@@ -1,13 +1,11 @@
-import { AbstractLight, LightOptions } from "./AbstractLight.js";
+import type { LightOptions } from "./AbstractLight.js";
+import { AbstractLight } from "./AbstractLight.js";
 import { LightType, ProjectionType } from "../../enums/index.js";
 import { Vector3D, MathPool } from "../../math/index.js";
-import { LightDataInterface } from "../../interfaces/index.js";
-import { Camera } from "../index.js";
-import {
-  AbstractProjection,
-  OrthographicProjection,
-  PerspectiveProjection,
-} from "../../math/projections/index.js";
+import type { LightDataInterface } from "../../interfaces/index.js";
+import { Camera } from "../cameras/Camera.js";
+import type { AbstractProjection, PerspectiveProjection } from "../../math/projections/index.js";
+import { OrthographicProjection } from "../../math/projections/index.js";
 
 /**
  * Configuration options for directional light.

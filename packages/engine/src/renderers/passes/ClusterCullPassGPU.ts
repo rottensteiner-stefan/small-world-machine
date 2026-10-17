@@ -1,7 +1,7 @@
-import { Scene } from "../../core/index.js";
-import { Vector3D } from "../../math/index.js";
-import { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
-import { RenderPass } from "../RenderPass.js";
+import type { Scene } from "../../core/index.js";
+import type { Vector3D } from "../../math/index.js";
+import type { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
+import type { RenderPass } from "../RenderPass.js";
 
 /**
  * Builds the clustered light grid (point/spot lights, fixed-capacity-per-cluster, no atomics)

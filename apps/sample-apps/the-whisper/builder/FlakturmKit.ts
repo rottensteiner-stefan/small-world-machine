@@ -1,3 +1,4 @@
+import type { Vector3D } from "@small-world-machine/engine";
 import {
   Object3D,
   Cube,
@@ -5,7 +6,6 @@ import {
   StandardMaterial,
   Color,
   PointLight,
-  Vector3D,
 } from "@small-world-machine/engine";
 
 export interface FluorescentLampOptions {

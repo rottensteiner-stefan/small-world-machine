@@ -1,3 +1,4 @@
+import type { Scene } from "@small-world-machine/engine";
 import {
   Color,
   Cube,
@@ -5,7 +6,6 @@ import {
   Object3D,
   SpotLight,
   StandardMaterial,
-  Scene,
 } from "@small-world-machine/engine";
 import { createRefSensorTexture } from "./textures.js";
 

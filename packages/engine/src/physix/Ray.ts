@@ -1,8 +1,8 @@
-import { BoundingBox } from "./BoundingBox.js";
-import { BoundingSphere } from "./BoundingSphere.js";
+import type { BoundingBox } from "./BoundingBox.js";
+import type { BoundingSphere } from "./BoundingSphere.js";
 import type { OBB } from "./OBB.js";
 import { BoundingType } from "../enums/index.js";
-import { BoundingVolume } from "../interfaces/index.js";
+import type { BoundingVolume } from "../interfaces/index.js";
 import { Vector3D, MathPool } from "../math/index.js";
 
 /**

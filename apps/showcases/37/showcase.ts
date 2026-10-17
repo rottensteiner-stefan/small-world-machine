@@ -1,15 +1,19 @@
+import type {
+  BloomElement,
+  ColorGradingElement,
+  GrainElement,
+  HbaoElement,
+  ToneMappingElement,
+  VignetteElement,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
-  BloomElement,
   CameraStrategyType,
   Color,
-  ColorGradingElement,
   Cube,
   Cylinder,
   FlyController,
-  GrainElement,
-  HbaoElement,
   Object3D,
   PerspectiveProjection,
   PointLight,
@@ -21,10 +25,8 @@ import {
   StandardMaterial,
   Texture,
   TextureWrap,
-  ToneMappingElement,
   ToneMappingMode,
   Vector3D,
-  VignetteElement,
 } from "@small-world-machine/engine";
 
 class Showcase37 extends AbstractShowcase {

@@ -1,9 +1,9 @@
-import { Object3D } from "../../core/Object3D.js";
-import { GltfJson } from "./types.js";
-import { GltfDocument, GltfNodeJson } from "./writerTypes.js";
-import { GeometryDataInterface } from "../../interfaces/index.js";
-import { Texture } from "../../core/textures/Texture.js";
-import { AssetManager } from "../AssetManager.js";
+import type { Object3D } from "../../core/Object3D.js";
+import type { GltfJson } from "./types.js";
+import type { GltfDocument, GltfNodeJson } from "./writerTypes.js";
+import type { GeometryDataInterface } from "../../interfaces/index.js";
+import type { Texture } from "../../core/textures/Texture.js";
+import type { AssetManager } from "../AssetManager.js";
 
 /** The raw JSON shape of a single glTF node, as it appears in `GltfJson.nodes[]`. */
 export type GltfNodeDef = NonNullable<GltfJson["nodes"]>[number];

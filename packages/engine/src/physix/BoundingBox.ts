@@ -1,9 +1,10 @@
 import { Collision } from "./Collision.js";
-import { BoundingSphere } from "./BoundingSphere.js";
+import type { BoundingSphere } from "./BoundingSphere.js";
 import type { OBB } from "./OBB.js";
 import type { ConvexHull } from "./ConvexHull.js";
-import { BoundingVolume, FrustumInterface } from "../interfaces/index.js";
-import { Vector3D, Matrix4 } from "../math/index.js";
+import type { BoundingVolume, FrustumInterface } from "../interfaces/index.js";
+import type { Matrix4 } from "../math/index.js";
+import { Vector3D } from "../math/index.js";
 import { BoundingType } from "../enums/index.js";
 
 /**

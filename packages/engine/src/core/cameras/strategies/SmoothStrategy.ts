@@ -1,10 +1,11 @@
-import {
+import type {
   CameraInterfaceData,
   CameraConstraints,
   CameraStrategy,
 } from "../../../interfaces/index.js";
 import { CameraStrategyType } from "../../../enums/index.js";
-import { Vector3D, MathUtils } from "../../../math/index.js";
+import type { Vector3D } from "../../../math/index.js";
+import { MathUtils } from "../../../math/index.js";
 import { clampVector } from "./CameraStrategyUtils.js";
 /**
  * A camera strategy that smoothly follows a target.

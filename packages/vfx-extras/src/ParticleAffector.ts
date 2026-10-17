@@ -1,4 +1,4 @@
-import { Particle } from "./Particle.js";
+import type { Particle } from "./Particle.js";
 
 /**
  * Interface for any modifier or force field that affects particles each tick.

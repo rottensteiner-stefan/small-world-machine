@@ -1,11 +1,7 @@
 import { describe, expect, it, vi, beforeAll } from "vitest";
 import { PostProcessPass } from "../../src/renderers/passes/PostProcessPass.js";
-import {
-  PostProcessingGroup,
-  ToneMappingElement,
-  VignetteElement,
-  ColorGradingElement,
-} from "../../src/index.js";
+import type { ToneMappingElement, VignetteElement, ColorGradingElement } from "../../src/index.js";
+import { PostProcessingGroup } from "../../src/index.js";
 import { PostProcessingEffectType } from "../../src/enums/index.js";
 import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
 

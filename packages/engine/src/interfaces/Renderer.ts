@@ -1,9 +1,9 @@
-import { EngineOptions } from "./EngineOptions.js";
-import { Scene } from "../core/index.js";
-import { Color } from "../core/colors/index.js";
-import { Vector3D } from "../math/index.js";
-import { RendererType } from "../enums/index.js";
-import { FrameInfo } from "./FrameInfo.js";
+import type { EngineOptions } from "./EngineOptions.js";
+import type { Scene } from "../core/index.js";
+import type { Color } from "../core/colors/index.js";
+import type { Vector3D } from "../math/index.js";
+import type { RendererType } from "../enums/index.js";
+import type { FrameInfo } from "./FrameInfo.js";
 
 /**
  * Interface for all renderer implementations.

@@ -1,12 +1,14 @@
-import { Scene } from "../../core/index.js";
+import type { Scene } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
 import { Topology } from "../../enums/index.js";
-import { WebGPURenderer, VIEW_SLOT_MAIN_CAMERA } from "../WebGPU/WebGPURenderer.js";
-import { RenderPass } from "../index.js";
+import type { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
+import { VIEW_SLOT_MAIN_CAMERA } from "../WebGPU/WebGPURenderer.js";
+import type { RenderPass } from "../index.js";
 import { InstancedMesh } from "../../core/InstancedMesh.js";
-import { Object3D } from "../../core/Object3D.js";
-import { Vector3D, MathUtils } from "../../math/index.js";
-import { Texture } from "../../core/textures/index.js";
+import type { Object3D } from "../../core/Object3D.js";
+import type { Vector3D } from "../../math/index.js";
+import { MathUtils } from "../../math/index.js";
+import type { Texture } from "../../core/textures/index.js";
 
 const _scratchInstanced: InstancedMesh[] = [];
 const _scratchStandard: Object3D[] = [];

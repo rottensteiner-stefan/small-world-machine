@@ -1,6 +1,6 @@
 import { AbstractLoader } from "./AbstractLoader.js";
 import { EventType } from "../enums/index.js";
-import { ImageLoaderOptions } from "../interfaces/index.js";
+import type { ImageLoaderOptions } from "../interfaces/index.js";
 
 /**
  * Loader for image assets.

@@ -1,4 +1,4 @@
-import { GltfJson, GltfData, TypedArray } from "./types.js";
+import type { GltfJson, GltfData, TypedArray } from "./types.js";
 
 /**
  * Utility parser for glTF 2.0 binary chunks (.glb), Base64 data URIs, and buffer accessors.

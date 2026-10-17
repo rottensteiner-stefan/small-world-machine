@@ -1,6 +1,6 @@
+import type { ForgeToolOptions, GeometryDataInterface } from "@small-world-machine/engine";
 import {
   ForgeTool,
-  ForgeToolOptions,
   SmallWorldMachine,
   Object3D,
   Sphere,
@@ -15,7 +15,6 @@ import {
   PerspectiveProjection,
   CameraStrategyType,
   Vector2D,
-  GeometryDataInterface,
 } from "@small-world-machine/engine";
 import { MATERIAL_STUDIO_CSS } from "./material-studio/materialStudioStyles.js";
 import { buildMaterialStudioUI } from "./material-studio/MaterialStudioUiBuilder.js";

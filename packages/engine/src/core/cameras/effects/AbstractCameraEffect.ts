@@ -1,4 +1,4 @@
-import { CameraEffect } from "../../../interfaces/index.js";
+import type { CameraEffect } from "../../../interfaces/index.js";
 import { Vector3D } from "../../../math/index.js";
 import { Color } from "../../colors/index.js";
 

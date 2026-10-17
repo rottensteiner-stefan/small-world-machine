@@ -1,7 +1,7 @@
 import { Collision } from "./Collision.js";
-import { BoundingBox } from "./BoundingBox.js";
-import { BoundingVolume, FrustumInterface } from "../interfaces/index.js";
-import { Vector3D, Matrix4 } from "../math/index.js";
+import type { BoundingBox } from "./BoundingBox.js";
+import type { BoundingVolume, FrustumInterface } from "../interfaces/index.js";
+import type { Vector3D, Matrix4 } from "../math/index.js";
 import { BoundingType } from "../enums/index.js";
 
 /**

@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { WorldWriter, GltfDocument } from "../../src/loaders/WorldWriter.js";
+import type { GltfDocument } from "../../src/loaders/WorldWriter.js";
+import { WorldWriter } from "../../src/loaders/WorldWriter.js";
 import { GltfLoader } from "../../src/loaders/GltfLoader.js";
-import { GltfData } from "../../src/loaders/gltf/index.js";
+import type { GltfData } from "../../src/loaders/gltf/index.js";
 import { KitRegistry } from "../../src/loaders/kit/KitRegistry.js";
 import { AssetManager } from "../../src/loaders/AssetManager.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Decal } from "../../src/core/objects/Decal.js";
-import { DecalMaterial } from "../../src/core/materials/surface/DecalMaterial.js";
+import type { DecalMaterial } from "../../src/core/materials/surface/DecalMaterial.js";
 import { createDecalShell } from "../../src/loaders/kit/DecalShell.js";
 import type { KitManifest } from "../../src/loaders/kit/KitTypes.js";
 

@@ -1,5 +1,5 @@
 import { Vector3D } from "./Vector3D.js";
-import { Matrix4 } from "./Matrix4.js";
+import type { Matrix4 } from "./Matrix4.js";
 
 /**
  * A class representing a quaternion for rotations.

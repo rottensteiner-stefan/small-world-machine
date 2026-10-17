@@ -1,5 +1,5 @@
 import { Behavior } from "./Behavior.js";
-import { StateMachine } from "../fsm/index.js";
+import type { StateMachine } from "../fsm/index.js";
 
 export class StateMachineBehavior<
   TState extends string,

@@ -1,4 +1,4 @@
-import { GltfExtensionPlugin } from "./GltfExtensionPlugin.js";
+import type { GltfExtensionPlugin } from "./GltfExtensionPlugin.js";
 
 const registry: GltfExtensionPlugin[] = [];
 

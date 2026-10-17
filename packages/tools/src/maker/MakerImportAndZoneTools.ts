@@ -1,8 +1,8 @@
+import type { Scene } from "@small-world-machine/engine";
 import {
   BasicMaterial,
   Color,
   Object3D,
-  Scene,
   StandardMaterial,
   WireframeMaterial,
   Octahedron,
@@ -14,11 +14,11 @@ import {
   Texture,
   GridLevelBuilder,
 } from "@small-world-machine/engine";
-import { resolveStageProjection } from "./StageProjectionResolver.js";
+import type { resolveStageProjection } from "./StageProjectionResolver.js";
 import { BackgroundPlane } from "./BackgroundPlane.js";
 import { defaultAsciiMapLegend } from "./AsciiMapLegend.js";
-import { UndoStack } from "./UndoStack.js";
-import { ProjectBinding } from "./ProjectBinding.js";
+import type { UndoStack } from "./UndoStack.js";
+import type { ProjectBinding } from "./ProjectBinding.js";
 
 /** In-progress click-to-draw state for a new `StageZoneMarker` (ADR 0016 Phase 2). `previewRoot`
  * holds ephemeral handle/line markers rebuilt after every placed point -- never added to the

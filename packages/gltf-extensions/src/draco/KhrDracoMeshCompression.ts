@@ -1,10 +1,11 @@
-import {
+import type {
   GltfExtensionPlugin,
   GltfPrimitiveDef,
   GltfReadContext,
   GeometryDataInterface,
 } from "@small-world-machine/engine";
-import { DracoDecoder, DracoAttributeMapping } from "./DracoDecoder.js";
+import type { DracoAttributeMapping } from "./DracoDecoder.js";
+import { DracoDecoder } from "./DracoDecoder.js";
 
 export interface DracoExtensionDef {
   bufferView: number;

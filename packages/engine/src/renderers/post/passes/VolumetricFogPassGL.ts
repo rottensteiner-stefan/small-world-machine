@@ -3,9 +3,9 @@ import FOG_FRAG_GLSL from "../shaders/VolumetricFog.frag.glsl?raw";
 import BILATERAL_FRAG_GLSL from "../shaders/VolumetricFogBilateral.frag.glsl?raw";
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
-import { VolumetricFogElement } from "../elements/index.js";
-import { DirectionalLight, PointLight, SpotLight } from "../../../core/lights/index.js";
-import { FogVolume } from "../../../core/objects/FogVolume.js";
+import type { VolumetricFogElement } from "../elements/index.js";
+import type { DirectionalLight, PointLight, SpotLight } from "../../../core/lights/index.js";
+import type { FogVolume } from "../../../core/objects/FogVolume.js";
 import { Color } from "../../../core/colors/index.js";
 import type { VolumetricTexture } from "../../../core/textures/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";

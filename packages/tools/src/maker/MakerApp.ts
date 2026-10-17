@@ -6,10 +6,18 @@
 // declaration has run (a real, previously-latent TDZ crash, not a hypothetical one -- hit and
 // confirmed live in-browser while building this). Importing from the package root avoids it by
 // construction, same as every existing showcase/app.
+import type {
+  Behavior,
+  AbstractMaterial,
+  BoundingBox,
+  BoundingSphere,
+  EngineOptions,
+  OBB,
+  KitDecalItem,
+} from "@small-world-machine/engine";
 import {
   SmallWorldMachine,
   Object3D,
-  Behavior,
   attachBehavior,
   detachBehavior,
   DirectionalLight,
@@ -17,18 +25,14 @@ import {
   SpotLight,
   AbstractLight,
   AmbientLight,
-  AbstractMaterial,
   WireframeMaterial,
   Color,
   isEditingTextInput,
   Grid,
   Cube,
   Raycaster,
-  BoundingBox,
-  BoundingSphere,
   BoundingType,
   CameraStrategyType,
-  EngineOptions,
   Vector2D,
   Vector3D,
   MathPool,
@@ -37,18 +41,18 @@ import {
   KitRegistry,
   Quaternion,
   Matrix4,
-  type OBB,
-  type KitDecalItem,
 } from "@small-world-machine/engine";
 
-import { OrbitCameraController, OrbitCameraView } from "./OrbitCameraController.js";
+import type { OrbitCameraView } from "./OrbitCameraController.js";
+import { OrbitCameraController } from "./OrbitCameraController.js";
 import { UndoStack } from "./UndoStack.js";
 import { HierarchyPanel } from "./HierarchyPanel.js";
 import { PropertyPanel } from "./PropertyPanel.js";
 import { ObjectPalette } from "./ObjectPalette.js";
 import { PrefabPalette } from "./PrefabPalette.js";
 import { ProjectBinding } from "./ProjectBinding.js";
-import { TransformGizmo, GizmoMode, GizmoAxis } from "./TransformGizmo.js";
+import type { GizmoMode, GizmoAxis } from "./TransformGizmo.js";
+import { TransformGizmo } from "./TransformGizmo.js";
 import { LightGizmoManager } from "./LightGizmoManager.js";
 import { StageZoneGizmoManager } from "./StageZoneGizmoManager.js";
 import { resolveStageProjection, projectRayToUv } from "./StageProjectionResolver.js";

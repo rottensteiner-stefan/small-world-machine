@@ -3,7 +3,7 @@ import { Object3D } from "../../../src/core/Object3D.js";
 import { PhysicsBroadphase } from "../../../src/physix/broadphase/PhysicsBroadphase.js";
 import { BoundingBox } from "../../../src/physix/BoundingBox.js";
 import { Vector3D } from "../../../src/math/index.js";
-import { Collidable } from "../../../src/interfaces/index.js";
+import type { Collidable } from "../../../src/interfaces/index.js";
 
 describe("PhysicsBroadphase", () => {
   it("builds an Octree and queries intersecting volumes", () => {

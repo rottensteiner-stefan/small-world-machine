@@ -1,4 +1,4 @@
-import { BlendingMode, CullMode, ShaderPropertyType } from "../../enums/index.js";
+import type { BlendingMode, CullMode, ShaderPropertyType } from "../../enums/index.js";
 
 /**
  * Metadata for a shader property.

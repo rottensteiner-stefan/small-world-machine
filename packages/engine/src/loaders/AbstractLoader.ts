@@ -1,6 +1,6 @@
 import { EventDispatcherImpl } from "../core/events/index.js";
-import { Events, EventHandler, LoaderOptions } from "../interfaces/index.js";
-import { EventType } from "../enums/index.js";
+import type { Events, EventHandler, LoaderOptions } from "../interfaces/index.js";
+import type { EventType } from "../enums/index.js";
 import { AssetManager } from "./AssetManager.js";
 
 /**

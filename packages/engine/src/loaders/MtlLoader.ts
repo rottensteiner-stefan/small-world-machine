@@ -2,7 +2,7 @@ import { AbstractLoader } from "./AbstractLoader.js";
 import { EventType, TextureFilter } from "../enums/index.js";
 import { PhongMaterial } from "../core/materials/index.js";
 import { Texture } from "../core/textures/index.js";
-import { LoaderOptions } from "../interfaces/index.js";
+import type { LoaderOptions } from "../interfaces/index.js";
 
 export class MtlLoader extends AbstractLoader<Map<string, PhongMaterial>> {
   /**

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { DynamicReflectionProbe, Scene, Object3D, RenderTargetCube } from "../../src/index.js";
-import { Renderer } from "../../src/interfaces/Renderer.js";
+import type { RenderTargetCube } from "../../src/index.js";
+import { DynamicReflectionProbe, Scene, Object3D } from "../../src/index.js";
+import type { Renderer } from "../../src/interfaces/Renderer.js";
 
 describe("DynamicReflectionProbe", (): void => {
   it("initializes with 1 face per frame by default", (): void => {

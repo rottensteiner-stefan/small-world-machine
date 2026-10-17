@@ -1,3 +1,4 @@
+import type { Geometry } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -20,7 +21,6 @@ import {
   ExtrudeGeometry,
   FPSController,
   Gear,
-  Geometry,
   Grid,
   Ground,
   HollowCylinder,

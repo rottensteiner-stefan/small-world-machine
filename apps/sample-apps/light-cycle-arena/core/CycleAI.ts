@@ -1,5 +1,5 @@
 import { Vector3D } from "@small-world-machine/engine/math/index.js";
-import { ArenaGrid } from "./ArenaGrid.js";
+import type { ArenaGrid } from "./ArenaGrid.js";
 
 const rotateLeft = (d: Vector3D): Vector3D => new Vector3D(-d.z, 0, d.x);
 const rotateRight = (d: Vector3D): Vector3D => new Vector3D(d.z, 0, -d.x);

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import { GltfLoader, Object3D } from "../../src/index.js";
+import type { Object3D } from "../../src/index.js";
+import { GltfLoader } from "../../src/index.js";
 import * as path from "path";
 import * as fs from "fs";
 

@@ -1,4 +1,4 @@
-import { BoundingVolume } from "./BoundingVolume.js";
+import type { BoundingVolume } from "./BoundingVolume.js";
 
 /**
  * Interface for objects that can be tested for physical collisions.

@@ -7,7 +7,7 @@ import { AssetManager } from "../../src/loaders/AssetManager.js";
 import { GltfLoader } from "../../src/loaders/GltfLoader.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Decal } from "../../src/core/objects/Decal.js";
-import { DecalMaterial } from "../../src/core/materials/surface/DecalMaterial.js";
+import type { DecalMaterial } from "../../src/core/materials/surface/DecalMaterial.js";
 import type {
   KitManifest,
   LevelDecalPlacement,

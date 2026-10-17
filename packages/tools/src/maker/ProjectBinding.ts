@@ -1,4 +1,5 @@
-import { Object3D, WorldWriter, GltfLoader, GltfData } from "@small-world-machine/engine";
+import type { Object3D, GltfData } from "@small-world-machine/engine";
+import { WorldWriter, GltfLoader } from "@small-world-machine/engine";
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
 const SCENE_FILE_NAME = "scene.gltf";

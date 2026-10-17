@@ -1,5 +1,5 @@
 import { AbstractGeometry } from "@small-world-machine/engine";
-import { Vec3Like } from "./Vec3Like.js";
+import type { Vec3Like } from "./Vec3Like.js";
 
 /**
  * A single, already-clipped convex cell (as produced by `computeCellFaces()`)

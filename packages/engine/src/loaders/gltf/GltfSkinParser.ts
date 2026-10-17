@@ -1,7 +1,8 @@
-import { GltfJson } from "./types.js";
+import type { GltfJson } from "./types.js";
 import { GltfBinaryParser } from "./GltfBinaryParser.js";
-import { Object3D } from "../../core/Object3D.js";
-import { Bone, Skeleton } from "../../core/animation/index.js";
+import type { Object3D } from "../../core/Object3D.js";
+import type { Bone } from "../../core/animation/index.js";
+import { Skeleton } from "../../core/animation/index.js";
 import { Matrix4 } from "../../math/index.js";
 
 /**

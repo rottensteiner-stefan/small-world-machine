@@ -1,6 +1,6 @@
 import { Decal } from "../../../core/objects/Decal.js";
 import { createDecalShell, decalToPayload, type SwmDecalPayload } from "../../kit/DecalShell.js";
-import { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
+import type { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
 
 /**
  * `SWM_decal` -- a box-projected decal (ADR 0029) with the payload of a `LevelDecalPlacement`.

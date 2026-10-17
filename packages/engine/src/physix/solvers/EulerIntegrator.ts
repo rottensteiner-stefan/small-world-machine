@@ -1,5 +1,6 @@
-import { Object3D } from "../../core/Object3D.js";
-import { Vector3D, MathUtils, MathPool } from "../../math/index.js";
+import type { Object3D } from "../../core/Object3D.js";
+import type { Vector3D } from "../../math/index.js";
+import { MathUtils, MathPool } from "../../math/index.js";
 
 /**
  * Shortest-path angular delta from `from` to `to` (radians, wrapped into (-PI, PI]).

@@ -1,5 +1,6 @@
-import { Behavior, InspectorField } from "./Behavior.js";
-import { Object3D } from "../index.js";
+import type { InspectorField } from "./Behavior.js";
+import { Behavior } from "./Behavior.js";
+import type { Object3D } from "../index.js";
 import { Noise } from "../../utils/index.js";
 import { MathUtils } from "../../math/index.js";
 

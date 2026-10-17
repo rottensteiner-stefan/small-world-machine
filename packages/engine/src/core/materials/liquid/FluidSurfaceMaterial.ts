@@ -7,12 +7,9 @@ import fragWGSL from "./shaders/FluidSurface.frag.wgsl?raw";
 import { AbstractMaterial } from "../AbstractMaterial.js";
 import { Color } from "../../colors/index.js";
 import { MaterialType, ShaderPropertyType } from "../../../enums/index.js";
-import { Texture } from "../../textures/index.js";
-import {
-  RenderManifest,
-  ShaderDefinition,
-  StandardWebGPULayout,
-} from "../../../renderers/shaders/index.js";
+import type { Texture } from "../../textures/index.js";
+import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
+import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
 
 /**
  * Configuration options for FluidSurfaceMaterial.

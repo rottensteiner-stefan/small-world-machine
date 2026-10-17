@@ -1,7 +1,7 @@
-import { Object3D } from "@small-world-machine/engine";
-import { OrbitCameraController, OrbitCameraView } from "./OrbitCameraController.js";
-import { GizmoMode, TransformGizmo } from "./TransformGizmo.js";
-import { ProjectBinding } from "./ProjectBinding.js";
+import type { Object3D } from "@small-world-machine/engine";
+import type { OrbitCameraController, OrbitCameraView } from "./OrbitCameraController.js";
+import type { GizmoMode, TransformGizmo } from "./TransformGizmo.js";
+import type { ProjectBinding } from "./ProjectBinding.js";
 
 export interface MakerToolbarContext {
   paletteContainer: HTMLElement;

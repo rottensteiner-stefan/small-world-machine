@@ -1,4 +1,5 @@
-import { Joint, JointOptions } from "./Joint.js";
+import type { JointOptions } from "./Joint.js";
+import { Joint } from "./Joint.js";
 import { MathPool } from "../../math/MathPool.js";
 
 /**

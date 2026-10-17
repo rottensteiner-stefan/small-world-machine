@@ -1,4 +1,5 @@
-import { AssetManager, ProgressCallback } from "./AssetManager.js";
+import type { ProgressCallback } from "./AssetManager.js";
+import { AssetManager } from "./AssetManager.js";
 
 export type ChunkCallback = (chunk: Uint8Array, loaded: number, total: number) => void;
 

@@ -1,7 +1,9 @@
-import { Vector3D, MathUtils } from "../math/index.js";
-import { CameraInterfaceData, Events } from "../interfaces/index.js";
+import type { Vector3D } from "../math/index.js";
+import { MathUtils } from "../math/index.js";
+import type { CameraInterfaceData, Events } from "../interfaces/index.js";
 import { EventType } from "../enums/index.js";
-import { SynthSFX, SoundHandle } from "./SynthSFX.js";
+import type { SoundHandle } from "./SynthSFX.js";
+import { SynthSFX } from "./SynthSFX.js";
 
 /**
  * A basic Audio System that wraps the Web Audio API.

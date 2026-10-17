@@ -1,5 +1,5 @@
 import { AbstractGeometry } from "./AbstractGeometry.js";
-import { Vector2D } from "../math/index.js";
+import type { Vector2D } from "../math/index.js";
 
 /**
  * Options for ExtrudeGeometry.

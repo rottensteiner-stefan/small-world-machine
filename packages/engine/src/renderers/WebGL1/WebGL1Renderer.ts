@@ -2,11 +2,13 @@ import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
 import { WebGLMainPass } from "../passes/WebGLMainPass.js";
 import { WebGLPostProcessPass } from "../passes/WebGLPostProcessPass.js";
 import { PostProcessPassGL, BloomPassGL, LightShaftsPassGL } from "../post/passes/index.js";
-import { CubeTexture, Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
+import type { Texture } from "../../core/textures/index.js";
+import { CubeTexture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
 import { StandardWebGPULayout, resolveManifestFlags } from "../shaders/index.js";
-import { DeviceLimit, InstancedMesh, Object3D, Scene } from "../../core/index.js";
+import type { Object3D, Scene } from "../../core/index.js";
+import { DeviceLimit, InstancedMesh } from "../../core/index.js";
 import { applyAnisotropy } from "../anisotropy.js";
-import {
+import type {
   EngineOptions,
   GeometryDataInterface,
   LightDataInterface,
@@ -21,7 +23,7 @@ import {
   PostProcessingEffectType,
 } from "../../enums/index.js";
 import { Mesh } from "../Mesh.js";
-import { Vector3D } from "../../math/index.js";
+import type { Vector3D } from "../../math/index.js";
 
 interface ProgramCache {
   prog: WebGLProgram;

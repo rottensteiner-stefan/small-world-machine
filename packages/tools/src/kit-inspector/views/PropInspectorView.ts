@@ -7,9 +7,8 @@ import {
   BasicMaterial,
   BoundingType,
   BoundingBox,
-  KitRegistry,
 } from "@small-world-machine/engine";
-import type { KitSocket } from "@small-world-machine/engine";
+import type { KitSocket, KitRegistry } from "@small-world-machine/engine";
 import type { CameraFrame, InspectedAssetInfo } from "../types.js";
 
 export interface PropViewResult {

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { StageMovementBehavior } from "../../../src/core/behaviors/StageMovementBehavior.js";
 import { StageZone } from "../../../src/core/stage/StageZone.js";
 import { Object3D } from "../../../src/core/Object3D.js";
-import { InputInterface, MouseState } from "../../../src/core/input/Input.js";
+import type { InputInterface, MouseState } from "../../../src/core/input/Input.js";
 import { Keys } from "../../../src/enums/Keys.js";
 
 class MockInput implements InputInterface {

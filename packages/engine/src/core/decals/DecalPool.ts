@@ -1,4 +1,5 @@
-import { Matrix4, MathPool, Vector3D } from "../../math/index.js";
+import type { Vector3D } from "../../math/index.js";
+import { Matrix4, MathPool } from "../../math/index.js";
 import type { Object3D } from "../Object3D.js";
 import { Decal } from "../objects/Decal.js";
 import type { DecalMaterial } from "../materials/surface/DecalMaterial.js";

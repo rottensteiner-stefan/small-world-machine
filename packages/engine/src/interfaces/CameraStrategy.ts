@@ -1,6 +1,6 @@
-import { CameraConstraints } from "./CameraConstraints.js";
-import { CameraInterfaceData } from "./CameraInterfaceData.js";
-import { Vector3D } from "../math/index.js";
+import type { CameraConstraints } from "./CameraConstraints.js";
+import type { CameraInterfaceData } from "./CameraInterfaceData.js";
+import type { Vector3D } from "../math/index.js";
 
 /**
  * Interface for camera control strategies (e.g. FPS, Orbit, Smooth).

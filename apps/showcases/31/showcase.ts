@@ -1,15 +1,18 @@
+import type {
+  BloomElement,
+  EngineOptions,
+  GrainElement,
+  HbaoElement,
+  VignetteElement,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
-  BloomElement,
   CameraStrategyType,
   Color,
   Cube,
   Cylinder,
   DirectionalLight,
-  EngineOptions,
-  GrainElement,
-  HbaoElement,
   InstancedMesh,
   MathUtils,
   Matrix4,
@@ -27,7 +30,6 @@ import {
   StandardMaterial,
   Torus,
   Vector3D,
-  VignetteElement,
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 

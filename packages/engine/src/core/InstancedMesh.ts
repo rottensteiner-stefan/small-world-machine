@@ -1,7 +1,7 @@
 import { Object3D } from "./Object3D.js";
 import { Matrix4 } from "../math/index.js";
-import { GeometryDataInterface } from "../interfaces/index.js";
-import { AbstractMaterial } from "./materials/index.js";
+import type { GeometryDataInterface } from "../interfaces/index.js";
+import type { AbstractMaterial } from "./materials/index.js";
 
 /**
  * A class for rendering multiple instances of a mesh with different transforms.

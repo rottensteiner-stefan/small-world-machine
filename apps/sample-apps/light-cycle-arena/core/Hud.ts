@@ -1,5 +1,5 @@
 import { Events } from "../Events.js";
-import { EventDispatcherImpl } from "@small-world-machine/engine/core/index.js";
+import type { EventDispatcherImpl } from "@small-world-machine/engine/core/index.js";
 
 /**
  * Minimal HUD: a live "time flow" bar (the direct feedback for the time-warp mechanic --

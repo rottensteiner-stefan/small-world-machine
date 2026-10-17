@@ -27,7 +27,7 @@ import {
   CylindricalArch,
   HollowTruncatedCone,
 } from "../../src/geometry/index.js";
-import { AbstractGeometry } from "../../src/geometry/AbstractGeometry.js";
+import type { AbstractGeometry } from "../../src/geometry/AbstractGeometry.js";
 
 function checkOutwardNormals(
   geometry: AbstractGeometry,

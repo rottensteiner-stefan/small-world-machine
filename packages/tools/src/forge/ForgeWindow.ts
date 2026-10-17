@@ -1,4 +1,4 @@
-import { ForgeTool } from "@small-world-machine/engine";
+import type { ForgeTool } from "@small-world-machine/engine";
 
 export class ForgeWindow {
   public static _maxZIndex: number = 10;

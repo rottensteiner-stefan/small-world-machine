@@ -1,6 +1,6 @@
 import { AmbientLight } from "../../../core/lights/AmbientLight.js";
 import { Color } from "../../../core/colors/Color.js";
-import { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
+import type { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
 
 /**
  * `SWM_lights_ambient` -- an `AmbientLight`. `KHR_lights_punctual` only describes punctual lights

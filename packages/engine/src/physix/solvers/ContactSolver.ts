@@ -1,13 +1,13 @@
 import { Object3D } from "../../core/Object3D.js";
 import { Vector3D, MathPool } from "../../math/index.js";
 import { Collision } from "../Collision.js";
-import { EventDispatcherImpl } from "../../core/events/EventDispatcherImpl.js";
-import { Collidable } from "../../interfaces/index.js";
+import type { EventDispatcherImpl } from "../../core/events/EventDispatcherImpl.js";
+import type { Collidable } from "../../interfaces/index.js";
 import { BoundingType } from "../../enums/index.js";
-import { BoundingBox } from "../BoundingBox.js";
-import { BoundingSphere } from "../BoundingSphere.js";
+import type { BoundingBox } from "../BoundingBox.js";
+import type { BoundingSphere } from "../BoundingSphere.js";
 import { StaticCollider } from "../StaticCollider.js";
-import { Joint } from "../joints/Joint.js";
+import type { Joint } from "../joints/Joint.js";
 
 /** A resolved contact pair between two world colliders. */
 export interface ContactPair {

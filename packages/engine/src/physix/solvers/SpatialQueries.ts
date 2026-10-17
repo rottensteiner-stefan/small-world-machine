@@ -1,14 +1,14 @@
 import { Object3D } from "../../core/Object3D.js";
 import { Vector3D, MathPool } from "../../math/index.js";
 import { Collision } from "../Collision.js";
-import { Collidable } from "../../interfaces/index.js";
+import type { Collidable } from "../../interfaces/index.js";
 import { BoundingBox } from "../BoundingBox.js";
 import { BoundingSphere } from "../BoundingSphere.js";
-import { OBB } from "../OBB.js";
+import type { OBB } from "../OBB.js";
 import { BoundingType } from "../../enums/index.js";
-import { PhysicsBroadphase } from "../broadphase/PhysicsBroadphase.js";
-import { Ray } from "../Ray.js";
-import { RaycastHit } from "../RaycastHit.js";
+import type { PhysicsBroadphase } from "../broadphase/PhysicsBroadphase.js";
+import type { Ray } from "../Ray.js";
+import type { RaycastHit } from "../RaycastHit.js";
 
 /**
  * Spatial query operations (raycast / raycastAll / sphereCast) against the broadphase tree.

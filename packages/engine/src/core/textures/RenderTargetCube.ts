@@ -1,5 +1,5 @@
 import { CubeTexture } from "./CubeTexture.js";
-import { RenderTargetOptions } from "./RenderTarget.js";
+import type { RenderTargetOptions } from "./RenderTarget.js";
 
 /**
  * A specialized cube texture that can be rendered to by a Renderer.

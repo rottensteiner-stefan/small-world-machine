@@ -1,5 +1,5 @@
-import { Scene } from "../../core/index.js";
-import { RenderBatch } from "../../core/Scene.js";
+import type { Scene } from "../../core/index.js";
+import type { RenderBatch } from "../../core/Scene.js";
 import {
   MaterialType,
   Topology,
@@ -7,10 +7,10 @@ import {
   NormalTargetMode,
 } from "../../enums/index.js";
 import { NORMAL_TARGET_CLEAR } from "../WebGPU/managers/NormalOutputWrapper.js";
-import { WebGPURenderer } from "../WebGPU/index.js";
-import { RenderPass } from "../index.js";
-import { Vector3D } from "../../math/index.js";
-import { Object3D } from "../../core/Object3D.js";
+import type { WebGPURenderer } from "../WebGPU/index.js";
+import type { RenderPass } from "../index.js";
+import type { Vector3D } from "../../math/index.js";
+import type { Object3D } from "../../core/Object3D.js";
 /**
  * Standard render pass for opaque and skybox objects.
  */

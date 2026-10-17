@@ -1,5 +1,5 @@
-import { BoundingVolume } from "./BoundingVolume.js";
-import { Topology } from "../enums/index.js";
+import type { BoundingVolume } from "./BoundingVolume.js";
+import type { Topology } from "../enums/index.js";
 
 export interface GeometryDataInterface {
   /** Vertex position data (x, y, z). Mandatory. */

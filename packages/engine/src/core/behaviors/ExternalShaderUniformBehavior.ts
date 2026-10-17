@@ -1,5 +1,6 @@
 import { Behavior } from "./Behavior.js";
-import { Object3D, CustomShaderMaterial } from "../index.js";
+import type { Object3D } from "../index.js";
+import { CustomShaderMaterial } from "../materials/index.js";
 
 /**
  * Automatically feeds external shader uniforms (like iTime, iResolution, or time, resolution)

@@ -1,8 +1,12 @@
 import { AbstractMaterial } from "./AbstractMaterial.js";
 import { CullMode, BlendingMode, ShaderPropertyType } from "../../enums/index.js";
 import { MathUtils } from "../../math/index.js";
-import { Texture, CubeTexture } from "../textures/index.js";
-import { RenderManifest, ShaderDefinition, ShaderLayout } from "../../renderers/shaders/index.js";
+import type { Texture, CubeTexture } from "../textures/index.js";
+import type {
+  RenderManifest,
+  ShaderDefinition,
+  ShaderLayout,
+} from "../../renderers/shaders/index.js";
 
 export interface CustomShaderMaterialOptions {
   /** Shader sources for different APIs. Provide at least one matching the active renderer. */

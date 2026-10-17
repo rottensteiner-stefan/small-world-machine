@@ -1,5 +1,6 @@
-import { Particle, ParticleOptions } from "./Particle.js";
-import { ParticleAffector } from "./ParticleAffector.js";
+import type { ParticleOptions } from "./Particle.js";
+import { Particle } from "./Particle.js";
+import type { ParticleAffector } from "./ParticleAffector.js";
 
 export interface ParticleSystemOptions {
   /** Maximum number of particles in the pool. Defaults to 1000. */

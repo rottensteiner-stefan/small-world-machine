@@ -1,4 +1,4 @@
-import { BoundingBox } from "./BoundingBox.js";
+import type { BoundingBox } from "./BoundingBox.js";
 import { Vector3D } from "../math/Vector3D.js";
 
 /**

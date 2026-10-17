@@ -1,9 +1,9 @@
-import { WebGLRenderPass } from "../WebGLRenderPass.js";
-import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
-import { Scene, Object3D } from "../../core/index.js";
+import type { WebGLRenderPass } from "../WebGLRenderPass.js";
+import type { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
+import type { Scene, Object3D } from "../../core/index.js";
 import { Vector3D } from "../../math/index.js";
-import { LightDataInterface } from "../../interfaces/index.js";
-import { RenderList, RenderBatch } from "../../core/Scene.js";
+import type { LightDataInterface } from "../../interfaces/index.js";
+import type { RenderList, RenderBatch } from "../../core/Scene.js";
 import { Topology, MaterialType, PostProcessingEffectType } from "../../enums/index.js";
 import { Color } from "../../core/colors/index.js";
 

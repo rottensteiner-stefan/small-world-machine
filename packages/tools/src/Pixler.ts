@@ -1,10 +1,5 @@
-import {
-  ForgeTool,
-  ForgeToolOptions,
-  ToolEvents,
-  EventDispatcherImpl,
-  isEditingTextInput,
-} from "@small-world-machine/engine";
+import type { ForgeToolOptions, EventDispatcherImpl } from "@small-world-machine/engine";
+import { ForgeTool, ToolEvents, isEditingTextInput } from "@small-world-machine/engine";
 import {
   bresenhamLine,
   floodFill,

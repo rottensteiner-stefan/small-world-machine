@@ -7,13 +7,9 @@ import fragGLSL100 from "./shaders/StylizedLava.frag.glsl100?raw";
 import { AbstractMaterial } from "../AbstractMaterial.js";
 import { Color } from "../../colors/index.js";
 import { MaterialType, ShaderPropertyType, TextureWrap } from "../../../enums/index.js";
-import {
-  RenderManifest,
-  ShaderDefinition,
-  StandardWebGPULayout,
-  VERTEX_COLOR_FLAG,
-} from "../../../renderers/shaders/index.js";
-import { Texture } from "../../textures/index.js";
+import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
+import { StandardWebGPULayout, VERTEX_COLOR_FLAG } from "../../../renderers/shaders/index.js";
+import type { Texture } from "../../textures/index.js";
 
 /**
  * Options for {@link StylizedLavaMaterial}: MinionsArt's "Simple Lava" shader parameters

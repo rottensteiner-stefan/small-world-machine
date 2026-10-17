@@ -1,6 +1,7 @@
 import { Texture } from "@small-world-machine/engine";
 import { BasisWasmTranscoder } from "./BasisWasmTranscoder.js";
-import { BasisDecodeResult, BasisTranscoderFormat, BasisTranscoderFormatId } from "./basisTypes.js";
+import type { BasisDecodeResult, BasisTranscoderFormatId } from "./basisTypes.js";
+import { BasisTranscoderFormat } from "./basisTypes.js";
 import {
   detectBestBlockFormat,
   engineFormatForBasisFormat,

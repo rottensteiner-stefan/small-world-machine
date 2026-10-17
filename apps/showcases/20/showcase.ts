@@ -1,9 +1,9 @@
+import type { BloomElement } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
   BasicMaterial,
   Behavior,
-  BloomElement,
   BobbingBehavior,
   CameraStrategyType,
   CatmullRomSpline,

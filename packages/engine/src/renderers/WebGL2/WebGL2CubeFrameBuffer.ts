@@ -1,4 +1,4 @@
-import { WebGL2FrameBufferOptions } from "./WebGL2FrameBuffer.js";
+import type { WebGL2FrameBufferOptions } from "./WebGL2FrameBuffer.js";
 
 /**
  * Encapsulates a WebGL2 Framebuffer with a cube map color texture and depth/stencil renderbuffer.

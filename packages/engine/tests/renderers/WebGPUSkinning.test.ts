@@ -6,7 +6,7 @@ import { GPUGeometryCache } from "../../src/renderers/WebGPU/managers/GPUGeometr
 import { Object3D } from "../../src/core/Object3D.js";
 import { SkinnedMesh, Skeleton, Bone } from "../../src/core/animation/index.js";
 import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
-import { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
+import type { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
 import { StandardWebGPULayout } from "../../src/renderers/shaders/StandardWebGPULayout.js";
 import { ModelGeometry } from "../../src/geometry/ModelGeometry.js";
 

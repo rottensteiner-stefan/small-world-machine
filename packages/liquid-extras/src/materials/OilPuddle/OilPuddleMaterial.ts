@@ -1,11 +1,10 @@
 import fragGLSL from "./OilPuddle.frag.glsl?raw";
 import fragGLSL100 from "./OilPuddle.frag.glsl100?raw";
 import fragWGSL from "./OilPuddle.frag.wgsl?raw";
+import type { RenderManifest, ShaderDefinition } from "@small-world-machine/engine";
 import {
   AbstractMaterial,
   Color,
-  RenderManifest,
-  ShaderDefinition,
   ShaderPropertyType,
   StandardWebGPULayout,
   Vector2D,

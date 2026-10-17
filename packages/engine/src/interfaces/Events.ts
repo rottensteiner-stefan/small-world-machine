@@ -1,4 +1,4 @@
-import { EventType } from "../enums/index.js";
+import type { EventType } from "../enums/index.js";
 
 /** Type for event handler functions. */
 export type EventHandler = (event: Record<string, unknown>) => void;

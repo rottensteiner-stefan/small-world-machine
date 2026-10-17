@@ -1,6 +1,6 @@
-import { Object3D } from "../Object3D.js";
+import type { Object3D } from "../Object3D.js";
 import { Quaternion } from "../../math/Quaternion.js";
-import { AnimationClip } from "./AnimationClip.js";
+import type { AnimationClip } from "./AnimationClip.js";
 import { AnimationAction } from "./AnimationAction.js";
 
 // Mixamo appends a session-dependent numeric suffix to its rig prefix ("mixamorig:" vs.

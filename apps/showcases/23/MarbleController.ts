@@ -1,11 +1,5 @@
-import {
-  Behavior,
-  CameraInterfaceData,
-  InputInterface,
-  Keys,
-  Object3D,
-  Vector3D,
-} from "@small-world-machine/engine";
+import type { CameraInterfaceData, InputInterface } from "@small-world-machine/engine";
+import { Behavior, Keys, Object3D, Vector3D } from "@small-world-machine/engine";
 
 /**
  * Controller to move a physics-based marble using WASD.

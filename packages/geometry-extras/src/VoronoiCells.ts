@@ -1,5 +1,5 @@
 import { AbstractGeometry } from "@small-world-machine/engine";
-import { Vec3Like } from "./Vec3Like.js";
+import type { Vec3Like } from "./Vec3Like.js";
 
 /** An axis-aligned box, used both as the seed-point spawn volume and the clipping bound. */
 export interface BoxBounds {

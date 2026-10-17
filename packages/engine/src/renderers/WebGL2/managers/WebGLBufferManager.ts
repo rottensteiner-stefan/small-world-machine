@@ -1,5 +1,5 @@
-import { Object3D } from "../../../core/index.js";
-import { GeometryDataInterface } from "../../../interfaces/index.js";
+import type { Object3D } from "../../../core/index.js";
+import type { GeometryDataInterface } from "../../../interfaces/index.js";
 import { Mesh } from "../../Mesh.js";
 
 /**

@@ -1,5 +1,5 @@
 import { CameraEffectType } from "../../enums/index.js";
-import { CameraEffect } from "../../interfaces/index.js";
+import type { CameraEffect } from "../../interfaces/index.js";
 import { Color } from "../colors/index.js";
 import { ShakeEffect, FlashEffect } from "./effects/index.js";
 

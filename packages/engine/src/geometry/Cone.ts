@@ -1,4 +1,5 @@
-import { Cylinder, CylinderOptions } from "./Cylinder.js";
+import type { CylinderOptions } from "./Cylinder.js";
+import { Cylinder } from "./Cylinder.js";
 
 /**
  * Configuration options for cone geometry.

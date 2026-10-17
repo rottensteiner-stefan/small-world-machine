@@ -1,14 +1,16 @@
+import type {
+  BloomElement,
+  EngineOptions,
+  GravitationalLensingElement,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
   BasicMaterial,
-  BloomElement,
   CameraStrategyType,
   Color,
   DirectionalLight,
-  EngineOptions,
   FollowCameraBehavior,
-  GravitationalLensingElement,
   Object3D,
   OrbitController,
   PerformanceTier,

@@ -1,16 +1,18 @@
+import type {
+  EngineOptions,
+  GeometryDataInterface,
+  Object3D,
+  SpotLight,
+  StandardMaterial,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   CameraStrategyType,
-  EngineOptions,
-  GeometryDataInterface,
   Keys,
-  Object3D,
   OrbitController,
   PerspectiveProjection,
   ProjectionType,
   RendererType,
-  SpotLight,
-  StandardMaterial,
   Vector2D,
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
@@ -20,8 +22,10 @@ import { buildBench, buildLaserEmitter } from "./buildBench.js";
 import { buildBeamSplitter, buildBeams } from "./buildBeamSplitter.js";
 import { buildDetector } from "./buildDetector.js";
 import { buildSpectrum } from "./buildSpectrum.js";
-import { LabInspector, LabInspectorHost, LabKnobs } from "./LabInspector.js";
-import { SPECTRAL_RAY_LENGTH, SpectralRay, computeSpectralRays } from "./optics.js";
+import type { LabInspectorHost, LabKnobs } from "./LabInspector.js";
+import { LabInspector } from "./LabInspector.js";
+import type { SpectralRay } from "./optics.js";
+import { SPECTRAL_RAY_LENGTH, computeSpectralRays } from "./optics.js";
 
 /**
  * Showcase 28: "The Quantum Refraction Lab / Optical Prism"

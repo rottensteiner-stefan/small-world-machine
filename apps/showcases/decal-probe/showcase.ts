@@ -1,3 +1,4 @@
+import type { HbaoElement } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -9,7 +10,6 @@ import {
   DecalMaterial,
   DirectionalLight,
   Ground,
-  HbaoElement,
   Plane,
   Object3D,
   OrbitController,

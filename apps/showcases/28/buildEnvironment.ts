@@ -1,5 +1,5 @@
+import type { Scene } from "@small-world-machine/engine";
 import {
-  Scene,
   AmbientLight,
   Color,
   Cube,

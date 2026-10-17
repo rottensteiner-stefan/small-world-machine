@@ -1,7 +1,8 @@
-import { Joint, JointOptions } from "./Joint.js";
+import type { JointOptions } from "./Joint.js";
+import { Joint } from "./Joint.js";
 import { Vector3D } from "../../math/Vector3D.js";
 import { MathPool } from "../../math/MathPool.js";
-import { RigidBody } from "../RigidBody.js";
+import type { RigidBody } from "../RigidBody.js";
 
 /**
  * Configuration options for HingeJoint.

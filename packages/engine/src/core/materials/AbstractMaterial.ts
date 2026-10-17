@@ -1,13 +1,11 @@
 import { Color } from "../colors/index.js";
-import { MaterialType, CullMode } from "../../enums/index.js";
-import {
-  RenderManifest,
-  ShaderDefinition,
-  registerMaterialShaderProvider,
-} from "../../renderers/shaders/index.js";
-import { ShaderProvider } from "../../interfaces/index.js";
+import type { MaterialType } from "../../enums/index.js";
+import { CullMode } from "../../enums/index.js";
+import type { RenderManifest, ShaderDefinition } from "../../renderers/shaders/index.js";
+import { registerMaterialShaderProvider } from "../../renderers/shaders/index.js";
+import type { ShaderProvider } from "../../interfaces/index.js";
 import { MathUtils } from "../../math/index.js";
-import { InspectorField } from "../Inspectable.js";
+import type { InspectorField } from "../Inspectable.js";
 import { shallowCloneWithValueTypes } from "../CloneUtils.js";
 
 /**

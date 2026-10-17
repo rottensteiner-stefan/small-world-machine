@@ -1,7 +1,12 @@
+import type {
+  BloomElement,
+  EngineOptions,
+  HbaoElement,
+  VolumetricFogElement,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
-  BloomElement,
   CameraStrategyType,
   Color,
   Cube,
@@ -9,8 +14,6 @@ import {
   CubeTexture,
   Cylinder,
   DirectionalLight,
-  EngineOptions,
-  HbaoElement,
   Object3D,
   Octahedron,
   OrbitController,
@@ -24,7 +27,6 @@ import {
   Texture,
   Torus,
   Vector3D,
-  VolumetricFogElement,
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 

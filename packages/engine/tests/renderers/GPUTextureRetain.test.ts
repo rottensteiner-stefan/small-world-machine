@@ -4,7 +4,7 @@ import { GPUTextureResourceCache } from "../../src/renderers/WebGPU/managers/GPU
 import { GPUFallbackResources } from "../../src/renderers/WebGPU/managers/GPUFallbackResources.js";
 import { Texture } from "../../src/core/textures/Texture.js";
 import { Object3D } from "../../src/core/Object3D.js";
-import { QualityConfig } from "../../src/interfaces/index.js";
+import type { QualityConfig } from "../../src/interfaces/index.js";
 
 // Node/vitest has no WebGPU global; stub the bit-flag constants the code under test reads.
 (globalThis as unknown as { GPUTextureUsage: Record<string, number> }).GPUTextureUsage ??= {

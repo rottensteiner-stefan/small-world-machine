@@ -10,7 +10,7 @@ import {
   PolygonFan,
   Vector3D,
 } from "@small-world-machine/engine";
-import { StageUvProjection } from "./StageProjectionResolver.js";
+import type { StageUvProjection } from "./StageProjectionResolver.js";
 
 const DEFAULT_COLOR = new Color(0.2, 0.85, 1.0);
 const SELECTED_COLOR = new Color(1.0, 0.8, 0.2);

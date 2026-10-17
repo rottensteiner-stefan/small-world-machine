@@ -4,12 +4,9 @@ import fragWGSL from "./shaders/Wireframe.frag.wgsl?raw";
 import { AbstractMaterial } from "./AbstractMaterial.js";
 import { MaterialType, CullMode, Topology, WireframeMode } from "../../enums/index.js";
 import { Color } from "../colors/index.js";
-import {
-  RenderManifest,
-  ShaderDefinition,
-  StandardWebGPULayout,
-} from "../../renderers/shaders/index.js";
-import { InspectorField } from "../Inspectable.js";
+import type { RenderManifest, ShaderDefinition } from "../../renderers/shaders/index.js";
+import { StandardWebGPULayout } from "../../renderers/shaders/index.js";
+import type { InspectorField } from "../Inspectable.js";
 
 /**
  * Configuration options for WireframeMaterial.

@@ -1,6 +1,6 @@
 import { Behavior } from "./Behavior.js";
-import { Vector3D } from "../../math/index.js";
-import { Ray } from "../../physix/index.js";
+import type { Vector3D } from "../../math/index.js";
+import type { Ray } from "../../physix/index.js";
 
 /**
  * Holds an Object3D's pointer-event handlers. Not constructed directly by user code --

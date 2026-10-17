@@ -1,5 +1,5 @@
-import { Object3D } from "../../core/Object3D.js";
-import { AbstractMaterial } from "../../core/materials/AbstractMaterial.js";
+import type { Object3D } from "../../core/Object3D.js";
+import type { AbstractMaterial } from "../../core/materials/AbstractMaterial.js";
 
 /**
  * Utility for querying and applying glTF 2.0 Material Variants (`KHR_materials_variants`).

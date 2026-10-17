@@ -1,5 +1,5 @@
-import { Particle } from "../Particle.js";
-import { ParticleAffector } from "../ParticleAffector.js";
+import type { Particle } from "../Particle.js";
+import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface DragOptions {
   /** Linear drag coefficient (F = -drag * v). Defaults to 0.5. */

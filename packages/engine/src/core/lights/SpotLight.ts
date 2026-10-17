@@ -1,10 +1,11 @@
-import { AbstractLight, LightOptions, MAX_CLUSTERED_LIGHTS_PER_TYPE } from "./AbstractLight.js";
+import type { LightOptions } from "./AbstractLight.js";
+import { AbstractLight, MAX_CLUSTERED_LIGHTS_PER_TYPE } from "./AbstractLight.js";
 import { LightType } from "../../enums/index.js";
-import { LightDataInterface } from "../../interfaces/index.js";
+import type { LightDataInterface } from "../../interfaces/index.js";
 import { Vector3D } from "../../math/index.js";
 import { PerspectiveProjection } from "../../math/projections/index.js";
-import { Camera } from "../index.js";
-import { InspectorField } from "../Inspectable.js";
+import { Camera } from "../cameras/Camera.js";
+import type { InspectorField } from "../Inspectable.js";
 
 /**
  * Configuration options for spotlight.

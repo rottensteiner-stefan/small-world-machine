@@ -1,6 +1,6 @@
-import { AbstractRenderer } from "./AbstractRenderer.js";
-import { Scene } from "../core/Scene.js";
-import { Vector3D } from "../math/index.js";
+import type { AbstractRenderer } from "./AbstractRenderer.js";
+import type { Scene } from "../core/Scene.js";
+import type { Vector3D } from "../math/index.js";
 
 /**
  * Interface for a render pass that can be executed by a renderer.

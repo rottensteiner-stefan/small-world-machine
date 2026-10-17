@@ -4,7 +4,8 @@ import { Sphere } from "../../geometry/Sphere.js";
 import { Cube } from "../../geometry/Cube.js";
 import { Cylinder } from "../../geometry/Cylinder.js";
 import { StandardMaterial } from "../../core/materials/surface/StandardMaterial.js";
-import { RatGroomingBehavior, RatGroomingBehaviorOptions } from "./RatGroomingBehavior.js";
+import type { RatGroomingBehaviorOptions } from "./RatGroomingBehavior.js";
+import { RatGroomingBehavior } from "./RatGroomingBehavior.js";
 
 export interface GroomingRatOptions {
   furColor?: Color | string;

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Mesh, VERTEX_COLOR_LOCATION } from "../../src/renderers/Mesh.js";
 import { Plane } from "../../src/geometry/index.js";
-import { GeometryDataInterface } from "../../src/interfaces/index.js";
+import type { GeometryDataInterface } from "../../src/interfaces/index.js";
 
 interface FakeGlCalls {
   ARRAY_BUFFER: number;

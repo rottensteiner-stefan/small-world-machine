@@ -1,11 +1,12 @@
-import { PointLight, PointLightOptions } from "../../../core/lights/PointLight.js";
+import type { PointLightOptions } from "../../../core/lights/PointLight.js";
+import { PointLight } from "../../../core/lights/PointLight.js";
 import { DirectionalLight } from "../../../core/lights/DirectionalLight.js";
 import { SpotLight } from "../../../core/lights/SpotLight.js";
-import { AbstractLight, LightOptions } from "../../../core/lights/AbstractLight.js";
+import type { AbstractLight, LightOptions } from "../../../core/lights/AbstractLight.js";
 import { Color } from "../../../core/colors/Color.js";
 import { Vector3D } from "../../../math/index.js";
-import { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
-import { GltfLightJson } from "../writerTypes.js";
+import type { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
+import type { GltfLightJson } from "../writerTypes.js";
 
 interface PunctualLightDef {
   type: string;

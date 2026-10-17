@@ -1,4 +1,5 @@
-import { ForgeTool, ForgeToolOptions } from "@small-world-machine/engine";
+import type { ForgeToolOptions } from "@small-world-machine/engine";
+import { ForgeTool } from "@small-world-machine/engine";
 
 /** Minimal concrete `ForgeTool` for tests -- `ForgeTool` itself is abstract. */
 export class TestForgeTool extends ForgeTool {

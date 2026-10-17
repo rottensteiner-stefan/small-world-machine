@@ -1,4 +1,4 @@
-import { KeyframeTrack } from "./KeyframeTrack.js";
+import type { KeyframeTrack } from "./KeyframeTrack.js";
 
 /**
  * An AnimationClip holds a collection of KeyframeTracks representing an animation sequence.

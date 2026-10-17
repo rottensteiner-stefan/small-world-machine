@@ -1,12 +1,11 @@
 import {
-  Decal,
   Quaternion,
   Vector3D,
   createDecalShell,
   decalEulerFromNormal,
   quaternionFromNormal,
 } from "@small-world-machine/engine";
-import type { Object3D } from "@small-world-machine/engine";
+import type { Object3D, Decal } from "@small-world-machine/engine";
 import { fitDecalPlane, type DecalPlaneFit } from "./DecalPlaneFit.js";
 
 /** A surface hit in world space; `normal` is the unit surface normal facing the viewer. */

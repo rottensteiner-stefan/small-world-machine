@@ -1,8 +1,8 @@
 import { Object3D } from "../Object3D.js";
 import { Camera } from "../cameras/Camera.js";
-import { Scene } from "../Scene.js";
+import type { Scene } from "../Scene.js";
 import { PerspectiveProjection } from "../../math/projections/index.js";
-import { Renderer } from "../../interfaces/index.js";
+import type { Renderer } from "../../interfaces/index.js";
 import { RenderTarget } from "../textures/index.js";
 import { MathPool } from "../../math/index.js";
 

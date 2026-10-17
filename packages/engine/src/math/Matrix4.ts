@@ -1,4 +1,4 @@
-import { Vector3D } from "./Vector3D.js";
+import type { Vector3D } from "./Vector3D.js";
 import { MathPool } from "./MathPool.js";
 
 /**

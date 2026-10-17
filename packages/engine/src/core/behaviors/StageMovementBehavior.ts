@@ -1,8 +1,8 @@
 import { Behavior } from "./Behavior.js";
-import { InspectorField } from "../Inspectable.js";
+import type { InspectorField } from "../Inspectable.js";
 import { Object3D } from "../Object3D.js";
-import { InputInterface } from "../input/Input.js";
-import { StageZone } from "../stage/StageZone.js";
+import type { InputInterface } from "../input/Input.js";
+import type { StageZone } from "../stage/StageZone.js";
 import { Keys, StageFacing } from "../../enums/index.js";
 
 /** A world-space position for a given (u, v) stage coordinate -- see `StageProjection`. */

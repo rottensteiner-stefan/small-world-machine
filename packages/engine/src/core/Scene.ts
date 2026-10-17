@@ -1,12 +1,13 @@
 import { Object3D } from "./Object3D.js";
-import { Octree, OctreeOptions } from "./culling/Octree.js";
-import { Fog } from "./Fog.js";
-import { Vector3D } from "../math/index.js";
-import { BoundingBox, SpatialHash, Joint } from "../physix/index.js";
+import type { OctreeOptions } from "./culling/Octree.js";
+import { Octree } from "./culling/Octree.js";
+import type { Fog } from "./Fog.js";
+import type { Vector3D } from "../math/index.js";
+import type { BoundingBox, SpatialHash, Joint } from "../physix/index.js";
 import { BoundingType, Topology, WireframeMode } from "../enums/index.js";
 import { DirectionalLight } from "./lights/index.js";
 import { SkinnedMesh } from "./animation/SkinnedMesh.js";
-import { Collidable } from "../interfaces/index.js";
+import type { Collidable } from "../interfaces/index.js";
 import { compareDecals } from "./decals/DecalMath.js";
 import type { Decal } from "./objects/Decal.js";
 

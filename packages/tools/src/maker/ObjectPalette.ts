@@ -1,3 +1,4 @@
+import type { Behavior } from "@small-world-machine/engine";
 import {
   Object3D,
   SpawnPoint,
@@ -8,7 +9,6 @@ import {
   DirectionalLight,
   SpotLight,
   AmbientLight,
-  Behavior,
   RotatorBehavior,
   HoverBehavior,
   BobbingBehavior,

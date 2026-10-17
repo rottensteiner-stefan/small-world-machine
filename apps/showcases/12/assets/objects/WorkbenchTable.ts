@@ -1,10 +1,5 @@
-import {
-  AbstractMaterial,
-  Cube,
-  Cylinder,
-  GeometryDataInterface,
-  Object3D,
-} from "@small-world-machine/engine";
+import type { AbstractMaterial, GeometryDataInterface } from "@small-world-machine/engine";
+import { Cube, Cylinder, Object3D } from "@small-world-machine/engine";
 
 const applyBoxUVs = (
   geo: GeometryDataInterface,

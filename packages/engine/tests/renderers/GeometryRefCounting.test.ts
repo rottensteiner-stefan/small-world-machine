@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { WebGLBufferManager } from "../../src/renderers/WebGL2/managers/WebGLBufferManager.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Scene } from "../../src/core/Scene.js";
-import { GeometryDataInterface } from "../../src/interfaces/index.js";
+import type { GeometryDataInterface } from "../../src/interfaces/index.js";
 
 function makeMockGl(): WebGL2RenderingContext {
   let bufferId = 0;

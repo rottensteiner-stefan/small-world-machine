@@ -1,9 +1,5 @@
-import {
-  AbstractMaterial,
-  RenderManifest,
-  ShaderDefinition,
-  StandardWebGPULayout,
-} from "@small-world-machine/engine";
+import type { RenderManifest, ShaderDefinition } from "@small-world-machine/engine";
+import { AbstractMaterial, StandardWebGPULayout } from "@small-world-machine/engine";
 
 const vertWGSL = `
 [WGSL_STRUCTS]

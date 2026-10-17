@@ -1,37 +1,40 @@
+import type {
+  BloomElement,
+  BoundingBox,
+  EngineOptions,
+  OutlineElement,
+  ToneMappingElement,
+  VignetteElement,
+  LevelHotspotDef,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
-  BloomElement,
-  BoundingBox,
   BoundingType,
   Color,
   Cube,
   CullMode,
   Cylinder,
   DirectionalLight,
-  EngineOptions,
   GltfLoader,
   MathUtils,
   Object3D,
-  OutlineElement,
   PointLight,
   PostProcessingEffectType,
   SpotLight,
   StandardMaterial,
-  ToneMappingElement,
   ToneMappingMode,
   Vector3D,
-  VignetteElement,
   RendererType,
   Texture,
   KitRegistry,
-  LevelHotspotDef,
 } from "@small-world-machine/engine";
 import { BunkerKit } from "../../builder/BunkerKit.js";
 import { FlakturmKit } from "../../builder/FlakturmKit.js";
 import { TerminalModal } from "../../ui/TerminalModal.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
-import { HotspotManager, HotspotAction } from "../../ui/HotspotManager.js";
+import type { HotspotAction } from "../../ui/HotspotManager.js";
+import { HotspotManager } from "../../ui/HotspotManager.js";
 
 type StageArea = "koje_42" | "vent_crawl" | "kaeltekammer";
 

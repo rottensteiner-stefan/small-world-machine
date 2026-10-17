@@ -1,13 +1,15 @@
-import { Scene } from "../../core/index.js";
+import type { Scene } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
 import { MaterialType } from "../../enums/MaterialType.js";
 import { Topology } from "../../enums/Topology.js";
-import { WebGPURenderer, VIEW_SLOT_SPOT_SHADOW_BASE } from "../WebGPU/WebGPURenderer.js";
-import { RenderPass } from "../index.js";
+import type { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
+import { VIEW_SLOT_SPOT_SHADOW_BASE } from "../WebGPU/WebGPURenderer.js";
+import type { RenderPass } from "../index.js";
 import { InstancedMesh } from "../../core/InstancedMesh.js";
-import { Object3D } from "../../core/Object3D.js";
-import { SpotLight } from "../../core/lights/SpotLight.js";
-import { Matrix4, MathPool, Vector3D, Frustum } from "../../math/index.js";
+import type { Object3D } from "../../core/Object3D.js";
+import type { SpotLight } from "../../core/lights/SpotLight.js";
+import type { Vector3D } from "../../math/index.js";
+import { Matrix4, MathPool, Frustum } from "../../math/index.js";
 
 const _scratchLightCasters: SpotLight[] = [];
 const _scratchCasters: Object3D[] = [];

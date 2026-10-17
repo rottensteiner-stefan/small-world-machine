@@ -1,4 +1,4 @@
-import { SmallWorldMachine } from "@small-world-machine/engine";
+import type { SmallWorldMachine } from "@small-world-machine/engine";
 import { Forge } from "./forge/Forge.js";
 import { MapGenerator } from "./MapGenerator.js";
 import { Pixler } from "./Pixler.js";

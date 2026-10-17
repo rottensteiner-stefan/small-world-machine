@@ -1,4 +1,4 @@
-import { Collidable, BoundingVolume } from "../interfaces/index.js";
+import type { Collidable, BoundingVolume } from "../interfaces/index.js";
 
 /**
  * A simple 2D spatial hash for fast broad-phase collision detection on the XZ plane.

@@ -1,3 +1,4 @@
+import type { Object3D } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -5,7 +6,6 @@ import {
   CameraStrategyType,
   Color,
   DirectionalLight,
-  Object3D,
   ObjLoader,
   PerspectiveProjection,
   ProjectionType,

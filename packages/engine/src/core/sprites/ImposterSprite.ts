@@ -1,7 +1,7 @@
 import { Sprite } from "./Sprite.js";
 import { SpriteMaterial } from "../materials/SpriteMaterial.js";
-import { Texture } from "../textures/Texture.js";
-import { Camera } from "../cameras/Camera.js";
+import type { Texture } from "../textures/Texture.js";
+import type { Camera } from "../cameras/Camera.js";
 
 /**
  * A camera-facing sprite that swaps between the angle textures a prior `bakeImposter()` call

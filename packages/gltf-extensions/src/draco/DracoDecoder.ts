@@ -1,4 +1,5 @@
-import { GeometryDataInterface, ModelGeometry } from "@small-world-machine/engine";
+import type { GeometryDataInterface } from "@small-world-machine/engine";
+import { ModelGeometry } from "@small-world-machine/engine";
 
 export type DracoAttributeMapping = Record<string, number>;
 

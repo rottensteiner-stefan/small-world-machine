@@ -1,5 +1,5 @@
 import { Behavior } from "../behaviors/index.js";
-import { Object3D, InputInterface } from "../index.js";
+import type { Object3D, InputInterface } from "../index.js";
 import { InputMode, Keys } from "../../enums/index.js";
 import { MathPool } from "../../math/index.js";
 

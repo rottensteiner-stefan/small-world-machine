@@ -1,5 +1,5 @@
-import { Texture, CubeTexture } from "../../core/textures/index.js";
-import { BlendingMode, CullMode, Topology, WireframeMode } from "../../enums/index.js";
+import type { Texture, CubeTexture } from "../../core/textures/index.js";
+import type { BlendingMode, CullMode, Topology, WireframeMode } from "../../enums/index.js";
 /**
  * Manifest flag for materials that read per-vertex colors (`a_color`, RGBA, white when the mesh
  * has none). The renderers bind the color stream only for programs/pipelines compiled with it.

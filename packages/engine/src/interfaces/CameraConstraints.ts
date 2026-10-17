@@ -1,4 +1,4 @@
-import { Vector3D } from "../math/index.js";
+import type { Vector3D } from "../math/index.js";
 
 /**
  * Interface defining spatial constraints for the camera position or target.

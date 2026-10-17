@@ -1,6 +1,6 @@
 import { MathPool, Matrix4, Vector3D } from "../math/index.js";
 import { BoundingBox } from "../physix/index.js";
-import { GeometryDataInterface, Geometry, BoundingVolume } from "../interfaces/index.js";
+import type { GeometryDataInterface, Geometry, BoundingVolume } from "../interfaces/index.js";
 import { Topology } from "../enums/index.js";
 /**
  * Base class for all geometry types.

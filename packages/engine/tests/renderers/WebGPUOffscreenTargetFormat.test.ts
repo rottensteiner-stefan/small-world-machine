@@ -9,7 +9,7 @@ import { GPUGeometryCache } from "../../src/renderers/WebGPU/managers/GPUGeometr
 import { RenderTarget } from "../../src/core/textures/index.js";
 import { CascadedShadowPassGPU } from "../../src/renderers/passes/CascadedShadowPassGPU.js";
 import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
-import { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
+import type { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Scene } from "../../src/core/Scene.js";
 import { Vector3D, Matrix4 } from "../../src/math/index.js";

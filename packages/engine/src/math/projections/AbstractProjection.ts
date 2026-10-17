@@ -1,5 +1,5 @@
 import { Matrix4 } from "../Matrix4.js";
-import { ProjectionType } from "../../enums/index.js";
+import type { ProjectionType } from "../../enums/index.js";
 
 /**
  * Base class for all camera projection types.

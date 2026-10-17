@@ -1,4 +1,4 @@
-import { Bone } from "./Bone.js";
+import type { Bone } from "./Bone.js";
 import { Matrix4 } from "../../math/Matrix4.js";
 
 /**

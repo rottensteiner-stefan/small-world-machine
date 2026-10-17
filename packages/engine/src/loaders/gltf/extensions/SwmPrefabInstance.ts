@@ -1,4 +1,4 @@
-import { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
+import type { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
 
 /**
  * `SWM_prefab_instance` -- provenance-only record of the Maker prefab a node was instantiated

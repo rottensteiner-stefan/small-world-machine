@@ -1,6 +1,7 @@
-import { LightOptions, AbstractLight } from "./AbstractLight.js";
+import type { LightOptions } from "./AbstractLight.js";
+import { AbstractLight } from "./AbstractLight.js";
 import { LightType } from "../../enums/index.js";
-import { LightDataInterface } from "../../interfaces/index.js";
+import type { LightDataInterface } from "../../interfaces/index.js";
 
 /**
  * Configuration options for area light.

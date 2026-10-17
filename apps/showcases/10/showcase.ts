@@ -1,8 +1,8 @@
+import type { Behavior, EngineOptions, GeometryDataInterface } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
   BasicMaterial,
-  Behavior,
   BobbingBehavior,
   BoundingBox,
   CameraStrategyType,
@@ -10,11 +10,9 @@ import {
   Cube,
   Cylinder,
   DirectionalLight,
-  EngineOptions,
   FPSController,
   Fog,
   FogMode,
-  GeometryDataInterface,
   GltfLoader,
   Ground,
   LambertMaterial,
@@ -38,22 +36,22 @@ import {
   FluidVolume,
 } from "@small-world-machine/engine";
 import { NoirWaterMaterial } from "@small-world-machine/liquid-extras";
+import type { GoldenSpec } from "./GoldenCapture.js";
 import {
   GoldenCapture,
-  GoldenSpec,
   createGoldenRandom,
   installRampVerifyHook,
   parseGoldenSpec,
 } from "./GoldenCapture.js";
 import { LiveTunePad } from "./LiveTunePad.js";
 import { PoolHomeBehavior, SplashDropBehavior } from "./PoolBehaviors.js";
+import type { PoolKey } from "./PoolLayout.js";
 import {
   FLOOR_Y,
   LIQUID_Y,
   POOL_CELLS,
   POOL_GRID_ROWS,
   POOL_SIZE,
-  PoolKey,
   TILE_CELL_PX,
   TILE_UNIT_SIZE,
   WALL_CENTER_Y,
@@ -61,14 +59,12 @@ import {
   WALL_THICKNESS,
   poolWorldPosition,
 } from "./PoolLayout.js";
-import { POOL_PRESETS, PoolAssets, PoolLiquid, PoolPreset } from "./PoolPresets.js";
-import { PoolProps, PropSpec } from "./PoolProps.js";
-import {
-  RandomSource,
-  TilePaletteName,
-  createNoirPoolTileTexture,
-  createPoolTileTexture,
-} from "./PoolTextures.js";
+import type { PoolAssets, PoolLiquid, PoolPreset } from "./PoolPresets.js";
+import { POOL_PRESETS } from "./PoolPresets.js";
+import type { PropSpec } from "./PoolProps.js";
+import { PoolProps } from "./PoolProps.js";
+import type { RandomSource, TilePaletteName } from "./PoolTextures.js";
+import { createNoirPoolTileTexture, createPoolTileTexture } from "./PoolTextures.js";
 
 // FluidVolume drag is a per-step velocity factor. The default 0.95 leaves the bodies nearly in
 // resonance with the swell and they overshoot the surface; 0.88 makes them ride it.

@@ -1,8 +1,9 @@
 import { Terrain } from "./Terrain.js";
-import { Object3D, Scene } from "../core/index.js";
+import type { Scene } from "../core/index.js";
+import { Object3D } from "../core/index.js";
 import { TerrainMaterial } from "../core/materials/index.js";
 import { Texture } from "../core/textures/index.js";
-import { Vector3D } from "../math/index.js";
+import type { Vector3D } from "../math/index.js";
 import { HeightmapGenerator, TextureGenerator } from "../utils/index.js";
 
 /**

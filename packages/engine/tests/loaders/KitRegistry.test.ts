@@ -3,11 +3,11 @@ import { KitRegistry } from "../../src/loaders/kit/KitRegistry.js";
 import { AssetManager } from "../../src/loaders/AssetManager.js";
 import { GltfLoader } from "../../src/loaders/GltfLoader.js";
 import { Object3D } from "../../src/core/Object3D.js";
-import { PointLight } from "../../src/core/lights/PointLight.js";
-import { SpotLight } from "../../src/core/lights/SpotLight.js";
-import { DirectionalLight } from "../../src/core/lights/DirectionalLight.js";
+import type { PointLight } from "../../src/core/lights/PointLight.js";
+import type { SpotLight } from "../../src/core/lights/SpotLight.js";
+import type { DirectionalLight } from "../../src/core/lights/DirectionalLight.js";
 import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
-import { KitManifest, PropMeta } from "../../src/loaders/kit/KitTypes.js";
+import type { KitManifest, PropMeta } from "../../src/loaders/kit/KitTypes.js";
 
 describe("KitRegistry", () => {
   const sampleManifest: KitManifest = {

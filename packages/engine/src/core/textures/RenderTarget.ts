@@ -1,4 +1,5 @@
-import { Texture, TextureOptions } from "./Texture.js";
+import type { TextureOptions } from "./Texture.js";
+import { Texture } from "./Texture.js";
 
 /**
  * Configuration options for creating a RenderTarget.

@@ -1,10 +1,10 @@
-import {
+import type {
   CameraInterfaceData,
   CameraConstraints,
   CameraStrategy,
 } from "../../../interfaces/index.js";
 import { CameraStrategyType } from "../../../enums/index.js";
-import { Vector3D } from "../../../math/index.js";
+import type { Vector3D } from "../../../math/index.js";
 /**
  * A camera strategy where the developer has full manual control.
  * The engine performs no automatic position or target updates.

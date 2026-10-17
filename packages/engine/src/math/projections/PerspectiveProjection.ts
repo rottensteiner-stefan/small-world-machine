@@ -2,7 +2,7 @@ import { AbstractProjection } from "./AbstractProjection.js";
 import { Matrix4 } from "../Matrix4.js";
 import { MathUtils } from "../MathUtils.js";
 import { ProjectionType } from "../../enums/index.js";
-import { ProjectionOptions } from "../../interfaces/index.js";
+import type { ProjectionOptions } from "../../interfaces/index.js";
 
 /**
  * Configuration options for perspective projection.

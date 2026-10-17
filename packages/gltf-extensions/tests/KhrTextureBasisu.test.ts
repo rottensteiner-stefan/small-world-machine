@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
+import type { StandardMaterial } from "@small-world-machine/engine";
 import {
   GltfLoader,
   registerGltfExtension,
   Texture,
-  StandardMaterial,
   CompressedTextureFormat,
 } from "@small-world-machine/engine";
 import { khrTextureBasisu } from "../src/basisu/KhrTextureBasisu.js";

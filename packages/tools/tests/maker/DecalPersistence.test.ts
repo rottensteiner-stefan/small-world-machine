@@ -6,7 +6,8 @@ import {
   Vector3D,
   createDecalShell,
 } from "@small-world-machine/engine";
-import { ProjectBinding, FileSystemDirectoryHandleLike } from "../../src/maker/ProjectBinding.js";
+import type { FileSystemDirectoryHandleLike } from "../../src/maker/ProjectBinding.js";
+import { ProjectBinding } from "../../src/maker/ProjectBinding.js";
 import { decalEulerFromNormal } from "../../src/maker/DecalStampTool.js";
 
 function fakeDirectory(): FileSystemDirectoryHandleLike {

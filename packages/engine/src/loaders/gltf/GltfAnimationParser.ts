@@ -1,12 +1,8 @@
-import { GltfJson } from "./types.js";
+import type { GltfJson } from "./types.js";
 import { GltfBinaryParser } from "./GltfBinaryParser.js";
-import { Object3D } from "../../core/Object3D.js";
-import {
-  AnimationClip,
-  KeyframeTrack,
-  TrackType,
-  InterpolationType,
-} from "../../core/animation/index.js";
+import type { Object3D } from "../../core/Object3D.js";
+import type { TrackType, InterpolationType } from "../../core/animation/index.js";
+import { AnimationClip, KeyframeTrack } from "../../core/animation/index.js";
 
 /**
  * Parser for glTF animations, keyframe samplers, and tracks.

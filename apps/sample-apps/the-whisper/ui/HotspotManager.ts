@@ -1,4 +1,4 @@
-import { Vector3D } from "@small-world-machine/engine";
+import type { Vector3D } from "@small-world-machine/engine";
 
 export interface HotspotAction {
   id: string;

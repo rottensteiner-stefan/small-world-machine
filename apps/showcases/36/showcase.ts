@@ -1,7 +1,11 @@
+import type {
+  BloomElement,
+  StandardMaterial,
+  ToneMappingElement,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
-  BloomElement,
   Color,
   Cube,
   CubeLayout,
@@ -15,9 +19,7 @@ import {
   ProjectionType,
   RendererType,
   SkyboxMaterial,
-  StandardMaterial,
   Texture,
-  ToneMappingElement,
   ToneMappingMode,
   Vector3D,
 } from "@small-world-machine/engine";

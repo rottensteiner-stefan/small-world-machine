@@ -1,5 +1,5 @@
 import AO_WGSL from "../shaders/AO.frag.wgsl?raw";
-import { HbaoElement } from "../elements/index.js";
+import type { HbaoElement } from "../elements/index.js";
 
 /**
  * Generates the HBAO texture for WebGPU via a compute pass -- reading the opaque

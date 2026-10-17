@@ -6,21 +6,20 @@ import { AudioSystem } from "../audio/AudioSystem.js";
 import { EventDispatcherImpl } from "./events/EventDispatcherImpl.js";
 import { DeviceFeature, DeviceLimit } from "./DeviceCaps.js";
 import { FrustumCuller } from "./culling/FrustumCuller.js";
+import type { AbstractProjection } from "../math/projections/index.js";
 import {
-  AbstractProjection,
   ObliqueProjection,
   OrthographicProjection,
   PerspectiveProjection,
 } from "../math/projections/index.js";
-import {
+import type {
   EngineOptions,
   ProjectionOptions,
   Renderer,
   RendererContext,
-  createDefaultRendererContext,
   FrameInfo,
-  createFrameInfo,
 } from "../interfaces/index.js";
+import { createDefaultRendererContext, createFrameInfo } from "../interfaces/index.js";
 import { ProjectionType, RendererType, PostProcessingEffectType } from "../enums/index.js";
 import { RendererFactory } from "../renderers/index.js";
 import { ShaderBootstrap } from "../renderers/shaders/index.js";

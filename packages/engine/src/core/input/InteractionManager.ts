@@ -1,8 +1,9 @@
-import { Scene } from "../Scene.js";
-import { Camera } from "../cameras/Camera.js";
-import { InputInterface } from "./Input.js";
-import { Object3D } from "../Object3D.js";
-import { Raycaster, Intersection } from "../../physix/index.js";
+import type { Scene } from "../Scene.js";
+import type { Camera } from "../cameras/Camera.js";
+import type { InputInterface } from "./Input.js";
+import type { Object3D } from "../Object3D.js";
+import type { Intersection } from "../../physix/index.js";
+import { Raycaster } from "../../physix/index.js";
 import { Vector2D } from "../../math/index.js";
 
 /**

@@ -1,7 +1,12 @@
+import type {
+  BloomElement,
+  EngineOptions,
+  HbaoElement,
+  VignetteElement,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
-  BloomElement,
   CameraStrategyType,
   Color,
   Cube,
@@ -9,9 +14,7 @@ import {
   CubeTexture,
   Cylinder,
   DirectionalLight,
-  EngineOptions,
   GltfLoader,
-  HbaoElement,
   Object3D,
   OrbitController,
   PerspectiveProjection,
@@ -24,7 +27,6 @@ import {
   SpotLight,
   StandardMaterial,
   Texture,
-  VignetteElement,
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 

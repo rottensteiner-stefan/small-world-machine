@@ -1,10 +1,5 @@
-import {
-  Object3D,
-  Scene,
-  Sprite,
-  InstancedMesh,
-  EventDispatcherImpl,
-} from "@small-world-machine/engine/core/index.js";
+import type { Scene, EventDispatcherImpl } from "@small-world-machine/engine/core/index.js";
+import { Object3D, Sprite, InstancedMesh } from "@small-world-machine/engine/core/index.js";
 import { Vector3D, Matrix4 } from "@small-world-machine/engine/math/index.js";
 import { Cube, Sphere } from "@small-world-machine/engine/geometry/index.js";
 import {
@@ -14,18 +9,17 @@ import {
 } from "@small-world-machine/engine/core/materials/index.js";
 import { PointLight } from "@small-world-machine/engine/core/lights/index.js";
 import { Color } from "@small-world-machine/engine/core/colors/index.js";
-import { Texture, TextureArray } from "@small-world-machine/engine/core/textures/index.js";
+import type { Texture } from "@small-world-machine/engine/core/textures/index.js";
+import { TextureArray } from "@small-world-machine/engine/core/textures/index.js";
 import { CullMode, TextureFilter, TextureWrap } from "@small-world-machine/engine/enums/index.js";
-import { CameraInterfaceData } from "@small-world-machine/engine/interfaces/index.js";
+import type { CameraInterfaceData } from "@small-world-machine/engine/interfaces/index.js";
 import {
   ProximitySensorBehavior,
   BobbingBehavior,
 } from "@small-world-machine/engine/core/behaviors/index.js";
-import {
-  GridLevelBuilder,
-  GridLegend,
-} from "@small-world-machine/engine/geometry/procgen/GridLevelBuilder.js";
-import { AudioSystem } from "@small-world-machine/engine/audio/index.js";
+import type { GridLegend } from "@small-world-machine/engine/geometry/procgen/GridLevelBuilder.js";
+import { GridLevelBuilder } from "@small-world-machine/engine/geometry/procgen/GridLevelBuilder.js";
+import type { AudioSystem } from "@small-world-machine/engine/audio/index.js";
 import { EnemyBehavior } from "./behaviors/EnemyBehavior.js";
 import {
   BoundingBox,

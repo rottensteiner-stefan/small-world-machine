@@ -2,7 +2,7 @@ import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { GPUPipelineCache } from "../../src/renderers/WebGPU/managers/GPUPipelineCache.js";
 import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
-import { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
+import type { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
 import { Object3D } from "../../src/core/Object3D.js";
 
 (globalThis as unknown as { GPUShaderStage: Record<string, number> }).GPUShaderStage ??= {

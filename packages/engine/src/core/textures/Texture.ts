@@ -1,4 +1,5 @@
-import { CompressedTextureFormat, TextureFilter, TextureWrap } from "../../enums/index.js";
+import type { CompressedTextureFormat } from "../../enums/index.js";
+import { TextureFilter, TextureWrap } from "../../enums/index.js";
 import { AssetManager } from "../../loaders/AssetManager.js";
 /**
  * Configuration options for creating a texture.

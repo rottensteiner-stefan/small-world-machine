@@ -1,5 +1,6 @@
 import { CompressedTextureFormat } from "@small-world-machine/engine";
-import { BasisDecodedImage, BasisTranscoderFormat, BasisTranscoderFormatId } from "./basisTypes.js";
+import type { BasisDecodedImage, BasisTranscoderFormatId } from "./basisTypes.js";
+import { BasisTranscoderFormat } from "./basisTypes.js";
 
 /**
  * Maps a Basis Universal transcoder output format id to the engine's

@@ -1,5 +1,5 @@
-import { Matrix4, Vector3D } from "../math/index.js";
-import { BoundingType } from "../enums/index.js";
+import type { Matrix4, Vector3D } from "../math/index.js";
+import type { BoundingType } from "../enums/index.js";
 /**
  * Minimal interface for a Frustum to avoid circular dependencies.
  */

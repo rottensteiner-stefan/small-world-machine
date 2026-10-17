@@ -1,5 +1,5 @@
-import { Particle } from "../Particle.js";
-import { ParticleAffector } from "../ParticleAffector.js";
+import type { Particle } from "../Particle.js";
+import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface BouncePlaneOptions {
   /** The coordinate on the axis where the bounce plane is located. Defaults to 0.0. */

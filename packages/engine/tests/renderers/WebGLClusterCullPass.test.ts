@@ -6,7 +6,7 @@ import { Vector3D } from "../../src/math/index.js";
 import { PointLight } from "../../src/core/lights/PointLight.js";
 
 import { Color } from "../../src/core/colors/Color.js";
-import { LightDataInterface } from "../../src/interfaces/LightData.js";
+import type { LightDataInterface } from "../../src/interfaces/LightData.js";
 import { DeviceCaps, DeviceLimit } from "../../src/core/DeviceCaps.js";
 
 function makeMockWebGL2Renderer(numClusters: { x: number; y: number; z: number }): {

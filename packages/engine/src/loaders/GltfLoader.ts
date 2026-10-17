@@ -1,14 +1,14 @@
 import { AbstractLoader } from "./AbstractLoader.js";
 import { EventType } from "../enums/index.js";
 import { Object3D } from "../core/index.js";
-import { Bone, Skeleton, SkinnedMesh, AnimationClip } from "../core/animation/index.js";
+import type { Skeleton, AnimationClip } from "../core/animation/index.js";
+import { Bone, SkinnedMesh } from "../core/animation/index.js";
 import { StandardMaterial } from "../core/materials/index.js";
-import { GltfLoaderOptions } from "../interfaces/index.js";
+import type { GltfLoaderOptions } from "../interfaces/index.js";
 import { Matrix4, Vector3D, Quaternion } from "../math/index.js";
 
+import type { GltfJson, GltfData } from "./gltf/index.js";
 import {
-  GltfJson,
-  GltfData,
   GltfBinaryParser,
   GltfMaterialParser,
   GltfAnimationParser,
@@ -17,7 +17,7 @@ import {
   GltfVariants,
 } from "./gltf/index.js";
 import { getGltfExtensions } from "./gltf/GltfExtensionRegistry.js";
-import { GltfReadContext } from "./gltf/GltfExtensionPlugin.js";
+import type { GltfReadContext } from "./gltf/GltfExtensionPlugin.js";
 // Side-effect import: registers the built-in extension plugins (KHR_lights_punctual,
 // SWM_prefab_instance, SWM_stage_zone) -- see ADR 0017.
 import "./gltf/extensions/index.js";

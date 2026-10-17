@@ -1,5 +1,6 @@
 import { WebGL2UniformBuffer } from "./WebGL2UniformBuffer.js";
-import { WebGLProgramCache, WebGL2ProgramCacheEntry } from "./managers/WebGLProgramCache.js";
+import type { WebGL2ProgramCacheEntry } from "./managers/WebGLProgramCache.js";
+import { WebGLProgramCache } from "./managers/WebGLProgramCache.js";
 import { WebGLTextureManager } from "./managers/WebGLTextureManager.js";
 import { WebGLBufferManager } from "./managers/WebGLBufferManager.js";
 import { WebGL2DepthFrameBuffer } from "./WebGL2DepthFrameBuffer.js";
@@ -19,22 +20,20 @@ import {
   LightShaftsPassGL,
   VolumetricFogPassGL,
 } from "../post/passes/index.js";
-import { AbstractLight, MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../core/lights/index.js";
+import type { AbstractLight } from "../../core/lights/index.js";
+import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../core/lights/index.js";
 import { MAX_AREA_LIGHTS } from "../../core/lights/AreaLight.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
-import { CubeTexture, Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
-import { RenderManifest, resolveManifestFlags } from "../shaders/index.js";
+import type { CubeTexture, RenderTarget } from "../../core/textures/index.js";
+import { Texture, RenderTargetCube } from "../../core/textures/index.js";
+import type { RenderManifest } from "../shaders/index.js";
+import { resolveManifestFlags } from "../shaders/index.js";
 import { Color } from "../../core/colors/index.js";
-import {
-  DeviceLimit,
-  InstancedMesh,
-  Object3D,
-  Scene,
-  TextureArray,
-  computeClipToBox,
-} from "../../core/index.js";
+import type { Object3D, Scene, TextureArray } from "../../core/index.js";
+import { DeviceLimit, InstancedMesh, computeClipToBox } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
-import { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
+import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
+import type { WireframeMode } from "../../enums/index.js";
 import {
   BlendingMode,
   CullMode,
@@ -42,11 +41,10 @@ import {
   RendererType,
   Topology,
   PostProcessingEffectType,
-  WireframeMode,
 } from "../../enums/index.js";
+import type { ClusterGridDims } from "../../math/index.js";
 import {
   Vector3D,
-  ClusterGridDims,
   Matrix4,
   computeClusterCounts,
   CLUSTER_TEX_WIDTH,

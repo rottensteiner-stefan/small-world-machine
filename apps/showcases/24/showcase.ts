@@ -14,11 +14,11 @@ import COMPUTETOYS_HEX_HOLOGRAM from "./assets/computetoys_hex_hologram.wgsl?raw
 import COMPUTETOYS_MATRIX_RAIN from "./assets/computetoys_matrix_rain.wgsl?raw";
 import COMPUTETOYS_SIN_CITY from "./assets/computetoys_sin_city.wgsl?raw";
 import COMPUTETOYS_CODE_TUNNEL from "./assets/computetoys_code_tunnel.wgsl?raw";
+import type { CameraInterfaceData } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
   Behavior,
-  CameraInterfaceData,
   CameraStrategyType,
   Color,
   ComputeToysImporter,

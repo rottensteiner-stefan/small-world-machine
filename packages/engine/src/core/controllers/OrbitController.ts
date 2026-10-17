@@ -1,6 +1,6 @@
 import { Behavior } from "../behaviors/index.js";
-import { CameraInterfaceData } from "../../interfaces/index.js";
-import { InputInterface } from "../index.js";
+import type { CameraInterfaceData } from "../../interfaces/index.js";
+import type { InputInterface } from "../index.js";
 
 /**
  * Configuration for the OrbitController.

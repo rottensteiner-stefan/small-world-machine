@@ -1,9 +1,9 @@
 import FULLSCREEN_VERT_WGSL from "../post/shaders/PostProcess.vert.wgsl?raw";
 import POST_PROCESS_FRAG_WGSL from "../post/shaders/PostProcess.frag.wgsl?raw";
-import { Scene } from "../../core/index.js";
-import { WebGPURenderer } from "../WebGPU/index.js";
-import { RenderPass } from "../index.js";
-import { Vector3D } from "../../math/index.js";
+import type { Scene } from "../../core/index.js";
+import type { WebGPURenderer } from "../WebGPU/index.js";
+import type { RenderPass } from "../index.js";
+import type { Vector3D } from "../../math/index.js";
 import {
   PostProcessingEffectType,
   TextureFilter,

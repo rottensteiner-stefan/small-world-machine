@@ -1,10 +1,11 @@
-import { Camera } from "../cameras/Camera.js";
+import type { Camera } from "../cameras/Camera.js";
 import { InstancedMesh } from "../InstancedMesh.js";
-import { AbstractMaterial, StandardMaterial } from "../materials/index.js";
+import type { AbstractMaterial } from "../materials/index.js";
+import { StandardMaterial } from "../materials/index.js";
 import { Color } from "../colors/index.js";
 import { Plane } from "../../geometry/index.js";
 import { Matrix4, Vector3D } from "../../math/index.js";
-import { GeometryDataInterface } from "../../interfaces/index.js";
+import type { GeometryDataInterface } from "../../interfaces/index.js";
 import { mulberry32 } from "../../utils/SeededRandom.js";
 
 export interface BillboardScatterArea {

@@ -8,11 +8,11 @@ import {
   AmbientLight,
   WorldWriter,
 } from "@small-world-machine/engine";
-import {
-  ProjectBinding,
+import type {
   FileSystemDirectoryHandleLike,
   FileSystemFileHandleLike,
 } from "../../src/maker/ProjectBinding.js";
+import { ProjectBinding } from "../../src/maker/ProjectBinding.js";
 
 /** A minimal in-memory fake of the File System Access API surface `ProjectBinding` actually
  * uses -- lets these tests run under Node/vitest without a real browser. */

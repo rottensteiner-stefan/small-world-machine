@@ -1,10 +1,12 @@
+import type {
+  StylizedWaterMaterialOptions,
+  ShaderDefinition,
+  RenderManifest,
+} from "@small-world-machine/engine";
 import {
   Color,
   StylizedWaterMaterial,
-  StylizedWaterMaterialOptions,
   composeStylizedWaterSources,
-  ShaderDefinition,
-  RenderManifest,
 } from "@small-world-machine/engine";
 import { THIN_FILM_GLSL_DECL, THIN_FILM_WGSL_DECL } from "../../shading/thinFilm/thinFilm.js";
 

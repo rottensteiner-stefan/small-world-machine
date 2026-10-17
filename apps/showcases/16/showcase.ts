@@ -1,3 +1,4 @@
+import type { InstancedMesh, StateMachine } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -8,7 +9,6 @@ import {
   DirectionalLight,
   DynamicReflectionProbe,
   Ground,
-  InstancedMesh,
   Matrix4,
   Object3D,
   PerspectiveProjection,
@@ -20,7 +20,6 @@ import {
   SkyboxMaterial,
   Sphere,
   StandardMaterial,
-  StateMachine,
   Texture,
   TextureFilter,
   Vector3D,

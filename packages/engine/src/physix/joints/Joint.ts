@@ -1,4 +1,4 @@
-import { Object3D } from "../../core/Object3D.js";
+import type { Object3D } from "../../core/Object3D.js";
 import { Vector3D } from "../../math/Vector3D.js";
 
 /**

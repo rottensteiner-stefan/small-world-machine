@@ -1,14 +1,14 @@
-import { Object3D } from "../core/Object3D.js";
-import { Scene } from "../core/Scene.js";
+import type { Object3D } from "../core/Object3D.js";
+import type { Scene } from "../core/Scene.js";
 import { Vector3D, MathPool } from "../math/index.js";
-import { EventDispatcherImpl } from "../core/events/EventDispatcherImpl.js";
-import { Collidable } from "../interfaces/index.js";
+import type { EventDispatcherImpl } from "../core/events/EventDispatcherImpl.js";
+import type { Collidable } from "../interfaces/index.js";
 import { BoundingType } from "../enums/index.js";
-import { BoundingBox } from "./BoundingBox.js";
-import { BoundingSphere } from "./BoundingSphere.js";
-import { OBB } from "./OBB.js";
-import { ConvexHull } from "./ConvexHull.js";
-import { FluidVolume } from "./FluidVolume.js";
+import type { BoundingBox } from "./BoundingBox.js";
+import type { BoundingSphere } from "./BoundingSphere.js";
+import type { OBB } from "./OBB.js";
+import type { ConvexHull } from "./ConvexHull.js";
+import type { FluidVolume } from "./FluidVolume.js";
 import { BuoyancySolver } from "./fluids/BuoyancySolver.js";
 import { PhysicsBroadphase } from "./broadphase/PhysicsBroadphase.js";
 import { SweptVolumeCCD } from "./ccd/SweptSphereCCD.js";
@@ -16,9 +16,9 @@ import { EulerIntegrator } from "./solvers/EulerIntegrator.js";
 import { ContactSolver, pairKey } from "./solvers/ContactSolver.js";
 import type { ContactPair } from "./solvers/ContactSolver.js";
 import { SpatialQueries } from "./solvers/SpatialQueries.js";
-import { Ray } from "./Ray.js";
-import { RaycastHit } from "./RaycastHit.js";
-import { Joint } from "./joints/Joint.js";
+import type { Ray } from "./Ray.js";
+import type { RaycastHit } from "./RaycastHit.js";
+import type { Joint } from "./joints/Joint.js";
 
 /**
  * A lightweight physics solver using Semi-Implicit Euler integration and spatial broadphase acceleration.

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { GltfLoader } from "../../src/loaders/GltfLoader.js";
-import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
-import { Object3D } from "../../src/core/Object3D.js";
+import type { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
+import type { Object3D } from "../../src/core/Object3D.js";
 
 describe("GltfLoader PBR Options", () => {
   it("should apply defaultMetallic and defaultRoughness when factors are omitted", async () => {

@@ -1,4 +1,4 @@
-import { PostProcessingElement } from "./PostProcessingElement.js";
+import type { PostProcessingElement } from "./PostProcessingElement.js";
 import {
   ToneMappingElement,
   VignetteElement,

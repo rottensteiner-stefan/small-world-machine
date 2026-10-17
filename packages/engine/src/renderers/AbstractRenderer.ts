@@ -1,19 +1,19 @@
 import { AbstractLight } from "../core/lights/index.js";
 import { Color } from "../core/colors/index.js";
-import {
+import type {
   Renderer,
   LightDataInterface,
   EngineOptions,
   QualityConfig,
-  ToneMapping,
   RendererContext,
-  createDefaultRendererContext,
 } from "../interfaces/index.js";
-import { RendererType } from "../enums/index.js";
-import { FrameInfo, createFrameInfo } from "../interfaces/FrameInfo.js";
-import { Object3D } from "../core/Object3D.js";
+import { ToneMapping, createDefaultRendererContext } from "../interfaces/index.js";
+import type { RendererType } from "../enums/index.js";
+import type { FrameInfo } from "../interfaces/FrameInfo.js";
+import { createFrameInfo } from "../interfaces/FrameInfo.js";
+import type { Object3D } from "../core/Object3D.js";
 import { FogVolume } from "../core/objects/FogVolume.js";
-import { Scene } from "../core/Scene.js";
+import type { Scene } from "../core/Scene.js";
 import { Vector3D } from "../math/index.js";
 import { PostProcessingGroup } from "./post/PostProcessingGroup.js";
 

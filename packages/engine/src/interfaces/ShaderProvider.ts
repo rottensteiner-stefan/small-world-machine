@@ -1,4 +1,4 @@
-import { ShaderDefinition } from "../renderers/shaders/index.js";
+import type { ShaderDefinition } from "../renderers/shaders/index.js";
 
 /**
  * Interface for components that provide their own shader definitions.

@@ -1,11 +1,12 @@
 import { AbstractRenderer } from "./AbstractRenderer.js";
-import { Color } from "../core/colors/index.js";
-import { Scene } from "../core/Scene.js";
-import { Object3D } from "../core/Object3D.js";
+import type { Color } from "../core/colors/index.js";
+import type { Scene } from "../core/Scene.js";
+import type { Object3D } from "../core/Object3D.js";
 import { Matrix4, Vector3D } from "../math/index.js";
-import { LightDataInterface } from "../interfaces/index.js";
-import { WebGLRenderPass } from "./WebGLRenderPass.js";
-import { Texture, RenderTarget } from "../core/textures/index.js";
+import type { LightDataInterface } from "../interfaces/index.js";
+import type { WebGLRenderPass } from "./WebGLRenderPass.js";
+import type { Texture } from "../core/textures/index.js";
+import { RenderTarget } from "../core/textures/index.js";
 export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   // WebGL2 context inherits from WebGL1 context
   protected gl!: WebGLRenderingContext | WebGL2RenderingContext;

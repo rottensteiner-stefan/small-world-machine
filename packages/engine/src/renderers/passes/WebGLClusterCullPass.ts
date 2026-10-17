@@ -1,9 +1,10 @@
-import { WebGLRenderPass } from "../WebGLRenderPass.js";
-import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
+import type { WebGLRenderPass } from "../WebGLRenderPass.js";
+import type { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
 import { WebGL2Renderer } from "../WebGL2/WebGL2Renderer.js";
-import { DeviceLimit, Scene } from "../../core/index.js";
+import type { Scene } from "../../core/index.js";
+import { DeviceLimit } from "../../core/index.js";
+import type { Vector3D } from "../../math/index.js";
 import {
-  Vector3D,
   clusterIndex,
   lightClusterCoverage,
   CLUSTER_TEX_WIDTH,
@@ -11,8 +12,8 @@ import {
   CLUSTER_INDEX_UNIT,
   DEFAULT_CLUSTER_TILE_SIZE,
 } from "../../math/index.js";
-import { LightDataInterface } from "../../interfaces/index.js";
-import { RenderList } from "../../core/Scene.js";
+import type { LightDataInterface } from "../../interfaces/index.js";
+import type { RenderList } from "../../core/Scene.js";
 
 /**
  * CPU-side clustered light culling for WebGL2 (fixed-capacity-per-cluster, no atomics -- see

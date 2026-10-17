@@ -1,5 +1,5 @@
-import { Vector3D } from "../math/index.js";
-import { Color } from "../core/colors/index.js";
+import type { Vector3D } from "../math/index.js";
+import type { Color } from "../core/colors/index.js";
 
 /**
  * Interface for camera effects that can be applied to a camera.

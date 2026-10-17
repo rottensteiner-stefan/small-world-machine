@@ -1,8 +1,8 @@
 import { Octree } from "../../core/culling/Octree.js";
 import { Vector3D } from "../../math/index.js";
-import { Collidable, BoundingVolume } from "../../interfaces/index.js";
+import type { Collidable, BoundingVolume } from "../../interfaces/index.js";
 import { BoundingBox } from "../BoundingBox.js";
-import { Ray } from "../Ray.js";
+import type { Ray } from "../Ray.js";
 import { BoundingType } from "../../enums/index.js";
 import { Object3D } from "../../core/Object3D.js";
 

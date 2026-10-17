@@ -4,12 +4,9 @@ import fragWGSL from "./shaders/Lambert.frag.wgsl?raw";
 import { AbstractMaterial } from "../AbstractMaterial.js";
 import { MaterialType, ShaderPropertyType } from "../../../enums/index.js";
 import { Color } from "../../colors/index.js";
-import { Texture } from "../../textures/index.js";
-import {
-  RenderManifest,
-  ShaderDefinition,
-  StandardWebGPULayout,
-} from "../../../renderers/shaders/index.js";
+import type { Texture } from "../../textures/index.js";
+import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
+import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
 import { Vector2D } from "../../../math/index.js";
 
 /**

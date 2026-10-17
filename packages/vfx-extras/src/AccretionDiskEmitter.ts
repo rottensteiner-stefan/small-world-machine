@@ -4,7 +4,7 @@ import { PointAttractorAffector } from "./affectors/PointAttractorAffector.js";
 import { PlanarSpringAffector } from "./affectors/PlanarSpringAffector.js";
 import { ThermalCoolingAffector } from "./affectors/ThermalCoolingAffector.js";
 import { FadeOutZoneAffector } from "./affectors/FadeOutZoneAffector.js";
-import { Particle } from "./Particle.js";
+import type { Particle } from "./Particle.js";
 
 export interface AccretionDiskOptions {
   /** Total number of particles in the disk. Defaults to 400. */

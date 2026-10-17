@@ -1,9 +1,9 @@
 import { Color } from "../colors/index.js";
-import { LightType } from "../../enums/index.js";
+import type { LightType } from "../../enums/index.js";
 import { Object3D } from "../Object3D.js";
-import { LightDataInterface } from "../../interfaces/index.js";
-import { Camera } from "../cameras/Camera.js";
-import { InspectorField } from "../Inspectable.js";
+import type { LightDataInterface } from "../../interfaces/index.js";
+import type { Camera } from "../cameras/Camera.js";
+import type { InspectorField } from "../Inspectable.js";
 
 /**
  * Global scene-wide cap on pushed point/spot lights per type -- see

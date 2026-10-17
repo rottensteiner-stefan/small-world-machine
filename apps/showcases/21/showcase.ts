@@ -1,15 +1,17 @@
+import type {
+  BloomElement,
+  EngineOptions,
+  GeometryDataInterface,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
-  BloomElement,
   BoundingBox,
   BoundingSphere,
   Color,
   ColorUtils,
   Cube,
   DirectionalLight,
-  EngineOptions,
-  GeometryDataInterface,
   GlassMaterial,
   Object3D,
   OrbitController,

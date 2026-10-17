@@ -1,3 +1,4 @@
+import type { StiffStrategy } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -13,7 +14,6 @@ import {
   PerspectiveProjection,
   PhongMaterial,
   Sphere,
-  StiffStrategy,
   Texture,
   TextureFilter,
   Vector3D,

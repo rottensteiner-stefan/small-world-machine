@@ -1,6 +1,6 @@
 import { PointLight } from "../../src/core/lights/PointLight.js";
 import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../src/core/lights/AbstractLight.js";
-import { LightDataInterface } from "../../src/interfaces/index.js";
+import type { LightDataInterface } from "../../src/interfaces/index.js";
 import { Color } from "../../src/core/colors/index.js";
 import { Vector3D } from "../../src/math/index.js";
 

@@ -1,5 +1,5 @@
-import { ShaderDefinition } from "./ShaderDefinition.js";
-import { ShaderProvider } from "../../interfaces/index.js";
+import type { ShaderDefinition } from "./ShaderDefinition.js";
+import type { ShaderProvider } from "../../interfaces/index.js";
 import { CoreShaderChunks } from "./CoreShaderChunks.js";
 
 /**

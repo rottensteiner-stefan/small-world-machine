@@ -7,7 +7,7 @@ import BLOOM_DOWNSAMPLE_FRAG_GLSL100 from "../shaders/BloomDownsample.frag.glsl1
 import BLOOM_UPSAMPLE_FRAG_GLSL100 from "../shaders/BloomUpsample.frag.glsl100?raw";
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
-import { BloomElement } from "../elements/index.js";
+import type { BloomElement } from "../elements/index.js";
 
 const MIP_CHAIN_LENGTH = 5;
 

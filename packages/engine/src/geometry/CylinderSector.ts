@@ -1,4 +1,5 @@
-import { Cylinder, CylinderOptions } from "./Cylinder.js";
+import type { CylinderOptions } from "./Cylinder.js";
+import { Cylinder } from "./Cylinder.js";
 import { MathUtils } from "../math/index.js";
 
 /**

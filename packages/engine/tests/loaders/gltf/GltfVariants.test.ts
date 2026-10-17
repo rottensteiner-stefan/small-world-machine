@@ -5,7 +5,7 @@ import { Color } from "../../../src/core/colors/Color.js";
 import { GltfVariants } from "../../../src/loaders/gltf/GltfVariants.js";
 import { GltfLoader } from "../../../src/loaders/GltfLoader.js";
 import { AssetManager } from "../../../src/loaders/AssetManager.js";
-import { GltfJson } from "../../../src/loaders/gltf/types.js";
+import type { GltfJson } from "../../../src/loaders/gltf/types.js";
 
 describe("GltfVariants (KHR_materials_variants)", () => {
   it("queries variant names and switches materials across hierarchy", () => {

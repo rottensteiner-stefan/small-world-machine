@@ -1,12 +1,12 @@
-import { Object3D } from "../core/Object3D.js";
+import type { Object3D } from "../core/Object3D.js";
 import { Decal } from "../core/objects/Decal.js";
-import { AbstractMaterial } from "../core/materials/AbstractMaterial.js";
+import type { AbstractMaterial } from "../core/materials/AbstractMaterial.js";
 import { StandardMaterial } from "../core/materials/surface/StandardMaterial.js";
 import { Matrix4, Vector3D, Quaternion } from "../math/index.js";
-import { GeometryDataInterface } from "../interfaces/index.js";
+import type { GeometryDataInterface } from "../interfaces/index.js";
 import { getGltfExtensions } from "./gltf/GltfExtensionRegistry.js";
-import { GltfWriteContext, GltfWriteState } from "./gltf/GltfExtensionPlugin.js";
-import {
+import type { GltfWriteContext, GltfWriteState } from "./gltf/GltfExtensionPlugin.js";
+import type {
   GltfDocument,
   GltfNodeJson,
   GltfMeshJson,

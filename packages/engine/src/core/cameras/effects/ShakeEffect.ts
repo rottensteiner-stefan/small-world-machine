@@ -1,5 +1,5 @@
 import { AbstractCameraEffect } from "./AbstractCameraEffect.js";
-import { CameraEffect } from "../../../interfaces/index.js";
+import type { CameraEffect } from "../../../interfaces/index.js";
 import { CameraEffectType } from "../../../enums/index.js";
 import { Noise } from "../../../utils/Noise.js";
 

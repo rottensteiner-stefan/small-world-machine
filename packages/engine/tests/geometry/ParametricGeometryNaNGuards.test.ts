@@ -16,7 +16,7 @@ import { Gear } from "../../src/geometry/Gear.js";
 import { Octahedron } from "../../src/geometry/Octahedron.js";
 import { Terrain } from "../../src/geometry/Terrain.js";
 import { ExtrudeGeometry } from "../../src/geometry/ExtrudeGeometry.js";
-import { AbstractGeometry } from "../../src/geometry/AbstractGeometry.js";
+import type { AbstractGeometry } from "../../src/geometry/AbstractGeometry.js";
 
 function assertNoNaN(geom: AbstractGeometry, name: string): void {
   const data = geom.getGeometryData();

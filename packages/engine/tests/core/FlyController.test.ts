@@ -9,7 +9,7 @@ import { CameraStrategyType } from "../../src/enums/CameraStrategyType.js";
 import { Vector3D, PerspectiveProjection } from "../../src/math/index.js";
 import { Octree } from "../../src/core/culling/Octree.js";
 import { BoundingBox } from "../../src/physix/BoundingBox.js";
-import { InputInterface, MouseState } from "../../src/core/input/Input.js";
+import type { InputInterface, MouseState } from "../../src/core/input/Input.js";
 
 // Mock InputInterface
 class MockInput implements InputInterface {

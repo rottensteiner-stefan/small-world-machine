@@ -1,7 +1,8 @@
-import { CameraInterfaceData, Collidable } from "../../interfaces/index.js";
-import { Object3D } from "../Object3D.js";
-import { Scene } from "../Scene.js";
-import { BoundingBox, BoundingSphere, Collision } from "../../physix/index.js";
+import type { CameraInterfaceData, Collidable } from "../../interfaces/index.js";
+import type { Object3D } from "../Object3D.js";
+import type { Scene } from "../Scene.js";
+import type { BoundingBox, BoundingSphere } from "../../physix/index.js";
+import { Collision } from "../../physix/index.js";
 import { MathPool } from "../../math/index.js";
 import { BoundingType } from "../../enums/index.js";
 

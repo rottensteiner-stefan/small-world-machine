@@ -4,18 +4,14 @@ import FROXEL_INJECT_WGSL from "../../shaders/source/web_gpu/compute/froxel_inje
 import FROXEL_REPROJECT_WGSL from "../../shaders/source/web_gpu/compute/froxel_reproject.wgsl?raw";
 import FROXEL_INTEGRATE_WGSL from "../../shaders/source/web_gpu/compute/froxel_integrate.wgsl?raw";
 
-import { VolumetricFogElement } from "../elements/index.js";
-import {
-  DirectionalLight,
-  PointLight,
-  SpotLight,
-  MAX_CLUSTERED_LIGHTS_PER_TYPE,
-} from "../../../core/lights/index.js";
-import { FogVolume } from "../../../core/objects/FogVolume.js";
+import type { VolumetricFogElement } from "../elements/index.js";
+import type { DirectionalLight, PointLight, SpotLight } from "../../../core/lights/index.js";
+import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../../core/lights/index.js";
+import type { FogVolume } from "../../../core/objects/FogVolume.js";
 import { VolumetricTexture } from "../../../core/textures/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
-import { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
+import type { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
 
 /** Uniform-array capacity of FogVolumes per pass (matches `FogVolumeData[16]` in the shaders). */
 const MAX_FOG_VOLUMES = 16;

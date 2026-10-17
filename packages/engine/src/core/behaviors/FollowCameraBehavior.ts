@@ -1,7 +1,7 @@
 import { Behavior } from "./Behavior.js";
 import { Object3D } from "../Object3D.js";
-import { Vector3D } from "../../math/Vector3D.js";
-import { CameraInterfaceData } from "../../interfaces/CameraInterfaceData.js";
+import type { Vector3D } from "../../math/Vector3D.js";
+import type { CameraInterfaceData } from "../../interfaces/CameraInterfaceData.js";
 
 export interface FollowCameraAxes {
   x?: boolean;

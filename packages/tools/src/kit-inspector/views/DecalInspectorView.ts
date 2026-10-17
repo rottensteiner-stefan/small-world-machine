@@ -1,3 +1,4 @@
+import type { KitRegistry } from "@small-world-machine/engine";
 import {
   Object3D,
   Plane,
@@ -5,7 +6,6 @@ import {
   Color,
   Texture,
   CullMode,
-  KitRegistry,
 } from "@small-world-machine/engine";
 import type { CameraFrame, InspectedAssetInfo } from "../types.js";
 

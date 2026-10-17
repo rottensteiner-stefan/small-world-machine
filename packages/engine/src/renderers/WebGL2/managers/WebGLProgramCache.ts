@@ -1,6 +1,6 @@
-import { Object3D } from "../../../core/index.js";
-import { ShaderRegistry } from "../../shaders/index.js";
-import { WebGL2UniformBuffer } from "../WebGL2UniformBuffer.js";
+import type { Object3D } from "../../../core/index.js";
+import type { ShaderRegistry } from "../../shaders/index.js";
+import type { WebGL2UniformBuffer } from "../WebGL2UniformBuffer.js";
 import { VERTEX_COLOR_LOCATION } from "../../Mesh.js";
 import {
   NORMAL_OUTPUT_FLAG,

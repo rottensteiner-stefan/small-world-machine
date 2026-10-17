@@ -1,4 +1,4 @@
-import { AiConfig, AiProviderType, IVisionAiProvider } from "./types.js";
+import type { AiConfig, AiProviderType, IVisionAiProvider } from "./types.js";
 import { GeminiProvider } from "./providers/GeminiProvider.js";
 import { OpenAiProvider } from "./providers/OpenAiProvider.js";
 import { ClaudeProvider } from "./providers/ClaudeProvider.js";

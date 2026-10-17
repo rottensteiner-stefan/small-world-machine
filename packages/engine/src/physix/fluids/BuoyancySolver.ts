@@ -1,9 +1,9 @@
-import { Object3D } from "../../core/Object3D.js";
-import { Vector3D } from "../../math/index.js";
+import type { Object3D } from "../../core/Object3D.js";
+import type { Vector3D } from "../../math/index.js";
 import { BoundingType } from "../../enums/index.js";
-import { BoundingBox } from "../BoundingBox.js";
-import { BoundingSphere } from "../BoundingSphere.js";
-import { FluidVolume } from "../FluidVolume.js";
+import type { BoundingBox } from "../BoundingBox.js";
+import type { BoundingSphere } from "../BoundingSphere.js";
+import type { FluidVolume } from "../FluidVolume.js";
 
 export interface FluidForcesResult {
   linearDrag: number;

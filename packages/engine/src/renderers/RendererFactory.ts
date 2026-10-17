@@ -1,9 +1,5 @@
-import {
-  Renderer,
-  EngineOptions,
-  RendererContext,
-  createDefaultRendererContext,
-} from "../interfaces/index.js";
+import type { Renderer, EngineOptions, RendererContext } from "../interfaces/index.js";
+import { createDefaultRendererContext } from "../interfaces/index.js";
 import { RendererType } from "../enums/index.js";
 import { WebGL1Renderer } from "./WebGL1/index.js";
 import { WebGL2Renderer } from "./WebGL2/index.js";

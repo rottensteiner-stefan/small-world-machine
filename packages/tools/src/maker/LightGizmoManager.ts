@@ -1,3 +1,4 @@
+import type { Camera } from "@small-world-machine/engine";
 import {
   Object3D,
   AbstractLight,
@@ -10,7 +11,6 @@ import {
   Sphere,
   Cone,
   Cylinder,
-  Camera,
 } from "@small-world-machine/engine";
 
 interface LightGizmoEntry {

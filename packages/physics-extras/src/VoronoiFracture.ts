@@ -1,20 +1,17 @@
+import type { AbstractMaterial, BoundingBox, BoundingSphere } from "@small-world-machine/engine";
 import {
   Object3D,
   RigidBody,
   ConvexHull,
   Vector3D,
-  AbstractMaterial,
   BoundingType,
-  BoundingBox,
-  BoundingSphere,
 } from "@small-world-machine/engine";
+import type { Vec3Like, BoxBounds } from "@small-world-machine/geometry-extras";
 import {
   VoronoiCells,
   computeCellFaces,
   cellCentroid,
   VoronoiShardGeometry,
-  Vec3Like,
-  BoxBounds,
 } from "@small-world-machine/geometry-extras";
 
 /**

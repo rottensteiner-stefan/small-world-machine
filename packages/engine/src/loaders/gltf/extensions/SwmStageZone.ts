@@ -1,6 +1,6 @@
 import { StageZone } from "../../../core/stage/StageZone.js";
 import { StageZoneMarker } from "../../../core/stage/StageZoneMarker.js";
-import { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
+import type { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
 
 /**
  * `SWM_stage_zone` -- a 2.5D stage movement zone (see ADR 0016), given a scene-graph presence as a

@@ -1,13 +1,14 @@
 import { AmbientLight } from "../../core/lights/AmbientLight.js";
 import { DirectionalLight } from "../../core/lights/DirectionalLight.js";
 import { Camera } from "../../core/cameras/Camera.js";
-import { Object3D } from "../../core/Object3D.js";
+import type { Object3D } from "../../core/Object3D.js";
 import { Scene } from "../../core/Scene.js";
 import { Color } from "../../core/colors/Color.js";
-import { RenderTarget, Texture } from "../../core/textures/index.js";
+import type { Texture } from "../../core/textures/index.js";
+import { RenderTarget } from "../../core/textures/index.js";
 import { OrthographicProjection } from "../../math/projections/OrthographicProjection.js";
 import { Vector3D } from "../../math/Vector3D.js";
-import { Renderer } from "../../interfaces/Renderer.js";
+import type { Renderer } from "../../interfaces/Renderer.js";
 
 export interface ImposterBakeOptions {
   /** Number of horizontal angles baked around the object's Y axis. Defaults to 8. */

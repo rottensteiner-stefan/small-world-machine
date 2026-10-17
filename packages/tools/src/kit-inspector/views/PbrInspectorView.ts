@@ -1,11 +1,5 @@
-import {
-  Object3D,
-  Sphere,
-  StandardMaterial,
-  Color,
-  Texture,
-  KitRegistry,
-} from "@small-world-machine/engine";
+import type { KitRegistry } from "@small-world-machine/engine";
+import { Object3D, Sphere, StandardMaterial, Color, Texture } from "@small-world-machine/engine";
 import type { CameraFrame, InspectedAssetInfo } from "../types.js";
 
 export interface PbrViewResult {

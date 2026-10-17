@@ -1,6 +1,7 @@
 import { Behavior } from "./Behavior.js";
-import { Object3D, StandardMaterial, CustomShaderMaterial } from "../index.js";
-import { Color } from "../colors/index.js";
+import type { Object3D } from "../index.js";
+import { StandardMaterial, CustomShaderMaterial } from "../materials/index.js";
+import type { Color } from "../colors/index.js";
 
 export interface EmissivePulseOptions {
   /** The base emissive intensity. Defaults to 0.2. */

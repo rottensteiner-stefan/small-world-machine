@@ -1,6 +1,7 @@
 import { Behavior } from "./Behavior.js";
-import { Object3D, Scene, AbstractMaterial } from "../index.js";
-import { GeometryDataInterface } from "../../interfaces/index.js";
+import type { Scene, AbstractMaterial } from "../index.js";
+import { Object3D } from "../Object3D.js";
+import type { GeometryDataInterface } from "../../interfaces/index.js";
 import { Vector3D } from "../../math/index.js";
 
 export interface TrailRendererOptions {

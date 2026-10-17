@@ -1,10 +1,8 @@
+import type { Object3D, Scene, StandardMaterial } from "@small-world-machine/engine";
 import {
   Behavior,
   GridMovementBehavior,
-  Object3D,
-  Scene,
   Sphere,
-  StandardMaterial,
   TrailRendererBehavior,
   Vector3D,
 } from "@small-world-machine/engine";

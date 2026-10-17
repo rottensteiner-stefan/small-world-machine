@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import Ajv2020 from "ajv/dist/2020.js";
 import type { ValidateFunction } from "ajv";
-import { LevelDescriptor } from "../../src/loaders/kit/KitTypes.js";
+import type { LevelDescriptor } from "../../src/loaders/kit/KitTypes.js";
 
 function findRepoRoot(startDir: string): string {
   let current = startDir;

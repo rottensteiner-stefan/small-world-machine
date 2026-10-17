@@ -10,7 +10,7 @@ import { SpotLight } from "../../src/core/lights/SpotLight.js";
 import { InstancedMesh } from "../../src/core/InstancedMesh.js";
 import { Cube } from "../../src/geometry/Cube.js";
 import { BasicMaterial } from "../../src/core/materials/surface/BasicMaterial.js";
-import { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
+import type { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
 import { Topology } from "../../src/enums/index.js";
 
 (globalThis as unknown as { GPUBufferUsage: Record<string, number> }).GPUBufferUsage ??= {

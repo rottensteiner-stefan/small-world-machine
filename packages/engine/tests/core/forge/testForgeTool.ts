@@ -1,4 +1,5 @@
-import { ForgeTool, ForgeToolOptions } from "../../../src/core/forge/ForgeTool.js";
+import type { ForgeToolOptions } from "../../../src/core/forge/ForgeTool.js";
+import { ForgeTool } from "../../../src/core/forge/ForgeTool.js";
 
 /** Minimal concrete `ForgeTool` for tests -- `ForgeTool` itself is abstract. */
 export class TestForgeTool extends ForgeTool {

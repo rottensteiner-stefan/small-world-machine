@@ -13,8 +13,8 @@ import { GPUObjectRingBuffer } from "../../src/renderers/WebGPU/managers/GPUObje
 import { GPUGeometryCache } from "../../src/renderers/WebGPU/managers/GPUGeometryCache.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
-import { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
-import { GeometryDataInterface } from "../../src/interfaces/index.js";
+import type { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
+import type { GeometryDataInterface } from "../../src/interfaces/index.js";
 import { Matrix4 } from "../../src/math/index.js";
 
 // Node/vitest has no WebGPU global; @webgpu/types only provides ambient TS types,

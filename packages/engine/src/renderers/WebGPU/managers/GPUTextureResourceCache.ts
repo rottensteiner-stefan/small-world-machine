@@ -1,8 +1,10 @@
-import { CubeTexture, Object3D, Texture, TextureArray } from "../../../core/index.js";
+import type { Object3D, Texture, TextureArray } from "../../../core/index.js";
+import { CubeTexture } from "../../../core/index.js";
 import { RenderTarget, RenderTargetCube } from "../../../core/textures/index.js";
-import { QualityConfig } from "../../../interfaces/index.js";
-import { CompressedTextureFormat, TextureFilter, TextureWrap } from "../../../enums/index.js";
-import { GPUFallbackResources } from "./GPUFallbackResources.js";
+import type { QualityConfig } from "../../../interfaces/index.js";
+import type { CompressedTextureFormat } from "../../../enums/index.js";
+import { TextureFilter, TextureWrap } from "../../../enums/index.js";
+import type { GPUFallbackResources } from "./GPUFallbackResources.js";
 import { MAX_ANISOTROPY_LEVEL, resolveAnisotropicLevel } from "../../anisotropy.js";
 import mipDownsampleWGSL from "../../post/shaders/MipDownsample.frag.wgsl?raw";
 import fullscreenVertWGSL from "../../post/shaders/PostProcess.vert.wgsl?raw";

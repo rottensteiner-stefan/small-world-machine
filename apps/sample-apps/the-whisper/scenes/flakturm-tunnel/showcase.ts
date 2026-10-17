@@ -1,3 +1,4 @@
+import type { AnimationClip, AnimationAction } from "@small-world-machine/engine";
 import {
   AmbientLight,
   DirectionalLight,
@@ -10,8 +11,6 @@ import {
   Texture,
   RendererType,
   AnimationMixer,
-  AnimationClip,
-  AnimationAction,
   Vector3D,
   StageMovementBehavior,
   StageZone,

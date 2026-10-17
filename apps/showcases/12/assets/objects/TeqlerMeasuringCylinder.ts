@@ -1,4 +1,5 @@
-import { AbstractMaterial, Cylinder, Object3D } from "@small-world-machine/engine";
+import type { AbstractMaterial } from "@small-world-machine/engine";
+import { Cylinder, Object3D } from "@small-world-machine/engine";
 
 export interface TeqlerMeasuringCylinderOptions {
   /** Radius of the glass tube in meters. Default: 0.08 */

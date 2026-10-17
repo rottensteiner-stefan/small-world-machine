@@ -1,4 +1,4 @@
-import { Vector } from "../interfaces/index.js";
+import type { Vector } from "../interfaces/index.js";
 
 /**
  * A class representing a 2D vector.

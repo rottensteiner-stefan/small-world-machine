@@ -1,12 +1,12 @@
-import {
+import type {
   Renderer,
   BloomElement,
   GrainElement,
   HbaoElement,
-  PostProcessingEffectType,
   ToneMappingElement,
   VignetteElement,
 } from "@small-world-machine/engine";
+import { PostProcessingEffectType } from "@small-world-machine/engine";
 
 /** Dark-cleanroom grade: only the laser, caustic fan and spectrum band bloom. */
 export function configurePostProcessing(renderer: Renderer): void {

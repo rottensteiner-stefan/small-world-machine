@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import type { AiConfig, AiProviderType, IVisionAiProvider } from "../../src/common/ai/index.js";
 import {
   parseImageData,
   sortModelsDescending,
@@ -8,9 +9,6 @@ import {
   OpenAiProvider,
   ClaudeProvider,
   OllamaProvider,
-  AiConfig,
-  AiProviderType,
-  IVisionAiProvider,
 } from "../../src/common/ai/index.js";
 
 describe("Vision AI Multi-Provider System", () => {

@@ -1,10 +1,12 @@
-import { AbstractMaterial } from "./materials/index.js";
-import { BoundingVolume, GeometryDataInterface, Collidable } from "../interfaces/index.js";
-import { MathUtils, Matrix4, Vector3D, Quaternion, MathPool } from "../math/index.js";
-import { Behavior, attachBehavior, detachBehavior } from "./behaviors/Behavior.js";
+import type { AbstractMaterial } from "./materials/index.js";
+import type { BoundingVolume, GeometryDataInterface, Collidable } from "../interfaces/index.js";
+import type { Quaternion } from "../math/index.js";
+import { MathUtils, Matrix4, Vector3D, MathPool } from "../math/index.js";
+import type { Behavior } from "./behaviors/Behavior.js";
+import { attachBehavior, detachBehavior } from "./behaviors/Behavior.js";
 import { PickingBehavior } from "./behaviors/PickingBehavior.js";
-import { RigidBody } from "../physix/RigidBody.js";
-import { InspectorField } from "./Inspectable.js";
+import type { RigidBody } from "../physix/RigidBody.js";
+import type { InspectorField } from "./Inspectable.js";
 import { shallowCloneWithValueTypes } from "./CloneUtils.js";
 
 /** Backs `occlusionCulled` -- kept off the instance itself so objects that are never touched by

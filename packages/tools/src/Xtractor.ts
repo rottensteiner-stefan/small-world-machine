@@ -1,21 +1,17 @@
-import {
-  ForgeTool,
-  ForgeToolOptions,
-  ToolEvents,
-  EventDispatcherImpl,
-} from "@small-world-machine/engine";
+import type { ForgeToolOptions, EventDispatcherImpl } from "@small-world-machine/engine";
+import { ForgeTool, ToolEvents } from "@small-world-machine/engine";
 import { AiConfigStorage, createVisionAiProvider } from "./common/ai/index.js";
+import type { CanvasActionChip } from "./common/image/index.js";
 import {
   detectSpriteBounds,
   magicWand,
   removeBackground,
   generateNormalMap,
-  CanvasActionChip,
   CanvasUndoHistory,
 } from "./common/image/index.js";
+import type { IngestResult } from "./common/io/index.js";
 import {
   UniversalIngestDropzone,
-  IngestResult,
   CommandHistory,
   bindToolShortcuts,
   isActiveToolHost,

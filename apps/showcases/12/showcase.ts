@@ -1,5 +1,11 @@
-import {
+import type {
   AbstractMaterial,
+  GearParameters,
+  GrainElement,
+  Scene,
+  VignetteElement,
+} from "@small-world-machine/engine";
+import {
   AbstractShowcase,
   AmbientLight,
   Behavior,
@@ -15,9 +21,7 @@ import {
   FPSController,
   Gear,
   GearMath,
-  GearParameters,
   GlassMaterial,
-  GrainElement,
   Ground,
   Object3D,
   PerspectiveProjection,
@@ -29,7 +33,6 @@ import {
   ProximitySensorBehavior,
   PulsatingBehavior,
   RendererType,
-  Scene,
   Sphere,
   SpotLight,
   StandardMaterial,
@@ -37,7 +40,6 @@ import {
   Torus,
   Vector2D,
   Vector3D,
-  VignetteElement,
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 import { WorkbenchTable } from "./assets/objects/WorkbenchTable.js";

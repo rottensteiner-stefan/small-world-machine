@@ -1,3 +1,4 @@
+import type { Texture } from "@small-world-machine/engine";
 import {
   Color,
   Cube,
@@ -6,7 +7,6 @@ import {
   Object3D,
   Octahedron,
   Sphere,
-  Texture,
   WorldMaterial,
 } from "@small-world-machine/engine";
 import { createBuoyTexture, createWoodCrateTexture } from "./PoolTextures.js";
