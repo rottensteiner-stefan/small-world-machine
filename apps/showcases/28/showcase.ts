@@ -1,13 +1,8 @@
 import {
-  AbstractGeometry,
   AbstractShowcase,
   AmbientLight,
   BloomElement,
-  BoundingBox,
-  BoundingSphere,
-  BoundingType,
   CameraStrategyType,
-  CauchyMaterials,
   Color,
   Cube,
   CubeLayout,
@@ -21,15 +16,11 @@ import {
   GrainElement,
   HbaoElement,
   Keys,
-  MathUtils,
   Object3D,
-  Optics,
   OrbitController,
   PerspectiveProjection,
   PostProcessingEffectType,
   ProjectionType,
-  Ray2D,
-  Raycaster,
   RendererType,
   SkyboxMaterial,
   SpotLight,
@@ -40,251 +31,23 @@ import {
   ToneMappingElement,
   Torus,
   Vector2D,
-  Vector3D,
   VignetteElement,
-  WireframeMaterial,
 } from "@small-world-machine/engine";
+import { attachDevTools } from "@small-world-machine/tools";
+import { CausticFanGeometry } from "./CausticFanGeometry.js";
+import { LabInspector, LabInspectorHost, LabKnobs } from "./LabInspector.js";
 import {
-  attachDevTools,
-  HierarchyPanel,
-  PropertyPanel,
-  UndoStack,
-} from "@small-world-machine/tools";
-import { Pane } from "tweakpane";
-
-// ----------------------------------------------------------------------------
-// Real prism optics: Snell's law at both surfaces of the equilateral-triangle prism, with a
-// Cauchy-dispersion refractive index per wavelength, instead of hand-placed decorative angles.
-// All 2D math below works in the world XZ plane (a `Vector2D`'s `.y` field stores world Z here,
-// since the prism's triangular cross-section and the incident beam both lie in a horizontal
-// plane -- see PRISM_RADIUS/PRISM_APEX_ANGLE usage in `computeSpectralRays()`).
-// ----------------------------------------------------------------------------
-
-const PRISM_RADIUS = 1.2; // matches the CentralPrism Cylinder's radiusTop/radiusBottom
-// The equilateral-triangle cross-section (Cylinder radialSegments: 3) has a 60-degree interior
-// angle at each vertex -- the classic prism "apex angle" A in the θ2 + θ3 = A refraction
-// relation, which drives the incidence-angle choice below (not used as a separate runtime value:
-// the actual vertex geometry in computeSpectralRays() already encodes it).
-// Chosen so every spectral color refracts back out through the far face without hitting total
-// internal reflection there (critical angle ~36-38 degrees for the dispersion range below), while
-// still landing safely inside the entry face's 120-degree angular span, clear of its edges, across
-// the turntable's +-0.12 rad wobble (see update()). Re-tuned from the old 44deg/+-0.25 rad per plan
-// P0-2: a numeric range scan over the FULL new wobble window proves all 7 bands stay valid at EVERY
-// angle in [-0.12, +0.12] only for NOMINAL in the upper part of the plan's 48-50deg band -- 50deg
-// keeps a ~+-0.13 rad symmetric 7/7 margin, so NOMINAL=50deg was chosen (see apps/showcases/28/docs/log.md).
-const NOMINAL_INCIDENCE_ANGLE = MathUtils.degToRad(50);
-const SPECTRAL_RAY_LENGTH = 4.8;
-
-interface SpectrumBand {
-  name: string;
-  color: Color;
-  wavelengthNm: number;
-  /** Per-band emissive gain (CIE-luminosity compensation): the loud yellow/green middle is pulled
-   * down and the dim red/blue/violet extremes pushed up so every spectral band reads at comparable
-   * brightness on the dark detector (plan P0-3: "even red->violet read"). */
-  luminosity: number;
-}
-
-const SPECTRUM: SpectrumBand[] = [
-  { name: "Red", color: new Color(1.0, 0.05, 0.05), wavelengthNm: 700, luminosity: 1.15 },
-  { name: "Orange", color: new Color(1.0, 0.45, 0.0), wavelengthNm: 620, luminosity: 0.95 },
-  { name: "Yellow", color: new Color(1.0, 0.9, 0.05), wavelengthNm: 580, luminosity: 0.7 },
-  { name: "Green", color: new Color(0.1, 1.0, 0.2), wavelengthNm: 530, luminosity: 0.6 },
-  { name: "Cyan", color: new Color(0.05, 0.9, 1.0), wavelengthNm: 490, luminosity: 0.75 },
-  { name: "Blue", color: new Color(0.1, 0.3, 1.0), wavelengthNm: 460, luminosity: 0.95 },
-  { name: "Violet", color: new Color(0.7, 0.1, 1.0), wavelengthNm: 400, luminosity: 1.1 },
-];
-
-/** Outward normal of edge `a`-`b`, for a convex polygon centred on the origin (true here: the
- * prism's triangular cross-section is centred at world (0, 0) in XZ). */
-function outwardFaceNormal(a: Vector2D, b: Vector2D): Vector2D {
-  return new Vector2D((a.x + b.x) / 2, (a.y + b.y) / 2).normalize();
-}
-
-interface SpectralRay {
-  name: string;
-  color: Color;
-  /** Real intersection of the beam with the prism's entry face (world XZ). */
-  entryPoint: Vector2D;
-  /** Real exit point on the prism's far face (world XZ) -- the start of the free-flight segment. */
-  exitPoint: Vector2D;
-  /** Start of the free-flight segment. */
-  origin: Vector2D;
-  direction: Vector2D;
-}
-
-/**
- * Traces each spectral band through the triangular prism using real Snell's-law refraction at
- * both surfaces, instead of hand-placed decorative fan angles. `prismRotation` must be the
- * prism's actual, *current* `rotation.y` (base rotation plus the turntable's live wobble --
- * see `update()`, which calls this every frame). Assumes the prism is centred at world XZ
- * (0, 0) and the incident beam travels along +X at z = 0 (matching the SpotLight/incident-beam
- * objects in `setupScene()`).
- *
- * Returns one entry per `SPECTRUM` band, in the same order -- `undefined` where that color
- * undergoes total internal reflection at the far face for the given `prismRotation` (a real,
- * unavoidable outcome here: the turntable's +-0.25 rad wobble swings the entry incidence angle
- * across a wider range than this prism's flint-glass dispersion can refract out cleanly the
- * whole time -- see docs/adr note in update()). Callers must handle holes, not assume 7 rays.
- */
-function computeSpectralRays(prismRotation: number): (SpectralRay | undefined)[] {
-  // Local vertex k sits at world angle (k * 120deg) before the prism's own rotation is applied
-  // (matches Cylinder's own (radius*sin(theta), radius*cos(theta)) vertex generation).
-  const vertices = [0, 1, 2].map((k) => {
-    const theta = (k * 2 * Math.PI) / 3 + prismRotation;
-    return new Vector2D(PRISM_RADIUS * Math.sin(theta), PRISM_RADIUS * Math.cos(theta));
-  });
-
-  const faces: [Vector2D, Vector2D][] = [
-    [vertices[0]!, vertices[1]!],
-    [vertices[1]!, vertices[2]!],
-    [vertices[2]!, vertices[0]!],
-  ];
-
-  // The incident laser beam travels from the optical rail (-10, 0) along +X at z = 0.
-  // Test all 3 polygon edges to find which face faces the incoming beam and gets struck.
-  const incidentOrigin = new Vector2D(-10, 0);
-  const incidentDir = new Vector2D(1, 0);
-  const incidentRay = new Ray2D(incidentOrigin, incidentDir);
-
-  let bestEntryHit: Vector2D | undefined;
-  let bestEntryFaceIdx = -1;
-  let bestEntryNormal: Vector2D | undefined;
-  let minT = Infinity;
-
-  for (let i = 0; i < 3; i++) {
-    const face = faces[i]!;
-    const hit = incidentRay.intersectSegment(face[0], face[1]);
-    if (!hit) continue;
-    const normal = outwardFaceNormal(face[0], face[1]);
-    // Beam strikes the exterior face only when outward normal opposes beam direction
-    if (normal.x * incidentDir.x + normal.y * incidentDir.y >= 0) continue;
-    const t = hit.x - incidentOrigin.x;
-    if (t < minT) {
-      minT = t;
-      bestEntryHit = hit;
-      bestEntryFaceIdx = i;
-      bestEntryNormal = normal;
-    }
-  }
-
-  if (!bestEntryHit || bestEntryFaceIdx === -1) {
-    return SPECTRUM.map(() => undefined);
-  }
-
-  const otherFaceIndices = [0, 1, 2].filter((i) => i !== bestEntryFaceIdx);
-  const otherFaces = otherFaceIndices.map((i) => faces[i]!);
-
-  const rays: (SpectralRay | undefined)[] = [];
-  for (const band of SPECTRUM) {
-    // Real, dense-flint-glass Cauchy dispersion -- consistent with this showcase's own
-    // "n = 1.65 flint glass" comment on the prism material (real n ranges ~1.629 red to ~1.688
-    // violet with this preset).
-    const n = Optics.cauchyIndex(band.wavelengthNm, CauchyMaterials.FLINT_GLASS);
-    const internalDir = Optics.refract(incidentDir, bestEntryNormal!, 1.0, n);
-    if (!internalDir) {
-      rays.push(undefined);
-      continue;
-    }
-
-    let exitPoint: Vector2D | undefined;
-    let exitFace: [Vector2D, Vector2D] | undefined;
-    const internalRay = new Ray2D(bestEntryHit, internalDir);
-    for (const face of otherFaces) {
-      const hit = internalRay.intersectSegment(face[0], face[1]);
-      if (hit) {
-        exitPoint = hit;
-        exitFace = face;
-        break;
-      }
-    }
-    if (!exitPoint || !exitFace) {
-      rays.push(undefined);
-      continue;
-    }
-
-    const exitNormalOutward = outwardFaceNormal(exitFace[0], exitFace[1]);
-    const exitNormalAgainstIncident = new Vector2D(-exitNormalOutward.x, -exitNormalOutward.y);
-    const exitDir = Optics.refract(internalDir, exitNormalAgainstIncident, n, 1.0);
-    if (!exitDir) {
-      // Total internal reflection at the far face -- this color has no exit ray right now.
-      rays.push(undefined);
-      continue;
-    }
-
-    rays.push({
-      name: band.name,
-      color: band.color,
-      entryPoint: bestEntryHit,
-      exitPoint,
-      origin: exitPoint,
-      direction: exitDir,
-    });
-  }
-  return rays;
-}
-
-/**
- * Dynamic 2D planar fan geometry on the laboratory bench surface (XZ plane at y = 0.005),
- * representing the continuous chromatic caustic dispersion wash connecting the prism exit face
- * directly to the detector graticule impact or free-flight trajectory (Plan P2-1).
- *
- * 8 boundary generators (indices 0..7) define 7 contiguous quads corresponding 1:1 to the 7
- * spectral wavelengths (Red, Orange, Yellow, Green, Cyan, Blue, Violet).
- * Total: 16 vertices, 7 quads = 14 triangles = 42 indices.
- */
-class CausticFanGeometry extends AbstractGeometry {
-  constructor() {
-    super();
-    this.generateGeometryData();
-  }
-
-  protected override generateGeometryData(): void {
-    // 8 boundaries * 2 vertices (exit and end) = 16 vertices
-    this._vertices = new Float32Array(16 * 3);
-    this._normals = new Float32Array(16 * 3);
-    this._uvs = new Float32Array(16 * 2);
-
-    // Initial normals pointing straight up (+Y)
-    for (let i = 0; i < 16; i++) {
-      this._normals[i * 3 + 1] = 1.0;
-    }
-
-    // Fixed UV layout:
-    // u across boundaries [0..1]
-    // v along length [0 = exit at prism base, 1 = endpoint on detector/bench]
-    for (let k = 0; k < 8; k++) {
-      const u = k / 7.0;
-      const vExit = 2 * k;
-      const vEnd = 2 * k + 1;
-      this._uvs[vExit * 2] = u;
-      this._uvs[vExit * 2 + 1] = 0.0;
-      this._uvs[vEnd * 2] = u;
-      this._uvs[vEnd * 2 + 1] = 1.0;
-    }
-
-    // 7 quads = 14 triangles = 42 indices
-    const indices = new Uint16Array(7 * 6);
-    let ptr = 0;
-    for (let q = 0; q < 7; q++) {
-      const v0 = 2 * q; // Left exit
-      const v1 = 2 * q + 1; // Left end
-      const v2 = 2 * (q + 1); // Right exit
-      const v3 = 2 * (q + 1) + 1; // Right end
-
-      // Triangle 1
-      indices[ptr++] = v0;
-      indices[ptr++] = v1;
-      indices[ptr++] = v2;
-
-      // Triangle 2
-      indices[ptr++] = v2;
-      indices[ptr++] = v1;
-      indices[ptr++] = v3;
-    }
-    this._indices = indices;
-  }
-}
+  NOMINAL_INCIDENCE_ANGLE,
+  SPECTRAL_RAY_LENGTH,
+  SPECTRUM,
+  SpectralRay,
+  computeSpectralRays,
+} from "./optics.js";
+import {
+  createBandGradientTexture,
+  createCausticGradientTexture,
+  createRefSensorTexture,
+} from "./textures.js";
 
 /**
  * Showcase 28: "The Quantum Refraction Lab / Optical Prism"
@@ -292,7 +55,7 @@ class CausticFanGeometry extends AbstractGeometry {
  * Benchmark testing transmission, optical dispersion, spectral split,
  * and high-refractive glass polyhedra under coherent laser illumination.
  */
-class Showcase28 extends AbstractShowcase {
+class Showcase28 extends AbstractShowcase implements LabInspectorHost {
   private _turntable!: Object3D;
   private _prismMesh!: Object3D;
   private _laserLight!: SpotLight;
@@ -314,205 +77,53 @@ class Showcase28 extends AbstractShowcase {
   private _causticPositions = new Float32Array(16 * 3);
   /** P2-2: soft chromatic bounce SpotLight grounding the dispersed fan on the bench and bezel. */
   private _chromaticBounceLight: SpotLight | undefined;
-  private _causticIntensity: number = 0.65;
-  private _chromaticBounceIntensity: number = 1.2;
-
-  /** Bakes a high-resolution chromatic caustic dispersion texture for the bench surface under the rays (P2-1). */
-  private _createCausticGradientTexture(): Texture {
-    const width = 512;
-    const height = 256;
-    const cv = document.createElement("canvas");
-    cv.width = width;
-    cv.height = height;
-    const ctx = cv.getContext("2d");
-    if (!ctx) throw new Error("[Showcase28] 2D canvas context unavailable for caustic.");
-
-    // Base horizontal spectrum gradient across the 7 wavelengths
-    const grad = ctx.createLinearGradient(0, 0, width, 0);
-    for (let i = 0; i < SPECTRUM.length; i++) {
-      const c = SPECTRUM[i]!.color;
-      const uCenter = (i + 0.5) / SPECTRUM.length;
-      grad.addColorStop(
-        Math.min(1.0, Math.max(0.0, uCenter)),
-        `rgb(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)})`,
-      );
-    }
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-
-    // Apply optical dispersion falloff and longitudinal attenuation
-    const imgData = ctx.getImageData(0, 0, width, height);
-    const data = imgData.data;
-    for (let y = 0; y < height; y++) {
-      const v = y / (height - 1); // 0 at prism exit, 1 at detector impact
-      // Longitudinal envelope: smooth quadratic emergence from prism base, bright core, gentle fade at boundary
-      const leadIn = Math.min(1.0, v / 0.08);
-      const leadInFalloff = leadIn * (2 - leadIn);
-      const tailOff = v < 0.75 ? 1.0 : Math.max(0.0, 1.0 - (v - 0.75) / 0.25);
-      const tailFalloff = tailOff * tailOff;
-      const vProfile = leadInFalloff * tailFalloff;
-
-      for (let x = 0; x < width; x++) {
-        const u = x / (width - 1); // 0 (Red) -> 1 (Violet)
-        // High-frequency optical caustic striations / micro-refraction filaments
-        const striations = 0.88 + 0.12 * Math.sin(u * 140.0 + v * 8.0);
-        // Intra-band caustic focus core: peaks gently along each ray centerline
-        const quadFrac = (u * 7.0) % 1.0;
-        const quadCenter = 1.0 - 4.0 * (quadFrac - 0.5) * (quadFrac - 0.5);
-        const corePeak = 0.75 + 0.25 * Math.max(0.0, quadCenter);
-
-        // Edge fade at the extreme outer flanks of Red and Violet
-        const uFlank = Math.sin(u * Math.PI);
-        const flankFade = Math.min(1.0, uFlank * 4.0);
-
-        const alpha = Math.min(
-          1.0,
-          Math.max(0.0, vProfile * striations * corePeak * flankFade * 0.72),
-        );
-        const idx = (y * width + x) * 4;
-        data[idx + 3] = Math.round(alpha * 255);
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-
-    return Texture.fromCanvas(cv, {
-      generateMipmaps: false,
-      magFilter: TextureFilter.LINEAR,
-      minFilter: TextureFilter.LINEAR,
-      addressModeU: TextureWrap.CLAMP_TO_EDGE,
-      addressModeV: TextureWrap.CLAMP_TO_EDGE,
-    });
-  }
-
-  /** Bakes the calibrated red->violet spectral ramp into a 1D emissive map. */
-  private _createBandGradientTexture(): Texture {
-    const width = 256;
-    const height = 8;
-    const cv = document.createElement("canvas");
-    cv.width = width;
-    cv.height = height;
-    const ctx = cv.getContext("2d");
-    if (!ctx) throw new Error("[Showcase28] 2D canvas context unavailable for the band gradient.");
-    const grad = ctx.createLinearGradient(0, 0, width, 0);
-    for (let i = 0; i < SPECTRUM.length; i++) {
-      const c = SPECTRUM[i]!.color;
-      // Saturation boost: the raw piecewise rgb() stops wash out through white-ish mixes in the
-      // mid-spectrum once drawn as a canvas gradient, so exaggerate each stop around its luma to
-      // keep every channel under 1 and the band's chromatic identity intact (no white/pink core).
-      const gray = (c.r + c.g + c.b) / 3;
-      const sat = 1.7;
-      const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
-      const sr = clamp01(gray + (c.r - gray) * sat);
-      const sg = clamp01(gray + (c.g - gray) * sat);
-      const sb = clamp01(gray + (c.b - gray) * sat);
-      grad.addColorStop(
-        i / (SPECTRUM.length - 1),
-        `rgb(${Math.round(sr * 255)}, ${Math.round(sg * 255)}, ${Math.round(sb * 255)})`,
-      );
-    }
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-    return Texture.fromCanvas(cv, {
-      generateMipmaps: false,
-      magFilter: TextureFilter.LINEAR,
-      minFilter: TextureFilter.LINEAR,
-      addressModeU: TextureWrap.CLAMP_TO_EDGE,
-      addressModeV: TextureWrap.CLAMP_TO_EDGE,
-    });
-  }
 
   private _splitterCarriage: Object3D | undefined;
-  private _splitterX = -2.3;
-  private _splitterActive = true;
   private _incidentBeamBefore: Object3D | undefined;
   private _incidentBeamAfter: Object3D | undefined;
   private _reflectedBeam: Object3D | undefined;
   private _refSensorSpot: Object3D | undefined;
 
-  // Lab Inspector integration
-  private _inspectorDrawer: HTMLElement | undefined;
-  private _inspectorToggleBtn: HTMLButtonElement | undefined = undefined;
-  private _inspectorOpen = false;
-  private _isHoveringInspector = false;
-  private _isDraggingInspector = false;
   private _orbitController: OrbitController | undefined = undefined;
-  private _undo = new UndoStack();
-  private _hierarchyPanel: HierarchyPanel | undefined = undefined;
-  private _propertyPanel: PropertyPanel | undefined = undefined;
-  private _selectedObject: Object3D | undefined = undefined;
-  private _selection = new Set<Object3D>();
-  private _highlightMesh: Object3D | undefined = undefined;
-  private readonly _raycaster = new Raycaster();
-  private _pointerDownPos: { x: number; y: number } | null = null;
-
-  /** Bakes the calibrated auxiliary reference detector readout scale texture. */
-  private _createRefSensorTexture(): Texture {
-    const width = 512;
-    const height = 128;
-    const cv = document.createElement("canvas");
-    cv.width = width;
-    cv.height = height;
-    const ctx = cv.getContext("2d");
-    if (!ctx) throw new Error("[Showcase28] 2D canvas context unavailable for ref sensor.");
-
-    // Dark instrument display background
-    ctx.fillStyle = "#0a0e14";
-    ctx.fillRect(0, 0, width, height);
-
-    // Subtle measurement border & center rail
-    ctx.strokeStyle = "rgba(0, 210, 255, 0.45)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(8, 8, width - 16, height - 16);
-
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(16, 64);
-    ctx.lineTo(width - 16, 64);
-    ctx.stroke();
-
-    // Scale ticks and labels along X
-    ctx.fillStyle = "rgba(0, 220, 255, 0.85)";
-    ctx.font = "bold 13px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("AUX REF PHOTODETECTOR  |  50.0% BEAM SPLIT", 256, 28);
-
-    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
-    ctx.font = "11px monospace";
-    for (let x = 32; x <= width - 32; x += 32) {
-      ctx.beginPath();
-      ctx.moveTo(x, 56);
-      ctx.lineTo(x, 72);
-      ctx.stroke();
-      const val = Math.round((x - 256) / 3.2);
-      ctx.fillText(`${val > 0 ? "+" : ""}${val}mm`, x, 92);
-    }
-
-    // Invert vertically so that texture mapping on the 3D detector face renders right-side up
-    const flippedCanvas = document.createElement("canvas");
-    flippedCanvas.width = width;
-    flippedCanvas.height = height;
-    const fCtx = flippedCanvas.getContext("2d");
-    if (fCtx) {
-      fCtx.translate(0, height);
-      fCtx.scale(1, -1);
-      fCtx.drawImage(cv, 0, 0);
-    }
-
-    return Texture.fromCanvas(flippedCanvas, {
-      generateMipmaps: false,
-      magFilter: TextureFilter.LINEAR,
-      minFilter: TextureFilter.LINEAR,
-      addressModeU: TextureWrap.CLAMP_TO_EDGE,
-      addressModeV: TextureWrap.CLAMP_TO_EDGE,
-    });
-  }
 
   private _time = 0;
+  /** Lab parameters shared with the inspector. */
+  private readonly _knobs: LabKnobs = {
+    // Secret manual-control mode: Ctrl+T pauses the automatic wobble and lets LEFT/RIGHT spin
+    // the turntable by hand instead.
+    manualTurntableControl: false,
+    manualTurntableAngle: 0,
+    splitterX: -2.3,
+    splitterActive: true,
+    causticIntensity: 0.65,
+    chromaticBounceIntensity: 1.2,
+  };
+  private readonly _inspector = new LabInspector(this);
+
+  // LabInspectorHost: scene objects are created in setupScene(), hence getters.
+  public get knobs(): LabKnobs {
+    return this._knobs;
+  }
+  public get orbitController(): OrbitController | undefined {
+    return this._orbitController;
+  }
+  public get turntable(): Object3D | undefined {
+    return this._turntable;
+  }
+  public get prismMesh(): Object3D | undefined {
+    return this._prismMesh;
+  }
+  public get laserLight(): SpotLight | undefined {
+    return this._laserLight;
+  }
+  public get floorCausticMesh(): Object3D | undefined {
+    return this._floorCausticMesh;
+  }
+  public get chromaticBounceLight(): SpotLight | undefined {
+    return this._chromaticBounceLight;
+  }
   // Secret manual-control mode: Ctrl+T pauses the automatic wobble and lets LEFT/RIGHT spin
   // the turntable by hand instead.
-  private _manualTurntableControl = false;
-  private _manualTurntableAngle = 0;
   /** One-shot guard: the P0-4 hero pose is applied once on the first frame (see update()). */
   private _heroPoseApplied = false;
   // Detector panel plane (world XZ), derived in setupScene() from the resting exit fan: center,
@@ -868,7 +479,7 @@ class Showcase28 extends AbstractShowcase {
 
     // 2. Sliding Beam Splitter Carriage
     this._splitterCarriage = new Object3D("SplitterCarriage");
-    this._splitterCarriage.position.set(this._splitterX, 0, 0);
+    this._splitterCarriage.position.set(this._knobs.splitterX, 0, 0);
 
     const carriageBase = new Object3D("CarriageBase");
     carriageBase.geometry = new Cube({ size: 1 }).getGeometryData();
@@ -964,7 +575,7 @@ class Showcase28 extends AbstractShowcase {
       color: new Color(0.04, 0.06, 0.08),
       emissiveColor: new Color(0.7, 0.85, 0.95),
       emissiveIntensity: 0.7,
-      emissiveMap: this._createRefSensorTexture(),
+      emissiveMap: createRefSensorTexture(),
     });
     refSensorFace.position.set(-2.25, 1.8, -2.2);
     this.scene.add(refSensorFace);
@@ -984,7 +595,7 @@ class Showcase28 extends AbstractShowcase {
     }).getGeometryData();
     this._refSensorSpot.material = refSpotMat;
     this._refSensorSpot.rotation.x = Math.PI / 2;
-    this._refSensorSpot.position.set(this._splitterX, 1.8, -2.18);
+    this._refSensorSpot.position.set(this._knobs.splitterX, 1.8, -2.18);
     this.scene.add(this._refSensorSpot);
 
     // 4. Split Laser Beams (Pre-Splitter, Post-Splitter, Reflected)
@@ -1037,7 +648,7 @@ class Showcase28 extends AbstractShowcase {
     }).getGeometryData();
     this._reflectedBeam.material = reflectedBeamMat;
     this._reflectedBeam.rotation.x = Math.PI / 2;
-    this._reflectedBeam.position.set(this._splitterX, 1.8, -1.1);
+    this._reflectedBeam.position.set(this._knobs.splitterX, 1.8, -1.1);
     this.scene.add(this._reflectedBeam);
 
     // SpotLight collinear with the incident laser
@@ -1286,7 +897,7 @@ class Showcase28 extends AbstractShowcase {
       color: new Color(1.0, 1.0, 1.0),
       emissiveColor: new Color(1.0, 1.0, 1.0),
       emissiveIntensity: 1.35,
-      emissiveMap: this._createBandGradientTexture(),
+      emissiveMap: createBandGradientTexture(),
       transparent: true,
     });
     this._bandMesh.isVisible = false;
@@ -1300,8 +911,8 @@ class Showcase28 extends AbstractShowcase {
     const causticMat = new StandardMaterial({
       color: new Color(0.0, 0.0, 0.0),
       emissiveColor: new Color(1.0, 1.0, 1.0),
-      emissiveIntensity: this._causticIntensity,
-      emissiveMap: this._createCausticGradientTexture(),
+      emissiveIntensity: this._knobs.causticIntensity,
+      emissiveMap: createCausticGradientTexture(),
       transparent: true,
       roughness: 0.9,
     });
@@ -1320,7 +931,7 @@ class Showcase28 extends AbstractShowcase {
     this._chromaticBounceLight = new SpotLight({
       name: "ChromaticBounceSpot",
       color: new Color(0.2, 0.8, 0.85),
-      intensity: this._chromaticBounceIntensity,
+      intensity: this._knobs.chromaticBounceIntensity,
       distance: 6.5,
       angle: Math.PI / 4,
       penumbra: 0.85,
@@ -1333,7 +944,7 @@ class Showcase28 extends AbstractShowcase {
     this._updateSpectralVisuals(initialRays);
 
     // Wire up in-viewport Inspector and Maker integration
-    this._setupInspector();
+    this._inspector.setup();
   }
 
   /** Intersection of an exit ray with the detector's receiving face plane (world XZ), or
@@ -1593,7 +1204,7 @@ class Showcase28 extends AbstractShowcase {
           this._chromaticBounceLight.position.set(midX, 0.75, midZ);
           this._chromaticBounceLight.direction.set(0, -1, 0);
           this._chromaticBounceLight.intensity =
-            this._chromaticBounceIntensity * (validCount / 7.0);
+            this._knobs.chromaticBounceIntensity * (validCount / 7.0);
 
           let sumR = 0;
           let sumG = 0;
@@ -1634,42 +1245,37 @@ class Showcase28 extends AbstractShowcase {
     ) {
       return;
     }
-    const isInspectorActive =
-      this._inspectorOpen &&
-      (this._isHoveringInspector ||
-        this._isDraggingInspector ||
-        (undefined !== this._inspectorDrawer &&
-          this._inspectorDrawer.contains(document.activeElement)));
+    const isInspectorActive = this._inspector.isActive;
     if (isInspectorActive) {
       if ("KeyI" === event.code) {
         event.preventDefault();
-        this._toggleInspector();
+        this._inspector.toggle();
       }
       return;
     }
     super.onKeyDown(event);
     if ("KeyI" === event.code) {
       event.preventDefault();
-      this._toggleInspector();
+      this._inspector.toggle();
       return;
     }
     if (Keys.LEFT === event.code || Keys.RIGHT === event.code) {
       event.preventDefault();
-      if (!this._manualTurntableControl && this._turntable) {
-        this._manualTurntableControl = true;
-        this._manualTurntableAngle = this._turntable.rotation.y;
+      if (!this._knobs.manualTurntableControl && this._turntable) {
+        this._knobs.manualTurntableControl = true;
+        this._knobs.manualTurntableAngle = this._turntable.rotation.y;
       }
     } else if (Keys.UP === event.code || Keys.DOWN === event.code) {
       event.preventDefault();
     } else if ("KeyM" === event.code) {
       event.preventDefault();
-      this._splitterActive = !this._splitterActive;
+      this._knobs.splitterActive = !this._knobs.splitterActive;
     } else if (Keys.SPACE === event.code) {
       event.preventDefault();
-      this._manualTurntableControl = !this._manualTurntableControl;
-      if (this._manualTurntableControl && this._turntable) {
-        this._manualTurntableAngle = this._turntable.rotation.y;
-      } else if (!this._manualTurntableControl && this._turntable) {
+      this._knobs.manualTurntableControl = !this._knobs.manualTurntableControl;
+      if (this._knobs.manualTurntableControl && this._turntable) {
+        this._knobs.manualTurntableAngle = this._turntable.rotation.y;
+      } else if (!this._knobs.manualTurntableControl && this._turntable) {
         // Re-align auto-wobble phase with current angle to avoid jump
         const clampedRatio = Math.max(-0.999, Math.min(0.999, this._turntable.rotation.y / 0.12));
         this._time = Math.asin(clampedRatio) / 0.6;
@@ -1680,12 +1286,7 @@ class Showcase28 extends AbstractShowcase {
   protected override update(deltaTime: number): void {
     this._time += deltaTime * 0.5;
 
-    const isInspectorActive =
-      this._inspectorOpen &&
-      (this._isHoveringInspector ||
-        this._isDraggingInspector ||
-        (undefined !== this._inspectorDrawer &&
-          this._inspectorDrawer.contains(document.activeElement)));
+    const isInspectorActive = this._inspector.isActive;
 
     // 50:50 Beam Splitter navigation on optical rail (UP/DOWN arrow keys)
     const isUp = !isInspectorActive && this.input.isPressed(Keys.UP);
@@ -1694,15 +1295,15 @@ class Showcase28 extends AbstractShowcase {
       const isShift = this.input.isPressed(Keys.SHIFT_L) || this.input.isPressed(Keys.SHIFT_R);
       const railSpeed = isShift ? 2.4 : 1.1; // units/s
       if (isUp) {
-        this._splitterX = Math.min(-1.15, this._splitterX + railSpeed * deltaTime);
+        this._knobs.splitterX = Math.min(-1.15, this._knobs.splitterX + railSpeed * deltaTime);
       }
       if (isDown) {
-        this._splitterX = Math.max(-3.35, this._splitterX - railSpeed * deltaTime);
+        this._knobs.splitterX = Math.max(-3.35, this._knobs.splitterX - railSpeed * deltaTime);
       }
     }
 
     if (this._splitterCarriage) {
-      this._splitterCarriage.position.x = this._splitterX;
+      this._splitterCarriage.position.x = this._knobs.splitterX;
     }
 
     // P0-4 hero framing, re-asserted exactly once on the first frame: the HybridSync camera
@@ -1720,23 +1321,23 @@ class Showcase28 extends AbstractShowcase {
       const isRight = !isInspectorActive && this.input.isPressed(Keys.RIGHT);
 
       if (isLeft || isRight) {
-        if (!this._manualTurntableControl) {
-          this._manualTurntableControl = true;
-          this._manualTurntableAngle = this._turntable.rotation.y;
+        if (!this._knobs.manualTurntableControl) {
+          this._knobs.manualTurntableControl = true;
+          this._knobs.manualTurntableAngle = this._turntable.rotation.y;
         }
       }
 
-      if (this._manualTurntableControl) {
+      if (this._knobs.manualTurntableControl) {
         // Manual mode: auto-wobble is paused, LEFT/RIGHT spin the turntable by hand.
         const isShift = this.input.isPressed(Keys.SHIFT_L) || this.input.isPressed(Keys.SHIFT_R);
         const manualSpeed = isShift ? 1.5 : 0.6; // rad/s (halved for fine precision control)
         if (isLeft) {
-          this._manualTurntableAngle -= manualSpeed * deltaTime;
+          this._knobs.manualTurntableAngle -= manualSpeed * deltaTime;
         }
         if (isRight) {
-          this._manualTurntableAngle += manualSpeed * deltaTime;
+          this._knobs.manualTurntableAngle += manualSpeed * deltaTime;
         }
-        this._turntable.rotation.y = this._manualTurntableAngle;
+        this._turntable.rotation.y = this._knobs.manualTurntableAngle;
       } else {
         // Gentle slow turntable rotation showcasing prism facets and refraction shifts.
         this._turntable.rotation.y = Math.sin(this._time * 0.6) * 0.12;
@@ -1753,7 +1354,7 @@ class Showcase28 extends AbstractShowcase {
 
     // Dynamic beam segments around the beam splitter
     const emitterX = -4.08;
-    const splitX = this._splitterX;
+    const splitX = this._knobs.splitterX;
 
     if (this._incidentBeamBefore) {
       const lenBefore = splitX - emitterX;
@@ -1765,20 +1366,20 @@ class Showcase28 extends AbstractShowcase {
       const lenAfter = Math.max(0.01, prismEntryX - splitX);
       this._incidentBeamAfter.position.set((splitX + prismEntryX) / 2, 1.8, 0);
       this._incidentBeamAfter.scale.set(1, lenAfter, 1);
-      (this._incidentBeamAfter.material as StandardMaterial).emissiveIntensity = this
-        ._splitterActive
+      (this._incidentBeamAfter.material as StandardMaterial).emissiveIntensity = this._knobs
+        .splitterActive
         ? 0.65
         : 1.1;
     }
 
     if (this._reflectedBeam) {
       this._reflectedBeam.position.set(splitX, 1.8, -1.1);
-      this._reflectedBeam.isVisible = this._splitterActive;
+      this._reflectedBeam.isVisible = this._knobs.splitterActive;
     }
 
     if (this._refSensorSpot) {
       this._refSensorSpot.position.set(splitX, 1.8, -2.18);
-      this._refSensorSpot.isVisible = this._splitterActive;
+      this._refSensorSpot.isVisible = this._knobs.splitterActive;
     }
 
     if (this._turntable && this._prismMesh) {
@@ -1794,615 +1395,7 @@ class Showcase28 extends AbstractShowcase {
       }
     }
 
-    if (this._inspectorOpen && this._selectedObject) {
-      this._syncHighlight();
-    }
-  }
-
-  private _isExcludedFromHierarchy(obj: Object3D): boolean {
-    return (
-      obj === this._highlightMesh ||
-      obj.name === "EditorHighlight" ||
-      obj.name.startsWith("SpectralRay_") ||
-      obj.name.startsWith("IncidentBeam_") ||
-      obj.name === "ReflectedBeam_90Deg" ||
-      obj.name === "RefSensorSpot" ||
-      obj.name === "InternalBeamPath" ||
-      obj.name === "Band_Gradient" ||
-      obj.name === "BenchCausticSpill" ||
-      obj.name === "ChromaticBounceSpot" ||
-      obj === this._chromaticBounceLight ||
-      obj.name === "Skybox"
-    );
-  }
-
-  private _collectPickable(parent: Object3D, out: Object3D[]): void {
-    if (this._isExcludedFromHierarchy(parent)) return;
-    if (parent.isVisible && parent.geometry) {
-      parent.computeBounds();
-      out.push(parent);
-    }
-    for (const child of parent.children) {
-      this._collectPickable(child, out);
-    }
-  }
-
-  private _pickFromScreen(clientX: number, clientY: number): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const ndc = new Vector2D(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1,
-    );
-    this._raycaster.setFromCamera(ndc, this.camera);
-    const pickables: Object3D[] = [];
-    this._collectPickable(this.scene.root, pickables);
-    const hits = this._raycaster.intersectObjects(pickables, true);
-    const hitObj = hits.length > 0 ? hits[0]!.object : undefined;
-    this._selectObject(hitObj);
-  }
-
-  private _selectObject(obj: Object3D | undefined): void {
-    this._selection.clear();
-    if (obj) {
-      this._selection.add(obj);
-    }
-    this._selectedObject = obj;
-    this._propertyPanel?.setSelection(obj);
-    this._hierarchyPanel?.setSelected(this._selection);
-    this._syncHighlight();
-  }
-
-  private _syncHighlight(): void {
-    if (!this._highlightMesh) {
-      const hl = new Object3D("EditorHighlight");
-      hl.geometry = new Cube({ size: 1 }).getGeometryData();
-      hl.material = new WireframeMaterial(new Color(0, 0.85, 1));
-      hl.isVisible = false;
-      this.scene.add(hl);
-      this._highlightMesh = hl;
-    }
-    const hl = this._highlightMesh;
-    if (!this._inspectorOpen || !this._selectedObject) {
-      hl.isVisible = false;
-      return;
-    }
-    const obj = this._selectedObject;
-    if (obj.geometry) {
-      obj.computeBounds();
-    }
-    if (!obj.bounds) {
-      hl.isVisible = false;
-      return;
-    }
-    const epsilon = new Vector3D(0.015, 0.015, 0.015);
-    if (BoundingType.BOX === obj.bounds.type) {
-      const box = obj.bounds as BoundingBox;
-      const size = new Vector3D().copyFrom(box.max).sub(box.min).add(epsilon);
-      hl.position.copyFrom(box.center);
-      hl.rotation.set(0, 0, 0);
-      hl.scale.copyFrom(size);
-      hl.updateMatrixWorld();
-      hl.isVisible = true;
-    } else if (BoundingType.SPHERE === obj.bounds.type) {
-      const sphere = obj.bounds as BoundingSphere;
-      const diameter = sphere.radius * 2;
-      const size = new Vector3D(diameter, diameter, diameter).add(epsilon);
-      hl.position.copyFrom(sphere.center);
-      hl.rotation.set(0, 0, 0);
-      hl.scale.copyFrom(size);
-      hl.updateMatrixWorld();
-      hl.isVisible = true;
-    } else {
-      hl.isVisible = false;
-    }
-  }
-
-  private _toggleInspector(force?: boolean): void {
-    this._inspectorOpen = undefined !== force ? force : !this._inspectorOpen;
-    if (!this._inspectorOpen) {
-      this._isHoveringInspector = false;
-      this._isDraggingInspector = false;
-      if (this._orbitController) {
-        this._orbitController.enabled = true;
-      }
-    }
-    if (this._inspectorToggleBtn) {
-      if (this._inspectorOpen) {
-        this._inspectorToggleBtn.classList.add("active");
-      } else {
-        this._inspectorToggleBtn.classList.remove("active");
-      }
-    }
-    if (this._inspectorDrawer) {
-      if (this._inspectorOpen) {
-        this._inspectorDrawer.classList.add("open");
-        this._hierarchyPanel?.refresh();
-        this._syncHighlight();
-      } else {
-        this._inspectorDrawer.classList.remove("open");
-        if (this._highlightMesh) {
-          this._highlightMesh.isVisible = false;
-        }
-      }
-    }
-  }
-
-  private _setupInspector(): void {
-    if (typeof document === "undefined") return;
-
-    // Inject styling for the Lab Inspector drawer and hierarchy panel
-    const styleId = "swm-showcase28-inspector-styles";
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement("style");
-      style.id = styleId;
-      style.textContent = `
-        .swm-inspector-btn {
-          position: fixed;
-          bottom: 5px;
-          right: 14px;
-          width: 26px;
-          height: 26px;
-          z-index: 10001;
-          pointer-events: auto;
-          background: var(--tool-card, rgba(22, 29, 45, 0.85));
-          color: var(--tool-text, #f8fafc);
-          border: 1px solid var(--tool-border, rgba(148, 163, 184, 0.25));
-          border-radius: var(--tool-radius-sm, 4px);
-          padding: 0;
-          font-size: 0.95rem;
-          cursor: pointer;
-          backdrop-filter: blur(8px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
-        }
-        .swm-inspector-btn:hover {
-          border-color: var(--tool-accent, #ffb84d);
-          color: var(--tool-accent, #ffb84d);
-          box-shadow: 0 0 10px var(--tool-accent-glow, rgba(255, 184, 77, 0.3));
-        }
-        .swm-inspector-btn.active {
-          background: rgba(255, 184, 77, 0.15);
-          border-color: var(--tool-accent, #ffb84d);
-          color: var(--tool-accent, #ffb84d);
-          box-shadow: 0 0 8px var(--tool-accent-glow, rgba(255, 184, 77, 0.25));
-        }
-        .swm-inspector-drawer {
-          position: fixed;
-          top: 0;
-          right: 0;
-          width: 320px;
-          height: calc(100vh - 36px);
-          background: var(--tool-panel, rgba(14, 18, 28, 0.95));
-          backdrop-filter: blur(16px);
-          border-left: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
-          border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
-          color: var(--tool-text, #f8fafc);
-          z-index: 10000;
-          display: flex;
-          flex-direction: column;
-          box-shadow: -6px 0 32px rgba(0, 0, 0, 0.6);
-          transform: translateX(100%);
-          transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-          font-family: var(--tool-font-ui, sans-serif);
-        }
-        .swm-inspector-drawer.open {
-          transform: translateX(0);
-        }
-        .swm-inspector-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 10px 14px;
-          border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.15));
-          background: var(--tool-panel-solid, #0e121c);
-        }
-        .swm-inspector-title {
-          font-size: 0.9rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          color: var(--tool-text, #f8fafc);
-          margin: 0;
-        }
-        .swm-inspector-close-btn {
-          background: none;
-          border: none;
-          color: var(--tool-text-muted, #94a3b8);
-          font-size: 1.1rem;
-          cursor: pointer;
-          padding: 2px 6px;
-          line-height: 1;
-        }
-        .swm-inspector-close-btn:hover {
-          color: var(--tool-danger, #ef4444);
-        }
-        .swm-inspector-body {
-          flex: 1;
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-        }
-        .swm-inspector-section {
-          border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.15));
-          display: flex;
-          flex-direction: column;
-        }
-        .swm-inspector-section-header {
-          font-size: 0.72rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.8px;
-          padding: 8px 12px 6px;
-          color: var(--tool-accent, #ffb84d);
-          background: rgba(255, 255, 255, 0.02);
-          border-bottom: 1px solid rgba(148, 163, 184, 0.1);
-        }
-        .swm-inspector-pane-wrap {
-          padding: 6px;
-        }
-        .swm-inspector-hierarchy-wrap {
-          padding: 6px;
-          background: rgba(10, 14, 22, 0.6);
-        }
-        .maker-hierarchy {
-          display: flex;
-          flex-direction: column;
-        }
-        .maker-hierarchy-search-wrapper {
-          margin-bottom: 6px;
-        }
-        .maker-hierarchy-search-input {
-          width: 100%;
-          box-sizing: border-box;
-          background: rgba(15, 23, 42, 0.8);
-          border: 1px solid rgba(148, 163, 184, 0.25);
-          border-radius: 4px;
-          color: #f8fafc;
-          padding: 4px 8px;
-          font-size: 0.78rem;
-          font-family: inherit;
-        }
-        .maker-hierarchy-search-input:focus {
-          outline: none;
-          border-color: var(--tool-accent, #ffb84d);
-        }
-        .maker-hierarchy-tree {
-          overflow-y: auto;
-          max-height: 260px;
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          padding-right: 2px;
-        }
-        .maker-hierarchy-row {
-          flex-shrink: 0;
-          height: 24px;
-          line-height: 24px;
-          padding-top: 0;
-          padding-bottom: 0;
-          padding-right: 8px;
-          font-family: var(--tool-font-mono, monospace);
-          font-size: 0.8rem;
-          color: #cbd5e1;
-          cursor: pointer;
-          user-select: none;
-          border-radius: 3px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          box-sizing: border-box;
-          display: flex;
-          align-items: center;
-        }
-        .maker-hierarchy-row:hover {
-          background: rgba(255, 255, 255, 0.08);
-          color: #fff;
-        }
-        .maker-hierarchy-row.selected {
-          background: rgba(255, 184, 77, 0.22);
-          color: var(--tool-accent, #ffb84d);
-          font-weight: 600;
-        }
-        .maker-hierarchy-rename-input {
-          background: rgba(15, 23, 42, 0.95);
-          border: 1px solid var(--tool-accent, #ffb84d);
-          border-radius: 3px;
-          color: #fff;
-          padding: 2px 6px;
-          font-size: 0.8rem;
-          font-family: var(--tool-font-mono, monospace);
-          width: 100%;
-          height: 22px;
-          box-sizing: border-box;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-
-    // Toggle button in Footer
-    const toggleBtn = document.createElement("button");
-    toggleBtn.className = "swm-inspector-btn";
-    toggleBtn.innerHTML = "<span>⚙</span>";
-    toggleBtn.title = "Toggle Lab Inspector Panel (Key: I)";
-    toggleBtn.onclick = (): void => {
-      this._toggleInspector();
-    };
-    this._inspectorToggleBtn = toggleBtn;
-
-    const footer = document.querySelector(".app-footer");
-    if (footer) {
-      footer.appendChild(toggleBtn);
-    } else {
-      document.body.appendChild(toggleBtn);
-    }
-
-    // Inspector Drawer
-    const drawer = document.createElement("aside");
-    drawer.className = "swm-inspector-drawer";
-    this._inspectorDrawer = drawer;
-
-    drawer.innerHTML = `
-      <header class="swm-inspector-header">
-        <h3 class="swm-inspector-title">Lab Inspector</h3>
-        <button id="swmInspectorClose" class="swm-inspector-close-btn" title="Close Inspector">✕</button>
-      </header>
-      <div class="swm-inspector-body">
-        <div class="swm-inspector-section">
-          <div class="swm-inspector-section-header">Lab Parameters</div>
-          <div id="swmInspectorParams" class="swm-inspector-pane-wrap"></div>
-        </div>
-        <div class="swm-inspector-section">
-          <div class="swm-inspector-section-header">Scene Hierarchy</div>
-          <div id="swmInspectorHierarchy" class="swm-inspector-hierarchy-wrap"></div>
-        </div>
-        <div class="swm-inspector-section">
-          <div class="swm-inspector-section-header">Selected Object</div>
-          <div id="swmInspectorProps" class="swm-inspector-pane-wrap"></div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(drawer);
-
-    // Isolate mouse, wheel, touch, and pointer events inside drawer so camera orbit and zoom are never triggered
-    const stopEvents = [
-      "mousedown",
-      "mouseup",
-      "mousemove",
-      "pointerdown",
-      "pointerup",
-      "pointermove",
-      "wheel",
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "keydown",
-      "keyup",
-      "click",
-      "dblclick",
-      "contextmenu",
-    ];
-    for (const ev of stopEvents) {
-      drawer.addEventListener(
-        ev,
-        (e) => {
-          e.stopPropagation();
-          if ("wheel" === ev) {
-            this.input.mouse.zoom = 0;
-            this.input.mouse.wheelX = 0;
-            this.input.mouse.wheelY = 0;
-          }
-        },
-        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
-      );
-    }
-
-    drawer.addEventListener("pointerenter", () => {
-      this._isHoveringInspector = true;
-      if (this._orbitController) {
-        this._orbitController.enabled = false;
-      }
-    });
-
-    drawer.addEventListener("pointerleave", (e: PointerEvent) => {
-      if (0 === e.buttons && !this._isDraggingInspector) {
-        this._isHoveringInspector = false;
-        if (this._orbitController) {
-          this._orbitController.enabled = true;
-        }
-      }
-    });
-
-    drawer.addEventListener("pointerdown", () => {
-      this._isHoveringInspector = true;
-      this._isDraggingInspector = true;
-      if (this._orbitController) {
-        this._orbitController.enabled = false;
-      }
-      this.input.mouse.dx = 0;
-      this.input.mouse.dy = 0;
-      this.input.mouse.zoom = 0;
-      this.input.mouse.left = false;
-    });
-
-    window.addEventListener("pointerup", () => {
-      this._isDraggingInspector = false;
-      if (!this._inspectorDrawer?.matches(":hover")) {
-        this._isHoveringInspector = false;
-        if (this._orbitController) {
-          this._orbitController.enabled = true;
-        }
-      }
-    });
-
-    drawer.querySelector("#swmInspectorClose")?.addEventListener("click", (): void => {
-      this._toggleInspector(false);
-    });
-
-    // Lab quick params pane
-    const paramsContainer = drawer.querySelector("#swmInspectorParams") as HTMLElement;
-    if (paramsContainer) {
-      const pane = new Pane({ container: paramsContainer });
-
-      const fTurntable = pane.addFolder({ title: "Prism & Turntable", expanded: true });
-      const currentDeg = this._turntable ? MathUtils.radToDeg(this._turntable.rotation.y) : 0;
-      fTurntable
-        .addBinding({ angleDeg: currentDeg }, "angleDeg", {
-          min: -180,
-          max: 180,
-          step: 0.5,
-          label: "Stage Angle",
-        })
-        .on("change", (ev) => {
-          if (!this._manualTurntableControl) {
-            this._manualTurntableControl = true;
-          }
-          this._manualTurntableAngle = MathUtils.degToRad(ev.value);
-          if (this._turntable) this._turntable.rotation.y = this._manualTurntableAngle;
-        });
-
-      fTurntable
-        .addBinding({ autoWobble: !this._manualTurntableControl }, "autoWobble", {
-          label: "Auto-Wobble",
-        })
-        .on("change", (ev) => {
-          this._manualTurntableControl = !ev.value;
-          if (this._manualTurntableControl && this._turntable) {
-            this._manualTurntableAngle = this._turntable.rotation.y;
-          }
-        });
-
-      const fSplitter = pane.addFolder({ title: "50:50 Beam Splitter", expanded: true });
-      fSplitter
-        .addBinding({ splitterX: this._splitterX }, "splitterX", {
-          min: -3.35,
-          max: -1.15,
-          step: 0.05,
-          label: "Rail Pos X",
-        })
-        .on("change", (ev) => {
-          this._splitterX = ev.value;
-        });
-
-      fSplitter
-        .addBinding({ active: this._splitterActive }, "active", {
-          label: "Splitter Engaged",
-        })
-        .on("change", (ev) => {
-          this._splitterActive = ev.value;
-        });
-
-      const fOptics = pane.addFolder({ title: "Optics & Glass", expanded: false });
-      if (this._prismMesh && this._prismMesh.material instanceof GlassMaterial) {
-        const gm = this._prismMesh.material;
-        fOptics.addBinding(gm, "ior", { min: 1.1, max: 2.2, step: 0.01, label: "Prism IOR" });
-        fOptics.addBinding(gm, "roughness", {
-          min: 0.0,
-          max: 0.35,
-          step: 0.01,
-          label: "Roughness",
-        });
-        fOptics.addBinding(gm, "thickness", { min: 0.1, max: 1.5, step: 0.05, label: "Thickness" });
-      }
-
-      const fLight = pane.addFolder({ title: "Laser & Bloom", expanded: false });
-      if (this._laserLight) {
-        fLight.addBinding(this._laserLight, "intensity", {
-          min: 0.5,
-          max: 6.0,
-          step: 0.1,
-          label: "Laser Power",
-        });
-      }
-      const bloom = this.renderer.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
-      if (bloom) {
-        fLight.addBinding(bloom, "intensity", {
-          min: 0.0,
-          max: 1.2,
-          step: 0.05,
-          label: "Bloom Glow",
-        });
-      }
-
-      const fCaustics = pane.addFolder({ title: "Caustics & Atmosphere (P2)", expanded: false });
-      fCaustics
-        .addBinding({ intensity: this._causticIntensity }, "intensity", {
-          min: 0.0,
-          max: 1.5,
-          step: 0.05,
-          label: "Caustic Power",
-        })
-        .on("change", (ev) => {
-          this._causticIntensity = ev.value;
-          if (this._floorCausticMesh?.material instanceof StandardMaterial) {
-            this._floorCausticMesh.material.emissiveIntensity = this._causticIntensity;
-          }
-        });
-
-      fCaustics
-        .addBinding({ bounce: this._chromaticBounceIntensity }, "bounce", {
-          min: 0.0,
-          max: 2.5,
-          step: 0.1,
-          label: "Chromatic Bounce",
-        })
-        .on("change", (ev) => {
-          this._chromaticBounceIntensity = ev.value;
-        });
-    }
-
-    // Hierarchy Panel integration
-    const hierarchyContainer = drawer.querySelector("#swmInspectorHierarchy") as HTMLElement;
-    if (hierarchyContainer) {
-      this._hierarchyPanel = new HierarchyPanel(
-        hierarchyContainer,
-        () => this.scene.root,
-        {
-          onSelect: (obj): void => {
-            this._selectObject(obj);
-          },
-          onReparent: (): void => {},
-          onRename: (obj, newName): void => {
-            obj.name = newName;
-            this._hierarchyPanel?.refresh();
-          },
-        },
-        (obj): boolean => this._isExcludedFromHierarchy(obj),
-      );
-    }
-
-    // Property Panel integration
-    const propsContainer = drawer.querySelector("#swmInspectorProps") as HTMLElement;
-    if (propsContainer) {
-      this._propertyPanel = new PropertyPanel(propsContainer, this._undo, {
-        onPropertyChanged: (_obj, propKey): void => {
-          if ("name" === propKey) {
-            this._hierarchyPanel?.refresh();
-          }
-        },
-      });
-    }
-
-    // Viewport 3D object picking on canvas pointer interaction
-    this.canvas.addEventListener("pointerdown", (event: PointerEvent) => {
-      if (0 === event.button) {
-        this._pointerDownPos = { x: event.clientX, y: event.clientY };
-      }
-    });
-
-    this.canvas.addEventListener("pointerup", (event: PointerEvent) => {
-      if (!this._inspectorOpen || 0 !== event.button || !this._pointerDownPos) {
-        return;
-      }
-      const dx = event.clientX - this._pointerDownPos.x;
-      const dy = event.clientY - this._pointerDownPos.y;
-      this._pointerDownPos = null;
-      if (Math.hypot(dx, dy) > 5) {
-        return;
-      }
-      this._pickFromScreen(event.clientX, event.clientY);
-    });
+    this._inspector.syncSelection();
   }
 }
 

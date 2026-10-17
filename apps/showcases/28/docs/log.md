@@ -213,3 +213,17 @@ broken, all historical entries above preserved.
   - Unit tests: 283 suites / 1928 tests all passing.
 
 
+
+---
+
+## 2026-10-17 – File split (pure refactor, no behaviour change)
+
+`showcase.ts` had grown to 2421 lines. Split along its natural seams:
+
+- `optics.ts` (180): spectral constants, `SPECTRUM`, `SpectralRay`, `computeSpectralRays()` -- pure 2D ray tracing, no engine objects.
+- `CausticFanGeometry.ts` (65): the dynamic bench caustic fan geometry.
+- `textures.ts` (173): the three canvas-baked emissive textures (`createCausticGradientTexture`, `createBandGradientTexture`, `createRefSensorTexture`).
+- `LabInspector.ts` (701): the in-viewport Lab Inspector (drawer, Lab Knobs, hierarchy/property panels, picking, highlight). It talks to the showcase through the small `LabInspectorHost` interface; the parameters it edits live in one shared `LabKnobs` object (`manualTurntableControl`, `splitterX`, `causticIntensity`, ...) instead of loose showcase fields.
+- `showcase.ts` is now 1417 lines. The biggest remaining block is `setupScene()` (~800 lines of scene construction), which assigns many showcase fields and was left as is on purpose.
+
+Verified: typecheck, lint, 1927 unit tests, `check-showcases 28` on WebGL1/WebGL2/WebGPU; browser comparison of the WebGPU frame against the pre-split frame (identical), Inspector open/close, hierarchy selection and highlight.
