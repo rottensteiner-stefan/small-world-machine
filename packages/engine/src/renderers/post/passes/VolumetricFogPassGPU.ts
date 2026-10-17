@@ -497,7 +497,7 @@ export class VolumetricFogPassGPU {
     }
     const numVols = Math.min(fogVolumes.length, MAX_FOG_VOLUMES);
     inj[20] = element.asymmetry;
-    inj[21] = 0.0; // unused: `intensity` is applied once, in the composite pass
+    inj[21] = element.ambientInject; // (`intensity` is applied once, in the composite pass)
     inj[22] = renderer.frameInfo.time; // gameplay time in seconds for rolling mist
     inj[23] = numVols;
 

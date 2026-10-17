@@ -670,10 +670,18 @@ export class WebGPURenderer extends AbstractRenderer {
           buffer: { type: "read-only-storage" },
         },
         { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
-        { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "cube" } },
+        {
+          binding: 4,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+          texture: { viewDimension: "cube" },
+        },
         { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "cube" } },
         { binding: 6, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d" } },
-        { binding: 7, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+        {
+          binding: 7,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+          sampler: { type: "filtering" },
+        },
         {
           binding: 8,
           visibility: GPUShaderStage.FRAGMENT,

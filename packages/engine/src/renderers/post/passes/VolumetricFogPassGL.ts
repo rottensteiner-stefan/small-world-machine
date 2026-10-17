@@ -6,6 +6,7 @@ import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import { VolumetricFogElement } from "../elements/index.js";
 import { DirectionalLight } from "../../../core/lights/index.js";
 import { FogVolume } from "../../../core/objects/FogVolume.js";
+import { Color } from "../../../core/colors/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 
 interface FogVolumeUniformLocations {
@@ -25,6 +26,9 @@ interface FogVolumeUniformLocations {
  *
  * WebGL1 degrades gracefully (returns null, relying on Scene.fog analytical distance fog).
  */
+/** Default ambient when the caller passes none (avoids a per-call allocation). */
+const NO_AMBIENT = new Color(0, 0, 0);
+
 export class VolumetricFogPassGL {
   private readonly _gl: WebGLRenderingContext | WebGL2RenderingContext;
   private readonly _isWebGL2: boolean;
@@ -43,6 +47,8 @@ export class VolumetricFogPassGL {
   private _uSunDirLoc: WebGLUniformLocation | null = null;
   private _uSunColorLoc: WebGLUniformLocation | null = null;
   private _uFogColorLoc: WebGLUniformLocation | null = null;
+  private _uAmbientLightLoc: WebGLUniformLocation | null = null;
+  private _uAmbientInjectLoc: WebGLUniformLocation | null = null;
   private _uIntensityLoc: WebGLUniformLocation | null = null;
   private _uDensityLoc: WebGLUniformLocation | null = null;
   private _uAsymmetryLoc: WebGLUniformLocation | null = null;
@@ -144,6 +150,8 @@ export class VolumetricFogPassGL {
       this._uSunDirLoc = gl.getUniformLocation(this._progFog, "u_sunDir");
       this._uSunColorLoc = gl.getUniformLocation(this._progFog, "u_sunColor");
       this._uFogColorLoc = gl.getUniformLocation(this._progFog, "u_fogColor");
+      this._uAmbientLightLoc = gl.getUniformLocation(this._progFog, "u_ambientLight");
+      this._uAmbientInjectLoc = gl.getUniformLocation(this._progFog, "u_ambientInject");
       this._uIntensityLoc = gl.getUniformLocation(this._progFog, "u_intensity");
       this._uDensityLoc = gl.getUniformLocation(this._progFog, "u_density");
       this._uAsymmetryLoc = gl.getUniformLocation(this._progFog, "u_asymmetry");
@@ -230,6 +238,8 @@ export class VolumetricFogPassGL {
     element: VolumetricFogElement,
     fogVolumes: FogVolume[] = [],
     time: number = 0,
+    ambientColor: Color = NO_AMBIENT,
+    ambientIntensity: number = 0,
   ): WebGLTexture | null {
     if (!this._isWebGL2 || !element.enabled || width <= 0 || height <= 0) {
       return null;
@@ -311,6 +321,16 @@ export class VolumetricFogPassGL {
     if (this._uFogColorLoc) {
       gl2.uniform3f(this._uFogColorLoc, element.color.r, element.color.g, element.color.b);
     }
+
+    if (this._uAmbientLightLoc) {
+      gl2.uniform3f(
+        this._uAmbientLightLoc,
+        ambientColor.r * ambientIntensity,
+        ambientColor.g * ambientIntensity,
+        ambientColor.b * ambientIntensity,
+      );
+    }
+    if (this._uAmbientInjectLoc) gl2.uniform1f(this._uAmbientInjectLoc, element.ambientInject);
 
     if (this._uIntensityLoc) gl2.uniform1f(this._uIntensityLoc, element.intensity);
     if (this._uDensityLoc) gl2.uniform1f(this._uDensityLoc, element.density);

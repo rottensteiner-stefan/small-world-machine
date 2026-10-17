@@ -13,6 +13,8 @@ uniform vec3 u_camPos;
 uniform vec3 u_sunDir;
 uniform vec3 u_sunColor;
 uniform vec3 u_fogColor;
+uniform vec3 u_ambientLight; // scene ambient colour * intensity
+uniform float u_ambientInject;
 uniform float u_intensity;
 uniform float u_density;
 uniform float u_asymmetry;
@@ -210,7 +212,7 @@ void main() {
 
         // Sunlight in-scattering + ambient base fog scattering
         vec3 sunScattering = shadow * u_sunColor * phase * powder;
-        vec3 ambientScattering = localAlbedo * 0.15 + localEmission;
+        vec3 ambientScattering = localAlbedo * u_ambientLight * u_ambientInject + localEmission;
         vec3 stepLight = sunScattering + ambientScattering;
 
         accumulatedLight += transmittance * stepLight * (1.0 - stepTransmittance);

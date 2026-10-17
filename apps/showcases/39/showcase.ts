@@ -130,6 +130,7 @@ class Showcase39 extends AbstractShowcase {
       this._fogElement.enabled = true;
       this._fogElement.density = 0.025;
       this._fogElement.intensity = 1.0;
+      this._fogElement.ambientInject = 1.5;
       this._fogElement.height = -1.0;
       this._fogElement.heightFalloff = 0.08;
       this._fogElement.asymmetry = 0.68; // Forward Mie scattering for god rays

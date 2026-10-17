@@ -791,6 +791,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             volFogNode,
             this._fogVolumes,
             this.frameInfo.time,
+            this._frameLights?.aCol,
+            this._frameLights?.aIntensity,
           );
         }
       }

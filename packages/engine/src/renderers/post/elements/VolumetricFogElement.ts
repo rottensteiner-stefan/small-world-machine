@@ -62,6 +62,13 @@ export class VolumetricFogElement extends PostProcessingElement {
   public castDirectionalShadow: boolean = true;
 
   /**
+   * How strongly the scene's ambient light (ambient colour and, on WebGPU, the IBL irradiance from
+   * above) scatters in the fog (default: 0 = off), like Godot's Ambient Inject. Lifts fog that lies in
+   * shadow, which otherwise goes black. Scaled by the local density.
+   */
+  public ambientInject: number = 0.0;
+
+  /**
    * Tint color applied to the accumulated in-scattering (default: neutral white). Multiplied by
    * each contributing light's own color and intensity.
    */

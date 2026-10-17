@@ -30,7 +30,7 @@ struct FogVolumeData {
 struct FroxelUniforms {
     invView: mat4x4f,        // camera rotation inverse (world from view), for cell direction
     params: vec4f,           // [density, height, heightFalloff, maxWorldDistance]
-    phase: vec4f,            // [asymmetry g, unused, time (s), numVolumes]
+    phase: vec4f,            // [asymmetry g, ambientInject, time (s), numVolumes]
     nearFar: vec4f,          // [near, far, sliceCount, pad]
     jitter: vec4f,           // [jitterX, jitterY, jitterZ, pad]
     volumes: array<FogVolumeData, 16>,
@@ -242,6 +242,13 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
         // Scattering coefficient sigma_s == extinction (albedo 1). Intensity is applied once, in
         // the composite pass.
         inScatter += lightScatter * extinction;
+
+        // Ambient inject: scene ambient colour plus the IBL irradiance from above, scaled by density.
+        if (froxel.phase.y > 0.0) {
+            let sky = textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 1.0, 0.0), 0.0).rgb;
+            let ambient = global.ambientColor.rgb + sky * global.envIntensity;
+            inScatter += ambient * (froxel.phase.y * extinction);
+        }
     }
 
     // rgb = in-scattered radiance per unit length, a = extinction sigma_t (unclamped, 1/m).
