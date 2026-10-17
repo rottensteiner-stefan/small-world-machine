@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### "Nothing is built on stone; all is built on sand, but we must build as if the sand were stone." - Jorge Luis Borges
+
+- **Features:**
+  - *Frame context* (`FrameInfo`, `Renderer.frameInfo`, `SmallWorldMachine.frameInfo`): per-frame gameplay time (hit-stop scaled), real time (unscaled), their deltas and the frame index, written by `step()` and read by the renderers. The fog and the post-processing passes no longer read `performance.now()`, so a fixed-timestep `step()` run is reproducible.
+  - *Capture frame rate* (`SmallWorldMachine.captureFrameRate`): like Unity's `Time.captureFramerate` / Godot's `--fixed-fps`, the realtime loop advances by exactly `1 / captureFrameRate` per frame regardless of wall-clock time.
+  - *Per-light fog intensity* (`AbstractLight.volumetricIntensity`, inspector field): scales a light's in-scattering in the volumetric fog (point, spot, sun); `0` removes it from the fog.
+  - *Fog ambient inject* (`VolumetricFogElement.ambientInject`): scene ambient light and the IBL irradiance from above scatter in the fog, on WebGPU and WebGL2 (`Scene.irradianceMap`).
+  - *Fog scattering albedo* (`VolumetricFogElement.scatteringAlbedo`): splits extinction into scattering and absorption (sigma_s = omega * sigma_t) for smoke and dust that darken instead of glow; `color` now tints the sun, local lights and ambient.
+- **Architecture & Bugfixes:**
+  - *Volumetric fog shading fixes (WebGPU)*: the sun now scales with density (sigma_s was missing), `intensity` is applied exactly once (it was squared for local lights and volumes), the scene is attenuated by the fog's transmittance instead of only adding light (`PostProcess.frag.wgsl`/`.glsl`), the composite samples a continuous depth coordinate instead of a floored slice, the integration stores the value at the slice centre, negative-density carving no longer depends on volume order, spot lights use their real cone/range parameters, and the history weight is 0 when jitter is off.
+  - *WebGL2 fog ignored `height` / `heightFalloff`*: now honoured, so both backends agree.
+  - *WebGL skybox clipped by the camera far plane* (`Skybox.vert.glsl`, `.glsl100`): the sky is now pinned to the far plane like in WGSL; a showcase with `far` below the cube extent (Showcase 27) rendered a black rectangle on WebGL.
+  - *Global bind group*: the irradiance cube and sampler (bindings 4 and 7) are visible to compute shaders, which the fog injection pass samples.
+  - *More than 16 FogVolumes* now log a one-time warning instead of silently dropping the rest.
+  - *Dependencies*: `npm audit fix` plus overrides for `compression` and VitePress' Vite resolve 13 of the 17 open Dependabot alerts (incl. the critical `shell-quote`); the remaining 4 are the unpatched `sprintf-js` chain via `@microsoft/api-extractor` (dev tooling only).
+- **Housekeeping & Docs:**
+  - *Showcase 28 split* into `optics.ts`, `CausticFanGeometry.ts`, `textures.ts`, `LabInspector.ts` and scene builders (`buildEnvironment`, `buildBench`, `buildBeamSplitter`, `buildDetector`, `buildSpectrum`, `postProcessing`); `showcase.ts` 2421 -> 661 lines, no behaviour change.
+  - *Showcase 39* fog retuned (density 0.025, intensity 1.0, ambient inject 1.5).
+  - *Volumetric fog guide* corrected (it documented non-existent `historyBlend`/`powderExponent` and a wrong grid size) and extended with the new parameters and the frame context.
+  - *Dead code removed*: three unused public wrappers in `froxel.ts` and two tests that only re-checked `Math.exp`/`Math.min`.
+  - *Docs build* fixed: dead `REFERENCES` link in ADR 0022 made `vitepress build` fail.
+
 ## [0.109.0] - 2026-10-17
 
 ### "The clearest way into the Universe is through a forest wilderness." - John Muir
