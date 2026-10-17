@@ -144,6 +144,10 @@ _Avoid_: treating `PostProcessingEffectsConfig`'s object shape as an ordered lis
 The hierarchical tree of 3D objects that defines spatial relationships, transformations, and rendering order.
 _Avoid_: World Map, Entity List
 
+**Skybox (kameragebundener Hintergrund)**:
+An `Object3D` with a cube geometry (`Cube`) and `SkyboxMaterial` (`depthWrite: false`, `CullMode.NONE`, `frustumCulled: false`) that surrounds the scene as an infinitely far, camera-centred background. The vertex shaders on all three backends neutralize the cube's world translation by adding the camera view position after the `u_model` transform (the view transform maps the camera position to the origin, so the translation cancels and only the orientation survives) and pin the rendered depth to the far plane (WGSL `.xyww`, GLSL `z = w * 0.99999`). A moving camera can therefore never walk out of the sky and a scene `far` plane closer than the cube never clips it; the sampled cube-map direction stays the unrotated local position, so existing scenes render pixel-identically.
+_Avoid_: Physical Sky Mesh
+
 **Semantic Socket**:
 A named transform node attached as a child to a specific skeletal bone (`mixamorig:LeftHand`, `mixamorig:RightHand`) with standardized local offsets and rotations to host props (Lanterns, Torches, Weapons) with zero jitter during animation playback.
 _Avoid_: Prop Constraint (informal)

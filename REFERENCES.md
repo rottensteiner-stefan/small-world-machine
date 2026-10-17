@@ -985,6 +985,16 @@ This document serves to record external sources, algorithms, mathematical deriva
   - Non-Overlapping Subtractive Isolation: $\big(\text{lerp}(C_1, C_2, c\,o)\,S\,(1 - M_{\text{edge}})(1 - M_{\text{top}})\,r\big) + M_{\text{edge}} C_{\text{edge}} S_{\text{top}} + M_{\text{top}} C_{\text{top}} S_{\text{top}}$
 - **Usage:** A massive heartfelt thank-you to Joyce (MinionsArt) for pioneering this stylized NPR lava paradigm! Her step-by-step breakdown (dual-frequency noise UV perturbation, a cellular crust texture, vertex-color painting, Scene Depth edge subtraction for organic shoreline burns, and mathematically clean subtractive cutout algebra that eliminates HDR bloom blowout) serves as the primary artistic and mathematical foundation for Small World Machine's `StylizedLavaMaterial`.
 
+### Infinite-Distance Camera-Bound Skybox (Camera-Centred Background)
+
+- **File:** `packages/engine/src/core/materials/shaders/Skybox.{vert.glsl,vert.glsl100,frag.wgsl}`, `packages/engine/src/renderers/shaders/source/web_gpu/skybox.vert.wgsl`
+- **Authors/Gurus:** Engine convention after the 2026-10-17 skybox audit (far-plane clipping on WebGL)
+- **Formulas / Architecture:**
+  - Camera binding: $\mathbf{p}_{\text{clip}} = P \cdot V \cdot (M \cdot \mathbf{p} + \mathbf{c}_{\text{view}})$ where $\mathbf{c}_{\text{view}}$ is the camera world position. Because $V \cdot \mathbf{c}_{\text{view}} = \mathbf{0}$, the model translation cancels and the cube always surrounds the viewer — the sky is at infinite distance, never a fixed scene mesh.
+  - Far-plane pinning: WGSL emits `(global.vp * p).xyww` ($z \leftarrow w$, forced maximum depth); GLSL writes `vec4(clip.xy, clip.w * 0.99999, clip.w)` (just below the cleared depth of 1.0 so LESS depth testing still passes) — a scene `far` plane smaller than the cube can never clip the sky.
+  - Sampling keeps the unrotated local direction (`o.wp = pos`), so cheap frames stay pixel-identical to prior releases and the cube-map horizon does not rotate when the camera turns.
+- **Usage:** Renders an infinitely-far environment on WebGPU, WebGL2 and WebGL1 with `depthWrite: false` and back-face culling disabled, so a moving camera (or a `far` plane closer than the cube) can never cut, walk out of, or z-fight the sky; regression-pinned in `SkyboxDepthPin.test.ts` and `SkyboxCameraBinding.test.ts`.
+
 ## AI Coding & Architecture Assistants
 
 
