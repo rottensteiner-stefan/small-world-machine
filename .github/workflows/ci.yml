@@ -49,11 +49,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Type check (src, showcases, tests)
+      - name: Type check (src, showcases, tests, scripts)
         run: npm run typecheck
 
       - name: Lint (src, showcases, tests)
         run: npm run lint
+
+      - name: Lint WGSL
+        run: npm run lint:wgsl
 
       - name: Unit tests
         run: npm test
