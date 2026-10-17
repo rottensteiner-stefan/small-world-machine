@@ -24,6 +24,8 @@ struct FroxelIntegrationSettings {
     cascadeMatrices1: mat4x4f,
     cascadeMatrices2: mat4x4f,
     cascadeMatrices3: mat4x4f,
+    elementMaskPosition: vec4f, // world-box centre of the element density mask [xyz, pad]
+    elementMaskSize: vec4f,     // half-extents of the mask box [xyz, pad]
 }
 
 @group(0) @binding(0) var filteredVolume: texture_3d<f32>;
@@ -32,6 +34,8 @@ struct FroxelIntegrationSettings {
 @group(0) @binding(3) var shadowSampler: sampler_comparison;
 @group(0) @binding(4) var integratedVolume: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(5) var<uniform> uni: FroxelIntegrationSettings;
+@group(0) @binding(6) var globalDensityMask: texture_3d<f32>;
+@group(0) @binding(7) var globalMaskSampler: sampler;
 
 // Henyey-Greenstein phase function for the directional contribution.
 fn hgPhase(cosTheta: f32, g: f32) -> f32 {
@@ -148,10 +152,15 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         // as the local lights in froxel_inject.wgsl), so the sun scales with density.
         var sunScatter = vec3f(0.0);
         if (sunActive && extinction > 0.0) {
+            // Element density-mask albedo per slice: G re-binds the per-cell single-scattering
+            // albedo, so the CPU uploads the sun tint unbaked only when a mask is present. The
+            // identity placeholder keeps an absent mask at a factor of exactly 1.0.
+            let maskUVW = clamp((worldPos - uni.elementMaskPosition.xyz) / (2.0 * uni.elementMaskSize.xyz) + 0.5, vec3f(0.0), vec3f(1.0));
+            let maskAlbedo = textureSample(globalDensityMask, globalMaskSampler, maskUVW).g;
             let cosTheta = dot(-viewDir, sunDir);
             let phase = hgPhase(cosTheta, asymmetry);
             let shadow = sampleCascadeShadow(worldPos, zMid);
-            sunScatter = sunColor * (shadow * phase * extinction);
+            sunScatter = sunColor * (shadow * phase * extinction) * maskAlbedo;
         }
 
         // Beer-Lambert transmittance. The Decima/Nubis powder term only brightens thin edges of

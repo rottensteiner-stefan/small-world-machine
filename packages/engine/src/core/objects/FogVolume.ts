@@ -2,6 +2,7 @@ import { Object3D } from "../Object3D.js";
 import { FogVolumeShape } from "../../enums/FogVolumeShape.js";
 import { Color } from "../colors/Color.js";
 import { Vector3D, Matrix4 } from "../../math/index.js";
+import type { VolumetricTexture } from "../textures/index.js";
 import { OBB } from "../../physix/index.js";
 
 export interface FogVolumeOptions {
@@ -16,6 +17,7 @@ export interface FogVolumeOptions {
   noiseScale?: number;
   noiseAmount?: number;
   noiseSpeed?: number;
+  densityMask?: VolumetricTexture;
   enabled?: boolean;
 }
 
@@ -52,6 +54,12 @@ export class FogVolume extends Object3D {
   public noiseAmount: number;
   /** Drift velocity of rolling mist in world units/sec. */
   public noiseSpeed: number;
+  /**
+   * Optional user-authored 3D density mask (see {@link VolumetricTexture}). R multiplies the local
+   * density per voxel inside the volume's own box (`pLocal / size` maps to mask UVW), G replaces the
+   * volume's per-voxel scattering albedo. `null` keeps the uniform analytical volume.
+   */
+  public densityMask: VolumetricTexture | null;
   /** Whether this fog volume actively injects into the froxel/raymarch passes. */
   public enabled: boolean;
 
@@ -70,6 +78,7 @@ export class FogVolume extends Object3D {
     this.noiseScale = options.noiseScale ?? 0.0;
     this.noiseAmount = options.noiseAmount ?? 0.0;
     this.noiseSpeed = options.noiseSpeed ?? 0.0;
+    this.densityMask = options.densityMask ?? null;
     this.enabled = options.enabled ?? true;
 
     this.isCollidable = false;

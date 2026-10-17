@@ -7,6 +7,8 @@ import { VolumetricFogElement } from "../elements/index.js";
 import { DirectionalLight, PointLight, SpotLight } from "../../../core/lights/index.js";
 import { FogVolume } from "../../../core/objects/FogVolume.js";
 import { Color } from "../../../core/colors/index.js";
+import type { VolumetricTexture } from "../../../core/textures/index.js";
+import { TextureFilter, TextureWrap } from "../../../enums/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 
 interface FogVolumeUniformLocations {
@@ -81,6 +83,15 @@ export class VolumetricFogPassGL {
   private _uSpotShadowMatrixLoc: WebGLUniformLocation | null = null;
   private _uSpotShadowInfoLoc: WebGLUniformLocation | null = null;
 
+  // Uniform locations: 3D density masks
+  private _uElementMaskLoc: WebGLUniformLocation | null = null;
+  private _uElementMaskBoxLoc: WebGLUniformLocation | null = null;
+  private _uElementMaskSizeLoc: WebGLUniformLocation | null = null;
+  private _uElementMaskEnabledLoc: WebGLUniformLocation | null = null;
+  private _uElementMaskAlbedoLoc: WebGLUniformLocation | null = null;
+  private _uFogVolumeMasksLoc: WebGLUniformLocation | null = null;
+  private _uFogVolumeMaskInfoLoc: WebGLUniformLocation | null = null;
+
   // Uniform locations: Bilateral upsample
   private _uLowResFogLoc: WebGLUniformLocation | null = null;
   private _uFullResDepthLoc: WebGLUniformLocation | null = null;
@@ -108,8 +119,26 @@ export class VolumetricFogPassGL {
   private readonly _scratchSpotLightParams: Float32Array = new Float32Array(16 * 4);
   private readonly _scratchSpotShadowMatrix: Float32Array = new Float32Array(4 * 16);
   private readonly _scratchSpotShadowInfo: Float32Array = new Float32Array(4 * 4);
+  private readonly _scratchElementMaskBox: Float32Array = new Float32Array(4);
+  private readonly _scratchElementMaskSize: Float32Array = new Float32Array(4);
+  private readonly _scratchFogVolumeMaskInfo: Float32Array = new Float32Array(16 * 4);
+  private readonly _scratchMaskedVolumeIndices: Int32Array = new Int32Array(8);
   /** Texture units of the 4 spot shadow samplers (0 = depth, 1 = sun shadow, 2 = irradiance). */
   private readonly _spotShadowUnits: Int32Array = new Int32Array([3, 4, 5, 6]);
+
+  // 3D density-mask texture units. WebGL2 guarantees at least 16 fragment texture units; 0..6 are
+  // taken by the depth/shadow/IBL/spot-shadow samplers above and the bilateral pass uses its own 0/1.
+  /** Unit of the element-global density mask. */
+  private static readonly _ELEMENT_MASK_UNIT: number = 7;
+  /** Number of per-FogVolume mask slots on units 8..15. */
+  private static readonly _VOLUME_MASK_SLOTS: number = 8;
+  /** Texture units of the per-FogVolume mask slots. */
+  private readonly _fogVolumeMaskUnits: Int32Array = new Int32Array([8, 9, 10, 11, 12, 13, 14, 15]);
+
+  private _warnedMaskCapacity: boolean = false;
+  private _identityMask3D: WebGLTexture | null = null;
+  /** GPU copies of the VolumetricTextures this pass has uploaded, keyed by their CPU object. */
+  private readonly _maskTextures = new Map<VolumetricTexture, WebGLTexture>();
 
   constructor(gl: WebGLRenderingContext | WebGL2RenderingContext, isWebGL2: boolean) {
     this._gl = gl;
@@ -207,6 +236,14 @@ export class VolumetricFogPassGL {
       this._uSpotShadowMapLoc = gl.getUniformLocation(this._progFog, "u_spotShadowMap");
       this._uSpotShadowMatrixLoc = gl.getUniformLocation(this._progFog, "u_spotShadowMatrix");
       this._uSpotShadowInfoLoc = gl.getUniformLocation(this._progFog, "u_spotShadowInfo");
+
+      this._uElementMaskLoc = gl.getUniformLocation(this._progFog, "u_elementMask");
+      this._uElementMaskBoxLoc = gl.getUniformLocation(this._progFog, "u_elementMaskBox");
+      this._uElementMaskSizeLoc = gl.getUniformLocation(this._progFog, "u_elementMaskSize");
+      this._uElementMaskEnabledLoc = gl.getUniformLocation(this._progFog, "u_elementMaskEnabled");
+      this._uElementMaskAlbedoLoc = gl.getUniformLocation(this._progFog, "u_elementMaskAlbedo");
+      this._uFogVolumeMasksLoc = gl.getUniformLocation(this._progFog, "u_fogVolumeMasks");
+      this._uFogVolumeMaskInfoLoc = gl.getUniformLocation(this._progFog, "u_fogVolumeMaskInfo");
 
       this._uFogVolumeLocs.length = 0;
       for (let i = 0; i < 16; i++) {
@@ -366,7 +403,14 @@ export class VolumetricFogPassGL {
     }
 
     const albedo = Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0);
-    const sunScale = sunActive ? dirLight!.intensity * dirLight!.volumetricIntensity * albedo : 0.0;
+    // While an element mask is bound the per-cell albedo is applied inside the shader, so the CPU
+    // bake keeps the albedo factor out (1.0) and the mask re-applies it per box cell; without a mask
+    // the bake stays exactly the pre-mask value (regression invariant).
+    const hasElementMask = element.densityMask !== undefined && element.densityMask.isLoaded;
+    const bakedAlbedo = hasElementMask ? 1.0 : albedo;
+    const sunScale = sunActive
+      ? dirLight!.intensity * dirLight!.volumetricIntensity * bakedAlbedo
+      : 0.0;
     if (this._uSunColorLoc) {
       gl2.uniform3f(
         this._uSunColorLoc,
@@ -389,7 +433,7 @@ export class VolumetricFogPassGL {
       );
     }
     if (this._uAmbientInjectLoc)
-      gl2.uniform1f(this._uAmbientInjectLoc, element.ambientInject * albedo);
+      gl2.uniform1f(this._uAmbientInjectLoc, element.ambientInject * bakedAlbedo);
 
     if (this._uIntensityLoc) gl2.uniform1f(this._uIntensityLoc, element.intensity);
     if (this._uDensityLoc) gl2.uniform1f(this._uDensityLoc, element.density);
@@ -477,7 +521,7 @@ export class VolumetricFogPassGL {
         this._scratchPointLightPos[base + 2] = mat[14]!;
         this._scratchPointLightPos[base + 3] = pl.distance;
 
-        const pScale = pl.intensity * pl.volumetricIntensity * albedo;
+        const pScale = pl.intensity * pl.volumetricIntensity * bakedAlbedo;
         this._scratchPointLightColor[base] = pl.color.r * pScale * element.color.r;
         this._scratchPointLightColor[base + 1] = pl.color.g * pScale * element.color.g;
         this._scratchPointLightColor[base + 2] = pl.color.b * pScale * element.color.b;
@@ -512,7 +556,7 @@ export class VolumetricFogPassGL {
         this._scratchSpotLightDir[base + 2] = dir.z / dirLen;
         this._scratchSpotLightDir[base + 3] = sl.decay;
 
-        const sScale = sl.intensity * sl.volumetricIntensity * albedo;
+        const sScale = sl.intensity * sl.volumetricIntensity * bakedAlbedo;
         this._scratchSpotLightColor[base] = sl.color.r * sScale * element.color.r;
         this._scratchSpotLightColor[base + 1] = sl.color.g * sScale * element.color.g;
         this._scratchSpotLightColor[base + 2] = sl.color.b * sScale * element.color.b;
@@ -569,6 +613,10 @@ export class VolumetricFogPassGL {
       gl2.uniform4fv(this._uSpotShadowInfoLoc, this._scratchSpotShadowInfo);
     }
 
+    // Bind the 3D density masks (element-global + per-FogVolume) on units 7..15 and upload the
+    // uniforms that drive their sampling. A pure no-mask scene performs no 3D-texture GL work here.
+    this._prepareMasks(gl2, element, fogVolumes, numVols, hasElementMask);
+
     gl2.bindVertexArray(this._vaoFog!);
     gl2.drawArrays(gl2.TRIANGLES, 0, 3);
     gl2.bindVertexArray(null);
@@ -607,6 +655,222 @@ export class VolumetricFogPassGL {
     return this._fullFogFbo!.texture;
   }
 
+  /** Maps a `VolumetricTexture` to its WebGL 3D texture, uploading on first use and re-uploading
+   * when the author flagged `.needsUpdate` (the flag is cleared here, after the GPU upload). */
+  private _uploadMask(gl2: WebGL2RenderingContext, mask: VolumetricTexture): WebGLTexture {
+    let glTex = this._maskTextures.get(mask);
+    if (!glTex) {
+      glTex = gl2.createTexture()!;
+      this._maskTextures.set(mask, glTex);
+      this._uploadMaskData(gl2, mask, glTex);
+    } else if (mask.needsUpdate) {
+      this._uploadMaskData(gl2, mask, glTex);
+    }
+    return glTex;
+  }
+
+  private _uploadMaskData(
+    gl2: WebGL2RenderingContext,
+    mask: VolumetricTexture,
+    glTex: WebGLTexture,
+  ): void {
+    gl2.bindTexture(gl2.TEXTURE_3D, glTex);
+    // RGBA8 unflipped upload: row 0 stays at v = 0, matching the bottom-up convention of the data.
+    gl2.texImage3D(
+      gl2.TEXTURE_3D,
+      0,
+      gl2.RGBA8,
+      mask.width,
+      mask.height,
+      mask.depth,
+      0,
+      gl2.RGBA,
+      gl2.UNSIGNED_BYTE,
+      mask.data,
+    );
+    gl2.texParameteri(
+      gl2.TEXTURE_3D,
+      gl2.TEXTURE_MIN_FILTER,
+      this._glMinFilter(gl2, mask.minFilter),
+    );
+    gl2.texParameteri(
+      gl2.TEXTURE_3D,
+      gl2.TEXTURE_MAG_FILTER,
+      this._glMagFilter(gl2, mask.magFilter),
+    );
+    gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_WRAP_S, this._glWrap(gl2, mask.addressModeU));
+    gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_WRAP_T, this._glWrap(gl2, mask.addressModeV));
+    gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_WRAP_R, this._glWrap(gl2, mask.addressModeW));
+    if (this._requiresMipmaps(mask.minFilter)) gl2.generateMipmap(gl2.TEXTURE_3D);
+    mask.needsUpdate = false;
+  }
+
+  private _glMinFilter(gl2: WebGL2RenderingContext, filter: TextureFilter): number {
+    switch (filter) {
+      case TextureFilter.NEAREST:
+        return gl2.NEAREST;
+      case TextureFilter.NEAREST_MIPMAP_NEAREST:
+        return gl2.NEAREST_MIPMAP_NEAREST;
+      case TextureFilter.NEAREST_MIPMAP_LINEAR:
+        return gl2.NEAREST_MIPMAP_LINEAR;
+      case TextureFilter.LINEAR_MIPMAP_NEAREST:
+        return gl2.LINEAR_MIPMAP_NEAREST;
+      case TextureFilter.LINEAR_MIPMAP_LINEAR:
+        return gl2.LINEAR_MIPMAP_LINEAR;
+      default:
+        return gl2.LINEAR; // LINEAR / DEFAULT
+    }
+  }
+
+  private _glMagFilter(gl2: WebGL2RenderingContext, filter: TextureFilter): number {
+    return TextureFilter.NEAREST === filter ? gl2.NEAREST : gl2.LINEAR;
+  }
+
+  private _requiresMipmaps(filter: TextureFilter): boolean {
+    switch (filter) {
+      case TextureFilter.NEAREST_MIPMAP_NEAREST:
+      case TextureFilter.NEAREST_MIPMAP_LINEAR:
+      case TextureFilter.LINEAR_MIPMAP_NEAREST:
+      case TextureFilter.LINEAR_MIPMAP_LINEAR:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private _glWrap(gl2: WebGL2RenderingContext, wrap: TextureWrap): number {
+    if (TextureWrap.REPEAT === wrap) return gl2.REPEAT;
+    if (TextureWrap.MIRRORED_REPEAT === wrap) return gl2.MIRRORED_REPEAT;
+    return gl2.CLAMP_TO_EDGE;
+  }
+
+  private _getIdentityMask3D(gl2: WebGL2RenderingContext): WebGLTexture {
+    if (!this._identityMask3D) {
+      const tex = gl2.createTexture()!;
+      gl2.bindTexture(gl2.TEXTURE_3D, tex);
+      gl2.texImage3D(
+        gl2.TEXTURE_3D,
+        0,
+        gl2.RGBA8,
+        1,
+        1,
+        1,
+        0,
+        gl2.RGBA,
+        gl2.UNSIGNED_BYTE,
+        new Uint8Array([255, 255, 255, 255]),
+      );
+      gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_MIN_FILTER, gl2.NEAREST);
+      gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_MAG_FILTER, gl2.NEAREST);
+      gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_WRAP_S, gl2.CLAMP_TO_EDGE);
+      gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_WRAP_T, gl2.CLAMP_TO_EDGE);
+      gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_WRAP_R, gl2.CLAMP_TO_EDGE);
+      this._identityMask3D = tex;
+    }
+    return this._identityMask3D!;
+  }
+
+  /**
+   * Uploads the element-global and per-volume 3D density masks (units 7..15) and the uniforms that
+   * drive their in-shader sampling. Returns without touching the 3D texture units when no mask is
+   * bound, so the no-mask path performs exactly the GL work it did before the mask feature.
+   */
+  private _prepareMasks(
+    gl2: WebGL2RenderingContext,
+    element: VolumetricFogElement,
+    fogVolumes: FogVolume[],
+    numVols: number,
+    hasElementMask: boolean,
+  ): void {
+    this._scratchFogVolumeMaskInfo.fill(0, 0, 16 * 4);
+
+    // Compact masked volumes onto the available slots; overflow beyond the slot budget is dropped
+    // (with a one-time warning) instead of silently rendering wrong.
+    let maskedCount = 0;
+    for (let i = 0; i < numVols; i++) {
+      const volMask = fogVolumes[i]!.densityMask;
+      if (volMask !== null && volMask.isLoaded) {
+        if (maskedCount < VolumetricFogPassGL._VOLUME_MASK_SLOTS) {
+          this._scratchMaskedVolumeIndices[maskedCount] = i;
+        }
+        maskedCount++;
+      }
+    }
+    if (maskedCount > VolumetricFogPassGL._VOLUME_MASK_SLOTS && !this._warnedMaskCapacity) {
+      this._warnedMaskCapacity = true;
+      console.warn(
+        `[VolumetricFog] ${maskedCount} FogVolumes have density masks, only the first ${VolumetricFogPassGL._VOLUME_MASK_SLOTS} are evaluated.`,
+      );
+    }
+
+    if (this._uElementMaskEnabledLoc) {
+      gl2.uniform1f(this._uElementMaskEnabledLoc, hasElementMask ? 1.0 : 0.0);
+    }
+
+    const boundMaskCount =
+      (hasElementMask ? 1 : 0) + Math.min(maskedCount, VolumetricFogPassGL._VOLUME_MASK_SLOTS);
+    if (boundMaskCount === 0) {
+      if (this._uFogVolumeMaskInfoLoc) {
+        gl2.uniform4fv(this._uFogVolumeMaskInfoLoc, this._scratchFogVolumeMaskInfo);
+      }
+      return;
+    }
+
+    // Keep every mask unit bound to a valid texture (an unused slot must not sample stale state).
+    const identity = this._getIdentityMask3D(gl2);
+    for (let u = 0; u < 1 + VolumetricFogPassGL._VOLUME_MASK_SLOTS; u++) {
+      gl2.activeTexture(gl2.TEXTURE0 + VolumetricFogPassGL._ELEMENT_MASK_UNIT + u);
+      gl2.bindTexture(gl2.TEXTURE_3D, identity);
+    }
+
+    if (this._uElementMaskLoc) {
+      gl2.uniform1i(this._uElementMaskLoc, VolumetricFogPassGL._ELEMENT_MASK_UNIT);
+    }
+    if (this._uFogVolumeMasksLoc) {
+      gl2.uniform1iv(this._uFogVolumeMasksLoc, this._fogVolumeMaskUnits);
+    }
+
+    if (hasElementMask) {
+      const mask = element.densityMask!;
+      gl2.activeTexture(gl2.TEXTURE0 + VolumetricFogPassGL._ELEMENT_MASK_UNIT);
+      gl2.bindTexture(gl2.TEXTURE_3D, this._uploadMask(gl2, mask));
+      const pos = element.maskPosition;
+      this._scratchElementMaskBox[0] = pos.x;
+      this._scratchElementMaskBox[1] = pos.y;
+      this._scratchElementMaskBox[2] = pos.z;
+      const size = element.maskSize;
+      this._scratchElementMaskSize[0] = size.x;
+      this._scratchElementMaskSize[1] = size.y;
+      this._scratchElementMaskSize[2] = size.z;
+      if (this._uElementMaskBoxLoc) {
+        gl2.uniform4fv(this._uElementMaskBoxLoc, this._scratchElementMaskBox);
+      }
+      if (this._uElementMaskSizeLoc) {
+        gl2.uniform4fv(this._uElementMaskSizeLoc, this._scratchElementMaskSize);
+      }
+      if (this._uElementMaskAlbedoLoc) {
+        gl2.uniform1f(
+          this._uElementMaskAlbedoLoc,
+          Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0),
+        );
+      }
+    }
+
+    const numSlots = Math.min(maskedCount, VolumetricFogPassGL._VOLUME_MASK_SLOTS);
+    for (let s = 0; s < numSlots; s++) {
+      const index = this._scratchMaskedVolumeIndices[s]!;
+      const vol = fogVolumes[index]!;
+      gl2.activeTexture(gl2.TEXTURE0 + this._fogVolumeMaskUnits[s]!);
+      gl2.bindTexture(gl2.TEXTURE_3D, this._uploadMask(gl2, vol.densityMask!));
+      const base = index * 4;
+      this._scratchFogVolumeMaskInfo[base] = 1.0;
+      this._scratchFogVolumeMaskInfo[base + 1] = s;
+    }
+    if (this._uFogVolumeMaskInfoLoc) {
+      gl2.uniform4fv(this._uFogVolumeMaskInfoLoc, this._scratchFogVolumeMaskInfo);
+    }
+  }
+
   private _getBlackCube(gl2: WebGL2RenderingContext): WebGLTexture {
     if (!this._blackCube) {
       const tex = gl2.createTexture();
@@ -639,6 +903,12 @@ export class VolumetricFogPassGL {
       gl2.deleteTexture(this._blackCube);
       this._blackCube = null;
     }
+    if (this._identityMask3D) {
+      gl2.deleteTexture(this._identityMask3D);
+      this._identityMask3D = null;
+    }
+    for (const tex of this._maskTextures.values()) gl2.deleteTexture(tex);
+    this._maskTextures.clear();
     this._halfColorFbo?.destroy();
     this._fullFogFbo?.destroy();
     if (this._vaoFog) gl2.deleteVertexArray(this._vaoFog);

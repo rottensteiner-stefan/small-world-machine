@@ -12,6 +12,7 @@ import {
   MAX_CLUSTERED_LIGHTS_PER_TYPE,
 } from "../../../core/lights/index.js";
 import { FogVolume } from "../../../core/objects/FogVolume.js";
+import { VolumetricTexture } from "../../../core/textures/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
 import { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
@@ -19,14 +20,30 @@ import { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
 /** Uniform-array capacity of FogVolumes per pass (matches `FogVolumeData[16]` in the shaders). */
 const MAX_FOG_VOLUMES = 16;
 
+/** Total float slots of the per-volume density-mask bind array (always kept fully bound). */
+const MAX_MASK_SLOTS = MAX_FOG_VOLUMES;
+
 /** Float offset of `scatterTint` (vec4) in FroxelUniforms, right after the 16 FogVolumeData. */
 const SCATTER_TINT_OFFSET = 32 + MAX_FOG_VOLUMES * 32;
 
 /** Float offset of the per-light scale arrays, after `scatterTint`. */
 const LIGHT_SCALE_OFFSET = SCATTER_TINT_OFFSET + 4;
 
-/** Total floats of FroxelUniforms: base + volumes + 64 point + 64 spot light scales. */
-const INJECT_UNIFORM_FLOATS = LIGHT_SCALE_OFFSET + 2 * MAX_CLUSTERED_LIGHTS_PER_TYPE;
+/** Float offset of the element-mask box uniforms (2 vec4), appended so existing lanes never shift. */
+const ELEMENT_MASK_OFFSET = LIGHT_SCALE_OFFSET + 2 * MAX_CLUSTERED_LIGHTS_PER_TYPE;
+
+/** Total floats of FroxelUniforms: base + volumes + 64 point + 64 spot light scales + mask box. */
+const INJECT_UNIFORM_FLOATS = ELEMENT_MASK_OFFSET + 8;
+
+/** Float offset of the element-mask box uniforms in FroxelIntegrationSettings (appended to 108). */
+const INTEGRATE_MASK_OFFSET = 108;
+
+/** Total floats of FroxelIntegrationSettings after the appended mask box uniforms. */
+const INTEGRATE_UNIFORM_FLOATS = INTEGRATE_MASK_OFFSET + 8;
+
+/** Neutral mask-box sentinels uploaded when no element mask is bound (identity sample is a no-op). */
+const NEUTRAL_MASK_POSITION: Vector3D = new Vector3D(0, 0, 0);
+const NEUTRAL_MASK_SIZE: Vector3D = new Vector3D(1, 1, 1);
 
 /**
  * Interleaved-Gradient-Noise-style hash (after Jorge Jimenez 2014) for the temporal sub-voxel jitter.
@@ -79,8 +96,20 @@ export class VolumetricFogPassGPU {
   private _integratePipeline!: GPUComputePipeline;
   private _integrateBGL!: GPUBindGroupLayout;
   private _integrateUniformBuffer!: GPUBuffer;
-  /** 108 floats: FroxelIntegrationSettings (invViewProj + 7x vec4f + 4x mat4x4f). */
-  private readonly _integrateUniformData: Float32Array = new Float32Array(108);
+  /** 116 floats: FroxelIntegrationSettings (invViewProj + 7x vec4f + 4x mat4x4f + mask box). */
+  private readonly _integrateUniformData: Float32Array = new Float32Array(INTEGRATE_UNIFORM_FLOATS);
+
+  // --- 3D density masks (element-global + per FogVolume) ---
+  private readonly _maskTextures = new Map<VolumetricTexture, GPUTexture>();
+  private _identityMask: VolumetricTexture | undefined = undefined;
+  /** Mask texture bound to the element-global slots (identity placeholder when none is set). */
+  private _elementMaskBinding: VolumetricTexture | null = null;
+  /** Per-volume mask textures bound to the inject slots (identity placeholder per absent mask). */
+  private readonly _volumeMaskBindings: (VolumetricTexture | null)[] = new Array(
+    MAX_MASK_SLOTS,
+  ).fill(null);
+  /** Reference identity of the last bound mask set; a change invalidates the cached bind groups. */
+  private _maskSignature: (VolumetricTexture | null)[] = [];
 
   // --- 4. Composite Render Pipeline (Single-Tap Trilinear Fragment Lookup) ---
   private _compositePipeline!: GPURenderPipeline;
@@ -163,7 +192,7 @@ export class VolumetricFogPassGPU {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this._integrateUniformBuffer = device.createBuffer({
-      size: 432, // 108 x f32
+      size: INTEGRATE_UNIFORM_FLOATS * 4, // 464
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this._compositeUniformBuffer = device.createBuffer({
@@ -180,6 +209,18 @@ export class VolumetricFogPassGPU {
           visibility: GPUShaderStage.COMPUTE,
           storageTexture: { access: "write-only", format: "rgba16float", viewDimension: "3d" },
         },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.COMPUTE,
+          texture: { sampleType: "float", viewDimension: "3d" },
+        },
+        { binding: 3, visibility: GPUShaderStage.COMPUTE, sampler: { type: "filtering" } },
+        {
+          binding: 4,
+          visibility: GPUShaderStage.COMPUTE,
+          texture: { sampleType: "float", viewDimension: "3d" },
+        },
+        { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: "filtering" } },
       ],
     });
 
@@ -235,6 +276,12 @@ export class VolumetricFogPassGPU {
           storageTexture: { access: "write-only", format: "rgba16float", viewDimension: "3d" },
         },
         { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
+        {
+          binding: 6,
+          visibility: GPUShaderStage.COMPUTE,
+          texture: { sampleType: "float", viewDimension: "3d" },
+        },
+        { binding: 7, visibility: GPUShaderStage.COMPUTE, sampler: { type: "filtering" } },
       ],
     });
     const integrateLayout = device.createPipelineLayout({ bindGroupLayouts: [this._integrateBGL] });
@@ -269,6 +316,92 @@ export class VolumetricFogPassGPU {
       fragment: { module: moduleFrag, entryPoint: "fs_main", targets: [{ format: "rgba16float" }] },
       primitive: { topology: "triangle-list" },
     });
+  }
+
+  /** A mask only participates while it holds uploaded data (`isLoaded`). */
+  private _usableMask(mask: VolumetricTexture | null | undefined): VolumetricTexture | null {
+    return mask && mask.isLoaded ? mask : null;
+  }
+
+  private _identityMaskTexture(): VolumetricTexture {
+    this._identityMask ??= VolumetricTexture.identity();
+    return this._identityMask;
+  }
+
+  /**
+   * Uploads a mask's texels into an owned rgba8unorm 3D texture on first use and whenever the
+   * author flagged `needsUpdate` (then clears the flag). Shared identity instance included, so
+   * absent masks still have a bound, no-op source.
+   */
+  private _ensureMaskGpu(mask: VolumetricTexture): GPUTexture {
+    let gpu = this._maskTextures.get(mask);
+    if (!gpu) {
+      gpu = this._device.createTexture({
+        size: [mask.width, mask.height, mask.depth],
+        dimension: "3d",
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      this._maskTextures.set(mask, gpu);
+      this._device.queue.writeTexture(
+        { texture: gpu },
+        mask.data,
+        { bytesPerRow: mask.width * 4, rowsPerImage: mask.height },
+        [mask.width, mask.height, mask.depth],
+      );
+      return gpu;
+    }
+    if (mask.needsUpdate) {
+      this._device.queue.writeTexture(
+        { texture: gpu },
+        mask.data,
+        { bytesPerRow: mask.width * 4, rowsPerImage: mask.height },
+        [mask.width, mask.height, mask.depth],
+      );
+      mask.needsUpdate = false;
+    }
+    return gpu;
+  }
+
+  /** Resolved mask view, falling back to the identity placeholder when none is bound. */
+  private _maskView(mask: VolumetricTexture | null): GPUTextureView {
+    return this._ensureMaskGpu(mask ?? this._identityMaskTexture()).createView({ dimension: "3d" });
+  }
+
+  /**
+   * Uploads the frame's element-global + per-volume masks and detects a changed mask set.
+   * Bind-group inputs are held in `_elementMaskBinding`/`_volumeMaskBindings` (all slots always
+   * resolved, identity placeholders included); rebuilding only happens when that set changes.
+   */
+  private _syncMasks(element: VolumetricFogElement, fogVolumes: FogVolume[]): void {
+    const identity = this._identityMaskTexture();
+    const elementMask = this._usableMask(element.densityMask);
+    const signature: (VolumetricTexture | null)[] = [elementMask];
+    const numVolumes = Math.min(fogVolumes.length, MAX_FOG_VOLUMES);
+    for (let v = 0; v < MAX_MASK_SLOTS; v++) {
+      const mask = this._usableMask(v < numVolumes ? fogVolumes[v]!.densityMask : null);
+      this._volumeMaskBindings[v] = mask ?? identity;
+      signature.push(mask);
+    }
+
+    this._ensureMaskGpu(identity);
+    if (elementMask) this._ensureMaskGpu(elementMask);
+    for (const mask of this._volumeMaskBindings) {
+      if (mask !== null && mask !== identity) this._ensureMaskGpu(mask);
+    }
+
+    const changed =
+      signature.length !== this._maskSignature.length ||
+      signature.some((mask, i) => mask !== this._maskSignature[i]);
+    this._maskSignature = signature;
+    this._elementMaskBinding = elementMask;
+
+    if (changed) {
+      // Never rebuilt mid-batch: invalidate the cached groups so _resizeTargets re-binds them.
+      this._injectBindGroup = undefined;
+      this._integrateBindGroupA = undefined;
+      this._integrateBindGroupB = undefined;
+    }
   }
 
   private _ensureInjectionLayout(renderer: WebGPURenderer): void {
@@ -382,6 +515,16 @@ export class VolumetricFogPassGPU {
         entries: [
           { binding: 0, resource: { buffer: this._injectUniformBuffer } },
           { binding: 1, resource: this._injectedView! },
+          { binding: 2, resource: this._maskView(this._elementMaskBinding) },
+          { binding: 3, resource: this._volumeSampler! },
+          {
+            binding: 4,
+            // The installed @webgpu/types predates array bindings; WebGPU accepts GPUTextureView[].
+            resource: this._volumeMaskBindings.map((mask) =>
+              this._maskView(mask),
+            ) as unknown as GPUBindingResource,
+          },
+          { binding: 5, resource: this._volumeSampler! },
         ],
       });
 
@@ -417,6 +560,8 @@ export class VolumetricFogPassGPU {
           { binding: 3, resource: this._shadowSampler! },
           { binding: 4, resource: this._integratedView! },
           { binding: 5, resource: { buffer: this._integrateUniformBuffer } },
+          { binding: 6, resource: this._maskView(this._elementMaskBinding) },
+          { binding: 7, resource: this._volumeSampler! },
         ],
       });
       this._integrateBindGroupB = this._device.createBindGroup({
@@ -428,6 +573,8 @@ export class VolumetricFogPassGPU {
           { binding: 3, resource: this._shadowSampler! },
           { binding: 4, resource: this._integratedView! },
           { binding: 5, resource: { buffer: this._integrateUniformBuffer } },
+          { binding: 6, resource: this._maskView(this._elementMaskBinding) },
+          { binding: 7, resource: this._volumeSampler! },
         ],
       });
 
@@ -468,11 +615,16 @@ export class VolumetricFogPassGPU {
     const shadowView = renderer.defaultDirShadowTextureView;
     if (!shadowView) return null;
 
+    this._syncMasks(element, fogVolumes);
     this._ensureInjectionLayout(renderer);
     this._resizeTargets(renderer, width, height, depthView, shadowView);
 
     const dims = renderer.clusterDims;
     const frameIndex = renderer.frameInfo.frameIndex;
+
+    // Whether an element-global mask is uploaded this frame: absent masks keep the baked albedo
+    // uploads, present masks switch the CPU to unbaked tint/sun so the shader applies mask.g.
+    const elementMaskActive = this._usableMask(element.densityMask) !== null;
 
     // Sub-voxel temporal jitter
     const jx = (ign(0, 1, frameIndex) - 0.5) * element.jitter;
@@ -543,10 +695,31 @@ export class VolumetricFogPassGPU {
     }
 
     const albedo = Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0);
-    inj[SCATTER_TINT_OFFSET] = element.color.r * albedo;
-    inj[SCATTER_TINT_OFFSET + 1] = element.color.g * albedo;
-    inj[SCATTER_TINT_OFFSET + 2] = element.color.b * albedo;
+    if (elementMaskActive) {
+      // Per-cell albedo is authored in the mask: upload the unbaked tint, the shader multiplies
+      // by mask.g so each cell keeps its own albedo instead of the global scatteringAlbedo.
+      inj[SCATTER_TINT_OFFSET] = element.color.r;
+      inj[SCATTER_TINT_OFFSET + 1] = element.color.g;
+      inj[SCATTER_TINT_OFFSET + 2] = element.color.b;
+    } else {
+      inj[SCATTER_TINT_OFFSET] = element.color.r * albedo;
+      inj[SCATTER_TINT_OFFSET + 1] = element.color.g * albedo;
+      inj[SCATTER_TINT_OFFSET + 2] = element.color.b * albedo;
+    }
     inj[SCATTER_TINT_OFFSET + 3] = element.localLightShadows ? 1.0 : 0.0;
+
+    // Element mask box: real geometry when a mask is bound, neutral sentinels otherwise so the
+    // always-bound identity sample stays the no-op it must be.
+    const maskPos = elementMaskActive ? element.maskPosition : NEUTRAL_MASK_POSITION;
+    const maskSize = elementMaskActive ? element.maskSize : NEUTRAL_MASK_SIZE;
+    inj[ELEMENT_MASK_OFFSET] = maskPos.x;
+    inj[ELEMENT_MASK_OFFSET + 1] = maskPos.y;
+    inj[ELEMENT_MASK_OFFSET + 2] = maskPos.z;
+    inj[ELEMENT_MASK_OFFSET + 3] = 0.0;
+    inj[ELEMENT_MASK_OFFSET + 4] = maskSize.x;
+    inj[ELEMENT_MASK_OFFSET + 5] = maskSize.y;
+    inj[ELEMENT_MASK_OFFSET + 6] = maskSize.z;
+    inj[ELEMENT_MASK_OFFSET + 7] = 0.0;
 
     // Per-light volumetric intensity, indexed like the renderer's light buffers.
     for (let i = 0; i < MAX_CLUSTERED_LIGHTS_PER_TYPE; i++) {
@@ -641,12 +814,21 @@ export class VolumetricFogPassGPU {
     const sunScale = sunActive
       ? dirLight!.intensity *
         dirLight!.volumetricIntensity *
-        Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0)
+        (elementMaskActive ? 1.0 : Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0))
       : 0.0;
     intg[32] = element.color.r * sunScale;
     intg[33] = element.color.g * sunScale;
     intg[34] = element.color.b * sunScale;
     intg[35] = sunActive ? 1.0 : 0.0;
+
+    intg[INTEGRATE_MASK_OFFSET] = maskPos.x;
+    intg[INTEGRATE_MASK_OFFSET + 1] = maskPos.y;
+    intg[INTEGRATE_MASK_OFFSET + 2] = maskPos.z;
+    intg[INTEGRATE_MASK_OFFSET + 3] = 0.0;
+    intg[INTEGRATE_MASK_OFFSET + 4] = maskSize.x;
+    intg[INTEGRATE_MASK_OFFSET + 5] = maskSize.y;
+    intg[INTEGRATE_MASK_OFFSET + 6] = maskSize.z;
+    intg[INTEGRATE_MASK_OFFSET + 7] = 0.0;
 
     const numCascades = Math.min(dirLight?.numCascades ?? 0, 4);
     intg[36] = dirLight?.cascadeSplits[0] ?? 10.0;
@@ -725,6 +907,15 @@ export class VolumetricFogPassGPU {
     this._reprojectUniformBuffer?.destroy();
     this._integrateUniformBuffer?.destroy();
     this._compositeUniformBuffer?.destroy();
+
+    for (const gpu of this._maskTextures.values()) {
+      gpu.destroy();
+    }
+    this._maskTextures.clear();
+    this._identityMask = undefined;
+    this._elementMaskBinding = null;
+    this._maskSignature = [];
+    for (let v = 0; v < MAX_MASK_SLOTS; v++) this._volumeMaskBindings[v] = null;
 
     this._injectBindGroup = undefined;
     this._reprojectBindGroupA = undefined;

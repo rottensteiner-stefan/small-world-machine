@@ -47,6 +47,9 @@ app.postProcessing.add(fog);
 | `castDirectionalShadow` | `true` | Directional (sun/moon) self-shadowing through the existing CSM. |
 | `color` | `Color(1, 1, 1)` | Tint of the scattered light (sun, local lights and ambient), on top of each light's own colour. |
 | `jitter` | `0.25` | Sub-voxel jitter strength. `0` disables jitter *and* the temporal filter (history weight 0.9 while jittering, 0 otherwise). |
+| `densityMask` | `undefined` | Optional user-authored `VolumetricTexture` (3D density mask). Its R channel multiplies the global medium density per voxel inside the world box `maskPosition` ± `maskSize`; its G channel carries a per-voxel single-scattering albedo that replaces the global `scatteringAlbedo` for those cells. WebGPU & WebGL2. |
+| `maskPosition` | `(0, 0, 0)` | World-space centre of the density-mask box. |
+| `maskSize` | `(10, 10, 10)` | Half-extents of the density-mask box (world units); one whole box maps to the whole texture. |
 
 ---
 
@@ -85,6 +88,7 @@ scene.add(mist);
 | `noiseScale` | `0.0` | World-space frequency of the 3D procedural value noise / fBm. |
 | `noiseAmount` | `0.0` | Modulation amplitude of 3D turbulence ($0.0$ = smooth medium, $1.0$ = deep billowy clouds). |
 | `noiseSpeed` | `0.0` | Velocity of time-based wind drift through the noise field. |
+| `densityMask` | `null` | Optional user-authored `VolumetricTexture` (3D density mask). R = per-voxel density factor applied to this volume's density, G = per-voxel single-scattering albedo replacing the volume's `albedo` scattering strength for those cells. Emission is unaffected. WebGPU supports up to 16 masked volumes; WebGL2 up to 8 (see "Density masks & per-cell albedo"). |
 
 ### Interior Carving (Negative Density)
 
@@ -103,6 +107,44 @@ scene.add(interiorCarver);
 ```
 
 Both backends clamp participating medium extinction via $\text{extinction} = \max(0.0, \text{extinction} + \text{volDensity})$, cleanly eroding all global fog and shafts within the volume bounds.
+
+---
+
+## Density masks & per-cell albedo (`VolumetricTexture`)
+
+A `VolumetricTexture` is a user-authored RGBA8 3D data texture (`width` × `height` × `depth` voxels, D3D-style bottom-up row order, uploaded without flip on either backend) that gives exact per-voxel control over the medium instead of relying on procedural noise alone. Channel contract, both backends:
+
+- `R` (0..1, `>1` amplifies) — per-voxel **density factor**; the only way a mask modulates extinction/transmittance.
+- `G` (0..1) — per-voxel **single-scattering albedo**, replacing the global (`VolumetricFogElement.scatteringAlbedo`) or per-volume (`FogVolume.albedo`) value in those cells. It applies to the light contributions (local lights, ambient, and the directional sun for the element mask); transmittance stays pure Beer-Lambert.
+- `B`, `A` — reserved, ignored.
+
+Placement — "Beides":
+
+```ts
+import { FogVolume, FogVolumeShape, VolumetricTexture } from '@small-world-machine/engine';
+
+// 1. Element-global mask inside a world-aligned box (cloud bank, smoke dome)
+const cloud = VolumetricTexture.fromData(data, 64, 32, 64);
+fog.densityMask = cloud;
+fog.maskPosition.set(0, 4, -20);   // world-space box centre
+fog.maskSize.set(15, 6, 15);       // half extents; one whole box maps to the whole texture
+
+// 2. Per-volume mask, sampled in the volume's OWN local box (transforms with the volume)
+const plume = new FogVolume({
+  shape: FogVolumeShape.Box,
+  size: new Vector3(6, 6, 6),
+  density: 0.12,
+  densityMask: VolumetricTexture.fromData(maskData, 32, 32, 32),
+});
+scene.add(plume);
+```
+
+The mask is sampled with clamped, smooth (trilinear) filtering at the box boundary and has no effect outside the box (the unmodulated medium stays). With **no mask bound anywhere the rendering path is numerically identical** to a build without this feature (the shaders always sample, but absent slots are bound to a shared 1×1×1 identity texture, R=G=1, which is a no-op). A `dispose()`d mask is treated as unbound.
+
+Backend specifics:
+
+- **WebGPU:** the element mask is sampled in the froxel inject pass (local lights + ambient) and the integrate pass (directional sun); up to **16** per-volume mask slots exist (slot = volume index; absent ones bound to identity). Changing a mask or setting `needsUpdate` re-uploads and rebuilds the affected bind groups.
+- **WebGL2:** element mask on its own texture unit; up to **8** per-volume masks (GLES 3.0 guarantees 16 fragment texture units, of which 0–6 are used by the raymarch and the spot-shadow samples). If more than 8 volumes carry a mask, the excess are ignored and a one-time warning is logged — keep the masked volumes at the beginning of the scene's fog-volume list.
 
 ---
 

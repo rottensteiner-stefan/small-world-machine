@@ -1,6 +1,8 @@
 import { PostProcessingElement } from "../PostProcessingElement.js";
 import { PostProcessingEffectType } from "../../../enums/index.js";
 import { Color } from "../../../core/colors/index.js";
+import { Vector3D } from "../../../math/index.js";
+import type { VolumetricTexture } from "../../../core/textures/index.js";
 
 /**
  * True 3D volumetric fog ("Froxel Stage 3") parameters.
@@ -96,4 +98,20 @@ export class VolumetricFogElement extends PostProcessingElement {
    * 0 disables jitter entirely for a fixed, deterministic volume.
    */
   public jitter: number = 0.25;
+
+  /**
+   * Optional user-authored 3D density mask (see {@link VolumetricTexture}). When bound, the mask's
+   * R channel multiplies the global medium density per voxel inside the world box `maskPosition` ±
+   * `maskSize`, so artists author exact cloud/smoke shapes instead of relying on procedural noise.
+   * The G channel carries a per-voxel single-scattering albedo that replaces the global
+   * `scatteringAlbedo` for those cells. Out-of-box cells keep the unmodulated medium. WebGPU and
+   * WebGL2.
+   */
+  public densityMask: VolumetricTexture | undefined = undefined;
+
+  /** World-space centre of the density-mask box (default: 0,0,0). */
+  public maskPosition: Vector3D = new Vector3D(0, 0, 0);
+
+  /** Half-extents of the density-mask box in world units; one box maps to the whole texture. */
+  public maskSize: Vector3D = new Vector3D(10, 10, 10);
 }

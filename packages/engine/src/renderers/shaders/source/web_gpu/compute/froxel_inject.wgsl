@@ -37,10 +37,19 @@ struct FroxelUniforms {
     scatterTint: vec4f,                // [rgb = fog tint * scattering albedo (sigma_s / sigma_t), localLightShadows (0/1)]
     pointFogScale: array<vec4f, 16>,   // per point light (index = light index) volumetric intensity, 4 per vec4
     spotFogScale: array<vec4f, 16>,    // same for spot lights
+    elementMaskPosition: vec4f,        // world-box centre of the element-global density mask [xyz, pad]
+    elementMaskSize: vec4f,            // half-extents of the mask box [xyz, pad]
 }
 
 @group(1) @binding(0) var<uniform> froxel: FroxelUniforms;
 @group(1) @binding(1) var volume: texture_storage_3d<rgba16float, write>;
+// Element-global and per-volume 3D density masks (see VolumetricTexture). Absent slots are bound
+// to a shared 1x1x1 identity texture (R=G=1), so an unbound mask is a no-op: the shader ALWAYS
+// samples instead of branching on availability.
+@group(1) @binding(2) var globalDensityMask: texture_3d<f32>;
+@group(1) @binding(3) var globalMaskSampler: sampler;
+@group(1) @binding(4) var volumeMasks: array<texture_3d<f32>, 16>;
+@group(1) @binding(5) var volumeMaskSampler: sampler;
 
 fn boxSDF(p: vec3f, b: vec3f) -> f32 {
     let q = abs(p) - b;
@@ -157,11 +166,18 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
     let camPos = global.viewPos.xyz;
     let worldPos = cellWorldPos(cell, dims, camPos);
 
+    // Element-global density mask: R = per-cell density factor of the global height fog, G =
+    // per-cell single-scattering albedo replacing the global `scatteringAlbedo` (the CPU uploads
+    // the unbaked tint only when a mask is present). The identity placeholder keeps unmodulated
+    // media bit-identical to a missing mask (factors of exactly 1.0).
+    let maskUVW = clamp((worldPos - froxel.elementMaskPosition.xyz) / (2.0 * froxel.elementMaskSize.xyz) + 0.5, vec3f(0.0), vec3f(1.0));
+    let maskCell = textureSample(globalDensityMask, globalMaskSampler, maskUVW);
+
     // Analytic phase -- height falloff above the fog baseline (like an exponential height fog layer).
     let heightDelta = worldPos.y - froxel.params.y;
     let heightFactor = exp(-froxel.params.z * max(heightDelta, 0.0));
     let dist = length(worldPos - camPos);
-    var extinction = froxel.params.x * heightFactor;
+    var extinction = froxel.params.x * heightFactor * maskCell.r;
     if (dist > froxel.params.w) {
         extinction = 0.0;
     }
@@ -207,9 +223,16 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
                 volDensity = volDensity * mix(1.0, clamp(turb * 1.8, 0.0, 3.0), noiseAmount);
             }
 
+            // Per-volume density mask sampled inside the volume's own box. The identity
+            // placeholder is a no-op (R=G=1): R scales the density (can even carve voids),
+            // G replaces the per-cell scattering albedo. Emission is not masked.
+            let volMaskUVW = clamp((pLocal / vol.size.xyz) * 0.5 + 0.5, vec3f(0.0), vec3f(1.0));
+            let volMask = textureSample(volumeMasks[v], volumeMaskSampler, volMaskUVW);
+            volDensity = volDensity * volMask.r;
+
             if (volDensity > 0.0) {
                 posDensity += volDensity;
-                volumeScatter += vol.albedo.rgb * volDensity + vol.emission.rgb * vol.params.w * falloff;
+                volumeScatter += vol.albedo.rgb * volMask.g * volDensity + vol.emission.rgb * vol.params.w * falloff;
             } else {
                 negDensity += volDensity;
             }
@@ -271,8 +294,8 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
         }
 
         // Scattering coefficient sigma_s == extinction (albedo 1). Intensity is applied once, in
-        // the composite pass.
-        inScatter += lightScatter * froxel.scatterTint.rgb * extinction;
+        // the composite pass. maskCell.g replaces the global albedo baked into scatterTint per cell.
+        inScatter += lightScatter * froxel.scatterTint.rgb * maskCell.g * extinction;
 
         // Ambient inject: scene ambient colour plus the IBL irradiance from above, scaled by density.
         if (froxel.phase.y > 0.0) {
@@ -287,7 +310,7 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
                 textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, -1.0), 0.0).rgb
             ) * (1.0 / 6.0);
             let ambient = global.ambientColor.rgb + sky * global.envIntensity;
-            inScatter += ambient * froxel.scatterTint.rgb * (froxel.phase.y * extinction);
+            inScatter += ambient * froxel.scatterTint.rgb * maskCell.g * (froxel.phase.y * extinction);
         }
     }
 

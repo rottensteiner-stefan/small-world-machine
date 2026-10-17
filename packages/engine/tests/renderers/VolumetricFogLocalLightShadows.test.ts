@@ -24,9 +24,9 @@ wgpuScope.GPUTextureUsage ??= {
 };
 
 // FroxelUniforms layout (froxel_inject.wgsl): invView + 4 vec4 (32 floats), 16 FogVolumeData (32 floats
-// each), then `scatterTint` (vec4), then 2 x 64 per-light scales. scatterTint.w = localLightShadows.
+// each), then `scatterTint` (vec4), then 2 x 64 per-light scales, then the element-mask box (2 vec4).
 const SCATTER_TINT_INDEX = 32 + 16 * 32;
-const INJECT_UNIFORM_BYTES = (SCATTER_TINT_INDEX + 4 + 2 * 64) * 4;
+const INJECT_UNIFORM_BYTES = (SCATTER_TINT_INDEX + 4 + 2 * 64 + 8) * 4;
 
 interface Write {
   size: number;
@@ -50,6 +50,7 @@ function injectUniforms(configure: (element: VolumetricFogElement) => void): Flo
       writeBuffer: vi.fn((buffer: { size: number }, _offset: number, data: Float32Array): void => {
         writes.push({ size: buffer.size, data: Float32Array.from(data) });
       }),
+      writeTexture: vi.fn(),
     },
   } as unknown as GPUDevice;
 

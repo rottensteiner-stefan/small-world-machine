@@ -56,6 +56,23 @@ uniform sampler2DShadow u_spotShadowMap[4];
 uniform mat4 u_spotShadowMatrix[4];
 uniform vec4 u_spotShadowInfo[4]; // x: bias, z: 1 when this spot shadows the fog
 
+// Element-global 3D density mask (RGBA8): R scales the global height-fog extinction inside the
+// world box `u_elementMaskBox` +/- `u_elementMaskSize`, G replaces the global scattering albedo for
+// the local-light, ambient and sun terms of in-box cells. Out-of-box cells keep the unmodulated
+// medium (R = 1, G = u_elementMaskAlbedo, matching the no-mask CPU-baked uniforms).
+uniform sampler3D u_elementMask; // unit 7
+uniform vec4 u_elementMaskBox;   // xyz: world-space mask centre
+uniform vec4 u_elementMaskSize;  // xyz: world-space mask half extents
+uniform float u_elementMaskEnabled; // 1 when the element mask is bound and applied
+uniform float u_elementMaskAlbedo;  // element scatteringAlbedo fallback for out-of-box cells
+
+// Per-FogVolume 3D density masks, compacted onto units 8..15 (WebGL2 guarantees >= 16 fragment
+// texture units; 0-6 are taken by depth/shadow/IBL/spot-shadow samplers). `u_fogVolumeMaskInfo[v].y`
+// holds the compacted slot of volume v, .x = 1 when a mask is bound for it. Empty slots keep the
+// identity texture bound; they are never sampled.
+uniform sampler3D u_fogVolumeMasks[8];
+uniform vec4 u_fogVolumeMaskInfo[16]; // x: 1 when this volume has a bound mask, y: mask slot (0..7)
+
 out vec4 fragColor;
 
 // Shadow term of spot `s` at a point in the air: 2x2 hardware PCF, same projection/depth convention as
@@ -217,8 +234,26 @@ void main() {
         vec3 samplePos = u_camPos + rayDir * t;
         float shadow = sampleShadow(samplePos);
 
+        // Element-global mask lookup per step. In-box cells the R channel scales the global
+        // height-fog extinction and the G channel replaces the global scattering albedo; the light
+        // uniforms are uploaded unbaked in this state, so out-of-box cells reconstruct the exact
+        // baked value through the albedo fallback (identity with the no-mask path).
+        float elemMaskR = 1.0;
+        float elemFactorG = 1.0;
+        if (u_elementMaskEnabled > 0.5) {
+            vec3 toBox = samplePos - u_elementMaskBox.xyz;
+            if (all(lessThanEqual(abs(toBox), u_elementMaskSize.xyz))) {
+                vec3 maskUv = clamp(toBox / max(2.0 * u_elementMaskSize.xyz, 0.0001) + 0.5, 0.0, 1.0);
+                vec4 maskSample = texture(u_elementMask, maskUv);
+                elemMaskR = maskSample.r;
+                elemFactorG = clamp(maskSample.g, 0.0, 1.0);
+            } else {
+                elemFactorG = u_elementMaskAlbedo;
+            }
+        }
+
         float localDensity =
-            u_density * exp(-u_fogHeightFalloff * max(samplePos.y - u_fogHeight, 0.0));
+            u_density * exp(-u_fogHeightFalloff * max(samplePos.y - u_fogHeight, 0.0)) * elemMaskR;
         float baseExtinction = localDensity;
         float posDensity = 0.0;
         float negDensity = 0.0;
@@ -245,6 +280,17 @@ void main() {
 
                 float volDensity = u_fogVolumes[v].params.y * falloff;
 
+                // Per-volume mask inside the volume's local box: R scales the density (a negative,
+                // carving density simply scales -- the carve semantics are preserved), G replaces
+                // the volume's per-cell scattering albedo factor. Emission is unaffected.
+                float volAlbedoFactor = 1.0;
+                if (u_fogVolumeMaskInfo[v].x > 0.5) {
+                    vec3 maskUv = clamp(pLocal / max(u_fogVolumes[v].size.xyz, 0.0001) * 0.5 + 0.5, 0.0, 1.0);
+                    vec4 maskSample = texture(u_fogVolumeMasks[int(u_fogVolumeMaskInfo[v].y + 0.5)], maskUv);
+                    volDensity *= maskSample.r;
+                    volAlbedoFactor = clamp(maskSample.g, 0.0, 1.0);
+                }
+
                 float noiseAmount = u_fogVolumes[v].emission.w;
                 float noiseScale = u_fogVolumes[v].albedo.w;
                 if (noiseAmount > 0.0 && noiseScale > 0.0 && volDensity > 0.0) {
@@ -256,7 +302,7 @@ void main() {
 
                 if (volDensity > 0.0) {
                     posDensity += volDensity;
-                    volumeScatter += u_fogVolumes[v].albedo.rgb * volDensity + u_fogVolumes[v].emission.rgb * u_fogVolumes[v].params.w * falloff;
+                    volumeScatter += u_fogVolumes[v].albedo.rgb * volAlbedoFactor * volDensity + u_fogVolumes[v].emission.rgb * u_fogVolumes[v].params.w * falloff;
                 } else {
                     negDensity += volDensity;
                 }
@@ -309,6 +355,10 @@ void main() {
             localLightScatter += u_spotLightColor[s].rgb * atten * cone * phase * spotFogShadow(s, samplePos);
         }
 
+        // The element mask's per-cell albedo replaces the global scattering albedo for all local
+        // lights. The factor is 1 (and the light uniforms stay CPU-baked) with no mask bound.
+        localLightScatter *= elemFactorG;
+
         float stepOpticalDepth = localDensity * dt;
         float stepTau = clamp(stepOpticalDepth, 0.0, 10.0);
         float stepTransmittance = exp(-stepTau);
@@ -319,10 +369,10 @@ void main() {
         // Directional sunlight in-scattering
         float cosSun = dot(rayDir, normalize(u_sunDir));
         float sunPhase = (1.0 - g * g) / (12.566370614359172 * max(pow(1.0 + g * g - 2.0 * g * cosSun, 1.5), 0.00001));
-        vec3 sunScattering = shadow * u_sunColor * sunPhase;
+        vec3 sunScattering = shadow * u_sunColor * sunPhase * elemFactorG;
 
         vec3 directScattering = (localLightScatter + sunScattering) * powder;
-        vec3 ambientScattering = skyAmbient * (u_ambientInject * u_fogColor) + volumeScatter;
+        vec3 ambientScattering = skyAmbient * (u_ambientInject * u_fogColor) * elemFactorG + volumeScatter;
         vec3 stepLight = directScattering + ambientScattering;
 
         accumulatedLight += transmittance * stepLight * (1.0 - stepTransmittance);
