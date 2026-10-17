@@ -595,3 +595,8 @@ class Showcase39 extends AbstractShowcase {
 
 const app = new Showcase39();
 app.start().catch((err: unknown) => console.error("[Showcase39] Failed to start:", err));
+// QA instrumentation hook for the browser capture scripts (same convention as Showcase 28).
+if (typeof window !== "undefined") {
+  const w = window as Window & { __showcase39?: Showcase39 };
+  w.__showcase39 = app;
+}

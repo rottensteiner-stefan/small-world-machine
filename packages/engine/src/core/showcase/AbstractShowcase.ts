@@ -34,6 +34,18 @@ export function getRendererTypeFromQuery(): RendererType | undefined {
 }
 
 /**
+ * Reads a `?captureFps=<N>` override from the URL (a positive number), or `undefined`. A showcase
+ * started with it advances by exactly `1 / N` seconds per frame (see
+ * `SmallWorldMachine.captureFrameRate`), independent of wall-clock time -- for recordings and
+ * reproducible captures.
+ */
+export function getCaptureFrameRateFromQuery(): number | undefined {
+  if (typeof window === "undefined" || !window.location) return undefined;
+  const raw = Number(new URLSearchParams(window.location.search).get("captureFps"));
+  return Number.isFinite(raw) && raw > 0 ? raw : undefined;
+}
+
+/**
  * IDs of the actually-existing numbered showcases (`apps/showcases/<id>/`), in navigation order.
  * Not a contiguous 1..N range -- 25 was retired (absorbed into Showcase 10's Waterworld rebuild)
  * and the gap was intentionally kept instead of renumbering everything after it. Kept as an
@@ -90,6 +102,7 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
   constructor(config: EngineOptions = {}) {
     const rendererTypeOverride = getRendererTypeFromQuery();
     super(rendererTypeOverride ? { ...config, rendererType: rendererTypeOverride } : config);
+    this.captureFrameRate = getCaptureFrameRateFromQuery() ?? 0;
     window.addEventListener("keydown", this._showcaseKeyDownHandler);
     this._initShowcaseNavigation();
   }
