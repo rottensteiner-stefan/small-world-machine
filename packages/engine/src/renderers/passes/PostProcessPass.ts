@@ -10,7 +10,6 @@ import {
   TextureWrap,
   Topology,
 } from "../../enums/index.js";
-import { ShaderRegistry } from "../shaders/index.js";
 
 /**
  * Full-screen post-processing pass (Uber-Shader).
@@ -148,7 +147,7 @@ export class PostProcessPass implements RenderPass {
     this._ensureResources(device);
 
     const vertModule = device.createShaderModule({ code: FULLSCREEN_VERT_WGSL });
-    let assembledFrag = ShaderRegistry.instance.assemble(POST_PROCESS_FRAG_WGSL, "wgsl");
+    let assembledFrag = renderer.context.shaderRegistry.assemble(POST_PROCESS_FRAG_WGSL, "wgsl");
 
     const tm = group.get<import("../post/index.js").ToneMappingElement>(
       PostProcessingEffectType.TONE_MAPPING,

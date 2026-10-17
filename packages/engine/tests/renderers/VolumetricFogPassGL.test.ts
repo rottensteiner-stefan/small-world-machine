@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { VolumetricFogPassGL } from "../../src/renderers/post/passes/VolumetricFogPassGL.js";
 import { VolumetricFogElement } from "../../src/renderers/post/elements/VolumetricFogElement.js";
 import { PostProcessPassGL } from "../../src/renderers/post/passes/PostProcessPassGL.js";
@@ -87,7 +88,7 @@ describe("VolumetricFogPassGL", () => {
   });
 
   it("triggers a shader rebuild in PostProcessPassGL when VolumetricFogElement is enabled or disabled", () => {
-    const glPass = new PostProcessPassGL({} as WebGL2RenderingContext, true);
+    const glPass = new PostProcessPassGL({} as WebGL2RenderingContext, true, new ShaderRegistry());
     const getSig = (
       glPass as unknown as { _getSignature: (g: PostProcessingGroup) => string }
     )._getSignature.bind(glPass);

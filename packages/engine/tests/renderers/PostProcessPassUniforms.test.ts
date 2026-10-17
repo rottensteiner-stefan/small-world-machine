@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeAll } from "vitest";
+import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { PostProcessPass } from "../../src/renderers/passes/PostProcessPass.js";
 import type { ToneMappingElement, VignetteElement, ColorGradingElement } from "../../src/index.js";
 import { PostProcessingGroup } from "../../src/index.js";
@@ -54,6 +55,7 @@ function makeMockDevice(): {
 function makeMockRenderer(device: GPUDevice, group: PostProcessingGroup): PassInternals {
   return {
     postProcessing: group,
+    context: { shaderRegistry: new ShaderRegistry() },
     frameInfo: { time: 0, deltaTime: 0, realTime: 0, realDeltaTime: 0, frameIndex: 0 },
     hdrTextureView: {},
     motionTrailResolvedView: undefined,

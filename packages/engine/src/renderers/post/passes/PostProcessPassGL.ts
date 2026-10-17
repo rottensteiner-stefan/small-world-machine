@@ -5,7 +5,7 @@ import POST_PROCESS_FRAG_GLSL from "../shaders/PostProcess.frag.glsl?raw";
 import FULLSCREEN_VERT_GLSL100 from "../shaders/PostProcess100.vert.glsl?raw";
 import POST_PROCESS_FRAG_GLSL100 from "../shaders/PostProcess100.frag.glsl?raw";
 import { PostProcessingEffectType } from "../../../enums/index.js";
-import { ShaderRegistry } from "../../shaders/index.js";
+import type { ShaderRegistry } from "../../shaders/index.js";
 
 /**
  * Handles post-processing blit for WebGL1 and WebGL2.
@@ -58,8 +58,15 @@ export class PostProcessPassGL {
   private readonly _isWebGL2: boolean;
   private _compiledSignature?: string;
 
-  constructor(_gl: WebGLRenderingContext | WebGL2RenderingContext, isWebGL2: boolean) {
+  private readonly _shaderRegistry: ShaderRegistry;
+
+  constructor(
+    _gl: WebGLRenderingContext | WebGL2RenderingContext,
+    isWebGL2: boolean,
+    shaderRegistry: ShaderRegistry,
+  ) {
     this._isWebGL2 = isWebGL2;
+    this._shaderRegistry = shaderRegistry;
   }
 
   private _getSignature(group: import("../index.js").PostProcessingGroup): string {
@@ -128,7 +135,7 @@ export class PostProcessPassGL {
 
     const vert = this._isWebGL2 ? FULLSCREEN_VERT_GLSL : FULLSCREEN_VERT_GLSL100;
     const rawFrag = this._isWebGL2 ? POST_PROCESS_FRAG_GLSL : POST_PROCESS_FRAG_GLSL100;
-    let frag = this._isWebGL2 ? ShaderRegistry.instance.assemble(rawFrag, "glsl300") : rawFrag;
+    let frag = this._isWebGL2 ? this._shaderRegistry.assemble(rawFrag, "glsl300") : rawFrag;
 
     const tm = group.get<import("../index.js").ToneMappingElement>(
       PostProcessingEffectType.TONE_MAPPING,

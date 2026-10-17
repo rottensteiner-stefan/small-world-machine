@@ -1913,7 +1913,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
           ? { internalFormat: this.gl.RG16F, format: this.gl.RG, type: this.gl.HALF_FLOAT }
           : undefined,
       });
-      this._postPassGL ??= new PostProcessPassGL(this.gl, true);
+      this._postPassGL ??= new PostProcessPassGL(this.gl, true, this.context.shaderRegistry);
       this._bloomPassGL ??= new BloomPassGL(this.gl, true);
       this._hbaoPassGL ??= new AOPassGL(this.gl);
       this._lightShaftsPassGL ??= new LightShaftsPassGL(this.gl, true);

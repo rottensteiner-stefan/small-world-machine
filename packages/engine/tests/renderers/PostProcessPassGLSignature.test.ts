@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { PostProcessingGroup } from "../../src/renderers/post/PostProcessingGroup.js";
 import { ToneMappingElement } from "../../src/renderers/post/elements/ToneMappingElement.js";
 import { VignetteElement } from "../../src/renderers/post/elements/VignetteElement.js";
@@ -7,7 +8,7 @@ import { PostProcessPassGL } from "../../src/renderers/post/passes/PostProcessPa
 
 describe("PostProcessPassGL Shader Signature & Rebuild Isolation", () => {
   it("does not alter shader signature when continuous tuning values change", () => {
-    const glPass = new PostProcessPassGL({} as WebGL2RenderingContext, true);
+    const glPass = new PostProcessPassGL({} as WebGL2RenderingContext, true, new ShaderRegistry());
     const getSig = (
       glPass as unknown as { _getSignature: (g: PostProcessingGroup) => string }
     )._getSignature.bind(glPass);

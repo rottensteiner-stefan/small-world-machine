@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
+import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { PostProcessingGroup } from "../../src/renderers/post/PostProcessingGroup.js";
 import type {
   ToneMappingElement,
@@ -133,6 +134,7 @@ function createMockGPU(): {
 
   const makeRenderer = (group: PostProcessingGroup): unknown => ({
     postProcessing: group,
+    context: { shaderRegistry: new ShaderRegistry() },
     frameInfo: { time: 0, deltaTime: 0, realTime: 0, realDeltaTime: 0, frameIndex: 0 },
     hdrTextureView: {},
     motionTrailResolvedView: undefined,
@@ -228,7 +230,7 @@ describe("Post-Processing Renderer Parity (WebGL2 vs WebGPU)", () => {
 
     // 1. Execute WebGL2 Pass
     const { gl, uniforms } = createMockGL();
-    const glPass = new PostProcessPassGL(gl, true);
+    const glPass = new PostProcessPassGL(gl, true, new ShaderRegistry());
     glPass.execute(
       gl,
       {} as WebGLTexture,
@@ -369,7 +371,7 @@ describe("Post-Processing Renderer Parity (WebGL2 vs WebGPU)", () => {
     lensing.singularityScreenPos.set(0.5, 0.5, -2.0);
 
     const { gl, uniforms } = createMockGL();
-    const glPass = new PostProcessPassGL(gl, true);
+    const glPass = new PostProcessPassGL(gl, true, new ShaderRegistry());
     glPass.execute(gl, {} as WebGLTexture, group, null, null);
 
     const { device, getWrittenUniforms, makeRenderer } = createMockGPU();

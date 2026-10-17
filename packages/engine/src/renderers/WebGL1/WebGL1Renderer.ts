@@ -1204,7 +1204,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         this._allocateHdrTarget(w, h);
       }
 
-      this._postPassGL ??= new PostProcessPassGL(this.gl, false);
+      this._postPassGL ??= new PostProcessPassGL(this.gl, false, this.context.shaderRegistry);
       this._bloomPassGL ??= new BloomPassGL(this.gl, false);
       this._lightShaftsPassGL ??= new LightShaftsPassGL(this.gl, false);
     } else if (this._hdrFbo) {
