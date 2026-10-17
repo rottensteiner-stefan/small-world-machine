@@ -6,7 +6,7 @@
 struct FroxelReprojectSettings {
     invViewProj: mat4x4f,
     prevViewProj: mat4x4f,
-    camPos: vec4f,
+    camPos: vec4f,           // unused
     nearFar: vec4f,          // [near, far, sliceCount, pad]
     reprojectParams: vec4f,  // [historyAlpha (0.85-0.95), jitterX, jitterY, jitterZ]
 }

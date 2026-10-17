@@ -15,7 +15,7 @@ struct FroxelIntegrationSettings {
     invViewProj: mat4x4f,
     camPos: vec4f,
     nearFar: vec4f,          // [near, far, sliceCount, pad]
-    params: vec4f,           // [density, maxWorldDistance, asymmetry(g), intensity]
+    params: vec4f,           // [unused, maxWorldDistance, asymmetry(g), unused] (intensity: composite pass)
     sunDir: vec4f,           // [x, y, z, pad]
     sunColorIntensity: vec4f,// [r, g, b, activeFlag]
     cascadeSplits: vec4f,
