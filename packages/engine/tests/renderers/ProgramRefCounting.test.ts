@@ -43,25 +43,27 @@ function makeMockGl(): WebGL2RenderingContext {
   } as unknown as WebGL2RenderingContext;
 }
 
+const registry = new ShaderRegistry();
+
 function makeCache(): { cache: WebGLProgramCache; gl: WebGL2RenderingContext } {
   const gl = makeMockGl();
   const cache = new WebGLProgramCache(
     gl,
     { bindToProgram: vi.fn() } as never,
-    ShaderRegistry.instance,
+    registry,
   );
   return { cache, gl };
 }
 
 describe("WebGLProgramCache reference counting", () => {
   beforeAll(async () => {
-    await CoreShaderChunks.init();
+    await CoreShaderChunks.init(registry);
   });
 
   it("compiles a program on first use and reuses it for a second object sharing the material's shader", () => {
     const { cache, gl } = makeCache();
     // A real material so ShaderRegistry has a genuine, valid GLSL300 definition to compile.
-    new BasicMaterial();
+    registry.ensureProvider(MaterialType.BASIC, new BasicMaterial());
 
     const objA = new Object3D("A");
     const objB = new Object3D("B");
@@ -79,7 +81,7 @@ describe("WebGLProgramCache reference counting", () => {
 
   it("does not delete the shared program while another object still references it", () => {
     const { cache, gl } = makeCache();
-    new BasicMaterial();
+    registry.ensureProvider(MaterialType.BASIC, new BasicMaterial());
 
     const objA = new Object3D("A");
     const objB = new Object3D("B");
@@ -98,7 +100,7 @@ describe("WebGLProgramCache reference counting", () => {
 
   it("releases the old program and acquires the new one when an object's material changes shader at runtime", () => {
     const { cache, gl } = makeCache();
-    new BasicMaterial();
+    registry.ensureProvider(MaterialType.BASIC, new BasicMaterial());
 
     const obj = new Object3D("Swappable");
     const keyA = cache.programCacheKey(MaterialType.BASIC, false, []);

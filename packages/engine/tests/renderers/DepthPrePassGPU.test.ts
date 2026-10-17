@@ -1,4 +1,5 @@
 import "../../src/index.js";
+import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { describe, expect, it, vi } from "vitest";
 import { DepthPrePassGPU } from "../../src/renderers/passes/DepthPrePassGPU.js";
 import { InstancedMesh } from "../../src/core/InstancedMesh.js";
@@ -11,6 +12,7 @@ type Internals = any;
 function makeMockRenderer(): Internals {
   return {
     activeDepthView: { mock: "depthView" },
+    context: { shaderRegistry: new ShaderRegistry() },
     globalBindGroup: { mock: "globalBindGroup" },
     _renderSubgroup: vi.fn(),
   };

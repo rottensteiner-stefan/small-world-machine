@@ -225,6 +225,7 @@ describe("Shadow passes' dummy color attachment tracks the active target's forma
       postProcessing: { enabled: true },
       gpuFormat: "bgra8unorm",
       currentColorTargetFormat: colorTargetFormat,
+      context: { shaderRegistry: new ShaderRegistry() },
       shadowMaps: new Map(),
       defaultDirShadowTextureView: {},
       dummyDirShadowTextureView: {},

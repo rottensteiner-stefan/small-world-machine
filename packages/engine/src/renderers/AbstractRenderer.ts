@@ -13,7 +13,7 @@ import type { FrameInfo } from "../interfaces/FrameInfo.js";
 import { createFrameInfo } from "../interfaces/FrameInfo.js";
 import type { Object3D } from "../core/Object3D.js";
 import { FogVolume } from "../core/objects/FogVolume.js";
-import type { Scene } from "../core/Scene.js";
+import type { Scene, RenderList } from "../core/Scene.js";
 import { Vector3D } from "../math/index.js";
 import { PostProcessingGroup } from "./post/PostProcessingGroup.js";
 
@@ -206,6 +206,32 @@ export abstract class AbstractRenderer implements Renderer {
       for (const child of node.children) {
         this._traverseFogVolumes(child);
       }
+    }
+  }
+
+  /**
+   * Hands the material of every object in `renderList` to this engine's `ShaderRegistry` (a
+   * `Map.has` per batch/transparent/decal object, no allocation once warm), so the shader
+   * definitions the frame needs resolve on the registry of the engine that draws them.
+   * @param renderList The frame's render list.
+   */
+  protected _registerRenderListProviders(renderList: RenderList): void {
+    const registry = this.context.shaderRegistry;
+    const batches = renderList.opaqueBatches;
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i]!;
+      const material = batch.objects[0]?.material;
+      if (material) registry.ensureProvider(batch.shaderId, material);
+    }
+    this._registerObjectProviders(renderList.transparent);
+    this._registerObjectProviders(renderList.decals);
+  }
+
+  private _registerObjectProviders(objects: ReadonlyArray<Object3D>): void {
+    const registry = this.context.shaderRegistry;
+    for (let i = 0; i < objects.length; i++) {
+      const material = objects[i]!.material;
+      if (material) registry.ensureProvider(material.getRenderManifest().shaderId, material);
     }
   }
 }

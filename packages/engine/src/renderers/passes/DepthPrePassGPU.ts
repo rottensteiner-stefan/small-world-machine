@@ -1,6 +1,6 @@
 import type { Scene } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
-import { Topology } from "../../enums/index.js";
+import { MaterialType, Topology } from "../../enums/index.js";
 import type { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
 import { VIEW_SLOT_MAIN_CAMERA } from "../WebGPU/WebGPURenderer.js";
 import type { RenderPass } from "../index.js";
@@ -58,6 +58,7 @@ export class DepthPrePassGPU implements RenderPass {
     vMat?: Float32Array,
   ): void {
     this._depthMaterial ??= new DepthMaterial();
+    renderer.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, this._depthMaterial);
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
 
     // No early return: the depth clear must happen every frame regardless of whether there's

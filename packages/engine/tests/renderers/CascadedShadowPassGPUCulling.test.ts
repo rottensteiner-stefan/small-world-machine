@@ -1,4 +1,5 @@
 import "../../src/index.js";
+import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { describe, expect, it, vi } from "vitest";
 import { CascadedShadowPassGPU } from "../../src/renderers/passes/CascadedShadowPassGPU.js";
 import { Object3D } from "../../src/core/Object3D.js";
@@ -50,6 +51,7 @@ function makeMockRenderer(objects: Object3D[]): Internals {
     postProcessing: { enabled: false },
     gpuFormat: "rgba8unorm",
     currentColorTargetFormat: "rgba8unorm",
+    context: { shaderRegistry: new ShaderRegistry() },
     shadowMaps: new Map(),
     defaultDirShadowTextureView: {},
     dummyDirShadowTextureView: {},

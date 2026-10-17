@@ -222,8 +222,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._initIblFallbackTextures();
     this.gl.enable(this.gl.DEPTH_TEST);
 
-    // Pre-register internal materials
-    new DepthMaterial();
+    // Internal materials the renderer draws by id (shadow/depth), not through a scene object
+    this.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, new DepthMaterial());
 
     // 2112 bytes: GlobalUniforms with std140 layout (u_areaLights[4] 96-byte stride ends at 2080,
     // followed by u_tileSizePx at 2080 and u_clusterDims at 2096) for clustered light culling.

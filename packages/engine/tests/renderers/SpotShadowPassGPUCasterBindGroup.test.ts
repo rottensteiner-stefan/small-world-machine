@@ -1,4 +1,5 @@
 import "../../src/index.js";
+import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { describe, expect, it, vi } from "vitest";
 import { SpotShadowPassGPU } from "../../src/renderers/passes/SpotShadowPassGPU.js";
 import { Vector3D } from "../../src/math/index.js";
@@ -39,6 +40,7 @@ function setup(): {
       queue: { writeBuffer: vi.fn() },
     },
     currentColorTargetFormat: "rgba8unorm",
+    context: { shaderRegistry: new ShaderRegistry() },
     defaultDirShadowTextureView: {},
     dummyDirShadowTextureView: {},
     defaultSpotShadowTextureView: {},

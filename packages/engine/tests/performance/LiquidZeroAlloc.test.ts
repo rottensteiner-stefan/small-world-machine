@@ -119,7 +119,9 @@ describe("Liquid Materials Zero-Allocation Guarantees", () => {
       for (const mat of materials) {
         const obj = new Object3D();
         obj.material = mat;
-        const shaderDef = ShaderRegistry.instance.get(mat.type)!;
+        const registry = new ShaderRegistry();
+        registry.ensureProvider(mat.type, mat);
+        const shaderDef = registry.get(mat.type)!;
         expect(shaderDef).toBeDefined();
 
         for (let frame = 0; frame < 500; frame++) {

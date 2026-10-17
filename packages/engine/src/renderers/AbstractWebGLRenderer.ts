@@ -87,6 +87,7 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     this._frameScene = scene;
     this.extractFogVolumes(scene);
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
+    this._registerRenderListProviders(renderList);
     if (renderList.decals.length > 0 && !this.isOffscreenRenderTarget) this.requestNormalBuffer();
 
     for (const pass of this._passes) {

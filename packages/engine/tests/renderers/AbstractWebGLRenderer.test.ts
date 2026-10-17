@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { AbstractWebGLRenderer } from "../../src/renderers/AbstractWebGLRenderer.js";
 import { type WebGLRenderPass } from "../../src/renderers/WebGLRenderPass.js";
 import { Scene } from "../../src/core/Scene.js";
+import { Object3D } from "../../src/core/Object3D.js";
 import { DirectionalLight } from "../../src/core/lights/DirectionalLight.js";
 import { FluidSurfaceMaterial } from "../../src/core/materials/liquid/FluidSurfaceMaterial.js";
+import { PhongMaterial } from "../../src/core/materials/surface/PhongMaterial.js";
 import { MaterialType, RendererType } from "../../src/enums/index.js";
 
 // Dummy implementation of the abstract base class
@@ -113,7 +115,9 @@ describe("AbstractWebGLRenderer Pass System", () => {
 describe("AbstractWebGLRenderer.requiresOpaqueDepth", () => {
   it("is true only for shaders whose layout declares u_opaqueDepthMap", () => {
     const renderer = new TestWebGLRenderer({} as WebGL2RenderingContext);
-    new FluidSurfaceMaterial(); // registers its shader provider
+    const registry = renderer.context.shaderRegistry;
+    registry.ensureProvider(MaterialType.FLUID_SURFACE, new FluidSurfaceMaterial());
+    registry.ensureProvider(MaterialType.PHONG, new PhongMaterial());
     expect(renderer.requiresOpaqueDepth(MaterialType.FLUID_SURFACE)).toBe(true);
     expect(renderer.requiresOpaqueDepth(MaterialType.PHONG)).toBe(false);
     expect(renderer.requiresOpaqueDepth("does-not-exist")).toBe(false);
@@ -125,5 +129,27 @@ describe("AbstractWebGLRenderer.requiresOpaqueDepth", () => {
     const cache = (renderer as unknown as { _opaqueDepthRequirement: Map<string, boolean> })
       ._opaqueDepthRequirement;
     expect(cache.has("late-shader")).toBe(false);
+  });
+});
+
+describe("AbstractWebGLRenderer render-list provider hand-over (ADR 0032)", () => {
+  it("registers the material of every batch, transparent and decal object on the renderer's registry", () => {
+    const renderer = new TestWebGLRenderer({} as WebGL2RenderingContext);
+    const opaque = new Object3D("opaque");
+    opaque.material = new PhongMaterial();
+    const glassy = new Object3D("glassy");
+    glassy.material = new FluidSurfaceMaterial();
+
+    (
+      renderer as unknown as { _registerRenderListProviders(list: unknown): void }
+    )._registerRenderListProviders({
+      opaqueBatches: [{ shaderId: MaterialType.PHONG, objects: [opaque] }],
+      transparent: [glassy],
+      decals: [],
+    });
+
+    const registry = renderer.context.shaderRegistry;
+    expect(registry.get(MaterialType.PHONG)).toBeDefined();
+    expect(registry.get(MaterialType.FLUID_SURFACE)).toBeDefined();
   });
 });

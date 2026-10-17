@@ -50,6 +50,7 @@ export class SpotShadowPassGPU implements RenderPass {
     if (casters.length === 0) return;
 
     this._depthMaterial ??= new DepthMaterial();
+    renderer.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, this._depthMaterial);
 
     const shadowRes = casters[0]?.shadowResolution || 1024;
 

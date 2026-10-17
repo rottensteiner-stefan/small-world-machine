@@ -1318,6 +1318,7 @@ export class WebGPURenderer extends AbstractRenderer {
     this._gpuBoneMatricesOffset = 0;
     this._boneSlotMap.clear();
 
+    this._registerRenderListProviders(scene.getVisibleObjectsSorted(vp, camPos));
     const lights = this.extractLights(scene);
     this._updateGlobalBuffers(vp, camPos, lights, scene, near, far, projMatrix);
     const ce = this._device.createCommandEncoder();

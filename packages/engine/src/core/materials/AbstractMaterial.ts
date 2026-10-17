@@ -2,7 +2,6 @@ import { Color } from "../colors/index.js";
 import type { MaterialType } from "../../enums/index.js";
 import { CullMode } from "../../enums/index.js";
 import type { RenderManifest, ShaderDefinition } from "../../renderers/shaders/index.js";
-import { registerMaterialShaderProvider } from "../../renderers/shaders/index.js";
 import type { ShaderProvider } from "../../interfaces/index.js";
 import { MathUtils } from "../../math/index.js";
 import type { InspectorField } from "../Inspectable.js";
@@ -40,14 +39,11 @@ export abstract class AbstractMaterial implements ShaderProvider {
   protected _renderManifest: RenderManifest | undefined = undefined;
 
   /**
-   * Creates a new material and automatically registers it with the ShaderRegistry.
+   * Creates a new material. It does not register itself anywhere: the renderer that draws it hands
+   * it to its own `ShaderRegistry` (`ShaderRegistry.ensureProvider`, ADR 0032).
    * @param type The type of the material.
    */
-  protected constructor(public readonly type: MaterialType | string) {
-    // Self-registration: The moment a material is instantiated,
-    // the engine knows how to handle its shader.
-    registerMaterialShaderProvider(this.type, this);
-  }
+  protected constructor(public readonly type: MaterialType | string) {}
 
   /**
    * Returns an independent copy of this material (own `uuid`, own `color`/other value-type

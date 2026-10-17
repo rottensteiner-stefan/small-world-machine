@@ -8,21 +8,6 @@ import { CoreShaderChunks } from "./CoreShaderChunks.js";
 export type ShaderLanguage = "glsl300" | "glsl100" | "wgsl";
 
 /**
- * Process-wide registry of material shader providers, keyed by material type. Materials aren't
- * constructed with a reference to a specific engine/registry, so this stays a flat type->provider
- * lookup rather than per-instance state -- every ShaderRegistry instance consults it as a fallback
- * in get(). Populated by AbstractMaterial's constructor.
- */
-const materialShaderProviders = new Map<string, ShaderProvider>();
-
-/** Registers a material type's shader provider for lookup by any ShaderRegistry instance. */
-export function registerMaterialShaderProvider(type: string, provider: ShaderProvider): void {
-  if (!materialShaderProviders.has(type)) {
-    materialShaderProviders.set(type, provider);
-  }
-}
-
-/**
  * Central registry for shader definitions.
  */
 export class ShaderRegistry {
@@ -63,6 +48,19 @@ export class ShaderRegistry {
   }
 
   /**
+   * Makes `provider` (typically a material) the source of shader `id` unless that id is already
+   * known (registered, or provided earlier). The renderer calls this for every material it
+   * renders, so a registry only ever knows what its own engine has seen (ADR 0032).
+   * @param id The shader ID (the material's `getRenderManifest().shaderId`).
+   * @param provider The provider that can build the shader definition on demand.
+   */
+  public ensureProvider(id: string, provider: ShaderProvider): void {
+    if (!this._shaders.has(id) && !this._providers.has(id)) {
+      this._providers.set(id, provider);
+    }
+  }
+
+  /**
    * Gets a shader definition by its ID.
    * If not found, it checks if a provider is registered for this ID.
    * @param id The ID of the shader.
@@ -73,7 +71,7 @@ export class ShaderRegistry {
     let def = this._shaders.get(id);
 
     if (!def) {
-      const provider = this._providers.get(id) ?? materialShaderProviders.get(id);
+      const provider = this._providers.get(id);
       if (provider) {
         def = provider.getShaderDefinition();
         this.register(def);

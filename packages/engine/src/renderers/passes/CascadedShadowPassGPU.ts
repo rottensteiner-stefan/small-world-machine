@@ -57,6 +57,7 @@ export class CascadedShadowPassGPU implements RenderPass {
     if (!dLight || !dLight.castShadow || dLight.numCascades === 0) return;
 
     this._depthMaterial ??= new DepthMaterial();
+    renderer.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, this._depthMaterial);
 
     const dummyFormat = renderer.currentColorTargetFormat;
     let dummyTargetView = this._dummyTargetViews.get(dummyFormat);
