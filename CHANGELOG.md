@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.110.0] - 2026-10-17
 
 ### "Nothing is built on stone; all is built on sand, but we must build as if the sand were stone." - Jorge Luis Borges
 
@@ -11,6 +11,9 @@
   - *Fog ambient inject* (`VolumetricFogElement.ambientInject`): scene ambient light and the IBL irradiance from above scatter in the fog, on WebGPU and WebGL2 (`Scene.irradianceMap`).
   - *Fog scattering albedo* (`VolumetricFogElement.scatteringAlbedo`): splits extinction into scattering and absorption (sigma_s = omega * sigma_t) for smoke and dust that darken instead of glow; `color` now tints the sun, local lights and ambient.
 - **Architecture & Bugfixes:**
+  - **Breaking (API):** `Renderer` has a new required member `frameInfo: FrameInfo`; custom `Renderer` implementations (and test mocks) must provide it (`createFrameInfo()`). `AbstractRenderer` already does.
+  - **Breaking (API):** removed the unused public helpers `froxelDepthSlices`, `clampFroxelMaxDistance` and `froxelSliceFromViewDepth` from `math/froxel.ts` (added in 0.109.0, no engine code used them); `sliceCenterViewDepth` stays.
+  - **Breaking (look):** volumetric fog renders differently after the shading fixes below (fog `intensity` was squared for local lights/volumes, the sun was density-independent, the scene is now attenuated by transmittance); retune `density`/`intensity` of existing scenes. `VolumetricFogElement.color` now also tints local lights and ambient, not only the sun.
   - *Volumetric fog shading fixes (WebGPU)*: the sun now scales with density (sigma_s was missing), `intensity` is applied exactly once (it was squared for local lights and volumes), the scene is attenuated by the fog's transmittance instead of only adding light (`PostProcess.frag.wgsl`/`.glsl`), the composite samples a continuous depth coordinate instead of a floored slice, the integration stores the value at the slice centre, negative-density carving no longer depends on volume order, spot lights use their real cone/range parameters, and the history weight is 0 when jitter is off.
   - *WebGL2 fog ignored `height` / `heightFalloff`*: now honoured, so both backends agree.
   - *WebGL skybox clipped by the camera far plane* (`Skybox.vert.glsl`, `.glsl100`): the sky is now pinned to the far plane like in WGSL; a showcase with `far` below the cube extent (Showcase 27) rendered a black rectangle on WebGL.
