@@ -1,4 +1,5 @@
 // Removed Fog import
+import { WebGPUGGlobalUniformLayout } from "../GlobalUniformLayout.js";
 import type { CubeTexture, Object3D, Scene, Texture } from "../../core/index.js";
 import {
   InstancedMesh,
@@ -2280,8 +2281,9 @@ export class WebGPURenderer extends AbstractRenderer {
     Matrix4.multiply(Matrix4.ZO_CORRECTION, originalVp, correctedVp);
 
     const gData = this._scratchGlobalBufferData;
-    gData.set(correctedVp.data, 0);
-    gData.set([camPos.x, camPos.y, camPos.z, 1], 16);
+    const glob = WebGPUGGlobalUniformLayout.fields;
+    gData.set(correctedVp.data, glob.vp.index);
+    gData.set([camPos.x, camPos.y, camPos.z, 1], glob.viewPos.index);
     // Slot 0 = main camera in the per-draw view buffer (group 3) -- kept correct here, once per
     // frame, independent of whatever CascadedShadowPassGPU/SpotShadowPassGPU write into their own
     // slots afterward. See VIEW_SLOT_MAIN_CAMERA.
@@ -2296,7 +2298,7 @@ export class WebGPURenderer extends AbstractRenderer {
         lights.aCol.b * lights.aIntensity,
         1,
       ],
-      20,
+      glob.ambientColor.index,
     );
     gData.set(
       [
@@ -2305,10 +2307,10 @@ export class WebGPURenderer extends AbstractRenderer {
         lights.dCol.b * lights.dIntensity,
         1,
       ],
-      24,
+      glob.dirLightColor.index,
     );
     // Fix: lights.dDir is already negated to point TO the light in applyTo.
-    gData.set([lights.dDir.x, lights.dDir.y, lights.dDir.z, 0], 28);
+    gData.set([lights.dDir.x, lights.dDir.y, lights.dDir.z, 0], glob.dirLightDir.index);
     // ── Forward-Pass / Post-Pass tonemapping contract ──────────────────────────────────────────
     // When PostProcessing is enabled the WebGPU pipeline is split into two passes:
     //   1. Forward pass  – renders the scene into an HDR render-target (linear, NOT tonemapped).
@@ -2328,22 +2330,25 @@ export class WebGPURenderer extends AbstractRenderer {
     // forward pass as a lightweight single-pass pipeline — no HDR buffer, no PostPass.
     const gamma = this.postProcessing.enabled ? 1.0 : (this._quality.gamma ?? 2.2);
     const exposure = this.postProcessing.enabled ? 1.0 : (this._quality.exposure ?? 1.0);
-    gData.set([lights.pLights.length, lights.sLights.length, lights.aLights.length, gamma], 32);
-    gData[36] = exposure; // exposure
+    gData.set(
+      [lights.pLights.length, lights.sLights.length, lights.aLights.length, gamma],
+      glob.numPointLights.index,
+    );
+    gData[glob.exposure.index] = exposure; // exposure
 
     const fog = scene.fog;
     if (fog) {
-      gData[37] = fog.mode;
-      gData[38] = fog.density;
-      gData[39] = fog.near;
-      gData[40] = fog.far;
-      gData[41] = fog.height;
-      gData[42] = fog.heightFalloff;
-      gData[43] = scene.environmentIntensity; // envIntensity instead of _pad
-      gData.set([fog.color.r, fog.color.g, fog.color.b, 1.0], 44);
+      gData[glob.fogMode.index] = fog.mode;
+      gData[glob.fogDensity.index] = fog.density;
+      gData[glob.fogNear.index] = fog.near;
+      gData[glob.fogFar.index] = fog.far;
+      gData[glob.fogHeight.index] = fog.height;
+      gData[glob.fogHeightFalloff.index] = fog.heightFalloff;
+      gData[glob.envIntensity.index] = scene.environmentIntensity; // envIntensity instead of _pad
+      gData.set([fog.color.r, fog.color.g, fog.color.b, 1.0], glob.fogColor.index);
     } else {
-      gData[37] = 0.0; // fogMode NONE
-      gData[43] = scene.environmentIntensity; // envIntensity
+      gData[glob.fogMode.index] = 0.0; // fogMode NONE
+      gData[glob.envIntensity.index] = scene.environmentIntensity; // envIntensity
     }
 
     // Default shadow values in case there are no shadows.
@@ -2351,41 +2356,43 @@ export class WebGPURenderer extends AbstractRenderer {
     // (192-195) -> dirShadowInfo (196-199); CascadedShadowPassGPU overwrites these
     // with real values (at these same, correct offsets) once a shadow-casting
     // directional light is actually rendered this frame.
-    gData[192] = 0.0; // cascadeSplits.x
-    gData[193] = 0.0;
-    gData[194] = 0.0;
-    gData[195] = 0.0;
+    const splits = glob.cascadeSplits;
+    gData[splits.index] = 0.0; // cascadeSplits.x
+    gData[splits.index + 1] = 0.0;
+    gData[splits.index + 2] = 0.0;
+    gData[splits.index + 3] = 0.0;
 
     // dirShadowInfo (bias, normalBias, castShadow, numCascades)
-    gData[196] = 0.001;
-    gData[197] = 0.002;
-    gData[198] = 0.0; // castShadow off by default
-    gData[199] = 4.0;
+    const dirInfo = glob.dirShadowInfo;
+    gData[dirInfo.index] = 0.001;
+    gData[dirInfo.index + 1] = 0.002;
+    gData[dirInfo.index + 2] = 0.0; // castShadow off by default
+    gData[dirInfo.index + 3] = 4.0;
 
-    gData[200] = near;
-    gData[201] = far;
+    gData[glob.cameraNearFar.index] = near;
+    gData[glob.cameraNearFar.index + 1] = far;
 
     // Clustered light culling metadata (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md).
     // resolution/tileSizePx/clusterDims must exactly match what ClusterCullPassGPU used to build
     // pointClusterGrid/spotClusterGrid this frame -- see setSize()/_allocateClusterBuffers().
-    gData[202] = this._context.canvas.width;
-    gData[203] = this._context.canvas.height;
-    gData[204] = projMatrix?.[0] ?? 1.0;
-    gData[205] = projMatrix?.[5] ?? 1.0;
+    gData[glob.resolution.index] = this._context.canvas.width;
+    gData[glob.resolution.index + 1] = this._context.canvas.height;
+    gData[glob.projScale.index] = projMatrix?.[0] ?? 1.0;
+    gData[glob.projScale.index + 1] = projMatrix?.[5] ?? 1.0;
     const tileSizePx = this._quality.clusteredLighting?.tileSize ?? DEFAULT_CLUSTER_TILE_SIZE;
-    gData[206] = tileSizePx[0];
-    gData[207] = tileSizePx[1];
-    gData[208] = this._clusterDims.x;
-    gData[209] = this._clusterDims.y;
-    gData[210] = this._clusterDims.z;
-    gData[211] = this._clusterMaxLightsPerCluster;
+    gData[glob.tileSizePx.index] = tileSizePx[0];
+    gData[glob.tileSizePx.index + 1] = tileSizePx[1];
+    gData[glob.clusterDims.index] = this._clusterDims.x;
+    gData[glob.clusterDims.index + 1] = this._clusterDims.y;
+    gData[glob.clusterDims.index + 2] = this._clusterDims.z;
+    gData[glob.clusterDims.index + 3] = this._clusterMaxLightsPerCluster;
 
     // Default spot shadow values
-    for (let i = 0; i < 4; i++) {
-      gData[112 + i * 4] = 0.001; // bias
-      gData[112 + i * 4 + 1] = 0.002; // normalBias
-      gData[112 + i * 4 + 2] = 0.0; // castShadow off
-      gData[112 + i * 4 + 3] = -1.0; // layer index (-1 = no shadow)
+    for (let i = 0; i < glob.spotShadowInfo.count; i++) {
+      gData[glob.spotShadowInfo.index + i * glob.spotShadowInfo.stride] = 0.001; // bias
+      gData[glob.spotShadowInfo.index + i * glob.spotShadowInfo.stride + 1] = 0.002; // normalBias
+      gData[glob.spotShadowInfo.index + i * glob.spotShadowInfo.stride + 2] = 0.0; // castShadow off
+      gData[glob.spotShadowInfo.index + i * glob.spotShadowInfo.stride + 3] = -1.0; // layer index (-1 = no shadow)
     }
 
     this._device!.queue.writeBuffer(this._globalUniformBuffer, 0, gData);

@@ -10,6 +10,7 @@ import type { Object3D } from "../../core/Object3D.js";
 import type { SpotLight } from "../../core/lights/SpotLight.js";
 import type { Vector3D } from "../../math/index.js";
 import { Matrix4, MathPool, Frustum } from "../../math/index.js";
+import { WebGPUGGlobalUniformLayout } from "../GlobalUniformLayout.js";
 
 const _scratchLightCasters: SpotLight[] = [];
 const _scratchCasters: Object3D[] = [];
@@ -218,32 +219,44 @@ export class SpotShadowPassGPU implements RenderPass {
     // call at the top of render() -- no restore needed. Only overlay the shadow-sampling data
     // MainRenderPass actually needs (spot shadow matrices/bias/info).
     const gData = renderer.scratchGlobalBufferData;
+    const glob = WebGPUGGlobalUniformLayout.fields;
     const rawVp = MathPool.acquireMatrix();
     const correctedVp = MathPool.acquireMatrix();
 
     for (let j = 0; j < maxShadowedSpotLights; j++) {
       const sLight = lights.sLights[j]!;
       if (sLight.castShadow && sLight.shadowCamera) {
-        gData[112 + j * 4] = sLight.shadowBias;
-        gData[112 + j * 4 + 1] = sLight.shadowNormalBias;
-        gData[112 + j * 4 + 2] = 1.0;
-        gData[112 + j * 4 + 3] = j;
+        gData[glob.spotShadowInfo.index + j * glob.spotShadowInfo.stride] = sLight.shadowBias;
+        gData[glob.spotShadowInfo.index + j * glob.spotShadowInfo.stride + 1] =
+          sLight.shadowNormalBias;
+        gData[glob.spotShadowInfo.index + j * glob.spotShadowInfo.stride + 2] = 1.0;
+        gData[glob.spotShadowInfo.index + j * glob.spotShadowInfo.stride + 3] = j;
 
         rawVp.data.set(sLight.shadowCamera.viewProjectionMatrix);
         Matrix4.multiply(Matrix4.ZO_CORRECTION, rawVp, correctedVp);
-        gData.set(correctedVp.data, 48 + j * 16);
+        gData.set(
+          correctedVp.data,
+          glob.spotShadowMatrices.index + j * glob.spotShadowMatrices.stride,
+        );
       }
     }
 
     MathPool.releaseMatrix(rawVp);
     MathPool.releaseMatrix(correctedVp);
 
-    // Only spotShadowMatrices/spotShadowInfo (floats 48-127, see GlobalUniforms in structs.wgsl)
-    // were touched above -- upload just that 320-byte slice instead of the whole 848-byte buffer.
-    // Re-uploading the untouched vp/lights/fog fields here too would be pure waste, and is one of
-    // up to 3 full-buffer writes of the same buffer per frame otherwise (this pass,
-    // CascadedShadowPassGPU, and _updateGlobalBuffers()'s own once-per-frame write).
-    renderer.gpuDevice!.queue.writeBuffer(renderer.globalUniformBuffer, 48 * 4, gData, 48, 80);
+    // Only spotShadowMatrices/spotShadowInfo (the wedge from spotShadowMatrices.index through
+    // spotShadowInfo.index + spotShadowInfo.floats, see GlobalUniforms in structs.wgsl) were
+    // touched above -- upload just that slice instead of the whole 848-byte buffer. Re-uploading
+    // the untouched vp/lights/fog fields here too would be pure waste, and is one of up to 3
+    // full-buffer writes of the same buffer per frame otherwise (this pass, CascadedShadowPassGPU,
+    // and _updateGlobalBuffers()'s own once-per-frame write).
+    renderer.gpuDevice!.queue.writeBuffer(
+      renderer.globalUniformBuffer,
+      glob.spotShadowMatrices.index * 4,
+      gData,
+      glob.spotShadowMatrices.index,
+      glob.spotShadowInfo.index + glob.spotShadowInfo.floats - glob.spotShadowMatrices.index,
+    );
 
     if (this._bindGroupNeedsShadowRebuild) {
       renderer.defaultSpotShadowTextureView = this._spotShadowTexView!;

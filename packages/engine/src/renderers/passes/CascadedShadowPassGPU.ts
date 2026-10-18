@@ -8,6 +8,7 @@ import { InstancedMesh } from "../../core/InstancedMesh.js";
 import type { Object3D } from "../../core/Object3D.js";
 import type { Vector3D } from "../../math/index.js";
 import { Matrix4, MathPool, Frustum } from "../../math/index.js";
+import { WebGPUGGlobalUniformLayout } from "../GlobalUniformLayout.js";
 
 const _scratchCasters: Object3D[] = [];
 const _scratchInstanced: InstancedMesh[] = [];
@@ -231,33 +232,45 @@ export class CascadedShadowPassGPU implements RenderPass {
     // call at the top of render() -- no restore needed. Only overlay the shadow-sampling data
     // MainRenderPass actually needs (cascade matrices/splits/dirShadowInfo).
     const gData = renderer.scratchGlobalBufferData;
-    gData[196] = dLight.shadowBias;
-    gData[197] = dLight.shadowNormalBias;
-    gData[198] = 1.0; // castShadow on
-    gData[199] = dLight.numCascades;
+    const glob = WebGPUGGlobalUniformLayout.fields;
+    const dirInfo = glob.dirShadowInfo;
+    gData[dirInfo.index] = dLight.shadowBias;
+    gData[dirInfo.index + 1] = dLight.shadowNormalBias;
+    gData[dirInfo.index + 2] = 1.0; // castShadow on
+    gData[dirInfo.index + 3] = dLight.numCascades;
 
     const rawCascadeVp = MathPool.acquireMatrix();
     const correctedCascadeVp = MathPool.acquireMatrix();
     for (let i = 0; i < dLight.numCascades; i++) {
       const cascadeCam = dLight.cascadeCameras[i]!;
-      gData[192 + i] = dLight.cascadeSplits[i]!;
+      gData[glob.cascadeSplits.index + i] = dLight.cascadeSplits[i]!;
 
       // WebGPU's [0, 1] depth range needs the same ZO correction _updateGlobalBuffers
       // applies to the main camera VP -- getShadowPCF reprojects using this matrix,
       // so it must match how the shadow map's depth values were actually written.
       rawCascadeVp.data.set(cascadeCam.viewProjectionMatrix);
       Matrix4.multiply(Matrix4.ZO_CORRECTION, rawCascadeVp, correctedCascadeVp);
-      gData.set(correctedCascadeVp.data, 128 + i * 16);
+      gData.set(
+        correctedCascadeVp.data,
+        glob.cascadeMatrices.index + i * glob.cascadeMatrices.stride,
+      );
     }
     MathPool.releaseMatrix(rawCascadeVp);
     MathPool.releaseMatrix(correctedCascadeVp);
 
-    // Only cascadeMatrices/cascadeSplits/dirShadowInfo (floats 128-199, see GlobalUniforms in
-    // structs.wgsl) were touched above -- upload just that 288-byte slice instead of the whole
-    // 848-byte buffer. Re-uploading the untouched vp/lights/fog fields here too would be pure
-    // waste, and is one of up to 3 full-buffer writes of the same buffer per frame otherwise
-    // (this pass, SpotShadowPassGPU, and _updateGlobalBuffers()'s own once-per-frame write).
-    renderer.gpuDevice!.queue.writeBuffer(renderer.globalUniformBuffer, 128 * 4, gData, 128, 72);
+    // Only cascadeMatrices/cascadeSplits/dirShadowInfo (the wedge from cascadeMatrices.index
+    // through dirShadowInfo.index + dirShadowInfo.floats, see GlobalUniforms in structs.wgsl)
+    // were touched above -- upload just that slice instead of the whole 848-byte buffer.
+    // Re-uploading the untouched vp/lights/fog fields here too would be pure waste, and is one of
+    // up to 3 full-buffer writes of the same buffer per frame otherwise (this pass,
+    // SpotShadowPassGPU, and _updateGlobalBuffers()'s own once-per-frame write).
+    renderer.gpuDevice!.queue.writeBuffer(
+      renderer.globalUniformBuffer,
+      glob.cascadeMatrices.index * 4,
+      gData,
+      glob.cascadeMatrices.index,
+      dirInfo.index + dirInfo.floats - glob.cascadeMatrices.index,
+    );
 
     // Bind the resulting texture array to the WebGPU Renderer's global bind group,
     // exactly once (the underlying GPUTexture is reused and just re-rendered into

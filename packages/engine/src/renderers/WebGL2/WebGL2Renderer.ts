@@ -1,4 +1,10 @@
 import { WebGL2UniformBuffer } from "./WebGL2UniformBuffer.js";
+import {
+  WebGL2GlobalUniformLayout,
+  WebGL2PointLightLayout,
+  WebGL2SpotLightLayout,
+  WebGL2AreaLightLayout,
+} from "../GlobalUniformLayout.js";
 import type { WebGL2ProgramCacheEntry } from "./managers/WebGLProgramCache.js";
 import { WebGLProgramCache } from "./managers/WebGLProgramCache.js";
 import { WebGLTextureManager } from "./managers/WebGLTextureManager.js";
@@ -22,7 +28,6 @@ import {
 } from "../post/passes/index.js";
 import type { AbstractLight } from "../../core/lights/index.js";
 import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../core/lights/index.js";
-import { MAX_AREA_LIGHTS } from "../../core/lights/AreaLight.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
 import type { CubeTexture, RenderTarget } from "../../core/textures/index.js";
 import { Texture, RenderTargetCube } from "../../core/textures/index.js";
@@ -233,9 +238,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     // Internal materials the renderer draws by id (shadow/depth), not through a scene object
     this.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, new DepthMaterial());
 
-    // 2112 bytes: GlobalUniforms with std140 layout (u_areaLights[4] 96-byte stride ends at 2080,
-    // followed by u_tileSizePx at 2080 and u_clusterDims at 2096) for clustered light culling.
-    this._globalUBO = new WebGL2UniformBuffer(this.gl, 2112, 0);
+    // GlobalUniforms with std140 layout -- size and every field offset come from the single
+    // GlobalUniformLayout table (u_areaLights[4] 96-byte stride ends at 2080, followed by
+    // u_tileSizePx at 2080 and u_clusterDims at 2096) for clustered light culling.
+    this._globalUBO = new WebGL2UniformBuffer(this.gl, WebGL2GlobalUniformLayout.totalBytes, 0);
     this._programCache = new WebGLProgramCache(
       this.gl,
       this._globalUBO,
@@ -308,11 +314,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * @param tileSizePx Screen-space tile size in pixels, [width, height].
    */
   public writeClusterGridUniforms(tileSizePx: [number, number]): void {
-    this._globalUBO.setVec2(2080, tileSizePx[0], tileSizePx[1]);
-    this._globalUBO.setFloat(2096, this._clusterDims.x);
-    this._globalUBO.setFloat(2100, this._clusterDims.y);
-    this._globalUBO.setFloat(2104, this._clusterDims.z);
-    this._globalUBO.setFloat(2108, this._clusterMaxLightsPerCluster);
+    const f = WebGL2GlobalUniformLayout.fields;
+    this._globalUBO.setVec2(f.tileSizePx.offset, tileSizePx[0], tileSizePx[1]);
+    this._globalUBO.setFloat(f.clusterDims.offset, this._clusterDims.x);
+    this._globalUBO.setFloat(f.clusterDims.offset + 4, this._clusterDims.y);
+    this._globalUBO.setFloat(f.clusterDims.offset + 8, this._clusterDims.z);
+    this._globalUBO.setFloat(f.clusterDims.offset + 12, this._clusterMaxLightsPerCluster);
   }
 
   /** Builds the black cube / (scale=1, bias=0) fallbacks used when a scene has no real IBL data. */
@@ -1802,95 +1809,104 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       );
     }
     const ubo = this._globalUBO;
-    ubo.setMatrix(0, vp);
-    ubo.setVec3(64, camPos.x, camPos.y, camPos.z);
+    const f = WebGL2GlobalUniformLayout.fields;
+    ubo.setMatrix(f.vp.offset, vp);
+    ubo.setVec3(f.viewPos.offset, camPos.x, camPos.y, camPos.z);
 
     // Scale colors by intensity without Vector3D allocations
     ubo.setVec3(
-      80,
+      f.ambientColor.offset,
       lights.aCol.r * lights.aIntensity,
       lights.aCol.g * lights.aIntensity,
       lights.aCol.b * lights.aIntensity,
     );
     ubo.setVec3(
-      96,
+      f.dirLightColor.offset,
       lights.dCol.r * lights.dIntensity,
       lights.dCol.g * lights.dIntensity,
       lights.dCol.b * lights.dIntensity,
     );
-    ubo.setVec3(112, lights.dDir.x, lights.dDir.y, lights.dDir.z);
+    ubo.setVec3(f.dirLightDir.offset, lights.dDir.x, lights.dDir.y, lights.dDir.z);
     // WebGL2's raw UBO light array still has 16 slots (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md);
     // clamp explicitly now that the scene-wide cap is 64.
-    ubo.setInt(128, Math.min(lights.pLights.length, 16));
-    ubo.setInt(132, Math.min(lights.sLights.length, 16));
-    ubo.setInt(136, lights.aLights.length);
+    ubo.setInt(f.numPointLights.offset, Math.min(lights.pLights.length, 16));
+    ubo.setInt(f.numSpotLights.offset, Math.min(lights.sLights.length, 16));
+    ubo.setInt(f.numAreaLights.offset, lights.aLights.length);
     const gamma = this.postProcessing.enabled ? 1.0 : (this._quality.gamma ?? 2.2);
     const exposure = this.postProcessing.enabled ? 1.0 : (this._quality.exposure ?? 1.0);
-    ubo.setFloat(140, gamma);
-    ubo.setFloat(144, exposure);
+    ubo.setFloat(f.gamma.offset, gamma);
+    ubo.setFloat(f.exposure.offset, exposure);
 
-    for (let i = 0; i < 16; i++) {
-      const offset = 160 + i * 32;
+    for (let i = 0; i < f.pointLights.count; i++) {
+      const offset = f.pointLights.offset + i * f.pointLights.stride;
       if (i < lights.pLights.length) {
         const pl = lights.pLights[i]!;
         const matData = pl.worldMatrix.data;
-        ubo.setVec3(offset, matData[12]!, matData[13]!, matData[14]!);
+        ubo.setVec3(offset + WebGL2PointLightLayout.pos, matData[12]!, matData[13]!, matData[14]!);
         ubo.setVec3(
-          offset + 16,
+          offset + WebGL2PointLightLayout.color,
           pl.color.r * pl.intensity,
           pl.color.g * pl.intensity,
           pl.color.b * pl.intensity,
         );
-        ubo.setFloat(offset + 12, pl.distance);
-        ubo.setFloat(offset + 28, pl.decay);
+        ubo.setFloat(offset + WebGL2PointLightLayout.distance, pl.distance);
+        ubo.setFloat(offset + WebGL2PointLightLayout.decay, pl.decay);
       }
     }
 
-    for (let i = 0; i < 16; i++) {
-      const offset = 672 + i * 64;
+    for (let i = 0; i < f.spotLights.count; i++) {
+      const offset = f.spotLights.offset + i * f.spotLights.stride;
       if (i < lights.sLights.length) {
         const sl = lights.sLights[i]!;
         const slMat = sl.worldMatrix.data;
         const dir = sl.direction;
         const dirLen = Math.sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z) || 1.0;
-        ubo.setVec3(offset, slMat[12]!, slMat[13]!, slMat[14]!);
-        ubo.setVec3(offset + 16, dir.x / dirLen, dir.y / dirLen, dir.z / dirLen);
+        ubo.setVec3(offset + WebGL2SpotLightLayout.pos, slMat[12]!, slMat[13]!, slMat[14]!);
         ubo.setVec3(
-          offset + 32,
+          offset + WebGL2SpotLightLayout.dir,
+          dir.x / dirLen,
+          dir.y / dirLen,
+          dir.z / dirLen,
+        );
+        ubo.setVec3(
+          offset + WebGL2SpotLightLayout.color,
           sl.color.r * sl.intensity,
           sl.color.g * sl.intensity,
           sl.color.b * sl.intensity,
         );
-        ubo.setFloat(offset + 48, Math.cos(sl.angle));
-        ubo.setFloat(offset + 52, Math.cos(sl.angle * (1.0 - sl.penumbra)));
-        ubo.setFloat(offset + 56, sl.distance);
-        ubo.setFloat(offset + 60, sl.decay);
+        ubo.setFloat(offset + WebGL2SpotLightLayout.angleCos, Math.cos(sl.angle));
+        ubo.setFloat(
+          offset + WebGL2SpotLightLayout.angleCosPenumbra,
+          Math.cos(sl.angle * (1.0 - sl.penumbra)),
+        );
+        ubo.setFloat(offset + WebGL2SpotLightLayout.distance, sl.distance);
+        ubo.setFloat(offset + WebGL2SpotLightLayout.decay, sl.decay);
       }
     }
 
-    for (let i = 0; i < MAX_AREA_LIGHTS; i++) {
-      const offset = 1696 + i * 96;
+    for (let i = 0; i < f.areaLights.count; i++) {
+      const offset = f.areaLights.offset + i * f.areaLights.stride;
       if (i < lights.aLights.length) {
         const al = lights.aLights[i]!;
         const mat = al.worldMatrix.data;
-        ubo.setVec3(offset, mat[12]!, mat[13]!, mat[14]!);
+        ubo.setVec3(offset + WebGL2AreaLightLayout.pos, mat[12]!, mat[13]!, mat[14]!);
         ubo.setVec3(
-          offset + 16,
+          offset + WebGL2AreaLightLayout.color,
           al.color.r * al.intensity,
           al.color.g * al.intensity,
           al.color.b * al.intensity,
         );
-        ubo.setVec3(offset + 32, mat[0]!, mat[1]!, mat[2]!);
-        ubo.setVec3(offset + 48, mat[4]!, mat[5]!, mat[6]!);
-        ubo.setVec3(offset + 64, mat[8]!, mat[9]!, mat[10]!);
-        ubo.setFloat(offset + 80, al.width / 2.0);
-        ubo.setFloat(offset + 84, al.height / 2.0);
-        ubo.setFloat(offset + 88, al.distance);
-        ubo.setFloat(offset + 92, al.decay);
+        ubo.setVec3(offset + WebGL2AreaLightLayout.u, mat[0]!, mat[1]!, mat[2]!);
+        ubo.setVec3(offset + WebGL2AreaLightLayout.v, mat[4]!, mat[5]!, mat[6]!);
+        ubo.setVec3(offset + WebGL2AreaLightLayout.w, mat[8]!, mat[9]!, mat[10]!);
+        ubo.setFloat(offset + WebGL2AreaLightLayout.widthHalf, al.width / 2.0);
+        ubo.setFloat(offset + WebGL2AreaLightLayout.heightHalf, al.height / 2.0);
+        ubo.setFloat(offset + WebGL2AreaLightLayout.distance, al.distance);
+        ubo.setFloat(offset + WebGL2AreaLightLayout.decay, al.decay);
       }
     }
 
-    ubo.setVec2(152, near, far);
+    ubo.setVec2(f.cameraNearFar.offset, near, far);
     ubo.update();
   }
 
