@@ -40,6 +40,7 @@ Detailed coding standards, formatting, shader logic, and domain knowledge are ou
 - `collaborate`: Multi-agent problem-solving and deliberation protocol with human moderator. Standard: Parallel execution with 4 default agents (1 coordinator, 3 workers) on Blackboard/tasks.
 - `vision-image`: "Synthetic eyes" for text-only models — send an image to an external vision API (Gemini default, OpenAI opt-in) and get a text description, to inspect renders, screenshots, concept art, or baked-in text.
 - `thermo-nuclear-code-quality-review-revised`: Extremely strict, manually-invoked maintainability review (abstraction quality, spaghetti growth, file size).
+- `reset-vite`: Frees occupied Vite dev/preview ports and kills hanging Vite processes.
 
 ## 4. Further Documentation
 

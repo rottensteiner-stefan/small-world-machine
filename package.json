@@ -24,6 +24,7 @@
     "build:lib": "npm run build --workspace=packages/engine",
     "css:audit": "node scripts/audit-css-tokens.js",
     "dev": "NODE_OPTIONS='--max-old-space-size=4096' vite --host",
+    "kill:vite": "node .agents/skills/reset-vite/reset-vite.mjs",
     "format": "prettier --write . && eslint . --fix",
     "lint": "eslint .",
     "lint:wgsl": "tsx scripts/lint-wgsl.ts",
