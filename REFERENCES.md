@@ -833,11 +833,14 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **License:** [CC0 (Creative Commons Zero)](https://creativecommons.org/publicdomain/zero/1.0/) — public domain, no attribution required (credited here anyway).
 - **Usage:** Replaces Showcase 30's original hand-built box-primitive "hover car" placeholder with a real low-poly vehicle mesh, re-skinned with the showcase's own neon-emissive materials.
 
-### Wet Asphalt & Cyberpunk Night Sky (Showcase 30 Textures)
+### Cyberpunk Facade, Asphalt & Night Sky IBL (Showcase 30 Textures)
 
-- **File:** `apps/showcases/30/assets/wet_asphalt_diffuse.webp`, `apps/showcases/30/assets/wet_asphalt_normal.webp`, `apps/showcases/30/assets/wet_asphalt_roughness.webp`, `apps/showcases/30/assets/skybox.webp`
-- **Source:** AI-generated (Gemini `gemini-3.1-flash-image`) diffuse photo + skybox faces, roughness/normal maps derived locally via ImageMagick.
-- **Usage:** Replaces two assets that were originally reused from unrelated showcases and didn't fit the scene: the street previously used a brass/gear "steampunk" PBR set instead of asphalt, and the skybox was a bright space-nebula texture that blew out through the building gap. The new skybox is a 6-panel horizontal-cross cubemap, each face generated independently and composited (not a single generated cross image, which generative models can't lay out reliably).
+- **File:** `apps/showcases/30/assets/asphalt_*.webp`, `apps/showcases/30/assets/facade_*.webp`, `apps/showcases/30/assets/ibl/*`
+- **Source:** Generated via Gemini (`gemini-3.1-flash-image`) and baked into full PBR maps (diffuse, normal, roughness, emissive) and IBL cubemaps/LUT via Small World Machine's `scripts/ibl-bake.ts`:
+  - `facade_*`: Modular cyberpunk high-rise elevation with glowing warm yellow and cyan window apertures (emissive map isolating windows).
+  - `asphalt_*`: Gritty wet tarmac with subtle aggregate texture and wet sheen specular response.
+  - `ibl/*`: 360-degree equirectangular rainy cyberpunk city night sky with deep indigo zenith, distant magenta/cyan horizon haze and skyscraper silhouette baked to specular prefilter mips, diffuse irradiance and BRDF LUT.
+- **Usage:** Provides atmospheric, dark, specular-rich PBR textures for Showcase 30 ("The Rain-Drenched Cyberpunk Albedo: Screen-Space Reflections & Neon Wetness").
 
 ### 360-Degree Milky Way Panorama (`eso0932a`)
 
