@@ -2,6 +2,7 @@ import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { WebGL1Renderer } from "../../src/renderers/WebGL1/WebGL1Renderer.js";
 import { RenderTargetCube } from "../../src/core/textures/RenderTargetCube.js";
+import { WebGLTextureManager } from "../../src/renderers/gl/managers/WebGLTextureManager.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RendererInternals = any;
@@ -46,14 +47,30 @@ function makeMockGl(): WebGLRenderingContext {
 // mirror-sphere-style material's `u_envMap`. WebGL1Renderer used to have no concept of a cube
 // render target at all -- `setRenderTarget`/`bindMainRenderTarget` only knew flat 2D
 // `RenderTarget`s, so a `RenderTargetCube` fell into that same branch and got allocated as a plain
-// `TEXTURE_2D`, and `_getWebGLCubeTexture` never recognized it as anything other than a broken,
+// `TEXTURE_2D`, and `getWebGLCubeTexture` never recognized it as anything other than a broken,
 // image-less `CubeTexture` and silently handed back the black default. These tests pin down the
-// real cube-map FBO path added to fix that (Showcase 15's spheres going fully black under WebGL1).
+// real cube-map FBO path (which now routes its cube bookkeeping through the shared
+// `WebGLTextureManager` the renderer mounts on initialize) -- this fixed Showcase 15's spheres
+// going fully black under WebGL1.
 describe("WebGL1Renderer RenderTargetCube support", () => {
-  it("allocates a real TEXTURE_CUBE_MAP (not TEXTURE_2D) and attaches the requested face", () => {
-    const gl = makeMockGl();
+  function mountRenderer(gl: WebGLRenderingContext): WebGL1Renderer {
     const renderer = new WebGL1Renderer();
     (renderer as RendererInternals).gl = gl;
+    // `initialize()` (and its context mock) is not worth fabricating here -- mount the shared
+    // texture manager exactly as initialize() does, so bindMainRenderTarget's cube path works.
+    (renderer as RendererInternals)._textures = new WebGLTextureManager(
+      gl,
+      (renderer as RendererInternals)._texCache,
+      {} as never,
+      {} as never,
+      { dialect: "glsl100" },
+    );
+    return renderer;
+  }
+
+  it("allocates a real TEXTURE_CUBE_MAP (not TEXTURE_2D) and attaches the requested face", () => {
+    const gl = makeMockGl();
+    const renderer = mountRenderer(gl);
 
     const cube = RenderTargetCube.create({ width: 64, height: 64 });
     renderer.setRenderTarget(cube, 3 /* TEXTURE_CUBE_MAP_NEGATIVE_X */);
@@ -72,10 +89,9 @@ describe("WebGL1Renderer RenderTargetCube support", () => {
     );
   });
 
-  it("makes the render target's GL texture available through _getWebGLCubeTexture", () => {
+  it("makes the render target's GL texture available through getWebGLCubeTexture", () => {
     const gl = makeMockGl();
-    const renderer = new WebGL1Renderer();
-    (renderer as RendererInternals).gl = gl;
+    const renderer = mountRenderer(gl);
 
     const cube = RenderTargetCube.create({ width: 64, height: 64 });
     renderer.setRenderTarget(cube, 0);
@@ -83,15 +99,14 @@ describe("WebGL1Renderer RenderTargetCube support", () => {
 
     // This is exactly the lookup every sampler-bound material (e.g. a mirror sphere's u_envMap)
     // goes through -- it must resolve to the real cube texture, not the black fallback.
-    const resolved = (renderer as RendererInternals)._getWebGLCubeTexture(cube);
+    const resolved = (renderer as RendererInternals)._textures.getWebGLCubeTexture(cube, undefined);
     expect(resolved).not.toBe((renderer as RendererInternals).defaultCubeTexture);
     expect(gl.createTexture).toHaveBeenCalledTimes(1);
   });
 
   it("reuses the same FBO/texture across faces instead of recreating them", () => {
     const gl = makeMockGl();
-    const renderer = new WebGL1Renderer();
-    (renderer as RendererInternals).gl = gl;
+    const renderer = mountRenderer(gl);
 
     const cube = RenderTargetCube.create({ width: 64, height: 64 });
 

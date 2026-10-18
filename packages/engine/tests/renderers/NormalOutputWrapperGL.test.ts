@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import "../../src/index.js";
 import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { ShaderBootstrap } from "../../src/renderers/shaders/ShaderBootstrap.js";
-import { wrapFragmentWithNormalOutputGL } from "../../src/renderers/WebGL2/managers/NormalOutputWrapperGL.js";
+import { wrapFragmentWithNormalOutputGL } from "../../src/renderers/gl/managers/NormalOutputWrapperGL.js";
 import { WebGLMainPass } from "../../src/renderers/passes/WebGLMainPass.js";
 import { Vector3D } from "../../src/math/index.js";
 import {

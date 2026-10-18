@@ -464,11 +464,12 @@ describe("WebGL2 capacity fail-fast validation", () => {
 describe("WebGL1 capacity fail-fast validation", () => {
   function setupWebGL1(renderer: RendererInternals): void {
     renderer.gl = makeMockGl();
-    renderer._getProgram = vi.fn(() => ({
-      program: {},
-      pointLightLocs: [],
+    const mockProg = {
+      prog: {},
       uniforms: new Map(),
+      pointLightLocs: [],
       samplerUnits: new Map(),
+      samplerTypes: new Map(),
       attributes: new Map([
         ["a_position", 0],
         ["a_normal", 1],
@@ -477,12 +478,20 @@ describe("WebGL1 capacity fail-fast validation", () => {
         ["a_color", 4],
         ["a_instanceMatrix", 6],
       ]),
-    }));
-    renderer._getOrCreateMesh = vi.fn(() => ({
-      bind: vi.fn(),
-      count: 3,
-      isIndexed: false,
-    }));
+    };
+    renderer._programCache = {
+      getProgram: vi.fn(() => mockProg),
+      programCacheKey: vi.fn(() => "testKey"),
+      acquireProgram: vi.fn(),
+    };
+    renderer._textures = { acquireTextures: vi.fn() };
+    renderer._geometry = {
+      getOrCreateMesh: vi.fn(() => ({
+        bind: vi.fn(),
+        count: 3,
+        isIndexed: false,
+      })),
+    };
     renderer._instancedArraysExt = {
       vertexAttribDivisorANGLE: vi.fn(),
       drawArraysInstancedANGLE: vi.fn(),

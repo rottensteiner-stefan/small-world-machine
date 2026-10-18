@@ -1,6 +1,6 @@
 import "../../src/index.js";
 import { describe, expect, it, vi, beforeAll } from "vitest";
-import { WebGLProgramCache } from "../../src/renderers/WebGL2/managers/WebGLProgramCache.js";
+import { WebGLProgramCache } from "../../src/renderers/gl/managers/WebGLProgramCache.js";
 import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
 import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { BasicMaterial } from "../../src/core/materials/surface/BasicMaterial.js";
@@ -47,11 +47,9 @@ const registry = new ShaderRegistry();
 
 function makeCache(): { cache: WebGLProgramCache; gl: WebGL2RenderingContext } {
   const gl = makeMockGl();
-  const cache = new WebGLProgramCache(
-    gl,
-    { bindToProgram: vi.fn() } as never,
-    registry,
-  );
+  const cache = new WebGLProgramCache(gl, registry, {
+    globalUBO: { bindToProgram: vi.fn() } as never,
+  });
   return { cache, gl };
 }
 

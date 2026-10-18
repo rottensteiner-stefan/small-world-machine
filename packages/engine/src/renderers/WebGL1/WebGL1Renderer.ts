@@ -2,60 +2,28 @@ import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
 import { WebGLMainPass } from "../passes/WebGLMainPass.js";
 import { WebGLPostProcessPass } from "../passes/WebGLPostProcessPass.js";
 import { PostProcessPassGL, BloomPassGL, LightShaftsPassGL } from "../post/passes/index.js";
-import type { Texture } from "../../core/textures/index.js";
-import { CubeTexture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
-import { StandardWebGPULayout, resolveManifestFlags } from "../shaders/index.js";
+import {
+  RenderTargetCube,
+  type Texture,
+  type CubeTexture,
+  type RenderTarget,
+} from "../../core/textures/index.js";
+import { resolveManifestFlags } from "../shaders/index.js";
 import type { Object3D, Scene } from "../../core/index.js";
 import { DeviceLimit, InstancedMesh } from "../../core/index.js";
-import { applyAnisotropy } from "../anisotropy.js";
-import type {
-  EngineOptions,
-  GeometryDataInterface,
-  LightDataInterface,
-} from "../../interfaces/index.js";
+import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
+import { WebGLProgramCache } from "../gl/managers/WebGLProgramCache.js";
+import { WebGLTextureManager } from "../gl/managers/WebGLTextureManager.js";
+import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
 import {
   MaterialType,
   RendererType,
-  TextureFilter,
   CullMode,
   BlendingMode,
   Topology,
   PostProcessingEffectType,
 } from "../../enums/index.js";
-import { Mesh } from "../Mesh.js";
 import type { Vector3D } from "../../math/index.js";
-
-interface ProgramCache {
-  prog: WebGLProgram;
-  uniforms: Map<string, WebGLUniformLocation | undefined>;
-  attributes: Map<string, number>;
-  pointLightLocs: {
-    pos: WebGLUniformLocation | undefined;
-    col: WebGLUniformLocation | undefined;
-    distance: WebGLUniformLocation | undefined;
-    decay: WebGLUniformLocation | undefined;
-  }[];
-  spotLightLocs: {
-    pos: WebGLUniformLocation | undefined;
-    dir: WebGLUniformLocation | undefined;
-    col: WebGLUniformLocation | undefined;
-    params: WebGLUniformLocation | undefined;
-  }[];
-  areaLightLocs: {
-    pos: WebGLUniformLocation | undefined;
-    col: WebGLUniformLocation | undefined;
-    normal: WebGLUniformLocation | undefined;
-    right: WebGLUniformLocation | undefined;
-    up: WebGLUniformLocation | undefined;
-    size: WebGLUniformLocation | undefined;
-  }[];
-  /** Texture unit assigned to each active sampler uniform in THIS program, discovered via introspection. */
-  samplerUnits: Map<string, number>;
-  /** GL sampler type (SAMPLER_2D/SAMPLER_CUBE) of each active sampler uniform in THIS program. */
-  samplerTypes: Map<string, number>;
-  /** Number of live Object3D instances currently referencing this compiled program. */
-  refCount: number;
-}
 
 /**
  * WebGL 1.0 implementation of the renderer.
@@ -78,16 +46,12 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     return this.gl;
   }
 
-  private _programs: Map<string, ProgramCache> = new Map();
-
-  private _cache: Map<GeometryDataInterface, Mesh> = new Map();
-  private _lastKnownGeometry: WeakMap<Object3D, GeometryDataInterface> = new WeakMap();
-  private _lastKnownProgramKey: WeakMap<Object3D, string> = new WeakMap();
-  private _texCubeCache: Map<CubeTexture, WebGLTexture> = new Map();
-  private _texRefCounts: Map<Texture, number> = new Map();
-  private _texCubeRefCounts: Map<CubeTexture, number> = new Map();
-  private _lastKnownTextures: WeakMap<Object3D, Record<string, Texture | CubeTexture | undefined>> =
-    new WeakMap();
+  /** Shared GL manager layer: compiled-program cache, uploaded-texture state and per-geometry
+   * mesh cache (see the `gl/managers` modules). WebGL1 mounts the exact same classes as
+   * WebGL2Renderer, with the `glsl100` compile/upload strategy selected at construction. */
+  private _programCache!: WebGLProgramCache;
+  private _textures!: WebGLTextureManager;
+  private _geometry!: WebGLBufferManager;
 
   private _opaqueTexture?: WebGLTexture;
 
@@ -152,6 +116,20 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this.initDefaultTextures();
     this.gl.enable(this.gl.DEPTH_TEST);
 
+    // Mount the shared GL manager layer (same classes as WebGL2Renderer) with the WebGL1
+    // `glsl100` strategy: no global UBO, no TextureArray/compressed upload, NPOT sampling rules.
+    this._geometry = new WebGLBufferManager(this.gl);
+    this._textures = new WebGLTextureManager(
+      this.gl,
+      this._texCache,
+      this.defaultTexture,
+      this.defaultCubeTexture,
+      { dialect: "glsl100" },
+    );
+    this._programCache = new WebGLProgramCache(this.gl, this.context.shaderRegistry, {
+      dialect: "glsl100",
+    });
+
     this.addPass(new WebGLMainPass());
     this.addPass(new WebGLPostProcessPass());
   }
@@ -173,296 +151,6 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       );
     }
     return false;
-  }
-
-  /** Cache key for a compiled program variant -- shared by `_getProgram` (which builds it) and
-   * `_acquireProgram`/`_releaseObjectProgram` (which just need it as an opaque refcounting key). */
-  private _programCacheKey(
-    shaderId: string,
-    isInstanced: boolean,
-    flags: readonly string[],
-  ): string {
-    const flagKey = flags.length > 0 ? "_" + flags.join("_") : "";
-    return isInstanced ? `${shaderId}_instanced${flagKey}` : `${shaderId}${flagKey}`;
-  }
-
-  /**
-   * @param flags Material feature flags (e.g. `USE_AO_MAP`, from `RenderManifest.flags`) that
-   * become `#define`s in the compiled shader -- mirrors `WebGL2Renderer`'s equivalent, needed so a
-   * `StandardMaterial` with e.g. a reflection map actually gets `USE_REFLECTION_MAP` compiled in,
-   * instead of every WebGL1 program silently compiling as if no material ever had any optional
-   * texture (metallic/roughness/ao/emissive/alpha/env/normal/reflection map) assigned at all.
-   */
-  private _getProgram(
-    shaderId: string,
-    isInstanced: boolean = false,
-    flags: readonly string[] = [],
-  ): ProgramCache {
-    const cacheKey = this._programCacheKey(shaderId, isInstanced, flags);
-    let cache = this._programs.get(cacheKey);
-    if (!cache) {
-      const def = this.context.shaderRegistry.get(shaderId);
-      if (!def || !def.sources.glsl100) {
-        throw new Error(
-          `[WebGL1Renderer] Shader definition for ${shaderId} not found or missing GLSL 100 source.`,
-        );
-      }
-
-      let vs = this.context.shaderRegistry.assemble(def.sources.glsl100.vs, "glsl100");
-      let fs = this.context.shaderRegistry.assemble(def.sources.glsl100.fs, "glsl100");
-      let defines = "";
-      if (isInstanced) defines += "#define USE_INSTANCING 1\n";
-      for (const flag of flags) defines += `#define ${flag} 1\n`;
-      if (defines) {
-        vs = defines + vs;
-        fs = defines + fs;
-      }
-      const prog = this.createShaderProgram(vs, fs);
-
-      const uniforms = new Map<string, WebGLUniformLocation | undefined>();
-      const attributes = new Map<string, number>();
-      const samplerUnits = new Map<string, number>();
-      const samplerTypes = new Map<string, number>();
-
-      const attribsToQuery = ["a_position", "a_normal", "a_uv", "a_tangent", "a_color"];
-      if (isInstanced) attribsToQuery.push("a_instanceMatrix", "a_instanceData");
-      attribsToQuery.forEach((name) => {
-        attributes.set(name, this.gl.getAttribLocation(prog, name));
-      });
-
-      // Ask the linked program for its actually-active uniforms instead of guessing names up
-      // front: a hand-maintained list can silently omit one, while introspection can't drift out
-      // of sync with the shader source. Every sampler uniform also gets a texture unit assigned
-      // here, dynamically per-program (WebGL1 has no shadow-map/IBL samplers to reserve units for).
-      const samplerTypeSet = new Set<number>([this.gl.SAMPLER_2D, this.gl.SAMPLER_CUBE]);
-      const activeCount = this.gl.getProgramParameter(prog, this.gl.ACTIVE_UNIFORMS) as number;
-      let nextSamplerUnit = 0;
-      for (let i = 0; i < activeCount; i++) {
-        const info = this.gl.getActiveUniform(prog, i);
-        if (!info) continue;
-        const isArray = info.size > 1 && info.name.endsWith("[0]");
-        const names = isArray
-          ? Array.from({ length: info.size }, (_, j) => `${info.name.slice(0, -3)}[${j}]`)
-          : [info.name];
-        const isSampler = samplerTypeSet.has(info.type);
-
-        for (const name of names) {
-          uniforms.set(name, this.gl.getUniformLocation(prog, name) ?? undefined);
-          if (isSampler) {
-            samplerUnits.set(name, nextSamplerUnit);
-            samplerTypes.set(name, info.type);
-            nextSamplerUnit++;
-          }
-        }
-      }
-
-      // `layout.uniforms` is near-universally `...StandardWebGPULayout.uniforms` (the fixed set
-      // every material spreads in to match WebGPU's shared `ObjectUniforms` struct) -- a lean
-      // shader legitimately using only a handful of those 16 names is the norm, not a mistake, so
-      // warning about the rest would just be noise.
-      //
-      // `layout.textures` is deliberately NOT checked here (unlike before per-material `flags`
-      // existed): it lists every texture slot the material COULD ever use (e.g. `u_aoMap`), not
-      // just the ones THIS compiled variant actually declares -- most of them are wrapped in
-      // `#ifdef USE_..._MAP` and only compiled in when the corresponding flag is passed to this
-      // very function, so a variant compiled without that flag legitimately doesn't have the
-      // uniform, and warning about it would misreport a working, intentional feature gate as a bug.
-      const genericUniformNames = new Set(Object.keys(StandardWebGPULayout.uniforms));
-      for (const name of Object.keys(def.layout.uniforms)) {
-        if (!uniforms.has(name) && !genericUniformNames.has(name)) {
-          console.warn(
-            `[WebGL1Renderer] Uniform '${name}' defined in material layout but not found in shader '${shaderId}'. It might be unused or optimized away.`,
-          );
-        }
-      }
-
-      const pointLightLocs = [];
-      const spotLightLocs = [];
-      const areaLightLocs = [];
-      for (let i = 0; i < 16; i++) {
-        pointLightLocs.push({
-          pos: this.gl.getUniformLocation(prog, `u_pointLightPos[${i}]`) ?? undefined,
-          col: this.gl.getUniformLocation(prog, `u_pointLightColor[${i}]`) ?? undefined,
-          distance: this.gl.getUniformLocation(prog, `u_pointLightDistance[${i}]`) ?? undefined,
-          decay: this.gl.getUniformLocation(prog, `u_pointLightDecay[${i}]`) ?? undefined,
-        });
-        spotLightLocs.push({
-          pos: this.gl.getUniformLocation(prog, `u_spotLightPos[${i}]`) ?? undefined,
-          dir: this.gl.getUniformLocation(prog, `u_spotLightDir[${i}]`) ?? undefined,
-          col: this.gl.getUniformLocation(prog, `u_spotLightColor[${i}]`) ?? undefined,
-          params: this.gl.getUniformLocation(prog, `u_spotLightParams[${i}]`) ?? undefined,
-        });
-      }
-      for (let i = 0; i < 4; i++) {
-        areaLightLocs.push({
-          pos: this.gl.getUniformLocation(prog, `u_areaLightPos[${i}]`) ?? undefined,
-          col: this.gl.getUniformLocation(prog, `u_areaLightColor[${i}]`) ?? undefined,
-          right: this.gl.getUniformLocation(prog, `u_areaLightRight[${i}]`) ?? undefined,
-          up: this.gl.getUniformLocation(prog, `u_areaLightUp[${i}]`) ?? undefined,
-          normal: this.gl.getUniformLocation(prog, `u_areaLightNormal[${i}]`) ?? undefined,
-          size: this.gl.getUniformLocation(prog, `u_areaLightSize[${i}]`) ?? undefined,
-        });
-      }
-
-      cache = {
-        prog,
-        uniforms,
-        attributes,
-        samplerUnits,
-        samplerTypes,
-        pointLightLocs,
-        spotLightLocs,
-        areaLightLocs,
-        refCount: 0,
-      };
-      this._programs.set(cacheKey, cache);
-    }
-    return cache;
-  }
-
-  /**
-   * Tracks that `obj` currently depends on the compiled program identified by `shaderId`.
-   * Called once per object per frame from the render loop, independent from `_getProgram`'s
-   * own lookup-or-create, since one program is typically shared by many objects at once.
-   */
-  private _acquireProgram(obj: Object3D, shaderId: string): void {
-    const lastKey = this._lastKnownProgramKey.get(obj);
-    if (lastKey === shaderId) return;
-    if (lastKey) this._releaseObjectProgram(obj);
-
-    const cache = this._programs.get(shaderId);
-    if (cache) cache.refCount++;
-    this._lastKnownProgramKey.set(obj, shaderId);
-  }
-
-  /** Releases the compiled program this object was referencing, if its refCount drops to zero. */
-  private _releaseObjectProgram(obj: Object3D): void {
-    const shaderId = this._lastKnownProgramKey.get(obj);
-    if (!shaderId) return;
-    this._lastKnownProgramKey.delete(obj);
-
-    const cache = this._programs.get(shaderId);
-    if (!cache) return;
-    cache.refCount--;
-    if (cache.refCount <= 0) {
-      this.gl.deleteProgram(cache.prog);
-      this._programs.delete(shaderId);
-    }
-  }
-
-  /** Applies filter + (for NPOT) wrap state for a 2D texture. WebGL1 only supports mipmaps and
-   * REPEAT/MIRRORED_REPEAT wrapping for power-of-two textures -- see the `needsUpdate` branch.
-   * Kept in one place so the first-upload and `needsUpdate` paths stay in lockstep. */
-  private _setWebGL1SamplerParams(
-    img: HTMLImageElement | ImageBitmap | HTMLCanvasElement,
-    tex: Texture,
-  ): void {
-    const isPOT = 0 === (img.width & (img.width - 1)) && 0 === (img.height & (img.height - 1));
-    const useMipmaps = this._quality.mipmapping && tex.generateMipmaps && isPOT;
-    if (useMipmaps) this.gl.generateMipmap(this.gl.TEXTURE_2D);
-    this.gl.texParameteri(
-      this.gl.TEXTURE_2D,
-      this.gl.TEXTURE_MAG_FILTER,
-      TextureFilter.NEAREST === tex.magFilter ? this.gl.NEAREST : this.gl.LINEAR,
-    );
-    this.gl.texParameteri(
-      this.gl.TEXTURE_2D,
-      this.gl.TEXTURE_MIN_FILTER,
-      useMipmaps ? this.gl.LINEAR_MIPMAP_LINEAR : this.gl.LINEAR,
-    );
-    if (!isPOT) {
-      this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
-      this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
-    }
-    // Anisotropic filtering sharpens mip-selected sampling -- same mipmap gate as the min filter.
-    applyAnisotropy(this.gl, this.gl.TEXTURE_2D, tex, this._quality, Boolean(useMipmaps));
-  }
-
-  private _getWebGLTexture(tex: Texture): WebGLTexture {
-    const fastPath = this._getWebGLTextureFastPath(tex);
-    if (fastPath) return fastPath;
-    let glTex: WebGLTexture | undefined = this._texCache.get(tex);
-    if (!glTex) {
-      // Guaranteed defined here: `_getWebGLTextureFastPath()` already returned early for a
-      // texture with no `.image` (TS can't carry that narrowing across the method call).
-      const img = tex.image!;
-      glTex = this.gl.createTexture()!;
-      this.gl.bindTexture(this.gl.TEXTURE_2D, glTex);
-      this.gl.texImage2D(
-        this.gl.TEXTURE_2D,
-        0,
-        this.gl.RGBA,
-        this.gl.RGBA,
-        this.gl.UNSIGNED_BYTE,
-        img,
-      );
-
-      // WebGL1 only supports mipmaps and REPEAT/MIRRORED_REPEAT wrapping for power-of-two
-      // textures: generateMipmap() throws GL_INVALID_OPERATION on an NPOT texture, and leaving
-      // wrap at the REPEAT default makes an NPOT texture "incomplete" (silently samples black) --
-      // same underlying WebGL1 constraint as the cube-texture fix in `_getWebGLCubeTexture`.
-      this._setWebGL1SamplerParams(img, tex);
-      this._texCache.set(tex, glTex);
-    } else if (tex.needsUpdate) {
-      // Guaranteed defined here: `_getWebGLTextureFastPath()` already returned early for a
-      // texture with no `.image` (TS can't carry that narrowing across the method call).
-      const img = tex.image!;
-      this.gl.bindTexture(this.gl.TEXTURE_2D, glTex);
-      this.gl.texImage2D(
-        this.gl.TEXTURE_2D,
-        0,
-        this.gl.RGBA,
-        this.gl.RGBA,
-        this.gl.UNSIGNED_BYTE,
-        img,
-      );
-      this._setWebGL1SamplerParams(img, tex);
-      tex.needsUpdate = false;
-    }
-    return glTex;
-  }
-
-  private _getWebGLCubeTexture(tex: CubeTexture): WebGLTexture {
-    if (this._quality?.disableTextures) return this.defaultCubeTexture;
-    // A RenderTargetCube's GL texture is allocated/populated by bindMainRenderTarget() (it has no
-    // CPU-side images to upload here) -- just return whatever it has already produced.
-    if (tex instanceof RenderTargetCube) {
-      const glTex = this._texCubeCache.get(tex);
-      return glTex ?? this.defaultCubeTexture;
-    }
-    if (!tex.isLoaded || tex.images.length !== 6) return this.defaultCubeTexture;
-    let glTex: WebGLTexture | undefined = this._texCubeCache.get(tex);
-    if (!glTex) {
-      glTex = this.gl.createTexture()!;
-      this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, glTex);
-      for (let i: number = 0; i < 6; i++) {
-        this.gl.texImage2D(
-          this.gl.TEXTURE_CUBE_MAP_POSITIVE_X + i,
-          0,
-          this.gl.RGBA,
-          this.gl.RGBA,
-          this.gl.UNSIGNED_BYTE,
-          tex.images[i] as ImageBitmap,
-        );
-      }
-      this.gl.texParameteri(this.gl.TEXTURE_CUBE_MAP, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
-      this.gl.texParameteri(this.gl.TEXTURE_CUBE_MAP, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
-      // WebGL1 requires CLAMP_TO_EDGE for any non-power-of-two texture -- the default wrap mode
-      // is REPEAT, and leaving that in place makes an NPOT cubemap "incomplete" per spec, which
-      // silently samples as solid black (no GL error). Skybox/reflection cubemaps are rarely POT.
-      this.gl.texParameteri(
-        this.gl.TEXTURE_CUBE_MAP,
-        this.gl.TEXTURE_WRAP_S,
-        this.gl.CLAMP_TO_EDGE,
-      );
-      this.gl.texParameteri(
-        this.gl.TEXTURE_CUBE_MAP,
-        this.gl.TEXTURE_WRAP_T,
-        this.gl.CLAMP_TO_EDGE,
-      );
-      this._texCubeCache.set(tex, glTex);
-    }
-    return glTex;
   }
 
   /** @inheritdoc */
@@ -515,8 +203,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       if (!fbo || !cubeTarget.isLoaded) {
         if (fbo) {
           this.gl.deleteFramebuffer(fbo);
-          const oldTex = this._texCubeCache.get(cubeTarget);
-          if (oldTex) this.gl.deleteTexture(oldTex);
+          this._textures.deleteCubeTexture(cubeTarget);
           const oldDepthRb = this._renderTargetCubeDepthBuffers.get(cubeTarget);
           if (oldDepthRb) {
             this.gl.deleteRenderbuffer(oldDepthRb);
@@ -573,7 +260,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         }
 
         this._renderTargetCubeFbos.set(cubeTarget, fbo);
-        this._texCubeCache.set(cubeTarget, tex);
+        this._textures.registerCubeTexture(cubeTarget, tex);
         cubeTarget.isLoaded = true;
       } else {
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, fbo);
@@ -582,7 +269,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       // The FBO is shared by all 6 faces (one texture, one framebuffer) -- re-point its color
       // attachment to the face requested for this call every time, since a cached FBO from a
       // previous face would otherwise still be attached to that stale face.
-      const cubeTex = this._texCubeCache.get(cubeTarget)!;
+      const cubeTex = this._textures.getCubeTexture(cubeTarget)!;
       this.gl.framebufferTexture2D(
         this.gl.FRAMEBUFFER,
         this.gl.COLOR_ATTACHMENT0,
@@ -839,8 +526,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       flags.push("USE_INSTANCE_COLOR");
     }
 
-    const programKey = this._programCacheKey(shaderId, isInstanced, flags);
-    const cache = this._getProgram(shaderId, isInstanced, flags);
+    const programKey = this._programCache.programCacheKey(shaderId, isInstanced, flags);
+    const cache = this._programCache.getProgram(shaderId, isInstanced, flags);
     this.gl.useProgram(cache.prog);
 
     const u = cache.uniforms;
@@ -1010,7 +697,9 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         const skyTex = texs["u_skybox"] as CubeTexture;
         this.gl.bindTexture(
           this.gl.TEXTURE_CUBE_MAP,
-          skyTex ? this._getWebGLCubeTexture(skyTex) : this.defaultCubeTexture,
+          skyTex
+            ? this._textures.getWebGLCubeTexture(skyTex, this._quality)
+            : this.defaultCubeTexture,
         );
         const uSkybox = u.get("u_skybox");
         if (uSkybox) this.gl.uniform1i(uSkybox, 0);
@@ -1028,7 +717,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
             const ct = texs[uniformName] as CubeTexture;
             this.gl.bindTexture(
               this.gl.TEXTURE_CUBE_MAP,
-              ct ? this._getWebGLCubeTexture(ct) : this.defaultCubeTexture,
+              ct ? this._textures.getWebGLCubeTexture(ct, this._quality) : this.defaultCubeTexture,
             );
           } else {
             this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, null);
@@ -1039,7 +728,10 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
             } else if (uniformName === "u_opaqueMap") {
               fallback = this._opaqueTexture ?? this.defaultTexture;
             }
-            this.gl.bindTexture(this.gl.TEXTURE_2D, t ? this._getWebGLTexture(t) : fallback);
+            this.gl.bindTexture(
+              this.gl.TEXTURE_2D,
+              t ? this._textures.getWebGLTexture(t, this._quality) : fallback,
+            );
           }
           this.gl.uniform1i(loc, unit);
         }
@@ -1049,10 +741,10 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       for (const o of objects) {
         if (!o.geometry) continue;
 
-        this._acquireProgram(o, programKey);
-        this._acquireTextures(o, texs);
+        this._programCache.acquireProgram(o, programKey);
+        this._textures.acquireTextures(o, texs);
 
-        const mesh = this._getOrCreateMesh(o, o.geometry);
+        const mesh = this._geometry.getOrCreateMesh(o, o.geometry);
         const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;
 
         if (isInstanced) {
@@ -1307,140 +999,22 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._hdrH = h;
   }
 
-  /**
-   * Looks up (or lazily creates) the GPU mesh for an object's geometry, and tracks
-   * per-object geometry references so `releaseObjectGeometry` can correctly free
-   * buffers once nothing references them anymore -- even when geometry is shared
-   * across many objects (see apps/showcases/19) or swapped on a live object at runtime.
-   */
-  private _getOrCreateMesh(obj: Object3D, geo: GeometryDataInterface): Mesh {
-    let mesh = this._cache.get(geo);
-    if (!mesh) {
-      mesh = new Mesh(this.gl, geo);
-      this._cache.set(geo, mesh);
-    } else if (geo.needsUpdate) {
-      mesh.update(geo);
-      geo.needsUpdate = false;
-    }
-
-    const lastGeo = this._lastKnownGeometry.get(obj);
-    if (lastGeo !== geo) {
-      if (lastGeo) this._releaseGeometryFor(obj);
-      mesh.refCount++;
-      this._lastKnownGeometry.set(obj, geo);
-    }
-
-    return mesh;
-  }
-
-  private _releaseGeometryFor(obj: Object3D): void {
-    const geo = this._lastKnownGeometry.get(obj);
-    if (!geo) return;
-    this._lastKnownGeometry.delete(obj);
-
-    const mesh = this._cache.get(geo);
-    if (!mesh) return;
-    mesh.refCount--;
-    if (mesh.refCount <= 0) {
-      mesh.dispose();
-      this._cache.delete(geo);
-    }
-  }
-
-  /**
-   * Tracks that `obj` currently depends on the textures in `textures` (typically
-   * `material.getRenderManifest().textures`). Called once per object per frame from
-   * the render loop. `textures` is diffed key-by-key against `obj`'s last-known
-   * snapshot rather than by container reference, since a material's manifest object
-   * is created once and mutated in place on every `getRenderManifest()` call.
-   */
-  private _acquireTextures(
-    obj: Object3D,
-    textures: Record<string, Texture | CubeTexture | undefined>,
-  ): void {
-    let lastTextures = this._lastKnownTextures.get(obj);
-    if (!lastTextures) {
-      lastTextures = {};
-      this._lastKnownTextures.set(obj, lastTextures);
-    }
-
-    for (const key in textures) {
-      const current = textures[key];
-      const last = lastTextures[key];
-      if (current !== last) {
-        if (last) this._releaseTexture(last);
-        if (current) this._acquireTexture(current);
-        lastTextures[key] = current;
-      }
-    }
-  }
-
-  private _acquireTexture(tex: Texture | CubeTexture): void {
-    if (tex instanceof CubeTexture) {
-      this._texCubeRefCounts.set(tex, (this._texCubeRefCounts.get(tex) ?? 0) + 1);
-    } else {
-      this._texRefCounts.set(tex, (this._texRefCounts.get(tex) ?? 0) + 1);
-    }
-  }
-
-  private _releaseTexture(tex: Texture | CubeTexture): void {
-    // Render targets are backed by the same Texture base class (so they can be
-    // assigned directly to a material, e.g. for portals/mirrors) but are re-rendered
-    // into and reused across frames independently of any one object's material
-    // reference -- their lifecycle belongs to whoever owns the render target, not to
-    // this per-object refcount. Only untrack our reference to it, never delete the
-    // underlying WebGLTexture here.
-    if (tex instanceof RenderTarget) return;
-
-    if (tex instanceof CubeTexture) {
-      const count = (this._texCubeRefCounts.get(tex) ?? 1) - 1;
-      if (count <= 0) {
-        const glTex = this._texCubeCache.get(tex);
-        if (glTex) this.gl.deleteTexture(glTex);
-        this._texCubeCache.delete(tex);
-        this._texCubeRefCounts.delete(tex);
-      } else {
-        this._texCubeRefCounts.set(tex, count);
-      }
-    } else {
-      const count = (this._texRefCounts.get(tex) ?? 1) - 1;
-      if (count <= 0) {
-        const glTex = this._texCache.get(tex);
-        if (glTex) this.gl.deleteTexture(glTex);
-        this._texCache.delete(tex);
-        this._texRefCounts.delete(tex);
-      } else {
-        this._texRefCounts.set(tex, count);
-      }
-    }
-  }
-
-  private _releaseObjectTextures(obj: Object3D): void {
-    const textures = this._lastKnownTextures.get(obj);
-    if (!textures) return;
-    this._lastKnownTextures.delete(obj);
-    for (const tex of Object.values(textures)) {
-      if (tex) this._releaseTexture(tex);
-    }
-  }
-
   /** @inheritdoc */
   protected override releaseObjectResources(obj: Object3D): void {
-    this._releaseGeometryFor(obj);
-    this._releaseObjectProgram(obj);
-    this._releaseObjectTextures(obj);
+    this._geometry.releaseGeometryFor(obj);
+    this._programCache.releaseObjectProgram(obj);
+    this._textures.releaseObjectTextures(obj);
   }
 
   /** @inheritdoc */
   public override destroy(): void {
     const gl = this.gl;
     if (gl) {
-      for (const cache of this._programs.values()) gl.deleteProgram(cache.prog);
-      for (const tex of this._texCache.values()) gl.deleteTexture(tex);
-      for (const tex of this._texCubeCache.values()) gl.deleteTexture(tex);
+      this._programCache?.dispose();
+      this._textures?.dispose();
+      this._geometry?.dispose();
       for (const fbo of this._renderTargetFbos.values()) gl.deleteFramebuffer(fbo);
       for (const rb of this._renderTargetDepthBuffers.values()) gl.deleteRenderbuffer(rb);
-      for (const mesh of this._cache.values()) mesh.dispose();
       if (this._hdrFbo) gl.deleteFramebuffer(this._hdrFbo);
       if (this._hdrTexture) gl.deleteTexture(this._hdrTexture);
       if (this._hdrRenderBuffer) gl.deleteRenderbuffer(this._hdrRenderBuffer);
@@ -1449,12 +1023,6 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       this._lightShaftsPassGL?.destroy();
     }
 
-    this._programs.clear();
-    this._cache.clear();
-    this._texCache.clear();
-    this._texCubeCache.clear();
-    this._texRefCounts.clear();
-    this._texCubeRefCounts.clear();
     this._renderTargetFbos.clear();
     this._renderTargetDepthBuffers.clear();
     this._hdrFbo = undefined;

@@ -1,7 +1,7 @@
 import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { WebGL1Renderer } from "../../src/renderers/WebGL1/WebGL1Renderer.js";
-import { WebGLTextureManager } from "../../src/renderers/WebGL2/managers/WebGLTextureManager.js";
+import { WebGLTextureManager } from "../../src/renderers/gl/managers/WebGLTextureManager.js";
 import { GPUTextureResourceCache } from "../../src/renderers/WebGPU/managers/GPUTextureResourceCache.js";
 import { GPUFallbackResources } from "../../src/renderers/WebGPU/managers/GPUFallbackResources.js";
 import { Texture } from "../../src/core/textures/Texture.js";
@@ -92,10 +92,19 @@ describe("Texture GPU re-upload on needsUpdate", () => {
     const gl = makeMockGl();
     const renderer = new WebGL1Renderer();
     (renderer as RendererInternals).gl = gl;
+    // Mount the shared GL manager layer the way WebGL1Renderer.initialize() does, with the
+    // WebGL1 `glsl100` dialect (NPOT + no TEXTURE_2D_ARRAY uploads).
+    (renderer as RendererInternals)._textures = new WebGLTextureManager(
+      gl,
+      new Map(),
+      {} as never,
+      {} as never,
+      { dialect: "glsl100" },
+    );
 
     const tex = Texture.fromCanvas({ width: 32, height: 33 } as HTMLCanvasElement);
 
-    const first = (renderer as RendererInternals)._getWebGLTexture(tex);
+    const first = (renderer as RendererInternals)._textures.getWebGLTexture(tex, undefined);
     expect(gl.createTexture).toHaveBeenCalledTimes(1);
     expect(gl.texImage2D).toHaveBeenCalledTimes(1);
     const firstSamplerCallCount = vi.mocked(gl.texParameteri).mock.calls.length;
@@ -103,7 +112,7 @@ describe("Texture GPU re-upload on needsUpdate", () => {
 
     vi.mocked(gl.texParameteri).mockClear();
     tex.needsUpdate = true;
-    const second = (renderer as RendererInternals)._getWebGLTexture(tex);
+    const second = (renderer as RendererInternals)._textures.getWebGLTexture(tex, undefined);
 
     expect(second).toBe(first);
     expect(gl.createTexture).toHaveBeenCalledTimes(1);

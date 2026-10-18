@@ -1,6 +1,6 @@
 import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
-import { WebGLTextureManager } from "../../src/renderers/WebGL2/managers/WebGLTextureManager.js";
+import { WebGLTextureManager } from "../../src/renderers/gl/managers/WebGLTextureManager.js";
 import { Texture } from "../../src/core/textures/Texture.js";
 import { RenderTarget } from "../../src/core/textures/RenderTarget.js";
 import { Object3D } from "../../src/core/Object3D.js";

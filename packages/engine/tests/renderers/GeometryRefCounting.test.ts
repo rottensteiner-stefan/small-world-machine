@@ -1,6 +1,6 @@
 import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
-import { WebGLBufferManager } from "../../src/renderers/WebGL2/managers/WebGLBufferManager.js";
+import { WebGLBufferManager } from "../../src/renderers/gl/managers/WebGLBufferManager.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Scene } from "../../src/core/Scene.js";
 import type { GeometryDataInterface } from "../../src/interfaces/index.js";

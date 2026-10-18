@@ -6,7 +6,7 @@ import {
 import {
   canWrapFragmentWithNormalOutputGL,
   wrapFragmentWithNormalOutputGL,
-} from "../../src/renderers/WebGL2/managers/NormalOutputWrapperGL.js";
+} from "../../src/renderers/gl/managers/NormalOutputWrapperGL.js";
 import { GPUPipelineCache } from "../../src/renderers/WebGPU/managers/GPUPipelineCache.js";
 import { NormalTargetMode } from "../../src/enums/index.js";
 import type { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";

@@ -5,13 +5,13 @@ import {
   WebGL2SpotLightLayout,
   WebGL2AreaLightLayout,
 } from "../GlobalUniformLayout.js";
-import type { WebGL2ProgramCacheEntry } from "./managers/WebGLProgramCache.js";
-import { WebGLProgramCache } from "./managers/WebGLProgramCache.js";
-import { WebGLTextureManager } from "./managers/WebGLTextureManager.js";
-import { WebGLBufferManager } from "./managers/WebGLBufferManager.js";
+import type { WebGLProgramCacheEntry } from "../gl/managers/WebGLProgramCache.js";
+import { WebGLProgramCache } from "../gl/managers/WebGLProgramCache.js";
+import { WebGLTextureManager } from "../gl/managers/WebGLTextureManager.js";
+import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
 import { WebGL2DepthFrameBuffer } from "./WebGL2DepthFrameBuffer.js";
 import { WebGL2FrameBuffer } from "./WebGL2FrameBuffer.js";
-import { NORMAL_OUTPUT_FLAG } from "./managers/NormalOutputWrapperGL.js";
+import { NORMAL_OUTPUT_FLAG } from "../gl/managers/NormalOutputWrapperGL.js";
 import { WebGL2CubeFrameBuffer } from "./WebGL2CubeFrameBuffer.js";
 import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
 import { WebGLShadowPass } from "../passes/WebGLShadowPass.js";
@@ -242,11 +242,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     // GlobalUniformLayout table (u_areaLights[4] 96-byte stride ends at 2080, followed by
     // u_tileSizePx at 2080 and u_clusterDims at 2096) for clustered light culling.
     this._globalUBO = new WebGL2UniformBuffer(this.gl, WebGL2GlobalUniformLayout.totalBytes, 0);
-    this._programCache = new WebGLProgramCache(
-      this.gl,
-      this._globalUBO,
-      this.context.shaderRegistry,
-    );
+    this._programCache = new WebGLProgramCache(this.gl, this.context.shaderRegistry, {
+      globalUBO: this._globalUBO,
+      dialect: "glsl300",
+    });
     this._allocateClusterTextures({ x: 1, y: 1, z: 1 }, 1);
 
     // Runs first: WebGLShadowPass's updateGlobalUBO() flushes the whole UBO (including the
@@ -969,7 +968,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * Helper to render the actual geometry for a shadow pass.
    */
   private _renderShadowScene(
-    cache: WebGL2ProgramCacheEntry,
+    cache: WebGLProgramCacheEntry,
     sortedGroups: import("../../core/Scene.js").RenderBatch[],
   ): void {
     for (let i = 0; i < sortedGroups.length; i++) {
@@ -1043,7 +1042,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   /**
    * Binds dummy depth textures to shadow samplers to satisfy WebGL2 sampler2DShadow validation rules.
    */
-  private _bindDummyShadowMaps(cache: WebGL2ProgramCacheEntry): void {
+  private _bindDummyShadowMaps(cache: WebGLProgramCacheEntry): void {
     const dummyUnit = 12;
     const maxUnits = this.context.deviceCaps.getLimit(DeviceLimit.WEBGL2_MAX_TEXTURE_IMAGE_UNITS);
     if (dummyUnit >= maxUnits) {
@@ -1075,7 +1074,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * otherwise hit the driver with `getUniformLocation` on every draw.
    */
   private _cachedUniformLocation(
-    cache: WebGL2ProgramCacheEntry,
+    cache: WebGLProgramCacheEntry,
     name: string,
   ): WebGLUniformLocation | undefined {
     if (!cache.uniforms.has(name)) {
