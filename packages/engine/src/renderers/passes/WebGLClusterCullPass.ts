@@ -32,6 +32,9 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
   private _spotCounts = new Uint8Array(1);
   private _grid = new Uint32Array(4);
   private _indices = new Uint32Array(CLUSTER_TEX_WIDTH * 2);
+  /** Next free slot in the flat index list per light type: lit cells are packed back to back. */
+  private _pointNext: number = 0;
+  private _spotNext: number = 0;
   private _warnedGridUnit: boolean = false;
   private _warnedIndexUnit: boolean = false;
   private _scratchCoverage = {
@@ -82,6 +85,8 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
     this._spotCounts.fill(0, 0, numClusters);
     // Zero the grid every frame
     this._grid.fill(0, 0, numClusters * 4);
+    this._pointNext = 0;
+    this._spotNext = 0;
 
     if (!projMatrix) {
       // No projection matrix stashed yet (e.g. very first frame) -- leave every cluster empty
@@ -184,9 +189,12 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
           const cell = clusterIndex(x, y, z, dims);
           const count = this._pointCounts[cell]!;
           if (count >= maxLightsPerCluster) continue;
-          this._indices[(cell * maxLightsPerCluster + count) * 2] = lightIndex;
+          if (0 === count) {
+            this._grid[cell * 4 + 0] = this._pointNext;
+            this._pointNext += maxLightsPerCluster;
+          }
+          this._indices[(this._grid[cell * 4 + 0]! + count) * 2] = lightIndex;
           this._pointCounts[cell] = count + 1;
-          this._grid[cell * 4 + 0] = cell * maxLightsPerCluster;
           this._grid[cell * 4 + 1] = count + 1;
         }
       }
@@ -245,9 +253,12 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
           const cell = clusterIndex(x, y, z, dims);
           const count = this._spotCounts[cell]!;
           if (count >= maxLightsPerCluster) continue;
-          this._indices[(cell * maxLightsPerCluster + count) * 2 + 1] = lightIndex;
+          if (0 === count) {
+            this._grid[cell * 4 + 2] = this._spotNext;
+            this._spotNext += maxLightsPerCluster;
+          }
+          this._indices[(this._grid[cell * 4 + 2]! + count) * 2 + 1] = lightIndex;
           this._spotCounts[cell] = count + 1;
-          this._grid[cell * 4 + 2] = cell * maxLightsPerCluster;
           this._grid[cell * 4 + 3] = count + 1;
         }
       }
@@ -260,6 +271,12 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
     gridHeight: number,
     indexHeight: number,
   ): void {
+    // Lit cells are packed from slot 0, so only the rows that hold them need to reach the GPU --
+    // uploading the full numClusters * maxLightsPerCluster table every frame costs megabytes.
+    const usedIndexHeight = Math.min(
+      indexHeight,
+      Math.max(1, Math.ceil(Math.max(this._pointNext, this._spotNext) / CLUSTER_TEX_WIDTH)),
+    );
     // Both fixed units can exceed a device that only offers the WebGL2 spec's guaranteed
     // minimum MAX_TEXTURE_IMAGE_UNITS (16, units 0-15) once the shadow system's own reserved
     // units (8-14, see WebGLProgramCache's doc) are accounted for -- degrade gracefully (skip +
@@ -308,7 +325,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
         0,
         0,
         CLUSTER_TEX_WIDTH,
-        indexHeight,
+        usedIndexHeight,
         gl.RG_INTEGER,
         gl.UNSIGNED_INT,
         this._indices,

@@ -95,7 +95,15 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private _opaqueNormalHeight = 0;
   private _opaqueDepthWidth: number = 0;
   private _opaqueDepthHeight: number = 0;
+  private static readonly _SPOT_SHADOW_MAP_NAMES: readonly string[] = [
+    "u_spotShadowMap[0]",
+    "u_spotShadowMap[1]",
+    "u_spotShadowMap[2]",
+    "u_spotShadowMap[3]",
+  ];
   private _opaqueDepthFormat: number = 0;
+  /** Whether the last verified blit read from the HDR FBO; `undefined` until a blit was verified. */
+  private _opaqueDepthVerifiedHdr: boolean | undefined;
   /** Set when no depth format could be blitted from the default framebuffer. */
   private _opaqueDepthUnsupported: boolean = false;
   protected _hdrFbo: WebGL2FrameBuffer | undefined = undefined;
@@ -610,21 +618,31 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     let captured = false;
     for (const internalFormat of candidates) {
+      let allocated = false;
       if (
         this._opaqueDepthWidth !== w ||
         this._opaqueDepthHeight !== h ||
         this._opaqueDepthFormat !== internalFormat
       ) {
         this._allocateOpaqueDepth(internalFormat, w, h);
+        allocated = true;
       }
 
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, hdr ? hdr.framebuffer : null);
       gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this._opaqueDepthFbo!);
+      // Whether a blit works depends only on the source/target depth formats, so once verified it
+      // is not probed again: `getError` is a CPU/GPU sync point and cost ~75% of the frame's JS time.
+      if (!allocated && this._opaqueDepthVerifiedHdr === !!hdr) {
+        gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+        captured = true;
+        break;
+      }
       // Drain stale errors so the blit's own result is unambiguous (bounded: a lost context
       // reports CONTEXT_LOST_WEBGL forever, which would otherwise never leave this loop).
       for (let drained = 0; drained < 8 && gl.NO_ERROR !== gl.getError(); drained++);
       gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
       if (gl.NO_ERROR === gl.getError()) {
+        this._opaqueDepthVerifiedHdr = !!hdr;
         captured = true;
         break;
       }
@@ -634,6 +652,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       // GL errors. This renderer has no context-restore path that could invalidate the verdict.
       this._opaqueDepthUnsupported = true;
       this._opaqueDepthFormat = 0;
+      this._opaqueDepthVerifiedHdr = undefined;
     }
 
     if (hdr) hdr.bind();
@@ -1028,14 +1047,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this.gl.activeTexture(this.gl.TEXTURE0 + dummyUnit);
     this.gl.bindTexture(this.gl.TEXTURE_2D, this._dummyShadowMap.texture);
 
-    let dirMapLoc = cache.uniforms.get("u_dirShadowMap");
-    if (!dirMapLoc)
-      dirMapLoc = this.gl.getUniformLocation(cache.prog, "u_dirShadowMap") ?? undefined;
+    const dirMapLoc = this._cachedUniformLocation(cache, "u_dirShadowMap");
     if (dirMapLoc) this.gl.uniform1i(dirMapLoc, dummyUnit);
 
-    let dirMapRawLoc = cache.uniforms.get("u_dirShadowMapRaw");
-    if (!dirMapRawLoc)
-      dirMapRawLoc = this.gl.getUniformLocation(cache.prog, "u_dirShadowMapRaw") ?? undefined;
+    const dirMapRawLoc = this._cachedUniformLocation(cache, "u_dirShadowMapRaw");
     if (dirMapRawLoc) {
       this.gl.activeTexture(this.gl.TEXTURE0 + WebGL2Renderer._RAW_DEPTH_UNIT);
       this.gl.bindTexture(this.gl.TEXTURE_2D, this._dummyShadowMap.texture);
@@ -1043,10 +1058,23 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     }
 
     for (let i = 0; i < 4; i++) {
-      let loc = cache.uniforms.get(`u_spotShadowMap[${i}]`);
-      if (!loc) loc = this.gl.getUniformLocation(cache.prog, `u_spotShadowMap[${i}]`) ?? undefined;
+      const loc = this._cachedUniformLocation(cache, WebGL2Renderer._SPOT_SHADOW_MAP_NAMES[i]!);
       if (loc) this.gl.uniform1i(loc, dummyUnit);
     }
+  }
+
+  /**
+   * Uniform location lookup that also caches misses: a program without the uniform would
+   * otherwise hit the driver with `getUniformLocation` on every draw.
+   */
+  private _cachedUniformLocation(
+    cache: WebGL2ProgramCacheEntry,
+    name: string,
+  ): WebGLUniformLocation | undefined {
+    if (!cache.uniforms.has(name)) {
+      cache.uniforms.set(name, this.gl.getUniformLocation(cache.prog, name) ?? undefined);
+    }
+    return cache.uniforms.get(name);
   }
 
   public renderBatch(

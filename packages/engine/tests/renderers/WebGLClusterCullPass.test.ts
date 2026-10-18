@@ -109,4 +109,62 @@ describe("WebGLClusterCullPass (BLK-R1 Regression)", () => {
     expect(gl.activeTexture).toHaveBeenCalled();
     expect(gl.bindTexture).toHaveBeenCalled();
   });
+  it("packs lit cells back to back and uploads only the used index rows", () => {
+    const pass = new WebGLClusterCullPass();
+    // 800x600 canvas, 16 px tiles: 50x38x24 = 45600 clusters -> 713 index rows if the whole
+    // 16-slot-per-cell table were uploaded
+    const dims = { x: 50, y: 38, z: 24 };
+    const numClusters = dims.x * dims.y * dims.z;
+    const { renderer, gl } = makeMockWebGL2Renderer(dims);
+    (renderer as { quality: unknown }).quality = { clusteredLighting: { tileSize: [16, 16] } };
+
+    const light = new PointLight({ distance: 2 });
+    light.position.set(0, 0, -5);
+    light.updateMatrixWorld();
+    const extractedLights: LightDataInterface = {
+      pLights: [light],
+      sLights: [],
+      aLights: [],
+      aCol: new Color(0, 0, 0),
+      aIntensity: 0,
+      dDir: new Vector3D(0, -1, 0),
+      dCol: new Color(1, 1, 1),
+      dIntensity: 0,
+    };
+    const vp = new Float32Array(16);
+    vp[0] = 1;
+    vp[5] = 1;
+    vp[10] = 1;
+    vp[15] = 1;
+    const projMatrix = new Float32Array(16);
+    projMatrix[0] = 1;
+    projMatrix[5] = 1;
+
+    pass.execute(
+      renderer as unknown as WebGL2Renderer,
+      new Scene(),
+      vp,
+      new Vector3D(0, 0, 0),
+      undefined,
+      { opaqueLookup: new Map(), opaqueBatches: [], transparent: [], decals: [] },
+      extractedLights,
+      0.1,
+      100,
+      projMatrix,
+    );
+
+    const internals = pass as unknown as { _pointNext: number; _grid: Uint32Array };
+    const litCells = internals._pointNext / 16;
+    const offsets: number[] = [];
+    for (let cell = 0; cell < numClusters; cell++) {
+      if (internals._grid[cell * 4 + 1]! > 0) offsets.push(internals._grid[cell * 4]!);
+    }
+    expect(litCells).toBeGreaterThan(0);
+    expect(offsets.length).toBe(litCells);
+    expect([...offsets].sort((a, b) => a - b)).toEqual(offsets.map((_, i) => i * 16));
+
+    const indexUpload = gl.texSubImage2D.mock.calls[1]!;
+    expect(indexUpload[5]).toBe(Math.max(1, Math.ceil(internals._pointNext / 1024)));
+    expect(indexUpload[5]).toBeLessThan(713);
+  });
 });
