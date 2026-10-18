@@ -13,7 +13,11 @@ import {
   Cube,
   Cylinder,
   DirectionalLight,
+  Fog,
+  FogMode,
   GltfLoader,
+  InstancedMesh,
+  Matrix4,
   Object3D,
   OrbitController,
   PlanarReflectionNode,
@@ -40,6 +44,8 @@ class Showcase30 extends AbstractShowcase {
   private _puddlePlates: Object3D[] = [];
   private _reflectionNode!: PlanarReflectionNode;
   private _hoverCar!: Object3D;
+  private _rainMesh!: InstancedMesh;
+  private _rainPositions!: Float32Array;
   private _time = 0;
 
   constructor(options: EngineOptions = {}) {
@@ -82,16 +88,16 @@ class Showcase30 extends AbstractShowcase {
     this.defaultFar = 150;
     this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
-    // Genuine "wet street photography" framing: near-puddle-level height and a near-horizontal
-    // view. The puddle's reflection strength is Fresnel-driven (like real water/wet asphalt) --
-    // it's strong at grazing angles and fades fast the higher/steeper the camera looks down, so
-    // camera HEIGHT above the puddle plane matters as much as the aim angle. Confirmed visually:
-    // at (x, 0.16-0.2, z) with a ~1 degree elevation angle, the car's own lights mirror clearly;
-    // the earlier (0, 0.5, 5.5)/(0, 0.3, -1) framing looked shallow-angled too but sat too high
-    // above the plane (0.485 vs 0.16) for the reflection to read.
-    this.camera.position.set(1.4, 0.42, 5.2);
-    this.camera.target.set(0, 0.6, -1.0);
+    this.camera.position.set(1.4, 0.52, 4.4);
+    this.camera.target.set(0, 0.35, -0.9);
     this.camera.addBehavior(new OrbitController({ input: this.input }));
+
+    // Atmospheric Rain Haze (deep night indigo, prevents background washout)
+    this.scene.fog = new Fog({
+      color: new Color(0.015, 0.02, 0.035),
+      mode: FogMode.EXP2,
+      density: 0.014,
+    });
 
     // 1. Dark Rainy Night Ambient
     const ambientLight = new AmbientLight({
@@ -171,14 +177,14 @@ class Showcase30 extends AbstractShowcase {
       console.warn("Could not load PBR textures:", e);
     }
 
-    // Materials Palette
+    // Materials Palette: Soaking wet tarmac with glossy specular sheen
     const dryAsphaltMat = new StandardMaterial({
-      color: new Color(0.35, 0.38, 0.42),
+      color: new Color(0.22, 0.24, 0.28),
       diffuseMap: asphaltDiffuse,
       normalMap: asphaltNormal,
       roughnessMap: asphaltRoughness,
-      roughness: 0.35,
-      metallic: 0.05,
+      roughness: 0.18,
+      metallic: 0.15,
       envMap: envTexture,
     });
 
@@ -204,17 +210,17 @@ class Showcase30 extends AbstractShowcase {
       reflectionFresnelBlend: 0.15,
     });
 
-    // Cyberpunk building facade with emissive scattered windows
+    // Cyberpunk building facade: rain-soaked with glossy wet sheen
     const buildingMat = new StandardMaterial({
-      color: new Color(0.7, 0.75, 0.85),
+      color: new Color(0.65, 0.7, 0.8),
       diffuseMap: facadeDiffuse,
       normalMap: facadeNormal,
       roughnessMap: facadeRoughness,
       emissiveMap: facadeEmission,
       emissiveColor: new Color(1.0, 1.0, 1.0),
       emissiveIntensity: 1.5,
-      roughness: 0.75,
-      metallic: 0.1,
+      roughness: 0.45,
+      metallic: 0.25,
       envMap: envTexture,
     });
 
@@ -259,10 +265,10 @@ class Showcase30 extends AbstractShowcase {
 
     // 5. Mirrored Rain Water Puddles (4 distinct puddles across the wet street)
     const puddleConfigs = [
-      { x: 0.4, z: 2.0, rx: 1.3, rz: 1.7 }, // Puddle 0: Mirror pool for hover car rear & underglow
-      { x: -2.2, z: -0.8, rx: 1.0, rz: 1.3 }, // Puddle 1: Mid-ground left beside car
-      { x: 2.5, z: -2.5, rx: 1.0, rz: 1.4 }, // Puddle 2: Distant right alley
-      { x: -2.3, z: 2.8, rx: 0.9, rz: 1.2 }, // Puddle 3: Foreground left
+      { x: 0.1, z: 0.0, rx: 1.9, rz: 2.6 }, // Puddle 0: Mirror pool directly under & behind hover car
+      { x: -3.4, z: -2.5, rx: 1.0, rz: 1.4 }, // Puddle 1: Distant left alley
+      { x: 3.4, z: -2.5, rx: 1.0, rz: 1.4 }, // Puddle 2: Distant right alley
+      { x: -2.6, z: 3.4, rx: 0.9, rz: 1.2 }, // Puddle 3: Foreground left
     ];
 
     for (let p = 0; p < puddleConfigs.length; p++) {
@@ -354,45 +360,73 @@ class Showcase30 extends AbstractShowcase {
     this.scene.add(overheadSign);
 
     // 8. Futuristic Hover Vehicle in Center
-    // Real low-poly mesh (Kenney "Car Kit", CC0 -- see REFERENCES.md) instead of the old
-    // hand-stacked chassis/cockpit box primitives.
+    // Real low-poly mesh (Kenney "Car Kit", CC0 -- see REFERENCES.md), reskinned with
+    // high-gloss sapphire cyberpunk metallic paint and illuminated light bars.
     this._hoverCar = new Object3D("HoverCar");
-    this._hoverCar.position.set(0, 0.8, -1.0);
-    this._hoverCar.rotation.y = Math.PI - 0.25;
+    this._hoverCar.position.set(0, 0.08, -0.9);
+    this._hoverCar.rotation.y = Math.PI - 0.35;
     this.scene.add(this._hoverCar);
+
+    // Soft camera-side key light to sculpt the car's metallic body contours and spoiler
+    const carKeyLight = new PointLight({
+      color: new Color(0.65, 0.8, 1.0),
+      intensity: 2.5,
+      distance: 8.0,
+    });
+    carKeyLight.position.set(2.2, 1.8, 3.2);
+    this.scene.add(carKeyLight);
 
     try {
       const carLoader = new GltfLoader({ basePath: "./assets/car/" });
       const carModel = await carLoader.load("sedan-sports.glb");
       carModel.scale.set(1.35, 1.35, 1.35);
-      carModel.castShadow = true;
+
+      // Reskin model with sleek cyberpunk metallic car paint and dark wheels
+      carModel.traverse((node: Object3D) => {
+        if (node.geometry) {
+          node.castShadow = true;
+          if (node.name.includes("body") || node.name.includes("spoiler")) {
+            node.material = new StandardMaterial({
+              color: new Color(0.12, 0.22, 0.38),
+              roughness: 0.14,
+              metallic: 0.9,
+              envMap: envTexture,
+            });
+          } else if (node.name.includes("wheel")) {
+            node.material = new StandardMaterial({
+              color: new Color(0.04, 0.04, 0.05),
+              roughness: 0.5,
+              metallic: 0.3,
+              envMap: envTexture,
+            });
+          }
+        }
+      });
+
       this._hoverCar.add(carModel);
     } catch (e) {
       console.warn("Could not load hover car model:", e);
     }
 
-    // Underglow strip (an actual emissive mesh under the belly, not just a light -- a PointLight
-    // alone illuminates the puddle below but isn't itself visible as a "glow") + a real PointLight
-    // alongside it so the glow actually lights the asphalt/puddle underneath. Sells the
-    // "hovering, not driving" read.
+    // Underglow strip + PointLight underneath
     const underglowBar = new Object3D("UnderglowBar");
     underglowBar.geometry = new Cube({ size: 1 }).getGeometryData();
     underglowBar.scale.set(0.35, 0.03, 2.2);
     underglowBar.material = new StandardMaterial({
       color: new Color(0.05, 0.95, 1.0),
       emissiveColor: new Color(0.1, 1.1, 1.3),
-      emissiveIntensity: 1.2,
+      emissiveIntensity: 1.5,
       roughness: 0.1,
     });
-    underglowBar.position.set(0, 0.04, 0);
+    underglowBar.position.set(0, 0.03, 0);
     this._hoverCar.add(underglowBar);
 
     const underglowLight = new PointLight({
       color: new Color(0.05, 0.95, 1.0),
-      intensity: 0.8,
-      distance: 2.5,
+      intensity: 2.0,
+      distance: 3.5,
     });
-    underglowLight.position.set(0, 0.04, 0);
+    underglowLight.position.set(0, 0.03, 0);
     this._hoverCar.add(underglowLight);
 
     // sedan-sports.glb front is +Z (headlights), rear is -Z (spoiler & taillights).
@@ -418,11 +452,11 @@ class Showcase30 extends AbstractShowcase {
 
     const tailLights = new Object3D("TailLights");
     tailLights.geometry = new Cube({ size: 1 }).getGeometryData();
-    tailLights.scale.set(1.15, 0.05, 0.1);
+    tailLights.scale.set(1.25, 0.06, 0.1);
     tailLights.material = new StandardMaterial({
       color: new Color(1.0, 0.0, 0.05),
-      emissiveColor: new Color(4.5, 0.05, 0.2),
-      emissiveIntensity: 1.2,
+      emissiveColor: new Color(5.0, 0.1, 0.2),
+      emissiveIntensity: 2.0,
       roughness: 0.1,
     });
     tailLights.position.set(0, 0.3, -1.62);
@@ -430,11 +464,46 @@ class Showcase30 extends AbstractShowcase {
 
     const tailLightGlow = new PointLight({
       color: new Color(1.0, 0.05, 0.1),
-      intensity: 1.0,
-      distance: 3.0,
+      intensity: 2.0,
+      distance: 3.5,
     });
     tailLightGlow.position.set(0, 0.3, -1.7);
     this._hoverCar.add(tailLightGlow);
+
+    // 9. Torrential Cyberpunk Rain Streaks
+    const RAIN_COUNT = 1000;
+    const rainGeom = new Cube({ size: 1 }).getGeometryData();
+    const rainMat = new StandardMaterial({
+      color: new Color(0.7, 0.85, 1.0),
+      emissiveColor: new Color(0.4, 0.6, 0.9),
+      emissiveIntensity: 0.8,
+      roughness: 0.1,
+      metallic: 0.9,
+    });
+    this._rainMesh = new InstancedMesh("RainSystem", rainGeom, rainMat, RAIN_COUNT);
+    this._rainPositions = new Float32Array(RAIN_COUNT * 3);
+
+    const rainMat4 = new Matrix4();
+    for (let i = 0; i < RAIN_COUNT; i++) {
+      const rx = (Math.random() - 0.5) * 14.0;
+      const ry = Math.random() * 14.0;
+      const rz = (Math.random() - 0.5) * 22.0;
+      this._rainPositions[i * 3 + 0] = rx;
+      this._rainPositions[i * 3 + 1] = ry;
+      this._rainPositions[i * 3 + 2] = rz;
+
+      rainMat4.identity();
+      rainMat4.data[0] = 0.012;
+      rainMat4.data[5] = 0.45;
+      rainMat4.data[10] = 0.012;
+      rainMat4.data[12] = rx;
+      rainMat4.data[13] = ry;
+      rainMat4.data[14] = rz;
+      this._rainMesh.setMatrixAt(i, rainMat4);
+    }
+    this._rainMesh.castShadow = false;
+    this.scene.add(this._rainMesh);
+    this._reflectionNode.excludedObjects.push(this._rainMesh);
   }
 
   protected override update(deltaTime: number): void {
@@ -442,8 +511,39 @@ class Showcase30 extends AbstractShowcase {
 
     // Hover vehicle levitation bobbing
     if (this._hoverCar) {
-      this._hoverCar.position.y = 0.8 + Math.sin(this._time * 2.5) * 0.08;
-      this._hoverCar.rotation.z = Math.sin(this._time * 1.5) * 0.02;
+      this._hoverCar.position.y = 0.08 + Math.sin(this._time * 2.0) * 0.015;
+      this._hoverCar.rotation.z = Math.sin(this._time * 1.5) * 0.01;
+    }
+
+    // Dynamic rain fall
+    if (this._rainMesh && this._rainPositions) {
+      const fallSpeed = 24.0 * deltaTime;
+      const windX = -2.0 * deltaTime;
+      const windZ = -1.0 * deltaTime;
+      const count = this._rainMesh.instanceCount;
+      const matrices = this._rainMesh.instanceMatrices;
+
+      for (let i = 0; i < count; i++) {
+        let x = this._rainPositions[i * 3 + 0]! + windX;
+        let y = this._rainPositions[i * 3 + 1]! - fallSpeed;
+        let z = this._rainPositions[i * 3 + 2]! + windZ;
+
+        if (y < 0.0) {
+          y = 13.0 + Math.random() * 2.0;
+          x = (Math.random() - 0.5) * 14.0;
+          z = (Math.random() - 0.5) * 22.0;
+        }
+
+        this._rainPositions[i * 3 + 0] = x;
+        this._rainPositions[i * 3 + 1] = y;
+        this._rainPositions[i * 3 + 2] = z;
+
+        const offset = i * 16;
+        matrices[offset + 12] = x;
+        matrices[offset + 13] = y;
+        matrices[offset + 14] = z;
+      }
+      this._rainMesh.instanceMatrixNeedsUpdate = true;
     }
 
     // Neon sign pulse flicker
