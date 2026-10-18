@@ -19,6 +19,15 @@ function runSkip(cwd: string, extraArgs: string[] = []): RunResult {
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
+function runSkipEmit(cwd: string, env: Record<string, string>): RunResult {
+  const result = spawnSync("node", [SCRIPT, "--emit-status"], {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+  return { status: result.status, output: `${result.stdout}${result.stderr}` };
+}
+
 describe("scripts/goldens/skip-check.js", () => {
   let repo: string;
 
@@ -123,5 +132,35 @@ describe("scripts/goldens/skip-check.js", () => {
 
     expect(status).toBe(0);
     expect(output).toContain("SKIP");
+  });
+
+  it("CI contract: --emit-status ends with exit 0 and signals RUN only via should_run=true", () => {
+    // Regression für den ersten realen Dispatch (39129094684): ein RUN mit Exit 1 markierte den
+    // CI-Step als fehlgeschlagen, GitHub verwirft die Outputs, alle `if:`-Gates liefen leer und der
+    // Fail-Closed-Guard schlug fälschlich an. Im CI-Modus muss die Entscheidung AUSSCHLIESSLICH über
+    // $GITHUB_OUTPUT laufen, nie über den Exit-Code.
+    seedBaselineRepo();
+    write("packages/engine/src/renderers/NewShader.ts", "export {};\n");
+    commitAll("new shader source");
+
+    const ghOut = path.join(repo, "gh-out.txt");
+    const { status, output } = runSkipEmit(repo, { GITHUB_OUTPUT: ghOut });
+
+    expect(status).toBe(0);
+    expect(output).toContain("RUN");
+    expect(fs.readFileSync(ghOut, "utf8")).toContain("should_run=true");
+  });
+
+  it("CI contract: --emit-status ends with exit 0 and signals SKIP only via should_run=false", () => {
+    seedBaselineRepo();
+    write("README.md", "readme v2\n");
+    commitAll("docs only");
+
+    const ghOut = path.join(repo, "gh-out.txt");
+    const { status, output } = runSkipEmit(repo, { GITHUB_OUTPUT: ghOut });
+
+    expect(status).toBe(0);
+    expect(output).toContain("SKIP");
+    expect(fs.readFileSync(ghOut, "utf8")).toContain("should_run=false");
   });
 });

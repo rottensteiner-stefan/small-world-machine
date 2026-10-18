@@ -152,12 +152,19 @@ export function decide({ baselineCommit, head, shallow, changed }) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  // CI-Modus: `--emit-status` schreibt die Entscheidung NUR über `should_run` in $GITHUB_OUTPUT und
+  // endet IMMER mit Exit 0. Ein non-zero Exit würde den CI-Step als fehlgeschlagen markieren; GitHub
+  // verwirft dann die Step-Outputs, die `if:`-Gates liefen leer und der Fail-Closed-Guard schlüge
+  // fälschlich an (im ersten realen Dispatch 39129094684 genau so beobachtet). Fehler (fs/git) werden
+  // weiterhin per Exception gemeldet -> leerer `should_run` => Guard failt closed. Lokal (ohne
+  // `--emit-status`) bleibt der dokumentierte Exit-Code-Vertrag: 0 = SKIP, 1 = RUN.
+  const emitStatus = args.emitStatus && !!process.env.GITHUB_OUTPUT;
   const exit = (shouldRun, reason) => {
-    if (args.emitStatus && process.env.GITHUB_OUTPUT) {
+    if (emitStatus) {
       fs.appendFileSync(process.env.GITHUB_OUTPUT, `should_run=${shouldRun ? "true" : "false"}\n`);
     }
     console.log(`[goldens:skip-check] ${shouldRun ? "RUN" : "SKIP"}: ${reason}`);
-    process.exitCode = shouldRun ? 1 : 0;
+    process.exitCode = emitStatus ? 0 : shouldRun ? 1 : 0;
   };
 
   const repoRoot = resolveRepoRoot(process.cwd());

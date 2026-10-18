@@ -106,9 +106,10 @@ wurden: im selben Commit wie die Änderung, mit der neuen Browser-Version im `su
   - Exit **0** = alles ok, **1** = technischer Fehler (Bild fehlt/unlesbar/blank), **2** = Drift-Verletzung.
 - `goldens:skip [--baseline <dir>] [--emit-status]`
   - Diff-Gate (Goldens-Optimierung M1): beendet **ohne Build und ohne Browser**, ob ein Capture/Compare-Lauf nötig ist. Nur `git`-Kommandozeile, keine Abhängigkeiten.
-  - Exit **0** = SKIP (kein Build-Input von Showcase 10 seit dem Baseline-Commit geändert), **1** = RUN.
+  - Lokal (ohne `--emit-status`): Exit **0** = SKIP, **1** = RUN.
+  - CI (mit `--emit-status`): Endet **immer mit Exit 0** und übermittelt die Entscheidung ausschließlich über `should_run=true|false` in `$GITHUB_OUTPUT` — nie über den Exit-Code (ein non-zero Exit würde den Step fehlschlagen lassen, GitHub verwirft die Outputs, und der Fail-Closed-Guard würde fälschlich anschlagen).
   - Fehlerrichtung konservativ: nur skippen, wenn es beweisbar nichts Output-Relevantes gibt — ein SKIP ist nie falsch-grün. Pfade, die die Canvas-Pixel nicht beeinflussen (docs/, .agents/, andere Apps, public/), erzwingen keinen Lauf.
-  - Der CI-Job `liquid-goldens` gated damit `npm ci`/Build/Capture/Compare (s. ci.yml); `--emit-status` schreibt `should_run=true|false` in `$GITHUB_OUTPUT`.
+  - Der CI-Job `liquid-goldens` gated damit `npm ci`/Build/Capture/Compare (s. ci.yml); `--emit-status` schreibt `should_run=true|false` in `$GITHUB_OUTPUT`. Der Job checked out with `fetch-depth: 0` (Shallow-Clones lösen den Baseline-Commit nicht auf → falsches Grün); ein leer bleibender `should_run` (z. B. Absturz des Skripts) failt closed.
 - `goldens:adopt-ci -- --run-id <id> [--accept] [--out <dir>] [--baseline <dir>]`
   - Ein Kommando für die Baseline-Neuaufnahme aus CI-Artefakten (M4): lädt die vier `liquid-goldens-*`-Artefakte via `gh`, merged sie, vergleicht gegen die Baseline und schreibt Review-Report (`<out>/review.html` + `compare.json`). Mit `--accept` werden vergleichbare Zellen sofort als neue Baseline übernommen.
 - `--report-html <path>` ist Zusatzoption von `goldens:compare`: einzelner, selbstständiger HTML-Report. Nur divergierende Zellen (DIFF/FAIL/ERR) tragen Baseline/Current/Diff-Thumbnails (eingebettete Data-URIs); identische Zellen stehen als Text.
