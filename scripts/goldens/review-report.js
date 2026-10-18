@@ -53,7 +53,11 @@ function thumbDataUri(file) {
   }
 }
 
-function escapeHtml(text) {
+export function thumbnailDataUri(file) {
+  return thumbDataUri(file);
+}
+
+export function escapeHtml(text) {
   return String(text)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")

@@ -30,10 +30,13 @@ npm run goldens:compare -- --baseline .agents/goldens/liquid/baseline \
 ```
 
 Die CI startet Capture+Compare **nur auf Anforderung**: Actions → „CI" → „Run workflow" (Schalter `goldens`; `smoke` ist
-der Showcase-Smoke-Test, `gpu-goldens` die informationelle WebGPU-Aufnahme). Push und Pull Request laufen nur durch `verify`.
+der Showcase-Smoke-Test, `capture` die Capture-Determinismus-Prüfung). Push und Pull Request laufen nur durch `verify`.
+WebGPU-Goldens (`--matrix gpu`) sind seit der Goldens-Optimierung (M2) **lokal** zu fahren (auf echter GPU); ein
+immer-fehlernder WebGPU-CI-Job wurde entfernt.
 Der Job `liquid-goldens` ist in vier Shards geteilt (`--shard i/4`, 4 Pools je Shard): die Zellen sind unabhängig und
 deterministisch, die Bilder ändern sich dadurch nicht, ein Lauf dauert etwa 5 statt 14 Minuten
-(`ref: .github/workflows/ci.yml`).
+(`ref: .github/workflows/ci.yml`). Der Job überspringt sich komplett (Diff-Gate, M1: `goldens:skip`), wenn seit dem
+Baseline-Commit kein Showcase-10-Build-Input geändert wurde.
 
 ### Shards
 
@@ -110,6 +113,8 @@ wurden: im selben Commit wie die Änderung, mit der neuen Browser-Version im `su
   - Ein Kommando für die Baseline-Neuaufnahme aus CI-Artefakten (M4): lädt die vier `liquid-goldens-*`-Artefakte via `gh`, merged sie, vergleicht gegen die Baseline und schreibt Review-Report (`<out>/review.html` + `compare.json`). Mit `--accept` werden vergleichbare Zellen sofort als neue Baseline übernommen.
 - `--report-html <path>` ist Zusatzoption von `goldens:compare`: einzelner, selbstständiger HTML-Report. Nur divergierende Zellen (DIFF/FAIL/ERR) tragen Baseline/Current/Diff-Thumbnails (eingebettete Data-URIs); identische Zellen stehen als Text.
 - `--accept` ist Zusatzoption von `goldens:compare`: übernimmt vergleichbare Zellen (OK/DIFF/FAIL) als neue Baseline — kopiert PNGs, merged `manifest.json`, aktualisiert nur die Drift-Anker in `summary.json` (Browser, Zeit). ERR-Zellen werden übersprungen, damit keine Baseline-Zelle mit Blank/fehlend überschrieben wird. Exit 0 = Drift als bestätigt gewertet; 1 bleibt bei technischem Fehler.
+- `goldens:gallery -- <dir> [--out <path>] [--title <text>]`
+  - Kontaktbogen (M5): eine einzelne, selbstständige HTML-Filmklappe aller PNGs eines Capture-Ordners (verkleinerte, eingebettete Thumbnails) — für Art-Review oder Vergleiche breiter Bildsätze ohne hunderte einzelne Dateien zu öffnen. Nicht-gating.
 
 ## Konfiguration
 

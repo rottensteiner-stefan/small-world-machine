@@ -47,6 +47,7 @@
     "goldens:compare": "node scripts/goldens/compare.js",
     "goldens:skip": "node scripts/goldens/skip-check.js",
     "goldens:adopt-ci": "node scripts/goldens/adopt-ci.js",
+    "goldens:gallery": "node scripts/goldens/contact-sheet.js",
     "goldens:grade": "node scripts/goldens/differential-grader.js",
     "worktree:new": "node scripts/worktree-new.mjs",
     "aniso:compare": "node scripts/aniso-compare.mjs",
