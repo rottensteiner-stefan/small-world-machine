@@ -96,23 +96,36 @@ void main() {
     // water -> 1 where the Gerstner crests pinch together (replaces the parked normal.y
     // threshold, which only picked up high-frequency curvature noise).
     // Anisotropic lace edge network: combines two frequencies of Worley cell walls.
+    // Named constants mirror the shared liquid shader set (OpenWater.frag.glsl/.wgsl).
+    const float CREST_FOAM_THRESHOLD_LOW = 0.65;
+    const float CREST_FOAM_THRESHOLD_HIGH = 0.95;
+    const float CREST_FOAM_INTENSITY = 0.9;
     vec2 crestCellUv = foamUv * 2.7 + 11.0;
     float crestCell2 = waterCellNoise(crestCellUv);
-    float crestMask = smoothstep(0.65, 0.95, v_crest);
+    float crestMask = smoothstep(CREST_FOAM_THRESHOLD_LOW, CREST_FOAM_THRESHOLD_HIGH, v_crest);
     float crestLace = max(smoothstep(0.35, 0.85, foamCell), smoothstep(0.35, 0.85, crestCell2));
-    float crestFoam = clamp(crestMask * crestLace + crestMask * crestMask * 0.6, 0.0, 1.0) * 0.9;
+    float crestFoam = clamp(crestMask * crestLace + crestMask * crestMask * 0.6, 0.0, 1.0) * CREST_FOAM_INTENSITY;
     foamMask = max(foamMask, crestFoam);
 
     finalColor = mix(finalColor, foamColor, foamMask);
 
     // Procedural caustics: a lighter second Worley-noise layer.
-    vec2 causticsUv1 = (v_worldPos.xz + v_normal.xz * 0.25) * 1.4 + vec2(u_time * foamNoiseSpeed * 0.35, u_time * foamNoiseSpeed * 0.2);
+    // Named constants mirror the shared liquid shader set (OpenWater.frag.glsl/.wgsl). The
+    // depth-based constants of the other backends -- CAUSTICS_MAX_DEPTH, CAUSTICS_FADE_EXPONENT,
+    // SPECULAR_EXPONENT, SPECULAR_INTENSITY -- are intentionally NOT declared here: this WebGL1
+    // path has no real depth capture, so it uses a Fresnel-proxy fade and a cheaper specular
+    // approximation instead of the pow-exponent model (see "No real depth buffer on WebGL1" and
+    // "Fresnel proxy" notes above); they exist only where the algorithm actually uses them.
+    const float CAUSTICS_SCALE = 1.4;
+    const float CAUSTICS_GAIN = 0.1;
+    const vec3 CAUSTICS_LIGHT_TINT = vec3(1.0, 0.98, 0.88);
+    vec2 causticsUv1 = (v_worldPos.xz + v_normal.xz * 0.25) * CAUSTICS_SCALE + vec2(u_time * foamNoiseSpeed * 0.35, u_time * foamNoiseSpeed * 0.2);
     vec2 causticsUv2 = (v_worldPos.xz - v_normal.xz * 0.2) * 1.96 - vec2(u_time * foamNoiseSpeed * 0.25, u_time * foamNoiseSpeed * 0.4);
     float caustics1 = 1.0 - waterCellNoise(causticsUv1);
     float caustics2 = 1.0 - waterCellNoise(causticsUv2);
     float causticsValue = pow(caustics1 * caustics2, 1.6) * 3.2;
     float causticsFade = 1.0 - smoothstep(0.0, 1.0, fresnel);
-    finalColor += vec3(1.0, 0.98, 0.88) * causticsValue * causticsFade * 0.1;
+    finalColor += CAUSTICS_LIGHT_TINT * causticsValue * causticsFade * CAUSTICS_GAIN;
 
     finalColor = pow(finalColor, vec3(1.0 / 2.2));
 
