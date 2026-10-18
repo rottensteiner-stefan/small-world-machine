@@ -44,9 +44,25 @@ verklebt sind. Kernprinzip: **eine Ebene = eine Zuständigkeit, ein einmaliger S
 resolved Config, explizite Wahl sperrt Automatik.**
 
 ### Ebene 1 — Detektion (bleibt, unverändert)
-`DeviceCaps.getPerformanceTier()` (`DeviceCaps.ts:594-620`) und `isMobile()` (`:549-564`) bleiben
-die einzige Quelle der Geräteklassifikation. Das ist Input, kein Hook: keine neuen
-User-konfigurierbaren Gerät-Knobs, keine Score-Veränderung in V1.
+`DeviceCaps.getPerformanceTier()` und `isMobile()` bleiben die einzige Quelle der
+Geräteklassifikation. Das ist Input, kein Hook: keine neuen User-konfigurierbaren Gerät-Knobs.
+
+**Nachtrag 2026-10-18 (Score-Korrektur):** Der Score wurde entgegen der
+ursprünglichen „keine Score-Veränderung in V1"-Zeile korrigiert, weil er systematisch falsch lag:
+- `deviceMemory` fehlt in Safari/Firefox → zählt jetzt wie ein gut ausgestattetes Gerät (vorher
+  Fallback 4 GB = 0 Punkte, dadurch war dort nie HIGH möglich).
+- WebGPU-Präsenz gibt keine Punkte mehr (API-Achse ≠ Performance-Achse).
+- `isMobile()` nutzt die physische Bildschirmgröße statt der Fensterbreite (Touch-Laptop mit
+  schmalem Fenster war „Mobile").
+- Neu: GPU-Klasse aus dem unmasked Renderer-String (`GpuClass.ts`, Regex-Tabelle: ±2 Punkte,
+  unbekannt = neutral). Software-Renderer (SwiftShader/llvmpipe) zählen als LOW.
+- Neu: Test-/Debug-Override `DeviceCaps.forcedTier` bzw. URL-Parameter `?tier=low|medium|high`
+  (Device-Simulation, z. B. Redmi-Gegenprobe). Der Golden-Capture (`scripts/goldens/capture.js`)
+  erzwingt `tier=high`, weil SwiftShader sonst auf LOW fiele und die Baselines verändern würde.
+Die AGENTS.md-Architektur-Law „Tiered Renderer Autonomy" (aktualisiert 2026-10-18) trennt explizit
+**API-Tier** (WebGPU/WebGL2/WebGL1 = Fähigkeiten) von **Performance-Tier** (schwaches/starkes Gerät =
+Speed) und verankert, dass jeder Renderer Features/Budgets (Auflösung, Samples, Radii, Counts) nach
+Performance-Tier reduzieren darf — genau diese Ebene-1/2-Trennung setzt dieser Resolver um.
 
 ### Ebene 2 — Policy (NEU: Quality-Tier-Resolver)
 Neu ist ein **deterministischer, einmaliger Resolver**, aufgerufen exakt einmal in
@@ -58,8 +74,11 @@ Regeln:
 - Der Resolver liefert eine **geschlossene, einmalig validierte** Konfiguration; `start()` schreibt
   danach nichts mehr an `config.quality`/`config.postProcessing` nach (Fail-Fast: genau ein
   Auflösungsschritt, danach gilt die Config).
-- **WebGPU wird nie als Downgrade-Schritt deaktiviert** (AGENTS-Doktrin „Never degrade WebGPU"):
-  der Tier bietet pro Effekt *Stufen* an (half-res, Samples, Kaskaden), degradiert aber kein Backend.
+- **Kein API-Parity-Cap** (AGENTS-Doktrin „Tiered Renderer Autonomy", Fassung 2026-10-18): WebGPU
+  wird nie begrenzt, *weil* WebGL2/1 etwas nicht können, und kein Backend wird als Downgrade-Schritt
+  deaktiviert. Die Tier-Matrix ist renderer-unabhängig und gehört zur **Performance-Achse**: Sie
+  darf auf jedem Renderer Effekte stufen (half-res, Samples, Kaskaden) oder abschalten, wenn das
+  Gerät sonst sein Frame-Budget reißt.
 - **Keine Shader-Recompiles durch Tier-Wechsel.** Tier-Entscheidungen werden als
   on/off-Konfiguration und Auflösungs-/Samples-Werte modelliert (statische Variationen via
   konfigurierbarer Uniforms/Konstanten), nicht als Wechsel zwischen verschiedenen Shader-Varianten —
