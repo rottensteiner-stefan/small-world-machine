@@ -5,10 +5,10 @@ import type {
   VignetteElement,
 } from "@small-world-machine/engine";
 import {
+  AbstractGeometry,
   AbstractShowcase,
   AmbientLight,
   CameraStrategyType,
-  Circle,
   Color,
   Cube,
   Cylinder,
@@ -18,6 +18,7 @@ import {
   GltfLoader,
   InstancedMesh,
   Matrix4,
+  Noise,
   Object3D,
   OrbitController,
   PlanarReflectionNode,
@@ -264,20 +265,151 @@ class Showcase30 extends AbstractShowcase {
     street.receiveShadow = true;
     this.scene.add(street);
 
-    // 5. Mirrored Rain Water Puddles (4 distinct puddles across the wet street)
+    interface SplashGeometryOptions {
+      radius?: number;
+      segments?: number;
+      seed?: number;
+      warp?: number;
+      frequency?: number;
+      satellites?: number;
+    }
+
+    /**
+     * Procedural organic splash / puddle geometry based on multi-frequency simplex noise warping,
+     * overlapping secondary lobes, and satellite droplets (matching the techniques demonstrated
+     * in public/tools/splatter-gen.html).
+     */
+    class SplashGeometry extends AbstractGeometry {
+      public radius: number;
+      public segments: number;
+      public seed: number;
+      public warp: number;
+      public frequency: number;
+      public satellites: number;
+
+      constructor(options: SplashGeometryOptions = {}) {
+        super();
+        this.radius = options.radius ?? 1.0;
+        this.segments = Math.max(16, options.segments ?? 64);
+        this.seed = options.seed ?? 1.0;
+        this.warp = options.warp ?? 0.35;
+        this.frequency = options.frequency ?? 2.4;
+        this.satellites = options.satellites ?? 5;
+        this.generateGeometryData();
+      }
+
+      protected override generateGeometryData(): void {
+        const v: number[] = [];
+        const uv: number[] = [];
+        const idx: number[] = [];
+        const norm: number[] = [];
+
+        let s = this.seed;
+        const rand = (): number => {
+          s = (s * 9301 + 49297) % 233280;
+          return s / 233280;
+        };
+
+        const addBlob = (
+          cx: number,
+          cz: number,
+          rBase: number,
+          segs: number,
+          warpAmp: number,
+          freq: number,
+          seedOffset: number,
+        ): void => {
+          const centerIdx = v.length / 3;
+          v.push(cx, 0, cz);
+          norm.push(0, 1, 0);
+          uv.push(0.5 + cx / (this.radius * 2.5), 0.5 + cz / (this.radius * 2.5));
+
+          const baseVertex = v.length / 3;
+          for (let i = 0; i <= segs; i++) {
+            const theta = (i / segs) * Math.PI * 2;
+            const nx = Math.cos(theta);
+            const nz = Math.sin(theta);
+
+            // Continuous 2D noise loop sampled on the circle
+            const n1 = Noise.simplex2(nx * freq + seedOffset, nz * freq + seedOffset * 1.7);
+            const n2 =
+              Noise.simplex2(
+                nx * (freq * 2.3) + seedOffset * 3.1,
+                nz * (freq * 2.3) + seedOffset * 4.3,
+              ) * 0.4;
+            const r = rBase * Math.max(0.15, 1.0 + (n1 + n2) * warpAmp);
+
+            const px = cx + nx * r;
+            const pz = cz + nz * r;
+
+            v.push(px, 0, pz);
+            norm.push(0, 1, 0);
+            uv.push(0.5 + px / (this.radius * 2.5), 0.5 + pz / (this.radius * 2.5));
+          }
+
+          for (let i = 0; i < segs; i++) {
+            idx.push(centerIdx, baseVertex + i + 1, baseVertex + i);
+          }
+        };
+
+        // 1. Main splash body
+        addBlob(0, 0, this.radius, this.segments, this.warp, this.frequency, this.seed * 7.13);
+
+        // 2. Secondary overlapping lobes to break radial symmetry into organic puddles
+        const lobeCount = 2 + Math.floor(rand() * 3);
+        for (let l = 0; l < lobeCount; l++) {
+          const lobeAngle = rand() * Math.PI * 2;
+          const lobeDist = this.radius * (0.25 + rand() * 0.35);
+          const lobeR = this.radius * (0.4 + rand() * 0.35);
+          const lx = Math.cos(lobeAngle) * lobeDist;
+          const lz = Math.sin(lobeAngle) * lobeDist;
+          addBlob(
+            lx,
+            lz,
+            lobeR,
+            32,
+            this.warp * 0.8,
+            this.frequency * 1.2,
+            this.seed * 11.3 + l * 5.7,
+          );
+        }
+
+        // 3. Small satellite droplets scattered around the splash
+        for (let k = 0; k < this.satellites; k++) {
+          const satAngle = rand() * Math.PI * 2;
+          const satDist = this.radius * (1.1 + rand() * 0.45);
+          const satR = this.radius * (0.05 + rand() * 0.08);
+          const sx = Math.cos(satAngle) * satDist;
+          const sz = Math.sin(satAngle) * satDist;
+          addBlob(sx, sz, satR, 12, 0.2, 2.0, this.seed * 19.1 + k * 3.3);
+        }
+
+        this._vertices = new Float32Array(v);
+        this._normals = new Float32Array(norm);
+        this._uvs = new Float32Array(uv);
+        this._indices = this._createIndexArray(idx.length);
+        this._indices.set(idx);
+        this.computeTangents();
+      }
+    }
+
+    // 5. Mirrored Rain Water Puddles (4 distinct organic splash puddles across the wet street)
     const puddleConfigs = [
-      { x: 0.1, z: 0.0, rx: 1.9, rz: 2.6 }, // Puddle 0: Mirror pool directly under & behind hover car
-      { x: -3.4, z: -2.5, rx: 1.0, rz: 1.4 }, // Puddle 1: Distant left alley
-      { x: 3.4, z: -2.5, rx: 1.0, rz: 1.4 }, // Puddle 2: Distant right alley
-      { x: -2.6, z: 3.4, rx: 0.9, rz: 1.2 }, // Puddle 3: Foreground left
+      { x: 0.1, z: 0.0, rx: 1.9, rz: 2.6, seed: 1.4, warp: 0.38, satellites: 7 }, // Puddle 0: Under & behind hover car
+      { x: -3.4, z: -2.5, rx: 1.1, rz: 1.5, seed: 4.8, warp: 0.42, satellites: 4 }, // Puddle 1: Distant left alley
+      { x: 3.4, z: -2.5, rx: 1.1, rz: 1.5, seed: 9.1, warp: 0.35, satellites: 4 }, // Puddle 2: Distant right alley
+      { x: -2.6, z: 3.4, rx: 1.0, rz: 1.3, seed: 13.5, warp: 0.45, satellites: 5 }, // Puddle 3: Foreground left
     ];
 
     for (let p = 0; p < puddleConfigs.length; p++) {
       const cfg = puddleConfigs[p]!;
       const puddle = new Object3D(`Puddle_${p}`);
-      puddle.geometry = new Circle({
+      puddle.geometry = new SplashGeometry({
         radius: 1.0,
-        segments: 48,
+        segments: 64,
+        seed: cfg.seed,
+        warp: cfg.warp,
+        satellites: cfg.satellites,
       }).getGeometryData();
       puddle.scale.set(cfg.rx, 1.0, cfg.rz);
       puddle.material = wetPuddleMat;
