@@ -51,7 +51,14 @@ Context attributes per backend (passed to `getContext()`), indexed by backend na
 
 These control the engine's graphical fidelity.
 
-- `autoDowngrade` (boolean, default: true): When `true`, the engine automatically overrides expensive settings (such as MSAA or HDR) once it detects a low-power device (e.g. smartphones).
+- **Automatic quality tiers (ADR 0035):** The engine detects the device tier once
+  (`DeviceCaps.getPerformanceTier()`: `LOW`/`MEDIUM`/`HIGH`) before the renderer is created and
+  applies a per-tier policy (HDR/MSAA/anisotropy/shadow caps, plus per-effect post toggles on
+  `LOW`). The configuration is resolved exactly once and then closed — nothing mutates
+  `quality`/`postProcessing` afterwards. Every field you set **explicitly** in your own
+  `quality`/`postProcessing` wins against the tier (generic override lock, "author choice
+  locks out auto"); leave a field unset to let the tier decide. `HIGH` reproduces today's
+  desktop behavior untouched. (The former manual `autoDowngrade` boolean is gone.)
 - `maxPixelRatio` (number, default: 2): Caps `window.devicePixelRatio`. Extremely high-resolution displays (like modern smartphones with a DPR of 3.0 or 4.0) can cause massive GPU bottlenecks. Capping this at `2` or `1.5` keeps framerates smooth without a noticeable loss of quality.
 - `msaa` (number): Multisample anti-aliasing level (0, 2, 4, 8).
 - `maxAnisotropy` (number): Anisotropic filtering level (1, 4, 8, 16) for sharper textures at shallow viewing angles. Enforced on mipmapped linear-filtered 2D textures on all backends (WebGL1/WebGL2 via the extension, WebGPU via `GPUSamplerDescriptor.maxAnisotropy`, both clamped to 16). A texture's `anisotropy` option inherits this engine level by default; `0` on a texture disables it for that texture.
@@ -109,7 +116,6 @@ Every field is optional and only overrides that specific value on top of the eff
   "fullscreen": true,
   "gravity": [0, -9.81, 0],
   "quality": {
-    "autoDowngrade": true,
     "maxPixelRatio": 2,
     "hdr": true,
     "toneMapping": "aces",

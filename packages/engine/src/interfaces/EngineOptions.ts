@@ -72,8 +72,6 @@ export interface QualityConfig {
   exposure?: number;
   /** Global toggle to disable all textures (renders default fallback textures). Defaults to false. */
   disableTextures?: boolean;
-  /** Whether to automatically downgrade settings (disable HDR, MSAA, etc.) on low-end devices. Defaults to true. */
-  autoDowngrade?: boolean;
   /** Maximum device pixel ratio (DPR) to use. Useful to clamp rendering resolution on 3x mobile displays. Defaults to Math.min(window.devicePixelRatio, 2). */
   maxPixelRatio?: number;
   /** Clustered/tiled forward+ light culling settings (WebGL2/WebGPU only). */

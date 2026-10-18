@@ -4,7 +4,7 @@ import { Input } from "./input/Input.js";
 import { InteractionManager } from "./input/InteractionManager.js";
 import { AudioSystem } from "../audio/AudioSystem.js";
 import { EventDispatcherImpl } from "./events/EventDispatcherImpl.js";
-import { DeviceFeature, DeviceLimit } from "./DeviceCaps.js";
+import { DeviceFeature, DeviceLimit, PerformanceTier } from "./DeviceCaps.js";
 import { FrustumCuller } from "./culling/FrustumCuller.js";
 import type { AbstractProjection } from "../math/projections/index.js";
 import {
@@ -21,6 +21,7 @@ import type {
 } from "../interfaces/index.js";
 import { createDefaultRendererContext, createFrameInfo } from "../interfaces/index.js";
 import { ProjectionType, RendererType, PostProcessingEffectType } from "../enums/index.js";
+import { QualityConfigResolver } from "./quality/QualityConfigResolver.js";
 import { RendererFactory } from "../renderers/index.js";
 import { ShaderBootstrap } from "../renderers/shaders/index.js";
 import { CollisionVisualizer, OctreeVisualizer } from "../utils/index.js";
@@ -170,34 +171,23 @@ export abstract class SmallWorldMachine {
     if (!this._isInitialized) {
       this._context = createDefaultRendererContext();
 
-      const autoDowngrade = this.config.quality?.autoDowngrade ?? true;
-      if (autoDowngrade) {
-        const tier = this._context.deviceCaps.getPerformanceTier();
-        if (tier === "LOW") {
-          console.warn(
-            `📉 Low Performance Tier detected (${this._context.deviceCaps.isMobile() ? "Mobile" : "Desktop"}). Applying aggressive performance downgrades.`,
-          );
-          this.config.quality = {
-            ...this.config.quality,
-            hdr: false,
-            msaa: 0,
-            maxAnisotropy: 1,
-            maxShadowResolution: 512,
-          };
-          this.config.postProcessing = {
-            ...this.config.postProcessing,
-            enabled: false,
-          };
-        } else if (tier === "MEDIUM") {
-          this.config.quality = {
-            ...this.config.quality,
-            msaa: 2,
-            maxAnisotropy: 2,
-          };
-        } else {
-          // High tier, no overrides needed
-        }
+      // ADR 0035, Ebene 2: ONE resolution step before the renderer is created. The tier policy
+      // (device tier -> quality/post settings) is applied exactly once and the configuration is
+      // closed afterwards -- no more later mutation of config.quality/postProcessing. Explicit
+      // author-set fields always win (Ebene 3, generic override lock).
+      const tier = this._context.deviceCaps.getPerformanceTier();
+      if (tier === PerformanceTier.LOW) {
+        console.warn(
+          `📉 Low Performance Tier detected (${this._context.deviceCaps.isMobile() ? "Mobile" : "Desktop"}). Applying tier quality policy.`,
+        );
       }
+      const resolvedQuality = QualityConfigResolver.resolve(
+        tier,
+        this.config.quality,
+        this.config.postProcessing,
+      );
+      this.config.quality = resolvedQuality.quality;
+      this.config.postProcessing = resolvedQuality.postProcessing;
 
       this.canvas = document.getElementById(this.config.canvasId!) as HTMLCanvasElement;
       if (!this.canvas) {
