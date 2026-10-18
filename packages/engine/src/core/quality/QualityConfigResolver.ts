@@ -122,11 +122,16 @@ export class QualityConfigResolver {
         if (userEffect === undefined) {
           continue;
         }
-        const resolvedEffect = {
-          ...((resolvedEffects[key] as Record<string, unknown> | undefined) ?? {}),
+        // Ebene 3 (V1), generic override-lock on the EFFECT as the locked axis: an author who
+        // configures an effect at all (e.g. only `hbao.radius`) owns that whole effect object.
+        // His object therefore REPLACES the tier value completely (no merge), so the tier can
+        // never force `enabled:false` onto an effect the author explicitly touched -- the tier
+        // only controls effects the author never mentioned. (ADR 0035 Ebene 3, fixed after
+        // claude-device-tier feedback 2026-10-18: the DRAFT semantics could disable HBAO on LOW
+        // even when the author had only set its radius.)
+        (resolvedEffects[key] as Record<string, unknown>) = {
+          ...(userEffect as Record<string, unknown>),
         };
-        mergeDefined(resolvedEffect, userEffect as Record<string, unknown>);
-        (resolvedEffects[key] as Record<string, unknown>) = resolvedEffect;
       }
     }
     if (Object.keys(resolvedEffects).length > 0) {

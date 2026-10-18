@@ -86,10 +86,13 @@ Regeln:
 
 ### Ebene 3 — Override (bleibt, aber als explizite Sperre)
 Explizite App-/User-Werte haben **Vorrang** vor der Tier-Policy (Muster aus Bericht `04`,
-„explicit choice locks out auto"). Präzisierungsbedarf in V1: Die Override-Semantik wird als
-„gesetzter Wert = gesperrte Achse" modelliert (ein manuell gesetztes `maxPixelRatio: 1.5` z. B.
-sperrt genau diese Achse gegen die Policy, nicht die ganze Tier-Zuordnung). Umfang zeigt die
-Offene-Entscheidungspunkte-Liste.
+„explicit choice locks out auto"). Präzisierung (beschlossen 2026-10-18 nach
+claude-device-tier-Feedback): Die gesperrte „Achse" ist für Post-Effekte der **gesamte
+Effekt-Schlüssel** (Effekt-Objekte sind atomare Einstellgruppen, vgl. ADR 0001). Wer ein Feld
+eines Effekts setzt (z. B. nur `effects.hbao.radius`), übernimmt den ganzen Effekt — die
+Policy kann einen vom Autor bearbeiteten Effekt nie auf `enabled:false` setzen; die Tier-Matrix
+steuert nur Effekte, die der Autor überhaupt nicht erwähnt hat. Auf der flachen
+`QualityConfig`-Ebene bleibt die Feld-Semantik (jedes explizit gesetzte Feld gewinnt).
 
 ### Ebene 4 — Runtime-Feedback (optional, NICHT in V1)
 Dynamische Render-Skala mit Frame-Time-Hysterese (Mechanismus b, Bericht `04`) — respektiert

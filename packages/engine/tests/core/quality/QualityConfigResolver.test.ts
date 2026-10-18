@@ -60,6 +60,17 @@ describe("QualityConfigResolver (ADR 0035, statischer Tier-Resolver)", () => {
     expect(resolved.postProcessing.effects?.volumetricFog?.enabled).toBe(false);
   });
 
+  it("an effect the author touched by any field is NOT switched off by the tier (axis = effect)", () => {
+    // The author configured hbao.radius but never mentioned hbao.enabled: the effect is the
+    // locked axis, so the tier policy must not force enabled:false onto it (claude-device-tier
+    // feedback). The author's whole hbao object wins; only untouched effects follow the tier.
+    const post: PostProcessingConfig = { effects: { hbao: { radius: 0.5 } } };
+    const resolved = QualityConfigResolver.resolve(PerformanceTier.LOW, undefined, post);
+    expect(resolved.postProcessing.effects?.hbao).toEqual({ radius: 0.5 });
+    expect(resolved.postProcessing.effects?.hbao?.enabled).toBeUndefined();
+    expect(resolved.postProcessing.effects?.volumetricFog?.enabled).toBe(false);
+  });
+
   it("author-set postProcessing.enabled=false is preserved, not flipped by the tier", () => {
     const resolved = QualityConfigResolver.resolve(PerformanceTier.LOW, undefined, {
       enabled: false,

@@ -59,6 +59,9 @@ These control the engine's graphical fidelity.
   `quality`/`postProcessing` wins against the tier (generic override lock, "author choice
   locks out auto"); leave a field unset to let the tier decide. `HIGH` reproduces today's
   desktop behavior untouched. (The former manual `autoDowngrade` boolean is gone.)
+  **Testing override:** the URL parameter `?tier=low|medium|high` (or `DeviceCaps.forcedTier`)
+  bypasses detection to simulate a device class — deterministic golden renders, ADR-0035
+  counter-checks on a forced `LOW`.
 - `maxPixelRatio` (number, default: 2): Caps `window.devicePixelRatio`. Extremely high-resolution displays (like modern smartphones with a DPR of 3.0 or 4.0) can cause massive GPU bottlenecks. Capping this at `2` or `1.5` keeps framerates smooth without a noticeable loss of quality.
 - `msaa` (number): Multisample anti-aliasing level (0, 2, 4, 8).
 - `maxAnisotropy` (number): Anisotropic filtering level (1, 4, 8, 16) for sharper textures at shallow viewing angles. Enforced on mipmapped linear-filtered 2D textures on all backends (WebGL1/WebGL2 via the extension, WebGPU via `GPUSamplerDescriptor.maxAnisotropy`, both clamped to 16). A texture's `anisotropy` option inherits this engine level by default; `0` on a texture disables it for that texture.
