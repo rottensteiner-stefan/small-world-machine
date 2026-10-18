@@ -1,18 +1,13 @@
 import { AmbientLight, DirectionalLight } from "@small-world-machine/engine/core/lights/index.js";
 import {
   CameraStrategyType,
-  ProjectionType,
   RendererType,
   PostProcessingEffectType,
 } from "@small-world-machine/engine/enums/index.js";
 import { Color } from "@small-world-machine/engine/core/colors/index.js";
 import { FPSController } from "@small-world-machine/engine/core/controllers/index.js";
-import { Object3D } from "@small-world-machine/engine/core/index.js";
-import { PerspectiveProjection } from "@small-world-machine/engine/math/projections/index.js";
-import { CubeTexture } from "@small-world-machine/engine/core/textures/index.js";
+import type { Object3D } from "@small-world-machine/engine/core/index.js";
 import { AbstractShowcase } from "@small-world-machine/engine/core/showcase/index.js";
-import { Cube } from "@small-world-machine/engine/geometry/index.js";
-import { SkyboxMaterial } from "@small-world-machine/engine/core/materials/index.js";
 import { GltfLoader } from "@small-world-machine/engine/loaders/index.js";
 import type { BloomElement } from "@small-world-machine/engine/renderers/post/elements/index.js";
 // ============================================================================
@@ -47,22 +42,15 @@ class PresentationDemoApp extends AbstractShowcase {
       bloom.color = new Color(1.2, 0.8, 1.6);
     }
 
-    // Explicit projection setup
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect: number = this.canvas.clientWidth / this.canvas.clientHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (60 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 1000,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    // Explicit projection setup (built by AbstractShowcase.configureCamera)
+    this.defaultFov = (60 * Math.PI) / 180;
+    this.configureCamera();
 
     this.camera.setStrategy(CameraStrategyType.FPS);
     this.camera.position.set(0, 0, 3);
 
     const fpsController = new FPSController({
+      input: this.input,
       moveSpeed: 5.0,
       enableCollision: false,
       scene: this.scene,
@@ -92,19 +80,8 @@ class PresentationDemoApp extends AbstractShowcase {
     fillLight.direction.set(1, 0, 0);
     this.scene.add(fillLight);
 
-    // Load Environment Map
-    const envTexture = new CubeTexture();
-    try {
-      await envTexture.loadFrom("/apps/showcases/13/assets/skybox.webp");
-
-      const skybox = new Object3D("Skybox");
-      skybox.geometry = new Cube({ size: 1000 }).getGeometryData();
-      skybox.material = new SkyboxMaterial({ cubeMap: envTexture });
-      skybox.frustumCulled = false;
-      this.scene.add(skybox);
-    } catch (e) {
-      console.warn("Could not load envmap for presentation showcases:", e);
-    }
+    // Load Environment Map (skybox) -- fail fast; envTexture is reused as the helmet's envMap.
+    const envTexture = await this.loadSkybox("/apps/showcases/13/assets/skybox.webp");
 
     // Load GLTF Model (Damaged Helmet)
     try {
@@ -195,12 +172,6 @@ class PresentationDemoApp extends AbstractShowcase {
     if (this._helmet && !this._isDragging) {
       this._helmet.rotation.y += deltaTime * 0.15;
       this._helmet.updateMatrixWorld();
-    }
-
-    const skybox = this.scene.objects.find((o) => "Skybox" === o.name);
-    if (skybox) {
-      skybox.position.copyFrom(this.camera.position);
-      skybox.updateMatrixWorld();
     }
   }
 

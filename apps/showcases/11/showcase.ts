@@ -9,9 +9,7 @@ import {
   Keys,
   Object3D,
   OrbitController,
-  PerspectiveProjection,
   PointLight,
-  ProjectionType,
   Sphere,
   WireframeMaterial,
 } from "@small-world-machine/engine";
@@ -26,16 +24,8 @@ class Showcase11 extends AbstractShowcase {
     this.onCanvasRecreated();
 
     // Configure camera projection
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect: number = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (75 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 1000,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (75 * Math.PI) / 180;
+    this.configureCamera();
 
     // Use HYBRID_SYNC strategy: Syncs manual position changes (WSAD) with orbital rotation (Maus).
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);

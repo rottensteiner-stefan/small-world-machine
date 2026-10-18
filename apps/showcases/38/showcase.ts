@@ -20,10 +20,8 @@ import {
   Fog,
   FogMode,
   Object3D,
-  PerspectiveProjection,
   PointLight,
   PostProcessingEffectType,
-  ProjectionType,
   Pyramid,
   RendererType,
   Sphere,
@@ -33,6 +31,7 @@ import {
   ToneMappingMode,
   Vector3D,
 } from "@small-world-machine/engine";
+import { box } from "../shared/prim.js";
 
 interface CameraPreset {
   name: string;
@@ -159,16 +158,8 @@ class Showcase38 extends AbstractShowcase {
     // ------------------------------------------------------------------------
     // 2. Camera Setup (65° FOV, First-Person / Fly Controller)
     // ------------------------------------------------------------------------
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect: number = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (65 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 200,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFar = 200;
+    this.configureCamera();
 
     this.camera.setStrategy(CameraStrategyType.FPS);
     const initialPreset = this._cameraPresets[0]!;
@@ -687,23 +678,19 @@ class Showcase38 extends AbstractShowcase {
     // ------------------------------------------------------------------------
 
     // Sheer Rock Buttresses framing the facade flanks (Left & Right)
-    const rockFlankLeft = new Object3D("RockFlank_Left");
-    rockFlankLeft.geometry = cubeGeom;
-    rockFlankLeft.material = cliffRockMat;
-    rockFlankLeft.scale.set(5.5, 38.0, 9.0);
-    rockFlankLeft.position.set(-14.2, 19.0, -2.0);
-    rockFlankLeft.castShadow = true;
-    rockFlankLeft.receiveShadow = true;
-    this.scene.add(rockFlankLeft);
+    this.scene.add(
+      box("RockFlank_Left", cliffRockMat, [5.5, 38.0, 9.0], [-14.2, 19.0, -2.0], {
+        cast: true,
+        receive: true,
+      }),
+    );
 
-    const rockFlankRight = new Object3D("RockFlank_Right");
-    rockFlankRight.geometry = cubeGeom;
-    rockFlankRight.material = cliffRockMat;
-    rockFlankRight.scale.set(5.5, 38.0, 9.0);
-    rockFlankRight.position.set(14.2, 19.0, -2.0);
-    rockFlankRight.castShadow = true;
-    rockFlankRight.receiveShadow = true;
-    this.scene.add(rockFlankRight);
+    this.scene.add(
+      box("RockFlank_Right", cliffRockMat, [5.5, 38.0, 9.0], [14.2, 19.0, -2.0], {
+        cast: true,
+        receive: true,
+      }),
+    );
 
     // Stylobate Stepped Podium (5 steps leading from Y=0 to Y=1.0)
     for (let step = 0; step < 5; step++) {

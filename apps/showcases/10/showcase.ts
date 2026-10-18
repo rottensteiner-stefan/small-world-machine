@@ -21,7 +21,6 @@ import {
   Object3D,
   OpenWaterMaterial,
   OpenWaterSurfaceProbe,
-  PerspectiveProjection,
   Plane,
   PointLight,
   RendererType,
@@ -186,7 +185,7 @@ export class Showcase10 extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {
     this.onCanvasRecreated();
 
-    const aspect = window.innerWidth / window.innerHeight;
+    const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
     // Start framing: as close as possible while the near pool row (outer pools + signs, +-21 m
     // wide, with margin) still fits the horizontal field of view at this aspect ratio.
     const startFov = MathUtils.degToRad(64);
@@ -201,13 +200,8 @@ export class Showcase10 extends AbstractShowcase {
           (framedDepth - this._startEyeHeight * Math.sin(-startPitch)) / Math.cos(startPitch),
       ),
     );
-    this.camera.projection = new PerspectiveProjection({
-      fov: startFov,
-      aspect,
-      near: 0.1,
-      far: 1000,
-    });
-    this.camera.updateProjectionMatrix();
+    this.defaultFov = startFov;
+    this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.FPS);
     this.camera.position.set(0, this._startEyeHeight, startZ);
     this.camera.theta = 0; // Look across all pool rows along -Z (the whole gallery in view)

@@ -3,14 +3,10 @@ import {
   AmbientLight,
   Color,
   Cube,
-  CubeLayout,
-  CubeTexture,
   DirectionalLight,
   MathUtils,
   Object3D,
-  PerspectiveProjection,
   PhongMaterial,
-  SkyboxMaterial,
   Vector3D,
 } from "@small-world-machine/engine";
 
@@ -24,14 +20,9 @@ export class Showcase7 extends AbstractShowcase {
 
   protected override async setupScene(): Promise<void> {
     // 1. Camera
-    const aspect: number = window.innerWidth / window.innerHeight;
-    this.camera.projection = new PerspectiveProjection({
-      fov: MathUtils.degToRad(75),
-      aspect,
-      near: 0.1,
-      far: 2000,
-    });
-    this.camera.updateProjectionMatrix();
+    this.defaultFov = MathUtils.degToRad(75);
+    this.defaultFar = 2000;
+    this.configureCamera();
 
     this.defaultMoveSpeed = this._moveSpeed;
     this.setInitialCamera(
@@ -46,14 +37,7 @@ export class Showcase7 extends AbstractShowcase {
     this.scene.add(sun);
 
     // 3. Skybox (Contains the floor texture in the bottom part of the cube map)
-    const skyTexture = new CubeTexture();
-    await skyTexture.loadFrom("./assets/skybox.webp", CubeLayout.CROSS_HORIZONTAL);
-
-    const skybox = new Object3D("Skybox");
-    skybox.geometry = new Cube({ size: 1000 }).getGeometryData();
-    skybox.material = new SkyboxMaterial({ cubeMap: skyTexture });
-    skybox.frustumCulled = false;
-    this.scene.add(skybox);
+    await this.loadSkybox("./assets/skybox.webp");
 
     // 4. Orientierungspunkte (Illusion Breaker)
     const referenceCube = new Object3D("ReferenceCube");
@@ -72,12 +56,6 @@ export class Showcase7 extends AbstractShowcase {
   protected override update(): void {
     // Keep camera above "virtual" floor
     this.camera.position.y = Math.max(this._eyeHeight, this.camera.position.y);
-
-    // Skybox follows camera
-    const skybox = this.scene.objects.find((o) => o.name === "Skybox");
-    if (skybox) {
-      skybox.position.copyFrom(this.camera.position);
-    }
   }
 }
 

@@ -15,10 +15,8 @@ import {
   Cylinder,
   FlyController,
   Object3D,
-  PerspectiveProjection,
   PointLight,
   PostProcessingEffectType,
-  ProjectionType,
   RendererType,
   Sphere,
   SpotLight,
@@ -28,6 +26,7 @@ import {
   ToneMappingMode,
   Vector3D,
 } from "@small-world-machine/engine";
+import { box } from "../shared/prim.js";
 
 class Showcase37 extends AbstractShowcase {
   private _refCamPos = new Vector3D(0.65, 1.15, 2.45);
@@ -101,17 +100,9 @@ class Showcase37 extends AbstractShowcase {
 
     // ------------------------------------------------------------------------
     // 2. Camera Setup (66° FOV, Corner Framing, Consensus 4 & 23)
-    // ------------------------------------------------------------------------
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect: number = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (66 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 100,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (66 * Math.PI) / 180;
+    this.defaultFar = 100;
+    this.configureCamera();
 
     this.camera.setStrategy(CameraStrategyType.FPS);
     this.setInitialCamera(this._refCamPos, this._refCamTarget);
@@ -643,13 +634,10 @@ class Showcase37 extends AbstractShowcase {
     firewoodBox.position.set(2.45, 0, 0.7);
     firewoodBox.rotation.y = -0.25;
 
-    const boxBase = new Object3D("BoxBase");
-    boxBase.geometry = cubeGeom;
-    boxBase.material = beamMat;
-    boxBase.scale.set(0.6, 0.35, 0.45);
-    boxBase.position.set(0, 0.18, 0);
-    boxBase.castShadow = true;
-    boxBase.receiveShadow = true;
+    const boxBase = box("BoxBase", beamMat, [0.6, 0.35, 0.45], [0, 0.18, 0], {
+      cast: true,
+      receive: true,
+    });
     firewoodBox.add(boxBase);
 
     // Stacked Logs inside

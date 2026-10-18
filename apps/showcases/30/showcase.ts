@@ -10,20 +10,15 @@ import {
   CameraStrategyType,
   Color,
   Cube,
-  CubeLayout,
-  CubeTexture,
   Cylinder,
   DirectionalLight,
   GltfLoader,
   Object3D,
   OrbitController,
-  PerspectiveProjection,
   PlanarReflectionNode,
   PointLight,
   PostProcessingEffectType,
-  ProjectionType,
   RendererType,
-  SkyboxMaterial,
   SpotLight,
   StandardMaterial,
   Texture,
@@ -82,16 +77,9 @@ class Showcase30 extends AbstractShowcase {
     }
 
     // Camera setup (Low-angle rain street camera)
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (48 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 150,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (48 * Math.PI) / 180;
+    this.defaultFar = 150;
+    this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     // Genuine "wet street photography" framing: near-puddle-level height and a near-horizontal
     // view. The puddle's reflection strength is Fresnel-driven (like real water/wet asphalt) --
@@ -147,44 +135,8 @@ class Showcase30 extends AbstractShowcase {
     this.scene.add(this._spotPink);
 
     // Load Environment Map & PBR Texture Maps
-    const envTexture = new CubeTexture();
-    try {
-      await envTexture.loadFrom("./assets/ibl/env.webp", CubeLayout.CROSS_HORIZONTAL);
-      const skybox = new Object3D("Skybox");
-      skybox.geometry = new Cube({ size: 1000 }).getGeometryData();
-      skybox.material = new SkyboxMaterial({ cubeMap: envTexture });
-      skybox.frustumCulled = false;
-      this.scene.add(skybox);
-    } catch (e) {
-      console.warn("Could not load envmap:", e);
-    }
-
-    // Real IBL (irradiance/prefilter/BRDF LUT), baked via tools/ibl-gen.html from a
-    // freshly-generated panorama matching this scene's own skybox -- replaces the previous
-    // (physically wrong) reuse of the raw, unconvolved skybox as both diffuse and specular map.
-    try {
-      const brdfTexture = await Texture.fromUrl("./assets/ibl/brdf_lut.webp");
-      const irradianceTexture = new CubeTexture();
-      await irradianceTexture.loadFrom("./assets/ibl/irradiance.webp", CubeLayout.CROSS_HORIZONTAL);
-      const prefilterTexture = new CubeTexture();
-      await prefilterTexture.loadMipmapsFrom(
-        [
-          "./assets/ibl/prefilter/mip0.webp",
-          "./assets/ibl/prefilter/mip1.webp",
-          "./assets/ibl/prefilter/mip2.webp",
-          "./assets/ibl/prefilter/mip3.webp",
-          "./assets/ibl/prefilter/mip4.webp",
-        ],
-        CubeLayout.CROSS_HORIZONTAL,
-      );
-
-      this.scene.brdfLUT = brdfTexture;
-      this.scene.irradianceMap = irradianceTexture;
-      this.scene.prefilterMap = prefilterTexture;
-      this.scene.environmentIntensity = 1.5;
-    } catch (e) {
-      console.warn("IBL maps not loaded:", e);
-    }
+    const envTexture = await this.loadSkybox("./assets/ibl/env.webp");
+    await this.loadIbl("./assets/ibl/");
 
     let asphaltDiffuse: Texture | undefined;
     let asphaltNormal: Texture | undefined;

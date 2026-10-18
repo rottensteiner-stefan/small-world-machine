@@ -3,21 +3,14 @@ import {
   AbstractShowcase,
   AmbientLight,
   Color,
-  Cube,
-  CubeLayout,
-  CubeTexture,
   Cylinder,
   DirectionalLight,
   GltfLoader,
   Object3D,
-  PerspectiveProjection,
   PostProcessingEffectType,
-  ProjectionType,
   RendererType,
-  SkyboxMaterial,
   SpotLight,
   StandardMaterial,
-  Texture,
   Vector3D,
 } from "@small-world-machine/engine";
 
@@ -39,16 +32,8 @@ class Showcase13 extends AbstractShowcase {
     }
 
     // Camera setup
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect: number = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (60 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 1000,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (60 * Math.PI) / 180;
+    this.configureCamera();
 
     this.defaultMoveSpeed = 5.0;
     this.setInitialCamera(new Vector3D(0, 0.3, 3), new Vector3D(0, 0.3, 0));
@@ -95,46 +80,9 @@ class Showcase13 extends AbstractShowcase {
     this.scene.add(fillLight);
 
     // Load an environment map for reflections
-    const envTexture = new CubeTexture();
-    try {
-      await envTexture.loadFrom("./assets/ibl/env.webp", CubeLayout.CROSS_HORIZONTAL);
-
-      // Add skybox to the background
-      const skybox = new Object3D("Skybox");
-      skybox.geometry = new Cube({ size: 1000 }).getGeometryData();
-      skybox.material = new SkyboxMaterial({ cubeMap: envTexture });
-      skybox.frustumCulled = false;
-      this.scene.add(skybox);
-    } catch (e) {
-      console.warn("Could not load envmap:", e);
-    }
-
-    // Real IBL (irradiance/prefilter/BRDF LUT), baked via tools/ibl-gen.html from a
-    // freshly-generated panorama matching this scene's own skybox -- replaces the previous
-    // (physically wrong) reuse of the raw, unconvolved skybox as both diffuse and specular map.
-    try {
-      const brdfTexture = await Texture.fromUrl("./assets/ibl/brdf_lut.webp");
-      const irradianceTexture = new CubeTexture();
-      await irradianceTexture.loadFrom("./assets/ibl/irradiance.webp", CubeLayout.CROSS_HORIZONTAL);
-      const prefilterTexture = new CubeTexture();
-      await prefilterTexture.loadMipmapsFrom(
-        [
-          "./assets/ibl/prefilter/mip0.webp",
-          "./assets/ibl/prefilter/mip1.webp",
-          "./assets/ibl/prefilter/mip2.webp",
-          "./assets/ibl/prefilter/mip3.webp",
-          "./assets/ibl/prefilter/mip4.webp",
-        ],
-        CubeLayout.CROSS_HORIZONTAL,
-      );
-
-      this.scene.brdfLUT = brdfTexture;
-      this.scene.irradianceMap = irradianceTexture;
-      this.scene.prefilterMap = prefilterTexture;
-      this.scene.environmentIntensity = 1.5;
-    } catch (e) {
-      console.warn("IBL maps not loaded:", e);
-    }
+    // Skybox + real IBL (irradiance/prefilter/BRDF LUT), baked via tools/ibl-gen.html -- fail fast.
+    const envTexture = await this.loadSkybox("./assets/ibl/env.webp");
+    await this.loadIbl("./assets/ibl/");
 
     // Exhibition Pedestal (Receives self & cast shadows from the helmet)
     const pedestal = new Object3D("ExhibitionPedestal");
@@ -217,12 +165,6 @@ class Showcase13 extends AbstractShowcase {
         -this._keySpotLight.position.z * 0.3,
       );
       this._keySpotLight.updateMatrixWorld();
-    }
-
-    const skybox = this.scene.objects.find((o) => o.name === "Skybox");
-    if (skybox) {
-      skybox.position.copyFrom(this.camera.position);
-      skybox.updateMatrixWorld();
     }
   }
 }

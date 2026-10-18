@@ -17,9 +17,7 @@ import {
   Object3D,
   Octahedron,
   OrbitController,
-  PerspectiveProjection,
   PostProcessingEffectType,
-  ProjectionType,
   RendererType,
   SkyboxMaterial,
   SpotLight,
@@ -81,16 +79,9 @@ class Showcase27 extends AbstractShowcase {
     }
 
     // Camera setup
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (55 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 500,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (55 * Math.PI) / 180;
+    this.defaultFar = 500;
+    this.configureCamera();
 
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     this.camera.position.set(0, 4.5, 7.5);

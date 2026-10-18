@@ -9,7 +9,6 @@ import {
   LambertMaterial,
   Object3D,
   OrbitController,
-  PerspectiveProjection,
   PhongMaterial,
 } from "@small-world-machine/engine";
 
@@ -17,15 +16,9 @@ class Showcase1 extends AbstractShowcase {
   private _myCube!: Object3D;
 
   protected override async setupScene(): Promise<void> {
-    // Force perspective projection
-    const aspect: number = window.innerWidth / window.innerHeight;
-    this.camera.projection = new PerspectiveProjection({
-      fov: (75 * Math.PI) / 180,
-      aspect,
-      near: 0.1,
-      far: 1000,
-    });
-    this.camera.updateProjectionMatrix();
+    // Force perspective projection (built by AbstractShowcase.configureCamera)
+    this.defaultFov = (75 * Math.PI) / 180;
+    this.configureCamera();
 
     // 1. Light: A gentle sun
     const sun: DirectionalLight = new DirectionalLight({ color: Color.WHITE, intensity: 1.0 });

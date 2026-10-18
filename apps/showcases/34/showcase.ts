@@ -12,8 +12,6 @@ import {
   ImposterSprite,
   Object3D,
   OrbitController,
-  PerspectiveProjection,
-  ProjectionType,
   RendererType,
   Sphere,
   StandardMaterial,
@@ -101,16 +99,9 @@ class Showcase34 extends AbstractShowcase {
     // so this showcase stays on the swapchain format throughout instead, which sidesteps the
     // mismatch entirely without touching renderer internals. A real fix belongs in the renderer's
     // pipeline cache (key it by target format too), not here.
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (55 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 100,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (55 * Math.PI) / 180;
+    this.defaultFar = 100;
+    this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     this.camera.position.set(0, 2.2, 8);
     this.camera.target.set(0, 1.5, -10);

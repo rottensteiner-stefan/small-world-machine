@@ -9,9 +9,7 @@ import {
   Object3D,
   ObjLoader,
   OrbitController,
-  PerspectiveProjection,
   PhongMaterial,
-  ProjectionType,
   Vector3D,
   WireframeMaterial,
 } from "@small-world-machine/engine";
@@ -20,16 +18,8 @@ class Showcase3 extends AbstractShowcase {
   private _carModel: Object3D | undefined;
 
   protected override async setupScene(): Promise<void> {
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect: number = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (75 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 1000,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (75 * Math.PI) / 180;
+    this.configureCamera();
 
     this.setInitialCamera(new Vector3D(0, 5, 15), new Vector3D(0, 0, 0));
 

@@ -13,7 +13,6 @@ import {
   Plane,
   Object3D,
   OrbitController,
-  PerspectiveProjection,
   PostProcessingEffectType,
   SpotLight,
   StandardMaterial,
@@ -86,14 +85,9 @@ const UNLIT = new URLSearchParams(location.search).get("unlit") === "1";
 
 class DecalProbe extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {
-    const aspect: number = window.innerWidth / window.innerHeight;
-    this.camera.projection = new PerspectiveProjection({
-      fov: (60 * Math.PI) / 180,
-      aspect,
-      near: 0.1,
-      far: 100,
-    });
-    this.camera.updateProjectionMatrix();
+    this.defaultFov = (60 * Math.PI) / 180;
+    this.defaultFar = 100;
+    this.configureCamera();
 
     if (new URLSearchParams(location.search).get("mip") === "1") {
       this.defaultCameraController = "none";

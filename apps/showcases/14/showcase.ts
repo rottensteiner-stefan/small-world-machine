@@ -18,10 +18,8 @@ import {
   FrostglassMaterial,
   GlassMaterial,
   Object3D,
-  PerspectiveProjection,
   PointLight,
   PostProcessingEffectType,
-  ProjectionType,
   RendererType,
   SpotLight,
   StandardMaterial,
@@ -651,16 +649,8 @@ class Showcase14 extends AbstractShowcase {
 
   protected override async setupScene(): Promise<void> {
     // Setup Camera Aspect
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect: number = this.canvas.clientWidth / this.canvas.clientHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (60 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 1000,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (60 * Math.PI) / 180;
+    this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.MANUAL);
 
     // Setup Shared Textures

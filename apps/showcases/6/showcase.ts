@@ -30,7 +30,6 @@ import {
   Object3D,
   Octahedron,
   OpenFrame,
-  PerspectiveProjection,
   Plane,
   PointedPillar,
   PolygonFan,
@@ -86,14 +85,8 @@ export class Showcase6 extends AbstractShowcase {
     );
 
     // 1. Camera Setup
-    const aspect: number = window.innerWidth / window.innerHeight;
-    this.camera.projection = new PerspectiveProjection({
-      fov: (75 * Math.PI) / 180,
-      aspect,
-      near: 0.1,
-      far: 1000,
-    });
-    this.camera.updateProjectionMatrix();
+    this.defaultFov = (75 * Math.PI) / 180;
+    this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.FPS);
     this.camera.position.set(0, 4, -40);
 

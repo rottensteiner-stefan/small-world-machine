@@ -10,8 +10,6 @@ import {
   CameraStrategyType,
   Keys,
   OrbitController,
-  PerspectiveProjection,
-  ProjectionType,
   RendererType,
   Vector2D,
 } from "@small-world-machine/engine";
@@ -171,16 +169,9 @@ class Showcase28 extends AbstractShowcase implements LabInspectorHost {
   /** Camera: perspective projection, hero pose and the orbit controller. */
   private _setupCamera(): void {
     // Camera setup
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (45 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 100,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (45 * Math.PI) / 180;
+    this.defaultFar = 100;
+    this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     // P0-4 hero reframe: low-three-quarter cinematic pose holding prism + full exit fan +
     // continuous detector band in one composition (beam path as leading line). Re-derived after

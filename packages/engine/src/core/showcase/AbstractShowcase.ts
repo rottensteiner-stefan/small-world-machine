@@ -1,7 +1,16 @@
-import { SmallWorldMachine } from "../index.js";
+import { Object3D, SmallWorldMachine } from "../index.js";
 import type { EngineOptions } from "../../interfaces/index.js";
-import { CameraStrategyType, Keys, RendererType } from "../../enums/index.js";
-import { Vector3D } from "../../math/index.js";
+import {
+  CameraStrategyType,
+  CubeLayout,
+  Keys,
+  ProjectionType,
+  RendererType,
+} from "../../enums/index.js";
+import { PerspectiveProjection, Vector3D } from "../../math/index.js";
+import { Cube } from "../../geometry/index.js";
+import { SkyboxMaterial } from "../materials/index.js";
+import { CubeTexture, Texture } from "../textures/index.js";
 import { FlyController, OrbitController } from "../controllers/index.js";
 
 /**
@@ -94,6 +103,18 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
 
   /** Whether collisions with scene geometry are enabled for the default FlyController. Defaults to false (noclip). */
   protected defaultFlyCollision: boolean = false;
+
+  /**
+   * Default vertical field of view in radians for the perspective camera, used by
+   * {@link configureCamera}. Defaults to 65deg (the value the showcases historically used).
+   */
+  protected defaultFov: number = (65 * Math.PI) / 180;
+
+  /** Default near plane distance for the perspective camera, used by {@link configureCamera}. */
+  protected defaultNear: number = 0.1;
+
+  /** Default far plane distance for the perspective camera, used by {@link configureCamera}. */
+  protected defaultFar: number = 1000;
 
   /**
    * The constructor is passed to Application.
@@ -344,6 +365,81 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
     if (!this.context.assetManager.isLoaded) {
       await this.context.assetManager.onLoaded();
     }
+  }
+
+  /**
+   * Builds the perspective camera projection from the canvas size (instead of the window), using
+   * {@link defaultFov} / {@link defaultNear} / {@link defaultFar}. No-ops for non-perspective
+   * cameras (e.g. an orthographic showcase keeps its own projection). Subclasses keep their
+   * historical framing by assigning the three fields before the call, then replacing their former
+   * hand-written projection block with a single `this.configureCamera();`.
+   */
+  protected configureCamera(): void {
+    if (!this.canvas) return; // start() assigns the canvas after renderer init; stay inert otherwise
+    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
+      const aspect: number = this.canvas.clientWidth / this.canvas.clientHeight;
+      // The Camera projection setter re-derives the aspect internally from `camera.aspect`, so it
+      // is updated explicitly (the camera's stored aspect would otherwise shadow the canvas value).
+      this.camera.aspect = aspect;
+      this.camera.projection = new PerspectiveProjection({
+        fov: this.defaultFov,
+        aspect,
+        near: this.defaultNear,
+        far: this.defaultFar,
+      });
+      this.camera.updateProjectionMatrix();
+    }
+  }
+
+  /**
+   * Loads the pre-baked image-based-lighting set (brdf LUT, diffuse irradiance cube and the five
+   * prefilter mips) from `basePath` and applies it to the scene, with `environmentIntensity`
+   * defaulting to the 1.5 the showcases conventionally used. All four loads run in parallel; a
+   * failed load THROWS (fail fast, no silent `console.warn` swallow).
+   * @param basePath Directory the IBL assets live in (may or may not end with `/`).
+   * @param intensity Value to assign to `scene.environmentIntensity` after applying the maps.
+   */
+  protected async loadIbl(basePath: string, intensity: number = 1.5): Promise<void> {
+    const base: string = basePath.endsWith("/") ? basePath : `${basePath}/`;
+    const brdfLUT: Promise<Texture> = Texture.fromUrl(`${base}brdf_lut.webp`);
+    const irradianceMap: CubeTexture = new CubeTexture();
+    const prefilterMap: CubeTexture = new CubeTexture();
+    await Promise.all([
+      brdfLUT,
+      irradianceMap.loadFrom(`${base}irradiance.webp`, CubeLayout.CROSS_HORIZONTAL),
+      prefilterMap.loadMipmapsFrom(
+        [
+          `${base}prefilter/mip0.webp`,
+          `${base}prefilter/mip1.webp`,
+          `${base}prefilter/mip2.webp`,
+          `${base}prefilter/mip3.webp`,
+          `${base}prefilter/mip4.webp`,
+        ],
+        CubeLayout.CROSS_HORIZONTAL,
+      ),
+    ]);
+    this.scene.brdfLUT = await brdfLUT;
+    this.scene.irradianceMap = irradianceMap;
+    this.scene.prefilterMap = prefilterMap;
+    this.scene.environmentIntensity = intensity;
+  }
+
+  /**
+   * Loads a skybox cube map, attaches a `Skybox` object (geometry size `size`, `frustumCulled =
+   * false`, {@link SkyboxMaterial}) to the scene and returns the loaded cube map so callers can
+   * keep reusing it as a material `envMap`. The skybox vertex shaders (all backends) bind
+   * themselves to the camera since 3a087deb, so no per-frame camera-follow code is needed. A
+   * failed load THROWS (fail fast, no silent `console.warn` swallow).
+   */
+  protected async loadSkybox(path: string, size: number = 1000): Promise<CubeTexture> {
+    const cubeMap: CubeTexture = new CubeTexture();
+    await cubeMap.loadFrom(path, CubeLayout.CROSS_HORIZONTAL);
+    const skybox: Object3D = new Object3D("Skybox");
+    skybox.geometry = new Cube({ size }).getGeometryData();
+    skybox.material = new SkyboxMaterial({ cubeMap });
+    skybox.frustumCulled = false;
+    this.scene.add(skybox);
+    return cubeMap;
   }
 
   /**

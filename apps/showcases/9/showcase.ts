@@ -11,7 +11,6 @@ import {
   Keys,
   MathUtils,
   Object3D,
-  PerspectiveProjection,
   PhongMaterial,
   Sphere,
   Texture,
@@ -52,14 +51,8 @@ export class Showcase9 extends AbstractShowcase {
     this.renderer.setClearColor(new Color(0.5, 0.7, 1.0));
 
     // 1. Camera Setup
-    const aspect: number = window.innerWidth / window.innerHeight;
-    this.camera.projection = new PerspectiveProjection({
-      fov: MathUtils.degToRad(60),
-      aspect,
-      near: 0.1,
-      far: 1000,
-    });
-    this.camera.updateProjectionMatrix();
+    this.defaultFov = MathUtils.degToRad(60);
+    this.configureCamera();
 
     this.camera.setStrategy(CameraStrategyType.STIFF);
     (this.camera.strategy as StiffStrategy).radius = 15;

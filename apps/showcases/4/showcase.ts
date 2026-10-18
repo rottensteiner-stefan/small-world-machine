@@ -7,8 +7,6 @@ import {
   Color,
   DirectionalLight,
   ObjLoader,
-  PerspectiveProjection,
-  ProjectionType,
   TerrainManager,
   TerrainMaterial,
   Texture,
@@ -38,17 +36,8 @@ export class Showcase4 extends AbstractShowcase {
       new BoundingBox(new Vector3D(-500, -100, -500), new Vector3D(500, 100, 500)),
     );
 
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect: number = window.innerWidth / window.innerHeight;
-      // Correction: Convert 75 degrees to radians
-      this.camera.projection = new PerspectiveProjection({
-        fov: (75 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 1000,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (75 * Math.PI) / 180;
+    this.configureCamera();
 
     this.camera.setStrategy(CameraStrategyType.SMOOTH);
     this.camera.position.set(0, 5, 15);

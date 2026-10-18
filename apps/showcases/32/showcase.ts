@@ -21,10 +21,8 @@ import {
   Matrix4,
   Object3D,
   OrbitController,
-  PerspectiveProjection,
   PointLight,
   PostProcessingEffectType,
-  ProjectionType,
   RendererType,
   Sphere,
   StandardMaterial,
@@ -104,16 +102,9 @@ class Showcase32 extends AbstractShowcase {
       colorGrading.gain.set(0.95, 1.0, 0.9);
     }
 
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (58 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 120,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (58 * Math.PI) / 180;
+    this.defaultFar = 120;
+    this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     this.camera.position.set(0, 2.4, 22);
     this.camera.target.set(0, 3.5, HOT_ZONE_Z);

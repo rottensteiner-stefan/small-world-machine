@@ -8,8 +8,6 @@ import {
   DirectionalLight,
   Object3D,
   OrbitController,
-  PerspectiveProjection,
-  ProjectionType,
   RendererType,
   Sphere,
   StandardMaterial,
@@ -46,16 +44,9 @@ class Showcase33 extends AbstractShowcase {
   }
 
   protected override async setupScene(): Promise<void> {
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (55 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 100,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (55 * Math.PI) / 180;
+    this.defaultFar = 100;
+    this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     this.camera.position.set(0, 3, 16);
     this.camera.target.set(0, 3, WALL_Z);

@@ -9,7 +9,6 @@ import {
   Ground,
   MathUtils,
   Object3D,
-  PerspectiveProjection,
   PhongMaterial,
   WireframeMaterial,
   ZoomController,
@@ -36,16 +35,8 @@ export class Showcase2 extends AbstractShowcase {
     });
 
     // 2. Configure the camera (FPS mode) with forced perspective projection
-    {
-      const aspect: number = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (75 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 1000,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (75 * Math.PI) / 180;
+    this.configureCamera();
     // We switch to the First-Person strategy
     this.camera.setStrategy(CameraStrategyType.FPS);
     this.camera.position.set(0, 3, 6);

@@ -24,12 +24,10 @@ import {
   GlassMaterial,
   Ground,
   Object3D,
-  PerspectiveProjection,
   PhongMaterial,
   Plane,
   PointLight,
   PostProcessingEffectType,
-  ProjectionType,
   ProximitySensorBehavior,
   PulsatingBehavior,
   RendererType,
@@ -41,6 +39,7 @@ import {
   Vector2D,
   Vector3D,
 } from "@small-world-machine/engine";
+import { box } from "../shared/prim.js";
 import { attachDevTools } from "@small-world-machine/tools";
 import { WorkbenchTable } from "./assets/objects/WorkbenchTable.js";
 import { ErlenmeyerFlask } from "./assets/objects/ErlenmeyerFlask.js";
@@ -363,16 +362,8 @@ class Showcase12 extends AbstractShowcase {
       grain.intensity = 0.15; // Wieder auf ein vernünftiges, atmosphärisches Level
     }
 
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect: number = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (75 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 1000,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (75 * Math.PI) / 180;
+    this.configureCamera();
     // --- Fog Setup ---
     // A room length is 40. 1/5 of that is 8.
     this.scene.fog = new Fog({
@@ -729,19 +720,13 @@ class Showcase12 extends AbstractShowcase {
     this.scene.add(rightWall);
 
     // 3.5 Walls (Front & Back) (Rock)
-    const frontWall = new Object3D("FrontWall").setPosition(0, 4, -20).setScale(20, 8, 1);
-    frontWall.geometry = new Cube({ size: 1 }).getGeometryData();
-    frontWall.material = rockMaterial;
-    frontWall.castShadow = true;
-    frontWall.receiveShadow = true;
-    this.scene.add(frontWall);
+    this.scene.add(
+      box("FrontWall", rockMaterial, [20, 8, 1], [0, 4, -20], { cast: true, receive: true }),
+    );
 
-    const backWall = new Object3D("BackWall").setPosition(0, 4, 20).setScale(20, 8, 1);
-    backWall.geometry = new Cube({ size: 1 }).getGeometryData();
-    backWall.material = rockMaterial;
-    backWall.castShadow = true;
-    backWall.receiveShadow = true;
-    this.scene.add(backWall);
+    this.scene.add(
+      box("BackWall", rockMaterial, [20, 8, 1], [0, 4, 20], { cast: true, receive: true }),
+    );
 
     // 3.8 Steampunk Gears (Composite with Spokes using GearMath)
     const createSpokedGear = (

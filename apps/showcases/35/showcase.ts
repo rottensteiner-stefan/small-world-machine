@@ -7,9 +7,7 @@ import {
   DirectionalLight,
   Object3D,
   OrbitController,
-  PerspectiveProjection,
   PointLight,
-  ProjectionType,
   RendererType,
   Sphere,
   StandardMaterial,
@@ -39,16 +37,9 @@ class Showcase35 extends AbstractShowcase {
   }
 
   protected override async setupScene(): Promise<void> {
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (45 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 100,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (45 * Math.PI) / 180;
+    this.defaultFar = 100;
+    this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
     const center = ((GRID_SIZE - 1) * SPACING) / 2;
     // Zoomed out further than a tight frame would need, so the grid sits well clear of the

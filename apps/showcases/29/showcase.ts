@@ -17,10 +17,8 @@ import {
   FlyController,
   GltfLoader,
   Object3D,
-  PerspectiveProjection,
   PointLight,
   PostProcessingEffectType,
-  ProjectionType,
   RendererType,
   Sphere,
   SpotLight,
@@ -115,16 +113,9 @@ class Showcase29 extends AbstractShowcase {
     }
 
     // Camera setup: Benchmark upper-gallery perspective down the colonnade (matching Crytek shot)
-    if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect = window.innerWidth / window.innerHeight;
-      this.camera.projection = new PerspectiveProjection({
-        fov: (60 * Math.PI) / 180,
-        aspect,
-        near: 0.1,
-        far: 300,
-      });
-      this.camera.updateProjectionMatrix();
-    }
+    this.defaultFov = (60 * Math.PI) / 180;
+    this.defaultFar = 300;
+    this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.FPS);
     this.camera.position.set(8.841, 1.226, -0.451);
     this.camera.theta = -1.506;

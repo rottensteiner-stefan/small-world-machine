@@ -6,7 +6,6 @@ import {
   DirectionalLight,
   MathUtils,
   Object3D,
-  PerspectiveProjection,
   PhongMaterial,
   Skydome,
   Texture,
@@ -25,14 +24,9 @@ export class Showcase8 extends AbstractShowcase {
 
   protected override async setupScene(): Promise<void> {
     // 1. Camera
-    const aspect: number = window.innerWidth / window.innerHeight;
-    this.camera.projection = new PerspectiveProjection({
-      fov: MathUtils.degToRad(75),
-      aspect,
-      near: 0.1,
-      far: 2000, // Make sure far plane is large enough for the skydome
-    });
-    this.camera.updateProjectionMatrix();
+    this.defaultFov = MathUtils.degToRad(75);
+    this.defaultFar = 2000; // Make sure far plane is large enough for the skydome
+    this.configureCamera();
 
     this.defaultMoveSpeed = this._moveSpeed;
     this.setInitialCamera(
