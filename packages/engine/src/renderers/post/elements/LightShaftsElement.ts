@@ -63,4 +63,20 @@ export class LightShaftsElement extends PostProcessingElement {
    * Edges with relative depth steps greater than this threshold are preserved to eliminate edge bleeding.
    */
   public depthThreshold: number = 0.05;
+
+  public override packUniforms(out: Float32Array, offset: number): void {
+    const o = offset;
+    out[o + 44] = this.intensity; // shaftsParams.x
+    out[o + 45] = this.density; // shaftsParams.y
+    out[o + 46] = 0.0; // shaftsParams.z
+    out[o + 47] = 0.0; // shaftsParams.w
+    out[o + 48] = this.color.r; // shaftsColor.r
+    out[o + 49] = this.color.g; // shaftsColor.g
+    out[o + 50] = this.color.b; // shaftsColor.b
+    out[o + 51] = 1.0; // shaftsColor.w
+  }
+
+  public override structuralKey(): string {
+    return `${this.enabled ? 1 : 0}`;
+  }
 }

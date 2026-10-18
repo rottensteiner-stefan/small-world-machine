@@ -28,4 +28,16 @@ export class GravitationalLensingElement extends PostProcessingElement {
 
   /** Photon sphere / Einstein ring glow multiplier (default: 2.5). */
   public ringGlowIntensity: number = 2.5;
+
+  public override packUniforms(out: Float32Array, offset: number): void {
+    const o = offset;
+    out[o + 32] = this.singularityScreenPos.x; // singularityPos.x
+    out[o + 33] = this.singularityScreenPos.y; // singularityPos.y
+    out[o + 34] = this.singularityScreenPos.z; // singularityPos.z
+    out[o + 35] = this.eventHorizonRadius; // singularityPos.w
+    out[o + 36] = this.strength; // lensingParams.x
+    out[o + 37] = this.spaghettification; // lensingParams.y
+    out[o + 38] = this.relativisticBeaming; // lensingParams.z
+    out[o + 39] = this.ringGlowIntensity; // lensingParams.w
+  }
 }

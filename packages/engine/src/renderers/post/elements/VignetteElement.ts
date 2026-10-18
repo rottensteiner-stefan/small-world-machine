@@ -13,4 +13,15 @@ export class VignetteElement extends PostProcessingElement {
   public darkness: number = 0.5;
   /** Controls the shape. 2.0 = elliptical, 6.0+ = rounded rectangle (default: 2.0) */
   public roundness: number = 2.0;
+
+  public override packUniforms(out: Float32Array, offset: number): void {
+    const o = offset;
+    out[o + 3] = this.offset; // a.w: vignetteOffset
+    out[o + 4] = this.darkness; // b.x: vignetteDarkness
+    out[o + 5] = this.roundness; // b.y: vignetteRoundness
+  }
+
+  public override structuralKey(): string {
+    return `${this.enabled ? 1 : 0}`;
+  }
 }

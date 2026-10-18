@@ -16,4 +16,8 @@ export class HbaoElement extends PostProcessingElement {
   public radius: number = 0.5;
   /** Strength of the darkening (default: 1.0). */
   public intensity: number = 1.0;
+
+  public override structuralKey(): string {
+    return `${this.enabled ? 1 : 0}`;
+  }
 }

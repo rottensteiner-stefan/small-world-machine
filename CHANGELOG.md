@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### "Perfection is achieved, not when there is nothing more to add, but when there is nothing left to take away." - Antoine de Saint-Exupéry
+
+- **Architecture & Bugfixes:**
+  - *Post-processing owns its uniforms (engine, thermo wave 1):* `PostProcessingElement` gains optional `packUniforms(out, offset)` and `structuralKey()`; every element feeding `DynUniforms` now packs its own slice, and `PostProcessPass` (WebGPU) decodes the group once per frame instead of ~34 `group.get()` calls, keys its rebuild signature from the elements' `structuralKey()` (byte-identical string), and writes the 208-byte block from the elements' own defaults. The 12 structural `replace()` calls now throw with the constant name when the WGSL pattern is missing, so a shader edit can never silently disable an effect again. Byte-identity stays pinned by `PostProcessPassUniforms`/`RendererParityPostProcess` (green) plus new per-element packing tests; no behaviour change.
+
 ## [0.113.0] - 2026-10-18
 
 ### "Have no fear of perfection - you'll never reach it." - Salvador Dalí

@@ -12,4 +12,12 @@ export class QuantizeElement extends PostProcessingElement {
 
   /** Number of color steps per RGB channel. E.g. 8.0 = 3 bits per channel. */
   public steps: number = 8.0;
+
+  public override packUniforms(out: Float32Array, offset: number): void {
+    out[offset + 8] = this.steps; // c.x: quantizeSteps
+  }
+
+  public override structuralKey(): string {
+    return `${this.enabled ? 1 : 0}`;
+  }
 }

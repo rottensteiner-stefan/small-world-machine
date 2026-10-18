@@ -18,4 +18,17 @@ export class BloomElement extends PostProcessingElement {
   public radius: number = 1.0;
   /** Color tint applied to the bloom highlights (default: white). */
   public color: Color = new Color(1.0, 1.0, 1.0);
+
+  public override packUniforms(out: Float32Array, offset: number): void {
+    const o = offset;
+    out[o + 7] = this.intensity; // b.w: bloomIntensity
+    out[o + 12] = this.color.r; // bloomColor.rgb
+    out[o + 13] = this.color.g;
+    out[o + 14] = this.color.b;
+    out[o + 15] = 0.0; // pad
+  }
+
+  public override structuralKey(): string {
+    return `${this.enabled ? 1 : 0}`;
+  }
 }

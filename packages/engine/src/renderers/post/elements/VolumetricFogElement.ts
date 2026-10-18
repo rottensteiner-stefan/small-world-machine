@@ -114,4 +114,8 @@ export class VolumetricFogElement extends PostProcessingElement {
 
   /** Half-extents of the density-mask box in world units; one box maps to the whole texture. */
   public maskSize: Vector3D = new Vector3D(10, 10, 10);
+
+  public override structuralKey(): string {
+    return `${this.enabled ? 1 : 0}`;
+  }
 }

@@ -13,4 +13,16 @@ export class FlashElement extends PostProcessingElement {
   public color: Color = new Color(1.0, 1.0, 1.0);
   /** Current flash strength in [0, 1]. */
   public intensity: number = 0;
+
+  public override packUniforms(out: Float32Array, offset: number): void {
+    const o = offset;
+    out[o + 40] = this.color.r; // flashParams.x
+    out[o + 41] = this.color.g; // flashParams.y
+    out[o + 42] = this.color.b; // flashParams.z
+    out[o + 43] = this.intensity; // flashParams.w
+  }
+
+  public override structuralKey(): string {
+    return `${this.enabled ? 1 : 0}`;
+  }
 }

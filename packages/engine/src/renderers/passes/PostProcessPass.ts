@@ -10,6 +10,61 @@ import {
   TextureWrap,
   Topology,
 } from "../../enums/index.js";
+import {
+  POST_PROCESS_DYNUNIFORM_FLOATS,
+  packPostProcessNeutralUniforms,
+} from "../post/PostProcessDynUniforms.js";
+import type { PostProcessingGroup } from "../post/index.js";
+import type {
+  BloomElement,
+  ColorGradingElement,
+  FlashElement,
+  GrainElement,
+  GravitationalLensingElement,
+  HbaoElement,
+  LightShaftsElement,
+  OutlineElement,
+  QuantizeElement,
+  ToneMappingElement,
+  VignetteElement,
+  VolumetricFogElement,
+} from "../post/elements/index.js";
+
+/**
+ * Decoded element bundle. The pass resolves every element type it needs exactly once per execute()
+ * so the group is never re-asked (previously ~34 separate `group.get()` calls per frame).
+ */
+interface PostEffectBundle {
+  tm: ToneMappingElement | undefined;
+  vig: VignetteElement | undefined;
+  grain: GrainElement | undefined;
+  bloom: BloomElement | undefined;
+  grade: ColorGradingElement | undefined;
+  quant: QuantizeElement | undefined;
+  hbao: HbaoElement | undefined;
+  shafts: LightShaftsElement | undefined;
+  volFog: VolumetricFogElement | undefined;
+  outline: OutlineElement | undefined;
+  flash: FlashElement | undefined;
+  lensing: GravitationalLensingElement | undefined;
+}
+
+function decodeBundle(group: PostProcessingGroup): PostEffectBundle {
+  return {
+    tm: group.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING),
+    vig: group.get<VignetteElement>(PostProcessingEffectType.VIGNETTE),
+    grain: group.get<GrainElement>(PostProcessingEffectType.GRAIN),
+    bloom: group.get<BloomElement>(PostProcessingEffectType.BLOOM),
+    grade: group.get<ColorGradingElement>(PostProcessingEffectType.COLOR_GRADING),
+    quant: group.get<QuantizeElement>(PostProcessingEffectType.QUANTIZE),
+    hbao: group.get<HbaoElement>(PostProcessingEffectType.HBAO),
+    shafts: group.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS),
+    volFog: group.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG),
+    outline: group.get<OutlineElement>(PostProcessingEffectType.OUTLINE),
+    flash: group.get<FlashElement>(PostProcessingEffectType.FLASH),
+    lensing: group.get<GravitationalLensingElement>(PostProcessingEffectType.GRAVITATIONAL_LENSING),
+  };
+}
 
 /**
  * Full-screen post-processing pass (Uber-Shader).
@@ -39,8 +94,9 @@ export class PostProcessPass implements RenderPass {
   private _uniformBuffer?: GPUBuffer;
   private _sampler?: GPUSampler;
   /** 52 floats (208 bytes): DynUniforms in PostProcess.frag.wgsl -- time + the continuous tuning
-   * parameters (incl. color grading, gravitational lensing, flash & light shafts), packed as 13x vec4f. */
-  private _uniformData: Float32Array = new Float32Array(52);
+   * parameters (incl. color grading, gravitational lensing, flash & light shafts), packed as 13x vec4f.
+   * Elements write their own slices via `packUniforms`; the identity baseline is seeded once. */
+  private _uniformData: Float32Array = new Float32Array(POST_PROCESS_DYNUNIFORM_FLOATS);
   private _builtTextureView?: GPUTextureView;
   private _builtBloomTextureView?: GPUTextureView;
   private _builtHbaoTextureView?: GPUTextureView;
@@ -48,61 +104,45 @@ export class PostProcessPass implements RenderPass {
   private _builtVolumetricFogTextureView?: GPUTextureView;
   private _compiledSignature?: string;
 
-  private _getSignature(group: import("../post/index.js").PostProcessingGroup): string {
-    const tm = group.get<import("../post/index.js").ToneMappingElement>(
-      PostProcessingEffectType.TONE_MAPPING,
-    );
-    const vig = group.get<import("../post/index.js").VignetteElement>(
-      PostProcessingEffectType.VIGNETTE,
-    );
-    const grain = group.get<import("../post/index.js").GrainElement>(
-      PostProcessingEffectType.GRAIN,
-    );
-    const bloom = group.get<import("../post/index.js").BloomElement>(
-      PostProcessingEffectType.BLOOM,
-    );
-    const grade = group.get<import("../post/index.js").ColorGradingElement>(
-      PostProcessingEffectType.COLOR_GRADING,
-    );
-    const quant = group.get<import("../post/index.js").QuantizeElement>(
-      PostProcessingEffectType.QUANTIZE,
-    );
-    const hbao = group.get<import("../post/index.js").HbaoElement>(PostProcessingEffectType.HBAO);
-    const shafts = group.get<import("../post/index.js").LightShaftsElement>(
-      PostProcessingEffectType.LIGHT_SHAFTS,
-    );
-    const volFog = group.get<import("../post/index.js").VolumetricFogElement>(
-      PostProcessingEffectType.VOLUMETRIC_FOG,
-    );
-    const outline = group.get<import("../post/index.js").OutlineElement>(
-      PostProcessingEffectType.OUTLINE,
-    );
-    const flash = group.get<import("../post/index.js").FlashElement>(
-      PostProcessingEffectType.FLASH,
-    );
+  constructor() {
+    // Identity baseline. The group registers every effect by default, so element slices are
+    // overwritten every frame; this only prevents stale data if an element type is absent.
+    packPostProcessNeutralUniforms(this._uniformData, 0);
+  }
 
+  private _computeSignature(filterMode: number, e: PostEffectBundle): string {
     // Only structural flags/modes -- these gate real WGSL code paths (branch taken, sample
     // count) and require a shader rebuild. Continuous tuning values (exposure, vignette
     // offset/darkness/roundness, grain intensity, bloom intensity/color, grading
     // contrast/saturation/temperature/tint/lift/gamma/gain, quantize steps, outline
     // thickness/sensitivity/color, flash color/intensity) live in the per-frame DynUniforms
     // buffer instead (see execute()) and deliberately do NOT appear here -- tuning them must
-    // never rebuild.
+    // never rebuild. The element's structuralKey() owns what forces a rebuild.
     return [
-      group.filterMode,
-      tm && tm.enabled ? 1 : 0,
-      tm && tm.enabled ? tm.mode : 0,
-      vig && vig.enabled ? 1 : 0,
-      grain && grain.enabled ? 1 : 0,
-      bloom && bloom.enabled ? 1 : 0,
-      grade && grade.enabled ? 1 : 0,
-      quant && quant.enabled ? 1 : 0,
-      hbao && hbao.enabled ? 1 : 0,
-      shafts && shafts.enabled ? 1 : 0,
-      volFog && volFog.enabled ? 1 : 0,
-      outline && outline.enabled ? 1 : 0,
-      flash && flash.enabled ? 1 : 0,
+      filterMode,
+      e.tm ? e.tm.structuralKey() : "0|0",
+      e.vig ? e.vig.structuralKey() : "0",
+      e.grain ? e.grain.structuralKey() : "0",
+      e.bloom ? e.bloom.structuralKey() : "0",
+      e.grade ? e.grade.structuralKey() : "0",
+      e.quant ? e.quant.structuralKey() : "0",
+      e.hbao ? e.hbao.structuralKey() : "0",
+      e.shafts ? e.shafts.structuralKey() : "0",
+      e.volFog ? e.volFog.structuralKey() : "0",
+      e.outline ? e.outline.structuralKey() : "0",
+      e.flash ? e.flash.structuralKey() : "0",
     ].join("|");
+  }
+
+  /** Replaces a WGSL compile-time constant, failing loudly instead of silently becoming a no-op
+   * when the PostProcess.frag.wgsl source drifts from what the pass expects. */
+  private _replaceConst(code: string, pattern: string, replacement: string): string {
+    if (!code.includes(pattern)) {
+      throw new Error(
+        `PostProcessPass: WGSL constant '${pattern}' not found in PostProcess.frag.wgsl -- the shader drifted from the pass; update one or the other.`,
+      );
+    }
+    return code.replace(pattern, replacement);
   }
 
   private _bgl?: GPUBindGroupLayout;
@@ -141,7 +181,8 @@ export class PostProcessPass implements RenderPass {
    */
   private _buildPipeline(
     renderer: WebGPURenderer,
-    group: import("../post/index.js").PostProcessingGroup,
+    group: PostProcessingGroup,
+    e: PostEffectBundle,
   ): void {
     const device = renderer.gpuDevice!;
     this._ensureResources(device);
@@ -149,103 +190,85 @@ export class PostProcessPass implements RenderPass {
     const vertModule = device.createShaderModule({ code: FULLSCREEN_VERT_WGSL });
     let assembledFrag = renderer.context.shaderRegistry.assemble(POST_PROCESS_FRAG_WGSL, "wgsl");
 
-    const tm = group.get<import("../post/index.js").ToneMappingElement>(
-      PostProcessingEffectType.TONE_MAPPING,
-    );
-    const vig = group.get<import("../post/index.js").VignetteElement>(
-      PostProcessingEffectType.VIGNETTE,
-    );
-    const grain = group.get<import("../post/index.js").GrainElement>(
-      PostProcessingEffectType.GRAIN,
-    );
-    const bloom = group.get<import("../post/index.js").BloomElement>(
-      PostProcessingEffectType.BLOOM,
-    );
-    const grade = group.get<import("../post/index.js").ColorGradingElement>(
-      PostProcessingEffectType.COLOR_GRADING,
-    );
-    const quant = group.get<import("../post/index.js").QuantizeElement>(
-      PostProcessingEffectType.QUANTIZE,
-    );
-    const hbao = group.get<import("../post/index.js").HbaoElement>(PostProcessingEffectType.HBAO);
-    const outline = group.get<import("../post/index.js").OutlineElement>(
-      PostProcessingEffectType.OUTLINE,
-    );
-    const flash = group.get<import("../post/index.js").FlashElement>(
-      PostProcessingEffectType.FLASH,
-    );
-    const shafts = group.get<import("../post/index.js").LightShaftsElement>(
-      PostProcessingEffectType.LIGHT_SHAFTS,
-    );
-
-    const tmEnabled = tm && tm.enabled;
-    const vigEnabled = vig && vig.enabled;
-    const grainEnabled = grain && grain.enabled;
-    const bloomEnabled = bloom && bloom.enabled;
-    const gradeEnabled = grade && grade.enabled;
-    const quantEnabled = quant && quant.enabled;
-    const hbaoEnabled = hbao && hbao.enabled;
-    const shaftsEnabled = shafts && shafts.enabled;
-    const outlineEnabled = outline && outline.enabled;
-    const flashEnabled = flash && flash.enabled;
-    const volFog = group.get<import("../post/index.js").VolumetricFogElement>(
-      PostProcessingEffectType.VOLUMETRIC_FOG,
-    );
-    const volFogEnabled = volFog && volFog.enabled;
+    const tmEnabled = e.tm && e.tm.enabled;
+    const vigEnabled = e.vig && e.vig.enabled;
+    const grainEnabled = e.grain && e.grain.enabled;
+    const bloomEnabled = e.bloom && e.bloom.enabled;
+    const gradeEnabled = e.grade && e.grade.enabled;
+    const quantEnabled = e.quant && e.quant.enabled;
+    const hbaoEnabled = e.hbao && e.hbao.enabled;
+    const shaftsEnabled = e.shafts && e.shafts.enabled;
+    const outlineEnabled = e.outline && e.outline.enabled;
+    const flashEnabled = e.flash && e.flash.enabled;
+    const volFogEnabled = e.volFog && e.volFog.enabled;
 
     // Inject only STRUCTURAL parameters as WGSL constants -- these gate real code paths (branch
     // taken, sample count), so changing them legitimately needs a rebuild. Continuous tuning
     // values (exposure, vignette/grain/bloom/quantize/outline numeric params) no longer appear
     // here at all -- they're written every frame into DynUniforms instead (see execute()).
-    assembledFrag = assembledFrag.replace(
+    // _replaceConst() throws when the WGSL no longer contains the constant, so a shader edit
+    // can never silently disable an effect.
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_toneMappingMode: u32 = 0u;",
       // Default to Reinhard (1) when no ToneMappingElement is configured — matches GL2 which
       // always applies Reinhard unconditionally in the forward pass. Without this fallback,
       // WebGPU PostProcess path with no tonemapper outputs raw HDR * exposure with no tone
       // curve, producing a visibly darker/flat result compared to GL2.
-      `const u_toneMappingMode: u32 = ${tmEnabled ? tm!.mode : 1}u;`,
+      `const u_toneMappingMode: u32 = ${tmEnabled ? e.tm!.mode : 1}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_vignetteEnabled: u32 = 0u;",
       `const u_vignetteEnabled: u32 = ${vigEnabled ? 1 : 0}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_grainEnabled: u32 = 0u;",
       `const u_grainEnabled: u32 = ${grainEnabled ? 1 : 0}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_colorGradingEnabled: u32 = 0u;",
       `const u_colorGradingEnabled: u32 = ${gradeEnabled ? 1 : 0}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_bloomEnabled: u32 = 0u;",
       `const u_bloomEnabled: u32 = ${bloomEnabled ? 1 : 0}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_quantizeEnabled: u32 = 0u;",
       `const u_quantizeEnabled: u32 = ${quantEnabled ? 1 : 0}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_hbaoEnabled: u32 = 0u;",
       `const u_hbaoEnabled: u32 = ${hbaoEnabled ? 1 : 0}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_lightShaftsEnabled: u32 = 0u;",
       `const u_lightShaftsEnabled: u32 = ${shaftsEnabled ? 1 : 0}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_volumetricFogEnabled: u32 = 0u;",
       `const u_volumetricFogEnabled: u32 = ${volFogEnabled ? 1 : 0}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_outlineEnabled: u32 = 0u;",
       `const u_outlineEnabled: u32 = ${outlineEnabled ? 1 : 0}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_flashEnabled: u32 = 0u;",
       `const u_flashEnabled: u32 = ${flashEnabled ? 1 : 0}u;`,
     );
-    assembledFrag = assembledFrag.replace(
+    assembledFrag = this._replaceConst(
+      assembledFrag,
       "const u_filterMode: u32 = 0u;",
       `const u_filterMode: u32 = ${group.filterMode}u;`,
     );
@@ -303,47 +326,42 @@ export class PostProcessPass implements RenderPass {
     const group = renderer.postProcessing;
     if (!group.enabled || !renderer.hdrTextureView) return;
 
+    // Resolve the effect bundle exactly once per frame -- texture selection, the structural
+    // rebuild signature and the DynUniforms packing all read from the same decoded references
+    // (the group used to be asked separately ~34x per frame).
+    const e = decodeBundle(group);
+
     // If TAA and/or Motion Trail resolved this frame, the uber pass reacts to that instead of
     // the raw per-frame color -- `_hdrTextureView` itself must stay untouched so both keep
     // reading fresh input next frame (see WebGPURenderer.render()).
     const colorView =
       renderer.motionTrailResolvedView ?? renderer.taaResolvedView ?? renderer.hdrTextureView;
 
-    const bloom = group.get<import("../post/index.js").BloomElement>(
-      PostProcessingEffectType.BLOOM,
-    );
     const bloomActiveView =
-      bloom && bloom.enabled && renderer.bloomTextureView
+      e.bloom && e.bloom.enabled && renderer.bloomTextureView
         ? renderer.bloomTextureView
         : renderer.whiteTextureView;
 
-    const hbao = group.get<import("../post/index.js").HbaoElement>(PostProcessingEffectType.HBAO);
     const hbaoActiveView =
-      hbao && hbao.enabled && renderer.hbaoTextureView
+      e.hbao && e.hbao.enabled && renderer.hbaoTextureView
         ? renderer.hbaoTextureView
         : renderer.whiteTextureView;
 
-    const shafts = group.get<import("../post/index.js").LightShaftsElement>(
-      PostProcessingEffectType.LIGHT_SHAFTS,
-    );
     const shaftsActiveView =
-      shafts && shafts.enabled && renderer.lightShaftsTextureView
+      e.shafts && e.shafts.enabled && renderer.lightShaftsTextureView
         ? renderer.lightShaftsTextureView
         : renderer.whiteTextureView;
 
-    const volFog = group.get<import("../post/index.js").VolumetricFogElement>(
-      PostProcessingEffectType.VOLUMETRIC_FOG,
-    );
     const volFogActiveView =
-      volFog && volFog.enabled && renderer.volumetricFogTextureView
+      e.volFog && e.volFog.enabled && renderer.volumetricFogTextureView
         ? renderer.volumetricFogTextureView
         : renderer.whiteTextureView;
 
-    const sig = this._getSignature(group);
+    const sig = this._computeSignature(group.filterMode, e);
 
     // Rebuild pipeline ONLY if the structural shader signature changed
     if (!this._pipeline || sig !== this._compiledSignature) {
-      this._buildPipeline(renderer, group);
+      this._buildPipeline(renderer, group, e);
       this._compiledSignature = sig;
     }
 
@@ -372,90 +390,21 @@ export class PostProcessPass implements RenderPass {
     }
 
     // Write the continuous tuning values every frame, independent of the rebuild guard above --
-    // this is the whole point: moving a slider never touches the pipeline. Matches DynUniforms'
-    // layout in PostProcess.frag.wgsl exactly (5x vec4f, index comments below give the offset).
-    const tm = group.get<import("../post/index.js").ToneMappingElement>(
-      PostProcessingEffectType.TONE_MAPPING,
-    );
-    const vig = group.get<import("../post/index.js").VignetteElement>(
-      PostProcessingEffectType.VIGNETTE,
-    );
-    const grain = group.get<import("../post/index.js").GrainElement>(
-      PostProcessingEffectType.GRAIN,
-    );
-    const grade = group.get<import("../post/index.js").ColorGradingElement>(
-      PostProcessingEffectType.COLOR_GRADING,
-    );
-    const quant = group.get<import("../post/index.js").QuantizeElement>(
-      PostProcessingEffectType.QUANTIZE,
-    );
-    const outline = group.get<import("../post/index.js").OutlineElement>(
-      PostProcessingEffectType.OUTLINE,
-    );
-    const flash = group.get<import("../post/index.js").FlashElement>(
-      PostProcessingEffectType.FLASH,
-    );
-
+    // this is the whole point: moving a slider never touches the pipeline. Every effect that
+    // feeds the DynUniforms block owns its slice and packs it itself via packUniforms(), so no
+    // per-slot `group.get` remains here (the bundle above is the single decode).
     const d = this._uniformData;
     d[0] = renderer.frameInfo.realTime % 100.0; // a.x: time (real time: effects like grain must not freeze in hit-stop)
-    d[1] = tm ? tm.exposure : 1.0; // a.y: exposure
-    d[2] = tm ? 1.0 / tm.gamma : 1.0; // a.z: inverseGamma
-    d[3] = vig ? vig.offset : 0.8; // a.w: vignetteOffset
-    d[4] = vig ? vig.darkness : 0.5; // b.x: vignetteDarkness
-    d[5] = vig ? vig.roundness : 2.0; // b.y: vignetteRoundness
-    d[6] = grain ? grain.intensity : 0.05; // b.z: grainIntensity
-    d[7] = bloom ? bloom.intensity : 1.0; // b.w: bloomIntensity
-    d[8] = quant ? quant.steps : 8.0; // c.x: quantizeSteps
-    d[9] = outline ? outline.thickness : 1.0; // c.y: outlineThickness
-    d[10] = outline ? outline.sensitivity : 1.0; // c.z: outlineSensitivity
-    d[11] = grade ? grade.gain.b : 1.0; // c.w: gainB
-    d[12] = bloom ? bloom.color.r : 1.0; // bloomColor.rgb
-    d[13] = bloom ? bloom.color.g : 1.0;
-    d[14] = bloom ? bloom.color.b : 1.0;
-    d[15] = 0; // pad
-    d[16] = outline ? outline.color.r : 0.0; // outlineColor.rgb
-    d[17] = outline ? outline.color.g : 0.0;
-    d[18] = outline ? outline.color.b : 0.0;
-    d[19] = 0; // pad
-    d[20] = grade ? grade.contrast : 1.0; // grading0.x: contrast
-    d[21] = grade ? grade.saturation : 1.0; // grading0.y: saturation
-    d[22] = grade ? grade.temperature : 0.0; // grading0.z: temperature
-    d[23] = grade ? grade.tint : 0.0; // grading0.w: tint
-    d[24] = grade ? grade.lift.r : 0.0; // grading1.x: liftR
-    d[25] = grade ? grade.lift.g : 0.0; // grading1.y: liftG
-    d[26] = grade ? grade.lift.b : 0.0; // grading1.z: liftB
-    d[27] = grade ? grade.gamma.r : 1.0; // grading1.w: gammaR
-    d[28] = grade ? grade.gamma.g : 1.0; // grading2.x: gammaG
-    d[29] = grade ? grade.gamma.b : 1.0; // grading2.y: gammaB
-    d[30] = grade ? grade.gain.r : 1.0; // grading2.z: gainR
-    d[31] = grade ? grade.gain.g : 1.0; // grading2.w: gainG
-
-    const lensing = group.get<import("../post/index.js").GravitationalLensingElement>(
-      PostProcessingEffectType.GRAVITATIONAL_LENSING,
-    );
-    const singPos = lensing ? lensing.singularityScreenPos : group.singularityScreenPos;
-    d[32] = singPos.x; // singularityPos.x
-    d[33] = singPos.y; // singularityPos.y
-    d[34] = singPos.z; // singularityPos.z
-    d[35] = lensing ? lensing.eventHorizonRadius : 0.03; // singularityPos.w: eventHorizonRadius
-    d[36] = lensing ? lensing.strength : 0.25; // lensingParams.x: strength
-    d[37] = lensing ? lensing.spaghettification : 0.15; // lensingParams.y: spaghettification
-    d[38] = lensing ? lensing.relativisticBeaming : 1.2; // lensingParams.z: relativisticBeaming
-    d[39] = lensing ? lensing.ringGlowIntensity : 2.5; // lensingParams.w: ringGlowIntensity
-
-    d[40] = flash ? flash.color.r : 1.0; // flashParams.x: color.r
-    d[41] = flash ? flash.color.g : 1.0; // flashParams.y: color.g
-    d[42] = flash ? flash.color.b : 1.0; // flashParams.z: color.b
-    d[43] = flash ? flash.intensity : 0.0; // flashParams.w: intensity
-
-    d[44] = shafts ? shafts.intensity : 1.0; // shaftsParams.x: intensity
-    d[45] = shafts ? shafts.density : 0.05; // shaftsParams.y: density
-    d[46] = 0;
-    d[47] = 0;
-    d[48] = shafts ? shafts.color.r : 1.0; // shaftsColor.r
-    d[49] = shafts ? shafts.color.g : 1.0; // shaftsColor.g
-    d[50] = shafts ? shafts.color.b : 1.0; // shaftsColor.b
-    d[51] = 1.0;
+    e.tm?.packUniforms?.(d, 0);
+    e.vig?.packUniforms?.(d, 0);
+    e.grain?.packUniforms?.(d, 0);
+    e.bloom?.packUniforms?.(d, 0);
+    e.quant?.packUniforms?.(d, 0);
+    e.outline?.packUniforms?.(d, 0);
+    e.grade?.packUniforms?.(d, 0);
+    e.lensing?.packUniforms?.(d, 0);
+    e.flash?.packUniforms?.(d, 0);
+    e.shafts?.packUniforms?.(d, 0);
 
     renderer.gpuDevice!.queue.writeBuffer(this._uniformBuffer!, 0, d);
 
