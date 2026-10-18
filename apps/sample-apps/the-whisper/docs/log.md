@@ -1987,3 +1987,35 @@ befüllen.
 - **Mixamo-Alternativen geprüft:** Der einzige andere Treffer („Walking Down A Set Of Stairs", 29 Frames, 0.917 s, In Place, heruntergeladen und konvertiert) ist keine Schleife: Hüfte sinkt von 0.98 auf 0.45 m (Hocke), Endpose bis 92° (Knie) neben der Startpose. Sonst gibt es nur Aufwärts-Clips. Quelle liegt nur lokal in `.agents/scratches/fbxcheck/`.
 - **Entscheidung (Stefan):** `stairs_down` nutzt `walking.glb` (1.0 s, sauberer Loop); die Treppengeometrie liefert die Höhe. `clipTiming.ts` und `ClipTiming.test.ts` entfernt, im Tunnel-Showcase entfällt `timeScale`; Diorama zeigt jetzt ebenfalls auf `walking.glb`. `descending_stairs.glb/.fbx` bleiben unbenutzt im Repo.
 - **Verifikation:** `lint:fix`, `tsc`, 270 Dateien / 1777 Tests grün; Diorama lädt, Taste `0` aktiviert `stairs_down`, 0 Konsolenfehler. Nicht visuell am Treppen-Zone-C im Tunnel geprüft.
+
+## 148. Geteilter `PlayerRig` ersetzt duplizierte Player-Plumbing in Diorama & Tunnel (2026-10-18)
+
+- **Refactor (Task d, Wave-1-package-B):** Der neue `scenes/shared/PlayerRig` bündelt alles, was
+  `character-diorama` und `flakturm-tunnel` bisher als Copy/Paste-Zwillinge dupliziert hatten:
+  Character-GLB-Loading mit **Re-Entrancy-Guard** (ein schnelles Doppel-`C` kann nie zwei Spieler
+  erzeugen) und awaited, fehlerpropagierendem `switchCharacter`, EINEN kanonischen Animations-Clip-
+  Pool (einmalig per `Promise.all` geladen, über alle Charakter-Wechsel wiederverwendet), Crossfade
+  (`play`/`update`), den `StageMovementBehavior`-Re-Attach (altes Behavior entfernen bevor neues
+  hinzugefügt wird; walkable (u,v) bleibt erhalten) sowie den Laternen-Attach inkl. zero-alloc
+  World-Position-Sync über `MathPool`-Scratch-Vektoren.
+- **Kanonischer Clip-Tabellen-Entscheid:** Die beiden Szenen-Tabellen waren gedriftet (Diorama
+  `walk_torch.glb`, Tunnel `walking_torch.glb`). Beide Dateien sind byte-identisch (SHA-1
+  `5c52989f0f2f9836882cc7a646846f7be231f490`) → EIN Tabelle im Rig, KEIN Konstruktor-Argument;
+  der Schlüssel `walk_torch` bleibt, was die Szenen-Logik ohnehin referenziert. Die vielstimmige
+  Hips-Translations-Urspurungs-Filterung des Dioramas gilt jetzt für ALLE Clips — der Tunnel verliert
+  damit nur die redundante Doppel-Root-Motion, da `StageMovementBehavior` den Rig positioniert
+  (Korrektheits-Fix, gemeldet).
+- **Fail-fast:** kein leeres `catch {}` mehr; ein fehlgeschlagener Clip-/Character-Load wirft aus
+  `switchCharacter` heraus und wird GENAU EINMAL am Key-Handler mit `console.error` gefangen; der
+  Rig bleibt bei Fehlern in seinem letzten gültigen Zustand (nichts wird vor erfolgreichem Load
+  mutiert).
+- **Szenen-spezifisch injiziert** über Options (Scales, `createMovementBehavior`-Factory,
+  Material-Pass, Laternen-Licht, `onCharacterReady`): Diorama behält seine `-0.5`-Erstlast-Pose via
+  `_firstCharacterReady`-Flag byte-genau; Tunnel behält E/SHIFT/L/idle-C-Blöcke und HUD-Tag.
+- **Verifikation:** `tsc`, `lint:fix`, volle Suite 310 Dateien / 2099 Tests grün inkl. neuer
+  `tests/PlayerRig.test.ts` (8 Tests: Re-Entrancy-Guard, Clip-Pool-nur-einmal, Hips-Filter,
+  Behavior-ersetzt-nicht-gestapelt, Character-Fehler behält alten Zustand, Clip-Pool-Fehler lässt
+  Rig unangetastet, Laternen-Sync zero-alloc + `_VECTOR_POOL`-Bilanz, `setLanternEnabled` toggelt
+  Mesh+Licht). `build` + Browser-Check beider Szenen (WebGL2, 4× `C`-Zyklen, 0 Konsolenfehler,
+  Canvas nicht leer) grün; `test:showcases` 117 Checks / 0 failed grün. Commit folgt auf Branch
+  `wave1-d` (Worktree, kein Push).

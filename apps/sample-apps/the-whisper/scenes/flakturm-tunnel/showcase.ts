@@ -1,4 +1,3 @@
-import type { AnimationClip, AnimationAction } from "@small-world-machine/engine";
 import {
   AmbientLight,
   DirectionalLight,
@@ -10,18 +9,15 @@ import {
   StandardMaterial,
   Texture,
   RendererType,
-  AnimationMixer,
   Vector3D,
   StageMovementBehavior,
   StageZone,
-  MathPool,
 } from "@small-world-machine/engine";
 import { AbstractShowcase } from "@small-world-machine/engine/core/index.js";
 import { attachDevTools } from "@small-world-machine/tools";
-import { GltfLoader } from "@small-world-machine/engine/loaders/GltfLoader.js";
-import { Bone } from "@small-world-machine/engine/core/animation/index.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
-import { BunkerKit } from "../../builder/BunkerKit.js";
+import { PlayerRig } from "../shared/PlayerRig.js";
+import type { PlayerRigType } from "../shared/PlayerRig.js";
 
 /** The background plane's world extent -- the only place a (u, v) stage coordinate is ever
  * turned into a 3D position. Fed directly into `StageMovementBehavior`'s `"flat-plane"`
@@ -70,30 +66,6 @@ const DEFAULT_ZONE_POINTS: Record<
   ],
 };
 
-/** Named animation clips shared by every Player skin. Add an entry here (and load the matching
- * FBX2glTF-converted `.glb` under `public/assets/the-whisper/mannequin/shared/anim/`) to make a new
- * animation available via `_playAnimation`. */
-const ANIMATION_CLIP_URLS: Record<string, string> = {
-  // Idle variations
-  idle_1: "/assets/the-whisper/mannequin/shared/anim/idle_1.glb",
-  idle_2: "/assets/the-whisper/mannequin/shared/anim/idle_2.glb",
-  idle_torch: "/assets/the-whisper/mannequin/shared/anim/idle_torch.glb",
-  // Walk & Run (neutral)
-  walk: "/assets/the-whisper/mannequin/shared/anim/walking.glb",
-  run_1: "/assets/the-whisper/mannequin/shared/anim/running_1.glb",
-  run_2: "/assets/the-whisper/mannequin/shared/anim/running_2.glb",
-  // Walk & Run (with lantern / torch)
-  walk_torch: "/assets/the-whisper/mannequin/shared/anim/walking_torch.glb",
-  run_torch: "/assets/the-whisper/mannequin/shared/anim/running_torch.glb",
-  // Stairs
-  stairs_up: "/assets/the-whisper/mannequin/shared/anim/ascending_stairs.glb",
-  // No usable descending clip: Mixamo's stair-descent clips are a 0.4s run fragment and a one-step
-  // crouch, neither loops. The neutral walk loops cleanly; the stairs geometry supplies the drop.
-  stairs_down: "/assets/the-whisper/mannequin/shared/anim/walking.glb",
-};
-
-const ANIMATION_FADE_SECONDS = 0.25;
-
 /** [SHIFT]+[Left]/[Right] manually spins the character in place (radians/second), same idea as
  * character-diorama's arrow-key rotation -- lets the player (or a dev checking the self-occlusion
  * angle documented in `.agents/notes/backlog.md`) look at the figure from any angle. Plain
@@ -102,55 +74,24 @@ const ANIMATION_FADE_SECONDS = 0.25;
  * controls fighting over `rotation.y`. */
 const MANUAL_ROTATE_SPEED = 1.5;
 
-/** Prioritized candidate bones for left-hand lantern attachment across different rigs */
-const LANTERN_HAND_BONE_CANDIDATES = [
-  // 1. Finger bones (grip center in palm / fingers)
-  "mixamorig:LeftHandMiddle1",
-  "mixamorig1:LeftHandMiddle1",
-  "mixamorig:LeftHandIndex1",
-  "mixamorig1:LeftHandIndex1",
-  // 2. Wrist bones (Mixamo fallback)
-  "mixamorig:LeftHand",
-  "mixamorig1:LeftHand",
-  "L_Hand",
-  // 3. Tripo / Yoshi bones
-  "tripo::0_Left_Limb_2",
-  "tripo::0_Left_Limb_3",
-];
-
-type CharacterType = "male" | "female" | "yoshi";
-
-interface AnimationFade {
-  from: AnimationAction | undefined;
-  to: AnimationAction;
-  elapsed: number;
-  duration: number;
-}
+/** Character-tag texts per skin (the rig itself is clip/character-agnostic -- see
+ * `scenes/shared/PlayerRig.ts`). Sent to `rightDesc`-style HUD on each switch. */
+const CHARACTER_DESC: Record<PlayerRigType, string> = {
+  male: "Spieler (Männlich) auf der 2.5D-Bühne",
+  female: "Spielerin (Weiblich) auf der 2.5D-Bühne",
+  yoshi: "🦖 Yoshi (Secret Easter Egg) auf der 2.5D-Bühne",
+};
 
 class AndNowScene2 extends AbstractShowcase {
-  private _player!: Object3D;
-  /** Stage anchor that `StageMovementBehavior` positions/scales (forced-perspective per zone).
-   * `_player` sits inside it at a fixed 1.8m-real-world-height local scale, so the per-zone
-   * scale factor multiplies on top of that instead of replacing it outright. */
-  private _playerRig!: Object3D;
-  private _movementBehavior!: StageMovementBehavior;
+  /** Shared player rig owning every character/clip/lantern/crossfade concern -- see
+   * `scenes/shared/PlayerRig.ts`. Reads through `root`/`movementBehavior`/`currentType` etc. */
+  private _playerRig: PlayerRig | undefined;
   private _pointLight!: PointLight;
-  private _lanternGroup: Object3D | undefined = undefined;
-  /** The current character's left-hand bone, tracked (position only, see `_syncLanternTransform()`)
-   * rather than used as `_lanternGroup`'s scene-graph parent. */
-  private _lanternHandBone: Bone | undefined = undefined;
-  private _lanternOn: boolean = true;
-  private _mixer?: AnimationMixer;
-  private _clips: Map<string, AnimationClip> = new Map();
-  private _activeAnimation: string | undefined;
-  private _fade: AnimationFade | undefined = undefined;
   private _idleTimer: number = 0;
   private _idleVariation: "idle_1" | "idle_2" = "idle_1";
   private _idleSwitchDuration: number = 8.0;
   private _zoneBadgeEl: HTMLElement | null = null;
   private _charDescEl: HTMLElement | null = null;
-  private _characterType: CharacterType = "male";
-  private _isSwitchingChar: boolean = false;
   private _lastCState: boolean = false;
   private _lastEState: boolean = false;
   private _lastLState: boolean = false;
@@ -269,168 +210,102 @@ class AndNowScene2 extends AbstractShowcase {
       typeof window !== "undefined"
         ? new URLSearchParams(window.location.search).get("char")
         : null;
-    const initialChar: CharacterType =
+    const initialChar: PlayerRigType =
       charParam === "female" ? "female" : charParam === "yoshi" ? "yoshi" : "male";
 
-    await this._loadCharacter(initialChar);
+    this._buildPlayerRig();
+    await this._playerRig!.switchCharacter(initialChar);
 
     this._setupEditorEvents();
   }
 
-  /**
-   * Lädt die ausgewählte Figur (männlich / weiblich / Yoshi), skaliert sie passend,
-   * bindet die Laterne an mixamorig:LeftHand und hängt Behavior & AnimationMixer ein.
-   */
-  private async _loadCharacter(charType: CharacterType): Promise<void> {
-    this._characterType = charType;
-    let currentUv = { u: 0.65, v: 0.85 };
-
-    if (this._movementBehavior) {
-      currentUv = this._movementBehavior.uv;
-      this._playerRig.removeBehavior(this._movementBehavior);
-    }
-
-    if (this._player) {
-      this._playerRig.remove(this._player);
-    }
-    if (!this._playerRig) {
-      this._playerRig = new Object3D("PlayerRig");
-      this.scene.add(this._playerRig);
-    }
-
-    try {
-      const gltfLoader = new GltfLoader();
-      let charModelUrl = "/assets/the-whisper/mannequin/player-male/character.glb";
-      let charScale = 1.8;
-      let descText = "Spieler (Männlich) auf der 2.5D-Bühne";
-
-      if (charType === "female") {
-        charModelUrl = "/assets/the-whisper/mannequin/player-female/character.glb";
-        charScale = 1.8;
-        descText = "Spielerin (Weiblich) auf der 2.5D-Bühne";
-      } else if (charType === "yoshi") {
-        charModelUrl = "/assets/the-whisper/mannequin/yoshi/character.glb";
-        charScale = 1.35;
-        descText = "🦖 Yoshi (Secret Easter Egg) auf der 2.5D-Bühne";
-      }
-
-      this._player = await gltfLoader.load(charModelUrl);
-      this._player.scale.set(charScale, charScale, charScale);
-
-      // 1. Alle Animationen aus dem Mocap-Pool laden
-      this._clips.clear();
-      for (const [name, url] of Object.entries(ANIMATION_CLIP_URLS)) {
-        try {
-          const animClips = await gltfLoader.loadAnimations(url);
-          const clip = animClips[0];
-          if (clip) {
-            this._clips.set(name, clip);
+  /** Builds the shared player rig with this scene's per-scene settings (scales, the movement
+   *  factory bound to the tunnel zones, the material pass, the lantern light). Everything else --
+   *  clip pool, crossfade, lantern hand-bone sync, character switching -- lives in `PlayerRig`
+   *  and is identical across the dusk scenes. */
+  private _buildPlayerRig(): void {
+    this._playerRig = new PlayerRig({
+      parent: this.scene.root,
+      lanternParent: this.scene.root,
+      input: this.input,
+      defaultStartUV: { u: 0.65, v: 0.85 },
+      characters: {
+        male: {
+          url: "/assets/the-whisper/mannequin/player-male/character.glb",
+          scale: 1.8,
+        },
+        female: {
+          url: "/assets/the-whisper/mannequin/player-female/character.glb",
+          scale: 1.8,
+        },
+        yoshi: {
+          url: "/assets/the-whisper/mannequin/yoshi/character.glb",
+          scale: 1.35,
+        },
+      },
+      lanternLight: this._pointLight,
+      adjustMaterials: (player: Object3D): void => {
+        // The tunnel renders the mannequin against a painted backdrop, so the flat unlit
+        // BasicMaterial was switched to StandardMaterial (matching the diorama's look) so the
+        // figure responds to scene light; roughness/metallic tuned the same way as the diorama's
+        // matte cloth-and-skin pass -- but implemented as a full material replacement, preserving
+        // any diffuse texture, which is this scene's own flavor.
+        const applyMaterialToHierarchy = (obj: Object3D): void => {
+          if (obj.material) {
+            const sMat = new StandardMaterial({ color: new Color(1, 1, 1) });
+            if ("diffuseMap" in obj.material && obj.material.diffuseMap instanceof Texture) {
+              sMat.diffuseMap = obj.material.diffuseMap;
+            }
+            sMat.roughness = 0.92;
+            sMat.metallic = 0.02;
+            obj.material = sMat;
           }
-        } catch (animErr) {
-          console.warn(`[AndNowScene2] Konnte Animation "${name}" nicht laden:`, animErr);
-        }
-      }
-      // Was a flat, unlit BasicMaterial until 2026-09-11: it rendered the diffuse texture as-is
-      // but ignored every scene light entirely (AmbientLight/DirectionalLight/the lantern's own
-      // PointLight all had zero effect on the character), leaving it a dark silhouette against
-      // the painted, already-bright background art no matter how the lights were tuned. Switched
-      // to StandardMaterial (matching character-diorama's approach for the same shared model) so
-      // the character actually responds to the scene's lighting; roughness/metallic tuned the
-      // same way diorama does for a matte, non-shiny cloth-and-skin look.
-      const applyMaterialToHierarchy = (obj: Object3D): void => {
-        if (obj.material) {
-          const sMat = new StandardMaterial({ color: new Color(1, 1, 1) });
-          if ("diffuseMap" in obj.material && obj.material.diffuseMap instanceof Texture) {
-            sMat.diffuseMap = obj.material.diffuseMap;
+          for (const child of obj.children) {
+            applyMaterialToHierarchy(child);
           }
-          sMat.roughness = 0.92;
-          sMat.metallic = 0.02;
-          obj.material = sMat;
+        };
+        applyMaterialToHierarchy(player);
+      },
+      createMovementBehavior: (startUv): StageMovementBehavior =>
+        new StageMovementBehavior({
+          input: this.input,
+          speed: 0.09,
+          runMultiplier: 2.2,
+          rotationSpeed: 12.0,
+          // convention -- confirmed live: rotation.y = 270° faces screen-left, 90° faces
+          // screen-right, 180° faces into the tunnel (depth), and 0° faces the camera.
+          facingOffset: Math.PI,
+          startFacing: "back",
+          // The camera here is fixed and never orbits (unlike character-diorama's free
+          // OrbitController), so "facing back" landing the stance dead-on in line with the camera
+          // would self-occlude one leg behind the other on every single session start -- see
+          // .agents/notes/backlog.md's 2026-09-10 entry. A small nudge off that exact axis avoids
+          // it without changing the intended starting orientation.
+          startFacingNudge: 0.14, // ~8 degrees
+          zones: this._stageZones,
+          projection: {
+            mode: "flat-plane",
+            width: BACKGROUND_WIDTH,
+            height: BACKGROUND_HEIGHT,
+            z: BACKGROUND_Z,
+            centerY: BACKGROUND_CENTER_Y,
+          },
+          startUV: startUv,
+          onZoneChange: (zone: StageZone): void => {
+            this._updateHUD(zone);
+            this._syncActiveAnimation();
+          },
+          onStateChange: (_state: "IDLE" | "WALK" | "RUN"): void => {
+            this._syncActiveAnimation();
+          },
+        }),
+      onCharacterReady: (type: PlayerRigType): void => {
+        if (this._charDescEl) {
+          this._charDescEl.textContent = CHARACTER_DESC[type];
         }
-        for (const child of obj.children) {
-          applyMaterialToHierarchy(child);
-        }
-      };
-      applyMaterialToHierarchy(this._player);
-
-      this._playerRig.add(this._player);
-
-      // Laterne (Platzhalter-Mesh + Punktlicht) an die Hand-Bone hängen
-      let handBone: Bone | undefined;
-      for (const boneName of LANTERN_HAND_BONE_CANDIDATES) {
-        const found = this._player.getObjectByName(boneName);
-        if (found instanceof Bone) {
-          handBone = found;
-          break;
-        }
-      }
-
-      this._lanternHandBone = handBone;
-      if (handBone) {
-        if (!this._lanternGroup) {
-          this._lanternGroup = this._buildLanternMesh();
-          this._pointLight.position.set(0, -0.16, 0);
-          this._lanternGroup.add(this._pointLight);
-          // Scene-level sibling, deliberately NOT a child of `handBone` -- see
-          // `_syncLanternTransform()`'s doc comment for why.
-          this.scene.add(this._lanternGroup);
-        }
-        this._lanternGroup.isVisible = this._lanternOn;
-        this._pointLight.isVisible = this._lanternOn;
-      } else {
-        console.warn(
-          `[AndNowScene2] Hand-Bone nicht gefunden -- Laterne bleibt an fixer Position.`,
-        );
-      }
-
-      // 2.5D Bühnen-Bewegung an Spieler ankoppeln
-      this._movementBehavior = new StageMovementBehavior({
-        input: this.input,
-        speed: 0.09,
-        runMultiplier: 2.2,
-        rotationSpeed: 12.0,
-        // convention -- confirmed live: rotation.y = 270° faces screen-left, 90° faces screen-right,
-        // 180° faces into the tunnel (depth), and 0° faces the camera.
-        facingOffset: Math.PI,
-        startFacing: "back",
-        // The camera here is fixed and never orbits (unlike character-diorama's free OrbitController),
-        // so "facing back" landing the stance dead-on in line with the camera would self-occlude one
-        // leg behind the other on every single session start, not just as a rare edge case -- see
-        // .agents/notes/backlog.md's 2026-09-10 entry. A small nudge off that exact axis avoids it
-        // without changing the intended starting orientation.
-        startFacingNudge: 0.14, // ~8 degrees
-        zones: this._stageZones,
-        projection: {
-          mode: "flat-plane",
-          width: BACKGROUND_WIDTH,
-          height: BACKGROUND_HEIGHT,
-          z: BACKGROUND_Z,
-          centerY: BACKGROUND_CENTER_Y,
-        },
-        startUV: currentUv,
-        onZoneChange: (zone: StageZone): void => {
-          this._updateHUD(zone);
-          this._syncActiveAnimation();
-        },
-        onStateChange: (_state: "IDLE" | "WALK" | "RUN"): void => {
-          this._syncActiveAnimation();
-        },
-      });
-      this._playerRig.addBehavior(this._movementBehavior);
-
-      if (0 < this._clips.size) {
-        this._mixer = new AnimationMixer(this._player);
-        this._activeAnimation = undefined;
-        this._fade = undefined;
         this._syncActiveAnimation(0);
-      }
-
-      if (this._charDescEl) {
-        this._charDescEl.textContent = descText;
-      }
-    } catch (e) {
-      console.error("[AndNowScene2] Fehler beim Laden des Charakters:", e);
-    }
+      },
+    });
   }
 
   /** Screen-space rectangle the background image currently occupies, recomputed each time the
@@ -738,82 +613,21 @@ class AndNowScene2 extends AbstractShowcase {
     this._zoneBadgeEl.textContent = zone.name;
   }
 
-  /** Keeps the lantern's world POSITION locked to the hand bone's grip point every frame, while
-   * deliberately NOT parenting it under that bone. Two independent reasons:
-   * 1. A hand bone swings through a large rotation arc during walk/idle animation -- a lantern
-   *    rigidly rotating with it would tumble around instead of hanging straight down from its
-   *    handle, the way a real lantern pivots freely in a gripped hand. Never applying the bone's
-   *    rotation to `_lanternGroup.rotation` (left at the identity `_buildLanternMesh()` sets it
-   *    to) means it always hangs down, by construction.
-   * 2. Mixamo rigs commonly bake a large (e.g. ~100x, a leftover cm-to-m unit conversion) uniform
-   *    scale into the skeleton's bones -- the GPU-skinned character mesh never shows it because
-   *    its skinning matrices are relative to each bone's *bind pose*
-   *    (`bone.worldMatrix * inverseBindMatrix`, see `Skeleton.update()`), which cancels a static
-   *    scale factor out. A plain `Object3D` parented directly onto a bone has no such
-   *    cancellation and would inherit the raw ~100x bone scale. Not parenting under the bone at
-   *    all sidesteps this entirely, rather than compensating for it every frame.
-   * This mirrors `GadgetInspector`'s `_objectAxes` gizmo: added to `this._scene` (not the selected
-   * object), then synced from the tracked object's world transform every frame instead of being a
-   * scene-graph child of it -- here we copy only position, never rotation or scale.
-   *
-   * Yoshi (an Easter-egg asset, not hand-authored -- Mixamo's automatic auto-rigger) uses this
-   * exact same path too. An earlier pass here special-cased him with a fixed by-eye offset,
-   * reasoning his auto-placed `LeftHandIndex1` sat nowhere near his visible paw -- that reading
-   * turned out to be a measurement artifact in the sibling `character-diorama` scene (captured
-   * before the torch pose had actually blended in). Re-checked there with a full bone-position
-   * dump once posed and a 180-frame simulated `walk_torch` sweep: his whole left-arm chain
-   * clusters correctly at his chest, stable to ~1cm. His bone scale is already ~1 (no FBX cm-to-m
-   * artifact baked in), so the `/ boneScale` division below is simply a no-op for him. See
-   * `character-diorama/showcase.ts`'s `_syncLanternTransform()` for the fuller writeup. */
-  private _syncLanternTransform(): void {
-    const lantern = this._lanternGroup;
-    if (!lantern || !this._player) return;
-
-    const bone = this._lanternHandBone;
-    if (!bone) return;
-
-    // Finger bones (Middle1/Index1) have their origin at the finger base inside the palm already;
-    // wrist bones (LeftHand) need a forward offset along +Y to reach the palm.
-    const isFingerBone =
-      bone.name.includes("Middle") || bone.name.includes("Index") || bone.name.includes("Limb_3");
-    const boneScale = bone.getAccumulatedWorldScale();
-    const localOffset = MathPool.acquireVector().set(
-      0,
-      (isFingerBone ? 0.01 : 0.08) / boneScale,
-      (isFingerBone ? 0.0 : 0.01) / boneScale,
-    );
-
-    const worldPos = MathPool.acquireVector();
-    bone.worldMatrix.transformVector(localOffset, worldPos);
-
-    lantern.position.copyFrom(worldPos);
-    lantern.updateMatrixWorld();
-
-    MathPool.releaseVector(localOffset);
-    MathPool.releaseVector(worldPos);
-  }
-
-  /** Greybox stand-in for the Sturmlaterne (storm lantern) from the concept art -- delegates to BunkerKit. */
-  private _buildLanternMesh(): Object3D {
-    return BunkerKit.createHeldLantern({ name: "LanternPlaceholder" });
-  }
-
-  /**
-   * Ermittelt anhand von Bewegungsstatus (IDLE, WALK, RUN), Laternenzustand
-   * und aktiver Zone (z. B. Treppe Auf/Ab) die exakt passende Animation.
-   */
+  /** Ermittelt anhand von Bewegungsstatus (IDLE, WALK, RUN), Laternenzustand
+   * und aktiver Zone (z. B. Treppe Auf/Ab) die exakt passende Animation. */
   private _resolveDesiredAnimation(): string {
-    const state = this._movementBehavior?.state ?? "IDLE";
-    const zone = this._movementBehavior?.activeZone;
+    const movement = this._playerRig?.movementBehavior;
+    const state = movement?.state ?? "IDLE";
+    const zone = movement?.activeZone;
     const isStairs = zone?.id === "zone_c";
-    const isLantern = this._lanternOn;
+    const isLantern = this._playerRig?.lanternEnabled ?? true;
 
     if (state === "IDLE") {
       return isLantern ? "idle_torch" : this._idleVariation;
     }
 
     if (isStairs) {
-      const isMovingDown = (this._movementBehavior?.moveForward ?? 0) < 0;
+      const isMovingDown = (movement?.moveForward ?? 0) < 0;
       return isMovingDown ? "stairs_down" : "stairs_up";
     }
 
@@ -827,62 +641,7 @@ class AndNowScene2 extends AbstractShowcase {
 
   private _syncActiveAnimation(fadeSeconds?: number): void {
     const anim = this._resolveDesiredAnimation();
-    this._playAnimation(anim, fadeSeconds !== undefined ? { fadeSeconds } : undefined);
-  }
-
-  /** Crossfades to the named clip from ANIMATION_CLIP_URLS. No-op if the clip hasn't been loaded
-   * (e.g. not yet converted/dropped in) or is already the active animation. */
-  private _playAnimation(name: string, opts?: { loop?: boolean; fadeSeconds?: number }): void {
-    if (!this._mixer || name === this._activeAnimation) return;
-    const clip = this._clips.get(name);
-    if (!clip) return;
-
-    // A fade already in flight gets cut short here -- its `from` is dropped from tracking below,
-    // so it must be stopped now or it would keep blending forever at its last, stale weight.
-    if (this._fade?.from) this._fade.from.stop();
-
-    const fromAction =
-      undefined !== this._activeAnimation
-        ? this._mixer.clipAction(this._clips.get(this._activeAnimation)!)
-        : undefined;
-    const toAction = this._mixer.clipAction(clip);
-    toAction.setLoop(opts?.loop ?? true);
-    toAction.weight = 0;
-    toAction.reset();
-    toAction.play();
-
-    this._fade = {
-      from: fromAction,
-      to: toAction,
-      elapsed: 0,
-      duration: Math.max(0, opts?.fadeSeconds ?? ANIMATION_FADE_SECONDS),
-    };
-    this._activeAnimation = name;
-  }
-
-  /** Advances the current crossfade (if any) by shifting weight from the outgoing to the
-   * incoming AnimationAction; AnimationMixer.update already blends simultaneously-playing
-   * actions by weight, so this only has to move the two weights toward their target. */
-  private _updateAnimationFade(deltaTime: number): void {
-    const fade = this._fade;
-    if (!fade) return;
-
-    if (0 >= fade.duration) {
-      fade.to.weight = 1;
-      if (fade.from) fade.from.stop();
-      this._fade = undefined;
-      return;
-    }
-
-    fade.elapsed += deltaTime;
-    const t = Math.min(1, fade.elapsed / fade.duration);
-    fade.to.weight = t;
-    if (fade.from) fade.from.weight = 1 - t;
-
-    if (1 <= t) {
-      if (fade.from) fade.from.stop();
-      this._fade = undefined;
-    }
+    this._playerRig?.play(anim, fadeSeconds !== undefined ? { fadeSeconds } : undefined);
   }
 
   protected override update(deltaTime: number): void {
@@ -896,7 +655,8 @@ class AndNowScene2 extends AbstractShowcase {
       if (this._editorSvg) this._editorSvg.style.display = this._editorActive ? "block" : "none";
       if (this._editorPanel)
         this._editorPanel.style.display = this._editorActive ? "block" : "none";
-      if (this._movementBehavior) this._movementBehavior.enabled = !this._editorActive;
+      const movement = this._playerRig?.movementBehavior;
+      if (movement) movement.enabled = !this._editorActive;
       if (this._editorActive) this._updateEditorUI();
     }
     this._lastEState = isEPressed;
@@ -908,21 +668,21 @@ class AndNowScene2 extends AbstractShowcase {
     const isShiftHeld = this.input.isPressed("ShiftLeft") || this.input.isPressed("ShiftRight");
     const rotateLeftHeld = isShiftHeld && this.input.isPressed("ArrowLeft");
     const rotateRightHeld = isShiftHeld && this.input.isPressed("ArrowRight");
-    if (this._playerRig && (rotateLeftHeld || rotateRightHeld)) {
-      if (this._movementBehavior) this._movementBehavior.enabled = false;
-      if (rotateLeftHeld) this._playerRig.rotation.y -= deltaTime * MANUAL_ROTATE_SPEED;
-      if (rotateRightHeld) this._playerRig.rotation.y += deltaTime * MANUAL_ROTATE_SPEED;
-    } else if (this._movementBehavior && !this._editorActive) {
-      this._movementBehavior.enabled = true;
+    const rigRoot = this._playerRig?.root;
+    const movement = this._playerRig?.movementBehavior;
+    if (rigRoot && (rotateLeftHeld || rotateRightHeld)) {
+      if (movement) movement.enabled = false;
+      if (rotateLeftHeld) rigRoot.rotation.y -= deltaTime * MANUAL_ROTATE_SPEED;
+      if (rotateRightHeld) rigRoot.rotation.y += deltaTime * MANUAL_ROTATE_SPEED;
+    } else if (movement && !this._editorActive) {
+      movement.enabled = true;
     }
 
-    // Toggle Laterne mit Taste 'L' -- Mesh und Punktlicht hängen beide an der Hand-Bone, also
-    // reicht ein gemeinsames isVisible statt separater An/Aus-Logik pro Teil.
+    // Toggle Laterne mit Taste 'L' -- Mesh und Punktlicht hängen beide im Shared Rig an der
+    // Hand-Bone, also reicht ein gemeinsames isVisible statt separater An/Aus-Logik pro Teil.
     const isLPressed = this.input.isPressed("KeyL");
     if (isLPressed && !this._lastLState) {
-      this._lanternOn = !this._lanternOn;
-      if (this._lanternGroup) this._lanternGroup.isVisible = this._lanternOn;
-      this._pointLight.isVisible = this._lanternOn;
+      if (this._playerRig) this._playerRig.setLanternEnabled(!this._playerRig.lanternEnabled);
       this._syncActiveAnimation();
     }
     this._lastLState = isLPressed;
@@ -941,7 +701,8 @@ class AndNowScene2 extends AbstractShowcase {
     this._lastNState = isNPressed;
 
     // Idle-Variations-Timer (Wechsel zwischen idle_1 und idle_2 bei inaktiver Laterne)
-    if (this._movementBehavior?.state === "IDLE" && !this._lanternOn) {
+    const movementState = this._playerRig?.movementBehavior?.state;
+    if (movementState === "IDLE" && !this._playerRig?.lanternEnabled) {
       this._idleTimer += deltaTime;
       if (this._idleTimer >= this._idleSwitchDuration) {
         this._idleTimer = 0;
@@ -955,21 +716,19 @@ class AndNowScene2 extends AbstractShowcase {
       this._idleVariation = "idle_1";
     }
 
-    // Toggle Charakter mit Taste 'C' (Männlich -> Weiblich -> Yoshi -> Männlich)
+    // Toggle Charakter mit Taste 'C' (Männlich -> Weiblich -> Yoshi -> Männlich). Der Shared Rig
+    // selbst ist re-entrancy-geguaranteed (ein schnelles Doppel-C erzeugt nie zwei Spieler) und
+    // propagiert Ladefehler -- fail fast, genau einmal hier gefangen.
     const isCPressed = this.input.isPressed("KeyC");
-    if (isCPressed && !this._lastCState && !this._isSwitchingChar) {
-      this._isSwitchingChar = true;
-      const nextChar: CharacterType =
-        this._characterType === "male"
-          ? "female"
-          : this._characterType === "female"
-            ? "yoshi"
-            : "male";
-      this._loadCharacter(nextChar)
-        .catch((err: unknown) => console.error("[AndNowScene2] Fehler beim Charakterwechsel:", err))
-        .finally(() => {
-          this._isSwitchingChar = false;
-        });
+    if (isCPressed && !this._lastCState) {
+      const current = this._playerRig?.currentType ?? "male";
+      const nextChar: PlayerRigType =
+        current === "male" ? "female" : current === "female" ? "yoshi" : "male";
+      this._playerRig
+        ?.switchCharacter(nextChar)
+        .catch((err: unknown) =>
+          console.error("[AndNowScene2] Fehler beim Charakterwechsel:", err),
+        );
     }
     this._lastCState = isCPressed;
 
@@ -977,12 +736,8 @@ class AndNowScene2 extends AbstractShowcase {
       this._updateEditorUI();
     }
 
-    if (this._mixer) {
-      this._updateAnimationFade(deltaTime);
-      this._mixer.update(deltaTime);
-    }
-
-    this._syncLanternTransform();
+    // Clip crossfade, Animation-Playback und Laternen-Sync leben im Shared Rig.
+    this._playerRig?.update(deltaTime);
 
     // Status-Anzeige der Spielfigur -- fix am oberen Bildschirmrand (CSS in index.html), folgt
     // der Figur bewusst NICHT mehr über die Bühne (verdeckte sie sonst z.B. weit oben auf der
@@ -990,13 +745,16 @@ class AndNowScene2 extends AbstractShowcase {
     if (this._playerRig && this._charTagEl && this._tagTitleEl && this._tagDetailsEl) {
       this._charTagEl.style.display = "block";
 
-      const clip = this._activeAnimation ? this._clips.get(this._activeAnimation) : undefined;
-      const action = clip && this._mixer ? this._mixer.clipAction(clip) : undefined;
+      const rig = this._playerRig;
+      const activeAnimation = rig.activeAnimation;
+      const activeClip = activeAnimation ? rig.clips.get(activeAnimation) : undefined;
+      const mixer = rig.mixer;
+      const action = activeClip && mixer ? mixer.clipAction(activeClip) : undefined;
       const timeStr = action ? action.time.toFixed(2) : "0.00";
 
       // Orientierung / Blickrichtung berechnen (0..360 Grad)
       // Visual convention: 270° = Links, 90° = Rechts, 180° = Hinten, 0° = Vorne
-      const rawDeg = ((this._playerRig.rotation.y * 180) / Math.PI) % 360;
+      const rawDeg = ((rig.root.rotation.y * 180) / Math.PI) % 360;
       const deg = (rawDeg + 360) % 360;
       let dirName: string;
       if (deg >= 157.5 && deg < 202.5) dirName = "⬆️ HINTEN";
@@ -1011,18 +769,19 @@ class AndNowScene2 extends AbstractShowcase {
       // (u,v) und Skalierung: dieselben Werte, die bisher nur per Konsole (StageMovementBehavior.uv /
       // StageZone.getScaleAt) auslesbar waren -- live sichtbar spart genau die manuelle
       // Nachmess-Arbeit aus der Zonen-Verifikation (siehe .agents/notes/backlog.md, Treppen-Fix).
-      const uv = this._movementBehavior?.uv;
-      const activeZone = this._movementBehavior?.activeZone;
+      const movement = rig.movementBehavior;
+      const uv = movement?.uv;
+      const activeZone = movement?.activeZone;
       const scaleAtUv = uv && activeZone ? activeZone.getScaleAt(uv.u, uv.v) : undefined;
       const uvStr = uv ? `u:${uv.u.toFixed(3)} v:${uv.v.toFixed(3)}` : "--";
       const scaleStr = scaleAtUv !== undefined ? scaleAtUv.toFixed(3) : "--";
 
-      this._tagTitleEl.textContent = `[${this._characterType.toUpperCase()}] ▶ ${this._activeAnimation ?? "none"} (t=${timeStr}s)`;
+      this._tagTitleEl.textContent = `[${rig.currentType.toUpperCase()}] ▶ ${activeAnimation ?? "none"} (t=${timeStr}s)`;
       this._tagDetailsEl.innerHTML = `
         Blickrichtung: <b style="color:#38bdf8;">${dirName} (${deg.toFixed(0)}°)</b><br>
-        State: <b style="color:#fff;">${this._movementBehavior?.state ?? "IDLE"}</b> | Zone: <b style="color:#fff;">${activeZone?.id ?? "none"}</b><br>
+        State: <b style="color:#fff;">${movement?.state ?? "IDLE"}</b> | Zone: <b style="color:#fff;">${activeZone?.id ?? "none"}</b><br>
         Position: <b style="color:#7dd3fc;">${uvStr}</b> | Skalierung: <b style="color:#7dd3fc;">${scaleStr}</b><br>
-        Laterne: <b style="color:#ffb84d;">${this._lanternOn ? "AN" : "AUS"}</b> (Anatomisch: Links)<br>
+        Laterne: <b style="color:#ffb84d;">${rig.lanternEnabled ? "AN" : "AUS"}</b> (Anatomisch: Links)<br>
         Renderer: <b style="color: #38bdf8;">${this.renderer.type}</b>
       `;
     }

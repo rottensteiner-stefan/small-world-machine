@@ -23,34 +23,10 @@ import {
 } from "@small-world-machine/engine";
 import { OrbitController } from "@small-world-machine/engine/core/controllers/OrbitController.js";
 import { OilPuddleMaterial } from "@small-world-machine/liquid-extras";
-import { Vector2D, Vector3D } from "@small-world-machine/engine/math/index.js";
-import type {
-  AnimationAction,
-  AnimationClip,
-} from "@small-world-machine/engine/core/animation/index.js";
-import { AnimationMixer, Bone } from "@small-world-machine/engine/core/animation/index.js";
+import { Vector2D } from "@small-world-machine/engine/math/index.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
-
-type CharacterType = "male" | "female" | "yoshi";
-
-/** Prioritized candidate bones for left-hand lantern attachment across different rigs -- kept in
- * sync with the identical list in `flakturm-tunnel/showcase.ts` (agreed in
- * `.agents/collaborate/lantern.md`'s consensus proposal); not extracted into a shared module since
- * the two scenes are otherwise fully independent showcases. */
-const LANTERN_HAND_BONE_CANDIDATES = [
-  // 1. Finger bones (grip center in palm / fingers)
-  "mixamorig:LeftHandMiddle1",
-  "mixamorig1:LeftHandMiddle1",
-  "mixamorig:LeftHandIndex1",
-  "mixamorig1:LeftHandIndex1",
-  // 2. Wrist bones (Mixamo fallback)
-  "mixamorig:LeftHand",
-  "mixamorig1:LeftHand",
-  "L_Hand",
-  // 3. Tripo / Yoshi bones
-  "tripo::0_Left_Limb_2",
-  "tripo::0_Left_Limb_3",
-];
+import { PlayerRig } from "../shared/PlayerRig.js";
+import type { PlayerRigType } from "../shared/PlayerRig.js";
 
 /** Half-extent (world units) of the walkable square on the diorama floor. The real floor plate
  * (`topFloor`, see `_buildFoundationPlatform`) spans ±2.1 with the left/back walls sitting right
@@ -61,37 +37,14 @@ const LANTERN_HAND_BONE_CANDIDATES = [
  * illusion needed or wanted here, see docs/guides/2-5d-scenes.md §3 ("doesn't apply" case). */
 const FLOOR_HALF_SIZE = 1.9;
 
-const ANIMATION_CLIPS: Record<string, string> = {
-  idle_1: "/assets/the-whisper/mannequin/shared/anim/idle_1.glb",
-  idle_2: "/assets/the-whisper/mannequin/shared/anim/idle_2.glb",
-  idle_torch: "/assets/the-whisper/mannequin/shared/anim/idle_torch.glb",
-  walk: "/assets/the-whisper/mannequin/shared/anim/walking.glb",
-  walk_torch: "/assets/the-whisper/mannequin/shared/anim/walk_torch.glb",
-  run_1: "/assets/the-whisper/mannequin/shared/anim/running_1.glb",
-  run_2: "/assets/the-whisper/mannequin/shared/anim/running_2.glb",
-  run_torch: "/assets/the-whisper/mannequin/shared/anim/running_torch.glb",
-  stairs_up: "/assets/the-whisper/mannequin/shared/anim/ascending_stairs.glb",
-  stairs_down: "/assets/the-whisper/mannequin/shared/anim/walking.glb",
-};
-
-function findNodeByName(root: Object3D, name: string): Object3D | undefined {
-  if (root.name === name || root.name.includes(name)) return root;
-  for (const child of root.children) {
-    const found = findNodeByName(child, name);
-    if (found) return found;
-  }
-  return undefined;
-}
-
 export class CharacterDioramaShowcase extends AbstractShowcase {
   private _dioramaRoot: Object3D | undefined;
-  private _characterType: CharacterType = "male";
-  private _player: Object3D | undefined;
-  private _playerRig: Object3D | undefined;
-  private _lanternGroup: Object3D | undefined;
-  private _lanternHandBone: Bone | undefined;
-  private _lanternPointLight: PointLight | undefined;
-  private _lanternOn: boolean = true;
+  /** Player rig owning every character/clip/lantern/crossfade concern -- see `scenes/shared/PlayerRig.ts`. */
+  private _playerRig: PlayerRig | undefined;
+  /** Guards the one-shot default showcase pose (the original `_loadCharacter`'s first-load
+   * `root.rotation.y = -0.5` line) so it is applied exactly once, right after the first switch
+   * completes -- preserves the original sequence byte-for-byte regardless of loop timing. */
+  private _firstCharacterReady: boolean = false;
   private _turntableActive: boolean = false;
   private _oilSlickMaterial: OilPuddleMaterial | undefined;
   /** Held state for the SHIFT+arrow-key character-rotation controls (continuous, not a per-press
@@ -101,16 +54,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
   private _rotateLeftHeld: boolean = false;
   private _rotateRightHeld: boolean = false;
   private static readonly _ROTATE_SPEED = 1.5; // radians per second
-  private _movementBehavior: StageMovementBehavior | undefined;
   private _stageZone: StageZone | undefined;
-  private _isSwitchingChar: boolean = false;
-
-  private _mixer: AnimationMixer | undefined;
-  private _clips: Map<string, AnimationClip> = new Map();
-  private _activeAnimation: string | undefined;
-  private _fade:
-    | { from?: AnimationAction | undefined; to: AnimationAction; elapsed: number; duration: number }
-    | undefined;
 
   // Textures
   private _wallTexture: Texture | undefined;
@@ -301,9 +245,11 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
       ],
     });
 
-    // 5. Load Initial Character
+    // 5. Player rig + initial character (all shared player plumbing lives in `PlayerRig` -- see
+    // `scenes/shared/PlayerRig.ts`; `C` cycles the skin, see `_cycleCharacter`).
+    this._buildPlayerRig();
     this._initHUD();
-    await this._loadCharacter("male");
+    await this._playerRig!.switchCharacter("male");
   }
 
   /**
@@ -1402,291 +1348,90 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
     }
   }
 
-  private async _loadCharacter(charType: CharacterType): Promise<void> {
-    this._characterType = charType;
+  /** Builds the shared player rig with this scene's per-scene settings (scales, the movement
+   *  factory bound to this diorama's floor zone, the matte material pass, the lantern light).
+   *  Everything else -- clip pool, crossfade, lantern hand-bone sync, character switching -- lives
+   *  in `PlayerRig` and is identical across the dusk scenes. */
+  private _buildPlayerRig(): void {
+    const lanternLight = new PointLight({ color: new Color(1.0, 0.8, 0.4) });
+    lanternLight.intensity = 1.8;
+    lanternLight.distance = 4.5;
 
-    if (this._player && this._playerRig) {
-      this._playerRig.remove(this._player);
-    }
-    if (!this._playerRig) {
-      this._playerRig = new Object3D("CharacterRig");
-      this._dioramaRoot!.add(this._playerRig);
-    }
-
-    try {
-      const gltfLoader = new GltfLoader();
-      let charUrl = "/assets/the-whisper/mannequin/player-male/character.glb";
-      let charScale = 1.7;
-
-      if (charType === "female") {
-        charUrl = "/assets/the-whisper/mannequin/player-female/character.glb";
-        charScale = 1.7;
-      } else if (charType === "yoshi") {
-        charUrl = "/assets/the-whisper/mannequin/yoshi/character.glb";
-        charScale = 1.35;
-      }
-
-      this._player = await gltfLoader.load(charUrl);
-      this._player.scale.set(charScale, charScale, charScale);
-
-      // Matte Oberflächen für Kleidung und Haut (verhindert unnatürlichen Latex-/Speck-Glanz)
-      const adjustCharacterMaterials = (obj: Object3D): void => {
-        if (obj.material && obj.material instanceof StandardMaterial) {
-          obj.material.roughness = 0.92;
-          obj.material.metallic = 0.02;
-          obj.material.metallicMap = undefined;
-        }
-        for (const child of obj.children) {
-          adjustCharacterMaterials(child);
-        }
-      };
-      adjustCharacterMaterials(this._player);
-
-      this._playerRig.add(this._player);
-
-      // Preserve the current stage position across a character switch (mirrors
-      // flakturm-tunnel's `_loadCharacter`) instead of resetting to the original showcase spot.
-      const isFirstLoad = !this._movementBehavior;
-      const currentUv = this._movementBehavior?.uv ?? { u: 0.526, v: 0.526 }; // ~(0.1, 0.1) world
-
-      if (this._movementBehavior) {
-        this._playerRig.removeBehavior(this._movementBehavior);
-      }
-
-      this._movementBehavior = new StageMovementBehavior({
-        input: this.input,
-        speed: 0.28,
-        runMultiplier: 2.0,
-        rotationSpeed: 12.0,
-        facingOffset: Math.PI, // same rig convention as flakturm-tunnel's identical mannequin assets
-        startFacing: "back",
-        zones: this._stageZone ? [this._stageZone] : [],
-        // A floor-plane mapping (v -> world Z, fixed Y), not a backdrop-wall mapping (v -> world
-        // Y, fixed Z) -- doesn't fit StageProjection's "flat-plane" shape, so this stays "custom".
-        projection: { mode: "custom" },
-        customUvToWorld: (u: number, v: number): { x: number; y: number; z: number } => ({
-          x: (u - 0.5) * 2 * FLOOR_HALF_SIZE,
-          y: 0,
-          z: (v - 0.5) * 2 * FLOOR_HALF_SIZE,
-        }),
-        startUV: currentUv,
-      });
-      this._playerRig.addBehavior(this._movementBehavior);
-
-      // Original showcase pose is a deliberate aesthetic default (angled toward the camera at
-      // rest) -- applied once, after the behavior's own init, since the behavior only touches
-      // rotation.y while actually moving afterward.
-      if (isFirstLoad) {
-        this._playerRig.rotation.y = -0.5;
-      }
-
-      this._clips.clear();
-      for (const [name, url] of Object.entries(ANIMATION_CLIPS)) {
-        try {
-          const animRoot = await gltfLoader.load(url);
-          if (animRoot.animations && animRoot.animations.length > 0) {
-            const clip = animRoot.animations[0]!;
-            clip.tracks = clip.tracks.filter((track) => {
-              const isHipsTranslation =
-                track.targetName.includes("Hips") && track.property === "translation";
-              return !isHipsTranslation;
-            });
-            this._clips.set(name, clip);
+    this._playerRig = new PlayerRig({
+      parent: this._dioramaRoot!,
+      lanternParent: this.scene.root,
+      input: this.input,
+      defaultStartUV: { u: 0.526, v: 0.526 },
+      characters: {
+        male: {
+          url: "/assets/the-whisper/mannequin/player-male/character.glb",
+          scale: 1.7,
+        },
+        female: {
+          url: "/assets/the-whisper/mannequin/player-female/character.glb",
+          scale: 1.7,
+        },
+        yoshi: {
+          url: "/assets/the-whisper/mannequin/yoshi/character.glb",
+          scale: 1.35,
+        },
+      },
+      lanternLight,
+      adjustMaterials: (player: Object3D): void => {
+        // Matte Oberflächen für Kleidung und Haut (verhindert unnatürlichen Latex-/Speck-Glanz) --
+        // in-place auf dem StandardMaterial, nicht Ersetzung (anders als der Tunnel-Showcase).
+        const matte = (obj: Object3D): void => {
+          if (obj.material && obj.material instanceof StandardMaterial) {
+            obj.material.roughness = 0.92;
+            obj.material.metallic = 0.02;
+            obj.material.metallicMap = undefined;
           }
-        } catch (err) {
-          // Ignore missing clip gracefully
-          console.warn("[CharacterDiorama] Failed to load animation clip:", name, err);
+          for (const child of obj.children) {
+            matte(child);
+          }
+        };
+        matte(player);
+      },
+      createMovementBehavior: (startUv): StageMovementBehavior =>
+        new StageMovementBehavior({
+          input: this.input,
+          speed: 0.28,
+          runMultiplier: 2.0,
+          rotationSpeed: 12.0,
+          facingOffset: Math.PI, // same rig convention as flakturm-tunnel's identical mannequin assets
+          startFacing: "back",
+          zones: this._stageZone ? [this._stageZone] : [],
+          // A floor-plane mapping (v -> world Z, fixed Y), not a backdrop-wall mapping (v -> world
+          // Y, fixed Z) -- doesn't fit StageProjection's "flat-plane" shape, so this stays "custom".
+          projection: { mode: "custom" },
+          customUvToWorld: (u: number, v: number): { x: number; y: number; z: number } => ({
+            x: (u - 0.5) * 2 * FLOOR_HALF_SIZE,
+            y: 0,
+            z: (v - 0.5) * 2 * FLOOR_HALF_SIZE,
+          }),
+          startUV: startUv,
+        }),
+      onCharacterReady: (): void => {
+        // Original showcase pose is a deliberate aesthetic default (angled toward the camera at
+        // rest) -- applied once, after the behavior's own first-load setup. Preserved byte-for-
+        // byte from the old `_loadCharacter`'s first-load line, even though the rig/behavior may
+        // overwrite `rotation.y` again on the loop's first frame; keeping the exact original
+        // sequence removes any dependence on loop timing.
+        if (!this._firstCharacterReady) {
+          this._firstCharacterReady = true;
+          this._playerRig!.root.rotation.y = -0.5;
         }
-      }
-
-      // Hand-/Fingerknöchel-Bone auflösen (für exaktes Hängen in der Handinnenfläche), inkl. Yoshis
-      // tripo::-Rig -- kanonische, priorisierte Liste, siehe LANTERN_HAND_BONE_CANDIDATES.
-      // Skin joints are always loaded as `Bone` by `GltfLoader` (see its `jointNodeIndices` check),
-      // so a resolved hand bone is always a `Bone` in practice -- the `instanceof` guard is
-      // defensive, not expected to ever reject a real match.
-      let handBone: Bone | undefined;
-      for (const boneName of LANTERN_HAND_BONE_CANDIDATES) {
-        const found = findNodeByName(this._player, boneName);
-        if (found instanceof Bone) {
-          handBone = found;
-          break;
-        }
-      }
-      this._lanternHandBone = handBone;
-      if (handBone) {
-        if (!this._lanternGroup) {
-          this._lanternGroup = this._buildLanternMesh();
-          this._lanternPointLight = new PointLight({
-            color: new Color(1.0, 0.8, 0.4),
-          });
-          this._lanternPointLight.intensity = 1.8;
-          this._lanternPointLight.distance = 4.5;
-          this._lanternPointLight.position.set(0, -0.16, 0);
-          this._lanternGroup.add(this._lanternPointLight);
-          this.scene.add(this._lanternGroup);
-        }
-        this._lanternGroup.isVisible = this._lanternOn;
-        if (this._lanternPointLight) {
-          this._lanternPointLight.isVisible = this._lanternOn;
-        }
-      }
-
-      if (this._clips.size > 0) {
-        this._mixer = new AnimationMixer(this._player);
-        this._activeAnimation = undefined;
-        this._playAnimation(this._lanternOn ? "idle_torch" : "idle_1", 0);
-      }
-
-      this._updateHUDLabels();
-    } catch (err) {
-      console.error("[CharacterDiorama] Failed to load character:", err);
-    }
-  }
-
-  private _buildLanternMesh(): Object3D {
-    const lantern = new Object3D("StormLantern");
-    const brassMat = new StandardMaterial({
-      color: new Color(0.75, 0.55, 0.2),
-      metallic: 0.8,
-      roughness: 0.3,
+        this._updateHUDLabels();
+        this._playAnimation(this._playerRig!.lanternEnabled ? "idle_torch" : "idle_1", 0);
+      },
     });
-    const glowGlassMat = new StandardMaterial({
-      color: new Color(1.0, 0.9, 0.6),
-    });
-
-    const handle = new Object3D("LanternHandle");
-    handle.geometry = new Torus({
-      radius: 0.06,
-      tube: 0.008,
-      radialSegments: 8,
-    }).getGeometryData();
-    handle.material = brassMat;
-    // Upright ring at the grip origin (matches flakturm-tunnel's fix for the same placeholder
-    // mesh) -- Torus geometry defaults to the horizontal XZ plane, which left the ring lying flat.
-    handle.rotation.z = Math.PI / 2;
-    handle.position.set(0, -0.02, 0);
-    lantern.add(handle);
-
-    const body = new Object3D("LanternBody");
-    body.geometry = new Cylinder({
-      radiusTop: 0.05,
-      radiusBottom: 0.07,
-      height: 0.18,
-      radialSegments: 12,
-    }).getGeometryData();
-    body.material = glowGlassMat;
-    body.position.set(0, -0.16, 0);
-    lantern.add(body);
-
-    return lantern;
   }
 
-  /** Keeps the lantern's world position locked to the hand bone's grip point every frame, via a
-   * bone-local offset transformed through the bone's full world matrix (rotation included) --
-   * this stays correct through character rotation/scale, unlike a raw world-space additive offset.
-   * Never touches `lantern.rotation` (left at identity), so it always hangs straight down instead
-   * of tumbling with the hand. See `flakturm-tunnel/showcase.ts`'s `_syncLanternTransform()` for
-   * the identical pattern (agreed in `.agents/collaborate/lantern.md`).
-   *
-   * Mixamo-rigged hand bones (player-male/player-female) carry a large accumulated world-space
-   * scale (~94x here, a leftover cm-to-m FBX unit conversion baked into the skeleton -- see
-   * `Bone.getAccumulatedWorldScale()`'s doc comment and `[[project_flakturm_lantern_scale_bug]]`).
-   * `worldMatrix.transformVector()` applies that scale to the local offset too, so a naive
-   * physically-small offset (0.01) exploded into a ~0.9 unit position error, landing the lantern
-   * far from the hand -- confirmed live via `bone.getAccumulatedWorldScale()` returning ~94.44 on
-   * `mixamorig:LeftHandMiddle1` for `player-male`. Dividing the local offset by that scale before
-   * transforming cancels it back out (matrix = T * R * S, so feeding `offset / S` yields
-   * `T + R * offset`, the correctly-rotated but unscaled result).
-   *
-   * Yoshi (an Easter-egg asset, log #77, auto-rigged by Mixamo rather than hand-authored) uses
-   * this exact same bone-tracking path too, resolving to `mixamorig:LeftHandIndex1` same as the
-   * humans -- an earlier session wrongly concluded his auto-placed hand bone was nowhere near his
-   * visible paw and gave him a separate fixed-offset hack instead. That reading was a measurement
-   * artifact (captured before the idle_torch pose had actually blended in, catching him mid
-   * bind-pose); dumping his full bone-world-position list once posed showed his whole left-arm
-   * chain -- Shoulder/Arm/ForeArm/Hand/Thumb1/Index1 -- clustered tightly at his chest as expected,
-   * and re-verified stable (~1cm lantern-to-bone distance) across a simulated 180-frame
-   * `walk_torch` loop. His bone scale is already ~1 (no FBX cm-to-m artifact), so the `/ boneScale`
-   * division below is simply a no-op for him, not a special case.
-   *
-   * `_lanternGroup` MUST be parented to `this.scene` (the true top-level root), never to
-   * `_dioramaRoot` -- this method always computes and assigns a WORLD-space position, which is
-   * only correct if the lantern's parent has an identity transform. `_dioramaRoot` is exactly the
-   * object the turntable feature rotates (see `update()`'s `_turntableActive` block), so the one
-   * time it had been parented there instead, the lantern silently drifted away from the hand by
-   * however far the turntable had spun -- invisible at rest (rotation 0) or from a fixed camera
-   * angle, but visible from any other viewing angle or once the turntable moves it. Live-diagnosed
-   * 2026-09-09 by reproducing a user-reported "lantern floats away from the hand" report that
-   * didn't show up in an earlier same-day check (which never rotated `_dioramaRoot`). */
-  private _syncLanternTransform(): void {
-    const lantern = this._lanternGroup;
-    if (!lantern || !this._player) return;
-
-    const bone = this._lanternHandBone;
-    if (!bone) return;
-
-    // Finger bones (Middle1/Index1) have their origin at the finger base inside the palm already;
-    // wrist bones (LeftHand) need a forward offset along +Y to reach the palm.
-    const isFingerBone =
-      bone.name.includes("Middle") || bone.name.includes("Index") || bone.name.includes("Limb_3");
-    const boneScale = bone.getAccumulatedWorldScale();
-    const localOffset = new Vector3D(
-      0,
-      (isFingerBone ? 0.01 : 0.08) / boneScale,
-      (isFingerBone ? 0.0 : 0.01) / boneScale,
-    );
-
-    const worldPos = bone.worldMatrix.transformVector(localOffset);
-    lantern.position.copyFrom(worldPos);
-    lantern.updateMatrixWorld();
-  }
-
+  /** Thin wrapper: delegates playback to the shared rig and keeps the HUD button highlight in
+   *  sync. The rig owns the actual crossfade machinery (see `scenes/shared/PlayerRig.ts`). */
   private _playAnimation(name: string, fadeSeconds: number = 0.35): void {
-    if (!this._mixer || name === this._activeAnimation) return;
-    const clip = this._clips.get(name);
-    if (!clip) return;
-
-    if (this._fade?.from) this._fade.from.stop();
-
-    const fromAction = this._activeAnimation
-      ? this._mixer.clipAction(this._clips.get(this._activeAnimation)!)
-      : undefined;
-    const toAction = this._mixer.clipAction(clip);
-    toAction.setLoop(true);
-    toAction.weight = 0;
-    toAction.reset();
-    toAction.play();
-
-    this._fade = {
-      from: fromAction,
-      to: toAction,
-      elapsed: 0,
-      duration: Math.max(0, fadeSeconds),
-    };
-    this._activeAnimation = name;
+    this._playerRig?.play(name, { fadeSeconds });
     this._updateActiveButtonUI(name);
-  }
-
-  private _updateAnimationFade(deltaTime: number): void {
-    const fade = this._fade;
-    if (!fade) return;
-
-    if (fade.duration <= 0) {
-      fade.to.weight = 1;
-      if (fade.from) fade.from.stop();
-      this._fade = undefined;
-      return;
-    }
-
-    fade.elapsed += deltaTime;
-    const t = Math.min(1, fade.elapsed / fade.duration);
-    fade.to.weight = t;
-    if (fade.from) fade.from.weight = 1 - t;
-
-    if (t >= 1) {
-      if (fade.from) fade.from.stop();
-      this._fade = undefined;
-    }
   }
 
   private _toggleNoir(): void {
@@ -1787,40 +1532,33 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
   }
 
   private _cycleCharacter(): void {
-    if (this._isSwitchingChar) return;
-    this._isSwitchingChar = true;
-    const next: CharacterType =
-      this._characterType === "male"
-        ? "female"
-        : this._characterType === "female"
-          ? "yoshi"
-          : "male";
-    this._loadCharacter(next)
-      .catch((err: unknown) => console.error("[CharacterDiorama] Character switch failed:", err))
-      .finally(() => {
-        this._isSwitchingChar = false;
-      });
+    const current = this._playerRig?.currentType ?? "male";
+    const next: PlayerRigType =
+      current === "male" ? "female" : current === "female" ? "yoshi" : "male";
+    // The rig guards re-entrancy (a fast double `C` returns the same in-flight switch) and
+    // propagates load errors -- fail fast, caught once here.
+    this._playerRig
+      ?.switchCharacter(next)
+      .catch((err: unknown) => console.error("[CharacterDiorama] Character switch failed:", err));
   }
 
   private _toggleTorch(): void {
-    this._lanternOn = !this._lanternOn;
-    if (this._lanternGroup) this._lanternGroup.isVisible = this._lanternOn;
-    if (this._lanternPointLight) this._lanternPointLight.isVisible = this._lanternOn;
+    if (!this._playerRig) return;
+    this._playerRig.setLanternEnabled(!this._playerRig.lanternEnabled);
+    const lanternOn = this._playerRig.lanternEnabled;
+    const active = this._playerRig.activeAnimation;
 
-    if (this._activeAnimation === "idle_1" || this._activeAnimation === "idle_2") {
-      if (this._lanternOn) this._playAnimation("idle_torch");
-    } else if (this._activeAnimation === "idle_torch") {
-      if (!this._lanternOn) this._playAnimation("idle_1");
-    } else if (this._activeAnimation === "walk" && this._lanternOn) {
+    if (active === "idle_1" || active === "idle_2") {
+      if (lanternOn) this._playAnimation("idle_torch");
+    } else if (active === "idle_torch") {
+      if (!lanternOn) this._playAnimation("idle_1");
+    } else if (active === "walk" && lanternOn) {
       this._playAnimation("walk_torch");
-    } else if (this._activeAnimation === "walk_torch" && !this._lanternOn) {
+    } else if (active === "walk_torch" && !lanternOn) {
       this._playAnimation("walk");
-    } else if (
-      (this._activeAnimation === "run_1" || this._activeAnimation === "run_2") &&
-      this._lanternOn
-    ) {
+    } else if ((active === "run_1" || active === "run_2") && lanternOn) {
       this._playAnimation("run_torch");
-    } else if (this._activeAnimation === "run_torch" && !this._lanternOn) {
+    } else if (active === "run_torch" && !lanternOn) {
       this._playAnimation("run_1");
     }
 
@@ -1833,17 +1571,19 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
   }
 
   private _updateHUDLabels(): void {
+    const charType = this._playerRig?.currentType ?? "male";
+    const lanternOn = this._playerRig?.lanternEnabled ?? true;
     if (this._lblChar) {
       this._lblChar.textContent =
-        this._characterType === "male"
+        charType === "male"
           ? "Spieler (Männlich)"
-          : this._characterType === "female"
+          : charType === "female"
             ? "Spielerin (Weiblich)"
             : "🦖 Yoshi";
     }
     if (this._lblTorch) {
-      this._lblTorch.textContent = this._lanternOn ? "AN" : "AUS";
-      this._lblTorch.style.color = this._lanternOn ? "#ffb84d" : "#8a99ad";
+      this._lblTorch.textContent = lanternOn ? "AN" : "AUS";
+      this._lblTorch.style.color = lanternOn ? "#ffb84d" : "#8a99ad";
     }
     if (this._lblTurntable) {
       this._lblTurntable.textContent = this._turntableActive ? "AN" : "AUS";
@@ -1873,26 +1613,24 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
     // disabled for the duration so the two controls don't fight over rotation.y, since it also
     // reads plain arrow keys for movement.
     const isShiftHeld = this.input.isPressed("ShiftLeft") || this.input.isPressed("ShiftRight");
-    if (this._playerRig && isShiftHeld && (this._rotateLeftHeld || this._rotateRightHeld)) {
-      if (this._movementBehavior) this._movementBehavior.enabled = false;
+    const rigRoot = this._playerRig?.root;
+    const movement = this._playerRig?.movementBehavior;
+    if (rigRoot && isShiftHeld && (this._rotateLeftHeld || this._rotateRightHeld)) {
+      if (movement) movement.enabled = false;
       if (this._rotateLeftHeld)
-        this._playerRig.rotation.y -= deltaTime * CharacterDioramaShowcase._ROTATE_SPEED;
+        rigRoot.rotation.y -= deltaTime * CharacterDioramaShowcase._ROTATE_SPEED;
       if (this._rotateRightHeld)
-        this._playerRig.rotation.y += deltaTime * CharacterDioramaShowcase._ROTATE_SPEED;
-    } else if (this._movementBehavior) {
-      this._movementBehavior.enabled = true;
+        rigRoot.rotation.y += deltaTime * CharacterDioramaShowcase._ROTATE_SPEED;
+    } else if (movement) {
+      movement.enabled = true;
     }
 
     if (this._oilSlickMaterial) {
       this._oilSlickMaterial.time += deltaTime;
     }
 
-    this._updateAnimationFade(deltaTime);
-    if (this._mixer) {
-      this._mixer.update(deltaTime);
-    }
-
-    this._syncLanternTransform();
+    // Clip crossfade, animation playback and lantern hand-bone sync all live in the shared rig.
+    this._playerRig?.update(deltaTime);
 
     const time = performance.now() * 0.001;
 
