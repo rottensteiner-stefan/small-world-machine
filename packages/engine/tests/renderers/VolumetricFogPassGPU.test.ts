@@ -7,7 +7,9 @@ import { FogVolume } from "../../src/core/objects/FogVolume.js";
 import { VolumetricTexture } from "../../src/core/textures/index.js";
 import { Color } from "../../src/core/colors/index.js";
 import { Vector3D } from "../../src/math/index.js";
-import { createFrameInfo, type FrameInfo } from "../../src/interfaces/index.js";
+import { createFrameInfo } from "../../src/interfaces/index.js";
+import type { FrameInfo, LightDataInterface } from "../../src/interfaces/index.js";
+import type { PostEffectPassContext } from "../../src/renderers/post/PostEffectPass.js";
 
 // WebGPU is unavailable in the vitest node environment, so the GPU flag objects the pass reads
 // at pipeline build time are polyfilled to plain bit flags.
@@ -232,6 +234,40 @@ function lastReprojectWrite(writes: UniformWrite[]): Float32Array {
   return reproject;
 }
 
+/**
+ * Builds the single-argument `PostEffectPassContext` the pass now consumes (previously a 12-arg
+ * execute call), mirroring what the renderer hands the VF pass: no color texture, a dummy color
+ * view, the scenario's depth view / camera, and an empty light list unless explicitly provided.
+ */
+function buildPassCtx(
+  renderer: WebGPURenderer,
+  ce: GPUCommandEncoder,
+  depthView: GPUTextureView,
+  element: VolumetricFogElement,
+  vp: Float32Array,
+  fogVolumes: FogVolume[] = [],
+  dirLight?: DirectionalLight,
+): PostEffectPassContext {
+  return {
+    renderer,
+    ce,
+    element,
+    colorTexture: undefined,
+    colorView: {} as GPUTextureView,
+    depthView,
+    width: 320,
+    height: 200,
+    vp,
+    vMat: undefined,
+    camPos: new Vector3D(0, 0, 0),
+    near: 0.1,
+    far: 100.0,
+    projMatrix: undefined,
+    lights: { dLight: dirLight, pLights: [], sLights: [] } as unknown as LightDataInterface,
+    fogVolumes,
+  };
+}
+
 /** Advances frameInfo exactly like SmallWorldMachine.step() does, then runs one full pass execute. */
 function stepFrame(
   scenario: PassScenario,
@@ -258,18 +294,13 @@ function stepFrame(
   };
 
   scenario.pass.execute(
-    scenario.renderer,
-    ce as unknown as GPUCommandEncoder,
-    scenario.depthView,
-    320,
-    200,
-    viewProj,
-    undefined,
-    scenario.camPos,
-    0.1,
-    100.0,
-    undefined,
-    scenario.element,
+    buildPassCtx(
+      scenario.renderer,
+      ce as unknown as GPUCommandEncoder,
+      scenario.depthView,
+      scenario.element,
+      viewProj,
+    ),
   );
 
   const repro = lastReprojectWrite(writes);
@@ -478,19 +509,15 @@ function runMaskFrame(
     })),
   };
   ctx.pass.execute(
-    ctx.renderer,
-    ce as unknown as GPUCommandEncoder,
-    ctx.depthView,
-    320,
-    200,
-    new Float32Array(16),
-    undefined,
-    new Vector3D(0, 0, 0),
-    0.1,
-    100,
-    dirLight,
-    element,
-    fogVolumes,
+    buildPassCtx(
+      ctx.renderer,
+      ce as unknown as GPUCommandEncoder,
+      ctx.depthView,
+      element,
+      new Float32Array(16),
+      fogVolumes,
+      dirLight,
+    ),
   );
 }
 

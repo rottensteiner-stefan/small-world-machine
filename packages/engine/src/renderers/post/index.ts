@@ -1,3 +1,4 @@
+export * from "./PostEffectPass.js";
 export * from "./PostProcessingElement.js";
 export * from "./PostProcessingGroup.js";
 export * from "./passes/PostProcessPassGL.js";

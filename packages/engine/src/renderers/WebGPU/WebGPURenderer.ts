@@ -1,6 +1,13 @@
 // Removed Fog import
 import { WebGPUGGlobalUniformLayout } from "../GlobalUniformLayout.js";
-import type { CubeTexture, Object3D, Scene, Texture } from "../../core/index.js";
+import type {
+  CubeTexture,
+  DirectionalLight,
+  Object3D,
+  Scene,
+  SpotLight,
+  Texture,
+} from "../../core/index.js";
 import {
   InstancedMesh,
   MAX_CLUSTERED_LIGHTS_PER_TYPE,
@@ -62,8 +69,19 @@ import {
   LightShaftsPassGPU,
   VolumetricFogPassGPU,
 } from "../post/passes/index.js";
+import type {
+  BloomElement,
+  HbaoElement,
+  LightShaftsElement,
+  MotionTrailElement,
+  TaaElement,
+  VolumetricFogElement,
+} from "../post/elements/index.js";
+import type { PostEffectPass, PostEffectPassContext } from "../post/PostEffectPass.js";
+import type { PostProcessingElement } from "../post/PostProcessingElement.js";
 import type { SkinnedMesh, Skeleton } from "../../core/animation/index.js";
 import { MAX_SKINNED_BONES } from "../../core/animation/index.js";
+import type { RenderBatch } from "../../core/Scene.js";
 
 /**
  * Dynamic-offset slot layout for the per-draw view-projection uniform (group 3, `view.vp` in
@@ -287,15 +305,9 @@ export class WebGPURenderer extends AbstractRenderer {
     | undefined;
   private _opaqueTextureView?: GPUTextureView;
 
-  private _shadowMaps = new Map<
-    import("../../core/index.js").DirectionalLight | import("../../core/index.js").SpotLight,
-    GPUTexture
-  >();
+  private _shadowMaps = new Map<DirectionalLight | SpotLight, GPUTexture>();
   /** Same Map instance every frame -- shadow passes `.get()`/`.set()` on it directly. */
-  public get shadowMaps(): Map<
-    import("../../core/index.js").DirectionalLight | import("../../core/index.js").SpotLight,
-    GPUTexture
-  > {
+  public get shadowMaps(): Map<DirectionalLight | SpotLight, GPUTexture> {
     return this._shadowMaps;
   }
 
@@ -309,22 +321,44 @@ export class WebGPURenderer extends AbstractRenderer {
   public get hdrTextureView(): GPUTextureView | undefined {
     return this._hdrTextureView;
   }
-  private _bloomPassGPU: BloomPassGPU | undefined = undefined;
+  // Single orchestration point for every GPU post-effect pass -- see `_getOrCreatePostEffectPass`
+  // and the `PostEffectPass` contract (ADR 0037). Replaces the former per-effect `_xxxPassGPU`
+  // fields and their separate `?.destroy()` lists. Passes are created lazily on first enable and
+  // destroyed in one registry sweep from `destroy()`.
+  private readonly _postEffectPasses = new Map<PostProcessingEffectType, PostEffectPass>();
+  /** Reused every frame (zero allocation on the hot path); fields are repopulated right before
+   * each dispatch -- see the `PostEffectPassContext` reuse contract. */
+  private readonly _postEffectCtx: PostEffectPassContext = {
+    renderer: this,
+    ce: undefined as unknown as GPUCommandEncoder,
+    element: undefined as unknown as PostProcessingElement,
+    colorTexture: undefined,
+    colorView: undefined as unknown as GPUTextureView,
+    depthView: undefined as unknown as GPUTextureView,
+    width: 0,
+    height: 0,
+    vp: new Float32Array(16),
+    vMat: undefined,
+    camPos: Vector3D.ZERO,
+    near: 0.1,
+    far: 1000,
+    projMatrix: undefined,
+    lights: undefined as unknown as LightDataInterface,
+    fogVolumes: [],
+  };
+
   private _bloomTextureView: GPUTextureView | undefined = undefined;
   public get bloomTextureView(): GPUTextureView | undefined {
     return this._bloomTextureView;
   }
-  private _hbaoPassGPU: AOPassGPU | undefined = undefined;
   private _hbaoTextureView: GPUTextureView | undefined = undefined;
   public get hbaoTextureView(): GPUTextureView | undefined {
     return this._hbaoTextureView;
   }
-  private _lightShaftsPassGPU: LightShaftsPassGPU | undefined = undefined;
   private _lightShaftsTextureView: GPUTextureView | undefined = undefined;
   public get lightShaftsTextureView(): GPUTextureView | undefined {
     return this._lightShaftsTextureView;
   }
-  private _volumetricFogPassGPU: VolumetricFogPassGPU | undefined = undefined;
   private _volumetricFogTextureView: GPUTextureView | undefined = undefined;
   /** Full-screen in-scattering target of the volumetric-fog raymarch pass, consumed additively
    * (before tonemapping) by PostProcessPass. Recomputed fresh every frame; undefined when the
@@ -332,26 +366,21 @@ export class WebGPURenderer extends AbstractRenderer {
   public get volumetricFogTextureView(): GPUTextureView | undefined {
     return this._volumetricFogTextureView;
   }
-  private _taaPassGPU: HistoryBlendPassGPU | undefined = undefined;
   /** This frame's TAA-resolved color view, if TAA is enabled -- read by PostProcessPass instead
    * of `_hdrTextureView` for its color input. Recomputed fresh every frame; `_hdrTextureView`
-   * itself is never overwritten so TAA keeps reading the raw per-frame render as "current". */
+   * itself is never overwritten so TAA keeps reading the raw per-frame render as "current".
+   * (TAA's `HistoryBlendPassGPU` instance lives in `_postEffectPasses`, its own separate history
+   * buffer from Motion Trail's. */
   private _taaResolvedView: GPUTextureView | undefined = undefined;
   public get taaResolvedView(): GPUTextureView | undefined {
     return this._taaResolvedView;
   }
-  /** Motion Trail's own history-blend instance -- a deliberate ghost/afterimage effect, not
-   * anti-aliasing, chained after TAA (see PostProcessPass's color-view fallback chain). */
-  private _motionTrailPassGPU: HistoryBlendPassGPU | undefined = undefined;
   private _motionTrailResolvedView: GPUTextureView | undefined = undefined;
   public get motionTrailResolvedView(): GPUTextureView | undefined {
     return this._motionTrailResolvedView;
   }
 
-  private _activeRenderTarget:
-    | import("../../core/index.js").RenderTarget
-    | import("../../core/index.js").RenderTargetCube
-    | null = null;
+  private _activeRenderTarget: RenderTarget | RenderTargetCube | null = null;
   protected _activeCubeFace: number = 0;
   protected _renderTargetTextures: Map<
     RenderTarget,
@@ -616,6 +645,24 @@ export class WebGPURenderer extends AbstractRenderer {
    */
   public addPass(pass: RenderPass): void {
     this._passes.push(pass);
+  }
+
+  /**
+   * Lazily creates (once) or returns the effect pass registered under `type` -- the renderer's
+   * single orchestration point for GPU post-effect passes (see `_postEffectPasses` and the
+   * `PostEffectPass` contract in ADR 0037). The same pass instance is reused across frames so its
+   * history buffers survive; `destroy()` tears every registry entry down in one sweep.
+   */
+  private _getOrCreatePostEffectPass(
+    type: PostProcessingEffectType,
+    ctor: new (device: GPUDevice) => PostEffectPass,
+  ): PostEffectPass {
+    let pass = this._postEffectPasses.get(type);
+    if (!pass) {
+      pass = new ctor(this._device!);
+      this._postEffectPasses.set(type, pass);
+    }
+    return pass;
   }
 
   private _initDefaultResources(): void {
@@ -1167,9 +1214,9 @@ export class WebGPURenderer extends AbstractRenderer {
     }
   }
 
-  private _currentIrradianceMap?: import("../../core/textures/index.js").CubeTexture | undefined;
-  private _currentPrefilterMap?: import("../../core/textures/index.js").CubeTexture | undefined;
-  private _currentBrdfLUT?: import("../../core/textures/index.js").Texture | undefined;
+  private _currentIrradianceMap?: CubeTexture | undefined;
+  private _currentPrefilterMap?: CubeTexture | undefined;
+  private _currentBrdfLUT?: Texture | undefined;
 
   public _createGlobalBindGroup(scene?: Scene): GPUBindGroup {
     const irrView = scene?.irradianceMap
@@ -1462,18 +1509,29 @@ export class WebGPURenderer extends AbstractRenderer {
           : this._context.getCurrentTexture().createView();
     }
 
-    const bloomNode = this.postProcessing.get<import("../post/index.js").BloomElement>(
-      PostProcessingEffectType.BLOOM,
-    );
-    const hbaoNode = this.postProcessing.get<import("../post/index.js").HbaoElement>(
-      PostProcessingEffectType.HBAO,
-    );
-    const taaNode = this.postProcessing.get<import("../post/index.js").TaaElement>(
-      PostProcessingEffectType.TAA,
-    );
-    const motionTrailNode = this.postProcessing.get<import("../post/index.js").MotionTrailElement>(
+    const bloomNode = this.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
+    const hbaoNode = this.postProcessing.get<HbaoElement>(PostProcessingEffectType.HBAO);
+    const taaNode = this.postProcessing.get<TaaElement>(PostProcessingEffectType.TAA);
+    const motionTrailNode = this.postProcessing.get<MotionTrailElement>(
       PostProcessingEffectType.MOTION_TRAIL,
     );
+
+    // Reused per frame -- see the `PostEffectPassContext` reuse contract. Fields that vary per
+    // effect (`colorView`, `element`, `fogVolumes`) are repopulated immediately before each
+    // dispatch below; everything else is refreshed once here.
+    const ctx = this._postEffectCtx;
+    ctx.ce = ce;
+    ctx.width = this._context.canvas.width;
+    ctx.height = this._context.canvas.height;
+    ctx.vp = vp;
+    ctx.vMat = vMat;
+    ctx.camPos = camPos;
+    ctx.near = near;
+    ctx.far = far;
+    ctx.projMatrix = projMatrix;
+    ctx.lights = lights;
+    ctx.colorTexture = this._hdrTexture;
+    ctx.depthView = this._opaqueDepthTextureView ?? this._fallback.dummyDepthTextureView;
 
     for (const pass of this._passes) {
       const isPostProcessPass = pass instanceof PostProcessPass;
@@ -1482,136 +1540,91 @@ export class WebGPURenderer extends AbstractRenderer {
         continue;
       }
 
-      // TAA resolves first, if enabled: Bloom and the final uber pass should react to the
-      // temporally-smoothed color, not the raw per-frame jittered one. `_hdrTextureView` itself
-      // is never reassigned, so this pass keeps reading fresh input every subsequent frame.
-      if (isPostProcessPass && taaNode && taaNode.enabled && this._hdrTextureView) {
-        this._taaPassGPU ??= new HistoryBlendPassGPU(this._device);
-        this._taaResolvedView =
-          this._taaPassGPU.execute(
-            ce,
-            this._hdrTextureView,
-            this._context.canvas.width,
-            this._context.canvas.height,
-            taaNode,
-          ) ?? undefined;
-      } else if (isPostProcessPass) {
-        this._taaResolvedView = undefined;
-      }
+      // The entire effect orchestration lives in the renderer's single `PostEffectPass` registry
+      // (`Map<PostProcessingEffectType, PostEffectPass>`, see `_getOrCreatePostEffectPass` /
+      // ADR 0037) -- one create/execute/destroy path for every GPU effect pass, no per-effect
+      // `_xxxPassGPU` fields.
+      if (isPostProcessPass) {
+        // TAA resolves first, if enabled: Bloom and the final uber pass should react to the
+        // temporally-smoothed color, not the raw per-frame jittered one. `_hdrTextureView` itself
+        // is never reassigned, so this pass keeps reading fresh input every subsequent frame.
+        if (taaNode && taaNode.enabled && this._hdrTextureView) {
+          ctx.colorView = this._hdrTextureView;
+          ctx.element = taaNode;
+          const p = this._getOrCreatePostEffectPass(
+            PostProcessingEffectType.TAA,
+            HistoryBlendPassGPU,
+          );
+          this._taaResolvedView = p.execute(ctx) ?? undefined;
+        } else {
+          this._taaResolvedView = undefined;
+        }
 
-      // Motion Trail: a deliberate ghost/afterimage look, not anti-aliasing -- reuses the same
-      // history-blend pass as TAA (its own separate instance/history buffer), chained after TAA.
-      const taaOrRawView = this._taaResolvedView ?? this._hdrTextureView;
-      if (isPostProcessPass && motionTrailNode && motionTrailNode.enabled && taaOrRawView) {
-        this._motionTrailPassGPU ??= new HistoryBlendPassGPU(this._device);
-        this._motionTrailResolvedView =
-          this._motionTrailPassGPU.execute(
-            ce,
-            taaOrRawView,
-            this._context.canvas.width,
-            this._context.canvas.height,
-            motionTrailNode,
-          ) ?? undefined;
-      } else if (isPostProcessPass) {
-        this._motionTrailResolvedView = undefined;
-      }
+        // Motion Trail: a deliberate ghost/afterimage look, not anti-aliasing -- reuses the same
+        // history-blend pass as TAA (its own separate instance/history buffer), chained after TAA.
+        const taaOrRawView = this._taaResolvedView ?? this._hdrTextureView;
+        if (motionTrailNode && motionTrailNode.enabled && taaOrRawView) {
+          ctx.colorView = taaOrRawView;
+          ctx.element = motionTrailNode;
+          const p = this._getOrCreatePostEffectPass(
+            PostProcessingEffectType.MOTION_TRAIL,
+            HistoryBlendPassGPU,
+          );
+          this._motionTrailResolvedView = p.execute(ctx) ?? undefined;
+        } else {
+          this._motionTrailResolvedView = undefined;
+        }
 
-      const colorTextureView = this._motionTrailResolvedView ?? taaOrRawView;
+        const colorTextureView = this._motionTrailResolvedView ?? taaOrRawView;
 
-      if (
-        isPostProcessPass &&
-        bloomNode &&
-        bloomNode.enabled &&
-        this._hdrTexture &&
-        colorTextureView
-      ) {
-        this._bloomPassGPU ??= new BloomPassGPU(this._device);
-        this._bloomTextureView =
-          this._bloomPassGPU.execute(ce, this._hdrTexture, colorTextureView, bloomNode) ??
-          undefined;
-      } else if (isPostProcessPass) {
-        this._bloomTextureView = undefined;
-      }
+        if (bloomNode && bloomNode.enabled && this._hdrTexture && colorTextureView) {
+          ctx.colorView = colorTextureView;
+          ctx.element = bloomNode;
+          const p = this._getOrCreatePostEffectPass(PostProcessingEffectType.BLOOM, BloomPassGPU);
+          this._bloomTextureView = p.execute(ctx) ?? undefined;
+        } else {
+          this._bloomTextureView = undefined;
+        }
 
-      if (
-        isPostProcessPass &&
-        hbaoNode &&
-        hbaoNode.enabled &&
-        this._opaqueDepthTextureView &&
-        projMatrix
-      ) {
-        this._hbaoPassGPU ??= new AOPassGPU(this._device);
-        this._hbaoTextureView =
-          this._hbaoPassGPU.execute(
-            ce,
-            this._opaqueDepthTextureView,
-            this._context.canvas.width,
-            this._context.canvas.height,
-            near,
-            far,
-            projMatrix,
-            hbaoNode,
-          ) ?? undefined;
-      } else if (isPostProcessPass) {
-        this._hbaoTextureView = undefined;
-      }
+        if (hbaoNode && hbaoNode.enabled && this._opaqueDepthTextureView && projMatrix) {
+          ctx.element = hbaoNode;
+          const p = this._getOrCreatePostEffectPass(PostProcessingEffectType.HBAO, AOPassGPU);
+          this._hbaoTextureView = p.execute(ctx) ?? undefined;
+        } else {
+          this._hbaoTextureView = undefined;
+        }
 
-      const shaftsNode = this.postProcessing.get<import("../post/index.js").LightShaftsElement>(
-        PostProcessingEffectType.LIGHT_SHAFTS,
-      );
-      if (
-        isPostProcessPass &&
-        shaftsNode &&
-        shaftsNode.enabled &&
-        this._opaqueDepthTextureView &&
-        lights.dLight
-      ) {
-        this._lightShaftsPassGPU ??= new LightShaftsPassGPU(this._device);
-        this._lightShaftsTextureView =
-          this._lightShaftsPassGPU.execute(
-            this,
-            ce,
-            this._opaqueDepthTextureView,
-            this._context.canvas.width,
-            this._context.canvas.height,
-            vp,
-            camPos,
-            lights.dLight,
-            shaftsNode,
-          ) ?? undefined;
-      } else if (isPostProcessPass) {
-        this._lightShaftsTextureView = undefined;
-      }
+        const shaftsNode = this.postProcessing.get<LightShaftsElement>(
+          PostProcessingEffectType.LIGHT_SHAFTS,
+        );
+        if (shaftsNode && shaftsNode.enabled && this._opaqueDepthTextureView && lights.dLight) {
+          ctx.element = shaftsNode;
+          const p = this._getOrCreatePostEffectPass(
+            PostProcessingEffectType.LIGHT_SHAFTS,
+            LightShaftsPassGPU,
+          );
+          this._lightShaftsTextureView = p.execute(ctx) ?? undefined;
+        } else {
+          this._lightShaftsTextureView = undefined;
+        }
 
-      // Volumetric fog: froxel inject -> temporal reprojection -> in-register integration (incl.
-      // directional/CSM sunlight) -> single-tap composite; PostProcessPass attenuates the scene by
-      // the transmittance and adds the in-scattering before tonemapping (ADR 0031).
-      const volFogNode = this.postProcessing.get<import("../post/index.js").VolumetricFogElement>(
-        PostProcessingEffectType.VOLUMETRIC_FOG,
-      );
-      if (isPostProcessPass && volFogNode && volFogNode.enabled && this._opaqueDepthTextureView) {
-        this._volumetricFogPassGPU ??= new VolumetricFogPassGPU(this._device);
-        const fogVolumes = this.extractFogVolumes(scene);
-        this._volumetricFogTextureView =
-          this._volumetricFogPassGPU.execute(
-            this,
-            ce,
-            this._opaqueDepthTextureView,
-            this._context.canvas.width,
-            this._context.canvas.height,
-            vp,
-            vMat,
-            camPos,
-            near,
-            far,
-            lights.dLight,
-            volFogNode,
-            fogVolumes,
-            lights.pLights,
-            lights.sLights,
-          ) ?? undefined;
-      } else if (isPostProcessPass) {
-        this._volumetricFogTextureView = undefined;
+        // Volumetric fog: froxel inject -> temporal reprojection -> in-register integration (incl.
+        // directional/CSM sunlight) -> single-tap composite; PostProcessPass attenuates the scene by
+        // the transmittance and adds the in-scattering before tonemapping (ADR 0031).
+        const volFogNode = this.postProcessing.get<VolumetricFogElement>(
+          PostProcessingEffectType.VOLUMETRIC_FOG,
+        );
+        if (volFogNode && volFogNode.enabled && this._opaqueDepthTextureView) {
+          ctx.element = volFogNode;
+          ctx.fogVolumes = this.extractFogVolumes(scene);
+          const p = this._getOrCreatePostEffectPass(
+            PostProcessingEffectType.VOLUMETRIC_FOG,
+            VolumetricFogPassGPU,
+          );
+          this._volumetricFogTextureView = p.execute(ctx) ?? undefined;
+        } else {
+          this._volumetricFogTextureView = undefined;
+        }
       }
 
       // Re-widen to the RenderPass interface: TS's control-flow analysis narrows `pass` towards
@@ -1792,7 +1805,7 @@ export class WebGPURenderer extends AbstractRenderer {
 
   public _renderBatch(
     rp: GPURenderPassEncoder,
-    batch: import("../../core/Scene.js").RenderBatch,
+    batch: RenderBatch,
     vMat?: Float32Array,
     normalMode: NormalTargetMode = NormalTargetMode.DEFAULT,
   ): void {
@@ -2582,12 +2595,10 @@ export class WebGPURenderer extends AbstractRenderer {
       this._hzbStagingBuffers[0].destroy();
       this._hzbStagingBuffers[1].destroy();
     }
-    this._bloomPassGPU?.destroy();
-    this._hbaoPassGPU?.destroy();
-    this._lightShaftsPassGPU?.destroy();
-    this._volumetricFogPassGPU?.destroy();
-    this._taaPassGPU?.destroy();
-    this._motionTrailPassGPU?.destroy();
+    // Every GPU post-effect pass in the registry, in one sweep -- replaces the former per-effect
+    // `?.destroy()` lists (see `_getOrCreatePostEffectPass` / the `PostEffectPass` contract).
+    for (const pass of this._postEffectPasses.values()) pass.destroy();
+    this._postEffectPasses.clear();
 
     this._screenOpaqueTexture?.tex.destroy();
     this._screenOpaqueTexture = undefined;
@@ -2600,7 +2611,6 @@ export class WebGPURenderer extends AbstractRenderer {
 
     this._hdrTexture = undefined;
     this._hdrTextureView = undefined;
-    this._bloomPassGPU = undefined;
 
     // Tears down the whole GPU context; all buffers/textures/pipelines created
     // from this device become invalid, freeing their underlying GPU memory.

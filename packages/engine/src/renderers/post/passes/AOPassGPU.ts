@@ -1,11 +1,12 @@
 import AO_WGSL from "../shaders/AO.frag.wgsl?raw";
+import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 import type { HbaoElement } from "../elements/index.js";
 
 /**
  * Generates the HBAO texture for WebGPU via a compute pass -- reading the opaque
  * depth texture directly via `textureLoad` and writing to a storage texture (`r8unorm`).
  */
-export class AOPassGPU {
+export class AOPassGPU implements PostEffectPass {
   private _device: GPUDevice;
   private _pipeline!: GPUComputePipeline;
   private _uniformBuffer!: GPUBuffer;
@@ -90,27 +91,16 @@ export class AOPassGPU {
   }
 
   /**
-   * Computes the HBAO texture from the opaque depth texture via a compute pass.
-   * @param ce The command encoder to record into.
-   * @param depthView View of the already-captured opaque (pre-transparent) depth texture.
-   * @param width Canvas width in pixels.
-   * @param height Canvas height in pixels.
-   * @param near Camera near plane.
-   * @param far Camera far plane.
-   * @param projMatrixData The camera's raw perspective projection matrix.
-   * @param hbao The HBAO effect parameters (radius, intensity).
+   * Computes the HBAO texture from the opaque depth texture via a compute pass. The effect's
+   * parameters come from `ctx.element` (typed as `HbaoElement`); the camera projection matrix from
+   * `ctx.projMatrix` -- the renderer only dispatches this pass while both a real opaque depth
+   * capture and the projection matrix are available (see the `PostEffectPass` contract).
    * @returns A view of the single-channel AO texture (R = occlusion factor), or null if unavailable.
    */
-  public execute(
-    ce: GPUCommandEncoder,
-    depthView: GPUTextureView,
-    width: number,
-    height: number,
-    near: number,
-    far: number,
-    projMatrixData: Float32Array,
-    hbao: HbaoElement,
-  ): GPUTextureView | null {
+  public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    const { ce, depthView, width, height, near, far, element } = ctx;
+    const hbao = element as HbaoElement;
+    const projMatrixData = ctx.projMatrix!;
     this._resize(width, height, depthView);
     if (!this._aoTexture || !this._aoTextureView || !this._bindGroup) return null;
 

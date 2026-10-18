@@ -5,13 +5,13 @@ import FROXEL_REPROJECT_WGSL from "../../shaders/source/web_gpu/compute/froxel_r
 import FROXEL_INTEGRATE_WGSL from "../../shaders/source/web_gpu/compute/froxel_integrate.wgsl?raw";
 
 import type { VolumetricFogElement } from "../elements/index.js";
-import type { DirectionalLight, PointLight, SpotLight } from "../../../core/lights/index.js";
 import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../../core/lights/index.js";
 import type { FogVolume } from "../../../core/objects/FogVolume.js";
 import { VolumetricTexture } from "../../../core/textures/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
 import type { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
+import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 
 /** Uniform-array capacity of FogVolumes per pass (matches `FogVolumeData[16]` in the shaders). */
 const MAX_FOG_VOLUMES = 16;
@@ -68,7 +68,7 @@ function ign(x: number, y: number, frame: number): number {
  *  4. Single-Tap Composite (Fragment, `VolumetricFog.frag.wgsl`): Reconstructs depth and performs
  *     a single hardware-trilinear 3D texture sample, writing into the HDR buffer before tonemapping.
  */
-export class VolumetricFogPassGPU {
+export class VolumetricFogPassGPU implements PostEffectPass {
   private readonly _device: GPUDevice;
 
   private _volumeSampler?: GPUSampler;
@@ -598,23 +598,14 @@ export class VolumetricFogPassGPU {
     }
   }
 
-  public execute(
-    renderer: WebGPURenderer,
-    ce: GPUCommandEncoder,
-    depthView: GPUTextureView,
-    width: number,
-    height: number,
-    viewProjMatrix: Float32Array,
-    vMat: Float32Array | undefined,
-    camPos: Vector3D,
-    near: number,
-    far: number,
-    dirLight: DirectionalLight | undefined,
-    element: VolumetricFogElement,
-    fogVolumes: FogVolume[] = [],
-    pointLights: readonly PointLight[] = [],
-    spotLights: readonly SpotLight[] = [],
-  ): GPUTextureView | null {
+  public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    const { renderer, ce, depthView, width, height, vp, vMat, camPos, near, far, lights } = ctx;
+    const viewProjMatrix = vp;
+    const dirLight = lights.dLight;
+    const element = ctx.element as VolumetricFogElement;
+    const fogVolumes = ctx.fogVolumes;
+    const pointLights = lights.pLights;
+    const spotLights = lights.sLights;
     if (!element.enabled || width <= 0 || height <= 0) {
       return null;
     }

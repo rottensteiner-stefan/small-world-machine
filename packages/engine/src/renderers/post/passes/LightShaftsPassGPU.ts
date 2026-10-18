@@ -3,17 +3,16 @@ import SHAFTS_FRAG_WGSL from "../shaders/LightShafts.frag.wgsl?raw";
 import BILATERAL_FRAG_WGSL from "../shaders/LightShaftsBilateral.frag.wgsl?raw";
 
 import type { LightShaftsElement } from "../elements/index.js";
-import type { DirectionalLight } from "../../../core/lights/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
-import type { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
+import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 
 /**
  * WebGPU implementation of atmospheric volumetric light shafts (God Rays):
  * - Half-resolution raymarching against Cascaded Shadow Maps (CSM).
  * - Joint 2x2 depth-aware cross-bilateral upsample to full screen resolution.
  */
-export class LightShaftsPassGPU {
+export class LightShaftsPassGPU implements PostEffectPass {
   private readonly _device: GPUDevice;
 
   private _sampler?: GPUSampler;
@@ -165,17 +164,11 @@ export class LightShaftsPassGPU {
   /**
    * Executes the volumetric light shafts passes on WebGPU.
    */
-  public execute(
-    renderer: WebGPURenderer,
-    ce: GPUCommandEncoder,
-    depthView: GPUTextureView,
-    width: number,
-    height: number,
-    viewProjMatrix: Float32Array,
-    camPos: Vector3D,
-    dirLight: DirectionalLight | undefined,
-    element: LightShaftsElement,
-  ): GPUTextureView | null {
+  public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    const { renderer, ce, depthView, width, height, vp, camPos, lights } = ctx;
+    const viewProjMatrix = vp;
+    const dirLight = lights.dLight;
+    const element = ctx.element as LightShaftsElement;
     if (!element.enabled || width <= 0 || height <= 0 || !dirLight) {
       return null;
     }

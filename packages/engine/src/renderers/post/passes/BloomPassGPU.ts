@@ -1,13 +1,14 @@
 import BLOOM_DOWNSAMPLE_WGSL from "../shaders/BloomDownsample.frag.wgsl?raw";
 import BLOOM_UPSAMPLE_WGSL from "../shaders/BloomUpsample.frag.wgsl?raw";
 import FULLSCREEN_VERT_WGSL from "../shaders/PostProcess.vert.wgsl?raw";
+import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 import type { BloomElement } from "../elements/index.js";
 import { TextureFilter, TextureWrap, Topology } from "../../../enums/index.js";
 
 /**
  * Handles the Bloom generation (Kawase Dual Filtering) for WebGPU.
  */
-export class BloomPassGPU {
+export class BloomPassGPU implements PostEffectPass {
   private _device: GPUDevice;
   private _downsamplePipeline!: GPURenderPipeline;
   private _upsamplePipeline!: GPURenderPipeline;
@@ -183,12 +184,11 @@ export class BloomPassGPU {
     }
   }
 
-  public execute(
-    ce: GPUCommandEncoder,
-    hdrTexture: GPUTexture,
-    hdrTextureView: GPUTextureView,
-    bloomConfig: BloomElement,
-  ): GPUTextureView | null {
+  public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    const { ce, element } = ctx;
+    const hdrTexture = ctx.colorTexture!;
+    const hdrTextureView = ctx.colorView;
+    const bloomConfig = element as BloomElement;
     const width = hdrTexture.width;
     const height = hdrTexture.height;
 

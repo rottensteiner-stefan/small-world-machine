@@ -17,6 +17,7 @@ import {
 } from "./elements/index.js";
 import { PostProcessingEffectType } from "../../enums/index.js";
 import { Vector3D } from "../../math/index.js";
+import type { PostProcessingConfig } from "../../interfaces/index.js";
 
 /**
  * A logical grouping of post-processing elements.
@@ -85,9 +86,31 @@ export class PostProcessingGroup {
   }
 
   /**
+   * Whether any enabled post-processing effect requires the opaque (pre-transparent) depth
+   * capture this frame. The renderer uses this single property -- never per-effect ad-hoc OR
+   * chains -- to decide whether the opaque depth capture must run (GPU path, see
+   * `WebGPURenderer`/`MainRenderPass`). An effect "requires opaque depth" when its GPU
+   * implementation reads the captured depth texture (HBAO, light shafts, volumetric fog).
+   * Effects without such a consumer (bloom, vignette, grain, grading, ...) never do.
+   *
+   * Covers ONLY post-processing consumers. The unrelated transparent/refraction capture and the
+   * decal depth/normal captures have their own, separate conditions in `MainRenderPass`.
+   */
+  public get requiresOpaqueDepth(): boolean {
+    const hbao = this.get<HbaoElement>(PostProcessingEffectType.HBAO);
+    const shafts = this.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS);
+    const volFog = this.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
+    return (
+      (hbao !== undefined && hbao.enabled) ||
+      (shafts !== undefined && shafts.enabled) ||
+      (volFog !== undefined && volFog.enabled)
+    );
+  }
+
+  /**
    * Loads configurations into elements from a configuration object.
    */
-  public loadConfig(config?: import("../../interfaces/index.js").PostProcessingConfig): void {
+  public loadConfig(config?: PostProcessingConfig): void {
     if (!config) return;
     if (config.enabled !== undefined) this.enabled = config.enabled;
     if (config.filterMode !== undefined) this.filterMode = config.filterMode;
@@ -276,9 +299,7 @@ export class PostProcessingGroup {
     }
 
     if (effects.volumetricFog) {
-      const volFog = this.get<import("./elements/index.js").VolumetricFogElement>(
-        PostProcessingEffectType.VOLUMETRIC_FOG,
-      );
+      const volFog = this.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
       if (volFog) {
         const vf = effects.volumetricFog;
         if (vf.enabled !== undefined) volFog.enabled = vf.enabled;

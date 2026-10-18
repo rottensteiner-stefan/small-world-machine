@@ -5,6 +5,7 @@ import type { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.j
 import { Color } from "../../src/core/colors/index.js";
 import { Vector3D } from "../../src/math/index.js";
 import { createFrameInfo } from "../../src/interfaces/index.js";
+import type { LightDataInterface } from "../../src/interfaces/index.js";
 
 // WebGPU is unavailable in the vitest node environment: polyfill the flag objects the pass reads.
 type WebGpuConstScope = {
@@ -77,20 +78,24 @@ function injectUniforms(configure: (element: VolumetricFogElement) => void): Flo
     beginRenderPass: vi.fn(makePass),
   } as unknown as GPUCommandEncoder;
 
-  new VolumetricFogPassGPU(device).execute(
+  new VolumetricFogPassGPU(device).execute({
     renderer,
     ce,
-    {} as GPUTextureView,
-    320,
-    200,
-    new Float32Array(16),
-    undefined,
-    new Vector3D(0, 0, 0),
-    0.1,
-    100.0,
-    undefined,
     element,
-  );
+    colorTexture: undefined,
+    colorView: {} as GPUTextureView,
+    depthView: {} as GPUTextureView,
+    width: 320,
+    height: 200,
+    vp: new Float32Array(16),
+    vMat: undefined,
+    camPos: new Vector3D(0, 0, 0),
+    near: 0.1,
+    far: 100.0,
+    projMatrix: undefined,
+    lights: { dLight: undefined, pLights: [], sLights: [] } as unknown as LightDataInterface,
+    fogVolumes: [],
+  });
   const inject = writes.find((w) => w.size === INJECT_UNIFORM_BYTES);
   if (!inject) throw new Error("No injection uniform write observed.");
   return inject.data;

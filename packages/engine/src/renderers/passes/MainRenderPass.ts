@@ -1,11 +1,6 @@
 import type { Scene } from "../../core/index.js";
 import type { RenderBatch } from "../../core/Scene.js";
-import {
-  MaterialType,
-  Topology,
-  PostProcessingEffectType,
-  NormalTargetMode,
-} from "../../enums/index.js";
+import { MaterialType, Topology, NormalTargetMode } from "../../enums/index.js";
 import { NORMAL_TARGET_CLEAR } from "../WebGPU/managers/NormalOutputWrapper.js";
 import type { WebGPURenderer } from "../WebGPU/index.js";
 import type { RenderPass } from "../index.js";
@@ -181,16 +176,10 @@ export class MainRenderPass implements RenderPass {
     } else {
       if (!opaquePassEnded) rp.end();
 
-      // HBAO and LightShafts need the opaque depth buffer every frame they're enabled, not just when there
-      // happen to be transparent objects (the only other consumer of this capture).
-      const hbaoNode = renderer.postProcessing.get<import("../post/index.js").HbaoElement>(
-        PostProcessingEffectType.HBAO,
-      );
-      const shaftsNode = renderer.postProcessing.get<import("../post/index.js").LightShaftsElement>(
-        PostProcessingEffectType.LIGHT_SHAFTS,
-      );
-      const needsDepth = (hbaoNode && hbaoNode.enabled) || (shaftsNode && shaftsNode.enabled);
-      if (needsDepth && !depthCaptured) {
+      // HBAO, light shafts and volumetric fog need the opaque depth buffer every frame they're
+      // enabled -- the single `postProcessing.requiresOpaqueDepth` property is the renderer's only
+      // source of truth for depth-consuming effects (no per-effect OR-chains, see ADR 0037).
+      if (renderer.postProcessing.requiresOpaqueDepth && !depthCaptured) {
         renderer.captureOpaqueDepth(ce);
       }
     }

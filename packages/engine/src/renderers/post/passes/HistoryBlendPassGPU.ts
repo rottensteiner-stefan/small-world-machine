@@ -1,12 +1,15 @@
 import FULLSCREEN_VERT_WGSL from "../shaders/PostProcess.vert.wgsl?raw";
 import HISTORY_BLEND_FRAG_WGSL from "../shaders/HistoryBlend.frag.wgsl?raw";
+import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 import { TextureFilter, TextureWrap, Topology } from "../../../enums/index.js";
 
 /**
  * Generic exponential history blend for WebGPU -- see HistoryBlendPassGL for the shared
- * rationale/trade-offs (used by both `TaaElement` and `MotionTrailElement`).
+ * rationale/trade-offs (used by both `TaaElement` and `MotionTrailElement`; the renderer keeps
+ * one separate instance per effect type in its `PostEffectPass` registry, so each keeps its own
+ * history buffer).
  */
-export class HistoryBlendPassGPU {
+export class HistoryBlendPassGPU implements PostEffectPass {
   private _device: GPUDevice;
   private _pipeline!: GPURenderPipeline;
   private _sampler!: GPUSampler;
@@ -93,13 +96,13 @@ export class HistoryBlendPassGPU {
    * Resolves the current frame against history.
    * @returns This frame's resolved HDR texture view (becomes history for the next call), or null if unavailable.
    */
-  public execute(
-    ce: GPUCommandEncoder,
-    currentView: GPUTextureView,
-    width: number,
-    height: number,
-    config: { feedback: number },
-  ): GPUTextureView | null {
+  public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    const { ce, width, height } = ctx;
+    const currentView = ctx.colorView;
+    // `PostProcessingElement`'s base type has no `feedback` member -- the renderer only ever
+    // hands this pass a `TaaElement`/`MotionTrailElement` (both of which declare it), so the
+    // cast through `unknown` is safe and pinned by the renderer's dispatch sites.
+    const config = ctx.element as unknown as { feedback: number };
     this._resize(width, height);
     if (!this._pingPong || !this._pingPongViews) return null;
 
