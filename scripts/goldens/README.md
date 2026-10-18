@@ -59,6 +59,9 @@ alles wie vorher (alle 32 Zellen).
    (kopiert alle PNGs, fasst `manifest.json`/`summary.json` zusammen und bricht ab, wenn eine Zelle doppelt vorkommt). Der Capture wiederholt eine leere Zelle bis zu dreimal (SwiftShader
    liefert auf einem ausgelasteten Runner gelegentlich ein leeres Bild); eine Zelle mit Konsolenfehlern wird nie wiederholt.
    Der Preview-Port ist per `PREVIEW_PORT` (Default 4173) einstellbar.
+4. **Automatisiert (M4, empfohlen):** `npm run goldens:adopt-ci -- --run-id <id> [--accept]` ersetzt die manuelle
+   Kette aus Schritt 3 — Download, Merge, Compare und (bei `--accept`) Übernahme laufen in einem Befehl, der
+   Review-Report landet in `.agents/scratches/adopt/review.html`.
 
 ## Drift zuordnen, bevor die Baseline neu aufgenommen wird
 
@@ -103,6 +106,10 @@ wurden: im selben Commit wie die Änderung, mit der neuen Browser-Version im `su
   - Exit **0** = SKIP (kein Build-Input von Showcase 10 seit dem Baseline-Commit geändert), **1** = RUN.
   - Fehlerrichtung konservativ: nur skippen, wenn es beweisbar nichts Output-Relevantes gibt — ein SKIP ist nie falsch-grün. Pfade, die die Canvas-Pixel nicht beeinflussen (docs/, .agents/, andere Apps, public/), erzwingen keinen Lauf.
   - Der CI-Job `liquid-goldens` gated damit `npm ci`/Build/Capture/Compare (s. ci.yml); `--emit-status` schreibt `should_run=true|false` in `$GITHUB_OUTPUT`.
+- `goldens:adopt-ci -- --run-id <id> [--accept] [--out <dir>] [--baseline <dir>]`
+  - Ein Kommando für die Baseline-Neuaufnahme aus CI-Artefakten (M4): lädt die vier `liquid-goldens-*`-Artefakte via `gh`, merged sie, vergleicht gegen die Baseline und schreibt Review-Report (`<out>/review.html` + `compare.json`). Mit `--accept` werden vergleichbare Zellen sofort als neue Baseline übernommen.
+- `--report-html <path>` ist Zusatzoption von `goldens:compare`: einzelner, selbstständiger HTML-Report. Nur divergierende Zellen (DIFF/FAIL/ERR) tragen Baseline/Current/Diff-Thumbnails (eingebettete Data-URIs); identische Zellen stehen als Text.
+- `--accept` ist Zusatzoption von `goldens:compare`: übernimmt vergleichbare Zellen (OK/DIFF/FAIL) als neue Baseline — kopiert PNGs, merged `manifest.json`, aktualisiert nur die Drift-Anker in `summary.json` (Browser, Zeit). ERR-Zellen werden übersprungen, damit keine Baseline-Zelle mit Blank/fehlend überschrieben wird. Exit 0 = Drift als bestätigt gewertet; 1 bleibt bei technischem Fehler.
 
 ## Konfiguration
 
