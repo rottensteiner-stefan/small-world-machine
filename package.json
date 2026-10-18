@@ -29,6 +29,7 @@
     "lint": "eslint .",
     "lint:wgsl": "tsx scripts/lint-wgsl.ts",
     "check:cycles": "npx --yes madge@8.0.0 --circular packages/engine/src",
+    "check:markers": "node scripts/check-verified-markers.js",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "prebuild": "node scripts/update-version.js",

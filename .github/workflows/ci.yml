@@ -54,6 +54,9 @@ jobs:
       - name: Lint WGSL
         run: npm run lint:wgsl
 
+      - name: Verified marker lint
+        run: npm run check:markers
+
       - name: Unit tests
         run: npm test
 
