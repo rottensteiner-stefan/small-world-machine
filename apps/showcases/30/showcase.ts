@@ -177,24 +177,25 @@ class Showcase30 extends AbstractShowcase {
       console.warn("Could not load PBR textures:", e);
     }
 
-    // Materials Palette: Soaking wet tarmac with glossy specular sheen
+    // Real planar reflection for the wet asphalt street and puddles (mirrors the actual scene:
+    // skyscrapers, glowing facade windows, neon signs, and hover car each frame).
+    this._reflectionNode = new PlanarReflectionNode("PuddleReflection", 1024, 1024);
+    this._reflectionNode.position.set(0, 0.001, 0);
+    this.scene.add(this._reflectionNode);
+
+    // Materials Palette: Soaking wet tarmac with glossy specular sheen & planar building reflections
     const dryAsphaltMat = new StandardMaterial({
       color: new Color(0.22, 0.24, 0.28),
       diffuseMap: asphaltDiffuse,
       normalMap: asphaltNormal,
       roughnessMap: asphaltRoughness,
-      roughness: 0.18,
+      roughness: 0.25,
       metallic: 0.15,
       envMap: envTexture,
+      reflectionMap: this._reflectionNode.renderTarget,
+      reflectivity: 0.45,
+      reflectionFresnelBlend: 0.25,
     });
-
-    // Real planar reflection for the puddles (mirrors the actual scene -- car, neon signs, rain
-    // rig -- each frame) instead of only the static skybox envMap, which alone can never show any
-    // local light source in the puddles. All 4 puddles share one node/render target since they're
-    // coplanar (same puddle height).
-    this._reflectionNode = new PlanarReflectionNode("PuddleReflection", 1024, 1024);
-    this._reflectionNode.position.set(0, 0.003, 0);
-    this.scene.add(this._reflectionNode);
 
     const wetPuddleMat = new StandardMaterial({
       color: new Color(0.02, 0.025, 0.035),
@@ -202,7 +203,7 @@ class Showcase30 extends AbstractShowcase {
       metallic: 0.95,
       envMap: envTexture,
       reflectionMap: this._reflectionNode.renderTarget,
-      reflectivity: 0.85,
+      reflectivity: 0.9,
       // Low, not the 0.5 default: a puddle should stay clearly reflective across a normal range
       // of viewing angles, not almost only within the last few degrees before a grazing angle
       // (pure Fresnel reads as an on/off switch, not a puddle -- see reflectionFresnelBlend's own
