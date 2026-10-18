@@ -17,6 +17,7 @@ import {
   SpotLight,
   AmbientLight,
   SpawnPoint,
+  pickKitTextureMap,
 } from "@small-world-machine/engine";
 
 export type ContentAssetType = "prop" | "texture" | "decal" | "primitive" | "light" | "prefab";
@@ -457,8 +458,10 @@ export class ContentDrawer {
           // PBR Textures
           if (manifest.textures) {
             for (const tex of manifest.textures) {
-              const albedoMap =
-                tex.maps.find((m) => m.includes("albedo") || m.includes("diffuse")) ?? tex.maps[0];
+              // Exact-token albedo pick (same matcher `KitRegistry.resolveTextureMaps`
+              // uses) — never a bare substring; the first unmatched image stays as the
+              // preview fallback if no channel is named.
+              const albedoMap = pickKitTextureMap(tex.maps, "albedo") ?? tex.maps[0];
               const texSlug = tex.id.includes("/") ? tex.id.split("/").pop()! : tex.id;
               this._assets.push({
                 id: tex.id,

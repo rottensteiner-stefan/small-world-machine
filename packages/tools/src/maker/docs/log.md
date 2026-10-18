@@ -523,6 +523,42 @@ Meilensteinen.
   Runtime-Browser-Verifikation im Worktree-Dev-Server erledigt: Maker-Seite mit verschmolzenem Header und
   Mode-Launcher (World aktiv, übrige Modes disabled bis M3+), Router schaltet auf `#world`, 0 Fehler/0 Warnungen.
 
+---
+
+## 2026-10-18 — Konsolidierung: Commit-Helfer, Keymap-Tabelle, zentrale Textur-Auflösung (Thermo Wave 1, Package B)
+
+Thermo-Review-Nacharbeit (`.agents/scratches/thermo-1014/09-tools-maker-kit-inspector.md`, Items 13/17/18) —
+keine neuen Shortcuts, keine neuen Features; alle bisherigen Bindings und ihr Verhalten bleiben exakt erhalten.
+
+- **Undo-Boilercode zentralisiert:** `MakerApp` hat jetzt `private _commit(label, redo, undo, discard?)` und
+  `private _snapshotCommand<T, O>(objs, read, write, label, apply)`; die Bestell-Verträge (redo genau einmal,
+  gemeinsames Follow-up genau einmal pro (Wieder-)Anwendung, Undo/Redo-Roundtrip) leben im
+  dependencies-injizierten, unit-testbaren Modul `MakerUndoCore.ts`. ALLE 16 `_undo.execute`-Aufrufstellen
+  (Add/Delete/Reparent/Rename/Duplicate/Group-1-tiel/Group-viel/Behavior-An-/Ab-/Material/Zone-Punkt-Ziehen/
+  Gizmo-Drag/Snap-Ground/3× Nudge) delegieren jetzt dorthin; Selektion nach Undo/Redo und die
+  Undo-Stack-Reihenfolge sind identisch. `snapSelectionToGround` und die drei `nudgeSelection`-Zweige nutzen
+  den Snapshot-Helfer statt handgeschriebener before/after-Blöcke.
+- **Keymap-Tabelle:** neues `MakerKeymap.ts` mit der geordneten, testbaren Tabelle `MAKER_KEYMAP` (Präzedenz =
+  Array-Reihenfolge) und `dispatchMakerKey()`; `_onMakerKeyDown` ist nur noch ein Resolver-Durchlauf. Jedes
+  Binding trägt `key`/`modifiers`/`exclude`/`label`/`when`/`action`; der Decal-Stamp-Pass-through bleibt
+  erhalten (action=false fällt zur nächsten Bindung durch). Die Tabelle ist für ein späteres Help-Overlay
+  freigelegt (Overlay selbst noch nicht gebaut).
+- **Textur-Auflösung entdreifacht:** neues `KitRegistry.resolveTextureMaps(kitId, item)` (+
+  `TextureSlotMatcher.ts` mit `detectTextureMapSlot`/`pickKitTextureMap`, exaktes Token-Matching statt
+  Substring — `m_albedo.png`=albedo, `_AO.`=ao, KEIN Fehlalarm bei `ao` in `saos`) lädt alle gefundenen Kanäle
+  parallel via `Promise.all`. Genutzt von Maker-`applyTexture`, Content-Drawer-Vorschau und Kit-Inspector
+  (`PbrInspectorView`). **Verhaltensänderung:** Maker wendet jetzt zusätzlich eine *Metalness*-Map an
+  (`mat.metallic = 1`, wie der Kit-Inspector es bereits tat, der dieselbe Kette nutzt). Einige Nicht-Szenengraph-
+  Undo-Stellen (Behavior-/Material-/Zone-Punkt) bekommen nun dasselbe Hierarchie-Follow-up (nur extra,
+  unsichtbarer Refresh).
+- **Tests als Netz:** `MakerKeymap.test.ts` (42 Tests, enumeriert jede vorab existierende Bindung aus der
+  alten if-Chain inkl. Guards/Negativfällen), `MakerCommit.test.ts` (8 Tests: Commit-Ordnung, Follow-up-Einmal-
+  Garantie, Snapshot-before/after-Roundtrip) und `KitRegistryResolveTextureMaps.test.ts` (5 Tests: Token-
+  Matching, Metalness, Parallel-Load mit Fake-Loader, Fehler-Ausbreitung).
+- **Gates:** Typecheck, Lint, volle Testsuite grün; Browser-Check Maker (Primitive erzeugen, Pfeil-Nudge,
+  Undo/Redo, Delete/Undo) ohne Konsolenfehler.
+
+
 
 
 

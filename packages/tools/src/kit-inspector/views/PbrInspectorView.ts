@@ -1,5 +1,11 @@
 import type { KitRegistry } from "@small-world-machine/engine";
-import { Object3D, Sphere, StandardMaterial, Color, Texture } from "@small-world-machine/engine";
+import {
+  Object3D,
+  Sphere,
+  StandardMaterial,
+  Color,
+  pickKitTextureMap,
+} from "@small-world-machine/engine";
 import type { CameraFrame, InspectedAssetInfo } from "../types.js";
 
 export interface PbrViewResult {
@@ -28,7 +34,9 @@ export async function buildPbrView(
   const pbrSphere = new Object3D("PbrPreviewSphere");
   pbrSphere.geometry = sphereGeo;
 
-  // maps[] are bare filenames; actual files live under textures/<slug>/
+  // Map loading is shared with the Maker via `KitRegistry.resolveTextureMaps`
+  // (exact-token matching, parallel `Promise.all` load); only the preview-URL
+  // string is derived here, through the same exact-token matcher.
   const slug = texItem.id.includes("/") ? texItem.id.split("/").pop()! : texItem.id;
   const base = `${reg.basePath}${kitId}/textures/${slug}`;
   const mat = new StandardMaterial({
@@ -37,32 +45,21 @@ export async function buildPbrView(
     metallic: 0.0,
   });
 
-  const findMapUrl = (keyword: string): string | undefined => {
-    const found = texItem.maps.find((m) => m.toLowerCase().includes(keyword));
-    return found ? `${base}/${found}` : undefined;
-  };
-
-  const albedoUrl = findMapUrl("albedo") ?? findMapUrl("diffuse");
-  const normalUrl = findMapUrl("normal");
-  const roughnessUrl = findMapUrl("roughness");
-  const aoUrl = findMapUrl("ao");
-  const metalnessUrl = findMapUrl("metalness") ?? findMapUrl("metallic");
-
-  const textureOptions = { assetManager: reg.assetManager };
-  if (albedoUrl) {
-    mat.diffuseMap = await Texture.fromUrl(albedoUrl, textureOptions);
+  const maps = await reg.resolveTextureMaps(kitId, texItem);
+  if (maps.albedo) {
+    mat.diffuseMap = maps.albedo;
   }
-  if (normalUrl) {
-    mat.normalMap = await Texture.fromUrl(normalUrl, textureOptions);
+  if (maps.normal) {
+    mat.normalMap = maps.normal;
   }
-  if (roughnessUrl) {
-    mat.roughnessMap = await Texture.fromUrl(roughnessUrl, textureOptions);
+  if (maps.roughness) {
+    mat.roughnessMap = maps.roughness;
   }
-  if (aoUrl) {
-    mat.aoMap = await Texture.fromUrl(aoUrl, textureOptions);
+  if (maps.ao) {
+    mat.aoMap = maps.ao;
   }
-  if (metalnessUrl) {
-    mat.metallicMap = await Texture.fromUrl(metalnessUrl, textureOptions);
+  if (maps.metalness) {
+    mat.metallicMap = maps.metalness;
     mat.metallic = 1.0;
   }
 
@@ -70,6 +67,7 @@ export async function buildPbrView(
   pbrSphere.position.set(0, 0.85, 0);
 
   const manifest = await reg.getKitManifest(kitId);
+  const albedoFile = pickKitTextureMap(texItem.maps, "albedo");
   const info: InspectedAssetInfo = {
     type: "texture",
     id: texItem.id,
@@ -80,7 +78,7 @@ export async function buildPbrView(
     author: manifest.author,
     license: manifest.license,
     version: manifest.version,
-    previewUrl: albedoUrl ?? "",
+    previewUrl: albedoFile ? `${base}/${albedoFile}` : "",
     textureMaps: texItem.maps.map((m) => `${base}/${m}`),
   };
 

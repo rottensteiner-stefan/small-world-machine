@@ -37,7 +37,6 @@ import {
   Vector3D,
   MathPool,
   StandardMaterial,
-  Texture,
   KitRegistry,
   Quaternion,
   Matrix4,
@@ -46,6 +45,8 @@ import {
 import type { OrbitCameraView } from "./OrbitCameraController.js";
 import { OrbitCameraController } from "./OrbitCameraController.js";
 import { UndoStack } from "./UndoStack.js";
+import { createMakerCommandRunner } from "./MakerUndoCore.js";
+import { dispatchMakerKey, type MakerKeyContext } from "./MakerKeymap.js";
 import { HierarchyPanel } from "./HierarchyPanel.js";
 import { PropertyPanel } from "./PropertyPanel.js";
 import { ObjectPalette } from "./ObjectPalette.js";
@@ -127,6 +128,31 @@ interface ZonePointDragState {
 export class MakerApp extends SmallWorldMachine {
   private readonly _orbit = new OrbitCameraController();
   private readonly _undo = new UndoStack();
+  /** Executes undoable scene-edit commands through `_undo` and runs the shared
+   * post-apply follow-up (`_hierarchyDirty`, property selection, autosave)
+   * exactly once per (re-)application — the ordering contract every call site
+   * that delegates to `_commit` relies on (see `MakerUndoCore`). */
+  private readonly _commitRunner = createMakerCommandRunner({
+    execute: (command): void => this._undo.execute(command),
+    afterApply: (): void => {
+      this._hierarchyDirty = true;
+      this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
+      this._project.scheduleAutosave(() => this.scene.root);
+    },
+  });
+  /** Like `_commitRunner`, but for transform-mode commands: the follow-up keeps
+   * the gizmo in sync (`_updateGizmo`) and refreshes selection + autosave,
+   * without marking the hierarchy dirty — exactly what the hand-written
+   * position/rotation/scale snapshot sites (`snapSelectionToGround`,
+   * `nudgeSelection`, gizmo drags) used to do. */
+  private readonly _snapshotRunner = createMakerCommandRunner({
+    execute: (command): void => this._undo.execute(command),
+    afterApply: (): void => {
+      this._updateGizmo();
+      this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
+      this._project.scheduleAutosave(() => this.scene.root);
+    },
+  });
   private readonly _project = new ProjectBinding();
   private readonly _raycaster = new Raycaster();
   /** Off-scene holding pen for "soft deleted" objects: reparenting into it uses `Object3D.add()`'s
@@ -441,19 +467,18 @@ export class MakerApp extends SmallWorldMachine {
           if (!target) return;
           try {
             const tex = textureItem as { id: string; maps: string[] };
-            const slug = tex.id.includes("/") ? tex.id.split("/").pop()! : tex.id;
-            const base = `${this._kitRegistry.basePath}${kitId}/textures/${slug}`;
-            const findMap = (kw: string): string | undefined =>
-              tex.maps.find((m) => m.toLowerCase().includes(kw));
-            const albedo = findMap("albedo") ?? findMap("diffuse");
-            const normal = findMap("normal");
-            const roughness = findMap("roughness");
-            const ao = findMap("ao");
+            // Shared, exact-token map resolution (also powers the KitInspector);
+            // loads every found channel in parallel and now includes metalness.
+            const maps = await this._kitRegistry.resolveTextureMaps(kitId, tex);
             const mat = new StandardMaterial({ color: Color.WHITE, metallic: 0, roughness: 0.8 });
-            if (albedo) mat.diffuseMap = await Texture.fromUrl(`${base}/${albedo}`);
-            if (normal) mat.normalMap = await Texture.fromUrl(`${base}/${normal}`);
-            if (roughness) mat.roughnessMap = await Texture.fromUrl(`${base}/${roughness}`);
-            if (ao) mat.aoMap = await Texture.fromUrl(`${base}/${ao}`);
+            if (maps.albedo) mat.diffuseMap = maps.albedo;
+            if (maps.normal) mat.normalMap = maps.normal;
+            if (maps.roughness) mat.roughnessMap = maps.roughness;
+            if (maps.ao) mat.aoMap = maps.ao;
+            if (maps.metalness) {
+              mat.metallicMap = maps.metalness;
+              mat.metallic = 1.0;
+            }
             this.setMaterialOnObject(target, mat);
           } catch (err) {
             console.error("[Maker] Failed to apply texture:", err);
@@ -689,8 +714,6 @@ export class MakerApp extends SmallWorldMachine {
         obj.scale.copyFrom(transform.scale);
         obj.updateMatrixWorld();
       }
-      this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-      this._project.scheduleAutosave(() => this.scene.root);
     };
 
     const beforeValues = new Map(
@@ -704,12 +727,11 @@ export class MakerApp extends SmallWorldMachine {
       ]),
     );
 
-    this._undo.execute({
-      label: `Gizmo ${mode} ${axis.toUpperCase()}${before.size > 1 ? ` (${before.size})` : ""}`,
-      redo: () => apply(after),
-      undo: () => apply(beforeValues),
-    });
-    this._project.scheduleAutosave(() => this.scene.root);
+    this._commit(
+      `Gizmo ${mode} ${axis.toUpperCase()}${before.size > 1 ? ` (${before.size})` : ""}`,
+      () => apply(after),
+      () => apply(beforeValues),
+    );
   }
 
   /** Replaces the entire selection with just `obj` (or clears it for `undefined`) -- a plain
@@ -821,22 +843,18 @@ export class MakerApp extends SmallWorldMachine {
       obj.position.copyFrom(smartPos);
     }
 
-    this._undo.execute({
-      label: `Add ${obj.name}`,
-      redo: () => {
+    this._commit(
+      `Add ${obj.name}`,
+      () => {
         this.scene.add(obj);
-        this._hierarchyDirty = true;
         this.selectObject(obj);
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      undo: () => {
+      () => {
         this._trashBin.add(obj);
-        this._hierarchyDirty = true;
         if (this._selected === obj) this.selectObject(undefined);
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      discard: () => this._disposeTrashedObject(obj),
-    });
+      () => this._disposeTrashedObject(obj),
+    );
   }
 
   /**
@@ -874,68 +892,50 @@ export class MakerApp extends SmallWorldMachine {
     if (0 === objs.length) return;
     const parents = objs.map((obj) => obj.parent!);
 
-    this._undo.execute({
-      label: `Delete ${objs.length} object${objs.length > 1 ? "s" : ""}`,
-      redo: () => {
+    this._commit(
+      `Delete ${objs.length} object${objs.length > 1 ? "s" : ""}`,
+      () => {
         for (const obj of objs) this._trashBin.add(obj);
-        this._hierarchyDirty = true;
         this.selectObject(undefined);
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      undo: () => {
+      () => {
         objs.forEach((obj, i) => parents[i]!.add(obj));
-        this._hierarchyDirty = true;
         this._selectMultiple(objs);
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      discard: () => {
+      () => {
         for (const obj of objs) this._disposeTrashedObject(obj);
       },
-    });
+    );
   }
 
   public reparent(obj: Object3D, newParent: Object3D): void {
     const oldParent = obj.parent;
     if (!oldParent || oldParent === newParent) return;
-    this._undo.execute({
-      label: `Move ${obj.name}`,
-      redo: () => {
+    this._commit(
+      `Move ${obj.name}`,
+      () => {
         newParent.add(obj);
-        this._hierarchyDirty = true;
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      undo: () => {
+      () => {
         oldParent.add(obj);
-        this._hierarchyDirty = true;
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-    });
+    );
   }
 
   public renameObject(obj: Object3D, newName: string): void {
     const oldName = obj.name;
     if (oldName === newName) return;
-    this._undo.execute({
-      label: `Rename to "${newName}"`,
-      redo: () => {
+    this._commit(
+      `Rename to "${newName}"`,
+      () => {
         obj.name = newName;
-        this._hierarchyDirty = true;
         this._hierarchyPanel.refresh();
-        if (this._primary === obj) {
-          this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        }
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      undo: () => {
+      () => {
         obj.name = oldName;
-        this._hierarchyDirty = true;
         this._hierarchyPanel.refresh();
-        if (this._primary === obj) {
-          this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        }
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-    });
+    );
   }
 
   /** Clones every selected object (via `Object3D.clone()`) and inserts each copy as a sibling
@@ -950,24 +950,20 @@ export class MakerApp extends SmallWorldMachine {
       return { parent: obj.parent!, clone };
     });
 
-    this._undo.execute({
-      label: `Duplicate ${objs.length} object${objs.length > 1 ? "s" : ""}`,
-      redo: () => {
+    this._commit(
+      `Duplicate ${objs.length} object${objs.length > 1 ? "s" : ""}`,
+      () => {
         for (const { parent, clone } of clones) parent.add(clone);
-        this._hierarchyDirty = true;
         this._selectMultiple(clones.map((c) => c.clone));
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      undo: () => {
+      () => {
         for (const { clone } of clones) this._trashBin.add(clone);
-        this._hierarchyDirty = true;
         this._selectMultiple(objs);
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      discard: () => {
+      () => {
         for (const { clone } of clones) this._disposeTrashedObject(clone);
       },
-    });
+    );
   }
 
   /** Groups the current selection into a new empty parent. A single selected object is wrapped
@@ -996,9 +992,9 @@ export class MakerApp extends SmallWorldMachine {
     group.rotation.copyFrom(beforeRot);
     group.scale.copyFrom(beforeScale);
 
-    this._undo.execute({
-      label: `Group ${obj.name}`,
-      redo: () => {
+    this._commit(
+      `Group ${obj.name}`,
+      () => {
         parent.add(group);
         group.updateMatrixWorld(); // group.worldMatrix must be current before children re-derive
         // their own worldMatrix from it below -- a freshly-added Object3D starts at identity.
@@ -1007,23 +1003,19 @@ export class MakerApp extends SmallWorldMachine {
         obj.rotation.set(0, 0, 0);
         obj.scale.set(1, 1, 1);
         obj.updateMatrixWorld();
-        this._hierarchyDirty = true;
         this.selectObject(group);
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      undo: () => {
+      () => {
         parent.add(obj);
         obj.position.copyFrom(beforePos);
         obj.rotation.copyFrom(beforeRot);
         obj.scale.copyFrom(beforeScale);
         obj.updateMatrixWorld();
         this._trashBin.add(group);
-        this._hierarchyDirty = true;
         this.selectObject(obj);
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      discard: () => this._disposeTrashedObject(group),
-    });
+      () => this._disposeTrashedObject(group),
+    );
   }
 
   /** Wraps several selected objects (possibly with different original parents) together under
@@ -1048,9 +1040,9 @@ export class MakerApp extends SmallWorldMachine {
     const group = new Object3D("Group");
     group.position.copyFrom(centroid);
 
-    this._undo.execute({
-      label: `Group ${objs.length} objects`,
-      redo: () => {
+    this._commit(
+      `Group ${objs.length} objects`,
+      () => {
         this.scene.add(group);
         group.updateMatrixWorld(); // see the comment in _groupSingle()'s redo -- same reason.
         objs.forEach((obj, i) => {
@@ -1058,23 +1050,19 @@ export class MakerApp extends SmallWorldMachine {
           obj.position.copyFrom(worldPositions[i]!.clone().sub(centroid));
           obj.updateMatrixWorld();
         });
-        this._hierarchyDirty = true;
         this.selectObject(group);
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      undo: () => {
+      () => {
         for (const s of snapshots) {
           s.parent.add(s.obj);
           s.obj.position.copyFrom(s.position);
           s.obj.updateMatrixWorld();
         }
         this._trashBin.add(group);
-        this._hierarchyDirty = true;
         this._selectMultiple(objs);
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      discard: () => this._disposeTrashedObject(group),
-    });
+      () => this._disposeTrashedObject(group),
+    );
   }
 
   public attachBehaviorToSelection(factory: () => Behavior): void {
@@ -1087,58 +1075,46 @@ export class MakerApp extends SmallWorldMachine {
       attached.set(obj, factory());
     }
 
-    this._undo.execute({
-      label: `Attach ${behaviorName}${objs.length > 1 ? ` (${objs.length})` : ""}`,
-      redo: () => {
+    this._commit(
+      `Attach ${behaviorName}${objs.length > 1 ? ` (${objs.length})` : ""}`,
+      () => {
         for (const [obj, behavior] of attached) {
           attachBehavior(obj.behaviors, behavior, obj);
         }
-        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      undo: () => {
+      () => {
         for (const [obj, behavior] of attached) {
           detachBehavior(obj.behaviors, behavior);
         }
-        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-    });
+    );
   }
 
   public detachBehaviorFromObject(obj: Object3D, behavior: Behavior): void {
     const behaviorName = behavior.constructor.name;
-    this._undo.execute({
-      label: `Detach ${behaviorName}`,
-      redo: () => {
+    this._commit(
+      `Detach ${behaviorName}`,
+      () => {
         detachBehavior(obj.behaviors, behavior);
-        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      undo: () => {
+      () => {
         attachBehavior(obj.behaviors, behavior, obj);
-        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-    });
+    );
   }
 
   public setMaterialOnObject(obj: Object3D, newMaterial: AbstractMaterial | undefined): void {
     const oldMaterial = obj.material;
     const label = newMaterial ? `Set ${newMaterial.constructor.name}` : "Remove Material";
-    this._undo.execute({
+    this._commit(
       label,
-      redo: () => {
+      () => {
         obj.material = newMaterial;
-        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-      undo: () => {
+      () => {
         obj.material = oldMaterial;
-        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-    });
+    );
   }
 
   private _onPointerDown(event: PointerEvent): void {
@@ -1336,19 +1312,17 @@ export class MakerApp extends SmallWorldMachine {
 
       // One undo command for the whole drag, exactly like `_finishGizmoDrag()` -- nothing was
       // pushed per pointermove above, only the live (u, v) mutation itself.
-      this._undo.execute({
-        label: "Move Zone Point",
-        redo: () => {
+      this._commit(
+        "Move Zone Point",
+        () => {
           point.u = after.u;
           point.v = after.v;
-          this._project.scheduleAutosave(() => this.scene.root);
         },
-        undo: () => {
+        () => {
           point.u = before.u;
           point.v = before.v;
-          this._project.scheduleAutosave(() => this.scene.root);
         },
-      });
+      );
       return;
     }
 
@@ -1598,133 +1572,81 @@ export class MakerApp extends SmallWorldMachine {
     return isEditingTextInput(target) || isEditingTextInput();
   }
 
+  /** Executes an undoable scene-edit command and runs the shared post-apply
+   * follow-up (`_hierarchyDirty`, property selection, autosave) exactly once per
+   * (re-)application. The ordering contract lives in `MakerUndoCore`; this thin
+   * wrapper keeps every call site on the named helper. */
+  private _commit(label: string, redo: () => void, undo: () => void, discard?: () => void): void {
+    this._commitRunner.commit(label, redo, undo, discard);
+  }
+
+  /** Snapshots `objs` for one undo step, runs `apply` once to reach the target
+   * state, then commits a single redo/undo pair (restoring the captured state)
+   * with the transform-style follow-up (gizmo sync + selection + autosave). */
+  private _snapshotCommand<T, O extends Object3D>(
+    objs: O[],
+    read: (obj: O) => T,
+    write: (obj: O, value: T) => void,
+    label: string,
+    apply: () => void,
+  ): void {
+    this._snapshotRunner.snapshotCommand(objs, read, write, label, apply);
+  }
+
+  /** Editor operations the keymap table drives — built lazily (only after
+   * `setupScene` has wired the panels/tools) and cached for the session. */
+  private _keyContext: MakerKeyContext | undefined;
+  private _getKeyContext(): MakerKeyContext {
+    if (this._keyContext) return this._keyContext;
+    const ctx: MakerKeyContext = {
+      isEditingField: (): boolean => this._isEditingField(),
+      isDecalStampActive: (): boolean => this._decalStamp.isActive,
+      isDrawingZone: (): boolean => this._importTools.isDrawingZone,
+      selectionSize: (): number => this._selection.size,
+      hasPrimary: (): boolean => this._primary !== undefined,
+      undo: (): void => this._undo.undo(),
+      redo: (): void => this._undo.redo(),
+      refreshSelectionAndHierarchy: (): void => {
+        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
+        this._hierarchyDirty = true;
+      },
+      decalHandleKeyDown: (event): boolean =>
+        // `MakerKeyEvent` is a structural subset of `KeyboardEvent`; the real
+        // event flows straight through and only needs a cast for the tool's type.
+        this._decalStamp.handleKeyDown(event as KeyboardEvent),
+      decalDisable: (): void => this._decalStamp.disable(),
+      zoneCancel: (): void => this._importTools.cancel(),
+      zoneFinish: (): void => this._importTools.finish(),
+      zoneToggle: (): void => this._importTools.toggle(),
+      deleteSelection: (): void => this.deleteSelection(),
+      startRenamingPrimary: (): void => {
+        if (this._primary) this._hierarchyPanel.startRenaming(this._primary);
+      },
+      focusSearch: (): void => this._hierarchyPanel.focusSearch(),
+      duplicateSelection: (): void => this.duplicateSelection(),
+      groupSelection: (): void => this.groupSelection(),
+      toggleSnap: (): void => {
+        this._toolbars.toggleSnap();
+      },
+      saveCameraBookmark: (slot): void => this._toolbars.saveCameraBookmark(slot),
+      jumpToCameraBookmark: (slot): void => this._toolbars.jumpToCameraBookmark(slot),
+      setGizmoMode: (mode): void => this._toolbars.setGizmoMode(mode),
+      stepGrid: (dir): void => {
+        this._toolbars.stepGrid(dir);
+      },
+      snapSelectionToGround: (): void => this.snapSelectionToGround(),
+      nudgeSelection: (key, isShift, isAlt): void => this.nudgeSelection(key, isShift, isAlt),
+    };
+    this._keyContext = ctx;
+    return ctx;
+  }
+
+  /** Resolves every keyboard shortcut through the `MAKER_KEYMAP` table (ordered,
+   * precedence explicit) instead of a hand-maintained if-chain. The table's
+   * guards (editing fields, selection state, decal stamp pass-through) are the
+   * exact ones the historical if-chain applied — see `MakerKeymap.ts`. */
   private _onMakerKeyDown(event: KeyboardEvent): void {
-    if ((event.ctrlKey || event.metaKey) && "z" === event.key.toLowerCase()) {
-      if (this._isEditingField(event.target)) return;
-      event.preventDefault();
-      if (event.shiftKey) this._undo.redo();
-      else this._undo.undo();
-      this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-      this._hierarchyDirty = true;
-      return;
-    }
-    if (this._decalStamp.isActive || "d" === event.key.toLowerCase()) {
-      if (this._isEditingField(event.target)) return;
-      if (this._importTools.isDrawingZone) this._importTools.cancel();
-      // Plain `D` toggles stamp mode; while it is on, R/arrows/Esc belong to the stamp, not to
-      // the Scale gizmo or selection nudging.
-      if (this._decalStamp.handleKeyDown(event)) return;
-    }
-    if (this._importTools.isDrawingZone) {
-      if ("Escape" === event.key) {
-        event.preventDefault();
-        this._importTools.cancel();
-        return;
-      }
-      if ("Enter" === event.key) {
-        event.preventDefault();
-        this._importTools.finish();
-        return;
-      }
-    }
-
-    if ("z" === event.key.toLowerCase() && !event.ctrlKey && !event.metaKey && !event.altKey) {
-      if (this._isEditingField()) return;
-      event.preventDefault();
-      this._decalStamp.disable();
-      this._importTools.toggle();
-      return;
-    }
-
-    if ("Delete" === event.key || "Backspace" === event.key) {
-      // Don't hijack Backspace while the user is typing into a text field.
-      if (this._isEditingField()) return;
-      if (0 < this._selection.size) {
-        event.preventDefault();
-        this.deleteSelection();
-      }
-      return;
-    }
-
-    if ("F2" === event.key) {
-      if (this._isEditingField()) return;
-      if (this._primary) {
-        event.preventDefault();
-        this._hierarchyPanel.startRenaming(this._primary);
-        return;
-      }
-    }
-
-    const key = event.key.toLowerCase();
-    if ((event.ctrlKey || event.metaKey) && "f" === key) {
-      if (this._isEditingField()) return;
-      event.preventDefault();
-      this._hierarchyPanel.focusSearch();
-      return;
-    }
-
-    if ((event.ctrlKey || event.metaKey) && ("d" === key || "g" === key)) {
-      if (this._isEditingField()) return;
-      if (0 === this._selection.size) return;
-      event.preventDefault();
-      if ("d" === key) this.duplicateSelection();
-      else this.groupSelection();
-      return;
-    }
-
-    if ("x" === key) {
-      if (this._isEditingField()) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      this._toolbars.toggleSnap();
-      return;
-    }
-
-    const slot = Number(event.key);
-    if (Number.isInteger(slot) && slot >= 1 && slot <= 9) {
-      if (this._isEditingField()) return;
-      if (event.altKey) return;
-      event.preventDefault();
-      if (event.ctrlKey || event.metaKey) this._toolbars.saveCameraBookmark(slot);
-      else this._toolbars.jumpToCameraBookmark(slot);
-      return;
-    }
-
-    if ("w" === key || "e" === key || "r" === key) {
-      if (this._isEditingField()) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      this._toolbars.setGizmoMode("w" === key ? "translate" : "e" === key ? "rotate" : "scale");
-      return;
-    }
-
-    if ("[" === event.key || "]" === event.key) {
-      if (this._isEditingField()) return;
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      event.preventDefault();
-      this._toolbars.stepGrid("[" === event.key ? -1 : 1);
-      return;
-    }
-
-    if ("End" === event.key) {
-      if (this._isEditingField()) return;
-      if (0 === this._selection.size) return;
-      event.preventDefault();
-      this.snapSelectionToGround();
-      return;
-    }
-
-    if (
-      "ArrowLeft" === event.key ||
-      "ArrowRight" === event.key ||
-      "ArrowUp" === event.key ||
-      "ArrowDown" === event.key ||
-      "PageUp" === event.key ||
-      "PageDown" === event.key
-    ) {
-      if (this._isEditingField()) return;
-      if (0 === this._selection.size) return;
-      event.preventDefault();
-      this.nudgeSelection(event.key, event.shiftKey, event.altKey);
-    }
+    dispatchMakerKey(event, this._getKeyContext());
   }
 
   /** Snaps selected object(s) so their lowest bounding-box point aligns exactly with the ground (Y = 0). */
@@ -1747,37 +1669,24 @@ export class MakerApp extends SmallWorldMachine {
     const dy = -minY;
     if (Math.abs(dy) < 0.0001) return;
 
-    const before = objs.map((obj) => ({ obj, pos: obj.position.clone() }));
-    const after = objs.map((obj) => {
-      const nextPos = obj.position.clone();
-      nextPos.y += dy;
-      if (this._gizmo.snap.enabled) {
-        nextPos.y = this._gizmo.snapValue("translate", nextPos.y);
-      }
-      return { obj, pos: nextPos };
-    });
-
-    this._undo.execute({
-      label: `Snap ${objs.length} object${objs.length > 1 ? "s" : ""} to Ground`,
-      redo: () => {
-        for (const { obj, pos } of after) {
-          obj.position.copyFrom(pos);
-          obj.updateMatrixWorld();
-        }
-        this._updateGizmo();
-        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        this._project.scheduleAutosave(() => this.scene.root);
+    this._snapshotCommand(
+      objs,
+      (obj) => obj.position.clone(),
+      (obj, pos) => {
+        obj.position.copyFrom(pos);
       },
-      undo: () => {
-        for (const { obj, pos } of before) {
-          obj.position.copyFrom(pos);
-          obj.updateMatrixWorld();
+      `Snap ${objs.length} object${objs.length > 1 ? "s" : ""} to Ground`,
+      () => {
+        for (const obj of objs) {
+          const nextPos = obj.position.clone();
+          nextPos.y += dy;
+          if (this._gizmo.snap.enabled) {
+            nextPos.y = this._gizmo.snapValue("translate", nextPos.y);
+          }
+          obj.position.copyFrom(nextPos);
         }
-        this._updateGizmo();
-        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-    });
+    );
   }
 
   /** Nudges selected object(s) along X/Y/Z axes via arrow keys according to active Gizmo mode (Move/Rotate/Scale) or Alt modifiers. */
@@ -1805,41 +1714,28 @@ export class MakerApp extends SmallWorldMachine {
 
       if (0 === rx && 0 === ry && 0 === rz) return;
 
-      const before = objs.map((obj) => ({ obj, rot: obj.rotation.clone() }));
-      const after = objs.map((obj) => {
-        const nextRot = obj.rotation.clone();
-        nextRot.x += rx;
-        nextRot.y += ry;
-        nextRot.z += rz;
-        if (this._gizmo.snap.enabled) {
-          nextRot.x = this._gizmo.snapValue("rotate", nextRot.x);
-          nextRot.y = this._gizmo.snapValue("rotate", nextRot.y);
-          nextRot.z = this._gizmo.snapValue("rotate", nextRot.z);
-        }
-        return { obj, rot: nextRot };
-      });
-
-      this._undo.execute({
-        label: `Rotate ${objs.length} object${objs.length > 1 ? "s" : ""}`,
-        redo: () => {
-          for (const { obj, rot } of after) {
-            obj.rotation.copyFrom(rot);
-            obj.updateMatrixWorld();
-          }
-          this._updateGizmo();
-          this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-          this._project.scheduleAutosave(() => this.scene.root);
+      this._snapshotCommand(
+        objs,
+        (obj) => obj.rotation.clone(),
+        (obj, rot) => {
+          obj.rotation.copyFrom(rot);
         },
-        undo: () => {
-          for (const { obj, rot } of before) {
-            obj.rotation.copyFrom(rot);
-            obj.updateMatrixWorld();
+        `Rotate ${objs.length} object${objs.length > 1 ? "s" : ""}`,
+        () => {
+          for (const obj of objs) {
+            const nextRot = obj.rotation.clone();
+            nextRot.x += rx;
+            nextRot.y += ry;
+            nextRot.z += rz;
+            if (this._gizmo.snap.enabled) {
+              nextRot.x = this._gizmo.snapValue("rotate", nextRot.x);
+              nextRot.y = this._gizmo.snapValue("rotate", nextRot.y);
+              nextRot.z = this._gizmo.snapValue("rotate", nextRot.z);
+            }
+            obj.rotation.copyFrom(nextRot);
           }
-          this._updateGizmo();
-          this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-          this._project.scheduleAutosave(() => this.scene.root);
         },
-      });
+      );
       return;
     }
 
@@ -1860,41 +1756,28 @@ export class MakerApp extends SmallWorldMachine {
 
       if (0 === sx && 0 === sy && 0 === sz) return;
 
-      const before = objs.map((obj) => ({ obj, scale: obj.scale.clone() }));
-      const after = objs.map((obj) => {
-        const nextScale = obj.scale.clone();
-        nextScale.x = Math.max(0.01, nextScale.x + sx);
-        nextScale.y = Math.max(0.01, nextScale.y + sy);
-        nextScale.z = Math.max(0.01, nextScale.z + sz);
-        if (this._gizmo.snap.enabled) {
-          nextScale.x = this._gizmo.snapValue("scale", nextScale.x);
-          nextScale.y = this._gizmo.snapValue("scale", nextScale.y);
-          nextScale.z = this._gizmo.snapValue("scale", nextScale.z);
-        }
-        return { obj, scale: nextScale };
-      });
-
-      this._undo.execute({
-        label: `Scale ${objs.length} object${objs.length > 1 ? "s" : ""}`,
-        redo: () => {
-          for (const { obj, scale } of after) {
-            obj.scale.copyFrom(scale);
-            obj.updateMatrixWorld();
-          }
-          this._updateGizmo();
-          this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-          this._project.scheduleAutosave(() => this.scene.root);
+      this._snapshotCommand(
+        objs,
+        (obj) => obj.scale.clone(),
+        (obj, scale) => {
+          obj.scale.copyFrom(scale);
         },
-        undo: () => {
-          for (const { obj, scale } of before) {
-            obj.scale.copyFrom(scale);
-            obj.updateMatrixWorld();
+        `Scale ${objs.length} object${objs.length > 1 ? "s" : ""}`,
+        () => {
+          for (const obj of objs) {
+            const nextScale = obj.scale.clone();
+            nextScale.x = Math.max(0.01, nextScale.x + sx);
+            nextScale.y = Math.max(0.01, nextScale.y + sy);
+            nextScale.z = Math.max(0.01, nextScale.z + sz);
+            if (this._gizmo.snap.enabled) {
+              nextScale.x = this._gizmo.snapValue("scale", nextScale.x);
+              nextScale.y = this._gizmo.snapValue("scale", nextScale.y);
+              nextScale.z = this._gizmo.snapValue("scale", nextScale.z);
+            }
+            obj.scale.copyFrom(nextScale);
           }
-          this._updateGizmo();
-          this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-          this._project.scheduleAutosave(() => this.scene.root);
         },
-      });
+      );
       return;
     }
 
@@ -1946,41 +1829,28 @@ export class MakerApp extends SmallWorldMachine {
 
     if (0 === dx && 0 === dy && 0 === dz) return;
 
-    const before = objs.map((obj) => ({ obj, pos: obj.position.clone() }));
-    const after = objs.map((obj) => {
-      const nextPos = obj.position.clone();
-      nextPos.x += dx;
-      nextPos.y += dy;
-      nextPos.z += dz;
-      if (this._gizmo.snap.enabled) {
-        nextPos.x = this._gizmo.snapValue("translate", nextPos.x);
-        nextPos.y = this._gizmo.snapValue("translate", nextPos.y);
-        nextPos.z = this._gizmo.snapValue("translate", nextPos.z);
-      }
-      return { obj, pos: nextPos };
-    });
-
-    this._undo.execute({
-      label: `Move ${objs.length} object${objs.length > 1 ? "s" : ""}`,
-      redo: () => {
-        for (const { obj, pos } of after) {
-          obj.position.copyFrom(pos);
-          obj.updateMatrixWorld();
-        }
-        this._updateGizmo();
-        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        this._project.scheduleAutosave(() => this.scene.root);
+    this._snapshotCommand(
+      objs,
+      (obj) => obj.position.clone(),
+      (obj, pos) => {
+        obj.position.copyFrom(pos);
       },
-      undo: () => {
-        for (const { obj, pos } of before) {
-          obj.position.copyFrom(pos);
-          obj.updateMatrixWorld();
+      `Move ${objs.length} object${objs.length > 1 ? "s" : ""}`,
+      () => {
+        for (const obj of objs) {
+          const nextPos = obj.position.clone();
+          nextPos.x += dx;
+          nextPos.y += dy;
+          nextPos.z += dz;
+          if (this._gizmo.snap.enabled) {
+            nextPos.x = this._gizmo.snapValue("translate", nextPos.x);
+            nextPos.y = this._gizmo.snapValue("translate", nextPos.y);
+            nextPos.z = this._gizmo.snapValue("translate", nextPos.z);
+          }
+          obj.position.copyFrom(nextPos);
         }
-        this._updateGizmo();
-        this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-        this._project.scheduleAutosave(() => this.scene.root);
       },
-    });
+    );
   }
 
   public override destroy(): void {

@@ -18,6 +18,7 @@ import {
   assertPropMeta,
   type KitManifest,
   type KitManifestItem,
+  type KitTextureItem,
   type KitDecalItem,
   type LevelDecalPlacement,
   type PropMeta,
@@ -26,6 +27,7 @@ import {
   type LevelDescriptor,
   type LevelInstance,
 } from "./KitTypes.js";
+import { pickKitTextureMap, type TextureMapSlot } from "./TextureSlotMatcher.js";
 
 export * from "./KitTypes.js";
 
@@ -39,6 +41,23 @@ export interface KitRegistryOptions {
   /** Injected custom fetch function (e.g. for virtual tool I/O schemes like sw-asset:// or ZIP sources). */
   customFetch?: (url: string, init?: RequestInit) => Promise<Response>;
 }
+
+/** The loaded PBR texture channels of a kit texture item (all optional). */
+export interface KitTextureMapSet {
+  albedo?: Texture;
+  normal?: Texture;
+  roughness?: Texture;
+  ao?: Texture;
+  metalness?: Texture;
+}
+
+const TEXTURE_MAP_SLOTS: readonly TextureMapSlot[] = [
+  "albedo",
+  "normal",
+  "roughness",
+  "ao",
+  "metalness",
+];
 
 /**
  * Manages modular asset kits, manifest resolution, meta.json parsing, socket light mounting,
@@ -99,6 +118,39 @@ export class KitRegistry {
 
     this._manifestCache.set(kitId, promise);
     return promise;
+  }
+
+  /**
+   * Resolves a kit texture item's maps into loaded textures (`albedo`, `normal`,
+   * `roughness`, `ao`, `metalness`). Filenames are matched by exact token (never
+   * a bare substring -- `m_albedo.png` is albedo, `ao` inside `saos` is nothing)
+   * and every found channel is loaded in parallel via `Promise.all`. Channels are
+   * loaded through this registry's own `AssetManager`; a failing map load rejects
+   * the whole resolution (fail fast). The map URLs derive from the item id the
+   * same way every kit texture directory is laid out (`kits/<kit>/textures/<slug>/`).
+   */
+  public async resolveTextureMaps(
+    kitId: string,
+    item: Pick<KitTextureItem, "id" | "maps">,
+  ): Promise<KitTextureMapSet> {
+    const slug = item.id.includes("/") ? item.id.split("/").pop()! : item.id;
+    const base = `${this._basePath}${kitId}/textures/${slug}`;
+    const options = { assetManager: this._assetManager };
+    const slots = TEXTURE_MAP_SLOTS.map((slot) => ({
+      slot,
+      file: pickKitTextureMap(item.maps, slot),
+    })).filter(
+      (entry): entry is { slot: TextureMapSlot; file: string } => entry.file !== undefined,
+    );
+    const loaded = await Promise.all(
+      slots.map(async ({ slot, file }) => ({
+        slot,
+        texture: await Texture.fromUrl(`${base}/${file}`, options),
+      })),
+    );
+    const result: KitTextureMapSet = {};
+    for (const { slot, texture } of loaded) result[slot] = texture;
+    return result;
   }
 
   /**
