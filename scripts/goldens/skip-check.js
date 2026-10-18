@@ -21,6 +21,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const DEFAULT_BASELINE = ".agents/goldens/liquid/baseline";
 
@@ -112,6 +113,43 @@ function isBuildInput(rel) {
   return false;
 }
 
+/**
+ * Reine Entscheidungslogik des Diff-Gates (ohne Git testbar).
+ *
+ * Sicherheitsrichtung: SKIP nur, wenn es beweisbar nichts Output-Relevantes gibt.
+ * Shallow-Repos (fetch-depth 1, CI-Default) lösen den Baseline-Commit nicht korrekt auf:
+ * `git log -- <baseline-pfad>` meldet dann fälschlich HEAD als einzigen relevanten Commit, also
+ * `baselineCommit === head` mit leerem Diff -> falsches Grün trotz geänderter Shader (so beim
+ * ersten realen CI-Lauf 2026-10-18 beobachtet). In dem Fall wird gerendert (RUN).
+ *
+ * @param {{ baselineCommit: string, head: string, shallow: boolean, changed: string[] }} input
+ * @returns {{ shouldRun: boolean, reason: string }}
+ */
+export function decide({ baselineCommit, head, shallow, changed }) {
+  if (!baselineCommit) {
+    return { shouldRun: true, reason: "baseline ist nicht im Repo getrackt / Commit nicht auflösbar" };
+  }
+  if (shallow && baselineCommit === head) {
+    return {
+      shouldRun: true,
+      reason: `shallow checkout: Baseline '${baselineCommit.slice(0, 8)}' ist nicht von HEAD unterscheidbar — Historie unvollständig, es wird gerendert`,
+    };
+  }
+  const offending = changed.filter(isBuildInput);
+  if (offending.length > 0) {
+    const sample = offending.slice(0, 5).join(", ");
+    const more = offending.length > 5 ? ` (+${offending.length - 5})` : "";
+    return {
+      shouldRun: true,
+      reason: `${offending.length} Build-Input-Änderung(en) seit Baseline ${baselineCommit.slice(0, 8)}: ${sample}${more}`,
+    };
+  }
+  return {
+    shouldRun: false,
+    reason: `seit Baseline ${baselineCommit.slice(0, 8)} keine Build-Input-Änderung (${changed.length} geänderte Pfade außerhalb des Build-Input)`,
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const exit = (shouldRun, reason) => {
@@ -129,24 +167,15 @@ async function main() {
   const baselineRel = path.relative(repoRoot, baselineAbs);
   const log = git(repoRoot, ["log", "-1", "--format=%H", "--", baselineRel]);
   const baselineCommit = log.ok ? log.stdout : "";
-  if (!baselineCommit) {
-    return exit(true, `baseline '${baselineRel}' ist nicht im Repo getrackt (kein Commit gefunden)`);
-  }
+  const head = git(repoRoot, ["rev-parse", "HEAD"]).stdout;
+  const shallowFlag = git(repoRoot, ["rev-parse", "--is-shallow-repository"]).stdout;
+  const shallow = shallowFlag === "true";
 
-  const changed = changedPaths(repoRoot, baselineCommit);
-  const offending = changed.filter(isBuildInput);
-  if (offending.length > 0) {
-    const sample = offending.slice(0, 5).join(", ");
-    const more = offending.length > 5 ? ` (+${offending.length - 5})` : "";
-    return exit(
-      true,
-      `${offending.length} Build-Input-Änderung(en) seit Baseline ${baselineCommit.slice(0, 8)}: ${sample}${more}`,
-    );
-  }
-  return exit(
-    false,
-    `seit Baseline ${baselineCommit.slice(0, 8)} keine Build-Input-Änderung (${changed.length} geänderte Pfade außerhalb des Build-Input)`,
-  );
+  const changed = baselineCommit ? changedPaths(repoRoot, baselineCommit) : [];
+  const { shouldRun, reason } = decide({ baselineCommit, head, shallow, changed });
+  exit(shouldRun, reason);
 }
 
-main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}

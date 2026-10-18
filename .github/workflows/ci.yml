@@ -174,9 +174,13 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     steps:
+      # fetch-depth: 0 ist hier Pflicht (nicht nur Komfort): das Diff-Gate (skip-check.js) löst den
+      # Baseline-Commit über die Historie auf. Ein Shallow-Clone (Default depth 1) lässt `git log`
+      # fälschlich HEAD als Baseline melden -> Diff leer -> falsches Grün trotz geänderter Shader.
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           lfs: true
 
       - name: Setup Node
