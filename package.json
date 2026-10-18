@@ -45,6 +45,7 @@
     "webgpu:resize-stress": "node scripts/webgpu-resize-stress.js",
     "goldens:capture": "node scripts/goldens/capture.js",
     "goldens:compare": "node scripts/goldens/compare.js",
+    "goldens:skip": "node scripts/goldens/skip-check.js",
     "goldens:grade": "node scripts/goldens/differential-grader.js",
     "worktree:new": "node scripts/worktree-new.mjs",
     "aniso:compare": "node scripts/aniso-compare.mjs",

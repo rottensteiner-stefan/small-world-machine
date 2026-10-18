@@ -98,6 +98,11 @@ wurden: im selben Commit wie die Änderung, mit der neuen Browser-Version im `su
   - `--current` ist Pflicht. Baseline-Zellen, die im Current fehlen, sind ein technischer Fehler (`--pool` schränkt die Prüfung auf einen Pool ein).
   - Vergleicht jede Zelle per `pixelmatch`, `diffRatio` = abweichende Pixel / Gesamtpixel.
   - Exit **0** = alles ok, **1** = technischer Fehler (Bild fehlt/unlesbar/blank), **2** = Drift-Verletzung.
+- `goldens:skip [--baseline <dir>] [--emit-status]`
+  - Diff-Gate (Goldens-Optimierung M1): beendet **ohne Build und ohne Browser**, ob ein Capture/Compare-Lauf nötig ist. Nur `git`-Kommandozeile, keine Abhängigkeiten.
+  - Exit **0** = SKIP (kein Build-Input von Showcase 10 seit dem Baseline-Commit geändert), **1** = RUN.
+  - Fehlerrichtung konservativ: nur skippen, wenn es beweisbar nichts Output-Relevantes gibt — ein SKIP ist nie falsch-grün. Pfade, die die Canvas-Pixel nicht beeinflussen (docs/, .agents/, andere Apps, public/), erzwingen keinen Lauf.
+  - Der CI-Job `liquid-goldens` gated damit `npm ci`/Build/Capture/Compare (s. ci.yml); `--emit-status` schreibt `should_run=true|false` in `$GITHUB_OUTPUT`.
 
 ## Konfiguration
 

@@ -17,10 +17,6 @@ on:
         description: 'Showcase smoke test: WebGL1/WebGL2, 4 shards'
         type: boolean
         default: true
-      gpu-goldens:
-        description: 'Also capture the informational WebGPU goldens (always fails on the GPU-less runner)'
-        type: boolean
-        default: false
       capture:
         description: 'Capture-mode determinism: Showcases 39 + 28, WebGL1/WebGL2, two fresh loads compared'
         type: boolean
@@ -189,18 +185,30 @@ jobs:
           node-version: 'lts/*'
           cache: npm
 
+      # Diff-Gate (goldens-optimization M1): SKIP wenn seit dem Baseline-Commit kein Build-Input
+      # von Showcase 10 geändert wurde. Läuft ohne node_modules (keine Abhängigkeiten) und beendet
+      # den Job in wenigen Sekunden grün statt npm ci + Build + Capture (~25 min) zu verbrennen.
+      # Fehlerrichtung konservativ: nur skippen, wenn es beweisbar nichts Output-Relevantes gibt.
+      - name: Skip gate when nothing output-relevant changed
+        id: skip
+        run: node scripts/goldens/skip-check.js --emit-status
+        shell: bash
+
       - name: Install dependencies
+        if: steps.skip.outputs.should_run == 'true'
         run: npm ci
 
       - name: Cache mkcert (certificate tool of `vite preview`)
         # Without the cache every fresh runner downloads mkcert from GitHub at server start; with many jobs
         # starting at once that request occasionally fails (ECONNRESET) and the preview server never comes up.
         uses: actions/cache@v4
+        if: steps.skip.outputs.should_run == 'true'
         with:
           path: ~/.vite-plugin-mkcert
           key: mkcert-${{ runner.os }}-v1
 
       - name: Build
+        if: steps.skip.outputs.should_run == 'true'
         run: npm run build
 
       # Capture this shard of the authoritative GL2 matrix (16 pools x 2 views = 32 deterministic
@@ -209,67 +217,26 @@ jobs:
       # fixed-step, a rescue option is to re-run only that pool via a single
       # `--pool <key>` retry -- deliberately NOT implemented here (keep it minimal).
       - name: Capture Liquid GL2 goldens
+        if: steps.skip.outputs.should_run == 'true'
         run: npm run goldens:capture -- --matrix gl2 --shard ${{ matrix.shard }}/4 --out "${{ runner.temp }}/liquid-goldens/current"
 
       # Compare against the committed baseline. No continue-on-error: any cell above
       # the drift threshold, or a technical/blank error, fails the build.
       - name: Compare Liquid GL2 goldens against baseline
+        if: steps.skip.outputs.should_run == 'true'
         run: npm run goldens:compare -- --baseline .agents/goldens/liquid/baseline --current "${{ runner.temp }}/liquid-goldens/current" --shard ${{ matrix.shard }}/4
+
+      # A skipped run is green by construction: deterministic pixels are byte-identical to the
+      # committed baseline when no build input changed, so there is nothing to archive.
+      - name: Gate skipped - nothing output-relevant changed
+        if: steps.skip.outputs.should_run == 'false'
+        run: echo "SKIPPED - no output-relevant change since the baseline commit; gate green without a capture."
 
       # Diagnostic artifact (current captures + manifest/summary), kept even on failure.
       - name: Upload Liquid goldens diagnostic artifacts
         uses: actions/upload-artifact@v4
-        if: always()
+        if: steps.skip.outputs.should_run == 'true'
         with:
           name: liquid-goldens-${{ matrix.shard }}
           path: ${{ runner.temp }}/liquid-goldens
-          if-no-files-found: warn
-
-  # Informational only: WebGPU software-rendering (SwiftShader) is environment-flaky,
-  # so GPU goldens never block merges. No GPU baseline is committed or compared here --
-  # we only capture, log a summary and upload as diagnostics.
-  liquid-goldens-gpu:
-    if: github.event_name == 'workflow_dispatch' && inputs.gpu-goldens
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          lfs: true
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 'lts/*'
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Cache mkcert (certificate tool of `vite preview`)
-        # Without the cache every fresh runner downloads mkcert from GitHub at server start; with many jobs
-        # starting at once that request occasionally fails (ECONNRESET) and the preview server never comes up.
-        uses: actions/cache@v4
-        with:
-          path: ~/.vite-plugin-mkcert
-          key: mkcert-${{ runner.os }}-v1
-
-      - name: Build
-        run: npm run build
-
-      - name: Capture Liquid WebGPU goldens (informational)
-        run: npm run goldens:capture -- --matrix gpu --out "${{ runner.temp }}/liquid-goldens-gpu/current"
-
-      - name: Log capture summary
-        shell: bash
-        run: cat "${{ runner.temp }}/liquid-goldens-gpu/current/summary.json"
-
-      - name: Upload Liquid GPU goldens diagnostic artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: liquid-goldens-gpu
-          path: ${{ runner.temp }}/liquid-goldens-gpu
           if-no-files-found: warn
