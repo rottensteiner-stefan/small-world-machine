@@ -4,7 +4,6 @@ import { PointAttractorAffector } from "./affectors/PointAttractorAffector.js";
 import { PlanarSpringAffector } from "./affectors/PlanarSpringAffector.js";
 import { ThermalCoolingAffector } from "./affectors/ThermalCoolingAffector.js";
 import { FadeOutZoneAffector } from "./affectors/FadeOutZoneAffector.js";
-import type { Particle } from "./Particle.js";
 
 export interface AccretionDiskOptions {
   /** Total number of particles in the disk. Defaults to 400. */
@@ -90,8 +89,8 @@ export class AccretionDiskEmitter {
     this.system = new ParticleSystem({
       capacity: count,
       affectors: [this.attractor, this.planarSpring, this.thermal, this.fadeOut],
-      onParticleDied: (particle: Particle): void => {
-        this.respawnParticle(particle);
+      onParticleDied: (index: number): void => {
+        this.respawnParticle(index);
       },
     });
 
@@ -113,7 +112,6 @@ export class AccretionDiskEmitter {
       const velZ = Math.cos(angle) * orbitalSpeed;
 
       const baseHeat = Math.max(0, 10.0 - r);
-
       this.system.emit({
         position: new Vector3D(posX, y, posZ),
         velocity: new Vector3D(velX, (Math.random() - 0.5) * 0.2, velZ),
@@ -123,25 +121,28 @@ export class AccretionDiskEmitter {
     }
   }
 
-  public respawnParticle(particle: Particle): void {
+  public respawnParticle(index: number): void {
     const angle = Math.random() * Math.PI * 2;
     const r = this.outerRadius;
     const y = this.center.y + (Math.random() - 0.5) * this.diskThickness;
 
-    const posX = this.center.x + Math.cos(angle) * r;
-    const posZ = this.center.z + Math.sin(angle) * r;
+    const arrays = this.system.arrays;
+    const o = index * 3;
+    arrays.positions[o] = this.center.x + Math.cos(angle) * r;
+    arrays.positions[o + 1] = y;
+    arrays.positions[o + 2] = this.center.z + Math.sin(angle) * r;
 
     const orbitalSpeed = Math.sqrt(this.mass / r) * this.driftFactor;
-    const velX = -Math.sin(angle) * orbitalSpeed;
-    const velZ = Math.cos(angle) * orbitalSpeed;
+    arrays.velocities[o] = -Math.sin(angle) * orbitalSpeed;
+    arrays.velocities[o + 1] = 0;
+    arrays.velocities[o + 2] = Math.cos(angle) * orbitalSpeed;
 
-    particle.reset({
-      position: new Vector3D(posX, y, posZ),
-      velocity: new Vector3D(velX, 0, velZ),
-      heat: 2.0,
-      size: 0.1,
-      alpha: 1.0,
-    });
+    arrays.heats[index] = 2.0;
+    arrays.sizes[index] = 0.1;
+    arrays.alphas[index] = 1.0;
+    arrays.lives[index] = 0;
+    arrays.maxLives[index] = Infinity;
+    arrays.aliveFlags[index] = 1;
   }
 
   public update(dt: number): void {

@@ -1182,6 +1182,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     if (this._quality.normalBuffer) shaderFlags.push(NORMAL_OUTPUT_FLAG);
 
+    // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
+    // semantics (texture-array index) stay untouched for other meshes: only an instanced mesh
+    // explicitly requesting it gets the `USE_INSTANCE_COLOR` variant compiled in.
+    if (isInst && objects[0] instanceof InstancedMesh && objects[0].useInstanceDataAsColor) {
+      shaderFlags.push("USE_INSTANCE_COLOR");
+    }
+
     const cache = this._programCache.getProgram(manifest.shaderId, isInst, shaderFlags);
     const programKey = this._programCache.programCacheKey(manifest.shaderId, isInst, shaderFlags);
     this.gl.useProgram(cache.prog);

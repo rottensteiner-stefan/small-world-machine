@@ -532,10 +532,8 @@ function injectBindGroupDesc(ctx: MaskFrameContext): {
 } {
   for (const call of ctx.createBindGroup.mock.calls as [desc: unknown][]) {
     const desc = call[0] as { entries?: { binding: number; resource: unknown }[] };
-    const hasMaskArray = (desc.entries ?? []).some(
-      (e) => e.binding === 4 && Array.isArray(e.resource) && e.resource.length === 16,
-    );
-    if (hasMaskArray) return desc as { entries: { binding: number; resource: unknown }[] };
+    const hasVolumeMasks = (desc.entries ?? []).some((e) => e.binding === 4);
+    if (hasVolumeMasks) return desc as { entries: { binding: number; resource: unknown }[] };
   }
   throw new Error("No injection bind-group creation observed.");
 }
@@ -709,9 +707,9 @@ describe("VolumetricFogPassGPU mask slot binding", () => {
     );
     const identityId = (ctx.createTexture.mock.results[0]!.value as { id: number }).id;
     expect(textureId(entries.get(2)!)).toBe(identityId);
-    const maskArray = entries.get(4) as unknown[];
-    expect(maskArray).toHaveLength(16);
-    for (const view of maskArray) expect(textureId(view)).toBe(identityId);
+    for (let i = 0; i < 8; i++) {
+      expect(textureId(entries.get(4 + i)!)).toBe(identityId);
+    }
   });
 
   it("binds a per-volume mask at the volume index and identity in every other slot", () => {
@@ -728,10 +726,10 @@ describe("VolumetricFogPassGPU mask slot binding", () => {
     const identityId = results[0]!.value.id;
     const maskResult = results.find((r) => r.value.id !== identityId);
     expect(maskResult).toBeDefined();
-    const maskArray = entries.get(4) as unknown[];
-    expect(maskArray).toHaveLength(16);
-    expect(textureId(maskArray[0]!)).toBe(maskResult!.value.id);
-    for (let i = 1; i < maskArray.length; i++) expect(textureId(maskArray[i]!)).toBe(identityId);
+    expect(textureId(entries.get(4)!)).toBe(maskResult!.value.id);
+    for (let i = 1; i < 8; i++) {
+      expect(textureId(entries.get(4 + i)!)).toBe(identityId);
+    }
     // No element mask: the element slot stays on the identity placeholder.
     expect(textureId(entries.get(2)!)).toBe(identityId);
   });

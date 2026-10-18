@@ -1,5 +1,5 @@
 import { Color } from "@small-world-machine/engine";
-import type { Particle } from "../Particle.js";
+import type { ParticleArrays } from "../Particle.js";
 import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface ColorOverLifeOptions {
@@ -25,42 +25,43 @@ export class ColorOverLifeAffector implements ParticleAffector {
     this.interpolateAlpha = options.interpolateAlpha ?? true;
   }
 
-  public apply(particle: Particle, _dt: number): void {
-    if (particle.maxLife <= 0 || !isFinite(particle.maxLife)) {
+  public apply(arrays: ParticleArrays, index: number, _dt: number): void {
+    if (arrays.maxLives[index]! <= 0 || !isFinite(arrays.maxLives[index]!)) {
       return;
     }
 
-    const progress = Math.max(0, Math.min(1, particle.life / particle.maxLife));
-    particle.color.r = this.startColor.r + (this.endColor.r - this.startColor.r) * progress;
-    particle.color.g = this.startColor.g + (this.endColor.g - this.startColor.g) * progress;
-    particle.color.b = this.startColor.b + (this.endColor.b - this.startColor.b) * progress;
+    const progress = Math.max(0, Math.min(1, arrays.lives[index]! / arrays.maxLives[index]!));
+    const o4 = index * 4;
+    arrays.colors[o4] = this.startColor.r + (this.endColor.r - this.startColor.r) * progress;
+    arrays.colors[o4 + 1] = this.startColor.g + (this.endColor.g - this.startColor.g) * progress;
+    arrays.colors[o4 + 2] = this.startColor.b + (this.endColor.b - this.startColor.b) * progress;
 
     if (this.interpolateAlpha) {
-      particle.alpha = this.startColor.a + (this.endColor.a - this.startColor.a) * progress;
+      arrays.alphas[index] = this.startColor.a + (this.endColor.a - this.startColor.a) * progress;
     }
   }
 
-  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
     const startColor = this.startColor;
     const endColor = this.endColor;
     const interpolateAlpha = this.interpolateAlpha;
 
     for (let i = 0; i < count; i++) {
-      const particle = particles[i]!;
-      if (particle.dead) {
+      if (arrays.aliveFlags[i] === 0) {
         continue;
       }
-      if (particle.maxLife <= 0 || !isFinite(particle.maxLife)) {
+      if (arrays.maxLives[i]! <= 0 || !isFinite(arrays.maxLives[i]!)) {
         continue;
       }
 
-      const progress = Math.max(0, Math.min(1, particle.life / particle.maxLife));
-      particle.color.r = startColor.r + (endColor.r - startColor.r) * progress;
-      particle.color.g = startColor.g + (endColor.g - startColor.g) * progress;
-      particle.color.b = startColor.b + (endColor.b - startColor.b) * progress;
+      const progress = Math.max(0, Math.min(1, arrays.lives[i]! / arrays.maxLives[i]!));
+      const o4 = i * 4;
+      arrays.colors[o4] = startColor.r + (endColor.r - startColor.r) * progress;
+      arrays.colors[o4 + 1] = startColor.g + (endColor.g - startColor.g) * progress;
+      arrays.colors[o4 + 2] = startColor.b + (endColor.b - startColor.b) * progress;
 
       if (interpolateAlpha) {
-        particle.alpha = startColor.a + (endColor.a - startColor.a) * progress;
+        arrays.alphas[i] = startColor.a + (endColor.a - startColor.a) * progress;
       }
     }
   }

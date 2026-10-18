@@ -45,4 +45,7 @@ void main() {
     // GLSL100) -- same simplification tradeoff as dropping TBN mapping in Glass.frag.glsl100.
 
     [FOG_CALC]
+#ifdef USE_INSTANCE_COLOR
+    gl_FragColor.rgb *= v_instanceColor.rgb;
+#endif
 }

@@ -2,8 +2,13 @@
 void main() {
   vec4 texColor = texture2D(u_diffuseMap, v_uv);
   float finalAlpha = u_color.a * texColor.a;
+  vec3 albedo = u_color.rgb * texColor.rgb;
+#ifdef USE_INSTANCE_COLOR
+  albedo *= v_instanceColor.rgb;
+  finalAlpha *= v_instanceColor.a;
+#endif
   if (finalAlpha < u_extraParams.y) {
     discard;
   }
-  gl_FragColor = vec4(u_color.rgb * texColor.rgb, finalAlpha);
+  gl_FragColor = vec4(albedo, finalAlpha);
 }

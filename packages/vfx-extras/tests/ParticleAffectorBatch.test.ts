@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { Vector3D, Color } from "@small-world-machine/engine";
-import { Particle } from "../src/Particle.js";
 import { ParticleSystem } from "../src/ParticleSystem.js";
 import type { ParticleAffector } from "../src/ParticleAffector.js";
 import {
@@ -15,6 +14,15 @@ import {
   SizeOverLifeAffector,
   BouncePlaneAffector,
 } from "../src/affectors/index.js";
+import {
+  createArrays,
+  cloneArrays,
+  setState,
+  readState,
+  expectStateEqual,
+  seededState,
+  type ParticleState,
+} from "./helpers/soa.js";
 
 /* Deterministic PRNG (mulberry32) for seeded particle sets; the engine keeps mulberry32 internal
    to packages/engine/src/utils/SeededRandom.ts, so tests use a local copy. */
@@ -29,122 +37,45 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-interface ParticleState {
-  pos: [number, number, number];
-  vel: [number, number, number];
-  acc: [number, number, number];
-  col: [number, number, number, number];
-  size: number;
-  alpha: number;
-  mass: number;
-  life: number;
-  maxLife: number;
-  heat: number;
-  dead: boolean;
-}
-
-function readState(p: Particle): ParticleState {
-  return {
-    pos: [p.position.x, p.position.y, p.position.z],
-    vel: [p.velocity.x, p.velocity.y, p.velocity.z],
-    acc: [p.acceleration.x, p.acceleration.y, p.acceleration.z],
-    col: [p.color.r, p.color.g, p.color.b, p.color.a],
-    size: p.size,
-    alpha: p.alpha,
-    mass: p.mass,
-    life: p.life,
-    maxLife: p.maxLife,
-    heat: p.heat,
-    dead: p.dead,
-  };
-}
-
-/** Exact (===) field-for-field comparison: applyBatch output must equal per-particle apply output bit for bit. */
-function expectStatesEqual(a: ParticleState, b: ParticleState): void {
-  for (let k = 0; k < 3; k++) {
-    expect(a.pos[k]).toBe(b.pos[k]);
-    expect(a.vel[k]).toBe(b.vel[k]);
-    expect(a.acc[k]).toBe(b.acc[k]);
-  }
-  for (let k = 0; k < 4; k++) {
-    expect(a.col[k]).toBe(b.col[k]);
-  }
-  expect(a.size).toBe(b.size);
-  expect(a.alpha).toBe(b.alpha);
-  expect(a.mass).toBe(b.mass);
-  expect(a.life).toBe(b.life);
-  expect(a.maxLife).toBe(b.maxLife);
-  expect(a.heat).toBe(b.heat);
-  expect(a.dead).toBe(b.dead);
-}
-
-function cloneParticle(p: Particle): Particle {
-  const c = new Particle({
-    position: new Vector3D(p.position.x, p.position.y, p.position.z),
-    velocity: new Vector3D(p.velocity.x, p.velocity.y, p.velocity.z),
-    acceleration: new Vector3D(p.acceleration.x, p.acceleration.y, p.acceleration.z),
-    color: new Color(p.color.r, p.color.g, p.color.b, p.color.a),
-    size: p.size,
-    alpha: p.alpha,
-    mass: p.mass,
-    life: p.life,
-    maxLife: p.maxLife,
-    heat: p.heat,
-  });
-  c.dead = p.dead;
-  return c;
-}
-
-/** Generic seeded particle with a mostly random state that the mutate hook can override for branch coverage. */
-function seededParticle(rng: () => number): Particle {
-  return new Particle({
-    position: new Vector3D(rng() * 12 - 6, rng() * 12 - 6, rng() * 12 - 6),
-    velocity: new Vector3D(rng() * 20 - 10, rng() * 20 - 10, rng() * 20 - 10),
-    size: 0.2 + rng(),
-    alpha: rng(),
-    mass: 2 + rng() * 4,
-    life: rng() * 2,
-    maxLife: 5,
-    heat: rng() * 10,
-  });
-}
-
 /**
  * The acceptance core for the hot-path contract: with a fresh affector instance, a seeded particle
- * set is fed to applyBatch() and, independently, to per-particle apply(); every field must then be
+ * slot set is fed to applyBatch() and, independently, to per-slot apply(); every field must then be
  * bit-identical (===). `make` is called once per variant so axis/interpolation configs are covered.
  */
 function runBatchBitIdentity(
   variants: Array<{
     make: () => ParticleAffector;
     dt: number;
-    particles: (rng: () => number) => Particle[];
+    states: (rng: () => number) => ParticleState[];
   }>,
 ): void {
   for (const variant of variants) {
     const rngState = mulberry32(0xc0ffee);
     const dt = variant.dt;
-    const template = variant.particles(rngState);
-    const batchClone = template.map(cloneParticle);
-    const applyClone = template.map(cloneParticle);
+    const template = variant.states(rngState);
+    const count = template.length;
+    const batchArrays = createArrays(count);
+    for (let i = 0; i < count; i++) {
+      setState(batchArrays, i, template[i]!);
+    }
+    const applyArrays = cloneArrays(batchArrays, count);
 
     const affector = variant.make();
     expect(affector.applyBatch).toBeDefined();
     affector.beginFrame?.(dt);
 
-    affector.applyBatch!(batchClone, batchClone.length, dt);
+    affector.applyBatch!(batchArrays, count, dt);
 
-    // Reference: per-particle apply on live particles only (exactly the legacy fallback order).
-    for (let i = applyClone.length - 1; i >= 0; i--) {
-      const p = applyClone[i]!;
-      if (p.dead) {
+    // Reference: per-live-slot apply in exactly the legacy fallback (reverse-index) order.
+    for (let i = count - 1; i >= 0; i--) {
+      if (applyArrays.aliveFlags[i] === 0) {
         continue;
       }
-      affector.apply(p, dt, i, applyClone.length);
+      affector.apply(applyArrays, i, dt);
     }
 
-    for (let i = 0; i < template.length; i++) {
-      expectStatesEqual(readState(batchClone[i]!), readState(applyClone[i]!));
+    for (let i = 0; i < count; i++) {
+      expectStateEqual(readState(batchArrays, i), readState(applyArrays, i));
     }
   }
 }
@@ -155,28 +86,45 @@ describe("ParticleAffector batch API", () => {
       {
         dt: 0.016,
         make: (): ParticleAffector => new DragAffector({ drag: 2.0, quadraticDrag: 0.1 }),
-        particles: (rng: () => number): Particle[] => [
-          ...Array.from({ length: 10 }, () => seededParticle(rng)),
-          // Forced dead and zero-velocity slots.
-          new Particle({
-            position: new Vector3D(1, 0, 0),
-            velocity: new Vector3D(0.2, -0.1, 0.4),
+        states: (rng: () => number): ParticleState[] => [
+          ...Array.from({ length: 10 }, () => seededState(rng)),
+          // Forced dead slot (must stay untouched).
+          {
+            pos: [1, 0, 0],
+            vel: [0.2, -0.1, 0.4],
+            acc: [0, 0, 0],
+            col: [1, 1, 1, 1],
+            size: 1,
+            alpha: 1,
             mass: 1,
-          }),
-          new Particle({
-            position: new Vector3D(-2, 3, 1),
-            velocity: new Vector3D(0, 0, 0),
+            life: 0,
+            maxLife: Infinity,
+            heat: 0,
+            alive: false,
+          },
+          // Zero-velocity slot (still live; drag must be a no-op on it).
+          {
+            pos: [-2, 3, 1],
+            vel: [0, 0, 0],
+            acc: [0, 0, 0],
+            col: [1, 1, 1, 1],
+            size: 1,
+            alpha: 1,
             mass: 1,
-          }),
+            life: 0,
+            maxLife: Infinity,
+            heat: 0,
+            alive: true,
+          },
         ],
       },
     ]);
     // A brand-new dead particle deep in the middle of a typical velocity range must stay untouched.
-    const dead = new Particle({ velocity: new Vector3D(10, -5, 2) });
-    dead.dead = true;
-    const before = readState(dead);
-    new DragAffector({ drag: 2.0, quadraticDrag: 0.1 }).applyBatch!([dead], 1, 0.016);
-    expectStatesEqual(readState(dead), before);
+    const arrays = createArrays(1);
+    setState(arrays, 0, { vel: [10, -5, 2], alive: false });
+    const before = readState(arrays, 0);
+    new DragAffector({ drag: 2.0, quadraticDrag: 0.1 }).applyBatch!(arrays, 1, 0.016);
+    expectStateEqual(readState(arrays, 0), before);
   });
 
   it("ColorOverLife: applyBatch is bit-identical to apply (interpolateAlpha on and off)", () => {
@@ -189,15 +137,39 @@ describe("ParticleAffector batch API", () => {
             endColor: new Color(0, 0, 1, 0),
             interpolateAlpha: true,
           }),
-        particles: (rng: () => number): Particle[] => {
+        states: (rng: () => number): ParticleState[] => {
           const set = Array.from({ length: 8 }, (_, i) => {
-            const p = seededParticle(rng);
-            p.life = i / 7; // 0 .. 1
-            p.maxLife = 1;
-            return p;
+            const s = seededState(rng);
+            s.life = i / 7; // 0 .. 1
+            s.maxLife = 1;
+            return s;
           });
-          set.push(new Particle({ life: 0, maxLife: 1 }));
-          set.push(new Particle({ life: 1, maxLife: 1 }));
+          set.push({
+            pos: [0, 0, 0],
+            vel: [0, 0, 0],
+            acc: [0, 0, 0],
+            col: [1, 1, 1, 1],
+            size: 1,
+            alpha: 1,
+            mass: 1,
+            life: 0,
+            maxLife: 1,
+            heat: 0,
+            alive: true,
+          });
+          set.push({
+            pos: [0, 0, 0],
+            vel: [0, 0, 0],
+            acc: [0, 0, 0],
+            col: [1, 1, 1, 1],
+            size: 1,
+            alpha: 1,
+            mass: 1,
+            life: 1,
+            maxLife: 1,
+            heat: 0,
+            alive: true,
+          });
           return set;
         },
       },
@@ -209,8 +181,8 @@ describe("ParticleAffector batch API", () => {
             endColor: new Color(0.9, 0.1, 0.3, 0.5),
             interpolateAlpha: false,
           }),
-        particles: (rng: () => number): Particle[] =>
-          Array.from({ length: 6 }, () => seededParticle(rng)),
+        states: (rng: () => number): ParticleState[] =>
+          Array.from({ length: 6 }, () => seededState(rng)),
       },
     ]);
   });
@@ -220,15 +192,18 @@ describe("ParticleAffector batch API", () => {
       {
         dt: 0.016,
         make: (): ParticleAffector => new SizeOverLifeAffector({ startScale: 1.0, endScale: 0.2 }),
-        particles: (rng: () => number): Particle[] => {
+        states: (rng: () => number): ParticleState[] => {
           const set = Array.from({ length: 8 }, (_, i) => {
-            const p = seededParticle(rng);
-            p.life = i / 7;
-            p.maxLife = 1;
-            return p;
+            const s = seededState(rng);
+            s.life = i / 7;
+            s.maxLife = 1;
+            return s;
           });
           // maxLife=Infinity is the documented no-op branch.
-          set.push(new Particle({ life: 0.5, maxLife: Infinity }));
+          const inf = seededState(rng);
+          inf.life = 0.5;
+          inf.maxLife = Infinity;
+          set.push(inf);
           return set;
         },
       },
@@ -246,10 +221,13 @@ describe("ParticleAffector batch API", () => {
             softening: 0.5,
             plummer: true,
           }),
-        particles: (rng: () => number): Particle[] => {
-          const set = Array.from({ length: 10 }, () => seededParticle(rng));
+        states: (rng: () => number): ParticleState[] => {
+          const set = Array.from({ length: 10 }, () => seededState(rng));
           // Near-singularity particle exercising the softening denominator.
-          set.push(new Particle({ position: new Vector3D(1e-4, -2e-4, 3e-4), mass: 1 }));
+          const near = seededState(rng);
+          near.pos = [1e-4, -2e-4, 3e-4];
+          near.mass = 1;
+          set.push(near);
           return set;
         },
       },
@@ -262,8 +240,8 @@ describe("ParticleAffector batch API", () => {
             softening: 0.25,
             plummer: false,
           }),
-        particles: (rng: () => number): Particle[] =>
-          Array.from({ length: 8 }, () => seededParticle(rng)),
+        states: (rng: () => number): ParticleState[] =>
+          Array.from({ length: 8 }, () => seededState(rng)),
       },
     ]);
   });
@@ -279,19 +257,19 @@ describe("ParticleAffector batch API", () => {
             inwardSuction: 1.5,
             center: new Vector3D(0, 0, 0),
           }),
-        particles: (rng: () => number): Particle[] => {
+        states: (rng: () => number): ParticleState[] => {
           if (axis === "y") {
-            return Array.from({ length: 10 }, () => seededParticle(rng));
+            return Array.from({ length: 10 }, () => seededState(rng));
           }
           // Force radial positions around the axis so every tangential branch is hit.
           return Array.from({ length: 10 }, (_, i) => {
-            const p = seededParticle(rng);
+            const s = seededState(rng);
             if (axis === "x") {
-              p.position.set(0, Math.cos(i) * 3, Math.sin(i) * 3);
+              s.pos = [0, Math.cos(i) * 3, Math.sin(i) * 3];
             } else {
-              p.position.set(Math.cos(i) * 3, Math.sin(i) * 3, 0);
+              s.pos = [Math.cos(i) * 3, Math.sin(i) * 3, 0];
             }
-            return p;
+            return s;
           });
         },
       })),
@@ -304,14 +282,14 @@ describe("ParticleAffector batch API", () => {
         dt: 0.016,
         make: (): ParticleAffector =>
           new PlanarSpringAffector({ axis, planePosition: 0, stiffness: 10, damping: 2 }),
-        particles: (rng: () => number): Particle[] => {
-          const set = Array.from({ length: 6 }, () => seededParticle(rng));
+        states: (rng: () => number): ParticleState[] => {
+          const set = Array.from({ length: 6 }, () => seededState(rng));
           // Large displacement on the spring axis + non-zero velocity on the damping term.
-          const p = seededParticle(rng);
-          if (axis === "x") p.position.x = 4;
-          if (axis === "y") p.position.y = 4;
-          if (axis === "z") p.position.z = 4;
-          p.velocity.set(1, 1, 1);
+          const p = seededState(rng);
+          if (axis === "x") p.pos = [4, p.pos[1], p.pos[2]];
+          if (axis === "y") p.pos = [p.pos[0], 4, p.pos[2]];
+          if (axis === "z") p.pos = [p.pos[0], p.pos[1], 4];
+          p.vel = [1, 1, 1];
           set.push(p);
           return set;
         },
@@ -325,29 +303,29 @@ describe("ParticleAffector batch API", () => {
         dt: 0.016,
         make: (): ParticleAffector =>
           new BouncePlaneAffector({ axis, planePosition: 0, restitution: 0.6, friction: 0.8 }),
-        particles: (rng: () => number): Particle[] => {
-          const set = Array.from({ length: 4 }, () => seededParticle(rng));
+        states: (rng: () => number): ParticleState[] => {
+          const set = Array.from({ length: 4 }, () => seededState(rng));
           // Below the plane with a normal-velocity sign that triggers the bounce branch.
           for (let i = 0; i < 4; i++) {
-            const p = seededParticle(rng);
+            const p = seededState(rng);
             if (axis === "x") {
-              p.position.x = -1;
-              p.velocity.set(-5, 2, -3);
+              p.pos = [-1, p.pos[1], p.pos[2]];
+              p.vel = [-5, 2, -3];
             } else if (axis === "y") {
-              p.position.y = -1;
-              p.velocity.set(2, -5, -3);
+              p.pos = [p.pos[0], -1, p.pos[2]];
+              p.vel = [2, -5, -3];
             } else {
-              p.position.z = -1;
-              p.velocity.set(2, -3, -5);
+              p.pos = [p.pos[0], p.pos[1], -1];
+              p.vel = [2, -3, -5];
             }
             set.push(p);
           }
           // Above the plane: no-op branch must stay bit-identical too.
-          const above = seededParticle(rng);
-          if (axis === "x") above.position.x = 2;
-          if (axis === "y") above.position.y = 2;
-          if (axis === "z") above.position.z = 2;
-          above.velocity.set(0, 1, 0);
+          const above = seededState(rng);
+          if (axis === "x") above.pos = [2, above.pos[1], above.pos[2]];
+          if (axis === "y") above.pos = [above.pos[0], 2, above.pos[2]];
+          if (axis === "z") above.pos = [above.pos[0], above.pos[1], 2];
+          above.vel = [0, 1, 0];
           set.push(above);
           return set;
         },
@@ -368,11 +346,20 @@ describe("ParticleAffector batch API", () => {
             maxHeat: 10,
             updateColor: true,
           }),
-        particles: (rng: () => number): Particle[] => {
-          const set = Array.from({ length: 8 }, () => seededParticle(rng));
-          set.push(new Particle({ position: new Vector3D(0.2, 0, 0), heat: 9.9 })); // inside zone + clamp
-          set.push(new Particle({ position: new Vector3D(5, 5, 5), heat: 3 })); // far away, cooling only
-          set.push(new Particle({ position: new Vector3D(0.05, 0, 0), heat: 0 })); // inside zone, blackbody
+        states: (rng: () => number): ParticleState[] => {
+          const set = Array.from({ length: 8 }, () => seededState(rng));
+          const inside = seededState(rng);
+          inside.pos = [0.2, 0, 0]; // inside zone + clamp
+          inside.heat = 9.9;
+          set.push(inside);
+          const far = seededState(rng);
+          far.pos = [5, 5, 5]; // far away, cooling only
+          far.heat = 3;
+          set.push(far);
+          const hot = seededState(rng);
+          hot.pos = [0.05, 0, 0]; // inside zone, blackbody
+          hot.heat = 0;
+          set.push(hot);
           return set;
         },
       },
@@ -387,8 +374,8 @@ describe("ParticleAffector batch API", () => {
             maxHeat: 5,
             updateColor: false,
           }),
-        particles: (rng: () => number): Particle[] =>
-          Array.from({ length: 6 }, () => seededParticle(rng)),
+        states: (rng: () => number): ParticleState[] =>
+          Array.from({ length: 6 }, () => seededState(rng)),
       },
     ]);
   });
@@ -404,11 +391,20 @@ describe("ParticleAffector batch API", () => {
             fadeEndRadius: 0.5,
             shrinkSize: true,
           }),
-        particles: (rng: () => number): Particle[] => {
-          const set = Array.from({ length: 4 }, () => seededParticle(rng));
-          set.push(new Particle({ position: new Vector3D(2, 0, 0), alpha: 1 })); // outside zone
-          set.push(new Particle({ position: new Vector3D(0.75, 0, 0), alpha: 1 })); // mid fade
-          set.push(new Particle({ position: new Vector3D(0.4, 0, 0), alpha: 1 })); // absorbed -> dead
+        states: (rng: () => number): ParticleState[] => {
+          const set = Array.from({ length: 4 }, () => seededState(rng));
+          const outside = seededState(rng);
+          outside.pos = [2, 0, 0]; // outside zone
+          outside.alpha = 1;
+          set.push(outside);
+          const mid = seededState(rng);
+          mid.pos = [0.75, 0, 0]; // mid fade
+          mid.alpha = 1;
+          set.push(mid);
+          const absorbed = seededState(rng);
+          absorbed.pos = [0.4, 0, 0]; // absorbed -> dead
+          absorbed.alpha = 1;
+          set.push(absorbed);
           return set;
         },
       },
@@ -421,10 +417,10 @@ describe("ParticleAffector batch API", () => {
         dt: 0.016,
         make: (): ParticleAffector =>
           new TurbulenceAffector({ strength: 5.0, frequency: 0.7, evolutionSpeed: 1.0 }),
-        particles: (rng: () => number): Particle[] => {
+        states: (rng: () => number): ParticleState[] => {
           // beginFrame() must be the only time dependency; the shared instance keeps `_time` constant
           // across both evaluation paths inside runBatchBitIdentity.
-          return Array.from({ length: 8 }, () => seededParticle(rng));
+          return Array.from({ length: 8 }, () => seededState(rng));
         },
       },
     ]);
@@ -447,18 +443,15 @@ describe("ParticleAffector batch API", () => {
     };
     const batchSystem = make(rngA);
     const legacySystem = make(rngB);
-    // Force the legacy path on the second system by stripping applyBatch from every affector.
+    // Force the fallback path on the second system by stripping applyBatch from every affector.
     for (const aff of legacySystem.affectors) {
       delete (aff as unknown as { applyBatch?: unknown }).applyBatch;
     }
     for (let frame = 0; frame < 60; frame++) {
       batchSystem.update(0.016);
       legacySystem.update(0.016);
-      for (let i = 0; i < batchSystem.particles.length; i++) {
-        expectStatesEqual(
-          readState(batchSystem.particles[i]!),
-          readState(legacySystem.particles[i]!),
-        );
+      for (let i = 0; i < batchSystem.activeCount; i++) {
+        expectStateEqual(readState(batchSystem.arrays, i), readState(legacySystem.arrays, i));
       }
     }
   });
@@ -466,19 +459,19 @@ describe("ParticleAffector batch API", () => {
   it("keeps working with third-party affectors that only implement apply (fallback path)", () => {
     const system = new ParticleSystem({ capacity: 4 });
     const fallback: ParticleAffector = {
-      apply: (p: Particle, _dt: number, _index: number, _total: number): void => {
-        p.acceleration.y += 9.81;
+      apply: (arrays, index): void => {
+        arrays.accelerations[index * 3 + 1]! += 9.81;
       },
     };
     expect(fallback.applyBatch).toBeUndefined();
     system.addAffector(fallback);
-    const p = system.emit({ position: new Vector3D(0, 0, 0) })!;
+    const index = system.emit({ position: new Vector3D(0, 0, 0) });
     system.update(1.0);
-    expect(p.dead).toBe(false);
-    expect(p.velocity.y).toBeCloseTo(9.81);
+    expect(system.isAlive(index)).toBe(true);
+    expect(system.arrays.velocities[index * 3 + 1]).toBeCloseTo(9.81);
   });
 
-  it("update() reuses its internal arrays and particle instances (zero per-frame allocation)", () => {
+  it("update() reuses its internal arrays and buffers (zero per-frame allocation)", () => {
     const system = new ParticleSystem({ capacity: 64 });
     system.addAffector(new DragAffector({ drag: 0.5 }));
     system.addAffector(new VortexAffector({ axis: "y", strength: 3.0 }));
@@ -497,8 +490,8 @@ describe("ParticleAffector batch API", () => {
       readonly _frameFlags: Uint8Array;
       readonly _freeIndices: number[];
     };
-    const particlesRef = system.particles;
-    const slotRef = system.particles[10]!;
+    const arraysRef = system.arrays;
+    const positionsRef = system.arrays.positions;
     const flagsRef = internal._frameFlags;
     const freeRef = internal._freeIndices;
 
@@ -506,9 +499,9 @@ describe("ParticleAffector batch API", () => {
       system.update(1 / 60);
     }
 
-    expect(system.particles).toBe(particlesRef);
-    expect(system.particles[10]).toBe(slotRef);
-    expect(system.particles.length).toBe(64);
+    expect(system.arrays).toBe(arraysRef);
+    expect(system.arrays.positions).toBe(positionsRef);
+    expect(system.activeCount).toBe(64);
     expect(internal._frameFlags).toBe(flagsRef);
     expect(internal._freeIndices).toBe(freeRef);
   });

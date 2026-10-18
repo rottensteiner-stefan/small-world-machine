@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Particle } from "../src/Particle.js";
+import { Vector3D, Color } from "@small-world-machine/engine";
 import { PointAttractorAffector } from "../src/affectors/PointAttractorAffector.js";
 import { VortexAffector } from "../src/affectors/VortexAffector.js";
 import { PlanarSpringAffector } from "../src/affectors/PlanarSpringAffector.js";
@@ -10,7 +10,7 @@ import { DragAffector } from "../src/affectors/DragAffector.js";
 import { ColorOverLifeAffector } from "../src/affectors/ColorOverLifeAffector.js";
 import { SizeOverLifeAffector } from "../src/affectors/SizeOverLifeAffector.js";
 import { BouncePlaneAffector } from "../src/affectors/BouncePlaneAffector.js";
-import { Vector3D, Color } from "@small-world-machine/engine";
+import { createArrays, setState, readState } from "./helpers/soa.js";
 
 describe("Affectors", () => {
   it("PointAttractorAffector pulls particles towards center", () => {
@@ -21,12 +21,14 @@ describe("Affectors", () => {
       plummer: true,
     });
 
-    const p = new Particle({ position: new Vector3D(10, 0, 0) });
-    attractor.apply(p, 0.1);
+    const arrays = createArrays(1);
+    setState(arrays, 0, { pos: [10, 0, 0] });
+    attractor.apply(arrays, 0, 0.1);
 
-    expect(p.acceleration.x).toBeLessThan(0); // Pulled in -X direction
-    expect(p.acceleration.y).toBe(0);
-    expect(p.acceleration.z).toBe(0);
+    const state = readState(arrays, 0);
+    expect(state.acc[0]).toBeLessThan(0); // Pulled in -X direction
+    expect(state.acc[1]).toBe(0);
+    expect(state.acc[2]).toBe(0);
   });
 
   it("VortexAffector applies tangential acceleration around Y axis", () => {
@@ -37,11 +39,13 @@ describe("Affectors", () => {
     });
 
     // Particle at (1, 0, 0) -> tangential direction should be (0, 0, 1)
-    const p = new Particle({ position: new Vector3D(1, 0, 0) });
-    vortex.apply(p, 0.1);
+    const arrays = createArrays(1);
+    setState(arrays, 0, { pos: [1, 0, 0] });
+    vortex.apply(arrays, 0, 0.1);
 
-    expect(p.acceleration.x).toBeCloseTo(0);
-    expect(p.acceleration.z).toBeGreaterThan(0);
+    const state = readState(arrays, 0);
+    expect(state.acc[0]).toBeCloseTo(0);
+    expect(state.acc[2]).toBeGreaterThan(0);
   });
 
   it("PlanarSpringAffector restores particles towards plane", () => {
@@ -51,10 +55,12 @@ describe("Affectors", () => {
       stiffness: 10.0,
     });
 
-    const p = new Particle({ position: new Vector3D(0, 2, 0) });
-    spring.apply(p, 0.1);
+    const arrays = createArrays(1);
+    setState(arrays, 0, { pos: [0, 2, 0] });
+    spring.apply(arrays, 0, 0.1);
 
-    expect(p.acceleration.y).toBeLessThan(0); // Pushed down towards y = 0
+    const state = readState(arrays, 0);
+    expect(state.acc[1]).toBeLessThan(0); // Pushed down towards y = 0
   });
 
   it("ThermalCoolingAffector calculates compression heat and blackbody color", () => {
@@ -66,11 +72,13 @@ describe("Affectors", () => {
       updateColor: true,
     });
 
-    const p = new Particle({ position: new Vector3D(0.5, 0, 0), heat: 0 });
-    thermal.apply(p, 0.1);
+    const arrays = createArrays(1);
+    setState(arrays, 0, { pos: [0.5, 0, 0], heat: 0 });
+    thermal.apply(arrays, 0, 0.1);
 
-    expect(p.heat).toBeGreaterThan(0);
-    expect(p.color.r).toBeGreaterThan(0.5); // Blackbody red/orange ramp
+    const state = readState(arrays, 0);
+    expect(state.heat).toBeGreaterThan(0);
+    expect(state.col[0]).toBeGreaterThan(0.5); // Blackbody red/orange ramp
   });
 
   it("FadeOutZoneAffector reduces alpha and flags dead inside horizon", () => {
@@ -82,38 +90,46 @@ describe("Affectors", () => {
     });
 
     // Particle midway in fading zone
-    const pMid = new Particle({ position: new Vector3D(0.75, 0, 0) });
-    fade.apply(pMid, 0.1);
-    expect(pMid.alpha).toBeCloseTo(0.5);
-    expect(pMid.dead).toBe(false);
+    const midArrays = createArrays(1);
+    setState(midArrays, 0, { pos: [0.75, 0, 0] });
+    fade.apply(midArrays, 0, 0.1);
+    expect(readState(midArrays, 0).alpha).toBeCloseTo(0.5);
+    expect(readState(midArrays, 0).alive).toBe(true);
 
     // Particle past inner horizon
-    const pSwallowed = new Particle({ position: new Vector3D(0.4, 0, 0) });
-    fade.apply(pSwallowed, 0.1);
-    expect(pSwallowed.alpha).toBe(0);
-    expect(pSwallowed.dead).toBe(true);
+    const swallowedArrays = createArrays(1);
+    setState(swallowedArrays, 0, { pos: [0.4, 0, 0] });
+    fade.apply(swallowedArrays, 0, 0.1);
+    expect(readState(swallowedArrays, 0).alpha).toBe(0);
+    expect(readState(swallowedArrays, 0).alive).toBe(false);
   });
 
   it("TurbulenceAffector applies pseudo-fluid rotational curl forces", () => {
     const turb = new TurbulenceAffector({ strength: 10.0, frequency: 0.5 });
-    const p = new Particle({ position: new Vector3D(1, 2, 3) });
+    const arrays = createArrays(1);
+    setState(arrays, 0, { pos: [1, 2, 3] });
 
-    turb.apply(p, 0.016);
+    turb.apply(arrays, 0, 0.016);
 
-    const accLen = p.acceleration.length();
+    const state = readState(arrays, 0);
+    const accLen = Math.sqrt(
+      state.acc[0] * state.acc[0] + state.acc[1] * state.acc[1] + state.acc[2] * state.acc[2],
+    );
     expect(accLen).toBeGreaterThan(0);
   });
 
   it("DragAffector decelerates particles opposing velocity direction", () => {
     const drag = new DragAffector({ drag: 2.0, quadraticDrag: 0.1 });
-    const p = new Particle({ velocity: new Vector3D(10, -5, 2) });
+    const arrays = createArrays(1);
+    setState(arrays, 0, { vel: [10, -5, 2] });
 
-    drag.apply(p, 0.016);
+    drag.apply(arrays, 0, 0.016);
 
     // Accelerations should oppose velocities
-    expect(p.acceleration.x).toBeLessThan(0);
-    expect(p.acceleration.y).toBeGreaterThan(0);
-    expect(p.acceleration.z).toBeLessThan(0);
+    const state = readState(arrays, 0);
+    expect(state.acc[0]).toBeLessThan(0);
+    expect(state.acc[1]).toBeGreaterThan(0);
+    expect(state.acc[2]).toBeLessThan(0);
   });
 
   it("ColorOverLifeAffector and SizeOverLifeAffector animate properties across particle lifetime", () => {
@@ -126,14 +142,16 @@ describe("Affectors", () => {
       endScale: 0.2,
     });
 
-    const p = new Particle({ life: 0.5, maxLife: 1.0 }); // 50% lifetime
-    colorAffector.apply(p, 0.016);
-    sizeAffector.apply(p, 0.016);
+    const arrays = createArrays(1);
+    setState(arrays, 0, { life: 0.5, maxLife: 1.0 }); // 50% lifetime
+    colorAffector.apply(arrays, 0, 0.016);
+    sizeAffector.apply(arrays, 0, 0.016);
 
-    expect(p.color.r).toBeCloseTo(0.5);
-    expect(p.color.b).toBeCloseTo(0.5);
-    expect(p.alpha).toBeCloseTo(0.5);
-    expect(p.size).toBeCloseTo(0.6);
+    const state = readState(arrays, 0);
+    expect(state.col[0]).toBeCloseTo(0.5);
+    expect(state.col[2]).toBeCloseTo(0.5);
+    expect(state.alpha).toBeCloseTo(0.5);
+    expect(state.size).toBeCloseTo(0.6);
   });
 
   it("BouncePlaneAffector reflects velocity on floor contact with restitution and friction", () => {
@@ -145,16 +163,18 @@ describe("Affectors", () => {
     });
 
     // Particle falling below plane
-    const p = new Particle({
-      position: new Vector3D(5, -0.1, 5),
-      velocity: new Vector3D(10, -20, 10),
+    const arrays = createArrays(1);
+    setState(arrays, 0, {
+      pos: [5, -0.1, 5],
+      vel: [10, -20, 10],
     });
 
-    bounce.apply(p, 0.016);
+    bounce.apply(arrays, 0, 0.016);
 
-    expect(p.position.y).toBe(0);
-    expect(p.velocity.y).toBeCloseTo(10); // -(-20) * 0.5
-    expect(p.velocity.x).toBeCloseTo(8); // 10 * 0.8
-    expect(p.velocity.z).toBeCloseTo(8);
+    const state = readState(arrays, 0);
+    expect(state.pos[1]).toBe(0);
+    expect(state.vel[1]).toBeCloseTo(10); // -(-20) * 0.5
+    expect(state.vel[0]).toBeCloseTo(8); // 10 * 0.8
+    expect(state.vel[2]).toBeCloseTo(8);
   });
 });

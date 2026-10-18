@@ -1,6 +1,6 @@
 {
   "name": "@small-world-machine/vfx-extras",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Visual effects, force-field affectors, and high-performance particle systems for the Small World Machine 3D engine.",
   "type": "module",
   "license": "MIT",

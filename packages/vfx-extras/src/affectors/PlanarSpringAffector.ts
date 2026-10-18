@@ -1,4 +1,4 @@
-import type { Particle } from "../Particle.js";
+import type { ParticleArrays } from "../Particle.js";
 import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface PlanarSpringOptions {
@@ -28,52 +28,57 @@ export class PlanarSpringAffector implements ParticleAffector {
     this.damping = options.damping ?? 0.5;
   }
 
-  public apply(particle: Particle, _dt: number): void {
+  public apply(arrays: ParticleArrays, index: number, _dt: number): void {
+    const o = index * 3;
+    const mass = arrays.masses[index]!;
+
     if (this.axis === "y") {
-      const dy = particle.position.y - this.planePosition;
+      const dy = arrays.positions[o + 1]! - this.planePosition;
       const springForce = -this.stiffness * dy;
-      const dampingForce = -this.damping * particle.velocity.y;
-      particle.acceleration.y += (springForce + dampingForce) / particle.mass;
+      const dampingForce = -this.damping * arrays.velocities[o + 1]!;
+      arrays.accelerations[o + 1]! += (springForce + dampingForce) / mass;
     } else if (this.axis === "x") {
-      const dx = particle.position.x - this.planePosition;
+      const dx = arrays.positions[o]! - this.planePosition;
       const springForce = -this.stiffness * dx;
-      const dampingForce = -this.damping * particle.velocity.x;
-      particle.acceleration.x += (springForce + dampingForce) / particle.mass;
+      const dampingForce = -this.damping * arrays.velocities[o]!;
+      arrays.accelerations[o]! += (springForce + dampingForce) / mass;
     } else if (this.axis === "z") {
-      const dz = particle.position.z - this.planePosition;
+      const dz = arrays.positions[o + 2]! - this.planePosition;
       const springForce = -this.stiffness * dz;
-      const dampingForce = -this.damping * particle.velocity.z;
-      particle.acceleration.z += (springForce + dampingForce) / particle.mass;
+      const dampingForce = -this.damping * arrays.velocities[o + 2]!;
+      arrays.accelerations[o + 2]! += (springForce + dampingForce) / mass;
     }
   }
 
-  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
     const axis = this.axis;
     const planePosition = this.planePosition;
     const stiffness = this.stiffness;
     const damping = this.damping;
 
     for (let i = 0; i < count; i++) {
-      const particle = particles[i]!;
-      if (particle.dead) {
+      if (arrays.aliveFlags[i] === 0) {
         continue;
       }
 
+      const o = i * 3;
+      const mass = arrays.masses[i]!;
+
       if (axis === "y") {
-        const dy = particle.position.y - planePosition;
+        const dy = arrays.positions[o + 1]! - planePosition;
         const springForce = -stiffness * dy;
-        const dampingForce = -damping * particle.velocity.y;
-        particle.acceleration.y += (springForce + dampingForce) / particle.mass;
+        const dampingForce = -damping * arrays.velocities[o + 1]!;
+        arrays.accelerations[o + 1]! += (springForce + dampingForce) / mass;
       } else if (axis === "x") {
-        const dx = particle.position.x - planePosition;
+        const dx = arrays.positions[o]! - planePosition;
         const springForce = -stiffness * dx;
-        const dampingForce = -damping * particle.velocity.x;
-        particle.acceleration.x += (springForce + dampingForce) / particle.mass;
+        const dampingForce = -damping * arrays.velocities[o]!;
+        arrays.accelerations[o]! += (springForce + dampingForce) / mass;
       } else if (axis === "z") {
-        const dz = particle.position.z - planePosition;
+        const dz = arrays.positions[o + 2]! - planePosition;
         const springForce = -stiffness * dz;
-        const dampingForce = -damping * particle.velocity.z;
-        particle.acceleration.z += (springForce + dampingForce) / particle.mass;
+        const dampingForce = -damping * arrays.velocities[o + 2]!;
+        arrays.accelerations[o + 2]! += (springForce + dampingForce) / mass;
       }
     }
   }

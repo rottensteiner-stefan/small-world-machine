@@ -47,9 +47,29 @@ struct FroxelUniforms {
 // to a shared 1x1x1 identity texture (R=G=1), so an unbound mask is a no-op: the shader ALWAYS
 // samples instead of branching on availability.
 @group(1) @binding(2) var globalDensityMask: texture_3d<f32>;
-@group(1) @binding(3) var globalMaskSampler: sampler;
-@group(1) @binding(4) var volumeMasks: array<texture_3d<f32>, 16>;
-@group(1) @binding(5) var volumeMaskSampler: sampler;
+@group(1) @binding(3) var volumeMaskSampler: sampler;
+@group(1) @binding(4) var volumeMask0: texture_3d<f32>;
+@group(1) @binding(5) var volumeMask1: texture_3d<f32>;
+@group(1) @binding(6) var volumeMask2: texture_3d<f32>;
+@group(1) @binding(7) var volumeMask3: texture_3d<f32>;
+@group(1) @binding(8) var volumeMask4: texture_3d<f32>;
+@group(1) @binding(9) var volumeMask5: texture_3d<f32>;
+@group(1) @binding(10) var volumeMask6: texture_3d<f32>;
+@group(1) @binding(11) var volumeMask7: texture_3d<f32>;
+
+fn sampleVolumeMask(slot: u32, uvw: vec3f) -> vec4f {
+    switch (slot) {
+        case 0u: { return textureSampleLevel(volumeMask0, volumeMaskSampler, uvw, 0.0); }
+        case 1u: { return textureSampleLevel(volumeMask1, volumeMaskSampler, uvw, 0.0); }
+        case 2u: { return textureSampleLevel(volumeMask2, volumeMaskSampler, uvw, 0.0); }
+        case 3u: { return textureSampleLevel(volumeMask3, volumeMaskSampler, uvw, 0.0); }
+        case 4u: { return textureSampleLevel(volumeMask4, volumeMaskSampler, uvw, 0.0); }
+        case 5u: { return textureSampleLevel(volumeMask5, volumeMaskSampler, uvw, 0.0); }
+        case 6u: { return textureSampleLevel(volumeMask6, volumeMaskSampler, uvw, 0.0); }
+        case 7u: { return textureSampleLevel(volumeMask7, volumeMaskSampler, uvw, 0.0); }
+        default: { return vec4f(1.0); }
+    }
+}
 
 fn boxSDF(p: vec3f, b: vec3f) -> f32 {
     let q = abs(p) - b;
@@ -171,7 +191,7 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
     // the unbaked tint only when a mask is present). The identity placeholder keeps unmodulated
     // media bit-identical to a missing mask (factors of exactly 1.0).
     let maskUVW = clamp((worldPos - froxel.elementMaskPosition.xyz) / (2.0 * froxel.elementMaskSize.xyz) + 0.5, vec3f(0.0), vec3f(1.0));
-    let maskCell = textureSample(globalDensityMask, globalMaskSampler, maskUVW);
+    let maskCell = textureSampleLevel(globalDensityMask, volumeMaskSampler, maskUVW, 0.0);
 
     // Analytic phase -- height falloff above the fog baseline (like an exponential height fog layer).
     let heightDelta = worldPos.y - froxel.params.y;
@@ -227,7 +247,7 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
             // placeholder is a no-op (R=G=1): R scales the density (can even carve voids),
             // G replaces the per-cell scattering albedo. Emission is not masked.
             let volMaskUVW = clamp((pLocal / vol.size.xyz) * 0.5 + 0.5, vec3f(0.0), vec3f(1.0));
-            let volMask = textureSample(volumeMasks[v], volumeMaskSampler, volMaskUVW);
+            let volMask = sampleVolumeMask(v, volMaskUVW);
             volDensity = volDensity * volMask.r;
 
             if (volDensity > 0.0) {

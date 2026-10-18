@@ -6,6 +6,10 @@ varying vec2 v_uv;
 varying mat3 v_tbn;
 varying vec4 v_clipPos;
 
+#ifdef USE_INSTANCE_COLOR
+varying vec4 v_instanceColor;
+#endif
+
 uniform vec4 u_color;
 uniform vec4 u_specColor;
 uniform float u_shininess;

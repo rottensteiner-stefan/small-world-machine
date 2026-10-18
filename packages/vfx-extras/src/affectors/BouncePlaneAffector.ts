@@ -1,4 +1,4 @@
-import type { Particle } from "../Particle.js";
+import type { ParticleArrays } from "../Particle.js";
 import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface BouncePlaneOptions {
@@ -28,63 +28,66 @@ export class BouncePlaneAffector implements ParticleAffector {
     this.friction = options.friction ?? 0.8;
   }
 
-  public apply(particle: Particle, _dt: number): void {
+  public apply(arrays: ParticleArrays, index: number, _dt: number): void {
+    const o = index * 3;
+
     if (this.axis === "y") {
-      if (particle.position.y <= this.planePosition && particle.velocity.y < 0) {
-        particle.position.y = this.planePosition;
-        particle.velocity.y = -particle.velocity.y * this.restitution;
-        particle.velocity.x *= this.friction;
-        particle.velocity.z *= this.friction;
+      if (arrays.positions[o + 1]! <= this.planePosition && arrays.velocities[o + 1]! < 0) {
+        arrays.positions[o + 1] = this.planePosition;
+        arrays.velocities[o + 1] = -arrays.velocities[o + 1]! * this.restitution;
+        arrays.velocities[o]! *= this.friction;
+        arrays.velocities[o + 2]! *= this.friction;
       }
     } else if (this.axis === "x") {
-      if (particle.position.x <= this.planePosition && particle.velocity.x < 0) {
-        particle.position.x = this.planePosition;
-        particle.velocity.x = -particle.velocity.x * this.restitution;
-        particle.velocity.y *= this.friction;
-        particle.velocity.z *= this.friction;
+      if (arrays.positions[o]! <= this.planePosition && arrays.velocities[o]! < 0) {
+        arrays.positions[o] = this.planePosition;
+        arrays.velocities[o] = -arrays.velocities[o]! * this.restitution;
+        arrays.velocities[o + 1]! *= this.friction;
+        arrays.velocities[o + 2]! *= this.friction;
       }
     } else if (this.axis === "z") {
-      if (particle.position.z <= this.planePosition && particle.velocity.z < 0) {
-        particle.position.z = this.planePosition;
-        particle.velocity.z = -particle.velocity.z * this.restitution;
-        particle.velocity.x *= this.friction;
-        particle.velocity.y *= this.friction;
+      if (arrays.positions[o + 2]! <= this.planePosition && arrays.velocities[o + 2]! < 0) {
+        arrays.positions[o + 2] = this.planePosition;
+        arrays.velocities[o + 2] = -arrays.velocities[o + 2]! * this.restitution;
+        arrays.velocities[o]! *= this.friction;
+        arrays.velocities[o + 1]! *= this.friction;
       }
     }
   }
 
-  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
     const axis = this.axis;
     const planePosition = this.planePosition;
     const restitution = this.restitution;
     const friction = this.friction;
 
     for (let i = 0; i < count; i++) {
-      const particle = particles[i]!;
-      if (particle.dead) {
+      if (arrays.aliveFlags[i] === 0) {
         continue;
       }
 
+      const o = i * 3;
+
       if (axis === "y") {
-        if (particle.position.y <= planePosition && particle.velocity.y < 0) {
-          particle.position.y = planePosition;
-          particle.velocity.y = -particle.velocity.y * restitution;
-          particle.velocity.x *= friction;
-          particle.velocity.z *= friction;
+        if (arrays.positions[o + 1]! <= planePosition && arrays.velocities[o + 1]! < 0) {
+          arrays.positions[o + 1] = planePosition;
+          arrays.velocities[o + 1] = -arrays.velocities[o + 1]! * restitution;
+          arrays.velocities[o]! *= friction;
+          arrays.velocities[o + 2]! *= friction;
         }
       } else if (axis === "x") {
-        if (particle.position.x <= planePosition && particle.velocity.x < 0) {
-          particle.position.x = planePosition;
-          particle.velocity.x = -particle.velocity.x * restitution;
-          particle.velocity.y *= friction;
-          particle.velocity.z *= friction;
+        if (arrays.positions[o]! <= planePosition && arrays.velocities[o]! < 0) {
+          arrays.positions[o] = planePosition;
+          arrays.velocities[o] = -arrays.velocities[o]! * restitution;
+          arrays.velocities[o + 1]! *= friction;
+          arrays.velocities[o + 2]! *= friction;
         }
       } else if (axis === "z") {
-        if (particle.position.z <= planePosition && particle.velocity.z < 0) {
-          particle.position.z = planePosition;
-          particle.velocity.z = -particle.velocity.z * restitution;
-          particle.velocity.x *= friction;
-          particle.velocity.y *= friction;
+        if (arrays.positions[o + 2]! <= planePosition && arrays.velocities[o + 2]! < 0) {
+          arrays.positions[o + 2] = planePosition;
+          arrays.velocities[o + 2] = -arrays.velocities[o + 2]! * restitution;
+          arrays.velocities[o]! *= friction;
+          arrays.velocities[o + 1]! *= friction;
         }
       }
     }

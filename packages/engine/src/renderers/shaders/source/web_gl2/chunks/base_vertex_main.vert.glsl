@@ -20,6 +20,9 @@ void main() {
 #ifdef USE_TEXTURE_ARRAY
   v_texIndex = a_instanceData.x;
 #endif
+#ifdef USE_INSTANCE_COLOR
+  v_instanceColor = a_instanceData;
+#endif
 #else
   mat4 modelMat = u_model;
 #endif

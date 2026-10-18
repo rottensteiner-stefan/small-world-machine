@@ -1871,16 +1871,29 @@ export class WebGPURenderer extends AbstractRenderer {
     wireframeMode?: WireframeMode,
     normalMode: NormalTargetMode = NormalTargetMode.DEFAULT,
   ): void {
+    // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in; the generic `instanceData`
+    // semantics (texture-array index) stay untouched for other meshes. It is injected on a local
+    // manifest copy so the shared material manifest is not polluted for other batches.
+    const useInstanceColor =
+      isInstanced && objects[0] instanceof InstancedMesh && objects[0].useInstanceDataAsColor;
+    let effManifest = manifest;
+    if (useInstanceColor && !manifest.flags?.includes("USE_INSTANCE_COLOR")) {
+      effManifest = {
+        ...manifest,
+        flags: [...(manifest.flags ?? []), "USE_INSTANCE_COLOR"],
+      };
+    }
+
     const targetFormat = this.currentColorTargetFormat;
     const cache = this._pipelineCache.getPipeline(
-      manifest,
+      effManifest,
       topology,
       isInstanced,
       targetFormat,
       normalMode,
     );
     const pipelineKey = this._pipelineCache.pipelineCacheKey(
-      manifest,
+      effManifest,
       topology,
       isInstanced,
       targetFormat,
@@ -1892,7 +1905,7 @@ export class WebGPURenderer extends AbstractRenderer {
     rp.setBindGroup(1, matBindGroup);
     rp.setBindGroup(3, this._viewBindGroup, [viewOffset]);
 
-    const usesVertexColor = manifest.flags?.includes(VERTEX_COLOR_FLAG) === true;
+    const usesVertexColor = effManifest.flags?.includes(VERTEX_COLOR_FLAG) === true;
 
     for (const obj of objects) {
       if (!obj.geometry) continue;

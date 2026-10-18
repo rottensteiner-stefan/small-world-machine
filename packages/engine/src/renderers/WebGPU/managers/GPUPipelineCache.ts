@@ -203,6 +203,7 @@ const ALWAYS_DECLARED_FLAGS: ReadonlySet<string> = new Set([
   "USE_NORMAL_MAP",
   "USE_RAMP_LUT",
   "USE_INSTANCING",
+  "USE_INSTANCE_COLOR",
   "USE_DECAL_GRADIENTS",
   "USE_DECAL_UNLIT",
 ]);
@@ -590,6 +591,11 @@ export class GPUPipelineCache {
       } else {
         wgslConstants += "const USE_INSTANCING: bool = false;\n";
       }
+      // Always declared so material fragments can reference it via a compile-time `select`
+      // (e.g. per-instance color tinting) even when no instance-color pipeline requested it.
+      wgslConstants += flags.includes("USE_INSTANCE_COLOR")
+        ? "const USE_INSTANCE_COLOR: bool = true;\n"
+        : "const USE_INSTANCE_COLOR: bool = false;\n";
       if (flags.includes("USE_NORMAL_MAP")) {
         wgslConstants += "const USE_NORMAL_MAP: bool = true;\n";
       } else {
@@ -638,9 +644,15 @@ export class GPUPipelineCache {
           },
         );
 
-        code = code.replace(/return\s+o;/g, "o.texIndex = inst_data.x;\n    return o;");
+        code = code.replace(
+          /return\s+o;/g,
+          "o.texIndex = inst_data.x;\n    o.instColor = inst_data;\n    return o;",
+        );
       } else {
-        code = code.replace(/return\s+o;/g, "o.texIndex = 0.0;\n    return o;");
+        code = code.replace(
+          /return\s+o;/g,
+          "o.texIndex = 0.0;\n    o.instColor = vec4f(1.0, 1.0, 1.0, 1.0);\n    return o;",
+        );
       }
 
       const unwrapped = withNormalOutput && !canWrapFragmentWithNormalOutput(code);

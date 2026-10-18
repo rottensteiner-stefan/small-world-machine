@@ -66,5 +66,6 @@
     color = linearToSRGB(color);
 
     [WGSL_FOG_CALC]
-    return vec4f(color, finalAlpha);
+    let tint = select(vec3f(1.0, 1.0, 1.0), i.instColor.rgb, USE_INSTANCE_COLOR);
+    return vec4f(color * tint, finalAlpha);
 }

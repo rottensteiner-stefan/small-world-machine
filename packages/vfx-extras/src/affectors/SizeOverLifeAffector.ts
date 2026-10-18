@@ -1,4 +1,4 @@
-import type { Particle } from "../Particle.js";
+import type { ParticleArrays } from "../Particle.js";
 import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface SizeOverLifeOptions {
@@ -20,30 +20,29 @@ export class SizeOverLifeAffector implements ParticleAffector {
     this.endScale = options.endScale ?? 0.0;
   }
 
-  public apply(particle: Particle, _dt: number): void {
-    if (particle.maxLife <= 0 || !isFinite(particle.maxLife)) {
+  public apply(arrays: ParticleArrays, index: number, _dt: number): void {
+    if (arrays.maxLives[index]! <= 0 || !isFinite(arrays.maxLives[index]!)) {
       return;
     }
 
-    const progress = Math.max(0, Math.min(1, particle.life / particle.maxLife));
-    particle.size = this.startScale + (this.endScale - this.startScale) * progress;
+    const progress = Math.max(0, Math.min(1, arrays.lives[index]! / arrays.maxLives[index]!));
+    arrays.sizes[index] = this.startScale + (this.endScale - this.startScale) * progress;
   }
 
-  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
     const startScale = this.startScale;
     const endScale = this.endScale;
 
     for (let i = 0; i < count; i++) {
-      const particle = particles[i]!;
-      if (particle.dead) {
+      if (arrays.aliveFlags[i] === 0) {
         continue;
       }
-      if (particle.maxLife <= 0 || !isFinite(particle.maxLife)) {
+      if (arrays.maxLives[i]! <= 0 || !isFinite(arrays.maxLives[i]!)) {
         continue;
       }
 
-      const progress = Math.max(0, Math.min(1, particle.life / particle.maxLife));
-      particle.size = startScale + (endScale - startScale) * progress;
+      const progress = Math.max(0, Math.min(1, arrays.lives[i]! / arrays.maxLives[i]!));
+      arrays.sizes[i] = startScale + (endScale - startScale) * progress;
     }
   }
 }

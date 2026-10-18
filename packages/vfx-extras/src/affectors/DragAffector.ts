@@ -1,4 +1,4 @@
-import type { Particle } from "../Particle.js";
+import type { ParticleArrays } from "../Particle.js";
 import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface DragOptions {
@@ -20,39 +20,42 @@ export class DragAffector implements ParticleAffector {
     this.quadraticDrag = options.quadraticDrag ?? 0.0;
   }
 
-  public apply(particle: Particle, _dt: number): void {
-    const vx = particle.velocity.x;
-    const vy = particle.velocity.y;
-    const vz = particle.velocity.z;
+  public apply(arrays: ParticleArrays, index: number, _dt: number): void {
+    const o = index * 3;
+    const vx = arrays.velocities[o]!;
+    const vy = arrays.velocities[o + 1]!;
+    const vz = arrays.velocities[o + 2]!;
 
     const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
     const dragCoeff = this.drag + this.quadraticDrag * speed;
 
-    particle.acceleration.x -= (vx * dragCoeff) / particle.mass;
-    particle.acceleration.y -= (vy * dragCoeff) / particle.mass;
-    particle.acceleration.z -= (vz * dragCoeff) / particle.mass;
+    const mass = arrays.masses[index]!;
+    arrays.accelerations[o]! -= (vx * dragCoeff) / mass;
+    arrays.accelerations[o + 1]! -= (vy * dragCoeff) / mass;
+    arrays.accelerations[o + 2]! -= (vz * dragCoeff) / mass;
   }
 
-  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
     const drag = this.drag;
     const quadraticDrag = this.quadraticDrag;
 
     for (let i = 0; i < count; i++) {
-      const particle = particles[i]!;
-      if (particle.dead) {
+      if (arrays.aliveFlags[i] === 0) {
         continue;
       }
 
-      const vx = particle.velocity.x;
-      const vy = particle.velocity.y;
-      const vz = particle.velocity.z;
+      const o = i * 3;
+      const vx = arrays.velocities[o]!;
+      const vy = arrays.velocities[o + 1]!;
+      const vz = arrays.velocities[o + 2]!;
 
       const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
       const dragCoeff = drag + quadraticDrag * speed;
 
-      particle.acceleration.x -= (vx * dragCoeff) / particle.mass;
-      particle.acceleration.y -= (vy * dragCoeff) / particle.mass;
-      particle.acceleration.z -= (vz * dragCoeff) / particle.mass;
+      const mass = arrays.masses[i]!;
+      arrays.accelerations[o]! -= (vx * dragCoeff) / mass;
+      arrays.accelerations[o + 1]! -= (vy * dragCoeff) / mass;
+      arrays.accelerations[o + 2]! -= (vz * dragCoeff) / mass;
     }
   }
 }

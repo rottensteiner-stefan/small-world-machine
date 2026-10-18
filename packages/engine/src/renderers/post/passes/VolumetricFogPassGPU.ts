@@ -17,7 +17,7 @@ import type { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
 const MAX_FOG_VOLUMES = 16;
 
 /** Total float slots of the per-volume density-mask bind array (always kept fully bound). */
-const MAX_MASK_SLOTS = MAX_FOG_VOLUMES;
+const MAX_MASK_SLOTS = 8;
 
 /** Float offset of `scatterTint` (vec4) in FroxelUniforms, right after the 16 FogVolumeData. */
 const SCATTER_TINT_OFFSET = 32 + MAX_FOG_VOLUMES * 32;
@@ -157,6 +157,7 @@ export class VolumetricFogPassGPU {
   private readonly _scratchInvViewProj: Matrix4 = new Matrix4();
   private readonly _scratchSunDir: Vector3D = new Vector3D();
   private _warnedVolumeLimit: boolean = false;
+  private _warnedMaskCapacity: boolean = false;
 
   constructor(device: GPUDevice) {
     this._device = device;
@@ -197,28 +198,28 @@ export class VolumetricFogPassGPU {
     });
 
     // 1. Injection BGL
-    this._injectBGL = device.createBindGroupLayout({
-      entries: [
-        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
-        {
-          binding: 1,
-          visibility: GPUShaderStage.COMPUTE,
-          storageTexture: { access: "write-only", format: "rgba16float", viewDimension: "3d" },
-        },
-        {
-          binding: 2,
-          visibility: GPUShaderStage.COMPUTE,
-          texture: { sampleType: "float", viewDimension: "3d" },
-        },
-        { binding: 3, visibility: GPUShaderStage.COMPUTE, sampler: { type: "filtering" } },
-        {
-          binding: 4,
-          visibility: GPUShaderStage.COMPUTE,
-          texture: { sampleType: "float", viewDimension: "3d" },
-        },
-        { binding: 5, visibility: GPUShaderStage.COMPUTE, sampler: { type: "filtering" } },
-      ],
-    });
+    const injectEntries: GPUBindGroupLayoutEntry[] = [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
+        storageTexture: { access: "write-only", format: "rgba16float", viewDimension: "3d" },
+      },
+      {
+        binding: 2,
+        visibility: GPUShaderStage.COMPUTE,
+        texture: { sampleType: "float", viewDimension: "3d" },
+      },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, sampler: { type: "filtering" } },
+    ];
+    for (let i = 0; i < MAX_MASK_SLOTS; i++) {
+      injectEntries.push({
+        binding: 4 + i,
+        visibility: GPUShaderStage.COMPUTE,
+        texture: { sampleType: "float", viewDimension: "3d" },
+      });
+    }
+    this._injectBGL = device.createBindGroupLayout({ entries: injectEntries });
 
     // 2. Reprojection BGL & Pipeline
     this._reprojectBGL = device.createBindGroupLayout({
@@ -379,6 +380,17 @@ export class VolumetricFogPassGPU {
       this._volumeMaskBindings[v] = mask ?? identity;
       signature.push(mask);
     }
+    if (numVolumes > MAX_MASK_SLOTS && !this._warnedMaskCapacity) {
+      for (let v = MAX_MASK_SLOTS; v < numVolumes; v++) {
+        if (this._usableMask(fogVolumes[v]!.densityMask) !== null) {
+          this._warnedMaskCapacity = true;
+          console.warn(
+            `[VolumetricFogPassGPU] FogVolume at index ${v} has a density mask, but WebGPU evaluates masks on only the first ${MAX_MASK_SLOTS} volumes. Place masked volumes at the start of the scene list.`,
+          );
+          break;
+        }
+      }
+    }
 
     this._ensureMaskGpu(identity);
     if (elementMask) this._ensureMaskGpu(elementMask);
@@ -506,22 +518,21 @@ export class VolumetricFogPassGPU {
       this._cachedGlobalBindGroup = renderer.globalBindGroup;
 
       // 1. Injection bind group
+      const injectGroupEntries: GPUBindGroupEntry[] = [
+        { binding: 0, resource: { buffer: this._injectUniformBuffer } },
+        { binding: 1, resource: this._injectedView! },
+        { binding: 2, resource: this._maskView(this._elementMaskBinding) },
+        { binding: 3, resource: this._volumeSampler! },
+      ];
+      for (let i = 0; i < MAX_MASK_SLOTS; i++) {
+        injectGroupEntries.push({
+          binding: 4 + i,
+          resource: this._maskView(this._volumeMaskBindings[i] ?? null),
+        });
+      }
       this._injectBindGroup = this._device.createBindGroup({
         layout: this._injectBGL,
-        entries: [
-          { binding: 0, resource: { buffer: this._injectUniformBuffer } },
-          { binding: 1, resource: this._injectedView! },
-          { binding: 2, resource: this._maskView(this._elementMaskBinding) },
-          { binding: 3, resource: this._volumeSampler! },
-          {
-            binding: 4,
-            // The installed @webgpu/types predates array bindings; WebGPU accepts GPUTextureView[].
-            resource: this._volumeMaskBindings.map((mask) =>
-              this._maskView(mask),
-            ) as unknown as GPUBindingResource,
-          },
-          { binding: 5, resource: this._volumeSampler! },
-        ],
+        entries: injectGroupEntries,
       });
 
       // 2. Reproject bind groups (Ping-Pong A -> B, and B -> A)

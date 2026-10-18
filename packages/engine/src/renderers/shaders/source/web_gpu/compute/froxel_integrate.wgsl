@@ -156,7 +156,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
             // albedo, so the CPU uploads the sun tint unbaked only when a mask is present. The
             // identity placeholder keeps an absent mask at a factor of exactly 1.0.
             let maskUVW = clamp((worldPos - uni.elementMaskPosition.xyz) / (2.0 * uni.elementMaskSize.xyz) + 0.5, vec3f(0.0), vec3f(1.0));
-            let maskAlbedo = textureSample(globalDensityMask, globalMaskSampler, maskUVW).g;
+            let maskAlbedo = textureSampleLevel(globalDensityMask, globalMaskSampler, maskUVW, 0.0).g;
             let cosTheta = dot(-viewDir, sunDir);
             let phase = hgPhase(cosTheta, asymmetry);
             let shadow = sampleCascadeShadow(worldPos, zMid);

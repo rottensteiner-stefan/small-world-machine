@@ -5,6 +5,10 @@ attribute vec3 a_tangent;
 
 #ifdef USE_INSTANCING
 attribute mat4 a_instanceMatrix;
+#ifdef USE_INSTANCE_COLOR
+attribute vec4 a_instanceData;
+varying vec4 v_instanceColor;
+#endif
 #endif
 
 uniform mat4 u_vp;
@@ -25,6 +29,9 @@ mat3 extractMat3(mat4 m) {
 void main() {
 #ifdef USE_INSTANCING
     mat4 modelMat = u_model * a_instanceMatrix;
+#ifdef USE_INSTANCE_COLOR
+    v_instanceColor = a_instanceData;
+#endif
 #else
     mat4 modelMat = u_model;
 #endif

@@ -13,6 +13,10 @@ in mat3 v_tbn;
 in float v_texIndex;
 #endif
 
+#ifdef USE_INSTANCE_COLOR
+in vec4 v_instanceColor;
+#endif
+
 uniform vec4 u_color;
 uniform vec4 u_specColor;
 uniform float u_shininess;

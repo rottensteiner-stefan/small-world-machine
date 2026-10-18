@@ -1,5 +1,5 @@
 import { Vector3D } from "@small-world-machine/engine";
-import type { Particle } from "../Particle.js";
+import type { ParticleArrays } from "../Particle.js";
 import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface VortexOptions {
@@ -29,10 +29,13 @@ export class VortexAffector implements ParticleAffector {
     this.inwardSuction = options.inwardSuction ?? 0.0;
   }
 
-  public apply(particle: Particle, _dt: number): void {
+  public apply(arrays: ParticleArrays, index: number, _dt: number): void {
+    const o = index * 3;
+    const mass = arrays.masses[index]!;
+
     if (this.axis === "x") {
-      const dy = particle.position.y - this.center.y;
-      const dz = particle.position.z - this.center.z;
+      const dy = arrays.positions[o + 1]! - this.center.y;
+      const dz = arrays.positions[o + 2]! - this.center.z;
       const r = Math.sqrt(dy * dy + dz * dz) || 0.001;
 
       // Tangential direction around X: (-z, 0, y) mapped to (0, -z, y)
@@ -43,14 +46,14 @@ export class VortexAffector implements ParticleAffector {
       const inY = -dy / r;
       const inZ = -dz / r;
 
-      particle.acceleration.y += (tangY * this.strength + inY * this.inwardSuction) / particle.mass;
-      particle.acceleration.z += (tangZ * this.strength + inZ * this.inwardSuction) / particle.mass;
+      arrays.accelerations[o + 1]! += (tangY * this.strength + inY * this.inwardSuction) / mass;
+      arrays.accelerations[o + 2]! += (tangZ * this.strength + inZ * this.inwardSuction) / mass;
       return;
     }
 
     if (this.axis === "z") {
-      const dx = particle.position.x - this.center.x;
-      const dy = particle.position.y - this.center.y;
+      const dx = arrays.positions[o]! - this.center.x;
+      const dy = arrays.positions[o + 1]! - this.center.y;
       const r = Math.sqrt(dx * dx + dy * dy) || 0.001;
 
       // Tangential direction around Z: (x, -y, 0) mapped to (-y, x, 0)
@@ -61,14 +64,14 @@ export class VortexAffector implements ParticleAffector {
       const inX = -dx / r;
       const inY = -dy / r;
 
-      particle.acceleration.x += (tangX * this.strength + inX * this.inwardSuction) / particle.mass;
-      particle.acceleration.y += (tangY * this.strength + inY * this.inwardSuction) / particle.mass;
+      arrays.accelerations[o]! += (tangX * this.strength + inX * this.inwardSuction) / mass;
+      arrays.accelerations[o + 1]! += (tangY * this.strength + inY * this.inwardSuction) / mass;
       return;
     }
 
-    if (this.axis === "y") {
-      const dx = particle.position.x - this.center.x;
-      const dz = particle.position.z - this.center.z;
+    {
+      const dx = arrays.positions[o]! - this.center.x;
+      const dz = arrays.positions[o + 2]! - this.center.z;
       const r = Math.sqrt(dx * dx + dz * dz) || 0.001;
 
       // Tangential direction: (-z, 0, x)
@@ -79,12 +82,12 @@ export class VortexAffector implements ParticleAffector {
       const inX = -dx / r;
       const inZ = -dz / r;
 
-      particle.acceleration.x += (tangX * this.strength + inX * this.inwardSuction) / particle.mass;
-      particle.acceleration.z += (tangZ * this.strength + inZ * this.inwardSuction) / particle.mass;
+      arrays.accelerations[o]! += (tangX * this.strength + inX * this.inwardSuction) / mass;
+      arrays.accelerations[o + 2]! += (tangZ * this.strength + inZ * this.inwardSuction) / mass;
     }
   }
 
-  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
     const centerX = this.center.x;
     const centerY = this.center.y;
     const centerZ = this.center.z;
@@ -93,14 +96,16 @@ export class VortexAffector implements ParticleAffector {
     const inwardSuction = this.inwardSuction;
 
     for (let i = 0; i < count; i++) {
-      const particle = particles[i]!;
-      if (particle.dead) {
+      if (arrays.aliveFlags[i] === 0) {
         continue;
       }
 
+      const o = i * 3;
+      const mass = arrays.masses[i]!;
+
       if (axis === "x") {
-        const dy = particle.position.y - centerY;
-        const dz = particle.position.z - centerZ;
+        const dy = arrays.positions[o + 1]! - centerY;
+        const dz = arrays.positions[o + 2]! - centerZ;
         const r = Math.sqrt(dy * dy + dz * dz) || 0.001;
 
         const tangY = -dz / r;
@@ -109,14 +114,14 @@ export class VortexAffector implements ParticleAffector {
         const inY = -dy / r;
         const inZ = -dz / r;
 
-        particle.acceleration.y += (tangY * strength + inY * inwardSuction) / particle.mass;
-        particle.acceleration.z += (tangZ * strength + inZ * inwardSuction) / particle.mass;
+        arrays.accelerations[o + 1]! += (tangY * strength + inY * inwardSuction) / mass;
+        arrays.accelerations[o + 2]! += (tangZ * strength + inZ * inwardSuction) / mass;
         continue;
       }
 
       if (axis === "z") {
-        const dx = particle.position.x - centerX;
-        const dy = particle.position.y - centerY;
+        const dx = arrays.positions[o]! - centerX;
+        const dy = arrays.positions[o + 1]! - centerY;
         const r = Math.sqrt(dx * dx + dy * dy) || 0.001;
 
         const tangX = -dy / r;
@@ -125,14 +130,14 @@ export class VortexAffector implements ParticleAffector {
         const inX = -dx / r;
         const inY = -dy / r;
 
-        particle.acceleration.x += (tangX * strength + inX * inwardSuction) / particle.mass;
-        particle.acceleration.y += (tangY * strength + inY * inwardSuction) / particle.mass;
+        arrays.accelerations[o]! += (tangX * strength + inX * inwardSuction) / mass;
+        arrays.accelerations[o + 1]! += (tangY * strength + inY * inwardSuction) / mass;
         continue;
       }
 
-      if (axis === "y") {
-        const dx = particle.position.x - centerX;
-        const dz = particle.position.z - centerZ;
+      {
+        const dx = arrays.positions[o]! - centerX;
+        const dz = arrays.positions[o + 2]! - centerZ;
         const r = Math.sqrt(dx * dx + dz * dz) || 0.001;
 
         const tangX = -dz / r;
@@ -141,8 +146,8 @@ export class VortexAffector implements ParticleAffector {
         const inX = -dx / r;
         const inZ = -dz / r;
 
-        particle.acceleration.x += (tangX * strength + inX * inwardSuction) / particle.mass;
-        particle.acceleration.z += (tangZ * strength + inZ * inwardSuction) / particle.mass;
+        arrays.accelerations[o]! += (tangX * strength + inX * inwardSuction) / mass;
+        arrays.accelerations[o + 2]! += (tangZ * strength + inZ * inwardSuction) / mass;
       }
     }
   }

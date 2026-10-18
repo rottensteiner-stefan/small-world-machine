@@ -12,8 +12,11 @@ uniform mat4 u_boneMatrices[64];
 
 #ifdef USE_INSTANCING
 in mat4 a_instanceMatrix;
-#ifdef USE_TEXTURE_ARRAY
 in vec4 a_instanceData;
+#ifdef USE_INSTANCE_COLOR
+out vec4 v_instanceColor;
+#endif
+#ifdef USE_TEXTURE_ARRAY
 out float v_texIndex;
 #endif
 #endif

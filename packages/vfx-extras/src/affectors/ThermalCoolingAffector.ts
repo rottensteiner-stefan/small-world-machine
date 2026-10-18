@@ -1,5 +1,5 @@
 import { Color, Vector3D } from "@small-world-machine/engine";
-import type { Particle } from "../Particle.js";
+import type { ParticleArrays } from "../Particle.js";
 import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface ThermalCoolingOptions {
@@ -38,28 +38,34 @@ export class ThermalCoolingAffector implements ParticleAffector {
     this.updateColor = options.updateColor ?? true;
   }
 
-  public apply(particle: Particle, dt: number): void {
-    const dx = particle.position.x - this.heatCenter.x;
-    const dy = particle.position.y - this.heatCenter.y;
-    const dz = particle.position.z - this.heatCenter.z;
+  public apply(arrays: ParticleArrays, index: number, dt: number): void {
+    const o = index * 3;
+    const dx = arrays.positions[o]! - this.heatCenter.x;
+    const dy = arrays.positions[o + 1]! - this.heatCenter.y;
+    const dz = arrays.positions[o + 2]! - this.heatCenter.z;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
     // Compression heating
     if (dist < this.compressionRadius) {
-      particle.heat += (this.compressionRadius - dist) * this.compressionHeatingRate * dt;
+      arrays.heats[index]! += (this.compressionRadius - dist) * this.compressionHeatingRate * dt;
     }
 
     // Cooling
-    particle.heat -= this.coolingRate * dt;
-    particle.heat = Math.max(0, Math.min(this.maxHeat, particle.heat));
+    arrays.heats[index]! -= this.coolingRate * dt;
+    arrays.heats[index] = Math.max(0, Math.min(this.maxHeat, arrays.heats[index]!));
 
     if (this.updateColor) {
-      const t = Math.min(1.0, particle.heat / (this.maxHeat * 0.8));
-      Color.blackbody(t, particle.color);
+      const t = Math.min(1.0, arrays.heats[index]! / (this.maxHeat * 0.8));
+      const c = new Color();
+      Color.blackbody(t, c);
+      const o4 = index * 4;
+      arrays.colors[o4] = c.r;
+      arrays.colors[o4 + 1] = c.g;
+      arrays.colors[o4 + 2] = c.b;
     }
   }
 
-  public applyBatch(particles: readonly Particle[], count: number, dt: number): void {
+  public applyBatch(arrays: ParticleArrays, count: number, dt: number): void {
     const centerX = this.heatCenter.x;
     const centerY = this.heatCenter.y;
     const centerZ = this.heatCenter.z;
@@ -68,28 +74,33 @@ export class ThermalCoolingAffector implements ParticleAffector {
     const coolingRate = this.coolingRate;
     const maxHeat = this.maxHeat;
     const updateColor = this.updateColor;
+    const heatColor = new Color();
 
     for (let i = 0; i < count; i++) {
-      const particle = particles[i]!;
-      if (particle.dead) {
+      if (arrays.aliveFlags[i] === 0) {
         continue;
       }
 
-      const dx = particle.position.x - centerX;
-      const dy = particle.position.y - centerY;
-      const dz = particle.position.z - centerZ;
+      const o = i * 3;
+      const dx = arrays.positions[o]! - centerX;
+      const dy = arrays.positions[o + 1]! - centerY;
+      const dz = arrays.positions[o + 2]! - centerZ;
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
       if (dist < compressionRadius) {
-        particle.heat += (compressionRadius - dist) * compressionHeatingRate * dt;
+        arrays.heats[i]! += (compressionRadius - dist) * compressionHeatingRate * dt;
       }
 
-      particle.heat -= coolingRate * dt;
-      particle.heat = Math.max(0, Math.min(maxHeat, particle.heat));
+      arrays.heats[i]! -= coolingRate * dt;
+      arrays.heats[i] = Math.max(0, Math.min(maxHeat, arrays.heats[i]!));
 
       if (updateColor) {
-        const t = Math.min(1.0, particle.heat / (maxHeat * 0.8));
-        Color.blackbody(t, particle.color);
+        const t = Math.min(1.0, arrays.heats[i]! / (maxHeat * 0.8));
+        Color.blackbody(t, heatColor);
+        const c4 = i * 4;
+        arrays.colors[c4] = heatColor.r;
+        arrays.colors[c4 + 1] = heatColor.g;
+        arrays.colors[c4 + 2] = heatColor.b;
       }
     }
   }

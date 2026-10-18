@@ -1,12 +1,13 @@
 # ADR 0035: Quality-Tier-Mechanismus (Detektion → Policy → Override-Sperre)
 
-> **Status: DRAFT** — Entwurf zur Diskussion über den Quality-Tier-Mechanismus (2026-10-18, Session
-> `alice-mobile-research`). Grundlage: 4-Agent-Recherche „mobile-rendering-testing" (Konsens 4/4,
-> Berichte `.agents/scratches/mobile-research/01–04*.md`), Audit-Verifikation gegen `HEAD 9ba78f16`.
-> Noch nicht verbindlich: Die Entscheidung wird erst mit der V1-Abgrenzung (siehe §„Offene
-> Entscheidungspunkte") und der finalen Implementierung promoviert.
-> **Pfade in diesem ADR beziehen sich auf `HEAD 9ba78f16` (2026-10-18); parallele Sessions
-> (ADR 0032, import-type, Wave-1-Packages A/B) können Zeilen verschieben — vor Umsetzung re-validieren.**
+> **Status: ACCEPTED** — Promoted 2026-10-18 (Session `swm-quality-tier`). Grundlage: 4-Agent-Recherche
+> „mobile-rendering-testing" (Konsens 4/4, Berichte `.agents/scratches/mobile-research/01–04*.md`),
+> Audit-Verifikation gegen `HEAD 9ba78f16` und Nutzer-Entscheid zu den offenen Punkten
+> (1=V1 statisch, 2=`autoDowngrade`**-Feld wird entfernt**, 3=Generische Override-Sperre).
+> **Pfade bezogen auf `HEAD e2227bfc` (2026-10-18, nach ADR 0036/0037/…); parallele Sessions
+> können Zeilen verschieben — vor Umsetzung re-validieren.**
+> **Übernahme am 2026-10-18:** `claude-perf` committeete dieses ADR als DRAFT in `e2227bfc`;
+> die vorliegende Fassung ist die von `swm-quality-tier` darauffolgend auf Accepted gesetzte Version.
 
 ## Kontext & Problem
 
@@ -83,9 +84,9 @@ werden können. Als eigener, späterer Meilenstein (ADR-Ergänzung).
 | Hook / Mechanismus | Entscheidung |
 |---|---|
 | `autoDowngrade`-Block `SmallWorldMachine.ts:173-200` + nachträgliche `config.quality`-Überschreibung | **Entfernt**, ersetzt durch Ebene-2-Resolver |
-| `QualityConfig.autoDowngrade`-Feld (`EngineOptions.ts:76`) | **Entfernt** (obsolet) — wenn der Nutzer zustimmt: API-brechend |
+| `QualityConfig.autoDowngrade`-Feld (`EngineOptions.ts:76`) | **Entfernt (beschlossen, V1)** — API-brechend |
 | `DeviceCaps.getPerformanceTier()` / `isMobile()` | **Bleibt** (Ebene 1, Detektion) |
-| `maxPixelRatio` + manuelle `msaa`/Qualitätswerte | **Bleibt**, als Override-Sperre (Ebene 3) |
+| `maxPixelRatio` + manuelle `msaa`/Qualitätswerte | **Bleibt**, als Override-Sperre (Ebene 3, generisch) |
 | Vorhandene Hebel (`renderer.type`-Branching, Post-Pipeline-Runtime-Config, per-Effekt-`enabled`) | **Bleiben** als Implementierungs-Surface der Tier-Matrix |
 
 ## Implementierungsansatz (V1-Skizze)
@@ -102,28 +103,32 @@ werden können. Als eigener, späterer Meilenstein (ADR-Ergänzung).
 4. Override-Sperre: explizit gesetzte Felder in `config.quality`/`config.postProcessing` gewinnen
    gegen die Matrix (V1 nur für die dokumentierten Achsen, siehe offene Punkte).
 
-## Offene Entscheidungspunkte (vor Promotion zu Accepted)
+## Offene Entscheidungspunkte — beschlossen (2026-10-18, Nutzer-Entscheid)
 
-1. **V1-Umfang statisch vs. dynamisch:** Empfehlung dieses Entwurfs: **V1 nur statischer
-   Tier-Resolver (Ebene 2), keine dynamische Render-Skala** (Ebene 4 später). Reduziert Kollision
-   mit Alices Wave-1-Claim (`renderers/`), Deckt das echte Problem (Redmi braucht statische
-   30-FPS-Reduktion bei starken Einsparungen) ohne unkalibrierte Auto-Logik.
-2. **API-Breaking `autoDowngrade`:** Feld entfernen (V1) oder deprecaten + in v1.0.0 entfernen?
-   (Parallele ADRs entfernen Deprecations mit v1.0.0-Ziel — Konsistenz spricht für
-   Deprecate→Remove, aber der Block selbst muss raus.)
-3. **Override-Umfang in V1:** Nur `maxPixelRatio` + `msaa` als gesperrte Achsen, oder generisch
-   „jedes explizit gesetzte Qualitäts-Feld sperrt"? Generisch ist weniger Code-Sonderfälle,
-   aber schwerer dokumentierbar.
-4. **Kaskaden-/Fog-Werte der LOW-Matrix:** exakte Zahlen werden am Redmi kalibriert — ADR
-   hinterlegt nur Prinzip + Startwerte, finale Werte in der Implementierungs-Notiz.
+1. **V1-Umfang:** **Beschlossen: V1 nur statischer Tier-Resolver (Ebene 2), keine dynamische
+   Render-Skala.** Ebene 4 (Runtime-Feedback) bleibt explizit aus V1 heraus; eigener, späterer
+   Meilenstein nach Redmi-Kalibrierung und nach Alices Wave-1.
+2. **API-Breaking `autoDowngrade`:** **Beschlossen: Feld wird in V1 entfernt** (nicht nur
+   deprecaten). Aufrufer, die `quality.autoDowngrade` setzen, müssen das Feld streichen; die
+   Automatik ist künftig implizit (Tier-Policy greift immer, Override-Sperre schützt explizite
+   Werte). Konsistent mit dem „Move fast, one cut"-Muster der parallelen Deprecation-Removals.
+3. **Override-Umfang in V1:** **Beschlossen: generische Sperre.** Jedes explizit gesetzte
+   Qualitäts- bzw. Post-Config-Feld sperrt seine Achse gegen die Tier-Policy („gesetzter Wert =
+   gesperrte Achse"). Kein V1 nur für `maxPixelRatio`+`msaa` — die generische Semantik ist weniger
+   Code-Sonderfälle und entspricht dem „explizite Wahl sperrt Auto"-Prinzip konsequent.
+4. **Kaskaden-/Fog-Werte der LOW-Matrix:** Startwerte in der Tier-Matrix hinterlegt, finale Werte
+   nach Redmi-Kalibrierung (Runbook `03`). Kein Block für die Promotion.
+
+Damit sind alle vier Punkte entschieden; die V1-Implementierung beginnt unmittelbar nach dieser
+Promotion.
 
 ## Consequences
 
-- **API:** `autoDowngrade`-Feld entfällt (siehe offener Punkt 2); Konfigurationssemantik ändert
+- **API:** `autoDowngrade`-Feld entfällt (beschlossen, V1); Konfigurationssemantik ändert
   sich von „mutabl, zweimal geschrieben" zu „einmal resolved, danach geschlossen".
-- **CI/Regression:** `autoDowngrade` ist heute implizit im Verhalten von Tests/Showcases enthalten;
-  Entfernen verlangt eine **Golden-/Showcase-Gegenprobe auf erzwungenem LOW** (Redmi-Simulation via
-  erzwungenem Tier + niedriger Auflösung, Runbook `03`), nicht nur Unit-Tests.
+- **CI/Regression:** Entfernen verlangt eine **Golden-/Showcase-Gegenprobe auf erzwungenem LOW**
+  (Redmi-Simulation via erzwungenem Tier + niedriger Auflösung, Runbook `03`) und eine
+  HIGH-Invarianz-Prüfung (HIGH muss exakt heutigem Desktop-Verhalten entsprechen).
 - **Showcases:** Neue Default-Sicherheit für Mobile, ohne dass Showcases Code ändern müssen
   (kein Showcase-29-Sonderfall).
 - **Parallel-Aktivität:** `EngineOptions.ts` (Interfaces) wird von keinem aktiven Claim berührt

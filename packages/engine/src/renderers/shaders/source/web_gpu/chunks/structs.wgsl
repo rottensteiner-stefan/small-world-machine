@@ -108,7 +108,8 @@ struct Out {
     @location(3) t: vec3f,
     @location(4) b: vec3f,
     @location(5) original_uv: vec2f,
-    @location(6) texIndex: f32
+    @location(6) texIndex: f32,
+    @location(7) instColor: vec4f
 }
 
 struct PointLight {

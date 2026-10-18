@@ -1,4 +1,4 @@
-import type { Particle } from "../Particle.js";
+import type { ParticleArrays } from "../Particle.js";
 import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface TurbulenceOptions {
@@ -26,46 +26,49 @@ export class TurbulenceAffector implements ParticleAffector {
     this.evolutionSpeed = options.evolutionSpeed ?? 1.0;
   }
 
-  public apply(particle: Particle, _dt: number): void {
+  public apply(arrays: ParticleArrays, index: number, _dt: number): void {
     const f = this.frequency;
     const t = this._time;
+    const o = index * 3;
 
-    const px = particle.position.x * f;
-    const py = particle.position.y * f;
-    const pz = particle.position.z * f;
+    const px = arrays.positions[o]! * f;
+    const py = arrays.positions[o + 1]! * f;
+    const pz = arrays.positions[o + 2]! * f;
 
     // Fast trigonometric curl approximation (divergence-free curl-noise field)
     const fx = Math.sin(py + t) * Math.cos(pz + t * 0.7);
     const fy = Math.sin(pz + t) * Math.cos(px + t * 0.7);
     const fz = Math.sin(px + t) * Math.cos(py + t * 0.7);
 
-    particle.acceleration.x += (fx * this.strength) / particle.mass;
-    particle.acceleration.y += (fy * this.strength) / particle.mass;
-    particle.acceleration.z += (fz * this.strength) / particle.mass;
+    const mass = arrays.masses[index]!;
+    arrays.accelerations[o]! += (fx * this.strength) / mass;
+    arrays.accelerations[o + 1]! += (fy * this.strength) / mass;
+    arrays.accelerations[o + 2]! += (fz * this.strength) / mass;
   }
 
-  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
     const t = this._time;
     const f = this.frequency;
     const strength = this.strength;
 
     for (let i = 0; i < count; i++) {
-      const particle = particles[i]!;
-      if (particle.dead) {
+      if (arrays.aliveFlags[i] === 0) {
         continue;
       }
 
-      const px = particle.position.x * f;
-      const py = particle.position.y * f;
-      const pz = particle.position.z * f;
+      const o = i * 3;
+      const px = arrays.positions[o]! * f;
+      const py = arrays.positions[o + 1]! * f;
+      const pz = arrays.positions[o + 2]! * f;
 
       const fx = Math.sin(py + t) * Math.cos(pz + t * 0.7);
       const fy = Math.sin(pz + t) * Math.cos(px + t * 0.7);
       const fz = Math.sin(px + t) * Math.cos(py + t * 0.7);
 
-      particle.acceleration.x += (fx * strength) / particle.mass;
-      particle.acceleration.y += (fy * strength) / particle.mass;
-      particle.acceleration.z += (fz * strength) / particle.mass;
+      const mass = arrays.masses[i]!;
+      arrays.accelerations[o]! += (fx * strength) / mass;
+      arrays.accelerations[o + 1]! += (fy * strength) / mass;
+      arrays.accelerations[o + 2]! += (fz * strength) / mass;
     }
   }
 

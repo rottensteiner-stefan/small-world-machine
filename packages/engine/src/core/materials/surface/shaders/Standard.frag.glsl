@@ -120,4 +120,7 @@ void main() {
 #endif
     
     [FOG_CALC]
+#ifdef USE_INSTANCE_COLOR
+    fragColor.rgb *= v_instanceColor.rgb;
+#endif
 }

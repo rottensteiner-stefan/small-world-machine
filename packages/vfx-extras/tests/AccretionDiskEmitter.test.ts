@@ -10,18 +10,28 @@ describe("AccretionDiskEmitter", () => {
       mass: 100,
     });
 
-    expect(disk.system.particles.length).toBe(50);
+    expect(disk.system.activeCount).toBe(50);
 
-    const firstParticle = disk.system.particles[0]!;
-    expect(firstParticle.velocity.length()).toBeGreaterThan(0);
-    expect(firstParticle.color).toBeDefined();
+    const arrays = disk.system.arrays;
+    const velLen = Math.sqrt(
+      arrays.velocities[0]! * arrays.velocities[0]! +
+        arrays.velocities[1]! * arrays.velocities[1]! +
+        arrays.velocities[2]! * arrays.velocities[2]!,
+    );
+    expect(velLen).toBeGreaterThan(0);
+    expect(arrays.colors).toBeDefined();
 
     // Step simulation for 5 frames
     for (let i = 0; i < 5; i++) {
       disk.update(0.016);
     }
 
-    expect(firstParticle.position.length()).toBeGreaterThan(0);
+    const posLen = Math.sqrt(
+      arrays.positions[0]! * arrays.positions[0]! +
+        arrays.positions[1]! * arrays.positions[1]! +
+        arrays.positions[2]! * arrays.positions[2]!,
+    );
+    expect(posLen).toBeGreaterThan(0);
   });
 
   it("respawns absorbed particles cleanly at outer radius", () => {
@@ -32,14 +42,21 @@ describe("AccretionDiskEmitter", () => {
       eventHorizonRadius: 0.5,
     });
 
-    const p = disk.system.particles[0]!;
+    const arrays = disk.system.arrays;
     // Place particle inside event horizon
-    p.position.set(0.1, 0, 0);
+    arrays.positions[0] = 0.1;
+    arrays.positions[1] = 0;
+    arrays.positions[2] = 0;
 
     disk.update(0.016);
 
     // Particle should have been swallowed and respawned near outerRadius (4.0)
-    expect(p.dead).toBe(false);
-    expect(p.position.length()).toBeCloseTo(4.0, 1);
+    expect(disk.system.isAlive(0)).toBe(true);
+    const posLen = Math.sqrt(
+      arrays.positions[0]! * arrays.positions[0]! +
+        arrays.positions[1]! * arrays.positions[1]! +
+        arrays.positions[2]! * arrays.positions[2]!,
+    );
+    expect(posLen).toBeCloseTo(4.0, 1);
   });
 });

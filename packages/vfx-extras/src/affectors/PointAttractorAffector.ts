@@ -1,5 +1,5 @@
 import { Vector3D } from "@small-world-machine/engine";
-import type { Particle } from "../Particle.js";
+import type { ParticleArrays } from "../Particle.js";
 import type { ParticleAffector } from "../ParticleAffector.js";
 
 export interface PointAttractorOptions {
@@ -31,10 +31,11 @@ export class PointAttractorAffector implements ParticleAffector {
     this.plummer = options.plummer ?? true;
   }
 
-  public apply(particle: Particle, _dt: number): void {
-    const dx = this.center.x - particle.position.x;
-    const dy = this.center.y - particle.position.y;
-    const dz = this.center.z - particle.position.z;
+  public apply(arrays: ParticleArrays, index: number, _dt: number): void {
+    const o = index * 3;
+    const dx = this.center.x - arrays.positions[o]!;
+    const dy = this.center.y - arrays.positions[o + 1]!;
+    const dz = this.center.z - arrays.positions[o + 2]!;
     const distSq = dx * dx + dy * dy + dz * dz;
     const dist = Math.sqrt(distSq) || 0.001;
 
@@ -53,12 +54,13 @@ export class PointAttractorAffector implements ParticleAffector {
     const fy = (dy / dist) * forceMag;
     const fz = (dz / dist) * forceMag;
 
-    particle.acceleration.x += fx / particle.mass;
-    particle.acceleration.y += fy / particle.mass;
-    particle.acceleration.z += fz / particle.mass;
+    const mass = arrays.masses[index]!;
+    arrays.accelerations[o]! += fx / mass;
+    arrays.accelerations[o + 1]! += fy / mass;
+    arrays.accelerations[o + 2]! += fz / mass;
   }
 
-  public applyBatch(particles: readonly Particle[], count: number, _dt: number): void {
+  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
     const centerX = this.center.x;
     const centerY = this.center.y;
     const centerZ = this.center.z;
@@ -67,14 +69,14 @@ export class PointAttractorAffector implements ParticleAffector {
     const plummer = this.plummer;
 
     for (let i = 0; i < count; i++) {
-      const particle = particles[i]!;
-      if (particle.dead) {
+      if (arrays.aliveFlags[i] === 0) {
         continue;
       }
 
-      const dx = centerX - particle.position.x;
-      const dy = centerY - particle.position.y;
-      const dz = centerZ - particle.position.z;
+      const o = i * 3;
+      const dx = centerX - arrays.positions[o]!;
+      const dy = centerY - arrays.positions[o + 1]!;
+      const dz = centerZ - arrays.positions[o + 2]!;
       const distSq = dx * dx + dy * dy + dz * dz;
       const dist = Math.sqrt(distSq) || 0.001;
 
@@ -90,9 +92,10 @@ export class PointAttractorAffector implements ParticleAffector {
       const fy = (dy / dist) * forceMag;
       const fz = (dz / dist) * forceMag;
 
-      particle.acceleration.x += fx / particle.mass;
-      particle.acceleration.y += fy / particle.mass;
-      particle.acceleration.z += fz / particle.mass;
+      const mass = arrays.masses[i]!;
+      arrays.accelerations[o]! += fx / mass;
+      arrays.accelerations[o + 1]! += fy / mass;
+      arrays.accelerations[o + 2]! += fz / mass;
     }
   }
 }

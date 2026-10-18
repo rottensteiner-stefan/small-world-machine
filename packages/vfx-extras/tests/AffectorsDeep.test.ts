@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { Particle } from "../src/Particle.js";
 import { Vector3D, Color } from "@small-world-machine/engine";
 import {
   PointAttractorAffector,
@@ -13,6 +12,7 @@ import {
   SizeOverLifeAffector,
   BouncePlaneAffector,
 } from "../src/affectors/index.js";
+import { createArrays, setState, readState } from "./helpers/soa.js";
 
 describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => {
   describe("PointAttractorAffector (Plummer Softened Gravity)", () => {
@@ -24,20 +24,19 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
         plummer: true,
       });
 
-      const p1 = new Particle();
-      p1.position.set(1.0, 0, 0);
-      p1.velocity.set(0, 0, 0);
-      p1.acceleration.set(0, 0, 0);
+      const arrays = createArrays(1);
+      setState(arrays, 0, { pos: [1, 0, 0], vel: [0, 0, 0], acc: [0, 0, 0] });
 
-      attractor.apply(p1, 0.1);
+      attractor.apply(arrays, 0, 0.1);
 
       // Force = G * M * r / (r^2 + eps^2)^(3/2)
       // For r=1.0, eps=0.25 (eps^2 = 0.0625): denom = (1.0 + 0.0625)^1.5 = 1.0625^1.5 = 1.09519
       // pull = 100 * 1.0 / 1.09519 = 91.31
-      expect(p1.acceleration.x).toBeLessThan(0); // Accelerated inward towards origin
-      expect(p1.acceleration.x).toBeCloseTo(-91.31, 1);
-      expect(p1.acceleration.y).toBe(0);
-      expect(p1.acceleration.z).toBe(0);
+      const state = readState(arrays, 0);
+      expect(state.acc[0]).toBeLessThan(0); // Accelerated inward towards origin
+      expect(state.acc[0]).toBeCloseTo(-91.31, 1);
+      expect(state.acc[1]).toBe(0);
+      expect(state.acc[2]).toBe(0);
     });
   });
 
@@ -49,16 +48,16 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
         inwardSuction: 2.0,
       });
 
-      const p = new Particle();
-      p.position.set(2.0, 0, 0); // Along +X
-      p.acceleration.set(0, 0, 0);
+      const arrays = createArrays(1);
+      setState(arrays, 0, { pos: [2, 0, 0], acc: [0, 0, 0] }); // Along +X
 
-      vortex.apply(p, 0.1);
+      vortex.apply(arrays, 0, 0.1);
 
       // Tangential direction around Y-axis at (2,0,0) points towards +Z
-      expect(p.acceleration.z).toBeGreaterThan(0);
+      const state = readState(arrays, 0);
+      expect(state.acc[2]).toBeGreaterThan(0);
       // Inward pull points towards origin (-X)
-      expect(p.acceleration.x).toBeLessThan(0);
+      expect(state.acc[0]).toBeLessThan(0);
     });
   });
 
@@ -71,22 +70,18 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
         axis: "y",
       });
 
-      const p = new Particle();
-      p.position.set(0, 5.0, 0);
-      p.velocity.set(0, 0, 0);
-      p.acceleration.set(0, 0, 0);
+      const arrays = createArrays(1);
 
       // Step 1: Initial downward acceleration
-      spring.apply(p, 0.1);
-      expect(p.acceleration.y).toBeLessThan(0);
-      expect(p.acceleration.y).toBeCloseTo(-5.0 * 20.0, 1); // F = -k * y => a = -100
+      setState(arrays, 0, { pos: [0, 5, 0], vel: [0, 0, 0], acc: [0, 0, 0] });
+      spring.apply(arrays, 0, 0.1);
+      expect(readState(arrays, 0).acc[1]).toBeLessThan(0);
+      expect(readState(arrays, 0).acc[1]).toBeCloseTo(-5.0 * 20.0, 1); // F = -k * y => a = -100
 
       // Step 2: Damping acts against upward velocity
-      p.velocity.set(0, 10.0, 0);
-      p.position.set(0, 0, 0);
-      p.acceleration.set(0, 0, 0);
-      spring.apply(p, 0.1);
-      expect(p.acceleration.y).toBeCloseTo(-20.0); // F_damp = -d * v = -2 * 10 = -20
+      setState(arrays, 0, { pos: [0, 0, 0], vel: [0, 10, 0], acc: [0, 0, 0] });
+      spring.apply(arrays, 0, 0.1);
+      expect(readState(arrays, 0).acc[1]).toBeCloseTo(-20.0); // F_damp = -d * v = -2 * 10 = -20
     });
   });
 
@@ -98,15 +93,14 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
         updateColor: true,
       });
 
-      const p = new Particle();
-      p.position.set(10.0, 0, 0); // Far away from compression radius
-      p.heat = 6.0;
-      p.color.set(1, 1, 1);
+      const arrays = createArrays(1);
+      setState(arrays, 0, { pos: [10, 0, 0], heat: 6, col: [1, 1, 1, 1] }); // Far away from compression radius
 
-      cooling.apply(p, 2.0); // dt = 2.0 => heat decreases by 1.0 to 5.0
-      expect(p.heat).toBeCloseTo(5.0);
+      cooling.apply(arrays, 0, 2.0); // dt = 2.0 => heat decreases by 1.0 to 5.0
+      const state = readState(arrays, 0);
+      expect(state.heat).toBeCloseTo(5.0);
       // Thermal color updated via blackbody
-      expect(p.color.r).toBeGreaterThan(0.7);
+      expect(state.col[0]).toBeGreaterThan(0.7);
     });
   });
 
@@ -117,24 +111,21 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
         fadeStartRadius: 0.55,
       });
 
-      const pOuter = new Particle();
-      pOuter.position.set(0.6, 0, 0);
-      pOuter.alpha = 1.0;
-      fader.apply(pOuter, 0.1);
-      expect(pOuter.alpha).toBeCloseTo(1.0);
+      const outerArrays = createArrays(1);
+      setState(outerArrays, 0, { pos: [0.6, 0, 0], alpha: 1 });
+      fader.apply(outerArrays, 0, 0.1);
+      expect(readState(outerArrays, 0).alpha).toBeCloseTo(1.0);
 
-      const pMid = new Particle();
-      pMid.position.set(0.45, 0, 0);
-      pMid.alpha = 1.0;
-      fader.apply(pMid, 0.1);
-      expect(pMid.alpha).toBeCloseTo(0.5);
+      const midArrays = createArrays(1);
+      setState(midArrays, 0, { pos: [0.45, 0, 0], alpha: 1 });
+      fader.apply(midArrays, 0, 0.1);
+      expect(readState(midArrays, 0).alpha).toBeCloseTo(0.5);
 
-      const pInner = new Particle();
-      pInner.position.set(0.3, 0, 0);
-      pInner.alpha = 1.0;
-      fader.apply(pInner, 0.1);
-      expect(pInner.alpha).toBeCloseTo(0.0);
-      expect(pInner.dead).toBe(true);
+      const innerArrays = createArrays(1);
+      setState(innerArrays, 0, { pos: [0.3, 0, 0], alpha: 1 });
+      fader.apply(innerArrays, 0, 0.1);
+      expect(readState(innerArrays, 0).alpha).toBeCloseTo(0.0);
+      expect(readState(innerArrays, 0).alive).toBe(false);
     });
   });
 
@@ -146,34 +137,36 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
         evolutionSpeed: 1.0,
       });
 
-      const p1 = new Particle();
-      p1.position.set(1.0, 0.5, 0.2);
-      p1.acceleration.set(0, 0, 0);
-      turb.apply(p1, 0.1);
+      const p1Arrays = createArrays(1);
+      setState(p1Arrays, 0, { pos: [1, 0.5, 0.2], acc: [0, 0, 0] });
+      turb.apply(p1Arrays, 0, 0.1);
 
-      const p2 = new Particle();
-      p2.position.set(5.0, -2.5, 3.2);
-      p2.acceleration.set(0, 0, 0);
-      turb.apply(p2, 0.1);
+      const p2Arrays = createArrays(1);
+      setState(p2Arrays, 0, { pos: [5, -2.5, 3.2], acc: [0, 0, 0] });
+      turb.apply(p2Arrays, 0, 0.1);
 
+      const s1 = readState(p1Arrays, 0);
+      const s2 = readState(p2Arrays, 0);
       // Accelerations should be perturbed differently based on position
-      expect(p1.acceleration.length()).toBeGreaterThan(0);
-      expect(p2.acceleration.length()).toBeGreaterThan(0);
-      expect(p1.acceleration.x).not.toBe(p2.acceleration.x);
+      const len1 = Math.sqrt(s1.acc[0] * s1.acc[0] + s1.acc[1] * s1.acc[1] + s1.acc[2] * s1.acc[2]);
+      const len2 = Math.sqrt(s2.acc[0] * s2.acc[0] + s2.acc[1] * s2.acc[1] + s2.acc[2] * s2.acc[2]);
+      expect(len1).toBeGreaterThan(0);
+      expect(len2).toBeGreaterThan(0);
+      expect(s1.acc[0]).not.toBe(s2.acc[0]);
     });
   });
 
   describe("DragAffector (Medium Resistance)", () => {
     it("decelerates particles smoothly without reversing direction", () => {
       const drag = new DragAffector({ drag: 0.5, quadraticDrag: 0.01 });
-      const p = new Particle();
-      p.velocity.set(10.0, 20.0, -30.0);
-      p.acceleration.set(0, 0, 0);
+      const arrays = createArrays(1);
+      setState(arrays, 0, { vel: [10, 20, -30], acc: [0, 0, 0] });
 
-      drag.apply(p, 0.1);
-      expect(p.acceleration.x).toBeLessThan(0);
-      expect(p.acceleration.y).toBeLessThan(0);
-      expect(p.acceleration.z).toBeGreaterThan(0);
+      drag.apply(arrays, 0, 0.1);
+      const state = readState(arrays, 0);
+      expect(state.acc[0]).toBeLessThan(0);
+      expect(state.acc[1]).toBeLessThan(0);
+      expect(state.acc[2]).toBeGreaterThan(0);
     });
   });
 
@@ -185,29 +178,28 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
         interpolateAlpha: true,
       });
 
-      const p = new Particle();
-      p.maxLife = 10.0;
+      const arrays = createArrays(1);
+      setState(arrays, 0, { maxLife: 10.0, life: 0 });
 
       // At start (life = 0)
-      p.life = 0.0;
-      colorGrad.apply(p, 0.1);
-      expect(p.color.r).toBeCloseTo(1.0);
-      expect(p.color.b).toBeCloseTo(0.0);
-      expect(p.alpha).toBeCloseTo(1.0);
+      colorGrad.apply(arrays, 0, 0.1);
+      expect(readState(arrays, 0).col[0]).toBeCloseTo(1.0);
+      expect(readState(arrays, 0).col[2]).toBeCloseTo(0.0);
+      expect(readState(arrays, 0).alpha).toBeCloseTo(1.0);
 
       // At half-life (life = 5)
-      p.life = 5.0;
-      colorGrad.apply(p, 0.1);
-      expect(p.color.r).toBeCloseTo(0.5);
-      expect(p.color.b).toBeCloseTo(0.5);
-      expect(p.alpha).toBeCloseTo(0.5);
+      arrays.lives[0] = 5.0;
+      colorGrad.apply(arrays, 0, 0.1);
+      expect(readState(arrays, 0).col[0]).toBeCloseTo(0.5);
+      expect(readState(arrays, 0).col[2]).toBeCloseTo(0.5);
+      expect(readState(arrays, 0).alpha).toBeCloseTo(0.5);
 
       // At end-life (life = 10)
-      p.life = 10.0;
-      colorGrad.apply(p, 0.1);
-      expect(p.color.r).toBeCloseTo(0.0);
-      expect(p.color.b).toBeCloseTo(1.0);
-      expect(p.alpha).toBeCloseTo(0.0);
+      arrays.lives[0] = 10.0;
+      colorGrad.apply(arrays, 0, 0.1);
+      expect(readState(arrays, 0).col[0]).toBeCloseTo(0.0);
+      expect(readState(arrays, 0).col[2]).toBeCloseTo(1.0);
+      expect(readState(arrays, 0).alpha).toBeCloseTo(0.0);
     });
   });
 
@@ -218,23 +210,22 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
         endScale: 0.0,
       });
 
-      const p = new Particle();
-      p.maxLife = 10.0;
+      const arrays = createArrays(1);
+      setState(arrays, 0, { maxLife: 10.0, life: 0 });
 
       // Start
-      p.life = 0.0;
-      sizeCurve.apply(p, 0.1);
-      expect(p.size).toBeCloseTo(1.0);
+      sizeCurve.apply(arrays, 0, 0.1);
+      expect(readState(arrays, 0).size).toBeCloseTo(1.0);
 
       // Half-life
-      p.life = 5.0;
-      sizeCurve.apply(p, 0.1);
-      expect(p.size).toBeCloseTo(0.5);
+      arrays.lives[0] = 5.0;
+      sizeCurve.apply(arrays, 0, 0.1);
+      expect(readState(arrays, 0).size).toBeCloseTo(0.5);
 
       // End
-      p.life = 10.0;
-      sizeCurve.apply(p, 0.1);
-      expect(p.size).toBeCloseTo(0.0);
+      arrays.lives[0] = 10.0;
+      sizeCurve.apply(arrays, 0, 0.1);
+      expect(readState(arrays, 0).size).toBeCloseTo(0.0);
     });
   });
 
@@ -247,18 +238,18 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
         friction: 0.9,
       });
 
-      const p = new Particle();
-      p.position.set(0, -0.5, 0); // Penetrated ground plane
-      p.velocity.set(10.0, -20.0, 0);
+      const arrays = createArrays(1);
+      setState(arrays, 0, { pos: [0, -0.5, 0], vel: [10, -20, 0] }); // Penetrated ground plane
 
-      bouncer.apply(p, 0.1);
+      bouncer.apply(arrays, 0, 0.1);
 
+      const state = readState(arrays, 0);
       // Clamped to surface
-      expect(p.position.y).toBe(0.0);
+      expect(state.pos[1]).toBe(0.0);
       // Inverted and dampened vertical velocity
-      expect(p.velocity.y).toBeCloseTo(16.0); // 20.0 * 0.8
+      expect(state.vel[1]).toBeCloseTo(16.0); // 20.0 * 0.8
       // Horizontal friction damping
-      expect(p.velocity.x).toBeCloseTo(9.0); // 10.0 * 0.9
+      expect(state.vel[0]).toBeCloseTo(9.0); // 10.0 * 0.9
     });
   });
 });

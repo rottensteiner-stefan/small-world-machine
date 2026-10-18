@@ -143,7 +143,7 @@ The mask is sampled with clamped, smooth (trilinear) filtering at the box bounda
 
 Backend specifics:
 
-- **WebGPU:** the element mask is sampled in the froxel inject pass (local lights + ambient) and the integrate pass (directional sun); up to **16** per-volume mask slots exist (slot = volume index; absent ones bound to identity). Changing a mask or setting `needsUpdate` re-uploads and rebuilds the affected bind groups.
+- **WebGPU:** the element mask is sampled in the froxel inject pass (local lights + ambient) and the integrate pass (directional sun); up to **8** per-volume mask slots exist (slot = volume index; absent ones bound to identity). Changing a mask or setting `needsUpdate` re-uploads and rebuilds the affected bind groups.
 - **WebGL2:** element mask on its own texture unit; up to **8** per-volume masks (GLES 3.0 guarantees 16 fragment texture units, of which 0–6 are used by the raymarch and the spot-shadow samples). If more than 8 volumes carry a mask, the excess are ignored and a one-time warning is logged — keep the masked volumes at the beginning of the scene's fog-volume list.
 
 ---

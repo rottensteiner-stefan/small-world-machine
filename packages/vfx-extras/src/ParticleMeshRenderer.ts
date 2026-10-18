@@ -11,18 +11,20 @@ export interface ParticleMeshRendererOptions {
   geometry: GeometryDataInterface;
   /** Shared material for the instanced mesh. */
   material: AbstractMaterial;
-  /** If true, initializes per-instance data buffer (4 floats: RGBA) for shader color mapping. Defaults to true. */
+  /** If true, writes per-instance RGBA color (r, g, b, a) into the instance color buffer. Defaults to true. */
   enableColorBuffer?: boolean;
 }
 
 /**
  * High-performance rendering bridge connecting a ParticleSystem to an InstancedMesh.
- * Synchronizes particle positions, scales, and colors into GPU buffers in a single draw call.
+ * Synchronizes particle positions, scales, and colors into GPU buffers in a single draw call,
+ * reading straight out of the system's SoA arrays (no per-particle objects).
  */
 export class ParticleMeshRenderer {
   public readonly mesh: InstancedMesh;
   public readonly system: ParticleSystem;
 
+  private readonly _tempPosition: Vector3D = new Vector3D();
   private readonly _tempMatrix: Matrix4 = new Matrix4();
   private readonly _tempScale: Vector3D = new Vector3D(1, 1, 1);
   private readonly _tempRotation: Quaternion = new Quaternion();
@@ -39,15 +41,18 @@ export class ParticleMeshRenderer {
     this._enableColorBuffer = options.enableColorBuffer ?? true;
     if (this._enableColorBuffer) {
       this.mesh.initInstanceData(4); // r, g, b, a
+      // The instance-data buffer carries RGBA color here, so the renderers compile an instance-color
+      // variant and the base shaders tint the surface with it (see InstancedMesh.useInstanceDataAsColor).
+      this.mesh.useInstanceDataAsColor = true;
     }
   }
 
   /**
-   * Synchronizes active particle transforms and colors into the GPU instance buffers.
+   * Synchronizes live particle transforms and colors into the GPU instance buffers. Zero
+   * allocation: reads the system's SoA arrays directly and reuses scratch objects.
    */
   public sync(): void {
-    const particles = this.system.particles;
-    const count = particles.length;
+    const arrays = this.system.arrays;
     const capacity = this.system.capacity;
 
     const matrices = this.mesh.instanceMatrices;
@@ -55,21 +60,30 @@ export class ParticleMeshRenderer {
 
     for (let i = 0; i < capacity; i++) {
       const offset16 = i * 16;
-      if (i < count && !particles[i]!.dead && particles[i]!.alpha > 0.001) {
-        const p = particles[i]!;
-        const s = p.size * p.alpha;
+      if (arrays.aliveFlags[i] === 1 && arrays.alphas[i]! > 0.001) {
+        const o = i * 3;
+        const s = arrays.sizes[i]! * arrays.alphas[i]!;
         this._tempScale.set(s, s, s);
+        this._tempPosition.set(
+          arrays.positions[o]!,
+          arrays.positions[o + 1]!,
+          arrays.positions[o + 2]!,
+        );
 
         // Build TRS matrix without GC allocations
-        this._tempMatrix.composeFromQuaternion(p.position, this._tempRotation, this._tempScale);
+        this._tempMatrix.composeFromQuaternion(
+          this._tempPosition,
+          this._tempRotation,
+          this._tempScale,
+        );
         matrices.set(this._tempMatrix.data, offset16);
 
         if (instanceData && this._enableColorBuffer) {
           const offset4 = i * 4;
-          instanceData[offset4] = p.color.r;
-          instanceData[offset4 + 1] = p.color.g;
-          instanceData[offset4 + 2] = p.color.b;
-          instanceData[offset4 + 3] = p.alpha;
+          instanceData[offset4] = arrays.colors[offset4]!;
+          instanceData[offset4 + 1] = arrays.colors[offset4 + 1]!;
+          instanceData[offset4 + 2] = arrays.colors[offset4 + 2]!;
+          instanceData[offset4 + 3] = arrays.alphas[i]!;
         }
       } else {
         // Zero-scale matrix collapses dead/invisible instances

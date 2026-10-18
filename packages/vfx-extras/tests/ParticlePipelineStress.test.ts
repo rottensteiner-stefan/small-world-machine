@@ -61,8 +61,8 @@ describe("Particle Pipeline Stress & Buffer Parity", () => {
       renderer.sync();
     }
 
-    expect(system.particles.length).toBeGreaterThan(0);
-    expect(system.particles.length).toBeLessThanOrEqual(system.capacity);
+    expect(system.activeCount).toBeGreaterThan(0);
+    expect(system.activeCount).toBeLessThanOrEqual(system.capacity);
     expect(renderer.mesh.instanceMatrices.length).toBe(system.capacity * 16);
     expect(renderer.mesh.instanceData!.length).toBe(system.capacity * 4);
     expect(renderer.mesh.instanceMatrixNeedsUpdate).toBe(true);
@@ -81,20 +81,28 @@ describe("Particle Pipeline Stress & Buffer Parity", () => {
       enableColorBuffer: true,
     });
 
-    const p = system.emit({
+    const idx = system.emit({
       position: new Vector3D(3.5, -1.2, 7.8),
       size: 1.5,
       alpha: 0.8,
-    })!;
-    p.color.set(0.7, 0.4, 0.1);
+    });
+    system.arrays.colors[idx * 4] = 0.7;
+    system.arrays.colors[idx * 4 + 1] = 0.4;
+    system.arrays.colors[idx * 4 + 2] = 0.1;
 
     renderer.sync();
 
-    // Compute reference matrix manually
+    // Compute reference matrix manually from the exact SoA values
+    const size = system.arrays.sizes[idx]! * system.arrays.alphas[idx]!;
     const refMatrix = new Matrix4();
-    const refScale = new Vector3D(p.size * p.alpha, p.size * p.alpha, p.size * p.alpha);
+    const refScale = new Vector3D(size, size, size);
     const refRot = new Quaternion();
-    refMatrix.composeFromQuaternion(p.position, refRot, refScale);
+    const refPos = new Vector3D(
+      system.arrays.positions[idx * 3]!,
+      system.arrays.positions[idx * 3 + 1]!,
+      system.arrays.positions[idx * 3 + 2]!,
+    );
+    refMatrix.composeFromQuaternion(refPos, refRot, refScale);
 
     for (let i = 0; i < 16; i++) {
       expect(renderer.mesh.instanceMatrices[i]).toBeCloseTo(refMatrix.data[i]!);

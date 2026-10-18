@@ -123,6 +123,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   private _instancedArraysExt: ANGLE_instanced_arrays | null = null;
   private _warnedNoInstancedArrays = false;
   private _instanceMatrixBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
+  private _instanceDataBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
 
   /** @inheritdoc */
   public async initialize(
@@ -224,7 +225,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       const samplerTypes = new Map<string, number>();
 
       const attribsToQuery = ["a_position", "a_normal", "a_uv", "a_tangent", "a_color"];
-      if (isInstanced) attribsToQuery.push("a_instanceMatrix");
+      if (isInstanced) attribsToQuery.push("a_instanceMatrix", "a_instanceData");
       attribsToQuery.forEach((name) => {
         attributes.set(name, this.gl.getAttribLocation(prog, name));
       });
@@ -831,6 +832,12 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     const manifest = mat.getRenderManifest();
     const texs = manifest.textures;
     const flags = resolveManifestFlags(manifest.flags, this._quality.disableTextures) ?? [];
+    // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
+    // semantics stay untouched for other meshes; only an instanced mesh explicitly requesting it
+    // gets the `USE_INSTANCE_COLOR` variant compiled in.
+    if (isInstanced && firstObj instanceof InstancedMesh && firstObj.useInstanceDataAsColor) {
+      flags.push("USE_INSTANCE_COLOR");
+    }
 
     const programKey = this._programCacheKey(shaderId, isInstanced, flags);
     const cache = this._getProgram(shaderId, isInstanced, flags);
@@ -1111,6 +1118,34 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
             }
           }
 
+          // Per-instance RGBA color (a_instanceData, material USE_INSTANCE_COLOR opt-in): upload
+          // and bind the instance-data buffer with an instancing divisor -- mirrors WebGL2's
+          // instanced-path binding, which was missing here so instance colors never reached a
+          // WebGL1 shader.
+          const dataLoc = cache.attributes.get("a_instanceData");
+          if (dataLoc !== undefined && dataLoc >= 0 && instMesh.instanceData) {
+            let dataBuf = this._instanceDataBuffers.get(instMesh);
+            if (!dataBuf) {
+              dataBuf = this.gl.createBuffer()!;
+              this._instanceDataBuffers.set(instMesh, dataBuf);
+            }
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
+            if (instMesh.instanceDataNeedsUpdate) {
+              this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
+              instMesh.instanceDataNeedsUpdate = false;
+            }
+            this.gl.enableVertexAttribArray(dataLoc);
+            this.gl.vertexAttribPointer(
+              dataLoc,
+              instMesh.instanceDataSize,
+              this.gl.FLOAT,
+              false,
+              0,
+              0,
+            );
+            ext.vertexAttribDivisorANGLE(dataLoc, 1);
+          }
+
           if (mesh.isIndexed) {
             this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, mesh.ebo ?? null);
             ext.drawElementsInstancedANGLE(
@@ -1129,6 +1164,10 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
               ext.vertexAttribDivisorANGLE(instLoc + i, 0);
               this.gl.disableVertexAttribArray(instLoc + i);
             }
+          }
+          if (dataLoc !== undefined && dataLoc >= 0) {
+            ext.vertexAttribDivisorANGLE(dataLoc, 0);
+            this.gl.disableVertexAttribArray(dataLoc);
           }
         } else {
           this._scratchModelMatrix.set(o.worldMatrix.data);

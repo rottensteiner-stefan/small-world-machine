@@ -14,6 +14,14 @@ export class InstancedMesh extends Object3D {
   public instanceData?: Float32Array;
   public instanceDataNeedsUpdate: boolean = false;
   public instanceDataSize: number = 0;
+  /**
+   * When true, `instanceData` holds per-instance RGBA color (r,g,b,a) instead of the legacy
+   * engine-generic meaning (a texture-array index in `.x`). The renderers compile a
+   * `USE_INSTANCE_COLOR` variant and the base shaders multiply the tint into the surface color,
+   * so the two semantics stay disjoint at shader-compile time (see `InstancedMesh` particle
+   * renderers). Defaults to false.
+   */
+  public useInstanceDataAsColor: boolean = false;
 
   constructor(
     name: string,
