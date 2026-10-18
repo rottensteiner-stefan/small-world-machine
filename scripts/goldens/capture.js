@@ -153,7 +153,7 @@ async function captureCell(browser, { poolKey, view }) {
   });
   page.on("pageerror", (error) => errors.push(error.message));
 
-  const query = `?rendererType=${backend}&__golden=${poolKey}&__goldenView=${view}&__goldenFrames=${frames}`;
+  const query = `?rendererType=${backend}&__golden=${poolKey}&__goldenView=${view}&__goldenFrames=${frames}&tier=high`;
   const url = `${PREVIEW_ORIGIN}/apps/showcases/10/index.html${query}`;
 
   try {

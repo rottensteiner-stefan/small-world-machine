@@ -1,3 +1,5 @@
+import { classifyGpu, GpuClass } from "./GpuClass.js";
+
 export enum PerformanceTier {
   LOW = "LOW",
   MEDIUM = "MEDIUM",
@@ -258,6 +260,14 @@ export class DeviceCaps {
         this._maxTextureArrayLayers = gl2.getParameter(gl2.MAX_ARRAY_TEXTURE_LAYERS);
         this._maxColorAttachments = gl2.getParameter(gl2.MAX_COLOR_ATTACHMENTS);
         this._hasFloatTextures = true; // Required by spec in WebGL2
+
+        if (this._gpuModel === "Unknown") {
+          const debugInfo = gl2.getExtension("WEBGL_debug_renderer_info");
+          if (debugInfo) {
+            this._gpuModel = gl2.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+            this._gpuVendor = gl2.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+          }
+        }
       }
     } catch {
       this._hasWebGL2 = false;
@@ -555,8 +565,9 @@ export class DeviceCaps {
       return true;
     }
 
+    // Physical screen, not the window: a touch laptop with a narrow browser window is not a phone.
     const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-    if (hasTouch && window.innerWidth <= 1024) {
+    if (hasTouch && Math.min(window.screen.width, window.screen.height) <= 1024) {
       return true;
     }
 
@@ -569,8 +580,13 @@ export class DeviceCaps {
   }
 
   public get memoryGB(): number {
-    if (typeof navigator === "undefined") return 4;
-    return (navigator as unknown as { deviceMemory?: number }).deviceMemory || 4;
+    return this.reportedMemoryGB ?? 4;
+  }
+
+  /** `navigator.deviceMemory`, or `undefined` where the browser does not report it. */
+  public get reportedMemoryGB(): number | undefined {
+    if (typeof navigator === "undefined") return undefined;
+    return (navigator as unknown as { deviceMemory?: number }).deviceMemory || undefined;
   }
 
   public get pixelRatio(): number {
@@ -589,10 +605,25 @@ export class DeviceCaps {
   }
 
   /**
+   * Test/debug override that bypasses detection (device simulation, deterministic golden renders).
+   * The URL parameter `?tier=low|medium|high` has the same effect without code changes.
+   */
+  public forcedTier: PerformanceTier | undefined = undefined;
+
+  private _readTierFromUrl(): PerformanceTier | undefined {
+    if (typeof window === "undefined" || !window.location) return undefined;
+    const value = new URLSearchParams(window.location.search).get("tier")?.toUpperCase();
+    return Object.values(PerformanceTier).find((tier) => tier === value);
+  }
+
+  /**
    * Uses experimental flags and hardware information to guess the device's performance capability.
    */
   public getPerformanceTier(): PerformanceTier {
+    const forcedTier = this.forcedTier ?? this._readTierFromUrl();
+    if (forcedTier) return forcedTier;
     if (typeof navigator === "undefined") return PerformanceTier.MEDIUM;
+    if (!this._isInitialized) this.init();
 
     let score = 0;
 
@@ -601,13 +632,17 @@ export class DeviceCaps {
     if (cores >= 8) score += 2;
     else if (cores > 4) score += 1;
 
-    // 2. Device Memory (Experimental Web API - returns RAM in GB, capped usually at 8)
-    const memory = this.memoryGB;
-    if (memory >= 8) score += 2;
+    // 2. Device Memory (Chromium-only, RAM in GB, capped at 8). Absence is a browser property,
+    // not a device property -- Safari and Firefox never report it -- so unknown scores like a
+    // well-equipped device instead of capping every Safari/Firefox desktop below HIGH.
+    const memory = this.reportedMemoryGB;
+    if (memory === undefined || memory >= 8) score += 2;
     else if (memory > 4) score += 1;
 
-    // 3. Next-Gen API presence (WebGPU)
-    if (navigator.gpu) score += 1;
+    // 3. GPU class from the unmasked renderer string
+    const gpuClass = classifyGpu(this._gpuModel);
+    if (gpuClass === GpuClass.HIGH) score += 2;
+    else if (gpuClass === GpuClass.LOW) score -= 2;
 
     // 4. Form factor penalty (Mobile devices thermally throttle much faster)
     if (this.isMobile()) {
