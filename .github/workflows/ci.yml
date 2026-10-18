@@ -232,6 +232,23 @@ jobs:
         if: steps.skip.outputs.should_run == 'false'
         run: echo "SKIPPED - no output-relevant change since the baseline commit; gate green without a capture."
 
+      # Fail-closed guard (M1): das Diff-Gate muss ein verbindliches Ergebnis haben. `should_run`
+      # wird vom Skript in jedem Pfad gesetzt; bleibt es dennoch leer (z.B. GITHUB_OUTPUT nicht
+      # verfügbar), darf der Job NICHT grün durchrutschen, ohne dass ein Capture existiert.
+      - name: Gate must have produced an outcome
+        if: always()
+        run: |
+          set -e
+          if [ "${{ steps.skip.outputs.should_run }}" = "false" ]; then
+            echo "Gate skipped by design - green."
+            exit 0
+          fi
+          if [ ! -d "${{ runner.temp }}/liquid-goldens/current" ]; then
+            echo "Gate produced no capture - failing closed."
+            exit 1
+          fi
+          echo "Gate captured a shard under ${{ runner.temp }}/liquid-goldens/current."
+
       # Diagnostic artifact (current captures + manifest/summary), kept even on failure.
       - name: Upload Liquid goldens diagnostic artifacts
         uses: actions/upload-artifact@v4
