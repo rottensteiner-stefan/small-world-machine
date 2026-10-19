@@ -414,7 +414,7 @@ scene.joints.push(doorHinge);
 
 ## 10. Continuous Collision Detection (CCD)
 
-For very fast-moving objects (projectiles, balls) that would otherwise skip through thin walls within a single frame (**tunneling**), Small World Machine provides continuous collision detection for spheres, boxes (`BoundingBox`), `OBB`s, and rays:
+For very fast-moving objects (projectiles, balls) that would otherwise skip through thin walls within a single frame (**tunneling**), Small World Machine provides continuous collision detection **for spheres only** via the `SweptSphereCCD` solver — a deliberate, documented scope (see [ADR 0005](../adr/0005-ccd-sphere-only-scope.md)). Boxes (`BoundingBox`), `OBB`s, and rays are *swept against the broadphase bounding volumes* (motion is resolved against the volume hierarchy during narrow-phase), but they do **not** have a dedicated continuous-sweep CCD solver like spheres do:
 
 ```typescript
 // CCD threshold: how much movement distance (relative to radius) engages CCD
