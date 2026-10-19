@@ -80,6 +80,9 @@ Sondermaterial je Flüssigkeit.
   Log-Rampen, keine Flüssigkeits-Namen im Code), Verteilung über `DropImpactSystem` an `DropImpactSurface`s,
   Shader mit Beer-Lambert-Absorption, Streu-Körperfarbe, Blasen (WebGPU/WebGL2) und Krone/Jet-Illusion (alle Tiers).
   Im Browser auf WebGPU, WebGL2 und WebGL1 geprüft (Showcase 30, Taste `F`).
-- **Offen:** Kombinationen (Entscheidung 4, Bausteine Farbwolke, sinkende Kugel, Dünnfilm, Linse, Reaktion), Flüssigkeit auf
-  Fläche (Entscheidung 2, zweite Hälfte). Vorläufige Annahme in den Presets: Altöl-Optik und Öl/Wasser-Grenzflächenspannung
-  sind Schätzungen.
+- **Zurückgestellt (Maintainer-Entscheid 2026-10-19, „ganz offiziell hinten angestellt"):** Kombinationen
+  (Entscheidung 4, Phase b: Bausteine Farbwolke, sinkende Kugel, Dünnfilm, Linse, Reaktion). Es gibt dafür keinen
+  Termin; die Entscheidung 4 selbst (Paarungen sind Daten, Phänomene je einmal Code) bleibt gültig und
+  unverändert, sie wird nur nicht umgesetzt. Aufnahme erst nach ausdrücklicher Freigabe.
+- **Offen, ohne Priorisierung:** Flüssigkeit auf Fläche (Entscheidung 2, zweite Hälfte).
+- **Vorläufig:** Altöl-Optik und Öl/Wasser-Grenzflächenspannung in den Presets sind Schätzungen.
