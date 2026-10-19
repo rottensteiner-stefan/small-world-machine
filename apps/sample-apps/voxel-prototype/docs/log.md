@@ -5,7 +5,99 @@
 
 ---
 
-## 2026-10-19 — M1 implementiert: Unendlich-Streaming, Worker-Meshing, Nahtfreiheit, Voxel-Sweep
+## 2026-10-20 — M2 implementiert: Break/Place, 1-Chunk-Remesh, gebäcktes AO, CC0-Atlas, Wasser-Rendern
+
+**Status:** ✅ M2-Architektur + Kern grün (Gates unten, inkl. M1-Regression). Plan:
+`.agents/scratches/voxel-m2-plan.md`. **NUR App-Level, kein Engine-Core-Change** (Dossier-Mandat).
+Reihenfolge laut FREIGABE 2026-10-19: ① Atlas/Sourcing → ② Raycast/Editor → ③ AO → ④ Tests/Gates.
+
+### Was gebaut wurde (alles app-level, `apps/sample-apps/voxel-prototype/`)
+
+- **CC0-Textur-Atlas als eingebettete Pixelgitter (FREIGABE: „CC0-Nachzeichnungen sind gut genug"):**
+  `voxel/palette/AtlasPixels.ts` (8 Layer als Hex-RGBA-Gitter, `ATLAS_SOURCES`-Provenienz),
+  `BlockTextureFactory` auf die Gitter umgestellt (Fail-Fast-Layer-Sync), Registry-Append
+  `BLOCK_TEX_LAYER` (GRASS_TOP..WATER) + `BLOCK_AIR..BLOCK_WATER=5`; gras-bottom→DIRT, side
+  GRASS_SIDE; Holz + Wasser registriert. **Wasser-Tile = reine Nah-Dither-Rauschfläche** (3 dicht
+  benachbarte Blautöne, alpha 0x9c) ohne Funken/Geometrie — nach 5 Vision-Iterationen (isolierte
+  helle Pixel wirkten als „Grid/Checker"); Provenienz im Dossier. Quelle: OGA „16×16 Block
+  Texture Set" (CC0, ARoachIFoundOnMyPillow), blocks_2.zip als Primärquelle; Wasser =
+  projekteigene In-Stil-Nachzeichnung (CC0 by construction).
+- **`voxel/physics/VoxelRaycast.ts`** — parametrische DDA von der Kamera gegen
+  `SweepWorld`-artige `isSolidCell`; Rückgabe Zelle/Enter-Flacenormale/Setz-Zelle, maxDist,
+  lückenlos & deterministisch (Start-in-Block, Kanten-Treffer, Out-of-Range).
+- **`voxel/physics/VoxelBlockEditor.ts`** — Kamera-Behavior, LMB/RMB-Kantenflanken-Edge-Detection,
+  `world.setBlock`; **Zifferntasten 1..5** wählen die Hand (Erde/Stein/Holz/Wasser/Gras) —
+  Wasser ist damit platzierbar (D3). Setz-Schutz gegen die Spieler-AABB (kein Klemm-Edit).
+- **`voxel/ChunkWorld.setBlock` + `_scheduleRemesh`** — **lokaler 1-Chunk-Remesh (D1, max 5)**:
+  eigene Chunk + ≤4 horizontale Nachbarn, deren Rim die editierte Zelle enthält. Phase-Regel
+  „ready→data" / „meshing→dirty" mit Stale-Discard (`_onMeshReady`-Guard) —
+  **„exakt EIN gültiges Mesh gewinnt"**, per `ChunkWorldEdits.test.ts` gepinnt. **Kein
+  3×3-Blick** (M5), kein Out-of-Band-Dispatch. Worker bleibt einzige Mesh-Quelle.
+- **AO (D5, MC-treu)** — `vertexOcclusionFactors` in `NaiveMesher`: occ∈{0..3} →
+  `aoFactor = 1 − occ/3` in `colors.g` (Layer bleibt `.r`), Stichproben in der AUSSEREN
+  Face-Schicht (block + Normal — kein Own-Plane, sonst verdunkelt sich jede geteilte Kante
+  flachen Geländes). **Naht-Exaktheit über Ecken-Spalten (D2):** `neighborCorners`-Protokoll
+  (4×16 B pp/pn/np/nn), `ChunkWorld._tryMesh` gated auf ALLE 8 horizontalen Nachbarn (Axiale +
+  Diagonale) — das ist `minNeighborsToMesh`, sonst helles „AO-Leck" am 4-Chunk-Eckscheitel.
+  **Debug-Verlauf:** Die ursprünglichen Test-Assertions (ao-Index 3, exaktes 2/3) waren
+  Test-Bugs — der Mesher konsumiert die Spalte korrekt am **Emissions-Index 2** (Probe:
+  with-ao [1,1,0.667,1], pos [15,6,15]); beide Meshes ohne/über die Spalte byte-determinierbar.
+- **Wasser-Rendern (D3)** — Pass 1.5 im Mesher: Face nur gegen **AIR** (kein Wasser-Wasser-/
+  Wasser-Solid-Face → kein Z-Fighting), kein AO (ao=1,1,1,1); Material `transparent: true` +
+  `depthWrite:true` (Alpha-Sort-Artefakte an seltenen Überlagerungen akzeptiert); `TextureArray`
+  upload via `gl.RGBA` (Alpha bleibt, verifiziert). Wasser nicht `collidable` → kein Schwimmen.
+  Shader draht `v_ao` (AO-Faltung) + `tex.a`-Alpha.
+- **`App.ts`/`index.html`** — Editor an Kamera, CSS-Crosshair (D4, kein Wireframe-Highlight),
+  Hints (LMB break · RMB place · 1–5 Handwahl), Stats „hand/edits", QA-Hook erweitert um
+  `getWorldBlock`/`setBlock`/`getHand`.
+
+### Verifikation (Gates)
+
+- `npx tsc --noEmit` ✅ (root, voxel-Bereich) · `npm run lint:fix` ✅ · `npm run build:lib` ✅ ·
+  `npm run test` ✅ **346 Dateien / 2467 Tests** (volle Suite; neue M2-Tests: VoxelRaycast,
+  ChunkWorldEdits inkl. Stale-Invariante, MesherAo inkl. Corner-Column-Byte-Identität,
+  MesherWaterFaces, AtlasPalette) · `npm run build:showcases` ✅.
+- **M1-Regression:** `check-voxel-m1.mjs` `ok: true` (ready 121→132, Worker-Messung wächst,
+  Chunk-Übergang, 0 Errors/nicht-blank) · **M2-Live-Gate `check-voxel-m2.mjs` `ok: true`:**
+  statisch grounded/ready=121/Worker, **Break via QA-Hook** `setBlock(20,10,19,0)` → Lese
+  zurück air, edits 0→1, `ready` erholt sich auf 121, Spieler bleibt grounded, Mesh-Zeit wächst
+  (Remesh auf dem Worker, 40.1→40.4 ms) · **Place** solid=3/roof=4/water=5, edits→4,
+  `settled=true` · 0 Console-/Page-Errors, Canvas nicht-blank (stddev 48.0).
+- **Recherche Steuerung** (User, 2026-10-20): `docs/minecraft-controls.md` + Verlinkung im
+  Dossier — daraus in M2 umgesetzt: Break (LMB), Place (RMB), Hand-Wahl (Digit1..5);
+  MMB-Pick-Block + Trackpad-/Gamepad-Feinheiten (Scroll-Debounce, unadjustedMovement,
+  PS/Switch-Mapping) → offene Punkte für M4.
+
+### Nächste Schritte
+
+M3: Tages-/Nacht-Licht + Persistenz · M4: Schritt/Auto-Jump, Inventar, Gamepad-Eingabe ·
+M5: Greedy-Mesher + 3×3-Blick · WebGPU-Material (bind-group-Array-Texture).
+
+---
+
+
+**Status:** ✅ Dokumentiert in [`docs/minecraft-controls.md`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/sample-apps/voxel-prototype/docs/minecraft-controls.md) und im [`concept-dossier.html`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/sample-apps/voxel-prototype/docs/concept-dossier.html) verlinkt.
+
+### Inhalte & Erkenntnisse
+- **Vollständige Standardbelegung (Java Edition):** Bewegung (WASD, Sprinten, Ducken/Kanten-Sperre, Creative-Fly), Mausaktionen (LMB Attack/Destroy, RMB Use/Place, MMB Pick Block, Wheel Hotbar), Inventar/Hotbar (1–9, E, Q, Swap F), Funktionstasten (F1–F11, F3-Subbefehle A/B/G/H/C).
+- **PlayStation 4 / PlayStation 5 Controller (DualShock 4 & DualSense):**
+  - Vollständiges Mapping der Bedrock-Standardbelegung (L-Stick Bewegung, L3 Sprint, R-Stick Kamera, R3 Sneak, R2 Attack/Break, L2 Use/Place, L1/R1 Hotbar-Cycling, ✕ Sprung/Flug, △ Inventar, ▢ Crafting, D-Pad F5/Drop/Chat).
+  - Gegenüberstellung Tastatur/Maus ↔ Controller.
+  - Besonderheiten: Analoge Trigger-Schwellenwerte, Stick-Deadzone (15%), HTML5 Gamepad API Referenzcode (`standard`-Mapping).
+- **Nintendo Switch (Joy-Con & Pro Controller):**
+  - Bedrock-Standardbelegung: ZR (Abbauen/Attack), ZL (Platzieren/Use), L/R (Hotbar), A (Sprung/Flug), B (Sneak/Abbrechen), X (Inventar), Y (Crafting), D-Pad (Drop, Chat, Emotes), +/- Tasten.
+  - Nintendo-Besonderheiten: A/B und X/Y Vertauschung ggü. Xbox/PS, rein digitale ZL/ZR-Schalter (kein analoger Achsenweg), keine Gameplay-Touch-Gesten im Handheld-Modus (rein physische Eingabe) und Notwendigkeit höherer Stick-Deadzones (Joy-Con Drift).
+- **macOS-Plattformbesonderheiten & Tastenkonflikte:**
+  - `fn`-Zwang für F-Tasten auf Mac-Tastaturen (oder Systemeinstellung umschalten).
+  - Gefährlicher Shortcut `Cmd+Q` (beendet Applikation/Browser) vs. `Q` (Item droppen).
+  - `Control + Klick` (macOS-OS-Rechtsklick) kollidiert mit Standard `Control` für Sprinten.
+  - Vollbild: `F11` vs. `Control + Command + F` (F11 ruft oft Mission Control auf).
+- **Trackpad- & Apple Magic Mouse-Verhalten:**
+  - Mac-Trackpads haben keinen nativen Mittelklick (Pick Block) → erfordert Tastatur-Rebind (z. B. `R` oder `B`).
+  - Zwei-Finger-Klick als Rechtsklick (Platzieren).
+  - Scrollrad-Dämpfung: Browser-`wheel`-Events liefern kontinuierliche Sub-Pixel-Trägheitswerte; für Hotbar-Slots ist ein Schwellenwert-Akkumulator/Debounce erforderlich.
+  - Pointer Lock mit `{ unadjustedMovement: true }` zur Umgehung der aggressiven macOS-Mausbeschleunigungskurve.
+- **Konsequenzen für M2:** Saubere Trennung von Break (LMB/R2/ZR mit Hold-Akkumulator), Place (RMB/L2/ZL mit Kontextmenü-Unterdrückung), Pick Block (MMB + Keyboard-Fallback `R`/`B`) und optionale Gamepad-Unterstützung im FPS-Behavior.
 
 **Status:** ✅ M1-Architektur + Kern grün (Gates unten). Plan: `.agents/scratches/voxel-m1-plan.md`.
 **Feature-Entscheid (User-Approval 2026-10-19, im Plan dokumentiert):** dedizierter

@@ -14,6 +14,27 @@
     zurückgenommen (Maker bleibt eigenständige Seite). Gemeinsamer Kern/CLI unverändert über ADR 0034
     (ACCEPTED). Kein Verhaltens-/API-Change — reine Architektur-Dokumentation.
 - **Sample Apps:**
+  - *Voxel-Proto M2: Break/Place-Editing, 1-Chunk-Remesh, gebäcktes AO, CC0-Atlas, Wasser-Rendern
+    (app-level, kein Engine-Change):* Sichtlinien-Raycast (`VoxelRaycast`, parametrische DDA gegen
+    `SweepWorld`-artige Abfragen, Distanz = Eintritts-Face-Konvention) + `VoxelBlockEditor`
+    (Kamera-Behavior, LMB/RMB-Kantenflanken, Zifferntasten 1–5 zur Hand-Auswahl Erde/Stein/Holz/
+    Wasser/Gras, Setz-Schutz gegen die Spieler-AABB). Edits schreiben über `ChunkWorld.setBlock`
+    und stoßen einen **lokalen 1-Chunk-Remesh** an (eigener Chunk + ≤4 Rand-Nachbarn, deren Rim
+    die editierte Zelle enthält; strikte „exakt EIN gültiges Mesh gewinnt"-Invariante inkl.
+    Stale-Discard; Remesh läuft über den Streaming-Loop, nie außerhalb). **Gebäcktes, MC-treues
+    Vertex-AO** (`occ ∈ {0..3}` → Faktor `1−occ/3` im `colors.g`-Kanal) mit **Naht-Exaktheit über
+    ein Ecke-Spalten-Protokoll**: Die vier Diagonal-Nachbarn liefern je eine 16er-Spalte
+    (`neighborCorners`, +4×16 B), ohne die ein 4-Chunk-Eckscheitel als helles „AO-Leck" erschiene
+    — AO-Rand-Scheitel sind damit byte-identisch zu dem, was der Nachbar-Chunk berechnen würde
+    (probed/gepinnt; beim Debug den Emissions-Index 2 vs. 3 korrekt zugeordnet). Wasser rendert
+    transparent (Face nur gegen AIR, kein Z-Fighting mit der opaken Pass; nicht kollidierbar —
+    kein Schwimmen in M2). CC0-Textur-Atlas als **eingebettete 16×16-Pixelgitter-Module**
+    (`voxel/palette/AtlasPixels.ts` mit `ATLAS_SOURCES`-Provenienz, OpenGameArt „16×16 Block
+    Texture Set" CC0, Wasser als projekteigene In-Stil-Nachzeichnung; deterministisch, node-
+    testbar, Tileability + Layer-Sync gepinnt) statt externer Assets. Worker bleibt die einzige
+    Mesh-Quelle („meshing never on main" hält). Wiederverwendbares Live-Gate
+    `.agents/scratches/check-voxel-m2.mjs` (break/place via QA-Hook → `air`/`solid`, Remesh
+    erholt `ready`, Spieler bleibt grounded, 0 Fehler). Kein Repo-API-Change.
   - *Voxel-Proto M1: Unendlich-Streaming, Worker-Meshing, Nahtfreiheit, Voxel-AABB-Sweep-Kollision
     (app-level, kein Engine-Change):* dedizierter Vite-Module-Worker (`mesh.worker.ts`; Welt-Gen +
     Mesh-Bau laufen NIEMALS auf dem Main-Thread — begründete Divergenz von Dossier-"ThreadPool",
