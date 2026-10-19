@@ -18,8 +18,6 @@ import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
 import {
   MaterialType,
   RendererType,
-  CullMode,
-  BlendingMode,
   Topology,
   PostProcessingEffectType,
 } from "../../enums/index.js";
@@ -32,14 +30,6 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   /** @inheritdoc */
   public override readonly type: RendererType = RendererType.WEB_GL1;
   declare protected gl: WebGLRenderingContext;
-
-  private _stateCullFaceEnabled: boolean | null = null;
-  private _stateCullFaceMode: number = -1;
-  private _stateBlendEnabled: boolean | null = null;
-  private _stateBlendSrc: number = -1;
-  private _stateBlendDst: number = -1;
-  private _stateDepthMask: boolean | null = null;
-  private _stateDepthTest: boolean | null = null;
 
   /** Satisfies Renderer interface */
   public override get webglContext(): WebGLRenderingContext {
@@ -73,8 +63,6 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
    * face at a time (see `setRenderTarget`'s `activeCubeFace` param). */
   private _renderTargetCubeFbos: Map<RenderTargetCube, WebGLFramebuffer> = new Map();
   private _renderTargetCubeDepthBuffers: Map<RenderTargetCube, WebGLRenderbuffer> = new Map();
-
-  private _scratchModelMatrix: Float32Array = new Float32Array(16);
 
   /** Cached once at init instead of re-querying `DeviceCaps` on every texture bind. */
   private _maxTextureUnits: number = 0;
@@ -175,16 +163,6 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   /** @inheritdoc */
   public override get isOffscreenRenderTarget(): boolean {
     return this._activeRenderTarget !== null;
-  }
-
-  public resetStateCache(): void {
-    this._stateCullFaceEnabled = null;
-    this._stateCullFaceMode = -1;
-    this._stateBlendEnabled = null;
-    this._stateBlendSrc = -1;
-    this._stateBlendDst = -1;
-    this._stateDepthMask = null;
-    this._stateDepthTest = null;
   }
 
   public bindMainRenderTarget(): boolean {
@@ -591,319 +569,190 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       if (loc?.decay) this.gl.uniform1f(loc.decay, pl.decay);
     }
 
-    {
-      // --- Fog Uniforms ---
-      if (fog) {
-        const modeLoc = u.get("u_fogMode");
-        if (modeLoc) this.gl.uniform1i(modeLoc, fog.mode);
-        const colLoc = u.get("u_fogColor");
-        if (colLoc) this.gl.uniform3f(colLoc, fog.color.r, fog.color.g, fog.color.b);
-        const densLoc = u.get("u_fogDensity");
-        if (densLoc) this.gl.uniform1f(densLoc, fog.density);
-        const nearLoc = u.get("u_fogNear");
-        if (nearLoc) this.gl.uniform1f(nearLoc, fog.near);
-        const farLoc = u.get("u_fogFar");
-        if (farLoc) this.gl.uniform1f(farLoc, fog.far);
-        const heightLoc = u.get("u_fogHeight");
-        if (heightLoc) this.gl.uniform1f(heightLoc, fog.height);
-        const hFalloffLoc = u.get("u_fogHeightFalloff");
-        if (hFalloffLoc) this.gl.uniform1f(hFalloffLoc, fog.heightFalloff);
-      } else {
-        const modeLoc = u.get("u_fogMode");
-        if (modeLoc) this.gl.uniform1i(modeLoc, 0); // NONE
-      }
+    this._bindFogUniforms(u, fog);
+    this._bindMaterialState(manifest.state);
+    this._bindGenericMaterialProperties(u, manifest.properties, true);
 
-      // --- 1. Bind Material States ---
-      const state = manifest.state;
-      const enableCull = !(state && CullMode.NONE === state.culling);
-      if (this._stateCullFaceEnabled !== enableCull) {
-        if (enableCull) this.gl.enable(this.gl.CULL_FACE);
-        else this.gl.disable(this.gl.CULL_FACE);
-        this._stateCullFaceEnabled = enableCull;
-      }
+    // --- 3. Bind Textures ---
+    if (shaderId === MaterialType.SKYBOX) {
+      this.gl.activeTexture(this.gl.TEXTURE0);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, null); // Unbind 2D to prevent conflict
+      const skyTex = texs["u_skybox"] as CubeTexture;
+      this.gl.bindTexture(
+        this.gl.TEXTURE_CUBE_MAP,
+        skyTex
+          ? this._textures.getWebGLCubeTexture(skyTex, this._quality)
+          : this.defaultCubeTexture,
+      );
+      const uSkybox = u.get("u_skybox");
+      if (uSkybox) this.gl.uniform1i(uSkybox, 0);
+    } else {
+      for (const [uniformName, unit] of cache.samplerUnits) {
+        const loc = u.get(uniformName);
+        if (!loc || !this._isTextureUnitAvailable(unit, uniformName)) continue;
 
-      if (enableCull) {
-        const cullMode = state && CullMode.FRONT === state.culling ? this.gl.FRONT : this.gl.BACK;
-        if (this._stateCullFaceMode !== cullMode) {
-          this.gl.cullFace(cullMode);
-          this._stateCullFaceMode = cullMode;
-        }
-      }
-
-      const enableBlend = !!state?.transparent;
-      if (this._stateBlendEnabled !== enableBlend) {
-        if (enableBlend) this.gl.enable(this.gl.BLEND);
-        else this.gl.disable(this.gl.BLEND);
-        this._stateBlendEnabled = enableBlend;
-      }
-
-      let depthMask = !enableBlend;
-      if (state?.depthWrite === false) depthMask = false;
-
-      if (this._stateDepthMask !== depthMask) {
-        this.gl.depthMask(depthMask);
-        this._stateDepthMask = depthMask;
-      }
-
-      if (enableBlend) {
-        let src: number = this.gl.SRC_ALPHA;
-        let dst: number = this.gl.ONE_MINUS_SRC_ALPHA;
-        if (state.blending === BlendingMode.ADDITIVE) {
-          src = this.gl.ONE;
-          dst = this.gl.ONE;
-        } else if (state.blending === BlendingMode.PREMULTIPLIED_ALPHA) {
-          src = this.gl.ONE;
-        }
-        if (this._stateBlendSrc !== src || this._stateBlendDst !== dst) {
-          this.gl.blendFunc(src, dst);
-          this._stateBlendSrc = src;
-          this._stateBlendDst = dst;
-        }
-      }
-
-      const enableDepthTest = state?.depthTest !== false;
-      if (this._stateDepthTest !== enableDepthTest) {
-        if (enableDepthTest) this.gl.enable(this.gl.DEPTH_TEST);
-        else this.gl.disable(this.gl.DEPTH_TEST);
-        this._stateDepthTest = enableDepthTest;
-      }
-
-      // --- 2. Bind Generic Material Properties (Uniforms) ---
-      for (const name in manifest.properties) {
-        const value = manifest.properties[name];
-        const loc = u.get(name);
-        if (!loc) continue;
-
-        if (typeof value === "number") {
-          this.gl.uniform1f(loc, value);
-        } else if (ArrayBuffer.isView(value)) {
-          const v = value as Float32Array;
-          if (v.length === 4) this.gl.uniform4fv(loc, v);
-          else if (v.length === 3) this.gl.uniform3fv(loc, v);
-          else if (v.length === 2) this.gl.uniform2fv(loc, v);
-          else if (v.length === 16) this.gl.uniformMatrix4fv(loc, false, v);
-        } else if (Array.isArray(value)) {
-          if (value.length === 4) this.gl.uniform4fv(loc, value as number[]);
-          else if (value.length === 3) this.gl.uniform3fv(loc, value as number[]);
-          else if (value.length === 2) this.gl.uniform2fv(loc, value as number[]);
-          else if (value.length === 16) this.gl.uniformMatrix4fv(loc, false, value as number[]);
-        }
-      }
-
-      // --- 3. Bind Textures ---
-      if (shaderId === MaterialType.SKYBOX) {
-        this.gl.activeTexture(this.gl.TEXTURE0);
-        this.gl.bindTexture(this.gl.TEXTURE_2D, null); // Unbind 2D to prevent conflict
-        const skyTex = texs["u_skybox"] as CubeTexture;
-        this.gl.bindTexture(
-          this.gl.TEXTURE_CUBE_MAP,
-          skyTex
-            ? this._textures.getWebGLCubeTexture(skyTex, this._quality)
-            : this.defaultCubeTexture,
-        );
-        const uSkybox = u.get("u_skybox");
-        if (uSkybox) this.gl.uniform1i(uSkybox, 0);
-      } else {
-        for (const [uniformName, unit] of cache.samplerUnits) {
-          const loc = u.get(uniformName);
-          if (!loc || !this._isTextureUnitAvailable(unit, uniformName)) continue;
-
-          this.gl.activeTexture(this.gl.TEXTURE0 + unit);
-          // Cube-vs-2D is a property of the sampler's declared GLSL type, not its name -- any
-          // samplerCube uniform (u_envMap today, potentially others in future materials) needs
-          // the cube-texture fallback path, not just one hardcoded name.
-          if (this.gl.SAMPLER_CUBE === cache.samplerTypes.get(uniformName)) {
-            this.gl.bindTexture(this.gl.TEXTURE_2D, null);
-            const ct = texs[uniformName] as CubeTexture;
-            this.gl.bindTexture(
-              this.gl.TEXTURE_CUBE_MAP,
-              ct ? this._textures.getWebGLCubeTexture(ct, this._quality) : this.defaultCubeTexture,
-            );
-          } else {
-            this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, null);
-            const t = texs[uniformName] as Texture;
-            let fallback: WebGLTexture = this.defaultTexture;
-            if (uniformName === "u_normalMap") {
-              fallback = this.defaultNormalMap;
-            } else if (uniformName === "u_opaqueMap") {
-              fallback = this._opaqueTexture ?? this.defaultTexture;
-            }
-            this.gl.bindTexture(
-              this.gl.TEXTURE_2D,
-              t ? this._textures.getWebGLTexture(t, this._quality) : fallback,
-            );
-          }
-          this.gl.uniform1i(loc, unit);
-        }
-      }
-
-      // --- Render each object ---
-      for (const o of objects) {
-        if (!o.geometry) continue;
-
-        this._programCache.acquireProgram(o, programKey);
-        this._textures.acquireTextures(o, texs);
-
-        const mesh = this._geometry.getOrCreateMesh(o, o.geometry);
-        const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;
-
-        if (isInstanced) {
-          const instMesh = o as InstancedMesh;
-          if (instMesh.instanceCount < 0) {
-            throw new Error(`[WebGL1Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
-          }
-          if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
-            throw new Error(
-              `[WebGL1Renderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
-            );
-          }
-          if (
-            instMesh.instanceData &&
-            instMesh.instanceData.byteLength < instMesh.instanceCount * 16
-          ) {
-            throw new Error(
-              `[WebGL1Renderer] InstancedMesh instanceData buffer too small: required at least ${instMesh.instanceCount * 16} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceData.byteLength} bytes.`,
-            );
-          }
-          const ext = this._instancedArraysExt!;
-
-          const uModel = u.get("u_model");
-          if (uModel) this.gl.uniformMatrix4fv(uModel, false, instMesh.worldMatrix.data);
-
-          let matrixBuf = this._instanceMatrixBuffers.get(instMesh);
-          if (!matrixBuf) {
-            matrixBuf = this.gl.createBuffer()!;
-            this._instanceMatrixBuffers.set(instMesh, matrixBuf);
-          }
-          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
-          if (instMesh.instanceMatrixNeedsUpdate) {
-            this.gl.bufferData(
-              this.gl.ARRAY_BUFFER,
-              instMesh.instanceMatrices,
-              this.gl.DYNAMIC_DRAW,
-            );
-            instMesh.instanceMatrixNeedsUpdate = false;
-          }
-
-          mesh.bind(
-            cache.attributes.get("a_position")!,
-            cache.attributes.get("a_normal")!,
-            cache.attributes.get("a_uv")!,
-            cache.attributes.get("a_tangent")!,
-            -1,
-            -1,
-            cache.attributes.get("a_color")!,
+        this.gl.activeTexture(this.gl.TEXTURE0 + unit);
+        // Cube-vs-2D is a property of the sampler's declared GLSL type, not its name -- any
+        // samplerCube uniform (u_envMap today, potentially others in future materials) needs
+        // the cube-texture fallback path, not just one hardcoded name.
+        if (this.gl.SAMPLER_CUBE === cache.samplerTypes.get(uniformName)) {
+          this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+          const ct = texs[uniformName] as CubeTexture;
+          this.gl.bindTexture(
+            this.gl.TEXTURE_CUBE_MAP,
+            ct ? this._textures.getWebGLCubeTexture(ct, this._quality) : this.defaultCubeTexture,
           );
-
-          // A mat4 attribute occupies 4 consecutive locations (loc..loc+3), one vec4 column each --
-          // universal GL attribute-binding mechanics, not GLSL-version-specific (mirrors
-          // WebGL2Renderer's identical `a_instanceMatrix` binding, ANGLE-suffixed here since WebGL1
-          // needs the extension for both the divisor and the instanced draw call below).
-          const instLoc = cache.attributes.get("a_instanceMatrix");
-          if (instLoc !== undefined && instLoc >= 0) {
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
-            for (let i = 0; i < 4; i++) {
-              const attribLoc = instLoc + i;
-              this.gl.enableVertexAttribArray(attribLoc);
-              this.gl.vertexAttribPointer(attribLoc, 4, this.gl.FLOAT, false, 64, i * 16);
-              ext.vertexAttribDivisorANGLE(attribLoc, 1);
-            }
-          }
-
-          // Per-instance RGBA color (a_instanceData, material USE_INSTANCE_COLOR opt-in): upload
-          // and bind the instance-data buffer with an instancing divisor -- mirrors WebGL2's
-          // instanced-path binding, which was missing here so instance colors never reached a
-          // WebGL1 shader.
-          const dataLoc = cache.attributes.get("a_instanceData");
-          if (dataLoc !== undefined && dataLoc >= 0 && instMesh.instanceData) {
-            let dataBuf = this._instanceDataBuffers.get(instMesh);
-            if (!dataBuf) {
-              dataBuf = this.gl.createBuffer()!;
-              this._instanceDataBuffers.set(instMesh, dataBuf);
-            }
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
-            if (instMesh.instanceDataNeedsUpdate) {
-              this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
-              instMesh.instanceDataNeedsUpdate = false;
-            }
-            this.gl.enableVertexAttribArray(dataLoc);
-            this.gl.vertexAttribPointer(
-              dataLoc,
-              instMesh.instanceDataSize,
-              this.gl.FLOAT,
-              false,
-              0,
-              0,
-            );
-            ext.vertexAttribDivisorANGLE(dataLoc, 1);
-          }
-
-          if (mesh.isIndexed) {
-            this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, mesh.ebo ?? null);
-            ext.drawElementsInstancedANGLE(
-              drawMode,
-              mesh.count,
-              mesh.indexType,
-              0,
-              instMesh.instanceCount,
-            );
-          } else {
-            ext.drawArraysInstancedANGLE(drawMode, 0, mesh.count, instMesh.instanceCount);
-          }
-
-          if (instLoc !== undefined && instLoc >= 0) {
-            for (let i = 0; i < 4; i++) {
-              ext.vertexAttribDivisorANGLE(instLoc + i, 0);
-              this.gl.disableVertexAttribArray(instLoc + i);
-            }
-          }
-          if (dataLoc !== undefined && dataLoc >= 0) {
-            ext.vertexAttribDivisorANGLE(dataLoc, 0);
-            this.gl.disableVertexAttribArray(dataLoc);
-          }
         } else {
-          this._scratchModelMatrix.set(o.worldMatrix.data);
-          if (state?.isSprite && vMat) {
-            const sx = Math.sqrt(
-              this._scratchModelMatrix[0]! ** 2 +
-                this._scratchModelMatrix[1]! ** 2 +
-                this._scratchModelMatrix[2]! ** 2,
-            );
-            const sy = Math.sqrt(
-              this._scratchModelMatrix[4]! ** 2 +
-                this._scratchModelMatrix[5]! ** 2 +
-                this._scratchModelMatrix[6]! ** 2,
-            );
-            const sz = Math.sqrt(
-              this._scratchModelMatrix[8]! ** 2 +
-                this._scratchModelMatrix[9]! ** 2 +
-                this._scratchModelMatrix[10]! ** 2,
-            );
-            this._scratchModelMatrix[0] = vMat[0]! * sx;
-            this._scratchModelMatrix[1] = vMat[4]! * sx;
-            this._scratchModelMatrix[2] = vMat[8]! * sx;
-            this._scratchModelMatrix[4] = vMat[1]! * sy;
-            this._scratchModelMatrix[5] = vMat[5]! * sy;
-            this._scratchModelMatrix[6] = vMat[9]! * sy;
-            this._scratchModelMatrix[8] = vMat[2]! * sz;
-            this._scratchModelMatrix[9] = vMat[6]! * sz;
-            this._scratchModelMatrix[10] = vMat[10]! * sz;
+          this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, null);
+          const t = texs[uniformName] as Texture;
+          let fallback: WebGLTexture = this.defaultTexture;
+          if (uniformName === "u_normalMap") {
+            fallback = this.defaultNormalMap;
+          } else if (uniformName === "u_opaqueMap") {
+            fallback = this._opaqueTexture ?? this.defaultTexture;
           }
-
-          const uModel = u.get("u_model");
-          if (uModel) this.gl.uniformMatrix4fv(uModel, false, this._scratchModelMatrix);
-
-          mesh.bind(
-            cache.attributes.get("a_position")!,
-            cache.attributes.get("a_normal")!,
-            cache.attributes.get("a_uv")!,
-            cache.attributes.get("a_tangent")!,
-            -1,
-            -1,
-            cache.attributes.get("a_color")!,
+          this.gl.bindTexture(
+            this.gl.TEXTURE_2D,
+            t ? this._textures.getWebGLTexture(t, this._quality) : fallback,
           );
-          mesh.draw(drawMode, batch.wireframeMode);
         }
+        this.gl.uniform1i(loc, unit);
+      }
+    }
+
+    // --- Render each object ---
+    for (const o of objects) {
+      if (!o.geometry) continue;
+
+      this._programCache.acquireProgram(o, programKey);
+      this._textures.acquireTextures(o, texs);
+
+      const mesh = this._geometry.getOrCreateMesh(o, o.geometry);
+      const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;
+
+      if (isInstanced) {
+        const instMesh = o as InstancedMesh;
+        if (instMesh.instanceCount < 0) {
+          throw new Error(`[WebGL1Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
+        }
+        if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
+          throw new Error(
+            `[WebGL1Renderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
+          );
+        }
+        if (
+          instMesh.instanceData &&
+          instMesh.instanceData.byteLength < instMesh.instanceCount * 16
+        ) {
+          throw new Error(
+            `[WebGL1Renderer] InstancedMesh instanceData buffer too small: required at least ${instMesh.instanceCount * 16} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceData.byteLength} bytes.`,
+          );
+        }
+        const ext = this._instancedArraysExt!;
+
+        const uModel = u.get("u_model");
+        if (uModel) this.gl.uniformMatrix4fv(uModel, false, instMesh.worldMatrix.data);
+
+        let matrixBuf = this._instanceMatrixBuffers.get(instMesh);
+        if (!matrixBuf) {
+          matrixBuf = this.gl.createBuffer()!;
+          this._instanceMatrixBuffers.set(instMesh, matrixBuf);
+        }
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
+        if (instMesh.instanceMatrixNeedsUpdate) {
+          this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceMatrices, this.gl.DYNAMIC_DRAW);
+          instMesh.instanceMatrixNeedsUpdate = false;
+        }
+
+        mesh.bind(
+          cache.attributes.get("a_position")!,
+          cache.attributes.get("a_normal")!,
+          cache.attributes.get("a_uv")!,
+          cache.attributes.get("a_tangent")!,
+          -1,
+          -1,
+          cache.attributes.get("a_color")!,
+        );
+
+        // A mat4 attribute occupies 4 consecutive locations (loc..loc+3), one vec4 column each --
+        // universal GL attribute-binding mechanics, not GLSL-version-specific (mirrors
+        // WebGL2Renderer's identical `a_instanceMatrix` binding, ANGLE-suffixed here since WebGL1
+        // needs the extension for both the divisor and the instanced draw call below).
+        const instLoc = cache.attributes.get("a_instanceMatrix");
+        if (instLoc !== undefined && instLoc >= 0) {
+          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
+          for (let i = 0; i < 4; i++) {
+            const attribLoc = instLoc + i;
+            this.gl.enableVertexAttribArray(attribLoc);
+            this.gl.vertexAttribPointer(attribLoc, 4, this.gl.FLOAT, false, 64, i * 16);
+            ext.vertexAttribDivisorANGLE(attribLoc, 1);
+          }
+        }
+
+        // Per-instance RGBA color (a_instanceData, material USE_INSTANCE_COLOR opt-in): upload
+        // and bind the instance-data buffer with an instancing divisor -- mirrors WebGL2's
+        // instanced-path binding, which was missing here so instance colors never reached a
+        // WebGL1 shader.
+        const dataLoc = cache.attributes.get("a_instanceData");
+        if (dataLoc !== undefined && dataLoc >= 0 && instMesh.instanceData) {
+          let dataBuf = this._instanceDataBuffers.get(instMesh);
+          if (!dataBuf) {
+            dataBuf = this.gl.createBuffer()!;
+            this._instanceDataBuffers.set(instMesh, dataBuf);
+          }
+          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
+          if (instMesh.instanceDataNeedsUpdate) {
+            this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
+            instMesh.instanceDataNeedsUpdate = false;
+          }
+          this.gl.enableVertexAttribArray(dataLoc);
+          this.gl.vertexAttribPointer(
+            dataLoc,
+            instMesh.instanceDataSize,
+            this.gl.FLOAT,
+            false,
+            0,
+            0,
+          );
+          ext.vertexAttribDivisorANGLE(dataLoc, 1);
+        }
+
+        if (mesh.isIndexed) {
+          this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, mesh.ebo ?? null);
+          ext.drawElementsInstancedANGLE(
+            drawMode,
+            mesh.count,
+            mesh.indexType,
+            0,
+            instMesh.instanceCount,
+          );
+        } else {
+          ext.drawArraysInstancedANGLE(drawMode, 0, mesh.count, instMesh.instanceCount);
+        }
+
+        if (instLoc !== undefined && instLoc >= 0) {
+          for (let i = 0; i < 4; i++) {
+            ext.vertexAttribDivisorANGLE(instLoc + i, 0);
+            this.gl.disableVertexAttribArray(instLoc + i);
+          }
+        }
+        if (dataLoc !== undefined && dataLoc >= 0) {
+          ext.vertexAttribDivisorANGLE(dataLoc, 0);
+          this.gl.disableVertexAttribArray(dataLoc);
+        }
+      } else {
+        this._uploadModelMatrix(o.worldMatrix.data, manifest.state, vMat, u);
+
+        mesh.bind(
+          cache.attributes.get("a_position")!,
+          cache.attributes.get("a_normal")!,
+          cache.attributes.get("a_uv")!,
+          cache.attributes.get("a_tangent")!,
+          -1,
+          -1,
+          cache.attributes.get("a_color")!,
+        );
+        mesh.draw(drawMode, batch.wireframeMode);
       }
     }
   }

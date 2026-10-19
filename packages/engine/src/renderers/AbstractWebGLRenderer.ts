@@ -6,8 +6,10 @@ import type { Object3D } from "../core/Object3D.js";
 import { Matrix4, Vector3D } from "../math/index.js";
 import type { LightDataInterface } from "../interfaces/index.js";
 import type { WebGLRenderPass } from "./WebGLRenderPass.js";
+import type { Fog } from "../core/Fog.js";
 import type { Texture } from "../core/textures/index.js";
-import { RenderTarget } from "../core/textures/index.js";
+import { BlendingMode, CullMode } from "../enums/index.js";
+import type { RenderManifest } from "./shaders/RenderManifest.js";
 export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   // WebGL2 context inherits from WebGL1 context
   protected gl!: WebGLRenderingContext | WebGL2RenderingContext;
@@ -21,26 +23,26 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   protected defaultSpecularMap!: WebGLTexture;
   protected defaultCubeTexture!: WebGLTexture;
 
-  /** Shared by WebGL1Renderer/WebGL2Renderer's `_getWebGLTexture()` -- also written to from
-   * their render-target and disposal code paths. */
+  /** Cache of uploaded 2D textures shared by `WebGLTextureManager` -- also written to from
+   * the render-target and disposal code paths. */
   protected _texCache: Map<Texture, WebGLTexture> = new Map();
 
-  /** Common early-exit checks `_getWebGLTexture()` needs regardless of WebGL1 vs. WebGL2 (whose
-   * upload paths otherwise differ -- WebGL2 additionally handles `TextureArray` via
-   * `texImage3D`). Returns the texture to use if any of these apply, or `undefined` if the
-   * caller should fall through to its own upload logic.
-   * A `RenderTarget` has no `.image` -- its GL texture already exists from being rendered into
-   * (populated in each renderer's own render-target bind path), so it's looked up in the cache
-   * instead of uploaded, mirroring the WebGPU renderer's identical `RenderTarget` handling. */
-  protected _getWebGLTextureFastPath(tex: Texture): WebGLTexture | undefined {
-    if (this._quality?.disableTextures) return this.defaultTexture;
-    if (!tex.isLoaded) return this.defaultTexture;
-    if (tex instanceof RenderTarget) {
-      return this._texCache.get(tex) || this.defaultTexture;
-    }
-    if (!tex.image) return this.defaultTexture;
-    return undefined;
-  }
+  // Per-frame-draw-state cache, shared verbatim by WebGL1Renderer/WebGL2Renderer: material
+  // state is only pushed to the driver when it actually changed (see `_bindMaterialState`),
+  // and `resetStateCache()` wipes it at the start of every `render()` call so no stale state
+  // leaks across frames or render targets.
+  protected _stateCullFaceEnabled: boolean | null = null;
+  protected _stateCullFaceMode: number = -1;
+  protected _stateBlendEnabled: boolean | null = null;
+  protected _stateBlendSrc: number = -1;
+  protected _stateBlendDst: number = -1;
+  protected _stateDepthMask: boolean | null = null;
+  protected _stateDepthTest: boolean | null = null;
+
+  /** Scratch upload buffer for the per-object model matrix (billboarded for sprites) -- shared by
+   * both renderers' `_uploadModelMatrix()`, which copies the object's world matrix into it so the
+   * billboard rewrite never mutates the live scene-graph matrix. */
+  protected _scratchModelMatrix: Float32Array = new Float32Array(16);
 
   protected _passes: WebGLRenderPass[] = [];
 
@@ -120,7 +122,187 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
    */
   protected abstract releaseObjectResources(obj: Object3D): void;
 
-  public abstract resetStateCache(): void;
+  /**
+   * Resets the per-frame draw-state cache. Called at the start of every `render()` call -- shared
+   * verbatim by WebGL1Renderer/WebGL2Renderer (see the state fields above).
+   */
+  public resetStateCache(): void {
+    this._stateCullFaceEnabled = null;
+    this._stateCullFaceMode = -1;
+    this._stateBlendEnabled = null;
+    this._stateBlendSrc = -1;
+    this._stateBlendDst = -1;
+    this._stateDepthMask = null;
+    this._stateDepthTest = null;
+  }
+
+  /**
+   * Binds the scene's fog uniforms (or disables fog, `u_fogMode = NONE`) on the current program.
+   * Bit-identical to what WebGL1Renderer and WebGL2Renderer both did inline; hoisted unchanged.
+   * Zero-allocation: reads `u.get()` from the caller-provided uniform map and the existing `gl`.
+   */
+  protected _bindFogUniforms(
+    u: Map<string, WebGLUniformLocation | undefined>,
+    fog: Fog | undefined,
+  ): void {
+    if (fog) {
+      const modeLoc = u.get("u_fogMode");
+      if (modeLoc) this.gl.uniform1i(modeLoc, fog.mode);
+      const colLoc = u.get("u_fogColor");
+      if (colLoc) this.gl.uniform3f(colLoc, fog.color.r, fog.color.g, fog.color.b);
+      const densLoc = u.get("u_fogDensity");
+      if (densLoc) this.gl.uniform1f(densLoc, fog.density);
+      const nearLoc = u.get("u_fogNear");
+      if (nearLoc) this.gl.uniform1f(nearLoc, fog.near);
+      const farLoc = u.get("u_fogFar");
+      if (farLoc) this.gl.uniform1f(farLoc, fog.far);
+      const heightLoc = u.get("u_fogHeight");
+      if (heightLoc) this.gl.uniform1f(heightLoc, fog.height);
+      const hFalloffLoc = u.get("u_fogHeightFalloff");
+      if (hFalloffLoc) this.gl.uniform1f(hFalloffLoc, fog.heightFalloff);
+    } else {
+      const modeLoc = u.get("u_fogMode");
+      if (modeLoc) this.gl.uniform1i(modeLoc, 0); // NONE
+    }
+  }
+
+  /**
+   * Applies the material's rasterizer/blend/depth state through the per-frame state cache, so the
+   * driver is only touched when the state actually changed. Bit-identical to what WebGL1Renderer
+   * and WebGL2Renderer both did inline; hoisted unchanged. Zero-allocation.
+   */
+  protected _bindMaterialState(state: RenderManifest["state"]): void {
+    const enableCull = !(state && CullMode.NONE === state.culling);
+    if (this._stateCullFaceEnabled !== enableCull) {
+      if (enableCull) this.gl.enable(this.gl.CULL_FACE);
+      else this.gl.disable(this.gl.CULL_FACE);
+      this._stateCullFaceEnabled = enableCull;
+    }
+
+    if (enableCull) {
+      const cullMode = state && CullMode.FRONT === state.culling ? this.gl.FRONT : this.gl.BACK;
+      if (this._stateCullFaceMode !== cullMode) {
+        this.gl.cullFace(cullMode);
+        this._stateCullFaceMode = cullMode;
+      }
+    }
+
+    const enableBlend = !!state?.transparent;
+    if (this._stateBlendEnabled !== enableBlend) {
+      if (enableBlend) this.gl.enable(this.gl.BLEND);
+      else this.gl.disable(this.gl.BLEND);
+      this._stateBlendEnabled = enableBlend;
+    }
+
+    let depthMask = !enableBlend;
+    if (state?.depthWrite === false) depthMask = false;
+
+    if (this._stateDepthMask !== depthMask) {
+      this.gl.depthMask(depthMask);
+      this._stateDepthMask = depthMask;
+    }
+
+    if (enableBlend) {
+      let src: number = this.gl.SRC_ALPHA;
+      let dst: number = this.gl.ONE_MINUS_SRC_ALPHA;
+      if (state.blending === BlendingMode.ADDITIVE) {
+        src = this.gl.ONE;
+        dst = this.gl.ONE;
+      } else if (state.blending === BlendingMode.PREMULTIPLIED_ALPHA) {
+        src = this.gl.ONE;
+      }
+      if (this._stateBlendSrc !== src || this._stateBlendDst !== dst) {
+        this.gl.blendFunc(src, dst);
+        this._stateBlendSrc = src;
+        this._stateBlendDst = dst;
+      }
+    }
+
+    const enableDepthTest = state?.depthTest !== false;
+    if (this._stateDepthTest !== enableDepthTest) {
+      if (enableDepthTest) this.gl.enable(this.gl.DEPTH_TEST);
+      else this.gl.disable(this.gl.DEPTH_TEST);
+      this._stateDepthTest = enableDepthTest;
+    }
+  }
+
+  /**
+   * Uploads the generic material `properties` from the render manifest as uniforms on the current
+   * program. Shared by both renderers. The `glsl100` flag preserves one WebGL1-only branch that
+   * WebGL2's original did not have (a plain-array `mat4` property): hoisting stops at a behavior
+   * divergence, so WebGL2 stays exactly as it was (it still handles `mat4` via the
+   * `Float32Array` branch). Zero-allocation.
+   */
+  protected _bindGenericMaterialProperties(
+    u: Map<string, WebGLUniformLocation | undefined>,
+    properties: Record<string, unknown>,
+    glsl100: boolean,
+  ): void {
+    for (const name in properties) {
+      const value = properties[name];
+      const loc = u.get(name);
+      if (!loc) continue;
+
+      if (typeof value === "number") {
+        this.gl.uniform1f(loc, value);
+      } else if (ArrayBuffer.isView(value)) {
+        const v = value as Float32Array;
+        if (v.length === 4) this.gl.uniform4fv(loc, v);
+        else if (v.length === 3) this.gl.uniform3fv(loc, v);
+        else if (v.length === 2) this.gl.uniform2fv(loc, v);
+        else if (v.length === 16) this.gl.uniformMatrix4fv(loc, false, v);
+      } else if (Array.isArray(value)) {
+        if (value.length === 4) this.gl.uniform4fv(loc, value as number[]);
+        else if (value.length === 3) this.gl.uniform3fv(loc, value as number[]);
+        else if (value.length === 2) this.gl.uniform2fv(loc, value as number[]);
+        else if (glsl100 && value.length === 16)
+          this.gl.uniformMatrix4fv(loc, false, value as number[]);
+      }
+    }
+  }
+
+  /**
+   * Uploads an object's model matrix (billboarded for sprites) on the current program. Shared by
+   * both renderers; the shadow/instanced paths call it with `state`/`vMat` unset, which skips the
+   * billboard rewrite exactly as they did before. Walks the matrix through `_scratchModelMatrix`
+   * so the live scene-graph matrix is never mutated. Zero-allocation.
+   */
+  protected _uploadModelMatrix(
+    worldData: Float32Array,
+    state: RenderManifest["state"],
+    vMat: Float32Array | undefined,
+    u: Map<string, WebGLUniformLocation | undefined>,
+  ): void {
+    this._scratchModelMatrix.set(worldData);
+    if (state?.isSprite && vMat) {
+      const sx = Math.sqrt(
+        this._scratchModelMatrix[0]! ** 2 +
+          this._scratchModelMatrix[1]! ** 2 +
+          this._scratchModelMatrix[2]! ** 2,
+      );
+      const sy = Math.sqrt(
+        this._scratchModelMatrix[4]! ** 2 +
+          this._scratchModelMatrix[5]! ** 2 +
+          this._scratchModelMatrix[6]! ** 2,
+      );
+      const sz = Math.sqrt(
+        this._scratchModelMatrix[8]! ** 2 +
+          this._scratchModelMatrix[9]! ** 2 +
+          this._scratchModelMatrix[10]! ** 2,
+      );
+      this._scratchModelMatrix[0] = vMat[0]! * sx;
+      this._scratchModelMatrix[1] = vMat[4]! * sx;
+      this._scratchModelMatrix[2] = vMat[8]! * sx;
+      this._scratchModelMatrix[4] = vMat[1]! * sy;
+      this._scratchModelMatrix[5] = vMat[5]! * sy;
+      this._scratchModelMatrix[6] = vMat[9]! * sy;
+      this._scratchModelMatrix[8] = vMat[2]! * sz;
+      this._scratchModelMatrix[9] = vMat[6]! * sz;
+      this._scratchModelMatrix[10] = vMat[10]! * sz;
+    }
+    const uModel = u.get("u_model");
+    if (uModel) this.gl.uniformMatrix4fv(uModel, false, this._scratchModelMatrix);
+  }
 
   /**
    * True while the current `render()` call is targeting an offscreen `RenderTarget`/

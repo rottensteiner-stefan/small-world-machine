@@ -40,8 +40,6 @@ import { DepthMaterial } from "../../core/materials/index.js";
 import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 import type { WireframeMode } from "../../enums/index.js";
 import {
-  BlendingMode,
-  CullMode,
   MaterialType,
   RendererType,
   Topology,
@@ -126,9 +124,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   protected _activeCubeFace: number = 0;
   private _renderTargetFbos: Map<RenderTarget, WebGL2FrameBuffer> = new Map();
   private _renderTargetCubeFbos: Map<RenderTargetCube, WebGL2CubeFrameBuffer> = new Map();
-
-  private _scratchModelMatrix: Float32Array = new Float32Array(16);
-
   private _globalUBO!: WebGL2UniformBuffer;
 
   /** Clustered light culling grid state, see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md.
@@ -149,14 +144,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   public get clusterIndexTex(): WebGLTexture {
     return this._clusterIndexTex;
   }
-
-  private _stateCullFaceEnabled: boolean | null = null;
-  private _stateCullFaceMode: number = -1;
-  private _stateBlendEnabled: boolean | null = null;
-  private _stateBlendSrc: number = -1;
-  private _stateBlendDst: number = -1;
-  private _stateDepthMask: boolean | null = null;
-  private _stateDepthTest: boolean | null = null;
 
   private _shadowMaps: Map<AbstractLight, WebGL2DepthFrameBuffer> = new Map();
   private _dummyShadowMap!: WebGL2DepthFrameBuffer;
@@ -354,16 +341,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     );
     this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
     this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
-  }
-
-  public resetStateCache(): void {
-    this._stateCullFaceEnabled = null;
-    this._stateCullFaceMode = -1;
-    this._stateBlendEnabled = null;
-    this._stateBlendSrc = -1;
-    this._stateBlendDst = -1;
-    this._stateDepthMask = null;
-    this._stateDepthTest = null;
   }
 
   /**
@@ -1015,9 +992,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         // program resident across the session like any other infrastructure resource.
         this._textures.acquireTextures(o, manifest.textures);
 
-        this._scratchModelMatrix.set(o.worldMatrix.data);
-        const uModel = cache.uniforms.get("u_model");
-        if (uModel) this.gl.uniformMatrix4fv(uModel, false, this._scratchModelMatrix);
+        this._uploadModelMatrix(o.worldMatrix.data, undefined, undefined, cache.uniforms);
 
         const mesh = this._geometry.getOrCreateMesh(o, o.geometry);
 
@@ -1355,27 +1330,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     const u = cache.uniforms;
 
-    // --- Fog Uniforms ---
-    const fog = scene?.fog;
-    if (fog) {
-      const modeLoc = u.get("u_fogMode");
-      if (modeLoc) this.gl.uniform1i(modeLoc, fog.mode);
-      const colLoc = u.get("u_fogColor");
-      if (colLoc) this.gl.uniform3f(colLoc, fog.color.r, fog.color.g, fog.color.b);
-      const densLoc = u.get("u_fogDensity");
-      if (densLoc) this.gl.uniform1f(densLoc, fog.density);
-      const nearLoc = u.get("u_fogNear");
-      if (nearLoc) this.gl.uniform1f(nearLoc, fog.near);
-      const farLoc = u.get("u_fogFar");
-      if (farLoc) this.gl.uniform1f(farLoc, fog.far);
-      const heightLoc = u.get("u_fogHeight");
-      if (heightLoc) this.gl.uniform1f(heightLoc, fog.height);
-      const hFalloffLoc = u.get("u_fogHeightFalloff");
-      if (hFalloffLoc) this.gl.uniform1f(hFalloffLoc, fog.heightFalloff);
-    } else {
-      const modeLoc = u.get("u_fogMode");
-      if (modeLoc) this.gl.uniform1i(modeLoc, 0); // NONE
-    }
+    this._bindFogUniforms(u, scene?.fog);
 
     // --- Global IBL Uniforms ---
     if (scene) {
@@ -1446,79 +1401,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     // --- 1. Bind Material States ---
     const state = manifest.state;
-    const enableCull = !(state && CullMode.NONE === state.culling);
-    if (this._stateCullFaceEnabled !== enableCull) {
-      if (enableCull) this.gl.enable(this.gl.CULL_FACE);
-      else this.gl.disable(this.gl.CULL_FACE);
-      this._stateCullFaceEnabled = enableCull;
-    }
-
-    if (enableCull) {
-      const cullMode = state && CullMode.FRONT === state.culling ? this.gl.FRONT : this.gl.BACK;
-      if (this._stateCullFaceMode !== cullMode) {
-        this.gl.cullFace(cullMode);
-        this._stateCullFaceMode = cullMode;
-      }
-    }
-
-    const enableBlend = !!state?.transparent;
-    if (this._stateBlendEnabled !== enableBlend) {
-      if (enableBlend) this.gl.enable(this.gl.BLEND);
-      else this.gl.disable(this.gl.BLEND);
-      this._stateBlendEnabled = enableBlend;
-    }
-
-    let depthMask = !enableBlend;
-    if (state?.depthWrite === false) depthMask = false;
-
-    if (this._stateDepthMask !== depthMask) {
-      this.gl.depthMask(depthMask);
-      this._stateDepthMask = depthMask;
-    }
-
-    if (enableBlend) {
-      let src: number = this.gl.SRC_ALPHA;
-      let dst: number = this.gl.ONE_MINUS_SRC_ALPHA;
-      if (state.blending === BlendingMode.ADDITIVE) {
-        src = this.gl.ONE;
-        dst = this.gl.ONE;
-      } else if (state.blending === BlendingMode.PREMULTIPLIED_ALPHA) {
-        src = this.gl.ONE;
-      }
-      if (this._stateBlendSrc !== src || this._stateBlendDst !== dst) {
-        this.gl.blendFunc(src, dst);
-        this._stateBlendSrc = src;
-        this._stateBlendDst = dst;
-      }
-    }
-
-    const enableDepthTest = state?.depthTest !== false;
-    if (this._stateDepthTest !== enableDepthTest) {
-      if (enableDepthTest) this.gl.enable(this.gl.DEPTH_TEST);
-      else this.gl.disable(this.gl.DEPTH_TEST);
-      this._stateDepthTest = enableDepthTest;
-    }
-
-    // --- 2. Bind Generic Material Properties (Uniforms) ---
-    for (const name in manifest.properties) {
-      const value = manifest.properties[name];
-      const loc = u.get(name);
-      if (!loc) continue;
-
-      if (typeof value === "number") {
-        this.gl.uniform1f(loc, value);
-      } else if (ArrayBuffer.isView(value)) {
-        const v = value as Float32Array;
-        if (v.length === 4) this.gl.uniform4fv(loc, v);
-        else if (v.length === 3) this.gl.uniform3fv(loc, v);
-        else if (v.length === 2) this.gl.uniform2fv(loc, v);
-        else if (v.length === 16) this.gl.uniformMatrix4fv(loc, false, v);
-      } else if (Array.isArray(value)) {
-        if (value.length === 4) this.gl.uniform4fv(loc, value as number[]);
-        else if (value.length === 3) this.gl.uniform3fv(loc, value as number[]);
-        else if (value.length === 2) this.gl.uniform2fv(loc, value as number[]);
-      }
-    }
+    this._bindMaterialState(state);
+    this._bindGenericMaterialProperties(u, manifest.properties, false);
 
     // --- 3. Bind Textures ---
     const texs = manifest.textures;
@@ -1626,9 +1510,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         // whose pointers must stay pristine for the non-instanced path.
         this.gl.bindVertexArray(null);
 
-        this._scratchModelMatrix.set(instMesh.worldMatrix.data);
-        const uModel = u.get("u_model");
-        if (uModel) this.gl.uniformMatrix4fv(uModel, false, this._scratchModelMatrix);
+        this._uploadModelMatrix(instMesh.worldMatrix.data, undefined, undefined, u);
 
         let matrixBuf = this._instanceBuffers.get(instMesh);
         if (!matrixBuf) {
@@ -1713,35 +1595,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         }
       } else {
         // Model Matrix & Billboarding
-        this._scratchModelMatrix.set(o.worldMatrix.data);
-        if (state?.isSprite && vMat) {
-          const sx = Math.sqrt(
-            this._scratchModelMatrix[0]! ** 2 +
-              this._scratchModelMatrix[1]! ** 2 +
-              this._scratchModelMatrix[2]! ** 2,
-          );
-          const sy = Math.sqrt(
-            this._scratchModelMatrix[4]! ** 2 +
-              this._scratchModelMatrix[5]! ** 2 +
-              this._scratchModelMatrix[6]! ** 2,
-          );
-          const sz = Math.sqrt(
-            this._scratchModelMatrix[8]! ** 2 +
-              this._scratchModelMatrix[9]! ** 2 +
-              this._scratchModelMatrix[10]! ** 2,
-          );
-          this._scratchModelMatrix[0] = vMat[0]! * sx;
-          this._scratchModelMatrix[1] = vMat[4]! * sx;
-          this._scratchModelMatrix[2] = vMat[8]! * sx;
-          this._scratchModelMatrix[4] = vMat[1]! * sy;
-          this._scratchModelMatrix[5] = vMat[5]! * sy;
-          this._scratchModelMatrix[6] = vMat[9]! * sy;
-          this._scratchModelMatrix[8] = vMat[2]! * sz;
-          this._scratchModelMatrix[9] = vMat[6]! * sz;
-          this._scratchModelMatrix[10] = vMat[10]! * sz;
-        }
-        const uModel = u.get("u_model");
-        if (uModel) this.gl.uniformMatrix4fv(uModel, false, this._scratchModelMatrix);
+        this._uploadModelMatrix(o.worldMatrix.data, state, vMat, u);
 
         if (state?.isDecal) this._setDecalUniforms(u, o);
 
