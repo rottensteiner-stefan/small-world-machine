@@ -83,7 +83,7 @@
         <table>
           <tr><th>Entscheidung</th><th>Stand</th></tr>
           <tr><td>#1 Ablage</td><td><b>Sample-App <code>apps/sample-apps/voxel-prototype/</code></b> (User-Entscheid 2026-10-19)</td></tr>
-          <tr><td>#2 Kollision</td><td class="warn">M1: eigener <code>VoxelPlayerCollision</code>-Behavior (SWM-Gesetz-konform), kein FPSController-Patch</td></tr>
+          <tr><td>#2 Kollision</td><td><b>umgesetzt in M1:</b> eigener <code>VoxelPlayerCollision</code>-Behavior + <code>VoxelSweep</code> (Luanti-Port), kein FPSController-Patch</td></tr>
           <tr><td>#3 Greedy vs. Naive+AO</td><td>M0/M1 Naive-Culling → M2 echtes AO → M5 AO-kompatibles Greedy (§5 S3, teilgelöst)</td></tr>
           <tr><td>#4 Datenformat</td><td class="warn">M3: eigener kompakter Region-Store (OPFS/indexedDB), Anvil nur bei echten MC-Saves (§5 S5)</td></tr>
           <tr><td>#5 WebGPU-Roadmap</td><td><b>WebGL2-Default, WebGPU als späterer Qualitätspfad</b> (§5 S1/S6, Anti-Pattern „WebGPU-only")</td></tr>
@@ -94,7 +94,7 @@
       <table>
         <tr><th>Milestone</th><th>Inhalt</th><th>Umfang</th></tr>
         <tr><td class="m">M0 ✅</td><td>Skelett + EIN statischer Chunk — Mesh↔Engine-Vertrag, Array-Texture, Naive-Mesher, Orbit-Verifikation</td><td>S</td></tr>
-        <tr><td class="m">M1</td><td>Unendlich-Streaming, Worker-Meshing, Nahtfreiheit, Voxel-AABB-Sweep-Kollision</td><td>L</td></tr>
+        <tr><td class="m">M1 ✅</td><td>Unendlich-Streaming, Worker-Meshing, Nahtfreiheit, Voxel-AABB-Sweep-Kollision (<b>2026-10-19:</b> dedizierter Vite-Module-Worker statt ThreadPool gem. §5 S2, kein Engine-Change; Spawn/Walk/Fly, no step-up/jump → M4)</td><td>L</td></tr>
         <tr><td class="m">M2</td><td>Break/Place + korrektem 1-Chunk-Remesh, Minecraft-Standard-Look (gebäcktes AO)</td><td>M</td></tr>
         <tr><td class="m">M3</td><td>Save/Load (eigener kompakter Binär-Store), Tageslicht-Regel + billigster Punktflood</td><td>M</td></tr>
         <tr><td class="m">M4</td><td>Spielbare Survival-Schleife ohne Mobs/Inventory — Spawn, Bauen, Tag/Nacht, Respawn</td><td>S–M</td></tr>

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmallWorldMachine — Voxel Prototype (M0)</title>
+    <title>SmallWorldMachine — Voxel Prototype (M1)</title>
     <link rel="icon" href="data:," />
     <style>
       html,
@@ -36,6 +36,20 @@
         user-select: none;
         min-width: 220px;
       }
+      #voxel-hint {
+        position: fixed;
+        bottom: 14px;
+        left: 14px;
+        z-index: 10;
+        padding: 8px 12px;
+        background: rgba(10, 12, 16, 0.7);
+        border: 1px solid #2a3140;
+        border-radius: 8px;
+        color: #8ba0bd;
+        font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        pointer-events: none;
+        user-select: none;
+      }
       #voxel-stats .stat-row {
         display: flex;
         justify-content: space-between;
@@ -52,6 +66,7 @@
   </head>
   <body>
     <div id="voxel-stats" role="status"></div>
+    <div id="voxel-hint">click canvas to capture mouse · WASD move · ESC release</div>
     <canvas id="SmallWorldMachine"></canvas>
     <script type="module" src="/apps/sample-apps/voxel-prototype/App.ts"></script>
   </body>

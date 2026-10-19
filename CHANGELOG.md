@@ -13,6 +13,20 @@
     einer Shell") ist opt-in-Richtungsziel ohne Vertragscharakter; der [AMEND auf ADR 0010 §3] wurde
     zurückgenommen (Maker bleibt eigenständige Seite). Gemeinsamer Kern/CLI unverändert über ADR 0034
     (ACCEPTED). Kein Verhaltens-/API-Change — reine Architektur-Dokumentation.
+- **Sample Apps:**
+  - *Voxel-Proto M1: Unendlich-Streaming, Worker-Meshing, Nahtfreiheit, Voxel-AABB-Sweep-Kollision
+    (app-level, kein Engine-Change):* dedizierter Vite-Module-Worker (`mesh.worker.ts`; Welt-Gen +
+    Mesh-Bau laufen NIEMALS auf dem Main-Thread — begründete Divergenz von Dossier-"ThreadPool",
+    weil dessen `fn.toString()`-Blob-Modell keinen Multi-File-Mesher hostet), deterministische
+    geseedete `TerrainGenerator`-Wert-Noise-Heightfield-Welt, `ChunkWorld`-Streaming-Kern mit
+    Lebenszyklus/`minNeighborsToMesh=4`/Hysterese/Frame-Budget, nachbar-bewusstes Seam-Culling über
+    `buildNeighborRim` + `RIM_INDEX_ORDER` (Rim-Paritätstests), Luanti-Port `VoxelSweep`
+    (`axisAlignedCollision` + `collisionMoveSimple`, Gravitation-in-`accel`, Bodenerkennung als
+    Final-Touches-Kontaktscan; Port-Bug fix: finaler `result.position = origin`-Clobber), app-seitiger
+    `VoxelPlayerCollision`-FPS-Behavior (FPSStrategy-Parität, Pointer-Lock, Streaming-Fokus),
+    `ChunkWorldHost` (one Object3D per chunk, Frustum-Cull), `App.ts`-Umbau auf Spielerstand +
+    Mesh-Zeit-Stats **(„meshing never on main"-Beweis)**. Wiederverwendbares Live-Gate
+    `.agents/scratches/check-voxel-m1.mjs`. Kein Repo-API-Change.
 
 ## [0.114.0] - 2026-10-19
 

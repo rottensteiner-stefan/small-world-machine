@@ -5,6 +5,91 @@
 
 ---
 
+## 2026-10-19 — M1 implementiert: Unendlich-Streaming, Worker-Meshing, Nahtfreiheit, Voxel-Sweep
+
+**Status:** ✅ M1-Architektur + Kern grün (Gates unten). Plan: `.agents/scratches/voxel-m1-plan.md`.
+**Feature-Entscheid (User-Approval 2026-10-19, im Plan dokumentiert):** dedizierter
+**Vite-Module-Worker** statt Engine-`ThreadPool` — dessen `fn.toString()`-Blob-Modell (KEINE
+Imports) kann keinen Multi-File-Mesher hosten, ThreadPool-Erweiterung = Engine-Change = Verstoß
+gegen das No-Engine-Change-Mandat. Divergenz als begründet dokumentiert (E1-A im Plan).
+
+### Was gebaut wurde (alles app-level, `apps/sample-apps/voxel-prototype/`)
+
+- **`voxel/TerrainGenerator.ts`** — deterministischer, geseedeter Wert-Noise-fbm-Höhenfeldfeld
+  (rein als Funktion der Weltkoordinaten + Seed → nahtfrei über Chunk-Grenzen, byte-identisch auf
+  Main + Worker), fester Block-Stack (Gras/Dirt/Stein), `heightAt()` für den Spawn.
+- **`voxel/ChunkWorld.ts`** — reiner Streaming-/Lebenszyklus-Kern (Requested→Data→Meshing→Ready→
+  Unload, `minNeighborsToMesh=4` horizontal, **Hysterese** `unloadRadius > generateRadius`
+  [Konstruktor-Invariante], Frame-Budget `maxTasksPerTick`, Stats), Kollisions-Abfrage
+  `getWorldBlock`/`isSolidAt` (Registrär-`collidable`, nicht Opazität), Callbacks
+  `onMeshReady`/`onUnload` (Host-Glue injiziert). Kein Object3D/DOM/Engine-Import → node-testbar.
+- **`voxel/mesh/NaiveMesher.ts`** — Refactor auf reine Funktion `buildMesh(input)` + geteilte
+  `FACES`; **Naht-System** `RIM_INDEX_ORDER`, `FaceDir`, `faceDirForOffset`, `buildNeighborRim`,
+  `descriptorFromRegistry`, `MeshBlockDescriptorEntry {id,opaque,collidable,layers[top,bottom,side]}`;
+  `NaiveMesher`-Klasse bleibt als dünner M0-kompatibler Wrapper.
+- **`voxel/worker/`** — `MeshWorkerProtocol.ts` (typisierte Transfer-Nachrichten, `MeshClient`-
+  Interface), `mesh.worker.ts` (dedizierter Modul-Worker, NIEMALS Main: Welt-Gen + Mesh-Bau,
+  `performance.now()`-Mesh-Zeit), `MeshWorkerClient.ts` (`new Worker(new URL(..., import.meta.url),
+  {type:"module"})`), `ForegroundMeshClient.ts` (synchroner Test-/Fallback-Double, gleiche Pure-
+  Code-Pfade).
+- **`voxel/physics/VoxelSweep.ts`** — **treuer, SIMPLIFIZIERTER Luanti-Port**
+  (`collisionMoveSimple` + `axisAlignedCollision`, Quelle
+  `.agents/collaborate/minecraft/sources/charly-voxel-gameplay-luanti-collision.cpp`, LGPL-2.1+):
+  Per-Achsen-Sweep, früheste-Achse-gewinnt, Snap + Achsen-Null (bouncy=0), 1e-5-Drunkaste,
+  **Bodenerkennung = Luanti-Final-Touches-Kontaktscan** (`|top−feet| < 0.05`). Bei der Verifikation
+  **einen echten Port-Bug gefunden & behoben**: die finale `result.position = origin`-Clobber-Zeile
+  konnte jeden Nicht-Kollisions-Frame auf die Startposition zurücksetzen (→ im no-collision-Pfad
+  wird `origin` nie synchronisiert). Bodenerkennung als begründete Divergenz dokumentiert (Luantis
+  Mid-Loop-Klausel `accel_f.Y==0` ist unter unserem Gravitation-in-`accel`-Modell toter Code).
+- **`voxel/physics/VoxelPlayerCollision.ts`** — app-seitiger FPS-Behavior (Kamera-gehostet, §4.4 E2):
+  WASD in der Engine-eigenen Bewegungsmathematik (FPSController-Parität), Maus-Look via
+  `pendingDx/pendingDy`, Schwerkraft + Sweep, Streaming-Fokus zentriert im Behavior (frische
+  Spielerposition), Kamera-Auge = Körper + `eyeHeight`. Adapter-Seam zwischen `SweepWorld`
+  (`isSolidCell`) und `ChunkWorld` (`isSolidAt`).
+- **`voxel/ChunkWorldHost.ts`** — Host-Glue: Worker-`VoxelMeshData` → `Object3D` (Lokal→Welt
+  `(cx·16,0,cz·16)`, Bounds, FrustumCulled, One-Chunk-One-Draw), Eviction, Triangle-Zähler.
+- **`App.ts` (Umbau)** — M0-Orbit-Rig ersetzt durch echten FPS-Spieler auf generiertem Terrain
+  (Spawn via `heightAt`+1), Streaming um Spieler, Stats-Overlay mit **Mesh-Beweis** (mesh last/
+  total, „dedicated worker"), FPS-Strategie + Pointer-Lock.
+- **`index.html`** — Titel M1, Bedienhinweis (click to capture · WASD).
+
+### Verifikation (Gates)
+
+- `npm run lint:fix` ✅ · `npm run build:lib` ✅ · `npm run test` ✅ **340 Dateien / 2419 Tests**
+  (inkl. 10 neuer Sweep-, 5 Seam-, 7 Terrain-, 5 ChunkWorld-Tests).
+- **Worker-Build-Beweis:** gezielter Vite-Build des Voxel-Eintrags → `new Worker(new URL(...))`
+  wird als **eigener Chunk** (`assets/mesh.worker-*.js`) emittiert, App-Bundle referenziert ihn.
+- **Sweep-Testdeckung:** Bodenstand (feet exakt auf Block-Oberkante), Sturz + exaktes Landen
+  (keine Überpenetration), **kein Tunneln bei |vy|=5000** (Speed-Clamp-Grenze), Wand-Sliden
+  (kein laterales Durchdringen, grounded bleibt), Decken-Stopp, leere Welt = reine Integration,
+  Input-Vektoren nie mutiert, Luanti-0.05-Kontaktband.
+- **Verhaltens-Beweis (Unit-pinned):** Wandlauf-Test zeigt Stopp exakt bei `max.x == Wandfläche`
+  (origin.x==2.7), Füße bleiben auf y=1 — das M1-Gate „Spieler STEHT auf Terrain" ist
+  testseitig abgesichert.
+- **Live-Gate `check-voxel-m1.mjs` (headless, SwiftShader, WEBGL2) — `ok: true`:** Spieler
+  grounded auf Spawn-Oberfläche (feet 20.5/11/20.5 = heightAt+1), Mesh-Zeit `meshMsTotal`
+  26.5→28.6 ms wächst (Worker-Messung, nur Dedicated-Worker meldet >0), W-Lauf über
+  Chunk-Grenze z=16 (5.17 m, Flat-Korridor seed 777 per Probe verifiziert), **Streaming-Fokus
+  migriert (1,1)→(1,0)**, Chunks ready 121→132, Canvas nicht-blank (stddev 41.7), **0 Console-/
+  Page-Errors**, Overlay zeigt „dedicated worker".
+- **Vision-Bestätigung (Gemini-Brücke, M0-Präzedenz):** generiertes Terrain sichtbar (Gras-
+  Kappe/Braun/Dirt), **keine Seams/Cracks/fehlende Faces/schwarze Löcher an Chunk-Grenzen**,
+  flaches Licht — Nahtfreiheit hält im echten Render. (Schwarzer Himmel = kein Skybox in M1,
+  erwartet.)
+
+### Bewusste Scope-Cuts (M1, im Plan dokumentiert)
+
+- Naive Face-Culling (Greedy = M5, AO = M2), **kein Step-Up/Auto-Jump** (→ M4), kein
+  Block-Editing (M2), keine Persistenz (M3), kein WebGPU-Material, **kein Worker-Pool** (M5),
+  kein Bounce/Päraktiven-Split in Sweep (Luanti-Parabola-Deferred, mit Jump-Feature).
+
+### Nächste Schritte
+
+M2: Break/Place + 1-Chunk-Remesh + Minecraft-Look (gebäcktes AO) · Textur-Atlas-Entscheid
+(user 2026-10-19: **CC0-Nachzeichnungen sind gut genug** — Backlog-Eintrag).
+
+---
+
 ## 2026-10-19 — M0-Härtung: Live-Gate deckt 2 realer Mesher-Bugs auf (Black-Screen)
 
 **Status:** ✅ M0-Gate final grün — Browser-Live-Verifikation (headless Puppeteer + SwiftShader,

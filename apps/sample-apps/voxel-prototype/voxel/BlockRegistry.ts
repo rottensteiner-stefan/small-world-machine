@@ -84,6 +84,16 @@ export class BlockRegistry {
     return this._blocks.get(id);
   }
 
+  /**
+   * All registered definitions in insertion order (M1: the pure mesher needs the registry as a
+   * serializable descriptor so the worker can cull/layer without importing this class -- a
+   * `Map<number, ...>` survives structured clone, but a plain array is the robust, transferable
+   * shape both the node tests and the worker consume).
+   */
+  public definitions(): BlockDefinition[] {
+    return Array.from(this._blocks.values());
+  }
+
   /** Whether a block id is solid for meshing (opaque and present). */
   public isOpaque(id: number): boolean {
     return id !== BLOCK_AIR && !(this._blocks.get(id)?.transparent ?? true);

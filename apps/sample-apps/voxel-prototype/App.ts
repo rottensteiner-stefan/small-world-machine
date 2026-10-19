@@ -1,80 +1,47 @@
-import type { Camera } from "@small-world-machine/engine";
-import { Behavior, MathUtils, Object3D, RendererType, Vector3D } from "@small-world-machine/engine";
+import { CameraStrategyType, RendererType } from "@small-world-machine/engine";
 import {
   getRendererTypeFromQuery,
   SmallWorldMachine,
 } from "@small-world-machine/engine/core/index.js";
 import { PerspectiveProjection } from "@small-world-machine/engine/math/projections/index.js";
-import {
-  BlockRegistry,
-  BLOCK_DIRT,
-  BLOCK_AIR,
-  BLOCK_GRASS,
-  BLOCK_STONE,
-} from "./voxel/BlockRegistry.js";
-import { Chunk } from "./voxel/Chunk.js";
-import { BlockMaterial } from "./voxel/material/BlockMaterial.js";
-import { NaiveMesher } from "./voxel/mesh/NaiveMesher.js";
-import { VoxelChunkGeometry } from "./voxel/mesh/VoxelChunkGeometry.js";
+import { BlockRegistry } from "./voxel/BlockRegistry.js";
+import { ChunkWorld } from "./voxel/ChunkWorld.js";
+import { ChunkWorldHost } from "./voxel/ChunkWorldHost.js";
 import { createBlockPalette } from "./voxel/BlockTextureFactory.js";
+import { BlockMaterial } from "./voxel/material/BlockMaterial.js";
+import { descriptorFromRegistry } from "./voxel/mesh/NaiveMesher.js";
+import { TerrainGenerator } from "./voxel/TerrainGenerator.js";
+import { VoxelPlayerCollision } from "./voxel/physics/VoxelPlayerCollision.js";
+import { ForegroundMeshClient } from "./voxel/worker/ForegroundMeshClient.js";
+import { MeshWorkerClient } from "./voxel/worker/MeshWorkerClient.js";
+import type { MeshClient } from "./voxel/worker/MeshWorkerProtocol.js";
 
 /**
- * Slowly orbits the camera around a fixed world target while keeping a constant height and
- * always looking at the target -- the M0 verification vantage: every pillar face is
- * continuously shown, which proves culling/winding (faces appear from the outside only) and
- * per-face atlas layers without any interaction. The rotation is purely cosmetic; M1 replaces
- * this with the real FPS/collision rig.
- */
-class OrbitAroundBehavior extends Behavior<Camera> {
-  private readonly _target: Readonly<Vector3D>;
-  private readonly _radius: number;
-  private readonly _height: number;
-  private readonly _speed: number;
-  private _angle: number;
-
-  constructor(target: Readonly<Vector3D>, radius: number, height: number) {
-    super();
-    this._target = target;
-    this._radius = radius;
-    this._height = height;
-    this._speed = 0.14; // rad/s -- slow enough to inspect, fast enough to cover all faces
-    this._angle = 0;
-  }
-
-  public override update(deltaTime: number): void {
-    const cam = this.target;
-    if (!cam) return;
-    this._angle += deltaTime * this._speed;
-    cam.position.x = this._target.x + Math.cos(this._angle) * this._radius;
-    cam.position.y = this._target.y + this._height;
-    cam.position.z = this._target.z + Math.sin(this._angle) * this._radius;
-    cam.target = new Vector3D(this._target.x, this._target.y, this._target.z);
-    cam.updateViewMatrix();
-  }
-}
-
-/**
- * M0 "Skelett + EIN statischer Chunk" (dossier §4.2) -- the mesh<->engine contract proof:
+ * Voxel M1 "unbounded streaming" (dossier §4.2, §5 S2) -- replaces the M0 orbit demo with a
+ * first-person player STANDING on generated terrain that streams around him:
  *
- *   - `BlockRegistry` (seeded) is the single source of truth for block semantics.
- *   - One data-only `Chunk` (16³) holding a freestanding terrain pillar.
- *   - `NaiveMesher` builds visible-face geometry; `colors.r` carries the per-face atlas layer.
- *   - `VoxelChunkGeometry` + shared `BlockMaterial` (GLSL300, `sampler2DArray`) host the chunk
- *     on the standard `Object3D` path (bounds, frustum culling, static draw), exactly the
- *     "one `Object3D` per chunk" pattern the later milestones keep.
+ *   - `TerrainGenerator` (seeded, deterministic) + `ChunkWorld` (pure streaming/lifecycle core).
+ *   - Meshing runs on a dedicated Vite module worker (`MeshWorkerClient`); the main thread ONLY
+ *     decides and dispatches -- proof in the stats overlay (`mesh total` grows, worker-side
+ *     `performance.now()` time, never a main-thread mesher call).
+ *   - Neighbor-aware culling (`buildNeighborRim`) makes chunk borders seamless (pinned by the
+ *     seam tests); the host materializes each outcome as the standard "one Object3D per chunk".
+ *   - `VoxelPlayerCollision` (app-level Behavior) runs the Luanti-derived swept AABB resolver
+ *     against the world: gravity, ground stand, wall slide -- the M1 gate's "player STANDS".
  *
- * Backend: WebGL2 default (dossier §4.4 #5 -- WebGL2 first, WebGPU as a later quality path).
- * `?rendererType=WEB_GL2|WEB_GPU|WEB_GL1` overrides for CI/smoke verification.
+ * Backend: WebGL2 default (dossier §4.4 #5); `?rendererType=WEB_GL2|WEB_GPU|WEB_GL1` overrides.
+ * WebGPU array-texture material + WebGL1 atlas remain later milestones (M0 logs).
  */
 export class App extends SmallWorldMachine {
   private _statsEl: HTMLElement | null = null;
   private _lastStatsUpdate = 0;
-  private _triangleCount = 0;
+
+  private _world!: ChunkWorld;
+  private _host!: ChunkWorldHost;
+  private _player!: VoxelPlayerCollision;
 
   constructor() {
-    // M0 ships GLSL300 only (no WGSL/GLSL100 variants yet), so force WebGL2 unless the
-    // URL explicitly pins a backend. This keeps default launches rendering even on machines
-    // whose `BEST` would pick WebGPU (whose array-texture material path is a follow-up).
+    // M1 ships GLSL300 only (like M0), so force WebGL2 unless the URL pins a backend.
     const rendererType = getRendererTypeFromQuery();
     if (rendererType) {
       super({ fullscreen: true, rendererType });
@@ -83,82 +50,94 @@ export class App extends SmallWorldMachine {
     }
   }
 
-  /** Builds a single terraint column inside the chunk: grass cap, dirt body, stone base. */
-  private _seedDemoPillar(chunk: Chunk): void {
-    // Freestanding pillar, centered in the chunk footprint so the orbit camera shows every
-    // side. Top block is grass (grass-top layer), body dirt, footing stone.
-    chunk.fill(BLOCK_AIR);
-    for (let y = 0; y < 4; y++) {
-      for (let z = 5; z < 11; z++) {
-        for (let x = 5; x < 11; x++) {
-          chunk.setBlock(x, y, z, BLOCK_STONE);
-        }
-      }
-    }
-    for (let y = 4; y < 11; y++) {
-      for (let z = 5; z < 11; z++) {
-        for (let x = 5; x < 11; x++) {
-          chunk.setBlock(x, y, z, BLOCK_DIRT);
-        }
-      }
-    }
-    for (let z = 5; z < 11; z++) {
-      for (let x = 5; x < 11; x++) {
-        chunk.setBlock(x, 11, z, BLOCK_GRASS);
-      }
-    }
-  }
-
   /** @inheritdoc */
   protected override async setupScene(): Promise<void> {
-    // Statistics overlay (draw-count proof for M0: 1 chunk => 1 Object3D => 1 draw call).
     this._statsEl = document.getElementById("voxel-stats");
 
-    // 1. Camera -- perspective, fixed interaction-free vantage driven by the orbit behavior.
+    // 1. Perspective projection; far plane covers the streaming radius with margin.
     this.camera.projection = new PerspectiveProjection({
-      fov: MathUtils.degToRad(60),
+      fov: (75 * Math.PI) / 180,
       aspect: this.camera.aspect,
       near: 0.1,
-      far: 300,
+      far: 500,
     });
     this.camera.updateProjectionMatrix();
+    this.camera.setStrategy(CameraStrategyType.FPS);
 
-    // 2. Registry (seeded, per-instance -- no singleton) and a single data-only chunk.
+    // 2. Registry (seeded, per-instance -- no singleton) + its transferable descriptor.
     const registry = new BlockRegistry();
     BlockRegistry.seed(registry);
-    const chunk = new Chunk();
-    this._seedDemoPillar(chunk);
+    const descriptor = descriptorFromRegistry(registry);
 
-    // 3. Palette + material (WebGL2 GLSL300; browser-only texture path).
+    // 3. Palette + shared material -- ONE BlockMaterial instance for every chunk host.
     const palette = await createBlockPalette();
     const material = new BlockMaterial(palette);
 
-    // 4. Mesh the chunk on the main thread (M0; M1 moves this into a `ThreadPool` worker) and
-    //    host it on the standard Object3D path -- one draw call per chunk, exactly the target
-    //    architecture (Dave-Report §2.1).
-    const mesh = new NaiveMesher(registry).build(chunk);
-    this._triangleCount = mesh.triangleCount;
+    // 4. World backbone. Production uses the dedicated mesh worker; a browser without `Worker`
+    //    degrades to the foreground double (meshing would run on main -- stats show the label).
+    const client: MeshClient =
+      typeof Worker !== "undefined" ? new MeshWorkerClient() : new ForegroundMeshClient();
+    this._host = new ChunkWorldHost(this.scene, material);
+    this._world = new ChunkWorld({
+      client,
+      descriptor,
+      seed: WORLD_SEED,
+      generateRadius: GENERATE_RADIUS,
+      unloadRadius: GENERATE_RADIUS + 2, // hysteresis: > generateRadius (ChunkWorld invariant)
+      callbacks: {
+        onMeshReady: (cx, cz, mesh): void => this._host.onMeshReady(cx, cz, mesh),
+        onUnload: (cx, cz): void => this._host.onUnload(cx, cz),
+      },
+    });
 
-    const host = new Object3D("chunk_0_0_0");
-    host.geometry = new VoxelChunkGeometry(mesh).getGeometryData();
-    host.material = material;
-    host.frustumCulled = true;
-    host.computeBounds();
-    this.scene.add(host);
+    // 5. Player: FPS look via the FPS strategy, feet standing on the generated surface.
+    const generator = new TerrainGenerator({ seed: WORLD_SEED });
+    const surface = generator.heightAt(SPAWN_X, SPAWN_Z); // topmost solid y
+    this._player = new VoxelPlayerCollision({ world: this._world, input: this.input });
+    this._player.setSpawn(SPAWN_X, surface + 1, SPAWN_Z); // feet on top of the grass cap
+    this.camera.addBehavior(this._player);
+    this._installQaHook();
 
-    // 5. Orbit camera around the pillar center (top of the pillar + a margin).
-    this.camera.addBehavior(new OrbitAroundBehavior(new Vector3D(8, 9, 8), 27, 13));
+    // 6. Pointer lock on click (engine FPS convention, see showcases 2/10/29).
+    this.canvas.addEventListener("click", (): void => {
+      if (!this.input.isPointerLocked) {
+        this.input.requestPointerLock(this.canvas);
+      }
+    });
 
-    // Final scene refresh so world matrices and light state exist before the first frame.
     this.scene.update();
-
     this._updateStats(true);
   }
 
   /** @inheritdoc */
   protected override update(deltaTime: number): void {
-    this._updateStats(false);
     void deltaTime;
+    this._updateStats(false);
+  }
+
+  /**
+   * Minimal QA surface for the headless live gate (`check-voxel-m1.mjs`, showcase24 pattern):
+   * structured reads of the player body and the world stats without parsing CSS/HTML text.
+   * Inert for normal usage (a single property on `window`).
+   */
+  private _installQaHook(): void {
+    (window as unknown as { __voxelM1?: VoxelM1QaApi }).__voxelM1 = {
+      getPlayer: (): PlayerQaState => {
+        const feet = this._player.getFeetPosition(); // fresh object; safe to hand out
+        return { feet, onGround: this._player.isOnGround() };
+      },
+      getStats: (): WorldQaStats => {
+        const s = this._world.getStats();
+        return {
+          ready: s.ready,
+          generated: s.generated,
+          inFlight: s.inFlight,
+          meshMsLast: s.meshMsLast,
+          meshMsTotal: s.meshMsTotal,
+          focus: this._world.getFocusChunk(),
+        };
+      },
+    };
   }
 
   private _updateStats(force: boolean): void {
@@ -166,18 +145,58 @@ export class App extends SmallWorldMachine {
     const now = performance.now();
     if (!force && now - this._lastStatsUpdate < 250) return;
     this._lastStatsUpdate = now;
-
     const renderer = this.renderer;
     const backend = renderer ? renderer.type : "n/a";
+    const stats = this._world.getStats();
+    const feet = this._player.getFeetPosition();
+    const workerMode = typeof Worker !== "undefined" ? "dedicated worker" : "foreground (main!)";
+
     this._statsEl.innerHTML =
       `<div class="stat-row"><span>renderer</span><b>${backend}</b></div>` +
-      `<div class="stat-row"><span>backend</span><b>WEBGL2 default (M0)</b></div>` +
-      `<div class="stat-row"><span>chunks</span><b>1</b></div>` +
+      `<div class="stat-row"><span>engine</span><b>voxel M1</b></div>` +
+      `<div class="stat-row"><span>player</span><b>${feet.x.toFixed(1)}, ${feet.y.toFixed(1)}, ${feet.z.toFixed(1)}</b></div>` +
+      `<div class="stat-row"><span>grounded</span><b>${this._player.isOnGround() ? "yes" : "no"}</b></div>` +
+      `<div class="stat-row"><span>chunks ready</span><b>${stats.ready}</b></div>` +
+      `<div class="stat-row"><span>chunks data</span><b>${stats.generated}</b></div>` +
+      `<div class="stat-row"><span>in flight</span><b>${stats.inFlight}</b></div>` +
       `<div class="stat-row"><span>objects</span><b>${this.scene.lastFrustumVisibleObjects.length}</b></div>` +
-      `<div class="stat-row"><span>triangles</span><b>${this._triangleCount}</b></div>` +
-      `<div class="stat-row"><span>meshing</span><b>main thread (M1 → worker)</b></div>`;
+      `<div class="stat-row"><span>triangles</span><b>${this._host.triangleCount}</b></div>` +
+      `<div class="stat-row"><span>mesh last</span><b>${stats.meshMsLast.toFixed(2)} ms</b></div>` +
+      `<div class="stat-row"><span>mesh total</span><b>${stats.meshMsTotal.toFixed(1)} ms</b></div>` +
+      `<div class="stat-row"><span>meshing</span><b>${workerMode}</b></div>`;
   }
 }
+
+/**
+ * QA gate state shapes (see `_installQaHook`). Plain serializable data -- evaluated through
+ * Puppeteer's structured clone by `.agents/scratches/check-voxel-m1.mjs`.
+ */
+export interface PlayerQaState {
+  feet: { x: number; y: number; z: number };
+  onGround: boolean;
+}
+
+export interface WorldQaStats {
+  ready: number;
+  generated: number;
+  inFlight: number;
+  meshMsLast: number;
+  meshMsTotal: number;
+  focus: { cx: number; cz: number };
+}
+
+export interface VoxelM1QaApi {
+  getPlayer(): PlayerQaState;
+  getStats(): WorldQaStats;
+}
+
+/** World seed for deterministic terrain (same seed -> same world; see TerrainGenerator tests). */
+const WORLD_SEED = 777;
+/** Player spawn column (world units). Streaming centers on the player every frame. */
+const SPAWN_X = 20.5;
+const SPAWN_Z = 20.5;
+/** Streaming add radius in chunks (Chebyshev). Data is generated within it. */
+const GENERATE_RADIUS = 6;
 
 if (typeof window !== "undefined") {
   const app: App = new App();
