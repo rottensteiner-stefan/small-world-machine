@@ -3,6 +3,18 @@
 > **Status: DRAFT** — Entwurf zum Implementierungsstart des „Big Merge" (2026-10-13, Session `big-merge`,
 > Konsens 4/4, Plan `.agents/collaborate/big-merge.md`). Noch nicht verbindlich: Die Entscheidung wird erst
 > mit den Abnahme-Gates der Meilensteine (Plan §8) und der finalen Implementierung (M6) promoviert.
+>
+> **Stand 2026-10-19 (Implementierungsfortschritt; Status bleibt DRAFT):** Das CLI-Segment (Ziel G2
+> „dual use") ist als `swm`-MVP umgesetzt und mit Release **0.114.0** veröffentlicht (Commits
+> `48bbe791`/`e50c537c`/`0b4ec063` in der main-Historie, Release-Tip `d0a3c493`): `packages/tools`
+> exponiert `bin.swm` (`src/cli/swm.mjs`, als `tsx`-Launcher-Shim eingecheckt) und `src/cli/index.ts`
+> kapselt bestehende Headless-Core-Slices als Subcommands — `swm map to-json|from-json` (ASCII-Map ↔
+> JSON-Grid über `core/map.ts`, `-` = stdin) und `swm kit validate <dir>` (Kit-Manifest-Validierung über
+> `core/kit.ts`), plus `--help`/`--version` (Version aus `package.json`) mit Nicht-Null-Exit bei
+> unbekanntem Befehl/Operation; 17 CLI-Tests plus `bin`-Smoke-Test grün auf dem gefalteten Tree. Kein
+> Engine-/Dependency-Touch außerhalb `packages/tools/**`, keine Verhaltensänderung am Kern. Die formale
+> Promotion DRAFT→ACCEPTED (inkl. Indexzeile) bleibt dem Maintainer; ebenfalls unverändert offen: der
+> IBL-Bake als Headless-Chrome-Subprozess und das reservierte `--binary` GLB-Flag (Backlog-Item, Phase B).
 
 ## Kontext & Problem
 
