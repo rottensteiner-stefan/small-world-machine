@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showcase 40 – Decal Probe: Box-Projected Decals on GPU – Concept Dossier</title>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --fg: #e2e8f0;
+    --muted: #8b949e;
+    --card: #14181f;
+    --border: #2a3038;
+    --accent: #58a6ff;
+    --cyan: #39c5bb;
+    --amber: #f0883e;
+  }
+  body {
+    margin: 0;
+    padding: 40px 20px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    color: #fff;
+  }
+  p.lead {
+    font-size: 17px;
+    color: var(--muted);
+    margin-top: 0;
+    margin-bottom: 28px;
+  }
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 32px 0 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+    color: var(--accent);
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+  }
+  .card h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+    color: #fff;
+  }
+  .card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  code {
+    background: rgba(110, 118, 129, 0.4);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  ul {
+    padding-left: 20px;
+    color: var(--muted);
+  }
+  li {
+    margin-bottom: 6px;
+  }
+  li strong {
+    color: var(--fg);
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Decal Probe: Box-Projected Decals on GPU</h1>
+  <p class="lead">A rendering laboratory for the engine's decal system — projected decals on floor, wall and a pedestal, normal-buffer blending, a recycling DecalPool, wet-puddle ORM probes and cross-backend parity.</p>
+
+  <h2>Core Pillars &amp; Technical Highlights</h2>
+  <div class="card-grid">
+    <div class="card">
+      <h3>1. Box-Projected Decals</h3>
+      <p>Decals are projectors with a box volume. A box wider than the pedestal base lands only on the floor; the pedestal's vertical sides must fade through the angle fade instead of smearing. World layout: floor, wall, pedestal, around-pedestal, normal probe, UV orientation control pair.</p>
+    </div>
+    <div class="card">
+      <h3>2. Normal-Buffer Blending</h3>
+      <p>A half-transparent decal over a normal-mapped floor: the decal's strongly tilted tangent-space normal is alpha-blended with the floor normal in the normal buffer, never overwriting it. `?nb=1|0|auto` forces the normal buffer on/off (the WebGL1 bake path must omit decals cleanly).</p>
+    </div>
+    <div class="card">
+      <h3>3. PBR Probe Constellation</h3>
+      <p>ORM/emissive/metallic/bump/wet probes against a shared `StandardMaterial` floor and an unlit twin — proving the decal shader reads the same channel mapping as the rest of the engine (AO, roughness, metallic, emissive, normal map) under a controlled light.</p>
+    </div>
+  </div>
+
+  <h2>Lab Controls (query parameters)</h2>
+  <ul>
+    <li><strong>Main scene:</strong> floor/wall/pedestal probes; <code>?spot=1</code> swaps the sun for a shadow-casting spot with an occluder whose shadow crosses a decal edge; <code>?bump=1|2</code> gives the floor a normal map; <code>?unlit=1</code> makes every probe decal unlit (WebGL2 normal-buffer requirement).</li>
+    <li><strong>Normal buffer:</strong> <code>?nb=1</code> / <code>?nb=0</code> force it on/off, default auto; <code>?pp=1</code> enables post-processing, <code>?hbao=1</code> additionally turns on HBAO independent of the normal buffer.</li>
+    <li><strong>Post-process / bake:</strong> <code>?bake=1</code> bakes every decal into a mesh before the first frame (the WebGL1 path); <code>?rendererType=WEB_GPU|WEB_GL2|WEB_GL1</code> picks the backend.</li>
+    <li><strong>Lab scenes:</strong> <code>?pool=1</code> drives a <code>DecalPool</code> (recycling, restacking, fade; <code>&amp;shoot=1</code> for real pointer-click ray casts); <code>?wet=1</code> shows the kit's wet-puddle ORM preset against a dark-only twin; <code>?orm=1</code> the eight-step ORM/emissive/metallic probe row; <code>?mip=1</code> the mip-sharpness comparison (Plane vs. Decal) with <code>?mipbias=&lt;n&gt;</code>.</li>
+  </ul>
+
+  <h2>Verification Tooling</h2>
+  <p>The page is the target of <code>npm run test:decals</code> (<code>scripts/check-decals.mjs</code>) and <code>node scripts/measure-decal-mips.mjs</code>. Those scripts share world coordinates with the scene modules and assert on GPU readbacks — normal-buffer contents, decal pixels, pool restacking — under WebGPU, WebGL2 and WebGL1. See <code>docs/guides/decals.md</code> and ADR 0028 / 0029.</p>
+</main>
+</body>
+</html>

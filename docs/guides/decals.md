@@ -301,7 +301,7 @@ negative value only for deliberately crisp, nearby decals.
 
 ## Decal probe and tests
 
-`apps/showcases/decal-probe` shows decals on a floor, a wall and a pedestal, plus UV and
+`apps/showcases/40` (the decal probe, Showcase 40) shows decals on a floor, a wall and a pedestal, plus UV and
 normal probes. Query parameters:
 
 - `?nb=1` / `?nb=0` forces the normal buffer on / off (default: auto)

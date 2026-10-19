@@ -1,12 +1,12 @@
 /* global window, document, requestAnimationFrame, GPUBufferUsage, GPUMapMode -- used inside page.evaluate (browser context) */
-// GPU assertions for the decal system (apps/showcases/decal-probe).
+// GPU assertions for the decal system (apps/showcases/40).
 // Usage: npm run test:decals   (env: DECAL_ORIGIN=https://localhost:5173, DECAL_REQUIRE_WEBGPU=1)
 // WebGL2 is the blocking set; WebGPU is informational unless DECAL_REQUIRE_WEBGPU=1.
 import puppeteer from "puppeteer";
 import { PNG } from "pngjs";
 
 const ORIGIN = process.env.DECAL_ORIGIN || "https://localhost:5173";
-const PAGE = `${ORIGIN}/apps/showcases/decal-probe/index.html`;
+const PAGE = `${ORIGIN}/apps/showcases/40/index.html`;
 const FRAMES = 20;
 const FLOOR = [0.5, 0.9];
 const SKY = [0.5, 0.03];

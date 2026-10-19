@@ -1,12 +1,12 @@
 /* global window, document, requestAnimationFrame -- used inside page.evaluate (browser context) */
 // Sharpness of decal textures vs hardware mips: Plane mesh (hardware mip selection) next to a Decal
-// carrying the same high-frequency texture, grazing camera (apps/showcases/decal-probe/mipScene.ts).
+// carrying the same high-frequency texture, grazing camera (apps/showcases/40/mipScene.ts).
 // Usage: node scripts/measure-decal-mips.mjs   (env: DECAL_ORIGIN, MIP_BIASES="0,-0.25,-0.5,-0.75")
 import puppeteer from "puppeteer";
 import { PNG } from "pngjs";
 
 const ORIGIN = process.env.DECAL_ORIGIN || "https://localhost:5173";
-const PAGE = `${ORIGIN}/apps/showcases/decal-probe/index.html`;
+const PAGE = `${ORIGIN}/apps/showcases/40/index.html`;
 const BIASES = (process.env.MIP_BIASES || "0,-0.25,-0.5,-0.75").split(",").map(Number);
 const BACKENDS = ["WEB_GL2", "WEB_GPU"];
 const BANDS = [

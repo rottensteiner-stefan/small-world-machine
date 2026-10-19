@@ -170,7 +170,7 @@ Small World Machine is organized as a lightweight TypeScript monorepo (`packages
 - **`packages/physics-extras`**: Advanced physics solvers, convex hulls, and geometric algorithms.
 
 ### `apps/` — Showcases & Sample Games
-- **`apps/showcases`**: 38 numbered interactive showcases (1–24, 26–39, #25 is intentionally absent) demonstrating engine features (PBR, IBL, Glass transmission, Post-processing, Clustered lighting, Spatial audio, etc.), plus the `decal-probe` and `presentation` apps.
+- **`apps/showcases`**: 39 numbered interactive showcases (1–24, 26–40, #25 is intentionally absent) demonstrating engine features (PBR, IBL, Glass transmission, Post-processing, Clustered lighting, Decals, Spatial audio, etc.), plus the `presentation` app.
 - **`apps/sample-apps`**: Production vertical slices and games (*The Whisper — A Viennese Requiem*, *Light Cycle Arena*, etc.).
 
 ### `public/` — Assets & Tools
