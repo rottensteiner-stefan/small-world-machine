@@ -110,13 +110,26 @@ eigenes Material rechtfertigt, kein Preset auf `LiquidSurfaceMaterial`.
 
 Im Rahmen der Flüssigkeits-Roadmap (Konsens P2, §8.6) wurden die Erkenntnisse aus der 256-Byte-Uniform-Slot-Grenze und der Interaktivitäts-Erweiterung (S1–S3) formell verankert:
 
-### 1. 256-Byte-Slot-MOAT (ADR 0026)
-- Das feste Uniform-Layout von 256 Byte (`ObjectUniforms`, 16 `vec4` Register) bleibt das unantastbare Limit der Engine, um strikte WebGL1-Kompatibilität (Fragment-Uniform-Mindestgarantie) sicherzustellen.
-- **Kein blindes Slot-Wachstum:** Es werden keine neuen `vec4`-Felder in den globalen Objekt-Block eingefügt.
-- Parameter-Wachstum und Interaktionskanäle werden über exakt registrierte Lane-Reuses (`LaneContractRegistry`) oder Kompilierzeit-Spezialisierungen kanalisiert.
+### 1. Uniform-Slot-MOAT: 512 Byte (ADR 0027; die 256-Byte-Fassung ist historisch)
+
+> **Stand 2026-10-19 — 256-Byte-MOAT obsolet:** Die unten historisch festgehaltene 256-Byte-Grenze
+> ist inzwischen *nicht mehr* das Limit der Engine. ADR 0026 (256 Byte) ist durch
+> [ADR 0027](./0027-object-uniforms-512-byte-expansion.md) **SUPERSEDED**: `ObjectUniforms` wurde
+> auf **512 Byte** (128 Floats = 32 `vec4`) erweitert (`StandardWebGPULayout.ts`, `structs.wgsl`),
+> inklusive der freien Parameter-Slots `u_matParam0` bis `u_matParam15`. Das aktive Limit der
+> Engine ist damit **512 Byte**, nicht 256. WebGL1 bleibt davon unberührt: Die `glsl100`-Shader
+> deklarieren weiterhin selektiv Einzeluniforms und unterliegen gar keinem Uniform-Block-Limit
+> (Begründung in ADR 0027).
+
+- **Historisch (Verdikt 2026-10-07, gültig bis ADR 0027):** Das feste Uniform-Layout von 256 Byte
+  (`ObjectUniforms`, 16 `vec4` Register) galt als das unantastbare Limit der Engine, um strikte
+  WebGL1-Kompatibilität (Fragment-Uniform-Mindestgarantie) sicherzustellen.
+- **Kein blindes Slot-Wachstum bleibt Leitplanke:** Neue `vec4`-Felder werden nur über die freien
+  `u_matParam0..15`-Slots des 512-Byte-Blocks oder exakt registrierte Lane-Reuses
+  (`LaneContractRegistry`) bzw. Kompilierzeit-Spezialisierungen kanalisiert.
 
 ### 2. Strategie für Parameter-Surfaces, LOD & komplexe Looks
-Sollten künftige Flüssigkeitseffekte (wie multiskaliges Ozean-LOD, komplexe Flow-Maps oder partikelgestützte Schaumkarten) mehr Parameter benötigen, als der 256-Byte-Slot fasst, greift folgende Prioritätskaskade (gemäß ADR 0026):
+Sollten künftige Flüssigkeitseffekte (wie multiskaliges Ozean-LOD, komplexe Flow-Maps oder partikelgestützte Schaumkarten) mehr Parameter benötigen, als der 512-Byte-Block fasst, greift folgende Prioritätskaskade (gemäß ADR 0026/0027):
 1. **LUT- & Parameter-Texturen (1D/2D):** Texturen bieten unbegrenzte Parameter-Speicherdichte bei voller WebGL1/2/WebGPU-Kompatibilität.
 2. **Kompilierzeit-Konstanten:** Feste Material-Presets (z. B. feste Wellenkonfigurationen oder Farben) werden bei der Shader-Assemblierung per Chunk/Token injiziert (0 Uniform-Kosten).
 3. **Instanz-/Vertex-Attribute:** Dynamische Partikel, Wellen-Splats oder lokale Modifikatoren können als Geometrie- oder Instanz-Attribute übertragen werden.
