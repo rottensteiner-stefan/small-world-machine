@@ -4,10 +4,6 @@ import { Vector3D, MathPool } from "../math/index.js";
 import type { EventDispatcherImpl } from "../core/events/EventDispatcherImpl.js";
 import type { Collidable } from "../interfaces/index.js";
 import { BoundingType } from "../enums/index.js";
-import type { BoundingBox } from "./BoundingBox.js";
-import type { BoundingSphere } from "./BoundingSphere.js";
-import type { OBB } from "./OBB.js";
-import type { ConvexHull } from "./ConvexHull.js";
 import type { FluidVolume } from "./FluidVolume.js";
 import { BuoyancySolver } from "./fluids/BuoyancySolver.js";
 import { PhysicsBroadphase } from "./broadphase/PhysicsBroadphase.js";
@@ -317,20 +313,20 @@ export class PhysicsSystem {
     } else if (obj.bounds) {
       const b = obj.bounds;
       if (b.type === BoundingType.BOX) {
-        const box = b as BoundingBox;
+        const box = b;
         box.min.add(posCorr);
         box.max.add(posCorr);
         box.center.add(posCorr);
       } else if (b.type === BoundingType.SPHERE) {
-        const sphere = b as BoundingSphere;
+        const sphere = b;
         if (sphere.center !== obj.position) {
           sphere.center.add(posCorr);
         }
       } else if (b.type === BoundingType.OBB) {
-        const obb = b as OBB;
+        const obb = b;
         obb.center.add(posCorr);
       } else if (b.type === BoundingType.HULL) {
-        const hull = b as ConvexHull;
+        const hull = b;
         hull.transform(obj.worldMatrix);
       }
     }

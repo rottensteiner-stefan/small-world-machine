@@ -213,7 +213,7 @@ export class Scene {
             let bStr: string = "null";
             if (obj.bounds) {
               if (obj.bounds.type === BoundingType.BOX) {
-                const b = obj.bounds as BoundingBox;
+                const b = obj.bounds;
                 bStr = `${b.min.x},${b.min.y},${b.min.z} to ${b.max.x},${b.max.y},${b.max.z}`;
               } else {
                 bStr = `non-box bounds (${obj.bounds.type})`;

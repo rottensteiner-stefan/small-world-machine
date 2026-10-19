@@ -1,7 +1,7 @@
 import type { CameraInterfaceData, Collidable } from "../../interfaces/index.js";
 import type { Object3D } from "../Object3D.js";
 import type { Scene } from "../Scene.js";
-import type { BoundingBox, BoundingSphere } from "../../physix/index.js";
+import type { BoundingSphere } from "../../physix/index.js";
 import { Collision } from "../../physix/index.js";
 import { MathPool } from "../../math/index.js";
 import { BoundingType } from "../../enums/index.js";
@@ -39,13 +39,11 @@ export function resolveSphereCollisions(
     if (!obj.bounds || obj === target) continue;
     let resolved: boolean;
     if (BoundingType.SPHERE === obj.bounds.type) {
-      resolved = Collision.resolveSphereSphere(
-        collider,
-        obj.bounds as BoundingSphere,
-        hitCorrection,
-      );
+      resolved = Collision.resolveSphereSphere(collider, obj.bounds, hitCorrection);
     } else {
-      resolved = Collision.resolveSphereBox(collider, obj.bounds as BoundingBox, hitCorrection);
+      // Generic dispatch lets the solver handle OBB/ConvexHull colliders (which
+      // `resolveSphereBox` cannot) instead of treating them as AABBs.
+      resolved = Collision.resolve(collider, obj.bounds, hitCorrection);
     }
 
     if (resolved) {

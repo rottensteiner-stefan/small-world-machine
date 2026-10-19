@@ -253,70 +253,60 @@ export class Object3D implements Collidable {
     if (this.geometry) {
       // 1. Get local bounds from geometry
       const localBounds = this.geometry.getBoundingVolume();
-      // 2. Transform bounds to world space without re-allocating (if types match, or if custom OBB was assigned)
+      // 2. Transform bounds to world space without re-allocating (if types match, or if a
+      //    custom OBB was assigned). When a fresh volume is required, `cloneEmpty` produces
+      //    an empty instance of the exact concrete class of `localBounds`, which keeps the
+      //    `.type` discriminant valid without a type-conditional constructor ladder.
       if (
         !this.bounds ||
         (this.bounds.type !== 2 /* BoundingType.OBB */ &&
           this.bounds.type !== 3 /* BoundingType.HULL */ &&
           this.bounds.type !== localBounds.type)
       ) {
-        // Create a fresh copy
-        if (localBounds.type === 1 /* BoundingType.BOX */) {
-          const lb = localBounds as import("../physix/index.js").BoundingBox;
-          const BoxType = lb.constructor as new (min: Vector3D, max: Vector3D) => BoundingVolume;
-          this.bounds = new BoxType(lb.min.clone(), lb.max.clone());
-        } else if (localBounds.type === 0 /* BoundingType.SPHERE */) {
-          const ls = localBounds as import("../physix/index.js").BoundingSphere;
-          const SphereType = ls.constructor as new (
-            center: Vector3D,
-            radius: number,
-          ) => BoundingVolume;
-          this.bounds = new SphereType(ls.center.clone(), ls.radius);
-        } else if (localBounds.type === 2 /* BoundingType.OBB */) {
-          const OBBType = localBounds.constructor as new () => BoundingVolume;
-          this.bounds = new OBBType();
-        }
+        this.bounds = localBounds.cloneEmpty();
       }
 
-      if (this.bounds && this.bounds.type === 1 /* BoundingType.BOX */) {
-        const lb = localBounds as import("../physix/index.js").BoundingBox;
-        const b = this.bounds as import("../physix/index.js").BoundingBox;
-        b.min.copyFrom(lb.min);
-        b.max.copyFrom(lb.max);
-        b.transform(this.worldMatrix);
-      } else if (this.bounds && this.bounds.type === 0 /* BoundingType.SPHERE */) {
-        const ls = localBounds as import("../physix/index.js").BoundingSphere;
-        const b = this.bounds as import("../physix/index.js").BoundingSphere;
-        b.center.copyFrom(ls.center);
-        b.radius = ls.radius;
-        b.transform(this.worldMatrix);
-      } else if (this.bounds && this.bounds.type === 2 /* BoundingType.OBB */) {
-        const b = this.bounds as import("../physix/index.js").OBB;
-        if (localBounds.type === 1 /* BoundingType.BOX */) {
-          const lb = localBounds as import("../physix/index.js").BoundingBox;
-          b.setLocalCenter(
-            (lb.min.x + lb.max.x) * 0.5,
-            (lb.min.y + lb.max.y) * 0.5,
-            (lb.min.z + lb.max.z) * 0.5,
-          );
-          b.setLocalHalfExtents(
-            (lb.max.x - lb.min.x) * 0.5,
-            (lb.max.y - lb.min.y) * 0.5,
-            (lb.max.z - lb.min.z) * 0.5,
-          );
-        } else if (localBounds.type === 2 /* BoundingType.OBB */) {
-          const lo = localBounds as import("../physix/index.js").OBB;
-          b.copyLocalCenterFrom(lo.center);
-          b.copyLocalHalfExtentsFrom(lo.halfExtents);
+      const bounds = this.bounds;
+      if (bounds) {
+        if (bounds.type === 1 /* BoundingType.BOX */) {
+          const b = bounds;
+          if (localBounds.type === 1 /* BoundingType.BOX */) {
+            b.min.copyFrom(localBounds.min);
+            b.max.copyFrom(localBounds.max);
+          }
+          b.transform(this.worldMatrix);
+        } else if (bounds.type === 0 /* BoundingType.SPHERE */) {
+          const b = bounds;
+          if (localBounds.type === 0 /* BoundingType.SPHERE */) {
+            b.center.copyFrom(localBounds.center);
+            b.radius = localBounds.radius;
+          }
+          b.transform(this.worldMatrix);
+        } else if (bounds.type === 2 /* BoundingType.OBB */) {
+          const b = bounds;
+          if (localBounds.type === 1 /* BoundingType.BOX */) {
+            b.setLocalCenter(
+              (localBounds.min.x + localBounds.max.x) * 0.5,
+              (localBounds.min.y + localBounds.max.y) * 0.5,
+              (localBounds.min.z + localBounds.max.z) * 0.5,
+            );
+            b.setLocalHalfExtents(
+              (localBounds.max.x - localBounds.min.x) * 0.5,
+              (localBounds.max.y - localBounds.min.y) * 0.5,
+              (localBounds.max.z - localBounds.min.z) * 0.5,
+            );
+          } else if (localBounds.type === 2 /* BoundingType.OBB */) {
+            b.copyLocalCenterFrom(localBounds.center);
+            b.copyLocalHalfExtentsFrom(localBounds.halfExtents);
+          }
+          b.transform(this.worldMatrix);
+        } else if (bounds.type === 3 /* BoundingType.HULL */) {
+          // A ConvexHull's shape is never derived from `geometry.getBoundingVolume()`
+          // (which only ever produces a Box/Sphere) -- it must be assigned manually
+          // (e.g. `obj.bounds = new ConvexHull(...)`), and is then only re-transformed
+          // here every frame, exactly like the manually-assigned-OBB branch above.
+          bounds.transform(this.worldMatrix);
         }
-        b.transform(this.worldMatrix);
-      } else if (this.bounds && this.bounds.type === 3 /* BoundingType.HULL */) {
-        // A ConvexHull's shape is never derived from `geometry.getBoundingVolume()`
-        // (which only ever produces a Box/Sphere) -- it must be assigned manually
-        // (e.g. `obj.bounds = new ConvexHull(...)`), and is then only re-transformed
-        // here every frame, exactly like the manually-assigned-OBB branch above.
-        const b = this.bounds as import("../physix/index.js").ConvexHull;
-        b.transform(this.worldMatrix);
       }
     }
     return this;

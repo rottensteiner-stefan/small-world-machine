@@ -4,8 +4,7 @@ import { MathPool } from "../../math/index.js";
 import { Collision } from "../Collision.js";
 import type { EventDispatcherImpl } from "../../core/events/EventDispatcherImpl.js";
 import { BoundingType } from "../../enums/index.js";
-import type { BoundingBox } from "../BoundingBox.js";
-import type { BoundingSphere } from "../BoundingSphere.js";
+import type { BoundingVolume } from "../../interfaces/index.js";
 import { StaticCollider } from "../StaticCollider.js";
 import type { Joint } from "../joints/Joint.js";
 import { pairKey } from "../PairTracker.js";
@@ -502,8 +501,8 @@ export class ContactSolver {
 
   /** Contact-point heuristic for accurate lever arms (exact for sphere/box, midpoint otherwise). */
   private _computeContactPoint(
-    volA: { type: BoundingType },
-    volB: { type: BoundingType },
+    volA: BoundingVolume,
+    volB: BoundingVolume,
     pair: ContactPair,
     centerA: Vector3D,
     centerB: Vector3D,
@@ -512,43 +511,43 @@ export class ContactSolver {
     const normal = pair.normal;
 
     if (volA.type === BoundingType.SPHERE && volB.type === BoundingType.SPHERE) {
-      const rA = (volA as BoundingSphere).radius;
+      const rA = volA.radius;
       contactPt.set(
         centerA.x - normal.x * (rA - pair.depth * 0.5),
         centerA.y - normal.y * (rA - pair.depth * 0.5),
         centerA.z - normal.z * (rA - pair.depth * 0.5),
       );
     } else if (volA.type === BoundingType.SPHERE && volB.type === BoundingType.BOX) {
-      const boxB = volB as BoundingBox;
+      const boxB = volB;
       contactPt.set(
         Math.max(boxB.min.x, Math.min(centerA.x, boxB.max.x)),
         Math.max(boxB.min.y, Math.min(centerA.y, boxB.max.y)),
         Math.max(boxB.min.z, Math.min(centerA.z, boxB.max.z)),
       );
     } else if (volA.type === BoundingType.BOX && volB.type === BoundingType.SPHERE) {
-      const boxA = volA as BoundingBox;
+      const boxA = volA;
       contactPt.set(
         Math.max(boxA.min.x, Math.min(centerB.x, boxA.max.x)),
         Math.max(boxA.min.y, Math.min(centerB.y, boxA.max.y)),
         Math.max(boxA.min.z, Math.min(centerB.z, boxA.max.z)),
       );
     } else if (volA.type === BoundingType.BOX && volB.type === BoundingType.BOX) {
-      const boxA = volA as BoundingBox;
-      const boxB = volB as BoundingBox;
+      const boxA = volA;
+      const boxB = volB;
       contactPt.set(
         (Math.max(boxA.min.x, boxB.min.x) + Math.min(boxA.max.x, boxB.max.x)) * 0.5,
         (Math.max(boxA.min.y, boxB.min.y) + Math.min(boxA.max.y, boxB.max.y)) * 0.5,
         (Math.max(boxA.min.z, boxB.min.z) + Math.min(boxA.max.z, boxB.max.z)) * 0.5,
       );
     } else if (volA.type === BoundingType.SPHERE) {
-      const rA = (volA as BoundingSphere).radius;
+      const rA = volA.radius;
       contactPt.set(
         centerA.x - normal.x * (rA - pair.depth * 0.5),
         centerA.y - normal.y * (rA - pair.depth * 0.5),
         centerA.z - normal.z * (rA - pair.depth * 0.5),
       );
     } else if (volB.type === BoundingType.SPHERE) {
-      const rB = (volB as BoundingSphere).radius;
+      const rB = volB.radius;
       contactPt.set(
         centerB.x + normal.x * (rB - pair.depth * 0.5),
         centerB.y + normal.y * (rB - pair.depth * 0.5),

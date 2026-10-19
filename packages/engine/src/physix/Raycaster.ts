@@ -1,6 +1,3 @@
-import type { BoundingBox } from "./BoundingBox.js";
-import type { BoundingSphere } from "./BoundingSphere.js";
-import type { OBB } from "./OBB.js";
 import { Ray } from "./Ray.js";
 import type { Vector2D, Matrix4 } from "../math/index.js";
 import { Vector3D, MathPool } from "../math/index.js";
@@ -78,12 +75,13 @@ export class Raycaster {
       }
 
       let broadT: number;
-      if (BoundingType.BOX === obj.bounds.type) {
-        broadT = this.ray.intersectsBox(obj.bounds as BoundingBox);
-      } else if (BoundingType.SPHERE === obj.bounds.type) {
-        broadT = this.ray.intersectsSphere(obj.bounds as BoundingSphere);
-      } else if (BoundingType.OBB === obj.bounds.type) {
-        broadT = this.ray.intersectsOBB(obj.bounds as OBB);
+      const bounds = obj.bounds;
+      if (BoundingType.BOX === bounds.type) {
+        broadT = this.ray.intersectsBox(bounds);
+      } else if (BoundingType.SPHERE === bounds.type) {
+        broadT = this.ray.intersectsSphere(bounds);
+      } else if (BoundingType.OBB === bounds.type) {
+        broadT = this.ray.intersectsOBB(bounds);
       } else {
         continue;
       }

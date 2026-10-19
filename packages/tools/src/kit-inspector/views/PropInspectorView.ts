@@ -27,7 +27,7 @@ export function computeHierarchyBounds(root: Object3D): BoundingBox {
     if (!child.geometry) return;
     const bv = child.geometry.getBoundingVolume();
     if (bv && bv.type === BoundingType.BOX) {
-      const box = bv as BoundingBox;
+      const box = bv;
       foundGeometry = true;
       min.x = Math.min(min.x, box.min.x * child.scale.x + child.position.x);
       min.y = Math.min(min.y, box.min.y * child.scale.y + child.position.y);

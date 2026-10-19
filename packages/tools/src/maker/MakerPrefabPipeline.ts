@@ -1,12 +1,5 @@
-import type {
-  Camera,
-  Object3D,
-  Scene,
-  BoundingBox,
-  BoundingSphere,
-  BoundingVolume,
-} from "@small-world-machine/engine";
-import { AbstractLight, BoundingType, Vector3D } from "@small-world-machine/engine";
+import type { Camera, Object3D, Scene, BoundingVolume } from "@small-world-machine/engine";
+import { AbstractLight, Vector3D } from "@small-world-machine/engine";
 import type { OrbitCameraController } from "./OrbitCameraController.js";
 import type { TransformGizmo } from "./TransformGizmo.js";
 import type { LightGizmoManager } from "./LightGizmoManager.js";
@@ -81,17 +74,12 @@ export class MakerPrefabPipeline {
     return node;
   }
 
+  /** World-space AABB enclosing `bounds`, delegated to the volume's own `getAabb()` so every
+   * concrete volume type (box, sphere, OBB, hull) is covered uniformly -- OBB/HULL bounds used
+   * to yield no frame at all and could clip the prefab preview. */
   private _boundsToAabb(bounds: BoundingVolume): { min: Vector3D; max: Vector3D } | undefined {
-    if (BoundingType.BOX === bounds.type) {
-      const box = bounds as BoundingBox;
-      return { min: box.min.clone(), max: box.max.clone() };
-    }
-    if (BoundingType.SPHERE === bounds.type) {
-      const sphere = bounds as BoundingSphere;
-      const r = new Vector3D(sphere.radius, sphere.radius, sphere.radius);
-      return { min: sphere.center.clone().sub(r), max: sphere.center.clone().add(r) };
-    }
-    return undefined;
+    const aabb = bounds.getAabb();
+    return { min: aabb.min.clone(), max: aabb.max.clone() };
   }
 
   /** Combined world-space AABB of `obj`'s own bounds plus every descendant's -- a prefab is

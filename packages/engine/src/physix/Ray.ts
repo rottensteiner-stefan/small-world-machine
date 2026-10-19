@@ -212,11 +212,11 @@ export class Ray {
    */
   public intersectVolume(volume: BoundingVolume): number {
     if (BoundingType.SPHERE === volume.type) {
-      return this.intersectsSphere(volume as BoundingSphere);
+      return this.intersectsSphere(volume);
     } else if (BoundingType.BOX === volume.type) {
-      return this.intersectsBox(volume as BoundingBox);
+      return this.intersectsBox(volume);
     } else if (BoundingType.OBB === volume.type) {
-      return this.intersectsOBB(volume as import("./OBB.js").OBB);
+      return this.intersectsOBB(volume);
     }
     return -1;
   }
@@ -239,7 +239,7 @@ export class Ray {
     this.at(t, outPoint);
 
     if (BoundingType.SPHERE === volume.type) {
-      const s = volume as BoundingSphere;
+      const s = volume;
       outNormal.copyFrom(outPoint).sub(s.center);
       const len = outNormal.length();
       if (len > 1e-8) {
@@ -248,7 +248,7 @@ export class Ray {
         outNormal.set(0, 1, 0);
       }
     } else if (BoundingType.BOX === volume.type) {
-      const b = volume as BoundingBox;
+      const b = volume;
       const dMinX = Math.abs(outPoint.x - b.min.x);
       const dMaxX = Math.abs(outPoint.x - b.max.x);
       const dMinY = Math.abs(outPoint.y - b.min.y);
@@ -279,7 +279,7 @@ export class Ray {
         outNormal.set(0, 0, 1);
       }
     } else if (BoundingType.OBB === volume.type) {
-      const o = volume as import("./OBB.js").OBB;
+      const o = volume;
       const rel = MathPool.acquireVector().copyFrom(outPoint).sub(o.center);
       const u0 = o.axes[0]!;
       const u1 = o.axes[1]!;

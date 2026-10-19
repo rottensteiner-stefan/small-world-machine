@@ -1,8 +1,6 @@
 import type { Object3D } from "../../core/Object3D.js";
 import type { Vector3D } from "../../math/index.js";
 import { BoundingType } from "../../enums/index.js";
-import type { BoundingBox } from "../BoundingBox.js";
-import type { BoundingSphere } from "../BoundingSphere.js";
 import type { FluidVolume } from "../FluidVolume.js";
 
 export interface FluidForcesResult {
@@ -62,11 +60,13 @@ export class BuoyancySolver {
         let aabbMaxY: number;
 
         if (boundsA.type === BoundingType.BOX) {
-          aabbMinY = (boundsA as BoundingBox).min.y;
-          aabbMaxY = (boundsA as BoundingBox).max.y;
+          const box = boundsA;
+          aabbMinY = box.min.y;
+          aabbMaxY = box.max.y;
         } else if (boundsA.type === BoundingType.SPHERE) {
-          aabbMinY = boundsA.center.y - (boundsA as BoundingSphere).radius;
-          aabbMaxY = boundsA.center.y + (boundsA as BoundingSphere).radius;
+          const sphere = boundsA;
+          aabbMinY = sphere.center.y - sphere.radius;
+          aabbMaxY = sphere.center.y + sphere.radius;
         } else {
           const br = boundsA.getBroadRadius();
           aabbMinY = boundsA.center.y - br;
@@ -99,13 +99,14 @@ export class BuoyancySolver {
     if (submergedRatioTotal > 0 && rb.inverseMass > 0) {
       let volume: number;
       if (boundsA.type === BoundingType.BOX) {
-        const box = boundsA as BoundingBox;
+        const box = boundsA;
         volume = Math.max(
           0.0001,
           (box.max.x - box.min.x) * (box.max.y - box.min.y) * (box.max.z - box.min.z),
         );
       } else if (boundsA.type === BoundingType.SPHERE) {
-        const r = (boundsA as BoundingSphere).radius;
+        const sphere = boundsA;
+        const r = sphere.radius;
         volume = (4.0 / 3.0) * Math.PI * r * r * r;
       } else {
         const r = boundsA.getBroadRadius();

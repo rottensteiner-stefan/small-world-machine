@@ -9,10 +9,7 @@
 import type {
   Behavior,
   AbstractMaterial,
-  BoundingBox,
-  BoundingSphere,
   EngineOptions,
-  OBB,
   KitDecalItem,
 } from "@small-world-machine/engine";
 import {
@@ -807,7 +804,7 @@ export class MakerApp extends SmallWorldMachine {
     } else if (obj.geometry) {
       obj.computeBounds();
       if (obj.bounds && BoundingType.BOX === obj.bounds.type) {
-        const box = obj.bounds as BoundingBox;
+        const box = obj.bounds;
         spawnY = -box.min.y;
       }
     }
@@ -1376,7 +1373,7 @@ export class MakerApp extends SmallWorldMachine {
     const pointsToTest: Vector3D[] = [];
     if (obj.bounds) {
       if (BoundingType.BOX === obj.bounds.type) {
-        const box = obj.bounds as BoundingBox;
+        const box = obj.bounds;
         pointsToTest.push(
           new Vector3D(box.min.x, box.min.y, box.min.z),
           new Vector3D(box.max.x, box.min.y, box.min.z),
@@ -1388,7 +1385,7 @@ export class MakerApp extends SmallWorldMachine {
           new Vector3D(box.max.x, box.max.y, box.max.z),
         );
       } else if (BoundingType.SPHERE === obj.bounds.type) {
-        const s = obj.bounds as BoundingSphere;
+        const s = obj.bounds;
         pointsToTest.push(
           s.center.clone(),
           s.center.clone().add(new Vector3D(s.radius, 0, 0)),
@@ -1510,7 +1507,7 @@ export class MakerApp extends SmallWorldMachine {
     if (!obj.bounds) return false;
     const epsilon = new Vector3D(0.02, 0.02, 0.02);
     if (BoundingType.BOX === obj.bounds.type) {
-      const box = obj.bounds as BoundingBox;
+      const box = obj.bounds;
       const size = new Vector3D().copyFrom(box.max).sub(box.min).add(epsilon);
       mesh.position.copyFrom(box.center);
       mesh.rotation.set(0, 0, 0);
@@ -1520,7 +1517,7 @@ export class MakerApp extends SmallWorldMachine {
     }
     if (BoundingType.OBB === obj.bounds.type) {
       // Oriented bounds (e.g. a Decal's box): the pooled cube takes the box's rotation, too.
-      const obb = obj.bounds as OBB;
+      const obb = obj.bounds;
       const [ax, ay, az] = obb.axes;
       const basis = new Matrix4();
       basis.data.set([ax.x, ax.y, ax.z, 0, ay.x, ay.y, ay.z, 0, az.x, az.y, az.z, 0, 0, 0, 0, 1]);
@@ -1531,7 +1528,7 @@ export class MakerApp extends SmallWorldMachine {
       return true;
     }
     if (BoundingType.SPHERE === obj.bounds.type) {
-      const sphere = obj.bounds as BoundingSphere;
+      const sphere = obj.bounds;
       const diameter = sphere.radius * 2;
       const size = new Vector3D(diameter, diameter, diameter).add(epsilon);
       mesh.position.copyFrom(sphere.center);

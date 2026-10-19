@@ -4,7 +4,6 @@ import { Scene } from "../core/Scene.js";
 import { WireframeMaterial } from "../core/materials/index.js";
 import { Cube, Sphere } from "../geometry/index.js";
 import { BoundingType } from "../enums/index.js";
-import type { BoundingBox, BoundingSphere } from "../physix/index.js";
 
 /**
  * Utility to visualize collision boundaries (AABBs and Spheres) in the scene.
@@ -75,16 +74,16 @@ export class CollisionVisualizer {
 
       // Sync transforms
       if (BoundingType.BOX === obj.bounds.type) {
-        const box: BoundingBox = obj.bounds as BoundingBox;
+        const box = obj.bounds;
         const sizeX: number = box.max.x - box.min.x;
         const sizeY: number = box.max.y - box.min.y;
         const sizeZ: number = box.max.z - box.min.z;
         debugObj.position.copyFrom(box.center);
         debugObj.scale.set(sizeX, sizeY, sizeZ);
       } else {
-        const sphere: BoundingSphere = obj.bounds as BoundingSphere;
-        debugObj.position.copyFrom(sphere.center);
-        debugObj.scale.set(sphere.radius * 2, sphere.radius * 2, sphere.radius * 2);
+        const r = obj.bounds.getBroadRadius();
+        debugObj.position.copyFrom(obj.bounds.center);
+        debugObj.scale.set(r * 2, r * 2, r * 2);
       }
       debugObj.updateMatrixWorld();
       activeUuids.add(obj.uuid);

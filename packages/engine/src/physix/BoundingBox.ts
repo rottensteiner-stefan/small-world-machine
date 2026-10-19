@@ -1,8 +1,7 @@
 import { Collision } from "./Collision.js";
+import type { Ray } from "./Ray.js";
 import type { BoundingSphere } from "./BoundingSphere.js";
-import type { OBB } from "./OBB.js";
-import type { ConvexHull } from "./ConvexHull.js";
-import type { BoundingVolume, FrustumInterface } from "../interfaces/index.js";
+import type { BoundingVolume, BoundingVolumeShape, FrustumInterface } from "../interfaces/index.js";
 import type { Matrix4 } from "../math/index.js";
 import { Vector3D } from "../math/index.js";
 import { BoundingType } from "../enums/index.js";
@@ -10,9 +9,9 @@ import { BoundingType } from "../enums/index.js";
 /**
  * Represents an axis-aligned bounding box (AABB).
  */
-export class BoundingBox implements BoundingVolume {
+export class BoundingBox implements BoundingVolumeShape {
   /** @inheritdoc */
-  public type: BoundingType = BoundingType.BOX;
+  public readonly type: typeof BoundingType.BOX = BoundingType.BOX;
 
   /** The center of the box. */
   public center: Vector3D = new Vector3D();
@@ -169,10 +168,10 @@ export class BoundingBox implements BoundingVolume {
   /** @inheritdoc */
   public containsVolume(other: BoundingVolume): boolean {
     if (BoundingType.BOX === other.type) {
-      return this.containsBox(other as BoundingBox);
+      return this.containsBox(other);
     }
     if (BoundingType.SPHERE === other.type) {
-      return this.containsSphere(other as BoundingSphere);
+      return this.containsSphere(other);
     }
     if (BoundingType.OBB === other.type) {
       // Conservative sphere-approximation, consistent with how OBBs are already treated for
@@ -180,14 +179,12 @@ export class BoundingBox implements BoundingVolume {
       // bounds always returns false, so an OBB-bounded object can never be inserted into an
       // Octree regardless of the tree's actual extent.
       //
-      // Deliberately NOT delegating to containsSphere(): OBB has no `.radius` field, so reusing
-      // it would mean either an unsafe `as BoundingSphere` cast on a plain {center, radius}
-      // literal (doesn't structurally satisfy the class) or allocating `new BoundingSphere(...)`
-      // on a path called once per OBB-bounded object on every dynamic-octree rebuild (i.e. every
-      // frame -- see Scene.updateDynamicOctree()). Inlining the comparison keeps this alloc-free.
-      const obb = other as OBB;
-      const r = obb.getBroadRadius();
-      const c = obb.center;
+      // Deliberately NOT delegating to containsSphere(): an OBB has no `.radius` field, so reusing
+      // it would mean allocating `new BoundingSphere(...)` on a path called once per OBB-bounded
+      // object on every dynamic-octree rebuild (i.e. every frame -- see
+      // Scene.updateDynamicOctree()). Inlining the comparison keeps this alloc-free.
+      const r = other.getBroadRadius();
+      const c = other.center;
       return (
         this.min.x <= c.x - r &&
         this.max.x >= c.x + r &&
@@ -201,9 +198,8 @@ export class BoundingBox implements BoundingVolume {
       // Same conservative sphere-approximation as the OBB branch above, and for
       // the same reason -- without it, a ConvexHull-bounded object (e.g. a
       // Voronoi fracture shard) can never be inserted into an Octree.
-      const hull = other as ConvexHull;
-      const r = hull.getBroadRadius();
-      const c = hull.center;
+      const r = other.getBroadRadius();
+      const c = other.center;
       return (
         this.min.x <= c.x - r &&
         this.max.x >= c.x + r &&
@@ -334,5 +330,81 @@ export class BoundingBox implements BoundingVolume {
       (newMinY + newMaxY) * 0.5,
       (newMinZ + newMaxZ) * 0.5,
     );
+  }
+
+  /** @inheritdoc */
+  public getAabb(): BoundingBox {
+    return new BoundingBox(this.min.clone(), this.max.clone());
+  }
+
+  /** @inheritdoc */
+  public translate(v: Vector3D): void {
+    this.min.add(v);
+    this.max.add(v);
+    this.center.add(v);
+  }
+
+  /** @inheritdoc */
+  public intersectsRay(ray: Ray): boolean {
+    return 0 <= ray.intersectsBox(this);
+  }
+
+  /** @inheritdoc */
+  public surfaceNormalAt(point: Vector3D): Vector3D {
+    const dxMin = Math.abs(point.x - this.min.x);
+    const dxMax = Math.abs(point.x - this.max.x);
+    const dyMin = Math.abs(point.y - this.min.y);
+    const dyMax = Math.abs(point.y - this.max.y);
+    const dzMin = Math.abs(point.z - this.min.z);
+    const dzMax = Math.abs(point.z - this.max.z);
+    const minD = Math.min(dxMin, dxMax, dyMin, dyMax, dzMin, dzMax);
+    if (minD === dxMin) return new Vector3D(-1, 0, 0);
+    if (minD === dxMax) return new Vector3D(1, 0, 0);
+    if (minD === dyMin) return new Vector3D(0, -1, 0);
+    if (minD === dyMax) return new Vector3D(0, 1, 0);
+    if (minD === dzMin) return new Vector3D(0, 0, -1);
+    return new Vector3D(0, 0, 1);
+  }
+
+  /** @inheritdoc */
+  public volume(): number {
+    return (this.max.x - this.min.x) * (this.max.y - this.min.y) * (this.max.z - this.min.z);
+  }
+
+  /** @inheritdoc */
+  public closestPoint(point: Vector3D): Vector3D {
+    const cx = Math.max(this.min.x, Math.min(point.x, this.max.x));
+    const cy = Math.max(this.min.y, Math.min(point.y, this.max.y));
+    const cz = Math.max(this.min.z, Math.min(point.z, this.max.z));
+    // Outside (or on the boundary): the clamped point is the closest surface point.
+    if (cx !== point.x || cy !== point.y || cz !== point.z) {
+      return new Vector3D(cx, cy, cz);
+    }
+    // Strictly inside: push onto the nearest face.
+    const dxMin = point.x - this.min.x;
+    const dxMax = this.max.x - point.x;
+    const dyMin = point.y - this.min.y;
+    const dyMax = this.max.y - point.y;
+    const dzMin = point.z - this.min.z;
+    const dzMax = this.max.z - point.z;
+    const minD = Math.min(dxMin, dxMax, dyMin, dyMax, dzMin, dzMax);
+    if (minD === dxMin) return new Vector3D(this.min.x, cy, cz);
+    if (minD === dxMax) return new Vector3D(this.max.x, cy, cz);
+    if (minD === dyMin) return new Vector3D(cx, this.min.y, cz);
+    if (minD === dyMax) return new Vector3D(cx, this.max.y, cz);
+    if (minD === dzMin) return new Vector3D(cx, cy, this.min.z);
+    return new Vector3D(cx, cy, this.max.z);
+  }
+
+  /** @inheritdoc */
+  public cloneEmpty(): BoundingVolume {
+    return new BoundingBox();
+  }
+
+  /** @inheritdoc */
+  public setFromLocal(center: Vector3D, halfExtents: Vector3D): void {
+    this.min.set(center.x - halfExtents.x, center.y - halfExtents.y, center.z - halfExtents.z);
+    this.max.set(center.x + halfExtents.x, center.y + halfExtents.y, center.z + halfExtents.z);
+    this.center.copyFrom(center);
   }
 }

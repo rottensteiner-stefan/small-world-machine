@@ -1,6 +1,6 @@
 import { BoundingBox } from "./BoundingBox.js";
 import type { BoundingSphere } from "./BoundingSphere.js";
-import type { OBB } from "./OBB.js";
+import { OBB } from "./OBB.js";
 import type { ConvexHull } from "./ConvexHull.js";
 import { Ray } from "./Ray.js";
 import type { BoundingVolume } from "../interfaces/index.js";
@@ -22,11 +22,17 @@ interface Polytope {
  * Static class for collision detection and resolution.
  */
 export class Collision {
-  private static _tempBoxObb = {
-    center: new Vector3D(),
-    halfExtents: new Vector3D(),
-    axes: [new Vector3D(1, 0, 0), new Vector3D(0, 1, 0), new Vector3D(0, 0, 1)],
-  } as unknown as OBB;
+  // Lazily-constructed OBB used by resolveBoxObb/_boxObb to treat a BoundingBox as an OBB:
+  // Collision.ts and OBB.ts import each other, so constructing a real OBB eagerly at
+  // class-evaluation time risks a half-initialized circular import; the lazy pattern (same
+  // as _sweepScratchBox below) sidesteps that. `_boxObb` reads only `center`/`halfExtents`/
+  // `axes`, which a fresh OBB initializes to the same identity state the former object
+  // literal provided.
+  private static _tempBoxObb: OBB | undefined;
+
+  private static _getTempBoxObb(): OBB {
+    return (this._tempBoxObb ??= new OBB());
+  }
 
   // Reused by sweepSphereBox/sweepSphereObb (CCD) instead of allocating a fresh BoundingBox/Ray
   // per call -- these run up to `maxSubSteps` times per frame per fast-moving sphere body. Only
@@ -75,52 +81,52 @@ export class Collision {
 
     // Use specific logic based on types to avoid infinite recursion
     if (BoundingType.SPHERE === a.type && BoundingType.SPHERE === b.type) {
-      return this._sphereSphere(a as BoundingSphere, b as BoundingSphere);
+      return this._sphereSphere(a, b);
     }
     if (BoundingType.BOX === a.type && BoundingType.BOX === b.type) {
-      return this._boxBox(a as BoundingBox, b as BoundingBox);
+      return this._boxBox(a, b);
     }
     if (BoundingType.SPHERE === a.type && BoundingType.BOX === b.type) {
-      return this._sphereBox(a as BoundingSphere, b as BoundingBox);
+      return this._sphereBox(a, b);
     }
     if (BoundingType.BOX === a.type && BoundingType.SPHERE === b.type) {
-      return this._sphereBox(b as BoundingSphere, a as BoundingBox);
+      return this._sphereBox(b, a);
     }
     if (BoundingType.OBB === a.type && BoundingType.OBB === b.type) {
-      return this._obbObb(a as unknown as OBB, b as unknown as OBB);
+      return this._obbObb(a, b);
     }
     if (BoundingType.SPHERE === a.type && BoundingType.OBB === b.type) {
-      return this._sphereObb(a as BoundingSphere, b as unknown as OBB);
+      return this._sphereObb(a, b);
     }
     if (BoundingType.OBB === a.type && BoundingType.SPHERE === b.type) {
-      return this._sphereObb(b as BoundingSphere, a as unknown as OBB);
+      return this._sphereObb(b, a);
     }
     if (BoundingType.BOX === a.type && BoundingType.OBB === b.type) {
-      return this._boxObb(a as BoundingBox, b as unknown as OBB);
+      return this._boxObb(a, b);
     }
     if (BoundingType.OBB === a.type && BoundingType.BOX === b.type) {
-      return this._boxObb(b as BoundingBox, a as unknown as OBB);
+      return this._boxObb(b, a);
     }
     if (BoundingType.HULL === a.type && BoundingType.HULL === b.type) {
-      return null !== this._satPolytopes(a as ConvexHull, b as ConvexHull);
+      return null !== this._satPolytopes(a, b);
     }
     if (BoundingType.HULL === a.type && BoundingType.SPHERE === b.type) {
-      return this._hullSphere(a as ConvexHull, b as BoundingSphere);
+      return this._hullSphere(a, b);
     }
     if (BoundingType.SPHERE === a.type && BoundingType.HULL === b.type) {
-      return this._hullSphere(b as ConvexHull, a as BoundingSphere);
+      return this._hullSphere(b, a);
     }
     if (BoundingType.HULL === a.type && BoundingType.BOX === b.type) {
-      return null !== this._satPolytopes(a as ConvexHull, this._boxAsHull(b as BoundingBox));
+      return null !== this._satPolytopes(a, this._boxAsHull(b));
     }
     if (BoundingType.BOX === a.type && BoundingType.HULL === b.type) {
-      return null !== this._satPolytopes(b as ConvexHull, this._boxAsHull(a as BoundingBox));
+      return null !== this._satPolytopes(b, this._boxAsHull(a));
     }
     if (BoundingType.HULL === a.type && BoundingType.OBB === b.type) {
-      return null !== this._satPolytopes(a as ConvexHull, this._obbAsHull(b as unknown as OBB));
+      return null !== this._satPolytopes(a, this._obbAsHull(b));
     }
     if (BoundingType.OBB === a.type && BoundingType.HULL === b.type) {
-      return null !== this._satPolytopes(b as ConvexHull, this._obbAsHull(a as unknown as OBB));
+      return null !== this._satPolytopes(b, this._obbAsHull(a));
     }
     return false;
   }
@@ -135,62 +141,62 @@ export class Collision {
    */
   public static resolve(a: BoundingVolume, b: BoundingVolume, result: Vector3D): boolean {
     if (BoundingType.SPHERE === a.type && BoundingType.SPHERE === b.type) {
-      return this.resolveSphereSphere(a as BoundingSphere, b as BoundingSphere, result);
+      return this.resolveSphereSphere(a, b, result);
     }
     if (BoundingType.SPHERE === a.type && BoundingType.BOX === b.type) {
-      return this.resolveSphereBox(a as BoundingSphere, b as BoundingBox, result);
+      return this.resolveSphereBox(a, b, result);
     }
     if (BoundingType.BOX === a.type && BoundingType.SPHERE === b.type) {
-      const hit = this.resolveSphereBox(b as BoundingSphere, a as BoundingBox, result);
+      const hit = this.resolveSphereBox(b, a, result);
       if (hit) result.scale(-1);
       return hit;
     }
     if (BoundingType.BOX === a.type && BoundingType.BOX === b.type) {
-      return this.resolveBoxBox(a as BoundingBox, b as BoundingBox, result);
+      return this.resolveBoxBox(a, b, result);
     }
     if (BoundingType.SPHERE === a.type && BoundingType.OBB === b.type) {
-      return this.resolveSphereObb(a as BoundingSphere, b as unknown as OBB, result);
+      return this.resolveSphereObb(a, b, result);
     }
     if (BoundingType.OBB === a.type && BoundingType.SPHERE === b.type) {
-      const hit = this.resolveSphereObb(b as BoundingSphere, a as unknown as OBB, result);
+      const hit = this.resolveSphereObb(b, a, result);
       if (hit) result.scale(-1);
       return hit;
     }
     if (BoundingType.BOX === a.type && BoundingType.OBB === b.type) {
-      return this.resolveBoxObb(a as BoundingBox, b as unknown as OBB, result);
+      return this.resolveBoxObb(a, b, result);
     }
     if (BoundingType.OBB === a.type && BoundingType.BOX === b.type) {
-      const hit = this.resolveBoxObb(b as BoundingBox, a as unknown as OBB, result);
+      const hit = this.resolveBoxObb(b, a, result);
       if (hit) result.scale(-1);
       return hit;
     }
     if (BoundingType.OBB === a.type && BoundingType.OBB === b.type) {
-      return this.resolveObbObb(a as unknown as OBB, b as unknown as OBB, result);
+      return this.resolveObbObb(a, b, result);
     }
     if (BoundingType.HULL === a.type && BoundingType.HULL === b.type) {
-      return this.resolveHullHull(a as ConvexHull, b as ConvexHull, result);
+      return this.resolveHullHull(a, b, result);
     }
     if (BoundingType.HULL === a.type && BoundingType.SPHERE === b.type) {
-      return this.resolveHullSphere(a as ConvexHull, b as BoundingSphere, result);
+      return this.resolveHullSphere(a, b, result);
     }
     if (BoundingType.SPHERE === a.type && BoundingType.HULL === b.type) {
-      const hit = this.resolveHullSphere(b as ConvexHull, a as BoundingSphere, result);
+      const hit = this.resolveHullSphere(b, a, result);
       if (hit) result.scale(-1);
       return hit;
     }
     if (BoundingType.HULL === a.type && BoundingType.BOX === b.type) {
-      return this.resolveHullBox(a as ConvexHull, b as BoundingBox, result);
+      return this.resolveHullBox(a, b, result);
     }
     if (BoundingType.BOX === a.type && BoundingType.HULL === b.type) {
-      const hit = this.resolveHullBox(b as ConvexHull, a as BoundingBox, result);
+      const hit = this.resolveHullBox(b, a, result);
       if (hit) result.scale(-1);
       return hit;
     }
     if (BoundingType.HULL === a.type && BoundingType.OBB === b.type) {
-      return this.resolveHullObb(a as ConvexHull, b as unknown as OBB, result);
+      return this.resolveHullObb(a, b, result);
     }
     if (BoundingType.OBB === a.type && BoundingType.HULL === b.type) {
-      const hit = this.resolveHullObb(b as ConvexHull, a as unknown as OBB, result);
+      const hit = this.resolveHullObb(b, a, result);
       if (hit) result.scale(-1);
       return hit;
     }
@@ -324,9 +330,10 @@ export class Collision {
    * @returns True if collision was resolved.
    */
   public static resolveBoxObb(b: BoundingBox, o: OBB, result: Vector3D): boolean {
-    this._tempBoxObb.center.copyFrom(b.center);
-    this._tempBoxObb.halfExtents.copyFrom(b.max).sub(b.min).scale(0.5);
-    return this.resolveObbObb(this._tempBoxObb, o, result);
+    const boxAsObb = this._getTempBoxObb();
+    boxAsObb.center.copyFrom(b.center);
+    boxAsObb.halfExtents.copyFrom(b.max).sub(b.min).scale(0.5);
+    return this.resolveObbObb(boxAsObb, o, result);
   }
 
   /**
@@ -883,16 +890,16 @@ export class Collision {
     ray.direction.copyFrom(delta);
 
     if (BoundingType.SPHERE === volume.type) {
-      const s = volume as BoundingSphere;
+      const s = volume;
       if (origin.distanceToSq(s.center) <= s.radius * s.radius) {
         return -1;
       }
       const t = ray.intersectsSphere(s);
       return t >= 0 && t <= 1 ? t : -1;
     } else if (BoundingType.BOX === volume.type) {
-      return this._sweepRayBox(ray, volume as BoundingBox);
+      return this._sweepRayBox(ray, volume);
     } else if (BoundingType.OBB === volume.type) {
-      const o = volume as OBB;
+      const o = volume;
       const box = (this._sweepScratchBox ??= new BoundingBox(new Vector3D(), new Vector3D()));
       const rel = MathPool.acquireVector().copyFrom(origin).sub(o.center);
       const u0 = MathUtils.at(o.axes, 0);
@@ -952,38 +959,38 @@ export class Collision {
     }
 
     if (BoundingType.SPHERE === moving.type) {
-      const s = moving as BoundingSphere;
+      const s = moving;
       if (BoundingType.SPHERE === target.type) {
-        return this.sweepSphereSphere(origin, delta, s.radius, target as BoundingSphere);
+        return this.sweepSphereSphere(origin, delta, s.radius, target);
       } else if (BoundingType.BOX === target.type) {
-        return this.sweepSphereBox(origin, delta, s.radius, target as BoundingBox);
+        return this.sweepSphereBox(origin, delta, s.radius, target);
       } else if (BoundingType.OBB === target.type) {
-        return this.sweepSphereObb(origin, delta, s.radius, target as OBB);
+        return this.sweepSphereObb(origin, delta, s.radius, target);
       }
     } else if (BoundingType.BOX === moving.type) {
-      const b = moving as BoundingBox;
+      const b = moving;
       const hx = (b.max.x - b.min.x) * 0.5;
       const hy = (b.max.y - b.min.y) * 0.5;
       const hz = (b.max.z - b.min.z) * 0.5;
       const half = MathPool.acquireVector().set(hx, hy, hz);
       let t = -1;
       if (BoundingType.BOX === target.type) {
-        t = this.sweepBoxBox(origin, delta, half, target as BoundingBox);
+        t = this.sweepBoxBox(origin, delta, half, target);
       } else if (BoundingType.SPHERE === target.type) {
-        t = this.sweepBoxSphere(origin, delta, half, target as BoundingSphere);
+        t = this.sweepBoxSphere(origin, delta, half, target);
       } else if (BoundingType.OBB === target.type) {
-        t = this.sweepBoxObb(origin, delta, half, target as OBB);
+        t = this.sweepBoxObb(origin, delta, half, target);
       }
       MathPool.releaseVector(half);
       return t;
     } else if (BoundingType.OBB === moving.type) {
-      const o = moving as OBB;
+      const o = moving;
       if (BoundingType.SPHERE === target.type) {
-        return this.sweepObbSphere(origin, delta, o, target as BoundingSphere);
+        return this.sweepObbSphere(origin, delta, o, target);
       } else if (BoundingType.BOX === target.type) {
-        return this.sweepObbBox(origin, delta, o, target as BoundingBox);
+        return this.sweepObbBox(origin, delta, o, target);
       } else if (BoundingType.OBB === target.type) {
-        return this.sweepObbObb(origin, delta, o, target as OBB);
+        return this.sweepObbObb(origin, delta, o, target);
       }
     }
     return -1;
@@ -1007,9 +1014,10 @@ export class Collision {
   }
 
   private static _boxObb(b: BoundingBox, o: OBB): boolean {
-    this._tempBoxObb.center.copyFrom(b.center);
-    this._tempBoxObb.halfExtents.copyFrom(b.max).sub(b.min).scale(0.5);
-    return this._obbObb(this._tempBoxObb, o);
+    const boxAsObb = this._getTempBoxObb();
+    boxAsObb.center.copyFrom(b.center);
+    boxAsObb.halfExtents.copyFrom(b.max).sub(b.min).scale(0.5);
+    return this._obbObb(boxAsObb, o);
   }
 
   /**

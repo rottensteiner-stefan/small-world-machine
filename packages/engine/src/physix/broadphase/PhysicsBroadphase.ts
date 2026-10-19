@@ -85,7 +85,7 @@ export class PhysicsBroadphase {
     let maxX: number, maxY: number, maxZ: number;
 
     if (b.type === BoundingType.BOX) {
-      const box = b as BoundingBox;
+      const box = b;
       minX = box.min.x;
       minY = box.min.y;
       minZ = box.min.z;

@@ -1,4 +1,4 @@
-import type { AbstractMaterial, BoundingBox, BoundingSphere } from "@small-world-machine/engine";
+import type { AbstractMaterial } from "@small-world-machine/engine";
 import {
   Object3D,
   RigidBody,
@@ -62,16 +62,18 @@ function deriveLocalBounds(target: Object3D): BoxBounds {
   }
   const bv = target.geometry.getBoundingVolume();
   if (BoundingType.SPHERE === bv.type) {
-    const s = bv as BoundingSphere;
+    const s = bv;
     return {
       min: { x: s.center.x - s.radius, y: s.center.y - s.radius, z: s.center.z - s.radius },
       max: { x: s.center.x + s.radius, y: s.center.y + s.radius, z: s.center.z + s.radius },
     };
   }
-  const b = bv as BoundingBox;
+  // Geometry-derived bounds are always Box or Sphere; for any exotic custom volume use the
+  // enclosing AABB (`getAabb` returns the box itself unchanged), so clipping bounds stay usable.
+  const aabb = bv.getAabb();
   return {
-    min: { x: b.min.x, y: b.min.y, z: b.min.z },
-    max: { x: b.max.x, y: b.max.y, z: b.max.z },
+    min: { x: aabb.min.x, y: aabb.min.y, z: aabb.min.z },
+    max: { x: aabb.max.x, y: aabb.max.y, z: aabb.max.z },
   };
 }
 

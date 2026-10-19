@@ -4,7 +4,6 @@ import { Collision } from "../Collision.js";
 import type { Collidable } from "../../interfaces/index.js";
 import { BoundingBox } from "../BoundingBox.js";
 import { BoundingSphere } from "../BoundingSphere.js";
-import type { OBB } from "../OBB.js";
 import { BoundingType } from "../../enums/index.js";
 import type { PhysicsBroadphase } from "../broadphase/PhysicsBroadphase.js";
 import type { Ray } from "../Ray.js";
@@ -228,7 +227,7 @@ export class SpatialQueries {
       if (closestCollider.bounds) {
         const bounds = closestCollider.bounds;
         if (bounds.type === BoundingType.BOX) {
-          const box = bounds as BoundingBox;
+          const box = bounds;
           const dxMin = Math.abs(hit.point.x - box.min.x);
           const dxMax = Math.abs(hit.point.x - box.max.x);
           const dyMin = Math.abs(hit.point.y - box.min.y);
@@ -244,7 +243,7 @@ export class SpatialQueries {
           else if (minD === dzMin) hit.normal.set(0, 0, -1);
           else hit.normal.set(0, 0, 1);
         } else if (bounds.type === BoundingType.OBB) {
-          const obb = bounds as OBB;
+          const obb = bounds;
           const localHit = MathPool.acquireVector().copyFrom(hit.point).sub(obb.center);
           const lx = localHit.dot(obb.axes[0]!);
           const ly = localHit.dot(obb.axes[1]!);

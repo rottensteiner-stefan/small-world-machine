@@ -1,6 +1,7 @@
-import type { Matrix4 } from "../math/index.js";
-import { Vector3D } from "../math/index.js";
-import type { BoundingVolume, FrustumInterface } from "../interfaces/index.js";
+import { Vector3D, type Matrix4 } from "../math/index.js";
+import type { Ray } from "./Ray.js";
+import { BoundingBox } from "./BoundingBox.js";
+import type { BoundingVolume, BoundingVolumeShape, FrustumInterface } from "../interfaces/index.js";
 import { BoundingType } from "../enums/index.js";
 import { Collision } from "./Collision.js";
 
@@ -8,8 +9,8 @@ import { Collision } from "./Collision.js";
  * An Oriented Bounding Box (OBB).
  * Essential for the Separating Axis Theorem (SAT) and precise collisions of rotated objects.
  */
-export class OBB implements BoundingVolume {
-  public type: BoundingType = BoundingType.OBB;
+export class OBB implements BoundingVolumeShape {
+  public readonly type: typeof BoundingType.OBB = BoundingType.OBB;
 
   /** Center of the OBB in world space. */
   public center: Vector3D = new Vector3D();
@@ -178,5 +179,113 @@ export class OBB implements BoundingVolume {
     copy.axes[1].copyFrom(this.axes[1]);
     copy.axes[2].copyFrom(this.axes[2]);
     return copy;
+  }
+
+  /** @inheritdoc */
+  public getAabb(): BoundingBox {
+    const min = new Vector3D(Infinity, Infinity, Infinity);
+    const max = new Vector3D(-Infinity, -Infinity, -Infinity);
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+          const p = this.center.clone().add(this.axes[0]!.clone().scale(sx * this.halfExtents.x));
+          p.add(this.axes[1]!.clone().scale(sy * this.halfExtents.y));
+          p.add(this.axes[2]!.clone().scale(sz * this.halfExtents.z));
+          min.x = Math.min(min.x, p.x);
+          min.y = Math.min(min.y, p.y);
+          min.z = Math.min(min.z, p.z);
+          max.x = Math.max(max.x, p.x);
+          max.y = Math.max(max.y, p.y);
+          max.z = Math.max(max.z, p.z);
+        }
+      }
+    }
+    return new BoundingBox(min, max);
+  }
+
+  /** @inheritdoc */
+  public translate(v: Vector3D): void {
+    this.center.add(v);
+    this._localCenter.add(v);
+  }
+
+  /** @inheritdoc */
+  public intersectsRay(ray: Ray): boolean {
+    return 0 <= ray.intersectsOBB(this);
+  }
+
+  /** @inheritdoc */
+  public surfaceNormalAt(point: Vector3D): Vector3D {
+    const local = point.clone().sub(this.center);
+    const lx = local.dot(this.axes[0]!);
+    const ly = local.dot(this.axes[1]!);
+    const lz = local.dot(this.axes[2]!);
+    const hx = this.halfExtents.x;
+    const hy = this.halfExtents.y;
+    const hz = this.halfExtents.z;
+    const dxMin = Math.abs(lx + hx);
+    const dxMax = Math.abs(lx - hx);
+    const dyMin = Math.abs(ly + hy);
+    const dyMax = Math.abs(ly - hy);
+    const dzMin = Math.abs(lz + hz);
+    const dzMax = Math.abs(lz - hz);
+    const minD = Math.min(dxMin, dxMax, dyMin, dyMax, dzMin, dzMax);
+    if (minD === dxMin) return this.axes[0]!.clone().scale(-1);
+    if (minD === dxMax) return this.axes[0]!.clone();
+    if (minD === dyMin) return this.axes[1]!.clone().scale(-1);
+    if (minD === dyMax) return this.axes[1]!.clone();
+    if (minD === dzMin) return this.axes[2]!.clone().scale(-1);
+    return this.axes[2]!.clone();
+  }
+
+  /** @inheritdoc */
+  public volume(): number {
+    return 8 * this.halfExtents.x * this.halfExtents.y * this.halfExtents.z;
+  }
+
+  /** @inheritdoc */
+  public closestPoint(point: Vector3D): Vector3D {
+    const local = point.clone().sub(this.center);
+    const lx = local.dot(this.axes[0]!);
+    const ly = local.dot(this.axes[1]!);
+    const lz = local.dot(this.axes[2]!);
+    const hx = this.halfExtents.x;
+    const hy = this.halfExtents.y;
+    const hz = this.halfExtents.z;
+    let cx = Math.max(-hx, Math.min(lx, hx));
+    let cy = Math.max(-hy, Math.min(ly, hy));
+    let cz = Math.max(-hz, Math.min(lz, hz));
+    // Strictly inside: push onto the nearest local face.
+    if (cx === lx && cy === ly && cz === lz) {
+      const dxMin = Math.abs(lx + hx);
+      const dxMax = Math.abs(lx - hx);
+      const dyMin = Math.abs(ly + hy);
+      const dyMax = Math.abs(ly - hy);
+      const dzMin = Math.abs(lz + hz);
+      const dzMax = Math.abs(lz - hz);
+      const minD = Math.min(dxMin, dxMax, dyMin, dyMax, dzMin, dzMax);
+      if (minD === dxMin) cx = -hx;
+      else if (minD === dxMax) cx = hx;
+      else if (minD === dyMin) cy = -hy;
+      else if (minD === dyMax) cy = hy;
+      else if (minD === dzMin) cz = -hz;
+      else cz = hz;
+    }
+    return this.center
+      .clone()
+      .add(this.axes[0]!.clone().scale(cx))
+      .add(this.axes[1]!.clone().scale(cy))
+      .add(this.axes[2]!.clone().scale(cz));
+  }
+
+  /** @inheritdoc */
+  public cloneEmpty(): BoundingVolume {
+    return new OBB();
+  }
+
+  /** @inheritdoc */
+  public setFromLocal(center: Vector3D, halfExtents: Vector3D): void {
+    this.setLocalCenter(center.x, center.y, center.z);
+    this.setLocalHalfExtents(halfExtents.x, halfExtents.y, halfExtents.z);
   }
 }
