@@ -43,12 +43,14 @@ import gl2LightCalc from "./source/web_gl2/chunks/light_calc.frag.glsl?raw";
 import gl2PbrMath from "./source/web_gl2/chunks/pbr_math.frag.glsl?raw";
 import gl2LightCalcPbr from "./source/web_gl2/chunks/light_calc_pbr.frag.glsl?raw";
 import gl2SdfMath from "./source/web_gl2/chunks/sdf_math.glsl?raw";
+import gl2GlassPbrLoops from "./source/web_gl2/chunks/glass_pbr_loops.frag.glsl?raw";
 
 // --- WebGL 1 ---
 import gl1LightDefs from "./source/web_gl1/chunks/lights.frag.glsl?raw";
 import gl1LightCalc from "./source/web_gl1/chunks/light_calc.frag.glsl?raw";
 import gl1PbrMath from "./source/web_gl1/chunks/pbr_math.frag.glsl?raw";
 import gl1LightCalcPbr from "./source/web_gl1/chunks/light_calc_pbr.frag.glsl?raw";
+import gl1GlassPbrLoops from "./source/web_gl1/chunks/glass_pbr_loops.frag.glsl?raw";
 import gl1BaseVs from "./source/web_gl1/base.vert.glsl?raw";
 import gl1BaseFs from "./source/web_gl1/base.frag.glsl?raw";
 
@@ -57,6 +59,7 @@ import wgslStructs from "./source/web_gpu/chunks/structs.wgsl?raw";
 import wgslLighting from "./source/web_gpu/chunks/lighting.wgsl?raw";
 import wgslPbrMath from "./source/web_gpu/chunks/pbr_math.wgsl?raw";
 import wgslPbrLighting from "./source/web_gpu/chunks/lighting_pbr.wgsl?raw";
+import wgslGlassPbrLoops from "./source/web_gpu/chunks/glass_pbr_loops.wgsl?raw";
 import wgslFogCalc from "./source/web_gpu/chunks/fog_calc.wgsl?raw";
 import wgslSdfMath from "./source/web_gpu/chunks/sdf_math.wgsl?raw";
 import wgslScreenFootprint from "./source/web_gpu/chunks/screen_footprint.wgsl?raw";
@@ -86,6 +89,7 @@ export class CoreShaderChunks {
     registry.registerChunk("LIGHT_CALC", gl2LightCalc, "glsl300");
     registry.registerChunk("PBR_MATH", gl2PbrMath, "glsl300");
     registry.registerChunk("LIGHT_CALC_PBR", gl2LightCalcPbr, "glsl300");
+    registry.registerChunk("GLASS_PBR_LOOPS", gl2GlassPbrLoops, "glsl300");
     registry.registerChunk("SDF_MATH", gl2SdfMath, "glsl300");
     registry.registerChunk("DIR_SHADOW", DIR_SHADOW_GLSL, "glsl300");
     registry.registerChunk("FOG_DEFS", FOG_DEFS, "glsl300");
@@ -104,6 +108,7 @@ export class CoreShaderChunks {
     registry.registerChunk("LIGHT_CALC", gl1LightCalc, "glsl100");
     registry.registerChunk("PBR_MATH", gl1PbrMath, "glsl100");
     registry.registerChunk("LIGHT_CALC_PBR", gl1LightCalcPbr, "glsl100");
+    registry.registerChunk("GLASS_PBR_LOOPS", gl1GlassPbrLoops, "glsl100");
     registry.registerChunk("SDF_MATH", gl2SdfMath, "glsl100");
     registry.registerChunk("DIR_SHADOW", DIR_SHADOW_WEBGL1_GLSL, "glsl100");
     registry.registerChunk("FOG_DEFS", FOG_DEFS, "glsl100");
@@ -120,6 +125,7 @@ export class CoreShaderChunks {
     registry.registerChunk("WGSL_LIGHTING", wgslLighting, "wgsl");
     registry.registerChunk("WGSL_PBR_MATH", wgslPbrMath, "wgsl");
     registry.registerChunk("WGSL_PBR_LIGHTING", wgslPbrLighting, "wgsl");
+    registry.registerChunk("WGSL_GLASS_PBR_LOOPS", wgslGlassPbrLoops, "wgsl");
     registry.registerChunk("WGSL_DIR_SHADOW", DIR_SHADOW_WGSL, "wgsl");
     registry.registerChunk("WGSL_FOG_CALC", wgslFogCalc, "wgsl");
     registry.registerChunk("WGSL_SDF_MATH", wgslSdfMath, "wgsl");
