@@ -103,5 +103,9 @@ trade-off.
 - Increasing `numCascades` sharpens near shadows, but costs more atlas space per cascade on
   WebGL2 (each cascade gets a smaller slice of the same `shadowResolution` atlas) — increase
   `shadowResolution` alongside it if cascades start looking blocky.
-- Shadows are relatively expensive; the engine's auto-downgrade path (`DeviceCaps`) lowers
-  `maxShadowResolution` on lower-performance-tier devices (see `docs/guides/configuration.md`).
+- Shadows are relatively expensive; the static per-tier policy (ADR 0035) lowers caps such as
+  `maxShadowResolution` on `LOW`/`MEDIUM` devices. The former single `autoDowngrade` boolean no
+  longer exists — the engine now resolves a quality tier exactly once at startup
+  (`QualityConfigResolver` over `DeviceCaps.getPerformanceTier()`, URL override
+  `?tier=low|medium|high`), and any value you set explicitly in `quality` wins against the tier
+  (see `docs/guides/configuration.md`).
