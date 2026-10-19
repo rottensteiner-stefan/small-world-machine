@@ -1,8 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.114.0] - 2026-10-19
 
-### "Perfection is achieved, not when there is nothing more to add, but when there is nothing left to take away." - Antoine de Saint-Exupéry
+### "The only way to go fast is to go well." - Robert C. Martin
 
 - **Tools & Scripts:**
   - *`swm`-CLI-MVP (ADR 0034 G2 „dual use", erstes Ops-D-Code):* `packages/tools/package.json` exponiert einen `bin`-Einstieg (`swm` → `src/cli/swm.mjs`, tsx-Launcher) und `src/cli/index.ts` kapselt vorhandene Headless-Core-Slices als Subcommands — ohne Engine- oder Dependency-Änderungen: `swm map to-json|from-json` (ASCII-Map ↔ JSON-Grid über `core/map.ts`), `swm kit validate <dir>` (Kit-Manifest-Validierung über `core/kit.ts`), sowie `--help`/`--version` (Version aus `package.json`) mit Nicht-Null-Exit bei unbekanntem Befehl/Operation. Neue CLI-Tests unter `packages/tools/tests/cli/`.
