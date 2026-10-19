@@ -4,8 +4,8 @@
 > Thermo-Audit `.agents/scratches/thermo-1014/01-renderers-webgl.md` (§2.7) und
 > `15-cross-cutting-and-roadmap.md`; Paket-Spezifikation `.agents/scratches/wave2-package-B.md`.
 > **Übernommen am 2026-10-19 (Maintainer-Abnahme):** ACCEPTED; der DRAFT-Vorbehalt ist obsolet. Paket-B-
-> Task 4 (PostEffectPass-GL-Konsum, Blockier-Option durch Paket A) ist Stand 2026-10-19 noch in Arbeit —
-> betrifft die Umsetzung, nicht den Entscheidungsgehalt dieses ADR.
+> Task 4 (PostEffectPass-GL-Konsum) ist mit Commit `d35b0517` vollständig umgesetzt (`GLPostEffects`,
+> `GLPostEffectPass`, GL-seitiges `requiresOpaqueDepth`, Bereinigung der ad-hoc Pass-Felder und `destroy()`-Listen).
 > **Pfade bezogen auf `HEAD 879bac8c` (2026-10-19); parallele Sessions verschieben Zeilen — vor weiterer
 > Umsetzung re-validieren. ADR-Nummern Wave 2: 0037=A (GPU), 0038=B (WebGL, dieses), 0039=C (Materialien),
 > 0040=D (Physix/Geometrie); `docs/adr/index.md` schreibt zentral die Koordination.**
@@ -55,11 +55,11 @@ Der Audit beklagt deren Größe und Duplikation: `WebGL2Renderer.ts` = 2087 Zeil
 
 - **Keine Verhaltensänderung:** `RendererParity*`/Golden-Tests grün; volle Testsuite 322/2227 grün; 4 WebGL-
   Showcase-Shards (20/20/20/18) + 1 WebGPU-Shard (30) ohne Konsole-Fehler; `check:markers` 0 Verstöße.
-- **Zeilenstände (transparent):** `WebGL1Renderer.ts` 1469 → 886 (−583, kumulativ; Ziel −300…−400 übertroffen),
-  `WebGL2Renderer.ts` 2087 → 1999 (−88 kumulativ aus Task 2/3; `_renderSubgroup` in-method 522 → ~60),
+- **Zeilenstände (transparent):** `WebGL1Renderer.ts` 1469 → 875 (−594, kumulativ; Ziel −300…−400 weit übertroffen),
+  `WebGL2Renderer.ts` 2087 → 1872 (−215 kumulativ; `_renderSubgroup` in-method 522 → ~60),
   `AbstractWebGLRenderer.ts` 303 → 485 (Staging der geteilten Helfer).
 - **Wartbarkeit:** eine Quelle für Programm-/Texture-/Geometry-Caches, ein Ort für State/Fog/Billboard;
   GL1/GL2 driftverbunden statt parallel.
 - **Offen (designer's call):** Unterschreitung der `~1700`-Zeilenmarke für `WebGL2Renderer.ts` erfordert
   Cross-File-Extraktion (Zwischen-Basis `WebGL2SubgroupRenderer` oder `GlobalUniformWriter`-Muster wie Paket A).
-- **Blockiert:** Task 4 hängt am Fold von Paket A (`PostEffectPass`-Interface).
+- **Abgeschlossen:** Task 4 (PostEffectPass-GL-Konsum) mit Commit `d35b0517` vollständig umgesetzt.
