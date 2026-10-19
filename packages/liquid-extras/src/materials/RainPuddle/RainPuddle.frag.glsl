@@ -59,7 +59,7 @@ void main() {
     vec4 clipPos = u_vp * vec4(v_worldPos, 1.0);
     vec2 screenUV = clipPos.xy / clipPos.w * 0.5 + 0.5;
     vec2 uv = screenUV + vec2(N.x, N.z) * reflectionDistortion;
-    // Unresolved micro-ripples act as roughness (analysis.md 3.4b): blur the mirror image by their
+    // Unresolved micro-ripples act as roughness: blur the mirror image by their
     // rms slope instead of letting them alias.
     float blurRadius = min(reflectionBlur * sqrt(ripple.z), 0.03);
     vec2 o = vec2(blurRadius, blurRadius * 0.6);
@@ -76,7 +76,7 @@ void main() {
     vec3 glints = specular * fresnel * specularStrength * u_exposure;
 
     // Straight-alpha over the street: F of the mirror image plus (1-F) of the street seen through
-    // the water, darkened by bottomTransmission (analysis.md 3.6).
+    // the water, darkened by bottomTransmission.
     float waterAlpha = waterMask * (1.0 - (1.0 - fresnel) * bottomTransmission);
     float dampAlpha = dampMask * dampDarkening;
     vec3 contribution = waterMask * (fresnel * reflection + glints) + dampMask * 0.3 * fresnel * reflection;

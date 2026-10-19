@@ -76,9 +76,8 @@ interface MoodPreset {
   dripIntensity: number;
 }
 
-// Night = the original neon look. Day = the overcast winter photo the puddle analysis was derived
-// from (.agents/scratches/puddle/analysis.md 3.1, 4.2-4.3): flat sky light, crushed saturation,
-// lifted blacks, cyan highlights, heavy vignette, fine grain.
+// Night = the original neon look. Day = an overcast rainy day: flat sky light, muted saturation,
+// lifted blacks, cool highlights, vignette, fine grain.
 const MOODS: Record<Mood, MoodPreset> = {
   [Mood.NIGHT]: {
     ambientColor: new Color(0.04, 0.07, 0.14),
@@ -113,7 +112,7 @@ const MOODS: Record<Mood, MoodPreset> = {
     spotIntensity: 0.0,
     neon: 0.12,
     facadeEmissive: 0.15,
-    // The photo's asphalt is rough and matte between the puddles: no mirror outside the water.
+    // Without neon there is nothing bright for the thin film to mirror; rough asphalt reads matte.
     streetReflectivity: 0.05,
     fogColor: new Color(0.64, 0.66, 0.68),
     fogDensity: 0.03,
@@ -152,8 +151,7 @@ const STREET_CAMERA: CameraPreset = {
   target: new Vector3D(0, 0.35, -0.9),
   fStop: 4.0,
 };
-// The reference photo: ~22 deg above the ground (from its ring ellipses), ~0.8 m from the water
-// (analysis.md 1.1-1.3), wide open, looking at the foreground puddle.
+// Low close-up of the foreground puddle, wide open so the street around it falls out of focus.
 const PUDDLE_CAMERA: CameraPreset = {
   position: new Vector3D(-2.45, 0.29, 4.12),
   target: new Vector3D(-2.6, 0.0, 3.4),
@@ -164,8 +162,7 @@ const PUDDLE_BASINS = [
   { x: 0.1, z: 0.0, radiusX: 1.6, radiusZ: 2.2 }, // under & behind the hover car
   { x: -3.4, z: -2.5, radiusX: 0.95, radiusZ: 1.3 }, // distant left alley
   { x: 3.4, z: -2.5, radiusX: 0.95, radiusZ: 1.3 }, // distant right alley
-  // Foreground left, framed by the puddle camera. Photo-sized: ~0.5 m across (analysis.md 1.3),
-  // so asphalt shows above and below the water like in the reference.
+  // Foreground left, framed by the puddle camera; small enough that its shore stays in frame.
   { x: -2.6, z: 3.4, radiusX: 0.42, radiusZ: 0.3 },
 ];
 
@@ -175,7 +172,7 @@ const PUDDLE_BASINS = [
  * Benchmark testing planar reflection response on physically based rain puddles
  * (RainPuddleMaterial: dielectric Fresnel, dispersive rain rings, frayed shorelines), contrasting
  * teal/magenta specular highlights and HDR neon bloom, plus an overcast day mood and a low puddle
- * camera matching the reference photo of .agents/scratches/puddle/.
+ * close-up camera.
  *
  * Keys: C = street / puddle camera, N = night / day mood.
  */
@@ -457,7 +454,8 @@ class Showcase30 extends AbstractShowcase {
     // underneath has an unobstructed line of sight up to the car, buildings, and sky.
     this._reflectionNode.excludedObjects.push(street, puddleLayer);
 
-    // Bare winter trees along both kerbs: the reference photo's puddle mirrors leafless branches.
+    // Bare winter trees along both kerbs: fine dark branches against the sky are what makes ripple
+    // distortion in the puddle mirror readable.
     const barkMat = new StandardMaterial({
       color: new Color(0.06, 0.055, 0.05),
       roughness: 0.85,
@@ -790,7 +788,7 @@ class Showcase30 extends AbstractShowcase {
 
   /**
    * Leafless trees as one instanced cylinder batch. Branch radii follow Leonardo's rule
-   * (r_parent^2.2 = sum r_child^2.2, analysis.md 3.5), so the silhouettes taper like real wood.
+   * (r_parent^2.2 = sum r_child^2.2), so the silhouettes taper like real wood.
    */
   private _createBareTrees(material: StandardMaterial): InstancedMesh {
     const matrices: Matrix4[] = [];

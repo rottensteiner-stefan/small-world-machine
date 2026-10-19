@@ -54,7 +54,7 @@
     let ndc = clipPos.xy / clipPos.w;
     let screenUV = vec2f(ndc.x * 0.5 + 0.5, ndc.y * -0.5 + 0.5);
     let uv = screenUV + vec2f(rippleNormal.x, -rippleNormal.z) * reflectionDistortion;
-    // Unresolved micro-ripples act as roughness (analysis.md 3.4b): blur the mirror image by their
+    // Unresolved micro-ripples act as roughness: blur the mirror image by their
     // rms slope instead of letting them alias.
     let blurRadius = min(reflectionBlur * sqrt(ripple.z), 0.03);
     let o = vec2f(blurRadius, blurRadius * 0.6);
@@ -71,7 +71,7 @@
     let glints = final_spec * fresnel * specularStrength * global.exposure;
 
     // Straight-alpha over the street: F of the mirror image plus (1-F) of the street seen through
-    // the water, darkened by bottomTransmission (analysis.md 3.6).
+    // the water, darkened by bottomTransmission.
     let waterAlpha = waterMask * (1.0 - (1.0 - fresnel) * bottomTransmission);
     let dampAlpha = dampMask * dampDarkening;
     let contribution = waterMask * (fresnel * reflection + glints) + dampMask * 0.3 * fresnel * reflection;

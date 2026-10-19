@@ -1,5 +1,4 @@
-// WGSL twin of RainPuddle.common.glsl -- keep the two in lockstep. Physics and constants:
-// .agents/scratches/puddle/analysis.md sections 2.3-2.4b.
+// WGSL twin of RainPuddle.common.glsl -- keep the two in lockstep.
 
 const RP_G: f32 = 9.81;
 const RP_SIGMA_RHO: f32 = 7.3e-5;

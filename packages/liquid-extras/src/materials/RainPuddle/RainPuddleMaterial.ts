@@ -8,7 +8,7 @@ import { AbstractMaterial, StandardWebGPULayout, Vector2D } from "@small-world-m
 
 const COMMON_TOKEN = "[RAIN_PUDDLE_COMMON]";
 
-/** Index of refraction of water, analysis.md 3.2. */
+/** Index of refraction of water. */
 const WATER_IOR = 1.333;
 
 /** A puddle basin: an elliptical Gaussian depression in the street, in world units (metres). */
@@ -77,8 +77,7 @@ export interface RainPuddleMaterialOptions {
  * (discarded). Rain rings follow the capillary-gravity dispersion relation through a
  * stationary-phase profile, so short waves lead and long waves trail, and each drop differs in
  * size, strength and daughter drop. The water reflects with exact dielectric Fresnel instead of a
- * metallic hack, and ripples both distort and blur the mirror image. Derivation:
- * `.agents/scratches/puddle/analysis.md`.
+ * metallic hack, and ripples both distort and blur the mirror image.
  *
  * Per frame the owner must advance {@link time} and call {@link setCameraFootprint} (it drives the
  * resolved-vs-roughness split of the ripples). The plane must be in the reflection node's

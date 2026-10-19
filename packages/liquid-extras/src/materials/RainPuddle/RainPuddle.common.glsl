@@ -1,6 +1,6 @@
 // Shared by the GLSL300 and GLSL100 RainPuddle fragment shaders (texture-free on purpose, so the
-// two dialects can include it verbatim). Physics and constants: .agents/scratches/puddle/analysis.md
-// sections 2.3-2.4b (capillary-gravity dispersion, stationary-phase ring profile, viscous damping).
+// two dialects can include it verbatim). Physics: capillary-gravity dispersion of water, a
+// stationary-phase ring profile per drop, viscous damping.
 
 const float RP_G = 9.81;
 const float RP_SIGMA_RHO = 7.3e-5;
@@ -137,7 +137,7 @@ float rpWaterDepthMm(vec2 p, float asphaltLuma, vec4 pud0, vec4 pud1, vec4 pud2,
 }
 
 // Exact unpolarized Fresnel for a dielectric: Schlick drifts ~15 % off at the 60-70 deg incidence a
-// street camera sees puddles at (analysis.md 3.2).
+// street camera sees puddles at.
 float rpFresnelDielectric(float cosI, float ior) {
     float c = clamp(cosI, 0.0, 1.0);
     float sinT2 = (1.0 - c * c) / (ior * ior);
@@ -147,7 +147,7 @@ float rpFresnelDielectric(float cosI, float ior) {
     return 0.5 * (rs * rs + rp * rp);
 }
 
-// Rain = many small fast-dying rings, drips = rare big ones with daughter drops (analysis.md 2.4b).
+// Rain = many small fast-dying rings, drips = rare big ones with daughter drops.
 vec3 rpRainField(vec2 p, float time, float rainIntensity, float dripIntensity, float depth, float footprint) {
     vec3 rain = rpDropLayer(p, time, 0.2, 0.5, rainIntensity, vec2(0.0005, 0.0013), 0.0, 0.09, depth, footprint, 3.17);
     vec3 drips = rpDropLayer(p, time, 0.45, 1.6, dripIntensity, vec2(0.0022, 0.0045), 0.6, 0.22, depth, footprint, 41.9);
