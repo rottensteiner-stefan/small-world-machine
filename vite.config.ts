@@ -260,6 +260,7 @@ export default defineConfig({
           import.meta.dirname,
           "apps/sample-apps/light-cycle-arena/index.html",
         ),
+        voxelPrototype: resolve(import.meta.dirname, "apps/sample-apps/voxel-prototype/index.html"),
         pbrgen: resolve(import.meta.dirname, "public/tools/pbr-gen.html"),
         iblgen: resolve(import.meta.dirname, "public/tools/ibl-gen.html"),
         pixler: resolve(import.meta.dirname, "public/tools/pixler.html"),
@@ -308,6 +309,9 @@ export default defineConfig({
           }
           if (chunk.name === "lightCycleArena") {
             return "apps/sample-apps/light-cycle-arena/App.js";
+          }
+          if (chunk.name === "voxelPrototype") {
+            return "apps/sample-apps/voxel-prototype/App.js";
           }
           return `apps/showcases/[name]/showcase.js`;
         },

@@ -1,0 +1,228 @@
+import { describe, expect, it } from "vitest";
+import {
+  BlockRegistry,
+  BLOCK_AIR,
+  BLOCK_DIRT,
+  BLOCK_GRASS,
+  BLOCK_STONE,
+} from "../voxel/BlockRegistry.js";
+import { Chunk } from "../voxel/Chunk.js";
+import type { VoxelMeshData } from "../voxel/mesh/NaiveMesher.js";
+import { NaiveMesher } from "../voxel/mesh/NaiveMesher.js";
+
+/**
+ * Decodes mesher output into per-face tuples. The M0 mesher emits one face as exactly 4
+ * consecutive vertices (positions/normals/uvs/colors aligned) + 2 triangles (6 indices).
+ */
+interface Face {
+  normal: [number, number, number];
+  layer: number;
+}
+
+function collectFaces(data: VoxelMeshData): Face[] {
+  const faces: Face[] = [];
+  const faceCount = data.triangleCount / 2;
+  for (let f = 0; f < faceCount; f++) {
+    const vi = f * 4;
+    const nBase = vi * 3;
+    faces.push({
+      normal: [data.normals[nBase]!, data.normals[nBase + 1]!, data.normals[nBase + 2]!],
+      layer: data.colors[vi * 4]!,
+    });
+  }
+  return faces;
+}
+
+function buildOne(x: number, y: number, z: number, id: number): VoxelMeshData {
+  const registry = new BlockRegistry();
+  BlockRegistry.seed(registry);
+  const chunk = new Chunk();
+  chunk.setBlock(x, y, z, id);
+  return new NaiveMesher(registry).build(chunk);
+}
+
+function seededMesher(): { registry: BlockRegistry; mesher: NaiveMesher } {
+  const registry = new BlockRegistry();
+  BlockRegistry.seed(registry);
+  return { registry, mesher: new NaiveMesher(registry) };
+}
+
+describe("NaiveMesher — winding invariant", () => {
+  it("every face keeps cross(tangentA, tangentB) === outward normal (back-face culling safety)", () => {
+    for (const face of NaiveMesher.FACES) {
+      const [ax, ay, az] = face.tangentA;
+      const [bx, by, bz] = face.tangentB;
+      const [nx, ny, nz] = face.normal;
+      const cross = [ay! * bz! - az! * by!, az! * bx! - ax! * bz!, ax! * by! - ay! * bx!];
+      expect(Math.abs(cross[0]! - nx!), `${face.normal} cross x`).toBeLessThan(1e-9);
+      expect(Math.abs(cross[1]! - ny!), `${face.normal} cross y`).toBeLessThan(1e-9);
+      expect(Math.abs(cross[2]! - nz!), `${face.normal} cross z`).toBeLessThan(1e-9);
+    }
+  });
+});
+
+describe("NaiveMesher — visible-face culling", () => {
+  it("a lone solid voxel produces exactly 6 faces (12 triangles)", () => {
+    const data = buildOne(5, 5, 5, BLOCK_DIRT);
+    expect(data.triangleCount).toBe(12);
+    expect(data.positions.length / 3).toBe(24);
+    expect(data.indices.length).toBe(36);
+  });
+
+  it("two adjacent solid voxels cull the shared face (10 faces)", () => {
+    const { mesher } = seededMesher();
+    const chunk = new Chunk();
+    chunk.setBlock(5, 5, 5, BLOCK_DIRT);
+    chunk.setBlock(6, 5, 5, BLOCK_DIRT);
+    const data = mesher.build(chunk);
+    // 12 + 12 - 2 (the shared face is counted once per voxel) = 20 triangles / 10 faces.
+    expect(data.triangleCount).toBe(20);
+    const faces = collectFaces(data);
+    expect(faces.length).toBe(10);
+    // The shared face between both blocks is culled: exactly ONE +X face (on block B) and ONE
+    // -X face (on block A) remain -- never the two that would face each other inside.
+    const isPlusX = (f: Face): boolean => f.normal.join(",") === "1,0,0";
+    const isMinusX = (f: Face): boolean => f.normal.join(",") === "-1,0,0";
+    expect(faces.filter(isPlusX).length).toBe(1);
+    expect(faces.filter(isMinusX).length).toBe(1);
+  });
+
+  it("exposes faces on the chunk border (out-of-bounds neighbour == air)", () => {
+    const data = buildOne(0, 0, 0, BLOCK_STONE);
+    expect(data.triangleCount).toBe(12); // corner voxel is still fully exposed
+  });
+
+  it("a transparent neighbour does not cull the opaque block's face", () => {
+    const { registry, mesher } = seededMesher();
+    registry.register({
+      id: 4,
+      name: "glass",
+      transparent: true,
+      collidable: false,
+      faceLayers: { top: 0, bottom: 0, side: 0 },
+    });
+    const chunk = new Chunk();
+    chunk.setBlock(5, 5, 5, BLOCK_DIRT);
+    chunk.setBlock(6, 5, 5, 4); // transparent neighbour
+    const data = mesher.build(chunk);
+    // Only the opaque block meshes; the transparent neighbour does not block the +X face.
+    expect(data.triangleCount).toBe(12);
+    const faces = collectFaces(data);
+    expect(faces.some((f) => f.normal.join(",") === "1,0,0")).toBe(true);
+  });
+});
+
+describe("NaiveMesher — per-face atlas layers", () => {
+  it("maps grass-cap faces to the correct palette layers (top=0, side=1, bottom=2)", () => {
+    const data = buildOne(5, 5, 5, BLOCK_GRASS);
+    const byNormal = new Map<string, number>();
+    for (const f of collectFaces(data)) byNormal.set(f.normal.join(","), f.layer);
+    expect(byNormal.get("0,1,0")).toBe(0); // grass top
+    expect(byNormal.get("0,-1,0")).toBe(2); // stone bottom
+    expect(byNormal.get("1,0,0")).toBe(1); // dirt side
+    expect(byNormal.get("-1,0,0")).toBe(1);
+    expect(byNormal.get("0,0,1")).toBe(1);
+    expect(byNormal.get("0,0,-1")).toBe(1);
+  });
+
+  it("keeps face normals axis-aligned unit vectors", () => {
+    const data = buildOne(5, 6, 7, BLOCK_STONE);
+    for (const f of collectFaces(data)) {
+      expect(Math.hypot(f.normal[0], f.normal[1], f.normal[2])).toBeCloseTo(1, 9);
+      expect(f.normal.filter((c) => c !== 0).length).toBe(1);
+    }
+  });
+});
+
+describe("NaiveMesher — output sanitation", () => {
+  it("an empty chunk produces zero triangles and zero vertices", () => {
+    const { mesher } = seededMesher();
+    const data = mesher.build(new Chunk());
+    expect(data.triangleCount).toBe(0);
+    expect(data.positions.length).toBe(0);
+    expect(data.indices.length).toBe(0);
+  });
+
+  it("BLOCK_AIR is never meshed; a solid-filled chunk culls all interior faces", () => {
+    const { mesher } = seededMesher();
+
+    const chunkAir = new Chunk();
+    chunkAir.fill(BLOCK_AIR);
+    expect(mesher.build(chunkAir).triangleCount).toBe(0);
+
+    // 16x16x16 = 4096 voxels; only the six outermost shell faces remain: 6 * 16*16 = 1536 faces
+    // -> 3072 triangles. This is the strongest possible proof that neighbouring solids fully
+    // cull interior faces.
+    const chunkSolid = new Chunk();
+    chunkSolid.fill(BLOCK_DIRT);
+    expect(mesher.build(chunkSolid).triangleCount).toBe(3072);
+  });
+});
+
+describe("NaiveMesher — emitted vertex data (regression: M0 all-zero positions)", () => {
+  it("every face emits 4 distinct, real voxel-corner vertices (no (0,0,0) leftovers)", () => {
+    // Regression: pass 2 wrote all four quad corners into a single position slot, leaving
+    // three of every four vertices at (0,0,0) -- every triangle collapsed to zero area and
+    // the chunk rendered nothing (the M0 black screen). Assert real, distinct corners.
+    const data = buildOne(5, 5, 5, BLOCK_DIRT);
+    const faceCount = data.triangleCount / 2;
+    expect(faceCount).toBe(6);
+    for (let f = 0; f < faceCount; f++) {
+      const corners: string[] = [];
+      for (let k = 0; k < 4; k++) {
+        const base = (f * 4 + k) * 3;
+        const px = data.positions[base]!;
+        const py = data.positions[base + 1]!;
+        const pz = data.positions[base + 2]!;
+        // Every corner coordinate must be a real voxel corner (exactly 5 or 6 here), never 0.
+        expect(px).toBeGreaterThanOrEqual(5);
+        expect(px).toBeLessThanOrEqual(6);
+        expect(py).toBeGreaterThanOrEqual(5);
+        expect(py).toBeLessThanOrEqual(6);
+        expect(pz).toBeGreaterThanOrEqual(5);
+        expect(pz).toBeLessThanOrEqual(6);
+        corners.push(`${px},${py},${pz}`);
+      }
+      // The 4 corners of a quad must be mutually distinct.
+      expect(new Set(corners).size).toBe(4);
+    }
+  });
+
+  it("every emitted triangle winds counter-clockwise around its outward normal (real data)", () => {
+    const data = buildOne(7, 8, 9, BLOCK_STONE);
+    const faceCount = data.triangleCount / 2;
+    expect(faceCount).toBe(6);
+    for (let f = 0; f < faceCount; f++) {
+      const p = (k: number): [number, number, number] => {
+        const base = (f * 4 + k) * 3;
+        return [data.positions[base]!, data.positions[base + 1]!, data.positions[base + 2]!];
+      };
+      const n = (): [number, number, number] => {
+        const base = f * 4 * 3;
+        return [data.normals[base]!, data.normals[base + 1]!, data.normals[base + 2]!];
+      };
+      const [nx, ny, nz] = n();
+      for (const tri of [
+        [0, 1, 2],
+        [0, 2, 3],
+      ] as const) {
+        const [x0, y0, z0] = p(tri[0]);
+        const [x1, y1, z1] = p(tri[1]);
+        const [x2, y2, z2] = p(tri[2]);
+        const ux = x1 - x0;
+        const uy = y1 - y0;
+        const uz = z1 - z0;
+        const vx = x2 - x0;
+        const vy = y2 - y0;
+        const vz = z2 - z0;
+        const cx = uy * vz - uz * vy;
+        const cy = uz * vx - ux * vz;
+        const cz = ux * vy - uy * vx;
+        // cross(edge1, edge2) must point ALONG the face's outward normal, never against it
+        // and never zero (zero area == the all-zero-positions regression).
+        const dot = cx * nx + cy * ny + cz * nz;
+        expect(dot, `face ${f} tri ${tri.join("")} degenerate or inverted`).toBeGreaterThan(0);
+      }
+    }
+  });
+});
