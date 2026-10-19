@@ -214,12 +214,9 @@ export class PointedPillar extends AbstractGeometry {
 
         indices.push(a, b, d);
         indices.push(b, c, d);
-
-        wireIndices.push(a, b, a, d);
-        if (x === radSegs - 1) wireIndices.push(d, c);
-        if (y === hSegs - 1) wireIndices.push(b, c);
       }
     }
+    wireIndices.push(...this.gridWireframe(hSegs + 1, radSegs + 1));
 
     // 2. Conical roof tip mantle (split vertices for sharp transition ridge!)
     const slantTip = this.getSlantHeightTip();
@@ -351,12 +348,12 @@ export class PointedPillar extends AbstractGeometry {
       indices.push(eCenterMid, eMid, eTip);
     }
 
-    this._vertices = new Float32Array(positions);
-    this._normals = new Float32Array(normals);
-    this._uvs = new Float32Array(uvs);
-    this._indices = this._createIndexArray(indices.length);
-    this._indices.set(indices);
-    this._wireframeIndices = this._createIndexArray(wireIndices.length);
-    this._wireframeIndices.set(wireIndices);
+    this.setBuffers({
+      vertices: positions,
+      uvs,
+      normals,
+      indices,
+      wireframeIndices: wireIndices,
+    });
   }
 }

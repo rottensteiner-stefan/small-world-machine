@@ -255,6 +255,131 @@ export abstract class AbstractGeometry implements Geometry {
   }
 
   /**
+   * Publishes pre-built vertex, UV, index and wireframe buffers onto the geometry in
+   * one step. Subclasses that generate their data procedurally (e.g. via
+   * {@link RevolveBuilder}) call this instead of mutating the protected arrays
+   * manually. `normals`/`colors`/`joints`/`weights` are only written when provided.
+   * @param data The buffer payload to assign.
+   */
+  protected setBuffers(data: {
+    vertices: ArrayLike<number>;
+    uvs: ArrayLike<number>;
+    indices?: ArrayLike<number> | undefined;
+    wireframeIndices?: ArrayLike<number> | undefined;
+    normals?: ArrayLike<number> | undefined;
+  }): void {
+    this._vertices = new Float32Array(data.vertices);
+    this._uvs = new Float32Array(data.uvs);
+    if (data.normals) {
+      this._normals = new Float32Array(data.normals);
+    }
+    if (data.indices && 0 < data.indices.length) {
+      this._indices = this._createIndexArray(data.indices.length);
+      this._indices.set(data.indices);
+    }
+    if (data.wireframeIndices && 0 < data.wireframeIndices.length) {
+      this._wireframeIndices = this._createIndexArray(data.wireframeIndices.length);
+      this._wireframeIndices.set(data.wireframeIndices);
+    }
+  }
+
+  /**
+   * Appends the two triangles of a quad `(a, b, c, d)` to `indices`.
+   * The caller declares the winding explicitly via `flip` — no automatic
+   * winding correction is performed, so a flipped authoring decision stays
+   * visible instead of being silently "fixed".
+   * @param indices The index array to append to.
+   * @param a The first corner index.
+   * @param b The second corner index.
+   * @param c The third corner index.
+   * @param d The fourth corner index.
+   * @param flip Invert the winding of both triangles.
+   */
+  protected addQuad(
+    indices: number[],
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    flip: boolean,
+  ): void {
+    if (flip) {
+      indices.push(a, c, b);
+      indices.push(c, d, b);
+    } else {
+      indices.push(a, b, c);
+      indices.push(b, d, c);
+    }
+  }
+
+  /**
+   * Appends triangle indices for a `rows x cols` quad grid (rows-1 * cols-1 cells),
+   * using the grid's canonical split. `reversed` emits the mirror winding, which is
+   * required for interior (inward-facing) surfaces such as the inner wall of a hollow
+   * revolve. No other winding logic is applied here.
+   * @param rows The number of grid rows (>= 2).
+   * @param cols The number of grid columns (>= 2).
+   * @param flip Emit the reversed (interior) winding.
+   * @returns The triangle index list in row-major, top-to-bottom order.
+   */
+  protected gridIndices(rows: number, cols: number, flip: boolean): number[] {
+    const indices: number[] = [];
+    for (let y: number = 0; y < rows - 1; y++) {
+      for (let x: number = 0; x < cols - 1; x++) {
+        const a: number = y * cols + x;
+        const b: number = a + 1;
+        const c: number = a + cols;
+        const d: number = c + 1;
+        if (flip) {
+          indices.push(a, c, b);
+          indices.push(b, c, d);
+        } else {
+          indices.push(a, b, c);
+          indices.push(b, d, c);
+        }
+      }
+    }
+    return indices;
+  }
+
+  /**
+   * Appends the structural wireframe line pairs for a `rows x cols` quad grid
+   * (rows-1 * cols-1 cells): each cell's top edge and left edge, the horizontal
+   * seam closure per row and the bottom row's edges — the same topology the
+   * revolve family emits for its structural grid before adding caps.
+   * @param rows The number of grid rows.
+   * @param cols The number of grid columns.
+   * @returns The wireframe index list.
+   */
+  protected gridWireframe(rows: number, cols: number): number[] {
+    const lines: number[] = [];
+    for (let y: number = 0; y < rows - 1; y++) {
+      for (let x: number = 0; x < cols - 1; x++) {
+        const a: number = y * cols + x;
+        lines.push(a, a + 1);
+        lines.push(a, a + cols);
+      }
+      const last: number = y * cols + (cols - 1);
+      const belowLast: number = (y + 1) * cols + (cols - 1);
+      lines.push(last, belowLast);
+    }
+    const bottomRow: number = (rows - 1) * cols;
+    for (let x: number = 0; x < cols - 1; x++) {
+      lines.push(bottomRow + x, bottomRow + x + 1);
+    }
+    return lines;
+  }
+
+  /**
+   * Re-runs {@link generateGeometryData} from the current parameter values.
+   * Public parameters are intentionally mutable (not `readonly`) so tooling can
+   * adjust a shape and call `rebuild()` to regenerate the buffers in place.
+   */
+  public rebuild(): void {
+    this.generateGeometryData();
+  }
+
+  /**
    * Computes the normals of the geometry using the current vertices and indices.
    * Averages normals for shared vertices.
    */

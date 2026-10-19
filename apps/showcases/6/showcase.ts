@@ -14,7 +14,6 @@ import {
   Cube,
   CutCylinder,
   Cylinder,
-  CylinderSector,
   CylindricalArch,
   DirectionalLight,
   Disk,
@@ -509,7 +508,7 @@ export class Showcase6 extends AbstractShowcase {
       },
       {
         name: "CylinderSector",
-        geom: new CylinderSector({
+        geom: new Cylinder({
           radiusTop: 1.4,
           radiusBottom: 1.4,
           height: 2.8,

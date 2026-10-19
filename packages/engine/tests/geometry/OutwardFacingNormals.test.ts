@@ -17,7 +17,6 @@ import {
   Arch,
   HollowCylinder,
   Barrel,
-  CylinderSector,
   Gear,
   Tube,
   OpenFrame,
@@ -99,7 +98,7 @@ describe("Winding & Outward-Facing Normal Verification", () => {
     ["Cylinder", new Cylinder({ radiusTop: 1.5, radiusBottom: 1.5, height: 3 })],
     [
       "CylinderSector",
-      new CylinderSector({
+      new Cylinder({
         radiusTop: 1.5,
         radiusBottom: 1.5,
         height: 3,

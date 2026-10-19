@@ -158,8 +158,6 @@ export class CutCylinder extends AbstractGeometry {
     const yCenterOffset = avgH / 2; // Center the cylinder vertically around origin
 
     // --- 1. Cylindrical Mantle Surface ---
-    const mantleOffset = v.length / 3;
-
     for (let y = 0; y <= this.heightSegments; y++) {
       const vCoord = y / this.heightSegments;
 
@@ -174,24 +172,10 @@ export class CutCylinder extends AbstractGeometry {
       }
     }
 
-    for (let y = 0; y < this.heightSegments; y++) {
-      for (let x = 0; x < this.radialSegments; x++) {
-        const first = mantleOffset + y * (this.radialSegments + 1) + x;
-        const second = first + this.radialSegments + 1;
-        idx.push(first, first + 1, second);
-        idx.push(first + 1, second + 1, second);
-
-        wireframeLines.push(first, first + 1);
-        wireframeLines.push(first, second);
-      }
-      const last = mantleOffset + y * (this.radialSegments + 1) + this.radialSegments;
-      const belowLast = mantleOffset + (y + 1) * (this.radialSegments + 1) + this.radialSegments;
-      wireframeLines.push(last, belowLast);
-    }
-    const mantleBottomRow = mantleOffset + this.heightSegments * (this.radialSegments + 1);
-    for (let x = 0; x < this.radialSegments; x++) {
-      wireframeLines.push(mantleBottomRow + x, mantleBottomRow + x + 1);
-    }
+    const cols = this.radialSegments + 1;
+    const rows = this.heightSegments + 1;
+    idx.push(...this.gridIndices(rows, cols, false));
+    wireframeLines.push(...this.gridWireframe(rows, cols));
 
     // --- 2. Top Oblique Elliptical Cap ---
     if (!this.openEnded && 0 < this.radius) {
@@ -282,14 +266,12 @@ export class CutCylinder extends AbstractGeometry {
       buildSideCap(this.thetaStart + this.thetaLength, false);
     }
 
-    this._vertices = new Float32Array(v);
-    this._uvs = new Float32Array(uv);
-    this._indices = this._createIndexArray(idx.length);
-    this._indices.set(idx);
-
-    this._wireframeIndices = this._createIndexArray(wireframeLines.length);
-    this._wireframeIndices.set(wireframeLines);
-
+    this.setBuffers({
+      vertices: v,
+      uvs: uv,
+      indices: idx,
+      wireframeIndices: wireframeLines,
+    });
     this.computeNormals();
   }
 }
