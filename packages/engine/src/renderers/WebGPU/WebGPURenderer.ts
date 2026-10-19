@@ -13,8 +13,7 @@ import {
   isSkinnedMesh,
   computeClipToBox,
 } from "../../core/index.js";
-import type { RenderTarget } from "../../core/textures/index.js";
-import { RenderTargetCube } from "../../core/textures/index.js";
+import type { RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
 import type { RenderManifest } from "../shaders/index.js";
 import { UniformPacker, VERTEX_COLOR_FLAG, resolveManifestFlags } from "../shaders/index.js";
 import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
@@ -45,6 +44,7 @@ import { AbstractRenderer } from "../AbstractRenderer.js";
 import type { RenderPass } from "../RenderPass.js";
 import { GlobalUniformWriter } from "./managers/GlobalUniformWriter.js";
 import { GPUFallbackResources } from "./managers/GPUFallbackResources.js";
+import { GPURenderTargetCache } from "./managers/GPURenderTargetCache.js";
 import { GPUTextureResourceCache } from "./managers/GPUTextureResourceCache.js";
 import { OpaqueCapture } from "./managers/OpaqueCapture.js";
 import {
@@ -218,6 +218,8 @@ export class WebGPURenderer extends AbstractRenderer {
   private _globalUniformWriter!: GlobalUniformWriter;
   /** Cached screen/offscreen opaque color/depth/normal snapshots -- see `OpaqueCapture`. */
   private _opaqueCapture!: OpaqueCapture;
+  /** Cached offscreen RenderTarget backing textures -- see `GPURenderTargetCache`. */
+  private _targetCache!: GPURenderTargetCache;
   protected _gpuInstanceBuffers: WeakMap<InstancedMesh, GPUBuffer> = new WeakMap();
   protected _gpuInstanceDataBuffers: WeakMap<InstancedMesh, GPUBuffer> = new WeakMap();
   protected _frameCount = 0;
@@ -371,20 +373,6 @@ export class WebGPURenderer extends AbstractRenderer {
 
   private _activeRenderTarget: RenderTarget | RenderTargetCube | null = null;
   protected _activeCubeFace: number = 0;
-  protected _renderTargetTextures: Map<
-    RenderTarget,
-    { tex: GPUTexture; view: GPUTextureView; depth?: GPUTexture; depthView?: GPUTextureView }
-  > = new Map();
-  protected _renderTargetCubeTextures: Map<
-    RenderTargetCube,
-    {
-      tex: GPUTexture;
-      cubeView: GPUTextureView;
-      faceViews: GPUTextureView[];
-      depth?: GPUTexture;
-      depthView?: GPUTextureView;
-    }
-  > = new Map();
 
   // Render Pass System
   protected _passes: RenderPass[] = [];
@@ -456,39 +444,24 @@ export class WebGPURenderer extends AbstractRenderer {
 
   public get activeDepthView(): GPUTextureView {
     if (this._activeRenderTarget) {
-      if (this._activeRenderTarget instanceof RenderTargetCube) {
-        const data = this._renderTargetCubeTextures.get(this._activeRenderTarget);
-        if (data && data.depthView) return data.depthView;
-      } else {
-        const data = this._renderTargetTextures.get(this._activeRenderTarget);
-        if (data && data.depthView) return data.depthView;
-      }
+      const view = this._targetCache.depthView(this._activeRenderTarget);
+      if (view) return view;
     }
     return this._depthTexture.createView();
   }
 
   public get activeDepthTexture(): GPUTexture {
     if (this._activeRenderTarget) {
-      if (this._activeRenderTarget instanceof RenderTargetCube) {
-        const data = this._renderTargetCubeTextures.get(this._activeRenderTarget);
-        if (data && data.depth) return data.depth;
-      } else {
-        const data = this._renderTargetTextures.get(this._activeRenderTarget);
-        if (data && data.depth) return data.depth;
-      }
+      const tex = this._targetCache.depthTexture(this._activeRenderTarget);
+      if (tex) return tex;
     }
     return this._depthTexture;
   }
 
   public get activeColorTexture(): GPUTexture {
     if (this._activeRenderTarget) {
-      if (this._activeRenderTarget instanceof RenderTargetCube) {
-        const data = this._renderTargetCubeTextures.get(this._activeRenderTarget);
-        if (data) return data.tex;
-      } else {
-        const data = this._renderTargetTextures.get(this._activeRenderTarget);
-        if (data) return data.tex;
-      }
+      const tex = this._targetCache.colorTexture(this._activeRenderTarget);
+      if (tex) return tex;
     }
     return this.postProcessing.enabled && this._hdrTexture
       ? this._hdrTexture
@@ -655,6 +628,7 @@ export class WebGPURenderer extends AbstractRenderer {
   private _initDefaultResources(): void {
     this._fallback = new GPUFallbackResources(this._device!);
     this._textures = new GPUTextureResourceCache(this._device!, this._fallback);
+    this._targetCache = new GPURenderTargetCache(this._device!, this._textures);
     this._geometryCache = new GPUGeometryCache(this._device!);
     this._opaqueCapture = new OpaqueCapture(this._device!, this._fallback);
 
@@ -1378,101 +1352,11 @@ export class WebGPURenderer extends AbstractRenderer {
 
     if (this._activeRenderTarget) {
       isOffscreen = true;
-
-      if (this._activeRenderTarget instanceof RenderTargetCube) {
-        let data = this._renderTargetCubeTextures.get(this._activeRenderTarget);
-        if (!data || !this._activeRenderTarget.isLoaded) {
-          if (data) {
-            data.tex.destroy();
-            if (data.depth) data.depth.destroy();
-          }
-
-          const tex = this._device!.createTexture({
-            size: {
-              width: this._activeRenderTarget.width,
-              height: this._activeRenderTarget.height,
-              depthOrArrayLayers: 6,
-            },
-            format: this._format,
-            usage:
-              GPUTextureUsage.RENDER_ATTACHMENT |
-              GPUTextureUsage.TEXTURE_BINDING |
-              GPUTextureUsage.COPY_SRC,
-          });
-
-          const cubeView = tex.createView({ dimension: "cube" });
-          const faceViews: GPUTextureView[] = [];
-          for (let i = 0; i < 6; i++) {
-            faceViews.push(
-              tex.createView({ dimension: "2d", baseArrayLayer: i, arrayLayerCount: 1 }),
-            );
-          }
-
-          let depth: GPUTexture | undefined;
-          let depthView: GPUTextureView | undefined;
-
-          if (this._activeRenderTarget.depth) {
-            depth = this._device!.createTexture({
-              size: [this._activeRenderTarget.width, this._activeRenderTarget.height],
-              format: "depth32float",
-              usage:
-                GPUTextureUsage.RENDER_ATTACHMENT |
-                GPUTextureUsage.TEXTURE_BINDING |
-                GPUTextureUsage.COPY_SRC,
-            });
-            depthView = depth.createView();
-          }
-
-          data = { tex, cubeView, faceViews };
-          if (depth !== undefined) data.depth = depth;
-          if (depthView !== undefined) data.depthView = depthView;
-          this._renderTargetCubeTextures.set(this._activeRenderTarget, data);
-          this._textures.registerRenderTargetCubeTexture(this._activeRenderTarget, tex, cubeView);
-          this._activeRenderTarget.isLoaded = true;
-        }
-        renderTargetView = data.faceViews[this._activeCubeFace]!;
-      } else {
-        let data = this._renderTargetTextures.get(this._activeRenderTarget);
-        if (!data || !this._activeRenderTarget.isLoaded) {
-          if (data) {
-            data.tex.destroy();
-            if (data.depth) data.depth.destroy();
-          }
-
-          const tex = this._device.createTexture({
-            size: [this._activeRenderTarget.width, this._activeRenderTarget.height],
-            format: this._format,
-            usage:
-              GPUTextureUsage.RENDER_ATTACHMENT |
-              GPUTextureUsage.TEXTURE_BINDING |
-              GPUTextureUsage.COPY_SRC,
-          });
-          const view = tex.createView();
-
-          let depth: GPUTexture | undefined;
-          let depthView: GPUTextureView | undefined;
-
-          if (this._activeRenderTarget.depth) {
-            depth = this._device.createTexture({
-              size: [this._activeRenderTarget.width, this._activeRenderTarget.height],
-              format: "depth32float",
-              usage:
-                GPUTextureUsage.RENDER_ATTACHMENT |
-                GPUTextureUsage.TEXTURE_BINDING |
-                GPUTextureUsage.COPY_SRC,
-            });
-            depthView = depth.createView();
-          }
-
-          data = { tex, view };
-          if (depth !== undefined) data.depth = depth;
-          if (depthView !== undefined) data.depthView = depthView;
-          this._renderTargetTextures.set(this._activeRenderTarget, data);
-          this._textures.registerRenderTargetTexture(this._activeRenderTarget, tex, view);
-          this._activeRenderTarget.isLoaded = true;
-        }
-        renderTargetView = data.view;
-      }
+      renderTargetView = this._targetCache.getActiveTargetView(
+        this._activeRenderTarget,
+        this._format,
+        this._activeCubeFace,
+      );
     } else {
       renderTargetView =
         this.postProcessing.enabled && this._hdrTextureView
@@ -2232,14 +2116,7 @@ export class WebGPURenderer extends AbstractRenderer {
     this._objectRing?.dispose();
     this._geometryCache?.dispose();
     for (const tex of this._shadowMaps.values()) tex.destroy();
-    for (const data of this._renderTargetTextures.values()) {
-      data.tex.destroy();
-      data.depth?.destroy();
-    }
-    for (const data of this._renderTargetCubeTextures.values()) {
-      data.tex.destroy();
-      data.depth?.destroy();
-    }
+    this._targetCache?.dispose();
 
     if (this._textures) {
       for (const tex of this._pinnedIblTextures) this._textures.releaseRetainedTexture(tex);
@@ -2274,8 +2151,6 @@ export class WebGPURenderer extends AbstractRenderer {
 
     this._materialBindGroups.clear();
     this._shadowMaps.clear();
-    this._renderTargetTextures.clear();
-    this._renderTargetCubeTextures.clear();
 
     this._hdrTexture = undefined;
     this._hdrTextureView = undefined;

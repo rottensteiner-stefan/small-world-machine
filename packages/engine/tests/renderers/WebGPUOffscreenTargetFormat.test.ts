@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
 import { GPUFallbackResources } from "../../src/renderers/WebGPU/managers/GPUFallbackResources.js";
 import { GlobalUniformWriter } from "../../src/renderers/WebGPU/managers/GlobalUniformWriter.js";
+import { GPURenderTargetCache } from "../../src/renderers/WebGPU/managers/GPURenderTargetCache.js";
 import { OpaqueCapture } from "../../src/renderers/WebGPU/managers/OpaqueCapture.js";
 import { GPUTextureResourceCache } from "../../src/renderers/WebGPU/managers/GPUTextureResourceCache.js";
 import { GPUPipelineCache } from "../../src/renderers/WebGPU/managers/GPUPipelineCache.js";
@@ -106,6 +107,7 @@ function makeRenderer(): { renderer: Internals; device: GPUDevice } {
   renderer._geometryCache = new GPUGeometryCache(device);
   renderer._opaqueCapture = new OpaqueCapture(device, renderer._fallback);
   renderer._globalUniformWriter = new GlobalUniformWriter(renderer);
+  renderer._targetCache = new GPURenderTargetCache(device, renderer._textures);
   renderer._viewUniformBuffer = { mock: "viewUniformBuffer" };
   renderer._viewBindGroup = { mock: "viewBindGroup" };
   renderer._viewUniformStride = 256;
@@ -445,7 +447,7 @@ describe("WebGPURenderer.captureOpaqueTexture() and captureOpaqueDepth() format 
     const mockRtDepth = { mock: "rtDepth" } as unknown as GPUTexture;
     const mockRtView = { mock: "rtView" } as unknown as GPUTextureView;
 
-    renderer._renderTargetTextures.set(rt, {
+    renderer._targetCache.renderTargetTextures.set(rt, {
       tex: mockRtTex,
       view: mockRtView,
       depth: mockRtDepth,
