@@ -8,6 +8,7 @@ import {
   VIEW_SLOT_SPOT_SHADOW_BASE,
 } from "../../src/renderers/WebGPU/WebGPURenderer.js";
 import { GPUFallbackResources } from "../../src/renderers/WebGPU/managers/GPUFallbackResources.js";
+import { GlobalUniformWriter } from "../../src/renderers/WebGPU/managers/GlobalUniformWriter.js";
 import { GPUTextureResourceCache } from "../../src/renderers/WebGPU/managers/GPUTextureResourceCache.js";
 import { GPUPipelineCache } from "../../src/renderers/WebGPU/managers/GPUPipelineCache.js";
 import { GPUObjectRingBuffer } from "../../src/renderers/WebGPU/managers/GPUObjectRingBuffer.js";
@@ -197,10 +198,12 @@ describe("WebGPU per-draw view uniform buffer (group 3)", () => {
 
   it("_updateGlobalBuffers writes VIEW_SLOT_MAIN_CAMERA (offset 0) every call", () => {
     const { renderer, device } = makeRenderer();
-    renderer._globalBindGroup = { mock: "globalBindGroup" };
-    renderer._pointLightBuffer = { mock: "plb" };
-    renderer._spotLightBuffer = { mock: "slb" };
-    renderer._areaLightBuffer = { mock: "alb" };
+    renderer._globalUniformWriter = new GlobalUniformWriter(renderer);
+    const writer = renderer._globalUniformWriter;
+    writer._globalUniformBuffer = { mock: "gub" };
+    writer._pointLightBuffer = { mock: "plb" };
+    writer._spotLightBuffer = { mock: "slb" };
+    writer._areaLightBuffer = { mock: "alb" };
     renderer._context = { canvas: { width: 800, height: 600 } };
     renderer._clusterDims = { x: 1, y: 1, z: 1 };
 
@@ -217,7 +220,7 @@ describe("WebGPU per-draw view uniform buffer (group 3)", () => {
     };
     const scene = { fog: undefined, environmentIntensity: 1 };
 
-    renderer._updateGlobalBuffers(vp, { x: 0, y: 0, z: 0 }, lights, scene);
+    writer.update(vp, { x: 0, y: 0, z: 0 }, lights, scene);
 
     const viewSlotWrite = (device.queue.writeBuffer as ReturnType<typeof vi.fn>).mock.calls.find(
       (call) => call[0] === renderer._viewUniformBuffer,

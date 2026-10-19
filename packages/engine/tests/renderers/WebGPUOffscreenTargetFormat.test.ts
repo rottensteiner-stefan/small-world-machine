@@ -3,6 +3,8 @@ import { createDefaultRendererContext } from "../../src/interfaces/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
 import { GPUFallbackResources } from "../../src/renderers/WebGPU/managers/GPUFallbackResources.js";
+import { GlobalUniformWriter } from "../../src/renderers/WebGPU/managers/GlobalUniformWriter.js";
+import { OpaqueCapture } from "../../src/renderers/WebGPU/managers/OpaqueCapture.js";
 import { GPUTextureResourceCache } from "../../src/renderers/WebGPU/managers/GPUTextureResourceCache.js";
 import { GPUPipelineCache } from "../../src/renderers/WebGPU/managers/GPUPipelineCache.js";
 import { GPUObjectRingBuffer } from "../../src/renderers/WebGPU/managers/GPUObjectRingBuffer.js";
@@ -102,6 +104,8 @@ function makeRenderer(): { renderer: Internals; device: GPUDevice } {
   );
   renderer._objectRing = new GPUObjectRingBuffer(device, renderer._objectBGL);
   renderer._geometryCache = new GPUGeometryCache(device);
+  renderer._opaqueCapture = new OpaqueCapture(device, renderer._fallback);
+  renderer._globalUniformWriter = new GlobalUniformWriter(renderer);
   renderer._viewUniformBuffer = { mock: "viewUniformBuffer" };
   renderer._viewBindGroup = { mock: "viewBindGroup" };
   renderer._viewUniformStride = 256;

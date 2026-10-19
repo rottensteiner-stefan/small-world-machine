@@ -1,5 +1,4 @@
 // Removed Fog import
-import { WebGPUGGlobalUniformLayout } from "../GlobalUniformLayout.js";
 import type {
   CubeTexture,
   DirectionalLight,
@@ -44,8 +43,10 @@ import {
 import { NORMAL_TARGET_FORMAT } from "./managers/NormalOutputWrapper.js";
 import { AbstractRenderer } from "../AbstractRenderer.js";
 import type { RenderPass } from "../RenderPass.js";
+import { GlobalUniformWriter } from "./managers/GlobalUniformWriter.js";
 import { GPUFallbackResources } from "./managers/GPUFallbackResources.js";
 import { GPUTextureResourceCache } from "./managers/GPUTextureResourceCache.js";
+import { OpaqueCapture } from "./managers/OpaqueCapture.js";
 import {
   GPUPipelineCache,
   getOptionalMaterialTextureBindings,
@@ -213,6 +214,10 @@ export class WebGPURenderer extends AbstractRenderer {
   }
   /** Per-geometry GPU vertex/index buffer cache -- see `GPUGeometryCache`'s own doc comment. */
   private _geometryCache!: GPUGeometryCache;
+  /** Frame-global uniform/light upload buffers + IBL-change detection -- see `GlobalUniformWriter`. */
+  private _globalUniformWriter!: GlobalUniformWriter;
+  /** Cached screen/offscreen opaque color/depth/normal snapshots -- see `OpaqueCapture`. */
+  private _opaqueCapture!: OpaqueCapture;
   protected _gpuInstanceBuffers: WeakMap<InstancedMesh, GPUBuffer> = new WeakMap();
   protected _gpuInstanceDataBuffers: WeakMap<InstancedMesh, GPUBuffer> = new WeakMap();
   protected _frameCount = 0;
@@ -225,16 +230,10 @@ export class WebGPURenderer extends AbstractRenderer {
   private _scratchInstancedObjects: Object3D[] = [];
   private _scratchStandardObjects: Object3D[] = [];
 
-  // 212 floats: GlobalUniforms grew by 8 floats (resolution/projScale/tileSizePx/clusterDims)
-  // for clustered light culling -- see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md.
-  private _scratchGlobalBufferData = new Float32Array(212);
-  /** Reused every frame (never reallocated) -- see `_updateGlobalBuffers()`. */
+  /** Reused every frame (never reallocated) -- see `GlobalUniformWriter`. */
   public get scratchGlobalBufferData(): Float32Array {
-    return this._scratchGlobalBufferData;
+    return this._globalUniformWriter.scratchGlobalBufferData;
   }
-  protected _scratchPointLightData = new Float32Array(32); // Initial capacity, grows dynamically
-  protected _scratchSpotLightData = new Float32Array(64); // Initial capacity, grows dynamically
-  protected _scratchAreaLightData = new Float32Array(96); // Initial capacity, grows dynamically
   protected _scratchObjBufferData = new Float32Array(512 / 4); // 512 bytes (32 vec4), see docs/adr/0027-object-uniforms-512-byte-expansion.md
 
   /** Clustered light grid dimensions for the current canvas size, see `setSize()`. */
@@ -243,6 +242,10 @@ export class WebGPURenderer extends AbstractRenderer {
     return this._clusterDims;
   }
   private _clusterMaxLightsPerCluster = 1;
+  /** Read by `GlobalUniformWriter.update()` for the clustered-culling metadata block. */
+  public get clusterMaxLightsPerCluster(): number {
+    return this._clusterMaxLightsPerCluster;
+  }
   private _pointClusterGridBuffer!: GPUBuffer;
   private _pointClusterIndexBuffer!: GPUBuffer;
   private _spotClusterGridBuffer!: GPUBuffer;
@@ -290,20 +293,6 @@ export class WebGPURenderer extends AbstractRenderer {
    * objects without needing stable per-object IDs. */
   private _hzbSlotObjects: [Object3D[], Object3D[]] = [[], []];
   private _hzbCopyRecordedThisFrame = false;
-
-  protected _opaqueTextures = new WeakMap<
-    object,
-    { tex: GPUTexture; view: GPUTextureView; width: number; height: number }
-  >();
-  protected _screenOpaqueTexture?:
-    | {
-        tex: GPUTexture;
-        view: GPUTextureView;
-        width: number;
-        height: number;
-      }
-    | undefined;
-  private _opaqueTextureView?: GPUTextureView;
 
   private _shadowMaps = new Map<DirectionalLight | SpotLight, GPUTexture>();
   /** Same Map instance every frame -- shadow passes `.get()`/`.set()` on it directly. */
@@ -400,13 +389,11 @@ export class WebGPURenderer extends AbstractRenderer {
   // Render Pass System
   protected _passes: RenderPass[] = [];
 
-  private _globalUniformBuffer!: GPUBuffer;
+  /** Frame-global uniform/light upload buffers live in `GlobalUniformWriter`; this getter keeps
+   * their single public consumer (`SpotShadowPassGPU`/`CascadedShadowPassGPU`) working unchanged. */
   public get globalUniformBuffer(): GPUBuffer {
-    return this._globalUniformBuffer;
+    return this._globalUniformWriter.globalUniformBuffer;
   }
-  private _pointLightBuffer!: GPUBuffer;
-  private _spotLightBuffer!: GPUBuffer;
-  private _areaLightBuffer!: GPUBuffer;
   private _globalBindGroup!: GPUBindGroup;
   private _globalResourcesVersion = 0;
   /** The scene IBL textures currently held through `retainTexture()` for the global bind group. */
@@ -669,6 +656,7 @@ export class WebGPURenderer extends AbstractRenderer {
     this._fallback = new GPUFallbackResources(this._device!);
     this._textures = new GPUTextureResourceCache(this._device!, this._fallback);
     this._geometryCache = new GPUGeometryCache(this._device!);
+    this._opaqueCapture = new OpaqueCapture(this._device!, this._fallback);
 
     this._boneMatricesBuffer = this._device!.createBuffer({
       size: 2048 * 64, // 2048 mat4x4f = 131072 bytes
@@ -677,24 +665,8 @@ export class WebGPURenderer extends AbstractRenderer {
   }
 
   private _initGlobalBuffers(): void {
-    this._globalUniformBuffer = this._device!.createBuffer({
-      // 848 bytes: GlobalUniforms grew by 40 bytes (resolution/projScale/tileSizePx/clusterDims)
-      // for clustered light culling -- see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md.
-      size: 848,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    this._pointLightBuffer = this._device!.createBuffer({
-      size: 2048,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    this._spotLightBuffer = this._device!.createBuffer({
-      size: 4096,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    this._areaLightBuffer = this._device!.createBuffer({
-      size: 4096,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
+    this._globalUniformWriter = new GlobalUniformWriter(this);
+    this._globalUniformWriter.init(this._device!);
 
     this._globalBGL = this._device!.createBindGroupLayout({
       entries: [
@@ -939,8 +911,9 @@ export class WebGPURenderer extends AbstractRenderer {
     }
   }
 
-  /** Writes an already ZO-corrected view-projection matrix into `slot`'s bytes. */
-  private _writeViewSlot(slot: number, correctedVpData: Float32Array): number {
+  /** Writes an already ZO-corrected view-projection matrix into `slot`'s bytes. Called by
+   * `GlobalUniformWriter` for the once-per-frame main-camera slot 0 write, and by `_setViewMatrix`. */
+  public _writeViewSlot(slot: number, correctedVpData: Float32Array): number {
     const offset = slot * this._viewUniformStride;
     this._device!.queue.writeBuffer(this._viewUniformBuffer, offset, correctedVpData);
     return offset;
@@ -949,8 +922,8 @@ export class WebGPURenderer extends AbstractRenderer {
   /** Writes `rawVp` (a raw, not-yet-ZO-corrected view-projection matrix) into the per-draw view
    * buffer at `slot` and returns the byte offset to pass as `setBindGroup(3, viewBindGroup,
    * [offset])`. Used by `CascadedShadowPassGPU`/`SpotShadowPassGPU` for their shadow cameras --
-   * the main camera's slot 0 is kept up to date by `_updateGlobalBuffers()` instead, once per
-   * frame, since every draw needs it regardless of pass. */
+   * the main camera's slot 0 is kept up to date by `GlobalUniformWriter.update()` instead, once
+   * per frame, since every draw needs it regardless of pass. */
   public _setViewMatrix(slot: number, rawVp: Float32Array): number {
     const raw = MathPool.acquireMatrix();
     const corrected = MathPool.acquireMatrix();
@@ -1214,10 +1187,6 @@ export class WebGPURenderer extends AbstractRenderer {
     }
   }
 
-  private _currentIrradianceMap?: CubeTexture | undefined;
-  private _currentPrefilterMap?: CubeTexture | undefined;
-  private _currentBrdfLUT?: Texture | undefined;
-
   public _createGlobalBindGroup(scene?: Scene): GPUBindGroup {
     const irrView = scene?.irradianceMap
       ? this._textures.getCubeTextureView(scene.irradianceMap, this._quality)
@@ -1233,10 +1202,10 @@ export class WebGPURenderer extends AbstractRenderer {
     return this._device!.createBindGroup({
       layout: this._globalBGL,
       entries: [
-        { binding: 0, resource: { buffer: this._globalUniformBuffer } },
-        { binding: 1, resource: { buffer: this._pointLightBuffer } },
-        { binding: 2, resource: { buffer: this._spotLightBuffer } },
-        { binding: 3, resource: { buffer: this._areaLightBuffer } },
+        { binding: 0, resource: { buffer: this._globalUniformWriter.globalUniformBuffer } },
+        { binding: 1, resource: { buffer: this._globalUniformWriter.pointLightBuffer } },
+        { binding: 2, resource: { buffer: this._globalUniformWriter.spotLightBuffer } },
+        { binding: 3, resource: { buffer: this._globalUniformWriter.areaLightBuffer } },
         { binding: 4, resource: irrView },
         { binding: 5, resource: prefView },
         { binding: 6, resource: brdfView },
@@ -1257,7 +1226,8 @@ export class WebGPURenderer extends AbstractRenderer {
    * (Re)allocates the clustered-light-culling storage buffers for the given grid size and
    * rebuilds the global bind group to reference them -- see
    * docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md. Resetting `_currentIrradianceMap`
-   * etc. forces `_updateGlobalBuffers()` to rebuild the bind group again on the next frame with
+   * etc. (via `GlobalUniformWriter.resetSceneTextures()`) forces `GlobalUniformWriter.update()`
+   * to rebuild the bind group again on the next frame with
    * the scene's real IBL textures (this method has no `Scene` to pull them from itself).
    * @param dims Cluster grid dimensions.
    * @param maxLightsPerCluster Maximum number of lights a single cluster cell can reference.
@@ -1326,9 +1296,10 @@ export class WebGPURenderer extends AbstractRenderer {
 
     if (this._globalBGL) {
       this._globalBindGroup = this._createGlobalBindGroup();
-      this._currentIrradianceMap = undefined;
-      this._currentPrefilterMap = undefined;
-      this._currentBrdfLUT = undefined;
+      // Resetting the IBL-change detection forces `GlobalUniformWriter.update()` to rebuild the
+      // bind group again on the next frame with the scene's real IBL textures (this method has no
+      // `Scene` to pull them from itself).
+      this._globalUniformWriter.resetSceneTextures();
     }
   }
 
@@ -1368,7 +1339,7 @@ export class WebGPURenderer extends AbstractRenderer {
 
     this._registerRenderListProviders(scene.getVisibleObjectsSorted(vp, camPos));
     const lights = this.extractLights(scene);
-    this._updateGlobalBuffers(vp, camPos, lights, scene, near, far, projMatrix);
+    this._globalUniformWriter.update(vp, camPos, lights, scene, near, far, projMatrix);
     const ce = this._device.createCommandEncoder();
 
     if (
@@ -1531,7 +1502,7 @@ export class WebGPURenderer extends AbstractRenderer {
     ctx.projMatrix = projMatrix;
     ctx.lights = lights;
     ctx.colorTexture = this._hdrTexture;
-    ctx.depthView = this._opaqueDepthTextureView ?? this._fallback.dummyDepthTextureView;
+    ctx.depthView = this._opaqueCapture.opaqueDepthView ?? this._fallback.dummyDepthTextureView;
 
     for (const pass of this._passes) {
       const isPostProcessPass = pass instanceof PostProcessPass;
@@ -1586,7 +1557,7 @@ export class WebGPURenderer extends AbstractRenderer {
           this._bloomTextureView = undefined;
         }
 
-        if (hbaoNode && hbaoNode.enabled && this._opaqueDepthTextureView && projMatrix) {
+        if (hbaoNode && hbaoNode.enabled && this._opaqueCapture.opaqueDepthView && projMatrix) {
           ctx.element = hbaoNode;
           const p = this._getOrCreatePostEffectPass(PostProcessingEffectType.HBAO, AOPassGPU);
           this._hbaoTextureView = p.execute(ctx) ?? undefined;
@@ -1597,7 +1568,12 @@ export class WebGPURenderer extends AbstractRenderer {
         const shaftsNode = this.postProcessing.get<LightShaftsElement>(
           PostProcessingEffectType.LIGHT_SHAFTS,
         );
-        if (shaftsNode && shaftsNode.enabled && this._opaqueDepthTextureView && lights.dLight) {
+        if (
+          shaftsNode &&
+          shaftsNode.enabled &&
+          this._opaqueCapture.opaqueDepthView &&
+          lights.dLight
+        ) {
           ctx.element = shaftsNode;
           const p = this._getOrCreatePostEffectPass(
             PostProcessingEffectType.LIGHT_SHAFTS,
@@ -1614,7 +1590,7 @@ export class WebGPURenderer extends AbstractRenderer {
         const volFogNode = this.postProcessing.get<VolumetricFogElement>(
           PostProcessingEffectType.VOLUMETRIC_FOG,
         );
-        if (volFogNode && volFogNode.enabled && this._opaqueDepthTextureView) {
+        if (volFogNode && volFogNode.enabled && this._opaqueCapture.opaqueDepthView) {
           ctx.element = volFogNode;
           ctx.fogVolumes = this.extractFogVolumes(scene);
           const p = this._getOrCreatePostEffectPass(
@@ -1643,43 +1619,9 @@ export class WebGPURenderer extends AbstractRenderer {
   }
 
   public captureOpaqueTexture(ce: GPUCommandEncoder, targetTex: GPUTexture): void {
-    let cacheObj = this._activeRenderTarget
-      ? this._opaqueTextures.get(this._activeRenderTarget)
-      : this._screenOpaqueTexture;
-
-    if (
-      !cacheObj ||
-      cacheObj.width !== targetTex.width ||
-      cacheObj.height !== targetTex.height ||
-      cacheObj.tex.format !== targetTex.format
-    ) {
-      if (cacheObj) this._fallback.deferDestroyTexture(cacheObj.tex);
-
-      const tex = this._device!.createTexture({
-        size: [targetTex.width, targetTex.height, 1],
-        format: targetTex.format,
-        usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING,
-      });
-      cacheObj = { tex, view: tex.createView(), width: targetTex.width, height: targetTex.height };
-
-      if (this._activeRenderTarget) {
-        this._opaqueTextures.set(this._activeRenderTarget, cacheObj);
-      } else {
-        this._screenOpaqueTexture = cacheObj;
-      }
-    }
-
-    this._opaqueTextureView = cacheObj.view;
-
-    ce.copyTextureToTexture({ texture: targetTex }, { texture: cacheObj.tex }, [
-      targetTex.width,
-      targetTex.height,
-      1,
-    ]);
+    this._opaqueCapture.captureOpaqueTexture(ce, targetTex, this._activeRenderTarget);
   }
 
-  /** Inverse of this frame's GL (non zero-to-one) view-projection; decals unproject depth with it. */
-  private readonly _frameInvViewProj: Matrix4 = new Matrix4();
   private readonly _scratchClipToBox: Matrix4 = new Matrix4();
   private readonly _decalColumns: Float32Array[] = [
     new Float32Array(4),
@@ -1689,70 +1631,24 @@ export class WebGPURenderer extends AbstractRenderer {
   ];
   private readonly _decalFlags: Float32Array = new Float32Array(4);
 
-  private _opaqueDepthTexture?: GPUTexture;
-  private _opaqueDepthTextureView?: GPUTextureView;
-  private _opaqueNormalTexture?: GPUTexture;
-  private _opaqueNormalTextureView?: GPUTextureView;
-
   /** Decals read the opaque depth beneath them, which only exists for the main camera target. */
   public get canDrawDecals(): boolean {
     return !this._activeRenderTarget;
   }
 
   /**
-   * Copies the normal buffer into a sampleable texture: it cannot be read while it is still a
-   * render attachment of the pass that wrote it. No-op while the buffer is off.
+   * Copies the normal buffer into a sampleable texture (delegated to `OpaqueCapture`): it cannot
+   * be read while it is still a render attachment of the pass that wrote it. No-op while the
+   * buffer is off.
    */
   public captureOpaqueNormal(ce: GPUCommandEncoder): void {
     const src = this._normalTexture;
-    if (!src) return;
-
-    if (
-      !this._opaqueNormalTexture ||
-      this._opaqueNormalTexture.width !== src.width ||
-      this._opaqueNormalTexture.height !== src.height
-    ) {
-      if (this._opaqueNormalTexture) this._fallback.deferDestroyTexture(this._opaqueNormalTexture);
-      this._opaqueNormalTexture = this._device!.createTexture({
-        size: [src.width, src.height],
-        format: src.format,
-        usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING,
-      });
-      this._opaqueNormalTextureView = this._opaqueNormalTexture.createView();
-    }
-
-    ce.copyTextureToTexture({ texture: src }, { texture: this._opaqueNormalTexture }, [
-      src.width,
-      src.height,
-      1,
-    ]);
+    if (!src) return; // normal buffer off
+    this._opaqueCapture.captureOpaqueNormal(ce, src);
   }
 
   public captureOpaqueDepth(ce: GPUCommandEncoder): void {
-    const srcTex = this.activeDepthTexture;
-
-    if (
-      !this._opaqueDepthTexture ||
-      this._opaqueDepthTexture.width !== srcTex.width ||
-      this._opaqueDepthTexture.height !== srcTex.height ||
-      this._opaqueDepthTexture.format !== srcTex.format
-    ) {
-      if (this._opaqueDepthTexture) this._fallback.deferDestroyTexture(this._opaqueDepthTexture);
-
-      const tex = this._device!.createTexture({
-        size: [srcTex.width, srcTex.height, 1],
-        format: srcTex.format,
-        usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING,
-      });
-      this._opaqueDepthTexture = tex;
-      this._opaqueDepthTextureView = tex.createView();
-    }
-
-    ce.copyTextureToTexture({ texture: srcTex }, { texture: this._opaqueDepthTexture }, [
-      srcTex.width,
-      srcTex.height,
-      1,
-    ]);
+    this._opaqueCapture.captureOpaqueDepth(ce, this.activeDepthTexture);
   }
 
   /**
@@ -2135,14 +2031,14 @@ export class WebGPURenderer extends AbstractRenderer {
    * matParam0..3 and the "normal buffer copy is bound" flag in matParam5.y. */
   private _packDecalUniforms(o: Object3D, values: Record<string, unknown>): void {
     const clipToBox = this._scratchClipToBox;
-    if (computeClipToBox(o.worldMatrix, this._frameInvViewProj, clipToBox)) {
+    if (computeClipToBox(o.worldMatrix, this._globalUniformWriter.frameInvViewProj, clipToBox)) {
       for (let c = 0; c < 4; c++) {
         const column = this._decalColumns[c]!;
         for (let r = 0; r < 4; r++) column[r] = clipToBox.data[c * 4 + r]!;
         values[`u_matParam${c}`] = column;
       }
     }
-    this._decalFlags[1] = this._opaqueNormalTextureView && this.activeNormalView ? 1 : 0;
+    this._decalFlags[1] = this._opaqueCapture.opaqueNormalView && this.activeNormalView ? 1 : 0;
     values["u_matParam5"] = this._decalFlags;
   }
 
@@ -2180,15 +2076,15 @@ export class WebGPURenderer extends AbstractRenderer {
     if ("u_opaqueMap" === name) {
       return m.textures["u_opaqueMap"]
         ? this._textures.getTextureView(m.textures["u_opaqueMap"] as Texture, this._quality)
-        : this._opaqueTextureView || this._fallback.whiteTextureView;
+        : this._opaqueCapture.opaqueTextureView || this._fallback.whiteTextureView;
     }
     if ("u_opaqueDepthMap" === name) {
       return m.textures["u_opaqueDepthMap"]
         ? this._textures.getTextureView(m.textures["u_opaqueDepthMap"] as Texture, this._quality)
-        : this._opaqueDepthTextureView || this._fallback.dummyDepthTextureView;
+        : this._opaqueCapture.opaqueDepthView || this._fallback.dummyDepthTextureView;
     }
     if ("u_normalBufferMap" === name) {
-      return this._opaqueNormalTextureView || this._fallback.whiteTextureView;
+      return this._opaqueCapture.opaqueNormalView || this._fallback.whiteTextureView;
     }
     return this._textures.getTextureView(m.textures[name] as Texture, this._quality);
   }
@@ -2234,9 +2130,9 @@ export class WebGPURenderer extends AbstractRenderer {
    * Rebuilds the global bind group for the scene's current IBL maps. The GPU textures behind those
    * maps are reference-counted per object, so this takes its own reference first (the new set,
    * then drops the old one) -- otherwise removing an object that shares a map destroys it under
-   * the bind group. Passes that copied the old bind group rebuild on the version bump.
-   */
-  private _rebuildGlobalBindGroupForScene(scene: Scene): void {
+   * the bind group. Passes that copied the old bind group rebuild on the version bump. Called by
+   * `GlobalUniformWriter.update()` when it detects a scene IBL change. */
+  public _rebuildGlobalBindGroupForScene(scene: Scene): void {
     const next: (Texture | CubeTexture)[] = [];
     for (const tex of [scene.irradianceMap, scene.prefilterMap, scene.brdfLUT]) {
       if (tex) next.push(tex);
@@ -2247,228 +2143,6 @@ export class WebGPURenderer extends AbstractRenderer {
 
     this._globalBindGroup = this._createGlobalBindGroup(scene);
     this._globalResourcesVersion++;
-  }
-
-  public _updateGlobalBuffers(
-    vp: Float32Array,
-    camPos: Vector3D,
-    lights: LightDataInterface,
-    scene: Scene,
-    near: number = 0.1,
-    far: number = 1000,
-    projMatrix?: Float32Array,
-  ): void {
-    if (lights.pLights.length > MAX_CLUSTERED_LIGHTS_PER_TYPE) {
-      throw new Error(
-        `[WebGPURenderer] Point light count exceeds limit of ${MAX_CLUSTERED_LIGHTS_PER_TYPE}: ${lights.pLights.length}`,
-      );
-    }
-    if (lights.sLights.length > MAX_CLUSTERED_LIGHTS_PER_TYPE) {
-      throw new Error(
-        `[WebGPURenderer] Spot light count exceeds limit of ${MAX_CLUSTERED_LIGHTS_PER_TYPE}: ${lights.sLights.length}`,
-      );
-    }
-    if (lights.aLights.length > 42) {
-      throw new Error(
-        `[WebGPURenderer] Area light count exceeds limit of 42: ${lights.aLights.length}`,
-      );
-    }
-    if (
-      this._currentIrradianceMap !== scene.irradianceMap ||
-      this._currentPrefilterMap !== scene.prefilterMap ||
-      this._currentBrdfLUT !== scene.brdfLUT
-    ) {
-      this._currentIrradianceMap = scene.irradianceMap;
-      this._currentPrefilterMap = scene.prefilterMap;
-      this._currentBrdfLUT = scene.brdfLUT;
-      this._rebuildGlobalBindGroupForScene(scene);
-    }
-
-    const correctedVp = MathPool.acquireMatrix();
-    const originalVp = MathPool.acquireMatrix();
-    originalVp.data.set(vp);
-    Matrix4.invert(originalVp, this._frameInvViewProj);
-
-    // WebGPU uses [0, 1] depth range, but our projection matrices use [-1, 1] (OpenGL standard).
-    // Apply ZO (Zero-to-One) correction matrix to fix clipping without modifying shaders.
-    Matrix4.multiply(Matrix4.ZO_CORRECTION, originalVp, correctedVp);
-
-    const gData = this._scratchGlobalBufferData;
-    const glob = WebGPUGGlobalUniformLayout.fields;
-    gData.set(correctedVp.data, glob.vp.index);
-    gData.set([camPos.x, camPos.y, camPos.z, 1], glob.viewPos.index);
-    // Slot 0 = main camera in the per-draw view buffer (group 3) -- kept correct here, once per
-    // frame, independent of whatever CascadedShadowPassGPU/SpotShadowPassGPU write into their own
-    // slots afterward. See VIEW_SLOT_MAIN_CAMERA.
-    this._writeViewSlot(VIEW_SLOT_MAIN_CAMERA, correctedVp.data);
-
-    MathPool.releaseMatrix(originalVp);
-    MathPool.releaseMatrix(correctedVp);
-    gData.set(
-      [
-        lights.aCol.r * lights.aIntensity,
-        lights.aCol.g * lights.aIntensity,
-        lights.aCol.b * lights.aIntensity,
-        1,
-      ],
-      glob.ambientColor.index,
-    );
-    gData.set(
-      [
-        lights.dCol.r * lights.dIntensity,
-        lights.dCol.g * lights.dIntensity,
-        lights.dCol.b * lights.dIntensity,
-        1,
-      ],
-      glob.dirLightColor.index,
-    );
-    // Fix: lights.dDir is already negated to point TO the light in applyTo.
-    gData.set([lights.dDir.x, lights.dDir.y, lights.dDir.z, 0], glob.dirLightDir.index);
-    // ── Forward-Pass / Post-Pass tonemapping contract ──────────────────────────────────────────
-    // When PostProcessing is enabled the WebGPU pipeline is split into two passes:
-    //   1. Forward pass  – renders the scene into an HDR render-target (linear, NOT tonemapped).
-    //                      gamma=1.0 disables the Reinhard guard in lighting_pbr.wgsl so that
-    //                      no tonemapping happens here. exposure=1.0 because the PostPass applies
-    //                      scene exposure itself via ToneMappingElement.
-    //   2. PostProcess pass – composites bloom/AO/etc., applies exposure, tonemap, and gamma.
-    //                         PostProcessPass.ts defaults to Reinhard when no ToneMappingElement
-    //                         is configured (see the u_toneMappingMode injection there).
-    //
-    // ⚠️  If you add tonemapping or gamma correction to the forward pass and PostProcessing is
-    //     enabled, you will double-tonemap: once here and once in the PostProcess pass.
-    //     This produces a visibly darker/flat scene (the symptom that triggered this comment).
-    //
-    // When PostProcessing is DISABLED, gamma and exposure come from _quality (default 2.2 / 1.0),
-    // the forward shader's gamma guard fires, and Reinhard + linearToSRGB run directly in the
-    // forward pass as a lightweight single-pass pipeline — no HDR buffer, no PostPass.
-    const gamma = this.postProcessing.enabled ? 1.0 : (this._quality.gamma ?? 2.2);
-    const exposure = this.postProcessing.enabled ? 1.0 : (this._quality.exposure ?? 1.0);
-    gData.set(
-      [lights.pLights.length, lights.sLights.length, lights.aLights.length, gamma],
-      glob.numPointLights.index,
-    );
-    gData[glob.exposure.index] = exposure; // exposure
-
-    const fog = scene.fog;
-    if (fog) {
-      gData[glob.fogMode.index] = fog.mode;
-      gData[glob.fogDensity.index] = fog.density;
-      gData[glob.fogNear.index] = fog.near;
-      gData[glob.fogFar.index] = fog.far;
-      gData[glob.fogHeight.index] = fog.height;
-      gData[glob.fogHeightFalloff.index] = fog.heightFalloff;
-      gData[glob.envIntensity.index] = scene.environmentIntensity; // envIntensity instead of _pad
-      gData.set([fog.color.r, fog.color.g, fog.color.b, 1.0], glob.fogColor.index);
-    } else {
-      gData[glob.fogMode.index] = 0.0; // fogMode NONE
-      gData[glob.envIntensity.index] = scene.environmentIntensity; // envIntensity
-    }
-
-    // Default shadow values in case there are no shadows.
-    // Struct order in structs.wgsl is cascadeMatrices (128-191) -> cascadeSplits
-    // (192-195) -> dirShadowInfo (196-199); CascadedShadowPassGPU overwrites these
-    // with real values (at these same, correct offsets) once a shadow-casting
-    // directional light is actually rendered this frame.
-    const splits = glob.cascadeSplits;
-    gData[splits.index] = 0.0; // cascadeSplits.x
-    gData[splits.index + 1] = 0.0;
-    gData[splits.index + 2] = 0.0;
-    gData[splits.index + 3] = 0.0;
-
-    // dirShadowInfo (bias, normalBias, castShadow, numCascades)
-    const dirInfo = glob.dirShadowInfo;
-    gData[dirInfo.index] = 0.001;
-    gData[dirInfo.index + 1] = 0.002;
-    gData[dirInfo.index + 2] = 0.0; // castShadow off by default
-    gData[dirInfo.index + 3] = 4.0;
-
-    gData[glob.cameraNearFar.index] = near;
-    gData[glob.cameraNearFar.index + 1] = far;
-
-    // Clustered light culling metadata (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md).
-    // resolution/tileSizePx/clusterDims must exactly match what ClusterCullPassGPU used to build
-    // pointClusterGrid/spotClusterGrid this frame -- see setSize()/_allocateClusterBuffers().
-    gData[glob.resolution.index] = this._context.canvas.width;
-    gData[glob.resolution.index + 1] = this._context.canvas.height;
-    gData[glob.projScale.index] = projMatrix?.[0] ?? 1.0;
-    gData[glob.projScale.index + 1] = projMatrix?.[5] ?? 1.0;
-    const tileSizePx = this._quality.clusteredLighting?.tileSize ?? DEFAULT_CLUSTER_TILE_SIZE;
-    gData[glob.tileSizePx.index] = tileSizePx[0];
-    gData[glob.tileSizePx.index + 1] = tileSizePx[1];
-    gData[glob.clusterDims.index] = this._clusterDims.x;
-    gData[glob.clusterDims.index + 1] = this._clusterDims.y;
-    gData[glob.clusterDims.index + 2] = this._clusterDims.z;
-    gData[glob.clusterDims.index + 3] = this._clusterMaxLightsPerCluster;
-
-    // Default spot shadow values
-    for (let i = 0; i < glob.spotShadowInfo.count; i++) {
-      gData[glob.spotShadowInfo.index + i * glob.spotShadowInfo.stride] = 0.001; // bias
-      gData[glob.spotShadowInfo.index + i * glob.spotShadowInfo.stride + 1] = 0.002; // normalBias
-      gData[glob.spotShadowInfo.index + i * glob.spotShadowInfo.stride + 2] = 0.0; // castShadow off
-      gData[glob.spotShadowInfo.index + i * glob.spotShadowInfo.stride + 3] = -1.0; // layer index (-1 = no shadow)
-    }
-
-    this._device!.queue.writeBuffer(this._globalUniformBuffer, 0, gData);
-
-    const plDataSize = Math.max(lights.pLights.length * 8, 8);
-    if (this._scratchPointLightData.length < plDataSize) {
-      this._scratchPointLightData = new Float32Array(plDataSize);
-    }
-    const plData = this._scratchPointLightData;
-    for (let i = 0; i < lights.pLights.length; i++) {
-      const l = lights.pLights[i]!;
-      const d = l.worldMatrix.data;
-      plData.set([d[12]!, d[13]!, d[14]!, l.distance], i * 8);
-      plData.set(
-        [l.color.r * l.intensity, l.color.g * l.intensity, l.color.b * l.intensity, l.decay],
-        i * 8 + 4,
-      );
-    }
-    this._device!.queue.writeBuffer(this._pointLightBuffer, 0, plData.subarray(0, plDataSize));
-
-    const slDataSize = Math.max(lights.sLights.length * 16, 16);
-    if (this._scratchSpotLightData.length < slDataSize) {
-      this._scratchSpotLightData = new Float32Array(slDataSize);
-    }
-    const slData = this._scratchSpotLightData;
-    for (let i = 0; i < lights.sLights.length; i++) {
-      const l = lights.sLights[i]!;
-      const d = l.worldMatrix.data;
-      slData.set([d[12]!, d[13]!, d[14]!, 1], i * 16);
-      const dir = MathPool.acquireVector().copyFrom(l.direction).normalize();
-      slData.set([dir.x, dir.y, dir.z, 0], i * 16 + 4);
-      slData.set(
-        [l.color.r * l.intensity, l.color.g * l.intensity, l.color.b * l.intensity, 1],
-        i * 16 + 8,
-      );
-      slData.set(
-        [Math.cos(l.angle), Math.cos(l.angle * (1.0 - l.penumbra)), l.distance, l.decay],
-        i * 16 + 12,
-      );
-      MathPool.releaseVector(dir);
-    }
-    this._device!.queue.writeBuffer(this._spotLightBuffer, 0, slData.subarray(0, slDataSize));
-
-    const alDataSize = Math.max(lights.aLights.length * 24, 24);
-    if (this._scratchAreaLightData.length < alDataSize) {
-      this._scratchAreaLightData = new Float32Array(alDataSize);
-    }
-    const alData = this._scratchAreaLightData;
-    for (let i = 0; i < lights.aLights.length; i++) {
-      const l = lights.aLights[i]!;
-      const m = l.worldMatrix.data;
-      const off = i * 24;
-      alData.set([m[12]!, m[13]!, m[14]!, 1], off);
-      alData.set(
-        [l.color.r * l.intensity, l.color.g * l.intensity, l.color.b * l.intensity, 1],
-        off + 4,
-      );
-      alData.set([m[0]!, m[1]!, m[2]!, 0], off + 8);
-      alData.set([m[4]!, m[5]!, m[6]!, 0], off + 12);
-      alData.set([m[8]!, m[9]!, m[10]!, 0], off + 16);
-      alData.set([l.width / 2, l.height / 2, l.distance, l.decay], off + 20);
-    }
-    this._device!.queue.writeBuffer(this._areaLightBuffer, 0, alData.subarray(0, alDataSize));
   }
 
   public override setSize(width: number, height: number): void {
@@ -2575,12 +2249,8 @@ export class WebGPURenderer extends AbstractRenderer {
     this._fallback?.dispose();
     this._textures?.dispose();
     this._pipelineCache?.dispose();
-    this._globalUniformBuffer?.destroy();
-    this._pointLightBuffer?.destroy();
-    this._spotLightBuffer?.destroy();
-    this._areaLightBuffer?.destroy();
+    this._globalUniformWriter?.dispose();
     this._depthTexture?.destroy();
-    this._opaqueDepthTexture?.destroy();
     this._hdrTexture?.destroy();
     this._normalTexture?.destroy();
     this._normalTexture = undefined;
@@ -2600,9 +2270,7 @@ export class WebGPURenderer extends AbstractRenderer {
     for (const pass of this._postEffectPasses.values()) pass.destroy();
     this._postEffectPasses.clear();
 
-    this._screenOpaqueTexture?.tex.destroy();
-    this._screenOpaqueTexture = undefined;
-    this._opaqueTextures = new WeakMap();
+    this._opaqueCapture?.dispose();
 
     this._materialBindGroups.clear();
     this._shadowMaps.clear();

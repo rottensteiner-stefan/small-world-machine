@@ -3,9 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebGL2Renderer } from "../../src/renderers/WebGL2/WebGL2Renderer.js";
-import { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
+import type { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
+import { GlobalUniformWriter } from "../../src/renderers/WebGPU/managers/GlobalUniformWriter.js";
 import { WebGL2UniformBuffer } from "../../src/renderers/WebGL2/WebGL2UniformBuffer.js";
-import { Vector3D, Matrix4 } from "../../src/math/index.js";
+import { Vector3D } from "../../src/math/index.js";
 import {
   WebGL2GlobalUniformLayout,
   WebGL2PointLightLayout,
@@ -160,29 +161,26 @@ function captureWebGL2(): number[] {
 }
 
 function captureWebGPU(): number[] {
-  const renderer = Object.create(WebGPURenderer.prototype) as Any;
   const device = { queue: { writeBuffer: vi.fn() } };
-  renderer._device = device;
-  renderer._scratchGlobalBufferData = new Float32Array(212);
-  renderer._scratchPointLightData = new Float32Array(16);
-  renderer._scratchSpotLightData = new Float32Array(32);
-  renderer._scratchAreaLightData = new Float32Array(48);
-  renderer._pointLightBuffer = {};
-  renderer._spotLightBuffer = {};
-  renderer._areaLightBuffer = {};
-  renderer._context = { canvas: { width: 1280, height: 720 } };
-  renderer._quality = { gamma: 2.2, exposure: 1.0, clusteredLighting: { tileSize: [32, 32] } };
-  renderer.postProcessing = { enabled: false };
-  renderer._clusterDims = { x: 12, y: 13, z: 14 };
-  renderer._clusterMaxLightsPerCluster = 32;
-  renderer._currentIrradianceMap = undefined;
-  renderer._currentPrefilterMap = undefined;
-  renderer._currentBrdfLUT = undefined;
-  renderer._frameInvViewProj = new Matrix4();
-  renderer._globalUniformBuffer = {};
-  renderer._writeViewSlot = (): number => 0;
+  // The writer reaches its host through WebGPURenderer's accessors only; a minimal stub is
+  // enough to exercise the byte-exact packing below (the same state the old renderer test set).
+  const host = {
+    gpuDevice: device,
+    postProcessing: { enabled: false },
+    quality: { gamma: 2.2, exposure: 1.0, clusteredLighting: { tileSize: [32, 32] } },
+    gpuCanvasContext: { canvas: { width: 1280, height: 720 } },
+    clusterDims: { x: 12, y: 13, z: 14 },
+    clusterMaxLightsPerCluster: 32,
+    _writeViewSlot: (): number => 0,
+    _rebuildGlobalBindGroupForScene: (): void => {},
+  } as unknown as WebGPURenderer;
+  const writer = new GlobalUniformWriter(host) as Any;
+  writer._pointLightBuffer = {};
+  writer._spotLightBuffer = {};
+  writer._areaLightBuffer = {};
+  writer._globalUniformBuffer = {};
 
-  renderer._updateGlobalBuffers(
+  writer.update(
     makeVp(),
     new Vector3D(11, 12, 13),
     makeLights(),
@@ -192,7 +190,7 @@ function captureWebGPU(): number[] {
     makeProj(),
   );
 
-  return Array.from(renderer._scratchGlobalBufferData);
+  return Array.from(writer._scratchGlobalBufferData);
 }
 
 function makeProj(): Float32Array {

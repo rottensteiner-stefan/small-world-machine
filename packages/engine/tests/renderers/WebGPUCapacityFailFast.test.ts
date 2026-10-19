@@ -1,6 +1,7 @@
 import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
+import { GlobalUniformWriter } from "../../src/renderers/WebGPU/managers/GlobalUniformWriter.js";
 import { WebGL2Renderer } from "../../src/renderers/WebGL2/WebGL2Renderer.js";
 import { WebGL1Renderer } from "../../src/renderers/WebGL1/WebGL1Renderer.js";
 import { Scene } from "../../src/core/Scene.js";
@@ -66,6 +67,7 @@ describe("WebGPU capacity fail-fast validation", () => {
   it("throws when point lights exceed limit in _updateGlobalBuffers", () => {
     const renderer = new WebGPURenderer() as RendererInternals;
     renderer._device = makeMockDevice();
+    renderer._globalUniformWriter = new GlobalUniformWriter(renderer);
     const scene = new Scene();
     const vp = new Float32Array(16);
     const camPos = new Vector3D(0, 0, 0);
@@ -78,7 +80,7 @@ describe("WebGPU capacity fail-fast validation", () => {
       dLights: [],
     };
 
-    expect(() => renderer._updateGlobalBuffers(vp, camPos, lights, scene)).toThrow(
+    expect(() => renderer._globalUniformWriter.update(vp, camPos, lights, scene)).toThrow(
       /Point light count exceeds limit of 64: 65/,
     );
   });
@@ -86,6 +88,7 @@ describe("WebGPU capacity fail-fast validation", () => {
   it("throws when spot lights exceed limit in _updateGlobalBuffers", () => {
     const renderer = new WebGPURenderer() as RendererInternals;
     renderer._device = makeMockDevice();
+    renderer._globalUniformWriter = new GlobalUniformWriter(renderer);
     const scene = new Scene();
     const vp = new Float32Array(16);
     const camPos = new Vector3D(0, 0, 0);
@@ -98,7 +101,7 @@ describe("WebGPU capacity fail-fast validation", () => {
       dLights: [],
     };
 
-    expect(() => renderer._updateGlobalBuffers(vp, camPos, lights, scene)).toThrow(
+    expect(() => renderer._globalUniformWriter.update(vp, camPos, lights, scene)).toThrow(
       /Spot light count exceeds limit of 64: 65/,
     );
   });
@@ -106,6 +109,7 @@ describe("WebGPU capacity fail-fast validation", () => {
   it("throws when area lights exceed limit of 42 in _updateGlobalBuffers", () => {
     const renderer = new WebGPURenderer() as RendererInternals;
     renderer._device = makeMockDevice();
+    renderer._globalUniformWriter = new GlobalUniformWriter(renderer);
     const scene = new Scene();
     const vp = new Float32Array(16);
     const camPos = new Vector3D(0, 0, 0);
@@ -127,7 +131,7 @@ describe("WebGPU capacity fail-fast validation", () => {
       dLights: [],
     };
 
-    expect(() => renderer._updateGlobalBuffers(vp, camPos, lights, scene)).toThrow(
+    expect(() => renderer._globalUniformWriter.update(vp, camPos, lights, scene)).toThrow(
       /Area light count exceeds limit of 42: 43/,
     );
   });
