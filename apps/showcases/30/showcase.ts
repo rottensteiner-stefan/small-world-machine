@@ -42,6 +42,7 @@ import {
   RainPuddleMaterial,
 } from "@small-world-machine/liquid-extras";
 import { attachDevTools } from "@small-world-machine/tools";
+import { RainStreaks } from "./RainStreaks.js";
 
 enum Mood {
   NIGHT = "night",
@@ -202,8 +203,7 @@ class Showcase30 extends AbstractShowcase {
   private readonly _dropSystem = new DropImpactSystem();
   private _fluidIndex = 0;
   private _hoverCar!: Object3D;
-  private _rainMesh!: InstancedMesh;
-  private _rainPositions!: Float32Array;
+  private readonly _rain = new RainStreaks();
   private _time = 0;
   private _sceneReady = false;
   private _mood: Mood = Mood.NIGHT;
@@ -665,40 +665,9 @@ class Showcase30 extends AbstractShowcase {
     tailLightGlow.position.set(0, 0.3, -1.7);
     this._hoverCar.add(tailLightGlow);
 
-    // 9. Torrential Cyberpunk Rain Streaks
-    const RAIN_COUNT = 1000;
-    const rainGeom = new Cube({ size: 1 }).getGeometryData();
-    const rainMat = new StandardMaterial({
-      color: new Color(0.7, 0.85, 1.0),
-      emissiveColor: new Color(0.4, 0.6, 0.9),
-      emissiveIntensity: 0.8,
-      roughness: 0.1,
-      metallic: 0.9,
-    });
-    this._rainMesh = new InstancedMesh("RainSystem", rainGeom, rainMat, RAIN_COUNT);
-    this._rainPositions = new Float32Array(RAIN_COUNT * 3);
-
-    const rainMat4 = new Matrix4();
-    for (let i = 0; i < RAIN_COUNT; i++) {
-      const rx = (Math.random() - 0.5) * 14.0;
-      const ry = Math.random() * 14.0;
-      const rz = (Math.random() - 0.5) * 22.0;
-      this._rainPositions[i * 3 + 0] = rx;
-      this._rainPositions[i * 3 + 1] = ry;
-      this._rainPositions[i * 3 + 2] = rz;
-
-      rainMat4.identity();
-      rainMat4.data[0] = 0.012;
-      rainMat4.data[5] = 0.45;
-      rainMat4.data[10] = 0.012;
-      rainMat4.data[12] = rx;
-      rainMat4.data[13] = ry;
-      rainMat4.data[14] = rz;
-      this._rainMesh.setMatrixAt(i, rainMat4);
-    }
-    this._rainMesh.castShadow = false;
-    this.scene.add(this._rainMesh);
-    this._reflectionNode.excludedObjects.push(this._rainMesh);
+    // 9. Rain: motion-blurred, lit streaks falling at terminal velocity (see RainStreaks).
+    this.scene.add(this._rain.mesh);
+    this._reflectionNode.excludedObjects.push(this._rain.mesh);
 
     for (const light of this._neonLights) {
       this._neonLightBase.push(light.intensity);
@@ -904,36 +873,7 @@ class Showcase30 extends AbstractShowcase {
       this._hoverCar.rotation.z = Math.sin(this._time * 1.5) * 0.01;
     }
 
-    // Dynamic rain fall
-    if (this._rainMesh && this._rainPositions) {
-      const fallSpeed = 24.0 * deltaTime;
-      const windX = -2.0 * deltaTime;
-      const windZ = -1.0 * deltaTime;
-      const count = this._rainMesh.instanceCount;
-      const matrices = this._rainMesh.instanceMatrices;
-
-      for (let i = 0; i < count; i++) {
-        let x = this._rainPositions[i * 3 + 0]! + windX;
-        let y = this._rainPositions[i * 3 + 1]! - fallSpeed;
-        let z = this._rainPositions[i * 3 + 2]! + windZ;
-
-        if (y < 0.0) {
-          y = 13.0 + Math.random() * 2.0;
-          x = (Math.random() - 0.5) * 14.0;
-          z = (Math.random() - 0.5) * 22.0;
-        }
-
-        this._rainPositions[i * 3 + 0] = x;
-        this._rainPositions[i * 3 + 1] = y;
-        this._rainPositions[i * 3 + 2] = z;
-
-        const offset = i * 16;
-        matrices[offset + 12] = x;
-        matrices[offset + 13] = y;
-        matrices[offset + 14] = z;
-      }
-      this._rainMesh.instanceMatrixNeedsUpdate = true;
-    }
+    this._rain.update(deltaTime, this._time, this.camera.position);
 
     // Neon sign pulse flicker
     if (this._neonSignMagenta) {
