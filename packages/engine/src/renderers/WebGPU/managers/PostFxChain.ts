@@ -4,6 +4,7 @@ import { Vector3D } from "../../../math/index.js";
 import type { LightDataInterface } from "../../../interfaces/index.js";
 import type {
   BloomElement,
+  DepthOfFieldElement,
   HbaoElement,
   LightShaftsElement,
   MotionTrailElement,
@@ -13,6 +14,7 @@ import type {
 import {
   AOPassGPU,
   BloomPassGPU,
+  DepthOfFieldPassGPU,
   HistoryBlendPassGPU,
   LightShaftsPassGPU,
   VolumetricFogPassGPU,
@@ -24,7 +26,7 @@ import type { WebGPURenderer } from "../WebGPURenderer.js";
 /**
  * Single orchestration point for the whole GPU post-FX chain that used to live inline in
  * `WebGPURenderer.render()`: the chained pre-uber effect dispatches (TAA -> motion trail ->
- * bloom -> HBAO -> light shafts -> volumetric fog), the `Map<PostProcessingEffectType,
+ * depth of field -> bloom -> HBAO -> light shafts -> volumetric fog), the `Map<PostProcessingEffectType,
  * PostEffectPass>` registry behind them (see ADR 0037), the reused `PostEffectPassContext`, and
  * the resulting per-effect texture views (`taaResolvedView`/`motionTrailResolvedView`/bloom/HBAO/
  * shafts/volumetric-fog) that the final uber pass reads.
@@ -60,6 +62,7 @@ export class PostFxChain {
 
   private _taaResolvedView: GPUTextureView | undefined = undefined;
   private _motionTrailResolvedView: GPUTextureView | undefined = undefined;
+  private _depthOfFieldResolvedView: GPUTextureView | undefined = undefined;
   private _bloomTextureView: GPUTextureView | undefined = undefined;
   private _hbaoTextureView: GPUTextureView | undefined = undefined;
   private _lightShaftsTextureView: GPUTextureView | undefined = undefined;
@@ -83,6 +86,12 @@ export class PostFxChain {
 
   public get motionTrailResolvedView(): GPUTextureView | undefined {
     return this._motionTrailResolvedView;
+  }
+
+  /** This frame's defocused HDR color view, if depth of field ran -- the final chained color the
+   * uber pass reads ahead of the motion-trail / TAA / raw HDR views. */
+  public get depthOfFieldResolvedView(): GPUTextureView | undefined {
+    return this._depthOfFieldResolvedView;
   }
 
   public get bloomTextureView(): GPUTextureView | undefined {
@@ -121,7 +130,7 @@ export class PostFxChain {
 
   /**
    * Drives this frame's chained pre-uber GPU post effects, in the fixed order TAA -> motion trail
-   * -> bloom -> HBAO -> light shafts -> volumetric fog, each step feeding its resolved view into
+   * -> depth of field -> bloom -> HBAO -> light shafts -> volumetric fog, each step feeding its resolved view into
    * the next. Runs only while the final `PostProcessPass` will actually execute (the renderer
    * skips both for offscreen render targets). The reused `PostEffectPassContext` is repopulated
    * here once per frame -- fields that vary per effect are rewired right before each dispatch.
@@ -195,7 +204,23 @@ export class PostFxChain {
       this._motionTrailResolvedView = undefined;
     }
 
-    const colorTextureView = this._motionTrailResolvedView ?? taaOrRawView;
+    const trailOrTaaView = this._motionTrailResolvedView ?? taaOrRawView;
+
+    // Depth of field defocuses the resolved HDR radiance before bloom and tone mapping: a lens
+    // integrates linear radiance over its aperture, so bright highlights must become bokeh discs
+    // first and only then glow. AO / light shafts / volumetric fog are composited later by the
+    // uber pass and stay unblurred -- acceptable, they are low-frequency terms.
+    const dofNode = group.get<DepthOfFieldElement>(PostProcessingEffectType.DEPTH_OF_FIELD);
+    if (dofNode && dofNode.enabled && renderer.opaqueDepthView && trailOrTaaView) {
+      ctx.colorView = trailOrTaaView;
+      ctx.element = dofNode;
+      const p = this._getOrCreatePass(PostProcessingEffectType.DEPTH_OF_FIELD, DepthOfFieldPassGPU);
+      this._depthOfFieldResolvedView = p.execute(ctx) ?? undefined;
+    } else {
+      this._depthOfFieldResolvedView = undefined;
+    }
+
+    const colorTextureView = this._depthOfFieldResolvedView ?? trailOrTaaView;
 
     if (bloomNode && bloomNode.enabled && renderer.hdrTexture && colorTextureView) {
       ctx.colorView = colorTextureView;

@@ -270,11 +270,14 @@ export class PostProcessPass implements RenderPass {
     // (the group used to be asked separately ~34x per frame).
     const e = decodeBundle(group);
 
-    // If TAA and/or Motion Trail resolved this frame, the uber pass reacts to that instead of
+    // If TAA, Motion Trail and/or depth of field resolved this frame, the uber pass reacts to that instead of
     // the raw per-frame color -- `_hdrTextureView` itself must stay untouched so both keep
     // reading fresh input next frame (see WebGPURenderer.render()).
     const colorView =
-      renderer.motionTrailResolvedView ?? renderer.taaResolvedView ?? renderer.hdrTextureView;
+      renderer.depthOfFieldResolvedView ??
+      renderer.motionTrailResolvedView ??
+      renderer.taaResolvedView ??
+      renderer.hdrTextureView;
 
     const bloomActiveView = this._activeViewOrWhite(renderer, e.bloom, renderer.bloomTextureView);
     const hbaoActiveView = this._activeViewOrWhite(renderer, e.hbao, renderer.hbaoTextureView);

@@ -294,6 +294,9 @@ export class WebGPURenderer extends AbstractRenderer {
   public get motionTrailResolvedView(): GPUTextureView | undefined {
     return this._postFxChain.motionTrailResolvedView;
   }
+  public get depthOfFieldResolvedView(): GPUTextureView | undefined {
+    return this._postFxChain.depthOfFieldResolvedView;
+  }
 
   private _activeRenderTarget: RenderTarget | RenderTargetCube | null = null;
   protected _activeCubeFace: number = 0;

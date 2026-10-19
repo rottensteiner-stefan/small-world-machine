@@ -14,6 +14,7 @@ import {
   FlashElement,
   LightShaftsElement,
   VolumetricFogElement,
+  DepthOfFieldElement,
 } from "./elements/index.js";
 import { PostProcessingEffectType } from "../../enums/index.js";
 import { Vector3D } from "../../math/index.js";
@@ -59,6 +60,7 @@ export class PostProcessingGroup {
     this.add(new FlashElement());
     this.add(new LightShaftsElement());
     this.add(new VolumetricFogElement());
+    this.add(new DepthOfFieldElement());
   }
 
   /**
@@ -90,7 +92,8 @@ export class PostProcessingGroup {
    * capture this frame. The renderer uses this single property -- never per-effect ad-hoc OR
    * chains -- to decide whether the opaque depth capture must run (GPU path, see
    * `WebGPURenderer`/`MainRenderPass`). An effect "requires opaque depth" when its GPU
-   * implementation reads the captured depth texture (HBAO, light shafts, volumetric fog).
+   * implementation reads the captured depth texture (HBAO, light shafts, volumetric fog, depth of
+   * field).
    * Effects without such a consumer (bloom, vignette, grain, grading, ...) never do.
    *
    * Covers ONLY post-processing consumers. The unrelated transparent/refraction capture and the
@@ -100,10 +103,12 @@ export class PostProcessingGroup {
     const hbao = this.get<HbaoElement>(PostProcessingEffectType.HBAO);
     const shafts = this.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS);
     const volFog = this.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
+    const dof = this.get<DepthOfFieldElement>(PostProcessingEffectType.DEPTH_OF_FIELD);
     return (
       (hbao !== undefined && hbao.enabled) ||
       (shafts !== undefined && shafts.enabled) ||
-      (volFog !== undefined && volFog.enabled)
+      (volFog !== undefined && volFog.enabled) ||
+      (dof !== undefined && dof.enabled)
     );
   }
 
@@ -320,6 +325,20 @@ export class PostProcessingGroup {
             volFog.color.set(col.r, col.g, col.b);
           }
         }
+      }
+    }
+
+    if (effects.depthOfField) {
+      const dof = this.get<DepthOfFieldElement>(PostProcessingEffectType.DEPTH_OF_FIELD);
+      if (dof) {
+        const df = effects.depthOfField;
+        if (df.enabled !== undefined) dof.enabled = df.enabled;
+        if (df.focusDistance !== undefined) dof.focusDistance = df.focusDistance;
+        if (df.focalLength !== undefined) dof.focalLength = df.focalLength;
+        if (df.fStop !== undefined) dof.fStop = df.fStop;
+        if (df.sensorHeight !== undefined) dof.sensorHeight = df.sensorHeight;
+        if (df.maxCocPx !== undefined) dof.maxCocPx = df.maxCocPx;
+        if (df.focusScreenY !== undefined) dof.focusScreenY = df.focusScreenY;
       }
     }
   }

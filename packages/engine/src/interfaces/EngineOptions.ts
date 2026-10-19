@@ -247,6 +247,16 @@ export interface PostProcessingEffectsConfig {
     jitter?: number;
     color?: { r: number; g: number; b: number } | [number, number, number];
   };
+  /** Thin-lens depth of field (bokeh gather on WebGL2/WebGPU, tilt-shift fallback on WebGL1). Off by default. */
+  depthOfField?: {
+    enabled?: boolean;
+    focusDistance?: number;
+    focalLength?: number;
+    fStop?: number;
+    sensorHeight?: number;
+    maxCocPx?: number;
+    focusScreenY?: number;
+  };
 }
 
 /**

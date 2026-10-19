@@ -1,11 +1,13 @@
 import type {
   BloomElement,
+  ColorGradingElement,
+  DepthOfFieldElement,
   EngineOptions,
+  GrainElement,
   HbaoElement,
   VignetteElement,
 } from "@small-world-machine/engine";
 import {
-  AbstractGeometry,
   AbstractShowcase,
   AmbientLight,
   CameraStrategyType,
@@ -17,37 +19,195 @@ import {
   FogMode,
   GltfLoader,
   InstancedMesh,
+  Keys,
   Matrix4,
-  Noise,
   Object3D,
   OrbitController,
+  Plane,
   PlanarReflectionNode,
   PointLight,
   PostProcessingEffectType,
+  Quaternion,
   RendererType,
   SpotLight,
   StandardMaterial,
   Texture,
+  Vector2D,
+  Vector3D,
 } from "@small-world-machine/engine";
+import { RainPuddleMaterial } from "@small-world-machine/liquid-extras";
 import { attachDevTools } from "@small-world-machine/tools";
+
+enum Mood {
+  NIGHT = "night",
+  DAY = "day",
+}
+
+enum CameraView {
+  STREET = "street",
+  PUDDLE = "puddle",
+}
+
+interface MoodPreset {
+  ambientColor: Color;
+  ambientIntensity: number;
+  keyColor: Color;
+  keyIntensity: number;
+  spotIntensity: number;
+  /** Multiplier on every neon light and emissive surface. */
+  neon: number;
+  facadeEmissive: number;
+  /** Mirror strength of the wet film on open asphalt (the puddles themselves are separate). */
+  streetReflectivity: number;
+  fogColor: Color;
+  fogDensity: number;
+  showSkybox: boolean;
+  clearColor: Color;
+  bloom: number;
+  vignetteDarkness: number;
+  vignetteOffset: number;
+  gradingEnabled: boolean;
+  saturation: number;
+  contrast: number;
+  lift: Color;
+  gain: Color;
+  grain: number;
+  rainIntensity: number;
+  dripIntensity: number;
+}
+
+// Night = the original neon look. Day = the overcast winter photo the puddle analysis was derived
+// from (.agents/scratches/puddle/analysis.md 3.1, 4.2-4.3): flat sky light, crushed saturation,
+// lifted blacks, cyan highlights, heavy vignette, fine grain.
+const MOODS: Record<Mood, MoodPreset> = {
+  [Mood.NIGHT]: {
+    ambientColor: new Color(0.04, 0.07, 0.14),
+    ambientIntensity: 0.2,
+    keyColor: new Color(0.2, 0.45, 0.7),
+    keyIntensity: 0.4,
+    spotIntensity: 2.2,
+    neon: 1.0,
+    facadeEmissive: 1.5,
+    streetReflectivity: 0.35,
+    fogColor: new Color(0.015, 0.02, 0.035),
+    fogDensity: 0.014,
+    showSkybox: true,
+    clearColor: new Color(0, 0, 0, 1),
+    bloom: 0.65,
+    vignetteDarkness: 0.65,
+    vignetteOffset: 0.9,
+    gradingEnabled: false,
+    saturation: 1.0,
+    contrast: 1.0,
+    lift: new Color(0, 0, 0),
+    gain: new Color(1, 1, 1),
+    grain: 0.0,
+    rainIntensity: 0.75,
+    dripIntensity: 0.45,
+  },
+  [Mood.DAY]: {
+    ambientColor: new Color(0.62, 0.64, 0.68),
+    ambientIntensity: 0.85,
+    keyColor: new Color(0.86, 0.88, 0.92),
+    keyIntensity: 0.55,
+    spotIntensity: 0.0,
+    neon: 0.12,
+    facadeEmissive: 0.15,
+    // The photo's asphalt is rough and matte between the puddles: no mirror outside the water.
+    streetReflectivity: 0.05,
+    fogColor: new Color(0.64, 0.66, 0.68),
+    fogDensity: 0.03,
+    showSkybox: false,
+    clearColor: new Color(0.8, 0.82, 0.84, 1),
+    bloom: 0.12,
+    vignetteDarkness: 0.95,
+    vignetteOffset: 0.7,
+    gradingEnabled: true,
+    saturation: 0.35,
+    contrast: 1.15,
+    lift: new Color(0.035, 0.035, 0.035),
+    gain: new Color(0.97, 1.02, 1.03),
+    grain: 0.06,
+    rainIntensity: 0.55,
+    dripIntensity: 0.6,
+  },
+};
+
+const STREET_WIDTH = 16;
+const STREET_LENGTH = 28;
+const ASPHALT_REPEAT_X = 10;
+const ASPHALT_REPEAT_Z = 18;
+
+interface CameraPreset {
+  position: Vector3D;
+  target: Vector3D;
+  focalLengthMm: number;
+  fStop: number;
+}
+
+// Focus sits on the camera target; a gentle lens so the street view stays readable.
+const STREET_CAMERA: CameraPreset = {
+  position: new Vector3D(1.4, 0.52, 4.4),
+  target: new Vector3D(0, 0.35, -0.9),
+  focalLengthMm: 35,
+  fStop: 4.0,
+};
+// The reference photo: ~22 deg above the ground (from its ring ellipses), ~0.8 m from the water,
+// shot like a 70 mm f/1.8 portrait lens (analysis.md 1.1-1.3), looking at the foreground puddle.
+const PUDDLE_CAMERA: CameraPreset = {
+  position: new Vector3D(-2.45, 0.29, 4.12),
+  target: new Vector3D(-2.6, 0.0, 3.4),
+  focalLengthMm: 70,
+  fStop: 1.8,
+};
+
+const PUDDLE_BASINS = [
+  { x: 0.1, z: 0.0, radiusX: 1.6, radiusZ: 2.2 }, // under & behind the hover car
+  { x: -3.4, z: -2.5, radiusX: 0.95, radiusZ: 1.3 }, // distant left alley
+  { x: 3.4, z: -2.5, radiusX: 0.95, radiusZ: 1.3 }, // distant right alley
+  // Foreground left, framed by the puddle camera. Photo-sized: ~0.5 m across (analysis.md 1.3),
+  // so asphalt shows above and below the water like in the reference.
+  { x: -2.6, z: 3.4, radiusX: 0.42, radiusZ: 0.3 },
+];
 
 /**
  * Showcase 30: "The Rain-Drenched Cyberpunk Albedo: Screen-Space Reflections & Neon Wetness"
  *
- * Benchmark testing planar & screen-space reflection response, roughness gradient
- * on water puddles, contrasting teal/magenta specular highlights, and HDR neon bloom.
+ * Benchmark testing planar reflection response on physically based rain puddles
+ * (RainPuddleMaterial: dielectric Fresnel, dispersive rain rings, frayed shorelines), contrasting
+ * teal/magenta specular highlights and HDR neon bloom, plus an overcast day mood and a low puddle
+ * camera matching the reference photo of .agents/scratches/puddle/.
+ *
+ * Keys: C = street / puddle camera, N = night / day mood.
  */
 class Showcase30 extends AbstractShowcase {
   private _neonSignMagenta!: Object3D;
   private _neonSignCyan!: Object3D;
   private _spotTeal!: SpotLight;
   private _spotPink!: SpotLight;
-  private _puddlePlates: Object3D[] = [];
   private _reflectionNode!: PlanarReflectionNode;
+  private _puddleMat!: RainPuddleMaterial;
   private _hoverCar!: Object3D;
   private _rainMesh!: InstancedMesh;
   private _rainPositions!: Float32Array;
   private _time = 0;
+  private _mood: Mood = Mood.NIGHT;
+  private _cameraView: CameraView = CameraView.STREET;
+  private _ambientLight!: AmbientLight;
+  private _keyLight!: DirectionalLight;
+  private _neonLights: PointLight[] = [];
+  private _neonLightBase: number[] = [];
+  private _neonMaterials: StandardMaterial[] = [];
+  private _neonEmissiveBase: number[] = [];
+  private _buildingMat!: StandardMaterial;
+  private _streetMat!: StandardMaterial;
+  private _skybox: Object3D | undefined;
+  private _fog!: Fog;
+  private _bloom: BloomElement | undefined;
+  private _vignette: VignetteElement | undefined;
+  private _grading: ColorGradingElement | undefined;
+  private _grain: GrainElement | undefined;
+  private _dof: DepthOfFieldElement | undefined;
 
   constructor(options: EngineOptions = {}) {
     super({
@@ -67,6 +227,18 @@ class Showcase30 extends AbstractShowcase {
       bloom.intensity = 0.65;
       bloom.threshold = 1.0;
     }
+    this._bloom = bloom;
+    this._grading = this.renderer.postProcessing.get<ColorGradingElement>(
+      PostProcessingEffectType.COLOR_GRADING,
+    );
+    this._grain = this.renderer.postProcessing.get<GrainElement>(PostProcessingEffectType.GRAIN);
+    this._dof = this.renderer.postProcessing.get<DepthOfFieldElement>(
+      PostProcessingEffectType.DEPTH_OF_FIELD,
+    );
+    if (this._dof) {
+      this._dof.enabled = true;
+      this._dof.maxCocPx = 20;
+    }
 
     const hbao = this.renderer.postProcessing.get<HbaoElement>(PostProcessingEffectType.HBAO);
     if (hbao) {
@@ -83,39 +255,41 @@ class Showcase30 extends AbstractShowcase {
       vig.darkness = 0.65;
       vig.offset = 0.9;
     }
+    this._vignette = vig;
 
     // Camera setup (Low-angle rain street camera)
     this.defaultFov = (48 * Math.PI) / 180;
     this.defaultFar = 150;
     this.configureCamera();
     this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
-    this.camera.position.set(1.4, 0.52, 4.4);
-    this.camera.target.set(0, 0.35, -0.9);
+    this.camera.position.copyFrom(STREET_CAMERA.position);
+    this.camera.target.copyFrom(STREET_CAMERA.target);
     this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // Atmospheric Rain Haze (deep night indigo, prevents background washout)
-    this.scene.fog = new Fog({
+    this._fog = new Fog({
       color: new Color(0.015, 0.02, 0.035),
       mode: FogMode.EXP2,
       density: 0.014,
     });
+    this.scene.fog = this._fog;
 
     // 1. Dark Rainy Night Ambient
-    const ambientLight = new AmbientLight({
+    this._ambientLight = new AmbientLight({
       color: new Color(0.04, 0.07, 0.14),
       intensity: 0.2,
     });
-    this.scene.add(ambientLight);
+    this.scene.add(this._ambientLight);
 
-    // 2. Far Street Rim Light (Moonlight through rain haze)
-    const moonLight = new DirectionalLight({
+    // 2. Far Street Rim Light (Moonlight through rain haze; overcast sky fill in the day mood)
+    this._keyLight = new DirectionalLight({
       color: new Color(0.2, 0.45, 0.7),
       intensity: 0.4,
     });
-    moonLight.position.set(5, 15, -10);
-    moonLight.direction.set(-0.3, -1.0, 0.5);
-    moonLight.castShadow = true;
-    this.scene.add(moonLight);
+    this._keyLight.position.set(5, 15, -10);
+    this._keyLight.direction.set(-0.3, -1.0, 0.5);
+    this._keyLight.castShadow = true;
+    this.scene.add(this._keyLight);
 
     // 3. Neon Cyberpunk Street Spotlights
     this._spotTeal = new SpotLight({
@@ -144,6 +318,7 @@ class Showcase30 extends AbstractShowcase {
 
     // Load Environment Map & PBR Texture Maps
     const envTexture = await this.loadSkybox("./assets/ibl/env.webp");
+    this._skybox = this.scene.getObjectByName("Skybox");
     await this.loadIbl("./assets/ibl/");
 
     let asphaltDiffuse: Texture | undefined;
@@ -161,8 +336,8 @@ class Showcase30 extends AbstractShowcase {
       asphaltNormal = await Texture.fromUrl("./assets/asphalt_normal.webp");
       asphaltRoughness = await Texture.fromUrl("./assets/asphalt_roughness.webp");
       for (const t of [asphaltDiffuse, asphaltNormal, asphaltRoughness]) {
-        t.repeat.x = 10;
-        t.repeat.y = 18;
+        t.repeat.x = ASPHALT_REPEAT_X;
+        t.repeat.y = ASPHALT_REPEAT_Z;
       }
 
       // Gemini AI-generated cyberpunk skyscraper facade with glowing windows
@@ -184,32 +359,20 @@ class Showcase30 extends AbstractShowcase {
     this._reflectionNode.position.set(0, 0.001, 0);
     this.scene.add(this._reflectionNode);
 
-    // Materials Palette: Soaking wet tarmac with glossy specular sheen & planar building reflections
-    const dryAsphaltMat = new StandardMaterial({
+    // Materials Palette: soaked tarmac. A water film is a dielectric, so no metallic term; the thin
+    // film still gives the whole street a soft, Fresnel-weighted mirror sheen. Standing water is the
+    // separate RainPuddleMaterial layer below.
+    const wetAsphaltMat = new StandardMaterial({
       color: new Color(0.22, 0.24, 0.28),
       diffuseMap: asphaltDiffuse,
       normalMap: asphaltNormal,
       roughnessMap: asphaltRoughness,
-      roughness: 0.25,
-      metallic: 0.15,
+      roughness: 0.3,
+      metallic: 0.0,
       envMap: envTexture,
       reflectionMap: this._reflectionNode.renderTarget,
-      reflectivity: 0.45,
-      reflectionFresnelBlend: 0.25,
-    });
-
-    const wetPuddleMat = new StandardMaterial({
-      color: new Color(0.02, 0.025, 0.035),
-      roughness: 0.02,
-      metallic: 0.95,
-      envMap: envTexture,
-      reflectionMap: this._reflectionNode.renderTarget,
-      reflectivity: 0.9,
-      // Low, not the 0.5 default: a puddle should stay clearly reflective across a normal range
-      // of viewing angles, not almost only within the last few degrees before a grazing angle
-      // (pure Fresnel reads as an on/off switch, not a puddle -- see reflectionFresnelBlend's own
-      // doc comment). Still keeps a real angle-dependent boost near grazing, just far less steep.
-      reflectionFresnelBlend: 0.15,
+      reflectivity: 0.35,
+      reflectionFresnelBlend: 0.5,
     });
 
     // Cyberpunk building facade: rain-soaked with glossy wet sheen
@@ -255,173 +418,53 @@ class Showcase30 extends AbstractShowcase {
       emissiveIntensity: 1.0,
       roughness: 0.1,
     });
+    this._buildingMat = buildingMat;
+    this._streetMat = wetAsphaltMat;
+    this._neonMaterials.push(neonMagentaMat, neonCyanMat, neonGoldMat);
 
     // 4. Main Wet Asphalt Ground
     const street = new Object3D("CyberStreet");
     street.geometry = new Cube({ size: 1 }).getGeometryData();
-    street.scale.set(16, 0.4, 28);
-    street.material = dryAsphaltMat;
+    street.scale.set(STREET_WIDTH, 0.4, STREET_LENGTH);
+    street.material = wetAsphaltMat;
     street.position.set(0, -0.2, 0);
     street.receiveShadow = true;
     this.scene.add(street);
 
-    interface SplashGeometryOptions {
-      radius?: number;
-      segments?: number;
-      seed?: number;
-      warp?: number;
-      frequency?: number;
-      satellites?: number;
-    }
-
-    /**
-     * Procedural organic splash / puddle geometry based on multi-frequency simplex noise warping,
-     * overlapping secondary lobes, and satellite droplets (matching the techniques demonstrated
-     * in public/tools/splatter-gen.html).
-     */
-    class SplashGeometry extends AbstractGeometry {
-      public radius: number;
-      public segments: number;
-      public seed: number;
-      public warp: number;
-      public frequency: number;
-      public satellites: number;
-
-      constructor(options: SplashGeometryOptions = {}) {
-        super();
-        this.radius = options.radius ?? 1.0;
-        this.segments = Math.max(16, options.segments ?? 64);
-        this.seed = options.seed ?? 1.0;
-        this.warp = options.warp ?? 0.35;
-        this.frequency = options.frequency ?? 2.4;
-        this.satellites = options.satellites ?? 5;
-        this.generateGeometryData();
-      }
-
-      protected override generateGeometryData(): void {
-        const v: number[] = [];
-        const uv: number[] = [];
-        const idx: number[] = [];
-        const norm: number[] = [];
-
-        let s = this.seed;
-        const rand = (): number => {
-          s = (s * 9301 + 49297) % 233280;
-          return s / 233280;
-        };
-
-        const addBlob = (
-          cx: number,
-          cz: number,
-          rBase: number,
-          segs: number,
-          warpAmp: number,
-          freq: number,
-          seedOffset: number,
-        ): void => {
-          const centerIdx = v.length / 3;
-          v.push(cx, 0, cz);
-          norm.push(0, 1, 0);
-          uv.push(0.5 + cx / (this.radius * 2.5), 0.5 + cz / (this.radius * 2.5));
-
-          const baseVertex = v.length / 3;
-          for (let i = 0; i <= segs; i++) {
-            const theta = (i / segs) * Math.PI * 2;
-            const nx = Math.cos(theta);
-            const nz = Math.sin(theta);
-
-            // Continuous 2D noise loop sampled on the circle
-            const n1 = Noise.simplex2(nx * freq + seedOffset, nz * freq + seedOffset * 1.7);
-            const n2 =
-              Noise.simplex2(
-                nx * (freq * 2.3) + seedOffset * 3.1,
-                nz * (freq * 2.3) + seedOffset * 4.3,
-              ) * 0.4;
-            const r = rBase * Math.max(0.15, 1.0 + (n1 + n2) * warpAmp);
-
-            const px = cx + nx * r;
-            const pz = cz + nz * r;
-
-            v.push(px, 0, pz);
-            norm.push(0, 1, 0);
-            uv.push(0.5 + px / (this.radius * 2.5), 0.5 + pz / (this.radius * 2.5));
-          }
-
-          for (let i = 0; i < segs; i++) {
-            idx.push(centerIdx, baseVertex + i + 1, baseVertex + i);
-          }
-        };
-
-        // 1. Main splash body
-        addBlob(0, 0, this.radius, this.segments, this.warp, this.frequency, this.seed * 7.13);
-
-        // 2. Secondary overlapping lobes to break radial symmetry into organic puddles
-        const lobeCount = 2 + Math.floor(rand() * 3);
-        for (let l = 0; l < lobeCount; l++) {
-          const lobeAngle = rand() * Math.PI * 2;
-          const lobeDist = this.radius * (0.25 + rand() * 0.35);
-          const lobeR = this.radius * (0.4 + rand() * 0.35);
-          const lx = Math.cos(lobeAngle) * lobeDist;
-          const lz = Math.sin(lobeAngle) * lobeDist;
-          addBlob(
-            lx,
-            lz,
-            lobeR,
-            32,
-            this.warp * 0.8,
-            this.frequency * 1.2,
-            this.seed * 11.3 + l * 5.7,
-          );
-        }
-
-        // 3. Small satellite droplets scattered around the splash
-        for (let k = 0; k < this.satellites; k++) {
-          const satAngle = rand() * Math.PI * 2;
-          const satDist = this.radius * (1.1 + rand() * 0.45);
-          const satR = this.radius * (0.05 + rand() * 0.08);
-          const sx = Math.cos(satAngle) * satDist;
-          const sz = Math.sin(satAngle) * satDist;
-          addBlob(sx, sz, satR, 12, 0.2, 2.0, this.seed * 19.1 + k * 3.3);
-        }
-
-        this._vertices = new Float32Array(v);
-        this._normals = new Float32Array(norm);
-        this._uvs = new Float32Array(uv);
-        this._indices = this._createIndexArray(idx.length);
-        this._indices.set(idx);
-        this.computeTangents();
-      }
-    }
-
-    // 5. Mirrored Rain Water Puddles (4 distinct organic splash puddles across the wet street)
-    const puddleConfigs = [
-      { x: 0.1, z: 0.0, rx: 1.9, rz: 2.6, seed: 1.4, warp: 0.38, satellites: 7 }, // Puddle 0: Under & behind hover car
-      { x: -3.4, z: -2.5, rx: 1.1, rz: 1.5, seed: 4.8, warp: 0.42, satellites: 4 }, // Puddle 1: Distant left alley
-      { x: 3.4, z: -2.5, rx: 1.1, rz: 1.5, seed: 9.1, warp: 0.35, satellites: 4 }, // Puddle 2: Distant right alley
-      { x: -2.6, z: 3.4, rx: 1.0, rz: 1.3, seed: 13.5, warp: 0.45, satellites: 5 }, // Puddle 3: Foreground left
-    ];
-
-    for (let p = 0; p < puddleConfigs.length; p++) {
-      const cfg = puddleConfigs[p]!;
-      const puddle = new Object3D(`Puddle_${p}`);
-      puddle.geometry = new SplashGeometry({
-        radius: 1.0,
-        segments: 64,
-        seed: cfg.seed,
-        warp: cfg.warp,
-        satellites: cfg.satellites,
-      }).getGeometryData();
-      puddle.scale.set(cfg.rx, 1.0, cfg.rz);
-      puddle.material = wetPuddleMat;
-      puddle.position.set(cfg.x, 0.003, cfg.z);
-      puddle.receiveShadow = true;
-      this.scene.add(puddle);
-      this._puddlePlates.push(puddle);
-    }
+    // 5. Rain puddles: one transparent water layer over the whole street. Where water stands is
+    // decided per pixel (basins vs. asphalt grain height), so shorelines fray at the real stones.
+    // The cube's top face maps U along +x and V along -z, hence the negative z tile period.
+    this._puddleMat = new RainPuddleMaterial({
+      reflectionMap: this._reflectionNode.renderTarget,
+      asphaltMap: asphaltDiffuse,
+      asphaltTilePeriod: new Vector2D(
+        STREET_WIDTH / ASPHALT_REPEAT_X,
+        -STREET_LENGTH / ASPHALT_REPEAT_Z,
+      ),
+      basins: PUDDLE_BASINS,
+    });
+    const puddleLayer = new Object3D("RainPuddleLayer");
+    puddleLayer.geometry = new Plane({
+      width: STREET_WIDTH,
+      height: STREET_LENGTH,
+    }).getGeometryData();
+    puddleLayer.rotation.x = -Math.PI / 2;
+    puddleLayer.position.set(0, 0.003, 0);
+    puddleLayer.material = this._puddleMat;
+    this.scene.add(puddleLayer);
 
     // Exclude the street pavement and puddles from the reflection sub-render so the mirror camera
     // underneath has an unobstructed line of sight up to the car, buildings, and sky.
-    this._reflectionNode.excludedObjects.push(street, ...this._puddlePlates);
+    this._reflectionNode.excludedObjects.push(street, puddleLayer);
+
+    // Bare winter trees along both kerbs: the reference photo's puddle mirrors leafless branches.
+    const barkMat = new StandardMaterial({
+      color: new Color(0.06, 0.055, 0.05),
+      roughness: 0.85,
+      metallic: 0.0,
+    });
+    const trees = this._createBareTrees(barkMat);
+    this.scene.add(trees);
 
     // 6. Cyberpunk Street Architecture (Alley Skyscrapers & Overhangs)
     for (const side of [-1, 1]) {
@@ -468,6 +511,7 @@ class Showcase30 extends AbstractShowcase {
     });
     magentaLight.position.set(-4.4, 5.5, 1.0);
     this.scene.add(magentaLight);
+    this._neonLights.push(magentaLight);
 
     this._neonSignCyan = new Object3D("NeonSignCyan");
     this._neonSignCyan.geometry = new Cube({ size: 1 }).getGeometryData();
@@ -483,6 +527,7 @@ class Showcase30 extends AbstractShowcase {
     });
     cyanLight.position.set(4.4, 6.2, -3.0);
     this.scene.add(cyanLight);
+    this._neonLights.push(cyanLight);
 
     // Overhead Street Arch Sign
     const overheadSign = new Object3D("OverheadSign");
@@ -637,10 +682,193 @@ class Showcase30 extends AbstractShowcase {
     this._rainMesh.castShadow = false;
     this.scene.add(this._rainMesh);
     this._reflectionNode.excludedObjects.push(this._rainMesh);
+
+    for (const light of this._neonLights) {
+      this._neonLightBase.push(light.intensity);
+    }
+    for (const mat of this._neonMaterials) {
+      this._neonEmissiveBase.push(mat.emissiveIntensity);
+    }
+    this._applyMood(this._mood);
+    this._applyLens(STREET_CAMERA);
+  }
+
+  protected override onKeyDown(event: KeyboardEvent): void {
+    super.onKeyDown(event);
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    if (Keys.C === event.code) {
+      this._applyCameraView(
+        this._cameraView === CameraView.STREET ? CameraView.PUDDLE : CameraView.STREET,
+      );
+    }
+    if (Keys.N === event.code) {
+      this._applyMood(this._mood === Mood.NIGHT ? Mood.DAY : Mood.NIGHT);
+    }
+  }
+
+  private _applyCameraView(view: CameraView): void {
+    this._cameraView = view;
+    const preset = view === CameraView.PUDDLE ? PUDDLE_CAMERA : STREET_CAMERA;
+    // Also makes R return to this view rather than to the boot camera.
+    this.setInitialCamera(preset.position, preset.target);
+    this.resetCamera();
+    this._applyLens(preset);
+  }
+
+  private _applyLens(preset: CameraPreset): void {
+    if (!this._dof) {
+      return;
+    }
+    this._dof.focalLength = preset.focalLengthMm;
+    this._dof.fStop = preset.fStop;
+  }
+
+  /** Keeps focus on the orbit target, so orbiting/zooming never drops the subject out of focus. */
+  private _updateFocus(): void {
+    if (!this._dof) {
+      return;
+    }
+    this._dof.focusDistance = Math.max(0.1, this.camera.position.distanceTo(this.camera.target));
+  }
+
+  private _applyMood(mood: Mood): void {
+    this._mood = mood;
+    const preset = MOODS[mood];
+
+    this._ambientLight.color = preset.ambientColor.clone();
+    this._ambientLight.intensity = preset.ambientIntensity;
+    this._keyLight.color = preset.keyColor.clone();
+    this._keyLight.intensity = preset.keyIntensity;
+    this._spotTeal.intensity = preset.spotIntensity;
+    this._spotPink.intensity = preset.spotIntensity;
+    for (let i = 0; i < this._neonLights.length; i++) {
+      this._neonLights[i]!.intensity = this._neonLightBase[i]! * preset.neon;
+    }
+    for (let i = 0; i < this._neonMaterials.length; i++) {
+      this._neonMaterials[i]!.emissiveIntensity = this._neonEmissiveBase[i]! * preset.neon;
+    }
+    this._buildingMat.emissiveIntensity = preset.facadeEmissive;
+    this._streetMat.reflectivity = preset.streetReflectivity;
+
+    this._fog.color = preset.fogColor.clone();
+    this._fog.density = preset.fogDensity;
+    if (this._skybox) {
+      this._skybox.isVisible = preset.showSkybox;
+    }
+    this.renderer.setClearColor(preset.clearColor.clone());
+
+    if (this._bloom) {
+      this._bloom.intensity = preset.bloom;
+    }
+    if (this._vignette) {
+      this._vignette.darkness = preset.vignetteDarkness;
+      this._vignette.offset = preset.vignetteOffset;
+    }
+    if (this._grading) {
+      this._grading.enabled = preset.gradingEnabled;
+      this._grading.saturation = preset.saturation;
+      this._grading.contrast = preset.contrast;
+      this._grading.lift = preset.lift.clone();
+      this._grading.gain = preset.gain.clone();
+    }
+    if (this._grain) {
+      this._grain.enabled = preset.grain > 0;
+      this._grain.intensity = preset.grain;
+    }
+
+    this._puddleMat.rainIntensity = preset.rainIntensity;
+    this._puddleMat.dripIntensity = preset.dripIntensity;
+  }
+
+  /**
+   * Leafless trees as one instanced cylinder batch. Branch radii follow Leonardo's rule
+   * (r_parent^2.2 = sum r_child^2.2, analysis.md 3.5), so the silhouettes taper like real wood.
+   */
+  private _createBareTrees(material: StandardMaterial): InstancedMesh {
+    const matrices: Matrix4[] = [];
+    let seed = 11;
+    const rand = (): number => {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    };
+    const up = new Vector3D(0, 1, 0);
+    const daVinciExponent = 2.2;
+
+    const grow = (
+      start: Vector3D,
+      dir: Vector3D,
+      length: number,
+      radius: number,
+      depth: number,
+    ): void => {
+      const rotation = new Quaternion();
+      const axis = new Vector3D().crossVectors(up, dir);
+      const axisLength = axis.length();
+      if (axisLength > 1e-5) {
+        rotation.setFromAxisAngle(
+          axis.scale(1 / axisLength),
+          Math.acos(Math.min(1, Math.max(-1, up.dot(dir)))),
+        );
+      }
+      const mid = start.clone().add(dir.clone().scale(length * 0.5));
+      matrices.push(
+        new Matrix4().composeFromQuaternion(mid, rotation, new Vector3D(radius, length, radius)),
+      );
+      if (depth === 0) {
+        return;
+      }
+      const end = start.clone().add(dir.clone().scale(length));
+      const childCount = rand() < 0.4 ? 3 : 2;
+      const childRadius = radius * Math.pow(childCount, -1 / daVinciExponent);
+      for (let c = 0; c < childCount; c++) {
+        const yaw = rand() * Math.PI * 2;
+        const tilt = 0.35 + rand() * 0.45;
+        const side = new Vector3D(Math.cos(yaw), 0, Math.sin(yaw));
+        const childDir = dir
+          .clone()
+          .scale(Math.cos(tilt))
+          .add(side.scale(Math.sin(tilt)));
+        childDir.y = Math.max(childDir.y, 0.15);
+        childDir.normalize();
+        grow(end, childDir, length * (0.68 + rand() * 0.12), childRadius, depth - 1);
+      }
+    };
+
+    const treeRoots = [
+      new Vector3D(-4.3, 0, -7.5),
+      new Vector3D(4.3, 0, -1.5),
+      new Vector3D(-4.3, 0, 6.5),
+      new Vector3D(4.3, 0, 8.5),
+    ];
+    for (const root of treeRoots) {
+      grow(root, new Vector3D(0, 1, 0), 1.8, 0.12, 5);
+    }
+
+    // Unit cylinder: the per-instance scale carries radius and length.
+    const geometry = new Cylinder({
+      radiusTop: 0.75,
+      radiusBottom: 1,
+      height: 1,
+      radialSegments: 6,
+    }).getGeometryData();
+    const mesh = new InstancedMesh("BareTrees", geometry, material, matrices.length);
+    for (let i = 0; i < matrices.length; i++) {
+      mesh.setMatrixAt(i, matrices[i]!);
+    }
+    mesh.castShadow = true;
+    return mesh;
   }
 
   protected override update(deltaTime: number): void {
     this._time += deltaTime;
+
+    if (this._puddleMat) {
+      this._puddleMat.time = this._time;
+      this._puddleMat.setCameraFootprint(this.defaultFov, this.canvas.height);
+    }
+    this._updateFocus();
 
     // Hover vehicle levitation bobbing
     if (this._hoverCar) {

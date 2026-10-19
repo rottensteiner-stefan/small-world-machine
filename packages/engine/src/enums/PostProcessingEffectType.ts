@@ -16,4 +16,5 @@ export enum PostProcessingEffectType {
   FLASH = "Flash",
   LIGHT_SHAFTS = "LightShafts",
   VOLUMETRIC_FOG = "VolumetricFog",
+  DEPTH_OF_FIELD = "DepthOfField",
 }

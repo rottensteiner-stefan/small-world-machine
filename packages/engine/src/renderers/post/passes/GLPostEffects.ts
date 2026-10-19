@@ -2,6 +2,7 @@ import { PostProcessingEffectType } from "../../../enums/index.js";
 import type { ShaderRegistry } from "../../shaders/index.js";
 import type {
   BloomElement,
+  DepthOfFieldElement,
   HbaoElement,
   LightShaftsElement,
   MotionTrailElement,
@@ -11,6 +12,7 @@ import type {
 import type { GLPostEffectPass, GLPostEffectPassContext } from "./GLPostEffectPass.js";
 import { AOPassGL } from "./AOPassGL.js";
 import { BloomPassGL } from "./BloomPassGL.js";
+import { DepthOfFieldPassGL } from "./DepthOfFieldPassGL.js";
 import { HistoryBlendPassGL } from "./HistoryBlendPassGL.js";
 import { LightShaftsPassGL } from "./LightShaftsPassGL.js";
 import { PostProcessPassGL } from "./PostProcessPassGL.js";
@@ -47,10 +49,12 @@ export class GLPostEffects {
       this._passes.set(PostProcessingEffectType.HBAO, new AOPassGL(gl2));
       this._passes.set(PostProcessingEffectType.LIGHT_SHAFTS, new LightShaftsPassGL(gl, true));
       this._passes.set(PostProcessingEffectType.VOLUMETRIC_FOG, new VolumetricFogPassGL(gl, true));
+      this._passes.set(PostProcessingEffectType.DEPTH_OF_FIELD, new DepthOfFieldPassGL(gl, true));
     } else {
-      // WebGL1 legacy fallback: the reduced GL1 chain (no TAA/HBAO/volumetric fog).
+      // WebGL1 legacy fallback: the reduced GL1 chain (no TAA/HBAO/volumetric fog, tilt-shift DoF).
       this._passes.set(PostProcessingEffectType.BLOOM, new BloomPassGL(gl, false));
       this._passes.set(PostProcessingEffectType.LIGHT_SHAFTS, new LightShaftsPassGL(gl, false));
+      this._passes.set(PostProcessingEffectType.DEPTH_OF_FIELD, new DepthOfFieldPassGL(gl, false));
     }
   }
 
@@ -81,6 +85,20 @@ export class GLPostEffects {
         ctx.element = trailNode;
         const resolved = motionTrail.execute(ctx);
         if (resolved) ctx.colorTexture = resolved;
+      }
+    }
+
+    // Depth of field defocuses the resolved HDR radiance before bloom and tone mapping: a lens
+    // integrates linear radiance over its aperture, so bright highlights must become bokeh discs
+    // first and only then glow. AO / light shafts / volumetric fog are composited later by the
+    // uber pass and stay unblurred -- acceptable, they are low-frequency terms.
+    const dof = this._passes.get(PostProcessingEffectType.DEPTH_OF_FIELD);
+    if (dof) {
+      const dofNode = ctx.group.get<DepthOfFieldElement>(PostProcessingEffectType.DEPTH_OF_FIELD);
+      if (dofNode && dofNode.enabled) {
+        ctx.element = dofNode;
+        const defocused = dof.execute(ctx);
+        if (defocused) ctx.colorTexture = defocused;
       }
     }
 

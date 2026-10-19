@@ -741,6 +741,13 @@ This document serves to record external sources, algorithms, mathematical deriva
   - Edge fallback: If $\sum w_i < \epsilon$, select nearest depth sample: $i_{\text{nearest}} = \arg\min_i |\Delta z_i|$
 - **Usage:** Upsamples half-resolution volumetric scattering to full resolution without causing light-bleeding or bright halos across foreground object silhouettes. When sampling across depth discontinuities, foreground pixels reject background fog taps and fall back to the closest depth sample.
 
+### Thin-Lens Depth of Field with Scatter-as-Gather Bokeh
+
+- **File:** `packages/engine/src/renderers/post/elements/DepthOfFieldElement.ts`, `packages/engine/src/renderers/post/shaders/DepthOfField*.frag.{wgsl,glsl}`
+- **Authors/Gurus:** Michael Potmesil & Indranil Chakravarty (1981, *A Lens and Aperture Camera Model for Synthetic Image Generation*), Dennis Gustafsson (2018, *Bokeh depth of field in a single pass*), Jorge Jimenez (2014, *Next Generation Post Processing in Call of Duty: Advanced Warfare*), Helmut Vogel (1979, golden-angle disc sampling)
+- **Source:** [Bokeh depth of field in a single pass](https://blog.voxagon.se/2018/05/04/bokeh-depth-of-field-in-single-pass.html)
+- **Usage:** CoC from the thin-lens equation $c(d) = \frac{A f |d - d_f|}{d (d_f - f)}$, $A = f/N$, converted to pixels via sensor height. A half-res gather over a Vogel (golden-angle) disc accepts each tap whose CoC disc reaches the centre pixel; taps behind the centre are clamped to the centre's own CoC so the blurred background never bleeds over a sharp foreground, while a defocused foreground does bleed over in-focus pixels.
+
 ## Graphics APIs (WebGPU / WebGL)
 
 ### W3C WebGPU Specification
