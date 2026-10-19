@@ -72,3 +72,14 @@ Sondermaterial je Flüssigkeit.
 - Makro-/Nahaufnahmen von Einschlägen gefordert sind → Entscheidung 3 (echte Geometrie für Krone/Jet).
 - Lachen, Spritzer oder Blutspuren auf Flächen gebraucht werden → Entscheidung 2 (zweite Hälfte nachziehen).
 - Das System für nur eine Flüssigkeit/eine Szene zu schwer wird → Entscheidung 1.
+
+## Umsetzungsstand
+
+- **2026-10-19, Phase (a) umgesetzt** (`packages/liquid-extras/src/drops/`, `RainPuddleMaterial`): Stoffwerte als Daten
+  (`FluidProperties`/`FLUID_PRESETS`, `DropProperties`), Regime aus Weber/Ohnesorge in `DropRegime` (stufenlose
+  Log-Rampen, keine Flüssigkeits-Namen im Code), Verteilung über `DropImpactSystem` an `DropImpactSurface`s,
+  Shader mit Beer-Lambert-Absorption, Streu-Körperfarbe, Blasen (WebGPU/WebGL2) und Krone/Jet-Illusion (alle Tiers).
+  Im Browser auf WebGPU, WebGL2 und WebGL1 geprüft (Showcase 30, Taste `F`).
+- **Offen:** Kombinationen (Entscheidung 4, Bausteine Farbwolke, sinkende Kugel, Dünnfilm, Linse, Reaktion), Flüssigkeit auf
+  Fläche (Entscheidung 2, zweite Hälfte). Vorläufige Annahme in den Presets: Altöl-Optik und Öl/Wasser-Grenzflächenspannung
+  sind Schätzungen.

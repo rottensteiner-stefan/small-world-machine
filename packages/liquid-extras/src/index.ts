@@ -3,3 +3,8 @@ export * from "./materials/OilPuddle/OilPuddleMaterial.js";
 export * from "./materials/OilSlick/OilSlickMaterial.js";
 export * from "./materials/RainPuddle/RainPuddleMaterial.js";
 export * from "./shading/thinFilm/thinFilm.js";
+export * from "./drops/DropSurfaceParams.js";
+export * from "./drops/FluidProperties.js";
+export * from "./drops/DropProperties.js";
+export * from "./drops/DropRegime.js";
+export * from "./drops/DropImpactSystem.js";

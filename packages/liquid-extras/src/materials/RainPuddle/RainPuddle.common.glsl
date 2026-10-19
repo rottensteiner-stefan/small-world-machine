@@ -1,15 +1,10 @@
 // Shared by the GLSL300 and GLSL100 RainPuddle fragment shaders (texture-free on purpose, so the
-// two dialects can include it verbatim). Physics: capillary-gravity dispersion of water, a
-// stationary-phase ring profile per drop, viscous damping.
+// two dialects can include it verbatim). Physics: capillary-gravity dispersion, a stationary-phase
+// ring profile per drop, viscous damping. The liquid is data (ADR 0042): sigma/rho and nu arrive in
+// a `fluid` vec4 built by rpFluid(), so water, blood, oil and acid run through the same code.
+// Define RP_BUBBLES before including this file to enable floating surface bubbles.
 
 const float RP_G = 9.81;
-const float RP_SIGMA_RHO = 7.3e-5;
-const float RP_NU = 1.0e-6;
-// Minimum group velocity of capillary-gravity waves: inside r/t < this no capillary ring exists yet.
-const float RP_CG_MIN = 0.178;
-// k_m = sqrt(rho*g/sigma): below it gravity dominates and the stationary-phase solve below no longer
-// tracks the capillary branch the visible ripples live on.
-const float RP_K_MIN = 370.0;
 const float RP_TWO_PI = 6.2831853;
 const float RP_SPREAD_REF = 0.02;
 
@@ -47,53 +42,101 @@ float rpTanh(float x) {
     return (1.0 - e) / (1.0 + e);
 }
 
-float rpOmega(float k, float depth) {
-    return sqrt((RP_G * k + RP_SIGMA_RHO * k * k * k) * rpTanh(k * depth));
+// fluid = (sigma/rho, nu, minimum group velocity, k_m). Both thresholds scale with sigma/rho:
+// c_min = sqrt(2*sqrt(g*sigma/rho)) is the phase-speed minimum, the group velocity bottoms out at
+// 0.768 of it (inside r/t below that no capillary ring exists yet). Below k_m = sqrt(g/(sigma/rho))
+// gravity dominates and the stationary-phase solve no longer tracks the capillary branch.
+vec4 rpFluid(float sigmaRho, float nu) {
+    float s = max(sigmaRho, 1.0e-7);
+    float cMin = sqrt(2.0 * sqrt(RP_G * s));
+    return vec4(s, nu, 0.768 * cMin, sqrt(RP_G / s));
+}
+
+float rpOmega(float k, float depth, float sigmaRho) {
+    return sqrt((RP_G * k + sigmaRho * k * k * k) * rpTanh(k * depth));
 }
 
 // Drops the d(tanh)/dk term: at the visible ripple wavenumbers (k*depth >~ 1) it changes c_g by a
 // few percent, not worth a second exp per iteration.
-float rpGroupVelocity(float k, float depth) {
-    return (RP_G + 3.0 * RP_SIGMA_RHO * k * k) * rpTanh(k * depth) / (2.0 * rpOmega(k, depth));
+float rpGroupVelocity(float k, float depth, float sigmaRho) {
+    return (RP_G + 3.0 * sigmaRho * k * k) * rpTanh(k * depth) / (2.0 * rpOmega(k, depth, sigmaRho));
 }
 
 // Stationary phase: the wavenumber seen at radius r and age t is the one whose group velocity is r/t.
 // Fixed-point iteration is exact for the pure-capillary power law c_g ~ k^0.5 and converges in a
 // few steps on the full branch.
-float rpLocalWavenumber(float v, float depth) {
-    float k = max(4.0 * v * v / (9.0 * RP_SIGMA_RHO), RP_K_MIN);
+float rpLocalWavenumber(float v, float depth, vec4 fluid) {
+    float k = max(4.0 * v * v / (9.0 * fluid.x), fluid.w);
     for (int n = 0; n < 3; n++) {
-        float ratio = v / rpGroupVelocity(k, depth);
-        k = max(k * ratio * ratio, RP_K_MIN);
+        float ratio = v / rpGroupVelocity(k, depth, fluid.x);
+        k = max(k * ratio * ratio, fluid.w);
     }
     return k;
 }
 
 // x = resolved radial slope d(eta)/dr, y = slope variance of the part too fine for the pixel
 // footprint (fed into roughness instead of aliasing).
-vec2 rpRipple(float r, float age, float dropDiameter, float strength, float depth, float footprint) {
+vec2 rpRipple(float r, float age, float dropDiameter, float strength, float depth, float footprint,
+              vec4 fluid) {
     float rSafe = max(r, 1.0e-4);
     float ageSafe = max(age, 1.0e-3);
     float v = rSafe / ageSafe;
-    float k = rpLocalWavenumber(v, depth);
+    float k = rpLocalWavenumber(v, depth, fluid);
     float craterRadius = 1.5 * dropDiameter;
     float spectrum = exp(-0.25 * k * k * craterRadius * craterRadius);
-    float propagating = smoothstep(RP_CG_MIN, RP_CG_MIN * 1.2, v);
-    float damping = exp(-2.0 * RP_NU * k * k * ageSafe);
+    float propagating = smoothstep(fluid.z, fluid.z * 1.2, v);
+    float damping = exp(-2.0 * fluid.y * k * k * ageSafe);
     // 2D geometric spreading ~ 1/sqrt(r), normalized where the ring has detached from the crater
     // splash (a few cm), not at the mm-sized crater itself.
     float spreading = sqrt(RP_SPREAD_REF / max(rSafe, RP_SPREAD_REF));
     float slope = strength * spectrum * propagating * damping * spreading * step(0.0, age);
-    float phase = k * rSafe - rpOmega(k, depth) * ageSafe;
+    float phase = k * rSafe - rpOmega(k, depth, fluid.x) * ageSafe;
     float resolved = smoothstep(2.0, 4.0, (RP_TWO_PI / k) / max(footprint, 1.0e-5));
     return vec2(slope * sin(phase) * resolved, 0.5 * slope * slope * (1.0 - resolved));
 }
 
+// Crown + Worthington-jet illusion for the first ~50 ms of an impact (ADR 0042, decision 3): no
+// geometry, only a raised rim travelling out of the crater and a bright point where the jet rises.
+// x = radial slope d(eta)/dr, y = highlight weight. Sub-pixel crowns fade instead of aliasing.
+vec2 rpCrown(float r, float age, float diameter, float strength, float footprint) {
+    float craterRadius = 1.5 * diameter;
+    float t = age / 0.05;
+    float alive = step(0.0, age) * (1.0 - smoothstep(0.6, 1.0, t));
+    float rimRadius = craterRadius * (1.0 + 0.8 * clamp(t, 0.0, 1.0));
+    float x = (r - rimRadius) / (0.35 * craterRadius);
+    float rim = exp(-x * x);
+    float jetWindow = smoothstep(0.25, 0.4, t) * (1.0 - smoothstep(0.8, 1.0, t));
+    float jetR = r / (0.4 * diameter);
+    float jet = exp(-jetR * jetR) * jetWindow;
+    float size = clamp(2.0 * craterRadius / max(footprint, 1.0e-5), 0.0, 1.0);
+    return strength * vec2(-2.4 * x * rim * alive * size * size, (0.6 * rim * alive + jet) * size);
+}
+
+#ifdef RP_BUBBLES
+// Floating hemispherical bubble the impact entrains: born once the crater has closed (~40 ms), lives
+// `lifetime` seconds, radius 0.8-3.2x the drop diameter (a few mm). x = radial slope of the spherical
+// cap, y = rim highlight where the cap turns grazing.
+vec2 rpBubble(float r, float age, float diameter, float roll, float present, float lifetime, float footprint) {
+    float life = age - 0.04;
+    float alive = present * step(0.0, life) * step(life, lifetime);
+    float radius = clamp(diameter * mix(0.8, 3.2, roll), 5.0e-4, 4.0e-3) * mix(0.6, 1.0, smoothstep(0.0, 0.01, life));
+    float q = r / radius;
+    float inside = 1.0 - step(1.0, q);
+    float qc = min(q, 0.95);
+    float slope = -qc / sqrt(1.0 - qc * qc);
+    float rimLight = smoothstep(0.7, 0.95, q);
+    float size = clamp(radius / max(footprint, 1.0e-5), 0.0, 1.0);
+    return alive * inside * vec2(slope * size * size, rimLight * size);
+}
+#endif
+
 // One stochastic drop per cell and period, re-randomized every period, evaluated over the 3x3
-// neighbourhood so rings can cross cell borders. xy = resolved height gradient, z = slope variance.
-vec3 rpDropLayer(vec2 p, float time, float cellSize, float period, float density, vec2 diameterRange,
-                 float daughterProb, float slopeScale, float depth, float footprint, float seed) {
-    vec3 acc = vec3(0.0);
+// neighbourhood so rings can cross cell borders. layerParams = (diameterMin, diameterMax,
+// slopeScale, daughterProbability), fx = (crownStrength, bubbleProbability).
+// xy = resolved height gradient, z = slope variance, w = crown/bubble highlight weight.
+vec4 rpDropLayer(vec2 p, float time, float cellSize, float period, float density, vec4 layerParams,
+                 vec2 fx, vec4 fluid, float bubbleLifetime, float depth, float footprint, float seed) {
+    vec4 acc = vec4(0.0);
     vec2 cellBase = floor(p / cellSize);
     for (int j = -1; j <= 1; j++) {
         for (int i = -1; i <= 1; i++) {
@@ -105,17 +148,27 @@ vec3 rpDropLayer(vec2 p, float time, float cellSize, float period, float density
             float landed = step(rpHash(dropKey), density);
             vec2 center = (cell + 0.1 + 0.8 * vec2(rpHash(dropKey + 5.1), rpHash(dropKey + 9.3))) * cellSize;
             float sizeRoll = rpHash(dropKey + 13.7);
-            float diameter = mix(diameterRange.x, diameterRange.y, sizeRoll * sizeRoll);
-            float strength = landed * slopeScale * mix(0.6, 1.4, rpHash(dropKey + 21.2));
-            float daughter = landed * step(rpHash(dropKey + 33.9), daughterProb);
+            float diameter = mix(layerParams.x, layerParams.y, sizeRoll * sizeRoll);
+            float strength = landed * layerParams.z * mix(0.6, 1.4, rpHash(dropKey + 21.2));
+            float daughter = landed * step(rpHash(dropKey + 33.9), layerParams.w);
             vec2 d = p - center;
             float r = length(d);
             vec2 dir = d / max(r, 1.0e-5);
-            vec2 mainRing = rpRipple(r, age, diameter, strength, depth, footprint);
+            vec2 mainRing = rpRipple(r, age, diameter, strength, depth, footprint, fluid);
             // Worthington-jet daughter drop: lands ~0.1 s later at the same spot, ~0.4x the size.
-            vec2 daughterRing = rpRipple(r, age - 0.1, diameter * 0.4, strength * 0.6 * daughter, depth, footprint);
-            acc.xy += dir * (mainRing.x + daughterRing.x);
+            vec2 daughterRing = rpRipple(r, age - 0.1, diameter * 0.4, strength * 0.6 * daughter, depth, footprint, fluid);
+            vec2 crown = rpCrown(r, age, diameter, landed * fx.x, footprint);
+            float radial = mainRing.x + daughterRing.x + crown.x;
+            float highlight = crown.y;
+#ifdef RP_BUBBLES
+            float bubbleHere = landed * step(rpHash(dropKey + 47.3), fx.y);
+            vec2 bubble = rpBubble(r, age, diameter, rpHash(dropKey + 51.7), bubbleHere, bubbleLifetime, footprint);
+            radial += bubble.x;
+            highlight += bubble.y;
+#endif
+            acc.xy += dir * radial;
             acc.z += mainRing.y + daughterRing.y;
+            acc.w += highlight;
         }
     }
     return acc;
@@ -147,9 +200,22 @@ float rpFresnelDielectric(float cosI, float ior) {
     return 0.5 * (rs * rs + rp * rp);
 }
 
-// Rain = many small fast-dying rings, drips = rare big ones with daughter drops.
-vec3 rpRainField(vec2 p, float time, float rainIntensity, float dripIntensity, float depth, float footprint) {
-    vec3 rain = rpDropLayer(p, time, 0.2, 0.5, rainIntensity, vec2(0.0005, 0.0013), 0.0, 0.09, depth, footprint, 3.17);
-    vec3 drips = rpDropLayer(p, time, 0.45, 1.6, dripIntensity, vec2(0.0022, 0.0045), 0.6, 0.22, depth, footprint, 41.9);
+// Beer-Lambert through the liquid column down to the ground and back up: path ~ 2*depth/cos(theta_t).
+vec3 rpColumnTransmission(float cosI, float ior, float depthMm, vec3 absorptionPerMm) {
+    float c = clamp(cosI, 0.0, 1.0);
+    float cosT = sqrt(max(1.0 - (1.0 - c * c) / (ior * ior), 0.0025));
+    return exp(-absorptionPerMm * (2.0 * max(depthMm, 0.0) / cosT));
+}
+
+// Rain = many small fast-dying rings, drips = rare big ones with daughter drops. Cell size and
+// period stay per layer (weather), the drop physics comes from the liquid data:
+// rainLayer/dripLayer = (diameterMin, diameterMax, slopeScale, daughterProbability),
+// fx = (rain crown, rain bubble, drip crown, drip bubble).
+vec4 rpRainField(vec2 p, float time, float rainIntensity, float dripIntensity, vec4 rainLayer, vec4 dripLayer,
+                 vec4 fx, vec4 fluid, float bubbleLifetime, float depth, float footprint) {
+    vec4 rain = rpDropLayer(p, time, 0.2, 0.5, rainIntensity, rainLayer, fx.xy, fluid, bubbleLifetime,
+                            depth, footprint, 3.17);
+    vec4 drips = rpDropLayer(p, time, 0.45, 1.6, dripIntensity, dripLayer, fx.zw, fluid, bubbleLifetime,
+                             depth, footprint, 41.9);
     return rain + drips;
 }

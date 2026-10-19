@@ -3,13 +3,11 @@ import commonWGSL from "./RainPuddle.common.wgsl?raw";
 import fragGLSL from "./RainPuddle.frag.glsl?raw";
 import fragGLSL100 from "./RainPuddle.frag.glsl100?raw";
 import fragWGSL from "./RainPuddle.frag.wgsl?raw";
+import type { DropLayerParams, DropSurfaceParams } from "../../drops/DropSurfaceParams.js";
 import type { RenderManifest, ShaderDefinition, Texture } from "@small-world-machine/engine";
 import { AbstractMaterial, StandardWebGPULayout, Vector2D } from "@small-world-machine/engine";
 
 const COMMON_TOKEN = "[RAIN_PUDDLE_COMMON]";
-
-/** Index of refraction of water. */
-const WATER_IOR = 1.333;
 
 /** A puddle basin: an elliptical Gaussian depression in the street, in world units (metres). */
 export interface RainPuddleBasin {
@@ -23,6 +21,55 @@ export interface RainPuddleBasin {
 export const RAIN_PUDDLE_MAX_BASINS = 4;
 
 const BASIN_LANES: readonly string[] = ["u_matParam4", "u_matParam5", "u_matParam6", "u_matParam7"];
+
+/**
+ * matParam lanes 8..13 carry the liquid (see `setDropSurfaceParams`). Lanes 0..7 are used above.
+ *  8: [sigmaOverRho, kinematicViscosity, scatteringPerMm, bubbleLifetime]
+ *  9: [absorptionPerMm.rgb, 0]
+ * 10: [scatterAlbedo.rgb, 0]
+ * 11: rain layer [diameterMin, diameterMax, slopeScale, daughterProbability]
+ * 12: drip layer [diameterMin, diameterMax, slopeScale, daughterProbability]
+ * 13: [rain crownStrength, rain bubbleProbability, drip crownStrength, drip bubbleProbability]
+ */
+const LANE_FLUID = "u_matParam8";
+const LANE_ABSORPTION = "u_matParam9";
+const LANE_ALBEDO = "u_matParam10";
+const LANE_RAIN = "u_matParam11";
+const LANE_DRIPS = "u_matParam12";
+const LANE_FX = "u_matParam13";
+
+/** Plain water under light rain: the material's behaviour before the liquid became data. */
+function createWaterRainParams(): DropSurfaceParams {
+  return {
+    sigmaOverRho: 7.2e-5,
+    kinematicViscosity: 1.0e-6,
+    ior: 1.333,
+    absorptionPerMm: [0.0004, 0.00007, 0.00002],
+    scatterAlbedo: [0, 0, 0],
+    scatteringPerMm: 0,
+    bubbleLifetime: 0.3,
+    rain: {
+      diameterMin: 0.0005,
+      diameterMax: 0.0013,
+      slopeScale: 0.09,
+      daughterProbability: 0,
+      crownStrength: 0.2,
+      bubbleProbability: 0.05,
+    },
+    drips: {
+      diameterMin: 0.0022,
+      diameterMax: 0.0045,
+      slopeScale: 0.22,
+      daughterProbability: 0.6,
+      crownStrength: 0.6,
+      bubbleProbability: 0.15,
+    },
+  };
+}
+
+function copyLayer(src: DropLayerParams): DropLayerParams {
+  return { ...src };
+}
 
 // Far away with a tiny radius: the basin's Gaussian evaluates to exactly 0 everywhere in a scene.
 const UNUSED_BASIN: readonly number[] = [1.0e5, 1.0e5, 1.0e-3, 1.0e-3];
@@ -51,7 +98,8 @@ export interface RainPuddleMaterialOptions {
   dampWidthMm?: number;
   /** How much the damp band darkens the street, 0-1. Defaults to 0.35. */
   dampDarkening?: number;
-  /** Share of the street colour that survives the trip through the water, 0-1. Defaults to 0.55. */
+  /** Wet-ground darkening: share of the street colour that survives the trip through the water
+   * before Beer-Lambert absorption of the liquid is applied, 0-1. Defaults to 0.55. */
   bottomTransmission?: number;
   /** Screen-UV offset of the mirror image per unit of ripple normal tilt. Defaults to 0.35. */
   reflectionDistortion?: number;
@@ -104,6 +152,14 @@ export class RainPuddleMaterial extends AbstractMaterial {
   public shininess: number;
   /** Seconds, advanced by the owner's update loop. */
   public time: number = 0;
+  private readonly _surface: DropSurfaceParams = createWaterRainParams();
+  private readonly _fluidLane: number[] = [0, 0, 0, 0];
+  private readonly _absorptionLane: number[] = [0, 0, 0, 0];
+  private readonly _albedoLane: number[] = [0, 0, 0, 0];
+  private readonly _rainLane: number[] = [0, 0, 0, 0];
+  private readonly _dripsLane: number[] = [0, 0, 0, 0];
+  private readonly _fxLane: number[] = [0, 0, 0, 0];
+  private readonly _optics: number[] = [0, 0, 0, 0];
   /** Radians per screen pixel, see {@link setCameraFootprint}. */
   public pixelAngle: number = 0.001;
 
@@ -128,6 +184,29 @@ export class RainPuddleMaterial extends AbstractMaterial {
 
     this.transparent = true;
     this.depthWrite = false;
+  }
+
+  /**
+   * Sets the liquid and drop behaviour (ADR 0042: pairings are data). The values are copied, so
+   * mutating `params` afterwards changes nothing. Defaults to plain water under light rain.
+   * Surface bubbles render on WebGPU and WebGL2 only; WebGL1 skips them.
+   */
+  public setDropSurfaceParams(params: DropSurfaceParams): void {
+    const s = this._surface;
+    s.sigmaOverRho = params.sigmaOverRho;
+    s.kinematicViscosity = params.kinematicViscosity;
+    s.ior = params.ior;
+    s.absorptionPerMm = [...params.absorptionPerMm];
+    s.scatterAlbedo = [...params.scatterAlbedo];
+    s.scatteringPerMm = params.scatteringPerMm;
+    s.bubbleLifetime = params.bubbleLifetime;
+    s.rain = copyLayer(params.rain);
+    s.drips = copyLayer(params.drips);
+  }
+
+  /** The material's own copy of the current liquid parameters (read-only view). */
+  public get dropSurfaceParams(): Readonly<DropSurfaceParams> {
+    return this._surface;
   }
 
   /**
@@ -161,18 +240,35 @@ export class RainPuddleMaterial extends AbstractMaterial {
       this.heightContrastMm,
       this.edgeNoise,
     ];
-    props["u_matParam2"] = [
-      WATER_IOR,
-      this.bottomTransmission,
-      this.reflectionDistortion,
-      this.reflectionBlur,
-    ];
+    const surf = this._surface;
+    const optics = this._optics;
+    optics[0] = surf.ior;
+    optics[1] = this.bottomTransmission;
+    optics[2] = this.reflectionDistortion;
+    optics[3] = this.reflectionBlur;
+    props["u_matParam2"] = optics;
     props["u_matParam3"] = [
       this.basinDepthMm,
       this.dampWidthMm,
       this.dampDarkening,
       this.specularStrength,
     ];
+    const fluid = this._fluidLane;
+    fluid[0] = surf.sigmaOverRho;
+    fluid[1] = surf.kinematicViscosity;
+    fluid[2] = surf.scatteringPerMm;
+    fluid[3] = surf.bubbleLifetime;
+    props[LANE_FLUID] = this._fluidLane;
+    props[LANE_ABSORPTION] = this._packVec3(this._absorptionLane, surf.absorptionPerMm);
+    props[LANE_ALBEDO] = this._packVec3(this._albedoLane, surf.scatterAlbedo);
+    props[LANE_RAIN] = this._packLayer(this._rainLane, surf.rain);
+    props[LANE_DRIPS] = this._packLayer(this._dripsLane, surf.drips);
+    const fx = this._fxLane;
+    fx[0] = surf.rain.crownStrength;
+    fx[1] = surf.rain.bubbleProbability;
+    fx[2] = surf.drips.crownStrength;
+    fx[3] = surf.drips.bubbleProbability;
+    props[LANE_FX] = fx;
     for (let b = 0; b < RAIN_PUDDLE_MAX_BASINS; b++) {
       const basin = this.basins[b];
       props[BASIN_LANES[b]!] = basin
@@ -181,6 +277,21 @@ export class RainPuddleMaterial extends AbstractMaterial {
     }
 
     return this._renderManifest;
+  }
+
+  private _packVec3(lane: number[], v: readonly number[]): number[] {
+    lane[0] = v[0]!;
+    lane[1] = v[1]!;
+    lane[2] = v[2]!;
+    return lane;
+  }
+
+  private _packLayer(lane: number[], layer: DropLayerParams): number[] {
+    lane[0] = layer.diameterMin;
+    lane[1] = layer.diameterMax;
+    lane[2] = layer.slopeScale;
+    lane[3] = layer.daughterProbability;
+    return lane;
   }
 
   /** @inheritdoc */

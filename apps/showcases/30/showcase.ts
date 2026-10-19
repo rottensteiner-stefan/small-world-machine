@@ -35,7 +35,12 @@ import {
   Vector2D,
   Vector3D,
 } from "@small-world-machine/engine";
-import { RainPuddleMaterial } from "@small-world-machine/liquid-extras";
+import {
+  DropImpactSystem,
+  FLUID_PRESETS,
+  FluidPreset,
+  RainPuddleMaterial,
+} from "@small-world-machine/liquid-extras";
 import { attachDevTools } from "@small-world-machine/tools";
 
 enum Mood {
@@ -132,6 +137,17 @@ const MOODS: Record<Mood, MoodPreset> = {
   },
 };
 
+// DEFAULT repeats WATER's value in the enum, so list the distinct liquids explicitly.
+const FLUID_CYCLE: readonly FluidPreset[] = [
+  FluidPreset.WATER,
+  FluidPreset.SEAWATER,
+  FluidPreset.BLOOD,
+  FluidPreset.OLIVE_OIL,
+  FluidPreset.USED_MOTOR_OIL,
+  FluidPreset.BATTERY_ACID,
+  FluidPreset.SULFURIC_ACID_98,
+];
+
 const STREET_WIDTH = 16;
 const STREET_LENGTH = 28;
 const ASPHALT_REPEAT_X = 10;
@@ -174,7 +190,7 @@ const PUDDLE_BASINS = [
  * teal/magenta specular highlights and HDR neon bloom, plus an overcast day mood and a low puddle
  * close-up camera.
  *
- * Keys: C = street / puddle camera, N = night / day mood.
+ * Keys: C = street / puddle camera, N = night / day mood, F = next liquid (drop-impact system).
  */
 class Showcase30 extends AbstractShowcase {
   private _neonSignMagenta!: Object3D;
@@ -183,6 +199,8 @@ class Showcase30 extends AbstractShowcase {
   private _spotPink!: SpotLight;
   private _reflectionNode!: PlanarReflectionNode;
   private _puddleMat!: RainPuddleMaterial;
+  private readonly _dropSystem = new DropImpactSystem();
+  private _fluidIndex = 0;
   private _hoverCar!: Object3D;
   private _rainMesh!: InstancedMesh;
   private _rainPositions!: Float32Array;
@@ -440,6 +458,7 @@ class Showcase30 extends AbstractShowcase {
       ),
       basins: PUDDLE_BASINS,
     });
+    this._dropSystem.addSurface(this._puddleMat);
     const puddleLayer = new Object3D("RainPuddleLayer");
     puddleLayer.geometry = new Plane({
       width: STREET_WIDTH,
@@ -710,6 +729,10 @@ class Showcase30 extends AbstractShowcase {
     if (Keys.N === event.code) {
       this._applyMood(this._mood === Mood.NIGHT ? Mood.DAY : Mood.NIGHT);
     }
+    if (Keys.F === event.code) {
+      this._fluidIndex = (this._fluidIndex + 1) % FLUID_CYCLE.length;
+      this._dropSystem.fluid = FLUID_PRESETS[FLUID_CYCLE[this._fluidIndex]!];
+    }
   }
 
   private _applyCameraView(view: CameraView): void {
@@ -868,6 +891,7 @@ class Showcase30 extends AbstractShowcase {
   protected override update(deltaTime: number): void {
     this._time += deltaTime;
 
+    this._dropSystem.apply();
     if (this._puddleMat) {
       this._puddleMat.time = this._time;
       this._puddleMat.setCameraFootprint(this.defaultFov, this.canvas.height);

@@ -4,19 +4,26 @@
 
 uniform vec4 u_matParam0; // [time, pixelAngle, rainIntensity, dripIntensity]
 uniform vec4 u_matParam1; // [asphaltTilePeriod.xy, heightContrastMm, edgeNoise]
-uniform vec4 u_matParam2; // [ior, bottomTransmission, reflectionDistortion, reflectionBlur]
+uniform vec4 u_matParam2; // [ior, wetDarkening (bottomTransmission), reflectionDistortion, reflectionBlur]
 uniform vec4 u_matParam3; // [basinDepthMm, dampWidthMm, dampDarkening, specularStrength]
 uniform vec4 u_matParam4; // puddle basin 0 [x, z, radiusX, radiusZ]
 uniform vec4 u_matParam5; // puddle basin 1
 uniform vec4 u_matParam6; // puddle basin 2
 uniform vec4 u_matParam7; // puddle basin 3
+uniform vec4 u_matParam8; // [sigmaOverRho, kinematicViscosity, scatteringPerMm, bubbleLifetime]
+uniform vec4 u_matParam9; // [absorptionPerMm.rgb, 0]
+uniform vec4 u_matParam10; // [scatterAlbedo.rgb, 0]
+uniform vec4 u_matParam11; // rain layer [diameterMin, diameterMax, slopeScale, daughterProbability]
+uniform vec4 u_matParam12; // drip layer [diameterMin, diameterMax, slopeScale, daughterProbability]
+uniform vec4 u_matParam13; // [rain crownStrength, rain bubbleProbability, drip crown, drip bubble]
 uniform sampler2D u_reflectionMap;
 
 [RAIN_PUDDLE_COMMON]
 
 // WebGL1 path (PhongMaterial's glsl100 convention): lighting is tuned in gamma space, so no
 // sRGB round trip. Only the sparse drip layer runs here -- the dense rain layer is 2x the ALU and
-// this tier's devices are the ones that miss frame budget first.
+// this tier's devices are the ones that miss frame budget first. Surface bubbles are skipped too
+// (RP_BUBBLES stays undefined); the crown/jet illusion is cheap and stays.
 void main() {
     float time = u_matParam0.x;
     float pixelAngle = u_matParam0.y;
@@ -32,6 +39,11 @@ void main() {
     float dampWidthMm = u_matParam3.y;
     float dampDarkening = u_matParam3.z;
     float specularStrength = u_matParam3.w;
+    vec4 fluid = rpFluid(u_matParam8.x, u_matParam8.y);
+    float scatteringPerMm = u_matParam8.z;
+    float bubbleLifetime = u_matParam8.w;
+    vec3 absorptionPerMm = u_matParam9.rgb;
+    vec3 scatterAlbedo = u_matParam10.rgb;
 
     vec2 p = v_worldPos.xz;
     vec3 asphalt = texture2D(u_diffuseMap, p / asphaltTilePeriod).rgb;
@@ -48,10 +60,10 @@ void main() {
     vec3 toEye = u_viewPos - v_worldPos;
     vec3 viewDir = normalize(toEye);
     float footprint = pixelAngle * length(toEye) / max(viewDir.y, 0.15);
-    vec3 ripple = vec3(0.0);
+    vec4 ripple = vec4(0.0);
     if (waterMask > 0.001) {
-        ripple = rpDropLayer(p, time, 0.45, 1.6, dripIntensity, vec2(0.0022, 0.0045), 0.6, 0.22,
-                             waterDepth, footprint, 41.9) * waterMask;
+        ripple = rpDropLayer(p, time, 0.45, 1.6, dripIntensity, u_matParam12, u_matParam13.zw, fluid,
+                             bubbleLifetime, waterDepth, footprint, 41.9) * waterMask;
     }
     vec3 N = normalize(vec3(-ripple.x, 1.0, -ripple.y));
 
@@ -71,9 +83,20 @@ void main() {
         texture2D(u_reflectionMap, clamp(uv - o, lo, hi)).rgb) / 4.0;
     vec3 glints = specular * fresnel * specularStrength;
 
-    float waterAlpha = waterMask * (1.0 - (1.0 - fresnel) * bottomTransmission);
+    // Same optics as the GLSL300 path (Beer-Lambert column, scattering body, achromatic alpha plus
+    // re-added channel surplus), in this tier's gamma space.
+    float opticalDepthMm = max(waterDepthMm, 0.0);
+    vec3 transmission = bottomTransmission * rpColumnTransmission(viewDir.y, ior, opticalDepthMm, absorptionPerMm);
+    float minTransmission = min(transmission.r, min(transmission.g, transmission.b));
+    float bodyOpacity = 1.0 - exp(-scatteringPerMm * opticalDepthMm);
+    float throughBody = (1.0 - fresnel) * (1.0 - bodyOpacity);
+    vec3 body = (1.0 - fresnel) * bodyOpacity * scatterAlbedo * finalLight;
+    vec3 tint = throughBody * (transmission - minTransmission) * asphalt * finalLight;
+    vec3 sparkle = min(ripple.w, 1.5) * (0.6 * reflection + 0.4 * finalLight);
+    float waterAlpha = waterMask * (1.0 - throughBody * minTransmission);
     float dampAlpha = dampMask * dampDarkening;
-    vec3 contribution = waterMask * (fresnel * reflection + glints) + dampMask * 0.3 * fresnel * reflection;
+    vec3 contribution = waterMask * (fresnel * reflection + glints + body + tint + sparkle) +
+                        dampMask * 0.3 * fresnel * reflection;
     float alpha = clamp(waterAlpha + dampAlpha, 0.0, 1.0);
     gl_FragColor = vec4(contribution / max(alpha, 1.0e-3), alpha);
 
