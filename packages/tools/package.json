@@ -8,6 +8,9 @@
     ".": "./src/index.ts",
     "./*": "./src/*"
   },
+  "bin": {
+    "swm": "./src/cli/swm.mjs"
+  },
   "dependencies": {
     "@small-world-machine/engine": "*",
     "@kitschpatrol/tweakpane-plugin-camerakit": "^0.3.1-beta.3",
