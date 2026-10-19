@@ -58,7 +58,9 @@ describe("VoxelRaycast — axis hits", () => {
     expect(hit!.z).toBe(4);
     expect(hit!.normal).toEqual({ x: 0, y: 0, z: 1 });
     expect(hit!.placeZ).toBe(5);
-    expect(hit!.distance).toBeCloseTo(4.5, 9);
+    // Entry face of cell z=4 from the +Z side sits at z=5.0 (origin z=8.5): distance 3.5, the
+    // same face-entry convention as the +X axis test (not the cell-centre distance 4.5).
+    expect(hit!.distance).toBeCloseTo(3.5, 9);
   });
 
   it("hits downward (-Y) with normal +Y", () => {
@@ -69,7 +71,9 @@ describe("VoxelRaycast — axis hits", () => {
     expect(hit!.y).toBe(4);
     expect(hit!.normal).toEqual({ x: 0, y: 1, z: 0 });
     expect(hit!.placeY).toBe(5);
-    expect(hit!.distance).toBeCloseTo(4.5, 9);
+    // Entry face of cell y=4 from above sits at y=5.0 (origin y=8.5): distance 3.5 (face-entry
+    // convention, not the cell-centre distance 4.5).
+    expect(hit!.distance).toBeCloseTo(3.5, 9);
   });
 });
 

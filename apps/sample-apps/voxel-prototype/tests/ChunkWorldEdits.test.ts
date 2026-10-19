@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { BLOCK_AIR, BLOCK_DIRT, BLOCK_STONE, BLOCK_WATER, BlockRegistry } from "../voxel/BlockRegistry.js";
+import {
+  BLOCK_AIR,
+  BLOCK_DIRT,
+  BLOCK_STONE,
+  BLOCK_WATER,
+  BlockRegistry,
+} from "../voxel/BlockRegistry.js";
 import { ChunkWorld } from "../voxel/ChunkWorld.js";
 import type { ChunkWorldCallbacks } from "../voxel/ChunkWorld.js";
 import { TerrainGenerator } from "../voxel/TerrainGenerator.js";
-import { descriptorFromRegistry } from "../voxel/mesh/NaiveMesher.js";
-import { buildMesh } from "../voxel/mesh/NaiveMesher.js";
-import type { MeshBlockDescriptorEntry } from "../voxel/mesh/NaiveMesher.js";
-import type { CornerDir, FaceDir } from "../voxel/mesh/NaiveMesher.js";
+import { buildMesh, descriptorFromRegistry } from "../voxel/mesh/NaiveMesher.js";
+import type { CornerDir, FaceDir, MeshBlockDescriptorEntry } from "../voxel/mesh/NaiveMesher.js";
 import { ForegroundMeshClient } from "../voxel/worker/ForegroundMeshClient.js";
 import type { MeshClient, MeshOutcome } from "../voxel/worker/MeshWorkerProtocol.js";
 
@@ -26,9 +30,12 @@ interface HostRecord {
   unloaded: boolean;
 }
 
-function harness(
-  options: { seed?: number; radius?: number; client?: MeshClient } = {},
-): { world: ChunkWorld; hosts: Map<string, HostRecord>; unloads: string[]; remeshlag: string[] } {
+function harness(options: { seed?: number; radius?: number; client?: MeshClient } = {}): {
+  world: ChunkWorld;
+  hosts: Map<string, HostRecord>;
+  unloads: string[];
+  remeshlag: string[];
+} {
   const registry = new BlockRegistry();
   BlockRegistry.seed(registry);
   const descriptor = descriptorFromRegistry(registry);
@@ -44,7 +51,12 @@ function harness(
     callbacks: {
       onMeshReady: (cx, cz, mesh): void => {
         remeshlag.push(`${cx},${cz}`);
-        hosts.set(`${cx},${cz}`, { cx, cz, mesh: mesh as ReturnType<typeof buildMesh>, unloaded: false });
+        hosts.set(`${cx},${cz}`, {
+          cx,
+          cz,
+          mesh: mesh as ReturnType<typeof buildMesh>,
+          unloaded: false,
+        });
       },
       onUnload: (cx, cz): void => {
         const key = `${cx},${cz}`;
@@ -204,11 +216,13 @@ class ControllableMeshClient implements MeshClient {
     neighborCorners?: Partial<Record<CornerDir, Uint8Array>>,
   ): Promise<MeshOutcome> {
     return new Promise<MeshOutcome>((resolve) => {
-      // Structured-clone semantics: snapshot the buffers at dispatch time.
+      // Structured-clone semantics: snapshot the buffers at dispatch time. exactOptionalPropertyTypes
+      // forbids assigning an explicit `undefined`, so only include the optional corner data when
+      // it was actually provided.
       this._pending.push({
         voxels: new Uint8Array(voxels),
         neighbors,
-        neighborCorners,
+        ...(neighborCorners === undefined ? {} : { neighborCorners }),
         resolve,
       });
     });
