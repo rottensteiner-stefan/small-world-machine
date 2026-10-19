@@ -1130,13 +1130,96 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     // --- 3. Build & Bind Shader ---
     const isInst =
       "instanceCount" in objects[0]! && (objects[0] as InstancedMesh).instanceCount > 0;
+    const shaderFlags = this._buildSubgroupShaderFlags(objects[0], manifest, scene, isInst);
+
+    const cache = this._programCache.getProgram(manifest.shaderId, isInst, shaderFlags);
+    const programKey = this._programCache.programCacheKey(manifest.shaderId, isInst, shaderFlags);
+    this.gl.useProgram(cache.prog);
+    // A program the normal wrapper could not rewrite has no output 1; routing the draw buffer to
+    // it would write undefined values into the normal buffer.
+    if (this._normalWriteRequested) {
+      this._hdrFbo?.setSecondaryWriteEnabled(cache.writesNormalOutput);
+    }
+
+    this._bindDummyShadowMaps(cache);
+
+    // Clustered light culling textures -- always bound at these fixed units by
+    // WebGLClusterCullPass (once per frame, before this pass runs); each program just needs to
+    // know which unit its sampler uniform reads from, see
+    // docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md.
+    const clusterGridLoc = cache.uniforms.get("u_clusterGrid");
+    if (clusterGridLoc) this.gl.uniform1i(clusterGridLoc, CLUSTER_GRID_UNIT);
+    const clusterIndexLoc = cache.uniforms.get("u_clusterIndices");
+    if (clusterIndexLoc) this.gl.uniform1i(clusterIndexLoc, CLUSTER_INDEX_UNIT);
+
+    // Bind Shadow Maps
+    this._bindSpotShadowMaps(cache, lights);
+    this._bindDirectionalShadowMaps(cache, lights);
+
+    this._bindFogUniforms(cache.uniforms, scene?.fog);
+
+    this._bindGlobalIblUniforms(cache, scene);
+
+    // --- 1. Bind Material States ---
+    const state = manifest.state;
+    this._bindMaterialState(state);
+    this._bindGenericMaterialProperties(cache.uniforms, manifest.properties, false);
+
+    this._bindSubgroupTextures(cache, shaderId, manifest);
+
+    // --- 4. Render each object ---
+    const texs = manifest.textures;
+
+    // --- 4. Render each object ---
+    for (let i = 0; i < objects.length; i++) {
+      const o = objects[i]!;
+      if (!o.geometry) continue;
+
+      this._programCache.acquireProgram(o, programKey);
+      this._textures.acquireTextures(o, texs);
+
+      if (isInstanced) {
+        this._renderInstancedObject(o as InstancedMesh, cache, topology);
+      } else {
+        this._renderStandardObject(o, cache, state, vMat, topology, wireframeMode);
+      }
+    }
+  }
+
+  /**
+   * True when `unit` may be used for a shadow-map sampler (still below the driver's texture-unit
+   * limit). Logs exactly the per-light warning the original inline checks did and lets the caller
+   * skip the offending bind. Single warning site for the spot + directional paths.
+   */
+  private _ensureShadowMapUnit(unit: number, label: string): boolean {
+    const maxUnits = this.context.deviceCaps.getLimit(DeviceLimit.WEBGL2_MAX_TEXTURE_IMAGE_UNITS);
+    if (unit < maxUnits) return true;
+    console.warn(
+      `[WebGL2Renderer] Exceeded MAX_TEXTURE_IMAGE_UNITS (${maxUnits}). Cannot bind ${label} to texture unit ${unit}.`,
+    );
+    return false;
+  }
+
+  /**
+   * Builds the `USE_*` shader-variant flags for a subgroup. Grouped per subgroup (not per object):
+   * every object sharing a batch shares its material's shader variant, so optional-feature
+   * detection reads the first object's skin/IBL/texture-array state exactly once. `USE_INSTANCE_COLOR`
+   * is a per-mesh opt-in and stays disjoint from the generic `instanceData` (texture-array index)
+   * semantics. Same single array allocation as the previous inline build.
+   */
+  private _buildSubgroupShaderFlags(
+    firstObject: Object3D | undefined,
+    manifest: RenderManifest,
+    scene: Scene | undefined,
+    isInst: boolean,
+  ): string[] {
     const shaderFlags = manifest.flags
       ? [...(resolveManifestFlags(manifest.flags, this._quality.disableTextures) ?? [])]
       : [];
 
     if (
-      objects[0] &&
-      ((isSkinnedMesh(objects[0]) && objects[0].skeleton) || objects[0].geometry?.joints)
+      firstObject &&
+      ((isSkinnedMesh(firstObject) && firstObject.skeleton) || firstObject.geometry?.joints)
     ) {
       if (!shaderFlags.includes("USE_SKINNING")) {
         shaderFlags.push("USE_SKINNING");
@@ -1166,82 +1249,67 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
     // semantics (texture-array index) stay untouched for other meshes: only an instanced mesh
     // explicitly requesting it gets the `USE_INSTANCE_COLOR` variant compiled in.
-    if (isInst && objects[0] instanceof InstancedMesh && objects[0].useInstanceDataAsColor) {
+    if (isInst && firstObject instanceof InstancedMesh && firstObject.useInstanceDataAsColor) {
       shaderFlags.push("USE_INSTANCE_COLOR");
     }
 
-    const cache = this._programCache.getProgram(manifest.shaderId, isInst, shaderFlags);
-    const programKey = this._programCache.programCacheKey(manifest.shaderId, isInst, shaderFlags);
-    this.gl.useProgram(cache.prog);
-    // A program the normal wrapper could not rewrite has no output 1; routing the draw buffer to
-    // it would write undefined values into the normal buffer.
-    if (this._normalWriteRequested) {
-      this._hdrFbo?.setSecondaryWriteEnabled(cache.writesNormalOutput);
-    }
+    return shaderFlags;
+  }
 
-    this._bindDummyShadowMaps(cache);
+  /** Binds shadow maps for the up-to-4 spot lights declared by the subgroup's material/program. */
+  private _bindSpotShadowMaps(cache: WebGLProgramCacheEntry, lights?: LightDataInterface): void {
+    if (!lights || lights.sLights.length === 0) return;
 
-    // Clustered light culling textures -- always bound at these fixed units by
-    // WebGLClusterCullPass (once per frame, before this pass runs); each program just needs to
-    // know which unit its sampler uniform reads from, see
-    // docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md.
-    const clusterGridLoc = cache.uniforms.get("u_clusterGrid");
-    if (clusterGridLoc) this.gl.uniform1i(clusterGridLoc, CLUSTER_GRID_UNIT);
-    const clusterIndexLoc = cache.uniforms.get("u_clusterIndices");
-    if (clusterIndexLoc) this.gl.uniform1i(clusterIndexLoc, CLUSTER_INDEX_UNIT);
+    for (let i = 0; i < 4; i++) {
+      if (i >= lights.sLights.length) break;
+      const light = lights.sLights[i]!;
+      const mapLoc = cache.uniforms.get(`u_spotShadowMap[${i}]`);
+      const matLoc = cache.uniforms.get(`u_spotShadowMatrix[${i}]`);
+      const infoLoc = cache.uniforms.get(`u_spotShadowInfo[${i}]`);
 
-    // Bind Shadow Maps
-    if (lights && lights.sLights.length > 0) {
-      for (let i = 0; i < 4; i++) {
-        if (i >= lights.sLights.length) break;
-        const light = lights.sLights[i]!;
-        const mapLoc = cache.uniforms.get(`u_spotShadowMap[${i}]`);
-        const matLoc = cache.uniforms.get(`u_spotShadowMatrix[${i}]`);
-        const infoLoc = cache.uniforms.get(`u_spotShadowInfo[${i}]`);
-
-        if (light.castShadow && light.shadowCamera) {
-          const fbo = this._shadowMaps.get(light);
-          if (fbo && fbo.texture) {
-            const texUnit = 8 + i; // TEXTURE8 to TEXTURE11
-            const maxUnits = this.context.deviceCaps.getLimit(
-              DeviceLimit.WEBGL2_MAX_TEXTURE_IMAGE_UNITS,
-            );
-            if (texUnit >= maxUnits) {
-              console.warn(
-                `[WebGL2Renderer] Exceeded MAX_TEXTURE_IMAGE_UNITS (${maxUnits}). Cannot bind spot shadow map to texture unit ${texUnit}.`,
-              );
-            } else {
-              this.gl.activeTexture(this.gl.TEXTURE0 + texUnit);
-              this.gl.bindTexture(this.gl.TEXTURE_2D, fbo.texture);
-              if (mapLoc) this.gl.uniform1i(mapLoc, texUnit);
-              if (matLoc)
-                this.gl.uniformMatrix4fv(matLoc, false, light.shadowCamera.viewProjectionMatrix);
-              if (infoLoc) {
-                this._scratchFloat4[0] = light.shadowBias;
-                this._scratchFloat4[1] = light.shadowNormalBias;
-                this._scratchFloat4[2] = 1.0;
-                this._scratchFloat4[3] = 0.0;
-                this.gl.uniform4fv(infoLoc, this._scratchFloat4);
-              }
-            }
-          }
-        } else {
-          if (mapLoc) this.gl.uniform1i(mapLoc, 12);
+      if (light.castShadow && light.shadowCamera) {
+        const fbo = this._shadowMaps.get(light);
+        if (fbo && fbo.texture) {
+          const texUnit = 8 + i; // TEXTURE8 to TEXTURE11
+          if (!this._ensureShadowMapUnit(texUnit, "spot shadow map")) continue;
+          this.gl.activeTexture(this.gl.TEXTURE0 + texUnit);
+          this.gl.bindTexture(this.gl.TEXTURE_2D, fbo.texture);
+          if (mapLoc) this.gl.uniform1i(mapLoc, texUnit);
+          if (matLoc)
+            this.gl.uniformMatrix4fv(matLoc, false, light.shadowCamera.viewProjectionMatrix);
           if (infoLoc) {
-            this._scratchFloat4[0] = 0.0;
-            this._scratchFloat4[1] = 0.0;
-            this._scratchFloat4[2] = 0.0;
+            this._scratchFloat4[0] = light.shadowBias;
+            this._scratchFloat4[1] = light.shadowNormalBias;
+            this._scratchFloat4[2] = 1.0;
             this._scratchFloat4[3] = 0.0;
             this.gl.uniform4fv(infoLoc, this._scratchFloat4);
           }
         }
+      } else {
+        if (mapLoc) this.gl.uniform1i(mapLoc, 12);
+        if (infoLoc) {
+          this._scratchFloat4[0] = 0.0;
+          this._scratchFloat4[1] = 0.0;
+          this._scratchFloat4[2] = 0.0;
+          this._scratchFloat4[3] = 0.0;
+          this.gl.uniform4fv(infoLoc, this._scratchFloat4);
+        }
       }
     }
+  }
 
-    // DirectionalLight Shadows
-    //
+  /**
+   * Binds the directional shadow map + cascade matrices, or (when no cascade depth exists --
+   * including offscreen probe targets and absent lights) unbinds the samplers to their dummy
+   * units. The unbind arm always runs: leaving a live sampler pointing at a stale unit would
+   * sample garbage next draw.
+   */
+  private _bindDirectionalShadowMaps(
+    cache: WebGLProgramCacheEntry,
+    lights?: LightDataInterface,
+  ): void {
     // Deliberately skipped while rendering into an offscreen target (a DynamicReflectionProbe
-    // face or a PlanarReflectionNode): cascade selection below picks a split by this DRAW's
+    // face or a PlanarReflectionNode): cascade selection picks a split by this DRAW's
     // `u_viewPos` (see `depth` in light_calc_pbr.frag.glsl/light_calc.frag.glsl), which is the
     // *current* camera position -- correct for the main camera, but the cascades themselves are
     // fit once per frame to the MAIN camera only (`Scene.updateLights()`). A probe sits far
@@ -1268,49 +1336,37 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       const fbo = this._shadowMaps.get(light);
       if (fbo && fbo.texture) {
         const texUnit = 12; // TEXTURE12
-        const maxUnits = this.context.deviceCaps.getLimit(
-          DeviceLimit.WEBGL2_MAX_TEXTURE_IMAGE_UNITS,
-        );
-        if (texUnit >= maxUnits) {
-          console.warn(
-            `[WebGL2Renderer] Exceeded MAX_TEXTURE_IMAGE_UNITS (${maxUnits}). Cannot bind directional shadow map to texture unit ${texUnit}.`,
-          );
-        } else {
-          this.gl.activeTexture(this.gl.TEXTURE0 + texUnit);
-          this.gl.bindTexture(this.gl.TEXTURE_2D, fbo.texture);
-          if (mapLoc) this.gl.uniform1i(mapLoc, texUnit);
+        if (!this._ensureShadowMapUnit(texUnit, "directional shadow map")) return;
+        this.gl.activeTexture(this.gl.TEXTURE0 + texUnit);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, fbo.texture);
+        if (mapLoc) this.gl.uniform1i(mapLoc, texUnit);
 
-          // Same depth texture, second unit, non-comparison sampler -- see PCSS blocker search.
-          this.gl.activeTexture(this.gl.TEXTURE0 + WebGL2Renderer._RAW_DEPTH_UNIT);
-          this.gl.bindTexture(this.gl.TEXTURE_2D, fbo.texture);
-          if (mapRawLoc) this.gl.uniform1i(mapRawLoc, WebGL2Renderer._RAW_DEPTH_UNIT);
+        // Same depth texture, second unit, non-comparison sampler -- see PCSS blocker search.
+        this.gl.activeTexture(this.gl.TEXTURE0 + WebGL2Renderer._RAW_DEPTH_UNIT);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, fbo.texture);
+        if (mapRawLoc) this.gl.uniform1i(mapRawLoc, WebGL2Renderer._RAW_DEPTH_UNIT);
 
-          for (let i = 0; i < light.numCascades; i++) {
-            const matLoc = cache.uniforms.get(`u_cascadeMatrices[${i}]`);
-            if (matLoc && light.cascadeCameras[i]) {
-              this.gl.uniformMatrix4fv(
-                matLoc,
-                false,
-                light.cascadeCameras[i]!.viewProjectionMatrix,
-              );
-            }
+        for (let i = 0; i < light.numCascades; i++) {
+          const matLoc = cache.uniforms.get(`u_cascadeMatrices[${i}]`);
+          if (matLoc && light.cascadeCameras[i]) {
+            this.gl.uniformMatrix4fv(matLoc, false, light.cascadeCameras[i]!.viewProjectionMatrix);
           }
+        }
 
-          if (splitsLoc) {
-            this._scratchFloat4[0] = light.cascadeSplits[0] ?? 0;
-            this._scratchFloat4[1] = light.cascadeSplits[1] ?? 0;
-            this._scratchFloat4[2] = light.cascadeSplits[2] ?? 0;
-            this._scratchFloat4[3] = light.cascadeSplits[3] ?? 0;
-            this.gl.uniform4fv(splitsLoc, this._scratchFloat4);
-          }
+        if (splitsLoc) {
+          this._scratchFloat4[0] = light.cascadeSplits[0] ?? 0;
+          this._scratchFloat4[1] = light.cascadeSplits[1] ?? 0;
+          this._scratchFloat4[2] = light.cascadeSplits[2] ?? 0;
+          this._scratchFloat4[3] = light.cascadeSplits[3] ?? 0;
+          this.gl.uniform4fv(splitsLoc, this._scratchFloat4);
+        }
 
-          if (infoLoc) {
-            this._scratchFloat4[0] = light.shadowBias;
-            this._scratchFloat4[1] = light.shadowNormalBias;
-            this._scratchFloat4[2] = 1.0;
-            this._scratchFloat4[3] = light.numCascades;
-            this.gl.uniform4fv(infoLoc, this._scratchFloat4);
-          }
+        if (infoLoc) {
+          this._scratchFloat4[0] = light.shadowBias;
+          this._scratchFloat4[1] = light.shadowNormalBias;
+          this._scratchFloat4[2] = 1.0;
+          this._scratchFloat4[3] = light.numCascades;
+          this.gl.uniform4fv(infoLoc, this._scratchFloat4);
         }
       }
     } else {
@@ -1327,84 +1383,88 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         this.gl.uniform4fv(infoLoc, this._scratchFloat4);
       }
     }
+  }
 
+  /**
+   * Binds the scene-global IBL resources (environment intensity, irradiance + prefilter cube
+   * maps, BRDF LUT) on their reserved sampler units. Each sampler is claimed with at least a
+   * fallback texture even without real IBL data: leaving an active sampler unassigned defaults
+   * it to unit 0, colliding with whatever 2D sampler legitimately owns that unit.
+   */
+  private _bindGlobalIblUniforms(cache: WebGLProgramCacheEntry, scene?: Scene): void {
+    if (!scene) return;
     const u = cache.uniforms;
 
-    this._bindFogUniforms(u, scene?.fog);
+    const intLoc = u.get("u_envIntensity");
+    if (intLoc) this.gl.uniform1f(intLoc, scene.environmentIntensity);
 
-    // --- Global IBL Uniforms ---
-    if (scene) {
-      const intLoc = u.get("u_envIntensity");
-      if (intLoc) this.gl.uniform1f(intLoc, scene.environmentIntensity);
-
-      // Irradiance Map -- always claim the unit with at least a dummy cube texture when the
-      // uniform is active, even without real IBL data: leaving an active sampler unassigned
-      // defaults it to unit 0, colliding with whatever 2D sampler (e.g. u_diffuseMap)
-      // legitimately owns that unit ("two textures of different types use the same sampler
-      // location" GL_INVALID_OPERATION).
-      const irrUnit = cache.samplerUnits.get("u_irradianceMap");
-      const irrLoc = u.get("u_irradianceMap");
-      if (
-        irrLoc &&
-        undefined !== irrUnit &&
-        this._isTextureUnitAvailable(irrUnit, "u_irradianceMap")
-      ) {
-        this.gl.activeTexture(this.gl.TEXTURE0 + irrUnit);
-        this.gl.bindTexture(this.gl.TEXTURE_2D, null);
-        this.gl.bindTexture(
-          this.gl.TEXTURE_CUBE_MAP,
-          scene.irradianceMap
-            ? this._textures.getWebGLCubeTexture(scene.irradianceMap, this._quality)
-            : this._blackCubeTexture,
-        );
-        this.gl.uniform1i(irrLoc, irrUnit);
-      }
-
-      // Prefilter Map
-      const prefUnit = cache.samplerUnits.get("u_prefilterMap");
-      const prefLoc = u.get("u_prefilterMap");
-      if (
-        prefLoc &&
-        undefined !== prefUnit &&
-        this._isTextureUnitAvailable(prefUnit, "u_prefilterMap")
-      ) {
-        this.gl.activeTexture(this.gl.TEXTURE0 + prefUnit);
-        this.gl.bindTexture(this.gl.TEXTURE_2D, null);
-        this.gl.bindTexture(
-          this.gl.TEXTURE_CUBE_MAP,
-          scene.prefilterMap
-            ? this._textures.getWebGLCubeTexture(scene.prefilterMap, this._quality)
-            : this._blackCubeTexture,
-        );
-        this.gl.uniform1i(prefLoc, prefUnit);
-      }
-
-      // BRDF LUT
-      const brdfUnit = cache.samplerUnits.get("u_brdfLUT");
-      const brdfLoc = u.get("u_brdfLUT");
-      if (
-        brdfLoc &&
-        undefined !== brdfUnit &&
-        this._isTextureUnitAvailable(brdfUnit, "u_brdfLUT")
-      ) {
-        this.gl.activeTexture(this.gl.TEXTURE0 + brdfUnit);
-        this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, null);
-        this.gl.bindTexture(
-          this.gl.TEXTURE_2D,
-          scene.brdfLUT
-            ? this._textures.getWebGLTexture(scene.brdfLUT, this._quality)
-            : this._defaultBrdfTexture,
-        );
-        this.gl.uniform1i(brdfLoc, brdfUnit);
-      }
+    // Irradiance Map
+    const irrUnit = cache.samplerUnits.get("u_irradianceMap");
+    const irrLoc = u.get("u_irradianceMap");
+    if (
+      irrLoc &&
+      undefined !== irrUnit &&
+      this._isTextureUnitAvailable(irrUnit, "u_irradianceMap")
+    ) {
+      this.gl.activeTexture(this.gl.TEXTURE0 + irrUnit);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+      this.gl.bindTexture(
+        this.gl.TEXTURE_CUBE_MAP,
+        scene.irradianceMap
+          ? this._textures.getWebGLCubeTexture(scene.irradianceMap, this._quality)
+          : this._blackCubeTexture,
+      );
+      this.gl.uniform1i(irrLoc, irrUnit);
     }
 
-    // --- 1. Bind Material States ---
-    const state = manifest.state;
-    this._bindMaterialState(state);
-    this._bindGenericMaterialProperties(u, manifest.properties, false);
+    // Prefilter Map
+    const prefUnit = cache.samplerUnits.get("u_prefilterMap");
+    const prefLoc = u.get("u_prefilterMap");
+    if (
+      prefLoc &&
+      undefined !== prefUnit &&
+      this._isTextureUnitAvailable(prefUnit, "u_prefilterMap")
+    ) {
+      this.gl.activeTexture(this.gl.TEXTURE0 + prefUnit);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+      this.gl.bindTexture(
+        this.gl.TEXTURE_CUBE_MAP,
+        scene.prefilterMap
+          ? this._textures.getWebGLCubeTexture(scene.prefilterMap, this._quality)
+          : this._blackCubeTexture,
+      );
+      this.gl.uniform1i(prefLoc, prefUnit);
+    }
 
-    // --- 3. Bind Textures ---
+    // BRDF LUT
+    const brdfUnit = cache.samplerUnits.get("u_brdfLUT");
+    const brdfLoc = u.get("u_brdfLUT");
+    if (brdfLoc && undefined !== brdfUnit && this._isTextureUnitAvailable(brdfUnit, "u_brdfLUT")) {
+      this.gl.activeTexture(this.gl.TEXTURE0 + brdfUnit);
+      this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, null);
+      this.gl.bindTexture(
+        this.gl.TEXTURE_2D,
+        scene.brdfLUT
+          ? this._textures.getWebGLTexture(scene.brdfLUT, this._quality)
+          : this._defaultBrdfTexture,
+      );
+      this.gl.uniform1i(brdfLoc, brdfUnit);
+    }
+  }
+
+  /**
+   * Binds this subgroup's material textures onto their reserved sampler units (reusing the cube
+   * fallback for samplerCube uniforms and the per-uniform fallback textures for unassigned maps).
+   * IBL maps are scene-global (bound once by `_bindGlobalIblUniforms`) and are intentionally
+   * skipped here: rebinding them would clobber the correct binding and re-trigger the sampler-type
+   * collision this loop is meant to avoid.
+   */
+  private _bindSubgroupTextures(
+    cache: WebGLProgramCacheEntry,
+    shaderId: string,
+    manifest: RenderManifest,
+  ): void {
+    const u = cache.uniforms;
     const texs = manifest.textures;
     if (shaderId === MaterialType.SKYBOX) {
       this.gl.activeTexture(this.gl.TEXTURE0);
@@ -1420,10 +1480,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       if (uSkybox) this.gl.uniform1i(uSkybox, 0);
     } else {
       for (const [uniformName, unit] of cache.samplerUnits) {
-        // IBL maps are scene-global, not per-object -- already bound once per draw call by the
-        // dedicated "Global IBL Uniforms" block above. Letting this per-object loop also process
-        // them would rebind them, clobbering the correct binding and re-triggering the same
-        // sampler-type collision this loop is meant to avoid.
         if (
           "u_irradianceMap" === uniformName ||
           "u_prefilterMap" === uniformName ||
@@ -1478,165 +1534,168 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         this.gl.uniform1i(loc, unit);
       }
     }
+  }
 
-    // --- 4. Render each object ---
-    for (const o of objects) {
-      if (!o.geometry) continue;
+  /**
+   * Instanced draw for one `InstancedMesh`: upper-bound validation, then manual attribute setup
+   * for the instance matrix/data on the DEFAULT VAO (never the mesh's cached VAO, whose pointers
+   * must stay pristine for the non-instanced path), the instanced draw, and the attribute reset.
+   */
+  private _renderInstancedObject(
+    instMesh: InstancedMesh,
+    cache: WebGLProgramCacheEntry,
+    topology: Topology,
+  ): void {
+    if (instMesh.instanceCount < 0) {
+      throw new Error(`[WebGL2Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
+    }
+    if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
+      throw new Error(
+        `[WebGL2Renderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
+      );
+    }
+    if (instMesh.instanceData && instMesh.instanceData.byteLength < instMesh.instanceCount * 16) {
+      throw new Error(
+        `[WebGL2Renderer] InstancedMesh instanceData buffer too small: required at least ${instMesh.instanceCount * 16} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceData.byteLength} bytes.`,
+      );
+    }
 
-      this._programCache.acquireProgram(o, programKey);
-      this._textures.acquireTextures(o, manifest.textures);
+    this.gl.bindVertexArray(null);
 
-      if (isInstanced) {
-        const instMesh = o as InstancedMesh;
-        if (instMesh.instanceCount < 0) {
-          throw new Error(`[WebGL2Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
-        }
-        if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
-          throw new Error(
-            `[WebGL2Renderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
-          );
-        }
-        if (
-          instMesh.instanceData &&
-          instMesh.instanceData.byteLength < instMesh.instanceCount * 16
-        ) {
-          throw new Error(
-            `[WebGL2Renderer] InstancedMesh instanceData buffer too small: required at least ${instMesh.instanceCount * 16} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceData.byteLength} bytes.`,
-          );
-        }
+    this._uploadModelMatrix(instMesh.worldMatrix.data, undefined, undefined, cache.uniforms);
 
-        // Instanced draws configure their base attributes + instance-matrices manually and reset
-        // them again afterwards, so they run on the DEFAULT VAO -- never on a mesh's cached VAO,
-        // whose pointers must stay pristine for the non-instanced path.
-        this.gl.bindVertexArray(null);
+    let matrixBuf = this._instanceBuffers.get(instMesh);
+    if (!matrixBuf) {
+      matrixBuf = this.gl.createBuffer()!;
+      this._instanceBuffers.set(instMesh, matrixBuf);
+    }
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
+    if (instMesh.instanceMatrixNeedsUpdate) {
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceMatrices, this.gl.DYNAMIC_DRAW);
+      instMesh.instanceMatrixNeedsUpdate = false;
+    }
 
-        this._uploadModelMatrix(instMesh.worldMatrix.data, undefined, undefined, u);
+    const mesh = this._geometry.getOrCreateMesh(instMesh, instMesh.geometry!);
 
-        let matrixBuf = this._instanceBuffers.get(instMesh);
-        if (!matrixBuf) {
-          matrixBuf = this.gl.createBuffer()!;
-          this._instanceBuffers.set(instMesh, matrixBuf);
-        }
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
-        if (instMesh.instanceMatrixNeedsUpdate) {
-          this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceMatrices, this.gl.DYNAMIC_DRAW);
-          instMesh.instanceMatrixNeedsUpdate = false;
-        }
+    mesh.bind(
+      cache.attributes.get("a_position")!,
+      cache.attributes.get("a_normal")!,
+      cache.attributes.get("a_uv")!,
+      cache.attributes.get("a_tangent")!,
+      cache.attributes.get("a_joints") ?? -1,
+      cache.attributes.get("a_weights") ?? -1,
+    );
 
-        const mesh = this._geometry.getOrCreateMesh(instMesh, instMesh.geometry!);
-
-        mesh.bind(
-          cache.attributes.get("a_position")!,
-          cache.attributes.get("a_normal")!,
-          cache.attributes.get("a_uv")!,
-          cache.attributes.get("a_tangent")!,
-          cache.attributes.get("a_joints") ?? -1,
-          cache.attributes.get("a_weights") ?? -1,
-        );
-
-        const loc = cache.attributes.get("a_instanceMatrix");
-        if (loc !== undefined && loc >= 0) {
-          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
-          for (let i = 0; i < 4; i++) {
-            const attribLoc = loc + i;
-            this.gl.enableVertexAttribArray(attribLoc);
-            this.gl.vertexAttribPointer(attribLoc, 4, this.gl.FLOAT, false, 64, i * 16);
-            this.gl.vertexAttribDivisor(attribLoc, 1);
-          }
-        }
-
-        const dataLoc = cache.attributes.get("a_instanceData");
-        if (dataLoc !== undefined && dataLoc >= 0 && instMesh.instanceData) {
-          let dataBuf = this._instanceDataBuffers.get(instMesh);
-          if (!dataBuf) {
-            dataBuf = this.gl.createBuffer()!;
-            this._instanceDataBuffers.set(instMesh, dataBuf);
-          }
-          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
-          if (instMesh.instanceDataNeedsUpdate) {
-            this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
-            instMesh.instanceDataNeedsUpdate = false;
-          }
-          this.gl.enableVertexAttribArray(dataLoc);
-          this.gl.vertexAttribPointer(
-            dataLoc,
-            instMesh.instanceDataSize,
-            this.gl.FLOAT,
-            false,
-            0,
-            0,
-          );
-          this.gl.vertexAttribDivisor(dataLoc, 1);
-        }
-
-        const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;
-        if (mesh.isIndexed) {
-          this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, mesh.ebo ?? null);
-          this.gl.drawElementsInstanced(
-            drawMode,
-            mesh.count,
-            mesh.indexType,
-            0,
-            instMesh.instanceCount,
-          );
-        } else {
-          this.gl.drawArraysInstanced(drawMode, 0, mesh.count, instMesh.instanceCount);
-        }
-
-        if (loc !== undefined && loc >= 0) {
-          for (let i = 0; i < 4; i++) {
-            this.gl.vertexAttribDivisor(loc + i, 0);
-            this.gl.disableVertexAttribArray(loc + i);
-          }
-        }
-        if (dataLoc !== undefined && dataLoc >= 0) {
-          this.gl.vertexAttribDivisor(dataLoc, 0);
-          this.gl.disableVertexAttribArray(dataLoc);
-        }
-      } else {
-        // Model Matrix & Billboarding
-        this._uploadModelMatrix(o.worldMatrix.data, state, vMat, u);
-
-        if (state?.isDecal) this._setDecalUniforms(u, o);
-
-        if (isSkinnedMesh(o) && o.skeleton) {
-          const skel = o.skeleton;
-          const boneLoc =
-            cache.uniforms.get("u_boneMatrices[0]") ??
-            this.gl.getUniformLocation(cache.prog, "u_boneMatrices");
-          if (boneLoc) {
-            // Clamp to the shader's fixed-size array: uploading more matrices than it declares
-            // would either error or overwrite whatever uniform happens to follow it in the program.
-            const maxFloats = MAX_SKINNED_BONES * 16;
-            const boneData =
-              skel.boneMatrices.length > maxFloats
-                ? skel.boneMatrices.subarray(0, maxFloats)
-                : skel.boneMatrices;
-            this.gl.uniformMatrix4fv(boneLoc, false, boneData);
-          }
-        }
-
-        // Bind and Draw Geometry
-        const mesh = this._geometry.getOrCreateMesh(o, o.geometry);
-
-        if (mesh.vaoCapable) {
-          mesh.bindVAO();
-        } else {
-          mesh.bind(
-            cache.attributes.get("a_position")!,
-            cache.attributes.get("a_normal")!,
-            cache.attributes.get("a_uv")!,
-            cache.attributes.get("a_tangent")!,
-            cache.attributes.get("a_joints") ?? -1,
-            cache.attributes.get("a_weights") ?? -1,
-            cache.attributes.get("a_color") ?? -1,
-          );
-        }
-
-        const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;
-        mesh.draw(drawMode, wireframeMode);
+    const loc = cache.attributes.get("a_instanceMatrix");
+    if (loc !== undefined && loc >= 0) {
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
+      for (let i = 0; i < 4; i++) {
+        const attribLoc = loc + i;
+        this.gl.enableVertexAttribArray(attribLoc);
+        this.gl.vertexAttribPointer(attribLoc, 4, this.gl.FLOAT, false, 64, i * 16);
+        this.gl.vertexAttribDivisor(attribLoc, 1);
       }
     }
+
+    const dataLoc = cache.attributes.get("a_instanceData");
+    if (dataLoc !== undefined && dataLoc >= 0 && instMesh.instanceData) {
+      let dataBuf = this._instanceDataBuffers.get(instMesh);
+      if (!dataBuf) {
+        dataBuf = this.gl.createBuffer()!;
+        this._instanceDataBuffers.set(instMesh, dataBuf);
+      }
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
+      if (instMesh.instanceDataNeedsUpdate) {
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
+        instMesh.instanceDataNeedsUpdate = false;
+      }
+      this.gl.enableVertexAttribArray(dataLoc);
+      this.gl.vertexAttribPointer(dataLoc, instMesh.instanceDataSize, this.gl.FLOAT, false, 0, 0);
+      this.gl.vertexAttribDivisor(dataLoc, 1);
+    }
+
+    const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;
+    if (mesh.isIndexed) {
+      this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, mesh.ebo ?? null);
+      this.gl.drawElementsInstanced(
+        drawMode,
+        mesh.count,
+        mesh.indexType,
+        0,
+        instMesh.instanceCount,
+      );
+    } else {
+      this.gl.drawArraysInstanced(drawMode, 0, mesh.count, instMesh.instanceCount);
+    }
+
+    if (loc !== undefined && loc >= 0) {
+      for (let i = 0; i < 4; i++) {
+        this.gl.vertexAttribDivisor(loc + i, 0);
+        this.gl.disableVertexAttribArray(loc + i);
+      }
+    }
+    if (dataLoc !== undefined && dataLoc >= 0) {
+      this.gl.vertexAttribDivisor(dataLoc, 0);
+      this.gl.disableVertexAttribArray(dataLoc);
+    }
+  }
+
+  /**
+   * Non-instanced draw for one object in the subgroup: model-matrix + decal/skin uniform upload,
+   * then geometry bind (cached VAO when the driver supports it, otherwise the per-program
+   * attribute pointers) and the draw call.
+   */
+  private _renderStandardObject(
+    o: Object3D,
+    cache: WebGLProgramCacheEntry,
+    state: RenderManifest["state"],
+    vMat: Float32Array | undefined,
+    topology: Topology,
+    wireframeMode: WireframeMode | undefined,
+  ): void {
+    const u = cache.uniforms;
+
+    // Model Matrix & Billboarding
+    this._uploadModelMatrix(o.worldMatrix.data, state, vMat, u);
+
+    if (state?.isDecal) this._setDecalUniforms(u, o);
+
+    if (isSkinnedMesh(o) && o.skeleton) {
+      const skel = o.skeleton;
+      const boneLoc =
+        cache.uniforms.get("u_boneMatrices[0]") ??
+        this.gl.getUniformLocation(cache.prog, "u_boneMatrices");
+      if (boneLoc) {
+        // Clamp to the shader's fixed-size array: uploading more matrices than it declares
+        // would either error or overwrite whatever uniform happens to follow it in the program.
+        const maxFloats = MAX_SKINNED_BONES * 16;
+        const boneData =
+          skel.boneMatrices.length > maxFloats
+            ? skel.boneMatrices.subarray(0, maxFloats)
+            : skel.boneMatrices;
+        this.gl.uniformMatrix4fv(boneLoc, false, boneData);
+      }
+    }
+
+    // Bind and Draw Geometry
+    const mesh = this._geometry.getOrCreateMesh(o, o.geometry!);
+
+    if (mesh.vaoCapable) {
+      mesh.bindVAO();
+    } else {
+      mesh.bind(
+        cache.attributes.get("a_position")!,
+        cache.attributes.get("a_normal")!,
+        cache.attributes.get("a_uv")!,
+        cache.attributes.get("a_tangent")!,
+        cache.attributes.get("a_joints") ?? -1,
+        cache.attributes.get("a_weights") ?? -1,
+        cache.attributes.get("a_color") ?? -1,
+      );
+    }
+
+    const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;
+    mesh.draw(drawMode, wireframeMode);
   }
 
   public updateGlobalUBO(
