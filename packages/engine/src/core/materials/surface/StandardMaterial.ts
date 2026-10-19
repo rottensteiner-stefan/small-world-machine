@@ -230,13 +230,37 @@ export class StandardMaterial extends AbstractMaterial {
    * single source of truth: `getRenderManifest` packs through it via `writeLane`, so renaming a
    * semantic or relocating a lane can never silently detach material from shader.
    */
-  private static readonly _LANES: readonly [MaterialLane] = [
+  private static readonly _LANES: readonly [MaterialLane, MaterialLane] = [
     {
       semantic: "reflectionFresnelBlend",
       lane: "u_matParam0",
       note: "x = blend (0..1), yzw unused",
     },
+    {
+      semantic: "sheenColor",
+      lane: "u_matParam10",
+      note:
+        "rgb = sheen tint (sRGB, the shaders linearize), w = enable flag: 1.0 iff sheenColor > 0 or " +
+        "sheenColorMap present. Decouples sheen from u_specColor (emissive): the w-flag mirrors the " +
+        "USE_SHEEN push basis exactly, so the WebGL1/WebGPU runtime gate and the WebGL2 compile gate " +
+        "activate identically (ADR 0039 sheen decision). Lane 10 sits clear of the reflection/water/ " +
+        "decal/lava semantics that occupy lanes 0..9.",
+    },
   ];
+
+  /**
+   * Sheen setup exists iff a tint color (>0) or a tint map is present. This is the single basis for
+   * both the `USE_SHEEN` compile flag (WebGL2) and the `u_matParam10.w` runtime enable (WebGL1/WebGPU),
+   * so every backend activates sheen under exactly the same condition.
+   */
+  private get hasSheenSetup(): boolean {
+    return (
+      this.sheenColor.r > 0 ||
+      this.sheenColor.g > 0 ||
+      this.sheenColor.b > 0 ||
+      undefined !== this.sheenColorMap
+    );
+  }
 
   /**
    * Creates a new StandardMaterial.
@@ -395,6 +419,13 @@ export class StandardMaterial extends AbstractMaterial {
       0,
       0,
     ]);
+    // Sheen travels decoupled from u_specColor (emissive) in _LANES[1]; see the lane's contract note.
+    writeLane(this._renderManifest, StandardMaterial._LANES[1], [
+      this.sheenColor.r,
+      this.sheenColor.g,
+      this.sheenColor.b,
+      this.hasSheenSetup ? 1 : 0,
+    ]);
     props["u_time"] = this.time;
 
     const flags: string[] = [];
@@ -418,12 +449,7 @@ export class StandardMaterial extends AbstractMaterial {
     if (this.clearcoatMap) flags.push("USE_CLEARCOAT_MAP");
     if (this.clearcoatRoughnessMap) flags.push("USE_CLEARCOAT_ROUGHNESS_MAP");
     if (this.clearcoatNormalMap) flags.push("USE_CLEARCOAT_NORMAL_MAP");
-    if (
-      this.sheenColor.r > 0 ||
-      this.sheenColor.g > 0 ||
-      this.sheenColor.b > 0 ||
-      this.sheenColorMap
-    ) {
+    if (this.hasSheenSetup) {
       flags.push("USE_SHEEN");
     }
     if (this.sheenColorMap) flags.push("USE_SHEEN_COLOR_MAP");

@@ -65,6 +65,10 @@ uniform float u_reflectivity;
 uniform vec4 u_matParam0;
 uniform float u_time;
 
+// Typed semantic lane (ADR 0027 / 0039): sheenColor -- rgb tint (sRGB, linearized below), w = enable
+// flag mirroring the USE_SHEEN push basis (sheen is decoupled from u_specColor / emissive).
+uniform vec4 u_matParam10;
+
 void main() {
     // Reconstruct original UV for static alpha map
     vec2 original_uv = v_uv / u_texRepeat;

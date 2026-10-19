@@ -30,6 +30,19 @@
     byte-identisch, **keine Verhaltensänderung** (WebGL1/WebGL2/WebGPU-Showcases 10/12/16 im Browser
     ohne neue Fehler). Sheen/Emissive-`u_specColor`-Semantik-Divergenz (Bericht 02 #8) bleibt bewusst
     als offener Verhaltens-Entscheidungspunkt dokumentiert (WebGL1/GPU vs. WebGL2).
+  - *Sheen/Emissive entkoppelt — Sheen läuft nur noch über `sheenColor` (engine, ADR-0039-Entscheid vom
+    2026-10-19):* die dort als offen gemeldete Drei-Backend-Divergenz ist geschlossen. `u_specColor`
+    ist ausschließlich Emissiv; Sheen-Tint und ein Enable-Flag reisen in der neuen typisierten Lane
+    `u_matParam10` (`StandardMaterial._LANES[1]`; rgb = Tint sRGB, w = Enable exakt nach der
+    USE_SHEEN-Push-Bedingung). Alle drei Renderer triggern jetzt identisch — WebGL1/WebGPU über das
+    Runtime-Gate `u_matParam10.w > 0.5`, WebGL2 über das Compile-Flag `USE_SHEEN` — und tinten überall
+    mit `sRGBToLinear(u_matParam10.rgb)` (WebGL2 ersetzt den bisherigen Weiß-Default durch die echte
+    Property-Farbe). **Behaviour change:** emissive Materialien rendern auf WebGL1/WebGPU nicht mehr
+    mit einer unbeabsichtigten Sheen-Lobe; `sheenColor` wirkt nun in allen Backends als Tint (zuvor
+    nur als WebGL2-Flag-Schalter). Umgesetzt in `StandardMaterial`, den PBR-`light_calc_pbr`-Chunks
+    (glsl100/glsl300) und `lighting_pbr.wgsl`; gepinnt durch neue Unit-Tests und den
+    `SheenDecouplingParity`-Source-Test. Bekannte Rest-Grenze (vorbestehend, WebGL2-only): Sheen-
+    Color-/Roughness-Maps sind nur auf WebGL2 verdrahtet.
   - *BoundingVolume-Vollendung, Collision-Kern-Zerlegung & Revolve-Generator (engine, wave 2, Paket D,
     ADR 0040):* der `Collision`-Monolith (1326 Zeilen) wurde in eine dünne Fassade (generischer
     `test`/`resolve`-Dispatch, Kugel/Box-Primitive, Einzeiler-Delegatoren) plus drei wert-erhaltende

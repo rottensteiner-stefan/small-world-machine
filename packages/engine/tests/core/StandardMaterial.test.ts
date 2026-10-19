@@ -142,4 +142,57 @@ describe("StandardMaterial", () => {
     expect(copy.attenuationDistance).toBe(5.0);
     expect(copy.attenuationColor.b).toBeCloseTo(0.8);
   });
+
+  it("should keep u_specColor emissive-only and enable sheen only via the sheenColor setup (decoupling)", () => {
+    // ADR 0039 sheen decision: an emissive-only material must no longer derive a sheen lobe on
+    // WebGL1/WebGPU (which previously gated sheen on emissive.rgb > 0). The typed u_matParam10 lane
+    // carries tint rgb + an enable w-flag that mirrors the USE_SHEEN push basis exactly.
+    const material = new StandardMaterial({
+      emissiveColor: new Color(1.0, 0.0, 0.0),
+      emissiveIntensity: 2.0,
+    });
+
+    const manifest = material.getRenderManifest();
+    const specColor = manifest.properties["u_specColor"] as Float32Array;
+    expect(specColor[0]).toBeCloseTo(1.0, 5);
+    expect(specColor[3]).toBeCloseTo(2.0, 5);
+
+    const sheenLane = manifest.properties["u_matParam10"] as number[];
+    expect(sheenLane[3]).toBe(0); // no sheen activation
+    expect(manifest.flags).not.toContain("USE_SHEEN");
+  });
+
+  it("should pack sheenColor into the u_matParam10 lane and keep u_specColor emissive-only", () => {
+    const material = new StandardMaterial({
+      emissiveColor: new Color(1.0, 0.5, 0.2),
+      sheenColor: new Color(0.9, 0.8, 0.7),
+      sheenRoughness: 0.3,
+    });
+
+    const manifest = material.getRenderManifest();
+    const sheenLane = manifest.properties["u_matParam10"] as number[];
+    expect(sheenLane[0]).toBeCloseTo(0.9, 5);
+    expect(sheenLane[1]).toBeCloseTo(0.8, 5);
+    expect(sheenLane[2]).toBeCloseTo(0.7, 5);
+    expect(sheenLane[3]).toBe(1); // enable
+    expect(manifest.flags).toContain("USE_SHEEN");
+
+    const specColor = manifest.properties["u_specColor"] as Float32Array;
+    expect(specColor[0]).toBeCloseTo(1.0, 5);
+    expect(specColor[1]).toBeCloseTo(0.5, 5);
+    expect(specColor[2]).toBeCloseTo(0.2, 5);
+  });
+
+  it("should enable sheen from sheenColorMap alone even with sheenColor set to black", () => {
+    const material = new StandardMaterial({
+      sheenColorMap: Texture.empty(),
+    });
+
+    const manifest = material.getRenderManifest();
+    const sheenLane = manifest.properties["u_matParam10"] as number[];
+    expect(sheenLane[3]).toBe(1);
+    expect(manifest.flags).toContain("USE_SHEEN");
+    expect(manifest.flags).toContain("USE_SHEEN_COLOR_MAP");
+    expect(manifest.flags).not.toContain("USE_COLOR_MAP");
+  });
 });

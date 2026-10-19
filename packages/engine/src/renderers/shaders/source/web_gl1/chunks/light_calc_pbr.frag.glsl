@@ -12,6 +12,8 @@ vec3 F0 = vec3(f0_dielectric);
 F0 = clamp(mix(F0, albedo, metallic), vec3(0.0), vec3(1.0));
 
 float clearcoat = u_liquidParams.w;
+// Sheen is decoupled from u_specColor (emissive): tint + enable travel in the typed u_matParam10
+// lane (ADR 0039 sheen decision); the runtime w-flag mirrors WebGL2's USE_SHEEN compile gate.
 float clearcoatRoughness = clamp(u_thresholds.x, 0.05, 1.0);
 float sheenRoughness = clamp(u_thresholds.y, 0.05, 1.0);
 
@@ -45,10 +47,10 @@ vec3 Lo = vec3(0.0);
         directLight = directLight * (1.0 - clearcoat * F_cc.r) + clearcoatSpecular * radiance * dotNL;
     }
 
-    if (sheenRoughness > 0.0 && (u_specColor.r > 0.0 || u_specColor.g > 0.0 || u_specColor.b > 0.0)) {
+    if (u_matParam10.w > 0.5) {
         float D_s = D_Charlie(dotNH, sheenRoughness);
         float V_s = V_Neubelt(dotNL, dotNV);
-        vec3 sheenSpecular = u_specColor.rgb * (D_s * V_s);
+        vec3 sheenSpecular = sRGBToLinear(u_matParam10.rgb) * (D_s * V_s);
         directLight += sheenSpecular * radiance * dotNL;
     }
 
@@ -102,10 +104,10 @@ for(int i = 0; i < 16; i++) {
         directLight = directLight * (1.0 - clearcoat * F_cc.r) + clearcoatSpecular * radiance * dotNL;
     }
 
-    if (sheenRoughness > 0.0 && (u_specColor.r > 0.0 || u_specColor.g > 0.0 || u_specColor.b > 0.0)) {
+    if (u_matParam10.w > 0.5) {
         float D_s = D_Charlie(dotNH, sheenRoughness);
         float V_s = V_Neubelt(dotNL, dotNV);
-        vec3 sheenSpecular = u_specColor.rgb * (D_s * V_s);
+        vec3 sheenSpecular = sRGBToLinear(u_matParam10.rgb) * (D_s * V_s);
         directLight += sheenSpecular * radiance * dotNL;
     }
 
@@ -160,10 +162,10 @@ for(int i = 0; i < 4; i++) {
         directLight = directLight * (1.0 - clearcoat * F_cc.r) + clearcoatSpecular * radiance * dotNL;
     }
 
-    if (sheenRoughness > 0.0 && (u_specColor.r > 0.0 || u_specColor.g > 0.0 || u_specColor.b > 0.0)) {
+    if (u_matParam10.w > 0.5) {
         float D_s = D_Charlie(dotNH, sheenRoughness);
         float V_s = V_Neubelt(dotNL, dotNV);
-        vec3 sheenSpecular = u_specColor.rgb * (D_s * V_s);
+        vec3 sheenSpecular = sRGBToLinear(u_matParam10.rgb) * (D_s * V_s);
         directLight += sheenSpecular * radiance * dotNL;
     }
 

@@ -26,6 +26,7 @@ async function loadChunksFromDir(dir: string, chunks: Map<string, string>) {
         if (name === "LIGHTING_PBR") key = "WGSL_PBR_LIGHTING";
         if (name === "LIGHTING") key = "WGSL_LIGHTING";
         if (name === "FOG_CALC") key = "WGSL_FOG_CALC";
+        if (name === "GLASS_PBR_LOOPS") key = "WGSL_GLASS_PBR_LOOPS";
 
         chunks.set(key, content);
       }

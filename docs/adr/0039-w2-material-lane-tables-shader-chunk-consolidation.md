@@ -6,8 +6,8 @@
 > Cluster-Index-Mathe), `15-cross-cutting-and-roadmap.md` (§2.8/§2.9); Paket-Spezifikation
 > `.agents/scratches/wave2-package-C.md`.
 > **Übernommen am 2026-10-19 (Maintainer-Abnahme):** ACCEPTED; der DRAFT-Vorbehalt ist obsolet. Der offene
-> Verhaltens-Entscheidungspunkt Sheen-`specColor`-Divergenz (Entscheidung 4) wird separat geklärt;
-> Ergebnis wird dort bzw. in der CHANGELOG nachgetragen.
+> Verhaltens-Entscheidungspunkt Sheen-`specColor`-Divergenz (Entscheidung 4) ist **RESOLVED 2026-10-19
+> (Maintainer-Entscheid)** — siehe Nachtrag in Entscheidung 4.
 > **Pfade/Commits bezogen auf `HEAD 4806d21a` (2026-10-19); parallele Sessions verschieben Zeilen — vor
 > weiterer Umsetzung re-validieren. Wave-2-ADR-Nummern: 0037=A (GPU), 0038=B (WebGL, gelandet), 0039=C
 > (Materialien, dieses), 0040=D (Physix/Geometrie); `docs/adr/index.md` schreibt zentral die Koordination.**
@@ -65,6 +65,16 @@ Zwei auditierte Mängel in den Material-/Shader-Quellen:
      WebGL2-Äquivalent — **drei Semantiken, vorbestehend.** Eine Vereinheitlichung wäre eine
      sichtbare Verhaltensänderung (mind. eines Backends) → bewusst NICHT still in Paket C korrigiert;
      User-Entscheid + CHANGELOG-Bullet vorgeschlagen.
+     **NACHTRAG / RESOLVED 2026-10-19 (Maintainer-Entscheid „jetzt perfekt lösen, kein Ausweichen"):**
+     Die Divergenz wurde geschlossen — Sheen ist in allen drei Backends ausschließlich über
+     `sheenColor`/`sheenColorMap` aktiv. Tint + Enable reisen in der neuen typisierten Lane
+     `u_matParam10` (rgb = Tint sRGB, w = Enable nach exakt der `USE_SHEEN`-Push-Basis);
+     `u_specColor` bleibt reines Emissiv. Verhaltensänderung (beabsichtigt, CHANGELOG markiert):
+     emissive Materialien verlieren auf WebGL1/WebGPU die unbeabsichtigte Sheen-Lobe; `sheenColor`
+     wirkt nun als Tint statt nur als WebGL2-Flag-Schalter. **Bekannte Rest-Grenze (vorbestehend,
+     WebGL2-only):** Sheen-Color-/Roughness-Maps bleiben nur auf WebGL2 verdrahtet (WebGL1-glsl100
+     und WebGPU deklarieren die Map-Sampler nicht). Fix + Pins: `StandardMaterial`, PBR-`light_calc`
+     (glsl100/glsl300) + `lighting_pbr.wgsl`, neue Unit- und `SheenDecouplingParity`-Tests.
    - **Decals `color.a`-Manifest (Showcase 12):** `u_color.a` bleibt echtes Alpha
      (`DecalMaterial` → `u_color`), von den Task-1-Lane-Umlegungen unberührt; Showcase 12 im Browser
      ohne neue Fehler. OK.

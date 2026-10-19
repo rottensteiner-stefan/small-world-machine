@@ -16,6 +16,8 @@ let f0_dielectric = pow((ior - 1.0) / (ior + 1.0), 2.0);
 var F0 = clamp(mix(vec3f(f0_dielectric), albedo, metallic), vec3f(0.0), vec3f(1.0));
 
 let clearcoat = obj.liquidParams.w;
+// Sheen is decoupled from the emissive specColor: tint + enable travel in the typed matParam10 lane
+// (ADR 0039 sheen decision); the runtime w-flag mirrors WebGL2's USE_SHEEN compile gate.
 let clearcoatRoughness = clamp(obj.thresholds.x, 0.05, 1.0);
 let sheenRoughness = clamp(obj.thresholds.y, 0.05, 1.0);
 
@@ -83,10 +85,10 @@ var Lo = vec3f(0.0);
         directLight = directLight * (1.0 - clearcoat * F_cc.x) + clearcoatSpecular * radiance * dotNL;
     }
 
-    if (sheenRoughness > 0.0 && (obj.specColor.r > 0.0 || obj.specColor.g > 0.0 || obj.specColor.b > 0.0)) {
+    if (obj.matParam10.w > 0.5) {
         let D_s = D_Charlie(dotNH, sheenRoughness);
         let V_s = V_Neubelt(dotNL, dotNV);
-        let sheenSpecular = obj.specColor.rgb * (D_s * V_s);
+        let sheenSpecular = sRGBToLinear(obj.matParam10.rgb) * (D_s * V_s);
         directLight += sheenSpecular * radiance * dotNL;
     }
 
@@ -151,10 +153,10 @@ for(var k=0u; k<pointCluster.y; k++) {
             directLight = directLight * (1.0 - clearcoat * F_cc.x) + clearcoatSpecular * radiance * dotNL;
         }
 
-        if (sheenRoughness > 0.0 && (obj.specColor.r > 0.0 || obj.specColor.g > 0.0 || obj.specColor.b > 0.0)) {
+        if (obj.matParam10.w > 0.5) {
             let D_s = D_Charlie(dotNH, sheenRoughness);
             let V_s = V_Neubelt(dotNL, dotNV);
-            let sheenSpecular = obj.specColor.rgb * (D_s * V_s);
+            let sheenSpecular = sRGBToLinear(obj.matParam10.rgb) * (D_s * V_s);
             directLight += sheenSpecular * radiance * dotNL;
         }
 
@@ -215,10 +217,10 @@ for(var k=0u; k<spotCluster.y; k++) {
             directLight = directLight * (1.0 - clearcoat * F_cc.x) + clearcoatSpecular * radiance * dotNL;
         }
 
-        if (sheenRoughness > 0.0 && (obj.specColor.r > 0.0 || obj.specColor.g > 0.0 || obj.specColor.b > 0.0)) {
+        if (obj.matParam10.w > 0.5) {
             let D_s = D_Charlie(dotNH, sheenRoughness);
             let V_s = V_Neubelt(dotNL, dotNV);
-            let sheenSpecular = obj.specColor.rgb * (D_s * V_s);
+            let sheenSpecular = sRGBToLinear(obj.matParam10.rgb) * (D_s * V_s);
             directLight += sheenSpecular * radiance * dotNL;
         }
 
@@ -273,10 +275,10 @@ for(var j=0u; j<u32(global.numAreaLights); j++) {
         directLight = directLight * (1.0 - clearcoat * F_cc.x) + clearcoatSpecular * radiance * dotNL;
     }
 
-    if (sheenRoughness > 0.0 && (obj.specColor.r > 0.0 || obj.specColor.g > 0.0 || obj.specColor.b > 0.0)) {
+    if (obj.matParam10.w > 0.5) {
         let D_s = D_Charlie(dotNH, sheenRoughness);
         let V_s = V_Neubelt(dotNL, dotNV);
-        let sheenSpecular = obj.specColor.rgb * (D_s * V_s);
+        let sheenSpecular = sRGBToLinear(obj.matParam10.rgb) * (D_s * V_s);
         directLight += sheenSpecular * radiance * dotNL;
     }
 

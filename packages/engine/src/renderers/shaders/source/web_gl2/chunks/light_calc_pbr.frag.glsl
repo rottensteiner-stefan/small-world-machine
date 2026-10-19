@@ -50,7 +50,9 @@ float dotNV_cc = max(dot(N_cc, V), 0.0001);
 #endif
 
 #ifdef USE_SHEEN
-vec3 sheenColor = vec3(1.0);
+// Sheen tint comes from the typed u_matParam10 lane (decoupled from the emissive u_specColor); see
+// StandardMaterial._LANES. The USE_SHEEN compile gate is pushed from the same basis as the lane's w-flag.
+vec3 sheenColor = sRGBToLinear(u_matParam10.rgb);
 #ifdef USE_SHEEN_COLOR_MAP
 sheenColor = sRGBToLinear(texture(u_sheenColorMap, v_uv).rgb);
 #endif
