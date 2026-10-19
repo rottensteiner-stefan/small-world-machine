@@ -85,20 +85,22 @@ fn rpRipple(r: f32, age: f32, dropDiameter: f32, strength: f32, depth: f32, foot
     return vec2f(slope * sin(phase) * resolved, 0.5 * slope * slope * (1.0 - resolved));
 }
 
-// Crown + Worthington-jet illusion for the first ~50 ms of an impact (ADR 0042, decision 3).
-// x = radial slope d(eta)/dr, y = highlight weight. Sub-pixel crowns fade instead of aliasing.
+// Crown + Worthington-jet illusion for the first ~120 ms of an impact (ADR 0042, decision 3); see the
+// GLSL twin for the reasoning. x = radial slope d(eta)/dr, y = highlight weight. Sub-pixel crowns fade
+// instead of aliasing.
+const RP_CROWN_LIFE: f32 = 0.12;
 fn rpCrown(r: f32, age: f32, diameter: f32, strength: f32, footprint: f32) -> vec2f {
     let craterRadius = 1.5 * diameter;
-    let t = age / 0.05;
-    let alive = step(0.0, age) * (1.0 - smoothstep(0.6, 1.0, t));
-    let rimRadius = craterRadius * (1.0 + 0.8 * clamp(t, 0.0, 1.0));
-    let x = (r - rimRadius) / (0.35 * craterRadius);
+    let t = age / RP_CROWN_LIFE;
+    let alive = step(0.0, age) * (1.0 - smoothstep(0.55, 1.0, t));
+    let rimRadius = craterRadius * (1.0 + 1.4 * clamp(t, 0.0, 1.0));
+    let x = (r - rimRadius) / (0.45 * craterRadius);
     let rim = exp(-x * x);
-    let jetWindow = smoothstep(0.25, 0.4, t) * (1.0 - smoothstep(0.8, 1.0, t));
-    let jetR = r / (0.4 * diameter);
+    let jetWindow = smoothstep(0.1, 0.25, t) * (1.0 - smoothstep(0.6, 1.0, t));
+    let jetR = r / (0.5 * diameter);
     let jet = exp(-jetR * jetR) * jetWindow;
     let size = clamp(2.0 * craterRadius / max(footprint, 1.0e-5), 0.0, 1.0);
-    return strength * vec2f(-2.4 * x * rim * alive * size * size, (0.6 * rim * alive + jet) * size);
+    return strength * vec2f(-2.4 * x * rim * alive * size * size, (0.8 * rim * alive + jet) * size);
 }
 
 // Floating hemispherical bubble: born once the crater has closed (~40 ms), lives `lifetime` seconds,

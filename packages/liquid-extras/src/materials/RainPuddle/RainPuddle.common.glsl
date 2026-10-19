@@ -95,21 +95,24 @@ vec2 rpRipple(float r, float age, float dropDiameter, float strength, float dept
     return vec2(slope * sin(phase) * resolved, 0.5 * slope * slope * (1.0 - resolved));
 }
 
-// Crown + Worthington-jet illusion for the first ~50 ms of an impact (ADR 0042, decision 3): no
-// geometry, only a raised rim travelling out of the crater and a bright point where the jet rises.
+// Crown + Worthington-jet illusion for the first ~120 ms of an impact (ADR 0042, decision 3): no
+// geometry, only a raised rim spreading out of the crater and a bright point where the jet rises and
+// falls (it hands over to the daughter drop that lands at 100 ms). 120 ms is ~7 frames at 60 Hz;
+// anything much shorter is gone before the eye registers it.
 // x = radial slope d(eta)/dr, y = highlight weight. Sub-pixel crowns fade instead of aliasing.
+const float RP_CROWN_LIFE = 0.12;
 vec2 rpCrown(float r, float age, float diameter, float strength, float footprint) {
     float craterRadius = 1.5 * diameter;
-    float t = age / 0.05;
-    float alive = step(0.0, age) * (1.0 - smoothstep(0.6, 1.0, t));
-    float rimRadius = craterRadius * (1.0 + 0.8 * clamp(t, 0.0, 1.0));
-    float x = (r - rimRadius) / (0.35 * craterRadius);
+    float t = age / RP_CROWN_LIFE;
+    float alive = step(0.0, age) * (1.0 - smoothstep(0.55, 1.0, t));
+    float rimRadius = craterRadius * (1.0 + 1.4 * clamp(t, 0.0, 1.0));
+    float x = (r - rimRadius) / (0.45 * craterRadius);
     float rim = exp(-x * x);
-    float jetWindow = smoothstep(0.25, 0.4, t) * (1.0 - smoothstep(0.8, 1.0, t));
-    float jetR = r / (0.4 * diameter);
+    float jetWindow = smoothstep(0.1, 0.25, t) * (1.0 - smoothstep(0.6, 1.0, t));
+    float jetR = r / (0.5 * diameter);
     float jet = exp(-jetR * jetR) * jetWindow;
     float size = clamp(2.0 * craterRadius / max(footprint, 1.0e-5), 0.0, 1.0);
-    return strength * vec2(-2.4 * x * rim * alive * size * size, (0.6 * rim * alive + jet) * size);
+    return strength * vec2(-2.4 * x * rim * alive * size * size, (0.8 * rim * alive + jet) * size);
 }
 
 #ifdef RP_BUBBLES
