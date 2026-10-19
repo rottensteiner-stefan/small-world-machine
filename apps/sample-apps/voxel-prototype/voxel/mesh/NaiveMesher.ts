@@ -1,5 +1,5 @@
 import type { BlockRegistry } from "../BlockRegistry.js";
-import { faceAxisForNormal } from "../BlockRegistry.js";
+import { BLOCK_AIR, faceAxisForNormal } from "../BlockRegistry.js";
 import { Chunk } from "../Chunk.js";
 
 /**
@@ -9,7 +9,9 @@ import { Chunk } from "../Chunk.js";
  * this shape back via `postMessage`).
  *
  * Per-vertex `colors` packs the atlas layer in `.r` (the engine binds `colors` at the fixed
- * attribute location 11 / `a_color`, read by the block shader); `.g/.b/.a` are left at 1.
+ * attribute location 11 / `a_color`, read by the block shader), the baked vertex-Occlusion
+ * factor in `.g` (0..1, Minecraft 4-level scheme -- M2), and `.b/.a` are left at 1. `colors.g`
+ * is 1 for transparent (water) faces, which get no block AO.
  */
 export interface VoxelMeshData {
   positions: Float32Array;
@@ -210,15 +212,49 @@ export function buildNeighborRim(neighborVoxels: Uint8Array, dir: FaceDir): Uint
 }
 
 /**
+ * M2 AO seam extension: the four horizontal DIAGONAL neighbors, tagged by the signs of their
+ * offset from this chunk ("p" = +, "n" = -; first char is X, second Z). Each diagonal chunk
+ * hands over ONLY the 16-tall vertical column at ITS corner adjacent to this chunk -- that is
+ * the single cell column the vertex-AO of a 4-chunk-corner face would otherwise miss, which
+ * would show as a bright "AO leak". Shipping 4 × 16 bytes keeps the AO seam-exact for every
+ * vertex without importing any neighbor chunk wholesale (M1 rim contract, extended).
+ */
+export type CornerDir = "pp" | "pn" | "np" | "nn";
+
+/** Local (x, z) corner of the diagonal chunk that faces THIS chunk, per `CornerDir`. */
+export const CORNER_COLUMNS: Readonly<Record<CornerDir, readonly [number, number]>> = {
+  pp: [0, 0], // diagonal at +X, +Z  -> its (0, 0) corner
+  pn: [0, 15], // diagonal at +X, -Z  -> its (0, 15) corner
+  np: [15, 0], // diagonal at -X, +Z  -> its (15, 0) corner
+  nn: [15, 15], // diagonal at -X, -Z  -> its (15, 15) corner
+};
+
+/** Extracts the 16-tall corner column of `neighborVoxels` (a full chunk) that faces THIS chunk
+ *  across the given diagonal. Pure copy, indexed by local Y (0..15) -- never aliases the source. */
+export function buildNeighborCorner(neighborVoxels: Uint8Array, corner: CornerDir): Uint8Array {
+  const size = Chunk.SIZE;
+  const pos = CORNER_COLUMNS[corner];
+  const column = new Uint8Array(size);
+  for (let y = 0; y < size; y++) {
+    column[y] = neighborVoxels[pos[0] + pos[1] * size + y * size * size]!;
+  }
+  return column;
+}
+
+/**
  * Input of the pure mesher. `voxels` is the chunk's raw block-id buffer (Chunk.SIZE³),
  * `descriptor` the transferable registry subset, `neighbors` the optional border planes of the
- * six axis-neighbors. A missing neighbor plane means "air" (a world/vertical edge), which keeps
- * the M0 single-chunk semantics (border faces exposed) intact when meshing without neighbors.
+ * six axis-neighbors and `neighborCorners` the optional AO corner columns of the four diagonal
+ * neighbors. A missing neighbor plane/corner means "air" (a world/vertical edge, or the M0
+ * single-chunk semantics) -- the seam contract is exact once the caller supplies all of them
+ * (`ChunkWorld` gates meshing on all 8 neighbors being present, M2).
  */
 export interface MeshBuildInput {
   voxels: Uint8Array;
   descriptor: readonly MeshBlockDescriptorEntry[];
   neighbors?: Partial<Record<FaceDir, Uint8Array>>;
+  /** `undefined` (or absent) means "no corner data": the M0/M1 single-chunk air semantics. */
+  neighborCorners?: Partial<Record<CornerDir, Uint8Array>> | undefined;
 }
 
 /**
@@ -265,15 +301,91 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
     return descriptor.get(input.voxels[x + z * size + y * size * size]!)?.opaque ?? false;
   };
 
+  /** Raw block id at (x,y,z), local or across a border: axis-out cells resolve through the
+   *  `neighbors` rim planes, a 4-chunk-corner cell through the `neighborCorners` AO columns
+   *  (M2 seam-exact AO), and out-of-world Y reads as air. Missing planes/corners read as air
+   *  (M0/world-edge semantics). This is the ONLY border-aware raw-id accessor; the AO and the
+   *  transparent-face passes use it -- never `input.voxels` directly. */
+  const cellIdAt = (x: number, y: number, z: number): number => {
+    if (y < 0 || y >= size) return BLOCK_AIR;
+    const xOut = x < 0 ? -1 : x >= size ? 1 : 0;
+    const zOut = z < 0 ? -1 : z >= size ? 1 : 0;
+    if (xOut !== 0 && zOut !== 0) {
+      const cornerDir = `${xOut > 0 ? "p" : "n"}${zOut > 0 ? "p" : "n"}` as CornerDir;
+      const column = input.neighborCorners?.[cornerDir];
+      return column ? column[y]! : BLOCK_AIR;
+    }
+    if (xOut !== 0) {
+      const dir: FaceDir = xOut > 0 ? "px" : "nx";
+      const rim = neighbors[dir];
+      if (!rim) return BLOCK_AIR;
+      return rim[y + z * size] ?? BLOCK_AIR;
+    }
+    if (zOut !== 0) {
+      const dir: FaceDir = zOut > 0 ? "pz" : "nz";
+      const rim = neighbors[dir];
+      if (!rim) return BLOCK_AIR;
+      return rim[x + y * size] ?? BLOCK_AIR;
+    }
+    return input.voxels[x + z * size + y * size * size]!;
+  };
+
+  /** Minecraft-treue 4-Level-Vertex-Occlusion (D5): occ in {0..3} -> Faktor in {1, 2/3, 1/3, 0},
+   *  0 = dunkelste Vertiefung. Stichproben sind die beiden In-Ebene-Kanten-Nachbarn und der
+   *  In-Ebene-Corner in der AUSSEREN-Face-Schicht (block + Face-Normale): ein komplett
+   *  eingeschlossener Corner ist am dunkelsten, ein offener bleibt hell (MC-Look). Eine
+   *  Own-Plane-Stichprobe würde jede geteilte Blockkante von flachem Gelände verdunkeln --
+   *  bewusst die Aussen-Schicht. Rand-Scheitel greifen über die Rims + Ecken-Spalten und sind
+   *  damit byte-identisch zum Nachbar-Chunk (ChunkWorld gated auf 8 Nachbarn). */
+  const vertexOcclusionFactors = (
+    x: number,
+    y: number,
+    z: number,
+    face: FaceTemplate,
+  ): readonly [number, number, number, number] => {
+    const n = face.normal;
+    const ta = face.tangentA;
+    const tb = face.tangentB;
+    const factors: [number, number, number, number] = [1, 1, 1, 1];
+    const corners: readonly (readonly [number, number])[] = [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ];
+    for (let k = 0; k < 4; k++) {
+      const sA = corners[k]![0] === 0 ? -1 : 1;
+      const sB = corners[k]![1] === 0 ? -1 : 1;
+      const sideAX = x + n[0]! + sA * ta[0]!;
+      const sideAY = y + n[1]! + sA * ta[1]!;
+      const sideAZ = z + n[2]! + sA * ta[2]!;
+      const sideBX = x + n[0]! + sB * tb[0]!;
+      const sideBY = y + n[1]! + sB * tb[1]!;
+      const sideBZ = z + n[2]! + sB * tb[2]!;
+      const cornerX = x + n[0]! + sA * ta[0]! + sB * tb[0]!;
+      const cornerY = y + n[1]! + sA * ta[1]! + sB * tb[1]!;
+      const cornerZ = z + n[2]! + sA * ta[2]! + sB * tb[2]!;
+      const a = (descriptor.get(cellIdAt(sideAX, sideAY, sideAZ))?.opaque ?? false) ? 1 : 0;
+      const b = (descriptor.get(cellIdAt(sideBX, sideBY, sideBZ))?.opaque ?? false) ? 1 : 0;
+      const d = (descriptor.get(cellIdAt(cornerX, cornerY, cornerZ))?.opaque ?? false) ? 1 : 0;
+      const occ = a === 1 && b === 1 ? 3 : a + b + d;
+      factors[k] = 1 - occ / 3;
+    }
+    return factors;
+  };
+
   const visibleFaces: Array<{
     x: number;
     y: number;
     z: number;
     face: FaceTemplate;
     layer: number;
+    ao: readonly [number, number, number, number];
   }> = [];
 
-  // Pass 1 -- collect visible faces (also sizes the output arrays exactly).
+  // Pass 1 -- collect opaque visible faces (also sizes the output arrays exactly). AO is baked
+  // per vertex; border faces sample the neighbor planes through the rims + 4-chunk-corner
+  // column, so the seam vertices are byte-identical to what the neighbor chunk would compute.
   for (let y = 0; y < size; y++) {
     for (let z = 0; z < size; z++) {
       for (let x = 0; x < size; x++) {
@@ -289,7 +401,32 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
           const axis = faceAxisForNormal(face.normal[1]!);
           const layers = descriptor.get(id)!.layers;
           const layer = layers[axis]!;
-          visibleFaces.push({ x, y, z, face, layer });
+          visibleFaces.push({ x, y, z, face, layer, ao: vertexOcclusionFactors(x, y, z, face) });
+        }
+      }
+    }
+  }
+
+  // Pass 1.5 -- collect TRANSPARENT (water) faces (D3): only faces directly against AIR are
+  // emitted -- no water-water or water-solid surfaces, which avoids z-fighting with the opaque
+  // pass by construction. Water carries no block AO (ao = 1,1,1,1): a translucent surface must
+  // not be crevice-darkened, and the transparent pass stays free of the corner-column logic.
+  for (let y = 0; y < size; y++) {
+    for (let z = 0; z < size; z++) {
+      for (let x = 0; x < size; x++) {
+        const id = input.voxels[x + z * size + y * size * size]!;
+        const def = descriptor.get(id);
+        if (!def || def.opaque) continue;
+
+        for (const face of FACES) {
+          const nx = x + face.neighborOffset[0]!;
+          const ny = y + face.neighborOffset[1]!;
+          const nz = z + face.neighborOffset[2]!;
+          if (cellIdAt(nx, ny, nz) !== BLOCK_AIR) continue;
+
+          const axis = faceAxisForNormal(face.normal[1]!);
+          const layer = def.layers[axis]!;
+          visibleFaces.push({ x, y, z, face, layer, ao: [1, 1, 1, 1] });
         }
       }
     }
@@ -312,7 +449,7 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
   let ii = 0;
   for (let f = 0; f < visibleFaces.length; f++) {
     const entry = visibleFaces[f]!;
-    const { x, y, z, face, layer } = entry;
+    const { x, y, z, face, layer, ao } = entry;
     const n = face.normal;
     const ta = face.tangentA;
     const tb = face.tangentB;
@@ -343,7 +480,7 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
     }
     for (let k = 0; k < 4; k++) {
       colors[(vi + k) * 4] = layer;
-      colors[(vi + k) * 4 + 1] = 1;
+      colors[(vi + k) * 4 + 1] = ao[k]!;
       colors[(vi + k) * 4 + 2] = 1;
       colors[(vi + k) * 4 + 3] = 1;
     }

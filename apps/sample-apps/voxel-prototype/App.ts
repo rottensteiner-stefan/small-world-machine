@@ -4,21 +4,30 @@ import {
   SmallWorldMachine,
 } from "@small-world-machine/engine/core/index.js";
 import { PerspectiveProjection } from "@small-world-machine/engine/math/projections/index.js";
-import { BlockRegistry } from "./voxel/BlockRegistry.js";
+import {
+  BlockRegistry,
+  BLOCK_DIRT,
+  BLOCK_GRASS,
+  BLOCK_STONE,
+  BLOCK_WATER,
+  BLOCK_WOOD,
+} from "./voxel/BlockRegistry.js";
 import { ChunkWorld } from "./voxel/ChunkWorld.js";
 import { ChunkWorldHost } from "./voxel/ChunkWorldHost.js";
 import { createBlockPalette } from "./voxel/BlockTextureFactory.js";
 import { BlockMaterial } from "./voxel/material/BlockMaterial.js";
 import { descriptorFromRegistry } from "./voxel/mesh/NaiveMesher.js";
 import { TerrainGenerator } from "./voxel/TerrainGenerator.js";
+import { VoxelBlockEditor } from "./voxel/physics/VoxelBlockEditor.js";
 import { VoxelPlayerCollision } from "./voxel/physics/VoxelPlayerCollision.js";
 import { ForegroundMeshClient } from "./voxel/worker/ForegroundMeshClient.js";
 import { MeshWorkerClient } from "./voxel/worker/MeshWorkerClient.js";
 import type { MeshClient } from "./voxel/worker/MeshWorkerProtocol.js";
 
 /**
- * Voxel M1 "unbounded streaming" (dossier §4.2, §5 S2) -- replaces the M0 orbit demo with a
- * first-person player STANDING on generated terrain that streams around him:
+ * Voxel M1+M2 (dossier §4.2, §5 S2): first-person player STANDING on generated terrain that
+ * streams around him, now with CC0 block-texture atlas, break/place editing and Minecraft-style
+ * baked AO:
  *
  *   - `TerrainGenerator` (seeded, deterministic) + `ChunkWorld` (pure streaming/lifecycle core).
  *   - Meshing runs on a dedicated Vite module worker (`MeshWorkerClient`); the main thread ONLY
@@ -28,6 +37,10 @@ import type { MeshClient } from "./voxel/worker/MeshWorkerProtocol.js";
  *     seam tests); the host materializes each outcome as the standard "one Object3D per chunk".
  *   - `VoxelPlayerCollision` (app-level Behavior) runs the Luanti-derived swept AABB resolver
  *     against the world: gravity, ground stand, wall slide -- the M1 gate's "player STANDS".
+ *   - M2: `VoxelBlockEditor` targets the FPS crosshair (pure DDA), LMB breaks / RMB places with
+ *     Digit1..5 hand selection; edits trigger a bounded local 1-chunk remesh (own + rim-touching
+ *     neighbors), the atlas is CC0 (see `voxel/palette/AtlasPixels.ts`), AO is baked per vertex
+ *     and water renders transparent.
  *
  * Backend: WebGL2 default (dossier §4.4 #5); `?rendererType=WEB_GL2|WEB_GPU|WEB_GL1` overrides.
  * WebGPU array-texture material + WebGL1 atlas remain later milestones (M0 logs).
@@ -39,6 +52,7 @@ export class App extends SmallWorldMachine {
   private _world!: ChunkWorld;
   private _host!: ChunkWorldHost;
   private _player!: VoxelPlayerCollision;
+  private _editor!: VoxelBlockEditor;
 
   constructor() {
     // M1 ships GLSL300 only (like M0), so force WebGL2 unless the URL pins a backend.
@@ -96,6 +110,15 @@ export class App extends SmallWorldMachine {
     this._player = new VoxelPlayerCollision({ world: this._world, input: this.input });
     this._player.setSpawn(SPAWN_X, surface + 1, SPAWN_Z); // feet on top of the grass cap
     this.camera.addBehavior(this._player);
+
+    // 6. Block editor (M2): aim + LMB/RMB + Digit1..5 hand selection. Placement is refused when
+    // the target cell overlaps the player body (guard injected from the player behavior).
+    this._editor = new VoxelBlockEditor({
+      world: this._world,
+      input: this.input,
+      placementBlocker: (x, y, z): boolean => this._player.overlapsCell(x, y, z),
+    });
+    this.camera.addBehavior(this._editor);
     this._installQaHook();
 
     // 6. Pointer lock on click (engine FPS convention, see showcases 2/10/29).
@@ -134,9 +157,16 @@ export class App extends SmallWorldMachine {
           inFlight: s.inFlight,
           meshMsLast: s.meshMsLast,
           meshMsTotal: s.meshMsTotal,
+          edits: s.edits,
           focus: this._world.getFocusChunk(),
         };
       },
+      // M2 editing reads/writes for the headless gate (deterministic, no mouse-aim juggling).
+      getWorldBlock: (x: number, y: number, z: number): number =>
+        this._world.getWorldBlock(x, y, z),
+      setBlock: (x: number, y: number, z: number, id: number): boolean =>
+        this._world.setBlock(x, y, z, id),
+      getHand: (): number => this._editor.getHand(),
     };
   }
 
@@ -153,9 +183,11 @@ export class App extends SmallWorldMachine {
 
     this._statsEl.innerHTML =
       `<div class="stat-row"><span>renderer</span><b>${backend}</b></div>` +
-      `<div class="stat-row"><span>engine</span><b>voxel M1</b></div>` +
+      `<div class="stat-row"><span>engine</span><b>voxel M2</b></div>` +
       `<div class="stat-row"><span>player</span><b>${feet.x.toFixed(1)}, ${feet.y.toFixed(1)}, ${feet.z.toFixed(1)}</b></div>` +
       `<div class="stat-row"><span>grounded</span><b>${this._player.isOnGround() ? "yes" : "no"}</b></div>` +
+      `<div class="stat-row"><span>hand</span><b>${this._blockName(this._editor.getHand())}</b></div>` +
+      `<div class="stat-row"><span>edits</span><b>${stats.edits}</b></div>` +
       `<div class="stat-row"><span>chunks ready</span><b>${stats.ready}</b></div>` +
       `<div class="stat-row"><span>chunks data</span><b>${stats.generated}</b></div>` +
       `<div class="stat-row"><span>in flight</span><b>${stats.inFlight}</b></div>` +
@@ -164,6 +196,23 @@ export class App extends SmallWorldMachine {
       `<div class="stat-row"><span>mesh last</span><b>${stats.meshMsLast.toFixed(2)} ms</b></div>` +
       `<div class="stat-row"><span>mesh total</span><b>${stats.meshMsTotal.toFixed(1)} ms</b></div>` +
       `<div class="stat-row"><span>meshing</span><b>${workerMode}</b></div>`;
+  }
+
+  private _blockName(id: number): string {
+    switch (id) {
+      case BLOCK_GRASS:
+        return "grass";
+      case BLOCK_DIRT:
+        return "dirt";
+      case BLOCK_STONE:
+        return "stone";
+      case BLOCK_WOOD:
+        return "wood";
+      case BLOCK_WATER:
+        return "water";
+      default:
+        return `block ${id}`;
+    }
   }
 }
 
@@ -182,12 +231,16 @@ export interface WorldQaStats {
   inFlight: number;
   meshMsLast: number;
   meshMsTotal: number;
+  edits: number;
   focus: { cx: number; cz: number };
 }
 
 export interface VoxelM1QaApi {
   getPlayer(): PlayerQaState;
   getStats(): WorldQaStats;
+  getWorldBlock(x: number, y: number, z: number): number;
+  setBlock(x: number, y: number, z: number, id: number): boolean;
+  getHand(): number;
 }
 
 /** World seed for deterministic terrain (same seed -> same world; see TerrainGenerator tests). */

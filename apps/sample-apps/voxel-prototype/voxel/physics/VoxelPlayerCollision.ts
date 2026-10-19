@@ -99,6 +99,23 @@ export class VoxelPlayerCollision extends Behavior<Camera> {
   }
 
   /**
+   * Whether the full voxel cell (wx, wy, wz) intersects the player AABB (world space). Strict
+   * inequalities, so resting exactly ON a surface (feet at an integer) does not overlap the
+   * cell below -- the same contact semantics the sweep resolver applies. Used by the block
+   * editor's placement guard (M2) so a player cannot embed itself in a freshly placed block.
+   */
+  public overlapsCell(wx: number, wy: number, wz: number): boolean {
+    const body = this._options.body;
+    const minX = this._body.x + body.min.x;
+    const maxX = this._body.x + body.max.x;
+    const minY = this._body.y + body.min.y;
+    const maxY = this._body.y + body.max.y;
+    const minZ = this._body.z + body.min.z;
+    const maxZ = this._body.z + body.max.z;
+    return maxX > wx && minX < wx + 1 && maxY > wy && minY < wy + 1 && maxZ > wz && minZ < wz + 1;
+  }
+
+  /**
    * Teleports the player to a feet position (e.g. the terrain surface at spawn). Clears velocity
    * and the ground flag. Must be called once before the first frame renders.
    */

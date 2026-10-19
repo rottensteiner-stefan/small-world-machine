@@ -1,7 +1,12 @@
 import { BLOCK_AIR } from "./BlockRegistry.js";
 import { Chunk } from "./Chunk.js";
-import type { FaceDir, MeshBlockDescriptorEntry, VoxelMeshData } from "./mesh/NaiveMesher.js";
-import { buildNeighborRim } from "./mesh/NaiveMesher.js";
+import type {
+  CornerDir,
+  FaceDir,
+  MeshBlockDescriptorEntry,
+  VoxelMeshData,
+} from "./mesh/NaiveMesher.js";
+import { buildNeighborCorner, buildNeighborRim } from "./mesh/NaiveMesher.js";
 import type { MeshClient, MeshOutcome } from "./worker/MeshWorkerProtocol.js";
 
 /**
@@ -15,9 +20,11 @@ import type { MeshClient, MeshOutcome } from "./worker/MeshWorkerProtocol.js";
  * generation and mesh building never run here; a generated buffer is stored as `Chunk`-data, a
  * meshed outcome is handed to the callback (`ChunkWorldHost` creates/removes `Object3D`s).
  *
- * Seam guarantee (M1 "keine Naht"): a chunk is only meshed once its four horizontal neighbors
- * have DATA (minNeighborsToMesh, dossier §3.2). The worker then receives only the neighbor border
- * planes, and `buildMesh` culls boundary faces exactly-once (pinned by `SeamMeshing.test.ts`).
+ * Seam guarantee (M1 "keine Naht"): a chunk is only meshed once its four horizontal AXIS
+ * neighbors have DATA (minNeighborsToMesh, dossier §3.2). The worker then receives only the
+ * neighbor border planes, and `buildMesh` culls boundary faces exactly-once (pinned by
+ * `SeamMeshing.test.ts`). M2 extends the gate to the four horizontal DIAGONAL neighbors whose
+ * AO corner columns (16 bytes each) keep vertex occlusion byte-identical across 4-chunk seams.
  */
 
 /** Internal lifecycle used by the streaming state machine. */
@@ -28,6 +35,8 @@ interface ChunkRecord {
   cz: number;
   phase: Phase;
   chunk: Chunk | null; // non-null once phase >= "data"
+  /** Set while a mesh is in flight if an edit mutated the voxels; the loop remeshes afterwards. */
+  dirty: boolean;
 }
 
 export interface ChunkWorldCallbacks {
@@ -65,6 +74,8 @@ export interface ChunkWorldStats {
   meshMsLast: number;
   /** Cumulative worker-side meshing wall time (ms). 0 while nothing meshed. */
   meshMsTotal: number;
+  /** Successful block edits since creation (M2, for the stats overlay + QA gate). */
+  edits: number;
 }
 
 const CHUNK_SIZE = Chunk.SIZE;
@@ -75,21 +86,38 @@ function chebyshev(a: number, b: number, x: number, y: number): number {
   return Math.max(Math.abs(a - x), Math.abs(b - y));
 }
 
-/** Neighbor offsets a chunk needs meshed before it can be meshed itself (horizontal only in M1). */
+/** Neighbor offsets a chunk needs meshed before it can be meshed itself: the four horizontal
+ *  axis-neighbors (seam-culling rims) PLUS the four horizontal diagonals (M2 AO corner columns).
+ *  All 8 live in the SAME Chebyshev ring, so this can never change the reachable mesh region
+ *  (meshed radius stays generateRadius-1) -- it only guarantees the AO corner data exists every
+ *  time a chunk meshes, keeping vertex AO byte-identical across 4-chunk seams. */
 const MESH_NEIGHBORS: readonly [number, number][] = [
-  [-1, 0], // -X
-  [1, 0], // +X
-  [0, -1], // -Z
-  [0, 1], // +Z
+  [-1, 0], // -X  (axial)
+  [1, 0], // +X  (axial)
+  [0, -1], // -Z  (axial)
+  [0, 1], // +Z  (axial)
+  [-1, -1], // -X,-Z  (diagonal)
+  [1, -1], // +X,-Z  (diagonal)
+  [-1, 1], // -X,+Z  (diagonal)
+  [1, 1], // +X,+Z  (diagonal)
 ];
 
-/** Maps a neighbor offset to the rim direction of that neighbor's plane FACING this chunk. */
+/** Maps a neighbor offset to the rim direction of that neighbor's plane FACING this chunk.
+ *  Axial offsets only (diagonals have no face plane -- their data arrives as corner columns). */
 function rimDirForNeighbor(dx: number, dz: number): FaceDir {
   // -X neighbor -> this chunk reads its localX=15 plane; +X -> localX=0; -Z -> localZ=15; +Z -> localZ=0.
   if (dx === -1) return "nx";
   if (dx === 1) return "px";
   if (dz === -1) return "nz";
   return "pz"; // dz === 1
+}
+
+/** Maps a diagonal neighbor offset to the `CornerDir` whose corner faces THIS chunk (the corner
+ *  column handed to the AO of this chunk's 4-corner faces). Diagonal offsets only; the naming
+ *  matches `CORNER_COLUMNS` in the pure mesher. */
+function cornerDirForNeighbor(dx: number, dz: number): CornerDir {
+  if (dx === -1) return dz === -1 ? "nn" : "np";
+  return dz === -1 ? "pn" : "pp"; // dx === 1
 }
 
 export class ChunkWorld {
@@ -106,6 +134,7 @@ export class ChunkWorld {
   private _focusSet: boolean = false;
   private _meshMsTotal: number = 0;
   private _meshMsLast: number = 0;
+  private _editCount: number = 0;
 
   constructor(options: ChunkWorldOptions) {
     this._client = options.client;
@@ -189,6 +218,37 @@ export class ChunkWorld {
     return this._collidable.has(this.getWorldBlock(wx, wy, wz));
   }
 
+  /**
+   * M2 block editing (dossier §4.2): writes a block id into the loaded column at world
+   * coordinates and schedules the BOUNDED 1-chunk remesh (own chunk + horizontal neighbors whose
+   * rim plane contains the edited cell -- max 5). REMESH IS DEFERRED to the streaming loop:
+   * phase "ready" -> "data" (the next `update()` ring re-meshes it with current voxels + rims;
+   * the edited chunk is always within reach -> ring 0/1, highest priority); phase "meshing" ->
+   * only `dirty` (the in-flight result is dropped in `_onMeshReady` and the loop remeshes after
+   * -- "exactly ONE valid mesh wins"). Deliberately NOT the cross-thread 3x3 view of M5: every
+   * re-dispatch is an independent local `MeshClient.mesh` with fresh buffers, the worker stays
+   * edit-unaware by construction.
+   *
+   * `id = 0` is BLOCK_AIR (break). Out-of-band Y (outside the 16-column height) or an unloaded
+   * column is a no-op (returns false) -- a raycast can never target unloaded cells, because
+   * unloaded columns read as air.
+   */
+  public setBlock(wx: number, wy: number, wz: number, id: number): boolean {
+    if (wy < 0 || wy >= CHUNK_SIZE) return false;
+    const cx = Math.floor(wx / CHUNK_SIZE);
+    const cz = Math.floor(wz / CHUNK_SIZE);
+    const rec = this._chunks.get(keyOf(cx, cz));
+    if (!rec?.chunk) return false;
+    const lx = ((Math.floor(wx) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const lz = ((Math.floor(wz) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const current = rec.chunk.getBlock(lx, Math.floor(wy), lz);
+    if (current === id) return false;
+    rec.chunk.setBlock(lx, Math.floor(wy), lz, id);
+    this._editCount++;
+    this._scheduleRemesh(cx, cz, lx, lz);
+    return true;
+  }
+
   public getStats(): ChunkWorldStats {
     let generated = 0;
     let inFlight = 0;
@@ -204,6 +264,7 @@ export class ChunkWorld {
       ready,
       meshMsLast: this._meshMsLast,
       meshMsTotal: this._meshMsTotal,
+      edits: this._editCount,
     };
   }
 
@@ -218,7 +279,7 @@ export class ChunkWorld {
   // --- internals ---
 
   private _requestGenerate(cx: number, cz: number): void {
-    const rec: ChunkRecord = { cx, cz, phase: "generating", chunk: null };
+    const rec: ChunkRecord = { cx, cz, phase: "generating", chunk: null, dirty: false };
     this._chunks.set(keyOf(cx, cz), rec);
     this._client
       .generate(cx, cz)
@@ -242,20 +303,53 @@ export class ChunkWorld {
     }
   }
 
-  /** Dispatches a mesh task once the chunk has data AND all four horizontal neighbors have data. */
+  /** M2 edit remesh scheduling (see `setBlock`): own chunk + every horizontal neighbor whose rim
+   *  plane contains the edited local cell. A corner cell touches two neighbors; a pure-interior
+   *  cell touches none. A "data"/"generating" mate needs no action -- its future mesh reads the
+   *  already-current voxels, so it is correct by construction. */
+  private _scheduleRemesh(cx: number, cz: number, lx: number, lz: number): void {
+    const schedule = (x: number, z: number): void => {
+      const rec = this._chunks.get(keyOf(x, z));
+      if (!rec?.chunk) return;
+      if (rec.phase === "ready") {
+        rec.phase = "data"; // streaming loop remeshes it next tick
+      } else if (rec.phase === "meshing") {
+        rec.dirty = true; // in-flight result must not apply stale geometry
+      }
+    };
+    schedule(cx, cz);
+    if (lx === 0) schedule(cx - 1, cz);
+    if (lx === CHUNK_SIZE - 1) schedule(cx + 1, cz);
+    if (lz === 0) schedule(cx, cz - 1);
+    if (lz === CHUNK_SIZE - 1) schedule(cx, cz + 1);
+  }
+
+  /**
+   * Dispatches a mesh task once the chunk has data AND all EIGHT horizontal neighbors (4 axials
+   * for seam culling + 4 diagonals for seam-exact AO corner columns) have data. Returns false
+   * while waiting -- the streaming loop retries. This is minNeighborsToMesh, now also the M2 AO
+   * seam contract: without the diagonals a 4-chunk-corner vertex could only approximate its AO
+   * sample, which would show as a bright leak exactly on the seam plane it is meant to hide.
+   */
   private _tryMesh(cx: number, cz: number, rec: ChunkRecord): boolean {
     if (rec.phase !== "data" || !rec.chunk) return false;
     const rims: Partial<Record<FaceDir, Uint8Array>> = {};
+    const corners: Partial<Record<CornerDir, Uint8Array>> = {};
     for (const [dx, dz] of MESH_NEIGHBORS) {
       const nrec = this._chunks.get(keyOf(cx + dx, cz + dz));
       if (!nrec?.chunk) return false; // not all neighbors have data yet -- wait (minNeighborsToMesh)
-      const dir = rimDirForNeighbor(dx, dz);
-      rims[dir] = buildNeighborRim(nrec.chunk.voxels, dir);
+      if (dx === 0 || dz === 0) {
+        const dir = rimDirForNeighbor(dx, dz);
+        rims[dir] = buildNeighborRim(nrec.chunk.voxels, dir);
+      } else {
+        const dir = cornerDirForNeighbor(dx, dz);
+        corners[dir] = buildNeighborCorner(nrec.chunk.voxels, dir);
+      }
     }
     rec.phase = "meshing";
     const voxels = rec.chunk.voxels;
     this._client
-      .mesh(cx, cz, voxels, rims)
+      .mesh(cx, cz, voxels, rims, corners)
       .then((outcome: MeshOutcome) => this._onMeshReady(cx, cz, outcome))
       .catch((err: unknown) => this._onError(cx, cz, err));
     return true;
@@ -264,6 +358,14 @@ export class ChunkWorld {
   private _onMeshReady(cx: number, cz: number, outcome: MeshOutcome): void {
     const rec = this._chunks.get(keyOf(cx, cz));
     if (!rec || rec.phase !== "meshing") return;
+    if (rec.dirty) {
+      // The voxels were edited while this mesh was in flight -> the result is stale relative to
+      // the current data. Do not apply it; hand the chunk back to the streaming loop, which
+      // remeshes it with the edited data (dirty flag cleared -- "exactly ONE valid mesh wins").
+      rec.dirty = false;
+      rec.phase = "data";
+      return;
+    }
     rec.phase = "ready";
     this._meshMsLast = outcome.meshMs;
     this._meshMsTotal += outcome.meshMs;

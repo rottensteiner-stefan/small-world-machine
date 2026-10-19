@@ -226,7 +226,7 @@ describe("M1 worker payload — single source of truth across the structured-clo
     expect(byId.has(BLOCK_AIR)).toBe(false); // AIR is never registered
     expect(byId.get(BLOCK_GRASS)).toMatchObject({
       opaque: true,
-      layers: [0, 2, 1], // top=grass, bottom=stone, side=dirt
+      layers: [0, 1, 3], // top=grass, bottom=dirt, side=grass_side (M2 MC-korrekt)
     });
     expect(byId.get(BLOCK_DIRT)).toMatchObject({ opaque: true, layers: [1, 1, 1] });
     expect(byId.get(BLOCK_STONE)).toMatchObject({ opaque: true, layers: [2, 2, 2] });

@@ -41,11 +41,18 @@ scope.onmessage = (e: MessageEvent<MeshWorkerRequest>): void => {
       }
       case "mesh": {
         const start = performance.now();
-        const mesh: VoxelMeshData = buildMesh({
-          voxels: msg.voxels,
-          descriptor,
-          neighbors: msg.neighbors,
-        });
+        const mesh: VoxelMeshData = msg.neighborCorners
+          ? buildMesh({
+              voxels: msg.voxels,
+              descriptor,
+              neighbors: msg.neighbors,
+              neighborCorners: msg.neighborCorners,
+            })
+          : buildMesh({
+              voxels: msg.voxels,
+              descriptor,
+              neighbors: msg.neighbors,
+            });
         const meshMs = performance.now() - start;
         scope.postMessage({ kind: "mesh-result", id: msg.id, outcome: { mesh, meshMs } });
         return;

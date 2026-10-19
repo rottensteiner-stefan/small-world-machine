@@ -1,4 +1,4 @@
-import type { FaceDir, MeshBlockDescriptorEntry } from "../mesh/NaiveMesher.js";
+import type { CornerDir, FaceDir, MeshBlockDescriptorEntry } from "../mesh/NaiveMesher.js";
 import type { MeshClient, MeshOutcome, MeshWorkerResponse } from "./MeshWorkerProtocol.js";
 
 /**
@@ -40,11 +40,12 @@ export class MeshWorkerClient implements MeshClient {
     cz: number,
     voxels: Uint8Array,
     neighbors: Partial<Record<FaceDir, Uint8Array>>,
+    neighborCorners?: Partial<Record<CornerDir, Uint8Array>>,
   ): Promise<MeshOutcome> {
     const id = this._nextId++;
     return new Promise<MeshOutcome>((resolve, reject) => {
       this._pending.set(id, { kind: "mesh", resolve, reject });
-      this._worker.postMessage({ kind: "mesh", id, cx, cz, voxels, neighbors });
+      this._worker.postMessage({ kind: "mesh", id, cx, cz, voxels, neighbors, neighborCorners });
     });
   }
 

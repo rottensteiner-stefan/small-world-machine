@@ -2,79 +2,72 @@ import { TextureFilter, TextureWrap } from "@small-world-machine/engine";
 import type { TextureArray } from "@small-world-machine/engine/core/textures/index.js";
 import { TextureArray as TextureArrayImpl } from "@small-world-machine/engine/core/textures/index.js";
 import { BLOCK_TEX_LAYER } from "./BlockRegistry.js";
+import { ATLAS_PIXEL_HEX, decodeHexRgba } from "./palette/AtlasPixels.js";
 
 /**
- * Builds the M0 block palette as a `TextureArray` from procedural canvas swatches -- no
- * borrowed asset, no Mojang textures, fully CC0-by-construction (dossier §2/§5.4 asset
- * cleanliness). Each layer is a distinct, deterministic color family with per-pixel speckle,
- * which both proves real texture sampling in the browser AND makes any wrong-layer/bleed bug
- * visually unmistakable (wrong layer = wrong color family).
+ * Builds the M2 block palette as a `TextureArray` from the EMBEDDED 16x16 pixel grids
+ * (`voxel/palette/AtlasPixels.ts`, reload: CC0 "16x16 Block Texture Set" (2023) by
+ * ARoachIFoundOnMyPillow + Water-Nachzeichnung). No borrowed Mojang textures, provenance in
+ * `AtlasPixels.ATLAS_SOURCES`. Switching from the M0 procedural swatches to real art is the
+ * M2 atlas turn-in (Entscheid 2026-10-19); the layer indices must match `BLOCK_TEX_LAYER`,
+ * which the factory enforces fail-fast here and which a node test pins on the data level
+ * (palette/AtlasPixels keys vs BLOCK_TEX_LAYER keys).
  *
  * Browser-only (canvases + `createImageBitmap`); unit tests never touch this module, so the
- * pure voxel data layer stays node-testable.
+ * pure voxel/data layer stays node-testable.
  *
- * Layer 0/1/2 MUST stay in sync with `BLOCK_TEX_LAYER` in `BlockRegistry.ts`.
+ * Nearest + clamp keeps sampling crisp and bleed-free (TextureArray eliminates atlas seams);
+ * the WATER layer carries per-pixel alpha for the transparent water render (M2).
  */
-const PALETTE_LAYERS: readonly {
-  layer: number;
-  base: readonly [number, number, number];
-  tint: number;
-}[] = [
-  { layer: BLOCK_TEX_LAYER.GRASS_TOP, base: [62, 132, 62], tint: 0 },
-  { layer: BLOCK_TEX_LAYER.DIRT, base: [128, 92, 62], tint: 0 },
-  { layer: BLOCK_TEX_LAYER.STONE, base: [128, 128, 132], tint: 20 },
-] as const;
-
 const SWATCH_SIZE = 16;
 
-/** Deterministic speckle so the pattern is stable across loads (no Math.random). */
-function speckle(x: number, y: number, seed: number): number {
-  // A small integer hash -- deterministic, no allocation, plenty for visual noise.
-  let h = x * 374761393 + y * 668265263 + seed * 2654435769;
-  h = (h ^ (h >>> 13)) * 1274126177;
-  h = h ^ (h >>> 16);
-  return (h >>> 0) % 256;
-}
-
-function drawLayer(base: readonly [number, number, number], seed: number): HTMLCanvasElement {
+function canvasFromRgba(rgba: Uint8Array): HTMLCanvasElement {
+  if (rgba.length !== SWATCH_SIZE * SWATCH_SIZE * 4) {
+    throw new Error(
+      `[BlockTextureFactory] expected ${SWATCH_SIZE * SWATCH_SIZE * 4} rgba bytes, got ${rgba.length}`,
+    );
+  }
   const canvas = document.createElement("canvas");
   canvas.width = SWATCH_SIZE;
   canvas.height = SWATCH_SIZE;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("[BlockTextureFactory] 2d context unavailable");
-
   const img = ctx.createImageData(SWATCH_SIZE, SWATCH_SIZE);
-  for (let y = 0; y < SWATCH_SIZE; y++) {
-    for (let x = 0; x < SWATCH_SIZE; x++) {
-      const s = speckle(x, y, seed) / 255.0;
-      const offset = (s - 0.5) * 46;
-      const i = (y * SWATCH_SIZE + x) * 4;
-      const r = Math.max(0, Math.min(255, Math.round(base[0]! + offset)));
-      const g = Math.max(0, Math.min(255, Math.round(base[1]! + offset)));
-      const b = Math.max(0, Math.min(255, Math.round(base[2]! + offset)));
-      img.data[i] = r;
-      img.data[i + 1] = g;
-      img.data[i + 2] = b;
-      img.data[i + 3] = 255;
-    }
-  }
+  img.data.set(rgba);
   ctx.putImageData(img, 0, 0);
   return canvas;
 }
 
 /**
- * Creates the block palette `TextureArray`. Nearest filtering + no mipmaps + clamp-to-edge
- * keep sampling crisp and bleeding-free; the swatch is square so the face mask has no
- * orientation to violate.
+ * Creates the block palette `TextureArray`. Layer order follows `BLOCK_TEX_LAYER` indices
+ * (the sampler2DArray layer selector in the block shader). Fails fast on any
+ * registry/atlas-pixel desync.
  */
 export async function createBlockPalette(): Promise<TextureArray> {
-  const canvases: HTMLCanvasElement[] = [];
-  for (const entry of PALETTE_LAYERS) {
-    canvases.push(drawLayer(entry.base, entry.tint));
+  const entries = Object.entries(BLOCK_TEX_LAYER) as ReadonlyArray<readonly [string, number]>;
+  const highest = Math.max(...entries.map(([, index]) => index));
+  const canvases: Array<HTMLCanvasElement | null> = new Array<HTMLCanvasElement | null>(
+    highest + 1,
+  ).fill(null);
+
+  for (const [name, index] of entries) {
+    const hex = ATLAS_PIXEL_HEX[name];
+    if (hex === undefined) {
+      throw new Error(`[BlockTextureFactory] atlas pixel layer "${name}" fehlt in AtlasPixels`);
+    }
+    canvases[index] = canvasFromRgba(decodeHexRgba(hex));
   }
+
+  const missing = canvases.map((c, i) => (c === null ? i : -1)).filter((i) => i >= 0);
+  if (missing.length > 0) {
+    throw new Error(
+      `[BlockTextureFactory] BLOCK_TEX_LAYER verweist auf unbefüllte Layer-Indizes: ${missing.join(", ")}`,
+    );
+  }
+
   const bitmaps: ImageBitmap[] = [];
   for (const canvas of canvases) {
-    bitmaps.push(await createImageBitmap(canvas));
+    bitmaps.push(await createImageBitmap(canvas!));
   }
   return TextureArrayImpl.fromImages(bitmaps, {
     minFilter: TextureFilter.NEAREST,

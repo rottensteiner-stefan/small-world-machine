@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmallWorldMachine — Voxel Prototype (M1)</title>
+    <title>SmallWorldMachine — Voxel Prototype (M2)</title>
     <link rel="icon" href="data:," />
     <style>
       html,
@@ -62,11 +62,46 @@
         color: #e8eef7;
         font-weight: 600;
       }
+      #voxel-crosshair {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        width: 18px;
+        height: 18px;
+        transform: translate(-50%, -50%);
+        z-index: 9;
+        pointer-events: none;
+      }
+      #voxel-crosshair::before,
+      #voxel-crosshair::after {
+        content: "";
+        position: absolute;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+      }
+      #voxel-crosshair::before {
+        left: 50%;
+        top: 0;
+        width: 2px;
+        height: 100%;
+        transform: translateX(-50%);
+      }
+      #voxel-crosshair::after {
+        top: 50%;
+        left: 0;
+        height: 2px;
+        width: 100%;
+        transform: translateY(-50%);
+      }
     </style>
   </head>
   <body>
     <div id="voxel-stats" role="status"></div>
-    <div id="voxel-hint">click canvas to capture mouse · WASD move · ESC release</div>
+    <div id="voxel-hint">
+      click canvas to capture mouse · WASD move · LMB break · RMB place · 1-5 select block( dirt ·
+      stone · wood · water · grass ) · ESC release
+    </div>
+    <div id="voxel-crosshair" aria-hidden="true"></div>
     <canvas id="SmallWorldMachine"></canvas>
     <script type="module" src="/apps/sample-apps/voxel-prototype/App.ts"></script>
   </body>

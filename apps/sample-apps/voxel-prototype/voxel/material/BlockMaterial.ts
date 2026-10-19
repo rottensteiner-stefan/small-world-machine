@@ -32,6 +32,12 @@ export class BlockMaterial extends CustomShaderMaterial {
         textures: { u_blockAtlas: { type: ShaderPropertyType.TEXTURE } },
       },
       textures: { u_blockAtlas: atlas },
+      // M2 water (D3): the atlas alpha drives blending per fragment. Opaque tiles sample
+      // alpha 1.0 and render opaque; the water layer blends against the opaque bed. depthWrite
+      // stays true so opaque geometry keeps writing depth; the rare water-over-water overlap in
+      // the transparent pass is an accepted alpha-sort limitation (documented in the plan).
+      transparent: true,
+      depthWrite: true,
     });
   }
 }

@@ -1,4 +1,4 @@
-import type { FaceDir, MeshBlockDescriptorEntry } from "../mesh/NaiveMesher.js";
+import type { CornerDir, FaceDir, MeshBlockDescriptorEntry } from "../mesh/NaiveMesher.js";
 import { buildMesh } from "../mesh/NaiveMesher.js";
 import { TerrainGenerator } from "../TerrainGenerator.js";
 import type { MeshClient, MeshOutcome } from "./MeshWorkerProtocol.js";
@@ -31,11 +31,14 @@ export class ForegroundMeshClient implements MeshClient {
     _cz: number,
     voxels: Uint8Array,
     neighbors: Partial<Record<FaceDir, Uint8Array>>,
+    neighborCorners?: Partial<Record<CornerDir, Uint8Array>>,
   ): Promise<MeshOutcome> {
     if (!this._descriptor.length) {
       throw new Error("[ForegroundMeshClient] configure() must run before mesh()");
     }
-    const mesh = buildMesh({ voxels, descriptor: this._descriptor, neighbors });
+    const mesh = neighborCorners
+      ? buildMesh({ voxels, descriptor: this._descriptor, neighbors, neighborCorners })
+      : buildMesh({ voxels, descriptor: this._descriptor, neighbors });
     return { mesh, meshMs: 0 }; // foreground runs on the caller thread -- no worker time to report
   }
 

@@ -1,4 +1,9 @@
-import type { FaceDir, MeshBlockDescriptorEntry, VoxelMeshData } from "../mesh/NaiveMesher.js";
+import type {
+  CornerDir,
+  FaceDir,
+  MeshBlockDescriptorEntry,
+  VoxelMeshData,
+} from "../mesh/NaiveMesher.js";
 
 /**
  * M1 worker protocol (`.agents/collaborate/minecraft/dossier.md` §4.2 M1 "MeshWorkerProtocol").
@@ -44,6 +49,9 @@ export interface MeshBuildRequest {
   voxels: Uint8Array;
   /** Border planes of the (up to 4 horizontal) neighbors, per `RIM_INDEX_ORDER`. */
   neighbors: Partial<Record<FaceDir, Uint8Array>>;
+  /** 16-tall AO corner columns of the up-to-4 diagonal neighbors (M2 seam-exact vertex AO;
+   *  `ChunkWorld` gates meshing on all 8 neighbors, so these are always present in production). */
+  neighborCorners?: Partial<Record<CornerDir, Uint8Array>>;
 }
 
 export type MeshWorkerRequest = MeshInitMessage | MeshGenerateRequest | MeshBuildRequest;
@@ -88,12 +96,14 @@ export interface MeshClient {
   configure(seed: number, descriptor: readonly MeshBlockDescriptorEntry[]): void;
   /** Generates the block-id buffer (SIZE³) of the world column (cx, cz) on a background thread. */
   generate(cx: number, cz: number): Promise<Uint8Array>;
-  /** Meshes the chunk (cx, cz) against its neighbor border planes on a background thread. */
+  /** Meshes the chunk (cx, cz) against its neighbor border planes (and AO corner columns) on a
+   *  background thread. */
   mesh(
     cx: number,
     cz: number,
     voxels: Uint8Array,
     neighbors: Partial<Record<FaceDir, Uint8Array>>,
+    neighborCorners?: Partial<Record<CornerDir, Uint8Array>>,
   ): Promise<MeshOutcome>;
   /** Releases background resources. Pending tasks reject. */
   destroy(): void;

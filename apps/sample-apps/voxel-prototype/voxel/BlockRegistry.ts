@@ -1,16 +1,14 @@
 /**
  * Single source of truth for block semantics (dossier §3.2 / Dave-Report "BlockRegistry").
- * The mesher, the (future M1) terrain generator, the (future M1) player collision sweep and
- * the block shader all read block behaviour HERE -- never from duplicated switch statements.
+ * The mesher, the terrain generator, the player collision sweep and the block shader all read
+ * block behaviour HERE -- never from duplicated switch statements.
  *
- * M0 only uses `id`, `transparent` and `faceLayers` (the naive mesher must know whether a
- * neighbor culls a face and which atlas layer each face uses). `collidable` is reserved for
- * the M1 voxel-grid player collision resolver and is part of the registry contract already.
- *
- * Texture-layer indices are opaque integers into the app's `TextureArray` palette (layer 0 =
- * grass top, 1 = dirt, 2 = stone -- see `BlockTextureFactory`). The registry must stay in
- * sync with that palette; M0 documents this in `docs/log.md` and keeps both in named
- * constants here.
+ * `id`, `transparent` and `faceLayers` drive the mesher (naive + AO + transparent-face rules)
+ * and the atlas texture per face. `collidable` is used by the voxel-grid player collision
+ * resolver and by the block editor's placement guard. Layer indices are opaque integers into
+ * the app's `TextureArray` palette (see `BlockTextureFactory`); the registry must stay in sync
+ * with that palette -- M2: `AtlasPixels` layer names vs `BLOCK_TEX_LAYER` keys are pinned by
+ * the palette sync test.
  */
 
 /** Texture-layer indices must match the palette built by `BlockTextureFactory`. */
@@ -18,12 +16,19 @@ export const BLOCK_TEX_LAYER = {
   GRASS_TOP: 0,
   DIRT: 1,
   STONE: 2,
+  GRASS_SIDE: 3,
+  WOOD_LOG_SIDE: 4,
+  WOOD_LOG_TOP: 5,
+  WOOD_PLANKS: 6,
+  WATER: 7,
 } as const;
 
 export const BLOCK_AIR = 0;
 export const BLOCK_GRASS = 1;
 export const BLOCK_DIRT = 2;
 export const BLOCK_STONE = 3;
+export const BLOCK_WOOD = 4;
+export const BLOCK_WATER = 5;
 
 /** Which atlas layer a block uses per face axis. `+Y` = top, `-Y` = bottom, else = side. */
 export interface BlockFaceLayers {
@@ -127,8 +132,8 @@ export class BlockRegistry {
       collidable: true,
       faceLayers: {
         top: BLOCK_TEX_LAYER.GRASS_TOP,
-        bottom: BLOCK_TEX_LAYER.STONE,
-        side: BLOCK_TEX_LAYER.DIRT,
+        bottom: BLOCK_TEX_LAYER.DIRT,
+        side: BLOCK_TEX_LAYER.GRASS_SIDE,
       },
     });
     registry.register({
@@ -151,6 +156,30 @@ export class BlockRegistry {
         top: BLOCK_TEX_LAYER.STONE,
         bottom: BLOCK_TEX_LAYER.STONE,
         side: BLOCK_TEX_LAYER.STONE,
+      },
+    });
+    registry.register({
+      id: BLOCK_WOOD,
+      name: "wood",
+      transparent: false,
+      collidable: true,
+      faceLayers: {
+        top: BLOCK_TEX_LAYER.WOOD_LOG_TOP,
+        bottom: BLOCK_TEX_LAYER.WOOD_LOG_TOP,
+        side: BLOCK_TEX_LAYER.WOOD_LOG_SIDE,
+      },
+    });
+    // M2 (D3): Wasser ist NICHT kollidierbar (Sweep läuft durch, kein Schwimmen — M4) und für
+    // den Mesher transparent (nur Faces gegen AIR werden gezeichnet, s. NaiveMesher).
+    registry.register({
+      id: BLOCK_WATER,
+      name: "water",
+      transparent: true,
+      collidable: false,
+      faceLayers: {
+        top: BLOCK_TEX_LAYER.WATER,
+        bottom: BLOCK_TEX_LAYER.WATER,
+        side: BLOCK_TEX_LAYER.WATER,
       },
     });
   }

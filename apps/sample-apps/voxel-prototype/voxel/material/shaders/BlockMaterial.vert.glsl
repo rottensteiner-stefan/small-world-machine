@@ -74,11 +74,14 @@ uniform mat4 u_model;
 out vec3 v_normal;
 out vec2 v_uv;
 flat out uint v_texLayer;
+out float v_ao;
 
 void main() {
     vec4 wp = u_model * vec4(a_position, 1.0);
     v_normal = normalize(mat3(u_model) * a_normal);
     v_uv = a_uv;
     v_texLayer = uint(a_color.x + 0.5);
+    // M2 baked vertex occlusion (Minecraft 4-level scheme), carried to the fragment.
+    v_ao = a_color.y;
     gl_Position = u_vp * wp;
 }

@@ -28,6 +28,7 @@ import {
   PointLight,
   PostProcessingEffectType,
   Quaternion,
+  RainStreaks,
   RendererType,
   SpotLight,
   StandardMaterial,
@@ -42,7 +43,6 @@ import {
   RainPuddleMaterial,
 } from "@small-world-machine/liquid-extras";
 import { attachDevTools } from "@small-world-machine/tools";
-import { RainStreaks } from "./RainStreaks.js";
 
 enum Mood {
   NIGHT = "night",
@@ -203,7 +203,7 @@ class Showcase30 extends AbstractShowcase {
   private readonly _dropSystem = new DropImpactSystem();
   private _fluidIndex = 0;
   private _hoverCar!: Object3D;
-  private readonly _rain = new RainStreaks();
+  private readonly _rain = new RainStreaks({ count: 10000 });
   private _time = 0;
   private _sceneReady = false;
   private _mood: Mood = Mood.NIGHT;

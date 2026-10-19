@@ -20,6 +20,7 @@ export class ChunkWorldHost {
   private readonly _scene: Scene;
   private readonly _material: BlockMaterial;
   private readonly _nodes = new Map<string, Object3D>();
+  private readonly _triangles = new Map<string, number>();
   private _triangleCount: number = 0;
 
   constructor(scene: Scene, material: BlockMaterial) {
@@ -38,12 +39,23 @@ export class ChunkWorldHost {
   }
 
   /**
-   * Hosts a freshly meshed chunk. Ignored if (cx, cz) is already hosted (the ChunkWorld phase
-   * machine guarantees exactly-once, so this only guards against a duplicated callback).
+   * Hosts a freshly meshed chunk. On a (cx, cz) that is already hosted the mesh REPLACES the
+   * existing geometry (M2 block-edit remesh): swap the `GeometryData`, recompute bounds and
+   * re-account triangles -- never mutate buffers in place (Dave-Report §2.1 swap pattern). The
+   * renderer re-uploads a freshly assigned GeometryData; old GPU buffers are dropped by its
+   * buffer lifecycle. KEEP THIS CLASS THIN: all logic lives in `ChunkWorld` / the pure mesher.
    */
   public onMeshReady(cx: number, cz: number, mesh: VoxelMeshData): void {
     const key = ChunkWorldHost._key(cx, cz);
-    if (this._nodes.has(key)) return; // defensive: exactly-once is ChunkWorld's contract
+    const existing = this._nodes.get(key);
+    if (existing) {
+      existing.geometry = new VoxelChunkGeometry(mesh).getGeometryData();
+      existing.computeBounds();
+      const previous = this._triangles.get(key) ?? 0;
+      this._triangleCount = this._triangleCount - previous + mesh.triangleCount;
+      this._triangles.set(key, mesh.triangleCount);
+      return;
+    }
 
     const node = new Object3D(`chunk_${cx}_${cz}`);
     node.geometry = new VoxelChunkGeometry(mesh).getGeometryData();
@@ -53,15 +65,20 @@ export class ChunkWorldHost {
     node.computeBounds();
     this._scene.add(node);
     this._nodes.set(key, node);
+    this._triangles.set(key, mesh.triangleCount);
     this._triangleCount += mesh.triangleCount;
   }
 
   /** Evicts the hosted node for (cx, cz) when the world unloads the chunk. */
   public onUnload(cx: number, cz: number): void {
-    const node = this._nodes.get(ChunkWorldHost._key(cx, cz));
+    const key = ChunkWorldHost._key(cx, cz);
+    const node = this._nodes.get(key);
     if (!node) return; // a chunk may be evicted before it ever meshed
     this._scene.remove(node);
-    this._nodes.delete(ChunkWorldHost._key(cx, cz));
+    this._nodes.delete(key);
+    const triangles = this._triangles.get(key) ?? 0;
+    this._triangles.delete(key);
+    this._triangleCount -= triangles;
   }
 
   /** Removes every hosted node (teardown). */

@@ -5,6 +5,7 @@ import {
   BLOCK_DIRT,
   BLOCK_GRASS,
   BLOCK_STONE,
+  BLOCK_TEX_LAYER,
 } from "../voxel/BlockRegistry.js";
 import { Chunk } from "../voxel/Chunk.js";
 import type { VoxelMeshData } from "../voxel/mesh/NaiveMesher.js";
@@ -92,10 +93,10 @@ describe("NaiveMesher — visible-face culling", () => {
     expect(data.triangleCount).toBe(12); // corner voxel is still fully exposed
   });
 
-  it("a transparent neighbour does not cull the opaque block's face", () => {
+  it("a transparent neighbour neither culls the opaque face nor renders against it", () => {
     const { registry, mesher } = seededMesher();
     registry.register({
-      id: 4,
+      id: 6, // beyond the seeded M2 block set (0=AIR, 1..5 = grass/dirt/stone/wood/water)
       name: "glass",
       transparent: true,
       collidable: false,
@@ -103,26 +104,32 @@ describe("NaiveMesher — visible-face culling", () => {
     });
     const chunk = new Chunk();
     chunk.setBlock(5, 5, 5, BLOCK_DIRT);
-    chunk.setBlock(6, 5, 5, 4); // transparent neighbour
+    chunk.setBlock(6, 5, 5, 6); // transparent neighbour
     const data = mesher.build(chunk);
-    // Only the opaque block meshes; the transparent neighbour does not block the +X face.
-    expect(data.triangleCount).toBe(12);
+    // M2 (D3): the opaque block meshes ALL its faces (the transparent neighbour is non-opaque),
+    // AND the transparent block meshes only its faces DIRECTLY AGAINST AIR. So: 12 (dirt, fully
+    // exposed) + 10 (glass: its -X face toward dirt is culled on both sides -> 5 faces) = 22.
+    expect(data.triangleCount).toBe(22);
     const faces = collectFaces(data);
+    // The +X face of the dirt block survives the transparent neighbour (never culled by glass).
     expect(faces.some((f) => f.normal.join(",") === "1,0,0")).toBe(true);
+    // Exactly one -X face remains: the dirt block's face toward open air. The glass block emits
+    // NO face against the dirt block (no water-into-solid z-fighting).
+    expect(faces.filter((f) => f.normal.join(",") === "-1,0,0").length).toBe(1);
   });
 });
 
 describe("NaiveMesher — per-face atlas layers", () => {
-  it("maps grass-cap faces to the correct palette layers (top=0, side=1, bottom=2)", () => {
+  it("maps grass-cap faces to the correct palette layers (top=GRASS_TOP, bottom=DIRT, side=GRASS_SIDE)", () => {
     const data = buildOne(5, 5, 5, BLOCK_GRASS);
     const byNormal = new Map<string, number>();
     for (const f of collectFaces(data)) byNormal.set(f.normal.join(","), f.layer);
-    expect(byNormal.get("0,1,0")).toBe(0); // grass top
-    expect(byNormal.get("0,-1,0")).toBe(2); // stone bottom
-    expect(byNormal.get("1,0,0")).toBe(1); // dirt side
-    expect(byNormal.get("-1,0,0")).toBe(1);
-    expect(byNormal.get("0,0,1")).toBe(1);
-    expect(byNormal.get("0,0,-1")).toBe(1);
+    expect(byNormal.get("0,1,0")).toBe(BLOCK_TEX_LAYER.GRASS_TOP); // grass top
+    expect(byNormal.get("0,-1,0")).toBe(BLOCK_TEX_LAYER.DIRT); // dirt underside (M2 atlas)
+    expect(byNormal.get("1,0,0")).toBe(BLOCK_TEX_LAYER.GRASS_SIDE); // dedicated grass side
+    expect(byNormal.get("-1,0,0")).toBe(BLOCK_TEX_LAYER.GRASS_SIDE);
+    expect(byNormal.get("0,0,1")).toBe(BLOCK_TEX_LAYER.GRASS_SIDE);
+    expect(byNormal.get("0,0,-1")).toBe(BLOCK_TEX_LAYER.GRASS_SIDE);
   });
 
   it("keeps face normals axis-aligned unit vectors", () => {
