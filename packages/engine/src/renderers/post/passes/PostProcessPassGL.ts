@@ -6,6 +6,22 @@ import FULLSCREEN_VERT_GLSL100 from "../shaders/PostProcess100.vert.glsl?raw";
 import POST_PROCESS_FRAG_GLSL100 from "../shaders/PostProcess100.frag.glsl?raw";
 import { PostProcessingEffectType } from "../../../enums/index.js";
 import type { ShaderRegistry } from "../../shaders/index.js";
+import type { PostProcessingGroup } from "../PostProcessingGroup.js";
+import type {
+  BloomElement,
+  ColorGradingElement,
+  FlashElement,
+  GrainElement,
+  GravitationalLensingElement,
+  HbaoElement,
+  LightShaftsElement,
+  OutlineElement,
+  QuantizeElement,
+  ToneMappingElement,
+  VignetteElement,
+  VolumetricFogElement,
+} from "../elements/index.js";
+import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
 
 /**
  * Handles post-processing blit for WebGL1 and WebGL2.
@@ -55,44 +71,34 @@ export class PostProcessPassGL {
   private _uFlashIntensity: WebGLUniformLocation | null = null;
 
   private _aPos: number = -1;
+  private readonly _gl: WebGLRenderingContext | WebGL2RenderingContext;
   private readonly _isWebGL2: boolean;
   private _compiledSignature?: string;
 
   private readonly _shaderRegistry: ShaderRegistry;
 
   constructor(
-    _gl: WebGLRenderingContext | WebGL2RenderingContext,
+    gl: WebGLRenderingContext | WebGL2RenderingContext,
     isWebGL2: boolean,
     shaderRegistry: ShaderRegistry,
   ) {
+    this._gl = gl;
     this._isWebGL2 = isWebGL2;
     this._shaderRegistry = shaderRegistry;
   }
 
-  private _getSignature(group: import("../index.js").PostProcessingGroup): string {
-    const tm = group.get<import("../index.js").ToneMappingElement>(
-      PostProcessingEffectType.TONE_MAPPING,
-    );
-    const vig = group.get<import("../index.js").VignetteElement>(PostProcessingEffectType.VIGNETTE);
-    const grain = group.get<import("../index.js").GrainElement>(PostProcessingEffectType.GRAIN);
-    const bloom = group.get<import("../index.js").BloomElement>(PostProcessingEffectType.BLOOM);
-    const grade = group.get<import("../index.js").ColorGradingElement>(
-      PostProcessingEffectType.COLOR_GRADING,
-    );
-    const quant = group.get<import("../index.js").QuantizeElement>(
-      PostProcessingEffectType.QUANTIZE,
-    );
-    const hbao = group.get<import("../index.js").HbaoElement>(PostProcessingEffectType.HBAO);
-    const shafts = group.get<import("../index.js").LightShaftsElement>(
-      PostProcessingEffectType.LIGHT_SHAFTS,
-    );
-    const volFog = group.get<import("../index.js").VolumetricFogElement>(
-      PostProcessingEffectType.VOLUMETRIC_FOG,
-    );
-    const outline = group.get<import("../index.js").OutlineElement>(
-      PostProcessingEffectType.OUTLINE,
-    );
-    const flash = group.get<import("../index.js").FlashElement>(PostProcessingEffectType.FLASH);
+  private _getSignature(group: PostProcessingGroup): string {
+    const tm = group.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING);
+    const vig = group.get<VignetteElement>(PostProcessingEffectType.VIGNETTE);
+    const grain = group.get<GrainElement>(PostProcessingEffectType.GRAIN);
+    const bloom = group.get<BloomElement>(PostProcessingEffectType.BLOOM);
+    const grade = group.get<ColorGradingElement>(PostProcessingEffectType.COLOR_GRADING);
+    const quant = group.get<QuantizeElement>(PostProcessingEffectType.QUANTIZE);
+    const hbao = group.get<HbaoElement>(PostProcessingEffectType.HBAO);
+    const shafts = group.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS);
+    const volFog = group.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
+    const outline = group.get<OutlineElement>(PostProcessingEffectType.OUTLINE);
+    const flash = group.get<FlashElement>(PostProcessingEffectType.FLASH);
 
     // Only structural flags/modes trigger a shader rebuild (matching WebGPU).
     // Continuous tuning values (exposure, gamma, vignette darkness/offset, grain intensity,
@@ -118,7 +124,7 @@ export class PostProcessPassGL {
 
   private _build(
     gl: WebGLRenderingContext | WebGL2RenderingContext,
-    group: import("../index.js").PostProcessingGroup,
+    group: PostProcessingGroup,
   ): void {
     if (this._prog) {
       gl.deleteProgram(this._prog);
@@ -137,29 +143,17 @@ export class PostProcessPassGL {
     const rawFrag = this._isWebGL2 ? POST_PROCESS_FRAG_GLSL : POST_PROCESS_FRAG_GLSL100;
     let frag = this._isWebGL2 ? this._shaderRegistry.assemble(rawFrag, "glsl300") : rawFrag;
 
-    const tm = group.get<import("../index.js").ToneMappingElement>(
-      PostProcessingEffectType.TONE_MAPPING,
-    );
-    const vig = group.get<import("../index.js").VignetteElement>(PostProcessingEffectType.VIGNETTE);
-    const grain = group.get<import("../index.js").GrainElement>(PostProcessingEffectType.GRAIN);
-    const bloom = group.get<import("../index.js").BloomElement>(PostProcessingEffectType.BLOOM);
-    const grade = group.get<import("../index.js").ColorGradingElement>(
-      PostProcessingEffectType.COLOR_GRADING,
-    );
-    const quant = group.get<import("../index.js").QuantizeElement>(
-      PostProcessingEffectType.QUANTIZE,
-    );
-    const hbao = group.get<import("../index.js").HbaoElement>(PostProcessingEffectType.HBAO);
-    const shafts = group.get<import("../index.js").LightShaftsElement>(
-      PostProcessingEffectType.LIGHT_SHAFTS,
-    );
-    const volFog = group.get<import("../index.js").VolumetricFogElement>(
-      PostProcessingEffectType.VOLUMETRIC_FOG,
-    );
-    const outline = group.get<import("../index.js").OutlineElement>(
-      PostProcessingEffectType.OUTLINE,
-    );
-    const flash = group.get<import("../index.js").FlashElement>(PostProcessingEffectType.FLASH);
+    const tm = group.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING);
+    const vig = group.get<VignetteElement>(PostProcessingEffectType.VIGNETTE);
+    const grain = group.get<GrainElement>(PostProcessingEffectType.GRAIN);
+    const bloom = group.get<BloomElement>(PostProcessingEffectType.BLOOM);
+    const grade = group.get<ColorGradingElement>(PostProcessingEffectType.COLOR_GRADING);
+    const quant = group.get<QuantizeElement>(PostProcessingEffectType.QUANTIZE);
+    const hbao = group.get<HbaoElement>(PostProcessingEffectType.HBAO);
+    const shafts = group.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS);
+    const volFog = group.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
+    const outline = group.get<OutlineElement>(PostProcessingEffectType.OUTLINE);
+    const flash = group.get<FlashElement>(PostProcessingEffectType.FLASH);
 
     const tmEnabled = tm && tm.enabled;
     const vigEnabled = vig && vig.enabled;
@@ -276,16 +270,50 @@ export class PostProcessPassGL {
   /**
    * Blits the HDR texture to the canvas framebuffer.
    */
+  public execute(ctx: GLPostEffectPassContext): void;
   public execute(
     gl: WebGLRenderingContext | WebGL2RenderingContext,
     hdrTexture: WebGLTexture,
-    group: import("../index.js").PostProcessingGroup,
-    bloomTexture: WebGLTexture | null = null,
-    hbaoTexture: WebGLTexture | null = null,
-    lightShaftsTexture: WebGLTexture | null = null,
-    volumetricFogTexture: WebGLTexture | null = null,
-    realTime: number = 0,
+    group: PostProcessingGroup,
+    bloomTexture?: WebGLTexture | null,
+    hbaoTexture?: WebGLTexture | null,
+    lightShaftsTexture?: WebGLTexture | null,
+    volumetricFogTexture?: WebGLTexture | null,
+    realTime?: number,
+  ): void;
+  public execute(
+    ctxOrGl: GLPostEffectPassContext | WebGLRenderingContext | WebGL2RenderingContext,
+    ...args: unknown[]
   ): void {
+    let gl: WebGLRenderingContext | WebGL2RenderingContext;
+    let hdrTexture: WebGLTexture;
+    let group: PostProcessingGroup;
+    let bloomTexture: WebGLTexture | null;
+    let hbaoTexture: WebGLTexture | null;
+    let lightShaftsTexture: WebGLTexture | null;
+    let volumetricFogTexture: WebGLTexture | null;
+    let realTime: number;
+
+    if (args.length > 0) {
+      gl = ctxOrGl as WebGLRenderingContext | WebGL2RenderingContext;
+      hdrTexture = args[0] as WebGLTexture;
+      group = args[1] as PostProcessingGroup;
+      bloomTexture = (args[2] as WebGLTexture | null) ?? null;
+      hbaoTexture = (args[3] as WebGLTexture | null) ?? null;
+      lightShaftsTexture = (args[4] as WebGLTexture | null) ?? null;
+      volumetricFogTexture = (args[5] as WebGLTexture | null) ?? null;
+      realTime = (args[6] as number) ?? 0;
+    } else {
+      const ctx = ctxOrGl as GLPostEffectPassContext;
+      gl = ctx.gl;
+      hdrTexture = ctx.colorTexture;
+      group = ctx.group;
+      bloomTexture = ctx.bloomTexture;
+      hbaoTexture = ctx.hbaoTexture;
+      lightShaftsTexture = ctx.lightShaftsTexture;
+      volumetricFogTexture = ctx.volumetricFogTexture;
+      realTime = ctx.realTime;
+    }
     const sig = this._getSignature(group);
     if (!this._prog || sig !== this._compiledSignature) {
       this._build(gl, group);
@@ -308,7 +336,7 @@ export class PostProcessPassGL {
     gl.uniform1i(this._uHdrTexture, 0);
 
     // Bloom
-    const bloom = group.get<import("../index.js").BloomElement>(PostProcessingEffectType.BLOOM);
+    const bloom = group.get<BloomElement>(PostProcessingEffectType.BLOOM);
     if (bloom && bloom.enabled && bloomTexture) {
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, bloomTexture);
@@ -316,7 +344,7 @@ export class PostProcessPassGL {
     }
 
     // HBAO
-    const hbao = group.get<import("../index.js").HbaoElement>(PostProcessingEffectType.HBAO);
+    const hbao = group.get<HbaoElement>(PostProcessingEffectType.HBAO);
     if (hbao && hbao.enabled && hbaoTexture) {
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, hbaoTexture);
@@ -324,9 +352,7 @@ export class PostProcessPassGL {
     }
 
     // Light Shafts
-    const shafts = group.get<import("../index.js").LightShaftsElement>(
-      PostProcessingEffectType.LIGHT_SHAFTS,
-    );
+    const shafts = group.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS);
     if (shafts && shafts.enabled && lightShaftsTexture) {
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, lightShaftsTexture);
@@ -338,9 +364,7 @@ export class PostProcessPassGL {
     }
 
     // Volumetric Fog
-    const volFog = group.get<import("../index.js").VolumetricFogElement>(
-      PostProcessingEffectType.VOLUMETRIC_FOG,
-    );
+    const volFog = group.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
     if (volFog && volFog.enabled && volumetricFogTexture) {
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, volumetricFogTexture);
@@ -348,21 +372,13 @@ export class PostProcessPassGL {
     }
 
     // Continuous Uniform Updates
-    const tm = group.get<import("../index.js").ToneMappingElement>(
-      PostProcessingEffectType.TONE_MAPPING,
-    );
-    const vig = group.get<import("../index.js").VignetteElement>(PostProcessingEffectType.VIGNETTE);
-    const grain = group.get<import("../index.js").GrainElement>(PostProcessingEffectType.GRAIN);
-    const grade = group.get<import("../index.js").ColorGradingElement>(
-      PostProcessingEffectType.COLOR_GRADING,
-    );
-    const quant = group.get<import("../index.js").QuantizeElement>(
-      PostProcessingEffectType.QUANTIZE,
-    );
-    const outline = group.get<import("../index.js").OutlineElement>(
-      PostProcessingEffectType.OUTLINE,
-    );
-    const flash = group.get<import("../index.js").FlashElement>(PostProcessingEffectType.FLASH);
+    const tm = group.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING);
+    const vig = group.get<VignetteElement>(PostProcessingEffectType.VIGNETTE);
+    const grain = group.get<GrainElement>(PostProcessingEffectType.GRAIN);
+    const grade = group.get<ColorGradingElement>(PostProcessingEffectType.COLOR_GRADING);
+    const quant = group.get<QuantizeElement>(PostProcessingEffectType.QUANTIZE);
+    const outline = group.get<OutlineElement>(PostProcessingEffectType.OUTLINE);
+    const flash = group.get<FlashElement>(PostProcessingEffectType.FLASH);
 
     if (this._uBloomIntensity) gl.uniform1f(this._uBloomIntensity, bloom ? bloom.intensity : 0.0);
     if (this._uBloomColor) {
@@ -406,7 +422,7 @@ export class PostProcessPassGL {
         gl.uniform3f(this._uOutlineColor, outline.color.r, outline.color.g, outline.color.b);
       else gl.uniform3f(this._uOutlineColor, 0.0, 0.0, 0.0);
     }
-    const lensing = group.get<import("../index.js").GravitationalLensingElement>(
+    const lensing = group.get<GravitationalLensingElement>(
       PostProcessingEffectType.GRAVITATIONAL_LENSING,
     );
     if (this._uSingularityScreenPos) {
@@ -463,12 +479,17 @@ export class PostProcessPassGL {
     gl.useProgram(null);
   }
 
-  /** Releases GPU resources. */
-  public destroy(gl: WebGLRenderingContext | WebGL2RenderingContext): void {
+  /** Releases GPU resources (contract shape: `destroy(): void`, ADR 0037). */
+  public destroy(): void {
+    const gl = this._gl;
     if (this._prog) gl.deleteProgram(this._prog);
     if (this._vb) gl.deleteBuffer(this._vb);
     if (this._isWebGL2 && this._vao) {
       (gl as WebGL2RenderingContext).deleteVertexArray(this._vao);
     }
+    this._prog = undefined;
+    this._vb = undefined;
+    this._vao = undefined;
+    this._compiledSignature = "";
   }
 }

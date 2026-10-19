@@ -15,10 +15,32 @@ import type {
 } from "../../src/renderers/post/elements/index.js";
 import { PostProcessingEffectType } from "../../src/enums/index.js";
 import { PostProcessPassGL } from "../../src/renderers/post/passes/PostProcessPassGL.js";
+import {
+  createGLPostEffectContext,
+  type GLPostEffectPassContext,
+} from "../../src/renderers/post/passes/GLPostEffectPass.js";
 import { PostProcessPass } from "../../src/renderers/passes/PostProcessPass.js";
 import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
 
 const testShaderRegistry = new ShaderRegistry();
+
+/** Builds the terminal uber-pass context for these unit tests (mirrors renderer repopulation). */
+function makeUberCtx(
+  gl: WebGL2RenderingContext,
+  group: PostProcessingGroup,
+  bloomTexture: WebGLTexture | null,
+  hbaoTexture: WebGLTexture | null,
+  lightShaftsTexture: WebGLTexture | null,
+): GLPostEffectPassContext {
+  const ctx = createGLPostEffectContext();
+  ctx.gl = gl;
+  ctx.group = group;
+  ctx.colorTexture = {} as WebGLTexture;
+  ctx.bloomTexture = bloomTexture;
+  ctx.hbaoTexture = hbaoTexture;
+  ctx.lightShaftsTexture = lightShaftsTexture;
+  return ctx;
+}
 
 (globalThis as unknown as { GPUShaderStage: Record<string, number> }).GPUShaderStage ??= {
   VERTEX: 0x1,
@@ -234,12 +256,7 @@ describe("Post-Processing Renderer Parity (WebGL2 vs WebGPU)", () => {
     const { gl, uniforms } = createMockGL();
     const glPass = new PostProcessPassGL(gl, true, new ShaderRegistry());
     glPass.execute(
-      gl,
-      {} as WebGLTexture,
-      group,
-      {} as WebGLTexture,
-      {} as WebGLTexture,
-      {} as WebGLTexture,
+      makeUberCtx(gl, group, {} as WebGLTexture, {} as WebGLTexture, {} as WebGLTexture),
     );
 
     // 2. Execute WebGPU Pass
@@ -374,7 +391,7 @@ describe("Post-Processing Renderer Parity (WebGL2 vs WebGPU)", () => {
 
     const { gl, uniforms } = createMockGL();
     const glPass = new PostProcessPassGL(gl, true, new ShaderRegistry());
-    glPass.execute(gl, {} as WebGLTexture, group, null, null);
+    glPass.execute(makeUberCtx(gl, group, null, null, null));
 
     const { device, getWrittenUniforms, makeRenderer } = createMockGPU();
     const gpuRenderer = makeRenderer(group);

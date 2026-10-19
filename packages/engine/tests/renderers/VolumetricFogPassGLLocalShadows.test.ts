@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { VolumetricFogPassGL } from "../../src/renderers/post/passes/VolumetricFogPassGL.js";
+import { createGLPostEffectContext } from "../../src/renderers/post/passes/GLPostEffectPass.js";
 import { VolumetricFogElement } from "../../src/renderers/post/elements/VolumetricFogElement.js";
 import { SpotLight } from "../../src/core/lights/index.js";
 import { Vector3D } from "../../src/math/index.js";
@@ -83,28 +84,22 @@ function run(
   spot.updateMatrixWorld();
   configure(element, spot);
 
-  new VolumetricFogPassGL(gl, true).execute(
-    {} as WebGLTexture,
-    800,
-    600,
-    new Float32Array(16),
-    new Vector3D(0, 0, 0),
-    0.1,
-    1000,
-    undefined,
-    null,
-    element,
-    [],
-    0,
-    undefined,
-    0,
-    null,
-    0,
-    [],
-    [spot],
-    shadowTextures,
-    fallback,
-  );
+  // Repopulate the pass context the same way the renderer does each frame.
+  const ctx = createGLPostEffectContext();
+  ctx.gl = gl;
+  ctx.width = 800;
+  ctx.height = 600;
+  ctx.colorTexture = {} as WebGLTexture;
+  ctx.depthTexture = {} as WebGLTexture;
+  ctx.viewProjMatrix = new Float32Array(16);
+  ctx.camPos = new Vector3D(0, 0, 0);
+  ctx.near = 0.1;
+  ctx.far = 1000;
+  ctx.element = element;
+  ctx.spotLights = [spot];
+  ctx.spotShadowTextures = shadowTextures;
+  ctx.fallbackShadowTexture = fallback;
+  new VolumetricFogPassGL(gl, true).execute(ctx);
   return rec;
 }
 

@@ -1,10 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import { VolumetricFogPassGL } from "../../src/renderers/post/passes/VolumetricFogPassGL.js";
+import {
+  createGLPostEffectContext,
+  type GLPostEffectPassContext,
+} from "../../src/renderers/post/passes/GLPostEffectPass.js";
 import { VolumetricFogElement } from "../../src/renderers/post/elements/VolumetricFogElement.js";
 import { DirectionalLight } from "../../src/core/lights/index.js";
 import { FogVolume } from "../../src/core/objects/FogVolume.js";
 import { VolumetricTexture } from "../../src/core/textures/index.js";
 import { Vector3D } from "../../src/math/index.js";
+import { Color } from "../../src/core/colors/index.js";
 
 interface MaskUploadRecord {
   width: number;
@@ -15,6 +20,44 @@ interface MaskUploadRecord {
 interface TextureBinding {
   target: number;
   texture: unknown;
+}
+
+/**
+ * Builds a minimal WebGL2 pass context for these unit tests (mirrors the renderer's per-frame
+ * repopulation of the reusable context; see GLPostEffectPassContext).
+ */
+function makeFogCtx(
+  gl: WebGL2RenderingContext,
+  element: VolumetricFogElement,
+  dirLight?: DirectionalLight,
+  volumes: FogVolume[] = [],
+): GLPostEffectPassContext {
+  const ctx = createGLPostEffectContext();
+  ctx.gl = gl;
+  ctx.width = 800;
+  ctx.height = 600;
+  ctx.colorTexture = {} as WebGLTexture;
+  ctx.depthTexture = {} as WebGLTexture;
+  ctx.viewProjMatrix = new Float32Array(16);
+  ctx.camPos = new Vector3D(0, 0, 0);
+  ctx.near = 0.1;
+  ctx.far = 1000;
+  ctx.element = element;
+  ctx.fogVolumes = volumes;
+  if (dirLight !== undefined) {
+    ctx.lights = {
+      aCol: new Color(0, 0, 0),
+      aIntensity: 0,
+      dDir: new Vector3D(0, 0, 0),
+      dCol: new Color(0, 0, 0),
+      dIntensity: 0,
+      dLight: dirLight,
+      pLights: [],
+      sLights: [],
+      aLights: [],
+    };
+  }
+  return ctx;
 }
 
 /** Builds a WebGL2 mock that records uniform uploads, 3D-texture uploads and per-unit bindings. */
@@ -170,19 +213,7 @@ function runMaskedVolume(
   const element = new VolumetricFogElement();
   element.enabled = true;
   element.scatteringAlbedo = scatterAlbedo;
-  pass.execute(
-    {} as WebGLTexture,
-    800,
-    600,
-    new Float32Array(16),
-    new Vector3D(0, 0, 0),
-    0.1,
-    1000,
-    undefined,
-    null,
-    element,
-    volumes,
-  );
+  pass.execute(makeFogCtx(mock.gl2, element, undefined, volumes));
   return { mock, pass, element };
 }
 
@@ -194,18 +225,7 @@ describe("VolumetricFogPassGL density masks", () => {
     element.enabled = true;
     element.scatteringAlbedo = 0.5;
 
-    pass.execute(
-      {} as WebGLTexture,
-      800,
-      600,
-      new Float32Array(16),
-      new Vector3D(0, 0, 0),
-      0.1,
-      1000,
-      undefined,
-      null,
-      element,
-    );
+    pass.execute(makeFogCtx(mock.gl2, element));
 
     expect(mock.texImage3DCalls).toHaveLength(0);
     expect(mock.uniformCalls["u_elementMaskEnabled"]).toBe(0);
@@ -227,18 +247,7 @@ describe("VolumetricFogPassGL density masks", () => {
     sun.color.set(0.8, 0.6, 0.4);
     sun.direction.set(0, -1, 0);
 
-    pass.execute(
-      {} as WebGLTexture,
-      800,
-      600,
-      new Float32Array(16),
-      new Vector3D(0, 0, 0),
-      0.1,
-      1000,
-      sun,
-      null,
-      element,
-    );
+    pass.execute(makeFogCtx(mock.gl2, element, sun));
 
     // baked: sunScale = 2 * 1.5 * 0.5 = 1.5, times the light/element tint.
     const sunColor = mock.uniformCalls["u_sunColor"] as number[];
@@ -264,18 +273,7 @@ describe("VolumetricFogPassGL density masks", () => {
     sun.color.set(0.8, 0.6, 0.4);
     sun.direction.set(0, -1, 0);
 
-    pass.execute(
-      {} as WebGLTexture,
-      800,
-      600,
-      new Float32Array(16),
-      new Vector3D(0, 0, 0),
-      0.1,
-      1000,
-      sun,
-      null,
-      element,
-    );
+    pass.execute(makeFogCtx(mock.gl2, element, sun));
 
     // unbaked: sunScale = 2 * 1.5 * 1.0 = 3.0, the per-cell albedo is applied in the shader.
     const sunColor = mock.uniformCalls["u_sunColor"] as number[];
@@ -344,19 +342,7 @@ describe("VolumetricFogPassGL density masks", () => {
     expect(mask.needsUpdate).toBe(false);
 
     mask.needsUpdate = true;
-    pass.execute(
-      {} as WebGLTexture,
-      800,
-      600,
-      new Float32Array(16),
-      new Vector3D(0, 0, 0),
-      0.1,
-      1000,
-      undefined,
-      null,
-      element,
-      [volume],
-    );
+    pass.execute(makeFogCtx(mock.gl2, element, undefined, [volume]));
 
     // Re-uploaded exactly once; the identity placeholder and cache hit must not re-upload.
     expect(mock.texImage3DCalls.length).toBe(uploadsAfterFirst + 1);

@@ -7,7 +7,7 @@ import SHAFTS_100_FRAG_GLSL from "../shaders/LightShafts100.frag.glsl?raw";
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import type { LightShaftsElement } from "../elements/index.js";
-import type { DirectionalLight } from "../../../core/lights/index.js";
+import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 
 /**
@@ -208,17 +208,16 @@ export class LightShaftsPassGL {
    * Executes the light shafts pass.
    * @returns The generated light shafts texture ready for additive composite before tonemapping, or null.
    */
-  public execute(
-    depthTexture: WebGLTexture | null,
-    sceneColorTexture: WebGLTexture,
-    width: number,
-    height: number,
-    viewProjMatrix: Float32Array,
-    camPos: Vector3D,
-    dirLight: DirectionalLight | undefined,
-    dirShadowTexture: WebGLTexture | null,
-    element: LightShaftsElement,
-  ): WebGLTexture | null {
+  public execute(ctx: GLPostEffectPassContext): WebGLTexture | null {
+    const depthTexture = ctx.depthTexture ?? null;
+    const sceneColorTexture = ctx.colorTexture;
+    const width = ctx.width;
+    const height = ctx.height;
+    const viewProjMatrix = ctx.viewProjMatrix;
+    const camPos = ctx.camPos;
+    const dirLight = ctx.lights?.dLight;
+    const dirShadowTexture = ctx.dirShadowTexture;
+    const element = ctx.element as LightShaftsElement;
     if (!element.enabled || width <= 0 || height <= 0 || !dirLight) {
       return null;
     }

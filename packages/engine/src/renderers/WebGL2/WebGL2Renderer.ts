@@ -18,14 +18,8 @@ import { WebGLShadowPass } from "../passes/WebGLShadowPass.js";
 import { WebGLMainPass } from "../passes/WebGLMainPass.js";
 import { WebGLPostProcessPass } from "../passes/WebGLPostProcessPass.js";
 import { WebGLClusterCullPass } from "../passes/WebGLClusterCullPass.js";
-import {
-  PostProcessPassGL,
-  BloomPassGL,
-  AOPassGL,
-  HistoryBlendPassGL,
-  LightShaftsPassGL,
-  VolumetricFogPassGL,
-} from "../post/passes/index.js";
+import { GLPostEffects, createGLPostEffectContext } from "../post/passes/index.js";
+import type { GLPostEffectPassContext } from "../post/passes/index.js";
 import type { AbstractLight } from "../../core/lights/index.js";
 import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../core/lights/index.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
@@ -34,17 +28,12 @@ import { Texture, RenderTargetCube } from "../../core/textures/index.js";
 import type { RenderManifest } from "../shaders/index.js";
 import { resolveManifestFlags } from "../shaders/index.js";
 import { Color } from "../../core/colors/index.js";
-import type { Object3D, Scene, TextureArray } from "../../core/index.js";
+import type { Object3D, RenderBatch, Scene, TextureArray } from "../../core/index.js";
 import { DeviceLimit, InstancedMesh, computeClipToBox } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
 import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 import type { WireframeMode } from "../../enums/index.js";
-import {
-  MaterialType,
-  RendererType,
-  Topology,
-  PostProcessingEffectType,
-} from "../../enums/index.js";
+import { MaterialType, RendererType, Topology } from "../../enums/index.js";
 import type { ClusterGridDims } from "../../math/index.js";
 import {
   Vector3D,
@@ -112,13 +101,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   protected _hdrFbo: WebGL2FrameBuffer | undefined = undefined;
   /** True while the main pass wants fragment output 1 routed into the normal buffer. */
   private _normalWriteRequested: boolean = false;
-  protected _postPassGL: PostProcessPassGL | undefined = undefined;
-  protected _bloomPassGL: BloomPassGL | undefined = undefined;
-  protected _hbaoPassGL: AOPassGL | undefined = undefined;
-  protected _lightShaftsPassGL: LightShaftsPassGL | undefined = undefined;
-  protected _volumetricFogPassGL: VolumetricFogPassGL | undefined = undefined;
-  protected _taaPassGL: HistoryBlendPassGL | undefined = undefined;
-  protected _motionTrailPassGL: HistoryBlendPassGL | undefined = undefined;
+  /** Owns every GL post pass (registry + terminal uber pass) behind the ADR 0037 contract. */
+  private _postEffects: GLPostEffects | undefined = undefined;
+  /** Reusable per-frame post context (zero allocation -- see GLPostEffectPassContext). */
+  private _postCtx: GLPostEffectPassContext | undefined = undefined;
 
   protected _activeRenderTarget: RenderTarget | RenderTargetCube | null = null;
   protected _activeCubeFace: number = 0;
@@ -693,153 +679,58 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
   public flushPostProcess(): void {
     const isOffscreen = this._activeRenderTarget !== null;
-    if (!isOffscreen && this.postProcessing.enabled && this._hdrFbo && this._postPassGL) {
-      // TAA resolves first, if enabled: everything downstream (Bloom, HBAO, the final uber
-      // pass) should react to the temporally-smoothed color, not the raw per-frame jittered one.
-      let colorTex: WebGLTexture = this._hdrFbo.texture;
-      if (this._taaPassGL) {
-        const taaNode = this.postProcessing.get<import("../post/index.js").TaaElement>(
-          PostProcessingEffectType.TAA,
-        );
-        if (taaNode && taaNode.enabled) {
-          const resolved = this._taaPassGL.execute(
-            colorTex,
-            this.gl.canvas.width,
-            this.gl.canvas.height,
-            taaNode,
-          );
-          if (resolved) colorTex = resolved;
-        }
-      }
-
-      // Motion Trail: a deliberate ghost/afterimage look, not anti-aliasing -- reuses the same
-      // history-blend pass as TAA (its own separate instance/history buffer), chained after TAA
-      // so both can be combined if ever wanted, though typically only one is enabled at a time.
-      if (this._motionTrailPassGL) {
-        const trailNode = this.postProcessing.get<import("../post/index.js").MotionTrailElement>(
-          PostProcessingEffectType.MOTION_TRAIL,
-        );
-        if (trailNode && trailNode.enabled) {
-          const resolved = this._motionTrailPassGL.execute(
-            colorTex,
-            this.gl.canvas.width,
-            this.gl.canvas.height,
-            trailNode,
-          );
-          if (resolved) colorTex = resolved;
-        }
-      }
-
-      let bloomTex: WebGLTexture | null = null;
-      if (this._bloomPassGL) {
-        const bloomNode = this.postProcessing.get<import("../post/index.js").BloomElement>(
-          PostProcessingEffectType.BLOOM,
-        );
-        if (bloomNode && bloomNode.enabled) {
-          bloomTex = this._bloomPassGL.execute(
-            colorTex,
-            this.gl.canvas.width,
-            this.gl.canvas.height,
-            bloomNode,
-          );
-        }
-      }
-
-      let hbaoTex: WebGLTexture | null = null;
-      if (this._hbaoPassGL && this._opaqueDepthTexture && this._frameProjMatrix) {
-        const hbaoNode = this.postProcessing.get<import("../post/index.js").HbaoElement>(
-          PostProcessingEffectType.HBAO,
-        );
-        if (hbaoNode && hbaoNode.enabled) {
-          hbaoTex = this._hbaoPassGL.execute(
-            this._opaqueDepthTexture,
-            this.gl.canvas.width,
-            this.gl.canvas.height,
-            this._frameNear,
-            this._frameFar,
-            this._frameProjMatrix,
-            hbaoNode,
-          );
-        }
-      }
-
-      let lightShaftsTex: WebGLTexture | null = null;
-      if (this._lightShaftsPassGL && this._frameLights?.dLight) {
-        const shaftsNode = this.postProcessing.get<import("../post/index.js").LightShaftsElement>(
-          PostProcessingEffectType.LIGHT_SHAFTS,
-        );
-        if (shaftsNode && shaftsNode.enabled && this._opaqueDepthTexture) {
-          const dLight = this._frameLights.dLight;
-          const shadowFbo = this._shadowMaps.get(dLight);
-          lightShaftsTex = this._lightShaftsPassGL.execute(
-            this._opaqueDepthTexture,
-            colorTex,
-            this.gl.canvas.width,
-            this.gl.canvas.height,
-            this._frameViewProj.data,
-            this._frameCamPos,
-            dLight,
-            shadowFbo?.texture ?? null,
-            shaftsNode,
-          );
-        }
-      }
-
-      let volumetricFogTex: WebGLTexture | null = null;
-      if (this._volumetricFogPassGL) {
-        const volFogNode = this.postProcessing.get<import("../post/index.js").VolumetricFogElement>(
-          PostProcessingEffectType.VOLUMETRIC_FOG,
-        );
-        if (volFogNode && volFogNode.enabled && this._opaqueDepthTexture) {
-          const dLight = this._frameLights?.dLight;
-          const shadowFbo = dLight ? this._shadowMaps.get(dLight) : undefined;
-          volumetricFogTex = this._volumetricFogPassGL.execute(
-            this._opaqueDepthTexture,
-            this.gl.canvas.width,
-            this.gl.canvas.height,
-            this._frameViewProj.data,
-            this._frameCamPos,
-            this._frameNear,
-            this._frameFar,
-            dLight,
-            shadowFbo?.texture ?? null,
-            volFogNode,
-            this._fogVolumes,
-            this.frameInfo.time,
-            this._frameLights?.aCol,
-            this._frameLights?.aIntensity,
-            this._frameScene?.irradianceMap
-              ? this._textures.getWebGLCubeTexture(this._frameScene.irradianceMap, this._quality)
-              : this._blackCubeTexture,
-            this._frameScene?.environmentIntensity ?? 0,
-            this._frameLights?.pLights ?? [],
-            this._frameLights?.sLights ?? [],
-            this._collectFogSpotShadowTextures(),
-            this._dummyShadowMap.texture,
-          );
-        }
-      }
-
-      this._postPassGL.execute(
-        this.gl,
-        colorTex,
-        this.postProcessing,
-        bloomTex,
-        hbaoTex,
-        lightShaftsTex,
-        volumetricFogTex,
-        this.frameInfo.realTime,
-      );
+    if (!isOffscreen && this.postProcessing.enabled && this._hdrFbo && this._postEffects) {
+      this._postEffects.execute(this._buildPostEffectContext());
     }
+  }
+
+  /**
+   * Repopulates the reusable per-frame post context from the current frame state (zero allocation
+   * -- the scratch context object itself is allocated once; every dispatch only re-points
+   * references, see GLPostEffectPassContext).
+   */
+  private _buildPostEffectContext(): GLPostEffectPassContext {
+    let ctx = this._postCtx;
+    if (!ctx) {
+      ctx = createGLPostEffectContext();
+      this._postCtx = ctx;
+    }
+    ctx.gl = this.gl;
+    ctx.group = this.postProcessing;
+    ctx.width = this.gl.canvas.width;
+    ctx.height = this.gl.canvas.height;
+    ctx.colorTexture = this._hdrFbo!.texture;
+    ctx.depthTexture = this._opaqueDepthTexture;
+    ctx.viewProjMatrix = this._frameViewProj.data;
+    ctx.camPos = this._frameCamPos;
+    ctx.near = this._frameNear;
+    ctx.far = this._frameFar;
+    ctx.projMatrixData = this._frameProjMatrix;
+    ctx.lights = this._frameLights;
+    ctx.fogVolumes = this._fogVolumes;
+    ctx.time = this.frameInfo.time;
+    ctx.realTime = this.frameInfo.realTime;
+    const dLight = this._frameLights?.dLight;
+    ctx.dirShadowTexture = dLight ? (this._shadowMaps.get(dLight)?.texture ?? null) : null;
+    ctx.spotShadowTextures = this._collectFogSpotShadowTextures();
+    ctx.fallbackShadowTexture = this._dummyShadowMap.texture;
+    ctx.irradianceMap = this._frameScene?.irradianceMap
+      ? this._textures.getWebGLCubeTexture(this._frameScene.irradianceMap, this._quality)
+      : this._blackCubeTexture;
+    ctx.envIntensity = this._frameScene?.environmentIntensity ?? 0;
+    ctx.pointLights = this._frameLights?.pLights ?? [];
+    ctx.spotLights = this._frameLights?.sLights ?? [];
+    ctx.bloomTexture = null;
+    ctx.hbaoTexture = null;
+    ctx.lightShaftsTexture = null;
+    ctx.volumetricFogTexture = null;
+    return ctx;
   }
 
   /**
    * Renders shadow maps for all shadow-casting lights.
    */
-  public renderShadowMaps(
-    lights: import("../../interfaces/index.js").LightDataInterface,
-    sortedGroups: import("../../core/Scene.js").RenderBatch[],
-  ): void {
+  public renderShadowMaps(lights: LightDataInterface, sortedGroups: RenderBatch[]): void {
     const emptyLights: LightDataInterface = {
       aCol: new Color(0, 0, 0, 1),
       aIntensity: 0,
@@ -944,10 +835,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   /**
    * Helper to render the actual geometry for a shadow pass.
    */
-  private _renderShadowScene(
-    cache: WebGLProgramCacheEntry,
-    sortedGroups: import("../../core/Scene.js").RenderBatch[],
-  ): void {
+  private _renderShadowScene(cache: WebGLProgramCacheEntry, sortedGroups: RenderBatch[]): void {
     for (let i = 0; i < sortedGroups.length; i++) {
       const batch = sortedGroups[i];
       if (batch!.shaderId === MaterialType.SKYBOX || batch!.objects.length === 0) continue;
@@ -1059,11 +947,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   }
 
   public renderBatch(
-    batch: import("../../core/Scene.js").RenderBatch,
+    batch: RenderBatch,
     vMat: Float32Array | undefined,
     _vp: Float32Array,
     _camPos: Vector3D,
-    lights: import("../../interfaces/index.js").LightDataInterface,
+    lights: LightDataInterface,
     scene: Scene,
   ): void {
     const objects = batch!.objects;
@@ -1876,30 +1764,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
           ? { internalFormat: this.gl.RG16F, format: this.gl.RG, type: this.gl.HALF_FLOAT }
           : undefined,
       });
-      this._postPassGL ??= new PostProcessPassGL(this.gl, true, this.context.shaderRegistry);
-      this._bloomPassGL ??= new BloomPassGL(this.gl, true);
-      this._hbaoPassGL ??= new AOPassGL(this.gl);
-      this._lightShaftsPassGL ??= new LightShaftsPassGL(this.gl, true);
-      this._volumetricFogPassGL ??= new VolumetricFogPassGL(this.gl, true);
-      this._taaPassGL ??= new HistoryBlendPassGL(this.gl);
-      this._motionTrailPassGL ??= new HistoryBlendPassGL(this.gl);
+      this._postEffects ??= new GLPostEffects(this.gl, true, this.context.shaderRegistry);
     } else if (!this.postProcessing.enabled && this._hdrFbo) {
-      this._postPassGL?.destroy?.(this.gl);
-      this._bloomPassGL?.destroy();
-      this._hbaoPassGL?.destroy();
-      this._lightShaftsPassGL?.destroy();
-      this._volumetricFogPassGL?.destroy();
-      this._taaPassGL?.destroy();
-      this._motionTrailPassGL?.destroy();
+      this._postEffects?.destroy();
+      this._postEffects = undefined;
+      this._postCtx = undefined;
       this._hdrFbo.destroy();
       this._hdrFbo = undefined;
-      this._postPassGL = undefined;
-      this._bloomPassGL = undefined;
-      this._hbaoPassGL = undefined;
-      this._lightShaftsPassGL = undefined;
-      this._volumetricFogPassGL = undefined;
-      this._taaPassGL = undefined;
-      this._motionTrailPassGL = undefined;
     }
   }
 
@@ -1974,13 +1845,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       if (this._opaqueNormalFbo) this.gl.deleteFramebuffer(this._opaqueNormalFbo);
       this._opaqueNormalTexture = undefined;
       this._opaqueNormalFbo = undefined;
-      this._postPassGL?.destroy(gl);
-      this._bloomPassGL?.destroy();
-      this._hbaoPassGL?.destroy();
-      this._lightShaftsPassGL?.destroy();
-      this._volumetricFogPassGL?.destroy();
-      this._taaPassGL?.destroy();
-      this._motionTrailPassGL?.destroy();
+      this._postEffects?.destroy();
       this._globalUBO?.destroy();
     }
 
@@ -1989,10 +1854,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._renderTargetCubeFbos.clear();
     this._shadowMaps.clear();
     this._hdrFbo = undefined;
-    this._postPassGL = undefined;
-    this._bloomPassGL = undefined;
-    this._lightShaftsPassGL = undefined;
-    this._volumetricFogPassGL = undefined;
+    this._postEffects = undefined;
+    this._postCtx = undefined;
 
     super.destroy();
   }

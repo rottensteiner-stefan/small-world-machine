@@ -11,6 +11,7 @@ import { Color } from "../../../core/colors/index.js";
 import type { VolumetricTexture } from "../../../core/textures/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
+import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
 
 interface FogVolumeUniformLocations {
   invTransform: WebGLUniformLocation | null;
@@ -264,8 +265,8 @@ export class VolumetricFogPassGL {
 
   /**
    * Executes the volumetric fog pass.
-   * @returns The generated full-resolution fog texture ready for additive composite before tonemapping, or null.
    */
+  public execute(ctx: GLPostEffectPassContext): WebGLTexture | null;
   public execute(
     depthTexture: WebGLTexture | null,
     width: number,
@@ -277,17 +278,87 @@ export class VolumetricFogPassGL {
     dirLight: DirectionalLight | undefined,
     dirShadowTexture: WebGLTexture | null,
     element: VolumetricFogElement,
-    fogVolumes: FogVolume[] = [],
-    time: number = 0,
-    ambientColor: Color = NO_AMBIENT,
-    ambientIntensity: number = 0,
-    irradianceMap: WebGLTexture | null = null,
-    envIntensity: number = 0,
-    pointLights: PointLight[] = [],
-    spotLights: SpotLight[] = [],
-    spotShadowTextures: readonly (WebGLTexture | null)[] = [],
-    fallbackShadowTexture: WebGLTexture | null = null,
+    fogVolumes?: FogVolume[],
+    time?: number,
+    ambientColor?: Color,
+    ambientIntensity?: number,
+    irradianceMap?: WebGLTexture | null,
+    envIntensity?: number,
+    pointLights?: PointLight[],
+    spotLights?: SpotLight[],
+    spotShadowTextures?: readonly (WebGLTexture | null)[],
+    fallbackShadowTexture?: WebGLTexture | null,
+  ): WebGLTexture | null;
+  public execute(
+    ctxOrDepth: GLPostEffectPassContext | WebGLTexture | null,
+    widthOrUndefined?: number,
+    ...args: unknown[]
   ): WebGLTexture | null {
+    let depthTexture: WebGLTexture | null;
+    let width: number;
+    let height: number;
+    let viewProjMatrix: Float32Array;
+    let camPos: Vector3D;
+    let near: number;
+    let far: number;
+    let dirLight: DirectionalLight | undefined;
+    let dirShadowTexture: WebGLTexture | null;
+    let element: VolumetricFogElement;
+    let fogVolumes: FogVolume[];
+    let time: number;
+    let ambientColor: Color;
+    let ambientIntensity: number;
+    let irradianceMap: WebGLTexture | null;
+    let envIntensity: number;
+    let pointLights: PointLight[];
+    let spotLights: SpotLight[];
+    let spotShadowTextures: readonly (WebGLTexture | null)[];
+    let fallbackShadowTexture: WebGLTexture | null;
+
+    if (typeof widthOrUndefined === "number") {
+      depthTexture = ctxOrDepth as WebGLTexture | null;
+      width = widthOrUndefined;
+      height = args[0] as number;
+      viewProjMatrix = args[1] as Float32Array;
+      camPos = args[2] as Vector3D;
+      near = args[3] as number;
+      far = args[4] as number;
+      dirLight = args[5] as DirectionalLight | undefined;
+      dirShadowTexture = args[6] as WebGLTexture | null;
+      element = args[7] as VolumetricFogElement;
+      fogVolumes = (args[8] as FogVolume[]) ?? [];
+      time = (args[9] as number) ?? 0;
+      ambientColor = (args[10] as Color) ?? NO_AMBIENT;
+      ambientIntensity = (args[11] as number) ?? 0;
+      irradianceMap = (args[12] as WebGLTexture | null) ?? null;
+      envIntensity = (args[13] as number) ?? 0;
+      pointLights = (args[14] as PointLight[]) ?? [];
+      spotLights = (args[15] as SpotLight[]) ?? [];
+      spotShadowTextures = (args[16] as readonly (WebGLTexture | null)[]) ?? [];
+      fallbackShadowTexture = (args[17] as WebGLTexture | null) ?? null;
+    } else {
+      const ctx = ctxOrDepth as GLPostEffectPassContext;
+      depthTexture = ctx.depthTexture ?? null;
+      width = ctx.width;
+      height = ctx.height;
+      viewProjMatrix = ctx.viewProjMatrix;
+      camPos = ctx.camPos;
+      near = ctx.near;
+      far = ctx.far;
+      dirLight = ctx.lights?.dLight;
+      dirShadowTexture = ctx.dirShadowTexture;
+      element = ctx.element as VolumetricFogElement;
+      fogVolumes = ctx.fogVolumes ?? [];
+      time = ctx.time ?? 0;
+      ambientColor = ctx.lights?.aCol ?? NO_AMBIENT;
+      ambientIntensity = ctx.lights?.aIntensity ?? 0;
+      irradianceMap = ctx.irradianceMap ?? null;
+      envIntensity = ctx.envIntensity ?? 0;
+      pointLights = ctx.pointLights ?? ctx.lights?.pLights ?? [];
+      spotLights = ctx.spotLights ?? ctx.lights?.sLights ?? [];
+      spotShadowTextures = ctx.spotShadowTextures ?? [];
+      fallbackShadowTexture = ctx.fallbackShadowTexture ?? null;
+    }
     if (!this._isWebGL2 || !element.enabled || width <= 0 || height <= 0) {
       return null;
     }

@@ -4,6 +4,7 @@ import AO_FRAG_GLSL from "../shaders/AO.frag.glsl?raw";
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import type { HbaoElement } from "../elements/index.js";
+import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
 
 /**
  * Generates the HBAO texture for WebGL2 -- reconstructs view-space position/normal from the
@@ -77,15 +78,14 @@ export class AOPassGL {
    * @param hbao The HBAO effect parameters (radius, intensity).
    * @returns The single-channel AO texture (R = occlusion factor, 1.0 = fully lit), or null if unavailable.
    */
-  public execute(
-    depthTexture: WebGLTexture,
-    width: number,
-    height: number,
-    near: number,
-    far: number,
-    projMatrixData: Float32Array,
-    hbao: HbaoElement,
-  ): WebGLTexture | null {
+  public execute(ctx: GLPostEffectPassContext): WebGLTexture | null {
+    const depthTexture = ctx.depthTexture!;
+    const width = ctx.width;
+    const height = ctx.height;
+    const near = ctx.near;
+    const far = ctx.far;
+    const projMatrixData = ctx.projMatrixData!;
+    const hbao = ctx.element as HbaoElement;
     if (!this._prog) return null;
 
     this._resizeTarget(width, height);

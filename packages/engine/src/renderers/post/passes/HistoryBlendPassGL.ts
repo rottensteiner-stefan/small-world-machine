@@ -3,6 +3,7 @@ import { tryCompileProgram } from "../../compileProgram.js";
 import HISTORY_BLEND_FRAG_GLSL from "../shaders/HistoryBlend.frag.glsl?raw";
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
+import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
 
 /**
  * Generic exponential history blend for WebGL2: blends the current frame with a ping-ponged
@@ -79,12 +80,11 @@ export class HistoryBlendPassGL {
    * Resolves the current frame against history.
    * @returns This frame's resolved HDR texture (becomes history for the next call), or null if unavailable.
    */
-  public execute(
-    currentTexture: WebGLTexture,
-    width: number,
-    height: number,
-    config: { feedback: number },
-  ): WebGLTexture | null {
+  public execute(ctx: GLPostEffectPassContext): WebGLTexture | null {
+    const currentTexture = ctx.colorTexture;
+    const width = ctx.width;
+    const height = ctx.height;
+    const config = ctx.element as unknown as { feedback: number };
     if (!this._prog) return null;
 
     this._resize(width, height);

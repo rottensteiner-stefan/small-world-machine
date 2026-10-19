@@ -4,7 +4,7 @@ import type { Scene, Object3D } from "../../core/index.js";
 import { Vector3D } from "../../math/index.js";
 import type { LightDataInterface } from "../../interfaces/index.js";
 import type { RenderList, RenderBatch } from "../../core/Scene.js";
-import { Topology, MaterialType, PostProcessingEffectType } from "../../enums/index.js";
+import { Topology, MaterialType } from "../../enums/index.js";
 import { Color } from "../../core/colors/index.js";
 
 export class WebGLMainPass implements WebGLRenderPass {
@@ -131,16 +131,15 @@ export class WebGLMainPass implements WebGLRenderPass {
       if (writesNormals) renderer.setNormalWriteEnabled(false);
     }
 
-    // HBAO and LightShafts need the opaque depth buffer every frame they're enabled, not just when there happen
-    // to be transparent objects (the only other consumer of this capture, for refraction).
-    const hbaoNode = renderer.postProcessing.get<import("../post/index.js").HbaoElement>(
-      PostProcessingEffectType.HBAO,
-    );
-    const shaftsNode = renderer.postProcessing.get<import("../post/index.js").LightShaftsElement>(
-      PostProcessingEffectType.LIGHT_SHAFTS,
-    );
-    const needsDepth = (hbaoNode && hbaoNode.enabled) || (shaftsNode && shaftsNode.enabled);
-    if (renderList.transparent.length === 0 && needsDepth && !depthCaptured) {
+    // HBAO, light shafts and volumetric fog need the opaque depth buffer every frame they are
+    // enabled, not just when there happen to be transparent objects (the only other consumer of
+    // this capture, for refraction). Single source of truth: `postProcessing.requiresOpaqueDepth`
+    // -- never a per-effect ad-hoc OR chain (ADR 0038 §4).
+    if (
+      renderList.transparent.length === 0 &&
+      renderer.postProcessing.requiresOpaqueDepth &&
+      !depthCaptured
+    ) {
       renderer.copyToOpaqueDepthTexture();
     }
 

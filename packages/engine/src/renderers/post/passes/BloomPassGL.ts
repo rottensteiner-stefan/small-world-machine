@@ -9,6 +9,7 @@ import BLOOM_UPSAMPLE_FRAG_GLSL100 from "../shaders/BloomUpsample.frag.glsl100?r
 
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import type { BloomElement } from "../elements/index.js";
+import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
 
 const MIP_CHAIN_LENGTH = 5;
 
@@ -196,12 +197,11 @@ export class BloomPassGL {
    * Generates the Bloom texture from the HDR input texture.
    * Returns the final bloom texture.
    */
-  public execute(
-    hdrTexture: WebGLTexture,
-    width: number,
-    height: number,
-    bloomConfig: BloomElement,
-  ): WebGLTexture | null {
+  public execute(ctx: GLPostEffectPassContext): WebGLTexture | null {
+    const hdrTexture = ctx.colorTexture;
+    const width = ctx.width;
+    const height = ctx.height;
+    const bloomConfig = ctx.element as BloomElement;
     if (!this._downsampleProg || !this._upsampleProg) {
       return null;
     }

@@ -1,11 +1,43 @@
 import { describe, it, expect } from "vitest";
 import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { VolumetricFogPassGL } from "../../src/renderers/post/passes/VolumetricFogPassGL.js";
+import {
+  createGLPostEffectContext,
+  type GLPostEffectPassContext,
+} from "../../src/renderers/post/passes/GLPostEffectPass.js";
 import { VolumetricFogElement } from "../../src/renderers/post/elements/VolumetricFogElement.js";
 import { PostProcessPassGL } from "../../src/renderers/post/passes/PostProcessPassGL.js";
 import { PostProcessingGroup } from "../../src/renderers/post/PostProcessingGroup.js";
 import { PointLight, SpotLight } from "../../src/core/lights/index.js";
 import { Vector3D } from "../../src/math/index.js";
+
+/**
+ * Builds a minimal pass context for these unit tests (mirrors the renderer's per-frame
+ * repopulation of the reusable context; see GLPostEffectPassContext).
+ */
+function makeFogCtx(
+  gl: WebGLRenderingContext | WebGL2RenderingContext,
+  element: VolumetricFogElement,
+  pointLights: PointLight[] = [],
+  spotLights: SpotLight[] = [],
+  width: number = 800,
+  height: number = 600,
+): GLPostEffectPassContext {
+  const ctx = createGLPostEffectContext();
+  ctx.gl = gl;
+  ctx.width = width;
+  ctx.height = height;
+  ctx.colorTexture = {} as WebGLTexture;
+  ctx.depthTexture = {} as WebGLTexture;
+  ctx.viewProjMatrix = new Float32Array(16);
+  ctx.camPos = new Vector3D(0, 0, 0);
+  ctx.near = 0.1;
+  ctx.far = 1000;
+  ctx.element = element;
+  ctx.pointLights = pointLights;
+  ctx.spotLights = spotLights;
+  return ctx;
+}
 
 describe("VolumetricFogPassGL", () => {
   it("degrades gracefully and returns null on WebGL1", () => {
@@ -19,18 +51,7 @@ describe("VolumetricFogPassGL", () => {
     const element = new VolumetricFogElement();
     element.enabled = true;
 
-    const result = pass.execute(
-      {} as WebGLTexture,
-      800,
-      600,
-      new Float32Array(16),
-      new Vector3D(0, 0, 0),
-      0.1,
-      1000,
-      undefined,
-      null,
-      element,
-    );
+    const result = pass.execute(makeFogCtx(mockGL1, element));
 
     expect(result).toBeNull();
     expect(() => pass.destroy()).not.toThrow();
@@ -56,34 +77,12 @@ describe("VolumetricFogPassGL", () => {
     element.enabled = false;
 
     // Disabled element
-    const res1 = pass.execute(
-      {} as WebGLTexture,
-      800,
-      600,
-      new Float32Array(16),
-      new Vector3D(0, 0, 0),
-      0.1,
-      1000,
-      undefined,
-      null,
-      element,
-    );
+    const res1 = pass.execute(makeFogCtx(mockGL2, element));
     expect(res1).toBeNull();
 
     // Zero dimensions
     element.enabled = true;
-    const res2 = pass.execute(
-      {} as WebGLTexture,
-      0,
-      0,
-      new Float32Array(16),
-      new Vector3D(0, 0, 0),
-      0.1,
-      1000,
-      undefined,
-      null,
-      element,
-    );
+    const res2 = pass.execute(makeFogCtx(mockGL2, element, [], [], 0, 0));
     expect(res2).toBeNull();
   });
 
@@ -183,26 +182,7 @@ describe("VolumetricFogPassGL", () => {
     sl.direction.set(0, -1, 0);
     sl.updateMatrixWorld();
 
-    const res = pass.execute(
-      {} as WebGLTexture,
-      800,
-      600,
-      new Float32Array(16),
-      new Vector3D(0, 0, 0),
-      0.1,
-      1000,
-      undefined,
-      null,
-      element,
-      [],
-      0,
-      undefined,
-      0,
-      null,
-      0,
-      [pl],
-      [sl],
-    );
+    const res = pass.execute(makeFogCtx(mockGL2, element, [pl], [sl]));
 
     expect(res).not.toBeNull();
     expect(uniformCalls["u_numPointLights"]).toBe(1);

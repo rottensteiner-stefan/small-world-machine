@@ -1,7 +1,8 @@
 import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
 import { WebGLMainPass } from "../passes/WebGLMainPass.js";
 import { WebGLPostProcessPass } from "../passes/WebGLPostProcessPass.js";
-import { PostProcessPassGL, BloomPassGL, LightShaftsPassGL } from "../post/passes/index.js";
+import { GLPostEffects, createGLPostEffectContext } from "../post/passes/index.js";
+import type { GLPostEffectPassContext } from "../post/passes/index.js";
 import {
   RenderTargetCube,
   type Texture,
@@ -9,18 +10,13 @@ import {
   type RenderTarget,
 } from "../../core/textures/index.js";
 import { resolveManifestFlags } from "../shaders/index.js";
-import type { Object3D, Scene } from "../../core/index.js";
+import type { Object3D, RenderBatch, Scene } from "../../core/index.js";
 import { DeviceLimit, InstancedMesh } from "../../core/index.js";
 import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 import { WebGLProgramCache } from "../gl/managers/WebGLProgramCache.js";
 import { WebGLTextureManager } from "../gl/managers/WebGLTextureManager.js";
 import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
-import {
-  MaterialType,
-  RendererType,
-  Topology,
-  PostProcessingEffectType,
-} from "../../enums/index.js";
+import { MaterialType, RendererType, Topology } from "../../enums/index.js";
 import type { Vector3D } from "../../math/index.js";
 
 /**
@@ -50,9 +46,10 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   protected _hdrRenderBuffer: WebGLRenderbuffer | undefined = undefined;
   private _hdrW: number = 0;
   private _hdrH: number = 0;
-  protected _postPassGL: PostProcessPassGL | undefined = undefined;
-  protected _bloomPassGL: BloomPassGL | undefined = undefined;
-  protected _lightShaftsPassGL: LightShaftsPassGL | undefined = undefined;
+  /** Owns every GL post pass (registry + terminal uber pass) behind the ADR 0037 contract. */
+  private _postEffects: GLPostEffects | undefined = undefined;
+  /** Reusable per-frame post context (zero allocation -- see GLPostEffectPassContext). */
+  private _postCtx: GLPostEffectPassContext | undefined = undefined;
 
   protected _activeRenderTarget: RenderTarget | RenderTargetCube | null = null;
   private _activeCubeFace: number = 0;
@@ -382,58 +379,54 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
 
   public flushPostProcess(): void {
     const isOffscreen = this._activeRenderTarget !== null;
-    if (!isOffscreen && this.postProcessing.enabled && this._hdrTexture && this._postPassGL) {
-      let bloomTex: WebGLTexture | null = null;
-      if (this._bloomPassGL) {
-        const bloomNode = this.postProcessing.get<import("../post/index.js").BloomElement>(
-          PostProcessingEffectType.BLOOM,
-        );
-        if (bloomNode && bloomNode.enabled) {
-          bloomTex = this._bloomPassGL.execute(
-            this._hdrTexture,
-            this.gl.canvas.width,
-            this.gl.canvas.height,
-            bloomNode,
-          );
-        }
-      }
-
-      let lightShaftsTex: WebGLTexture | null = null;
-      if (this._lightShaftsPassGL && this._frameLights?.dLight) {
-        const shaftsNode = this.postProcessing.get<import("../post/index.js").LightShaftsElement>(
-          PostProcessingEffectType.LIGHT_SHAFTS,
-        );
-        if (shaftsNode && shaftsNode.enabled) {
-          const dLight = this._frameLights.dLight;
-          lightShaftsTex = this._lightShaftsPassGL.execute(
-            null,
-            this._hdrTexture,
-            this.gl.canvas.width,
-            this.gl.canvas.height,
-            this._frameViewProj.data,
-            this._frameCamPos,
-            dLight,
-            null,
-            shaftsNode,
-          );
-        }
-      }
-
-      this._postPassGL.execute(
-        this.gl,
-        this._hdrTexture,
-        this.postProcessing,
-        bloomTex,
-        null,
-        lightShaftsTex,
-        null,
-        this.frameInfo.realTime,
-      );
+    if (!isOffscreen && this.postProcessing.enabled && this._hdrTexture && this._postEffects) {
+      this._postEffects.execute(this._buildPostEffectContext());
     }
   }
 
+  /**
+   * Repopulates the reusable per-frame post context from the current frame state (zero allocation
+   * -- the scratch context object itself is allocated once; every dispatch only re-points
+   * references, see GLPostEffectPassContext). WebGL1 has no opaque-depth capture and no shadow /
+   * irradiance textures, so the depth consumers degrade to their GL1 fallbacks (null depth).
+   */
+  private _buildPostEffectContext(): GLPostEffectPassContext {
+    let ctx = this._postCtx;
+    if (!ctx) {
+      ctx = createGLPostEffectContext();
+      this._postCtx = ctx;
+    }
+    ctx.gl = this.gl;
+    ctx.group = this.postProcessing;
+    ctx.width = this.gl.canvas.width;
+    ctx.height = this.gl.canvas.height;
+    ctx.colorTexture = this._hdrTexture!;
+    ctx.depthTexture = undefined;
+    ctx.viewProjMatrix = this._frameViewProj.data;
+    ctx.camPos = this._frameCamPos;
+    ctx.near = this._frameNear;
+    ctx.far = this._frameFar;
+    ctx.projMatrixData = this._frameProjMatrix;
+    ctx.lights = this._frameLights;
+    ctx.fogVolumes = this._fogVolumes;
+    ctx.time = this.frameInfo.time;
+    ctx.realTime = this.frameInfo.realTime;
+    ctx.dirShadowTexture = null;
+    ctx.spotShadowTextures = [];
+    ctx.fallbackShadowTexture = null;
+    ctx.irradianceMap = null;
+    ctx.envIntensity = 0;
+    ctx.pointLights = this._frameLights?.pLights ?? [];
+    ctx.spotLights = this._frameLights?.sLights ?? [];
+    ctx.bloomTexture = null;
+    ctx.hbaoTexture = null;
+    ctx.lightShaftsTexture = null;
+    ctx.volumetricFogTexture = null;
+    return ctx;
+  }
+
   public renderBatch(
-    batch: import("../../core/Scene.js").RenderBatch,
+    batch: RenderBatch,
     vMat: Float32Array | undefined,
     vp: Float32Array,
     camPos: Vector3D,
@@ -475,7 +468,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   }
 
   private _renderSubgroup(
-    batch: import("../../core/Scene.js").RenderBatch,
+    batch: RenderBatch,
     objects: Object3D[],
     isInstanced: boolean,
     vMat: Float32Array | undefined,
@@ -784,13 +777,11 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         this._allocateHdrTarget(w, h);
       }
 
-      this._postPassGL ??= new PostProcessPassGL(this.gl, false, this.context.shaderRegistry);
-      this._bloomPassGL ??= new BloomPassGL(this.gl, false);
-      this._lightShaftsPassGL ??= new LightShaftsPassGL(this.gl, false);
+      this._postEffects ??= new GLPostEffects(this.gl, false, this.context.shaderRegistry);
     } else if (this._hdrFbo) {
-      this._postPassGL?.destroy(this.gl);
-      this._bloomPassGL?.destroy();
-      this._lightShaftsPassGL?.destroy();
+      this._postEffects?.destroy();
+      this._postEffects = undefined;
+      this._postCtx = undefined;
       this.gl.deleteFramebuffer(this._hdrFbo);
       this.gl.deleteTexture(this._hdrTexture!);
       this.gl.deleteRenderbuffer(this._hdrRenderBuffer!);
@@ -799,9 +790,6 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       this._hdrRenderBuffer = undefined;
       this._hdrW = 0;
       this._hdrH = 0;
-      this._postPassGL = undefined;
-      this._bloomPassGL = undefined;
-      this._lightShaftsPassGL = undefined;
     }
   }
 
@@ -867,9 +855,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       if (this._hdrFbo) gl.deleteFramebuffer(this._hdrFbo);
       if (this._hdrTexture) gl.deleteTexture(this._hdrTexture);
       if (this._hdrRenderBuffer) gl.deleteRenderbuffer(this._hdrRenderBuffer);
-      this._postPassGL?.destroy(gl);
-      this._bloomPassGL?.destroy();
-      this._lightShaftsPassGL?.destroy();
+      this._postEffects?.destroy();
     }
 
     this._renderTargetFbos.clear();
@@ -877,9 +863,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._hdrFbo = undefined;
     this._hdrTexture = undefined;
     this._hdrRenderBuffer = undefined;
-    this._postPassGL = undefined;
-    this._bloomPassGL = undefined;
-    this._lightShaftsPassGL = undefined;
+    this._postEffects = undefined;
+    this._postCtx = undefined;
 
     super.destroy();
   }
