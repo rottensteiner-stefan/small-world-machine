@@ -15,6 +15,20 @@
   - *vfx-extras re-mapped to structure-of-arrays (P1):* `ParticleSystem` stores the full particle state in parallel typed arrays (`ParticleSystem.arrays`: positions/velocities/accelerations xyz-strided, colors rgba-strided, sizes/alphas/masses/lives/maxLives/heats, `aliveFlags`), engine-consistent with `WeatherEmitter` and directly GPU-upload-ready; `update()` stays zero-allocation and reuses the per-frame markers.
   - *Index-based particle API:* `emit()` returns a particle slot index instead of a `Particle` object, `onParticleDied` receives that index and can respawn by writing the SoA arrays, and `particles[]` is replaced by `activeCount` + `arrays`. All ten built-in affectors operate on the arrays with bit-identical `apply`/`applyBatch` pairs (pinned by parity tests incl. the fallback path for third-party affectors).
   - **Breaking (API):** `@small-world-machine/vfx-extras` particle code must migrate to the index-based API; the per-particle `Particle` heap object and `particles[]` are gone. Engine-core surface is additive only (*`InstancedMesh.useInstanceDataAsColor`*, `instanceData` semantics unchanged).
+  - *Typisierte Material-Lane-Tabellen & Shader-Chunk-Konsolidierung (engine, wave 2, ADR 0039):* die
+    überladenen Magic-Slots (`u_pad1`, `u_extraParams`, `u_texOffset`, `u_color.a` als Specular-Proxy
+    u. a.) wurden auf semantische Lane-Tabellen umgestellt — `StandardMaterial` über die neue typisierte
+    `MaterialLanes`-Tabelle/`writeLane` (`u_matParam0.x` statt `u_pad1`), Liquid-/Wasser-Materialien
+    über ihre ADR-0027-Lanes (`matParam3..7` für Wellen/Kante/Specular, `u_color.a` ist wieder echtes
+    Alpha). Der byte-identisch in sechs Kopien vorliegende Glass/Frostglass-PBR-Lichtloop wurde in je
+    eine geteilte Chunk-Datei pro Dialekt konsolidiert (registriert als `GLASS_PBR_LOOPS`/
+    `WGSL_GLASS_PBR_LOOPS` in `CoreShaderChunks`); Glass und Frostglass referenzieren nur noch den
+    Chunk, ohne private Kopie. Neue Source-Invariant-/Paritäts-Tests (`MaterialLaneTableParity`,
+    `GlassPbrLoopsParity`) pinnen Wert/Lane-, Trio- und Material-Parität. Wurde als Ganzes wert-
+    erhaltend umgesetzt — Task-1-Golden byte-identisch zum Clean-HEAD, Task-2-Assemblierung
+    byte-identisch, **keine Verhaltensänderung** (WebGL1/WebGL2/WebGPU-Showcases 10/12/16 im Browser
+    ohne neue Fehler). Sheen/Emissive-`u_specColor`-Semantik-Divergenz (Bericht 02 #8) bleibt bewusst
+    als offener Verhaltens-Entscheidungspunkt dokumentiert (WebGL1/GPU vs. WebGL2).
 - **Features:**
   - *Per-instance particle color now renders on every backend (P0, vfx-extras):* the per-particle RGBA written by `ParticleMeshRenderer` into the instance-data buffer is finally consumed as a color tint by all three renderers. `InstancedMesh.useInstanceDataAsColor` opts a mesh into a `USE_INSTANCE_COLOR` shader variant (`ParticleMeshRenderer` sets it automatically); WebGL2 and WebGPU multiply the RGBA into the surface color of the `BasicMaterial`/`StandardMaterial` base shaders, and WebGL1 now binds and uploads the instance-data buffer at all (it previously ignored it). The generic legacy meaning of `instanceData` (a texture-array index in `.x`, used by the `yad` sample app) stays untouched -- the two semantics remain disjoint at shader-compile time. Accretion-disk blackbody/heat colors no longer render as an unread channel.
 - **Tools & Scripts (Golden-Optimierung M1/M2/M4/M5):**
