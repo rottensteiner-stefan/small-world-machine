@@ -17,11 +17,17 @@ dieses Dokuments und im Referenz-Anhang am Ende erhalten.
 
 | # | Technik | Priorität | Aufwand | Abhängigkeit / Hinweis |
 |---|---|---|---|---|
-| W1 | **Echter volumetrischer Nebel (Froxel, „Stufe B")** — kamera-ausgerichtetes 3D-Dichte-Raster + Raymarching + Phasenfunktion/In-Scattering gegen Lichtquellen, God-Rays. | **hoch** (nächstes großes Vorhaben) | mittel | Wiederverwendet die Clustered-Lighting-Infrastruktur (#5): Frustum-Slicing, Pro-Zelle-Lichtlisten (Frostbite/Hillaire SIGGRAPH 15 bestätigt diese Reihenfolge). WebGPU via Compute, WebGL2 via CPU-Culling+Datentextur, WebGL1 kein Pfad. Referenzarchitektur: Unreal, Godot 4 (nur Forward+), Frostbite. |
+| W1 | ✅ **umgesetzt** — **Echter volumetrischer Nebel (Froxel, „Stufe B")** — kamera-ausgerichtetes 3D-Dichte-Raster + Raymarching + Phasenfunktion/In-Scattering gegen Lichtquellen, God-Rays. (ADR 0031, Showcase 39 „Atmospheric Sanctum"; Früher: **hoch** (nächstes großes Vorhaben), Aufwand mittel.) | — | Wiederverwendet die Clustered-Lighting-Infrastruktur (#5): Frustum-Slicing, Pro-Zelle-Lichtlisten (Frostbite/Hillaire SIGGRAPH 15 bestätigt diese Reihenfolge). WebGPU via Compute; WebGL2-Folge als CPU-Culling+Datentextur geplant (ADR 0031), WebGL1 kein Pfad. Referenzarchitektur: Unreal, Godot 4 (nur Forward+), Frostbite. |
 | W2 | **Volles GTAO** — aktuell nur ein vereinfachtes HBAO (`AOPassGL/GPU`, `HbaoElement`). Es fehlen: kosinus-gewichtete Arc-Integration (arccos statt `dot()`-Proxy), Multi-Bounce-Näherung, Dünne-Objekte-Heuristik, Temporal Filtering über Motion Vectors (bräuchte volles TAA, netto offen). | mittel | mittel | Separate Einordnung im Referenz-Anhang A. |
 | W3 | **LOD + Dithered Cross-Fade** — kein LOD-System vorhanden; einfache Distanzstufen mit Bayer-/Noise-Dither an der Fade-Grenze. | niedrig-mittel | mittel | Erst sinnvoll, wenn Multi-LOD-Assets existieren. |
-| W4 | **Billboards/Imposter** — für offene Welten/Wälder/Menschenmengen; bei aktuellen Maze-/Dungeon-/Fahrzeug-Showcases selten organische Fernwiederholung. | niedrig | mittel | kein dringender Anwendungsfall. |
+| W4 | ✅ **umgesetzt** — **Billboards/Imposter** — für offene Welten/Wälder/Menschenmengen; `BillboardInstancer` (`core/objects/`), Showcase 34; CPU-seitige Billboard-Ausrichtung (das „Unreal/Fortnite tree"-Muster). (Früher: Priorität niedrig, Aufwand mittel, kein dringender Anwendungsfall.) | — | — |
 | W5 | **Volles TAA (Motion-Vector-Reprojektion)** — aktuell dokumentierter Trade-off ohne Reprojektion (Ghosting bei schneller Bewegung akzeptiert). | niedrig (bewusster Verzicht) | groß | Extra-Render-Target + Pro-Material-Output; Basis (`HistoryBlendPassGL/GPU`) existiert bereits. |
+
+> **Stand 2026-10-19:** W1 (volumetrischer Froxel-Nebel, „Stufe B") und W4 (Billboards) sind
+> umgesetzt — W1 via ADR 0031/Showcase 39 (Froxel = Cluster-Grid-Reuse, WebGPU-V1; WebGL2 als
+> ADR-0031-Folge geplant), W4 via `BillboardInstancer` (Showcase 34). Beide Reihen oben sind zur
+> Historie mit ✅ markiert und zählen nicht mehr zu den offenen Punkten. Weiter offen: W2 (volles
+> GTAO), W3 (LOD), W5 (volles TAA).
 
 **Bewusst geschlossen (nicht mehr offen):**
 - **#4 Pro-Objekt-Lichtauswahl** — obsolet: durch Clustered/Tiled Lighting (#5) ersetzt (globaler Cap 16/64).
@@ -100,7 +106,8 @@ Volles TAA = W5.
 - **Stufe B (W1):** Froxel + Raymarching + Phasenfunktion. Frostbite (Hillaire) etabliert die
   Reihenfolge „erst Pro-Zelle-Lichtlisten (== #5), dann Nebel als Konsument". Unity HDRP: Local
   Volumetric Fog ohne volumetrische Schatten; Godot: nur Forward+; Unreal/Godot/Frostbite: mit
-  Selbstabschattung.
+  Selbstabschattung. **(Stand 2026-10-19: Stufe B ist umgesetzt — ADR 0031, Showcase 39; dieser
+  Abschnitt dokumentiert die Recherche-Grundlage.)**
 
 ---
 
