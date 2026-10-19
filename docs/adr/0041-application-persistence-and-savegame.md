@@ -1,10 +1,10 @@
 # ADR 0041: Application Persistence & Savegame — Pflicht-Grundlage für App-Manifest, stabile IDs und Laufzeitzustand
 
-> **Status: DRAFT** — 2026-10-19, Session `swm-ops-b` (Onboarding-Audit). Grundlage sind die
+> **Status: ACCEPTED** — 2026-10-19 (Maintainer-Abnahme; ursprünglich DRAFT vom 2026-10-19, Session `swm-ops-b`). Grundlage sind die
 > **verbindlichen** Entscheidungen aus `docs/research/application-persistence-whole-world-2026-09-29.md`
-> (§12a, 2026-09-29) sowie deren Reihenfolgen-Vorgabe (§10, angepasst §12a). Noch nicht verbindlich:
-> Die Entscheidung wird erst mit der Umsetzung des Primär-Einstiegs-Schritts 1 (App-Manifest + Schema,
-> unten) und der Abnahme promoviert.
+> (§12a, 2026-09-29) sowie deren Reihenfolgen-Vorgabe (§10, angepasst §12a).
+> **Übernommen am 2026-10-19 (Maintainer-Abnahme):** ACCEPTED als Grundlagendokument; die Umsetzung von
+> Schritt 1 (App-Manifest + Schema) erfolgt getrennt und bleibt Voraussetzung für die Implementierung.
 > **Scope-Hinweis:** Reine Persistenz-/Dokumentation-Grundlage. Kein Code, kein Build-Eingriff in diesem ADR.
 
 ## Kontext & Problem

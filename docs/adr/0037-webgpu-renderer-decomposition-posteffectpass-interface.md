@@ -1,9 +1,10 @@
 # 0037: WebGPU Renderer Decomposition & GPU PostEffectPass Interface
 
-- **Status:** Draft
+- **Status:** Accepted
+- **Accepted:** 2026-10-19 (maintainer approval)
 - **Date:** 2026-10-18
 - **Status of:** *Thermo audit 2026-10-14* (`02-renderers-webgpu-shaders.md`, `03-post-decals-culling-lights.md`), Wave 2, Package A
-- **Decision Makers:** Small World Machine Architecture Team (pending human approval)
+- **Decision Makers:** Small World Machine Architecture Team — approved by the maintainer on 2026-10-19
 
 ---
 

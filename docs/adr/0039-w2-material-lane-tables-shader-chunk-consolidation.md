@@ -1,11 +1,13 @@
 # ADR 0039: Typisierte Material-Lane-Tabellen & Shader-Chunk-Konsolidierung (dreisprachige Parität)
 
-> **Status: DRAFT** — 2026-10-19, Session `swm-wave2-c` (Wave-2-Paket C: Materialien + Shader-Quellen).
+> **Status: ACCEPTED** — 2026-10-19 (Maintainer-Abnahme; ursprünglich DRAFT vom 2026-10-19, Session `swm-wave2-c`).
 > Grundlage: Thermo-Audit `.agents/scratches/thermo-1014/04-core-materials.md`,
 > `02-renderers-webgpu-shaders.md` (Shader-Anteile), `13-extras-packages.md` (pbr_math ×3,
 > Cluster-Index-Mathe), `15-cross-cutting-and-roadmap.md` (§2.8/§2.9); Paket-Spezifikation
 > `.agents/scratches/wave2-package-C.md`.
-> **Noch nicht verbindlich:** Promotion erst nach Abnahme des gesamten Pakets C.
+> **Übernommen am 2026-10-19 (Maintainer-Abnahme):** ACCEPTED; der DRAFT-Vorbehalt ist obsolet. Der offene
+> Verhaltens-Entscheidungspunkt Sheen-`specColor`-Divergenz (Entscheidung 4) wird separat geklärt;
+> Ergebnis wird dort bzw. in der CHANGELOG nachgetragen.
 > **Pfade/Commits bezogen auf `HEAD 4806d21a` (2026-10-19); parallele Sessions verschieben Zeilen — vor
 > weiterer Umsetzung re-validieren. Wave-2-ADR-Nummern: 0037=A (GPU), 0038=B (WebGL, gelandet), 0039=C
 > (Materialien, dieses), 0040=D (Physix/Geometrie); `docs/adr/index.md` schreibt zentral die Koordination.**

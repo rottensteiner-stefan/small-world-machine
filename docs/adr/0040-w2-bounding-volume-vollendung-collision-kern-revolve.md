@@ -1,11 +1,11 @@
 # ADR 0040: BoundingVolume-Vollendung, Collision-Kern-Zerlegung & Revolve-Generator (Wave 2, Paket D)
 
-> **Status: DRAFT** — 2026-10-19, Session `swm-wave2-d` (Wave-2-Paket D: Physix/Geometrie).
+> **Status: ACCEPTED** — 2026-10-19 (Maintainer-Abnahme; ursprünglich DRAFT vom 2026-10-19, Session `swm-wave2-d`).
 > Grundlage: Thermo-Audit `.agents/scratches/thermo-1014/07-physix-math.md` (BV-/Collision-/Trägheits-
 > Themen), `06-geometry.md` (Revolve), Roadmap 15 §2.1 (BoundingVolume), §2.11 (Revolve), §5 Welle 2
 > (Collision-Kern), §6 (offene Verifikation Physik); Paket-Spezifikation
 > `.agents/scratches/wave2-package-D.md`.
-> **Noch nicht verbindlich:** Promotion erst nach Abnahme des gesamten Pakets D.
+> **Übernommen am 2026-10-19 (Maintainer-Abnahme):** ACCEPTED; der DRAFT-Vorbehalt ist obsolet.
 > **Pfade/Commits bezogen auf `HEAD d7aa4c97` (2026-10-19); parallele Sessions verschieben Zeilen — vor
 > weiterer Umsetzung re-validieren. Wave-2-ADR-Nummern: 0037=A (GPU), 0038=B (WebGL), 0039=C
 > (Materialien), 0040=D (Physix/Geometrie, dieses), 0041=Ops-B (Anwendungspersistenz);

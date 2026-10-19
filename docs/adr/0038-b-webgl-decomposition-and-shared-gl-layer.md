@@ -1,10 +1,11 @@
 # ADR 0038: WebGL-Renderer-Zerlegung & gemeinsame GL-Manager-Schicht
 
-> **Status: DRAFT** — 2026-10-19, Session `swm-wave2-b` (Wave-2-Paket B: WebGL-Zerlegung). Grundlage:
+> **Status: ACCEPTED** — 2026-10-19 (Maintainer-Abnahme; ursprünglich DRAFT vom 2026-10-19, Session `swm-wave2-b`). Grundlage:
 > Thermo-Audit `.agents/scratches/thermo-1014/01-renderers-webgl.md` (§2.7) und
 > `15-cross-cutting-and-roadmap.md`; Paket-Spezifikation `.agents/scratches/wave2-package-B.md`.
-> **Noch nicht verbindlich:** Promotion erst nach Abnahme des gesamten Pakets B (inkl. des von Paket A
-> abhängigen PostEffectPass-GL-Konsums).
+> **Übernommen am 2026-10-19 (Maintainer-Abnahme):** ACCEPTED; der DRAFT-Vorbehalt ist obsolet. Paket-B-
+> Task 4 (PostEffectPass-GL-Konsum, Blockier-Option durch Paket A) ist Stand 2026-10-19 noch in Arbeit —
+> betrifft die Umsetzung, nicht den Entscheidungsgehalt dieses ADR.
 > **Pfade bezogen auf `HEAD 879bac8c` (2026-10-19); parallele Sessions verschieben Zeilen — vor weiterer
 > Umsetzung re-validieren. ADR-Nummern Wave 2: 0037=A (GPU), 0038=B (WebGL, dieses), 0039=C (Materialien),
 > 0040=D (Physix/Geometrie); `docs/adr/index.md` schreibt zentral die Koordination.**
