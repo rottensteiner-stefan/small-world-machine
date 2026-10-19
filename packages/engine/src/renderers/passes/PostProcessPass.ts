@@ -4,67 +4,14 @@ import type { Scene } from "../../core/index.js";
 import type { WebGPURenderer } from "../WebGPU/index.js";
 import type { RenderPass } from "../index.js";
 import type { Vector3D } from "../../math/index.js";
-import {
-  PostProcessingEffectType,
-  TextureFilter,
-  TextureWrap,
-  Topology,
-} from "../../enums/index.js";
+import { TextureFilter, TextureWrap, Topology } from "../../enums/index.js";
 import {
   POST_PROCESS_DYNUNIFORM_FLOATS,
   packPostProcessNeutralUniforms,
 } from "../post/PostProcessDynUniforms.js";
 import type { PostProcessingGroup } from "../post/index.js";
-import type {
-  BloomElement,
-  ColorGradingElement,
-  FlashElement,
-  GrainElement,
-  GravitationalLensingElement,
-  HbaoElement,
-  LightShaftsElement,
-  OutlineElement,
-  QuantizeElement,
-  ToneMappingElement,
-  VignetteElement,
-  VolumetricFogElement,
-} from "../post/elements/index.js";
-
-/**
- * Decoded element bundle. The pass resolves every element type it needs exactly once per execute()
- * so the group is never re-asked (previously ~34 separate `group.get()` calls per frame).
- */
-interface PostEffectBundle {
-  tm: ToneMappingElement | undefined;
-  vig: VignetteElement | undefined;
-  grain: GrainElement | undefined;
-  bloom: BloomElement | undefined;
-  grade: ColorGradingElement | undefined;
-  quant: QuantizeElement | undefined;
-  hbao: HbaoElement | undefined;
-  shafts: LightShaftsElement | undefined;
-  volFog: VolumetricFogElement | undefined;
-  outline: OutlineElement | undefined;
-  flash: FlashElement | undefined;
-  lensing: GravitationalLensingElement | undefined;
-}
-
-function decodeBundle(group: PostProcessingGroup): PostEffectBundle {
-  return {
-    tm: group.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING),
-    vig: group.get<VignetteElement>(PostProcessingEffectType.VIGNETTE),
-    grain: group.get<GrainElement>(PostProcessingEffectType.GRAIN),
-    bloom: group.get<BloomElement>(PostProcessingEffectType.BLOOM),
-    grade: group.get<ColorGradingElement>(PostProcessingEffectType.COLOR_GRADING),
-    quant: group.get<QuantizeElement>(PostProcessingEffectType.QUANTIZE),
-    hbao: group.get<HbaoElement>(PostProcessingEffectType.HBAO),
-    shafts: group.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS),
-    volFog: group.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG),
-    outline: group.get<OutlineElement>(PostProcessingEffectType.OUTLINE),
-    flash: group.get<FlashElement>(PostProcessingEffectType.FLASH),
-    lensing: group.get<GravitationalLensingElement>(PostProcessingEffectType.GRAVITATIONAL_LENSING),
-  };
-}
+import type { PostEffectBundle } from "../post/PostEffectBundle.js";
+import { decodeBundle } from "../post/PostEffectBundle.js";
 
 /**
  * Full-screen post-processing pass (Uber-Shader).
@@ -207,71 +154,50 @@ export class PostProcessPass implements RenderPass {
     // values (exposure, vignette/grain/bloom/quantize/outline numeric params) no longer appear
     // here at all -- they're written every frame into DynUniforms instead (see execute()).
     // _replaceConst() throws when the WGSL no longer contains the constant, so a shader edit
-    // can never silently disable an effect.
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_toneMappingMode: u32 = 0u;",
-      // Default to Reinhard (1) when no ToneMappingElement is configured — matches GL2 which
+    // can never silently disable an effect. The table keeps the injected strings byte-identical
+    // to the former sequential calls.
+    const constInjections: [string, string][] = [
+      // Default to Reinhard (1) when no ToneMappingElement is configured -- matches GL2 which
       // always applies Reinhard unconditionally in the forward pass. Without this fallback,
       // WebGPU PostProcess path with no tonemapper outputs raw HDR * exposure with no tone
       // curve, producing a visibly darker/flat result compared to GL2.
-      `const u_toneMappingMode: u32 = ${tmEnabled ? e.tm!.mode : 1}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_vignetteEnabled: u32 = 0u;",
-      `const u_vignetteEnabled: u32 = ${vigEnabled ? 1 : 0}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_grainEnabled: u32 = 0u;",
-      `const u_grainEnabled: u32 = ${grainEnabled ? 1 : 0}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_colorGradingEnabled: u32 = 0u;",
-      `const u_colorGradingEnabled: u32 = ${gradeEnabled ? 1 : 0}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_bloomEnabled: u32 = 0u;",
-      `const u_bloomEnabled: u32 = ${bloomEnabled ? 1 : 0}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_quantizeEnabled: u32 = 0u;",
-      `const u_quantizeEnabled: u32 = ${quantEnabled ? 1 : 0}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_hbaoEnabled: u32 = 0u;",
-      `const u_hbaoEnabled: u32 = ${hbaoEnabled ? 1 : 0}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_lightShaftsEnabled: u32 = 0u;",
-      `const u_lightShaftsEnabled: u32 = ${shaftsEnabled ? 1 : 0}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_volumetricFogEnabled: u32 = 0u;",
-      `const u_volumetricFogEnabled: u32 = ${volFogEnabled ? 1 : 0}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_outlineEnabled: u32 = 0u;",
-      `const u_outlineEnabled: u32 = ${outlineEnabled ? 1 : 0}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_flashEnabled: u32 = 0u;",
-      `const u_flashEnabled: u32 = ${flashEnabled ? 1 : 0}u;`,
-    );
-    assembledFrag = this._replaceConst(
-      assembledFrag,
-      "const u_filterMode: u32 = 0u;",
-      `const u_filterMode: u32 = ${group.filterMode}u;`,
-    );
+      [
+        "const u_toneMappingMode: u32 = 0u;",
+        `const u_toneMappingMode: u32 = ${tmEnabled ? e.tm!.mode : 1}u;`,
+      ],
+      [
+        "const u_vignetteEnabled: u32 = 0u;",
+        `const u_vignetteEnabled: u32 = ${vigEnabled ? 1 : 0}u;`,
+      ],
+      ["const u_grainEnabled: u32 = 0u;", `const u_grainEnabled: u32 = ${grainEnabled ? 1 : 0}u;`],
+      [
+        "const u_colorGradingEnabled: u32 = 0u;",
+        `const u_colorGradingEnabled: u32 = ${gradeEnabled ? 1 : 0}u;`,
+      ],
+      ["const u_bloomEnabled: u32 = 0u;", `const u_bloomEnabled: u32 = ${bloomEnabled ? 1 : 0}u;`],
+      [
+        "const u_quantizeEnabled: u32 = 0u;",
+        `const u_quantizeEnabled: u32 = ${quantEnabled ? 1 : 0}u;`,
+      ],
+      ["const u_hbaoEnabled: u32 = 0u;", `const u_hbaoEnabled: u32 = ${hbaoEnabled ? 1 : 0}u;`],
+      [
+        "const u_lightShaftsEnabled: u32 = 0u;",
+        `const u_lightShaftsEnabled: u32 = ${shaftsEnabled ? 1 : 0}u;`,
+      ],
+      [
+        "const u_volumetricFogEnabled: u32 = 0u;",
+        `const u_volumetricFogEnabled: u32 = ${volFogEnabled ? 1 : 0}u;`,
+      ],
+      [
+        "const u_outlineEnabled: u32 = 0u;",
+        `const u_outlineEnabled: u32 = ${outlineEnabled ? 1 : 0}u;`,
+      ],
+      ["const u_flashEnabled: u32 = 0u;", `const u_flashEnabled: u32 = ${flashEnabled ? 1 : 0}u;`],
+      ["const u_filterMode: u32 = 0u;", `const u_filterMode: u32 = ${group.filterMode}u;`],
+    ];
+    for (const [pattern, replacement] of constInjections) {
+      assembledFrag = this._replaceConst(assembledFrag, pattern, replacement);
+    }
 
     const fragModule = device.createShaderModule({ code: assembledFrag });
 
@@ -315,6 +241,19 @@ export class PostProcessPass implements RenderPass {
     });
   }
 
+  /**
+   * Selects the texture view the uber pass samples for an effect: the effect's resolved view when
+   * the effect is enabled AND produced one this frame, else the neutral pass-through white fallback
+   * (an inactive effect must not tint the output -- same convention as the GL2 uber pass family).
+   */
+  private _activeViewOrWhite(
+    renderer: WebGPURenderer,
+    elem: { readonly enabled: boolean } | undefined,
+    view: GPUTextureView | undefined,
+  ): GPUTextureView {
+    return elem?.enabled && view ? view : renderer.whiteTextureView;
+  }
+
   public execute(
     renderer: WebGPURenderer,
     _scene: Scene,
@@ -337,25 +276,18 @@ export class PostProcessPass implements RenderPass {
     const colorView =
       renderer.motionTrailResolvedView ?? renderer.taaResolvedView ?? renderer.hdrTextureView;
 
-    const bloomActiveView =
-      e.bloom && e.bloom.enabled && renderer.bloomTextureView
-        ? renderer.bloomTextureView
-        : renderer.whiteTextureView;
-
-    const hbaoActiveView =
-      e.hbao && e.hbao.enabled && renderer.hbaoTextureView
-        ? renderer.hbaoTextureView
-        : renderer.whiteTextureView;
-
-    const shaftsActiveView =
-      e.shafts && e.shafts.enabled && renderer.lightShaftsTextureView
-        ? renderer.lightShaftsTextureView
-        : renderer.whiteTextureView;
-
-    const volFogActiveView =
-      e.volFog && e.volFog.enabled && renderer.volumetricFogTextureView
-        ? renderer.volumetricFogTextureView
-        : renderer.whiteTextureView;
+    const bloomActiveView = this._activeViewOrWhite(renderer, e.bloom, renderer.bloomTextureView);
+    const hbaoActiveView = this._activeViewOrWhite(renderer, e.hbao, renderer.hbaoTextureView);
+    const shaftsActiveView = this._activeViewOrWhite(
+      renderer,
+      e.shafts,
+      renderer.lightShaftsTextureView,
+    );
+    const volFogActiveView = this._activeViewOrWhite(
+      renderer,
+      e.volFog,
+      renderer.volumetricFogTextureView,
+    );
 
     const sig = this._computeSignature(group.filterMode, e);
 

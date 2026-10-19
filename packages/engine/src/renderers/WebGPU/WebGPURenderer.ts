@@ -16,7 +16,7 @@ import {
 import type { RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
 import type { RenderManifest } from "../shaders/index.js";
 import { UniformPacker, VERTEX_COLOR_FLAG, resolveManifestFlags } from "../shaders/index.js";
-import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
+import type { EngineOptions } from "../../interfaces/index.js";
 
 import type { ClusterGridDims } from "../../math/index.js";
 import {
@@ -30,13 +30,7 @@ import {
 } from "../../math/index.js";
 import clusterCullWGSL from "../shaders/source/web_gpu/compute/cluster_cull.wgsl?raw";
 import hzbVisibilityTestWGSL from "../shaders/source/web_gpu/compute/hzb_visibility_test.wgsl?raw";
-import {
-  RendererType,
-  Topology,
-  PostProcessingEffectType,
-  NormalTargetMode,
-  WireframeMode,
-} from "../../enums/index.js";
+import { RendererType, Topology, NormalTargetMode, WireframeMode } from "../../enums/index.js";
 import { NORMAL_TARGET_FORMAT } from "./managers/NormalOutputWrapper.js";
 import { AbstractRenderer } from "../AbstractRenderer.js";
 import type { RenderPass } from "../RenderPass.js";
@@ -45,6 +39,7 @@ import { GPUFallbackResources } from "./managers/GPUFallbackResources.js";
 import { GPURenderTargetCache } from "./managers/GPURenderTargetCache.js";
 import { GPUTextureResourceCache } from "./managers/GPUTextureResourceCache.js";
 import { HzbOcclusionSystem } from "./managers/HzbOcclusionSystem.js";
+import { PostFxChain } from "./managers/PostFxChain.js";
 import { OpaqueCapture } from "./managers/OpaqueCapture.js";
 import {
   GPUPipelineCache,
@@ -62,23 +57,6 @@ import {
   DepthPrePassGPU,
   HzbOcclusionPassGPU,
 } from "../passes/index.js";
-import {
-  BloomPassGPU,
-  AOPassGPU,
-  HistoryBlendPassGPU,
-  LightShaftsPassGPU,
-  VolumetricFogPassGPU,
-} from "../post/passes/index.js";
-import type {
-  BloomElement,
-  HbaoElement,
-  LightShaftsElement,
-  MotionTrailElement,
-  TaaElement,
-  VolumetricFogElement,
-} from "../post/elements/index.js";
-import type { PostEffectPass, PostEffectPassContext } from "../post/PostEffectPass.js";
-import type { PostProcessingElement } from "../post/PostProcessingElement.js";
 import type { SkinnedMesh, Skeleton } from "../../core/animation/index.js";
 import { MAX_SKINNED_BONES } from "../../core/animation/index.js";
 import type { RenderBatch } from "../../core/Scene.js";
@@ -207,6 +185,17 @@ export class WebGPURenderer extends AbstractRenderer {
   private _globalUniformWriter!: GlobalUniformWriter;
   /** Cached screen/offscreen opaque color/depth/normal snapshots -- see `OpaqueCapture`. */
   private _opaqueCapture!: OpaqueCapture;
+  /** Read by the post-FX chain (see `PostFxChain.runPostEffects`) as the opaque-depth snapshot
+   * this frame; `undefined` until the main render pass captured one. Additive read-only accessor,
+   * does not replace the internal `_opaqueCapture.opaqueDepthView` usages elsewhere. */
+  public get opaqueDepthView(): GPUTextureView | undefined {
+    return this._opaqueCapture.opaqueDepthView;
+  }
+  /** Fallback depth view passed to post effects when no opaque depth was captured -- see
+   * `GPUFallbackResources`. Additive read-only accessor for `PostFxChain`. */
+  public get dummyDepthTextureView(): GPUTextureView {
+    return this._fallback.dummyDepthTextureView;
+  }
   /** Cached offscreen RenderTarget backing textures -- see `GPURenderTargetCache`. */
   private _targetCache!: GPURenderTargetCache;
   protected _gpuInstanceBuffers: WeakMap<InstancedMesh, GPUBuffer> = new WeakMap();
@@ -270,63 +259,40 @@ export class WebGPURenderer extends AbstractRenderer {
   public get hdrTextureView(): GPUTextureView | undefined {
     return this._hdrTextureView;
   }
-  // Single orchestration point for every GPU post-effect pass -- see `_getOrCreatePostEffectPass`
-  // and the `PostEffectPass` contract (ADR 0037). Replaces the former per-effect `_xxxPassGPU`
-  // fields and their separate `?.destroy()` lists. Passes are created lazily on first enable and
-  // destroyed in one registry sweep from `destroy()`.
-  private readonly _postEffectPasses = new Map<PostProcessingEffectType, PostEffectPass>();
-  /** Reused every frame (zero allocation on the hot path); fields are repopulated right before
-   * each dispatch -- see the `PostEffectPassContext` reuse contract. */
-  private readonly _postEffectCtx: PostEffectPassContext = {
-    renderer: this,
-    ce: undefined as unknown as GPUCommandEncoder,
-    element: undefined as unknown as PostProcessingElement,
-    colorTexture: undefined,
-    colorView: undefined as unknown as GPUTextureView,
-    depthView: undefined as unknown as GPUTextureView,
-    width: 0,
-    height: 0,
-    vp: new Float32Array(16),
-    vMat: undefined,
-    camPos: Vector3D.ZERO,
-    near: 0.1,
-    far: 1000,
-    projMatrix: undefined,
-    lights: undefined as unknown as LightDataInterface,
-    fogVolumes: [],
-  };
+  // Single orchestration point for the whole GPU post-FX chain (TAA -> motion trail -> bloom ->
+  // HBAO -> light shafts -> volumetric fog) -- see `PostFxChain` and the `PostEffectPass` contract
+  // (ADR 0037). Replaces the former per-effect `_xxxPassGPU` fields, their `?.destroy()` lists and
+  // the inline dispatch chain that used to live in `render()`; passes are created lazily on first
+  // enable and destroyed in one registry sweep from `destroy()`. The result-view accessors below
+  // are plain chain delegates kept public because the final uber pass (`PostProcessPass`) reads
+  // them as inputs.
+  private readonly _postFxChain = new PostFxChain(this);
 
-  private _bloomTextureView: GPUTextureView | undefined = undefined;
   public get bloomTextureView(): GPUTextureView | undefined {
-    return this._bloomTextureView;
+    return this._postFxChain.bloomTextureView;
   }
-  private _hbaoTextureView: GPUTextureView | undefined = undefined;
   public get hbaoTextureView(): GPUTextureView | undefined {
-    return this._hbaoTextureView;
+    return this._postFxChain.hbaoTextureView;
   }
-  private _lightShaftsTextureView: GPUTextureView | undefined = undefined;
   public get lightShaftsTextureView(): GPUTextureView | undefined {
-    return this._lightShaftsTextureView;
+    return this._postFxChain.lightShaftsTextureView;
   }
-  private _volumetricFogTextureView: GPUTextureView | undefined = undefined;
   /** Full-screen in-scattering target of the volumetric-fog raymarch pass, consumed additively
    * (before tonemapping) by PostProcessPass. Recomputed fresh every frame; undefined when the
    * `VolumetricFogElement` is disabled or inputs are missing. */
   public get volumetricFogTextureView(): GPUTextureView | undefined {
-    return this._volumetricFogTextureView;
+    return this._postFxChain.volumetricFogTextureView;
   }
   /** This frame's TAA-resolved color view, if TAA is enabled -- read by PostProcessPass instead
    * of `_hdrTextureView` for its color input. Recomputed fresh every frame; `_hdrTextureView`
    * itself is never overwritten so TAA keeps reading the raw per-frame render as "current".
-   * (TAA's `HistoryBlendPassGPU` instance lives in `_postEffectPasses`, its own separate history
+   * (TAA's `HistoryBlendPassGPU` instance lives in the chain's registry, its own separate history
    * buffer from Motion Trail's. */
-  private _taaResolvedView: GPUTextureView | undefined = undefined;
   public get taaResolvedView(): GPUTextureView | undefined {
-    return this._taaResolvedView;
+    return this._postFxChain.taaResolvedView;
   }
-  private _motionTrailResolvedView: GPUTextureView | undefined = undefined;
   public get motionTrailResolvedView(): GPUTextureView | undefined {
-    return this._motionTrailResolvedView;
+    return this._postFxChain.motionTrailResolvedView;
   }
 
   private _activeRenderTarget: RenderTarget | RenderTargetCube | null = null;
@@ -563,24 +529,6 @@ export class WebGPURenderer extends AbstractRenderer {
    */
   public addPass(pass: RenderPass): void {
     this._passes.push(pass);
-  }
-
-  /**
-   * Lazily creates (once) or returns the effect pass registered under `type` -- the renderer's
-   * single orchestration point for GPU post-effect passes (see `_postEffectPasses` and the
-   * `PostEffectPass` contract in ADR 0037). The same pass instance is reused across frames so its
-   * history buffers survive; `destroy()` tears every registry entry down in one sweep.
-   */
-  private _getOrCreatePostEffectPass(
-    type: PostProcessingEffectType,
-    ctor: new (device: GPUDevice) => PostEffectPass,
-  ): PostEffectPass {
-    let pass = this._postEffectPasses.get(type);
-    if (!pass) {
-      pass = new ctor(this._device!);
-      this._postEffectPasses.set(type, pass);
-    }
-    return pass;
   }
 
   private _initDefaultResources(): void {
@@ -1017,30 +965,6 @@ export class WebGPURenderer extends AbstractRenderer {
           : this._context.getCurrentTexture().createView();
     }
 
-    const bloomNode = this.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
-    const hbaoNode = this.postProcessing.get<HbaoElement>(PostProcessingEffectType.HBAO);
-    const taaNode = this.postProcessing.get<TaaElement>(PostProcessingEffectType.TAA);
-    const motionTrailNode = this.postProcessing.get<MotionTrailElement>(
-      PostProcessingEffectType.MOTION_TRAIL,
-    );
-
-    // Reused per frame -- see the `PostEffectPassContext` reuse contract. Fields that vary per
-    // effect (`colorView`, `element`, `fogVolumes`) are repopulated immediately before each
-    // dispatch below; everything else is refreshed once here.
-    const ctx = this._postEffectCtx;
-    ctx.ce = ce;
-    ctx.width = this._context.canvas.width;
-    ctx.height = this._context.canvas.height;
-    ctx.vp = vp;
-    ctx.vMat = vMat;
-    ctx.camPos = camPos;
-    ctx.near = near;
-    ctx.far = far;
-    ctx.projMatrix = projMatrix;
-    ctx.lights = lights;
-    ctx.colorTexture = this._hdrTexture;
-    ctx.depthView = this._opaqueCapture.opaqueDepthView ?? this._fallback.dummyDepthTextureView;
-
     for (const pass of this._passes) {
       const isPostProcessPass = pass instanceof PostProcessPass;
 
@@ -1048,96 +972,23 @@ export class WebGPURenderer extends AbstractRenderer {
         continue;
       }
 
-      // The entire effect orchestration lives in the renderer's single `PostEffectPass` registry
-      // (`Map<PostProcessingEffectType, PostEffectPass>`, see `_getOrCreatePostEffectPass` /
-      // ADR 0037) -- one create/execute/destroy path for every GPU effect pass, no per-effect
-      // `_xxxPassGPU` fields.
+      // The entire chained pre-uber effect orchestration lives in the `PostFxChain` manager
+      // (TAA -> motion trail -> bloom -> HBAO -> light shafts -> volumetric fog; one create/
+      // execute/destroy path per `PostEffectPass`, see ADR 0037) -- it owns the reused
+      // `PostEffectPassContext`, the per-effect registry and this frame's result views, so the
+      // renderer keeps no per-effect `_xxxPassGPU` fields or inline dispatch list.
       if (isPostProcessPass) {
-        // TAA resolves first, if enabled: Bloom and the final uber pass should react to the
-        // temporally-smoothed color, not the raw per-frame jittered one. `_hdrTextureView` itself
-        // is never reassigned, so this pass keeps reading fresh input every subsequent frame.
-        if (taaNode && taaNode.enabled && this._hdrTextureView) {
-          ctx.colorView = this._hdrTextureView;
-          ctx.element = taaNode;
-          const p = this._getOrCreatePostEffectPass(
-            PostProcessingEffectType.TAA,
-            HistoryBlendPassGPU,
-          );
-          this._taaResolvedView = p.execute(ctx) ?? undefined;
-        } else {
-          this._taaResolvedView = undefined;
-        }
-
-        // Motion Trail: a deliberate ghost/afterimage look, not anti-aliasing -- reuses the same
-        // history-blend pass as TAA (its own separate instance/history buffer), chained after TAA.
-        const taaOrRawView = this._taaResolvedView ?? this._hdrTextureView;
-        if (motionTrailNode && motionTrailNode.enabled && taaOrRawView) {
-          ctx.colorView = taaOrRawView;
-          ctx.element = motionTrailNode;
-          const p = this._getOrCreatePostEffectPass(
-            PostProcessingEffectType.MOTION_TRAIL,
-            HistoryBlendPassGPU,
-          );
-          this._motionTrailResolvedView = p.execute(ctx) ?? undefined;
-        } else {
-          this._motionTrailResolvedView = undefined;
-        }
-
-        const colorTextureView = this._motionTrailResolvedView ?? taaOrRawView;
-
-        if (bloomNode && bloomNode.enabled && this._hdrTexture && colorTextureView) {
-          ctx.colorView = colorTextureView;
-          ctx.element = bloomNode;
-          const p = this._getOrCreatePostEffectPass(PostProcessingEffectType.BLOOM, BloomPassGPU);
-          this._bloomTextureView = p.execute(ctx) ?? undefined;
-        } else {
-          this._bloomTextureView = undefined;
-        }
-
-        if (hbaoNode && hbaoNode.enabled && this._opaqueCapture.opaqueDepthView && projMatrix) {
-          ctx.element = hbaoNode;
-          const p = this._getOrCreatePostEffectPass(PostProcessingEffectType.HBAO, AOPassGPU);
-          this._hbaoTextureView = p.execute(ctx) ?? undefined;
-        } else {
-          this._hbaoTextureView = undefined;
-        }
-
-        const shaftsNode = this.postProcessing.get<LightShaftsElement>(
-          PostProcessingEffectType.LIGHT_SHAFTS,
+        this._postFxChain.runPostEffects(
+          ce,
+          scene,
+          vp,
+          vMat,
+          camPos,
+          near,
+          far,
+          projMatrix,
+          lights,
         );
-        if (
-          shaftsNode &&
-          shaftsNode.enabled &&
-          this._opaqueCapture.opaqueDepthView &&
-          lights.dLight
-        ) {
-          ctx.element = shaftsNode;
-          const p = this._getOrCreatePostEffectPass(
-            PostProcessingEffectType.LIGHT_SHAFTS,
-            LightShaftsPassGPU,
-          );
-          this._lightShaftsTextureView = p.execute(ctx) ?? undefined;
-        } else {
-          this._lightShaftsTextureView = undefined;
-        }
-
-        // Volumetric fog: froxel inject -> temporal reprojection -> in-register integration (incl.
-        // directional/CSM sunlight) -> single-tap composite; PostProcessPass attenuates the scene by
-        // the transmittance and adds the in-scattering before tonemapping (ADR 0031).
-        const volFogNode = this.postProcessing.get<VolumetricFogElement>(
-          PostProcessingEffectType.VOLUMETRIC_FOG,
-        );
-        if (volFogNode && volFogNode.enabled && this._opaqueCapture.opaqueDepthView) {
-          ctx.element = volFogNode;
-          ctx.fogVolumes = this.extractFogVolumes(scene);
-          const p = this._getOrCreatePostEffectPass(
-            PostProcessingEffectType.VOLUMETRIC_FOG,
-            VolumetricFogPassGPU,
-          );
-          this._volumetricFogTextureView = p.execute(ctx) ?? undefined;
-        } else {
-          this._volumetricFogTextureView = undefined;
-        }
       }
 
       // Re-widen to the RenderPass interface: TS's control-flow analysis narrows `pass` towards
@@ -1782,10 +1633,9 @@ export class WebGPURenderer extends AbstractRenderer {
     // pair). destroy() implicitly unmaps a still-mapped buffer per spec -- safe even if a
     // mapAsync() from a not-yet-applied readback is still pending on one of the staging pair.
     this._hzbSystem?.dispose();
-    // Every GPU post-effect pass in the registry, in one sweep -- replaces the former per-effect
-    // `?.destroy()` lists (see `_getOrCreatePostEffectPass` / the `PostEffectPass` contract).
-    for (const pass of this._postEffectPasses.values()) pass.destroy();
-    this._postEffectPasses.clear();
+    // Tears down every GPU post-effect pass in the chain's registry, in one sweep (see
+    // `PostFxChain` / the `PostEffectPass` contract, ADR 0037).
+    this._postFxChain.destroy();
 
     this._opaqueCapture?.dispose();
 
