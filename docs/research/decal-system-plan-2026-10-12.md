@@ -1,6 +1,6 @@
 # Decal-System: Plan, Messungen und Fahrplan (2026-10-12)
 
-> **Status:** Phase 0 und 1 umgesetzt und auf echter GPU geprüft (WebGPU und WebGL2, WebGL1 ignoriert Decals). Phase 2 in Arbeit, Phasen 3 bis 6 offen.
+> **Status:** Phase 0 und 1 umgesetzt und auf echter GPU geprüft (WebGPU und WebGL2, WebGL1 ignoriert Decals). Phasen 2–6 sind inzwischen umgesetzt und im Code verifiziert (Entscheidungen in ADR 0029); offen bleiben nur Mess-/Budgetpunkte (Anisotropie der Decal-Texturen, ms-Budget auf Zielgeräten).
 > **Datum:** 2026-10-12
 > **Referenzen:** [ADR 0028 (Normal-Buffer)](../adr/0028-thin-normal-buffer-mrt.md), [ADR 0029 (Decal-System)](../adr/0029-decal-system.md), [Decal-Guide](../guides/decals.md), `REFERENCES.md`, Probe `apps/showcases/decal-probe`, Prüfskript `npm run test:decals`.
 
@@ -47,8 +47,8 @@ Jede Phase endet mit `npm run lint:fix`, `build:lib`, `test`, `lint:wgsl` und `n
 | 0 | Spike WebGPU | erledigt |
 | 1 | Kern auf beiden Backends, Tests, Probe, GPU-Skript | erledigt |
 | 2 | Qualität: Mip-Schärfe gemessen (`mipBias` bleibt bei 0), `USE_DECAL_UNLIT` (`unlit`), normal-mapped Empfänger in der Probe gemessen; offen: Anisotropie der Decal-Texturen, ms-Budget auf Zielgeräten | weitgehend erledigt |
-| 3 | Daten: `KitDecalItem` (size, normal, orm, emission), `LevelDescriptor.decals[]`, Schema, Validator, `loadLevel`, Migration der 6 Prolog-Decals | offen |
-| 4 | Maker-Stempelwerkzeug (modal: `D` an, Klick stempelt, `R` dreht, Pfeile schieben, `Shift` skaliert, `Esc` aus), Speicherung über `SWM_decal` | offen |
+| 3 | Daten: `KitDecalItem` (size, normal, orm, emission), `LevelDescriptor.decals[]`, Schema, Validator, `loadLevel`, Migration der 6 Prolog-Decals | umgesetzt |
+| 4 | Maker-Stempelwerkzeug (modal: `D` an, Klick stempelt, `R` dreht, Pfeile schieben, `Shift` skaliert, `Esc` aus), Speicherung über `SWM_decal` | umgesetzt |
 | 5 | Mesh-Decal-Baker (Load-Zeit, CPU, Sutherland-Hodgman gegen die Box, statische Empfänger) für WebGL1 | umgesetzt |
 | 6 | 6a Plane-Fit (Maker, `DecalPlaneFit.ts`), 6b Nässe als Kit-Decal `flakturm/wet_puddle` (kein Engine-Feature), 6c Laufzeit-`DecalPool`; 6d Decal-Sockets (`LevelDecalPlacement.socket`, `KitSocket.rotation`) | umgesetzt (2026-10-13) |
 
