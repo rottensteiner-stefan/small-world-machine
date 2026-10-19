@@ -35,6 +35,12 @@ Verworfene Alternativen:
 
 Dem bestehenden Vorbild von `public/tools/pixler.html`, `map-gen.html` und `xtractor.html` folgend (eigenständige Asset-Bearbeitungs-Workflows, die keine laufende Spiel-Canvas benötigen), erhält Maker `public/tools/maker.html`. Das entspricht seinem tatsächlichen Umfang — das Komponieren ganzer Umgebungen, nicht nur das Live-Anpassen einer bereits laufenden Szene — und erfordert nicht, dass zuerst eine `SmallWorldMachine`-Instanz existiert.
 
+> **Re-AMEND 2026-10-19 (ADR-0033-AMEND zurückgenommen):** Die in ADR 0033 vorgenommene Generalisierung
+> „Maker als eine Anwendungs-Shell für alle Autoren-Werkzeuge" (AMEND auf diesen §3) ist mit dem Re-Scope
+> vom 2026-10-19 wieder aufgehoben („Option 3"). §3 steht erneut in Originalfassung — Maker bleibt eine
+> eigenständige Seite; die Shell-Infrastruktur (`ToolMode`/`ToolModeHost`/`ModeHashRouter`) ist optionale
+> Bereitstellung, keine Verschmelzung der Werkzeuge. (Entscheidungs-Record: ADR 0033, AMENDED 2026-10-19.)
+
 ### 4. Kein expliziter Speichern-Button — Autosave, Undo-first-UX
 
 Jede Eigenschaftsbearbeitung: (a) wird sofort live auf die Szene im Speicher angewendet, (b) wird auf einen Undo/Redo-Befehlsstapel gelegt (Wiederverwendung des bereits in `Pixler`s "vollständiger Undo/Redo-Historie" bewährten Musters), (c) löst ein entprelltes (~500 ms) Durchschreiben in den gebundenen Projektordner über die File System Access API aus (`showDirectoryPicker`/`FileSystemFileHandle`). Kein modaler "Speichern"-Dialog für gewöhnliche Bearbeitungen; ein "Ungespeicherte Änderungen"-Indikator übernimmt die Rolle, die ein Titelleisten-Punkt unter macOS spielt. Cmd+S bleibt als expliziter Fallback-/Export-Pfad für Browser ohne Unterstützung der File System Access API verfügbar.

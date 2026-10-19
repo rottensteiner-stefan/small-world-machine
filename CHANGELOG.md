@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### "The most valuable of all talents is that of never using two words when one will do." - Thomas Jefferson
+
+- **Housekeeping & Docs:**
+  - *„Big Merge" neu bewertet (ADR 0033, ACCEPTED + AMENDED 2026-10-19, Doku-Entscheid „Option 3"):* Nur die
+    Mechanismen bleiben verbindlich — optionale Maker-Shell-Infrastruktur (`ToolMode`-Lifecycle statt
+    `ForgeTool`, `ToolModeHost`/`ModeHashRouter`, `maker.html#<mode>`), Entry-Aliase statt Dokument-Swap
+    (Legacy-`public/tools/*.html` bleiben Vite-Eingänge, M7 dauerhaft Nicht-Ziel), Forge bleibt In-Game,
+    Undo pro Tool/Dokument. Die Werkzeug-Verschmelzung („alle Autoren-Werkzeuge als ToolMode-Module in
+    einer Shell") ist opt-in-Richtungsziel ohne Vertragscharakter; der [AMEND auf ADR 0010 §3] wurde
+    zurückgenommen (Maker bleibt eigenständige Seite). Gemeinsamer Kern/CLI unverändert über ADR 0034
+    (ACCEPTED). Kein Verhaltens-/API-Change — reine Architektur-Dokumentation.
+
 ## [0.114.0] - 2026-10-19
 
 ### "The only way to go fast is to go well." - Robert C. Martin
