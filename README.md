@@ -164,13 +164,13 @@ Small World Machine is organized as a lightweight TypeScript monorepo (`packages
   - `src/loaders`: Asset loading pipeline (glTF 2.0, Declarative Level Descriptors / `KitRegistry`, OBJ/MTL, Textures).
   - `src/physix`: Physics system, colliders, bounding boxes (AABB/OBB), and solvers.
   - `src/renderers`: Hybrid WebGPU, WebGL 2, and WebGL 1 rendering backends.
-- **`packages/tools`**: Standalone browser tools (`Maker`, `Forge`, `Xtractor`, `Pixler`, `MapGen`, `MaterialStudio`) as well as dev/production helpers (`attachDevTools`).
+- **`packages/tools`**: Browser tools (`Maker` with the merged M1/M2 `maker/` suite, `Forge`, `Xtractor`, `Pixler`, `MapGen`, `MaterialStudio`; the M3+ tool merges per ADR 0033 are still open), a headless core (`core/`, ADR 0034 — a `swm` CLI is in progress), and dev/production helpers (`attachDevTools`).
 - **`packages/gltf-extensions`**: Extended glTF capabilities including `KHR_texture_basisu` (WASM-based Basis Universal / KTX2 GPU texture transcoding).
 - **`packages/geometry-extras`**: Procedural and parametric geometry extensions (`Lathe`, Platonic solids, Filled polygons).
 - **`packages/physics-extras`**: Advanced physics solvers, convex hulls, and geometric algorithms.
 
 ### `apps/` — Showcases & Sample Games
-- **`apps/showcases`**: 37 numbered interactive showcases (1–38, #25 is intentionally absent) demonstrating engine features (PBR, IBL, Glass transmission, Post-processing, Clustered lighting, Spatial audio, etc.), plus the `decal-probe` and `presentation` apps.
+- **`apps/showcases`**: 38 numbered interactive showcases (1–24, 26–39, #25 is intentionally absent) demonstrating engine features (PBR, IBL, Glass transmission, Post-processing, Clustered lighting, Spatial audio, etc.), plus the `decal-probe` and `presentation` apps.
 - **`apps/sample-apps`**: Production vertical slices and games (*The Whisper — A Viennese Requiem*, *Light Cycle Arena*, etc.).
 
 ### `public/` — Assets & Tools
@@ -193,6 +193,13 @@ The engine's flagship standalone 3D scene composer and level editor ([User Guide
 - **9-Slot Camera Bookmarks:** Fast vantage point recall (<kbd>1</kbd>–<kbd>9</kbd>) and memorization (<kbd>Ctrl+1</kbd>–<kbd>9</kbd> / Right-click).
 - **ASCII Map Importer:** Instant conversion of ASCII text tilemaps (`#`, `.`, `D`, `@`, `T`, `P`) into modular 3D dungeons.
 - **Atomic Undo/Redo & Soft Delete:** Full history stack (<kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Shift+Z</kbd>) with off-scene trash bin protecting GPU buffer allocations.
+
+> **Status (Big Merge, ADR 0033/0034):** Maker's M1/M2 footprint is on `main` — the
+> `packages/tools/src/maker/` suite (`ToolMode`, `ModeHashRouter`, `WorldModeAdapter`, …) and
+> `public/tools/maker.html` ship a fused mode launcher in which the **World** editor is live.
+> The other tools (Xtractor, Pixler, Map, Material, IBL, Kit) are not yet migrated into that
+> launcher — they remain available as standalone pages below. A `swm` CLI on the headless
+> `packages/tools/src/core/` is in progress. This is the current state, not a roadmap promise.
 
 ### Standalone Development Tools
 - **T-01: Procedural Splatter Generator** (`public/tools/splatter-gen.html`): Generate procedural blood, splatters, dirt decals, and impact masks.
