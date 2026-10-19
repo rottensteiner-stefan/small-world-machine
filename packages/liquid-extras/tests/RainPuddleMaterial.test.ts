@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BlendingMode, Vector2D } from "@small-world-machine/engine";
+import { Vector2D } from "@small-world-machine/engine";
 import {
   RAIN_PUDDLE_MAX_BASINS,
   RainPuddleMaterial,
@@ -12,12 +12,6 @@ describe("RainPuddleMaterial", () => {
     expect(mat.transparent).toBe(true);
     expect(mat.depthWrite).toBe(false);
   });
-
-  it("requests alpha blending explicitly, which WebGPU pipelines are built from", () => {
-    const state = new RainPuddleMaterial().getRenderManifest().state;
-    expect(state?.blending).toBe(BlendingMode.ALPHA);
-  });
-
   it("injects the shared physics into all three backends and leaves no template token behind", () => {
     const sources = new RainPuddleMaterial().getShaderDefinition().sources;
     for (const src of [sources.glsl300?.fs, sources.glsl100?.fs, sources.wgsl]) {

@@ -1542,6 +1542,12 @@ export class WebGPURenderer extends AbstractRenderer {
     const d = Math.min(devicePixelRatio, maxRatio);
     this._context.canvas.width = width * d;
     this._context.canvas.height = height * d;
+    // Pin the CSS size like AbstractWebGLRenderer.setSize(): without it a canvas that no
+    // stylesheet sizes is displayed at its (DPR-scaled) attribute size.
+    if ("style" in this._context.canvas) {
+      this._context.canvas.style.width = `${width}px`;
+      this._context.canvas.style.height = `${height}px`;
+    }
     // setSize() runs between frames, so textures replaced by earlier resizes are safe to free now;
     // without this, repeated resizes without a render (hidden tab) pile up full-screen textures.
     this._fallback.drainPendingDestroy();

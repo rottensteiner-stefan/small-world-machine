@@ -60,7 +60,7 @@ export function computeSignedCocPx(
  * - WebGL1: no opaque-depth capture exists on this tier (see `WebGL1Renderer.copyToOpaqueDepthTexture`),
  *   so the CoC cannot be derived from depth. Falls back to a screen-space tilt-shift: a horizontal
  *   focus band at `focusScreenY`, blurring towards the top/bottom with the lens' far-field CoC
- *   (S, clamped to `maxCocPx`) -- the same lens parameters still drive the blur strength.
+ *   (S, clamped to `maxCocRatio`) -- the same lens parameters still drive the blur strength.
  *
  * Runs on the HDR scene colour after TAA / motion trail and before bloom and the tone-mapping uber pass.
  * Opt-in post-processing effect, off by default.
@@ -87,10 +87,12 @@ export class DepthOfFieldElement extends PostProcessingElement {
   public sensorHeight: number = 24;
 
   /**
-   * Upper bound of the CoC diameter in full-resolution pixels (default: 16). Caps the gather radius
-   * and therefore the cost; larger values allow creamier bokeh on big screens.
+   * Upper bound of the CoC diameter as a fraction of the viewport height (default: 0.015, i.e.
+   * ~16 px at 1080p). Caps the gather radius and therefore the cost. A fraction rather than pixels
+   * so the look does not change with resolution or device pixel ratio (and so between tiers that
+   * render at different buffer sizes).
    */
-  public maxCocPx: number = 16;
+  public maxCocRatio: number = 0.015;
 
   /**
    * WebGL1 only: vertical screen position of the tilt-shift focus band, 0 = bottom, 1 = top
@@ -110,6 +112,14 @@ export class DepthOfFieldElement extends PostProcessingElement {
       this.sensorHeight,
       viewportHeightPx,
     );
+  }
+
+  /**
+   * CoC diameter cap in pixels for the given viewport height (see {@link maxCocRatio}).
+   * @param viewportHeightPx Height of the render target in pixels.
+   */
+  public maxCocPx(viewportHeightPx: number): number {
+    return this.maxCocRatio * viewportHeightPx;
   }
 
   public override structuralKey(): string {

@@ -179,7 +179,7 @@ export class DepthOfFieldPassGPU implements PostEffectPass {
     d[1] = ctx.far;
     d[2] = element.focusDistance;
     d[3] = element.cocScalePx(height);
-    d[4] = element.maxCocPx;
+    d[4] = element.maxCocPx(height);
     this._device.queue.writeBuffer(this._uniformBuffer, 0, d);
 
     this._drawFullscreen(ce, this._cocView!, this._pipelineCoc, this._bindGroupCoc!);

@@ -202,7 +202,7 @@ export class DepthOfFieldPassGL implements GLPostEffectPass {
     gl.uniform1f(loc.far, ctx.far);
     gl.uniform1f(loc.focusDistance, element.focusDistance);
     gl.uniform1f(loc.cocScale, cocScale);
-    gl.uniform1f(loc.maxCoc, element.maxCocPx);
+    gl.uniform1f(loc.maxCoc, element.maxCocPx(ctx.height));
   }
 
   /**
@@ -254,7 +254,7 @@ export class DepthOfFieldPassGL implements GLPostEffectPass {
     gl2.activeTexture(gl2.TEXTURE0);
     gl2.bindTexture(gl2.TEXTURE_2D, cocFbo.texture);
     gl2.uniform1i(this._gatherCocLoc, 0);
-    gl2.uniform1f(this._gatherMaxCocLoc, element.maxCocPx);
+    gl2.uniform1f(this._gatherMaxCocLoc, element.maxCocPx(height));
     gl2.drawArrays(gl2.TRIANGLES, 0, 3);
 
     outputFbo.bind();
@@ -297,7 +297,7 @@ export class DepthOfFieldPassGL implements GLPostEffectPass {
     gl.uniform1i(this._scene100Loc, 0);
     gl.uniform2f(this._texelSize100Loc, 1.0 / ctx.width, 1.0 / ctx.height);
     gl.uniform1f(this._focusScreenY100Loc, element.focusScreenY);
-    gl.uniform1f(this._farCoc100Loc, Math.min(cocScale, element.maxCocPx));
+    gl.uniform1f(this._farCoc100Loc, Math.min(cocScale, element.maxCocPx(ctx.height)));
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this._vb100!);
     gl.enableVertexAttribArray(this._aPos100);

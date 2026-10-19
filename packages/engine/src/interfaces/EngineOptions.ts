@@ -254,7 +254,7 @@ export interface PostProcessingEffectsConfig {
     focalLength?: number;
     fStop?: number;
     sensorHeight?: number;
-    maxCocPx?: number;
+    maxCocRatio?: number;
     focusScreenY?: number;
   };
 }

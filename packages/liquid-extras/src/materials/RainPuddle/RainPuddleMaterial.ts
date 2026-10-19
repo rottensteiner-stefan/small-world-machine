@@ -4,12 +4,7 @@ import fragGLSL from "./RainPuddle.frag.glsl?raw";
 import fragGLSL100 from "./RainPuddle.frag.glsl100?raw";
 import fragWGSL from "./RainPuddle.frag.wgsl?raw";
 import type { RenderManifest, ShaderDefinition, Texture } from "@small-world-machine/engine";
-import {
-  AbstractMaterial,
-  BlendingMode,
-  StandardWebGPULayout,
-  Vector2D,
-} from "@small-world-machine/engine";
+import { AbstractMaterial, StandardWebGPULayout, Vector2D } from "@small-world-machine/engine";
 
 const COMMON_TOKEN = "[RAIN_PUDDLE_COMMON]";
 
@@ -153,10 +148,6 @@ export class RainPuddleMaterial extends AbstractMaterial {
       this._renderManifest = this._createBaseManifest();
     }
     this._syncBaseManifestState();
-    // `transparent` alone only routes the draw into the transparent queue; WebGPU builds its
-    // pipeline from `blending` and would otherwise write color/alpha unblended (WebGL enables
-    // blending for the whole transparent pass, which hid this).
-    this._renderManifest.state!.blending = BlendingMode.ALPHA;
 
     const texs = this._renderManifest.textures;
     texs["u_diffuseMap"] = this.asphaltMap;

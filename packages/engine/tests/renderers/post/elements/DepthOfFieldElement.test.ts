@@ -17,7 +17,7 @@ describe("DepthOfFieldElement", () => {
     expect(elem.focalLength).toBeCloseTo(50);
     expect(elem.fStop).toBeCloseTo(2.0);
     expect(elem.sensorHeight).toBeCloseTo(24);
-    expect(elem.maxCocPx).toBeCloseTo(16);
+    expect(elem.maxCocRatio).toBeCloseTo(0.015);
     expect(elem.focusScreenY).toBeCloseTo(0.5);
     expect(elem.structuralKey()).toBe("0");
   });
@@ -41,7 +41,7 @@ describe("DepthOfFieldElement", () => {
           focusDistance: 0.6,
           focalLength: 85,
           fStop: 1.4,
-          maxCocPx: 24,
+          maxCocRatio: 0.02,
         },
       },
     });
@@ -51,8 +51,16 @@ describe("DepthOfFieldElement", () => {
     expect(elem.focusDistance).toBeCloseTo(0.6);
     expect(elem.focalLength).toBeCloseTo(85);
     expect(elem.fStop).toBeCloseTo(1.4);
-    expect(elem.maxCocPx).toBeCloseTo(24);
+    expect(elem.maxCocRatio).toBeCloseTo(0.02);
     expect(elem.sensorHeight).toBeCloseTo(24);
+  });
+
+  it("scales the CoC cap with the render height, so 1x and 2x DPR buffers look the same", () => {
+    const elem = new DepthOfFieldElement();
+    elem.maxCocRatio = 0.02;
+
+    expect(elem.maxCocPx(1080)).toBeCloseTo(21.6);
+    expect(elem.maxCocPx(2160) / 2160).toBeCloseTo(elem.maxCocPx(1080) / 1080);
   });
 });
 

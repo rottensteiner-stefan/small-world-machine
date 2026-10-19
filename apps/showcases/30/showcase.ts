@@ -237,7 +237,7 @@ class Showcase30 extends AbstractShowcase {
     );
     if (this._dof) {
       this._dof.enabled = true;
-      this._dof.maxCocPx = 20;
+      this._dof.maxCocRatio = 0.02;
     }
 
     const hbao = this.renderer.postProcessing.get<HbaoElement>(PostProcessingEffectType.HBAO);

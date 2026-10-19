@@ -213,6 +213,20 @@ const SHADER_FLAG_PATTERN = /^[A-Z][A-Z0-9_]*$/;
  * Sorted, de-duplicated and validated flag list. Each flag becomes a WGSL `const`, so a
  * duplicate would not compile and an invalid identifier would corrupt the shader prefix.
  */
+/**
+ * WebGPU bakes blending into the pipeline, WebGL toggles it from `transparent` at draw time
+ * (AbstractWebGLRenderer: transparent => SRC_ALPHA/ONE_MINUS_SRC_ALPHA unless `blending` picks
+ * another function). A transparent material that never set `blending` must therefore resolve to
+ * ALPHA here too, or it is written unblended on WebGPU only.
+ */
+export function resolveBlendingMode(state: {
+  transparent?: boolean | undefined;
+  blending?: BlendingMode | undefined;
+}): BlendingMode {
+  if (state.blending) return state.blending;
+  return state.transparent ? BlendingMode.ALPHA : BlendingMode.DEFAULT;
+}
+
 function normalizeShaderFlags(flags: readonly string[]): string[] {
   for (const flag of flags) {
     if (!SHADER_FLAG_PATTERN.test(flag)) {
@@ -371,7 +385,7 @@ export class GPUPipelineCache {
       "_" +
       (state.culling || CullMode.DEFAULT) +
       "_" +
-      (state.blending || BlendingMode.DEFAULT) +
+      resolveBlendingMode(state) +
       "_" +
       (state.depthWrite !== false) +
       "_" +
@@ -459,17 +473,18 @@ export class GPUPipelineCache {
       }
 
       const targets: GPUColorTargetState[] = [{ format: targetFormat }];
-      if (state.blending === BlendingMode.ALPHA) {
+      const blending = resolveBlendingMode(state);
+      if (blending === BlendingMode.ALPHA) {
         targets[0]!.blend = {
           color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
           alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
         };
-      } else if (state.blending === BlendingMode.ADDITIVE) {
+      } else if (blending === BlendingMode.ADDITIVE) {
         targets[0]!.blend = {
           color: { srcFactor: "one", dstFactor: "one", operation: "add" },
           alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
         };
-      } else if (state.blending === BlendingMode.PREMULTIPLIED_ALPHA) {
+      } else if (blending === BlendingMode.PREMULTIPLIED_ALPHA) {
         targets[0]!.blend = {
           color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
           alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },

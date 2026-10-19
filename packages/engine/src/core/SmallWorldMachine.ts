@@ -229,6 +229,11 @@ export abstract class SmallWorldMachine {
         this.canvas.height = this.config.height;
       }
 
+      // Captured before renderer creation: the WebGPU renderer sizes itself during init, which
+      // already scales canvas.width by the pixel ratio, so re-reading it would apply DPR twice.
+      const cssWidth = this.canvas.width;
+      const cssHeight = this.canvas.height;
+
       await ShaderBootstrap.init(this._context.shaderRegistry);
 
       this._context.deviceCaps.init();
@@ -240,7 +245,7 @@ export abstract class SmallWorldMachine {
         this._context,
       );
 
-      this.renderer.setSize(this.canvas.width, this.canvas.height);
+      this.renderer.setSize(cssWidth, cssHeight);
 
       if (!(window as unknown as Record<string, boolean>)["__SMALLWORLDMACHINE_BANNER__"]) {
         (window as unknown as Record<string, boolean>)["__SMALLWORLDMACHINE_BANNER__"] = true;

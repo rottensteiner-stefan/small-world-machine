@@ -337,7 +337,7 @@ export class PostProcessingGroup {
         if (df.focalLength !== undefined) dof.focalLength = df.focalLength;
         if (df.fStop !== undefined) dof.fStop = df.fStop;
         if (df.sensorHeight !== undefined) dof.sensorHeight = df.sensorHeight;
-        if (df.maxCocPx !== undefined) dof.maxCocPx = df.maxCocPx;
+        if (df.maxCocRatio !== undefined) dof.maxCocRatio = df.maxCocRatio;
         if (df.focusScreenY !== undefined) dof.focusScreenY = df.focusScreenY;
       }
     }
