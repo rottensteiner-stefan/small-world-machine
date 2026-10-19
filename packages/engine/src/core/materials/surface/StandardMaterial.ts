@@ -7,6 +7,8 @@ import { MaterialType, ShaderPropertyType, BlendingMode } from "../../../enums/i
 import type { Texture, CubeTexture } from "../../textures/index.js";
 import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
 import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
+import { writeLane } from "../MaterialLanes.js";
+import type { MaterialLane } from "../MaterialLanes.js";
 import { Vector2D } from "../../../math/index.js";
 import type { InspectorField } from "../../Inspectable.js";
 
@@ -222,6 +224,21 @@ export class StandardMaterial extends AbstractMaterial {
   public time: number;
 
   /**
+   * Typed semantic lane table (ADR 0027 / 0039) for this material. `reflectionFresnelBlend` was
+   * historically smuggled through a generic padding slot; it now travels in `u_matParam0.x` and
+   * the shader reads it from there (see Standard.frag.glsl / Standard.frag.wgsl). The table is the
+   * single source of truth: `getRenderManifest` packs through it via `writeLane`, so renaming a
+   * semantic or relocating a lane can never silently detach material from shader.
+   */
+  private static readonly _LANES: readonly [MaterialLane] = [
+    {
+      semantic: "reflectionFresnelBlend",
+      lane: "u_matParam0",
+      note: "x = blend (0..1), yzw unused",
+    },
+  ];
+
+  /**
    * Creates a new StandardMaterial.
    * @param options The configuration options for the material.
    */
@@ -371,7 +388,13 @@ export class StandardMaterial extends AbstractMaterial {
     props["u_useEnvMap"] = this.envMap ? 1.0 : 0.0;
     props["u_useReflectionMap"] = this.reflectionMap ? 1.0 : 0.0;
     props["u_reflectivity"] = this.reflectivity;
-    props["u_pad1"] = this.reflectionFresnelBlend;
+    // Pack through the typed lane table -- the table entry is the single source of truth.
+    writeLane(this._renderManifest, StandardMaterial._LANES[0], [
+      this.reflectionFresnelBlend,
+      0,
+      0,
+      0,
+    ]);
     props["u_time"] = this.time;
 
     const flags: string[] = [];
@@ -427,64 +450,7 @@ export class StandardMaterial extends AbstractMaterial {
    * multiple objects, where a direct mutation would visibly affect all of them at once.
    */
   public override clone(): StandardMaterial {
-    const copy = new StandardMaterial({
-      color: new Color(this.color.r, this.color.g, this.color.b, this.color.a),
-      metallic: this.metallic,
-      roughness: this.roughness,
-      ao: this.ao,
-      diffuseMap: this.diffuseMap,
-      normalMap: this.normalMap,
-      normalScale: this.normalScale.clone(),
-      metallicMap: this.metallicMap,
-      roughnessMap: this.roughnessMap,
-      aoMap: this.aoMap,
-      emissiveColor: new Color(
-        this.emissiveColor.r,
-        this.emissiveColor.g,
-        this.emissiveColor.b,
-        this.emissiveColor.a,
-      ),
-      emissiveMap: this.emissiveMap,
-      alphaMap: this.alphaMap,
-      envMap: this.envMap,
-      reflectionMap: this.reflectionMap,
-      reflectivity: this.reflectivity,
-      reflectionFresnelBlend: this.reflectionFresnelBlend,
-      emissiveIntensity: this.emissiveIntensity,
-      transparent: this.transparent,
-      alphaTest: this.alphaTest,
-      clearcoat: this.clearcoat,
-      clearcoatRoughness: this.clearcoatRoughness,
-      clearcoatMap: this.clearcoatMap,
-      clearcoatRoughnessMap: this.clearcoatRoughnessMap,
-      clearcoatNormalMap: this.clearcoatNormalMap,
-      sheenColor: new Color(
-        this.sheenColor.r,
-        this.sheenColor.g,
-        this.sheenColor.b,
-        this.sheenColor.a,
-      ),
-      sheenRoughness: this.sheenRoughness,
-      sheenColorMap: this.sheenColorMap,
-      sheenRoughnessMap: this.sheenRoughnessMap,
-      transmission: this.transmission,
-      transmissionMap: this.transmissionMap,
-      ior: this.ior,
-      thickness: this.thickness,
-      thicknessMap: this.thicknessMap,
-      attenuationDistance: this.attenuationDistance,
-      attenuationColor: new Color(
-        this.attenuationColor.r,
-        this.attenuationColor.g,
-        this.attenuationColor.b,
-        this.attenuationColor.a,
-      ),
-      time: this.time,
-    });
-    copy.cullMode = this.cullMode;
-    copy.depthWrite = this.depthWrite;
-    copy.depthTest = this.depthTest;
-    return copy;
+    return super.clone() as StandardMaterial;
   }
 
   /** @inheritdoc */

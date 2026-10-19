@@ -405,25 +405,25 @@ describe("S1 G2 constants-equality manifest (same-field proof)", () => {
 
     const material = new OpenWaterMaterial({ wave1, wave2, wave3, speed });
     const props = material.getRenderManifest().properties;
-    const extra = props["u_extraParams"] as number[];
-    const liquid = props["u_liquidParams"] as number[];
-    const thresholds = props["u_thresholds"] as number[];
+    const wave1Lane = props["u_matParam3"] as number[];
+    const wave2Lane = props["u_matParam4"] as number[];
+    const wave3Lane = props["u_matParam5"] as number[];
     const reflectivity = props["u_reflectivity"] as number;
 
     // Same-field proof: the packed manifest (what ships to the GPU) equals the probe's lanes.
     const probe = OpenWaterSurfaceProbe.fromMaterial(material);
     const lanes = probe.getWaveLanes();
 
-    expect(extra).toHaveLength(4);
-    expect(liquid).toHaveLength(4);
-    expect(thresholds).toHaveLength(4);
+    expect(wave1Lane).toHaveLength(4);
+    expect(wave2Lane).toHaveLength(4);
+    expect(wave3Lane).toHaveLength(4);
     for (let i = 0; i < 4; i++) {
-      expect(extra[i]).toBe(lanes.wave1[i]);
-      expect(liquid[i]).toBe(lanes.wave2[i]);
-      expect(thresholds[i]).toBe(lanes.wave3[i]);
-      expect(extra[i]).toBe(wave1[i]);
-      expect(liquid[i]).toBe(wave2[i]);
-      expect(thresholds[i]).toBe(wave3[i]);
+      expect(wave1Lane[i]).toBe(lanes.wave1[i]);
+      expect(wave2Lane[i]).toBe(lanes.wave2[i]);
+      expect(wave3Lane[i]).toBe(lanes.wave3[i]);
+      expect(wave1Lane[i]).toBe(wave1[i]);
+      expect(wave2Lane[i]).toBe(wave2[i]);
+      expect(wave3Lane[i]).toBe(wave3[i]);
     }
     expect(reflectivity).toBe(speed);
     expect(lanes.speed).toBe(reflectivity);

@@ -4,8 +4,8 @@
     let waterColor = sRGBToLinear(obj.color.rgb);
     let deepWaterColor = sRGBToLinear(obj.specColor.rgb);
 
-    let edgeColor = vec3<f32>(obj.texOffset.x, obj.texOffset.y, obj.texRepeat.x);
-    let edgeSoftness = max(obj.texRepeat.y, 0.001);
+    let edgeColor = obj.matParam6.xyz;
+    let edgeSoftness = max(obj.matParam6.w, 0.001);
     // Parameters unpacked from 512-byte ObjectUniforms (obj.matParam0..2)
     let waterAbsorption = obj.matParam0.xyz;
     let refractionStrength = obj.matParam0.w;

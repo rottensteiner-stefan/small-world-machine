@@ -116,6 +116,13 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
   /** Multiplier on `emissiveColor`. */
   public emissiveStrength: number;
 
+  /** Typed semantic lane bank (see the lane table in `getRenderManifest`); the shaders read these for every look parameter. */
+  private readonly _matParam0: number[] = [0, 0, 0, 0];
+  private readonly _matParam1: number[] = [0, 0, 0, 0];
+  private readonly _matParam2: number[] = [0, 0, 0, 0];
+  private readonly _matParam3: number[] = [0, 0, 0, 0];
+  private readonly _matParam4: number[] = [0, 0, 0, 0];
+
   /**
    * Creates a new FluidSurfaceMaterial.
    * @param options The configuration options.
@@ -182,27 +189,20 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
     if (undefined === this._renderManifest) {
       this._renderManifest = this._createBaseManifest();
       this._renderManifest.properties["u_specColor"] = this.edgeColor.toFloat32Array();
-      // u_extraParams.x and u_liquidParams.z/.w are unread by the base flow shader (x was a
-      // fixed 1.0 placeholder, z/w always 0) -- repurposed to carry emissiveColor.rgb
-      // (pre-multiplied by emissiveStrength) for opaque/emissive presets like LavaMaterial.
-      this._renderManifest.properties["u_extraParams"] = [
-        this.emissiveColor.r * this.emissiveStrength,
-        this.time,
-        this.flowSpeed,
-        this.distortion,
-      ];
-      this._renderManifest.properties["u_liquidParams"] = [
-        0,
-        0,
-        this.emissiveColor.g * this.emissiveStrength,
-        this.emissiveColor.b * this.emissiveStrength,
-      ];
-      // Free StandardWebGPULayout slots carrying the optional look parameters (this shader reads
-      // them under these names; GLSL declarations carry the same comments):
-      // u_thresholds = [rim, specular, normalStrength, absorption], u_shininess = specularPower,
-      // u_isTerrain = emissiveMask, u_metallic = pulse amplitude, u_roughness = pulse speed,
-      // u_reflectivity = transitionSoftness, u_pad1 = shade.
-      this._renderManifest.properties["u_thresholds"] = [0, 0, 0, 0];
+      // Typed semantic lane table (ADR 0027 / 0039). Every look parameter travels in a dedicated
+      // u_matParamN slot declared by FluidSurface.frag.* / .vert.* -- previously these were
+      // smuggled through generic slots (u_extraParams, u_liquidParams, u_thresholds,
+      // u_shininess, u_isTerrain, u_metallic, u_roughness, u_reflectivity).
+      //   u_matParam0 = [shade, rimStrength, specularStrength, normalStrength]
+      //   u_matParam1 = [specularPower, absorption, emissiveMask, transitionSoftness]
+      //   u_matParam2 = [flowSpeed, distortion, emissivePulse, emissivePulseSpeed]
+      //   u_matParam3 = [emissive.r*strength, emissive.g*strength, emissive.b*strength, time]
+      //   u_matParam4 = [waveFrequency, waveAmplitude, 0, 0]  (vertex stage only)
+      this._renderManifest.properties["u_matParam0"] = this._matParam0;
+      this._renderManifest.properties["u_matParam1"] = this._matParam1;
+      this._renderManifest.properties["u_matParam2"] = this._matParam2;
+      this._renderManifest.properties["u_matParam3"] = this._matParam3;
+      this._renderManifest.properties["u_matParam4"] = this._matParam4;
       this._renderManifest.textures["u_diffuseMap"] = this.noiseMap;
     }
 
@@ -213,31 +213,36 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
 
     props["u_specColor"] = this.edgeColor.toFloat32Array();
 
-    const extra = props["u_extraParams"] as number[];
-    extra[0] = this.emissiveColor.r * this.emissiveStrength;
-    extra[1] = this.time;
-    extra[2] = this.flowSpeed;
-    extra[3] = this.distortion;
+    const p0 = this._matParam0;
+    p0[0] = this.shade;
+    p0[1] = this.rimStrength;
+    p0[2] = this.specularStrength;
+    p0[3] = this.normalStrength;
 
-    const liquid = props["u_liquidParams"] as number[];
+    const p1 = this._matParam1;
+    p1[0] = this.specularPower;
+    p1[1] = this.absorption;
+    p1[2] = this.emissiveMask;
+    p1[3] = this.transitionSoftness;
+
+    const p2 = this._matParam2;
+    p2[0] = this.flowSpeed;
+    p2[1] = this.distortion;
+    p2[2] = this.emissivePulse;
+    p2[3] = this.emissivePulseSpeed;
+
+    const p3 = this._matParam3;
+    p3[0] = this.emissiveColor.r * this.emissiveStrength;
+    p3[1] = this.emissiveColor.g * this.emissiveStrength;
+    p3[2] = this.emissiveColor.b * this.emissiveStrength;
+    p3[3] = this.time;
+
     // Viscosity -> sluggish, large blobs: lower frequency, bigger amplitude as it grows.
-    liquid[0] = 3.0 / (1.0 + this.viscosity * 0.1);
-    const effectiveWaveAmplitude = this.waveAmplitude ?? 0.03 + this.viscosity * 0.006;
-    liquid[1] = effectiveWaveAmplitude;
-    liquid[2] = this.emissiveColor.g * this.emissiveStrength;
-    liquid[3] = this.emissiveColor.b * this.emissiveStrength;
-
-    const thr = props["u_thresholds"] as number[];
-    thr[0] = this.rimStrength;
-    thr[1] = this.specularStrength;
-    thr[2] = this.normalStrength;
-    thr[3] = this.absorption;
-    props["u_shininess"] = this.specularPower;
-    props["u_isTerrain"] = this.emissiveMask;
-    props["u_metallic"] = this.emissivePulse;
-    props["u_roughness"] = this.emissivePulseSpeed;
-    props["u_reflectivity"] = this.transitionSoftness;
-    props["u_pad1"] = this.shade;
+    const p4 = this._matParam4;
+    p4[0] = 3.0 / (1.0 + this.viscosity * 0.1);
+    p4[1] = this.waveAmplitude ?? 0.03 + this.viscosity * 0.006;
+    p4[2] = 0;
+    p4[3] = 0;
 
     texs["u_diffuseMap"] = this.noiseMap;
     if (this.normalMap) texs["u_normalMap"] = this.normalMap;
@@ -247,7 +252,7 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
     // troughs of the main pass (depth compare less-equal) fail the depth test and the clear
     // colour shows through as horizontal stripes (see RenderManifest.skipDepthPrePass).
     if (this._renderManifest.state) {
-      this._renderManifest.state.skipDepthPrePass = !this.transparent && effectiveWaveAmplitude > 0;
+      this._renderManifest.state.skipDepthPrePass = !this.transparent && p4[1] > 0;
     }
 
     return this._renderManifest;

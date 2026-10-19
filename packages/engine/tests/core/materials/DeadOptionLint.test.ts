@@ -712,11 +712,11 @@ describe("DeadOptionLint (G3/G9)", () => {
       const props = mat.getRenderManifest().properties as Record<string, number[] | number>;
       const lane = (name: string): number[] => props[name] as number[];
 
-      expect(lane("u_extraParams")).toEqual([1.0, 0.5, 0.1, 8.0]);
-      expect(lane("u_liquidParams")).toEqual([0.2, 0.7, 0.12, 5.0]);
-      expect(lane("u_thresholds")).toEqual([-0.3, 0.5, 0.04, 2.0]);
+      expect(lane("u_matParam3")).toEqual([1.0, 0.5, 0.1, 8.0]);
+      expect(lane("u_matParam4")).toEqual([0.2, 0.7, 0.12, 5.0]);
+      expect(lane("u_matParam5")).toEqual([-0.3, 0.5, 0.04, 2.0]);
       expect(props["u_reflectivity"]).toBe(1.1);
-      expect(lane("u_texRepeat")[1]).toBe(1.2);
+      expect(lane("u_matParam6")[3]).toBe(1.2);
       expect(lane("u_matParam0")).toEqual([0.35, 0.08, 0.03, 0.04]);
       expect(lane("u_matParam1")[0]).toBeCloseTo(0.9, 6);
       expect(lane("u_matParam1")[3]).toBe(1.5);

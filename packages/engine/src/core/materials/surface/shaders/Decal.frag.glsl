@@ -44,7 +44,6 @@ uniform vec2 u_texRepeat;
 uniform float u_useEnvMap;
 uniform float u_useReflectionMap;
 uniform float u_reflectivity;
-uniform float u_pad1;
 uniform float u_time;
 
 uniform mat4 u_model;

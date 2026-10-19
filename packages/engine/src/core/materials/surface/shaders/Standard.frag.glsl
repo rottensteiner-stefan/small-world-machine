@@ -59,10 +59,10 @@ uniform vec2 u_texRepeat;
 uniform float u_useEnvMap;
 uniform float u_useReflectionMap;
 uniform float u_reflectivity;
-// Repurposed: reflectionFresnelBlend -- how much of the reflection's strength comes from view
-// angle at all (0 = constant regardless of angle, 1 = pure Fresnel). See Standard.frag.wgsl's
-// identical use of obj.pad1 for the full rationale.
-uniform float u_pad1;
+// Typed semantic lane (ADR 0027 / 0039): reflectionFresnelBlend -- how much of the reflection's
+// strength comes from view angle at all (0 = constant regardless of angle, 1 = pure Fresnel).
+// See Standard.frag.wgsl's identical use of obj.matParam0.x for the full rationale.
+uniform vec4 u_matParam0;
 uniform float u_time;
 
 void main() {
@@ -114,7 +114,7 @@ void main() {
         vec3 reflectionColor = sRGBToLinear(texture(u_reflectionMap, screenUV).rgb);
         
         // Blend based on reflectivity and fresnel or fixed factor
-        float f = u_reflectivity * mix(1.0, F_Schlick(max(dot(normalize(v_normal), V), 0.0), F0).x, u_pad1); // simple approx
+        float f = u_reflectivity * mix(1.0, F_Schlick(max(dot(normalize(v_normal), V), 0.0), F0).x, u_matParam0.x); // simple approx
         fragColor.rgb = mix(fragColor.rgb, reflectionColor, f);
     }
 #endif

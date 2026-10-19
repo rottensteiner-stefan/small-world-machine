@@ -68,9 +68,9 @@ layout(std140) uniform GlobalUniforms {
 };
 
 uniform mat4 u_model;
-uniform vec4 u_extraParams;
-uniform vec4 u_liquidParams;
-uniform vec4 u_thresholds;
+uniform vec4 u_matParam3; // wave1 [dirX, dirY, steepness (Q), wavelength]
+uniform vec4 u_matParam4; // wave2 [dirX, dirY, steepness (Q), wavelength]
+uniform vec4 u_matParam5; // wave3 [dirX, dirY, steepness (Q), wavelength]
 uniform vec4 u_styleA;
 uniform vec4 u_matParam2;
 uniform float u_time;
@@ -90,9 +90,9 @@ void main() {
     vec4 worldPosInit = u_model * vec4(a_position, 1.0);
     vec3 wp = worldPosInit.xyz;
 
-    vec4 w1 = u_extraParams;
-    vec4 w2 = u_liquidParams;
-    vec4 w3 = u_thresholds;
+    vec4 w1 = u_matParam3;
+    vec4 w2 = u_matParam4;
+    vec4 w3 = u_matParam5;
     vec4 w4 = vec4(w1.y, -w1.x, w1.z * 0.45, w1.w * 0.42); // Detail wave 1 (perpendicular, shorter)
     vec4 w5 = vec4(-w2.y, w2.x, w2.z * 0.35, w2.w * 0.35); // Detail wave 2
     vec4 w6 = vec4(w1.x * 0.5 - w1.y * 0.866, w1.x * 0.866 + w1.y * 0.5, w1.z * 0.25, w1.w * 0.22); // Bimodal 60-deg cross-swell

@@ -9,10 +9,10 @@ fn vs(
 ) -> Out {
     var o: Out;
     
-    let time = obj.extraParams.y;
-    let flowSpeed = obj.extraParams.z;
-    let waveFrequency = obj.liquidParams.x;
-    let waveAmplitude = obj.liquidParams.y;
+    let time = obj.matParam3.w;
+    let flowSpeed = obj.matParam2.x;
+    let waveFrequency = obj.matParam4.x;
+    let waveAmplitude = obj.matParam4.y;
 
     var p = pos;
     let worldPosInit = obj.model * vec4f(p, 1.0);

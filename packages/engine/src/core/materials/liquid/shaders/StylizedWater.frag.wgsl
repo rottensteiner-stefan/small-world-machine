@@ -15,8 +15,8 @@ fn aaStepMask(edge: f32, value: f32, softness: f32) -> f32 {
 @fragment fn fs(i: Out) -> @location(0) vec4<f32> {
     let shallowColor = sRGBToLinear(obj.color.rgb);
     let deepColor = sRGBToLinear(obj.specColor.rgb);
-    let edgeColor = sRGBToLinear(vec3<f32>(obj.texOffset.x, obj.texOffset.y, obj.texRepeat.x));
-    let edgeSoftness = max(obj.texRepeat.y, 0.001);
+    let edgeColor = sRGBToLinear(obj.matParam6.xyz);
+    let edgeSoftness = max(obj.matParam6.w, 0.001);
     let foamDistance = max(obj.matParam1.w, 0.001);
 
     // styleId map: 0 toon, 1 soft, 2 sparkle, 3 extension (Noir/Oil), 4 dredge, 5 bold
@@ -146,13 +146,13 @@ fn aaStepMask(edge: f32, value: f32, softness: f32) -> f32 {
     let halfVector = normalize(lightDir + camDir);
     let nDotH = saturate(dot(i.n, halfVector));
     // Narrow cone: wave slopes are smooth over metres, a wide cone covers ~20 percent of the pool
-    let specular = aaStepMask(0.9993, nDotH, 0.0005) * obj.color.a * surfaceShadow;
+    let specular = aaStepMask(0.9993, nDotH, 0.0005) * obj.matParam7.x * surfaceShadow;
     surfaceColor += global.dirLightColor.rgb * specular;
 
     if (obj.styleB.z > 0.0) {
         let stepFps = select(12.0, 8.0, isSparkle);
         let glint = waterGlintStar(i.wp.xz * 2.6, obj.time * stepFps, nDotH) * obj.styleB.z * surfaceShadow;
-        surfaceColor += vec3<f32>(1.0, 0.92, 0.7) * glint * obj.color.a;
+        surfaceColor += vec3<f32>(1.0, 0.92, 0.7) * glint * obj.matParam7.x;
     }
 
     if (obj.styleA.z > 0.0) {

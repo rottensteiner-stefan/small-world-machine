@@ -10,8 +10,10 @@ in vec2 v_uv;
 
 uniform vec4 u_color;          // Shallow water color (RGBA)
 uniform vec4 u_specColor;      // Deep water color (RGBA)
-uniform vec2 u_texOffset;      // Edge/Shore color (R, G)
-uniform vec2 u_texRepeat;      // Edge color (B), edgeSoftness
+// Typed semantic lanes (ADR 0027 / 0039) -- see StylizedWaterMaterial.getRenderManifest.
+// Edge shading previously rode u_texOffset/u_texRepeat, specularStrength rode u_color.a.
+uniform vec4 u_matParam6;      // [edgeColor.rgb, edgeSoftness]
+uniform vec4 u_matParam7;      // [specularStrength, 0, 0, 0]
 // Dedicated material parameter bank (512-byte layout slots)
 uniform vec4 u_matParam0;         // [waterAbsorption.rgb, refractionStrength]
 uniform vec4 u_matParam1;         // [foamColor.rgb, foamDistance]
@@ -44,8 +46,8 @@ float aaStepMask(float edge, float value, float softness) {
 void main() {
     vec3 shallowColor = sRGBToLinear(u_color.rgb);
     vec3 deepColor = sRGBToLinear(u_specColor.rgb);
-    vec3 edgeColor = sRGBToLinear(vec3(u_texOffset.x, u_texOffset.y, u_texRepeat.x));
-    float edgeSoftness = max(u_texRepeat.y, 0.001);
+    vec3 edgeColor = sRGBToLinear(u_matParam6.rgb);
+    float edgeSoftness = max(u_matParam6.a, 0.001);
     float foamDistance = max(u_matParam1.a, 0.001);
     float refractionStrength = u_matParam0.a;
 
@@ -182,14 +184,14 @@ void main() {
     vec3 lightDir = normalize(u_dirLightDir);
     vec3 halfVector = normalize(lightDir + camDir);
     float nDotH = clamp(dot(v_normal, halfVector), 0.0, 1.0);
-    // Toon-specular, a = specularStrength. Narrow cone: wave slopes are smooth over metres, a wide cone covers ~20 percent of the pool
-    float specular = aaStepMask(0.9993, nDotH, 0.0005) * u_color.a * surfaceShadow;
+    // Toon-specular, u_matParam7.x = specularStrength. Narrow cone: wave slopes are smooth over metres, a wide cone covers ~20 percent of the pool
+    float specular = aaStepMask(0.9993, nDotH, 0.0005) * u_matParam7.x * surfaceShadow;
     surfaceColor += u_dirLightColor * specular;
 
     if (u_styleB.z > 0.0) {
         float stepFps = isSparkle ? 8.0 : 12.0;
         float glint = waterGlintStar(v_worldPos.xz * 2.6, u_time * stepFps, nDotH) * u_styleB.z * surfaceShadow;
-        surfaceColor += vec3(1.0, 0.92, 0.7) * glint * u_color.a;
+        surfaceColor += vec3(1.0, 0.92, 0.7) * glint * u_matParam7.x;
     }
 
     // Stroke / Ripple lines

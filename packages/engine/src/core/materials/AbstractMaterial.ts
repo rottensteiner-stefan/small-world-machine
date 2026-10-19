@@ -50,9 +50,18 @@ export abstract class AbstractMaterial implements ShaderProvider {
    * fields) -- geometry-adjacent references like texture maps stay shared, since texture data is
    * immutable. Used by `Object3D.clone()` (Maker's Duplicate command) so a duplicated object's
    * material edits don't leak back onto the original.
+   *
+   * Every material shares this one base implementation (subclasses that historically wrote their
+   * own full constructor round-tripping clones now delegate back here -- see StandardMaterial /
+   * FrostglassMaterial). The render-manifest cache is NOT shared: a manifest is the material's
+   * live packing buffer and is mutated by every `getRenderManifest()` call, so sharing it would
+   * let a duplicated object's edits leak back onto the original and vice versa. Clones build
+   * their own manifest on the next render.
    */
   public clone(): AbstractMaterial {
-    return shallowCloneWithValueTypes(this);
+    const copy = shallowCloneWithValueTypes(this);
+    copy._renderManifest = undefined;
+    return copy;
   }
 
   /**

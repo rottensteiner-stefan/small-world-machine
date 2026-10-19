@@ -23,14 +23,15 @@
         let dotNV_refl = max(dot(normalize(i.n), V_dir), 0.0);
         let F0_refl = mix(vec3f(0.04), albedo, metallic);
         let F_refl = F_Schlick(dotNV_refl, F0_refl).x;
-        // obj.pad1 (repurposed as reflectionFresnelBlend, see StandardMaterial.ts) picks how much
-        // of the reflection's strength comes from view angle at all: 0 = constant regardless of
-        // angle, 1 = pure Schlick Fresnel (its (1-cosTheta)^5 term stays low across most of the
-        // angle range and only rises steeply in the last few degrees before grazing incidence --
-        // physically correct for a dielectric, but reads as an on/off switch to a human observer
-        // rather than a gradual falloff). Materials wanting a reflection that stays legible across
-        // a wider range of angles (see the Showcase 30 puddle) should lower this well below 0.5.
-        let f = obj.reflectivity * mix(1.0, F_refl, obj.pad1);
+        // obj.matParam0.x (repurposed as reflectionFresnelBlend, see StandardMaterial.ts) picks
+        // how much of the reflection's strength comes from view angle at all: 0 = constant
+        // regardless of angle, 1 = pure Schlick Fresnel (its (1-cosTheta)^5 term stays low across
+        // most of the angle range and only rises steeply in the last few degrees before grazing
+        // incidence -- physically correct for a dielectric, but reads as an on/off switch to a
+        // human observer rather than a gradual falloff). Materials wanting a reflection that stays
+        // legible across a wider range of angles (see the Showcase 30 puddle) should lower this
+        // well below 0.5.
+        let f = obj.reflectivity * mix(1.0, F_refl, obj.matParam0.x);
         color = mix(color, reflectionColor, f);
     }
 

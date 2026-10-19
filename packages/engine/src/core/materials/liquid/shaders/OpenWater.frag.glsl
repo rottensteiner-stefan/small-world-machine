@@ -11,12 +11,11 @@ in float v_crest;
 
 uniform vec4 u_color;
 uniform vec4 u_specColor;
-uniform vec2 u_texOffset;
-uniform vec2 u_texRepeat;
 // Dedicated material parameter bank (512-byte layout slots)
 uniform vec4 u_matParam0; // [waterAbsorption.rgb, refractionStrength]
 uniform vec4 u_matParam1; // [foamColor.rgb, foamDistance]
 uniform vec4 u_matParam2; // [foamCutoff, foamNoiseScale, foamNoiseSpeed, poolHalfExtent (vertex stage)]
+uniform vec4 u_matParam6; // [edgeColor.rgb, edgeSoftness] (ADR 0027 / 0039 semantic lane)
 uniform float u_time;
 uniform sampler2D u_opaqueDepthMap;
 uniform sampler2D u_opaqueMap;
@@ -29,8 +28,8 @@ void main() {
     vec3 waterColor = sRGBToLinear(u_color.rgb);
     vec3 deepWaterColor = sRGBToLinear(u_specColor.rgb);
 
-    vec3 edgeColor = vec3(u_texOffset.x, u_texOffset.y, u_texRepeat.x);
-    float edgeSoftness = max(u_texRepeat.y, 0.001);
+    vec3 edgeColor = u_matParam6.rgb;
+    float edgeSoftness = max(u_matParam6.a, 0.001);
 
     // Unpack from dedicated material parameter slots (512-byte layout)
     vec3 waterAbsorption = u_matParam0.rgb;

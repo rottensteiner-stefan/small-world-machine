@@ -10,15 +10,11 @@ in vec3 v_normal;
 
 uniform vec4 u_color;
 uniform vec4 u_specColor;
-uniform vec4 u_extraParams;
-uniform vec4 u_liquidParams;
-uniform vec4 u_thresholds; // [rimStrength, specStrength, normalStrength, absorption]
-uniform float u_shininess; // specular power
-uniform float u_isTerrain; // emissiveMask: 0 = constant glow, 1 = noise-driven (hot cracks, dark crust)
-uniform float u_metallic; // emissive pulse amplitude
-uniform float u_roughness; // emissive pulse speed (rad/s)
-uniform float u_reflectivity; // transition softness (0.2 = legacy two-tone width)
-uniform float u_pad1; // diffuse shade strength (wrapped N.L)
+// Typed semantic lane bank (ADR 0027 / 0039) -- see FluidSurfaceMaterial.getRenderManifest.
+uniform vec4 u_matParam0; // [shade, rimStrength, specularStrength, normalStrength]
+uniform vec4 u_matParam1; // [specularPower, absorption, emissiveMask, transitionSoftness]
+uniform vec4 u_matParam2; // [flowSpeed, distortion, emissivePulse, emissivePulseSpeed]
+uniform vec4 u_matParam3; // [emissive.r*strength, emissive.g*strength, emissive.b*strength, time]
 uniform sampler2D u_diffuseMap;
 uniform sampler2D u_normalMap;
 uniform sampler2D u_opaqueDepthMap;
@@ -26,9 +22,9 @@ uniform sampler2D u_opaqueDepthMap;
 out vec4 fragColor;
 
 void main() {
-    float time = u_extraParams.y;
-    float flowSpeed = u_extraParams.z;
-    float noiseScale = u_extraParams.w;
+    float time = u_matParam3.w;
+    float flowSpeed = u_matParam2.x;
+    float noiseScale = u_matParam2.y;
 
     // Use world position XZ for seamless tiling across objects
     vec2 worldUV = v_worldPos.xz * 0.5;
@@ -44,9 +40,9 @@ void main() {
     // Surface normal: the mesh normal (displaced analytically in the vertex stage) tilted by the
     // flowing normal map. normalStrength 0 (default) leaves it untouched.
     vec3 nm = texture(u_normalMap, uv1).rgb * 2.0 - 1.0;
-    vec3 N = normalize(v_normal + vec3(nm.x, 0.0, nm.y) * u_thresholds.z);
+    vec3 N = normalize(v_normal + vec3(nm.x, 0.0, nm.y) * u_matParam0.w);
     vec3 V = normalize(u_viewPos - v_worldPos);
-    float softness = max(u_reflectivity, 0.01);
+    float softness = max(u_matParam1.w, 0.01);
 
     vec3 baseColor = sRGBToLinear(u_color.rgb) * (1.0 - smoothstep(0.0, 0.6, noise)) * 1.5;
     vec3 edgeColor = sRGBToLinear(u_specColor.rgb);
@@ -73,31 +69,30 @@ void main() {
 
     vec3 finalColor = mix(baseColor, edgeColor, finalBlend);
 
-    // Emissive glow (lava/molten presets) -- u_extraParams.x and u_liquidParams.zw are otherwise
-    // unused by this shader, repurposed to carry emissiveColor.rgb pre-multiplied by
-    // emissiveStrength (see FluidSurfaceMaterial.ts). Zero by default, a no-op for plain fluids.
-    vec3 emissive = vec3(u_extraParams.x, u_liquidParams.z, u_liquidParams.w);
+    // Emissive glow (lava/molten presets) -- u_matParam3.rgb carries emissiveColor pre-multiplied
+    // by emissiveStrength (see FluidSurfaceMaterial.ts). Zero by default, a no-op for plain fluids.
+    vec3 emissive = u_matParam3.rgb;
     // Noise-driven mask: hot where the noise is low (cracks), dark crust where it is high, with a
     // soft falloff. emissiveMask 0 keeps the legacy constant glow; the pulse rolls along the noise.
     float hot = 1.0 - smoothstep(0.5 - softness, 0.5 + softness, noise);
-    float pulse = 1.0 + u_metallic * 0.5 * sin(time * u_roughness + noise * 6.2831853);
-    finalColor += sRGBToLinear(emissive) * mix(1.0, hot, u_isTerrain) * pulse;
+    float pulse = 1.0 + u_matParam2.z * 0.5 * sin(time * u_matParam2.w + noise * 6.2831853);
+    finalColor += sRGBToLinear(emissive) * mix(1.0, hot, u_matParam1.z) * pulse;
 
     // Optional lighting: wrapped diffuse shade, Fresnel rim (translucent edge glow), specular.
     vec3 L = normalize(u_dirLightDir);
     float dirShadow = sampleDirShadow(v_worldPos, N);
     float ndl = dot(N, L) * 0.5 + 0.5;
-    finalColor *= mix(1.0, ndl * ndl * 1.6 * mix(0.35, 1.0, dirShadow), u_pad1);
+    finalColor *= mix(1.0, ndl * ndl * 1.6 * mix(0.35, 1.0, dirShadow), u_matParam0.x);
     float ndv = clamp(dot(N, V), 0.0, 1.0);
-    float rim = pow(1.0 - ndv, 3.0) * u_thresholds.x;
+    float rim = pow(1.0 - ndv, 3.0) * u_matParam0.y;
     finalColor += edgeColor * rim;
     float ndh = clamp(dot(N, normalize(L + V)), 0.0, 1.0);
-    finalColor += u_dirLightColor * pow(ndh, max(u_shininess, 1.0)) * u_thresholds.y * dirShadow;
+    finalColor += u_dirLightColor * pow(ndh, max(u_matParam1.x, 1.0)) * u_matParam0.z * dirShadow;
 
     // Beer-Lambert thickness from the opaque depth capture: thin slime (shallow depthDiff) turns
     // see-through, thick slime stays dense. absorption 0 (default) keeps alpha at 1.
-    float thickness = 1.0 - exp(-u_thresholds.w * max(depthDiff, 0.0));
-    float alpha = mix(1.0, clamp(thickness + rim, 0.25, 1.0), step(0.0001, u_thresholds.w));
+    float thickness = 1.0 - exp(-u_matParam1.y * max(depthDiff, 0.0));
+    float alpha = mix(1.0, clamp(thickness + rim, 0.25, 1.0), step(0.0001, u_matParam1.y));
 
     finalColor *= u_exposure;
     finalColor = linearToSRGB(finalColor);

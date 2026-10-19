@@ -51,16 +51,7 @@ export class FrostglassMaterial extends AbstractMaterial {
    * panel without every other panel sharing the same template flashing in sync.
    */
   public override clone(): FrostglassMaterial {
-    return new FrostglassMaterial({
-      color: new Color(this.color.r, this.color.g, this.color.b, this.color.a),
-      metallic: this.metallic,
-      roughness: this.roughness,
-      blurRadius: this.blurRadius,
-      transmission: this.transmission,
-      clarityPulseCenter: this.clarityPulseCenter.clone(),
-      clarityPulseRadius: this.clarityPulseRadius,
-      normalMap: this.normalMap,
-    });
+    return super.clone() as FrostglassMaterial;
   }
 
   public getRenderManifest(): RenderManifest {

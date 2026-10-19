@@ -18,9 +18,9 @@ fn vs(
     let worldPosInit = obj.model * vec4f(p, 1.0);
     var wp = worldPosInit.xyz;
     
-    let w1 = obj.extraParams;
-    let w2 = obj.liquidParams;
-    let w3 = obj.thresholds;
+    let w1 = obj.matParam3;
+    let w2 = obj.matParam4;
+    let w3 = obj.matParam5;
     let w4 = vec4f(w1.y, -w1.x, w1.z * 0.45, w1.w * 0.42);
     let w5 = vec4f(-w2.y, w2.x, w2.z * 0.35, w2.w * 0.35);
     let w6 = vec4f(w1.x * 0.5 - w1.y * 0.866, w1.x * 0.866 + w1.y * 0.5, w1.z * 0.25, w1.w * 0.22);

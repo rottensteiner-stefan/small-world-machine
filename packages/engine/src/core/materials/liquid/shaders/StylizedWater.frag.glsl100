@@ -13,8 +13,8 @@ varying vec4 v_clipPos;
 uniform vec3 u_viewPos;
 uniform vec4 u_color;
 uniform vec4 u_specColor;
-uniform vec2 u_texOffset;
-uniform vec2 u_texRepeat;
+uniform vec4 u_matParam6; // [edgeColor.rgb, edgeSoftness]
+uniform vec4 u_matParam7; // [specularStrength, 0, 0, 0]
 // Dedicated material parameter bank (512-byte layout slots)
 uniform vec4 u_matParam0; // [waterAbsorption.rgb, refractionStrength]
 uniform vec4 u_matParam1; // [foamColor.rgb, foamDistance]
@@ -44,8 +44,8 @@ float aaStepMask(float edge, float value, float softness) {
 void main() {
     vec3 shallowColor = pow(u_color.rgb, vec3(2.2));
     vec3 deepColor = pow(u_specColor.rgb, vec3(2.2));
-    vec3 edgeColor = pow(vec3(u_texOffset.x, u_texOffset.y, u_texRepeat.x), vec3(2.2));
-    float edgeSoftness = max(u_texRepeat.y, 0.001);
+    vec3 edgeColor = pow(u_matParam6.rgb, vec3(2.2));
+    float edgeSoftness = max(u_matParam6.a, 0.001);
 
     // styleId map: 0 toon, 1 soft, 2 sparkle, 3 extension (Noir/Oil), 4 dredge, 5 bold
     float styleId = u_styleB.w;
@@ -137,14 +137,14 @@ void main() {
     vec3 lightDir = normalize(u_dirLightDir);
     vec3 halfVector = normalize(lightDir + viewDir);
     float nDotH = clamp(dot(v_normal, halfVector), 0.0, 1.0);
-    // a = specularStrength; narrow cone (wave slopes are smooth over metres)
-    float specular = smoothstep(0.9988, 0.9997, nDotH) * u_color.a * 0.5; // halved: the WebGL1 normal is smoother, the lobe grows
+    // From the matParam7 lane, a = specularStrength; narrow cone (wave slopes are smooth over metres)
+    float specular = smoothstep(0.9988, 0.9997, nDotH) * u_matParam7.x * 0.5; // halved: the WebGL1 normal is smoother, the lobe grows
     baseColor += u_dirLightColor * specular;
 
     if (u_styleB.z > 0.0) {
         float stepFps = isSparkle ? 8.0 : 12.0;
         float glint = waterGlintStar(v_worldPos.xz * 2.6, u_time * stepFps, nDotH) * u_styleB.z;
-        baseColor += vec3(1.0, 0.92, 0.7) * glint * u_color.a;
+        baseColor += vec3(1.0, 0.92, 0.7) * glint * u_matParam7.x;
     }
 
     if (u_styleA.z > 0.0) {

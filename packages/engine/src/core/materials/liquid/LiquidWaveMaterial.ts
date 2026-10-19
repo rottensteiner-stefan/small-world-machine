@@ -60,6 +60,18 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
   protected readonly _styleAArray: number[] = [0, 0, 0, 0];
   /** The `u_matParam2` lane: `[foamCutoff, foamNoiseScale, foamNoiseSpeed, <preset lane>]`; `w` is free for presets. */
   protected readonly _matParam2Array: number[] = [0, 0, 0, 0];
+  /** Typed semantic wave lanes (ADR 0027 / 0039): previously wave1/2/3 rode the generic
+   * `u_extraParams`/`u_liquidParams`/`u_thresholds` slots and the edge shading rode
+   * `u_texOffset`/`u_texRepeat`. They now live in dedicated lanes:
+   *   u_matParam3 = wave1 [dirX, dirY, steepness (Q), wavelength]
+   *   u_matParam4 = wave2 [dirX, dirY, steepness (Q), wavelength]
+   *   u_matParam5 = wave3 [dirX, dirY, steepness (Q), wavelength]
+   *   u_matParam6 = [edgeColor.r, edgeColor.g, edgeColor.b, edgeSoftness]
+   */
+  protected readonly _matParam3Array: number[] = [0, 0, 0, 0];
+  protected readonly _matParam4Array: number[] = [0, 0, 0, 0];
+  protected readonly _matParam5Array: number[] = [0, 0, 0, 0];
+  protected readonly _matParam6Array: number[] = [0, 0, 0, 0];
 
   /**
    * Emits an impact ring wave at (x, z). Only presets that render impact rings (OpenWater) act on
@@ -106,19 +118,19 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
       // view of what's below it instead of only fading to a flat deepWaterColor.
       this._renderManifest.textures["u_opaqueMap"] = undefined;
       this._renderManifest.properties["u_specColor"] = this.deepWaterColor.toFloat32Array();
-      // u_texOffset/u_texRepeat carry edgeColor.rgb + edgeSoftness here, not actual texture
-      // UV offset/repeat: a liquid surface has no UV-mapped diffuse, so these slots are free and
-      // repurposed to fit edge shading data (ADR 0026 lane repurposing).
-      this._renderManifest.properties["u_texOffset"] = [this.edgeColor.r, this.edgeColor.g];
-      this._renderManifest.properties["u_texRepeat"] = [this.edgeColor.b, this.edgeSoftness];
-      this._renderManifest.properties["u_extraParams"] = [...this.wave1];
-      this._renderManifest.properties["u_liquidParams"] = [...this.wave2];
-      this._renderManifest.properties["u_thresholds"] = [...this.wave3];
+      // Semantic lanes for every liquid parameter (ADR 0027 512-byte bank). Wave data and edge
+      // shading previously rode the generic u_extraParams/u_liquidParams/u_thresholds and
+      // u_texOffset/u_texRepeat slots; they now have dedicated u_matParamN lanes (see the lane
+      // table above), keeping the generic slots free for their canonical base meaning.
+      this._renderManifest.properties["u_matParam3"] = this._matParam3Array;
+      this._renderManifest.properties["u_matParam4"] = this._matParam4Array;
+      this._renderManifest.properties["u_matParam5"] = this._matParam5Array;
+      this._renderManifest.properties["u_matParam6"] = this._matParam6Array;
       this._renderManifest.properties["u_reflectivity"] = this.speed;
       this._renderManifest.properties["u_time"] = this.time;
       this._renderManifest.properties["u_styleA"] = this._styleAArray;
 
-      // New 512-byte semantic parameter slots (matParam0..3)
+      // New 512-byte semantic parameter slots (matParam0..2)
       this._renderManifest.properties["u_matParam0"] = [
         this.waterAbsorption[0],
         this.waterAbsorption[1],
@@ -139,31 +151,29 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
     const props = this._renderManifest.properties as Record<string, unknown>;
     props["u_specColor"] = this.deepWaterColor.toFloat32Array();
 
-    const offset = props["u_texOffset"] as number[];
-    offset[0] = this.edgeColor.r;
-    offset[1] = this.edgeColor.g;
+    const w1 = this._matParam3Array;
+    w1[0] = this.wave1[0];
+    w1[1] = this.wave1[1];
+    w1[2] = this.wave1[2];
+    w1[3] = this.wave1[3];
 
-    const repeat = props["u_texRepeat"] as number[];
-    repeat[0] = this.edgeColor.b;
-    repeat[1] = this.edgeSoftness;
+    const w2 = this._matParam4Array;
+    w2[0] = this.wave2[0];
+    w2[1] = this.wave2[1];
+    w2[2] = this.wave2[2];
+    w2[3] = this.wave2[3];
 
-    const e = props["u_extraParams"] as number[];
-    e[0] = this.wave1[0];
-    e[1] = this.wave1[1];
-    e[2] = this.wave1[2];
-    e[3] = this.wave1[3];
+    const w3 = this._matParam5Array;
+    w3[0] = this.wave3[0];
+    w3[1] = this.wave3[1];
+    w3[2] = this.wave3[2];
+    w3[3] = this.wave3[3];
 
-    const l = props["u_liquidParams"] as number[];
-    l[0] = this.wave2[0];
-    l[1] = this.wave2[1];
-    l[2] = this.wave2[2];
-    l[3] = this.wave2[3];
-
-    const t = props["u_thresholds"] as number[];
-    t[0] = this.wave3[0];
-    t[1] = this.wave3[1];
-    t[2] = this.wave3[2];
-    t[3] = this.wave3[3];
+    const edge = this._matParam6Array;
+    edge[0] = this.edgeColor.r;
+    edge[1] = this.edgeColor.g;
+    edge[2] = this.edgeColor.b;
+    edge[3] = this.edgeSoftness;
 
     props["u_reflectivity"] = this.speed;
     props["u_time"] = this.time;

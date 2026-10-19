@@ -5,8 +5,10 @@ attribute vec3 a_normal;
 
 uniform mat4 u_vp;
 uniform mat4 u_model;
-uniform vec4 u_extraParams; // [emissive.r, time, flowSpeed, noiseScale]
-uniform vec4 u_liquidParams; // [waveFreq, waveAmp, emissive.g, emissive.b]
+// Typed semantic lane bank (ADR 0027 / 0039) -- see FluidSurfaceMaterial.getRenderManifest.
+uniform vec4 u_matParam2;
+uniform vec4 u_matParam3;
+uniform vec4 u_matParam4;
 
 varying vec2 v_uv;
 varying vec3 v_worldPos;
@@ -16,10 +18,10 @@ void main() {
     v_uv = a_uv;
     vec3 pos = a_position;
 
-    float time = u_extraParams.y;
-    float flowSpeed = u_extraParams.z;
-    float waveFrequency = u_liquidParams.x;
-    float waveAmplitude = u_liquidParams.y;
+    float time = u_matParam3.w;
+    float flowSpeed = u_matParam2.x;
+    float waveFrequency = u_matParam4.x;
+    float waveAmplitude = u_matParam4.y;
 
     vec4 worldPos = u_model * vec4(pos, 1.0);
     float displacementSpeed = time * flowSpeed * 0.5;

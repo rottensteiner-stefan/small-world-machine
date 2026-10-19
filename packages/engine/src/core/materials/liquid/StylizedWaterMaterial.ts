@@ -206,6 +206,12 @@ export class StylizedWaterMaterial extends LiquidWaveMaterial {
 
   private readonly _colorWithSpecular: number[] = [0, 0, 0, 0];
   private readonly _deepWithCaustic: number[] = [0, 0, 0, 0];
+  /**
+   * Typed semantic lane bank (ADR 0027 / 0039) -- see `getRenderManifest`. `specularStrength`
+   * previously rode `u_color.a` (alpha of the shallow-water colour); it now lives in the
+   * dedicated `u_matParam7` lane and `u_color.a` is the real alpha (1.0).
+   */
+  private readonly _matParam7Array: number[] = [0, 0, 0, 0];
   /** The `u_styleB` lane; subclasses may overwrite entries after `super.getRenderManifest()`. */
   protected readonly _styleBArray: number[] = [0, 0, 0, 0];
   private readonly _flagsWithRamp: string[] = [RAMP_LUT_FLAG];
@@ -287,8 +293,15 @@ export class StylizedWaterMaterial extends LiquidWaveMaterial {
     c[0] = this.color.r;
     c[1] = this.color.g;
     c[2] = this.color.b;
-    c[3] = this.specularStrength;
+    c[3] = 1.0; // real alpha: specularStrength moved to u_matParam7.x (no more alpha-channel smuggling)
     props["u_color"] = c;
+
+    const p7 = this._matParam7Array;
+    p7[0] = this.specularStrength;
+    p7[1] = 0;
+    p7[2] = 0;
+    p7[3] = 0;
+    props["u_matParam7"] = p7;
 
     const d = this._deepWithCaustic;
     d[0] = this.deepWaterColor.r;

@@ -4,10 +4,10 @@ type WaveLane = [number, number, number, number];
 
 /**
  * The lanes of an OpenWater material the vertex shader evaluates. The wave lanes are transmitted
- * as `u_extraParams`, `u_liquidParams` and `u_thresholds`, `speed` as `u_reflectivity`, `splat` as
- * `u_styleA` and `poolHalfExtent` as `u_matParam2.w`. S1 contract: the probe must read these SAME
- * fields and never re-derive or hand-copy constants, otherwise the "same-field" proof (G2
- * constants-equality manifest) breaks.
+ * as the typed `u_matParam3`/`u_matParam4`/`u_matParam5` lanes (ADR 0027 / 0039), `speed` as
+ * `u_reflectivity`, `splat` as `u_styleA` and `poolHalfExtent` as `u_matParam2.w`. S1 contract: the
+ * probe must read these SAME fields and never re-derive or hand-copy constants, otherwise the
+ * "same-field" proof (G2 constants-equality manifest) breaks.
  *
  * The object is read LIVE on every query (an `OpenWaterMaterial` passes itself via
  * `fromMaterial`), so inspector edits and `emitSplat` calls reach the probe. Pass a frozen

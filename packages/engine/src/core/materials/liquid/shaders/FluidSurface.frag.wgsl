@@ -1,7 +1,7 @@
 @fragment fn fs(i: Out) -> @location(0) vec4<f32> {
-    let time = obj.extraParams.y;
-    let flowSpeed = obj.extraParams.z;
-    let noiseScale = obj.extraParams.w;
+    let time = obj.matParam3.w;
+    let flowSpeed = obj.matParam2.x;
+    let noiseScale = obj.matParam2.y;
 
     // Use world position XZ for seamless tiling
     let worldUV = i.wp.xz * 0.5; 
@@ -18,9 +18,9 @@
     // Surface normal: mesh normal (displaced analytically in the vertex stage) tilted by the
     // flowing normal map. normalStrength 0 (default) leaves it untouched.
     let nm = textureSample(u_normalMap, s, uv1).rgb * 2.0 - 1.0;
-    let N = normalize(i.n + vec3<f32>(nm.x, 0.0, nm.y) * obj.thresholds.z);
+    let N = normalize(i.n + vec3<f32>(nm.x, 0.0, nm.y) * obj.matParam0.w);
     let V = normalize(global.viewPos.xyz - i.wp);
-    let softness = max(obj.reflectivity, 0.01);
+    let softness = max(obj.matParam1.w, 0.01);
 
     let baseColor = sRGBToLinear(obj.color.rgb) * (1.0 - smoothstep(0.0, 0.6, noise)) * 1.5;
     let edgeCol = sRGBToLinear(obj.specColor.rgb); 
@@ -46,31 +46,31 @@
 
     var color = mix(baseColor, edgeCol, finalBlend);
 
-    // Emissive glow (lava/molten presets) -- obj.extraParams.x and obj.liquidParams.zw are
-    // otherwise unused by this shader, repurposed to carry emissiveColor.rgb pre-multiplied by
-    // emissiveStrength (see FluidSurfaceMaterial.ts). Zero by default, a no-op for plain fluids.
-    let emissive = vec3<f32>(obj.extraParams.x, obj.liquidParams.z, obj.liquidParams.w);
+    // Emissive glow (lava/molten presets) -- obj.matParam3.rgb carries emissiveColor
+    // pre-multiplied by emissiveStrength (see FluidSurfaceMaterial.ts). Zero by default, a no-op.
+    let emissive = obj.matParam3.xyz;
     // Noise-driven mask: hot where the noise is low (cracks), dark crust where it is high, with a
-    // soft falloff. emissiveMask (obj.isTerrain) 0 keeps the legacy constant glow; the pulse
-    // (obj.metallic amplitude, obj.roughness speed) rolls along the noise.
+    // soft falloff. emissiveMask (obj.matParam1.z) 0 keeps the legacy constant glow; the pulse
+    // (obj.matParam2.z amplitude, obj.matParam2.w speed) rolls along the noise.
     let hot = 1.0 - smoothstep(0.5 - softness, 0.5 + softness, noise);
-    let pulse = 1.0 + obj.metallic * 0.5 * sin(time * obj.roughness + noise * 6.2831853);
-    color += sRGBToLinear(emissive) * mix(1.0, hot, obj.isTerrain) * pulse;
+    let pulse = 1.0 + obj.matParam2.z * 0.5 * sin(time * obj.matParam2.w + noise * 6.2831853);
+    color += sRGBToLinear(emissive) * mix(1.0, hot, obj.matParam1.z) * pulse;
 
-    // Optional lighting: wrapped diffuse shade (obj.pad1), Fresnel rim, specular (obj.thresholds).
+    // Optional lighting: wrapped diffuse shade (obj.matParam0.x), Fresnel rim, specular
+    // (obj.matParam0.y/z, specular power obj.matParam1.x).
     let L = normalize(global.dirLightDir.xyz);
     let dirShadow = sampleDirShadow(i.wp, N);
     let ndl = dot(N, L) * 0.5 + 0.5;
-    color *= mix(1.0, ndl * ndl * 1.6 * mix(0.35, 1.0, dirShadow), obj.pad1);
+    color *= mix(1.0, ndl * ndl * 1.6 * mix(0.35, 1.0, dirShadow), obj.matParam0.x);
     let ndv = clamp(dot(N, V), 0.0, 1.0);
-    let rim = pow(1.0 - ndv, 3.0) * obj.thresholds.x;
+    let rim = pow(1.0 - ndv, 3.0) * obj.matParam0.y;
     color += edgeCol * rim;
     let ndh = clamp(dot(N, normalize(L + V)), 0.0, 1.0);
-    color += global.dirLightColor.rgb * pow(ndh, max(obj.shininess, 1.0)) * obj.thresholds.y * dirShadow;
+    color += global.dirLightColor.rgb * pow(ndh, max(obj.matParam1.x, 1.0)) * obj.matParam0.z * dirShadow;
 
     // Beer-Lambert thickness from the opaque depth capture (see the GLSL version).
-    let thickness = 1.0 - exp(-obj.thresholds.w * max(depthDiff, 0.0));
-    let alpha = mix(1.0, clamp(thickness + rim, 0.25, 1.0), step(0.0001, obj.thresholds.w));
+    let thickness = 1.0 - exp(-obj.matParam1.y * max(depthDiff, 0.0));
+    let alpha = mix(1.0, clamp(thickness + rim, 0.25, 1.0), step(0.0001, obj.matParam1.y));
 
     // Exposure
     color *= global.exposure;
