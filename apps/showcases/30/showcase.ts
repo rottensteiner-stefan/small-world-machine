@@ -138,26 +138,25 @@ const STREET_LENGTH = 28;
 const ASPHALT_REPEAT_X = 10;
 const ASPHALT_REPEAT_Z = 18;
 
+// The focal length is not a preset value: it follows from the camera's FOV and the DoF sensor
+// size (see _applyLens), otherwise the blur would belong to a different lens than the framing.
 interface CameraPreset {
   position: Vector3D;
   target: Vector3D;
-  focalLengthMm: number;
   fStop: number;
 }
 
-// Focus sits on the camera target; a gentle lens so the street view stays readable.
+// Focus sits on the camera target; stopped down so the street view stays readable.
 const STREET_CAMERA: CameraPreset = {
   position: new Vector3D(1.4, 0.52, 4.4),
   target: new Vector3D(0, 0.35, -0.9),
-  focalLengthMm: 35,
   fStop: 4.0,
 };
-// The reference photo: ~22 deg above the ground (from its ring ellipses), ~0.8 m from the water,
-// shot like a 70 mm f/1.8 portrait lens (analysis.md 1.1-1.3), looking at the foreground puddle.
+// The reference photo: ~22 deg above the ground (from its ring ellipses), ~0.8 m from the water
+// (analysis.md 1.1-1.3), wide open, looking at the foreground puddle.
 const PUDDLE_CAMERA: CameraPreset = {
   position: new Vector3D(-2.45, 0.29, 4.12),
   target: new Vector3D(-2.6, 0.0, 3.4),
-  focalLengthMm: 70,
   fStop: 1.8,
 };
 
@@ -191,6 +190,7 @@ class Showcase30 extends AbstractShowcase {
   private _rainMesh!: InstancedMesh;
   private _rainPositions!: Float32Array;
   private _time = 0;
+  private _sceneReady = false;
   private _mood: Mood = Mood.NIGHT;
   private _cameraView: CameraView = CameraView.STREET;
   private _ambientLight!: AmbientLight;
@@ -691,11 +691,17 @@ class Showcase30 extends AbstractShowcase {
     }
     this._applyMood(this._mood);
     this._applyLens(STREET_CAMERA);
+    this._sceneReady = true;
   }
 
   protected override onKeyDown(event: KeyboardEvent): void {
     super.onKeyDown(event);
     if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    // Keys arrive while setupScene() is still awaiting assets; the lights/materials the presets
+    // drive don't exist yet, and setupScene() applies the current presets itself at its end.
+    if (!this._sceneReady) {
       return;
     }
     if (Keys.C === event.code) {
@@ -721,7 +727,7 @@ class Showcase30 extends AbstractShowcase {
     if (!this._dof) {
       return;
     }
-    this._dof.focalLength = preset.focalLengthMm;
+    this._dof.focalLength = this._dof.sensorHeight / (2 * Math.tan(this.defaultFov / 2));
     this._dof.fStop = preset.fStop;
   }
 
