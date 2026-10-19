@@ -4,6 +4,11 @@
 > Dokument ist ein Recherche-Papier im Sinne von `docs/research/` (Bestandsaufnahme, Pros/Contras,
 > Empfehlung), **kein** ADR. Wird die Strategie fixiert, gehört die Entscheidung als ADR
 > (Vorschlag `docs/adr/0036-wasm-strategy.md`) dokumentiert.
+> **Update 2026-10-19 — Entscheidung getroffen:** [ADR 0036](../adr/0036-typescript-bleibt-kein-wasm-assemblyscript.md)
+> ist seit **2026-10-18 ACCEPTED** und folgt dieser Empfehlung: additiv bleiben, kein Vollumstieg;
+> einziger fest eingeplanter WASM-Einsatz ist Asset-Decoding außerhalb des Kerns
+> (`packages/gltf-extensions`, ADR 0018). Die Analysen und Empfehlungen dieses Papiers bleiben
+> unverändert gültig und sind unverändert als Referenz zu lesen.
 > **Anlass:** User-Frage, ob Teile der Engine (Berechnungen) oder die Engine **zur Gänze** auf
 > WASM/AssemblyScript umgestellt werden sollten.
 > **Kontext:** Dieses Papier versteht sich als Sparring-Input im Sinne der AGENTS-Doktrin
@@ -186,6 +191,9 @@ Neben den klassischen „schneller/GC-frei“-Argumenten gibt es einen **spezifi
    eine Frage des *Hosts*, nicht der Engine-Architektur.
 5. **Falls die Strategie fixiert wird:** Entscheidung als ADR dokumentieren
    (Entwurf `docs/adr/0036-wasm-strategy.md`), mit Verweis auf dieses Papier.
+   **Update 2026-10-19 — erledigt:** die Entscheidung ist getroffen,
+   [ADR 0036](../adr/0036-typescript-bleibt-kein-wasm-assemblyscript.md) ist ACCEPTED
+   (2026-10-18) und verweist auf dieses Papier; die Empfehlungen bleiben unverändert.
 
 ---
 
