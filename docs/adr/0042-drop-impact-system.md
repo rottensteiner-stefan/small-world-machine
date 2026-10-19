@@ -35,6 +35,30 @@ Sondermaterial je Flüssigkeit.
    kurzlebige Geometrie. *Abgelehnt (vorerst):* Instancing-Geometrie. Grund: deutlich teurer,
    der Nutzen zeigt sich erst in extremer Nahsicht.
 
+4. **Paarungen sind Daten, Phänomene sind Code** (Ergänzung 2026-10-19). Gleichartige Paarungen
+   (Wasser auf Wasser, Blut auf Blut, Öl auf Öl, Säure auf Säure) unterscheiden sich nur in
+   Stoffwerten: Dichte, Oberflächenspannung, Viskosität (Ringe, Dämpfung, Regime über Oh), IOR
+   (Glanz) und Absorption je Farbkanal (klar vs. opak/farbig). Kombinationen erzeugen dagegen
+   qualitativ neue Phänomene, die sich nicht über andere Zahlen in derselben Formel ausdrücken
+   lassen. Diese Phänomene werden je **einmal** als Baustein implementiert und **ausschließlich über
+   Werte der Paarung ausgewählt**: Mischbarkeit, Dichteverhältnis Tropfen/Becken und
+   Spreitkoeffizient `S = σ_Becken − σ_Tropfen − σ_Grenzfläche` (plus ein Reaktions-Flag).
+
+   | Bedingung (aus Werten) | Phänomen-Baustein | Beispiel |
+   |---|---|---|
+   | mischbar | absinkende Farbwolke, Diffusion | Blut in Wasser |
+   | nicht mischbar, Tropfen dichter | sinkende Kugel | Wasser in Öl |
+   | nicht mischbar, Tropfen leichter, S > 0 | spreitender Dünnfilm (Interferenzfarben, dämpft Kapillarwellen) | Öl auf Wasser |
+   | nicht mischbar, Tropfen leichter, S < 0 | schwimmende Linse | manche Öle auf Wasser |
+   | reaktiv | Gasbläschen, Verfärbung | Säure auf Kalkwasser |
+
+   Es gibt keinen paarungsspezifischen Code (kein `if (blood && water)`); eine neue Paarung ist ein
+   neuer Datensatz.
+
+   **Umsetzungsreihenfolge:** (a) gleichartige Paarungen: die festen Wasser-Konstanten im Shader
+   werden Parameter, Absorption/Opazität kommen hinzu, danach sind Wasser, Blut, Öl und Säure reine
+   Presets; (b) Kombinationen: die Phänomen-Bausteine der Tabelle nacheinander.
+
 ## Konsequenzen
 
 - Aus der Nähe (Makro-Kamera, flacher Blick) wirken Krone und Jet nicht plastisch; Silhouetten
