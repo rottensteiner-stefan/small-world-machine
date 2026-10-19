@@ -30,6 +30,24 @@
     byte-identisch, **keine Verhaltensänderung** (WebGL1/WebGL2/WebGPU-Showcases 10/12/16 im Browser
     ohne neue Fehler). Sheen/Emissive-`u_specColor`-Semantik-Divergenz (Bericht 02 #8) bleibt bewusst
     als offener Verhaltens-Entscheidungspunkt dokumentiert (WebGL1/GPU vs. WebGL2).
+  - *BoundingVolume-Vollendung, Collision-Kern-Zerlegung & Revolve-Generator (engine, wave 2, Paket D,
+    ADR 0040):* der `Collision`-Monolith (1326 Zeilen) wurde in eine dünne Fassade (generischer
+    `test`/`resolve`-Dispatch, Kugel/Box-Primitive, Einzeiler-Delegatoren) plus drei wert-erhaltende
+    Kern-Module zerlegt — `CollisionSweep.ts` (`CollisionSweepSolver`, CCD-Sweep-TOIs/`sweep`/
+    `sweepRayVolume`), `CollisionObb.ts` (`CollisionObbSolver`, OBB-SAT-Test/MTV) und
+    `CollisionHull.ts` (`CollisionHullSolver`, Konvex-Hull-SAT) —, mit **vor** dem Refactor
+    geschriebenen Pin-Tests (`CollisionKernelPin.test.ts`, Muster Wave-1); `Collision*`-/`Sweep`-Tests
+    bleiben bit-identisch grün. Die 15 `as unknown as OBB`-Casts und die Aufruf-Leitern
+    (Ray/Raycaster, BuoyancySolver, PhysicsBroadphase, ContactSolver, SpatialQueries,
+    `Object3D.computeBounds`, MakerPrefabPipeline, `Collision.sweepRayVolume`) wurden auf den
+    typisierten `BoundingVolume`-Methodensatz der Diskriminierten-Union umgestellt (Grep-Gate
+    `as unknown as OBB` im Source = 0). **Behaviour change (physik-seitig):**
+    `MakerPrefabPipeline._boundsToAabb` → `getAabb` (der OBB/HULL-Frame war zuvor undefined),
+    `CollisionResolution`-Else-Zweig → `Collision.resolve`, `CollisionVisualizer`/`VoronoiFracture` →
+    `getBroadRadius`/`getAabb`. Revolve-Generator: die 9-fach duplizierte Revolve-Generierung wurde
+    über `LatheGeometry`/`RevolveBuilder` konsolidiert (5 Formen = dünne Wrapper, `Cone` erweitert
+    `Cylinder`, `CutCylinder`/`PointedPillar` eigenständig aber auf gemeinsamen Helfern),
+    `CylinderSector.ts` gelöscht — wert-erhaltend, kein Render-Delta.
 - **Features:**
   - *Per-instance particle color now renders on every backend (P0, vfx-extras):* the per-particle RGBA written by `ParticleMeshRenderer` into the instance-data buffer is finally consumed as a color tint by all three renderers. `InstancedMesh.useInstanceDataAsColor` opts a mesh into a `USE_INSTANCE_COLOR` shader variant (`ParticleMeshRenderer` sets it automatically); WebGL2 and WebGPU multiply the RGBA into the surface color of the `BasicMaterial`/`StandardMaterial` base shaders, and WebGL1 now binds and uploads the instance-data buffer at all (it previously ignored it). The generic legacy meaning of `instanceData` (a texture-array index in `.x`, used by the `yad` sample app) stays untouched -- the two semantics remain disjoint at shader-compile time. Accretion-disk blackbody/heat colors no longer render as an unread channel.
 - **Tools & Scripts (Golden-Optimierung M1/M2/M4/M5):**

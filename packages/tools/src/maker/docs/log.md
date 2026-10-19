@@ -568,3 +568,6 @@ keine neuen Shortcuts, keine neuen Features; alle bisherigen Bindings und ihr Ve
 
 
 
+
+## 2026-10-19 — BV-Writer-Migration im Maker-Prefab-Pfeil (Wave 2, Paket D)
+`MakerPrefabPipeline` nutzt jetzt den typisierten BoundingVolume-Methodensatz (`getAabb` statt des vorherigen `_boundsToAabb`), sodass die Prefab-Verarbeitung auch für OBB/HULL-Frames korrekte Welträume liefert (zuvor undefined). Für AABB-Prefabs bleibt das Verhalten identisch. Aufgabe-2-Nacharbeit Paket D; keine neue Maker-Funktion/kein neuer Shortcut, keine Undo/Redo-Berührung.
