@@ -2,13 +2,46 @@ import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { HzbOcclusionPassGPU } from "../../src/renderers/passes/HzbOcclusionPassGPU.js";
 import { WebGPURenderer } from "../../src/renderers/WebGPU/WebGPURenderer.js";
+import { HzbOcclusionSystem } from "../../src/renderers/WebGPU/managers/HzbOcclusionSystem.js";
+import type { GPUFallbackResources } from "../../src/renderers/WebGPU/managers/GPUFallbackResources.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Scene } from "../../src/core/Scene.js";
 import { BoundingSphere } from "../../src/physix/index.js";
 import { Vector3D } from "../../src/math/index.js";
 
+// Node/vitest has no WebGPU global; @webgpu/types only provides ambient TS types, not a runtime
+// value. Stub the bit-flag constants the code under test actually reads.
+(globalThis as unknown as { GPUBufferUsage: Record<string, number> }).GPUBufferUsage ??= {
+  MAP_READ: 0x0001,
+  MAP_WRITE: 0x0002,
+  COPY_SRC: 0x0004,
+  COPY_DST: 0x0008,
+  INDEX: 0x0010,
+  VERTEX: 0x0020,
+  UNIFORM: 0x0040,
+  STORAGE: 0x0080,
+  INDIRECT: 0x0100,
+  QUERY_RESOLVE: 0x0200,
+};
+(globalThis as unknown as { GPUShaderStage: Record<string, number> }).GPUShaderStage ??= {
+  VERTEX: 0x1,
+  FRAGMENT: 0x2,
+  COMPUTE: 0x4,
+};
+(globalThis as unknown as { GPUTextureUsage: Record<string, number> }).GPUTextureUsage ??= {
+  COPY_SRC: 0x01,
+  COPY_DST: 0x02,
+  TEXTURE_BINDING: 0x04,
+  STORAGE_BINDING: 0x08,
+  RENDER_ATTACHMENT: 0x10,
+};
+(globalThis as unknown as { GPUMapMode: Record<string, number> }).GPUMapMode ??= {
+  READ: 0x1,
+  WRITE: 0x2,
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type RendererInternals = any;
+type Internals = any;
 
 function makeMockComputePass(): {
   setPipeline: ReturnType<typeof vi.fn>;
@@ -43,17 +76,57 @@ function makeMockCommandEncoder(): {
   return { ce, computePasses };
 }
 
-function makeMockDevice(): { device: unknown; createTexture: ReturnType<typeof vi.fn> } {
-  const createTexture = vi.fn(() => ({
-    createView: vi.fn(() => ({ id: "view" })),
-    destroy: vi.fn(),
-  }));
+function makeMockDevice(): {
+  device: {
+    createBindGroupLayout: ReturnType<typeof vi.fn>;
+    createPipelineLayout: ReturnType<typeof vi.fn>;
+    createComputePipeline: ReturnType<typeof vi.fn>;
+    createShaderModule: ReturnType<typeof vi.fn>;
+    createBindGroup: ReturnType<typeof vi.fn>;
+    createBuffer: ReturnType<typeof vi.fn>;
+    createTexture: ReturnType<typeof vi.fn>;
+    queue: { writeBuffer: ReturnType<typeof vi.fn> };
+  };
+} {
   const device = {
-    createTexture,
-    createBindGroup: vi.fn((desc: unknown) => ({ desc })),
+    createBindGroupLayout: vi.fn((desc: Record<string, unknown>) => ({ desc })),
+    createPipelineLayout: vi.fn((desc: Record<string, unknown>) => ({ desc })),
+    createComputePipeline: vi.fn((desc: Record<string, unknown>) => ({
+      id: "computePipeline",
+      ...desc,
+    })),
+    createShaderModule: vi.fn((desc: Record<string, unknown>) => ({ module: desc })),
+    createBindGroup: vi.fn((desc: Record<string, unknown>) => ({ desc })),
+    createBuffer: vi.fn((desc: Record<string, unknown>) => ({ id: "buffer", ...desc })),
+    createTexture: vi.fn(() => ({
+      createView: vi.fn(() => ({ id: "mipView" })),
+      destroy: vi.fn(),
+    })),
     queue: { writeBuffer: vi.fn() },
   };
-  return { device, createTexture };
+  return { device };
+}
+
+/** A fully-constructed system with a mocked device; `mipLevelCount` is injectable so tests can pin
+ * the pyramid depth. Reaching into internals mirrors the pre-extraction renderer-internals tests. */
+function makeSystem(mipLevelCount = 4): Internals {
+  const { device } = makeMockDevice();
+  const system = new HzbOcclusionSystem(
+    device as unknown as GPUDevice,
+    {} as unknown as GPUFallbackResources,
+    "testShaderCode",
+    {} as unknown as GPUBindGroupLayout,
+    () => mipLevelCount,
+  ) as Internals;
+  return system;
+}
+
+/** `makeSystem()` + the resize every real frame path relies on (`setSize()` allocates the pyramid
+ * texture and its bind groups before the first render). */
+function makeReadySystem(mipLevelCount = 5): Internals {
+  const system = makeSystem(mipLevelCount);
+  system.resize(64, 64, { id: "depthView" });
+  return system;
 }
 
 function makeObjectWithBounds(x: number, y: number, z: number, radius: number): Object3D {
@@ -73,7 +146,7 @@ describe("HzbOcclusionPassGPU", () => {
   it("builds the pyramid before dispatching the visibility test", () => {
     const pass = new HzbOcclusionPassGPU();
     const calls: string[] = [];
-    const renderer: RendererInternals = {
+    const renderer: Internals = {
       _buildHzbPyramid: vi.fn(() => calls.push("build")),
       _dispatchHzbTest: vi.fn(() => calls.push("test")),
     };
@@ -92,102 +165,49 @@ describe("HzbOcclusionPassGPU", () => {
   });
 });
 
-describe("WebGPURenderer._buildHzbPyramid", () => {
+describe("HzbOcclusionSystem.buildPyramid", () => {
   it("dispatches one copy pass plus one downsample pass per additional mip level", () => {
-    const { device } = makeMockDevice();
-    const renderer = new WebGPURenderer() as RendererInternals;
-    renderer._device = device;
-    renderer._context = { canvas: { width: 64, height: 64 } };
-    renderer._activeRenderTarget = null;
-    renderer._hzbTexture = { createView: vi.fn(() => ({ id: "mipView" })) };
-    renderer._hzbMipLevelCount = 4;
-    renderer._hzbCopyPipeline = { id: "copyPipeline" };
-    renderer._hzbCopyBGL = { id: "copyBGL" };
-    renderer._hzbDownsamplePipeline = { id: "downsamplePipeline" };
-    renderer._hzbDownsampleBGL = { id: "downsampleBGL" };
-    Object.defineProperty(renderer, "activeDepthView", { get: () => ({ id: "depthView" }) });
-    renderer._rebuildHzbBindGroups();
+    const system = makeReadySystem(4);
 
     const { ce, computePasses } = makeMockCommandEncoder();
-    renderer._buildHzbPyramid(ce as unknown as GPUCommandEncoder);
+    system.buildPyramid(ce as unknown as GPUCommandEncoder, false);
 
     // 1 copy (mip 0) + 3 downsamples (mips 1, 2, 3) for a 4-level chain.
     expect(computePasses).toHaveLength(4);
-    expect(computePasses[0]!.setPipeline).toHaveBeenCalledWith(renderer._hzbCopyPipeline);
-    expect(computePasses[1]!.setPipeline).toHaveBeenCalledWith(renderer._hzbDownsamplePipeline);
-    expect(computePasses[3]!.setPipeline).toHaveBeenCalledWith(renderer._hzbDownsamplePipeline);
+    expect(computePasses[0]!.setPipeline).toHaveBeenCalledWith(system._hzbCopyPipeline);
+    expect(computePasses[1]!.setPipeline).toHaveBeenCalledWith(system._hzbDownsamplePipeline);
+    expect(computePasses[3]!.setPipeline).toHaveBeenCalledWith(system._hzbDownsamplePipeline);
     for (const p of computePasses) expect(p.end).toHaveBeenCalledTimes(1);
   });
 
   it("reuses the same bind groups across multiple frames instead of recreating them each call", () => {
-    const { device } = makeMockDevice();
-    const renderer = new WebGPURenderer() as RendererInternals;
-    renderer._device = device;
-    renderer._context = { canvas: { width: 64, height: 64 } };
-    renderer._activeRenderTarget = null;
-    renderer._hzbTexture = { createView: vi.fn(() => ({ id: "mipView" })) };
-    renderer._hzbMipLevelCount = 4;
-    renderer._hzbCopyPipeline = { id: "copyPipeline" };
-    renderer._hzbCopyBGL = { id: "copyBGL" };
-    renderer._hzbDownsamplePipeline = { id: "downsamplePipeline" };
-    renderer._hzbDownsampleBGL = { id: "downsampleBGL" };
-    Object.defineProperty(renderer, "activeDepthView", { get: () => ({ id: "depthView" }) });
-    renderer._rebuildHzbBindGroups(); // simulates the one-time call from setSize()
+    const system = makeReadySystem(4);
 
-    const createBindGroup = (device as { createBindGroup: ReturnType<typeof vi.fn> })
-      .createBindGroup;
+    const createBindGroup = system._device.createBindGroup;
     createBindGroup.mockClear();
 
     // Three simulated frames -- no per-frame setSize(), so no further createBindGroup() calls
-    // should happen; _buildHzbPyramid() must reuse the bind groups _rebuildHzbBindGroups() built.
+    // should happen; buildPyramid() must reuse the bind groups resize() built.
     for (let frame = 0; frame < 3; frame++) {
       const { ce } = makeMockCommandEncoder();
-      renderer._buildHzbPyramid(ce as unknown as GPUCommandEncoder);
+      system.buildPyramid(ce as unknown as GPUCommandEncoder, false);
     }
 
     expect(createBindGroup).not.toHaveBeenCalled();
   });
 
   it("does nothing for an offscreen render target", () => {
-    const { device } = makeMockDevice();
-    const renderer = new WebGPURenderer() as RendererInternals;
-    renderer._device = device;
-    renderer._activeRenderTarget = { id: "someRenderTarget" };
-    renderer._hzbTexture = { createView: vi.fn() };
-    renderer._hzbCopyPipeline = { id: "copyPipeline" };
-    renderer._hzbCopyBGL = { id: "copyBGL" };
-
+    const system = makeSystem();
     const { ce, computePasses } = makeMockCommandEncoder();
-    renderer._buildHzbPyramid(ce as unknown as GPUCommandEncoder);
+    system.buildPyramid(ce as unknown as GPUCommandEncoder, true);
 
     expect(computePasses).toHaveLength(0);
   });
 });
 
-describe("WebGPURenderer._dispatchHzbTest", () => {
-  function makeReadyRenderer(): { renderer: RendererInternals; device: unknown } {
-    const { device } = makeMockDevice();
-    const renderer = new WebGPURenderer() as RendererInternals;
-    renderer._device = device;
-    renderer._activeRenderTarget = null;
-    renderer._hzbTestPipeline = { id: "testPipeline" };
-    renderer._hzbTestBGL = { id: "testBGL" };
-    renderer._hzbAabbBuffer = { id: "aabbBuffer" };
-    renderer._hzbResultsBuffer = { id: "resultsBuffer" };
-    renderer._hzbTestParamsBuffer = { id: "paramsBuffer" };
-    renderer._hzbSampledView = { id: "sampledView" };
-    renderer._hzbMipLevelCount = 5;
-    renderer._globalBindGroup = { id: "globalBindGroup" };
-    renderer._hzbStagingBuffers = [{ id: "staging0" }, { id: "staging1" }];
-    renderer._hzbStagingSlot = 0;
-    renderer._hzbStagingPending = [false, false];
-    renderer._hzbSlotObjects = [[], []];
-    renderer._rebuildHzbBindGroups();
-    return { renderer, device };
-  }
-
+describe("HzbOcclusionSystem.dispatchTest", () => {
   it("packs bounding-sphere AABBs for objects with bounds and skips those without", () => {
-    const { renderer, device } = makeReadyRenderer();
+    const system = makeReadySystem(5);
     const noBounds = new Object3D("NoBounds"); // bounds left undefined -- must be skipped, not crash
     noBounds.inFrustum = true;
     const scene = makeSceneWith([
@@ -202,82 +222,101 @@ describe("WebGPURenderer._dispatchHzbTest", () => {
     scene.getVisibleObjectsSorted(new Float32Array(16), new Vector3D());
 
     const { ce } = makeMockCommandEncoder();
-    renderer._dispatchHzbTest(ce as unknown as GPUCommandEncoder, scene);
+    system.dispatchTest(
+      ce as unknown as GPUCommandEncoder,
+      scene,
+      { id: "globalBindGroup" },
+      false,
+    );
 
-    const writeCalls = (device as { queue: { writeBuffer: ReturnType<typeof vi.fn> } }).queue
-      .writeBuffer.mock.calls;
-    const aabbWrite = writeCalls.find((c: unknown[]) => c[0] === renderer._hzbAabbBuffer);
+    const writeCalls = (system._device as { queue: { writeBuffer: ReturnType<typeof vi.fn> } })
+      .queue.writeBuffer.mock.calls;
+    const aabbWrite = writeCalls.find((c: unknown[]) => c[0] === system._hzbAabbBuffer);
     expect(aabbWrite).toBeDefined();
     const data = aabbWrite![2] as Float32Array;
     expect(Array.from(data.slice(0, 4))).toEqual([1, 2, 3, 0.5]);
     expect(Array.from(data.slice(4, 8))).toEqual([-4, 0, 7, 2.5]);
 
-    const paramsWrite = writeCalls.find((c: unknown[]) => c[0] === renderer._hzbTestParamsBuffer);
+    const paramsWrite = writeCalls.find((c: unknown[]) => c[0] === system._hzbTestParamsBuffer);
     expect(paramsWrite).toBeDefined();
     expect((paramsWrite![2] as Uint32Array)[0]).toBe(2); // objectCount: only the 2 with bounds
     expect((paramsWrite![2] as Uint32Array)[1]).toBe(5); // mipCount
 
     expect(ce.copyBufferToBuffer).toHaveBeenCalledWith(
-      renderer._hzbResultsBuffer,
+      system._hzbResultsBuffer,
       0,
-      renderer._hzbStagingBuffers[0],
+      system._hzbStagingBuffers[0],
       0,
       2 * 4,
     );
-    expect(renderer._hzbSlotObjects[0]).toHaveLength(2);
-    expect(renderer._hzbCopyRecordedThisFrame).toBe(true);
+    expect(system._hzbSlotObjects[0]).toHaveLength(2);
+    expect(system._hzbCopyRecordedThisFrame).toBe(true);
   });
 
   it("reuses the same bind group across multiple frames instead of recreating it each call", () => {
-    const { renderer, device } = makeReadyRenderer();
-    const createBindGroup = (device as { createBindGroup: ReturnType<typeof vi.fn> })
-      .createBindGroup;
+    const system = makeReadySystem();
+
+    const createBindGroup = system._device.createBindGroup;
     createBindGroup.mockClear();
 
     for (let frame = 0; frame < 3; frame++) {
-      renderer._hzbStagingSlot = 0;
-      renderer._hzbStagingPending = [false, false];
+      system._hzbStagingSlot = 0;
+      system._hzbStagingPending = [false, false];
       const scene = makeSceneWith([makeObjectWithBounds(0, 0, 0, 1)]);
       const { ce } = makeMockCommandEncoder();
-      renderer._dispatchHzbTest(ce as unknown as GPUCommandEncoder, scene);
+      system.dispatchTest(
+        ce as unknown as GPUCommandEncoder,
+        scene,
+        { id: "globalBindGroup" },
+        false,
+      );
     }
 
     expect(createBindGroup).not.toHaveBeenCalled();
   });
 
   it("skips entirely when the current staging slot is still pending a previous mapAsync", () => {
-    const { renderer } = makeReadyRenderer();
-    renderer._hzbStagingPending = [true, false];
+    const system = makeReadySystem();
+    system._hzbStagingPending = [true, false];
     const scene = makeSceneWith([makeObjectWithBounds(0, 0, 0, 1)]);
 
     const { ce, computePasses } = makeMockCommandEncoder();
-    renderer._dispatchHzbTest(ce as unknown as GPUCommandEncoder, scene);
+    system.dispatchTest(
+      ce as unknown as GPUCommandEncoder,
+      scene,
+      { id: "globalBindGroup" },
+      false,
+    );
 
     expect(computePasses).toHaveLength(0);
     expect(ce.copyBufferToBuffer).not.toHaveBeenCalled();
   });
 
   it("does nothing when there are no bounded candidates", () => {
-    const { renderer } = makeReadyRenderer();
+    const system = makeReadySystem();
     const noBounds = new Object3D("NoBounds");
     noBounds.inFrustum = true;
     const scene = makeSceneWith([noBounds]);
 
     const { ce, computePasses } = makeMockCommandEncoder();
-    renderer._dispatchHzbTest(ce as unknown as GPUCommandEncoder, scene);
+    system.dispatchTest(
+      ce as unknown as GPUCommandEncoder,
+      scene,
+      { id: "globalBindGroup" },
+      false,
+    );
 
     expect(computePasses).toHaveLength(0);
   });
 });
 
-describe("WebGPURenderer.applyPendingOcclusionResults", () => {
+describe("HzbOcclusionSystem.applyOcclusionResults", () => {
   it("zips a mapped staging buffer's u32 flags onto the dispatched objects and unmaps", () => {
-    const renderer = new WebGPURenderer() as RendererInternals;
-    renderer._occlusionCullingEnabled = true;
+    const system = makeSystem();
 
     const raw = new Uint32Array([1, 0, 1]).buffer;
     const unmap = vi.fn();
-    renderer._hzbStagingBuffers = [
+    system._hzbStagingBuffers = [
       { mapState: "mapped", getMappedRange: vi.fn(() => raw), unmap },
       { mapState: "unmapped", getMappedRange: vi.fn(), unmap: vi.fn() },
     ];
@@ -286,44 +325,39 @@ describe("WebGPURenderer.applyPendingOcclusionResults", () => {
       makeObjectWithBounds(1, 0, 0, 1),
       makeObjectWithBounds(2, 0, 0, 1),
     ];
-    renderer._hzbSlotObjects = [[objA, objB, objC], []];
-    renderer._hzbStagingPending = [true, false];
+    system._hzbSlotObjects = [[objA, objB, objC], []];
+    system._hzbStagingPending = [true, false];
 
-    renderer.applyPendingOcclusionResults(new Scene());
+    system.applyOcclusionResults();
 
     expect(objA.occlusionCulled).toBe(false); // 1 = visible
     expect(objB.occlusionCulled).toBe(true); // 0 = occluded
     expect(objC.occlusionCulled).toBe(false);
     expect(unmap).toHaveBeenCalledTimes(1);
-    expect(renderer._hzbStagingPending[0]).toBe(false);
+    expect(system._hzbStagingPending[0]).toBe(false);
   });
 
   it("does nothing for a slot that's pending but not yet mapped", () => {
-    const renderer = new WebGPURenderer() as RendererInternals;
-    renderer._occlusionCullingEnabled = true;
+    const system = makeSystem();
     const unmap = vi.fn();
-    renderer._hzbStagingBuffers = [
+    system._hzbStagingBuffers = [
       { mapState: "pending", getMappedRange: vi.fn(), unmap },
       { mapState: "unmapped", getMappedRange: vi.fn(), unmap: vi.fn() },
     ];
-    renderer._hzbSlotObjects = [[], []];
-    renderer._hzbStagingPending = [true, false];
+    system._hzbSlotObjects = [[], []];
+    system._hzbStagingPending = [true, false];
+
+    expect(() => system.applyOcclusionResults()).not.toThrow();
+    expect(unmap).not.toHaveBeenCalled();
+    expect(system._hzbStagingPending[0]).toBe(true);
+  });
+});
+
+describe("WebGPURenderer.applyPendingOcclusionResults delegate", () => {
+  it("does nothing when occlusion culling isn't enabled (no HzbOcclusionSystem constructed)", () => {
+    const renderer = new WebGPURenderer() as Internals;
+    renderer._hzbSystem = undefined;
 
     expect(() => renderer.applyPendingOcclusionResults(new Scene())).not.toThrow();
-    expect(unmap).not.toHaveBeenCalled();
-    expect(renderer._hzbStagingPending[0]).toBe(true);
-  });
-
-  it("does nothing when occlusion culling isn't enabled", () => {
-    const renderer = new WebGPURenderer() as RendererInternals;
-    renderer._occlusionCullingEnabled = false;
-    const unmap = vi.fn();
-    renderer._hzbStagingBuffers = [{ mapState: "mapped", getMappedRange: vi.fn(), unmap }, {}];
-    renderer._hzbSlotObjects = [[], []];
-    renderer._hzbStagingPending = [true, false];
-
-    renderer.applyPendingOcclusionResults(new Scene());
-
-    expect(unmap).not.toHaveBeenCalled();
   });
 });
