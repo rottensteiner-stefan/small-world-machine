@@ -6,9 +6,9 @@
     <link rel="icon" type="image/webp" href="/favicon.webp" />
     <link rel="stylesheet" href="/assets/shared.css" />
     <link rel="stylesheet" href="/assets/tool-theme.css" />
-    <title>Gamepad Diagnostic & Calibration Tool</title>
+    <title>Gamepad Diagnostic & Mapping Tool</title>
     <style>
-body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool-bg); color: var(--tool-text); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool-bg); color: var(--tool-text); display: flex; flex-direction: column; height: 100vh; overflow-y: auto; }
       .meta-box {
         background: var(--tool-panel);
         padding: 1rem;
@@ -19,27 +19,28 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
       .wizard-box {
         background: var(--tool-card);
         border: 2px solid var(--tool-accent);
-        padding: 1.5rem;
+        padding: 0.5rem 1rem;
         border-radius: var(--tool-radius-md);
-        margin-bottom: 1.5rem;
+        margin-bottom: 0.75rem;
         text-align: center;
       }
       .wizard-box h2 {
-        margin-top: 0;
+        font-size: 1rem;
+        margin: 0 0 0.25rem;
         color: var(--tool-accent);
       }
       .wizard-instruction {
-        font-size: 1.3rem;
+        font-size: 1.1rem;
         font-weight: bold;
-        margin: 1rem 0;
-        min-height: 40px;
+        margin: 0.4rem 0;
+        min-height: 1.4rem;
         color: var(--tool-danger);
       }
       .wizard-progress {
         background: var(--tool-inset);
-        height: 8px;
+        height: 6px;
         border-radius: var(--tool-radius-sm);
-        margin: 1rem auto;
+        margin: 0.4rem auto;
         width: 80%;
         overflow: hidden;
       }
@@ -138,8 +139,8 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
       /* Controller type tabs */
       .ctrl-tabs {
         display: flex;
-        gap: 8px;
-        margin-bottom: 1rem;
+        gap: 6px;
+        margin-bottom: 0;
         flex-wrap: wrap;
         justify-content: center;
       }
@@ -147,7 +148,7 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
         background: var(--tool-panel);
         border: 1px solid var(--tool-border);
         color: var(--tool-text-muted);
-        padding: 6px 16px;
+        padding: 3px 12px;
         border-radius: 20px;
         font-family: inherit;
         font-size: 0.85rem;
@@ -178,53 +179,56 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
     </style>
   </head>
     <header class="tool-header">
-      <h1>Gamepad Diagnostic & Calibration</h1>
+      <h1>Gamepad Diagnostic & Mapping</h1>
       <button class="tool-close-btn" id="toolCloseBtn" title="Close Window" onclick="if (window.parent && window.parent !== window) { window.parent.postMessage({ type: 'close-tool' }, '*'); } try { window.close(); } catch(e) {}">✕</button>
     </header>
     <script>if (window.self !== window.top || window.opener) document.body.classList.add("in-window");</script>
     
     <!-- Controller Type Selector -->
-    <div class="wizard-box" style="margin-bottom: 1rem">
-      <h2 style="margin-bottom: 0.75rem">Controller-Typ wählen</h2>
+    <div class="wizard-box">
       <div class="ctrl-tabs" id="ctrl-tabs">
         <button class="ctrl-tab active" data-profile="nintendo">
-          🎮 Nintendo<span class="ctrl-badge">Switch / Joy-Con</span>
+          🎮 Nintendo
         </button>
         <button class="ctrl-tab" data-profile="xbox">
-          🎮 Xbox<span class="ctrl-badge">Series / One</span>
+          🎮 Xbox
         </button>
         <button class="ctrl-tab" data-profile="playstation">
-          🎮 PlayStation<span class="ctrl-badge">4 / 5</span>
+          🎮 PlayStation
         </button>
         <button class="ctrl-tab" data-profile="generic">
-          🕹 Generic<span class="ctrl-badge">Standard API</span>
+          🕹 Generic
         </button>
       </div>
     </div>
 
     <!-- Calibration Wizard Box -->
     <div class="wizard-box" id="wizard-panel">
-      <h2>Schritt-für-Schritt-Kalibrierung</h2>
+      <h2>Belegungs-Erkennung</h2>
       <div class="wizard-progress">
         <div class="wizard-progress-bar" id="wizard-progress-bar"></div>
       </div>
       <div class="wizard-instruction" id="wizard-instruction">
-        Bitte drücke eine Taste auf dem Controller, um die Kalibrierung zu starten...
+        Bitte drücke eine Taste auf dem Controller, um die Erkennung zu starten...
       </div>
-      <button
-        class="swf-btn" style="margin-top: 0.5rem"
-        id="btn-connect-webhid"
-      >
-        Nintendo Joy-Con (WebHID) verbinden
-      </button>
-      <br />
-      <button class="swf-btn" id="btn-restart" style="display: none; margin-top: 0.5rem">Neu starten</button>
+      <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: nowrap; margin-top: 0.25rem">
+        <button class="swf-btn" id="btn-connect-webhid">Nintendo Joy-Con (WebHID) verbinden</button>
+        <button class="swf-btn" id="btn-skip" style="display: none">Überspringen (Enter)</button>
+        <button class="swf-btn" id="btn-restart" style="display: none">Neu starten</button>
+      </div>
 
       <div class="results-box" id="results-box">
-        <h3>Kalibrierung abgeschlossen!</h3>
-        <p>Kopiere dieses Mapping und gib es im Chat an:</p>
+        <h3>Belegung erkannt!</h3>
+        <p>Erkannte Belegung (index = Standard-API-Index, invert = Achse läuft umgekehrt, null = übersprungen):</p>
         <pre id="results-code"></pre>
       </div>
+    </div>
+
+    <div class="meta-box" id="raw-info" style="font-family: monospace; font-size: 0.8rem; white-space: pre-wrap">Rohdaten: warte auf Gamepad...</div>
+
+    <div class="meta-box">
+      <button class="swf-btn" id="btn-hid-inspect">WebHID-Inspektor (Rohdaten)</button>
+      <pre id="hid-out" style="font-size: 0.75rem; margin: 0.5rem 0 0; white-space: pre-wrap">Nicht verbunden.</pre>
     </div>
 
     <div class="meta-box" id="meta-info">
@@ -251,8 +255,9 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
       import { Input } from "/packages/engine/src/core/input/Input.ts";
 
       // Initialize Input
-      Input.init();
-      Input.debug = true;
+      const input = new Input();
+      input.init();
+      input.debug = true;
 
       const metaInfo = document.getElementById("meta-info");
       const axesContainer = document.getElementById("axes-container");
@@ -262,6 +267,7 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
       const resultsBox = document.getElementById("results-box");
       const resultsCode = document.getElementById("results-code");
       const btnRestart = document.getElementById("btn-restart");
+      const btnSkip = document.getElementById("btn-skip");
       const btnConnectWebHID = document.getElementById("btn-connect-webhid");
 
       // Controller profiles
@@ -330,62 +336,149 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
           activeProfile = PROFILES[tab.dataset.profile];
           btnConnectWebHID.style.display = activeProfile.showWebHID ? "inline-block" : "none";
           // Rebuild UI if device already connected
-          if (initializedDevice) buildUI(Input.gamepadController.getActiveDevice());
+          if (initializedDevice) buildUI(input.gamepadController.getActiveDevice());
         });
       });
 
       // Calibration logic variables
       let isCalibrating = false;
       let currentStepIdx = 0;
+      // Belegungs-Erkennung: jeder Schritt wartet auf die erste echte Eingabe
+      // (Differenz zum Ruhezustand) und speichert deren Index.
+      const AXIS_SCAN_COUNT = 16;
+      const HAT_REST = 1.2; // Chrome kodiert Hat-Switches als Achse: neutral = 1.29, Richtungen -1..1
+      const BUTTON_SCAN_COUNT = 18;
+      const AXIS_THRESHOLD = 0.6;
+      const AXIS_NEUTRAL = 0.3;
       const calibrationSteps = [
-        {
-          id: "leftStickX",
-          label: "Bewege den LINKEN Stick ganz nach LINKS",
-          type: "axis",
-          check: (dev) => dev.getAxis(0) < -0.8,
-        },
-        {
-          id: "leftStickY",
-          label: "Bewege den LINKEN Stick ganz nach OBEN",
-          type: "axis",
-          check: (dev) => dev.getAxis(1) < -0.8,
-        },
-        {
-          id: "rightStickX",
-          label: "Bewege den RECHTEN Stick ganz nach LINKS",
-          type: "axis",
-          check: (dev) => dev.getAxis(2) < -0.8,
-        },
-        {
-          id: "rightStickY",
-          label: "Bewege den RECHTEN Stick ganz nach OBEN",
-          type: "axis",
-          check: (dev) => dev.getAxis(3) < -0.8,
-        },
-        {
-          id: "btnJump",
-          label: "Drücke die Taste für SPRINGEN (z. B. A oder B)",
-          type: "button",
-          check: (dev) => dev.isButtonPressed(0) || dev.isButtonPressed(1),
-        },
+        { id: "leftStickX", label: "LINKEN Stick ganz nach LINKS", type: "axis" },
+        { id: "leftStickY", label: "LINKEN Stick ganz nach OBEN", type: "axis" },
+        { id: "rightStickX", label: "RECHTEN Stick ganz nach LINKS", type: "axis" },
+        { id: "rightStickY", label: "RECHTEN Stick ganz nach OBEN", type: "axis" },
+        { id: "faceSouth", label: "Face-Taste UNTEN drücken", type: "button" },
+        { id: "faceEast", label: "Face-Taste RECHTS drücken", type: "button" },
+        { id: "faceWest", label: "Face-Taste LINKS drücken", type: "button" },
+        { id: "faceNorth", label: "Face-Taste OBEN drücken", type: "button" },
+        { id: "leftBumper", label: "Linke Schulter-Taste (L1) drücken", type: "button" },
+        { id: "rightBumper", label: "Rechte Schulter-Taste (R1) drücken", type: "button" },
+        { id: "leftTrigger", label: "Linken Trigger (L2) drücken", type: "button" },
+        { id: "rightTrigger", label: "Rechten Trigger (R2) drücken", type: "button" },
+        { id: "select", label: "Select / Minus / Share drücken", type: "button" },
+        { id: "start", label: "Start / Plus / Options drücken", type: "button" },
+        { id: "leftStickPress", label: "LINKEN Stick eindrücken (L3)", type: "button" },
+        { id: "rightStickPress", label: "RECHTEN Stick eindrücken (R3)", type: "button" },
+        { id: "dpadUp", dpad: true, label: "D-Pad OBEN drücken", type: "button" },
+        { id: "dpadDown", dpad: true, label: "D-Pad UNTEN drücken", type: "button" },
+        { id: "dpadLeft", dpad: true, label: "D-Pad LINKS drücken", type: "button" },
+        { id: "dpadRight", dpad: true, label: "D-Pad RECHTS drücken", type: "button" },
       ];
       const recordedMappings = {};
       let waitingForRelease = false;
+      let baseline = null;
+
+      function snapshot(dev) {
+        const axes = [];
+        for (let i = 0; i < AXIS_SCAN_COUNT; i++) axes.push(dev.getAxis(i));
+        const buttons = [];
+        for (let i = 0; i < BUTTON_SCAN_COUNT; i++) buttons.push(dev.isButtonPressed(i));
+        return { axes, buttons };
+      }
+
+      function isUsed(kind, index) {
+        return Object.values(recordedMappings).some((m) => m && m.kind === kind && m.index === index);
+      }
+
+      function detectInput(dev, step) {
+        if (step.type === "axis") {
+          for (let i = 0; i < AXIS_SCAN_COUNT; i++) {
+            const d = dev.getAxis(i) - baseline.axes[i];
+            if (baseline.axes[i] > HAT_REST) continue;
+            if (Math.abs(d) > AXIS_THRESHOLD && !isUsed("axis", i)) {
+              return { kind: "axis", index: i, invert: d > 0 };
+            }
+          }
+        } else {
+          for (let i = 0; i < BUTTON_SCAN_COUNT; i++) {
+            if (dev.isButtonPressed(i) && !baseline.buttons[i] && !isUsed("button", i)) {
+              return { kind: "button", index: i };
+            }
+          }
+          if (step.dpad) {
+            for (let i = 0; i < AXIS_SCAN_COUNT; i++) {
+              const v = dev.getAxis(i);
+              if (baseline.axes[i] > HAT_REST && v < HAT_REST) {
+                return { kind: "hat", index: i, value: Math.round(v * 1000) / 1000 };
+              }
+            }
+          }
+        }
+        return null;
+      }
+
+      function isNeutral(dev) {
+        for (let i = 0; i < AXIS_SCAN_COUNT; i++) {
+          if (Math.abs(dev.getAxis(i) - baseline.axes[i]) > AXIS_NEUTRAL) return false;
+        }
+        for (let i = 0; i < BUTTON_SCAN_COUNT; i++) {
+          if (dev.isButtonPressed(i) && !baseline.buttons[i]) return false;
+        }
+        return true;
+      }
+
+      function advanceStep() {
+        currentStepIdx++;
+        waitingForRelease = false;
+        baseline = null;
+        nextStep();
+      }
+
+      function skipStep() {
+        if (!isCalibrating) return;
+        recordedMappings[calibrationSteps[currentStepIdx].id] = null;
+        advanceStep();
+      }
+
+      function runWizard(dev) {
+        const step = calibrationSteps[currentStepIdx];
+        if (!baseline) baseline = snapshot(dev);
+        if (waitingForRelease) {
+          if (isNeutral(dev)) advanceStep();
+          return;
+        }
+        const hit = detectInput(dev, step);
+        if (hit) {
+          recordedMappings[step.id] = hit;
+          wizardInstruction.innerText = `${step.label}: erkannt (${hit.kind} ${hit.index}). Bitte loslassen...`;
+          waitingForRelease = true;
+        }
+      }
 
       // Button bindings
       btnConnectWebHID.addEventListener("click", async () => {
         try {
-          await Input.requestJoyConConnection();
+          await input.requestJoyConConnection();
         } catch (err) {
           console.error("WebHID connection failed:", err);
         }
+      });
+
+      btnSkip.addEventListener("click", skipStep);
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") skipStep();
       });
 
       btnRestart.addEventListener("click", () => {
         startCalibration();
       });
 
+      let uiAxisCount = 4;
+      function currentAxisCount() {
+        const g = Array.from(navigator.getGamepads()).find((x) => x && x.connected);
+        return g ? Math.max(g.axes.length, 4) : 4;
+      }
+
       function buildUI(device) {
+        uiAxisCount = currentAxisCount();
         const bNames = activeProfile.buttons;
         const aNames = activeProfile.axes;
         metaInfo.innerHTML = `
@@ -395,7 +488,7 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
 
         // Build Axes Progress Bars
         axesContainer.innerHTML = "";
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < uiAxisCount; i++) {
           const name = aNames[i] || `Achse ${i}`;
           const row = document.createElement("div");
           row.className = "axis-row";
@@ -428,6 +521,9 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
         isCalibrating = true;
         currentStepIdx = 0;
         waitingForRelease = false;
+        baseline = null;
+        for (const k of Object.keys(recordedMappings)) delete recordedMappings[k];
+        btnSkip.style.display = "inline-block";
         resultsBox.style.display = "none";
         btnRestart.style.display = "none";
         nextStep();
@@ -439,7 +535,7 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
           return;
         }
         const step = calibrationSteps[currentStepIdx];
-        wizardInstruction.innerText = step.label;
+        wizardInstruction.innerText = `Schritt ${currentStepIdx + 1}/${calibrationSteps.length}: ${step.label}`;
         const progress = (currentStepIdx / calibrationSteps.length) * 100;
         wizardProgressBar.style.width = `${progress}%`;
       }
@@ -447,19 +543,89 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
       function finishCalibration() {
         isCalibrating = false;
         wizardProgressBar.style.width = "100%";
-        wizardInstruction.innerText = "Test erfolgreich abgeschlossen!";
+        wizardInstruction.innerText = "Belegung erkannt!";
+        btnSkip.style.display = "none";
         btnRestart.style.display = "inline-block";
         resultsBox.style.display = "block";
-        resultsCode.innerText = JSON.stringify(recordedMappings, null, 2);
+        resultsCode.innerText = JSON.stringify(
+          { controller: input.gamepadController.getActiveDevice()?.id ?? "", mapping: recordedMappings },
+          null,
+          2,
+        );
       }
 
       let initializedDevice = false;
 
-      function updateLoop() {
-        // Update input state in engine wrapper
-        Input.update();
+      const rawInfo = document.getElementById("raw-info");
 
-        const dev = Input.gamepadController.getActiveDevice();
+      // WebHID-Inspektor: zeigt HID-Collections und Input-Reports (Hex, geänderte Bytes markiert)
+      const hidOut = document.getElementById("hid-out");
+      const hex = (b) => b.toString(16).padStart(2, "0");
+      document.getElementById("btn-hid-inspect").addEventListener("click", async () => {
+        if (!("hid" in navigator)) {
+          hidOut.textContent = "WebHID wird von diesem Browser nicht unterstützt.";
+          return;
+        }
+        try {
+          const [dev] = await navigator.hid.requestDevice({
+            filters: [{ vendorId: 0x20d6 }, { vendorId: 0x057e }],
+          });
+          if (!dev) {
+            hidOut.textContent = "Kein Gerät gewählt.";
+            return;
+          }
+          if (!dev.opened) await dev.open();
+          const head =
+            `${dev.productName} (vendor 0x${hex(dev.vendorId >> 8)}${hex(dev.vendorId & 255)}, product 0x${hex(dev.productId >> 8)}${hex(dev.productId & 255)})\n` +
+            dev.collections
+              .map(
+                (c) =>
+                  `collection usagePage 0x${c.usagePage.toString(16)} usage 0x${c.usage.toString(16)} ` +
+                  `in:[${c.inputReports.map((x) => x.reportId)}] out:[${c.outputReports.map((x) => x.reportId)}] feat:[${c.featureReports.map((x) => x.reportId)}]`,
+              )
+              .join("\n");
+          let prev = new Map();
+          let count = 0;
+          dev.addEventListener("inputreport", (e) => {
+            const bytes = new Uint8Array(e.data.buffer);
+            const old = prev.get(e.reportId);
+            prev.set(e.reportId, bytes);
+            count++;
+            const line = Array.from(bytes)
+              .map((v, i) => (old && old[i] !== v ? `[${hex(v)}]` : hex(v)))
+              .join(" ");
+            hidOut.textContent = `${head}\n\nreports: ${count}\nreportId ${e.reportId} (${bytes.length} B), [xx] = geändert:\n${line}`;
+          });
+          hidOut.textContent = `${head}\n\nVerbunden. Warte auf Input-Reports (Button drücken / Sticks bewegen)...`;
+        } catch (err) {
+          hidOut.textContent = `WebHID-Fehler: ${err}`;
+        }
+      });
+
+      function updateRaw() {
+        const gps = Array.from(navigator.getGamepads()).filter((g) => g && g.connected);
+        if (gps.length === 0) {
+          rawInfo.textContent = "Rohdaten: kein Gamepad in navigator.getGamepads()";
+          return;
+        }
+        rawInfo.textContent = gps
+          .map((g) => {
+            const axes = Array.from(g.axes).map((v, i) => `${i}:${v.toFixed(2)}`).join("  ");
+            const pressed = Array.from(g.buttons)
+              .map((b, i) => (b.pressed || b.value > 0.1 ? `${i}(${b.value.toFixed(2)})` : null))
+              .filter(Boolean)
+              .join(" ");
+            return `[${g.index}] ${g.id}\nmapping: "${g.mapping}"  axes: ${g.axes.length}  buttons: ${g.buttons.length}\naxes: ${axes}\nbuttons gedrückt: ${pressed || "-"}`;
+          })
+          .join("\n\n");
+      }
+
+      function updateLoop() {
+        updateRaw();
+        // Update input state in engine wrapper
+        input.update();
+
+        const dev = input.gamepadController.getActiveDevice();
 
         if (dev) {
           if (!initializedDevice) {
@@ -474,13 +640,13 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
           `;
 
           // Update Axes visualizers
-          for (let i = 0; i < 4; i++) {
+          for (let i = 0; i < uiAxisCount; i++) {
             const val = dev.getAxis(i);
             const valText = document.getElementById(`axis-val-${i}`);
             const bar = document.getElementById(`axis-bar-${i}`);
             if (valText && bar) {
               valText.innerText = val.toFixed(2);
-              const percent = Math.abs(val) * 50;
+              const percent = Math.min(Math.abs(val), 1) * 50;
               bar.style.width = `${percent}%`;
               if (val >= 0) {
                 bar.style.marginLeft = "50%";
@@ -505,22 +671,7 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
             }
           }
 
-          // Wizard Input Detection
-          if (isCalibrating) {
-            const step = calibrationSteps[currentStepIdx];
-            if (waitingForRelease) {
-              if (!step.check(dev)) {
-                waitingForRelease = false;
-                recordedMappings[step.id] = "Verifiziert";
-                currentStepIdx++;
-                nextStep();
-              }
-            } else {
-              if (step.check(dev)) {
-                waitingForRelease = true;
-              }
-            }
-          }
+          if (isCalibrating) runWizard(dev);
         } else {
           if (initializedDevice) {
             initializedDevice = false;

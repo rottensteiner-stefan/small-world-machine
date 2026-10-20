@@ -304,7 +304,7 @@ export class UniversalGamepadController {
             idUpper.includes("JOY-CON") ||
             idUpper.includes("PRO CONTROLLER");
 
-          if (!isNintendo || !this._joyConModule) {
+          if (!isNintendo || !this._hasOpenWebHIDDevice()) {
             standardDevices.push(new StandardGamepadDevice(gp));
           }
         }
@@ -375,6 +375,15 @@ export class UniversalGamepadController {
     for (const dev of this._devices) {
       dev.update();
     }
+  }
+
+  private _hasOpenWebHIDDevice(): boolean {
+    const connectedMap = this._joyConModule?.connectedJoyCons;
+    if (!connectedMap) return false;
+    for (const jc of connectedMap.values()) {
+      if (jc.device.opened) return true;
+    }
+    return false;
   }
 
   public get devices(): GamepadDevice[] {
