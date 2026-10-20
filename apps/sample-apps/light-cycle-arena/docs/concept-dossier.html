@@ -1,4 +1,690 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Light Cycle Arena — Concept Dossier</title></head>
-<body><h1>Light Cycle Arena — Concept Dossier</h1><p>Noch kein Dossier vorhanden.</p></body>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Light Cycle Arena — Concept Dossier</title>
+    <style>
+      :root {
+        --bg-dark: #05050a;
+        --bg-card: #0b0d17;
+        --bg-card-hover: #121626;
+        --accent-cyan: #40d9f2;
+        --accent-cyan-glow: rgba(64, 217, 242, 0.6);
+        --accent-magenta: #ff598c;
+        --accent-magenta-glow: rgba(255, 89, 140, 0.6);
+        --accent-grid: #38bdf8;
+        --accent-wall: #99b3ff;
+        --text-main: #f0f4f8;
+        --text-muted: #8290a5;
+        --border-subtle: #1a2238;
+        --border-highlight: #2c3858;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background-color: var(--bg-dark);
+        color: var(--text-main);
+        line-height: 1.6;
+        padding: 2.5rem 1.5rem;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      /* Hero */
+      header.hero {
+        text-align: center;
+        padding: 3.5rem 1.5rem;
+        background: radial-gradient(circle at center, #10162f 0%, var(--bg-dark) 85%);
+        border: 1px solid var(--border-subtle);
+        border-radius: 16px;
+        margin-bottom: 3.5rem;
+        position: relative;
+        overflow: hidden;
+      }
+
+      header.hero::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--accent-cyan), var(--accent-magenta), transparent);
+      }
+
+      .badge {
+        display: inline-block;
+        background: rgba(64, 217, 242, 0.12);
+        color: var(--accent-cyan);
+        border: 1px solid rgba(64, 217, 242, 0.4);
+        padding: 0.35rem 1rem;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        margin-bottom: 1.2rem;
+      }
+
+      h1.title {
+        font-size: 3.2rem;
+        font-weight: 800;
+        letter-spacing: -1px;
+        margin-bottom: 0.8rem;
+        background: linear-gradient(135deg, #ffffff 0%, #b8f1ff 40%, var(--accent-cyan) 80%, var(--accent-magenta) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      p.tagline {
+        font-size: 1.2rem;
+        color: var(--text-muted);
+        max-width: 780px;
+        margin: 0 auto 1.8rem;
+      }
+
+      .meta-bar {
+        display: flex;
+        justify-content: center;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+
+      .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: rgba(255, 255, 255, 0.04);
+        padding: 0.3rem 0.8rem;
+        border-radius: 6px;
+        border: 1px solid var(--border-subtle);
+      }
+
+      .meta-item strong {
+        color: var(--text-main);
+      }
+
+      /* Sections */
+      section {
+        margin-bottom: 3.5rem;
+      }
+
+      h2.section-title {
+        font-size: 1.6rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        color: #ffffff;
+      }
+
+      h2.section-title::before {
+        content: "";
+        display: inline-block;
+        width: 4px;
+        height: 1.3rem;
+        background: var(--accent-cyan);
+        border-radius: 2px;
+        box-shadow: 0 0 8px var(--accent-cyan);
+      }
+
+      /* Grid Cards */
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 1.5rem;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+        gap: 1.5rem;
+      }
+
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 1.6rem;
+        transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-2px);
+        border-color: var(--border-highlight);
+        background: var(--bg-card-hover);
+      }
+
+      .card h3 {
+        font-size: 1.15rem;
+        margin-bottom: 0.8rem;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .card p {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        line-height: 1.6;
+      }
+
+      /* Color Bible */
+      .palette {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 1rem;
+      }
+
+      .swatch {
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+      }
+
+      .swatch-color {
+        height: 80px;
+        width: 100%;
+        display: flex;
+        align-items: flex-end;
+        padding: 0.5rem;
+        font-family: monospace;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      }
+
+      .swatch-info {
+        padding: 0.8rem;
+      }
+
+      .swatch-info strong {
+        display: block;
+        font-size: 0.85rem;
+        color: #fff;
+        margin-bottom: 0.2rem;
+      }
+
+      .swatch-info span {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      /* Blueprint Terminal */
+      .terminal-box {
+        background: #040508;
+        border: 1px solid #1a2238;
+        border-radius: 10px;
+        padding: 1.2rem;
+        font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: 0.85rem;
+        color: #8be9fd;
+        overflow-x: auto;
+        line-height: 1.5;
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+      }
+
+      .terminal-box .cyan {
+        color: var(--accent-cyan);
+      }
+
+      .terminal-box .magenta {
+        color: var(--accent-magenta);
+      }
+
+      .terminal-box .dim {
+        color: #55627a;
+      }
+
+      .terminal-box .gold {
+        color: #ffd166;
+      }
+
+      .terminal-box .green {
+        color: #06d6a0;
+      }
+
+      /* Tech Spec Table */
+      table.spec-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--bg-card);
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border-subtle);
+      }
+
+      table.spec-table th,
+      table.spec-table td {
+        padding: 1rem 1.2rem;
+        text-align: left;
+        font-size: 0.9rem;
+      }
+
+      table.spec-table th {
+        background: rgba(255, 255, 255, 0.03);
+        color: #fff;
+        font-weight: 600;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      table.spec-table tr:not(:last-child) td {
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      table.spec-table td:first-child {
+        font-family: monospace;
+        color: var(--accent-cyan);
+        font-weight: 600;
+      }
+
+      /* Time Scale Diagram */
+      .time-warp-bar {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 1.2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+      }
+
+      .bar-track {
+        height: 12px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent-cyan) 0%, var(--accent-magenta) 100%);
+        box-shadow: 0 0 14px var(--accent-cyan-glow);
+        border-radius: 6px;
+      }
+
+      /* Footer */
+      footer {
+        text-align: center;
+        padding-top: 3rem;
+        border-top: 1px solid var(--border-subtle);
+        color: var(--text-muted);
+        font-size: 0.85rem;
+      }
+
+      code {
+        background: rgba(255, 255, 255, 0.08);
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.85em;
+        color: #e2e8f0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Hero -->
+      <header class="hero">
+        <span class="badge">Tactical Grid Combat • Small World Machine</span>
+        <h1 class="title">LIGHT CYCLE ARENA</h1>
+        <p class="tagline">
+          Ein minimalistisches Cyberpunk-Vektor-Duell auf einer 24×24-Arena. Das klassische Tron-Prinzip
+          verschmilzt mit einer taktischen <strong>Superhot Time-Dilation-Mechanik</strong>: Die Zeit fließt nur bei
+          gehaltener Bewegungstaste – lässt man los, friert die Arena auf 8% ein.
+        </p>
+        <div class="meta-bar">
+          <div class="meta-item">
+            <span>Raster:</span>
+            <strong>24×24 Zellen (96×96 Units)</strong>
+          </div>
+          <div class="meta-item">
+            <span>Pipeline:</span>
+            <strong>WebGPU / WebGL2 / WebGL1</strong>
+          </div>
+          <div class="meta-item">
+            <span>Kamera:</span>
+            <strong>Orthographic Isometric</strong>
+          </div>
+          <div class="meta-item">
+            <span>Assets:</span>
+            <strong>0 KB (100% Procedural Primitives)</strong>
+          </div>
+          <div class="meta-item">
+            <span>PostFX:</span>
+            <strong>Neon Bloom + Camera Flash</strong>
+          </div>
+        </div>
+      </header>
+
+      <!-- Vision & Core Pillars -->
+      <section>
+        <h2 class="section-title">Design-Säulen & Kernmechaniken</h2>
+        <div class="grid-3">
+          <div class="card">
+            <h3>⏳ "Time Moves When You Move"</h3>
+            <p>
+              Inspiriert von <em>Superhot</em>. Wenn der Spieler eine Richtungstaste (WASD / Pfeile) hält, laufen beide
+              Cycles mit vollem Tempo (<code>CYCLE_SPEED = 13</code>). Lässt man los, interpoliert die globale
+              Zeitskalierung via Lerp blitzschnell auf <code>IDLE_TIME_SCALE = 0.08</code>. Der Twitch-Reflex-Runner wird zum
+              taktischen Routen-Schachspiel.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>📐 100% Prozedurale Vektor-Ästhetik</h3>
+            <p>
+              Keine externen Bitmaps oder 3D-Modelle. Der Arena-Boden nutzt <code>Ground</code>, das leuchtende Gitter
+              <code>GridGeometry</code> mit <code>WireframeMaterial</code>, und die permanenten Lichtwände werden hocheffizient
+              über einen gemeinsamen <code>InstancedMesh</code>-Drawcall gerendert. Maximale Performance, null Ladezeiten.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>👁️ Isometrische Orthographische Übersicht</h3>
+            <p>
+              Eine starre isometrische Kameraperspektive ohne Fluchtpunktverzerrung
+              (<code>OrthographicProjection</code> + <code>CameraStrategyType.ISOMETRIC</code>). Das gesamte 96×96-Spielfeld
+              bleibt zu jedem Zeitpunkt vollständig einsehbar, sodass Korridore und Sackgassen präzise vorausberechnet werden können.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tactical Time Dilation & HUD -->
+      <section>
+        <h2 class="section-title">Die Superhot-Zeitkrümmung</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Mechanische Synchronisation</h3>
+            <p>
+              Entscheidend für die Spielbalance: Das Zeit-Dilation-Delta skaliert <strong>beide</strong> Kontrahenten
+              gleichzeitig. Die Zyklen sind nicht relativ schneller oder langsamer, sondern die gesamte Arena hält gemeinsam
+              den Atem an:
+            </p>
+            <br />
+            <div class="terminal-box">
+<span class="dim">// Zeitinterpolierung im Render-Loop</span>
+<span class="cyan">const</span> target = roundOver ? 0 : isHoldingMove() ? <span class="gold">1.0</span> : <span class="gold">0.08</span>;
+timeScale += (target - timeScale) * Math.min(1, deltaTime * <span class="gold">6.0</span>);
+
+<span class="dim">// Beide Cycle-Behaviors manuell getaktet</span>
+player.movement.update(deltaTime * timeScale);
+ai.movement.update(deltaTime * timeScale);
+hud.update(timeScale);</div>
+          </div>
+
+          <div class="card">
+            <h3>Taktisches Feedback & HUD</h3>
+            <p>
+              Am unteren Bildschirmrand visualisiert ein dynamischer Neon-Balken (<code>Hud.ts</code>) die augenblickliche
+              Zeitverzögerung. Leuchtendes Cyan signalisiert 100% Echtzeit, während ein Zusammensacken auf 8% dem Spieler
+              sofortige visuelle Bestätigung gibt, dass das Feld eingefroren ist.
+            </p>
+            <div style="margin-top: 1.5rem;" class="time-warp-bar">
+              <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted);">
+                <span>BULLET-TIME (8%)</span>
+                <span>VOLLE GESCHWINDIGKEIT (100%)</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width: 75%;"></div>
+              </div>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                Zeit-Lerp-Faktor: <code>6.0 s⁻¹</code> • Reaktions-Window: ~160 ms für nahtloses Einfrieren
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Color Bible & Visual Direction -->
+      <section>
+        <h2 class="section-title">Farb- und Vektor-Bibel</h2>
+        <div class="palette">
+          <div class="swatch">
+            <div class="swatch-color" style="background-color: #40d9f2; color: #040508;">
+              #40D9F2
+            </div>
+            <div class="swatch-info">
+              <strong>Player Cyan</strong>
+              <span>Color(0.25, 0.85, 0.95) Emissive Intensity 5.0</span>
+            </div>
+          </div>
+
+          <div class="swatch">
+            <div class="swatch-color" style="background-color: #ff598c; color: #ffffff;">
+              #FF598C
+            </div>
+            <div class="swatch-info">
+              <strong>Rival Magenta</strong>
+              <span>Color(1.0, 0.35, 0.55) Emissive Intensity 5.0</span>
+            </div>
+          </div>
+
+          <div class="swatch">
+            <div class="swatch-color" style="background-color: #38bdf8; color: #040508;">
+              #38BDF8
+            </div>
+            <div class="swatch-info">
+              <strong>Grid Wireframe</strong>
+              <span>WireframeMaterial Y-Offset +0.02 (Anti Z-Fighting)</span>
+            </div>
+          </div>
+
+          <div class="swatch">
+            <div class="swatch-color" style="background-color: #99b3ff; color: #040508;">
+              #99B3FF
+            </div>
+            <div class="swatch-info">
+              <strong>Perimeter Walls</strong>
+              <span>Glow Slabs Emissive Intensity 2.0</span>
+            </div>
+          </div>
+
+          <div class="swatch">
+            <div class="swatch-color" style="background-color: #05050a; color: #8290a5;">
+              #05050A
+            </div>
+            <div class="swatch-info">
+              <strong>Arena Void</strong>
+              <span>Color(0.02, 0.02, 0.04) Roughness 0.9 Ground</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Arena Grid Architecture & AI -->
+      <section>
+        <h2 class="section-title">Grid-Architektur & Kontrahenten-KI</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Diskretes Gitter & Kollisionsmatrix</h3>
+            <p>
+              Die Arena ist in <code>24×24 = 576</code> diskrete Zellen mit Kantenlänge <code>4.0 Units</code> unterteilt
+              (Gesamtgröße <code>96×96 Units</code>). Sobald ein Cycle eine Zelle betritt, wird sie in <code>ArenaGrid</code>
+              als belegt markiert und eine permanente Lichtwand instanziiert.
+            </p>
+            <br />
+            <div class="terminal-box">
+<span class="green">┌──────────────────────────────────────────────┐</span>
+<span class="green">│</span>  <span class="magenta">RIVAL SPAWN (Top-Right)</span>                     <span class="green">│</span>
+<span class="green">│</span>  Position: [X: +36, Z: +16] Direction: [-1, 0, 0]   <span class="green">│</span>
+<span class="green">│</span>                                              <span class="green">│</span>
+<span class="green">│</span>          <span class="dim">╔═══════════════════════════╗</span>       <span class="green">│</span>
+<span class="green">│</span>          <span class="dim">║</span>  576 Instanced Wall Slots <span class="dim">║</span>       <span class="green">│</span>
+<span class="green">│</span>          <span class="dim">║</span>  Orthogonal 90° Junctions <span class="dim">║</span>       <span class="green">│</span>
+<span class="green">│</span>          <span class="dim">╚═══════════════════════════╝</span>       <span class="green">│</span>
+<span class="green">│</span>                                              <span class="green">│</span>
+<span class="green">│</span>  <span class="cyan">PLAYER SPAWN (Bottom-Left)</span>                  <span class="green">│</span>
+<span class="green">│</span>  Position: [X: -36, Z: -16] Direction: [+1, 0, 0]   <span class="green">│</span>
+<span class="green">└──────────────────────────────────────────────┘</span></div>
+          </div>
+
+          <div class="card">
+            <h3>Heuristische 1-Step-Lookahead KI</h3>
+            <p>
+              <code>CycleAI</code> entscheidet autonom an jeder Gitterkreuzung (<code>onGridIntersection</code>). Statt eines
+              aufwendigen State-Machine-Overheads evaluiert die KI die 3 erreichbaren Richtungen (Geradeaus, Links 90°, Rechts 90°):
+            </p>
+            <br />
+            <ul style="color: var(--text-muted); font-size: 0.9rem; padding-left: 1.2rem; line-height: 1.8;">
+              <li><strong>Sicherheits-Check:</strong> Besetzte Zellen (eigene Wand, Spielerwand, Außenrand) werden sofort verworfen.</li>
+              <li><strong>Manhattan-Minimierung:</strong> Berechnet den Distanzgewinn zum Spieler (<code>distBefore - distAfter</code>).</li>
+              <li><strong>Greedy Jagd:</strong> Wählt den Kurs, der die Lücke zum Spieler maximal verengt, um ihn einzukreisen.</li>
+              <li><strong>Crash-Fatalismus:</strong> Sind alle 3 Wege blockiert, fährt die KI geradeaus in die Wand und detoniert.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Engine Blueprint -->
+      <section>
+        <h2 class="section-title">Engine-Blueprint & Subsysteme</h2>
+        <table class="spec-table">
+          <thead>
+            <tr>
+              <th style="width: 28%;">Subsystem / Klasse</th>
+              <th style="width: 30%;">Rolle in Light Cycle Arena</th>
+              <th>Technische Besonderheiten</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GridMovementBehavior</td>
+              <td>Orthogonale Bewegung & diskrete Turns</td>
+              <td>
+                Wird mit <code>isActive = false</code> gebunden und in <code>App.update()</code> manuell mit
+                skaliertem <code>deltaTime * timeScale</code> getaktet.
+              </td>
+            </tr>
+            <tr>
+              <td>InstancedMesh</td>
+              <td>Permanente Lichtwand-Segmente</td>
+              <td>
+                Ein einziger Cube-Mesh-Drawcall pro Cycle für bis zu 576 Segmente. Matrizen werden on-the-fly via
+                <code>setMatrixAt()</code> in den GPU-Buffer geschrieben.
+              </td>
+            </tr>
+            <tr>
+              <td>BloomElement</td>
+              <td>Post-Processing Neon-Glow</td>
+              <td>
+                Intensität <code>0.9</code>, Threshold <code>0.55</code>. Verleiht den Emissive-Materialien
+                (Faktor 5–6) den charakteristischen Tron-Film-Look.
+              </td>
+            </tr>
+            <tr>
+              <td>OrthographicProjection</td>
+              <td>Verzerrungsfreie Kameraübersicht</td>
+              <td>
+                Halbhöhe <code>ARENA_CELLS * GRID_SIZE * 0.62</code>. Verhindert optische Fluchtverzerrungen für
+                millimetergenaues Planen während Bullet-Time.
+              </td>
+            </tr>
+            <tr>
+              <td>Camera Effects</td>
+              <td>Treffer-Feedback & Screen Flash</td>
+              <td>
+                <code>CameraEffectType.SHAKE</code> (0.5 s, Amplitude 0.35) und <code>CameraEffectType.FLASH</code> (0.5 s,
+                Intensität 0.2) bei Crash-Einschlag.
+              </td>
+            </tr>
+            <tr>
+              <td>Procedural Audio</td>
+              <td>Synthetische Crash-Töne</td>
+              <td>
+                Direkte WebAudio-Oszillatoren via <code>audio.playTone()</code>: 90 Hz Square-Wave für Spieler-Crash,
+                520 Hz Sawtooth für KI-Niederlage.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Controls & Guide -->
+      <section>
+        <h2 class="section-title">Steuerung & Gameplay-Guide</h2>
+        <div class="grid-3">
+          <div class="card">
+            <h3>🎮 Steuerung</h3>
+            <p>
+              <code>W / A / S / D</code> oder <code>Pfeiltasten</code> zur Kursänderung.<br />
+              <strong>Gedrückt halten:</strong> Zeit läuft mit 100%.<br />
+              <strong>Loslassen:</strong> Zeitlupe / Bullet-Time (8%).<br />
+              <code>Enter</code>: Sofortiger Runderneustart nach Crash.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>⚡ Taktik: Die Falle stellen</h3>
+            <p>
+              Da die KI stur den Abstand minimiert, kann sie leicht getäuscht werden: Halte kurz an (Bullet-Time), plane
+              einen 90°-Haken um eine bereits gezogene Wand herum und schneide der KI den Rückweg ab.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>⛔ Tödliche 180°-Wenden</h3>
+            <p>
+              Ein direktes Umdrehen in die entgegengesetzte Richtung wird vom Steuerungspuffer ignoriert, um sofortige
+              Selbstzerstörung durch Kollision mit dem eigenen Hecksegment zu verhindern.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Roadmap & Future Vision -->
+      <section>
+        <h2 class="section-title">Status & Zukünftige Erweiterungen</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>✅ Vollständig implementiert</h3>
+            <ul style="color: var(--text-muted); font-size: 0.9rem; padding-left: 1.2rem; line-height: 1.8;">
+              <li>Orthogonales 24×24 Arena-Grid mit Instant-Kollisionsmatrix</li>
+              <li>Manuell getaktete Superhot-Zeitkrümmung mit weichem Lerp-Übergang</li>
+              <li>Dynamischer HTML-HUD-Balken für Time-Flow-Feedback</li>
+              <li>InstancedMesh-Lichtspuren mit emissiven Materialien</li>
+              <li>Gitterkreuzungs-KI mit Manhattan-Distanzmetrik</li>
+              <li>Bloom-Post-Processing, Screen-Shake, Screen-Flash und Audiosynthese</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3>🚀 Mögliche Evolutionsstufen</h3>
+            <ul style="color: var(--text-muted); font-size: 0.9rem; padding-left: 1.2rem; line-height: 1.8;">
+              <li><strong>Multiplayer-Modus:</strong> 1v1-Online-Duell via WebSockets / WebRTC DataChannels</li>
+              <li><strong>Pickups & Power-Ups:</strong> Trail-Jump (Sprung über eine Wand), Speed-Booster, EMP-Bombe</li>
+              <li><strong>4-Player Chaos Arena:</strong> 4 Cycles gleichzeitig in einer erweiterten 48×48-Arena</li>
+              <li><strong>Dynamische Hindernisse:</strong> Pulsierende Laser-Barrieren und Teleporter-Felder</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer>
+        <p>Light Cycle Arena — Konzept- & Architektur-Dossier • Small World Machine Engine Documentation</p>
+        <p style="margin-top: 0.4rem; font-size: 0.75rem;">
+          Autoren: Stefan Rottensteiner & Agentic AI Pair Programming • Zuletzt aktualisiert: Oktober 2026
+        </p>
+      </footer>
+    </div>
+  </body>
 </html>
+

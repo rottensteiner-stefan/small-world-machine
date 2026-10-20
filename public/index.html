@@ -447,7 +447,7 @@
       
       <!-- Header -->
       <header class="hero">
-        <div class="badge-version">⚡ SMALL WORLD MACHINE v0.104.0</div>
+        <div class="badge-version">⚡ SMALL WORLD MACHINE v0.115.1</div>
         <h1>Small World Machine</h1>
         <p class="subtitle">Zentrales Portal: Spiele, Showcases, Tools & Dokumentation</p>
         
@@ -770,6 +770,18 @@
           });
         }
 
+        function setCategory(category) {
+          currentCategory = category;
+          tabBtns.forEach(b => {
+            if (b.getAttribute('data-filter') === category) {
+              b.classList.add('active');
+            } else {
+              b.classList.remove('active');
+            }
+          });
+          applyFilter();
+        }
+
         searchInput.addEventListener('input', function(e) {
           searchQuery = e.target.value.trim().toLowerCase();
           applyFilter();
@@ -777,12 +789,34 @@
 
         tabBtns.forEach(btn => {
           btn.addEventListener('click', function() {
-            tabBtns.forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            currentCategory = this.getAttribute('data-filter');
-            applyFilter();
+            const cat = this.getAttribute('data-filter');
+            setCategory(cat);
+            try {
+              const url = new URL(window.location.href);
+              if (cat === 'all') {
+                url.searchParams.delete('filter');
+              } else {
+                url.searchParams.set('filter', cat);
+              }
+              window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+            } catch {
+              // Ignore history errors if running restricted
+            }
           });
         });
+
+        // Initialize category from URL query (?filter=showcases) or hash (#showcases)
+        const params = new URLSearchParams(window.location.search);
+        const urlCategory =
+          params.get('filter') ||
+          params.get('category') ||
+          window.location.hash.replace(/^#/, '');
+
+        if (urlCategory && Array.from(tabBtns).some(b => b.getAttribute('data-filter') === urlCategory)) {
+          setCategory(urlCategory);
+        } else {
+          applyFilter();
+        }
       })();
     </script>
   </body>

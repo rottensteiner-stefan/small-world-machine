@@ -85,6 +85,23 @@ export default defineConfig({
               return next();
             }
 
+            // Redirect /apps/showcases to the launcher root with the Showcases tab pre-selected
+            if (
+              pathname === "/apps/showcases" ||
+              pathname === "/apps/showcases/" ||
+              pathname === "/apps/showcases/index.html"
+            ) {
+              const target =
+                "/?filter=showcases" +
+                (search ? (search.startsWith("?") ? "&" + search.slice(1) : "&" + search) : "");
+              res.writeHead(302, {
+                Location: target,
+                "Content-Type": "text/html",
+              });
+              res.end();
+              return;
+            }
+
             // If path doesn't end with a slash, check if it points to a directory with index.html
             if (!pathname.endsWith("/")) {
               const cleanPath = decodeURIComponent(pathname.replace(/^\/+/, ""));
@@ -122,6 +139,21 @@ export default defineConfig({
         server.middlewares.use((req, res, next) => {
           if (!req.url) return next();
           const [pathname, search] = req.url.split("?");
+          if (
+            pathname === "/apps/showcases" ||
+            pathname === "/apps/showcases/" ||
+            pathname === "/apps/showcases/index.html"
+          ) {
+            const target =
+              "/?filter=showcases" +
+              (search ? (search.startsWith("?") ? "&" + search.slice(1) : "&" + search) : "");
+            res.writeHead(302, {
+              Location: target,
+              "Content-Type": "text/html",
+            });
+            res.end();
+            return;
+          }
           if (pathname && !pathname.endsWith("/")) {
             const cleanPath = decodeURIComponent(pathname.replace(/^\/+/, ""));
             const diskPath = path.resolve(server.config.root, cleanPath);

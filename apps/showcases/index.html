@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="refresh" content="0; url=/?filter=showcases" />
+    <title>3D Showcases — Weiterleitung...</title>
+    <script>
+      const target =
+        "/?filter=showcases" +
+        (window.location.search ? "&" + window.location.search.replace(/^\?/, "") : "") +
+        window.location.hash;
+      window.location.replace(target);
+    </script>
+  </head>
+  <body>
+    <p>Weiterleitung zu <a href="/?filter=showcases">3D Showcases</a>...</p>
+  </body>
+</html>

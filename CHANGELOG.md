@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.115.1] - 2026-10-21
+
+### "A line is a dot that went for a walk." - Paul Klee
+
+- **Features:**
+  - *Showcase-Portal & URL-Routing:* `/apps/showcases` (mit oder ohne Slash) leitet via HTTP 302 direkt auf das Portal `/?filter=showcases` weiter; dort wird der Button „🎨 3D Showcases (1–41)" automatisch vorselektiert.
+  - *Portal Deep-Linking:* Das zentrale Startportal (`public/index.html`) unterstützt Filter-Zustände aus Query-Parametern (`?filter=...`) und URL-Hashes (`#...`) und synchronisiert Klicks via `history.replaceState`.
+  - *Showcase 41 (Metal Wall Relief):* Neues Showcase für Assemblage-Relief-Art mit Impasto-Malspachtel-Strichen, PBR/Normal-Mapping und interaktivem Tuning-HUD.
+  - *Showcase 1 (Basic Setup):* Umfassender Geometrie-Wechsler (Würfel, Kugel, Zylinder, Torus, Plane etc.) und interaktiver Farb-Picker integriert.
+  - *Modernes TuneHUD-Design:* Vereinheitlichtes Glassmorphism-/Cyber-Drawer-Design mit responsiver Bottom-Sheet-Einschubanimation für Smartphones und Footer-Zahnrad-Toggle über diverse Showcases hinweg (u. a. 14, 17, 18, 30, 38, 39, 41).
+- **Architecture & Bugfixes:**
+  - *Vite Directory-Index & Clean-URLs:* `vite.config.ts` löst Verzeichnis-URLs ohne trailing Slash oder explizites `index.html` sauber via HTTP 302 auf.
+  - *Artistic Extras:* Neues Paket `packages/artistic-extras` mit `MetalReliefMaterial`, `ImpastoStrokeMaterial`, `StrokeRaster` und Post-Processing implementiert.
+- **Housekeeping & Docs:**
+  - *App-Konzept-Dossiers:* Ausführliche visuelle Konzept-Dossiers und Living Logs für `apps/sample-apps/yad/docs/` und `apps/sample-apps/light-cycle-arena/docs/` gemäß App-Docs-Konvention angelegt.
+
+
 ## [0.115.0] - 2026-10-20
 
 ### "The most valuable of all talents is that of never using two words when one will do." - Thomas Jefferson
