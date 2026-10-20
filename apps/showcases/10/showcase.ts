@@ -3,6 +3,7 @@ import {
   AbstractShowcase,
   AmbientLight,
   BasicMaterial,
+  BillboardInstancer,
   BobbingBehavior,
   BoundingBox,
   CameraStrategyType,
@@ -26,11 +27,11 @@ import {
   RendererType,
   RigidBody,
   RotatorBehavior,
+  StandardMaterial,
   StylizedWaterMaterial,
   Texture,
   TextureWrap,
   Vector3D,
-  WorldMaterial,
   ZoomController,
   FluidVolume,
 } from "@small-world-machine/engine";
@@ -113,6 +114,7 @@ export class Showcase10 extends AbstractShowcase {
   private _noirTracked: Array<Object3D | undefined> = [];
   private readonly _rippleScratch: [number, number] = [0, 0];
   private _liveTunePad: LiveTunePad | undefined;
+  private _grassTufts: BillboardInstancer | undefined;
   private _time: number = 0;
   private readonly _buoyancyBodies: Array<{
     body: Object3D;
@@ -232,17 +234,62 @@ export class Showcase10 extends AbstractShowcase {
 
     const tiles = this._createTileMaterials();
 
-    // Meadow grass texture for the surrounding terrain
+    // Meadow grass PBR textures for surrounding terrain (albedo, normal, roughness, AO)
     const grassTexture = await Texture.fromUrl("./assets/grass.webp", {
       generateMipmaps: true,
       flipY: true,
       anisotropy: 16,
     });
-    const groundMaterial = new WorldMaterial({ diffuseMap: grassTexture });
-    groundMaterial.color = Color.WHITE;
+    const grassNormal = await Texture.fromUrl("./assets/grass_normal.webp", {
+      generateMipmaps: true,
+      flipY: true,
+      anisotropy: 16,
+    });
+    const grassRoughness = await Texture.fromUrl("./assets/grass_roughness.webp", {
+      generateMipmaps: true,
+      flipY: true,
+    });
+    const grassAo = await Texture.fromUrl("./assets/grass_ao.webp", {
+      generateMipmaps: true,
+      flipY: true,
+    });
+    const groundMaterial = new StandardMaterial({
+      diffuseMap: grassTexture,
+      normalMap: grassNormal,
+      roughnessMap: grassRoughness,
+      aoMap: grassAo,
+      roughness: 0.9,
+      metallic: 0.0,
+      color: Color.WHITE,
+    });
 
-    // Build the lush meadow ground with seamless cutouts for the 2x5 pool grid
+    // Build the lush meadow ground with seamless cutouts for the pool grid
     this._buildGroundWithPoolHoles(groundMaterial);
+
+    // Plant 3D billboard grass tufts around pool curbs and across walkways to break up flat geometry
+    const tuftTexture = await Texture.fromUrl("./assets/grass_tuft.webp", {
+      generateMipmaps: true,
+      flipY: true,
+    });
+    const tuftMaterial = new StandardMaterial({
+      diffuseMap: tuftTexture,
+      roughness: 0.85,
+      metallic: 0.0,
+      color: Color.WHITE,
+      transparent: true,
+      alphaTest: 0.35,
+    });
+    const tuftPositions = this._generateTuftPositions();
+    this._grassTufts = new BillboardInstancer("GrassTufts", {
+      positions: tuftPositions,
+      size: [0.35, 0.6],
+      axisLocked: true,
+      material: tuftMaterial,
+      seed: 1042,
+    });
+    this._grassTufts.mesh.position.y = 0.22;
+    this._grassTufts.mesh.receiveShadow = true;
+    this.scene.add(this._grassTufts.mesh);
     // Load fluid textures for Lava & Slime pools
     const textureOptions = { generateMipmaps: true, flipY: true };
     // Stylized Lava inputs (MinionsArt _MainTex / _DistortTex): sampled at world XZ, so they must
@@ -517,7 +564,7 @@ export class Showcase10 extends AbstractShowcase {
    * Builds the world meadow ground with seamless cutouts for all pools of the grid,
    * mapping UVs in world space so the grass tiles continuously across all chunks.
    */
-  private _buildGroundWithPoolHoles(groundMaterial: WorldMaterial): void {
+  private _buildGroundWithPoolHoles(groundMaterial: StandardMaterial): void {
     const addGroundChunk = (name: string, w: number, d: number, px: number, pz: number): void => {
       const chunk = new Object3D(name);
       const geom = new Ground({ width: w, depth: d }).getGeometryData();
@@ -567,6 +614,68 @@ export class Showcase10 extends AbstractShowcase {
         );
       }
     }
+  }
+
+  /**
+   * Generates placement positions for grass tufts hugging pool perimeters and scattered
+   * across lawn walkways.
+   */
+  private _generateTuftPositions(): Vector3D[] {
+    const positions: Vector3D[] = [];
+    const poolKeys = Object.keys(POOL_CELLS) as PoolKey[];
+    const half = POOL_SIZE / 2;
+
+    // Seeded local PRNG for deterministic placement across all runs
+    let seed = 1042;
+    const rng = (): number => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+
+    // 1. Scatter tufts tightly along pool perimeters to break up sharp concrete edges
+    for (const key of poolKeys) {
+      const pos = poolWorldPosition(key);
+      const tuftsPerSide = 8;
+      for (let s = 0; s < tuftsPerSide; s++) {
+        const offsetRatio = (s + 0.5) / tuftsPerSide;
+        const span = (offsetRatio - 0.5) * (POOL_SIZE - 0.4);
+        const jitter = (rng() - 0.5) * 0.15;
+        const curbMargin = 0.08 + rng() * 0.22;
+
+        // North edge
+        positions.push(new Vector3D(pos.x + span + jitter, 0, pos.z - half - curbMargin));
+        // South edge
+        positions.push(new Vector3D(pos.x + span + jitter, 0, pos.z + half + curbMargin));
+        // West edge
+        positions.push(new Vector3D(pos.x - half - curbMargin, 0, pos.z + span + jitter));
+        // East edge
+        positions.push(new Vector3D(pos.x + half + curbMargin, 0, pos.z + span + jitter));
+      }
+    }
+
+    // 2. Scatter tufts across the meadow walkways between the pools
+    const poolCenters = poolKeys.map(poolWorldPosition);
+    let attempts = 0;
+    while (positions.length < 750 && attempts < 3000) {
+      attempts++;
+      const rx = (rng() - 0.5) * 44; // walkway width span
+      const rz = (rng() - 0.5) * 60; // walkway depth span
+
+      // Check if inside any pool footprint (with small curb margin)
+      let insidePool = false;
+      for (let i = 0; i < poolCenters.length; i++) {
+        const c = poolCenters[i]!;
+        if (Math.abs(rx - c.x) < half + 0.15 && Math.abs(rz - c.z) < half + 0.15) {
+          insidePool = true;
+          break;
+        }
+      }
+      if (!insidePool) {
+        positions.push(new Vector3D(rx, 0, rz));
+      }
+    }
+
+    return positions;
   }
 
   /**
@@ -736,6 +845,10 @@ export class Showcase10 extends AbstractShowcase {
   protected override update(deltaTime: number): void {
     this._time += deltaTime;
     this.camera.position.y = Math.max(this._minEyeHeight, this.camera.position.y);
+
+    if (this._grassTufts) {
+      this._grassTufts.update(this.camera);
+    }
 
     for (const liquid of this._liquids) {
       liquid.time = this._time;

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.115.2] - 2026-10-21
+
+### "The creation of something new is not accomplished by the intellect but by the play instinct." - Carl Jung
+
+- **Features:**
+  - *Showcase 10 (Waterworld & Liquid Gallery) PBR-Gras & Tiefe:* Die Wiesenflächen rund um die 16 Becken wurden von flachem `WorldMaterial` auf voll beleuchtetes `StandardMaterial` mit PBR umgestellt. Multi-Scale-Sobel-Normal-Map (`grass_normal.webp`), Mikrorauheits-Map (`grass_roughness.webp`) und Hohlraum-AO (`grass_ao.webp`) erzeugen plastischen Lichtbruch unter direktem Sonnenlicht und Cascaded Shadows.
+  - *3D-Foliage & Kantenbrechung via `BillboardInstancer`:* 750 instanziierte Grasbüschel (`grass_tuft.webp`, 38 Halme mit Alpha-Cutout) entlang der Beton-Beckenränder und auf den Gehwegen brechen die harte 90°-Schnittkante der Sockel auf.
+  - *Portal & Minceraft-Integration:* Die modulare Voxel-Sandbox (M0–M3) wurde offiziell auf *Minceraft* getauft und mit Direkt-Links zum Spiel und zum Konzept-Dossier prominent im Startportal (`public/index.html`) verlinkt.
+- **Housekeeping & Docs:**
+  - *Living Logs:* `apps/showcases/10/docs/log.md` sowie `concept-dossier.html` und Browser-Titel der Voxel-App aktualisiert.
+
 ## [0.115.1] - 2026-10-21
 
 ### "A line is a dot that went for a walk." - Paul Klee

@@ -51,3 +51,11 @@ Verification: pixel comparison of all 16 pools (GL2, top view) before/after = 0 
 Assets: removed unused `crate_*.webp` (16) and `grass.png` from this app's assets (about 9.5 MB; Showcase 12 has its own copies). Known leftovers, not touched: other unreferenced maps in `assets/` (`lava*`, `rock*`, `sand`, `slime*` non-bubble variants), and the scratched-steel texture set is duplicated in Showcases 12, 28 and 30.
 
 Not done: procedural canvas textures have no dispose path (`Texture` has no `dispose()`), so they are only released with the engine instance.
+
+## 2026-10-21 – 3D Depth & Foliage for Grass Surface
+
+Upgraded the flat ground plane to full PBR lighting and 3D silhouette foliage:
+- **Ground Material (PBR):** Replaced `WorldMaterial` (flat Lambert diffuse) with `StandardMaterial`.
+- **Texture Maps:** Generated multi-scale Sobel `grass_normal.webp`, micro-roughness `grass_roughness.webp`, and cavity `grass_ao.webp` from `grass.webp`. Directional sun, point lights (lava/slime), and cascaded shadow maps now react plastically with blade micro-relief.
+- **3D Foliage & Silhouette (`BillboardInstancer`):** Generated `grass_tuft.webp` (512x512 alpha-tested blade clump). Instantiated 750 camera-facing billboard tufts hugging the concrete pool curb edges and scattered along walkways, breaking up the harsh 90-degree pool rim intersections.
+
