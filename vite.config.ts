@@ -69,9 +69,76 @@ export default defineConfig({
     {
       name: "serve-index-from-public",
       configureServer(server) {
-        server.middlewares.use((req, _res, next) => {
-          if (req.url === "/") {
-            req.url = "/index.html";
+        const createDirectoryIndexMiddleware = (root: string) => {
+          return (req: http.IncomingMessage, res: http.ServerResponse, next: () => void) => {
+            if (!req.url) {
+              return next();
+            }
+
+            if (req.url === "/" || req.url.startsWith("/?")) {
+              req.url = "/index.html" + (req.url.startsWith("/?") ? req.url.slice(1) : "");
+              return next();
+            }
+
+            const [pathname, search] = req.url.split("?");
+            if (!pathname) {
+              return next();
+            }
+
+            // If path doesn't end with a slash, check if it points to a directory with index.html
+            if (!pathname.endsWith("/")) {
+              const cleanPath = decodeURIComponent(pathname.replace(/^\/+/, ""));
+              const candidates = [
+                path.resolve(root, cleanPath),
+                path.resolve(root, "public", cleanPath),
+              ];
+
+              for (const candidate of candidates) {
+                try {
+                  if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+                    if (fs.existsSync(path.join(candidate, "index.html"))) {
+                      const target = pathname + "/" + (search ? "?" + search : "");
+                      res.writeHead(302, {
+                        Location: target,
+                        "Content-Type": "text/html",
+                      });
+                      res.end();
+                      return;
+                    }
+                  }
+                } catch {
+                  // Ignore filesystem access errors
+                }
+              }
+            }
+
+            next();
+          };
+        };
+
+        server.middlewares.use(createDirectoryIndexMiddleware(server.config.root));
+      },
+      configurePreviewServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (!req.url) return next();
+          const [pathname, search] = req.url.split("?");
+          if (pathname && !pathname.endsWith("/")) {
+            const cleanPath = decodeURIComponent(pathname.replace(/^\/+/, ""));
+            const diskPath = path.resolve(server.config.root, cleanPath);
+            try {
+              if (fs.existsSync(diskPath) && fs.statSync(diskPath).isDirectory()) {
+                if (fs.existsSync(path.join(diskPath, "index.html"))) {
+                  res.writeHead(302, {
+                    Location: pathname + "/" + (search ? "?" + search : ""),
+                    "Content-Type": "text/html",
+                  });
+                  res.end();
+                  return;
+                }
+              }
+            } catch {
+              // Ignore
+            }
           }
           next();
         });
