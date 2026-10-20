@@ -19,7 +19,7 @@ export interface TextureOptions {
    * `quality.maxAnisotropy` level; `0` disables filtering and `> 1` requests an explicit level
    * (never above the engine cap or the device limit). Only mipmapped textures are affected. */
   anisotropy?: number;
-  /** Whether the image should be flipped vertically during loading. Defaults to false. */
+  /** Whether the image should be flipped vertically during loading. Defaults to true. */
   flipY?: boolean;
   /** The AssetManager instance to use for `fromUrl()`. Defaults to a fresh private instance
    * (not the deprecated process-wide singleton) -- pass this to share caching/headers/base-URL
@@ -160,7 +160,11 @@ export class Texture {
     image: HTMLImageElement | ImageBitmap,
     options?: TextureOptions,
   ): Texture {
-    return new Texture(image, options);
+    const tex = new Texture(image, options);
+    if (options?.flipY) {
+      tex.flipY();
+    }
+    return tex;
   }
 
   /**
@@ -171,7 +175,11 @@ export class Texture {
    * @returns A new Texture instance.
    */
   public static fromCanvas(canvas: HTMLCanvasElement, options?: TextureOptions): Texture {
-    return new Texture(canvas, options);
+    const tex = new Texture(canvas, options);
+    if (options?.flipY) {
+      tex.flipY();
+    }
+    return tex;
   }
 
   /**
@@ -204,13 +212,15 @@ export class Texture {
 
   /**
    * Loads a texture from a URL.
+   * Defaults to `flipY: true` ("Human Convention First" - top of image maps to top of 3D geometry).
    * @param url The URL of the image.
    * @param options Optional configuration options.
    * @returns A promise that resolves to a new Texture instance.
    */
   public static async fromUrl(url: string, options?: TextureOptions): Promise<Texture> {
     const assetManager = options?.assetManager ?? new AssetManager();
-    const image = await assetManager.loadImage(url, undefined, options?.flipY);
+    const flipY = options?.flipY ?? true;
+    const image = await assetManager.loadImage(url, undefined, flipY);
     return new Texture(image, options);
   }
 }

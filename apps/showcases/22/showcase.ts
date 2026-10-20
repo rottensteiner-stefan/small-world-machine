@@ -89,7 +89,7 @@ class Showcase22 extends AbstractShowcase {
     this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // 3. Environment: The Magnetic Singularity & Milky Way Skydome
-    const skyTexture = await Texture.fromUrl("./assets/milkyway.webp");
+    const skyTexture = await Texture.fromUrl("./assets/milkyway.webp", { flipY: false });
     const skydome = new Skydome({
       texture: skyTexture,
       radius: 1000,

@@ -41,7 +41,7 @@ export class Showcase8 extends AbstractShowcase {
     this.scene.add(sun);
 
     // 3. Skydome
-    const skyTexture: Texture = await Texture.fromUrl("./assets/space-2.webp");
+    const skyTexture: Texture = await Texture.fromUrl("./assets/space-2.webp", { flipY: false });
 
     const skydome: Skydome = new Skydome({
       texture: skyTexture,

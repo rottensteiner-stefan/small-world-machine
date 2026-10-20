@@ -31,4 +31,38 @@ describe("Texture", () => {
     texture.needsUpdate = true;
     expect(texture.needsUpdate).toBe(true);
   });
+
+  it("defaults to flipY: true when loading fromUrl", async () => {
+    const fakeAssetManager = {
+      loadImage: async (_url: string, _onProgress?: unknown, flipY?: boolean) => {
+        expect(flipY).toBe(true);
+        return {} as ImageBitmap;
+      },
+    } as unknown as import("../../src/loaders/AssetManager.js").AssetManager;
+
+    const tex = await Texture.fromUrl("dummy.png", { assetManager: fakeAssetManager });
+    expect(tex.isLoaded).toBe(true);
+  });
+
+  it("respects explicit flipY: false when loading fromUrl", async () => {
+    const fakeAssetManager = {
+      loadImage: async (_url: string, _onProgress?: unknown, flipY?: boolean) => {
+        expect(flipY).toBe(false);
+        return {} as ImageBitmap;
+      },
+    } as unknown as import("../../src/loaders/AssetManager.js").AssetManager;
+
+    const tex = await Texture.fromUrl("dummy.png", {
+      assetManager: fakeAssetManager,
+      flipY: false,
+    });
+    expect(tex.isLoaded).toBe(true);
+  });
+
+  it("applies flipY when requested on fromCanvas", () => {
+    const canvas = { width: 64, height: 64 } as HTMLCanvasElement;
+    const texture = Texture.fromCanvas(canvas, { flipY: true });
+    expect(texture.repeat.y).toBe(-1);
+    expect(texture.offset.y).toBe(1);
+  });
 });

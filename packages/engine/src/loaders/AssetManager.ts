@@ -219,10 +219,15 @@ export class AssetManager {
     return promise;
   }
 
+  /**
+   * Fetches an image via fetch+Blob and decodes it via createImageBitmap.
+   * `flipY` defaults to `true` ("Human Convention First" - top of image maps to top of 3D geometry).
+   * glTF models and cubemaps explicitly pass `false`.
+   */
   public async loadImage(
     url: string,
     onProgress?: ProgressCallback,
-    flipY: boolean = false,
+    flipY: boolean = true,
   ): Promise<ImageBitmap | HTMLImageElement> {
     const cacheKey: string = `${url}_${flipY}`;
     // The fallback (HTMLImageElement) lives INSIDE the cached promise: a successful fallback is

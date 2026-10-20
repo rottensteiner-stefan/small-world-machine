@@ -65,7 +65,7 @@ export async function buildEnvironment(scene: Scene): Promise<LabSurfaceTextures
   // freshly-generated panorama matching this scene's own skybox -- replaces the previous
   // (physically wrong) reuse of the raw, unconvolved skybox as both diffuse and specular map.
   try {
-    const brdfTexture = await Texture.fromUrl("./assets/ibl/brdf_lut.webp");
+    const brdfTexture = await Texture.fromUrl("./assets/ibl/brdf_lut.webp", { flipY: false });
     const irradianceTexture = new CubeTexture();
     await irradianceTexture.loadFrom("./assets/ibl/irradiance.webp", CubeLayout.CROSS_HORIZONTAL);
     const prefilterTexture = new CubeTexture();

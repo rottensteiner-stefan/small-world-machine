@@ -6,8 +6,8 @@ import type { ImageLoaderOptions } from "../interfaces/index.js";
  * Loader for image assets.
  */
 export class ImageLoader extends AbstractLoader<ImageBitmap | HTMLImageElement> {
-  /** Whether the image should be flipped vertically during loading. */
-  public flipY: boolean = false;
+  /** Whether the image should be flipped vertically during loading. Defaults to true. */
+  public flipY: boolean = true;
 
   /**
    * Creates a new ImageLoader.
@@ -15,7 +15,7 @@ export class ImageLoader extends AbstractLoader<ImageBitmap | HTMLImageElement> 
    */
   constructor(options: ImageLoaderOptions = {}) {
     super(options);
-    this.flipY = options.flipY ?? false;
+    this.flipY = options.flipY ?? true;
   }
 
   /** @inheritdoc */

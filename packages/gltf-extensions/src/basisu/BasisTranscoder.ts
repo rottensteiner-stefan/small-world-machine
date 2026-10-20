@@ -92,7 +92,7 @@ export class BasisTranscoder {
     const blob = new Blob([buffer], { type: mimeType });
     const url = URL.createObjectURL(blob);
     try {
-      return await Texture.fromUrl(url);
+      return await Texture.fromUrl(url, { flipY: false });
     } finally {
       URL.revokeObjectURL(url);
     }

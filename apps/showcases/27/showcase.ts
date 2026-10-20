@@ -152,7 +152,7 @@ class Showcase27 extends AbstractShowcase {
 
     try {
       const [brdfTexture, ...textures] = await Promise.all([
-        Texture.fromUrl("./assets/ibl/brdf_lut.webp"),
+        Texture.fromUrl("./assets/ibl/brdf_lut.webp", { flipY: false }),
         Texture.fromUrl("./assets/marble_gold_diffuse.webp"),
         Texture.fromUrl("./assets/marble_gold_normal.webp"),
         Texture.fromUrl("./assets/marble_gold_roughness.webp"),

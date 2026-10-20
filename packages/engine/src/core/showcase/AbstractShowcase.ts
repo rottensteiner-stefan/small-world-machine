@@ -63,7 +63,7 @@ export function getCaptureFrameRateFromQuery(): number | undefined {
  */
 const VALID_SHOWCASE_IDS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28,
-  29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+  29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
 ];
 
 export abstract class AbstractShowcase extends SmallWorldMachine {
@@ -401,7 +401,9 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
    */
   protected async loadIbl(basePath: string, intensity: number = 1.5): Promise<void> {
     const base: string = basePath.endsWith("/") ? basePath : `${basePath}/`;
-    const brdfLUT: Promise<Texture> = Texture.fromUrl(`${base}brdf_lut.webp`);
+    // BRDF LUT is a data texture (its V axis is roughness, not image "top"), so it must NOT be
+    // flipped by the `flipY: true` default -- same doctrine as glTF and cubemap textures.
+    const brdfLUT: Promise<Texture> = Texture.fromUrl(`${base}brdf_lut.webp`, { flipY: false });
     const irradianceMap: CubeTexture = new CubeTexture();
     const prefilterMap: CubeTexture = new CubeTexture();
     await Promise.all([

@@ -200,7 +200,7 @@ class Showcase29 extends AbstractShowcase {
 
     // 3. Load Mediterranean Skydome & Ambient Environment
     try {
-      const skyTexture = await Texture.fromUrl("./assets/sky_panorama.webp");
+      const skyTexture = await Texture.fromUrl("./assets/sky_panorama.webp", { flipY: false });
       const skydome = new Object3D("Skydome");
       skydome.geometry = new Sphere({
         radius: 180,

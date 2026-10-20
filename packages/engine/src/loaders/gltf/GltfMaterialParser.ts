@@ -339,7 +339,9 @@ export class GltfMaterialParser {
     if (!url) return null;
 
     try {
-      const img = await assetManager.loadImage(url);
+      // glTF 2.0 defines texture coordinates with origin (0, 0) at the upper-left corner of the image,
+      // so glTF textures must NOT be flipped on decode (flipY = false).
+      const img = await assetManager.loadImage(url, undefined, false);
       return Texture.fromImage(img);
     } finally {
       if (objectUrl) URL.revokeObjectURL(url);
