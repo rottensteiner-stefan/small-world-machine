@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.115.0] - 2026-10-20
 
 ### "The most valuable of all talents is that of never using two words when one will do." - Thomas Jefferson
 
@@ -80,6 +80,13 @@
 - **Architecture & Bugfixes:**
   - *WebGPU blends transparent materials like WebGL (engine, `GPUPipelineCache.resolveBlendingMode`):* WebGL switches on SRC_ALPHA/ONE_MINUS_SRC_ALPHA for every `transparent` draw, while WebGPU only blended when a material set `state.blending` itself. Transparent materials without it (`LiquidWaveMaterial`, `SlimeMaterial`, `StylizedLavaMaterial`, `OilPuddleMaterial` in liquid-extras and showcase 12, `RainPuddleMaterial`) were written unblended on WebGPU -- e.g. rain puddles ~35 % too bright and too contrasty. The pipeline key and colour target now resolve `transparent` without `blending` to ALPHA; explicitly chosen modes are untouched (**Behaviour change on WebGPU** for those materials, towards WebGL parity).
   - *WebGPU canvas no longer applies the device pixel ratio twice at startup (engine):* the WebGPU renderer sizes itself during init (`canvas.width = cssWidth · DPR`), and `SmallWorldMachine.start()` then passed that already scaled `canvas.width` to `setSize()` again -- a 2x-DPR screen rendered 4x the pixels of WebGL until the first window resize. `start()` now passes the CSS size captured before renderer creation, and `WebGPURenderer.setSize()` pins the canvas CSS size like `AbstractWebGLRenderer.setSize()` does.
+
+## [Unreleased]
+
+### "Patience and perseverance have a magical effect before which difficulties disappear and obstacles vanish." - John Quincy Adams
+
+- **Features:**
+  - *Showcase 41 & `@small-world-machine/artistic-extras` — 3D-Metall-Wandrelief & Assemblage Art:* Neues Extra-Package `@small-world-machine/artistic-extras` (`packages/artistic-extras/`) mit `MetalReliefMaterial` (3D PBR-kompatibel, Voronoi-Spachtelfacetten / Impasto, gerichtete Winkelschleifer-Schleifriefen, Schweißkanten-Beveling via Screen-Space-Derivate, selektive Color-Pop-Farbisolierung in HSV/Luma mit Eisenoxid/Rost-Farbrampe in Tiefen, Streckmetall-Gitter und nasse vertikale Bodenreflexionen auf WebGPU, WebGL2 und WebGL1) sowie `MetalReliefScreenMaterial` und `MetalReliefPostProcessor` (Screen-Space Sobel-Präge- und Farbfilter für Canvases und Render-Targets). Showcase 41 (`apps/showcases/41/`) demonstriert den Look mit interaktivem Live-Toggle im HUD zwischen **2.5D-Diorama** (geschichtete 3D-Bleche, Stahldrähte, Parallaxe mit Orbit-Kamera) und **Full-Screen Canvas Shader** (flaches 2D-Bild in Echtzeit plastisch geprägt) über drei Motive (Paris Regen mit rotem Schirm, Alpine Seilbahn mit gespannten Stahldrahtseilen, Nordischer Hafen mit Segelboot-Wanten). Volle Einbindung in `vite.config.ts`, `scripts/check-showcases.js`, `public/index.html` und Navigationsring (40→41→1). App-Dossier nach Konvention (`docs/concept-dossier.html` + `docs/log.md`).
 
 ## [0.114.0] - 2026-10-19
 
