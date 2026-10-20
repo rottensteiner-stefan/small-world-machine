@@ -5,6 +5,83 @@
 
 ---
 
+## 2026-10-20 — M3 implementiert: Persistenz (Edit-Deltas) + gebackenes Tageslicht/Schattierung
+
+**Status:** ✅ M3-Architektur + Kern grün (Gates unten, inkl. M1+M2-Regression). Plan:
+`.agents/scratches/voxel-m3-plan.md` (FREIGEGEBEN 2026-10-20, Entscheide D1–D5 fixiert). **NUR
+App-Level, kein Engine-Core-Change** (Dossier-Mandat). Reihenfolge laut Freigabe: ① Delta-Store →
+② ChunkWorld-Tracking → ③ Licht → ④ Gates.
+
+### Was gebaut wurde (alles app-level, `apps/sample-apps/voxel-prototype/`)
+
+- **Delta-Store (D1/D2, interface-first):** `voxel/store/ChunkDeltaCodec.ts` (reine, versionierte
+  V1-Serialisierung: Header `version|seed|count` + `(x,y,z,id)`-Tupel; byte-deterministisch,
+  „last-write-wins" je Zelle, fremde Versionen/korrupte Payloads → sauber ignorieren statt
+  Fehler). `ChunkDeltaStore.ts` = **Interface** (`getSeed/setSeed/loadChunkDelta/
+  saveChunkDelta/clearChunkDelta/clearAll/flush/close`) + Memory-Treiber für Node-Tests und das
+  headless Gate. `IndexedDbChunkDeltaStore.ts` = einziger aktueller Produkt-Treiber (D2: OPFS/
+  andere Backends später hinter demselben Interface); typsichere Promise-Kapselung ohne `any`,
+  Fail-fast auf IDB-Fehlern.
+- **ChunkWorld-Delta-Tracking (D3/D3b):** `setBlock` vermerkt die editierte Zelle im
+  Geänderte-Zellen-Set des Chunk-Records (getrennt von der Remesh-Logik); **Save-on-Evict**
+  (Streaming-Schleife + destroy) serialisiert NUR die abweichenden Zellen und speichert sie
+  Feuer-und-vergiss (in-flight-Tracking); `persistAll()`/`flushStore()` = Durability-Barriere für
+  den pagehide/visibilitychange-Pfad. **Load-Apply im `_onData`-Pfad:** der Record bleibt bis zum
+  Abschluss des Store-Reads in „generating", damit die Streaming-Schleife nie eine uneditierte
+  Säule vorzeitig mesht — der Worker erhält und mesht die **zusammengesetzten** Ziel-Voxels
+  (generiert + Deltas), bleibt also einzige Mesh-Quelle („meshing never on main" hält).
+  **Renn-Guard:** ein neuerer lokaler Edit während eines laufenden Loads gewinnt gegen ältere
+  gespeicherte Daten (per Gated-Store-Test deterministisch gepinnt). Seed wird lazy + einmalig
+  persisiert (D3b) → „Browser-Neustart → exakt dieselbe Welt".
+- **Licht (D4/D5):** `voxel/light/daylight.ts` (pure, golden-gepinnte Funktionen). Tageslicht-
+  Höhenregel `daylightFactorAt(y, surfaceY)` (Oberfläche=1.0, pro Block runter −0.16, globaler
+  Floor 0.1) — **rein koordinaten-abhängig → naht-exakt per Konstruktion**, kein
+  Ecken-Spalten-Protokoll nötig (im Gegensatz zu AO). × billigster Punktflood `floodSealedness`
+  (12 Einzelachsen-Proben im Air-Ring der Face-Außenseite; versiegelte Hohlräume ×0.7, jede
+  Offenheit → 1.0; harter Cutoff, auf Heightfield-Terrain inert — nur echte versiegelte Volumen
+  dunkeln, D5-Scope-Cut dokumentiert). Der Mesher bäckt das Ergebnis in `colors.b`; Shader
+  multipliziert `albedo · mix(ambient,1,ao) · ndl · lightFactor` (exakte Formel golden gepinnt;
+  D4 = worker-gebaut wie AO, ein globaler Tageszeit-Multiplikator als Shader-Uniform kommt
+  bewusst erst M4). AO-Kanal `.g` unverändert (M2-Regression in `MesherLight.test.ts` gepinnt).
+- **App-Wiring:** `IndexedDbChunkDeltaStore` in `ChunkWorld` injiziert (graceful degrade — ohne
+  Browser-Storage läuft die App weiter, nur ohne Persistenz); Auto-Flush bei pagehide/
+  visibilitychange; Overlay-Zeile „Δ saved (session)" (Anzahl/KB); QA-Hook erweitert um
+  `getLightFactor` / `forcePersist` / `getStoredSeed`.
+
+### Verifikation (M3-Gate)
+
+- `tsc --noEmit`, `npm run lint:fix`, `npm run build:lib`, volle Suite **352 Dateien / 2505 Tests
+  grün** (inkl. 27 neuer M3-Tests: ChunkDeltaStore 9, ChunkWorldDeltas 6, MesherLight 12);
+  `npm run build:showcases` ok.
+- `check-voxel-m1.mjs` + `check-voxel-m2.mjs` **Regression grün** (je `ok:true`, Worker-Beweis
+  unangetastet).
+- `check-voxel-m3.mjs` (NEU): statisch grounded/Worker-Beweis/0 Errors/nicht-blank; **Persistenz-
+  Beweis** — QA-Edit → `forcePersist` → `page.reload()` → dieselbe Zelle liest weiter den
+  editierten Wert (1 Zelle = **13 Bytes**, KB-Bereich wörtlich), Seed=777 im Store; **Licht-
+  Beweis** — Oberflächen-Zelle `getLightFactor`=1.0, Untergrund-Zelle=0.36 (<1.0),
+  Chunk-Grenz-Oberflächen-Zelle=1.0 (kein Schatten-Leak; Höhenregel-Parität über Rim). Vision
+  (Gemini-Brücke): persistierter Block eindeutig sichtbar, Shading plausibel (oben hell/unten
+  dunkler, keine flachen Schwarzlöcher), **keine Naht-Artefakte an Chunk-Grenzen**, AO-Look
+  erhalten.
+
+### Bewusste Scope-Entscheidungen (Dossier-Disziplin)
+
+- **Kein volles MC-Licht** (kein Torch-Gradient-Cast/Occlusion), **kein Tag/Nacht-Rhythmus** als
+  Mechanik (erst M4, als Uniform-Multiplikator ÜBER der gebackenen Struktur, ohne Neumeshing),
+  **kein OPFS-Treiber** (hinter dem Interface nachrüstbar), kein Multi-Worker-Pool, kein
+  WebGPU-Material, **Terrain-Generator unverändert**.
+- **Punktflood = billigster harter Cutoff** (D5): minimale Grenz-Unschärfe bei fehlenden
+  Nachbardaten („open"-Lesung an Welträndern) ist akzeptierter Trade-off, kein exaktes Fluten.
+- Bekannte Vorbestehende Grenze (nicht M3): schwarzer Himmel (kein Skybox-/Atmosphären-Pass,
+  M0-Ära) — unverändert, kein M3-Regress. Persistenz bei abruptem Prozess-Kill über
+  `pagehide` ist „best effort" (Fire-and-Forget); der explizite Flush-Pfad (`forcePersist`/
+  `persistAll`) ist die harte Durability-Garantie.
+
+### Nächste Schritte (M4/M5)
+
+Tag/Nacht als Spielmechanik (Uniform-Multiplikator), weiterer Store-Treiber (OPFS) optional,
+Anvil-Import nur falls echte MC-Saves, Multi-Worker-Pool (M5).
+
 ## 2026-10-20 — M2 implementiert: Break/Place, 1-Chunk-Remesh, gebäcktes AO, CC0-Atlas, Wasser-Rendern
 
 **Status:** ✅ M2-Architektur + Kern grün (Gates unten, inkl. M1-Regression). Plan:

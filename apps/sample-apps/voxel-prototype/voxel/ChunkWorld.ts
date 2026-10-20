@@ -7,6 +7,11 @@ import type {
   VoxelMeshData,
 } from "./mesh/NaiveMesher.js";
 import { buildNeighborCorner, buildNeighborRim } from "./mesh/NaiveMesher.js";
+import { daylightFactorAt } from "./light/daylight.js";
+import type { ChunkDeltaEdit } from "./store/ChunkDeltaCodec.js";
+import { encodeChunkDelta } from "./store/ChunkDeltaCodec.js";
+import type { ChunkDeltaStore } from "./store/ChunkDeltaStore.js";
+import { tryDecode } from "./store/ChunkDeltaStore.js";
 import type { MeshClient, MeshOutcome } from "./worker/MeshWorkerProtocol.js";
 
 /**
@@ -37,6 +42,10 @@ interface ChunkRecord {
   chunk: Chunk | null; // non-null once phase >= "data"
   /** Set while a mesh is in flight if an edit mutated the voxels; the loop remeshes afterwards. */
   dirty: boolean;
+  /** M3: local linear cell index -> block id, for every cell edited since this Chunk was built
+   *  (the generated terrain plus any stored edits that were applied at load). This is the ONLY
+   *  thing that ever gets persisted -- the terrain itself is regenerated from the seed (D1). */
+  deltas: Map<number, number>;
 }
 
 export interface ChunkWorldCallbacks {
@@ -53,6 +62,9 @@ export interface ChunkWorldOptions {
   descriptor: readonly MeshBlockDescriptorEntry[];
   /** World seed handed to the worker's own `TerrainGenerator`. */
   seed: number;
+  /** M3: optional edit-delta store. When injected, edited cells are persisted on eviction and
+   *  re-applied on load (only cells that differ from the seed-regenerated terrain -- D1/D3). */
+  store?: ChunkDeltaStore;
   /** Streaming add radius (Chebyshev, in chunks). Data is generated within it. Default 6. */
   generateRadius?: number;
   /** Suspension distance where a ready chunk is dropped (hysteresis: must be > generateRadius). */
@@ -76,6 +88,10 @@ export interface ChunkWorldStats {
   meshMsTotal: number;
   /** Successful block edits since creation (M2, for the stats overlay + QA gate). */
   edits: number;
+  /** M3: number of chunk edit-deltas persisted (save-on-evict / `persistAll`). */
+  persistCount: number;
+  /** M3: total bytes persisted -- KB-range by construction (edit deltas only, D1). */
+  persistBytes: number;
 }
 
 const CHUNK_SIZE = Chunk.SIZE;
@@ -123,10 +139,17 @@ function cornerDirForNeighbor(dx: number, dz: number): CornerDir {
 export class ChunkWorld {
   private readonly _client: MeshClient;
   private readonly _collidable: ReadonlySet<number>;
+  private readonly _opaque: ReadonlySet<number>;
   private readonly _callbacks: ChunkWorldCallbacks;
   private readonly _generateRadius: number;
   private readonly _unloadRadius: number;
   private readonly _maxTasksPerTick: number;
+  private readonly _seed: number;
+  private readonly _store: ChunkDeltaStore | null;
+  /** Single-flight seed persistence (D3b) -- set once, at most one IDB write in flight. */
+  private _seedPersist: Promise<void> | null = null;
+  /** In-flight delta saves; awaited by `flushStore()` for the pagehide/QA durability path. */
+  private _pendingSaves: Set<Promise<void>> = new Set();
 
   private readonly _chunks: Map<string, ChunkRecord> = new Map();
   private _focusCx: number = 0;
@@ -135,10 +158,13 @@ export class ChunkWorld {
   private _meshMsTotal: number = 0;
   private _meshMsLast: number = 0;
   private _editCount: number = 0;
+  private _persistCount: number = 0;
+  private _persistBytes: number = 0;
 
   constructor(options: ChunkWorldOptions) {
     this._client = options.client;
     this._collidable = new Set(options.descriptor.filter((e) => e.collidable).map((e) => e.id));
+    this._opaque = new Set(options.descriptor.filter((e) => e.opaque).map((e) => e.id));
     this._callbacks = options.callbacks;
     this._generateRadius = options.generateRadius ?? 6;
     this._unloadRadius = options.unloadRadius ?? this._generateRadius + 2;
@@ -148,6 +174,8 @@ export class ChunkWorld {
       );
     }
     this._maxTasksPerTick = options.maxTasksPerTick ?? 16;
+    this._seed = options.seed;
+    this._store = options.store ?? null;
     // Wire the background roles with the world seed + block semantics (fire-and-forget: the
     // worker processes messages in order, so configure always precedes the first task).
     this._client.configure(options.seed, options.descriptor);
@@ -176,6 +204,7 @@ export class ChunkWorld {
     for (const [key, rec] of Array.from(this._chunks)) {
       if (chebyshev(rec.cx, rec.cz, fx, fz) > this._unloadRadius) {
         if (rec.phase === "ready") this._callbacks.onUnload(rec.cx, rec.cz);
+        this._saveDelta(rec); // M3: persist edited cells BEFORE the record is dropped (D3)
         this._chunks.delete(key);
       }
     }
@@ -218,6 +247,35 @@ export class ChunkWorld {
     return this._collidable.has(this.getWorldBlock(wx, wy, wz));
   }
 
+  /** M3 light probe (QA gate / diagnostics): the baked light factor a cell would carry in the
+   *  mesh. Returns the canonical seam-exact DAYLIGHT component (the SAME pure height rule the
+   *  worker mesher bakes into `colors.b`, D4). The mesher's per-face point-flood only darkens
+   *  fully sealed air pockets -- a face-side effect a cell query cannot determine without face
+   *  context, and inert on generated heightfield terrain (no sealed pockets), so this query and
+   *  the meshed output agree on the game world. Out-of-column cells read as open air (full light). */
+  public lightFactorAt(wx: number, wy: number, wz: number): number {
+    if (wy < 0 || wy >= CHUNK_SIZE) return 1;
+    const rec = this._chunks.get(keyOf(Math.floor(wx / CHUNK_SIZE), Math.floor(wz / CHUNK_SIZE)));
+    if (!rec?.chunk) return 1;
+    const lx = ((Math.floor(wx) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const lz = ((Math.floor(wz) % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const voxels = rec.chunk.voxels;
+    const opaqueAt = (x: number, y: number, z: number): boolean => {
+      if (x < 0 || y < 0 || z < 0 || x >= CHUNK_SIZE || y >= CHUNK_SIZE || z >= CHUNK_SIZE) {
+        return false; // missing neighbor data -> open (world/column edge)
+      }
+      return this._opaque.has(voxels[x + z * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE]!);
+    };
+    let surfaceY = -1;
+    for (let y = CHUNK_SIZE - 1; y >= 0; y--) {
+      if (opaqueAt(lx, y, lz)) {
+        surfaceY = y;
+        break;
+      }
+    }
+    return daylightFactorAt(wy, surfaceY);
+  }
+
   /**
    * M2 block editing (dossier §4.2): writes a block id into the loaded column at world
    * coordinates and schedules the BOUNDED 1-chunk remesh (own chunk + horizontal neighbors whose
@@ -245,6 +303,10 @@ export class ChunkWorld {
     if (current === id) return false;
     rec.chunk.setBlock(lx, Math.floor(wy), lz, id);
     this._editCount++;
+    // M3 delta tracking: remember the edited cell (local linear index) so it can be persisted on
+    // eviction. Last-write-wins -- a later edit of the same cell overwrites the earlier entry.
+    rec.deltas.set(rec.chunk.indexOf(lx, Math.floor(wy), lz), id);
+    void this._persistSeed();
     this._scheduleRemesh(cx, cz, lx, lz);
     return true;
   }
@@ -265,21 +327,51 @@ export class ChunkWorld {
       meshMsLast: this._meshMsLast,
       meshMsTotal: this._meshMsTotal,
       edits: this._editCount,
+      persistCount: this._persistCount,
+      persistBytes: this._persistBytes,
     };
   }
 
   public destroy(): void {
     for (const rec of this._chunks.values()) {
       if (rec.phase === "ready") this._callbacks.onUnload(rec.cx, rec.cz);
+      this._saveDelta(rec); // M3: persist edited cells even on hard teardown
     }
     this._chunks.clear();
     this._client.destroy();
   }
 
+  /**
+   * M3 durability (D3): eagerly persists every loaded chunk's edit-deltas (loaded edits are
+   * re-stored idempotently; new edits are saved once) and waits for all in-flight writes +
+   * the seed record. Used by the pagehide/visibilitychange flush path in the host app and by
+   * the QA gate to prove persistence across reload.
+   */
+  public async persistAll(): Promise<void> {
+    for (const rec of this._chunks.values()) this._saveDelta(rec);
+    await this._persistSeed();
+    await this.flushStore();
+  }
+
+  /** Waits for every currently in-flight delta write and the driver's durability barrier. */
+  public async flushStore(): Promise<void> {
+    const store = this._store;
+    if (!store) return;
+    await Promise.allSettled([...this._pendingSaves]);
+    await store.flush();
+  }
+
   // --- internals ---
 
   private _requestGenerate(cx: number, cz: number): void {
-    const rec: ChunkRecord = { cx, cz, phase: "generating", chunk: null, dirty: false };
+    const rec: ChunkRecord = {
+      cx,
+      cz,
+      phase: "generating",
+      chunk: null,
+      dirty: false,
+      deltas: new Map(),
+    };
     this._chunks.set(keyOf(cx, cz), rec);
     this._client
       .generate(cx, cz)
@@ -287,12 +379,27 @@ export class ChunkWorld {
       .catch((err: unknown) => this._onError(cx, cz, err));
   }
 
-  private _onData(cx: number, cz: number, data: Uint8Array): void {
+  /** Generates a column and, once the stored edit-delta has been reapplied on top of the
+   *  regenerated terrain, hands it to the mesher. The worker stays the ONLY source of mesh
+   *  geometry -- it simply receives the COMPOSED voxels (generated + edits), exactly as in M1/M2.
+   *
+   *  The record stays in phase "generating" while the async store read runs, so the streaming
+   *  loop can never dispatch a premature mesh of the un-edited column. If the chunk is evicted
+   *  while the read is in flight, its (now complete) deltas are persisted and the mesh is
+   *  skipped -- nothing is lost. */
+  private async _onData(cx: number, cz: number, data: Uint8Array): Promise<void> {
     const rec = this._chunks.get(keyOf(cx, cz));
     if (!rec || rec.phase !== "generating") return; // evicted meanwhile
     const chunk = new Chunk();
     chunk.voxels.set(data);
     rec.chunk = chunk;
+    await this._applyStoredEdits(cx, cz, rec);
+    if (!this._chunks.has(keyOf(cx, cz))) {
+      // Evicted while the store read was in flight -- persist the fully applied edits, skip mesh.
+      this._saveDelta(rec);
+      void this._persistSeed();
+      return;
+    }
     rec.phase = "data";
     // Try to mesh this chunk (neighbors may already be ready) and unblock any neighbor that was
     // waiting on OUR data.
@@ -300,6 +407,42 @@ export class ChunkWorld {
     for (const [dx, dz] of MESH_NEIGHBORS) {
       const nrec = this._chunks.get(keyOf(cx + dx, cz + dz));
       if (nrec && nrec.phase === "data") this._tryMesh(cx + dx, cz + dz, nrec);
+    }
+  }
+
+  /** Loads and applies (cx,cz)'s stored edit-delta onto the freshly generated voxels (M3 D3).
+   *  Cells already touched by a NEWER local edit (post-generation) are left alone -- a mount-time
+   *  edit must never be clobbered by older persisted data. Foreign/corrupt payloads or store
+   *  errors are dropped with a warning: a storage hiccup must not block the world (fail-soft). */
+  private async _applyStoredEdits(cx: number, cz: number, rec: ChunkRecord): Promise<void> {
+    const store = this._store;
+    const chunk = rec.chunk;
+    if (!store || !chunk) return;
+    let payload: Uint8Array | null;
+    try {
+      payload = await store.loadChunkDelta(cx, cz);
+    } catch (err: unknown) {
+      console.warn(`[ChunkWorld] store read failed for (${cx}, ${cz}), building from terrain:`, err);
+      return;
+    }
+    if (payload === null) return;
+    const data = tryDecode(payload);
+    if (data === null) {
+      console.warn(
+        `[ChunkWorld] discarding stored delta for (${cx}, ${cz}): foreign version or corrupt payload`,
+      );
+      return;
+    }
+    let applied = 0;
+    for (const edit of data.edits) {
+      const index = chunk.indexOf(edit.x, edit.y, edit.z);
+      if (rec.deltas.has(index)) continue; // a newer local edit already owns this cell
+      chunk.setBlock(edit.x, edit.y, edit.z, edit.id);
+      rec.deltas.set(index, edit.id);
+      applied++;
+    }
+    if (applied > 0) {
+      console.info(`[ChunkWorld] reapplied ${applied} stored edits on (${cx}, ${cz})`);
     }
   }
 
@@ -377,5 +520,57 @@ export class ChunkWorld {
     // errors self-heal). Persistent bugs surface in the console.
     this._chunks.delete(keyOf(cx, cz));
     console.warn(`[ChunkWorld] task failed for chunk (${cx}, ${cz}):`, err);
+  }
+
+  /** Inverse of `Chunk.indexOf` (M3 delta persistence): local linear index -> local (x,y,z). */
+  private static _localCoordsOf(index: number): { x: number; y: number; z: number } {
+    const x = index % CHUNK_SIZE;
+    const z = Math.floor(index / CHUNK_SIZE) % CHUNK_SIZE;
+    const y = Math.floor(index / (CHUNK_SIZE * CHUNK_SIZE));
+    return { x, y, z };
+  }
+
+  /** Serializes and queues a chunk's edit-deltas for storage (fire-and-forget; awaited by
+   *  `persistAll`/`flushStore`). No-op when there is no store or nothing was edited. Re-saving a
+   *  chunk that was merely loaded and left untouched is idempotent */
+  private _saveDelta(rec: ChunkRecord): void {
+    const store = this._store;
+    if (!store || rec.deltas.size === 0) return;
+    const edits: ChunkDeltaEdit[] = [];
+    for (const [index, id] of rec.deltas) {
+      const { x, y, z } = ChunkWorld._localCoordsOf(index);
+      edits.push({ x, y, z, id });
+    }
+    const payload = encodeChunkDelta(this._seed, edits);
+    const tracked: Promise<void> = store.saveChunkDelta(rec.cx, rec.cz, payload).then(
+      () => {
+        this._persistCount++;
+        this._persistBytes += payload.length;
+      },
+      (err: unknown) => {
+        console.warn(`[ChunkWorld] delta save failed for (${rec.cx}, ${rec.cz}):`, err);
+      },
+    );
+    this._pendingSaves.add(tracked);
+    void tracked.finally(() => this._pendingSaves.delete(tracked));
+  }
+
+  /** Single-flight persistence of the world seed (D3b), so a relaunch rebuilds the same world.
+   *  Called lazily on the first edit / delta save; awaited by `persistAll`. Failures re-arm so a
+   *  later edit retries instead of silently losing the seed. */
+  private _persistSeed(): Promise<void> | null {
+    const store = this._store;
+    if (!store) return null;
+    if (this._seedPersist) return this._seedPersist;
+    this._seedPersist = Promise.resolve(store.setSeed(this._seed)).then(
+      () => {
+        this._seedPersist = null;
+      },
+      (err: unknown) => {
+        this._seedPersist = null;
+        console.warn("[ChunkWorld] seed persist failed:", err);
+      },
+    );
+    return this._seedPersist;
   }
 }

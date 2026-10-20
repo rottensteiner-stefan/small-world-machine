@@ -75,6 +75,7 @@ out vec3 v_normal;
 out vec2 v_uv;
 flat out uint v_texLayer;
 out float v_ao;
+out float v_light;
 
 void main() {
     vec4 wp = u_model * vec4(a_position, 1.0);
@@ -83,5 +84,7 @@ void main() {
     v_texLayer = uint(a_color.x + 0.5);
     // M2 baked vertex occlusion (Minecraft 4-level scheme), carried to the fragment.
     v_ao = a_color.y;
+    // M3 baked daylight/point-flood light factor (colors.b), carried to the fragment.
+    v_light = a_color.z;
     gl_Position = u_vp * wp;
 }

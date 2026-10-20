@@ -1,6 +1,12 @@
 import type { BlockRegistry } from "../BlockRegistry.js";
 import { BLOCK_AIR, faceAxisForNormal } from "../BlockRegistry.js";
 import { Chunk } from "../Chunk.js";
+import {
+  FLOOD_OFFSETS,
+  combineLight,
+  daylightFactorAt,
+  floodSealedness,
+} from "../light/daylight.js";
 
 /**
  * Output of the mesher: typed vertex/index arrays shaped exactly like the engine's
@@ -10,8 +16,10 @@ import { Chunk } from "../Chunk.js";
  *
  * Per-vertex `colors` packs the atlas layer in `.r` (the engine binds `colors` at the fixed
  * attribute location 11 / `a_color`, read by the block shader), the baked vertex-Occlusion
- * factor in `.g` (0..1, Minecraft 4-level scheme -- M2), and `.b/.a` are left at 1. `colors.g`
- * is 1 for transparent (water) faces, which get no block AO.
+ * factor in `.g` (0..1, Minecraft 4-level scheme -- M2), and the M3 baked light factor in `.b`
+ * (0..1, daylight height rule x cheapest point flood, worker-built like the AO). `.a` stays 1.
+ * `colors.g` is 1 for transparent (water) faces, which get no block AO, and their `.b` is
+ * always full light (a translucent surface is never shaded by the flood).
  */
 export interface VoxelMeshData {
   positions: Float32Array;
@@ -330,6 +338,41 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
     return input.voxels[x + z * size + y * size * size]!;
   };
 
+  // M3 baked light (D4/D5): per FACE, lightFactor = daylight height rule (the cell's OWN column
+  // -- seam-exact by construction, no cross-chunk data) x cheapest point flood. The flood probes
+  // the AIR RING on the face's OUTER side (single-axis FLOOD_OFFSETS around the adjacent air
+  // cell): a truly sealed pocket (0 open ring cells) darkens hard, ANY openness keeps full flood
+  // weight (D5 hard cut, no exact flooding). Every visible face implies an open neighbor, so on
+  // heightfield terrain the flood stays inert (vertical openness in the ring) -- it only fires on
+  // genuinely enclosed volumes (sealed rooms/pockets), which is exactly D5's scope.
+  const columnSurfaceY = new Map<number, number>();
+  const surfaceOfColumn = (x: number, z: number): number => {
+    const key = x + z * size;
+    const cached = columnSurfaceY.get(key);
+    if (cached !== undefined) return cached;
+    let surf = -1;
+    for (let y = size - 1; y >= 0; y--) {
+      const id = input.voxels[x + z * size + y * size * size]!;
+      if (descriptor.get(id)?.opaque ?? false) {
+        surf = y;
+        break;
+      }
+    }
+    columnSurfaceY.set(key, surf);
+    return surf;
+  };
+
+  const lightForFace = (x: number, y: number, z: number, face: FaceTemplate): number => {
+    const ax = x + face.neighborOffset[0]!;
+    const ay = y + face.neighborOffset[1]!;
+    const az = z + face.neighborOffset[2]!;
+    let open = 0;
+    for (const [dx, dy, dz] of FLOOD_OFFSETS) {
+      if (!isSolidAt(ax + dx, ay + dy, az + dz)) open++;
+    }
+    return combineLight(daylightFactorAt(y, surfaceOfColumn(x, z)), floodSealedness(open));
+  };
+
   /** Minecraft-treue 4-Level-Vertex-Occlusion (D5): occ in {0..3} -> Faktor in {1, 2/3, 1/3, 0},
    *  0 = dunkelste Vertiefung. Stichproben sind die beiden In-Ebene-Kanten-Nachbarn und der
    *  In-Ebene-Corner in der AUSSEREN-Face-Schicht (block + Face-Normale): ein komplett
@@ -381,6 +424,7 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
     face: FaceTemplate;
     layer: number;
     ao: readonly [number, number, number, number];
+    light: number;
   }> = [];
 
   // Pass 1 -- collect opaque visible faces (also sizes the output arrays exactly). AO is baked
@@ -401,7 +445,15 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
           const axis = faceAxisForNormal(face.normal[1]!);
           const layers = descriptor.get(id)!.layers;
           const layer = layers[axis]!;
-          visibleFaces.push({ x, y, z, face, layer, ao: vertexOcclusionFactors(x, y, z, face) });
+          visibleFaces.push({
+            x,
+            y,
+            z,
+            face,
+            layer,
+            ao: vertexOcclusionFactors(x, y, z, face),
+            light: lightForFace(x, y, z, face),
+          });
         }
       }
     }
@@ -426,7 +478,8 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
 
           const axis = faceAxisForNormal(face.normal[1]!);
           const layer = def.layers[axis]!;
-          visibleFaces.push({ x, y, z, face, layer, ao: [1, 1, 1, 1] });
+          // Water faces carry no AO and no flood shading (translucent surfaces stay fully lit).
+          visibleFaces.push({ x, y, z, face, layer, ao: [1, 1, 1, 1], light: 1 });
         }
       }
     }
@@ -449,7 +502,7 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
   let ii = 0;
   for (let f = 0; f < visibleFaces.length; f++) {
     const entry = visibleFaces[f]!;
-    const { x, y, z, face, layer, ao } = entry;
+    const { x, y, z, face, layer, ao, light } = entry;
     const n = face.normal;
     const ta = face.tangentA;
     const tb = face.tangentB;
@@ -481,7 +534,7 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
     for (let k = 0; k < 4; k++) {
       colors[(vi + k) * 4] = layer;
       colors[(vi + k) * 4 + 1] = ao[k]!;
-      colors[(vi + k) * 4 + 2] = 1;
+      colors[(vi + k) * 4 + 2] = light;
       colors[(vi + k) * 4 + 3] = 1;
     }
 

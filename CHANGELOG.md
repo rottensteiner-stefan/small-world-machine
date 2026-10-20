@@ -14,6 +14,28 @@
     zurückgenommen (Maker bleibt eigenständige Seite). Gemeinsamer Kern/CLI unverändert über ADR 0034
     (ACCEPTED). Kein Verhaltens-/API-Change — reine Architektur-Dokumentation.
 - **Sample Apps:**
+  - *Voxel-Proto M3: Persistenz (Edit-Deltas) + gebackenes Tageslicht/Schattierung (app-level, kein
+    Engine-Change):* **Automatisches Save/Load** ohne UI (D3): gespeichert werden NUR
+    `(x,y,z,id)`-Tupel der von der deterministisch geseedeten Welt abweichenden Zellen
+    („editierter Delta-Store", D1) — KB-Bereich per Konstruktion (verifiziert: 1 Zelle = 13 B);
+    Seed wird im Store mitpersistiert (D3b, „Neustart → exakt dieselbe Welt"). **Interface-first**
+    (D2): `ChunkDeltaStore`-Interface (load/save/clear/flush/seed) mit **IndexedDB als einzigen
+    aktuellen Treiber** (OPFS/andere später hinter demselben Interface), reine versionierte
+    V1-Codierung (fremde Versionen/korrupte Payloads werden ignoriert statt gefehlt); Memory-
+    Treiber für Node-Tests/Gate. `ChunkWorld` trackt Editierungen je Chunk, speichert bei
+    Evict + `persistAll`/Flush (pagehide/visibilitychange), wendet Deltas im `_onData`-Pfad auf
+    die generierte Säule an (Renn-Guard: neuere lokale Edits schlagen ältere gespeicherte Daten;
+    der Worker mesht nach wie vor die einzige zusammengesetzte Voxel-Quelle — „meshing never on
+    main" hält). **Baked Licht (D4/D5):** Lichtfaktor in `colors.b` (worker-gebaut wie das AO) =
+    Tageslicht-Höhenregel (Oberfläche 1.0, pro Block −0.16, Floor 0.1; **rein koordinaten-
+    abhängig → naht-exakt per Konstruktion**, kein Ecken-Spalten-Protokoll) × billigster
+    Punktflood (hart gecutteter 12-Proben-Air-Ring der Face-Außenseite; versiegelte Hohlräume
+    dunkeln, offene bleiben voll). Shader multipliziert `albedo · mix(ambient,1,ao) · ndl ·
+    lightFactor` (Formel golden gepinnt; globaler Tageszeit-Multiplikator als Uniform erst M4);
+    AO `.g` unverändert (M2-Regression gepinnt). QA-Hook `getLightFactor`/`forcePersist`/
+    `getStoredSeed`; wiederverwendbares Live-Gate `.agents/scratches/check-voxel-m3.mjs`
+    (QA-Edit → forcePersist → `page.reload()` → Zelle weiterhin editiert; Licht oben hell/unten
+    dunkel; 0 Errors; nicht-blank). Kein Repo-API-Change.
   - *Voxel-Proto M2: Break/Place-Editing, 1-Chunk-Remesh, gebäcktes AO, CC0-Atlas, Wasser-Rendern
     (app-level, kein Engine-Change):* Sichtlinien-Raycast (`VoxelRaycast`, parametrische DDA gegen
     `SweepWorld`-artige Abfragen, Distanz = Eintritts-Face-Konvention) + `VoxelBlockEditor`

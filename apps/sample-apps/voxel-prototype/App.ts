@@ -18,6 +18,8 @@ import { createBlockPalette } from "./voxel/BlockTextureFactory.js";
 import { BlockMaterial } from "./voxel/material/BlockMaterial.js";
 import { descriptorFromRegistry } from "./voxel/mesh/NaiveMesher.js";
 import { TerrainGenerator } from "./voxel/TerrainGenerator.js";
+import type { ChunkDeltaStore } from "./voxel/store/ChunkDeltaStore.js";
+import { IndexedDbChunkDeltaStore } from "./voxel/store/IndexedDbChunkDeltaStore.js";
 import { VoxelBlockEditor } from "./voxel/physics/VoxelBlockEditor.js";
 import { VoxelPlayerCollision } from "./voxel/physics/VoxelPlayerCollision.js";
 import { ForegroundMeshClient } from "./voxel/worker/ForegroundMeshClient.js";
@@ -53,6 +55,7 @@ export class App extends SmallWorldMachine {
   private _host!: ChunkWorldHost;
   private _player!: VoxelPlayerCollision;
   private _editor!: VoxelBlockEditor;
+  private _store: ChunkDeltaStore | null = null;
 
   constructor() {
     // M1 ships GLSL300 only (like M0), so force WebGL2 unless the URL pins a backend.
@@ -92,16 +95,35 @@ export class App extends SmallWorldMachine {
     const client: MeshClient =
       typeof Worker !== "undefined" ? new MeshWorkerClient() : new ForegroundMeshClient();
     this._host = new ChunkWorldHost(this.scene, material);
+    // M3 persistence (D2/D3): IndexedDB edit-delta store -- the ONLY current driver behind the
+    // interface; the app runs fully fine when no browser storage exists (offline/workers-only
+    // contexts degrade to "no persistence", never crash).
+    try {
+      this._store = new IndexedDbChunkDeltaStore();
+    } catch (err: unknown) {
+      console.warn("[voxel-prototype] IndexedDB unavailable, persistence disabled:", err);
+      this._store = null;
+    }
     this._world = new ChunkWorld({
       client,
       descriptor,
       seed: WORLD_SEED,
+      ...(this._store ? { store: this._store } : {}),
       generateRadius: GENERATE_RADIUS,
       unloadRadius: GENERATE_RADIUS + 2, // hysteresis: > generateRadius (ChunkWorld invariant)
       callbacks: {
         onMeshReady: (cx, cz, mesh): void => this._host.onMeshReady(cx, cz, mesh),
         onUnload: (cx, cz): void => this._host.onUnload(cx, cz),
       },
+    });
+    // M3 auto-save (D3): durability flush when the tab hides/closes. Save-on-evict already runs
+    // in the streaming loop; this is the pagehide/visibilitychange barrier on top of it.
+    const flush = (): void => {
+      void this._world.persistAll();
+    };
+    document.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) flush();
     });
 
     // 5. Player: FPS look via the FPS strategy, feet standing on the generated surface.
@@ -158,6 +180,8 @@ export class App extends SmallWorldMachine {
           meshMsLast: s.meshMsLast,
           meshMsTotal: s.meshMsTotal,
           edits: s.edits,
+          persistCount: s.persistCount,
+          persistBytes: s.persistBytes,
           focus: this._world.getFocusChunk(),
         };
       },
@@ -167,6 +191,16 @@ export class App extends SmallWorldMachine {
       setBlock: (x: number, y: number, z: number, id: number): boolean =>
         this._world.setBlock(x, y, z, id),
       getHand: (): number => this._editor.getHand(),
+      // M3 persistence + light reads for the headless gate.
+      getLightFactor: (x: number, y: number, z: number): number =>
+        this._world.lightFactorAt(x, y, z),
+      forcePersist: (): Promise<{ persistCount: number; persistBytes: number }> =>
+        this._world.persistAll().then(() => {
+          const s = this._world.getStats();
+          return { persistCount: s.persistCount, persistBytes: s.persistBytes };
+        }),
+      getStoredSeed: async (): Promise<number | null> =>
+        this._store ? this._store.getSeed() : null,
     };
   }
 
@@ -183,11 +217,12 @@ export class App extends SmallWorldMachine {
 
     this._statsEl.innerHTML =
       `<div class="stat-row"><span>renderer</span><b>${backend}</b></div>` +
-      `<div class="stat-row"><span>engine</span><b>voxel M2</b></div>` +
+      `<div class="stat-row"><span>engine</span><b>voxel M3</b></div>` +
       `<div class="stat-row"><span>player</span><b>${feet.x.toFixed(1)}, ${feet.y.toFixed(1)}, ${feet.z.toFixed(1)}</b></div>` +
       `<div class="stat-row"><span>grounded</span><b>${this._player.isOnGround() ? "yes" : "no"}</b></div>` +
       `<div class="stat-row"><span>hand</span><b>${this._blockName(this._editor.getHand())}</b></div>` +
       `<div class="stat-row"><span>edits</span><b>${stats.edits}</b></div>` +
+      `<div class="stat-row"><span>Δ saved (session)</span><b>${stats.persistCount} / ${(stats.persistBytes / 1024).toFixed(1)} KB</b></div>` +
       `<div class="stat-row"><span>chunks ready</span><b>${stats.ready}</b></div>` +
       `<div class="stat-row"><span>chunks data</span><b>${stats.generated}</b></div>` +
       `<div class="stat-row"><span>in flight</span><b>${stats.inFlight}</b></div>` +
@@ -232,6 +267,8 @@ export interface WorldQaStats {
   meshMsLast: number;
   meshMsTotal: number;
   edits: number;
+  persistCount: number;
+  persistBytes: number;
   focus: { cx: number; cz: number };
 }
 
@@ -241,6 +278,9 @@ export interface VoxelM1QaApi {
   getWorldBlock(x: number, y: number, z: number): number;
   setBlock(x: number, y: number, z: number, id: number): boolean;
   getHand(): number;
+  getLightFactor(x: number, y: number, z: number): number;
+  forcePersist(): Promise<{ persistCount: number; persistBytes: number }>;
+  getStoredSeed(): Promise<number | null>;
 }
 
 /** World seed for deterministic terrain (same seed -> same world; see TerrainGenerator tests). */
