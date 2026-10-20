@@ -10,57 +10,104 @@
 
       .ui-panel {
         position: absolute;
-        top: 150px;
+        top: 100px;
         left: 20px;
-        background: rgba(10, 10, 20, 0.85);
-        border: 1px solid rgba(0, 255, 255, 0.3);
+        background: var(--tool-panel, rgba(14, 18, 28, 0.95));
+        border: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
         border-radius: 8px;
-        padding: 20px;
-        color: #fff;
-        font-family: var(--showcase-font);
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(5px);
+        color: #e2e8f0;
+        font-family: var(--font-ui, "Rajdhani", sans-serif);
+        font-size: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         width: 320px;
+        overflow: hidden;
+        user-select: none;
+        z-index: 999;
       }
-      .ui-panel h3 {
-        margin-top: 0;
-        margin-bottom: 10px;
-        font-size: 1.2rem;
-        color: #00ffff;
+      .hud-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        background: rgba(255, 255, 255, 0.04);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .hud-title {
+        font-weight: 700;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #f8fafc;
+      }
+      .hud-badge {
+        font-size: 10px;
+        background: rgba(176, 0, 255, 0.2);
+        color: #d884ff;
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid rgba(176, 0, 255, 0.35);
+      }
+      .hud-body {
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .hud-section {
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #94a3b8;
+        margin-bottom: 8px;
       }
       .ui-panel p {
-        font-size: 0.9rem;
-        color: #ccc;
-        margin-bottom: 20px;
-        line-height: 1.4;
+        font-size: 11px;
+        color: #cbd5e1;
+        margin: 0;
+        line-height: 1.5;
       }
-      .ui-panel button {
+      .btn-preset {
         display: block;
         width: 100%;
-        padding: 10px;
-        margin-bottom: 10px;
-        background: transparent;
-        border: 1px solid #00ffff;
-        color: #00ffff;
-        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #e2e8f0;
+        padding: 8px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
         cursor: pointer;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
+        transition: background 0.15s, border-color 0.15s;
+        text-align: center;
+        box-sizing: border-box;
       }
-      .ui-panel button:hover {
-        background: rgba(0, 255, 255, 0.2);
+      .btn-preset:hover:not(:disabled) {
+        background: rgba(176, 0, 255, 0.25);
+        border-color: #b000ff;
+        color: #fff;
+        box-shadow: 0 0 10px rgba(176, 0, 255, 0.4);
       }
-      .ui-panel button:disabled {
-        border-color: #555;
-        color: #555;
+      .btn-preset:disabled {
+        opacity: 0.35;
         cursor: not-allowed;
-        background: transparent;
       }
       #resultText {
-        margin-top: 15px;
-        font-weight: bold;
-        color: #ff0055;
-        min-height: 20px;
+        margin-top: 10px;
+        font-family: var(--font-mono, "JetBrains Mono", monospace);
+        font-size: 11px;
+        color: #38bdf8;
+        min-height: 18px;
+        text-align: center;
       }
     
     </style>
@@ -69,19 +116,29 @@
     <showcase-layout title="ThreadPool (Web Workers)" subtitle-b64="PHA+V2ViIFdvcmtlcnMgKFRocmVhZFBvb2wpIHZzIG1haW4tdGhyZWFkIGJsb2NraW5nLjwvcD4=" prev="../16/index.html" next="../18/index.html"></showcase-layout>
 
     <div class="ui-panel">
-      <h3>Multithreading Test</h3>
-      <p>
-        Watch the spinning cubes. Clicking the Main Thread button will completely freeze the browser
-        (0 FPS) while calculating 5,000,000 primes.
-        <br /><br />
-        The Worker Pool button offloads the exact same calculation to a background thread, keeping
-        the engine running butter-smooth.
-      </p>
-
-      <button id="btnMainThread">Run Heavy Task (Main Thread)</button>
-      <button id="btnWorkerThread">Run Heavy Task (Worker Pool)</button>
-
-      <div id="resultText">Waiting...</div>
+      <div class="hud-header">
+        <div class="hud-title">
+          <span>⚡</span> Multithreading Test
+        </div>
+        <span class="hud-badge">ThreadPool</span>
+      </div>
+      <div class="hud-body">
+        <div class="hud-section">
+          <p>
+            Watch the spinning cubes. Clicking the Main Thread button will completely freeze the browser
+            (0 FPS) while calculating 5,000,000 primes.
+            <br /><br />
+            The Worker Pool button offloads the exact same calculation to a background thread, keeping
+            the engine running butter-smooth.
+          </p>
+        </div>
+        <div class="hud-section">
+          <div class="section-title">⚡ Execution Tasks</div>
+          <button id="btnMainThread" class="btn-preset">Run Heavy Task (Main Thread)</button>
+          <button id="btnWorkerThread" class="btn-preset" style="margin-top:6px;">Run Heavy Task (Worker Pool)</button>
+          <div id="resultText">Waiting...</div>
+        </div>
+      </div>
     </div>
 
     <!-- The WebGL Canvas -->

@@ -68,8 +68,8 @@ class Showcase23 extends AbstractShowcase {
     }
     this._scoreElement.innerText = `SCORE: ${this._score} / ${this._maxScore}`;
     this._timeElement.innerText = `Time: 30:00`;
-    this._timeElement.style.color = "#ff3b3b";
-    this._timeElement.style.textShadow = "0 0 15px #ff3b3b";
+    this._timeElement.style.color = "#38bdf8";
+    this._timeElement.style.textShadow = "0 0 10px rgba(56, 189, 248, 0.6)";
 
     this._startButton.isVisible = false;
     this._startButton.isCollidable = false;
@@ -100,7 +100,8 @@ class Showcase23 extends AbstractShowcase {
     this._scoreElement = document.getElementById("scoreDisplay") as HTMLDivElement;
     this._timeElement = document.getElementById("timeDisplay") as HTMLDivElement;
     this._scoreElement.style.fontWeight = "bold";
-    this._scoreElement.style.textShadow = "0 0 10px #00ffff";
+    this._scoreElement.style.color = "#d884ff";
+    this._scoreElement.style.textShadow = "0 0 10px rgba(176, 0, 255, 0.8)";
     this._scoreElement.innerText = "SCORE: 0 / 0";
 
     // Camera setup

@@ -19,7 +19,6 @@ import {
   FogMode,
   GltfLoader,
   InstancedMesh,
-  Keys,
   Matrix4,
   Object3D,
   OrbitController,
@@ -205,7 +204,6 @@ class Showcase30 extends AbstractShowcase {
   private _hoverCar!: Object3D;
   private readonly _rain = new RainStreaks({ count: 10000 });
   private _time = 0;
-  private _sceneReady = false;
   private _mood: Mood = Mood.NIGHT;
   private _cameraView: CameraView = CameraView.STREET;
   private _ambientLight!: AmbientLight;
@@ -677,31 +675,7 @@ class Showcase30 extends AbstractShowcase {
     }
     this._applyMood(this._mood);
     this._applyLens(STREET_CAMERA);
-    this._sceneReady = true;
-  }
-
-  protected override onKeyDown(event: KeyboardEvent): void {
-    super.onKeyDown(event);
-    if (event.metaKey || event.ctrlKey || event.altKey) {
-      return;
-    }
-    // Keys arrive while setupScene() is still awaiting assets; the lights/materials the presets
-    // drive don't exist yet, and setupScene() applies the current presets itself at its end.
-    if (!this._sceneReady) {
-      return;
-    }
-    if (Keys.C === event.code) {
-      this._applyCameraView(
-        this._cameraView === CameraView.STREET ? CameraView.PUDDLE : CameraView.STREET,
-      );
-    }
-    if (Keys.N === event.code) {
-      this._applyMood(this._mood === Mood.NIGHT ? Mood.DAY : Mood.NIGHT);
-    }
-    if (Keys.F === event.code) {
-      this._fluidIndex = (this._fluidIndex + 1) % FLUID_CYCLE.length;
-      this._dropSystem.fluid = FLUID_PRESETS[FLUID_CYCLE[this._fluidIndex]!];
-    }
+    this._createHud();
   }
 
   private _applyCameraView(view: CameraView): void {
@@ -711,6 +685,7 @@ class Showcase30 extends AbstractShowcase {
     this.setInitialCamera(preset.position, preset.target);
     this.resetCamera();
     this._applyLens(preset);
+    this._updateHud();
   }
 
   private _applyLens(preset: CameraPreset): void {
@@ -776,6 +751,7 @@ class Showcase30 extends AbstractShowcase {
 
     this._puddleMat.rainIntensity = preset.rainIntensity;
     this._puddleMat.dripIntensity = preset.dripIntensity;
+    this._updateHud();
   }
 
   /**
@@ -908,6 +884,171 @@ class Showcase30 extends AbstractShowcase {
     if (this._reflectionNode && this.camera) {
       this._reflectionNode.updateReflection(this.scene, this.camera, this.renderer);
     }
+  }
+
+  private _hudElement?: HTMLDivElement;
+  private _inspectorBtn?: HTMLButtonElement;
+
+  private _toggleInspector(force?: boolean): void {
+    if (!this._hudElement) return;
+    const isCurrentlyOpen = this._hudElement.classList.contains("open");
+    const open = undefined !== force ? force : !isCurrentlyOpen;
+    if (open) {
+      this._hudElement.classList.add("open");
+      this._inspectorBtn?.classList.add("active");
+    } else {
+      this._hudElement.classList.remove("open");
+      this._inspectorBtn?.classList.remove("active");
+    }
+  }
+
+  private _createHud(): void {
+    const existingHud = document.getElementById("cyberpunk-hud");
+    if (existingHud) existingHud.remove();
+    const existingBtn = document.getElementById("cyberpunkInspectorBtn");
+    if (existingBtn) existingBtn.remove();
+    const existingStyle = document.getElementById("cyberpunkHudStyle");
+    if (existingStyle) existingStyle.remove();
+
+    const hud = document.createElement("aside") as unknown as HTMLDivElement;
+    hud.id = "cyberpunk-hud";
+    hud.className = "swm-inspector-drawer";
+    document.body.appendChild(hud);
+    this._hudElement = hud;
+
+    // Stop events from leaking to camera controllers
+    const stopEvents = [
+      "mousedown",
+      "mouseup",
+      "mousemove",
+      "pointerdown",
+      "pointerup",
+      "pointermove",
+      "wheel",
+      "touchstart",
+      "touchmove",
+      "touchend",
+      "click",
+      "dblclick",
+      "contextmenu",
+    ];
+    for (const ev of stopEvents) {
+      hud.addEventListener(
+        ev,
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
+      );
+    }
+
+    // Footer toggle button
+    const toggleBtn = document.createElement("button");
+    toggleBtn.id = "cyberpunkInspectorBtn";
+    toggleBtn.className = "swm-inspector-btn";
+    toggleBtn.innerHTML = "<span>⚙</span>";
+    toggleBtn.title = "Settings (Toggle)";
+    toggleBtn.setAttribute("aria-label", "Toggle Inspector");
+    toggleBtn.onclick = (): void => {
+      this._toggleInspector();
+    };
+    this._inspectorBtn = toggleBtn;
+
+    const footer = document.querySelector(".app-footer");
+    if (footer) {
+      footer.appendChild(toggleBtn);
+    } else {
+      document.body.appendChild(toggleBtn);
+    }
+
+    this._updateHud();
+  }
+
+  private _updateHud(): void {
+    if (!this._hudElement) return;
+    const isNight = this._mood === Mood.NIGHT;
+    const isPuddle = this._cameraView === CameraView.PUDDLE;
+
+    this._hudElement.innerHTML = `
+      <div class="bottom-sheet-grabber"></div>
+      <div class="hud-header">
+        <div class="hud-title">
+          <span>🌧️</span> Cyberpunk Albedo
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="hud-badge">SSR & Wetness</span>
+          <button id="cyberpunkHudClose" class="hud-close-btn" title="Close Inspector">✕</button>
+        </div>
+      </div>
+      <div class="hud-body">
+        <div class="hud-section">
+          <div class="section-title">🌃 Environment & Camera</div>
+          <div class="hud-row">
+            <label for="swMood">Night Mood</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swMood" ${isNight ? "checked" : ""}>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
+          <div class="hud-row">
+            <label for="swPuddle">Puddle Camera</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swPuddle" ${isPuddle ? "checked" : ""}>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="hud-section">
+          <div class="section-title">💧 Fluid Surface</div>
+          <div class="hud-row">
+            <label for="selFluid">Liquid Preset</label>
+            <select id="selFluid">
+              ${FLUID_CYCLE.map(
+                (fluid, idx) => `
+                <option value="${idx}" ${this._fluidIndex === idx ? "selected" : ""}>
+                  ${fluid.charAt(0).toUpperCase() + fluid.slice(1).replace(/_/g, " ")}
+                </option>
+              `,
+              ).join("")}
+            </select>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("cyberpunkHudClose")?.addEventListener("click", () => {
+      this._toggleInspector(false);
+    });
+
+    document.getElementById("swMood")?.addEventListener("change", (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this._applyMood(checked ? Mood.NIGHT : Mood.DAY);
+    });
+
+    document.getElementById("swPuddle")?.addEventListener("change", (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this._applyCameraView(checked ? CameraView.PUDDLE : CameraView.STREET);
+    });
+
+    document.getElementById("selFluid")?.addEventListener("change", (e) => {
+      this._fluidIndex = parseInt((e.target as HTMLSelectElement).value, 10);
+      this._dropSystem.fluid = FLUID_PRESETS[FLUID_CYCLE[this._fluidIndex]!];
+    });
+  }
+
+  public override destroy(): void {
+    if (this._hudElement && this._hudElement.parentNode) {
+      this._hudElement.parentNode.removeChild(this._hudElement);
+    }
+    if (this._inspectorBtn && this._inspectorBtn.parentNode) {
+      this._inspectorBtn.parentNode.removeChild(this._inspectorBtn);
+    }
+    const style = document.getElementById("cyberpunkHudStyle");
+    if (style && style.parentNode) {
+      style.parentNode.removeChild(style);
+    }
+    super.destroy();
   }
 }
 

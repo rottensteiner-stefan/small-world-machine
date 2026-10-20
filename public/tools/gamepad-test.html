@@ -555,6 +555,9 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
       }
 
       let initializedDevice = false;
+      // Bluetooth-Controller melden sich manchmal für einzelne Frames ab; erst danach gilt er als getrennt
+      const DISCONNECT_GRACE_MS = 1000;
+      let lastSeenMs = 0;
 
       const rawInfo = document.getElementById("raw-info");
 
@@ -628,6 +631,7 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
         const dev = input.gamepadController.getActiveDevice();
 
         if (dev) {
+          lastSeenMs = performance.now();
           if (!initializedDevice) {
             buildUI(dev);
             initializedDevice = true;
@@ -673,7 +677,8 @@ body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool
 
           if (isCalibrating) runWizard(dev);
         } else {
-          if (initializedDevice) {
+          if (initializedDevice && performance.now() - lastSeenMs > DISCONNECT_GRACE_MS) {
+            console.warn("[gamepad-test] Controller getrennt, Wizard wird zurückgesetzt");
             initializedDevice = false;
             metaInfo.innerHTML =
               '<p style="color:#94a3b8; font-style:italic;">Kein Controller verbunden.</p>';

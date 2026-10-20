@@ -470,8 +470,7 @@ class Showcase39 extends AbstractShowcase {
     this._brazierLight.position.set(-4.5, 2.1, 4.0);
     this.scene.add(this._brazierLight);
 
-    // --- 10. Keyboard & Interactive HUD ---
-    this._setupControls();
+    // --- 10. Interactive HUD ---
     this._createHud();
 
     attachDevTools(this);
@@ -493,92 +492,199 @@ class Showcase39 extends AbstractShowcase {
     }
   }
 
-  private _setupControls(): void {
-    window.addEventListener("keydown", (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if (key === "f") {
-        if (this._fogElement) {
-          this._fogElement.enabled = !this._fogElement.enabled;
-          this._updateHudText();
-        }
-      } else if (key === "c") {
-        this._chamberCarverVolume.enabled = !this._chamberCarverVolume.enabled;
-        this._updateHudText();
-      } else if (key === "n") {
-        const active = this._altarMistVolume.noiseAmount > 0.0;
-        this._altarMistVolume.noiseAmount = active ? 0.0 : 0.7;
-        this._brazierMistVolume.noiseAmount = active ? 0.0 : 0.8;
-        this._updateHudText();
-      } else if (key === "1") {
-        this._sunMode = 1;
-        this._updateSunAngle();
-        this._updateHudText();
-      } else if (key === "2") {
-        this._sunMode = 2;
-        this._updateSunAngle();
-        this._updateHudText();
-      } else if (key === "v") {
-        this._isFlyMode = !this._isFlyMode;
-        if (this._orbitController) this._orbitController.enabled = !this._isFlyMode;
-        if (this._flyController) this._flyController.enabled = this._isFlyMode;
-        this._updateHudText();
-      }
-    });
+  private _hudElement?: HTMLElement;
+  private _inspectorBtn?: HTMLButtonElement;
+
+  private _toggleInspector(force?: boolean): void {
+    if (!this._hudElement) return;
+    const isCurrentlyOpen = this._hudElement.classList.contains("open");
+    const open = undefined !== force ? force : !isCurrentlyOpen;
+    if (open) {
+      this._hudElement.classList.add("open");
+      this._inspectorBtn?.classList.add("active");
+    } else {
+      this._hudElement.classList.remove("open");
+      this._inspectorBtn?.classList.remove("active");
+    }
   }
 
-  private _hudElement?: HTMLDivElement;
-
   private _createHud(): void {
-    const hud = document.createElement("div");
+    const existingHud = document.getElementById("showcase-hud");
+    if (existingHud) existingHud.remove();
+    const existingBtn = document.getElementById("sanctumInspectorBtn");
+    if (existingBtn) existingBtn.remove();
+
+    const hud = document.createElement("aside");
     hud.id = "showcase-hud";
-    hud.style.position = "fixed";
-    hud.style.top = "68px";
-    hud.style.left = "20px";
-    hud.style.backgroundColor = "rgba(12, 16, 24, 0.82)";
-    hud.style.backdropFilter = "blur(10px)";
-    hud.style.border = "1px solid rgba(255, 255, 255, 0.15)";
-    hud.style.borderRadius = "8px";
-    hud.style.padding = "14px 18px";
-    hud.style.color = "#f0f4f8";
-    hud.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
-    hud.style.fontSize = "12px";
-    hud.style.lineHeight = "1.6";
-    hud.style.zIndex = "999";
-    hud.style.boxShadow = "0 8px 32px rgba(0,0,0,0.4)";
-    hud.style.pointerEvents = "auto";
+    hud.className = "swm-inspector-drawer";
     document.body.appendChild(hud);
     this._hudElement = hud;
+
+    // Stop events from leaking to camera controllers
+    const stopEvents = [
+      "mousedown",
+      "mouseup",
+      "mousemove",
+      "pointerdown",
+      "pointerup",
+      "pointermove",
+      "wheel",
+      "touchstart",
+      "touchmove",
+      "touchend",
+      "click",
+      "dblclick",
+      "contextmenu",
+    ];
+    for (const ev of stopEvents) {
+      hud.addEventListener(
+        ev,
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
+      );
+    }
+
+    // Footer toggle button
+    const toggleBtn = document.createElement("button");
+    toggleBtn.id = "sanctumInspectorBtn";
+    toggleBtn.className = "swm-inspector-btn";
+    toggleBtn.innerHTML = "<span>⚙</span>";
+    toggleBtn.title = "Settings (Toggle)";
+    toggleBtn.setAttribute("aria-label", "Toggle Inspector");
+    toggleBtn.onclick = (): void => {
+      this._toggleInspector();
+    };
+    this._inspectorBtn = toggleBtn;
+
+    const footer = document.querySelector(".app-footer");
+    if (footer) {
+      footer.appendChild(toggleBtn);
+    } else {
+      document.body.appendChild(toggleBtn);
+    }
+
     this._updateHudText();
   }
 
   private _updateHudText(): void {
     if (!this._hudElement) return;
-    const fogOn = this._fogElement?.enabled ? "ON" : "OFF";
-    const carverOn = this._chamberCarverVolume.enabled
-      ? "ACTIVE (Carving clear interior)"
-      : "DISABLED (Fog floods room)";
-    const noiseOn =
-      this._altarMistVolume.noiseAmount > 0.0 ? "ON (Rolling Mist)" : "OFF (Uniform Fog)";
-    const sunModeStr =
-      this._sunMode === 1 ? "High Noon (Vertical Shaft)" : "Golden Hour (Diagonal Rays)";
-    const cameraModeStr = this._isFlyMode ? "Free-Fly (WASD + Mouse)" : "Orbit (Drag / Scroll)";
+    const fogOn = this._fogElement?.enabled ?? false;
+    const carverOn = this._chamberCarverVolume.enabled;
+    const noiseOn = this._altarMistVolume.noiseAmount > 0.0;
     const rendererBackend = this.renderer.constructor.name.includes("GPU")
-      ? "WebGPU (True 3D Froxel)"
-      : "WebGL2 (Raymarch Fallback)";
+      ? "WebGPU (Froxel)"
+      : "WebGL2 (Raymarch)";
 
     this._hudElement.innerHTML = `
-      <div style="font-weight: 700; font-size: 13px; margin-bottom: 8px; color: #5ce1e6; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">
-        Atmospheric Sanctum HUD [${rendererBackend}]
+      <div class="bottom-sheet-grabber"></div>
+      <div class="hud-header">
+        <div class="hud-title">
+          <span>🌫️</span> Atmospheric Sanctum
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="hud-badge">${rendererBackend}</span>
+          <button id="sanctumHudClose" class="hud-close-btn" title="Close Panel">✕</button>
+        </div>
       </div>
-      <div><strong>[F] Volumetric Fog:</strong> <span style="color: ${fogOn === "ON" ? "#73f79c" : "#ff6b6b"}">${fogOn}</span></div>
-      <div><strong>[C] Interior Carving:</strong> <span style="color: ${this._chamberCarverVolume.enabled ? "#73f79c" : "#ffbb55"}">${carverOn}</span></div>
-      <div><strong>[N] 3D Procedural Noise:</strong> <span style="color: ${this._altarMistVolume.noiseAmount > 0.0 ? "#73f79c" : "#aaa"}">${noiseOn}</span></div>
-      <div><strong>[1/2] Sun Alignment:</strong> <span style="color: #ffd166">${sunModeStr}</span></div>
-      <div><strong>[V] Camera Navigation:</strong> <span style="color: #73b4f7">${cameraModeStr}</span></div>
-      <div style="margin-top: 8px; font-size: 11px; color: #8892b0;">
-        Fly into the rear vaulted chamber (Z = -21) to observe the zero-fog carved interior!
+      <div class="hud-body">
+        <div class="hud-section">
+          <div class="section-title">🌫️ Volumetric Fog & Mist</div>
+          <div class="hud-row">
+            <label for="swFog">Volumetric Fog</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swFog" ${fogOn ? "checked" : ""}>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
+          <div class="hud-row">
+            <label for="swCarver">Interior Carving</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swCarver" ${carverOn ? "checked" : ""}>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
+          <div class="hud-row">
+            <label for="swNoise">3D Rolling Mist</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swNoise" ${noiseOn ? "checked" : ""}>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="hud-section">
+          <div class="section-title">☀️ Sun & Navigation</div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+            <label>Sun Alignment</label>
+            <div class="preset-group">
+              <button class="btn-preset ${this._sunMode === 1 ? "active" : ""}" id="btnSunNoon">High Noon</button>
+              <button class="btn-preset ${this._sunMode === 2 ? "active" : ""}" id="btnSunGolden">Golden Hour</button>
+            </div>
+          </div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
+            <label>Camera Navigation</label>
+            <div class="preset-group">
+              <button class="btn-preset ${!this._isFlyMode ? "active" : ""}" id="btnCamOrbit">Orbit Mode</button>
+              <button class="btn-preset ${this._isFlyMode ? "active" : ""}" id="btnCamFly">Free-Fly Mode</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size: 11px; color: #94a3b8; line-height: 1.4; padding: 2px 4px;">
+          Fly into the rear vaulted chamber (Z = -21) to observe the zero-fog carved interior!
+        </div>
       </div>
     `;
+
+    document.getElementById("sanctumHudClose")?.addEventListener("click", () => {
+      this._toggleInspector(false);
+    });
+
+    // Hook up switch listeners
+    document.getElementById("swFog")?.addEventListener("change", (e) => {
+      if (this._fogElement) {
+        this._fogElement.enabled = (e.target as HTMLInputElement).checked;
+      }
+    });
+
+    document.getElementById("swCarver")?.addEventListener("change", (e) => {
+      this._chamberCarverVolume.enabled = (e.target as HTMLInputElement).checked;
+    });
+
+    document.getElementById("swNoise")?.addEventListener("change", (e) => {
+      const active = (e.target as HTMLInputElement).checked;
+      this._altarMistVolume.noiseAmount = active ? 0.7 : 0.0;
+      this._brazierMistVolume.noiseAmount = active ? 0.8 : 0.0;
+    });
+
+    // Hook up preset buttons
+    document.getElementById("btnSunNoon")?.addEventListener("click", () => {
+      this._sunMode = 1;
+      this._updateSunAngle();
+      this._updateHudText();
+    });
+
+    document.getElementById("btnSunGolden")?.addEventListener("click", () => {
+      this._sunMode = 2;
+      this._updateSunAngle();
+      this._updateHudText();
+    });
+
+    document.getElementById("btnCamOrbit")?.addEventListener("click", () => {
+      this._isFlyMode = false;
+      if (this._orbitController) this._orbitController.enabled = true;
+      if (this._flyController) this._flyController.enabled = false;
+      this._updateHudText();
+    });
+
+    document.getElementById("btnCamFly")?.addEventListener("click", () => {
+      this._isFlyMode = true;
+      if (this._orbitController) this._orbitController.enabled = false;
+      if (this._flyController) this._flyController.enabled = true;
+      this._updateHudText();
+    });
   }
 
   protected override update(dt: number): void {

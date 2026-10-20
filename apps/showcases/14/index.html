@@ -15,7 +15,7 @@
         color: #e0e0e0;
         min-height: 100vh;
         margin: 0;
-        padding: 2rem 1rem;
+        padding: 2rem 1rem 4.5rem 1rem;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
@@ -31,87 +31,6 @@
         width: 100%;
         max-width: 1400px;
         padding-top: 0;
-      }
-
-      .controls {
-        background: rgba(18, 20, 24, 0.85);
-        border: 1px solid #2f343f;
-        border-radius: 8px;
-        padding: 1rem 1.5rem;
-        display: inline-flex;
-        gap: 1.5rem;
-        align-items: center;
-        margin-bottom: 2.5rem;
-        flex-wrap: wrap;
-        justify-content: center;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-        backdrop-filter: blur(10px);
-      }
-
-      .control-group {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-      }
-
-      .control-group label {
-        font-size: 0.75rem;
-        color: #888;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        font-weight: bold;
-      }
-
-      .btn {
-        background: #20222a;
-        border: 1px solid #3f4454;
-        color: #e0e0e0;
-        padding: 0.5rem 1rem;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        font-weight: bold;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        user-select: none;
-      }
-
-      .btn:hover {
-        background: #00ffff;
-        color: #000;
-        border-color: #00ffff;
-        box-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
-      }
-
-      .btn.active {
-        background: #00ffff;
-        color: #000;
-        border-color: #00ffff;
-        box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
-      }
-
-      .slider-container {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .slider {
-        -webkit-appearance: none;
-        width: 110px;
-        height: 6px;
-        background: #2e323e;
-        border-radius: 3px;
-        outline: none;
-      }
-
-      .slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: #00ffff;
-        cursor: pointer;
-        box-shadow: 0 0 5px rgba(0, 255, 255, 0.8);
       }
 
       /* Video Wall Grid */
@@ -304,33 +223,63 @@
   <body>
     <showcase-layout title="📺 Surveillance Video Wall" subtitle-b64="PHA+U3luY2hyb25pemVkIGZlZWRzIHdpdGggcG9zdC1wcm9jZXNzaW5nIHBhc3Nlcy48L3A+" prev="../13/index.html" next="../15/index.html"></showcase-layout>
 
-    <div class="controls">
-      <div class="control-group">
-        <label>Sweep:</label>
-        <button id="btn-play-pause" class="btn active">ACTIVE</button>
-      </div>
-      <div class="control-group">
-        <label>Speed:</label>
-        <div class="slider-container">
-          <input id="slider-speed" type="range" min="0" max="200" value="100" class="slider" />
+    <aside id="surveillance-inspector" class="swm-inspector-drawer">
+      <div class="bottom-sheet-grabber"></div>
+      <div class="hud-header">
+        <div class="hud-title">
+          <span>📹</span> Surveillance Control
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="hud-badge">Video Wall</span>
+          <button id="surveillanceHudClose" class="hud-close-btn" title="Close Inspector">✕</button>
         </div>
       </div>
-      <div class="control-group">
-        <label>Angle:</label>
-        <button id="btn-angle-high" class="btn active">HIGH</button>
-        <button id="btn-angle-desk" class="btn">DESK</button>
-        <button id="btn-angle-door" class="btn">DOOR</button>
+      <div class="hud-body">
+        <div class="hud-section">
+          <div class="section-title">📹 Camera & Sweep</div>
+          <div class="hud-row">
+            <label for="swSweep">Camera Sweep</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swSweep" checked>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <label for="sliderSpeed">Sweep Speed</label>
+              <span class="val-label" id="valSpeed">100%</span>
+            </div>
+            <input type="range" id="sliderSpeed" min="0" max="200" value="100" />
+          </div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+            <label>Camera Angle</label>
+            <div class="preset-group">
+              <button class="btn-preset active" id="btn-angle-high" data-angle="high">High</button>
+              <button class="btn-preset" id="btn-angle-desk" data-angle="desk">Desk</button>
+              <button class="btn-preset" id="btn-angle-door" data-angle="door">Door</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud-section">
+          <div class="section-title">💡 Atmosphere & Security</div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+            <label>Light Mode</label>
+            <div class="preset-group">
+              <button class="btn-preset active" id="btn-light-swing" data-light="swing">Swing</button>
+              <button class="btn-preset" id="btn-light-flicker" data-light="flicker">Flicker</button>
+            </div>
+          </div>
+          <div class="hud-row">
+            <label for="swSirens">Alarm Sirens</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swSirens" checked>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
+        </div>
       </div>
-      <div class="control-group">
-        <label>Lights:</label>
-        <button id="btn-light-swing" class="btn active">SWING</button>
-        <button id="btn-light-flicker" class="btn">FLICKER</button>
-      </div>
-      <div class="control-group">
-        <label>Sirens:</label>
-        <button id="btn-sirens-toggle" class="btn active">ON</button>
-      </div>
-    </div>
+    </aside>
 
     <div class="wall-container">
       <div class="video-grid">

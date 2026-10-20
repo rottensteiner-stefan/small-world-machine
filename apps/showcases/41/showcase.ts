@@ -14,7 +14,12 @@ import {
 import {
   MetalReliefMaterial,
   MetalReliefScreenMaterial,
+  ImpastoStrokeMaterial,
+  buildStrokeSplats,
+  rasterizeSplatColor,
+  rasterizeSplatDirection,
 } from "@small-world-machine/artistic-extras";
+import type { StrokePoint } from "@small-world-machine/artistic-extras";
 
 function createBoxMesh(
   name: string,
@@ -34,7 +39,7 @@ function createPlaneMesh(
   name: string,
   width: number,
   height: number,
-  mat: MetalReliefMaterial | MetalReliefScreenMaterial,
+  mat: MetalReliefMaterial | MetalReliefScreenMaterial | ImpastoStrokeMaterial,
 ): Object3D {
   const obj = new Object3D(name);
   obj.geometry = new Plane({ width: 1, height: 1 }).getGeometryData();
@@ -102,7 +107,7 @@ function createFallbackTexture(name: string, accentColor: string): Texture {
 export class MetalReliefShowcase extends AbstractShowcase {
   protected override defaultCameraController: "fly" | "orbit" | "none" = "orbit";
 
-  private _displayMode: "diorama" | "fullscreen" = "fullscreen";
+  private _displayMode: "fullscreen" | "diorama" | "studio" = "fullscreen";
   private _materials: MetalReliefMaterial[] = [];
   private _dioramaRoot: Object3D = new Object3D("DioramaRoot");
   private _focalGroup: Object3D = new Object3D("FocalGroup");
@@ -120,6 +125,37 @@ export class MetalReliefShowcase extends AbstractShowcase {
   private _customImageAspect: number = 1.3393;
 
   private _textures: Record<string, Texture> = {};
+
+  // --- Palette Knife Studio (interactive impasto painting) ---
+  private readonly _STUDIO_WIDTH = 1024;
+  private readonly _STUDIO_HEIGHT = 768;
+  private _studioRoot: Object3D = new Object3D("StudioRoot");
+  private _studioMaterial!: ImpastoStrokeMaterial;
+  private _studioPaintCanvas!: HTMLCanvasElement;
+  private _studioDirCanvas!: HTMLCanvasElement;
+  private _studioPaintCtx!: CanvasRenderingContext2D;
+  private _studioDirCtx!: CanvasRenderingContext2D;
+  private _studioPaintTex!: Texture;
+  private _studioDirTex!: Texture;
+  private _studioSteelTex!: Texture;
+  private _isPainting: boolean = false;
+  private _lastPointer: StrokePoint = { x: -1, y: -1 };
+  private _brushSizeBase: number = 12;
+  private _brushMaxRadius: number = 72;
+  private _paintColor: string = "#c0392b";
+  private _eraserMode: boolean = false;
+  private _studioBaseMode: "steel" | "photo" = "steel";
+  private _undoSnapshot: ImageData | null = null;
+  private _qaNonce: number = 0;
+  /** Palette swatches, selected with keys 1-6 while in the studio. */
+  private readonly _swatches: string[] = [
+    "#c0392b", // oxide red (accent)
+    "#d4af37", // gold leaf
+    "#b000ff", // engine violet
+    "#38bdf8", // steel blue
+    "#f1e9d8", // bone white
+    "#1e2b26", // charcoal bronze
+  ];
 
   constructor() {
     super({
@@ -260,6 +296,9 @@ export class MetalReliefShowcase extends AbstractShowcase {
     this._setupKeyboardShortcuts();
     this._setupCanvasWipeInteraction();
     this._setupDragAndDrop();
+    this._buildStudio();
+    this._setupStudioInteraction();
+    this._installQaHooks();
     this._setMode("fullscreen");
   }
 
@@ -270,7 +309,8 @@ export class MetalReliefShowcase extends AbstractShowcase {
     }
   }
 
-  private _setMode(mode: "diorama" | "fullscreen"): void {
+  private _setMode(mode: "fullscreen" | "diorama" | "studio"): void {
+    const wasStudio = this._displayMode === "studio";
     this._displayMode = mode;
     const overlay = document.getElementById("wipeDividerOverlay");
     const selMode = document.getElementById("selMode") as HTMLSelectElement | null;
@@ -278,26 +318,36 @@ export class MetalReliefShowcase extends AbstractShowcase {
       selMode.value = mode;
     }
 
-    if (mode === "diorama") {
-      this._dioramaRoot.isVisible = true;
-      this._screenGroup.isVisible = false;
-      if (overlay) overlay.style.display = "none";
-      if (this._orbitController) {
-        this._orbitController.enabled = true;
-      }
-    } else {
-      this._dioramaRoot.isVisible = false;
-      this._screenGroup.isVisible = true;
-      if (overlay) overlay.style.display = "block";
-      if (this._orbitController) {
-        this._orbitController.enabled = false;
-      }
+    const studioSection = document.getElementById("studioSection");
+    if (studioSection) {
+      studioSection.style.display = mode === "studio" ? "flex" : "none";
+    }
+
+    const isStudio = mode === "studio";
+    this._dioramaRoot.isVisible = mode === "diorama";
+    this._screenGroup.isVisible = !isStudio && mode === "fullscreen";
+    this._studioRoot.isVisible = isStudio;
+    if (overlay) overlay.style.display = mode === "fullscreen" ? "block" : "none";
+
+    if (this._orbitController) {
+      this._orbitController.enabled = mode === "diorama";
+    }
+
+    if (isStudio) {
+      this.camera.position.set(0, 0, 4.0);
+      this.camera.target.set(0, 0, 0);
+      this._syncStudioBase();
+    } else if (mode === "fullscreen") {
       this.camera.position.set(0, 0, 4.0);
       this.camera.target.set(0, 0, 0);
       if (this._screenMaterial && this._textures[this._activePreset]) {
         this._screenMaterial.diffuseMap = this._textures[this._activePreset];
       }
       this._updateMeshAspect();
+    } else if (wasStudio) {
+      // Leaving the studio: keep the orbit rig in a neutral pose.
+      this.camera.position.set(0, 0, 4.0);
+      this.camera.target.set(0, 0, 0);
     }
   }
 
@@ -641,7 +691,43 @@ export class MetalReliefShowcase extends AbstractShowcase {
       }
 
       if (e.code === "KeyM") {
-        this._setMode(this._displayMode === "fullscreen" ? "diorama" : "fullscreen");
+        const next =
+          this._displayMode === "fullscreen"
+            ? "diorama"
+            : this._displayMode === "diorama"
+              ? "studio"
+              : "fullscreen";
+        this._setMode(next);
+        return;
+      }
+
+      if (e.code === "KeyP") {
+        this._setMode(this._displayMode === "studio" ? "fullscreen" : "studio");
+        return;
+      }
+
+      // ---- Palette Knife Studio controls ----
+      if (this._displayMode === "studio") {
+        if (e.code === "BracketLeft") {
+          this._brushSizeBase = Math.max(3, this._brushSizeBase - 2);
+        } else if (e.code === "BracketRight") {
+          this._brushSizeBase = Math.min(120, this._brushSizeBase + 2);
+        } else if (e.code === "KeyX") {
+          this._eraserMode = !this._eraserMode;
+        } else if (e.code === "KeyC") {
+          this._clearStudio();
+        } else if (e.code === "KeyZ") {
+          this._undoStudio();
+        } else if (e.code === "KeyQ") {
+          this._setStudioBase(this._studioBaseMode === "steel" ? "photo" : "steel");
+        } else if (e.code >= "Digit1" && e.code <= "Digit6") {
+          const idx = parseInt(e.code.charAt(5), 10) - 1;
+          const swatch = this._swatches[idx];
+          if (swatch) {
+            this._paintColor = swatch;
+            this._eraserMode = false;
+          }
+        }
         return;
       }
 
@@ -729,6 +815,13 @@ export class MetalReliefShowcase extends AbstractShowcase {
         this._screenMaterial.rustStrength = 0.8;
       }
       this._updateMeshAspect();
+    }
+
+    // The Palette Knife Studio base layer follows the active preset in photo mode.
+    if (this._studioMaterial && this._textures[presetId]) {
+      if (this._studioBaseMode === "photo") {
+        this._studioMaterial.baseMap = this._textures[presetId];
+      }
     }
   }
 
@@ -960,6 +1053,27 @@ export class MetalReliefShowcase extends AbstractShowcase {
       #reliefTuningHud.open {
         transform: translateX(0);
       }
+      @media (max-width: 768px) {
+        #reliefTuningHud {
+          top: auto;
+          bottom: 36px;
+          left: 0;
+          right: 0;
+          width: 100vw;
+          max-height: calc(100vh - 80px);
+          border-left: none;
+          border-right: none;
+          border-bottom: none;
+          border-top: 1px solid var(--tool-border, rgba(148, 163, 184, 0.25));
+          border-radius: 14px 14px 0 0;
+          box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.7);
+          transform: translateY(100%);
+          transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #reliefTuningHud.open {
+          transform: translateY(0);
+        }
+      }
       .swm-inspector-btn {
         position: fixed;
         bottom: 5px;
@@ -982,15 +1096,15 @@ export class MetalReliefShowcase extends AbstractShowcase {
         transition: all 0.2s ease;
       }
       .swm-inspector-btn:hover {
-        border-color: var(--tool-accent, #e53e3e);
-        color: var(--tool-accent, #e53e3e);
-        box-shadow: 0 0 10px rgba(229, 62, 62, 0.4);
+        border-color: var(--tool-accent, #b000ff);
+        color: var(--tool-accent, #b000ff);
+        box-shadow: 0 0 10px rgba(176, 0, 255, 0.4);
       }
       .swm-inspector-btn.active {
-        background: rgba(229, 62, 62, 0.2);
-        border-color: var(--tool-accent, #e53e3e);
-        color: var(--tool-accent, #e53e3e);
-        box-shadow: 0 0 8px rgba(229, 62, 62, 0.3);
+        background: rgba(176, 0, 255, 0.2);
+        border-color: var(--tool-accent, #b000ff);
+        color: var(--tool-accent, #b000ff);
+        box-shadow: 0 0 8px rgba(176, 0, 255, 0.3);
       }
       #reliefTuningHud .hud-header {
         display: flex;
@@ -1010,11 +1124,11 @@ export class MetalReliefShowcase extends AbstractShowcase {
       }
       #reliefTuningHud .hud-badge {
         font-size: 10px;
-        background: rgba(229, 62, 62, 0.2);
-        color: #fc8181;
+        background: rgba(176, 0, 255, 0.2);
+        color: #d884ff;
         padding: 2px 6px;
         border-radius: 4px;
-        border: 1px solid rgba(229, 62, 62, 0.35);
+        border: 1px solid rgba(176, 0, 255, 0.35);
       }
       #reliefTuningHud .hud-body {
         padding: 12px 14px;
@@ -1063,7 +1177,7 @@ export class MetalReliefShowcase extends AbstractShowcase {
       }
       #reliefTuningHud input[type="range"] {
         flex: 1.3;
-        accent-color: #e53e3e;
+        accent-color: #b000ff;
         cursor: pointer;
       }
       #reliefTuningHud select {
@@ -1093,14 +1207,14 @@ export class MetalReliefShowcase extends AbstractShowcase {
         text-align: center;
       }
       #reliefTuningHud .btn-preset:hover {
-        background: rgba(229, 62, 62, 0.25);
-        border-color: #e53e3e;
+        background: rgba(176, 0, 255, 0.25);
+        border-color: #b000ff;
         color: #fff;
       }
       #reliefTuningHud .btn-preset.active {
-        background: #e53e3e;
+        background: #b000ff;
         color: #fff;
-        border-color: #e53e3e;
+        border-color: #b000ff;
       }
       #wipeDividerOverlay {
         position: fixed;
@@ -1136,13 +1250,13 @@ export class MetalReliefShowcase extends AbstractShowcase {
       }
       .wipe-pill-after {
         right: 24px;
-        border-right: 3px solid #e53e3e;
+        border-right: 3px solid #b000ff;
       }
       .wipe-divider-line {
         position: fixed;
         width: 2px;
         background: #ffffff;
-        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(229, 62, 62, 0.5);
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(176, 0, 255, 0.5);
         transform: translateX(-50%);
         pointer-events: auto;
         cursor: ew-resize;
@@ -1177,8 +1291,8 @@ export class MetalReliefShowcase extends AbstractShowcase {
         transition: all 0.2s ease;
       }
       .hud-dropzone:hover, .hud-dropzone.dragover {
-        border-color: #e53e3e;
-        background: rgba(229, 62, 62, 0.12);
+        border-color: #b000ff;
+        background: rgba(176, 0, 255, 0.12);
         color: #fff;
       }
     `;
@@ -1186,13 +1300,15 @@ export class MetalReliefShowcase extends AbstractShowcase {
 
     const hud = document.createElement("div");
     hud.id = "reliefTuningHud";
+    hud.className = "swm-inspector-drawer";
     hud.innerHTML = `
+      <div class="bottom-sheet-grabber"></div>
       <div class="hud-header" id="hudHeader">
         <div class="hud-title">
           <span>🎨</span> Metal Relief Lab
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <span class="hud-badge">[I] Toggle</span>
+          <span class="hud-badge">Inspector</span>
           <button id="reliefHudClose" title="Close Panel" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;padding:0 4px;line-height:1;">✕</button>
         </div>
       </div>
@@ -1205,6 +1321,7 @@ export class MetalReliefShowcase extends AbstractShowcase {
             <select id="selMode">
               <option value="fullscreen" selected>Photo-to-Metal Converter (Split)</option>
               <option value="diorama">2.5D Diorama (3D Layered)</option>
+              <option value="studio">🎨 Palette Knife Studio (Paint)</option>
             </select>
           </div>
         </div>
@@ -1233,7 +1350,7 @@ export class MetalReliefShowcase extends AbstractShowcase {
             <button class="btn-preset" id="btnPresetHarbor">⛵ Harbor</button>
           </div>
           <div id="dropZoneHud" class="hud-dropzone" style="margin-top:8px;">
-            <span>📁 Drop any photo or <u style="color:#e53e3e;">browse</u></span>
+            <span>📁 Drop any photo or <u style="color:#b000ff;">browse</u></span>
             <input type="file" id="filePickerInput" accept="image/*" style="display:none;" />
           </div>
         </div>
@@ -1285,6 +1402,48 @@ export class MetalReliefShowcase extends AbstractShowcase {
             <label>Wet Rain Sheen</label>
             <input type="range" id="slRain" min="0" max="1" step="0.05" value="0.50" />
             <span class="val-label" id="valRain">0.50</span>
+          </div>
+        </div>
+
+        <!-- Palette Knife Studio -->
+        <div class="hud-section" id="studioSection" style="display:none;">
+          <div class="section-title">🎨 Palette Knife Studio</div>
+          <div class="hud-row">
+            <label>Brush Size</label>
+            <input type="range" id="slBrushSize" min="3" max="120" step="1" value="12" />
+            <span class="val-label" id="valBrushSize">12</span>
+          </div>
+          <div class="hud-row">
+            <label>Impasto Height</label>
+            <input type="range" id="slBrushRelief" min="0" max="2" step="0.05" value="1.00" />
+            <span class="val-label" id="valBrushRelief">1.00</span>
+          </div>
+          <div class="hud-row">
+            <label>Knife Smear</label>
+            <input type="range" id="slBrushSmear" min="0" max="1" step="0.02" value="0.28" />
+            <span class="val-label" id="valBrushSmear">0.28</span>
+          </div>
+          <div class="hud-row">
+            <label>Metallic</label>
+            <input type="range" id="slBrushMetallic" min="0" max="1" step="0.05" value="0.55" />
+            <span class="val-label" id="valBrushMetallic">0.55</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:6px;">
+            <button class="btn-preset active" id="swatch1" style="background:#c0392b;" title="Oxide Red (1)"></button>
+            <button class="btn-preset" id="swatch2" style="background:#d4af37;" title="Gold Leaf (2)"></button>
+            <button class="btn-preset" id="swatch3" style="background:#b000ff;" title="Engine Violet (3)"></button>
+            <button class="btn-preset" id="swatch4" style="background:#38bdf8;" title="Steel Blue (4)"></button>
+            <button class="btn-preset" id="swatch5" style="background:#f1e9d8;" title="Bone White (5)"></button>
+            <button class="btn-preset" id="swatch6" style="background:#1e2b26;" title="Charcoal Bronze (6)"></button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:6px;">
+            <button class="btn-preset" id="btnErase">✕ Erase (X)</button>
+            <button class="btn-preset" id="btnUndo">↩ Undo (Z)</button>
+            <button class="btn-preset" id="btnClear">🗑 Clear (C)</button>
+            <button class="btn-preset" id="btnBaseToggle">🖼 Base</button>
+          </div>
+          <div class="hud-row" style="margin-top:8px;">
+            <span style="font-size:11px;color:#94a3b8;">Keys: [ ] size · 1-6 palette · Q base (steel/photo) · P leave studio</span>
           </div>
         </div>
       </div>
@@ -1390,7 +1549,7 @@ export class MetalReliefShowcase extends AbstractShowcase {
     // Mode dropdown
     const selMode = document.getElementById("selMode") as HTMLSelectElement | null;
     selMode?.addEventListener("change", () => {
-      this._setMode(selMode.value as "diorama" | "fullscreen");
+      this._setMode(selMode.value as "fullscreen" | "diorama" | "studio");
     });
 
     // Split buttons
@@ -1473,6 +1632,257 @@ export class MetalReliefShowcase extends AbstractShowcase {
       }
       if (this._screenMaterial) this._screenMaterial.wetRainStreaks = v;
     });
+
+    // ---- Palette Knife Studio controls ----
+    this._bindSlider("slBrushSize", "valBrushSize", (v) => {
+      this._brushSizeBase = v;
+    });
+    this._bindSlider("slBrushRelief", "valBrushRelief", (v) => {
+      if (this._studioMaterial) this._studioMaterial.brushRelief = v;
+    });
+    this._bindSlider("slBrushSmear", "valBrushSmear", (v) => {
+      if (this._studioMaterial) this._studioMaterial.smearDistance = v;
+    });
+    this._bindSlider("slBrushMetallic", "valBrushMetallic", (v) => {
+      if (this._studioMaterial) this._studioMaterial.metallic = v;
+    });
+
+    document.getElementById("btnUndo")?.addEventListener("click", () => {
+      this._undoStudio();
+    });
+    document.getElementById("btnClear")?.addEventListener("click", () => {
+      this._clearStudio();
+    });
+    const btnErase = document.getElementById("btnErase");
+    btnErase?.addEventListener("click", () => {
+      this._eraserMode = !this._eraserMode;
+      btnErase.classList.toggle("active", this._eraserMode);
+    });
+    const btnBase = document.getElementById("btnBaseToggle");
+    btnBase?.addEventListener("click", () => {
+      this._setStudioBase(this._studioBaseMode === "steel" ? "photo" : "steel");
+      btnBase.classList.toggle("active", this._studioBaseMode === "photo");
+    });
+
+    for (let i = 0; i < this._swatches.length; i++) {
+      const btn = document.getElementById(`swatch${i + 1}`);
+      btn?.addEventListener("click", () => {
+        this._paintColor = this._swatches[i]!;
+        this._eraserMode = false;
+        btnErase?.classList.remove("active");
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Palette Knife Studio — interactive impasto painting onto a 3D plane.
+  // ---------------------------------------------------------------------------
+
+  /** Canvas + 2D context with a permanently inverted Y axis, so image-space drawing is
+   * stored pre-flipped for direct (un-flipped) upload onto the engine's top-down UVs. */
+  private _createFlippedCanvas2D(
+    width: number,
+    height: number,
+  ): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D context unavailable");
+    ctx.translate(0, height);
+    ctx.scale(1, -1);
+    return { canvas, ctx };
+  }
+
+  /** Procedural steel plate that forms the neutral studio ground layer. */
+  private _drawSteelPlate(ctx: CanvasRenderingContext2D): void {
+    const w = this._STUDIO_WIDTH;
+    const h = this._STUDIO_HEIGHT;
+    ctx.fillStyle = "#21252b";
+    ctx.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 2) {
+      const a = 0.02 + (0.05 * ((y * 2654435761) % 100)) / 100;
+      ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+      ctx.fillRect(0, y, w, 1);
+    }
+    for (let i = 0; i < 60; i++) {
+      const x0 = (i * 997) % w;
+      const y0 = (i * 719) % h;
+      const len = 24 + ((i * 31) % 90);
+      ctx.strokeStyle = `rgba(180,190,210,${0.04 + ((i % 5) * 0.03).toFixed(2)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x0 + len * 0.6, y0 - len);
+      ctx.stroke();
+    }
+  }
+
+  private _buildStudio(): void {
+    const paint = this._createFlippedCanvas2D(this._STUDIO_WIDTH, this._STUDIO_HEIGHT);
+    this._studioPaintCanvas = paint.canvas;
+    this._studioPaintCtx = paint.ctx;
+
+    const dir = this._createFlippedCanvas2D(this._STUDIO_WIDTH, this._STUDIO_HEIGHT);
+    this._studioDirCanvas = dir.canvas;
+    this._studioDirCtx = dir.ctx;
+
+    const steel = this._createFlippedCanvas2D(this._STUDIO_WIDTH, this._STUDIO_HEIGHT);
+    this._drawSteelPlate(steel.ctx);
+
+    this._studioPaintTex = Texture.fromCanvas(this._studioPaintCanvas);
+    this._studioDirTex = Texture.fromCanvas(this._studioDirCanvas);
+    this._studioSteelTex = Texture.fromCanvas(steel.canvas);
+
+    this._studioMaterial = new ImpastoStrokeMaterial({
+      paintMap: this._studioPaintTex,
+      dirMap: this._studioDirTex,
+      baseMap: this._studioSteelTex,
+    });
+
+    const quad = createPlaneMesh("StudioCanvasQuad", 4.15, 3.1, this._studioMaterial).setPosition(
+      0,
+      0,
+      0,
+    );
+    this._studioRoot.add(quad);
+    this._studioRoot.isVisible = false;
+    this.scene.add(this._studioRoot);
+  }
+
+  private _pointerPressure(e: PointerEvent): number {
+    if (e.pointerType === "mouse") return 0.6;
+    const p = typeof e.pressure === "number" && e.pressure > 0 ? e.pressure : 0.5;
+    return Math.min(1, Math.max(0, p));
+  }
+
+  private _setupStudioInteraction(): void {
+    const canvas = document.getElementById("SmallWorldMachine") as HTMLCanvasElement | null;
+    if (!canvas) return;
+
+    const toCanvasSpace = (e: PointerEvent): StrokePoint => {
+      const rect = canvas.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / Math.max(1, rect.width)) * this._STUDIO_WIDTH;
+      const y = ((e.clientY - rect.top) / Math.max(1, rect.height)) * this._STUDIO_HEIGHT;
+      return {
+        x: Math.max(0, Math.min(this._STUDIO_WIDTH, x)),
+        y: Math.max(0, Math.min(this._STUDIO_HEIGHT, y)),
+      };
+    };
+
+    canvas.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (this._displayMode !== "studio" || this._isHoveringHud) return;
+      this._isPainting = true;
+      this._undoSnapshot = this._studioPaintCtx.getImageData(
+        0,
+        0,
+        this._STUDIO_WIDTH,
+        this._STUDIO_HEIGHT,
+      );
+      const p = toCanvasSpace(e);
+      this._rasterizePointerStroke(p, p, this._pointerPressure(e));
+      canvas.setPointerCapture?.(e.pointerId);
+    });
+
+    window.addEventListener("pointermove", (e: PointerEvent) => {
+      if (!this._isPainting || this._displayMode !== "studio") return;
+      const cur = toCanvasSpace(e);
+      this._rasterizePointerStroke(this._lastPointer, cur, this._pointerPressure(e));
+      this._lastPointer = cur;
+    });
+
+    const endPaint = (): void => {
+      this._isPainting = false;
+    };
+    window.addEventListener("pointerup", endPaint);
+    window.addEventListener("pointercancel", endPaint);
+  }
+
+  private _rasterizePointerStroke(from: StrokePoint, to: StrokePoint, pressure: number): void {
+    const splats = buildStrokeSplats({
+      from,
+      to,
+      pressure,
+      baseRadius: this._brushSizeBase,
+      maxRadius: this._brushMaxRadius,
+      maxStepPx: 8,
+      colorHex: this._paintColor,
+      canvasWidth: this._STUDIO_WIDTH,
+      canvasHeight: this._STUDIO_HEIGHT,
+    });
+    const op: GlobalCompositeOperation = this._eraserMode ? "destination-out" : "source-over";
+    this._studioPaintCtx.globalCompositeOperation = op;
+    this._studioDirCtx.globalCompositeOperation = op;
+    for (const splat of splats) {
+      rasterizeSplatColor(this._studioPaintCtx, splat, this._paintColor);
+      rasterizeSplatDirection(this._studioDirCtx, splat);
+    }
+    this._studioPaintCtx.globalCompositeOperation = "source-over";
+    this._studioDirCtx.globalCompositeOperation = "source-over";
+    this._studioPaintTex.needsUpdate = true;
+    this._studioDirTex.needsUpdate = true;
+    this._qaNonce++;
+  }
+
+  private _clearStudio(): void {
+    this._studioPaintCtx.clearRect(0, 0, this._STUDIO_WIDTH, this._STUDIO_HEIGHT);
+    this._studioDirCtx.clearRect(0, 0, this._STUDIO_WIDTH, this._STUDIO_HEIGHT);
+    this._studioPaintTex.needsUpdate = true;
+    this._studioDirTex.needsUpdate = true;
+    this._qaNonce++;
+  }
+
+  private _undoStudio(): void {
+    if (!this._undoSnapshot) return;
+    this._studioPaintCtx.putImageData(this._undoSnapshot, 0, 0);
+    this._studioPaintTex.needsUpdate = true;
+    this._qaNonce++;
+  }
+
+  private _syncStudioBase(): void {
+    if (!this._studioMaterial) return;
+    if (this._studioBaseMode === "photo") {
+      const tex = this._textures[this._activePreset];
+      if (tex) this._studioMaterial.baseMap = tex;
+    } else {
+      this._studioMaterial.baseMap = this._studioSteelTex;
+    }
+  }
+
+  private _setStudioBase(mode: "steel" | "photo"): void {
+    this._studioBaseMode = mode;
+    this._syncStudioBase();
+  }
+
+  /** Deterministic paint hook for the automated live gate; `v` is top-down image space. */
+  private _installQaHooks(): void {
+    (window as unknown as Record<string, unknown>)["__qaImpasto"] = {
+      getMode: (): string => this._displayMode,
+      setMode: (m: string): void => {
+        this._setMode(m as "fullscreen" | "diorama" | "studio");
+      },
+      nonce: (): number => this._qaNonce,
+      paint: (u: number, v: number, pressure: number): void => {
+        const p: StrokePoint = { x: u * this._STUDIO_WIDTH, y: v * this._STUDIO_HEIGHT };
+        this._rasterizePointerStroke(p, p, pressure);
+      },
+      clear: (): void => this._clearStudio(),
+      undo: (): void => this._undoStudio(),
+      setBase: (m: string): void => this._setStudioBase(m as "steel" | "photo"),
+      paintCoverage: (): number => {
+        const data = this._studioPaintCtx.getImageData(
+          0,
+          0,
+          this._STUDIO_WIDTH,
+          this._STUDIO_HEIGHT,
+        ).data;
+        let sum = 0;
+        for (let i = 3; i < data.length; i += 4) {
+          sum += data[i]! / 255;
+        }
+        return sum / (this._STUDIO_WIDTH * this._STUDIO_HEIGHT);
+      },
+    };
   }
 }
 

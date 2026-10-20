@@ -56,8 +56,9 @@ class Showcase38 extends AbstractShowcase {
   private _flickerEnabled: boolean = true;
   private _flickerBehaviors: FlickerBehavior[] = [];
   private _audioMuted: boolean = false;
+  private _activePresetIdx: number = 0;
 
-  private _hudElement: HTMLDivElement | null = null;
+  private _hudElement: HTMLElement | null = null;
 
   private readonly _cameraPresets: CameraPreset[] = [
     {
@@ -1564,52 +1565,9 @@ class Showcase38 extends AbstractShowcase {
     this._createHud();
   }
 
-  // --------------------------------------------------------------------------
-  // Interactive Keyboard Controls & Presets
-  // --------------------------------------------------------------------------
-  protected override onKeyDown(event: KeyboardEvent): void {
-    super.onKeyDown(event);
-
-    switch (event.key) {
-      case "1":
-      case "2":
-      case "3":
-      case "4":
-      case "5": {
-        const idx = parseInt(event.key, 10) - 1;
-        const preset = this._cameraPresets[idx];
-        if (preset) {
-          this.setInitialCamera(preset.position, preset.target);
-          this._updateHud();
-        }
-        break;
-      }
-      case "t":
-      case "T": {
-        this._cycleTimeOfDay();
-        break;
-      }
-      case "f":
-      case "F": {
-        this._flickerEnabled = !this._flickerEnabled;
-        this._updateHud();
-        break;
-      }
-      case "m":
-      case "M": {
-        this._audioMuted = !this._audioMuted;
-        if (this.audio) {
-          this.audio.setMusicVolume(this._audioMuted ? 0.0 : 0.4);
-        }
-        this._updateHud();
-        break;
-      }
-    }
-  }
-
-  private _cycleTimeOfDay(): void {
-    if (this._timeOfDayMode === TimeOfDay.GOLDEN_HOUR) {
-      this._timeOfDayMode = TimeOfDay.MIDDAY;
+  private _setTimeOfDay(mode: TimeOfDay): void {
+    this._timeOfDayMode = mode;
+    if (mode === TimeOfDay.MIDDAY) {
       // Midday sun: intense, high angle, clear skies
       this._sunLight.direction.set(0.2, -0.92, -0.32).normalize();
       this._sunLight.color.set(1.0, 0.96, 0.88);
@@ -1624,8 +1582,7 @@ class Showcase38 extends AbstractShowcase {
         this._colorGrading.saturation = 1.02;
         this._colorGrading.contrast = 1.05;
       }
-    } else if (this._timeOfDayMode === TimeOfDay.MIDDAY) {
-      this._timeOfDayMode = TimeOfDay.MIDNIGHT;
+    } else if (mode === TimeOfDay.MIDNIGHT) {
       // Midnight starlight: dark desert night with glowing torchlight
       this._sunLight.direction.set(0.4, -0.7, -0.6).normalize();
       this._sunLight.color.set(0.08, 0.12, 0.22);
@@ -1641,7 +1598,6 @@ class Showcase38 extends AbstractShowcase {
         this._colorGrading.contrast = 1.12;
       }
     } else {
-      this._timeOfDayMode = TimeOfDay.GOLDEN_HOUR;
       // Golden hour: warm low sun slicing through canyon
       this._sunLight.direction.set(0.55, -0.65, -0.52).normalize();
       this._sunLight.color.set(1.0, 0.88, 0.72);
@@ -1661,44 +1617,182 @@ class Showcase38 extends AbstractShowcase {
     this._updateHud();
   }
 
+  private _inspectorBtn?: HTMLButtonElement;
+
+  private _toggleInspector(force?: boolean): void {
+    if (!this._hudElement) return;
+    const isCurrentlyOpen = this._hudElement.classList.contains("open");
+    const open = undefined !== force ? force : !isCurrentlyOpen;
+    if (open) {
+      this._hudElement.classList.add("open");
+      this._inspectorBtn?.classList.add("active");
+    } else {
+      this._hudElement.classList.remove("open");
+      this._inspectorBtn?.classList.remove("active");
+    }
+  }
+
   private _createHud(): void {
-    const hud = document.createElement("div");
+    const existingHud = document.getElementById("petra-hud");
+    if (existingHud) existingHud.remove();
+    const existingBtn = document.getElementById("petraInspectorBtn");
+    if (existingBtn) existingBtn.remove();
+    const existingStyle = document.getElementById("petraHudStyle");
+    if (existingStyle) existingStyle.remove();
+
+    const hud = document.createElement("aside");
     hud.id = "petra-hud";
-    hud.style.position = "fixed";
-    hud.style.bottom = "20px";
-    hud.style.left = "20px";
-    hud.style.padding = "12px 18px";
-    hud.style.background = "rgba(18, 12, 10, 0.82)";
-    hud.style.border = "1px solid rgba(220, 160, 100, 0.35)";
-    hud.style.borderRadius = "8px";
-    hud.style.color = "#f2e4d0";
-    hud.style.fontFamily = "system-ui, -apple-system, sans-serif";
-    hud.style.fontSize = "13px";
-    hud.style.lineHeight = "1.5";
-    hud.style.pointerEvents = "none";
-    hud.style.backdropFilter = "blur(6px)";
-    hud.style.zIndex = "1000";
+    hud.className = "swm-inspector-drawer";
     document.body.appendChild(hud);
     this._hudElement = hud;
+
+    // Stop events from leaking to camera controllers
+    const stopEvents = [
+      "mousedown",
+      "mouseup",
+      "mousemove",
+      "pointerdown",
+      "pointerup",
+      "pointermove",
+      "wheel",
+      "touchstart",
+      "touchmove",
+      "touchend",
+      "click",
+      "dblclick",
+      "contextmenu",
+    ];
+    for (const ev of stopEvents) {
+      hud.addEventListener(
+        ev,
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
+      );
+    }
+
+    // Footer toggle button
+    const toggleBtn = document.createElement("button");
+    toggleBtn.id = "petraInspectorBtn";
+    toggleBtn.className = "swm-inspector-btn";
+    toggleBtn.innerHTML = "<span>⚙</span>";
+    toggleBtn.title = "Settings (Toggle)";
+    toggleBtn.setAttribute("aria-label", "Toggle Inspector");
+    toggleBtn.onclick = (): void => {
+      this._toggleInspector();
+    };
+    this._inspectorBtn = toggleBtn;
+
+    const footer = document.querySelector(".app-footer");
+    if (footer) {
+      footer.appendChild(toggleBtn);
+    } else {
+      document.body.appendChild(toggleBtn);
+    }
+
     this._updateHud();
   }
 
   private _updateHud(): void {
     if (!this._hudElement) return;
     this._hudElement.innerHTML = `
-      <div style="font-weight: 700; color: #f5b060; margin-bottom: 4px; letter-spacing: 0.5px;">AL-KHAZNEH — THE TREASURY OF PETRA</div>
-      <div><strong>Time of Day [T]:</strong> <span style="color: #ffd8a0;">${this._timeOfDayMode}</span></div>
-      <div><strong>Flame Flicker [F]:</strong> <span style="color: ${this._flickerEnabled ? "#66e088" : "#e06666"};">${this._flickerEnabled ? "Enabled" : "Disabled"}</span></div>
-      <div><strong>Canyon Wind [M]:</strong> <span style="color: ${!this._audioMuted ? "#66e088" : "#e06666"};">${!this._audioMuted ? "Playing" : "Muted"}</span></div>
-      <div style="margin-top: 6px; font-size: 11px; opacity: 0.85;">
-        <em>Keys:</em> <strong>[1]</strong> Siq Gorge | <strong>[2]</strong> Plaza | <strong>[3]</strong> Portico | <strong>[4]</strong> Inner Sanctum | <strong>[5]</strong> Shrine
+      <div class="bottom-sheet-grabber"></div>
+      <div class="hud-header">
+        <div class="hud-title">
+          <span>🏛️</span> Al-Khazneh — Petra
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="hud-badge">Petra Lab</span>
+          <button id="petraHudClose" class="hud-close-btn" title="Close Inspector">✕</button>
+        </div>
+      </div>
+      <div class="hud-body">
+        <div class="hud-section">
+          <div class="section-title">⚙️ Atmosphere & Audio</div>
+          <div class="hud-row">
+            <label for="selTimeOfDay">Time of Day</label>
+            <select id="selTimeOfDay">
+              <option value="${TimeOfDay.GOLDEN_HOUR}" ${this._timeOfDayMode === TimeOfDay.GOLDEN_HOUR ? "selected" : ""}>Golden Hour</option>
+              <option value="${TimeOfDay.MIDDAY}" ${this._timeOfDayMode === TimeOfDay.MIDDAY ? "selected" : ""}>Midday Sun</option>
+              <option value="${TimeOfDay.MIDNIGHT}" ${this._timeOfDayMode === TimeOfDay.MIDNIGHT ? "selected" : ""}>Midnight Starlight</option>
+            </select>
+          </div>
+          <div class="hud-row">
+            <label for="swFlicker">Flame Flicker</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swFlicker" ${this._flickerEnabled ? "checked" : ""}>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
+          <div class="hud-row">
+            <label for="swAudio">Canyon Wind Audio</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swAudio" ${!this._audioMuted ? "checked" : ""}>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="hud-section">
+          <div class="section-title">📍 Camera Positions</div>
+          <div class="preset-group">
+            <button class="btn-preset ${this._activePresetIdx === 0 ? "active" : ""}" data-cam="0">Siq Gorge</button>
+            <button class="btn-preset ${this._activePresetIdx === 1 ? "active" : ""}" data-cam="1">Plaza</button>
+            <button class="btn-preset ${this._activePresetIdx === 2 ? "active" : ""}" data-cam="2">Portico</button>
+            <button class="btn-preset ${this._activePresetIdx === 3 ? "active" : ""}" data-cam="3">Sanctum</button>
+            <button class="btn-preset ${this._activePresetIdx === 4 ? "active" : ""}" data-cam="4">Shrine</button>
+          </div>
+        </div>
       </div>
     `;
+
+    document.getElementById("petraHudClose")?.addEventListener("click", () => {
+      this._toggleInspector(false);
+    });
+
+    // Dropdown change listener
+    document.getElementById("selTimeOfDay")?.addEventListener("change", (e) => {
+      const mode = (e.target as HTMLSelectElement).value as TimeOfDay;
+      this._setTimeOfDay(mode);
+    });
+
+    // Switch listeners
+    document.getElementById("swFlicker")?.addEventListener("change", (e) => {
+      this._flickerEnabled = (e.target as HTMLInputElement).checked;
+    });
+
+    document.getElementById("swAudio")?.addEventListener("change", (e) => {
+      this._audioMuted = !(e.target as HTMLInputElement).checked;
+      if (this.audio) {
+        this.audio.setMusicVolume(this._audioMuted ? 0.0 : 0.4);
+      }
+    });
+
+    // Preset button click listeners
+    this._hudElement.querySelectorAll<HTMLButtonElement>("button[data-cam]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const camIdx = parseInt(btn.dataset["cam"] ?? "0", 10);
+        const preset = this._cameraPresets[camIdx];
+        if (preset) {
+          this._activePresetIdx = camIdx;
+          this.setInitialCamera(preset.position, preset.target);
+          this._updateHud();
+        }
+      });
+    });
   }
 
   public override destroy(): void {
     if (this._hudElement && this._hudElement.parentNode) {
       this._hudElement.parentNode.removeChild(this._hudElement);
+    }
+    if (this._inspectorBtn && this._inspectorBtn.parentNode) {
+      this._inspectorBtn.parentNode.removeChild(this._inspectorBtn);
+    }
+    const style = document.getElementById("petraHudStyle");
+    if (style && style.parentNode) {
+      style.parentNode.removeChild(style);
     }
     super.destroy();
   }

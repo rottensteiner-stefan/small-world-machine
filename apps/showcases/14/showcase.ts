@@ -1047,26 +1047,96 @@ Promise.all([
 // ============================================================================
 
 function setupUIControls(): void {
-  // Play/Pause sweep
-  const playPauseBtn = document.getElementById("btn-play-pause");
-  if (playPauseBtn) {
-    playPauseBtn.addEventListener("click", () => {
-      SharedState.sweepActive = !SharedState.sweepActive;
-      if (SharedState.sweepActive) {
-        playPauseBtn.textContent = "ACTIVE";
-        playPauseBtn.classList.add("active");
-      } else {
-        playPauseBtn.textContent = "PAUSED";
-        playPauseBtn.classList.remove("active");
-      }
-    });
+  const drawer = document.getElementById("surveillance-inspector");
+
+  // Footer toggle button
+  const toggleBtn = document.createElement("button");
+  toggleBtn.id = "surveillanceInspectorBtn";
+  toggleBtn.className = "swm-inspector-btn";
+  toggleBtn.innerHTML = "<span>⚙</span>";
+  toggleBtn.title = "Settings (Toggle)";
+  toggleBtn.setAttribute("aria-label", "Toggle Inspector");
+
+  const toggleInspector = (force?: boolean): void => {
+    if (!drawer) return;
+    const isCurrentlyOpen = drawer.classList.contains("open");
+    const open = undefined !== force ? force : !isCurrentlyOpen;
+    if (open) {
+      drawer.classList.add("open");
+      toggleBtn.classList.add("active");
+    } else {
+      drawer.classList.remove("open");
+      toggleBtn.classList.remove("active");
+    }
+  };
+
+  toggleBtn.onclick = (): void => {
+    toggleInspector();
+  };
+
+  const closeBtn = document.getElementById("surveillanceHudClose");
+  closeBtn?.addEventListener("click", () => toggleInspector(false));
+
+  const attachFooterBtn = (): void => {
+    const footer = document.querySelector(".app-footer");
+    if (footer) {
+      footer.appendChild(toggleBtn);
+    } else {
+      document.body.appendChild(toggleBtn);
+      setTimeout(() => {
+        const f = document.querySelector(".app-footer");
+        if (f && toggleBtn.parentNode !== f) {
+          f.appendChild(toggleBtn);
+        }
+      }, 100);
+    }
+  };
+  attachFooterBtn();
+
+  // Stop events inside drawer from propagating to document/canvases
+  const stopEvents = [
+    "mousedown",
+    "mouseup",
+    "mousemove",
+    "pointerdown",
+    "pointerup",
+    "pointermove",
+    "wheel",
+    "touchstart",
+    "touchmove",
+    "touchend",
+    "click",
+    "dblclick",
+    "contextmenu",
+  ];
+  if (drawer) {
+    for (const ev of stopEvents) {
+      drawer.addEventListener(
+        ev,
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
+      );
+    }
   }
 
+  // Camera sweep toggle switch
+  const swSweep = document.getElementById("swSweep") as HTMLInputElement | null;
+  swSweep?.addEventListener("change", () => {
+    SharedState.sweepActive = swSweep.checked;
+  });
+
   // Sweep speed slider
-  const speedSlider = document.getElementById("slider-speed") as HTMLInputElement;
+  const speedSlider = document.getElementById("sliderSpeed") as HTMLInputElement | null;
+  const valSpeed = document.getElementById("valSpeed");
   if (speedSlider) {
     speedSlider.addEventListener("input", () => {
-      SharedState.sweepSpeed = parseFloat(speedSlider.value) / 100.0;
+      const val = parseFloat(speedSlider.value);
+      SharedState.sweepSpeed = val / 100.0;
+      if (valSpeed) {
+        valSpeed.textContent = `${Math.round(val)}%`;
+      }
     });
   }
 
@@ -1112,20 +1182,11 @@ function setupUIControls(): void {
     lightFlickerBtn.addEventListener("click", () => setLightModeActive(lightFlickerBtn, "flicker"));
   }
 
-  // Sirens toggle
-  const sirensToggleBtn = document.getElementById("btn-sirens-toggle");
-  if (sirensToggleBtn) {
-    sirensToggleBtn.addEventListener("click", () => {
-      SharedState.sirensActive = !SharedState.sirensActive;
-      if (SharedState.sirensActive) {
-        sirensToggleBtn.textContent = "ON";
-        sirensToggleBtn.classList.add("active");
-      } else {
-        sirensToggleBtn.textContent = "OFF";
-        sirensToggleBtn.classList.remove("active");
-      }
-    });
-  }
+  // Sirens toggle switch
+  const swSirens = document.getElementById("swSirens") as HTMLInputElement | null;
+  swSirens?.addEventListener("change", () => {
+    SharedState.sirensActive = swSirens.checked;
+  });
 
   // Toggle monitor power via LED
   const leds = document.querySelectorAll(".power-led");

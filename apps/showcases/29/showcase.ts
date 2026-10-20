@@ -419,6 +419,27 @@ class Showcase29 extends AbstractShowcase {
       #sponzaTuningHud.open {
         transform: translateX(0);
       }
+      @media (max-width: 768px) {
+        #sponzaTuningHud {
+          top: auto;
+          bottom: 36px;
+          left: 0;
+          right: 0;
+          width: 100vw;
+          max-height: calc(100vh - 80px);
+          border-left: none;
+          border-right: none;
+          border-bottom: none;
+          border-top: 1px solid var(--tool-border, rgba(148, 163, 184, 0.25));
+          border-radius: 14px 14px 0 0;
+          box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.7);
+          transform: translateY(100%);
+          transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #sponzaTuningHud.open {
+          transform: translateY(0);
+        }
+      }
       .swm-inspector-btn {
         position: fixed;
         bottom: 5px;
@@ -441,15 +462,15 @@ class Showcase29 extends AbstractShowcase {
         transition: all 0.2s ease;
       }
       .swm-inspector-btn:hover {
-        border-color: var(--tool-accent, #ffb84d);
-        color: var(--tool-accent, #ffb84d);
-        box-shadow: 0 0 10px var(--tool-accent-glow, rgba(255, 184, 77, 0.3));
+        border-color: var(--tool-accent, #b000ff);
+        color: var(--tool-accent, #b000ff);
+        box-shadow: 0 0 10px rgba(176, 0, 255, 0.4);
       }
       .swm-inspector-btn.active {
-        background: rgba(255, 184, 77, 0.15);
-        border-color: var(--tool-accent, #ffb84d);
-        color: var(--tool-accent, #ffb84d);
-        box-shadow: 0 0 8px var(--tool-accent-glow, rgba(255, 184, 77, 0.25));
+        background: rgba(176, 0, 255, 0.2);
+        border-color: var(--tool-accent, #b000ff);
+        color: var(--tool-accent, #b000ff);
+        box-shadow: 0 0 8px rgba(176, 0, 255, 0.3);
       }
       #sponzaTuningHud .hud-header {
         display: flex;
@@ -469,11 +490,11 @@ class Showcase29 extends AbstractShowcase {
       }
       #sponzaTuningHud .hud-badge {
         font-size: 10px;
-        background: rgba(255, 180, 50, 0.2);
-        color: #fbbf24;
+        background: rgba(176, 0, 255, 0.2);
+        color: #d884ff;
         padding: 2px 6px;
         border-radius: 4px;
-        border: 1px solid rgba(251, 191, 36, 0.3);
+        border: 1px solid rgba(176, 0, 255, 0.35);
       }
       #sponzaTuningHud .hud-body {
         padding: 12px 14px;
@@ -522,11 +543,11 @@ class Showcase29 extends AbstractShowcase {
       }
       #sponzaTuningHud input[type="range"] {
         flex: 1.3;
-        accent-color: #f59e0b;
+        accent-color: #b000ff;
         cursor: pointer;
       }
       #sponzaTuningHud input[type="checkbox"] {
-        accent-color: #f59e0b;
+        accent-color: #b000ff;
         cursor: pointer;
         width: 15px;
         height: 15px;
@@ -549,27 +570,29 @@ class Showcase29 extends AbstractShowcase {
         text-align: center;
       }
       #sponzaTuningHud .btn-preset:hover {
-        background: rgba(245, 158, 11, 0.25);
-        border-color: #f59e0b;
+        background: rgba(176, 0, 255, 0.25);
+        border-color: #b000ff;
         color: #fff;
       }
       #sponzaTuningHud .btn-preset.active {
-        background: #f59e0b;
-        color: #0f172a;
-        border-color: #f59e0b;
+        background: #b000ff;
+        color: #fff;
+        border-color: #b000ff;
       }
     `;
     document.head.appendChild(style);
 
     const hud = document.createElement("div");
     hud.id = "sponzaTuningHud";
+    hud.className = "swm-inspector-drawer";
     hud.innerHTML = `
+      <div class="bottom-sheet-grabber"></div>
       <div class="hud-header" id="hudHeader">
         <div class="hud-title">
           <span>🏛️</span> Sponza Lighting Lab
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <span class="hud-badge">[I] Toggle</span>
+          <span class="hud-badge">Inspector</span>
           <button id="sponzaHudClose" title="Close Panel" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;padding:0 4px;line-height:1;">✕</button>
         </div>
       </div>

@@ -254,15 +254,15 @@ export class LabInspector {
           transition: all 0.2s ease;
         }
         .swm-inspector-btn:hover {
-          border-color: var(--tool-accent, #ffb84d);
-          color: var(--tool-accent, #ffb84d);
-          box-shadow: 0 0 10px var(--tool-accent-glow, rgba(255, 184, 77, 0.3));
+          border-color: var(--tool-accent, #b000ff);
+          color: var(--tool-accent, #b000ff);
+          box-shadow: 0 0 10px rgba(176, 0, 255, 0.4);
         }
         .swm-inspector-btn.active {
-          background: rgba(255, 184, 77, 0.15);
-          border-color: var(--tool-accent, #ffb84d);
-          color: var(--tool-accent, #ffb84d);
-          box-shadow: 0 0 8px var(--tool-accent-glow, rgba(255, 184, 77, 0.25));
+          background: rgba(176, 0, 255, 0.2);
+          border-color: var(--tool-accent, #b000ff);
+          color: var(--tool-accent, #b000ff);
+          box-shadow: 0 0 8px rgba(176, 0, 255, 0.3);
         }
         .swm-inspector-drawer {
           position: fixed;
@@ -285,6 +285,27 @@ export class LabInspector {
         }
         .swm-inspector-drawer.open {
           transform: translateX(0);
+        }
+        @media (max-width: 768px) {
+          .swm-inspector-drawer {
+            top: auto;
+            bottom: 36px;
+            left: 0;
+            right: 0;
+            width: 100vw;
+            max-height: calc(100vh - 80px);
+            border-left: none;
+            border-right: none;
+            border-bottom: none;
+            border-top: 1px solid var(--tool-border, rgba(148, 163, 184, 0.25));
+            border-radius: 14px 14px 0 0;
+            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.7);
+            transform: translateY(100%);
+            transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+          .swm-inspector-drawer.open {
+            transform: translateY(0);
+          }
         }
         .swm-inspector-header {
           display: flex;
@@ -331,7 +352,7 @@ export class LabInspector {
           text-transform: uppercase;
           letter-spacing: 0.8px;
           padding: 8px 12px 6px;
-          color: var(--tool-accent, #ffb84d);
+          color: var(--tool-accent, #d884ff);
           background: rgba(255, 255, 255, 0.02);
           border-bottom: 1px solid rgba(148, 163, 184, 0.1);
         }
@@ -362,7 +383,7 @@ export class LabInspector {
         }
         .maker-hierarchy-search-input:focus {
           outline: none;
-          border-color: var(--tool-accent, #ffb84d);
+          border-color: var(--tool-accent, #b000ff);
         }
         .maker-hierarchy-tree {
           overflow-y: auto;
@@ -397,13 +418,13 @@ export class LabInspector {
           color: #fff;
         }
         .maker-hierarchy-row.selected {
-          background: rgba(255, 184, 77, 0.22);
-          color: var(--tool-accent, #ffb84d);
+          background: rgba(176, 0, 255, 0.22);
+          color: var(--tool-accent, #d884ff);
           font-weight: 600;
         }
         .maker-hierarchy-rename-input {
           background: rgba(15, 23, 42, 0.95);
-          border: 1px solid var(--tool-accent, #ffb84d);
+          border: 1px solid var(--tool-accent, #b000ff);
           border-radius: 3px;
           color: #fff;
           padding: 2px 6px;
@@ -440,6 +461,7 @@ export class LabInspector {
     this._inspectorDrawer = drawer;
 
     drawer.innerHTML = `
+      <div class="bottom-sheet-grabber"></div>
       <header class="swm-inspector-header">
         <h3 class="swm-inspector-title">Lab Inspector</h3>
         <button id="swmInspectorClose" class="swm-inspector-close-btn" title="Close Inspector">✕</button>
