@@ -38,6 +38,8 @@ export interface MetalReliefScreenMaterialOptions {
   desaturation?: number;
   /** Strength of warm iron oxide / raw umber rust in shadows (0..1). Defaults to 0.8. */
   rustStrength?: number;
+  /** Split-screen Before/After divider position in [0, 1]. Negative value (e.g. -1.0) disables split wipe. Defaults to -1.0. */
+  splitPosition?: number;
 }
 
 /**
@@ -60,6 +62,7 @@ export class MetalReliefScreenMaterial extends AbstractMaterial {
   public hueTolerance: number;
   public desaturation: number;
   public rustStrength: number;
+  public splitPosition: number;
   public time: number = 0.0;
 
   constructor(options: MetalReliefScreenMaterialOptions = {}) {
@@ -79,6 +82,7 @@ export class MetalReliefScreenMaterial extends AbstractMaterial {
     this.hueTolerance = options.hueTolerance ?? 0.09;
     this.desaturation = options.desaturation ?? 0.95;
     this.rustStrength = options.rustStrength ?? 0.8;
+    this.splitPosition = options.splitPosition ?? -1.0;
   }
 
   /** @inheritdoc */
@@ -87,6 +91,7 @@ export class MetalReliefScreenMaterial extends AbstractMaterial {
       this._renderManifest = this._createBaseManifest();
       this._renderManifest.properties["u_specColor"] = new Float32Array([1.0, 1.0, 1.0, 1.0]);
       this._renderManifest.properties["u_styleA"] = [0.0, 0.0, 0.0, 0.0];
+      this._renderManifest.properties["u_styleB"] = [-1.0, 0.0, 0.0, 0.0];
       this._renderManifest.textures["u_diffuseMap"] = this.diffuseMap;
     }
 
@@ -117,6 +122,10 @@ export class MetalReliefScreenMaterial extends AbstractMaterial {
     styleA[1] = this.hueTolerance;
     styleA[2] = this.desaturation;
     styleA[3] = this.rustStrength;
+
+    const styleB = (props["u_styleB"] as number[]) ?? [0.0, 0.0, 0.0, 0.0];
+    styleB[0] = this.splitPosition;
+    props["u_styleB"] = styleB;
 
     return this._renderManifest;
   }

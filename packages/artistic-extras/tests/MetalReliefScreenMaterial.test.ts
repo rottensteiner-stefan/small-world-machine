@@ -18,6 +18,7 @@ describe("MetalReliefScreenMaterial", () => {
     expect(mat.hueTolerance).toBe(0.09);
     expect(mat.desaturation).toBe(0.95);
     expect(mat.rustStrength).toBe(0.8);
+    expect(mat.splitPosition).toBe(-1.0);
   });
 
   it("packs continuous parameters into render manifest lanes", () => {
@@ -34,6 +35,7 @@ describe("MetalReliefScreenMaterial", () => {
       hueTolerance: 0.15,
       desaturation: 0.85,
       rustStrength: 0.9,
+      splitPosition: 0.45,
     });
     mat.time = 5.5;
 
@@ -57,6 +59,9 @@ describe("MetalReliefScreenMaterial", () => {
     expect(styleA[1]).toBe(0.15);
     expect(styleA[2]).toBe(0.85);
     expect(styleA[3]).toBe(0.9);
+
+    const styleB = manifest.properties["u_styleB"] as number[];
+    expect(styleB[0]).toBe(0.45);
 
     expect(manifest.properties["u_time"]).toBe(5.5);
   });

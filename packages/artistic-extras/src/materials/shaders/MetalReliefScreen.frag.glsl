@@ -2,6 +2,7 @@
 
 uniform vec4 u_liquidParams;
 uniform vec4 u_styleA;
+uniform vec4 u_styleB;
 uniform float u_time;
 
 float mrs_hash(vec2 p) {
@@ -71,26 +72,18 @@ void main() {
     // Estimated texel size for Sobel kernel
     vec2 texelSize = vec2(1.0 / 512.0, 1.0 / 512.0);
 
-    #ifdef USE_DIFFUSE_MAP
-        float l00 = mrs_luma(texture(u_diffuseMap, v_uv + vec2(-1.0, -1.0) * texelSize).rgb);
-        float l10 = mrs_luma(texture(u_diffuseMap, v_uv + vec2( 0.0, -1.0) * texelSize).rgb);
-        float l20 = mrs_luma(texture(u_diffuseMap, v_uv + vec2( 1.0, -1.0) * texelSize).rgb);
+    float l00 = mrs_luma(texture(u_diffuseMap, v_uv + vec2(-1.0, -1.0) * texelSize).rgb);
+    float l10 = mrs_luma(texture(u_diffuseMap, v_uv + vec2( 0.0, -1.0) * texelSize).rgb);
+    float l20 = mrs_luma(texture(u_diffuseMap, v_uv + vec2( 1.0, -1.0) * texelSize).rgb);
 
-        float l01 = mrs_luma(texture(u_diffuseMap, v_uv + vec2(-1.0,  0.0) * texelSize).rgb);
-        vec4 centerTex = texture(u_diffuseMap, v_uv);
-        float l11 = mrs_luma(centerTex.rgb);
-        float l21 = mrs_luma(texture(u_diffuseMap, v_uv + vec2( 1.0,  0.0) * texelSize).rgb);
+    float l01 = mrs_luma(texture(u_diffuseMap, v_uv + vec2(-1.0,  0.0) * texelSize).rgb);
+    vec4 centerTex = texture(u_diffuseMap, v_uv);
+    float l11 = mrs_luma(centerTex.rgb);
+    float l21 = mrs_luma(texture(u_diffuseMap, v_uv + vec2( 1.0,  0.0) * texelSize).rgb);
 
-        float l02 = mrs_luma(texture(u_diffuseMap, v_uv + vec2(-1.0,  1.0) * texelSize).rgb);
-        float l12 = mrs_luma(texture(u_diffuseMap, v_uv + vec2( 0.0,  1.0) * texelSize).rgb);
-        float l22 = mrs_luma(texture(u_diffuseMap, v_uv + vec2( 1.0,  1.0) * texelSize).rgb);
-    #else
-        vec4 centerTex = u_color;
-        float l11 = mrs_luma(centerTex.rgb);
-        float l00 = l11; float l10 = l11; float l20 = l11;
-        float l01 = l11; float l21 = l11;
-        float l02 = l11; float l12 = l11; float l22 = l11;
-    #endif
+    float l02 = mrs_luma(texture(u_diffuseMap, v_uv + vec2(-1.0,  1.0) * texelSize).rgb);
+    float l12 = mrs_luma(texture(u_diffuseMap, v_uv + vec2( 0.0,  1.0) * texelSize).rgb);
+    float l22 = mrs_luma(texture(u_diffuseMap, v_uv + vec2( 1.0,  1.0) * texelSize).rgb);
 
     // 1. Sobel Gradient
     float dX = (l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02);
@@ -149,6 +142,11 @@ void main() {
     }
 
     vec3 shadedColor = finalAlbedo * (0.35 + 0.75 * NdotL) + specColor;
+
+    float splitPos = u_styleB.x;
+    if (splitPos >= 0.0 && v_uv.x < splitPos) {
+        shadedColor = centerTex.rgb;
+    }
 
     fragColor = vec4(shadedColor, centerTex.a);
 }

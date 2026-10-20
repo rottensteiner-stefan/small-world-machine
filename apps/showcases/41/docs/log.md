@@ -33,3 +33,31 @@ Showcase 41 wurde erstellt und nahtlos in die Showcase-Architektur eingebunden.
   - `scripts/check-showcases.js`: `"41"` in `numberedShowcases` aufgenommen.
   - `VALID_SHOWCASE_IDS` in `AbstractShowcase.ts` um `40, 41` ergänzt.
   - `public/index.html`: Showcase 41 in die Showcase-Galerie eingetragen.
+
+---
+
+## 2026-10-20 — Photo-to-Metal Relief Converter & Before/After Wipe-Slider
+
+Ausbau von Showcase 41 zum vollwertigen Foto-zu-Metallrelief-Konverter mit authentischen realistischen Fotografien und Direktvergleich:
+
+### Vorgenommene Änderungen
+
+- **Realistische Ausgangsfotografien:**
+  - 3 hochauflösende Fotografien als Ausgangsbasis generiert und integriert: `paris_photo.jpg` (Pariser Boulevard im Regen mit rotem Regenschirm & Eiffelturm), `alps_photo.jpg` (alpine Schneelandschaft mit roter Seilbahngondel), `harbor_photo.jpg` (nordischer Hafen mit rotem Segelboot).
+- **Split-Screen Wipe Shader (`MetalReliefScreenMaterial`):**
+  - Shader-Uniform `u_styleB.x` als Split-Position implementiert (in GLSL300, GLSL100 und WGSL).
+  - Bei `splitPosition >= 0.0`: Linke Seite zeigt das unberührte Originalfoto (`centerTex.rgb`), rechte Seite zeigt das plastische Metallwandrelief mit Sobel-Prägung, Spachtel-Facetten, Schleifspuren und Kanten-Glanz; getrennt durch eine präzise 2px-Trennlinie.
+  - WebGL1- und WebGL2-Shader-Pfade gehärtet (unconditional `u_diffuseMap`-Sampling ohne inaktive Defines).
+- **Interaktiver Wipe-Slider & Drag-Handle:**
+  - Schwebender vertikaler Trennstrich mit zentriertem Anfasser `[ ◀ ❘ ▶ ]` und Floating-Badges (`ORIGINAL PHOTO` links, `3D METAL RELIEF` rechts).
+  - Direktes horizontales Ziehen mit der Maus auf der Canvas oder am Handle verschiebt den Split in Echtzeit.
+  - HUD-Regler und Schnellwahltasten (`50% Split`, `100% Photo`, `100% Metal`).
+- **Universal Drag & Drop & Upload:**
+  - Beliebige Bilddateien (`.png`, `.jpg`, `.webp`) können direkt aus dem Finder/Desktop auf das Browserfenster gedroppt werden.
+  - Automatisches Laden via `Texture.fromUrl()`, Ermitteln der Original-Aspect-Ratio und Anpassung des Meshs ohne Verzerrung.
+  - Datei-Auswahldialog ("📁 Drop photo or browse") im Drawer-Panel integriert.
+- **Tastatursteuerung & Verifikation:**
+  - `Space` / `KeyW`: Schnelles Umschalten zwischen 50%-Split und Vollansicht.
+  - `KeyM`: Wechsel zwischen Foto-Konverter und 2.5D-Assemblage-Diorama.
+  - `1-3`: Direktwahl der drei Fotomotive.
+  - Volle Verifikation via Puppeteer in WebGPU, WebGL2 und WebGL1 erfolgreich bestanden.

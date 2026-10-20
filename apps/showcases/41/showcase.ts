@@ -37,7 +37,8 @@ function createPlaneMesh(
   mat: MetalReliefMaterial | MetalReliefScreenMaterial,
 ): Object3D {
   const obj = new Object3D(name);
-  obj.geometry = new Plane({ width, height }).getGeometryData();
+  obj.geometry = new Plane({ width: 1, height: 1 }).getGeometryData();
+  obj.setScale(width, height, 1);
   obj.material = mat;
   return obj;
 }
@@ -101,7 +102,7 @@ function createFallbackTexture(name: string, accentColor: string): Texture {
 export class MetalReliefShowcase extends AbstractShowcase {
   protected override defaultCameraController: "fly" | "orbit" | "none" = "orbit";
 
-  private _displayMode: "diorama" | "fullscreen" = "diorama";
+  private _displayMode: "diorama" | "fullscreen" = "fullscreen";
   private _materials: MetalReliefMaterial[] = [];
   private _dioramaRoot: Object3D = new Object3D("DioramaRoot");
   private _focalGroup: Object3D = new Object3D("FocalGroup");
@@ -115,6 +116,8 @@ export class MetalReliefShowcase extends AbstractShowcase {
   private _reliefPanelBtn?: HTMLButtonElement;
   private _isHoveringHud: boolean = false;
   private _isDraggingHud: boolean = false;
+  private _isDraggingSplit: boolean = false;
+  private _customImageAspect: number = 1.3393;
 
   private _textures: Record<string, Texture> = {};
 
@@ -144,26 +147,35 @@ export class MetalReliefShowcase extends AbstractShowcase {
     });
     this.scene.add(sun);
 
-    // Preload textures with safe fallbacks
+    // Preload realistic photographs for Before/After converter
     try {
-      // Engine convention: the upright Plane uses top-down UVs (v=1 = top), so
-      // images destined for it must be loaded flipped (see MtlLoader). Without
-      // this, the fullscreen motif appears vertically mirrored.
-      this._textures["paris"] = await Texture.fromUrl("./assets/paris.jpg", { flipY: true });
+      this._textures["paris"] = await Texture.fromUrl("./assets/paris_photo.jpg");
     } catch {
-      this._textures["paris"] = createFallbackTexture("Paris", "#e53e3e");
+      try {
+        this._textures["paris"] = await Texture.fromUrl("./assets/paris.jpg");
+      } catch {
+        this._textures["paris"] = createFallbackTexture("Paris", "#e53e3e");
+      }
     }
 
     try {
-      this._textures["alps"] = await Texture.fromUrl("./assets/alps.jpg", { flipY: true });
+      this._textures["alps"] = await Texture.fromUrl("./assets/alps_photo.jpg");
     } catch {
-      this._textures["alps"] = createFallbackTexture("Alps", "#e53e3e");
+      try {
+        this._textures["alps"] = await Texture.fromUrl("./assets/alps.jpg");
+      } catch {
+        this._textures["alps"] = createFallbackTexture("Alps", "#e53e3e");
+      }
     }
 
     try {
-      this._textures["harbor"] = await Texture.fromUrl("./assets/harbor.jpg", { flipY: true });
+      this._textures["harbor"] = await Texture.fromUrl("./assets/harbor_photo.jpg");
     } catch {
-      this._textures["harbor"] = createFallbackTexture("Harbor", "#3182ce");
+      try {
+        this._textures["harbor"] = await Texture.fromUrl("./assets/harbor.jpg");
+      } catch {
+        this._textures["harbor"] = createFallbackTexture("Harbor", "#3182ce");
+      }
     }
 
     // --- 1. Assemble Diorama Root (2.5D Mode) ---
@@ -216,6 +228,7 @@ export class MetalReliefShowcase extends AbstractShowcase {
     // --- 2. Assemble Full-Screen Canvas Quad Mode ---
     this._screenMaterial = new MetalReliefScreenMaterial({
       diffuseMap: this._textures["paris"],
+      splitPosition: 0.5,
       reliefStrength: 1.5,
       paletteKnifeStrength: 0.5,
       paletteKnifeScale: 24.0,
@@ -224,19 +237,18 @@ export class MetalReliefShowcase extends AbstractShowcase {
       edgeGlintStrength: 1.2,
       wetRainStreaks: 0.5,
       targetHue: 0.0,
-      hueTolerance: 0.09,
+      hueTolerance: 0.12,
       desaturation: 0.95,
       rustStrength: 0.8,
     });
 
     this._screenMesh = createPlaneMesh(
       "ScreenCanvasQuad",
-      3.2,
-      4.2,
+      4.15,
+      3.1,
       this._screenMaterial,
     ).setPosition(0, 0, 0);
     this._screenGroup.add(this._screenMesh);
-    this._screenGroup.isVisible = false;
     this.scene.add(this._screenGroup);
 
     const orbit = new OrbitController({ input: this.input });
@@ -244,19 +256,71 @@ export class MetalReliefShowcase extends AbstractShowcase {
     this.camera.addBehavior(orbit);
 
     this._createReliefControlUI();
+    this._createWipeOverlayUI();
     this._setupKeyboardShortcuts();
+    this._setupCanvasWipeInteraction();
+    this._setupDragAndDrop();
+    this._setMode("fullscreen");
+  }
+
+  protected override update(deltaTime: number): void {
+    super.update(deltaTime);
+    if (this._displayMode === "fullscreen") {
+      this._updateDividerLinePosition();
+    }
   }
 
   private _setMode(mode: "diorama" | "fullscreen"): void {
     this._displayMode = mode;
+    const overlay = document.getElementById("wipeDividerOverlay");
+    const selMode = document.getElementById("selMode") as HTMLSelectElement | null;
+    if (selMode && selMode.value !== mode) {
+      selMode.value = mode;
+    }
+
     if (mode === "diorama") {
       this._dioramaRoot.isVisible = true;
       this._screenGroup.isVisible = false;
+      if (overlay) overlay.style.display = "none";
+      if (this._orbitController) {
+        this._orbitController.enabled = true;
+      }
     } else {
       this._dioramaRoot.isVisible = false;
       this._screenGroup.isVisible = true;
-      this._screenMaterial.diffuseMap = this._textures[this._activePreset];
+      if (overlay) overlay.style.display = "block";
+      if (this._orbitController) {
+        this._orbitController.enabled = false;
+      }
+      this.camera.position.set(0, 0, 4.0);
+      this.camera.target.set(0, 0, 0);
+      if (this._screenMaterial && this._textures[this._activePreset]) {
+        this._screenMaterial.diffuseMap = this._textures[this._activePreset];
+      }
+      this._updateMeshAspect();
     }
+  }
+
+  private _updateMeshAspect(): void {
+    if (!this._screenMesh) return;
+    const aspect = this._activePreset === "custom" ? this._customImageAspect : 1200 / 896;
+    const fov = (65 * Math.PI) / 180;
+    const dist = 4.0;
+    const visH = 2 * dist * Math.tan(fov / 2);
+    const canvas = document.getElementById("SmallWorldMachine") as HTMLCanvasElement | null;
+    const winAspect =
+      canvas && canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 16 / 9;
+    const visW = visH * winAspect;
+
+    let h = visH * 0.82;
+    let w = h * aspect;
+    if (w > visW * 0.88) {
+      w = visW * 0.88;
+      h = w / aspect;
+    }
+
+    this._screenMesh.setScale(w, h, 1);
+    this._updateDividerLinePosition();
   }
 
   private _buildParisMotif(): void {
@@ -575,6 +639,34 @@ export class MetalReliefShowcase extends AbstractShowcase {
       if (isHudActive) {
         return;
       }
+
+      if (e.code === "KeyM") {
+        this._setMode(this._displayMode === "fullscreen" ? "diorama" : "fullscreen");
+        return;
+      }
+
+      if (e.code === "Space" || e.code === "KeyW") {
+        if (this._displayMode === "fullscreen") {
+          const cur = this._screenMaterial?.splitPosition ?? 0.5;
+          this._setSplitPosition(cur > 0.05 ? 0.0 : 0.5);
+        }
+        return;
+      }
+
+      if (e.code === "Digit1") {
+        this._setActivePreset("paris");
+        return;
+      }
+
+      if (e.code === "Digit2") {
+        this._setActivePreset("alps");
+        return;
+      }
+
+      if (e.code === "Digit3") {
+        this._setActivePreset("harbor");
+        return;
+      }
     });
   }
 
@@ -606,7 +698,9 @@ export class MetalReliefShowcase extends AbstractShowcase {
         ? "btnPresetParis"
         : presetId === "alps"
           ? "btnPresetAlps"
-          : "btnPresetHarbor",
+          : presetId === "harbor"
+            ? "btnPresetHarbor"
+            : "btnPresetCustom",
     );
     activeBtn?.classList.add("active");
 
@@ -614,8 +708,209 @@ export class MetalReliefShowcase extends AbstractShowcase {
     else if (presetId === "alps") this._buildAlpsMotif();
     else if (presetId === "harbor") this._buildHarborMotif();
 
-    if (this._displayMode === "fullscreen" && this._screenMaterial) {
-      this._screenMaterial.diffuseMap = this._textures[presetId];
+    if (this._screenMaterial) {
+      if (this._textures[presetId]) {
+        this._screenMaterial.diffuseMap = this._textures[presetId];
+      }
+      if (presetId === "paris") {
+        this._screenMaterial.targetHue = 0.0;
+        this._screenMaterial.hueTolerance = 0.12;
+        this._screenMaterial.desaturation = 0.95;
+        this._screenMaterial.rustStrength = 0.8;
+      } else if (presetId === "alps") {
+        this._screenMaterial.targetHue = 0.0;
+        this._screenMaterial.hueTolerance = 0.12;
+        this._screenMaterial.desaturation = 0.95;
+        this._screenMaterial.rustStrength = 0.75;
+      } else if (presetId === "harbor") {
+        this._screenMaterial.targetHue = 0.0;
+        this._screenMaterial.hueTolerance = 0.14;
+        this._screenMaterial.desaturation = 0.92;
+        this._screenMaterial.rustStrength = 0.8;
+      }
+      this._updateMeshAspect();
+    }
+  }
+
+  private _getScreenMeshBounds(): { left: number; top: number; width: number; height: number } {
+    const canvas = document.getElementById("SmallWorldMachine") as HTMLCanvasElement | null;
+    if (!canvas || !this._screenMesh) {
+      return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    }
+    const rect = canvas.getBoundingClientRect();
+    const sx = this._screenMesh.scale.x * 0.5;
+    const sy = this._screenMesh.scale.y * 0.5;
+
+    const pMin = this.camera.project(new Vector3D(-sx, -sy, 0));
+    const pMax = this.camera.project(new Vector3D(sx, sy, 0));
+
+    const left = rect.left + (pMin.x * 0.5 + 0.5) * rect.width;
+    const right = rect.left + (pMax.x * 0.5 + 0.5) * rect.width;
+    const top = rect.top + (-pMax.y * 0.5 + 0.5) * rect.height;
+    const bottom = rect.top + (-pMin.y * 0.5 + 0.5) * rect.height;
+
+    return {
+      left,
+      top,
+      width: Math.max(1, right - left),
+      height: Math.max(1, bottom - top),
+    };
+  }
+
+  private _updateDividerLinePosition(): void {
+    if (this._displayMode !== "fullscreen") return;
+    const bounds = this._getScreenMeshBounds();
+    const line = document.getElementById("wipeDividerLine");
+    if (!line) return;
+
+    const curSplit = this._screenMaterial?.splitPosition ?? 0.5;
+    const lineX = bounds.left + curSplit * bounds.width;
+
+    line.style.left = `${lineX}px`;
+    line.style.top = `${bounds.top}px`;
+    line.style.height = `${bounds.height}px`;
+
+    const pillBefore = document.querySelector(".wipe-pill-before") as HTMLElement | null;
+    const pillAfter = document.querySelector(".wipe-pill-after") as HTMLElement | null;
+    if (pillBefore) {
+      pillBefore.style.left = `${Math.max(16, bounds.left + 16)}px`;
+      pillBefore.style.top = `${Math.max(76, bounds.top + 16)}px`;
+    }
+    if (pillAfter) {
+      pillAfter.style.right = `${Math.max(16, window.innerWidth - (bounds.left + bounds.width) + 16)}px`;
+      pillAfter.style.top = `${Math.max(76, bounds.top + 16)}px`;
+    }
+  }
+
+  private _setSplitPosition(pos: number): void {
+    const clamped = Math.max(0.0, Math.min(1.0, pos));
+    if (this._screenMaterial) {
+      this._screenMaterial.splitPosition = clamped;
+    }
+    const slider = document.getElementById("slSplit") as HTMLInputElement | null;
+    const label = document.getElementById("valSplit");
+    if (slider) slider.value = clamped.toFixed(2);
+    if (label) label.textContent = clamped.toFixed(2);
+
+    this._updateDividerLinePosition();
+
+    const btnHalf = document.getElementById("btnSplitHalf");
+    const btnPhoto = document.getElementById("btnSplitPhoto");
+    const btnMetal = document.getElementById("btnSplitMetal");
+    btnHalf?.classList.toggle("active", Math.abs(clamped - 0.5) < 0.03);
+    btnPhoto?.classList.toggle("active", clamped >= 0.98);
+    btnMetal?.classList.toggle("active", clamped <= 0.02);
+  }
+
+  private _createWipeOverlayUI(): void {
+    const existing = document.getElementById("wipeDividerOverlay");
+    if (existing) existing.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "wipeDividerOverlay";
+    overlay.innerHTML = `
+      <div class="wipe-pill wipe-pill-before">◀ Original Photo</div>
+      <div class="wipe-pill wipe-pill-after">3D Metal Relief ▶</div>
+      <div id="wipeDividerLine" class="wipe-divider-line">
+        <div class="wipe-handle" title="Drag to compare before & after">
+          <span>◀ ❘ ▶</span>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const dividerLine = overlay.querySelector("#wipeDividerLine") as HTMLElement | null;
+    if (dividerLine) {
+      dividerLine.addEventListener("pointerdown", (e: PointerEvent) => {
+        e.stopPropagation();
+        this._isDraggingSplit = true;
+      });
+    }
+
+    this._updateDividerLinePosition();
+  }
+
+  private _setupCanvasWipeInteraction(): void {
+    const canvas = document.getElementById("SmallWorldMachine") as HTMLCanvasElement | null;
+    if (!canvas) return;
+
+    const onPointerMove = (e: PointerEvent): void => {
+      if (!this._isDraggingSplit || this._displayMode !== "fullscreen") return;
+      const bounds = this._getScreenMeshBounds();
+      if (bounds.width <= 0) return;
+      const normX = (e.clientX - bounds.left) / bounds.width;
+      this._setSplitPosition(normX);
+    };
+
+    const onPointerUp = (): void => {
+      this._isDraggingSplit = false;
+    };
+
+    canvas.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (this._displayMode !== "fullscreen" || this._isHoveringHud) return;
+      this._isDraggingSplit = true;
+      const bounds = this._getScreenMeshBounds();
+      if (bounds.width <= 0) return;
+      const normX = (e.clientX - bounds.left) / bounds.width;
+      this._setSplitPosition(normX);
+    });
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("resize", () => {
+      this._updateMeshAspect();
+    });
+  }
+
+  private _setupDragAndDrop(): void {
+    const prevent = (e: DragEvent): void => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    window.addEventListener("dragenter", prevent);
+    window.addEventListener("dragover", (e: DragEvent) => {
+      prevent(e);
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
+      }
+      const dropzone = document.getElementById("dropZoneHud");
+      dropzone?.classList.add("dragover");
+    });
+    window.addEventListener("dragleave", () => {
+      const dropzone = document.getElementById("dropZoneHud");
+      dropzone?.classList.remove("dragover");
+    });
+
+    window.addEventListener("drop", async (e: DragEvent) => {
+      prevent(e);
+      const dropzone = document.getElementById("dropZoneHud");
+      dropzone?.classList.remove("dragover");
+      const files = e.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+      const file = files[0];
+      if (!file || !file.type.startsWith("image/")) return;
+      await this._loadCustomImageFile(file);
+    });
+  }
+
+  private async _loadCustomImageFile(file: File): Promise<void> {
+    const url = URL.createObjectURL(file);
+    try {
+      const tex = await Texture.fromUrl(url);
+      this._textures["custom"] = tex;
+
+      const img = new Image();
+      img.src = url;
+      await img.decode().catch(() => {});
+      if (img.naturalWidth && img.naturalHeight) {
+        this._customImageAspect = img.naturalWidth / img.naturalHeight;
+      }
+
+      this._setActivePreset("custom");
+      this._setMode("fullscreen");
+    } catch (err) {
+      console.error("Failed to load dropped photo:", err);
     }
   }
 
@@ -807,6 +1102,85 @@ export class MetalReliefShowcase extends AbstractShowcase {
         color: #fff;
         border-color: #e53e3e;
       }
+      #wipeDividerOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        z-index: 90;
+      }
+      .wipe-pill {
+        position: fixed;
+        top: 96px;
+        padding: 6px 14px;
+        background: rgba(14, 18, 28, 0.88);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 20px;
+        font-family: var(--font-ui, "Rajdhani", sans-serif);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: #f1f5f9;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        user-select: none;
+        pointer-events: none;
+      }
+      .wipe-pill-before {
+        left: 24px;
+        border-left: 3px solid #38bdf8;
+      }
+      .wipe-pill-after {
+        right: 24px;
+        border-right: 3px solid #e53e3e;
+      }
+      .wipe-divider-line {
+        position: fixed;
+        width: 2px;
+        background: #ffffff;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(229, 62, 62, 0.5);
+        transform: translateX(-50%);
+        pointer-events: auto;
+        cursor: ew-resize;
+      }
+      .wipe-handle {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: #0f172a;
+        border: 2px solid #ffffff;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 700;
+        cursor: ew-resize;
+        user-select: none;
+      }
+      .hud-dropzone {
+        border: 1px dashed rgba(148, 163, 184, 0.35);
+        border-radius: 6px;
+        padding: 8px 10px;
+        text-align: center;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.03);
+        transition: all 0.2s ease;
+      }
+      .hud-dropzone:hover, .hud-dropzone.dragover {
+        border-color: #e53e3e;
+        background: rgba(229, 62, 62, 0.12);
+        color: #fff;
+      }
     `;
     document.head.appendChild(style);
 
@@ -829,59 +1203,88 @@ export class MetalReliefShowcase extends AbstractShowcase {
           <div class="hud-row">
             <label for="selMode">Display Mode</label>
             <select id="selMode">
-              <option value="diorama">2.5D Diorama (3D Geometry)</option>
-              <option value="fullscreen">Full-Screen Canvas Shader</option>
+              <option value="fullscreen" selected>Photo-to-Metal Converter (Split)</option>
+              <option value="diorama">2.5D Diorama (3D Layered)</option>
             </select>
           </div>
         </div>
 
-        <!-- Presets -->
+        <!-- Before / After Wipe -->
         <div class="hud-section">
-          <div class="section-title">⚡ Motif Presets</div>
+          <div class="section-title">↔️ Before / After Split Wipe</div>
+          <div class="hud-row">
+            <label>Divider Position</label>
+            <input type="range" id="slSplit" min="0" max="1" step="0.01" value="0.50" />
+            <span class="val-label" id="valSplit">0.50</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px;">
+            <button class="btn-preset active" id="btnSplitHalf">50% Split</button>
+            <button class="btn-preset" id="btnSplitPhoto">Photo Only</button>
+            <button class="btn-preset" id="btnSplitMetal">Metal Only</button>
+          </div>
+        </div>
+
+        <!-- Presets & Upload -->
+        <div class="hud-section">
+          <div class="section-title">⚡ Realistic Photo Presets</div>
           <div class="preset-group">
             <button class="btn-preset active" id="btnPresetParis">🗼 Paris</button>
             <button class="btn-preset" id="btnPresetAlps">🚡 Alps</button>
             <button class="btn-preset" id="btnPresetHarbor">⛵ Harbor</button>
           </div>
+          <div id="dropZoneHud" class="hud-dropzone" style="margin-top:8px;">
+            <span>📁 Drop any photo or <u style="color:#e53e3e;">browse</u></span>
+            <input type="file" id="filePickerInput" accept="image/*" style="display:none;" />
+          </div>
         </div>
 
         <!-- Palette Knife & Relief Depth -->
         <div class="hud-section">
-          <div class="section-title">🔪 Impasto & Grinder</div>
+          <div class="section-title">🔪 Impasto & Relief Depth</div>
+          <div class="hud-row">
+            <label>Sobel Relief</label>
+            <input type="range" id="slSobel" min="0" max="3" step="0.05" value="1.50" />
+            <span class="val-label" id="valSobel">1.50</span>
+          </div>
           <div class="hud-row">
             <label>Palette Knife</label>
-            <input type="range" id="slRelief" min="0" max="2" step="0.05" value="0.75" />
-            <span class="val-label" id="valRelief">0.75</span>
+            <input type="range" id="slRelief" min="0" max="2" step="0.05" value="0.50" />
+            <span class="val-label" id="valRelief">0.50</span>
           </div>
           <div class="hud-row">
             <label>Grind Marks (Flex)</label>
-            <input type="range" id="slScratches" min="0" max="1" step="0.05" value="0.45" />
-            <span class="val-label" id="valScratches">0.45</span>
+            <input type="range" id="slScratches" min="0" max="1" step="0.05" value="0.40" />
+            <span class="val-label" id="valScratches">0.40</span>
           </div>
           <div class="hud-row">
-            <label>Welded Edge Bevel</label>
-            <input type="range" id="slBevel" min="0" max="2" step="0.05" value="1.00" />
-            <span class="val-label" id="valBevel">1.00</span>
+            <label>Welded Edge Glint</label>
+            <input type="range" id="slBevel" min="0" max="2.5" step="0.05" value="1.20" />
+            <span class="val-label" id="valBevel">1.20</span>
           </div>
         </div>
 
         <!-- Industrial Patina -->
         <div class="hud-section">
-          <div class="section-title">⚙️ Industrial Patina</div>
+          <div class="section-title">⚙️ Industrial Patina & Pop</div>
           <div class="hud-row">
             <label>Iron Oxide Rust</label>
-            <input type="range" id="slRust" min="0" max="1" step="0.05" value="0.75" />
-            <span class="val-label" id="valRust">0.75</span>
+            <input type="range" id="slRust" min="0" max="1" step="0.05" value="0.80" />
+            <span class="val-label" id="valRust">0.80</span>
           </div>
           <div class="hud-row">
-            <label>Streckmetall Mesh</label>
-            <input type="range" id="slWiremesh" min="0" max="1" step="0.05" value="0.35" />
-            <span class="val-label" id="valWiremesh">0.35</span>
+            <label>Desaturation</label>
+            <input type="range" id="slDesat" min="0" max="1" step="0.05" value="0.95" />
+            <span class="val-label" id="valDesat">0.95</span>
           </div>
           <div class="hud-row">
-            <label>Wet Reflections</label>
-            <input type="range" id="slRain" min="0" max="1" step="0.05" value="0.60" />
-            <span class="val-label" id="valRain">0.60</span>
+            <label>Accent Hue Pop</label>
+            <input type="range" id="slHue" min="0" max="1" step="0.01" value="0.00" />
+            <span class="val-label" id="valHue">0.00</span>
+          </div>
+          <div class="hud-row">
+            <label>Wet Rain Sheen</label>
+            <input type="range" id="slRain" min="0" max="1" step="0.05" value="0.50" />
+            <span class="val-label" id="valRain">0.50</span>
           </div>
         </div>
       </div>
@@ -950,7 +1353,7 @@ export class MetalReliefShowcase extends AbstractShowcase {
     hud.addEventListener("pointerleave", (e: PointerEvent) => {
       if (0 === e.buttons && !this._isDraggingHud) {
         this._isHoveringHud = false;
-        if (this._orbitController) {
+        if (this._orbitController && this._displayMode === "diorama") {
           this._orbitController.enabled = true;
         }
       }
@@ -973,7 +1376,7 @@ export class MetalReliefShowcase extends AbstractShowcase {
       const curHud = document.getElementById("reliefTuningHud");
       if (!curHud?.matches(":hover")) {
         this._isHoveringHud = false;
-        if (this._orbitController) {
+        if (this._orbitController && this._displayMode === "diorama") {
           this._orbitController.enabled = true;
         }
       }
@@ -990,6 +1393,20 @@ export class MetalReliefShowcase extends AbstractShowcase {
       this._setMode(selMode.value as "diorama" | "fullscreen");
     });
 
+    // Split buttons
+    this._bindSlider("slSplit", "valSplit", (v) => {
+      this._setSplitPosition(v);
+    });
+    document.getElementById("btnSplitHalf")?.addEventListener("click", () => {
+      this._setSplitPosition(0.5);
+    });
+    document.getElementById("btnSplitPhoto")?.addEventListener("click", () => {
+      this._setSplitPosition(1.0);
+    });
+    document.getElementById("btnSplitMetal")?.addEventListener("click", () => {
+      this._setSplitPosition(0.0);
+    });
+
     // Presets
     document.getElementById("btnPresetParis")?.addEventListener("click", () => {
       this._setActivePreset("paris");
@@ -1001,12 +1418,29 @@ export class MetalReliefShowcase extends AbstractShowcase {
       this._setActivePreset("harbor");
     });
 
+    // File picker in HUD
+    const dropZone = document.getElementById("dropZoneHud");
+    const filePicker = document.getElementById("filePickerInput") as HTMLInputElement | null;
+    dropZone?.addEventListener("click", () => {
+      filePicker?.click();
+    });
+    filePicker?.addEventListener("change", () => {
+      if (filePicker.files?.[0]) {
+        this._loadCustomImageFile(filePicker.files[0]);
+      }
+    });
+
     // Sliders
+    this._bindSlider("slSobel", "valSobel", (v) => {
+      if (this._screenMaterial) {
+        this._screenMaterial.reliefStrength = v;
+      }
+    });
+
     this._bindSlider("slRelief", "valRelief", (v) => {
       for (const m of this._materials) m.paletteKnifeStrength = v;
       if (this._screenMaterial) {
-        this._screenMaterial.reliefStrength = v * 2.0;
-        this._screenMaterial.paletteKnifeStrength = v * 0.7;
+        this._screenMaterial.paletteKnifeStrength = v;
       }
     });
 
@@ -1025,10 +1459,12 @@ export class MetalReliefShowcase extends AbstractShowcase {
       if (this._screenMaterial) this._screenMaterial.rustStrength = v;
     });
 
-    this._bindSlider("slWiremesh", "valWiremesh", (v) => {
-      for (const m of this._materials) {
-        if (m.wireMeshStrength > 0.05) m.wireMeshStrength = v;
-      }
+    this._bindSlider("slDesat", "valDesat", (v) => {
+      if (this._screenMaterial) this._screenMaterial.desaturation = v;
+    });
+
+    this._bindSlider("slHue", "valHue", (v) => {
+      if (this._screenMaterial) this._screenMaterial.targetHue = v;
     });
 
     this._bindSlider("slRain", "valRain", (v) => {

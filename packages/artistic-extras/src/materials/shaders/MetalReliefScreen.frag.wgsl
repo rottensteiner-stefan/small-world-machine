@@ -132,6 +132,12 @@ fn mrs_voronoiFacets(uv: vec2f, scale: f32) -> vec3f {
     }
 
     var color = finalAlbedo * (0.35 + 0.75 * NdotL) + specColor;
+
+    let splitPos = obj.styleB.x;
+    if (splitPos >= 0.0 && i.uv.x < splitPos) {
+        color = centerTex.rgb;
+    }
+
     [WGSL_FOG_CALC]
 
     return vec4f(color, centerTex.a);
