@@ -556,6 +556,7 @@ export class MaterialStudioController {
             edgeThick,
             edgeInvert,
           },
+          { copyDiffuse: false },
         );
         writeToCanvas(canvases.height, maps.height);
         writeToCanvas(canvases.normal, maps.normal);

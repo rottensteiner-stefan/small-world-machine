@@ -7,7 +7,12 @@ export function readModeHash(): string {
 }
 
 /** Sets the route fragment in-place; never navigates the document. */
-export function writeModeHash(modeId: string): void {
+export function writeModeHash(modeId: string, replace: boolean = false): void {
+  if (replace) {
+    // Correcting an unknown hash must not add a history entry (Back would loop into it).
+    window.history.replaceState(window.history.state, "", `#${modeId}`);
+    return;
+  }
   window.location.hash = modeId;
 }
 
@@ -17,7 +22,7 @@ export interface ModeHashRouterOptions {
   /** Injectable hash read; defaults to `readModeHash`. */
   readHash?: () => string;
   /** Injectable hash write; defaults to `writeModeHash`. */
-  writeHash?: (modeId: string) => void;
+  writeHash?: (modeId: string, replace?: boolean) => void;
 }
 
 /**
@@ -31,7 +36,7 @@ export class ModeHashRouter {
   private readonly _host: ToolModeHost;
   private readonly _defaultModeId: string;
   private readonly _readHash: () => string;
-  private readonly _writeHash: (modeId: string) => void;
+  private readonly _writeHash: (modeId: string, replace?: boolean) => void;
   private readonly _onHashChange = (): void => {
     this._applyRoute();
   };
@@ -78,7 +83,7 @@ export class ModeHashRouter {
     const requested = this._requestedMode();
     const target = this._resolveTarget(requested);
     if (target !== requested) {
-      this._writeHash(target);
+      this._writeHash(target, true);
     }
     this._activate(target);
   }

@@ -464,6 +464,7 @@ export class PropertyPanel {
             host[propKey] = to;
           }
           binding.refresh();
+          before = to; // keep the undo base in sync after redo
           this._notifyChanged(host, propKey, to);
         },
         undo: () => {
@@ -473,11 +474,11 @@ export class PropertyPanel {
             host[propKey] = from;
           }
           binding.refresh();
+          before = from; // the NEXT edit must start from the undone value
           this._notifyChanged(host, propKey, from);
         },
       });
-      this._notifyChanged(host, propKey, to);
-      before = to;
+      // `execute()` ran `redo`, which already notified exactly once.
     });
     this._blades.push(binding);
     return binding;
@@ -646,7 +647,8 @@ export class PropertyPanel {
           colorObj.b = to.b / 255;
           proxy.value = { ...to };
           binding.refresh();
-          this._notifyChanged(host, propKey, to);
+          before = to;
+          this._notifyChanged(host, propKey, colorObj);
         },
         undo: () => {
           colorObj.r = from.r / 255;
@@ -654,11 +656,10 @@ export class PropertyPanel {
           colorObj.b = from.b / 255;
           proxy.value = { ...from };
           binding.refresh();
-          this._notifyChanged(host, propKey, from);
+          before = from;
+          this._notifyChanged(host, propKey, colorObj);
         },
       });
-      this._notifyChanged(host, propKey, to);
-      before = to;
     });
     this._blades.push(binding);
     return binding;

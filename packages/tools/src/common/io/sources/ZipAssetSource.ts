@@ -1,6 +1,7 @@
 import type { IAssetSource } from "../types.js";
 import { SecurityValidator } from "../Security.js";
 import { safeUnzip } from "../safeUnzip.js";
+import { globToRegExp } from "../globPattern.js";
 
 export interface ZipAssetSourceOptions {
   id?: string;
@@ -100,7 +101,7 @@ export class ZipAssetSource implements IAssetSource {
   public async list(pattern?: string): Promise<string[]> {
     const all = Array.from(this._files.keys());
     if (!pattern) return all;
-    const regex = new RegExp(pattern.replace(/\*/g, ".*"));
+    const regex = globToRegExp(pattern);
     return all.filter((p) => regex.test(p));
   }
 

@@ -37,6 +37,12 @@ describe("core/map ASCII<->grid conversions", () => {
     expect(mapToString(grid)).toBe("WW\nW.");
   });
 
+  it("truncates longer rows so the grid stays rectangular", () => {
+    const grid = stringToMap("WW\nWWWW\nW");
+    expect(grid.every((row) => row.length === 2)).toBe(true);
+    expect(mapToString(grid)).toBe("WW\nWW\nW.");
+  });
+
   it("normalizes escaped newlines and trims lines", () => {
     const grid = stringToMap("WW\\nW");
     // "WW" is the first line, so "W" is padded to its width (matches the tool)

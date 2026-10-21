@@ -32,8 +32,8 @@ export function mapToString(grid: string[][]): string {
 /**
  * Parses an ASCII map string into a grid. Preserves the exact semantics of the
  * original tool implementation: empty strings yield an empty grid, embedded literal
- * "\\n" sequences are normalized, every line is trimmed, and all rows are padded to
- * the width of the first line.
+ * "\\n" sequences are normalized, every line is trimmed, and all rows are padded or
+ * truncated to the width of the first line.
  */
 export function stringToMap(mapStr: string): string[][] {
   if (!mapStr.trim()) return [];
@@ -50,6 +50,7 @@ export function stringToMap(mapStr: string): string[][] {
   for (let y = 0; y < lines.length; y++) {
     const row = lines[y]!.split("");
     while (row.length < width) row.push(".");
+    row.length = width; // longer rows are cut: the grid stays rectangular
     grid.push(row);
   }
   return grid;

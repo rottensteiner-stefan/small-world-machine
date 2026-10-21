@@ -6,7 +6,7 @@ import {
   validateKitZip,
 } from "../../src/core/kit.js";
 import { ZipAssetSink } from "../../src/common/io/sinks/ZipAssetSink.js";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -90,6 +90,69 @@ describe("core/kit createNodeDirectoryAssetSource", () => {
 
       const { report } = await validateKitSource(source);
       expect(report.valid).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("core/kit createNodeDirectoryAssetSource — lazy, safe", () => {
+  it("reads file contents on demand (not snapshotted at construction)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "swm-kit-lazy-"));
+    try {
+      await writeFile(join(dir, "a.txt"), "one", "utf-8");
+      const source = await createNodeDirectoryAssetSource(dir);
+      await writeFile(join(dir, "a.txt"), "two", "utf-8");
+      expect(await source.readText("a.txt")).toBe("two");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips node_modules/.git and does not choke on symlinked directories", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "swm-kit-skip-"));
+    try {
+      await mkdir(join(dir, "node_modules", "x"), { recursive: true });
+      await writeFile(join(dir, "node_modules", "x", "big.bin"), "x");
+      await mkdir(join(dir, "real"), { recursive: true });
+      await writeFile(join(dir, "real", "f.txt"), "f");
+      await symlink(join(dir, "real"), join(dir, "linkdir"));
+      await symlink(join(dir, "real"), join(dir, "real", "loop"));
+      const source = await createNodeDirectoryAssetSource(dir);
+      const files = await source.list();
+      expect(files).toEqual(["real/f.txt"]);
+      expect(await source.has("node_modules/x/big.bin")).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("list(pattern) treats regex metacharacters literally and anchors the match", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "swm-kit-glob-"));
+    try {
+      for (const f of ["a.png", "a.png.bak", "aXpng", "b(1).png"]) {
+        await writeFile(join(dir, f), "x");
+      }
+      const source = await createNodeDirectoryAssetSource(dir);
+      expect((await source.list("*.png")).sort()).toEqual(["a.png", "b(1).png"]);
+      expect(await source.list("b(1).png")).toEqual(["b(1).png"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("toFetch: malformed percent-encoding yields 400 (no throw), missing 404, hit 200", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "swm-kit-fetch-"));
+    try {
+      await writeFile(join(dir, "a b.txt"), "hi");
+      const source = await createNodeDirectoryAssetSource(dir);
+      const f = source.toFetch();
+      expect((await f("/%E0%A4%A.txt")).status).toBe(400);
+      expect((await f("/missing.txt")).status).toBe(404);
+      expect((await f("/../etc/passwd")).status).toBe(404);
+      const ok = await f("/a%20b.txt?x=1");
+      expect(ok.status).toBe(200);
+      expect(await ok.text()).toBe("hi");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

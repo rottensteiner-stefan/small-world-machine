@@ -12,7 +12,15 @@ export interface UndoCommand {
    * of `redo()`/`undo()` was applied most recently is still in effect when this runs, so the
    * command knows which side (if either) needs releasing. */
   discard?(): void;
+  /** Commands executed back-to-back with the same `mergeKey` (within `MERGE_WINDOW_MS`, and with
+   * no undo/redo/clear in between) collapse into ONE history step: the merged step redoes to the
+   * newest command's state and undoes to the oldest command's pre-state. Both commands must
+   * therefore restore absolute state (snapshots), not apply deltas. Used for held-key nudges. */
+  mergeKey?: string;
 }
+
+/** Max gap between two same-key commands for them to merge into one undo step. */
+export const MERGE_WINDOW_MS = 400;
 
 /** Same cap Pixler's own undo history uses (`Pixler.ts`'s `_history`) -- kept in sync so both of
  * this project's undo stacks grow to the same bound rather than picking an arbitrary new number. */
@@ -34,12 +42,45 @@ const MAX_HISTORY = 50;
 export class UndoStack {
   private _undone: UndoCommand[] = [];
   private _done: UndoCommand[] = [];
+  /** Timestamp of the last executed command while it is still the history top and may be merged into. */
+  private _lastExecutedAt: number | undefined;
 
-  /** Runs `command.redo()` immediately and pushes it onto the undo history. */
+  constructor(private readonly _now: () => number = (): number => performance.now()) {}
+
+  /** Runs `command.redo()` immediately and pushes it onto the undo history (or merges it into the
+   * previous step, see `UndoCommand.mergeKey`). */
   public execute(command: UndoCommand): void {
     command.redo();
-    this._done.push(command);
     this._discardAll(this._undone); // the redo branch is gone for good the moment something new executes
+    const now = this._now();
+    const top = this._done[this._done.length - 1];
+    if (
+      top !== undefined &&
+      command.mergeKey !== undefined &&
+      top.mergeKey === command.mergeKey &&
+      this._lastExecutedAt !== undefined &&
+      now - this._lastExecutedAt <= MERGE_WINDOW_MS
+    ) {
+      const olderDiscard = top.discard;
+      const newerDiscard = command.discard;
+      const merged: UndoCommand = {
+        label: command.label,
+        mergeKey: command.mergeKey,
+        redo: command.redo,
+        undo: top.undo,
+      };
+      if (olderDiscard || newerDiscard) {
+        merged.discard = (): void => {
+          olderDiscard?.();
+          newerDiscard?.();
+        };
+      }
+      this._done[this._done.length - 1] = merged;
+      this._lastExecutedAt = now;
+      return;
+    }
+    this._done.push(command);
+    this._lastExecutedAt = now;
     if (this._done.length > MAX_HISTORY) {
       this._done.shift()?.discard?.();
     }
@@ -56,6 +97,7 @@ export class UndoStack {
   public undo(): void {
     const command = this._done.pop();
     if (!command) return;
+    this._lastExecutedAt = undefined;
     command.undo();
     this._undone.push(command);
   }
@@ -63,12 +105,14 @@ export class UndoStack {
   public redo(): void {
     const command = this._undone.pop();
     if (!command) return;
+    this._lastExecutedAt = undefined;
     command.redo();
     this._done.push(command);
   }
 
   /** Drops all history without undoing anything -- for a freshly loaded/reset document. */
   public clear(): void {
+    this._lastExecutedAt = undefined;
     this._discardAll(this._done);
     this._discardAll(this._undone);
   }

@@ -17,6 +17,8 @@ export interface MakerUndoCommand {
   redo: () => void;
   undo: () => void;
   discard?: () => void;
+  /** Same-key commands in quick succession merge into one undo step (see `UndoCommand.mergeKey`). */
+  mergeKey?: string;
 }
 
 /** A group of objects a transform/snapshot command may move together. */
@@ -36,7 +38,13 @@ export interface MakerUndoRunner {
    * Executes an undoable operation via the injected undo stack and runs the
    * injected follow-up exactly once after the (re-)application of the change.
    */
-  commit(label: string, redo: () => void, undo: () => void, discard?: () => void): void;
+  commit(
+    label: string,
+    redo: () => void,
+    undo: () => void,
+    discard?: () => void,
+    mergeKey?: string,
+  ): void;
   /**
    * Executes a snapshot/restore transform over `objs` as ONE undo step:
    * captures the pre-state via `read`, runs `apply` once to reach the target
@@ -50,12 +58,19 @@ export interface MakerUndoRunner {
     write: (obj: O, value: T) => void,
     label: string,
     apply: () => void,
+    mergeKey?: string,
   ): void;
 }
 
 export function createMakerCommandRunner(deps: MakerUndoRunnerDeps): MakerUndoRunner {
   return {
-    commit(label: string, redo: () => void, undo: () => void, discard?: () => void): void {
+    commit(
+      label: string,
+      redo: () => void,
+      undo: () => void,
+      discard?: () => void,
+      mergeKey?: string,
+    ): void {
       const command: MakerUndoCommand = {
         label,
         redo: () => {
@@ -68,6 +83,7 @@ export function createMakerCommandRunner(deps: MakerUndoRunnerDeps): MakerUndoRu
         },
       };
       if (discard !== undefined) command.discard = discard;
+      if (mergeKey !== undefined) command.mergeKey = mergeKey;
       deps.execute(command);
     },
     snapshotCommand<T, O extends Transformable>(
@@ -76,6 +92,7 @@ export function createMakerCommandRunner(deps: MakerUndoRunnerDeps): MakerUndoRu
       write: (obj: O, value: T) => void,
       label: string,
       apply: () => void,
+      mergeKey?: string,
     ): void {
       const before = objs.map((obj) => ({ obj, value: read(obj) }));
       // `apply` moves the objects to their target state; the post-state is the
@@ -97,6 +114,8 @@ export function createMakerCommandRunner(deps: MakerUndoRunnerDeps): MakerUndoRu
             obj.updateMatrixWorld();
           }
         },
+        undefined,
+        mergeKey,
       );
     },
   };

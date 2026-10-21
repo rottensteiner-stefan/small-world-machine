@@ -214,7 +214,7 @@ describe("MAKER_KEYMAP — decal stamp (D / active tool)", () => {
     const prevented = vi.fn();
     expect(h.dispatch({ key: "d", preventDefault: prevented })).toBe(true);
     expect(prevented).toHaveBeenCalled();
-    expect(h.calls.map((c) => c.op)).toEqual(["zoneCancel", "decalToggle"]);
+    expect(h.calls.map((c) => c.op).sort()).toEqual(["decalToggle", "zoneCancel"]);
   });
 
   it("an active stamp claims the keys it handles (Arrows no longer nudge)", () => {

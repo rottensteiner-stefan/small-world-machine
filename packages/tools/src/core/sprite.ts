@@ -232,11 +232,33 @@ export function detectSpriteBoundsRgba(
     }
   }
 
-  // Sort boxes top-to-bottom, left-to-right (standard sprite sheet order)
-  return boxes.sort((a, b) => {
-    if (Math.abs(a.y - b.y) > 16) {
-      return a.y - b.y;
-    }
-    return a.x - b.x;
-  });
+  return sortSpriteBoxes(boxes);
+}
+
+/** Row band height (px): boxes whose top edge lies within this distance of the row's first box share a row. */
+const ROW_TOLERANCE = 16;
+
+/**
+ * Sprite-sheet reading order: top-to-bottom rows, left-to-right inside a row. Rows are formed by
+ * clustering against the row's anchor (first box by y) -- a pairwise "within 16px" comparator is
+ * not a strict weak ordering (not transitive), which made the order depend on the sort algorithm
+ * for dense sheets.
+ */
+export function sortSpriteBoxes(boxes: SpriteBounds[]): SpriteBounds[] {
+  const byY = [...boxes].sort((a, b) => a.y - b.y || a.x - b.x);
+  const out: SpriteBounds[] = [];
+  let row: SpriteBounds[] = [];
+  let anchorY = 0;
+  const flush = (): void => {
+    row.sort((a, b) => a.x - b.x || a.y - b.y);
+    out.push(...row);
+    row = [];
+  };
+  for (const box of byY) {
+    if (row.length > 0 && box.y - anchorY > ROW_TOLERANCE) flush();
+    if (row.length === 0) anchorY = box.y;
+    row.push(box);
+  }
+  flush();
+  return out;
 }

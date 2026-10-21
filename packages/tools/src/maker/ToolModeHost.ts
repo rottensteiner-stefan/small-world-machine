@@ -49,7 +49,11 @@ export class ToolModeHost {
       throw new Error(`ToolModeHost: unknown mode '${modeId}'`);
     }
     if (this._activeModeId !== undefined) {
-      this._modes.get(this._activeModeId)?.unmount();
+      const previous = this._modes.get(this._activeModeId);
+      // The previous mode is gone from the surface from here on, whatever happens next: never
+      // leave `_activeModeId` pointing at a mode that is already unmounted.
+      this._activeModeId = undefined;
+      previous?.unmount();
     }
     if (!this._initialized.has(next)) {
       next.initialize();
@@ -57,6 +61,14 @@ export class ToolModeHost {
     }
     next.mount(this._mountEl);
     this._activeModeId = modeId;
+  }
+
+  /** Unmounts the active mode (if any) and leaves the host with no active mode. */
+  public dispose(): void {
+    if (this._activeModeId === undefined) return;
+    const active = this._modes.get(this._activeModeId);
+    this._activeModeId = undefined;
+    active?.unmount();
   }
 
   public get activeModeId(): string | undefined {

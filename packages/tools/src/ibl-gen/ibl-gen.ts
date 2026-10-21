@@ -121,11 +121,10 @@ export class IBLBaker {
   ): Promise<WebGLTexture> {
     const gl = this._gl;
     // The sampler expects GL convention (row 0 = bottom); decoded images start at the top row.
-    // UNPACK_FLIP_Y is ignored for ImageBitmap, so the flip has to happen at decode time.
-    const bitmap =
-      fileOrBlob instanceof ImageBitmap
-        ? fileOrBlob
-        : await createImageBitmap(fileOrBlob, { imageOrientation: "flipY" });
+    // UNPACK_FLIP_Y is ignored for ImageBitmap, so the flip has to happen at decode time. A
+    // caller-supplied ImageBitmap is re-decoded flipped too, so both input paths share one
+    // orientation (the caller keeps ownership of, and is not mutated through, its bitmap).
+    const bitmap = await createImageBitmap(fileOrBlob, { imageOrientation: "flipY" });
     const tex = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
@@ -133,6 +132,7 @@ export class IBLBaker {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    bitmap.close();
     return tex;
   }
 

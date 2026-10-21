@@ -23,9 +23,8 @@ export interface RasterIO {
 }
 
 /**
- * Node.js adapter built on `pngjs` (currently a root devDependency only; promoting
- * it to a production dependency of `@small-world-machine/tools` is a later packaging
- * fix, Finding F4). `pngjs` is CommonJS and ships no type declarations, so the module
+ * Node.js adapter built on `pngjs` (a declared dependency of `@small-world-machine/tools`,
+ * like `tsx`, which the `swm` bin shim needs). `pngjs` is CommonJS and ships no type declarations, so the module
  * is loaded through a dynamic `import` whose result is cast to a minimal structural
  * shape. The dynamic import is key for the browser: it executes lazily, so browser
  * bundles never touch a Node builtin at module scope.

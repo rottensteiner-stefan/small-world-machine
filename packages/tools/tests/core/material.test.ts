@@ -48,6 +48,12 @@ describe("core/material MaterialMapPipeline", () => {
     expect(maps.diffuse.data).not.toBe(src.data);
   });
 
+  it("copyDiffuse:false hands back the input image instead of copying it", () => {
+    const src = { width: 4, height: 4, data: new Uint8ClampedArray(4 * 4 * 4).fill(90) };
+    const maps = derivePbrMaps(src, DEFAULT_PARAMS, { copyDiffuse: false });
+    expect(maps.diffuse).toBe(src);
+  });
+
   it("is byte-deterministic across invocations", () => {
     const src = gradientFixture(12, 10);
     const a = derivePbrMaps(src, DEFAULT_PARAMS);

@@ -43,6 +43,12 @@ import type { OrbitCameraView } from "./OrbitCameraController.js";
 import { OrbitCameraController } from "./OrbitCameraController.js";
 import { UndoStack } from "./UndoStack.js";
 import { createMakerCommandRunner } from "./MakerUndoCore.js";
+import {
+  isZeroDelta,
+  nudgeRotationDelta,
+  nudgeScaleDelta,
+  nudgeTranslateDelta,
+} from "./MakerNudge.js";
 import { dispatchMakerKey, type MakerKeyContext } from "./MakerKeymap.js";
 import { HierarchyPanel } from "./HierarchyPanel.js";
 import { PropertyPanel } from "./PropertyPanel.js";
@@ -1586,8 +1592,9 @@ export class MakerApp extends SmallWorldMachine {
     write: (obj: O, value: T) => void,
     label: string,
     apply: () => void,
+    mergeKey?: string,
   ): void {
-    this._snapshotRunner.snapshotCommand(objs, read, write, label, apply);
+    this._snapshotRunner.snapshotCommand(objs, read, write, label, apply, mergeKey);
   }
 
   /** Editor operations the keymap table drives — built lazily (only after
@@ -1596,7 +1603,7 @@ export class MakerApp extends SmallWorldMachine {
   private _getKeyContext(): MakerKeyContext {
     if (this._keyContext) return this._keyContext;
     const ctx: MakerKeyContext = {
-      isEditingField: (): boolean => this._isEditingField(),
+      isEditingField: (): boolean => this._isEditingField(this._keyEventTarget ?? undefined),
       isDecalStampActive: (): boolean => this._decalStamp.isActive,
       isDrawingZone: (): boolean => this._importTools.isDrawingZone,
       selectionSize: (): number => this._selection.size,
@@ -1643,8 +1650,16 @@ export class MakerApp extends SmallWorldMachine {
    * guards (editing fields, selection state, decal stamp pass-through) are the
    * exact ones the historical if-chain applied — see `MakerKeymap.ts`. */
   private _onMakerKeyDown(event: KeyboardEvent): void {
-    dispatchMakerKey(event, this._getKeyContext());
+    // The editing-field guard must see the event's own target (shadow DOM / retargeting can
+    // make it differ from `document.activeElement`), exactly like the pre-keymap code did.
+    this._keyEventTarget = event.target;
+    try {
+      dispatchMakerKey(event, this._getKeyContext());
+    } finally {
+      this._keyEventTarget = null;
+    }
   }
+  private _keyEventTarget: EventTarget | null = null;
 
   /** Snaps selected object(s) so their lowest bounding-box point aligns exactly with the ground (Y = 0). */
   public snapSelectionToGround(): void {
@@ -1693,138 +1708,75 @@ export class MakerApp extends SmallWorldMachine {
 
     // Alt forces Rotate (or Alt+Shift forces Scale), otherwise follows current gizmo mode
     const mode: GizmoMode = isAlt && isShift ? "scale" : isAlt ? "rotate" : this._gizmo.mode;
+    // Held / rapid nudges of the same selection collapse into one undo step (UndoStack.mergeKey).
+    const mergeKey = `nudge:${mode}:${objs.map((o) => o.id).join(",")}`;
+    const plural = objs.length > 1 ? "s" : "";
+    const snap = this._gizmo.snap;
 
     if ("rotate" === mode) {
-      const baseAngle = this._gizmo.snap.enabled ? this._gizmo.snap.rotate : Math.PI / 12; // 15 deg
-      const multiplier = isShift ? 6 : 1; // 6x = 90 deg quarter turn
-      const snapAngle = baseAngle * multiplier;
-      let rx = 0;
-      let ry = 0;
-      let rz = 0;
-
-      if ("PageUp" === key) rz = snapAngle;
-      else if ("PageDown" === key) rz = -snapAngle;
-      else if ("ArrowLeft" === key) ry = snapAngle;
-      else if ("ArrowRight" === key) ry = -snapAngle;
-      else if ("ArrowUp" === key) rx = -snapAngle;
-      else if ("ArrowDown" === key) rx = snapAngle;
-
-      if (0 === rx && 0 === ry && 0 === rz) return;
-
+      const baseAngle = snap.enabled ? snap.rotate : Math.PI / 12; // 15 deg
+      const d = nudgeRotationDelta(key, baseAngle * (isShift ? 6 : 1)); // 6x = 90 deg quarter turn
+      if (isZeroDelta(d)) return;
       this._snapshotCommand(
         objs,
         (obj) => obj.rotation.clone(),
         (obj, rot) => {
           obj.rotation.copyFrom(rot);
         },
-        `Rotate ${objs.length} object${objs.length > 1 ? "s" : ""}`,
+        `Rotate ${objs.length} object${plural}`,
         () => {
           for (const obj of objs) {
-            const nextRot = obj.rotation.clone();
-            nextRot.x += rx;
-            nextRot.y += ry;
-            nextRot.z += rz;
-            if (this._gizmo.snap.enabled) {
-              nextRot.x = this._gizmo.snapValue("rotate", nextRot.x);
-              nextRot.y = this._gizmo.snapValue("rotate", nextRot.y);
-              nextRot.z = this._gizmo.snapValue("rotate", nextRot.z);
+            const next = obj.rotation.clone();
+            next.x += d.x;
+            next.y += d.y;
+            next.z += d.z;
+            if (snap.enabled) {
+              next.x = this._gizmo.snapValue("rotate", next.x);
+              next.y = this._gizmo.snapValue("rotate", next.y);
+              next.z = this._gizmo.snapValue("rotate", next.z);
             }
-            obj.rotation.copyFrom(nextRot);
+            obj.rotation.copyFrom(next);
           }
         },
+        mergeKey,
       );
       return;
     }
 
     if ("scale" === mode) {
-      const baseStep = this._gizmo.snap.enabled ? this._gizmo.snap.scale : 0.25;
-      const multiplier = isShift ? 10 : 1;
-      const step = baseStep * multiplier;
-      let sx = 0;
-      let sy = 0;
-      let sz = 0;
-
-      if ("PageUp" === key) sy = step;
-      else if ("PageDown" === key) sy = -step;
-      else if ("ArrowLeft" === key) sx = -step;
-      else if ("ArrowRight" === key) sx = step;
-      else if ("ArrowUp" === key) sz = -step;
-      else if ("ArrowDown" === key) sz = step;
-
-      if (0 === sx && 0 === sy && 0 === sz) return;
-
+      const d = nudgeScaleDelta(key, (snap.enabled ? snap.scale : 0.25) * (isShift ? 10 : 1));
+      if (isZeroDelta(d)) return;
       this._snapshotCommand(
         objs,
         (obj) => obj.scale.clone(),
         (obj, scale) => {
           obj.scale.copyFrom(scale);
         },
-        `Scale ${objs.length} object${objs.length > 1 ? "s" : ""}`,
+        `Scale ${objs.length} object${plural}`,
         () => {
           for (const obj of objs) {
-            const nextScale = obj.scale.clone();
-            nextScale.x = Math.max(0.01, nextScale.x + sx);
-            nextScale.y = Math.max(0.01, nextScale.y + sy);
-            nextScale.z = Math.max(0.01, nextScale.z + sz);
-            if (this._gizmo.snap.enabled) {
-              nextScale.x = this._gizmo.snapValue("scale", nextScale.x);
-              nextScale.y = this._gizmo.snapValue("scale", nextScale.y);
-              nextScale.z = this._gizmo.snapValue("scale", nextScale.z);
+            const next = obj.scale.clone();
+            next.x = Math.max(0.01, next.x + d.x);
+            next.y = Math.max(0.01, next.y + d.y);
+            next.z = Math.max(0.01, next.z + d.z);
+            if (snap.enabled) {
+              next.x = this._gizmo.snapValue("scale", next.x);
+              next.y = this._gizmo.snapValue("scale", next.y);
+              next.z = this._gizmo.snapValue("scale", next.z);
             }
-            obj.scale.copyFrom(nextScale);
+            obj.scale.copyFrom(next);
           }
         },
+        mergeKey,
       );
       return;
     }
 
-    // Default: Translate mode
-    const baseStep = this._gizmo.snap.enabled ? this._gizmo.snap.translate : 0.5;
-    const multiplier = isShift ? 10 : 1;
-    const step = baseStep * multiplier;
-
-    // Camera-cardinal alignment: arrow directions match on-screen visual perspective
+    // Default: Translate mode, arrow directions follow the camera's cardinal heading
     const camFwd = this.camera.target.clone().sub(this.camera.position);
-    camFwd.y = 0;
-    if (camFwd.lengthSq() < 0.0001) camFwd.set(0, 0, -1);
-    else camFwd.normalize();
-
-    let fwdX = 0;
-    let fwdZ = 0;
-    let rgtX = 0;
-    let rgtZ = 0;
-
-    if (Math.abs(camFwd.z) >= Math.abs(camFwd.x)) {
-      fwdZ = camFwd.z > 0 ? 1 : -1;
-      rgtX = -fwdZ;
-    } else {
-      fwdX = camFwd.x > 0 ? 1 : -1;
-      rgtZ = fwdX;
-    }
-
-    let dx = 0;
-    let dy = 0;
-    let dz = 0;
-
-    if ("PageUp" === key) {
-      dy = step;
-    } else if ("PageDown" === key) {
-      dy = -step;
-    } else if ("ArrowLeft" === key) {
-      dx = -rgtX * step;
-      dz = -rgtZ * step;
-    } else if ("ArrowRight" === key) {
-      dx = rgtX * step;
-      dz = rgtZ * step;
-    } else if ("ArrowUp" === key) {
-      dx = fwdX * step;
-      dz = fwdZ * step;
-    } else if ("ArrowDown" === key) {
-      dx = -fwdX * step;
-      dz = -fwdZ * step;
-    }
-
-    if (0 === dx && 0 === dy && 0 === dz) return;
+    const step = (snap.enabled ? snap.translate : 0.5) * (isShift ? 10 : 1);
+    const d = nudgeTranslateDelta(key, step, camFwd.x, camFwd.z);
+    if (isZeroDelta(d)) return;
 
     this._snapshotCommand(
       objs,
@@ -1832,21 +1784,22 @@ export class MakerApp extends SmallWorldMachine {
       (obj, pos) => {
         obj.position.copyFrom(pos);
       },
-      `Move ${objs.length} object${objs.length > 1 ? "s" : ""}`,
+      `Move ${objs.length} object${plural}`,
       () => {
         for (const obj of objs) {
-          const nextPos = obj.position.clone();
-          nextPos.x += dx;
-          nextPos.y += dy;
-          nextPos.z += dz;
-          if (this._gizmo.snap.enabled) {
-            nextPos.x = this._gizmo.snapValue("translate", nextPos.x);
-            nextPos.y = this._gizmo.snapValue("translate", nextPos.y);
-            nextPos.z = this._gizmo.snapValue("translate", nextPos.z);
+          const next = obj.position.clone();
+          next.x += d.x;
+          next.y += d.y;
+          next.z += d.z;
+          if (snap.enabled) {
+            next.x = this._gizmo.snapValue("translate", next.x);
+            next.y = this._gizmo.snapValue("translate", next.y);
+            next.z = this._gizmo.snapValue("translate", next.z);
           }
-          obj.position.copyFrom(nextPos);
+          obj.position.copyFrom(next);
         }
       },
+      mergeKey,
     );
   }
 
@@ -1854,6 +1807,7 @@ export class MakerApp extends SmallWorldMachine {
     this._abortController.abort();
     this._abortController = new AbortController();
     this._modeRouter.stop();
+    this._modeHost.dispose();
     this._trashBin.remove(...this._trashBin.children);
     this._undo.clear();
     super.destroy();

@@ -238,6 +238,12 @@ Here is my analysis of your character sprite:
     expect(chips).toHaveLength(0);
   });
 
+  it("offers no rotate chip for unsupported angles, but does for right angles", () => {
+    expect(parseActionChips("[ROTATE: 45]")).toHaveLength(0);
+    expect(parseActionChips("[ROTATE: 90]").map((c) => c.id)).toEqual(["rotate_90"]);
+    expect(parseActionChips("[ROTATE: -90]").map((c) => c.id)).toEqual(["rotate_-90"]);
+  });
+
   it("throws error for non-orthogonal rotation angles in rotateImage", () => {
     const src = createTestImage(4, 4, [100, 100, 100, 255]);
     expect(() => rotateImage(src, 45)).toThrow(/only supports right-angle rotations/);

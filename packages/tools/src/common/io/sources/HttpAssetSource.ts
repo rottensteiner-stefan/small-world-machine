@@ -1,5 +1,6 @@
 import type { IAssetSource } from "../types.js";
 import { SecurityValidator } from "../Security.js";
+import { globToRegExp } from "../globPattern.js";
 
 export interface HttpAssetSourceOptions {
   id?: string;
@@ -40,7 +41,7 @@ export class HttpAssetSource implements IAssetSource {
   public async list(pattern?: string): Promise<string[]> {
     const all = Array.from(this._knownFiles);
     if (!pattern) return all;
-    const regex = new RegExp(pattern.replace(/\*/g, ".*"));
+    const regex = globToRegExp(pattern);
     return all.filter((p) => regex.test(p));
   }
 

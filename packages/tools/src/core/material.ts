@@ -137,8 +137,18 @@ export interface MaterialPbrMaps {
   edge: RgbaImage;
 }
 
+export interface DerivePbrOptions {
+  /** Copy the diffuse into the result (default). `false` returns the INPUT image as `diffuse`
+   * (no per-call buffer copy) for callers, like the studio's slider ticks, that never mutate it. */
+  copyDiffuse?: boolean;
+}
+
 /** Derives all PBR maps from a diffuse RGBA buffer. Pure and deterministic. */
-export function derivePbrMaps(image: RgbaImage, params: MaterialStudioMapParams): MaterialPbrMaps {
+export function derivePbrMaps(
+  image: RgbaImage,
+  params: MaterialStudioMapParams,
+  options: DerivePbrOptions = {},
+): MaterialPbrMaps {
   const w = image.width;
   const h = image.height;
   const pixels = image.data;
@@ -174,7 +184,10 @@ export function derivePbrMaps(image: RgbaImage, params: MaterialStudioMapParams)
   });
 
   return {
-    diffuse: { width: w, height: h, data: new Uint8ClampedArray(pixels) },
+    diffuse:
+      options.copyDiffuse === false
+        ? image
+        : { width: w, height: h, data: new Uint8ClampedArray(pixels) },
     height: { width: w, height: h, data: height },
     normal: { width: w, height: h, data: normal },
     specular: { width: w, height: h, data: specular },

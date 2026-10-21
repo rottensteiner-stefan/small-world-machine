@@ -107,7 +107,9 @@ export function parseActionChips(text: string): CanvasActionChip[] {
 
   // 5. [ROTATE: 90|-90|180|270]
   const rotMatch = text.match(/\[ROTATE:\s*(-?\d+)\s*\]/i);
-  if (rotMatch) {
+  // Only right-angle rotations are offered: `rotateImage` throws for anything else, and the
+  // chip's execute has no error path, so an unsupported angle must not become a clickable chip.
+  if (rotMatch && [0, 90, 180, 270].includes(((parseInt(rotMatch[1]!, 10) % 360) + 360) % 360)) {
     const deg = parseInt(rotMatch[1]!, 10);
     addChip({
       id: `rotate_${deg}`,

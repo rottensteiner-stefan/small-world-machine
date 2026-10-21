@@ -12,6 +12,8 @@ export interface MakerKeyEvent {
   metaKey: boolean;
   shiftKey: boolean;
   altKey: boolean;
+  /** True for OS auto-repeat keydowns while a key is held. */
+  repeat?: boolean;
   preventDefault(): void;
 }
 
@@ -74,19 +76,34 @@ export interface MakerKeyBinding {
   label: string;
   /** State guard; the binding only fires while this returns true. */
   when?: (ctx: MakerKeyContext, event: MakerKeyEvent) => boolean;
+  /**
+   * Whether OS key auto-repeat may re-fire this binding. Default false: held
+   * toggles (snap, decal, zone), delete, duplicate etc. must fire once per
+   * physical press. Opt in only for naturally continuous actions (undo/redo,
+   * nudge, grid step, active decal-stamp transforms).
+   */
+  allowRepeat?: boolean;
   /** Performs the action. Returns true = consumed (stop), false = pass through. */
   action: (ctx: MakerKeyContext, event: MakerKeyEvent) => boolean;
 }
 
 /**
  * Routes every key the stamp tool owns while it is active, mirroring the old
- * `if (this._decalStamp.isActive || "d" === key)` block: a stray zone draw is
- * cancelled first, then the stamp decides. Only stamps a key the stamp reports
- * as consumed; everything else falls through to the rest of the table.
+ * `if (this._decalStamp.isActive || "d" === key)` block: the stamp decides, and
+ * a stray zone draw is cancelled only when the stamp consumed the key;
+ * everything else falls through to the rest of the table.
  */
 function decalRoute(ctx: MakerKeyContext, event: MakerKeyEvent): boolean {
-  if (ctx.isDrawingZone()) ctx.zoneCancel();
-  return ctx.decalHandleKeyDown(event);
+  // The stamp's own "d" toggle must not flicker while the key is held.
+  if (event.repeat === true && "d" === event.key.toLowerCase()) {
+    event.preventDefault();
+    return true;
+  }
+  const consumed = ctx.decalHandleKeyDown(event);
+  // Only a key the stamp actually consumed may abort a zone in progress; a
+  // rejected key (Ctrl+D, a bare Shift keydown) must leave the zone alone.
+  if (consumed && ctx.isDrawingZone()) ctx.zoneCancel();
+  return consumed;
 }
 
 /**
@@ -99,6 +116,7 @@ export const MAKER_KEYMAP: readonly MakerKeyBinding[] = [
     key: "z",
     modifiers: { ctrlOrMeta: true },
     label: "Undo / Redo (history step back / forward, Shift redo)",
+    allowRepeat: true,
     when: (ctx): boolean => !ctx.isEditingField(),
     action: (ctx, event): boolean => {
       event.preventDefault();
@@ -109,14 +127,31 @@ export const MAKER_KEYMAP: readonly MakerKeyBinding[] = [
     },
   },
   {
+    key: "y",
+    modifiers: { ctrlOrMeta: true },
+    exclude: { shift: true, alt: true },
+    label: "Redo (Ctrl+Y, Windows convention)",
+    allowRepeat: true,
+    when: (ctx): boolean => !ctx.isEditingField(),
+    action: (ctx, event): boolean => {
+      event.preventDefault();
+      ctx.redo();
+      ctx.refreshSelectionAndHierarchy();
+      return true;
+    },
+  },
+  {
     key: "d",
     matchAnyKey: true,
     label: "Decal stamp active — route keys to the stamp tool",
+    // Arrow/R transforms of the stamp are continuous; its "d" toggle is guarded below.
+    allowRepeat: true,
     when: (ctx): boolean => ctx.isDecalStampActive() && !ctx.isEditingField(),
     action: decalRoute,
   },
   {
     key: "d",
+    exclude: { ctrl: true, meta: true, alt: true },
     label: "Toggle decal stamp tool",
     when: (ctx): boolean => !ctx.isEditingField() && !ctx.isDecalStampActive(),
     action: decalRoute,
@@ -239,6 +274,7 @@ export const MAKER_KEYMAP: readonly MakerKeyBinding[] = [
     keyAliases: ["]"],
     exclude: { ctrl: true, meta: true, alt: true },
     label: "Step grid (decrease / increase)",
+    allowRepeat: true,
     when: (ctx): boolean => !ctx.isEditingField(),
     action: (ctx, event): boolean => {
       event.preventDefault();
@@ -259,7 +295,10 @@ export const MAKER_KEYMAP: readonly MakerKeyBinding[] = [
   {
     key: "ArrowLeft",
     keyAliases: ["ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown"],
+    // Ctrl/Cmd+Arrow is browser/OS navigation (history back, Mission Control).
+    exclude: { ctrl: true, meta: true },
     label: "Nudge selection (Shift x10 / Alt modes)",
+    allowRepeat: true,
     when: (ctx): boolean => !ctx.isEditingField() && ctx.selectionSize() > 0,
     action: (ctx, event): boolean => {
       event.preventDefault();
@@ -302,6 +341,12 @@ export function dispatchMakerKey(event: MakerKeyEvent, ctx: MakerKeyContext): bo
   for (const binding of MAKER_KEYMAP) {
     if (!matchesKey(binding, event)) continue;
     if (binding.when && !binding.when(ctx, event)) continue;
+    // Auto-repeat of a once-per-press binding is swallowed (not passed on to later
+    // bindings, which would otherwise see the held key as a fresh press).
+    if (event.repeat === true && binding.allowRepeat !== true) {
+      event.preventDefault();
+      return true;
+    }
     if (binding.action(ctx, event)) return true;
   }
   return false;

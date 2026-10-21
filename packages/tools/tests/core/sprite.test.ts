@@ -5,6 +5,7 @@ import {
   detectSpriteBoundsRgba,
   flipRgba,
   padToPowerOfTwoRgba,
+  sortSpriteBoxes,
 } from "../../src/core/sprite.js";
 import {
   autocropImage,
@@ -171,5 +172,38 @@ describe("core/sprite detectSpriteBoundsRgba", () => {
     const b = detectSpriteBoundsRgba(src, {});
     expect(a).toEqual(b);
     expect(a).toHaveLength(0);
+  });
+});
+
+describe("core/sprite sortSpriteBoxes", () => {
+  it("orders rows top-to-bottom and each row left-to-right", () => {
+    const out = sortSpriteBoxes([
+      { x: 50, y: 40, w: 4, h: 4 },
+      { x: 0, y: 0, w: 4, h: 4 },
+      { x: 20, y: 5, w: 4, h: 4 },
+      { x: 0, y: 40, w: 4, h: 4 },
+    ]);
+    expect(out.map((b) => [b.x, b.y])).toEqual([
+      [0, 0],
+      [20, 5],
+      [0, 40],
+      [50, 40],
+    ]);
+  });
+
+  it("is independent of the input order, even for chained y offsets (non-transitive tolerance)", () => {
+    const boxes = [
+      { x: 90, y: 0, w: 4, h: 4 },
+      { x: 50, y: 10, w: 4, h: 4 },
+      { x: 10, y: 20, w: 4, h: 4 },
+      { x: 70, y: 12, w: 4, h: 4 },
+    ];
+    const reference = sortSpriteBoxes(boxes).map((b) => [b.x, b.y]);
+    const perms = [
+      [...boxes].reverse(),
+      [boxes[1]!, boxes[3]!, boxes[0]!, boxes[2]!],
+      [boxes[2]!, boxes[0]!, boxes[3]!, boxes[1]!],
+    ];
+    for (const p of perms) expect(sortSpriteBoxes(p).map((b) => [b.x, b.y])).toEqual(reference);
   });
 });
