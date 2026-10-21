@@ -13,3 +13,5 @@ Bälle/Projektile), zu einem Bruchteil des Implementierungsaufwands.
 dünne Wände/Böden tunneln. Das ist neue Arbeit (echte Convex-Sweep-Mathematik), kein Bugfix am
 bestehenden CCD-Pfad — von `ccdMotionThreshold` ist so, wie es ist, keine Hilfe für Box-Körper zu
 erwarten.
+
+> **Status (2026-10-21): überholt.** `SweptVolumeCCD` (`packages/engine/src/physix/ccd/SweptSphereCCD.ts`) sweept inzwischen auch Box und OBB (`CollisionSweepSolver`). Dieser ADR beschreibt den ursprünglichen Stand.

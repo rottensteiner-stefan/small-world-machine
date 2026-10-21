@@ -185,7 +185,7 @@ const movement = new StageMovementBehavior({
   speed: 0.09,
   zones: [zoneA],
   startFacingNudge: 0.14, // ~8 degrees, steers the starting facing away from the self-occlusion axis
-  uvToWorld: (u, v) => ({ x: (u - 0.5) * 16, y: 4.5 + (0.5 - v) * 9, z: 0 }),
+  projection: { mode: "flat-plane", width: 16, height: 9, z: 0, centerY: 4.5 },
 });
 ```
 
@@ -199,8 +199,9 @@ this.camera.position.set(0, 4.5, 10.864);
 this.camera.target.set(0, 4.5, 0);
 
 // 2. Painted background as a flat, unlit plane
-const bg = new Plane({ width: 16, height: 9 });
-bg.material = new BasicMaterial({ diffuseMap: await new Texture().load("bg.webp") });
+const bg = new Object3D("Background");
+bg.geometry = new Plane({ width: 16, height: 9 }).getGeometryData();
+bg.material = new BasicMaterial({ diffuseMap: await Texture.fromUrl("bg.webp", { flipY: true }) });
 
 // 3. Walkable area as a polygon in image coordinates (u,v 0..1)
 const zoneA = new StageZone({
@@ -218,7 +219,7 @@ const movement = new StageMovementBehavior({
   input: this.input,
   speed: 0.09,
   zones: [zoneA],
-  uvToWorld: (u, v) => ({ x: (u - 0.5) * 16, y: 4.5 + (0.5 - v) * 9, z: 0 }),
+  projection: { mode: "flat-plane", width: 16, height: 9, z: 0, centerY: 4.5 },
 });
 playerRig.addBehavior(movement);
 
@@ -252,4 +253,4 @@ Games where the three depth tricks from §2 can be seen clearly in action:
 
 ---
 
-> **Outlook:** setting up a background image together with its movement zones today means hand-editing scene code and using the `[E]` zone editor per showcase. Extending the **Maker** editor (currently a 3D world editor, see [Maker (3D world editor)](/guides/maker)) with its own 2.5D scene-authoring mode — importing a background image, checking it against the camera's vanishing point, drawing `StageZone` chains including branches as in §4 — is a planned direction for this, but not yet implemented.
+> **Outlook:** setting up a background image together with its movement zones today means hand-editing scene code and using the `[E]` zone editor per showcase. Extending the **Maker** editor (currently a 3D world editor, see [Maker (3D world editor)](/guides/maker)) with its own 2.5D scene-authoring mode — importing a background image, checking it against the camera's vanishing point, drawing `StageZone` chains including branches as in §4 — is the planned direction. The Maker can already import a background image and draw `StageZone`s (key `Z`, see [Maker](/guides/maker)); the vanishing-point check and branch chains are not yet implemented.

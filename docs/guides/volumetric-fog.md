@@ -28,7 +28,7 @@ fog.enabled = true;
 fog.density = 0.02;        // scattering extinction coefficient of the medium
 fog.maxDistance = 80;      // clamped against the scene far plane
 fog.intensity = 1.0;       // overall in-scattering multiplier
-app.postProcessing.add(fog);
+renderer.postProcessing.add(fog);
 ```
 
 ## Parameters (`VolumetricFogElement`)
@@ -58,12 +58,12 @@ app.postProcessing.add(fog);
 `FogVolume` objects are scene-graph nodes (`Object3D`) that inject localized analytical participating media into the 3D froxel grid (WebGPU) or screen-space raymarch volume (WebGL2).
 
 ```ts
-import { FogVolume, FogVolumeShape, Vector3, Color } from '@small-world-machine/engine';
+import { FogVolume, FogVolumeShape, Vector3D, Color } from '@small-world-machine/engine';
 
 // Positive mist volume with procedural turbulence
 const mist = new FogVolume({
-  shape: FogVolumeShape.Sphere,
-  size: new Vector3(8, 8, 8),
+  shape: FogVolumeShape.SPHERE,
+  size: new Vector3D(8, 8, 8),
   density: 0.15,
   albedo: new Color(0.2, 0.7, 0.9),
   edgeFade: 0.25,
@@ -79,16 +79,16 @@ scene.add(mist);
 
 | Property | Default | Meaning |
 |---|---|---|
-| `shape` | `FogVolumeShape.Box` | Analytical SDF primitive: `Box`, `Sphere`, or `Cylinder`. |
-| `size` | `Vector3(2, 2, 2)` | Extents / dimensions in local space (width, height, depth). |
-| `density` | `1.0` | Local extinction coefficient. **Negative values carve out fog!** |
-| `edgeFade` | `0.1` | Fraction of volume radius/half-extents over which boundary softly fades to zero. |
+| `shape` | `FogVolumeShape.BOX` | Analytical SDF primitive: `BOX`, `SPHERE`, or `CYLINDER`. |
+| `size` | `Vector3D(5, 5, 5)` | Extents / dimensions in local space (width, height, depth). |
+| `density` | `0.1` | Local extinction coefficient. **Negative values carve out fog!** |
+| `edgeFade` | `0.2` | Fraction of volume radius/half-extents over which boundary softly fades to zero. |
 | `albedo` | `Color(1, 1, 1)` | Single-scattering albedo color tint. |
 | `emission` | `Color(0, 0, 0)` | Self-luminous volumetric emission color (e.g. fire, glowing braziers, neon portals). |
 | `noiseScale` | `0.0` | World-space frequency of the 3D procedural value noise / fBm. |
 | `noiseAmount` | `0.0` | Modulation amplitude of 3D turbulence ($0.0$ = smooth medium, $1.0$ = deep billowy clouds). |
 | `noiseSpeed` | `0.0` | Velocity of time-based wind drift through the noise field. |
-| `densityMask` | `null` | Optional user-authored `VolumetricTexture` (3D density mask). R = per-voxel density factor applied to this volume's density, G = per-voxel single-scattering albedo replacing the volume's `albedo` scattering strength for those cells. Emission is unaffected. WebGPU supports up to 16 masked volumes; WebGL2 up to 8 (see "Density masks & per-cell albedo"). |
+| `densityMask` | `null` | Optional user-authored `VolumetricTexture` (3D density mask). R = per-voxel density factor applied to this volume's density, G = per-voxel single-scattering albedo replacing the volume's `albedo` scattering strength for those cells. Emission is unaffected. WebGPU and WebGL2 each support up to 8 masked volumes (see "Density masks & per-cell albedo"). |
 
 ### Interior Carving (Negative Density)
 
@@ -97,8 +97,8 @@ To keep interior spaces (such as indoor vaults, underground bunkers, crypts, or 
 ```ts
 // Interior room carving: zeroes out participating extinction
 const interiorCarver = new FogVolume({
-  shape: FogVolumeShape.Box,
-  size: new Vector3(12, 6, 16),
+  shape: FogVolumeShape.BOX,
+  size: new Vector3D(12, 6, 16),
   density: -1.2, // Clamps extinction: max(0.0, globalExtinction + volDensity)
   edgeFade: 0.05,
 });
@@ -131,8 +131,8 @@ fog.maskSize.set(15, 6, 15);       // half extents; one whole box maps to the wh
 
 // 2. Per-volume mask, sampled in the volume's OWN local box (transforms with the volume)
 const plume = new FogVolume({
-  shape: FogVolumeShape.Box,
-  size: new Vector3(6, 6, 6),
+  shape: FogVolumeShape.BOX,
+  size: new Vector3D(6, 6, 6),
   density: 0.12,
   densityMask: VolumetricTexture.fromData(maskData, 32, 32, 32),
 });
@@ -182,12 +182,12 @@ Backend specifics:
 
 ## Interactive Showcase
 
-Check out **Showcase 39 ("Atmospheric Sanctum")** at [`apps/showcases/39/`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/showcases/39/):
+Check out **Showcase 39 ("Atmospheric Sanctum")** at [`apps/showcases/39/`](../../apps/showcases/39/):
 - Monumental colonnade nave with high clerestory skylight casting sharp 4-cascade CSM shafts.
 - Swirling cyan mist with rolling 3D noise turbulence at the altar.
 - Warm amber emissive brazier sphere.
 - Negative density interior carving volume ($Z = -21$, density = -1.2) keeping the rear vaulted sanctuary crystal clear.
-- Interactive controls: `[F]` toggle fog, `[C]` toggle interior carving, `[N]` toggle 3D noise, `[1]`/`[2]` rotate sun angle, `[V]` switch fly/orbit camera.
+- Interactive controls: `[F]` toggle fog, `[C]` toggle interior carving.
 
 ---
 

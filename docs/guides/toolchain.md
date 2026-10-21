@@ -8,7 +8,6 @@ Here's the recommended toolchain for working efficiently with the engine:
 * **Role:** The absolute standard for 3D modeling, rigging, and animation.
 * **Usage:**
   * Import Mixamo/Sketchfab models to edit skeletons, adjust weights, or combine animations.
-  * Design levels and export NavMeshes (invisible collision/walkable areas) for the engine.
   * Optimize geometry (reduce polygons) and bake PBR textures into single atlases to reduce WebGL/WebGPU draw calls.
 * **Status:** Essential.
 
@@ -16,7 +15,7 @@ Here's the recommended toolchain for working efficiently with the engine:
 * **Role:** Khronos Group's CLI toolsuite for strong asset compression.
 * **Usage:**
   * Unoptimized `.glb` files (e.g. direct Mixamo exports) often contain uncompressed data, unused bones, or massive animation tracks (30MB+).
-  * `gltf-transform` lets you apply **Draco** or **Meshopt** compression, quantization, and pruning directly from the terminal, often shrinking assets down to 1-2 MB.
+  * `gltf-transform` lets you apply **Draco** compression (the engine's `gltf-extensions` support Draco and BasisU/KTX2, not Meshopt), quantization, and pruning directly from the terminal, often shrinking assets down to 1-2 MB.
   * *Tip:* Can be run locally via `npx @gltf-transform/cli`.
 * **Status:** Strongly recommended (for production builds).
 
@@ -39,7 +38,7 @@ Here's the recommended toolchain for working efficiently with the engine:
 ## 5. FBX-to-GLTF conversion: fbx2gltf / web converters
 * **Role:** Format conversion for 3D assets.
 * **Usage:**
-  * Small World Machine exclusively uses the open `glTF/GLB` standard via `GltfLoader`.
+  * Small World Machine primarily uses the open `glTF/GLB` standard via `GltfLoader` (`ObjLoader`/`MtlLoader` exist for OBJ).
   * When downloading `.fbx` files (e.g. from Mixamo), they need to be converted. This can be done via the `fbx2gltf` CLI tool or quickly via web converters like [AnyConv](https://anyconv.com/fbx-to-glb-converter/).
 * **Status:** Necessary auxiliary tool.
 

@@ -52,7 +52,7 @@ this.scene.add(mesh);
 this.scene.updateStaticOctree();
 ```
 
-Once an octree is present, the `InteractionManager` automatically uses `Octree.queryRay()` to instantly discard thousands of objects without performing a single expensive intersection test.
+Once an octree is present, the `InteractionManager` automatically uses `Octree.queryRay()` (and the scene's spatial hash / dynamic octree) to instantly discard thousands of objects without performing a single expensive intersection test.
 
 ## 3. Ready-Made Behaviors
 
@@ -91,6 +91,6 @@ For high-precision applications such as CAD tools or shooters, the raycaster use
 2. If the object has a `geometry`, it dynamically iterates over the mesh's actual triangle vertices and transforms them into world space.
 3. It performs a **Möller-Trumbore intersection test** to determine the exact intersection distance `t`.
 
-> **Architecture Note (Broadphase vs. Narrowphase):** The `Raycaster` core class itself is designed strictly as a linear *narrowphase* evaluator. It deliberately contains no spatial acceleration of its own (such as a BVH or an internal octree). Instead, spatial filtering (the *broadphase*) is handled one layer up by systems like the `InteractionManager` (via `scene.staticOctree.queryRay`), which then hands the `Raycaster` only the drastically reduced list of candidate objects. This clear separation of responsibilities keeps the raycaster simple and avoids redundant acceleration structures.
+> **Architecture Note (Broadphase vs. Narrowphase):** The `Raycaster` core class itself is designed strictly as a linear *narrowphase* evaluator. It deliberately contains no spatial acceleration of its own (such as a BVH or an internal octree). Instead, spatial filtering (the *broadphase*) is handled one layer up by systems like the `InteractionManager` (via `scene.staticOctree.queryRay` and the spatial hash), which then hands the `Raycaster` only the drastically reduced list of candidate objects. This clear separation of responsibilities keeps the raycaster simple and avoids redundant acceleration structures.
 
 This guarantees that even transparent gaps or irregular meshes remain pixel-precisely clickable.

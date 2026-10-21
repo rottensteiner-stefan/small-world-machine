@@ -32,14 +32,16 @@ For sounds that should be attenuated and panned based on 3D position, use `playS
 this.audio.playSpatial("explosion", enemy.position, false, 1.0, /* refDistance */ 2.0, /* maxDistance */ 20.0);
 ```
 
-`playSpatial` uses an HRTF `PannerNode` with inverse distance falloff. Both methods return the underlying `AudioBufferSourceNode` (and, for spatial sounds, the `PannerNode`), so the running instance can be stopped or otherwise inspected itself - the engine does not track active voices on its own.
+`playSpatial` uses an HRTF `PannerNode` with inverse distance falloff. `play` returns the `AudioBufferSourceNode`, `playSpatial` returns `{ source, panner }`; both return `null` for an unknown sound name. So the running instance can be stopped or otherwise inspected itself - the engine does not track active voices on its own.
 
 ## The Mixer
 
 Every sound plays through one of two gain buses, both routed into a master bus:
 
 - `sfxGain` - sound effects (`play`, `playSpatial`, and all `SynthSFX` methods except `startDrone`).
-- `musicGain` - background music/ambience.
+- `musicGain` - background music/ambience (`playMusic(name, loop = true, volume)` and the drone).
+
+Also available: `playWhiteNoiseBurst(duration, volume, centerFreq, q)`, an `AUDIO_LOADED` event on `app.events` after `load()`, and `dispose()` (stops endless sounds and closes the `AudioContext`). `startDrone`/`startFire` return a `SoundHandle`; call `.stop()` on it, otherwise the sound runs until `dispose()`.
 
 A single procedural reverb (a fixed 2-second decay impulse, generated at startup) is wired as a send effect on the SFX bus. Adjust levels with:
 

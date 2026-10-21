@@ -8,7 +8,7 @@ These importers automatically translate external shader syntax into the engine's
 
 The engine ships with three built-in importers:
 
-1. **`ShadertoyImporter`**: Parses Shadertoy code (WebGL2/GLSL300), translates `mainImage`, and resolves built-in uniforms such as `iTime` and `iResolution`.
+1. **`ShadertoyImporter`**: Parses Shadertoy code (GLSL300 and GLSL100), translates `mainImage`, and resolves built-in uniforms such as `iTime` and `iResolution`.
 2. **`GLSLSandboxImporter`**: Parses GLSLSandbox code, translates legacy `gl_FragColor` assignments, and maps `time`/`mouse` uniforms.
 3. **`ComputeToysImporter`**: Parses Compute.toys code (WGSL).
 

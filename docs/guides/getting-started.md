@@ -18,6 +18,8 @@ The engine uses a strategy-based lifecycle. You derive from `SmallWorldMachine` 
 
 ### 1. Basic showcase implementation
 
+The page needs a canvas with the engine's default id: `<canvas id="SmallWorldMachine"></canvas>` (override via the `canvasId` option); otherwise `start()` throws "Canvas element with ID ... not found".
+
 Create a file called `app.ts` to bootstrap the engine:
 
 ```typescript

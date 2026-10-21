@@ -55,7 +55,7 @@ The engine uses a unified camera architecture. The base `Camera` is parameterize
 import { Camera, PerspectiveProjection, FirstPersonController, ShakeEffect } from "@small-world-machine/engine";
 
 // Create a camera with a perspective projection
-const camera = new Camera(new PerspectiveProjection({ fov: 60, near: 0.1, far: 1000 }));
+const camera = new Camera(new PerspectiveProjection({ fov: MathUtils.degToRad(60), near: 0.1, far: 1000 }));
 
 // Attach a controller directly as a Behavior
 camera.addBehavior(
@@ -77,8 +77,8 @@ Small World Machine uses a hybrid rendering pipeline (WebGPU, WebGL2, WebGL1) bu
 
 ### Key material families
 
-- `StandardMaterial`: Core PBR material with `albedo`, `metallic`, `roughness`, and diffuse/normal/roughness map slots.
-- `GlassMaterial`: Real-time screen-space refraction (SSR) with configurable `ior` and volumetric absorption.
+- `StandardMaterial`: Core PBR material with `color`, `metallic`, `roughness`, and diffuse/normal/roughness map slots.
+- `GlassMaterial`: Glass material with a configurable `ior`.
 - `SpriteMaterial`: Camera-facing 2D/2.5D billboard material.
 - **Wave family (ADR 0013):**
   - `OpenWaterMaterial`: Realistic ocean water with Gerstner waves and opaque depth fade (soft shorelines).

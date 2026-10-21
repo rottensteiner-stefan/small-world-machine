@@ -17,7 +17,7 @@ The rest of this guide covers the second path - it's also what `CustomShaderMate
 
 | Folder | Materials |
 | --- | --- |
-| `surface/` | `Basic`, `Lambert`, `Phong`, `Standard` |
+| `surface/` | `Basic`, `Lambert`, `Phong`, `Standard`, `Decal` |
 | `glass/` | `Glass`, `Frostglass` |
 | `liquid/` | `OpenWater`, `StylizedWater`, `LiquidWave`, `FluidSurface`, `Slime`, `Lava`, `StylizedLava` |
 | *(root)* | `AbstractMaterial`, `CustomShaderMaterial`, single-purpose materials (`Depth`, `Skybox`, `Sprite`, `Terrain`, `Wireframe`, `World`, `RetroScreen`) and `shaders/chunks/` shared by several materials |
@@ -81,20 +81,18 @@ A material can supply up to three independent shader sources: `wgsl` (WebGPU), `
 Since the three sources are maintained by hand and independently, they *will* drift apart - a uniform present in the WGSL version but missing (or misspelled) in the GLSL300 version is a common source of bugs, and it doesn't show up as a compile error, only as a texture/uniform silently never being set. After changing or adding a material's shaders, run:
 
 ```bash
-npm run build:showcases && npm run preview
-node .agents/scratches/sweep-renderer.mjs WEB_GL1
-node .agents/scratches/sweep-renderer.mjs WEB_GL2
+npm run test:showcases
 ```
 
-against a showcase that uses the material, for both renderer dialects. It loads each showcase headlessly and reports real GL compile/link/`GL_INVALID_OPERATION` errors - the project's own `npm run test:showcases` (`scripts/check-showcases.js`) now also forces all three renderer types (`WEB_GL1`/`WEB_GL2`/`WEB_GPU`) via Swiftshader flags and captures per-renderer console errors, so it's a valid alternative for WebGL1/WebGL2 shader bugs; for WebGPU, headless Chrome remains unreliable (see the `showcases-smoke-test` CI job, intentionally non-blocking).
+It loads each showcase headlessly and reports real GL compile/link/`GL_INVALID_OPERATION` errors - `scripts/check-showcases.js` forces all three renderer types (`WEB_GL1`/`WEB_GL2`/`WEB_GPU`) via Swiftshader flags and captures per-renderer console errors, which covers WebGL1/WebGL2 shader bugs; for WebGPU, headless Chrome remains unreliable (see the `showcases-smoke-test` CI job, intentionally non-blocking).
 
 ## Uniform and Texture Binding Is Automatic
 
-The WebGL1/WebGL2 renderers determine a compiled shader's uniforms and sampler texture units by querying the linked GPU program directly (`gl.getActiveUniform`), instead of consulting a hand-maintained list of expected names. This means: **as soon as a uniform or texture is declared in the shader source and listed in `layout.uniforms`/`layout.textures`, it "just works"** - nothing in `WebGL1Renderer.ts`/`WebGL2Renderer.ts` needs to be touched to support it, and there is no internal name list whose update could be forgotten.
+The WebGL1/WebGL2 renderers determine a compiled shader's uniforms and sampler texture units by querying the linked GPU program directly (`gl.getActiveUniform`, in `renderers/gl/managers/WebGLProgramCache.ts`), instead of consulting a hand-maintained list of expected names. This means: **as soon as a uniform or texture is declared in the shader source and listed in `layout.uniforms`/`layout.textures`, it "just works"** - nothing in the renderers needs to be touched to support it, and there is no internal name list whose update could be forgotten.
 
 The one thing that still has to match by convention: the property/texture keys written in `getRenderManifest()` (e.g. `texs["u_diffuseMap"]`) must be spelled exactly like the corresponding `uniform sampler2D u_diffuseMap;` in the shader source. A mismatch is not a compile error - the uniform simply never gets written, so the sampler is left at whatever the GPU driver defaults to.
 
-If a name in `layout.uniforms`/`layout.textures` has no matching active uniform in the compiled shader (a typo, or the shader compiler optimized it away because it's actually unused), `WebGL1Renderer` logs a console warning naming the mismatch - a quick way to spot a typo without having to search through the render output.
+If a name in `layout.uniforms`/`layout.textures` has no matching active uniform in the compiled shader (a typo, or the shader compiler optimized it away because it's actually unused), the WebGL1 (GLSL100) path logs a console warning naming the mismatch (names from `StandardWebGPULayout.uniforms` are deliberately not warned about) - a quick way to spot a typo without having to search through the render output.
 
 Cube vs. 2D textures are also detected automatically, based on the sampler type declared in the shader (`samplerCube` vs. `sampler2D`), not on the uniform's name - so a new cube-sampler uniform likewise needs no name-based special case.
 

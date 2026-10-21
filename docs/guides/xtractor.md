@@ -18,7 +18,7 @@ app.start();
 Press **Ctrl+Alt+G** (or **Cmd+Alt+G**) to open the Forge overlay, where Xtractor appears as the "Asset Extractor" window.
 
 ::: tip Standalone page
-Xtractor is also available as a self-contained page at `/tools/xtractor.html`. Note that this is a **separate, hand-duplicated copy** of the tool's HTML/CSS/JS, not a thin wrapper around the same class — feature parity between the two is maintained by hand. The standalone page has no shared event bus, so it cannot hand crops off to Pixler (see [Limitations](#einschraenkungen) below).
+Xtractor is also available as a self-contained page at `/tools/xtractor.html`. The page instantiates the same `Xtractor` class (`new Xtractor({ parent: container })`), so there is no duplicated code. It has no shared event bus, so it cannot hand crops off to Pixler (see [Limitations](#einschraenkungen) below).
 :::
 
 ::: tip Own package since ADR 0024
@@ -27,19 +27,20 @@ Xtractor is also available as a self-contained page at `/tools/xtractor.html`. N
 
 ## Loading an image
 
-Three ways to get an image onto the canvas, all of which land at the same 1:1 pixel-scale canvas (on-screen zoom is CSS scaling, not resampling):
+All routes land at the same 1:1 pixel-scale canvas (on-screen zoom is CSS scaling, not resampling). Input goes through a `UniversalIngestDropzone`:
 
-- **Upload** — the "Upload Image" button opens a file picker dialog.
-- **Drag & drop** — drag an image file anywhere onto the canvas.
-- **URL** — paste a URL into the text field and click "Load". Cross-origin images that don't send permissive CORS headers won't load; Xtractor shows an explanatory message instead of proxying the request — downloading the image and uploading it locally is the reliable fallback.
-- **Paste from clipboard** — `Ctrl/Cmd+V`, while Xtractor is the topmost visible Forge window, pastes an image directly from your clipboard. This only works when Xtractor is docked in the Forge overlay; the standalone page has no paste handling.
+- **Upload** — click the dropzone to open a file picker.
+- **Drag & drop** — drop onto the dropzone or anywhere on the window. Besides images it accepts ZIP archives, SVG, PBR sets and text/JSON.
+- **URL** — paste a URL into the text field and click "Load". Cross-origin images without permissive CORS headers won't load; Xtractor shows an explanatory message instead of proxying — downloading and uploading locally is the fallback.
+- **Paste from clipboard** — `Ctrl/Cmd+V` pastes an image directly (also on the standalone page, since paste is part of the dropzone).
 
 ## Selecting a region
 
-Two selection tools, switchable via the toolbar:
+Selection tools, switchable via the toolbar (Hand, Rect, Circle, Wand), plus buttons for Auto-Sprites, RemBG and Normal and Undo/Redo:
 
 - **Rect** (default) — draw a rectangular selection by click-and-drag (minimum 10×10px).
 - **Circle** — the same click-and-drag gesture, but crops to an elliptical/circular region instead of a rectangle.
+- **Wand** — magic wand / smart masking.
 - **Hand** — pans the canvas instead of drawing a selection.
 
 Once a selection exists, you can:
@@ -48,22 +49,21 @@ Once a selection exists, you can:
 - **Zoom** with the +/- buttons or `Ctrl` + mouse wheel (10%–1000%, zooms around the cursor).
 - **Clear** it with the Clear Selection button.
 
+Keyboard: `Ctrl+D` deselect, `Ctrl+0` fit, `Ctrl+1` 100%, `Esc`, arrow keys move the selection (`Shift` ×10), `Delete`/`Backspace` removes the image, `Cmd/Ctrl+Z` / `Shift+Z` undo/redo.
+
 ## Sending a crop to Pixler
 
 Once a selection exists, a preview pill with a **"Send to Pixler"** button appears above the chat panel. Clicking it sends the crop (as a PNG data URL) directly into the docked [Pixler](/guides/pixler) window via the engine's shared event bus — this is the one fully functional cross-tool integration in this tool. There is no equivalent handoff to Map Generator or Material Studio.
 
 ## The chat panel
 
-::: warning This is a mockup, not a real AI assistant
-The chat panel on the right looks like an AI assistant, but is not connected to any vision model or backend. It's a hardcoded, regex-based demo: if your message (with an active selection) contains a keyword like "10", "slice", or "cut", it slices the selection into 10 fixed-width vertical strips and shows each as a downloadable PNG. Anything else gets a generic "tell me what to do" response. The source has an explicit `@DEVELOPER_NOTE` marking this as a placeholder for a real `fetch()` call to a vision model backend.
-:::
+The chat panel (`xtractor/AiChatPanel.ts`) connects to a vision/LLM provider — Gemini, OpenAI, Claude, Ollama or a custom HTTP endpoint (`common/ai/providers/`) — configured via the panel's settings with your own API key. The system prompt makes the model answer with deterministic **action chips** in square brackets, which Xtractor executes locally: `[REMBG]`, `[CHROMA_KEY]`, `[AUTOCROP]`, `[CROP]`, `[FLIP_H/V]`, `[ROTATE]`, `[SCALE]`, `[PAD_POT]`, `[RECOLOR]`, `[POSTERIZE]`, `[GRAYSCALE]`, `[INVERT]`, `[SEPIA]`, `[AUTO_LEVELS]`, `[ADJUST]`, `[OUTLINE]`, `[DESPECKLE]`, `[AUTO_SPRITES]`, `[SLICE: N]`, `[NORMAL_MAP]`, `[DEPTH_MAP]`, `[EMISSIVE_MAP]`, `[AO_MAP]` (`common/image/ActionChips.ts`).
 
-Today this is the only export path in the tool — there is no "download crop" or "copy to clipboard" button for a selection alone; you either send it to Pixler or ask the mock chat to cut it into ten pieces.
+Export paths: the slice gallery offers a PNG download per cut, normal/depth maps have a preview with download, and results can be applied to the image (undoable) or sent to Pixler.
 
 ## Limitations {#einschraenkungen}
 
-- **PDF upload does not work.** The file picker dialog accepts PDFs, but selecting one just shows a message that PDF support is planned for "Phase 2" — no PDF.js integration exists yet.
-- **The chat assistant is entirely a mockup** (see above) — no real AI backend is wired up.
-- **Slicing is hardcoded to 10 equal vertical strips.** There is no configurable grid size, no rows, no atlas/metadata export — this falls well short of a general sprite atlas generator.
-- **No state persistence.** Reopening the Forge window loses your loaded image, selection, and chat history.
-- **The standalone `xtractor.html` page is a separate copy** of the tool with no event bus — no Pixler handoff, no clipboard paste. Any feature added to the real `Xtractor` class has to be ported there by hand to stay in sync.
+- **No PDF support.** The dropzone does not accept PDFs (no PDF code exists).
+- **Slicing is vertical strips only:** `[SLICE: N]` cuts N (1–64) equal strips; there is no row/column grid and no atlas/metadata export. `[AUTO_SPRITES]` detects sprites via connected components instead.
+- **No state persistence.** `getState()` returns `null`; reopening the Forge window loses your loaded image, selection and chat history (in-session undo history exists).
+- **The standalone `xtractor.html` page has no event bus** — no Pixler handoff.

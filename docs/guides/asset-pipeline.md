@@ -40,7 +40,7 @@ Not all surfaces should be created the same way. Balance visual fidelity and pro
 
 ---
 
-## 3. The 4-Tier Polycount & Geometry Budget ([ADR 0011](/adr/0011-three-tier-rendering-architecture))
+## 3. The 4-Tier Polycount & Geometry Budget ([ADR 0011](/adr/0011-modular-asset-kits-and-remote-catalog))
 
 To avoid **sub-pixel quad overdraw** (where micro-triangles smaller than a 2×2 pixel fragment quad choke mobile TBDR rasterizers) and keep initial load times minimal, every 3D asset must adhere to a strict geometry budget based on its maximum bounding box dimension ($L_\text{max}$):
 
@@ -56,7 +56,7 @@ To avoid **sub-pixel quad overdraw** (where micro-triangles smaller than a 2×2 
 
 ---
 
-## 4. The 4-Pillar Modular Environment Doctrine ([ADR 0019](/adr/0019-modular-environment-design))
+## 4. The 4-Pillar Modular Environment Doctrine ([ADR 0019](/adr/0019-modular-environment-texturing-and-scale-doctrine))
 
 When assembling environments ranging from a small 7×7 m room to a 50 m hall, repetition and tiling artifacts destroy immersion. All modular kits follow four architectural pillars:
 

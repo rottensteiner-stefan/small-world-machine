@@ -66,11 +66,13 @@ $$J = t_x \cdot b_z - t_z \cdot b_x$$
 
 The normalized crest factor $v_{\text{crest}}$ passed to the fragment stage is:
 
-$$v_{\text{crest}} = \text{clamp}\left(\frac{1.0 - J}{\max(\sum S_i, 0.001)}, -1.0, 1.0\right)$$
+$$v_{\text{crest}} = \text{clamp}\left(\frac{2.5 \cdot (1.0 - J)}{\max(\sum S_i, 0.001)}, -1.0, 1.0\right)$$
 
 In the fragment shader, crest foam is evaluated smoothly:
 
-$$\text{foam}_{\text{crest}} = \text{smoothstep}(\text{CREST\_FOAM\_LOW}, \text{CREST\_FOAM\_HIGH}, v_{\text{crest}}) \cdot \text{noisePattern} \cdot \text{CREST\_FOAM\_INTENSITY}$$
+$$\text{foam}_{\text{crest}} = \text{clamp}(m \cdot \text{lace} + 0.6\,m^2, 0, 1) \cdot \text{CREST\_FOAM\_INTENSITY}$$
+
+where $m$ is the crest mask (`smoothstep` of $v_{\text{crest}}$ between `CREST_FOAM_THRESHOLD_LOW` = 0.65 and `CREST_FOAM_THRESHOLD_HIGH` = 0.95; `CREST_FOAM_INTENSITY` = 0.9) and lace is a noise pattern (`OpenWater.frag.glsl`).
 
 ---
 
@@ -116,8 +118,8 @@ flowchart TD
     Fluid --> Probe["OpenWaterSurfaceProbe.surfaceHeightAt(worldX, worldZ, time)"]
     Probe --> Solver["Newton-Raphson Inverse Jacobian Solver"]
     Solver --> Mirror["f32 Gerstner Evaluation (Math.fround)"]
-    Mirror --> Height["Accurate Surface Height & Normal"]
-    Height --> Buoyancy["BuoyancySolver.solve(body, fluidVolume)"]
+    Mirror --> Height["Accurate Surface Height"]
+    Height --> Buoyancy["BuoyancySolver.applyFluidForces(obj, fluidVolumes, gravity)"]
     Buoyancy --> Forces["Apply Archimedean Force & Hydrodynamic Drag to RigidBody"]
 ```
 
@@ -125,7 +127,7 @@ flowchart TD
 
 Because JavaScript uses 64-bit float numbers (`double`) while GPU shaders evaluate in 32-bit floats (`highp f32`), the `OpenWaterSurfaceProbe` enforces single-precision semantics using `Math.fround`:
 
-- Parity tolerance between `OpenWaterSurfaceProbe` and GPU transform feedback is verified at $< 0.12 \, \text{mm}$ across standard test suites (`npm run probe:gpu-parity`).
+- Parity between `OpenWaterSurfaceProbe` and GPU transform feedback is verified with `npm run probe:gpu-parity` (measured SwiftShader deviation around $10^{-4} \, \text{m}$; the script exits non-zero if a sample exceeds its bound).
 
 ### 4.2 Horizontal Inverse Solving (Newton-Raphson)
 

@@ -14,43 +14,58 @@ Every level manifest conforms to the engine's JSON Schema (`public/schemas/level
 
 ```json
 {
-  "scene": "koje42",
-  "items": [
+  "$schema": "../../../../../public/schemas/level.schema.json",
+  "id": "koje_42",
+  "name": "Bunker Koje 42 Arenberg",
+  "version": "1.0.0",
+  "props": [
     {
-      "id": "bunker_bed_01",
-      "kit": "flakturm",
-      "reference": "bunker_bunk_bed",
-      "position": [-1.2, 0.0, 1.8],
-      "rotation": [0.0, 1.5708, 0.0],
-      "scale": [1.0, 1.0, 1.0]
-    },
+      "id": "MetalDesk",
+      "kitProp": "bunker/metal_desk",
+      "position": [-0.75, 0.403, -0.982],
+      "rotation": [0, 1.570796, 0],
+      "scale": 1.2,
+      "materialOverrides": { "roughness": 0.75, "metallic": 0.45 }
+    }
+  ],
+  "decals": [
     {
-      "id": "decal_hazard_floor",
-      "kit": "flakturm",
-      "reference": "decal_hazard_stripes",
-      "parent": "bunker_bed_01",
-      "position": [0.0, 0.02, 0.5],
-      "rotation": [1.5708, 0.0, 0.0],
-      "scale": [1.2, 0.4, 0.1]
+      "id": "Decal_Koje42Sign",
+      "kitDecal": "flakturm/sign_koje42",
+      "position": [-2.34, 1.75, 1.0],
+      "rotation": [1.570796, 1.570796, 0]
     }
   ]
 }
 ```
 
+A complete real example: `apps/sample-apps/the-whisper/scenes/prologue/koje42.level.json`.
+
 ### Core Schema Fields
 
 | Field | Type | Required | Description |
 | :--- | :--- | :---: | :--- |
-| `scene` | `string` | Yes | Identifier of the level / scene. |
-| `items` | `Array<Item>` | Yes | List of prop instances, kits, lights, or decals in world space. |
-| `items[].id` | `string` | Yes | Unique instance name within the scene. |
-| `items[].kit` | `string` | Yes | Name of the asset kit (e.g. `flakturm`, `industrial`, `victorian`). |
-| `items[].reference` | `string` | Yes | Identifier of the asset in the kit's manifest (`meta.json`). |
-| `items[].position` | `[x, y, z]` | Yes | Placement coordinates (world space, or local to `parent` if defined). |
-| `items[].rotation` | `[x, y, z]` | No | Euler rotation angles in radians (XYZ order). Defaults to `[0, 0, 0]`. |
-| `items[].scale` | `[x, y, z]` | No | Scale factors along X, Y, Z. Defaults to `[1, 1, 1]`. |
-| `items[].parent` | `string` | No | ID of another item to attach to hierarchically. |
-| `items[].socket` | `string` | No | Named socket on the parent prop (requires `parent`). |
+| `id` | `string` | Yes | Identifier of the level / scene. |
+| `name` | `string` | Yes | Display name. |
+| `version` | `string` | Yes | Semver version of the manifest. |
+| `description` | `string` | No | Free-text description. |
+| `props` | `Array<PropPlacement>` | Yes | Kit prop instances. |
+| `decals` | `Array<DecalPlacement>` | No | Projected decals (see [Decals](./decals.md)). |
+| `lights` | `Array<Light>` | No | Scene lights. |
+| `hotspots` | `Array<Hotspot>` | No | Interaction hotspots. |
+| `environment` | `object` | No | Environment settings, e.g. `surfaces[]`. |
+| `stageZone` | `object` | No | 2.5D walkable zone. |
+| `props[].id` | `string` | Yes | Unique instance name within the scene. |
+| `props[].kitProp` | `string` | Yes | `"<kit>/<prop>"`, e.g. `bunker/metal_desk`; resolved through the kit's `kit.json`. |
+| `props[].position` | `[x, y, z]` | Yes | World-space placement. |
+| `props[].rotation` | `[x, y, z]` | No | Euler angles in radians (XYZ). |
+| `props[].scale` | `number` | No | Uniform scale factor. |
+| `props[].lightOverrides` / `materialOverrides` | `object` | No | Per-instance overrides of the prop's lights / materials. |
+| `decals[].kitDecal` | `string` | Yes | `"<kit>/<decal>"`, e.g. `flakturm/sign_koje42`. |
+| `decals[].parent` | `string` | No | ID of a prop to attach the decal to. |
+| `decals[].socket` | `string` | No | Named socket on the parent prop (requires `parent`). |
+
+The authoritative field list (including `size`, `fade`, `opacity`, `priority`, `tags` on decals) is `$defs` in `public/schemas/level.schema.json`.
 
 ---
 
@@ -79,10 +94,10 @@ Small World Machine guarantees the integrity of all level files through automate
 All `*.level.json` files **must reside under `apps/`** (e.g. `apps/sample-apps/the-whisper/scenes/prologue/`).
 
 ### Test Coverage
-[`packages/engine/tests/loaders/LevelValidation.test.ts`](file:///packages/engine/tests/loaders/LevelValidation.test.ts) recursively scans the entire `apps/` tree and enforces:
+`packages/engine/tests/loaders/LevelValidation.test.ts` recursively scans the entire `apps/` tree and enforces:
 1. **Schema Compliance:** Validates every level against `public/schemas/level.schema.json` via Ajv (Draft 2020-12).
-2. **Kit & Prop Integrity:** Verifies that every referenced `kit` exists in `public/assets/kits/` and that the specified `reference` is registered in that kit's `meta.json`.
-3. **Socket Veracity:** Ensures that any referenced `socket` actually exists on the parent prop.
+2. **Kit & Prop Integrity:** Verifies that every `kitProp` is registered in its kit's `kit.json` and that the referenced `meta` file exists.
+3. **Decal Integrity:** Verifies every `kitDecal` including its map files (`file`/`normal`/`orm`/`emission` under `decals/`), that a decal's `parent` is a prop ID, and that a `socket` exists in the parent's `meta.sockets`.
 
 If an asset is deleted, renamed, or misspelled, CI immediately rejects the commit.
 
@@ -94,13 +109,13 @@ When integrating external 3D models (from photogrammetry, artists, or generative
 
 ### Discrepancies in Dimensions vs. Mesh Scale
 External generation pipelines often write incorrect metadata bounds. For instance:
-* A model's `meta.json` may state `1.8 × 2.2 × 0.25 m`, but the actual vertices of the root mesh render at `0.92 × 1.0 × 0.94 m`.
+* A model's `meta.json` (per-prop metadata; the kit manifest itself is `kit.json`) may state `1.8 × 2.2 × 0.25 m`, but the actual vertices of the root mesh render at `0.92 × 1.0 × 0.94 m`.
 * **Remedy:** Always verify the visual fit against reference human-scale props (such as doorways, beds, or characters). If a prop is non-articulated (e.g. a static blast door), compensate via explicit scale in `*.level.json`. If articulation is needed, source or export a clean mesh with the origin at the hinge pivot.
 
 ### Projected Box Decals vs. Plane Overlays
-Small World Machine supports hardware-accelerated **projected box decals** ([ADR 0029](/adr/0029-projected-box-decals), see [Decal Guide](./decals.md)):
+Small World Machine supports hardware-accelerated **projected box decals** ([ADR 0029](/adr/0029-decal-system), see [Decal Guide](./decals.md)):
 * **Box Decals (`Decal`, `DecalMaterial`):** Project directly onto arbitrary opaque surfaces using the depth/normal buffer on WebGL2 and WebGPU.
-* **Primitive Quad Workaround (WebGL1):** If targeting WebGL1 where MRT/depth sampling is unavailable, decals can fallback to a transparent quad (`Plane` + `StandardMaterial` with `transparent: true`, `diffuseMap = alphaMap`, `depthWrite = false`, `cullMode = NONE`).
+* **WebGL1:** Where MRT/depth sampling is unavailable, decals can be baked into meshes (`bakeDecalMesh` / `bakeSceneDecals`, see [Decal Guide](./decals.md)) or fall back to a transparent quad (`Plane` + `StandardMaterial` with `transparent: true`, `diffuseMap = alphaMap`, `depthWrite = false`, `cullMode = NONE`).
 
 ### Coordinate System & Primitive Orientation
 Remember the engine's core coordinate system:

@@ -13,13 +13,13 @@ The `Forge` class is an overlay that hosts draggable, resizable windows containi
 Small World Machine ships with several built-in Forge tools to speed up your workflow:
 
 1. **[Pixler](/guides/pixler):** A retro 2D pixel-art editor for drawing sprites directly in-game. Offers a full UI toolbar with pencil, bucket fill, color picker, and line tool. Supports symmetry mode (X/Y axis), automatic edge trimming, canvas panning, mirroring, and full undo/redo history.
-2. **[Xtractor](/guides/xtractor):** An image cropping/slicing tool that can hand crops directly to Pixler. Includes a mock AI-assistant UI as a starting point for integrating a real vision-model backend.
+2. **[Xtractor](/guides/xtractor):** An image cropping/slicing tool that can hand crops directly to Pixler. Includes an AI chat panel (Gemini, OpenAI, Claude, Ollama or custom provider) that triggers deterministic image actions.
 3. **[Map Generator](/guides/map-generator):** A visual grid editor for painting generic maps/levels and exporting them as `GridLevelBuilder`-compatible ASCII strings.
-4. **[Maker](/guides/maker):** A standalone 3D world and scene editor with glTF 2.0 + `SWM_*` persistence, transform gizmos, snapping, prefabs, and full undo/redo.
+4. **[Maker](/guides/maker):** A standalone (not a `ForgeTool`, not docked by `attachDevTools`) 3D world and scene editor with glTF 2.0 + `SWM_*` persistence, transform gizmos, snapping, prefabs, and full undo/redo.
 5. **[Material Studio](/guides/material-studio):** A PBR texture map generator that derives normal/roughness/AO/etc. maps from a single diffuse image and previews them on a sample mesh.
 
 ::: tip Standalone tool pages
-Maker, Pixler, Xtractor, and Map Generator are also available as **standalone web pages** (`/tools/maker.html`, `/tools/pixler.html`, `/tools/map-gen.html`, `/tools/xtractor.html`) that run independently, without needing a game canvas or Forge overlay — the recommended path for a dedicated asset-editing workflow. Material Studio is available docked in the Forge overlay of a running engine, or as a standalone generator tool.
+Maker, Pixler, Xtractor, and Map Generator are also available as **standalone web pages** (`/tools/maker.html`, `/tools/pixler.html`, `/tools/map-gen.html`, `/tools/xtractor.html`) that run independently, without needing a game canvas or Forge overlay — the recommended path for a dedicated asset-editing workflow. Material Studio is available docked in the Forge overlay of a running engine, or as the standalone PBR generator `/tools/pbr-gen.html`.
 :::
 
 ::: tip Own package since ADR 0024
@@ -89,6 +89,13 @@ export class MyCustomTool extends ForgeTool {
       console.log("Custom tool logic executed!");
     });
   }
+
+  // Required by ForgeTool: serialize / restore the tool's state
+  public getState(): unknown {
+    return null;
+  }
+
+  public setState(_state: unknown): void {}
 }
 ```
 

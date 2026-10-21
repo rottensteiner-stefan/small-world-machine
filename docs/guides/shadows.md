@@ -90,10 +90,8 @@ radius based on that distance — shadows read as sharp right at the contact poi
 progressively softer the farther they are from their caster, instead of being uniformly soft
 everywhere. This only applies to the **primary** cascade a fragment falls into; the secondary
 cascade-blend sample (see above) still uses fixed-radius PCF, so as not to double the cost in
-the blend zone. **Spot light shadows use only fixed-radius PCF** — no PCSS — since they are
-typically smaller/less prominent in today's scenes; see
-`docs/research/aaa-engine-techniques.md` for the exact scope and the reasoning behind that
-trade-off.
+the blend zone. **Spot light shadows use PCSS on WebGPU only**; on WebGL2 they stay at fixed-radius PCF. See
+[ADR 0006](/adr/0006-pcss-directional-light-only) for the scope. Only the first 4 spot lights get a shadow map.
 
 ## Tuning tips
 

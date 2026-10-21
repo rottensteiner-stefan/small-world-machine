@@ -39,14 +39,15 @@ Further controls:
 
 - **Resize** — set new `W`/`H` values and click Resize; existing content is preserved (anchored top-left), the new area is filled with Empty.
 - **Bucket Fill (Empty)** — despite the name, not a flood-fill from a click point. It replaces *every* Empty cell (`.`) across the entire grid with the currently selected tile — useful for laying down a base floor before detailing.
-- **Clear Map** — resets every cell to Empty (asks for confirmation first).
-- **Export String / Import String** — round-trips the map through a text field as a simple, newline-separated character grid, one character per cell.
+- **Clear Map** — resets every cell to Empty; the button asks for a second click within a few seconds ("Wirklich löschen? (nochmal klicken)") instead of a blocking dialog.
+- **Export** — the "Map kopieren" button copies the map to the clipboard as a newline-separated character grid, one character per cell.
+- **Import** — a Universal IO dropzone ("Map, Level, Bild oder Text ablegen") accepts `.txt`, `.map`, `.json`, `.png`, `.zip`, a URL or `Cmd/Ctrl+V`. Images are quantized to a grid (`quantizeImageToGrid` in `core/map.ts`; images up to 128×128 keep their size).
 
 There are no keyboard shortcuts — painting is entirely mouse-driven — and no undo/redo.
 
 ## Exporting into a game
 
-Click **▶ Play in YAD** to save the current map to `localStorage` (key `yad_custom_map`) and open the [YAD](/guides/custom-game) showcase in a new tab, which reads that key on startup and uses it instead of its bundled default level. This is the only code path that writes that key; Map Generator and YAD only ever read it back.
+Click **▶ Play in YAD** to save the current map to `localStorage` (key `yad_custom_map`) and open the [YAD](/guides/custom-game) showcase in a new tab, which reads that key on startup and uses it instead of its bundled default level. This is the only code path that writes that key; YAD reads it back, and `attachDevTools` loads it into the docked Map Generator on startup.
 
 ::: warning Map Generator's palette and YAD's legend don't fully line up
 YAD's actual level legend uses `1`/`2`/`3` for health/armor/weapon items — it never reads `I`. And although YAD configures `lavaFloorChars: ["T"]`, its legend has no `T` entry, so a `T` tile painted here currently falls back to normal floor in YAD instead of rendering as lava. If you're building a level specifically for YAD, treat the editor's palette as a starting point, not a guaranteed 1:1 mapping — check YAD's legend in `apps/sample-apps/yad/App.ts`'s `setupScene()` to see what's actually rendered.

@@ -25,7 +25,7 @@ A close relative lives at `/tools/pbr-gen.html` — it duplicates the same image
 
 ## Loading a source image
 
-Drag and drop an image onto the dropzone, click it to open a file picker dialog, or paste directly (`Ctrl/Cmd+V` while Material Studio is the topmost Forge window). PNG/JPG/WebP up to 8MB. If nothing is loaded, a bundled stone texture is used by default — falling back to a synthetic, procedural noise texture if even that fails to load.
+Drag and drop onto the dropzone (or anywhere on the window), click it to open a file picker, or paste directly (`Ctrl/Cmd+V`). The `UniversalIngestDropzone` accepts images, PBR sets, ZIP archives, SVG and text/data URLs, up to 50 MB by default (`SecurityValidator`). The map derivation and presets live headless in `packages/tools/src/core/material.ts` (`derivePbrMaps`, `MATERIAL_STUDIO_PRESETS`). If nothing is loaded, a bundled stone texture is used by default — falling back to a synthetic, procedural noise texture if even that fails to load.
 
 ## Generating maps
 

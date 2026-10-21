@@ -30,10 +30,11 @@ The `EngineOptions` object defines the entire state of the core engine. Below ar
 ### Root options
 
 - `canvasId` (string): The ID of the HTML canvas element to render into.
-- `rendererType` (string): The preferred renderer (e.g. `BEST`, `WEB_GPU`, `WEB_GL2`).
-- `projectionType` (string): Either `PERSPECTIVE` or `ORTHOGRAPHIC`.
+- `rendererType` (string): The preferred renderer (e.g. `BEST`, `WEB_GPU`, `WEB_GL2`, `CANVAS`).
+- `projectionType` (string): One of `PerspectiveProjection`, `OrthographicProjection` or `ObliqueProjection` (see `ProjectionType`).
 - `fullscreen` (boolean): Whether the canvas should automatically scale to the window size.
-- `gravity` (number[]): A 3-element array defining the physics gravity vector (e.g. `[0, -9.81, 0]`).
+- `gravity` (number[]): A 3-element array defining the physics gravity vector (e.g. `[0, -9.81, 0]`). Only takes effect with `enablePhysics: true` (default `false`).
+- `enablePhysics` (boolean), `enableOcclusionCulling` (boolean), `width` / `height` (number), `inputMode`: further root options, see `EngineOptions`.
 
 ### Renderer backend attributes (`renderer`)
 
@@ -80,7 +81,7 @@ Configures the post-processing pipeline. General pipeline settings (`enabled`, `
 "postProcessing": {
   "enabled": true,
   "effects": {
-    "toneMapping": { "enabled": true, "mode": "aces", "exposure": 1.0, "gamma": 2.2 },
+    "toneMapping": { "enabled": true, "mode": 3, "exposure": 1.0, "gamma": 2.2 },
     "vignette": { "enabled": true, "offset": 0.8, "darkness": 0.5, "roundness": 2.0 },
     "grain": { "enabled": true, "intensity": 0.05 },
     "bloom": { "enabled": true, "threshold": 1.0, "softThreshold": 0.5, "intensity": 1.0, "radius": 0.85 },
@@ -92,9 +93,10 @@ Configures the post-processing pipeline. General pipeline settings (`enabled`, `
 }
 ```
 
-> **Hinweis — nicht vollständig:** Das `effects`-Schema oben ist eine *Auswahl*; dieselbe flache
-> `effects`-Struktur enthält weitere Effekte (`flash`, `colorGrading`, `gravitationalLensing`,
-> `lightShafts`), die optional im selben Stil konfigurierbar sind.
+> **Note — not exhaustive:** The `effects` schema above is a *selection*; the same flat
+> `effects` structure contains further effects (`flash`, `colorGrading`, `gravitationalLensing`,
+> `lightShafts`, `volumetricFog`, `depthOfField`) that can be configured in the same style.
+> `toneMapping.mode` here is the numeric `ToneMappingMode` (`NONE`=0, `REINHARD`=1, `CINEON`=2, `ACES_FILMIC`=3); only `quality.toneMapping` takes strings such as `"aces"`.
 
 Every field is optional and only overrides that specific value on top of the effect's own defaults — fields that shouldn't be changed don't need to be specified.
 
@@ -104,10 +106,10 @@ Every field is optional and only overrides that specific value on top of the eff
 - **`taa`** — simplified temporal anti-aliasing: sub-pixel camera jitter plus an exponential history blend, no motion-vector reprojection. Smooths edges in static/slow-moving scenes; visible ghosting during fast motion. WebGL/WebGPU only.
 - **`motionTrail`** — a *deliberate* ghost/afterimage effect (not anti-aliasing) that reuses the same history-blend mechanism as `taa` with a significantly higher feedback value. WebGL/WebGPU only.
 
-### Projections & audio
+### Projections
 
-- `projection`: Camera options such as `fov`, `near`, `far`, etc.
-- `audio`: Sound configuration (e.g. global volume, distance model).
+- `projectionOptions`: Camera options `fov` (in **radians**), `near`, `far`, `orthoSize`.
+- `projectionInstance`: A ready-made projection instance instead of options.
 
 ## Full configuration example
 
@@ -115,7 +117,7 @@ Every field is optional and only overrides that specific value on top of the eff
 {
   "canvasId": "SmallWorldMachine",
   "rendererType": "BEST",
-  "projectionType": "PERSPECTIVE",
+  "projectionType": "PerspectiveProjection",
   "fullscreen": true,
   "gravity": [0, -9.81, 0],
   "quality": {

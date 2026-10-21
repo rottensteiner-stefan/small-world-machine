@@ -2,7 +2,7 @@
 
 ## [0.115.3] - 2026-10-21
 
-### "There are two ways of spreading light: to be the candle or the mirror that reflects it." - Edith Wharton
+### "Clarity is the counterbalance of profound thought." - Luc de Clapiers, Marquis de Vauvenargues
 
 - **Features:**
   - *Showcase 37 — „Living Light"-Pass:* Pendelleuchte, Kerzencluster, Kaminkluster und Stehlampe flackern jetzt deterministisch und organisch (überlagerte Sinus-Drafts + langsames Breathen, kein `Math.random`) — die Szene wird spürbar lebendig statt statisch ausgeleuchtet. Zugleich der „Filter-Look" zurückgenommen: Vignette (0.68→0.5, Offset 0.88), Sättigung (0.95→0.9), Bloom-Schwelle (0.8→0.95, nur noch echte Emitter blühen), Exposure (1.05→1.02) und Wärme-Grade leicht reduziert; Ambiente minimal angehoben gegen Total-Voids; Pendel-Emissiv (1.1→0.8) und Pendel-/Kerzen-Intensität (3.6→2.6 / 0.75→0.52) kalibriert. Neuer QA-Hook `window.__qaSwm37` (Lebend-Probe der Lichtwerte + `faceHearth()`-Pose) für automatisierte Live-Gates über alle Renderer-Tiers.
@@ -12,6 +12,7 @@
   - *Showcase 37 — Rosa Akzentlampe wärmer/gedämpfter:* Schirm (Magenta → warmer Staubroton), Lichtfarbe (Magenta → Rose) und -intensität (0.45→0.28) — der kollidierende Magenta-Wash an der Wand ist weg, der Akzent bleibt dezenter (User-Entscheid).
   - *Showcase 37 — Schatten ent-blockt:* Pendel-ShadowMap 1024→2048 reduziert das Treppenstufen-Aliasing an Sofa/Treppe deutlich (Optik-Probe: „much cleaner and softer"). Hinweis ehrlich dokumentiert: die Engine filtert Schatten nur über kontaktbasierten 3×3-PCF (kein cinematischer Soft-Shadow) — echte Schwarzblur-/VSM-Schatten sind Roadmap.
 - **Housekeeping & Docs:**
+  - *Guides-Audit (`docs/guides/`):* Alle 33 Guides gegen den Code geprüft und veraltete Stellen korrigiert — u. a. `physics` (CCD jetzt Kugel/Box/OBB, `setupScene()` statt `init()`, `physics:trigger`/`physics:collision`), `configuration` (numerischer `toneMapping.mode`, `projectionOptions`, echte `projectionType`-Werte), `scene-assembly` (Manifest nach `level.schema.json`: `props`/`kitProp`, `decals`/`kitDecal`), `xtractor` (echter KI-Chat mit Action Chips), `volumetric-fog` (`FogVolumeShape.BOX`, Defaults, Masken-Limit 8), `map-generator`, `maker`, `forge`, `pixler`, `audio`, `eventbus`, `2-5d-scenes`, `custom-game`, `extensions`, `toolchain`. ADR 0005 mit Status-Hinweis „überholt" versehen, tote `file:///`- und ADR-Links repariert, fehlende Guides in die VitePress-Sidebar aufgenommen.
   - *Herd-Erkenntnis festgehalten:* Der Feuerkasten bleibt bewusst die dunkle Basisöffnung — primitive Emissiv-Geometrie (Flächen/Quader/Glutkugeln) liest ohne Partikel-/VFX-System stets als Artefakt (weißer Balken/Würfel/LED-Streifen); das „Feuer" wird über das flackernde Kaminlicht ausgedrückt. Roadmap-Notiz: echte Flammen brauchen ein Engine-VFX-/Partikelsystem.
 
 ## [0.115.2] - 2026-10-21

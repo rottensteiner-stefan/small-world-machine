@@ -6,7 +6,7 @@ Small World Machine is designed as a multi-application, multi-showcase monorepo.
 
 ## 1. Directory Structure
 
-Every standalone app or showcase under `apps/<category>/<app-name>/` (e.g. `apps/sample-apps/the-whisper/` or `apps/showcases/10/`) maintains a dedicated `docs/` subfolder:
+Every standalone app and every larger showcase under `apps/<category>/<app-name>/` (e.g. `apps/sample-apps/the-whisper/` or `apps/showcases/10/`) maintains a dedicated `docs/` subfolder (small showcases may go without one; showcase 27 has only a `log.md`). Extra files such as `story.md` or `assets/` are allowed next to the two core artifacts:
 
 ```
 apps/<category>/<app-name>/
@@ -55,10 +55,15 @@ apps/<category>/<app-name>/
 
 | Application | Path | Key Focus |
 | :--- | :--- | :--- |
-| **The Whisper — A Viennese Requiem** | [`apps/sample-apps/the-whisper/docs/log.md`](file:///apps/sample-apps/the-whisper/docs/log.md) | Narrative graphic-noir RPG, 2.5D diorama rooms, level schemas. |
-| **Minceraft (Voxel Sandbox)** | [`apps/sample-apps/voxel-prototype/docs/log.md`](file:///apps/sample-apps/voxel-prototype/docs/log.md) | Voxel engine, worker meshing, delta persistence, daylight model. |
-| **YAD (Yet Another Dungeon)** | [`apps/sample-apps/yad/docs/log.md`](file:///apps/sample-apps/yad/docs/log.md) | 2.5D dungeon crawler, raycast physics, torch illumination. |
-| **Light Cycle Arena** | [`apps/sample-apps/light-cycle-arena/docs/log.md`](file:///apps/sample-apps/light-cycle-arena/docs/log.md) | High-speed 3D Tron grid, neon post-processing, light trails. |
-| **Showcase 10 (Waterworld Gallery)** | [`apps/showcases/10/docs/log.md`](file:///apps/showcases/10/docs/log.md) | 16-pool liquid gallery, Gerstner waves, buoyancy probes, PBR grass. |
-| **Showcase 39 (Atmospheric Sanctum)** | [`apps/showcases/39/docs/log.md`](file:///apps/showcases/39/docs/log.md) | Froxel 3D volumetric fog, interior carving, animated 3D mist. |
-| **Showcase 40 (Decal Probe)** | [`apps/showcases/40/docs/log.md`](file:///apps/showcases/40/docs/log.md) | Projected box decals, normal buffer inspection, decal sockets. |
+| **The Whisper — A Viennese Requiem** | [`apps/sample-apps/the-whisper/docs/log.md`](../../apps/sample-apps/the-whisper/docs/log.md) | Narrative graphic-noir RPG, 2.5D diorama rooms, level schemas. |
+| **Minceraft (Voxel Sandbox)** | [`apps/sample-apps/voxel-prototype/docs/log.md`](../../apps/sample-apps/voxel-prototype/docs/log.md) | Voxel engine, worker meshing, delta persistence, daylight model. |
+| **YAD (Yet Another Dungeon)** | [`apps/sample-apps/yad/docs/log.md`](../../apps/sample-apps/yad/docs/log.md) | 2.5D dungeon crawler, raycast physics, torch illumination. |
+| **Light Cycle Arena** | [`apps/sample-apps/light-cycle-arena/docs/log.md`](../../apps/sample-apps/light-cycle-arena/docs/log.md) | High-speed 3D Tron grid, neon post-processing, light trails. |
+| **Showcase 10 (Waterworld Gallery)** | [`apps/showcases/10/docs/log.md`](../../apps/showcases/10/docs/log.md) | 16-pool liquid gallery, Gerstner waves, buoyancy probes, PBR grass. |
+| **Showcase 39 (Atmospheric Sanctum)** | [`apps/showcases/39/docs/log.md`](../../apps/showcases/39/docs/log.md) | Froxel 3D volumetric fog, interior carving, animated 3D mist. |
+| **Showcase 40 (Decal Probe)** | [`apps/showcases/40/docs/log.md`](../../apps/showcases/40/docs/log.md) | Projected box decals, normal buffer inspection, decal sockets. |
+| **Showcase 22 (Gargantua / Black Hole)** | [`apps/showcases/22/docs/log.md`](../../apps/showcases/22/docs/log.md) | Black hole rendering. |
+| **Showcase 24 (Shader Gallery)** | [`apps/showcases/24/docs/log.md`](../../apps/showcases/24/docs/log.md) | Shader gallery. |
+| **Showcase 27 (Shadow Sanctuary)** | [`apps/showcases/27/docs/log.md`](../../apps/showcases/27/docs/log.md) | Shadow showcase (log only, no dossier). |
+| **Showcase 28 (Quantum Refraction Lab / Optical Prism)** | [`apps/showcases/28/docs/log.md`](../../apps/showcases/28/docs/log.md) | Refraction / optical prism. |
+| **Showcase 41 (Metal Wall Relief & Assemblage Art)** | [`apps/showcases/41/docs/log.md`](../../apps/showcases/41/docs/log.md) | Metal wall relief and assemblage art. |

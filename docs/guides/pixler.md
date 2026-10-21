@@ -58,10 +58,10 @@ Full shortcut reference: arrow keys/WASD move a cursor cell by cell (drawing whi
 
 - **Copy as Base64** — the 📋 button copies a PNG data URL to the clipboard.
 - **Copy as Image** — the 💾 button writes an actual PNG blob to the clipboard, so you can paste it into other apps (or back into Pixler, or another tool).
-- **Paste** — `Ctrl/Cmd+V`, while Pixler is the topmost visible Forge window, loads whatever is on your clipboard.
+- **Import** — Pixler embeds a `UniversalIngestDropzone`: file picker, folder, URL, drag & drop onto the window, and paste (`Ctrl/Cmd+V`). It accepts images, SVG (rasterized to 64 px), PBR sets, ZIP archives, files and text.
 - **From Xtractor** — see [Xtractor](/guides/xtractor)'s "Send to Pixler" button, which pushes a crop directly to the Pixler instance listening on the shared event bus.
 
-There is no filesystem save/load — export only happens via the clipboard — and no sprite sheet/animation frame support; this is an editor for single static images.
+There is no filesystem save — export only happens via the clipboard — and no sprite sheet/animation frame support; this is an editor for single static images.
 
 ## Limitations
 
@@ -69,4 +69,4 @@ There is no filesystem save/load — export only happens via the clipboard — a
 - **No rotate**, only horizontal/vertical mirroring.
 - **Bucket Fill ignores symmetry mode.**
 - **Sprite content does not persist across reloads in the docked Forge window** — `getState()`/`setState()` exist on the class, but the Forge window manager never calls them, so only the window's open/closed state survives a reload, not what you drew.
-- The standalone page cannot receive pushes from Xtractor (no shared event bus) and has no paste routing of its own beyond what the class itself provides.
+- The standalone page cannot receive pushes from Xtractor (no shared event bus); drop and paste work there as well, since they are part of the class.

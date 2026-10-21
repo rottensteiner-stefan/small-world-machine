@@ -7,7 +7,9 @@ Small World Machine uses a flexible, physically-based rendering (PBR) foundation
 - `StandardMaterial`: The primary PBR material, based on the Cook-Torrance BRDF model. Supports `color`, `metallic`, `roughness`, and diffuse, normal, roughness, and emissive textures.
 - `PhongMaterial` & `LambertMaterial`: Non-PBR specular and diffuse materials, for classic stylized rendering.
 - `BasicMaterial` & `WireframeMaterial`: Unlit materials for wireframe debugging, UI elements, or flat stylized assets.
-- `GlassMaterial` & `FrostglassMaterial`: Real-time screen-space refraction (SSR) with configurable `ior`, `thickness`, and `transmission`.
+- `GlassMaterial` & `FrostglassMaterial`: Glass and frosted-glass materials with configurable `ior`, `thickness`, and `transmission`.
+- `DecalMaterial`: Projected box decals (see [Decals](./decals.md)).
+- `CustomShaderMaterial`: User-supplied shader sources (see [Shader Importers](./shader-importers.md)).
 - `SpriteMaterial`: 2D/2.5D camera-facing billboards and particles.
 - `RetroScreenMaterial`: A specialized material that mimics old CRT monitors with scanlines and chromatic aberration.
 

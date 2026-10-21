@@ -39,14 +39,16 @@ The camera system supports several strategy patterns:
 
 1. **Fixed Camera:** Constant position and target. Used for isometric backdrops.
 2. **Smooth Follow:** Linearly interpolates position and target toward a target Object3D, damping the focus.
-3. **FPS Camera:** Full mouse-/keyboard-relative look control and WASD movement. Supports terrain-height snapping.
-4. **Isometric Camera:** Parallel orthographic projections with pixel-precise viewport snapping.
+3. **FPS Camera:** Full mouse-/keyboard-relative look control and WASD movement, with a configurable `heightOffset`.
+4. **Isometric Camera:** Parallel orthographic projections; pixel-precise viewport snapping is opt-in (`IsometricStrategy.pixelPerfect`, default `false`).
+5. **Manual (default), HybridSync, Stiff:** `ManualCamera` is the default strategy (`CameraStrategyType.MANUAL`); `HYBRID_SYNC` and `STIFF` are further variants.
 
 ```typescript
 // Lock in the FPS strategy during setup
 this.camera.setStrategy(CameraStrategyType.FPS);
 this.camera.addBehavior(
   new FPSController({
+    input: this.input,
     moveSpeed: 8.0,
     enableCollision: false,
     scene: this.scene,
@@ -72,7 +74,7 @@ All geometries dynamically compute an axis-aligned bounding box (AABB). Frustum 
 When creating 2.5D matte paintings, UI backgrounds, or billboards:
 
 1. **Use `Plane` geometry:** Always use `Plane({ width, height })` for flat backgrounds. `Plane` generates standard UV coordinates ($U \in [0, 1]$ left to right, $V \in [1, 0]$ top to bottom), facing $+Z$.
-2. **WebGL texture vertical flip (`flipY`) & WebP format:** DOM/HTML images have their pixel origin $(0,0)$ at the top left, while WebGL texture coordinates start at $(0,0)$ at the bottom left. Always pass `{ flipY: true }` when loading textures. Prefer **WebP (`.webp`)** over JPEG for 2D art, to avoid dark block artifacts and to enable alpha-channel transparency for foreground layers:
+2. **WebGL texture vertical flip (`flipY`) & WebP format:** DOM/HTML images have their pixel origin $(0,0)$ at the top left, while WebGL texture coordinates start at $(0,0)$ at the bottom left. `Texture.fromUrl` already defaults to `flipY: true`; pass it explicitly only for clarity or to override it. Prefer **WebP (`.webp`)** over JPEG for 2D art, to avoid dark block artifacts and to enable alpha-channel transparency for foreground layers:
    ```typescript
    const bgTex = await Texture.fromUrl("/assets/path/image.webp", { flipY: true });
    ```

@@ -31,7 +31,7 @@ Practical, in-depth guides for each subsystem and tool of the Small World Machin
 | [Physics & Rigid Bodies](./physics.md) | Collision detection, solvers, constraints/joints. |
 | [Audio System](./audio.md) | 3D audio, mixer, procedural synthesizer. |
 | [State Machines (FSM)](./state-machines.md) | Zero-allocation finite state machine framework. |
-| [EventBus & Game Loop](./eventbus.md) | Central event dispatch and render loop. |
+| [EventBus](./eventbus.md) | Central, per-instance event dispatch. |
 | [Modular Ecosystem & Layering](./extensions.md) | Core engine vs. ecosystem package boundaries (see also [Extensions](/extensions/)). |
 | [Building Your Own Game](./custom-game.md) | End-to-end guide for a new project built on the engine. |
 | [App Documentation & Living Logs](./app-docs-convention.md) | Standard for apps/<app>/docs/ structure: concept-dossier.html (visual spec) and log.md (living memory). |
@@ -50,9 +50,9 @@ Practical, in-depth guides for each subsystem and tool of the Small World Machin
 
 ## Standalone Reference Material
 
-Standalone HTML explainer pieces linked to from one of the guides above or from a `.agents/skills/` recipe (not part of the VitePress page tree): see [`docs/reference/`](file:///docs/reference/) in the repo.
+Standalone HTML explainer pieces linked to from one of the guides above or from a `.agents/skills/` recipe (not part of the VitePress page tree): see `docs/reference/` in the repo.
 
 | Explainer | Description |
 |---|---|
-| [`docs/reference/2-5d-grundlagen.html`](file:///docs/reference/2-5d-grundlagen.html) | Illustrated fundamentals explainer ("how 2.5D works"). |
-| [`docs/reference/bein-verdeckung.html`](file:///docs/reference/bein-verdeckung.html) | Visual explainer on leg-occlusion in perspective projections. |
+| [`docs/reference/2-5d-grundlagen.html`](../reference/2-5d-grundlagen.html) | Illustrated fundamentals explainer ("how 2.5D works"). |
+| [`docs/reference/bein-verdeckung.html`](../reference/bein-verdeckung.html) | Visual explainer on leg-occlusion in perspective projections. |

@@ -53,7 +53,7 @@ export class MyGame extends SmallWorldMachine {
     });
   }
 
-  protected override init(): void {
+  protected override setupScene(): void {
     this.physics.fixedTimeStep = 1 / 60; // 60 Hz physics tick
     this.physics.solverIterations = 6;   // PGS iterations for stacking stability
   }
@@ -108,7 +108,7 @@ scene.add(box);
                   └────────┬────────┘       └────────┬────────┘
                            │                         │
                            │    Analytical Solver    │
-                           │   (15-Axis SAT / GJK)   │
+                           │   (15-Axis SAT)         │
                            │                         │
                   ┌────────┴────────┐       ┌────────┴────────┐
                   │       OBB       │       │   ConvexHull    │
@@ -191,7 +191,7 @@ projectile.collisionMask = CollisionLayers.DEFAULT | CollisionLayers.ENEMY;
 
 Triggers are physical sensor volumes (`isTrigger = true`) that register overlaps but exert **no physical repulsion force** on bodies.
 
-Small World Machine provides zero-allocation lifecycle events via the global `EventDispatcher`:
+Small World Machine provides zero-allocation lifecycle events via the per-instance event bus (`app.events`, an `EventDispatcherImpl`):
 
 | Event Name | When Fired? | Payload Properties |
 | :--- | :--- | :--- |
@@ -201,6 +201,8 @@ Small World Machine provides zero-allocation lifecycle events via the global `Ev
 | `physics:collision-enter`| On the first physical solid-body contact | `objectA`, `objectB`, `normal`, `depth`, `impulse` |
 | `physics:collision-stay` | On sustained contact / sliding | `objectA`, `objectB`, `normal`, `depth`, `impulse` |
 | `physics:collision-exit` | After the physical contact resolves | `objectA`, `objectB` |
+| `physics:trigger` | On every trigger contact (each step) | `objectA`, `objectB`, `normal`, `depth` |
+| `physics:collision` | On every contact, including trigger pairs (`impulse: 0`) | `objectA`, `objectB`, `normal`, `depth`, `impulse` |
 | `physics:sleep` | When a body transitions to the resting state | `object` |
 | `physics:wakeup` | When a body wakes up from an impact/force | `object` |
 
@@ -414,11 +416,11 @@ scene.joints.push(doorHinge);
 
 ## 10. Continuous Collision Detection (CCD)
 
-For very fast-moving objects (projectiles, balls) that would otherwise skip through thin walls within a single frame (**tunneling**), Small World Machine provides continuous collision detection **for spheres only** via the `SweptSphereCCD` solver — a deliberate, documented scope (see [ADR 0005](../adr/0005-ccd-sphere-only-scope.md)). Boxes (`BoundingBox`), `OBB`s, and rays are *swept against the broadphase bounding volumes* (motion is resolved against the volume hierarchy during narrow-phase), but they do **not** have a dedicated continuous-sweep CCD solver like spheres do:
+For very fast-moving objects (projectiles, balls) that would otherwise skip through thin walls within a single frame (**tunneling**), Small World Machine provides continuous collision detection **for spheres, boxes and OBBs** via the `SweptVolumeCCD` solver (`SweptSphereCCD` remains as a backward-compatible alias; sweeps live in `CollisionSweepSolver`). Rays are not swept bodies; use `raycast` / `sphereCast` for them. The historical sphere-only scope is recorded in [ADR 0005](../adr/0005-ccd-sphere-only-scope.md) and is superseded by this:
 
 ```typescript
 // CCD threshold: how much movement distance (relative to radius) engages CCD
-physics.ccdMotionThreshold = 0.5; // Kicks in once displacement exceeds 50% of the body's own size
+physics.ccdMotionThreshold = 0.5; // Multiple of the body's broad radius (default 1.0); Infinity disables CCD
 ```
 
 ---

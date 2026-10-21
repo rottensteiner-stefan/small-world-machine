@@ -4,7 +4,7 @@
 
 ```
 +-------------------------------------------------------------------------------------------------------+
-|  Header: [Maker - Small World Machine]   [📷1][📷2]..[📷9]   [🧲 0.50m][[][]]   [⬇ Floor]   [Save/Status]      |
+|  Header: [Maker - Small World Machine]   [📷1][📷2]..[📷9]   [🧲 0.50m][[][]]   [⬇ Ground]   [Save/Status]      |
 +-------------------+---------------------------------------------------------------+-------------------+
 | Hierarchy & Add   | Viewport & interactive tools                                  | Inspector         |
 | - Scene tree      | - Orbit camera & 9 quick view bookmarks (1-9 / Ctrl+1-9)      | - Transform       |
@@ -51,8 +51,8 @@ Double-click a decal in the Content Drawer's *Decals* pill (or press <kbd>D</kbd
 
 Limitation: decals are not raycast targets, so a click in the viewport cannot select a stamped decal; select it in the hierarchy panel (the inspector then offers priority, opacity, edge fade and angle fade).
 
-### Snap to floor (<kbd>End</kbd> / `⬇ Floor`)
-Pressing <kbd>End</kbd> (or clicking `⬇ Floor`) computes the exact lower world-space bounding-box bound (`min.y`) for the entire current selection (single object or multi-selection cluster) and moves it vertically so its bottom edge sits exactly flush with `Y = 0` (the world floor plane).
+### Snap to ground (<kbd>End</kbd> / `⬇ Ground (End)`)
+Pressing <kbd>End</kbd> (or clicking `⬇ Ground (End)`) computes the exact lower world-space bounding-box bound (`min.y`) for the entire current selection (single object or multi-selection cluster) and moves it vertically so its bottom edge sits exactly flush with `Y = 0` (the world floor plane).
 
 ---
 
@@ -171,10 +171,10 @@ Maker includes a built-in ASCII tilemap converter (`MapImportPanel.ts`) for quic
 
 ```
 ASCII source:              3D world generation:
-##########                 W / G -> Wall block (2m tall)
-#.P...+...E#               .     -> Floor tile (implicit, no marker)
-#..b.......#               +     -> Door marker
-##########                  P     -> Player-start marker
+WWWWWWWWWW                 W / G -> Wall block (2m tall)
+W.P...+...EW               .     -> Floor tile (implicit, no marker)
+W..b.......W               +     -> Door marker
+WWWWWWWWWW                  P     -> Player-start marker
                             E     -> Enemy marker
                             b     -> Barrel marker
                             l     -> Torch marker
@@ -195,6 +195,7 @@ Maker uses the browser's native **File System Access API** (`showDirectoryPicker
 - **Frictionless autosave:** every edit (transform change, color adjustment, hierarchy reorder, prefab creation) triggers a debounced (~500ms) write-through directly to `scene.gltf`.
 - **`SWM_*` glTF metadata extensions:** non-standard engine data is stored cleanly in glTF 2.0's `extensions` vendor namespace via a pluggable extension registry (see `docs/adr/0017-gltf-extension-plugin-registry.md`). Currently implemented:
   - `SWM_prefab_instance`: provenance-only record of which Maker prefab a node was instantiated from.
+  - `SWM_decal` and `SWM_lights_ambient`: stamped decals and ambient light data.
   - `SWM_stage_zone`: a 2.5D `StageZone`'s points and display name (see `docs/adr/0016-2-5d-stage-zones-as-a-gltf-extension.md`), giving it a scene-graph presence via `StageZoneMarker`.
   - A node's material is written through native glTF `pbrMetallicRoughness` rather than a custom extension, since `StandardMaterial`'s fields map onto it directly. Behaviors and physics data are not currently round-tripped through the glTF file (`WorldWriter`'s scope is still Phase 0: hierarchy, transforms, one material per mesh, and position-only geometry).
 - **Portability:** the generated `scene.gltf` files can be opened directly in Blender, Babylon.js, Three.js, or loaded straight into the Small World Machine game runtime via `GltfLoader`.
@@ -227,7 +228,7 @@ All scene mutations are tracked on an atomic `UndoStack`:
 | | <kbd>Shift</kbd> + $\uparrow$ / $\downarrow$ or <kbd>PageUp</kbd> / <kbd>PageDown</kbd> | Move selection along the Y axis (height) |
 | | <kbd>Alt</kbd> + arrows | Rotate selection by angle snap ($15^\circ$) |
 | | <kbd>Alt</kbd> + <kbd>Shift</kbd> + arrows | Scale selection by scale snap ($0.25$) |
-| | <kbd>End</kbd> | **Snap to floor:** drop selection flush onto $Y = 0$ floor |
+| | <kbd>End</kbd> | **Snap to ground:** drop selection flush onto $Y = 0$ floor |
 | **Selection & graph** | <kbd>Left-click</kbd> | Select single object |
 | | <kbd>Shift</kbd> / <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + click | Toggle/additive multi-selection |
 | | <kbd>Drag on empty space</kbd> | 2D marquee selection |

@@ -1,6 +1,6 @@
-# EventBus & Game Loop
+# EventBus
 
-In modern 3D applications, UI coupled directly to the 3D engine or the game loop produces spaghetti code and performance bottlenecks. The **Small World Machine** provides a built-in, type-safe, allocation-free **EventBus** (`EventDispatcherImpl`) to cleanly decouple systems.
+In modern 3D applications, UI coupled directly to the 3D engine or the game loop produces spaghetti code and performance bottlenecks. The **Small World Machine** provides a built-in, type-safe, low-allocation **EventBus** (`EventDispatcherImpl`) to cleanly decouple systems.
 
 ## The application EventBus
 
@@ -30,8 +30,8 @@ export const MyGameEvents = {
 } as const;
 ```
 
-::: tip No built-in event registry
-The engine itself does not ship a built-in event registry — there is no `AppEvents` export. Each app defines its own local registry following the pattern above. The YAD sample app is a good reference: `apps/sample-apps/yad/Events.ts` defines a plain `Events` constant (e.g. `Events.DAMAGE = "app:yad:damage"`, `Events.SHOOT = "app:yad:shoot"`) dispatched on the shared `EventDispatcherImpl` bus to decouple gameplay logic from presentation. Define an equivalent registry for your own game rather than looking for one to extend.
+::: tip No built-in app event registry
+The engine only emits its own events — `EventType` (`AUDIO_LOADED`, `LOADER_START`/`PROGRESS`/`END`/`ERROR`) and the `physics:*` events (see [Physics](./physics.md)) — and ships no registry for game events; there is no `AppEvents` export. Each app defines its own local registry following the pattern above. The YAD sample app is a good reference: `apps/sample-apps/yad/Events.ts` defines a plain `Events` constant (e.g. `Events.DAMAGE = "app:yad:damage"`, `Events.SHOOT = "app:yad:shoot"`) dispatched on the shared `EventDispatcherImpl` bus to decouple gameplay logic from presentation. Define an equivalent registry for your own game rather than looking for one to extend.
 :::
 
 ## Dispatching events
