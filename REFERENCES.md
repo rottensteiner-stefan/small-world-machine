@@ -372,6 +372,16 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Source:** ["Triangulation by Ear Clipping" (David Eberly, Geometric Tools)](https://www.geometrictools.com/Documentation/TriangulationByEarClipping.pdf)
 - **Usage:** `FilledPolygon` ear-clips arbitrary simple concave contours and subtracts holes: each hole is wound opposite to the outer ring, bridged to it through a mutually visible vertex pair, and traced as a closed loop so the doubled connector cut preserves the signed area (`area(outer) − Σ area(holes)`, verified by tests). This generalizes the core `PolygonFan`, which only fills star-shaped profiles.
 
+### Hammersley Low-Discrepancy Sequence & Hemispherical Importance Sampling
+
+- **File:** `packages/tools/src/ibl-gen/IBLShaders.ts`
+- **Authors/Gurus:** J. M. Hammersley (1960), Holger Dammertz (2012)
+- **Source:** [Hammersley Points on the Hemisphere (Holger Dammertz)](http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html)
+- **Formulas:**
+  - Van der Corput radical inverse: $\Phi_2(i) = \sum_{j=0}^{31} b_j \cdot 2^{-(j+1)}$ computed via 32-bit bitfield reversals and shifts.
+  - Quasi-Monte Carlo sequence: $\Xi_i = \left(\frac{i}{N}, \Phi_2(i)\right)$
+- **Usage:** Used in the IBL baking shader pipeline to generate low-discrepancy 2D point distributions across the hemisphere without precomputing or uploading random sample textures. Provides rapid convergence when importance-sampling the GGX normal distribution function.
+
 ## Physics & Collision Detection
 
 ### Gravitational Lensing (Black Hole Shadow & Einstein Ring)
@@ -434,6 +444,16 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 - **Authors/Gurus:** Jessica Hodgins
 - **Usage:** Her foundational research in integrating physical simulations with character animation serves as an ongoing inspiration for adding complex kinematics and physics-driven behaviors to game engines.
+
+### Dimensionless Drop Impact Regimes (Ohnesorge & Weber Numbers)
+
+- **File:** `packages/liquid-extras/src/drops/DropRegime.ts`, `packages/liquid-extras/src/drops/DropImpactSystem.ts`
+- **Authors/Gurus:** Christophe Josserand, Sigurdur T. Thoroddsen (2016), Wilhelm Ohnesorge (1936), Moritz Weber (1919)
+- **Source:** [Drop Impact on a Liquid Surface (Annual Review of Fluid Mechanics 48, 365–391, 2016)](https://www.annualreviews.org/doi/10.1146/annurev-fluid-122414-034401)
+- **Formulas:**
+  - Weber number: $We = \frac{\rho v^2 D}{\sigma}$
+  - Ohnesorge number: $Oh = \frac{\mu}{\sqrt{\rho \sigma D}}$
+- **Usage:** Evaluates fluid dynamics regimes for drop impacts purely from physical dimensionless numbers instead of branching on liquid names. Drives splashing thresholds (crown formation for $We > 300$, bubble entrainment, Worthington jets) and viscous damping transitions ($Oh > 0.1$) so diverse pairings (water, blood, oil, acid) share unified physics and shaders.
 
 ## Game Feel & Player Experience
 
@@ -747,6 +767,20 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Authors/Gurus:** Michael Potmesil & Indranil Chakravarty (1981, *A Lens and Aperture Camera Model for Synthetic Image Generation*), Dennis Gustafsson (2018, *Bokeh depth of field in a single pass*), Jorge Jimenez (2014, *Next Generation Post Processing in Call of Duty: Advanced Warfare*), Helmut Vogel (1979, golden-angle disc sampling)
 - **Source:** [Bokeh depth of field in a single pass](https://blog.voxagon.se/2018/05/04/bokeh-depth-of-field-in-single-pass.html)
 - **Usage:** CoC from the thin-lens equation $c(d) = \frac{A f |d - d_f|}{d (d_f - f)}$, $A = f/N$, converted to pixels via sensor height. A half-res gather over a Vogel (golden-angle) disc accepts each tap whose CoC disc reaches the centre pixel; taps behind the centre are clamped to the centre's own CoC so the blurred background never bleeds over a sharp foreground, while a defocused foreground does bleed over in-focus pixels.
+
+### Split-Sum Specular IBL Approximation & 2D BRDF LUT
+
+- **File:** `packages/tools/src/ibl-gen/IBLShaders.ts`, `packages/tools/src/ibl-gen/ibl-gen.ts`, `scripts/ibl-bake.ts`, `packages/engine/src/core/showcase/AbstractShowcase.ts`
+- **Authors/Gurus:** Brian Karis (Epic Games, 2013)
+- **Source:** ["Real Shading in Unreal Engine 4"](https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf) — SIGGRAPH 2013 Course: Physically Based Shading in Theory and Practice
+- **Usage:** Splits the specular reflection integral of image-based lighting into two precomputable factors: a pre-filtered radiance environment map (GGX importance-sampled across roughness mip levels) and an analytic 2D look-up table (BRDF LUT) indexing the Fresnel scale and bias by $N \cdot V$ and roughness. Enables real-time physically based ambient reflections at 60 FPS in WebGL2 and WebGPU.
+
+### Volumetric Froxel Fog (Frustum-Aligned 3D Voxel Grid & In-Scattering)
+
+- **File:** `packages/engine/src/renderers/shaders/source/web_gpu/compute/froxel_fog.wgsl`, `packages/engine/src/renderers/passes/VolumetricFogPassGPU.ts`, `apps/showcases/39/showcase.ts`
+- **Authors/Gurus:** Sébastien Hillaire (Frostbite, 2015), Bart Wronski (2014)
+- **Source:** [Physically-based & Unified Volumetric Rendering in Frostbite (SIGGRAPH 2015)](https://www.ea.com/frostbite/news/physically-based-unified-volumetric-rendering-in-frostbite)
+- **Usage:** Generates unified 3D volumetric fog by dividing the view frustum into exponential depth slices coupled to the clustered light lists (ADR 0007). In-scattering and extinction from point, spot, and directional lights are computed in a WebGPU compute pass using Henyey-Greenstein/Schlick phase functions, integrated along depth, and composited into the scene buffer before tone mapping.
 
 ## Graphics APIs (WebGPU / WebGL)
 
