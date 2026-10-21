@@ -38,12 +38,12 @@ struct GlobalUniforms {
     resolution: vec2f,    // canvas size in pixels, for clustered light culling
     projScale: vec2f,     // projection matrix diagonal terms [0][0]/[1][1], for view-space reconstruction
     tileSizePx: vec2f,    // clustered light grid screen-space tile size in pixels
-    clusterDims: vec4f    // [x, y, z cell counts, maxLightsPerCluster], all as f32
+    clusterDims: vec4f, // [x, y, z cell counts, maxLightsPerCluster], all as f32
 
     // --- 5. Shadow Softness Tuning (16 bytes) ---
     // PCSS softness knobs (WebGPU only today): x = penumbra scale multiplier (1 = legacy),
     // y = cap on the variable-radius PCF kernel in shadow-map texels (default 4), z/w = reserved.
-    shadowSoftness: vec4f
+    shadowSoftness: vec4f,
 }
 
 // ObjectUniforms: 512-byte uniform block (32 vec4 / 128 floats)

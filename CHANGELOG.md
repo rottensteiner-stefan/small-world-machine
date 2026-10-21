@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.115.5] - 2026-10-21
+
+### "To light a candle is to cast a shadow." - Ursula K. Le Guin
+
+- **Features:**
+  - *Showcase 42 — Soft Shadow Lab:* deterministische, minimale WebGPU-Schattenbühne (eine Schattenbox auf hellem Bühnenboden, fixe Kamera, ohne Post-Processing) als visueller Beweis-Stand für die PCSS-Softness-Knöpfe. QA-Hook `window.__qaSwm42` liest die konfigurierten Knöpfe **und** die echte GPU-Uniform-Lane (`[212,213]` = penumbraScale/pcfMaxRadius) für Headless-Live-Gates. Das Live-Gate `.agents/scratches/check-swm42.mjs` (scratch) ist GRÜN: auf WEB_GPU erreichen die Knöpfe den GPU-Puffer (`[1,4]` → `[3,12]`) und re-tunen **lokalisiert** die Penumbra des Live-Schattens (5362 geänderte Pixel, 100 % innerhalb der Schatten-Halo, richtungskohärent); auf WEB_GL2 exakt 0 geänderte Pixel — bewiesene No-Op, die Knöpfe sind korrekt WebGPU-gescoped.
+- **Architecture & Bugfixes:**
+  - *WGSL-Syntax-Fix in `structs.wgsl`:* `shadowSoftness: vec4f` fehlte das Trenn-Komma zu `clusterDims` (Commit 5f71a6ce) → die GlobalUniforms-Struktur brach die WGSL-Kompilierung auf **jedem** WebGPU-Backend (von der TS-Layout-Test-Pin unerkannt). Vom Live-Gate gefangen; echte GPU-Kompilierung läuft wieder.
+  - Showcase-42-Registrierung in `vite.config.ts` (Rollup-Input), `AbstractShowcase` (VALID_SHOWCASE_IDS) und `scripts/check-showcases.js` (CI-Liste), inkl. Versionsstand 0.115.5.
+- **Housekeeping & Docs:**
+  - `apps/showcases/42/docs/log.md`: Living Log mit Gate-Beweisen + ehrlichen Neben-Befunden (WebGPU headless braucht Chromium `--enable-unsafe-webgpu`, sonst leiser WebGL2-Fallback; das Repo-Gate `check-showcases.js` hatte dieses Flag nicht → „WEB_GPU"-Abdeckung war bisher faktisch blind; Engine-`Plane` startet vertikal, Böden brauchen `rotation.x = -Math.PI/2`).
+
 ## [0.115.4] - 2026-10-21
 
 ### "The darkest place is under the candlestick." - Proverb
