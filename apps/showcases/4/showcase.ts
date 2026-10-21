@@ -40,7 +40,9 @@ export class Showcase4 extends AbstractShowcase {
     this.configureCamera();
 
     this.camera.setStrategy(CameraStrategyType.SMOOTH);
-    this.camera.position.set(0, 5, 15);
+    // Cinematic elevated 3/4 intro (same approach as Showcase 3), high enough to clear the
+    // large scaled racer so the chase never starts under the vehicle's rear.
+    this.setInitialCamera(new Vector3D(0, 12, 22), new Vector3D(0, 0, 0));
 
     const ambientLight: AmbientLight = new AmbientLight({ color: Color.WHITE, intensity: 0.3 });
     this.scene.add(ambientLight);

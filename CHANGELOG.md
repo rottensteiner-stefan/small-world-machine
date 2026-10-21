@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.115.3] - 2026-10-21
+
+### "There are two ways of spreading light: to be the candle or the mirror that reflects it." - Edith Wharton
+
+- **Features:**
+  - *Showcase 37 — „Living Light"-Pass:* Pendelleuchte, Kerzencluster, Kaminkluster und Stehlampe flackern jetzt deterministisch und organisch (überlagerte Sinus-Drafts + langsames Breathen, kein `Math.random`) — die Szene wird spürbar lebendig statt statisch ausgeleuchtet. Zugleich der „Filter-Look" zurückgenommen: Vignette (0.68→0.5, Offset 0.88), Sättigung (0.95→0.9), Bloom-Schwelle (0.8→0.95, nur noch echte Emitter blühen), Exposure (1.05→1.02) und Wärme-Grade leicht reduziert; Ambiente minimal angehoben gegen Total-Voids; Pendel-Emissiv (1.1→0.8) und Pendel-/Kerzen-Intensität (3.6→2.6 / 0.75→0.52) kalibriert. Neuer QA-Hook `window.__qaSwm37` (Lebend-Probe der Lichtwerte + `faceHearth()`-Pose) für automatisierte Live-Gates über alle Renderer-Tiers.
+  - *Showcase 4 — Cinematic Kamera-Start:* Der FPS/Chase-Start beginnt nicht mehr „unter dem Heck des Fahrzeugs", sondern wie Showcase 3 als gehobene 3/4-Einfahrt (`setInitialCamera` synchronisiert Position, Target und Theta/Phi statt nur Position).
+  - *Showcase 37 — Boden wieder matt:* `floorMat`-Roughness-Basis 0.48→0.8 (Basis ist im Standard-Shader ein Multiplikator auf der Roughness-Map: `obj.roughness * roughnessMap.g`). Die Dielen glänzen nicht mehr wie ein Plastik-Veneer unter direktem Pendel-/Kerzenlicht, sondern lesen als mattes, trockenes Landhaus-Holz (Optik-Probe: keine Spiegel-Highlights/Hotspots mehr auf den Planks).
+- **Housekeeping & Docs:**
+  - *Herd-Erkenntnis festgehalten:* Der Feuerkasten bleibt bewusst die dunkle Basisöffnung — primitive Emissiv-Geometrie (Flächen/Quader/Glutkugeln) liest ohne Partikel-/VFX-System stets als Artefakt (weißer Balken/Würfel/LED-Streifen); das „Feuer" wird über das flackernde Kaminlicht ausgedrückt. Roadmap-Notiz: echte Flammen brauchen ein Engine-VFX-/Partikelsystem.
+
 ## [0.115.2] - 2026-10-21
 
 ### "The creation of something new is not accomplished by the intellect but by the play instinct." - Carl Jung

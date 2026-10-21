@@ -32,6 +32,14 @@ class Showcase37 extends AbstractShowcase {
   private _refCamPos = new Vector3D(0.65, 1.15, 2.45);
   private _refCamTarget = new Vector3D(-0.1, 0.85, -0.5);
 
+  // --- Living-light rig (deterministic flicker, no Math.random) ---
+  private _flickerT: number = 0;
+  private _pendantLight: SpotLight | undefined;
+  private _floorLampLight: PointLight | undefined;
+  private _candleLight: PointLight | undefined;
+  private _fireplaceLight: PointLight | undefined;
+  private _flameMats: StandardMaterial[] = [];
+
   protected override async setupScene(): Promise<void> {
     // ------------------------------------------------------------------------
     // 1. Post-Processing Pipeline Setup (Phase 2 Specification)
@@ -45,7 +53,9 @@ class Showcase37 extends AbstractShowcase {
     if (toneMapping) {
       toneMapping.enabled = true;
       toneMapping.mode = ToneMappingMode.ACES_FILMIC;
-      toneMapping.exposure = 1.05;
+      // 1.02 (was 1.05): keep shadows deep so the fire lights actually carry the room
+      // instead of the whole frame sitting at the top of the tone curve (a CG tell).
+      toneMapping.exposure = 1.02;
     }
 
     // Parametric Color Grading (Warm Brown/Orange Atmosphere, Consensus 18)
@@ -54,12 +64,14 @@ class Showcase37 extends AbstractShowcase {
     );
     if (colorGrading) {
       colorGrading.enabled = true;
-      colorGrading.temperature = 0.28;
-      colorGrading.saturation = 0.95;
-      colorGrading.contrast = 1.06;
-      colorGrading.lift = new Color(0.02, 0.015, 0.01);
-      colorGrading.gamma = new Color(1.04, 0.98, 0.9);
-      colorGrading.gain = new Color(1.05, 1.0, 0.95);
+      // Softened (was temperature 0.28 / saturation 0.95 / contrast 1.06): a heavy warm bake
+      // reads as "filter demo". We keep the cozy direction but let the light sources do the work.
+      colorGrading.temperature = 0.2;
+      colorGrading.saturation = 0.9;
+      colorGrading.contrast = 1.04;
+      colorGrading.lift = new Color(0.015, 0.012, 0.008);
+      colorGrading.gamma = new Color(1.03, 0.985, 0.925);
+      colorGrading.gain = new Color(1.04, 1.0, 0.96);
     }
 
     // HBAO Screen-Space Ambient Occlusion (Contact shadows in corners & furniture)
@@ -74,8 +86,10 @@ class Showcase37 extends AbstractShowcase {
     const bloom = this.renderer.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
     if (bloom) {
       bloom.enabled = true;
-      bloom.intensity = 0.45;
-      bloom.threshold = 0.8;
+      // Threshold raised 0.8 -> 0.95 so ONLY the actual emitters bloom (flames, shade, fire),
+      // never the whole painted room. Intensity nudged down for the same anti-CG reason.
+      bloom.intensity = 0.4;
+      bloom.threshold = 0.95;
       bloom.radius = 0.55;
       bloom.color = new Color(1.0, 0.92, 0.75);
     }
@@ -86,8 +100,10 @@ class Showcase37 extends AbstractShowcase {
     );
     if (vignette) {
       vignette.enabled = true;
-      vignette.darkness = 0.68;
-      vignette.offset = 0.82;
+      // 0.68 darkness was a hard "photo filter" ring; drop to a soft cinematic falloff that
+      // never reads as a grade. Offset pushed outward (0.82 -> 0.88) so only the true corners darken.
+      vignette.darkness = 0.5;
+      vignette.offset = 0.88;
       vignette.roundness = 2.0;
     }
 
@@ -201,7 +217,10 @@ class Showcase37 extends AbstractShowcase {
       normalMap: woodFloorNorm,
       roughnessMap: woodFloorRough,
       metallic: 0.0,
-      roughness: 0.48,
+      // 0.48 was far too glossy and read as a veneer of plastic under the pendant/candle
+      // highlights. Base roughness is a MULTIPLIER on the roughness map in the standard shader
+      // (`obj.roughness * roughnessMap.g`), so a matte, natural diele needs a high base: 0.8.
+      roughness: 0.8,
     });
 
     const rugMat = new StandardMaterial({
@@ -284,7 +303,9 @@ class Showcase37 extends AbstractShowcase {
     const pendantShadeMat = new StandardMaterial({
       color: new Color(0.96, 0.9, 0.75),
       emissiveColor: new Color(1.0, 0.88, 0.68),
-      emissiveIntensity: 1.1,
+      // 0.8 instead of 1.1: keeps the shade a lit fabric rather than a flat blown-out white disc
+      // (the previous 1.1 flooded the whole silhouette under ACES).
+      emissiveIntensity: 0.8,
       metallic: 0.0,
       roughness: 0.75,
     });
@@ -325,22 +346,26 @@ class Showcase37 extends AbstractShowcase {
       metallic: 0.0,
       roughness: 0.1,
     });
+    // Shared by every candle flame on the coffee table; flickered in update().
+    this._flameMats.push(candleFlameMat);
 
     // ------------------------------------------------------------------------
     // 5. Lighting Hierarchy (Phase 2 & Consensus 1, 3, 19)
     // ------------------------------------------------------------------------
 
-    // Minimal Warm Ambient Light
+    // Minimal Warm Ambient Light -- slightly lifted (intensity 0.2 -> 0.3) so the room never
+    // collapses into flat black voids; a faint simulated bounce fill, kept below the mood.
     const ambientLight = new AmbientLight({
-      color: new Color(0.08, 0.05, 0.03),
-      intensity: 0.2,
+      color: new Color(0.09, 0.06, 0.04),
+      intensity: 0.3,
     });
     this.scene.add(ambientLight);
 
-    // Dominant Pendant Light (SpotLight with Shadow Map, pointing down)
+    // Dominant Pendant Light (SpotLight with Shadow Map, pointing down) -- 2.6 instead of 3.6 so
+    // the hero light still reads as the warm source without scorching the table into blown highs.
     const pendantLight = new SpotLight({
       color: new Color(1.0, 0.92, 0.82),
-      intensity: 3.6,
+      intensity: 2.6,
       distance: 7.0,
       decay: 2.0,
       angle: (78 * Math.PI) / 180,
@@ -351,6 +376,7 @@ class Showcase37 extends AbstractShowcase {
     pendantLight.castShadow = true;
     pendantLight.shadowBias = 0.002;
     pendantLight.shadowResolution = 1024;
+    this._pendantLight = pendantLight;
     this.scene.add(pendantLight);
 
     // Upward Ceiling Fill Light from Pendant
@@ -375,26 +401,32 @@ class Showcase37 extends AbstractShowcase {
       decay: 2.0,
     });
     floorLampLight.position.set(-0.1, 1.35, -2.15);
+    this._floorLampLight = floorLampLight;
     this.scene.add(floorLampLight);
 
-    // Fireplace Ember Glow (Warm Orange inside hearth, Consensus 15)
+    // Fireplace Ember Glow (Warm Orange inside hearth, Consensus 15) -- base kept LOW so the fire
+    // bed itself stays the dominant visible source; a bright hidden light with no visible fire
+    // reads as a bulb behind bricks.
     const fireplaceLight = new PointLight({
       color: new Color(1.0, 0.45, 0.12),
-      intensity: 0.85,
+      intensity: 0.45,
       distance: 3.0,
       decay: 2.0,
     });
     fireplaceLight.position.set(2.15, 0.35, -0.15);
+    this._fireplaceLight = fireplaceLight;
     this.scene.add(fireplaceLight);
 
-    // Candle Cluster PointLight (Warm flickering glow on coffee table, Consensus 3)
+    // Candle Cluster PointLight (Warm flickering glow on coffee table, Consensus 3) -- 0.52 keeps
+    // the candles intimate instead of behaving like small high-intensity spotlights.
     const candleLight = new PointLight({
       color: new Color(1.0, 0.65, 0.22),
-      intensity: 0.75,
+      intensity: 0.52,
       distance: 2.0,
       decay: 2.0,
     });
     candleLight.position.set(-0.05, 0.58, -0.35);
+    this._candleLight = candleLight;
     this.scene.add(candleLight);
 
     // ------------------------------------------------------------------------
@@ -585,7 +617,12 @@ class Showcase37 extends AbstractShowcase {
     chimneyUpper.castShadow = true;
     fireplace.add(chimneyUpper);
 
-    // Dark Firebox Cavity (Unbeleuchtete Öffnung)
+    // Firebox: a solid dark plug that reads as an unlit empty opening (the baseline the scene
+    // shipped with). All deeper fire treatment was dropped after a/v passes: without a particle or
+    // VFX system, every primitive attempt (flat glow plane, quads, packed glowing spheres) read as
+    // an hard CG artifact (bar / white cube / LED strip). The fire here is expressed purely through
+    // the flickering fireplace light below -- low, warm, organic -- which is the feature that adds
+    // "living" life without any broken geometry.
     const firebox = new Object3D("Firebox");
     firebox.geometry = cubeGeom;
     firebox.material = darkInteriorMat;
@@ -1057,6 +1094,64 @@ class Showcase37 extends AbstractShowcase {
     floorLamp.add(pinkShade);
 
     this.scene.add(floorLamp);
+
+    // QA surface for the automated live gate -- proves the living-light rig actually moves
+    // (a static still would keep these identical across samples).
+    (window as unknown as Record<string, unknown>)["__qaSwm37"] = {
+      sample: (): { candle: number; fire: number; flame: number } => ({
+        candle: this._candleLight?.intensity ?? 0,
+        fire: this._fireplaceLight?.intensity ?? 0,
+        flame: this._flameMats[0]?.emissiveIntensity ?? 0,
+      }),
+      // Points the fly camera straight at the hearth mouth so the automated gate (and any visual
+      // review) can actually look INTO the firebox instead of the default living-room framing
+      // which clips the fireplace to a thin sliver on the right edge. Uses setInitialCamera so the
+      // FPS strategy's theta/phi (not only position/target) are re-oriented.
+      faceHearth: (): void => {
+        if (!this.camera) return;
+        this.setInitialCamera(new Vector3D(1.05, 0.95, 0.15), new Vector3D(2.35, 0.45, -0.2));
+      },
+    };
+  }
+
+  protected override update(deltaTime: number): void {
+    super.update(deltaTime);
+    this._flickerT += deltaTime;
+    const t = this._flickerT;
+
+    // Candle cluster: fast, small-amplitude quiver (a living flame, not a bulb).
+    if (this._candleLight) {
+      this._candleLight.intensity = 0.52 * this._flicker(t, 21.0, 0.16, 7.3);
+    }
+    // Fireplace wood fire: slower, wide luminous swings with occasional flares.
+    if (this._fireplaceLight) {
+      this._fireplaceLight.intensity = 0.45 * this._flicker(t, 8.5, 0.45, 2.1);
+    }
+    // Floor lamp: faint mains hum.
+    if (this._floorLampLight) {
+      this._floorLampLight.intensity = 0.45 * this._flicker(t, 3.2, 0.05, 11.8);
+    }
+    // Pendant bulb: near-imperceptible instability so the hero light never feels synthetic.
+    if (this._pendantLight) {
+      this._pendantLight.intensity = 2.6 * this._flicker(t, 13.0, 0.03, 5.4);
+    }
+
+    // Candle flames + fire bed pulse with the same draft noise. Kept below the old hard 3.0 core
+    // so the bloom threshold (0.95) doesn't smear the little flames into plate-sized white discs.
+    for (const m of this._flameMats) {
+      m.emissiveIntensity = 1.5 + 1.6 * this._flicker(t, 23.0, 0.3, 4.6);
+    }
+  }
+
+  /** Deterministic organic flicker: damped layered sines + a slow breathe (no Math.random). */
+  private _flicker(t: number, speed: number, amp: number, seed: number): number {
+    const n =
+      Math.sin(t * speed + seed) * 0.55 +
+      Math.sin(t * speed * 2.17 + seed * 1.7) * 0.28 +
+      Math.sin(t * speed * 3.73 + seed * 2.9) * 0.17;
+    const breathe = 1 + 0.045 * Math.sin(t * 0.21 + seed * 6.0);
+    const v = (1 + n * amp) * breathe;
+    return v < 0 ? 0 : v;
   }
 }
 
