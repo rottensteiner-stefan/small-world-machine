@@ -105,8 +105,6 @@ export class LevelBuilder {
     const wallGeo = new Cube({ size: this._gridSize }).getGeometryData();
     const sphereGeo = new Sphere({ radius: 0.6 }).getGeometryData();
 
-    const playerStart = new Vector3D(0, 1, 0);
-
     const wallPositions: { x: number; y: number; z: number; texIndex: number }[] = [];
     const wallTextures: Texture[] = [];
     const charToTexIndex: Record<string, number> = {};
@@ -305,13 +303,7 @@ export class LevelBuilder {
           },
         };
       } else if (entry.type === "playerSpawn") {
-        gridLegend[char] = {
-          type: "custom",
-          onBuild: (_x, _y, worldX, worldZ): Object3D | undefined => {
-            playerStart.set(worldX, 1.0, worldZ);
-            return undefined; // Nothing added to scene
-          },
-        };
+        gridLegend[char] = { type: "floor", isSpawn: true };
       }
     }
 
@@ -326,7 +318,7 @@ export class LevelBuilder {
     }
 
     const gridBuilder = new GridLevelBuilder();
-    await gridBuilder.build(scene, mapData, {
+    const spawn = await gridBuilder.build(scene, mapData, {
       legend: gridLegend,
       ...(config.floorTexture && { defaultFloorTexture: config.floorTexture }),
       ...(config.ceilingTexture
@@ -387,6 +379,8 @@ export class LevelBuilder {
       wallInstanced.computeBounds();
       scene.add(wallInstanced);
     }
+
+    const playerStart = new Vector3D(spawn.x, 1.0, spawn.z);
 
     return { playerStart, lavaMaterials, lavaLights };
   }
