@@ -29,19 +29,22 @@ const SLOT_PRIORITY: readonly TextureMapSlot[] = [
 ];
 
 /**
- * Detects which PBR slot a filename belongs to. The trailing token wins
- * (`m_albedo.png` is albedo, not metallic); only if it names no slot is a
- * whole-token keyword match anywhere in the name accepted (`brick_ao_2k.png`
- * is AO). Substring false positives are impossible: `ao` inside `saos` is not
- * a token, so `saos.png` matches nothing.
+ * Detects which PBR slot a filename belongs to. Tokens are read from the end: the right-most
+ * token that names a slot wins (`m_albedo.png` is albedo, not metallic; `rough_concrete_diff_4k.png`
+ * is albedo although it starts with `rough`, since the resolution token `4k` names no slot).
+ * Only whole tokens count, so substring false positives are impossible: `ao` inside `saos` is not
+ * a token, `saos.png` matches nothing.
  */
 export function detectTextureMapSlot(filename: string): TextureMapSlot | undefined {
   const base = filename.replace(/\.[^/.]+$/, "");
-  const lastToken = base.split(/[_\-. ]+/).pop() ?? "";
-  for (const slot of SLOT_PRIORITY) {
-    if (TEXTURE_SLOT_PATTERNS[slot].test(`_${lastToken}.`)) return slot;
+  const tokens = base.split(/[_\-. ]+/);
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const token = `_${tokens[i]}.`;
+    for (const slot of SLOT_PRIORITY) {
+      if (TEXTURE_SLOT_PATTERNS[slot].test(token)) return slot;
+    }
   }
-  return SLOT_PRIORITY.find((slot) => TEXTURE_SLOT_PATTERNS[slot].test(filename));
+  return undefined;
 }
 
 /**

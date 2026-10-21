@@ -169,6 +169,9 @@ export class GltfLoader extends AbstractLoader<Object3D> {
         "KHR_materials_transmission",
         "KHR_materials_volume",
         "KHR_materials_ior",
+        // Int8/Int16 (optionally normalized) attributes: GltfBinaryParser reads them and the
+        // geometry parser widens them to Float32; the dequantization lives in the node transform.
+        "KHR_mesh_quantization",
       ]);
 
       const unsupported = json.extensionsRequired.filter((ext) => !supportedExtensions.has(ext));

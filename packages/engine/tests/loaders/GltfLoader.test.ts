@@ -212,4 +212,31 @@ describe("GltfLoader validation and fail-fast", () => {
     );
     expect(root).toBeDefined();
   });
+
+  it("loads a KHR_mesh_quantization primitive (Int16 positions, dequantized by the node scale)", async () => {
+    const buffer = new ArrayBuffer(18);
+    new Int16Array(buffer).set([0, 0, 0, 1000, 0, 0, 0, 2000, 0]);
+    const loader = new GltfLoader();
+    const root = await loader.parse(
+      {
+        json: {
+          asset: { version: "2.0" },
+          extensionsRequired: ["KHR_mesh_quantization"],
+          extensionsUsed: ["KHR_mesh_quantization"],
+          scene: 0,
+          scenes: [{ nodes: [0] }],
+          nodes: [{ name: "Quantized", mesh: 0, scale: [0.001, 0.001, 0.001] }],
+          meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+          accessors: [{ bufferView: 0, componentType: 5122, count: 3, type: "VEC3" }],
+          bufferViews: [{ buffer: 0, byteLength: 18 }],
+        },
+        buffers: [buffer],
+      },
+      "",
+    );
+
+    const node = root.getObjectByName("Quantized");
+    expect(node).toBeDefined();
+    expect(node?.scale.x).toBeCloseTo(0.001, 9);
+  });
 });
