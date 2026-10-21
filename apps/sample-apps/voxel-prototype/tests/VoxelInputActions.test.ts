@@ -42,9 +42,12 @@ describe("VoxelInputActions — composite semantic bindings", () => {
     pressedKeys.add(Keys.W);
     expect(actions.update().move).toEqual({ x: 0, z: -1 });
 
-    // W + D = forward (-1 z) + strafe right (+1 x)
+    // W + D = diagonal, clamped to the unit disc (no sqrt(2) speed boost)
     pressedKeys.add(Keys.D);
-    expect(actions.update().move).toEqual({ x: 1, z: -1 });
+    const diagonal = actions.update().move;
+    expect(diagonal.x).toBeCloseTo(Math.SQRT1_2, 9);
+    expect(diagonal.z).toBeCloseTo(-Math.SQRT1_2, 9);
+    expect(Math.hypot(diagonal.x, diagonal.z)).toBeCloseTo(1, 9);
   });
 
   it("triggers breakBlock edge via LMB or KeyF or KeyQ without repeat", () => {

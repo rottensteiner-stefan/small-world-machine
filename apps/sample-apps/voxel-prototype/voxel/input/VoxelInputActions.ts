@@ -131,10 +131,11 @@ export class VoxelInputActions {
     const rawMoveZ = (kbMoveZ !== 0 ? kbMoveZ : arrowMoveZ) + gpMoveZ;
     const rawStrafe = (kbStrafe !== 0 ? kbStrafe : arrowStrafe) + gpMoveX;
 
-    const move = {
-      x: Math.max(-1, Math.min(1, rawStrafe)),
-      z: Math.max(-1, Math.min(1, rawMoveZ)),
-    };
+    // Clamp to the unit disc (not per axis): W+D must not be sqrt(2) faster than W alone.
+    // Analog sticks below full deflection keep their magnitude.
+    const moveLen = Math.hypot(rawStrafe, rawMoveZ);
+    const moveScale = moveLen > 1 ? 1 / moveLen : 1;
+    const move = { x: rawStrafe * moveScale, z: rawMoveZ * moveScale };
 
     // 3. Look Deltas (Pointer movement + Gamepad Right Stick)
     const look = {

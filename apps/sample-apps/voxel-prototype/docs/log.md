@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-10-21 — Code-Review-Fixes: abgewandte Flächen & Diagonalgeschwindigkeit
+
+**Status:** ✅ Zwei Befunde aus dem 7-Tage-Review (`.agents/scratches/code-review-7d/E-voxel-whisper.md`) behoben.
+
+- **Block-Shader (`BlockMaterial.frag.glsl`):** Der M3-Umbau hatte `ndl` als reinen Faktor vor das
+  Ambient gesetzt (`... * ndl * lightFactor`); Flächen mit `ndl == 0` (-X, -Y, -Z) wurden dadurch
+  schwarz. Wieder `(ambient + (1 - ambient) * ndl)` wie in M0–M2. Regressionstest:
+  `tests/BlockMaterialShader.test.ts`.
+- **Bewegung (`VoxelInputActions.ts`):** Achsen wurden einzeln geklemmt, W+D lief damit
+  √2-mal so schnell. Jetzt Klemmung auf die Einheitsscheibe (Analogsticks behalten ihren Betrag).
+  Der Test pinnte vorher den Fehler (`{x: 1, z: -1}`) und prüft jetzt `|move| == 1`.
+- **Offen aus dem Review (nicht angefasst):** Spieler fällt beim Kaltstart durch ungeladene Chunks,
+  Gamepad evtl. doppelt gezählt, Modifier-Filter (Cmd+R/F/1..5), Chunk-Mesh-Lecks bei `_onError`.
+
+---
+
 ## 2026-10-21 — Fix Texturausrichtung (flipY & 90°-Seitenlage) + Semantisches Action-Input-System (Trackpad-First)
 
 **Status:** ✅ Texturen aufrecht & korrekt gerichtet; Action-Mapping mit macOS-Touchpad/Gamepad-Support integriert.

@@ -39,7 +39,9 @@ void main() {
     float ambient = 0.34;
     float ao = clamp(v_ao, 0.0, 1.0);
     float lightFactor = clamp(v_light, 0.0, 1.0);
-    vec3 lit = albedo * mix(ambient, 1.0, ao) * ndl * lightFactor;
+    // The ambient floor must stay inside the direct term: faces turned away from the light
+    // (-X, -Y, -Z) have ndl == 0 and would otherwise render pure black.
+    vec3 lit = albedo * mix(ambient, 1.0, ao) * (ambient + (1.0 - ambient) * ndl) * lightFactor;
 
     fragColor = vec4(lit, tex.a);
 }
