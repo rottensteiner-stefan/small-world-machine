@@ -1,12 +1,8 @@
 # Artistic Extras (`@small-world-machine/artistic-extras`)
 
-Das Paket `@small-world-machine/artistic-extras` enthält malerische Materialien und Bildverarbeitung für stilisierte Looks: Metall-Wandrelief, Impasto-Pinselstriche und selektive Farbisolation. Es hängt nur von `@small-world-machine/engine` ab. Referenz-Anwendung: Showcase 41 (*Metal Wall Relief & Assemblage Art*, `apps/showcases/41/`).
+`@small-world-machine/artistic-extras` is an optional ecosystem package that provides painterly materials and image processing: metal wall relief, impasto strokes and selective color isolation. It depends on `@small-world-machine/engine`.
 
-## Installation & Import
-
-```bash
-npm install @small-world-machine/artistic-extras
-```
+## Import
 
 ```typescript
 import {
@@ -16,38 +12,31 @@ import {
   MetalReliefPostProcessor,
   ArtisticColorUtils,
 } from "@small-world-machine/artistic-extras";
-// Reine Strich-Mathematik für das Impasto-Studio: pressureToBrush, interpolateStrokeSteps, buildStrokeSplats, ...
 ```
 
----
+`StrokeRaster` exports the DOM-free stroke math (`pressureToBrush`, `interpolateStrokeSteps`, `buildStrokeSplats`).
 
-## Komponenten
+## Components
 
-### 1. `MetalReliefMaterial`
-Material für skulpturale Metall-Wandreliefs: Spachtelstriche (`paletteKnifeStrength`, `paletteKnifeScale`), Schleifspuren (`scratchIntensity`, `scratchScale`), Kantenabschrägung (`edgeBevelStrength`), Drahtgitter (`wireMeshStrength`, `wireMeshScale`), Regenspuren (`wetRainStreaks`), Rost (`rustStrength`), selektive Farbisolation (`colorPopTargetHue`, `colorPopTolerance`, `colorPopDesaturation`) sowie `metallic` und `roughness`. Eine Textur wird über `diffuseMap` gesetzt.
+| Class | Description |
+|---|---|
+| `MetalReliefMaterial` | Metal wall relief material. Options: `diffuseMap`, `color`, `paletteKnifeStrength`, `paletteKnifeScale`, `scratchIntensity`, `scratchScale`, `edgeBevelStrength`, `wireMeshStrength`, `wireMeshScale`, `wetRainStreaks`, `rustStrength`, `colorPopTargetHue`, `colorPopTolerance`, `colorPopDesaturation`, `metallic`, `roughness` |
+| `MetalReliefScreenMaterial` | Turns a 2D image (`diffuseMap`) into a metal relief with Sobel embossing (`reliefStrength`), palette knife, scratches and color isolation (`targetHue`, `hueTolerance`, `desaturation`). `splitPosition` shows a before/after split. |
+| `ImpastoStrokeMaterial` | Live impasto material. `paintMap`, `dirMap` (canvas textures the app re-uploads while painting) and `baseMap` are all required. Options: `brushRelief`, `smearDistance`, `edgeLift`, `paintOpacity`, `metallic`, `roughness`. |
+| `MetalReliefPostProcessor` | Screen-space version of the relief effect with the same parameters. `applyToCanvas(sourceCanvas, targetCanvas?)` filters a canvas through WebGL; shaders exist for WebGL1, WebGL2 and WebGPU. |
+| `ArtisticColorUtils` | RGB/HSV conversion, color-pop isolation, rust/steel tone mapping |
 
-### 2. `MetalReliefScreenMaterial`
-Leinwand-/Screen-Material: Verwandelt ein beliebiges 2D-Bild (`diffuseMap`) per Sobel-Prägung (`reliefStrength`), Spachtelstrichen, Kratzern und Farbisolation (`targetHue`, `hueTolerance`, `desaturation`) in ein Metallrelief. `splitPosition` blendet ein Vorher/Nachher-Splitscreen ein.
-
-### 3. `ImpastoStrokeMaterial`
-Interaktives Impasto-Material: Höhenfeld und Strichrichtung kommen aus zwei Canvas-Texturen, die die App beim Malen neu hochlädt (`paintMap`, `dirMap`, dazu die Grundschicht `baseMap`; alle drei sind erforderlich). Parameter: `brushRelief`, `smearDistance`, `edgeLift`, `paintOpacity`, `metallic`, `roughness`. Die Strich-Mathematik (Druck → Pinselzustand, Segment-Interpolation, Splats) liegt DOM-frei in `StrokeRaster` und ist in Node testbar.
-
-### 4. `MetalReliefPostProcessor`
-Bildschirm-Postprocessor für Render, Foto oder Canvas mit denselben Parametern wie das Screen-Material (`reliefStrength`, `paletteKnifeStrength`, `scratchIntensity`, `targetHue`, `rustStrength`, `edgeGlintStrength`, `wireMeshStrength` ...). `applyToCanvas(sourceCanvas, targetCanvas?)` filtert ein Quell-Canvas per WebGL in ein Ziel-Canvas (Standard: dasselbe); es existieren Shader für WebGL1, WebGL2 und WebGPU.
-
-### 5. `ArtisticColorUtils`
-Farbraum-Helfer: RGB↔HSV, selektive Farbisolation („Color Pop") und malerisches Rost-/Stahl-Tonemapping.
-
----
-
-## Beispiel
+## Example
 
 ```typescript
-const relief = new MetalReliefMaterial({
+plane.material = new MetalReliefMaterial({
   diffuseMap: await Texture.fromUrl("/assets/painting.webp", { flipY: true }),
   paletteKnifeStrength: 0.8,
   scratchIntensity: 0.5,
-  colorPopTargetHue: 0.0, // Rot bleibt farbig, der Rest wird entsättigt
+  colorPopTargetHue: 0.0, // red stays colored, the rest is desaturated
 });
-plane.material = relief;
 ```
+
+## Related
+
+Showcase 41 (`apps/showcases/41/`)

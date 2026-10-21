@@ -1,63 +1,55 @@
-# Physik-Extras (`@small-world-machine/physics-extras`)
+# Physics Extras (`@small-world-machine/physics-extras`)
 
-Das Paket `@small-world-machine/physics-extras` kombiniert die Kern-Physik-Engine (`@small-world-machine/engine`) mit prozeduraler Geometriezerlegung (`@small-world-machine/geometry-extras`), um dynamische Zerstörung, Brucheffekte und Trümmersimulationen bereitzustellen.
+`@small-world-machine/physics-extras` is an optional ecosystem package that provides higher-level physics building blocks. It depends on `@small-world-machine/engine` and `@small-world-machine/geometry-extras`.
 
-## Installation & Import
-
-```bash
-npm install @small-world-machine/physics-extras
-```
+## Import
 
 ```typescript
 import { fractureObject } from "@small-world-machine/physics-extras";
 ```
 
----
+## `fractureObject(target, options)`
 
-## Voronoi-Frakturierung (`fractureObject`)
+Splits an `Object3D` into convex Voronoi shards. Each shard is a new `Object3D` with a `ConvexHull` collider and a `RigidBody`. The function returns the shards; the caller removes the original and adds the shards to the scene.
 
-`fractureObject` nimmt ein beliebiges `Object3D`, zerlegt dessen Bounding-Volumen über ein 3D-Voronoi-Diagramm in konvexe Zellensplitter und erzeugt für jedes Bruchstück ein eigenständiges `Object3D` mit einem passenden `ConvexHull`-Kollider und `RigidBody`.
+| Option | Default | Description |
+|---|---|---|
+| `points` | none | Seed points in the target's local space; if omitted, `pointCount` random points are used |
+| `pointCount` | 12 | Number of shards |
+| `seed` | 1 | Seed for reproducible shapes |
+| `weights` | none | Per-point weights (power diagram, see `VoronoiCells`) |
+| `bounds` | geometry bounds | Clipping box in local space |
+| `relaxationIterations` | 1 | Lloyd relaxation rounds |
+| `cellPadding` | 0.92 | Shrinks each shard toward its centroid to open cracks |
+| `totalMass` | 1 | Total mass, split evenly across shards |
+| `restitution` | 0.3 | Shard `RigidBody` restitution |
+| `friction` | 0.9 | Shard `RigidBody` friction |
+| `material` | target's material | Material of all shards |
+| `impactPoint` | none | World-space origin; if set, shards receive an outward impulse |
+| `explosionStrength` | 2 | Strength of that impulse |
 
-### Wichtigste Optionen
-
-* **`points`:** Explizite Saatpunkte im lokalen Raum des Objekts; ohne Angabe werden `pointCount` Zufallspunkte erzeugt.
-* **`pointCount`:** Anzahl der erzeugten Splitter (Standard: `12`).
-* **`seed`:** Seed für deterministische, reproduzierbare Splitterformen (Standard: `1`).
-* **`weights`:** Gewichte pro Punkt (Power-Diagramm, siehe `VoronoiCells`).
-* **`bounds`:** Zuschnitt-Box im lokalen Raum (Standard: Bounding-Volumen der Geometrie).
-* **`relaxationIterations`:** Anzahl der Lloyd-Relaxationsschritte für gleichmäßigere Zellengrößen (Standard: `1`).
-* **`material`:** Material der Splitter (Standard: das Material des Objekts).
-* **`cellPadding`:** Skalierungsfaktor pro Fragment zur Erzeugung sichtbarer Risse vor dem Einsturz (Standard: `0.92`).
-* **`impactPoint` & `explosionStrength`:** Schlagpunkt in Weltkoordinaten, von dem aus ein radialer Explosionsimpuls auf alle Trümmerstücke ausgeübt wird (Standard-Stärke: `2`).
-* **`totalMass`, `restitution`, `friction`:** Gesamtmasse (gleichmäßig auf die Splitter verteilt, Standard `1`) sowie Rückprall (`0.3`) und Reibung (`0.9`) der Trümmer-`RigidBody`s.
-
-### Beispiel
+## Example
 
 ```typescript
 import { Object3D, Cube, StandardMaterial, Vector3D } from "@small-world-machine/engine";
 import { fractureObject } from "@small-world-machine/physics-extras";
 
-// 1. Zu zerstörendes Objekt
-// Hinweis: Object3D akzeptiert nur einen Namen als Konstruktor-Argument; Geometrie und
-// Material werden danach explizit zugewiesen (Cube nimmt ausschließlich `size` entgegen).
 const pillar = new Object3D("Pillar");
 pillar.geometry = new Cube({ size: 1 }).getGeometryData();
 pillar.material = new StandardMaterial();
 pillar.position.set(0, 2, 0);
 scene.add(pillar);
 
-// 2. Objekt bei Treffer in 20 Splitter zerbrechen
 const shards = fractureObject(pillar, {
   pointCount: 20,
   impactPoint: new Vector3D(0, 2, 0.5),
-  explosionStrength: 5.0,
-  restitution: 0.2,
-  friction: 0.8,
+  explosionStrength: 5,
 });
 
-// 3. Ursprüngliches Objekt entfernen und Splitter zur Szene hinzufügen
 scene.remove(pillar);
-for (const shard of shards) {
-  scene.add(shard);
-}
+for (const shard of shards) scene.add(shard);
 ```
+
+## Related
+
+[ADR 0021](/adr/0021-ecosystem-packages-exotic-geometry-and-physics), [Physics guide](/guides/physics)

@@ -1,36 +1,27 @@
-# glTF-Erweiterungen (`@small-world-machine/gltf-extensions`)
+# glTF Extensions (`@small-world-machine/gltf-extensions`)
 
-Das Paket `@small-world-machine/gltf-extensions` implementiert die datenkomprimierenden Erweiterungen des offiziellen Khronos glTF 2.0 Standards (`KHR_draco_mesh_compression` und `KHR_texture_basisu`).
+`@small-world-machine/gltf-extensions` is an optional ecosystem package that provides the data-level glTF 2.0 extensions `KHR_draco_mesh_compression` and `KHR_texture_basisu`. It depends on `@small-world-machine/engine`.
 
-## Installation & Registrierung
+## Registration
 
-```bash
-npm install @small-world-machine/gltf-extensions
-```
-
-Um alle glTF-Erweiterungen automatisch in der `GltfLoader`-Plugin-Registry zu registrieren, genügt ein einziger Side-Effect-Import vor dem Laden von Modellen:
+A side-effect import registers both extensions in the `GltfLoader` plugin registry:
 
 ```typescript
 import "@small-world-machine/gltf-extensions/register";
 import { GltfLoader } from "@small-world-machine/engine";
 
-const loader = new GltfLoader();
-const scene = await loader.load("model-compressed.glb");
+const scene = await new GltfLoader().load("model-compressed.glb");
 ```
 
----
+Sub-path imports: `@small-world-machine/gltf-extensions/draco` and `/basisu`. `register` also exports `khrDracoMeshCompression` and `khrTextureBasisu`.
 
-Alternativ lassen sich die Erweiterungen einzeln über die Sub-Pfade `@small-world-machine/gltf-extensions/draco` und `/basisu` einbinden; `register` exportiert zusätzlich `khrDracoMeshCompression` und `khrTextureBasisu`.
+## Extensions
 
----
+| Extension | Behavior |
+|---|---|
+| `KHR_draco_mesh_compression` | Decodes Draco-compressed geometry (positions, normals, UVs, indices) with a WebAssembly decoder. The decoder path is configurable via `DracoDecoder` (`decoderPath`). |
+| `KHR_texture_basisu` | Transcodes KTX2 textures (Basis Universal, ETC1S or UASTC) with a WebAssembly transcoder (`BasisWasmTranscoder`). Default output is RGBA8. A hardware-compressed target format can be chosen: BC1, BC3, BC7, ASTC, ETC2. BC1 works only for UASTC sources. |
 
-## Enthaltene Erweiterungen
+## Related
 
-### 1. `KHR_draco_mesh_compression`
-* Dekodiert hochgradig komprimierte Punktwolken und Geometrie-Puffer (Positionen, Normalen, UVs, Indizes) mittels WebAssembly Draco-Dekoder.
-* Reduziert die Dateigröße komplexer 3D-Meshes erheblich; der Dekoder-Pfad lässt sich über `DracoDecoder` konfigurieren (`decoderPath`).
-
-### 2. `KHR_texture_basisu`
-* Transkodiert KTX2-Texturen (Basis Universal, ETC1S oder UASTC) zur Laufzeit per WebAssembly (`BasisWasmTranscoder`).
-* Standard-Ausgabe ist RGBA8 (universeller Fallback). Alternativ lässt sich ein hardware-komprimiertes Zielformat wählen (BC1, BC3, BC7, ASTC, ETC2 – je nach GPU-Unterstützung); BC1 gibt es nur für UASTC-Quellen.
-* Komprimierte Formate sparen VRAM und reduzieren Textur-Ladezeiten.
+[ADR 0017](/adr/0017-gltf-extension-plugin-registry), [ADR 0018](/adr/0018-gltf-data-level-extensions-and-ecosystem-package)

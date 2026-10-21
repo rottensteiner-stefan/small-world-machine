@@ -1,12 +1,8 @@
 # VFX Extras (`@small-world-machine/vfx-extras`)
 
-Das Paket `@small-world-machine/vfx-extras` bietet eine hochperformante, speicherallocationsfreie Partikel- und Kraftfeld-Pipeline für Small World Machine. Es ermöglicht komplexe astrophysikalische Phänomene, Magieeffekte, Feuer, Rauch und dichte Partikelschwärme mit tausenden Instanzen bei 60 FPS in einem einzigen GPU Draw Call.
+`@small-world-machine/vfx-extras` is an optional ecosystem package that provides a particle system with force-field affectors and GPU-instanced rendering. It depends on `@small-world-machine/engine`.
 
-## Installation & Import
-
-```bash
-npm install @small-world-machine/vfx-extras
-```
+## Import
 
 ```typescript
 import {
@@ -23,28 +19,33 @@ import {
 } from "@small-world-machine/vfx-extras";
 ```
 
----
+## Components
 
-## Kernkomponenten
+### `ParticleSystem`
 
-### 1. `ParticleSystem`
-Verwaltet einen fest allokierten Pool (`capacity`, Standard 1000) in Structure-of-Arrays-Form (`Float32Array`-Felder, adressiert per Slot-Index); freie Slots werden über eine Free-List wiederverwendet. Partikel entstehen per `emit(options)`, Affektoren kommen über `affectors` oder `addAffector()`/`removeAffector()` hinzu, `compact()` und `clear()` räumen den Pool auf.
+Fixed-capacity particle pool (`capacity`, default 1000) in structure-of-arrays form: one `Float32Array` per field, addressed by slot index. Freed slots are reused through a free list; `update()` allocates nothing.
+
+| Member | Description |
+|---|---|
+| `emit(options)` | Spawns a particle and returns its slot index |
+| `update(dt)` | Integrates and applies all affectors |
+| `affectors`, `addAffector()`, `removeAffector()` | Manage the affector list |
+| `compact()`, `clear()` | Reclaim dead slots / remove all particles |
+| `activeCount`, `isAlive(index)` | State queries |
+| `onParticleDied(index)` | Optional callback with the slot index |
 
 ```typescript
 const system = new ParticleSystem({
   capacity: 2000,
   onParticleDied: (index) => {
-    // Optionaler Callback (Slot-Index), z. B. für Respawn
+    // e.g. respawn
   },
 });
 ```
 
-### 2. `ParticleMeshRenderer`
-Schlägt die Brücke zwischen dem CPU-Partikelsystem und der GPU-Instanzierung (`InstancedMesh`).
+### `ParticleMeshRenderer`
 
-* **1 Draw Call:** Alle aktiven Partikel werden als Instanzen eines gemeinsamen Basis-Meshes gerendert.
-* **Zero GC:** Instanz-Transformationsmatrizen ($16 \times \text{Float32}$) und optionale Farb-Puffer ($4 \times \text{Float32}$, RGBA) werden direkt im Float32Array aktualisiert.
-* **Instanz-Kollaps:** Tote oder unsichtbare Partikel ($\alpha \approx 0$) werden auf eine Matrix-Skalierung von $0$ gesetzt und belasten die GPU nicht.
+Renders a `ParticleSystem` as one `InstancedMesh` (one draw call). `sync()` writes matrices and, if `enableColorBuffer` is true (default), RGBA colors into the instance buffers. Dead or invisible particles get scale 0.
 
 ```typescript
 import { Sphere, StandardMaterial } from "@small-world-machine/engine";
@@ -53,65 +54,60 @@ const renderer = new ParticleMeshRenderer({
   system,
   geometry: new Sphere({ radius: 0.05 }).getGeometryData(),
   material: new StandardMaterial(),
-  enableColorBuffer: true,
 });
-
 scene.add(renderer.mesh);
 
-// Im Game-Loop / Animation-Frame:
+// each frame
 system.update(dt);
 renderer.sync();
 ```
 
----
+### Affectors
 
-## Universelle Affektor-Bibliothek
+Affectors modify `position`, `velocity`, `acceleration`, `color`, `size`, `alpha` and `heat` per time step.
 
-Affektoren modifizieren Partikelzustände (`position`, `velocity`, `acceleration`, `color`, `size`, `alpha`, `heat`) pro Zeitschritt $\Delta t$.
+| Affector | Effect |
+|---|---|
+| `PointAttractorAffector` | Gravity-like attraction, Plummer potential: $F = \frac{G \cdot M \cdot r}{(r^2 + \epsilon^2)^{3/2}}$ |
+| `VortexAffector` | Tangential acceleration plus centripetal pull |
+| `PlanarSpringAffector` | Damped spring toward a plane: $F_y = -k \cdot y - d \cdot v_y$ |
+| `ThermalCoolingAffector` | Compression heating and radiative cooling |
+| `FadeOutZoneAffector` | Alpha ramp between `r_in` and `r_out` |
+| `TurbulenceAffector` | Trigonometric 3D curl noise |
+| `DragAffector` | $\mathbf{F} = -(\gamma_1 + \gamma_2 \|\mathbf{v}\|) \mathbf{v}$ |
+| `ColorOverLifeAffector` | Color and alpha gradient over lifetime |
+| `SizeOverLifeAffector` | Scale curve over lifetime |
+| `BouncePlaneAffector` | Elastic reflection at the plane $y = y_0$ |
 
-| Affektor | Formel / Wirkungsweise | Typischer Einsatz |
-|---|---|---|
-| **`PointAttractorAffector`** | $F = \frac{G \cdot M \cdot r}{(r^2 + \epsilon^2)^{3/2}}$ (Plummer-Potential) | Gravitation, Schwarze Löcher, Magnetismus, Sog |
-| **`VortexAffector`** | Tangentiale Drehbeschleunigung $\mathbf{v}_{\perp}$ + Zentripetalsog | Wirbelstürme, Strudel, Spiralgalaxien, Akkretionsscheiben |
-| **`PlanarSpringAffector`** | $F_y = -k \cdot y - d \cdot v_y$ (Dämpfungsschwingung) | Orbitale Scheibenstabilisierung, Wellenflächen |
-| **`ThermalCoolingAffector`** | Kompressionserwärmung + radiative Planck-Kühlung | Glutpartikel, Plasma, Akkretionsscheiben, Schweißfunken |
-| **`FadeOutZoneAffector`** | $\alpha = \text{clamp}\left(\frac{r - r_{in}}{r_{out} - r_{in}}, 0, 1\right)$ | Gravitative Rotverschiebung, Ereignishorizont, Absorption |
-| **`TurbulenceAffector`** | Trigonometrischer 3D-Curl-Noise $\nabla \times \mathbf{A}$ | Rauchwirbel, atmosphärische Böen, Flammen |
-| **`DragAffector`** | $\mathbf{F}_{\text{drag}} = -(\gamma_1 + \gamma_2 \|\mathbf{v}\|) \mathbf{v}$ | Luft-/Wasserwiderstand, Verlangsamung im Medium |
-| **`ColorOverLifeAffector`** | Farb- und Alpha-Gradient über Lebensdauer $t \in [0, 1]$ | Farbverlauf von Feuer nach Rauch, Magieschweife |
-| **`SizeOverLifeAffector`** | Skalierungsverlauf über Lebensdauer | Explosionen, expandierende Rauchwolken |
-| **`BouncePlaneAffector`** | Elastische Kollisionsreflexion an Ebene ($y = y_0$) | Funken auf Boden, Regentropfen, Trümmer |
+### `AccretionDiskEmitter`
 
----
+Prebuilt accretion-disk simulation with a Keplerian orbital velocity $v(r) = \sqrt{M / r} \cdot f_{\text{drift}}$, event-horizon absorption, redshift fade and thermal cooling. It exposes its `system` and the affectors it created (`attractor`, `planarSpring`, `thermal`, `fadeOut`).
 
-## Beispiel: Akkretionsscheiben-Simulation (`AccretionDiskEmitter`)
-
-Ein hochstufiges, schlüsselfertiges System zur astrophysikalischen Simulation einer Akkretionsscheibe mit Kepler-Rotationsprofil:
-
-$$v_{\text{orbit}}(r) = \sqrt{\frac{M}{r}} \cdot f_{\text{drift}}$$
+| Option | Default |
+|---|---|
+| `particleCount` | 400 |
+| `center` | `(0, 0, 0)` |
+| `innerRadius` / `outerRadius` | 0.6 / 3.0 |
+| `eventHorizonRadius` | 0.35 |
+| `fadeStartRadius` | 0.55 |
+| `mass` | `particleCount` |
+| `diskThickness` | 0.2 |
+| `driftFactor` | 0.98 |
 
 ```typescript
-const accretionDisk = new AccretionDiskEmitter({
-  particleCount: 1500,
-  innerRadius: 0.6,
-  outerRadius: 3.2,
-  eventHorizonRadius: 0.35,
-  fadeStartRadius: 0.55,
-  // center: new Vector3D(0, 0, 0),  // optional, Standard: Ursprung
-  mass: 1500,
-  diskThickness: 0.15,
-  driftFactor: 0.985,
-});
-
+const disk = new AccretionDiskEmitter({ particleCount: 1500, outerRadius: 3.2, mass: 1500 });
 const renderer = new ParticleMeshRenderer({
-  system: accretionDisk.system,
+  system: disk.system,
   geometry: new Sphere({ radius: 0.04 }).getGeometryData(),
   material: new StandardMaterial(),
 });
-
 scene.add(renderer.mesh);
 
-// Im Render-Loop:
-accretionDisk.update(dt);
+// each frame
+disk.update(dt);
 renderer.sync();
 ```
+
+## Related
+
+[ADR 0022](/adr/0022-gpu-instanced-vfx-pipeline-and-extras-package)
