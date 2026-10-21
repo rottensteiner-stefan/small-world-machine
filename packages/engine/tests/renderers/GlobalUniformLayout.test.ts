@@ -27,7 +27,7 @@ const FIXTURE_PATH = path.join(__dirname, "global-uniform-snapshot.json");
 interface PackedSnapshot {
   /** 528 floats = full 2112-byte WebGL2 GlobalUniforms UBO, _data order. */
   webgl2: number[];
-  /** 212 floats = full 848-byte WebGPU GlobalUniforms buffer (scratchGlobalBufferData). */
+  /** 216 floats = full 864-byte WebGPU GlobalUniforms buffer (scratchGlobalBufferData). */
   webgpu: number[];
 }
 
@@ -221,9 +221,9 @@ describe("GlobalUniforms byte-identity (snapshot taken from the OLD writers befo
     expect(packed.webgl2).toHaveLength(528);
   });
 
-  it("webgpu snapshot is a full 848-byte block (212 floats)", () => {
+  it("webgpu snapshot is a full 864-byte block (216 floats)", () => {
     const packed = captureSnapshot();
-    expect(packed.webgpu).toHaveLength(212);
+    expect(packed.webgpu).toHaveLength(216);
   });
 });
 

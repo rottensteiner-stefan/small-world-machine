@@ -27,7 +27,7 @@ function makeCaster(name: string, bounds: BoundingSphere | undefined): Object3D 
 }
 
 function makeMockRenderer(objects: Object3D[]): Internals {
-  const scratchGlobalBufferData = new Float32Array(212);
+  const scratchGlobalBufferData = new Float32Array(216);
   const device = {
     createTexture: vi.fn(() => ({ createView: vi.fn(() => ({})) })),
     queue: { writeBuffer: vi.fn() },

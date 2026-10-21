@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.115.4] - 2026-10-21
+
+### "The darkest place is under the candlestick." - Proverb
+
+- **Features:**
+  - *PCSS-Softness-Knöpfe (WebGPU, Phase 0/1 der Soft-Shadow-Roadmap):* Neue opt-in Qualitäts-Knöpfe über den bestehenden ADR-0035-Override-Lock — `quality.shadowSoftness` (Penumbra-Multiplikator, Default 1) skaliert die PCSS-Penumbre ehrlich, `quality.shadowMaxPcfRadius` (Kernel-Cap in Shadow-Map-Texeln, Default 4) begrenzt die Bandbreite des variablen PCF-Radius. Bei neutralen Defaults ist das Bild **byte-identisch** zum bisherigen Verhalten — nichts ändert sich ohne explizites Opt-in, bestehende Szenen bleiben unberührt. WebGPU-only: WebGL2 hat heute kein PCSS (nur festes 3×3-PCF) und WebGL1 kein Shadow-Mapping; die Backend-Grenzen sind in der Doku ehrlich benannt.
+- **Architecture & Bugfixes:**
+  - *WebGPU-`GlobalUniforms` test-pinned erweitert (848 → 864 B / 212 → 216 floats):* Neues Feld `shadowSoftness: vec4f` (`[penumbraScale, pcfMaxRadius, pad, pad]`) am Struct-Ende — alle bestehenden Offsets unverändert, der Wedge-Partial-Upload von `CascadedShadowPassGPU` (Bereich 128–199) bleibt unberührt. `GlobalUniformLayout.ts`/`GlobalUniformWriter.ts`/`structs.wgsl` synchron gezogen; `GlobalUniformLayout.test.ts` (WGSL-Parse-Pin) und Regenerierung des Snapshot-Fixtures verriegeln die Layout-Identität. `getShadowPCSS` (WebGPU) skaliert die Penumbra jetzt über `penumbraScale` statt die Legacy-Formel hart zu kodieren, mit Default `[1, 4]` = identisches Verhalten.
+- **Housekeeping & Docs:**
+  - `docs/guides/shadows.md`: neue Sektion „PCSS softness tuning (WebGPU)" plus Tuning-Tip (Knöpfe gegen Penumbra, nicht gegen den Acne-Bias kämpfen). Renderer-Test-Fakes (216 floats) und Versionsstand 0.115.4 synchronisiert.
+
 ## [0.115.3] - 2026-10-21
 
 ### "Clarity is the counterbalance of profound thought." - Luc de Clapiers, Marquis de Vauvenargues

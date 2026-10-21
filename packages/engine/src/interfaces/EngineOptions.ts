@@ -77,6 +77,18 @@ export interface QualityConfig {
   /** Clustered/tiled forward+ light culling settings (WebGL2/WebGPU only). */
   clusteredLighting?: ClusteredLightingConfig;
   /**
+   * PCSS penumbra softness multiplier for shadow-casting WebGPU lights (the only backend with a
+   * PCSS path today). `1` reproduces the legacy behavior exactly; `>1` widens, `<1` narrows the
+   * soft penumbra. WebGL2 (fixed-PCF) and WebGL1 (no shadow mapping) ignore it. Default 1.
+   */
+  shadowSoftness?: number;
+  /**
+   * Cap on the variable-radius PCF kernel used by PCSS, in shadow-map texels. Default 4 —
+   * corresponds to the legacy hardcoded cap. Raise it together with `shadowSoftness` to allow
+   * wider penumbras. WebGPU only.
+   */
+  shadowMaxPcfRadius?: number;
+  /**
    * Write the shading normal (world space, octahedral `rg16float`) into a second render target
    * of the main pass for decals, AO and post effects (ADR 0028). `"auto"` (default) switches it
    * on, once and for good, the first time a decal is visible (costs nothing before that; WebGL2

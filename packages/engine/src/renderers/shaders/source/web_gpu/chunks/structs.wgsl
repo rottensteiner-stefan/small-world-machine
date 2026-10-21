@@ -1,7 +1,8 @@
 // WGSL Global and Object structures
 
-// GlobalUniforms: Scene-level uniforms (848 bytes / 212 floats)
-// Cleanly grouped into Camera & View, Environment & Fog, Shadow Maps, and Clustered Light Grid.
+// GlobalUniforms: Scene-level uniforms (864 bytes / 216 floats)
+// Cleanly grouped into Camera & View, Environment & Fog, Shadow Maps, Clustered Light Grid,
+// and Shadow Softness Tuning.
 struct GlobalUniforms {
     // --- 1. Camera & View (80 bytes) ---
     vp: mat4x4f,
@@ -38,6 +39,11 @@ struct GlobalUniforms {
     projScale: vec2f,     // projection matrix diagonal terms [0][0]/[1][1], for view-space reconstruction
     tileSizePx: vec2f,    // clustered light grid screen-space tile size in pixels
     clusterDims: vec4f    // [x, y, z cell counts, maxLightsPerCluster], all as f32
+
+    // --- 5. Shadow Softness Tuning (16 bytes) ---
+    // PCSS softness knobs (WebGPU only today): x = penumbra scale multiplier (1 = legacy),
+    // y = cap on the variable-radius PCF kernel in shadow-map texels (default 4), z/w = reserved.
+    shadowSoftness: vec4f
 }
 
 // ObjectUniforms: 512-byte uniform block (32 vec4 / 128 floats)

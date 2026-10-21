@@ -93,12 +93,12 @@ export const WebGL2AreaLightLayout = {
   slotBytes: 96,
 } as const;
 
-// ── WebGPU (212 floats / 848 bytes) ───────────────────────────────────────────────────────────
+// ── WebGPU (216 floats / 864 bytes) ───────────────────────────────────────────────────────────
 // Field order and float indices match `structs.wgsl` exactly.
 
 export const WebGPUGGlobalUniformLayout = {
-  totalFloats: 212,
-  totalBytes: 848,
+  totalFloats: 216,
+  totalBytes: 864,
   fields: {
     vp: { index: 0, floats: 16 },
     viewPos: { index: 16, floats: 4 },
@@ -128,5 +128,6 @@ export const WebGPUGGlobalUniformLayout = {
     projScale: { index: 204, floats: 2 },
     tileSizePx: { index: 206, floats: 2 },
     clusterDims: { index: 208, floats: 4 },
+    shadowSoftness: { index: 212, floats: 4 },
   },
 } as const;

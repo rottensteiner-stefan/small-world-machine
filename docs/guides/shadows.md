@@ -93,6 +93,32 @@ cascade-blend sample (see above) still uses fixed-radius PCF, so as not to doubl
 the blend zone. **Spot light shadows use PCSS on WebGPU only**; on WebGL2 they stay at fixed-radius PCF. See
 [ADR 0006](/adr/0006-pcss-directional-light-only) for the scope. Only the first 4 spot lights get a shadow map.
 
+### PCSS softness tuning (WebGPU)
+
+The PCSS penumbra (the *softness* of the shadow, i.e. how wide the gradient band is) is a global,
+quality-style knob — not per light — and lives on `EngineOptions.quality` like every other quality
+axis (config hint > tier > heuristic; the ADR 0035 override-lock applies: anything you set explicitly
+wins against the tier policy):
+
+```typescript
+const engine = new Engine({
+  // ...
+  quality: {
+    // Defaults reproduce the legacy behavior byte-for-byte; only set these to resize the penumbra.
+    shadowSoftness: 1.0,       // penumbra scale multiplier; >1 widens, <1 narrows the soft band
+    shadowMaxPcfRadius: 4.0,   // cap on the variable-radius PCF kernel, in shadow-map texels
+  },
+});
+```
+
+- `shadowSoftness` (default `1`) multiplies the PCSS penumbra estimate. It is the honest "softness"
+  control for directional/spot PCSS on WebGPU.
+- `shadowMaxPcfRadius` (default `4`) caps how many shadow-map texels the variable-radius PCF may
+  reach. To get genuinely wider penumbras you normally raise both together — a `shadowSoftness` far
+  above 1 with the default cap just saturates the kernel back to the cap.
+- These knobs are **WebGPU-only today**: they are no-ops on WebGL2 (which has no PCSS, only fixed
+  PCF) and WebGL1 (no shadow mapping at all).
+
 ## Tuning tips
 
 - Start with `shadowNormalBias` around `0.02–0.05` and `shadowBias` around `0.001–0.005`;
@@ -107,3 +133,6 @@ the blend zone. **Spot light shadows use PCSS on WebGPU only**; on WebGL2 they s
   (`QualityConfigResolver` over `DeviceCaps.getPerformanceTier()`, URL override
   `?tier=low|medium|high`), and any value you set explicitly in `quality` wins against the tier
   (see `docs/guides/configuration.md`).
+- If a WebGPU PCSS shadow reads too soft or too hard for a scene, adjust `shadowSoftness`
+  (direction) and `shadowMaxPcfRadius` (bandwidth ceiling) instead of fighting the depth `bias` —
+  those tune the penumbra, not the acne/peter-panning trade.

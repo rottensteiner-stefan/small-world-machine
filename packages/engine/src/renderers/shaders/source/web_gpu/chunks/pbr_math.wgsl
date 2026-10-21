@@ -125,7 +125,15 @@ fn getShadowPCSS(map: texture_depth_2d_array, samp: sampler_comparison, shadowPo
     }
     avgBlockerDepth /= blockerCount;
     let occluderDepthDelta = depthRef - avgBlockerDepth;
-    let pcfRadius = clamp(1.0 + occluderDepthDelta / max(bias, 0.0001), 1.0, 4.0);
+    // PCSS softness tuning (WebGPU global, see docs/guides/shadows.md): shadowSoftness.x =
+    // penumbra scale multiplier (1 = legacy), shadowSoftness.y = PCF radius cap in texels.
+    // Neutral defaults [1, 4] reproduce the pre-knob clamp() exactly, so overriding the knobs
+    // is opt-in and never changes existing scenes unless an author asks for it.
+    let pcfRadius = clamp(
+        1.0 + global.shadowSoftness.x * occluderDepthDelta / max(bias, 0.0001),
+        1.0,
+        max(global.shadowSoftness.y, 1.0),
+    );
 
     var shadow: f32 = 0.0;
     for (var y: i32 = -1; y <= 1; y++) {

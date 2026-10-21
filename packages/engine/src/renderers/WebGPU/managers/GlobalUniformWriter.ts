@@ -26,9 +26,10 @@ export class GlobalUniformWriter {
   private _spotLightBuffer!: GPUBuffer;
   private _areaLightBuffer!: GPUBuffer;
 
-  // 212 floats: GlobalUniforms grew by 8 floats (resolution/projScale/tileSizePx/clusterDims)
-  // for clustered light culling -- see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md.
-  private _scratchGlobalBufferData = new Float32Array(212);
+  // 216 floats: GlobalUniforms grew by 8 floats (resolution/projScale/tileSizePx/clusterDims)
+  // for clustered light culling -- see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md,
+  // and by 4 floats (shadowSoftness) for PCSS softness tuning (docs/guides/shadows.md).
+  private _scratchGlobalBufferData = new Float32Array(216);
   private _scratchPointLightData = new Float32Array(32); // Initial capacity, grows dynamically
   private _scratchSpotLightData = new Float32Array(64); // Initial capacity, grows dynamically
   private _scratchAreaLightData = new Float32Array(96); // Initial capacity, grows dynamically
@@ -74,9 +75,10 @@ export class GlobalUniformWriter {
    */
   public init(device: GPUDevice): void {
     this._globalUniformBuffer = device.createBuffer({
-      // 848 bytes: GlobalUniforms grew by 40 bytes (resolution/projScale/tileSizePx/clusterDims)
-      // for clustered light culling -- see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md.
-      size: 848,
+      // 864 bytes: GlobalUniforms grew by 40 bytes (resolution/projScale/tileSizePx/clusterDims)
+      // for clustered light culling -- see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md --
+      // and by 16 bytes (shadowSoftness) for PCSS softness tuning (docs/guides/shadows.md).
+      size: 864,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this._pointLightBuffer = device.createBuffer({
@@ -254,6 +256,17 @@ export class GlobalUniformWriter {
     gData[glob.clusterDims.index + 1] = this._host.clusterDims.y;
     gData[glob.clusterDims.index + 2] = this._host.clusterDims.z;
     gData[glob.clusterDims.index + 3] = this._host.clusterMaxLightsPerCluster;
+
+    // shadowSoftness (WebGPU PCSS tuning): [penumbraScale, pcfMaxRadius, pad, pad].
+    // Neutral defaults keep the pre-knob behavior byte-identical: penumbraScale 1.0 reproduces
+    // the legacy clamp(1 + delta/bias, 1, 4) exactly, maxPcfRadius 4 the legacy cap. The knobs
+    // only take effect when an author overrides them via `quality` (ADR 0035 override-lock);
+    // CascadedShadowPassGPU's wedge re-upload never touches this range (it ends at dirShadowInfo).
+    const soft = glob.shadowSoftness;
+    gData[soft.index] = this._host.quality.shadowSoftness ?? 1.0;
+    gData[soft.index + 1] = this._host.quality.shadowMaxPcfRadius ?? 4.0;
+    gData[soft.index + 2] = 0.0;
+    gData[soft.index + 3] = 0.0;
 
     // Default spot shadow values
     for (let i = 0; i < glob.spotShadowInfo.count; i++) {
