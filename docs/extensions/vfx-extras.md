@@ -28,13 +28,13 @@ import {
 ## Kernkomponenten
 
 ### 1. `ParticleSystem`
-Verwaltet einen fest allokierten Ringpuffer (`capacity`) von `Particle`-Instanzen. Unterstützt kontinuierliche Emission, Burst-Spawns, Lebenszeitverwaltung und das Hinzufügen beliebiger Affektoren.
+Verwaltet einen fest allokierten Pool (`capacity`, Standard 1000) in Structure-of-Arrays-Form (`Float32Array`-Felder, adressiert per Slot-Index); freie Slots werden über eine Free-List wiederverwendet. Partikel entstehen per `emit(options)`, Affektoren kommen über `affectors` oder `addAffector()`/`removeAffector()` hinzu, `compact()` und `clear()` räumen den Pool auf.
 
 ```typescript
 const system = new ParticleSystem({
   capacity: 2000,
-  onParticleDied: (p) => {
-    // Optionaler Respawn-Callback
+  onParticleDied: (index) => {
+    // Optionaler Callback (Slot-Index), z. B. für Respawn
   },
 });
 ```
@@ -97,6 +97,7 @@ const accretionDisk = new AccretionDiskEmitter({
   outerRadius: 3.2,
   eventHorizonRadius: 0.35,
   fadeStartRadius: 0.55,
+  // center: new Vector3D(0, 0, 0),  // optional, Standard: Ursprung
   mass: 1500,
   diskThickness: 0.15,
   driftFactor: 0.985,

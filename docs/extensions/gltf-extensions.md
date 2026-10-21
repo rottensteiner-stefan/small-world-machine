@@ -20,16 +20,17 @@ const scene = await loader.load("model-compressed.glb");
 
 ---
 
+Alternativ lassen sich die Erweiterungen einzeln über die Sub-Pfade `@small-world-machine/gltf-extensions/draco` und `/basisu` einbinden; `register` exportiert zusätzlich `khrDracoMeshCompression` und `khrTextureBasisu`.
+
+---
+
 ## Enthaltene Erweiterungen
 
 ### 1. `KHR_draco_mesh_compression`
 * Dekodiert hochgradig komprimierte Punktwolken und Geometrie-Puffer (Positionen, Normalen, UVs, Indizes) mittels WebAssembly Draco-Dekoder.
-* Reduziert die Dateigröße komplexer 3D-Meshes um bis zu 80–90%.
+* Reduziert die Dateigröße komplexer 3D-Meshes erheblich; der Dekoder-Pfad lässt sich über `DracoDecoder` konfigurieren (`decoderPath`).
 
 ### 2. `KHR_texture_basisu`
-* Dekodiert und transkodiert universelle Basis Universal (KTX2 / `.basis`) GPU-Texturformate zur Laufzeit.
-* Unterstützt Hardware-beschleunigte Textur-Dekompression direkt im VRAM:
-  * **BC7 / BC3 (DXT5):** Desktop WebGL / WebGPU
-  * **ASTC:** Mobile (iOS / Android)
-  * **ETC2:** WebGL2 Standard
-* Spart erhebliche Mengen an VRAM und eliminiert Textur-Lade-Ruckler.
+* Transkodiert KTX2-Texturen (Basis Universal, ETC1S oder UASTC) zur Laufzeit per WebAssembly (`BasisWasmTranscoder`).
+* Standard-Ausgabe ist RGBA8 (universeller Fallback). Alternativ lässt sich ein hardware-komprimiertes Zielformat wählen (BC1, BC3, BC7, ASTC, ETC2 – je nach GPU-Unterstützung); BC1 gibt es nur für UASTC-Quellen.
+* Komprimierte Formate sparen VRAM und reduzieren Textur-Ladezeiten.

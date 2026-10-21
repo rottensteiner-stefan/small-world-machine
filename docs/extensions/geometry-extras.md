@@ -1,6 +1,6 @@
 # Exotische Geometrien (`@small-world-machine/geometry-extras`)
 
-Das Paket `@small-world-machine/geometry-extras` erweitert den Kern-Primitiven-Katalog (`Cube`, `Sphere`, `Plane`, `Cylinder`, `Tube`) um eine umfangreiche Sammlung prozeduraler, parametrischer und mathematisch exotischer 3D-Geometrien.
+Das Paket `@small-world-machine/geometry-extras` erweitert den Kern-Primitiven-Katalog (u. a. `Cube`, `Sphere`, `Plane`, `Cylinder`, `Tube`, `Torus`, `Capsule`) um eine umfangreiche Sammlung prozeduraler, parametrischer und mathematisch exotischer 3D-Geometrien.
 
 ## Installation & Import
 
@@ -18,8 +18,12 @@ import {
   ParametricSurface,
   FilledPolygon,
   VoronoiShardGeometry,
+  VoronoiCells,
+  poissonDiskSample,
   MarchingCubes,
+  metaballField,
 } from "@small-world-machine/geometry-extras";
+import { Vector3D } from "@small-world-machine/engine";
 ```
 
 ---
@@ -31,10 +35,11 @@ Generiert 3D-Supershapes aus zwei gekoppelten 2D-Superformeln. Erzeugt Seesterne
 
 ```typescript
 const supershape = new Supershape({
-  m1: 7, n1_1: 0.2, n2_1: 1.7, n3_1: 1.7, // Formel 1 (horizontal)
-  m2: 7, n1_2: 0.2, n2_2: 1.7, n3_2: 1.7, // Formel 2 (vertikal)
-  radialSegments: 64,
-  heightSegments: 64,
+  radius: 1.0,
+  longitude: { m: 7, n1: 0.2, n2: 1.7, n3: 1.7 }, // Formel 1 (horizontal)
+  latitude: { m: 7, n1: 0.2, n2: 1.7, n3: 1.7 },  // Formel 2 (vertikal)
+  longitudeSegments: 64,
+  latitudeSegments: 64,
 });
 ```
 
@@ -59,8 +64,9 @@ Parametrisches Möbius-Band mit kontinuierlicher Halb-Verdrillung.
 const mobius = new MobiusStrip({
   radius: 1.0,
   width: 0.4,
-  segments: 64,
-  strips: 16,
+  segments: 96,       // Segmente entlang der Länge
+  widthSegments: 8,   // Segmente über die Breite
+  twists: 1,          // Halbverdrillungen pro Umlauf
 });
 ```
 
@@ -68,28 +74,56 @@ const mobius = new MobiusStrip({
 Rotiert einen 2D-Pfad aus Punkten um die Y-Achse, um Vasen, Säulen, Flaschen oder Becher zu erzeugen.
 
 ```typescript
-const points = [
-  { x: 0.0, y: 0.0 },
-  { x: 0.5, y: 0.2 },
-  { x: 0.3, y: 1.0 },
-  { x: 0.6, y: 1.8 },
+// Profil: x = Radius, y = Höhe, von unten nach oben (Vector3D)
+const profile = [
+  new Vector3D(0.0, 0.0, 0),
+  new Vector3D(0.5, 0.2, 0),
+  new Vector3D(0.3, 1.0, 0),
+  new Vector3D(0.6, 1.8, 0),
 ];
-const lathe = new Lathe({ points, segments: 32 });
+const lathe = new Lathe({ profile, segments: 32 }); // optional: closed, startAngle, arcAngle
 ```
 
 ### 5. `PlatonicSolid`
-Exakte platonische Körper: Tetraeder, Oktaeder, Dodekaeder und Ikosaeder mit scharfen oder geteilten Flächennormalen.
+Platonische Körper: Tetraeder, Oktaeder, Dodekaeder und Ikosaeder; `detail` unterteilt die Flächen.
 
 ```typescript
 const dodecahedron = new PlatonicSolid({
-  type: "dodecahedron",
+  solid: "dodecahedron", // tetrahedron | octahedron | icosahedron | dodecahedron
   radius: 1.0,
+  detail: 0,
 });
 ```
 
-### 6. `FilledPolygon` & `VoronoiShardGeometry`
-* **`FilledPolygon`:** Triangulierung beliebiger 2D-Polygone (auch nicht-konvex / mit Löchern) mittels Ear-Clipping.
-* **`VoronoiShardGeometry`:** Konvexe Voronoi-Zellenfragmente zur realistischen Zerstörungssimulation und Bruchdarstellung.
+### 6. `ParametricSurface`
+Fläche aus einer beliebigen Funktion `(u, v) => Vector3D`.
 
-### 7. `MarchingCubes`
+```typescript
+const wave = new ParametricSurface({
+  surface: (u, v) => new Vector3D(u, Math.sin(u * 4) * Math.cos(v * 4) * 0.2, v),
+  uMin: -1, uMax: 1, vMin: -1, vMax: 1,
+  uSegments: 64, vSegments: 64, // optional: closedU, closedV
+});
+```
+
+### 7. `FilledPolygon` & `VoronoiShardGeometry`
+* **`FilledPolygon`:** Triangulierung beliebiger Polygone (`outer`, optional `holes`, auch nicht-konvex) mittels Ear-Clipping.
+* **`VoronoiShardGeometry`:** Konvexes Voronoi-Zellenfragment aus einer Liste von Flächen, für Zerstörungssimulation und Bruchdarstellung.
+
+### 8. `VoronoiCells` & `poissonDiskSample`
+* **`VoronoiCells`:** Zerlegt eine Box (`bounds`) in 3D-Voronoi-Zellen (`points` oder `pointCount`, `seed`, `weights`, `cellPadding`, `relaxationIterations`). Hilfsfunktionen: `computeCellFaces`, `relaxPoints`, `cellCentroid`.
+* **`poissonDiskSample`:** Gleichmäßig verteilte Zufallspunkte mit Mindestabstand (`bounds`, `minDistance`, `seed`, `maxAttempts`).
+
+
+### 9. `MarchingCubes`
 Erzeugt Polygon-Meshes aus 3D-Skalarfeldern (SDFs, Iso-Flächen, Metaballs).
+
+```typescript
+const blob = new MarchingCubes({
+  sample: metaballField([{ x: 0, y: 0, z: 0, radius: 1, strength: 1 }]), // (x, y, z) => Wert
+  isoLevel: 0.5,
+  min: { x: -2, y: -2, z: -2 },
+  max: { x: 2, y: 2, z: 2 },
+  resolution: 32,
+});
+```

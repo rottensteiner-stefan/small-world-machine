@@ -9,7 +9,7 @@ npm install @small-world-machine/physics-extras
 ```
 
 ```typescript
-import { fractureObject, VoronoiFractureOptions } from "@small-world-machine/physics-extras";
+import { fractureObject } from "@small-world-machine/physics-extras";
 ```
 
 ---
@@ -20,12 +20,16 @@ import { fractureObject, VoronoiFractureOptions } from "@small-world-machine/phy
 
 ### Wichtigste Optionen
 
+* **`points`:** Explizite Saatpunkte im lokalen Raum des Objekts; ohne Angabe werden `pointCount` Zufallspunkte erzeugt.
 * **`pointCount`:** Anzahl der erzeugten Splitter (Standard: `12`).
-* **`seed`:** Seed für deterministische, reproduzierbare Splitterformen.
-* **`relaxationIterations`:** Anzahl der Lloyd-Relaxationsschritte für gleichmäßigere Zellengrößen.
+* **`seed`:** Seed für deterministische, reproduzierbare Splitterformen (Standard: `1`).
+* **`weights`:** Gewichte pro Punkt (Power-Diagramm, siehe `VoronoiCells`).
+* **`bounds`:** Zuschnitt-Box im lokalen Raum (Standard: Bounding-Volumen der Geometrie).
+* **`relaxationIterations`:** Anzahl der Lloyd-Relaxationsschritte für gleichmäßigere Zellengrößen (Standard: `1`).
+* **`material`:** Material der Splitter (Standard: das Material des Objekts).
 * **`cellPadding`:** Skalierungsfaktor pro Fragment zur Erzeugung sichtbarer Risse vor dem Einsturz (Standard: `0.92`).
-* **`impactPoint` & `explosionStrength`:** Schlagpunkt in Weltkoordinaten, von dem aus ein radialer Explosionsimpuls auf alle Trümmerstücke ausgeübt wird.
-* **`totalMass`, `restitution`, `friction`:** Physikalische Materialeigenschaften für die Trümmer-`RigidBody`s.
+* **`impactPoint` & `explosionStrength`:** Schlagpunkt in Weltkoordinaten, von dem aus ein radialer Explosionsimpuls auf alle Trümmerstücke ausgeübt wird (Standard-Stärke: `2`).
+* **`totalMass`, `restitution`, `friction`:** Gesamtmasse (gleichmäßig auf die Splitter verteilt, Standard `1`) sowie Rückprall (`0.3`) und Reibung (`0.9`) der Trümmer-`RigidBody`s.
 
 ### Beispiel
 

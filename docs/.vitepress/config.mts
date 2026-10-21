@@ -37,6 +37,8 @@ export default defineConfig({
             { text: "Geometrie Extras (@small-world-machine/geometry-extras)", link: "/extensions/geometry-extras" },
             { text: "Physik Extras (@small-world-machine/physics-extras)", link: "/extensions/physics-extras" },
             { text: "glTF Erweiterungen (@small-world-machine/gltf-extensions)", link: "/extensions/gltf-extensions" },
+            { text: "Artistic Extras (@small-world-machine/artistic-extras)", link: "/extensions/artistic-extras" },
+            { text: "Liquid Extras (@small-world-machine/liquid-extras)", link: "/extensions/liquid-extras" },
           ],
         },
       ],
