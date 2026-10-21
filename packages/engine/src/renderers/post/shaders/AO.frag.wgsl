@@ -36,6 +36,12 @@ fn neighbourViewPos(coord: vec2i, dims: vec2i) -> vec4f {
     return vec4f(reconstructViewPos((vec2f(c) + vec2f(0.5)) / vec2f(dims), z), z);
 }
 
+// Reliable finite test: exponent bits all ones means Inf or NaN (WGSL has no isNan()/isInf(),
+// and `x == x` / `x != x` may be constant-folded by the shader compiler).
+fn isFiniteF32(x: f32) -> bool {
+    return (bitcast<u32>(x) & 0x7f800000u) != 0x7f800000u;
+}
+
 fn computeHBAO(pixelCoord: vec2i, dims: vec2i) -> f32 {
     let maxCoord = dims - vec2i(1, 1);
     let centerCoord = clamp(pixelCoord, vec2i(0, 0), maxCoord);
@@ -117,14 +123,11 @@ fn computeHBAO(pixelCoord: vec2i, dims: vec2i) -> f32 {
             }
 
             let horizonSin = dot(toSample / dist, normal);
-            // `x != x` is the portable NaN check in WGSL (no isNan()/isInf() builtins --
-            // removed from the spec, see AO.frag.glsl's isnan()/isinf() for why this guard
-            // exists at all). max()/clamp() have unspecified results for a NaN operand, so a
-            // NaN horizonSin (e.g. from an upstream-NaN depth sample slipping past the `dist`
-            // bounds check above, since NaN comparisons are always false) must be filtered out
-            // BEFORE it reaches max() -- Inf doesn't need the same treatment, IEEE754 ordering
-            // for Inf is well-defined so the clamp() below already handles it correctly.
-            if (horizonSin == horizonSin) {
+            // max()/clamp() have unspecified results for a NaN operand, so a non-finite
+            // horizonSin (e.g. from an upstream-NaN depth sample slipping past the `dist` bounds
+            // check above) is filtered out BEFORE it reaches max(). `x == x` is not a reliable
+            // test (the compiler may fold it), the exponent-bit test below is.
+            if (isFiniteF32(horizonSin)) {
                 maxHorizonSin = max(maxHorizonSin, horizonSin);
             }
         }
@@ -133,7 +136,7 @@ fn computeHBAO(pixelCoord: vec2i, dims: vec2i) -> f32 {
     occlusion /= 6.0;
 
     var ao = clamp(1.0 - occlusion * u.intensity, 0.0, 1.0);
-    if (ao != ao) {
+    if (!isFiniteF32(ao)) {
         ao = 1.0;
     }
     return ao;

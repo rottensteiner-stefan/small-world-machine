@@ -13,6 +13,17 @@ import hzbDownsampleMaxWGSL from "../../shaders/source/web_gpu/compute/hzb_downs
 const MAX_HZB_TESTED_OBJECTS = 8192;
 
 /**
+ * Readback latency is 1-3 frames (ping-pong `mapAsync`), so a test result describes the camera of
+ * a few frames ago. Two conservative mitigations, both biased toward "draw it":
+ * - `HZB_RADIUS_PADDING`: the tested sphere is inflated, so small camera/object motion during the
+ *   latency window cannot reveal a texel the stale footprint did not cover.
+ * - `HZB_OCCLUDED_FRAMES_TO_CULL`: an object is only culled after this many consecutive
+ *   "occluded" results (flicker suppression); a single "visible" result un-culls it at once.
+ */
+const HZB_RADIUS_PADDING = 1.15;
+const HZB_OCCLUDED_FRAMES_TO_CULL = 2;
+
+/**
  * Owns the entire Hierarchical-Z (HZB) occlusion-culling GPU subsystem that used to live inside
  * `WebGPURenderer`: the pyramid's copy/downsample/visibility-test pipelines, the depth-pyramid
  * texture, the packed-AABB/result/params buffers, the ping-pong `MAP_READ` staging pair and its
@@ -63,6 +74,8 @@ export class HzbOcclusionSystem {
    * a pending readback's snapshot is never clobbered by a later dispatch. */
   private _hzbSlotObjects: [Object3D[], Object3D[]] = [[], []];
   private _hzbCopyRecordedThisFrame = false;
+  /** Consecutive "occluded" readbacks per object (absent = 0); per-system, not global. */
+  private readonly _occludedStreak = new WeakMap<Object3D, number>();
 
   /** Reused every frame -- see `dispatchTest()`. */
   private readonly _hzbAabbScratch = new Float32Array(MAX_HZB_TESTED_OBJECTS * 4);
@@ -250,7 +263,7 @@ export class HzbOcclusionSystem {
   /**
    * Builds this frame's HZB pyramid: mip 0 seeded from the renderer's just-finished opaque depth
    * (already written by `DepthPrePassGPU` earlier in `_passes`), then mips 1..N max-reduced from
-   * the level below, one dispatch per level -- see hzb_copy_depth.wgsl/hzb_downsample_max.wgsl.
+   * the level below, one dispatch per level inside a single compute pass -- see hzb_copy_depth.wgsl/hzb_downsample_max.wgsl.
    * Recorded into the frame's shared command encoder: unlike `GPUTextureResourceCache`'s texture
    * mip generation (which needs its own throwaway encoder+submit since callers run it mid-frame
    * while a render pass may already be open), this runs between two whole passes, never inside
@@ -263,24 +276,26 @@ export class HzbOcclusionSystem {
 
     const w0 = this._canvasWidth;
     const h0 = this._canvasHeight;
-    const copyPass = ce.beginComputePass({ label: "HzbCopyDepth" });
-    copyPass.setPipeline(this._hzbCopyPipeline);
-    copyPass.setBindGroup(0, this._hzbCopyBindGroup);
-    copyPass.dispatchWorkgroups(Math.ceil(w0 / 8), Math.ceil(h0 / 8));
-    copyPass.end();
+    // One compute pass for the whole chain (copy + every downsample level): each dispatch is its
+    // own usage scope in WebGPU, so a level's storage writes are visible to the next dispatch's
+    // texture read without ending the pass. Saves N pass begin/end pairs per frame.
+    const pass = ce.beginComputePass({ label: "HzbBuildPyramid" });
+    pass.setPipeline(this._hzbCopyPipeline);
+    pass.setBindGroup(0, this._hzbCopyBindGroup);
+    pass.dispatchWorkgroups(Math.ceil(w0 / 8), Math.ceil(h0 / 8));
 
-    if (!this._hzbDownsamplePipeline) return;
-    for (let level = 1; level < this._hzbMipLevelCount; level++) {
-      const bg = this._hzbDownsampleBindGroups[level - 1];
-      if (!bg) continue;
-      const w = Math.max(1, w0 >> level);
-      const h = Math.max(1, h0 >> level);
-      const pass = ce.beginComputePass({ label: `HzbDownsample_${level}` });
+    if (this._hzbDownsamplePipeline) {
       pass.setPipeline(this._hzbDownsamplePipeline);
-      pass.setBindGroup(0, bg);
-      pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8));
-      pass.end();
+      for (let level = 1; level < this._hzbMipLevelCount; level++) {
+        const bg = this._hzbDownsampleBindGroups[level - 1];
+        if (!bg) continue;
+        const w = Math.max(1, w0 >> level);
+        const h = Math.max(1, h0 >> level);
+        pass.setBindGroup(0, bg);
+        pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8));
+      }
     }
+    pass.end();
   }
 
   /** Filters `scene.lastFrustumVisibleObjects` (a byproduct of the `isVisible && inFrustum` walk
@@ -291,6 +306,12 @@ export class HzbOcclusionSystem {
    * comment for why this doesn't read one of `FrustumCuller`'s output fields instead, and why
    * relying on `DepthPrePassGPU` having already run this frame is safe (it's fixed earlier than
    * `HzbOcclusionPassGPU` in `WebGPURenderer`'s `_passes` array).
+   *
+   * Only objects whose `computeBounds()` yields bounds are tested. `isCollidable = false` objects
+   * (decals, fog volumes, purely visual helpers) deliberately get none and therefore always draw:
+   * that is the conservative default (a fog volume or decal must never be culled by opaque depth),
+   * see the `Object3D.isCollidable` contract. The per-candidate `computeBounds()` is an in-place
+   * recycle (no allocation) against the current `worldMatrix`.
    *
    * `obj.bounds` is only kept current by `Scene.updateDynamicOctree()`/`updateStaticOctree()`,
    * which don't run unless the scene actually has octrees enabled -- otherwise the only thing
@@ -364,7 +385,7 @@ export class HzbOcclusionSystem {
       this._hzbAabbScratch[i * 4 + 0] = c.x;
       this._hzbAabbScratch[i * 4 + 1] = c.y;
       this._hzbAabbScratch[i * 4 + 2] = c.z;
-      this._hzbAabbScratch[i * 4 + 3] = obj.bounds!.getBroadRadius();
+      this._hzbAabbScratch[i * 4 + 3] = obj.bounds!.getBroadRadius() * HZB_RADIUS_PADDING;
     }
     if (count === 0) return;
 
@@ -430,7 +451,16 @@ export class HzbOcclusionSystem {
       const mapped = new Uint32Array(buffer.getMappedRange());
       const objects = this._hzbSlotObjects[slot]!;
       for (let i = 0; i < objects.length; i++) {
-        objects[i]!.occlusionCulled = 0 === mapped[i];
+        const obj = objects[i]!;
+        if (0 === mapped[i]) {
+          const streak = (this._occludedStreak.get(obj) ?? 0) + 1;
+          this._occludedStreak.set(obj, streak);
+          if (streak >= HZB_OCCLUDED_FRAMES_TO_CULL) obj.occlusionCulled = true;
+        } else {
+          if (obj.occlusionCulled || this._occludedStreak.has(obj))
+            this._occludedStreak.delete(obj);
+          obj.occlusionCulled = false;
+        }
       }
       buffer.unmap();
       this._hzbStagingPending[slot] = false;

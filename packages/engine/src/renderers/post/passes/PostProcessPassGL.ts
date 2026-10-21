@@ -22,6 +22,7 @@ import type {
   VolumetricFogElement,
 } from "../elements/index.js";
 import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
+import { requireGlObject } from "../../gl/requireGlObject.js";
 
 /**
  * Handles post-processing blit for WebGL1 and WebGL2.
@@ -73,7 +74,16 @@ export class PostProcessPassGL {
   private _aPos: number = -1;
   private readonly _gl: WebGLRenderingContext | WebGL2RenderingContext;
   private readonly _isWebGL2: boolean;
-  private _compiledSignature?: string;
+  private _compiledSignature: number | undefined;
+  /**
+   * Whether this frame's upstream passes actually produced HBAO / light-shafts / fog textures. The
+   * matching `#define`s are baked from these (not from `element.enabled` alone): a pass can return
+   * no texture (e.g. a sun without shadows), and an enabled define with nothing bound would sample
+   * the HDR colour (unit 0) as if it were shafts/fog.
+   */
+  private _hasHbaoTexture = false;
+  private _hasShaftsTexture = false;
+  private _hasFogTexture = false;
 
   private readonly _shaderRegistry: ShaderRegistry;
 
@@ -87,7 +97,11 @@ export class PostProcessPassGL {
     this._shaderRegistry = shaderRegistry;
   }
 
-  private _getSignature(group: PostProcessingGroup): string {
+  /**
+   * Bit-packed structural signature (no per-frame array / string allocation): bits 0-3 filter
+   * mode, 4 tone-map on, 5-8 tone-map mode, 9.. one bit per effect in the order below.
+   */
+  private _getSignature(group: PostProcessingGroup): number {
     const tm = group.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING);
     const vig = group.get<VignetteElement>(PostProcessingEffectType.VIGNETTE);
     const grain = group.get<GrainElement>(PostProcessingEffectType.GRAIN);
@@ -105,21 +119,22 @@ export class PostProcessPassGL {
     // bloom intensity/color, grading contrast/saturation/temperature/tint/lift/gamma/gain,
     // quantize steps, outline thickness/color, flash color/intensity) are set via uniforms per
     // frame.
-    return [
-      group.filterMode,
-      tm && tm.enabled ? 1 : 0,
-      tm && tm.enabled ? tm.mode : 0,
-      vig && vig.enabled ? 1 : 0,
-      grain && grain.enabled ? 1 : 0,
-      bloom && bloom.enabled ? 1 : 0,
-      grade && grade.enabled ? 1 : 0,
-      quant && quant.enabled ? 1 : 0,
-      hbao && hbao.enabled ? 1 : 0,
-      shafts && shafts.enabled ? 1 : 0,
-      volFog && volFog.enabled ? 1 : 0,
-      outline && outline.enabled ? 1 : 0,
-      flash && flash.enabled ? 1 : 0,
-    ].join("|");
+    const tmOn = tm !== undefined && tm.enabled;
+    return (
+      (group.filterMode & 0xf) |
+      ((tmOn ? 1 : 0) << 4) |
+      (((tmOn ? tm.mode : 0) & 0xf) << 5) |
+      ((vig && vig.enabled ? 1 : 0) << 9) |
+      ((grain && grain.enabled ? 1 : 0) << 10) |
+      ((bloom && bloom.enabled ? 1 : 0) << 11) |
+      ((grade && grade.enabled ? 1 : 0) << 12) |
+      ((quant && quant.enabled ? 1 : 0) << 13) |
+      ((hbao && hbao.enabled && this._hasHbaoTexture ? 1 : 0) << 14) |
+      ((shafts && shafts.enabled && this._hasShaftsTexture ? 1 : 0) << 15) |
+      ((volFog && volFog.enabled && this._hasFogTexture ? 1 : 0) << 16) |
+      ((outline && outline.enabled ? 1 : 0) << 17) |
+      ((flash && flash.enabled ? 1 : 0) << 18)
+    );
   }
 
   private _build(
@@ -161,9 +176,9 @@ export class PostProcessPassGL {
     const bloomEnabled = bloom && bloom.enabled;
     const gradeEnabled = grade && grade.enabled;
     const quantEnabled = quant && quant.enabled;
-    const hbaoEnabled = hbao && hbao.enabled;
-    const shaftsEnabled = shafts && shafts.enabled;
-    const volFogEnabled = volFog && volFog.enabled;
+    const hbaoEnabled = hbao && hbao.enabled && this._hasHbaoTexture;
+    const shaftsEnabled = shafts && shafts.enabled && this._hasShaftsTexture;
+    const volFogEnabled = volFog && volFog.enabled && this._hasFogTexture;
     const outlineEnabled = outline && outline.enabled;
     const flashEnabled = flash && flash.enabled;
 
@@ -257,10 +272,10 @@ export class PostProcessPassGL {
 
     if (this._isWebGL2) {
       const gl2 = gl as WebGL2RenderingContext;
-      this._vao = gl2.createVertexArray()!;
+      this._vao = requireGlObject(gl2.createVertexArray(), "vertex array");
     } else {
       this._aPos = gl.getAttribLocation(p, "a_pos");
-      this._vb = gl.createBuffer()!;
+      this._vb = requireGlObject(gl.createBuffer(), "buffer");
       gl.bindBuffer(gl.ARRAY_BUFFER, this._vb);
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, null);
@@ -270,50 +285,18 @@ export class PostProcessPassGL {
   /**
    * Blits the HDR texture to the canvas framebuffer.
    */
-  public execute(ctx: GLPostEffectPassContext): void;
-  public execute(
-    gl: WebGLRenderingContext | WebGL2RenderingContext,
-    hdrTexture: WebGLTexture,
-    group: PostProcessingGroup,
-    bloomTexture?: WebGLTexture | null,
-    hbaoTexture?: WebGLTexture | null,
-    lightShaftsTexture?: WebGLTexture | null,
-    volumetricFogTexture?: WebGLTexture | null,
-    realTime?: number,
-  ): void;
-  public execute(
-    ctxOrGl: GLPostEffectPassContext | WebGLRenderingContext | WebGL2RenderingContext,
-    ...args: unknown[]
-  ): void {
-    let gl: WebGLRenderingContext | WebGL2RenderingContext;
-    let hdrTexture: WebGLTexture;
-    let group: PostProcessingGroup;
-    let bloomTexture: WebGLTexture | null;
-    let hbaoTexture: WebGLTexture | null;
-    let lightShaftsTexture: WebGLTexture | null;
-    let volumetricFogTexture: WebGLTexture | null;
-    let realTime: number;
-
-    if (args.length > 0) {
-      gl = ctxOrGl as WebGLRenderingContext | WebGL2RenderingContext;
-      hdrTexture = args[0] as WebGLTexture;
-      group = args[1] as PostProcessingGroup;
-      bloomTexture = (args[2] as WebGLTexture | null) ?? null;
-      hbaoTexture = (args[3] as WebGLTexture | null) ?? null;
-      lightShaftsTexture = (args[4] as WebGLTexture | null) ?? null;
-      volumetricFogTexture = (args[5] as WebGLTexture | null) ?? null;
-      realTime = (args[6] as number) ?? 0;
-    } else {
-      const ctx = ctxOrGl as GLPostEffectPassContext;
-      gl = ctx.gl;
-      hdrTexture = ctx.colorTexture;
-      group = ctx.group;
-      bloomTexture = ctx.bloomTexture;
-      hbaoTexture = ctx.hbaoTexture;
-      lightShaftsTexture = ctx.lightShaftsTexture;
-      volumetricFogTexture = ctx.volumetricFogTexture;
-      realTime = ctx.realTime;
-    }
+  public execute(ctx: GLPostEffectPassContext): void {
+    const gl = ctx.gl;
+    const hdrTexture = ctx.colorTexture;
+    const group = ctx.group;
+    const bloomTexture = ctx.bloomTexture;
+    const hbaoTexture = ctx.hbaoTexture;
+    const lightShaftsTexture = ctx.lightShaftsTexture;
+    const volumetricFogTexture = ctx.volumetricFogTexture;
+    const realTime = ctx.realTime;
+    this._hasHbaoTexture = Boolean(hbaoTexture);
+    this._hasShaftsTexture = Boolean(lightShaftsTexture);
+    this._hasFogTexture = Boolean(volumetricFogTexture);
     const sig = this._getSignature(group);
     if (!this._prog || sig !== this._compiledSignature) {
       this._build(gl, group);
@@ -323,6 +306,10 @@ export class PostProcessPassGL {
     if (!this._prog) return;
 
     gl.useProgram(this._prog);
+
+    // Remember what the geometry passes left enabled so it can be restored below.
+    const wasCullFace = gl.isEnabled(gl.CULL_FACE);
+    const wasBlend = gl.isEnabled(gl.BLEND);
 
     // Disable depth testing and writing
     gl.disable(gl.DEPTH_TEST);
@@ -475,7 +462,9 @@ export class PostProcessPassGL {
     // Restore state
     gl.depthMask(true);
     gl.enable(gl.DEPTH_TEST);
-    gl.enable(gl.BLEND);
+    if (wasCullFace) gl.enable(gl.CULL_FACE);
+    if (wasBlend) gl.enable(gl.BLEND);
+    else gl.disable(gl.BLEND);
     gl.useProgram(null);
   }
 
@@ -490,6 +479,6 @@ export class PostProcessPassGL {
     this._prog = undefined;
     this._vb = undefined;
     this._vao = undefined;
-    this._compiledSignature = "";
+    this._compiledSignature = undefined;
   }
 }

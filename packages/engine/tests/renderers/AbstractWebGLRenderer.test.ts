@@ -18,7 +18,18 @@ class TestWebGLRenderer extends AbstractWebGLRenderer {
     this.gl = gl;
   }
 
+  public restoredCount = 0;
+
   public override async initialize(): Promise<void> {}
+  public install(canvas: HTMLCanvasElement): void {
+    this.installContextLossHandling(canvas);
+  }
+  public uninstall(): void {
+    this.uninstallContextLossHandling();
+  }
+  protected override onContextRestored(): void {
+    this.restoredCount++;
+  }
   public override setRenderTarget(): void {}
   public override renderBatch(): void {}
   protected override releaseObjectResources(): void {}
@@ -109,6 +120,96 @@ describe("AbstractWebGLRenderer Pass System", () => {
     scene.remove(dLight);
     extracted = renderer.extractLights(scene);
     expect(extracted.dLight).toBeUndefined();
+  });
+});
+
+describe("AbstractWebGLRenderer context loss", () => {
+  function setup(): {
+    renderer: TestWebGLRenderer;
+    canvas: HTMLCanvasElement;
+    pass: WebGLRenderPass;
+  } {
+    const renderer = new TestWebGLRenderer({ canvas: {} } as unknown as WebGL2RenderingContext);
+    const canvas = new EventTarget() as unknown as HTMLCanvasElement;
+    renderer.install(canvas);
+    const pass: WebGLRenderPass = { name: "P", execute: vi.fn() };
+    renderer.addPass(pass);
+    return { renderer, canvas, pass };
+  }
+
+  it("accepts the loss (preventDefault), pauses rendering and reports it", () => {
+    const { renderer, canvas, pass } = setup();
+    const onLost = vi.fn();
+    renderer.onContextLost = onLost;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const event = new Event("webglcontextlost", { cancelable: true });
+    canvas.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true); // tells the browser we want the context back
+    expect(renderer.isContextLost).toBe(true);
+    expect(onLost).toHaveBeenCalledTimes(1);
+    renderer.render(new Scene(), new Float32Array(16));
+    expect(pass.execute).not.toHaveBeenCalled(); // no exception storm, no draw calls
+    warn.mockRestore();
+  });
+
+  it("rebuilds the GPU resources on restore and resumes rendering", () => {
+    const { renderer, canvas, pass } = setup();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+
+    canvas.dispatchEvent(new Event("webglcontextrestored"));
+
+    expect(renderer.restoredCount).toBe(1);
+    expect(renderer.isContextLost).toBe(false);
+    renderer.render(new Scene(), new Float32Array(16));
+    expect(pass.execute).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("stops listening once uninstalled", () => {
+    const { renderer, canvas } = setup();
+    renderer.uninstall();
+    canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+    expect(renderer.isContextLost).toBe(false);
+  });
+});
+
+describe("AbstractRenderer.extractLights frame memo", () => {
+  const memoize = (renderer: object, scene: Scene | undefined): void =>
+    (renderer as unknown as { memoizeLightsFor: (s: Scene | undefined) => void }).memoizeLightsFor(
+      scene,
+    );
+
+  it("serves repeated requests for the memoized scene without walking it again, then goes fresh", () => {
+    const renderer = new TestWebGLRenderer({ canvas: {} } as unknown as WebGL2RenderingContext);
+    const scene = new Scene();
+    const dLight = new DirectionalLight();
+    scene.add(dLight);
+
+    expect(renderer.extractLights(scene).dLight).toBe(dLight);
+    memoize(renderer, scene);
+
+    // A shadow pass asking again within the frame gets the snapshot, not a second traversal.
+    dLight.isVisible = false;
+    expect(renderer.extractLights(scene).dLight).toBe(dLight);
+
+    // Frame over: the next extraction sees the change.
+    memoize(renderer, undefined);
+    expect(renderer.extractLights(scene).dLight).toBeUndefined();
+  });
+
+  it("never serves the memo for a different scene (offscreen / reflection passes)", () => {
+    const renderer = new TestWebGLRenderer({ canvas: {} } as unknown as WebGL2RenderingContext);
+    const main = new Scene();
+    main.add(new DirectionalLight());
+    const other = new Scene();
+
+    renderer.extractLights(main);
+    memoize(renderer, main);
+
+    expect(renderer.extractLights(other).dLight).toBeUndefined();
   });
 });
 

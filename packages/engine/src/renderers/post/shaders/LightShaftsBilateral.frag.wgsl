@@ -6,11 +6,17 @@ struct VertexOutput {
 @group(0) @binding(0) var linearSampler: sampler;
 @group(0) @binding(1) var lowResShaftsMap: texture_2d<f32>;
 @group(0) @binding(2) var fullResDepthMap: texture_depth_2d;
-@group(0) @binding(3) var<uniform> params: vec4f; // x: texelSize.x, y: texelSize.y, z: depthThreshold
+// x: texelSize.x, y: texelSize.y, z: depthThreshold, w: camera near
+// planes.x: camera far (rest pad)
+struct BilateralParams {
+    params: vec4f,
+    planes: vec4f,
+};
+@group(0) @binding(3) var<uniform> bp: BilateralParams;
 
 fn linearizeDepth(d: f32) -> f32 {
-    let near = 0.1;
-    let far = 1000.0;
+    let near = bp.params.w;
+    let far = bp.planes.x;
     return (near * far) / max(far - d * (far - near), 0.00001);
 }
 
@@ -21,8 +27,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let fullDepth = textureLoad(fullResDepthMap, fullCoord, 0);
     let fullLinear = linearizeDepth(fullDepth);
 
-    let texelSize = params.xy;
-    let threshold = max(params.z, 0.0001);
+    let texelSize = bp.params.xy;
+    let threshold = max(bp.params.z, 0.0001);
 
     var offsets = array<vec2f, 4>(
         vec2f(-0.5, -0.5),

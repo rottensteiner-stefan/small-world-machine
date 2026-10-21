@@ -17,6 +17,9 @@ const _scratchCasters: Object3D[] = [];
 const _scratchInstanced: InstancedMesh[] = [];
 const _scratchStandard: Object3D[] = [];
 
+/** Frames without a shadow-casting spot light before the shadow atlas is freed. */
+const SPOT_FBO_IDLE_FRAMES = 120;
+
 export class SpotShadowPassGPU implements RenderPass {
   public name = "SpotShadowPassGPU";
 
@@ -24,15 +27,37 @@ export class SpotShadowPassGPU implements RenderPass {
    * single cached view (fixed at whichever format happened to be current the first time this
    * pass ever ran) silently mismatched the depth material's pipeline in whichever context
    * (main scene pass vs. a `PlanarReflectionNode` sub-render) didn't match that first one. */
-  private _dummyTargetViews = new Map<GPUTextureFormat, GPUTextureView>();
+  private _dummyTargets = new Map<
+    GPUTextureFormat,
+    { tex: GPUTexture; view: GPUTextureView; resolution: number }
+  >();
+  /** Consecutive frames without any shadow-casting spot light, see `SPOT_FBO_IDLE_FRAMES`. */
+  private _idleFrames = 0;
   private _bindGroupNeedsShadowRebuild = true;
   private _shadowCasterBindGroupVersion = -1;
   private _depthMaterial?: DepthMaterial;
   private _shadowCasterBindGroup?: GPUBindGroup;
-  private _spotShadowTexView?: GPUTextureView;
-  private _fbo?: GPUTexture;
+  private _spotShadowTexView?: GPUTextureView | undefined;
+  private _fbo?: GPUTexture | undefined;
   private _layerViews: GPUTextureView[] = [];
   private _frustum: Frustum = new Frustum();
+
+  /**
+   * The 4-layer atlas (64 MB at 2048^2) used to live forever once built. After
+   * `SPOT_FBO_IDLE_FRAMES` frames with no shadow-casting spot light it is released and the global
+   * bind group points back at the dummy map; a light that casts again rebuilds it on demand.
+   */
+  private _releaseIdleAtlas(renderer: WebGPURenderer, scene: Scene): void {
+    if (!this._fbo) return;
+    if (++this._idleFrames < SPOT_FBO_IDLE_FRAMES) return;
+    renderer.deferDestroyTexture(this._fbo);
+    this._fbo = undefined;
+    this._spotShadowTexView = undefined;
+    this._layerViews = [];
+    this._bindGroupNeedsShadowRebuild = true;
+    renderer.defaultSpotShadowTextureView = renderer.dummySpotShadowTextureView;
+    renderer.globalBindGroup = renderer._createGlobalBindGroup(scene);
+  }
 
   public execute(
     renderer: WebGPURenderer,
@@ -48,7 +73,11 @@ export class SpotShadowPassGPU implements RenderPass {
       if (lights.sLights[i]!.castShadow) _scratchLightCasters.push(lights.sLights[i]!);
     }
     const casters = _scratchLightCasters;
-    if (casters.length === 0) return;
+    if (casters.length === 0) {
+      this._releaseIdleAtlas(renderer, scene);
+      return;
+    }
+    this._idleFrames = 0;
 
     this._depthMaterial ??= new DepthMaterial();
     renderer.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, this._depthMaterial);
@@ -56,17 +85,24 @@ export class SpotShadowPassGPU implements RenderPass {
     const shadowRes = casters[0]?.shadowResolution || 1024;
 
     const dummyFormat = renderer.currentColorTargetFormat;
-    let dummyTargetView = this._dummyTargetViews.get(dummyFormat);
-    if (!dummyTargetView) {
+    let dummy = this._dummyTargets.get(dummyFormat);
+    if (!dummy || dummy.resolution !== shadowRes) {
+      if (dummy) renderer.deferDestroyTexture(dummy.tex);
       const tex = renderer.gpuDevice!.createTexture({
         size: [shadowRes, shadowRes],
         format: dummyFormat,
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       });
-      dummyTargetView = tex.createView();
-      this._dummyTargetViews.set(dummyFormat, dummyTargetView);
+      dummy = { tex, view: tex.createView(), resolution: shadowRes };
+      this._dummyTargets.set(dummyFormat, dummy);
     }
+    const dummyTargetView = dummy.view;
 
+    // The atlas follows the first caster's resolution; a changed resolution used to be ignored.
+    if (this._fbo && this._fbo.width !== shadowRes) {
+      renderer.deferDestroyTexture(this._fbo);
+      this._fbo = undefined;
+    }
     if (!this._fbo) {
       // Always create 4 layers because maximum spotlights is 4.
       this._fbo = renderer.gpuDevice!.createTexture({

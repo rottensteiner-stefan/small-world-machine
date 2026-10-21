@@ -1,4 +1,5 @@
 import type { Vector3D } from "../../math/index.js";
+import { requireGlObject } from "../gl/requireGlObject.js";
 
 /**
  * Wrapper for a WebGL2 Uniform Buffer Object (UBO).
@@ -25,7 +26,7 @@ export class WebGL2UniformBuffer {
     this._data = new Float32Array(buffer);
     this._int32Data = new Int32Array(buffer);
 
-    this._buffer = this._gl.createBuffer()!;
+    this._buffer = requireGlObject(this._gl.createBuffer(), "buffer");
     this._gl.bindBuffer(this._gl.UNIFORM_BUFFER, this._buffer);
     this._gl.bufferData(this._gl.UNIFORM_BUFFER, size, this._gl.DYNAMIC_DRAW);
     this._gl.bindBufferBase(this._gl.UNIFORM_BUFFER, this._bindingPoint, this._buffer);

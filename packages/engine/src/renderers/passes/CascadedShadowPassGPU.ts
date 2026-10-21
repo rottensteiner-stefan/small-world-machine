@@ -4,6 +4,7 @@ import { MaterialType, Topology } from "../../enums/index.js";
 import type { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
 import { VIEW_SLOT_CASCADE_BASE } from "../WebGPU/WebGPURenderer.js";
 import type { RenderPass } from "../index.js";
+import { DirectionalLight } from "../../core/lights/DirectionalLight.js";
 import { InstancedMesh } from "../../core/InstancedMesh.js";
 import type { Object3D } from "../../core/Object3D.js";
 import type { Vector3D } from "../../math/index.js";
@@ -27,10 +28,13 @@ export class CascadedShadowPassGPU implements RenderPass {
    * pipeline (built fresh per call from the SAME `currentColorTargetFormat`) in whichever context
    * didn't match that first one, which WebGPU rejects as an attachment-state mismatch.
    */
-  private _dummyTargetViews = new Map<GPUTextureFormat, GPUTextureView>();
+  private _dummyTargets = new Map<
+    GPUTextureFormat,
+    { tex: GPUTexture; view: GPUTextureView; resolution: number }
+  >();
   private _dirShadowTexView?: GPUTextureView;
   private _cascadeLayerViews: GPUTextureView[] = [];
-  private _cachedFbo?: GPUTexture;
+  private _cachedFbo?: GPUTexture | undefined;
   private _bindGroupNeedsShadowRebuild = true;
   private _shadowCasterBindGroupVersion = -1;
   private _depthMaterial?: DepthMaterial;
@@ -44,6 +48,31 @@ export class CascadedShadowPassGPU implements RenderPass {
   private _shadowCasterBindGroup?: GPUBindGroup;
   private _frustum: Frustum = new Frustum();
 
+  /**
+   * Frees the shadow map of every light that is no longer the scene's directional light
+   * (removed or replaced) and points the global bind group back at the dummy map, so nothing
+   * bound still references the destroyed texture.
+   */
+  private _releaseStaleShadowMaps(
+    renderer: WebGPURenderer,
+    scene: Scene,
+    current: DirectionalLight | undefined,
+  ): void {
+    let released = false;
+    for (const [light, tex] of renderer.shadowMaps) {
+      if (light === current || !(light instanceof DirectionalLight)) continue;
+      renderer.deferDestroyTexture(tex);
+      renderer.shadowMaps.delete(light);
+      released = true;
+    }
+    if (!released) return;
+    this._cachedFbo = undefined;
+    this._cascadeLayerViews = [];
+    this._bindGroupNeedsShadowRebuild = true;
+    renderer.defaultDirShadowTextureView = renderer.dummyDirShadowTextureView;
+    renderer.globalBindGroup = renderer._createGlobalBindGroup(scene);
+  }
+
   public execute(
     renderer: WebGPURenderer,
     scene: Scene,
@@ -55,27 +84,42 @@ export class CascadedShadowPassGPU implements RenderPass {
   ): void {
     const lights = renderer.extractLights(scene);
     const dLight = lights.dLight;
-    if (!dLight || !dLight.castShadow || dLight.numCascades === 0) return;
+    this._releaseStaleShadowMaps(renderer, scene, dLight);
+    // `numCascades` is a public field but `cascadeCameras` is built once by the light's
+    // constructor: raising it later would index missing cameras, so the usable count is clamped.
+    const numCascades = dLight ? Math.min(dLight.numCascades, dLight.cascadeCameras.length) : 0;
+    if (!dLight || !dLight.castShadow || numCascades === 0) return;
 
     this._depthMaterial ??= new DepthMaterial();
     renderer.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, this._depthMaterial);
 
+    // The dummy color attachment must match the depth attachment's size, so it follows the
+    // shadow resolution (a resolution change used to leave the first frame's size in place).
     const dummyFormat = renderer.currentColorTargetFormat;
-    let dummyTargetView = this._dummyTargetViews.get(dummyFormat);
-    if (!dummyTargetView) {
+    let dummy = this._dummyTargets.get(dummyFormat);
+    if (!dummy || dummy.resolution !== dLight.shadowResolution) {
+      if (dummy) renderer.deferDestroyTexture(dummy.tex);
       const tex = renderer.gpuDevice!.createTexture({
         size: [dLight.shadowResolution, dLight.shadowResolution],
         format: dummyFormat,
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       });
-      dummyTargetView = tex.createView();
-      this._dummyTargetViews.set(dummyFormat, dummyTargetView);
+      dummy = { tex, view: tex.createView(), resolution: dLight.shadowResolution };
+      this._dummyTargets.set(dummyFormat, dummy);
     }
+    const dummyTargetView = dummy.view;
 
     let fbo = renderer.shadowMaps.get(dLight) as GPUTexture | undefined;
+    // Resolution / cascade count are live properties of the light: a map built for other values
+    // would be sampled with the wrong layout (or fail `createView` on a missing array layer).
+    if (fbo && (fbo.width !== dLight.shadowResolution || fbo.depthOrArrayLayers !== numCascades)) {
+      renderer.deferDestroyTexture(fbo);
+      renderer.shadowMaps.delete(dLight);
+      fbo = undefined;
+    }
     if (!fbo) {
       fbo = renderer.gpuDevice!.createTexture({
-        size: [dLight.shadowResolution, dLight.shadowResolution, dLight.numCascades],
+        size: [dLight.shadowResolution, dLight.shadowResolution, numCascades],
         format: "depth32float",
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
@@ -84,10 +128,10 @@ export class CascadedShadowPassGPU implements RenderPass {
       this._bindGroupNeedsShadowRebuild = true;
     }
 
-    if (this._cachedFbo !== fbo || this._cascadeLayerViews.length !== dLight.numCascades) {
+    if (this._cachedFbo !== fbo || this._cascadeLayerViews.length !== numCascades) {
       this._cachedFbo = fbo;
       this._cascadeLayerViews = [];
-      for (let i = 0; i < dLight.numCascades; i++) {
+      for (let i = 0; i < numCascades; i++) {
         this._cascadeLayerViews.push(
           fbo.createView({
             dimension: "2d",
@@ -118,7 +162,7 @@ export class CascadedShadowPassGPU implements RenderPass {
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
     const depthManifest = this._depthMaterial.getRenderManifest();
 
-    for (let i = 0; i < dLight.numCascades; i++) {
+    for (let i = 0; i < numCascades; i++) {
       const cascadeCam = dLight.cascadeCameras[i]!;
 
       // Per-cascade frustum, mirroring SpotShadowPassGPU's approach: without this, every
@@ -237,11 +281,11 @@ export class CascadedShadowPassGPU implements RenderPass {
     gData[dirInfo.index] = dLight.shadowBias;
     gData[dirInfo.index + 1] = dLight.shadowNormalBias;
     gData[dirInfo.index + 2] = 1.0; // castShadow on
-    gData[dirInfo.index + 3] = dLight.numCascades;
+    gData[dirInfo.index + 3] = numCascades;
 
     const rawCascadeVp = MathPool.acquireMatrix();
     const correctedCascadeVp = MathPool.acquireMatrix();
-    for (let i = 0; i < dLight.numCascades; i++) {
+    for (let i = 0; i < numCascades; i++) {
       const cascadeCam = dLight.cascadeCameras[i]!;
       gData[glob.cascadeSplits.index + i] = dLight.cascadeSplits[i]!;
 

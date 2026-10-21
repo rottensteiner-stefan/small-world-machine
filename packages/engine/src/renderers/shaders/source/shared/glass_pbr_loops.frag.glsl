@@ -1,3 +1,6 @@
+// Shared glsl100 + glsl300 Glass/Frostglass PBR light loop (ADR 0039). Light data is read through
+// the GLASS_* accessor macros each dialect defines next to its light uniforms (LIGHT_DEFS), so the
+// loop body exists exactly once.
     // --- Directional Light ---
     vec3 L = normalize(u_dirLightDir);
     vec3 H = normalize(V + L);
@@ -16,15 +19,22 @@
     Lo += (kD * tintColor / 3.14159265359 + specular) * radiance * dotNL;
 
     // --- Point Lights ---
-    for(int i = 0; i < 4; i++) {
+    for(int i = 0; i < 16; i++) {
         if (i >= u_numPointLights) break;
-        vec3 lightVec = u_pointLights[i].pos - v_worldPos;
+        vec3 lightVec = GLASS_POINT_POS(i) - v_worldPos;
         float dist = length(lightVec);
         vec3 L_p = normalize(lightVec);
         vec3 H_p = normalize(V + L_p);
 
-        float attenuation = 1.0 / (dist * dist + 0.0001);
-        vec3 pRadiance = u_pointLights[i].color * attenuation;
+        // Same range window + decay law as the opaque PBR path (light_calc_pbr), so glass in front
+        // of a surface is lit by the same light the surface is.
+        float pRange = max(GLASS_POINT_RANGE(i), 0.001);
+        float pDecay = GLASS_POINT_DECAY(i);
+        float pFalloff = 1.0 / max(dist * dist, 0.01);
+        float pRatio = dist / pRange;
+        float pWindow = clamp(1.0 - pRatio * pRatio * pRatio * pRatio, 0.0, 1.0);
+        float attenuation = (pDecay > 0.0) ? (pFalloff * pWindow * pWindow) : clamp(1.0 - dist / pRange, 0.0, 1.0);
+        vec3 pRadiance = GLASS_POINT_COLOR(i) * attenuation;
 
         float pDotNL = max(dot(N, L_p), 0.0);
         float pDotNH = max(dot(N, H_p), 0.0);
@@ -41,18 +51,18 @@
     }
 
     // --- Spot Lights ---
-    for(int i = 0; i < 4; i++) {
+    for(int i = 0; i < 16; i++) {
         if (i >= u_numSpotLights) break;
-        vec3 lightVec = u_spotLights[i].pos - v_worldPos;
+        vec3 lightVec = GLASS_SPOT_POS(i) - v_worldPos;
         float dist = length(lightVec);
         vec3 L_s = normalize(lightVec);
         vec3 H_s = normalize(V + L_s);
 
-        vec3 spotDir = normalize(u_spotLights[i].dir);
-        float cosOuter = u_spotLights[i].params.x;
-        float cosInner = u_spotLights[i].params.y;
-        float maxDist = u_spotLights[i].params.z;
-        float decay = u_spotLights[i].params.w;
+        vec3 spotDir = normalize(GLASS_SPOT_DIR(i));
+        float cosOuter = GLASS_SPOT_PARAMS(i).x;
+        float cosInner = GLASS_SPOT_PARAMS(i).y;
+        float maxDist = GLASS_SPOT_PARAMS(i).z;
+        float decay = GLASS_SPOT_PARAMS(i).w;
 
         float theta = dot(-L_s, spotDir);
         float epsilon = max(cosInner - cosOuter, 0.0001);
@@ -61,7 +71,7 @@
         if (intensity > 0.0 && dist < maxDist) {
             float distanceAttenuation = pow(clamp(1.0 - dist / maxDist, 0.0, 1.0), decay);
             float attenuation = distanceAttenuation * intensity;
-            vec3 sRadiance = u_spotLights[i].color * attenuation;
+            vec3 sRadiance = GLASS_SPOT_COLOR(i) * attenuation;
 
             float sDotNL = max(dot(N, L_s), 0.0);
             float sDotNH = max(dot(N, H_s), 0.0);

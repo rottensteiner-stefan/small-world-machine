@@ -1,4 +1,5 @@
 /** Configuration for WebGL2FrameBuffer. */
+import { requireGlObject } from "../gl/requireGlObject.js";
 export interface WebGL2FrameBufferOptions {
   /** Width in pixels. */
   width: number;
@@ -15,6 +16,30 @@ export interface WebGL2FrameBufferOptions {
    * Draw buffers stay on COLOR_ATTACHMENT0 only until `setSecondaryWriteEnabled(true)`.
    */
   secondary?: WebGL2FrameBufferAttachmentOptions | undefined;
+  /**
+   * Whether to attach a DEPTH24_STENCIL8 renderbuffer. Defaults to true; pure fullscreen
+   * post-process targets never depth-test, so they pass `false` and save 4 bytes per pixel each.
+   */
+  depth?: boolean | undefined;
+}
+
+/** Storage triple for a colour target (see {@link pickHdrColorFormat}). */
+export interface WebGL2ColorFormat {
+  internalFormat: number;
+  format: number;
+  type: number;
+}
+
+/**
+ * Picks the best colour-target storage the device can render to: RGBA16F when
+ * `EXT_color_buffer_float` is available (same rule as the main HDR target in `WebGL2Renderer`),
+ * otherwise RGBA8. Post-process passes must use this instead of hard-coding RGBA16F, which makes
+ * `checkFramebufferStatus` fail (and the pass throw every frame) on devices without the extension.
+ */
+export function pickHdrColorFormat(gl: WebGL2RenderingContext): WebGL2ColorFormat {
+  return gl.getExtension("EXT_color_buffer_float") !== null
+    ? { internalFormat: gl.RGBA16F, format: gl.RGBA, type: gl.HALF_FLOAT }
+    : { internalFormat: gl.RGBA8, format: gl.RGBA, type: gl.UNSIGNED_BYTE };
 }
 
 /** Storage description of an additional color attachment. */
@@ -30,7 +55,7 @@ export interface WebGL2FrameBufferAttachmentOptions {
 export class WebGL2FrameBuffer {
   private _gl: WebGL2RenderingContext;
   private readonly _framebuffer: WebGLFramebuffer;
-  private readonly _renderbuffer: WebGLRenderbuffer;
+  private readonly _renderbuffer: WebGLRenderbuffer | undefined;
   private readonly _texture: WebGLTexture;
   private _width: number;
   private _height: number;
@@ -56,11 +81,11 @@ export class WebGL2FrameBuffer {
     this._type = options.type ?? gl.UNSIGNED_BYTE;
     this._secondary = options.secondary;
 
-    this._framebuffer = gl.createFramebuffer()!;
+    this._framebuffer = requireGlObject(gl.createFramebuffer(), "framebuffer");
     gl.bindFramebuffer(gl.FRAMEBUFFER, this._framebuffer);
 
     // Color texture
-    this._texture = gl.createTexture()!;
+    this._texture = requireGlObject(gl.createTexture(), "texture");
     gl.bindTexture(gl.TEXTURE_2D, this._texture);
     gl.texImage2D(
       gl.TEXTURE_2D,
@@ -81,7 +106,7 @@ export class WebGL2FrameBuffer {
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._texture, 0);
 
     if (this._secondary) {
-      this._secondaryTexture = gl.createTexture()!;
+      this._secondaryTexture = requireGlObject(gl.createTexture(), "texture");
       this._allocateSecondary(this._secondaryTexture, this._width, this._height);
       gl.framebufferTexture2D(
         gl.FRAMEBUFFER,
@@ -92,16 +117,18 @@ export class WebGL2FrameBuffer {
       );
     }
 
-    // Depth and stencil renderbuffer
-    this._renderbuffer = gl.createRenderbuffer()!;
-    gl.bindRenderbuffer(gl.RENDERBUFFER, this._renderbuffer);
-    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, this._width, this._height);
-    gl.framebufferRenderbuffer(
-      gl.FRAMEBUFFER,
-      gl.DEPTH_STENCIL_ATTACHMENT,
-      gl.RENDERBUFFER,
-      this._renderbuffer,
-    );
+    // Depth and stencil renderbuffer (optional: fullscreen post targets do not need one)
+    if (options.depth !== false) {
+      this._renderbuffer = requireGlObject(gl.createRenderbuffer(), "renderbuffer");
+      gl.bindRenderbuffer(gl.RENDERBUFFER, this._renderbuffer);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, this._width, this._height);
+      gl.framebufferRenderbuffer(
+        gl.FRAMEBUFFER,
+        gl.DEPTH_STENCIL_ATTACHMENT,
+        gl.RENDERBUFFER,
+        this._renderbuffer,
+      );
+    }
 
     const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
     if (status !== gl.FRAMEBUFFER_COMPLETE) {
@@ -202,8 +229,10 @@ export class WebGL2FrameBuffer {
       this._gl.bindTexture(this._gl.TEXTURE_2D, null);
     }
 
-    this._gl.bindRenderbuffer(this._gl.RENDERBUFFER, this._renderbuffer);
-    this._gl.renderbufferStorage(this._gl.RENDERBUFFER, this._gl.DEPTH24_STENCIL8, width, height);
+    if (this._renderbuffer) {
+      this._gl.bindRenderbuffer(this._gl.RENDERBUFFER, this._renderbuffer);
+      this._gl.renderbufferStorage(this._gl.RENDERBUFFER, this._gl.DEPTH24_STENCIL8, width, height);
+    }
   }
 
   /**
@@ -232,7 +261,7 @@ export class WebGL2FrameBuffer {
    */
   public destroy(): void {
     this._gl.deleteFramebuffer(this._framebuffer);
-    this._gl.deleteRenderbuffer(this._renderbuffer);
+    if (this._renderbuffer) this._gl.deleteRenderbuffer(this._renderbuffer);
     this._gl.deleteTexture(this._texture);
     if (this._secondaryTexture) this._gl.deleteTexture(this._secondaryTexture);
   }

@@ -8,9 +8,16 @@ import type { VolumetricFogElement } from "../elements/index.js";
 import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../../core/lights/index.js";
 import type { FogVolume } from "../../../core/objects/FogVolume.js";
 import { VolumetricTexture } from "../../../core/textures/index.js";
-import { Matrix4, Vector3D } from "../../../math/index.js";
+import {
+  DEFAULT_CLUSTER_TILE_SIZE,
+  DEFAULT_CLUSTER_Z_SLICES,
+  Matrix4,
+  Vector3D,
+  computeClusterCounts,
+} from "../../../math/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
 import type { WebGPURenderer } from "../../WebGPU/WebGPURenderer.js";
+import { PostEffectPipelineGate } from "../PostEffectPipelineGate.js";
 import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 
 /** Uniform-array capacity of FogVolumes per pass (matches `FogVolumeData[16]` in the shaders). */
@@ -37,6 +44,13 @@ const INTEGRATE_MASK_OFFSET = 108;
 /** Total floats of FroxelIntegrationSettings after the appended mask box uniforms. */
 const INTEGRATE_UNIFORM_FLOATS = INTEGRATE_MASK_OFFSET + 8;
 
+/**
+ * Smallest cluster grid (per axis) the froxel volume may inherit. Below this (e.g. the 1x1x1 grid of
+ * `clusteredLighting.enabled = false`, or a huge tile size) the fog would degenerate into a
+ * full-screen constant, so it builds its own grid instead -- see `_resolveVolumeDims`.
+ */
+const MIN_INHERITED_FROXEL_DIMS: readonly [number, number, number] = [16, 9, 8];
+
 /** Neutral mask-box sentinels uploaded when no element mask is bound (identity sample is a no-op). */
 const NEUTRAL_MASK_POSITION: Vector3D = new Vector3D(0, 0, 0);
 const NEUTRAL_MASK_SIZE: Vector3D = new Vector3D(1, 1, 1);
@@ -54,7 +68,9 @@ function ign(x: number, y: number, frame: number): number {
  * WebGPU implementation of true 3D volumetric fog ("Froxel Stage 3", Phase 1).
  *
  * Option R coupling: The froxel volume reuses the clustered light grid (16x16pt tiles, log-staggered
- * depth slices).
+ * depth slices) while that grid is fine enough (`MIN_INHERITED_FROXEL_DIMS`). With a degenerate
+ * cluster grid (`clusteredLighting.enabled = false` -> 1x1x1) the fog owns a default-sized grid and
+ * `froxel_inject.wgsl` maps each froxel cell onto the cluster cell holding its light list.
  *
  * Phase 1 Multi-Pass Pipeline:
  *  1. Injection (Compute, `froxel_inject.wgsl`): Injects per-froxel in-scattering (sigma_s * L) and
@@ -96,7 +112,10 @@ export class VolumetricFogPassGPU implements PostEffectPass {
   private readonly _integrateUniformData: Float32Array = new Float32Array(INTEGRATE_UNIFORM_FLOATS);
 
   // --- 3D density masks (element-global + per FogVolume) ---
-  private readonly _maskTextures = new Map<VolumetricTexture, GPUTexture>();
+  private readonly _maskTextures = new Map<
+    VolumetricTexture,
+    { texture: GPUTexture; view: GPUTextureView }
+  >();
   private _identityMask: VolumetricTexture | undefined = undefined;
   /** Mask texture bound to the element-global slots (identity placeholder when none is set). */
   private _elementMaskBinding: VolumetricTexture | null = null;
@@ -104,8 +123,13 @@ export class VolumetricFogPassGPU implements PostEffectPass {
   private readonly _volumeMaskBindings: (VolumetricTexture | null)[] = new Array(
     MAX_MASK_SLOTS,
   ).fill(null);
-  /** Reference identity of the last bound mask set; a change invalidates the cached bind groups. */
-  private _maskSignature: (VolumetricTexture | null)[] = [];
+  /** Reference identity of the last bound mask set (slot 0 = element mask, then the volume slots); a change invalidates the cached bind groups. */
+  private readonly _maskSignature: (VolumetricTexture | null)[] = new Array(
+    1 + MAX_MASK_SLOTS,
+  ).fill(null);
+  private readonly _scratchSignature: (VolumetricTexture | null)[] = new Array(
+    1 + MAX_MASK_SLOTS,
+  ).fill(null);
 
   // --- 4. Composite Render Pipeline (Single-Tap Trilinear Fragment Lookup) ---
   private _compositePipeline!: GPURenderPipeline;
@@ -119,30 +143,32 @@ export class VolumetricFogPassGPU implements PostEffectPass {
   private _height: number = 0;
   private _volumeDims: [number, number, number] = [0, 0, 0];
 
-  private _injectedTexture?: GPUTexture;
+  private _injectedTexture?: GPUTexture | undefined;
   private _injectedView?: GPUTextureView;
 
-  private _historyTextureA?: GPUTexture;
+  private _historyTextureA?: GPUTexture | undefined;
   private _historyViewA?: GPUTextureView;
 
-  private _historyTextureB?: GPUTexture;
+  private _historyTextureB?: GPUTexture | undefined;
   private _historyViewB?: GPUTextureView;
 
   private _historyPingPong: boolean = false;
   private _hasHistory: boolean = false;
+  /** near/far the history volume was accumulated with; the log slicing changes with them. */
+  private _historyNear: number = 0;
+  private _historyFar: number = 0;
   private readonly _prevViewProjMatrix: Float32Array = new Float32Array(16);
 
-  private _integratedTexture?: GPUTexture;
+  private _integratedTexture?: GPUTexture | undefined;
   private _integratedView?: GPUTextureView;
 
   /** Full-resolution in-scattering target. */
-  private _fogTexture?: GPUTexture;
-  private _fogTextureView?: GPUTextureView;
+  private _fogTexture?: GPUTexture | undefined;
+  private _fogTextureView?: GPUTextureView | undefined;
 
   // Cached bind inputs
   private _cachedDepthView: GPUTextureView | undefined = undefined;
   private _cachedShadowView: GPUTextureView | undefined = undefined;
-  private _cachedGlobalBindGroup: GPUBindGroup | undefined = undefined;
 
   private _injectBindGroup: GPUBindGroup | undefined = undefined;
   private _reprojectBindGroupA: GPUBindGroup | undefined = undefined;
@@ -158,12 +184,19 @@ export class VolumetricFogPassGPU implements PostEffectPass {
   private readonly _scratchSunDir: Vector3D = new Vector3D();
   private readonly _scratchCascadeVp: Matrix4 = new Matrix4();
   private readonly _scratchCascadeVpZO: Matrix4 = new Matrix4();
+  /** Validation guards: an invalid pipeline disables the fog instead of dropping the whole frame. */
+  private readonly _gate: PostEffectPipelineGate;
+  private readonly _injectGate: PostEffectPipelineGate;
   private _warnedVolumeLimit: boolean = false;
   private _warnedMaskCapacity: boolean = false;
 
   constructor(device: GPUDevice) {
     this._device = device;
+    this._gate = new PostEffectPipelineGate(device, "VolumetricFog");
+    this._injectGate = new PostEffectPipelineGate(device, "VolumetricFogInject");
+    this._gate.begin();
     this._buildPipelines();
+    this._gate.end();
   }
 
   private _buildPipelines(): void {
@@ -332,39 +365,50 @@ export class VolumetricFogPassGPU implements PostEffectPass {
    * author flagged `needsUpdate` (then clears the flag). Shared identity instance included, so
    * absent masks still have a bound, no-op source.
    */
-  private _ensureMaskGpu(mask: VolumetricTexture): GPUTexture {
-    let gpu = this._maskTextures.get(mask);
-    if (!gpu) {
-      gpu = this._device.createTexture({
+  private _ensureMaskGpu(mask: VolumetricTexture): { texture: GPUTexture; view: GPUTextureView } {
+    let entry = this._maskTextures.get(mask);
+    if (!entry) {
+      const texture = this._device.createTexture({
         size: [mask.width, mask.height, mask.depth],
         dimension: "3d",
         format: "rgba8unorm",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       });
-      this._maskTextures.set(mask, gpu);
+      entry = { texture, view: texture.createView({ dimension: "3d" }) };
+      this._maskTextures.set(mask, entry);
       this._device.queue.writeTexture(
-        { texture: gpu },
+        { texture },
         mask.data,
         { bytesPerRow: mask.width * 4, rowsPerImage: mask.height },
         [mask.width, mask.height, mask.depth],
       );
-      return gpu;
+      return entry;
     }
     if (mask.needsUpdate) {
       this._device.queue.writeTexture(
-        { texture: gpu },
+        { texture: entry.texture },
         mask.data,
         { bytesPerRow: mask.width * 4, rowsPerImage: mask.height },
         [mask.width, mask.height, mask.depth],
       );
       mask.needsUpdate = false;
     }
-    return gpu;
+    return entry;
   }
 
-  /** Resolved mask view, falling back to the identity placeholder when none is bound. */
+  /** Resolved (cached) mask view, falling back to the identity placeholder when none is bound. */
   private _maskView(mask: VolumetricTexture | null): GPUTextureView {
-    return this._ensureMaskGpu(mask ?? this._identityMaskTexture()).createView({ dimension: "3d" });
+    return this._ensureMaskGpu(mask ?? this._identityMaskTexture()).view;
+  }
+
+  /** Destroys the GPU textures of masks that are no longer bound (removed volumes, swapped masks). */
+  private _evictUnboundMasks(): void {
+    for (const [mask, entry] of this._maskTextures) {
+      if (this._maskSignature.includes(mask) || mask === this._identityMask) continue;
+      if (this._volumeMaskBindings.includes(mask)) continue;
+      entry.texture.destroy();
+      this._maskTextures.delete(mask);
+    }
   }
 
   /**
@@ -375,12 +419,13 @@ export class VolumetricFogPassGPU implements PostEffectPass {
   private _syncMasks(element: VolumetricFogElement, fogVolumes: FogVolume[]): void {
     const identity = this._identityMaskTexture();
     const elementMask = this._usableMask(element.densityMask);
-    const signature: (VolumetricTexture | null)[] = [elementMask];
+    const signature = this._scratchSignature;
+    signature[0] = elementMask;
     const numVolumes = Math.min(fogVolumes.length, MAX_FOG_VOLUMES);
     for (let v = 0; v < MAX_MASK_SLOTS; v++) {
       const mask = this._usableMask(v < numVolumes ? fogVolumes[v]!.densityMask : null);
       this._volumeMaskBindings[v] = mask ?? identity;
-      signature.push(mask);
+      signature[1 + v] = mask;
     }
     if (numVolumes > MAX_MASK_SLOTS && !this._warnedMaskCapacity) {
       for (let v = MAX_MASK_SLOTS; v < numVolumes; v++) {
@@ -400,10 +445,13 @@ export class VolumetricFogPassGPU implements PostEffectPass {
       if (mask !== null && mask !== identity) this._ensureMaskGpu(mask);
     }
 
-    const changed =
-      signature.length !== this._maskSignature.length ||
-      signature.some((mask, i) => mask !== this._maskSignature[i]);
-    this._maskSignature = signature;
+    let changed = false;
+    for (let i = 0; i < signature.length; i++) {
+      if (signature[i] !== this._maskSignature[i]) {
+        changed = true;
+        this._maskSignature[i] = signature[i]!;
+      }
+    }
     this._elementMaskBinding = elementMask;
 
     if (changed) {
@@ -411,12 +459,42 @@ export class VolumetricFogPassGPU implements PostEffectPass {
       this._injectBindGroup = undefined;
       this._integrateBindGroupA = undefined;
       this._integrateBindGroupB = undefined;
+      this._evictUnboundMasks();
     }
+  }
+
+  /**
+   * Froxel grid size. Inherits the cluster grid while it is fine enough; with a degenerate one
+   * (`clusteredLighting.enabled = false` collapses it to 1x1x1) the fog builds its own default-sized
+   * grid so it neither collapses to one screen-wide sample nor becomes un-budgetable. The inject
+   * shader maps froxel cells onto cluster cells, so the two grids may differ freely.
+   */
+  private _resolveVolumeDims(
+    renderer: WebGPURenderer,
+    width: number,
+    height: number,
+  ): [number, number, number] {
+    const c = renderer.clusterDims;
+    if (
+      c.x >= MIN_INHERITED_FROXEL_DIMS[0] &&
+      c.y >= MIN_INHERITED_FROXEL_DIMS[1] &&
+      c.z >= MIN_INHERITED_FROXEL_DIMS[2]
+    ) {
+      return [c.x, c.y, c.z];
+    }
+    const own = computeClusterCounts(
+      width,
+      height,
+      DEFAULT_CLUSTER_TILE_SIZE,
+      DEFAULT_CLUSTER_Z_SLICES,
+    );
+    return [own.x, own.y, own.z];
   }
 
   private _ensureInjectionLayout(renderer: WebGPURenderer): void {
     if (this._injectPipeline) return;
     const layout = renderer.globalBGL;
+    this._injectGate.begin();
     this._injectPipeline = this._device.createComputePipeline({
       layout: this._device.createPipelineLayout({
         bindGroupLayouts: [layout, this._injectBGL],
@@ -428,6 +506,7 @@ export class VolumetricFogPassGPU implements PostEffectPass {
         entryPoint: "injectFog",
       },
     });
+    this._injectGate.end();
   }
 
   private _resizeTargets(
@@ -437,8 +516,7 @@ export class VolumetricFogPassGPU implements PostEffectPass {
     depthView: GPUTextureView,
     shadowView: GPUTextureView,
   ): void {
-    const dims = renderer.clusterDims;
-    const volDims: [number, number, number] = [dims.x, dims.y, dims.z];
+    const volDims = this._resolveVolumeDims(renderer, width, height);
 
     if (
       this._width !== width ||
@@ -490,6 +568,10 @@ export class VolumetricFogPassGPU implements PostEffectPass {
       });
       this._integratedView = this._integratedTexture.createView({ dimension: "3d" });
 
+      // DECISION (review A6): the full-res composite target is kept. Folding the 3D lookup into the uber
+      // pass would couple the always-on uber shader signature to the froxel volume + opaque depth bindings
+      // (extra bindings and a variant explosion for every non-fog scene). The target is rgba16float and only
+      // allocated while fog is enabled; PostFxChain destroys the whole pass after a disabled grace period.
       this._fogTexture = this._device.createTexture({
         size: [width, height, 1],
         format: "rgba16float",
@@ -512,12 +594,12 @@ export class VolumetricFogPassGPU implements PostEffectPass {
     if (
       !this._injectBindGroup ||
       this._cachedDepthView !== depthView ||
-      this._cachedShadowView !== shadowView ||
-      this._cachedGlobalBindGroup !== renderer.globalBindGroup
+      this._cachedShadowView !== shadowView
     ) {
+      // `renderer.globalBindGroup` is deliberately not a trigger: none of the groups below contain
+      // it (group 0 of the inject pass is set live at dispatch time).
       this._cachedDepthView = depthView;
       this._cachedShadowView = shadowView;
-      this._cachedGlobalBindGroup = renderer.globalBindGroup;
 
       // 1. Injection bind group
       const injectGroupEntries: GPUBindGroupEntry[] = [
@@ -608,18 +690,50 @@ export class VolumetricFogPassGPU implements PostEffectPass {
     const fogVolumes = ctx.fogVolumes;
     const pointLights = lights.pLights;
     const spotLights = lights.sLights;
+    // Every frame that does not produce a volume breaks temporal continuity: the next rendered frame
+    // must not blend against a history (and previous view-projection) from before the gap.
     if (!element.enabled || width <= 0 || height <= 0) {
+      this._hasHistory = false;
       return null;
     }
 
     const shadowView = renderer.defaultDirShadowTextureView;
-    if (!shadowView) return null;
+    if (!shadowView) {
+      this._hasHistory = false;
+      return null;
+    }
+
+    // Fail fast on a degenerate camera (not initialised yet): inverting a singular matrix leaves the
+    // target untouched, which would silently feed garbage to inject/reproject/integrate.
+    const view = this._scratchView;
+    if (vMat) view.data.set(vMat);
+    else view.identity();
+    this._scratchInvViewProj.data.set(viewProjMatrix);
+    if (
+      !Matrix4.invert(view, this._scratchInvView) ||
+      !Matrix4.invert(this._scratchInvViewProj, this._scratchInvViewProj)
+    ) {
+      this._hasHistory = false;
+      return null;
+    }
 
     this._syncMasks(element, fogVolumes);
     this._ensureInjectionLayout(renderer);
+    // Pipelines still validating (1-2 frames) or failed validation: skip the effect, never the frame.
+    if (!this._gate.ready || !this._injectGate.ready) {
+      this._hasHistory = false;
+      return null;
+    }
     this._resizeTargets(renderer, width, height, depthView, shadowView);
 
-    const dims = renderer.clusterDims;
+    // The log slicing depends on near/far: history accumulated with other planes is misaligned.
+    if (this._historyNear !== near || this._historyFar !== far) {
+      this._hasHistory = false;
+      this._historyNear = near;
+      this._historyFar = far;
+    }
+
+    const dims = { x: this._volumeDims[0], y: this._volumeDims[1], z: this._volumeDims[2] };
     const frameIndex = renderer.frameInfo.frameIndex;
 
     // Whether an element-global mask is uploaded this frame: absent masks keep the baked albedo
@@ -632,11 +746,6 @@ export class VolumetricFogPassGPU implements PostEffectPass {
     const jz = (ign(4, 5, frameIndex) - 0.5) * element.jitter;
 
     // --- 1. Injection uniform data (FroxelUniforms) ---
-    const view = this._scratchView;
-    if (vMat) view.data.set(vMat);
-    else view.identity();
-    Matrix4.invert(view, this._scratchInvView);
-
     const inj = this._injectUniformData;
     inj.set(this._scratchInvView.data, 0); // 0-15: invView
     inj[16] = element.density;
@@ -735,13 +844,10 @@ export class VolumetricFogPassGPU implements PostEffectPass {
     cpInject.setPipeline(this._injectPipeline!);
     cpInject.setBindGroup(0, renderer.globalBindGroup);
     cpInject.setBindGroup(1, this._injectBindGroup!);
-    cpInject.dispatchWorkgroups(Math.ceil(dims.x / 4), Math.ceil(dims.y / 4), dims.z);
+    cpInject.dispatchWorkgroups(Math.ceil(dims.x / 8), Math.ceil(dims.y / 8), dims.z);
     cpInject.end();
 
     // --- 2. Reprojection & Temporal Filter (Compute) ---
-    this._scratchInvViewProj.data.set(viewProjMatrix);
-    Matrix4.invert(this._scratchInvViewProj, this._scratchInvViewProj);
-
     const rep = this._reprojectUniformData;
     rep.set(this._scratchInvViewProj.data, 0); // 0-15: invViewProj
     if (this._hasHistory) {
@@ -816,9 +922,12 @@ export class VolumetricFogPassGPU implements PostEffectPass {
         dirLight!.volumetricIntensity *
         (elementMaskActive ? 1.0 : Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0))
       : 0.0;
-    intg[32] = element.color.r * sunScale;
-    intg[33] = element.color.g * sunScale;
-    intg[34] = element.color.b * sunScale;
+    // The directional light's own colour tints the shafts (same as the GL fog pass): a red evening
+    // sun must not produce white rays.
+    const sunColor = dirLight?.color;
+    intg[32] = element.color.r * (sunColor?.r ?? 1.0) * sunScale;
+    intg[33] = element.color.g * (sunColor?.g ?? 1.0) * sunScale;
+    intg[34] = element.color.b * (sunColor?.b ?? 1.0) * sunScale;
     intg[35] = sunActive ? 1.0 : 0.0;
 
     intg[INTEGRATE_MASK_OFFSET] = maskPos.x;
@@ -900,37 +1009,54 @@ export class VolumetricFogPassGPU implements PostEffectPass {
     return this._fogTextureView!;
   }
 
-  public destroy(): void {
+  /**
+   * Frees the volume/history/fog targets (e.g. while the effect stays disabled); the next `execute`
+   * re-creates them and starts a fresh history.
+   */
+  public releaseTargets(): void {
     this._injectedTexture?.destroy();
     this._historyTextureA?.destroy();
     this._historyTextureB?.destroy();
     this._integratedTexture?.destroy();
     this._fogTexture?.destroy();
-
-    this._injectUniformBuffer?.destroy();
-    this._reprojectUniformBuffer?.destroy();
-    this._integrateUniformBuffer?.destroy();
-    this._compositeUniformBuffer?.destroy();
-
-    for (const gpu of this._maskTextures.values()) {
-      gpu.destroy();
-    }
-    this._maskTextures.clear();
-    this._identityMask = undefined;
-    this._elementMaskBinding = null;
-    this._maskSignature = [];
-    for (let v = 0; v < MAX_MASK_SLOTS; v++) this._volumeMaskBindings[v] = null;
-
+    this._injectedTexture = undefined;
+    this._historyTextureA = undefined;
+    this._historyTextureB = undefined;
+    this._integratedTexture = undefined;
+    this._fogTexture = undefined;
+    this._fogTextureView = undefined;
+    this._width = 0;
+    this._height = 0;
+    this._volumeDims = [0, 0, 0];
+    this._hasHistory = false;
+    this._historyPingPong = false;
     this._injectBindGroup = undefined;
     this._reprojectBindGroupA = undefined;
     this._reprojectBindGroupB = undefined;
     this._integrateBindGroupA = undefined;
     this._integrateBindGroupB = undefined;
     this._compositeBindGroup = undefined;
+  }
+
+  public destroy(): void {
+    this.releaseTargets();
+
+    this._injectUniformBuffer?.destroy();
+    this._reprojectUniformBuffer?.destroy();
+    this._integrateUniformBuffer?.destroy();
+    this._compositeUniformBuffer?.destroy();
+
+    for (const entry of this._maskTextures.values()) {
+      entry.texture.destroy();
+    }
+    this._maskTextures.clear();
+    this._identityMask = undefined;
+    this._elementMaskBinding = null;
+    this._maskSignature.fill(null);
+    for (let v = 0; v < MAX_MASK_SLOTS; v++) this._volumeMaskBindings[v] = null;
 
     this._cachedDepthView = undefined;
     this._cachedShadowView = undefined;
-    this._cachedGlobalBindGroup = undefined;
     this._hasHistory = false;
   }
 }

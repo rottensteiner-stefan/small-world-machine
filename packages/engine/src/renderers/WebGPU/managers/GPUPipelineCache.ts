@@ -15,6 +15,8 @@ export interface WebGPUPipelineCacheEntry {
   bgLayouts: GPUBindGroupLayout[];
   /** Number of live Object3D instances currently referencing this pipeline. */
   refCount: number;
+  /** The `pipelineCacheKey()` this entry is stored under; lets callers skip recomputing it. */
+  key: string;
 }
 
 /**
@@ -182,12 +184,20 @@ export function getOptionalMaterialTextureBindings(): Record<
 export function getOptionalMaterialTextureNames(
   shaderId: string,
   shaderRegistry: ShaderRegistry,
-): string[] {
+): readonly string[] {
   const declared = shaderRegistry.get(shaderId)?.layout.textures;
-  if (!declared) return [];
+  if (!declared) return NO_NAMES;
+  // Called once per draw group: memoized per declared-textures object so a re-registered shader
+  // (new layout object) naturally invalidates it.
+  const hit = _optionalNamesCache.get(declared);
+  if (hit) return hit;
   const bindings = getOptionalMaterialTextureBindings();
-  return Object.keys(declared).filter((name) => name in bindings);
+  const names = Object.keys(declared).filter((name) => name in bindings);
+  _optionalNamesCache.set(declared, names);
+  return names;
 }
+const NO_NAMES: readonly string[] = [];
+const _optionalNamesCache = new WeakMap<object, readonly string[]>();
 
 /**
  * Number of sampled-texture bindings in the global bind group (irradianceMap, prefilterMap,
@@ -210,10 +220,6 @@ const ALWAYS_DECLARED_FLAGS: ReadonlySet<string> = new Set([
 const SHADER_FLAG_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
 /**
- * Sorted, de-duplicated and validated flag list. Each flag becomes a WGSL `const`, so a
- * duplicate would not compile and an invalid identifier would corrupt the shader prefix.
- */
-/**
  * WebGPU bakes blending into the pipeline, WebGL toggles it from `transparent` at draw time
  * (AbstractWebGLRenderer: transparent => SRC_ALPHA/ONE_MINUS_SRC_ALPHA unless `blending` picks
  * another function). A transparent material that never set `blending` must therefore resolve to
@@ -227,14 +233,24 @@ export function resolveBlendingMode(state: {
   return state.transparent ? BlendingMode.ALPHA : BlendingMode.DEFAULT;
 }
 
-function normalizeShaderFlags(flags: readonly string[]): string[] {
-  for (const flag of flags) {
+/**
+ * Sorted, de-duplicated and validated flag list. Hot path (called per draw group): flags that are already strictly
+ * ascending -- the common case, materials declare them sorted -- are returned as-is without
+ * allocating. Each flag becomes a WGSL `const`, so a
+ * duplicate would not compile and an invalid identifier would corrupt the shader prefix.
+ */
+function normalizeShaderFlags(flags: readonly string[]): readonly string[] {
+  let sortedUnique = true;
+  for (let i = 0; i < flags.length; i++) {
+    const flag = flags[i]!;
     if (!SHADER_FLAG_PATTERN.test(flag)) {
       throw new Error(
         `[GPUPipelineCache] Invalid shader flag name "${flag}" (expected ^[A-Z][A-Z0-9_]*$).`,
       );
     }
+    if (i > 0 && flags[i - 1]! >= flag) sortedUnique = false;
   }
+  if (sortedUnique) return flags;
   return [...new Set(flags)].sort();
 }
 
@@ -297,7 +313,7 @@ export class GPUPipelineCache {
    * plus the 5 IBL/shadow textures in the global bind group = 20) exceeds WebGPU's guaranteed
    * per-stage sampled-texture minimum of 16 on any device that doesn't happen to allow more.
    */
-  public getMaterialBGL(shaderId: string, flags: string[]): GPUBindGroupLayout {
+  public getMaterialBGL(shaderId: string, flags: readonly string[]): GPUBindGroupLayout {
     flags = normalizeShaderFlags(flags);
     const key = shaderId + "_" + flags.join("|");
     let bgl = this._materialBGLCache.get(key);
@@ -520,6 +536,7 @@ export class GPUPipelineCache {
         layout: pipelineLayout,
         bgLayouts: [this._globalBGL, materialBGL, this._objectBGL, this._viewBGL],
         refCount: 0,
+        key,
       };
       this._pipelines.set(key, cache);
     }
@@ -567,7 +584,7 @@ export class GPUPipelineCache {
   public getShaderModule(
     shaderId: string,
     isInstanced: boolean = false,
-    flags: string[] = [],
+    flags: readonly string[] = [],
     withNormalOutput: boolean = false,
   ): GPUShaderModule {
     flags = normalizeShaderFlags(flags);

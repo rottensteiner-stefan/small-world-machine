@@ -1,3 +1,5 @@
+import { requireGlObject } from "../gl/requireGlObject.js";
+
 /**
  * Encapsulates a WebGL2 Framebuffer configured specifically for depth rendering (Shadow Maps).
  * It has NO color attachment and a DEPTH_COMPONENT32F texture attachment.
@@ -20,11 +22,11 @@ export class WebGL2DepthFrameBuffer {
     this._width = width;
     this._height = height;
 
-    this._framebuffer = gl.createFramebuffer()!;
+    this._framebuffer = requireGlObject(gl.createFramebuffer(), "framebuffer");
     gl.bindFramebuffer(gl.FRAMEBUFFER, this._framebuffer);
 
     // Create a depth-only texture
-    this._depthTexture = gl.createTexture()!;
+    this._depthTexture = requireGlObject(gl.createTexture(), "texture");
     gl.bindTexture(gl.TEXTURE_2D, this._depthTexture);
 
     // We use DEPTH_COMPONENT24 for high-precision shadow mapping to avoid artifacts while maximizing compatibility

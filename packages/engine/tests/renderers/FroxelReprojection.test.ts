@@ -1,158 +1,99 @@
 import { describe, it, expect } from "vitest";
-import { Matrix4 } from "../../src/math/index.js";
+import { Matrix4, sliceCenterViewDepth } from "../../src/math/index.js";
+import injectWGSL from "../../src/renderers/shaders/source/web_gpu/compute/froxel_inject.wgsl?raw";
+import reprojectWGSL from "../../src/renderers/shaders/source/web_gpu/compute/froxel_reproject.wgsl?raw";
+import integrateWGSL from "../../src/renderers/shaders/source/web_gpu/compute/froxel_integrate.wgsl?raw";
 
-// Slicing math matching froxel.ts and WGSL compute shaders (single source of truth)
-function sliceDepth(slice: number, near: number, far: number, slices: number): number {
-  const n = Math.max(near, 1e-6);
-  const f = Math.max(far, n + 1e-6);
-  const low = Math.pow(f / n, slice / slices) * n;
-  const high = Math.pow(f / n, (slice + 1.0) / slices) * n;
-  return Math.max(n * 1.001, Math.sqrt(low * high));
+/**
+ * Compiles a pure scalar WGSL function (f32 params/locals, `max/min/pow/sqrt/log/clamp`) from the
+ * REAL shader source into a JS function, so the tests exercise the shipped math instead of a copy.
+ */
+function wgslScalarFn(source: string, name: string): (...args: number[]) => number {
+  const m = new RegExp(`fn\\s+${name}\\s*\\(([^)]*)\\)\\s*->\\s*f32\\s*\\{([\\s\\S]*?)\\n\\}`).exec(
+    source,
+  );
+  if (!m) throw new Error(`fn ${name} not found in WGSL`);
+  const params = m[1]!
+    .split(",")
+    .map((p) => p.split(":")[0]!.trim())
+    .filter(Boolean);
+  const body = m[2]!
+    .replace(/\blet\b/g, "const")
+    .replace(/\bvar\b/g, "let")
+    .replace(/:\s*f32/g, "")
+    .replace(/\b(max|min|pow|sqrt|log|abs|floor)\(/g, "Math.$1(")
+    .replace(/\bclamp\(([^,]+),\s*([^,]+),\s*([^;]+)\);/g, "Math.min(Math.max($1, $2), $3);");
+  return new Function(...params, body) as (...args: number[]) => number;
 }
 
-function depthToNormalizedSlice(viewZ: number, near: number, far: number): number {
-  const n = Math.max(near, 1e-6);
-  const f = Math.max(far, n + 1e-6);
-  const clampedZ = Math.min(Math.max(viewZ, n), f);
-  return Math.log(clampedZ / n) / Math.max(Math.log(f / n), 1e-6);
+/** Extracts the right-hand side of `let clipZ = ...;` from a WGSL shader as a JS function of (zMid, near, far). */
+function wgslClipZ(source: string): (zMid: number, near: number, far: number) => number {
+  const m = /let clipZ = ([^;]+);/.exec(source);
+  if (!m) throw new Error("clipZ not found in WGSL");
+  const expr = m[1]!.replace(/\bmax\(/g, "Math.max(");
+  return new Function("zMid", "near", "far", `return ${expr};`) as (
+    zMid: number,
+    near: number,
+    far: number,
+  ) => number;
 }
 
-function computeClipZ(zMid: number, near: number, far: number): number {
-  return ((far + near) * zMid - 2.0 * near * far) / Math.max(zMid * (far - near), 1e-6);
-}
-
-describe("Froxel Reprojection & Temporal Filtering Math", () => {
+describe("Froxel WGSL slicing matches froxel.ts (single source of truth)", () => {
   const near = 0.1;
   const far = 100.0;
   const slices = 64;
+  const shaders: [string, (...a: number[]) => number][] = [
+    ["froxel_inject.wgsl", wgslScalarFn(injectWGSL, "sliceCenterDepth")],
+    ["froxel_reproject.wgsl", wgslScalarFn(reprojectWGSL, "sliceDepth")],
+    ["froxel_integrate.wgsl", wgslScalarFn(integrateWGSL, "sliceDepth")],
+  ];
 
-  describe("Logarithmic Slice Slicing & Inversion", () => {
-    it("preserves near and far boundaries monotonically", () => {
-      const z0 = sliceDepth(0, near, far, slices);
-      const zLast = sliceDepth(slices - 1, near, far, slices);
-
-      expect(z0).toBeGreaterThanOrEqual(near);
-      expect(zLast).toBeLessThanOrEqual(far);
-      expect(zLast).toBeGreaterThan(z0);
-    });
-
-    it("inverts depth to normalized slice coordinate accurately", () => {
-      for (let s = 0; s < slices; s += 8) {
-        const z = sliceDepth(s, near, far, slices);
-        const normSlice = depthToNormalizedSlice(z, near, far);
-        const reconstructedSlice = normSlice * slices;
-
-        // Texel centers correspond to slice + 0.5 in normalized space
-        expect(reconstructedSlice).toBeCloseTo(s + 0.5, 1);
-      }
-    });
+  it.each(shaders)("%s slice centre depth equals sliceCenterViewDepth", (_n, fn) => {
+    for (let s = 0; s < slices; s++) {
+      expect(fn(s, near, far, slices)).toBeCloseTo(sliceCenterViewDepth(s, near, far, slices), 3);
+    }
   });
 
-  describe("NDC ClipZ Unprojection", () => {
-    it("reconstructs exact view-space depth through invViewProj without distortion", () => {
-      const proj = new Matrix4();
-      Matrix4.perspective(Math.PI / 3, 16 / 9, near, far, proj);
-
-      const invProj = new Matrix4();
-      expect(Matrix4.invert(proj, invProj)).toBe(true);
-
-      const testDepths = [0.5, 2.0, 10.0, 50.0, 95.0];
-      for (const zTest of testDepths) {
-        const clipZ = computeClipZ(zTest, near, far);
-
-        // clipZ is in OpenGL NDC [-1, 1]: at near clipZ=-1, at far clipZ=1
-        expect(clipZ).toBeGreaterThanOrEqual(-1.001);
-        expect(clipZ).toBeLessThanOrEqual(1.001);
-
-        // Unproject point (0, 0, clipZ, 1) using invProj
-        const m = invProj.data;
-        const zViewH = m[2]! * 0 + m[6]! * 0 + m[10]! * clipZ + m[14]! * 1.0;
-        const wViewH = m[3]! * 0 + m[7]! * 0 + m[11]! * clipZ + m[15]! * 1.0;
-        const reconstructedZ = zViewH / wViewH;
-
-        // In right-handed coordinates, camera looks along -Z, so reconstructedZ is -zTest
-        expect(reconstructedZ).toBeCloseTo(-zTest, 2);
-      }
-    });
+  it("reprojection's depth->slice coordinate inverts the slice centre to texel centre (s + 0.5)/N", () => {
+    const toSlice = wgslScalarFn(reprojectWGSL, "depthToNormalizedSlice");
+    for (let s = 0; s < slices; s += 7) {
+      const z = sliceCenterViewDepth(s, near, far, slices);
+      expect(toSlice(z, near, far) * slices).toBeCloseTo(s + 0.5, 1);
+    }
+    // Out-of-range depths clamp to the volume (reprojection treats them as outside via range check).
+    expect(toSlice(1e6, near, far)).toBeCloseTo(1, 6);
+    expect(toSlice(1e-6, near, far)).toBeCloseTo(0, 6);
   });
 
-  describe("3D AABB 7-Tap Variance Clamping", () => {
-    it("clamps divergent history samples to the neighborhood bounds with padding", () => {
-      const center = [0.2, 0.2, 0.2, 0.05];
-      const neighbors = [
-        [0.21, 0.19, 0.2, 0.05],
-        [0.19, 0.21, 0.2, 0.05],
-        [0.2, 0.22, 0.19, 0.048],
-        [0.2, 0.18, 0.21, 0.052],
-        [0.2, 0.2, 0.22, 0.051],
-        [0.2, 0.2, 0.18, 0.049],
-      ];
+  it.each([
+    ["froxel_reproject.wgsl", reprojectWGSL],
+    ["froxel_integrate.wgsl", integrateWGSL],
+  ])("%s unprojects view depth through the engine's GL-clip perspective matrix", (_n, src) => {
+    const clipZ = wgslClipZ(src);
+    const proj = new Matrix4();
+    Matrix4.perspective(Math.PI / 3, 16 / 9, near, far, proj);
+    const invProj = new Matrix4();
+    expect(Matrix4.invert(proj, invProj)).toBe(true);
+    for (const zTest of [0.5, 2.0, 10.0, 50.0, 95.0]) {
+      const cz = clipZ(zTest, near, far);
+      expect(cz).toBeGreaterThanOrEqual(-1.001);
+      expect(cz).toBeLessThanOrEqual(1.001);
+      const m = invProj.data;
+      const z = m[10]! * cz + m[14]!;
+      const w = m[11]! * cz + m[15]!;
+      expect(z / w).toBeCloseTo(-zTest, 2);
+    }
+  });
+});
 
-      const boxMin = [...center];
-      const boxMax = [...center];
-      for (const n of neighbors) {
-        for (let c = 0; c < 4; c++) {
-          boxMin[c] = Math.min(boxMin[c]!, n[c]!);
-          boxMax[c] = Math.max(boxMax[c]!, n[c]!);
-        }
-      }
-
-      // Add 5% padding + epsilon
-      for (let c = 0; c < 4; c++) {
-        const pad = 0.05 * (boxMax[c]! - boxMin[c]!) + 1e-4;
-        boxMin[c] = boxMin[c]! - pad;
-        boxMax[c] = boxMax[c]! + pad;
-      }
-
-      // Outlier history sample (e.g. from an old bright explosion that vanished)
-      const rogueHistory = [0.95, 0.95, 0.95, 0.8];
-      const clampedHistory = rogueHistory.map((val, idx) =>
-        Math.min(Math.max(val, boxMin[idx]!), boxMax[idx]!),
-      );
-
-      // Must be tightly clamped to current local neighborhood
-      expect(clampedHistory[0]).toBeLessThanOrEqual(boxMax[0]!);
-      expect(clampedHistory[0]).toBeCloseTo(boxMax[0]!, 4);
-      expect(clampedHistory[3]).toBeLessThanOrEqual(boxMax[3]!);
-    });
-
-    it("blends exponentially when history is within valid bounds", () => {
-      const current = 0.2;
-      const history = 0.22;
-      const alpha = 0.9; // 90% history, 10% new sample
-
-      const blended = current * (1.0 - alpha) + history * alpha;
-      expect(blended).toBeCloseTo(0.218, 4);
-    });
-
-    it("resets history on first frame (alpha = 0)", () => {
-      const current = 0.5;
-      const history = 10.0; // Stale or uninitialized
-      const alpha = 0.0;
-
-      const blended = current * (1.0 - alpha) + history * alpha;
-      expect(blended).toBe(0.5);
-    });
+describe("Froxel reprojection shader structure", () => {
+  it("clamps history to the 7-tap neighbourhood AABB before the EMA blend", () => {
+    expect(reprojectWGSL).toMatch(/let clampedHistory = clamp\(historySample, boxMin, boxMax\);/);
+    expect(reprojectWGSL).toMatch(/mix\(currentSample, clampedHistory, alpha\)/);
+    expect(reprojectWGSL.match(/vec3i\(-?\d, -?\d, -?\d\)/g)).toHaveLength(6);
   });
 
-  describe("Sub-Voxel Jittering Synchronization", () => {
-    it("generates zero-centered offsets bounded by element.jitter", () => {
-      function ign(x: number, y: number, frame: number): number {
-        const magic =
-          52.9829189 * (((0.06711056 * x + 0.00583715 * y + 0.00583715 * frame) % 1.0) + 1.0);
-        return magic - Math.floor(magic);
-      }
-
-      const jitterScale = 0.8;
-      for (let frame = 1; frame <= 10; frame++) {
-        const jx = (ign(0, 1, frame) - 0.5) * jitterScale;
-        const jy = (ign(2, 3, frame) - 0.5) * jitterScale;
-        const jz = (ign(4, 5, frame) - 0.5) * jitterScale;
-
-        expect(Math.abs(jx)).toBeLessThanOrEqual(0.5 * jitterScale);
-        expect(Math.abs(jy)).toBeLessThanOrEqual(0.5 * jitterScale);
-        expect(Math.abs(jz)).toBeLessThanOrEqual(0.5 * jitterScale);
-      }
-    });
+  it("caps the history weight below 1 so the history can never freeze", () => {
+    expect(reprojectWGSL).toMatch(/clamp\(uni\.reprojectParams\.x, 0\.0, 0\.98\)/);
   });
 });

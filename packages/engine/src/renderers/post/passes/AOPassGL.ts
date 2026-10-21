@@ -5,6 +5,7 @@ import AO_FRAG_GLSL from "../shaders/AO.frag.glsl?raw";
 import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import type { HbaoElement } from "../elements/index.js";
 import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
+import { requireGlObject } from "../../gl/requireGlObject.js";
 
 /**
  * Generates the HBAO texture for WebGL2 -- reconstructs view-space position/normal from the
@@ -50,7 +51,7 @@ export class AOPassGL {
     this._uIntensity = gl.getUniformLocation(this._prog, "u_intensity");
     this._uTexelSize = gl.getUniformLocation(this._prog, "u_texelSize");
 
-    this._vao = gl.createVertexArray()!;
+    this._vao = requireGlObject(gl.createVertexArray(), "vertex array");
   }
 
   private _resizeTarget(width: number, height: number): void {
@@ -64,6 +65,7 @@ export class AOPassGL {
       internalFormat: this._gl.R8,
       format: this._gl.RED,
       type: this._gl.UNSIGNED_BYTE,
+      depth: false,
     });
   }
 

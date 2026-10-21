@@ -7,3 +7,4 @@ export * from "./passes/BloomPassGPU.js";
 
 export * from "./elements/index.js";
 export * from "./passes/index.js";
+export * from "./PostEffectPipelineGate.js";

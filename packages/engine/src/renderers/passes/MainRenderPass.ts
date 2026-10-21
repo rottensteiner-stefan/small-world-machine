@@ -32,6 +32,68 @@ export class MainRenderPass implements RenderPass {
     objects: this._scratchDecalObjects,
   };
 
+  // Render-pass descriptors are consumed synchronously by `beginRenderPass()`, so one set is
+  // reused every frame instead of allocating attachment arrays + descriptors per pass.
+  private readonly _clearColor: GPURenderPassColorAttachment = {
+    view: undefined as unknown as GPUTextureView,
+    loadOp: "clear",
+    storeOp: "store",
+  };
+  private readonly _clearNormal: GPURenderPassColorAttachment = {
+    view: undefined as unknown as GPUTextureView,
+    clearValue: NORMAL_TARGET_CLEAR,
+    loadOp: "clear",
+    storeOp: "store",
+  };
+  private readonly _loadColor: GPURenderPassColorAttachment = {
+    view: undefined as unknown as GPUTextureView,
+    loadOp: "load",
+    storeOp: "store",
+  };
+  private readonly _loadNormal: GPURenderPassColorAttachment = {
+    view: undefined as unknown as GPUTextureView,
+    loadOp: "load",
+    storeOp: "store",
+  };
+  private readonly _clearAttachments: GPURenderPassColorAttachment[] = [];
+  private readonly _loadAttachments: GPURenderPassColorAttachment[] = [];
+  private readonly _depthAttachment: GPURenderPassDepthStencilAttachment = {
+    view: undefined as unknown as GPUTextureView,
+    depthLoadOp: "load",
+    depthStoreOp: "store",
+  };
+  private readonly _clearDescriptor: GPURenderPassDescriptor = {
+    colorAttachments: this._clearAttachments,
+    depthStencilAttachment: this._depthAttachment,
+  };
+  private readonly _loadDescriptor: GPURenderPassDescriptor = {
+    colorAttachments: this._loadAttachments,
+    depthStencilAttachment: this._depthAttachment,
+  };
+
+  /** Begins a pass over the reused attachment set; `clear` selects the clearing variant. */
+  private _beginPass(
+    ce: GPUCommandEncoder,
+    renderer: WebGPURenderer,
+    targetView: GPUTextureView,
+    normalView: GPUTextureView | undefined,
+    clear: boolean,
+  ): GPURenderPassEncoder {
+    const attachments = clear ? this._clearAttachments : this._loadAttachments;
+    const color = clear ? this._clearColor : this._loadColor;
+    const normal = clear ? this._clearNormal : this._loadNormal;
+    color.view = targetView;
+    if (clear) color.clearValue = renderer.clearColor;
+    attachments.length = 0;
+    attachments.push(color);
+    if (normalView) {
+      normal.view = normalView;
+      attachments.push(normal);
+    }
+    this._depthAttachment.view = renderer.activeDepthView;
+    return ce.beginRenderPass(clear ? this._clearDescriptor : this._loadDescriptor);
+  }
+
   public execute(
     renderer: WebGPURenderer,
     scene: Scene,
@@ -44,37 +106,13 @@ export class MainRenderPass implements RenderPass {
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
 
     const normalView = renderer.activeNormalView;
-    const colorAttachments: GPURenderPassColorAttachment[] = [
-      {
-        view: targetView,
-        clearValue: renderer.clearColor,
-        loadOp: "clear",
-        storeOp: "store",
-      },
-    ];
-    if (normalView) {
-      colorAttachments.push({
-        view: normalView,
-        clearValue: NORMAL_TARGET_CLEAR,
-        loadOp: "clear",
-        storeOp: "store",
-      });
-    }
     const opaqueMode = normalView ? NormalTargetMode.WRITE : NormalTargetMode.NONE;
     const maskedMode = normalView ? NormalTargetMode.MASKED : NormalTargetMode.NONE;
 
-    const rp = ce.beginRenderPass({
-      colorAttachments,
-      depthStencilAttachment: {
-        // DepthPrePassGPU already cleared and populated this depth buffer with the frontmost
-        // depth for every opaque object this frame -- "load" instead of "clear" builds on top
-        // of that instead of erasing it, which is what lets unchanged depthCompare:"less-equal"
-        // below reject occluded fragments via early-Z before their fragment shader runs.
-        view: renderer.activeDepthView,
-        depthLoadOp: "load",
-        depthStoreOp: "store",
-      },
-    });
+    // DepthPrePassGPU already cleared and populated this depth buffer with the frontmost depth
+    // for every opaque object this frame -- "load" instead of "clear" builds on top of that,
+    // which is what lets depthCompare:"less-equal" reject occluded fragments via early-Z.
+    const rp = this._beginPass(ce, renderer, targetView, normalView, true);
 
     // 1. Skybox first
     for (let i = 0; i < renderList.opaqueBatches.length; i++) {
@@ -104,20 +142,7 @@ export class MainRenderPass implements RenderPass {
       depthCaptured = true;
       if (normalView) renderer.captureOpaqueNormal(ce);
 
-      const decalAttachments: GPURenderPassColorAttachment[] = [
-        { view: targetView, loadOp: "load", storeOp: "store" },
-      ];
-      if (normalView) {
-        decalAttachments.push({ view: normalView, loadOp: "load", storeOp: "store" });
-      }
-      const rpDecal = ce.beginRenderPass({
-        colorAttachments: decalAttachments,
-        depthStencilAttachment: {
-          view: renderer.activeDepthView,
-          depthLoadOp: "load",
-          depthStoreOp: "store",
-        },
-      });
+      const rpDecal = this._beginPass(ce, renderer, targetView, normalView, false);
       const decalMode = normalView ? NormalTargetMode.BLEND : NormalTargetMode.NONE;
       for (const decal of renderList.decals) {
         this._scratchDecalObjects[0] = decal;
@@ -137,24 +162,7 @@ export class MainRenderPass implements RenderPass {
       if (!depthCaptured) renderer.captureOpaqueDepth(ce);
 
       // Start transparent pass
-      const transparentAttachments: GPURenderPassColorAttachment[] = [
-        {
-          view: targetView,
-          loadOp: "load",
-          storeOp: "store",
-        },
-      ];
-      if (normalView) {
-        transparentAttachments.push({ view: normalView, loadOp: "load", storeOp: "store" });
-      }
-      const rpTransparent = ce.beginRenderPass({
-        colorAttachments: transparentAttachments,
-        depthStencilAttachment: {
-          view: renderer.activeDepthView,
-          depthLoadOp: "load",
-          depthStoreOp: "store",
-        },
-      });
+      const rpTransparent = this._beginPass(ce, renderer, targetView, normalView, false);
 
       // 3. Transparent objects
       for (const obj of renderList.transparent) {
@@ -179,7 +187,14 @@ export class MainRenderPass implements RenderPass {
       // HBAO, light shafts and volumetric fog need the opaque depth buffer every frame they're
       // enabled -- the single `postProcessing.requiresOpaqueDepth` property is the renderer's only
       // source of truth for depth-consuming effects (no per-effect OR-chains, see ADR 0037).
-      if (renderer.postProcessing.requiresOpaqueDepth && !depthCaptured) {
+      // The post chain only runs for the main camera target (PostProcessPass is skipped for
+      // offscreen renders), so an offscreen render (reflection, probe) never needs the copy.
+      if (
+        !renderer.activeRenderTarget &&
+        renderer.postProcessing.enabled &&
+        renderer.postProcessing.requiresOpaqueDepth &&
+        !depthCaptured
+      ) {
         renderer.captureOpaqueDepth(ce);
       }
     }

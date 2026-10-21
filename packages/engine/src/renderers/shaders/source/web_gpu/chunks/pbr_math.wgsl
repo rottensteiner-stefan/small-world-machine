@@ -132,7 +132,18 @@ fn getShadowPCSS(map: texture_depth_2d_array, samp: sampler_comparison, shadowPo
         vec2f(-0.1244, -0.9602),
     );
     // Search disk radius in shadow-map texels. 8 covers near and far penumbra alike without
-    // sampling half the map; the penalty for a wide disk is unshadowed fragments' early out.
+    // sampling half the map; fully lit fragments leave early below (blockerCount < 1).
+    //
+    // Deliberate design decisions (7d review A14, see ADR 0006 / docs/shadows.md):
+    // - FIXED sunflower disk, no per-pixel rotation (interleaved gradient noise): the search is
+    //   deterministic by contract (bit-identical frames, gated by check-swm42*.mjs); rotation
+    //   would trade that for noise that only TAA hides. Kept fixed.
+    // - searchTexels stays a constant: it equals the reach of the default PCF cap (1.5 * 4 texels
+    //   < 8); shadowSoftness.z remains reserved rather than becoming an unused knob.
+    // - Spot maps (perspective): ndc.z is hyperbolic in view depth, so `radial` below shrinks for
+    //   distant receivers and the penumbra reads harder than for the ortho cascades. That errs
+    //   toward a sharper (never leakier) shadow; linearizing needs the spot near/far, which no
+    //   uniform lane carries yet (spotShadowInfo is full) -- a struct growth, not a shader tweak.
     let searchTexels = 8.0;
 
     var avgBlockerDepth: f32 = 0.0;

@@ -5,6 +5,7 @@ import BILATERAL_FRAG_WGSL from "../shaders/LightShaftsBilateral.frag.wgsl?raw";
 import type { LightShaftsElement } from "../elements/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
+import { PostEffectPipelineGate } from "../PostEffectPipelineGate.js";
 import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 
 /**
@@ -14,6 +15,7 @@ import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js
  */
 export class LightShaftsPassGPU implements PostEffectPass {
   private readonly _device: GPUDevice;
+  private readonly _gate: PostEffectPipelineGate;
 
   private _sampler?: GPUSampler;
   private _shadowSampler?: GPUSampler;
@@ -28,7 +30,7 @@ export class LightShaftsPassGPU implements PostEffectPass {
   private _pipelineBilateral!: GPURenderPipeline;
   private _bglBilateral!: GPUBindGroupLayout;
   private _uniformBufferBilateral!: GPUBuffer;
-  private readonly _uniformDataBilateral: Float32Array = new Float32Array(4); // 16 bytes
+  private readonly _uniformDataBilateral: Float32Array = new Float32Array(8); // 32 bytes (vec4 + vec4)
 
   // Targets
   private _width: number = 0;
@@ -46,10 +48,15 @@ export class LightShaftsPassGPU implements PostEffectPass {
   // Scratch math
   private readonly _scratchInvViewProj: Matrix4 = new Matrix4();
   private readonly _scratchSunDir: Vector3D = new Vector3D();
+  private readonly _scratchCascadeVp: Matrix4 = new Matrix4();
+  private readonly _scratchCascadeVpZO: Matrix4 = new Matrix4();
 
   constructor(device: GPUDevice) {
     this._device = device;
+    this._gate = new PostEffectPipelineGate(device, "LightShafts");
+    this._gate.begin();
     this._buildPipelines();
+    this._gate.end();
   }
 
   private _buildPipelines(): void {
@@ -72,7 +79,7 @@ export class LightShaftsPassGPU implements PostEffectPass {
     });
 
     this._uniformBufferBilateral = device.createBuffer({
-      size: 16,
+      size: 32,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -165,6 +172,7 @@ export class LightShaftsPassGPU implements PostEffectPass {
    * Executes the volumetric light shafts passes on WebGPU.
    */
   public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    if (!this._gate.ready) return null;
     const { renderer, ce, depthView, width, height, vp, camPos, lights } = ctx;
     const viewProjMatrix = vp;
     const dirLight = lights.dLight;
@@ -254,7 +262,12 @@ export class LightShaftsPassGPU implements PostEffectPass {
     for (let i = 0; i < numCascades; i++) {
       const cam = dirLight.cascadeCameras[i];
       if (cam) {
-        d.set(cam.viewProjectionMatrix, 40 + i * 16);
+        // The shadow map is rendered with ZO_CORRECTION * raw (see CascadedShadowPassGPU), so its
+        // depth is in [0, 1]. Sampling with the raw GL-clip matrix compares against z in [-1, 1]
+        // and starts every shadow far behind its occluder. Same matrix the main PBR shader uses.
+        this._scratchCascadeVp.data.set(cam.viewProjectionMatrix);
+        Matrix4.multiply(Matrix4.ZO_CORRECTION, this._scratchCascadeVp, this._scratchCascadeVpZO);
+        d.set(this._scratchCascadeVpZO.data, 40 + i * 16);
       }
     }
 
@@ -264,7 +277,8 @@ export class LightShaftsPassGPU implements PostEffectPass {
     this._uniformDataBilateral[0] = 1.0 / halfW;
     this._uniformDataBilateral[1] = 1.0 / halfH;
     this._uniformDataBilateral[2] = element.depthThreshold;
-    this._uniformDataBilateral[3] = 0.0;
+    this._uniformDataBilateral[3] = ctx.near;
+    this._uniformDataBilateral[4] = ctx.far;
     this._device.queue.writeBuffer(this._uniformBufferBilateral, 0, this._uniformDataBilateral);
 
     // --- PASS 1: Half-Resolution Raymarching ---

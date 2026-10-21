@@ -14,6 +14,12 @@
  */
 const DEFAULT_CAPACITY = 4096;
 
+interface ObjectSlotRecord {
+  frame: number;
+  epoch: number;
+  offset: number;
+}
+
 export class GPUObjectRingBuffer {
   private readonly _device: GPUDevice;
   private readonly _objectBGL: GPUBindGroupLayout;
@@ -31,6 +37,17 @@ export class GPUObjectRingBuffer {
    * referenced their slots has actually been recorded and submitted. A list, because a frame can
    * grow more than once. */
   private _pendingDestroy: GPUBuffer[] = [];
+  /**
+   * Allocation-free per-(object, material) dedup used by the draw loop: persistent records
+   * validated by a frame stamp instead of a per-frame `Map<string,...>` fed with freshly
+   * concatenated `uuid:matUuid` keys. A record is live only if both the frame and the buffer
+   * epoch (bumped when a mid-frame growth invalidates handed-out offsets) match.
+   */
+  private _objectSlots = new WeakMap<object, Map<string, ObjectSlotRecord>>();
+  private _frameId = 0;
+  private _epoch = 0;
+  /** Whether the last `acquireObjectSlot()` returned an already-written slot (no result object). */
+  public lastAcquireCached = false;
 
   constructor(
     device: GPUDevice,
@@ -98,6 +115,7 @@ export class GPUObjectRingBuffer {
   public beginFrame(): void {
     this._slotMap.clear();
     this._slotCount = 0;
+    this._frameId++;
     this.ensureCapacity(Math.max(DEFAULT_CAPACITY, Math.ceil(this._lastFrameSlotCount * 1.5)));
   }
 
@@ -127,12 +145,52 @@ export class GPUObjectRingBuffer {
       // buffer, so the dedup map must not hand them out again for the new one.
       this.ensureCapacity(this._slotCount + 1);
       this._slotMap.clear();
+      this._epoch++;
     }
     const slot = this._slotCount++;
 
     const offset = slot * this._stride;
     if (key !== undefined) this._slotMap.set(key, offset);
     return { offset, cached: false };
+  }
+
+  /**
+   * Allocation-free variant of `acquireSlot()` for the per-draw path: dedups on the (object,
+   * `matUuid`) pair without building a key string. `obj === undefined` never dedupes (sprites).
+   * Returns the byte offset; `lastAcquireCached` tells whether data must still be written.
+   */
+  public acquireObjectSlot(obj: object | undefined, matUuid: string): number {
+    let record: ObjectSlotRecord | undefined;
+    if (obj !== undefined) {
+      let byMat = this._objectSlots.get(obj);
+      if (!byMat) {
+        byMat = new Map();
+        this._objectSlots.set(obj, byMat);
+      }
+      record = byMat.get(matUuid);
+      if (!record) {
+        record = { frame: -1, epoch: -1, offset: 0 };
+        byMat.set(matUuid, record);
+      }
+      if (record.frame === this._frameId && record.epoch === this._epoch) {
+        this.lastAcquireCached = true;
+        return record.offset;
+      }
+    }
+
+    if (this._slotCount >= this._capacity) {
+      this.ensureCapacity(this._slotCount + 1);
+      this._slotMap.clear();
+      this._epoch++;
+    }
+    const offset = this._slotCount++ * this._stride;
+    if (record) {
+      record.frame = this._frameId;
+      record.epoch = this._epoch;
+      record.offset = offset;
+    }
+    this.lastAcquireCached = false;
+    return offset;
   }
 
   public write(offset: number, data: Float32Array): void {

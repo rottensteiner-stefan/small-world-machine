@@ -77,6 +77,9 @@ const VIEW_SLOT_COUNT = 9;
 /**
  * Modern WebGPU implementation with dynamic vertex updates and memory management.
  */
+/** Frames a material bind group may sit unused before `_sweepMaterialBindGroups()` drops it. */
+const MATERIAL_BIND_GROUP_IDLE_FRAMES = 600;
+
 export class WebGPURenderer extends AbstractRenderer {
   public override readonly type: RendererType = RendererType.WEB_GPU;
   protected _adapter: GPUAdapter | undefined = undefined;
@@ -87,6 +90,11 @@ export class WebGPURenderer extends AbstractRenderer {
   /** Satisfies Renderer interface */
   public override get isContextLost(): boolean {
     return this._isDeviceLost;
+  }
+
+  /** True when the device was created with the optional `timestamp-query` feature (K5). */
+  public get supportsTimestampQuery(): boolean {
+    return this._device?.features.has("timestamp-query") === true;
   }
 
   /** Satisfies Renderer interface */
@@ -143,8 +151,20 @@ export class WebGPURenderer extends AbstractRenderer {
     {
       bg: GPUBindGroup;
       resources: unknown[];
+      /** `_frameCount` of the last draw that used this entry; see `_sweepMaterialBindGroups()`. */
+      lastUsedFrame: number;
     }
   >();
+  /** Reused by `_getMaterialBindGroup()` so the per-batch lookup allocates nothing on a hit. */
+  private readonly _scratchBgBindings: number[] = [];
+  private readonly _scratchBgResources: GPUBindingResource[] = [];
+  /** Reused manifest view for the USE_INSTANCE_COLOR variant (see `_renderSubgroup`). */
+  private readonly _scratchInstanceColorFlags: string[] = [];
+  private readonly _scratchEffManifest: RenderManifest = {
+    shaderId: "",
+    properties: {},
+    textures: {},
+  };
   /** Fallback/placeholder GPU resources (default & dummy textures/buffers) -- see
    * `GPUFallbackResources`'s own doc comment. */
   private _fallback!: GPUFallbackResources;
@@ -164,6 +184,11 @@ export class WebGPURenderer extends AbstractRenderer {
   }
   public set defaultDirShadowTextureView(view: GPUTextureView) {
     this._fallback.defaultDirShadowTextureView = view;
+  }
+  /** Destroys `tex` after this frame's submit (commands recorded earlier this frame, e.g. an
+   * offscreen sub-render, may still reference it). For passes that replace their own textures. */
+  public deferDestroyTexture(tex: GPUTexture): void {
+    this._fallback.deferDestroyTexture(tex);
   }
   public get dummyDirShadowTextureView(): GPUTextureView {
     return this._fallback.dummyDirShadowTextureView;
@@ -199,6 +224,8 @@ export class WebGPURenderer extends AbstractRenderer {
   /** Cached offscreen RenderTarget backing textures -- see `GPURenderTargetCache`. */
   private _targetCache!: GPURenderTargetCache;
   protected _gpuInstanceBuffers: WeakMap<InstancedMesh, GPUBuffer> = new WeakMap();
+  /** Per-mesh high-water mark of instances whose matrices are on the GPU (see `_renderSubgroup`). */
+  private _instanceMatricesUploaded = new WeakMap<InstancedMesh, number>();
   protected _gpuInstanceDataBuffers: WeakMap<InstancedMesh, GPUBuffer> = new WeakMap();
   protected _frameCount = 0;
   protected _scratchModelMatrix = new Float32Array(16);
@@ -236,6 +263,9 @@ export class WebGPURenderer extends AbstractRenderer {
   }
 
   private _depthTexture!: GPUTexture;
+  /** Created once with `_depthTexture` (not per `activeDepthView` access, which is read 5-6x per
+   * frame) so consumers caching bind groups by view identity see a stable object. */
+  private _depthTextureView!: GPUTextureView;
 
   // Hierarchical-Z occlusion culling -- see docs/adr/0008-hzb-occlusion-culling-webgpu-only.md.
   // All of this stays unallocated (the system left undefined) unless `enableOcclusionCulling` was
@@ -374,7 +404,7 @@ export class WebGPURenderer extends AbstractRenderer {
       const view = this._targetCache.depthView(this._activeRenderTarget);
       if (view) return view;
     }
-    return this._depthTexture.createView();
+    return this._depthTextureView;
   }
 
   public get activeDepthTexture(): GPUTexture {
@@ -454,7 +484,16 @@ export class WebGPURenderer extends AbstractRenderer {
       // still produce compressed textures in formats the current renderer cannot upload,
       // so the upload path (`GPUTextureResourceCache`) validates availability at use time.
       requiredFeatures: (
-        ["texture-compression-bc", "texture-compression-etc2", "texture-compression-astc"] as const
+        [
+          "texture-compression-bc",
+          "texture-compression-etc2",
+          "texture-compression-astc",
+          // GPU pass timing is opt-in per adapter. DECISION (K5): only the feature is requested
+          // and surfaced via `supportsTimestampQuery`; no query sets are created, so there is no
+          // per-frame cost. The frame-time governor stays CPU-timed until a consumer wires
+          // `timestampWrites` into a pass (async resolve/readback is its own piece of work).
+          "timestamp-query",
+        ] as const
       ).filter((feature) => this._adapter!.features.has(feature)),
     });
     this._isDeviceLost = false;
@@ -910,13 +949,17 @@ export class WebGPURenderer extends AbstractRenderer {
     }
 
     this._frameCount++;
+    if (this._frameCount % MATERIAL_BIND_GROUP_IDLE_FRAMES === 0) this._sweepMaterialBindGroups();
 
     this._objectRing.beginFrame();
     this._gpuBoneMatricesOffset = 0;
     this._boneSlotMap.clear();
 
     this._registerRenderListProviders(scene.getVisibleObjectsSorted(vp, camPos));
+    this.memoizeLightsFor(undefined);
     const lights = this.extractLights(scene);
+    // The cascaded/spot shadow passes below re-request the same lights: serve them from the memo.
+    this.memoizeLightsFor(scene);
     this._globalUniformWriter.update(vp, camPos, lights, scene, near, far, projMatrix);
     const ce = this._device.createCommandEncoder();
 
@@ -1003,10 +1046,21 @@ export class WebGPURenderer extends AbstractRenderer {
     }
 
     this._device.queue.submit([ce.finish()]);
+    this.memoizeLightsFor(undefined);
 
     this._objectRing.endFrame();
     this._fallback.drainPendingDestroy();
     if (this._occlusionCullingEnabled) this._kickoffHzbMapAsync();
+  }
+
+  /**
+   * Frees the GPU textures (color, depth, opaque snapshots) of an offscreen target the app no
+   * longer renders to (e.g. a removed planar reflection). Without this call the textures live
+   * until `destroy()`. Safe to call for targets never rendered; deferred past this frame's submit.
+   */
+  public releaseRenderTarget(target: RenderTarget | RenderTargetCube): void {
+    this._targetCache.release(target, (tex) => this._fallback.deferDestroyTexture(tex));
+    this._opaqueCapture.releaseTarget(target);
   }
 
   public captureOpaqueTexture(ce: GPUCommandEncoder, targetTex: GPUTexture): void {
@@ -1039,7 +1093,7 @@ export class WebGPURenderer extends AbstractRenderer {
   }
 
   public captureOpaqueDepth(ce: GPUCommandEncoder): void {
-    this._opaqueCapture.captureOpaqueDepth(ce, this.activeDepthTexture);
+    this._opaqueCapture.captureOpaqueDepth(ce, this.activeDepthTexture, this._activeRenderTarget);
   }
 
   /**
@@ -1179,10 +1233,20 @@ export class WebGPURenderer extends AbstractRenderer {
       isInstanced && objects[0] instanceof InstancedMesh && objects[0].useInstanceDataAsColor;
     let effManifest = manifest;
     if (useInstanceColor && !manifest.flags?.includes("USE_INSTANCE_COLOR")) {
-      effManifest = {
-        ...manifest,
-        flags: [...(manifest.flags ?? []), "USE_INSTANCE_COLOR"],
-      };
+      // Scratch copy instead of `{...manifest, flags: [...]}` per subgroup per frame; the
+      // pipeline cache reads it synchronously within the getPipeline() call below.
+      const flags = this._scratchInstanceColorFlags;
+      flags.length = 0;
+      if (manifest.flags)
+        for (let i = 0; i < manifest.flags.length; i++) flags.push(manifest.flags[i]!);
+      flags.push("USE_INSTANCE_COLOR");
+      effManifest = this._scratchEffManifest;
+      effManifest.shaderId = manifest.shaderId;
+      effManifest.properties = manifest.properties;
+      effManifest.textures = manifest.textures;
+      effManifest.flags = flags;
+      if (manifest.state) effManifest.state = manifest.state;
+      else delete effManifest.state;
     }
 
     const targetFormat = this.currentColorTargetFormat;
@@ -1193,13 +1257,7 @@ export class WebGPURenderer extends AbstractRenderer {
       targetFormat,
       normalMode,
     );
-    const pipelineKey = this._pipelineCache.pipelineCacheKey(
-      effManifest,
-      topology,
-      isInstanced,
-      targetFormat,
-      normalMode,
-    );
+    const pipelineKey = cache.key;
     rp.setPipeline(cache.pipeline);
 
     const matBindGroup = this._getMaterialBindGroup(matUuid, manifest, cache.bgLayouts[1]!);
@@ -1208,6 +1266,13 @@ export class WebGPURenderer extends AbstractRenderer {
 
     const usesVertexColor = effManifest.flags?.includes(VERTEX_COLOR_FLAG) === true;
 
+    // K6 state dedup: consecutive objects sharing one geometry (the common instanced-by-hand /
+    // repeated-prop case) keep the vertex/index buffers already bound. Skipped for instanced
+    // subgroups, whose `ensureDummyBufferSize(instanceCount)` may swap a dummy buffer that an
+    // earlier object's slot still holds. Render bundles are deliberately not used: every draw's
+    // dynamic offset into the per-frame object ring and the per-frame material/global bind
+    // groups change each frame, so a recorded bundle would be invalid by the next one.
+    let lastGeo: object | undefined;
     for (const obj of objects) {
       if (!obj.geometry) continue;
 
@@ -1218,14 +1283,17 @@ export class WebGPURenderer extends AbstractRenderer {
       rp.setBindGroup(2, this._objectRing.bindGroup, [objOffset]);
 
       const gCache = this._geometryCache.getGeoCache(obj, obj.geometry!);
-      this._fallback.ensureDummyBufferSize(gCache.vertexCount);
-      rp.setVertexBuffer(0, gCache.vb);
-      rp.setVertexBuffer(1, gCache.nb || this._fallback.dummyNormalBuffer);
-      rp.setVertexBuffer(2, gCache.uvb || this._fallback.dummyUvBuffer);
-      rp.setVertexBuffer(3, gCache.tb || this._fallback.dummyTangentBuffer);
-      rp.setVertexBuffer(4, gCache.jb || this._fallback.dummyJointsBuffer);
-      rp.setVertexBuffer(5, gCache.wb || this._fallback.dummyWeightsBuffer);
-      if (usesVertexColor) rp.setVertexBuffer(6, gCache.cb || this._fallback.dummyColorBuffer);
+      if (isInstanced || gCache !== lastGeo) {
+        this._fallback.ensureDummyBufferSize(gCache.vertexCount);
+        rp.setVertexBuffer(0, gCache.vb);
+        rp.setVertexBuffer(1, gCache.nb || this._fallback.dummyNormalBuffer);
+        rp.setVertexBuffer(2, gCache.uvb || this._fallback.dummyUvBuffer);
+        rp.setVertexBuffer(3, gCache.tb || this._fallback.dummyTangentBuffer);
+        rp.setVertexBuffer(4, gCache.jb || this._fallback.dummyJointsBuffer);
+        rp.setVertexBuffer(5, gCache.wb || this._fallback.dummyWeightsBuffer);
+        if (usesVertexColor) rp.setVertexBuffer(6, gCache.cb || this._fallback.dummyColorBuffer);
+        lastGeo = isInstanced ? undefined : gCache;
+      }
 
       if (isInstanced) {
         const instMesh = obj as InstancedMesh;
@@ -1250,10 +1318,27 @@ export class WebGPURenderer extends AbstractRenderer {
           });
           this._gpuInstanceBuffers.set(instMesh, instanceBuf);
           instMesh.instanceMatrixNeedsUpdate = true;
+          this._instanceMatricesUploaded.delete(instMesh);
         }
 
-        if (instMesh.instanceMatrixNeedsUpdate) {
-          this._device!.queue.writeBuffer(instanceBuf, 0, instMesh.instanceMatrices);
+        // Upload only the live instances (instanceCount * 16 floats), not the whole capacity.
+        // `instanceCount` is a plain field, so growing it within capacity without touching a
+        // matrix must still upload the newly exposed tail: tracked as an uploaded high-water mark.
+        const uploaded = this._instanceMatricesUploaded.get(instMesh) ?? 0;
+        if (instMesh.instanceMatrixNeedsUpdate || instMesh.instanceCount > uploaded) {
+          this._device!.queue.writeBuffer(
+            instanceBuf,
+            0,
+            instMesh.instanceMatrices,
+            0,
+            instMesh.instanceCount * 16,
+          );
+          this._instanceMatricesUploaded.set(
+            instMesh,
+            instMesh.instanceMatrixNeedsUpdate
+              ? instMesh.instanceCount
+              : Math.max(uploaded, instMesh.instanceCount),
+          );
           instMesh.instanceMatrixNeedsUpdate = false;
         }
 
@@ -1340,9 +1425,8 @@ export class WebGPURenderer extends AbstractRenderer {
     vMat?: Float32Array,
   ): number {
     const isSprite = m.state?.isSprite === true;
-    const key = isSprite ? undefined : `${obj.uuid}:${matUuid}`;
-    const { offset, cached } = this._objectRing.acquireSlot(key);
-    if (!cached && this._packObjectUniforms(obj, m, vMat)) {
+    const offset = this._objectRing.acquireObjectSlot(isSprite ? undefined : obj, matUuid);
+    if (!this._objectRing.lastAcquireCached && this._packObjectUniforms(obj, m, vMat)) {
       this._objectRing.write(offset, this._scratchObjBufferData);
     }
     return offset;
@@ -1486,35 +1570,64 @@ export class WebGPURenderer extends AbstractRenderer {
     layout: GPUBindGroupLayout,
   ): GPUBindGroup {
     const envOrSkybox = m.textures["u_skybox"] || m.textures["u_envMap"];
-    const bindings: number[] = [1, 3, 11, 12];
-    const resources: GPUBindingResource[] = [
+    // Scratch arrays: a cache hit (the per-frame norm) allocates nothing; only a miss copies them.
+    const bindings = this._scratchBgBindings;
+    const resources = this._scratchBgResources;
+    bindings.length = 0;
+    resources.length = 0;
+    bindings.push(1, 3, 11, 12);
+    resources.push(
       this._textures.getSampler(m.textures["u_diffuseMap"] as Texture, this._quality),
       this._textures.getNormalTextureView(m.textures["u_normalMap"] as Texture),
       this._textures.getCubeTextureView(envOrSkybox as CubeTexture, this._quality),
       this._textures.getTextureView(m.textures["u_emissiveMap"] as Texture, this._quality),
-    ];
+    );
     const bindingInfo = getOptionalMaterialTextureBindings();
-    for (const name of getOptionalMaterialTextureNames(m.shaderId, this.context.shaderRegistry)) {
+    const optionalNames = getOptionalMaterialTextureNames(m.shaderId, this.context.shaderRegistry);
+    for (let i = 0; i < optionalNames.length; i++) {
+      const name = optionalNames[i]!;
       bindings.push(bindingInfo[name]!.binding);
       resources.push(this._resolveOptionalMaterialTexture(name, m));
     }
 
     const cache = this._materialBindGroups.get(matUuid);
-    if (
-      cache &&
-      cache.resources.length === resources.length &&
-      cache.resources.every((r, i) => r === resources[i])
-    ) {
-      return cache.bg;
+    if (cache && cache.resources.length === resources.length) {
+      let same = true;
+      for (let i = 0; i < resources.length; i++) {
+        if (cache.resources[i] !== resources[i]) {
+          same = false;
+          break;
+        }
+      }
+      if (same) {
+        cache.lastUsedFrame = this._frameCount;
+        return cache.bg;
+      }
     }
 
-    const bg = this._device!.createBindGroup({
-      layout,
-      entries: bindings.map((binding, i) => ({ binding, resource: resources[i]! })),
-    });
+    const entries: GPUBindGroupEntry[] = [];
+    for (let i = 0; i < bindings.length; i++) {
+      entries.push({ binding: bindings[i]!, resource: resources[i]! });
+    }
+    const bg = this._device!.createBindGroup({ layout, entries });
 
-    this._materialBindGroups.set(matUuid, { bg, resources });
+    this._materialBindGroups.set(matUuid, {
+      bg,
+      resources: resources.slice(),
+      lastUsedFrame: this._frameCount,
+    });
     return bg;
+  }
+
+  /** Material bind groups hold views of every texture they bind, so entries of materials that
+   * left the scene would pin those GPU textures forever. Swept lazily: anything not drawn for
+   * `MATERIAL_BIND_GROUP_IDLE_FRAMES` frames is dropped (a still-live material just rebuilds). */
+  private _sweepMaterialBindGroups(): void {
+    for (const [uuid, entry] of this._materialBindGroups) {
+      if (this._frameCount - entry.lastUsedFrame > MATERIAL_BIND_GROUP_IDLE_FRAMES) {
+        this._materialBindGroups.delete(uuid);
+      }
+    }
   }
 
   /**
@@ -1540,6 +1653,22 @@ export class WebGPURenderer extends AbstractRenderer {
     if (!this._device || width <= 0 || height <= 0) return;
     const maxRatio = this._quality.maxPixelRatio ?? 2;
     const d = Math.min(devicePixelRatio, maxRatio);
+    // Identical backing size (ResizeObserver double fire, DPR rounding): everything below would
+    // be a full re-allocation plus bind-group invalidation for nothing. Only when the size
+    // buffers exist already -- the first call must run the full path.
+    if (
+      this._depthTexture &&
+      this._context.canvas.width === width * d &&
+      this._context.canvas.height === height * d &&
+      (this.postProcessing.enabled
+        ? this._hdrTexture !== undefined
+        : this._hdrTexture === undefined)
+    ) {
+      // The cluster grid also depends on `quality.clusteredLighting`, which apps re-apply via
+      // setSize(): keep that part live.
+      this._syncClusterGrid();
+      return;
+    }
     this._context.canvas.width = width * d;
     this._context.canvas.height = height * d;
     // Pin the CSS size like AbstractWebGLRenderer.setSize(): without it a canvas that no
@@ -1560,16 +1689,17 @@ export class WebGPURenderer extends AbstractRenderer {
         GPUTextureUsage.TEXTURE_BINDING |
         GPUTextureUsage.COPY_SRC,
     });
+    this._depthTextureView = this._depthTexture.createView();
 
     // HZB occlusion pyramid update as the canvas resized -- the system reallocates its depth
-    // texture at the new dimensions and rebuilds its bind groups (the depth view bound into the
-    // mip-0 copy group is `activeDepthView`, which resolves to this frame's fresh `_depthTexture`
-    // since no offscreen target is active during `setSize()`). No-op when occlusion culling is
-    // disabled (`_hzbSystem` is never constructed then).
+    // texture at the new dimensions and rebuilds its bind groups. The mip-0 copy group needs the
+    // SCREEN depth view, so it is passed explicitly: `activeDepthView` would resolve to an
+    // offscreen target's depth if one happens to be bound when the app calls `setSize()`.
+    // No-op when occlusion culling is disabled (`_hzbSystem` is never constructed then).
     this._hzbSystem?.resize(
       this._context.canvas.width,
       this._context.canvas.height,
-      this.activeDepthView,
+      this._depthTextureView,
     );
 
     if (this.postProcessing.enabled) {
@@ -1589,6 +1719,11 @@ export class WebGPURenderer extends AbstractRenderer {
       this._hdrTextureView = undefined;
     }
 
+    this._syncClusterGrid();
+  }
+
+  /** (Re)allocates the cluster buffers when the grid dims / per-cluster capacity changed. */
+  private _syncClusterGrid(): void {
     // Clustered light culling grid depends on canvas resolution -- see
     // docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md. `enabled: false` collapses the
     // grid to a single cluster covering the whole frustum, which is equivalent to the old

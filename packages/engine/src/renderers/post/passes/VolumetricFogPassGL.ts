@@ -3,15 +3,15 @@ import { tryCompileProgram } from "../../compileProgram.js";
 import FOG_FRAG_GLSL from "../shaders/VolumetricFog.frag.glsl?raw";
 import BILATERAL_FRAG_GLSL from "../shaders/VolumetricFogBilateral.frag.glsl?raw";
 
-import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
+import { pickHdrColorFormat, WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import type { VolumetricFogElement } from "../elements/index.js";
-import type { DirectionalLight, PointLight, SpotLight } from "../../../core/lights/index.js";
 import type { FogVolume } from "../../../core/objects/FogVolume.js";
 import { Color } from "../../../core/colors/index.js";
 import type { VolumetricTexture } from "../../../core/textures/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
 import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
+import { requireGlObject } from "../../gl/requireGlObject.js";
 
 interface FogVolumeUniformLocations {
   invTransform: WebGLUniformLocation | null;
@@ -24,7 +24,7 @@ interface FogVolumeUniformLocations {
 /**
  * Executes volumetric fog on WebGL2 (Phase 2 parity fallback & Phase 3 interior carving):
  * - Pass 1: Half-resolution screen-space raymarching against depth buffer and CSM directional shadows
- *   with Schlick (1993) phase function, Interleaved Gradient Noise (IGN) jitter, Decima powder highlights,
+ *   with Henyey-Greenstein phase function, Interleaved Gradient Noise (IGN) jitter, Decima powder highlights,
  *   and analytical FogVolume SDF evaluation with interior carving (negative density).
  * - Pass 2: Full-resolution depth-aware cross-bilateral upsampling to preserve crisp geometric silhouettes.
  *
@@ -64,6 +64,7 @@ export class VolumetricFogPassGL {
   private _uAsymmetryLoc: WebGLUniformLocation | null = null;
   private _uMaxDistLoc: WebGLUniformLocation | null = null;
   private _uSamplesLoc: WebGLUniformLocation | null = null;
+  private _uJitterLoc: WebGLUniformLocation | null = null;
   private _uCascadeMatricesLoc: WebGLUniformLocation | null = null;
   private _uCascadeSplitsLoc: WebGLUniformLocation | null = null;
   private _uDirShadowInfoLoc: WebGLUniformLocation | null = null;
@@ -135,8 +136,18 @@ export class VolumetricFogPassGL {
   /** Number of per-FogVolume mask slots on units 8..15. */
   private static readonly _VOLUME_MASK_SLOTS: number = 8;
   /** Texture units of the per-FogVolume mask slots. */
+  /** Sampler objects found on the mask units, restored after the raymarch draw. */
+  private readonly _savedSamplers: (WebGLSampler | null)[] = new Array<WebGLSampler | null>(
+    1 + VolumetricFogPassGL._VOLUME_MASK_SLOTS,
+  ).fill(null);
   private readonly _fogVolumeMaskUnits: Int32Array = new Int32Array([8, 9, 10, 11, 12, 13, 14, 15]);
 
+  /** Uniform vectors the full-size (16 item) shader needs, with headroom. */
+  private static readonly _FULL_BUDGET_UNIFORM_VECTORS: number = 320;
+  /** Device has too few fragment uniform vectors for the full-size shader. */
+  private readonly _lowSpec: boolean;
+  /** Capacity of the volume / point-light / spot-light uniform arrays (16, or 8 on min-spec). */
+  private readonly _maxItems: number;
   private _warnedMaskCapacity: boolean = false;
   private _identityMask3D: WebGLTexture | null = null;
   /** GPU copies of the VolumetricTextures this pass has uploaded, keyed by their CPU object. */
@@ -145,6 +156,15 @@ export class VolumetricFogPassGL {
   constructor(gl: WebGLRenderingContext | WebGL2RenderingContext, isWebGL2: boolean) {
     this._gl = gl;
     this._isWebGL2 = isWebGL2;
+    // The raymarch shader needs ~300 uniform vectors with 16 volumes / point / spot lights; the
+    // WebGL2 guaranteed minimum is 224. On such min-spec devices the item arrays shrink to 8
+    // (~190 vectors) and the step budget is capped, instead of failing to link and silently
+    // dropping the whole effect.
+    const maxVectors = isWebGL2
+      ? (gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) as number)
+      : Number.POSITIVE_INFINITY;
+    this._lowSpec = maxVectors < VolumetricFogPassGL._FULL_BUDGET_UNIFORM_VECTORS;
+    this._maxItems = this._lowSpec ? 8 : 16;
     this._build();
   }
 
@@ -158,8 +178,12 @@ export class VolumetricFogPassGL {
     const gl2 = gl as WebGL2RenderingContext;
 
     // 1. Raymarching program
-    this._progFog =
-      this._createProgram(FULLSCREEN_VERT_GLSL, FOG_FRAG_GLSL, "FogRaymarch") ?? undefined;
+    // Item-array capacity is the only literal 16 in the shader besides unrelated maths.
+    const fogFrag = FOG_FRAG_GLSL.replace(/\[16\]/g, `[${this._maxItems}]`).replace(
+      /< 16;/g,
+      `< ${this._maxItems};`,
+    );
+    this._progFog = this._createProgram(FULLSCREEN_VERT_GLSL, fogFrag, "FogRaymarch") ?? undefined;
     if (this._progFog) {
       this._uDepthMapLoc = gl.getUniformLocation(this._progFog, "u_opaqueDepthMap");
       this._uDirShadowMapLoc = gl.getUniformLocation(this._progFog, "u_dirShadowMap");
@@ -179,6 +203,7 @@ export class VolumetricFogPassGL {
       this._uAsymmetryLoc = gl.getUniformLocation(this._progFog, "u_asymmetry");
       this._uMaxDistLoc = gl.getUniformLocation(this._progFog, "u_maxDistance");
       this._uSamplesLoc = gl.getUniformLocation(this._progFog, "u_samples");
+      this._uJitterLoc = gl.getUniformLocation(this._progFog, "u_jitter");
       this._uCascadeMatricesLoc = gl.getUniformLocation(this._progFog, "u_cascadeMatrices");
       this._uCascadeSplitsLoc = gl.getUniformLocation(this._progFog, "u_cascadeSplits");
       this._uDirShadowInfoLoc = gl.getUniformLocation(this._progFog, "u_dirShadowInfo");
@@ -206,7 +231,7 @@ export class VolumetricFogPassGL {
       this._uFogVolumeMaskInfoLoc = gl.getUniformLocation(this._progFog, "u_fogVolumeMaskInfo");
 
       this._uFogVolumeLocs.length = 0;
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < this._maxItems; i++) {
         this._uFogVolumeLocs.push({
           invTransform: gl.getUniformLocation(this._progFog, `u_fogVolumes[${i}].invTransform`),
           params: gl.getUniformLocation(this._progFog, `u_fogVolumes[${i}].params`),
@@ -216,7 +241,7 @@ export class VolumetricFogPassGL {
         });
       }
 
-      this._vaoFog = gl2.createVertexArray()!;
+      this._vaoFog = requireGlObject(gl2.createVertexArray(), "vertex array");
     }
 
     // 2. Bilateral upsampling program
@@ -229,7 +254,7 @@ export class VolumetricFogPassGL {
       this._uNearFarLoc = gl.getUniformLocation(this._progBilateral, "u_nearFar");
       this._uDepthThresholdLoc = gl.getUniformLocation(this._progBilateral, "u_depthThreshold");
 
-      this._vaoBilateral = gl2.createVertexArray()!;
+      this._vaoBilateral = requireGlObject(gl2.createVertexArray(), "vertex array");
     }
   }
 
@@ -249,116 +274,42 @@ export class VolumetricFogPassGL {
     this._halfColorFbo = new WebGL2FrameBuffer(gl2, {
       width: halfW,
       height: halfH,
-      internalFormat: gl2.RGBA16F,
-      format: gl2.RGBA,
-      type: gl2.HALF_FLOAT,
+      ...pickHdrColorFormat(gl2),
+      depth: false,
     });
 
     this._fullFogFbo = new WebGL2FrameBuffer(gl2, {
       width,
       height,
-      internalFormat: gl2.RGBA16F,
-      format: gl2.RGBA,
-      type: gl2.HALF_FLOAT,
+      ...pickHdrColorFormat(gl2),
+      depth: false,
     });
   }
 
   /**
    * Executes the volumetric fog pass.
    */
-  public execute(ctx: GLPostEffectPassContext): WebGLTexture | null;
-  public execute(
-    depthTexture: WebGLTexture | null,
-    width: number,
-    height: number,
-    viewProjMatrix: Float32Array,
-    camPos: Vector3D,
-    near: number,
-    far: number,
-    dirLight: DirectionalLight | undefined,
-    dirShadowTexture: WebGLTexture | null,
-    element: VolumetricFogElement,
-    fogVolumes?: FogVolume[],
-    time?: number,
-    ambientColor?: Color,
-    ambientIntensity?: number,
-    irradianceMap?: WebGLTexture | null,
-    envIntensity?: number,
-    pointLights?: PointLight[],
-    spotLights?: SpotLight[],
-    spotShadowTextures?: readonly (WebGLTexture | null)[],
-    fallbackShadowTexture?: WebGLTexture | null,
-  ): WebGLTexture | null;
-  public execute(
-    ctxOrDepth: GLPostEffectPassContext | WebGLTexture | null,
-    widthOrUndefined?: number,
-    ...args: unknown[]
-  ): WebGLTexture | null {
-    let depthTexture: WebGLTexture | null;
-    let width: number;
-    let height: number;
-    let viewProjMatrix: Float32Array;
-    let camPos: Vector3D;
-    let near: number;
-    let far: number;
-    let dirLight: DirectionalLight | undefined;
-    let dirShadowTexture: WebGLTexture | null;
-    let element: VolumetricFogElement;
-    let fogVolumes: FogVolume[];
-    let time: number;
-    let ambientColor: Color;
-    let ambientIntensity: number;
-    let irradianceMap: WebGLTexture | null;
-    let envIntensity: number;
-    let pointLights: PointLight[];
-    let spotLights: SpotLight[];
-    let spotShadowTextures: readonly (WebGLTexture | null)[];
-    let fallbackShadowTexture: WebGLTexture | null;
-
-    if (typeof widthOrUndefined === "number") {
-      depthTexture = ctxOrDepth as WebGLTexture | null;
-      width = widthOrUndefined;
-      height = args[0] as number;
-      viewProjMatrix = args[1] as Float32Array;
-      camPos = args[2] as Vector3D;
-      near = args[3] as number;
-      far = args[4] as number;
-      dirLight = args[5] as DirectionalLight | undefined;
-      dirShadowTexture = args[6] as WebGLTexture | null;
-      element = args[7] as VolumetricFogElement;
-      fogVolumes = (args[8] as FogVolume[]) ?? [];
-      time = (args[9] as number) ?? 0;
-      ambientColor = (args[10] as Color) ?? NO_AMBIENT;
-      ambientIntensity = (args[11] as number) ?? 0;
-      irradianceMap = (args[12] as WebGLTexture | null) ?? null;
-      envIntensity = (args[13] as number) ?? 0;
-      pointLights = (args[14] as PointLight[]) ?? [];
-      spotLights = (args[15] as SpotLight[]) ?? [];
-      spotShadowTextures = (args[16] as readonly (WebGLTexture | null)[]) ?? [];
-      fallbackShadowTexture = (args[17] as WebGLTexture | null) ?? null;
-    } else {
-      const ctx = ctxOrDepth as GLPostEffectPassContext;
-      depthTexture = ctx.depthTexture ?? null;
-      width = ctx.width;
-      height = ctx.height;
-      viewProjMatrix = ctx.viewProjMatrix;
-      camPos = ctx.camPos;
-      near = ctx.near;
-      far = ctx.far;
-      dirLight = ctx.lights?.dLight;
-      dirShadowTexture = ctx.dirShadowTexture;
-      element = ctx.element as VolumetricFogElement;
-      fogVolumes = ctx.fogVolumes ?? [];
-      time = ctx.time ?? 0;
-      ambientColor = ctx.lights?.aCol ?? NO_AMBIENT;
-      ambientIntensity = ctx.lights?.aIntensity ?? 0;
-      irradianceMap = ctx.irradianceMap ?? null;
-      envIntensity = ctx.envIntensity ?? 0;
-      pointLights = ctx.pointLights ?? ctx.lights?.pLights ?? [];
-      spotLights = ctx.spotLights ?? ctx.lights?.sLights ?? [];
-      spotShadowTextures = ctx.spotShadowTextures ?? [];
-      fallbackShadowTexture = ctx.fallbackShadowTexture ?? null;
-    }
+  public execute(ctx: GLPostEffectPassContext): WebGLTexture | null {
+    const depthTexture = ctx.depthTexture ?? null;
+    const width = ctx.width;
+    const height = ctx.height;
+    const viewProjMatrix = ctx.viewProjMatrix;
+    const camPos = ctx.camPos;
+    const near = ctx.near;
+    const far = ctx.far;
+    const dirLight = ctx.lights?.dLight;
+    const dirShadowTexture = ctx.dirShadowTexture;
+    const element = ctx.element as VolumetricFogElement;
+    const fogVolumes = ctx.fogVolumes ?? [];
+    const time = ctx.time ?? 0;
+    const ambientColor = ctx.lights?.aCol ?? NO_AMBIENT;
+    const ambientIntensity = ctx.lights?.aIntensity ?? 0;
+    const irradianceMap = ctx.irradianceMap ?? null;
+    const envIntensity = ctx.envIntensity ?? 0;
+    const pointLights = ctx.pointLights ?? ctx.lights?.pLights ?? [];
+    const spotLights = ctx.spotLights ?? ctx.lights?.sLights ?? [];
+    const spotShadowTextures = ctx.spotShadowTextures ?? [];
+    const fallbackShadowTexture = ctx.fallbackShadowTexture ?? null;
     if (!this._isWebGL2 || !element.enabled || width <= 0 || height <= 0) {
       return null;
     }
@@ -388,9 +339,9 @@ export class VolumetricFogPassGL {
 
     // Directional Shadow Map -> Unit 1
     gl2.activeTexture(gl2.TEXTURE1);
-    if (dirShadowTexture) {
-      gl2.bindTexture(gl2.TEXTURE_2D, dirShadowTexture);
-    }
+    // Never leave the unit stale: without a shadow map it would still hold the previous frame's
+    // full-res depth texture (no compare mode) behind a sampler2DShadow.
+    gl2.bindTexture(gl2.TEXTURE_2D, dirShadowTexture ?? fallbackShadowTexture);
     if (this._uDirShadowMapLoc) gl2.uniform1i(this._uDirShadowMapLoc, 1);
 
     // IBL irradiance cube -> Unit 2
@@ -475,7 +426,11 @@ export class VolumetricFogPassGL {
     if (this._uMaxDistLoc) {
       gl2.uniform1f(this._uMaxDistLoc, Math.min(element.maxDistance, far));
     }
-    if (this._uSamplesLoc) gl2.uniform1i(this._uSamplesLoc, 24);
+    if (this._uSamplesLoc) {
+      const requested = Math.round(element.samples);
+      gl2.uniform1i(this._uSamplesLoc, this._lowSpec ? Math.min(requested, 16) : requested);
+    }
+    if (this._uJitterLoc) gl2.uniform1f(this._uJitterLoc, element.jitter);
 
     // Shadow cascades
     const numCascades = Math.min(dirLight?.numCascades ?? 0, 4);
@@ -506,16 +461,16 @@ export class VolumetricFogPassGL {
       gl2.uniform1f(this._uTimeLoc, time);
     }
 
-    if (fogVolumes.length > 16 && !this._warnedVolumeLimit) {
+    if (fogVolumes.length > this._maxItems && !this._warnedVolumeLimit) {
       this._warnedVolumeLimit = true;
       console.warn(
-        `[VolumetricFog] ${fogVolumes.length} FogVolumes in the scene, only the first 16 are evaluated.`,
+        `[VolumetricFog] ${fogVolumes.length} FogVolumes in the scene, only the first ${this._maxItems} are evaluated.`,
       );
     }
-    const numVols = Math.min(fogVolumes.length, 16);
+    const numVols = Math.min(fogVolumes.length, this._maxItems);
     if (this._uNumFogVolumesLoc) gl2.uniform1i(this._uNumFogVolumesLoc, numVols);
 
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < this._maxItems; i++) {
       const loc = this._uFogVolumeLocs[i];
       if (!loc) continue;
       if (i < numVols) {
@@ -539,9 +494,9 @@ export class VolumetricFogPassGL {
     }
 
     // Upload local point lights
-    const numPts = Math.min(pointLights.length, 16);
+    const numPts = Math.min(pointLights.length, this._maxItems);
     if (this._uNumPointLightsLoc) gl2.uniform1i(this._uNumPointLightsLoc, numPts);
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < this._maxItems; i++) {
       const base = i * 4;
       if (i < numPts) {
         const pl = pointLights[i]!;
@@ -567,9 +522,9 @@ export class VolumetricFogPassGL {
       gl2.uniform4fv(this._uPointLightColorLoc, this._scratchPointLightColor);
 
     // Upload local spot lights
-    const numSpots = Math.min(spotLights.length, 16);
+    const numSpots = Math.min(spotLights.length, this._maxItems);
     if (this._uNumSpotLightsLoc) gl2.uniform1i(this._uNumSpotLightsLoc, numSpots);
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < this._maxItems; i++) {
       const base = i * 4;
       if (i < numSpots) {
         const sl = spotLights[i]!;
@@ -647,9 +602,25 @@ export class VolumetricFogPassGL {
     // uniforms that drive their sampling. A pure no-mask scene performs no 3D-texture GL work here.
     this._prepareMasks(gl2, element, fogVolumes, numVols, hasElementMask);
 
+    // Sampler objects override texture parameters on their unit. The renderer keeps a NEAREST/CLAMP
+    // raw-depth sampler bound on one of the mask units (13): detach whatever sampler objects sit
+    // on the mask units for this draw so the masks filter/wrap as uploaded, then put them back.
+    const maskUnitCount = 1 + VolumetricFogPassGL._VOLUME_MASK_SLOTS;
+    for (let u = 0; u < maskUnitCount; u++) {
+      const unit = VolumetricFogPassGL._ELEMENT_MASK_UNIT + u;
+      gl2.activeTexture(gl2.TEXTURE0 + unit);
+      this._savedSamplers[u] = gl2.getParameter(gl2.SAMPLER_BINDING) as WebGLSampler | null;
+      gl2.bindSampler(unit, null);
+    }
+    gl2.activeTexture(gl2.TEXTURE0);
+
     gl2.bindVertexArray(this._vaoFog!);
     gl2.drawArrays(gl2.TRIANGLES, 0, 3);
     gl2.bindVertexArray(null);
+
+    for (let u = 0; u < maskUnitCount; u++) {
+      gl2.bindSampler(VolumetricFogPassGL._ELEMENT_MASK_UNIT + u, this._savedSamplers[u] ?? null);
+    }
 
     // --- PASS 2: Bilateral Depth-Aware Upsample ---
     this._fullFogFbo!.bind();
@@ -690,7 +661,7 @@ export class VolumetricFogPassGL {
   private _uploadMask(gl2: WebGL2RenderingContext, mask: VolumetricTexture): WebGLTexture {
     let glTex = this._maskTextures.get(mask);
     if (!glTex) {
-      glTex = gl2.createTexture()!;
+      glTex = requireGlObject(gl2.createTexture(), "texture");
       this._maskTextures.set(mask, glTex);
       this._uploadMaskData(gl2, mask, glTex);
     } else if (mask.needsUpdate) {
@@ -776,7 +747,7 @@ export class VolumetricFogPassGL {
 
   private _getIdentityMask3D(gl2: WebGL2RenderingContext): WebGLTexture {
     if (!this._identityMask3D) {
-      const tex = gl2.createTexture()!;
+      const tex = requireGlObject(gl2.createTexture(), "texture");
       gl2.bindTexture(gl2.TEXTURE_3D, tex);
       gl2.texImage3D(
         gl2.TEXTURE_3D,

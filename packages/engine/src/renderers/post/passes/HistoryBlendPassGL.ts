@@ -2,8 +2,9 @@ import FULLSCREEN_VERT_GLSL from "../shaders/PostProcess.vert.glsl?raw";
 import { tryCompileProgram } from "../../compileProgram.js";
 import HISTORY_BLEND_FRAG_GLSL from "../shaders/HistoryBlend.frag.glsl?raw";
 
-import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
+import { pickHdrColorFormat, WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
+import { requireGlObject } from "../../gl/requireGlObject.js";
 
 /**
  * Generic exponential history blend for WebGL2: blends the current frame with a ping-ponged
@@ -52,7 +53,7 @@ export class HistoryBlendPassGL {
     this._uFeedback = gl.getUniformLocation(this._prog, "u_feedback");
     this._uHasHistory = gl.getUniformLocation(this._prog, "u_hasHistory");
 
-    this._vao = gl.createVertexArray()!;
+    this._vao = requireGlObject(gl.createVertexArray(), "vertex array");
   }
 
   private _resize(width: number, height: number): void {
@@ -69,9 +70,8 @@ export class HistoryBlendPassGL {
       new WebGL2FrameBuffer(this._gl, {
         width,
         height,
-        internalFormat: this._gl.RGBA16F,
-        format: this._gl.RGBA,
-        type: this._gl.HALF_FLOAT,
+        ...pickHdrColorFormat(this._gl),
+        depth: false,
       });
     this._pingPong = [makeTarget(), makeTarget()];
   }

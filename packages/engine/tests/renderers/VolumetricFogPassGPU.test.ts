@@ -6,10 +6,13 @@ import { DirectionalLight } from "../../src/core/lights/index.js";
 import { FogVolume } from "../../src/core/objects/FogVolume.js";
 import { VolumetricTexture } from "../../src/core/textures/index.js";
 import { Color } from "../../src/core/colors/index.js";
-import { Vector3D } from "../../src/math/index.js";
+import { Matrix4, Vector3D } from "../../src/math/index.js";
 import { createFrameInfo } from "../../src/interfaces/index.js";
 import type { FrameInfo, LightDataInterface } from "../../src/interfaces/index.js";
 import type { PostEffectPassContext } from "../../src/renderers/post/PostEffectPass.js";
+import injectWGSL from "../../src/renderers/shaders/source/web_gpu/compute/froxel_inject.wgsl?raw";
+import reprojectWGSL from "../../src/renderers/shaders/source/web_gpu/compute/froxel_reproject.wgsl?raw";
+import integrateWGSL from "../../src/renderers/shaders/source/web_gpu/compute/froxel_integrate.wgsl?raw";
 
 // WebGPU is unavailable in the vitest node environment, so the GPU flag objects the pass reads
 // at pipeline build time are polyfilled to plain bit flags.
@@ -112,10 +115,17 @@ interface FrameTrace {
   internals: PassInternalsSnapshot;
 }
 
+/**
+ * Invertible, seed-distinct view-projection stand-in: a real perspective matrix whose translation
+ * column differs per seed (the determinant only depends on the other entries, so it never goes singular).
+ * The pass fails fast on singular matrices, so fake `seed * 1000 + i` matrices would not run at all.
+ */
 function makeViewProj(seed: number): Float32Array {
-  const m = new Float32Array(16);
-  for (let i = 0; i < 16; i++) m[i] = seed * 1000 + i;
-  return m;
+  const m = new Matrix4();
+  Matrix4.perspective(Math.PI / 3, 16 / 9, 0.1, 100.0, m);
+  m.data[12] = seed * 0.25;
+  m.data[13] = -seed * 0.125;
+  return Float32Array.from(m.data);
 }
 
 function makeComputePassMocks(): ComputePassMocks {
@@ -514,7 +524,7 @@ function runMaskFrame(
       ce as unknown as GPUCommandEncoder,
       ctx.depthView,
       element,
-      new Float32Array(16),
+      makeViewProj(1),
       fogVolumes,
       dirLight,
     ),
@@ -778,5 +788,324 @@ describe("VolumetricFogPassGPU mask slot binding", () => {
     expect(destroyed()).toBe(0);
     expect(() => ctx.pass.destroy()).not.toThrow();
     expect(destroyed()).toBe(created);
+  });
+});
+
+// ---- Uniform layout parity: the CPU payload must land on the offsets the real WGSL structs declare ----
+
+interface WgslLayout {
+  /** Float offset of every field. */
+  offsets: Map<string, number>;
+  /** Total struct size in floats (padded to the struct alignment). */
+  floats: number;
+}
+
+const WGSL_SCALARS: Record<string, [size: number, align: number]> = {
+  f32: [4, 4],
+  u32: [4, 4],
+  i32: [4, 4],
+  vec2f: [8, 8],
+  vec3f: [12, 16],
+  vec4f: [16, 16],
+  mat4x4f: [64, 16],
+};
+
+/** Parses `struct <name> { ... }` out of real WGSL and lays it out with uniform-buffer rules. */
+function parseWgslStruct(
+  source: string,
+  name: string,
+  structs: Map<string, number> = new Map(),
+): WgslLayout {
+  const match = new RegExp(`struct\\s+${name}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(source);
+  if (!match) throw new Error(`struct ${name} not found in WGSL`);
+  const offsets = new Map<string, number>();
+  let byteOffset = 0;
+  let maxAlign = 4;
+  for (const raw of match[1]!.split("\n")) {
+    const line = raw.replace(/\/\/.*$/, "").trim();
+    if (!line) continue;
+    const field = /^(\w+)\s*:\s*(.+?),?$/.exec(line);
+    if (!field) throw new Error(`unparsable WGSL field: ${line}`);
+    const [, fieldName, type] = field as unknown as [string, string, string];
+    let size: number;
+    let align: number;
+    const arr = /^array<(\w+),\s*(\d+)>$/.exec(type);
+    if (arr) {
+      const elem = arr[1]!;
+      const elemLayout = WGSL_SCALARS[elem] ?? [structs.get(elem) ?? -1, 16];
+      if (elemLayout[0] < 0) throw new Error(`unknown WGSL element type ${elem}`);
+      align = elemLayout[1];
+      size = Math.ceil(elemLayout[0] / align) * align * Number(arr[2]);
+    } else if (WGSL_SCALARS[type]) {
+      [size, align] = WGSL_SCALARS[type]!;
+    } else if (structs.has(type)) {
+      size = structs.get(type)!;
+      align = 16;
+    } else {
+      throw new Error(`unknown WGSL type ${type}`);
+    }
+    byteOffset = Math.ceil(byteOffset / align) * align;
+    offsets.set(fieldName, byteOffset / 4);
+    byteOffset += size;
+    maxAlign = Math.max(maxAlign, align);
+  }
+  return { offsets, floats: Math.ceil(byteOffset / maxAlign) * (maxAlign / 4) };
+}
+
+function offsetOf(layout: WgslLayout, field: string): number {
+  const o = layout.offsets.get(field);
+  if (o === undefined) throw new Error(`field ${field} missing`);
+  return o;
+}
+
+describe("VolumetricFogPassGPU uniform layout parity with the real WGSL", () => {
+  const fogVolume = parseWgslStruct(injectWGSL, "FogVolumeData");
+  const injectLayout = parseWgslStruct(
+    injectWGSL,
+    "FroxelUniforms",
+    new Map([["FogVolumeData", fogVolume.floats * 4]]),
+  );
+  const reprojectLayout = parseWgslStruct(reprojectWGSL, "FroxelReprojectSettings");
+  const integrateLayout = parseWgslStruct(integrateWGSL, "FroxelIntegrationSettings");
+
+  it("allocates uniform buffers exactly as large as the WGSL structs", () => {
+    const { device, createBuffer } = makeDeviceMocks();
+    new VolumetricFogPassGPU(device);
+    const sizes = (createBuffer.mock.results as { value: MockBuffer }[]).map((r) => r.value.size);
+    expect(sizes).toContain(injectLayout.floats * 4);
+    expect(sizes).toContain(reprojectLayout.floats * 4);
+    expect(sizes).toContain(integrateLayout.floats * 4);
+  });
+
+  it("writes the injection payload at the WGSL field offsets", () => {
+    const ctx = makeMaskFrameContext();
+    const element = initElement(new Color(0.9, 0.6, 0.3), 0.5);
+    element.densityMask = makeMask(2, 2, 2);
+    element.maskPosition.set(10, 20, 30);
+    element.maskSize.set(5, 6, 7);
+    element.density = 0.37;
+    element.asymmetry = 0.42;
+    runMaskFrame(ctx, element);
+    const inj = injectUniforms(ctx);
+    expect(inj.length).toBe(injectLayout.floats);
+    expect(inj[offsetOf(injectLayout, "params")]).toBeCloseTo(0.37, 6);
+    expect(inj[offsetOf(injectLayout, "phase")]).toBeCloseTo(0.42, 6);
+    expect(inj[offsetOf(injectLayout, "nearFar")]).toBeCloseTo(0.1, 6);
+    expect(inj[offsetOf(injectLayout, "nearFar") + 2]).toBe(8); // slice count
+    expect(inj[offsetOf(injectLayout, "scatterTint")]).toBeCloseTo(0.9, 6);
+    expect(inj[offsetOf(injectLayout, "elementMaskPosition") + 2]).toBe(30);
+    expect(inj[offsetOf(injectLayout, "elementMaskSize") + 1]).toBe(6);
+  });
+
+  it("writes the integration payload at the WGSL field offsets", () => {
+    const ctx = makeMaskFrameContext();
+    const element = initElement(new Color(0.9, 0.6, 0.3), 0.5);
+    element.densityMask = makeMask(2, 2, 2);
+    element.maskPosition.set(10, 20, 30);
+    element.maskSize.set(5, 6, 7);
+    const sun = new DirectionalLight({ intensity: 2 });
+    runMaskFrame(ctx, element, [], sun);
+    const intg = integrateUniforms(ctx);
+    expect(intg.length).toBe(integrateLayout.floats);
+    expect(intg[offsetOf(integrateLayout, "nearFar")]).toBeCloseTo(0.1, 6);
+    expect(intg[offsetOf(integrateLayout, "sunColorIntensity")]).toBeCloseTo(0.9 * 2, 5);
+    expect(intg[offsetOf(integrateLayout, "sunColorIntensity") + 3]).toBe(1);
+    expect(intg[offsetOf(integrateLayout, "elementMaskPosition")]).toBe(10);
+    expect(intg[offsetOf(integrateLayout, "elementMaskSize") + 2]).toBe(7);
+    // cascadeMatrices0 starts right after shadowInfo; the ZO-corrected matrix is non-trivial.
+    expect(offsetOf(integrateLayout, "cascadeMatrices0")).toBe(
+      offsetOf(integrateLayout, "shadowInfo") + 4,
+    );
+  });
+
+  it("writes the reprojection payload at the WGSL field offsets", () => {
+    const { scenario, writes } = createScenario();
+    stepFrame(scenario, writes, makeViewProj(1));
+    stepFrame(scenario, writes, makeViewProj(2));
+    const rep = lastReprojectWrite(writes);
+    expect(rep.length).toBe(reprojectLayout.floats);
+    expect(offsetOf(reprojectLayout, "reprojectParams")).toBe(WEIGHT_INDEX);
+    expect(offsetOf(reprojectLayout, "prevViewProj")).toBe(PREV_VIEW_PROJ_INDEX);
+    expect(rep[offsetOf(reprojectLayout, "nearFar") + 1]).toBeCloseTo(100, 4);
+  });
+});
+
+describe("VolumetricFogPassGPU robustness and resource lifetime", () => {
+  function frame(
+    ctx: MaskFrameContext,
+    el: VolumetricFogElement,
+    vp: Float32Array,
+    near = 0.1,
+    far = 100,
+  ): GPUTextureView | null {
+    ctx.frameInfo.frameIndex += 1;
+    const ce = {
+      beginComputePass: vi.fn((): ComputePassMocks => makeComputePassMocks()),
+      beginRenderPass: vi.fn(() => ({
+        setPipeline: vi.fn(),
+        setBindGroup: vi.fn(),
+        draw: vi.fn(),
+        end: vi.fn(),
+      })),
+    };
+    const c = buildPassCtx(ctx.renderer, ce as unknown as GPUCommandEncoder, ctx.depthView, el, vp);
+    c.near = near;
+    c.far = far;
+    return ctx.pass.execute(c);
+  }
+  const hasHistory = (ctx: MaskFrameContext): boolean =>
+    (ctx.pass as RendererInternals)._hasHistory as boolean;
+
+  it("skips the frame (null, history dropped) on a singular view-projection instead of using garbage", () => {
+    const ctx = makeMaskFrameContext();
+    const el = initElement();
+    expect(frame(ctx, el, makeViewProj(1))).not.toBeNull();
+    expect(hasHistory(ctx)).toBe(true);
+    expect(frame(ctx, el, new Float32Array(16))).toBeNull();
+    expect(hasHistory(ctx)).toBe(false);
+  });
+
+  it("drops the history across a disabled gap so the re-enabled frame is unwarmed", () => {
+    const ctx = makeMaskFrameContext();
+    const el = initElement();
+    el.jitter = 0.25;
+    frame(ctx, el, makeViewProj(1));
+    frame(ctx, el, makeViewProj(2));
+    el.enabled = false;
+    expect(frame(ctx, el, makeViewProj(3))).toBeNull();
+    el.enabled = true;
+    frame(ctx, el, makeViewProj(4));
+    const rep = ctx.writes.filter((w) => w.buffer.size === REPROJECT_UNIFORM_BYTES).pop()!.data;
+    expect(rep[WEIGHT_INDEX]).toBe(0);
+  });
+
+  it("drops the history when the shadow view is missing for a frame", () => {
+    const ctx = makeMaskFrameContext();
+    const el = initElement();
+    frame(ctx, el, makeViewProj(1));
+    (
+      ctx.renderer as unknown as { defaultDirShadowTextureView: unknown }
+    ).defaultDirShadowTextureView = undefined;
+    expect(frame(ctx, el, makeViewProj(2))).toBeNull();
+    expect(hasHistory(ctx)).toBe(false);
+  });
+
+  it("invalidates the history when near/far change (the log slicing moves)", () => {
+    const ctx = makeMaskFrameContext();
+    const el = initElement();
+    el.jitter = 0.25;
+    frame(ctx, el, makeViewProj(1));
+    frame(ctx, el, makeViewProj(2));
+    frame(ctx, el, makeViewProj(3), 0.1, 200);
+    const rep = ctx.writes.filter((w) => w.buffer.size === REPROJECT_UNIFORM_BYTES).pop()!.data;
+    expect(rep[WEIGHT_INDEX]).toBe(0);
+    frame(ctx, el, makeViewProj(4), 0.1, 200);
+    const rep2 = ctx.writes.filter((w) => w.buffer.size === REPROJECT_UNIFORM_BYTES).pop()!.data;
+    expect(rep2[WEIGHT_INDEX]).toBe(HISTORY_WEIGHT);
+  });
+
+  it("uses a tinted directional light colour for the sun shafts", () => {
+    const ctx = makeMaskFrameContext();
+    const el = initElement(new Color(1, 1, 1), 1);
+    const sun = new DirectionalLight({ intensity: 1, color: new Color(1.0, 0.2, 0.1) });
+    runMaskFrame(ctx, el, [], sun);
+    const intg = integrateUniforms(ctx);
+    expect(intg[SUN_COLOUR_INDEX]).toBeCloseTo(1.0, 5);
+    expect(intg[SUN_COLOUR_INDEX + 1]).toBeCloseTo(0.2, 5);
+    expect(intg[SUN_COLOUR_INDEX + 2]).toBeCloseTo(0.1, 5);
+  });
+
+  it("builds its own froxel grid when the cluster grid is degenerate (clusteredLighting disabled)", () => {
+    const ctx = makeMaskFrameContext();
+    (ctx.renderer as unknown as { clusterDims: unknown }).clusterDims = { x: 1, y: 1, z: 1 };
+    const el = initElement();
+    frame(ctx, el, makeViewProj(1));
+    const sizes = (ctx.createTexture.mock.calls as [{ size: number[]; dimension?: string }][])
+      .map((c) => c[0])
+      .filter(
+        (d) => d.dimension === "3d" && d.size.length === 3 && d.size[0]! > 1 && d.size[2]! > 1,
+      );
+    expect(sizes.length).toBeGreaterThan(0);
+    // 320x200 canvas, 16 px tiles, 24 slices.
+    expect(sizes[0]!.size).toEqual([20, 13, 24]);
+  });
+
+  it("inherits a fine-enough cluster grid unchanged", () => {
+    const ctx = makeMaskFrameContext();
+    frame(ctx, initElement(), makeViewProj(1));
+    const three = (ctx.createTexture.mock.calls as [{ size: number[]; dimension?: string }][])
+      .map((c) => c[0])
+      .filter((d) => d.dimension === "3d" && d.size[2]! > 1 && d.size[0]! > 2);
+    expect(three[0]!.size).toEqual([16, 16, 8]);
+  });
+
+  it("evicts GPU textures of masks that are no longer bound", () => {
+    const ctx = makeMaskFrameContext();
+    const el = initElement();
+    el.densityMask = makeMask(2, 2, 2);
+    runMaskFrame(ctx, el);
+    const results = ctx.createTexture.mock.results as {
+      value: { destroy: ReturnType<typeof vi.fn>; id: number };
+    }[];
+    const maskTex = results.find(
+      (r) =>
+        r.value.id !== 0 &&
+        (ctx.createTexture.mock.calls[r.value.id]![0] as { size: number[] }).size[0] === 2,
+    )!;
+    expect(maskTex.value.destroy).not.toHaveBeenCalled();
+    el.densityMask = undefined;
+    runMaskFrame(ctx, el);
+    expect(maskTex.value.destroy).toHaveBeenCalled();
+  });
+
+  it("does not rebuild bind groups when only the renderer's global bind group changes", () => {
+    const ctx = makeMaskFrameContext();
+    const el = initElement();
+    runMaskFrame(ctx, el);
+    const n = ctx.createBindGroup.mock.calls.length;
+    (ctx.renderer as unknown as { globalBindGroup: unknown }).globalBindGroup = {};
+    runMaskFrame(ctx, el);
+    expect(ctx.createBindGroup.mock.calls.length).toBe(n);
+  });
+
+  it("releaseTargets frees the volumes and the next frame rebuilds them unwarmed", () => {
+    const ctx = makeMaskFrameContext();
+    const el = initElement();
+    frame(ctx, el, makeViewProj(1));
+    const before = ctx.createTexture.mock.calls.length;
+    ctx.pass.releaseTargets();
+    expect(hasHistory(ctx)).toBe(false);
+    expect(frame(ctx, el, makeViewProj(2))).not.toBeNull();
+    expect(ctx.createTexture.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  it("dispatches inject with 8x8 workgroups over the froxel grid", () => {
+    const ctx = makeMaskFrameContext();
+    ctx.frameInfo.frameIndex += 1;
+    const passes: ComputePassMocks[] = [];
+    const ce = {
+      beginComputePass: vi.fn((): ComputePassMocks => {
+        const p = makeComputePassMocks();
+        passes.push(p);
+        return p;
+      }),
+      beginRenderPass: vi.fn(() => ({
+        setPipeline: vi.fn(),
+        setBindGroup: vi.fn(),
+        draw: vi.fn(),
+        end: vi.fn(),
+      })),
+    };
+    ctx.pass.execute(
+      buildPassCtx(
+        ctx.renderer,
+        ce as unknown as GPUCommandEncoder,
+        ctx.depthView,
+        initElement(),
+        makeViewProj(1),
+      ),
+    );
+    expect(passes[0]!.dispatchWorkgroups).toHaveBeenCalledWith(2, 2, 8);
+    expect(injectWGSL).toMatch(/@workgroup_size\(8, 8, 1\)\s*\nfn injectFog/);
   });
 });

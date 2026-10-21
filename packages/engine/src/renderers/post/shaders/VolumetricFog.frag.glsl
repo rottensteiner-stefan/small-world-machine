@@ -25,6 +25,7 @@ uniform float u_density;
 uniform float u_asymmetry;
 uniform float u_maxDistance;
 uniform int u_samples;
+uniform float u_jitter; // VolumetricFogElement.jitter: 0 = fixed, deterministic samples
 
 uniform mat4 u_cascadeMatrices[4];
 uniform vec4 u_cascadeSplits;
@@ -223,7 +224,14 @@ void main() {
         skyAmbient += skyMean * (u_envIntensity / 6.0);
     }
 
-    float jitter = getIGN(gl_FragCoord.xy);
+    // The WebGL2 tier has no temporal accumulation, so the spatial dither must stay at full
+    // strength from the documented default (0.25) upwards; below it the dither fades out and at 0
+    // the samples sit at fixed mid-step positions (deterministic volume for golden screenshots).
+    // The sun phase depends only on the ray direction: evaluate it once, not per step.
+    float cosSun = dot(rayDir, normalize(u_sunDir));
+    float sunPhase = (1.0 - g * g) / (12.566370614359172 * max(pow(1.0 + g * g - 2.0 * g * cosSun, 1.5), 0.00001));
+
+    float jitter = mix(0.5, getIGN(gl_FragCoord.xy), clamp(u_jitter * 4.0, 0.0, 1.0));
     vec3 accumulatedLight = vec3(0.0);
     float transmittance = 1.0;
 
@@ -379,8 +387,6 @@ void main() {
         float powder = mix(1.0, 1.0 - exp(-stepTau * 2.0), 0.35);
 
         // Directional sunlight in-scattering
-        float cosSun = dot(rayDir, normalize(u_sunDir));
-        float sunPhase = (1.0 - g * g) / (12.566370614359172 * max(pow(1.0 + g * g - 2.0 * g * cosSun, 1.5), 0.00001));
         vec3 sunScattering = shadow * u_sunColor * sunPhase * elemFactorG;
 
         vec3 directScattering = (localLightScatter + sunScattering) * powder;

@@ -5,10 +5,11 @@ import SHAFTS_FRAG_GLSL from "../shaders/LightShafts.frag.glsl?raw";
 import BILATERAL_FRAG_GLSL from "../shaders/LightShaftsBilateral.frag.glsl?raw";
 import SHAFTS_100_FRAG_GLSL from "../shaders/LightShafts100.frag.glsl?raw";
 
-import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
+import { pickHdrColorFormat, WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import type { LightShaftsElement } from "../elements/index.js";
 import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
+import { requireGlObject } from "../../gl/requireGlObject.js";
 
 /**
  * Executes atmospheric light shafts across WebGL1 and WebGL2:
@@ -48,6 +49,7 @@ export class LightShaftsPassGL {
   private _uFullResDepthLoc: WebGLUniformLocation | null = null;
   private _uLowResTexelSizeLoc: WebGLUniformLocation | null = null;
   private _uDepthThresholdLoc: WebGLUniformLocation | null = null;
+  private _uNearFarLoc: WebGLUniformLocation | null = null;
 
   // WebGL1 program & locations
   private _prog100?: WebGLProgram | undefined;
@@ -112,7 +114,7 @@ export class LightShaftsPassGL {
         this._uCascadeSplitsLoc = gl.getUniformLocation(this._progShafts, "u_cascadeSplits");
         this._uDirShadowInfoLoc = gl.getUniformLocation(this._progShafts, "u_dirShadowInfo");
 
-        this._vaoShafts = gl2.createVertexArray()!;
+        this._vaoShafts = requireGlObject(gl2.createVertexArray(), "vertex array");
       }
 
       // 2. Bilateral upsampling program
@@ -123,8 +125,9 @@ export class LightShaftsPassGL {
         this._uFullResDepthLoc = gl.getUniformLocation(this._progBilateral, "u_fullResDepthMap");
         this._uLowResTexelSizeLoc = gl.getUniformLocation(this._progBilateral, "u_lowResTexelSize");
         this._uDepthThresholdLoc = gl.getUniformLocation(this._progBilateral, "u_depthThreshold");
+        this._uNearFarLoc = gl.getUniformLocation(this._progBilateral, "u_nearFar");
 
-        this._vaoBilateral = gl2.createVertexArray()!;
+        this._vaoBilateral = requireGlObject(gl2.createVertexArray(), "vertex array");
       }
     } else {
       // WebGL1 radial blur program
@@ -142,7 +145,7 @@ export class LightShaftsPassGL {
         this._uShaftColor100Loc = gl.getUniformLocation(this._prog100, "u_shaftColor");
 
         this._aPos100 = gl.getAttribLocation(this._prog100, "a_pos");
-        this._vb100 = gl.createBuffer()!;
+        this._vb100 = requireGlObject(gl.createBuffer(), "buffer");
         gl.bindBuffer(gl.ARRAY_BUFFER, this._vb100);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
@@ -167,23 +170,21 @@ export class LightShaftsPassGL {
       this._halfColorFbo = new WebGL2FrameBuffer(gl2, {
         width: halfW,
         height: halfH,
-        internalFormat: gl2.RGBA16F,
-        format: gl2.RGBA,
-        type: gl2.HALF_FLOAT,
+        ...pickHdrColorFormat(gl2),
+        depth: false,
       });
 
       this._fullShaftsFbo = new WebGL2FrameBuffer(gl2, {
         width,
         height,
-        internalFormat: gl2.RGBA16F,
-        format: gl2.RGBA,
-        type: gl2.HALF_FLOAT,
+        ...pickHdrColorFormat(gl2),
+        depth: false,
       });
     } else {
       if (this._gl1Fbo) gl.deleteFramebuffer(this._gl1Fbo);
       if (this._gl1Texture) gl.deleteTexture(this._gl1Texture);
 
-      this._gl1Texture = gl.createTexture()!;
+      this._gl1Texture = requireGlObject(gl.createTexture(), "texture");
       gl.bindTexture(gl.TEXTURE_2D, this._gl1Texture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, halfW, halfH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -191,7 +192,7 @@ export class LightShaftsPassGL {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-      this._gl1Fbo = gl.createFramebuffer()!;
+      this._gl1Fbo = requireGlObject(gl.createFramebuffer(), "framebuffer");
       gl.bindFramebuffer(gl.FRAMEBUFFER, this._gl1Fbo);
       gl.framebufferTexture2D(
         gl.FRAMEBUFFER,
@@ -333,6 +334,9 @@ export class LightShaftsPassGL {
 
       if (this._uLowResTexelSizeLoc) {
         gl2.uniform2f(this._uLowResTexelSizeLoc, 1.0 / halfW, 1.0 / halfH);
+      }
+      if (this._uNearFarLoc) {
+        gl2.uniform2f(this._uNearFarLoc, ctx.near, ctx.far);
       }
       if (this._uDepthThresholdLoc) {
         gl2.uniform1f(this._uDepthThresholdLoc, element.depthThreshold);

@@ -35,6 +35,13 @@ interface Write {
 }
 
 /** Runs one pass execute with a mock device and returns the FroxelUniforms the injection pass received. */
+/** Invertible view-projection (the pass fails fast on singular matrices). */
+function identityVp(): Float32Array {
+  const m = new Float32Array(16);
+  m[0] = m[5] = m[10] = m[15] = 1;
+  return m;
+}
+
 function injectUniforms(configure: (element: VolumetricFogElement) => void): Float32Array {
   const writes: Write[] = [];
   const device = {
@@ -87,7 +94,7 @@ function injectUniforms(configure: (element: VolumetricFogElement) => void): Flo
     depthView: {} as GPUTextureView,
     width: 320,
     height: 200,
-    vp: new Float32Array(16),
+    vp: identityVp(),
     vMat: undefined,
     camPos: new Vector3D(0, 0, 0),
     near: 0.1,

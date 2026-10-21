@@ -70,6 +70,8 @@ describe("VolumetricFogPassGL", () => {
       getProgramParameter: () => true,
       getUniformLocation: () => ({}),
       createVertexArray: () => ({}),
+      MAX_FRAGMENT_UNIFORM_VECTORS: 0x8dfd,
+      getParameter: () => 1024,
     } as unknown as WebGL2RenderingContext;
 
     const pass = new VolumetricFogPassGL(mockGL2, true);
@@ -88,9 +90,13 @@ describe("VolumetricFogPassGL", () => {
 
   it("triggers a shader rebuild in PostProcessPassGL when VolumetricFogElement is enabled or disabled", () => {
     const glPass = new PostProcessPassGL({} as WebGL2RenderingContext, true, new ShaderRegistry());
-    const getSig = (
-      glPass as unknown as { _getSignature: (g: PostProcessingGroup) => string }
-    )._getSignature.bind(glPass);
+    const internals = glPass as unknown as {
+      _getSignature: (g: PostProcessingGroup) => number;
+      _hasFogTexture: boolean;
+    };
+    const getSig = internals._getSignature.bind(glPass);
+    // The fog define is only baked when the fog pass produced a texture this frame.
+    internals._hasFogTexture = true;
 
     const group = new PostProcessingGroup();
     const volFog = new VolumetricFogElement();
@@ -146,6 +152,11 @@ describe("VolumetricFogPassGL", () => {
       useProgram: () => {},
       activeTexture: () => {},
       bindVertexArray: () => {},
+      getExtension: () => ({}), // EXT_color_buffer_float present
+      SAMPLER_BINDING: 0x8919,
+      MAX_FRAGMENT_UNIFORM_VECTORS: 0x8dfd,
+      getParameter: (pname: number) => (pname === 0x8dfd ? 1024 : null),
+      bindSampler: () => {},
       drawArrays: () => {},
       uniform1i: (loc: unknown, val: number) => {
         uniformCalls[String(loc)] = val;

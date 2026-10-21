@@ -95,9 +95,18 @@ export class VolumetricFogElement extends PostProcessingElement {
 
   /**
    * Interleaved gradient noise jitter strength to break up raymarch banding (0..1, default: 0.25).
-   * 0 disables jitter entirely for a fixed, deterministic volume.
+   * 0 disables jitter entirely for a fixed, deterministic volume. WebGPU scales its temporal
+   * froxel jitter by this value; WebGL2 (no temporal accumulation) keeps full spatial dither from
+   * 0.25 upwards and fades it out below.
    */
   public jitter: number = 0.25;
+
+  /**
+   * Raymarch steps per pixel on the WebGL2 tier (clamped to 4..32 by the shader, default: 24).
+   * Lower it to trade quality for speed on weak devices; min-spec devices (few fragment uniform
+   * vectors) are additionally capped at 16. WebGPU's froxel volume ignores it.
+   */
+  public samples: number = 24;
 
   /**
    * Optional user-authored 3D density mask (see {@link VolumetricTexture}). When bound, the mask's

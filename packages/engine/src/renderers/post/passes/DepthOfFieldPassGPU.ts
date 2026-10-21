@@ -5,6 +5,7 @@ import COMPOSITE_FRAG_WGSL from "../shaders/DepthOfFieldComposite.frag.wgsl?raw"
 
 import type { DepthOfFieldElement } from "../elements/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
+import { PostEffectPipelineGate } from "../PostEffectPipelineGate.js";
 import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 
 const TARGET_FORMAT: GPUTextureFormat = "rgba16float";
@@ -17,6 +18,7 @@ const TARGET_FORMAT: GPUTextureFormat = "rgba16float";
  */
 export class DepthOfFieldPassGPU implements PostEffectPass {
   private readonly _device: GPUDevice;
+  private readonly _gate: PostEffectPipelineGate;
   private readonly _sampler: GPUSampler;
   private readonly _uniformBuffer: GPUBuffer;
   // DofUniforms: near, far, focusDistance, cocScale, maxCoc, 3x pad (32 bytes).
@@ -54,10 +56,13 @@ export class DepthOfFieldPassGPU implements PostEffectPass {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
+    this._gate = new PostEffectPipelineGate(device, "DepthOfField");
+    this._gate.begin();
     const vert = device.createShaderModule({ code: FULLSCREEN_VERT_WGSL });
     this._pipelineCoc = this._createPipeline(vert, COC_FRAG_WGSL);
     this._pipelineGather = this._createPipeline(vert, GATHER_FRAG_WGSL);
     this._pipelineComposite = this._createPipeline(vert, COMPOSITE_FRAG_WGSL);
+    this._gate.end();
   }
 
   private _createPipeline(vert: GPUShaderModule, fragCode: string): GPURenderPipeline {
@@ -89,8 +94,13 @@ export class DepthOfFieldPassGPU implements PostEffectPass {
     this._gatherTexture?.destroy();
     this._outputTexture?.destroy();
 
-    const halfW = Math.max(Math.floor(width / 2), 1);
-    const halfH = Math.max(Math.floor(height / 2), 1);
+    // ceil, not floor: with floor an odd full-res width loses its last column (the CoC prefilter
+    // reads a 2x2 block at pos*2, clamped to the edge, so the extra half-res texel is covered).
+    // Known trade-off (kept): the gather bilinearly mixes colour and the signed CoC stored in
+    // alpha, which bleeds CoC across silhouette edges; the near-field dilation in the prefilter
+    // and the CoC-aware composite upsample bound the artefact.
+    const halfW = Math.max(Math.ceil(width / 2), 1);
+    const halfH = Math.max(Math.ceil(height / 2), 1);
     this._cocTexture = this._createTarget(halfW, halfH);
     this._cocView = this._cocTexture.createView();
     this._gatherTexture = this._createTarget(halfW, halfH);
@@ -161,6 +171,7 @@ export class DepthOfFieldPassGPU implements PostEffectPass {
    * @returns The defocused HDR colour view that replaces the chained colour, or null.
    */
   public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    if (!this._gate.ready) return null;
     const { ce, colorView, depthView, width, height } = ctx;
     const element = ctx.element as DepthOfFieldElement;
     if (!element.enabled || width <= 0 || height <= 0) return null;

@@ -21,3 +21,14 @@ uniform vec3 u_areaLightRight[4];
 uniform vec3 u_areaLightUp[4];
 uniform vec3 u_areaLightNormal[4];
 uniform vec2 u_areaLightSize[4];
+
+
+// Accessors the shared GLASS_PBR_LOOPS chunk reads lights through (GLSL100: plain uniform arrays).
+#define GLASS_POINT_POS(i) u_pointLightPos[i]
+#define GLASS_POINT_COLOR(i) u_pointLightColor[i]
+#define GLASS_POINT_RANGE(i) u_pointLightDistance[i]
+#define GLASS_POINT_DECAY(i) u_pointLightDecay[i]
+#define GLASS_SPOT_POS(i) u_spotLightPos[i]
+#define GLASS_SPOT_DIR(i) u_spotLightDir[i]
+#define GLASS_SPOT_COLOR(i) u_spotLightColor[i]
+#define GLASS_SPOT_PARAMS(i) u_spotLightParams[i]

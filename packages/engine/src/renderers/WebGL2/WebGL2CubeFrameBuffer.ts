@@ -1,4 +1,5 @@
 import type { WebGL2FrameBufferOptions } from "./WebGL2FrameBuffer.js";
+import { requireGlObject } from "../gl/requireGlObject.js";
 
 /**
  * Encapsulates a WebGL2 Framebuffer with a cube map color texture and depth/stencil renderbuffer.
@@ -27,11 +28,11 @@ export class WebGL2CubeFrameBuffer {
     this._format = options.format ?? gl.RGBA;
     this._type = options.type ?? gl.UNSIGNED_BYTE;
 
-    this._framebuffer = gl.createFramebuffer()!;
+    this._framebuffer = requireGlObject(gl.createFramebuffer(), "framebuffer");
     gl.bindFramebuffer(gl.FRAMEBUFFER, this._framebuffer);
 
     // Color texture (Cube Map)
-    this._texture = gl.createTexture()!;
+    this._texture = requireGlObject(gl.createTexture(), "texture");
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, this._texture);
     for (let i = 0; i < 6; i++) {
       gl.texImage2D(
@@ -62,7 +63,7 @@ export class WebGL2CubeFrameBuffer {
     );
 
     // Depth and stencil renderbuffer
-    this._renderbuffer = gl.createRenderbuffer()!;
+    this._renderbuffer = requireGlObject(gl.createRenderbuffer(), "renderbuffer");
     gl.bindRenderbuffer(gl.RENDERBUFFER, this._renderbuffer);
     gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, this._width, this._height);
     gl.framebufferRenderbuffer(

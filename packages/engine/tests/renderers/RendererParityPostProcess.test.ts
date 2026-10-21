@@ -42,6 +42,10 @@ function makeUberCtx(
   return ctx;
 }
 
+(globalThis as unknown as { GPUTextureUsage: Record<string, number> }).GPUTextureUsage ??= {
+  COPY_DST: 0x02,
+  TEXTURE_BINDING: 0x04,
+};
 (globalThis as unknown as { GPUShaderStage: Record<string, number> }).GPUShaderStage ??= {
   VERTEX: 0x1,
   FRAGMENT: 0x2,
@@ -99,6 +103,7 @@ function createMockGL(): {
       bufferData: (): void => {},
       useProgram: (): void => {},
       disable: (): void => {},
+      isEnabled: (): boolean => false,
       enable: (): void => {},
       depthMask: (): void => {},
       activeTexture: (): void => {},
@@ -148,7 +153,9 @@ function createMockGPU(): {
     createShaderModule: vi.fn(() => ({})),
     createRenderPipeline: vi.fn(() => ({})),
     createBindGroup: vi.fn(() => ({})),
+    createTexture: vi.fn(() => ({ createView: (): object => ({}), destroy: vi.fn() })),
     queue: {
+      writeTexture: vi.fn(),
       writeBuffer: vi.fn((_buf: unknown, _offset: number, data: Float32Array) => {
         writtenUniforms = new Float32Array(data);
       }),

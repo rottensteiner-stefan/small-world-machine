@@ -43,9 +43,11 @@ fn sampleShadow(worldPos: vec3f) -> f32 {
 
     let lightSpacePos = u.cascadeMatrices[cascadeIndex] * vec4f(worldPos, 1.0);
     let proj = lightSpacePos.xyz / lightSpacePos.w;
-    let uv = proj.xy * 0.5 + 0.5;
+    // Same convention as getShadowPCF in pbr_math.wgsl: the matrix is ZO-corrected (z in [0, 1])
+    // and texture space has v pointing down, so y is flipped.
+    let uv = vec2f(proj.x * 0.5 + 0.5, 0.5 - proj.y * 0.5);
 
-    if (proj.z > 1.0 || uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+    if (proj.z > 1.0 || proj.z < 0.0 || uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
         return 1.0;
     }
 

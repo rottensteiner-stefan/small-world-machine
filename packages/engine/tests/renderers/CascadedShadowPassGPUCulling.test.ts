@@ -29,7 +29,11 @@ function makeCaster(name: string, bounds: BoundingSphere | undefined): Object3D 
 function makeMockRenderer(objects: Object3D[]): Internals {
   const scratchGlobalBufferData = new Float32Array(216);
   const device = {
-    createTexture: vi.fn(() => ({ createView: vi.fn(() => ({})) })),
+    createTexture: vi.fn((desc: { size: number[] }) => ({
+      width: desc.size[0],
+      depthOrArrayLayers: desc.size[2] ?? 1,
+      createView: vi.fn(() => ({})),
+    })),
     queue: { writeBuffer: vi.fn() },
   };
   // Identity view-projection -> NDC clip space equals world space, so the cascade frustum is
@@ -51,6 +55,7 @@ function makeMockRenderer(objects: Object3D[]): Internals {
     postProcessing: { enabled: false },
     gpuFormat: "rgba8unorm",
     currentColorTargetFormat: "rgba8unorm",
+    deferDestroyTexture: vi.fn(),
     context: { shaderRegistry: new ShaderRegistry() },
     shadowMaps: new Map(),
     defaultDirShadowTextureView: {},

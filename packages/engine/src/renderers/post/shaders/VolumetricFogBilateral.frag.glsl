@@ -23,13 +23,15 @@ void main() {
     float fullDepth = texture(u_fullResDepthMap, v_uv).r;
     float fullLinear = linearizeDepth(fullDepth);
 
-    // 4 nearest half-resolution texel centers
-    vec2 offsets[4] = vec2[](
-        vec2(-0.5, -0.5),
-        vec2( 0.5, -0.5),
-        vec2(-0.5,  0.5),
-        vec2( 0.5,  0.5)
-    );
+    // The four half-resolution texels around this pixel, fetched at their exact texel centres.
+    // The low-res pass shaded each texel with the full-res depth under that texel's centre, so
+    // the depth weight must read the same full-res texel (a +-0.5 uv offset would land on
+    // neighbouring ones), and the colour must not be filtered by the sampler.
+    ivec2 fullSize = textureSize(u_fullResDepthMap, 0);
+    ivec2 lowMax = ivec2(1.0 / u_lowResTexelSize) - 1;
+    vec2 p = v_uv / u_lowResTexelSize - 0.5;
+    ivec2 base = ivec2(floor(p));
+    vec2 f = fract(p);
 
     vec4 sumColor = vec4(0.0);
     float sumWeight = 0.0;
@@ -37,10 +39,12 @@ void main() {
     vec4 nearestColor = vec4(0.0);
 
     for (int i = 0; i < 4; i++) {
-        vec2 tapUV = v_uv + offsets[i] * u_lowResTexelSize;
-        float lowDepth = texture(u_fullResDepthMap, tapUV).r;
+        ivec2 o = ivec2(i & 1, i >> 1);
+        ivec2 c = clamp(base + o, ivec2(0), lowMax);
+        vec2 centreUV = (vec2(c) + 0.5) * u_lowResTexelSize;
+        float lowDepth = texelFetch(u_fullResDepthMap, min(ivec2(centreUV * vec2(fullSize)), fullSize - 1), 0).r;
         float lowLinear = linearizeDepth(lowDepth);
-        vec4 color = texture(u_lowResFogMap, tapUV);
+        vec4 color = texelFetch(u_lowResFogMap, c, 0);
 
         // Relative linearized depth difference to prevent premature occluder rejection
         float depthDiff = abs(fullLinear - lowLinear) / max(fullLinear, 0.001);
@@ -49,8 +53,9 @@ void main() {
             nearestColor = color;
         }
 
-        // Exponential cross-bilateral depth weight
-        float weight = exp(-depthDiff / max(u_depthThreshold, 0.0001)) + 0.0001;
+        // Bilinear spatial weight x exponential cross-bilateral depth weight
+        vec2 bw = mix(1.0 - f, f, vec2(o));
+        float weight = bw.x * bw.y * exp(-depthDiff / max(u_depthThreshold, 0.0001)) + 0.0001;
         sumColor += color * weight;
         sumWeight += weight;
     }

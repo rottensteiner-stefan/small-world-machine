@@ -122,3 +122,14 @@ vec3 linearToSRGB(vec3 color) {
 vec3 sRGBToLinear(vec3 color) {
     return pow(color, vec3(u_gamma));
 }
+
+
+// Accessors the shared GLASS_PBR_LOOPS chunk reads lights through (GLSL300: UBO structs).
+#define GLASS_POINT_POS(i) u_pointLights[i].pos
+#define GLASS_POINT_COLOR(i) u_pointLights[i].color
+#define GLASS_POINT_RANGE(i) u_pointLights[i].distance
+#define GLASS_POINT_DECAY(i) u_pointLights[i].decay
+#define GLASS_SPOT_POS(i) u_spotLights[i].pos
+#define GLASS_SPOT_DIR(i) u_spotLights[i].dir
+#define GLASS_SPOT_COLOR(i) u_spotLights[i].color
+#define GLASS_SPOT_PARAMS(i) u_spotLights[i].params

@@ -156,15 +156,35 @@ export class WebGLTextureManager {
       this._gl.TEXTURE_MAG_FILTER,
       TextureFilter.NEAREST === tex.magFilter ? this._gl.NEAREST : this._gl.LINEAR,
     );
+    // Same filter/wrap semantics as the WebGL2 path (`_setSamplerParams`); only NPOT textures are
+    // forced to CLAMP_TO_EDGE without mipmaps, because WebGL1 cannot do anything else with them.
+    let minFilter: number = this._gl.LINEAR;
+    if (useMipmaps) {
+      minFilter =
+        TextureFilter.NEAREST === tex.minFilter
+          ? this._gl.NEAREST_MIPMAP_LINEAR
+          : this._gl.LINEAR_MIPMAP_LINEAR;
+    } else if (TextureFilter.NEAREST === tex.minFilter) {
+      minFilter = this._gl.NEAREST;
+    }
+    this._gl.texParameteri(this._gl.TEXTURE_2D, this._gl.TEXTURE_MIN_FILTER, minFilter);
+
+    const wrapOf = (mode: TextureWrap): number =>
+      TextureWrap.REPEAT === mode
+        ? this._gl.REPEAT
+        : TextureWrap.MIRRORED_REPEAT === mode
+          ? this._gl.MIRRORED_REPEAT
+          : this._gl.CLAMP_TO_EDGE;
     this._gl.texParameteri(
       this._gl.TEXTURE_2D,
-      this._gl.TEXTURE_MIN_FILTER,
-      useMipmaps ? this._gl.LINEAR_MIPMAP_LINEAR : this._gl.LINEAR,
+      this._gl.TEXTURE_WRAP_S,
+      isPOT ? wrapOf(tex.addressModeU) : this._gl.CLAMP_TO_EDGE,
     );
-    if (!isPOT) {
-      this._gl.texParameteri(this._gl.TEXTURE_2D, this._gl.TEXTURE_WRAP_S, this._gl.CLAMP_TO_EDGE);
-      this._gl.texParameteri(this._gl.TEXTURE_2D, this._gl.TEXTURE_WRAP_T, this._gl.CLAMP_TO_EDGE);
-    }
+    this._gl.texParameteri(
+      this._gl.TEXTURE_2D,
+      this._gl.TEXTURE_WRAP_T,
+      isPOT ? wrapOf(tex.addressModeV) : this._gl.CLAMP_TO_EDGE,
+    );
     // Anisotropic filtering sharpens mip-selected sampling -- same mipmap gate as the min filter.
     applyAnisotropy(this._gl, this._gl.TEXTURE_2D, tex, quality, Boolean(useMipmaps));
   }
@@ -349,7 +369,13 @@ export class WebGLTextureManager {
       if ("isTextureArray" in tex && (tex as TextureArray).isTextureArray) {
         this._uploadTextureArray(tex as TextureArray, glTex, quality);
       } else if (tex.compressedImage) {
-        this._uploadCompressedTexture(tex, glTex);
+        try {
+          this._uploadCompressedTexture(tex, glTex);
+        } catch (error) {
+          // Unsupported block format: do not leak the half-created texture (it is never cached).
+          this._gl.deleteTexture(glTex);
+          throw error;
+        }
         this._setSamplerParams(this._gl.TEXTURE_2D, tex, false, quality);
       } else {
         this._gl.bindTexture(this._gl.TEXTURE_2D, glTex);

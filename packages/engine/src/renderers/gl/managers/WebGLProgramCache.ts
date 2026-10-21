@@ -141,8 +141,32 @@ export class WebGLProgramCache {
     this._dialect = options.dialect ?? "glsl300";
   }
 
+  /**
+   * Fails fast when a program needs more fragment texture units than the device offers (WebGL1's
+   * guaranteed minimum is only 8): binding past the limit is a silent GL error that leaves the
+   * material sampling the wrong texture, so name the culprit instead.
+   */
+  private _assertTextureUnits(shaderId: string, unitsNeeded: number): void {
+    const available = this._gl.getParameter(this._gl.MAX_TEXTURE_IMAGE_UNITS) as number;
+    if (unitsNeeded > available) {
+      throw new Error(
+        `[WebGLProgramCache] Shader "${shaderId}" needs ${unitsNeeded} texture units but the device ` +
+          `only exposes ${available} (MAX_TEXTURE_IMAGE_UNITS).`,
+      );
+    }
+  }
+
   public programCacheKey(shaderId: string, isInstanced: boolean, flags: readonly string[]): string {
-    const flagKey = flags.length > 0 ? "_" + flags.join("_") : "";
+    // Order-independent: ["A","B"] and ["B","A"] are the same program (sort a copy only if needed).
+    let sorted = true;
+    for (let i = 1; i < flags.length; i++) {
+      if (flags[i - 1]! > flags[i]!) {
+        sorted = false;
+        break;
+      }
+    }
+    const ordered = sorted ? flags : [...flags].sort();
+    const flagKey = ordered.length > 0 ? "_" + ordered.join("_") : "";
     return isInstanced ? `${shaderId}_instanced${flagKey}` : `${shaderId}${flagKey}`;
   }
 
@@ -229,6 +253,7 @@ export class WebGLProgramCache {
         }
       }
     }
+    this._assertTextureUnits(shaderId, nextSamplerUnit);
 
     // `layout.uniforms` is near-universally `...StandardWebGPULayout.uniforms` (the fixed set
     // every material spreads in to match WebGPU's shared `ObjectUniforms` struct) -- a lean
@@ -391,6 +416,7 @@ export class WebGLProgramCache {
         }
       }
     }
+    this._assertTextureUnits(def.id, nextSamplerUnit);
 
     return {
       prog,

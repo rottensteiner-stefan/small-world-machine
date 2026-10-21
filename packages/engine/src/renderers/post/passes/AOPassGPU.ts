@@ -1,4 +1,5 @@
 import AO_WGSL from "../shaders/AO.frag.wgsl?raw";
+import { PostEffectPipelineGate } from "../PostEffectPipelineGate.js";
 import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 import type { HbaoElement } from "../elements/index.js";
 
@@ -8,6 +9,7 @@ import type { HbaoElement } from "../elements/index.js";
  */
 export class AOPassGPU implements PostEffectPass {
   private _device: GPUDevice;
+  private readonly _gate: PostEffectPipelineGate;
   private _pipeline!: GPUComputePipeline;
   private _uniformBuffer!: GPUBuffer;
   private _uniformData: Float32Array = new Float32Array(8);
@@ -21,7 +23,10 @@ export class AOPassGPU implements PostEffectPass {
 
   constructor(device: GPUDevice) {
     this._device = device;
+    this._gate = new PostEffectPipelineGate(device, "HBAO");
+    this._gate.begin();
     this._buildPipeline();
+    this._gate.end();
   }
 
   private _buildPipeline(): void {
@@ -98,6 +103,7 @@ export class AOPassGPU implements PostEffectPass {
    * @returns A view of the single-channel AO texture (R = occlusion factor), or null if unavailable.
    */
   public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    if (!this._gate.ready) return null;
     const { ce, depthView, width, height, near, far, element } = ctx;
     const hbao = element as HbaoElement;
     const projMatrixData = ctx.projMatrix!;

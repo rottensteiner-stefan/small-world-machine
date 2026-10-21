@@ -464,6 +464,13 @@ export class GPUTextureResourceCache {
     });
   }
 
+  /** Drops the view-cache entries `registerRenderTarget*Texture()` created for `rt` (the GPU
+   * texture itself is destroyed by `GPURenderTargetCache.release()`). */
+  public unregisterRenderTarget(rt: RenderTarget | RenderTargetCube): void {
+    this._textureViewCache.delete(rt as RenderTarget);
+    this._cubeTextureViewCache.delete(rt as RenderTargetCube);
+  }
+
   /** Cube counterpart of `registerRenderTargetTexture()`. */
   public registerRenderTargetCubeTexture(
     rt: RenderTargetCube,

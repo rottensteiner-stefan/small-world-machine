@@ -1,10 +1,12 @@
 // Volumetric Fog -- Froxel light injection (WebGPU compute, V1).
-// Option R: reuses the clustered light grid (ADR 0007). Every cluster cell already holds a
+// Option R: reuses the clustered light lists (ADR 0007). Every cluster cell already holds a
 // light list (pointClusterGrid/pointClusterIndices/spotClusterGrid/spotClusterIndices), so this
 // pass walks EXACTLY those lists instead of re-culling -- the grid and the volume can never
 // disagree about which lights reach a cell.
 //
-// Output: one 3D froxel cell per cluster grid cell, written as rgba16float:
+// Output: one 3D froxel cell, written as rgba16float. The froxel grid (the size of `volume`) matches
+// the cluster grid while that is fine enough, but is independent of it: each froxel cell looks up
+// the light list of the cluster cell it falls into (see `clusterCellIndex`).
 //   rgb = in-scattered radiance per unit length (local lights + FogVolume albedo/emission)
 //   a   = extinction sigma_t (1/m, unclamped) for the integration pass
 // The integration compute pass adds directional CSM sunlight and integrates along depth;
@@ -176,9 +178,52 @@ fn cellWorldPos(cell: vec3f, dims: vec3f, camPos: vec3f) -> vec3f {
     return camPos + worldDir;
 }
 
-@compute @workgroup_size(4, 4, 1)
-fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
-    let dims = vec3f(f32(global.clusterDims.x), f32(global.clusterDims.y), f32(global.clusterDims.z));
+// Cluster cell (flat index, same layout as cluster_cull.wgsl / lighting.wgsl) that holds the light
+// list for froxel cell `gid` of a `dims`-sized froxel grid. Identical grids map 1:1; a coarser or
+// degenerate (1x1x1) cluster grid maps many froxel cells onto one cluster cell.
+fn clusterCellIndex(gid: vec3u, dims: vec3f) -> u32 {
+    let cdx = u32(global.clusterDims.x);
+    let cdy = u32(global.clusterDims.y);
+    let cdz = u32(global.clusterDims.z);
+    let cx = min(u32((f32(gid.x) + 0.5) / dims.x * f32(cdx)), cdx - 1u);
+    let cy = min(u32((f32(gid.y) + 0.5) / dims.y * f32(cdy)), cdy - 1u);
+    let near = max(froxel.nearFar.x, 1e-6);
+    let far = max(froxel.nearFar.y, near + 1e-6);
+    let zc = sliceCenterDepth(f32(gid.z), near, far, froxel.nearFar.z);
+    let zf = floor(log(zc / near) * f32(cdz) / max(log(far / near), 1e-6));
+    let cz = u32(clamp(zf, 0.0, f32(cdz - 1u)));
+    return cx + cdx * (cy + cdy * cz);
+}
+
+// Sphere-mean of the (low-frequency) IBL irradiance cube: constant per frame, so one thread per
+// workgroup samples the six axes and shares the result instead of every cell repeating it.
+var<workgroup> ambientSky: vec3f;
+
+@compute @workgroup_size(8, 8, 1)
+fn injectFog(
+    @builtin(global_invocation_id) gid: vec3u,
+    @builtin(local_invocation_index) lid: u32,
+) {
+    // phase.y is a uniform: this branch and the barrier are in uniform control flow (and precede
+    // the per-thread bounds return below).
+    if (froxel.phase.y > 0.0) {
+        if (lid == 0u) {
+            // Isotropic scattering sees the whole sphere: mean over the six axis directions
+            // approximates the irradiance L0 term; sampling straight up would only see the zenith.
+            ambientSky = (
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(1.0, 0.0, 0.0), 0.0).rgb +
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(-1.0, 0.0, 0.0), 0.0).rgb +
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 1.0, 0.0), 0.0).rgb +
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, -1.0, 0.0), 0.0).rgb +
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, 1.0), 0.0).rgb +
+                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, -1.0), 0.0).rgb
+            ) * (1.0 / 6.0);
+        }
+        workgroupBarrier();
+    }
+
+    let volDims = textureDimensions(volume);
+    let dims = vec3f(f32(volDims.x), f32(volDims.y), f32(volDims.z));
     if (f32(gid.x) >= dims.x || f32(gid.y) >= dims.y || f32(gid.z) >= dims.z) {
         return;
     }
@@ -199,9 +244,8 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
     let heightFactor = exp(-froxel.params.z * max(heightDelta, 0.0));
     let dist = length(worldPos - camPos);
     var extinction = froxel.params.x * heightFactor * maskCell.r;
-    if (dist > froxel.params.w) {
-        extinction = 0.0;
-    }
+    // Smooth range fade over the last third of maxDistance (no pop edge); zero beyond it.
+    let rangeFade = 1.0 - smoothstep(froxel.params.w * 0.66, froxel.params.w, dist);
 
     // Evaluate localized FogVolume instances. Positive and negative densities are accumulated
     // separately and combined afterwards, so carving does not depend on the array order.
@@ -264,11 +308,13 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
     extinction = max(0.0, uncarved + negDensity);
     // Carving also removes the ambient/emissive contribution of the volumes it cuts through.
     volumeScatter *= select(0.0, extinction / uncarved, uncarved > 1e-5);
+    extinction *= rangeFade;
+    volumeScatter *= rangeFade;
 
     var inScatter = volumeScatter;
 
     if (extinction > 0.0) {
-        let cellIndex = u32(gid.x) + u32(global.clusterDims.x) * (u32(gid.y) + u32(global.clusterDims.y) * u32(gid.z));
+        let cellIndex = clusterCellIndex(gid, dims);
         let viewDir = normalize(worldPos - camPos);
         var lightScatter = vec3f(0.0);
 
@@ -283,7 +329,14 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
             let phase = hgPhase(dot(ldir, viewDir), froxel.phase.x);
             let ratio = lightDist / max(light.pos.w, 0.001);
             let window = clamp(1.0 - ratio * ratio * ratio * ratio, 0.0, 1.0);
-            let atten = window * window / (1.0 + lightDist * lightDist);
+            // Same two attenuation modes as the surface shader (lighting_pbr.wgsl): col.w (decay) > 0 is
+            // the windowed inverse square -- regularised with 1 + d^2 because a point INSIDE the
+            // medium can sit arbitrarily close to the light (surfaces clamp at d^2 >= 0.01) -- and
+            // decay == 0 is the linear 1 - d/range ramp, so fog and lit surfaces agree per light.
+            var atten = window * window / (1.0 + lightDist * lightDist);
+            if (light.col.w <= 0.0) {
+                atten = clamp(1.0 - ratio, 0.0, 1.0);
+            }
             let fogScale = froxel.pointFogScale[lightIdx / 4u][lightIdx % 4u];
             lightScatter += light.col.rgb * atten * phase * fogScale;
         }
@@ -300,8 +353,12 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
             if (maxDist > 0.0 && lightDist >= maxDist) { continue; }
             let theta = dot(-ldir, normalize(light.dir.xyz));
             if (theta <= light.params.x) { continue; }
-            let cone = smoothstep(light.params.x, light.params.y, theta);
+            // Linear cone ramp like the surface shader (not smoothstep), so the beam edge matches the lit cone.
+            let cone = clamp((theta - light.params.x) / max(light.params.y - light.params.x, 0.0001), 0.0, 1.0);
             let phase = hgPhase(dot(ldir, viewDir), froxel.phase.x);
+            // DECISION: spots keep a regularised inverse-square (1 / (1 + d^2)) that the surface shader
+            // (pow(1 - d/maxDist, decay) only) does not have: light travelling through a medium is
+            // physically attenuated with distance, and without it a spot beam would not fade along its length.
             var atten = 1.0 / (1.0 + lightDist * lightDist);
             if (maxDist > 0.0) {
                 atten *= pow(clamp(1.0 - lightDist / maxDist, 0.0, 1.0), max(light.params.w, 1.0));
@@ -320,17 +377,7 @@ fn injectFog(@builtin(global_invocation_id) gid: vec3u) {
 
         // Ambient inject: scene ambient colour plus the IBL irradiance from above, scaled by density.
         if (froxel.phase.y > 0.0) {
-            // Isotropic scattering sees the whole sphere: mean of the (low-frequency) irradiance cube over
-            // the six axis directions approximates its L0 term; sampling straight up would only see the zenith.
-            let sky = (
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(1.0, 0.0, 0.0), 0.0).rgb +
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(-1.0, 0.0, 0.0), 0.0).rgb +
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 1.0, 0.0), 0.0).rgb +
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, -1.0, 0.0), 0.0).rgb +
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, 1.0), 0.0).rgb +
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, -1.0), 0.0).rgb
-            ) * (1.0 / 6.0);
-            let ambient = global.ambientColor.rgb + sky * global.envIntensity;
+            let ambient = global.ambientColor.rgb + ambientSky * global.envIntensity;
             inScatter += ambient * froxel.scatterTint.rgb * maskCell.g * (froxel.phase.y * extinction);
         }
     }

@@ -66,6 +66,52 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     this._passes.push(pass);
   }
 
+  /** True between `webglcontextlost` and `webglcontextrestored`: every GL object is invalid then. */
+  private _contextLost = false;
+  private _removeContextListeners: (() => void) | undefined;
+
+  /**
+   * Listens for context loss on `canvas`. `preventDefault()` on `webglcontextlost` is what tells
+   * the browser the page wants the context back; until it returns `render()` is a no-op (instead
+   * of throwing on every frame), and on restore the subclass rebuilds its GPU resources.
+   */
+  protected installContextLossHandling(canvas: HTMLCanvasElement): void {
+    this._removeContextListeners?.();
+    const onLost = (event: Event): void => {
+      event.preventDefault();
+      this._contextLost = true;
+      console.warn("[WebGL] Context lost; rendering is paused until the browser restores it.");
+      this.onContextLost?.({ reason: "webglcontextlost", message: "WebGL context lost" });
+    };
+    const onRestored = (): void => {
+      this.onContextRestored();
+      this._contextLost = false;
+      console.warn("[WebGL] Context restored; GPU resources were re-created.");
+    };
+    canvas.addEventListener("webglcontextlost", onLost);
+    canvas.addEventListener("webglcontextrestored", onRestored);
+    this._removeContextListeners = (): void => {
+      canvas.removeEventListener("webglcontextlost", onLost);
+      canvas.removeEventListener("webglcontextrestored", onRestored);
+    };
+  }
+
+  /** Drops every handle created on the lost context (they are dead, nothing to delete) and rebuilds the renderer's GPU resources. */
+  protected onContextRestored(): void {
+    // Renderers without GPU state of their own have nothing to rebuild.
+  }
+
+  /** Removes the context-loss listeners; subclasses call it from `destroy()`. */
+  protected uninstallContextLossHandling(): void {
+    this._removeContextListeners?.();
+    this._removeContextListeners = undefined;
+  }
+
+  /** Whether the context is currently lost (rendering is skipped). @inheritdoc */
+  public override get isContextLost(): boolean {
+    return this._contextLost;
+  }
+
   public render(
     scene: Scene,
     vp: Float32Array,
@@ -75,6 +121,7 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     far?: number,
     projMatrix?: Float32Array,
   ): void {
+    if (this._contextLost) return;
     this._releaseRemovedObjects(scene.consumeRemovedObjects());
 
     this.resetStateCache();

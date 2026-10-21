@@ -29,6 +29,14 @@ const testShaderRegistry = new ShaderRegistry();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PassInternals = any;
 
+(globalThis as unknown as { GPUTextureUsage: Record<string, number> }).GPUTextureUsage ??= {
+  COPY_SRC: 0x01,
+  COPY_DST: 0x02,
+  TEXTURE_BINDING: 0x04,
+  STORAGE_BINDING: 0x08,
+  RENDER_ATTACHMENT: 0x10,
+};
+
 function makeMockDevice(): {
   device: GPUDevice;
   renderPass: Record<string, ReturnType<typeof vi.fn>>;
@@ -48,7 +56,8 @@ function makeMockDevice(): {
     createShaderModule: vi.fn(() => ({})),
     createRenderPipeline: vi.fn(() => ({})),
     createBindGroup: vi.fn(() => ({})),
-    queue: { writeBuffer: vi.fn() },
+    createTexture: vi.fn(() => ({ createView: (): object => ({}), destroy: vi.fn() })),
+    queue: { writeBuffer: vi.fn(), writeTexture: vi.fn() },
     __commandEncoder: commandEncoder,
   } as unknown as GPUDevice;
   return { device, renderPass };

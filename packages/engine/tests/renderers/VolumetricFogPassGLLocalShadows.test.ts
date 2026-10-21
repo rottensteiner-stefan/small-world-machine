@@ -60,6 +60,11 @@ function run(
       activeUnit = unit - 33984;
     },
     bindVertexArray: () => {},
+    getExtension: () => ({}), // EXT_color_buffer_float present
+    SAMPLER_BINDING: 0x8919,
+    MAX_FRAGMENT_UNIFORM_VECTORS: 0x8dfd,
+    getParameter: (pname: number) => (pname === 0x8dfd ? 1024 : null),
+    bindSampler: () => {},
     drawArrays: () => {
       Object.assign(rec.boundAtDraw, bound);
     },

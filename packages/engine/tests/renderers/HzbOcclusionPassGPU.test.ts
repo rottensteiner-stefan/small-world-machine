@@ -166,18 +166,19 @@ describe("HzbOcclusionPassGPU", () => {
 });
 
 describe("HzbOcclusionSystem.buildPyramid", () => {
-  it("dispatches one copy pass plus one downsample pass per additional mip level", () => {
+  it("records copy + every downsample level as dispatches inside ONE compute pass", () => {
     const system = makeReadySystem(4);
 
     const { ce, computePasses } = makeMockCommandEncoder();
     system.buildPyramid(ce as unknown as GPUCommandEncoder, false);
 
-    // 1 copy (mip 0) + 3 downsamples (mips 1, 2, 3) for a 4-level chain.
-    expect(computePasses).toHaveLength(4);
-    expect(computePasses[0]!.setPipeline).toHaveBeenCalledWith(system._hzbCopyPipeline);
-    expect(computePasses[1]!.setPipeline).toHaveBeenCalledWith(system._hzbDownsamplePipeline);
-    expect(computePasses[3]!.setPipeline).toHaveBeenCalledWith(system._hzbDownsamplePipeline);
-    for (const p of computePasses) expect(p.end).toHaveBeenCalledTimes(1);
+    // 1 copy (mip 0) + 3 downsamples (mips 1, 2, 3) for a 4-level chain: 4 dispatches, 1 pass.
+    expect(computePasses).toHaveLength(1);
+    const pass = computePasses[0]!;
+    expect(pass.dispatchWorkgroups).toHaveBeenCalledTimes(4);
+    expect(pass.setPipeline.mock.calls[0]![0]).toBe(system._hzbCopyPipeline);
+    expect(pass.setPipeline.mock.calls[1]![0]).toBe(system._hzbDownsamplePipeline);
+    expect(pass.end).toHaveBeenCalledTimes(1);
   });
 
   it("reuses the same bind groups across multiple frames instead of recreating them each call", () => {
@@ -234,8 +235,11 @@ describe("HzbOcclusionSystem.dispatchTest", () => {
     const aabbWrite = writeCalls.find((c: unknown[]) => c[0] === system._hzbAabbBuffer);
     expect(aabbWrite).toBeDefined();
     const data = aabbWrite![2] as Float32Array;
-    expect(Array.from(data.slice(0, 4))).toEqual([1, 2, 3, 0.5]);
-    expect(Array.from(data.slice(4, 8))).toEqual([-4, 0, 7, 2.5]);
+    // Radius is padded (readback latency, see HZB_RADIUS_PADDING) -- never below the true radius.
+    expect(Array.from(data.slice(0, 3))).toEqual([1, 2, 3]);
+    expect(data[3]).toBeCloseTo(0.5 * 1.15, 5);
+    expect(Array.from(data.slice(4, 7))).toEqual([-4, 0, 7]);
+    expect(data[7]).toBeCloseTo(2.5 * 1.15, 5);
 
     const paramsWrite = writeCalls.find((c: unknown[]) => c[0] === system._hzbTestParamsBuffer);
     expect(paramsWrite).toBeDefined();
@@ -292,6 +296,25 @@ describe("HzbOcclusionSystem.dispatchTest", () => {
     expect(ce.copyBufferToBuffer).not.toHaveBeenCalled();
   });
 
+  it("never tests non-collidable objects (no bounds): they always draw", () => {
+    const system = makeReadySystem();
+    const visual = new Object3D("VisualOnly");
+    visual.isCollidable = false;
+    visual.inFrustum = true;
+    const scene = makeSceneWith([visual]);
+    scene.getVisibleObjectsSorted(new Float32Array(16), new Vector3D());
+
+    const { ce, computePasses } = makeMockCommandEncoder();
+    system.dispatchTest(
+      ce as unknown as GPUCommandEncoder,
+      scene,
+      { id: "globalBindGroup" },
+      false,
+    );
+    expect(computePasses).toHaveLength(0);
+    expect(visual.occlusionCulled).toBe(false);
+  });
+
   it("does nothing when there are no bounded candidates", () => {
     const system = makeReadySystem();
     const noBounds = new Object3D("NoBounds");
@@ -331,10 +354,36 @@ describe("HzbOcclusionSystem.applyOcclusionResults", () => {
     system.applyOcclusionResults();
 
     expect(objA.occlusionCulled).toBe(false); // 1 = visible
-    expect(objB.occlusionCulled).toBe(true); // 0 = occluded
+    expect(objB.occlusionCulled).toBe(false); // 0 = occluded once: hysteresis keeps it drawn
     expect(objC.occlusionCulled).toBe(false);
     expect(unmap).toHaveBeenCalledTimes(1);
     expect(system._hzbStagingPending[0]).toBe(false);
+  });
+
+  function feed(system: Internals, objs: Object3D[], flags: number[]): void {
+    const raw = new Uint32Array(flags).buffer;
+    system._hzbStagingBuffers = [
+      { mapState: "mapped", getMappedRange: vi.fn(() => raw), unmap: vi.fn() },
+      { mapState: "unmapped", getMappedRange: vi.fn(), unmap: vi.fn() },
+    ];
+    system._hzbSlotObjects = [objs, []];
+    system._hzbStagingPending = [true, false];
+    system.applyOcclusionResults();
+  }
+
+  it("culls only after consecutive occluded readbacks and un-culls on the first visible one", () => {
+    const system = makeSystem();
+    const obj = makeObjectWithBounds(0, 0, 0, 1);
+
+    feed(system, [obj], [0]);
+    expect(obj.occlusionCulled).toBe(false);
+    feed(system, [obj], [0]);
+    expect(obj.occlusionCulled).toBe(true);
+    feed(system, [obj], [1]);
+    expect(obj.occlusionCulled).toBe(false);
+    // The streak restarted: one occluded readback is again not enough.
+    feed(system, [obj], [0]);
+    expect(obj.occlusionCulled).toBe(false);
   });
 
   it("does nothing for a slot that's pending but not yet mapped", () => {

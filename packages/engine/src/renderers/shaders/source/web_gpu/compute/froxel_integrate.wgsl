@@ -62,20 +62,8 @@ fn sliceBounds(slice: f32, near: f32, far: f32, slices: f32) -> vec2f {
     return vec2f(zNear, zFar);
 }
 
-// Cascaded Shadow Map evaluation per slice.
-fn sampleCascadeShadow(worldPos: vec3f, viewZ: f32) -> f32 {
-    if (uni.shadowInfo.z < 0.5 || uni.shadowInfo.w < 0.5) {
-        return 1.0;
-    }
-
-    var cascadeIndex = 0u;
-    let numCascades = u32(uni.shadowInfo.w);
-    let splits = uni.cascadeSplits;
-
-    if (viewZ > splits.x && numCascades > 1u) { cascadeIndex = 1u; }
-    if (viewZ > splits.y && numCascades > 2u) { cascadeIndex = 2u; }
-    if (viewZ > splits.z && numCascades > 3u) { cascadeIndex = 3u; }
-
+// Shadow of one cascade at a world position (1 = lit). Outside the cascade's map counts as lit.
+fn sampleCascade(worldPos: vec3f, cascadeIndex: u32) -> f32 {
     var shadowMatrix = uni.cascadeMatrices0;
     if (cascadeIndex == 1u) { shadowMatrix = uni.cascadeMatrices1; }
     else if (cascadeIndex == 2u) { shadowMatrix = uni.cascadeMatrices2; }
@@ -85,18 +73,47 @@ fn sampleCascadeShadow(worldPos: vec3f, viewZ: f32) -> f32 {
     let shadowCoord = shadowPos.xyz / max(shadowPos.w, 1e-6);
     let shadowUV = shadowCoord.xy * vec2f(0.5, -0.5) + vec2f(0.5, 0.5);
 
-    if (shadowUV.x < 0.0 || shadowUV.x > 1.0 || shadowUV.y < 0.0 || shadowUV.y > 1.0) {
+    if (shadowUV.x < 0.0 || shadowUV.x > 1.0 || shadowUV.y < 0.0 || shadowUV.y > 1.0 || shadowCoord.z > 1.0) {
         return 1.0;
     }
 
-    let bias = uni.shadowInfo.x;
     return textureSampleCompareLevel(
         shadowMap,
         shadowSampler,
         shadowUV,
         i32(cascadeIndex),
-        shadowCoord.z - bias,
+        shadowCoord.z - uni.shadowInfo.x,
     );
+}
+
+// Cascaded Shadow Map evaluation per slice. Same convention as the surface shaders
+// (lighting_pbr.wgsl): cascades are selected by the Euclidean distance from the camera (NOT view
+// depth) and blended over the last 10% of a cascade's range.
+fn sampleCascadeShadow(worldPos: vec3f, viewDist: f32) -> f32 {
+    if (uni.shadowInfo.z < 0.5 || uni.shadowInfo.w < 0.5) {
+        return 1.0;
+    }
+
+    let numCascades = u32(uni.shadowInfo.w);
+    var cascadeIndex = numCascades - 1u;
+    let splits = array<f32, 4>(uni.cascadeSplits.x, uni.cascadeSplits.y, uni.cascadeSplits.z, uni.cascadeSplits.w);
+    for (var c = 0u; c < numCascades; c++) {
+        if (viewDist < splits[c]) {
+            cascadeIndex = c;
+            break;
+        }
+    }
+
+    var shadow = sampleCascade(worldPos, cascadeIndex);
+    if (cascadeIndex + 1u < numCascades) {
+        let splitFar = splits[cascadeIndex];
+        let blendBand = max(splitFar * 0.1, 0.0001);
+        let blendToNext = 1.0 - clamp((splitFar - viewDist) / blendBand, 0.0, 1.0);
+        if (blendToNext > 0.0) {
+            shadow = mix(shadow, sampleCascade(worldPos, cascadeIndex + 1u), blendToNext);
+        }
+    }
+    return shadow;
 }
 
 @compute @workgroup_size(8, 8, 1)
@@ -136,7 +153,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         let slabThickness = max(bounds.y - bounds.x, 1e-5);
 
         if (zMid > maxDist) {
-            // Beyond maximum distance: keep current accumulated values.
+            // Beyond maximum distance: keep the accumulated values (froxel_inject.wgsl already faded the
+            // extinction to zero over the last third, so this is a continuation, not a pop).
             textureStore(integratedVolume, coord, vec4f(accumulatedRadiance, accumulatedTransmittance));
             continue;
         }
@@ -164,7 +182,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
             // (same convention as the local lights in froxel_inject.wgsl).
             let cosTheta = dot(viewDir, sunDir);
             let phase = hgPhase(cosTheta, asymmetry);
-            let shadow = sampleCascadeShadow(worldPos, zMid);
+            let shadow = sampleCascadeShadow(worldPos, length(worldPos - uni.camPos.xyz));
             sunScatter = sunColor * (shadow * phase * extinction) * maskAlbedo;
         }
 

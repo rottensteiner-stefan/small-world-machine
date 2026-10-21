@@ -13,17 +13,35 @@ const AXES = [
   "0.0, 0.0, -1.0",
 ];
 
+/** Directions passed to every irradiance-cube sample in a shader source, in textual order. */
+function sampledDirections(source: string, pattern: RegExp): string[] {
+  return [...source.matchAll(pattern)].map((m) => m[1]!.replace(/\s+/g, " "));
+}
+
 describe("volumetric fog IBL ambient samples the sphere mean", () => {
-  it.each([
-    [
-      "WGSL",
+  it("WGSL samples the six axes exactly once in total, not once per froxel cell", () => {
+    const dirs = sampledDirections(
       injectWGSL,
-      (a: string): string => `textureSampleLevel(u_irradianceMap, globalSampler, vec3f(${a}), 0.0)`,
-    ],
-    ["GLSL", fogGLSL, (a: string): string => `texture(u_irradianceMap, vec3(${a}))`],
-  ])("%s reads the irradiance cube along +-X, +-Y and +-Z", (_name, source, call) => {
-    for (const axis of AXES) {
-      expect(source).toContain((call as (a: string) => string)(axis));
-    }
+      /textureSampleLevel\(u_irradianceMap, globalSampler, vec3f\(([^)]*)\), 0\.0\)/g,
+    );
+    expect([...dirs].sort()).toEqual([...AXES].sort());
+  });
+
+  it("WGSL computes the mean once per workgroup (thread 0) and shares it behind a barrier", () => {
+    expect(injectWGSL).toMatch(/var<workgroup> ambientSky: vec3f;/);
+    expect(injectWGSL).toMatch(
+      /if \(lid == 0u\)[\s\S]*?ambientSky = \([\s\S]*?\* \(1\.0 \/ 6\.0\);/,
+    );
+    // The barrier sits before the per-thread bounds early-out (uniform control flow).
+    expect(injectWGSL.indexOf("workgroupBarrier();")).toBeGreaterThan(0);
+    expect(injectWGSL.indexOf("workgroupBarrier();")).toBeLessThan(
+      injectWGSL.indexOf("let volDims"),
+    );
+    expect(injectWGSL).toMatch(/ambientSky \* global\.envIntensity/);
+  });
+
+  it("GLSL reads the irradiance cube along +-X, +-Y and +-Z", () => {
+    const dirs = sampledDirections(fogGLSL, /texture\(u_irradianceMap, vec3\(([^)]*)\)\)/g);
+    for (const axis of AXES) expect(dirs).toContain(axis);
   });
 });

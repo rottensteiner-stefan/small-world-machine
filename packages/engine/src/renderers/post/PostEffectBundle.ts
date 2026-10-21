@@ -36,19 +36,47 @@ export interface PostEffectBundle {
   lensing: GravitationalLensingElement | undefined;
 }
 
-export function decodeBundle(group: PostProcessingGroup): PostEffectBundle {
+/** An empty bundle, the reusable target of {@link decodeBundleInto}. */
+export function createEmptyBundle(): PostEffectBundle {
   return {
-    tm: group.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING),
-    vig: group.get<VignetteElement>(PostProcessingEffectType.VIGNETTE),
-    grain: group.get<GrainElement>(PostProcessingEffectType.GRAIN),
-    bloom: group.get<BloomElement>(PostProcessingEffectType.BLOOM),
-    grade: group.get<ColorGradingElement>(PostProcessingEffectType.COLOR_GRADING),
-    quant: group.get<QuantizeElement>(PostProcessingEffectType.QUANTIZE),
-    hbao: group.get<HbaoElement>(PostProcessingEffectType.HBAO),
-    shafts: group.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS),
-    volFog: group.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG),
-    outline: group.get<OutlineElement>(PostProcessingEffectType.OUTLINE),
-    flash: group.get<FlashElement>(PostProcessingEffectType.FLASH),
-    lensing: group.get<GravitationalLensingElement>(PostProcessingEffectType.GRAVITATIONAL_LENSING),
+    tm: undefined,
+    vig: undefined,
+    grain: undefined,
+    bloom: undefined,
+    grade: undefined,
+    quant: undefined,
+    hbao: undefined,
+    shafts: undefined,
+    volFog: undefined,
+    outline: undefined,
+    flash: undefined,
+    lensing: undefined,
   };
+}
+
+/** Allocation-free decode: overwrites every field of `out` (the per-frame hot path reuses one). */
+export function decodeBundleInto(
+  group: PostProcessingGroup,
+  out: PostEffectBundle,
+): PostEffectBundle {
+  out.tm = group.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING);
+  out.vig = group.get<VignetteElement>(PostProcessingEffectType.VIGNETTE);
+  out.grain = group.get<GrainElement>(PostProcessingEffectType.GRAIN);
+  out.bloom = group.get<BloomElement>(PostProcessingEffectType.BLOOM);
+  out.grade = group.get<ColorGradingElement>(PostProcessingEffectType.COLOR_GRADING);
+  out.quant = group.get<QuantizeElement>(PostProcessingEffectType.QUANTIZE);
+  out.hbao = group.get<HbaoElement>(PostProcessingEffectType.HBAO);
+  out.shafts = group.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS);
+  out.volFog = group.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
+  out.outline = group.get<OutlineElement>(PostProcessingEffectType.OUTLINE);
+  out.flash = group.get<FlashElement>(PostProcessingEffectType.FLASH);
+  out.lensing = group.get<GravitationalLensingElement>(
+    PostProcessingEffectType.GRAVITATIONAL_LENSING,
+  );
+  return out;
+}
+
+/** Allocating convenience wrapper (tests / cold paths). Per-frame callers use `decodeBundleInto`. */
+export function decodeBundle(group: PostProcessingGroup): PostEffectBundle {
+  return decodeBundleInto(group, createEmptyBundle());
 }

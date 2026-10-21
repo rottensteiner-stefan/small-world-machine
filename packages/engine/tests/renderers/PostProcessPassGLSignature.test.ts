@@ -3,6 +3,8 @@ import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { PostProcessingGroup } from "../../src/renderers/post/PostProcessingGroup.js";
 import { ToneMappingElement } from "../../src/renderers/post/elements/ToneMappingElement.js";
 import { VignetteElement } from "../../src/renderers/post/elements/VignetteElement.js";
+import { LightShaftsElement } from "../../src/renderers/post/elements/LightShaftsElement.js";
+import { VolumetricFogElement } from "../../src/renderers/post/elements/VolumetricFogElement.js";
 import { BloomElement } from "../../src/renderers/post/elements/BloomElement.js";
 import { PostProcessPassGL } from "../../src/renderers/post/passes/PostProcessPassGL.js";
 
@@ -10,7 +12,7 @@ describe("PostProcessPassGL Shader Signature & Rebuild Isolation", () => {
   it("does not alter shader signature when continuous tuning values change", () => {
     const glPass = new PostProcessPassGL({} as WebGL2RenderingContext, true, new ShaderRegistry());
     const getSig = (
-      glPass as unknown as { _getSignature: (g: PostProcessingGroup) => string }
+      glPass as unknown as { _getSignature: (g: PostProcessingGroup) => number }
     )._getSignature.bind(glPass);
 
     const group = new PostProcessingGroup();
@@ -47,5 +49,34 @@ describe("PostProcessPassGL Shader Signature & Rebuild Isolation", () => {
     bloom.enabled = false;
     const sig3 = getSig(group);
     expect(sig3).not.toBe(sig1);
+  });
+
+  it("bakes shafts/fog/HBAO into the shader only when their texture exists this frame", () => {
+    const glPass = new PostProcessPassGL({} as WebGL2RenderingContext, true, new ShaderRegistry());
+    const internals = glPass as unknown as {
+      _getSignature: (g: PostProcessingGroup) => number;
+      _hasShaftsTexture: boolean;
+      _hasFogTexture: boolean;
+      _hasHbaoTexture: boolean;
+    };
+    const group = new PostProcessingGroup();
+    const shafts = new LightShaftsElement();
+    const fog = new VolumetricFogElement();
+    shafts.enabled = true;
+    fog.enabled = true;
+    group.add(shafts);
+    group.add(fog);
+
+    // Elements enabled, but the upstream passes produced nothing (e.g. sun without shadows):
+    // an enabled define would sample the HDR colour on unit 0 as if it were shafts/fog.
+    const noTextures = internals._getSignature(group);
+
+    internals._hasShaftsTexture = true;
+    const withShafts = internals._getSignature(group);
+    internals._hasFogTexture = true;
+    const withBoth = internals._getSignature(group);
+
+    expect(withShafts).not.toBe(noTextures);
+    expect(withBoth).not.toBe(withShafts);
   });
 });

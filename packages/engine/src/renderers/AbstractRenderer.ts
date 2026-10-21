@@ -148,12 +148,28 @@ export abstract class AbstractRenderer implements Renderer {
     return true;
   }
 
+  /** Scene whose lights `_lightData` already holds for the frame in progress (see `memoizeLightsFor`). */
+  private _lightsMemoScene: Scene | undefined;
+
+  /**
+   * Makes `extractLights(scene)` return the data of the last extraction instead of walking the
+   * scene again, until it is cleared with `undefined`. A renderer calls it right after its own
+   * per-frame extraction and clears it when the frame ends, so passes that re-request the lights
+   * within the frame (cascaded/spot shadows) cost nothing; outside a frame it is always fresh.
+   */
+  protected memoizeLightsFor(scene: Scene | undefined): void {
+    this._lightsMemoScene = scene;
+  }
+
   /**
    * Extracts all lights from the scene for rendering.
    * @param scene The scene to extract lights from.
    * @returns An object containing all extracted light data.
    */
   public extractLights(scene: Scene): LightDataInterface {
+    // Inside a frame the renderer has already extracted this scene's lights once; the shadow
+    // passes ask again for the same data (see `memoizeLightsFor`), so skip the repeated walk.
+    if (this._lightsMemoScene === scene) return this._lightData;
     this._lightData.pLights.length = 0;
     this._lightData.sLights.length = 0;
     this._lightData.aLights.length = 0;
@@ -180,8 +196,9 @@ export abstract class AbstractRenderer implements Renderer {
     }
 
     if (undefined !== node.children) {
-      for (const child of node.children) {
-        this._traverseLights(child);
+      const children = node.children;
+      for (let i = 0; i < children.length; i++) {
+        this._traverseLights(children[i]!);
       }
     }
   }
@@ -203,8 +220,9 @@ export abstract class AbstractRenderer implements Renderer {
     }
 
     if (undefined !== node.children) {
-      for (const child of node.children) {
-        this._traverseFogVolumes(child);
+      const children = node.children;
+      for (let i = 0; i < children.length; i++) {
+        this._traverseFogVolumes(children[i]!);
       }
     }
   }

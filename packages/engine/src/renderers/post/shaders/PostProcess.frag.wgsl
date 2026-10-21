@@ -38,9 +38,17 @@ struct DynUniforms {
     lensingParams: vec4f, // [strength, spaghettification, relativisticBeaming, ringGlowIntensity]
     flashParams: vec4f, // [color.r, color.g, color.b, intensity]
     shaftsParams: vec4f, // [intensity, density, 0, 0]
-    shaftsColor: vec4f, // [r, g, b, 1.0]
+    shaftsColor: vec4f, // [r, g, b, 1.0] RESERVED: unread (tint is baked into the shafts texture by the raymarch); kept for layout stability
 }
 @group(0) @binding(2) var<uniform> dyn: DynUniforms;
+
+// Reliable finite test (exponent bits all ones = Inf/NaN); `x == x` may be folded by the compiler.
+fn isFiniteF32(x: f32) -> bool {
+    return (bitcast<u32>(x) & 0x7f800000u) != 0x7f800000u;
+}
+fn isFiniteVec3(v: vec3f) -> bool {
+    return isFiniteF32(v.x) && isFiniteF32(v.y) && isFiniteF32(v.z);
+}
 
 fn random(st: vec2f) -> f32 {
     var p3  = fract(vec3f(st.xyx) * 0.1031);
@@ -265,7 +273,8 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
     // Volumetric Light Shafts (In-Scattering) -- additive linear HDR lighting
     if (1u == u_lightShaftsEnabled) {
         let shafts = textureSample(lightShaftsTexture, hdrSampler, distortUv).rgb;
-        if (shafts.r == shafts.r) {
+        // Exponent-bit finite test: `x == x` is NOT a reliable NaN test in WGSL (may be folded).
+        if (isFiniteVec3(shafts)) {
             hdr += shafts * dyn.shaftsParams.x;
         }
     }
@@ -275,7 +284,7 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
     // the scene is attenuated by the transmittance, then the scattered light is added.
     if (1u == u_volumetricFogEnabled) {
         let fog = textureSample(volumetricFogTexture, hdrSampler, distortUv);
-        if (fog.r == fog.r && fog.a == fog.a) {
+        if (isFiniteVec3(fog.rgb) && isFiniteF32(fog.a)) {
             hdr = hdr * clamp(fog.a, 0.0, 1.0) + fog.rgb;
         }
     }
@@ -284,12 +293,8 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
     // approximates occluded incoming light rather than a display-referred image adjustment.
     if (1u == u_hbaoEnabled) {
         let hbaoVal = textureSample(hbaoTexture, hdrSampler, distortUv).r;
-        // `hbaoVal == hbaoVal` is the portable WGSL NaN check (no isNan() builtin, see
-        // AO.frag.wgsl) -- clamp() has an unspecified result for a NaN input, so skip the
-        // multiply entirely on NaN instead of trusting clamp() to sanitize it, mirroring
-        // PostProcess.frag.glsl's isnan()/isinf() guard. Inf doesn't need the same treatment,
-        // IEEE754 ordering for Inf is well-defined so clamp() already handles it correctly.
-        if (hbaoVal == hbaoVal) {
+        // clamp() is unspecified for NaN input, so skip the multiply on non-finite values.
+        if (isFiniteF32(hbaoVal)) {
             hdr *= clamp(hbaoVal, 0.0, 1.0);
         }
     }

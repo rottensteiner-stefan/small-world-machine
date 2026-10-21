@@ -15,6 +15,14 @@ import type { PostProcessingGroup } from "../PostProcessingGroup.js";
  * allocation on the hot path -- see the coding-guide "reused scratch" contract). Passes MUST read
  * it synchronously inside `execute()` and never retain a reference past the call: the very next
  * dispatch overwrites the fields (`colorTexture`, `element`, `lights`, ...) that vary per effect.
+ *
+ * GL state contract. A pass may change the framebuffer, viewport, program, active texture unit,
+ * texture/sampler bindings (units 0..15), `DEPTH_TEST`, `DEPTH_MASK` and `BLEND` while it runs; it
+ * must not assume any of them on entry and must not restore them itself. The terminal uber pass
+ * (`PostProcessPassGL`) is the single place that restores the state the geometry passes expect
+ * (depth test/mask, and the cull-face / blend enables it sampled on entry), so exactly one pass
+ * owns that responsibility. The one exception is a sampler *object* a pass detaches from a unit
+ * for its draw (the fog pass does so on its mask units): it puts that sampler back afterwards.
  */
 export interface GLPostEffectPassContext {
   /** The GL context of the owning renderer (WebGL1 or WebGL2 surface). */

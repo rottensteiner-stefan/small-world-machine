@@ -24,6 +24,8 @@ function makeMockGl(): WebGL2RenderingContext {
     attachShader: vi.fn(),
     linkProgram: vi.fn(),
     getProgramParameter: vi.fn(() => true),
+    MAX_TEXTURE_IMAGE_UNITS: 0x8872,
+    getParameter: vi.fn(() => 16),
     getProgramInfoLog: vi.fn(() => ""),
     deleteShader: vi.fn((s: object) => shaders.delete(s)),
     deleteProgram: vi.fn(),

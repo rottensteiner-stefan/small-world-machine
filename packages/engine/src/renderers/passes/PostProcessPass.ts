@@ -9,9 +9,9 @@ import {
   POST_PROCESS_DYNUNIFORM_FLOATS,
   packPostProcessNeutralUniforms,
 } from "../post/PostProcessDynUniforms.js";
-import type { PostProcessingGroup } from "../post/index.js";
 import type { PostEffectBundle } from "../post/PostEffectBundle.js";
-import { decodeBundle } from "../post/PostEffectBundle.js";
+import { createEmptyBundle, decodeBundleInto } from "../post/PostEffectBundle.js";
+import { PostEffectPipelineGate } from "../post/PostEffectPipelineGate.js";
 
 /**
  * Full-screen post-processing pass (Uber-Shader).
@@ -36,7 +36,7 @@ import { decodeBundle } from "../post/PostEffectBundle.js";
 export class PostProcessPass implements RenderPass {
   public name = "PostProcessPass";
 
-  private _pipeline?: GPURenderPipeline;
+  private _pipeline: GPURenderPipeline | undefined = undefined;
   private _bindGroup?: GPUBindGroup;
   private _uniformBuffer?: GPUBuffer;
   private _sampler?: GPUSampler;
@@ -49,7 +49,16 @@ export class PostProcessPass implements RenderPass {
   private _builtHbaoTextureView?: GPUTextureView;
   private _builtShaftsTextureView?: GPUTextureView;
   private _builtVolumetricFogTextureView?: GPUTextureView;
-  private _compiledSignature?: string;
+  /** Signature of the most recently REQUESTED pipeline build (may still be validating). */
+  private _requestedSignature?: string;
+  /** Monotonic build id: a validation verdict for a superseded build is dropped. */
+  private _buildSerial: number = 0;
+  private _safeFallbackRequested: boolean = false;
+  /** Reused per frame (zero allocation): the decoded effect bundle. */
+  private readonly _bundle: PostEffectBundle = createEmptyBundle();
+  /** Neutral 1x1 (0,0,0,1) stand-in for fog/shafts/bloom: additive 0 radiance, fog transmittance 1. */
+  private _blackTexture: GPUTexture | undefined = undefined;
+  private _blackTextureView: GPUTextureView | undefined = undefined;
 
   constructor() {
     // Identity baseline. The group registers every effect by default, so element slices are
@@ -126,11 +135,7 @@ export class PostProcessPass implements RenderPass {
   /**
    * Lazily compiles or rebuilds the render pipeline when structural shader settings change.
    */
-  private _buildPipeline(
-    renderer: WebGPURenderer,
-    group: PostProcessingGroup,
-    e: PostEffectBundle,
-  ): void {
+  private _buildPipeline(renderer: WebGPURenderer, filterMode: number, e: PostEffectBundle): void {
     const device = renderer.gpuDevice!;
     this._ensureResources(device);
 
@@ -193,15 +198,29 @@ export class PostProcessPass implements RenderPass {
         `const u_outlineEnabled: u32 = ${outlineEnabled ? 1 : 0}u;`,
       ],
       ["const u_flashEnabled: u32 = 0u;", `const u_flashEnabled: u32 = ${flashEnabled ? 1 : 0}u;`],
-      ["const u_filterMode: u32 = 0u;", `const u_filterMode: u32 = ${group.filterMode}u;`],
+      ["const u_filterMode: u32 = 0u;", `const u_filterMode: u32 = ${filterMode}u;`],
     ];
     for (const [pattern, replacement] of constInjections) {
       assembledFrag = this._replaceConst(assembledFrag, pattern, replacement);
     }
 
+    // Validation-scoped creation: an invalid uber variant must not invalidate the frame. The
+    // previous (good) pipeline keeps rendering until the new one is verified; a failed variant
+    // keeps the old pipeline, or -- when none exists yet -- falls back to a neutral variant
+    // with every optional effect off.
+    const serial = ++this._buildSerial;
+    const gate = new PostEffectPipelineGate(device, "PostProcess", (ok) => {
+      if (serial !== this._buildSerial) return;
+      if (ok) {
+        this._pipeline = candidate;
+      } else if (!this._pipeline && !this._safeFallbackRequested) {
+        this._safeFallbackRequested = true;
+        this._buildPipeline(renderer, 0, createEmptyBundle());
+      }
+    });
+    gate.begin();
     const fragModule = device.createShaderModule({ code: assembledFrag });
-
-    this._pipeline = device.createRenderPipeline({
+    const candidate = device.createRenderPipeline({
       layout: this._pipelineLayout!,
       vertex: { module: vertModule, entryPoint: "vs_main" },
       fragment: {
@@ -211,6 +230,7 @@ export class PostProcessPass implements RenderPass {
       },
       primitive: { topology: Topology.TRIANGLE_LIST },
     });
+    gate.end();
   }
 
   /**
@@ -241,11 +261,40 @@ export class PostProcessPass implements RenderPass {
     });
   }
 
+  /** Lazily creates the 1x1 (0,0,0,1) fallback texture owned by this pass. */
+  private _blackView(device: GPUDevice): GPUTextureView {
+    if (!this._blackTextureView) {
+      this._blackTexture = device.createTexture({
+        size: [1, 1, 1],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      device.queue.writeTexture(
+        { texture: this._blackTexture },
+        new Uint8Array([0, 0, 0, 255]),
+        { bytesPerRow: 4 },
+        [1, 1, 1],
+      );
+      this._blackTextureView = this._blackTexture.createView();
+    }
+    return this._blackTextureView;
+  }
+
   /**
-   * Selects the texture view the uber pass samples for an effect: the effect's resolved view when
-   * the effect is enabled AND produced one this frame, else the neutral pass-through white fallback
-   * (an inactive effect must not tint the output -- same convention as the GL2 uber pass family).
+   * Selects the texture view the uber pass samples for an ADDITIVE/ATTENUATING effect (bloom,
+   * light shafts, volumetric fog): the effect's resolved view when it is enabled AND produced one
+   * this frame, else neutral black (0,0,0,1): +0 radiance, fog transmittance 1. White here would
+   * add +1.0 radiance over the whole image whenever a pass returns null (e.g. a fog early-out).
    */
+  private _activeViewOrBlack(
+    device: GPUDevice,
+    elem: { readonly enabled: boolean } | undefined,
+    view: GPUTextureView | undefined,
+  ): GPUTextureView {
+    return elem?.enabled && view ? view : this._blackView(device);
+  }
+
+  /** Same for ambient occlusion, which is MULTIPLICATIVE: the neutral element is white (1 = no occlusion). */
   private _activeViewOrWhite(
     renderer: WebGPURenderer,
     elem: { readonly enabled: boolean } | undefined,
@@ -268,7 +317,7 @@ export class PostProcessPass implements RenderPass {
     // Resolve the effect bundle exactly once per frame -- texture selection, the structural
     // rebuild signature and the DynUniforms packing all read from the same decoded references
     // (the group used to be asked separately ~34x per frame).
-    const e = decodeBundle(group);
+    const e = decodeBundleInto(group, this._bundle);
 
     // If TAA, Motion Trail and/or depth of field resolved this frame, the uber pass reacts to that instead of
     // the raw per-frame color -- `_hdrTextureView` itself must stay untouched so both keep
@@ -279,26 +328,27 @@ export class PostProcessPass implements RenderPass {
       renderer.taaResolvedView ??
       renderer.hdrTextureView;
 
-    const bloomActiveView = this._activeViewOrWhite(renderer, e.bloom, renderer.bloomTextureView);
-    const hbaoActiveView = this._activeViewOrWhite(renderer, e.hbao, renderer.hbaoTextureView);
-    const shaftsActiveView = this._activeViewOrWhite(
-      renderer,
-      e.shafts,
-      renderer.lightShaftsTextureView,
-    );
-    const volFogActiveView = this._activeViewOrWhite(
-      renderer,
-      e.volFog,
-      renderer.volumetricFogTextureView,
-    );
-
     const sig = this._computeSignature(group.filterMode, e);
 
     // Rebuild pipeline ONLY if the structural shader signature changed
-    if (!this._pipeline || sig !== this._compiledSignature) {
-      this._buildPipeline(renderer, group, e);
-      this._compiledSignature = sig;
+    if (sig !== this._requestedSignature) {
+      this._requestedSignature = sig;
+      this._buildPipeline(renderer, group.filterMode, e);
     }
+
+    const device = renderer.gpuDevice!;
+    const bloomActiveView = this._activeViewOrBlack(device, e.bloom, renderer.bloomTextureView);
+    const hbaoActiveView = this._activeViewOrWhite(renderer, e.hbao, renderer.hbaoTextureView);
+    const shaftsActiveView = this._activeViewOrBlack(
+      device,
+      e.shafts,
+      renderer.lightShaftsTextureView,
+    );
+    const volFogActiveView = this._activeViewOrBlack(
+      device,
+      e.volFog,
+      renderer.volumetricFogTextureView,
+    );
 
     // Rebuild bind group ONLY if the bound texture views changed
     if (
@@ -343,6 +393,9 @@ export class PostProcessPass implements RenderPass {
 
     renderer.gpuDevice!.queue.writeBuffer(this._uniformBuffer!, 0, d);
 
+    // No verified pipeline yet (first build still validating, or failed): skip the blit this frame.
+    if (!this._pipeline) return;
+
     // Final blit directly to the swap-chain (canvas)
     const screenView = renderer.gpuCanvasContext.getCurrentTexture().createView();
     const rp = ce.beginRenderPass({
@@ -365,5 +418,8 @@ export class PostProcessPass implements RenderPass {
 
   public destroy(): void {
     this._uniformBuffer?.destroy();
+    this._blackTexture?.destroy();
+    this._blackTexture = undefined;
+    this._blackTextureView = undefined;
   }
 }

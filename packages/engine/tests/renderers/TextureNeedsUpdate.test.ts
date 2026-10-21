@@ -41,6 +41,7 @@ type RendererInternals = any;
 function makeMockGl(): WebGL2RenderingContext {
   return {
     createTexture: vi.fn().mockReturnValue({}),
+    deleteTexture: vi.fn(),
     bindTexture: vi.fn(),
     texImage2D: vi.fn(),
     texImage3D: vi.fn(),
@@ -337,6 +338,8 @@ describe("Texture GPU re-upload on needsUpdate", () => {
     });
 
     expect(() => textures.getWebGLTexture(tex, undefined)).toThrow(/No ETC2 support/);
+    // The half-created GL texture is released (it is never cached, so it would leak every frame).
+    expect(vi.mocked(gl.deleteTexture)).toHaveBeenCalledTimes(1);
   });
 
   it("GPUTextureResourceCache uploads block-compressed textures via writeTexture", () => {

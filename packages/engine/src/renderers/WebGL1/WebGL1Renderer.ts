@@ -13,7 +13,10 @@ import { resolveManifestFlags } from "../shaders/index.js";
 import type { Object3D, RenderBatch, Scene } from "../../core/index.js";
 import { DeviceLimit, InstancedMesh } from "../../core/index.js";
 import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
-import { WebGLProgramCache } from "../gl/managers/WebGLProgramCache.js";
+import {
+  WebGLProgramCache,
+  type WebGLProgramCacheEntry,
+} from "../gl/managers/WebGLProgramCache.js";
 import { WebGLTextureManager } from "../gl/managers/WebGLTextureManager.js";
 import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
 import { MaterialType, RendererType, Topology } from "../../enums/index.js";
@@ -23,6 +26,9 @@ import type { Vector3D } from "../../math/index.js";
  * WebGL 1.0 implementation of the renderer.
  */
 export class WebGL1Renderer extends AbstractWebGLRenderer {
+  /** Shared empty shadow-texture list so the per-frame post context allocates nothing. */
+  private static readonly _NO_SHADOW_TEXTURES: readonly (WebGLTexture | null)[] = [];
+
   /** @inheritdoc */
   public override readonly type: RendererType = RendererType.WEB_GL1;
   declare protected gl: WebGLRenderingContext;
@@ -39,7 +45,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   private _textures!: WebGLTextureManager;
   private _geometry!: WebGLBufferManager;
 
-  private _opaqueTexture?: WebGLTexture;
+  private _opaqueTexture?: WebGLTexture | undefined;
 
   protected _hdrFbo: WebGLFramebuffer | undefined = undefined;
   protected _hdrTexture: WebGLTexture | undefined = undefined;
@@ -84,6 +90,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       canvas.getContext("webgl", attributes) || canvas.getContext("experimental-webgl", attributes);
     if (!gl) throw new Error("[WebGL1Renderer] WebGL1 context could not be initialized.");
     this.gl = gl as WebGLRenderingContext;
+    this.installContextLossHandling(canvas);
 
     if (config?.quality) {
       this._quality = { ...this._quality, ...config.quality };
@@ -97,23 +104,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     );
     this._instancedArraysExt = this.gl.getExtension("ANGLE_instanced_arrays");
 
-    this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, false);
-    this.initDefaultTextures();
-    this.gl.enable(this.gl.DEPTH_TEST);
-
-    // Mount the shared GL manager layer (same classes as WebGL2Renderer) with the WebGL1
-    // `glsl100` strategy: no global UBO, no TextureArray/compressed upload, NPOT sampling rules.
-    this._geometry = new WebGLBufferManager(this.gl);
-    this._textures = new WebGLTextureManager(
-      this.gl,
-      this._texCache,
-      this.defaultTexture,
-      this.defaultCubeTexture,
-      { dialect: "glsl100" },
-    );
-    this._programCache = new WebGLProgramCache(this.gl, this.context.shaderRegistry, {
-      dialect: "glsl100",
-    });
+    this._createGpuResources();
 
     this.addPass(new WebGLMainPass());
     this.addPass(new WebGLPostProcessPass());
@@ -412,7 +403,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     ctx.time = this.frameInfo.time;
     ctx.realTime = this.frameInfo.realTime;
     ctx.dirShadowTexture = null;
-    ctx.spotShadowTextures = [];
+    ctx.spotShadowTextures = WebGL1Renderer._NO_SHADOW_TEXTURES;
     ctx.fallbackShadowTexture = null;
     ctx.irradianceMap = null;
     ctx.envIntensity = 0;
@@ -489,7 +480,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     const mat = firstObj.material!;
     const manifest = mat.getRenderManifest();
     const texs = manifest.textures;
-    const flags = resolveManifestFlags(manifest.flags, this._quality.disableTextures) ?? [];
+    // Copy: `resolveManifestFlags` may return the manifest's own array and `push` below mutates.
+    const flags = [...(resolveManifestFlags(manifest.flags, this._quality.disableTextures) ?? [])];
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
     // semantics stay untouched for other meshes; only an instanced mesh explicitly requesting it
     // gets the `USE_INSTANCE_COLOR` variant compiled in.
@@ -530,37 +522,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     const uDirLightDir = u.get("u_dirLightDir");
     if (uDirLightDir) this.gl.uniform3f(uDirLightDir, lights.dDir.x, lights.dDir.y, lights.dDir.z);
 
-    // --- Bind Lights ---
-    // WebGL1 has no clustering (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md) and only
-    // has 16 uniform slots -- fail-fast if more than 16 are supplied.
-    if (lights.pLights.length > 16) {
-      throw new Error(
-        `[WebGL1Renderer] Point light count exceeds limit of 16: ${lights.pLights.length}`,
-      );
-    }
-    const numPointLights = lights.pLights.length;
-    const uNumPointLights = u.get("u_numPointLights");
-    if (uNumPointLights) this.gl.uniform1i(uNumPointLights, numPointLights);
-    for (let i = 0; i < numPointLights; i++) {
-      const pl = lights.pLights[i]!;
-      const loc = cache.pointLightLocs[i];
-      if (loc?.pos)
-        this.gl.uniform3f(
-          loc.pos,
-          pl.worldMatrix.data[12]!,
-          pl.worldMatrix.data[13]!,
-          pl.worldMatrix.data[14]!,
-        );
-      if (loc?.col)
-        this.gl.uniform3f(
-          loc.col,
-          pl.color.r * pl.intensity,
-          pl.color.g * pl.intensity,
-          pl.color.b * pl.intensity,
-        );
-      if (loc?.distance) this.gl.uniform1f(loc.distance, pl.distance);
-      if (loc?.decay) this.gl.uniform1f(loc.decay, pl.decay);
-    }
+    this._bindLights(u, cache, lights);
 
     this._bindFogUniforms(u, fog);
     this._bindMaterialState(manifest.state);
@@ -836,6 +798,164 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._hdrH = h;
   }
 
+  /**
+   * Creates every GL object the renderer owns up front (default textures and the shared manager
+   * layer). Shared by `initialize()` and the context-restore path, so a restored context ends up
+   * in exactly the state a fresh one does.
+   */
+  private _createGpuResources(): void {
+    this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, false);
+    this.initDefaultTextures();
+    this.gl.enable(this.gl.DEPTH_TEST);
+
+    // Mount the shared GL manager layer (same classes as WebGL2Renderer) with the WebGL1
+    // `glsl100` strategy: no global UBO, no TextureArray/compressed upload, NPOT sampling rules.
+    this._geometry = new WebGLBufferManager(this.gl);
+    this._textures = new WebGLTextureManager(
+      this.gl,
+      this._texCache,
+      this.defaultTexture,
+      this.defaultCubeTexture,
+      { dialect: "glsl100" },
+    );
+    this._programCache = new WebGLProgramCache(this.gl, this.context.shaderRegistry, {
+      dialect: "glsl100",
+    });
+  }
+
+  /** @inheritdoc */
+  protected override onContextRestored(): void {
+    // Every handle created on the old context is dead: forget them (nothing to delete) and rebuild.
+    this._texCache.clear();
+    this._renderTargetFbos.clear();
+    this._renderTargetDepthBuffers.clear();
+    this._renderTargetCubeFbos.clear();
+    this._renderTargetCubeDepthBuffers.clear();
+    this._instanceDataBuffers = new WeakMap();
+    this._hdrFbo = undefined;
+    this._hdrTexture = undefined;
+    this._hdrRenderBuffer = undefined;
+    this._hdrW = 0;
+    this._hdrH = 0;
+    this._postEffects = undefined;
+    this._postCtx = undefined;
+    this._opaqueTexture = undefined;
+    this._instancedArraysExt = this.gl.getExtension("ANGLE_instanced_arrays");
+    this._createGpuResources();
+    this._reconcilePostProcess();
+  }
+
+  /**
+   * Uploads the frame's point / spot / area lights into the glsl100 light uniform arrays. WebGL1
+   * has no clustering (docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md) and only a handful
+   * of uniform slots, so exceeding a limit fails fast.
+   */
+  private _bindLights(
+    u: Map<string, WebGLUniformLocation | undefined>,
+    cache: WebGLProgramCacheEntry,
+    lights: LightDataInterface,
+  ): void {
+    // --- Bind Lights ---
+    // WebGL1 has no clustering (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md) and only
+    // has 16 uniform slots -- fail-fast if more than 16 are supplied.
+    if (lights.pLights.length > 16) {
+      throw new Error(
+        `[WebGL1Renderer] Point light count exceeds limit of 16: ${lights.pLights.length}`,
+      );
+    }
+    const numPointLights = lights.pLights.length;
+    const uNumPointLights = u.get("u_numPointLights");
+    if (uNumPointLights) this.gl.uniform1i(uNumPointLights, numPointLights);
+    for (let i = 0; i < numPointLights; i++) {
+      const pl = lights.pLights[i]!;
+      const loc = cache.pointLightLocs[i];
+      if (loc?.pos)
+        this.gl.uniform3f(
+          loc.pos,
+          pl.worldMatrix.data[12]!,
+          pl.worldMatrix.data[13]!,
+          pl.worldMatrix.data[14]!,
+        );
+      if (loc?.col)
+        this.gl.uniform3f(
+          loc.col,
+          pl.color.r * pl.intensity,
+          pl.color.g * pl.intensity,
+          pl.color.b * pl.intensity,
+        );
+      if (loc?.distance) this.gl.uniform1f(loc.distance, pl.distance);
+      if (loc?.decay) this.gl.uniform1f(loc.decay, pl.decay);
+    }
+
+    // Spot lights: the glsl100 shaders (Phong + glass) loop over them, but nothing used to upload
+    // the uniforms, so `u_numSpotLights` stayed 0 and every spot light was silently ignored.
+    if (lights.sLights.length > 16) {
+      throw new Error(
+        `[WebGL1Renderer] Spot light count exceeds limit of 16: ${lights.sLights.length}`,
+      );
+    }
+    const numSpotLights = lights.sLights.length;
+    const uNumSpotLights = u.get("u_numSpotLights");
+    if (uNumSpotLights) this.gl.uniform1i(uNumSpotLights, numSpotLights);
+    for (let i = 0; i < numSpotLights; i++) {
+      const sl = lights.sLights[i]!;
+      const loc = cache.spotLightLocs[i];
+      const m = sl.worldMatrix.data;
+      if (loc?.pos) this.gl.uniform3f(loc.pos, m[12]!, m[13]!, m[14]!);
+      if (loc?.dir) {
+        // Normalised here (the shader normalises again, but a zero vector must never reach it).
+        const d = sl.direction;
+        const len = Math.hypot(d.x, d.y, d.z) || 1;
+        this.gl.uniform3f(loc.dir, d.x / len, d.y / len, d.z / len);
+      }
+      if (loc?.col) {
+        this.gl.uniform3f(
+          loc.col,
+          sl.color.r * sl.intensity,
+          sl.color.g * sl.intensity,
+          sl.color.b * sl.intensity,
+        );
+      }
+      if (loc?.params) {
+        this.gl.uniform4f(
+          loc.params,
+          Math.cos(sl.angle),
+          Math.cos(sl.angle * (1.0 - sl.penumbra)),
+          sl.distance,
+          sl.decay,
+        );
+      }
+    }
+
+    // Area lights (max 4): same layout the WebGPU writer packs (right/up/normal = matrix columns).
+    if (lights.aLights.length > 4) {
+      throw new Error(
+        `[WebGL1Renderer] Area light count exceeds limit of 4: ${lights.aLights.length}`,
+      );
+    }
+    const numAreaLights = lights.aLights.length;
+    const uNumAreaLights = u.get("u_numAreaLights");
+    if (uNumAreaLights) this.gl.uniform1i(uNumAreaLights, numAreaLights);
+    for (let i = 0; i < numAreaLights; i++) {
+      const al = lights.aLights[i]!;
+      const loc = cache.areaLightLocs[i];
+      const m = al.worldMatrix.data;
+      if (loc?.pos) this.gl.uniform3f(loc.pos, m[12]!, m[13]!, m[14]!);
+      if (loc?.col) {
+        this.gl.uniform3f(
+          loc.col,
+          al.color.r * al.intensity,
+          al.color.g * al.intensity,
+          al.color.b * al.intensity,
+        );
+      }
+      if (loc?.right) this.gl.uniform3f(loc.right, m[0]!, m[1]!, m[2]!);
+      if (loc?.up) this.gl.uniform3f(loc.up, m[4]!, m[5]!, m[6]!);
+      if (loc?.normal) this.gl.uniform3f(loc.normal, m[8]!, m[9]!, m[10]!);
+      if (loc?.size) this.gl.uniform2f(loc.size, al.width / 2, al.height / 2);
+    }
+  }
+
   /** @inheritdoc */
   protected override releaseObjectResources(obj: Object3D): void {
     this._geometry.releaseGeometryFor(obj);
@@ -845,6 +965,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
 
   /** @inheritdoc */
   public override destroy(): void {
+    this.uninstallContextLossHandling();
     const gl = this.gl;
     if (gl) {
       this._programCache?.dispose();
@@ -855,9 +976,15 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       if (this._hdrFbo) gl.deleteFramebuffer(this._hdrFbo);
       if (this._hdrTexture) gl.deleteTexture(this._hdrTexture);
       if (this._hdrRenderBuffer) gl.deleteRenderbuffer(this._hdrRenderBuffer);
+      for (const fbo of this._renderTargetCubeFbos.values()) gl.deleteFramebuffer(fbo);
+      for (const rb of this._renderTargetCubeDepthBuffers.values()) gl.deleteRenderbuffer(rb);
+      if (this._opaqueTexture) gl.deleteTexture(this._opaqueTexture);
+      this._opaqueTexture = undefined;
       this._postEffects?.destroy();
     }
 
+    this._renderTargetCubeFbos.clear();
+    this._renderTargetCubeDepthBuffers.clear();
     this._renderTargetFbos.clear();
     this._renderTargetDepthBuffers.clear();
     this._hdrFbo = undefined;

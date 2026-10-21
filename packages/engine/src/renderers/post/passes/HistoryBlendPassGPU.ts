@@ -1,5 +1,6 @@
 import FULLSCREEN_VERT_WGSL from "../shaders/PostProcess.vert.wgsl?raw";
 import HISTORY_BLEND_FRAG_WGSL from "../shaders/HistoryBlend.frag.wgsl?raw";
+import { PostEffectPipelineGate } from "../PostEffectPipelineGate.js";
 import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 import { TextureFilter, TextureWrap, Topology } from "../../../enums/index.js";
 
@@ -11,6 +12,7 @@ import { TextureFilter, TextureWrap, Topology } from "../../../enums/index.js";
  */
 export class HistoryBlendPassGPU implements PostEffectPass {
   private _device: GPUDevice;
+  private readonly _gate: PostEffectPipelineGate;
   private _pipeline!: GPURenderPipeline;
   private _sampler!: GPUSampler;
   private _uniformBuffer!: GPUBuffer;
@@ -28,7 +30,10 @@ export class HistoryBlendPassGPU implements PostEffectPass {
 
   constructor(device: GPUDevice) {
     this._device = device;
+    this._gate = new PostEffectPipelineGate(device, "HistoryBlend");
+    this._gate.begin();
     this._buildPipeline();
+    this._gate.end();
   }
 
   private _buildPipeline(): void {
@@ -97,6 +102,7 @@ export class HistoryBlendPassGPU implements PostEffectPass {
    * @returns This frame's resolved HDR texture view (becomes history for the next call), or null if unavailable.
    */
   public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    if (!this._gate.ready) return null;
     const { ce, width, height } = ctx;
     const currentView = ctx.colorView;
     // `PostProcessingElement`'s base type has no `feedback` member -- the renderer only ever

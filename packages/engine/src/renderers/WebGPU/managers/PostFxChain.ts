@@ -38,7 +38,24 @@ import type { WebGPURenderer } from "../WebGPURenderer.js";
  * on first enable and destroyed in one registry sweep from `destroy()`.
  */
 export class PostFxChain {
+  /** Frames an effect may stay disabled before its pass (history targets, froxel volumes, ...) is
+   * destroyed and its registry entry dropped; re-enabling later simply re-creates it. ~5 s at
+   * 60 fps: long enough that a toggled slider does not thrash allocations. */
+  public static readonly IDLE_DESTROY_FRAMES: number = 300;
+
   private readonly _passes = new Map<PostProcessingEffectType, PostEffectPass>();
+  /** Frame counter (increments once per `runPostEffects`) and the last frame each pass was used. */
+  private _frame: number = 0;
+  private readonly _lastUsedFrame = new Map<PostProcessingEffectType, number>();
+  /** Pre-bound so the per-frame sweep allocates no closure. */
+  private readonly _sweepEntry = (pass: PostEffectPass, type: PostProcessingEffectType): void => {
+    const last = this._lastUsedFrame.get(type) ?? this._frame;
+    if (this._frame - last > PostFxChain.IDLE_DESTROY_FRAMES) {
+      pass.destroy();
+      this._passes.delete(type);
+      this._lastUsedFrame.delete(type);
+    }
+  };
   /** Reused every frame (zero allocation on the hot path); fields are repopulated right before
    * each dispatch -- see the `PostEffectPassContext` reuse contract. */
   private readonly _ctx: PostEffectPassContext = {
@@ -125,6 +142,7 @@ export class PostFxChain {
       pass = new ctor(this._host.gpuDevice!);
       this._passes.set(type, pass);
     }
+    this._lastUsedFrame.set(type, this._frame);
     return pass;
   }
 
@@ -156,6 +174,7 @@ export class PostFxChain {
     projMatrix: Float32Array | undefined,
     lights: LightDataInterface,
   ): void {
+    this._frame++;
     const renderer = this._host;
     const group = renderer.postProcessing;
     const bloomNode = group.get<BloomElement>(PostProcessingEffectType.BLOOM);
@@ -263,6 +282,10 @@ export class PostFxChain {
     } else {
       this._volumetricFogTextureView = undefined;
     }
+
+    // A disabled effect used to keep its pass (and all GPU memory) forever: free passes that have
+    // been unused for IDLE_DESTROY_FRAMES frames.
+    this._passes.forEach(this._sweepEntry);
   }
 
   /** Tears down every GPU post-effect pass in the registry, in one sweep -- replaces the former
@@ -271,5 +294,6 @@ export class PostFxChain {
   public destroy(): void {
     for (const pass of this._passes.values()) pass.destroy();
     this._passes.clear();
+    this._lastUsedFrame.clear();
   }
 }

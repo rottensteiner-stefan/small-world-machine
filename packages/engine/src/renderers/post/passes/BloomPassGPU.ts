@@ -1,6 +1,7 @@
 import BLOOM_DOWNSAMPLE_WGSL from "../shaders/BloomDownsample.frag.wgsl?raw";
 import BLOOM_UPSAMPLE_WGSL from "../shaders/BloomUpsample.frag.wgsl?raw";
 import FULLSCREEN_VERT_WGSL from "../shaders/PostProcess.vert.wgsl?raw";
+import { PostEffectPipelineGate } from "../PostEffectPipelineGate.js";
 import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
 import type { BloomElement } from "../elements/index.js";
 import { TextureFilter, TextureWrap, Topology } from "../../../enums/index.js";
@@ -10,6 +11,7 @@ import { TextureFilter, TextureWrap, Topology } from "../../../enums/index.js";
  */
 export class BloomPassGPU implements PostEffectPass {
   private _device: GPUDevice;
+  private readonly _gate: PostEffectPipelineGate;
   private _downsamplePipeline!: GPURenderPipeline;
   private _upsamplePipeline!: GPURenderPipeline;
   private _sampler!: GPUSampler;
@@ -30,7 +32,10 @@ export class BloomPassGPU implements PostEffectPass {
 
   constructor(device: GPUDevice) {
     this._device = device;
+    this._gate = new PostEffectPipelineGate(device, "Bloom");
+    this._gate.begin();
     this._buildPipelines();
+    this._gate.end();
   }
 
   private _buildPipelines(): void {
@@ -185,6 +190,7 @@ export class BloomPassGPU implements PostEffectPass {
   }
 
   public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    if (!this._gate.ready) return null;
     const { ce, element } = ctx;
     const hdrTexture = ctx.colorTexture!;
     const hdrTextureView = ctx.colorView;

@@ -7,6 +7,32 @@ import type { LightDataInterface } from "../../../interfaces/index.js";
 import type { Vector3D } from "../../../math/index.js";
 import { DEFAULT_CLUSTER_TILE_SIZE, MathPool, Matrix4 } from "../../../math/index.js";
 
+/** Floats per light slot in the three storage buffers (must match the WGSL `PointLight`/`SpotLight`/`AreaLight` structs). */
+const POINT_LIGHT_FLOATS = 8;
+const SPOT_LIGHT_FLOATS = 16;
+const AREA_LIGHT_FLOATS = 24;
+const BYTES_PER_FLOAT = 4;
+/** Point/spot buffers hold exactly `MAX_CLUSTERED_LIGHTS_PER_TYPE` slots (64 * 32 B = 2048 B, 64 * 64 B = 4096 B).
+ * Functions, not module constants: `core/index.js` is a circular import here and its exports are
+ * still undefined while this module evaluates. */
+const pointLightBufferBytes = (): number =>
+  MAX_CLUSTERED_LIGHTS_PER_TYPE * POINT_LIGHT_FLOATS * BYTES_PER_FLOAT;
+const spotLightBufferBytes = (): number =>
+  MAX_CLUSTERED_LIGHTS_PER_TYPE * SPOT_LIGHT_FLOATS * BYTES_PER_FLOAT;
+/** Area lights are a WebGPU storage array (not the 4-slot std140 block of WebGL2); capacity is whatever fits in one 4 KiB buffer (42). */
+const AREA_LIGHT_BUFFER_BYTES = 4096;
+const MAX_WEBGPU_AREA_LIGHTS = Math.floor(
+  AREA_LIGHT_BUFFER_BYTES / (AREA_LIGHT_FLOATS * BYTES_PER_FLOAT),
+);
+
+/** Allocation-free `array.set([x, y, z, w], index)`. */
+function setVec4(a: Float32Array, index: number, x: number, y: number, z: number, w: number): void {
+  a[index] = x;
+  a[index + 1] = y;
+  a[index + 2] = z;
+  a[index + 3] = w;
+}
+
 /**
  * Owns the per-frame global-uniform write path that used to live inside `WebGPURenderer`:
  * the global/light/view data scratch arrays, the four GPU buffers they are uploaded into, the
@@ -26,13 +52,12 @@ export class GlobalUniformWriter {
   private _spotLightBuffer!: GPUBuffer;
   private _areaLightBuffer!: GPUBuffer;
 
-  // 216 floats: GlobalUniforms grew by 8 floats (resolution/projScale/tileSizePx/clusterDims)
-  // for clustered light culling -- see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md,
-  // and by 4 floats (shadowSoftness) for PCSS softness tuning (docs/guides/shadows.md).
-  private _scratchGlobalBufferData = new Float32Array(216);
-  private _scratchPointLightData = new Float32Array(32); // Initial capacity, grows dynamically
-  private _scratchSpotLightData = new Float32Array(64); // Initial capacity, grows dynamically
-  private _scratchAreaLightData = new Float32Array(96); // Initial capacity, grows dynamically
+  // Size comes from the single layout table (GlobalUniformLayout.ts), pinned against structs.wgsl
+  // by tests/renderers/GlobalUniformLayout.test.ts.
+  private _scratchGlobalBufferData = new Float32Array(WebGPUGGlobalUniformLayout.totalFloats);
+  private _scratchPointLightData = new Float32Array(4 * POINT_LIGHT_FLOATS); // grows dynamically
+  private _scratchSpotLightData = new Float32Array(4 * SPOT_LIGHT_FLOATS); // grows dynamically
+  private _scratchAreaLightData = new Float32Array(4 * AREA_LIGHT_FLOATS); // grows dynamically
 
   /** Inverse of this frame's GL (non zero-to-one) view-projection; decals unproject depth with it. */
   private readonly _frameInvViewProj: Matrix4 = new Matrix4();
@@ -75,22 +100,19 @@ export class GlobalUniformWriter {
    */
   public init(device: GPUDevice): void {
     this._globalUniformBuffer = device.createBuffer({
-      // 864 bytes: GlobalUniforms grew by 40 bytes (resolution/projScale/tileSizePx/clusterDims)
-      // for clustered light culling -- see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md --
-      // and by 16 bytes (shadowSoftness) for PCSS softness tuning (docs/guides/shadows.md).
-      size: 864,
+      size: WebGPUGGlobalUniformLayout.totalBytes,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this._pointLightBuffer = device.createBuffer({
-      size: 2048,
+      size: pointLightBufferBytes(),
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     this._spotLightBuffer = device.createBuffer({
-      size: 4096,
+      size: spotLightBufferBytes(),
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     this._areaLightBuffer = device.createBuffer({
-      size: 4096,
+      size: AREA_LIGHT_BUFFER_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
   }
@@ -125,9 +147,20 @@ export class GlobalUniformWriter {
         `[WebGPURenderer] Spot light count exceeds limit of ${MAX_CLUSTERED_LIGHTS_PER_TYPE}: ${lights.sLights.length}`,
       );
     }
-    if (lights.aLights.length > 42) {
+    if (lights.aLights.length > MAX_WEBGPU_AREA_LIGHTS) {
       throw new Error(
-        `[WebGPURenderer] Area light count exceeds limit of 42: ${lights.aLights.length}`,
+        `[WebGPURenderer] Area light count exceeds limit of ${MAX_WEBGPU_AREA_LIGHTS}: ${lights.aLights.length}`,
+      );
+    }
+    // Fail fast on a corrupt camera instead of uploading NaN/inverted planes that silently break
+    // clustering, fog and HZB. Orthographic cameras may legitimately have near <= 0, so only
+    // finiteness and ordering are checked.
+    if (!Number.isFinite(near) || !Number.isFinite(far) || far <= near) {
+      throw new Error(`[WebGPURenderer] Invalid camera near/far: near=${near}, far=${far}`);
+    }
+    if (projMatrix !== undefined && projMatrix.length < 16) {
+      throw new Error(
+        `[WebGPURenderer] projMatrix must have 16 elements, got ${projMatrix.length}`,
       );
     }
     if (
@@ -153,7 +186,7 @@ export class GlobalUniformWriter {
     const gData = this._scratchGlobalBufferData;
     const glob = WebGPUGGlobalUniformLayout.fields;
     gData.set(correctedVp.data, glob.vp.index);
-    gData.set([camPos.x, camPos.y, camPos.z, 1], glob.viewPos.index);
+    setVec4(gData, glob.viewPos.index, camPos.x, camPos.y, camPos.z, 1);
     // Slot 0 = main camera in the per-draw view buffer (group 3) -- kept correct here, once per
     // frame, independent of whatever CascadedShadowPassGPU/SpotShadowPassGPU write into their own
     // slots afterward. See VIEW_SLOT_MAIN_CAMERA.
@@ -161,48 +194,37 @@ export class GlobalUniformWriter {
 
     MathPool.releaseMatrix(originalVp);
     MathPool.releaseMatrix(correctedVp);
-    gData.set(
-      [
-        lights.aCol.r * lights.aIntensity,
-        lights.aCol.g * lights.aIntensity,
-        lights.aCol.b * lights.aIntensity,
-        1,
-      ],
+    setVec4(
+      gData,
       glob.ambientColor.index,
+      lights.aCol.r * lights.aIntensity,
+      lights.aCol.g * lights.aIntensity,
+      lights.aCol.b * lights.aIntensity,
+      1,
     );
-    gData.set(
-      [
-        lights.dCol.r * lights.dIntensity,
-        lights.dCol.g * lights.dIntensity,
-        lights.dCol.b * lights.dIntensity,
-        1,
-      ],
+    setVec4(
+      gData,
       glob.dirLightColor.index,
+      lights.dCol.r * lights.dIntensity,
+      lights.dCol.g * lights.dIntensity,
+      lights.dCol.b * lights.dIntensity,
+      1,
     );
-    // Fix: lights.dDir is already negated to point TO the light in applyTo.
-    gData.set([lights.dDir.x, lights.dDir.y, lights.dDir.z, 0], glob.dirLightDir.index);
-    // ── Forward-Pass / Post-Pass tonemapping contract ──────────────────────────────────────────
-    // When PostProcessing is enabled the WebGPU pipeline is split into two passes:
-    //   1. Forward pass  – renders the scene into an HDR render-target (linear, NOT tonemapped).
-    //                      gamma=1.0 disables the Reinhard guard in lighting_pbr.wgsl so that
-    //                      no tonemapping happens here. exposure=1.0 because the PostPass applies
-    //                      scene exposure itself via ToneMappingElement.
-    //   2. PostProcess pass – composites bloom/AO/etc., applies exposure, tonemap, and gamma.
-    //                         PostProcessPass.ts defaults to Reinhard when no ToneMappingElement
-    //                         is configured (see the u_toneMappingMode injection there).
-    //
-    // ⚠️  If you add tonemapping or gamma correction to the forward pass and PostProcessing is
-    //     enabled, you will double-tonemap: once here and once in the PostProcess pass.
-    //     This produces a visibly darker/flat scene (the symptom that triggered this comment).
-    //
-    // When PostProcessing is DISABLED, gamma and exposure come from _quality (default 2.2 / 1.0),
-    // the forward shader's gamma guard fires, and Reinhard + linearToSRGB run directly in the
-    // forward pass as a lightweight single-pass pipeline — no HDR buffer, no PostPass.
+    // lights.dDir is already negated to point TO the light in applyTo.
+    setVec4(gData, glob.dirLightDir.index, lights.dDir.x, lights.dDir.y, lights.dDir.z, 0);
+    // Tonemapping contract: with post-processing enabled the forward pass writes linear HDR
+    // (gamma 1.0 disables the forward shader's Reinhard guard, exposure 1.0) and the PostProcess
+    // pass applies exposure/tonemap/gamma once. Without post-processing the forward pass does it
+    // itself from `quality.gamma`/`quality.exposure`. Never apply both (double tonemapping).
     const gamma = this._host.postProcessing.enabled ? 1.0 : (this._host.quality.gamma ?? 2.2);
     const exposure = this._host.postProcessing.enabled ? 1.0 : (this._host.quality.exposure ?? 1.0);
-    gData.set(
-      [lights.pLights.length, lights.sLights.length, lights.aLights.length, gamma],
+    setVec4(
+      gData,
       glob.numPointLights.index,
+      lights.pLights.length,
+      lights.sLights.length,
+      lights.aLights.length,
+      gamma,
     );
     gData[glob.exposure.index] = exposure; // exposure
 
@@ -215,7 +237,7 @@ export class GlobalUniformWriter {
       gData[glob.fogHeight.index] = fog.height;
       gData[glob.fogHeightFalloff.index] = fog.heightFalloff;
       gData[glob.envIntensity.index] = scene.environmentIntensity; // envIntensity instead of _pad
-      gData.set([fog.color.r, fog.color.g, fog.color.b, 1.0], glob.fogColor.index);
+      setVec4(gData, glob.fogColor.index, fog.color.r, fog.color.g, fog.color.b, 1.0);
     } else {
       gData[glob.fogMode.index] = 0.0; // fogMode NONE
       gData[glob.envIntensity.index] = scene.environmentIntensity; // envIntensity
@@ -247,8 +269,11 @@ export class GlobalUniformWriter {
     // pointClusterGrid/spotClusterGrid this frame -- see setSize()/_allocateClusterBuffers().
     gData[glob.resolution.index] = this._host.gpuCanvasContext.canvas.width;
     gData[glob.resolution.index + 1] = this._host.gpuCanvasContext.canvas.height;
-    gData[glob.projScale.index] = projMatrix?.[0] ?? 1.0;
-    gData[glob.projScale.index + 1] = projMatrix?.[5] ?? 1.0;
+    // No projMatrix = orthographic / offscreen-reflection render (callers legitimately omit it):
+    // projScale is then the documented neutral 1.0 (the cluster/HZB footprint math has no
+    // perspective to undo). A *present* but malformed matrix already threw above.
+    gData[glob.projScale.index] = projMatrix ? projMatrix[0]! : 1.0;
+    gData[glob.projScale.index + 1] = projMatrix ? projMatrix[5]! : 1.0;
     const tileSizePx = this._host.quality.clusteredLighting?.tileSize ?? DEFAULT_CLUSTER_TILE_SIZE;
     gData[glob.tileSizePx.index] = tileSizePx[0];
     gData[glob.tileSizePx.index + 1] = tileSizePx[1];
@@ -279,7 +304,7 @@ export class GlobalUniformWriter {
     const device = this._host.gpuDevice!;
     device.queue.writeBuffer(this._globalUniformBuffer, 0, gData);
 
-    const plDataSize = Math.max(lights.pLights.length * 8, 8);
+    const plDataSize = Math.max(lights.pLights.length * POINT_LIGHT_FLOATS, POINT_LIGHT_FLOATS);
     if (this._scratchPointLightData.length < plDataSize) {
       this._scratchPointLightData = new Float32Array(plDataSize);
     }
@@ -287,15 +312,20 @@ export class GlobalUniformWriter {
     for (let i = 0; i < lights.pLights.length; i++) {
       const l = lights.pLights[i]!;
       const d = l.worldMatrix.data;
-      plData.set([d[12]!, d[13]!, d[14]!, l.distance], i * 8);
-      plData.set(
-        [l.color.r * l.intensity, l.color.g * l.intensity, l.color.b * l.intensity, l.decay],
-        i * 8 + 4,
+      const o = i * POINT_LIGHT_FLOATS;
+      setVec4(plData, o, d[12]!, d[13]!, d[14]!, l.distance);
+      setVec4(
+        plData,
+        o + 4,
+        l.color.r * l.intensity,
+        l.color.g * l.intensity,
+        l.color.b * l.intensity,
+        l.decay,
       );
     }
     device.queue.writeBuffer(this._pointLightBuffer, 0, plData.subarray(0, plDataSize));
 
-    const slDataSize = Math.max(lights.sLights.length * 16, 16);
+    const slDataSize = Math.max(lights.sLights.length * SPOT_LIGHT_FLOATS, SPOT_LIGHT_FLOATS);
     if (this._scratchSpotLightData.length < slDataSize) {
       this._scratchSpotLightData = new Float32Array(slDataSize);
     }
@@ -303,22 +333,31 @@ export class GlobalUniformWriter {
     for (let i = 0; i < lights.sLights.length; i++) {
       const l = lights.sLights[i]!;
       const d = l.worldMatrix.data;
-      slData.set([d[12]!, d[13]!, d[14]!, 1], i * 16);
+      const o = i * SPOT_LIGHT_FLOATS;
+      setVec4(slData, o, d[12]!, d[13]!, d[14]!, 1);
       const dir = MathPool.acquireVector().copyFrom(l.direction).normalize();
-      slData.set([dir.x, dir.y, dir.z, 0], i * 16 + 4);
-      slData.set(
-        [l.color.r * l.intensity, l.color.g * l.intensity, l.color.b * l.intensity, 1],
-        i * 16 + 8,
+      setVec4(slData, o + 4, dir.x, dir.y, dir.z, 0);
+      setVec4(
+        slData,
+        o + 8,
+        l.color.r * l.intensity,
+        l.color.g * l.intensity,
+        l.color.b * l.intensity,
+        1,
       );
-      slData.set(
-        [Math.cos(l.angle), Math.cos(l.angle * (1.0 - l.penumbra)), l.distance, l.decay],
-        i * 16 + 12,
+      setVec4(
+        slData,
+        o + 12,
+        Math.cos(l.angle),
+        Math.cos(l.angle * (1.0 - l.penumbra)),
+        l.distance,
+        l.decay,
       );
       MathPool.releaseVector(dir);
     }
     device.queue.writeBuffer(this._spotLightBuffer, 0, slData.subarray(0, slDataSize));
 
-    const alDataSize = Math.max(lights.aLights.length * 24, 24);
+    const alDataSize = Math.max(lights.aLights.length * AREA_LIGHT_FLOATS, AREA_LIGHT_FLOATS);
     if (this._scratchAreaLightData.length < alDataSize) {
       this._scratchAreaLightData = new Float32Array(alDataSize);
     }
@@ -326,16 +365,20 @@ export class GlobalUniformWriter {
     for (let i = 0; i < lights.aLights.length; i++) {
       const l = lights.aLights[i]!;
       const m = l.worldMatrix.data;
-      const off = i * 24;
-      alData.set([m[12]!, m[13]!, m[14]!, 1], off);
-      alData.set(
-        [l.color.r * l.intensity, l.color.g * l.intensity, l.color.b * l.intensity, 1],
+      const off = i * AREA_LIGHT_FLOATS;
+      setVec4(alData, off, m[12]!, m[13]!, m[14]!, 1);
+      setVec4(
+        alData,
         off + 4,
+        l.color.r * l.intensity,
+        l.color.g * l.intensity,
+        l.color.b * l.intensity,
+        1,
       );
-      alData.set([m[0]!, m[1]!, m[2]!, 0], off + 8);
-      alData.set([m[4]!, m[5]!, m[6]!, 0], off + 12);
-      alData.set([m[8]!, m[9]!, m[10]!, 0], off + 16);
-      alData.set([l.width / 2, l.height / 2, l.distance, l.decay], off + 20);
+      setVec4(alData, off + 8, m[0]!, m[1]!, m[2]!, 0);
+      setVec4(alData, off + 12, m[4]!, m[5]!, m[6]!, 0);
+      setVec4(alData, off + 16, m[8]!, m[9]!, m[10]!, 0);
+      setVec4(alData, off + 20, l.width / 2, l.height / 2, l.distance, l.decay);
     }
     device.queue.writeBuffer(this._areaLightBuffer, 0, alData.subarray(0, alDataSize));
   }

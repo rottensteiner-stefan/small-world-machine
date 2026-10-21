@@ -6,9 +6,10 @@ import COMPOSITE_FRAG_GLSL from "../shaders/DepthOfFieldComposite.frag.glsl?raw"
 import TILT_SHIFT_100_FRAG_GLSL from "../shaders/DepthOfFieldTiltShift100.frag.glsl?raw";
 import { tryCompileProgram } from "../../compileProgram.js";
 
-import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
+import { pickHdrColorFormat, WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import type { DepthOfFieldElement } from "../elements/index.js";
 import type { GLPostEffectPass, GLPostEffectPassContext } from "./GLPostEffectPass.js";
+import { requireGlObject } from "../../gl/requireGlObject.js";
 
 /** Uniform locations of the thin-lens CoC evaluation shared by the CoC and composite programs. */
 interface LensUniformLocations {
@@ -117,7 +118,7 @@ export class DepthOfFieldPassGL implements GLPostEffectPass {
     this._compGatherLoc = gl.getUniformLocation(this._progComposite, "u_gatherMap");
     this._compLens = this._lensLocations(this._progComposite);
 
-    this._vao = gl.createVertexArray()!;
+    this._vao = requireGlObject(gl.createVertexArray(), "vertex array");
   }
 
   private _buildWebGL1(gl: WebGLRenderingContext | WebGL2RenderingContext): void {
@@ -135,7 +136,7 @@ export class DepthOfFieldPassGL implements GLPostEffectPass {
     this._focusScreenY100Loc = gl.getUniformLocation(this._prog100, "u_focusScreenY");
     this._farCoc100Loc = gl.getUniformLocation(this._prog100, "u_farCoc");
     this._aPos100 = gl.getAttribLocation(this._prog100, "a_pos");
-    this._vb100 = gl.createBuffer()!;
+    this._vb100 = requireGlObject(gl.createBuffer(), "buffer");
     gl.bindBuffer(gl.ARRAY_BUFFER, this._vb100);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
@@ -158,9 +159,8 @@ export class DepthOfFieldPassGL implements GLPostEffectPass {
         new WebGL2FrameBuffer(gl2, {
           width: w,
           height: h,
-          internalFormat: gl2.RGBA16F,
-          format: gl2.RGBA,
-          type: gl2.HALF_FLOAT,
+          ...pickHdrColorFormat(gl2),
+          depth: false,
         });
       this._cocFbo = makeTarget(halfW, halfH);
       this._gatherFbo = makeTarget(halfW, halfH);
@@ -171,7 +171,7 @@ export class DepthOfFieldPassGL implements GLPostEffectPass {
     if (this._gl1Fbo) gl.deleteFramebuffer(this._gl1Fbo);
     if (this._gl1Texture) gl.deleteTexture(this._gl1Texture);
     // 8-bit like the WebGL1 HDR target it replaces in the chain (see WebGL1Renderer).
-    this._gl1Texture = gl.createTexture()!;
+    this._gl1Texture = requireGlObject(gl.createTexture(), "texture");
     gl.bindTexture(gl.TEXTURE_2D, this._gl1Texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -179,7 +179,7 @@ export class DepthOfFieldPassGL implements GLPostEffectPass {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.bindTexture(gl.TEXTURE_2D, null);
-    this._gl1Fbo = gl.createFramebuffer()!;
+    this._gl1Fbo = requireGlObject(gl.createFramebuffer(), "framebuffer");
     gl.bindFramebuffer(gl.FRAMEBUFFER, this._gl1Fbo);
     gl.framebufferTexture2D(
       gl.FRAMEBUFFER,

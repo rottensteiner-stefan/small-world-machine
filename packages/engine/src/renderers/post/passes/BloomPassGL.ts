@@ -7,9 +7,10 @@ import BLOOM_UPSAMPLE_FRAG_GLSL from "../shaders/BloomUpsample.frag.glsl?raw";
 import BLOOM_DOWNSAMPLE_FRAG_GLSL100 from "../shaders/BloomDownsample.frag.glsl100?raw";
 import BLOOM_UPSAMPLE_FRAG_GLSL100 from "../shaders/BloomUpsample.frag.glsl100?raw";
 
-import { WebGL2FrameBuffer } from "../../WebGL2/index.js";
+import { pickHdrColorFormat, WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import type { BloomElement } from "../elements/index.js";
 import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
+import { requireGlObject } from "../../gl/requireGlObject.js";
 
 const MIP_CHAIN_LENGTH = 5;
 
@@ -45,7 +46,6 @@ export class BloomPassGL {
   private _aPosDown: number = -1;
   private _aPosUp: number = -1;
   /** WebGL1 path only: whether the device supports rendering to a half-float texture. */
-  private _gl1UseHalfFloat: boolean = false;
   private _gl1HalfFloatType: number = 0;
 
   private _mipChain: WebGL2FrameBuffer[] = [];
@@ -92,27 +92,27 @@ export class BloomPassGL {
     }
 
     if (this._isWebGL2) {
-      this._vao = (gl as WebGL2RenderingContext).createVertexArray()!;
+      this._vao = requireGlObject(
+        (gl as WebGL2RenderingContext).createVertexArray(),
+        "vertex array",
+      );
     } else {
       // Same fullscreen-triangle trick as PostProcessPassGL's WebGL1 path (no gl_VertexID here).
-      this._vb = gl.createBuffer()!;
+      this._vb = requireGlObject(gl.createBuffer(), "buffer");
       gl.bindBuffer(gl.ARRAY_BUFFER, this._vb);
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-      // WebGL1 needs extensions for a half-float render target; fall back to UNSIGNED_BYTE
-      // (lower precision, but never crashes) when unavailable -- same pattern as the renderer's
-      // own main HDR framebuffer setup.
-      const extHalf = gl.getExtension("OES_texture_half_float");
-      const extColorHalf = gl.getExtension("EXT_color_buffer_half_float");
-      this._gl1UseHalfFloat = !!(extHalf && extColorHalf);
-      this._gl1HalfFloatType = this._gl1UseHalfFloat ? extHalf!.HALF_FLOAT_OES : gl.UNSIGNED_BYTE;
+      // WebGL1Renderer always renders into an RGBA8 target: half-float render targets silently drop
+      // draws on ANGLE/Metal (see its HDR setup), and the scene it feeds is RGBA8 anyway. Bloom
+      // mips therefore stay UNSIGNED_BYTE instead of probing OES_texture_half_float.
+      this._gl1HalfFloatType = gl.UNSIGNED_BYTE;
     }
   }
 
   private _createGL1MipTarget(width: number, height: number): GL1MipTarget {
     const gl = this._gl;
-    const texture = gl.createTexture()!;
+    const texture = requireGlObject(gl.createTexture(), "texture");
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(
       gl.TEXTURE_2D,
@@ -130,7 +130,7 @@ export class BloomPassGL {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    const fbo = gl.createFramebuffer()!;
+    const fbo = requireGlObject(gl.createFramebuffer(), "framebuffer");
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -172,9 +172,8 @@ export class BloomPassGL {
           new WebGL2FrameBuffer(gl2, {
             width: mipWidth,
             height: mipHeight,
-            internalFormat: gl2.RGBA16F, // Keep HDR precision for Bloom
-            format: gl2.RGBA,
-            type: gl2.HALF_FLOAT,
+            ...pickHdrColorFormat(gl2), // HDR precision for Bloom where the device can render it
+            depth: false,
           }),
         );
       } else {

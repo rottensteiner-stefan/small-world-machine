@@ -46,6 +46,7 @@ import {
   DEFAULT_CLUSTER_Z_SLICES,
   DEFAULT_MAX_LIGHTS_PER_CLUSTER,
 } from "../../math/index.js";
+import { requireGlObject } from "../gl/requireGlObject.js";
 
 /** Out-of-range clear value (octahedral encodings live in [-1, 1]): "no normal" -- see ADR 0028. */
 const NORMAL_TARGET_CLEAR: Float32Array = new Float32Array([-2, -2, 0, 0]);
@@ -78,9 +79,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private static readonly _RAW_DEPTH_UNIT = 13;
   private _rawDepthSampler!: WebGLSampler;
 
-  private _opaqueTexture?: WebGLTexture;
-  private _opaqueDepthTexture?: WebGLTexture;
-  private _opaqueDepthFbo?: WebGLFramebuffer;
+  private _opaqueTexture?: WebGLTexture | undefined;
+  private _opaqueDepthTexture?: WebGLTexture | undefined;
+  private _opaqueDepthFbo?: WebGLFramebuffer | undefined;
   private _opaqueNormalTexture: WebGLTexture | undefined = undefined;
   private _opaqueNormalFbo: WebGLFramebuffer | undefined = undefined;
   private _opaqueNormalWidth = 0;
@@ -132,6 +133,22 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   }
 
   private _shadowMaps: Map<AbstractLight, WebGL2DepthFrameBuffer> = new Map();
+  /** Lights that rendered a shadow map in the current `renderShadowMaps()` call. */
+  private readonly _shadowMapsUsed: Set<AbstractLight> = new Set();
+  /** Reused "no lights" payload for the depth-only shadow programs. */
+  private readonly _emptyLights: LightDataInterface = {
+    aCol: new Color(0, 0, 0, 1),
+    aIntensity: 0,
+    dCol: new Color(0, 0, 0, 1),
+    dDir: Vector3D.ZERO,
+    dIntensity: 0,
+    aLights: [],
+    pLights: [],
+    sLights: [],
+  };
+  private readonly _zeroVec4: Float32Array = new Float32Array(4);
+  private readonly _scratchInstancedObjects: Object3D[] = [];
+  private readonly _scratchStandardObjects: Object3D[] = [];
   private _dummyShadowMap!: WebGL2DepthFrameBuffer;
   /** Scratch: shadow depth textures of the first 4 spot lights for the volumetric fog pass. */
   private readonly _fogSpotShadowTextures: (WebGLTexture | null)[] = [null, null, null, null];
@@ -167,7 +184,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     const gl = canvas.getContext("webgl2", attributes);
     if (!gl) throw new Error("[WebGL2Renderer] WebGL2 context could not be initialized.");
     this.gl = gl as WebGL2RenderingContext;
-    this._geometry = new WebGLBufferManager(this.gl);
+    this.installContextLossHandling(canvas);
 
     if (config?.quality) {
       this._quality = { ...this._quality, ...config.quality };
@@ -181,6 +198,23 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       DeviceLimit.WEBGL2_MAX_TEXTURE_IMAGE_UNITS,
     );
 
+    this._createGpuResources();
+
+    // Runs first: WebGLShadowPass's updateGlobalUBO() flushes the whole UBO (including the
+    // cluster grid uniforms WebGLClusterCullPass stages below) to the GPU in one call.
+    this.addPass(new WebGLClusterCullPass());
+    this.addPass(new WebGLShadowPass());
+    this.addPass(new WebGLMainPass());
+    this.addPass(new WebGLPostProcessPass());
+  }
+
+  /**
+   * Creates every GL object the renderer owns beyond what the scene and the post stack allocate
+   * lazily. Shared by `initialize()` and the context-restore path, so a restored context ends up in
+   * exactly the state a fresh one does.
+   */
+  private _createGpuResources(): void {
+    this._geometry = new WebGLBufferManager(this.gl);
     this._dummyShadowMap = new WebGL2DepthFrameBuffer(this.gl, 1, 1);
     this._dummyShadowMap.bind();
     this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
@@ -189,7 +223,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     // Sampler object overriding TEXTURE_COMPARE_MODE to NONE, bound once to a fixed unit so any
     // depth texture bound there afterwards reads as a plain float instead of a 0/1 comparison --
     // sampler objects take precedence over a texture's own parameters for the unit they're bound to.
-    this._rawDepthSampler = this.gl.createSampler()!;
+    this._rawDepthSampler = requireGlObject(this.gl.createSampler(), "sampler");
     this.gl.samplerParameteri(this._rawDepthSampler, this.gl.TEXTURE_COMPARE_MODE, this.gl.NONE);
     this.gl.samplerParameteri(this._rawDepthSampler, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
     this.gl.samplerParameteri(this._rawDepthSampler, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
@@ -220,13 +254,38 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       dialect: "glsl300",
     });
     this._allocateClusterTextures({ x: 1, y: 1, z: 1 }, 1);
+  }
 
-    // Runs first: WebGLShadowPass's updateGlobalUBO() flushes the whole UBO (including the
-    // cluster grid uniforms WebGLClusterCullPass stages below) to the GPU in one call.
-    this.addPass(new WebGLClusterCullPass());
-    this.addPass(new WebGLShadowPass());
-    this.addPass(new WebGLMainPass());
-    this.addPass(new WebGLPostProcessPass());
+  /** @inheritdoc */
+  protected override onContextRestored(): void {
+    // Every handle created on the old context is dead: forget them (nothing to delete) and rebuild.
+    const clusterDims = this._clusterDims;
+    const clusterMaxLights = this._clusterMaxLightsPerCluster;
+    this._texCache.clear();
+    this._renderTargetFbos.clear();
+    this._renderTargetCubeFbos.clear();
+    this._shadowMaps.clear();
+    this._shadowMapsUsed.clear();
+    this._instanceBuffers = new WeakMap();
+    this._instanceDataBuffers = new WeakMap();
+    this._hdrFbo = undefined;
+    this._postEffects = undefined;
+    this._postCtx = undefined;
+    this._opaqueTexture = undefined;
+    this._opaqueDepthTexture = undefined;
+    this._opaqueDepthFbo = undefined;
+    this._opaqueDepthWidth = 0;
+    this._opaqueDepthHeight = 0;
+    this._opaqueDepthVerifiedHdr = undefined;
+    this._opaqueDepthUnsupported = false;
+    this._opaqueNormalTexture = undefined;
+    this._opaqueNormalFbo = undefined;
+    this._opaqueNormalWidth = 0;
+    this._opaqueNormalHeight = 0;
+    // The old pair is dead too; `_allocateClusterTextures` would "delete" it harmlessly.
+    this._createGpuResources();
+    this._allocateClusterTextures(clusterDims, clusterMaxLights);
+    if (this.postProcessing.enabled) this._ensurePostProcessFbo();
   }
 
   /**
@@ -244,6 +303,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     const indexCount = numClusters * Math.max(1, maxLightsPerCluster);
     const indexHeight = Math.max(1, Math.ceil(indexCount / CLUSTER_TEX_WIDTH));
 
+    // setSize() re-allocates whenever the grid dims change: free the previous pair first.
+    if (this._clusterGridTex) this.gl.deleteTexture(this._clusterGridTex);
+    if (this._clusterIndexTex) this.gl.deleteTexture(this._clusterIndexTex);
     this._clusterGridTex = this._createIntegerTexture(CLUSTER_TEX_WIDTH, gridHeight, true);
     this._clusterIndexTex = this._createIntegerTexture(CLUSTER_TEX_WIDTH, indexHeight, false);
 
@@ -700,7 +762,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     ctx.width = this.gl.canvas.width;
     ctx.height = this.gl.canvas.height;
     ctx.colorTexture = this._hdrFbo!.texture;
-    ctx.depthTexture = this._opaqueDepthTexture;
+    // A failed capture leaves the texture allocated but empty: passes must see "no depth", not zeros.
+    ctx.depthTexture = this._opaqueDepthUnsupported ? undefined : this._opaqueDepthTexture;
     ctx.viewProjMatrix = this._frameViewProj.data;
     ctx.camPos = this._frameCamPos;
     ctx.near = this._frameNear;
@@ -731,16 +794,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * Renders shadow maps for all shadow-casting lights.
    */
   public renderShadowMaps(lights: LightDataInterface, sortedGroups: RenderBatch[]): void {
-    const emptyLights: LightDataInterface = {
-      aCol: new Color(0, 0, 0, 1),
-      aIntensity: 0,
-      dCol: new Color(0, 0, 0, 1),
-      dDir: Vector3D.ZERO,
-      dIntensity: 0,
-      aLights: [],
-      pLights: [],
-      sLights: [],
-    };
+    const emptyLights = this._emptyLights;
+    this._shadowMapsUsed.clear();
 
     // SpotLights
     for (const light of lights.sLights) {
@@ -758,6 +813,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       } else {
         fbo.resize(light.shadowResolution, light.shadowResolution);
       }
+      this._shadowMapsUsed.add(light);
 
       fbo.bind();
       this.gl.depthMask(true);
@@ -799,6 +855,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       } else {
         fbo.resize(atlasWidth, atlasHeight);
       }
+      this._shadowMapsUsed.add(light);
 
       fbo.bind(); // This sets viewport to full atlas, we'll overwrite it per cascade
       this.gl.depthMask(true);
@@ -829,6 +886,14 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
       this.gl.cullFace(this.gl.BACK);
       fbo.unbind();
+    }
+
+    // Lights that were removed or stopped casting shadows no longer keep their (up to 2048^2)
+    // depth map alive.
+    for (const [light, shadowFbo] of this._shadowMaps) {
+      if (this._shadowMapsUsed.has(light)) continue;
+      shadowFbo.destroy();
+      this._shadowMaps.delete(light);
     }
   }
 
@@ -864,7 +929,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       }
 
       if (!hasAlpha && uExtraLoc) {
-        this.gl.uniform4fv(uExtraLoc, new Float32Array([0, 0, 0, 0]));
+        this.gl.uniform4fv(uExtraLoc, this._zeroVec4);
       }
 
       for (const o of objects) {
@@ -957,8 +1022,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     const objects = batch!.objects;
     if (objects.length === 0) return;
 
-    const instancedObjects: Object3D[] = [];
-    const standardObjects: Object3D[] = [];
+    // Reused partition buffers (cleared here): `_renderSubgroup` only iterates them synchronously.
+    const instancedObjects = this._scratchInstancedObjects;
+    const standardObjects = this._scratchStandardObjects;
+    instancedObjects.length = 0;
+    standardObjects.length = 0;
 
     for (let i = 0; i < objects.length; i++) {
       const o = objects[i];
@@ -1829,6 +1897,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
   /** @inheritdoc */
   public override destroy(): void {
+    this.uninstallContextLossHandling();
     const gl = this.gl;
     if (gl) {
       this._programCache?.dispose();
@@ -1847,6 +1916,21 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._opaqueNormalFbo = undefined;
       this._postEffects?.destroy();
       this._globalUBO?.destroy();
+      // Renderer-owned textures / FBOs that used to leak on destroy().
+      for (const tex of [
+        this._clusterGridTex,
+        this._clusterIndexTex,
+        this._opaqueTexture,
+        this._opaqueDepthTexture,
+        this._blackCubeTexture,
+        this._defaultBrdfTexture,
+      ]) {
+        if (tex) gl.deleteTexture(tex);
+      }
+      if (this._opaqueDepthFbo) gl.deleteFramebuffer(this._opaqueDepthFbo);
+      this._opaqueTexture = undefined;
+      this._opaqueDepthTexture = undefined;
+      this._opaqueDepthFbo = undefined;
     }
 
     this._texCache.clear();

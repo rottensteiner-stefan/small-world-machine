@@ -61,14 +61,27 @@ function makeFogCtx(
 }
 
 /** Builds a WebGL2 mock that records uniform uploads, 3D-texture uploads and per-unit bindings. */
-function makeMaskGl(): {
+function makeMaskGl(
+  maxFragmentUniformVectors = 1024,
+  hasFloatColorBuffer = true,
+): {
   gl2: WebGL2RenderingContext;
   uniformCalls: Record<string, unknown>;
   bindUnit: (unit: number) => TextureBinding | undefined;
   texImage3DCalls: MaskUploadRecord[];
   createdTextures: () => number;
   deletedTextures: () => number;
+  samplerBinds: { unit: number; sampler: unknown }[];
+  foreignSampler: object;
+  shaderSources: string[];
+  /** Internal formats passed to texImage2D (the pass's colour targets). */
+  colorTargetFormats: number[];
 } {
+  const shaderSources: string[] = [];
+  const colorTargetFormats: number[] = [];
+  /** Stands in for the renderer's NEAREST/CLAMP raw-depth sampler sitting on a mask unit. */
+  const foreignSampler = {};
+  const samplerBinds: { unit: number; sampler: unknown }[] = [];
   const uniformCalls: Record<string, unknown> = {};
   const bindings = new Map<number, TextureBinding>();
   const texImage3DCalls: MaskUploadRecord[] = [];
@@ -111,7 +124,9 @@ function makeMaskGl(): {
     BLEND: 0x0be2,
     TRIANGLES: 0x0004,
     createShader: () => ({}),
-    shaderSource: () => {},
+    shaderSource: (_shader: unknown, src: string) => {
+      shaderSources.push(src);
+    },
     compileShader: () => {},
     getShaderParameter: () => true,
     createProgram: () => ({}),
@@ -139,7 +154,9 @@ function makeMaskGl(): {
       currentUnit = unit;
     },
     texParameteri: () => {},
-    texImage2D: () => {},
+    texImage2D: (_target: number, _level: number, internalFormat: number) => {
+      colorTargetFormats.push(internalFormat);
+    },
     texImage3D: (
       _target: number,
       _level: number,
@@ -168,6 +185,15 @@ function makeMaskGl(): {
     depthMask: () => {},
     useProgram: () => {},
     bindVertexArray: () => {},
+    getExtension: (name: string) =>
+      name === "EXT_color_buffer_float" && !hasFloatColorBuffer ? null : {},
+    SAMPLER_BINDING: 0x8919,
+    MAX_FRAGMENT_UNIFORM_VECTORS: 0x8dfd,
+    getParameter: (pname: number) =>
+      pname === 0x8919 ? foreignSampler : pname === 0x8dfd ? maxFragmentUniformVectors : null,
+    bindSampler: (unit: number, sampler: unknown) => {
+      samplerBinds.push({ unit, sampler });
+    },
     drawArrays: () => {},
     uniform1i: (loc: unknown, val: number) => {
       uniformCalls[String(loc)] = val;
@@ -196,6 +222,10 @@ function makeMaskGl(): {
     texImage3DCalls,
     createdTextures: () => createdTextures,
     deletedTextures: () => deletedTextures,
+    samplerBinds,
+    foreignSampler,
+    shaderSources,
+    colorTargetFormats,
   };
 }
 
@@ -246,6 +276,83 @@ describe("VolumetricFogPassGL density masks", () => {
     // Left at the GL default (0) they would alias `u_opaqueDepthMap` (sampler2D): INVALID_OPERATION.
     expect(mock.uniformCalls["u_elementMask"]).toBe(7);
     expect(mock.uniformCalls["u_fogVolumeMasks"]).toEqual([8, 9, 10, 11, 12, 13, 14, 15]);
+  });
+
+  it("detaches foreign sampler objects from the mask units for the raymarch draw and restores them", () => {
+    const mock = makeMaskGl();
+    const pass = new VolumetricFogPassGL(mock.gl2, true);
+    const element = new VolumetricFogElement();
+    element.enabled = true;
+
+    pass.execute(makeFogCtx(mock.gl2, element));
+
+    const detached = mock.samplerBinds.filter((b) => b.sampler === null).map((b) => b.unit);
+    const restored = mock.samplerBinds
+      .filter((b) => b.sampler === mock.foreignSampler)
+      .map((b) => b.unit);
+    // Units 7..15 (element mask + 8 volume slots), including the renderer's raw-depth unit 13.
+    expect(detached).toEqual([7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    expect(restored).toEqual([7, 8, 9, 10, 11, 12, 13, 14, 15]);
+  });
+
+  it("shrinks the item arrays and caps the steps on min-spec devices (224 uniform vectors)", () => {
+    const full = makeMaskGl(1024);
+    new VolumetricFogPassGL(full.gl2, true);
+    const fullFog = full.shaderSources.find((src) => src.includes("u_pointLightPos"))!;
+    expect(fullFog).toContain("u_pointLightPos[16]");
+
+    const low = makeMaskGl(224);
+    const pass = new VolumetricFogPassGL(low.gl2, true);
+    const lowFog = low.shaderSources.find((src) => src.includes("u_pointLightPos"))!;
+    expect(lowFog).toContain("u_pointLightPos[8]");
+    expect(lowFog).toContain("u_fogVolumes[8]");
+    expect(lowFog).not.toMatch(/\[16\]/);
+
+    const element = new VolumetricFogElement();
+    element.enabled = true;
+    element.samples = 32;
+    pass.execute(makeFogCtx(low.gl2, element));
+    expect(low.uniformCalls["u_samples"]).toBe(16);
+  });
+
+  it("uses VolumetricFogElement.samples as the step budget on capable devices", () => {
+    const mock = makeMaskGl(1024);
+    const pass = new VolumetricFogPassGL(mock.gl2, true);
+    const element = new VolumetricFogElement();
+    element.enabled = true;
+    element.samples = 12;
+    pass.execute(makeFogCtx(mock.gl2, element));
+    expect(mock.uniformCalls["u_samples"]).toBe(12);
+  });
+
+  it("allocates RGBA16F colour targets when float rendering is available", () => {
+    const mock = makeMaskGl(1024, true);
+    const element = new VolumetricFogElement();
+    element.enabled = true;
+    new VolumetricFogPassGL(mock.gl2, true).execute(makeFogCtx(mock.gl2, element));
+    // The pass's two fog targets (half-res march + full-res upsample) are the first allocations.
+    expect(mock.colorTargetFormats.slice(0, 2)).toEqual([0x881a, 0x881a]);
+  });
+
+  it("falls back to RGBA8 colour targets without EXT_color_buffer_float instead of failing the framebuffer", () => {
+    const mock = makeMaskGl(1024, false);
+    const element = new VolumetricFogElement();
+    element.enabled = true;
+    new VolumetricFogPassGL(mock.gl2, true).execute(makeFogCtx(mock.gl2, element));
+    expect(mock.colorTargetFormats.slice(0, 2)).toEqual([0x8058, 0x8058]);
+    expect(mock.colorTargetFormats).not.toContain(0x881a);
+  });
+
+  it("uploads VolumetricFogElement.jitter so 0 can switch the dither off", () => {
+    for (const jitter of [0, 0.25, 1]) {
+      const mock = makeMaskGl();
+      const pass = new VolumetricFogPassGL(mock.gl2, true);
+      const element = new VolumetricFogElement();
+      element.enabled = true;
+      element.jitter = jitter;
+      pass.execute(makeFogCtx(mock.gl2, element));
+      expect(mock.uniformCalls["u_jitter"]).toBe(jitter);
+    }
   });
 
   it("bakes the global albedo into the sun colour when no element mask is bound", () => {

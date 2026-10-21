@@ -36,10 +36,15 @@ function setup(): {
   const renderer: Internals = {
     extractLights: vi.fn(() => ({ sLights: [spotLight] })),
     gpuDevice: {
-      createTexture: vi.fn(() => ({ createView: vi.fn(() => ({})) })),
+      createTexture: vi.fn((desc: { size: number[] }) => ({
+        width: desc.size[0],
+        depthOrArrayLayers: desc.size[2] ?? 1,
+        createView: vi.fn(() => ({})),
+      })),
       queue: { writeBuffer: vi.fn() },
     },
     currentColorTargetFormat: "rgba8unorm",
+    deferDestroyTexture: vi.fn(),
     context: { shaderRegistry: new ShaderRegistry() },
     defaultDirShadowTextureView: {},
     dummyDirShadowTextureView: {},

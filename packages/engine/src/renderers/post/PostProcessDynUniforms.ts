@@ -16,7 +16,10 @@ export const POST_PROCESS_DYNUNIFORM_FLOATS = 52;
  * not exist. Two slots intentionally differ from the enabled-"default" of their element:
  * - `inverseGamma` is 1.0 (tone mapping absent = no gamma correction; an enabled element describes
  *   an actual curve).
- * - the light-shaft tint is white (absent = no tint; an enabled element ships a warm sunlight tint).
+ * Note: `shaftsColor` (slots 48..51) is currently NOT read by `PostProcess.frag.wgsl` -- the tint
+ * is applied in the raymarch (`LightShaftsPassGPU`, sunColor) and the composite is a plain add. The
+ * lane is kept as reserved layout space (the 13x vec4f struct is mirrored by tests/WGSL), written
+ * neutral here and by `LightShaftsElement.packUniforms`.
  */
 export function packPostProcessNeutralUniforms(out: Float32Array, offset: number): void {
   const o = offset;

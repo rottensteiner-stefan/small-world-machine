@@ -177,6 +177,29 @@ export class GPURenderTargetCache {
     return data.view;
   }
 
+  /**
+   * Frees the GPU textures of a render target that is no longer used (e.g. a removed planar
+   * reflection) and forgets it. Deferred through `destroyTexture` when given, because commands
+   * recorded earlier in the same frame may still reference the textures. A no-op for targets this
+   * cache never allocated.
+   */
+  public release(
+    target: RenderTarget | RenderTargetCube,
+    destroyTexture: (tex: GPUTexture) => void = (tex) => tex.destroy(),
+  ): void {
+    const data =
+      target instanceof RenderTargetCube
+        ? this._renderTargetCubeTextures.get(target)
+        : this._renderTargetTextures.get(target);
+    if (!data) return;
+    destroyTexture(data.tex);
+    if (data.depth) destroyTexture(data.depth);
+    if (target instanceof RenderTargetCube) this._renderTargetCubeTextures.delete(target);
+    else this._renderTargetTextures.delete(target);
+    this._textures.unregisterRenderTarget(target);
+    target.isLoaded = false;
+  }
+
   public dispose(): void {
     for (const data of this._renderTargetTextures.values()) {
       data.tex.destroy();

@@ -214,8 +214,10 @@ describe("Shadow passes' dummy color attachment tracks the active target's forma
 
   function makeMockShadowRenderer(colorTargetFormat: string): Internals {
     const device = {
-      createTexture: vi.fn((desc: { format: string }) => ({
+      createTexture: vi.fn((desc: { format: string; size: number[] }) => ({
         format: desc.format,
+        width: desc.size[0],
+        depthOrArrayLayers: desc.size[2] ?? 1,
         createView: vi.fn(() => ({})),
       })),
       queue: { writeBuffer: vi.fn() },
@@ -237,6 +239,7 @@ describe("Shadow passes' dummy color attachment tracks the active target's forma
       postProcessing: { enabled: true },
       gpuFormat: "bgra8unorm",
       currentColorTargetFormat: colorTargetFormat,
+      deferDestroyTexture: vi.fn(),
       context: { shaderRegistry: new ShaderRegistry() },
       shadowMaps: new Map(),
       defaultDirShadowTextureView: {},

@@ -38,6 +38,45 @@ describe("froxel fog geometry conventions", () => {
   });
 });
 
+describe("froxel fog cascade / range / grid conventions", () => {
+  it("integrate selects cascades by camera distance (like lighting_pbr.wgsl), not view depth", () => {
+    expect(integrateWGSL).toMatch(
+      /sampleCascadeShadow\(worldPos, length\(worldPos - uni\.camPos\.xyz\)\)/,
+    );
+    expect(integrateWGSL).not.toMatch(/sampleCascadeShadow\(worldPos, zMid\)/);
+    expect(integrateWGSL).toMatch(/viewDist < splits\[c\]/);
+  });
+
+  it("integrate blends into the next cascade over the last 10% like the surface shader", () => {
+    expect(integrateWGSL).toMatch(/max\(splitFar \* 0\.1, 0\.0001\)/);
+    expect(integrateWGSL).toMatch(
+      /mix\(shadow, sampleCascade\(worldPos, cascadeIndex \+ 1u\), blendToNext\)/,
+    );
+  });
+
+  it("integrate treats samples beyond the light's far plane as lit", () => {
+    expect(integrateWGSL).toMatch(/shadowCoord\.z > 1\.0/);
+  });
+
+  it("inject fades extinction smoothly towards maxDistance instead of cutting it", () => {
+    expect(injectWGSL).toMatch(/smoothstep\(froxel\.params\.w \* 0\.66, froxel\.params\.w, dist\)/);
+    expect(injectWGSL).not.toMatch(/if \(dist > froxel\.params\.w\)/);
+  });
+
+  it("inject honours the surface shader's point-light decay modes and linear cone ramp", () => {
+    expect(injectWGSL).toMatch(
+      /if \(light\.col\.w <= 0\.0\) \{\s*atten = clamp\(1\.0 - ratio, 0\.0, 1\.0\);/,
+    );
+    expect(injectWGSL).toMatch(/let cone = clamp\(\(theta - light\.params\.x\)/);
+    expect(injectWGSL).not.toMatch(/smoothstep\(light\.params\.x/);
+  });
+
+  it("inject sizes the froxel grid from the volume and maps cells onto cluster cells", () => {
+    expect(injectWGSL).toMatch(/textureDimensions\(volume\)/);
+    expect(injectWGSL).toMatch(/let cellIndex = clusterCellIndex\(gid, dims\);/);
+  });
+});
+
 describe("HZB conservativeness conventions", () => {
   it("the visibility test loads all four corner texels of the sphere's screen rect", () => {
     expect(hzbTestWGSL.match(/textureLoad\(hzbTex/g)).toHaveLength(4);
