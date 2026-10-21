@@ -235,6 +235,19 @@ describe("VolumetricFogPassGL density masks", () => {
     expect(info.every((v) => v === 0)).toBe(true);
   });
 
+  it("points the 3D mask samplers at units distinct from the 2D depth sampler even without any mask", () => {
+    const mock = makeMaskGl();
+    const pass = new VolumetricFogPassGL(mock.gl2, true);
+    const element = new VolumetricFogElement();
+    element.enabled = true;
+
+    pass.execute(makeFogCtx(mock.gl2, element));
+
+    // Left at the GL default (0) they would alias `u_opaqueDepthMap` (sampler2D): INVALID_OPERATION.
+    expect(mock.uniformCalls["u_elementMask"]).toBe(7);
+    expect(mock.uniformCalls["u_fogVolumeMasks"]).toEqual([8, 9, 10, 11, 12, 13, 14, 15]);
+  });
+
   it("bakes the global albedo into the sun colour when no element mask is bound", () => {
     const mock = makeMaskGl();
     const pass = new VolumetricFogPassGL(mock.gl2, true);

@@ -837,6 +837,16 @@ export class VolumetricFogPassGL {
       gl2.uniform1f(this._uElementMaskEnabledLoc, hasElementMask ? 1.0 : 0.0);
     }
 
+    // Always point the 3D mask samplers at their own units, even when no mask is bound: left at the
+    // default 0 they would share a unit with the sampler2D `u_opaqueDepthMap`, which makes the draw
+    // invalid (INVALID_OPERATION: different sampler types on one unit).
+    if (this._uElementMaskLoc) {
+      gl2.uniform1i(this._uElementMaskLoc, VolumetricFogPassGL._ELEMENT_MASK_UNIT);
+    }
+    if (this._uFogVolumeMasksLoc) {
+      gl2.uniform1iv(this._uFogVolumeMasksLoc, this._fogVolumeMaskUnits);
+    }
+
     const boundMaskCount =
       (hasElementMask ? 1 : 0) + Math.min(maskedCount, VolumetricFogPassGL._VOLUME_MASK_SLOTS);
     if (boundMaskCount === 0) {
@@ -851,13 +861,6 @@ export class VolumetricFogPassGL {
     for (let u = 0; u < 1 + VolumetricFogPassGL._VOLUME_MASK_SLOTS; u++) {
       gl2.activeTexture(gl2.TEXTURE0 + VolumetricFogPassGL._ELEMENT_MASK_UNIT + u);
       gl2.bindTexture(gl2.TEXTURE_3D, identity);
-    }
-
-    if (this._uElementMaskLoc) {
-      gl2.uniform1i(this._uElementMaskLoc, VolumetricFogPassGL._ELEMENT_MASK_UNIT);
-    }
-    if (this._uFogVolumeMasksLoc) {
-      gl2.uniform1iv(this._uFogVolumeMasksLoc, this._fogVolumeMaskUnits);
     }
 
     if (hasElementMask) {

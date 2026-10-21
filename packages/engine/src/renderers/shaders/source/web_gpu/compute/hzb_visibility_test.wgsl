@@ -6,9 +6,10 @@
 // `global.resolution`) is prepended before this file, same as cluster_cull.wgsl, giving
 // `@group(0)` for free -- this file only adds `@group(1)`, its own bindings.
 //
-// Conservative by design: tests a bounding SPHERE, not a tight AABB (`BoundingVolume` only
-// generically exposes `center`/`getBroadRadius()` across Box/Sphere/OBB), and treats anything it
-// can't confidently project (camera inside/behind the sphere) as visible. An occlusion test
+// Conservative by design: tests a bounding SPHERE (not a tight AABB) (`BoundingVolume` only
+// generically exposes `center`/`getBroadRadius()` across Box/Sphere/OBB) against its whole screen
+// rect (four corner texels of one mip), and treats anything it can't confidently project (camera
+// inside/behind the sphere, sphere reaching the near plane) as visible. An occlusion test
 // that's slightly too generous costs a few wasted draw calls next frame; one that's too
 // aggressive would make a real, visible object disappear.
 //
@@ -40,8 +41,10 @@ fn testVisibility(@builtin(global_invocation_id) id: vec3u) {
     let radius = aabbs[i].w;
 
     let clip = global.vp * vec4f(center, 1.0);
-    if (clip.w <= 0.0001) {
-        results[i] = 1u; // behind/at the camera -- can't project reliably, assume visible
+    // clip.w is the view-space depth of the centre. Behind/at the camera, or a sphere that reaches
+    // the near plane, cannot be projected reliably -- assume visible.
+    if (clip.w <= radius + 0.0001) {
+        results[i] = 1u;
         return;
     }
     let ndc = clip.xyz / clip.w;
@@ -60,26 +63,34 @@ fn testVisibility(@builtin(global_invocation_id) id: vec3u) {
         nearestWorld = center + (toCam / toCamLen) * min(radius, toCamLen);
     }
     let nearClip = global.vp * vec4f(nearestWorld, 1.0);
-    var nearDepth = ndc.z;
-    if (nearClip.w > 0.0001) {
-        nearDepth = nearClip.z / nearClip.w;
+    if (nearClip.w <= 0.0001) {
+        results[i] = 1u;
+        return;
     }
+    let nearDepth = nearClip.z / nearClip.w;
 
-    let viewDist = max(length(center - global.viewPos.xyz), 0.0001);
-    let ndcRadius = worldRadiusToNdcRadius(radius, viewDist);
-    let footprintPx = max(ndcRadius.x * global.resolution.x, ndcRadius.y * global.resolution.y);
+    // Screen-space rect of the sphere (projected by view depth = clip.w, not by Euclidean distance,
+    // which would shrink the footprint off-axis).
+    let ndcRadius = worldRadiusToNdcRadius(radius, clip.w);
+    let uvCenter = vec2f(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5)); // NDC Y-up -> texture V-down
+    let uvHalf = ndcRadius * 0.5;
+    let uvMin = clamp(uvCenter - uvHalf, vec2f(0.0), vec2f(1.0));
+    let uvMax = clamp(uvCenter + uvHalf, vec2f(0.0), vec2f(1.0));
+    let rectPx = (uvMax - uvMin) * global.resolution.xy;
+    let extentPx = max(max(rectPx.x, rectPx.y), 1.0);
 
-    // Mip where the footprint covers roughly one texel -- coarser (higher) mips hold the
-    // *farthest* depth over a wider area, which only ever makes the test MORE conservative.
-    var mip = 0u;
-    if (footprintPx > 1.0) {
-        mip = min(u32(ceil(log2(footprintPx))), params.mipCount - 1u);
-    }
-
+    // Mip whose texel is at least as large as the rect: the rect then touches at most 2x2 texels,
+    // and the four corner loads below cover all of them. Taking the max (farthest) depth of those
+    // texels is conservative -- it can only keep an object, never wrongly drop it.
+    let mip = min(u32(ceil(log2(extentPx))), params.mipCount - 1u);
     let mipDims = vec2f(textureDimensions(hzbTex, mip));
-    let uv = vec2f(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5)); // NDC Y-up -> texture V-down
-    let texel = vec2i(clamp(uv * mipDims, vec2f(0.0), mipDims - vec2f(1.0)));
-    let farthestInFootprint = textureLoad(hzbTex, texel, i32(mip)).r;
+    let lo = vec2i(clamp(uvMin * mipDims, vec2f(0.0), mipDims - vec2f(1.0)));
+    let hi = vec2i(clamp(uvMax * mipDims, vec2f(0.0), mipDims - vec2f(1.0)));
+    let d00 = textureLoad(hzbTex, vec2i(lo.x, lo.y), i32(mip)).r;
+    let d10 = textureLoad(hzbTex, vec2i(hi.x, lo.y), i32(mip)).r;
+    let d01 = textureLoad(hzbTex, vec2i(lo.x, hi.y), i32(mip)).r;
+    let d11 = textureLoad(hzbTex, vec2i(hi.x, hi.y), i32(mip)).r;
+    let farthestInFootprint = max(max(d00, d10), max(d01, d11));
 
     results[i] = select(0u, 1u, nearDepth <= farthestInFootprint);
 }

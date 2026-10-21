@@ -23,14 +23,19 @@ fn downsampleMax(@builtin(global_invocation_id) id: vec3u) {
     let srcDims = textureDimensions(srcMip, 0);
     let x0 = min(id.x * 2u, srcDims.x - 1u);
     let y0 = min(id.y * 2u, srcDims.y - 1u);
-    let x1 = min(x0 + 1u, srcDims.x - 1u);
-    let y1 = min(y0 + 1u, srcDims.y - 1u);
+    // Mip sizes are floor(size / 2): for an odd source size the last destination texel also owns
+    // the extra last source column/row. Dropping it would make the pyramid non-conservative there.
+    var x1 = min(x0 + 1u, srcDims.x - 1u);
+    var y1 = min(y0 + 1u, srcDims.y - 1u);
+    if (id.x == dstDims.x - 1u) { x1 = srcDims.x - 1u; }
+    if (id.y == dstDims.y - 1u) { y1 = srcDims.y - 1u; }
 
-    let d00 = textureLoad(srcMip, vec2i(i32(x0), i32(y0)), 0).r;
-    let d10 = textureLoad(srcMip, vec2i(i32(x1), i32(y0)), 0).r;
-    let d01 = textureLoad(srcMip, vec2i(i32(x0), i32(y1)), 0).r;
-    let d11 = textureLoad(srcMip, vec2i(i32(x1), i32(y1)), 0).r;
-    let farthest = max(max(d00, d10), max(d01, d11));
+    var farthest = 0.0;
+    for (var y = y0; y <= y1; y++) {
+        for (var x = x0; x <= x1; x++) {
+            farthest = max(farthest, textureLoad(srcMip, vec2i(i32(x), i32(y)), 0).r);
+        }
+    }
 
     textureStore(dstMip, vec2i(id.xy), vec4f(farthest, 0.0, 0.0, 0.0));
 }

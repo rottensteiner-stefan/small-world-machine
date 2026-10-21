@@ -156,6 +156,8 @@ export class VolumetricFogPassGPU implements PostEffectPass {
   private readonly _scratchInvView: Matrix4 = new Matrix4();
   private readonly _scratchInvViewProj: Matrix4 = new Matrix4();
   private readonly _scratchSunDir: Vector3D = new Vector3D();
+  private readonly _scratchCascadeVp: Matrix4 = new Matrix4();
+  private readonly _scratchCascadeVpZO: Matrix4 = new Matrix4();
   private _warnedVolumeLimit: boolean = false;
   private _warnedMaskCapacity: boolean = false;
 
@@ -842,7 +844,11 @@ export class VolumetricFogPassGPU implements PostEffectPass {
     for (let i = 0; i < numCascades; i++) {
       const cam = dirLight!.cascadeCameras[i];
       if (cam) {
-        intg.set(cam.viewProjectionMatrix, 44 + i * 16);
+        // The shadow map was rendered with the zero-to-one corrected matrix (see
+        // CascadedShadowPassGPU); sampling with the raw one compares z in [-1, 1] against [0, 1].
+        this._scratchCascadeVp.data.set(cam.viewProjectionMatrix);
+        Matrix4.multiply(Matrix4.ZO_CORRECTION, this._scratchCascadeVp, this._scratchCascadeVpZO);
+        intg.set(this._scratchCascadeVpZO.data, 44 + i * 16);
       }
     }
 

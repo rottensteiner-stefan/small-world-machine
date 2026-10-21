@@ -133,7 +133,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
         let bounds = sliceBounds(f32(z), near, far, slices);
         let zMid = sliceDepth(f32(z), near, far, slices);
-        let stepLen = max(bounds.y - bounds.x, 1e-5);
+        let slabThickness = max(bounds.y - bounds.x, 1e-5);
 
         if (zMid > maxDist) {
             // Beyond maximum distance: keep current accumulated values.
@@ -147,6 +147,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         let worldH = uni.invViewProj * clipPos;
         let worldPos = worldH.xyz / max(worldH.w, 1e-6);
         let viewDir = normalize(worldPos - uni.camPos.xyz);
+        // Slices are slabs of view-space depth; the ray crosses a slab off-axis over
+        // slabThickness / cos(theta) = slabThickness * rayDistance / viewDepth.
+        let stepLen = slabThickness * max(length(worldPos - uni.camPos.xyz) / max(zMid, 1e-6), 1.0);
 
         // Directional sun in-scattering: sigma_s * L, with sigma_s == extinction (same convention
         // as the local lights in froxel_inject.wgsl), so the sun scales with density.
@@ -157,7 +160,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
             // identity placeholder keeps an absent mask at a factor of exactly 1.0.
             let maskUVW = clamp((worldPos - uni.elementMaskPosition.xyz) / (2.0 * uni.elementMaskSize.xyz) + 0.5, vec3f(0.0), vec3f(1.0));
             let maskAlbedo = textureSampleLevel(globalDensityMask, globalMaskSampler, maskUVW, 0.0).g;
-            let cosTheta = dot(-viewDir, sunDir);
+            // sunDir points TO the sun, viewDir camera -> point: forward scattering is dot = +1
+            // (same convention as the local lights in froxel_inject.wgsl).
+            let cosTheta = dot(viewDir, sunDir);
             let phase = hgPhase(cosTheta, asymmetry);
             let shadow = sampleCascadeShadow(worldPos, zMid);
             sunScatter = sunColor * (shadow * phase * extinction) * maskAlbedo;

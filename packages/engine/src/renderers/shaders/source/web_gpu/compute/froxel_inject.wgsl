@@ -165,14 +165,15 @@ fn cellWorldPos(cell: vec3f, dims: vec3f, camPos: vec3f) -> vec3f {
     // Flip Y: cluster grid Y grows downward (screen space), world Y grows upward.
     let ndcY = 1.0 - ((cell.y + 0.5 + froxel.jitter.y) / dims.y * 2.0);
     let viewZ = sliceCenterDepth(cell.z + froxel.jitter.z, froxel.nearFar.x, froxel.nearFar.y, froxel.nearFar.z);
-    var viewDir = vec3f(
+    // Unnormalised (z = -1): scaling by the slice's view-space depth puts the cell centre ON that
+    // depth slice (the cluster grid and the integration pass both slice by view depth).
+    let viewPos = vec3f(
         ndcX / global.projScale.x,
         ndcY / global.projScale.y,
         -1.0,
-    );
-    viewDir = normalize(viewDir);
-    let worldDir = (froxel.invView * vec4f(viewDir, 0.0)).xyz;
-    return camPos + worldDir * viewZ;
+    ) * viewZ;
+    let worldDir = (froxel.invView * vec4f(viewPos, 0.0)).xyz;
+    return camPos + worldDir;
 }
 
 @compute @workgroup_size(4, 4, 1)
