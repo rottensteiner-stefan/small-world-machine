@@ -51,6 +51,6 @@ None of this is pre-loaded — open the relevant file when the task touches that
 - `docs/guides/` (start at `docs/guides/index.md`): Per-subsystem deep-dive guides (materials, physics, tools, coordinate system, etc.). Read the guide for the subsystem you're touching.
 - `docs/research/` (start at `docs/research/index.md`): Point-in-time research/audit reports — historical context, not living standards.
 - `.agents/notes/backlog.md`: Living, append-only chronological project journal (ideas/open items/decisions, status legend 💡📋🔜✅❌). Worth a glance at the newest entries at session start.
-- `.agents/notes/asset-sourcing-guideline.md`: Living doctrine for asset/texture sourcing (CC0 sources, Tripo3D, small-batch rule).
+- `docs/guides/asset-pipeline.md`: Official guide for asset/texture sourcing, 4-tier polycount budgets, and modular environments.
 - `.agents/notes/app-docs-convention.md`: Living convention that every app under `apps/<app>/docs/` has `concept-dossier.html` + `log.md`.
 - `.agents/notes/reference/`: Standalone HTML deep-dive explainers, linked to from the specific guide/skill that needs them (e.g. 2.5D basics from `docs/guides/2-5d-scenes.md`, leg-occlusion from the `character-pipeline` skill) rather than indexed on their own.
