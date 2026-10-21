@@ -13,8 +13,8 @@ varying vec2 v_uv;
 uniform vec4 u_color;
 uniform vec4 u_specColor;
 uniform float u_shininess;
-uniform vec4 u_extraParams;
-uniform vec4 u_liquidParams;
+uniform vec4 u_matParam0;
+uniform vec4 u_matParam1;
 uniform vec4 u_styleA;
 uniform float u_metallic;
 uniform float u_roughness;
@@ -69,15 +69,15 @@ vec3 mr_voronoiFacets(vec2 uv, float scale) {
 }
 
 void main() {
-    float paletteKnifeStrength = u_extraParams.x;
-    float paletteKnifeScale    = u_extraParams.y;
-    float scratchIntensity      = u_extraParams.z;
-    float scratchScale          = u_extraParams.w;
+    float paletteKnifeStrength = u_matParam0.x;
+    float paletteKnifeScale    = u_matParam0.y;
+    float scratchIntensity      = u_matParam0.z;
+    float scratchScale          = u_matParam0.w;
 
-    float edgeBevelStrength    = u_liquidParams.x;
-    float wireMeshStrength     = u_liquidParams.y;
-    float wireMeshScale        = u_liquidParams.z;
-    float wetRainStreaks       = u_liquidParams.w;
+    float edgeBevelStrength    = u_matParam1.x;
+    float wireMeshStrength     = u_matParam1.y;
+    float wireMeshScale        = u_matParam1.z;
+    float wetRainStreaks       = u_matParam1.w;
 
     float targetHue            = u_styleA.x;
     float hueTolerance         = u_styleA.y;

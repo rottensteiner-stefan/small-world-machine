@@ -2,7 +2,8 @@
 [FOG_DEFS]
 [LIGHT_DEFS]
 
-uniform vec4 u_liquidParams;
+uniform vec4 u_matParam0; // semantic lane 0: relief / palette-knife / scratch parameters
+uniform vec4 u_matParam1; // semantic lane 1: edge / wire-mesh / rain parameters
 uniform vec4 u_styleA;
 uniform float u_metallic;
 uniform float u_roughness;
@@ -59,15 +60,15 @@ vec3 mr_voronoiFacets(vec2 uv, float scale) {
 
 void main() {
     // --- Unpack Parameters ---
-    float paletteKnifeStrength = u_extraParams.x; // default: 0.6
-    float paletteKnifeScale    = u_extraParams.y; // default: 12.0
-    float scratchIntensity      = u_extraParams.z; // default: 0.35
-    float scratchScale          = u_extraParams.w; // default: 80.0
+    float paletteKnifeStrength = u_matParam0.x; // default: 0.6
+    float paletteKnifeScale    = u_matParam0.y; // default: 12.0
+    float scratchIntensity      = u_matParam0.z; // default: 0.35
+    float scratchScale          = u_matParam0.w; // default: 80.0
 
-    float edgeBevelStrength    = u_liquidParams.x; // default: 0.8
-    float wireMeshStrength     = u_liquidParams.y; // default: 0.0
-    float wireMeshScale        = u_liquidParams.z; // default: 40.0
-    float wetRainStreaks       = u_liquidParams.w; // default: 0.4
+    float edgeBevelStrength    = u_matParam1.x; // default: 0.8
+    float wireMeshStrength     = u_matParam1.y; // default: 0.0
+    float wireMeshScale        = u_matParam1.z; // default: 40.0
+    float wetRainStreaks       = u_matParam1.w; // default: 0.4
 
     float targetHue            = u_styleA.x; // default: 0.0 (Red)
     float hueTolerance         = u_styleA.y; // default: 0.09

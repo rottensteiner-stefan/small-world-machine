@@ -91,6 +91,10 @@ export class MetalReliefScreenMaterial extends AbstractMaterial {
       this._renderManifest = this._createBaseManifest();
       this._renderManifest.properties["u_specColor"] = new Float32Array([1.0, 1.0, 1.0, 1.0]);
       this._renderManifest.properties["u_styleA"] = [0.0, 0.0, 0.0, 0.0];
+      // Own semantic lanes (ADR 0039). `u_extraParams[1]` is the engine's alpha-test cutoff and
+      // `[2..3]` its normal scale: reusing them made the depth/shadow passes discard the surface.
+      this._renderManifest.properties["u_matParam0"] = [0.0, 0.0, 0.0, 0.0];
+      this._renderManifest.properties["u_matParam1"] = [0.0, 0.0, 0.0, 0.0];
       this._renderManifest.properties["u_styleB"] = [-1.0, 0.0, 0.0, 0.0];
       this._renderManifest.textures["u_diffuseMap"] = this.diffuseMap;
     }
@@ -105,13 +109,13 @@ export class MetalReliefScreenMaterial extends AbstractMaterial {
 
     props["u_time"] = this.time;
 
-    const extra = props["u_extraParams"] as number[];
+    const extra = props["u_matParam0"] as number[];
     extra[0] = this.reliefStrength;
     extra[1] = this.paletteKnifeStrength;
     extra[2] = this.paletteKnifeScale;
     extra[3] = this.scratchIntensity;
 
-    const liquid = props["u_liquidParams"] as number[];
+    const liquid = props["u_matParam1"] as number[];
     liquid[0] = this.scratchScale;
     liquid[1] = this.edgeGlintStrength;
     liquid[2] = this.wetRainStreaks;

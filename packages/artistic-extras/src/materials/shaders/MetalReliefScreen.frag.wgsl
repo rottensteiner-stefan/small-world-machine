@@ -51,15 +51,15 @@ fn mrs_voronoiFacets(uv: vec2f, scale: f32) -> vec3f {
 }
 
 @fragment fn fs(i: Out) -> @location(0) vec4f {
-    let reliefStrength       = obj.extraParams.x;
-    let paletteKnifeStrength = obj.extraParams.y;
-    let paletteKnifeScale    = obj.extraParams.z;
-    let scratchIntensity     = obj.extraParams.w;
+    let reliefStrength       = obj.matParam0.x;
+    let paletteKnifeStrength = obj.matParam0.y;
+    let paletteKnifeScale    = obj.matParam0.z;
+    let scratchIntensity     = obj.matParam0.w;
 
-    let scratchScale         = obj.liquidParams.x;
-    let edgeGlintStrength    = obj.liquidParams.y;
-    let wetRainStreaks       = obj.liquidParams.z;
-    let wireMeshStrength     = obj.liquidParams.w;
+    let scratchScale         = obj.matParam1.x;
+    let edgeGlintStrength    = obj.matParam1.y;
+    let wetRainStreaks       = obj.matParam1.z;
+    let wireMeshStrength     = obj.matParam1.w;
 
     let targetHue            = obj.styleA.x;
     let hueTolerance         = obj.styleA.y;

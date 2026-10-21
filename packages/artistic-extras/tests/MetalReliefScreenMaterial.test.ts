@@ -42,13 +42,18 @@ describe("MetalReliefScreenMaterial", () => {
     const manifest = mat.getRenderManifest();
     expect(manifest.shaderId).toBe("MetalReliefScreenMaterial");
 
-    const extra = manifest.properties["u_extraParams"] as number[];
+    // The engine owns u_extraParams (ao / alpha-test cutoff / normal scale): the material must
+    // leave it at its defaults, otherwise the depth and shadow passes discard the surface.
+    const engineExtra = manifest.properties["u_extraParams"] as number[] | undefined;
+    expect(engineExtra?.[1] ?? 0).toBe(0);
+
+    const extra = manifest.properties["u_matParam0"] as number[];
     expect(extra[0]).toBe(2.2);
     expect(extra[1]).toBe(0.9);
     expect(extra[2]).toBe(30.0);
     expect(extra[3]).toBe(0.7);
 
-    const liquid = manifest.properties["u_liquidParams"] as number[];
+    const liquid = manifest.properties["u_matParam1"] as number[];
     expect(liquid[0]).toBe(150.0);
     expect(liquid[1]).toBe(1.8);
     expect(liquid[2]).toBe(0.85);
