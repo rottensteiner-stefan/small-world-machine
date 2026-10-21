@@ -55,6 +55,7 @@ const config: GridLevelConfig = {
     },
     "P": {
       type: "custom",
+      isSpawn: true, // the first tile with isSpawn is reported as the spawn by build()
       onBuild: (x, y, worldX, worldZ) => {
         this.camera.position.set(worldX, 1.0, worldZ);
         return undefined; // We add no object, we just move the camera
@@ -66,6 +67,6 @@ const config: GridLevelConfig = {
 // Define the map as a single, newline-separated string
 const myMap = ["#######", "#P    #", "#######"].join("\n");
 
-// Build the map (async — resolves to a `Vector3D`; currently always the origin, the "P" spawn is not yet reported)
+// Build the map (async — resolves to the world position of the first `isSpawn` tile, or the map center (the origin) if there is none)
 await builder.build(this.scene, myMap, config);
 ```

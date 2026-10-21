@@ -30,6 +30,8 @@ export interface GridLegendEntry {
   preventFloorCeiling?: boolean;
   /** Optional generic identification tag applied to the built floor object (e.g. for gameplay hazard checks) */
   tag?: string;
+  /** If true, the first tile with this entry (row-major) defines the player spawn returned by `build()` */
+  isSpawn?: boolean;
 }
 
 export type GridLegend = Record<string, GridLegendEntry>;
@@ -58,7 +60,7 @@ export class GridLevelBuilder {
    * @param scene The scene to add objects to.
    * @param mapData The raw ASCII string map.
    * @param config The configuration and legend for mapping characters to 3D.
-   * @returns The world position of the first found "player" spawn or center of map.
+   * @returns The world position (y = 0) of the first tile whose legend entry has `isSpawn`, or the map center (the origin) if none does.
    */
   public async build(scene: Scene, mapData: string, config: GridLevelConfig): Promise<Vector3D> {
     const lines = mapData
@@ -93,6 +95,7 @@ export class GridLevelBuilder {
         : null);
 
     const playerStart = new Vector3D(0, 0, 0);
+    let spawnFound = false;
 
     for (let y = 0; y < depth; y++) {
       const line = lines[y];
@@ -106,6 +109,11 @@ export class GridLevelBuilder {
         const worldZ = y * gridSize - offsetZ + gridSize / 2;
 
         const entry = config.legend[char];
+
+        if (entry?.isSpawn && !spawnFound) {
+          playerStart.set(worldX, 0, worldZ);
+          spawnFound = true;
+        }
 
         // Custom builder has full override
         if (entry?.type === "custom" && entry.onBuild) {

@@ -167,11 +167,11 @@ export const CollisionLayers = {
 } as const;
 ```
 
-> **Hinweis:** Die Engine exportiert kein solches `CollisionLayers`-Objekt — die konkrete
-> Layer-Vereinbarung gehört ins eigene Projekt (im Beispiel oben zum Kopieren als `as const`).
-> Die zugrunde liegenden Primitive existieren in der Engine: `Object3D.collisionLayer`
-> (Default `1`) und `Object3D.collisionMask` (Default `0xFFFFFFFF`); Kollision findet nur statt,
-> wenn beide Filtermasken überlappen (siehe Formel oben).
+> **Note:** The engine does not export a `CollisionLayers` object like this — the concrete
+> layer convention belongs in your own project (copy the `as const` example above).
+> The underlying primitives do exist in the engine: `Object3D.collisionLayer`
+> (default `1`) and `Object3D.collisionMask` (default `0xFFFFFFFF`); a collision only happens
+> if both filter masks overlap (see the formula above).
 
 ### Configuration example
 
