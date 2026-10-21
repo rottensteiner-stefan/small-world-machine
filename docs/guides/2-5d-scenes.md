@@ -2,7 +2,7 @@
 
 2.5D is not a special rendering mode — it's a family of old, well-proven tricks for faking depth cheaply. This guide walks end-to-end through building a 2.5D scene with Small World Machine: matching a background image to a camera, defining where a character is allowed to walk, choosing the right camera strategy, scenes with more than one vanishing point, and a handful of real bugs this engine's own reference game ("The Whisper") ran into along the way.
 
-> **Related:** The basic mechanics of background planes — UVs, `flipY`, aspect ratio — are covered in [2.5D Backgrounds & Texture Orientation](/guides/coordinate-system#_2-5d-backgrounds-texture-orientation) in the coordinate system guide. This guide builds on that with perspective matching, movement zones, and camera-strategy trade-offs. For every class and option mentioned below, see the **[API reference](/api/index.html)**. For an illustrated fundamentals explainer ("how 2.5D works"), see `.agents/notes/reference/2-5d-grundlagen.html` in the repo.
+> **Related:** The basic mechanics of background planes — UVs, `flipY`, aspect ratio — are covered in [2.5D Backgrounds & Texture Orientation](/guides/coordinate-system#_2-5d-backgrounds-texture-orientation) in the coordinate system guide. This guide builds on that with perspective matching, movement zones, and camera-strategy trade-offs. For every class and option mentioned below, see the **[API reference](/api/index.html)**. For an illustrated fundamentals explainer ("how 2.5D works"), see `docs/reference/2-5d-grundlagen.html` in the repo.
 
 ## 1. What "2.5D" actually means
 

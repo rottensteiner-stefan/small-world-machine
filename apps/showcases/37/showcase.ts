@@ -134,6 +134,12 @@ class Showcase37 extends AbstractShowcase {
     });
     this.camera.addBehavior(flyCtrl);
 
+    // Custom warm IBL: baked from a procedural "dark warm room at night" equirectangular panorama
+    // (generator: .agents/scratches/gen-warm-ibl.mjs, baker: scripts/ibl-bake.ts --linear). Low
+    // intensity on purpose -- it must only add a faint indirect warm fill and believable warm
+    // reflection hints on the brass/wood, never wash out the candle-lit mood.
+    await this.loadIbl("./assets/ibl/", 0.4);
+
     // ------------------------------------------------------------------------
     // 3. Load PBR Textures
     // ------------------------------------------------------------------------
@@ -310,10 +316,13 @@ class Showcase37 extends AbstractShowcase {
       roughness: 0.75,
     });
 
+    // Floor lamp shade -- warmed & damped from harsh magenta (0.98,0.35,0.55) to a dusty blush/
+    // terracotta so the accent stays visible but stops fighting the warm palette (user decision:
+    // "wärmer/gedämpfter").
     const floorLampShadeMat = new StandardMaterial({
-      color: new Color(0.98, 0.35, 0.55),
-      emissiveColor: new Color(1.0, 0.3, 0.55),
-      emissiveIntensity: 1.0,
+      color: new Color(0.86, 0.52, 0.46),
+      emissiveColor: new Color(0.95, 0.62, 0.5),
+      emissiveIntensity: 0.7,
       metallic: 0.0,
       roughness: 0.4,
     });
@@ -375,7 +384,10 @@ class Showcase37 extends AbstractShowcase {
     pendantLight.position.set(0.05, 1.95, -0.2);
     pendantLight.castShadow = true;
     pendantLight.shadowBias = 0.002;
-    pendantLight.shadowResolution = 1024;
+    // 2048 instead of 1024: reduces the blocky stair-step aliasing on the sofa/stair shadows. The
+    // engine's shadow filter is a contact-hardening 3x3 PCF (no cinematic soft-shadow blur), so
+    // the highest impact is map resolution for cleaner edges.
+    pendantLight.shadowResolution = 2048;
     this._pendantLight = pendantLight;
     this.scene.add(pendantLight);
 
@@ -394,9 +406,11 @@ class Showcase37 extends AbstractShowcase {
     this.scene.add(pendantUpLight);
 
     // Floor Lamp Accent Light (Warm Pink Accent behind sofa, Consensus 1 & 21)
+    // Floor lamp accent light -- warmed (rose instead of magenta) and damped (0.28) so its wall
+    // wash reads as a soft cozy accent, not a clashing magenta splash (user decision).
     const floorLampLight = new PointLight({
-      color: new Color(1.0, 0.45, 0.65),
-      intensity: 0.45,
+      color: new Color(1.0, 0.6, 0.5),
+      intensity: 0.28,
       distance: 2.4,
       decay: 2.0,
     });
@@ -1129,7 +1143,7 @@ class Showcase37 extends AbstractShowcase {
     }
     // Floor lamp: faint mains hum.
     if (this._floorLampLight) {
-      this._floorLampLight.intensity = 0.45 * this._flicker(t, 3.2, 0.05, 11.8);
+      this._floorLampLight.intensity = 0.28 * this._flicker(t, 3.2, 0.05, 11.8);
     }
     // Pendant bulb: near-imperceptible instability so the hero light never feels synthetic.
     if (this._pendantLight) {

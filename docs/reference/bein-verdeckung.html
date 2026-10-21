@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warum das Bein verschwindet</title>
+<link rel="stylesheet" href="../../public/assets/fonts.css">
+<style>
+  :root {
+    --bg: #f2ede1;
+    --surface: #e8ddc7;
+    --surface-2: #ddd0b3;
+    --ink: #2b2419;
+    --ink-dim: #6b5f47;
+    --line: #b5a685;
+    --visible: #3f7a4a;
+    --visible-soft: #cfe0c9;
+    --hidden: #b8531f;
+    --hidden-soft: #f0d3bd;
+    --accent: #b8531f;
+    font-family: "Rajdhani", sans-serif;
+  }
+
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #17140d;
+      --surface: #211c13;
+      --surface-2: #2c2519;
+      --ink: #ede4d0;
+      --ink-dim: #a4967a;
+      --line: #4d4430;
+      --visible: #7dbf72;
+      --visible-soft: #23301f;
+      --hidden: #e08a3c;
+      --hidden-soft: #3a2716;
+      --accent: #e08a3c;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #17140d;
+    --surface: #211c13;
+    --surface-2: #2c2519;
+    --ink: #ede4d0;
+    --ink-dim: #a4967a;
+    --line: #4d4430;
+    --visible: #7dbf72;
+    --visible-soft: #23301f;
+    --hidden: #e08a3c;
+    --hidden-soft: #3a2716;
+    --accent: #e08a3c;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    margin: 0;
+    padding: 48px 20px 80px;
+    line-height: 1.6;
+  }
+
+  main {
+    max-width: 740px;
+    margin: 0 auto;
+  }
+
+  .eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--hidden);
+    margin: 0 0 10px;
+  }
+
+  h1 {
+    font-family: "Rajdhani", sans-serif;
+    font-weight: 700;
+    font-size: clamp(28px, 4.5vw, 40px);
+    line-height: 1.12;
+    margin: 0 0 20px;
+    text-wrap: balance;
+    max-width: 16ch;
+  }
+
+  p {
+    max-width: 65ch;
+    margin: 0 0 16px;
+    font-size: 17px;
+    color: var(--ink);
+  }
+
+  p.lede {
+    font-size: 19px;
+    color: var(--ink-dim);
+  }
+
+  strong { color: var(--ink); font-weight: 600; }
+
+  .diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 28px 28px 24px;
+    margin: 40px 0 32px;
+  }
+
+  .diagram-card h2 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 18px;
+    font-weight: 500;
+  }
+
+  .stage {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  svg#topdown {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 18px 0 6px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+  }
+
+  .controls input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+
+  .angle-readout {
+    font-variant-numeric: tabular-nums;
+    min-width: 5ch;
+    text-align: right;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .hint {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    margin-top: 6px;
+  }
+
+  .view-strip {
+    margin-top: 22px;
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+  }
+
+  .view-strip h3 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+
+  svg#camview {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: var(--surface-2);
+    border-radius: 2px;
+  }
+
+  .status-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-top: 12px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 10px 3px 8px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .status-badge .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .status-badge.visible-state {
+    background: var(--visible-soft);
+    color: var(--visible);
+  }
+  .status-badge.visible-state .dot { background: var(--visible); }
+
+  .status-badge.hidden-state {
+    background: var(--hidden-soft);
+    color: var(--hidden);
+  }
+  .status-badge.hidden-state .dot { background: var(--hidden); }
+
+  .sep-value {
+    color: var(--ink-dim);
+  }
+
+  .legend {
+    display: flex;
+    gap: 22px;
+    margin-top: 16px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+    color: var(--ink-dim);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 2px; }
+
+  .note {
+    background: var(--surface);
+    border-left: 3px solid var(--accent);
+    padding: 14px 18px;
+    margin: 28px 0;
+    font-size: 15px;
+    color: var(--ink-dim);
+    border-radius: 0 3px 3px 0;
+  }
+  .note strong { color: var(--ink); }
+
+  footer {
+    margin-top: 40px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+  }
+</style>
+</head>
+<body>
+
+
+<main>
+  <p class="eyebrow">The Whisper &mdash; Flakturm-Tunnel &amp; Diorama</p>
+  <h1>Warum das Bein verschwindet</h1>
+  <p class="lede">Kein Grafikfehler, kein kaputtes Modell &mdash; reine Perspektive. Dreh die Figur unten selbst und sieh zu, wie sich der Abstand der beiden Beine auf dem Bildschirm verändert, obwohl sich in Wirklichkeit gar nichts an der Figur ändert.</p>
+
+  <p>Stell dir zwei Zaunpfähle in einer Reihe vor. Gehst du seitlich daran vorbei, siehst du beide klar getrennt. Stellst du dich aber genau an das eine Ende der Reihe und schaust entlang, verschwindet der hintere Pfahl fast komplett hinter dem vorderen &mdash; nicht weil er weg ist, sondern weil deine Blicklinie und die Reihe der Pfähle genau zusammenfallen.</p>
+  <p>Bei der Spielfigur passiert dasselbe mit den beiden Füßen. Sie stehen nicht exakt nebeneinander, sondern leicht versetzt &mdash; ein Fuß ein kleines Stück weiter vorne als der andere. Dreht sich die Figur, dreht sich diese gedachte Linie zwischen den Füßen mit. Genau dann, wenn diese Linie zufällig auf die Kamera zeigt, verschwindet ein Fuß fast vollständig hinter dem anderen.</p>
+
+  <div class="diagram-card">
+    <h2>Draufsicht &mdash; Figur, Kamera, kritischer Bereich</h2>
+    <div class="stage">
+      <svg id="topdown" viewBox="0 0 680 380" role="img" aria-label="Draufsicht: eine feste Kamera oben blickt entlang der Welt-Z-Achse auf eine drehbare Figur; ein farbiger Ring um die Figur zeigt, bei welchen Drehwinkeln sich die Füße auf dem Bildschirm überdecken.">
+        <defs>
+          <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <!-- camera frustum: a filled wedge from the fixed camera down to the figure, plus a
+             labeled centerline showing the actual view direction (world -Z). -->
+        <path d="M 340 46 L 246 230 L 434 230 Z" fill="currentColor" opacity="0.05"/>
+        <line x1="340" y1="46" x2="340" y2="230" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 5"/>
+        <line x1="340" y1="46" x2="246" y2="228" stroke="var(--line)" stroke-width="1" opacity="0.5"/>
+        <line x1="340" y1="46" x2="434" y2="228" stroke="var(--line)" stroke-width="1" opacity="0.5"/>
+        <text x="352" y="140" font-family="JetBrains Mono, monospace" font-size="10.5" fill="var(--ink-dim)" letter-spacing="0.03em">Blickrichtung: &minus;Z</text>
+
+        <g transform="translate(340,32)">
+          <path d="M -16 14 L 0 -10 L 16 14 Z" fill="currentColor" opacity="0.55"/>
+          <rect x="-3" y="10" width="6" height="10" fill="currentColor" opacity="0.55"/>
+        </g>
+        <text x="340" y="18" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="var(--ink-dim)" letter-spacing="0.05em">KAMERA &mdash; FIX, DREHT NIE</text>
+
+        <!-- heat ring: wedges injected by script -->
+        <g id="heatring" transform="translate(340,240)"></g>
+
+        <!-- character token: rotated by script; 0deg = rotation.y = 0 = blickt zur Kamera -->
+        <g id="figure" transform="translate(340,240)">
+          <circle r="15" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+          <circle id="footBack" cx="0" cy="0" r="5" fill="var(--hidden)"/>
+          <circle id="footFront" cx="0" cy="0" r="5" fill="var(--visible)"/>
+          <path id="facingArrow" d="M 0 0 L 0 -30" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        </g>
+
+        <text x="340" y="270" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--ink-dim)">FIGUR &mdash; Pfeil = rotation.y</text>
+
+        <!-- world-axis gizmo: how this top-down drawing maps onto the engine's real X/Y/Z axes. -->
+        <g transform="translate(56,332)">
+          <line x1="0" y1="0" x2="34" y2="0" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <text x="42" y="4" font-family="JetBrains Mono, monospace" font-size="11" fill="var(--ink-dim)">+X</text>
+          <line x1="0" y1="0" x2="0" y2="34" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <text x="-5" y="48" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="var(--ink-dim)">&minus;Z</text>
+          <circle r="2.4" fill="currentColor"/>
+          <text x="10" y="-8" font-family="JetBrains Mono, monospace" font-size="9.5" fill="var(--ink-dim)" opacity="0.75">+Y zeigt aus dem Blatt</text>
+        </g>
+      </svg>
+      <div class="controls">
+        <label for="angle" style="color:var(--ink-dim);">DREHUNG</label>
+        <input type="range" id="angle" min="0" max="359" value="180" step="1">
+        <span class="angle-readout"><span id="angleVal">180</span>&deg;</span>
+      </div>
+      <p class="hint">Der Ring zeigt für jeden Drehwinkel, wie nah die beiden Füße auf dem Bildschirm zusammenrücken &mdash; <span style="color:var(--hidden)">warm</span> heißt: rückt zusammen / verdeckt sich, <span style="color:var(--visible)">grün</span> heißt: deutlich getrennt.</p>
+    </div>
+
+    <div class="view-strip">
+      <h3>Was die Kamera bei diesem Winkel sieht</h3>
+      <svg id="camview" viewBox="0 0 680 140" role="img" aria-label="Vereinfachte Kameransicht: zwei Punkte für die beiden Füße, deren Abstand zueinander sich je nach Drehwinkel der Figur ändert.">
+        <line id="groundline" x1="0" y1="112" x2="680" y2="112" stroke="var(--line)" stroke-width="1"/>
+        <circle id="dotBack" cx="340" cy="80" r="9" fill="var(--hidden)"/>
+        <circle id="dotFront" cx="340" cy="80" r="9" fill="var(--visible)"/>
+        <text x="340" y="128" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--ink-dim)">Bildmitte</text>
+      </svg>
+      <div class="status-line">
+        <span id="statusBadge" class="status-badge visible-state"><span class="dot"></span><span id="statusText">Beide Beine getrennt sichtbar</span></span>
+        <span class="sep-value">Bildschirm-Abstand: <span id="sepVal">&mdash;</span></span>
+      </div>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--visible)"></span>vorderer Fuß</span>
+        <span><span class="swatch" style="background:var(--hidden)"></span>hinterer Fuß</span>
+      </div>
+    </div>
+  </div>
+
+  <p>Im Spiel betrifft das nicht nur die Füße &mdash; jedes Detail, das am Körper leicht versetzt sitzt (eine Hand, eine Mantelfalte, der Griff der Laterne), kann sich bei genau diesem einen Winkel kurz mit einem anderen Körperteil überdecken. Die Füße fallen nur am meisten auf, weil sie am weitesten auseinanderstehen.</p>
+
+  <div class="note">
+    <strong>Warum der Fix nicht &bdquo;das Bein reparieren&ldquo; war:</strong> Es gibt an der Figur nichts kaputtes zu reparieren &mdash; das Skelett ist korrekt. Der Fix im Flakturm-Tunnel dreht stattdessen die Start-Blickrichtung der Figur um 8° aus genau dieser kritischen Linie heraus, damit sie beim Szenenstart nicht mehr exakt draufsteht.
+  </div>
+
+  <footer>Vereinfachtes Modell zur Veranschaulichung &mdash; die genauen Zahlen der echten Spielfigur weichen leicht ab, das Prinzip ist identisch.</footer>
+</main>
+
+<script>
+(function () {
+  var svgNS = "http://www.w3.org/2000/svg";
+  var ring = document.getElementById("heatring");
+  var figure = document.getElementById("figure");
+  var footBack = document.getElementById("footBack");
+  var footFront = document.getElementById("footFront");
+  var facingArrow = document.getElementById("facingArrow");
+  var dotBack = document.getElementById("dotBack");
+  var dotFront = document.getElementById("dotFront");
+  var statusBadge = document.getElementById("statusBadge");
+  var statusText = document.getElementById("statusText");
+  var sepVal = document.getElementById("sepVal");
+  var angleInput = document.getElementById("angle");
+  var angleVal = document.getElementById("angleVal");
+
+  // Simplified stance: two feet offset from the character's center, in the character's own
+  // local frame (forward = local +Z). A slight sideways spread plus a larger front/back stagger
+  // -- illustrative numbers, not the exact rig, but the same shape of imbalance that makes one
+  // specific facing direction the "critical" one instead of a symmetric front/back split.
+  var LATERAL = 0.09;   // sideways offset (left/right)
+  var STAGGER = 0.27;   // front/back offset (one foot planted a bit ahead)
+
+  // Camera distance along its fixed sightline -- separation shrinks with distance, same as the
+  // real fixed camera in the tunnel scene.
+  var CAM_DIST = 6.2;
+  var FOCAL = 620; // purely for scaling the preview strip to a readable pixel range
+
+  function project(angleDeg) {
+    var a = (angleDeg * Math.PI) / 180;
+    // Rotate each foot's local offset by the figure's facing angle.
+    function rotate(lx, lz) {
+      return {
+        x: lx * Math.cos(a) + lz * Math.sin(a),
+        z: -lx * Math.sin(a) + lz * Math.cos(a),
+      };
+    }
+    var front = rotate(LATERAL, STAGGER);
+    var back = rotate(-LATERAL, -STAGGER);
+    // Perspective projection along the fixed camera axis (camera looks toward -z from +CAM_DIST).
+    var depthFront = CAM_DIST - front.z;
+    var depthBack = CAM_DIST - back.z;
+    var screenFront = (front.x / depthFront) * FOCAL;
+    var screenBack = (back.x / depthBack) * FOCAL;
+    return { screenFront: screenFront, screenBack: screenBack, front: front, back: back };
+  }
+
+  function separationAt(angleDeg) {
+    var p = project(angleDeg);
+    return Math.abs(p.screenFront - p.screenBack);
+  }
+
+  // Build the colored heat ring once: sample separation() around the full circle, normalize,
+  // and draw as 72 five-degree wedges interpolated between the hidden (warm) and visible (green)
+  // tokens actually used elsewhere on the page.
+  (function buildRing() {
+    var N = 72;
+    var maxSep = 0;
+    var samples = [];
+    for (var i = 0; i < N; i++) {
+      var deg = (i / N) * 360;
+      var s = separationAt(deg);
+      samples.push(s);
+      if (s > maxSep) maxSep = s;
+    }
+    var innerR = 20;
+    var outerR = 58;
+    var visibleColor = getComputedStyle(document.documentElement).getPropertyValue("--visible").trim();
+    var hiddenColor = getComputedStyle(document.documentElement).getPropertyValue("--hidden").trim();
+    function lerpColor(t) {
+      // t=0 -> hidden (fully overlapped), t=1 -> visible (fully separated)
+      function hexToRgb(h) {
+        h = h.replace("#", "");
+        return [parseInt(h.substring(0,2),16), parseInt(h.substring(2,4),16), parseInt(h.substring(4,6),16)];
+      }
+      var c0 = hexToRgb(hiddenColor.charAt(0) === "#" ? hiddenColor : "#" + hiddenColor);
+      var c1 = hexToRgb(visibleColor.charAt(0) === "#" ? visibleColor : "#" + visibleColor);
+      var r = Math.round(c0[0] + (c1[0]-c0[0])*t);
+      var g = Math.round(c0[1] + (c1[1]-c0[1])*t);
+      var b = Math.round(c0[2] + (c1[2]-c0[2])*t);
+      return "rgb(" + r + "," + g + "," + b + ")";
+    }
+    for (var i = 0; i < N; i++) {
+      var deg0 = (i / N) * 360 - 90; // -90 so 0deg (facing camera) points "up" on screen
+      var deg1 = ((i + 1) / N) * 360 - 90;
+      var t = Math.min(1, samples[i] / (maxSep * 0.9));
+      var a0 = (deg0 * Math.PI) / 180, a1 = (deg1 * Math.PI) / 180;
+      var x0 = Math.cos(a0) * outerR, y0 = Math.sin(a0) * outerR;
+      var x1 = Math.cos(a1) * outerR, y1 = Math.sin(a1) * outerR;
+      var xi1 = Math.cos(a1) * innerR, yi1 = Math.sin(a1) * innerR;
+      var xi0 = Math.cos(a0) * innerR, yi0 = Math.sin(a0) * innerR;
+      var path = document.createElementNS(svgNS, "path");
+      var d = "M " + x0.toFixed(2) + " " + y0.toFixed(2) +
+        " A " + outerR + " " + outerR + " 0 0 1 " + x1.toFixed(2) + " " + y1.toFixed(2) +
+        " L " + xi1.toFixed(2) + " " + yi1.toFixed(2) +
+        " A " + innerR + " " + innerR + " 0 0 0 " + xi0.toFixed(2) + " " + yi0.toFixed(2) + " Z";
+      path.setAttribute("d", d);
+      path.setAttribute("fill", lerpColor(t));
+      path.setAttribute("opacity", "0.85");
+      ring.appendChild(path);
+    }
+  })();
+
+  function update(angleDeg) {
+    angleVal.textContent = Math.round(angleDeg);
+
+    // Rotate the figure token (0deg = facing the camera, arrow points toward camera i.e. up).
+    figure.setAttribute("transform", "translate(340,240) rotate(" + angleDeg + ")");
+
+    var p = project(angleDeg);
+    // Place the two foot dots inside the figure token (small, local display scale).
+    var dispScale = 46;
+    footFront.setAttribute("cx", (p.front.x * dispScale).toFixed(1));
+    footFront.setAttribute("cy", (-p.front.z * dispScale * 0.001).toFixed(1)); // keep near-flat visually
+    footBack.setAttribute("cx", (p.back.x * dispScale).toFixed(1));
+    footBack.setAttribute("cy", (-p.back.z * dispScale * 0.001).toFixed(1));
+
+    // Camera-view strip: map screen-space offsets to the preview SVG's pixel width.
+    var centerX = 340;
+    var pxScale = 900;
+    var fx = centerX + p.screenFront * pxScale * 0.01;
+    var bx = centerX + p.screenBack * pxScale * 0.01;
+    dotFront.setAttribute("cx", fx.toFixed(1));
+    dotBack.setAttribute("cx", bx.toFixed(1));
+
+    var sep = Math.abs(fx - bx);
+    sepVal.textContent = sep.toFixed(0) + " px (vereinfachtes Modell)";
+
+    var maxPossible = 90; // rough reference for "fully separated" in this simplified strip
+    if (sep < 6) {
+      statusBadge.className = "status-badge hidden-state";
+      statusText.textContent = "Ein Fuß verschwindet fast vollständig";
+    } else if (sep < 24) {
+      statusBadge.className = "status-badge hidden-state";
+      statusText.textContent = "Beine überlappen sich stark";
+    } else {
+      statusBadge.className = "status-badge visible-state";
+      statusText.textContent = "Beide Beine getrennt sichtbar";
+    }
+  }
+
+  angleInput.addEventListener("input", function () {
+    update(parseFloat(angleInput.value));
+  });
+
+  update(parseFloat(angleInput.value));
+})();
+</script>
+
+</body>
+</html>

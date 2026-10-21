@@ -53,4 +53,4 @@ None of this is pre-loaded — open the relevant file when the task touches that
 - `.agents/notes/backlog.md`: Living, append-only chronological project journal (ideas/open items/decisions, status legend 💡📋🔜✅❌). Worth a glance at the newest entries at session start.
 - `docs/guides/asset-pipeline.md`: Official guide for asset/texture sourcing, 4-tier polycount budgets, and modular environments.
 - `docs/guides/app-docs-convention.md`: Living convention that every app under `apps/<app>/docs/` has `concept-dossier.html` + `log.md`.
-- `.agents/notes/reference/`: Standalone HTML deep-dive explainers, linked to from the specific guide/skill that needs them (e.g. 2.5D basics from `docs/guides/2-5d-scenes.md`, leg-occlusion from the `character-pipeline` skill) rather than indexed on their own.
+- `docs/reference/`: Standalone HTML deep-dive explainers, linked to from the specific guide/skill that needs them (e.g. 2.5D basics from `docs/guides/2-5d-scenes.md`, leg-occlusion from the `character-pipeline` skill) rather than indexed on their own.

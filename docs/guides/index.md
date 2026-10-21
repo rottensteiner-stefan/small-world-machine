@@ -50,4 +50,9 @@ Practical, in-depth guides for each subsystem and tool of the Small World Machin
 
 ## Standalone Reference Material
 
-Standalone HTML explainer pieces linked to from one of the guides above or from a `.agents/skills/` recipe (not part of the VitePress page tree): see `.agents/notes/reference/` in the repo.
+Standalone HTML explainer pieces linked to from one of the guides above or from a `.agents/skills/` recipe (not part of the VitePress page tree): see [`docs/reference/`](file:///docs/reference/) in the repo.
+
+| Explainer | Description |
+|---|---|
+| [`docs/reference/2-5d-grundlagen.html`](file:///docs/reference/2-5d-grundlagen.html) | Illustrated fundamentals explainer ("how 2.5D works"). |
+| [`docs/reference/bein-verdeckung.html`](file:///docs/reference/bein-verdeckung.html) | Visual explainer on leg-occlusion in perspective projections. |
