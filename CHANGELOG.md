@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.115.7] - 2026-10-21
+
+### "Shadow owes its birth to light." - John Gay
+
+- **Features:**
+  - *Showcase 42 — Kontakt-Härtungs-Probe (`?probe=pole`):* Dünn-Occluder-Demo (dünner Pfahl-Caster) mit URL-tunbarer Kamera/Licht/Sonnen-Intensität/Ambient und kalibriertem High-Contrast-Rig als Default. Macht das PCSS-Signaturverhalten „scharf am Caster, weich in der Distanz" sichtbar und messbar: Kontaktlinie an der Basis hart (Nahe-Umbra-Kontrast 0.61), Ferne in einen breiten flachen Gradienten diffundiert (Ferne-Umbra 0.26) — WebGL2-Negativkontrolle hält 0.60/0.60 und beweist, dass der Gradient echt PCSS-spezifisch ist.
+- **Architecture & Bugfixes:**
+  - *Finding (d):* echte Kontakt-Härtung ist mit der gehärteten (c)-PCSS für dünne Occluder bereits erreicht — die früher postulierte *adaptive* Blocker-Suche ist dafür nicht nötig (feste 16-Tap-Sunflower-Scheibe zerstört die Härtung nicht). Box-Blocker bleiben fundamental uniform weich (Suchscheibe mittelt die gesamte Tiefenspanne) — dokumentierte Grenze statt offener Roadmap-Punkt.
+  - *Beim (d)-Durchstich gefangen + gefixt:* `softness=0`-Parse (`|| 1`-Kollaps), `this._params`-Zuweisung vor `super()` (Seiten-Hänger), und `parseNum()`-Bug, der **fehlende** Query-Parameter als 0 behandelte (`Number(null)`=0) und damit die Box-Default-Bühne schwarz rendern ließ — vom Box-Regressions-Gate gefangen.
+- **Quality & Verification:**
+  - *Neues committed Live-Gate `scripts/check-swm42-pole.mjs`:* misst Nahe-/Ferne-Umbra unterhalb der kontaktlinie (auto-detektiert), assertet Härtung, GL2-Negativkontrolle und Stärken-Diskriminator. Läufe: **`SWM42 POLE GATE: OK`** (WEB_GPU 0.61/0.26, WEB_GL2 0.56/0.60). Box-Gate bleibt **`SWM42 GATE: OK`** (beide Tiers). Volle Test-Suite grün (2539/2539).
+- **Housekeeping & Docs:**
+  - `docs/guides/shadows.md` + `docs/adr/0006` ehrlich auf 0.115.7-Status gehoben (Kontakt-Härtung demonstriert + gegated; adaptive Suche als unnötig dokumentiert; Textur-Budget-Hinweis erhalten). `apps/showcases/42/docs/log.md` (Increment-d-Eintrag + Query-Knöpfe). Code-Review-Finding „Gates sind gitignored → Beweis nicht reproduzierbar" für den neuen Gate adressiert (unter `scripts/` committet).
+  - Version 0.115.7.
+
 ## [0.115.6] - 2026-10-21
 
 ### "There is no sun without shadow, and it is essential to know the night." - Albert Camus

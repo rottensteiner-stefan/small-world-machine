@@ -13,6 +13,11 @@ PCSS-Penumbre real verbreitern — und dass sie auf WebGL2 eine dokumentierte No
 - `?rendererType=WEB_GPU` — Backend-Override (AbstractShowcase).
 - `?softness=<float>` → `quality.shadowSoftness` (Default 1).
 - `?maxRadius=<int>` → `quality.shadowMaxPcfRadius` (Default 4).
+- `?probe=pole` — Dünn-Occluder-Probe (dünner Pfahl) für die Kontakt-Härtungs-Demonstration
+  (Default: Box-Szene).
+- Probe-Rig-Overrides (URL, nur für Doku/Kalibrierung): `camX/camY/camZ`, `lookX/lookY/lookZ`,
+  `lightX/lightY/lightZ`, `sunI`, `amb`. Fehlende Parameter fallen auf die rig-spezifischen
+  Defaults zurück (Pole: kalibriertes Kontrast-Rig; Box: unveränderter (c)-Stand).
 
 ## Setup-Entscheidungen
 
@@ -26,6 +31,38 @@ PCSS-Penumbre real verbreitern — und dass sie auf WebGL2 eine dokumentierte No
   Uniform-Lane-Inhalt der WebGPU (`scratch[212,213]`) → CPU→GPU-Verdrahtung prüfbar.
 
 ## Changelog
+
+### 2026-10-21 (0.115.7) — Kontakt-Härtung demonstriert + Live-Gate (Increment d)
+- **Probe-Modus `?probe=pole`:** dünner, hoher Zylinder-Caster (Radius 0.12) auf der Bühne; Query-tunbare
+  Kamera/ Licht/ Sonnen-Intensität/ Ambient (`camX/Y/Z`, `lookX/Y/Z`, `lightX/Y/Z`, `sunI`, `amb`).
+  Die Defaults des Pole-Modus reproduzieren das kalibrierte High-Contrast-Rig (sunI=5, amb=0.08,
+  lightY=-0.5, Kamera (0,6.5,12)/(0,1,-1)), Box-Modus-Defaults bleiben byte-identisch zum (c)-Stand.
+- **Beweis (Vision + numerisch):** Der gehärtete (c)-PCSS produziert mit dem dünnen Pfahl das echte
+  PCSS-Signaturverhalten „scharf am Caster, weich in der Distanz":
+  - Kontaktlinie an der Pfahl-Basis: **hart/tief** (gemessen Nahe-Umbra-Kontrast **0.61**).
+  - Ferne Zone: **erblasst** in einen breiten, flachen Penumbra-Gradienten (Ferne-Umbra **0.26**).
+  - **WebGL2-Negativkontrolle (festes PCF):** Umbra bleibt durchgehend tief (**0.60/0.60**) →
+    der Gradient ist echt PCSS-spezifisch, kein Perspektiv-Artefakt.
+- **Finding — adaptive Blocker-Suche nicht nötig:** die feste 16-Tap-Sunflower-Scheibe zerstört die
+  Härtung für einen dünnen Occluder nicht; die zuvor (0.115.5/0.115.6) als Roadmap postulierte
+  adaptive Suche wird damit als unnötig verworfen (Doku ehrlich aktualisiert). Ein **Box-Blocker
+  bleibt fundamental uniform weich** (die Scheibe mittelt seine ganze Tiefenspanne) — dokumentierte
+  Grenze, KEINE offene Roadmap-Festlegung mehr.
+- **Committed Live-Gate `scripts/check-swm42-pole.mjs`:** misst Nahe-/Ferne-Umbra an der Kontaktlinie
+  (auto-detektiert), assertet Härtung + GL2-Negativkontrolle + Stärken-Diskriminator. Zwei Läufe:
+  **`SWM42 POLE GATE: OK`** (GPU 0.61/0.26, GL2 0.56/0.60). Box-Gate `.agents/scratches/check-swm42.mjs`
+  weiterhin **`SWM42 GATE: OK`** (beide Tiers grün).
+- **In (d) gefundene + gefixte Bugs (Box-Gate hat sie gefangen):**
+  - `softness=0` wurde durch `|| 1` fälschlich zu 1 gemappt (3021:0-Parse) → fix.
+  - `this._params = p` vor `super()` → „Must call super constructor" → Seite hing (Hänge-Ursache der
+    Calibration-Läufe) → Fix: Zuweisung hinter `super()`.
+  - `parseNum()` behandelte **fehlende** Query-Parameter als 0 (`Number(null)`=0, endlich) → Box-Defaults
+    wurden zu sunI=0/camY=0 → **schwarze Bühne, Box-Gate rot**. Fix: fehlender Param → Fallback.
+    Lehre: Default-Pfade ziehen im Live-Gate gegenprüfen, nicht nur Override-Pfade.
+- **Hinweis Framing:** Der Directional-Light-Schatten des Pfahls hat keinen natürlichen Endpunkt
+  (läuft bis Frame-/Bühnenrand); die Ferne-Zone ist als die am weitesten entfernte sichtbare Zone
+  definiert (unterste Frame-Zeilen). Für die Dokumentations-Frames ist der Schatten unten leicht
+  beschnitten — erwartetes Verhalten des Rigs, nicht bloß ein Framing-Fehler.
 
 ### 2026-10-21 (0.115.6) — PCSS-Härtung
 - **Engine-Increment (c):** `getShadowPCSS` in `pbr_math.wgsl` gehärtet:

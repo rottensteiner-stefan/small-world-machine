@@ -90,11 +90,17 @@ radius based on that distance. The engine's WebGPU PCSS is *principled and stabl
 is derived from the perspective-normalized receiver/blocker depth gap (decoupled from the
 acne `bias`, which only guards the depth compare) over a **deterministic** sunflower blocker
 disk, so the result is reproducible run-to-run and the softness knobs below re-tune the
-penumbra cleanly. **Status note (0.115.5):** a hard-at-the-caster *contact hardening*
-gradient is not yet achieved at the geometry level — the fixed search disk makes the 
-penumbra read roughly uniform for a box-shaped blocker, and true contact-hardening requires
-an *adaptive* blocker search plus a thin-occluder calibration scene (roadmap, alongside the
-EVSM/EVSSM/MSM path). This only applies to the **primary** cascade a fragment falls into; the
+penumbra cleanly. **Status note (0.115.7):** *contact-hardening is demonstrated and gated.* A
+`?probe=pole` thin-cylinder probe on Showcase 42 shows the PCSS "sharp at the caster, soft in
+distance" signature: the contact line at the caster base stays hard and deep while the penumbra
+grows with distance and the far zone diffuses into a wide, shallow gradient — measured on-screen
+as near-zone umbra contrast `0.61` collapsing to `0.26` at max distance, versus a WebGL2
+negative control (fixed PCF) that holds `0.60` everywhere (see
+`scripts/check-swm42-pole.mjs`, live gate: `SWM42 POLE GATE: OK`). The previously-anticipated
+*adaptive* blocker search proved unnecessary for that hardening — the fixed sunflower disk does
+not destroy it for a thin occluder. A wide, box-shaped blocker *remains* uniformly soft, which
+is fundamental geometry: the search disk then averages the occluder's whole depth span. This
+only applies to the **primary** cascade a fragment falls into; the
 secondary cascade-blend sample (see above) still uses fixed-radius PCF, so as not to double
 the cost in the blend zone. **Spot light shadows use PCSS on WebGPU only**; on WebGL2 they
 stay at fixed-radius PCF. See [ADR 0006](/adr/0006-pcss-directional-light-only) for the
