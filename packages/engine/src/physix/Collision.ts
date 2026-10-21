@@ -3,7 +3,7 @@ import type { BoundingSphere } from "./BoundingSphere.js";
 import type { OBB } from "./OBB.js";
 import type { ConvexHull } from "./ConvexHull.js";
 import type { BoundingVolume } from "../interfaces/index.js";
-import type { Vector3D} from "../math/index.js";
+import type { Vector3D } from "../math/index.js";
 import { MathPool } from "../math/index.js";
 import { BoundingType } from "../enums/index.js";
 import { CollisionObbSolver } from "./CollisionObb.js";
@@ -249,23 +249,30 @@ export class Collision {
    * @returns True if collision was resolved.
    */
   public static resolveBoxBox(b1: BoundingBox, b2: BoundingBox, result: Vector3D): boolean {
-    const overlapX = Math.min(b1.max.x, b2.max.x) - Math.max(b1.min.x, b2.min.x);
-    if (overlapX <= 0) return false;
-    const overlapY = Math.min(b1.max.y, b2.max.y) - Math.max(b1.min.y, b2.min.y);
-    if (overlapY <= 0) return false;
-    const overlapZ = Math.min(b1.max.z, b2.max.z) - Math.max(b1.min.z, b2.min.z);
-    if (overlapZ <= 0) return false;
+    // Per axis the shorter way out: push b1 up (b2.max - b1.min) or down (b1.max - b2.min). That
+    // equals the intersection width for partial overlap but, unlike it, stays correct when one
+    // box lies inside the other along the axis (a thin plate inside a tall box).
+    const upX = b2.max.x - b1.min.x;
+    const downX = b1.max.x - b2.min.x;
+    if (upX <= 0 || downX <= 0) return false;
+    const upY = b2.max.y - b1.min.y;
+    const downY = b1.max.y - b2.min.y;
+    if (upY <= 0 || downY <= 0) return false;
+    const upZ = b2.max.z - b1.min.z;
+    const downZ = b1.max.z - b2.min.z;
+    if (upZ <= 0 || downZ <= 0) return false;
+
+    const depthX = Math.min(upX, downX);
+    const depthY = Math.min(upY, downY);
+    const depthZ = Math.min(upZ, downZ);
 
     // Push out along the single axis of least penetration.
-    if (overlapX <= overlapY && overlapX <= overlapZ) {
-      const dir = b1.center.x - b2.center.x >= 0 ? 1 : -1;
-      result.set(overlapX * dir, 0, 0);
-    } else if (overlapY <= overlapX && overlapY <= overlapZ) {
-      const dir = b1.center.y - b2.center.y >= 0 ? 1 : -1;
-      result.set(0, overlapY * dir, 0);
+    if (depthX <= depthY && depthX <= depthZ) {
+      result.set(upX <= downX ? depthX : -depthX, 0, 0);
+    } else if (depthY <= depthX && depthY <= depthZ) {
+      result.set(0, upY <= downY ? depthY : -depthY, 0);
     } else {
-      const dir = b1.center.z - b2.center.z >= 0 ? 1 : -1;
-      result.set(0, 0, overlapZ * dir);
+      result.set(0, 0, upZ <= downZ ? depthZ : -depthZ);
     }
 
     return true;
@@ -466,7 +473,12 @@ export class Collision {
       // 3-arg form: originOrDelta is the delta, deltaOrTarget is the target.
       return CollisionSweepSolver.sweep(moving, originOrDelta, deltaOrTarget as BoundingVolume);
     }
-    return CollisionSweepSolver.sweep(moving, originOrDelta, deltaOrTarget as Vector3D, targetParam);
+    return CollisionSweepSolver.sweep(
+      moving,
+      originOrDelta,
+      deltaOrTarget as Vector3D,
+      targetParam,
+    );
   }
 
   private static _sphereSphere(s1: BoundingSphere, s2: BoundingSphere): boolean {

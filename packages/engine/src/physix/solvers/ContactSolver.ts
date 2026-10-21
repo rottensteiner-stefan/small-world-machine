@@ -2,6 +2,7 @@ import { Object3D } from "../../core/Object3D.js";
 import type { Vector3D } from "../../math/index.js";
 import { MathPool } from "../../math/index.js";
 import { Collision } from "../Collision.js";
+import { CollisionHullSolver } from "../CollisionHull.js";
 import type { EventDispatcherImpl } from "../../core/events/EventDispatcherImpl.js";
 import { BoundingType } from "../../enums/index.js";
 import type { BoundingVolume } from "../../interfaces/index.js";
@@ -40,6 +41,9 @@ interface PairSolveScratch {
   relTangent: Vector3D;
   impulseT: Vector3D;
   contactPt: Vector3D;
+  /** Centroids of each body's deepest feature (see `_computeContactPoint`). */
+  supportA: Vector3D;
+  supportB: Vector3D;
   velA: Vector3D;
   velB: Vector3D;
   rA: Vector3D;
@@ -81,6 +85,8 @@ export class ContactSolver {
       relTangent: MathPool.acquireVector(),
       impulseT: MathPool.acquireVector(),
       contactPt: MathPool.acquireVector(),
+      supportA: MathPool.acquireVector(),
+      supportB: MathPool.acquireVector(),
       velA: MathPool.acquireVector(),
       velB: MathPool.acquireVector(),
       rA: MathPool.acquireVector(),
@@ -128,6 +134,8 @@ export class ContactSolver {
     MathPool.releaseVector(scratch.rA);
     MathPool.releaseVector(scratch.velB);
     MathPool.releaseVector(scratch.velA);
+    MathPool.releaseVector(scratch.supportB);
+    MathPool.releaseVector(scratch.supportA);
     MathPool.releaseVector(scratch.contactPt);
     MathPool.releaseVector(scratch.impulseT);
     MathPool.releaseVector(scratch.relTangent);
@@ -343,7 +351,16 @@ export class ContactSolver {
     const volA = first.bounds!;
     const volB = second.bounds!;
 
-    this._computeContactPoint(volA, volB, pair, centerA, centerB, s.contactPt);
+    this._computeContactPoint(
+      volA,
+      volB,
+      pair,
+      centerA,
+      centerB,
+      s.contactPt,
+      s.supportA,
+      s.supportB,
+    );
 
     // Lever arms rA = contactPt - centerA, rB = contactPt - centerB
     s.rA.set(s.contactPt.x - centerA.x, s.contactPt.y - centerA.y, s.contactPt.z - centerA.z);
@@ -507,6 +524,8 @@ export class ContactSolver {
     centerA: Vector3D,
     centerB: Vector3D,
     contactPt: Vector3D,
+    supportA: Vector3D,
+    supportB: Vector3D,
   ): void {
     const normal = pair.normal;
 
@@ -554,12 +573,76 @@ export class ContactSolver {
         centerB.z + normal.z * (rB - pair.depth * 0.5),
       );
     } else {
-      contactPt.set(
-        (centerA.x + centerB.x) * 0.5,
-        (centerA.y + centerB.y) * 0.5,
-        (centerA.z + centerB.z) * 0.5,
-      );
+      // OBB / hull / mixed polytope pairs: each body's deepest feature (the vertices furthest
+      // towards the other body) is averaged, and the more compact of the two wins. The midpoint
+      // of the two centres is useless here: with a small crate on a large floor it lies metres
+      // away from the contact and the resulting lever arm spins the crate for no reason.
+      const spreadA = this._supportCentroid(volA, -normal.x, -normal.y, -normal.z, supportA);
+      const spreadB = this._supportCentroid(volB, normal.x, normal.y, normal.z, supportB);
+      if (spreadA >= 0 && (spreadB < 0 || spreadA <= spreadB)) {
+        contactPt.copyFrom(supportA);
+      } else if (spreadB >= 0) {
+        contactPt.copyFrom(supportB);
+      } else {
+        contactPt.set(
+          (centerA.x + centerB.x) * 0.5,
+          (centerA.y + centerB.y) * 0.5,
+          (centerA.z + centerB.z) * 0.5,
+        );
+      }
     }
+  }
+
+  /**
+   * Writes the centroid of `vol`'s vertices that lie furthest along `(dx, dy, dz)` (a face
+   * contributes its whole corner set, an edge two vertices, a corner one) into `out` and returns
+   * how far those vertices spread around it, or -1 if `vol` has no vertex representation.
+   */
+  private _supportCentroid(
+    vol: BoundingVolume,
+    dx: number,
+    dy: number,
+    dz: number,
+    out: Vector3D,
+  ): number {
+    let vertices: readonly Vector3D[];
+    if (vol.type === BoundingType.BOX) {
+      vertices = CollisionHullSolver.boxAsHull(vol).vertices;
+    } else if (vol.type === BoundingType.OBB) {
+      vertices = CollisionHullSolver.obbAsHull(vol).vertices;
+    } else if (vol.type === BoundingType.HULL) {
+      vertices = vol.vertices;
+    } else {
+      return -1;
+    }
+
+    let best = -Infinity;
+    for (const v of vertices) {
+      const d = v.x * dx + v.y * dy + v.z * dz;
+      if (d > best) best = d;
+    }
+    const tolerance = 1e-3;
+    let sx = 0;
+    let sy = 0;
+    let sz = 0;
+    let count = 0;
+    for (const v of vertices) {
+      if (v.x * dx + v.y * dy + v.z * dz >= best - tolerance) {
+        sx += v.x;
+        sy += v.y;
+        sz += v.z;
+        count++;
+      }
+    }
+    out.set(sx / count, sy / count, sz / count);
+
+    let spreadSq = 0;
+    for (const v of vertices) {
+      if (v.x * dx + v.y * dy + v.z * dz >= best - tolerance) {
+        spreadSq = Math.max(spreadSq, v.distanceToSq(out));
+      }
+    }
+    return Math.sqrt(spreadSq);
   }
 
   /** Resting-contact velocity stabilization: clamp small discrete gravity drift on settled bodies. */

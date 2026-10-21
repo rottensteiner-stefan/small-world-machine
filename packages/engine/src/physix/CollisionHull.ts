@@ -240,7 +240,10 @@ export class CollisionHullSolver {
       if (d > maxB) maxB = d;
     }
 
-    const overlap = Math.min(maxA, maxB) - Math.max(minA, minB);
+    // Penetration depth along this axis = the shorter way out (MTV). The interval intersection
+    // width `min(max) - max(min)` equals it only for partial overlap; under containment it is just
+    // the inner interval's length and badly under-reports the depth.
+    const overlap = Math.min(maxA - minB, maxB - minA);
     if (0 > overlap) return false;
     if (overlap < this._hullSatMinOverlap) {
       this._hullSatMinOverlap = overlap;
@@ -253,8 +256,8 @@ export class CollisionHullSolver {
 
   /**
    * SAT test for a convex hull against a sphere: every face normal of the hull is
-   * a candidate axis, plus the axis from the sphere's center to the hull's
-   * nearest vertex (handling the sphere resting near a corner/edge, where no
+   * a candidate axis, plus the axis from the hull's closest surface point to the
+   * sphere's center (handling the sphere resting near a corner/edge, where no
    * single face normal alone is the true minimum-separating axis).
    */
   private static _satHullSphere(
@@ -268,20 +271,22 @@ export class CollisionHullSolver {
       if (!this._considerHullSphereAxis(n.x, n.y, n.z, h.vertices, center, radius)) return null;
     }
 
-    let nearest: Vector3D | undefined;
-    let nearestDistSq = Infinity;
-    for (const v of h.vertices) {
-      const d = v.distanceToSq(center);
-      if (d < nearestDistSq) {
-        nearestDistSq = d;
-        nearest = v;
-      }
-    }
-    if (nearest) {
-      const ax = center.x - nearest.x;
-      const ay = center.y - nearest.y;
-      const az = center.z - nearest.z;
-      if (!this._considerHullSphereAxis(ax, ay, az, h.vertices, center, radius)) return null;
+    // The remaining candidate axis runs from the closest point on the hull's surface to the sphere
+    // centre. That point is a vertex, an edge point or a face point; the nearest *vertex* alone is
+    // not enough: near an edge it is not a separating axis, so a sphere still clear of the edge
+    // would be reported as touching.
+    const closest = h.closestPoint(center);
+    if (
+      !this._considerHullSphereAxis(
+        center.x - closest.x,
+        center.y - closest.y,
+        center.z - closest.z,
+        h.vertices,
+        center,
+        radius,
+      )
+    ) {
+      return null;
     }
 
     const res = this._satResult;
@@ -317,7 +322,7 @@ export class CollisionHullSolver {
     const minS = c - radius;
     const maxS = c + radius;
 
-    const overlap = Math.min(maxH, maxS) - Math.max(minH, minS);
+    const overlap = Math.min(maxH - minS, maxS - minH); // shorter way out, see _considerHullAxis
     if (0 > overlap) return false;
     if (overlap < this._hullSatMinOverlap) {
       this._hullSatMinOverlap = overlap;
