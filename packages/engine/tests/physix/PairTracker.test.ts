@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { PairTracker, pairKey } from "../../src/physix/PairTracker.js";
+import { PairTracker, pairKey, PAIR_ID_LIMIT } from "../../src/physix/PairTracker.js";
 import { EventDispatcherImpl } from "../../src/core/events/EventDispatcherImpl.js";
 import { Object3D } from "../../src/core/Object3D.js";
 
 describe("PairTracker", () => {
   describe("pairKey", () => {
     it("is symmetric and collision-free for ids above 2^21", () => {
-      const a = 100000000;
-      const b = 100000001;
-      const c = 100000002;
+      const a = 33554432; // first internal collider id (2^25)
+      const b = 33554433;
+      const c = 33554434;
       expect(pairKey(a, b)).toBe(pairKey(b, a));
       expect(pairKey(a, b)).not.toBe(pairKey(a, c));
       expect(pairKey(b, c)).not.toBe(pairKey(a, c));
@@ -16,11 +16,27 @@ describe("PairTracker", () => {
 
     it("produces no collisions for 4096 distinct pairs beyond 2^21 (2,097,152)", () => {
       const base = 2097152 + 777;
-      const keys = new Set<bigint>();
+      const keys = new Set<number>();
       for (let i = 0; i < 4096; i++) {
         keys.add(pairKey(base + i, base + i + 1000));
       }
       expect(keys.size).toBe(4096);
+    });
+  });
+
+  describe("pairKey range", () => {
+    it("is exact at the upper id bound and returns a plain number (no BigInt)", () => {
+      const max = PAIR_ID_LIMIT - 1;
+      expect(typeof pairKey(max - 1, max)).toBe("number");
+      expect(pairKey(max - 1, max)).not.toBe(pairKey(max - 2, max));
+      expect(pairKey(max - 1, max)).not.toBe(pairKey(max - 1, max - 2));
+      expect(Number.isSafeInteger(pairKey(max - 1, max))).toBe(true);
+    });
+
+    it("fails fast instead of aliasing for ids outside the exact range", () => {
+      expect(() => pairKey(1, PAIR_ID_LIMIT)).toThrow(RangeError);
+      expect(() => pairKey(-1, 5)).toThrow(RangeError);
+      expect(() => pairKey(1.5, 5)).toThrow(RangeError);
     });
   });
 
@@ -82,15 +98,15 @@ describe("PairTracker", () => {
 
       t.beginDiscovery();
       const step1 = t.trackTrigger(key);
-      step1.state.objectA = a;
-      step1.state.objectB = b;
+      step1.objectA = a;
+      step1.objectB = b;
       expect(step1.wasPresent).toBe(false);
       t.endStep(events);
 
       t.beginDiscovery();
       const step2 = t.trackTrigger(key);
-      step2.state.objectA = a;
-      step2.state.objectB = b;
+      step2.objectA = a;
+      step2.objectB = b;
       expect(step2.wasPresent).toBe(true);
       t.endStep(events);
     });
@@ -112,14 +128,14 @@ describe("PairTracker", () => {
 
       t.beginDiscovery();
       const step1 = t.trackTrigger(key);
-      step1.state.objectA = a;
-      step1.state.objectB = b;
+      step1.objectA = a;
+      step1.objectB = b;
       t.endStep(events);
 
       t.beginDiscovery();
       const stay = t.trackTrigger(key);
-      stay.state.objectA = a;
-      stay.state.objectB = b;
+      stay.objectA = a;
+      stay.objectB = b;
       t.endStep(events);
       expect(exits.length).toBe(0);
 
@@ -138,8 +154,8 @@ describe("PairTracker", () => {
 
       t.beginDiscovery();
       const first = t.trackTrigger(key);
-      first.state.objectA = new Object3D("A");
-      first.state.objectB = new Object3D("B");
+      first.objectA = new Object3D("A");
+      first.objectB = new Object3D("B");
       t.endStep(events);
 
       // Pair not present next step -> its state is released back into the pool.
@@ -149,9 +165,29 @@ describe("PairTracker", () => {
       // A brand-new pair reuses the released state entry.
       t.beginDiscovery();
       const second = t.trackTrigger(key);
-      expect(second.state).toBe(first.state);
+      expect(second).toBe(first);
       expect(second.wasPresent).toBe(false);
       t.endStep(events);
+    });
+
+    it("fires exits on a step that discovers no pairs at all", () => {
+      const events = new EventDispatcherImpl();
+      const t = new PairTracker();
+      let exits = 0;
+      events.addEventListener("physics:collision-exit", () => exits++);
+      const key = pairKey(1, 2);
+      t.beginDiscovery();
+      const st = t.trackCollision(key);
+      st.objectA = new Object3D("A");
+      st.objectB = new Object3D("B");
+      t.endStep(events);
+      expect(exits).toBe(0);
+      t.beginDiscovery();
+      t.endStep(events); // empty step
+      expect(exits).toBe(1);
+      t.beginDiscovery();
+      t.endStep(events);
+      expect(exits).toBe(1); // exit fires exactly once
     });
 
     it("clear() releases all retained state", () => {
@@ -159,8 +195,8 @@ describe("PairTracker", () => {
       const t = new PairTracker();
       t.beginDiscovery();
       const first = t.trackTrigger(pairKey(9, 10));
-      first.state.objectA = new Object3D("A");
-      first.state.objectB = new Object3D("B");
+      first.objectA = new Object3D("A");
+      first.objectB = new Object3D("B");
       t.endStep(events);
       expect(t.activePairs.length).toBe(0);
 
@@ -171,7 +207,7 @@ describe("PairTracker", () => {
       t.clear();
       t.beginDiscovery();
       const recycled = t.trackTrigger(pairKey(9, 10));
-      expect(recycled.state).toBe(first.state);
+      expect(recycled).toBe(first);
     });
   });
 });

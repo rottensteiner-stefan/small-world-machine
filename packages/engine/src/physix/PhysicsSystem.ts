@@ -34,6 +34,13 @@ export class PhysicsSystem {
    */
   public ccdMotionThreshold: number = 1.0;
 
+  /**
+   * Telemetry: total number of fixed steps discarded because a frame needed more than
+   * `maxSubSteps` of simulation (the remaining time is dropped to avoid a spiral of death).
+   * Time clamped by `maxDeltaTime` is not counted. Monotonic; reset by assigning 0.
+   */
+  public droppedSteps: number = 0;
+
   /** Active Physics Joints / Constraints tracked directly by the system. */
   public joints: Joint[] = [];
 
@@ -49,7 +56,8 @@ export class PhysicsSystem {
   private _warnedObjects = new Set<Object3D>();
 
   private _collidableIdMap = new WeakMap<Collidable, number>();
-  private _nextInternalId: number = 100000000;
+  /** Internal collider ids live in `[2^25, 2^26)`: dense, and inside the exact range of `pairKey`. */
+  private _nextInternalId: number = 33554432;
 
   private readonly _contactSolver = new ContactSolver();
   private readonly _tracker = new PairTracker();
@@ -97,6 +105,21 @@ export class PhysicsSystem {
    */
   private _collectRecursive(obj: Object3D, bodies: Object3D[], colliders: Collidable[]): void {
     if (obj.isCollidable) {
+      if (
+        obj.rigidBody &&
+        obj.rigidBody.inverseMass > 0 &&
+        obj.parent !== undefined &&
+        obj.parent.parent !== undefined &&
+        !this._warnedObjects.has(obj)
+      ) {
+        // The integrator and solver treat `position`/`rotation` as world state (RigidBodyMath
+        // assumption): a dynamic body nested under another object is simulated in the parent's
+        // local frame, which is wrong as soon as the parent is transformed.
+        console.warn(
+          `[PhysicsSystem] Warning: dynamic body '${obj.name}' is nested below another object. Physics treats its position/rotation as world space; keep dynamic bodies at scene root.`,
+        );
+        this._warnedObjects.add(obj);
+      }
       if (obj.bounds) {
         colliders.push(obj);
       }
@@ -195,6 +218,9 @@ export class PhysicsSystem {
     }
 
     if (this._accumulator >= this.fixedTimeStep) {
+      // Spiral-of-death guard: simulation time beyond `maxSubSteps` is dropped, not deferred.
+      // Make it observable so a frame-budget problem is not silent.
+      this.droppedSteps += Math.floor(this._accumulator / this.fixedTimeStep);
       this._accumulator %= this.fixedTimeStep;
     }
 

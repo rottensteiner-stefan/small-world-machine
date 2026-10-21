@@ -156,4 +156,31 @@ describe("Collision (ConvexHull)", () => {
     hull.transform(m);
     expect(hull.center.x).toBeCloseTo(1);
   });
+
+  it("hull and OBB SAT agree on the MTV of a slightly tilted resting stack (shared parallel-edge cut-off)", () => {
+    for (const tilt of [0, 0.002, 0.004, 0.02]) {
+      const place = new Matrix4().compose(
+        new Vector3D(0, 1.9, 0),
+        new Vector3D(0, 0, tilt),
+        new Vector3D(1, 1, 1),
+      );
+      const hullA = makeBoxHull(new Vector3D(0, 0, 0), new Vector3D(1, 1, 1));
+      const hullB = makeBoxHull(new Vector3D(0, 0, 0), new Vector3D(1, 1, 1));
+      hullB.transform(place);
+      const obbA = new OBB(new Vector3D(0, 0, 0), new Vector3D(1, 1, 1));
+      const obbB = new OBB(new Vector3D(0, 0, 0), new Vector3D(1, 1, 1));
+      obbA.transform(new Matrix4());
+      obbB.transform(place);
+
+      const hullMtv = new Vector3D();
+      const obbMtv = new Vector3D();
+      expect(Collision.resolve(hullB, hullA, hullMtv)).toBe(true);
+      expect(Collision.resolve(obbB, obbA, obbMtv)).toBe(true);
+      // Both push the upper box up by ~0.1; no sideways component from a noisy edge axis.
+      expect(hullMtv.y).toBeGreaterThan(0.05);
+      expect(Math.abs(hullMtv.x)).toBeLessThan(1e-3);
+      expect(Math.abs(hullMtv.z)).toBeLessThan(1e-3);
+      expect(hullMtv.y).toBeCloseTo(obbMtv.y, 2);
+    }
+  });
 });

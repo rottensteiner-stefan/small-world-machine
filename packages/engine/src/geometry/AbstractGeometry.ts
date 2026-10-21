@@ -267,20 +267,46 @@ export abstract class AbstractGeometry implements Geometry {
     indices?: ArrayLike<number> | undefined;
     wireframeIndices?: ArrayLike<number> | undefined;
     normals?: ArrayLike<number> | undefined;
+    /**
+     * Take ownership of already-typed buffers (`Float32Array` vertices/uvs/normals,
+     * `Uint16Array`/`Uint32Array` indices) instead of copying them. Only pass `true`
+     * when the caller discards its reference afterwards (e.g. a throwaway revolve
+     * core), otherwise the geometry would alias the caller's data.
+     */
+    adopt?: boolean | undefined;
   }): void {
-    this._vertices = new Float32Array(data.vertices);
-    this._uvs = new Float32Array(data.uvs);
-    if (data.normals) {
-      this._normals = new Float32Array(data.normals);
+    const adopt: boolean = true === data.adopt;
+    this._vertices = AbstractGeometry._toFloat32(data.vertices, adopt);
+    this._uvs = AbstractGeometry._toFloat32(data.uvs, adopt);
+    // The payload is the complete state: anything not provided (or empty) is cleared so
+    // a rebuild with less geometry cannot leave stale buffers behind that index past
+    // the new vertex buffer.
+    this._normals = data.normals
+      ? AbstractGeometry._toFloat32(data.normals, adopt)
+      : new Float32Array();
+    this._indices = this._toIndexArray(data.indices, adopt);
+    this._wireframeIndices = this._toIndexArray(data.wireframeIndices, adopt);
+  }
+
+  /** Copies (or adopts) a numeric buffer as `Float32Array`. */
+  private static _toFloat32(source: ArrayLike<number>, adopt: boolean): Float32Array {
+    return adopt && source instanceof Float32Array ? source : new Float32Array(source);
+  }
+
+  /** Converts an index payload to the matching index array, or `undefined` when empty. */
+  private _toIndexArray(
+    source: ArrayLike<number> | undefined,
+    adopt: boolean,
+  ): Uint16Array | Uint32Array | undefined {
+    if (!source || 0 === source.length) {
+      return undefined;
     }
-    if (data.indices && 0 < data.indices.length) {
-      this._indices = this._createIndexArray(data.indices.length);
-      this._indices.set(data.indices);
+    if (adopt && (source instanceof Uint16Array || source instanceof Uint32Array)) {
+      return source;
     }
-    if (data.wireframeIndices && 0 < data.wireframeIndices.length) {
-      this._wireframeIndices = this._createIndexArray(data.wireframeIndices.length);
-      this._wireframeIndices.set(data.wireframeIndices);
-    }
+    const out: Uint16Array | Uint32Array = this._createIndexArray(source.length);
+    out.set(source);
+    return out;
   }
 
   /**
@@ -376,6 +402,9 @@ export abstract class AbstractGeometry implements Geometry {
    * adjust a shape and call `rebuild()` to regenerate the buffers in place.
    */
   public rebuild(): void {
+    // Derived caches belong to the previous buffers; drop them so they are recomputed.
+    this._tangents = new Float32Array();
+    this._cachedBoundingVolume = undefined;
     this.generateGeometryData();
   }
 

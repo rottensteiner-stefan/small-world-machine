@@ -1,3 +1,4 @@
+import { PENETRATION_SLOP } from "../../src/physix/solvers/ContactSolver.js";
 import { describe, it, expect, beforeEach } from "vitest";
 import { PhysicsSystem } from "../../src/physix/PhysicsSystem.js";
 import { Scene } from "../../src/core/Scene.js";
@@ -51,7 +52,9 @@ describe("PhysicsSystem Resting Contact Convergence", () => {
     const max = Math.max(...last30);
 
     // Sphere radius is 1.0, ground top is y = 0, so resting height is exactly 1.0
-    expect(sphere.position.y).toBeCloseTo(1.0, 2);
+    // (the solver tolerates PENETRATION_SLOP of overlap by design, so it rests at 1 - slop).
+    expect(sphere.position.y).toBeLessThanOrEqual(1.0 + 1e-6);
+    expect(sphere.position.y).toBeGreaterThanOrEqual(1.0 - PENETRATION_SLOP - 1e-6);
     // Delta between min and max over 30 frames should be negligible (no bouncing/oscillating)
     expect(max - min).toBeLessThan(0.005);
   });

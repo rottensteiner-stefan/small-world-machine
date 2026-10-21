@@ -16,7 +16,13 @@ import type { RigidBody } from "./RigidBody.js";
  * identity and the computation degenerates to the exact legacy per-axis scaling, so the solver
  * behaviour for non-rotated and spherical bodies is numerically unchanged.
  *
- * An instance owns small scratch buffers (not re-entrant); take one per owning solver/joint.
+ * An instance owns small scratch buffers (not re-entrant, stateless between calls): the contact
+ * solver shares one, joints and bodies may share one too.
+ *
+ * Orientation assumption (M6): `rotation` is the body's Euler rotation as integrated by
+ * `EulerIntegrator` (which treats `Object3D.rotation`/`position` as the simulated state, i.e. the
+ * body is parented to an identity frame, like every scene root object). Dynamic bodies nested
+ * under a rotated parent are unsupported; `PhysicsSystem` warns once about them.
  */
 export class RigidBodyMath {
   private readonly _q = new Quaternion(0, 0, 0, 1);
@@ -59,6 +65,27 @@ export class RigidBodyMath {
       this._dW.x * r.y - this._dW.y * r.x,
     );
     return this._dV.x * dir.x + this._dV.y * dir.y + this._dV.z * dir.z;
+  }
+
+  /**
+   * Pure angular effective inverse mass about world axis `u` (unit): `uᵀ · R · I⁻¹ · Rᵀ · u`.
+   * Used by constraints that act on a rotation axis only (hinge alignment, motor, limits).
+   */
+  public angularInvMass(rb: RigidBody, rotation: Vector3D, u: Vector3D): number {
+    this._applyInvInertiaWorld(rb, rotation, u, this._dW);
+    return this._dW.x * u.x + this._dW.y * u.y + this._dW.z * u.z;
+  }
+
+  /**
+   * Adds a pure angular impulse `L` (world vector, no linear part): `ω += R · I⁻¹ · Rᵀ · L`.
+   * Skipped for static bodies.
+   */
+  public applyAngularMomentum(rb: RigidBody, rotation: Vector3D, angular: Vector3D): void {
+    if (rb.inverseMass <= 0) return;
+    this._applyInvInertiaWorld(rb, rotation, angular, this._dW);
+    rb.angularVelocity.x += this._dW.x;
+    rb.angularVelocity.y += this._dW.y;
+    rb.angularVelocity.z += this._dW.z;
   }
 
   /**
@@ -137,3 +164,11 @@ export class RigidBodyMath {
     out.copyFrom(this._l).applyQuaternion(this._q);
   }
 }
+
+/**
+ * Process-wide scratch instance. `RigidBodyMath` holds no state between calls (every method fully
+ * overwrites its scratch before reading it), so bodies, joints and the contact solver share this
+ * one instead of owning ~1 KB each. This is scratch memory, not engine state: multiple engine
+ * instances on one page remain independent.
+ */
+export const sharedRigidBodyMath = new RigidBodyMath();

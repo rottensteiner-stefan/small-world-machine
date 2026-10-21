@@ -1,10 +1,17 @@
 import { Vector3D, MathPool, MathUtils } from "../math/index.js";
 import { Ray } from "./Ray.js";
 import { BoundingBox } from "./BoundingBox.js";
-import type { BoundingSphere } from "./BoundingSphere.js";
+import { BoundingSphere } from "./BoundingSphere.js";
 import type { OBB } from "./OBB.js";
 import type { BoundingVolume } from "../interfaces/index.js";
 import { BoundingType } from "../enums/index.js";
+
+/**
+ * A mover that starts already overlapping its target only gets a time-of-impact of 0 when its
+ * displacement carries it further in by more than the current penetration plus this tolerance.
+ * Resting/sliding contacts (tiny inward drift, e.g. one gravity step) must not be frozen.
+ */
+const CCD_PENETRATION_TOLERANCE = 0.01;
 
 /**
  * Sweep kernel of the collision system: continuous-collision-detection (CCD) time-of-impact
@@ -23,6 +30,11 @@ export class CollisionSweepSolver {
   // depending on which module a given entry point happens to load first.
   private static _sweepScratchBox: BoundingBox | undefined;
   private static _sweepScratchRay: Ray | undefined;
+  // Input box of `sweepBoxSphere`: must not alias `_sweepScratchBox`, which `sweepSphereBox`
+  // overwrites while it reads its `b` argument.
+  private static _sweepScratchInputBox: BoundingBox | undefined;
+  // Stand-in sphere for hull targets (see `sweep`: hulls sweep as their bounding sphere).
+  private static _sweepScratchSphere: BoundingSphere | undefined;
 
   /**
    * Sweeps a moving sphere against a static sphere, used for Continuous Collision Detection
@@ -34,8 +46,10 @@ export class CollisionSweepSolver {
    * @param radius The moving sphere's radius.
    * @param s The static sphere to sweep against.
    * @returns The time-of-impact as a fraction of `delta` in `[0, 1]`, or -1 if no impact occurs
-   * during this sweep (including if the two spheres already overlap at `origin`, since that's a
-   * pre-existing overlap the discrete resolver already handles, not a new tunneling event).
+   * during this sweep. If the spheres already overlap at `origin`, the discrete resolver owns the
+   * pre-existing overlap (-1) unless the motion drives them clearly deeper (more than the current
+   * penetration plus a small tolerance): then the TOI is 0, so a body with residual penetration
+   * cannot tunnel through a thin target.
    */
   public static sweepSphereSphere(
     origin: Vector3D,
@@ -54,9 +68,15 @@ export class CollisionSweepSolver {
 
     const b = 2 * m.dot(delta);
     const c = m.lengthSq() - sumRad * sumRad;
+    if (c <= 0) {
+      // Already overlapping: moving deeper = moving along -m. Inward travel along the contact
+      // normal is -(m . delta)/|m|; penetration depth is sumRad - |m|.
+      const dist = Math.sqrt(m.lengthSq());
+      const inward = dist > 1e-9 ? -m.dot(delta) / dist : delta.length();
+      MathPool.releaseVector(m);
+      return inward > sumRad - dist + CCD_PENETRATION_TOLERANCE ? 0 : -1;
+    }
     MathPool.releaseVector(m);
-
-    if (c <= 0) return -1;
 
     const discriminant = b * b - 4 * a * c;
     if (discriminant < 0) return -1;
@@ -66,13 +86,57 @@ export class CollisionSweepSolver {
   }
 
   /**
-   * Internal sweep kernel: intersects a ray against an axis-aligned box representing an inflated
-   * swept target. If the ray starts inside the box (containsPoint or tmin < 0), returns -1
-   * (indicating pre-existing overlap / invalid TOI, rather than returning the exit TOI).
+   * Start-inside case of {@link _sweepRayBox}. `roundRadius > 0` means the box is a sphere-inflated
+   * (rounded) target: only a start that really overlaps the rounded shape counts (corner regions of
+   * the inflated box do not touch). Returns 0 if the displacement drives the mover deeper than the
+   * current penetration plus {@link CCD_PENETRATION_TOLERANCE}, otherwise -1 (the discrete resolver
+   * owns resting/separating overlaps).
    */
-  private static _sweepRayBox(ray: Ray, box: BoundingBox): number {
+  private static _sweepStartInside(ray: Ray, box: BoundingBox, roundRadius: number): number {
+    const o = ray.origin;
+    const d = ray.direction;
+    let inward: number;
+    let depth: number;
+    if (roundRadius > 0) {
+      const qx = Math.max(box.min.x + roundRadius, Math.min(o.x, box.max.x - roundRadius));
+      const qy = Math.max(box.min.y + roundRadius, Math.min(o.y, box.max.y - roundRadius));
+      const qz = Math.max(box.min.z + roundRadius, Math.min(o.z, box.max.z - roundRadius));
+      const nx = o.x - qx;
+      const ny = o.y - qy;
+      const nz = o.z - qz;
+      const dist = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      if (dist >= roundRadius) return -1; // corner region of the inflated box: not touching
+      if (dist > 1e-9) {
+        inward = -(d.x * nx + d.y * ny + d.z * nz) / dist;
+        depth = roundRadius - dist;
+        return inward > depth + CCD_PENETRATION_TOLERANCE ? 0 : -1;
+      }
+    }
+    // Centre inside the (inner) box, or an exact box: nearest face of `box` is the exit axis.
+    const dxMin = o.x - box.min.x;
+    const dxMax = box.max.x - o.x;
+    const dyMin = o.y - box.min.y;
+    const dyMax = box.max.y - o.y;
+    const dzMin = o.z - box.min.z;
+    const dzMax = box.max.z - o.z;
+    depth = Math.min(dxMin, dxMax, dyMin, dyMax, dzMin, dzMax);
+    if (depth === dxMin) inward = d.x;
+    else if (depth === dxMax) inward = -d.x;
+    else if (depth === dyMin) inward = d.y;
+    else if (depth === dyMax) inward = -d.y;
+    else if (depth === dzMin) inward = d.z;
+    else inward = -d.z;
+    return inward > depth + CCD_PENETRATION_TOLERANCE ? 0 : -1;
+  }
+
+  /**
+   * Internal sweep kernel: intersects a ray against an axis-aligned box representing an inflated
+   * swept target. If the ray starts inside the box (containsPoint), the result comes from
+   * {@link _sweepStartInside} (TOI 0 when driving deeper, else -1), never the exit TOI.
+   */
+  private static _sweepRayBox(ray: Ray, box: BoundingBox, roundRadius: number = 0): number {
     if (box.containsPoint(ray.origin)) {
-      return -1;
+      return this._sweepStartInside(ray, box, roundRadius);
     }
 
     let tmin = -Infinity;
@@ -134,7 +198,7 @@ export class CollisionSweepSolver {
     box.max.set(b.max.x + radius, b.max.y + radius, b.max.z + radius);
     ray.origin.copyFrom(origin);
     ray.direction.copyFrom(delta);
-    return this._sweepRayBox(ray, box);
+    return this._sweepRayBox(ray, box, radius);
   }
 
   /**
@@ -167,7 +231,7 @@ export class CollisionSweepSolver {
 
     box.min.set(-o.halfExtents.x - radius, -o.halfExtents.y - radius, -o.halfExtents.z - radius);
     box.max.set(o.halfExtents.x + radius, o.halfExtents.y + radius, o.halfExtents.z + radius);
-    return this._sweepRayBox(ray, box);
+    return this._sweepRayBox(ray, box, radius);
   }
 
   /**
@@ -207,7 +271,7 @@ export class CollisionSweepSolver {
     halfExtents: Vector3D,
     s: BoundingSphere,
   ): number {
-    const box = (this._sweepScratchBox ??= new BoundingBox(new Vector3D(), new Vector3D()));
+    const box = (this._sweepScratchInputBox ??= new BoundingBox(new Vector3D(), new Vector3D()));
     box.min.set(origin.x - halfExtents.x, origin.y - halfExtents.y, origin.z - halfExtents.z);
     box.max.set(origin.x + halfExtents.x, origin.y + halfExtents.y, origin.z + halfExtents.z);
     const negDelta = MathPool.acquireVector().copyFrom(delta).scale(-1);
@@ -291,7 +355,7 @@ export class CollisionSweepSolver {
     );
     box.max.set(o.halfExtents.x + s.radius, o.halfExtents.y + s.radius, o.halfExtents.z + s.radius);
 
-    return this._sweepRayBox(ray, box);
+    return this._sweepRayBox(ray, box, s.radius);
   }
 
   /**
@@ -376,7 +440,13 @@ export class CollisionSweepSolver {
       const t = ray.intersectsSphere(s);
       return t >= 0 && t <= 1 ? t : -1;
     } else if (BoundingType.BOX === volume.type) {
+      // A point projectile that starts inside a volume has no entry time (same as the sphere case).
+      if (volume.containsPoint(origin)) return -1;
       return this._sweepRayBox(ray, volume);
+    } else if (BoundingType.HULL === volume.type) {
+      if (volume.containsPoint(origin)) return -1;
+      const t = volume.rayDistance(ray);
+      return t >= 0 && t <= 1 ? t : -1;
     } else if (BoundingType.OBB === volume.type) {
       const o = volume;
       const box = (this._sweepScratchBox ??= new BoundingBox(new Vector3D(), new Vector3D()));
@@ -389,7 +459,25 @@ export class CollisionSweepSolver {
       ray.direction.set(delta.dot(u0), delta.dot(u1), delta.dot(u2));
       box.min.set(-o.halfExtents.x, -o.halfExtents.y, -o.halfExtents.z);
       box.max.set(o.halfExtents.x, o.halfExtents.y, o.halfExtents.z);
+      if (box.containsPoint(ray.origin)) return -1;
       return this._sweepRayBox(ray, box);
+    }
+    return -1;
+  }
+
+  /** Sweeps a sphere of `radius` against any non-hull static volume. */
+  private static _sweepSphereAgainst(
+    origin: Vector3D,
+    delta: Vector3D,
+    radius: number,
+    target: BoundingVolume,
+  ): number {
+    if (BoundingType.SPHERE === target.type) {
+      return this.sweepSphereSphere(origin, delta, radius, target);
+    } else if (BoundingType.BOX === target.type) {
+      return this.sweepSphereBox(origin, delta, radius, target);
+    } else if (BoundingType.OBB === target.type) {
+      return this.sweepSphereObb(origin, delta, radius, target);
     }
     return -1;
   }
@@ -435,6 +523,19 @@ export class CollisionSweepSolver {
       origin = moving.center;
       delta = originOrDelta;
       target = deltaOrTarget as BoundingVolume;
+    }
+
+    // Convex hulls are swept as their bounding sphere (conservative): the sweep can report an
+    // impact slightly before the exact shapes touch (up to the hull's slack inside its sphere) but
+    // never misses one, so a fast shard cannot tunnel. Previously hulls silently returned -1.
+    if (BoundingType.HULL === target.type) {
+      const sph = (this._sweepScratchSphere ??= new BoundingSphere(new Vector3D(), 1));
+      sph.center.copyFrom(target.center);
+      sph.radius = target.getBroadRadius();
+      return this.sweep(moving, origin, delta, sph);
+    }
+    if (BoundingType.HULL === moving.type) {
+      return this._sweepSphereAgainst(origin, delta, moving.getBroadRadius(), target);
     }
 
     if (BoundingType.SPHERE === moving.type) {

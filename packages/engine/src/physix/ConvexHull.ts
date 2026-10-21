@@ -8,6 +8,16 @@ import { Collision } from "./Collision.js";
 
 const MIN_LENGTH_SQ: number = 0.0000001;
 
+// Module-level scratch for the per-triangle queries below (single-threaded, never re-entrant
+// across these methods), so ray casts and closest-point queries over many triangles allocate
+// nothing.
+const _s0 = new Vector3D();
+const _s1 = new Vector3D();
+const _s2 = new Vector3D();
+const _s3 = new Vector3D();
+const _s4 = new Vector3D();
+const _s5 = new Vector3D();
+
 /**
  * An arbitrary convex polyhedron bounding volume (face/vertex list), e.g. a
  * Voronoi fracture shard. Unlike `BoundingBox`/`OBB`, its shape is fully general
@@ -33,6 +43,8 @@ export class ConvexHull implements BoundingVolumeShape {
   private readonly _localEdgeDirections: Vector3D[];
   private readonly _localCenter: Vector3D;
   private readonly _faces: readonly (readonly number[])[];
+  /** Cached bounding radius around `center`; refreshed by `transform()` (vertex set is fixed). */
+  private _broadRadius: number = 0;
 
   /**
    * Creates a new ConvexHull. Prefer `ConvexHull.fromFaceLoops()` when you only
@@ -57,6 +69,7 @@ export class ConvexHull implements BoundingVolumeShape {
     this.faceNormals = this._localFaceNormals.map((n) => n.clone());
     this.edgeDirections = this._localEdgeDirections.map((e) => e.clone());
     this.center.copyFrom(this._localCenter);
+    this._refreshBroadRadius();
   }
 
   /**
@@ -71,7 +84,17 @@ export class ConvexHull implements BoundingVolumeShape {
     const indexOf: Map<string, number> = new Map();
     const faces: number[][] = [];
 
-    const keyOf = (v: Vector3D): string => `${v.x.toFixed(5)}|${v.y.toFixed(5)}|${v.z.toFixed(5)}`;
+    // Scale-relative weld tolerance (1e-5 of the largest coordinate) quantised to integers:
+    // unlike `toFixed(5)` it does not depend on the model's units and has no "-0" vs "0" split.
+    let maxAbs = 0;
+    for (const loop of faceLoops) {
+      for (const p of loop) {
+        maxAbs = Math.max(maxAbs, Math.abs(p.x), Math.abs(p.y), Math.abs(p.z));
+      }
+    }
+    const eps = Math.max(1e-9, maxAbs * 1e-5);
+    const q = (n: number): number => Math.round(n / eps) + 0; // `+ 0` folds -0 into 0
+    const keyOf = (v: Vector3D): string => `${q(v.x)}|${q(v.y)}|${q(v.z)}`;
 
     for (const loop of faceLoops) {
       const faceIndices: number[] = [];
@@ -151,12 +174,16 @@ export class ConvexHull implements BoundingVolumeShape {
 
   /** @inheritdoc */
   public getBroadRadius(): number {
+    return this._broadRadius;
+  }
+
+  private _refreshBroadRadius(): void {
     let maxSq: number = 0;
-    for (const v of this.vertices) {
-      const d: number = v.distanceToSq(this.center);
+    for (let i = 0; i < this.vertices.length; i++) {
+      const d: number = this.vertices[i]!.distanceToSq(this.center);
       if (d > maxSq) maxSq = d;
     }
-    return Math.sqrt(maxSq);
+    this._broadRadius = Math.sqrt(maxSq);
   }
 
   /** @inheritdoc */
@@ -211,6 +238,7 @@ export class ConvexHull implements BoundingVolumeShape {
     }
     this.center.copyFrom(this._localCenter);
     matrix.transformVector(this.center);
+    this._refreshBroadRadius();
   }
 
   /**
@@ -235,70 +263,104 @@ export class ConvexHull implements BoundingVolumeShape {
     return new BoundingBox(min, max);
   }
 
-  /** @inheritdoc */
+  /**
+   * Translates the world-space vertices and center by `v`. Like `BoundingBox.translate`, this
+   * only moves the *world* copy: the local source of truth is untouched, so the offset is valid
+   * until the next `transform()` re-derives the world data from the local shape (it is never
+   * pushed through that matrix a second time).
+   */
   public translate(v: Vector3D): void {
-    // Keep both the source-of-truth local list and the world-space copies in sync so a
-    // subsequent `transform()` reproduces the translated position instead of reverting.
-    for (const lv of this._localVertices) lv.add(v);
-    this._localCenter.add(v);
     this.center.add(v);
     for (const wv of this.vertices) wv.add(v);
   }
 
   /** @inheritdoc */
   public intersectsRay(ray: Ray): boolean {
+    return this.rayDistance(ray) >= 0;
+  }
+
+  /** True when `point` lies inside (or on) every face plane of the hull. Allocation-free. */
+  public containsPoint(point: Vector3D): boolean {
+    for (const face of this._faces) {
+      if (face.length < 3) continue;
+      const v0 = this.vertices[face[0]!]!;
+      const n = _s0
+        .copyFrom(this.vertices[face[1]!]!)
+        .sub(v0)
+        .cross(_s1.copyFrom(this.vertices[face[2]!]!).sub(v0));
+      const len = n.length();
+      if (len < 1e-9) continue;
+      // Orient outward (away from the centroid), independent of the loop winding.
+      const side = n.dot(_s2.copyFrom(this.center).sub(v0)) > 0 ? -1 : 1;
+      if ((side * n.dot(_s2.copyFrom(point).sub(v0))) / len > 1e-9) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Distance `t >= 0` (in units of `ray.direction`) to the nearest face hit, or -1 on a miss.
+   * A ray starting inside the hull reports the exit point, matching Sphere/Box/OBB.
+   */
+  public rayDistance(ray: Ray): number {
+    let best = -1;
     for (const face of this._faces) {
       if (face.length < 3) continue;
       const v0 = this.vertices[face[0]!]!;
       for (let i = 1; i < face.length - 1; i++) {
-        if (this._rayTriangle(ray, v0, this.vertices[face[i]!]!, this.vertices[face[i + 1]!]!)) {
-          return true;
-        }
+        const t = this._rayTriangle(
+          ray,
+          v0,
+          this.vertices[face[i]!]!,
+          this.vertices[face[i + 1]!]!,
+        );
+        if (t >= 0 && (best < 0 || t < best)) best = t;
       }
     }
-    return false;
+    return best;
   }
 
   /**
-   * Möller–Trumbore ray/triangle test; returns whether the ray hits the triangle at t >= 0.
+   * Möller–Trumbore ray/triangle test; returns the hit distance `t >= 0`, or -1 on a miss.
    */
-  private _rayTriangle(ray: Ray, a: Vector3D, b: Vector3D, c: Vector3D): boolean {
-    const e1 = b.clone().sub(a);
-    const e2 = c.clone().sub(a);
-    const p = ray.direction.clone().cross(e2);
+  private _rayTriangle(ray: Ray, a: Vector3D, b: Vector3D, c: Vector3D): number {
+    const e1 = _s0.copyFrom(b).sub(a);
+    const e2 = _s1.copyFrom(c).sub(a);
+    const p = _s2.copyFrom(ray.direction).cross(e2);
     const det = e1.dot(p);
-    if (Math.abs(det) < 1e-9) return false;
+    if (Math.abs(det) < 1e-9) return -1;
     const invDet = 1 / det;
-    const tvec = ray.origin.clone().sub(a);
+    const tvec = _s3.copyFrom(ray.origin).sub(a);
     const u = tvec.dot(p) * invDet;
-    if (u < 0 || u > 1) return false;
-    const q = tvec.clone().cross(e1);
+    if (u < 0 || u > 1) return -1;
+    const q = _s4.copyFrom(tvec).cross(e1);
     const v = ray.direction.dot(q) * invDet;
-    if (v < 0 || u + v > 1) return false;
+    if (v < 0 || u + v > 1) return -1;
     const t = e2.dot(q) * invDet;
-    return t >= 0;
+    return t >= 0 ? t : -1;
   }
 
   /** @inheritdoc */
   public surfaceNormalAt(point: Vector3D): Vector3D {
-    let best: Vector3D | undefined;
+    const best = new Vector3D();
+    let found = false;
     let bestDist = Infinity;
     for (const face of this._faces) {
       if (face.length < 3) continue;
       const v0 = this.vertices[face[0]!]!;
       const v1 = this.vertices[face[1]!]!;
       const v2 = this.vertices[face[2]!]!;
-      const n = v1.clone().sub(v0).cross(v2.clone().sub(v0));
+      const n = _s0.copyFrom(v1).sub(v0).cross(_s1.copyFrom(v2).sub(v0));
       const len = n.length();
       if (len < 1e-9) continue;
       n.scale(1 / len);
-      const dist = Math.abs(n.dot(point.clone().sub(v0)));
+      const dist = Math.abs(n.dot(_s2.copyFrom(point).sub(v0)));
       if (dist < bestDist) {
         bestDist = dist;
-        best = n;
+        best.copyFrom(n);
+        found = true;
       }
     }
-    return best ?? new Vector3D(0, 1, 0);
+    return found ? best : best.set(0, 1, 0);
   }
 
   /** @inheritdoc */
@@ -310,7 +372,7 @@ export class ConvexHull implements BoundingVolumeShape {
       for (let i = 1; i < face.length - 1; i++) {
         const v1 = this.vertices[face[i]!]!;
         const v2 = this.vertices[face[i + 1]!]!;
-        tetraSum += v0.dot(v1.clone().cross(v2));
+        tetraSum += v0.dot(_s0.copyFrom(v1).cross(v2));
       }
     }
     // Triangulation in a consistent (outward) winding over a convex polyhedron yields a
@@ -320,67 +382,87 @@ export class ConvexHull implements BoundingVolumeShape {
 
   /** @inheritdoc */
   public closestPoint(point: Vector3D): Vector3D {
-    let bestPoint: Vector3D = this.center.clone();
+    return this.closestPointInto(point, new Vector3D());
+  }
+
+  /** Allocation-free {@link closestPoint}: writes the closest surface point into `out`. */
+  public closestPointInto(point: Vector3D, out: Vector3D): Vector3D {
+    const bestPoint = out.copyFrom(this.center);
     let bestDistSq = Infinity;
     for (const face of this._faces) {
       if (face.length < 3) continue;
       const v0 = this.vertices[face[0]!]!;
       for (let i = 1; i < face.length - 1; i++) {
-        const p = ConvexHull._closestPointOnTriangle(
+        ConvexHull._closestPointOnTriangle(
           point,
           v0,
           this.vertices[face[i]!]!,
           this.vertices[face[i + 1]!]!,
+          _s5,
         );
-        const distSq = p.distanceToSq(point);
+        const distSq = _s5.distanceToSq(point);
         if (distSq < bestDistSq) {
           bestDistSq = distSq;
-          bestPoint = p;
+          bestPoint.copyFrom(_s5);
         }
       }
     }
     return bestPoint;
   }
 
+  /** Closest point on triangle `abc` to `p`, written into `out` (uses `_s0.._s4` as scratch). */
   private static _closestPointOnTriangle(
     p: Vector3D,
     a: Vector3D,
     b: Vector3D,
     c: Vector3D,
-  ): Vector3D {
-    const ab = b.clone().sub(a);
-    const ac = c.clone().sub(a);
-    const ap = p.clone().sub(a);
+    out: Vector3D,
+  ): void {
+    const ab = _s0.copyFrom(b).sub(a);
+    const ac = _s1.copyFrom(c).sub(a);
+    const ap = _s2.copyFrom(p).sub(a);
     const d1 = ab.dot(ap);
     const d2 = ac.dot(ap);
-    if (d1 <= 0 && d2 <= 0) return a.clone();
-    const bp = p.clone().sub(b);
+    if (d1 <= 0 && d2 <= 0) {
+      out.copyFrom(a);
+      return;
+    }
+    const bp = _s2.copyFrom(p).sub(b);
     const d3 = ab.dot(bp);
     const d4 = ac.dot(bp);
-    if (d3 >= 0 && d4 <= d3) return b.clone();
+    if (d3 >= 0 && d4 <= d3) {
+      out.copyFrom(b);
+      return;
+    }
     const vc = d1 * d4 - d3 * d2;
     if (vc <= 0 && d1 >= 0 && d3 <= 0) {
       const v = d1 / (d1 - d3);
-      return a.clone().add(ab.scale(v));
+      out.copyFrom(a).add(_s3.copyFrom(ab).scale(v));
+      return;
     }
-    const cp = p.clone().sub(c);
+    const cp = _s2.copyFrom(p).sub(c);
     const d5 = ab.dot(cp);
     const d6 = ac.dot(cp);
-    if (d6 >= 0 && d5 <= d6) return c.clone();
+    if (d6 >= 0 && d5 <= d6) {
+      out.copyFrom(c);
+      return;
+    }
     const vb = d5 * d2 - d1 * d6;
     if (vb <= 0 && d2 >= 0 && d6 <= 0) {
       const w = d2 / (d2 - d6);
-      return a.clone().add(ac.scale(w));
+      out.copyFrom(a).add(_s3.copyFrom(ac).scale(w));
+      return;
     }
     const va = d3 * d6 - d5 * d4;
     if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
       const w = (d4 - d3) / (d4 - d3 + (d5 - d6));
-      return b.clone().add(c.clone().sub(b).scale(w));
+      out.copyFrom(b).add(_s3.copyFrom(c).sub(b).scale(w));
+      return;
     }
     const denom = 1 / (va + vb + vc);
     const v = vb * denom;
     const w = vc * denom;
-    return a.clone().add(ab.scale(v)).add(ac.scale(w));
+    out.copyFrom(a).add(_s3.copyFrom(ab).scale(v)).add(_s4.copyFrom(ac).scale(w));
   }
 
   /** @inheritdoc */
@@ -391,9 +473,18 @@ export class ConvexHull implements BoundingVolumeShape {
   /** @inheritdoc */
   public setFromLocal(center: Vector3D, _halfExtents: Vector3D): void {
     // A hull's shape comes from its vertex/face list, not half extents -- `setFromLocal`
-    // therefore re-positions the hull so its centroid lands at `center` (spatial queries
-    // that need a specific origin rely on this); `_halfExtents` is semantically inapplicable.
-    const shift = center.clone().sub(this.center);
-    this.translate(shift);
+    // therefore re-positions the *local* source so its centroid lands at `center` (the world
+    // copy follows immediately and survives later `transform()` calls); `_halfExtents` is
+    // semantically inapplicable.
+    const sx = center.x - this._localCenter.x;
+    const sy = center.y - this._localCenter.y;
+    const sz = center.z - this._localCenter.z;
+    for (const lv of this._localVertices) lv.set(lv.x + sx, lv.y + sy, lv.z + sz);
+    this._localCenter.set(center.x, center.y, center.z);
+    for (let i = 0; i < this._localVertices.length; i++) {
+      this.vertices[i]!.copyFrom(this._localVertices[i]!);
+    }
+    this.center.copyFrom(this._localCenter);
+    this._refreshBroadRadius();
   }
 }

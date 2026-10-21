@@ -4,6 +4,9 @@ import type { BoundingBox } from "./BoundingBox.js";
 import type { OBB } from "./OBB.js";
 import type { BoundingSphere } from "./BoundingSphere.js";
 
+/** Squared length below which an edge-edge cross axis counts as parallel (shared with OBB SAT). */
+const PARALLEL_EDGE_CROSS_SQ = 0.0001;
+
 /**
  * The minimal shape `_satPolytopes` needs: a convex shape's world-space vertices,
  * face normals, and unique edge directions. `ConvexHull` satisfies this
@@ -11,6 +14,13 @@ import type { BoundingSphere } from "./BoundingSphere.js";
  */
 interface Polytope {
   vertices: readonly Vector3D[];
+  faceNormals: readonly Vector3D[];
+  edgeDirections: readonly Vector3D[];
+}
+
+/** Mutable polytope view reused by `boxAsHull`/`obbAsHull` (no object literal per test). */
+interface MutablePolytope extends Polytope {
+  vertices: Vector3D[];
   faceNormals: readonly Vector3D[];
   edgeDirections: readonly Vector3D[];
 }
@@ -40,6 +50,18 @@ export class CollisionHullSolver {
     new Vector3D(0, 1, 0),
     new Vector3D(0, 0, 1),
   ];
+  // The two polytope views are overwritten on every call: the returned object is only valid until
+  // the next `boxAsHull`/`obbAsHull` call (a box view and an OBB view may coexist).
+  private static _boxPolytope: MutablePolytope = {
+    vertices: CollisionHullSolver._scratchBoxCorners,
+    faceNormals: CollisionHullSolver._boxAxes,
+    edgeDirections: CollisionHullSolver._boxAxes,
+  };
+  private static _obbPolytope: MutablePolytope = {
+    vertices: CollisionHullSolver._scratchObbCorners,
+    faceNormals: CollisionHullSolver._boxAxes,
+    edgeDirections: CollisionHullSolver._boxAxes,
+  };
 
   /**
    * Resolves collision between two convex hulls via the Separating Axis Theorem,
@@ -134,7 +156,7 @@ export class CollisionHullSolver {
     c[5]!.set(b.max.x, b.min.y, b.max.z);
     c[6]!.set(b.min.x, b.max.y, b.max.z);
     c[7]!.set(b.max.x, b.max.y, b.max.z);
-    return { vertices: c, faceNormals: this._boxAxes, edgeDirections: this._boxAxes };
+    return this._boxPolytope;
   }
 
   /**
@@ -167,7 +189,10 @@ export class CollisionHullSolver {
         }
       }
     }
-    return { vertices: c, faceNormals: o.axes, edgeDirections: o.axes };
+    const poly = this._obbPolytope;
+    poly.faceNormals = o.axes;
+    poly.edgeDirections = o.axes;
+    return poly;
   }
 
   /**
@@ -194,6 +219,10 @@ export class CollisionHullSolver {
         const cx = ea.y * eb.z - ea.z * eb.y;
         const cy = ea.z * eb.x - ea.x * eb.z;
         const cz = ea.x * eb.y - ea.y * eb.x;
+        // Same cut-off as the OBB SAT (`CollisionObb`, |sin| < 0.01, ~0.57 deg): the cross axis of
+        // nearly parallel edges is numerically noise and, with no face bias, could win the
+        // minimum-overlap race and shove a slightly tilted stack sideways. Face axes cover them.
+        if (cx * cx + cy * cy + cz * cz < PARALLEL_EDGE_CROSS_SQ) continue;
         if (!this._considerHullAxis(cx, cy, cz, a.vertices, b.vertices)) return null;
       }
     }
@@ -275,19 +304,18 @@ export class CollisionHullSolver {
     // centre. That point is a vertex, an edge point or a face point; the nearest *vertex* alone is
     // not enough: near an edge it is not a separating axis, so a sphere still clear of the edge
     // would be reported as touching.
-    const closest = h.closestPoint(center);
-    if (
-      !this._considerHullSphereAxis(
-        center.x - closest.x,
-        center.y - closest.y,
-        center.z - closest.z,
-        h.vertices,
-        center,
-        radius,
-      )
-    ) {
-      return null;
-    }
+    const closest = MathPool.acquireVector();
+    h.closestPointInto(center, closest);
+    const ok = this._considerHullSphereAxis(
+      center.x - closest.x,
+      center.y - closest.y,
+      center.z - closest.z,
+      h.vertices,
+      center,
+      radius,
+    );
+    MathPool.releaseVector(closest);
+    if (!ok) return null;
 
     const res = this._satResult;
     res.overlap = this._hullSatMinOverlap;

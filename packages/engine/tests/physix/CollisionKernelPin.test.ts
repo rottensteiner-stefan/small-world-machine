@@ -12,6 +12,10 @@ import { Vector3D } from "../../src/math/index.js";
  * byte-for-byte identical after the file is decomposed into the sweep kernel, the OBB-SAT
  * kernel and `CollisionHull.ts`. A deviation here means the split changed physics behavior,
  * not an allowed tolerance.
+ *
+ * These are a refactor safety net only (trivial axis-aligned inputs), NOT a correctness proof.
+ * Correctness (containment, edge regions, rotations, minimal MTV) is covered by
+ * `CollisionResolveBehavior.test.ts`, `PhysixDepthAndEdgeRegression.test.ts` and `HullCollision.test.ts`.
  */
 
 /** Axis-aligned box ConvexHull, same winding as used across physix tests. */

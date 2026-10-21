@@ -206,7 +206,7 @@ export class Ray {
   }
 
   /**
-   * Tests whether this ray intersects any bounding volume (Sphere, Box, OBB).
+   * Tests whether this ray intersects any bounding volume (Sphere, Box, OBB, Hull).
    * @param volume Target bounding volume.
    * @returns Distance t to the nearest intersection, or -1 if no intersection.
    */
@@ -217,6 +217,8 @@ export class Ray {
       return this.intersectsBox(volume);
     } else if (BoundingType.OBB === volume.type) {
       return this.intersectsOBB(volume);
+    } else if (BoundingType.HULL === volume.type) {
+      return volume.rayDistance(this);
     }
     return -1;
   }
@@ -319,6 +321,8 @@ export class Ray {
       if (dMax2 < minD) {
         outNormal.copyFrom(u2);
       }
+    } else if (BoundingType.HULL === volume.type) {
+      outNormal.copyFrom(volume.surfaceNormalAt(outPoint));
     }
     return t;
   }

@@ -188,6 +188,7 @@ export class HollowCylinder extends AbstractGeometry {
       indices: core.indices,
       wireframeIndices: core.wireframeIndices,
       normals: core.normals,
+      adopt: true,
     });
   }
 }

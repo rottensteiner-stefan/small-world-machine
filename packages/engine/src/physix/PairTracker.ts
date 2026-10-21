@@ -11,6 +11,12 @@ export interface ContactPair {
   colliding: boolean;
   normal: Vector3D;
   depth: number;
+  /** Accumulated normal impulse magnitude over this step's solver iterations (always >= 0). */
+  accNormalImpulse: number;
+  /** Accumulated friction impulse (world vector, length <= mu * accNormalImpulse). */
+  accFriction: Vector3D;
+  /** Target relative normal velocity (restitution bounce) fixed on the first iteration. */
+  bounceTarget: number;
 }
 
 /** A persistent pair state used to derive enter/stay/exit events across frames. */
@@ -20,18 +26,37 @@ export interface ContactPairState {
   normal: Vector3D;
   depth: number;
   impulse: number;
+  /**
+   * Set by {@link PairTracker.trackTrigger} / {@link PairTracker.trackCollision}: whether the pair
+   * was already tracked last step (enter vs. stay). Lives on the pooled state so tracking a pair
+   * allocates nothing.
+   */
+  wasPresent: boolean;
 }
 
+/** Exclusive upper bound for ids usable in {@link pairKey} (`a * 2^26 + b` stays below 2^53). */
+export const PAIR_ID_LIMIT = 67108864;
+const PAIR_ID_SHIFT = 67108864;
+
 /**
- * 64-bit pair key combining two ids using BigInt to prevent precision loss above 2^21.
+ * Pair key combining two ids into one exact, allocation-free double (`min * 2^26 + max`).
  * Symmetric canonical ordering: `key(a, b) === key(b, a)`. This is the single pair key
  * implementation in the engine; every pair consumer (discovery dedup, lifecycle state)
  * derives its identities from here.
+ *
+ * Both ids must be integers in `[0, PAIR_ID_LIMIT)`; larger ids would alias other pairs, so
+ * they fail fast instead. Object ids are dense counters and the system's internal ids start at
+ * `2^25`, so this holds unless an app assigns its own huge `collider.id` values.
  */
-export function pairKey(idA: number, idB: number): bigint {
+export function pairKey(idA: number, idB: number): number {
   const a = idA < idB ? idA : idB;
   const b = idA < idB ? idB : idA;
-  return (BigInt(a) << 32n) | BigInt(b);
+  if (!(a >= 0 && b < PAIR_ID_LIMIT) || a !== Math.floor(a) || b !== Math.floor(b)) {
+    throw new RangeError(
+      `pairKey: ids must be integers in [0, ${PAIR_ID_LIMIT}), got (${idA}, ${idB})`,
+    );
+  }
+  return a * PAIR_ID_SHIFT + b;
 }
 
 /**
@@ -47,7 +72,7 @@ export function pairKey(idA: number, idB: number): bigint {
  */
 export class PairTracker {
   // --- Per-step discovery dedup -------------------------------------------------------------
-  private readonly _seenKeys = new Set<bigint>();
+  private readonly _seenKeys = new Set<number>();
 
   // --- Pooled ContactPair entries (owned by the broadphase discovery, consumed by the solver) --
   private readonly _pairPool: ContactPair[] = [];
@@ -55,10 +80,10 @@ export class PairTracker {
 
   // --- Pooled enter/stay/exit state (owned by the solver's lifecycle bookkeeping) ------------
   private readonly _statePool: ContactPairState[] = [];
-  private _currentTriggerPairs = new Map<bigint, ContactPairState>();
-  private _prevTriggerPairs = new Map<bigint, ContactPairState>();
-  private _currentCollisionPairs = new Map<bigint, ContactPairState>();
-  private _prevCollisionPairs = new Map<bigint, ContactPairState>();
+  private _currentTriggerPairs = new Map<number, ContactPairState>();
+  private _prevTriggerPairs = new Map<number, ContactPairState>();
+  private _currentCollisionPairs = new Map<number, ContactPairState>();
+  private _prevCollisionPairs = new Map<number, ContactPairState>();
 
   /** The pairs discovered this step (sorted in place by the caller before solving). */
   public get activePairs(): ContactPair[] {
@@ -93,6 +118,9 @@ export class PairTracker {
       pair.colliding = false;
       pair.normal.set(0, 0, 0);
       pair.depth = 0;
+      pair.accNormalImpulse = 0;
+      pair.accFriction.set(0, 0, 0);
+      pair.bounceTarget = 0;
       entry = pair;
     } else {
       entry = {
@@ -103,6 +131,9 @@ export class PairTracker {
         colliding: false,
         normal: new Vector3D(),
         depth: 0,
+        accNormalImpulse: 0,
+        accFriction: new Vector3D(),
+        bounceTarget: 0,
       };
     }
     this._activePairs.push(entry);
@@ -118,29 +149,29 @@ export class PairTracker {
   }
 
   /**
-   * Registers a trigger pair for this step and returns its pooled state plus whether the pair
-   * was already present last step (so the caller can dispatch enter vs. stay, then the shared
+   * Registers a trigger pair for this step and returns its pooled state; `state.wasPresent` says
+   * whether the pair was already present last step (so the caller can dispatch enter vs. stay, then the shared
    * `physics:trigger` / `physics:collision` events).
    */
-  public trackTrigger(key: bigint): { state: ContactPairState; wasPresent: boolean } {
-    const wasPresent = this._prevTriggerPairs.has(key);
+  public trackTrigger(key: number): ContactPairState {
     let state = this._currentTriggerPairs.get(key);
     if (!state) {
       state = this._acquireState();
       this._currentTriggerPairs.set(key, state);
     }
-    return { state, wasPresent };
+    state.wasPresent = this._prevTriggerPairs.has(key);
+    return state;
   }
 
   /** See {@link trackTrigger} — the collision-pair counterpart. */
-  public trackCollision(key: bigint): { state: ContactPairState; wasPresent: boolean } {
-    const wasPresent = this._prevCollisionPairs.has(key);
+  public trackCollision(key: number): ContactPairState {
     let state = this._currentCollisionPairs.get(key);
     if (!state) {
       state = this._acquireState();
       this._currentCollisionPairs.set(key, state);
     }
-    return { state, wasPresent };
+    state.wasPresent = this._prevCollisionPairs.has(key);
+    return state;
   }
 
   /**
@@ -207,6 +238,7 @@ export class PairTracker {
     if (s) {
       s.depth = 0;
       s.impulse = 0;
+      s.wasPresent = false;
       s.normal.set(0, 0, 0);
       return s;
     }
@@ -216,6 +248,7 @@ export class PairTracker {
       normal: new Vector3D(),
       depth: 0,
       impulse: 0,
+      wasPresent: false,
     };
   }
 

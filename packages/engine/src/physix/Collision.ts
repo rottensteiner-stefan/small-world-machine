@@ -89,6 +89,12 @@ export class Collision {
    * @returns True if the volumes are intersecting and MTV was computed, false otherwise.
    */
   public static resolve(a: BoundingVolume, b: BoundingVolume, result: Vector3D): boolean {
+    // Hull SAT is expensive (|Ea|*|Eb| cross axes over all vertices): reject far pairs by their
+    // bounding radii first, exactly like `test` does. Cached radii make this O(1).
+    if (BoundingType.HULL === a.type || BoundingType.HULL === b.type) {
+      const sumRad = a.getBroadRadius() + b.getBroadRadius();
+      if (a.center.distanceToSq(b.center) > sumRad * sumRad) return false;
+    }
     if (BoundingType.SPHERE === a.type && BoundingType.SPHERE === b.type) {
       return this.resolveSphereSphere(a, b, result);
     }

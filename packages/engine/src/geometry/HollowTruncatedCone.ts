@@ -239,7 +239,8 @@ export class HollowTruncatedCone extends AbstractGeometry {
       capBottom: !this.openEnded,
       sideCaps: true,
       flipInnerU: false,
-      capUvScaleTop: this.outerRadiusTop / this.outerRadiusBottom,
+      // Radii are mutable before rebuild(): a zero bottom radius must not yield NaN UVs.
+      capUvScaleTop: 0 < this.outerRadiusBottom ? this.outerRadiusTop / this.outerRadiusBottom : 1,
     });
     this.setBuffers({
       vertices: core.vertices,
@@ -247,6 +248,7 @@ export class HollowTruncatedCone extends AbstractGeometry {
       indices: core.indices,
       wireframeIndices: core.wireframeIndices,
       normals: core.normals,
+      adopt: true,
     });
   }
 }

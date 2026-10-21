@@ -21,9 +21,12 @@ export interface LatheRing {
 export interface LatheGeometryOptions {
   /**
    * The revolve profile: one ring per height slice, bottom to top. Consecutive rings
-   * share no wall vertices — each quad cell is emitted with four dedicated corners,
-   * which keeps sharp edges and guarantees outward-facing winding without relying on
-   * any winding auto-correction.
+   * SHARE their wall vertices (one vertex row per ring), so wall normals are averaged
+   * across profile corners: a kink in the profile is shaded smooth, which is what
+   * sphere/capsule-like profiles need. For a hard crease, add the corner twice as two
+   * rings at the same height (a zero-height step) or end the wall there and use a cap.
+   * Caps and cut-plane caps always own dedicated vertices, so their edges stay sharp.
+   * Winding is emitted explicitly (no auto-correction).
    */
   rings: readonly LatheRing[];
   /** The number of radial subdivisions around the circumference. */
@@ -95,8 +98,19 @@ export class LatheGeometry extends AbstractGeometry {
     }
     this.rings = options.rings;
     this.radialSegments = Math.max(3, Math.floor(options.radialSegments));
-    this.thetaStart = options.thetaStart;
-    this.thetaLength = options.thetaLength;
+    // Normalize instead of throwing: a negative length is the same sector walked the
+    // other way (start moves back, length flips sign, winding stays outward); a length
+    // beyond a full turn or a non-finite one is a full circle.
+    let thetaStart: number = options.thetaStart;
+    let thetaLength: number = options.thetaLength;
+    if (Number.isFinite(thetaLength) && 0 > thetaLength) {
+      thetaStart += thetaLength;
+      thetaLength = -thetaLength;
+    }
+    this.thetaStart = Number.isFinite(thetaStart) ? thetaStart : 0;
+    this.thetaLength = Number.isFinite(thetaLength)
+      ? Math.min(thetaLength, MathUtils.TWO_PI)
+      : MathUtils.TWO_PI;
     this.capTop = options.capTop;
     this.capBottom = options.capBottom;
     this.sideCaps = options.sideCaps;
@@ -175,6 +189,52 @@ export class LatheGeometry extends AbstractGeometry {
       this._wireframeIndices.set(wire);
     }
     this.computeNormals();
+    if (!isSector) {
+      this._closeSeamNormals();
+    }
+  }
+
+  /**
+   * Full-circle wall seam and poles. The first and last vertex of each wall row sit at
+   * the same position but only touch one cell each, so `computeNormals` gives them
+   * different normals (a visible seam). Average them; a zero-radius row (pole) is
+   * collapsed to one shared normal for all its coincident vertices.
+   */
+  private _closeSeamNormals(): void {
+    const cols = this.radialSegments + 1;
+    const ringCount = this.rings.length;
+    const hasInner = this.rings.some((ring) => 0 < (ring.inner ?? 0));
+    const walls = hasInner ? 2 : 1;
+    const n = this._normals;
+    for (let w = 0; w < walls; w++) {
+      const offset = w * ringCount * cols;
+      for (let y = 0; y < ringCount; y++) {
+        const ring = this.rings[y]!;
+        const radius = 1 === w ? (ring.inner ?? 0) : ring.outer;
+        const first = (offset + y * cols) * 3;
+        const count = 0 >= radius ? cols : 2;
+        let sx = 0;
+        let sy = 0;
+        let sz = 0;
+        for (let k = 0; k < count; k++) {
+          const i = 0 >= radius ? first + k * 3 : first + k * (cols - 1) * 3;
+          sx += n[i]!;
+          sy += n[i + 1]!;
+          sz += n[i + 2]!;
+        }
+        const len = Math.hypot(sx, sy, sz);
+        if (len < 0.00001) continue;
+        sx /= len;
+        sy /= len;
+        sz /= len;
+        for (let k = 0; k < count; k++) {
+          const i = 0 >= radius ? first + k * 3 : first + k * (cols - 1) * 3;
+          n[i] = sx;
+          n[i + 1] = sy;
+          n[i + 2] = sz;
+        }
+      }
+    }
   }
 
   /**
@@ -327,8 +387,9 @@ export class LatheGeometry extends AbstractGeometry {
    */
   private _emitSideCaps(v: number[], uv: number[], idx: number[], wire: number[]): void {
     const ringCount = this.rings.length;
-    const hollow = 0 < (this.rings[0]!.inner ?? 0);
-    const inner = (ring: LatheRing): number => (hollow ? Math.max(0, ring.inner ?? 0) : 0);
+    // Per ring: a ring without an inner radius reaches the axis at that height, so a
+    // profile that is hollow only at some rings gets the matching cross-section.
+    const inner = (ring: LatheRing): number => Math.max(0, ring.inner ?? 0);
 
     for (const isStart of [true, false]) {
       const angle = isStart ? this.thetaStart : this.thetaStart + this.thetaLength;
@@ -340,9 +401,9 @@ export class LatheGeometry extends AbstractGeometry {
         const ring = this.rings[y]!;
         const vCoord = ringCount > 1 ? y / (ringCount - 1) : 0;
         v.push(inner(ring) * sin, ring.y, inner(ring) * cos);
-        uv.push(0, vCoord);
+        uv.push(0, 1.0 - vCoord);
         v.push(ring.outer * sin, ring.y, ring.outer * cos);
-        uv.push(1, vCoord);
+        uv.push(1, 1.0 - vCoord);
       }
 
       for (let y = 0; y < ringCount - 1; y++) {

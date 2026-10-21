@@ -1,7 +1,7 @@
 import type { JointOptions } from "./Joint.js";
 import { Joint } from "./Joint.js";
 import { MathPool } from "../../math/MathPool.js";
-import { RigidBodyMath } from "../RigidBodyMath.js";
+import { sharedRigidBodyMath } from "../RigidBodyMath.js";
 
 /**
  * Configuration options for DistanceJoint.
@@ -19,7 +19,7 @@ export interface DistanceJointOptions extends JointOptions {
  * Distance Joint maintaining a fixed or bounded distance between two anchor points.
  */
 export class DistanceJoint extends Joint {
-  private readonly _math = new RigidBodyMath();
+  private readonly _math = sharedRigidBodyMath;
 
   /** Target equilibrium distance. */
   public distance: number;

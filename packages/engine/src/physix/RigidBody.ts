@@ -1,5 +1,5 @@
 import { Vector3D, MathPool } from "../math/index.js";
-import { RigidBodyMath } from "./RigidBodyMath.js";
+import { sharedRigidBodyMath } from "./RigidBodyMath.js";
 
 /**
  * A component that adds Newtonian physics capabilities to an Object3D.
@@ -53,7 +53,7 @@ export class RigidBody {
   /** Precalculated inverse principal inertia components (1/Ix, 1/Iy, 1/Iz). */
   public inverseInertiaTensor: Vector3D = new Vector3D(1, 1, 1);
 
-  private readonly _math = new RigidBodyMath();
+  private readonly _math = sharedRigidBodyMath;
 
   private _inertia: number;
   private _inverseInertia: number;

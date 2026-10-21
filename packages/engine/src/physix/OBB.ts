@@ -205,8 +205,10 @@ export class OBB implements BoundingVolumeShape {
 
   /** @inheritdoc */
   public translate(v: Vector3D): void {
+    // World-space only (see the interface contract): shifting `_localCenter` as well would push
+    // `v` through the world matrix's rotation/scale on the next `transform()` (double translate).
+    // Like `BoundingBox.translate`, the offset lasts until the next `transform()`.
     this.center.add(v);
-    this._localCenter.add(v);
   }
 
   /** @inheritdoc */

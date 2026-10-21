@@ -2,8 +2,9 @@ import type { JointOptions } from "./Joint.js";
 import { Joint } from "./Joint.js";
 import { Vector3D } from "../../math/Vector3D.js";
 import { MathPool } from "../../math/MathPool.js";
-import { RigidBodyMath } from "../RigidBodyMath.js";
-import type { RigidBody } from "../RigidBody.js";
+import { sharedRigidBodyMath } from "../RigidBodyMath.js";
+import { solveAnchorVelocity } from "./AnchorConstraint.js";
+import type { Object3D } from "../../core/Object3D.js";
 
 /**
  * Configuration options for HingeJoint.
@@ -29,6 +30,12 @@ export interface HingeJointOptions extends JointOptions {
 
 /** Angular-impulse magnitude below which the constraint is considered satisfied (no-op). */
 const ANGULAR_EPSILON = 1e-6;
+/** Canonical reference axes tried (in order) when measuring the hinge angle. */
+const CANDIDATE_AXES: ReadonlyArray<readonly [number, number, number]> = [
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 1],
+];
 /** Baumgarte stabilisation factor for the angular position terms. */
 const BAUMGARTE = 0.2;
 
@@ -44,13 +51,7 @@ const BAUMGARTE = 0.2;
  * `getRelativeAngle()` grows.
  */
 export class HingeJoint extends Joint {
-  private readonly _math = new RigidBodyMath();
-
-  private static readonly _scratchAxes = [
-    { ux: 1, uy: 0, uz: 0, relV: 0, err: 0 },
-    { ux: 0, uy: 1, uz: 0, relV: 0, err: 0 },
-    { ux: 0, uy: 0, uz: 1, relV: 0, err: 0 },
-  ];
+  private readonly _math = sharedRigidBodyMath;
 
   /** Local hinge axis on bodyA. */
   public axisA: Vector3D;
@@ -99,32 +100,29 @@ export class HingeJoint extends Joint {
     return out;
   }
 
-  /**
-   * Effective inverse rotational inertia along `u`: the quadratic form sum(u_i^2 * I_i^-1).
-   * This is the correct term for a rotated axis; the plain linear dot product is too weak.
-   */
-  private _axialInvInertia(u: Vector3D, invTensor: Vector3D): number {
-    return u.x * u.x * invTensor.x + u.y * u.y * invTensor.y + u.z * u.z * invTensor.z;
+  /** Effective inverse rotational inertia of one body along world axis `u` (world-rotated inertia). */
+  private _axialInvInertia(body: Object3D | null, u: Vector3D): number {
+    const rb = body?.rigidBody;
+    if (!rb || rb.inverseMass <= 0) return 0;
+    return this._math.angularInvMass(rb, body!.rotation, u);
   }
 
   /** Applies an angular impulse `j` along world axis `u`: +j to bodyA, -j to bodyB. */
-  private _applyAngularImpulse(
-    u: Vector3D,
-    j: number,
-    rbA: RigidBody | undefined,
-    rbB: RigidBody | undefined,
-    invMassA: number,
-    invMassB: number,
-  ): void {
-    if (rbA && invMassA > 0) {
-      rbA.angularVelocity.x += u.x * j * rbA.inverseInertiaTensor.x;
-      rbA.angularVelocity.y += u.y * j * rbA.inverseInertiaTensor.y;
-      rbA.angularVelocity.z += u.z * j * rbA.inverseInertiaTensor.z;
-    }
-    if (rbB && invMassB > 0) {
-      rbB.angularVelocity.x -= u.x * j * rbB.inverseInertiaTensor.x;
-      rbB.angularVelocity.y -= u.y * j * rbB.inverseInertiaTensor.y;
-      rbB.angularVelocity.z -= u.z * j * rbB.inverseInertiaTensor.z;
+  private _applyAngularImpulse(u: Vector3D, j: number): void {
+    const torque = MathPool.acquireVector();
+    try {
+      const rbA = this.bodyA.rigidBody;
+      if (rbA && rbA.inverseMass > 0) {
+        torque.set(u.x * j, u.y * j, u.z * j);
+        this._math.applyAngularMomentum(rbA, this.bodyA.rotation, torque);
+      }
+      const rbB = this.bodyB?.rigidBody;
+      if (rbB && rbB.inverseMass > 0) {
+        torque.set(-u.x * j, -u.y * j, -u.z * j);
+        this._math.applyAngularMomentum(rbB, this.bodyB!.rotation, torque);
+      }
+    } finally {
+      MathPool.releaseVector(torque);
     }
   }
 
@@ -146,11 +144,7 @@ export class HingeJoint extends Joint {
     return len;
   }
 
-  private _rotatedRef(
-    body: import("../../core/Object3D.js").Object3D,
-    local: Vector3D,
-    out: Vector3D,
-  ): void {
+  private _rotatedRef(body: Object3D, local: Vector3D, out: Vector3D): void {
     body.worldMatrix.transformVector(local, out);
     out.sub(body.position);
   }
@@ -176,15 +170,9 @@ export class HingeJoint extends Joint {
     const localCanonical = MathPool.acquireVector();
     const worldCanonical = MathPool.acquireVector();
 
-    const candidates: ReadonlyArray<readonly [number, number, number]> = [
-      [1, 0, 0],
-      [0, 1, 0],
-      [0, 0, 1],
-    ];
-
     let angle = Number.NaN;
-    for (let i = 0; i < candidates.length; i++) {
-      const cand = candidates[i]!;
+    for (let i = 0; i < CANDIDATE_AXES.length; i++) {
+      const cand = CANDIDATE_AXES[i]!;
       localCanonical.set(cand[0], cand[1], cand[2]);
 
       // Rotate the canonical axis into bodyA's world frame; degenerate if parallel to hinge axis.
@@ -220,108 +208,6 @@ export class HingeJoint extends Joint {
     return angle;
   }
 
-  /** Solves the 3-DOF point-to-point anchor constraint, as in the non-rotational joints. */
-  private _solveLinear(
-    dt: number,
-    rbA: RigidBody | undefined,
-    rbB: RigidBody | undefined,
-    invMassA: number,
-    invMassB: number,
-    totalInvMass: number,
-  ): void {
-    const pA = MathPool.acquireVector();
-    const pB = MathPool.acquireVector();
-    this.getWorldAnchorA(pA);
-    this.getWorldAnchorB(pB);
-
-    const centerA = this.bodyA.position;
-    const centerB = this.bodyB ? this.bodyB.position : pB;
-
-    const rA = MathPool.acquireVector();
-    const rB = MathPool.acquireVector();
-    rA.set(pA.x - centerA.x, pA.y - centerA.y, pA.z - centerA.z);
-    rB.set(pB.x - centerB.x, pB.y - centerB.y, pB.z - centerB.z);
-
-    // Point velocities at the anchors: v + w x r (world-space kinematics)
-    const velA = MathPool.acquireVector();
-    const velB = MathPool.acquireVector();
-    if (rbA && invMassA > 0) {
-      this._math.pointVelocity(rbA, rA, velA);
-    } else {
-      velA.set(0, 0, 0);
-    }
-    if (rbB && invMassB > 0) {
-      this._math.pointVelocity(rbB, rB, velB);
-    } else {
-      velB.set(0, 0, 0);
-    }
-
-    const relVx = velB.x - velA.x;
-    const relVy = velB.y - velA.y;
-    const relVz = velB.z - velA.z;
-    const errX = pB.x - pA.x;
-    const errY = pB.y - pA.y;
-    const errZ = pB.z - pA.z;
-    const betaDt = 0.2 / dt;
-
-    const axes = HingeJoint._scratchAxes;
-    axes[0]!.relV = relVx;
-    axes[0]!.err = errX;
-    axes[1]!.relV = relVy;
-    axes[1]!.err = errY;
-    axes[2]!.relV = relVz;
-    axes[2]!.err = errZ;
-
-    const dir = MathPool.acquireVector();
-    const impulse = MathPool.acquireVector();
-    let totalImpulseSq = 0;
-
-    for (let i = 0; i < 3; i++) {
-      const axis = axes[i]!;
-      dir.set(axis.ux, axis.uy, axis.uz);
-
-      // Rotational inverse mass through the body's world-rotated inertia (unchanged for axis-aligned bodies).
-      let kRot = 0;
-      if (invMassA > 0 && rbA) {
-        kRot += this._math.effectiveInvMass(rbA, this.bodyA.rotation, rA, dir);
-      }
-      if (invMassB > 0 && rbB) {
-        kRot += this._math.effectiveInvMass(rbB, this.bodyB!.rotation, rB, dir);
-      }
-
-      const effInvMass = totalInvMass + kRot;
-      if (effInvMass <= 0) continue;
-      const j = (axis.relV + betaDt * axis.err) / effInvMass;
-      if (Math.abs(j) < 1e-8) continue;
-
-      totalImpulseSq += j * j;
-
-      impulse.set(dir.x * j, dir.y * j, dir.z * j);
-      if (invMassA > 0 && rbA) {
-        rbA.applyImpulseAtPoint(impulse, pA, centerA, this.bodyA.rotation);
-      }
-      if (invMassB > 0 && rbB) {
-        impulse.scale(-1);
-        rbB.applyImpulseAtPoint(impulse, pB, centerB, this.bodyB!.rotation);
-      }
-    }
-
-    MathPool.releaseVector(dir);
-    MathPool.releaseVector(velB);
-    MathPool.releaseVector(velA);
-    MathPool.releaseVector(rB);
-    MathPool.releaseVector(rA);
-
-    if (Math.sqrt(totalImpulseSq) > this.breakForce) {
-      this.isBroken = true;
-      this.enabled = false;
-    }
-
-    MathPool.releaseVector(pA);
-    MathPool.releaseVector(pB);
-    MathPool.releaseVector(impulse);
-  }
-
   /** @inheritdoc */
   public solveVelocity(dt: number): void {
     if (!this.enabled || this.isBroken) return;
@@ -334,7 +220,11 @@ export class HingeJoint extends Joint {
     const totalInvMass = invMassA + invMassB;
     if (totalInvMass <= 0) return;
 
-    this._solveLinear(dt, rbA, rbB, invMassA, invMassB, totalInvMass);
+    if (solveAnchorVelocity(this, dt) > this.breakForce) {
+      this.isBroken = true;
+      this.enabled = false;
+      return;
+    }
 
     // --- Axis alignment: remove the 2 rotational DOFs so both axes stay parallel. ---
     const axisA = MathPool.acquireVector();
@@ -352,10 +242,9 @@ export class HingeJoint extends Joint {
     u1.copyFrom(axisA).cross(ref).normalize();
     u2.copyFrom(axisA).cross(u1).normalize();
 
-    for (const u of [u1, u2]) {
-      const kInvA = rbA ? this._axialInvInertia(u, rbA.inverseInertiaTensor) : 0;
-      const kInvB = rbB ? this._axialInvInertia(u, rbB.inverseInertiaTensor) : 0;
-      const k = kInvA + kInvB;
+    for (let ui = 0; ui < 2; ui++) {
+      const u = ui === 0 ? u1 : u2;
+      const k = this._axialInvInertia(this.bodyA, u) + this._axialInvInertia(this.bodyB, u);
       if (k <= 0) continue;
 
       const relVel =
@@ -369,7 +258,7 @@ export class HingeJoint extends Joint {
 
       const j = -(relVel + (BAUMGARTE / dt) * cU) / k;
       if (Math.abs(j) < ANGULAR_EPSILON) continue;
-      this._applyAngularImpulse(u, j, rbA, rbB, invMassA, invMassB);
+      this._applyAngularImpulse(u, j);
     }
 
     MathPool.releaseVector(ref);
@@ -382,14 +271,11 @@ export class HingeJoint extends Joint {
     // angVel = (omegaB - omegaA) . axis is the rate at which getRelativeAngle() grows.
     const axis = MathPool.acquireVector();
     this.getWorldAxisA(axis);
-    const kInvA = rbA ? this._axialInvInertia(axis, rbA.inverseInertiaTensor) : 0;
-    const kInvB = rbB ? this._axialInvInertia(axis, rbB.inverseInertiaTensor) : 0;
-    const k = kInvA + kInvB;
+    const k = this._axialInvInertia(this.bodyA, axis) + this._axialInvInertia(this.bodyB, axis);
     if (k > 0) {
       // angVel = (omegaB - omegaA) . axis is the rate at which getRelativeAngle() grows.
       const angVelA = rbA && invMassA > 0 ? rbA.angularVelocity.dot(axis) : 0;
       const angVelB = rbB && invMassB > 0 ? rbB.angularVelocity.dot(axis) : 0;
-      const angleVel = angVelB - angVelA;
       // Motor convention: a positive motorSpeed turns bodyA counter-clockwise relative to bodyB
       // around the axis, so the motor targets (omegaA - omegaB) . axis = motorSpeed.
       const motorRel = angVelA - angVelB;
@@ -419,22 +305,28 @@ export class HingeJoint extends Joint {
             j = Math.max(-maxImpulse, Math.min(maxImpulse, j));
           }
           if (Math.abs(j) > ANGULAR_EPSILON) {
-            this._applyAngularImpulse(axis, j, rbA, rbB, invMassA, invMassB);
+            this._applyAngularImpulse(axis, j);
           }
         }
       }
 
       if (beyond !== 0) {
+        // Re-measure: the motor impulse above changed the relative speed.
+        const angleVel =
+          (rbB && invMassB > 0 ? rbB.angularVelocity.dot(axis) : 0) -
+          (rbA && invMassA > 0 ? rbA.angularVelocity.dot(axis) : 0);
         const violation = beyond > 0 ? limit - this.maxAngle : this.minAngle - limit;
-        // One-sided pull-back: the limit may only push the hinge back into the allowed range.
-        let j = (beyond * angleVel + (BAUMGARTE / dt) * violation) / k;
+        // One-sided pull-back. A positive impulse on bodyA lowers `angleVel`, a negative one
+        // raises it. Above the upper limit we need j >= 0 (lower angleVel); below the lower limit
+        // we need j <= 0 (raise angleVel). The magnitude drives angleVel to the Baumgarte target.
+        let j: number;
         if (beyond > 0) {
-          j = Math.max(0, j);
+          j = Math.max(0, (angleVel + (BAUMGARTE / dt) * violation) / k);
         } else {
-          j = Math.min(0, j);
+          j = Math.min(0, (angleVel - (BAUMGARTE / dt) * violation) / k);
         }
         if (Math.abs(j) > ANGULAR_EPSILON) {
-          this._applyAngularImpulse(axis, j, rbA, rbB, invMassA, invMassB);
+          this._applyAngularImpulse(axis, j);
         }
       }
     }

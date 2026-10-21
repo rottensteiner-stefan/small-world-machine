@@ -87,6 +87,7 @@ export class Tube extends AbstractGeometry {
       indices: core.indices,
       wireframeIndices: core.wireframeIndices,
       normals: core.normals,
+      adopt: true,
     });
   }
 }

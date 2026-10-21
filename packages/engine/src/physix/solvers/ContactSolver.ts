@@ -10,10 +10,13 @@ import { StaticCollider } from "../StaticCollider.js";
 import type { Joint } from "../joints/Joint.js";
 import { pairKey } from "../PairTracker.js";
 import type { PairTracker, ContactPair } from "../PairTracker.js";
-import { RigidBodyMath } from "../RigidBodyMath.js";
+import { sharedRigidBodyMath } from "../RigidBodyMath.js";
 import type { RigidBody } from "../RigidBody.js";
 
 export { pairKey, type ContactPair, type ContactPairState } from "../PairTracker.js";
+
+/** Penetration (world units) tolerated by the positional pass before it pushes bodies apart. */
+export const PENETRATION_SLOP = 0.005;
 
 /** Per-step dependencies injected by the owner system (keeps the public API surface there). */
 export interface ContactSolverContext {
@@ -62,7 +65,8 @@ interface PairSolveScratch {
  * frame instead of the duplicated unrotated `kRot` arithmetic the original solver inlined.
  */
 export class ContactSolver {
-  private readonly _math = new RigidBodyMath();
+  /** One scratch instance shared with the solve pass (stateless between calls, not re-entrant). */
+  private readonly _math = sharedRigidBodyMath;
 
   /**
    * Solves all active contact pairs, then dispatches the resulting collision/trigger life-cycle
@@ -72,7 +76,6 @@ export class ContactSolver {
    * @param ctx Per-step configuration and dependencies.
    */
   public solve(pairs: ContactPair[], joints: Joint[], ctx: ContactSolverContext): void {
-    const events = ctx.events;
     const iterationCount = Math.max(1, ctx.solverIterations);
 
     const scratch: PairSolveScratch = {
@@ -95,6 +98,37 @@ export class ContactSolver {
 
     const gravStep = ctx.gravityLength * ctx.fixedTimeStep;
 
+    try {
+      this._solveIterations(pairs, joints, ctx, scratch, iterationCount, gravStep);
+    } finally {
+      // Event listeners may throw from dispatchEvent: never leak the pooled scratch vectors.
+      MathPool.releaseVector(scratch.rB);
+      MathPool.releaseVector(scratch.rA);
+      MathPool.releaseVector(scratch.velB);
+      MathPool.releaseVector(scratch.velA);
+      MathPool.releaseVector(scratch.supportB);
+      MathPool.releaseVector(scratch.supportA);
+      MathPool.releaseVector(scratch.contactPt);
+      MathPool.releaseVector(scratch.impulseT);
+      MathPool.releaseVector(scratch.relTangent);
+      MathPool.releaseVector(scratch.vt);
+      MathPool.releaseVector(scratch.impulse);
+      MathPool.releaseVector(scratch.posCorr);
+      MathPool.releaseVector(scratch.zeroVel);
+      MathPool.releaseVector(scratch.result);
+      MathPool.releaseVector(scratch.rv);
+    }
+  }
+
+  private _solveIterations(
+    pairs: ContactPair[],
+    joints: Joint[],
+    ctx: ContactSolverContext,
+    scratch: PairSolveScratch,
+    iterationCount: number,
+    gravStep: number,
+  ): void {
+    const events = ctx.events;
     for (let iter = 0; iter < iterationCount; iter++) {
       // Symmetric Gauss-Seidel: alternate forward and backward passes for bidirectional constraint propagation
       const isForward = iter % 2 === 0;
@@ -129,22 +163,6 @@ export class ContactSolver {
     // 6. Trigger & Collision Exit Events (dispatches exits, returns state to the pool,
     //    rolls the current maps into next step's "previous" slot)
     ctx.tracker.endStep(events);
-
-    MathPool.releaseVector(scratch.rB);
-    MathPool.releaseVector(scratch.rA);
-    MathPool.releaseVector(scratch.velB);
-    MathPool.releaseVector(scratch.velA);
-    MathPool.releaseVector(scratch.supportB);
-    MathPool.releaseVector(scratch.supportA);
-    MathPool.releaseVector(scratch.contactPt);
-    MathPool.releaseVector(scratch.impulseT);
-    MathPool.releaseVector(scratch.relTangent);
-    MathPool.releaseVector(scratch.vt);
-    MathPool.releaseVector(scratch.impulse);
-    MathPool.releaseVector(scratch.posCorr);
-    MathPool.releaseVector(scratch.zeroVel);
-    MathPool.releaseVector(scratch.result);
-    MathPool.releaseVector(scratch.rv);
   }
 
   /**
@@ -210,8 +228,11 @@ export class ContactSolver {
     }
 
     // 1. Position resolution (penetration separation)
-    if (depth > 0) {
-      const correction = depth / totalInvMass;
+    // Penetration slop: ignore the last few millimetres so resting contacts do not oscillate
+    // between "separated" and "penetrating" (which flickers events and defeats sleeping).
+    const correctedDepth = depth - PENETRATION_SLOP;
+    if (correctedDepth > 0) {
+      const correction = correctedDepth / totalInvMass;
 
       if (invMassA > 0 && firstObj) {
         s.posCorr.copyFrom(pair.normal).scale(correction * invMassA);
@@ -254,18 +275,23 @@ export class ContactSolver {
     const events = ctx.events;
     const curVelA = rbA ? rbA.velocity : s.zeroVel;
     const curVelB = rbB ? rbB.velocity : s.zeroVel;
-    const moveThreshSq = Math.max(
+    const gravFloorSq = gravStep * gravStep * 1.44;
+    const moveThreshSqA = Math.max(
       rbA ? rbA.sleepLinearThreshold * rbA.sleepLinearThreshold : 0.0025,
-      gravStep * gravStep * 1.44,
+      gravFloorSq,
+    );
+    const moveThreshSqB = Math.max(
+      rbB ? rbB.sleepLinearThreshold * rbB.sleepLinearThreshold : 0.0025,
+      gravFloorSq,
     );
     const isMovingA =
       rbA !== undefined &&
       !rbA.isSleeping &&
-      (curVelA.lengthSq() > moveThreshSq || curVelA.x * curVelA.x + curVelA.z * curVelA.z > 1e-4);
+      (curVelA.lengthSq() > moveThreshSqA || curVelA.x * curVelA.x + curVelA.z * curVelA.z > 1e-4);
     const isMovingB =
       rbB !== undefined &&
       !rbB.isSleeping &&
-      (curVelB.lengthSq() > moveThreshSq || curVelB.x * curVelB.x + curVelB.z * curVelB.z > 1e-4);
+      (curVelB.lengthSq() > moveThreshSqB || curVelB.x * curVelB.x + curVelB.z * curVelB.z > 1e-4);
 
     if (rbA && rbA.isSleeping && isMovingB) {
       rbA.wakeUp();
@@ -277,7 +303,11 @@ export class ContactSolver {
     }
   }
 
-  /** Trigger bookkeeping + event dispatch for a colliding trigger pair (first iteration only). */
+  /**
+   * Trigger bookkeeping + event dispatch for a colliding trigger pair (first iteration only).
+   * Event payload `normal` is the pooled pair vector: valid only during the listener call, copy it
+   * (`normal.clone()`) to keep it.
+   */
   private _trackTrigger(
     pair: ContactPair,
     ctx: ContactSolverContext,
@@ -287,7 +317,8 @@ export class ContactSolver {
   ): void {
     const events = ctx.events;
     const key = pairKey(pair.idA, pair.idB);
-    const { state, wasPresent } = ctx.tracker.trackTrigger(key);
+    const state = ctx.tracker.trackTrigger(key);
+    const wasPresent = state.wasPresent;
     state.objectA = (firstObj ?? secondObj)!;
     state.objectB = firstObj ? pair.second : pair.first;
     state.normal.copyFrom(pair.normal);
@@ -390,38 +421,52 @@ export class ContactSolver {
       kRotN += this._math.effectiveInvMass(rbB, secondObj.rotation, s.rB, normal);
     }
 
-    const effInvMassN = totalInvMassOf(invMassA, invMassB) + kRotN;
+    const effInvMassN = invMassA + invMassB + kRotN;
 
-    // 2. Velocity resolution (Normal Impulse with angular reaction)
-    let jMag = 0;
-    if (velAlongNormal < 0 && effInvMassN > 0) {
-      const restA = rbA
-        ? rbA.restitution
-        : first instanceof StaticCollider
-          ? first.restitution
-          : 0.2;
-      const restB = rbB
-        ? rbB.restitution
-        : second instanceof StaticCollider
-          ? second.restitution
-          : 0.2;
-      const e = iter === 0 && velAlongNormal <= -0.5 ? Math.min(restA, restB) : 0;
-      jMag = -(1 + e) * velAlongNormal;
-      // Successive Over-Relaxation (SOR) factor (1.2) for fast convergence on stacked contacts
-      const relaxation = iter > 0 ? 1.2 : 1.0;
-      jMag = (jMag / effInvMassN) * relaxation;
-
-      s.impulse.copyFrom(normal).scale(jMag);
-      if (invMassA > 0 && rbA && firstObj) {
-        this._math.applyImpulseAtPoint(rbA, firstObj.rotation, s.impulse, s.rA);
+    // 2. Velocity resolution: accumulated normal impulse (projected Gauss-Seidel). The running
+    //    sum is clamped to >= 0 (contacts push, never pull) while each iteration may *reduce*
+    //    an earlier overshoot, so the SOR factor cannot inject energy.
+    if (iter === 0) {
+      pair.accNormalImpulse = 0;
+      pair.accFriction.set(0, 0, 0);
+      let bounce = 0;
+      if (velAlongNormal <= -0.5) {
+        const restA = rbA
+          ? rbA.restitution
+          : first instanceof StaticCollider
+            ? first.restitution
+            : 0.2;
+        const restB = rbB
+          ? rbB.restitution
+          : second instanceof StaticCollider
+            ? second.restitution
+            : 0.2;
+        bounce = -Math.min(restA, restB) * velAlongNormal;
       }
-      if (invMassB > 0 && rbB && secondObj) {
-        s.impulse.scale(-1);
-        this._math.applyImpulseAtPoint(rbB, secondObj.rotation, s.impulse, s.rB);
-      }
+      pair.bounceTarget = bounce;
     }
 
-    // 3. Coulomb Contact Friction (with angular response)
+    if (effInvMassN > 0) {
+      const relaxation = iter > 0 ? 1.2 : 1.0;
+      const delta = ((pair.bounceTarget - velAlongNormal) / effInvMassN) * relaxation;
+      const newAcc = Math.max(0, pair.accNormalImpulse + delta);
+      const applied = newAcc - pair.accNormalImpulse;
+      pair.accNormalImpulse = newAcc;
+      if (applied !== 0) {
+        s.impulse.copyFrom(normal).scale(applied);
+        if (invMassA > 0 && rbA && firstObj) {
+          this._math.applyImpulseAtPoint(rbA, firstObj.rotation, s.impulse, s.rA);
+        }
+        if (invMassB > 0 && rbB && secondObj) {
+          s.impulse.scale(-1);
+          this._math.applyImpulseAtPoint(rbB, secondObj.rotation, s.impulse, s.rB);
+        }
+      }
+    }
+    const jMag = pair.accNormalImpulse;
+
+    // 3. Coulomb friction: the accumulated tangential impulse stays inside the cone
+    //    |jT| <= mu * (accumulated normal impulse), independent of this iteration's increment.
     if (invMassA > 0 && rbA) {
       this._math.pointVelocity(rbA, s.rA, s.velA);
     } else {
@@ -458,30 +503,38 @@ export class ContactSolver {
         kRotT += this._math.effectiveInvMass(rbB, secondObj.rotation, s.rB, s.relTangent);
       }
 
-      const effInvMassT = totalInvMassOf(invMassA, invMassB) + kRotT;
-
-      // Max tangential friction impulse allowed by Coulomb cone
-      const maxFrictionImpulse = mu * jMag;
-      // Ideal impulse to stop tangential sliding
-      const idealFrictionImpulse = effInvMassT > 0 ? vtSpeed / effInvMassT : 0;
-      const jFriction = Math.min(idealFrictionImpulse, maxFrictionImpulse);
-
-      if (jFriction > 1e-8) {
-        s.impulseT.set(-tDirX * jFriction, -tDirY * jFriction, -tDirZ * jFriction);
-        if (invMassA > 0 && rbA && firstObj) {
-          this._math.applyImpulseAtPoint(rbA, firstObj.rotation, s.impulseT, s.rA);
-        }
-        if (invMassB > 0 && rbB && secondObj) {
-          s.impulseT.scale(-1);
-          this._math.applyImpulseAtPoint(rbB, secondObj.rotation, s.impulseT, s.rB);
+      const effInvMassT = invMassA + invMassB + kRotT;
+      if (effInvMassT > 0) {
+        const idealFrictionImpulse = vtSpeed / effInvMassT;
+        // candidate = accFriction - t * ideal  (impulse opposes the sliding direction)
+        const acc = pair.accFriction;
+        const cx = acc.x - tDirX * idealFrictionImpulse;
+        const cy = acc.y - tDirY * idealFrictionImpulse;
+        const cz = acc.z - tDirZ * idealFrictionImpulse;
+        const cLen = Math.sqrt(cx * cx + cy * cy + cz * cz);
+        const maxF = mu * jMag;
+        const k = cLen > maxF && cLen > 0 ? maxF / cLen : 1;
+        // Impulse applied now = clamped candidate - previous accumulation.
+        s.impulseT.set(cx * k - acc.x, cy * k - acc.y, cz * k - acc.z);
+        acc.set(cx * k, cy * k, cz * k);
+        if (s.impulseT.lengthSq() > 1e-16) {
+          if (invMassA > 0 && rbA && firstObj) {
+            this._math.applyImpulseAtPoint(rbA, firstObj.rotation, s.impulseT, s.rA);
+          }
+          if (invMassB > 0 && rbB && secondObj) {
+            s.impulseT.scale(-1);
+            this._math.applyImpulseAtPoint(rbB, secondObj.rotation, s.impulseT, s.rB);
+          }
         }
       }
     }
 
-    // 4. Dispatch collision event once on the first iteration
+    // 4. Dispatch collision event once on the first iteration. `normal` is the pooled pair vector:
+    //    listeners must copy it to keep it beyond the call.
     if (iter === 0 && pair.colliding && (velAlongNormal < 0 || pair.depth > 0)) {
       const key = pairKey(pair.idA, pair.idB);
-      const { state, wasPresent } = ctx.tracker.trackCollision(key);
+      const state = ctx.tracker.trackCollision(key);
+      const wasPresent = state.wasPresent;
       state.objectA = (firstObj ?? secondObj)!;
       state.objectB = firstObj ? second : first;
       state.normal.copyFrom(normal);
@@ -682,8 +735,4 @@ export class ContactSolver {
       }
     }
   }
-}
-
-function totalInvMassOf(invMassA: number, invMassB: number): number {
-  return invMassA + invMassB;
 }

@@ -120,8 +120,8 @@ export class BoundingSphere implements BoundingVolumeShape {
     const offset = point.clone().sub(this.center);
     const len = offset.length();
     if (len < 1e-9) return new Vector3D(this.center.x + this.radius, this.center.y, this.center.z);
-    const scale = Math.min(this.radius / len, 1);
-    return this.center.clone().add(offset.scale(scale));
+    // Always a *surface* point, like Box/OBB/Hull: interior queries project outwards too.
+    return this.center.clone().add(offset.scale(this.radius / len));
   }
 
   /** @inheritdoc */
@@ -131,6 +131,8 @@ export class BoundingSphere implements BoundingVolumeShape {
 
   /** @inheritdoc */
   public setFromLocal(center: Vector3D, halfExtents: Vector3D): void {
+    // Radius is the *circumscribed* sphere of the box (|halfExtents|), so it encloses the same
+    // region as `BoundingBox.setFromLocal` (it is not volume-equal).
     this.center.copyFrom(center);
     this.radius = halfExtents.length();
   }

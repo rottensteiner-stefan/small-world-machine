@@ -3,6 +3,7 @@ import { Ray } from "../../src/physix/Ray.js";
 import { BoundingBox } from "../../src/physix/BoundingBox.js";
 import { BoundingSphere } from "../../src/physix/BoundingSphere.js";
 import { OBB } from "../../src/physix/OBB.js";
+import { ConvexHull } from "../../src/physix/ConvexHull.js";
 import { Vector3D } from "../../src/math/index.js";
 
 describe("Ray", () => {
@@ -67,6 +68,53 @@ describe("Ray", () => {
       obb.axes[2].set(-cos45, 0, cos45);
       expect(ray.intersectsOBB(obb)).toBeGreaterThan(0);
       expect(ray.intersectsOBB(obb)).toBeLessThan(10);
+    });
+  });
+
+  describe("convex hull targets", () => {
+    function cubeHull(): ConvexHull {
+      const v = [
+        new Vector3D(-1, -1, -1),
+        new Vector3D(1, -1, -1),
+        new Vector3D(1, 1, -1),
+        new Vector3D(-1, 1, -1),
+        new Vector3D(-1, -1, 1),
+        new Vector3D(1, -1, 1),
+        new Vector3D(1, 1, 1),
+        new Vector3D(-1, 1, 1),
+      ];
+      const f = [
+        [0, 3, 2, 1],
+        [4, 5, 6, 7],
+        [0, 1, 5, 4],
+        [3, 7, 6, 2],
+        [0, 4, 7, 3],
+        [1, 2, 6, 5],
+      ];
+      return new ConvexHull(v, f);
+    }
+
+    it("intersectVolume returns the entry distance for a hull (was silently -1)", () => {
+      const ray = new Ray(new Vector3D(0, 0, 10), new Vector3D(0, 0, -1));
+      expect(ray.intersectVolume(cubeHull())).toBeCloseTo(9, 6);
+      const miss = new Ray(new Vector3D(5, 5, 10), new Vector3D(0, 0, -1));
+      expect(miss.intersectVolume(cubeHull())).toBe(-1);
+    });
+
+    it("a ray starting inside a hull reports the exit distance like the other volumes", () => {
+      const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(1, 0, 0));
+      expect(ray.intersectVolume(cubeHull())).toBeCloseTo(1, 6);
+    });
+
+    it("intersectVolumeDetailed gives hit point and outward normal on a hull", () => {
+      const ray = new Ray(new Vector3D(0.2, 5, 0.1), new Vector3D(0, -1, 0));
+      const pt = new Vector3D();
+      const n = new Vector3D();
+      const t = ray.intersectVolumeDetailed(cubeHull(), pt, n);
+      expect(t).toBeCloseTo(4, 6);
+      expect(pt.y).toBeCloseTo(1, 6);
+      expect(n.y).toBeCloseTo(1, 6);
+      expect(n.x).toBeCloseTo(0, 6);
     });
   });
 });

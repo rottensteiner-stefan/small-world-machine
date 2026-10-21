@@ -258,12 +258,22 @@ describe("Collision", () => {
       expect(toi).toBe(-1);
     });
 
-    it("should return -1 for a sphere sweep already overlapping at the start", () => {
-      // Already-overlapping is a pre-existing penetration, not a new tunneling event -- the
-      // discrete resolver is responsible for that case, not the sweep test.
+    it("should leave a sphere sweep that already overlaps and moves away to the discrete resolver (-1)", () => {
+      const s = new BoundingSphere(new Vector3D(0.5, 0, 0), 1.0);
+      const toi = Collision.sweepSphereSphere(
+        new Vector3D(0, 0, 0),
+        new Vector3D(-5, 0, 0),
+        1.0,
+        s,
+      );
+      expect(toi).toBe(-1);
+    });
+
+    it("should return TOI 0 for a sphere sweep that already overlaps and is driven deeper", () => {
+      // Replaces the old "overlap -> -1" pin: that let residual penetration tunnel through.
       const s = new BoundingSphere(new Vector3D(0.5, 0, 0), 1.0);
       const toi = Collision.sweepSphereSphere(new Vector3D(0, 0, 0), new Vector3D(5, 0, 0), 1.0, s);
-      expect(toi).toBe(-1);
+      expect(toi).toBe(0);
     });
 
     it("should find the earliest time-of-impact for a sphere sweeping through a static box", () => {
