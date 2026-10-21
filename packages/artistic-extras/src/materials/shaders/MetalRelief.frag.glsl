@@ -4,18 +4,23 @@
 
 uniform vec4 u_matParam0; // semantic lane 0: relief / palette-knife / scratch parameters
 uniform vec4 u_matParam1; // semantic lane 1: edge / wire-mesh / rain parameters
-uniform vec4 u_styleA;
+uniform vec4 u_matParam2; // semantic lane 2: color-pop (hue, tolerance, desaturation, rust)
+uniform vec4 u_matParam3; // semantic lane 3: key light direction xyz (stylized, see main)
 uniform float u_metallic;
 uniform float u_roughness;
 uniform float u_time;
 
-// Procedural hash
+// Hoskins hash without sine: identical bits in WGSL / GLSL300 / GLSL100 (cross-dialect parity).
 float mr_hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
 }
 
 vec2 mr_hash2(vec2 p) {
-    return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453123);
+    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx + p3.yz) * p3.zy);
 }
 
 // RGB to HSV
@@ -70,10 +75,10 @@ void main() {
     float wireMeshScale        = u_matParam1.z; // default: 40.0
     float wetRainStreaks       = u_matParam1.w; // default: 0.4
 
-    float targetHue            = u_styleA.x; // default: 0.0 (Red)
-    float hueTolerance         = u_styleA.y; // default: 0.09
-    float desaturation         = u_styleA.z; // default: 0.95
-    float rustStrength         = u_styleA.w; // default: 0.75
+    float targetHue            = u_matParam2.x; // default: 0.0 (Red)
+    float hueTolerance         = u_matParam2.y; // default: 0.09
+    float desaturation         = u_matParam2.z; // default: 0.95
+    float rustStrength         = u_matParam2.w; // default: 0.75
 
     // --- Base Color from texture or uniform ---
     #ifdef USE_DIFFUSE_MAP
@@ -112,7 +117,7 @@ void main() {
     }
 
     // --- 4. Curvature & Welded Edge Bevel ---
-    float curvature = length(fwidth(perturbedN)) * 6.0;
+    float curvature = length(abs(dFdx(perturbedN)) + abs(dFdy(perturbedN))) * 6.0; // == length(fwidth(n)), same as WGSL/GLSL100
     float edgeGlint = clamp(curvature * edgeBevelStrength, 0.0, 1.0);
 
     // --- 5. Selective Color Isolation (The Red Pop) ---
@@ -150,8 +155,11 @@ void main() {
     }
 
     // --- 7. Simple Direct Lighting & Specular Highlight ---
-    vec3 L = normalize(vec3(0.4, 0.8, 0.5)); // Main directional light key
-    vec3 V = normalize(-v_worldPos);
+    // STYLIZED (not physically based, by design): this material is a painterly relief look. It ignores
+    // scene lights/shadows/IBL and uses its own key light (lane u_matParam3.xyz, default (0.4, 0.8, 0.5)).
+    // Energy is bounded instead: diffuse <= albedo, metallic darkens diffuse, specular and result are clamped to 1.
+    vec3 L = normalize(u_matParam3.xyz);
+    vec3 V = normalize(u_viewPos - v_worldPos);
     vec3 H = normalize(L + V);
 
     float NdotL = max(dot(perturbedN, L), 0.0);
@@ -161,12 +169,13 @@ void main() {
     float spec = pow(NdotH, specPower) * (1.0 - dynamicRoughness);
 
     // Bare silver metal glint on worn edges
-    vec3 specColor = mix(vec3(0.3), vec3(1.0, 0.98, 0.95), dynamicMetallic) + vec3(edgeGlint * 0.7);
+    vec3 specColor = min(mix(vec3(0.3), vec3(1.0, 0.98, 0.95), dynamicMetallic) + vec3(edgeGlint * 0.7), vec3(1.0));
 
-    vec3 diffuseLight = finalAlbedo * (vec3(0.25) + vec3(0.85) * NdotL);
+    vec3 diffuseLight = finalAlbedo * (vec3(0.25) + vec3(0.75) * NdotL) * (1.0 - 0.5 * dynamicMetallic);
     vec3 specularLight = specColor * spec * (NdotL > 0.0 ? 1.0 : 0.0);
 
-    vec3 shadedColor = diffuseLight + specularLight;
+    vec3 shadedColor = min(diffuseLight + specularLight, vec3(1.0));
 
     fragColor = vec4(shadedColor, baseAlbedo.a);
+    [FOG_CALC]
 }

@@ -4,6 +4,7 @@ import {
   hexWithAlpha,
   interpolateStrokeSteps,
   pressureToBrush,
+  rasterizeSplatDirection,
 } from "../src/math/StrokeRaster.js";
 
 describe("StrokeRaster (pure math)", () => {
@@ -90,6 +91,56 @@ describe("StrokeRaster (pure math)", () => {
     });
     expect(down[0]!.dirV01).toBeLessThan(0.5);
     expect(down[0]!.dirU01).toBeCloseTo(0.5, 4);
+  });
+
+  it("normalizes the direction in pixel space (no double canvas-aspect scaling)", () => {
+    // 45 degree stroke on a 2:1 canvas. The shader multiplies the decoded direction by the
+    // per-axis texel size, so the encoded vector must be the pixel-space unit vector: equal
+    // magnitude on both axes. Normalizing in UV space (dx/w, dy/h) gave u != v here.
+    const diag = buildStrokeSplats({
+      from: { x: 10, y: 100 },
+      to: { x: 110, y: 0 },
+      pressure: 0.8,
+      baseRadius: 5,
+      maxRadius: 18,
+      maxStepPx: 500,
+      colorHex: "#ff0000",
+      canvasWidth: 200,
+      canvasHeight: 100,
+    });
+    const du = diag[0]!.dirU01 * 2 - 1;
+    const dv = diag[0]!.dirV01 * 2 - 1;
+    expect(du).toBeCloseTo(Math.SQRT1_2, 3);
+    expect(dv).toBeCloseTo(Math.SQRT1_2, 3);
+  });
+
+  it("direction splats replace instead of blending (copy composite clipped to the disc)", () => {
+    const calls: string[] = [];
+    const ctx = {
+      save: () => calls.push("save"),
+      restore: () => calls.push("restore"),
+      beginPath: () => calls.push("beginPath"),
+      arc: () => calls.push("arc"),
+      clip: () => calls.push("clip"),
+      fillRect: () => calls.push("fillRect"),
+      fillStyle: "",
+      set globalCompositeOperation(v: string) {
+        calls.push(`op:${v}`);
+      },
+    } as unknown as CanvasRenderingContext2D;
+    rasterizeSplatDirection(ctx, {
+      x: 5,
+      y: 5,
+      radius: 4,
+      relief: 0.5,
+      lift: 0.5,
+      dirU01: 0.9,
+      dirV01: 0.1,
+      coverage: 0.5,
+    });
+    expect(calls.indexOf("clip")).toBeLessThan(calls.indexOf("op:copy"));
+    expect(calls.indexOf("op:copy")).toBeLessThan(calls.indexOf("fillRect"));
+    expect(calls[calls.length - 1]).toBe("restore");
   });
 
   it("caps coverage and keeps encoded channels in range", () => {

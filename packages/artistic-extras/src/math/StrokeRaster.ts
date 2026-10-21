@@ -27,7 +27,7 @@ export interface BrushSplat {
   radius: number;
   relief: number;
   lift: number;
-  /** 0..1 encoded stroke direction in plane-UV space (u, v). See buildStrokeSplats. */
+  /** 0..1 encoded unit stroke direction in canvas pixel space with V up (u, v). See buildStrokeSplats. */
   dirU01: number;
   dirV01: number;
   /** Coverage contribution, 0..1. */
@@ -44,7 +44,7 @@ export interface StrokeSegmentInput {
   maxStepPx: number;
   /** Paint color as a `#rrggbb` hex string (used by the rasterizer, not the math). */
   colorHex: string;
-  /** Paint canvas dimensions in pixels; needed to normalize the direction vector. */
+  /** Paint canvas dimensions in pixels (rasterizer payload; the direction is normalized in pixel space). */
   canvasWidth: number;
   canvasHeight: number;
 }
@@ -98,7 +98,7 @@ export function interpolateStrokeSteps(
 /**
  * Builds the full per-splat payload for a stroke segment, one splat per interpolated step.
  *
- * The direction is normalized into plane-UV space: a positive canvas-x delta grows `u`, a
+ * The direction is a pixel-space unit vector in plane-UV orientation: a positive canvas-x delta grows `u`, a
  * positive canvas-y delta (pointing down in image space) shrinks `v` (the engine Plane maps
  * v = 1 to the top of the geometry). Encoding happens here so the shaders stay branch-free and
  * orientation-consistent on every tier.
@@ -114,9 +114,12 @@ export function buildStrokeSplats(input: StrokeSegmentInput): BrushSplat[] {
   let dirU01 = 0.5;
   let dirV01 = 0.5;
   if (len > 1e-4) {
-    // Plane-UV direction: u grows with canvas x, v shrinks with canvas y.
-    const u = dx / input.canvasWidth;
-    const v = -dy / input.canvasHeight;
+    // Pixel-space unit direction (u grows with canvas x, v shrinks with canvas y). The shader
+    // multiplies it by the per-axis texel size to get the UV offset, so the direction MUST be
+    // normalized in pixel space: normalizing in UV space (dx / width, dy / height) skewed every
+    // smear on non-square canvases because the texel scale was applied a second time.
+    const u = dx;
+    const v = -dy;
     const inv = 1 / Math.hypot(u, v);
     dirU01 = u * inv * 0.5 + 0.5;
     dirV01 = v * inv * 0.5 + 0.5;
@@ -166,7 +169,15 @@ export function rasterizeSplatColor(
 
 /**
  * Writes one impasto splat's direction/pressure into the direction canvas. Alpha carries the
- * pressure so overlapping strokes keep the most recent one (source-over). B carries the lift.
+ * pressure, B the lift.
+ *
+ * The splat REPLACES what was there (`copy` composite clipped to the splat disc): the data is a
+ * direction vector, and `source-over` at alpha < 1 (coverage is capped at 0.9) would blend the old
+ * and new vector, which is not a meaningful direction. Known limit (DECISION): canvas pixels are
+ * stored premultiplied 8-bit, so at very low pressure (low alpha) the un-premultiplied RGB
+ * direction is quantized coarsely (about 0.5 / (255 * alpha) per channel); it is only visible as
+ * a slightly jittered smear direction on very light strokes, where the smear is least noticeable.
+ * Making the canvas opaque would need a shader/channel re-layout and an app-side neutral fill.
  */
 export function rasterizeSplatDirection(ctx: CanvasRenderingContext2D, splat: BrushSplat): void {
   const r = Math.max(0.5, splat.radius);
@@ -174,10 +185,14 @@ export function rasterizeSplatDirection(ctx: CanvasRenderingContext2D, splat: Br
   const gByte = Math.round(Math.min(255, Math.max(0, splat.dirV01 * 255)));
   const bByte = Math.round(Math.min(255, Math.max(0, splat.lift * 255)));
   const aByte = Math.round(Math.min(255, Math.max(0, splat.coverage * 255)));
-  ctx.fillStyle = `rgba(${rByte}, ${gByte}, ${bByte}, ${aByte / 255})`;
+  ctx.save();
   ctx.beginPath();
   ctx.arc(splat.x, splat.y, r, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.clip();
+  ctx.globalCompositeOperation = "copy";
+  ctx.fillStyle = `rgba(${rByte}, ${gByte}, ${bByte}, ${aByte / 255})`;
+  ctx.fillRect(splat.x - r, splat.y - r, r * 2, r * 2);
+  ctx.restore();
 }
 
 /** Helper to expand `#rrggbb` into an 8-digit rgba color string. */

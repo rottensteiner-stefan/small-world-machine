@@ -1,7 +1,10 @@
 [BASE_FRAGMENT_HEADER]
+[FOG_DEFS]
+[LIGHT_DEFS]
 
-uniform vec4 u_styleA;
-uniform vec4 u_styleB;
+uniform vec4 u_matParam0; // lane 0: brushRelief, smearDistance, edgeLift, paintOpacity
+uniform vec4 u_matParam1; // lane 1: paint canvas texel size (1/w, 1/h)
+uniform vec4 u_matParam2; // lane 2: key light direction xyz (stylized)
 uniform float u_time;
 uniform float u_metallic;
 uniform float u_roughness;
@@ -9,12 +12,12 @@ uniform sampler2D u_emissiveMap;
 uniform sampler2D u_aoMap;
 
 void main() {
-    float brushRelief = u_styleA.x;
-    float smearDist   = u_styleA.y;
-    float edgeLift    = u_styleA.z;
-    float paintOpacity= u_styleA.w;
-    float invW = max(u_styleB.x, 1e-6);
-    float invH = max(u_styleB.y, 1e-6);
+    float brushRelief = u_matParam0.x;
+    float smearDist   = u_matParam0.y;
+    float edgeLift    = u_matParam0.z;
+    float paintOpacity= u_matParam0.w;
+    float invW = max(u_matParam1.x, 1e-6);
+    float invH = max(u_matParam1.y, 1e-6);
     vec2 texel = vec2(invW, invH);
 
     vec4 paint  = texture(u_diffuseMap, v_uv);
@@ -47,8 +50,11 @@ void main() {
     float reliefScale = brushRelief * (1.0 + 2.0 * coverage);
     vec3 perturbedN = normalize(N + (T * (-gX) + B * (-gY)) * reliefScale * 3.0);
 
-    vec3 L = normalize(vec3(0.4, 0.7, 0.5));
-    vec3 V = normalize(-v_worldPos);
+    // STYLIZED (not physically based, by design): ignores scene lights/shadows/IBL and uses its own key
+    // light (lane u_matParam2.xyz, default (0.4, 0.7, 0.5)). Energy is bounded: diffuse <= albedo,
+    // metallic darkens diffuse, specular and result are clamped to 1.
+    vec3 L = normalize(u_matParam2.xyz);
+    vec3 V = normalize(u_viewPos - v_worldPos);
     vec3 H = normalize(L + V);
     float NdotL = max(dot(perturbedN, L), 0.0);
     float NdotH = max(dot(perturbedN, H), 0.0);
@@ -57,14 +63,17 @@ void main() {
 
     float edgeFactor = lift * coverage;
     vec3 specColor = mix(vec3(0.35), vec3(1.0, 0.98, 0.95), u_metallic);
-    specColor += vec3(0.8) * (edgeFactor * edgeLift);
+    specColor = min(specColor + vec3(0.8) * (edgeFactor * edgeLift), vec3(1.0));
 
-    vec3 baseShaded = baseTex.rgb * (vec3(0.42) + vec3(0.8) * NdotL);
-    vec3 paintShaded = paintColor * (vec3(0.35) + vec3(0.85) * NdotL)
+    vec3 metalK = vec3(1.0 - 0.5 * u_metallic);
+    vec3 baseShaded = baseTex.rgb * (vec3(0.42) + vec3(0.58) * NdotL);
+    vec3 paintShaded = paintColor * (vec3(0.35) + vec3(0.65) * NdotL) * metalK
         + specColor * spec * step(0.0, NdotL);
 
     vec3 color = mix(baseShaded, paintShaded, clamp(paintAlpha * 1.4, 0.0, 1.0));
     color += specColor * (spec * edgeFactor * 0.6);
+    color = min(color, vec3(1.0));
 
     fragColor = vec4(color, 1.0);
+    [FOG_CALC]
 }

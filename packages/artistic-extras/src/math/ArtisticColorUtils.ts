@@ -81,66 +81,63 @@ export class ArtisticColorUtils {
   }
 
   /**
-   * Evaluates the selective color mask factor [0..1] for a given RGB color.
-   * A factor of 1.0 means the color matches the target accent hue (e.g. red),
-   * while 0.0 means it should be converted to industrial metal/rust.
+   * Evaluates the selective color mask factor [0..1] for a given RGB color. Mirrors the shaders
+   * (`mr_rgb2hsv` + `smoothstep(tol, tol * 0.3, hueDiff) * smoothstep(0.2, 0.4, sat)` in
+   * MetalRelief / MetalReliefScreen / MetalReliefPost): a factor of 1.0 means the color matches the
+   * target accent hue (e.g. red), 0.0 means it is converted to industrial metal/rust.
    *
    * @param color Input RGB color
    * @param targetHue Target hue [0..1] (e.g. 0.0 for pure red)
-   * @param tolerance Hue tolerance window [0..0.5] (e.g. 0.08)
-   * @param minSaturation Minimum saturation needed to qualify as colored (default: 0.25)
+   * @param tolerance Hue tolerance window [0..0.5] (shader default 0.09)
    */
   public static computeColorPopMask(
     color: Color | [number, number, number],
     targetHue: number = 0.0,
-    tolerance: number = 0.08,
-    minSaturation: number = 0.25,
+    tolerance: number = 0.09,
   ): number {
     const r = Array.isArray(color) ? color[0] : color.r;
     const g = Array.isArray(color) ? color[1] : color.g;
     const b = Array.isArray(color) ? color[2] : color.b;
 
     const hsv = this.rgbToHsv(r, g, b);
-    if (hsv.s < minSaturation) {
-      return 0.0;
-    }
-
     const dist = this.hueDistance(hsv.h, targetHue);
-    if (dist >= tolerance) {
-      return 0.0;
-    }
-
-    // Smooth falloff towards the tolerance edge
-    const edgeT = 1.0 - dist / tolerance;
-    const satT = Math.min(1.0, (hsv.s - minSaturation) / 0.25);
-    return edgeT * satT;
+    return (
+      ArtisticColorUtils._smoothstep(tolerance, tolerance * 0.3, dist) *
+      ArtisticColorUtils._smoothstep(0.2, 0.4, hsv.s)
+    );
   }
 
   /**
-   * Grades an achromatic/monochrome luma value into the industrial metal/rust palette.
-   * Shadows get warm raw umber / rust tones, midtones get cool steel gray, and highlights get zinc silver.
+   * Grades an achromatic luma value into the industrial metal/rust palette using the same ramp as
+   * the shaders (`rustShadow` -> `steelMid` -> `zincHigh`, see `metalGrad` in MetalRelief*.frag.*).
+   * Shadows get warm raw umber / rust tones, midtones cool steel, highlights zinc silver.
    *
    * @param luma Luminance value [0..1]
-   * @param rustStrength Blend intensity for the rust/sepia tint in shadows [0..1]
+   * @param rustStrength Blend intensity for the rust tint in shadows [0..1]
    */
   public static gradeIndustrialMetal(
     luma: number,
-    rustStrength: number = 0.7,
+    rustStrength: number = 0.75,
   ): [number, number, number] {
-    const clampedLuma = Math.max(0, Math.min(1, luma));
+    const l = Math.max(0, Math.min(1, luma));
+    const rust: [number, number, number] = [0.38, 0.22, 0.12];
+    const steel: [number, number, number] = [0.52, 0.56, 0.6];
+    const zinc: [number, number, number] = [0.88, 0.9, 0.94];
+    const tMid = Math.max(0, Math.min(1, l * 2.2));
+    const tHigh = Math.max(0, Math.min(1, (l - 0.45) * 2.2));
 
-    // Shadow rust: [0.38, 0.22, 0.12]
-    // Mid steel:   [0.55, 0.58, 0.62]
-    // High zinc:   [0.90, 0.92, 0.95]
-    const rustR = 0.38 * rustStrength + clampedLuma * (1 - rustStrength);
-    const rustG = 0.22 * rustStrength + clampedLuma * (1 - rustStrength);
-    const rustB = 0.12 * rustStrength + clampedLuma * (1 - rustStrength);
+    const out: [number, number, number] = [0, 0, 0];
+    for (let c = 0; c < 3; c++) {
+      const rustShadow = rust[c]! * rustStrength + l * 0.6 * (1 - rustStrength);
+      const mid = rustShadow + (steel[c]! * l - rustShadow) * tMid;
+      out[c] = mid + (zinc[c]! * l - mid) * tHigh;
+    }
+    return out;
+  }
 
-    const shadowMix = Math.max(0, 1.0 - clampedLuma * 2.0);
-    const r = clampedLuma * 0.9 + shadowMix * (rustR - clampedLuma * 0.9);
-    const g = clampedLuma * 0.92 + shadowMix * (rustG - clampedLuma * 0.92);
-    const b = clampedLuma * 0.95 + shadowMix * (rustB - clampedLuma * 0.95);
-
-    return [Math.max(0, Math.min(1, r)), Math.max(0, Math.min(1, g)), Math.max(0, Math.min(1, b))];
+  /** GLSL/WGSL `smoothstep` incl. the reversed-edge case used by the hue mask. */
+  private static _smoothstep(e0: number, e1: number, x: number): number {
+    const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+    return t * t * (3 - 2 * t);
   }
 }

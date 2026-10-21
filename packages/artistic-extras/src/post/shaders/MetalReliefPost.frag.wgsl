@@ -77,11 +77,18 @@ struct VertexOutput {
     @location(0) uv: vec2f,
 }
 
+fn sampleUp(uv: vec2f) -> vec4f {
+    return textureSample(uTexture, uSampler, vec2f(uv.x, 1.0 - uv.y));
+}
+
 @vertex
 fn vsMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
     var out: VertexOutput;
     let x = f32((vertexIndex << 1u) & 2u);
     let y = f32(vertexIndex & 2u);
+    // `uv` is y-up (v = 1 at the top), the same convention as the GLSL variants, so every effect
+    // below (streaks, scratches, Sobel sign) matches across dialects. Only the texture fetch flips
+    // V, because WebGPU texture row 0 is the top row (see sampleUp).
     out.uv = vec2f(x, 1.0 - y);
     out.position = vec4f(x * 2.0 - 1.0, 1.0 - y * 2.0, 0.0, 1.0);
     return out;
@@ -91,18 +98,18 @@ fn vsMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
 fn fsMain(in: VertexOutput) -> @location(0) vec4f {
     let texelSize = 1.0 / max(u.resolution, vec2f(1.0));
 
-    let l00 = getLuma(textureSample(uTexture, uSampler, in.uv + vec2f(-1.0, -1.0) * texelSize).rgb);
-    let l10 = getLuma(textureSample(uTexture, uSampler, in.uv + vec2f( 0.0, -1.0) * texelSize).rgb);
-    let l20 = getLuma(textureSample(uTexture, uSampler, in.uv + vec2f( 1.0, -1.0) * texelSize).rgb);
+    let l00 = getLuma(sampleUp(in.uv + vec2f(-1.0, -1.0) * texelSize).rgb);
+    let l10 = getLuma(sampleUp(in.uv + vec2f( 0.0, -1.0) * texelSize).rgb);
+    let l20 = getLuma(sampleUp(in.uv + vec2f( 1.0, -1.0) * texelSize).rgb);
 
-    let l01 = getLuma(textureSample(uTexture, uSampler, in.uv + vec2f(-1.0,  0.0) * texelSize).rgb);
-    let centerTex = textureSample(uTexture, uSampler, in.uv);
+    let l01 = getLuma(sampleUp(in.uv + vec2f(-1.0,  0.0) * texelSize).rgb);
+    let centerTex = sampleUp(in.uv);
     let l11 = getLuma(centerTex.rgb);
-    let l21 = getLuma(textureSample(uTexture, uSampler, in.uv + vec2f( 1.0,  0.0) * texelSize).rgb);
+    let l21 = getLuma(sampleUp(in.uv + vec2f( 1.0,  0.0) * texelSize).rgb);
 
-    let l02 = getLuma(textureSample(uTexture, uSampler, in.uv + vec2f(-1.0,  1.0) * texelSize).rgb);
-    let l12 = getLuma(textureSample(uTexture, uSampler, in.uv + vec2f( 0.0,  1.0) * texelSize).rgb);
-    let l22 = getLuma(textureSample(uTexture, uSampler, in.uv + vec2f( 1.0,  1.0) * texelSize).rgb);
+    let l02 = getLuma(sampleUp(in.uv + vec2f(-1.0,  1.0) * texelSize).rgb);
+    let l12 = getLuma(sampleUp(in.uv + vec2f( 0.0,  1.0) * texelSize).rgb);
+    let l22 = getLuma(sampleUp(in.uv + vec2f( 1.0,  1.0) * texelSize).rgb);
 
     let dX = (l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02);
     let dY = (l02 + 2.0 * l12 + l22) - (l00 + 2.0 * l10 + l20);

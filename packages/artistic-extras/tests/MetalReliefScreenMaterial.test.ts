@@ -59,14 +59,15 @@ describe("MetalReliefScreenMaterial", () => {
     expect(liquid[2]).toBe(0.85);
     expect(liquid[3]).toBe(0.4);
 
-    const styleA = manifest.properties["u_styleA"] as number[];
-    expect(styleA[0]).toBe(0.1);
-    expect(styleA[1]).toBe(0.15);
-    expect(styleA[2]).toBe(0.85);
-    expect(styleA[3]).toBe(0.9);
+    const colorPop = manifest.properties["u_matParam2"] as number[];
+    expect(colorPop[0]).toBe(0.1);
+    expect(colorPop[1]).toBe(0.15);
+    expect(colorPop[2]).toBe(0.85);
+    expect(colorPop[3]).toBe(0.9);
 
-    const styleB = manifest.properties["u_styleB"] as number[];
-    expect(styleB[0]).toBe(0.45);
+    expect((manifest.properties["u_matParam3"] as number[])[0]).toBe(0.45);
+    expect("u_styleA" in manifest.properties).toBe(false);
+    expect("u_styleB" in manifest.properties).toBe(false);
 
     expect(manifest.properties["u_time"]).toBe(5.5);
   });

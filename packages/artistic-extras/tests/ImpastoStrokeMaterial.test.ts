@@ -51,27 +51,31 @@ describe("ImpastoStrokeMaterial", () => {
     mat.time = 3.25;
 
     const manifest = mat.getRenderManifest();
-    const styleA = manifest.properties["u_styleA"] as number[];
-    expect(styleA[0]).toBe(1.4);
-    expect(styleA[1]).toBe(0.5);
-    expect(styleA[2]).toBe(1.2);
-    expect(styleA[3]).toBe(0.8);
+    expect("u_styleA" in manifest.properties).toBe(false);
+    expect("u_styleB" in manifest.properties).toBe(false);
+    const brush = manifest.properties["u_matParam0"] as number[];
+    expect(brush[0]).toBe(1.4);
+    expect(brush[1]).toBe(0.5);
+    expect(brush[2]).toBe(1.2);
+    expect(brush[3]).toBe(0.8);
 
-    const styleB = manifest.properties["u_styleB"] as number[];
-    expect(styleB[0]).toBeCloseTo(1 / 1024, 9);
-    expect(styleB[1]).toBeCloseTo(1 / 768, 9);
+    const texel = manifest.properties["u_matParam1"] as number[];
+    expect(texel[0]).toBeCloseTo(1 / 1024, 9);
+    expect(texel[1]).toBeCloseTo(1 / 768, 9);
+    expect((manifest.properties["u_matParam2"] as number[]).slice(0, 3)).toEqual([0.4, 0.7, 0.5]);
 
     expect(manifest.properties["u_metallic"]).toBe(0.7);
     expect(manifest.properties["u_roughness"]).toBe(0.35);
     expect(manifest.properties["u_time"]).toBe(3.25);
   });
 
-  it("degrades the reciprocal lanes to 1.0 when no paint canvas is provided", () => {
+  it("fails fast when the renderer processes it without a sized paint canvas", () => {
+    // Construction and assignment stay legal (the app may set paintMap on a later line)...
     const mat = new ImpastoStrokeMaterial();
-    const manifest = mat.getRenderManifest();
-    const styleB = manifest.properties["u_styleB"] as number[];
-    expect(styleB[0]).toBe(1.0);
-    expect(styleB[1]).toBe(1.0);
+    expect(() => mat.getRenderManifest()).toThrow(/paintMap/);
+    // ...and recovers once the canvas texture is assigned.
+    mat.paintMap = fakeTexture(256, 128);
+    expect(() => mat.getRenderManifest()).not.toThrow();
   });
 
   it("provides valid shader definitions for all three API tiers", () => {

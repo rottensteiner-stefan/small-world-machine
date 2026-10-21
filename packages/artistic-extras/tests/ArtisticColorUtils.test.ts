@@ -37,17 +37,17 @@ describe("ArtisticColorUtils", () => {
     const asphaltGray = new Color(0.3, 0.3, 0.3);
 
     // Red and crimson should yield high mask values
-    const maskRed = ArtisticColorUtils.computeColorPopMask(pureRed, 0.0, 0.1, 0.2);
+    const maskRed = ArtisticColorUtils.computeColorPopMask(pureRed, 0.0, 0.1);
     expect(maskRed).toBeGreaterThan(0.9);
 
-    const maskCrimson = ArtisticColorUtils.computeColorPopMask(crimson, 0.0, 0.12, 0.2);
+    const maskCrimson = ArtisticColorUtils.computeColorPopMask(crimson, 0.0, 0.12);
     expect(maskCrimson).toBeGreaterThan(0.7);
 
     // Steel blue and neutral gray should yield 0
-    const maskSteel = ArtisticColorUtils.computeColorPopMask(steelBlue, 0.0, 0.1, 0.2);
+    const maskSteel = ArtisticColorUtils.computeColorPopMask(steelBlue, 0.0, 0.1);
     expect(maskSteel).toBe(0.0);
 
-    const maskGray = ArtisticColorUtils.computeColorPopMask(asphaltGray, 0.0, 0.1, 0.2);
+    const maskGray = ArtisticColorUtils.computeColorPopMask(asphaltGray, 0.0, 0.1);
     expect(maskGray).toBe(0.0);
   });
 
@@ -62,5 +62,31 @@ describe("ArtisticColorUtils", () => {
     expect(highlightRamped[0]).toBeGreaterThan(0.7);
     expect(highlightRamped[1]).toBeGreaterThan(0.7);
     expect(highlightRamped[2]).toBeGreaterThan(0.7);
+  });
+
+  it("matches the shader math: smoothstep mask and the shared metal ramp", () => {
+    // Shader: smoothstep(tol, tol*0.3, hueDiff) * smoothstep(0.2, 0.4, sat). Hand-evaluated:
+    // hueDiff == tol -> 0, hueDiff == 0.3*tol -> 1, saturation <= 0.2 -> 0, >= 0.4 -> 1.
+    const sat = (s: number): [number, number, number] => [1, 1 - s, 1 - s]; // hue 0, saturation s
+    expect(ArtisticColorUtils.computeColorPopMask(sat(0.4), 0.0, 0.09)).toBeCloseTo(1, 5);
+    expect(ArtisticColorUtils.computeColorPopMask(sat(0.2), 0.0, 0.09)).toBeCloseTo(0, 5);
+    expect(ArtisticColorUtils.computeColorPopMask(sat(0.3), 0.0, 0.09)).toBeCloseTo(0.5, 5); // smoothstep(.5)
+    // Linear edge falloff would give 0.5 at the middle of the tolerance window; smoothstep gives
+    // exactly 0.5 only at the midpoint, but 0.15625 at a quarter (linear: 0.25).
+    const hue = (h: number): [number, number, number] => ArtisticColorUtils.hsvToRgb(h, 1, 1);
+    const tol = 0.1;
+    const x = tol * 0.3 + (tol - tol * 0.3) * 0.25; // a quarter into the window from the far edge
+    expect(ArtisticColorUtils.computeColorPopMask(hue(x), 0.0, tol)).toBeCloseTo(1 - 0.15625, 4);
+
+    // Ramp endpoints: black stays black; luma 1 reaches zincHigh * 1.
+    expect(ArtisticColorUtils.gradeIndustrialMetal(0, 0.75)).toEqual([
+      0.38 * 0.75,
+      0.22 * 0.75,
+      0.12 * 0.75,
+    ]);
+    const white = ArtisticColorUtils.gradeIndustrialMetal(1, 0.75);
+    expect(white[0]).toBeCloseTo(0.88, 5);
+    expect(white[1]).toBeCloseTo(0.9, 5);
+    expect(white[2]).toBeCloseTo(0.94, 5);
   });
 });

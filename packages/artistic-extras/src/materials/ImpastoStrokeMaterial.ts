@@ -7,6 +7,7 @@ import {
   ShaderPropertyType,
   StandardWebGPULayout,
 } from "@small-world-machine/engine";
+import { writeLane } from "./laneWrite.js";
 import type { RenderManifest, ShaderDefinition, Texture } from "@small-world-machine/engine";
 
 export interface ImpastoStrokeMaterialOptions {
@@ -35,6 +36,11 @@ export interface ImpastoStrokeMaterialOptions {
   edgeLift?: number;
   /** How much paint replaces the base layer (0..1). Defaults to 0.92. */
   paintOpacity?: number;
+  /**
+   * Direction TOWARD the stylized key light in world space (need not be normalized). The material is
+   * deliberately stylized-unlit: it ignores scene lights/shadows/IBL. Defaults to (0.4, 0.7, 0.5).
+   */
+  lightDirection?: readonly [number, number, number];
   /** Metalness of the impasto surface (0..1). Defaults to 0.55. */
   metallic?: number;
   /** Roughness of the impasto surface (0..1). Defaults to 0.5. */
@@ -63,6 +69,7 @@ export class ImpastoStrokeMaterial extends AbstractMaterial {
   public paintOpacity: number;
   public metallic: number;
   public roughness: number;
+  public lightDirection: [number, number, number];
   public time: number = 0.0;
 
   constructor(options: ImpastoStrokeMaterialOptions = {}) {
@@ -76,6 +83,8 @@ export class ImpastoStrokeMaterial extends AbstractMaterial {
     this.smearDistance = options.smearDistance ?? 0.28;
     this.edgeLift = options.edgeLift ?? 0.9;
     this.paintOpacity = options.paintOpacity ?? 0.92;
+    const ld = options.lightDirection ?? [0.4, 0.7, 0.5];
+    this.lightDirection = [ld[0], ld[1], ld[2]];
     this.metallic = options.metallic ?? 0.55;
     this.roughness = options.roughness ?? 0.5;
   }
@@ -85,8 +94,10 @@ export class ImpastoStrokeMaterial extends AbstractMaterial {
     if (undefined === this._renderManifest) {
       this._renderManifest = this._createBaseManifest();
       this._renderManifest.properties["u_specColor"] = new Float32Array([1.0, 1.0, 1.0, 1.0]);
-      this._renderManifest.properties["u_styleA"] = [0.0, 0.0, 0.0, 0.0];
-      this._renderManifest.properties["u_styleB"] = [0.0, 0.0, 0.0, 0.0];
+      // Own semantic lanes (ADR 0039): lane 0 brush params, lane 1 canvas texel size, lane 2 key light.
+      this._renderManifest.properties["u_matParam0"] = [0.0, 0.0, 0.0, 0.0];
+      this._renderManifest.properties["u_matParam1"] = [0.0, 0.0, 0.0, 0.0];
+      this._renderManifest.properties["u_matParam2"] = [0.0, 0.0, 0.0, 0.0];
       this._renderManifest.textures["u_diffuseMap"] = this.paintMap;
       this._renderManifest.textures["u_emissiveMap"] = this.dirMap;
       this._renderManifest.textures["u_aoMap"] = this.baseMap;
@@ -106,20 +117,29 @@ export class ImpastoStrokeMaterial extends AbstractMaterial {
     props["u_roughness"] = this.roughness;
     props["u_time"] = this.time;
 
-    const styleA = props["u_styleA"] as number[];
-    styleA[0] = this.brushRelief;
-    styleA[1] = this.smearDistance;
-    styleA[2] = this.edgeLift;
-    styleA[3] = this.paintOpacity;
+    writeLane(this._renderManifest, "u_matParam0", [
+      this.brushRelief,
+      this.smearDistance,
+      this.edgeLift,
+      this.paintOpacity,
+    ]);
 
-    // Paint canvas resolution reciprocals, used as finite-difference / smear texel size.
-    const pw = this.paintMap?.image ? this.paintMap.image.width : 1;
-    const ph = this.paintMap?.image ? this.paintMap.image.height : 1;
-    const styleB = props["u_styleB"] as number[];
-    styleB[0] = 1 / Math.max(1, pw);
-    styleB[1] = 1 / Math.max(1, ph);
-    styleB[2] = 0;
-    styleB[3] = 0;
+    // Fail fast when the renderer processes the material (not in a setter: the app may assign the
+    // canvas texture in a later line). Without the canvas size the finite-difference / smear texel
+    // would silently fall back to a whole-UV-width step.
+    const image = this.paintMap?.image;
+    if (undefined === image || !(image.width > 0) || !(image.height > 0)) {
+      throw new Error(
+        "ImpastoStrokeMaterial: paintMap with a sized image (canvas) is required to derive the texel size.",
+      );
+    }
+    writeLane(this._renderManifest, "u_matParam1", [1 / image.width, 1 / image.height, 0, 0]);
+    writeLane(this._renderManifest, "u_matParam2", [
+      this.lightDirection[0],
+      this.lightDirection[1],
+      this.lightDirection[2],
+      0,
+    ]);
 
     return this._renderManifest;
   }

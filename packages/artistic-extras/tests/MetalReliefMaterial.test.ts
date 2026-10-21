@@ -61,11 +61,15 @@ describe("MetalReliefMaterial", () => {
     expect(liquid[2]).toBe(50.0);
     expect(liquid[3]).toBe(0.8);
 
-    const styleA = manifest.properties["u_styleA"] as number[];
-    expect(styleA[0]).toBe(0.05);
-    expect(styleA[1]).toBe(0.12);
-    expect(styleA[2]).toBe(0.9);
-    expect(styleA[3]).toBe(0.85);
+    const colorPop = manifest.properties["u_matParam2"] as number[];
+    expect(colorPop[0]).toBe(0.05);
+    expect(colorPop[1]).toBe(0.12);
+    expect(colorPop[2]).toBe(0.9);
+    expect(colorPop[3]).toBe(0.85);
+
+    // Key light lane (stylized material): default direction, overridable per material.
+    expect((manifest.properties["u_matParam3"] as number[]).slice(0, 3)).toEqual([0.4, 0.8, 0.5]);
+    expect("u_styleA" in manifest.properties).toBe(false);
 
     expect(manifest.properties["u_metallic"]).toBe(0.65);
     expect(manifest.properties["u_roughness"]).toBe(0.45);
@@ -98,5 +102,12 @@ describe("MetalReliefMaterial", () => {
 
     clone.paletteKnifeStrength = 0.3;
     expect(original.paletteKnifeStrength).toBe(1.1);
+  });
+
+  it("exposes the key light direction as a material parameter", () => {
+    const mat = new MetalReliefMaterial({ lightDirection: [0, 1, 0] });
+    expect((mat.getRenderManifest().properties["u_matParam3"] as number[]).slice(0, 3)).toEqual([
+      0, 1, 0,
+    ]);
   });
 });

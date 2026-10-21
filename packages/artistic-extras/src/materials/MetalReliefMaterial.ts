@@ -7,6 +7,7 @@ import {
   ShaderPropertyType,
   StandardWebGPULayout,
 } from "@small-world-machine/engine";
+import { writeLane } from "./laneWrite.js";
 import type { RenderManifest, ShaderDefinition, Texture } from "@small-world-machine/engine";
 
 export interface MetalReliefMaterialOptions {
@@ -38,6 +39,11 @@ export interface MetalReliefMaterialOptions {
   colorPopDesaturation?: number;
   /** Strength of warm iron oxide / raw umber rust in shadows (0..1). Defaults to 0.75. */
   rustStrength?: number;
+  /**
+   * Direction TOWARD the stylized key light in world space (need not be normalized). The material is
+   * deliberately stylized-unlit: it ignores scene lights/shadows/IBL. Defaults to (0.4, 0.8, 0.5).
+   */
+  lightDirection?: readonly [number, number, number];
   /** Base metalness (0..1). Defaults to 0.4. */
   metallic?: number;
   /** Base roughness (0..1). Defaults to 0.7. */
@@ -66,6 +72,7 @@ export class MetalReliefMaterial extends AbstractMaterial {
   public rustStrength: number;
   public metallic: number;
   public roughness: number;
+  public lightDirection: [number, number, number];
   public time: number = 0.0;
 
   constructor(options: MetalReliefMaterialOptions = {}) {
@@ -85,6 +92,8 @@ export class MetalReliefMaterial extends AbstractMaterial {
     this.colorPopTolerance = options.colorPopTolerance ?? 0.09;
     this.colorPopDesaturation = options.colorPopDesaturation ?? 0.95;
     this.rustStrength = options.rustStrength ?? 0.75;
+    const ld = options.lightDirection ?? [0.4, 0.8, 0.5];
+    this.lightDirection = [ld[0], ld[1], ld[2]];
     this.metallic = options.metallic ?? 0.4;
     this.roughness = options.roughness ?? 0.7;
   }
@@ -94,11 +103,12 @@ export class MetalReliefMaterial extends AbstractMaterial {
     if (undefined === this._renderManifest) {
       this._renderManifest = this._createBaseManifest();
       this._renderManifest.properties["u_specColor"] = new Float32Array([1.0, 1.0, 1.0, 1.0]);
-      this._renderManifest.properties["u_styleA"] = [0.0, 0.0, 0.0, 0.0];
       // Own semantic lanes (ADR 0039). `u_extraParams[1]` is the engine's alpha-test cutoff and
       // `[2..3]` its normal scale: reusing them made the depth/shadow passes discard the surface.
       this._renderManifest.properties["u_matParam0"] = [0.0, 0.0, 0.0, 0.0];
       this._renderManifest.properties["u_matParam1"] = [0.0, 0.0, 0.0, 0.0];
+      this._renderManifest.properties["u_matParam2"] = [0.0, 0.0, 0.0, 0.0];
+      this._renderManifest.properties["u_matParam3"] = [0.0, 0.0, 0.0, 0.0];
       this._renderManifest.textures["u_diffuseMap"] = this.diffuseMap;
     }
 
@@ -126,11 +136,18 @@ export class MetalReliefMaterial extends AbstractMaterial {
     liquid[2] = this.wireMeshScale;
     liquid[3] = this.wetRainStreaks;
 
-    const styleA = props["u_styleA"] as number[];
-    styleA[0] = this.colorPopTargetHue;
-    styleA[1] = this.colorPopTolerance;
-    styleA[2] = this.colorPopDesaturation;
-    styleA[3] = this.rustStrength;
+    writeLane(this._renderManifest, "u_matParam2", [
+      this.colorPopTargetHue,
+      this.colorPopTolerance,
+      this.colorPopDesaturation,
+      this.rustStrength,
+    ]);
+    writeLane(this._renderManifest, "u_matParam3", [
+      this.lightDirection[0],
+      this.lightDirection[1],
+      this.lightDirection[2],
+      0,
+    ]);
 
     return this._renderManifest;
   }

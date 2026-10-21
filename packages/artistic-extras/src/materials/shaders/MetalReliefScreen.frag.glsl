@@ -1,17 +1,24 @@
 [BASE_FRAGMENT_HEADER]
+[FOG_DEFS]
+[LIGHT_DEFS]
 
 uniform vec4 u_matParam0; // semantic lane 0: relief / palette-knife / scratch parameters
 uniform vec4 u_matParam1; // semantic lane 1: edge / wire-mesh / rain parameters
-uniform vec4 u_styleA;
-uniform vec4 u_styleB;
+uniform vec4 u_matParam2; // lane 2: color-pop (hue, tolerance, desaturation, rust)
+uniform vec4 u_matParam3; // lane 3: x = split position (-1 = off)
 uniform float u_time;
 
+// Hoskins hash without sine: identical bits in WGSL / GLSL300 / GLSL100 (cross-dialect parity).
 float mrs_hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
 }
 
 vec2 mrs_hash2(vec2 p) {
-    return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453123);
+    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx + p3.yz) * p3.zy);
 }
 
 vec3 mrs_rgb2hsv(vec3 c) {
@@ -65,10 +72,10 @@ void main() {
     float wetRainStreaks       = u_matParam1.z; // default: 0.5
     float wireMeshStrength     = u_matParam1.w; // default: 0.0
 
-    float targetHue            = u_styleA.x; // default: 0.0 (Red)
-    float hueTolerance         = u_styleA.y; // default: 0.09
-    float desaturation         = u_styleA.z; // default: 0.95
-    float rustStrength         = u_styleA.w; // default: 0.8
+    float targetHue            = u_matParam2.x; // default: 0.0 (Red)
+    float hueTolerance         = u_matParam2.y; // default: 0.09
+    float desaturation         = u_matParam2.z; // default: 0.95
+    float rustStrength         = u_matParam2.w; // default: 0.8
 
     // Estimated texel size for Sobel kernel
     vec2 texelSize = vec2(1.0 / 512.0, 1.0 / 512.0);
@@ -124,6 +131,8 @@ void main() {
     vec3 finalAlbedo = mix(steelAlbedo, centerTex.rgb, colorMask) * scratchFactor;
 
     // 5. Directional Relief Lighting & Specular Edge Glints
+    // STYLIZED (by design): screen-space relief with a fixed key light and a camera-facing view vector;
+    // it does not sample scene lights. Not energy conserving beyond the 1.1 diffuse ceiling.
     vec3 L = normalize(vec3(0.5, 0.7, 0.5));
     vec3 V = vec3(0.0, 0.0, 1.0);
     vec3 H = normalize(L + V);
@@ -144,10 +153,11 @@ void main() {
 
     vec3 shadedColor = finalAlbedo * (0.35 + 0.75 * NdotL) + specColor;
 
-    float splitPos = u_styleB.x;
+    float splitPos = u_matParam3.x;
     if (splitPos >= 0.0 && v_uv.x < splitPos) {
         shadedColor = centerTex.rgb;
     }
 
     fragColor = vec4(shadedColor, centerTex.a);
+    [FOG_CALC]
 }

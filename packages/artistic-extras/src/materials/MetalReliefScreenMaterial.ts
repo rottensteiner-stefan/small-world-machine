@@ -7,6 +7,7 @@ import {
   ShaderPropertyType,
   StandardWebGPULayout,
 } from "@small-world-machine/engine";
+import { writeLane } from "./laneWrite.js";
 import type { RenderManifest, ShaderDefinition, Texture } from "@small-world-machine/engine";
 
 export interface MetalReliefScreenMaterialOptions {
@@ -90,12 +91,12 @@ export class MetalReliefScreenMaterial extends AbstractMaterial {
     if (undefined === this._renderManifest) {
       this._renderManifest = this._createBaseManifest();
       this._renderManifest.properties["u_specColor"] = new Float32Array([1.0, 1.0, 1.0, 1.0]);
-      this._renderManifest.properties["u_styleA"] = [0.0, 0.0, 0.0, 0.0];
       // Own semantic lanes (ADR 0039). `u_extraParams[1]` is the engine's alpha-test cutoff and
       // `[2..3]` its normal scale: reusing them made the depth/shadow passes discard the surface.
       this._renderManifest.properties["u_matParam0"] = [0.0, 0.0, 0.0, 0.0];
       this._renderManifest.properties["u_matParam1"] = [0.0, 0.0, 0.0, 0.0];
-      this._renderManifest.properties["u_styleB"] = [-1.0, 0.0, 0.0, 0.0];
+      this._renderManifest.properties["u_matParam2"] = [0.0, 0.0, 0.0, 0.0];
+      this._renderManifest.properties["u_matParam3"] = [-1.0, 0.0, 0.0, 0.0];
       this._renderManifest.textures["u_diffuseMap"] = this.diffuseMap;
     }
 
@@ -121,15 +122,13 @@ export class MetalReliefScreenMaterial extends AbstractMaterial {
     liquid[2] = this.wetRainStreaks;
     liquid[3] = this.wireMeshStrength;
 
-    const styleA = props["u_styleA"] as number[];
-    styleA[0] = this.targetHue;
-    styleA[1] = this.hueTolerance;
-    styleA[2] = this.desaturation;
-    styleA[3] = this.rustStrength;
-
-    const styleB = (props["u_styleB"] as number[]) ?? [0.0, 0.0, 0.0, 0.0];
-    styleB[0] = this.splitPosition;
-    props["u_styleB"] = styleB;
+    writeLane(this._renderManifest, "u_matParam2", [
+      this.targetHue,
+      this.hueTolerance,
+      this.desaturation,
+      this.rustStrength,
+    ]);
+    writeLane(this._renderManifest, "u_matParam3", [this.splitPosition, 0, 0, 0]);
 
     return this._renderManifest;
   }

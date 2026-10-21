@@ -2,12 +2,12 @@
 // Interactive palette-knife impasto: height field = paint coverage (u_diffuseMap.a),
 // stroke direction/pressure = u_emissiveMap, background layer = u_aoMap.
 @fragment fn fs(i: Out) -> @location(0) vec4f {
-    let brushRelief = obj.styleA.x;
-    let smearDist   = obj.styleA.y;
-    let edgeLift    = obj.styleA.z;
-    let paintOpacity= obj.styleA.w;
-    let invW = max(obj.styleB.x, 1e-6);
-    let invH = max(obj.styleB.y, 1e-6);
+    let brushRelief = obj.matParam0.x;
+    let smearDist   = obj.matParam0.y;
+    let edgeLift    = obj.matParam0.z;
+    let paintOpacity= obj.matParam0.w;
+    let invW = max(obj.matParam1.x, 1e-6);
+    let invH = max(obj.matParam1.y, 1e-6);
     let texel = vec2f(invW, invH);
 
     let paint  = textureSample(u_diffuseMap, s, i.uv);
@@ -45,8 +45,11 @@
     let reliefScale = brushRelief * (1.0 + 2.0 * coverage);
     let perturbedN = normalize(N + (T * (-gX) + B * (-gY)) * reliefScale * 3.0);
 
-    let L = normalize(vec3f(0.4, 0.7, 0.5));
-    let V = normalize(-i.wp);
+    // STYLIZED (not physically based, by design): ignores scene lights/shadows/IBL and uses its own key
+    // light (lane matParam2.xyz, default (0.4, 0.7, 0.5)). Energy is bounded: diffuse <= albedo,
+    // metallic darkens diffuse, specular and result are clamped to 1.
+    let L = normalize(obj.matParam2.xyz);
+    let V = normalize(global.viewPos.xyz - i.wp);
     let H = normalize(L + V);
     let NdotL = max(dot(perturbedN, L), 0.0);
     let NdotH = max(dot(perturbedN, H), 0.0);
@@ -56,14 +59,16 @@
     // Raised rim along the painted stroke edge.
     let edgeFactor = lift * coverage;
     var specColor = mix(vec3f(0.35), vec3f(1.0, 0.98, 0.95), obj.metallic);
-    specColor += vec3f(0.8) * (edgeFactor * edgeLift);
+    specColor = min(specColor + vec3f(0.8) * (edgeFactor * edgeLift), vec3f(1.0));
 
-    let baseShaded = baseTex.rgb * (vec3f(0.42) + vec3f(0.8) * NdotL);
-    let paintShaded = paintColor * (vec3f(0.35) + vec3f(0.85) * NdotL)
+    let metalK = vec3f(1.0 - 0.5 * obj.metallic);
+    let baseShaded = baseTex.rgb * (vec3f(0.42) + vec3f(0.58) * NdotL);
+    let paintShaded = paintColor * (vec3f(0.35) + vec3f(0.65) * NdotL) * metalK
         + specColor * spec * select(0.0, 1.0, NdotL > 0.0);
 
     var color = mix(baseShaded, paintShaded, clamp(paintAlpha * 1.4, 0.0, 1.0));
     color += specColor * (spec * edgeFactor * 0.6);
+    color = min(color, vec3f(1.0));
     [WGSL_FOG_CALC]
 
     return vec4f(color, 1.0);

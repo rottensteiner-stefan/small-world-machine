@@ -57,10 +57,10 @@ fn mr_voronoiFacets(uv: vec2f, scale: f32) -> vec3f {
     let wireMeshScale        = obj.matParam1.z;
     let wetRainStreaks       = obj.matParam1.w;
 
-    let targetHue            = obj.styleA.x;
-    let hueTolerance         = obj.styleA.y;
-    let desaturation         = obj.styleA.z;
-    let rustStrength         = obj.styleA.w;
+    let targetHue            = obj.matParam2.x;
+    let hueTolerance         = obj.matParam2.y;
+    let desaturation         = obj.matParam2.z;
+    let rustStrength         = obj.matParam2.w;
 
     let texel = textureSample(u_diffuseMap, s, i.uv);
     let baseAlbedo = texel * obj.color;
@@ -123,8 +123,11 @@ fn mr_voronoiFacets(uv: vec2f, scale: f32) -> vec3f {
         dynamicMetallic  = mix(dynamicMetallic, 0.98, streak);
     }
 
-    let L = normalize(vec3f(0.4, 0.8, 0.5));
-    let V = normalize(-i.wp);
+    // STYLIZED (not physically based, by design): ignores scene lights/shadows/IBL, uses its own key
+    // light (lane matParam3.xyz, default (0.4, 0.8, 0.5)). Energy is bounded: diffuse <= albedo,
+    // metallic darkens diffuse, specular and result are clamped to 1.
+    let L = normalize(obj.matParam3.xyz);
+    let V = normalize(global.viewPos.xyz - i.wp);
     let H = normalize(L + V);
 
     let NdotL = max(dot(perturbedN, L), 0.0);
@@ -133,12 +136,12 @@ fn mr_voronoiFacets(uv: vec2f, scale: f32) -> vec3f {
     let specPower = mix(16.0, 128.0, 1.0 - dynamicRoughness);
     let spec = pow(NdotH, specPower) * (1.0 - dynamicRoughness);
 
-    let specColor = mix(vec3f(0.3), vec3f(1.0, 0.98, 0.95), dynamicMetallic) + vec3f(edgeGlint * 0.7);
+    let specColor = min(mix(vec3f(0.3), vec3f(1.0, 0.98, 0.95), dynamicMetallic) + vec3f(edgeGlint * 0.7), vec3f(1.0));
 
-    let diffuseLight = finalAlbedo * (vec3f(0.25) + vec3f(0.85) * NdotL);
+    let diffuseLight = finalAlbedo * (vec3f(0.25) + vec3f(0.75) * NdotL) * (1.0 - 0.5 * dynamicMetallic);
     let specularLight = specColor * spec * select(0.0, 1.0, NdotL > 0.0);
 
-    var color = diffuseLight + specularLight;
+    var color = min(diffuseLight + specularLight, vec3f(1.0));
     [WGSL_FOG_CALC]
 
     return vec4f(color, baseAlbedo.a);

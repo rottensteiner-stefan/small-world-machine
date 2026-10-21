@@ -9,13 +9,15 @@ precision highp float;
 varying vec3 v_worldPos;
 varying vec3 v_normal;
 varying vec2 v_uv;
+uniform vec3 u_viewPos;
 
 uniform vec4 u_color;
 uniform vec4 u_specColor;
 uniform float u_shininess;
 uniform vec4 u_matParam0;
 uniform vec4 u_matParam1;
-uniform vec4 u_styleA;
+uniform vec4 u_matParam2; // semantic lane 2: color-pop (hue, tolerance, desaturation, rust)
+uniform vec4 u_matParam3; // semantic lane 3: key light direction xyz (stylized, see main)
 uniform float u_metallic;
 uniform float u_roughness;
 uniform float u_time;
@@ -24,12 +26,19 @@ uniform float u_time;
 uniform sampler2D u_diffuseMap;
 #endif
 
+[FOG_DEFS]
+
+// Hoskins hash without sine: identical bits in WGSL / GLSL300 / GLSL100 (cross-dialect parity).
 float mr_hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
 }
 
 vec2 mr_hash2(vec2 p) {
-    return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453123);
+    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx + p3.yz) * p3.zy);
 }
 
 vec3 mr_rgb2hsv(vec3 c) {
@@ -79,10 +88,10 @@ void main() {
     float wireMeshScale        = u_matParam1.z;
     float wetRainStreaks       = u_matParam1.w;
 
-    float targetHue            = u_styleA.x;
-    float hueTolerance         = u_styleA.y;
-    float desaturation         = u_styleA.z;
-    float rustStrength         = u_styleA.w;
+    float targetHue            = u_matParam2.x;
+    float hueTolerance         = u_matParam2.y;
+    float desaturation         = u_matParam2.z;
+    float rustStrength         = u_matParam2.w;
 
     #ifdef USE_DIFFUSE_MAP
         vec4 texel = texture2D(u_diffuseMap, v_uv);
@@ -114,8 +123,10 @@ void main() {
         scratchFactor *= (1.0 - wire * wireMeshStrength * 0.4);
     }
 
+    // Same metric as GLSL300/WGSL (length of fwidth). Without OES_standard_derivatives (rare WebGL1
+    // devices) there are no derivatives: documented fallback is curvature = 0, i.e. no edge glint.
     #ifdef GL_OES_standard_derivatives
-        float curvature = (length(dFdx(perturbedN)) + length(dFdy(perturbedN))) * 4.0;
+        float curvature = length(abs(dFdx(perturbedN)) + abs(dFdy(perturbedN))) * 6.0;
     #else
         float curvature = 0.0;
     #endif
@@ -148,8 +159,11 @@ void main() {
         dynamicMetallic  = mix(dynamicMetallic, 0.98, streak);
     }
 
-    vec3 L = normalize(vec3(0.4, 0.8, 0.5));
-    vec3 V = normalize(-v_worldPos);
+    // STYLIZED (not physically based, by design): this material is a painterly relief look. It ignores
+    // scene lights/shadows/IBL and uses its own key light (lane u_matParam3.xyz, default (0.4, 0.8, 0.5)).
+    // Energy is bounded instead: diffuse <= albedo, metallic darkens diffuse, specular and result are clamped to 1.
+    vec3 L = normalize(u_matParam3.xyz);
+    vec3 V = normalize(u_viewPos - v_worldPos);
     vec3 H = normalize(L + V);
 
     float NdotL = max(dot(perturbedN, L), 0.0);
@@ -158,10 +172,11 @@ void main() {
     float specPower = mix(16.0, 128.0, 1.0 - dynamicRoughness);
     float spec = pow(NdotH, specPower) * (1.0 - dynamicRoughness);
 
-    vec3 specColor = mix(vec3(0.3), vec3(1.0, 0.98, 0.95), dynamicMetallic) + vec3(edgeGlint * 0.7);
+    vec3 specColor = min(mix(vec3(0.3), vec3(1.0, 0.98, 0.95), dynamicMetallic) + vec3(edgeGlint * 0.7), vec3(1.0));
 
-    vec3 diffuseLight = finalAlbedo * (vec3(0.25) + vec3(0.85) * NdotL);
+    vec3 diffuseLight = finalAlbedo * (vec3(0.25) + vec3(0.75) * NdotL) * (1.0 - 0.5 * dynamicMetallic);
     vec3 specularLight = specColor * spec * (NdotL > 0.0 ? 1.0 : 0.0);
 
-    gl_FragColor = vec4(diffuseLight + specularLight, baseAlbedo.a);
+    gl_FragColor = vec4(min(diffuseLight + specularLight, vec3(1.0)), baseAlbedo.a);
+    [FOG_CALC]
 }

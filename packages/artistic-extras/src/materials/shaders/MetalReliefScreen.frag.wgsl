@@ -61,10 +61,10 @@ fn mrs_voronoiFacets(uv: vec2f, scale: f32) -> vec3f {
     let wetRainStreaks       = obj.matParam1.z;
     let wireMeshStrength     = obj.matParam1.w;
 
-    let targetHue            = obj.styleA.x;
-    let hueTolerance         = obj.styleA.y;
-    let desaturation         = obj.styleA.z;
-    let rustStrength         = obj.styleA.w;
+    let targetHue            = obj.matParam2.x;
+    let hueTolerance         = obj.matParam2.y;
+    let desaturation         = obj.matParam2.z;
+    let rustStrength         = obj.matParam2.w;
 
     let texelSize = vec2f(1.0 / 512.0, 1.0 / 512.0);
 
@@ -133,7 +133,7 @@ fn mrs_voronoiFacets(uv: vec2f, scale: f32) -> vec3f {
 
     var color = finalAlbedo * (0.35 + 0.75 * NdotL) + specColor;
 
-    let splitPos = obj.styleB.x;
+    let splitPos = obj.matParam3.x;
     if (splitPos >= 0.0 && i.uv.x < splitPos) {
         color = centerTex.rgb;
     }
