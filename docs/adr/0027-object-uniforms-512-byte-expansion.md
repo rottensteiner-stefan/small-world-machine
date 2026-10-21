@@ -1,5 +1,7 @@
 # ADR 0027: Erweiterung des `ObjectUniforms`-Puffers auf 512 Byte & Entflechtung der Semantik-Slots
 
+> **Stand-Hinweis (2026-10-21):** Die Dual-Write-Übergangsphase (Entscheidung 3) ist beendet: `LiquidWaveMaterial` schreibt nur noch `u_matParam0..6`, die Shader lesen `u_matParam*`. Die Testzahlen im Text sind ein historischer Stand. ADR 0039 hat das Muster um `MaterialLanes` erweitert.
+
 > Status: ACCEPTED (Oktober 2026, Gesamtpaket zur Überwindung des 256-Byte-Flaschenhalses)
 > Replaces / Supersedes: [ADR 0026](./0026-object-uniforms-256-byte-moat.md)
 
@@ -32,7 +34,7 @@ Diese 256-Byte-Kappe führte in der Praxis zu starkem semantischem „Slot-Hijac
    - Für `OpenWater`:
      - `matParam0`: `vec4(waterAbsorption.rgb, refractionStrength)`
      - `matParam1`: `vec4(foamColor.rgb, foamDistance)`
-     - `matParam2`: `vec4(foamCutoff, foamNoiseScale, foamNoiseSpeed, foamIntensity)`
+     - `matParam2`: `vec4(foamCutoff, foamNoiseScale, foamNoiseSpeed, foamIntensity)` (Stand 2026-10-21: bei `OpenWaterMaterial` trägt `matParam2.w` stattdessen `poolHalfExtent`; ein `foamIntensity` gibt es nicht)
 3. **Abwärtskompatibilität (Dual-Write):**
    - Bestehende Materialien (`LiquidWaveMaterial`) belegen zur Wahrung voller Rückwärtskompatibilität vorerst sowohl die Legacy-Slots als auch die neuen `matParam`-Slots.
    - WebGL1-Shader (`glsl100`) behalten ihre schlanken, selektiven Einzeluniform-Deklarationen und bleiben damit 100% konform zur GLSL-ES-1.00-Spezifikation.

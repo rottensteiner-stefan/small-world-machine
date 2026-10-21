@@ -1,5 +1,7 @@
 # 0037: WebGPU Renderer Decomposition & GPU PostEffectPass Interface
 
+> **Status note (2026-10-21):** The post-effect registry now lives in `PostFxChain._passes` (`_getOrCreatePass`), not in `WebGPURenderer._postEffectPasses`. `requiresOpaqueDepth` also covers `DEPTH_OF_FIELD`. `WebGPURenderer.ts` has 1664 lines (was 1655). The open item "ADR index line" is done.
+
 - **Status:** Accepted
 - **Accepted:** 2026-10-19 (maintainer approval)
 - **Date:** 2026-10-18

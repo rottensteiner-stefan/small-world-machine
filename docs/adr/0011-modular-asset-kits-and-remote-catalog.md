@@ -1,5 +1,7 @@
 # Modulare Asset-Kits & Out-of-Tree-Asset-Bibliotheks-Architektur
 
+> **Stand-Hinweis (2026-10-21):** Phase 1 umgesetzt, Phase 2 teilweise (siehe Status-Block unten). Der Katalog-Index `public/assets/kits/index.json` (`{ "kits": [...] }`) ist hier nicht erwähnt; sein `$schema` verweist auf `schemas/kits-index.schema.json`, das (noch) nicht existiert. Der App-Name `and-now` im Text entspricht heute `apps/sample-apps/the-whisper`.
+
 ## Kontext & Problem
 
 Während das Small-World-Machine-Ökosystem um reichhaltigere Diorama-Szenen, Charaktere, Animationen und 3D-Requisiten wächst (etwa die per Tripo3D generierten Industrie-Schott-Wandlampen, Holzkisten, Wellblech-Ölfässer, polygonalen Schutthaufen und humanoiden Biped-Rigs), wächst das Volumen binärer Assets rasant.
@@ -141,8 +143,9 @@ Distribution (Remote-URIs) und damit der eigentliche entfernte Katalog-Ingest.
   npx small-world-machine add prop industrial/wall_lamp
   ```
 
-**Status:** nicht umgesetzt. Weder `GltfLoader.loadFromCatalog()` noch die `small-world-machine`-CLI
-existieren im Code -- setzt ohnehin Phase 2 (ein echtes Remote-Katalog-Ziel) voraus.
+**Status:** nicht umgesetzt. `GltfLoader.loadFromCatalog()` existiert nicht, ebenso wenig `add kit`/`add prop`
+in der CLI -- das setzt ohnehin Phase 2 (ein echtes Remote-Katalog-Ziel) voraus. (Stand 2026-10-21: Eine `swm`-CLI
+existiert inzwischen, siehe ADR 0034, mit `map to-json|from-json` und `kit validate <dir>`.)
 
 ## Konsequenzen
 

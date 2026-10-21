@@ -1,5 +1,7 @@
 # ADR 0038: WebGL-Renderer-Zerlegung & gemeinsame GL-Manager-Schicht
 
+> **Stand-Hinweis (2026-10-21):** Zeilenstände (Stand 2026-10-21): `WebGL1Renderer.ts` 871, `WebGL2Renderer.ts` 1862, `AbstractWebGLRenderer.ts` 485. Entscheidung 4 (PostEffectPass-GL-Konsum) ist erledigt (`GLPostEffectPass.ts`, `GLPostEffects.ts`).
+
 > **Status: ACCEPTED** — 2026-10-19 (Maintainer-Abnahme; ursprünglich DRAFT vom 2026-10-19, Session `swm-wave2-b`). Grundlage:
 > Thermo-Audit `.agents/scratches/thermo-1014/01-renderers-webgl.md` (§2.7) und
 > `15-cross-cutting-and-roadmap.md`; Paket-Spezifikation `.agents/scratches/wave2-package-B.md`.
@@ -44,7 +46,7 @@ Der Audit beklagt deren Größe und Duplikation: `WebGL2Renderer.ts` = 2087 Zeil
    Zero-Allocation; keine Verhaltensänderung. **Das `<1700`-Ziel für `WebGL2Renderer.ts` bleibt angestrebt,
    nicht erreicht (siehe Konsequenzen);** die Zerlegung belässt die Helper bewusst in der Klasse, damit der
    Hot Path direkte Privatfeld-Zugriffe behält (Coding-Guide §3B).
-4. **PostEffectPass-GL-Konsum (Task 4, ausstehend):** `WebGLPostProcessPass`/`PostProcessPassGL` sollen auf den
+4. **PostEffectPass-GL-Konsum (Task 4, erledigt mit `d35b0517`):** `WebGLPostProcessPass`/`PostProcessPassGL` sollen auf den
    `PostEffectPass`-Interface-Vertrag aus Paket A umgestellt werden (`execute(ctx)`, `destroy()`,
    `Map<PostProcessingEffectType, PostEffectPass>`, `postProcessing.requiresOpaqueDepth` auch GL-seitig,
    `?.destroy()`-Listen in `WebGL2Renderer`/`WebGL1Renderer` zusammengeführt). Das Interface liegt bis zum

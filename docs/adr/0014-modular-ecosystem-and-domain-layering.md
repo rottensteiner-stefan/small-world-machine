@@ -1,5 +1,7 @@
 # ADR 0014: Modulares Ökosystem und Domänen-Schichtung — Auflösung von `extensions/`
 
+> **Stand-Hinweis (2026-10-21):** Status: umgesetzt (siehe Status-Absatz unten). Tier 4 (Tools) liegt seit ADR 0024 im Paket `@small-world-machine/tools` (`packages/tools/`); ein Verzeichnis `packages/engine/src/tools` gibt es nicht mehr, die Export-Regel `./tools/index.js` ist überholt. `GridLevelBuilder` liegt in `packages/engine/src/geometry/procgen/`. `OrbitController` liegt in `core/controllers/`. Unter `apps/sample-apps/` existiert zusätzlich `voxel-prototype`.
+
 ## Kontext & Problem
 
 Das Verzeichnis `src/extensions/` wurde ursprünglich als Auffangordner für "modulare Logik, die auf dem Kern der Engine aufbaut, aber für grundlegendes 3D-Rendering nicht erforderlich ist" eingeführt. Mit der Zeit entstand daraus ein klassisches **"Grab-Bag"-/Rumpelkammer-Anti-Pattern**:

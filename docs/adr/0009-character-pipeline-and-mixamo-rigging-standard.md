@@ -1,5 +1,7 @@
 # Charakter-Pipeline-Architektur & Mixamo-Rigging-Standard
 
+> **Stand-Hinweis (2026-10-21):** Der Laternen-Sync (`_syncLanternTransform()`) liegt jetzt in `PlayerRig._syncLantern()` (`apps/sample-apps/the-whisper/scenes/shared/PlayerRig.ts`). Der Hand-Socket ist eine priorisierte Kandidatenliste (`LANTERN_HAND_BONE_CANDIDATES`, zuerst `LeftHandMiddle1`, `LeftHandIndex1`, dann `mixamorig:LeftHand` u. a.). Der Rig-Wrapper `_characterRig` mit fester 1,8-Skalierung ist durch `PlayerCharacterSpec.scale` pro Szene ersetzt. Die Prinzipien (Weltposition, Division durch die akkumulierte Weltskalierung) gelten weiter.
+
 ## Kontext & Problem
 
 Aus 2D-Konzepten spielbare 3D-Charaktere für die Small World Machine zu erzeugen, braucht eine

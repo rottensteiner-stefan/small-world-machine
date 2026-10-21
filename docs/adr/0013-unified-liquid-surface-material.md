@@ -1,5 +1,7 @@
 # Vereinheitlichtes Flüssigkeits-Material: Ein Kernmechanismus, Presets fürs Aussehen
 
+> **Stand-Hinweis (2026-10-21):** Status: Akzeptiert, umgesetzt (`LiquidWaveMaterial`, `FluidSurfaceMaterial`, `LavaMaterial`, `SlimeMaterial` unter `core/materials/liquid/`). Die im Text genannte Klasse `LiquidSurfaceMaterial` existiert nicht; gemeint sind `LiquidWaveMaterial`/`FluidSurfaceMaterial`. Die `LaneContractRegistry` ist kein Code, sondern `scripts/lane-contracts/lane-contracts.json` mit `scan.js`. Die Aufteilung in Engine-Kern und `liquid-extras` regelt ADR 0025.
+
 ## Kontext & Problem
 
 `OpenWaterMaterial` (realistisches PBR-Wasser) und `StylizedWaterMaterial` (Toon-Wasser) sind zwei

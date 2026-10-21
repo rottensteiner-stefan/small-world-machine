@@ -1,5 +1,7 @@
 # ADR 0024: Entwicklungswerkzeuge als eigenes Ökosystem-Paket (`@small-world-machine/tools`)
 
+> **Stand-Hinweis (2026-10-21):** Status: Akzeptiert, umgesetzt. `attachDevTools(app)` liefert inzwischen ein `DevToolsHandle` (`{ forge, detach() }`) statt `void`. Das Paket enthält zusätzlich `kit-inspector`, die CLI `swm` und `core` (ADR 0033/0034).
+
 ## Kontext & Problem
 
 Die Kern-Engine verfolgt die Philosophie eines ultraleichten Kerns; Domänenspezifisches wandert in separate Workspace-Pakete (ADR 0014, ADR 0018, ADR 0021, ADR 0022). Aktuell liegen alle Editor-/Diagnose-Werkzeuge (`Maker`, `MaterialStudio`, `Pixler`, `Xtractor`, `MapGenerator`, der `Forge`-Fenstermanager) physisch unter `packages/engine/src/tools/` — Teil des Kern-Pakets `@small-world-machine/engine` —, obwohl eine ausgelieferte Spiel-Anwendung sie zur Laufzeit nie braucht.

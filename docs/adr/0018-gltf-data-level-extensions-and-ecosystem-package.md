@@ -1,5 +1,7 @@
 # ADR 0018: glTF Data-Level-Extensions & `@small-world-machine/gltf-extensions`-Ökosystem-Paket
 
+> **Stand-Hinweis (2026-10-21):** Status: Akzeptiert, umgesetzt (`packages/gltf-extensions/`). Die Testzahl im Text ist ein historischer Stand.
+
 ## Kontext & Problem
 
 Mit ADR 0017 wurde die `GltfExtensionPlugin`-Registry eingeführt. Diese deckte primär **Szenengraph-/Node-Ebene-Extensions** ab (`readNode`, `applyNode`, `writeNode`, `finalizeWrite`), wie `KHR_lights_punctual`, `SWM_prefab_instance` und `SWM_stage_zone`.

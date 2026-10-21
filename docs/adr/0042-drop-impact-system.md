@@ -1,5 +1,7 @@
 # ADR 0042: Tropfen auf Flüssigkeiten als System, Splash als Shader-Illusion
 
+> **Stand-Hinweis (2026-10-21):** Umsetzungsstand: Phase (a) ist umgesetzt (`packages/liquid-extras/src/drops/`, Showcase 30), Phase (b) ist zurückgestellt.
+
 > **Status: ACCEPTED** — 2026-10-19 (Maintainer-Entscheidung). Ausdrücklich als **revidierbar** markiert:
 > alle drei Entscheidungen sollen bei Bedarf überprüft und erweitert werden (Auslöser unten).
 

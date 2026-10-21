@@ -1,5 +1,7 @@
 # ADR 0041: Application Persistence & Savegame — Pflicht-Grundlage für App-Manifest, stabile IDs und Laufzeitzustand
 
+> **Stand-Hinweis (2026-10-21):** Stand 2026-10-21: Keine der fünf Stufen ist umgesetzt. `app.json`, App-Schema, `content/<sprache>.json` und ein Savegame-Format existieren nicht; `level.schema.json` hat kein `schemaVersion`. Der ADR ist reines Grundlagendokument.
+
 > **Status: ACCEPTED** — 2026-10-19 (Maintainer-Abnahme; ursprünglich DRAFT vom 2026-10-19, Session `swm-ops-b`). Grundlage sind die
 > **verbindlichen** Entscheidungen aus `docs/research/application-persistence-whole-world-2026-09-29.md`
 > (§12a, 2026-09-29) sowie deren Reihenfolgen-Vorgabe (§10, angepasst §12a).

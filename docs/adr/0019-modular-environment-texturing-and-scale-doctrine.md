@@ -1,5 +1,7 @@
 # ADR 0019: Modulare Environment-Texturierung & 4-Säulen-Skalierungs-Doktrin
 
+> **Stand-Hinweis (2026-10-21):** Status: Akzeptiert. Die Doktrin ist in `FlakturmKit` umgesetzt. Abweichungen: Die Textur `concrete_reinforced_heavy` (Typ D) ist im Kit `flakturm` nicht ausgeliefert. Säule 4 (UV-Jitter) ist eine Richtlinie mit Anwendungs-Snippet in `docs/guides/asset-pipeline.md`, kein Engine-Feature. Projizierte Decals bietet inzwischen das Decal-System (ADR 0029).
+
 ## Kontext & Problem
 
 In 3D-Bunker- und Industrie-Umgebungen (wie in *The Whisper* im Flakturm Arenberg) variieren Raumgrößen von intimen Kammerspielen (z. B. Koje 42, 7×7 m) bis hin zu monumentalen Hallen, Schächten, Munitionsdepots und Schleusen (20×20 m bis >50 m).

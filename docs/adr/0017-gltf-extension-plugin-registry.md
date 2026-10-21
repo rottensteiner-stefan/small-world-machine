@@ -1,5 +1,7 @@
 # glTF-Extension-Plugin-Registry statt hartkodierter if/else-Zweige
 
+> **Stand-Hinweis (2026-10-21):** Status: Akzeptiert, umgesetzt. Seit ADR 0018 kennt das Plugin-Interface zusätzlich die Hooks `decodeGeometry` und `resolveTexture`. Eingebaut sind heute fünf Plugins: `khrLightsPunctual`, `swmPrefabInstance`, `swmStageZone`, `swmDecal` und `swmLightsAmbient`. Die verworfene Alternative „separates Package“ wurde für Data-Level-Extensions (Draco, BasisU) durch ADR 0018 teilweise umgesetzt.
+
 ## Kontext & Problem
 
 `GltfLoader`/`WorldWriter` kennen bislang genau zwei Vendor-/Community-Extensions —

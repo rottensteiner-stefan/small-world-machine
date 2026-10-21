@@ -1133,7 +1133,7 @@ befüllen.
 
 ## 109. ADR 0016 vollständig umgesetzt: Flakturm-Tunnel ist jetzt Maker-fähig (2026-09-12)
 - **Anlass:** Der oben angekündigte "nächste Schritt" — die Flakturm-Tunnel-Szene im Maker
-  öffnen/bearbeiten/speichern können. Umgesetzt in drei Phasen (siehe `docs/adr/0016-...md` und
+  öffnen/bearbeiten/speichern können. Umgesetzt in drei Phasen (siehe `docs/adr/0016-2-5d-stage-zones-as-a-gltf-extension.md` und
   die neue `docs/adr/0017-gltf-extension-plugin-registry.md` für Details).
 - **Was sich für and-now konkret ändert:** `flakturm-tunnel/showcase.ts`s `uvToWorld`-Closure
   wurde zu `projection: {mode:"flat-plane", width:16, height:9, z:0, centerY:4.5}` (reine Daten

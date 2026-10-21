@@ -1,5 +1,7 @@
 # ADR 0021: Ökosystem-Pakete für exotische Geometrien (`@small-world-machine/geometry-extras`) & höherstufige Physik (`@small-world-machine/physics-extras`)
 
+> **Stand-Hinweis (2026-10-21):** Status: Akzeptiert, umgesetzt. Zusätzliche Pakete nach demselben Muster: `vfx-extras` (ADR 0022), `liquid-extras` (ADR 0025), `artistic-extras` und `tools` (ADR 0024). Neben `geometry-extras/Lathe` existiert seit ADR 0040 ein Revolve-Generator im Kern (`packages/engine/src/geometry/LatheGeometry.ts`).
+
 ## Kontext & Problem
 
 Die Kern-Engine verfolgt die Philosophie eines ultraleichten Kerns ohne externe Abhängigkeiten. In ADR 0018 wurde bereits ein separater Weg etabliert: datenkomprimierende glTF-Extensions (Draco, BasisU) leben nicht im Kern, sondern im Ökosystem-Paket `@small-world-machine/gltf-extensions`.
@@ -24,4 +26,4 @@ Dieselbe Realität ergibt sich für den Geometrie- und Physikbereich:
 - **Kern bleibt schlank:** der Primitive-Katalog und die Physik-API wachsen nicht um hunderte Nischen-Figuren.
 - **Reicher Erweiterungspfad für Dritte:** Entwickler können eigene Geometrie- oder Physik-Pakete nach exakt demselben Muster beisteuern (vergleiche `geometry-extras/README.md` "Adding a new exotic geometry").
 - **Grenzen:** Nur was über zwei unabhängige Projekte hinweg als universell nachgewiesen ist, wandert zurück in den Kern (vgl. ADR 0015 "App-First-Regel").
-- **Kopplung zwischen Extras-Paketen erlaubt, aber azyklisch:** `physics-extras` darf `geometry-extras` importieren; kein Extras-Paket darf je `@small-world-machine/engine` importieren und dabei den Kern aufblähen.
+- **Kopplung zwischen Extras-Paketen erlaubt, aber azyklisch:** `physics-extras` darf `geometry-extras` importieren; der Kern (`@small-world-machine/engine`) darf kein Extras-Paket importieren und bleibt dadurch schlank.

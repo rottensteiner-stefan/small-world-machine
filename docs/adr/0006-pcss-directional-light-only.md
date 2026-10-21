@@ -1,5 +1,7 @@
 # PCSS (weiche Schatten): Directional Lights überall, Spot Lights nur auf WebGPU
 
+> **Stand-Hinweis (2026-10-21):** Das Texturen-Budget des Cluster-Systems beträgt heute die Einheiten 8–15 (Spot-Shadow 8–11, Directional 12, Raw-Depth 13, Cluster-Grid 14, Cluster-Index 15; `math/ClusterGrid.ts`). Die Aussage zum Warn-/Fallback-Pfad (Einheiten 8–18) trifft nicht mehr zu; die Schlussfolgerung, dass vier weitere Raw-Spot-Einheiten das 16er-Budget sprengen würden, bleibt gültig. `getShadowPCSS` ist in `pbr_math.wgsl` definiert.
+
 Der Blocker-Search + Variable-Radius-PCF-Pass läuft für die primäre Kaskade des Directional Light
 auf allen Backends, und (Stand dieses Updates) für Spot Lights auf WebGPU. Der
 Cascade-Blend-Sample der sekundären Kaskade des Directional Light behält überall das ältere,

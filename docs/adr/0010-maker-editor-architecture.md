@@ -1,5 +1,7 @@
 # Maker: Weltformat & Editor-Architektur
 
+> **Stand-Hinweis (2026-10-21):** Umgesetzt (Phase 3 ausgeliefert). Der Maker-Code liegt seit ADR 0024 in `packages/tools/src/maker/`, nicht in `packages/engine/src/tools/`. Das Loader-Extension-Handling (hier: nur `KHR_materials_emissive_strength`) läuft seit ADR 0017 über die Plugin-Registry. ADR 0033 hat das Workspace-Konzept (§4) auf das Backlog zurückgestuft; §4 gilt faktisch unverändert.
+
 ## Kontext & Problem
 
 Small World Machine hat sich ein reichhaltiges Laufzeit-Objektmodell erarbeitet (19 Geometrie-Primitive, 16 Materialien, 5 Lichttypen, ~20 Behaviors), aber es gibt keine Möglichkeit, eine Szene zu *komponieren* oder zu *persistieren*, außer TypeScript von Hand zu schreiben. `GadgetInspector` (`packages/engine/src/tools/GadgetInspector.ts`, damaliger Stand vor ADR 0024) ist das bislang nächstliegende Werkzeug — ein Tweakpane-basiertes Overlay, das per Raycast ein Live-Objekt auswählt und dessen Transform-/Material-/Licht-/Behavior-Eigenschaften bearbeitet —, aber seine (inzwischen entfernte) Dokumentation listete genau die Lücken auf, die ihn daran hindern, ein echter Editor zu werden (GadgetInspector wurde nach ADR 0024 vollständig durch `Maker` ersetzt, siehe [`docs/guides/maker.md`](../guides/maker.md)):

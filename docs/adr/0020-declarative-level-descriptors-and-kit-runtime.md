@@ -1,5 +1,7 @@
 # ADR 0020: Deklarative Level-Deskriptoren & Instanzbasierte Kit-Runtime (`KitRegistry`)
 
+> **Stand-Hinweis (2026-10-21):** Status: Akzeptiert, umgesetzt. Das Level-Schema (`public/schemas/level.schema.json`) kennt inzwischen auch `decals` (ADR 0029) und `environment`; `KitRegistry.hydrateDecal` ist ergänzt. Die Zeilenangabe zu `prologue.ts` ist ein historischer Stand (heute ca. 1276 Zeilen). Savegames: siehe ADR 0041 (noch nicht umgesetzt).
+
 ## Kontext & Problem
 
 In der initialen Entwicklung von 3D-Szenen (exemplarisch im Prolog *Koje 42* von *The Whisper*) wurden Requisiten, Lichter, PBR-Materialanpassungen und Hotspots imperativ im TypeScript-Code aufgebaut:

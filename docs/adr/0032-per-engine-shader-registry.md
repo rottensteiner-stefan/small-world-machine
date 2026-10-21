@@ -1,5 +1,7 @@
 # 0032: Per-Engine Shader Registry (No Process-Wide Shader State)
 
+> **Status note (2026-10-21):** Registration is consolidated in `AbstractRenderer._registerRenderListProviders` (`ensureProvider` once per frame for batches, transparent and decal objects) instead of the three batch entry points named below. `ShaderBootstrap.init` loads only the chunks; `MaterialType.DEPTH` is registered by the passes/renderers themselves via `ensureProvider`.
+
 - **Status:** Accepted & Implemented (phases 1 to 3, 2026-10-17)
 - **Date:** 2026-10-17
 - **Decision Makers:** Small World Machine Architecture Team

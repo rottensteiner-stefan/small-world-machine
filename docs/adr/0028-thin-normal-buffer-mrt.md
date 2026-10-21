@@ -1,5 +1,7 @@
 # Dünner Normal-Buffer als MRT im Main Pass: kein G-Buffer, Velocity getrennt
 
+> **Stand-Hinweis (2026-10-21):** Status: umgesetzt. `captureOpaqueDepth` und `_opaqueDepthTexture` liegen seit ADR 0037 in `renderers/WebGPU/managers/OpaqueCapture.ts`.
+
 Status: angenommen. WebGPU und WebGL2 umgesetzt und auf echter GPU geprüft (Boden, Würfelflächen, Sentinel am Himmel); HBAO nutzt den Buffer bewusst nicht (geometrische Normale, siehe Abschnitt „Befund beim HBAO-Anschluss“). Decals schalten ihn bei Bedarf automatisch ein.
 
 Die Engine rendert Forward mit Clustered Lighting ([0007](0007-clustered-lighting-webgl2-webgpu-only.md)) und hat bewusst keinen G-Buffer. Es gibt auch keinen Normal- oder Velocity-Buffer. Dieser ADR führt einen dünnen Normal-Buffer ein, geschrieben als zweites Render-Ziel (MRT) des Main Pass, damit Decals die Normal-Map der Unterlage übernehmen können. Ein G-Buffer und Deferred bleiben ausgeschlossen.

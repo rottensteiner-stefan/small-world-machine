@@ -3,7 +3,7 @@
 > **Status:** Point-in-time-Analyse (2026-10-18), noch **keine Entscheidung** getroffen — dieses
 > Dokument ist ein Recherche-Papier im Sinne von `docs/research/` (Bestandsaufnahme, Pros/Contras,
 > Empfehlung), **kein** ADR. Wird die Strategie fixiert, gehört die Entscheidung als ADR
-> (Vorschlag `docs/adr/0036-wasm-strategy.md`) dokumentiert.
+> (Vorschlag `docs/adr/0036-typescript-bleibt-kein-wasm-assemblyscript.md`) dokumentiert.
 > **Update 2026-10-19 — Entscheidung getroffen:** [ADR 0036](../adr/0036-typescript-bleibt-kein-wasm-assemblyscript.md)
 > ist seit **2026-10-18 ACCEPTED** und folgt dieser Empfehlung: additiv bleiben, kein Vollumstieg;
 > einziger fest eingeplanter WASM-Einsatz ist Asset-Decoding außerhalb des Kerns
@@ -190,7 +190,7 @@ Neben den klassischen „schneller/GC-frei“-Argumenten gibt es einen **spezifi
    C++-Host (`commercial-indie-roadmap.md`) abgedeckt — dort ist „eingebettete WASM-Runtime“
    eine Frage des *Hosts*, nicht der Engine-Architektur.
 5. **Falls die Strategie fixiert wird:** Entscheidung als ADR dokumentieren
-   (Entwurf `docs/adr/0036-wasm-strategy.md`), mit Verweis auf dieses Papier.
+   (Entwurf `docs/adr/0036-typescript-bleibt-kein-wasm-assemblyscript.md`), mit Verweis auf dieses Papier.
    **Update 2026-10-19 — erledigt:** die Entscheidung ist getroffen,
    [ADR 0036](../adr/0036-typescript-bleibt-kein-wasm-assemblyscript.md) ist ACCEPTED
    (2026-10-18) und verweist auf dieses Papier; die Empfehlungen bleiben unverändert.

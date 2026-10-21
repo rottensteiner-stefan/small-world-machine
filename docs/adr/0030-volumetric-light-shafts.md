@@ -1,5 +1,7 @@
 # 0030: Volumetric Light Shafts (God Rays) Across Hybrid WebGL1/WebGL2/WebGPU Pipelines
 
+> **Status note (2026-10-21):** Local point/spot volumetrics, listed here as future roadmap, were implemented by ADR 0031.
+
 - **Status:** Accepted & Implemented
 - **Date:** 2026-10-14
 - **Decision Makers:** Small World Machine Architecture Team
@@ -32,7 +34,7 @@ We established a 2-tier hybrid architecture:
 
 ### Tier 2: Half-Resolution Raymarching against CSM + Cross-Bilateral Upsample (WebGL 2.0 & WebGPU)
 - **Technique:** Raymarching through participating media along primary camera rays from near to either the opaque surface depth or `maxDistance`.
-- **Shadow Map Reuse:** Reuses the Directional Cascaded Shadow Map (CSM, unit 14) already computed during `WebGLShadowPass` / `CascadedShadowPassGPU`. No second shadow pass is executed.
+- **Shadow Map Reuse:** Reuses the Directional Cascaded Shadow Map (CSM, WebGL2 texture unit 1) already computed during `WebGLShadowPass` / `CascadedShadowPassGPU`. No second shadow pass is executed.
 - **Phase Function:** Schlick (1993) phase function approximation of Henyey-Greenstein ($k \approx 1.55g - 0.55g^3$), saving expensive floating-point powers (`pow(..., 1.5)`) while preserving forward scattering peaks around the sun.
 - **Jittering:** Interleaved Gradient Noise (IGN, Jorge Jimenez 2014) offset per ray to break step banding into low-discrepancy high-frequency noise.
 - **Upsampling Filter:** 2x2 Depth-Aware Cross-Bilateral Filter. Naive bilinear interpolation produces bright halos and bleeding around sharp silhouette edges. The cross-bilateral filter weights neighboring half-resolution samples by exponential depth distance ($\exp(-|\Delta z| / \tau)$) and falls back to the nearest depth tap if all four taps cross a silhouette discontinuity.

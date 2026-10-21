@@ -1,5 +1,7 @@
 # ADR 0025: Stilisierte Flüssigkeits-Looks — Engine-Kern vs. Extension-Paket
 
+> **Stand-Hinweis (2026-10-21):** Die Randbedingung „224 Byte belegt, zwei freie vec4“ ist historisch; seit ADR 0027 hat der Block 512 Byte. Die Preset-Leiter von `StylizedWaterMaterial` heißt heute `flat | toon | bold | soft | sparkle | dredge | custom` (6 `styleId`, `u_styleB.w`). Noir ist kein Kern-Preset, sondern `NoirWaterMaterial` in `liquid-extras`, das inzwischen auch `OilSlick`, `OilPuddle` und `RainPuddle` enthält.
+
 > Status: ACCEPTED (Dave / Bob / Charly / Erin / Alice, 2026-10-03)
 
 ## Kontext & Problem

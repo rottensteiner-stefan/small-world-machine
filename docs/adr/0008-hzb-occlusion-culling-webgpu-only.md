@@ -1,5 +1,7 @@
 # Hierarchical-Z-Occlusion-Culling: nur WebGPU, Kugel-Bounds, um einen Frame veraltet
 
+> **Stand-Hinweis (2026-10-21):** Die Implementierung liegt seit ADR 0037 in `renderers/WebGPU/managers/HzbOcclusionSystem.ts`; die genannten `_hzb*`-Felder und `MAX_HZB_TESTED_OBJECTS` stehen nicht mehr in `WebGPURenderer` (dort nur dünne Delegates). `BoundingVolume` umfasst inzwischen auch `ConvexHull` (ADR 0040); die Kugel-Begründung bleibt gültig.
+
 Hierarchical-Z (HZB) Occlusion Culling gibt es nur für WebGPU, opt-in über
 `EngineOptions.enableOcclusionCulling` (Standard: aus). Anders als Clustered Lighting
 ([0007](0007-clustered-lighting-webgl2-webgpu-only.md)) gibt es hier überhaupt keinen

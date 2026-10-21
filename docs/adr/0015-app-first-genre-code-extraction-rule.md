@@ -1,5 +1,7 @@
 # App-First: Genre-spezifischer Gameplay-Code bleibt außerhalb des Kerns, bis ein zweites Projekt ihn braucht
 
+> **Stand-Hinweis (2026-10-21):** Status: Akzeptiert, gültig (erzwungen durch `eslint.config.js`). Die Apps liegen unter `apps/sample-apps/` (`the-whisper`, `yad`, `light-cycle-arena`, `voxel-prototype`); `and-now` existiert nicht mehr.
+
 ## Kontext
 
 Small World Machine ist eine universelle 3D-Engine. Jede neue Projektidee (ein Doom-artiger Shooter, eine

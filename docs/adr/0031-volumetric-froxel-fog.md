@@ -1,5 +1,7 @@
 # 0031: Volumetric Froxel Fog (Stufe 3, WebGPU Compute & WebGL2 Parity)
 
+> **Status note (2026-10-21):** Status of the scope question: V1 was WebGPU only; WebGL2 parity followed on 2026-10-17 (hybrid architecture, see the update above). Later look retunings are recorded only in `CHANGELOG.md`. Test and performance numbers are a snapshot.
+
 - **Status:** Accepted & Implemented
 - **Date:** 2026-10-16 (Updated 2026-10-17 for v0.110.0)
 - **Status of:** *[2026-10-16 Complete, 2026-10-17 v0.110.0 Refinements]* 3-Tier Fog Standard, Stufe 3
@@ -124,7 +126,7 @@ sessions):
 - `packages/engine/src/interfaces/FrameInfo.ts` — frame context timing contract (`time`, `realTime`, `deltaTime`, `realDeltaTime`, `frameIndex`).
 - `packages/engine/src/core/SmallWorldMachine.ts` — `frameInfo` writer and `captureFrameRate` fixed-step clock.
 - `packages/engine/src/core/lights/AbstractLight.ts` — `volumetricIntensity` per-light in-scattering multiplier.
-- `packages/engine/src/core/objects/FogVolume.ts` & `FogVolumeShape.ts` — scene-graph node supporting Box, Sphere, Cylinder analytical SDFs, density/albedo/emission/falloff, and 3D noise parameters.
+- `packages/engine/src/core/objects/FogVolume.ts` & `packages/engine/src/enums/FogVolumeShape.ts` — scene-graph node supporting Box, Sphere, Cylinder analytical SDFs, density/albedo/emission/falloff, and 3D noise parameters.
 - `VolumetricFogElement.ts` — post-processing configuration element controlling density, height, height falloff, asymmetry (Henyey-Greenstein g), CSM shadowing, jitter, `scatteringAlbedo`, and `ambientInject`.
 - `froxel_inject.wgsl`, `froxel_reproject.wgsl`, `froxel_integrate.wgsl`, `VolumetricFog.frag.wgsl` — WebGPU compute and composite pipeline.
 - `VolumetricFogPassGPU.ts` & `VolumetricFogPassGL.ts` — backend pass orchestrators for WebGPU and WebGL2.

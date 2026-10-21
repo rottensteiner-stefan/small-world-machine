@@ -1,5 +1,7 @@
 # ADR 0022: GPU-Instanzierte VFX-Partikel-Pipeline & `@small-world-machine/vfx-extras`
 
+> **Stand-Hinweis (2026-10-21):** Status: Akzeptiert, umgesetzt (`packages/vfx-extras/`, 10 Affektoren). Dem Paket fehlt noch die von ADR 0021 geforderte `README.md`.
+
 ## Kontext & Problem
 
 Showcase 22 (Akkretionsscheibe um ein supermassives Schwarzes Loch) führte komplexe relativistische Physik und hochdichte Partikelsimulationen ein:
@@ -20,7 +22,7 @@ Showcase 22 (Akkretionsscheibe um ein supermassives Schwarzes Loch) führte komp
 
 3. **Kern-Erweiterungen mit universellem Mehrwert:**
    - [`Color.blackbody()`](../../packages/engine/src/core/colors/Color.ts) und [`Color.fromTemperature()`](../../packages/engine/src/core/colors/Color.ts) wandern in den Kern als allgemeine Farb- und Strahlungs-Utilities.
-   - [`GravitationalLensingElement`](../../packages/engine/src/renderers/post/elements/GravitationalLensingElement.ts) entkoppelt dynamische Linsenparameter (`eh`, `strength`, `spaghettification`, `beaming`, `ringGlow`) synchron in GLSL und WGSL (160-Byte-Puffer).
+   - [`GravitationalLensingElement`](../../packages/engine/src/renderers/post/elements/GravitationalLensingElement.ts) entkoppelt dynamische Linsenparameter (`eh`, `strength`, `spaghettification`, `beaming`, `ringGlow`) synchron in GLSL und WGSL (160-Byte-Puffer zum Zeitpunkt der Entscheidung; heute 208 Byte, `POST_PROCESS_DYNUNIFORM_FLOATS = 52`; die Parameter heißen im Code `eventHorizonRadius`, `strength`, `spaghettification`, `relativisticBeaming`, `ringGlowIntensity`).
    - [`FollowCameraBehavior`](../../packages/engine/src/core/behaviors/FollowCameraBehavior.ts) bietet weiche Zielverfolgung über das Behavior-System.
 
 4. **Wissenschaftliche & Mathematische Verankerung:**

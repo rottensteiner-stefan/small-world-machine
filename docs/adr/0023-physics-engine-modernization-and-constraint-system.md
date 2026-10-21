@@ -1,5 +1,7 @@
 # ADR 0023: Modernisierung der Physik-Engine & Constraint-System
 
+> **Stand-Hinweis (2026-10-21):** Status: Akzeptiert, umgesetzt. `SweptVolumeCCD` liegt in `physix/ccd/SweptSphereCCD.ts` (Alias `SweptSphereCCD`; siehe ADR 0005).
+
 ## Kontext & Problem
 
 Die ursprüngliche Physik-Engine von Small World Machine war auf elementare Zentralstöße von Kugeln und einfache AABBs beschränkt. Mit wachsenden Anforderungen an komplexe Gameplays (z. B. Character-Controller, Scharniere, Seile, sensorische Trigger-Zonen, Raycasts für Waffen und Sichtlinien sowie realistische Kanten-Kollisionen und Kisten-Stapel) zeigten sich folgende architektonische Limitierungen:
@@ -17,7 +19,7 @@ Die ursprüngliche Physik-Engine von Small World Machine war auf elementare Zent
    - CCD (`SweptVolumeCCD`) überspringt Sensorvolumina ohne Positionsklemmung.
 
 2. **Physics Raycast & Shape-Cast Query API (Option B):**
-   - Neues typisiertes Interface [`RaycastHit`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/RaycastHit.ts) (`distance`, `point`, `normal`, `collider`, `object`).
+   - Neues typisiertes Interface [`RaycastHit`](../../packages/engine/src/physix/RaycastHit.ts) (`distance`, `point`, `normal`, `collider`, `object`).
    - Analytische Schnittpunktsberechnungen für `BoundingSphere`, `BoundingBox` und `OBB` auf `Ray`.
    - High-Level-APIs `physics.raycast(...)`, `physics.raycastAll(...)` (distanzsortiert) und `physics.sphereCast(...)` auf `PhysicsSystem`.
 
@@ -27,11 +29,11 @@ Die ursprüngliche Physik-Engine von Small World Machine war auf elementare Zent
 
 4. **Projected Gauss-Seidel Constraint- & Joint-System (Option C):**
    - Modulare Gelenkhierarchie unter `packages/engine/src/physix/joints/`:
-     - [`Joint`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/joints/Joint.ts): Basisklasse mit Weltanker-Projektion, `breakForce` und `collideConnected`.
-     - [`DistanceJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/joints/DistanceJoint.ts): Feste und bereichsbegrenzte Distanz-Constraints.
-     - [`SpringJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/joints/SpringJoint.ts): Hooke'sche Federkräfte mit viskoser Dämpfung.
-     - [`BallSocketJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/joints/BallSocketJoint.ts): 3-DOF sphärische Punkt-zu-Punkt-Gelenke.
-     - [`HingeJoint`](file:///Users/srottensteiner/PhpstormProjects/small-world-machine/packages/engine/src/physix/joints/HingeJoint.ts): 1-DOF Drehgelenke mit Achsensperre, Winkel-Limits und bidirektionalem Motor.
+     - [`Joint`](../../packages/engine/src/physix/joints/Joint.ts): Basisklasse mit Weltanker-Projektion, `breakForce` und `collideConnected`.
+     - [`DistanceJoint`](../../packages/engine/src/physix/joints/DistanceJoint.ts): Feste und bereichsbegrenzte Distanz-Constraints.
+     - [`SpringJoint`](../../packages/engine/src/physix/joints/SpringJoint.ts): Hooke'sche Federkräfte mit viskoser Dämpfung.
+     - [`BallSocketJoint`](../../packages/engine/src/physix/joints/BallSocketJoint.ts): 3-DOF sphärische Punkt-zu-Punkt-Gelenke.
+     - [`HingeJoint`](../../packages/engine/src/physix/joints/HingeJoint.ts): 1-DOF Drehgelenke mit Achsensperre, Winkel-Limits und bidirektionalem Motor.
    - Nahtlose Integration in `Scene.joints` und die iterative PGS-Schleife von `PhysicsSystem`.
 
 ## Konsequenzen
