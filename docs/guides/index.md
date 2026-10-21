@@ -34,6 +34,7 @@ Practical, in-depth guides for each subsystem and tool of the Small World Machin
 | [EventBus & Game Loop](./eventbus.md) | Central event dispatch and render loop. |
 | [Modular Ecosystem & Layering](./extensions.md) | Core engine vs. ecosystem package boundaries (see also [Extensions](/extensions/)). |
 | [Building Your Own Game](./custom-game.md) | End-to-end guide for a new project built on the engine. |
+| [App Documentation & Living Logs](./app-docs-convention.md) | Standard for apps/<app>/docs/ structure: concept-dossier.html (visual spec) and log.md (living memory). |
 
 ## Tools & Editors
 

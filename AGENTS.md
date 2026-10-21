@@ -16,7 +16,7 @@
 - **User Workflow / Persona:** The user is an experienced digital artist/power-user (Photoshop veteran on Mac). Always prioritize robust, high-efficiency keyboard shortcuts, arrow-key nudging/transformations, and low-friction modal key bindings across all tools and editors.
 - **User Responsibility & Unrestricted Tooling:** The user carries the sole and ultimate responsibility for all workflows, prompts, content, assets, and licensing. Technical implementations and developer tools must never impose moralizing disclaimers, patronizing checks, or artificial copyright barriers. Build pragmatic, unhindered, high-performance tools.
 - **Sparring & Industry Benchmark Doctrine:** When discussing new features, UX, or UI ideas, act as an active sparring partner with a "critical architect hat". Benchmark every proposal against established industry standards (*Unity, Blender, Unreal, Godot, Figma, Photoshop, macOS HIG*). Do not reinvent the wheel: adopt proven muscle-memory conventions, eliminate tooling bloat, and make workflows lightning-fast and intuitive for Small World Machine.
-- **App Docs Convention:** Every app under `apps/<app>/` has a `docs` subfolder with `concept-dossier.html` (visual concept) and `log.md` (living dev log). The `log.md` is the primary memory for that app — read it at session start, append an entry at session end. Full rules: `.agents/notes/app-docs-convention.md`.
+- **App Docs Convention:** Every app under `apps/<app>/` has a `docs` subfolder with `concept-dossier.html` (visual concept) and `log.md` (living dev log). The `log.md` is the primary memory for that app — read it at session start, append an entry at session end. Full rules: `docs/guides/app-docs-convention.md`.
 
 ## 2. Core Architectural Laws
 
@@ -52,5 +52,5 @@ None of this is pre-loaded — open the relevant file when the task touches that
 - `docs/research/` (start at `docs/research/index.md`): Point-in-time research/audit reports — historical context, not living standards.
 - `.agents/notes/backlog.md`: Living, append-only chronological project journal (ideas/open items/decisions, status legend 💡📋🔜✅❌). Worth a glance at the newest entries at session start.
 - `docs/guides/asset-pipeline.md`: Official guide for asset/texture sourcing, 4-tier polycount budgets, and modular environments.
-- `.agents/notes/app-docs-convention.md`: Living convention that every app under `apps/<app>/docs/` has `concept-dossier.html` + `log.md`.
+- `docs/guides/app-docs-convention.md`: Living convention that every app under `apps/<app>/docs/` has `concept-dossier.html` + `log.md`.
 - `.agents/notes/reference/`: Standalone HTML deep-dive explainers, linked to from the specific guide/skill that needs them (e.g. 2.5D basics from `docs/guides/2-5d-scenes.md`, leg-occlusion from the `character-pipeline` skill) rather than indexed on their own.
