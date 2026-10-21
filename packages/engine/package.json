@@ -1,7 +1,7 @@
 {
   "name": "@small-world-machine/engine",
   "private": true,
-  "version": "0.115.5",
+  "version": "0.115.6",
   "description": "A lightweight 3D engine for hybrid WebGL/WebGPU rendering pipelines.",
   "type": "module",
   "license": "MIT",
@@ -16,3 +16,4 @@
     "joy-con-webhid": "^0.11.0"
   }
 }
+

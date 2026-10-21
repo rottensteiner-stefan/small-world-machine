@@ -27,6 +27,18 @@ PCSS-Penumbre real verbreitern — und dass sie auf WebGL2 eine dokumentierte No
 
 ## Changelog
 
+### 2026-10-21 (0.115.6) — PCSS-Härtung
+- **Engine-Increment (c):** `getShadowPCSS` in `pbr_math.wgsl` gehärtet:
+  - Penumbra-Breite prinzipiell aus perspektiv-normalisierter Receiver-/Blocker-Tiefendifferenz
+    (orthografische Kaskaden = linearer Tiefenraum), entkoppelt vom Acne-`bias`.
+  - Deterministische 16-Tap-Sunflower-Blocker-Suche statt fester ±2-Taps — kein run-to-run-Flip.
+  - `shadows.md` + ADR 0006 ehrlich aktualisiert: echte Kontakt-Härtung (scharf am Caster) ist
+    geometriebedingt noch nicht erreicht (feste Suchscheibe) → Roadmap adaptive Suche/Dünn-Occluder.
+- **Gate-Regression (2×):** `SWM42 GATE: OK` mit **bit-identischen** Metriken (changed 4698,
+  maxDelta 52.86, meanAbsDelta 21.94, dominantSign „lighter", dominantFraction 0.7746,
+  outsideHalo 0) — Determinismus bewiesen; WebGL2 exakt 0 (No-Op). Richtungs-Check auf
+  „directionNotNoise >= 0.55" umgestellt (verbreiternde Feder ist inhärent zweiseitig).
+
 ### 2026-10-21
 - Showcase 42 angelegt (Phase „Showcase-Live-Gate" der Soft-Shadow-Roadmap).
 - Registriert in vite.config.ts (Rollup-Input), AbstractShowcase VALID_SHOWCASE_IDS,

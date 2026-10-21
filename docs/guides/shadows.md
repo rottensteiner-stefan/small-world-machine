@@ -86,12 +86,19 @@ shadow map sample that softens the hard binary in-shadow/out-of-shadow edge (see
 Directional light shadows take this a step further with **PCSS** (Percentage-Closer Soft
 Shadows, Fernando 2005): a *blocker search* reads the raw (non-comparison) shadow map depth
 around the sample to estimate how far away the nearest occluder is, then scales the PCF
-radius based on that distance — shadows read as sharp right at the contact point and
-progressively softer the farther they are from their caster, instead of being uniformly soft
-everywhere. This only applies to the **primary** cascade a fragment falls into; the secondary
-cascade-blend sample (see above) still uses fixed-radius PCF, so as not to double the cost in
-the blend zone. **Spot light shadows use PCSS on WebGPU only**; on WebGL2 they stay at fixed-radius PCF. See
-[ADR 0006](/adr/0006-pcss-directional-light-only) for the scope. Only the first 4 spot lights get a shadow map.
+radius based on that distance. The engine's WebGPU PCSS is *principled and stable*: the radius
+is derived from the perspective-normalized receiver/blocker depth gap (decoupled from the
+acne `bias`, which only guards the depth compare) over a **deterministic** sunflower blocker
+disk, so the result is reproducible run-to-run and the softness knobs below re-tune the
+penumbra cleanly. **Status note (0.115.5):** a hard-at-the-caster *contact hardening*
+gradient is not yet achieved at the geometry level — the fixed search disk makes the 
+penumbra read roughly uniform for a box-shaped blocker, and true contact-hardening requires
+an *adaptive* blocker search plus a thin-occluder calibration scene (roadmap, alongside the
+EVSM/EVSSM/MSM path). This only applies to the **primary** cascade a fragment falls into; the
+secondary cascade-blend sample (see above) still uses fixed-radius PCF, so as not to double
+the cost in the blend zone. **Spot light shadows use PCSS on WebGPU only**; on WebGL2 they
+stay at fixed-radius PCF. See [ADR 0006](/adr/0006-pcss-directional-light-only) for the
+scope. Only the first 4 spot lights get a shadow map.
 
 ### PCSS softness tuning (WebGPU)
 
@@ -104,7 +111,9 @@ wins against the tier policy):
 const engine = new Engine({
   // ...
   quality: {
-    // Defaults reproduce the legacy behavior byte-for-byte; only set these to resize the penumbra.
+    // Since 0.115.6 the radius is principled (perspective-normalized receiver/blocker gap,
+    // decoupled from the acne bias) and the default cap governs the look — the gate proves the
+    // knob re-tunes the penumbra and WebGL2 stays a byte-exact no-op. Set these to resize it.
     shadowSoftness: 1.0,       // penumbra scale multiplier; >1 widens, <1 narrows the soft band
     shadowMaxPcfRadius: 4.0,   // cap on the variable-radius PCF kernel, in shadow-map texels
   },

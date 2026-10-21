@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.115.6] - 2026-10-21
+
+### "There is no sun without shadow, and it is essential to know the night." - Albert Camus
+
+- **Architecture & Bugfixes:**
+  - *PCSS-Härtung in `getShadowPCSS` (`pbr_math.wgsl`):* die WebGPU-Penumbre wird jetzt **prinzipiell** aus der perspektiv-normalisierten Receiver-/Blocker-Tiefendifferenz abgeleitet (orthografische Kaskaden = linearer Tiefenraum) statt aus der `bias`-Division des legacy-Pfads, die gegen den winzigen Bias explodierte, permanent in den Radius-Cap sättigte und das Rendering-Vorzeichen von Lauf zu Lauf kippte. Die Blocker-Suche nutzt eine **deterministische 16-Tap-Sunflower-Scheibe**.
+  - *Ehrliche Grenze (dokumentiert in `shadows.md` + ADR 0006):* echte Kontakt-Härtung (scharf am Caster) ist geometriebedingt noch nicht erreicht — die feste Suchscheibe tastet an der Kontaktlinie in den Blockerschaft, daher liest die Penumbra für Box-Blocker annähernd uniform. Kontakt-Härtung braucht eine adaptive Blocker-Suche plus Dünn-Occluder-Kalibrierung → Roadmap (Phase 2+/EVSM/EVSSM/MSM).
+- **Quality & Verification:**
+  - Live-Gate `.agents/scratches/check-swm42.mjs` (scratch) zweimal gelaufen: **`SWM42 GATE: OK`, beide Läufe bit-identisch** (changed 4698, maxDelta 52.86, meanAbsDelta 21.94, Richtung „lighter", 100 % in der Penumbra-Halo lokalisiert) — Determinismus bewiesen; WebGL2 weiterhin exakt 0 geänderte Pixel (Knöpfe sind WebGPU-only).
+  - Der Richtungs-Check des Gates wurde auf „directionNotNoise ≥ 0.55" umgestellt: eine verbreiternde Feder ist inhärent zweiseitig, das alte ≥-0.85-Kriterium hätte das Artefakt der legacy-Sättigung (reiner Dunkel-Bleed) statt des Features verlangt.
+- **Housekeeping & Docs:**
+  - `docs/guides/shadows.md` (PCSS-Abschnitt ehrlich korrigiert: „scharf am Kontakt" war nie realisiert → als Roadmap markiert), `docs/adr/0006` (Stand-Hinweis 0.115.6), `apps/showcases/42/docs/log.md` (Increment-Log).
+  - Version 0.115.6.
+
 ## [0.115.5] - 2026-10-21
 
 ### "To light a candle is to cast a shadow." - Ursula K. Le Guin
