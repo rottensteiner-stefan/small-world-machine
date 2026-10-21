@@ -25,6 +25,7 @@ Practical, in-depth guides for each subsystem and tool of the Small World Machin
 | [Configuration & Setup](./configuration.md) | `EngineOptions` and engine setup. |
 | [Coordinate System & Camera Strategies](./coordinate-system.md) | Right-handed coordinate system, camera strategies. |
 | [2.5D Scenes & Backgrounds](./2-5d-scenes.md) | Perspective matching, movement zones, camera strategy trade-offs. |
+| [Scene Assembly & Level Pipeline](./scene-assembly.md) | Declarative level authoring (*.level.json), Vite asset loading rules, and kit pipeline. |
 | [Gamification & Interactions](./interactions.md) | `InteractionManager`, pointer events, octree picking. |
 | [Physics & Rigid Bodies](./physics.md) | Collision detection, solvers, constraints/joints. |
 | [Audio System](./audio.md) | 3D audio, mixer, procedural synthesizer. |
