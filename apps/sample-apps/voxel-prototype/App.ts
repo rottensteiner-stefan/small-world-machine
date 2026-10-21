@@ -20,6 +20,7 @@ import { descriptorFromRegistry } from "./voxel/mesh/NaiveMesher.js";
 import { TerrainGenerator } from "./voxel/TerrainGenerator.js";
 import type { ChunkDeltaStore } from "./voxel/store/ChunkDeltaStore.js";
 import { IndexedDbChunkDeltaStore } from "./voxel/store/IndexedDbChunkDeltaStore.js";
+import { VoxelInputActions } from "./voxel/input/VoxelInputActions.js";
 import { VoxelBlockEditor } from "./voxel/physics/VoxelBlockEditor.js";
 import { VoxelPlayerCollision } from "./voxel/physics/VoxelPlayerCollision.js";
 import { ForegroundMeshClient } from "./voxel/worker/ForegroundMeshClient.js";
@@ -55,6 +56,7 @@ export class App extends SmallWorldMachine {
   private _host!: ChunkWorldHost;
   private _player!: VoxelPlayerCollision;
   private _editor!: VoxelBlockEditor;
+  private _inputActions!: VoxelInputActions;
   private _store: ChunkDeltaStore | null = null;
 
   constructor() {
@@ -126,24 +128,31 @@ export class App extends SmallWorldMachine {
       if (document.hidden) flush();
     });
 
-    // 5. Player: FPS look via the FPS strategy, feet standing on the generated surface.
+    // 5. Semantic input actions (composite bindings: Mouse + Trackpad + Gamepad).
+    this._inputActions = new VoxelInputActions({ input: this.input });
+
+    // 6. Player: FPS look via the FPS strategy, feet standing on the generated surface.
     const generator = new TerrainGenerator({ seed: WORLD_SEED });
     const surface = generator.heightAt(SPAWN_X, SPAWN_Z); // topmost solid y
-    this._player = new VoxelPlayerCollision({ world: this._world, input: this.input });
+    this._player = new VoxelPlayerCollision({
+      world: this._world,
+      input: this.input,
+      actions: this._inputActions,
+    });
     this._player.setSpawn(SPAWN_X, surface + 1, SPAWN_Z); // feet on top of the grass cap
     this.camera.addBehavior(this._player);
 
-    // 6. Block editor (M2): aim + LMB/RMB + Digit1..5 hand selection. Placement is refused when
-    // the target cell overlaps the player body (guard injected from the player behavior).
+    // 7. Block editor (M2): aim + LMB/RMB (or Trackpad F/E/R) + Digit1..5/wheel selection.
     this._editor = new VoxelBlockEditor({
       world: this._world,
       input: this.input,
+      actions: this._inputActions,
       placementBlocker: (x, y, z): boolean => this._player.overlapsCell(x, y, z),
     });
     this.camera.addBehavior(this._editor);
     this._installQaHook();
 
-    // 6. Pointer lock on click (engine FPS convention, see showcases 2/10/29).
+    // 8. Pointer lock on click (engine FPS convention, see showcases 2/10/29).
     this.canvas.addEventListener("click", (): void => {
       if (!this.input.isPointerLocked) {
         this.input.requestPointerLock(this.canvas);
@@ -156,7 +165,7 @@ export class App extends SmallWorldMachine {
 
   /** @inheritdoc */
   protected override update(deltaTime: number): void {
-    void deltaTime;
+    this._inputActions.update(deltaTime);
     this._updateStats(false);
   }
 

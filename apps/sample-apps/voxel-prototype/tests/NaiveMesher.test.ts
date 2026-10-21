@@ -232,4 +232,32 @@ describe("NaiveMesher — emitted vertex data (regression: M0 all-zero positions
       }
     }
   });
+
+  it("maps UVs upright on all vertical side faces (top vertex has V=1, bottom vertex has V=0)", () => {
+    const data = buildOne(5, 5, 5, BLOCK_STONE);
+    const faceCount = data.triangleCount / 2;
+    for (let f = 0; f < faceCount; f++) {
+      const normalY = data.normals[f * 12 + 1]!;
+      // Side faces have normal Y == 0
+      if (normalY !== 0) continue;
+
+      for (let k = 0; k < 4; k++) {
+        const py = data.positions[(f * 4 + k) * 3 + 1]!;
+        const v = data.uvs[(f * 4 + k) * 2 + 1]!;
+        if (py === 6) {
+          // Top edge of block at y=5..6
+          expect(
+            v,
+            `top vertex must have V=1 (face normal ${data.normals[f * 12]},${normalY},${data.normals[f * 12 + 2]})`,
+          ).toBe(1);
+        } else if (py === 5) {
+          // Bottom edge of block at y=5..6
+          expect(
+            v,
+            `bottom vertex must have V=0 (face normal ${data.normals[f * 12]},${normalY},${data.normals[f * 12 + 2]})`,
+          ).toBe(0);
+        }
+      }
+    }
+  });
 });

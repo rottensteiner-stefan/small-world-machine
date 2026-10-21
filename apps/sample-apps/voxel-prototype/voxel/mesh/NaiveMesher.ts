@@ -42,6 +42,16 @@ export interface FaceTemplate {
   /** Offset added to the block base so the quad sits on the outward face plane. */
   displacement: readonly [number, number, number];
   neighborOffset: readonly [number, number, number];
+  /**
+   * Explicit UV corners mapping (u, v) in {0, 1}² for quad corners k=0..3.
+   * Ensures textures stand upright and un-rotated on all faces regardless of tangent basis.
+   */
+  uvCorners: readonly [
+    readonly [number, number],
+    readonly [number, number],
+    readonly [number, number],
+    readonly [number, number],
+  ];
 }
 
 /**
@@ -56,6 +66,12 @@ export const FACES: readonly FaceTemplate[] = [
     tangentB: [0, 0, 1],
     displacement: [1, 0, 0],
     neighborOffset: [1, 0, 0],
+    uvCorners: [
+      [1, 0],
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ],
   },
   // -X -- plane x
   {
@@ -64,6 +80,12 @@ export const FACES: readonly FaceTemplate[] = [
     tangentB: [0, 1, 0],
     displacement: [0, 0, 0],
     neighborOffset: [-1, 0, 0],
+    uvCorners: [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ],
   },
   // +Y -- plane y+1
   {
@@ -72,6 +94,12 @@ export const FACES: readonly FaceTemplate[] = [
     tangentB: [1, 0, 0],
     displacement: [0, 1, 0],
     neighborOffset: [0, 1, 0],
+    uvCorners: [
+      [0, 1],
+      [0, 0],
+      [1, 0],
+      [1, 1],
+    ],
   },
   // -Y -- plane y
   {
@@ -80,6 +108,12 @@ export const FACES: readonly FaceTemplate[] = [
     tangentB: [0, 0, 1],
     displacement: [0, 0, 0],
     neighborOffset: [0, -1, 0],
+    uvCorners: [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ],
   },
   // +Z -- plane z+1
   {
@@ -88,6 +122,12 @@ export const FACES: readonly FaceTemplate[] = [
     tangentB: [0, 1, 0],
     displacement: [0, 0, 1],
     neighborOffset: [0, 0, 1],
+    uvCorners: [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ],
   },
   // -Z -- plane z
   {
@@ -96,6 +136,12 @@ export const FACES: readonly FaceTemplate[] = [
     tangentB: [1, 0, 0],
     displacement: [0, 0, 0],
     neighborOffset: [0, 0, -1],
+    uvCorners: [
+      [1, 0],
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ],
   },
 ];
 
@@ -526,10 +572,11 @@ export function buildMesh(input: MeshBuildInput): VoxelMeshData {
       normals[(vi + k) * 3 + 1] = n[1]!;
       normals[(vi + k) * 3 + 2] = n[2]!;
     }
-    // UV corners match the parameter corners (full swatch per face).
+    // UV corners use face-specific alignment so all textures stand upright and un-rotated.
+    const uvCorners = face.uvCorners;
     for (let k = 0; k < 4; k++) {
-      uvs[(vi + k) * 2] = corners[k]![0];
-      uvs[(vi + k) * 2 + 1] = corners[k]![1];
+      uvs[(vi + k) * 2] = uvCorners[k]![0];
+      uvs[(vi + k) * 2 + 1] = uvCorners[k]![1];
     }
     for (let k = 0; k < 4; k++) {
       colors[(vi + k) * 4] = layer;

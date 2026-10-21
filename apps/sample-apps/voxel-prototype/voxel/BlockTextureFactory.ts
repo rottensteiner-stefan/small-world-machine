@@ -67,7 +67,9 @@ export async function createBlockPalette(): Promise<TextureArray> {
 
   const bitmaps: ImageBitmap[] = [];
   for (const canvas of canvases) {
-    bitmaps.push(await createImageBitmap(canvas!));
+    // Engine standard: "Human Convention First" (flipY: true) so top-of-canvas (grass rim)
+    // maps to V=1 (top of 3D block).
+    bitmaps.push(await createImageBitmap(canvas!, { imageOrientation: "flipY" }));
   }
   return TextureArrayImpl.fromImages(bitmaps, {
     minFilter: TextureFilter.NEAREST,

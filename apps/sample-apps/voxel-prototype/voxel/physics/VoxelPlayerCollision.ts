@@ -1,5 +1,6 @@
 import { Behavior, Keys } from "@small-world-machine/engine";
 import type { Camera, InputInterface } from "@small-world-machine/engine";
+import type { VoxelInputActions } from "../input/VoxelInputActions.js";
 import type { ChunkWorld } from "../ChunkWorld.js";
 import type { SweepWorld, Vec3 } from "./VoxelSweep.js";
 import { sweepVoxel } from "./VoxelSweep.js";
@@ -49,6 +50,8 @@ export interface VoxelPlayerOptions {
   world: ChunkWorld;
   /** Input source (no global fallback). Required. */
   input: InputInterface;
+  /** Optional semantic action translator (composite bindings). */
+  actions?: VoxelInputActions | undefined;
   /** Maximum planar walk speed in m/s. Default 5. */
   walkSpeed?: number;
   /** Gravity in m/s² (positive number, applied downward). Default 20. */
@@ -60,9 +63,10 @@ export interface VoxelPlayerOptions {
 }
 
 export class VoxelPlayerCollision extends Behavior<Camera> {
-  private readonly _options: Required<Omit<VoxelPlayerOptions, "world" | "input">> & {
+  private readonly _options: Required<Omit<VoxelPlayerOptions, "world" | "input" | "actions">> & {
     world: ChunkWorld;
     input: InputInterface;
+    actions: VoxelInputActions | undefined;
   };
   private readonly _world: SweepWorldAdapter;
 
@@ -81,6 +85,7 @@ export class VoxelPlayerCollision extends Behavior<Camera> {
     this._options = {
       world: options.world,
       input: options.input,
+      actions: options.actions,
       walkSpeed: options.walkSpeed ?? 5,
       gravity: options.gravity ?? 20,
       eyeHeight: options.eyeHeight ?? 1.62,
@@ -132,21 +137,28 @@ export class VoxelPlayerCollision extends Behavior<Camera> {
 
     const input = this._options.input;
 
-    // 1. Feed the FPS strategy with raw look deltas (it owns sensitivity + theta/phi).
+    const actions = this._options.actions?.current;
+
+    // 1. Feed the FPS strategy with look deltas (it owns sensitivity + theta/phi).
     if (input.isPointerLocked) {
-      cam.pendingDx += input.mouse.dx;
-      cam.pendingDy += input.mouse.dy;
+      cam.pendingDx += actions ? actions.look.dx : input.mouse.dx;
+      cam.pendingDy += actions ? actions.look.dy : input.mouse.dy;
     }
 
-    // 2. Desired planar velocity from WASD, in the camera's yaw frame (FPSController parity).
-    const moveZ = input.getAxis(Keys.W, Keys.S); // W = -1 (forward)
-    const strafe = input.getAxis(Keys.A, Keys.D);
+    // 2. Desired planar velocity from WASD / actions, in the camera's yaw frame (FPSController parity).
+    const moveZ = actions ? actions.move.z : input.getAxis(Keys.W, Keys.S); // W / forward is -1
+    const strafe = actions ? actions.move.x : input.getAxis(Keys.A, Keys.D);
     const sin = Math.sin(cam.theta);
     const cos = Math.cos(cam.theta);
     const speed = this._options.walkSpeed;
+
+    // Jump impulse if grounded
+    const isJumping = this._onGround && (actions ? actions.jump : input.isPressed(Keys.SPACE));
+    const vyStart = isJumping ? 8.5 : this._velocity.y;
+
     const velocity: Vec3 = {
       x: -moveZ * sin * speed + strafe * cos * speed,
-      y: this._velocity.y,
+      y: vyStart,
       z: moveZ * cos * speed + strafe * sin * speed,
     };
 

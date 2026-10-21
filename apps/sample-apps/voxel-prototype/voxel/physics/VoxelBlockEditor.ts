@@ -1,5 +1,6 @@
 import { Behavior, Keys } from "@small-world-machine/engine";
 import type { Camera, InputInterface } from "@small-world-machine/engine";
+import type { VoxelInputActions } from "../input/VoxelInputActions.js";
 import {
   BLOCK_AIR,
   BLOCK_DIRT,
@@ -62,6 +63,8 @@ export interface VoxelEditorOptions {
   world: ChunkWorld;
   /** Input source (no global fallback). Required. */
   input: InputInterface;
+  /** Optional semantic action translator (composite bindings). */
+  actions?: VoxelInputActions | undefined;
   /** Hand blocks for Digit1..N (default dirt/stone/wood/water/grass). At most 5 slots. */
   handSlots?: readonly number[];
   /** Maximum reach of the targeting ray in meters. Default 6. */
@@ -74,6 +77,7 @@ export class VoxelBlockEditor extends Behavior<Camera> {
   private readonly _rayWorld: RaycastWorldAdapter;
   private readonly _world: ChunkWorld;
   private readonly _input: InputInterface;
+  private readonly _actions: VoxelInputActions | undefined;
   private readonly _handSlots: readonly number[];
   private readonly _maxDistance: number;
   private readonly _placementBlocker: ((x: number, y: number, z: number) => boolean) | undefined;
@@ -97,6 +101,7 @@ export class VoxelBlockEditor extends Behavior<Camera> {
     this._rayWorld = new RaycastWorldAdapter(options.world);
     this._world = options.world;
     this._input = options.input;
+    this._actions = options.actions;
     this._handSlots = handSlots;
     this._maxDistance = options.maxDistance ?? 6;
     this._placementBlocker = options.placementBlocker;
@@ -121,16 +126,30 @@ export class VoxelBlockEditor extends Behavior<Camera> {
     const cam = this.target;
     if (!cam) return;
 
-    this._updateHandSelection();
+    let breakEdge: boolean;
+    let placeEdge: boolean;
 
-    const leftDown = this._input.mouse.left;
-    const rightDown = this._input.mouse.right;
-    const leftEdge = leftDown && !this._prevLeft;
-    const rightEdge = rightDown && !this._prevRight;
-    this._prevLeft = leftDown;
-    this._prevRight = rightDown;
+    if (this._actions) {
+      const actions = this._actions.current;
+      if (actions.selectedSlot !== null && actions.selectedSlot < this._handSlots.length) {
+        this._handIndex = actions.selectedSlot;
+      } else if (actions.cycleSlot !== 0) {
+        const len = this._handSlots.length;
+        this._handIndex = (((this._handIndex + actions.cycleSlot) % len) + len) % len;
+      }
+      breakEdge = actions.breakBlock;
+      placeEdge = actions.placeBlock;
+    } else {
+      this._updateHandSelection();
+      const leftDown = this._input.mouse.left;
+      const rightDown = this._input.mouse.right;
+      breakEdge = leftDown && !this._prevLeft;
+      placeEdge = rightDown && !this._prevRight;
+      this._prevLeft = leftDown;
+      this._prevRight = rightDown;
+    }
 
-    if ((!leftEdge && !rightEdge) || !this._input.isPointerLocked) {
+    if ((!breakEdge && !placeEdge) || !this._input.isPointerLocked) {
       return;
     }
 
@@ -142,10 +161,10 @@ export class VoxelBlockEditor extends Behavior<Camera> {
     );
     if (!hit) return;
 
-    if (leftEdge) {
+    if (breakEdge) {
       this._world.setBlock(hit.x, hit.y, hit.z, BLOCK_AIR);
     }
-    if (rightEdge) {
+    if (placeEdge) {
       const blocked =
         this._placementBlocker !== undefined
           ? this._placementBlocker(hit.placeX, hit.placeY, hit.placeZ)

@@ -5,6 +5,34 @@
 
 ---
 
+## 2026-10-21 — Fix Texturausrichtung (flipY & 90°-Seitenlage) + Semantisches Action-Input-System (Trackpad-First)
+
+**Status:** ✅ Texturen aufrecht & korrekt gerichtet; Action-Mapping mit macOS-Touchpad/Gamepad-Support integriert.
+
+### Was gebaut wurde
+
+1. **Texturausrichtung („Human Convention First" & Entzerrung):**
+   - **Kopfstehen behoben:** [`BlockTextureFactory.ts`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/sample-apps/voxel-prototype/voxel/BlockTextureFactory.ts) decodiert Bitmaps nun mit `{ imageOrientation: "flipY" }` analog zum Engine-Standard `flipY: true`. Dadurch landet Zeile 0 des Atlas (grünes Gras) zuverlässig bei $V=1$ (Oberkante des 3D-Blocks) und Zeile 15 (Erde) bei $V=0$ (Boden).
+   - **90°-Kippen der Seitenflächen behoben:** In [`NaiveMesher.ts`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/sample-apps/voxel-prototype/voxel/mesh/NaiveMesher.ts) wurden explizite `uvCorners` im `FaceTemplate` hinterlegt. Auf allen vier vertikalen Seitenflächen (`+X`, `-X`, `+Z`, `-Z`) zeigt $V$ nun strikt vertikal nach oben, ohne dass 3D-Vertexpositionen verändert oder Naht-Invarianzen gebrochen werden.
+   - Neuer Regressionstest in [`NaiveMesher.test.ts`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/sample-apps/voxel-prototype/tests/NaiveMesher.test.ts) sichert $V=1$ für obere Vertices und $V=0$ für untere Vertices auf allen Seitenflächen ab.
+
+2. **Semantisches Action-Input-System (Trackpad-First, Gamepad-Ready):**
+   - Neuer Modul [`VoxelInputActions.ts`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/sample-apps/voxel-prototype/voxel/input/VoxelInputActions.ts): Übersetzt rohe Hardware-Inputs in semantische Aktionen (`move`, `look`, `jump`, `breakBlock`, `placeBlock`, `selectedSlot`, `cycleSlot`).
+   - **macOS-Touchpad-Komfort:**
+     - `breakBlock`: Reagiert auf `LMB` **sowie** Tastatur `F` oder `Q` (flüssiges Abbauen ohne Mausklick).
+     - `placeBlock`: Reagiert auf `RMB` **sowie** Tastatur `E` oder `R` (eliminiert den fehleranfälligen 2-Finger-Klick im Pointer-Lock).
+     - `cycleSlot`: Mausrad-Events werden mit 120 ms Cooldown debounced, um Momentum-Inertia-Spam beim 2-Finger-Wischen zu verhindern.
+     - `jump`: Leertaste führt bei Bodenkontakt einen Sprungimpuls aus.
+   - **Gamepad-Integration:** Unterstützt Standard-Gamepads via HTML5 Gamepad API (Analogstick-Bewegung/Look, L2/R2 für Place/Break, L1/R1 für Slot-Cycle, A/✕ für Jump).
+   - Wiring in [`App.ts`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/sample-apps/voxel-prototype/App.ts), [`VoxelPlayerCollision.ts`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/sample-apps/voxel-prototype/voxel/physics/VoxelPlayerCollision.ts) und [`VoxelBlockEditor.ts`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/sample-apps/voxel-prototype/voxel/physics/VoxelBlockEditor.ts).
+   - Neuer Unit-Test [`VoxelInputActions.test.ts`](file:///Users/srottensteiner/PhpstormProjects/rottensteiner-stefan/small-world-machine/apps/sample-apps/voxel-prototype/tests/VoxelInputActions.test.ts) sichert alle Bindings und Kanten-Trigger ab.
+
+### Verifikation
+
+- `vitest run apps/sample-apps/voxel-prototype`: Alle 15 Testdateien / 124 Tests grün.
+- `npm run lint:fix`: 0 Fehler, 0 Warnungen.
+- `npm run build:lib`: Grün.
+
 ## 2026-10-20 — M3 implementiert: Persistenz (Edit-Deltas) + gebackenes Tageslicht/Schattierung
 
 **Status:** ✅ M3-Architektur + Kern grün (Gates unten, inkl. M1+M2-Regression). Plan:
