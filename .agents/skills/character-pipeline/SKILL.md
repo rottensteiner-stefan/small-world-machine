@@ -353,7 +353,7 @@ apps/sample-apps/<app>/raw/mannequin/
 | **Körperteile bewegen sich nicht / verzerren** | Skelett überschreitet das 64-Bone-Limit des WebGL2-Shaders (`u_boneMatrices[64]`). | Rig auf $\le 64$ Bones reduzieren (Spring-Bones auf übergeordnete Joints binden). |
 | **Figur ist komplett pechschwarz** | Tripo exportiert PBR mit `metallic: 1.0` ohne passendes IBL/HDRI. | Im `GltfLoader` `clampMetallic: 0.2` setzen oder auf `BasicMaterial` mit `diffuseMap` umstellen. |
 | **Turnaround hat Flecken / Schatten** | Konzeptbild hatte gebackenes Chiaroscuro-Licht. | Prompt mit *„Pure unshaded flat Albedo diffuse, zero shadows, pure white background“* re-generieren. |
-| **Bein verschwindet / wird von der Hüfte verdeckt** | Perspektivische Bein-Überlappung bei bestimmten Kamerawinkeln + Posen. | Siehe die bebilderte Tiefen-Erklärung `.agents/notes/reference/bein-verdeckung.html` ("Warum das Bein verschwindet"). |
+| **Bein verschwindet / wird von der Hüfte verdeckt** | Perspektivische Bein-Überlappung bei bestimmten Kamerawinkeln + Posen. | Siehe die bebilderte Tiefen-Erklärung `docs/reference/bein-verdeckung.html` ("Warum das Bein verschwindet"). |
 
 ---
 
