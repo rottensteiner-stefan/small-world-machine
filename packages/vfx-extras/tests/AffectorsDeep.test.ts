@@ -118,7 +118,7 @@ describe("Universal VFX Affectors Deep Physical & Mathematical Analysis", () => 
 
       const midArrays = createArrays(1);
       setState(midArrays, 0, { pos: [0.45, 0, 0], alpha: 1 });
-      fader.apply(midArrays, 0, 0.1);
+      fader.apply(midArrays, 0, 1 / 60); // one reference frame
       expect(readState(midArrays, 0).alpha).toBeCloseTo(0.5);
 
       const innerArrays = createArrays(1);

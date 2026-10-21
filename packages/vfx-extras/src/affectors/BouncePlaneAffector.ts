@@ -1,5 +1,5 @@
 import type { ParticleArrays } from "../Particle.js";
-import type { ParticleAffector } from "../ParticleAffector.js";
+import { BatchedAffector } from "./BatchedAffector.js";
 
 export interface BouncePlaneOptions {
   /** The coordinate on the axis where the bounce plane is located. Defaults to 0.0. */
@@ -15,13 +15,14 @@ export interface BouncePlaneOptions {
 /**
  * Reflects particle velocity when hitting a geometric collision plane (sparks, rain, debris bouncing).
  */
-export class BouncePlaneAffector implements ParticleAffector {
+export class BouncePlaneAffector extends BatchedAffector {
   public planePosition: number;
   public axis: "x" | "y" | "z";
   public restitution: number;
   public friction: number;
 
   constructor(options: BouncePlaneOptions = {}) {
+    super();
     this.planePosition = options.planePosition ?? 0.0;
     this.axis = options.axis ?? "y";
     this.restitution = options.restitution ?? 0.6;
@@ -51,44 +52,6 @@ export class BouncePlaneAffector implements ParticleAffector {
         arrays.velocities[o + 2] = -arrays.velocities[o + 2]! * this.restitution;
         arrays.velocities[o]! *= this.friction;
         arrays.velocities[o + 1]! *= this.friction;
-      }
-    }
-  }
-
-  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
-    const axis = this.axis;
-    const planePosition = this.planePosition;
-    const restitution = this.restitution;
-    const friction = this.friction;
-
-    for (let i = 0; i < count; i++) {
-      if (arrays.aliveFlags[i] === 0) {
-        continue;
-      }
-
-      const o = i * 3;
-
-      if (axis === "y") {
-        if (arrays.positions[o + 1]! <= planePosition && arrays.velocities[o + 1]! < 0) {
-          arrays.positions[o + 1] = planePosition;
-          arrays.velocities[o + 1] = -arrays.velocities[o + 1]! * restitution;
-          arrays.velocities[o]! *= friction;
-          arrays.velocities[o + 2]! *= friction;
-        }
-      } else if (axis === "x") {
-        if (arrays.positions[o]! <= planePosition && arrays.velocities[o]! < 0) {
-          arrays.positions[o] = planePosition;
-          arrays.velocities[o] = -arrays.velocities[o]! * restitution;
-          arrays.velocities[o + 1]! *= friction;
-          arrays.velocities[o + 2]! *= friction;
-        }
-      } else if (axis === "z") {
-        if (arrays.positions[o + 2]! <= planePosition && arrays.velocities[o + 2]! < 0) {
-          arrays.positions[o + 2] = planePosition;
-          arrays.velocities[o + 2] = -arrays.velocities[o + 2]! * restitution;
-          arrays.velocities[o]! *= friction;
-          arrays.velocities[o + 1]! *= friction;
-        }
       }
     }
   }

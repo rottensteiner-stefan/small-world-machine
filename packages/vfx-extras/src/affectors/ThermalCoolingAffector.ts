@@ -1,6 +1,6 @@
 import { Color, Vector3D } from "@small-world-machine/engine";
 import type { ParticleArrays } from "../Particle.js";
-import type { ParticleAffector } from "../ParticleAffector.js";
+import { BatchedAffector } from "./BatchedAffector.js";
 
 export interface ThermalCoolingOptions {
   /** Cooling rate per second in vacuum. Defaults to 1.5. */
@@ -21,15 +21,17 @@ export interface ThermalCoolingOptions {
  * Simulates thermodynamic heating near a singularity/core and radiative cooling in space.
  * Updates particle.heat and maps it to a blackbody radiation color ramp.
  */
-export class ThermalCoolingAffector implements ParticleAffector {
+export class ThermalCoolingAffector extends BatchedAffector {
   public coolingRate: number;
   public heatCenter: Vector3D;
   public compressionRadius: number;
   public compressionHeatingRate: number;
   public maxHeat: number;
   public updateColor: boolean;
+  private readonly _heatColor: Color = new Color();
 
   constructor(options: ThermalCoolingOptions = {}) {
+    super();
     this.coolingRate = options.coolingRate ?? 1.5;
     this.heatCenter = options.heatCenter?.clone() ?? new Vector3D(0, 0, 0);
     this.compressionRadius = options.compressionRadius ?? 1.0;
@@ -56,52 +58,12 @@ export class ThermalCoolingAffector implements ParticleAffector {
 
     if (this.updateColor) {
       const t = Math.min(1.0, arrays.heats[index]! / (this.maxHeat * 0.8));
-      const c = new Color();
+      const c = this._heatColor;
       Color.blackbody(t, c);
       const o4 = index * 4;
       arrays.colors[o4] = c.r;
       arrays.colors[o4 + 1] = c.g;
       arrays.colors[o4 + 2] = c.b;
-    }
-  }
-
-  public applyBatch(arrays: ParticleArrays, count: number, dt: number): void {
-    const centerX = this.heatCenter.x;
-    const centerY = this.heatCenter.y;
-    const centerZ = this.heatCenter.z;
-    const compressionRadius = this.compressionRadius;
-    const compressionHeatingRate = this.compressionHeatingRate;
-    const coolingRate = this.coolingRate;
-    const maxHeat = this.maxHeat;
-    const updateColor = this.updateColor;
-    const heatColor = new Color();
-
-    for (let i = 0; i < count; i++) {
-      if (arrays.aliveFlags[i] === 0) {
-        continue;
-      }
-
-      const o = i * 3;
-      const dx = arrays.positions[o]! - centerX;
-      const dy = arrays.positions[o + 1]! - centerY;
-      const dz = arrays.positions[o + 2]! - centerZ;
-      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-      if (dist < compressionRadius) {
-        arrays.heats[i]! += (compressionRadius - dist) * compressionHeatingRate * dt;
-      }
-
-      arrays.heats[i]! -= coolingRate * dt;
-      arrays.heats[i] = Math.max(0, Math.min(maxHeat, arrays.heats[i]!));
-
-      if (updateColor) {
-        const t = Math.min(1.0, arrays.heats[i]! / (maxHeat * 0.8));
-        Color.blackbody(t, heatColor);
-        const c4 = i * 4;
-        arrays.colors[c4] = heatColor.r;
-        arrays.colors[c4 + 1] = heatColor.g;
-        arrays.colors[c4 + 2] = heatColor.b;
-      }
     }
   }
 }

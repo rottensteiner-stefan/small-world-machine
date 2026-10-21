@@ -1,6 +1,6 @@
 import { Vector3D } from "@small-world-machine/engine";
 import type { ParticleArrays } from "../Particle.js";
-import type { ParticleAffector } from "../ParticleAffector.js";
+import { BatchedAffector } from "./BatchedAffector.js";
 
 export interface PointAttractorOptions {
   /** The position of the gravitational attractor / center of mass. Defaults to (0, 0, 0). */
@@ -18,13 +18,14 @@ export interface PointAttractorOptions {
  * Uses Plummer potential softening to prevent numerical explosion near r = 0.
  * Formula: F = - G*M * r / (r^2 + epsilon^2)^1.5
  */
-export class PointAttractorAffector implements ParticleAffector {
+export class PointAttractorAffector extends BatchedAffector {
   public center: Vector3D;
   public strength: number;
   public softening: number;
   public plummer: boolean;
 
   constructor(options: PointAttractorOptions = {}) {
+    super();
     this.center = options.center?.clone() ?? new Vector3D(0, 0, 0);
     this.strength = options.strength ?? 100;
     this.softening = options.softening ?? 0.5;
@@ -55,47 +56,12 @@ export class PointAttractorAffector implements ParticleAffector {
     const fz = (dz / dist) * forceMag;
 
     const mass = arrays.masses[index]!;
+    // Non-positive mass = immovable: skip instead of dividing by zero (Infinity/NaN acceleration).
+    if (!(mass > 0)) {
+      return;
+    }
     arrays.accelerations[o]! += fx / mass;
     arrays.accelerations[o + 1]! += fy / mass;
     arrays.accelerations[o + 2]! += fz / mass;
-  }
-
-  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
-    const centerX = this.center.x;
-    const centerY = this.center.y;
-    const centerZ = this.center.z;
-    const strength = this.strength;
-    const softening = this.softening;
-    const plummer = this.plummer;
-
-    for (let i = 0; i < count; i++) {
-      if (arrays.aliveFlags[i] === 0) {
-        continue;
-      }
-
-      const o = i * 3;
-      const dx = centerX - arrays.positions[o]!;
-      const dy = centerY - arrays.positions[o + 1]!;
-      const dz = centerZ - arrays.positions[o + 2]!;
-      const distSq = dx * dx + dy * dy + dz * dz;
-      const dist = Math.sqrt(distSq) || 0.001;
-
-      let forceMag: number;
-      if (plummer) {
-        const plummerDenom = distSq + softening * softening;
-        forceMag = (strength * dist) / (plummerDenom * Math.sqrt(plummerDenom));
-      } else {
-        forceMag = strength / (distSq + softening * softening);
-      }
-
-      const fx = (dx / dist) * forceMag;
-      const fy = (dy / dist) * forceMag;
-      const fz = (dz / dist) * forceMag;
-
-      const mass = arrays.masses[i]!;
-      arrays.accelerations[o]! += fx / mass;
-      arrays.accelerations[o + 1]! += fy / mass;
-      arrays.accelerations[o + 2]! += fz / mass;
-    }
   }
 }

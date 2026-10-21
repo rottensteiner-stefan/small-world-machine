@@ -1,4 +1,5 @@
 import { Vector3D } from "@small-world-machine/engine";
+import { mulberry32 } from "@small-world-machine/engine/utils/SeededRandom.js";
 import { ParticleSystem } from "./ParticleSystem.js";
 import { PointAttractorAffector } from "./affectors/PointAttractorAffector.js";
 import { PlanarSpringAffector } from "./affectors/PlanarSpringAffector.js";
@@ -24,6 +25,8 @@ export interface AccretionDiskOptions {
   diskThickness?: number;
   /** Orbital velocity multiplier (< 1.0 creates a slow inward spiral). Defaults to 0.98. */
   driftFactor?: number;
+  /** Seed for the deterministic spawn RNG (same seed, same disk). Defaults to a fixed seed. */
+  seed?: number;
 }
 
 /**
@@ -40,6 +43,7 @@ export class AccretionDiskEmitter {
   public mass: number;
   public diskThickness: number;
   public driftFactor: number;
+  private readonly _rng: () => number;
 
   public attractor: PointAttractorAffector;
   public planarSpring: PlanarSpringAffector;
@@ -56,6 +60,7 @@ export class AccretionDiskEmitter {
     this.mass = options.mass ?? count;
     this.diskThickness = options.diskThickness ?? 0.2;
     this.driftFactor = options.driftFactor ?? 0.98;
+    this._rng = mulberry32(options.seed ?? 0x5eed1234);
 
     this.attractor = new PointAttractorAffector({
       center: this.center,
@@ -99,10 +104,9 @@ export class AccretionDiskEmitter {
 
   private _initParticles(count: number): void {
     for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const r =
-        this.innerRadius + Math.pow(Math.random(), 2) * (this.outerRadius - this.innerRadius);
-      const y = this.center.y + (Math.random() - 0.5) * this.diskThickness;
+      const angle = this._rng() * Math.PI * 2;
+      const r = this.innerRadius + Math.pow(this._rng(), 2) * (this.outerRadius - this.innerRadius);
+      const y = this.center.y + (this._rng() - 0.5) * this.diskThickness;
 
       const posX = this.center.x + Math.cos(angle) * r;
       const posZ = this.center.z + Math.sin(angle) * r;
@@ -114,7 +118,7 @@ export class AccretionDiskEmitter {
       const baseHeat = Math.max(0, 10.0 - r);
       this.system.emit({
         position: new Vector3D(posX, y, posZ),
-        velocity: new Vector3D(velX, (Math.random() - 0.5) * 0.2, velZ),
+        velocity: new Vector3D(velX, (this._rng() - 0.5) * 0.2, velZ),
         heat: baseHeat,
         size: 0.1,
       });
@@ -122,9 +126,9 @@ export class AccretionDiskEmitter {
   }
 
   public respawnParticle(index: number): void {
-    const angle = Math.random() * Math.PI * 2;
+    const angle = this._rng() * Math.PI * 2;
     const r = this.outerRadius;
-    const y = this.center.y + (Math.random() - 0.5) * this.diskThickness;
+    const y = this.center.y + (this._rng() - 0.5) * this.diskThickness;
 
     const arrays = this.system.arrays;
     const o = index * 3;

@@ -1,6 +1,6 @@
 import { Vector3D } from "@small-world-machine/engine";
 import type { ParticleArrays } from "../Particle.js";
-import type { ParticleAffector } from "../ParticleAffector.js";
+import { BatchedAffector } from "./BatchedAffector.js";
 
 export interface VortexOptions {
   /** The rotation center. Defaults to (0, 0, 0). */
@@ -16,13 +16,14 @@ export interface VortexOptions {
 /**
  * Applies a swirling vortex / tangential force field around a central axis.
  */
-export class VortexAffector implements ParticleAffector {
+export class VortexAffector extends BatchedAffector {
   public center: Vector3D;
   public axis: "x" | "y" | "z";
   public strength: number;
   public inwardSuction: number;
 
   constructor(options: VortexOptions = {}) {
+    super();
     this.center = options.center?.clone() ?? new Vector3D(0, 0, 0);
     this.axis = options.axis ?? "y";
     this.strength = options.strength ?? 1.0;
@@ -32,6 +33,10 @@ export class VortexAffector implements ParticleAffector {
   public apply(arrays: ParticleArrays, index: number, _dt: number): void {
     const o = index * 3;
     const mass = arrays.masses[index]!;
+    // Non-positive mass = immovable: skip instead of dividing by zero (Infinity/NaN acceleration).
+    if (!(mass > 0)) {
+      return;
+    }
 
     if (this.axis === "x") {
       const dy = arrays.positions[o + 1]! - this.center.y;
@@ -84,71 +89,6 @@ export class VortexAffector implements ParticleAffector {
 
       arrays.accelerations[o]! += (tangX * this.strength + inX * this.inwardSuction) / mass;
       arrays.accelerations[o + 2]! += (tangZ * this.strength + inZ * this.inwardSuction) / mass;
-    }
-  }
-
-  public applyBatch(arrays: ParticleArrays, count: number, _dt: number): void {
-    const centerX = this.center.x;
-    const centerY = this.center.y;
-    const centerZ = this.center.z;
-    const axis = this.axis;
-    const strength = this.strength;
-    const inwardSuction = this.inwardSuction;
-
-    for (let i = 0; i < count; i++) {
-      if (arrays.aliveFlags[i] === 0) {
-        continue;
-      }
-
-      const o = i * 3;
-      const mass = arrays.masses[i]!;
-
-      if (axis === "x") {
-        const dy = arrays.positions[o + 1]! - centerY;
-        const dz = arrays.positions[o + 2]! - centerZ;
-        const r = Math.sqrt(dy * dy + dz * dz) || 0.001;
-
-        const tangY = -dz / r;
-        const tangZ = dy / r;
-
-        const inY = -dy / r;
-        const inZ = -dz / r;
-
-        arrays.accelerations[o + 1]! += (tangY * strength + inY * inwardSuction) / mass;
-        arrays.accelerations[o + 2]! += (tangZ * strength + inZ * inwardSuction) / mass;
-        continue;
-      }
-
-      if (axis === "z") {
-        const dx = arrays.positions[o]! - centerX;
-        const dy = arrays.positions[o + 1]! - centerY;
-        const r = Math.sqrt(dx * dx + dy * dy) || 0.001;
-
-        const tangX = -dy / r;
-        const tangY = dx / r;
-
-        const inX = -dx / r;
-        const inY = -dy / r;
-
-        arrays.accelerations[o]! += (tangX * strength + inX * inwardSuction) / mass;
-        arrays.accelerations[o + 1]! += (tangY * strength + inY * inwardSuction) / mass;
-        continue;
-      }
-
-      {
-        const dx = arrays.positions[o]! - centerX;
-        const dz = arrays.positions[o + 2]! - centerZ;
-        const r = Math.sqrt(dx * dx + dz * dz) || 0.001;
-
-        const tangX = -dz / r;
-        const tangZ = dx / r;
-
-        const inX = -dx / r;
-        const inZ = -dz / r;
-
-        arrays.accelerations[o]! += (tangX * strength + inX * inwardSuction) / mass;
-        arrays.accelerations[o + 2]! += (tangZ * strength + inZ * inwardSuction) / mass;
-      }
     }
   }
 }

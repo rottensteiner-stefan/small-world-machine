@@ -63,3 +63,26 @@ describe("ParticleMeshRenderer", () => {
     expect(renderer.mesh.useInstanceDataAsColor).toBe(true);
   });
 });
+
+describe("ParticleMeshRenderer after ParticleSystem.clear()", () => {
+  it("collapses cleared slots instead of drawing ghost particles", () => {
+    const system = new ParticleSystem({ capacity: 3 });
+    const geometry = new Sphere({ radius: 0.1 }).getGeometryData();
+    const renderer = new ParticleMeshRenderer({ system, geometry, material: new BasicMaterial() });
+    system.emit({ position: new Vector3D(1, 2, 3) });
+    system.emit({ position: new Vector3D(4, 5, 6) });
+    renderer.sync();
+    expect(renderer.mesh.instanceMatrices[12]).toBe(1);
+
+    system.clear();
+    system.update(0.016);
+    renderer.sync();
+
+    for (let i = 0; i < 3; i++) {
+      expect(system.isAlive(i)).toBe(false);
+      expect(Array.from(renderer.mesh.instanceMatrices.subarray(i * 16, i * 16 + 16))).toEqual(
+        new Array(16).fill(0),
+      );
+    }
+  });
+});

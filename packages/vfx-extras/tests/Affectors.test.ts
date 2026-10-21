@@ -92,7 +92,7 @@ describe("Affectors", () => {
     // Particle midway in fading zone
     const midArrays = createArrays(1);
     setState(midArrays, 0, { pos: [0.75, 0, 0] });
-    fade.apply(midArrays, 0, 0.1);
+    fade.apply(midArrays, 0, 1 / 60); // one reference frame
     expect(readState(midArrays, 0).alpha).toBeCloseTo(0.5);
     expect(readState(midArrays, 0).alive).toBe(true);
 

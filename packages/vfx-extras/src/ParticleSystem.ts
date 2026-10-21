@@ -323,5 +323,7 @@ export class ParticleSystem {
   public clear(): void {
     this._freeIndices = [];
     this._size = 0;
+    this._aliveFlags.fill(0);
+    this._frameFlags.fill(0);
   }
 }
