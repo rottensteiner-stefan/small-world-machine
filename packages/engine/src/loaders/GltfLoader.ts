@@ -74,53 +74,14 @@ export class GltfLoader extends AbstractLoader<Object3D> {
 
   private async _loadBinary(url: string): Promise<GltfData> {
     const arrayBuffer = await this._assetManager.loadBinary(url);
-    const dataView = new DataView(arrayBuffer);
-
-    // Check Magic: "glTF"
-    const magic = dataView.getUint32(0, true);
-    if (magic !== 0x46546c67) throw new Error("Not a valid .glb file.");
-
-    const version = dataView.getUint32(4, true);
-    if (version !== 2) throw new Error("Only glTF 2.0 is supported.");
-
-    // Parse Chunks
-    let json: GltfJson | null = null;
-    const buffers: ArrayBuffer[] = [];
-    let offset = 12;
-
-    while (offset < arrayBuffer.byteLength) {
-      const chunkLength = dataView.getUint32(offset, true);
-      const chunkType = dataView.getUint32(offset + 4, true);
-      offset += 8;
-
-      if (chunkType === 0x4e4f534a) {
-        // JSON
-        const jsonContent = new TextDecoder().decode(
-          new Uint8Array(arrayBuffer, offset, chunkLength),
-        );
-        json = JSON.parse(jsonContent) as GltfJson;
-      } else if (chunkType === 0x004e4942) {
-        // BIN
-        buffers.push(arrayBuffer.slice(offset, offset + chunkLength));
-      }
-      offset += chunkLength;
-    }
-
-    if (!json) throw new Error("No JSON chunk found in .glb file.");
-
-    return { json, buffers };
+    return GltfBinaryParser.parseGlb(arrayBuffer);
   }
 
   /** Decodes a `data:...;base64,...` URI into raw bytes -- public/static so callers that parse a
    * glTF JSON document themselves (`ProjectBinding`, rather than `load()`/`_loadJson()`) can
    * decode its embedded buffers before handing the document to `_parse()`. */
   public static decodeDataUri(uri: string): ArrayBuffer {
-    const base64 = uri.split(",")[1]!;
-    const binaryStr = atob(base64);
-    const buffer = new ArrayBuffer(binaryStr.length);
-    const view = new Uint8Array(buffer);
-    for (let i = 0; i < binaryStr.length; i++) view[i] = binaryStr.charCodeAt(i);
-    return buffer;
+    return GltfBinaryParser.decodeBase64(uri);
   }
 
   /**

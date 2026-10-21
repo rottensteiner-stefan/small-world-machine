@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { GltfLoader } from "../../src/loaders/GltfLoader.js";
+import { Topology } from "../../src/enums/index.js";
 import type { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import type { Object3D } from "../../src/core/Object3D.js";
 
@@ -211,6 +212,43 @@ describe("GltfLoader validation and fail-fast", () => {
       "",
     );
     expect(root).toBeDefined();
+  });
+
+  it("loads a LINES primitive next to the triangle primitive of the same mesh", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const buffer = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]).buffer;
+    const loader = new GltfLoader();
+    const root = await loader.parse(
+      {
+        json: {
+          asset: { version: "2.0" },
+          scene: 0,
+          scenes: [{ nodes: [0] }],
+          nodes: [{ name: "Mixed", mesh: 0 }],
+          meshes: [
+            {
+              primitives: [
+                { attributes: { POSITION: 0 }, mode: 1 },
+                { attributes: { POSITION: 0 }, mode: 4 },
+              ],
+            },
+          ],
+          accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: "VEC3" }],
+          bufferViews: [{ buffer: 0, byteLength: 36 }],
+        },
+        buffers: [buffer],
+      },
+      "",
+    );
+
+    const meshes = root.getObjectByName("Mixed")?.children ?? [];
+    expect(meshes).toHaveLength(2);
+    expect(meshes.map((m) => m.geometry?.topology)).toEqual([
+      Topology.LINE_LIST,
+      Topology.TRIANGLE_LIST,
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("loads a KHR_mesh_quantization primitive (Int16 positions, dequantized by the node scale)", async () => {

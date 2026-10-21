@@ -2,6 +2,7 @@ import type { GltfJson } from "./types.js";
 import { GltfBinaryParser } from "./GltfBinaryParser.js";
 import type { GeometryDataInterface } from "../../interfaces/index.js";
 import { ModelGeometry } from "../../geometry/index.js";
+import { Topology } from "../../enums/index.js";
 import { getGltfExtensions } from "./GltfExtensionRegistry.js";
 import type { GltfPrimitiveDef, GltfReadContext } from "./GltfExtensionPlugin.js";
 
@@ -28,11 +29,19 @@ export class GltfGeometryParser {
       }
     }
 
-    // Check for supported primitive mode (glTF default is 4 = TRIANGLES)
-    if (primitive.mode !== undefined && primitive.mode !== 4) {
-      throw new Error(
-        `[GltfGeometryParser] Unsupported primitive mode ${primitive.mode}. Only TRIANGLES (mode 4) is currently supported.`,
+    // glTF primitive modes: 0 POINTS, 1 LINES, 2 LINE_LOOP, 3 LINE_STRIP, 4 TRIANGLES (default),
+    // 5 TRIANGLE_STRIP, 6 TRIANGLE_FAN. Strips, fans and line loops/strips are re-indexed into a
+    // plain triangle / line list below. POINTS are skipped with a warning (the WebGL tiers have no
+    // point primitive path), so one stray primitive does not abort the whole asset.
+    const mode = primitive.mode ?? 4;
+    if (!Number.isInteger(mode) || mode < 0 || mode > 6) {
+      throw new Error(`[GltfGeometryParser] Invalid primitive mode ${mode}.`);
+    }
+    if (mode === 0) {
+      console.warn(
+        "[GltfGeometryParser] Skipping POINTS primitive (point rendering is not supported).",
       );
+      return null;
     }
 
     // 2. Standard uncompressed buffer accessor path
@@ -82,6 +91,21 @@ export class GltfGeometryParser {
       finalIndices = new Uint16Array(0);
     }
 
+    const isLines = mode >= 1 && mode <= 3;
+    if (mode === 5 || mode === 6) {
+      finalIndices = GltfGeometryParser._toTriangleList(
+        mode,
+        indices ? finalIndices : undefined,
+        positions.length / 3,
+      );
+    } else if (isLines) {
+      finalIndices = GltfGeometryParser._toLineList(
+        mode as 1 | 2 | 3,
+        indices ? finalIndices : undefined,
+        positions.length / 3,
+      );
+    }
+
     let finalJoints: Float32Array | Uint16Array | undefined;
     if (joints) {
       if (joints instanceof Uint8Array) {
@@ -110,17 +134,70 @@ export class GltfGeometryParser {
         : new Float32Array(normals)
       : new Float32Array(0);
 
-    return new ModelGeometry(
-      posArray,
-      uvArray,
-      normArray,
-      finalIndices,
-      finalJoints || finalWeights
-        ? {
-            joints: finalJoints,
-            weights: finalWeights,
-          }
-        : undefined,
-    ).getGeometryData();
+    return new ModelGeometry(posArray, uvArray, normArray, finalIndices, {
+      ...(finalJoints || finalWeights ? { joints: finalJoints, weights: finalWeights } : {}),
+      ...(isLines ? { topology: Topology.LINE_LIST } : {}),
+    }).getGeometryData();
+  }
+
+  /**
+   * Re-indexes a TRIANGLE_STRIP (5) or TRIANGLE_FAN (6) into a plain triangle list. Without an
+   * index accessor the vertices are consumed in order. Strip triangles alternate their winding, so
+   * every odd one is flipped to keep all faces front-facing.
+   */
+  private static _toTriangleList(
+    mode: 5 | 6,
+    source: Uint16Array | Uint32Array | undefined,
+    vertexCount: number,
+  ): Uint16Array | Uint32Array {
+    const count = source ? source.length : vertexCount;
+    const triangles = Math.max(0, count - 2);
+    const out =
+      vertexCount > 65535 ? new Uint32Array(triangles * 3) : new Uint16Array(triangles * 3);
+    const at = (i: number): number => (source ? source[i]! : i);
+    for (let t = 0; t < triangles; t++) {
+      const o = t * 3;
+      if (mode === 6) {
+        out[o] = at(0);
+        out[o + 1] = at(t + 1);
+        out[o + 2] = at(t + 2);
+      } else if (t % 2 === 0) {
+        out[o] = at(t);
+        out[o + 1] = at(t + 1);
+        out[o + 2] = at(t + 2);
+      } else {
+        out[o] = at(t + 1);
+        out[o + 1] = at(t);
+        out[o + 2] = at(t + 2);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Re-indexes LINES (1), LINE_LOOP (2) or LINE_STRIP (3) into a plain line list (index pairs).
+   * Without an index accessor the vertices are consumed in order. A trailing unpaired LINES index
+   * is dropped.
+   */
+  private static _toLineList(
+    mode: 1 | 2 | 3,
+    source: Uint16Array | Uint32Array | undefined,
+    vertexCount: number,
+  ): Uint16Array | Uint32Array {
+    const count = source ? source.length : vertexCount;
+    const segments =
+      mode === 1 ? Math.floor(count / 2) : Math.max(0, mode === 2 ? count : count - 1);
+    const out = vertexCount > 65535 ? new Uint32Array(segments * 2) : new Uint16Array(segments * 2);
+    const at = (i: number): number => (source ? source[i]! : i);
+    for (let s = 0; s < segments; s++) {
+      if (mode === 1) {
+        out[s * 2] = at(s * 2);
+        out[s * 2 + 1] = at(s * 2 + 1);
+      } else {
+        out[s * 2] = at(s);
+        out[s * 2 + 1] = at((s + 1) % count);
+      }
+    }
+    return out;
   }
 }
