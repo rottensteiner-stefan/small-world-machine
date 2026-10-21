@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AssetManager } from "../../../src/loaders/AssetManager.js";
 import { Texture } from "../../../src/core/textures/index.js";
 
 describe("Texture.dispose", () => {
@@ -42,5 +43,26 @@ describe("Texture.dispose", () => {
     texture.dispose();
     texture.dispose();
     expect(texture.isLoaded).toBe(false);
+  });
+
+  it("does not close a cached bitmap shared through an AssetManager (fromUrl)", async () => {
+    const close = vi.fn();
+    class FakeBitmap {
+      public close = close;
+    }
+    vi.stubGlobal("ImageBitmap", FakeBitmap);
+    const bitmap = new FakeBitmap();
+    const assetManager = {
+      loadImage: vi.fn().mockResolvedValue(bitmap),
+    } as unknown as AssetManager;
+
+    const a = await Texture.fromUrl("x.png", { assetManager });
+    const b = await Texture.fromUrl("x.png", { assetManager });
+    a.dispose();
+
+    expect(close).not.toHaveBeenCalled();
+    expect(b.image).toBe(bitmap);
+    expect(b.isLoaded).toBe(true);
+    vi.unstubAllGlobals();
   });
 });

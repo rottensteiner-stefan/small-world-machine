@@ -36,7 +36,8 @@ export function resolveSphereCollisions(
   const hitCorrection = MathPool.acquireVector();
 
   for (const obj of _scratchHits) {
-    if (!obj.bounds || obj === target) continue;
+    // Decals/fog volumes own OBB bounds for culling only; they are never obstacles.
+    if (!obj.bounds || obj === target || obj.isCollidable === false) continue;
     let resolved: boolean;
     if (BoundingType.SPHERE === obj.bounds.type) {
       resolved = Collision.resolveSphereSphere(collider, obj.bounds, hitCorrection);

@@ -574,6 +574,20 @@ export class DeviceCaps {
     return false;
   }
 
+  /**
+   * True on iPhone/iPad/iPod, including iPadOS which reports a desktop `MacIntel` platform but
+   * has multi-touch. These devices ship Apple A/M-series GPUs that are strong for their form
+   * factor, yet the WebGL renderer string is the opaque "Apple GPU" and Safari hides
+   * `deviceMemory`, so the generic signals alone can never rate them above LOW.
+   */
+  public isAppleMobile(): boolean {
+    if (typeof navigator === "undefined") return false;
+    const ua = typeof navigator.userAgent === "string" ? navigator.userAgent : "";
+    if (/iPhone|iPad|iPod/.test(ua)) return true;
+    const platform = (navigator as unknown as { platform?: string }).platform;
+    return platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  }
+
   public get cores(): number {
     if (typeof navigator === "undefined") return 4;
     return navigator.hardwareConcurrency || 4;
@@ -643,6 +657,10 @@ export class DeviceCaps {
     const gpuClass = classifyGpu(this._gpuModel);
     if (gpuClass === GpuClass.HIGH) score += 2;
     else if (gpuClass === GpuClass.LOW) score -= 2;
+
+    // 3b. iOS/iPadOS: the renderer string is masked ("Apple GPU" -> UNKNOWN), so credit the
+    // known-strong Apple silicon explicitly. Net effect for a 6-core iPhone: MEDIUM, not LOW.
+    if (gpuClass === GpuClass.UNKNOWN && this.isAppleMobile()) score += 2;
 
     // 4. Form factor penalty (Mobile devices thermally throttle much faster)
     if (this.isMobile()) {

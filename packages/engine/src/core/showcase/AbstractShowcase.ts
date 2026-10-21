@@ -377,7 +377,12 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
   protected configureCamera(): void {
     if (!this.canvas) return; // start() assigns the canvas after renderer init; stay inert otherwise
     if (ProjectionType.PERSPECTIVE === this.camera.projection.type) {
-      const aspect: number = this.canvas.clientWidth / this.canvas.clientHeight;
+      // A hidden / collapsed canvas reports 0x0: keep the previous aspect instead of NaN/Infinity.
+      const height: number = this.canvas.clientHeight;
+      const aspect: number =
+        height > 0 && this.canvas.clientWidth > 0
+          ? this.canvas.clientWidth / height
+          : this.camera.aspect;
       // The Camera projection setter re-derives the aspect internally from `camera.aspect`, so it
       // is updated explicitly (the camera's stored aspect would otherwise shadow the canvas value).
       this.camera.aspect = aspect;

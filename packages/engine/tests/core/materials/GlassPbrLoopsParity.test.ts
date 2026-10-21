@@ -6,14 +6,11 @@ import { ShaderRegistry } from "../../../src/renderers/shaders/ShaderRegistry.js
 
 const SRC_DIR = join(__dirname, "../../../src");
 const GLASS_DIR = join(SRC_DIR, "core/materials/glass/shaders");
-const CHUNK_GL1 = join(
-  SRC_DIR,
-  "renderers/shaders/source/web_gl1/chunks/glass_pbr_loops.frag.glsl",
-);
-const CHUNK_GL2 = join(
-  SRC_DIR,
-  "renderers/shaders/source/web_gl2/chunks/glass_pbr_loops.frag.glsl",
-);
+// glsl100 and glsl300 share ONE loop body; each dialect supplies GLASS_* accessor macros next to its
+// light uniforms (LIGHT_DEFS).
+const CHUNK_GLSL = join(SRC_DIR, "renderers/shaders/source/shared/glass_pbr_loops.frag.glsl");
+const LIGHT_DEFS_GL1 = join(SRC_DIR, "renderers/shaders/source/web_gl1/chunks/lights.frag.glsl");
+const LIGHT_DEFS_GL2 = join(SRC_DIR, "renderers/shaders/source/web_gl2/chunks/lights.frag.glsl");
 const CHUNK_WGSL = join(SRC_DIR, "renderers/shaders/source/web_gpu/chunks/glass_pbr_loops.wgsl");
 
 // Wave-2 Package C Task 3 (ADR 0039): the Glass/Frostglass PBR lighting loop was consolidated from
@@ -50,12 +47,18 @@ describe("GLASS_PBR_LOOPS chunk registration (all dialects)", () => {
 });
 
 describe("GLASS_PBR_LOOPS trio structural parity (glsl100 <-> glsl300 <-> wgsl)", () => {
-  const gl1 = readFileSync(CHUNK_GL1, "utf8");
-  const gl2 = readFileSync(CHUNK_GL2, "utf8");
+  const gl1 = readFileSync(CHUNK_GLSL, "utf8");
+  const gl2 = gl1; // one body for both GLSL dialects
   const wgsl = readFileSync(CHUNK_WGSL, "utf8");
 
   it("shares the same BRDF math terms in every dialect", () => {
-    for (const term of ["D_GGX(", "G_SchlickGGX(", "F_Schlick(", "(1.0 - metallic)", "4.0 * dotNV * dotNL"]) {
+    for (const term of [
+      "D_GGX(",
+      "G_SchlickGGX(",
+      "F_Schlick(",
+      "(1.0 - metallic)",
+      "4.0 * dotNV * dotNL",
+    ]) {
       expect(gl1, `glsl100 term ${term}`).toContain(term);
       expect(gl2, `glsl300 term ${term}`).toContain(term);
       expect(wgsl, `wgsl term ${term}`).toContain(term);
@@ -82,7 +85,9 @@ describe("GLASS_PBR_LOOPS trio structural parity (glsl100 <-> glsl300 <-> wgsl)"
   it("covers exactly the same three light types (directional, point, spot) in every dialect", () => {
     const markers = (source: string): string[] => {
       const found: string[] = [];
-      for (const m of source.matchAll(/\/\/ --- (?:Directional Light|Point Lights|Spot Lights) ---/g)) {
+      for (const m of source.matchAll(
+        /\/\/ --- (?:Directional Light|Point Lights|Spot Lights) ---/g,
+      )) {
         found.push(m[0]!);
       }
       return found;
@@ -130,21 +135,90 @@ describe("GLASS_PBR_LOOPS trio structural parity (glsl100 <-> glsl300 <-> wgsl)"
   });
 });
 
+describe("GLASS_PBR_LOOPS accessor macros (shared glsl100/glsl300 body)", () => {
+  const MACROS = [
+    "GLASS_POINT_POS",
+    "GLASS_POINT_COLOR",
+    "GLASS_POINT_RANGE",
+    "GLASS_POINT_DECAY",
+    "GLASS_SPOT_POS",
+    "GLASS_SPOT_DIR",
+    "GLASS_SPOT_COLOR",
+    "GLASS_SPOT_PARAMS",
+  ];
+  const body = readFileSync(CHUNK_GLSL, "utf8");
+
+  it("defines every accessor the shared loop uses in BOTH dialect light headers", () => {
+    for (const [name, file] of [
+      ["glsl100", LIGHT_DEFS_GL1],
+      ["glsl300", LIGHT_DEFS_GL2],
+    ] as const) {
+      const defs = readFileSync(file, "utf8");
+      for (const macro of MACROS) {
+        expect(defs, `${name} defines ${macro}`).toMatch(new RegExp(`#define ${macro}\\(i\\) `));
+      }
+    }
+  });
+
+  it("reads lights only through the accessors (no dialect-specific uniform names in the body)", () => {
+    expect(body).not.toMatch(/u_pointLight|u_spotLight|u_pointLights\[|u_spotLights\[/);
+    for (const macro of MACROS) expect(body, `${macro} is used`).toContain(macro + "(i)");
+  });
+
+  it("covers all 16 clustered-capable lights per type and uses the surface range/decay window", () => {
+    expect(body.match(/for\(int i = 0; i < 16; i\+\+\)/g)).toHaveLength(2);
+    expect(body).toContain("GLASS_POINT_RANGE(i)");
+    expect(body).toContain("pWindow * pWindow");
+  });
+});
+
 describe("Glass/Frostglass source invariant (no private PBR loop copy)", () => {
   const sources: Array<{ name: string; file: string; placeholder: string; marker: string }> = [
-    { name: "Glass.frag.glsl", file: join(GLASS_DIR, "Glass.frag.glsl"), placeholder: "[GLASS_PBR_LOOPS]", marker: "// --- Directional Light ---" },
-    { name: "Glass.frag.glsl100", file: join(GLASS_DIR, "Glass.frag.glsl100"), placeholder: "[GLASS_PBR_LOOPS]", marker: "// --- Directional Light ---" },
-    { name: "Glass.frag.wgsl", file: join(GLASS_DIR, "Glass.frag.wgsl"), placeholder: "[WGSL_GLASS_PBR_LOOPS]", marker: "// Directional Light" },
-    { name: "Frostglass.frag.glsl", file: join(GLASS_DIR, "Frostglass.frag.glsl"), placeholder: "[GLASS_PBR_LOOPS]", marker: "// --- Directional Light ---" },
-    { name: "Frostglass.frag.glsl100", file: join(GLASS_DIR, "Frostglass.frag.glsl100"), placeholder: "[GLASS_PBR_LOOPS]", marker: "// --- Directional Light ---" },
-    { name: "Frostglass.frag.wgsl", file: join(GLASS_DIR, "Frostglass.frag.wgsl"), placeholder: "[WGSL_GLASS_PBR_LOOPS]", marker: "// Directional Light" },
+    {
+      name: "Glass.frag.glsl",
+      file: join(GLASS_DIR, "Glass.frag.glsl"),
+      placeholder: "[GLASS_PBR_LOOPS]",
+      marker: "// --- Directional Light ---",
+    },
+    {
+      name: "Glass.frag.glsl100",
+      file: join(GLASS_DIR, "Glass.frag.glsl100"),
+      placeholder: "[GLASS_PBR_LOOPS]",
+      marker: "// --- Directional Light ---",
+    },
+    {
+      name: "Glass.frag.wgsl",
+      file: join(GLASS_DIR, "Glass.frag.wgsl"),
+      placeholder: "[WGSL_GLASS_PBR_LOOPS]",
+      marker: "// Directional Light",
+    },
+    {
+      name: "Frostglass.frag.glsl",
+      file: join(GLASS_DIR, "Frostglass.frag.glsl"),
+      placeholder: "[GLASS_PBR_LOOPS]",
+      marker: "// --- Directional Light ---",
+    },
+    {
+      name: "Frostglass.frag.glsl100",
+      file: join(GLASS_DIR, "Frostglass.frag.glsl100"),
+      placeholder: "[GLASS_PBR_LOOPS]",
+      marker: "// --- Directional Light ---",
+    },
+    {
+      name: "Frostglass.frag.wgsl",
+      file: join(GLASS_DIR, "Frostglass.frag.wgsl"),
+      placeholder: "[WGSL_GLASS_PBR_LOOPS]",
+      marker: "// Directional Light",
+    },
   ];
 
   it("keeps the PBR loop ONLY as the shared chunk reference", () => {
     for (const src of sources) {
       const text = readFileSync(src.file, "utf8");
       expect(text, `${src.name} references ${src.placeholder}`).toContain(src.placeholder);
-      expect(text, `${src.name} has no re-inlined loop body (marker gone)`).not.toContain(src.marker);
+      expect(text, `${src.name} has no re-inlined loop body (marker gone)`).not.toContain(
+        src.marker,
+      );
     }
   });
 

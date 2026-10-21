@@ -142,14 +142,26 @@ export class KitRegistry {
     })).filter(
       (entry): entry is { slot: TextureMapSlot; file: string } => entry.file !== undefined,
     );
-    const loaded = await Promise.all(
+    const settled = await Promise.allSettled(
       slots.map(async ({ slot, file }) => ({
         slot,
         texture: await Texture.fromUrl(`${base}/${file}`, options),
       })),
     );
+    const failure = settled.find(
+      (entry): entry is PromiseRejectedResult => entry.status === "rejected",
+    );
+    if (failure) {
+      // Fail fast, but do not leave the maps that did load dangling.
+      for (const entry of settled) {
+        if (entry.status === "fulfilled") entry.value.texture.dispose();
+      }
+      throw failure.reason;
+    }
     const result: KitTextureMapSet = {};
-    for (const { slot, texture } of loaded) result[slot] = texture;
+    for (const entry of settled) {
+      if (entry.status === "fulfilled") result[entry.value.slot] = entry.value.texture;
+    }
     return result;
   }
 

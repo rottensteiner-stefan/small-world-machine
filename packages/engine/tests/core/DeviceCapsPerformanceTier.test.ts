@@ -10,6 +10,8 @@ interface FakeDevice {
   touch?: boolean;
   innerWidth?: number;
   screenWidth?: number;
+  userAgent?: string;
+  platform?: string;
 }
 
 const DEBUG_RENDERER = 1;
@@ -20,6 +22,8 @@ function stubDevice(device: FakeDevice): void {
     hardwareConcurrency: device.cores,
     deviceMemory: device.memory,
     maxTouchPoints: device.touch ? 5 : 0,
+    userAgent: device.userAgent ?? "",
+    platform: device.platform ?? "",
     gpu: {},
   });
   vi.stubGlobal("window", {
@@ -87,6 +91,41 @@ describe("DeviceCaps.getPerformanceTier()", () => {
       innerWidth: 360,
     });
     expect(new DeviceCaps().getPerformanceTier()).toBe(PerformanceTier.LOW);
+  });
+
+  it("rates a 6-core iPhone (masked Apple GPU, no deviceMemory) as MEDIUM, not LOW", () => {
+    stubDevice({
+      cores: 6,
+      memory: undefined,
+      renderer: "Apple GPU",
+      coarsePointer: true,
+      touch: true,
+      screenWidth: 390,
+      innerWidth: 390,
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+    });
+    const caps = new DeviceCaps();
+    expect(caps.isAppleMobile()).toBe(true);
+    expect(caps.getPerformanceTier()).toBe(PerformanceTier.MEDIUM);
+  });
+
+  it("recognises iPadOS (desktop UA, MacIntel + multi-touch) as Apple mobile", () => {
+    stubDevice({
+      cores: 8,
+      memory: undefined,
+      renderer: "Apple GPU",
+      coarsePointer: true,
+      touch: true,
+      screenWidth: 820,
+      platform: "MacIntel",
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+    });
+    expect(new DeviceCaps().isAppleMobile()).toBe(true);
+  });
+
+  it("does not treat a desktop Mac as Apple mobile", () => {
+    stubDevice({ cores: 8, renderer: "Apple GPU", platform: "MacIntel" });
+    expect(new DeviceCaps().isAppleMobile()).toBe(false);
   });
 
   it("does not treat a touch laptop with a narrow window as mobile", () => {

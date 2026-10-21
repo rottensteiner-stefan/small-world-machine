@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RainStreaks, Matrix4, Vector3D } from "../../src/index.js";
+import { RainStreaks, Matrix4, Vector3D, Object3D } from "../../src/index.js";
 
 /** jsdom has no working 2D canvas backing store (the `canvas` npm package is not installed),
  *  and `RainStreaks` builds its streak texture procedurally, so stub the canvas context. */
@@ -142,5 +142,50 @@ describe("RainStreaks", () => {
   it("fails fast on invalid options", () => {
     expect(() => new RainStreaks({ count: 0 })).toThrow(RangeError);
     expect(() => new RainStreaks({ dropSizeRange: [0.003, 0.001] })).toThrow(RangeError);
+  });
+
+  it("keeps every matrix finite for zero-fall-speed drizzle without wind", () => {
+    const rain = new RainStreaks({
+      count: 16,
+      windX: 0,
+      windZ: 0,
+      dropSizeRange: [0.0001, 0.0002],
+    });
+    rain.update(0.016, 0, new Vector3D(0, 1, 0));
+    for (const value of rain.mesh.instanceMatrices.subarray(0, 16 * 16)) {
+      expect(Number.isFinite(value)).toBe(true);
+    }
+  });
+
+  it("accepts a degenerate dropSizeRange (min == max) without NaN instance colors", () => {
+    const rain = new RainStreaks({ count: 4, dropSizeRange: [0.001, 0.001] });
+    rain.update(0.016, 0, new Vector3D());
+    for (const value of rain.mesh.instanceMatrices.subarray(0, 4 * 16)) {
+      expect(Number.isFinite(value)).toBe(true);
+    }
+    // NaN brightness would be stored as 0 (invisible streaks); a valid one is a positive gain.
+    for (let i = 0; i < 4; i++) expect(rain.mesh.instanceData![i * 4]!).toBeGreaterThan(0);
+  });
+
+  it("is deterministic per seed, differs between seeds and survives negative seeds", () => {
+    const camera = new Vector3D();
+    const snapshot = (seed: number): number[] => {
+      const rain = new RainStreaks({ count: 8, seed });
+      rain.update(0, 0, camera);
+      return Array.from(rain.mesh.instanceMatrices.subarray(0, 8 * 16));
+    };
+    expect(snapshot(3)).toEqual(snapshot(3));
+    expect(snapshot(3)).not.toEqual(snapshot(4));
+    for (const v of snapshot(-1)) expect(Number.isFinite(v)).toBe(true);
+  });
+
+  it("dispose() detaches the mesh and releases the streak texture, twice-safe", () => {
+    const rain = new RainStreaks({ count: 2 });
+    const parent = new Object3D("root");
+    parent.add(rain.mesh);
+    rain.dispose();
+    expect(rain.mesh.parent).toBeUndefined();
+    expect(parent.children).not.toContain(rain.mesh);
+    rain.dispose();
   });
 });

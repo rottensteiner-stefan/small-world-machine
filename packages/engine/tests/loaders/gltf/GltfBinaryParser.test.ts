@@ -191,4 +191,91 @@ describe("GltfBinaryParser", () => {
     expect(i16Data).toBeInstanceOf(Int16Array);
     expect(Array.from(i16Data as Int16Array)).toEqual([-1000, 2000]);
   });
+
+  it("skips the 4-byte column padding of a MAT3 UNSIGNED_BYTE accessor", () => {
+    // Two matrices; each column is 3 bytes + 1 pad byte, so one element is 12 bytes.
+    const bytes = new Uint8Array(24);
+    for (let m = 0; m < 2; m++) {
+      for (let col = 0; col < 3; col++) {
+        for (let row = 0; row < 3; row++) bytes[m * 12 + col * 4 + row] = m * 9 + col * 3 + row + 1;
+        bytes[m * 12 + col * 4 + 3] = 255; // padding must never leak into the result
+      }
+    }
+    const json = {
+      bufferViews: [{ buffer: 0, byteLength: 24 }],
+      accessors: [{ bufferView: 0, componentType: 5121, count: 2, type: "MAT3" }],
+    };
+    const data = GltfBinaryParser.getBufferData(json.accessors[0], json, [bytes.buffer]);
+    expect(Array.from(data!)).toEqual(Array.from({ length: 18 }, (_, i) => i + 1));
+  });
+
+  it("rejects a MAT2 UNSIGNED_BYTE accessor that is too short for its padded layout", () => {
+    const json = {
+      bufferViews: [{ buffer: 0, byteLength: 4 }],
+      accessors: [{ bufferView: 0, componentType: 5121, count: 1, type: "MAT3" }],
+    };
+    expect(() =>
+      GltfBinaryParser.getBufferData(json.accessors[0], json, [new ArrayBuffer(4)]),
+    ).toThrow();
+  });
+
+  it("applies a sparse accessor on top of its base bufferView", () => {
+    const base = new Float32Array([1, 2, 3, 4]);
+    const indices = new Uint8Array([1, 3]);
+    const values = new Float32Array([20, 40]);
+    const bin = new Uint8Array(16 + 2 + 2 + 8);
+    bin.set(new Uint8Array(base.buffer), 0);
+    bin.set(indices, 16);
+    bin.set(new Uint8Array(values.buffer), 20);
+    const json = {
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 16 },
+        { buffer: 0, byteOffset: 16, byteLength: 2 },
+        { buffer: 0, byteOffset: 20, byteLength: 8 },
+      ],
+      accessors: [
+        {
+          bufferView: 0,
+          componentType: 5126,
+          count: 4,
+          type: "SCALAR",
+          sparse: {
+            count: 2,
+            indices: { bufferView: 1, componentType: 5121 },
+            values: { bufferView: 2 },
+          },
+        },
+      ],
+    };
+    const data = GltfBinaryParser.getBufferData(json.accessors[0], json, [bin.buffer]);
+    expect(Array.from(data!)).toEqual([1, 20, 3, 40]);
+    // The source buffer is not mutated.
+    expect(Array.from(new Float32Array(bin.buffer, 0, 4))).toEqual([1, 2, 3, 4]);
+  });
+
+  it("builds a zero-based sparse accessor when no bufferView is given", () => {
+    const bin = new Uint8Array(4 + 4);
+    new Uint8Array(bin.buffer, 0, 2).set([2, 0]); // indices (u8, padded)
+    new Float32Array(bin.buffer, 4, 1).set([7]);
+    const json = {
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 1 },
+        { buffer: 0, byteOffset: 4, byteLength: 4 },
+      ],
+      accessors: [
+        {
+          componentType: 5126,
+          count: 3,
+          type: "SCALAR",
+          sparse: {
+            count: 1,
+            indices: { bufferView: 0, componentType: 5121 },
+            values: { bufferView: 1 },
+          },
+        },
+      ],
+    };
+    const data = GltfBinaryParser.getBufferData(json.accessors[0], json, [bin.buffer]);
+    expect(Array.from(data!)).toEqual([0, 0, 7]);
+  });
 });

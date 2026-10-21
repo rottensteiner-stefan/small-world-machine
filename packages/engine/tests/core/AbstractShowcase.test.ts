@@ -317,6 +317,16 @@ describe("AbstractShowcase Camera Configuration (aspect from canvas size)", () =
     expect(proj.aspect).toBeCloseTo(1600 / 900, 10);
   });
 
+  it("keeps a finite aspect when the canvas is hidden (clientHeight 0)", () => {
+    showcase.configure();
+    setCanvasSize(showcase.canvas!, 0, 0);
+    showcase.configure();
+
+    const proj = showcase.camera.projection as PerspectiveProjection;
+    expect(Number.isFinite(proj.aspect)).toBe(true);
+    expect(proj.aspect).toBeCloseTo(1600 / 900, 10);
+  });
+
   it("derives the aspect from the canvas, not the window", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 640 });
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 480 });

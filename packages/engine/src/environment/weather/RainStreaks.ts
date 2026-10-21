@@ -6,6 +6,7 @@ import { Texture } from "../../core/textures/Texture.js";
 import { Plane } from "../../geometry/index.js";
 import type { Object3D } from "../../core/Object3D.js";
 import type { Vector3D } from "../../math/index.js";
+import { mulberry32 } from "../../utils/SeededRandom.js";
 
 const MM = 0.001;
 
@@ -161,11 +162,8 @@ export class RainStreaks {
     const diameterMaxMm = dropMax / MM;
     const tail = 1 - Math.exp(-LAMBDA_PER_MM * (diameterMaxMm - diameterMinMm));
 
-    let state = options.seed ?? DEFAULT_SEED;
-    const rand = (): number => {
-      state = (state * 9301 + 49297) % 233280;
-      return state / 233280;
-    };
+    const rand = mulberry32(options.seed ?? DEFAULT_SEED);
+    const diameterSpanMm = diameterMaxMm - diameterMinMm;
 
     const material = new StandardMaterial({
       color: options.color ?? new Color(0.88, 0.93, 1.0, 0.6),
@@ -197,11 +195,22 @@ export class RainStreaks {
       this._y[i] = rand() * this._height;
       this._z[i] = (rand() - 0.5) * 2 * this._halfExtent;
       // Bigger drops carry more light into the lens.
-      const brightness =
-        0.55 + 0.45 * ((diameterMm - diameterMinMm) / (diameterMaxMm - diameterMinMm));
+      // A degenerate range (min == max) has no spread: use the middle brightness, not 0/0.
+      const sizeT = diameterSpanMm > 0 ? (diameterMm - diameterMinMm) / diameterSpanMm : 0.5;
+      const brightness = 0.55 + 0.45 * sizeT;
       const gain = brightness * this._brightness;
       this.mesh.setInstanceDataAt(i, [gain, gain, gain, 1]);
     }
+  }
+
+  /**
+   * Detaches the mesh from its parent and releases the procedural streak canvas texture.
+   * Safe to call twice. The mesh must not be rendered afterwards.
+   */
+  public dispose(): void {
+    this.mesh.parent?.remove(this.mesh);
+    const material = this.mesh.material as StandardMaterial | undefined;
+    material?.diffuseMap?.dispose();
   }
 
   /**
@@ -238,9 +247,13 @@ export class RainStreaks {
       zs[i] = z;
 
       // Streak axis = the drop's velocity; it extends upward from the drop (the blur trails behind it).
-      const invSpeed = 1 / Math.hypot(windX, speed, windZ);
+      // Drops below ~0.11 mm have zero terminal speed; with no wind the velocity vanishes, so
+      // fall back to a vertical axis instead of dividing by zero (NaN matrices).
+      const velocityLength = Math.hypot(windX, speed, windZ);
+      const hasVelocity = velocityLength > 1e-6;
+      const invSpeed = hasVelocity ? 1 / velocityLength : 0;
       const ux = windX * invSpeed;
-      const uy = -speed * invSpeed;
+      const uy = hasVelocity ? -speed * invSpeed : -1;
       const uz = windZ * invSpeed;
       const length = speed * exposure;
 

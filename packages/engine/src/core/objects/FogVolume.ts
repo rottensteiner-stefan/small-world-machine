@@ -93,7 +93,11 @@ export class FogVolume extends Object3D {
   public getInverseWorldMatrix(): Matrix4 {
     this.updateMatrixWorld(false);
     this._invWorldMatrix.data.set(this.worldMatrix.data);
-    Matrix4.invert(this._invWorldMatrix, this._invWorldMatrix);
+    // A degenerate (zero-scale) world matrix has no inverse: fall back to identity so shaders
+    // sample a defined (empty) volume instead of garbage.
+    if (!Matrix4.invert(this._invWorldMatrix, this._invWorldMatrix)) {
+      this._invWorldMatrix.identity();
+    }
     return this._invWorldMatrix;
   }
 

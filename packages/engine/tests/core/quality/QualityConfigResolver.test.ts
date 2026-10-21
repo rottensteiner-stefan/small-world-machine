@@ -83,4 +83,27 @@ describe("QualityConfigResolver (ADR 0035, statischer Tier-Resolver)", () => {
     const without = QualityConfigResolver.resolve(PerformanceTier.LOW);
     expect(withEmpty).toEqual(without);
   });
+
+  it.each([PerformanceTier.LOW, PerformanceTier.MEDIUM, PerformanceTier.HIGH])(
+    "does not alias the shared tier policy (%s): mutating a result leaves later resolves intact",
+    (tier) => {
+      const first = QualityConfigResolver.resolve(tier);
+      const snapshot = structuredClone(first);
+      first.quality.hdr = true;
+      first.quality.msaa = 8;
+      if (first.postProcessing.effects?.hbao) first.postProcessing.effects.hbao.enabled = true;
+      first.postProcessing.effects = { bloom: { enabled: true } };
+      const second = QualityConfigResolver.resolve(tier);
+      expect(second).toEqual(snapshot);
+    },
+  );
+
+  it("does not alias the policy effect objects when the author overrides another effect", () => {
+    const first = QualityConfigResolver.resolve(PerformanceTier.LOW, undefined, {
+      effects: { bloom: { enabled: true } },
+    });
+    first.postProcessing.effects!.hbao!.enabled = true;
+    const second = QualityConfigResolver.resolve(PerformanceTier.LOW);
+    expect(second.postProcessing.effects?.hbao?.enabled).toBe(false);
+  });
 });

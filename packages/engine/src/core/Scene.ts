@@ -17,7 +17,12 @@ export interface RenderBatch {
   matUuid: string;
   wireframeMode?: WireframeMode;
   objects: Object3D[];
+  /** Consecutive frames this batch collected no object; the scene prunes it after `BATCH_IDLE_FRAMES`. */
+  idleFrames?: number;
 }
+
+/** Empty opaque batches survive this many frames (cheap re-show) before the scene drops them. */
+const BATCH_IDLE_FRAMES = 120;
 
 export interface RenderList {
   opaqueLookup: Map<string, Map<Topology, Map<string, RenderBatch>>>;
@@ -297,6 +302,7 @@ export class Scene {
     this.lastFrustumVisibleObjects.length = 0;
 
     this._collectVisible(this.root, this._renderList);
+    this._pruneIdleBatches(this._renderList);
 
     (this._renderList.decals as Decal[]).sort(compareDecals);
 
@@ -318,6 +324,29 @@ export class Scene {
     });
 
     return this._renderList;
+  }
+
+  /**
+   * Drops batches that stayed empty for `BATCH_IDLE_FRAMES` frames. Every material uuid (a clone
+   * regenerates it) otherwise leaves an empty batch that is walked forever. Allocation-free.
+   */
+  private _pruneIdleBatches(renderList: RenderList): void {
+    const batches = renderList.opaqueBatches;
+    for (let i = batches.length - 1; i >= 0; i--) {
+      const batch = batches[i]!;
+      if (batch.objects.length > 0) {
+        batch.idleFrames = 0;
+        continue;
+      }
+      batch.idleFrames = (batch.idleFrames ?? 0) + 1;
+      if (batch.idleFrames < BATCH_IDLE_FRAMES) continue;
+      batches.splice(i, 1);
+      const topologyMap = renderList.opaqueLookup.get(batch.shaderId);
+      const matMap = topologyMap?.get(batch.topology);
+      matMap?.delete(batch.matUuid);
+      if (matMap && matMap.size === 0) topologyMap!.delete(batch.topology);
+      if (topologyMap && topologyMap.size === 0) renderList.opaqueLookup.delete(batch.shaderId);
+    }
   }
 
   private _collectVisible(obj: Object3D, renderList: RenderList): void {

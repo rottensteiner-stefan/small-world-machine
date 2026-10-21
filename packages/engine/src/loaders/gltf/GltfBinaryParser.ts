@@ -64,8 +64,71 @@ export class GltfBinaryParser {
     json: GltfJson,
     buffers: ArrayBuffer[],
   ): TypedArray | null {
-    if (accessor === undefined || accessor.bufferView === undefined || !json.bufferViews)
-      return null;
+    if (accessor === undefined || !json.bufferViews) return null;
+    if (accessor.bufferView === undefined) {
+      // Spec: no bufferView means all zeros, plus the sparse substitutions if present.
+      return accessor.sparse ? this._applySparse(accessor, undefined, json, buffers) : null;
+    }
+    const base = this._getDenseBufferData(accessor, json, buffers);
+    if (base && accessor.sparse) return this._applySparse(accessor, base, json, buffers);
+    return base;
+  }
+
+  /** Applies `accessor.sparse` on top of `base` (or zeros) and returns a fresh dense array. */
+  private static _applySparse(
+    accessor: NonNullable<GltfJson["accessors"]>[number],
+    base: TypedArray | undefined,
+    json: GltfJson,
+    buffers: ArrayBuffer[],
+  ): TypedArray | null {
+    const sparse = accessor.sparse;
+    if (!sparse) return base ?? null;
+    const numComponents = this.getComponentCount(accessor.type);
+    const indices = this._getDenseBufferData(
+      {
+        bufferView: sparse.indices.bufferView,
+        byteOffset: sparse.indices.byteOffset ?? 0,
+        componentType: sparse.indices.componentType,
+        count: sparse.count,
+        type: "SCALAR",
+      },
+      json,
+      buffers,
+    );
+    const values = this._getDenseBufferData(
+      {
+        bufferView: sparse.values.bufferView,
+        byteOffset: sparse.values.byteOffset ?? 0,
+        componentType: accessor.componentType,
+        count: sparse.count,
+        type: accessor.type,
+        ...(accessor.normalized !== undefined ? { normalized: accessor.normalized } : {}),
+      },
+      json,
+      buffers,
+    );
+    if (!indices || !values) return base ?? null;
+    const OutCtor = values.constructor as new (length: number) => TypedArray;
+    const output = new OutCtor(accessor.count * numComponents);
+    if (base) output.set(base);
+    for (let i = 0; i < sparse.count; i++) {
+      const target = indices[i]! * numComponents;
+      if (target + numComponents > output.length) {
+        throw new Error(
+          `[GltfBinaryParser] Sparse accessor index ${indices[i]} is outside count ${accessor.count}`,
+        );
+      }
+      for (let c = 0; c < numComponents; c++) output[target + c] = values[i * numComponents + c]!;
+    }
+    return output;
+  }
+
+  private static _getDenseBufferData(
+    accessor: NonNullable<GltfJson["accessors"]>[number],
+    json: GltfJson,
+    buffers: ArrayBuffer[],
+  ): TypedArray | null {
+    if (accessor.bufferView === undefined || !json.bufferViews) return null;
     const bufferView = json.bufferViews[accessor.bufferView];
     if (!bufferView) return null;
     const buffer = buffers[bufferView.buffer];
@@ -112,7 +175,19 @@ export class GltfBinaryParser {
         return null;
     }
 
-    const elementByteSize = numComponents * bytesPerElement;
+    // glTF 3.6.2.4: matrix columns are padded to 4-byte boundaries (MAT2 with 1-byte and MAT3
+    // with 1-/2-byte components), so those layouts are never dense.
+    const matrixDim = accessor.type === "MAT2" ? 2 : accessor.type === "MAT3" ? 3 : 0;
+    const columnBytes = matrixDim * bytesPerElement;
+    const paddedColumnBytes = Math.ceil(columnBytes / 4) * 4;
+    const isPaddedMatrix = matrixDim > 0 && paddedColumnBytes !== columnBytes;
+    const componentByteOffset = (c: number): number =>
+      isPaddedMatrix
+        ? Math.floor(c / matrixDim) * paddedColumnBytes + (c % matrixDim) * bytesPerElement
+        : c * bytesPerElement;
+    const elementByteSize = isPaddedMatrix
+      ? matrixDim * paddedColumnBytes
+      : numComponents * bytesPerElement;
     const stride =
       bufferView.byteStride !== undefined && bufferView.byteStride !== 0
         ? bufferView.byteStride
@@ -149,7 +224,7 @@ export class GltfBinaryParser {
       for (let i = 0; i < accessor.count; i++) {
         const elemOffset = i * stride;
         for (let c = 0; c < numComponents; c++) {
-          const compOffset = elemOffset + c * bytesPerElement;
+          const compOffset = elemOffset + componentByteOffset(c);
           const outIdx = i * numComponents + c;
           switch (accessor.componentType) {
             case 5120:
@@ -176,7 +251,7 @@ export class GltfBinaryParser {
       return result;
     }
 
-    if (stride === elementByteSize) {
+    if (stride === elementByteSize && !isPaddedMatrix) {
       if (byteOffset % bytesPerElement === 0) {
         return new ctor(buffer, byteOffset, count);
       }
@@ -190,7 +265,7 @@ export class GltfBinaryParser {
     for (let i = 0; i < accessor.count; i++) {
       const elemOffset = i * stride;
       for (let c = 0; c < numComponents; c++) {
-        const compOffset = elemOffset + c * bytesPerElement;
+        const compOffset = elemOffset + componentByteOffset(c);
         const outIdx = i * numComponents + c;
         switch (accessor.componentType) {
           case 5120:

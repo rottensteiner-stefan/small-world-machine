@@ -27,6 +27,9 @@ import { ShaderBootstrap } from "../renderers/shaders/index.js";
 import { CollisionVisualizer, OctreeVisualizer } from "../utils/index.js";
 import { PhysicsSystem } from "../physix/PhysicsSystem.js";
 
+/** Whether this module instance already printed the console banner. */
+let _bannerPrinted: boolean = false;
+
 /** The current engine version. */
 export const ENGINE_VERSION = "0.115.7";
 
@@ -175,6 +178,9 @@ export abstract class SmallWorldMachine {
       // (device tier -> quality/post settings) is applied exactly once and the configuration is
       // closed afterwards -- no more later mutation of config.quality/postProcessing. Explicit
       // author-set fields always win (Ebene 3, generic override lock).
+      if (this.config.performanceTier) {
+        this._context.deviceCaps.forcedTier = this.config.performanceTier;
+      }
       const tier = this._context.deviceCaps.getPerformanceTier();
       if (tier === PerformanceTier.LOW) {
         console.warn(
@@ -247,8 +253,10 @@ export abstract class SmallWorldMachine {
 
       this.renderer.setSize(cssWidth, cssHeight);
 
-      if (!(window as unknown as Record<string, boolean>)["__SMALLWORLDMACHINE_BANNER__"]) {
-        (window as unknown as Record<string, boolean>)["__SMALLWORLDMACHINE_BANNER__"] = true;
+      // Cosmetic once-per-module console banner. Module state instead of a `window` flag: it
+      // pollutes no global namespace, and instances of separately bundled engines each print once.
+      if (!_bannerPrinted) {
+        _bannerPrinted = true;
         const bannerStyle1 =
           "font-size: 24px; font-weight: bold; font-family: sans-serif; color: #B000FF; text-shadow: 0 0 10px rgba(176, 0, 255, 0.5); line-height: 30px;";
 

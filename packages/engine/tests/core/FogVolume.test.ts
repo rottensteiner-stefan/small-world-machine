@@ -177,4 +177,12 @@ describe("FogVolume", () => {
       expect(extracted[0]?.name).toBe("ActiveFog");
     });
   });
+
+  it("getInverseWorldMatrix falls back to identity for a zero-scale volume", () => {
+    const fog = new FogVolume();
+    fog.setScale(0, 0, 0);
+    fog.updateMatrixWorld(true);
+    const inv = fog.getInverseWorldMatrix();
+    expect(Array.from(inv.data)).toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  });
 });

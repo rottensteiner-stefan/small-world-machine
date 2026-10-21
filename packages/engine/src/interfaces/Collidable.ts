@@ -7,6 +7,11 @@ import type { BoundingVolume } from "./BoundingVolume.js";
 export interface Collidable {
   /** Optional integer identifier for deterministic physics solver sorting and netcode lockstep. */
   id?: number;
+  /**
+   * Explicit opt-out: `false` means the object may own bounds for culling (Decal, FogVolume)
+   * but must never act as an obstacle/hit in volume queries. Absent or `true` means collidable.
+   */
+  isCollidable?: boolean;
   /** The physical bounding volume of the object. */
   bounds: BoundingVolume | undefined;
   /** 32-bit collision layer bitmask this collider belongs to (default: 1). */

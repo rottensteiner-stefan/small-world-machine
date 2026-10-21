@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { KitRegistry } from "../../src/loaders/kit/KitRegistry.js";
+import { Texture } from "../../src/core/textures/Texture.js";
 import { AssetManager } from "../../src/loaders/AssetManager.js";
 
 /**
@@ -125,5 +126,21 @@ describe("KitRegistry.resolveTextureMaps", () => {
 
     expect(result).toEqual({});
     expect(loadImage).not.toHaveBeenCalled();
+  });
+
+  it("rejects with the original error and disposes the maps that already loaded", async () => {
+    const assetManager = new AssetManager();
+    vi.spyOn(assetManager, "loadImage").mockImplementation(async (url: string) => {
+      if (url.includes("normal")) throw new Error("boom");
+      return {} as HTMLImageElement;
+    });
+    const dispose = vi.spyOn(Texture.prototype, "dispose");
+    const registry = new KitRegistry({ basePath: "/assets/kits/", assetManager });
+
+    await expect(
+      registry.resolveTextureMaps("k", { id: "k/t", maps: ["a_albedo.png", "a_normal.png"] }),
+    ).rejects.toThrow("boom");
+    expect(dispose).toHaveBeenCalledTimes(1);
+    dispose.mockRestore();
   });
 });

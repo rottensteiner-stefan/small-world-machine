@@ -143,6 +143,10 @@ export class GltfLoader extends AbstractLoader<Object3D> {
       }
     }
 
+    if (json.asset?.version === undefined) {
+      console.warn("[GltfLoader] Missing required `asset.version`; assuming glTF 2.0.");
+    }
+
     // 0. Initialize read context and let registered extension plugins pre-pass the document
     // (e.g. indexing KHR_lights_punctual.lights[] by node) -- see ADR 0017.
     const readCtx: GltfReadContext = { json, state: new Map() };

@@ -278,3 +278,18 @@ describe("GltfLoader validation and fail-fast", () => {
     expect(node?.scale.x).toBeCloseTo(0.001, 9);
   });
 });
+
+describe("GltfLoader asset.version", () => {
+  it("warns when the required asset.version is missing, but still loads", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const loader = new GltfLoader();
+    const parse = (
+      loader as unknown as {
+        _parse: (gltf: unknown, baseUrl: string) => Promise<Object3D>;
+      }
+    )._parse.bind(loader);
+    await parse({ json: { scenes: [{ nodes: [] }], scene: 0 }, buffers: [] }, "x.gltf");
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("asset.version"))).toBe(true);
+    warn.mockRestore();
+  });
+});

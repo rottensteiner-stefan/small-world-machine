@@ -12,6 +12,11 @@ export interface GltfJson {
     count: number;
     type: string;
     normalized?: boolean;
+    sparse?: {
+      count: number;
+      indices: { bufferView: number; byteOffset?: number; componentType: number };
+      values: { bufferView: number; byteOffset?: number };
+    };
   }[];
   meshes?: {
     name?: string;

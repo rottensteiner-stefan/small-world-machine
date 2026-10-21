@@ -228,7 +228,7 @@ export class OctreeNode {
 
     for (let i: number = 0; i < this.objects.length; i++) {
       const obj = this.objects[i]!;
-      if (obj.bounds && Collision.test(obj.bounds, volume)) {
+      if (obj.isCollidable !== false && obj.bounds && Collision.test(obj.bounds, volume)) {
         result.push(obj);
       }
     }

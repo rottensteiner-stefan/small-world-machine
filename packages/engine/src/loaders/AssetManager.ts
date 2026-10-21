@@ -257,33 +257,78 @@ export class AssetManager {
       } catch (e: unknown) {
         // Fall back to a plain HTMLImageElement (e.g. when createImageBitmap is unavailable).
         console.error(e);
-        return new Promise<HTMLImageElement>((resolve, reject) => {
-          this._fetchWithProgress(url, `${cacheKey}_fallback`, onProgress)
-            .then((blob) => {
-              const objectUrl = URL.createObjectURL(blob);
-              const img: HTMLImageElement = new Image();
-              img.crossOrigin = "anonymous";
-              img.src = objectUrl;
-              img.onload = (): void => {
-                URL.revokeObjectURL(objectUrl);
-                resolve(img);
-              };
-              img.onerror = (): void => {
-                URL.revokeObjectURL(objectUrl);
-                reject(`[AssetManager] Fallback failed: ${url}`);
-              };
-            })
-            .catch(() => {
-              const img: HTMLImageElement = new Image();
-              img.crossOrigin = "anonymous";
-              img.src = this.resolveUrl(url);
-              img.onload = (): void => resolve(img);
-              img.onerror = (): void => {
-                reject(`[AssetManager] Fallback failed: ${url}`);
-              };
-            });
-        });
+        const img = await this._loadImageElement(url, cacheKey, onProgress);
+        // createImageBitmap's `imageOrientation: "flipY"` is not available here, so honour the
+        // same flipY contract by re-rasterising the decoded element upside down.
+        return flipY ? this._flipImageElement(img) : img;
       }
+    });
+  }
+
+  /** Decodes `url` through a plain `<img>` (blob URL first, direct URL as last resort). */
+  private _loadImageElement(
+    url: string,
+    cacheKey: string,
+    onProgress?: ProgressCallback,
+  ): Promise<HTMLImageElement> {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const fail = (): void => reject(new Error(`[AssetManager] Fallback failed: ${url}`));
+      this._fetchWithProgress(url, `${cacheKey}_fallback`, onProgress)
+        .then((blob) => {
+          const objectUrl = URL.createObjectURL(blob);
+          const img: HTMLImageElement = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = objectUrl;
+          img.onload = (): void => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(img);
+          };
+          img.onerror = (): void => {
+            URL.revokeObjectURL(objectUrl);
+            fail();
+          };
+        })
+        .catch(() => {
+          const img: HTMLImageElement = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = this.resolveUrl(url);
+          img.onload = (): void => resolve(img);
+          img.onerror = fail;
+        });
+    });
+  }
+
+  /** Returns a vertically flipped copy of a decoded `<img>` (canvas round-trip). */
+  private _flipImageElement(source: HTMLImageElement): Promise<HTMLImageElement> {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = source.naturalWidth || source.width;
+      canvas.height = source.naturalHeight || source.height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("[AssetManager] flipY fallback needs a 2D canvas context"));
+        return;
+      }
+      context.translate(0, canvas.height);
+      context.scale(1, -1);
+      context.drawImage(source, 0, 0);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("[AssetManager] flipY fallback could not encode the flipped image"));
+          return;
+        }
+        const objectUrl = URL.createObjectURL(blob);
+        const flipped: HTMLImageElement = new Image();
+        flipped.onload = (): void => {
+          URL.revokeObjectURL(objectUrl);
+          resolve(flipped);
+        };
+        flipped.onerror = (): void => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("[AssetManager] flipY fallback failed to reload the flipped image"));
+        };
+        flipped.src = objectUrl;
+      }, "image/png");
     });
   }
 

@@ -19,7 +19,15 @@ export interface TextureOptions {
    * `quality.maxAnisotropy` level; `0` disables filtering and `> 1` requests an explicit level
    * (never above the engine cap or the device limit). Only mipmapped textures are affected. */
   anisotropy?: number;
-  /** Whether the image should be flipped vertically during loading. Defaults to true. */
+  /**
+   * Vertical flip so the image's top maps to the top of the geometry ("Human Convention First").
+   * Semantics per factory, because a decoded image can only be flipped by one of two means:
+   * - `fromUrl`: flipped at decode time (pixels), default `true`. glTF, BasisU and cubemaps
+   *   explicitly pass `false`. The HTMLImageElement fallback honours it too.
+   * - `fromImage` / `fromCanvas`: the caller already owns decoded pixels, so nothing is applied
+   *   implicitly; default `false`. `true` applies the UV flip (`flipY()`, negative `repeat.y`),
+   *   which interacts with your own `repeat`/`offset`.
+   */
   flipY?: boolean;
   /** The AssetManager instance to use for `fromUrl()`. Defaults to a fresh private instance
    * (not the deprecated process-wide singleton) -- pass this to share caching/headers/base-URL
@@ -50,6 +58,11 @@ export interface CompressedImage {
 export class Texture {
   /** The underlying image, bitmap, or canvas data. */
   public image: HTMLImageElement | ImageBitmap | HTMLCanvasElement | undefined = undefined;
+  /**
+   * False when `image` is owned by an `AssetManager` cache shared with other textures
+   * (`fromUrl`): `dispose()` then only drops the reference instead of closing the bitmap.
+   */
+  private _ownsImage: boolean = true;
   /**
    * Optional block-compressed payload. When present, `image` is `undefined` and
    * renderers upload `compressedImage` directly via `compressedTexImage2D`
@@ -114,13 +127,16 @@ export class Texture {
    * Releases the CPU-side pixel data: closes an `ImageBitmap`, shrinks a canvas' backing store to
    * zero and drops the references. GPU copies are owned by the renderers and are freed when the
    * objects/materials using the texture are removed from the scene; this only frees what the
-   * texture itself holds (e.g. a procedural canvas). Call it after the scene using the texture is
+   * texture itself holds (e.g. a procedural canvas). A bitmap loaded by `fromUrl` belongs to the
+   * (shared) `AssetManager` cache and is not closed here; it is released with that manager. Call it after the scene using the texture is
    * destroyed: a disposed texture reads as not loaded, so renderers sample their white fallback.
    */
   public dispose(): void {
     const image = this.image;
     if (typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap) {
-      image.close();
+      // A cached bitmap is shared by every texture of the same url+flip: closing it would turn
+      // sibling textures into 0x0 images and poison later cache hits.
+      if (this._ownsImage) image.close();
     } else if (typeof HTMLCanvasElement !== "undefined" && image instanceof HTMLCanvasElement) {
       image.width = 0;
       image.height = 0;
@@ -221,6 +237,8 @@ export class Texture {
     const assetManager = options?.assetManager ?? new AssetManager();
     const flipY = options?.flipY ?? true;
     const image = await assetManager.loadImage(url, undefined, flipY);
-    return new Texture(image, options);
+    const texture = new Texture(image, options);
+    texture._ownsImage = false;
+    return texture;
   }
 }

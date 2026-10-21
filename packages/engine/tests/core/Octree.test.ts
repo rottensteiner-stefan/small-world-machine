@@ -4,6 +4,8 @@ import { Object3D } from "../../src/core/Object3D.js";
 import { BoundingBox } from "../../src/physix/BoundingBox.js";
 import { Vector3D } from "../../src/math/Vector3D.js";
 import { Cube } from "../../src/geometry/Cube.js";
+import { Decal } from "../../src/core/objects/Decal.js";
+import { DecalMaterial } from "../../src/core/materials/index.js";
 import { Sprite } from "../../src/core/sprites/Sprite.js";
 
 describe("Octree", () => {
@@ -96,5 +98,30 @@ describe("Octree", () => {
     // Removing non-existent object returns false
     const nonExistent = new Object3D("Ghost");
     expect(octree.remove(nonExistent)).toBe(false);
+  });
+
+  it("queryVolume skips decals, whose OBB bounds exist only for culling", () => {
+    const octree = new Octree(
+      new BoundingBox(new Vector3D(-10, -10, -10), new Vector3D(10, 10, 10)),
+    );
+    const solid = new Object3D("solid");
+    solid.geometry = new Cube({ size: 1 }).getGeometryData();
+    solid.updateMatrixWorld();
+    solid.computeBounds();
+    const decal = new Decal(new DecalMaterial());
+    decal.updateMatrixWorld();
+    decal.computeBounds();
+    expect(decal.bounds).toBeDefined();
+    expect(octree.insert(solid)).toBe(true);
+    expect(octree.insert(decal)).toBe(true);
+
+    const hits: Object3D[] = [];
+    octree.queryVolume(solid.bounds!, hits);
+    expect(hits).toContain(solid);
+    expect(hits).not.toContain(decal);
+    // Frustum culling still sees the decal.
+    expect(octree.root.objects.concat(octree.root.children.flatMap((c) => c.objects))).toContain(
+      decal,
+    );
   });
 });

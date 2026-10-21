@@ -89,7 +89,9 @@ export class QualityConfigResolver {
     userQuality?: QualityConfig,
     userPost?: PostProcessingConfig,
   ): { quality: QualityConfig; postProcessing: PostProcessingConfig } {
-    const policy = TIER_MATRIX[tier];
+    // Deep copy: the matrix is module-wide, so results handed to one engine instance must never
+    // alias it (a later mutation would change the policy for every instance and resolve()).
+    const policy = structuredClone(TIER_MATRIX[tier]);
     const quality = mergeDefined<QualityConfig>(
       { ...policy.quality } as QualityConfig,
       userQuality ?? ({} as QualityConfig),

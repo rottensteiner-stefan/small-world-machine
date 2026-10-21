@@ -21,11 +21,16 @@ describe("skybox vertex shaders bind the cube to the camera", () => {
   it.each([
     ["GLSL ES 3.00", skyboxVertGLSL],
     ["GLSL ES 1.00", skyboxVertGLSL100],
-  ])("%s adds the camera position to neutralize the model translation", (_name, source) => {
-    expect(source).toMatch(
-      /u_model\s*\*\s*vec4\(a_position,\s*1\.0\)\s*\+\s*vec4\(u_viewPos,\s*0\.0\)/,
-    );
-  });
+  ])(
+    "%s drops the model translation (w = 0) and re-centres on the camera (w = 1)",
+    (_name, source) => {
+      // A skybox object placed away from the origin must not be shifted relative to the camera;
+      // identical to skybox.vert.wgsl.
+      expect(source).toMatch(
+        /u_model\s*\*\s*vec4\(a_position,\s*0\.0\)\s*\+\s*vec4\(u_viewPos,\s*1\.0\)/,
+      );
+    },
+  );
 
   it("GLSL ES 1.00 declares the u_viewPos uniform (WebGL1 uploads it when present)", () => {
     expect(skyboxVertGLSL100).toMatch(/uniform\s+vec3\s+u_viewPos;/);

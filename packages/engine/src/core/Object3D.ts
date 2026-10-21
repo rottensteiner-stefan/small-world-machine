@@ -9,10 +9,6 @@ import type { RigidBody } from "../physix/RigidBody.js";
 import type { InspectorField } from "./Inspectable.js";
 import { shallowCloneWithValueTypes } from "./CloneUtils.js";
 
-/** Backs `occlusionCulled` -- kept off the instance itself so objects that are never touched by
- * WebGPU HZB occlusion culling (i.e. every object on WebGL1/WebGL2) don't carry the field. */
-const occlusionCulledMap = new WeakMap<Object3D, boolean>();
-
 /** Shared exposed default for `lookAt()`'s `up` parameter -- never mutated by the method. */
 const _UNIT_UP = new Vector3D(0, 1, 0);
 
@@ -95,7 +91,14 @@ export class Object3D implements Collidable {
   public pendingRemovalSink?: (obj: Object3D) => void;
 
   public isVisible: boolean = true;
-  /** Whether this object should generate bounds and participate in physics/raycasting. Defaults to true. */
+  /**
+   * Whether this object generates bounds and participates in physics/raycasting. Defaults to true.
+   * Contract (decided 2026-10, review 7d): `isCollidable = false` => `computeBounds()` leaves
+   * `bounds` undefined, so the object is never frustum-culled, never octree-inserted and never
+   * HZB occlusion-tested (it always draws). Subclasses that are non-collidable but still want
+   * culling (Decal, FogVolume) override `computeBounds()` to supply cull-only bounds; such
+   * objects are excluded from collision queries via `Octree.queryVolume`/`resolveSphereCollisions`.
+   */
   public isCollidable: boolean = true;
   public frustumCulled: boolean = true;
   public isStatic: boolean = false;
@@ -107,12 +110,7 @@ export class Object3D implements Collidable {
    * whichever objects it has a fresh readback for; everything else keeps its last known value.
    * Always false on WebGL1/WebGL2 (never written there), making `Scene._collectVisible()`'s
    * check a permanent no-op on those backends. */
-  public get occlusionCulled(): boolean {
-    return occlusionCulledMap.get(this) ?? false;
-  }
-  public set occlusionCulled(value: boolean) {
-    occlusionCulledMap.set(this, value);
-  }
+  public occlusionCulled: boolean = false;
 
   public castShadow: boolean = false;
   public receiveShadow: boolean = false;
@@ -386,6 +384,8 @@ export class Object3D implements Collidable {
     copy.id = Object3D._getNextId();
     copy.parent = undefined;
     copy.bounds = undefined;
+    // GPU occlusion result belongs to the source instance; a fresh clone starts visible.
+    copy.occlusionCulled = false;
     delete copy.rigidBody;
     copy.localMatrix = new Matrix4();
     copy.worldMatrix = new Matrix4();

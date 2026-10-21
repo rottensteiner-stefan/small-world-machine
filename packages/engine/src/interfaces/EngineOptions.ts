@@ -1,4 +1,5 @@
 import type { ProjectionType, RendererType, InputMode, ToneMappingMode } from "../enums/index.js";
+import type { PerformanceTier } from "../core/DeviceCaps.js";
 import type { AbstractProjection } from "../math/projections/index.js";
 /**
  * Configuration for a single renderer backend.
@@ -134,6 +135,11 @@ export interface EngineOptions {
   inputMode?: InputMode;
   /** Per-backend renderer configuration, keyed by backend (`WEB_GPU`/`WEB_GL2`/`WEB_GL1`). */
   renderer?: RendererConfig;
+  /**
+   * Overrides the detected device performance tier (deterministic goldens, device simulation).
+   * Beats the `?tier=` URL parameter and the heuristic estimate.
+   */
+  performanceTier?: PerformanceTier;
   /** Optional quality settings. */
   quality?: QualityConfig;
   /** Optional post-processing settings. */
