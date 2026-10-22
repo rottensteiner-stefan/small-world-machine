@@ -49,12 +49,20 @@
               vec2 atlasUV = (projCoords.xy + vec2(col, row)) / cols;
               float currentDepth = projCoords.z;
 
+              if (u_evsmParams.x > 0.5) {
+                  // EVSM (ADR 0007): filter the warped moments of this cascade's atlas cell,
+                  // then run the two-sided Chebyshev bound (dynamic floor + LBR). Cell-clamped
+                  // taps so the 3x3 filter never bleeds into a neighboring cascade.
+                  shadowA = evalEVSMDir(atlasUV, cellMin, cellMax, currentDepth);
+              } else {
               // PCSS: (1) blocker search via the raw (non-comparison) depth read, averaging
               // occluders found within a search radius; (2) derive a penumbra size from how far
               // the receiver is behind those occluders; (3) PCF again with that variable radius.
               // Samples are clamped to this cascade's own atlas cell so a wide search radius
               // near a cell edge can't bleed into a neighboring cascade's texels.
               // Directional light only, not spot lights -- see docs/adr/0006-pcss-directional-light-only.md.
+              // NOTE: kept at the historical indentation so the default (non-EVSM) path's diff
+              // stays reviewable; it is the byte-identical predecessor of this branch.
               const int pcssTaps = 8;
               vec2 searchOffsets[pcssTaps];
               searchOffsets[0] = vec2(-1.0, -1.0);
@@ -103,6 +111,7 @@
                   }
                   shadowA /= 9.0;
               }
+              } // end of the else (legacy PCSS) branch for u_evsmParams.x <= 0.5
           }
 
           float shadowB = shadowA;
@@ -119,6 +128,13 @@
                   vec2 atlasUVB = (projCoordsB.xy + vec2(colB, rowB)) / cols;
                   float currentDepthB = projCoordsB.z;
 
+                  if (u_evsmParams.x > 0.5) {
+                      // EVSM (ADR 0007): cell-clamped moments for the blend sample too, so the
+                      // blend band never mixes PCF and EVSM results.
+                      vec2 cellMinB = vec2(colB, rowB) / cols;
+                      vec2 cellMaxB = cellMinB + vec2(1.0) / cols;
+                      shadowB = evalEVSMDir(atlasUVB, cellMinB, cellMaxB, currentDepthB);
+                  } else {
                   shadowB = 0.0;
                   for(int x = -1; x <= 1; ++x) {
                       for(int y = -1; y <= 1; ++y) {
@@ -126,6 +142,7 @@
                       }
                   }
                   shadowB /= 9.0;
+              }
               }
           }
 

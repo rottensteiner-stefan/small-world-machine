@@ -111,6 +111,20 @@ export class CascadedShadowPassGPU implements RenderPass {
     renderer.context.shaderRegistry.ensureProvider(MaterialType.EVSM, this._evsmMaterial);
     const evsmManifest = this._evsmMaterial.getRenderManifest();
 
+    // Moment texels no caster covers must evaluate as LIT (they are "empty" background, exactly
+    // like depth-1.0 texels in the depth pass), so the moment atlas is cleared to the far-plane
+    // warp vector -- the moments of an occluder AT d = 1 -- and every in-front receiver fails the
+    // Chebyshev "in front of the mean" test. A clear of 0 would evaluate DARK and paint shadow
+    // holes wherever a cascade cell had no geometry. e = exp(40) is fp32-representable and the
+    // negative side stays a normal; lane semantics identical to the writer's c = 40.
+    const evsmFarE = Math.exp(40);
+    const evsmFarClear = {
+      r: evsmFarE,
+      g: evsmFarE * evsmFarE,
+      b: -1 / evsmFarE,
+      a: 1 / (evsmFarE * evsmFarE),
+    };
+
     // Moment texture lifecycle mirrors the depth fbo (resolution / cascade count are live light
     // properties; a stale texture would be sampled with the wrong layout or fail `createView`).
     if (
@@ -165,6 +179,7 @@ export class CascadedShadowPassGPU implements RenderPass {
             view: this._evsmLayerViews[i]!,
             loadOp: "clear",
             storeOp: "store",
+            clearValue: evsmFarClear,
           },
         ],
         depthStencilAttachment: {

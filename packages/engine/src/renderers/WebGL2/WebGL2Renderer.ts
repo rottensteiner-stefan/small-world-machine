@@ -20,7 +20,7 @@ import { WebGLPostProcessPass } from "../passes/WebGLPostProcessPass.js";
 import { WebGLClusterCullPass } from "../passes/WebGLClusterCullPass.js";
 import { GLPostEffects, createGLPostEffectContext } from "../post/passes/index.js";
 import type { GLPostEffectPassContext } from "../post/passes/index.js";
-import type { AbstractLight } from "../../core/lights/index.js";
+import type { AbstractLight, DirectionalLight } from "../../core/lights/index.js";
 import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../core/lights/index.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
 import type { CubeTexture, RenderTarget } from "../../core/textures/index.js";
@@ -31,6 +31,7 @@ import { Color } from "../../core/colors/index.js";
 import type { Object3D, RenderBatch, Scene, TextureArray } from "../../core/index.js";
 import { DeviceLimit, InstancedMesh, computeClipToBox } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
+import { EvsmMomentMaterial } from "../../core/materials/EvsmMomentMaterial.js";
 import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 import type { WireframeMode } from "../../enums/index.js";
 import { MaterialType, RendererType, Topology } from "../../enums/index.js";
@@ -78,6 +79,26 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * texture object itself (see WebGL2DepthFrameBuffer). */
   private static readonly _RAW_DEPTH_UNIT = 13;
   private _rawDepthSampler!: WebGLSampler;
+
+  /** Fixed unit for the EVSM moment atlas sampler (ADR 0007). Dedicated unit 14 -- never overlaps
+   * the shadow units 8-13 nor the dynamically allocated material/IBL samplers. */
+  private static readonly _EVSM_MAP_UNIT = 14;
+  /** EVSM tuning lanes, byte-identical to the WebGPU side (GlobalUniformWriter lanes 217/218). */
+  private static readonly _EVSM_VARIANCE_FLOOR = 0.002;
+  private static readonly _EVSM_LIGHT_BLEED = 0.004;
+  /** Moment-atlas clear vector meaning "no occluder" = an occluder at the far plane, which every
+   * in-front receiver evaluates as lit (far-plane EVSM rationale: see the moment writer header). */
+  private _evsmFarClear: [number, number, number, number] = [0, 0, 0, 0];
+  /** RGBA32F moment atlas (color) + its FBO. The FBO reuses the CSM depth atlas as its depth
+   * attachment, so `_evsmAtlasTexture` and `_evsmAtlasFbo` stand alone as a color-only set. */
+  private _evsmAtlasFbo: WebGLFramebuffer | null = null;
+  private _evsmAtlasTexture: WebGLTexture | null = null;
+  /** 1x1 RGBA32F dummy, bound to u_dirEVSMMap whenever no real moment atlas is active (EVSM off
+   * or unsupported) so the sampler always references a real texture object on every program. */
+  private _evsmDummyTexture: WebGLTexture | null = null;
+  /** True when EXT_color_buffer_float (required to render into RGBA32F) was granted. */
+  private _evsmSupported = false;
+  private _evsmSupportChecked = false;
 
   private _opaqueTexture?: WebGLTexture | undefined;
   private _opaqueDepthTexture?: WebGLTexture | undefined;
@@ -244,6 +265,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     // Internal materials the renderer draws by id (shadow/depth), not through a scene object
     this.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, new DepthMaterial());
+    this.context.shaderRegistry.ensureProvider(MaterialType.EVSM, new EvsmMomentMaterial());
 
     // GlobalUniforms with std140 layout -- size and every field offset come from the single
     // GlobalUniformLayout table (u_areaLights[4] 96-byte stride ends at 2080, followed by
@@ -271,6 +293,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._hdrFbo = undefined;
     this._postEffects = undefined;
     this._postCtx = undefined;
+    // EVSM (ADR 0007) handles are dead with the old context; rebuild lazily (see
+    // _checkEvsmSupport/_ensureEvsmAtlas) and re-check EXT_color_buffer_float.
+    this._evsmAtlasFbo = null;
+    this._evsmAtlasTexture = null;
+    this._evsmDummyTexture = null;
+    this._evsmSupported = false;
+    this._evsmSupportChecked = false;
     this._opaqueTexture = undefined;
     this._opaqueDepthTexture = undefined;
     this._opaqueDepthFbo = undefined;
@@ -884,6 +913,25 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         this._renderShadowScene(cache, sortedGroups);
       }
 
+      // EVSM (ADR 0007): render the warped variance moments into a separate RGBA32F atlas right
+      // after the depth pass, while the CSM depth atlas is still attached. The moment FBO reuses
+      // that depth texture as its depth attachment with depthWrite off + LEQUAL, so the moments
+      // come from exactly the front-most surface the depth pass just stored. Opt-in only
+      // (quality.shadowMode === "evsm"); gated on EXT_color_buffer_float with an honest fallback
+      // (mode flag stays 0 -> the fixed-PCF/pcss default path, see _checkEvsmSupport).
+      if (this._quality.shadowMode === "evsm") {
+        this._renderEvsmMoments(
+          light,
+          fbo,
+          cols,
+          res,
+          atlasWidth,
+          atlasHeight,
+          emptyLights,
+          sortedGroups,
+        );
+      }
+
       this.gl.cullFace(this.gl.BACK);
       fbo.unbind();
     }
@@ -895,6 +943,220 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       shadowFbo.destroy();
       this._shadowMaps.delete(light);
     }
+  }
+
+  /**
+   * EVSM (ADR 0007) WebGL2 support gate, called lazily (idempotent). RGBA32F color render targets
+   * require `EXT_color_buffer_float`; when the driver refuses it the engine degrades HONESTLY to
+   * the default shadow mapping instead of rendering into an unsupported framebuffer -- exactly
+   * one warning, and the mode flag stays 0 so no shader ever samples the (absent) moment atlas.
+   * Also (re)creates the 1x1 RGBA32F dummy every program's active `u_dirEVSMMap` sampler needs as
+   * a real bound texture, and precomputes the far-plane moment clear vector below.
+   */
+  private _checkEvsmSupport(): void {
+    if (this._evsmSupportChecked) return;
+    this._evsmSupportChecked = true;
+    this._evsmSupported = Boolean(this.gl.getExtension("EXT_color_buffer_float"));
+
+    // A moment texel no caster covers must evaluate as LIT, so it holds the moments of an
+    // occluder AT the far plane (d = 1): (e^{40}, e^{80}, -e^{-40}, e^{-80}) -- every in-front
+    // receiver's warp `exp(c * d)`, d < 1, is <= e^{40} and therefore fails the Chebyshev
+    // bound's "in front of the mean" test. A clear of 0 would read as "occluded by nothing" and
+    // paint shadow holes wherever a cascade cell had no geometry.
+    const farE = Math.exp(40);
+    this._evsmFarClear = [farE, farE * farE, -1 / farE, 1 / (farE * farE)];
+
+    if (!this._evsmSupported) {
+      console.warn(
+        "[WebGL2Renderer] EXT_color_buffer_float is unavailable: EVSM (quality.shadowMode = " +
+          "'evsm') falls back to the default shadow mapping instead of a broken moment atlas.",
+      );
+      return;
+    }
+    if (this._evsmDummyTexture) return;
+    const tex = this.gl.createTexture();
+    if (!tex) return;
+    this.gl.bindTexture(this.gl.TEXTURE_2D, tex);
+    this.gl.texImage2D(
+      this.gl.TEXTURE_2D,
+      0,
+      this.gl.RGBA32F,
+      1,
+      1,
+      0,
+      this.gl.RGBA,
+      this.gl.FLOAT,
+      null,
+    );
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+    this._evsmDummyTexture = tex;
+  }
+
+  /**
+   * Creates the RGBA32F moment atlas (color-only FBO). Its depth attachment is the CSM depth-atlas
+   * texture, attached per frame in `_renderEvsmMoments` so a freshly created atlas never holds a
+   * stale depth reference. Returns false on failure so the caller can fall back to the default
+   * shadow mapping for this frame instead of rendering into a broken framebuffer.
+   */
+  private _ensureEvsmAtlas(atlasWidth: number, atlasHeight: number): boolean {
+    if (this._evsmAtlasTexture && this._evsmAtlasFbo) return true;
+    if (this._evsmAtlasTexture) {
+      this.gl.deleteTexture(this._evsmAtlasTexture);
+      this._evsmAtlasTexture = null;
+    }
+    if (this._evsmAtlasFbo) {
+      this.gl.deleteFramebuffer(this._evsmAtlasFbo);
+      this._evsmAtlasFbo = null;
+    }
+    const tex = this.gl.createTexture();
+    const fbo = this.gl.createFramebuffer();
+    if (!tex || !fbo) return false;
+    this.gl.bindTexture(this.gl.TEXTURE_2D, tex);
+    this.gl.texImage2D(
+      this.gl.TEXTURE_2D,
+      0,
+      this.gl.RGBA32F,
+      atlasWidth,
+      atlasHeight,
+      0,
+      this.gl.RGBA,
+      this.gl.FLOAT,
+      null,
+    );
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, fbo);
+    this.gl.framebufferTexture2D(
+      this.gl.FRAMEBUFFER,
+      this.gl.COLOR_ATTACHMENT0,
+      this.gl.TEXTURE_2D,
+      tex,
+      0,
+    );
+    const status = this.gl.checkFramebufferStatus(this.gl.FRAMEBUFFER);
+    if (status !== this.gl.FRAMEBUFFER_COMPLETE) {
+      console.warn(
+        `[WebGL2Renderer] EVSM moment framebuffer incomplete (0x${status.toString(16)}); ` +
+          "falling back to the default shadow mapping.",
+      );
+      return false;
+    }
+    this._evsmAtlasTexture = tex;
+    this._evsmAtlasFbo = fbo;
+    return true;
+  }
+
+  /**
+   * Binds the EVSM uniforms + moment-atlas sampler for the current program (ADR 0007). Always a
+   * valid binding: EVSM only becomes active when opted in (quality.shadowMode === "evsm") AND
+   * supported (EXT_color_buffer_float) AND a real atlas exists, otherwise the mode flag is 0 and
+   * the sampler references the 1x1 dummy so every lit shader (incl. the GLSL300 water chunks)
+   * takes its byte-identical default path. Called from BOTH branches of _bindDirectionalShadowMaps
+   * and (mode 0) from _bindDummyShadowMaps.
+   */
+  private _bindEvsmShadowUniforms(cache: WebGLProgramCacheEntry, atlasReady: boolean): void {
+    const paramsLoc = this._cachedUniformLocation(cache, "u_evsmParams");
+    const mapLoc = this._cachedUniformLocation(cache, "u_dirEVSMMap");
+    if (!paramsLoc && !mapLoc) return;
+    this._checkEvsmSupport();
+    const active = atlasReady && this._quality.shadowMode === "evsm" && this._evsmSupported;
+    if (paramsLoc) {
+      this._scratchFloat4[0] = active ? 1.0 : 0.0;
+      this._scratchFloat4[1] = WebGL2Renderer._EVSM_VARIANCE_FLOOR;
+      this._scratchFloat4[2] = WebGL2Renderer._EVSM_LIGHT_BLEED;
+      this._scratchFloat4[3] = 0.0;
+      this.gl.uniform4fv(paramsLoc, this._scratchFloat4);
+    }
+    if (mapLoc) {
+      const unit = WebGL2Renderer._EVSM_MAP_UNIT;
+      if (this._ensureShadowMapUnit(unit, "EVSM moment map")) {
+        this.gl.activeTexture(this.gl.TEXTURE0 + unit);
+        this.gl.bindTexture(
+          this.gl.TEXTURE_2D,
+          active && this._evsmAtlasTexture ? this._evsmAtlasTexture : this._evsmDummyTexture,
+        );
+        this.gl.uniform1i(mapLoc, unit);
+      }
+    }
+  }
+
+  /**
+   * Renders the EVSM moment atlas (ADR 0007) per cascade, immediately after the depth pass while
+   * the CSM depth atlas is still an attached depth source. Runs only for
+   * quality.shadowMode === "evsm" with EXT_color_buffer_float present. Geometry/culling/VP reuse
+   * the exact depth-pass conventions (same FRONT cull, per-cascade viewport + global UBO), so the
+   * moments describe the same front-most surface the depth pass just recorded.
+   */
+  private _renderEvsmMoments(
+    light: DirectionalLight,
+    depthFbo: WebGL2DepthFrameBuffer,
+    cols: number,
+    res: number,
+    atlasWidth: number,
+    atlasHeight: number,
+    emptyLights: LightDataInterface,
+    sortedGroups: RenderBatch[],
+  ): void {
+    this._checkEvsmSupport();
+    if (!this._evsmSupported) return;
+    if (!this._ensureEvsmAtlas(atlasWidth, atlasHeight)) return;
+    if (!this._evsmAtlasFbo || !this._evsmAtlasTexture) return;
+
+    const evsmCache = this._programCache.getProgram(MaterialType.EVSM);
+    this.gl.useProgram(evsmCache.prog);
+    this._bindDummyShadowMaps(evsmCache);
+
+    // Reuse the depth atlas (already holding this frame's cascades) as the depth test source.
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this._evsmAtlasFbo);
+    this.gl.framebufferTexture2D(
+      this.gl.FRAMEBUFFER,
+      this.gl.DEPTH_ATTACHMENT,
+      this.gl.TEXTURE_2D,
+      depthFbo.texture,
+      0,
+    );
+
+    this.gl.depthMask(false);
+    this.gl.depthFunc(this.gl.LEQUAL);
+    this.gl.enable(this.gl.DEPTH_TEST);
+    this.gl.disable(this.gl.BLEND);
+    this.gl.enable(this.gl.CULL_FACE);
+    this.gl.cullFace(this.gl.FRONT);
+
+    for (let i = 0; i < light.numCascades; i++) {
+      const cascadeCam = light.cascadeCameras[i];
+      if (!cascadeCam) continue;
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      this.gl.viewport(col * res, row * res, res, res);
+
+      // Scissor-clear this cascade's cell to the far-plane moment vector, so texels with no
+      // caster evaluate as LIT instead of as shadow holes (gl.clear ignores the viewport).
+      this.gl.enable(this.gl.SCISSOR_TEST);
+      this.gl.scissor(col * res, row * res, res, res);
+      this.gl.clearColor(
+        this._evsmFarClear[0],
+        this._evsmFarClear[1],
+        this._evsmFarClear[2],
+        this._evsmFarClear[3],
+      );
+      this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+      this.gl.disable(this.gl.SCISSOR_TEST);
+
+      this.updateGlobalUBO(cascadeCam.viewProjectionMatrix, cascadeCam.position, emptyLights);
+
+      this._renderShadowScene(evsmCache, sortedGroups);
+    }
+
+    // Restore the depth state the rest of the frame expects.
+    this.gl.depthMask(true);
+    this.gl.depthFunc(this.gl.LESS);
+    this.gl.cullFace(this.gl.BACK);
   }
 
   /**
@@ -995,6 +1257,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       const loc = this._cachedUniformLocation(cache, WebGL2Renderer._SPOT_SHADOW_MAP_NAMES[i]!);
       if (loc) this.gl.uniform1i(loc, dummyUnit);
     }
+
+    // EVSM (ADR 0007): every program with an active u_dirEVSMMap sampler needs a valid binding
+    // even when no real moment atlas exists yet. _bindDirectionalShadowMaps later overrides this
+    // with the real atlas when EVSM is active (mode 0 here keeps the shader on its default path).
+    this._bindEvsmShadowUniforms(cache, false);
   }
 
   /**
@@ -1290,6 +1557,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       const infoLoc = cache.uniforms.get("u_dirShadowInfo");
 
       const fbo = this._shadowMaps.get(light);
+      // EVSM (ADR 0007): mode flag + moment-atlas sampler. Active only when every gate is green
+      // (mode opt-in, EXT_color_buffer_float, real atlas from this frame's moment pass) -- runs
+      // before the fbo checks so a missing FBO still yields a valid dummy + mode-0 binding.
+      this._bindEvsmShadowUniforms(cache, !!fbo);
       if (fbo && fbo.texture) {
         const texUnit = 12; // TEXTURE12
         if (!this._ensureShadowMapUnit(texUnit, "directional shadow map")) return;
@@ -1326,6 +1597,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         }
       }
     } else {
+      // No shadow-casting directional light: EVSM mode stays 0 with the dummy sampler bound.
+      this._bindEvsmShadowUniforms(cache, false);
       const mapLoc = cache.uniforms.get("u_dirShadowMap");
       if (mapLoc) this.gl.uniform1i(mapLoc, 12);
       const mapRawLoc = cache.uniforms.get("u_dirShadowMapRaw");
@@ -1914,6 +2187,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       if (this._opaqueNormalFbo) this.gl.deleteFramebuffer(this._opaqueNormalFbo);
       this._opaqueNormalTexture = undefined;
       this._opaqueNormalFbo = undefined;
+      if (this._evsmAtlasTexture) gl.deleteTexture(this._evsmAtlasTexture);
+      if (this._evsmAtlasFbo) gl.deleteFramebuffer(this._evsmAtlasFbo);
+      if (this._evsmDummyTexture) gl.deleteTexture(this._evsmDummyTexture);
+      this._evsmAtlasTexture = null;
+      this._evsmAtlasFbo = null;
+      this._evsmDummyTexture = null;
       this._postEffects?.destroy();
       this._globalUBO?.destroy();
       // Renderer-owned textures / FBOs that used to leak on destroy().

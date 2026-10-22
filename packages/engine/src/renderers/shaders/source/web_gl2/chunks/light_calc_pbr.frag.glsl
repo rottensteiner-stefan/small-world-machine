@@ -112,6 +112,10 @@ vec3 Lo = vec3(0.0);
             vec2 atlasUV = (projCoords.xy + vec2(col, row)) / cols;
             float currentDepth = projCoords.z;
 
+            if (u_evsmParams.x > 0.5) {
+                // EVSM (ADR 0007): cell-clamped moment evaluation (see base_fragment_header).
+                shadowA = evalEVSMDir(atlasUV, cellMin, cellMax, currentDepth);
+            } else {
             shadowA = 0.0;
             for(int x = -1; x <= 1; ++x) {
                 for(int y = -1; y <= 1; ++y) {
@@ -120,6 +124,7 @@ vec3 Lo = vec3(0.0);
                 }
             }
             shadowA /= 9.0;
+            } // end of legacy PCF branch (u_evsmParams.x <= 0.5)
         }
 
         float shadowB = shadowA;
@@ -136,6 +141,13 @@ vec3 Lo = vec3(0.0);
                 vec2 atlasUVB = (projCoordsB.xy + vec2(colB, rowB)) / cols;
                 float currentDepthB = projCoordsB.z;
 
+                if (u_evsmParams.x > 0.5) {
+                    // EVSM (ADR 0007): cell-clamped moments for the blend sample too, so the
+                    // blend band never mixes PCF and EVSM results.
+                    vec2 cellMinB = vec2(colB, rowB) / cols;
+                    vec2 cellMaxB = cellMinB + vec2(1.0) / cols;
+                    shadowB = evalEVSMDir(atlasUVB, cellMinB, cellMaxB, currentDepthB);
+                } else {
                 shadowB = 0.0;
                 for(int x = -1; x <= 1; ++x) {
                     for(int y = -1; y <= 1; ++y) {
@@ -143,6 +155,7 @@ vec3 Lo = vec3(0.0);
                     }
                 }
                 shadowB /= 9.0;
+                } // end of legacy PCF branch
             }
         }
 
