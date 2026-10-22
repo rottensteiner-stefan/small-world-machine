@@ -204,6 +204,21 @@ export class WebGPURenderer extends AbstractRenderer {
   public get dummySpotShadowTextureView(): GPUTextureView {
     return this._fallback.dummySpotShadowTextureView;
   }
+  /** Read by the EVSM sampler binding of the global bind group; reassigned once by
+   * `CascadedShadowPassGPU` when a real EVSM moment map first exists (ADR 0007). */
+  public get defaultEVSMTextureView(): GPUTextureView {
+    return this._fallback.defaultEVSMTextureView;
+  }
+  public set defaultEVSMTextureView(view: GPUTextureView) {
+    this._fallback.defaultEVSMTextureView = view;
+  }
+  public get dummyEVSMTextureView(): GPUTextureView {
+    return this._fallback.dummyEVSMTextureView;
+  }
+  /** Linear clamp-to-edge sampler for the EVSM moment map (ADR 0007). */
+  public get evsmSampler(): GPUSampler {
+    return this._fallback.evsmSampler;
+  }
   /** Per-geometry GPU vertex/index buffer cache -- see `GPUGeometryCache`'s own doc comment. */
   private _geometryCache!: GPUGeometryCache;
   /** Frame-global uniform/light upload buffers + IBL-change detection -- see `GlobalUniformWriter`. */
@@ -663,6 +678,18 @@ export class WebGPURenderer extends AbstractRenderer {
           visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
           buffer: { type: "read-only-storage" },
         },
+        // EVSM moment map (ADR 0007): rgba32float 2d-array + linear clamp-to-edge sampler,
+        // fragment-stage only -- sampled by getEVSM() when quality.shadowMode === "evsm".
+        {
+          binding: 16,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { viewDimension: "2d-array", sampleType: "float" },
+        },
+        {
+          binding: 17,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: "filtering" },
+        },
       ],
     });
 
@@ -835,6 +862,9 @@ export class WebGPURenderer extends AbstractRenderer {
         { binding: 13, resource: { buffer: this._spotClusterGridBuffer } },
         { binding: 14, resource: { buffer: this._spotClusterIndexBuffer } },
         { binding: 15, resource: { buffer: this._boneMatricesBuffer } },
+        // EVSM moment map + sampler (ADR 0007); falls back to the dummy map until a real one exists.
+        { binding: 16, resource: this._fallback.defaultEVSMTextureView },
+        { binding: 17, resource: this._fallback.evsmSampler },
       ],
     });
   }
@@ -1225,6 +1255,14 @@ export class WebGPURenderer extends AbstractRenderer {
     topology: GPUPrimitiveTopology = Topology.DEFAULT,
     wireframeMode?: WireframeMode,
     normalMode: NormalTargetMode = NormalTargetMode.DEFAULT,
+    /**
+     * Optional override for the render-pass color target the pipeline is built for. Defaults to
+     * `currentColorTargetFormat` (the main frame or active RenderTarget). The EVSM moment pass
+     * (ADR 0007) renders into an `rgba32float` 2d-array and passes `"rgba32float"` here --
+     * pipeline caching already keys on this format, so overriding a non-main target simply
+     * builds the variant the moment pass actually needs instead of mismatching attachment state.
+     */
+    targetOverride?: GPUTextureFormat,
   ): void {
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in; the generic `instanceData`
     // semantics (texture-array index) stay untouched for other meshes. It is injected on a local
@@ -1249,7 +1287,7 @@ export class WebGPURenderer extends AbstractRenderer {
       else delete effManifest.state;
     }
 
-    const targetFormat = this.currentColorTargetFormat;
+    const targetFormat = targetOverride ?? this.currentColorTargetFormat;
     const cache = this._pipelineCache.getPipeline(
       effManifest,
       topology,

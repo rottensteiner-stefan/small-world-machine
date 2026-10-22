@@ -30,6 +30,10 @@ export class GPUFallbackResources {
   private _dummySpotShadowTexView!: GPUTextureView;
   private _shadowSampler!: GPUSampler;
 
+  private _defaultEVSMTexView!: GPUTextureView;
+  private _dummyEVSMTexView!: GPUTextureView;
+  private _evsmSampler!: GPUSampler;
+
   private _dummyNormalBuffer!: GPUBuffer;
   private _dummyUvBuffer!: GPUBuffer;
   private _dummyTangentBuffer!: GPUBuffer;
@@ -95,6 +99,23 @@ export class GPUFallbackResources {
   }
   public get dummySpotShadowTextureView(): GPUTextureView {
     return this._dummySpotShadowTexView;
+  }
+
+  /** Read by the fragment shader's EVSM sampler binding of the global bind group; reassigned once
+   * by `CascadedShadowPassGPU` when a real EVSM moment map first exists (ADR 0007). */
+  public get defaultEVSMTextureView(): GPUTextureView {
+    return this._defaultEVSMTexView;
+  }
+  public set defaultEVSMTextureView(view: GPUTextureView) {
+    this._defaultEVSMTexView = view;
+  }
+  public get dummyEVSMTextureView(): GPUTextureView {
+    return this._dummyEVSMTexView;
+  }
+  /** Linear clamp-to-edge sampler for the EVSM moment map; mirrors `_shadowSampler` minus the
+   * comparison, because moments are ordinary float data that must be filtered (not compared). */
+  public get evsmSampler(): GPUSampler {
+    return this._evsmSampler;
   }
 
   public get dummyNormalBuffer(): GPUBuffer {
@@ -190,6 +211,25 @@ export class GPUFallbackResources {
       magFilter: TextureFilter.LINEAR,
       minFilter: TextureFilter.LINEAR,
       compare: "less",
+      addressModeU: TextureWrap.CLAMP_TO_EDGE,
+      addressModeV: TextureWrap.CLAMP_TO_EDGE,
+    });
+
+    // EVSM moment fallback textures (rgba32float 2d-array) + linear clamp-to-edge sampler. The
+    // dummy hands every fragment a neutral all-zero moment read until a real map exists (a full
+    // zero read would imply infinite variance only via the floor guard, so getEVSM() early-outs
+    // on the evsmParams.x mode flag before sampling anyway).
+    const dummyEvsm = this._device.createTexture({
+      size: [1, 1, 4],
+      format: "rgba32float",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    this._dummyEVSMTexView = dummyEvsm.createView({ dimension: "2d-array" });
+    this._defaultEVSMTexView = this._dummyEVSMTexView;
+
+    this._evsmSampler = this._device.createSampler({
+      magFilter: TextureFilter.LINEAR,
+      minFilter: TextureFilter.LINEAR,
       addressModeU: TextureWrap.CLAMP_TO_EDGE,
       addressModeV: TextureWrap.CLAMP_TO_EDGE,
     });

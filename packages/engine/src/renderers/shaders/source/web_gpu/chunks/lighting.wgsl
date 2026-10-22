@@ -33,13 +33,13 @@ var shadow: f32 = 1.0;
         // Normal-offset bias, scaled by NdotL so grazing angles get the biggest offset.
         let dirShadowSamplePos = i.wp + N * global.dirShadowInfo.y * (1.0 - diff_dir);
         let shadowPos = global.cascadeMatrices[cascadeIndex] * vec4f(dirShadowSamplePos, 1.0);
-        let shadowA = getShadowPCSS(u_dirShadowMap, shadowSampler, shadowPos, cascadeIndex, global.dirShadowInfo.x);
+        let shadowA = getShadowDirMain(u_dirShadowMap, shadowSampler, shadowPos, cascadeIndex, global.dirShadowInfo.x);
 
         var shadowB = shadowA;
         if (blendToNext > 0.0) {
             let nextCascade = cascadeIndex + 1u;
             let shadowPosB = global.cascadeMatrices[nextCascade] * vec4f(dirShadowSamplePos, 1.0);
-            shadowB = getShadowPCF(u_dirShadowMap, shadowSampler, shadowPosB, nextCascade, global.dirShadowInfo.x);
+            shadowB = getShadowDirBlend(u_dirShadowMap, shadowSampler, shadowPosB, nextCascade, global.dirShadowInfo.x);
         }
 
         shadow = mix(shadowA, shadowB, blendToNext);

@@ -16,5 +16,5 @@ fn sampleDirShadow(worldPos: vec3f, N: vec3f) -> f32 {
     let nDotL = max(dot(N, normalize(global.dirLightDir.xyz)), 0.0);
     let samplePos = worldPos + N * global.dirShadowInfo.y * (1.0 - nDotL);
     let shadowPos = global.cascadeMatrices[cascadeIndex] * vec4f(samplePos, 1.0);
-    return getShadowPCF(u_dirShadowMap, shadowSampler, shadowPos, cascadeIndex, global.dirShadowInfo.x);
+    return getShadowDirBlend(u_dirShadowMap, shadowSampler, shadowPos, cascadeIndex, global.dirShadowInfo.x);
 }

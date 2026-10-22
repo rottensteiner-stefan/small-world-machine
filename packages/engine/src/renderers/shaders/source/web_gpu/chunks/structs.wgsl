@@ -47,9 +47,9 @@ struct GlobalUniforms {
 
     // --- 6. EVSM Tuning (16 bytes) ---
     // EVSM (Exponential Variance Shadow Maps, see docs/shadows.md / ADR 0007):
-    // x = mode flag (0 = PCSS/PCF, 1 = EVSM), y = dynamic variance floor epsilon (Chebyshev
-    // min-variance bias, replaces depth bias in EVSM), z = light-bleeding-reduction amount
-    // (LBR remap), w = reserved.
+    // x = mode flag (0 = PCSS/PCF, 1 = EVSM), y = dynamic min-variance MULTIPLIER (chain-rule
+    // epsilon, Filament uses 0.002 -- the floor is `y * (warpedDepth)²` and replaces the depth
+    // bias for acne control in EVSM), z = light-bleeding-reduction amount (LBR remap), w reserved.
     evsmParams: vec4f,
 }
 
@@ -166,6 +166,14 @@ struct AreaLight {
 @group(0) @binding(13) var<storage, read_write> spotClusterGrid: array<vec2u>;
 @group(0) @binding(14) var<storage, read_write> spotClusterIndices: array<u32>;
 @group(0) @binding(15) var<storage, read> boneMatrices: array<mat4x4f>;
+
+// EVSM moment map (ADR 0007): rgba32float 2d-array holding 4 exponentially warped variance
+// moments per texel (same per-cascade layers as u_dirShadowMap). Only reached (fragment stage)
+// when quality.shadowMode === "evsm"; written by CascadedShadowPassGPU's moment pass and sampled
+// by getEVSM() in pbr_math.wgsl. evsmSampler uses linear filtering + clamp-to-edge so moment
+// filtering never bleeds across map edges.
+@group(0) @binding(16) var u_dirEvsmMap: texture_2d_array<f32>;
+@group(0) @binding(17) var evsmSampler: sampler;
 
 @group(1) @binding(1) var s: sampler;
 @group(1) @binding(2) var u_diffuseMap: texture_2d<f32>;

@@ -1,5 +1,6 @@
 import type { Scene } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
+import { EvsmMomentMaterial } from "../../core/materials/EvsmMomentMaterial.js";
 import { MaterialType, Topology } from "../../enums/index.js";
 import type { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
 import { VIEW_SLOT_CASCADE_BASE } from "../WebGPU/WebGPURenderer.js";
@@ -48,6 +49,17 @@ export class CascadedShadowPassGPU implements RenderPass {
   private _shadowCasterBindGroup?: GPUBindGroup;
   private _frustum: Frustum = new Frustum();
 
+  // EVSM (ADR 0007): `rgba32float` 2d-array of exponentially warped variance moments, one layer
+  // per cascade. Rendered only when `renderer.quality.shadowMode === "evsm"`; it reuses the SAME
+  // per-cascade depth array layer as its depth attachment with LEQUAL + depth-write off (see the
+  // EvsmMomentMaterial manifest), so it re-emits moments for exactly the front-most surface the
+  // depth pass just stored -- no second depth buffer, no self-shadowing mismatch.
+  private _evsmMaterial?: EvsmMomentMaterial;
+  private _evsmTex?: GPUTexture | undefined;
+  private _evsmTexView?: GPUTextureView | undefined;
+  private _evsmLayerViews: GPUTextureView[] = [];
+  private _evsmBindGroupNeedsRebuild = true;
+
   /**
    * Frees the shadow map of every light that is no longer the scene's directional light
    * (removed or replaced) and points the global bind group back at the dummy map, so nothing
@@ -70,7 +82,173 @@ export class CascadedShadowPassGPU implements RenderPass {
     this._cascadeLayerViews = [];
     this._bindGroupNeedsShadowRebuild = true;
     renderer.defaultDirShadowTextureView = renderer.dummyDirShadowTextureView;
+    // Also drop any EVSM moment map that belonged to the removed/replaced light (ADR 0007).
+    this._evsmTex = undefined;
+    this._evsmTexView = undefined;
+    this._evsmLayerViews = [];
+    this._evsmBindGroupNeedsRebuild = true;
+    renderer.defaultEVSMTextureView = renderer.dummyEVSMTextureView;
     renderer.globalBindGroup = renderer._createGlobalBindGroup(scene);
+  }
+
+  /**
+   * EVSM moment pass (ADR 0007): renders the exponentially warped variance moments per cascade
+   * into an `rgba32float` 2d-array (`u_dirEvsmMap`), immediately after the depth pass, reusing
+   * the freshly stored depth array layers as the LEQUAL depth test (the EvsmMomentMaterial
+   * pipeline has depth-write off, see GPUPipelineCache "less-equal"). This emits moments for
+   * exactly the front-most surface the depth pass just stored -- no second depth buffer, no
+   * self-shadowing mismatch, no read/write conflict (the `_shadowCasterBindGroup` snapshot
+   * references the dummy EVSM view, not this texture).
+   */
+  private _renderEvsmCascades(
+    renderer: WebGPURenderer,
+    ce: GPUCommandEncoder,
+    dLight: DirectionalLight,
+    numCascades: number,
+    renderList: ReturnType<Scene["getVisibleObjectsSorted"]>,
+  ): void {
+    this._evsmMaterial ??= new EvsmMomentMaterial();
+    renderer.context.shaderRegistry.ensureProvider(MaterialType.EVSM, this._evsmMaterial);
+    const evsmManifest = this._evsmMaterial.getRenderManifest();
+
+    // Moment texture lifecycle mirrors the depth fbo (resolution / cascade count are live light
+    // properties; a stale texture would be sampled with the wrong layout or fail `createView`).
+    if (
+      this._evsmTex &&
+      (this._evsmTex.width !== dLight.shadowResolution ||
+        this._evsmTex.depthOrArrayLayers !== numCascades)
+    ) {
+      renderer.deferDestroyTexture(this._evsmTex);
+      this._evsmTex = undefined;
+      this._evsmTexView = undefined;
+      this._evsmLayerViews = [];
+    }
+    if (!this._evsmTex) {
+      this._evsmTex = renderer.gpuDevice!.createTexture({
+        size: [dLight.shadowResolution, dLight.shadowResolution, numCascades],
+        format: "rgba32float",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      this._evsmTexView = this._evsmTex.createView({ dimension: "2d-array" });
+      this._evsmLayerViews = [];
+      for (let i = 0; i < numCascades; i++) {
+        this._evsmLayerViews.push(
+          this._evsmTex.createView({
+            dimension: "2d",
+            baseArrayLayer: i,
+            arrayLayerCount: 1,
+          }),
+        );
+      }
+      // The main-pass bind group must start sampling the real moment map before the next frame.
+      this._evsmBindGroupNeedsRebuild = true;
+    }
+
+    for (let i = 0; i < numCascades; i++) {
+      const cascadeCam = dLight.cascadeCameras[i]!;
+
+      // Recompute this cascade's light-space frustum exactly like the depth loop above
+      // (see the comment there): the shared `_frustum` field is per-cascade state.
+      const tempMat = MathPool.acquireMatrix();
+      tempMat.data.set(cascadeCam.viewProjectionMatrix);
+      this._frustum.setFromMatrix(tempMat);
+      MathPool.releaseMatrix(tempMat);
+
+      const viewOffset = renderer._setViewMatrix(
+        VIEW_SLOT_CASCADE_BASE + i,
+        cascadeCam.viewProjectionMatrix,
+      );
+
+      const rp = ce.beginRenderPass({
+        colorAttachments: [
+          {
+            view: this._evsmLayerViews[i]!,
+            loadOp: "clear",
+            storeOp: "store",
+          },
+        ],
+        depthStencilAttachment: {
+          view: this._cascadeLayerViews[i]!,
+          // Load the depth the depth pass just wrote instead of clearing it: the front-surface
+          // extraction relies on those values, and depth-write is off on the moment pipeline.
+          depthClearValue: 1.0,
+          depthLoadOp: "load",
+          depthStoreOp: "store",
+        },
+      });
+
+      // Dummy-referencing global snapshot (never the real moment map) -- same rationale as the
+      // depth loop's `setBindGroup(0, ...)`.
+      rp.setBindGroup(0, this._shadowCasterBindGroup!);
+
+      for (let batchIdx = 0; batchIdx < renderList.opaqueBatches.length; batchIdx++) {
+        const batch = renderList.opaqueBatches[batchIdx];
+        if (batch!.shaderId === MaterialType.SKYBOX || batch!.objects.length === 0) continue;
+
+        let topology: GPUPrimitiveTopology = Topology.DEFAULT;
+        if (batch!.topology === Topology.POINT_LIST) topology = Topology.POINT_LIST;
+        else if (batch!.topology === Topology.LINE_LIST) topology = Topology.LINE_LIST;
+        else if (batch!.topology === Topology.LINE_STRIP) topology = Topology.LINE_STRIP;
+
+        const objects = batch!.objects;
+
+        _scratchCasters.length = 0;
+        for (let j = 0; j < objects.length; j++) {
+          const o = objects[j]!;
+          if (o.castShadow && (!o.bounds || this._frustum.intersectsVolume(o.bounds))) {
+            _scratchCasters.push(o);
+          }
+        }
+        if (_scratchCasters.length === 0) continue;
+
+        _scratchInstanced.length = 0;
+        _scratchStandard.length = 0;
+        for (let j = 0; j < _scratchCasters.length; j++) {
+          const obj = _scratchCasters[j]!;
+          if (obj instanceof InstancedMesh) {
+            _scratchInstanced.push(obj);
+          } else {
+            _scratchStandard.push(obj);
+          }
+        }
+
+        if (_scratchStandard.length > 0) {
+          // `"rgba32float"` overrides the derived main-target format so the moment pipeline's
+          // color target matches this pass's rgba32float attachment (see _renderSubgroup).
+          renderer._renderSubgroup(
+            rp,
+            _scratchStandard,
+            false,
+            this._evsmMaterial.uuid,
+            evsmManifest,
+            viewOffset,
+            cascadeCam.viewMatrix,
+            topology,
+            undefined,
+            undefined,
+            "rgba32float",
+          );
+        }
+
+        if (_scratchInstanced.length > 0) {
+          renderer._renderSubgroup(
+            rp,
+            _scratchInstanced,
+            true,
+            this._evsmMaterial.uuid,
+            evsmManifest,
+            viewOffset,
+            cascadeCam.viewMatrix,
+            topology,
+            undefined,
+            undefined,
+            "rgba32float",
+          );
+        }
+      }
+
+      rp.end();
+    }
   }
 
   public execute(
@@ -151,12 +329,15 @@ export class CascadedShadowPassGPU implements RenderPass {
     ) {
       const realDirShadow = renderer.defaultDirShadowTextureView;
       const realSpotShadow = renderer.defaultSpotShadowTextureView;
+      const realEvsm = renderer.defaultEVSMTextureView;
       renderer.defaultDirShadowTextureView = renderer.dummyDirShadowTextureView;
       renderer.defaultSpotShadowTextureView = renderer.dummySpotShadowTextureView;
+      renderer.defaultEVSMTextureView = renderer.dummyEVSMTextureView;
       this._shadowCasterBindGroup = renderer._createGlobalBindGroup(scene);
       this._shadowCasterBindGroupVersion = renderer.globalResourcesVersion;
       renderer.defaultDirShadowTextureView = realDirShadow;
       renderer.defaultSpotShadowTextureView = realSpotShadow;
+      renderer.defaultEVSMTextureView = realEvsm;
     }
 
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
@@ -271,6 +452,13 @@ export class CascadedShadowPassGPU implements RenderPass {
       rp.end();
     }
 
+    // EVSM (ADR 0007): opt-in moment pass, run right after the depth pass. It renders the warped
+    // variance moments per cascade, reusing the freshly stored depth array layers as its LEQUAL
+    // depth test (no second depth buffer, exact front-surface extraction).
+    if (renderer.quality.shadowMode === "evsm") {
+      this._renderEvsmCascades(renderer, ce, dLight, numCascades, renderList);
+    }
+
     // GlobalUniforms was never touched by the loop above (only the dedicated view-slot buffer
     // was), so it still holds this frame's real camera data from the one _updateGlobalBuffers()
     // call at the top of render() -- no restore needed. Only overlay the shadow-sampling data
@@ -319,10 +507,14 @@ export class CascadedShadowPassGPU implements RenderPass {
     // Bind the resulting texture array to the WebGPU Renderer's global bind group,
     // exactly once (the underlying GPUTexture is reused and just re-rendered into
     // on subsequent frames, so the bind group doesn't need to be rebuilt again).
-    if (this._bindGroupNeedsShadowRebuild) {
+    if (this._bindGroupNeedsShadowRebuild || this._evsmBindGroupNeedsRebuild) {
       renderer.defaultDirShadowTextureView = this._dirShadowTexView!;
+      if (renderer.quality.shadowMode === "evsm" && this._evsmTexView) {
+        renderer.defaultEVSMTextureView = this._evsmTexView;
+      }
       renderer.globalBindGroup = renderer._createGlobalBindGroup(scene);
       this._bindGroupNeedsShadowRebuild = false;
+      this._evsmBindGroupNeedsRebuild = false;
     }
   }
 }

@@ -189,3 +189,92 @@ fn getShadowPCSS(map: texture_depth_2d_array, samp: sampler_comparison, shadowPo
     return shadow / 9.0;
 }
 
+// ── EVSM (Exponential Variance Shadow Maps) ────────────────────────────────────────────────
+// ADR 0007. Produced in the Filament line (surface_shadowing.fs evaluateEVSM / chebyshevUpperBound):
+// the umbra proof is a one-tailed Chebyshev bound on exponentially warped depth, hardened by a
+// DYNAMIC min-variance floor (chain rule of the warp -- a flat floor is wrong because the warp
+// expands variance enormously) and by Light-Bleeding-Reduction (LBR). Two warped VSMs are combined
+// with min(pos, neg) to kill the far-depth single-sided leak. Getting the LBR remap order wrong or
+// applying a flat bias here is the classic leak/acne failure; everything below intentionally
+// mirrors Filament's terms 1:1 (only the tap pattern is simplified from their LOD-based EVSSM).
+//
+// Precondition: the moment texture (`u_dirEvsmMap`) stores (e^{c·d}, e^{2c·d}, -e^{-c·d}, e^{-2c·d})
+// for the SAME remap d = ndc.z * 2 - 1 and c = 40 as EvsmMoment.frag.wgsl; the writer stores those
+// values from the depth pass's rasterized [0,1] depth. `ndc.z` below is that receiver depth in the
+// same [0,1] space, so both sides warp identically.
+
+fn chebyshevUpperBoundEVSM(m1: f32, m2: f32, depth: f32) -> f32 {
+    // Fast path: receiver fully in front of the filtered caster mean -- no possible occlusion.
+    if (depth <= m1) {
+        return 1.0;
+    }
+    // Dynamic variance floor: epsilon * (warpedDepth)^2 (Filament EPSILON_MULTIPLIER 0.002),
+    // scaled by the SAME warped mean used by the bound. Replaces the depth bias in EVSM.
+    let variance = max(m2 - m1 * m1, global.evsmParams.y * m1 * m1);
+    let d = depth - m1;
+    let pMax = variance / max(variance + d * d, 1e-7);
+    // Light Bleeding Reduction: remap [lbrAmount, 1] onto [0, 1] (Filament chebyshevUpperBound).
+    let lbrAmount = clamp(global.evsmParams.z, 0.0, 0.999);
+    return clamp((pMax - lbrAmount) / max(1.0 - lbrAmount, 1e-7), 0.0, 1.0);
+}
+
+fn getEVSM(map: texture_2d_array<f32>, samp: sampler, shadowPos: vec4f, layer: u32) -> f32 {
+    let ndc = shadowPos.xyz / shadowPos.w;
+    let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || ndc.z > 1.0 || ndc.z < 0.0) {
+        return 1.0;
+    }
+
+    let zReceiver = ndc.z;
+    // Same remap + warp as the moment writer (2.7.4.1 & EvsmMoment.frag.wgsl).
+    let depth = clamp(zReceiver * 2.0 - 1.0, -1.0, 1.0);
+    let c = 40.0;
+    let pw = exp(c * depth);
+    let nw = -1.0 / pw;
+
+    // Filter the moments (not the visibility): averaging warped moments is the only mathematically
+    // sound smearing for VSM/EVSM (see docs/shadows.md / ADR 0007). A 3x3 box scaled by the same
+    // PCSS radius cap gives a modest, stable penumbra; the hardware linear filter already softens
+    // the single-fetch case, so this is the author-controlled width, not a second blur pass.
+    let dims = textureDimensions(map);
+    let texel = vec2f(1.0 / f32(dims.x), 1.0 / f32(dims.y));
+    let radius = max(global.shadowSoftness.y, 1.0);
+    var acc = vec4f(0.0);
+    for (var ty: i32 = -1; ty <= 1; ty++) {
+        for (var tx: i32 = -1; tx <= 1; tx++) {
+            let tapUV = clamp(uv + vec2f(f32(tx), f32(ty)) * texel * radius, vec2f(0.0), vec2f(1.0));
+            acc += textureSample(map, samp, tapUV, layer);
+        }
+    }
+    let moments = acc / 9.0;
+
+    let p = chebyshevUpperBoundEVSM(moments.x, moments.y, pw);
+    let n = chebyshevUpperBoundEVSM(moments.z, moments.w, nw);
+    return min(p, n);
+}
+
+// Directional-shadow dispatchers: `evsmParams.x > 0.5` switches every directional sampling call
+// site (main + PBR + glass + liquid dir_shadow) onto the EVSM moment path in one place. There are
+// TWO dispatchers on purpose: the main-cascade sample (A) historically used PCSS, the
+// cascade-blend sample (B) deliberately stayed on fixed PCF (ADR 0006 -- avoids doubling the
+// blocker-search cost in the blend band). Routing both through one dispatcher would have silently
+// changed the default pcss path in the blend band and broken the byte-identical gates; so each
+// dispatcher's pcss branch re-invokes EXACTLY the function its call site used before (main ->
+// getShadowPCSS, blend -> getShadowPCF), and the EVSM branch is identical for both. Static scenes
+// and the box/pole gates stay byte-identical because the default mode is PCSS (all EVSM code is
+// dead until an author opts in via quality.shadowMode -- ADR 0035 override-lock).
+fn getShadowDirMain(map: texture_depth_2d_array, samp: sampler_comparison, shadowPos: vec4f, layer: u32, bias: f32) -> f32 {
+    if (global.evsmParams.x > 0.5) {
+        return getEVSM(u_dirEvsmMap, evsmSampler, shadowPos, layer);
+    }
+    return getShadowPCSS(map, samp, shadowPos, layer, bias);
+}
+
+fn getShadowDirBlend(map: texture_depth_2d_array, samp: sampler_comparison, shadowPos: vec4f, layer: u32, bias: f32) -> f32 {
+    if (global.evsmParams.x > 0.5) {
+        return getEVSM(u_dirEvsmMap, evsmSampler, shadowPos, layer);
+    }
+    return getShadowPCF(map, samp, shadowPos, layer, bias);
+}
+

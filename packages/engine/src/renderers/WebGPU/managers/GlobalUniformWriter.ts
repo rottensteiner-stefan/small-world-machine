@@ -16,11 +16,14 @@ const BYTES_PER_FLOAT = 4;
 /**
  * EVSM tuning defaults (only reached when `quality.shadowMode === "evsm"`; ADR 0007).
  * These are the GL2-compatible central defaults; the shadow shaders read the same lanes.
- * `varianceFloor` is the dynamic (chain-rule-scaled by the warp) min-variance epsilon that
- * replaces the depth bias for acne control in EVSM; `lightBleed` is the light-bleeding-reduction
- * remap amount (higher darkens residual leak faster, too high darkens the whole penumbra).
+ * `varianceFloor` is the DYNAMIC min-variance MULTIPLIER epsilon from the exponential-depth
+ * chain rule: `minVariance = epsilon * (pw * pw)` where `pw` is the receiver's warped depth
+ * (Filament `evaluateEVSM`, `EPSILON_MULTIPLIER = 0.002`). It replaces the depth bias for acne
+ * control in EVSM -- a flat floor would be wrong because the warp expands variance enormously.
+ * `lightBleed` is the light-bleeding-reduction remap amount (higher darkens residual leak
+ * faster, too high darkens the whole penumbra).
  */
-const EVSM_VARIANCE_FLOOR = 1e-3;
+const EVSM_VARIANCE_FLOOR = 0.002;
 const EVSM_LIGHT_BLEED = 0.004;
 /** Point/spot buffers hold exactly `MAX_CLUSTERED_LIGHTS_PER_TYPE` slots (64 * 32 B = 2048 B, 64 * 64 B = 4096 B).
  * Functions, not module constants: `core/index.js` is a circular import here and its exports are
