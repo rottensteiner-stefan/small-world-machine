@@ -6,6 +6,7 @@ import { Scene } from "../../core/Scene.js";
 import { Color } from "../../core/colors/Color.js";
 import type { Texture } from "../../core/textures/index.js";
 import { RenderTarget } from "../../core/textures/index.js";
+import { RendererType } from "../../enums/index.js";
 import { OrthographicProjection } from "../../math/projections/OrthographicProjection.js";
 import { Vector3D } from "../../math/Vector3D.js";
 import type { Renderer } from "../../interfaces/Renderer.js";
@@ -15,6 +16,10 @@ export interface ImposterBakeOptions {
   angleCount?: number;
   /** Square resolution of each baked angle texture, in pixels. Defaults to 128. */
   resolution?: number;
+  /** Background each baked angle texture is cleared to. Defaults to fully transparent
+   * black, so a billboard composites over whatever sits behind it instead of carrying the
+   * renderer's (usually opaque, scene-specific) clear color into the texture. */
+  clearColor?: Color;
   /** Bake-time ambient light color. Defaults to a neutral grey. */
   ambientColor?: Color;
   ambientIntensity?: number;
@@ -22,6 +27,14 @@ export interface ImposterBakeOptions {
   lightColor?: Color;
   lightIntensity?: number;
   lightDirection?: [number, number, number];
+  /** Anchors the baked vertical frame so the object's lowest point (its ground line) sits at
+   * the bottom edge of every angle texture, instead of framing the object's bounding sphere
+   * centered. For objects that stand on the ground (trees, characters, props) this plants the
+   * base of the baked billboard exactly at the sprite's bottom edge, so an `ImposterSprite`
+   * placed with its lower edge at the floor level does not read as hovering above the ground.
+   * Defaults to false (centered framing -- callers relying on the previous vertical centering
+   * are unaffected). */
+  groundAtBottom?: boolean;
 }
 
 const DEFAULT_ANGLE_COUNT = 8;
@@ -33,7 +46,11 @@ const DEFAULT_RESOLUTION = 128;
  * root grouping several geometry-bearing parts) would otherwise report no bounds at all, and
  * `bakeImposter` would frame the camera on empty space at the root's own position. Assumes
  * `updateMatrixWorld()` has already run on `root` (and therefore its whole subtree). */
-function computeSubtreeBoundingSphere(root: Object3D): { center: Vector3D; radius: number } {
+function computeSubtreeBoundingSphere(root: Object3D): {
+  center: Vector3D;
+  radius: number;
+  minY: number;
+} {
   let minX = Infinity;
   let minY = Infinity;
   let minZ = Infinity;
@@ -59,14 +76,44 @@ function computeSubtreeBoundingSphere(root: Object3D): { center: Vector3D; radiu
   };
   visit(root);
 
-  if (!isFinite(minX)) return { center: root.position.clone(), radius: 1 };
+  if (!isFinite(minX)) {
+    return { center: root.position.clone(), radius: 1, minY: root.position.y };
+  }
 
   const center = new Vector3D((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
   const radius = Math.max(
     0.5,
     Math.sqrt((maxX - minX) ** 2 + (maxY - minY) ** 2 + (maxZ - minZ) ** 2) / 2,
   );
-  return { center, radius };
+  return { center, radius, minY };
+}
+
+/**
+ * Computes the vertical framing of the bake frustum, in scene-relative Y (relative to the
+ * subtree's bounding-sphere center, matching the camera orbit). With `groundAtBottom` the lower
+ * frustum edge is anchored at the object's ground line (`minY`, minus a small anti-clip margin)
+ * instead of centered, and the same vertical extent as the centered frame is preserved upward --
+ * so the baked billboard keeps its full height but its base lands exactly at the sprite's bottom.
+ * @returns `center`, `radius`, `minY` (the object's genuine ground line) and the frustum's
+ * `lower`/`upper` Y in frustum-relative space (i.e. relative to `center.y`, the space the ortho
+ * projection expects).
+ */
+export function computeImposterVerticalFrame(
+  root: Object3D,
+  groundAtBottom: boolean,
+): { center: Vector3D; radius: number; minY: number; lower: number; upper: number } {
+  const { center, radius, minY } = computeSubtreeBoundingSphere(root);
+  const halfExtent = radius * 1.1;
+
+  if (!groundAtBottom) {
+    return { center, radius, minY, lower: -halfExtent, upper: halfExtent };
+  }
+
+  // Anchor the world-space ground line (minY) slightly above the image's bottom edge so the
+  // base's AA edge is never clipped; keep the vertical span identical to the centered frame.
+  const lower = minY - radius * 0.08 - center.y;
+  const upper = lower + 2 * halfExtent;
+  return { center, radius, minY, lower, upper };
 }
 
 /**
@@ -91,6 +138,7 @@ export function bakeImposter(
 ): Texture[] {
   const angleCount = options.angleCount ?? DEFAULT_ANGLE_COUNT;
   const resolution = options.resolution ?? DEFAULT_RESOLUTION;
+  const bakeClear = options.clearColor?.clone() ?? new Color(0, 0, 0, 0);
 
   const bakeScene = new Scene();
   bakeScene.add(
@@ -109,43 +157,62 @@ export function bakeImposter(
   bakeScene.add(targetObject);
 
   targetObject.updateMatrixWorld();
-  const { center, radius } = computeSubtreeBoundingSphere(targetObject);
+  const { center, radius, lower, upper } = computeImposterVerticalFrame(
+    targetObject,
+    options.groundAtBottom === true,
+  );
+
+  const halfExtent = radius * 1.1;
+  // The render target's row 0 is the TOP of the image on WebGPU (top-left framebuffer origin)
+  // but the BOTTOM on WebGL (bottom-left origin), while Sprite/Plane always sample V=1 at the
+  // quad's top. So the bake must be pre-flipped vertically ONLY where row 0 is the top. The
+  // previous unconditional pre-flip made WebGPU upright but left WebGL imposters upside down.
+  const flipForWebGpuRowOrder = renderer.type === RendererType.WEB_GPU;
 
   const camera = new Camera(
     new OrthographicProjection({
-      left: -radius * 1.1,
-      right: radius * 1.1,
-      // Swapped vs. the usual bottom<top convention: RenderTarget textures come out of the
-      // renderer in WebGPU's native top-left row order, but `Plane`/`Sprite`'s UV mapping
-      // (V=1 at the quad's top, V=0 at its bottom -- see src/geometry/Plane.ts) assumes the
-      // bottom-left-origin convention regular loaded images get Y-flip-corrected into during
-      // upload (`Texture`'s `flipY` option). A render target never goes through that image-load
-      // step, so without this pre-flip every baked angle displays upside down on the sprite.
-      bottom: radius * 1.1,
-      top: -radius * 1.1,
+      left: -halfExtent,
+      right: halfExtent,
+      // `lower`/`upper` already mirror the object's ground-line anchoring (scene-relative).
+      // Swapped vs. the usual bottom<top convention on the WebGPU leg: this compensates for the
+      // row-order mismatch described above. On the WebGL leg the conventional bottom<top mapping
+      // is used instead -- and in both cases the same world-space Y that was `lower` (the ground
+      // line, when groundAtBottom) lands at the BOTTOM of the output image.
+      bottom: flipForWebGpuRowOrder ? upper : lower,
+      top: flipForWebGpuRowOrder ? lower : upper,
       near: 0.01,
       far: radius * 4,
     }),
   );
   camera.up.set(0, 1, 0);
 
+  // The bake renders through the same pass as the live frame, which clears each target with the
+  // renderer's clear color. A billboard must not bake the scene's sky into itself, so the clear
+  // color is overridden for the bake and restored afterwards.
+  const previousClear = renderer.clearColor.clone();
+  renderer.setClearColor(bakeClear);
+
   const textures: Texture[] = [];
-  for (let i = 0; i < angleCount; i++) {
-    const angle = (i / angleCount) * Math.PI * 2;
-    camera.position.set(
-      center.x + Math.sin(angle) * radius * 2,
-      center.y,
-      center.z + Math.cos(angle) * radius * 2,
-    );
-    camera.target.set(center.x, center.y, center.z);
-    camera.updateViewMatrix();
+  try {
+    for (let i = 0; i < angleCount; i++) {
+      const angle = (i / angleCount) * Math.PI * 2;
+      camera.position.set(
+        center.x + Math.sin(angle) * radius * 2,
+        center.y,
+        center.z + Math.cos(angle) * radius * 2,
+      );
+      camera.target.set(center.x, center.y, center.z);
+      camera.updateViewMatrix();
 
-    const target = RenderTarget.create({ width: resolution, height: resolution });
-    renderer.setRenderTarget(target);
-    renderer.render(bakeScene, camera.viewProjectionMatrix, camera.position, camera.viewMatrix);
-    renderer.setRenderTarget(null);
+      const target = RenderTarget.create({ width: resolution, height: resolution });
+      renderer.setRenderTarget(target);
+      renderer.render(bakeScene, camera.viewProjectionMatrix, camera.position, camera.viewMatrix);
+      renderer.setRenderTarget(null);
 
-    textures.push(target);
+      textures.push(target);
+    }
+  } finally {
+    renderer.setClearColor(previousClear);
   }
 
   return textures;

@@ -7,6 +7,15 @@
 - **Features:**
   - *EVSM als opt-in (ADR 0043, `quality.shadowMode="evsm"`):* exponenziell gewarpte Varianz-Momente (`e^{c·d}`, c=40) mit zweiseitiger Chebyshev-Obergrenze, dynamischem Varianz-Floor-Multiplikator und Light-Bleed-Reduktion. WebGPU: Momenten-Pass + `textureLoad`-Auswertung (unfilterable-float-Bind umgeht das optionale `float32-filterable`-Feature); WebGL2: eigener RGBA32F-Momenten-Atlas hinter `EXT_color_buffer_float`-Gate mit ehrlichem Fallback + Warnung. Der Default `pcss` bleibt bytes-identisch (Quelltext-Guards `EvsmGlslGuards.test.ts` + goldener Lauf).
   - *Showcase 42 — EVSM-Probe:* `?shadowMode=<pcss|evsm>`-Knopf und QA-Hook liest die echten `evsmParams`-Lanes `[216..218]` (Mode-Flag/Varianz-Floor/LBR) der WebGPU-GlobalUniforms → committed Live-Gate `scripts/check-swm42-evsm.mjs` prüft die CPU→GPU-Verdrahtung der opt-in-Lane (Mode-Flag 1/0) bei fehlerfreiem Lauf.
+  - *Sprite/Billboard-Szenen-Fog:* `Sprite.frag.{wgsl,glsl,glsl100}` wenden denselben `scene.fog`
+    an wie die lit-PBR-Shader (`[WGSL_FOG_CALC]`/`[FOG_DEFS]`+`[FOG_CALC]`, inkl. Höhen-Falloff) —
+    camera-facing Sprites spielen die Distanz-Nebel-Konsistenz zu Boden/Bäumen her; bei aktivem Nebel
+    gibt es keine scharfen Imposter-/Decal-Ausreißer mehr.
+  - *`bakeImposter.groundAtBottom` (opt-in):* verankert die untere Vertikal-Frame-Kante der Bake an
+    der Grundlinie des Objekts statt symmetrisch-zentriert um den Bounding-Sphere-Center, sodass der
+    Sockel bodenstehender Objekte (Bäume, Charaktere) exakt am Sprite-Unterrand sitzt statt in der
+    Luft zu „schweben" (~12 % Bildhöhe Leerraum). Default bleibt zentriert/unverändert;
+    `computeImposterVerticalFrame()` ist exportiert.
 - **Architecture & Bugfixes:**
   - *WebGPU-Runtime-Fix (beide Nutzer-Pipeline-Fehler):* `getEVSM()` lädt den rgba32float-Momenten-Atlas per `textureLoad` (Texel-Loads sind im nicht-uniformen Kaskaden-Kontrollfluss legal, `textureSample` nicht) und Bind 16 ist `unfilterable-float`.
   - *WebGL2 pcss-Schwarz-Regression gefixt:* `_bindEvsmShadowUniforms` early-return außerhalb des evsm-Modus — der Dummy-Bind + Leftover-Unit 14 schwärzte den Default-Pfad. Default bleibt exakt (2× [121,120,119]).
@@ -27,6 +36,10 @@
   - *Neues committed Live-Gate `scripts/check-swm42-evsm.mjs`:* assertet fehlerfreien Lauf, Mode-Flag-Lane `evsmParams[0]` (1 unter evsm, 0 unter pcss) und plausible Frames (nicht schwarz/aufgeblasen, Schattenpräsenz) — WebGL2 darf unter keinem `shadowMode` ein kaputtes (schwarzes) Frame liefern. Navigiert per `domcontentloaded` + paintReady (der `networkidle0`-Timeout der EVSM-Seite ist ein falscher Navigations-Hang, nicht EVSM-bedingt).
 - **Housekeeping & Docs:**
   - ADR 0043 + Index-Eintrag, `docs/guides/shadows.md`-EVSM-Sektion (opt-in-Knopf, Backend-Unterstützung, Tuning-Lanes, ehrliche Statuszeile), `apps/showcases/42/docs/log.md` (Stage-C-Eintrag + WebGL2-Befund-Kette).
+  - *Showcase 34 (Billboard Grove):* dezenter Horizont-Haze (LINEAR) + Imposter-Rückreihe geerdet
+    und nach innen gezogen (`groundAtBottom`, `z∈[-14,-11]`) — kein Grünflächen-Überlauf, kein
+    Schweben. Unit-Tests `SpriteFog.test.ts` (Fog-Assemble alle 3 Backends + Fog-Calc-Parität) und
+    `ImposterBaker.test.ts` (Erdungs-Vertrag: Bodenlinie an Frame-Unterkante, Span erhalten).
   - Version 0.116.0.
 
 ## [0.115.7] - 2026-10-21
