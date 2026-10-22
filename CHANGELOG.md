@@ -61,6 +61,14 @@
     sowie Z-Jump-Thickness-Penalty (`smoothstep(radius, radius * 2.5, abs(samplePos.z - fragPos.z))`)
     gegen entfernte Hintergrund-Halos; kombinierter 4-Tap-Bilinear-4×4-Box-Filter im Post-Process-Pass
     glättet das 4×4-Bayer-Muster vollständig (`AORadiusStructure.test.ts`).
+  - *WebGPU Froxel Volumetric Fog Anti-Flicker & Sub-Slice-Quadratur (`froxel_inject.wgsl`, `froxel_reproject.wgsl`, `froxel_integrate.wgsl`, Showcase 39):*
+    kanonische (ungejitterte) Froxel-Weltpositions-Rekonstruktion in `froxel_reproject.wgsl` verhindert
+    zufälliges `±0.4`-Texel-Wabern bei stehender Kamera; analytische `FogVolume`-SDFs werden in
+    `froxel_inject.wgsl` am kanonischen Froxel-Zentrum ausgewertet, sodass kompakte Volumen nicht mehr
+    zwischen groben Z-Slices flackern; 3-Punkt-Sub-Slab-Schatten-Quadratur in `froxel_integrate.wgsl`
+    beseitigt Treppen-Artefakte an schrägen Lichtschächten. In Showcase 39 (64 Z-Slices, `8×8`-Tiles,
+    solide Decken-/Oberlicht-Rippen, Vorwärtsstreuung $\cos\theta > 0$ und Live-Slider im HUD) sind die
+    volumetrischen God-Ray-Vorhänge nun klar und flackerfrei sichtbar.
 - **Quality & Verification:**
   - *Neues committed Live-Gate `scripts/check-swm42-evsm.mjs`:* assertet fehlerfreien Lauf, Mode-Flag-Lane `evsmParams[0]` (1 unter evsm, 0 unter pcss) und plausible Frames (nicht schwarz/aufgeblasen, Schattenpräsenz) — WebGL2 darf unter keinem `shadowMode` ein kaputtes (schwarzes) Frame liefern. Navigiert per `domcontentloaded` + paintReady (der `networkidle0`-Timeout der EVSM-Seite ist ein falscher Navigations-Hang, nicht EVSM-bedingt).
 - **Housekeeping & Docs:**

@@ -76,6 +76,10 @@ class Showcase39 extends AbstractShowcase {
       fullscreen: true,
       quality: {
         maxPixelRatio: 1.5,
+        clusteredLighting: {
+          tileSize: [8, 8],
+          zSlices: 64,
+        },
       },
       ...options,
     });
@@ -130,24 +134,24 @@ class Showcase39 extends AbstractShowcase {
     );
     if (this._fogElement) {
       this._fogElement.enabled = true;
-      this._fogElement.density = 0.025;
-      this._fogElement.intensity = 1.0;
-      this._fogElement.ambientInject = 1.5;
-      this._fogElement.height = -1.0;
-      this._fogElement.heightFalloff = 0.08;
-      this._fogElement.asymmetry = 0.68; // Forward Mie scattering for god rays
-      this._fogElement.color = new Color(0.92, 0.96, 1.0);
+      this._fogElement.density = 0.024;
+      this._fogElement.intensity = 1.05;
+      this._fogElement.ambientInject = 0.16;
+      this._fogElement.height = 0.0;
+      this._fogElement.heightFalloff = 0.03;
+      this._fogElement.asymmetry = 0.6; // Forward Mie scattering for god rays
+      this._fogElement.color = new Color(0.96, 0.97, 1.0);
       this._fogElement.castDirectionalShadow = true;
       this._fogElement.maxDistance = 65.0;
-      this._fogElement.jitter = 0.8;
+      this._fogElement.jitter = 0.25;
     }
 
     // --- 3. Camera Setup & Strategy ---
     if (this.camera.projection.type === ProjectionType.PERSPECTIVE) {
       const proj = this.camera.projection as PerspectiveProjection;
       proj.fov = 58;
-      proj.near = 0.1;
-      proj.far = 100.0;
+      proj.near = 0.5;
+      proj.far = 85.0;
     }
     this.camera.position.set(0, 4.5, 22);
     this.camera.target.set(0, 2.5, -4);
@@ -238,22 +242,38 @@ class Showcase39 extends AbstractShowcase {
     floor.receiveShadow = true;
     this.scene.add(floor);
 
-    // High clerestory ceiling with central skylight opening
-    const ceilingLeft = new Object3D("CeilingLeft");
-    ceilingLeft.geometry = new Plane({ width: 14, height: 64 }).getGeometryData();
-    ceilingLeft.rotation.x = Math.PI / 2;
-    ceilingLeft.position.set(-11, 10, 0);
-    ceilingLeft.material = chamberWallMat;
+    // High clerestory ceiling slabs (solid boxes so CSM shadows block all light outside the central skylight)
+    const ceilingLeft = createBox("CeilingLeft", 14.0, 0.8, 64.0, chamberWallMat);
+    ceilingLeft.position.set(-11, 10.4, 0);
     ceilingLeft.castShadow = true;
+    ceilingLeft.receiveShadow = true;
     this.scene.add(ceilingLeft);
 
-    const ceilingRight = new Object3D("CeilingRight");
-    ceilingRight.geometry = new Plane({ width: 14, height: 64 }).getGeometryData();
-    ceilingRight.rotation.x = Math.PI / 2;
-    ceilingRight.position.set(11, 10, 0);
-    ceilingRight.material = chamberWallMat;
+    const ceilingRight = createBox("CeilingRight", 14.0, 0.8, 64.0, chamberWallMat);
+    ceilingRight.position.set(11, 10.4, 0);
     ceilingRight.castShadow = true;
+    ceilingRight.receiveShadow = true;
     this.scene.add(ceilingRight);
+
+    // Solid roof slab over the rear section (Z < -15) and front vestibule (Z > 16) so light only enters through the nave skylight bays
+    const ceilingRear = createBox("CeilingRear", 10.0, 0.8, 18.0, chamberWallMat);
+    ceilingRear.position.set(0, 10.4, -23.0);
+    ceilingRear.castShadow = true;
+    this.scene.add(ceilingRear);
+
+    const ceilingFront = createBox("CeilingFront", 10.0, 0.8, 16.0, chamberWallMat);
+    ceilingFront.position.set(0, 10.4, 24.0);
+    ceilingFront.castShadow = true;
+    this.scene.add(ceilingFront);
+
+    // Longitudinal skylight tracery mullions running along the nave (Z): these slice diagonal sunlight
+    // into coherent 3D curtains of light & shadow aligned with the viewer's sightlines!
+    for (const mx of [-2.7, -0.9, 0.9, 2.7]) {
+      const mullion = createBox(`SkylightMullion_${mx}`, 0.65, 1.1, 32.0, darkBasaltMat);
+      mullion.position.set(mx, 9.75, -1.0);
+      mullion.castShadow = true;
+      this.scene.add(mullion);
+    }
 
     // Colonnade Pillars along the grand central nave
     const numPillars = 6;
@@ -274,11 +294,17 @@ class Showcase39 extends AbstractShowcase {
       colR.receiveShadow = true;
       this.scene.add(colR);
 
-      // Transverse Arch Beams connecting ceiling
-      const arch = createBox(`Arch_${i}`, 13.0, 0.8, 0.8, darkBasaltMat);
-      arch.position.set(0, 9.6, z);
-      arch.castShadow = true;
-      this.scene.add(arch);
+      // Side-aisle vault ribs connecting outer walls to the colonnade pillars (leaving the central
+      // skylight tracery bays unobstructed along Z so diagonal God Ray curtains stream cleanly)
+      const archL = createBox(`ArchL_${i}`, 6.5, 0.8, 0.9, darkBasaltMat);
+      archL.position.set(-8.5, 9.6, z);
+      archL.castShadow = true;
+      this.scene.add(archL);
+
+      const archR = createBox(`ArchR_${i}`, 6.5, 0.8, 0.9, darkBasaltMat);
+      archR.position.set(8.5, 9.6, z);
+      archR.castShadow = true;
+      this.scene.add(archR);
     }
 
     // Outer Hall Side Walls
@@ -293,6 +319,13 @@ class Showcase39 extends AbstractShowcase {
     wallRight.castShadow = true;
     wallRight.receiveShadow = true;
     this.scene.add(wallRight);
+
+    // Rear Cathedral Outer Wall (closes the building behind the meditation chamber so no stray light leaks in)
+    const rearOuterWall = createBox("RearOuterWall", 36.0, 11.0, 1.0, chamberWallMat);
+    rearOuterWall.position.set(0, 5.5, -26.5);
+    rearOuterWall.castShadow = true;
+    rearOuterWall.receiveShadow = true;
+    this.scene.add(rearOuterWall);
 
     // Front Entrance Arch
     const frontWallLeft = createBox("FrontWallLeft", 12.0, 10.0, 1.0, chamberWallMat);
@@ -478,17 +511,19 @@ class Showcase39 extends AbstractShowcase {
 
   private _updateSunAngle(): void {
     if (this._sunMode === 1) {
-      // High noon sunlight pouring vertically through clerestory opening
-      this._sunLight.direction.set(0.15, -0.96, -0.22);
+      // High noon celestial beams pouring steeply through the skylight tracery
+      this._sunLight.direction.set(0.26, -0.9, 0.35);
       this._sunLight.direction.normalize();
-      this._sunLight.color.set(1.0, 0.96, 0.9);
-      this._sunLight.intensity = 3.2;
+      this._sunLight.color.set(0.95, 0.97, 1.0);
+      this._sunLight.intensity = 3.0;
+      this._sunLight.volumetricIntensity = 3.8;
     } else {
-      // Low golden-hour sun streaming diagonally across nave & columns
-      this._sunLight.direction.set(-0.62, -0.45, -0.64);
+      // Golden-hour sun streaming diagonally across the skylight mullions & central nave
+      this._sunLight.direction.set(-0.34, -0.84, 0.42);
       this._sunLight.direction.normalize();
-      this._sunLight.color.set(1.0, 0.88, 0.72);
-      this._sunLight.intensity = 3.6;
+      this._sunLight.color.set(1.0, 0.86, 0.66);
+      this._sunLight.intensity = 3.4;
+      this._sunLight.volumetricIntensity = 3.8;
     }
   }
 
@@ -612,6 +647,27 @@ class Showcase39 extends AbstractShowcase {
               <span class="hud-switch-slider"></span>
             </label>
           </div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;">
+              <label for="rngDensity">Fog Density</label>
+              <span id="valDensity">${(this._fogElement?.density ?? 0.024).toFixed(3)}</span>
+            </div>
+            <input type="range" id="rngDensity" min="0.005" max="0.060" step="0.001" value="${this._fogElement?.density ?? 0.024}">
+          </div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:4px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;">
+              <label for="rngShafts">God Ray Strength</label>
+              <span id="valShafts">${this._sunLight.volumetricIntensity.toFixed(1)}</span>
+            </div>
+            <input type="range" id="rngShafts" min="0.0" max="8.0" step="0.1" value="${this._sunLight.volumetricIntensity}">
+          </div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:4px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;">
+              <label for="rngAsymmetry">Mie Asymmetry (g)</label>
+              <span id="valAsymmetry">${(this._fogElement?.asymmetry ?? 0.6).toFixed(2)}</span>
+            </div>
+            <input type="range" id="rngAsymmetry" min="0.0" max="0.85" step="0.01" value="${this._fogElement?.asymmetry ?? 0.6}">
+          </div>
         </div>
 
         <div class="hud-section">
@@ -657,6 +713,27 @@ class Showcase39 extends AbstractShowcase {
       const active = (e.target as HTMLInputElement).checked;
       this._altarMistVolume.noiseAmount = active ? 0.7 : 0.0;
       this._brazierMistVolume.noiseAmount = active ? 0.8 : 0.0;
+    });
+
+    document.getElementById("rngDensity")?.addEventListener("input", (e) => {
+      const v = parseFloat((e.target as HTMLInputElement).value);
+      if (this._fogElement) this._fogElement.density = v;
+      const lbl = document.getElementById("valDensity");
+      if (lbl) lbl.textContent = v.toFixed(3);
+    });
+
+    document.getElementById("rngShafts")?.addEventListener("input", (e) => {
+      const v = parseFloat((e.target as HTMLInputElement).value);
+      this._sunLight.volumetricIntensity = v;
+      const lbl = document.getElementById("valShafts");
+      if (lbl) lbl.textContent = v.toFixed(1);
+    });
+
+    document.getElementById("rngAsymmetry")?.addEventListener("input", (e) => {
+      const v = parseFloat((e.target as HTMLInputElement).value);
+      if (this._fogElement) this._fogElement.asymmetry = v;
+      const lbl = document.getElementById("valAsymmetry");
+      if (lbl) lbl.textContent = v.toFixed(2);
     });
 
     // Hook up preset buttons

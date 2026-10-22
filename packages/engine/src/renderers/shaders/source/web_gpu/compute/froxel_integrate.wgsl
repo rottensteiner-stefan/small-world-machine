@@ -182,7 +182,21 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
             // (same convention as the local lights in froxel_inject.wgsl).
             let cosTheta = dot(viewDir, sunDir);
             let phase = hgPhase(cosTheta, asymmetry);
-            let shadow = sampleCascadeShadow(worldPos, length(worldPos - uni.camPos.xyz));
+            var shadow = sampleCascadeShadow(worldPos, length(worldPos - uni.camPos.xyz));
+            // Stratified sub-slab shadow quadrature across [bounds.x, bounds.y] so diagonal light
+            // shafts crossing slice boundaries preserve constant energy without staircase blotches.
+            for (var sub = 0u; sub < 3u; sub++) {
+                let tSub = (f32(sub) + 0.5) * (1.0 / 3.0);
+                // Skip midpoint (tSub == 0.5) which is already sampled above via zMid.
+                let zSub = mix(bounds.x, bounds.y, select(0.833333, 0.166667, sub == 0u));
+                if (sub != 1u) {
+                    let clipZSub = ((far + near) * zSub - 2.0 * near * far) / max(zSub * (far - near), 1e-6);
+                    let worldHSub = uni.invViewProj * vec4f(ndcX, ndcY, clipZSub, 1.0);
+                    let worldPosSub = worldHSub.xyz / max(worldHSub.w, 1e-6);
+                    shadow += sampleCascadeShadow(worldPosSub, length(worldPosSub - uni.camPos.xyz));
+                }
+            }
+            shadow *= (1.0 / 3.0);
             sunScatter = sunColor * (shadow * phase * extinction) * maskAlbedo;
         }
 

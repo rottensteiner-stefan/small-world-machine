@@ -65,20 +65,20 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         boxMax = max(boxMax, val);
     }
 
-    // Expand box slightly to allow smooth temporal convergence.
-    let boxPadding = 0.05 * (boxMax - boxMin) + vec4f(1e-4);
+    // Expand box slightly to allow smooth temporal convergence without clipping sub-voxel jitter.
+    let boxPadding = 0.25 * (boxMax - boxMin) + max(abs(currentSample) * 0.25, vec4f(1e-3));
     boxMin = boxMin - boxPadding;
     boxMax = boxMax + boxPadding;
 
-    // 2. Reconstruct current froxel world position incorporating sub-voxel jitter.
+    // 2. Reconstruct canonical (unjittered) froxel world position so stationary-camera history
+    // lookups sample the exact texel centre (x+0.5, y+0.5, z+0.5) without random self-advection.
     let near = uni.nearFar.x;
     let far = uni.nearFar.y;
     let slices = f32(dims.z);
 
-    let jitter = uni.reprojectParams.yzw;
-    let ndcX = (f32(x) + 0.5 + jitter.x) / f32(dims.x) * 2.0 - 1.0;
-    let ndcY = 1.0 - (f32(y) + 0.5 + jitter.y) / f32(dims.y) * 2.0;
-    let zMid = sliceDepth(f32(z) + jitter.z, near, far, slices);
+    let ndcX = (f32(x) + 0.5) / f32(dims.x) * 2.0 - 1.0;
+    let ndcY = 1.0 - (f32(y) + 0.5) / f32(dims.y) * 2.0;
+    let zMid = sliceDepth(f32(z), near, far, slices);
 
     let clipZ = ((far + near) * zMid - 2.0 * near * far) / max(zMid * (far - near), 1e-6);
     let clipPos = vec4f(ndcX, ndcY, clipZ, 1.0);

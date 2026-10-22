@@ -162,11 +162,11 @@ fn sliceCenterDepth(slice: f32, near: f32, far: f32, slices: f32) -> f32 {
 
 // World position of a froxel cell centre: camera position + the flashed NDC ray times the slice
 // centre depth. Incorporates sub-voxel temporal jitter to eliminate slice banding and IGN noise.
-fn cellWorldPos(cell: vec3f, dims: vec3f, camPos: vec3f) -> vec3f {
-    let ndcX = (cell.x + 0.5 + froxel.jitter.x) / dims.x * 2.0 - 1.0;
+fn cellWorldPos(cell: vec3f, dims: vec3f, camPos: vec3f, jitterScale: f32) -> vec3f {
+    let ndcX = (cell.x + 0.5 + froxel.jitter.x * 0.12 * jitterScale) / dims.x * 2.0 - 1.0;
     // Flip Y: cluster grid Y grows downward (screen space), world Y grows upward.
-    let ndcY = 1.0 - ((cell.y + 0.5 + froxel.jitter.y) / dims.y * 2.0);
-    let viewZ = sliceCenterDepth(cell.z + froxel.jitter.z, froxel.nearFar.x, froxel.nearFar.y, froxel.nearFar.z);
+    let ndcY = 1.0 - ((cell.y + 0.5 + froxel.jitter.y * 0.12 * jitterScale) / dims.y * 2.0);
+    let viewZ = sliceCenterDepth(cell.z + froxel.jitter.z * 0.15 * jitterScale, froxel.nearFar.x, froxel.nearFar.y, froxel.nearFar.z);
     // Unnormalised (z = -1): scaling by the slice's view-space depth puts the cell centre ON that
     // depth slice (the cluster grid and the integration pass both slice by view depth).
     let viewPos = vec3f(
@@ -230,7 +230,8 @@ fn injectFog(
 
     let cell = vec3f(gid);
     let camPos = global.viewPos.xyz;
-    let worldPos = cellWorldPos(cell, dims, camPos);
+    let worldPos = cellWorldPos(cell, dims, camPos, 1.0);
+    let volumeWorldPos = cellWorldPos(cell, dims, camPos, 0.0);
 
     // Element-global density mask: R = per-cell density factor of the global height fog, G =
     // per-cell single-scattering albedo replacing the global `scatteringAlbedo` (the CPU uploads
@@ -247,8 +248,10 @@ fn injectFog(
     // Smooth range fade over the last third of maxDistance (no pop edge); zero beyond it.
     let rangeFade = 1.0 - smoothstep(froxel.params.w * 0.66, froxel.params.w, dist);
 
-    // Evaluate localized FogVolume instances. Positive and negative densities are accumulated
-    // separately and combined afterwards, so carving does not depend on the array order.
+    // Evaluate localized FogVolume instances at the canonical (unjittered) froxel centre so
+    // analytical SDF boundaries never strobe across coarse Z-slices. Positive and negative
+    // densities are accumulated separately and combined afterwards, so carving does not depend on
+    // the array order.
     let baseExtinction = extinction;
     var posDensity = 0.0;
     var negDensity = 0.0;
@@ -257,7 +260,7 @@ fn injectFog(
     let numVolumes = min(u32(froxel.phase.w), 16u);
     for (var v = 0u; v < numVolumes; v++) {
         let vol = froxel.volumes[v];
-        let pLocal = (vol.invTransform * vec4f(worldPos, 1.0)).xyz;
+        let pLocal = (vol.invTransform * vec4f(volumeWorldPos, 1.0)).xyz;
         let shape = u32(vol.params.x);
         var sdf = 1.0;
         if (shape == 0u) {
