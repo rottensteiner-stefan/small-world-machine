@@ -6,7 +6,7 @@ import * as path from "path";
 // use PCSS (getShadowPCSS is fully generic -- same signature as getShadowPCF, no directional-
 // specific uniform access -- so this is a pure function-name swap, no new bindings). The
 // directional cascade-blend sample deliberately stays on fixed PCF (avoids doubling the
-// blocker-search cost in the blend zone). With EVSM (ADR 0007) the directional path is routed
+// blocker-search cost in the blend zone). With EVSM (ADR 0043) the directional path is routed
 // through mode dispatchers: getShadowDirMain (pcss branch = PCSS) and getShadowDirBlend (pcss
 // branch = fixed PCF). Each pcss branch MUST re-invoke the exact function its call site used
 // before, or the default (non-EVSM) blend band would silently change and break the byte-identical
@@ -83,7 +83,18 @@ describe("EVSM directional dispatchers preserve the default PCSS behavior per ca
     expect(pbrMath).toContain(
       "fn getEVSM(map: texture_2d_array<f32>, shadowPos: vec4f, layer: u32) -> f32 {",
     );
-    expect(pbrMath).toContain("acc += textureLoad(map, tapTexel, layer, 0u);");
+    expect(pbrMath).toContain("let rawTap = textureLoad(map, vec2u(tapCoord), layer, 0u);");
     expect(pbrMath).not.toContain("textureSample(map, samp, tapUV, layer)");
+  });
+
+  describe("PCSS anti-ghosting and contact-hardening", () => {
+    it("uses compact PCF early-exit for contact shadows (pcfRadius <= 1.2)", () => {
+      expect(pbrMath).toContain("if (pcfRadius <= 1.2) {");
+    });
+
+    it("uses 16-tap rotated disk for penumbra to eliminate 3x3 grid ghosting", () => {
+      expect(pbrMath).toContain("return shadow / 16.0;");
+      expect(pbrMath).toContain("let angle = noise * 6.2831853;");
+    });
   });
 });

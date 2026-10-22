@@ -263,8 +263,14 @@ void main() {
 
     // Ambient Occlusion (HBAO) -- darkens the linear scene color before tonemapping, since it
     // approximates occluded incoming light rather than a display-referred image adjustment.
+    // Four hardware-bilinear taps average the 4x4 Bayer-dithered HBAO tile to zero pattern noise.
     if (u_hbaoEnabled == 1) {
-        float hbaoVal = texture(u_hbaoTexture, distortUv).r;
+        vec2 aoTexel = 1.0 / vec2(textureSize(u_hdrTexture, 0));
+        float ao0 = texture(u_hbaoTexture, distortUv + vec2(-0.5, -0.5) * aoTexel).r;
+        float ao1 = texture(u_hbaoTexture, distortUv + vec2( 1.5, -0.5) * aoTexel).r;
+        float ao2 = texture(u_hbaoTexture, distortUv + vec2(-0.5,  1.5) * aoTexel).r;
+        float ao3 = texture(u_hbaoTexture, distortUv + vec2( 1.5,  1.5) * aoTexel).r;
+        float hbaoVal = (ao0 + ao1 + ao2 + ao3) * 0.25;
         if (!isnan(hbaoVal) && !isinf(hbaoVal)) {
             hdr *= clamp(hbaoVal, 0.0, 1.0);
         }

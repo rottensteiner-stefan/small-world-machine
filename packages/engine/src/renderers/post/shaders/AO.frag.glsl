@@ -73,27 +73,50 @@ void main() {
     // horizon angle visible along each, and average -- the same core idea as full HBAO's
     // horizon integration, just with one max-sample per direction instead of an angular
     // integral, and no separate temporal/spatial denoise pass (combined here into one shader).
-    const int DIR_COUNT = 6;
+    const int DIR_COUNT = 8;
     vec2 dirs[DIR_COUNT];
     dirs[0] = vec2(1.0, 0.0);
-    dirs[1] = vec2(0.5, 0.866025);
-    dirs[2] = vec2(-0.5, 0.866025);
-    dirs[3] = vec2(-1.0, 0.0);
-    dirs[4] = vec2(-0.5, -0.866025);
-    dirs[5] = vec2(0.5, -0.866025);
+    dirs[1] = vec2(0.70710678, 0.70710678);
+    dirs[2] = vec2(0.0, 1.0);
+    dirs[3] = vec2(-0.70710678, 0.70710678);
+    dirs[4] = vec2(-1.0, 0.0);
+    dirs[5] = vec2(-0.70710678, -0.70710678);
+    dirs[6] = vec2(0.0, -1.0);
+    dirs[7] = vec2(0.70710678, -0.70710678);
+
+    const float bayerTable[16] = float[16](
+         0.0,  8.0,  2.0, 10.0,
+        12.0,  4.0, 14.0,  6.0,
+         3.0, 11.0,  1.0,  9.0,
+        15.0,  7.0, 13.0,  5.0
+    );
+    ivec2 pixCoord = ivec2(gl_FragCoord.xy);
+    int bayerIdx = (pixCoord.x & 3) + ((pixCoord.y & 3) << 2);
+    float bayer = (bayerTable[bayerIdx] + 0.5) / 16.0;
+    float rotAngle = bayer * 0.78539816;
+    float cosA = cos(rotAngle);
+    float sinA = sin(rotAngle);
 
     // March distance follows the world-space radius: radius * projScaleY * (height / 2) / linearZ
     // is the radius projected to pixels. Min 4 px keeps contact AO alive at distance (steps would
     // collapse onto the centre texel); max 128 px bounds the texture-fetch cost of close-ups.
     float pixelRadius = clamp(u_radius * u_projScale.y * 0.5 / (u_texelSize.y * linearZ), 4.0, 128.0);
-    float stepPixels = pixelRadius / 4.0;
+    float stepPixels = pixelRadius / 8.0;
 
-    const int STEPS = 4;
+    const int STEPS = 8;
     float occlusion = 0.0;
     for (int d = 0; d < DIR_COUNT; d++) {
+        vec2 baseDir = dirs[d];
+        vec2 dir = vec2(
+            baseDir.x * cosA - baseDir.y * sinA,
+            baseDir.x * sinA + baseDir.y * cosA
+        );
+        float radialJitter = fract(bayer + float(d) * 0.38196601);
         float maxHorizonSin = 0.0;
         for (int s = 1; s <= STEPS; s++) {
-            vec2 sampleUv = v_uv + dirs[d] * u_texelSize * float(s) * stepPixels;
+            float t = (float(s) - 1.0 + radialJitter) / 8.0;
+            float marchSteps = (0.3 * t + 0.7 * t * t) * 8.0;
+            vec2 sampleUv = v_uv + dir * u_texelSize * max(1.0, marchSteps * stepPixels);
             if (sampleUv.x < 0.0 || sampleUv.x > 1.0 || sampleUv.y < 0.0 || sampleUv.y > 1.0) {
                 continue;
             }
@@ -105,12 +128,16 @@ void main() {
             vec3 sViewPos = reconstructViewPos(sampleUv, sLinearZ);
 
             vec3 toSample = sViewPos - viewPos;
+            float effDist = length(vec3(toSample.xy, toSample.z * 1.6));
             float dist = length(toSample);
-            if (dist > u_radius || dist < 0.0001) continue;
+            if (effDist > u_radius || dist < 0.0001) continue;
 
+            float normDist = effDist / u_radius;
+            float falloff = clamp(1.0 - normDist * normDist, 0.0, 1.0);
             float horizonSin = dot(toSample / dist, normal);
             if (!isnan(horizonSin) && !isinf(horizonSin)) {
-                maxHorizonSin = max(maxHorizonSin, horizonSin);
+                float biasedSin = clamp((horizonSin - 0.08) / 0.92, 0.0, 1.0);
+                maxHorizonSin = max(maxHorizonSin, biasedSin * falloff * falloff);
             }
         }
         occlusion += clamp(maxHorizonSin, 0.0, 1.0);

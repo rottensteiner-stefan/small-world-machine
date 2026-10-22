@@ -87,22 +87,47 @@ fn computeHBAO(pixelCoord: vec2i, dims: vec2i) -> f32 {
         normal = -normal;
     }
 
-    let dirs = array<vec2f, 6>(
-        vec2f(1.0, 0.0), vec2f(0.5, 0.866025), vec2f(-0.5, 0.866025),
-        vec2f(-1.0, 0.0), vec2f(-0.5, -0.866025), vec2f(0.5, -0.866025),
+    let dirs = array<vec2f, 8>(
+        vec2f(1.0, 0.0), vec2f(0.70710678, 0.70710678),
+        vec2f(0.0, 1.0), vec2f(-0.70710678, 0.70710678),
+        vec2f(-1.0, 0.0), vec2f(-0.70710678, -0.70710678),
+        vec2f(0.0, -1.0), vec2f(0.70710678, -0.70710678),
     );
+
+    // 4x4 Bayer dither table (0..15): paired with the 4x4 bilinear box filter in PostProcess,
+    // every 4x4 pixel tile integrates 16 unique angular rotations and 16 radial step phases
+    // with zero residual pattern noise.
+    let bayerTable = array<f32, 16>(
+        0.0,  8.0,  2.0, 10.0,
+       12.0,  4.0, 14.0,  6.0,
+        3.0, 11.0,  1.0,  9.0,
+       15.0,  7.0, 13.0,  5.0,
+    );
+    let bayerIdx = (u32(centerCoord.x) & 3u) + ((u32(centerCoord.y) & 3u) << 2u);
+    let bayer = (bayerTable[bayerIdx] + 0.5) / 16.0;
+    let rotAngle = bayer * 0.78539816;
+    let cosA = cos(rotAngle);
+    let sinA = sin(rotAngle);
 
     // March distance follows the world-space radius: radius * projScaleY * (height / 2) / linearZ
     // is the radius projected to pixels. Min 4 px keeps contact AO alive at distance (steps would
     // collapse onto the centre texel); max 128 px bounds the cache-miss cost of close-ups.
     let pixelRadius = clamp(u.radius * u.projScaleY * f32(dims.y) * 0.5 / linearZ, 4.0, 128.0);
-    let stepPixels = pixelRadius / 4.0;
+    let stepPixels = pixelRadius / 8.0;
 
     var occlusion = 0.0;
-    for (var d = 0; d < 6; d++) {
+    for (var d = 0; d < 8; d++) {
+        let baseDir = dirs[d];
+        let dir = vec2f(
+            baseDir.x * cosA - baseDir.y * sinA,
+            baseDir.x * sinA + baseDir.y * cosA,
+        );
+        let radialJitter = fract(bayer + f32(d) * 0.38196601);
         var maxHorizonSin = 0.0;
-        for (var s = 1; s <= 4; s++) {
-            let sampleCoord = centerCoord + vec2i(dirs[d] * f32(s) * stepPixels);
+        for (var s = 1; s <= 8; s++) {
+            let t = (f32(s) - 1.0 + radialJitter) / 8.0;
+            let marchSteps = (0.3 * t + 0.7 * t * t) * 8.0;
+            let sampleCoord = centerCoord + vec2i(round(dir * max(1.0, marchSteps * stepPixels)));
             if (sampleCoord.x < 0 || sampleCoord.x > maxCoord.x || sampleCoord.y < 0 || sampleCoord.y > maxCoord.y) {
                 continue;
             }
@@ -117,23 +142,27 @@ fn computeHBAO(pixelCoord: vec2i, dims: vec2i) -> f32 {
             let sViewPos = reconstructViewPos(sUv, sLinearZ);
 
             let toSample = sViewPos - viewPos;
+            let effDist = length(vec3f(toSample.xy, toSample.z * 1.6));
             let dist = length(toSample);
-            if (dist > u.radius || dist < 0.0001) {
+            if (effDist > u.radius || dist < 0.0001) {
                 continue;
             }
 
+            let normDist = effDist / u.radius;
+            let falloff = clamp(1.0 - normDist * normDist, 0.0, 1.0);
             let horizonSin = dot(toSample / dist, normal);
             // max()/clamp() have unspecified results for a NaN operand, so a non-finite
             // horizonSin (e.g. from an upstream-NaN depth sample slipping past the `dist` bounds
             // check above) is filtered out BEFORE it reaches max(). `x == x` is not a reliable
             // test (the compiler may fold it), the exponent-bit test below is.
             if (isFiniteF32(horizonSin)) {
-                maxHorizonSin = max(maxHorizonSin, horizonSin);
+                let biasedSin = clamp((horizonSin - 0.08) / 0.92, 0.0, 1.0);
+                maxHorizonSin = max(maxHorizonSin, biasedSin * falloff * falloff);
             }
         }
         occlusion += clamp(maxHorizonSin, 0.0, 1.0);
     }
-    occlusion /= 6.0;
+    occlusion /= 8.0;
 
     var ao = clamp(1.0 - occlusion * u.intensity, 0.0, 1.0);
     if (!isFiniteF32(ao)) {

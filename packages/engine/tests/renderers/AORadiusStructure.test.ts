@@ -26,3 +26,22 @@ describe("HBAO normal source", () => {
     });
   }
 });
+
+describe("HBAO anti-ghosting (Bayer dither + distance falloff + 4x4 box filter)", () => {
+  for (const file of ["AO.frag.wgsl", "AO.frag.glsl"]) {
+    it(`${file} uses 4x4 Bayer angular/radial jitter and quadratic distance falloff`, () => {
+      const src = readFileSync(resolve(dir, file), "utf8");
+      expect(src).toContain("bayerTable");
+      expect(src).toContain("radialJitter");
+      expect(src).toContain("falloff * falloff");
+    });
+  }
+
+  for (const file of ["PostProcess.frag.wgsl", "PostProcess.frag.glsl"]) {
+    it(`${file} filters the 4x4 Bayer HBAO tile via 4 bilinear taps`, () => {
+      const src = readFileSync(resolve(dir, file), "utf8");
+      expect(src).toContain("aoTexel");
+      expect(src).toContain("(ao0 + ao1 + ao2 + ao3) * 0.25");
+    });
+  }
+});

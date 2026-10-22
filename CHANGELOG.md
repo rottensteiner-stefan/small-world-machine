@@ -6,7 +6,7 @@
 
 - **Features:**
   - *EVSM als opt-in (ADR 0043, `quality.shadowMode="evsm"`):* exponenziell gewarpte Varianz-Momente (`e^{c·d}`, c=40) mit zweiseitiger Chebyshev-Obergrenze, dynamischem Varianz-Floor-Multiplikator und Light-Bleed-Reduktion. WebGPU: Momenten-Pass + `textureLoad`-Auswertung (unfilterable-float-Bind umgeht das optionale `float32-filterable`-Feature); WebGL2: eigener RGBA32F-Momenten-Atlas hinter `EXT_color_buffer_float`-Gate mit ehrlichem Fallback + Warnung. Der Default `pcss` bleibt bytes-identisch (Quelltext-Guards `EvsmGlslGuards.test.ts` + goldener Lauf).
-  - *Showcase 42 — EVSM-Probe:* `?shadowMode=<pcss|evsm>`-Knopf und QA-Hook liest die echten `evsmParams`-Lanes `[216..218]` (Mode-Flag/Varianz-Floor/LBR) der WebGPU-GlobalUniforms → committed Live-Gate `scripts/check-swm42-evsm.mjs` prüft die CPU→GPU-Verdrahtung der opt-in-Lane (Mode-Flag 1/0) bei fehlerfreiem Lauf.
+  - *Showcase 42 — EVSM-Probe & Interactive Soft Shadow Lab HUD:* `?shadowMode=<pcss|evsm>`-Knopf und QA-Hook liest die echten `evsmParams`-Lanes `[216..218]` (Mode-Flag/Varianz-Floor/LBR) der WebGPU-GlobalUniforms → committed Live-Gate `scripts/check-swm42-evsm.mjs` prüft die CPU→GPU-Verdrahtung der opt-in-Lane (Mode-Flag 1/0) bei fehlerfreiem Lauf. Zusätzlich interaktives `.swm-inspector-drawer`-HUD (`#showcase-hud`, Toggle `⚙` im `.app-footer` oder Taste `I`) mit Probe-Presets (`Box`, `Pole`, `Step Rig`), `Caster Lift Y`, Live-Umschalter `PCSS` vs. `EVSM`, Penumbra-/Sonnenwinkel-/Bias-Reglern, Orbit/Zoom und Live-GPU-UBO-Telemetrie.
   - *Sprite/Billboard-Szenen-Fog:* `Sprite.frag.{wgsl,glsl,glsl100}` wenden denselben `scene.fog`
     an wie die lit-PBR-Shader (`[WGSL_FOG_CALC]`/`[FOG_DEFS]`+`[FOG_CALC]`, inkl. Höhen-Falloff) —
     camera-facing Sprites spielen die Distanz-Nebel-Konsistenz zu Boden/Bäumen her; bei aktivem Nebel
@@ -54,7 +54,13 @@
     im Kontakt (`pcfRadius ≤ 1.2`, keine Noise-/Tap-Overhead an Kontaktlinien) + 16-Tap-Vogel-Disk
     mit per-Pixel deterministischem Interleaved-Gradient-Noise in der weichen Penumbra. Dadurch
     weicht der Default-`pcss`-Filter bewusst vom historischen 3×3-Gitter ab (verbessert, alle Gates/
-    Guards bleiben grün) — siehe Bericht zur Entscheidungslage.
+    Guards bleiben grün, abgesichert durch `SpotLightPCSS.test.ts`) — siehe Bericht zur Entscheidungslage.
+  - *HBAO-Ghosting & Sägezahn-Banding behoben (`AO.frag.{wgsl,glsl}`, `PostProcess.frag.{wgsl,glsl}`):*
+    8 Richtungen × 8 kontaktgewichtete quadratische Schritte (`t = frac * (0.35 + 0.65 * frac)`) mit
+    4×4-Bayer-Dither-Rotation und -Radial-Jitter, quadratischem Distanz-Falloff (`falloff * falloff`)
+    sowie Z-Jump-Thickness-Penalty (`smoothstep(radius, radius * 2.5, abs(samplePos.z - fragPos.z))`)
+    gegen entfernte Hintergrund-Halos; kombinierter 4-Tap-Bilinear-4×4-Box-Filter im Post-Process-Pass
+    glättet das 4×4-Bayer-Muster vollständig (`AORadiusStructure.test.ts`).
 - **Quality & Verification:**
   - *Neues committed Live-Gate `scripts/check-swm42-evsm.mjs`:* assertet fehlerfreien Lauf, Mode-Flag-Lane `evsmParams[0]` (1 unter evsm, 0 unter pcss) und plausible Frames (nicht schwarz/aufgeblasen, Schattenpräsenz) — WebGL2 darf unter keinem `shadowMode` ein kaputtes (schwarzes) Frame liefern. Navigiert per `domcontentloaded` + paintReady (der `networkidle0`-Timeout der EVSM-Seite ist ein falscher Navigations-Hang, nicht EVSM-bedingt).
 - **Housekeeping & Docs:**

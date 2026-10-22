@@ -291,8 +291,14 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
 
     // Ambient Occlusion (HBAO) -- darkens the linear scene color before tonemapping, since it
     // approximates occluded incoming light rather than a display-referred image adjustment.
+    // Four hardware-bilinear taps average the 4x4 Bayer-dithered HBAO tile to zero pattern noise.
     if (1u == u_hbaoEnabled) {
-        let hbaoVal = textureSample(hbaoTexture, hdrSampler, distortUv).r;
+        let aoTexel = 1.0 / dims;
+        let ao0 = textureSample(hbaoTexture, hdrSampler, distortUv + vec2f(-0.5, -0.5) * aoTexel).r;
+        let ao1 = textureSample(hbaoTexture, hdrSampler, distortUv + vec2f( 1.5, -0.5) * aoTexel).r;
+        let ao2 = textureSample(hbaoTexture, hdrSampler, distortUv + vec2f(-0.5,  1.5) * aoTexel).r;
+        let ao3 = textureSample(hbaoTexture, hdrSampler, distortUv + vec2f( 1.5,  1.5) * aoTexel).r;
+        let hbaoVal = (ao0 + ao1 + ao2 + ao3) * 0.25;
         // clamp() is unspecified for NaN input, so skip the multiply on non-finite values.
         if (isFiniteF32(hbaoVal)) {
             hdr *= clamp(hbaoVal, 0.0, 1.0);
