@@ -75,8 +75,14 @@ function analyzeFrame(pngBuffer) {
     const o = i * 4;
     y[i] = 0.2126 * p.data[o] + 0.7152 * p.data[o + 1] + 0.0722 * p.data[o + 2];
   }
+  // The showcase pages inject a fixed `.app-footer` overlay (z-index 10000, 36px) over the bottom
+  // of the viewport (see vite.config.ts / shared.css). It is part of the page UI, not the 3D
+  // scene, and its dark band would otherwise be mistaken for the deepest shadow core. Restrict the
+  // analysis to the canvas region above it. (+4px safety margin.)
+  const FOOTER_OVERLAY_PX = 40;
+  const H_MAX = H - FOOTER_OVERLAY_PX;
   const rowStats = [];
-  for (let yy = 0; yy < H; yy++) {
+  for (let yy = 0; yy < H_MAX; yy++) {
     const vals = [];
     for (let x = X_MIN; x <= X_MAX; x++) vals.push(y[yy * W + x]);
     const backdrop = percentile(vals, 0.99);
@@ -91,7 +97,7 @@ function analyzeFrame(pngBuffer) {
   // Contact line = last row whose core is below 30 (only the pole body is that dark). Everything
   // above it is the pole, everything below is the cast shadow.
   let contact = -1;
-  for (let yy = H - 1; yy >= 0; yy--) {
+  for (let yy = H_MAX - 1; yy >= 0; yy--) {
     const s = rowStats[yy];
     if (s && s.min < 30) {
       contact = yy;
@@ -101,10 +107,10 @@ function analyzeFrame(pngBuffer) {
   if (contact < 0) throw new Error("contact line not found — is the pole probe rendering?");
   const near = [];
   const far = [];
-  for (let yy = Math.min(H - 1, contact + 4); yy <= Math.min(H - 1, contact + 40); yy++) {
+  for (let yy = Math.min(H_MAX - 1, contact + 4); yy <= Math.min(H_MAX - 1, contact + 40); yy++) {
     if (rowStats[yy]) near.push(rowStats[yy]);
   }
-  for (let yy = Math.max(0, H - 90); yy <= Math.max(0, H - 10); yy++) {
+  for (let yy = Math.max(0, H_MAX - 90); yy <= Math.max(0, H_MAX - 10); yy++) {
     if (rowStats[yy]) far.push(rowStats[yy]);
   }
   if (near.length < 5 || far.length < 5) throw new Error("insufficient shadow rows for metric");
