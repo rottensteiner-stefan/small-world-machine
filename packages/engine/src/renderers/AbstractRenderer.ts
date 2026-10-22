@@ -36,7 +36,6 @@ export abstract class AbstractRenderer implements Renderer {
     mipmapping: true,
     maxAnisotropy: 4,
     msaa: 4,
-    maxShadowResolution: 1024,
     hdr: false,
     toneMapping: ToneMapping.NONE,
     gamma: 2.2,

@@ -143,7 +143,9 @@ const engine = new Engine({
   WebGL2 (each cascade gets a smaller slice of the same `shadowResolution` atlas) — increase
   `shadowResolution` alongside it if cascades start looking blocky.
 - Shadows are relatively expensive; the static per-tier policy (ADR 0035) lowers caps such as
-  `maxShadowResolution` on `LOW`/`MEDIUM` devices. The former single `autoDowngrade` boolean no
+  MSAA/anisotropy and disables post effects on `LOW`/`MEDIUM` devices (there is no separate
+  shadow-resolution cap — the directional light's own `shadowResolution` is the resolution).
+  The former single `autoDowngrade` boolean no
   longer exists — the engine now resolves a quality tier exactly once at startup
   (`QualityConfigResolver` over `DeviceCaps.getPerformanceTier()`, URL override
   `?tier=low|medium|high`), and any value you set explicitly in `quality` wins against the tier

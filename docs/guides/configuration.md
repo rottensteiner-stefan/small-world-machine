@@ -70,7 +70,15 @@ These control the engine's graphical fidelity.
   **Checking it by eye:** Showcase 10 accepts `?aniso=N` (cap at N, `1` = off; without it the engine default of 4 applies), and `npm run build && npm run aniso:compare` renders its oblique view at several levels on both GL2 and WebGPU, writes the images, a difference image and sharpness numbers to `.agents/scratches/aniso/report.html`, and prints the GPU it ran on (run it on a real GPU, not in software rendering). On an Apple M4 Pro the detail in the far field rose by about 20 % from level 1 to 4, by 4 % more from 4 to 8 and by 1 % from 8 to 16, on both backends.
 - `hdr` (boolean): Enables high-dynamic-range (Float16) rendering pipelines.
 - `toneMapping` (string): The tone mapping algorithm to use (e.g. `aces`, `reinhard`, `none`).
-- `maxShadowResolution` (number): Maximum texture size for shadow maps.
+- `shadowMode` (`"pcss"` | `"evsm"`): Optional directional-shadow algorithm. `"evsm"`
+  (Exponential Variance Shadow Maps, see `docs/guides/shadows.md` and ADR 0007) renders
+  warped variance moments and evaluates a Chebyshev bound with light-bleeding reduction;
+  `"pcss"` — the default, reproducing legacy behavior byte-identically — keeps PCSS on
+  WebGPU and fixed-PCF on WebGL2. `"evsm"` requires WebGPU or WebGL2 with
+  `EXT_color_buffer_float`; WebGL2 silently falls back to fixed-PCF with a console warning
+  when the extension is missing, and WebGL1 ignores it entirely.
+- `shadowSoftness` (number): PCSS penumbra multiplier (WebGPU only, default 1, see
+  `docs/guides/shadows.md`). `"evsm"` uses its own fixed penumbra filtering.
 - `disableTextures` (boolean): When `true`, all textures are bypassed and fallback colors are rendered (useful for debugging).
 
 ### Post-processing (`postProcessing`)
@@ -125,8 +133,7 @@ Every field is optional and only overrides that specific value on top of the eff
     "hdr": true,
     "toneMapping": "aces",
     "msaa": 4,
-    "maxAnisotropy": 16,
-    "maxShadowResolution": 2048
+    "maxAnisotropy": 16
   },
   "postProcessing": {
     "enabled": true,

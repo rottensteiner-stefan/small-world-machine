@@ -12,6 +12,16 @@ const POINT_LIGHT_FLOATS = 8;
 const SPOT_LIGHT_FLOATS = 16;
 const AREA_LIGHT_FLOATS = 24;
 const BYTES_PER_FLOAT = 4;
+
+/**
+ * EVSM tuning defaults (only reached when `quality.shadowMode === "evsm"`; ADR 0007).
+ * These are the GL2-compatible central defaults; the shadow shaders read the same lanes.
+ * `varianceFloor` is the dynamic (chain-rule-scaled by the warp) min-variance epsilon that
+ * replaces the depth bias for acne control in EVSM; `lightBleed` is the light-bleeding-reduction
+ * remap amount (higher darkens residual leak faster, too high darkens the whole penumbra).
+ */
+const EVSM_VARIANCE_FLOOR = 1e-3;
+const EVSM_LIGHT_BLEED = 0.004;
 /** Point/spot buffers hold exactly `MAX_CLUSTERED_LIGHTS_PER_TYPE` slots (64 * 32 B = 2048 B, 64 * 64 B = 4096 B).
  * Functions, not module constants: `core/index.js` is a circular import here and its exports are
  * still undefined while this module evaluates. */
@@ -292,6 +302,15 @@ export class GlobalUniformWriter {
     gData[soft.index + 1] = this._host.quality.shadowMaxPcfRadius ?? 4.0;
     gData[soft.index + 2] = 0.0;
     gData[soft.index + 3] = 0.0;
+
+    // evsmParams (WebGPU EVSM tuning, ADR 0007): x = mode flag (1 only when the author opted in,
+    // so the default stays byte-identical PCSS), y = dynamic variance floor, z = light-bleeding
+    // reduction, w = reserved. See the EVSM_VARIANCE_FLOOR/EVSM_LIGHT_BLEED constants above.
+    const evsm = glob.evsmParams;
+    gData[evsm.index] = this._host.quality.shadowMode === "evsm" ? 1.0 : 0.0;
+    gData[evsm.index + 1] = EVSM_VARIANCE_FLOOR;
+    gData[evsm.index + 2] = EVSM_LIGHT_BLEED;
+    gData[evsm.index + 3] = 0.0;
 
     // Default spot shadow values
     for (let i = 0; i < glob.spotShadowInfo.count; i++) {

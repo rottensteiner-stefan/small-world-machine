@@ -1,8 +1,8 @@
 // WGSL Global and Object structures
 
-// GlobalUniforms: Scene-level uniforms (864 bytes / 216 floats)
+// GlobalUniforms: Scene-level uniforms (880 bytes / 220 floats)
 // Cleanly grouped into Camera & View, Environment & Fog, Shadow Maps, Clustered Light Grid,
-// and Shadow Softness Tuning.
+// and Shadow Softness / EVSM Tuning.
 struct GlobalUniforms {
     // --- 1. Camera & View (80 bytes) ---
     vp: mat4x4f,
@@ -44,6 +44,13 @@ struct GlobalUniforms {
     // PCSS softness knobs (WebGPU only today): x = penumbra scale multiplier (1 = legacy),
     // y = cap on the variable-radius PCF kernel in shadow-map texels (default 4), z/w = reserved.
     shadowSoftness: vec4f,
+
+    // --- 6. EVSM Tuning (16 bytes) ---
+    // EVSM (Exponential Variance Shadow Maps, see docs/shadows.md / ADR 0007):
+    // x = mode flag (0 = PCSS/PCF, 1 = EVSM), y = dynamic variance floor epsilon (Chebyshev
+    // min-variance bias, replaces depth bias in EVSM), z = light-bleeding-reduction amount
+    // (LBR remap), w = reserved.
+    evsmParams: vec4f,
 }
 
 // ObjectUniforms: 512-byte uniform block (32 vec4 / 128 floats)

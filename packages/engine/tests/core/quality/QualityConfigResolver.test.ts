@@ -23,7 +23,6 @@ describe("QualityConfigResolver (ADR 0035, statischer Tier-Resolver)", () => {
     expect(resolved.quality.hdr).toBe(false);
     expect(resolved.quality.msaa).toBe(0);
     expect(resolved.quality.maxAnisotropy).toBe(1);
-    expect(resolved.quality.maxShadowResolution).toBe(512);
     expect(resolved.quality.maxPixelRatio).toBe(1);
     expect(resolved.postProcessing.effects?.hbao?.enabled).toBe(false);
     expect(resolved.postProcessing.effects?.volumetricFog?.enabled).toBe(false);
@@ -38,13 +37,12 @@ describe("QualityConfigResolver (ADR 0035, statischer Tier-Resolver)", () => {
   });
 
   it("generic override lock: an explicitly set author field wins against the tier (Ebene 3)", () => {
-    const quality: QualityConfig = { hdr: true, msaa: 4, maxShadowResolution: 2048 };
+    const quality: QualityConfig = { hdr: true, msaa: 4, maxAnisotropy: 8 };
     const resolved = QualityConfigResolver.resolve(PerformanceTier.LOW, quality);
     expect(resolved.quality.hdr).toBe(true);
     expect(resolved.quality.msaa).toBe(4);
-    expect(resolved.quality.maxShadowResolution).toBe(2048);
+    expect(resolved.quality.maxAnisotropy).toBe(8);
     // unset axes still follow the tier policy
-    expect(resolved.quality.maxAnisotropy).toBe(1);
     expect(resolved.quality.maxPixelRatio).toBe(1);
   });
 

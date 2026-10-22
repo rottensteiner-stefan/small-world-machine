@@ -23,7 +23,6 @@ const TIER_MATRIX: Readonly<Record<PerformanceTier, TierQualityPolicy>> = {
       hdr: false,
       msaa: 0,
       maxAnisotropy: 1,
-      maxShadowResolution: 512,
       maxPixelRatio: 1,
     },
     postProcessing: {
