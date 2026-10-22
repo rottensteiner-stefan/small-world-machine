@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
+import { validate, formatDiagnostic, LIMITS } from "@moreplease/glslang";
 import { ShaderRegistry } from "../../../src/renderers/shaders/ShaderRegistry.js";
 import { ShaderBootstrap } from "../../../src/renderers/shaders/ShaderBootstrap.js";
 import {
@@ -76,6 +77,59 @@ describe("ShaderValidation & Contract Suite", () => {
           const wgsl = registry.assemble(def.sources.wgsl, "wgsl");
           expect(wgsl).not.toMatch(/\[[A-Z][A-Z0-9_]+\]/);
         }
+      });
+    });
+  });
+
+  describe("GLSL Syntax & Linking Validation (Khronos glslang)", () => {
+    materials.forEach(({ name, instance }) => {
+      it(`validates GLSL300 syntax and linking for ${name}`, async () => {
+        const def = instance.getShaderDefinition();
+        const registry = testShaderRegistry;
+        if (!def.sources.glsl300) return;
+
+        const vs = registry.assemble(def.sources.glsl300.vs, "glsl300");
+        const fs = registry.assemble(def.sources.glsl300.fs, "glsl300");
+
+        // Strict compiler rule: #version 300 es must be at line 1
+        expect(vs.trimStart().startsWith("#version 300 es"), `${name} VS #version line 1`).toBe(
+          true,
+        );
+        expect(fs.trimStart().startsWith("#version 300 es"), `${name} FS #version line 1`).toBe(
+          true,
+        );
+
+        const res = await validate(
+          [
+            { name: `${name}.vert`, source: vs },
+            { name: `${name}.frag`, source: fs },
+          ],
+          { target: "webgl2" },
+        );
+
+        expect(res.ok, res.diagnostics.map(formatDiagnostic).join("\n")).toBe(true);
+      });
+
+      it(`validates GLSL100 syntax and linking for ${name}`, async () => {
+        const def = instance.getShaderDefinition();
+        const registry = testShaderRegistry;
+        if (!def.sources.glsl100) return;
+
+        const vs = registry.assemble(def.sources.glsl100.vs, "glsl100");
+        const fs = registry.assemble(def.sources.glsl100.fs, "glsl100");
+
+        const res = await validate(
+          [
+            { name: `${name}.vert`, source: vs },
+            { name: `${name}.frag`, source: fs },
+          ],
+          {
+            target: "webgl1",
+            limits: { ...LIMITS.webgl1, maxFragmentUniformVectors: 1024, maxTextureImageUnits: 16 },
+          },
+        );
+
+        expect(res.ok, res.diagnostics.map(formatDiagnostic).join("\n")).toBe(true);
       });
     });
   });
