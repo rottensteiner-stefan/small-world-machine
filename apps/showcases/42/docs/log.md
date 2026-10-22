@@ -102,3 +102,41 @@ PCSS-Penumbre real verbreitern — und dass sie auf WebGL2 eine dokumentierte No
     in `scripts/check-showcases.js` einziehen.
   - Engine-`Plane` startet vertikal (XY, Normal +Z) — Böden brauchen `rotation.x = -Math.PI / 2`
     (Showcase 42 nutzt dieselbe Konvention wie Showcase 39).
+
+### 2026-10-22 (0.116.0) — EVSM-Probe + Gate (Stage C, ADR 0043)
+- **Neuer Query-Knopf `?shadowMode=<pcss|evsm>`** → `quality.shadowMode` (Default `pcss`). EVSM ist
+  opt-in (ADR 0043); der Default-Pfad bleibt bytes-identisch (Quelltext-Guards + goldener Lauf).
+- **QA-Hook erweitert:** `__qaSwm42.sample()` liefert jetzt `shadowMode` und — auf WebGPU — die
+  echten `evsmParams`-Lanes `[216..218]` (Mode-Flag, Varianz-Floor-Multiplikator, LBR-Anteil), sodass
+  der Gate die CPU→GPU-Verdrahtung der opt-in-Lane prüfen kann. Auf WebGL2 (ohne globalen
+  Scratch-Puffer) bleibt `evsmParams` null.
+- **Committed Live-Gate `scripts/check-swm42-evsm.mjs`** (Muster: check-swm42-pole.mjs, aber
+  `domcontentloaded` + paintReady statt `networkidle0` — der EVSM-Page-Hang im Diagnose-Lauf war ein
+  falscher Navigations-Timeout, nicht EVSM-bedingt). Asserts: (a) fehlerfreier Lauf (keine
+  Pipeline-/Kompilier-Fehler), (b) `evsmParams[0]===1` unter `shadowMode=evsm` und `===0` unter dem
+  pcss-Default, (c) plausibler Frame. Läufe: **`SWM42 EVSM GATE: OK`** (WebGPU).
+- **WebGL2-Befund-Kette (ehrlich dokumentiert, ADR 0043/shadows.md):**
+  1. *pcss-Schwarz (B2-Regression, gefixt):* `_bindEvsmShadowUniforms` band im Default einen
+     Dummy + ließ Unit 14 „active" → WebGL2/pcss wurde schwarz. Fix: Early-Return solange
+     `shadowMode !== "evsm"` (Default bleibt exakt, 2× [121,120,119]).
+  2. *Gelb = clearColor-Leak (gefixt):* der Momenten-Pass `gl.clearColor(e^40, e^80, -e^-40, e^-80)`
+     restaurierte das Clear nie → `WebGLMainPass`-`clear(COLOR|DEPTH)` füllte den sichtbaren Canvas
+     mit clamp(e^40,e^80,-e^-40)→(255,255,0) ≈ exakt das beobachtete Gelb. Fix: clearColor nach dem
+     Momenten-Pass restaurieren.
+  3. *WebGL2-EVSM-Schwarz — WURZEL GEFUNDEN + GEFIXT (nicht Treiber, sondern echte Engine-Bugs):*
+     Nach (1)+(2) blieb `shadowMode=evsm` schwarz; die Diagnose-Kette war korrekt, aber unvollständig:
+     Atlas 100 % farClear (kein NaN/Inf), Lit-Pass-Bindung korrekt (Bind-Log), Float32-Simulation der
+     EVSM-Mathe liefert `min(p,n)=1.0` (LIT), NEAREST/float-linear ohne Effekt. Der entscheidende
+     Shader-/Bind-Instrumentierungs-Befund: `_bindSubgroupTextures()` re-pointete `u_dirEVSMMap`
+     NACH der Atlas-Bindung erneut (dynamisch vergebene Low-Unit + 1×1-**weißes** `defaultTexture`)
+     → der EVSM-Shader tastete Weiß statt des Atlas ab → `chebyshev≈0` → schwarzer Frame (nur
+     schwaches Ambient). Zusätzlich (latent) kollidierte `_EVSM_MAP_UNIT=14` mit `CLUSTER_GRID_UNIT=14`
+     (Cluster-Grid-Eviction, `GL_INVALID_OPERATION` pro Draw). Fixes (nur `WebGL2Renderer.ts`):
+     `u_dirEVSMMap` aus der Material-Sampler-Schleife ausnehmen (wie IBL-Maps) + Bindung auf der
+     pro-Programm exklusiv reservierten Sampler-Einheit statt fester Unit 14. Verifiziert grün:
+     WebGL2/evsm `[120,119,118]` (Schatten sichtbar, keine GL-Mismatch-Fehler), WebGL2/pcss-Default
+     weiterhin byte-identisch `[121,120,119]`. Die drei Behalte-Fixes (pcss-Early-Return,
+     clearColor-Restore, NEAREST-Atlas) bleiben als Engineering-Entscheidungen bestehen.
+- **WebGPU-EVSM:** funktional (Momenten-Pass + `textureLoad`-Auswertung, Mode-Flag = 1 auf
+  GPU-Lane 216, fehlerfreier Lauf) aber ausgewaschen (flache Kontakt-Tiefe) — Tuning-Thema der
+  Default-Lanes (ADR 0043), keine Architektur-Lücke.

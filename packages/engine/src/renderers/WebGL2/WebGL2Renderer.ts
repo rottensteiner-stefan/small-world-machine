@@ -80,8 +80,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private static readonly _RAW_DEPTH_UNIT = 13;
   private _rawDepthSampler!: WebGLSampler;
 
-  /** Fixed unit for the EVSM moment atlas sampler (ADR 0007). Dedicated unit 14 -- never overlaps
-   * the shadow units 8-13 nor the dynamically allocated material/IBL samplers. */
+  /** Defensive fallback unit for the EVSM moment atlas sampler (ADR 0043). NOTE: unit 14 is
+   * CLUSTER_GRID_UNIT (the RG32UI cluster-grid texture), so `_bindEvsmShadowUniforms` no longer
+   * binds the RGBA32F atlas there -- it uses the per-program sampler unit the program cache
+   * reserved exclusively for `u_dirEVSMMap` (see that method) and only falls back to this fixed
+   * unit for the (theoretical) case of an active sampler without an allocated unit. */
   private static readonly _EVSM_MAP_UNIT = 14;
   /** EVSM tuning lanes, byte-identical to the WebGPU side (GlobalUniformWriter lanes 217/218). */
   private static readonly _EVSM_VARIANCE_FLOOR = 0.002;
@@ -293,7 +296,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._hdrFbo = undefined;
     this._postEffects = undefined;
     this._postCtx = undefined;
-    // EVSM (ADR 0007) handles are dead with the old context; rebuild lazily (see
+    // EVSM (ADR 0043) handles are dead with the old context; rebuild lazily (see
     // _checkEvsmSupport/_ensureEvsmAtlas) and re-check EXT_color_buffer_float.
     this._evsmAtlasFbo = null;
     this._evsmAtlasTexture = null;
@@ -913,7 +916,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         this._renderShadowScene(cache, sortedGroups);
       }
 
-      // EVSM (ADR 0007): render the warped variance moments into a separate RGBA32F atlas right
+      // EVSM (ADR 0043): render the warped variance moments into a separate RGBA32F atlas right
       // after the depth pass, while the CSM depth atlas is still attached. The moment FBO reuses
       // that depth texture as its depth attachment with depthWrite off + LEQUAL, so the moments
       // come from exactly the front-most surface the depth pass just stored. Opt-in only
@@ -946,7 +949,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   }
 
   /**
-   * EVSM (ADR 0007) WebGL2 support gate, called lazily (idempotent). RGBA32F color render targets
+   * EVSM (ADR 0043) WebGL2 support gate, called lazily (idempotent). RGBA32F color render targets
    * require `EXT_color_buffer_float`; when the driver refuses it the engine degrades HONESTLY to
    * the default shadow mapping instead of rendering into an unsupported framebuffer -- exactly
    * one warning, and the mode flag stays 0 so no shader ever samples the (absent) moment atlas.
@@ -1026,8 +1029,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.gl.FLOAT,
       null,
     );
-    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
-    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+    // NEAREST: the EVSM evaluation performs its own deterministic 3x3 box filter over exact
+    // texel taps (evalEVSMDir), so hardware LINEAR on the RGBA32F atlas would double-filter and,
+    // more importantly, depend on the optional float-linear sampling path (OES_texture_float_linear)
+    // which SwiftShader/ANGLE reports present but samples as zeros here, blacking out the whole
+    // EVSM path. NEAREST keeps the shader's box filter exact, byte-deterministic and driver-robust.
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
+    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
     this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
     this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, fbo);
@@ -1052,7 +1060,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   }
 
   /**
-   * Binds the EVSM uniforms + moment-atlas sampler for the current program (ADR 0007). Always a
+   * Binds the EVSM uniforms + moment-atlas sampler for the current program (ADR 0043). Always a
    * valid binding: EVSM only becomes active when opted in (quality.shadowMode === "evsm") AND
    * supported (EXT_color_buffer_float) AND a real atlas exists, otherwise the mode flag is 0 and
    * the sampler references the 1x1 dummy so every lit shader (incl. the GLSL300 water chunks)
@@ -1060,6 +1068,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * and (mode 0) from _bindDummyShadowMaps.
    */
   private _bindEvsmShadowUniforms(cache: WebGLProgramCacheEntry, atlasReady: boolean): void {
+    // In the default (PCSS/PCF) mode the EVSM helpers are dead code (`u_evsmParams.x === 0`), so a
+    // dummy bind is not just unnecessary but harmful: it leaves TEXTURE_2D "active" on unit 14 and
+    // clobbers the unit the material/light path expects, which degrades WebGL2 to a black canvas on
+    // every lit program (regression caught by the Stage-C gate). Only opt-in EVSM binds the moment
+    // lane + atlas here. See docs/adr/0043 for the byte-identical default guarantee.
+    if (this._quality.shadowMode !== "evsm") return;
     const paramsLoc = this._cachedUniformLocation(cache, "u_evsmParams");
     const mapLoc = this._cachedUniformLocation(cache, "u_dirEVSMMap");
     if (!paramsLoc && !mapLoc) return;
@@ -1073,20 +1087,36 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.gl.uniform4fv(paramsLoc, this._scratchFloat4);
     }
     if (mapLoc) {
-      const unit = WebGL2Renderer._EVSM_MAP_UNIT;
+      // Bind the moment atlas/dummy on the sampler unit the program cache reserved EXCLUSIVELY
+      // for u_dirEVSMMap within this program (guaranteed distinct from every material texture and
+      // from the spot/dir/raw shadow and cluster units) -- NOT on the fixed _EVSM_MAP_UNIT 14, which
+      // is CLUSTER_GRID_UNIT: the RG32UI cluster-grid texture WebGLClusterCullPass binds each frame.
+      // Putting the RGBA32F atlas there evicted the grid, and every u_clusterGrid fetch then hit a
+      // float texture through an integer sampler (GL_INVALID_OPERATION each draw, plus broken
+      // clustered lighting). _bindSubgroupTextures skips u_dirEVSMMap (see there), so nothing
+      // re-points or unbinds this unit between here and the draw. Inert for the default pcss/pcf
+      // path (early return above). A program that somehow had the sampler uniform active without
+      // an allocated unit falls back to the fixed unit.
+      const unit = cache.samplerUnits.get("u_dirEVSMMap") ?? WebGL2Renderer._EVSM_MAP_UNIT;
       if (this._ensureShadowMapUnit(unit, "EVSM moment map")) {
+        const useAtlas = active && this._evsmAtlasTexture;
         this.gl.activeTexture(this.gl.TEXTURE0 + unit);
         this.gl.bindTexture(
           this.gl.TEXTURE_2D,
-          active && this._evsmAtlasTexture ? this._evsmAtlasTexture : this._evsmDummyTexture,
+          useAtlas ? this._evsmAtlasTexture : this._evsmDummyTexture,
         );
         this.gl.uniform1i(mapLoc, unit);
+        // State hygiene: the material/light path binds textures with an explicit activeTexture
+        // per unit, so leaving unit 14 "active" here is meaningless at best and, on paths that
+        // assume the default unit (TEXTURE0), redirects their next bind into this sampler slot.
+        // Restore the default unit so a subsequent bare bind stays where the caller expects.
+        this.gl.activeTexture(this.gl.TEXTURE0);
       }
     }
   }
 
   /**
-   * Renders the EVSM moment atlas (ADR 0007) per cascade, immediately after the depth pass while
+   * Renders the EVSM moment atlas (ADR 0043) per cascade, immediately after the depth pass while
    * the CSM depth atlas is still an attached depth source. Runs only for
    * quality.shadowMode === "evsm" with EXT_color_buffer_float present. Geometry/culling/VP reuse
    * the exact depth-pass conventions (same FRONT cull, per-cascade viewport + global UBO), so the
@@ -1151,6 +1181,15 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.updateGlobalUBO(cascadeCam.viewProjectionMatrix, cascadeCam.position, emptyLights);
 
       this._renderShadowScene(evsmCache, sortedGroups);
+    }
+
+    // Restore the scene's row clear color: the far-plane scissor clears above `gl.clearColor`d an
+    // astronomically bright vector (e^40, e^80, ...) that would otherwise leak into the main
+    // pass's `clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT)` and paint the whole canvas as
+    // clamp(e^40)->255, clamp(e^80)->255, clamp(-e^-40)->0 -- the flat yellow Stage-C regression.
+    {
+      const cc = this.clearColor;
+      this.gl.clearColor(cc.r, cc.g, cc.b, cc.a);
     }
 
     // Restore the depth state the rest of the frame expects.
@@ -1258,7 +1297,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       if (loc) this.gl.uniform1i(loc, dummyUnit);
     }
 
-    // EVSM (ADR 0007): every program with an active u_dirEVSMMap sampler needs a valid binding
+    // EVSM (ADR 0043): every program with an active u_dirEVSMMap sampler needs a valid binding
     // even when no real moment atlas exists yet. _bindDirectionalShadowMaps later overrides this
     // with the real atlas when EVSM is active (mode 0 here keeps the shader on its default path).
     this._bindEvsmShadowUniforms(cache, false);
@@ -1557,7 +1596,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       const infoLoc = cache.uniforms.get("u_dirShadowInfo");
 
       const fbo = this._shadowMaps.get(light);
-      // EVSM (ADR 0007): mode flag + moment-atlas sampler. Active only when every gate is green
+      // EVSM (ADR 0043): mode flag + moment-atlas sampler. Active only when every gate is green
       // (mode opt-in, EXT_color_buffer_float, real atlas from this frame's moment pass) -- runs
       // before the fbo checks so a missing FBO still yields a valid dummy + mode-0 binding.
       this._bindEvsmShadowUniforms(cache, !!fbo);
@@ -1712,7 +1751,16 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         if (
           "u_irradianceMap" === uniformName ||
           "u_prefilterMap" === uniformName ||
-          "u_brdfLUT" === uniformName
+          "u_brdfLUT" === uniformName ||
+          // EVSM (ADR 0043): u_dirEVSMMap is a renderer-owned sampler managed by
+          // _bindEvsmShadowUniforms on its own reserved unit, NOT a material texture. Routing it
+          // through this loop rebinds the 1x1 WHITE defaultTexture on u_dirEVSMMap's allocated
+          // low unit and re-points the uniform there, so the EVSM fragment path samples white
+          // moments (m1=m2=1.0) instead of the moment atlas -> chebyshevUpperBoundEVSM returns ~0
+          // -> dirShadow ~ 0 -> the whole EVSM frame goes black with only faint ambient surviving.
+          // Skipping it here keeps the atlas binding set by _bindDirectionalShadowMaps intact at
+          // draw time. Inert for the default PCSS/PCF path (u_dirEVSMMap is never sampled there).
+          "u_dirEVSMMap" === uniformName
         ) {
           continue;
         }

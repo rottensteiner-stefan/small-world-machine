@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.116.0] - 2026-10-22
+
+### "In God we trust; all others must bring data." - W. Edwards Deming
+
+- **Features:**
+  - *EVSM als opt-in (ADR 0043, `quality.shadowMode="evsm"`):* exponenziell gewarpte Varianz-Momente (`e^{c·d}`, c=40) mit zweiseitiger Chebyshev-Obergrenze, dynamischem Varianz-Floor-Multiplikator und Light-Bleed-Reduktion. WebGPU: Momenten-Pass + `textureLoad`-Auswertung (unfilterable-float-Bind umgeht das optionale `float32-filterable`-Feature); WebGL2: eigener RGBA32F-Momenten-Atlas hinter `EXT_color_buffer_float`-Gate mit ehrlichem Fallback + Warnung. Der Default `pcss` bleibt bytes-identisch (Quelltext-Guards `EvsmGlslGuards.test.ts` + goldener Lauf).
+  - *Showcase 42 — EVSM-Probe:* `?shadowMode=<pcss|evsm>`-Knopf und QA-Hook liest die echten `evsmParams`-Lanes `[216..218]` (Mode-Flag/Varianz-Floor/LBR) der WebGPU-GlobalUniforms → committed Live-Gate `scripts/check-swm42-evsm.mjs` prüft die CPU→GPU-Verdrahtung der opt-in-Lane (Mode-Flag 1/0) bei fehlerfreiem Lauf.
+- **Architecture & Bugfixes:**
+  - *WebGPU-Runtime-Fix (beide Nutzer-Pipeline-Fehler):* `getEVSM()` lädt den rgba32float-Momenten-Atlas per `textureLoad` (Texel-Loads sind im nicht-uniformen Kaskaden-Kontrollfluss legal, `textureSample` nicht) und Bind 16 ist `unfilterable-float`.
+  - *WebGL2 pcss-Schwarz-Regression gefixt:* `_bindEvsmShadowUniforms` early-return außerhalb des evsm-Modus — der Dummy-Bind + Leftover-Unit 14 schwärzte den Default-Pfad. Default bleibt exakt (2× [121,120,119]).
+  - *WebGL2 Gelb = clearColor-Leak gefixt:* der Momenten-Pass `gl.clearColor(e^40, e^80, -e^-40, e^-80)` restaurierte das Clear nie → der `WebGLMainPass`-Clear füllte den Canvas mit (255,255,0). Fix: clearColor nach dem Momenten-Pass restaurieren.
+  - *WebGL2-EVSM-Schwarz — Wurzel gefunden + behoben (kein Treiber-/Sampling-Problem):* die
+    Diagnose-Kette (Atlas 100 % farClear ohne NaN/Inf, korrekte Atlas-Bindung mit Mode 1,
+    NEAREST/float-linear ohne Effekt, Float32-Simulation liefert `min(p,n)=1.0`) schloss
+    Treiber-Sampling und Shader-Mathe aus; per Shader-/Bind-Instrumentierung offenbarten sich zwei
+    reale Engine-State-Bugs: `_bindSubgroupTextures()` re-pointete `u_dirEVSMMap` nach der
+    Atlas-Bindung auf das 1×1-**weiße** `defaultTexture` (→ der Shader tastete Weiß ab →
+    `chebyshev≈0` → schwarzer Frame) und `_EVSM_MAP_UNIT=14` kollidierte mit `CLUSTER_GRID_UNIT=14`
+    (Cluster-Grid-Eviction, `GL_INVALID_OPERATION` pro Draw). Fixes in `WebGL2Renderer.ts`:
+    `u_dirEVSMMap` aus der Material-Sampler-Schleife ausnehmen (wie IBL-Maps) + Bindung auf der
+    pro-Programm exklusiv reservierten Sampler-Einheit. Verifiziert: WebGL2/evsm `[120,119,118]`
+    (echter Schatten), WebGL2/pcss-Default weiterhin byte-identisch `[121,120,119]`.
+    Details in ADR 0043 / `shadows.md` / Showcase-Log.
+- **Quality & Verification:**
+  - *Neues committed Live-Gate `scripts/check-swm42-evsm.mjs`:* assertet fehlerfreien Lauf, Mode-Flag-Lane `evsmParams[0]` (1 unter evsm, 0 unter pcss) und plausible Frames (nicht schwarz/aufgeblasen, Schattenpräsenz) — WebGL2 darf unter keinem `shadowMode` ein kaputtes (schwarzes) Frame liefern. Navigiert per `domcontentloaded` + paintReady (der `networkidle0`-Timeout der EVSM-Seite ist ein falscher Navigations-Hang, nicht EVSM-bedingt).
+- **Housekeeping & Docs:**
+  - ADR 0043 + Index-Eintrag, `docs/guides/shadows.md`-EVSM-Sektion (opt-in-Knopf, Backend-Unterstützung, Tuning-Lanes, ehrliche Statuszeile), `apps/showcases/42/docs/log.md` (Stage-C-Eintrag + WebGL2-Befund-Kette).
+  - Version 0.116.0.
+
 ## [0.115.7] - 2026-10-21
 
 ### "Shadow owes its birth to light." - John Gay

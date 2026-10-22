@@ -16,9 +16,12 @@ interface QaSwm42Sample {
   rendererType: string;
   softness: number;
   maxRadius: number;
+  shadowMode: "pcss" | "evsm";
   probe: "box" | "pole";
   /** The [penumbraScale, pcfMaxRadius] values actually written into the WebGPU global buffer. */
   uniform: [number, number] | null;
+  /** The [modeFlag, varianceFloor, lightBleed] lanes (216..218) actually written on WebGPU. */
+  evsmParams: [number, number, number] | null;
   /** Key global-buffer lanes (WebGPU only): ambient/dir-light data + dirShadowInfo for diagnosis. */
   glob: {
     ambient: number | null;
@@ -59,16 +62,20 @@ function parseNum(p: URLSearchParams, key: string, fallback: number): number {
  *   ?rendererType=WEB_GPU   backend override (handled by AbstractShowcase)
  *   ?softness=<float>       -> quality.shadowSoftness      (default 1)
  *   ?maxRadius=<int>        -> quality.shadowMaxPcfRadius  (default 4)
+ *   ?shadowMode=<pcss|evsm> -> quality.shadowMode          (default "pcss"; EVSM opt-in, ADR 0043)
  *
  * The scene is deliberately stripped: one box caster on a bright, uniform floor, weak ambient,
  * no post-processing, fixed camera. Any measured pixel change in the shadow transition can
  * therefore be attributed exclusively to the penumbra knobs. The `__qaSwm42` hook also exposes
  * the uniform lane actually written into the WebGPU global buffer (`[212, 213]` = penumbraScale,
- * pcfMaxRadius) so the gate can verify CPU -> GPU wiring end to end.
+ * pcfMaxRadius, `[216..218]` = evsmParams mode flag / variance floor / light bleed) so the gate
+ * can verify CPU -> GPU wiring end to end.
  */
 export class Showcase42 extends AbstractShowcase {
   private readonly _softness: number;
   private readonly _maxRadius: number;
+  /** "pcss" (default) keeps the legacy path byte-identical; "evsm" renders EVSM moments (ADR 0043). */
+  private readonly _shadowMode: "pcss" | "evsm";
   /** "box" = the (b)/(c) regression stage; "pole" = thin caster for the contact-hardening probe. */
   private readonly _probe: "box" | "pole";
   private readonly _camPos: { x: number; y: number; z: number };
@@ -82,12 +89,18 @@ export class Showcase42 extends AbstractShowcase {
     const rawSoft = Number(p.get("softness"));
     const softness = Number.isFinite(rawSoft) ? Math.max(0, rawSoft) : 1;
     const maxRadius = Math.max(1, Number(p.get("maxRadius")) || 4);
+    const shadowMode = p.get("shadowMode") === "evsm" ? "evsm" : "pcss";
     super({
-      quality: { shadowSoftness: softness, shadowMaxPcfRadius: maxRadius },
+      quality: {
+        shadowMode,
+        shadowSoftness: softness,
+        shadowMaxPcfRadius: maxRadius,
+      },
       postProcessing: { enabled: false },
     });
     this._softness = softness;
     this._maxRadius = maxRadius;
+    this._shadowMode = shadowMode;
     this._probe = p.get("probe") === "pole" ? "pole" : "box";
     // Probe mode defaults reproduce the calibrated high-contrast rig (hardened PCSS demo); the
     // box mode keeps its own deterministic rig. Every value below can be overridden via URL.
@@ -190,6 +203,17 @@ export class Showcase42 extends AbstractShowcase {
           typeof penumbraScale === "number" && typeof pcfMaxRadius === "number"
             ? [penumbraScale, pcfMaxRadius]
             : null;
+        const evsmMode = scratch?.[216];
+        const evsmFloor = scratch?.[217];
+        const evsmBleed = scratch?.[218];
+        const evsmParams: [number, number, number] | null =
+          typeof evsmMode === "number"
+            ? [
+                evsmMode,
+                typeof evsmFloor === "number" ? evsmFloor : 0,
+                typeof evsmBleed === "number" ? evsmBleed : 0,
+              ]
+            : null;
         const dirShadowInfo: [number, number, number, number] | null =
           scratch && typeof scratch[196] === "number"
             ? [scratch[196]!, scratch[197]!, scratch[198]!, scratch[199]!]
@@ -210,8 +234,10 @@ export class Showcase42 extends AbstractShowcase {
           rendererType: this.renderer.type,
           softness: this._softness,
           maxRadius: this._maxRadius,
+          shadowMode: this._shadowMode,
           probe: this._probe,
           uniform,
+          evsmParams,
           glob: scratch
             ? {
                 ambient: scratch[20] ?? null,

@@ -153,3 +153,42 @@ const engine = new Engine({
 - If a WebGPU PCSS shadow reads too soft or too hard for a scene, adjust `shadowSoftness`
   (direction) and `shadowMaxPcfRadius` (bandwidth ceiling) instead of fighting the depth `bias` —
   those tune the penumbra, not the acne/peter-panning trade.
+
+## EVSM — Exponential Variance Shadow Mapping (opt-in)
+
+**EVSM** (ADR 0043) filters **variance moments** instead of tap-counting PCF/PCSS. The moment
+atlas stores the exponentially warped depth `(e^{40·d}, e^{80·d}, -e^{-40·d}, e^{-80·d})` with
+`d ∈ [-1,1]` (Filament-style warp, `c = 40`), and the evaluation runs a one-sided Chebyshev upper
+bound hardened by a **dynamic** variance-floor multiplier and a light-bleed reduction. Because
+moments are filtered ahead of time, soft penumbras do not cost extra PCF taps — the smoothing is
+baked into the moment atlas.
+
+```typescript
+const engine = new Engine({
+  quality: {
+    shadowMode: "evsm", // opt-in; default "pcss" stays byte-identical
+  },
+});
+```
+
+- `quality.shadowMode` (`"pcss" | "evsm"`, default `"pcss"`) — switches directional-light shadow
+  filtering to the EVSM moment path. The default `pcss` code path is **byte-identical** whether or
+  not `evsm` exists (guarded by `EvsmGlslGuards.test.ts` plus the golden default run).
+- **Backend support:** WebGPU and WebGL2 both implement EVSM (Tiered-Renderer autonomy — the API
+  tier never removes a feature the hardware can run). On **WebGL2** the moment atlas requires the
+  `EXT_color_buffer_float` extension; without it the engine **honestly falls back** to the default
+  shadow method with a console warning instead of rendering a broken frame.
+- **Tuning lanes** (GlobalUniforms `evsmParams`, WebGPU lanes `[216..218]`; mirrored on WebGL2):
+  mode flag, variance-floor **multiplier** (default `0.002`), light-bleed-reduction amount (default
+  `0.004`). The floor is a multiplier on the squared first moment, not a flat floor — the exponential
+  warp expands variance enormously, so a flat floor is wrong.
+
+> **Status note (0.116.0):** The WebGPU EVSM path renders and is live-gated on showcase 42
+> (`scripts/check-swm42-evsm.mjs`: error-free run, `evsmParams[0]=1` mode lane under `shadowMode=evsm`,
+> plausible frame). Its look is currently **washed-out** (the contact zone reads shallow) — that is a
+> calibration matter of the tuning default lanes, not an architecture gap. WebGL2 EVSM was black on
+> the software stack at the start of Stage C; root cause was **not** a driver float-sampling issue but
+> two real engine state bugs (the material-sampler loop re-pointed `u_dirEVSMMap` to a white
+> default texel after the atlas bind, and the fixed unit 14 collided with the cluster-grid unit).
+> Both are fixed in 0.116.0 — WebGL2 EVSM renders a real shadow with the default path untouched
+> (see ADR 0043 for the full record).
