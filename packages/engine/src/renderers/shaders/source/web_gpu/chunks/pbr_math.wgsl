@@ -218,7 +218,17 @@ fn chebyshevUpperBoundEVSM(m1: f32, m2: f32, depth: f32) -> f32 {
     return clamp((pMax - lbrAmount) / max(1.0 - lbrAmount, 1e-7), 0.0, 1.0);
 }
 
-fn getEVSM(map: texture_2d_array<f32>, samp: sampler, shadowPos: vec4f, layer: u32) -> f32 {
+// Texture-sample-free EVSM evaluator. Taps are fetched with `textureLoad`, NOT `textureSample`, for
+// two hard WebGPU reasons: (1) the moment map is rgba32float -- unfilterable by default, so a
+// "float" (filterable) binding is invalid and only works where float32-filterable is enabled;
+// texel loads ignore filtering entirely and bind as "unfilterable-float" on every device; and
+// (2) this function runs inside the per-fragment cascade-selection control flow (its condition
+// depends on the interpolated world position), and `textureSample` is only legal in UNIFORM
+// control flow -- depth-compare sampling (getShadowPCSS/getShadowPCF) is exempt, regular texture
+// sampling is not. Texel loads are legal in non-uniform flow, so this works everywhere without a
+// filterable sampler or the float32-filterable feature. The 9-tap box (instead of one hardware
+// bilinear fetch) is the same author-controlled moment smearing on both APIs.
+fn getEVSM(map: texture_2d_array<f32>, shadowPos: vec4f, layer: u32) -> f32 {
     let ndc = shadowPos.xyz / shadowPos.w;
     let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
 
@@ -234,17 +244,22 @@ fn getEVSM(map: texture_2d_array<f32>, samp: sampler, shadowPos: vec4f, layer: u
     let nw = -1.0 / pw;
 
     // Filter the moments (not the visibility): averaging warped moments is the only mathematically
-    // sound smearing for VSM/EVSM (see docs/shadows.md / ADR 0007). A 3x3 box scaled by the same
-    // PCSS radius cap gives a modest, stable penumbra; the hardware linear filter already softens
-    // the single-fetch case, so this is the author-controlled width, not a second blur pass.
-    let dims = textureDimensions(map);
-    let texel = vec2f(1.0 / f32(dims.x), 1.0 / f32(dims.y));
+    // sound smearing for VSM/EVSM (see docs/shaders.md / ADR 0007). A 3x3 box scaled by the same
+    // PCSS radius cap gives a modest, stable penumbra. Each array layer is one full cascade map
+    // (no atlas cell to bleed into), so taps only clamp to the texture bounds.
+    let dims = vec2u(textureDimensions(map));
+    let dimsF = vec2f(dims);
     let radius = max(global.shadowSoftness.y, 1.0);
     var acc = vec4f(0.0);
     for (var ty: i32 = -1; ty <= 1; ty++) {
         for (var tx: i32 = -1; tx <= 1; tx++) {
-            let tapUV = clamp(uv + vec2f(f32(tx), f32(ty)) * texel * radius, vec2f(0.0), vec2f(1.0));
-            acc += textureSample(map, samp, tapUV, layer);
+            let tapUV = clamp(
+                uv + vec2f(f32(tx), f32(ty)) / dimsF * radius,
+                vec2f(0.0),
+                vec2f(1.0),
+            );
+            let tapTexel = min(vec2u(tapUV * dimsF), dims - vec2u(1));
+            acc += textureLoad(map, tapTexel, layer, 0u);
         }
     }
     let moments = acc / 9.0;
@@ -266,14 +281,14 @@ fn getEVSM(map: texture_2d_array<f32>, samp: sampler, shadowPos: vec4f, layer: u
 // dead until an author opts in via quality.shadowMode -- ADR 0035 override-lock).
 fn getShadowDirMain(map: texture_depth_2d_array, samp: sampler_comparison, shadowPos: vec4f, layer: u32, bias: f32) -> f32 {
     if (global.evsmParams.x > 0.5) {
-        return getEVSM(u_dirEvsmMap, evsmSampler, shadowPos, layer);
+        return getEVSM(u_dirEvsmMap, shadowPos, layer);
     }
     return getShadowPCSS(map, samp, shadowPos, layer, bias);
 }
 
 fn getShadowDirBlend(map: texture_depth_2d_array, samp: sampler_comparison, shadowPos: vec4f, layer: u32, bias: f32) -> f32 {
     if (global.evsmParams.x > 0.5) {
-        return getEVSM(u_dirEvsmMap, evsmSampler, shadowPos, layer);
+        return getEVSM(u_dirEvsmMap, shadowPos, layer);
     }
     return getShadowPCF(map, samp, shadowPos, layer, bias);
 }

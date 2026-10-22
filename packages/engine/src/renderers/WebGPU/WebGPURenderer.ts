@@ -678,12 +678,15 @@ export class WebGPURenderer extends AbstractRenderer {
           visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
           buffer: { type: "read-only-storage" },
         },
-        // EVSM moment map (ADR 0007): rgba32float 2d-array + linear clamp-to-edge sampler,
-        // fragment-stage only -- sampled by getEVSM() when quality.shadowMode === "evsm".
+        // EVSM moment map (ADR 0007): rgba32float 2d-array. "unfilterable-float" (not "float"):
+        // RGBA32Float only offers the unfilterable sample type unless the float32-filterable
+        // device feature is enabled, and getEVSM() fetches taps with textureLoad anyway (texel
+        // loads are legal in the cascade's non-uniform control flow and ignore filtering), so no
+        // filterable sampler or device feature is required. Binding 17 below remains reserved.
         {
           binding: 16,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: { viewDimension: "2d-array", sampleType: "float" },
+          texture: { viewDimension: "2d-array", sampleType: "unfilterable-float" },
         },
         {
           binding: 17,

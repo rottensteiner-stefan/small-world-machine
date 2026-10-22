@@ -72,6 +72,18 @@ describe("EVSM directional dispatchers preserve the default PCSS behavior per ca
 
   it("both dispatchers switch to the EVSM moment path when the mode flag is set", () => {
     expect(pbrMath).toContain("if (global.evsmParams.x > 0.5) {");
-    expect(pbrMath).toContain("getEVSM(u_dirEvsmMap, evsmSampler, shadowPos, layer)");
+    expect(pbrMath).toContain("getEVSM(u_dirEvsmMap, shadowPos, layer)");
+  });
+
+  // Regression guards for the two WebGPU pipeline errors that used to break EVERY lit shader:
+  // (1) binding a rgba32float texture to a filterable ("float") binding is invalid, and
+  // (2) textureSample is illegal in the cascade's non-uniform control flow (only depth-compare
+  // sampling is exempt). getEVSM must therefore fetch moments with textureLoad and take no sampler.
+  it("the moment evaluator fetches taps with textureLoad (no sampled/filterable sampler needed)", () => {
+    expect(pbrMath).toContain(
+      "fn getEVSM(map: texture_2d_array<f32>, shadowPos: vec4f, layer: u32) -> f32 {",
+    );
+    expect(pbrMath).toContain("acc += textureLoad(map, tapTexel, layer, 0u);");
+    expect(pbrMath).not.toContain("textureSample(map, samp, tapUV, layer)");
   });
 });
