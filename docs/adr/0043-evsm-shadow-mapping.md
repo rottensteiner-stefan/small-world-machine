@@ -57,9 +57,10 @@ Der Mensch hat am 2026-10-22 die folgenden verbindlichen Entscheidungen getroffe
    - Einseitiger **Chebyshev-upper-bound** mit **dynamischem** Varianz-Floor `y·µ₁²` (Multiplikator,
      kein fester Sockel — die Warp-Weitung macht feste Sockel falsch) und **Light-Bleed-Reduktion**
      (LBR-Remap).
-   - Tuning-Lanes `[216..218]` im WebGPU-GlobalUniforms-Block (`evsmParams`): Mode-Flag,
-     Varianz-Floor-Multiplikator (Default 0.002), LBR-Anteil (Default 0.004). WebGL2 spiegelt dieselben
-     Werte über ein äquivalentes Uniform-Slot-Paar.
+   - Tuning-Lanes `[216..219]` im WebGPU-GlobalUniforms-Block (`evsmParams`): Mode-Flag,
+     Varianz-Floor-Multiplikator (Default 0.002), LBR-Anteil (Default 0.12, GPU-Gems-3-§8.4.3-Remap),
+     Empfänger-Tiefen-Bias vor dem Warp (Default 0.0002, three.js-VSM-Prezedenz). WebGL2 spiegelt
+     dieselben Werte über ein äquivalentes Uniform-Slot-Paar.
 2. **WebGPU = Momenten-Pass + Auswertung** (umgesetzt, live gegated):
    - `CascadedShadowPassGPU._renderEvsmCascades` rendert die Momente in ein
      `texture_2d_array`-`rgba32float`-Ziel (Kaskaden-Ebenen, volle Auflösung).
@@ -116,10 +117,39 @@ Der Mensch hat am 2026-10-22 die folgenden verbindlichen Entscheidungen getroffe
   `scripts/check-swm42-evsm.mjs`) prüft: (a) fehlerfreier Lauf (keine Pipeline-/Kompilier-Fehler),
   (b) Mode-Flag-Lane `evsmParams[0] = 1` unter `shadowMode=evsm` und `= 0` unter dem pcss-Default,
   (c) plausibler Frame (keine leere/aufgeblasene Bühne, Schattenpräsenz oberhalb Toleranz).
-- **Tuning-Look:** Der WebGPU-EVSM-Look ist Stand 0.116.0 ausgewaschen (flache Kontakt-Tiefe,
-  `near≈0.006` / `far≈0.219`); die LBR-Senke von 0.004 greift kaum. Das ist ein Kalibrierungs-Thema
-  der Defaults (Varianz-Floor/LBR), keine Architektur-Lücke — die Lanes sind dafür die
-  dokumentierte Schnittstelle.
+- **Tuning-Look & Anti-Peter-Panning / Anti-Light-Bleed (gelöst, 0.116.0):** Der initiale
+  WebGPU-EVSM-Look war ausgewaschen (`near≈0.006` / `far≈0.122`), und selbst ein naives
+  Zwei-Slice-3×3-Filter hinterließ an dünnen Castern (`?probe=pole`, ~5–6 Texel breit) noch einen
+  6-Pixel-Peter-Panning-Spalt an der Pole-Basis (`baseGapRows` `0.129` auf WebGL2 / `0.408` auf
+  WebGPU) sowie parallele Streifen und eine vermeintliche Far-Zone-Sättigung (`far≈0.405` für
+  Radius 12 ≡ 16). Die mathematische Wurzelanalyse zeigte vier gekoppelte Ursachen, die in beiden
+  Backends (`pbr_math.wgsl`, `base_fragment_header.frag.glsl`, `dir_shadow.glsl`,
+  `WebGL2Renderer._renderEvsmMoments`) behoben wurden:
+  1. **Receiver-Horizon-Clamping der Momente (`rawTap.x >= pw ? rMoment : rawTap`):** Unokkludierte
+     Hintergrund-Texel im EVSM-Atlas halten den Far-Plane-Clear `(e^{40}, e^{80}, -e^{-40}, e^{-80})`.
+     Beim ungefilterten Mitteln über Silhouettenkanten sprengt ein einziges Hintergrund-Tap das
+     positive Moment (`e^{40}`) und zieht das negative Momenten-Mittel `m1_neg` Richtung `0`, sodass
+     `nw <= m1_neg` überall dort fälschlich zu `1.0` (100% LIT) auswertet, wo der Blocker-Anteil
+     `α < e^{-40 Δd}` liegt (direkt an der Pole-Basis für jedes `α < 1`). Durch Klemmen
+     nicht-okkludierender Taps auf den Empfänger-Horizont `rMoment = (pw, pw², nw, nw²)` bleibt
+     `m1 < R` für jedes `α > 0` und `Δd > 0`, und die Silhouetten-Chebyshev-Schranke konvergiert
+     exakt gegen `1 - α`.
+  2. **25-Tap-N-Rooks-Wide-Lattice (`(4·wx + wy, 4·wy - wx)`):** Ein reguläres 3×3-Gitter (`{-R, 0, +R}`)
+     trifft bei einem ~5 Texel dünnen vertikalen Pole für jedes `R > 3` nur die Mittelspalte
+     (`3/9 = 33.3%`, daher `R=12 ≡ R=16`). Das gescherten 5×5-N-Rooks-Gitter tastet jede ganzzahlige
+     X- und Y-Spalte in `[-10, +10]` lückenlos ab (Spaltengewicht `1/5 = 20%`, keine Streifen).
+  3. **Blocker-Only-`occluderDepth` + `smoothstep(0.0015, 0.012, gap)`:** `occluderDepth` wird nur
+     aus echten Blocker-Taps (`rawTap.x < pw`) bestimmt (keine `e^{40}`-Kontamination von
+     `log(tight.x)`) und auf die reale Kaskaden-Tiefenspanne (`EVSM_BLEND_DEPTH = 0.012`) normiert.
+  4. **Front-Face-Momente in WebGL2 (`cullFace(BACK)`):** Back-Face-Rendering (`cullFace(FRONT)`)
+     erzeugt an der Pole-Basis `z_backface == z_floor` (`d → 0`, garantierter Chebyshev-Kollaps zu
+     `1.0`). WebGL2 rendert den EVSM-Momenten-Pass nun wie WebGPU mit `cullFace(BACK)` +
+     skaliertem synthetischen Kontakt-Varianz-Floor (`rawVar` bleibt zu 100% erhalten).
+  - **Messung Pole-Probe (`scripts/check-swm42-evsm.mjs`):**
+    - **WebGPU EVSM:** `baseGapRows = 0.609` ab Pixel 1 (exakt wie PCSS `0.609`, null Peter-Panning),
+      `nearContrast = 0.589`, `farContrast = 0.375` (`spread = 0.214 > 0.20`).
+    - **WebGL2 EVSM:** `baseGapRows = 0.607` ab Pixel 1 (vorher `0.129`), `nearContrast = 0.588`,
+      `farContrast = 0.380` (`spread = 0.208 > 0.20`).
 
 ---
 

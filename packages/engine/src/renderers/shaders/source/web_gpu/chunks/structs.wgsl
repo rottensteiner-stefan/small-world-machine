@@ -46,10 +46,13 @@ struct GlobalUniforms {
     shadowSoftness: vec4f,
 
     // --- 6. EVSM Tuning (16 bytes) ---
-    // EVSM (Exponential Variance Shadow Maps, see docs/shadows.md / ADR 0007):
+    // EVSM (Exponential Variance Shadow Maps, see docs/shadows.md / ADR 0043):
     // x = mode flag (0 = PCSS/PCF, 1 = EVSM), y = dynamic min-variance MULTIPLIER (chain-rule
     // epsilon, Filament uses 0.002 -- the floor is `y * (warpedDepth)²` and replaces the depth
-    // bias for acne control in EVSM), z = light-bleeding-reduction amount (LBR remap), w reserved.
+    // bias for acne control in EVSM), z = light-bleeding-reduction amount (LBR remap), w = tiny
+    // RECEIVER depth bias applied to the receiver depth before the warp (three.js VSM bias
+    // precedent; counters peter-panning at the caster silhouette, see GlobalUniformWriter).
+    // Lanes y/z/w are only meaningful when x > 0.5; lane w stays 0.0 under the pcss default.
     evsmParams: vec4f,
 }
 
@@ -167,7 +170,7 @@ struct AreaLight {
 @group(0) @binding(14) var<storage, read_write> spotClusterIndices: array<u32>;
 @group(0) @binding(15) var<storage, read> boneMatrices: array<mat4x4f>;
 
-// EVSM moment map (ADR 0007): rgba32float 2d-array holding 4 exponentially warped variance
+// EVSM moment map (ADR 0043): rgba32float 2d-array holding 4 exponentially warped variance
 // moments per texel (same per-cascade layers as u_dirShadowMap). Only reached (fragment stage)
 // when quality.shadowMode === "evsm"; written by CascadedShadowPassGPU's moment pass and sampled
 // by getEVSM() in pbr_math.wgsl. evsmSampler uses linear filtering + clamp-to-edge so moment

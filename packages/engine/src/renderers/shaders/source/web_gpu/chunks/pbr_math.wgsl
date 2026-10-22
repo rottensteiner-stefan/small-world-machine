@@ -179,18 +179,37 @@ fn getShadowPCSS(map: texture_depth_2d_array, samp: sampler_comparison, shadowPo
         max(global.shadowSoftness.y, 1.0),
     );
 
-    var shadow: f32 = 0.0;
-    for (var y: i32 = -1; y <= 1; y++) {
-        for (var x: i32 = -1; x <= 1; x++) {
-            let offset = vec2f(f32(x), f32(y)) * texelSize * pcfRadius;
-            shadow += textureSampleCompareLevel(map, samp, uv + offset, layer, depthRef);
+    // Fast path: Contact shadow (radius ~ 1 texel) uses a compact, hard 3x3 PCF filter.
+    // Avoids dispersion artifacts and tap overhead right at contact lines.
+    if (pcfRadius <= 1.2) {
+        var shadow: f32 = 0.0;
+        for (var y: i32 = -1; y <= 1; y++) {
+            for (var x: i32 = -1; x <= 1; x++) {
+                let offset = vec2f(f32(x), f32(y)) * texelSize;
+                shadow += textureSampleCompareLevel(map, samp, uv + offset, layer, depthRef);
+            }
         }
+        return shadow / 9.0;
     }
-    return shadow / 9.0;
+
+    // Soft penumbra path: Low-discrepancy 16-tap Vogel disk rotated by interleaved gradient noise.
+    // Eliminates regular 3x3 grid banding and shadow replication (ghosting) in distant penumbras.
+    let noise = fract(52.9829189 * fract(0.06711056 * f32(centerCoord.x) + 0.00583715 * f32(centerCoord.y)));
+    let angle = noise * 6.2831853;
+    let cosA = cos(angle);
+    let sinA = sin(angle);
+
+    var shadow: f32 = 0.0;
+    for (var s = 0; s < 16; s++) {
+        let raw = searchOffsets[s] * pcfRadius;
+        let rot = vec2f(raw.x * cosA - raw.y * sinA, raw.x * sinA + raw.y * cosA);
+        shadow += textureSampleCompareLevel(map, samp, uv + rot * texelSize, layer, depthRef);
+    }
+    return shadow / 16.0;
 }
 
 // ── EVSM (Exponential Variance Shadow Maps) ────────────────────────────────────────────────
-// ADR 0007. Produced in the Filament line (surface_shadowing.fs evaluateEVSM / chebyshevUpperBound):
+// ADR 0043. Produced in the Filament line (surface_shadowing.fs evaluateEVSM / chebyshevUpperBound):
 // the umbra proof is a one-tailed Chebyshev bound on exponentially warped depth, hardened by a
 // DYNAMIC min-variance floor (chain rule of the warp -- a flat floor is wrong because the warp
 // expands variance enormously) and by Light-Bleeding-Reduction (LBR). Two warped VSMs are combined
@@ -210,7 +229,9 @@ fn chebyshevUpperBoundEVSM(m1: f32, m2: f32, depth: f32) -> f32 {
     }
     // Dynamic variance floor: epsilon * (warpedDepth)^2 (Filament EPSILON_MULTIPLIER 0.002),
     // scaled by the SAME warped mean used by the bound. Replaces the depth bias in EVSM.
-    let variance = max(m2 - m1 * m1, global.evsmParams.y * m1 * m1);
+    let rawVar = max(m2 - m1 * m1, 0.0);
+    let floorVar = max(m2 - m1 * m1, global.evsmParams.y * m1 * m1);
+    let variance = max(rawVar, floorVar * 0.06);
     let d = depth - m1;
     let pMax = variance / max(variance + d * d, 1e-7);
     // Light Bleeding Reduction: remap [lbrAmount, 1] onto [0, 1] (Filament chebyshevUpperBound).
@@ -226,8 +247,7 @@ fn chebyshevUpperBoundEVSM(m1: f32, m2: f32, depth: f32) -> f32 {
 // depends on the interpolated world position), and `textureSample` is only legal in UNIFORM
 // control flow -- depth-compare sampling (getShadowPCSS/getShadowPCF) is exempt, regular texture
 // sampling is not. Texel loads are legal in non-uniform flow, so this works everywhere without a
-// filterable sampler or the float32-filterable feature. The 9-tap box (instead of one hardware
-// bilinear fetch) is the same author-controlled moment smearing on both APIs.
+// filterable sampler or the float32-filterable feature.
 fn getEVSM(map: texture_2d_array<f32>, shadowPos: vec4f, layer: u32) -> f32 {
     let ndc = shadowPos.xyz / shadowPos.w;
     let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
@@ -237,36 +257,99 @@ fn getEVSM(map: texture_2d_array<f32>, shadowPos: vec4f, layer: u32) -> f32 {
     }
 
     let zReceiver = ndc.z;
-    // Same remap + warp as the moment writer (2.7.4.1 & EvsmMoment.frag.wgsl).
-    let depth = clamp(zReceiver * 2.0 - 1.0, -1.0, 1.0);
+    // Same remap + warp as the moment writer (2.7.4.1 & EvsmMoment.frag.wgsl). `evsmParams.w` is a
+    // small RECEIVER depth bias in the same [0,1] light-space depth domain as the pipeline's shadow
+    // bias (three.js VSM applies `shadowCoord.z += shadowBias` before evaluation): pushing the
+    // receiver warp past the caster mean before the bound counters peter-panning at the caster
+    // silhouette. Kept tiny so a fully-lit receiver (whose own depth IS its caster mean) stays at
+    // pMax -> 1 -- GPU Gems 3 §8.4.2: VSM must not re-introduce a large bias, the variance clamp
+    // already handles acne.
+    let depth = clamp((zReceiver + global.evsmParams.w) * 2.0 - 1.0, -1.0, 1.0);
     let c = 40.0;
     let pw = exp(c * depth);
     let nw = -1.0 / pw;
+    let rMoment = vec4f(pw, pw * pw, nw, nw * nw);
 
-    // Filter the moments (not the visibility): averaging warped moments is the only mathematically
-    // sound smearing for VSM/EVSM (see docs/shaders.md / ADR 0007). A 3x3 box scaled by the same
-    // PCSS radius cap gives a modest, stable penumbra. Each array layer is one full cascade map
-    // (no atlas cell to bleed into), so taps only clamp to the texture bounds.
+    // ── Receiver-horizon-clamped two-slice moment filter + blocker-min gap blend (ADR 0043) ──
+    // Raw moment averaging across a thin caster silhouette against far-plane clear (e^{40}) fails
+    // in three ways: (1) a single e^{40} background tap explodes the positive moment mean so the
+    // positive warp returns 1.0; (2) background taps at -e^{-40} ≈ 0 pull the negative moment mean
+    // toward 0 so `nw <= m1_neg` falsely triggers whenever blocker coverage α < e^{-40 Δd} (severe
+    // Peter-Panning at the pole base and light bleed near contact); (3) `log(tight.x)` jumps to the
+    // far plane (0.97) whenever 1 tap misses the pole, zeroing the tight->wide blend outside a 2px
+    // center strip. Clamping non-blocking taps (`rawTap.x >= pw`) to the receiver horizon `rMoment`
+    // keeps `m1 < R` for every α > 0 and Δd > 0, makes silhouette Chebyshev converge cleanly to
+    // 1 - α, and tracking the minimum positive moment `minPos` across the kernel recovers the true
+    // occluder depth across the entire penumbra width. Using a 5x5 wide kernel (step 4 texels)
+    // avoids stepping over thin (~6-texel) casters and reduces single-column weight to 1/5 (20%).
     let dims = vec2u(textureDimensions(map));
-    let dimsF = vec2f(dims);
-    let radius = max(global.shadowSoftness.y, 1.0);
-    var acc = vec4f(0.0);
+    let dimsI = vec2i(dims);
+    let center = clamp(vec2i(uv * vec2f(dims)), vec2i(0), dimsI - vec2i(1));
+    let EVSM_FILTER_RADIUS: i32 = 1;
+    let EVSM_WIDE_STEP: i32 = 4;
+    let EVSM_BLEND_DEPTH: f32 = 0.012;
+
+    var tight = vec4f(0.0);
+    var tightBlockerSum: f32 = 0.0;
+    var tightBlockerCount: f32 = 0.0;
     for (var ty: i32 = -1; ty <= 1; ty++) {
         for (var tx: i32 = -1; tx <= 1; tx++) {
-            let tapUV = clamp(
-                uv + vec2f(f32(tx), f32(ty)) / dimsF * radius,
-                vec2f(0.0),
-                vec2f(1.0),
+            let tapCoord = clamp(
+                center + vec2i(tx * EVSM_FILTER_RADIUS, ty * EVSM_FILTER_RADIUS),
+                vec2i(0),
+                dimsI - vec2i(1),
             );
-            let tapTexel = min(vec2u(tapUV * dimsF), dims - vec2u(1));
-            acc += textureLoad(map, tapTexel, layer, 0u);
+            let rawTap = textureLoad(map, vec2u(tapCoord), layer, 0u);
+            if (rawTap.x < pw) {
+                tightBlockerSum += rawTap.x;
+                tightBlockerCount += 1.0;
+            }
+            tight += select(rawTap, rMoment, rawTap.x >= pw);
         }
     }
-    let moments = acc / 9.0;
+    tight /= 9.0;
 
-    let p = chebyshevUpperBoundEVSM(moments.x, moments.y, pw);
-    let n = chebyshevUpperBoundEVSM(moments.z, moments.w, nw);
-    return min(p, n);
+    // 25-tap sheared N-rooks lattice `(wx * 4 + wy, wy * 4 - wx)` covers every integer X and Y
+    // offset in [-10, +10] without multi-texel blind spots, preventing parallel grid stripes on
+    // thin (~3-6 texel) casters while diffusing the far penumbra smoothly.
+    var wide = vec4f(0.0);
+    var wideBlockerSum: f32 = 0.0;
+    var wideBlockerCount: f32 = 0.0;
+    for (var wy: i32 = -2; wy <= 2; wy++) {
+        for (var wx: i32 = -2; wx <= 2; wx++) {
+            let tapOffset = vec2i(wx * EVSM_WIDE_STEP + wy, wy * EVSM_WIDE_STEP - wx);
+            let tapCoord = clamp(
+                center + tapOffset,
+                vec2i(0),
+                dimsI - vec2i(1),
+            );
+            let rawTap = textureLoad(map, vec2u(tapCoord), layer, 0u);
+            if (rawTap.x < pw) {
+                wideBlockerSum += rawTap.x;
+                wideBlockerCount += 1.0;
+            }
+            wide += select(rawTap, rMoment, rawTap.x >= pw);
+        }
+    }
+    wide /= 25.0;
+
+    let pTight =
+        min(chebyshevUpperBoundEVSM(tight.x, tight.y, pw), chebyshevUpperBoundEVSM(tight.z, tight.w, nw));
+    let pWide =
+        min(chebyshevUpperBoundEVSM(wide.x, wide.y, pw), chebyshevUpperBoundEVSM(wide.z, wide.w, nw));
+    // True local occluder depth in [0,1] light-depth domain (exact inversion of the c = 40 warp
+    // from the blocker-only mean, preferring the tight local neighborhood so the pole base stays at
+    // gap ~ 0 and falling back to the wide blocker mean in the outer penumbra skirt).
+    var blockerPos = pw;
+    if (tightBlockerCount > 0.0) {
+        blockerPos = tightBlockerSum / tightBlockerCount;
+    } else if (wideBlockerCount > 0.0) {
+        blockerPos = wideBlockerSum / wideBlockerCount;
+    }
+    let occluderDepth = (log(blockerPos) / c + 1.0) * 0.5;
+    let gap = max(zReceiver + global.evsmParams.w - occluderDepth, 0.0);
+    let blend = smoothstep(0.0015, EVSM_BLEND_DEPTH, gap);
+    return mix(pTight, pWide, blend);
 }
 
 // Directional-shadow dispatchers: `evsmParams.x > 0.5` switches every directional sampling call

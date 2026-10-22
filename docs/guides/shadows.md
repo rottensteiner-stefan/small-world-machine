@@ -178,17 +178,48 @@ const engine = new Engine({
   tier never removes a feature the hardware can run). On **WebGL2** the moment atlas requires the
   `EXT_color_buffer_float` extension; without it the engine **honestly falls back** to the default
   shadow method with a console warning instead of rendering a broken frame.
-- **Tuning lanes** (GlobalUniforms `evsmParams`, WebGPU lanes `[216..218]`; mirrored on WebGL2):
-  mode flag, variance-floor **multiplier** (default `0.002`), light-bleed-reduction amount (default
-  `0.004`). The floor is a multiplier on the squared first moment, not a flat floor — the exponential
-  warp expands variance enormously, so a flat floor is wrong.
+- **Tuning lanes** (GlobalUniforms `evsmParams`, WebGPU lanes `[216..219]`; mirrored on WebGL2):
+  mode flag (x), variance-floor **multiplier** (y, default `0.002`), light-bleed-reduction **remap
+  amount** (z, default `0.12`, GPU Gems 3 `ReduceLightBleeding`), **receiver depth bias** before the
+  warp (w, default `0.0002` in [0,1] light-depth; three.js VSM applies the same bias to the receiver
+  depth). The floor is a multiplier on the squared first moment, not a flat floor — the exponential
+  warp expands variance enormously, so a flat floor is wrong. Lane w is only non-zero in `evsm` mode
+  so the `pcss` default uniform buffer stays byte-identical (see the committed snapshot).
 
 > **Status note (0.116.0):** The WebGPU EVSM path renders and is live-gated on showcase 42
 > (`scripts/check-swm42-evsm.mjs`: error-free run, `evsmParams[0]=1` mode lane under `shadowMode=evsm`,
-> plausible frame). Its look is currently **washed-out** (the contact zone reads shallow) — that is a
-> calibration matter of the tuning default lanes, not an architecture gap. WebGL2 EVSM was black on
+> plausible frame). WebGL2 EVSM was black on
 > the software stack at the start of Stage C; root cause was **not** a driver float-sampling issue but
 > two real engine state bugs (the material-sampler loop re-pointed `u_dirEVSMMap` to a white
 > default texel after the atlas bind, and the fixed unit 14 collided with the cluster-grid unit).
 > Both are fixed in 0.116.0 — WebGL2 EVSM renders a real shadow with the default path untouched
 > (see ADR 0043 for the full record).
+>
+> **Contact-quality & Anti-Peter-Panning fix (0.116.0):** the initial live look had two inherent
+> EVSM artifacts on thin casters (`?probe=pole`) — peter-panning at the pole base and light bleed
+> near contact, plus parallel striping and an apparent `far ≈ 0.405` plateau when using a sparse 3×3
+> wide box. Fixed identically across WebGPU (`pbr_math.wgsl`) and WebGL2 (`base_fragment_header.frag.glsl`,
+> `dir_shadow.glsl`, `WebGL2Renderer._renderEvsmMoments`):
+> 1. **Receiver-horizon moment clamping (`rawTap.x >= pw ? rMoment : rawTap`)** — clamping
+>    non-occluding background taps (`e^{40}` far-plane clear) to the receiver's own moment vector
+>    `(pw, pw², nw, nw²)` prevents `e^{40}` from exploding the positive warp and stops `-e^{-40} ≈ 0`
+>    from pulling the negative mean `m1_neg` above `nw` when blocker coverage `α < e^{-40 Δd}` (which
+>    previously clipped the pole base and silhouette edges to `1.0` LIT).
+> 2. **Two-slice filter with 25-tap sheared N-rooks wide lattice** — tight 3×3 (`EVSM_FILTER_RADIUS = 1`)
+>    for crisp contact umbra + wide 5×5 sheared N-rooks lattice `(4·wx + wy, 4·wy - wx)` covering every
+>    integer X/Y offset in `[-10, +10]` without stepping over thin (~5-texel) casters, blended via
+>    `smoothstep(0.0015, EVSM_BLEND_DEPTH, gap)` (`EVSM_BLEND_DEPTH = 0.012`) using the blocker-only
+>    mean `occluderDepth` (uncontaminated by `e^{40}` clear texels).
+> 3. **Front-face moments in WebGL2 (`cullFace(BACK)`) + contact floor scaling** — rendering back faces
+>    (`cullFace(FRONT)`) into the moment atlas collapsed `d → 0` where the pole base meets the floor;
+>    switching `_renderEvsmMoments` to `cullFace(BACK)` (matching WebGPU `EvsmMomentMaterial`) and
+>    scaling only the synthetic variance floor (`max(rawVar, floorVar * 0.06)`) eliminates the 6-pixel
+>    contact ramp while preserving 100% of true penumbra variance `rawVar`, receiver bias (`w = 0.0002`),
+>    and LBR (`z = 0.12`).
+>
+> **Measured (pole probe, showcase 42):** Both tiers render without errors and pass all contact-hardening
+> thresholds: first-row contact umbra `baseGapRows = 0.609` on WebGPU and `0.607` on WebGL2 (matching
+> PCSS `0.609` from pixel 1, zero peter-panning gap), `nearUmbraContrast = 0.589` (WebGPU) / `0.588`
+> (WebGL2), and `farUmbraContrast = 0.375` (WebGPU) / `0.380` (WebGL2) (`spread > 0.20`, `< 0.40`
+> far-collapse ceiling). The default `pcss` path and its committed uniform-buffer snapshot remain
+> byte-identical (lane w is mode-gated to 0).

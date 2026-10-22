@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 
-// Source-level guards for Stage B2 (ADR 0007, WebGL2 atlas EVSM). Vitest has no GLSL compiler, so a
+// Source-level guards for Stage B2 (ADR 0043, WebGL2 atlas EVSM). Vitest has no GLSL compiler, so a
 // syntax slip would only surface in the browser -- these guards keep the intent honest instead:
 //  (1) every WebGL2 directional-shadow sampling site has an EVSM branch that evaluates the moment
 //      atlas via the shared helpers (cell-clamped), and
@@ -31,8 +31,9 @@ describe("EVSM WebGL2 shader branches keep the default path byte-identical", () 
     expect(header).toContain("uniform vec4 u_evsmParams;");
     expect(header).toContain("chebyshevUpperBoundEVSM");
     expect(header).toContain("evalEVSMDir");
-    // Same c = 40, dynamic chain-rule floor and LBR remap as the WebGPU dispatch path.
-    expect(header).toContain("exp(40.0 * (currentDepth * 2.0 - 1.0))");
+    // Same c = 40, dynamic chain-rule floor and LBR remap as the WebGPU dispatch path; the receiver
+    // warp additionally applies the tiny w-lane depth bias (three.js VSM bias, peter-panning guard).
+    expect(header).toContain("exp(40.0 * ((currentDepth + u_evsmParams.w) * 2.0 - 1.0))");
     expect(header).toContain("max(m2 - m1 * m1, u_evsmParams.y * m1 * m1)");
   });
 

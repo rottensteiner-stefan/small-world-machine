@@ -56,13 +56,13 @@ uniform mat4 u_cascadeMatrices[4];
 uniform vec4 u_cascadeSplits;
 uniform vec4 u_dirShadowInfo; // x=bias, y=normalBias, z=castShadow, w=numCascades
 
-// EVSM (ADR 0007): the exponentially warped variance moment atlas (rgba32float, same cascade grid
+// EVSM (ADR 0043): the exponentially warped variance moment atlas (rgba32float, same cascade grid
 // as u_dirShadowMap) and its tuning lanes. Only reached when u_evsmParams.x > 0.5
 // (quality.shadowMode === "evsm"); with the default PCSS/pcf mode these uniforms are inert but
 // must stay bound (the renderer always binds u_dirEVSMMap, at least to a dummy) because the
 // helpers below reference the sampler, which makes it active in every lit program.
 uniform sampler2D u_dirEVSMMap;
-uniform vec4 u_evsmParams; // x=mode flag (0/1), y=dynamic variance floor MULTIPLIER, z=LBR amount, w=reserved
+uniform vec4 u_evsmParams; // x=mode flag (0/1), y=dynamic variance floor MULTIPLIER, z=LBR amount, w=receiver depth bias
 
 // One-tailed Chebyshev upper bound (Filament evaluateEVSM / chebyshevUpperBound): fully lit when
 // the receiver is in front of the filtered caster mean, otherwise the variance bound hardened by
@@ -71,7 +71,9 @@ uniform vec4 u_evsmParams; // x=mode flag (0/1), y=dynamic variance floor MULTIP
 // chebyshevUpperBoundEVSM in pbr_math.wgsl and to the moment writer EvsmMoment.frag.glsl.
 float chebyshevUpperBoundEVSM(float m1, float m2, float depth) {
     if (depth <= m1) return 1.0;
+    float rawVar = max(m2 - m1 * m1, 0.0);
     float variance = max(m2 - m1 * m1, u_evsmParams.y * m1 * m1);
+    variance = max(rawVar, variance * 0.06);
     float d = depth - m1;
     float pMax = variance / max(variance + d * d, 1e-7);
     float lbr = clamp(u_evsmParams.z, 0.0, 0.999);
@@ -81,23 +83,80 @@ float chebyshevUpperBoundEVSM(float m1, float m2, float depth) {
 // Evaluates the EVSM moments for this cascade's atlas cell (cell-clamped taps so a wide filter
 // never bleeds into a neighboring cascade) against the receiver's [0,1] shadow depth. Same remap
 // and warp (c = 40, d = depth * 2 - 1) as the moment writer EvsmMoment.frag.glsl; combines the
-// positive and negative warped VSMs with min(p, n) exactly like the WebGPU getEVSM.
+// positive and negative warped VSMs with min(p, n) exactly like the WebGPU getEVSM. The w lane is
+// a tiny RECEIVER depth bias in this same [0,1] light-depth domain (three.js VSM adds the shadow
+// bias to the receiver depth before evaluation): it pushes the receiver warp past the caster mean
+// at the silhouette to counter peter-panning, and stays negligible on fully-lit receivers whose
+// own depth is their caster mean (GPU Gems 3 §8.4.2 bias caution).
 float evalEVSMDir(vec2 atlasUV, vec2 cellMin, vec2 cellMax, float currentDepth) {
-    float pw = exp(40.0 * (currentDepth * 2.0 - 1.0));
+    float pw = exp(40.0 * ((currentDepth + u_evsmParams.w) * 2.0 - 1.0));
     float nw = -1.0 / pw;
+    vec4 rMoment = vec4(pw, pw * pw, nw, nw * nw);
+    // Receiver-horizon-clamped two-slice moment filter + blocker-min gap blend (ADR 0043).
+    // Byte-parallel with WebGPU getEVSM (pbr_math.wgsl): clamping non-blocking taps (`rawTap.x >= pw`)
+    // to `rMoment` prevents far-plane clear texels (e^{40}) from exploding the positive warp or
+    // pulling the negative warp mean above `nw` at the caster base (Peter-Panning / contact light
+    // bleed), while `minPos` recovers the true occluder depth across the entire penumbra width and
+    // the 5x5 wide kernel (step 4 texels) diffuses thin casters smoothly without stepping over them.
+    const int EVSM_FILTER_RADIUS = 1;
+    const int EVSM_WIDE_STEP = 4;
+    const float EVSM_BLEND_DEPTH = 0.012;
     vec2 texel = 1.0 / vec2(textureSize(u_dirEVSMMap, 0));
-    vec4 moments = vec4(0.0);
+
+    vec4 tight = vec4(0.0);
+    float tightBlockerSum = 0.0;
+    float tightBlockerCount = 0.0;
     for (int y = -1; y <= 1; y++) {
         for (int x = -1; x <= 1; x++) {
-            vec2 tapUV = clamp(atlasUV + vec2(float(x), float(y)) * texel, cellMin, cellMax);
-            moments += texture(u_dirEVSMMap, tapUV);
+            vec2 tapUV = clamp(atlasUV + vec2(float(x * EVSM_FILTER_RADIUS), float(y * EVSM_FILTER_RADIUS)) * texel, cellMin, cellMax);
+            vec4 rawTap = texture(u_dirEVSMMap, tapUV);
+            if (rawTap.x < pw) {
+                tightBlockerSum += rawTap.x;
+                tightBlockerCount += 1.0;
+            }
+            tight += (rawTap.x >= pw) ? rMoment : rawTap;
         }
     }
-    moments /= 9.0;
-    return min(
-        chebyshevUpperBoundEVSM(moments.x, moments.y, pw),
-        chebyshevUpperBoundEVSM(moments.z, moments.w, nw)
+    tight /= 9.0;
+
+    vec4 wide = vec4(0.0);
+    float wideBlockerSum = 0.0;
+    float wideBlockerCount = 0.0;
+    for (int y = -2; y <= 2; y++) {
+        for (int x = -2; x <= 2; x++) {
+            vec2 tapOffset = vec2(float(x * EVSM_WIDE_STEP + y), float(y * EVSM_WIDE_STEP - x));
+            vec2 tapUV = clamp(atlasUV + tapOffset * texel, cellMin, cellMax);
+            vec4 rawTap = texture(u_dirEVSMMap, tapUV);
+            if (rawTap.x < pw) {
+                wideBlockerSum += rawTap.x;
+                wideBlockerCount += 1.0;
+            }
+            wide += (rawTap.x >= pw) ? rMoment : rawTap;
+        }
+    }
+    wide /= 25.0;
+
+    float pTight = min(
+        chebyshevUpperBoundEVSM(tight.x, tight.y, pw),
+        chebyshevUpperBoundEVSM(tight.z, tight.w, nw)
     );
+    float pWide = min(
+        chebyshevUpperBoundEVSM(wide.x, wide.y, pw),
+        chebyshevUpperBoundEVSM(wide.z, wide.w, nw)
+    );
+    // True local occluder depth in [0,1] light-depth domain (exact inversion of the c = 40 warp
+    // from the blocker-only mean, preferring the tight local neighborhood so the pole base stays at
+    // gap ~ 0 and falling back to the wide blocker mean in the outer penumbra skirt).
+    float blockerPos = pw;
+    if (tightBlockerCount > 0.0) {
+        blockerPos = tightBlockerSum / tightBlockerCount;
+    } else if (wideBlockerCount > 0.0) {
+        blockerPos = wideBlockerSum / wideBlockerCount;
+    }
+    float occluderDepth = (log(blockerPos) / 40.0 + 1.0) * 0.5;
+    float gap = max(currentDepth + u_evsmParams.w - occluderDepth, 0.0);
+    float blend = smoothstep(0.0015, EVSM_BLEND_DEPTH, gap);
+    return mix(pTight, pWide, blend);
 }
 
 out vec4 fragColor;

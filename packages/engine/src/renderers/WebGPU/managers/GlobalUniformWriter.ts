@@ -14,17 +14,29 @@ const AREA_LIGHT_FLOATS = 24;
 const BYTES_PER_FLOAT = 4;
 
 /**
- * EVSM tuning defaults (only reached when `quality.shadowMode === "evsm"`; ADR 0007).
+ * EVSM tuning defaults (only reached when `quality.shadowMode === "evsm"`; ADR 0043).
  * These are the GL2-compatible central defaults; the shadow shaders read the same lanes.
  * `varianceFloor` is the DYNAMIC min-variance MULTIPLIER epsilon from the exponential-depth
  * chain rule: `minVariance = epsilon * (pw * pw)` where `pw` is the receiver's warped depth
  * (Filament `evaluateEVSM`, `EPSILON_MULTIPLIER = 0.002`). It replaces the depth bias for acne
  * control in EVSM -- a flat floor would be wrong because the warp expands variance enormously.
- * `lightBleed` is the light-bleeding-reduction remap amount (higher darkens residual leak
- * faster, too high darkens the whole penumbra).
+ * `lightBleed` is the light-bleeding-reduction REMAP amount (GPU Gems 3 §8.4.3 `ReduceLightBleeding`
+ * aggressiveness: `clamp((pMax - amount)/(1 - amount), 0, 1)`. Set "just high enough" -- too high
+ * darkens/limits the penumbra; the historical 0.004 was effectively no reduction, which is why the
+ * near-contact leak and the washed look persisted).
+ * `receiveBias` is a tiny RECEIVER depth bias applied BEFORE the exponential warp, in the same
+ * [0,1] light-space depth domain as the engine's shadow bias lanes. Precedent: three.js VSM adds
+ * the shadow bias to the receiver depth before evaluation (`shadowCoord.z += shadowBias`). At the
+ * caster silhouette the receiver and occluder share (nearly) the same depth, so the raw Chebyshev
+ * bound returns ~1 (lit) -- readings as peter-panning; the bias pushes the receiver warp past the
+ * caster mean there. It must stay small: on a fully-lit receiver the stored moments encode the
+ * receiver's OWN depth as the caster mean, so any bias reads the surface as marginally "behind"
+ * itself and would tint the whole lit scene (GPU Gems 3 §8.4.2 bias caution).
  */
 const EVSM_VARIANCE_FLOOR = 0.002;
-const EVSM_LIGHT_BLEED = 0.004;
+const EVSM_LIGHT_BLEED = 0.12;
+/** In [0,1] light-space depth units; ~2e-4 keeps the pMax->1 lit-receiver fast path intact. */
+const EVSM_RECEIVE_BIAS = 0.0002;
 /** Point/spot buffers hold exactly `MAX_CLUSTERED_LIGHTS_PER_TYPE` slots (64 * 32 B = 2048 B, 64 * 64 B = 4096 B).
  * Functions, not module constants: `core/index.js` is a circular import here and its exports are
  * still undefined while this module evaluates. */
@@ -306,14 +318,17 @@ export class GlobalUniformWriter {
     gData[soft.index + 2] = 0.0;
     gData[soft.index + 3] = 0.0;
 
-    // evsmParams (WebGPU EVSM tuning, ADR 0007): x = mode flag (1 only when the author opted in,
-    // so the default stays byte-identical PCSS), y = dynamic variance floor, z = light-bleeding
-    // reduction, w = reserved. See the EVSM_VARIANCE_FLOOR/EVSM_LIGHT_BLEED constants above.
+    // evsmParams (WebGPU EVSM tuning, ADR 0043): x = mode flag (1 only when the author opted in,
+    // so the default stays byte-identical PCSS), y = dynamic variance floor MULTIPLIER (chain-rule
+    // epsilon), z = light-bleeding-reduction amount (GPU Gems 3 §8.4.3 remap aggressiveness),
+    // w = RECEIVER depth bias before the exponential warp (three.js VSM `shadowCoord.z += shadowBias`;
+    // see EVSM_RECEIVE_BIAS). See the EVSM_* constants above.
     const evsm = glob.evsmParams;
     gData[evsm.index] = this._host.quality.shadowMode === "evsm" ? 1.0 : 0.0;
     gData[evsm.index + 1] = EVSM_VARIANCE_FLOOR;
     gData[evsm.index + 2] = EVSM_LIGHT_BLEED;
-    gData[evsm.index + 3] = 0.0;
+    // Mode-gated like the flag: the pcss-default snapshot pins lane 219 to 0.0 and EVSM is opt-in.
+    gData[evsm.index + 3] = this._host.quality.shadowMode === "evsm" ? EVSM_RECEIVE_BIAS : 0.0;
 
     // Default spot shadow values
     for (let i = 0; i < glob.spotShadowInfo.count; i++) {

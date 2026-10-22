@@ -86,9 +86,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * reserved exclusively for `u_dirEVSMMap` (see that method) and only falls back to this fixed
    * unit for the (theoretical) case of an active sampler without an allocated unit. */
   private static readonly _EVSM_MAP_UNIT = 14;
-  /** EVSM tuning lanes, byte-identical to the WebGPU side (GlobalUniformWriter lanes 217/218). */
+  /** EVSM tuning lanes, byte-identical to the WebGPU side (GlobalUniformWriter lanes 217-219). */
   private static readonly _EVSM_VARIANCE_FLOOR = 0.002;
-  private static readonly _EVSM_LIGHT_BLEED = 0.004;
+  private static readonly _EVSM_LIGHT_BLEED = 0.12;
+  /** Receiver depth bias before the exponential warp (three.js VSM `shadowCoord.z += shadowBias`);
+   * in [0,1] light-depth units. See the WebGPU EVSM_RECEIVE_BIAS constant for the rationale. */
+  private static readonly _EVSM_RECEIVE_BIAS = 0.0002;
   /** Moment-atlas clear vector meaning "no occluder" = an occluder at the far plane, which every
    * in-front receiver evaluates as lit (far-plane EVSM rationale: see the moment writer header). */
   private _evsmFarClear: [number, number, number, number] = [0, 0, 0, 0];
@@ -1083,7 +1086,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._scratchFloat4[0] = active ? 1.0 : 0.0;
       this._scratchFloat4[1] = WebGL2Renderer._EVSM_VARIANCE_FLOOR;
       this._scratchFloat4[2] = WebGL2Renderer._EVSM_LIGHT_BLEED;
-      this._scratchFloat4[3] = 0.0;
+      this._scratchFloat4[3] = WebGL2Renderer._EVSM_RECEIVE_BIAS;
       this.gl.uniform4fv(paramsLoc, this._scratchFloat4);
     }
     if (mapLoc) {
@@ -1151,12 +1154,16 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       0,
     );
 
-    this.gl.depthMask(false);
-    this.gl.depthFunc(this.gl.LEQUAL);
+    // Render front faces (cullFace(BACK), matching WebGPU CascadedShadowPassGPU / EvsmMomentMaterial)
+    // so the moment atlas stores the closest caster surface rather than the back face. Back-face
+    // moments (cullFace(FRONT)) have zero depth separation (d -> 0) where a caster's base meets the
+    // floor, which forces Chebyshev's variance / (variance + d^2) -> 1.0 (Peter-Panning at the base).
+    this.gl.depthMask(true);
+    this.gl.depthFunc(this.gl.LESS);
     this.gl.enable(this.gl.DEPTH_TEST);
     this.gl.disable(this.gl.BLEND);
     this.gl.enable(this.gl.CULL_FACE);
-    this.gl.cullFace(this.gl.FRONT);
+    this.gl.cullFace(this.gl.BACK);
 
     for (let i = 0; i < light.numCascades; i++) {
       const cascadeCam = light.cascadeCameras[i];
@@ -1165,8 +1172,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       const row = Math.floor(i / cols);
       this.gl.viewport(col * res, row * res, res, res);
 
-      // Scissor-clear this cascade's cell to the far-plane moment vector, so texels with no
-      // caster evaluate as LIT instead of as shadow holes (gl.clear ignores the viewport).
+      // Scissor-clear this cascade's cell to the far-plane moment vector + depth 1.0, so texels with
+      // no caster evaluate as LIT instead of as shadow holes (gl.clear ignores the viewport).
       this.gl.enable(this.gl.SCISSOR_TEST);
       this.gl.scissor(col * res, row * res, res, res);
       this.gl.clearColor(
@@ -1175,7 +1182,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         this._evsmFarClear[2],
         this._evsmFarClear[3],
       );
-      this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+      this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
       this.gl.disable(this.gl.SCISSOR_TEST);
 
       this.updateGlobalUBO(cascadeCam.viewProjectionMatrix, cascadeCam.position, emptyLights);

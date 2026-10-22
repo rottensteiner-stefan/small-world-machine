@@ -32,6 +32,29 @@
     pro-Programm exklusiv reservierten Sampler-Einheit. Verifiziert: WebGL2/evsm `[120,119,118]`
     (echter Schatten), WebGL2/pcss-Default weiterhin byte-identisch `[121,120,119]`.
     Details in ADR 0043 / `shadows.md` / Showcase-Log.
+  - *EVSM-Kontakt-Qualitäts-Fix (ADR 0043, beide Backends byte-parallel):* Peter-Panning an der
+    Caster-Basis + Light-Bleed nahe Kontakt + Far-Penumbra-Streifen/-Sättigung beseitigt.
+    Wurzel-Analyse + Fixes in `pbr_math.wgsl` / `base_fragment_header.frag.glsl` /
+    `dir_shadow.glsl` / `WebGL2Renderer._renderEvsmMoments`: (1) **Receiver-Horizon-Clamping** der
+    Momente (`rawTap.x >= pw ? rMoment : rawTap`) — verhindert, dass der Far-Plane-Clear `e^40` das
+    positive Moment sprengt bzw. `-e^-40 ≈ 0` das negative Mittel `m1_neg` über `nw` hebt, wenn
+    Blocker-Anteil `α < e^(-40·Δd)` (bisher 100% LIT an Pole-Basis/Silhouettenkanten); (2)
+    **25-Tap-Sheared-N-Rooks-Wide-Lattice** (`4·wx+wy`, `4·wy−wx`) tastet jeden ganzzahligen X/Y-
+    Offset in `[-10,+10]` lückenlos ab statt nur die Mittelspalte (`R=12≡16`-Plateau bei 3/9);
+    (3) **Blocker-Only-`occluderDepth`** (`log(blockerPos)`) + `smoothstep(0.0015, 0.012, gap)`-
+    Blend auf reale Kaskaden-Tiefenspanne; (4) **Front-Face-Momente WebGL2** (`cullFace(BACK)`, wie
+    WebGPU `EvsmMomentMaterial`) + skalierter synthetischer Kontakt-Varianz-Floor
+    (`max(rawVar, floorVar·0.06)` — `rawVar` bleibt 100% erhalten); Empfänger-Tiefen-Bias
+    (Lane w, `0.0002`) vor dem Warp (three.js-VSM-Prezedenz), LBR-Default `0.004→0.12`
+    (GPU Gems 3 §8.4.3). Gemessen (Pole-Probe, Showcase 42): WebGPU `baseGapRows=0.609` ab Pixel 1
+    (identisch PCSS), `nearContrast=0.589`, `farContrast=0.375`; WebGL2 `0.607` / `0.588` / `0.380`.
+    Default `pcss` bleibt opt-in (w-Lane mode-gated auf 0; Quelltext-Guards + goldener Lauf grün).
+  - *WebGPU-pcss-Anti-Ghosting (Vogel-Disk-Penumbra):* der reguläre 3×3-Gitter-Filter erzeugte
+    Streifen-/Geister-Penumbras in weichen Schatten (`spotLightPCSS`). Fix: schneller harter 3×3-PCF
+    im Kontakt (`pcfRadius ≤ 1.2`, keine Noise-/Tap-Overhead an Kontaktlinien) + 16-Tap-Vogel-Disk
+    mit per-Pixel deterministischem Interleaved-Gradient-Noise in der weichen Penumbra. Dadurch
+    weicht der Default-`pcss`-Filter bewusst vom historischen 3×3-Gitter ab (verbessert, alle Gates/
+    Guards bleiben grün) — siehe Bericht zur Entscheidungslage.
 - **Quality & Verification:**
   - *Neues committed Live-Gate `scripts/check-swm42-evsm.mjs`:* assertet fehlerfreien Lauf, Mode-Flag-Lane `evsmParams[0]` (1 unter evsm, 0 unter pcss) und plausible Frames (nicht schwarz/aufgeblasen, Schattenpräsenz) — WebGL2 darf unter keinem `shadowMode` ein kaputtes (schwarzes) Frame liefern. Navigiert per `domcontentloaded` + paintReady (der `networkidle0`-Timeout der EVSM-Seite ist ein falscher Navigations-Hang, nicht EVSM-bedingt).
 - **Housekeeping & Docs:**
