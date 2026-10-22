@@ -2,7 +2,7 @@
 
 > **Stand-Hinweis (2026-10-21):** Umgesetzt (V1, statischer Resolver, 2026-10-18/19): `core/quality/QualityConfigResolver.ts`, `DeviceCaps.forcedTier` / `?tier=`; das Feld `autoDowngrade` ist entfernt. Die LOW-Matrix weicht von der Skizze ab (kein Post-Resolution-Scale; `hdr=false`, `msaa=0`, `maxAnisotropy=1`, `maxShadowResolution=512`, `maxPixelRatio=1`, HBAO/Fog/LightShafts/MotionTrail/TAA/Bloom aus) und ist unkalibriert (Redmi-Kalibrierung offen). Ebene 4 (Runtime-Feedback) ist wie vorgesehen nicht umgesetzt. Zeilenangaben im Text sind ein historischer Stand.
 
-> **Folgenachricht (2026-10-22, im Zuge EVSM/ADR 0007):** `maxShadowResolution` war ein toter
+> **Folgenachricht (2026-10-22, im Zuge EVSM/ADR 0043):** `maxShadowResolution` war ein toter
 > Knopf (in keiner Schatten-Allokation gelesen — die Auflösung stammt ausschließlich vom
 > `ShadowLight.shadowResolution`-Feld) und ist deshalb aus `QualityConfig`, der LOW-Matrix und
 > `AbstractRenderer` entfernt worden (statt es migrationsriskant nachzuwiren). Die Schatten-

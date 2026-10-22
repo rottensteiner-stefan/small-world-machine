@@ -89,6 +89,17 @@ export interface Renderer {
    */
   destroy?(): void;
 
+  /**
+   * Frees the GPU resources of an offscreen target the app stops rendering to (a removed planar
+   * reflection or probe). Without it they live until `destroy()`. Safe for targets that were never
+   * rendered; must not be called for the currently active target.
+   */
+  releaseRenderTarget?(
+    target:
+      | import("../core/textures/index.js").RenderTarget
+      | import("../core/textures/index.js").RenderTargetCube,
+  ): void;
+
   /** Whether the underlying GPU device or context has been lost. */
   readonly isContextLost?: boolean;
   /** Optional callback triggered when the GPU context is lost. */

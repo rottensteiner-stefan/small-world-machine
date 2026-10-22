@@ -90,7 +90,7 @@ export interface QualityConfig {
   /**
    * Optional shadow algorithm for directional lights. `"evsm"` renders exponentially warped
    * variance moments (`rgba32float`) and evaluates them with a Chebyshev bound plus light-
-   * bleeding reduction and a dynamic variance floor (ADR 0007). `"pcss"` (default) keeps the
+   * bleeding reduction and a dynamic variance floor (ADR 0043). `"pcss"` (default) keeps the
    * PCSS path. Opt-in: the default stays `"pcss"` so existing scenes and gates stay
    * byte-identical. WebGPU core and WebGL2 (gated on `EXT_color_buffer_float`, otherwise it
    * falls back to fixed-PCF with a console warning) support it; WebGL1 has no shadow mapping.

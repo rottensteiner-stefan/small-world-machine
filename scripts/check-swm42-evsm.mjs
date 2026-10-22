@@ -68,7 +68,7 @@ function percentile(arr, q) {
  * Returns { meanLuma, backdrop, minCore, shadowContrast }.
  */
 function analyzeFrame(pngBuffer) {
-  const p = PNG.sync.read(pngBuffer);
+  const p = PNG.sync.read(Buffer.from(pngBuffer));
   const W = p.width;
   const H = p.height;
   const X_MIN = Math.floor(W * 0.45);

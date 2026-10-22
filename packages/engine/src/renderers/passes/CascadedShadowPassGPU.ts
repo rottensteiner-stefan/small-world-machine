@@ -49,7 +49,7 @@ export class CascadedShadowPassGPU implements RenderPass {
   private _shadowCasterBindGroup?: GPUBindGroup;
   private _frustum: Frustum = new Frustum();
 
-  // EVSM (ADR 0007): `rgba32float` 2d-array of exponentially warped variance moments, one layer
+  // EVSM (ADR 0043): `rgba32float` 2d-array of exponentially warped variance moments, one layer
   // per cascade. Rendered only when `renderer.quality.shadowMode === "evsm"`; it reuses the SAME
   // per-cascade depth array layer as its depth attachment with LEQUAL + depth-write off (see the
   // EvsmMomentMaterial manifest), so it re-emits moments for exactly the front-most surface the
@@ -82,7 +82,7 @@ export class CascadedShadowPassGPU implements RenderPass {
     this._cascadeLayerViews = [];
     this._bindGroupNeedsShadowRebuild = true;
     renderer.defaultDirShadowTextureView = renderer.dummyDirShadowTextureView;
-    // Also drop any EVSM moment map that belonged to the removed/replaced light (ADR 0007).
+    // Also drop any EVSM moment map that belonged to the removed/replaced light (ADR 0043).
     this._evsmTex = undefined;
     this._evsmTexView = undefined;
     this._evsmLayerViews = [];
@@ -92,7 +92,7 @@ export class CascadedShadowPassGPU implements RenderPass {
   }
 
   /**
-   * EVSM moment pass (ADR 0007): renders the exponentially warped variance moments per cascade
+   * EVSM moment pass (ADR 0043): renders the exponentially warped variance moments per cascade
    * into an `rgba32float` 2d-array (`u_dirEvsmMap`), immediately after the depth pass, reusing
    * the freshly stored depth array layers as the LEQUAL depth test (the EvsmMomentMaterial
    * pipeline has depth-write off, see GPUPipelineCache "less-equal"). This emits moments for
@@ -467,7 +467,7 @@ export class CascadedShadowPassGPU implements RenderPass {
       rp.end();
     }
 
-    // EVSM (ADR 0007): opt-in moment pass, run right after the depth pass. It renders the warped
+    // EVSM (ADR 0043): opt-in moment pass, run right after the depth pass. It renders the warped
     // variance moments per cascade, reusing the freshly stored depth array layers as its LEQUAL
     // depth test (no second depth buffer, exact front-surface extraction).
     if (renderer.quality.shadowMode === "evsm") {

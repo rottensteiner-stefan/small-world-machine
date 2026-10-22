@@ -71,7 +71,7 @@ These control the engine's graphical fidelity.
 - `hdr` (boolean): Enables high-dynamic-range (Float16) rendering pipelines.
 - `toneMapping` (string): The tone mapping algorithm to use (e.g. `aces`, `reinhard`, `none`).
 - `shadowMode` (`"pcss"` | `"evsm"`): Optional directional-shadow algorithm. `"evsm"`
-  (Exponential Variance Shadow Maps, see `docs/guides/shadows.md` and ADR 0007) renders
+  (Exponential Variance Shadow Maps, see `docs/guides/shadows.md` and ADR 0043) renders
   warped variance moments and evaluates a Chebyshev bound with light-bleeding reduction;
   `"pcss"` — the default, reproducing legacy behavior byte-identically — keeps PCSS on
   WebGPU and fixed-PCF on WebGL2. `"evsm"` requires WebGPU or WebGL2 with

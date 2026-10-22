@@ -494,3 +494,12 @@ export class PlayerController {
   }
 }
 ```
+
+## Solver notes (review fixes, 2026-10)
+
+- **Accumulated impulses:** each contact pair keeps `accNormalImpulse` (clamped `>= 0`, later iterations may reduce an earlier overshoot) and `accFriction` (kept inside `|jT| <= mu * accNormalImpulse`). The 1.2 SOR factor is therefore safe.
+- **Penetration slop:** `PENETRATION_SLOP = 0.005` m of overlap is tolerated by the positional pass; resting bodies sit up to 5 mm inside the surface by design.
+- **Pair keys:** `pairKey(a, b) = min * 2^26 + max` (plain number, throws outside `[0, 2^26)`); internal collider ids start at `2^25`.
+- **CCD:** a mover that starts overlapping gets TOI 0 only if it is driven deeper than penetration + 1 cm; hulls sweep as their bounding sphere (conservative, may stop early, never tunnels).
+- **Orientation:** `RigidBodyMath` takes the integrated `Object3D.rotation` as world rotation; dynamic bodies nested under another object are unsupported (the system warns once).
+- **Telemetry:** `PhysicsSystem.droppedSteps` counts fixed steps discarded by the `maxSubSteps` guard.

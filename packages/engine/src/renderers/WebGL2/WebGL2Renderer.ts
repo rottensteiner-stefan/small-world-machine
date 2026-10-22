@@ -2224,6 +2224,21 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   }
 
   /** @inheritdoc */
+  public releaseRenderTarget(target: RenderTarget | RenderTargetCube): void {
+    if (target instanceof RenderTargetCube) {
+      this._renderTargetCubeFbos.get(target)?.destroy();
+      this._renderTargetCubeFbos.delete(target);
+      this._textures.unregisterCubeTexture(target);
+    } else {
+      this._renderTargetFbos.get(target)?.destroy();
+      this._renderTargetFbos.delete(target);
+      this._textures.unregisterTexture(target);
+    }
+    // The FBO (and its colour texture) is gone: a later render into the target re-allocates it.
+    target.isLoaded = false;
+  }
+
+  /** @inheritdoc */
   public override destroy(): void {
     this.uninstallContextLossHandling();
     const gl = this.gl;

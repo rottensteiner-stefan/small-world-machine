@@ -1,4 +1,4 @@
-// EVSM moment writer (ADR 0007). Depth source: `i.pos.z`. The shared vertex chunk writes the
+// EVSM moment writer (ADR 0043). Depth source: `i.pos.z`. The shared vertex chunk writes the
 // clip-space position into `Out.pos` (@builtin(position)); reading it in the fragment yields the
 // rasterized [0,1] fragment depth -- the exact value the depth pass just stored for this very
 // fragment, since the moment pass renders the same geometry with the same cascade VP into the same

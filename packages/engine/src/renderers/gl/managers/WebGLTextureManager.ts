@@ -564,6 +564,16 @@ export class WebGLTextureManager {
     this._texCubeCache.set(tex, glTex);
   }
 
+  /** Forgets (without deleting) the texture registered for `tex`; the owner has already freed it. */
+  public unregisterTexture(tex: Texture): void {
+    this._texCache.delete(tex);
+  }
+
+  /** Cube counterpart of `unregisterTexture()`. */
+  public unregisterCubeTexture(tex: CubeTexture): void {
+    this._texCubeCache.delete(tex);
+  }
+
   /** Raw cube-cache lookup without the default-texture fallback, for render-target bookkeeping
    * (re-pointing cube faces / releasing re-allocated FBO textures). */
   public getCubeTexture(tex: CubeTexture): WebGLTexture | undefined {

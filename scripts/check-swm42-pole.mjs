@@ -65,7 +65,7 @@ function percentile(arr, q) {
  * blended into the floor tone (wide soft penumbra).
  */
 function analyzeFrame(pngBuffer) {
-  const p = PNG.sync.read(pngBuffer);
+  const p = PNG.sync.read(Buffer.from(pngBuffer));
   const W = p.width;
   const H = p.height;
   const X_MIN = Math.floor(W * 0.45);

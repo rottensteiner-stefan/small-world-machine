@@ -957,6 +957,30 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   }
 
   /** @inheritdoc */
+  public releaseRenderTarget(target: RenderTarget | RenderTargetCube): void {
+    if (target instanceof RenderTargetCube) {
+      const fbo = this._renderTargetCubeFbos.get(target);
+      if (fbo) this.gl.deleteFramebuffer(fbo);
+      const depth = this._renderTargetCubeDepthBuffers.get(target);
+      if (depth) this.gl.deleteRenderbuffer(depth);
+      this._renderTargetCubeFbos.delete(target);
+      this._renderTargetCubeDepthBuffers.delete(target);
+      this._textures.deleteCubeTexture(target);
+    } else {
+      const fbo = this._renderTargetFbos.get(target);
+      if (fbo) this.gl.deleteFramebuffer(fbo);
+      const depth = this._renderTargetDepthBuffers.get(target);
+      if (depth) this.gl.deleteRenderbuffer(depth);
+      const tex = this._texCache.get(target);
+      if (tex) this.gl.deleteTexture(tex);
+      this._renderTargetFbos.delete(target);
+      this._renderTargetDepthBuffers.delete(target);
+      this._textures.unregisterTexture(target);
+    }
+    target.isLoaded = false;
+  }
+
+  /** @inheritdoc */
   protected override releaseObjectResources(obj: Object3D): void {
     this._geometry.releaseGeometryFor(obj);
     this._programCache.releaseObjectProgram(obj);

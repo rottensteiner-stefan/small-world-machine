@@ -144,4 +144,11 @@ export class DynamicReflectionProbe extends Object3D {
       }
     }
   }
+
+  /**
+   * Releases the cube target's GPU resources on `renderer` (see `PlanarReflectionNode.dispose`).
+   */
+  public dispose(renderer: Renderer): void {
+    renderer.releaseRenderTarget?.(this.renderTarget);
+  }
 }

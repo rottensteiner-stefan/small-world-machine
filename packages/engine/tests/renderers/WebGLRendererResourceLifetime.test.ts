@@ -2,7 +2,9 @@ import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { WebGL1Renderer } from "../../src/renderers/WebGL1/WebGL1Renderer.js";
 import { WebGL2Renderer } from "../../src/renderers/WebGL2/WebGL2Renderer.js";
-import type { LightDataInterface } from "../../src/interfaces/index.js";
+import type { LightDataInterface, Renderer } from "../../src/interfaces/index.js";
+import { RenderTarget } from "../../src/core/textures/index.js";
+import { PlanarReflectionNode } from "../../src/core/reflection/PlanarReflectionNode.js";
 
 /** Private state the lifetime tests have to plant/inspect (the renderers need a real context to
  * initialize, which is not worth faking). */
@@ -16,6 +18,12 @@ interface Gl2Internals {
   _blackCubeTexture?: WebGLTexture;
   _defaultBrdfTexture?: WebGLTexture;
   _shadowMaps: Map<object, { destroy: () => void }>;
+  _renderTargetFbos: Map<object, { destroy: () => void }>;
+  _textures: {
+    unregisterTexture: (t: object) => void;
+    unregisterCubeTexture: (t: object) => void;
+  };
+  _texCache: Map<object, object>;
   _allocateClusterTextures: (dims: { x: number; y: number; z: number }, max: number) => void;
 }
 
@@ -106,6 +114,57 @@ describe("WebGL2Renderer resource lifetime", () => {
 
     expect(destroy).toHaveBeenCalledTimes(1);
     expect(internals._shadowMaps.has(staleLight)).toBe(false);
+  });
+});
+
+describe("releaseRenderTarget", () => {
+  /** A renderer with the texture manager stubbed to the cache bookkeeping `release` relies on. */
+  function rendererWithTextureCache(): WebGL2Renderer {
+    const renderer = new WebGL2Renderer();
+    const internals = renderer as unknown as Gl2Internals;
+    internals._textures = {
+      unregisterTexture: (t): void => {
+        internals._texCache.delete(t);
+      },
+      unregisterCubeTexture: (): void => {},
+    };
+    return renderer;
+  }
+
+  it("WebGL2: destroys the target's FBO, forgets its texture and lets a later render re-allocate it", () => {
+    const renderer = rendererWithTextureCache();
+    const internals = renderer as unknown as Gl2Internals;
+    const target = RenderTarget.create({ width: 8, height: 8 });
+    target.isLoaded = true;
+    const destroy = vi.fn();
+    internals._renderTargetFbos.set(target, { destroy });
+    internals._texCache.set(target, {});
+
+    renderer.releaseRenderTarget(target);
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(internals._renderTargetFbos.has(target)).toBe(false);
+    expect(internals._texCache.has(target)).toBe(false);
+    expect(target.isLoaded).toBe(false);
+  });
+
+  it("is safe for a target that was never rendered", () => {
+    const renderer = rendererWithTextureCache();
+    expect(() =>
+      renderer.releaseRenderTarget(RenderTarget.create({ width: 4, height: 4 })),
+    ).not.toThrow();
+  });
+
+  it("PlanarReflectionNode.dispose hands its render target to the renderer", () => {
+    const node = new PlanarReflectionNode("mirror", 16, 16);
+    const releaseRenderTarget = vi.fn();
+    node.dispose({ releaseRenderTarget } as unknown as Renderer);
+    expect(releaseRenderTarget).toHaveBeenCalledWith(node.renderTarget);
+  });
+
+  it("PlanarReflectionNode.dispose tolerates renderers without the capability", () => {
+    const node = new PlanarReflectionNode("mirror", 16, 16);
+    expect(() => node.dispose({} as unknown as Renderer)).not.toThrow();
   });
 });
 

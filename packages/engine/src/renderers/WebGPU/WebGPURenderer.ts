@@ -205,7 +205,7 @@ export class WebGPURenderer extends AbstractRenderer {
     return this._fallback.dummySpotShadowTextureView;
   }
   /** Read by the EVSM sampler binding of the global bind group; reassigned once by
-   * `CascadedShadowPassGPU` when a real EVSM moment map first exists (ADR 0007). */
+   * `CascadedShadowPassGPU` when a real EVSM moment map first exists (ADR 0043). */
   public get defaultEVSMTextureView(): GPUTextureView {
     return this._fallback.defaultEVSMTextureView;
   }
@@ -215,7 +215,7 @@ export class WebGPURenderer extends AbstractRenderer {
   public get dummyEVSMTextureView(): GPUTextureView {
     return this._fallback.dummyEVSMTextureView;
   }
-  /** Linear clamp-to-edge sampler for the EVSM moment map (ADR 0007). */
+  /** Linear clamp-to-edge sampler for the EVSM moment map (ADR 0043). */
   public get evsmSampler(): GPUSampler {
     return this._fallback.evsmSampler;
   }
@@ -678,7 +678,7 @@ export class WebGPURenderer extends AbstractRenderer {
           visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
           buffer: { type: "read-only-storage" },
         },
-        // EVSM moment map (ADR 0007): rgba32float 2d-array. "unfilterable-float" (not "float"):
+        // EVSM moment map (ADR 0043): rgba32float 2d-array. "unfilterable-float" (not "float"):
         // RGBA32Float only offers the unfilterable sample type unless the float32-filterable
         // device feature is enabled, and getEVSM() fetches taps with textureLoad anyway (texel
         // loads are legal in the cascade's non-uniform control flow and ignore filtering), so no
@@ -865,7 +865,7 @@ export class WebGPURenderer extends AbstractRenderer {
         { binding: 13, resource: { buffer: this._spotClusterGridBuffer } },
         { binding: 14, resource: { buffer: this._spotClusterIndexBuffer } },
         { binding: 15, resource: { buffer: this._boneMatricesBuffer } },
-        // EVSM moment map + sampler (ADR 0007); falls back to the dummy map until a real one exists.
+        // EVSM moment map + sampler (ADR 0043); falls back to the dummy map until a real one exists.
         { binding: 16, resource: this._fallback.defaultEVSMTextureView },
         { binding: 17, resource: this._fallback.evsmSampler },
       ],
@@ -1261,7 +1261,7 @@ export class WebGPURenderer extends AbstractRenderer {
     /**
      * Optional override for the render-pass color target the pipeline is built for. Defaults to
      * `currentColorTargetFormat` (the main frame or active RenderTarget). The EVSM moment pass
-     * (ADR 0007) renders into an `rgba32float` 2d-array and passes `"rgba32float"` here --
+     * (ADR 0043) renders into an `rgba32float` 2d-array and passes `"rgba32float"` here --
      * pipeline caching already keys on this format, so overriding a non-main target simply
      * builds the variant the moment pass actually needs instead of mismatching attachment state.
      */

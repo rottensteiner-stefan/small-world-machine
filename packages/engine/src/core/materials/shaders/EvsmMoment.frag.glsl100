@@ -6,7 +6,7 @@ void main() {
         discard;
     }
 
-    // EVSM moment encoding (ADR 0007), WebGL1 variant -- never reached today (WebGL1 has no
+    // EVSM moment encoding (ADR 0043), WebGL1 variant -- never reached today (WebGL1 has no
     // shadow mapping), kept so the material can compile on every dialect.
     float depth = clamp(gl_FragCoord.z, 0.0, 1.0);
     float d = clamp(depth * 2.0 - 1.0, -1.0, 1.0);

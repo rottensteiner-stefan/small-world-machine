@@ -117,4 +117,13 @@ export class PlanarReflectionNode extends Object3D {
       }
     }
   }
+
+  /**
+   * Releases the GPU resources of `renderTarget` on `renderer`. Call it when the node is removed
+   * for good (or before replacing the renderer): the target is owned by this node, so nothing else
+   * frees it before `renderer.destroy()`. Rendering again afterwards simply re-allocates it.
+   */
+  public dispose(renderer: Renderer): void {
+    renderer.releaseRenderTarget?.(this.renderTarget);
+  }
 }

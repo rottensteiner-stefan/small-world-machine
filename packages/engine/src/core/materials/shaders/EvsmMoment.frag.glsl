@@ -15,7 +15,7 @@ void main() {
         discard;
     }
 
-    // EVSM moment encoding (ADR 0007) -- byte-compatible with EvsmMoment.frag.wgsl:
+    // EVSM moment encoding (ADR 0043) -- byte-compatible with EvsmMoment.frag.wgsl:
     // (e^{c·d}, e^{2c·d}, -e^{-c·d}, e^{-2c·d}) with d in [-1,1] and c = 40 (the Filament
     // vsm-exponent). Every stored value stays inside the fp32 representable range (see WGSL
     // header for the exact magnitude reasoning).

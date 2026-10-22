@@ -36,7 +36,7 @@ export const MaterialType = {
   SLIME: "SlimeMaterial",
   /** Depth material for shadow mapping. */
   DEPTH: "DepthMaterial",
-  /** EVSM moment-writing material for the exponentially warped variance map (ADR 0007). */
+  /** EVSM moment-writing material for the exponentially warped variance map (ADR 0043). */
   EVSM: "EvsmMomentMaterial",
   /** Physically based rendering material with transmission/refraction. */
   GLASS: "GlassMaterial",

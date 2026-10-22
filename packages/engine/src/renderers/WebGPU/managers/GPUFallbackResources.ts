@@ -102,7 +102,7 @@ export class GPUFallbackResources {
   }
 
   /** Read by the fragment shader's EVSM sampler binding of the global bind group; reassigned once
-   * by `CascadedShadowPassGPU` when a real EVSM moment map first exists (ADR 0007). */
+   * by `CascadedShadowPassGPU` when a real EVSM moment map first exists (ADR 0043). */
   public get defaultEVSMTextureView(): GPUTextureView {
     return this._defaultEVSMTexView;
   }

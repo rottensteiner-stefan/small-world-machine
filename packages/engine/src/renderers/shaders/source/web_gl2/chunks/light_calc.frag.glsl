@@ -50,7 +50,7 @@
               float currentDepth = projCoords.z;
 
               if (u_evsmParams.x > 0.5) {
-                  // EVSM (ADR 0007): filter the warped moments of this cascade's atlas cell,
+                  // EVSM (ADR 0043): filter the warped moments of this cascade's atlas cell,
                   // then run the two-sided Chebyshev bound (dynamic floor + LBR). Cell-clamped
                   // taps so the 3x3 filter never bleeds into a neighboring cascade.
                   shadowA = evalEVSMDir(atlasUV, cellMin, cellMax, currentDepth);
@@ -129,7 +129,7 @@
                   float currentDepthB = projCoordsB.z;
 
                   if (u_evsmParams.x > 0.5) {
-                      // EVSM (ADR 0007): cell-clamped moments for the blend sample too, so the
+                      // EVSM (ADR 0043): cell-clamped moments for the blend sample too, so the
                       // blend band never mixes PCF and EVSM results.
                       vec2 cellMinB = vec2(colB, rowB) / cols;
                       vec2 cellMaxB = cellMinB + vec2(1.0) / cols;

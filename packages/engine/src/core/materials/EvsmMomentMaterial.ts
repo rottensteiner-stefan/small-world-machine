@@ -16,7 +16,7 @@ export type EvsmMomentMaterialOptions = {
 };
 
 /**
- * A specialized material for rendering the EVSM moment texture (ADR 0007): instead of a depth
+ * A specialized material for rendering the EVSM moment texture (ADR 0043): instead of a depth
  * target it writes the 4 exponentially warped variance channels `(e^{cd}, e^{2cd}, -e^{-cd},
  * e^{-2cd})` into an `rgba32float` color attachment. It only evaluates alpha testing if a diffuse
  * texture is provided. The pass attaches an already-rendered depth array layer as its depth
