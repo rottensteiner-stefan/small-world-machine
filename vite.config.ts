@@ -6,6 +6,11 @@ import net from "net";
 import EventEmitter from "events";
 import fs from "fs";
 import path from "path";
+import {
+  directoryRedirectTarget,
+  parseShowcaseLayout,
+  showcasesRedirectTarget,
+} from "./scripts/lib/dev-redirects.ts";
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -48,20 +53,20 @@ export default defineConfig({
     {
       name: "showcase-layout",
       transformIndexHtml(html) {
-        const layoutRegex =
-          /<showcase-layout\s+title="([^"]*)"\s+subtitle-b64="([^"]*)"\s+prev="([^"]*)"\s+next="([^"]*)"\s*><\/showcase-layout>/;
-        const match = html.match(layoutRegex);
-        if (match) {
-          const [full, title, subtitleB64] = match;
-          const subtitle = Buffer.from(subtitleB64, "base64").toString("utf-8");
+        const layout = parseShowcaseLayout(html);
+        if (layout) {
           const headerHtml = `
 <header id="info">
-  <h1>${title}</h1>
-  ${subtitle}
+  <h1>${layout.title}</h1>
+  ${layout.subtitle}
 </header>`;
           const footerHtml = `<footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World Machine</footer>`;
-          html = html.replace(full, headerHtml);
+          html = html.replace(layout.tag, headerHtml);
           html = html.replace("</body>", footerHtml + "\n  </body>");
+        } else if (html.includes("<showcase-layout")) {
+          throw new Error(
+            "<showcase-layout> found but title/subtitle-b64 attributes could not be parsed",
+          );
         }
         return html;
       },
@@ -85,48 +90,13 @@ export default defineConfig({
               return next();
             }
 
-            // Redirect /apps/showcases to the launcher root with the Showcases tab pre-selected
-            if (
-              pathname === "/apps/showcases" ||
-              pathname === "/apps/showcases/" ||
-              pathname === "/apps/showcases/index.html"
-            ) {
-              const target =
-                "/?filter=showcases" +
-                (search ? (search.startsWith("?") ? "&" + search.slice(1) : "&" + search) : "");
-              res.writeHead(302, {
-                Location: target,
-                "Content-Type": "text/html",
-              });
+            const target =
+              showcasesRedirectTarget(pathname, search) ??
+              directoryRedirectTarget(root, pathname, search);
+            if (target) {
+              res.writeHead(302, { Location: target, "Content-Type": "text/html" });
               res.end();
               return;
-            }
-
-            // If path doesn't end with a slash, check if it points to a directory with index.html
-            if (!pathname.endsWith("/")) {
-              const cleanPath = decodeURIComponent(pathname.replace(/^\/+/, ""));
-              const candidates = [
-                path.resolve(root, cleanPath),
-                path.resolve(root, "public", cleanPath),
-              ];
-
-              for (const candidate of candidates) {
-                try {
-                  if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
-                    if (fs.existsSync(path.join(candidate, "index.html"))) {
-                      const target = pathname + "/" + (search ? "?" + search : "");
-                      res.writeHead(302, {
-                        Location: target,
-                        "Content-Type": "text/html",
-                      });
-                      res.end();
-                      return;
-                    }
-                  }
-                } catch {
-                  // Ignore filesystem access errors
-                }
-              }
             }
 
             next();
@@ -139,38 +109,14 @@ export default defineConfig({
         server.middlewares.use((req, res, next) => {
           if (!req.url) return next();
           const [pathname, search] = req.url.split("?");
-          if (
-            pathname === "/apps/showcases" ||
-            pathname === "/apps/showcases/" ||
-            pathname === "/apps/showcases/index.html"
-          ) {
-            const target =
-              "/?filter=showcases" +
-              (search ? (search.startsWith("?") ? "&" + search.slice(1) : "&" + search) : "");
-            res.writeHead(302, {
-              Location: target,
-              "Content-Type": "text/html",
-            });
+          if (!pathname) return next();
+          const target =
+            showcasesRedirectTarget(pathname, search) ??
+            directoryRedirectTarget(server.config.root, pathname, search);
+          if (target) {
+            res.writeHead(302, { Location: target, "Content-Type": "text/html" });
             res.end();
             return;
-          }
-          if (pathname && !pathname.endsWith("/")) {
-            const cleanPath = decodeURIComponent(pathname.replace(/^\/+/, ""));
-            const diskPath = path.resolve(server.config.root, cleanPath);
-            try {
-              if (fs.existsSync(diskPath) && fs.statSync(diskPath).isDirectory()) {
-                if (fs.existsSync(path.join(diskPath, "index.html"))) {
-                  res.writeHead(302, {
-                    Location: pathname + "/" + (search ? "?" + search : ""),
-                    "Content-Type": "text/html",
-                  });
-                  res.end();
-                  return;
-                }
-              }
-            } catch {
-              // Ignore
-            }
           }
           next();
         });
