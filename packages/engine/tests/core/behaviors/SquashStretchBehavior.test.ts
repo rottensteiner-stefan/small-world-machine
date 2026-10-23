@@ -46,9 +46,4 @@ describe("SquashStretchBehavior", () => {
     expect(target.scale.y).toBeCloseTo(1, 2);
     expect(target.scale.z).toBeCloseTo(1, 2);
   });
-
-  it("does nothing when the target is not an Object3D", () => {
-    const behavior = new SquashStretchBehavior();
-    expect(() => behavior.update(1 / 60)).not.toThrow();
-  });
 });

@@ -1,4 +1,5 @@
 import { Object3D, Vector3D, Quaternion } from "../../src/index.js";
+import { Behavior } from "../../src/core/behaviors/Behavior.js";
 import { describe, it, expect } from "vitest";
 
 describe("Object3D", () => {
@@ -118,5 +119,115 @@ describe("Object3D", () => {
       expect(forward.z).toBeCloseTo(0);
       expect(obj.quaternion.w).not.toBe(1); // Quaternion was actively updated from identity
     });
+  });
+});
+
+describe("Object3D graph operations", () => {
+  it("add() reparents and tracks children; remove() detaches and clears the parent", () => {
+    const parent = new Object3D("parent");
+    const child = new Object3D("child");
+
+    parent.add(child);
+    expect(parent.children).toContain(child);
+    expect(child.parent).toBe(parent);
+
+    parent.remove(child);
+    expect(parent.children).not.toContain(child);
+    expect(child.parent).toBeUndefined();
+  });
+
+  it("getObjectByName finds nested descendants", () => {
+    const root = new Object3D("root");
+    const mid = new Object3D("mid");
+    const leaf = new Object3D("leaf");
+    mid.add(leaf);
+    root.add(mid);
+    expect(root.getObjectByName("leaf")).toBe(leaf);
+    expect(root.getObjectByName("root")).toBe(root);
+    expect(root.getObjectByName("missing")).toBeUndefined();
+  });
+
+  it("traverse visits every node exactly once in depth-first pre-order", () => {
+    const root = new Object3D("root");
+    const a = new Object3D("a");
+    const a1 = new Object3D("a1");
+    const b = new Object3D("b");
+    a.add(a1);
+    root.add(a, b);
+
+    const visited: string[] = [];
+    root.traverse((o) => visited.push(o.name));
+    // Depth-first pre-order: root, then a and its subtree, then b.
+    expect(visited).toEqual(["root", "a", "a1", "b"]);
+  });
+
+  it("removing a node during traverse does not crash or observe stale nodes", () => {
+    const root = new Object3D("root");
+    const doomed = new Object3D("doomed");
+    const survivor = new Object3D("survivor");
+    root.add(doomed, survivor);
+
+    const visited: string[] = [];
+    root.traverse((o) => {
+      visited.push(o.name);
+      if (o === root) root.remove(doomed);
+    });
+
+    expect(visited[0]).toBe("root");
+    expect(root.children).not.toContain(doomed);
+    expect(root.children).toContain(survivor);
+  });
+});
+
+describe("Object3D behavior lifecycle", () => {
+  it("addBehavior attaches and sets target; removeBehavior detaches and clears target", () => {
+    const obj = new Object3D();
+    const behavior = new (class extends Behavior {
+      public override update(): void {}
+    })();
+
+    obj.addBehavior(behavior);
+    expect(obj.behaviors).toContain(behavior);
+    expect(behavior.target).toBe(obj);
+
+    obj.removeBehavior(behavior);
+    expect(obj.behaviors).not.toContain(behavior);
+    expect(behavior.target).toBeUndefined();
+  });
+
+  it("clone re-attaches independent behavior instances with the clone as target", () => {
+    const obj = new Object3D("source");
+    const originalBehavior = new (class extends Behavior {
+      public override update(): void {}
+    })();
+    obj.addBehavior(originalBehavior);
+
+    const copy = obj.clone();
+    expect(copy).not.toBe(obj);
+    expect(copy.behaviors).toHaveLength(1);
+    const copiedBehavior = copy.behaviors[0]!;
+    expect(copiedBehavior).not.toBe(originalBehavior);
+    expect(copiedBehavior.target).toBe(copy);
+    // Behavior uuids are fresh per clone -- no shared identity.
+    expect(copiedBehavior.uuid).not.toBe(originalBehavior.uuid);
+  });
+
+  it("clone produces a deep independent subtree and drops the rigid body", () => {
+    const parent = new Object3D("parent");
+    const child = new Object3D("child");
+    parent.add(child);
+    parent.rigidBody = { mass: 1 } as unknown as import("../../src/physix/RigidBody.js").RigidBody;
+
+    const copy = parent.clone();
+    expect(copy.children).toHaveLength(1);
+    expect(copy.children[0]).not.toBe(child);
+    expect((copy.children[0] as Object3D).parent).toBe(copy);
+    // The clone is free-floating until reparented.
+    expect(copy.parent).toBeUndefined();
+    expect(copy.rigidBody).toBeUndefined();
+
+    // Mutating the clone must not touch the original subtree.
+    copy.getObjectByName("child")!.name = "renamed";
+    expect(child.name).toBe("child");
   });
 });

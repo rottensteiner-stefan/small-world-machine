@@ -1,6 +1,19 @@
 # Liquid Goldens (M1)
 
-Deterministischer Rendering-Baseline-Schutz für Showcase 10 („Waterworld & Liquid Gallery“) —
+> **📌 Status: manuelles Audit-Werkzeug, kein Push-/PR-Gate.** Die Goldens laufen **nicht** in
+> `npm test` und **nicht** im Push-/PR-`verify`-CI-Job (der läuft nur Typecheck, Lint, Unit-Tests,
+> Build). Sie sind ein **auf Anforderung** gestartetes Auditsystem (Actions → „CI" → „Run workflow"),
+> dessen Ergebnis **manuell** reviewt werden muss (siehe „Regelmäßiger Ablauf"). Verlasse dich also
+> **nicht** darauf, dass ein Push irgendetwas über Pixel-Regressionen weiß — genau das ist die
+> Lücke, die dieser Ordner schließt, wenn er explizit gefahren wird. Die Entscheidung, goldens in
+> den Default-CI zu verdrahten, kostet ~25 min je Lauf und steht weiterhin offen (bewusst).
+>
+> **Toleranz-Hinweis:** `config.json` gated global mit `maxDiffRatio: 0.005` (0,5 %), während die
+> dokumentierte macOS↔Linux-Umgebungsdrift in `oblique`-Zellen 0,6–1,8 % betragen kann. Für
+> bekannte rauschartige Pools müssen per-Zell-Toleranzen in `poolOverrides` gesetzt werden
+> (aktuell leer) — die globale 0,5 %-Schwelle ist sonst **nicht** auf Umgebungsdrift kalibriert.
+
+Deterministischer Rendering-Baseline-Schutz für Showcase 10 („Waterworld & Liquid Gallery") —
 Teil von **M1** der Flüssigkeits-Roadmap (`.agents/collaborate/liquid-roadmap.md` §8.2).
 
 Jede ausgabeändernde Shader-Änderung darf das Wasserbild nicht unbemerkt verändern. Diese Tools

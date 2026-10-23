@@ -114,4 +114,34 @@ describe("Quaternion", () => {
     expect(euler.y).toBeCloseTo(0.6);
     expect(euler.z).toBeCloseTo(0);
   });
+
+  describe("algebraic identities", () => {
+    it("composes a rotation with its inverse about the same axis back to identity", () => {
+      const axis = new Vector3D(0, 1, 0);
+      const q = new Quaternion().setFromAxisAngle(axis, 0.7);
+      q.multiply(new Quaternion().setFromAxisAngle(axis, -0.7));
+      // Rotating by +0.7 then -0.7 about the same axis must equal no rotation.
+      expect(q.w).toBeCloseTo(1, 6);
+      expect(q.x).toBeCloseTo(0, 6);
+      expect(q.y).toBeCloseTo(0, 6);
+      expect(q.z).toBeCloseTo(0, 6);
+    });
+
+    it("preserves unit length across normalization and composition", () => {
+      const q1 = new Quaternion().setFromAxisAngle(new Vector3D(1, 0, 0), 0.3).normalize();
+      const q2 = new Quaternion().setFromAxisAngle(new Vector3D(0.2, 1, -0.3), -1.1).normalize();
+      const c = new Quaternion().copyFrom(q1).multiply(q2).normalize();
+      expect(c.length()).toBeCloseTo(1, 6);
+    });
+
+    it("composing with the identity quaternion changes nothing", () => {
+      const q = new Quaternion().setFromAxisAngle(new Vector3D(0, 0, 1), 0.9);
+      const copy = new Quaternion().copyFrom(q);
+      q.multiply(new Quaternion().identity());
+      expect(q.x).toBeCloseTo(copy.x, 6);
+      expect(q.y).toBeCloseTo(copy.y, 6);
+      expect(q.z).toBeCloseTo(copy.z, 6);
+      expect(q.w).toBeCloseTo(copy.w, 6);
+    });
+  });
 });

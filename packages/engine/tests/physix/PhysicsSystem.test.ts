@@ -23,7 +23,6 @@ describe("PhysicsSystem", () => {
     // Default gravity is -9.81 on Y, set to 0 for controlled tests
     system.gravity.set(0, 0, 0);
     system.maxDeltaTime = 1000.0;
-    system.maxDeltaTime = 1000.0;
     scene = new Scene();
   });
 
@@ -37,7 +36,6 @@ describe("PhysicsSystem", () => {
     rb.applyForce(new Vector3D(10, 0, 0));
 
     // dt = 1.0s
-    system.fixedTimeStep = 1.0;
     system.fixedTimeStep = 1.0;
     system.step(scene, 1.0);
 
@@ -61,7 +59,6 @@ describe("PhysicsSystem", () => {
 
     system.gravity.set(0, -10, 0);
 
-    system.fixedTimeStep = 0.5;
     system.fixedTimeStep = 0.5;
     system.step(scene, 0.5);
 
@@ -103,7 +100,6 @@ describe("PhysicsSystem", () => {
 
     // step 0.5s
     system.fixedTimeStep = 0.5;
-    system.fixedTimeStep = 0.5;
     system.step(scene, 0.5);
 
     // a_angular = PI / 1 = PI
@@ -130,7 +126,6 @@ describe("PhysicsSystem", () => {
     rb.applyTorque(new Vector3D(100, 100, 100));
 
     system.fixedTimeStep = 1.0;
-    system.fixedTimeStep = 1.0;
     system.step(scene, 1.0);
 
     expect(rb.velocity.lengthSq()).toBe(0);
@@ -149,7 +144,6 @@ describe("PhysicsSystem", () => {
     rb.velocity.set(10, 10, 10);
     obj.position.set(5, 5, 5);
 
-    system.fixedTimeStep = 0;
     system.fixedTimeStep = 0;
     system.step(scene, 0);
     expect(rb.forces.lengthSq()).toBe(30000); // not cleared
@@ -193,11 +187,13 @@ describe("PhysicsSystem", () => {
     expect(rb.velocity.x).toBe(1e10);
 
     system.fixedTimeStep = 1.0;
-    system.fixedTimeStep = 1.0;
     system.step(scene, 1.0);
 
-    expect(Number.isNaN(obj.position.x)).toBe(false);
-    expect(obj.position.x).toBeCloseTo(1e10, -8);
+    // The real contract here is "no NaN and the displacement survives", not eight digits of a
+    // ten-billion-scale number -- so assert finiteness and a relative band instead of the old
+    // `toBeCloseTo(1e10, -8)` which silently allowed +/-5e7.
+    expect(Number.isFinite(obj.position.x)).toBe(true);
+    expect(Math.abs(obj.position.x - 1e10)).toBeLessThanOrEqual(1e10 * 1e-4);
   });
 
   it("should resolve Sphere-Sphere collisions (push apart and bounce)", async () => {
@@ -226,28 +222,29 @@ describe("PhysicsSystem", () => {
     rb1.velocity.set(1, 0, 0);
     rb2.velocity.set(-1, 0, 0);
 
-    // Call resolveCollisions directly by casting to any to avoid integration step tunneling
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (system as any)._resolveCollisions([sphere1, sphere2], [sphere1, sphere2]);
+    // Call the resolver directly (typed private call, not `as any`) to avoid integration tunneling.
+    const resolver = system as unknown as {
+      _resolveCollisions(
+        bodies: Object3D[],
+        colliders: Object3D[],
+        joints: unknown[],
+        dt: number,
+      ): void;
+    };
+    resolver._resolveCollisions([sphere1, sphere2], [sphere1, sphere2], [], 1.0);
 
-    // After positional correction:
-    // depth is 0.5. totalInvMass is 2. correction is 0.25.
-    // normal points from s2(1.5) to s1(0) -> (-1, 0, 0).
-    // so s1 is pushed left by 0.25 -> x = -0.25
-    // so s2 is pushed right by 0.25 -> x = 1.75
-    expect(sphere1.position.x).toBeCloseTo(-0.25, 1);
-    expect(sphere2.position.x).toBeCloseTo(1.75, 1);
+    // After positional correction (measured, not guessed): the resolver applies a slop-aware
+    // correction, so depth 0.5 splits into exactly 0.2475 per body -- NOT the naive 0.25 a bare
+    // `(depth - penetrationSlop) / totalInvMass` hand-model would claim. The assertions below used
+    // to be `toBeCloseTo(-0.25, 1)` (+/-0.05) next to a comment that computed 0.25 -- the loose
+    // tolerance masked the resolver's actual slop behavior. Now pinned at the measured value.
+    expect(sphere1.position.x).toBeCloseTo(-0.2475, 4);
+    expect(sphere2.position.x).toBeCloseTo(1.7475, 4);
 
-    // After impulse:
-    // normal = (-1, 0, 0)
-    // velA = 1, velB = -1. rv = (2, 0, 0)
-    // velAlongNormal = -2
-    // e = 1.0. jMag = -(2) * -2 / 2 = 2.
-    // impulse = normal * jMag = (-2, 0, 0)
-    // rb1 gets (-2, 0, 0). new vel = (1 - 2) = -1.
-    // rb2 gets (2, 0, 0). new vel = (-1 + 2) = 1.
-    expect(rb1.velocity.x).toBeCloseTo(-1);
-    expect(rb2.velocity.x).toBeCloseTo(1);
+    // After impulse (documented fully): restitution 1, equal masses, head-on -- the relative
+    // velocity along the normal inverts, swapping the velocities.
+    expect(rb1.velocity.x).toBeCloseTo(-1, 5);
+    expect(rb2.velocity.x).toBeCloseTo(1, 5);
   });
   it("should resolve Box-Box collisions (push apart and bounce)", () => {
     const box1 = new Object3D();
@@ -271,16 +268,23 @@ describe("PhysicsSystem", () => {
     rb1.velocity.set(1, 0, 0);
     rb2.velocity.set(-1, 0, 0);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (system as any)._resolveCollisions([box1, box2], [box1, box2]);
+    const resolver = system as unknown as {
+      _resolveCollisions(
+        bodies: Object3D[],
+        colliders: Object3D[],
+        joints: unknown[],
+        dt: number,
+      ): void;
+    };
+    resolver._resolveCollisions([box1, box2], [box1, box2], [], 1.0);
 
-    // Overlap on X is 0.5 (box1 max.x=1, box2 min.x=0.5), Y/Z fully overlap -> X is least penetration.
-    // Same depth/mass/velocity setup as the Sphere-Sphere test above, so the correction and
-    // impulse math resolve identically: box1 pushed left, box2 pushed right, velocities reverse.
-    expect(box1.position.x).toBeCloseTo(-0.25, 1);
-    expect(box2.position.x).toBeCloseTo(1.75, 1);
-    expect(rb1.velocity.x).toBeCloseTo(-1);
-    expect(rb2.velocity.x).toBeCloseTo(1);
+    // Overlap on X is 0.5 (box1 max.x=1, box2 min.x=0.5), Y/Z fully overlap -> X is least
+    // penetration. Same depth/mass/velocity setup as the Sphere-Sphere test above, so the
+    // slop-aware correction and impulse resolve identically (measured values, see that test).
+    expect(box1.position.x).toBeCloseTo(-0.2475, 4);
+    expect(box2.position.x).toBeCloseTo(1.7475, 4);
+    expect(rb1.velocity.x).toBeCloseTo(-1, 5);
+    expect(rb2.velocity.x).toBeCloseTo(1, 5);
   });
 
   it("should resolve OBB-OBB collisions (push apart and bounce)", () => {
@@ -311,14 +315,22 @@ describe("PhysicsSystem", () => {
     rb1.velocity.set(1, 0, 0);
     rb2.velocity.set(-1, 0, 0);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (system as any)._resolveCollisions([obb1, obb2], [obb1, obb2]);
+    const resolver = system as unknown as {
+      _resolveCollisions(
+        bodies: Object3D[],
+        colliders: Object3D[],
+        joints: unknown[],
+        dt: number,
+      ): void;
+    };
+    resolver._resolveCollisions([obb1, obb2], [obb1, obb2], [], 1.0);
 
-    // Same depth/mass/velocity setup as the axis-aligned Box-Box test above -> identical math.
-    expect(obb1.position.x).toBeCloseTo(-0.25, 1);
-    expect(obb2.position.x).toBeCloseTo(1.75, 1);
-    expect(rb1.velocity.x).toBeCloseTo(-1);
-    expect(rb2.velocity.x).toBeCloseTo(1);
+    // Same depth/mass/velocity setup as the axis-aligned Box-Box test above -> identical
+    // slop-aware correction (measured, see Sphere-Sphere test).
+    expect(obb1.position.x).toBeCloseTo(-0.2475, 4);
+    expect(obb2.position.x).toBeCloseTo(1.7475, 4);
+    expect(rb1.velocity.x).toBeCloseTo(-1, 5);
+    expect(rb2.velocity.x).toBeCloseTo(1, 5);
   });
 
   it("should resolve collisions against Scene.staticColliders (colliders outside the Object3D graph)", () => {
@@ -367,7 +379,6 @@ describe("PhysicsSystem", () => {
     system.gravity.set(0, -10, 0);
     expect(() => {
       system.fixedTimeStep = 0.1;
-      system.fixedTimeStep = 0.1;
       system.step(scene, 0.1);
     }).not.toThrow();
 
@@ -402,7 +413,6 @@ describe("PhysicsSystem", () => {
 
     // Step for 100 frames
     for (let i = 0; i < 100; i++) {
-      system.fixedTimeStep = 0.016;
       system.fixedTimeStep = 0.016;
       system.step(scene, 0.016);
       scene.update();
@@ -439,7 +449,6 @@ describe("PhysicsSystem", () => {
     bodies[21]!.rigidBody!.velocity.set(-1, 0, 0);
 
     // Only these 2 pairs should be processed and bounce.
-    system.fixedTimeStep = 0.1;
     system.fixedTimeStep = 0.1;
     system.step(scene, 0.1);
 
@@ -613,7 +622,6 @@ describe("PhysicsSystem", () => {
       return originalInsert.call(this, obj);
     };
 
-    system.fixedTimeStep = 0.1;
     system.fixedTimeStep = 0.1;
     system.step(scene, 0.1);
 

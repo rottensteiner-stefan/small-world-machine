@@ -147,6 +147,54 @@ describe("Matrix4", () => {
     });
   });
 
+  describe("algebraic identities", () => {
+    it("M * M^-1 == I for a non-trivial TRS (translation + rotation + non-uniform scale)", () => {
+      const m = new Matrix4();
+      m.compose(new Vector3D(3, -2, 5), new Vector3D(0.4, -0.3, 0.8), new Vector3D(2, 3, 4));
+      const inv = new Matrix4();
+      const ok = m.invert(inv);
+      expect(ok).toBe(true);
+
+      const prod = new Matrix4().multiply(m).multiply(inv);
+      for (let i = 0; i < 16; i++) {
+        const expected = i % 5 === 0 ? 1 : 0;
+        expect(prod.data[i], `identity violated at data[${i}]`).toBeCloseTo(expected, 6);
+      }
+    });
+
+    it("determinant of a TRS matrix equals the product of its scale factors", () => {
+      const m = new Matrix4();
+      m.compose(new Vector3D(0, 0, 0), new Vector3D(0.2, 0.5, -0.4), new Vector3D(2, 3, 4));
+      // det(T * R * S) = det(S) = sx * sy * sz for a right-handed TRS.
+      expect(m.determinant()).toBeCloseTo(24, 5);
+    });
+
+    it("rejects singular matrices on invert", () => {
+      const m = Matrix4.scale(0, 0, 0);
+      const inv = new Matrix4();
+      expect(m.invert(inv)).toBe(false);
+    });
+
+    it("a rotation matrix is orthonormal: it preserves vector lengths and dot products", () => {
+      const m = new Matrix4();
+      m.compose(new Vector3D(0, 0, 0), new Vector3D(-0.3, 0.9, 0.6), new Vector3D(1, 1, 1));
+
+      const u = new Vector3D(1, 2, 3);
+      const v = new Vector3D(-4, 5, -6);
+      // transformVector mutates in place (see "should transform a vector correctly" above).
+      const ru = new Vector3D(u.x, u.y, u.z);
+      const rv = new Vector3D(v.x, v.y, v.z);
+      m.transformVector(ru);
+      m.transformVector(rv);
+
+      // Length preservation.
+      expect(ru.length()).toBeCloseTo(u.length(), 6);
+      expect(rv.length()).toBeCloseTo(v.length(), 6);
+      // Angle (dot product) preservation.
+      expect(ru.dot(rv)).toBeCloseTo(u.dot(v), 5);
+    });
+  });
+
   describe("lookAt", () => {
     it("should construct valid non-degenerate matrix when eye-target and up are collinear along X-axis", () => {
       const eye = new Vector3D(10, 0, 0);

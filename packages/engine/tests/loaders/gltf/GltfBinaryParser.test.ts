@@ -209,14 +209,16 @@ describe("GltfBinaryParser", () => {
     expect(Array.from(data!)).toEqual(Array.from({ length: 18 }, (_, i) => i + 1));
   });
 
-  it("rejects a MAT2 UNSIGNED_BYTE accessor that is too short for its padded layout", () => {
+  it("rejects a MAT3 UNSIGNED_BYTE accessor that is too short for its padded layout", () => {
     const json = {
       bufferViews: [{ buffer: 0, byteLength: 4 }],
       accessors: [{ bufferView: 0, componentType: 5121, count: 1, type: "MAT3" }],
     };
+    // MAT3 with 1-byte components is column-padded (3 columns x 4 bytes = 12 bytes/element), so a
+    // 4-byte bufferView can never satisfy count 1 -- the parser must reject it, not produce garbage.
     expect(() =>
       GltfBinaryParser.getBufferData(json.accessors[0], json, [new ArrayBuffer(4)]),
-    ).toThrow();
+    ).toThrow(/exceeds buffer/);
   });
 
   it("applies a sparse accessor on top of its base bufferView", () => {
@@ -277,5 +279,273 @@ describe("GltfBinaryParser", () => {
     };
     const data = GltfBinaryParser.getBufferData(json.accessors[0], json, [bin.buffer]);
     expect(Array.from(data!)).toEqual([0, 0, 7]);
+  });
+});
+
+/** Builds a spec-shaped .glb container (magic, version, JSON chunk padded to 4, optional BIN chunk). */
+function buildGlb(json: unknown, bin?: Uint8Array): ArrayBuffer {
+  const encoder = new TextEncoder();
+  const jsonBytes = encoder.encode(JSON.stringify(json));
+  const jsonPad = (4 - (jsonBytes.length % 4)) % 4;
+  const paddedJson = new Uint8Array(jsonBytes.length + jsonPad);
+  paddedJson.set(jsonBytes);
+  paddedJson.fill(0x20, jsonBytes.length); // JSON chunks are space-padded per the glTF 2.0 spec.
+
+  const binLen = bin ? bin.length : 0;
+  const binPad = bin ? (4 - (bin.length % 4)) % 4 : 0;
+  const total = 12 + 8 + jsonBytes.length + jsonPad + (bin ? 8 + binLen + binPad : 0);
+
+  const buffer = new ArrayBuffer(total);
+  const dv = new DataView(buffer);
+  dv.setUint32(0, 0x46546c67, true); // "glTF"
+  dv.setUint32(4, 2, true);
+  dv.setUint32(8, total, true);
+
+  let offset = 12;
+  dv.setUint32(offset, paddedJson.length, true);
+  dv.setUint32(offset + 4, 0x4e4f534a, true); // JSON
+  new Uint8Array(buffer, offset + 8, paddedJson.length).set(paddedJson);
+  offset += 8 + paddedJson.length;
+
+  if (bin) {
+    const paddedBin = new Uint8Array(binLen + binPad);
+    paddedBin.set(bin);
+    paddedBin.fill(0, binLen); // BIN chunks are zero-padded to 4-byte alignment.
+    dv.setUint32(offset, binLen + binPad, true);
+    dv.setUint32(offset + 4, 0x004e4942, true); // BIN
+    new Uint8Array(buffer, offset + 8, paddedBin.length).set(paddedBin);
+  }
+  return buffer;
+}
+
+describe("GltfBinaryParser.parseGlb (real .glb container bytes)", () => {
+  it("extracts JSON and BIN payload from a well-formed .glb", () => {
+    const json = { asset: { version: "2.0" }, buffers: [{ byteLength: 4 }] };
+    const bin = new Uint8Array([1, 2, 3, 4]);
+    const glb = buildGlb(json, bin);
+
+    const { json: parsedJson, buffers } = GltfBinaryParser.parseGlb(glb);
+    expect(parsedJson.asset?.version).toBe("2.0");
+    expect(buffers).toHaveLength(1);
+    expect(Array.from(new Uint8Array(buffers[0]!))).toEqual([1, 2, 3, 4]);
+  });
+
+  it("parses a JSON-only .glb into an empty buffer list", () => {
+    const glb = buildGlb({ asset: { version: "2.0" } });
+    const { json, buffers } = GltfBinaryParser.parseGlb(glb);
+    expect(json.asset?.version).toBe("2.0");
+    expect(buffers).toHaveLength(0);
+  });
+
+  it("skips unknown chunk types instead of failing", () => {
+    // Manually build header + an unknown chunk + a JSON chunk. Spec says readers must ignore
+    // unknown chunk types, so only the JSON chunk may drive the result.
+    const jsonBytes = new TextEncoder().encode(JSON.stringify({ asset: { version: "2.0" } }));
+    const jsonPad = (4 - (jsonBytes.length % 4)) % 4;
+    const paddedJson = new Uint8Array(jsonBytes.length + jsonPad);
+    paddedJson.set(jsonBytes);
+    paddedJson.fill(0x20, jsonBytes.length);
+
+    const UNKNOWN_PAYLOAD = 8;
+    const total = 12 + 8 + UNKNOWN_PAYLOAD + 8 + paddedJson.length;
+    const buffer = new ArrayBuffer(total);
+    const dv = new DataView(buffer);
+    dv.setUint32(0, 0x46546c67, true);
+    dv.setUint32(4, 2, true);
+    dv.setUint32(8, total, true);
+    let offset = 12;
+    dv.setUint32(offset, UNKNOWN_PAYLOAD, true);
+    dv.setUint32(offset + 4, 0x46554e00, true); // unknown "FUN\0" chunk
+    offset += 8 + UNKNOWN_PAYLOAD;
+    dv.setUint32(offset, paddedJson.length, true);
+    dv.setUint32(offset + 4, 0x4e4f534a, true);
+    new Uint8Array(buffer, offset + 8, paddedJson.length).set(paddedJson);
+
+    const { json } = GltfBinaryParser.parseGlb(buffer);
+    expect(json.asset?.version).toBe("2.0");
+  });
+
+  it("rejects a wrong magic number", () => {
+    const glb = buildGlb({ asset: { version: "2.0" } });
+    new DataView(glb).setUint32(0, 0x12345678, true);
+    expect(() => GltfBinaryParser.parseGlb(glb)).toThrow(/Not a valid \.glb/);
+  });
+
+  it("rejects a non-2.0 version", () => {
+    const glb = buildGlb({ asset: { version: "2.0" } });
+    new DataView(glb).setUint32(4, 1, true);
+    expect(() => GltfBinaryParser.parseGlb(glb)).toThrow(/Only glTF 2\.0/);
+  });
+
+  it("rejects a truncated header (fewer than 12 bytes)", () => {
+    // Magic/version read succeeds for a 4-byte buffer, but a 4-byte buffer has no valid chunk and
+    // no JSON -> the parser must fail rather than return partial data.
+    expect(() => GltfBinaryParser.parseGlb(new ArrayBuffer(4))).toThrow();
+  });
+
+  it("rejects a chunk whose declared length runs off the end of the buffer", () => {
+    const glb = buildGlb({ asset: { version: "2.0" } });
+    // Claim an absurd JSON chunk length that overflows the buffer.
+    new DataView(glb).setUint32(12, 0x7fffffff, true);
+    expect(() => GltfBinaryParser.parseGlb(glb)).toThrow();
+  });
+
+  it("rejects a .glb without a JSON chunk", () => {
+    // BIN chunk only: no JSON chunk present -> must fail (a scene description is mandatory).
+    const dv = new DataView(new ArrayBuffer(28));
+    dv.setUint32(0, 0x46546c67, true);
+    dv.setUint32(4, 2, true);
+    dv.setUint32(8, 28, true);
+    dv.setUint32(12, 16, true); // BIN chunk length (16 = 12 + 4 padding)
+    dv.setUint32(16, 0x004e4942, true);
+    const noJson = dv.buffer;
+    expect(() => GltfBinaryParser.parseGlb(noJson)).toThrow(/No JSON chunk/);
+  });
+
+  it("uses the last JSON chunk when multiple are present", () => {
+    const enc = new TextEncoder();
+    const first = enc.encode(JSON.stringify({ a: 1 }));
+    const second = enc.encode(JSON.stringify({ a: 2 }));
+    const padTo4 = (n: number): number => (4 - (n % 4)) % 4;
+    const p1 = first.length + padTo4(first.length);
+    const p2 = second.length + padTo4(second.length);
+    const total = 12 + 8 + p1 + 8 + p2;
+    const buffer = new ArrayBuffer(total);
+    const dv = new DataView(buffer);
+    dv.setUint32(0, 0x46546c67, true);
+    dv.setUint32(4, 2, true);
+    dv.setUint32(8, total, true);
+    let offset = 12;
+    for (const bytes of [first, second]) {
+      const pad = (4 - (bytes.length % 4)) % 4;
+      const padded = new Uint8Array(bytes.length + pad);
+      padded.set(bytes);
+      padded.fill(0x20, bytes.length);
+      dv.setUint32(offset, padded.length, true);
+      dv.setUint32(offset + 4, 0x4e4f534a, true);
+      new Uint8Array(buffer, offset + 8, padded.length).set(padded);
+      offset += 8 + padded.length;
+    }
+
+    const { json } = GltfBinaryParser.parseGlb(buffer);
+    // The parser overwrites `json` per chunk, so the last JSON chunk wins.
+    expect((json as { a: number }).a).toBe(2);
+  });
+});
+
+describe("GltfBinaryParser.getBufferData edge branches", () => {
+  it("throws when byteStride is smaller than the element size", () => {
+    const json = {
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 16, byteStride: 2 }],
+      accessors: [{ bufferView: 0, componentType: 5126, count: 4, type: "SCALAR" }],
+    };
+    // SCALAR Float32 element = 4 bytes; a stride of 2 cannot pack it densely.
+    expect(() =>
+      GltfBinaryParser.getBufferData(json.accessors[0], json, [new ArrayBuffer(16)]),
+    ).toThrow(/Invalid byteStride/);
+  });
+
+  it("returns null for an out-of-range bufferView index", () => {
+    const json = {
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 16 }],
+      accessors: [{ bufferView: 3, componentType: 5126, count: 4, type: "SCALAR" }],
+    };
+    expect(
+      GltfBinaryParser.getBufferData(json.accessors[0], json, [new ArrayBuffer(16)]),
+    ).toBeNull();
+  });
+
+  it("returns null for an out-of-range buffer index", () => {
+    const json = {
+      bufferViews: [{ buffer: 7, byteOffset: 0, byteLength: 16 }],
+      accessors: [{ bufferView: 0, componentType: 5126, count: 4, type: "SCALAR" }],
+    };
+    expect(
+      GltfBinaryParser.getBufferData(json.accessors[0], json, [new ArrayBuffer(16)]),
+    ).toBeNull();
+  });
+
+  it("normalizes SHORT/UNSIGNED_SHORT/UNSIGNED_INT componentTypes", () => {
+    // 5122 SHORT normalized: -32768 -> -1.0 (clamped).
+    const i16 = new Int16Array([-32768, 0, 32767]).buffer;
+    const jI16 = {
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 6 }],
+      accessors: [
+        {
+          bufferView: 0,
+          componentType: 5122,
+          count: 3,
+          type: "SCALAR",
+          normalized: true,
+        },
+      ],
+    };
+    const dI16 = GltfBinaryParser.getBufferData(jI16.accessors[0], jI16, [i16]);
+    expect(Array.from(dI16 as Float32Array)).toEqual([-1, 0, 1]);
+
+    // 5123 UNSIGNED_SHORT normalized: 65535 -> 1.0.
+    const u16 = new Uint16Array([0, 65535]).buffer;
+    const jU16 = {
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 4 }],
+      accessors: [
+        { bufferView: 0, componentType: 5123, count: 2, type: "SCALAR", normalized: true },
+      ],
+    };
+    const dU16 = GltfBinaryParser.getBufferData(jU16.accessors[0], jU16, [u16]);
+    expect(Array.from(dU16 as Float32Array)).toEqual([0, 1]);
+
+    // 5125 UNSIGNED_INT normalized: 4294967295 -> 1.0.
+    const u32 = new Uint32Array([0, 4294967295]).buffer;
+    const jU32 = {
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 8 }],
+      accessors: [
+        { bufferView: 0, componentType: 5125, count: 2, type: "SCALAR", normalized: true },
+      ],
+    };
+    const dU32 = GltfBinaryParser.getBufferData(jU32.accessors[0], jU32, [u32]);
+    expect(Array.from(dU32 as Float32Array)).toEqual([0, 1]);
+  });
+
+  it("handles count === 0 as an empty typed array without throwing", () => {
+    const json = {
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 0 }],
+      accessors: [{ bufferView: 0, componentType: 5126, count: 0, type: "SCALAR" }],
+    };
+    const data = GltfBinaryParser.getBufferData(json.accessors[0], json, [new ArrayBuffer(0)]);
+    expect(data).toBeInstanceOf(Float32Array);
+    expect((data as Float32Array).length).toBe(0);
+  });
+
+  it("throws when a sparse accessor index exceeds the accessor count", () => {
+    const base = new Float32Array([1, 2, 3]).buffer;
+    const indices = new Uint8Array([5]); // index 5 >= count 3
+    const values = new Float32Array([99]);
+    const bin = new Uint8Array(12 + 8);
+    bin.set(new Uint8Array(base), 0);
+    bin.set(indices, 12);
+    bin.set(new Uint8Array(values.buffer), 16);
+    const json = {
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 12 },
+        { buffer: 0, byteOffset: 12, byteLength: 1 },
+        { buffer: 0, byteOffset: 16, byteLength: 4 },
+      ],
+      accessors: [
+        {
+          bufferView: 0,
+          componentType: 5126,
+          count: 3,
+          type: "SCALAR",
+          sparse: {
+            count: 1,
+            indices: { bufferView: 1, componentType: 5121 },
+            values: { bufferView: 2 },
+          },
+        },
+      ],
+    };
+    expect(() => GltfBinaryParser.getBufferData(json.accessors[0], json, [bin.buffer])).toThrow(
+      /outside count/,
+    );
   });
 });

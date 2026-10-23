@@ -23,16 +23,25 @@ describe("MathUtils", () => {
     expect(uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   });
 
-  it("should perform fast sin lookup correctly", () => {
-    expect(MathUtils.fastSin(0)).toBeCloseTo(0, 2);
-    expect(MathUtils.fastSin(Math.PI / 2)).toBeCloseTo(1, 2);
-    expect(MathUtils.fastSin(Math.PI)).toBeCloseTo(0, 2);
+  it("fastSin approximates Math.sin over the whole domain within a bounded error", () => {
+    // The only thing that gives this approximation meaning is how close it stays to the reference
+    // across the domain -- three endpoint pins say nothing about the lookup band in between. The
+    // current implementation is exact; the 1e-3 bound is what a future legitimate LUT must hold to.
+    const STEPS = 20000;
+    for (let i = 0; i <= STEPS; i++) {
+      const x = (i / STEPS) * Math.PI * 8 - Math.PI * 4;
+      const err = Math.abs(MathUtils.fastSin(x) - Math.sin(x));
+      expect(err, `fastSin diverges at x=${x}`).toBeLessThan(1e-3);
+    }
   });
 
-  it("should perform fast cos lookup correctly", () => {
-    expect(MathUtils.fastCos(0)).toBeCloseTo(1, 2);
-    expect(MathUtils.fastCos(Math.PI / 2)).toBeCloseTo(0, 2);
-    expect(MathUtils.fastCos(Math.PI)).toBeCloseTo(-1, 2);
+  it("fastCos approximates Math.cos over the whole domain within a bounded error", () => {
+    const STEPS = 20000;
+    for (let i = 0; i <= STEPS; i++) {
+      const x = (i / STEPS) * Math.PI * 8 - Math.PI * 4;
+      const err = Math.abs(MathUtils.fastCos(x) - Math.cos(x));
+      expect(err, `fastCos diverges at x=${x}`).toBeLessThan(1e-3);
+    }
   });
 
   it("should lerp between two numbers correctly", () => {
@@ -69,15 +78,37 @@ describe("MathUtils", () => {
     expect(MathUtils.inverseLerp(5, 5, 5)).toBe(0);
   });
 
-  it("should calculate damp correctly", () => {
+  it("should calculate damp correctly (frame-rate-independent approach toward target)", () => {
     const start = 0;
     const target = 10;
-    const dt = 0.1;
     const lambda = 5;
-    const dampened = MathUtils.damp(start, target, lambda, dt);
-    expect(dampened).toBeGreaterThan(0);
-    expect(dampened).toBeLessThan(10);
-    expect(dampened).toBeCloseTo(MathUtils.lerp(start, target, 1 - Math.exp(-lambda * dt)));
+    const dt = 0.1;
+
+    // dt=0 leaves the value untouched.
+    expect(MathUtils.damp(start, target, lambda, 0)).toBe(start);
+    // lambda=0 never moves.
+    expect(MathUtils.damp(start, target, 0, dt)).toBe(start);
+    // A single step moves strictly toward the target without overshooting.
+    const one = MathUtils.damp(start, target, lambda, dt);
+    expect(one).toBeGreaterThan(start);
+    expect(one).toBeLessThan(target);
+    // Repeating the step converges monotonically toward the target without overshooting. Once the
+    // increment underflows to 0 in floating point, further steps make no progress -- so the loop
+    // must tolerate saturation instead of asserting strict progress forever.
+    let value = start;
+    let iterations = 0;
+    while (target - value > 1e-6 && iterations < 100000) {
+      const next = MathUtils.damp(value, target, lambda, dt);
+      expect(next).toBeGreaterThanOrEqual(value - 1e-9);
+      expect(next).toBeLessThan(target);
+      value = next;
+      iterations++;
+    }
+    expect(target - value).toBeLessThan(1e-6);
+    // Downward case mirrors the upward one (target below start).
+    const down = MathUtils.damp(target, start, lambda, dt);
+    expect(down).toBeLessThan(target);
+    expect(down).toBeGreaterThan(start);
   });
 
   it("should check isPowerOfTwo correctly", () => {
