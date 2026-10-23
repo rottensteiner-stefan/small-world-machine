@@ -11,6 +11,7 @@ import type {
 } from "../../interfaces/index.js";
 import type { Behavior } from "../behaviors/Behavior.js";
 import { attachBehavior, detachBehavior } from "../behaviors/Behavior.js";
+import { CameraFlyToBehavior, type CameraFlyToOptions } from "../behaviors/CameraFlyToBehavior.js";
 import { Color } from "../colors/index.js";
 
 /**
@@ -243,6 +244,43 @@ export class Camera implements CameraInterfaceData {
   public removeBehavior(behavior: Behavior): this {
     detachBehavior(this.behaviors, behavior);
     return this;
+  }
+
+  /**
+   * Whether the camera is currently executing a cinematic fly-through transition.
+   */
+  public get isFlying(): boolean {
+    const flyBehavior = this.behaviors.find(
+      (b): b is CameraFlyToBehavior => b instanceof CameraFlyToBehavior,
+    );
+    return flyBehavior?.isFlying ?? false;
+  }
+
+  /**
+   * Initiates a smooth cinematic fly-through transition to the target position and look-at point.
+   * Lazily attaches a CameraFlyToBehavior if not already present on the camera.
+   * @param options Target position, look-at target, and curve settings.
+   * @returns Promise resolving to `true` when the destination is reached, or `false` if cancelled.
+   */
+  public flyTo(options: CameraFlyToOptions): Promise<boolean> {
+    let flyBehavior = this.behaviors.find(
+      (b): b is CameraFlyToBehavior => b instanceof CameraFlyToBehavior,
+    );
+    if (!flyBehavior) {
+      flyBehavior = new CameraFlyToBehavior();
+      this.addBehavior(flyBehavior);
+    }
+    return flyBehavior.flyTo(options);
+  }
+
+  /**
+   * Cancels any active camera fly-through transition immediately.
+   */
+  public cancelFlight(): void {
+    const flyBehavior = this.behaviors.find(
+      (b): b is CameraFlyToBehavior => b instanceof CameraFlyToBehavior,
+    );
+    flyBehavior?.cancel();
   }
 
   /** @inheritdoc */

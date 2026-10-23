@@ -21,3 +21,4 @@ export * from "./ExternalShaderUniformBehavior.js";
 export * from "./SquashStretchBehavior.js";
 export * from "./StageMovementBehavior.js";
 export * from "./FollowCameraBehavior.js";
+export * from "./CameraFlyToBehavior.js";

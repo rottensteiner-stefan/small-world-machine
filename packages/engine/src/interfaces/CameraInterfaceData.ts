@@ -5,6 +5,7 @@ import type { AbstractProjection } from "../math/projections/index.js";
 import type { Matrix4, Vector3D } from "../math/index.js";
 import type { CameraEffectType, CameraStrategyType } from "../enums/index.js";
 import type { Behavior } from "../core/behaviors/index.js";
+import type { CameraFlyToOptions } from "../core/behaviors/CameraFlyToBehavior.js";
 import type { Color } from "../core/colors/index.js";
 
 /**
@@ -152,6 +153,15 @@ export interface CameraInterfaceData {
    * @returns The world position on the Y=0 plane.
    */
   screenToWorld(screenX: number, screenY: number): Vector3D;
+
+  /** Whether a cinematic fly transition is active. */
+  readonly isFlying?: boolean;
+
+  /** Initiates a smooth cinematic fly-through transition. */
+  flyTo?(options: CameraFlyToOptions): Promise<boolean>;
+
+  /** Cancels any active camera flight. */
+  cancelFlight?(): void;
 
   /**
    * Projects a 3D world position into Normalized Device Coordinates (NDC: [-1, 1] on X, Y, Z).

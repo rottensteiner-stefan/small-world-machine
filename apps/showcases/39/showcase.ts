@@ -10,6 +10,7 @@ import {
   AbstractShowcase,
   AmbientLight,
   CameraStrategyType,
+  CatmullRomSpline,
   Color,
   Cube,
   Cylinder,
@@ -65,6 +66,7 @@ class Showcase39 extends AbstractShowcase {
   private _ambientLight!: AmbientLight;
   private _altarLight!: PointLight;
   private _brazierLight!: PointLight;
+  private _chamberLight!: PointLight;
 
   private _fogElement: VolumetricFogElement | undefined = undefined;
   private _altarMistVolume!: FogVolume;
@@ -73,6 +75,12 @@ class Showcase39 extends AbstractShowcase {
   private _skylightMistVolume!: FogVolume;
   private _shrineRelic!: Object3D;
   private _baseGodRayStrength = 3.8;
+
+  private _leylineActive = true;
+  private _leylineSpline!: CatmullRomSpline;
+  private _leylineOrb!: Object3D;
+  private _leylineLight!: PointLight;
+  private readonly _leylineMotes: Object3D[] = [];
 
   private _orbitController?: OrbitController;
   private _flyController?: FlyController;
@@ -212,7 +220,7 @@ class Showcase39 extends AbstractShowcase {
     this._orbitController.enabled = false;
     this.camera.addBehavior(this._orbitController);
 
-    this._applyCameraPreset(0);
+    this._applyCameraPreset(0, true);
 
     // --- 4. PBR Texture Sets & Architectural Materials ---
     const wrapRepeat = {
@@ -680,7 +688,87 @@ class Showcase39 extends AbstractShowcase {
     this._brazierLight.position.set(-4.5, 2.1, 4.0);
     this.scene.add(this._brazierLight);
 
-    // --- 10. Interactive HUD ---
+    // Warm relic light inside the carved meditation chamber. The chamber sits beyond every other
+    // light (z = -21 vs. altar z = -4 / brazier z = 4), so without a local source it stays a dark
+    // void and the Interior Carving toggle can never be seen. With carving ON the room now reads
+    // as a lit, clear interior; with carving OFF the surrounding fog scatters this glow into a
+    // warm veil that hides the relic behind its beam (the carve bounds stop just outside the
+    // doorway, so a candle glow still spills into the nave fog for atmosphere).
+    this._chamberLight = new PointLight({
+      color: new Color(1.0, 0.74, 0.46),
+      intensity: 2.4,
+      distance: 9.0,
+      volumetricIntensity: 3.2, // scatters in the fog once carving is disabled
+    });
+    this._chamberLight.position.set(0, 3.4, -21);
+    this.scene.add(this._chamberLight);
+
+    // --- 10. Mystic Leyline Stream (Catmull-Rom Energy Beam & Motes) ---
+    const leylinePoints = [
+      new Vector3D(0.0, 2.0, -21.0), // Starts at Relic in Crypt
+      new Vector3D(0.0, 2.5, -16.5), // Glides toward Crypt door
+      new Vector3D(0.0, 2.9, -13.5), // Centers through portal arch
+      new Vector3D(1.4, 3.4, -9.0), // High energetic curve in Nave
+      new Vector3D(0.7, 2.8, -6.5), // Dipping toward Altar dais
+      new Vector3D(0.0, 1.9, -4.0), // Swirls into Altar bowl
+    ];
+    this._leylineSpline = new CatmullRomSpline(leylinePoints);
+
+    const orbMat = new StandardMaterial({
+      color: new Color(0.25, 0.98, 0.88),
+      emissiveColor: new Color(0.18, 0.95, 0.82),
+      emissiveIntensity: 6.0,
+      roughness: 0.1,
+    });
+
+    const sphereGeo = new Sphere({
+      radius: 0.14,
+      widthSegments: 16,
+      heightSegments: 16,
+    }).getGeometryData();
+
+    this._leylineOrb = new Object3D("LeylineOrb");
+    this._leylineOrb.geometry = sphereGeo;
+    this._leylineOrb.material = orbMat;
+    this.scene.add(this._leylineOrb);
+
+    this._leylineLight = new PointLight({
+      color: new Color(0.2, 0.95, 0.82),
+      intensity: 2.4,
+      distance: 8.0,
+      volumetricIntensity: 4.5, // lights up surrounding volumetric fog!
+    });
+    this.scene.add(this._leylineLight);
+
+    const moteGeo = new Sphere({
+      radius: 0.055,
+      widthSegments: 10,
+      heightSegments: 10,
+    }).getGeometryData();
+
+    const NUM_MOTES = 24;
+    for (let i = 0; i < NUM_MOTES; i++) {
+      const frac = i / NUM_MOTES;
+      // Spectral gradient along the stream: cyan -> golden amber -> emerald green
+      const r = 0.2 + 0.65 * Math.sin(frac * Math.PI);
+      const g = 0.92;
+      const b = 0.85 - 0.55 * Math.sin(frac * Math.PI);
+
+      const moteMat = new StandardMaterial({
+        color: new Color(r, g, b),
+        emissiveColor: new Color(r, g, b),
+        emissiveIntensity: 4.5,
+        roughness: 0.2,
+      });
+
+      const mote = new Object3D(`LeylineMote_${i}`);
+      mote.geometry = moteGeo;
+      mote.material = moteMat;
+      this._leylineMotes.push(mote);
+      this.scene.add(mote);
+    }
+
+    // --- 11. Interactive HUD ---
     this._createHud();
 
     attachDevTools(this);
@@ -708,13 +796,39 @@ class Showcase39 extends AbstractShowcase {
     }
   }
 
-  private _applyCameraPreset(index: number): void {
+  private _applyCameraPreset(index: number, instant = false): void {
     const preset = this._cameraPresets[index];
     if (!preset) return;
     this._activePresetIdx = index;
-    this._orbitPivot.copyFrom(preset.target);
-    this.setInitialCamera(preset.position, preset.target);
+
+    if (instant) {
+      this.camera.cancelFlight?.();
+      this._orbitPivot.copyFrom(preset.target);
+      this.setInitialCamera(preset.position, preset.target);
+      this._syncCameraStrategy();
+      return;
+    }
+
+    const startZ = this.camera.position.z;
+    const endZ = preset.position.z;
+    const crossingPortal = (startZ > -15.0 && endZ < -16.0) || (startZ < -16.0 && endZ > -15.0);
+
+    const waypoints = crossingPortal ? [new Vector3D(0.0, 2.9, -13.5)] : undefined;
+
     this._syncCameraStrategy();
+
+    this.camera.flyTo?.({
+      position: preset.position,
+      target: preset.target,
+      waypoints,
+      onComplete: () => {
+        this._orbitPivot.copyFrom(preset.target);
+        this._syncCameraStrategy();
+      },
+      onCancel: () => {
+        this._syncCameraStrategy();
+      },
+    });
   }
 
   private _setCameraMode(flyMode: boolean): void {
@@ -747,7 +861,8 @@ class Showcase39 extends AbstractShowcase {
   }
 
   private _syncCameraStrategy(): void {
-    const canControl = !this._isHoveringHud && !this._isDraggingHud;
+    const isFlying = this.camera.isFlying ?? false;
+    const canControl = !this._isHoveringHud && !this._isDraggingHud && !isFlying;
     if (this._isFlyMode) {
       this.camera.setStrategy(CameraStrategyType.FPS);
       if (this._flyController) this._flyController.enabled = canControl;
@@ -762,7 +877,7 @@ class Showcase39 extends AbstractShowcase {
   }
 
   public override resetCamera(): void {
-    this._applyCameraPreset(this._activePresetIdx);
+    this._applyCameraPreset(this._activePresetIdx, false);
     this._updateHudText();
   }
 
@@ -771,6 +886,27 @@ class Showcase39 extends AbstractShowcase {
     if (event.altKey || event.metaKey || event.ctrlKey) return;
     const active = document.activeElement;
     if (active && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return;
+
+    // Movement keys interrupt a camera fly-through so the user immediately has manual control
+    if (this.camera.isFlying) {
+      const isNav = (
+        [
+          Keys.W,
+          Keys.A,
+          Keys.S,
+          Keys.D,
+          Keys.UP,
+          Keys.DOWN,
+          Keys.LEFT,
+          Keys.RIGHT,
+        ] as readonly string[]
+      ).includes(event.code);
+      if (isNav) {
+        this.camera.cancelFlight?.();
+        this._orbitPivot.copyFrom(this.camera.target);
+        this._syncCameraStrategy();
+      }
+    }
 
     switch (event.code) {
       case Keys.F:
@@ -805,6 +941,10 @@ class Showcase39 extends AbstractShowcase {
         break;
       case Keys.V:
         this._setCameraMode(!this._isFlyMode);
+        this._updateHudText();
+        break;
+      case Keys.L:
+        this._leylineActive = !this._leylineActive;
         this._updateHudText();
         break;
       case Keys.I:
@@ -971,6 +1111,13 @@ class Showcase39 extends AbstractShowcase {
               <span class="hud-switch-slider"></span>
             </label>
           </div>
+          <div class="hud-row">
+            <label for="swLeyline">✨ Mystic Leyline [L]</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swLeyline" ${this._leylineActive ? "checked" : ""}>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
           <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:6px;">
             <div style="display:flex;justify-content:space-between;font-size:12px;">
               <label for="rngDensity">Fog Density</label>
@@ -1049,6 +1196,10 @@ class Showcase39 extends AbstractShowcase {
       this._skylightMistVolume.noiseAmount = active ? 0.75 : 0.0;
     });
 
+    document.getElementById("swLeyline")?.addEventListener("change", (e) => {
+      this._leylineActive = (e.target as HTMLInputElement).checked;
+    });
+
     document.getElementById("rngDensity")?.addEventListener("input", (e) => {
       const v = parseFloat((e.target as HTMLInputElement).value);
       if (this._fogElement) this._fogElement.density = v;
@@ -1111,6 +1262,7 @@ class Showcase39 extends AbstractShowcase {
       this._isFlyMode &&
       !this._isHoveringHud &&
       !this._isDraggingHud &&
+      !this.camera.isFlying &&
       0 !== this.input.mouse.zoom
     ) {
       const dollyStep = -this.input.mouse.zoom * 18.0;
@@ -1139,6 +1291,45 @@ class Showcase39 extends AbstractShowcase {
     if (this._brazierLight) {
       this._brazierLight.intensity =
         2.2 + Math.sin(this._time * 6.0) * 0.35 + Math.cos(this._time * 11.0) * 0.15;
+    }
+
+    // Animated Mystic Leyline stream flowing along the Catmull-Rom spline
+    if (this._leylineOrb) {
+      this._leylineOrb.isVisible = this._leylineActive;
+      this._leylineLight.intensity = this._leylineActive
+        ? 2.2 + Math.sin(this._time * 6.0) * 0.4
+        : 0.0;
+
+      if (this._leylineActive) {
+        // Continuous loop along the spline: ~8 seconds per round-trip
+        const headT = (this._time * 0.125) % 1.0;
+        this._leylineSpline.getPoint(headT, this._leylineOrb.position);
+        this._leylineLight.position.copyFrom(this._leylineOrb.position);
+
+        const tempMotePos = new Vector3D();
+        const numMotes = this._leylineMotes.length;
+        for (let i = 0; i < numMotes; i++) {
+          const mote = this._leylineMotes[i]!;
+          mote.isVisible = true;
+
+          // Trailing phase offset
+          const moteT = (headT - (i + 1) * 0.026 + 1.0) % 1.0;
+          this._leylineSpline.getPoint(moteT, tempMotePos);
+
+          // Double-helix vortex swirl around spline core
+          const angle = this._time * 5.0 + i * 0.65;
+          const swirlRadius = 0.2 + Math.sin(i * 0.8) * 0.07;
+          mote.position.set(
+            tempMotePos.x + Math.cos(angle) * swirlRadius,
+            tempMotePos.y + Math.sin(angle) * swirlRadius,
+            tempMotePos.z + Math.sin(angle * 0.5) * 0.08,
+          );
+        }
+      } else {
+        for (let i = 0; i < this._leylineMotes.length; i++) {
+          this._leylineMotes[i]!.isVisible = false;
+        }
+      }
     }
   }
 }
