@@ -9,6 +9,7 @@ import {
   BLOCK_WATER,
   BLOCK_WOOD,
 } from "../BlockRegistry.js";
+import type { PlayerRig } from "../player/PlayerRig.js";
 import type { ChunkWorld } from "../ChunkWorld.js";
 import { raycastVoxel } from "./VoxelRaycast.js";
 import type { RaycastWorld } from "./VoxelRaycast.js";
@@ -65,6 +66,8 @@ export interface VoxelEditorOptions {
   input: InputInterface;
   /** Optional semantic action translator (composite bindings). */
   actions?: VoxelInputActions | undefined;
+  /** Optional survival player rig (blocks editing while dead). */
+  rig?: PlayerRig | undefined;
   /** Hand blocks for Digit1..N (default dirt/stone/wood/water/grass). At most 5 slots. */
   handSlots?: readonly number[];
   /** Maximum reach of the targeting ray in meters. Default 6. */
@@ -78,6 +81,7 @@ export class VoxelBlockEditor extends Behavior<Camera> {
   private readonly _world: ChunkWorld;
   private readonly _input: InputInterface;
   private readonly _actions: VoxelInputActions | undefined;
+  private readonly _rig: PlayerRig | undefined;
   private readonly _handSlots: readonly number[];
   private readonly _maxDistance: number;
   private readonly _placementBlocker: ((x: number, y: number, z: number) => boolean) | undefined;
@@ -102,9 +106,15 @@ export class VoxelBlockEditor extends Behavior<Camera> {
     this._world = options.world;
     this._input = options.input;
     this._actions = options.actions;
+    this._rig = options.rig;
     this._handSlots = handSlots;
     this._maxDistance = options.maxDistance ?? 6;
     this._placementBlocker = options.placementBlocker;
+  }
+
+  /** The currently selected hand slot index (0..4). */
+  public get handIndex(): number {
+    return this._handIndex;
   }
 
   /** The currently selected hand block id (for the stats/QA readout). */
@@ -124,7 +134,7 @@ export class VoxelBlockEditor extends Behavior<Camera> {
 
   public override update(_deltaTime: number): void {
     const cam = this.target;
-    if (!cam) return;
+    if (!cam || this._rig?.isDead) return;
 
     let breakEdge: boolean;
     let placeEdge: boolean;

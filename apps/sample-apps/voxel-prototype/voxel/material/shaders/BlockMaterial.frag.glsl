@@ -22,6 +22,8 @@ in float v_ao;
 in float v_light;
 
 uniform sampler2DArray u_blockAtlas;
+uniform float u_daylight;
+uniform vec3 u_sunDirection;
 
 out vec4 fragColor;
 
@@ -29,16 +31,13 @@ void main() {
     vec4 tex = texture(u_blockAtlas, vec3(v_uv, float(v_texLayer)));
     vec3 albedo = tex.rgb;
 
-    // M3 baked daylight/point-flood light, multiplied on top of the existing stylized term
-    // (dossier §4.3 M3 D4: worker-baked `.b` channel; golden-pinned formula). Surface cells bake
-    // 1.0 (full daylight); underground cells bake < 1.0 -- a hard global Tageszeit multiplier
-    // arrives later as a shader uniform in M4, on top of this static structure.
+    // M3 baked daylight/point-flood light + M4 dynamic daylight multiplier and sun direction
     vec3 normal = normalize(v_normal);
-    vec3 lightDir = normalize(vec3(0.55, 0.82, 0.28));
+    vec3 lightDir = normalize(u_sunDirection);
     float ndl = clamp(dot(normal, lightDir), 0.0, 1.0);
     float ambient = 0.34;
     float ao = clamp(v_ao, 0.0, 1.0);
-    float lightFactor = clamp(v_light, 0.0, 1.0);
+    float lightFactor = clamp(v_light, 0.0, 1.0) * clamp(u_daylight, 0.15, 1.0);
     // The ambient floor must stay inside the direct term: faces turned away from the light
     // (-X, -Y, -Z) have ndl == 0 and would otherwise render pure black.
     vec3 lit = albedo * mix(ambient, 1.0, ao) * (ambient + (1.0 - ambient) * ndl) * lightFactor;

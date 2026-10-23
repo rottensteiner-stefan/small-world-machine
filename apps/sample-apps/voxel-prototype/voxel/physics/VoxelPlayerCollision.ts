@@ -1,6 +1,7 @@
 import { Behavior, Keys } from "@small-world-machine/engine";
 import type { Camera, InputInterface } from "@small-world-machine/engine";
 import type { VoxelInputActions } from "../input/VoxelInputActions.js";
+import type { PlayerRig } from "../player/PlayerRig.js";
 import type { ChunkWorld } from "../ChunkWorld.js";
 import type { SweepWorld, Vec3 } from "./VoxelSweep.js";
 import { sweepVoxel } from "./VoxelSweep.js";
@@ -52,6 +53,10 @@ export interface VoxelPlayerOptions {
   input: InputInterface;
   /** Optional semantic action translator (composite bindings). */
   actions?: VoxelInputActions | undefined;
+  /** Optional survival player rig (health, fall damage, respawn). */
+  rig?: PlayerRig | undefined;
+  /** Whether auto-jump over 1-block obstacles is enabled. Default true. */
+  autoJump?: boolean;
   /** Maximum planar walk speed in m/s. Default 5. */
   walkSpeed?: number;
   /** Gravity in m/s² (positive number, applied downward). Default 20. */
@@ -63,10 +68,13 @@ export interface VoxelPlayerOptions {
 }
 
 export class VoxelPlayerCollision extends Behavior<Camera> {
-  private readonly _options: Required<Omit<VoxelPlayerOptions, "world" | "input" | "actions">> & {
+  private readonly _options: Required<
+    Omit<VoxelPlayerOptions, "world" | "input" | "actions" | "rig">
+  > & {
     world: ChunkWorld;
     input: InputInterface;
     actions: VoxelInputActions | undefined;
+    rig: PlayerRig | undefined;
   };
   private readonly _world: SweepWorldAdapter;
 
@@ -86,6 +94,8 @@ export class VoxelPlayerCollision extends Behavior<Camera> {
       world: options.world,
       input: options.input,
       actions: options.actions,
+      rig: options.rig,
+      autoJump: options.autoJump ?? true,
       walkSpeed: options.walkSpeed ?? 5,
       gravity: options.gravity ?? 20,
       eyeHeight: options.eyeHeight ?? 1.62,
@@ -96,6 +106,44 @@ export class VoxelPlayerCollision extends Behavior<Camera> {
   /** Whether the body is standing on solid ground (as resolved by the previous frame). */
   public isOnGround(): boolean {
     return this._onGround;
+  }
+
+  /**
+   * Evaluates whether a 1-block step-up / auto-jump obstacle is directly ahead of the player.
+   */
+  public canStepUp(vx: number, vz: number): boolean {
+    if (!this._onGround) return false;
+    const speedSq = vx * vx + vz * vz;
+    if (speedSq < 0.01) return false;
+
+    const len = Math.sqrt(speedSq);
+    const normX = vx / len;
+    const normZ = vz / len;
+
+    // Probe beyond the body bounds in movement direction
+    const bodyExtent = Math.hypot(
+      normX * this._options.body.max.x,
+      normZ * this._options.body.max.z,
+    );
+    const probeDist = bodyExtent + 0.25;
+    const probeX = Math.floor(this._body.x + normX * probeDist);
+    const probeZ = Math.floor(this._body.z + normZ * probeDist);
+    const footY = Math.floor(this._body.y + 0.2);
+
+    // Obstacle at foot level
+    const hasObstacle = this._world.isSolidCell(probeX, footY, probeZ);
+    if (!hasObstacle) return false;
+
+    // Room above the obstacle (1-block height + 1.8m player headroom)
+    const head1 = this._world.isSolidCell(probeX, footY + 1, probeZ);
+    const head2 = this._world.isSolidCell(probeX, footY + 2, probeZ);
+    const aboveCurrent = this._world.isSolidCell(
+      Math.floor(this._body.x),
+      footY + 2,
+      Math.floor(this._body.z),
+    );
+
+    return !head1 && !head2 && !aboveCurrent;
   }
 
   /** Current feet position (player body origin) in world units. A fresh object, never shared. */
@@ -135,6 +183,14 @@ export class VoxelPlayerCollision extends Behavior<Camera> {
     const cam = this.target;
     if (!cam || !this._spawned) return;
 
+    // Survival: if player is dead, immobilize and maintain view
+    if (this._options.rig?.isDead) {
+      cam.position.x = this._body.x;
+      cam.position.y = this._body.y + this._options.eyeHeight;
+      cam.position.z = this._body.z;
+      return;
+    }
+
     const input = this._options.input;
 
     const actions = this._options.actions?.current;
@@ -152,14 +208,25 @@ export class VoxelPlayerCollision extends Behavior<Camera> {
     const cos = Math.cos(cam.theta);
     const speed = this._options.walkSpeed;
 
-    // Jump impulse if grounded
-    const isJumping = this._onGround && (actions ? actions.jump : input.isPressed(Keys.SPACE));
-    const vyStart = isJumping ? 8.5 : this._velocity.y;
+    const planarVx = -moveZ * sin * speed + strafe * cos * speed;
+    const planarVz = moveZ * cos * speed + strafe * sin * speed;
+
+    // Jump impulse if grounded, or auto-jump / step-up over 1-block obstacles
+    const isManualJump = this._onGround && (actions ? actions.jump : input.isPressed(Keys.SPACE));
+    const isAutoJump =
+      !isManualJump && this._options.autoJump && this.canStepUp(planarVx, planarVz);
+
+    let vyStart = this._velocity.y;
+    if (isManualJump) {
+      vyStart = 8.5;
+    } else if (isAutoJump) {
+      vyStart = 6.8;
+    }
 
     const velocity: Vec3 = {
-      x: -moveZ * sin * speed + strafe * cos * speed,
+      x: planarVx,
       y: vyStart,
-      z: moveZ * cos * speed + strafe * sin * speed,
+      z: planarVz,
     };
 
     // 3. Sweep against the voxel grid (gravity always active; the resolver caps the axis).
@@ -180,6 +247,9 @@ export class VoxelPlayerCollision extends Behavior<Camera> {
     this._velocity = { x: result.velocity.x, y: vy, z: result.velocity.z };
     this._body = { x: result.position.x, y: result.position.y, z: result.position.z };
     this._onGround = result.onGround;
+
+    // Update survival state (fall damage, void detection)
+    this._options.rig?.updateGroundState(result.onGround, this._body.y);
 
     // 5. Center streaming on the fresh body and dispatch the bounded world tasks.
     this._options.world.setFocus(this._body.x, this._body.z);

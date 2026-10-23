@@ -1,5 +1,6 @@
 import { CameraStrategyType, RendererType } from "@small-world-machine/engine";
 import {
+  Color,
   getRendererTypeFromQuery,
   SmallWorldMachine,
 } from "@small-world-machine/engine/core/index.js";
@@ -20,6 +21,8 @@ import { descriptorFromRegistry } from "./voxel/mesh/NaiveMesher.js";
 import { TerrainGenerator } from "./voxel/TerrainGenerator.js";
 import type { ChunkDeltaStore } from "./voxel/store/ChunkDeltaStore.js";
 import { IndexedDbChunkDeltaStore } from "./voxel/store/IndexedDbChunkDeltaStore.js";
+import { DayNightCycle } from "./voxel/environment/DayNightCycle.js";
+import { PlayerRig } from "./voxel/player/PlayerRig.js";
 import { VoxelInputActions } from "./voxel/input/VoxelInputActions.js";
 import { VoxelBlockEditor } from "./voxel/physics/VoxelBlockEditor.js";
 import { VoxelPlayerCollision } from "./voxel/physics/VoxelPlayerCollision.js";
@@ -50,6 +53,11 @@ import type { MeshClient } from "./voxel/worker/MeshWorkerProtocol.js";
  */
 export class App extends SmallWorldMachine {
   private _statsEl: HTMLElement | null = null;
+  private _flashEl: HTMLElement | null = null;
+  private _deathEl: HTMLElement | null = null;
+  private _healthEl: HTMLElement | null = null;
+  private _hotbarEl: HTMLElement | null = null;
+  private _btnRespawn: HTMLElement | null = null;
   private _lastStatsUpdate = 0;
 
   private _world!: ChunkWorld;
@@ -57,6 +65,10 @@ export class App extends SmallWorldMachine {
   private _player!: VoxelPlayerCollision;
   private _editor!: VoxelBlockEditor;
   private _inputActions!: VoxelInputActions;
+  private _material!: BlockMaterial;
+  private _dayNight!: DayNightCycle;
+  private _rig!: PlayerRig;
+  private _clearColor: Color = new Color(0.45, 0.65, 0.95, 1);
   private _store: ChunkDeltaStore | null = null;
 
   constructor() {
@@ -72,6 +84,11 @@ export class App extends SmallWorldMachine {
   /** @inheritdoc */
   protected override async setupScene(): Promise<void> {
     this._statsEl = document.getElementById("voxel-stats");
+    this._flashEl = document.getElementById("damage-flash");
+    this._deathEl = document.getElementById("death-screen");
+    this._healthEl = document.getElementById("voxel-health");
+    this._hotbarEl = document.getElementById("voxel-hotbar");
+    this._btnRespawn = document.getElementById("btn-respawn");
 
     // 1. Perspective projection; far plane covers the streaming radius with margin.
     this.camera.projection = new PerspectiveProjection({
@@ -90,13 +107,16 @@ export class App extends SmallWorldMachine {
 
     // 3. Palette + shared material -- ONE BlockMaterial instance for every chunk host.
     const palette = await createBlockPalette();
-    const material = new BlockMaterial(palette);
+    this._material = new BlockMaterial(palette);
+
+    // M4 Day/Night cycle controller
+    this._dayNight = new DayNightCycle({ cycleDuration: 120 });
 
     // 4. World backbone. Production uses the dedicated mesh worker; a browser without `Worker`
     //    degrades to the foreground double (meshing would run on main -- stats show the label).
     const client: MeshClient =
       typeof Worker !== "undefined" ? new MeshWorkerClient() : new ForegroundMeshClient();
-    this._host = new ChunkWorldHost(this.scene, material);
+    this._host = new ChunkWorldHost(this.scene, this._material);
     // M3 persistence (D2/D3): IndexedDB edit-delta store -- the ONLY current driver behind the
     // interface; the app runs fully fine when no browser storage exists (offline/workers-only
     // contexts degrade to "no persistence", never crash).
@@ -131,6 +151,38 @@ export class App extends SmallWorldMachine {
     // 5. Semantic input actions (composite bindings: Mouse + Trackpad + Gamepad).
     this._inputActions = new VoxelInputActions({ input: this.input });
 
+    // M4 Survival Player Rig
+    this._rig = new PlayerRig({
+      onDamage: (): void => {
+        if (this._flashEl) {
+          this._flashEl.style.opacity = "1";
+          setTimeout((): void => {
+            if (this._flashEl) this._flashEl.style.opacity = "0";
+          }, 180);
+        }
+      },
+      onDeath: (): void => {
+        if (this._deathEl) this._deathEl.style.display = "flex";
+        if (this.input.isPointerLocked) {
+          document.exitPointerLock();
+        }
+      },
+      onRespawn: (): void => {
+        if (this._deathEl) this._deathEl.style.display = "none";
+      },
+    });
+
+    const doRespawn = (): void => {
+      if (!this._rig.isDead) return;
+      this._doRespawn();
+    };
+    this._btnRespawn?.addEventListener("click", doRespawn);
+    window.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (this._rig.isDead && (e.code === "Space" || e.code === "Enter")) {
+        doRespawn();
+      }
+    });
+
     // 6. Player: FPS look via the FPS strategy, feet standing on the generated surface.
     const generator = new TerrainGenerator({ seed: WORLD_SEED });
     const surface = generator.heightAt(SPAWN_X, SPAWN_Z); // topmost solid y
@@ -138,6 +190,8 @@ export class App extends SmallWorldMachine {
       world: this._world,
       input: this.input,
       actions: this._inputActions,
+      rig: this._rig,
+      autoJump: true,
     });
     this._player.setSpawn(SPAWN_X, surface + 1, SPAWN_Z); // feet on top of the grass cap
     this.camera.addBehavior(this._player);
@@ -147,6 +201,7 @@ export class App extends SmallWorldMachine {
       world: this._world,
       input: this.input,
       actions: this._inputActions,
+      rig: this._rig,
       placementBlocker: (x, y, z): boolean => this._player.overlapsCell(x, y, z),
     });
     this.camera.addBehavior(this._editor);
@@ -154,19 +209,82 @@ export class App extends SmallWorldMachine {
 
     // 8. Pointer lock on click (engine FPS convention, see showcases 2/10/29).
     this.canvas.addEventListener("click", (): void => {
-      if (!this.input.isPointerLocked) {
+      if (!this.input.isPointerLocked && !this._rig.isDead) {
         this.input.requestPointerLock(this.canvas);
       }
     });
 
     this.scene.update();
+    this._syncDaylight();
+    this._updateHud();
     this._updateStats(true);
   }
 
   /** @inheritdoc */
   protected override update(deltaTime: number): void {
     this._inputActions.update(deltaTime);
+
+    // M4 Day/Night cycle
+    this._dayNight.update(deltaTime);
+    this._syncDaylight();
+
+    this._updateHud();
     this._updateStats(false);
+  }
+
+  private _syncDaylight(): void {
+    const daylight = this._dayNight.getDaylight();
+    const sunDir = this._dayNight.getSunDirection();
+    this._material.setDaylight(daylight);
+    this._material.setSunDirection(sunDir);
+
+    const sky = this._dayNight.getSkyColor();
+    this._clearColor.r = sky.r;
+    this._clearColor.g = sky.g;
+    this._clearColor.b = sky.b;
+    this.renderer?.setClearColor(this._clearColor);
+  }
+
+  private _doRespawn(): void {
+    this._rig.respawn();
+    const generator = new TerrainGenerator({ seed: WORLD_SEED });
+    const surface = generator.heightAt(SPAWN_X, SPAWN_Z);
+    this._player.setSpawn(SPAWN_X, surface + 1, SPAWN_Z);
+    if (this._deathEl) this._deathEl.style.display = "none";
+    if (!this.input.isPointerLocked) {
+      this.input.requestPointerLock(this.canvas);
+    }
+  }
+
+  private _updateHud(): void {
+    if (this._healthEl) {
+      const hp = this._rig.health;
+      let hearts = "";
+      for (let i = 0; i < 10; i++) {
+        const threshold = (i + 1) * 2;
+        if (hp >= threshold) {
+          hearts += "❤️";
+        } else if (hp >= threshold - 1) {
+          hearts += "💔";
+        } else {
+          hearts += "🖤";
+        }
+      }
+      this._healthEl.textContent = `${hearts} ${hp}/20`;
+    }
+
+    if (this._hotbarEl) {
+      const activeIdx = this._editor.handIndex;
+      const slots = this._hotbarEl.children;
+      for (let i = 0; i < slots.length; i++) {
+        const el = slots[i] as HTMLElement;
+        if (i === activeIdx) {
+          el.classList.add("active");
+        } else {
+          el.classList.remove("active");
+        }
+      }
+    }
   }
 
   /**
@@ -210,6 +328,17 @@ export class App extends SmallWorldMachine {
         }),
       getStoredSeed: async (): Promise<number | null> =>
         this._store ? this._store.getSeed() : null,
+      // M4 survival & day/night reads/controls
+      getHealth: (): number => this._rig.health,
+      isDead: (): boolean => this._rig.isDead,
+      takeDamage: (amount: number): void => this._rig.takeDamage(amount),
+      respawn: (): void => this._doRespawn(),
+      getDaylight: (): number => this._dayNight.getDaylight(),
+      getTimePhase: (): string => this._dayNight.getTimePhase(),
+      setTime: (t: number): void => {
+        this._dayNight.setTime(t);
+        this._syncDaylight();
+      },
     };
   }
 
@@ -226,7 +355,10 @@ export class App extends SmallWorldMachine {
 
     this._statsEl.innerHTML =
       `<div class="stat-row"><span>renderer</span><b>${backend}</b></div>` +
-      `<div class="stat-row"><span>engine</span><b>voxel M3</b></div>` +
+      `<div class="stat-row"><span>engine</span><b>voxel M4</b></div>` +
+      `<div class="stat-row"><span>day / phase</span><b>${this._dayNight.getTimePhase()} (${(this._dayNight.time * 24).toFixed(1)}h)</b></div>` +
+      `<div class="stat-row"><span>daylight</span><b>${(this._dayNight.getDaylight() * 100).toFixed(0)}%</b></div>` +
+      `<div class="stat-row"><span>health</span><b>${this._rig.health} / 20 HP</b></div>` +
       `<div class="stat-row"><span>player</span><b>${feet.x.toFixed(1)}, ${feet.y.toFixed(1)}, ${feet.z.toFixed(1)}</b></div>` +
       `<div class="stat-row"><span>grounded</span><b>${this._player.isOnGround() ? "yes" : "no"}</b></div>` +
       `<div class="stat-row"><span>hand</span><b>${this._blockName(this._editor.getHand())}</b></div>` +
@@ -290,6 +422,14 @@ export interface VoxelM1QaApi {
   getLightFactor(x: number, y: number, z: number): number;
   forcePersist(): Promise<{ persistCount: number; persistBytes: number }>;
   getStoredSeed(): Promise<number | null>;
+  // M4 Survival & Day/Night extensions
+  getHealth(): number;
+  isDead(): boolean;
+  takeDamage(amount: number): void;
+  respawn(): void;
+  getDaylight(): number;
+  getTimePhase(): string;
+  setTime(t: number): void;
 }
 
 /** World seed for deterministic terrain (same seed -> same world; see TerrainGenerator tests). */

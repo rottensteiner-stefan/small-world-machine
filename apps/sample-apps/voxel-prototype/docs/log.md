@@ -5,6 +5,38 @@
 
 ---
 
+## 2026-10-23 — M4 implementiert: Spielbare Survival-Schlaufe (Tag/Nacht, Auto-Jump, Fallschaden, Respawn)
+
+**Status:** ✅ M4-Architektur + Survival-Loop grün. Plan: `.agents/scratches/voxel-m4-plan.md`. **NUR App-Level, kein Engine-Core-Change** (Dossier-Mandat).
+
+### Was gebaut wurde (alles app-level, `apps/sample-apps/voxel-prototype/`)
+
+- **Tag-/Nacht-Rhythmus (`voxel/environment/DayNightCycle.ts`):**
+  - Kontinuierlicher 24h-Zeitzyklus (Standard: 120s für schnelle Prototype-Loops, konfigurierbar).
+  - Berechnet `daylight` (0.15 Nacht-Ambient bis 1.0 Mittag), Sonnenrichtungsvektor `u_sunDirection` und interpolierte Himmelsfarben `clearColor` (Tagblau → Abendrot/Dämmerung → Nacht-Navy).
+  - Shader-Uniforms `u_daylight` und `u_sunDirection` in `BlockMaterial`: Fragment faltet dynamisches Sonnenlicht über das gebackene Tageslicht (`v_light * u_daylight`) und passt `ndl` an den rotierenden Sonnenvektor an — **kein Neumeshing / Zero-GC im Frame-Loop**.
+- **Auto-Jump / Step-Up 1.0 Block (`voxel/physics/VoxelPlayerCollision.ts`):**
+  - Automatische Erkennung (`canStepUp`) bei horizontaler Bewegung gegen 1-Block-Hindernisse: Prüft, ob der Kopfraum über dem Block frei ist (`headroom >= 2 blocks`), und triggert einen sanften Aufstiegsimpuls (`vy = 6.8`), sodass der Spieler ohne Spacebar-Dauerfeuer flüssig über Terrassen und Hügel wandert.
+- **Player Rig & Survival-Zustand (`voxel/player/PlayerRig.ts`):**
+  - **Health:** 20 HP (10 Herzen).
+  - **Fallschaden:** Reines Minecraft-Modell — Messung der Fallhöhe ab Peak `y`. Bei Landung (`onGround == true`): Wenn `fallDistance > 3.0` Blöcke, Schaden = `Math.floor(fallDistance - 3.0)`.
+  - **Void-Schutz:** Absturz ins Nichts (`y < -30`) ist sofort tödlich.
+  - **Tod & Respawn:** Bei `health <= 0` friert die Bewegung ein, der Cursor wird freigegeben und das Todes-Overlay eingeblendet. Respawn (via Button oder Leertaste) stellt 20 HP wieder her und setzt den Spieler sicher auf dem Spawn-Gipfel ab.
+- **HUD & Visuelles Feedback (`index.html` + `App.ts`):**
+  - **Hotbar (1–5):** Zentrierte Leiste am unteren Bildschirmrand mit animierter Selektion des aktiven Blocks (synchron mit Tasten 1–5, Mausrad und Gamepad).
+  - **Health-Herzen:** 10 Herzen (rot / leer), optischer roter Schadens-Flash über dem Screen.
+  - **Tageszeit & Stats:** Anzeige von Phase (sunrise / day / sunset / night), Sonnenstunden und Helligkeit im Info-Panel.
+  - **Death-Screen:** „You died!"-Overlay mit Respawn-Button.
+
+### Verifikation
+
+- `vitest run apps/sample-apps/voxel-prototype`: Alle 19 Testdateien / 136 Tests grün (inkl. 4 DayNightCycle-, 4 PlayerRig-, 3 VoxelPlayerCollision-Tests).
+- Volle Projekt-Suite: **402 Testdateien / 2933 Tests bestanden**, `npm run lint:fix` 0 Fehler / 0 Warnungen, `npm run build:lib` grün.
+- Live-Gate `node .agents/scratches/check-voxel-m4.mjs`: `ok: true`, non-blank (stddev 24.10 / 21.47), 0 Console-/Page-Errors, Day/Night-Transition und kompletter Survival-Damage/Death/Respawn-Kreislauf erfolgreich durchlaufen.
+- Regression: `check-voxel-m1.mjs` und `check-voxel-m3.mjs` unverändert `ok: true`.
+
+---
+
 ## 2026-10-21 — Code-Review-Fixes: abgewandte Flächen & Diagonalgeschwindigkeit
 
 **Status:** ✅ Zwei Befunde aus dem 7-Tage-Review (`.agents/scratches/code-review-7d/E-voxel-whisper.md`) behoben.

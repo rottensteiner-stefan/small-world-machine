@@ -28,8 +28,15 @@ export class BlockMaterial extends CustomShaderMaterial {
         glsl300: { vs: GLSL_VERT, fs: GLSL_FRAG },
       },
       layout: {
-        uniforms: {},
+        uniforms: {
+          u_daylight: { type: ShaderPropertyType.FLOAT },
+          u_sunDirection: { type: ShaderPropertyType.VEC3 },
+        },
         textures: { u_blockAtlas: { type: ShaderPropertyType.TEXTURE } },
+      },
+      properties: {
+        u_daylight: 1.0,
+        u_sunDirection: [0.55, 0.82, 0.28],
       },
       textures: { u_blockAtlas: atlas },
       // M2 water (D3): the atlas alpha drives blending per fragment. Opaque tiles sample
@@ -39,5 +46,15 @@ export class BlockMaterial extends CustomShaderMaterial {
       transparent: true,
       depthWrite: true,
     });
+  }
+
+  /** Sets the dynamic day/night ambient multiplier [0.15, 1.0]. */
+  public setDaylight(value: number): void {
+    this.properties["u_daylight"] = value;
+  }
+
+  /** Sets the 3D direction vector of the sun. */
+  public setSunDirection(dir: [number, number, number]): void {
+    this.properties["u_sunDirection"] = dir;
   }
 }
