@@ -31,6 +31,8 @@
     "lint:wgsl": "tsx scripts/lint-wgsl.ts",
     "check:cycles": "madge --circular packages/engine/src",
     "check:markers": "node scripts/check-verified-markers.js",
+    "check:swm42-evsm": "node scripts/check-swm42-evsm.mjs",
+    "check:swm42-pole": "node scripts/check-swm42-pole.mjs",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "prebuild": "node scripts/update-version.js",
