@@ -52,6 +52,8 @@ export interface MeshBuildRequest {
   /** 16-tall AO corner columns of the up-to-4 diagonal neighbors (M2 seam-exact vertex AO;
    *  `ChunkWorld` gates meshing on all 8 neighbors, so these are always present in production). */
   neighborCorners?: Partial<Record<CornerDir, Uint8Array>>;
+  /** M5: whether to use AO-compatible greedy quad merging. Default true. */
+  useGreedy?: boolean;
 }
 
 export type MeshWorkerRequest = MeshInitMessage | MeshGenerateRequest | MeshBuildRequest;
@@ -104,6 +106,7 @@ export interface MeshClient {
     voxels: Uint8Array,
     neighbors: Partial<Record<FaceDir, Uint8Array>>,
     neighborCorners?: Partial<Record<CornerDir, Uint8Array>>,
+    useGreedy?: boolean,
   ): Promise<MeshOutcome>;
   /** Releases background resources. Pending tasks reject. */
   destroy(): void;

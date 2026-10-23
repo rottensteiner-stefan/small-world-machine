@@ -1,5 +1,6 @@
 import type { CornerDir, FaceDir, MeshBlockDescriptorEntry } from "../mesh/NaiveMesher.js";
 import { buildMesh } from "../mesh/NaiveMesher.js";
+import { buildGreedyMesh } from "../mesh/GreedyMesher.js";
 import { TerrainGenerator } from "../TerrainGenerator.js";
 import type { MeshClient, MeshOutcome } from "./MeshWorkerProtocol.js";
 
@@ -32,13 +33,15 @@ export class ForegroundMeshClient implements MeshClient {
     voxels: Uint8Array,
     neighbors: Partial<Record<FaceDir, Uint8Array>>,
     neighborCorners?: Partial<Record<CornerDir, Uint8Array>>,
+    useGreedy: boolean = true,
   ): Promise<MeshOutcome> {
     if (!this._descriptor.length) {
       throw new Error("[ForegroundMeshClient] configure() must run before mesh()");
     }
+    const meshFn = useGreedy ? buildGreedyMesh : buildMesh;
     const mesh = neighborCorners
-      ? buildMesh({ voxels, descriptor: this._descriptor, neighbors, neighborCorners })
-      : buildMesh({ voxels, descriptor: this._descriptor, neighbors });
+      ? meshFn({ voxels, descriptor: this._descriptor, neighbors, neighborCorners })
+      : meshFn({ voxels, descriptor: this._descriptor, neighbors });
     return { mesh, meshMs: 0 }; // foreground runs on the caller thread -- no worker time to report
   }
 

@@ -59,6 +59,8 @@ export class App extends SmallWorldMachine {
   private _hotbarEl: HTMLElement | null = null;
   private _btnRespawn: HTMLElement | null = null;
   private _lastStatsUpdate = 0;
+  private _isBenchmark: boolean = false;
+  private readonly _frameTimes: number[] = [];
 
   private _world!: ChunkWorld;
   private _host!: ChunkWorldHost;
@@ -79,6 +81,9 @@ export class App extends SmallWorldMachine {
     } else {
       super({ fullscreen: true, rendererType: RendererType.WEB_GL2 });
     }
+    const urlParams =
+      typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    this._isBenchmark = urlParams?.has("benchmark") ?? urlParams?.has("stats") ?? false;
   }
 
   /** @inheritdoc */
@@ -222,6 +227,10 @@ export class App extends SmallWorldMachine {
 
   /** @inheritdoc */
   protected override update(deltaTime: number): void {
+    const dtMs = deltaTime * 1000;
+    this._frameTimes.push(dtMs);
+    if (this._frameTimes.length > 120) this._frameTimes.shift();
+
     this._inputActions.update(deltaTime);
 
     // M4 Day/Night cycle
@@ -304,12 +313,39 @@ export class App extends SmallWorldMachine {
           ready: s.ready,
           generated: s.generated,
           inFlight: s.inFlight,
+          voxelChunksRetained: s.voxelChunksRetained,
           meshMsLast: s.meshMsLast,
           meshMsTotal: s.meshMsTotal,
           edits: s.edits,
           persistCount: s.persistCount,
           persistBytes: s.persistBytes,
           focus: this._world.getFocusChunk(),
+        };
+      },
+      getTelemetry: (): VoxelTelemetry => {
+        const s = this._world.getStats();
+        const n = this._frameTimes.length;
+        const sum = n > 0 ? this._frameTimes.reduce((a, b) => a + b, 0) : 16.6;
+        const avgDt = n > 0 ? sum / n : 16.6;
+        const fps = avgDt > 0 ? Math.round(1000 / avgDt) : 60;
+        let minDt = 0;
+        for (const dt of this._frameTimes) {
+          if (dt > minDt) minDt = dt;
+        }
+        const fpsMin = minDt > 0 ? Math.round(1000 / minDt) : 60;
+        return {
+          fps,
+          fpsAvg: fps,
+          fpsMin,
+          frameTimeMsAvg: Number(avgDt.toFixed(2)),
+          drawCalls: this.scene.lastFrustumVisibleObjects.length,
+          triangles: this._host.triangleCount,
+          chunksReady: s.ready,
+          voxelChunksRetained: s.voxelChunksRetained,
+          cpuVoxelMemoryKb: s.voxelChunksRetained * 4,
+          meshMsAvg: s.ready > 0 ? Number((s.meshMsTotal / s.ready).toFixed(2)) : 0,
+          meshMsTotal: Number(s.meshMsTotal.toFixed(1)),
+          isBenchmark: this._isBenchmark,
         };
       },
       // M2 editing reads/writes for the headless gate (deterministic, no mouse-aim juggling).
@@ -352,10 +388,15 @@ export class App extends SmallWorldMachine {
     const stats = this._world.getStats();
     const feet = this._player.getFeetPosition();
     const workerMode = typeof Worker !== "undefined" ? "dedicated worker" : "foreground (main!)";
+    const n = this._frameTimes.length;
+    const sum = n > 0 ? this._frameTimes.reduce((a, b) => a + b, 0) : 16.6;
+    const avgDt = n > 0 ? sum / n : 16.6;
+    const fps = avgDt > 0 ? Math.round(1000 / avgDt) : 60;
 
     this._statsEl.innerHTML =
       `<div class="stat-row"><span>renderer</span><b>${backend}</b></div>` +
-      `<div class="stat-row"><span>engine</span><b>voxel M4</b></div>` +
+      `<div class="stat-row"><span>engine</span><b>voxel M5 (Greedy + S4)</b></div>` +
+      `<div class="stat-row"><span>fps</span><b>${fps} (${avgDt.toFixed(1)} ms)</b></div>` +
       `<div class="stat-row"><span>day / phase</span><b>${this._dayNight.getTimePhase()} (${(this._dayNight.time * 24).toFixed(1)}h)</b></div>` +
       `<div class="stat-row"><span>daylight</span><b>${(this._dayNight.getDaylight() * 100).toFixed(0)}%</b></div>` +
       `<div class="stat-row"><span>health</span><b>${this._rig.health} / 20 HP</b></div>` +
@@ -365,6 +406,7 @@ export class App extends SmallWorldMachine {
       `<div class="stat-row"><span>edits</span><b>${stats.edits}</b></div>` +
       `<div class="stat-row"><span>Δ saved (session)</span><b>${stats.persistCount} / ${(stats.persistBytes / 1024).toFixed(1)} KB</b></div>` +
       `<div class="stat-row"><span>chunks ready</span><b>${stats.ready}</b></div>` +
+      `<div class="stat-row"><span>voxels in RAM</span><b>${stats.voxelChunksRetained} (~${stats.voxelChunksRetained * 4} KB)</b></div>` +
       `<div class="stat-row"><span>chunks data</span><b>${stats.generated}</b></div>` +
       `<div class="stat-row"><span>in flight</span><b>${stats.inFlight}</b></div>` +
       `<div class="stat-row"><span>objects</span><b>${this.scene.lastFrustumVisibleObjects.length}</b></div>` +
@@ -405,6 +447,7 @@ export interface WorldQaStats {
   ready: number;
   generated: number;
   inFlight: number;
+  voxelChunksRetained: number;
   meshMsLast: number;
   meshMsTotal: number;
   edits: number;
@@ -413,9 +456,25 @@ export interface WorldQaStats {
   focus: { cx: number; cz: number };
 }
 
+export interface VoxelTelemetry {
+  fps: number;
+  fpsAvg: number;
+  fpsMin: number;
+  frameTimeMsAvg: number;
+  drawCalls: number;
+  triangles: number;
+  chunksReady: number;
+  voxelChunksRetained: number;
+  cpuVoxelMemoryKb: number;
+  meshMsAvg: number;
+  meshMsTotal: number;
+  isBenchmark: boolean;
+}
+
 export interface VoxelM1QaApi {
   getPlayer(): PlayerQaState;
   getStats(): WorldQaStats;
+  getTelemetry(): VoxelTelemetry;
   getWorldBlock(x: number, y: number, z: number): number;
   setBlock(x: number, y: number, z: number, id: number): boolean;
   getHand(): number;

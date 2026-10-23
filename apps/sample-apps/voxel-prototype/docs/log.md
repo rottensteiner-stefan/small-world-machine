@@ -5,6 +5,38 @@
 
 ---
 
+## 2026-10-23 — M5 implementiert: Härtung, AO-kompatibles Greedy-Meshing, Voxel-Eviction & Telemetrie
+
+**Status:** ✅ M5 final abgeschlossen & abgenommen. Forschungsreport: `docs/research/voxel-m5-performance-benchmark.md`. **NUR App-Level, kein Engine-Core-Change** (Dossier-Mandat).
+
+### Was gebaut wurde (alles app-level, `apps/sample-apps/voxel-prototype/`)
+
+- **AO-kompatibles Greedy-Meshing (`voxel/mesh/GreedyMesher.ts`):**
+  - 2D-Slice-Merging mit striktem Quad-Key-Matching (`blockId`, Textur-`layer`, `ao0..ao3`, `light`, `transparent`).
+  - Merged Nachbar-Quads nur, wenn alle 4 Vertex-AO-Werte und der Lichtfaktor exakt übereinstimmen (`Math.abs < 1e-4`).
+  - Reduziert die Dreieckszahlen flacher Plateaus, Decken und Wände um **~60–75 %** ohne Schattierungs-Artefakte oder Textur-Verzerrungen.
+  - Vollständige Verdrahtung in `mesh.worker.ts`, `MeshWorkerClient.ts` und `ForegroundMeshClient.ts`.
+- **S4 Sparse-Memory- & Voxel-Eviction-Policy (`voxel/ChunkWorld.ts`):**
+  - Entkopplung von Render-Präsenz (GPU-Mesh im Frustum) und Daten-Präsenz (CPU `Uint8Array(4096)`).
+  - Außerhalb `retainVoxelRadius` werden CPU-Voxel freigegeben (`rec.chunk = null; rec.voxelEvicted = true;`), sobald Nachbarn nicht mehr meshen müssen.
+  - Bei Annäherung des Spielers oder Edits werden Voxel-Daten im Hintergrund deterministisch regeneriert und mit `rec.deltas` rehydriert.
+- **Echtzeit-Telemetrie & Benchmark-Harness (`App.ts`):**
+  - URL-Parameter `?benchmark=1` / `?stats=1` aktiviert erweiterte Telemetrie.
+  - `getTelemetry()` auf `window.__voxelM1` liefert Frametime, FPS, Voxel-RAM-Nutzung, Dreieckszahlen und Worker-Meshing-Zeiten.
+  - Info-Panel erweitert um FPS, Frametimes und Voxel-RAM (`~X KB`).
+- **Edge-Fuzzing & Torture-Tests (`tests/VoxelEdgeFuzz.test.ts`):**
+  - Testet ungültige/extreme Koordinaten, 4-Chunk-Nahtkanten-Toggle, High-Speed-AABB-Sweeps und 3D-Schachbrett-Geometrien.
+- **Automatisierter Headless-Live-Gate (`.agents/scratches/check-voxel-m5.mjs`):**
+  - Prüft Streaming, Greedy-Meshing, Voxel-Eviction und Telemetrie headless über Puppeteer (121 Chunks, ~145 Tris/Chunk, 0 Fehler).
+
+### Verifikation
+
+- `vitest run apps/sample-apps/voxel-prototype`: Alle 22 Testdateien / 145 Tests bestanden.
+- Headless Live-Gate `node .agents/scratches/check-voxel-m5.mjs`: `ok: true`, non-blank (stddev 20.78), 0 Console-/Page-Errors.
+- `npx tsc --noEmit` & `npm run lint`: 0 Fehler, 0 Warnungen.
+
+---
+
 ## 2026-10-23 — M4 implementiert: Spielbare Survival-Schlaufe (Tag/Nacht, Auto-Jump, Fallschaden, Respawn)
 
 **Status:** ✅ M4-Architektur + Survival-Loop grün. Plan: `.agents/scratches/voxel-m4-plan.md`. **NUR App-Level, kein Engine-Core-Change** (Dossier-Mandat).

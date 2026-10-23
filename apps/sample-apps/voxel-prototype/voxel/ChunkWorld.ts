@@ -39,7 +39,9 @@ interface ChunkRecord {
   cx: number;
   cz: number;
   phase: Phase;
-  chunk: Chunk | null; // non-null once phase >= "data"
+  chunk: Chunk | null; // non-null once phase >= "data", may be evicted to null when far (S4)
+  voxelEvicted?: boolean;
+  reloadingVoxels?: boolean;
   /** Set while a mesh is in flight if an edit mutated the voxels; the loop remeshes afterwards. */
   dirty: boolean;
   /** M3: local linear cell index -> block id, for every cell edited since this Chunk was built
@@ -67,6 +69,9 @@ export interface ChunkWorldOptions {
   store?: ChunkDeltaStore;
   /** Streaming add radius (Chebyshev, in chunks). Data is generated within it. Default 6. */
   generateRadius?: number;
+  /** S4 Eviction-Policy: distance from focus (Chebyshev) beyond which CPU voxel arrays are released
+   *  while GPU meshes stay rendered in the scene. Defaults to Math.max(3, (generateRadius ?? 6) - 2). */
+  retainVoxelRadius?: number;
   /** Suspension distance where a ready chunk is dropped (hysteresis: must be > generateRadius). */
   unloadRadius?: number;
   /** Generate/mesh dispatches budgeted per `update()` call. Default 16. */
@@ -82,6 +87,8 @@ export interface ChunkWorldStats {
   inFlight: number;
   /** Chunks meshed and ready (hosted). */
   ready: number;
+  /** Number of chunks whose CPU voxel arrays are currently retained in memory (S4). */
+  voxelChunksRetained: number;
   /** Worker-side meshing wall time of the last completed mesh (ms). */
   meshMsLast: number;
   /** Cumulative worker-side meshing wall time (ms). 0 while nothing meshed. */
@@ -142,6 +149,7 @@ export class ChunkWorld {
   private readonly _opaque: ReadonlySet<number>;
   private readonly _callbacks: ChunkWorldCallbacks;
   private readonly _generateRadius: number;
+  private readonly _retainVoxelRadius: number;
   private readonly _unloadRadius: number;
   private readonly _maxTasksPerTick: number;
   private readonly _seed: number;
@@ -167,6 +175,7 @@ export class ChunkWorld {
     this._opaque = new Set(options.descriptor.filter((e) => e.opaque).map((e) => e.id));
     this._callbacks = options.callbacks;
     this._generateRadius = options.generateRadius ?? 6;
+    this._retainVoxelRadius = options.retainVoxelRadius ?? Math.max(3, this._generateRadius - 2);
     this._unloadRadius = options.unloadRadius ?? this._generateRadius + 2;
     if (this._unloadRadius <= this._generateRadius) {
       throw new Error(
@@ -209,7 +218,33 @@ export class ChunkWorld {
       }
     }
 
-    // 2. Generate/mesh inside the radius, nearest rings first (deterministic order, budgeted).
+    // 2. S4 CPU-Voxel Eviction: drop CPU voxel data for far chunks whose neighbors do not need it
+    if (this._retainVoxelRadius < this._unloadRadius) {
+      for (const rec of this._chunks.values()) {
+        if (rec.chunk !== null) {
+          if (chebyshev(rec.cx, rec.cz, fx, fz) > this._retainVoxelRadius) {
+            let needed = false;
+            for (const [dx, dz] of MESH_NEIGHBORS) {
+              const nrec = this._chunks.get(keyOf(rec.cx + dx, rec.cz + dz));
+              if (
+                nrec &&
+                nrec.phase === "data" &&
+                chebyshev(nrec.cx, nrec.cz, fx, fz) < this._generateRadius
+              ) {
+                needed = true;
+                break;
+              }
+            }
+            if (!needed) {
+              rec.chunk = null;
+              rec.voxelEvicted = true;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Generate/mesh inside the radius, nearest rings first (deterministic order, budgeted).
     let dispatched = 0;
     ring: for (let r = 0; r <= this._generateRadius; r++) {
       for (let dz = -r; dz <= r; dz++) {
@@ -221,6 +256,15 @@ export class ChunkWorld {
           const rec = this._chunks.get(keyOf(cx, cz));
           if (!rec) {
             this._requestGenerate(cx, cz);
+            dispatched++;
+            continue;
+          }
+          if (
+            rec.voxelEvicted &&
+            !rec.reloadingVoxels &&
+            chebyshev(cx, cz, fx, fz) <= this._retainVoxelRadius
+          ) {
+            this._requestReloadVoxels(rec);
             dispatched++;
             continue;
           }
@@ -315,15 +359,18 @@ export class ChunkWorld {
     let generated = 0;
     let inFlight = 0;
     let ready = 0;
+    let voxelChunksRetained = 0;
     for (const rec of this._chunks.values()) {
       if (rec.phase === "generating" || rec.phase === "meshing") inFlight++;
       if (rec.phase === "data" || rec.phase === "meshing" || rec.phase === "ready") generated++;
       if (rec.phase === "ready") ready++;
+      if (rec.chunk !== null) voxelChunksRetained++;
     }
     return {
       generated,
       inFlight,
       ready,
+      voxelChunksRetained,
       meshMsLast: this._meshMsLast,
       meshMsTotal: this._meshMsTotal,
       edits: this._editCount,
@@ -379,6 +426,30 @@ export class ChunkWorld {
       .catch((err: unknown) => this._onError(cx, cz, err));
   }
 
+  private _requestReloadVoxels(rec: ChunkRecord): void {
+    rec.reloadingVoxels = true;
+    this._client
+      .generate(rec.cx, rec.cz)
+      .then((data) => this._onVoxelsReloaded(rec, data))
+      .catch((err: unknown) => {
+        rec.reloadingVoxels = false;
+        console.warn(`[ChunkWorld] failed to reload voxels for (${rec.cx}, ${rec.cz}):`, err);
+      });
+  }
+
+  private _onVoxelsReloaded(rec: ChunkRecord, data: Uint8Array): void {
+    if (this._chunks.get(keyOf(rec.cx, rec.cz)) !== rec) return;
+    const chunk = new Chunk();
+    chunk.voxels.set(data);
+    for (const [index, id] of rec.deltas) {
+      const coords = ChunkWorld._localCoordsOf(index);
+      chunk.setBlock(coords.x, coords.y, coords.z, id);
+    }
+    rec.chunk = chunk;
+    rec.voxelEvicted = false;
+    rec.reloadingVoxels = false;
+  }
+
   /** Generates a column and, once the stored edit-delta has been reapplied on top of the
    *  regenerated terrain, hands it to the mesher. The worker stays the ONLY source of mesh
    *  geometry -- it simply receives the COMPOSED voxels (generated + edits), exactly as in M1/M2.
@@ -422,7 +493,10 @@ export class ChunkWorld {
     try {
       payload = await store.loadChunkDelta(cx, cz);
     } catch (err: unknown) {
-      console.warn(`[ChunkWorld] store read failed for (${cx}, ${cz}), building from terrain:`, err);
+      console.warn(
+        `[ChunkWorld] store read failed for (${cx}, ${cz}), building from terrain:`,
+        err,
+      );
       return;
     }
     if (payload === null) return;

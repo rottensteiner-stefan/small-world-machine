@@ -1,5 +1,6 @@
 import type { MeshBlockDescriptorEntry, VoxelMeshData } from "../mesh/NaiveMesher.js";
 import { buildMesh } from "../mesh/NaiveMesher.js";
+import { buildGreedyMesh } from "../mesh/GreedyMesher.js";
 import { TerrainGenerator } from "../TerrainGenerator.js";
 import type { MeshWorkerRequest, MeshWorkerResponse } from "./MeshWorkerProtocol.js";
 
@@ -41,14 +42,15 @@ scope.onmessage = (e: MessageEvent<MeshWorkerRequest>): void => {
       }
       case "mesh": {
         const start = performance.now();
+        const meshFn = msg.useGreedy !== false ? buildGreedyMesh : buildMesh;
         const mesh: VoxelMeshData = msg.neighborCorners
-          ? buildMesh({
+          ? meshFn({
               voxels: msg.voxels,
               descriptor,
               neighbors: msg.neighbors,
               neighborCorners: msg.neighborCorners,
             })
-          : buildMesh({
+          : meshFn({
               voxels: msg.voxels,
               descriptor,
               neighbors: msg.neighbors,
