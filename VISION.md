@@ -18,6 +18,17 @@ We reject that bloat. **Great 3D experiences are made of:**
 
 ---
 
+## 🏛️ Architectural North Stars: The Spirit of Godot & PlayCanvas
+
+Small World Machine deliberately avoids the trap of shoehorning multi-gigabyte desktop behemoths into the browser via bloated WebAssembly wrappers. Instead, our design is benchmarked against two of the most pragmatic, developer-focused engines in the industry:
+
+- **Godot's Ergonomics & Composition:** Intuitive scene tree composition, modular behaviors over rigid class hierarchies, human-sized APIs, and a relentless focus on developer velocity and joy.
+- **PlayCanvas's Web-Native Mastery:** Built strictly for the browser runtime from day one, offering instant load times, zero-allocation hot paths, and exploiting native WebGL 2 and WebGPU pipelines to the metal.
+
+By synthesizing Godot's composable simplicity with PlayCanvas's high-efficiency web runtime, Small World Machine occupies the ideal sweet spot: a browser-native game engine with heavyweight capabilities and a featherweight footprint.
+
+---
+
 ## The Pain Points We Solve
 
 ### 1. The Monolithic Engine Tax vs. High-Performance Indie Gaming
@@ -46,14 +57,18 @@ We reject that bloat. **Great 3D experiences are made of:**
 
 ---
 
-## ⚡ Our Core Tenets
+## ⚡ The Grundgesetz: Our Architectural Tenets
 
-1. **Atmosphere > Pixel Counting:** Rich lighting, thoughtful color palettes, stylized post-processing, and strong silhouettes create timeless games. We don't need 8K brute force to evoke genuine emotion.
-2. **Lean Power:** Zero-allocation hot paths, object pooling, and custom right-handed math engines ensure buttery smooth performance on normal consumer hardware.
-3. **DX is King:** Standalone authoring tools (**Maker**, **The Forge**, **PBR/IBL/Map/Sprite Generators**) ship directly with the engine to let developers focus on creating games rather than configuring tooling.
-4. **Open & Portable:** Standard glTF 2.0, standard web APIs, zero cloud lock-in.
-5. **No Compromises on Architecture:** Strict typing, decoupled event systems, robust lifecycles, and predictable memory management.
+1. **Atmosphäre vor Pixelzählen (Atmosphere > Spec Chasing):** Reiches Licht, durchdachte Farbpaletten, stilisierte Post-Processing-Effekte und markante Silhouetten schaffen zeitlose Spiele. Wir brauchen keine 8K-Brute-Force, um echte Emotionen zu wecken.
+2. **Schlanke Modularität:** Keine aufgeblasenen Allround-Monsterklassen. Alles ist ein präziser, komponierbarer Baustein (`Behavior`, `SceneNode`).
+3. **Schnelle Iteration:** Null Sekunden Build-Overhead, sofortiges visuelles und auditives Feedback direkt im Browser. Was du schreibst, läuft sofort bei 60 FPS.
+4. **Ehrliche Abstraktionen:** Wenn ein Feature gebraucht wird, existiert eine intuitive High-Level-API (wie unser `camera.flyTo(...)`), darunter ein glasklares, verlässliches Fundament ohne undurchsichtige Magie.
+5. **Browser-Nativität:** Von Grund auf für WebGL 2 und WebGPU in modernem, striktem TypeScript gebaut – keine C++-Desktop-Altlasten, die krampfhaft per WASM in den Browser gepresst wurden.
+6. **Zero-GC & Hot-Path-Disziplin:** Allokationsfreie Frame-Loops (`update(deltaTime)`), Strukturierung über TypedArrays und speicherschonendes Pooling für kompromisslos flüssige Frameraten.
+7. **Leichtgewichtiger Footprint:** Schnelle Ladezeiten und schlanke Bundles statt hunderter Megabyte Engine-Ballast.
+8. **Offene Standards & Tooling:** Volle Unterstützung von glTF 2.0 PBR, schema-validierten Leveln und integrierten Standalone-Werkzeugen (**Maker**, **The Forge**, Shader-/Textur-Generatoren), die direkt im Browser arbeiten.
+9. **Pragmatismus vor Dogmatismus:** Es gibt keinen illusorischen 100%-Purismus-Anspruch. Wir folgen diesen Prinzipien so weit wie architektonisch sinnvoll und technisch zielführend — das exzellente, spielbare Ergebnis und die Entwicklerfreude haben stets Vorrang vor akademischer Perfektion.
 
-Small World Machine is the engine for developers and digital artists who want to craft captivating, atmospheric, and truly memorable 3D games for the open web.
+Small World Machine ist die Engine für Entwickler und Digital Artists, die faszinierende, atmosphärische und wahrhaft denkwürdige 3D-Welten für das offene Web erschaffen wollen.
 
 

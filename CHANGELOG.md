@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.117.0] - 2026-10-23
+
+### "Structure is the essence of freedom." - Frank Lloyd Wright
+
+- **Features:**
+  - *CameraFlyToBehavior & Spline Flight:* Wiederverwendbares `CameraFlyToBehavior` mit Bézier- und Catmull-Rom-Spline-Interpolation, variabler Wegpunktunterstützung (0 Wegpunkte für direkte Bézier-Bögen mit Lift, 1 Wegpunkt für exakte inverse Bézier-Führung, 2+ Wegpunkte über Catmull-Rom-Splines), konfigurierbarer Dauer und sanftem `easeInOutCubic`-Easing. Direkte Convenience-Methoden `camera.flyTo(...)`, `camera.cancelFlight()` und `camera.isFlying` an der Kern-Kamera-Klasse.
+  - *Showcase 39 — Mystic Leyline & Torbogen-Navigation:* Kamera-Führung durch den Torbogen in die beleuchtete Meditationskammer sowie animierter magischer Energie-Leyline-Partikelstrom mit 6-Punkt-Spline, führendem Leucht-Orb mit dynamischem Punktlicht und 24 doppelhelix-förmig wirbelnden Lichtpartikeln.
+- **Housekeeping & Docs:**
+  - *Architektonisches Grundgesetz & Leitsterne (VISION.md, AGENTS.md):* Verankerung der **Godot & PlayCanvas**-Doktrin als architektonischer Nordstern (Schlanke Modularität, Schnelle Iteration, Ehrliche Abstraktionen, Browser-Nativität, Zero-GC & Hot-Path-Disziplin, Leichtgewichtiger Footprint) inklusive pragmatischer Realismus-Klausel.
+
 ## [0.116.0] - 2026-10-22
 
 ### "In God we trust; all others must bring data." - W. Edwards Deming

@@ -20,6 +20,14 @@
 
 ## 2. Core Architectural Laws
 
+- **The Godot & PlayCanvas Doctrine (Architectural North Stars):** Small World Machine merges the ergonomics and node-composition spirit of **Godot** with the lightweight, browser-native performance and zero-GC discipline of **PlayCanvas**:
+  - *Schlanke Modularität:* Keine aufgeblasenen Allround-Monsterklassen. Alles ist ein präziser, komponierbarer Baustein (`Behavior`, `SceneNode`).
+  - *Schnelle Iteration:* Null Sekunden Build-Overhead, sofortiges Feedback direkt im Browser.
+  - *Ehrliche Abstraktionen:* Intuitive High-Level-APIs (z. B. `camera.flyTo(...)`) auf einem transparenten, soliden Low-Level-Fundament ohne Magie.
+  - *Browser-Nativität:* Von Grund auf für WebGL2 und WebGPU in modernem TypeScript gebaut – keine C++-Desktop-Altlasten, die krampfhaft per WASM in den Browser gepresst wurden.
+  - *Zero-GC & Hot-Path-Disziplin:* Allokationsfreie Frame-Loops (`update(deltaTime)`), Strukturierung über TypedArrays und speicherschonendes Pooling.
+  - *Leichtgewichtiger Footprint:* Schnelle Ladezeiten und schlanke Builds statt hunderter Megabyte Engine-Ballast.
+  - *Pragmatismus statt Dogmatismus:* Kein 100%-Purismus-Anspruch (illusorisch). Wir folgen diesen Prinzipien so weit wie architektonisch sinnvoll und praxistauglich — das exzellente, spielbare Ergebnis und die Entwicklerfreude stehen immer im Mittelpunkt.
 - **Right-Handed System:** +X=Right, +Y=Up, +Z=Backward (-Z=Forward/Front).
 - **Behavior System:** Entities like Cameras use the Behavior system rather than specific controller arrays. Use `camera.addBehavior(new OrbitController())` instead of managing controllers directly.
 - **No Global Singletons:** Small World Machine must support multiple engine instances per page. Never use global singletons. Pass dependencies via Context Objects, Constructor Injection, or Scene Graph lifecycle methods.
