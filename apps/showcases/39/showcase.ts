@@ -2,7 +2,6 @@ import type {
   BloomElement,
   EngineOptions,
   HbaoElement,
-  PerspectiveProjection,
   ToneMappingElement,
   VignetteElement,
   VolumetricFogElement,
@@ -10,6 +9,7 @@ import type {
 import {
   AbstractShowcase,
   AmbientLight,
+  CameraStrategyType,
   Color,
   Cube,
   Cylinder,
@@ -17,19 +17,28 @@ import {
   FlyController,
   FogVolume,
   FogVolumeShape,
+  Keys,
   Object3D,
   OrbitController,
   Plane,
   PointLight,
   PostProcessingEffectType,
-  ProjectionType,
   RendererType,
   Sphere,
   StandardMaterial,
+  Texture,
+  TextureWrap,
   ToneMappingMode,
+  Vector2D,
   Vector3D,
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
+
+interface CameraPreset {
+  readonly name: string;
+  readonly position: Vector3D;
+  readonly target: Vector3D;
+}
 
 /**
  * Showcase 39: "Atmospheric Sanctum: Volumetric Froxel Fog & Interior Carving"
@@ -61,10 +70,40 @@ class Showcase39 extends AbstractShowcase {
   private _altarMistVolume!: FogVolume;
   private _chamberCarverVolume!: FogVolume;
   private _brazierMistVolume!: FogVolume;
+  private _skylightMistVolume!: FogVolume;
+  private _shrineRelic!: Object3D;
+  private _baseGodRayStrength = 3.8;
 
   private _orbitController?: OrbitController;
   private _flyController?: FlyController;
-  private _isFlyMode = false;
+  private _isFlyMode = true;
+  private _activePresetIdx = 0;
+  private _orbitPivot = new Vector3D(0, 2.5, -4);
+  private _isHoveringHud = false;
+  private _isDraggingHud = false;
+
+  private readonly _cameraPresets: CameraPreset[] = [
+    {
+      name: "Nave",
+      position: new Vector3D(0, 4.5, 22),
+      target: new Vector3D(0, 2.5, -4),
+    },
+    {
+      name: "Altar",
+      position: new Vector3D(4.2, 2.6, 3.5),
+      target: new Vector3D(0, 1.6, -4.5),
+    },
+    {
+      name: "Portal",
+      position: new Vector3D(0, 2.8, -11.5),
+      target: new Vector3D(0, 2.4, -21.0),
+    },
+    {
+      name: "Carved Room",
+      position: new Vector3D(2.4, 2.4, -18.5),
+      target: new Vector3D(0, 1.8, -21.5),
+    },
+  ];
 
   private _sunMode: 1 | 2 = 2;
   private _time = 0;
@@ -83,6 +122,10 @@ class Showcase39 extends AbstractShowcase {
       },
       ...options,
     });
+  }
+
+  protected override onCanvasRecreated(): void {
+    // Keep cursor unlocked on click so drag-look and HUD interaction stay frictionless.
   }
 
   protected override async setupScene(): Promise<void> {
@@ -147,55 +190,173 @@ class Showcase39 extends AbstractShowcase {
     }
 
     // --- 3. Camera Setup & Strategy ---
-    if (this.camera.projection.type === ProjectionType.PERSPECTIVE) {
-      const proj = this.camera.projection as PerspectiveProjection;
-      proj.fov = 58;
-      proj.near = 0.5;
-      proj.far = 85.0;
-    }
-    this.camera.position.set(0, 4.5, 22);
-    this.camera.target.set(0, 2.5, -4);
-
-    this._orbitController = new OrbitController({
-      input: this.input,
-    });
-    this.camera.addBehavior(this._orbitController);
+    this.defaultFov = (58 * Math.PI) / 180;
+    this.defaultNear = 0.5;
+    this.defaultFar = 85.0;
+    this.configureCamera();
 
     this._flyController = new FlyController({
       input: this.input,
       moveSpeed: 8.0,
+      fastMultiplier: 2.5,
+      slowMultiplier: 0.35,
+      lookSensitivity: 0.004,
+      enableVertical: true,
+      flyInLookDirection: true,
     });
-    this._flyController.enabled = false;
     this.camera.addBehavior(this._flyController);
 
-    // --- 4. Architectural Materials ---
+    this._orbitController = new OrbitController({
+      input: this.input,
+    });
+    this._orbitController.enabled = false;
+    this.camera.addBehavior(this._orbitController);
+
+    this._applyCameraPreset(0);
+
+    // --- 4. PBR Texture Sets & Architectural Materials ---
+    const wrapRepeat = {
+      addressModeU: TextureWrap.REPEAT,
+      addressModeV: TextureWrap.REPEAT,
+    };
+
+    const [
+      floorAlbedo,
+      floorNormal,
+      floorOrm,
+      marbleAlbedo,
+      marbleNormal,
+      marbleOrm,
+      basaltAlbedo,
+      basaltNormal,
+      basaltOrm,
+      goldAlbedo,
+      goldNormal,
+      goldOrm,
+      ashlarAlbedo,
+      ashlarNormal,
+      ashlarOrm,
+      carvedAlbedo,
+      carvedNormal,
+      carvedRough,
+    ] = await Promise.all([
+      Texture.fromUrl("./assets/sanctum_floor_albedo.webp", wrapRepeat),
+      Texture.fromUrl("./assets/sanctum_floor_normal.webp", wrapRepeat),
+      Texture.fromUrl("./assets/sanctum_floor_roughness.webp", wrapRepeat),
+      Texture.fromUrl("./assets/cathedral_marble_albedo.webp", wrapRepeat),
+      Texture.fromUrl("./assets/cathedral_marble_normal.webp", wrapRepeat),
+      Texture.fromUrl("./assets/cathedral_marble_roughness.webp", wrapRepeat),
+      Texture.fromUrl("./assets/volcanic_basalt_albedo.webp", wrapRepeat),
+      Texture.fromUrl("./assets/volcanic_basalt_normal.webp", wrapRepeat),
+      Texture.fromUrl("./assets/volcanic_basalt_roughness.webp", wrapRepeat),
+      Texture.fromUrl("./assets/sacred_gold_albedo.webp", wrapRepeat),
+      Texture.fromUrl("./assets/sacred_gold_normal.webp", wrapRepeat),
+      Texture.fromUrl("./assets/sacred_gold_roughness.webp", wrapRepeat),
+      Texture.fromUrl("./assets/sanctum_ashlar_albedo.webp", wrapRepeat),
+      Texture.fromUrl("./assets/sanctum_ashlar_normal.webp", wrapRepeat),
+      Texture.fromUrl("./assets/sanctum_ashlar_roughness.webp", wrapRepeat),
+      Texture.fromUrl("../38/assets/carved_masonry_albedo.png", wrapRepeat),
+      Texture.fromUrl("../38/assets/carved_masonry_normal.png", wrapRepeat),
+      Texture.fromUrl("../38/assets/carved_masonry_roughness.png", wrapRepeat),
+      this.loadIbl("../27/assets/ibl", 0.25),
+    ]);
+
+    // 4x4m square Opus-Sectile stone & terracotta-porphyry tiles across the 36x64m nave floor
+    floorAlbedo.repeat = { x: 9, y: 16 };
+    floorNormal.repeat = { x: 9, y: 16 };
+    floorOrm.repeat = { x: 9, y: 16 };
+
+    // Fluted Botticino/Calacatta marble with smoky & gold veins along the 12 colonnade pillars
+    marbleAlbedo.repeat = { x: 2, y: 4 };
+    marbleNormal.repeat = { x: 2, y: 4 };
+    marbleOrm.repeat = { x: 2, y: 4 };
+
+    // Obsidian basalt with gold-pyrite veins for dais steps, vault ribs, and tracery mullions
+    basaltAlbedo.repeat = { x: 3, y: 3 };
+    basaltNormal.repeat = { x: 3, y: 3 };
+    basaltOrm.repeat = { x: 3, y: 3 };
+
+    // Hammered antique bronze & 24K gold rosette filigree for the Altar and Relic Shrine
+    goldAlbedo.repeat = { x: 2, y: 2 };
+    goldNormal.repeat = { x: 2, y: 2 };
+    goldOrm.repeat = { x: 2, y: 2 };
+
+    // Monumental Gothic cathedral stone ashlar for outer nave walls and clerestory ceilings
+    ashlarAlbedo.repeat = { x: 8, y: 2.5 };
+    ashlarNormal.repeat = { x: 8, y: 2.5 };
+    ashlarOrm.repeat = { x: 8, y: 2.5 };
+
+    // Crisp carved terracotta-sandstone masonry for the zero-fog rear meditation chamber
+    carvedAlbedo.repeat = { x: 3, y: 2 };
+    carvedNormal.repeat = { x: 3, y: 2 };
+    carvedRough.repeat = { x: 3, y: 2 };
+
     const stoneFloorMat = new StandardMaterial({
-      color: new Color(0.35, 0.33, 0.3),
-      roughness: 0.65,
-      metallic: 0.05,
+      color: new Color(0.95, 0.94, 0.92),
+      diffuseMap: floorAlbedo,
+      normalMap: floorNormal,
+      normalScale: new Vector2D(1.15, 1.15),
+      roughnessMap: floorOrm,
+      metallicMap: floorOrm,
+      aoMap: floorOrm,
+      roughness: 0.95,
+      metallic: 1.0,
     });
 
     const pillarMat = new StandardMaterial({
-      color: new Color(0.55, 0.52, 0.46),
-      roughness: 0.45,
-      metallic: 0.05,
+      color: new Color(0.96, 0.94, 0.9),
+      diffuseMap: marbleAlbedo,
+      normalMap: marbleNormal,
+      normalScale: new Vector2D(1.2, 1.2),
+      roughnessMap: marbleOrm,
+      metallicMap: marbleOrm,
+      aoMap: marbleOrm,
+      roughness: 0.9,
+      metallic: 1.0,
     });
 
     const darkBasaltMat = new StandardMaterial({
-      color: new Color(0.12, 0.12, 0.14),
-      roughness: 0.35,
-      metallic: 0.2,
+      color: new Color(0.92, 0.94, 0.98),
+      diffuseMap: basaltAlbedo,
+      normalMap: basaltNormal,
+      normalScale: new Vector2D(1.1, 1.1),
+      roughnessMap: basaltOrm,
+      metallicMap: basaltOrm,
+      aoMap: basaltOrm,
+      roughness: 0.9,
+      metallic: 1.0,
     });
 
     const goldTrimMat = new StandardMaterial({
-      color: new Color(0.9, 0.75, 0.3),
-      roughness: 0.25,
-      metallic: 0.85,
+      color: new Color(1.0, 0.94, 0.82),
+      diffuseMap: goldAlbedo,
+      normalMap: goldNormal,
+      normalScale: new Vector2D(1.25, 1.25),
+      roughnessMap: goldOrm,
+      metallicMap: goldOrm,
+      aoMap: goldOrm,
+      roughness: 0.85,
+      metallic: 1.0,
+    });
+
+    const hallWallMat = new StandardMaterial({
+      color: new Color(0.88, 0.85, 0.82),
+      diffuseMap: ashlarAlbedo,
+      normalMap: ashlarNormal,
+      normalScale: new Vector2D(1.3, 1.3),
+      roughnessMap: ashlarOrm,
+      aoMap: ashlarOrm,
+      roughness: 0.95,
+      metallic: 0.04,
     });
 
     const chamberWallMat = new StandardMaterial({
-      color: new Color(0.25, 0.23, 0.22),
-      roughness: 0.75,
+      color: new Color(0.76, 0.66, 0.58),
+      diffuseMap: carvedAlbedo,
+      normalMap: carvedNormal,
+      normalScale: new Vector2D(1.35, 1.35),
+      roughnessMap: carvedRough,
+      roughness: 0.85,
       metallic: 0.02,
     });
 
@@ -243,25 +404,25 @@ class Showcase39 extends AbstractShowcase {
     this.scene.add(floor);
 
     // High clerestory ceiling slabs (solid boxes so CSM shadows block all light outside the central skylight)
-    const ceilingLeft = createBox("CeilingLeft", 14.0, 0.8, 64.0, chamberWallMat);
+    const ceilingLeft = createBox("CeilingLeft", 14.0, 0.8, 64.0, hallWallMat);
     ceilingLeft.position.set(-11, 10.4, 0);
     ceilingLeft.castShadow = true;
     ceilingLeft.receiveShadow = true;
     this.scene.add(ceilingLeft);
 
-    const ceilingRight = createBox("CeilingRight", 14.0, 0.8, 64.0, chamberWallMat);
+    const ceilingRight = createBox("CeilingRight", 14.0, 0.8, 64.0, hallWallMat);
     ceilingRight.position.set(11, 10.4, 0);
     ceilingRight.castShadow = true;
     ceilingRight.receiveShadow = true;
     this.scene.add(ceilingRight);
 
     // Solid roof slab over the rear section (Z < -15) and front vestibule (Z > 16) so light only enters through the nave skylight bays
-    const ceilingRear = createBox("CeilingRear", 10.0, 0.8, 18.0, chamberWallMat);
+    const ceilingRear = createBox("CeilingRear", 10.0, 0.8, 18.0, hallWallMat);
     ceilingRear.position.set(0, 10.4, -23.0);
     ceilingRear.castShadow = true;
     this.scene.add(ceilingRear);
 
-    const ceilingFront = createBox("CeilingFront", 10.0, 0.8, 16.0, chamberWallMat);
+    const ceilingFront = createBox("CeilingFront", 10.0, 0.8, 16.0, hallWallMat);
     ceilingFront.position.set(0, 10.4, 24.0);
     ceilingFront.castShadow = true;
     this.scene.add(ceilingFront);
@@ -308,32 +469,32 @@ class Showcase39 extends AbstractShowcase {
     }
 
     // Outer Hall Side Walls
-    const wallLeft = createBox("WallLeft", 1.0, 10.0, 64.0, chamberWallMat);
+    const wallLeft = createBox("WallLeft", 1.0, 10.0, 64.0, hallWallMat);
     wallLeft.position.set(-18, 5, 0);
     wallLeft.castShadow = true;
     wallLeft.receiveShadow = true;
     this.scene.add(wallLeft);
 
-    const wallRight = createBox("WallRight", 1.0, 10.0, 64.0, chamberWallMat);
+    const wallRight = createBox("WallRight", 1.0, 10.0, 64.0, hallWallMat);
     wallRight.position.set(18, 5, 0);
     wallRight.castShadow = true;
     wallRight.receiveShadow = true;
     this.scene.add(wallRight);
 
     // Rear Cathedral Outer Wall (closes the building behind the meditation chamber so no stray light leaks in)
-    const rearOuterWall = createBox("RearOuterWall", 36.0, 11.0, 1.0, chamberWallMat);
+    const rearOuterWall = createBox("RearOuterWall", 36.0, 11.0, 1.0, hallWallMat);
     rearOuterWall.position.set(0, 5.5, -26.5);
     rearOuterWall.castShadow = true;
     rearOuterWall.receiveShadow = true;
     this.scene.add(rearOuterWall);
 
     // Front Entrance Arch
-    const frontWallLeft = createBox("FrontWallLeft", 12.0, 10.0, 1.0, chamberWallMat);
+    const frontWallLeft = createBox("FrontWallLeft", 12.0, 10.0, 1.0, hallWallMat);
     frontWallLeft.position.set(-12, 5, 26);
     frontWallLeft.castShadow = true;
     this.scene.add(frontWallLeft);
 
-    const frontWallRight = createBox("FrontWallRight", 12.0, 10.0, 1.0, chamberWallMat);
+    const frontWallRight = createBox("FrontWallRight", 12.0, 10.0, 1.0, hallWallMat);
     frontWallRight.position.set(12, 5, 26);
     frontWallRight.castShadow = true;
     this.scene.add(frontWallRight);
@@ -411,6 +572,7 @@ class Showcase39 extends AbstractShowcase {
     shrineRelic.material = goldTrimMat;
     shrineRelic.position.set(0, 2.0, -21);
     shrineRelic.castShadow = true;
+    this._shrineRelic = shrineRelic;
     this.scene.add(shrineRelic);
 
     // --- 8. FogVolume Nodes (Option R Phase 3 & 5) ---
@@ -465,6 +627,21 @@ class Showcase39 extends AbstractShowcase {
     this._brazierMistVolume.position.set(-4.5, 2.2, 4.0);
     this.scene.add(this._brazierMistVolume);
 
+    // D. Clerestory Skylight Dust & Mist Volume (Wind-drifting 3D turbulence inside the upper God Ray shafts)
+    this._skylightMistVolume = new FogVolume({
+      name: "SkylightDustCurrents",
+      shape: FogVolumeShape.BOX,
+      size: new Vector3D(5.5, 3.8, 15.0),
+      density: 0.045,
+      edgeFade: 0.45,
+      albedo: new Color(1.0, 0.96, 0.88),
+      noiseScale: 0.38,
+      noiseAmount: 0.75,
+      noiseSpeed: 0.35,
+    });
+    this._skylightMistVolume.position.set(0, 5.8, -1.0);
+    this.scene.add(this._skylightMistVolume);
+
     // --- 9. Dynamic Lights & CSM Cascades ---
     this._ambientLight = new AmbientLight({
       color: new Color(0.18, 0.22, 0.28),
@@ -510,20 +687,129 @@ class Showcase39 extends AbstractShowcase {
   }
 
   private _updateSunAngle(): void {
+    const swayX = Math.sin(this._time * 0.36) * 0.11 + Math.cos(this._time * 0.19) * 0.04;
+    const swayZ = Math.cos(this._time * 0.27) * 0.07;
+    const breathe = 1.0 + Math.sin(this._time * 0.58) * 0.12 + Math.cos(this._time * 1.15) * 0.05;
+
     if (this._sunMode === 1) {
       // High noon celestial beams pouring steeply through the skylight tracery
-      this._sunLight.direction.set(0.26, -0.9, 0.35);
+      this._sunLight.direction.set(0.26 + swayX, -0.9, 0.35 + swayZ);
       this._sunLight.direction.normalize();
       this._sunLight.color.set(0.95, 0.97, 1.0);
       this._sunLight.intensity = 3.0;
-      this._sunLight.volumetricIntensity = 3.8;
+      this._sunLight.volumetricIntensity = this._baseGodRayStrength * breathe;
     } else {
       // Golden-hour sun streaming diagonally across the skylight mullions & central nave
-      this._sunLight.direction.set(-0.34, -0.84, 0.42);
+      this._sunLight.direction.set(-0.34 + swayX, -0.84, 0.42 + swayZ);
       this._sunLight.direction.normalize();
       this._sunLight.color.set(1.0, 0.86, 0.66);
       this._sunLight.intensity = 3.4;
-      this._sunLight.volumetricIntensity = 3.8;
+      this._sunLight.volumetricIntensity = this._baseGodRayStrength * breathe;
+    }
+  }
+
+  private _applyCameraPreset(index: number): void {
+    const preset = this._cameraPresets[index];
+    if (!preset) return;
+    this._activePresetIdx = index;
+    this._orbitPivot.copyFrom(preset.target);
+    this.setInitialCamera(preset.position, preset.target);
+    this._syncCameraStrategy();
+  }
+
+  private _setCameraMode(flyMode: boolean): void {
+    if (this._isFlyMode === flyMode) return;
+    if (flyMode) {
+      // Orbit -> Fly: compute forward look angles (theta, phi) from current target - position
+      const dir = this.camera.target.clone().sub(this.camera.position);
+      const len = dir.length();
+      if (len > 1e-4) {
+        dir.scale(1.0 / len);
+        this.camera.phi = Math.asin(Math.max(-0.9999, Math.min(0.9999, dir.y)));
+        this.camera.theta = Math.atan2(dir.x, -dir.z);
+      }
+    } else {
+      // Fly -> Orbit: place orbit pivot 12m ahead along the current look direction
+      const sinT = Math.sin(this.camera.theta);
+      const cosT = Math.cos(this.camera.theta);
+      const sinP = Math.sin(this.camera.phi);
+      const cosP = Math.cos(this.camera.phi);
+      const orbitDist = 12.0;
+      this._orbitPivot.set(
+        this.camera.position.x + sinT * cosP * orbitDist,
+        this.camera.position.y + sinP * orbitDist,
+        this.camera.position.z - cosT * cosP * orbitDist,
+      );
+      this.camera.target.copyFrom(this._orbitPivot);
+    }
+    this._isFlyMode = flyMode;
+    this._syncCameraStrategy();
+  }
+
+  private _syncCameraStrategy(): void {
+    const canControl = !this._isHoveringHud && !this._isDraggingHud;
+    if (this._isFlyMode) {
+      this.camera.setStrategy(CameraStrategyType.FPS);
+      if (this._flyController) this._flyController.enabled = canControl;
+      if (this._orbitController) this._orbitController.enabled = false;
+    } else {
+      this.camera.target.copyFrom(this._orbitPivot);
+      this.camera.setStrategy(CameraStrategyType.HYBRID_SYNC);
+      if (this._flyController) this._flyController.enabled = false;
+      if (this._orbitController) this._orbitController.enabled = canControl;
+    }
+    this.camera.updateViewMatrix();
+  }
+
+  public override resetCamera(): void {
+    this._applyCameraPreset(this._activePresetIdx);
+    this._updateHudText();
+  }
+
+  protected override onKeyDown(event: KeyboardEvent): void {
+    super.onKeyDown(event);
+    if (event.altKey || event.metaKey || event.ctrlKey) return;
+    const active = document.activeElement;
+    if (active && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return;
+
+    switch (event.code) {
+      case Keys.F:
+        if (this._fogElement) {
+          this._fogElement.enabled = !this._fogElement.enabled;
+          this._updateHudText();
+        }
+        break;
+      case Keys.C:
+        if (!this._isFlyMode) {
+          this._chamberCarverVolume.enabled = !this._chamberCarverVolume.enabled;
+          this._updateHudText();
+        }
+        break;
+      case Keys.N: {
+        const activeNoise = this._altarMistVolume.noiseAmount > 0.0;
+        this._altarMistVolume.noiseAmount = activeNoise ? 0.0 : 0.7;
+        this._brazierMistVolume.noiseAmount = activeNoise ? 0.0 : 0.8;
+        this._skylightMistVolume.noiseAmount = activeNoise ? 0.0 : 0.75;
+        this._updateHudText();
+        break;
+      }
+      case Keys.D1:
+        this._sunMode = 1;
+        this._updateSunAngle();
+        this._updateHudText();
+        break;
+      case Keys.D2:
+        this._sunMode = 2;
+        this._updateSunAngle();
+        this._updateHudText();
+        break;
+      case Keys.V:
+        this._setCameraMode(!this._isFlyMode);
+        this._updateHudText();
+        break;
+      case Keys.I:
+        this._toggleInspector();
+        break;
     }
   }
 
@@ -576,10 +862,48 @@ class Showcase39 extends AbstractShowcase {
         ev,
         (e) => {
           e.stopPropagation();
+          if ("wheel" === ev) {
+            this.input.mouse.zoom = 0;
+            this.input.mouse.wheelX = 0;
+            this.input.mouse.wheelY = 0;
+          }
         },
         { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
       );
     }
+
+    hud.addEventListener("pointerenter", () => {
+      this._isHoveringHud = true;
+      if (this._flyController) this._flyController.enabled = false;
+      if (this._orbitController) this._orbitController.enabled = false;
+    });
+
+    hud.addEventListener("pointerleave", (e: PointerEvent) => {
+      if (0 === e.buttons && !this._isDraggingHud) {
+        this._isHoveringHud = false;
+        this._syncCameraStrategy();
+      }
+    });
+
+    hud.addEventListener("pointerdown", () => {
+      this._isHoveringHud = true;
+      this._isDraggingHud = true;
+      if (this._flyController) this._flyController.enabled = false;
+      if (this._orbitController) this._orbitController.enabled = false;
+      this.input.mouse.dx = 0;
+      this.input.mouse.dy = 0;
+      this.input.mouse.zoom = 0;
+      this.input.mouse.left = false;
+    });
+
+    window.addEventListener("pointerup", () => {
+      if (!this._isDraggingHud) return;
+      this._isDraggingHud = false;
+      if (!this._hudElement?.matches(":hover")) {
+        this._isHoveringHud = false;
+        this._syncCameraStrategy();
+      }
+    });
 
     // Footer toggle button
     const toggleBtn = document.createElement("button");
@@ -657,9 +981,9 @@ class Showcase39 extends AbstractShowcase {
           <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:4px;">
             <div style="display:flex;justify-content:space-between;font-size:12px;">
               <label for="rngShafts">God Ray Strength</label>
-              <span id="valShafts">${this._sunLight.volumetricIntensity.toFixed(1)}</span>
+              <span id="valShafts">${this._baseGodRayStrength.toFixed(1)}</span>
             </div>
-            <input type="range" id="rngShafts" min="0.0" max="8.0" step="0.1" value="${this._sunLight.volumetricIntensity}">
+            <input type="range" id="rngShafts" min="0.0" max="8.0" step="0.1" value="${this._baseGodRayStrength}">
           </div>
           <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:4px;">
             <div style="display:flex;justify-content:space-between;font-size:12px;">
@@ -680,16 +1004,25 @@ class Showcase39 extends AbstractShowcase {
             </div>
           </div>
           <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
-            <label>Camera Navigation</label>
+            <label>Camera Mode [V]</label>
             <div class="preset-group">
+              <button class="btn-preset ${this._isFlyMode ? "active" : ""}" id="btnCamFly">Free-Fly (WASD)</button>
               <button class="btn-preset ${!this._isFlyMode ? "active" : ""}" id="btnCamOrbit">Orbit Mode</button>
-              <button class="btn-preset ${this._isFlyMode ? "active" : ""}" id="btnCamFly">Free-Fly Mode</button>
+            </div>
+          </div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
+            <label>Camera Viewpoints</label>
+            <div class="preset-group">
+              <button class="btn-preset ${this._activePresetIdx === 0 ? "active" : ""}" data-cam="0">Nave</button>
+              <button class="btn-preset ${this._activePresetIdx === 1 ? "active" : ""}" data-cam="1">Altar</button>
+              <button class="btn-preset ${this._activePresetIdx === 2 ? "active" : ""}" data-cam="2">Portal</button>
+              <button class="btn-preset ${this._activePresetIdx === 3 ? "active" : ""}" data-cam="3">Carved Room</button>
             </div>
           </div>
         </div>
 
         <div style="font-size: 11px; color: #94a3b8; line-height: 1.4; padding: 2px 4px;">
-          Fly into the rear vaulted chamber (Z = -21) to observe the zero-fog carved interior!
+          Use <strong>WASD / Arrows</strong> + <strong>Drag</strong> (or <strong>Scroll</strong>) to fly into the carved chamber (Z = -21), or pick a viewpoint above.
         </div>
       </div>
     `;
@@ -713,6 +1046,7 @@ class Showcase39 extends AbstractShowcase {
       const active = (e.target as HTMLInputElement).checked;
       this._altarMistVolume.noiseAmount = active ? 0.7 : 0.0;
       this._brazierMistVolume.noiseAmount = active ? 0.8 : 0.0;
+      this._skylightMistVolume.noiseAmount = active ? 0.75 : 0.0;
     });
 
     document.getElementById("rngDensity")?.addEventListener("input", (e) => {
@@ -724,7 +1058,8 @@ class Showcase39 extends AbstractShowcase {
 
     document.getElementById("rngShafts")?.addEventListener("input", (e) => {
       const v = parseFloat((e.target as HTMLInputElement).value);
-      this._sunLight.volumetricIntensity = v;
+      this._baseGodRayStrength = v;
+      this._updateSunAngle();
       const lbl = document.getElementById("valShafts");
       if (lbl) lbl.textContent = v.toFixed(1);
     });
@@ -750,22 +1085,52 @@ class Showcase39 extends AbstractShowcase {
     });
 
     document.getElementById("btnCamOrbit")?.addEventListener("click", () => {
-      this._isFlyMode = false;
-      if (this._orbitController) this._orbitController.enabled = true;
-      if (this._flyController) this._flyController.enabled = false;
+      this._setCameraMode(false);
       this._updateHudText();
     });
 
     document.getElementById("btnCamFly")?.addEventListener("click", () => {
-      this._isFlyMode = true;
-      if (this._orbitController) this._orbitController.enabled = false;
-      if (this._flyController) this._flyController.enabled = true;
+      this._setCameraMode(true);
       this._updateHudText();
+    });
+
+    this._hudElement.querySelectorAll<HTMLButtonElement>("button[data-cam]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const camIdx = parseInt(btn.dataset["cam"] ?? "0", 10);
+        this._applyCameraPreset(camIdx);
+        this._updateHudText();
+      });
     });
   }
 
   protected override update(dt: number): void {
     this._time += dt;
+
+    // In Free-Fly mode, allow mouse wheel / trackpad two-finger scroll to dolly along the look vector
+    if (
+      this._isFlyMode &&
+      !this._isHoveringHud &&
+      !this._isDraggingHud &&
+      0 !== this.input.mouse.zoom
+    ) {
+      const dollyStep = -this.input.mouse.zoom * 18.0;
+      const sinT = Math.sin(this.camera.theta);
+      const cosT = Math.cos(this.camera.theta);
+      const sinP = Math.sin(this.camera.phi);
+      const cosP = Math.cos(this.camera.phi);
+      this.camera.position.x += sinT * cosP * dollyStep;
+      this.camera.position.y += sinP * dollyStep;
+      this.camera.position.z += -cosT * cosP * dollyStep;
+    }
+
+    // Gentle celestial drift and cloud-scud breathing of the skylight God Ray curtains
+    this._updateSunAngle();
+
+    // Gentle levitation of the golden Shrine Relic inside the carved meditation chamber
+    if (this._shrineRelic) {
+      this._shrineRelic.position.y = 2.0 + Math.sin(this._time * 1.8) * 0.08;
+      this._shrineRelic.rotation.y = this._time * 0.45;
+    }
 
     // Gentle pulsing & flicker of the altar and brazier point lights
     if (this._altarLight) {

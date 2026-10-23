@@ -89,6 +89,24 @@ describe("FlyController", () => {
     expect(camera.position.z).toBeLessThan(startZ);
   });
 
+  it("should fly forward and strafe when Arrow keys (UP / RIGHT) are pressed", () => {
+    const controller = new FlyController({
+      input: mockInput,
+      moveSpeed: 10,
+    });
+    camera.addBehavior(controller);
+
+    mockInput.setKey(Keys.UP, true);
+    mockInput.setKey(Keys.RIGHT, true);
+    const startZ = camera.position.z;
+    const startX = camera.position.x;
+
+    controller.update(0.1);
+
+    expect(camera.position.z).toBeLessThan(startZ);
+    expect(camera.position.x).toBeGreaterThan(startX);
+  });
+
   it("should ascend when Space or E is pressed", () => {
     const controller = new FlyController({
       input: mockInput,

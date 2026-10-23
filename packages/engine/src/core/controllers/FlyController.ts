@@ -142,8 +142,8 @@ export class FlyController extends Behavior {
 
     // 3. Movement
     if (this._options.enableMovement) {
-      const moveZ = input.getAxis(Keys.W, Keys.S);
-      const moveX = input.getAxis(Keys.A, Keys.D);
+      const moveZ = input.getAxis(Keys.W, Keys.S) || input.getAxis(Keys.UP, Keys.DOWN);
+      const moveX = input.getAxis(Keys.A, Keys.D) || input.getAxis(Keys.LEFT, Keys.RIGHT);
 
       const theta = isCamera ? target.theta : (target as Object3D).rotation.y;
       const phi = isCamera ? target.phi : (target as Object3D).rotation.x;

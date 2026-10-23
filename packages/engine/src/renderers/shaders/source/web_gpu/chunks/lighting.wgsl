@@ -26,8 +26,8 @@ var shadow: f32 = 1.0;
         var blendToNext: f32 = 0.0;
         if (cascadeIndex + 1u < numCascades) {
             let splitFar = global.cascadeSplits[cascadeIndex];
-            let blendBand = max(splitFar * 0.1, 0.0001);
-            blendToNext = 1.0 - clamp((splitFar - viewDist) / blendBand, 0.0, 1.0);
+            let blendBand = max(splitFar * 0.2, 0.0001);
+            blendToNext = smoothstep(0.0, 1.0, 1.0 - clamp((splitFar - viewDist) / blendBand, 0.0, 1.0));
         }
 
         // Normal-offset bias, scaled by NdotL so grazing angles get the biggest offset.

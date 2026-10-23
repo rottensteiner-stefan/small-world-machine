@@ -56,6 +56,12 @@ export class GlassMaterial extends AbstractMaterial {
     (props["u_liquidParams"] as number[])[1] = this.thickness;
     (props["u_liquidParams"] as number[])[2] = this.transmission;
 
+    const extra = props["u_extraParams"] as number[];
+    extra[0] = 1.0; // AO
+    extra[1] = 0.0; // alpha test
+    extra[2] = 1.0; // normalScale.x
+    extra[3] = 1.0; // normalScale.y
+
     this._renderManifest.textures["u_normalMap"] = this.normalMap;
 
     const flags: string[] = [];

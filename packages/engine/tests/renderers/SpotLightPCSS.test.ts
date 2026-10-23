@@ -62,12 +62,9 @@ describe("EVSM directional dispatchers preserve the default PCSS behavior per ca
     "packages/engine/src/renderers/shaders/source/web_gpu/chunks/pbr_math.wgsl",
   );
 
-  it("the blend dispatcher keeps the fixed-PCF fallback (no PCSS cost in the blend band)", () => {
-    expect(pbrMath).toContain("return getShadowPCF(map, samp, shadowPos, layer, bias);");
-  });
-
-  it("the main dispatcher keeps the PCSS fallback for the primary cascade sample", () => {
+  it("both main and blend dispatchers keep the PCSS fallback so cascade splits stay C0-continuous", () => {
     expect(pbrMath).toContain("return getShadowPCSS(map, samp, shadowPos, layer, bias);");
+    expect(pbrMath).toContain("let filterRadius = max(1.0, pcfRadius * cascadeScale);");
   });
 
   it("both dispatchers switch to the EVSM moment path when the mode flag is set", () => {

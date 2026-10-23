@@ -144,7 +144,16 @@ fn getShadowPCSS(map: texture_depth_2d_array, samp: sampler_comparison, shadowPo
     //   distant receivers and the penumbra reads harder than for the ortho cascades. That errs
     //   toward a sharper (never leakier) shadow; linearizing needs the spot near/far, which no
     //   uniform lane carries yet (spotShadowInfo is full) -- a struct growth, not a shader tweak.
-    let searchTexels = 8.0;
+    // Normalize blocker-search and penumbra radii across orthographic CSM cascades (shadowPos.w == 1)
+    // so the physical world-space penumbra width stays continuous across cascade split circles.
+    // Cascade 0 (layer == 0u) and perspective spot lights (shadowPos.w != 1) keep cascadeScale = 1.0.
+    let isHigherOrthoCascade = abs(shadowPos.w - 1.0) < 1e-4 && layer > 0u && layer < 4u;
+    let cascadeScale = select(
+        1.0,
+        clamp(global.cascadeSplits[0] / max(global.cascadeSplits[layer], 0.001), 0.2, 1.0),
+        isHigherOrthoCascade,
+    );
+    let searchTexels = 8.0 * cascadeScale;
 
     var avgBlockerDepth: f32 = 0.0;
     var blockerCount: f32 = 0.0;
@@ -194,6 +203,7 @@ fn getShadowPCSS(map: texture_depth_2d_array, samp: sampler_comparison, shadowPo
 
     // Soft penumbra path: Low-discrepancy 16-tap Vogel disk rotated by interleaved gradient noise.
     // Eliminates regular 3x3 grid banding and shadow replication (ghosting) in distant penumbras.
+    let filterRadius = max(1.0, pcfRadius * cascadeScale);
     let noise = fract(52.9829189 * fract(0.06711056 * f32(centerCoord.x) + 0.00583715 * f32(centerCoord.y)));
     let angle = noise * 6.2831853;
     let cosA = cos(angle);
@@ -201,7 +211,7 @@ fn getShadowPCSS(map: texture_depth_2d_array, samp: sampler_comparison, shadowPo
 
     var shadow: f32 = 0.0;
     for (var s = 0; s < 16; s++) {
-        let raw = searchOffsets[s] * pcfRadius;
+        let raw = searchOffsets[s] * filterRadius;
         let rot = vec2f(raw.x * cosA - raw.y * sinA, raw.x * sinA + raw.y * cosA);
         shadow += textureSampleCompareLevel(map, samp, uv + rot * texelSize, layer, depthRef);
     }
@@ -373,6 +383,6 @@ fn getShadowDirBlend(map: texture_depth_2d_array, samp: sampler_comparison, shad
     if (global.evsmParams.x > 0.5) {
         return getEVSM(u_dirEvsmMap, shadowPos, layer);
     }
-    return getShadowPCF(map, samp, shadowPos, layer, bias);
+    return getShadowPCSS(map, samp, shadowPos, layer, bias);
 }
 
