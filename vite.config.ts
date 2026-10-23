@@ -32,6 +32,21 @@ export default defineConfig({
     // The real dev server binds here, internally -- see PUBLIC_PORT's doc comment above.
     port: INTERNAL_HTTPS_PORT,
     strictPort: true,
+    watch: {
+      ignored: [
+        "**/.claude/**",
+        "**/.agents/**",
+        "**/.idea/**",
+        "**/.husky/**",
+        "**/coverage/**",
+        "**/dist/**",
+        "**/scripts/**",
+        ...(process.env.VITEST ? [] : ["**/tests/**"]),
+      ],
+    },
+    fs: {
+      deny: [".env*", "**/.claude/**", "**/.agents/**", "**/.husky/**"],
+    },
   },
   test: {
     globals: true,
