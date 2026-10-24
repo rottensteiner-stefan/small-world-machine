@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { GltfGeometryParser } from "../../../src/loaders/gltf/GltfGeometryParser.js";
 import { Topology } from "../../../src/enums/index.js";
+import type { BoundingBox } from "../../../src/physix/BoundingBox.js";
 
 describe("GltfGeometryParser", () => {
   it("parses primitive attributes into GeometryDataInterface", async () => {
@@ -65,6 +66,110 @@ describe("GltfGeometryParser", () => {
     expect(Array.from(geo!.indices as Uint16Array)).toEqual([0, 1, 2]);
     expect(geo!.joints).toBeDefined();
     expect(Array.from(geo!.joints!)).toEqual([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3]);
+  });
+
+  describe("asset-contract fixes (EP-5, EP-7, tangent passthrough)", () => {
+    it("dequantizes quantized POSITION onto the declared min/max domain (EP-7)", async () => {
+      // KHR_mesh_quantization: normalized Int16 storage whose accessor min/max declare the
+      // real unit-space [-5, +5]. int = 32767 encodes u = 1 (→ max), int = -32767 → u = 0 (→ min).
+      const buf = new ArrayBuffer(12);
+      new Int16Array(buf).set([-32767, -32767, -32767, 32767, -32767, 32767]);
+
+      const json = {
+        bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+        accessors: [
+          {
+            bufferView: 0,
+            byteOffset: 0,
+            componentType: 5122,
+            normalized: true,
+            count: 2,
+            type: "VEC3",
+            min: [-5, -5, -5],
+            max: [5, 5, 5],
+          },
+        ],
+      };
+
+      const geo = await GltfGeometryParser.parseGeometry(
+        { attributes: { POSITION: 0 } },
+        json,
+        [buf],
+      );
+
+      const positions = Array.from(geo!.vertices as Float32Array);
+      // First vertex -> min corner (-5, -5, -5).
+      expect(positions[0]).toBeCloseTo(-5, 4);
+      expect(positions[1]).toBeCloseTo(-5, 4);
+      expect(positions[2]).toBeCloseTo(-5, 4);
+      // Second vertex -> (+5, -5, +5). Without dequantization the normalized [-1,1] buffer
+      // would have yielded ±1, collapsing the geometry into a 1-unit cube.
+      expect(positions[3]).toBeCloseTo(5, 4);
+      expect(positions[4]).toBeCloseTo(-5, 4);
+      expect(positions[5]).toBeCloseTo(5, 4);
+    });
+
+    it("honors Float32 POSITION accessor min/max as authoritative header bounds (EP-5)", async () => {
+      const pos = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+      const json = {
+        bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36 }],
+        accessors: [
+          {
+            bufferView: 0,
+            byteOffset: 0,
+            componentType: 5126,
+            count: 3,
+            type: "VEC3",
+            min: [-0.25, -0.5, -1],
+            max: [0.75, 0.5, 1],
+          },
+        ],
+      };
+
+      const geo = await GltfGeometryParser.parseGeometry(
+        { attributes: { POSITION: 0 } },
+        json,
+        [pos.buffer],
+      );
+
+      // The header min/max feed the cached bound directly (no CPU vertex scan override).
+      const box = geo!.getBoundingVolume() as BoundingBox;
+      expect(box.min.x).toBeCloseTo(-0.25, 6);
+      expect(box.min.y).toBeCloseTo(-0.5, 6);
+      expect(box.min.z).toBeCloseTo(-1, 6);
+      expect(box.max.x).toBeCloseTo(0.75, 6);
+      expect(box.max.y).toBeCloseTo(0.5, 6);
+      expect(box.max.z).toBeCloseTo(1, 6);
+    });
+
+    it("forwards glTF TANGENT verbatim and preserves the w handedness (EP-1 loader slice)", async () => {
+      const pos = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+      const tan = new Float32Array([
+        1, 0, 0, 1, // w = +1 (regular)
+        0, 1, 0, -1, // w = -1 (mirrored island), must NOT be dropped
+        0, 0, 1, 1,
+      ]);
+      const json = {
+        bufferViews: [
+          { buffer: 0, byteOffset: 0, byteLength: 36 },
+          { buffer: 1, byteOffset: 0, byteLength: 48 },
+        ],
+        accessors: [
+          { bufferView: 0, byteOffset: 0, componentType: 5126, count: 3, type: "VEC3" },
+          { bufferView: 1, byteOffset: 0, componentType: 5126, count: 3, type: "VEC4" },
+        ],
+      };
+
+      const geo = await GltfGeometryParser.parseGeometry(
+        { attributes: { POSITION: 0, TANGENT: 1 } },
+        json,
+        [pos.buffer, tan.buffer],
+      );
+
+      const tangents = geo!.tangents as Float32Array;
+      expect(tangents.length).toBe(12);
+      expect(Array.from(tangents)).toEqual([1, 0, 0, 1, 0, 1, 0, -1, 0, 0, 1, 1]);
+    });
   });
 
   describe("primitive modes", () => {

@@ -202,7 +202,11 @@ describe("AbstractGeometry.setBuffers / rebuild (M10)", () => {
     for (const i of d.indices!) expect(i).toBeLessThan(vertexCount);
     for (const i of d.wireframeIndices!) expect(i).toBeLessThan(vertexCount);
     expect(d.normals!.length).toBe(d.vertices.length);
-    expect(d.tangents!.length).toBe(d.vertices.length);
+    // Tangent data carries the vec4 contract (tx, ty, tz, w).
+    expect(d.tangents!.length).toBe(vertexCount * 4);
+    // w must be a valid handedness sign. This geometry's seam/cap UV triangulation is genuinely
+    // mirrored, so the derived sign is -1 -- the contract only pins the magnitude, not the sign.
+    expect(Math.abs(d.tangents![3]!)).toBe(1);
     const bb = c.getBoundingVolume();
     const max = Math.max(...Array.from(d.vertices).filter((_, i) => i % 3 === 0));
     expect((bb as unknown as { max: { x: number } }).max.x).toBeCloseTo(max, 5);

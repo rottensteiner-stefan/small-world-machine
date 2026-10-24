@@ -8,11 +8,11 @@ void main() {
 
   vec4 localPos = skinMat * vec4(a_position, 1.0);
   vec3 localNormal = mat3(skinMat) * a_normal;
-  vec3 localTangent = mat3(skinMat) * a_tangent;
+  vec3 localTangent = mat3(skinMat) * a_tangent.xyz;
 #else
   vec4 localPos = vec4(a_position, 1.0);
   vec3 localNormal = a_normal;
-  vec3 localTangent = a_tangent;
+  vec3 localTangent = a_tangent.xyz;
 #endif
 
 #ifdef USE_INSTANCING
@@ -40,6 +40,10 @@ void main() {
   v_uv = (a_uv * u_texRepeat) + u_texOffset;
 
   vec3 tangent = localTangent;
+  // Bitangent handedness w = ±1: folded into B in the VERTEX stage (fragment/material
+  // shaders reconstruct the TBN unmodified). Defaults to +1 when the tangent is zero or
+  // absent, so mirrored-UV islands still get their sign from authored/derived data only.
+  float bitangentSign = dot(tangent, tangent) < 0.0001 ? 1.0 : a_tangent.w;
   if (dot(tangent, tangent) < 0.0001) {
     if (abs(v_normal.y) < 0.999) {
       tangent = cross(v_normal, vec3(0, 1, 0));
@@ -51,7 +55,7 @@ void main() {
   vec3 T = normalize(mat3(modelMat) * tangent);
   vec3 N_v = v_normal;
   T = normalize(T - dot(T, N_v) * N_v);
-  vec3 B = cross(N_v, T);
+  vec3 B = cross(N_v, T) * bitangentSign;
   v_tbn = mat3(T, B, N_v);
 
   gl_Position = u_vp * wp;

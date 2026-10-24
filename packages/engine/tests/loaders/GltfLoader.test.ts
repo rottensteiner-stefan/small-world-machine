@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { GltfLoader } from "../../src/loaders/GltfLoader.js";
 import { Topology } from "../../src/enums/index.js";
+import { Matrix4, Quaternion } from "../../src/math/index.js";
 import type { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import type { Object3D } from "../../src/core/Object3D.js";
 
@@ -276,6 +277,41 @@ describe("GltfLoader validation and fail-fast", () => {
     const node = root.getObjectByName("Quantized");
     expect(node).toBeDefined();
     expect(node?.scale.x).toBeCloseTo(0.001, 9);
+  });
+});
+
+describe("GltfLoader matrix-authored node orientation (EP-6 / F4-A)", () => {
+  it("derives an exact quaternion for a matrix node instead of a lossy Euler round-trip", async () => {
+    // glTF column-major 90-degree rotation about +Z plus a translation.
+    const matrix = [0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 3, 4, 5, 1];
+    const loader = new GltfLoader();
+    const root = await loader.parse(
+      {
+        json: {
+          asset: { version: "2.0" },
+          scene: 0,
+          scenes: [{ nodes: [0] }],
+          nodes: [{ name: "MatNode", matrix }],
+        },
+        buffers: [],
+      },
+      "",
+    );
+
+    const node = root.getObjectByName("MatNode");
+    expect(node).toBeDefined();
+    expect(node?.quaternion).toBeDefined();
+
+    // The node's quaternion must equal the exact quaternion of the imported matrix (same
+    // decomposition path), so animation/quaternion consumers read the true orientation.
+    const expected = new Matrix4();
+    expected.data.set(matrix);
+    const expectedQ = new Quaternion().setFromRotationMatrix(expected);
+
+    expect(node!.quaternion!.x).toBeCloseTo(expectedQ.x, 6);
+    expect(node!.quaternion!.y).toBeCloseTo(expectedQ.y, 6);
+    expect(node!.quaternion!.z).toBeCloseTo(expectedQ.z, 6);
+    expect(node!.quaternion!.w).toBeCloseTo(expectedQ.w, 6);
   });
 });
 

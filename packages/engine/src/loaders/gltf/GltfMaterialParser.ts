@@ -22,6 +22,27 @@ export class GltfMaterialParser {
   }
 
   /**
+   * Encodes a glTF-linear channel into the engine's sRGB-authored color convention.
+   * This is the inverse of the shader decode (`sRGBToLinear`/`pow(x, gamma)`), so a
+   * glTF-linear `baseColorFactor` is converted ONCE here and decoded exactly once in the
+   * fragment shader -- the historical double-decode (imported tints rendered too dark)
+   * is thereby removed. Matches the engine's pow-approximation exactly for round-trips.
+   */
+  public static linearToEngineSRGB(v: number): number {
+    return Math.pow(v, 1.0 / 2.2);
+  }
+
+  /**
+   * Decodes an engine-sRGB color channel back into glTF-linear baseColorFactor. This is the
+   * exact inverse of {@link linearToEngineSRGB} (pow exponent 2.2), used by `WorldWriter` so
+   * its exported `baseColorFactor` is glTF-linear and round-trips through the loader's single
+   * encode back to the authored sRGB value. Alpha is never encoded and stays untouched.
+   */
+  public static engineSRGBToLinear(v: number): number {
+    return Math.pow(v, 2.2);
+  }
+
+  /**
    * Resolves a glTF material definition into a Small World Machine StandardMaterial.
    */
   public static async parseMaterial(
@@ -38,10 +59,13 @@ export class GltfMaterialParser {
     const readCtx: GltfReadContext = ctx ?? { json, state: new Map() };
 
     if (pbr.baseColorFactor) {
+      // glTF defines baseColorFactor in LINEAR space. `Material.color` (and every shader's
+      // sRGBToLinear(u_color)) is sRGB-authored, so the factor is encoded here, once, and
+      // decoded exactly once by the shader (see linearToEngineSRGB).
       mat.color = new Color(
-        pbr.baseColorFactor[0]!,
-        pbr.baseColorFactor[1]!,
-        pbr.baseColorFactor[2]!,
+        GltfMaterialParser.linearToEngineSRGB(pbr.baseColorFactor[0]!),
+        GltfMaterialParser.linearToEngineSRGB(pbr.baseColorFactor[1]!),
+        GltfMaterialParser.linearToEngineSRGB(pbr.baseColorFactor[2]!),
         pbr.baseColorFactor[3]!,
       );
     }
@@ -263,7 +287,10 @@ export class GltfMaterialParser {
     if (m.alphaMode === "BLEND") {
       mat.transparent = true;
     } else if (m.alphaMode === "MASK") {
-      mat.transparent = true;
+      // glTF MASK is a depth-writing opaque cutout: the fragment shader already `discard`s
+      // below alphaTest, so the material must stay in the opaque batch (depthWrite retained,
+      // no alpha blending). Setting `transparent` here would have blended + dropped the
+      // depth-write, breaking the glTF alphaMode semantics.
       mat.alphaTest = m.alphaCutoff !== undefined ? m.alphaCutoff : 0.5;
     }
 

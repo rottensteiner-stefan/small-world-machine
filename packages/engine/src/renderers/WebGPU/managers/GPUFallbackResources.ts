@@ -261,7 +261,11 @@ export class GPUFallbackResources {
     });
     this._device.queue.writeBuffer(this._dummyUvBuffer, 0, uvData);
     const tangentData = new Float32Array(newSize).fill(0);
-    for (let i = 0; i < newSize; i += 3) tangentData[i] = 1.0;
+    // vec4 tangent contract (tx, ty, tz, w): x = 1 (neutral direction), w = 1 (no mirroring).
+    for (let i = 0; i < newSize; i += 4) {
+      tangentData[i] = 1.0;
+      tangentData[i + 3] = 1.0;
+    }
     this._dummyTangentBuffer = this._device.createBuffer({
       size: tangentData.byteLength,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,

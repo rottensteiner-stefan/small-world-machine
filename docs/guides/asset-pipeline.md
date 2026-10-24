@@ -86,3 +86,53 @@ const jitterZ = (chunkWorldZ * 0.37) % 1.0;
 material.diffuseMap.offset.set(jitterX, jitterZ);
 ```
 This guarantees continuous variation across modular tiling geometry with zero runtime memory overhead.
+
+---
+
+## 5. DCC Export Contract & Coordinate Invariants
+
+> Every entry is tagged `[VERIFIED]` (confirmed against current engine source) or `[PROPOSED]`
+> (authoring/export rule derived from verified engine behavior). Nothing here is invented. This is the
+> **binding pipeline contract** for all assets exported from DCC tools (Blender, Tripo3D, Mixamo, ...)
+> into Small World Machine. Terminology references the [coordinate-system guide](./coordinate-system.md).
+
+### Units & Scale
+
+| # | Rule | Status |
+| :--- | :--- | :--- |
+| U1 | Assets are authored in **metric 1‑meter units** (1 scene unit = 1 m). This matches the engine's physics calibration: default global gravity is `[0, -9.81, 0]` (`PhysicsSystem.ts`, §"Initial gravity..."), i.e. earth gravity on the Y axis. | `[VERIFIED]` |
+| U2 | No arbitrary "unit multipliers" on import. The glTF loader applies node transforms verbatim; unit fidelity is the exporter's responsibility. | `[VERIFIED]` (loader) / `[PROPOSED]` (exporter) |
+
+### Orientation & Handedness
+
+| # | Rule | Status |
+| :--- | :--- | :--- |
+| O1 | The engine is **right-handed**: `+X` = right, `+Y` = up, `+Z` = backward, `-Z` = forward/front. Export must match this handedness exactly (no mirroring, no axis-swap on export). | `[VERIFIED]` |
+| O2 | The glTF loader applies a node's local transform **verbatim** — it performs **no yaw compensation** (e.g. it never adds `+90°` to make a model "face forward"). A character that appears to walk backward is a **DCC authoring/orientation error**, not an engine bug; fix the export (rotate the root node into `-Z`-facing). See the [coordinate-system guide](./coordinate-system.md). | `[VERIFIED]` |
+| O3 | **Pivot doctrine:** every mesh node's origin must sit at its world-space anchor (character at the feet/root bone, prop at the mount point). Exporting "floating" origins drifts physics/spawn logic. | `[PROPOSED]` |
+| O4 | **Transforms frozen:** freeze scale and rotation (apply + reset, Ctrl/Cmd‑A) before export; do not ship a node hierarchy containing baked rotations or non‑1 scales on the root. This keeps the bind-pose skinned-mesh bounds minimal. | `[PROPOSED]` |
+| O5 | **No negative scale anywhere.** Negative scale reverses parity, flips winding and mirrors UV orientation; it is also the classic cause of inverted tangent handedness. Remove `scale = -1` reflections before export (flip the geometry/UVs in the DCC instead). [See the 2.5D negative-scale note.](./coordinate-system.md) | `[VERIFIED]` (rendering behavior) / `[PROPOSED]` (linter rule) |
+
+### Tangents & Normal Mapping
+
+| # | Rule | Status |
+| :--- | :--- | :--- |
+| T1 | Tangents use the **MikkTSpace/glTF vec4 contract** `(tx, ty, tz, w)` with `w = ±1` bitangent handedness. The engine derives `w` on the CPU (`AbstractGeometry.computeTangents`) and forwards DCC-baked `glTF TANGENT` verbatim including `w`; every shader tier folds the sign into `B = cross(N, T) * w`. Exporting **without** tangents is fine (engine generates them), but a UV island mirrored against its geometry must then have its `w` derived correctly — never bake `w = +1` for mirrored islands. | `[VERIFIED]` — implemented 2026‑10‑24 (S5 gate, EP‑1) |
+| T2 | Do not "fix" relief direction by flipping `normalMap` channels in-engine; correct the handedness in the DCC (`w` is then derived/carried automatically). | `[PROPOSED]` |
+
+### Texture & Color Space
+
+| # | Rule | Status |
+| :--- | :--- | :--- |
+| C1 | **No hardware-sRGB framebuffer/texture path exists** today; all textures are decoded in software shader code. Artist textures (albedo/diffuse, emissive) are shipped **sRGB-encoded**; the engine linearizes them in-shader (`sRGBToLinear = pow(x, gamma)`). Normal, metallic/roughness and AO maps are **linear data** and must be shipped raw. | `[VERIFIED]` |
+| C2 | `material.color` / imported `baseColorFactor` is treated as **sRGB-authored**: glTF-linear factors are encoded **once** by the loader and decoded **once** by the shader (double-decode removed 2026‑10‑24, S5 EP‑4). Never pre-darken colors "because the engine is dark". | `[VERIFIED]` |
+| C3 | Normal maps ship **green-up, DirectX-convention-compatible in-engine**: the engine reads the green channel directly; DCC green-down assets can be handled per-asset via `normalScale.y = -1`. (`NormalMapFormat` remains a Tools-side generator concept.) | `[VERIFIED]` (engine reads green) / `[PROPOSED]` (export = green-up) |
+| C4 | ORM-channel packing: metallic and roughness (and AO) are **separate maps** in the current pipeline — the engine does not consume a single packed `ORM` texture today. Export/import the channels separately; a packed-ORM composite is the documented target contract, not today's state. | `[VERIFIED]` (today) |
+| C5 | **Alpha textures (transparency/cutout) must be mip-backed in premultiplied space** to avoid black halos from straight-alpha mip filtering (S5 EP‑10). Engine side: GPU premultiply support exists (`PREMULTIPLIED_ALPHA`), used once a halo-reproducing golden asset appears. | `[PROPOSED]` (DCC enforcement; engine option deferred) |
+| C6 | The engine's sRGB decode/encode is a **pow approximation** with a quantified worst-case deviation of **0.0085** (decode) / **0.0335** (encode) in deep shadows vs. IEC 61966‑2‑1. This is documented, golden-stable, and scheduled to be swapped to the exact curve together with the next S5/S1 color release. | `[VERIFIED]` (quantified) |
+
+### Geometry Contract (engine side, informational)
+
+- `SkinnedMesh` computes **conservative pose-aware bounds** (union over bones) for culling — a character posed far from its bind pose is no longer frustum/occlusion/shadow-culled by mistake (S5 EP‑2).
+- `KHR_mesh_quantization`: quantized `POSITION` is **dequantized** onto the accessor's declared `min/max` domain on load (S5 EP‑7); accessor `min/max` is trusted for **Float32** POSITION only. Export with real-world bounds in `min/max`.
+- Cutout materials (`alphaMode = MASK`) stay in the **opaque** batch (depth-writing discard); do not author them as transparent. (`alphaMode = BLEND` is the only transparent mode.)

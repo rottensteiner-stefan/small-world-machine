@@ -2,7 +2,7 @@
 in vec3 a_position;
 in vec3 a_normal;
 in vec2 a_uv;
-in vec3 a_tangent;
+in vec4 a_tangent; // (tx, ty, tz, w), w = ±1 bitangent handedness (MikkTSpace/glTF)
 
 #ifdef USE_SKINNING
 in vec4 a_joints;

@@ -12,6 +12,10 @@ export interface GltfJson {
     count: number;
     type: string;
     normalized?: boolean;
+    /** Per-component minimum (raw domain: integers stay integers, floats stay floats). */
+    min?: number[];
+    /** Per-component maximum (raw domain: integers stay integers, floats stay floats). */
+    max?: number[];
     sparse?: {
       count: number;
       indices: { bufferView: number; byteOffset?: number; componentType: number };

@@ -16,7 +16,7 @@ export abstract class AbstractGeometry implements Geometry {
   protected _wireframeIndices: Uint16Array | Uint32Array | undefined = undefined;
   /** The normals of the geometry (nx, ny, nz). */
   protected _normals: Float32Array = new Float32Array();
-  /** The tangents of the geometry (tx, ty, tz). */
+  /** The tangents of the geometry (tx, ty, tz, w), `w = ±1` bitangent handedness. */
   protected _tangents: Float32Array = new Float32Array();
   /** The UV coordinates of the geometry (u, v). */
   protected _uvs: Float32Array = new Float32Array();
@@ -84,11 +84,17 @@ export abstract class AbstractGeometry implements Geometry {
   /**
    * Computes the tangents of the geometry based on normals and UVs.
    * Required for normal mapping.
+   *
+   * Output schema is the vec4 contract `(tx, ty, tz, w)` where `w = ±1` is the
+   * bitangent handedness (MikkTSpace/glTF convention, `B = cross(N, T) * w`).
+   * `w` is derived from the Lengyel `tan1`/`tan2` accumulator pair: a UV island
+   * whose UV winding contradicts its geometry winding yields `w = -1`, so the
+   * vertex shader flips `B` and mirrored normal-mapped relief stays correct.
    */
   public computeTangents(): void {
     if (0 === this._vertices.length || 0 === this._uvs.length || this._isLineGeometry) return;
 
-    this._tangents = new Float32Array(this._vertices.length);
+    this._tangents = new Float32Array((this._vertices.length / 3) * 4);
 
     if (undefined === this._indices || 0 !== this._indices.length % 3) {
       return;
@@ -168,6 +174,9 @@ export abstract class AbstractGeometry implements Geometry {
       const tx: number = tan1[i * 3]!;
       const ty: number = tan1[i * 3 + 1]!;
       const tz: number = tan1[i * 3 + 2]!;
+      const t2x: number = tan2[i * 3]!;
+      const t2y: number = tan2[i * 3 + 1]!;
+      const t2z: number = tan2[i * 3 + 2]!;
 
       // Gram-Schmidt orthogonalize
       const dot: number = nx * tx + ny * ty + nz * tz;
@@ -177,26 +186,35 @@ export abstract class AbstractGeometry implements Geometry {
       const len: number = Math.sqrt(otx * otx + oty * oty + otz * otz);
 
       if (len > 0.00001) {
-        this._tangents[i * 3] = otx / len;
-        this._tangents[i * 3 + 1] = oty / len;
-        this._tangents[i * 3 + 2] = otz / len;
+        this._tangents[i * 4] = otx / len;
+        this._tangents[i * 4 + 1] = oty / len;
+        this._tangents[i * 4 + 2] = otz / len;
+        // Bitangent handedness `w = ±1` (Lengyel/MikkTSpace): cross(N, T) is the bare
+        // bitangent direction; if it disagrees with the accumulated Lengyel bitangent
+        // `tan2`, the UV island is mirrored and the shader must flip B (B = cross(N,T)*w).
+        const bx: number = ny * otz - nz * oty;
+        const by: number = nz * otx - nx * otz;
+        const bz: number = nx * oty - ny * otx;
+        this._tangents[i * 4 + 3] = bx * t2x + by * t2y + bz * t2z < 0.0 ? -1.0 : 1.0;
       } else {
         const absNy = Math.abs(ny);
         if (absNy < 0.999) {
           const px = -nz;
           const pz = nx;
           const pLen = Math.sqrt(px * px + pz * pz);
-          this._tangents[i * 3] = px / pLen;
-          this._tangents[i * 3 + 1] = 0;
-          this._tangents[i * 3 + 2] = pz / pLen;
+          this._tangents[i * 4] = px / pLen;
+          this._tangents[i * 4 + 1] = 0;
+          this._tangents[i * 4 + 2] = pz / pLen;
         } else {
           const py = nz;
           const pz = -ny;
           const pLen = Math.sqrt(py * py + pz * pz);
-          this._tangents[i * 3] = 0;
-          this._tangents[i * 3 + 1] = py / pLen;
-          this._tangents[i * 3 + 2] = pz / pLen;
+          this._tangents[i * 4] = 0;
+          this._tangents[i * 4 + 1] = py / pLen;
+          this._tangents[i * 4 + 2] = pz / pLen;
         }
+        // Degenerate tangent input: the handedness is undefined, default to +1.
+        this._tangents[i * 4 + 3] = 1.0;
       }
     }
   }

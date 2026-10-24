@@ -124,7 +124,7 @@ describe("GPUGeometryCache reference counting", () => {
     const geo: GeometryDataInterface = {
       vertices: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
       normals: new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0]),
-      tangents: new Float32Array([1, 0, 0, 1, 0, 0, 1, 0, 0]),
+      tangents: new Float32Array([1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1]),
       getBoundingVolume: (): never => {
         throw new Error("not used in this test");
       },

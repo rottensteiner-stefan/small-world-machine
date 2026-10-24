@@ -48,12 +48,21 @@ export class GltfGeometryParser {
     const attributes = primitive.attributes;
     if (!attributes || attributes["POSITION"] === undefined || !json.accessors) return null;
 
-    const positions = GltfBinaryParser.getBufferData(
-      json.accessors[attributes["POSITION"]],
-      json,
-      buffers,
-    );
+    const posAccessor = json.accessors[attributes["POSITION"]];
+    // POSITION is the one attribute whose quantized (normalized integer) storage must be
+    // dequantized into unit space; NORMAL/TANGENT/etc. keep their normalized domain.
+    const positions = GltfBinaryParser.getBufferData(posAccessor, json, buffers, {
+      dequantize: true,
+    });
     if (!positions) return null;
+
+    // glTF 2.0 `TANGENT` is a VEC4 whose w component is the bitangent handedness
+    // (MikkTSpace). It is forwarded verbatim (incl. w) so DCC-baked tangents are
+    // neither dropped nor recomputed by the CPU generator.
+    const tangents =
+      attributes["TANGENT"] !== undefined
+        ? GltfBinaryParser.getBufferData(json.accessors[attributes["TANGENT"]], json, buffers)
+        : undefined;
 
     const normals =
       attributes["NORMAL"] !== undefined
@@ -133,8 +142,34 @@ export class GltfGeometryParser {
         ? normals
         : new Float32Array(normals)
       : new Float32Array(0);
+    const tanArray = tangents
+      ? tangents instanceof Float32Array
+        ? tangents
+        : new Float32Array(tangents)
+      : undefined;
+
+    // Header min/max are trustworthy ONLY for unquantized Float32 POSITION: the accessor
+    // bounds live in the dequantized domain, and only Float32 (unnormalized) POSITION
+    // reaches this parser without a rescale. Quantized/other inputs keep the CPU scan.
+    let headerBounds: { min: [number, number, number]; max: [number, number, number] } | undefined;
+    if (
+      posAccessor &&
+      posAccessor.componentType === 5126 &&
+      !posAccessor.normalized &&
+      posAccessor.min !== undefined &&
+      posAccessor.max !== undefined &&
+      posAccessor.min.length >= 3 &&
+      posAccessor.max.length >= 3
+    ) {
+      headerBounds = {
+        min: [posAccessor.min[0]!, posAccessor.min[1]!, posAccessor.min[2]!],
+        max: [posAccessor.max[0]!, posAccessor.max[1]!, posAccessor.max[2]!],
+      };
+    }
 
     return new ModelGeometry(posArray, uvArray, normArray, finalIndices, {
+      ...(tanArray ? { tangents: tanArray } : {}),
+      ...(headerBounds ? { headerBounds } : {}),
       ...(finalJoints || finalWeights ? { joints: finalJoints, weights: finalWeights } : {}),
       ...(isLines ? { topology: Topology.LINE_LIST } : {}),
     }).getGeometryData();

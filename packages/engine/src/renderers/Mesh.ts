@@ -192,7 +192,8 @@ export class Mesh {
     if (0 <= tanLoc) {
       if (this.tanbo) {
         this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this.tanbo);
-        this._gl.vertexAttribPointer(tanLoc, 3, this._gl.FLOAT, false, 0, 0);
+        // Tangent data is the vec4 contract (tx, ty, tz, w) -- size 4.
+        this._gl.vertexAttribPointer(tanLoc, 4, this._gl.FLOAT, false, 0, 0);
         this._gl.enableVertexAttribArray(tanLoc);
       } else {
         this._gl.disableVertexAttribArray(tanLoc);
@@ -266,7 +267,8 @@ export class Mesh {
     this._setupAttribute(gl, 0, this.vbo, 3, this._gl.FLOAT);
     this._setupAttribute(gl, 1, this.nbo, 3, this._gl.FLOAT);
     this._setupAttribute(gl, 2, this.tbo, 2, this._gl.FLOAT);
-    this._setupAttribute(gl, 3, this.tanbo, 3, this._gl.FLOAT);
+    // Tangent data is the vec4 contract (tx, ty, tz, w) -- size 4.
+    this._setupAttribute(gl, 3, this.tanbo, 4, this._gl.FLOAT);
     this._setupAttribute(gl, 4, this.jbo, 4, this._gl.FLOAT);
     this._setupAttribute(gl, 5, this.wbo, 4, this._gl.FLOAT);
     this._setupAttribute(gl, VERTEX_COLOR_LOCATION, this.cbo, 4, this._gl.FLOAT);

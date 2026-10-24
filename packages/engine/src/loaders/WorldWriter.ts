@@ -5,6 +5,7 @@ import { StandardMaterial } from "../core/materials/surface/StandardMaterial.js"
 import { Matrix4, Vector3D, Quaternion } from "../math/index.js";
 import type { GeometryDataInterface } from "../interfaces/index.js";
 import { getGltfExtensions } from "./gltf/GltfExtensionRegistry.js";
+import { GltfMaterialParser } from "./gltf/GltfMaterialParser.js";
 import type { GltfWriteContext, GltfWriteState } from "./gltf/GltfExtensionPlugin.js";
 import type {
   GltfDocument,
@@ -249,7 +250,15 @@ export class WorldWriter {
   private static _writeMaterial(mat: AbstractMaterial): GltfMaterialJson {
     const json: GltfMaterialJson = {
       pbrMetallicRoughness: {
-        baseColorFactor: [mat.color.r, mat.color.g, mat.color.b, mat.color.a],
+        // baseColorFactor is glTF-LINEAR while Material.color is sRGB-authored; encode it back
+        // to linear on write so the loader's single encode round-trips the authored value (S5
+        // EP-4). Alpha is never color-converted.
+        baseColorFactor: [
+          GltfMaterialParser.engineSRGBToLinear(mat.color.r),
+          GltfMaterialParser.engineSRGBToLinear(mat.color.g),
+          GltfMaterialParser.engineSRGBToLinear(mat.color.b),
+          mat.color.a,
+        ],
       },
     };
     if (mat instanceof StandardMaterial) {

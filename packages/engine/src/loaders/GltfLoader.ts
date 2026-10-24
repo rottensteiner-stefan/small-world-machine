@@ -323,6 +323,11 @@ export class GltfLoader extends AbstractLoader<Object3D> {
       const sca = new Vector3D(1, 1, 1);
       mat.decompose(pos, rot, sca);
       obj.position.copyFrom(pos);
+      // Exact orientation: derive the quaternion from the rotation matrix and let
+      // `updateMatrixWorld`'s quaternion compose path use it, consistent with the TRS/animation
+      // path. `obj.rotation` (Euler) is kept for inspector display only. This removes the lossy
+      // Euler round-trip (gimbal branch in Matrix4.decompose) for matrix-authored nodes.
+      obj.quaternion = (obj.quaternion || new Quaternion()).setFromRotationMatrix(mat);
       obj.rotation.copyFrom(rot);
       obj.scale.copyFrom(sca);
     } else {

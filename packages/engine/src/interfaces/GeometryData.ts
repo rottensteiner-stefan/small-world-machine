@@ -10,7 +10,12 @@ export interface GeometryDataInterface {
   wireframeIndices?: Uint16Array | Uint32Array | undefined;
   /** Optional normal data (nx, ny, nz). */
   normals?: Float32Array | undefined;
-  /** Optional tangent data (tx, ty, tz). Used for normal mapping. */
+  /**
+   * Optional tangent data, 4 components per vertex `(tx, ty, tz, w)`.
+   * `w = ±1` is the bitangent handedness (MikkTSpace/glTF convention,
+   * `B = cross(N, T) * w`). CPU-generated tangents derive `w` from the Lengyel
+   * `tan1/tan2` pair; glTF `TANGENT.w` is preserved verbatim when authored.
+   */
   tangents?: Float32Array | undefined;
   /** Optional texture coordinate data (u, v). */
   uvs?: Float32Array | undefined;

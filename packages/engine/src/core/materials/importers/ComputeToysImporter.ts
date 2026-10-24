@@ -51,7 +51,7 @@ fn vs(
   @location(0) a_position: vec3f, 
   @location(1) a_normal: vec3f, 
   @location(2) a_uv: vec2f, 
-  @location(3) a_tangent: vec3f
+  @location(3) a_tangent: vec4f
 ) -> Out {
     var o: Out;
     let worldPos = obj.model * vec4f(a_position, 1.0);
@@ -59,8 +59,10 @@ fn vs(
     o.wp = worldPos.xyz;
     o.n = a_normal;
     o.uv = a_uv;
-    o.t = a_tangent;
-    o.b = cross(a_normal, a_tangent);
+    o.t = a_tangent.xyz;
+    // Bitangent handedness w = ±1 (vec4 tangent contract, shares location 3 with base.vert).
+    let tangentSign = select(1.0, a_tangent.w, dot(a_tangent.xyz, a_tangent.xyz) < 0.0001);
+    o.b = cross(a_normal, a_tangent.xyz) * tangentSign;
     o.original_uv = a_uv;
     o.texIndex = 0.0;
     return o;

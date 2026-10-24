@@ -1,5 +1,7 @@
 import { AbstractGeometry } from "./AbstractGeometry.js";
 import { Topology } from "../enums/index.js";
+import { BoundingBox } from "../physix/index.js";
+import { Vector3D } from "../math/index.js";
 
 /**
  * Options for configuring skinning data on a ModelGeometry.
@@ -9,6 +11,20 @@ export interface ModelGeometryOptions {
   joints?: number[] | Float32Array | Uint16Array | undefined;
   /** Skinning joint weights (4 weights per vertex). */
   weights?: number[] | Float32Array | undefined;
+  /**
+   * Optional vertex tangents, 4 components per vertex `(tx, ty, tz, w)` with
+   * `w = ±1` bitangent handedness (glTF `TANGENT` passthrough). When provided,
+   * these are used verbatim — the CPU generator is NOT invoked — so 4 floats per
+   * vertex are expected.
+   */
+  tangents?: number[] | Float32Array | undefined;
+  /**
+   * Authoritative bounds from the source-file header (glTF `accessor.min/max`),
+   * used instead of a CPU vertex scan. ONLY valid for unquantized Float32
+   * POSITION; callers must not pass it for quantized accessors, whose header
+   * bounds are in the dequantized domain while the buffer is still scaled.
+   */
+  headerBounds?: { min: [number, number, number]; max: [number, number, number] } | undefined;
   /**
    * How `indices` are to be read: `TRIANGLE_LIST` (default) or `LINE_LIST` (index pairs, drawn as
    * line segments; normals default to up and no tangents are derived). Any other topology throws:
@@ -56,6 +72,19 @@ export class ModelGeometry extends AbstractGeometry {
         options.weights instanceof Float32Array
           ? options.weights
           : new Float32Array(options.weights);
+    }
+    if (options?.tangents) {
+      this._tangents =
+        options.tangents instanceof Float32Array
+          ? options.tangents
+          : new Float32Array(options.tangents);
+    }
+    if (options?.headerBounds) {
+      const hb = options.headerBounds;
+      this._cachedBoundingVolume = new BoundingBox(
+        new Vector3D(hb.min[0], hb.min[1], hb.min[2]),
+        new Vector3D(hb.max[0], hb.max[1], hb.max[2]),
+      );
     }
 
     if (indices instanceof Uint16Array || indices instanceof Uint32Array) {

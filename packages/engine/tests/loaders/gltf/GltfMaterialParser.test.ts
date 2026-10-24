@@ -25,6 +25,53 @@ describe("GltfMaterialParser", () => {
     expect(mat.transparent).toBe(true);
   });
 
+  it("keeps a MASK material in the opaque batch (depth-writing cutout, EP-3)", async () => {
+    const mat = await GltfMaterialParser.parseMaterial(
+      { alphaMode: "MASK", alphaCutoff: 0.4 },
+      {},
+      "",
+      [],
+      new AssetManager(),
+    );
+
+    // glTF MASK is a depth-writing opaque cutout: the fragment shader discards below the
+    // cutoff, so transparent must stay false (no alpha blending, depthWrite retained).
+    expect(mat.transparent).toBe(false);
+    expect(mat.alphaTest).toBe(0.4);
+
+    const defaultCutoff = await GltfMaterialParser.parseMaterial(
+      { alphaMode: "MASK" },
+      {},
+      "",
+      [],
+      new AssetManager(),
+    );
+    expect(defaultCutoff.transparent).toBe(false);
+    expect(defaultCutoff.alphaTest).toBe(0.5);
+  });
+
+  it("encodes baseColorFactor once per the sRGB-authored Material.color convention (EP-4)", async () => {
+    // glTF baseColorFactor is linear; Material.color (and the shader decode) is sRGB-authored.
+    // The loader encodes ONCE here, the shader decodes ONCE -- no double-decode.
+    const mat = await GltfMaterialParser.parseMaterial(
+      { pbrMetallicRoughness: { baseColorFactor: [0.5, 0.25, 0.75, 0.6] } },
+      {},
+      "",
+      [],
+      new AssetManager(),
+    );
+
+    expect(mat.color.a).toBe(0.6); // alpha is never encoded
+    expect(mat.color.r).toBeCloseTo(GltfMaterialParser.linearToEngineSRGB(0.5), 6);
+
+    // A single shader decode pow(x, 2.2) round-trips to the authored linear factor ...
+    expect(Math.pow(mat.color.r, 2.2)).toBeCloseTo(0.5, 4);
+    expect(Math.pow(mat.color.g, 2.2)).toBeCloseTo(0.25, 4);
+    expect(Math.pow(mat.color.b, 2.2)).toBeCloseTo(0.75, 4);
+    // ... and the stored value is raised, not darkened by a second decode.
+    expect(mat.color.r).toBeGreaterThan(0.5);
+  });
+
   it("applies clamp constraints to metallic and roughness", () => {
     expect(GltfMaterialParser.applyClamp(0.8, 0.5)).toBe(0.5);
     expect(GltfMaterialParser.applyClamp(0.2, [0.3, 0.7])).toBe(0.3);

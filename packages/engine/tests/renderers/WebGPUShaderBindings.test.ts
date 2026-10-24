@@ -102,7 +102,7 @@ describe("WebGPU Shader Bindings & Layouts", () => {
     expect(code).toContain("@location(0) pos: vec3f");
     expect(code).toContain("@location(1) normal: vec3f");
     expect(code).toContain("@location(2) uv: vec2f");
-    expect(code).toContain("@location(3) tangent: vec3f");
+    expect(code).toContain("@location(3) tangent: vec4f");
 
     // 3. instMatrix should be instantiated
     expect(code).toContain("let instMatrix = mat4x4f(inst_col0, inst_col1, inst_col2, inst_col3);");

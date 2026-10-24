@@ -23,6 +23,14 @@ Small World Machine uses a **right-handed coordinate system**:
      +Z (Backward)
 ```
 
+> **Normative — glTF/DCC import contract (S5 gate, EP‑15):** this handedness is the single binding
+> spatial contract for all imported assets. The glTF loader applies node transforms **verbatim** and
+> performs **no yaw compensation** — it never rotates a model by `+90°` (or any fixed amount) to make
+> it "face forward". A character that walks backward after import is therefore an **authoring/export
+> error**: the DCC must orient the asset so its forward direction is `-Z`. Facing is a content-creation
+> contract, not an engine transform. (Baked constraints: `+X` right, `+Y` up, `-Z` forward; see also
+> the [asset-pipeline guide](./asset-pipeline.md) "DCC Export Contract & Coordinate Invariants".)
+
 ## Camera Control & Look Formulas
 
 When writing custom look/orbit math or relative movement controls (e.g. WASD), use look-relative trigonometry:

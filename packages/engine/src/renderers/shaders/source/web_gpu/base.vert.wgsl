@@ -2,7 +2,7 @@
     @location(0) pos: vec3f,
     @location(1) normal: vec3f,
     @location(2) uv: vec2f,
-    @location(3) tangent: vec3f,
+    @location(3) tangent: vec4f, // (tx, ty, tz, w), w = ±1 bitangent handedness (MikkTSpace/glTF)
     @location(4) joints: vec4f,
     @location(5) weights: vec4f
 ) -> Out {
@@ -10,7 +10,7 @@
     
     var localPos = vec4f(pos, 1.0);
     var localNormal = normal;
-    var localTangent = tangent;
+    var localTangent = tangent.xyz;
     
     if (obj.isSkinned > 0.5) {
         let bOffset = u32(obj.boneOffset);
@@ -23,7 +23,7 @@
         localPos = skinMat * vec4f(pos, 1.0);
         let skinMat3 = mat3x3f(skinMat[0].xyz, skinMat[1].xyz, skinMat[2].xyz);
         localNormal = skinMat3 * normal;
-        localTangent = skinMat3 * tangent;
+        localTangent = skinMat3 * tangent.xyz;
     }
     
     let worldPos = obj.model * localPos;
@@ -43,6 +43,11 @@
         o.n = normalize(worldN);
     }
     
+    // Bitangent handedness w = ±1, folded into B in the VERTEX stage (fragment/material
+    // shaders reconstruct the TBN unmodified). Defaults to +1 when the tangent is zero or
+    // absent, so mirrored-UV islands keep their authored/derived sign only.
+    let tangentSign = select(1.0, tangent.w, dot(localTangent, localTangent) < 0.0001);
+    
     let worldT = m33 * localTangent;
     if (dot(localTangent, localTangent) < 0.0001 || dot(worldT, worldT) < 1e-20) {
         let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(o.n.y) > 0.999);
@@ -51,7 +56,7 @@
         o.t = normalize(worldT);
     }
     
-    let worldB = cross(o.n, o.t);
+    let worldB = cross(o.n, o.t) * tangentSign;
     if (dot(worldB, worldB) < 1e-20) {
         let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(o.n.y) > 0.999);
         o.b = normalize(cross(o.n, up));

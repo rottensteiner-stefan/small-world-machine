@@ -1,7 +1,7 @@
 attribute vec3 a_position;
 attribute vec3 a_normal;
 attribute vec2 a_uv;
-attribute vec3 a_tangent;
+attribute vec4 a_tangent; // (tx, ty, tz, w), w = ±1 bitangent handedness (MikkTSpace/glTF)
 
 #ifdef USE_INSTANCING
 attribute mat4 a_instanceMatrix;
@@ -41,7 +41,10 @@ void main() {
     v_normal = normalize(m3 * a_normal);
     v_uv = (a_uv * u_texRepeat) + u_texOffset;
 
-    vec3 tangent = a_tangent;
+    vec3 tangent = a_tangent.xyz;
+    // Bitangent handedness w = ±1, folded into B in the vertex stage. Defaults to +1
+    // when the tangent is zero/absent (degenerate or disabled attribute).
+    float bitangentSign = length(tangent) < 0.0001 ? 1.0 : a_tangent.w;
     if (length(tangent) < 0.0001) {
         if (abs(v_normal.y) < 0.999) {
             tangent = cross(v_normal, vec3(0.0, 1.0, 0.0));
@@ -53,7 +56,7 @@ void main() {
     vec3 T = normalize(m3 * tangent);
     vec3 N = v_normal;
     T = normalize(T - dot(T, N) * N);
-    vec3 B = cross(N, T);
+    vec3 B = cross(N, T) * bitangentSign;
     v_tbn = mat3(T, B, N);
 
     gl_Position = u_vp * wp;
