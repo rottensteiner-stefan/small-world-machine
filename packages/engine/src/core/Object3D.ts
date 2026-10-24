@@ -101,6 +101,19 @@ export class Object3D implements Collidable {
    */
   public isCollidable: boolean = true;
   public frustumCulled: boolean = true;
+  /**
+   * Declares intent that this object does not move after setup.
+   *
+   * Documented contract (Phase-1 gate, D5): `isStatic` is intentional state, NOT an
+   * optimization lever — there is no cached fast path. Whether static or not, the scene
+   * graph rebuilds the world matrix of an object that has `matrixWorldNeedsUpdate` set;
+   * non-static objects (the default) request this every frame and are always rebuilt.
+   * `setPosition()/setRotation()/setScale()/translate()` never set `matrixWorldNeedsUpdate`,
+   * matching the high-churn dynamic paths. Under a live `Scene` root the per-frame traversal
+   * forces updates, so even a later-moved static subtree is picked up; only STANDALONE
+   * subtrees outside a scene root (e.g. a detached DecalPool/FogVolume subtree) freeze until
+   * `matrixWorldNeedsUpdate = true` — call `updateMatrixWorld()` there explicitly.
+   */
   public isStatic: boolean = false;
   public matrixWorldNeedsUpdate: boolean = true;
   public inFrustum: boolean = true;
