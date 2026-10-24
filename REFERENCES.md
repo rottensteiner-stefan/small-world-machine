@@ -602,6 +602,12 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Source:** [Real-Time Rendering (RTR)](https://www.realtimerendering.com/)
 - **Usage:** The bible for real-time rendering. Fundamental concepts such as Opaque vs. Transparent rendering order, back-to-front sorting, and state minimization (minimizing draw calls by efficiently grouping by pass -> shader -> material) are derived from here.
 
+### Instanced Batching & Draw-Call-Konsolidierung
+
+- **Files:** `packages/engine/src/core/InstancedMesh.ts`, `packages/engine/src/renderers/AutoInstancing.ts` (ADR 0046), `packages/engine/src/renderers/WebGPU/managers/GPUInstanceRingBuffer.ts`; Entscheidung in [ADR 0046](../docs/adr/0046-automatic-instancing.md).
+- **Inspiration/Quellen:** Verifizierte Recherche in **`docs/research/instanced-batching-2026-10-24.md`** + Quellenliste **`docs/research/instanced-batching-sources-2026-10-24.md`** (three.js `InstancedMesh`/`BatchedMesh`, Unity Static/Dynamic Batching & SRP Batcher, Godot `MultiMesh`, Bevy batching, PlayCanvas BatchManager, AMD RDNA Guide/AZDO GDC 2014, Arm Mali Best Practices, QtQuick3D, W3C/Khronos-WebGL-WebGPU-Spezifikationen).
+- **Usage:** Unser Automatisches Instancing (ADR 0046) folgt dem branchenweiten Konsens (Instancing gleicher Geometrie+Material in einen Draw, per-Objekt-Culling erhalten). Der Bericht begründet mit verifizierter Evidenz, warum die drei verbleibenden Stufen (Geometry-Merge/Static-Batching, Multi-Draw „gleiches Material, viele Geometrien", Voll-GPU-driven/indirect) bisher bewusst **nicht** gebaut werden — u. a. zwei harte Web-Fakten: WebGL 1/2 kann kein indirect Zeichnen (erst GLES 3.1; GPU-driven ist WebGPU-only), und `WEBGL_multi_draw` fehlt in Firefox. Die Defer-Bedingungen für künftige ADRs stehen im Bericht.
+
 ### Percentage-Closer Filtering (PCF) for Soft Shadows
 
 - **File:** `packages/engine/src/renderers/WebGL2/WebGL2Renderer.ts`, `packages/engine/src/core/materials/surface/shaders/Phong.frag.glsl`, `packages/engine/src/core/materials/surface/shaders/Standard.frag.glsl`
