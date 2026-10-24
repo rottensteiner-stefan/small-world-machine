@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_INSTANCING_MIN_RUN,
+  groupByGeometryForInstancing,
   partitionInstanceRuns,
 } from "../../src/renderers/AutoInstancing.js";
 import { Object3D } from "../../src/core/Object3D.js";
@@ -67,5 +68,63 @@ describe("partitionInstanceRuns", () => {
     const out = { runObjects: [] as Object3D[], runs: [] as number[], rest: [] as Object3D[] };
     partitionInstanceRuns(list, out.runObjects, out.runs, out.rest, true);
     expect(out.runs).toEqual([]); // the non-caster at index 4 breaks the stretch
+  });
+});
+
+describe("groupByGeometryForInstancing", () => {
+  const a = new Cube().getGeometryData();
+  const b = new Cube({ size: 2 }).getGeometryData();
+
+  it(`ADRs the scattered-stretch gap (ADR 0046 A2): interleaved same-geometry objects that never
+      formed a run before become one run after grouping`, () => {
+    // No stretch of >=4 identical geometries in the input order, but 7 a's and 6 b's in total.
+    const list = [
+      ...objs(a, 3),
+      ...objs(b, 3),
+      ...objs(a, 3),
+      ...objs(b, 3),
+      ...objs(a, 1),
+    ];
+    expect(split(list).runs).toEqual([]); // the naive order yields no run
+
+    const grouped = list.slice();
+    const ordinals = new WeakMap<GeometryDataInterface, number>();
+    groupByGeometryForInstancing(grouped, ordinals, 0);
+    const { runs } = split(grouped);
+    expect(runs).toEqual([0, 7, 7, 13]); // 7 a's, then 6 b's -- both now form runs
+  });
+
+  it("is deterministic: regrouping an already-grouped subgroup is a stable no-op", () => {
+    const grouped = [...objs(a, 4), ...objs(b, 4)];
+    const before = grouped.map((o) => o.name);
+    const ordinals = new WeakMap<GeometryDataInterface, number>();
+    groupByGeometryForInstancing(grouped, ordinals, 0);
+    expect(grouped.map((o) => o.name)).toEqual(before);
+    groupByGeometryForInstancing(grouped, ordinals, 0);
+    expect(grouped.map((o) => o.name)).toEqual(before);
+  });
+
+  it(`leaves subgroups below ${AUTO_INSTANCING_MIN_RUN} objects untouched`, () => {
+    const small = [...objs(a, 3), ...objs(b, 2)];
+    const before = small.slice();
+    groupByGeometryForInstancing(small, new WeakMap(), 0);
+    expect(small).toEqual(before);
+  });
+
+  it("sinks geometry-less objects to the end deterministically", () => {
+    const solid = [...objs(a, 5)];
+    const empty = new Object3D("empty");
+    const list = [empty, ...solid];
+    groupByGeometryForInstancing(list, new WeakMap(), 0);
+    expect(list[list.length - 1]).toBe(empty);
+    expect(list.slice(0, -1)).toEqual(solid);
+  });
+
+  it("assigns ordinals monotonically, reuses known ones, and returns the continuation seed", () => {
+    const ordinals = new WeakMap<GeometryDataInterface, number>();
+    const seed = groupByGeometryForInstancing([...objs(a, 4), ...objs(b, 4)], ordinals, 0);
+    expect(seed).toBe(2); // exactly two unique geometries were recorded
+    const reseed = groupByGeometryForInstancing([...objs(a, 4), ...objs(b, 4)], ordinals, seed);
+    expect(reseed).toBe(2); // known geometries are not re-ordered by a fresh traversal
   });
 });

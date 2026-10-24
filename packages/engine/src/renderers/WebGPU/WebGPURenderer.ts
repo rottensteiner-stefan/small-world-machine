@@ -16,7 +16,7 @@ import {
 import type { RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
 import type { RenderManifest } from "../shaders/index.js";
 import { UniformPacker, VERTEX_COLOR_FLAG, resolveManifestFlags } from "../shaders/index.js";
-import type { EngineOptions } from "../../interfaces/index.js";
+import type { EngineOptions, GeometryDataInterface } from "../../interfaces/index.js";
 
 import type { ClusterGridDims } from "../../math/index.js";
 import {
@@ -50,7 +50,7 @@ import { GPUObjectRingBuffer } from "./managers/GPUObjectRingBuffer.js";
 import { GPUGeometryCache } from "./managers/GPUGeometryCache.js";
 import type { WebGPUGeoCacheEntry, WebGPULineRibbon } from "./managers/GPUGeometryCache.js";
 import { GPUInstanceRingBuffer } from "./managers/GPUInstanceRingBuffer.js";
-import { AUTO_INSTANCING_MIN_RUN, partitionInstanceRuns } from "../AutoInstancing.js";
+import { AUTO_INSTANCING_MIN_RUN, groupByGeometryForInstancing, partitionInstanceRuns } from "../AutoInstancing.js";
 import {
   MainRenderPass,
   PostProcessPass,
@@ -151,6 +151,10 @@ export class WebGPURenderer extends AbstractRenderer {
   private readonly _scratchRunObjects: Object3D[] = [];
   private readonly _scratchRuns: number[] = [];
   private readonly _scratchRunRest: Object3D[] = [];
+
+  /** ADR 0046 A2: geometry-ordinal scratch so `groupByGeometryForInstancing` stays allocation-free. */
+  private readonly _geometryOrdinals: WeakMap<GeometryDataInterface, number> = new WeakMap();
+  private _geometryOrdinalSeed = 0;
 
   /** Per-draw view-projection dynamic-offset buffer -- see `VIEW_SLOT_*`/`_setViewMatrix()`. */
   private _viewBGL!: GPUBindGroupLayout;
@@ -1338,6 +1342,14 @@ export class WebGPURenderer extends AbstractRenderer {
       effManifest.state?.isSprite !== true &&
       effManifest.state?.isDecal !== true
     ) {
+      // ADR 0046 A2: consecutive same-geometry objects form the longest runs on which
+      // `partitionInstanceRuns` merges (and feed the K6 vertex-buffer state dedup below) --
+      // reorder the subgroup stably by geometry first.
+      this._geometryOrdinalSeed = groupByGeometryForInstancing(
+        objects,
+        this._geometryOrdinals,
+        this._geometryOrdinalSeed,
+      );
       partitionInstanceRuns(
         objects,
         this._scratchRunObjects,

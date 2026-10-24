@@ -32,7 +32,7 @@ import type { Object3D, RenderBatch, Scene, TextureArray } from "../../core/inde
 import { DeviceLimit, InstancedMesh, computeClipToBox } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
 import { EvsmMomentMaterial } from "../../core/materials/EvsmMomentMaterial.js";
-import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
+import type { EngineOptions, GeometryDataInterface, LightDataInterface } from "../../interfaces/index.js";
 import {
   MaterialType,
   RendererType,
@@ -41,7 +41,7 @@ import {
   WireframeMode,
 } from "../../enums/index.js";
 import type { GLLineRibbon, Mesh } from "../Mesh.js";
-import { AUTO_INSTANCING_MIN_RUN, partitionInstanceRuns } from "../AutoInstancing.js";
+import { AUTO_INSTANCING_MIN_RUN, groupByGeometryForInstancing, partitionInstanceRuns } from "../AutoInstancing.js";
 import { usesLineQuadShadow } from "../LineShadowRibbon.js";
 import type { ClusterGridDims } from "../../math/index.js";
 import {
@@ -88,6 +88,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private readonly _scratchRunObjects: Object3D[] = [];
   private readonly _scratchRuns: number[] = [];
   private readonly _scratchRunRest: Object3D[] = [];
+
+  /** ADR 0046 A2: geometry-ordinal scratch so `groupByGeometryForInstancing` stays allocation-free. */
+  private readonly _geometryOrdinals: WeakMap<GeometryDataInterface, number> = new WeakMap();
+  private _geometryOrdinalSeed = 0;
 
   private _scratchFloat4: Float32Array = new Float32Array(4);
 
@@ -1513,6 +1517,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       manifest.state?.isDecal !== true &&
       manifest.flags?.includes(VERTEX_COLOR_FLAG) !== true
     ) {
+      // ADR 0046 A2: consecutive same-geometry objects form the longest runs on which
+      // `partitionInstanceRuns` merges -- reorder the eligible subgroup stably by geometry first.
+      this._geometryOrdinalSeed = groupByGeometryForInstancing(
+        standardObjects,
+        this._geometryOrdinals,
+        this._geometryOrdinalSeed,
+      );
       partitionInstanceRuns(
         standardObjects,
         this._scratchRunObjects,

@@ -1,6 +1,7 @@
 import type { Object3D } from "../core/Object3D.js";
 import { InstancedMesh } from "../core/InstancedMesh.js";
 import { isSkinnedMesh } from "../core/animation/SkinnedMesh.js";
+import type { GeometryDataInterface } from "../interfaces/index.js";
 
 /** Shortest run of same-geometry objects worth one instanced draw instead of per-object draws. */
 export const AUTO_INSTANCING_MIN_RUN = 4;
@@ -58,4 +59,40 @@ export function partitionInstanceRuns(
     }
     i = end;
   }
+}
+
+/**
+ * ADR 0046 supplement (A2): reorders an opaque subgroup in place so that objects sharing the exact
+ * same `GeometryData` become consecutive. `partitionInstanceRuns` only merges *consecutive* same-
+ * geometry objects, so this maximizes the runs it can form (and, on WebGPU, also the existing K6
+ * vertex-buffer state dedup) without a global per-frame sort. Identical semantics to ADR 0046:
+ * only reference-equal geometries merge, content-identical but distinct objects do not.
+ *
+ * The sort is stable (ES2019 `Array.prototype.sort`) and deterministic (key = a monotonically
+ * assigned geometry ordinal), so rendering order, determinism and Capture-Frame-Rate are
+ * unaffected. `ordinals` is persistent scratch and `nextOrdinal` the next free ordinal; the
+ * function returns the continuation value the caller must keep. A `WeakMap` never keeps disposed
+ * geometries alive, and the helper returns without touching anything below `AUTO_INSTANCING_MIN_RUN`
+ * (`undefined`-geometry objects deterministically sink to the end).
+ */
+export function groupByGeometryForInstancing(
+  objects: Object3D[],
+  ordinals: WeakMap<GeometryDataInterface, number>,
+  nextOrdinal: number,
+): number {
+  if (objects.length < AUTO_INSTANCING_MIN_RUN) return nextOrdinal;
+  for (let i = 0; i < objects.length; i++) {
+    const geometry = objects[i]!.geometry;
+    if (geometry !== undefined && !ordinals.has(geometry)) {
+      ordinals.set(geometry, nextOrdinal++);
+    }
+  }
+  objects.sort((a, b) => {
+    const ga = a.geometry;
+    const gb = b.geometry;
+    if (ga === undefined) return gb === undefined ? 0 : 1;
+    if (gb === undefined) return -1;
+    return (ordinals.get(ga) ?? 0) - (ordinals.get(gb) ?? 0);
+  });
+  return nextOrdinal;
 }
