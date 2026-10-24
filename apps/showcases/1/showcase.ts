@@ -157,6 +157,8 @@ class Showcase1 extends AbstractShowcase {
   private _activeMesh!: Object3D;
   private _phongMaterial!: PhongMaterial;
   private _wireframeMaterial!: WireframeMaterial;
+  private _sun!: DirectionalLight;
+  private _shadowResolution: number = 4096;
 
   private _selectedGeometryId: string = "cube";
   private _selectedColorHex: string = "#1e90ff";
@@ -164,6 +166,7 @@ class Showcase1 extends AbstractShowcase {
   private _autoRotate: boolean = true;
   private _rotateSpeed: number = 1.0;
   private _isWireframe: boolean = false;
+  private _wireframeCastsShadow: boolean = true;
 
   private _hudElement: HTMLElement | null = null;
   private _inspectorBtn: HTMLButtonElement | null = null;
@@ -176,7 +179,9 @@ class Showcase1 extends AbstractShowcase {
     const sun = new DirectionalLight({ color: Color.WHITE, intensity: 1.0 });
     sun.direction.set(-1, -1, -1);
     sun.castShadow = true;
+    sun.shadowResolution = this._shadowResolution;
     sun.shadowBias = 0.005;
+    this._sun = sun;
     this.scene.add(sun);
 
     this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.25 }));
@@ -254,6 +259,15 @@ class Showcase1 extends AbstractShowcase {
     });
   }
 
+  private _setShadowResolution(val: number): void {
+    this._shadowResolution = val;
+    this._sun.shadowResolution = val;
+    const label = document.getElementById("valShadowRes");
+    if (label) {
+      label.textContent = `${val} px`;
+    }
+  }
+
   private _setShininess(val: number): void {
     this._shininess = val;
     this._phongMaterial.shininess = val;
@@ -266,6 +280,11 @@ class Showcase1 extends AbstractShowcase {
   private _setWireframe(active: boolean): void {
     this._isWireframe = active;
     this._activeMesh.material = active ? this._wireframeMaterial : this._phongMaterial;
+    this._applyCastShadow();
+  }
+
+  private _applyCastShadow(): void {
+    this._activeMesh.castShadow = !this._isWireframe || this._wireframeCastsShadow;
   }
 
   private _toggleInspector(force?: boolean): void {
@@ -440,6 +459,20 @@ class Showcase1 extends AbstractShowcase {
               <span class="hud-switch-slider"></span>
             </label>
           </div>
+          <div class="hud-row">
+            <label for="swWireShadow">Wireframe casts shadow</label>
+            <label class="hud-switch">
+              <input type="checkbox" id="swWireShadow" ${this._wireframeCastsShadow ? "checked" : ""}>
+              <span class="hud-switch-slider"></span>
+            </label>
+          </div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <label for="sliderShadowRes">Shadow Map Resolution</label>
+              <span class="val-label" id="valShadowRes">${this._shadowResolution} px</span>
+            </div>
+            <input type="range" id="sliderShadowRes" min="8" max="13" step="1" value="${Math.log2(this._shadowResolution)}" />
+          </div>
         </div>
       </div>
     `;
@@ -484,6 +517,16 @@ class Showcase1 extends AbstractShowcase {
 
     document.getElementById("swWireframe")?.addEventListener("change", (e) => {
       this._setWireframe((e.target as HTMLInputElement).checked);
+    });
+
+    document.getElementById("swWireShadow")?.addEventListener("change", (e) => {
+      this._wireframeCastsShadow = (e.target as HTMLInputElement).checked;
+      this._applyCastShadow();
+    });
+
+    document.getElementById("sliderShadowRes")?.addEventListener("input", (e) => {
+      const exp = parseInt((e.target as HTMLInputElement).value, 10);
+      this._setShadowResolution(2 ** exp);
     });
   }
 
