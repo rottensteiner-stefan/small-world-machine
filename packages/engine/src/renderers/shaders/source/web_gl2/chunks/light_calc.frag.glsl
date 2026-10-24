@@ -34,7 +34,6 @@
           vec3 dirShadowSamplePos = v_worldPos + N * u_dirShadowInfo.y * (1.0 - diff_dir);
           float cols = ceil(sqrt(u_dirShadowInfo.w));
           float bias = u_dirShadowInfo.x;
-          vec2 texelSize = 1.0 / vec2(textureSize(u_dirShadowMap, 0));
 
           vec4 lightSpacePos = u_cascadeMatrices[cascadeIndex] * vec4(dirShadowSamplePos, 1.0);
           vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
@@ -55,63 +54,9 @@
                   // taps so the 3x3 filter never bleeds into a neighboring cascade.
                   shadowA = evalEVSMDir(atlasUV, cellMin, cellMax, currentDepth);
               } else {
-              // PCSS: (1) blocker search via the raw (non-comparison) depth read, averaging
-              // occluders found within a search radius; (2) derive a penumbra size from how far
-              // the receiver is behind those occluders; (3) PCF again with that variable radius.
-              // Samples are clamped to this cascade's own atlas cell so a wide search radius
-              // near a cell edge can't bleed into a neighboring cascade's texels.
-              // Directional light only, not spot lights -- see docs/adr/0006-pcss-directional-light-only.md.
-              // NOTE: kept at the historical indentation so the default (non-EVSM) path's diff
-              // stays reviewable; it is the byte-identical predecessor of this branch.
-              const int pcssTaps = 8;
-              vec2 searchOffsets[pcssTaps];
-              searchOffsets[0] = vec2(-1.0, -1.0);
-              searchOffsets[1] = vec2(0.0, -1.0);
-              searchOffsets[2] = vec2(1.0, -1.0);
-              searchOffsets[3] = vec2(-1.0, 0.0);
-              searchOffsets[4] = vec2(1.0, 0.0);
-              searchOffsets[5] = vec2(-1.0, 1.0);
-              searchOffsets[6] = vec2(0.0, 1.0);
-              searchOffsets[7] = vec2(1.0, 1.0);
-
-              float searchRadiusTexels = 2.0;
-              float avgBlockerDepth = 0.0;
-              float blockerCount = 0.0;
-              for (int s = 0; s < pcssTaps; s++) {
-                  vec2 sampleUV = clamp(
-                      atlasUV + searchOffsets[s] * texelSize * searchRadiusTexels,
-                      cellMin, cellMax
-                  );
-                  float blockerDepth = texture(u_dirShadowMapRaw, sampleUV).r;
-                  if (blockerDepth < currentDepth - bias) {
-                      avgBlockerDepth += blockerDepth;
-                      blockerCount += 1.0;
-                  }
+                  // PCSS, cell-clamped (evalPCSSDir in base_fragment_header, ADR 0006).
+                  shadowA = evalPCSSDir(atlasUV, cellMin, cellMax, currentDepth, bias, cascadeIndex);
               }
-
-              if (blockerCount < 1.0) {
-                  shadowA = 1.0; // Nothing occluding within the search radius -- fully lit.
-              } else {
-                  avgBlockerDepth /= blockerCount;
-                  // Penumbra grows with how many "bias-widths" deep the average occluder sits
-                  // below the receiver. `bias` is already a scene/cascade-calibrated depth-slop
-                  // unit in this same normalized shadow-map depth space, so reusing it as the
-                  // scale keeps the softness estimate self-calibrating instead of hand-tuning a
-                  // magic constant against normalized depth (whose world-unit meaning varies
-                  // per cascade).
-                  float occluderDepthDelta = currentDepth - avgBlockerDepth;
-                  float pcfRadius = clamp(1.0 + occluderDepthDelta / max(bias, 0.0001), 1.0, 4.0);
-
-                  shadowA = 0.0;
-                  for(int x = -1; x <= 1; ++x) {
-                      for(int y = -1; y <= 1; ++y) {
-                          vec2 tapUV = clamp(atlasUV + vec2(x, y) * texelSize * pcfRadius, cellMin, cellMax);
-                          shadowA += texture(u_dirShadowMap, vec3(tapUV, currentDepth - bias));
-                      }
-                  }
-                  shadowA /= 9.0;
-              }
-              } // end of the else (legacy PCSS) branch for u_evsmParams.x <= 0.5
           }
 
           float shadowB = shadowA;
@@ -128,21 +73,15 @@
                   vec2 atlasUVB = (projCoordsB.xy + vec2(colB, rowB)) / cols;
                   float currentDepthB = projCoordsB.z;
 
+                  // Same filter as sample A (EVSM or PCSS, like WebGPU's getShadowDirBlend), so the
+                  // blend band never mixes two different penumbra widths.
+                  vec2 cellMinB = vec2(colB, rowB) / cols;
+                  vec2 cellMaxB = cellMinB + vec2(1.0) / cols;
                   if (u_evsmParams.x > 0.5) {
-                      // EVSM (ADR 0043): cell-clamped moments for the blend sample too, so the
-                      // blend band never mixes PCF and EVSM results.
-                      vec2 cellMinB = vec2(colB, rowB) / cols;
-                      vec2 cellMaxB = cellMinB + vec2(1.0) / cols;
                       shadowB = evalEVSMDir(atlasUVB, cellMinB, cellMaxB, currentDepthB);
                   } else {
-                  shadowB = 0.0;
-                  for(int x = -1; x <= 1; ++x) {
-                      for(int y = -1; y <= 1; ++y) {
-                          shadowB += texture(u_dirShadowMap, vec3(atlasUVB + vec2(x, y) * texelSize, currentDepthB - bias));
-                      }
+                      shadowB = evalPCSSDir(atlasUVB, cellMinB, cellMaxB, currentDepthB, bias, nextCascade);
                   }
-                  shadowB /= 9.0;
-              }
               }
           }
 

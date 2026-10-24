@@ -56,13 +56,12 @@ function parseNum(p: URLSearchParams, key: string, fallback: number): number {
 }
 
 /**
- * Showcase 42 — Soft Shadow Lab (WebGPU PCSS softness gate + interactive tuning HUD).
+ * Showcase 42 — Soft Shadow Lab (PCSS softness gate + interactive tuning HUD).
  *
  * Deterministic micro-stage used by the headless live-gates (`scripts/check-swm42-pole.mjs`,
  * `scripts/check-swm42-evsm.mjs`, `.agents/scratches/check-swm42.mjs`) to *prove* that the
- * WebGPU-only `quality.shadowSoftness` / `quality.shadowMaxPcfRadius` knobs actually widen the
- * PCSS penumbra on screen, and that they are a documented no-op on WebGL2 (negative control —
- * WebGL2 only has fixed 3x3 PCF in default mode, plus optional EVSM in ADR 0043).
+ * `quality.shadowSoftness` / `quality.shadowMaxPcfRadius` knobs actually widen the PCSS penumbra
+ * on screen, on WebGPU and WebGL2 alike (`?softness=0` = hard 3x3 PCF, the negative control).
  *
  * For interactive sessions, a collapsible Tuning HUD (`#shadowLabHud`, toggle via key `I` or the
  * bottom-right button) lets users switch probes (`1` Box, `2` Pole, `3` Step Rig), lift the caster
@@ -503,14 +502,8 @@ export class Showcase42 extends AbstractShowcase {
       ?.classList.toggle("active", this._shadowMode === ShadowMode.EVSM);
 
     const pcssControls = document.getElementById("pcssKernelRows");
-    const gl2PcssNote = document.getElementById("gl2PcssNote");
-    const isWebGPU = this.renderer.type === "WEB_GPU";
     if (pcssControls) {
-      pcssControls.style.opacity = this._shadowMode === ShadowMode.PCSS && isWebGPU ? "1" : "0.45";
-    }
-    if (gl2PcssNote) {
-      gl2PcssNote.style.display =
-        !isWebGPU && this._shadowMode === ShadowMode.PCSS ? "block" : "none";
+      pcssControls.style.opacity = this._shadowMode === ShadowMode.PCSS ? "1" : "0.45";
     }
 
     setSlider("slLiftY", "valLiftY", this._liftY, 2, " m");
@@ -565,17 +558,6 @@ export class Showcase42 extends AbstractShowcase {
         line-height: 1.35;
         color: #94a3b8;
         margin-top: 6px;
-      }
-      #showcase-hud .hud-warn {
-        font-size: 10px;
-        line-height: 1.35;
-        color: #fbbf24;
-        background: rgba(251, 191, 36, 0.1);
-        border: 1px solid rgba(251, 191, 36, 0.3);
-        border-radius: 5px;
-        padding: 5px 7px;
-        margin-top: 6px;
-        display: none;
       }
       #shadowLabReadout {
         font-family: var(--font-mono, "JetBrains Mono", monospace);
@@ -647,9 +629,6 @@ export class Showcase42 extends AbstractShowcase {
               <input id="slMaxRadius" type="range" min="1" max="16" step="1" value="4" />
               <span id="valMaxRadius" class="val-label">4 px</span>
             </div>
-          </div>
-          <div id="gl2PcssNote" class="hud-warn">
-            ℹ️ On <b>WebGL2</b>, the default mode uses fixed 3×3 hardware PCF (PCSS softness sliders are a documented WebGPU-only feature). Switch to <b>EVSM</b> or press <b>Option+3</b> for WebGPU.
           </div>
         </div>
 

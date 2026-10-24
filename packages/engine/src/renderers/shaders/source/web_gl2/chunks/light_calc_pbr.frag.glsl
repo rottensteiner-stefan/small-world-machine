@@ -97,7 +97,6 @@ vec3 Lo = vec3(0.0);
         vec3 dirShadowSamplePos = v_worldPos + N * u_dirShadowInfo.y * (1.0 - dotNL);
         float cols = ceil(sqrt(u_dirShadowInfo.w));
         float bias = u_dirShadowInfo.x;
-        vec2 texelSize = 1.0 / vec2(textureSize(u_dirShadowMap, 0));
 
         vec4 lightSpacePos = u_cascadeMatrices[cascadeIndex] * vec4(dirShadowSamplePos, 1.0);
         vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
@@ -116,15 +115,9 @@ vec3 Lo = vec3(0.0);
                 // EVSM (ADR 0043): cell-clamped moment evaluation (see base_fragment_header).
                 shadowA = evalEVSMDir(atlasUV, cellMin, cellMax, currentDepth);
             } else {
-            shadowA = 0.0;
-            for(int x = -1; x <= 1; ++x) {
-                for(int y = -1; y <= 1; ++y) {
-                    vec2 tapUV = clamp(atlasUV + vec2(x, y) * texelSize, cellMin, cellMax);
-                    shadowA += texture(u_dirShadowMap, vec3(tapUV, currentDepth - bias));
-                }
+                // PCSS, cell-clamped (evalPCSSDir in base_fragment_header, ADR 0006).
+                shadowA = evalPCSSDir(atlasUV, cellMin, cellMax, currentDepth, bias, cascadeIndex);
             }
-            shadowA /= 9.0;
-            } // end of legacy PCF branch (u_evsmParams.x <= 0.5)
         }
 
         float shadowB = shadowA;
@@ -141,21 +134,14 @@ vec3 Lo = vec3(0.0);
                 vec2 atlasUVB = (projCoordsB.xy + vec2(colB, rowB)) / cols;
                 float currentDepthB = projCoordsB.z;
 
+                // Same filter as sample A (see non-PBR light_calc.frag.glsl).
+                vec2 cellMinB = vec2(colB, rowB) / cols;
+                vec2 cellMaxB = cellMinB + vec2(1.0) / cols;
                 if (u_evsmParams.x > 0.5) {
-                    // EVSM (ADR 0043): cell-clamped moments for the blend sample too, so the
-                    // blend band never mixes PCF and EVSM results.
-                    vec2 cellMinB = vec2(colB, rowB) / cols;
-                    vec2 cellMaxB = cellMinB + vec2(1.0) / cols;
                     shadowB = evalEVSMDir(atlasUVB, cellMinB, cellMaxB, currentDepthB);
                 } else {
-                shadowB = 0.0;
-                for(int x = -1; x <= 1; ++x) {
-                    for(int y = -1; y <= 1; ++y) {
-                        shadowB += texture(u_dirShadowMap, vec3(atlasUVB + vec2(x, y) * texelSize, currentDepthB - bias));
-                    }
+                    shadowB = evalPCSSDir(atlasUVB, cellMinB, cellMaxB, currentDepthB, bias, nextCascade);
                 }
-                shadowB /= 9.0;
-                } // end of legacy PCF branch
             }
         }
 

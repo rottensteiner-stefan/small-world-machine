@@ -82,15 +82,16 @@ export interface QualityConfig {
   /** Clustered/tiled forward+ light culling settings (WebGL2/WebGPU only). */
   clusteredLighting?: ClusteredLightingConfig;
   /**
-   * PCSS penumbra softness multiplier for shadow-casting WebGPU lights (the only backend with a
-   * PCSS path today). `1` reproduces the legacy behavior exactly; `>1` widens, `<1` narrows the
-   * soft penumbra. WebGL2 (fixed-PCF) and WebGL1 (no shadow mapping) ignore it. Default 1.
+   * PCSS penumbra softness multiplier. `1` reproduces the legacy behavior exactly; `>1` widens,
+   * `<1` narrows the soft penumbra, `0` gives a hard 3x3 PCF edge. Applies to directional lights
+   * on WebGPU and WebGL2 and to spot lights on WebGPU (WebGL2 spot lights use fixed PCF, ADR 0006);
+   * WebGL1 has no shadow mapping. Default 1.
    */
   shadowSoftness?: number;
   /**
    * Cap on the variable-radius PCF kernel used by PCSS, in shadow-map texels. Default 4 —
    * corresponds to the legacy hardcoded cap. Raise it together with `shadowSoftness` to allow
-   * wider penumbras. WebGPU only.
+   * wider penumbras. Same scope as `shadowSoftness`.
    */
   shadowMaxPcfRadius?: number;
   /**
@@ -99,7 +100,7 @@ export interface QualityConfig {
    * bleeding reduction and a dynamic variance floor (ADR 0043). `ShadowMode.PCSS` (default) keeps
    * the PCSS path. Opt-in: the default stays PCSS so existing scenes and gates stay
    * byte-identical. WebGPU core and WebGL2 (gated on `EXT_color_buffer_float`, otherwise it
-   * falls back to fixed-PCF with a console warning) support it; WebGL1 has no shadow mapping.
+   * falls back to PCSS with a console warning) support it; WebGL1 has no shadow mapping.
    */
   shadowMode?: ShadowMode;
   /**

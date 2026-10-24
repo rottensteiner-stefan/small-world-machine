@@ -81,12 +81,14 @@ These control the engine's graphical fidelity.
 - `shadowMode` (`"pcss"` | `"evsm"`): Optional directional-shadow algorithm. `"evsm"`
   (Exponential Variance Shadow Maps, see `docs/guides/shadows.md` and ADR 0043) renders
   warped variance moments and evaluates a Chebyshev bound with light-bleeding reduction;
-  `"pcss"` — the default, reproducing legacy behavior byte-identically — keeps PCSS on
-  WebGPU and fixed-PCF on WebGL2. `"evsm"` requires WebGPU or WebGL2 with
-  `EXT_color_buffer_float`; WebGL2 silently falls back to fixed-PCF with a console warning
+  `"pcss"` — the default — keeps PCSS on WebGPU and WebGL2. `"evsm"` requires WebGPU or
+  WebGL2 with `EXT_color_buffer_float`; WebGL2 falls back to PCSS with a console warning
   when the extension is missing, and WebGL1 ignores it entirely.
-- `shadowSoftness` (number): PCSS penumbra multiplier (WebGPU only, default 1, see
-  `docs/guides/shadows.md`). `"evsm"` uses its own fixed penumbra filtering.
+- `shadowSoftness` (number): PCSS penumbra multiplier (default 1, `0` = hard 3×3 PCF; see
+  `docs/guides/shadows.md`). Directional lights on WebGPU and WebGL2, spot lights on WebGPU
+  only. `"evsm"` uses its own fixed penumbra filtering.
+- `shadowMaxPcfRadius` (number): cap on the PCSS filter radius in shadow-map texels (default 4),
+  same scope as `shadowSoftness`.
 - `disableTextures` (boolean): When `true`, all textures are bypassed and fallback colors are rendered (useful for debugging).
 
 ### Post-processing (`postProcessing`)

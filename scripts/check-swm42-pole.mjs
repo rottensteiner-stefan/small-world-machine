@@ -1,7 +1,7 @@
 // SWM-Showcase-42 contact-hardening live-gate (committed): loads the pole probe on the preview
-// server and PROVES the WebGPU hardened PCSS exhibits the "sharp at the caster, soft in distance"
-// contact-hardening signature for a thin occluder, while WebGL2's fixed PCF (negative control)
-// keeps a deep umbra everywhere (no PCSS diffusion).
+// server and PROVES the hardened PCSS exhibits the "sharp at the caster, soft in distance"
+// contact-hardening signature for a thin occluder on WebGPU AND WebGL2, while `softness=0`
+// (hard 3x3 PCF, negative control) keeps a deep umbra everywhere (no PCSS diffusion).
 /* global window -- used inside page.evaluate/evaluateOnNewDocument (browser context) */
 // The pole probe (`?probe=pole`) renders one thin cylinder caster under a calibrated high-contrast
 // rig. The metric measures, along the cast shadow's length:
@@ -38,16 +38,24 @@ const RIG = {
   lightX: "0.08", lightY: "-0.5", lightZ: "0.85",
   sunI: "5", amb: "0.08",
 };
-const SOFTNESS = { softness: "3", maxRadius: "12" };
+const SOFT = { softness: "3", maxRadius: "12" };
+const HARD = { softness: "0", maxRadius: "12" };
+
+// Runs: both tiers with the soft rig, plus the negative control (softness 0 = hard 3x3 PCF).
+const RUNS = [
+  { key: "WEB_GPU/soft3", tier: "WEB_GPU", softness: SOFT },
+  { key: "WEB_GL2/soft3", tier: "WEB_GL2", softness: SOFT },
+  { key: "WEB_GL2/soft0", tier: "WEB_GL2", softness: HARD },
+];
 
 // Metric thresholds (calibrated on the deterministic scene with wide margins; see log.md):
 //   WEB_GPU soft3: near 0.61 / far 0.26  -> contact deep, far fully diffuse.
-//   WEB_GL2 soft3: near 0.56 / far 0.60  -> deep core persists (negative control).
+//   fixed PCF:     near 0.56 / far 0.60  -> deep core persists (negative control).
 const THRESHOLDS = {
-  gpuContactMinimum: 0.5,      // near zone must stay deep (hard contact)
-  gpuFarCollapseMaximum: 0.4,  // far zone must diffuse (PCSS penumbra blending)
-  gpuSpreadMinimum: 0.2,       // near - far spread (hardening gradient magnitude)
-  gl2FarPersistMinimum: 0.5,   // fixed PCF must keep a deep core at distance
+  contactMinimum: 0.5,        // near zone must stay deep (hard contact)
+  farCollapseMaximum: 0.4,    // far zone must diffuse (PCSS penumbra blending)
+  spreadMinimum: 0.2,         // near - far spread (hardening gradient magnitude)
+  controlFarPersistMinimum: 0.5, // hard PCF must keep a deep core at distance
 };
 
 const server = spawn("npm", PREVIEW_ARGS, { cwd: ROOT, stdio: "pipe", detached: true });
@@ -118,14 +126,14 @@ function analyzeFrame(pngBuffer) {
   return { contactY: contact, nearUmbraContrast: avg(near), farUmbraContrast: avg(far) };
 }
 
-async function openAndSettle(page, tier) {
+async function openAndSettle(page, tier, softness) {
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => {
     if (m.type() === "error") errors.push("console.error: " + m.text());
   });
   await page.setViewport({ width: 1280, height: 800 });
-  const q = new URLSearchParams({ ...RIG, ...SOFTNESS, rendererType: tier }).toString();
+  const q = new URLSearchParams({ ...RIG, ...softness, rendererType: tier }).toString();
   await page.goto(`${BASE_URL}?${q}`, { waitUntil: "networkidle0", timeout: 90000 });
   await page.waitForFunction(() => window.__swm42PaintReady === true, {
     timeout: 120000,
@@ -137,7 +145,7 @@ async function openAndSettle(page, tier) {
   return { errors, sample, shot };
 }
 
-async function run(browser, tier) {
+async function run(browser, tier, softness) {
   const page = await browser.newPage();
   await page.evaluateOnNewDocument(() => {
     window.__swm42PaintReady = false;
@@ -147,8 +155,8 @@ async function run(browser, tier) {
   });
   let out;
   try {
-    const { errors, sample, shot } = await openAndSettle(page, tier);
-    const shotPath = path.join(FRAME_DIR, `pole-gate-${tier}-soft3.png`);
+    const { errors, sample, shot } = await openAndSettle(page, tier, softness);
+    const shotPath = path.join(FRAME_DIR, `pole-gate-${tier}-soft${softness.softness}.png`);
     fs.mkdirSync(FRAME_DIR, { recursive: true });
     fs.writeFileSync(shotPath, shot);
     out = { errors, sample, shotPath, metric: analyzeFrame(shot) };
@@ -180,9 +188,9 @@ try {
   });
   const results = {};
   try {
-    for (const tier of ["WEB_GPU", "WEB_GL2"]) {
-      const r = await run(browser, tier);
-      results[tier] = {
+    for (const { key, tier, softness } of RUNS) {
+      const r = await run(browser, tier, softness);
+      results[key] = {
         pageErrors: r.errors,
         rendererType: r.sample?.rendererType,
         probe: r.sample?.probe,
@@ -197,27 +205,34 @@ try {
     await browser.close();
   }
 
-  const g = results.WEB_GPU;
-  const l = results.WEB_GL2;
+  const g = results["WEB_GPU/soft3"];
+  const l = results["WEB_GL2/soft3"];
+  const c = results["WEB_GL2/soft0"];
   const sameConfigs =
-    g.rendererType === "WEB_GPU" && l.rendererType === "WEB_GL2" && g.probe === "pole" && l.probe === "pole";
-  const noErrors = g.pageErrors.length === 0 && l.pageErrors.length === 0;
-  // Hardening must be present on WebGPU and ABSENT on WebGL2 (negative control).
-  const gpuHarden =
-    g.nearUmbraContrast > THRESHOLDS.gpuContactMinimum &&
-    g.farUmbraContrast < THRESHOLDS.gpuFarCollapseMaximum &&
-    g.nearUmbraContrast - g.farUmbraContrast > THRESHOLDS.gpuSpreadMinimum;
-  const gl2Control = l.farUmbraContrast > THRESHOLDS.gl2FarPersistMinimum;
-  // Magnitude discriminator: the GPU's far-zone collapse must be clearly steeper than any
-  // perspective-driven effect the fixed-PCF control shows (defeats the confounder).
-  const magnitudeGap = g.farUmbraContrast < l.farUmbraContrast - 0.15;
+    g.rendererType === "WEB_GPU" &&
+    l.rendererType === "WEB_GL2" &&
+    c.rendererType === "WEB_GL2" &&
+    [g, l, c].every((r) => r.probe === "pole");
+  const noErrors = [g, l, c].every((r) => r.pageErrors.length === 0);
+  // Hardening must be present on both tiers and ABSENT in the hard-PCF control.
+  const hardens = (r) =>
+    r.nearUmbraContrast > THRESHOLDS.contactMinimum &&
+    r.farUmbraContrast < THRESHOLDS.farCollapseMaximum &&
+    r.nearUmbraContrast - r.farUmbraContrast > THRESHOLDS.spreadMinimum;
+  const gpuHarden = hardens(g);
+  const gl2Harden = hardens(l);
+  const control = c.farUmbraContrast > THRESHOLDS.controlFarPersistMinimum;
+  // Magnitude discriminator: each tier's far-zone collapse must be clearly steeper than any
+  // perspective-driven effect the hard-PCF control shows (defeats the confounder).
+  const magnitudeGap =
+    g.farUmbraContrast < c.farUmbraContrast - 0.15 && l.farUmbraContrast < c.farUmbraContrast - 0.15;
 
-  const ok = noErrors && sameConfigs && gpuHarden && gl2Control && magnitudeGap;
+  const ok = noErrors && sameConfigs && gpuHarden && gl2Harden && control && magnitudeGap;
   console.log(JSON.stringify(
     {
       results,
       thresholds: THRESHOLDS,
-      checks: { noErrors, sameConfigs, gpuHarden, gl2Control, magnitudeGap },
+      checks: { noErrors, sameConfigs, gpuHarden, gl2Harden, control, magnitudeGap },
       ok,
     },
     null,

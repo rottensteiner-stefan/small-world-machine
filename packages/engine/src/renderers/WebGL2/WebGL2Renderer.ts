@@ -1836,6 +1836,16 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
           this._scratchFloat4[3] = light.numCascades;
           this.gl.uniform4fv(infoLoc, this._scratchFloat4);
         }
+
+        // PCSS knobs (evalPCSSDir), same defaults as the WebGPU GlobalUniformWriter.
+        const softLoc = cache.uniforms.get("u_shadowSoftness");
+        if (softLoc) {
+          this._scratchFloat4[0] = this._quality.shadowSoftness ?? 1.0;
+          this._scratchFloat4[1] = this._quality.shadowMaxPcfRadius ?? 4.0;
+          this._scratchFloat4[2] = 0.0;
+          this._scratchFloat4[3] = 0.0;
+          this.gl.uniform4fv(softLoc, this._scratchFloat4);
+        }
       }
     } else {
       // No shadow-casting directional light: EVSM mode stays 0 with the dummy sampler bound.

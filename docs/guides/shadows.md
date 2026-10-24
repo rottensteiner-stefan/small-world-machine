@@ -86,7 +86,7 @@ shadow map sample that softens the hard binary in-shadow/out-of-shadow edge (see
 Directional light shadows take this a step further with **PCSS** (Percentage-Closer Soft
 Shadows, Fernando 2005): a *blocker search* reads the raw (non-comparison) shadow map depth
 around the sample to estimate how far away the nearest occluder is, then scales the PCF
-radius based on that distance. The engine's WebGPU PCSS is *principled and stable*: the radius
+radius based on that distance. The engine's PCSS is *principled and stable*: the radius
 is derived from the perspective-normalized receiver/blocker depth gap (decoupled from the
 acne `bias`, which only guards the depth compare) over a **deterministic** sunflower blocker
 disk, so the result is reproducible run-to-run and the softness knobs below re-tune the
@@ -94,19 +94,25 @@ penumbra cleanly. **Status note (0.115.7):** *contact-hardening is demonstrated 
 `?probe=pole` thin-cylinder probe on Showcase 42 shows the PCSS "sharp at the caster, soft in
 distance" signature: the contact line at the caster base stays hard and deep while the penumbra
 grows with distance and the far zone diffuses into a wide, shallow gradient — measured on-screen
-as near-zone umbra contrast `0.61` collapsing to `0.26` at max distance, versus a WebGL2
-negative control (fixed PCF) that holds `0.60` everywhere (see
-`scripts/check-swm42-pole.mjs`, live gate: `SWM42 POLE GATE: OK`). The previously-anticipated
-*adaptive* blocker search proved unnecessary for that hardening — the fixed sunflower disk does
-not destroy it for a thin occluder. A wide, box-shaped blocker *remains* uniformly soft, which
-is fundamental geometry: the search disk then averages the occluder's whole depth span. This
-only applies to the **primary** cascade a fragment falls into; the
-secondary cascade-blend sample (see above) still uses fixed-radius PCF, so as not to double
-the cost in the blend zone. **Spot light shadows use PCSS on WebGPU only**; on WebGL2 they
-stay at fixed-radius PCF. See [ADR 0006](/adr/0006-pcss-directional-light-only) for the
-scope. Only the first 4 spot lights get a shadow map.
+as near-zone umbra contrast `0.61` collapsing to `0.34` at max distance on WebGPU and `0.56` →
+`0.34` on WebGL2, versus a negative control (`softness=0`, hard 3×3 PCF) that holds `0.60`
+at distance (see `scripts/check-swm42-pole.mjs`, live gate: `SWM42 POLE GATE: OK`). The
+previously-anticipated *adaptive* blocker search proved unnecessary for that hardening — the
+fixed sunflower disk does not destroy it for a thin occluder. A wide, box-shaped blocker
+*remains* uniformly soft, which is fundamental geometry: the search disk then averages the
+occluder's whole depth span. The cascade-blend sample uses the same PCSS filter, so the blend
+band never mixes two penumbra widths.
 
-### PCSS softness tuning (WebGPU)
+**WebGL2** runs the same algorithm (`evalPCSSDir` in `base_fragment_header.frag.glsl`, a port of
+`getShadowPCSS` in `pbr_math.wgsl`) for every lit material, PBR and non-PBR. The only
+differences come from the cascade atlas: every tap is clamped to the cascade's own cell, and
+the cell's texel count stands in for the WebGPU per-layer map size. **Spot light shadows use
+PCSS on WebGPU only**; on WebGL2 they stay at fixed-radius PCF. Water/liquid materials with
+their own header (`dir_shadow.glsl`) also keep fixed 3×3 PCF on WebGL2. See
+[ADR 0006](/adr/0006-pcss-directional-light-only) for the scope. Only the first 4 spot lights
+get a shadow map.
+
+### PCSS softness tuning
 
 The PCSS penumbra (the *softness* of the shadow, i.e. how wide the gradient band is) is a global,
 quality-style knob — not per light — and lives on `EngineOptions.quality` like every other quality
@@ -119,20 +125,21 @@ const engine = new Engine({
   quality: {
     // Since 0.115.6 the radius is principled (perspective-normalized receiver/blocker gap,
     // decoupled from the acne bias) and the default cap governs the look — the gate proves the
-    // knob re-tunes the penumbra and WebGL2 stays a byte-exact no-op. Set these to resize it.
+    // knob re-tunes the penumbra on WebGPU and WebGL2. Set these to resize it.
     shadowSoftness: 1.0,       // penumbra scale multiplier; >1 widens, <1 narrows the soft band
     shadowMaxPcfRadius: 4.0,   // cap on the variable-radius PCF kernel, in shadow-map texels
   },
 });
 ```
 
-- `shadowSoftness` (default `1`) multiplies the PCSS penumbra estimate. It is the honest "softness"
-  control for directional/spot PCSS on WebGPU.
+- `shadowSoftness` (default `1`) multiplies the PCSS penumbra estimate; `0` gives a hard 3×3 PCF
+  edge. It is the honest "softness" control for directional PCSS (WebGPU and WebGL2) and spot
+  PCSS (WebGPU).
 - `shadowMaxPcfRadius` (default `4`) caps how many shadow-map texels the variable-radius PCF may
   reach. To get genuinely wider penumbras you normally raise both together — a `shadowSoftness` far
   above 1 with the default cap just saturates the kernel back to the cap.
-- These knobs are **WebGPU-only today**: they are no-ops on WebGL2 (which has no PCSS, only fixed
-  PCF) and WebGL1 (no shadow mapping at all).
+- WebGL2 reads both knobs from `u_shadowSoftness`; they do nothing for WebGL2 spot lights (fixed
+  PCF) and on WebGL1 (no shadow mapping at all).
 
 ## Line casters (wireframes)
 
@@ -201,8 +208,8 @@ const engine = new Engine({
 ```
 
 - `quality.shadowMode` (`"pcss" | "evsm"`, default `"pcss"`) — switches directional-light shadow
-  filtering to the EVSM moment path. The default `pcss` code path is **byte-identical** whether or
-  not `evsm` exists (guarded by `EvsmGlslGuards.test.ts` plus the golden default run).
+  filtering to the EVSM moment path. In the default `pcss` mode the EVSM branches are dead code
+  (guarded by `EvsmGlslGuards.test.ts` plus the golden default run).
 - **Backend support:** WebGPU and WebGL2 both implement EVSM (Tiered-Renderer autonomy — the API
   tier never removes a feature the hardware can run). On **WebGL2** the moment atlas requires the
   `EXT_color_buffer_float` extension; without it the engine **honestly falls back** to the default

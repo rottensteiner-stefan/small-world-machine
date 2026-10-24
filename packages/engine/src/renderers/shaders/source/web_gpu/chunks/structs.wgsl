@@ -41,7 +41,7 @@ struct GlobalUniforms {
     clusterDims: vec4f, // [x, y, z cell counts, maxLightsPerCluster], all as f32
 
     // --- 5. Shadow Softness Tuning (16 bytes) ---
-    // PCSS softness knobs (WebGPU only today): x = penumbra scale multiplier (1 = legacy),
+    // PCSS softness knobs (WebGL2 mirrors them in u_shadowSoftness): x = penumbra scale multiplier (1 = legacy),
     // y = cap on the variable-radius PCF kernel in shadow-map texels (default 4), z/w = reserved.
     shadowSoftness: vec4f,
 

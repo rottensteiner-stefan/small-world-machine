@@ -6,8 +6,8 @@ import * as path from "path";
 // syntax slip would only surface in the browser -- these guards keep the intent honest instead:
 //  (1) every WebGL2 directional-shadow sampling site has an EVSM branch that evaluates the moment
 //      atlas via the shared helpers (cell-clamped), and
-//  (2) the default (non-EVSM) path text is still present UNTOUCHED at every call site, because the
-//      box/pole gates promise byte-identical frames while quality.shadowMode is the default pcss.
+//  (2) the default (non-EVSM) path at every call site is the shared PCSS port evalPCSSDir (ADR 0006),
+//      for the main AND the cascade-blend sample, so the blend band never mixes two filters.
 // The moment writer EvsmMoment.frag.glsl and the WebGPU pbr_math.wgsl equivalences are asserted in
 // their own tests / lint pass.
 
@@ -20,7 +20,7 @@ const LIT_CHUNKS = [
   "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl",
 ];
 
-describe("EVSM WebGL2 shader branches keep the default path byte-identical", () => {
+describe("EVSM WebGL2 shader branches sit next to the default PCSS path", () => {
   const header = readChunk(
     "packages/engine/src/renderers/shaders/source/web_gl2/chunks/base_fragment_header.frag.glsl",
   );
@@ -37,6 +37,16 @@ describe("EVSM WebGL2 shader branches keep the default path byte-identical", () 
     expect(header).toContain("max(m2 - m1 * m1, u_evsmParams.y * m1 * m1)");
   });
 
+  it("the shared header ports the WebGPU getShadowPCSS penumbra estimate and softness knobs", () => {
+    expect(header).toContain("uniform vec4 u_shadowSoftness;");
+    expect(header).toContain("float evalPCSSDir(");
+    // Same principled radius as pbr_math.wgsl (cell texel count stands in for the layer size).
+    expect(header).toContain("float radial = dz / max(depthRef, 0.00001);");
+    expect(header).toContain(
+      "clamp(1.0 + radial * cellTexels * 0.12 * u_shadowSoftness.x, 1.0, max(u_shadowSoftness.y, 1.0))",
+    );
+  });
+
   it("the dir_shadow chunk (water/liquid own-header shaders) carries its own identical helpers", () => {
     expect(dirShadow).toContain("uniform sampler2D u_dirEVSMMap;");
     expect(dirShadow).toContain("chebyshevUpperBoundEVSM");
@@ -46,25 +56,20 @@ describe("EVSM WebGL2 shader branches keep the default path byte-identical", () 
   for (const file of LIT_CHUNKS) {
     const source = readChunk(file);
 
-    it(`${file}: the main-cascade sample has an EVSM branch AND keeps the default PCSS/PCF path`, () => {
+    it(`${file}: the main-cascade sample has an EVSM branch and the PCSS default`, () => {
       expect(source).toContain("shadowA = evalEVSMDir(atlasUV, cellMin, cellMax, currentDepth);");
-      // The default path's sampling call must still exist untouched for byte-identical gates.
-      if (file.includes("light_calc.frag.glsl")) {
-        expect(source).toContain(
-          "shadowA += texture(u_dirShadowMap, vec3(tapUV, currentDepth - bias));",
-        );
-        expect(source).toContain("shadowA /= 9.0;");
-      }
+      expect(source).toContain(
+        "shadowA = evalPCSSDir(atlasUV, cellMin, cellMax, currentDepth, bias, cascadeIndex);",
+      );
     });
 
-    it(`${file}: the cascade-blend sample routes EVSM through cell-clamped moments too`, () => {
+    it(`${file}: the cascade-blend sample uses the same cell-clamped filters`, () => {
       expect(source).toContain(
         "shadowB = evalEVSMDir(atlasUVB, cellMinB, cellMaxB, currentDepthB);",
       );
       expect(source).toContain("vec2 cellMinB = vec2(colB, rowB) / cols;");
-      // The blend band must never mix PCF and EVSM results, so the legacy PCF call stays present.
       expect(source).toContain(
-        "shadowB += texture(u_dirShadowMap, vec3(atlasUVB + vec2(x, y) * texelSize, currentDepthB - bias));",
+        "shadowB = evalPCSSDir(atlasUVB, cellMinB, cellMaxB, currentDepthB, bias, nextCascade);",
       );
     });
   }
