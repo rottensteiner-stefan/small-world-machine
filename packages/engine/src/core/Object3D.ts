@@ -257,7 +257,8 @@ export class Object3D implements Collidable {
       //    `.type` discriminant valid without a type-conditional constructor ladder.
       if (
         !this.bounds ||
-        (this.bounds.type !== 2 /* BoundingType.OBB */ &&
+        (this.bounds.type !== 0 /* BoundingType.SPHERE */ &&
+          this.bounds.type !== 2 /* BoundingType.OBB */ &&
           this.bounds.type !== 3 /* BoundingType.HULL */ &&
           this.bounds.type !== localBounds.type)
       ) {

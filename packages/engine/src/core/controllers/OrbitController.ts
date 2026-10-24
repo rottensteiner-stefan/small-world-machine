@@ -12,10 +12,6 @@ export interface OrbitControllerOptions {
   lookSensitivity?: number;
   /** Rotation speed for keyboard. Defaults to 2.0. */
   rotationSpeed?: number;
-  /** Minimum vertical angle (phi) in radians. Defaults to 0.01. */
-  minPhi?: number;
-  /** Maximum vertical angle (phi) in radians. Defaults to PI - 0.01. */
-  maxPhi?: number;
   /** Whether rotation (Mouse) is enabled. Defaults to true. */
   enableRotation?: boolean;
 }
@@ -38,8 +34,6 @@ export class OrbitController extends Behavior<CameraInterfaceData> {
       input: options.input,
       lookSensitivity: options.lookSensitivity ?? 0.005,
       rotationSpeed: options.rotationSpeed ?? 2.0,
-      minPhi: options.minPhi ?? 0.01,
-      maxPhi: options.maxPhi ?? Math.PI - 0.01,
       enableRotation: options.enableRotation ?? true,
     };
   }
