@@ -239,7 +239,7 @@ export class CascadedShadowPassGPU implements RenderPass {
             viewOffset,
             cascadeCam.viewMatrix,
             topology,
-            undefined,
+            batch!.wireframeMode,
             undefined,
             "rgba32float",
           );
@@ -255,7 +255,7 @@ export class CascadedShadowPassGPU implements RenderPass {
             viewOffset,
             cascadeCam.viewMatrix,
             topology,
-            undefined,
+            batch!.wireframeMode,
             undefined,
             "rgba32float",
           );
@@ -447,6 +447,7 @@ export class CascadedShadowPassGPU implements RenderPass {
             viewOffset,
             cascadeCam.viewMatrix,
             topology,
+            batch!.wireframeMode,
           );
         }
 
@@ -460,6 +461,7 @@ export class CascadedShadowPassGPU implements RenderPass {
             viewOffset,
             cascadeCam.viewMatrix,
             topology,
+            batch!.wireframeMode,
           );
         }
       }

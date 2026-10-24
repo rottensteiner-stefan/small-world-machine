@@ -230,6 +230,7 @@ export class SpotShadowPassGPU implements RenderPass {
             viewOffset,
             shadowCam.viewMatrix,
             topology,
+            batch!.wireframeMode,
           );
         }
 
@@ -243,6 +244,7 @@ export class SpotShadowPassGPU implements RenderPass {
             viewOffset,
             shadowCam.viewMatrix,
             topology,
+            batch!.wireframeMode,
           );
         }
       }

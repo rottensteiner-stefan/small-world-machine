@@ -5,6 +5,7 @@ import { CascadedShadowPassGPU } from "../../src/renderers/passes/CascadedShadow
 import { Object3D } from "../../src/core/Object3D.js";
 import { Matrix4, Vector3D } from "../../src/math/index.js";
 import { BoundingSphere } from "../../src/physix/index.js";
+import { WireframeMode } from "../../src/enums/index.js";
 
 // Node/vitest has no WebGPU global; @webgpu/types only provides ambient TS types,
 // not a runtime value. Stub the bit-flag constants this pass actually reads.
@@ -77,10 +78,10 @@ function makeMockRenderer(objects: Object3D[]): Internals {
   };
 }
 
-function makeMockScene(objects: Object3D[]): Internals {
+function makeMockScene(objects: Object3D[], wireframeMode?: WireframeMode): Internals {
   return {
     getVisibleObjectsSorted: vi.fn(() => ({
-      opaqueBatches: [{ shaderId: "test-batch", objects, topology: undefined }],
+      opaqueBatches: [{ shaderId: "test-batch", objects, topology: undefined, wireframeMode }],
     })),
   };
 }
@@ -139,6 +140,19 @@ describe("CascadedShadowPassGPU: per-cascade frustum culling", () => {
     expect(renderer._renderSubgroup).toHaveBeenCalledTimes(1);
     const [, objects] = (renderer._renderSubgroup as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(objects).toEqual([noBounds]);
+  });
+
+  it("forwards the batch's wireframeMode so line casters draw the edge index buffer, not the triangle one", () => {
+    const caster = makeCaster("wire", new BoundingSphere(new Vector3D(0, 0, 0), 0.1));
+    const renderer = makeMockRenderer([caster]);
+    const scene = makeMockScene([caster], WireframeMode.STRUCTURAL);
+    const ce = { beginRenderPass: vi.fn(() => ({ setBindGroup: vi.fn(), end: vi.fn() })) };
+
+    const pass = new CascadedShadowPassGPU() as Internals;
+    pass.execute(renderer, scene, ce, {}, new Float32Array(16), new Vector3D(0, 0, 0));
+
+    const call = (renderer._renderSubgroup as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(call[8]).toBe(WireframeMode.STRUCTURAL);
   });
 
   it("uploads only the cascadeMatrices/cascadeSplits/dirShadowInfo slice, not the whole 848-byte GlobalUniforms buffer", () => {
