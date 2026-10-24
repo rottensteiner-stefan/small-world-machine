@@ -89,3 +89,32 @@ Ein-Frame-Veraltung sichtbares Pop-in bei schnellen Kameraschnitten/Teleports ve
 braucht explizite HZB-Invalidierung (z. B. szenenweites Zurücksetzen von `occlusionCulled`) bei
 erkannten großen Kamerasprüngen, was nicht Teil der Nur-eingeschwungener-Zustand-Begründung dieses
 ADRs ist.
+
+---
+
+## Erweiterung (S3, 2026-10-24): Teleport-Invalidierung via `notifyCameraTeleport()` — ausdrücklich Erweiterung, keine Re-Litigation
+
+Der vorstehende Abschnitt nennt explizite HZB-Invalidierung bei Kamerasprüngen als **deferred
+non-goal** ("Das hier überdenken, wenn"). Diese Entscheidung bleibt bestehen — **kein** Auto-Detektions-
+Mechanismus wird nachträglich eingebaut (Bool-Knob `autoResetOnCut` bleibt deferiert, DP-4-C). Was S3
+(Phase 4, `notifyCameraTeleport`) hinzufügt, ist ein **manueller, synchroner, idempotenter,
+skalar-freier** Invalidierungs-Hook auf Engine-Ebene:
+
+- **`SmallWorldMachine.notifyCameraTeleport()`** (der öffentliche Einstiegspunkt, den Apps nach Level-
+  Load/Portal/Cinematic-Jump/Respawn aufrufen) fächert auf:
+  1. Renderer-seitig (tier-ehrlich, ADR 0043): TAA-History-Reset (`HistoryBlendPassGPU`/
+     `HistoryBlendPassGL`, beide Tiers), volumetrischer-Fog-History-Reset (`VolumetricFogPassGPU`,
+     WebGPU-only) und `HzbOcclusionSystem.resetOcclusionStreak()` — das Zurücksetzen des
+     **`_occludedStreak`-WeakMaps ist verbindlich (E2)**: Streak-Einträge sind pro-Objekt und
+     überleben die Readback-Latenz; ohne Clear würde der nächste `applyOcclusionResults()` bei einem
+     einzigen weiteren „occluded"-Readback auf einem stale Streak re-cullen.
+  2. Engine-seitig: szenenweiter `occlusionCulled = false`-Walk (`Scene.resetOcclusionCulled()`),
+     unabhängig vom Renderer, damit kein Objekt auf veraltetem HZB-Zustand gehalten wird.
+- **Explizit kein** selbsttätiges Cut-Erkennen und **kein** neuer Bool-Knob; der Hook setzt die
+  ein-Frame-Veraltung nur dort künstlich auf „frisch", wo ein nicht-kontinuierlicher Kamerasprung das
+  Pop-in-Fenster sonst sichtbar machte. Das Pop-in-Fenster selbst (Readback-Latenz ~1–3 Frames,
+  A4) bleibt wie oben beschrieben bestehen.
+
+Der Hook ist damit konkret die beabsichtigte, manuelle Antwort auf genau die im „Das hier
+überdenken, wenn"-Block skizzierte Teleport-Situation — er erweitert den Scope dieses ADRs, ohne
+die zugrunde liegende Nicht-Ziel-Entscheidung zu kippen.

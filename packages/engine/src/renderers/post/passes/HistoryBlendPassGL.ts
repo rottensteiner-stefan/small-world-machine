@@ -127,6 +127,19 @@ export class HistoryBlendPassGL {
     return writeTarget.texture;
   }
 
+  /**
+   * Discards the temporal history (S3 DP-4A): clears the `_hasHistory` flag so the next `execute`
+   * resolves against a blank history instead of the pre-cut frame. Called by
+   * `SmallWorldMachine.notifyCameraTeleport()` on camera cuts (TAA ghosts identically on WebGL2 as
+   * on WebGPU -- both tiers, E1). Idempotent; synchronous; void; scalar-free. The ping-pong parity
+   * is intentionally reset to 0 for a deterministic fresh state; the old history content is ignored
+   * once `_hasHistory` is false.
+   */
+  public resetHistory(): void {
+    this._hasHistory = false;
+    this._parity = 0;
+  }
+
   /** Releases GPU resources. */
   public destroy(): void {
     const gl = this._gl;

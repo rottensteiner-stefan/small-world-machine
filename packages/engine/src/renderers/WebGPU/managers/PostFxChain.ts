@@ -296,4 +296,19 @@ export class PostFxChain {
     this._passes.clear();
     this._lastUsedFrame.clear();
   }
+
+  /**
+   * Discards the temporal history of every owned pass that keeps one (S3 DP-4A): iterates the
+   * registry and calls each pass' optional `resetHistory()`. Only the history-blend passes
+   * (`HistoryBlendPassGPU` for TAA/MotionTrail) and `VolumetricFogPassGPU` implement it; the
+   * non-temporal passes simply have no history to drop, so this stays a cheap, idempotent loop.
+   * Called by `SmallWorldMachine.notifyCameraTeleport()` (via the `WebGPURenderer` delegate) on
+   * camera cuts -- never on the per-frame hot path. A pass that was never created (effect disabled)
+   * has no history and needs no reset.
+   */
+  public resetHistory(): void {
+    for (const pass of this._passes.values()) {
+      pass.resetHistory?.();
+    }
+  }
 }

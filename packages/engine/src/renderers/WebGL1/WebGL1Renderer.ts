@@ -755,6 +755,17 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     }
   }
 
+  /**
+   * S3 DP-4A: WebGL1 keeps the honest no-op (ADR 0043). The GL1 post chain registers no temporal
+   * history-blend pass (only Bloom/LightShafts/DoF) and occlusion culling is WebGPU-only, so there
+   * is no state a camera teleport could invalidate. `SmallWorldMachine.notifyCameraTeleport()`
+   * still runs the scene-wide `occlusionCulled` walk, which is a harmless no-op here since the flag
+   * is never set on WebGL1.
+   */
+  public override notifyCameraTeleport(_scene: Scene): void {
+    // Intentionally empty (honest tier no-op).
+  }
+
   /** Only runs on creation or dimension change; callers must not invoke it per render. */
   private _allocateHdrTarget(w: number, h: number): void {
     const gl = this.gl;

@@ -1038,6 +1038,20 @@ export class VolumetricFogPassGPU implements PostEffectPass {
     this._compositeBindGroup = undefined;
   }
 
+  /**
+   * Discards the temporal fog history (S3 DP-4A, M6): resets the `_hasHistory` gate so the next
+   * `execute` performs a fresh in-scattering integration instead of temporal-reprojecting a stale
+   * volume across a camera cut. Called by `SmallWorldMachine.notifyCameraTeleport()`. The
+   * ping-pong texture contents and `_prevViewProjMatrix` are intentionally left alone: the
+   * reprojection shader only reads/blends them when `_hasHistory` is true (see the `rep[40]` blend
+   * factor), and `_prevViewProjMatrix` is overwritten at the end of the next `execute` anyway.
+   * Idempotent; synchronous; void; scalar-free. WebGL2 fog is non-temporal and WebGL1 has no
+   * volumetric fog, so this method only ever exists on the WebGPU pass.
+   */
+  public resetHistory(): void {
+    this._hasHistory = false;
+  }
+
   public destroy(): void {
     this.releaseTargets();
 

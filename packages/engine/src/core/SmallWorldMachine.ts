@@ -101,6 +101,17 @@ export abstract class SmallWorldMachine {
    */
   public captureFrameRate: number = 0;
 
+  /**
+   * Telemetry for the REALTIME loop's frame clamp (S3 m2) -- deliberately DISTINCT from
+   * `physics.droppedSteps`: a second monotonic counter of the wall-clock seconds the `_loop()`
+   * clamp (0.1 s, see `_loop`) silently swallowed because a single frame's raw delta exceeded it
+   * (a hitch/tab-throttle/overflow). `physics.droppedSteps` counts spiral-of-death drops of the
+   * fixed-step accumulator and is unreachable on the realtime path (0.1 s < 10 × 1/60), so this
+   * field is the only honest signal that realtime time was dropped. The `step()` harness never
+   * clamps, so this stays 0 under capture stepping. Monotonic; reset by assigning 0.
+   */
+  public realtimeClampedDropSeconds: number = 0;
+
   /** Timing context of the last stepped frame (gameplay and real time, frame index). */
   public get frameInfo(): Readonly<FrameInfo> {
     return this._frameInfo;
@@ -352,6 +363,27 @@ export abstract class SmallWorldMachine {
    * in, keeps working after `stop()`, never calls `requestAnimationFrame`, and never reads or
    * writes `_isRunning`. This is the deterministic fixed-timestep hook for golden baselines and
    * test harnesses, where animated scenes must be reproducible independent of real elapsed time.
+   *
+   * @invariant FRAME-ORDER: Die Phasen-Reihenfolge innerhalb dieses Frames ist fix (physics ->
+   * Interpolation -> Kamera -> Lights/Cascades -> Frustum-Cull -> Render); ein Reorder bricht die
+   * Oracle-Tests (tests/core/SmallWorldMachinePhaseOrder.test.ts) laut, siehe ADR 0047 Registry.
+   *
+   * Goldener Harness-Vertrag (S3 m3 / DP-7-S3): `step()` ist NUR unter diesen vier Vorbedingungen
+   * ein reproduzierbarer, deterministischer Golden-Hook -- wer davon abweicht, sieht mit
+   * Absicht Varianz:
+   *  - `deltaTime` fix und <= 1/60 (z. B. exakt 1/60); größere Werte aktivieren echte
+   *    Multi-Substep-Simulation bzw. Sub-Frame-Restakkumulator und sind weiterhin korrekt, aber
+   *    nicht mehr bit-exakt zu einem 60-Hz-Lauf vergleichbar;
+   *  - Occlusion-Culling aus (`config.enableOcclusionCulling === false`): die HZB-Readback-Latenz
+   *    (1-3 Frames) macht das GPU-Ergebnis frameblock-abhängig;
+   *  - deterministischer Input (keine realen Event-/Timer-Quellen; `Input.update()` selbst ist
+   *    zustandslos pro Frame);
+   *  - stabile Canvas-Abmessungen (kein `resize` im Testlauf; die TAA-Jitter-Skalierung und die
+   *    Render-Guard hängen von `clientWidth/Height` ab).
+   * Hinweis zu den A8-Doku-Korrekturen: `PhysicsSystem.maxSubSteps` ist 10 und NICHT 4, und der
+   * echte Realtime-Frame-Clamp liegt bei 0,1 s (`_loop`), nicht bei `maxDeltaTime` (0,25 s ist nur
+   * direkt per `physics.step` erreichbar). `realtimeClampedDropSeconds` macht Realtime-Clamp-Drops
+   * beobachtbar; `step()` selbst clamp/t droppt nie.
    * @param deltaTime Simulated elapsed seconds for this step (e.g. `1/60` for 60 Hz); forwarded to `update()`.
    * @throws If called after `destroy()` or with a negative / non-finite `deltaTime`.
    */
@@ -386,7 +418,24 @@ export abstract class SmallWorldMachine {
     }
 
     this.scene.update(gameplayDeltaTime);
-    this.scene.updateLights(this.camera);
+
+    // ------------------------------------------------------------------------------------------
+    // Phases. RATIFIED ORDER (see registry invariant FRAME-ORDER, ADR 0047) -- do not reorder.
+    //
+    //   1. physics step            (above; fixed-timestep accumulator intact)
+    //   2. scene update / skinning (above)
+    //   3. render interpolation    -> the following phases see the interpolated render pose
+    //   4. camera update           -> the camera / its behaviors are no longer one frame behind
+    //   5. lights / cascades       -> cascade frusta are built from the CURRENT camera pose
+    //   6. frustum cull            -> tests the interpolated render bounds (not the discrete pose)
+    //   7. render
+    //
+    // This fixes the audited M1/M2/M3/M4 defects: cascades lag (updateLights ran before the
+    // camera), the follow-camera read a discrete one-frame-stale target, and culling tested the
+    // discrete pose. This pins the invariant FRAME-ORDER (ADR 0047); the phase-order oracle test
+    // `tests/core/SmallWorldMachinePhaseOrder.test.ts` -- a reorder of the blocks below breaks
+    // that test loudly by design.
+    // ------------------------------------------------------------------------------------------
 
     // TAA sub-pixel jitter: baked into the camera's view-projection matrix by updateViewMatrix()
     // below (via camera.update() -> ... -> updateViewMatrix()). Only applied while TAA is
@@ -407,8 +456,20 @@ export abstract class SmallWorldMachine {
       this.camera.jitterY = 0;
     }
 
-    // Real deltaTime, not gameplayDeltaTime: the camera (and its shake/flash effects) keeps
-    // running at full speed during hit-stop, which is what sells the freeze-frame impact.
+    // Phase 3 -- render interpolation AFTER scene update (so `updateMatrixWorld`/skinning already
+    // ran on the discrete pose) and BEFORE the camera/cull/render phases. `applyRenderInterpolation`
+    // leaves `position`/`rotation` at the discrete simulated pose and only the `worldMatrix` blended;
+    // camera-follow consumers of physics bodies must read the interpolated pose via
+    // `PhysicsSystem.getInterpolatedPosition()` (see `EulerIntegrator` position-vs-worldMatrix
+    // window documentation, DP-2A) -- the camera jitter fix on high-Hz displays depends on it.
+    if (this.config.enablePhysics) {
+      this.physics.applyRenderInterpolation();
+    }
+
+    // Phase 4 -- camera. Real deltaTime, not gameplayDeltaTime: the camera (and its shake/flash
+    // effects) keeps running at full speed during hit-stop, which is what sells the freeze-frame
+    // impact. `updateViewMatrix()` is invoked inside `camera.update()`; with interpolation now
+    // applied above, the camera pose is no longer one frame behind the simulated world.
     this.camera.update(this.camera.target, 0, 0, deltaTime);
 
     // Forward the camera's aggregated flash state into the renderer's post-processing element,
@@ -425,14 +486,17 @@ export abstract class SmallWorldMachine {
       this.interactionManager.update();
     }
 
+    // Phase 5 -- lights / shadow cascades: AFTER the camera phase, so `DirectionalLight.updateCascades`
+    // derives its frusta from THIS frame's camera pose instead of last frame's (M1).
+    this.scene.updateLights(this.camera);
+
     if (this.config.enableOcclusionCulling) {
       this.renderer.applyPendingOcclusionResults?.(this.scene);
     }
-    this._frustumCuller.cull(this.scene, this.camera.viewProjectionMatrix4);
 
-    if (this.config.enablePhysics) {
-      this.physics.applyRenderInterpolation();
-    }
+    // Phase 6 -- frustum cull: AFTER interpolation, so culling tests the interpolated render
+    // bounds of physics bodies, not their discrete simulated pose (M4).
+    this._frustumCuller.cull(this.scene, this.camera.viewProjectionMatrix4);
 
     if (this.debug) {
       this._collisionVisualizer.update(this.scene);
@@ -470,6 +534,30 @@ export abstract class SmallWorldMachine {
    */
   public stop(): void {
     this._isRunning = false;
+  }
+
+  /**
+   * Invalidates every temporal/occlusion-history state that assumes a continuous camera path
+   * (S3 DP-4A / M5/M6/M7). Call synchronously after teleporting or hard-cutting the camera (level
+   * load, portal, cinematic jump, respawn): it fans out to ALL state-holding tiers:
+   *  - TAA history reset (`HistoryBlendPassGPU` / `HistoryBlendPassGL`, both tiers) - otherwise a
+   *    cut ghosts/smears against the pre-cut history (M5);
+   *  - volumetric-fog temporal history reset (`VolumetricFogPassGPU`) - fresh in-scattering instead
+   *    of reprojecting a stale volume across the cut (M6, WebGPU-only; WebGL2 fog is non-temporal,
+   *    WebGL1 has none);
+   *  - a scene-wide `occlusionCulled = false` walk AND the `HzbOcclusionSystem` `_occludedStreak`
+   *    clear - otherwise the next HZB apply re-culls on a stale per-object streak after the camera
+   *    pointed elsewhere for exactly one readback window (M7, mandatory per E2).
+   * WebGL1 is an honest no-op on the renderer side (ADR 0043: no temporal/occlusion state there;
+   * the scene walk stays a harmless no-op since `occlusionCulled` is never set).
+   *
+   * Synchronous, idempotent, void, scalar-free (ADR 0047 classification n/a). Rule-of-Three is MET
+   * (TAA + fog + occlusion = 3 semantic consumers). This is an explicit EXTENSION of ADR 0008's
+   * deferred non-goal (teleport invalidation), see docs/adr/0008-... "Erweiterung (S3)".
+   */
+  public notifyCameraTeleport(): void {
+    this.renderer.notifyCameraTeleport?.(this.scene);
+    this.scene.resetOcclusionCulled();
   }
 
   /**
@@ -536,10 +624,20 @@ export abstract class SmallWorldMachine {
       return;
     }
 
-    const deltaTime: number =
-      0 < this.captureFrameRate
-        ? 1.0 / this.captureFrameRate
-        : Math.max(0, Math.min((currentTime - this._lastTime) / 1000.0, 0.1));
+    const rawDeltaMs: number = currentTime - this._lastTime;
+    let deltaTime: number;
+    if (0 < this.captureFrameRate) {
+      deltaTime = 1.0 / this.captureFrameRate;
+    } else {
+      const rawDelta: number = rawDeltaMs / 1000.0;
+      // Real frame clamp 0.1 s (S3 m2): any wall-clock time beyond it is swallowed, not deferred.
+      // Make that drop observable via `realtimeClampedDropSeconds` (distinct from
+      // `physics.droppedSteps`, which can never fire here -- 0.1 s < 10 x 1/60).
+      if (rawDelta > 0.1) {
+        this.realtimeClampedDropSeconds += rawDelta - 0.1;
+      }
+      deltaTime = 0 <= rawDelta ? Math.min(rawDelta, 0.1) : 0;
+    }
     this._lastTime = currentTime;
 
     this.step(deltaTime);

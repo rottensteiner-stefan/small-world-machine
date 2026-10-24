@@ -288,6 +288,7 @@ Invarianten; die S4-Matrix (IDs 1.1–3.2) wird beim P5-Gate merge-bar ergänzt 
 | `BOUNDS-CONTAINMENT` | Berechnete Bounds enthalten die Geometrie; `isCollidable=false` ⇒ keine Bounds. | `Object3D.ts:94–102` |
 | `STATIC-INTENT` | `isStatic` ist Absicht, kein Optimierungs-Hebel; keine versteckte Caching-Semantik. | `Object3D.ts:104–117`, `Scene.ts:214–216` |
 | `PROJECTION-INVERTIBILITY` | `screenToWorld∘worldToScreen ≈ id` unter Toleranz; degenerierte Kamera soft-fail statt Crash. | `tests/core/CameraDegenerateSoftFail.test.ts` |
+| `FRAME-ORDER` | Feste, getestete Phasen-Reihenfolge pro Frame (`step()`): physics → Interpolation (Renderpose) → Kamera → Lights/Cascades (Ist-Pose) → Frustum-Cull → Render; ein Phasen-Reorder bricht die Oracle-Tests laut. | `SmallWorldMachine.ts` `step()` (Phasen-Kontrakt), Test `tests/core/SmallWorldMachinePhaseOrder.test.ts` |
 
 Wer eine Invariante referenziert, deren ID nicht im Seed steht, erweitert den Seed (Check-
 Konstante + dieser Tabelle) oder nutzt den Escape-Hatch mit Begründung.

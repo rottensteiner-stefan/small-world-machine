@@ -112,6 +112,13 @@ export abstract class AbstractRenderer implements Renderer {
   }
 
   /** @inheritdoc */
+  public notifyCameraTeleport(_scene: Scene): void {
+    // Tier-honest no-op (S3 DP-4A, ADR 0043): the base renderer has no temporal/occlusion state to
+    // invalidate. WebGPU (TAA/fog/HZB) and WebGL2 (TAA history) override it; WebGL1 legitimately
+    // keeps this no-op.
+  }
+
+  /** @inheritdoc */
   public setClearColor(color: Color): void {
     this._clearColor = color;
   }

@@ -32,7 +32,11 @@ import type { Object3D, RenderBatch, Scene, TextureArray } from "../../core/inde
 import { DeviceLimit, InstancedMesh, computeClipToBox } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
 import { EvsmMomentMaterial } from "../../core/materials/EvsmMomentMaterial.js";
-import type { EngineOptions, GeometryDataInterface, LightDataInterface } from "../../interfaces/index.js";
+import type {
+  EngineOptions,
+  GeometryDataInterface,
+  LightDataInterface,
+} from "../../interfaces/index.js";
 import {
   MaterialType,
   RendererType,
@@ -41,7 +45,11 @@ import {
   WireframeMode,
 } from "../../enums/index.js";
 import type { GLLineRibbon, Mesh } from "../Mesh.js";
-import { AUTO_INSTANCING_MIN_RUN, groupByGeometryForInstancing, partitionInstanceRuns } from "../AutoInstancing.js";
+import {
+  AUTO_INSTANCING_MIN_RUN,
+  groupByGeometryForInstancing,
+  partitionInstanceRuns,
+} from "../AutoInstancing.js";
 import { usesLineQuadShadow } from "../LineShadowRibbon.js";
 import type { ClusterGridDims } from "../../math/index.js";
 import {
@@ -2453,6 +2461,17 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._hdrFbo.destroy();
       this._hdrFbo = undefined;
     }
+  }
+
+  /**
+   * S3 DP-4A teleport fan-out on WebGL2: resets the chained GL post-FX temporal history (the TAA /
+   * motion-trail history-blend pass ghosts identically to WebGPU after a camera cut -- E1 ruled
+   * "both tiers" in). Called synchronously by `SmallWorldMachine.notifyCameraTeleport()`; a
+   * never-created `GLPostEffects` (post-processing off) has no history and is skipped -- the API is
+   * idempotent.
+   */
+  public override notifyCameraTeleport(_scene: Scene): void {
+    this._postEffects?.resetHistory();
   }
 
   /** @inheritdoc */

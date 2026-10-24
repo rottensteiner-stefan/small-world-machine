@@ -162,4 +162,17 @@ export class GLPostEffects {
     this._passes.clear();
     this._uberPass.destroy();
   }
+
+  /**
+   * Discards the temporal history of every owned pass that keeps one (S3 DP-4A): iterates the
+   * registry and calls each pass' optional `resetHistory()`. Only the WebGL2 history-blend passes
+   * implement it; WebGL1 registers none, so this is an honest no-op there (no temporal state --
+   * ADR 0043). Called by `SmallWorldMachine.notifyCameraTeleport()` via the renderer delegate;
+   * idle-safe and idempotent (an uncreated pass has no history to drop).
+   */
+  public resetHistory(): void {
+    for (const pass of this._passes.values()) {
+      pass.resetHistory?.();
+    }
+  }
 }

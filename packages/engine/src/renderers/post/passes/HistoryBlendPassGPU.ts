@@ -157,6 +157,19 @@ export class HistoryBlendPassGPU implements PostEffectPass {
     return writeView;
   }
 
+  /**
+   * Discards the temporal history (S3 DP-4A): clears the `_hasHistory` flag so the next `execute`
+   * blends against a blank history instead of the pre-cut frame. Called by
+   * `SmallWorldMachine.notifyCameraTeleport()` on camera cuts -- without it a hard cut ghosts/smears
+   * against the stale pre-cut history (M5). Idempotent; synchronous; void; scalar-free. The ping-pong
+   * parity is intentionally left alone: with `_hasHistory` cleared the shader ignores the old
+   * buffers, so flipping parity here would add no value.
+   */
+  public resetHistory(): void {
+    this._hasHistory = false;
+    this._parity = 0;
+  }
+
   public destroy(): void {
     this._pingPong?.[0].destroy();
     this._pingPong?.[1].destroy();

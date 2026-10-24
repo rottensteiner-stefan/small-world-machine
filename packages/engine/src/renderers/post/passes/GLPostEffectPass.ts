@@ -88,6 +88,13 @@ export interface GLPostEffectPassContext {
 export interface GLPostEffectPass {
   execute(ctx: GLPostEffectPassContext): WebGLTexture | null;
   destroy(): void;
+  /**
+   * Optional (S3 DP-4A): discards the pass' temporal history so the next `execute` resolves fresh.
+   * Only the WebGL2 history-blend passes (`HistoryBlendPassGL` for TAA/MotionTrail) implement it;
+   * the WebGL1 chain has no temporal pass, so `GLPostEffects.resetHistory()` is an honest no-op
+   * there (ADR 0043). Called by `SmallWorldMachine.notifyCameraTeleport()` on camera cuts.
+   */
+  resetHistory?(): void;
 }
 
 /**

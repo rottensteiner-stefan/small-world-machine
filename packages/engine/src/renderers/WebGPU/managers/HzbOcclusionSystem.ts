@@ -74,8 +74,12 @@ export class HzbOcclusionSystem {
    * a pending readback's snapshot is never clobbered by a later dispatch. */
   private _hzbSlotObjects: [Object3D[], Object3D[]] = [[], []];
   private _hzbCopyRecordedThisFrame = false;
-  /** Consecutive "occluded" readbacks per object (absent = 0); per-system, not global. */
-  private readonly _occludedStreak = new WeakMap<Object3D, number>();
+  /**
+   * Consecutive "occluded" readbacks per object (absent = 0); per-system, not global. Mutable on
+   * purpose: `WeakMap` is not iterable, so the only way to fully clear it is to replace the
+   * instance -- see `resetOcclusionStreak()` (S3 DP-4A / E2).
+   */
+  private _occludedStreak = new WeakMap<Object3D, number>();
 
   /** Reused every frame -- see `dispatchTest()`. */
   private readonly _hzbAabbScratch = new Float32Array(MAX_HZB_TESTED_OBJECTS * 4);
@@ -427,6 +431,20 @@ export class HzbOcclusionSystem {
     });
 
     this._hzbStagingSlot = slot === 0 ? 1 : 0;
+  }
+
+  /**
+   * Clears the per-object occlusion streak so no stale count survives a camera cut (S3 DP-4A /
+   * E2, MANDATORY): after a teleport the readback latency means the *next* HZB apply would
+   * otherwise restore `occlusionCulled` on an object that was occluded for the pre-cut camera after
+   * as little as one more "occluded" readback. WeakMap has no `clear()`, hence the instance
+   * replacement. It does NOT touch the per-object `occlusionCulled` flags -- the scene-wide reset
+   * lives in `SmallWorldMachine.notifyCameraTeleport()`/`Scene.resetOcclusionCulled()`. Pending
+   * staging readbacks are unaffected and simply re-apply on their next `applyOcclusionResults()`
+   * call against a zeroed streak. Idempotent.
+   */
+  public resetOcclusionStreak(): void {
+    this._occludedStreak = new WeakMap<Object3D, number>();
   }
 
   /** Polls `buffer.mapState === "mapped"` on each pending slot directly, rather than reacting to

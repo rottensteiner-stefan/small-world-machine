@@ -78,4 +78,12 @@ export interface PostEffectPass {
   execute(ctx: PostEffectPassContext): GPUTextureView | null;
   /** Releases all GPU resources allocated by the pass. See the contract above. */
   destroy(): void;
+  /**
+   * Optional (S3 DP-4A): discards the pass' temporal history so the next `execute` resolves fresh.
+   * Implemented only by passes with meaningful history state (`HistoryBlendPassGPU`,
+   * `VolumetricFogPassGPU`); the fan-out iterators (`PostFxChain.resetHistory`) never require it.
+   * Called by `SmallWorldMachine.notifyCameraTeleport()` on camera cuts -- never on the per-frame
+   * hot path.
+   */
+  resetHistory?(): void;
 }

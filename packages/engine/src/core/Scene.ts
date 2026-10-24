@@ -190,6 +190,25 @@ export class Scene {
     }
   }
 
+  /**
+   * Scene-wide reset of the WebGPU Hierarchical-Z occlusion flag (S3 DP-4A, teleport path): walks
+   * the whole scene graph and sets `occlusionCulled = false` on every node. Called by
+   * `SmallWorldMachine.notifyCameraTeleport()` so a cut/teleport cannot leave objects wrongly
+   * culled on stale HZB state (the renderer-side `_occludedStreak` clear lives in
+   * `HzbOcclusionSystem`/the renderer delegate). Always a no-op in effect on WebGL1/WebGL2, where
+   * `occlusionCulled` is never set (see the field's contract on `Object3D`).
+   */
+  public resetOcclusionCulled(): void {
+    this._resetOcclusionCulledRecursive(this.root);
+  }
+
+  private _resetOcclusionCulledRecursive(obj: Object3D): void {
+    obj.occlusionCulled = false;
+    for (let i = 0; i < obj.children.length; i++) {
+      this._resetOcclusionCulledRecursive(obj.children[i]!);
+    }
+  }
+
   public updateStaticOctree(): void {
     if (!this.staticOctree) return;
     this.staticOctree.clear();

@@ -93,6 +93,7 @@ const INVARIANT_REGISTRY: readonly string[] = [
   "BOUNDS-CONTAINMENT",
   "STATIC-INTENT",
   "PROJECTION-INVERTIBILITY",
+  "FRAME-ORDER",
 ];
 const INVARIANT_REGISTRY_SET: ReadonlySet<string> = new Set<string>(INVARIANT_REGISTRY);
 

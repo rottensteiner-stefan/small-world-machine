@@ -319,9 +319,14 @@ export class Camera implements CameraInterfaceData {
 
   /** @inheritdoc */
   public update(targetPos: Vector3D, dx: number, dy: number, deltaTime: number = 0.016): void {
+    // Mutation guard, mirrored from `Scene._updateBehaviorsRecursive` (S3 m1/DP-6A): a behavior may
+    // detach itself (or an earlier-indexed sibling) from within its update, splicing the list so the
+    // next behavior shifts down into slot `i`. Re-visit `i` so it is not silently skipped. Append
+    // mutations never shift the current slot, so the guard cannot double-run anything.
     for (let i = 0; i < this.behaviors.length; i++) {
       const b = this.behaviors[i]!;
       if (b.isActive) b.update(deltaTime);
+      if (this.behaviors[i] !== b) i--;
     }
 
     const totalDx = dx + this.pendingDx;

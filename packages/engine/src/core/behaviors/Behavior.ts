@@ -51,6 +51,15 @@ export abstract class Behavior<
   /**
    * Called every frame to update the behavior logic.
    * @param deltaTime The time elapsed since the last frame in seconds.
+   *
+   * PHASE NOTE (S3 DP-3, decided): there is deliberately NO `lateUpdate` hook yet. A strictly
+   * post-everything phase was audited (p4-gate-dossier M3/C5, worker dissent documented) and
+   * REJECTED for S3 because the engine-internal Rule of Three is unmet (only 0-1 genuine
+   * engine-internal "truly post-everything" consumers; camera-attach and app-level follows are
+   * solved by the FRAME-ORDER reorder in `SmallWorldMachine.step()` plus the
+   * `PhysicsSystem.getInterpolatedPosition()` read-out). Tracked as a gated backlog item: the hook
+   * lands only once `>= 3` engine-internal consumers exist and a single documented phase after
+   * skinning/interpolation is required (see ADR 0047 marker/phase contract).
    */
   public abstract update(deltaTime: number): void;
 }

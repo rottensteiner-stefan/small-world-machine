@@ -237,6 +237,33 @@ export class PhysicsSystem {
   }
 
   /**
+   * Correct render-pose read-out for camera-follow consumers (S3 DP-2A): computes the interpolated
+   * (blend) pose of a tracked rigid body WITHOUT mutating it, extracting only the position into
+   * `out`. After `applyRenderInterpolation()` (or `EulerIntegrator.interpolateTransform`) the
+   * body's `position`/`rotation` fields hold the DISCRETE simulated pose while the rendered pose is
+   * only in `worldMatrix`; reading `obj.position` there yields the discrete pose and produces
+   * camera jitter on high-Hz displays (M2). This method recomputes the blend from
+   * `prevPosition` + `alpha` -- stateless regarding any prior interpolation -- and must be called
+   * AFTER the frame's `physics.step` and BEFORE the next `physics.step` (same window as render).
+   * Zero allocation (MathPool).
+   * @param obj The tracked rigid body (must have a RigidBody).
+   * @param out Receives the interpolated render position.
+   */
+  public getInterpolatedPosition(obj: Object3D, out: Vector3D): void {
+    const alpha = this.interpolationAlpha;
+    const truePos = MathPool.acquireVector();
+    const trueRot = MathPool.acquireVector();
+    const blendPos = MathPool.acquireVector();
+    const blendRot = MathPool.acquireVector();
+    EulerIntegrator.computeInterpolatedPose(obj, alpha, truePos, trueRot, blendPos, blendRot);
+    out.copyFrom(blendPos);
+    MathPool.releaseVector(truePos);
+    MathPool.releaseVector(trueRot);
+    MathPool.releaseVector(blendPos);
+    MathPool.releaseVector(blendRot);
+  }
+
+  /**
    * Renders every tracked rigid body's transform interpolated between previous and current physics states.
    */
   public applyRenderInterpolation(): void {

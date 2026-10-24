@@ -117,9 +117,19 @@ export class EulerIntegrator {
   }
 
   /**
-   * Applies render-interpolation between previous and current physics state.
+   * Computes the render-interpolated (blend) pose between previous and current physics state,
+   * WITHOUT mutating `obj` (window: after `interpolateTransform`/`applyRenderInterpolation` runs,
+   * `position`/`rotation` hold the DISCRETE simulated pose while only `worldMatrix` is blended --
+   * this read-out is the honest way to obtain the blend pose for camera-follow consumers, S3
+   * DP-2A). Pure scratch math into caller-provided vectors: zero allocation.
+   * @param obj The tracked rigid body.
+   * @param alpha Interpolation alpha in [0,1); must equal the accumulator's `interpolationAlpha`.
+   * @param truePos Out: copy of `obj.position` (discrete true pose).
+   * @param trueRot Out: copy of `obj.rotation` (discrete true pose).
+   * @param blendPos Out: lerp(prevPosition, truePos, alpha) - the render pose.
+   * @param blendRot Out: shortest-path angular lerp of prevRotation toward trueRot.
    */
-  public static interpolateTransform(
+  public static computeInterpolatedPose(
     obj: Object3D,
     alpha: number,
     truePos: Vector3D,
@@ -138,6 +148,30 @@ export class EulerIntegrator {
       rb.prevRotation.y + shortestAngleDelta(rb.prevRotation.y, trueRot.y) * alpha,
       rb.prevRotation.z + shortestAngleDelta(rb.prevRotation.z, trueRot.z) * alpha,
     );
+  }
+
+  /**
+   * Applies render-interpolation between previous and current physics state.
+   *
+   * WINDOW (S3 DP-2A): after this returns, `obj.position`/`obj.rotation` (and `obj.quaternion`)
+   * are RESTORED to the discrete simulated pose, while `obj.worldMatrix` carries the blended
+   * render pose. This is deliberate -- the simulated state must stay exact for the next physics
+   * step. Any consumer that reads a body's pose for RENDERING purposes (camera-follow, spline
+   * tools, gizmos) must read the blend pose via
+   * `PhysicsSystem.getInterpolatedPosition()`/`EulerIntegrator.computeInterpolatedPose()` inside
+   * the interpolate-then-render window of the frame instead of `obj.position`, or it will see the
+   * discrete pose while the body is drawn at the blend pose (1-frame-style jitter on high-Hz
+   * displays, baggage of M2).
+   */
+  public static interpolateTransform(
+    obj: Object3D,
+    alpha: number,
+    truePos: Vector3D,
+    trueRot: Vector3D,
+    blendPos: Vector3D,
+    blendRot: Vector3D,
+  ): void {
+    EulerIntegrator.computeInterpolatedPose(obj, alpha, truePos, trueRot, blendPos, blendRot);
 
     obj.position.copyFrom(blendPos);
     obj.rotation.copyFrom(blendRot);

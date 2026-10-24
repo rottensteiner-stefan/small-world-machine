@@ -50,7 +50,11 @@ import { GPUObjectRingBuffer } from "./managers/GPUObjectRingBuffer.js";
 import { GPUGeometryCache } from "./managers/GPUGeometryCache.js";
 import type { WebGPUGeoCacheEntry, WebGPULineRibbon } from "./managers/GPUGeometryCache.js";
 import { GPUInstanceRingBuffer } from "./managers/GPUInstanceRingBuffer.js";
-import { AUTO_INSTANCING_MIN_RUN, groupByGeometryForInstancing, partitionInstanceRuns } from "../AutoInstancing.js";
+import {
+  AUTO_INSTANCING_MIN_RUN,
+  groupByGeometryForInstancing,
+  partitionInstanceRuns,
+} from "../AutoInstancing.js";
 import {
   MainRenderPass,
   PostProcessPass,
@@ -849,6 +853,18 @@ export class WebGPURenderer extends AbstractRenderer {
 
   public override applyPendingOcclusionResults(_scene: Scene): void {
     this._hzbSystem?.applyOcclusionResults();
+  }
+
+  /**
+   * S3 DP-4A teleport fan-out on WebGPU: resets the chained post-FX temporal history (TAA,
+   * motion trail, volumetric fog) and clears the HZB occlusion streak. Called synchronously by
+   * `SmallWorldMachine.notifyCameraTeleport()` on camera cuts. Any subsystem may be absent
+   * (uncreated pass / occlusion never enabled) and is skipped -- the API is idempotent and
+   * fine-grained. The scene-wide `occlusionCulled = false` walk happens engine-side.
+   */
+  public override notifyCameraTeleport(_scene: Scene): void {
+    this._postFxChain.resetHistory();
+    this._hzbSystem?.resetOcclusionStreak();
   }
 
   public _createGlobalBindGroup(scene?: Scene): GPUBindGroup {

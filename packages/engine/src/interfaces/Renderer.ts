@@ -116,4 +116,15 @@ export interface Renderer {
    * and whenever occlusion culling isn't enabled.
    */
   applyPendingOcclusionResults?(scene: Scene): void;
+
+  /**
+   * Invalidates renderer-side temporal/occlusion state that assumes a continuous camera path
+   * (S3 DP-4A). Optional because the API is tier-honest:
+   *  - WebGPU: resets TAA + volumetric-fog history and the HZB `_occludedStreak`;
+   *  - WebGL2: resets the TAA/motion-trail history-blend pass (ghosts identically to WebGPU);
+   *  - WebGL1: honest no-op (no temporal or occlusion state there -- ADR 0043).
+   * Called synchronously by `SmallWorldMachine.notifyCameraTeleport()`. The scene-wide
+   * `occlusionCulled = false` walk is the engine's responsibility, not the renderer's.
+   */
+  notifyCameraTeleport?(scene: Scene): void;
 }
