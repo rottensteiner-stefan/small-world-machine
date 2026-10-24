@@ -120,7 +120,8 @@ describe("WebGL2 shadow pass: InstancedMesh casters", () => {
       instMesh,
       inst,
       Topology.TRIANGLE_LIST,
-      undefined,
+      undefined, // batch wireframeMode
+      undefined, // no line-quad ribbon
     );
     expect(draw).toHaveBeenCalledTimes(1); // only the plain caster takes the non-instanced path
     expect(r.gl.useProgram.mock.calls.map((c) => c[0])).toEqual([std.prog, inst.prog]);

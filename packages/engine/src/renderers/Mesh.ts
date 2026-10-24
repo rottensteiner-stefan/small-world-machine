@@ -308,6 +308,33 @@ export class Mesh {
   }
 
   /**
+   * Instanced counterpart of `draw()` (WebGL2 only), with the same index-buffer choice: structural
+   * wireframes draw the edge buffer, not the triangle indices read as line pairs.
+   */
+  public drawInstanced(
+    mode: number,
+    instanceCount: number,
+    wireframeMode: WireframeMode = WireframeMode.DEFAULT,
+  ): void {
+    const gl = this._gl as WebGL2RenderingContext;
+    if (mode === gl.LINES && wireframeMode === WireframeMode.STRUCTURAL && this.webo) {
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.webo);
+      gl.drawElementsInstanced(
+        mode,
+        this.wireframeCount,
+        this.wireframeIndexType,
+        0,
+        instanceCount,
+      );
+    } else if (this.isIndexed) {
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ebo ?? null);
+      gl.drawElementsInstanced(mode, this.count, this.indexType, 0, instanceCount);
+    } else {
+      gl.drawArraysInstanced(mode, 0, this.count, instanceCount);
+    }
+  }
+
+  /**
    * Returns the edge ribbon of `data` for `wireframeMode` (ADR 0045), built on first request and
    * rewritten after `update()`. `undefined` for a geometry without edges.
    */

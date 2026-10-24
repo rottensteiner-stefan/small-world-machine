@@ -1314,7 +1314,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         }
 
         if (isInstanced) {
-          this._renderInstancedObject(o, cache, batch!.topology, ribbon);
+          this._renderInstancedObject(o, cache, batch!.topology, batch!.wireframeMode, ribbon);
           continue;
         }
 
@@ -1541,7 +1541,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._textures.acquireTextures(o, texs);
 
       if (isInstanced) {
-        this._renderInstancedObject(o as InstancedMesh, cache, topology);
+        this._renderInstancedObject(o as InstancedMesh, cache, topology, wireframeMode);
       } else {
         this._renderStandardObject(o, cache, state, vMat, topology, wireframeMode);
       }
@@ -1917,12 +1917,14 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * Instanced draw for one `InstancedMesh`: upper-bound validation, then manual attribute setup
    * for the instance matrix/data on the DEFAULT VAO (never the mesh's cached VAO, whose pointers
    * must stay pristine for the non-instanced path), the instanced draw, and the attribute reset.
+   * `wireframeMode` picks the edge buffer for structural line meshes, like the non-instanced path.
    * With a `ribbon` (line-quad shadow draw, ADR 0045) the edge ribbon replaces the mesh buffers.
    */
   private _renderInstancedObject(
     instMesh: InstancedMesh,
     cache: WebGLProgramCacheEntry,
     topology: Topology,
+    wireframeMode?: WireframeMode,
     ribbon?: GLLineRibbon,
   ): void {
     if (instMesh.instanceCount < 0) {
@@ -2000,17 +2002,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;
     if (ribbon) {
       this.gl.drawArraysInstanced(this.gl.TRIANGLES, 0, ribbon.vertexCount, instMesh.instanceCount);
-    } else if (mesh.isIndexed) {
-      this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, mesh.ebo ?? null);
-      this.gl.drawElementsInstanced(
-        drawMode,
-        mesh.count,
-        mesh.indexType,
-        0,
-        instMesh.instanceCount,
-      );
     } else {
-      this.gl.drawArraysInstanced(drawMode, 0, mesh.count, instMesh.instanceCount);
+      mesh.drawInstanced(drawMode, instMesh.instanceCount, wireframeMode);
     }
 
     if (loc !== undefined && loc >= 0) {
