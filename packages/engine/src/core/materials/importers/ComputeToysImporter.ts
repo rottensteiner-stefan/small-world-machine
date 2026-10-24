@@ -61,7 +61,7 @@ fn vs(
     o.uv = a_uv;
     o.t = a_tangent.xyz;
     // Bitangent handedness w = ±1 (vec4 tangent contract, shares location 3 with base.vert).
-    let tangentSign = select(1.0, a_tangent.w, dot(a_tangent.xyz, a_tangent.xyz) < 0.0001);
+    let tangentSign = select(a_tangent.w, 1.0, dot(a_tangent.xyz, a_tangent.xyz) < 0.0001);
     o.b = cross(a_normal, a_tangent.xyz) * tangentSign;
     o.original_uv = a_uv;
     o.texIndex = 0.0;

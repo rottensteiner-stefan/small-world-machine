@@ -46,7 +46,7 @@
     // Bitangent handedness w = ±1, folded into B in the VERTEX stage (fragment/material
     // shaders reconstruct the TBN unmodified). Defaults to +1 when the tangent is zero or
     // absent, so mirrored-UV islands keep their authored/derived sign only.
-    let tangentSign = select(1.0, tangent.w, dot(localTangent, localTangent) < 0.0001);
+    let tangentSign = select(tangent.w, 1.0, dot(localTangent, localTangent) < 0.0001);
     
     let worldT = m33 * localTangent;
     if (dot(localTangent, localTangent) < 0.0001 || dot(worldT, worldT) < 1e-20) {

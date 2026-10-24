@@ -253,13 +253,19 @@ export class StandardMaterial extends AbstractMaterial {
     // scalar `u_thresholds[3]` (StandardMaterial.ts:392) cannot hold a vec3, so an owned typed lane
     // carries it and the shaders read obj.matParam11.xyz / u_matParam11.rgb only on tiers with the
     // transmission path (WebGPU + WebGL2; WebGL1 has no transmission block, E-M13).
-    // @pending-S5-review: reconcile with the S5 glTF loader color-space conversion once
-    // GltfMaterialParser lands.
+    // S5/S1 color-space ruling (campaign-lead, 2026-10-24): RESOLVED as LINEAR/RAW by design. S5
+    // EP-4 established an sRGB-authored convention for the ALBEDO surface color (`Material.color`
+    // / baseColorFactor, single loader encode). attenuationColor is a distinct PHYSICAL quantity:
+    // KHR_materials_volume volume-absorption color feeding a Beer-Lambert kernel, authored in
+    // linear/raw spectral terms (e.g. incandescent material temperature curves). It must NOT be
+    // run through the sRGB albedo encode/decode pair, so the loader applies no conversion here
+    // and this lane stays LINEAR/RAW. (R1 review nit 3 closed.)
     {
       semantic: "attenuationColor",
       lane: "u_matParam11",
       note:
-        "rgb = volumetric attenuation colour (LINEAR/RAW, @pending-S5-review), w = 1.0. " +
+        "rgb = volumetric attenuation colour (LINEAR/RAW — physical quantity, NOT the sRGB albedo lane " +
+        "per S5 EP-4 ruling 2026-10-24), w = 1.0. " +
         "Only meaningful with USE_TRANSMISSION; never read on WebGL1 (no transmission path).",
     },
   ];

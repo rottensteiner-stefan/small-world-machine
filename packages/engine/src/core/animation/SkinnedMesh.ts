@@ -36,6 +36,11 @@ export class SkinnedMesh extends Object3D {
    * the union over bones of `(bone.worldMatrix_i · inverseBind_i · localAABB corners)` is a
    * valid conservative superset AABB. Bounded cost: ≤ `MAX_SKINNED_BONES` bones × 8 corners,
    * allocation-free (pooled scratch).
+   *
+   * Conservativeness edge: the union is only a true superset if the bones were refreshed via
+   * `Skeleton.update` with this mesh's exact current world matrix (model·invMeshWorld cancels)
+   * and no residual/offset mesh transform is applied afterwards. Callers must refresh skeleton +
+   * bounds in that order before any culling decision.
    */
   public override computeBounds(): this {
     // Shared Object3D contract: non-collidable objects carry no bounds (never culled).
