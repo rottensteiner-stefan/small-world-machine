@@ -31,6 +31,7 @@ export interface LiquidWaveMaterialInit {
    * Gerstner wavelengths. `1.0` (default) is a numeric identity so every lane stays byte-identical
    * to the legacy defaults ("value-preserving"); set the reciprocal of a node's scale to keep the
    * water look invariant on a scaled surface. Length semantics DIVIDE by domainScale.
+   * @domain reference domain size of the water surface in meters (>0); reciprocal of a node's scale keeps the look scale-invariant (length lanes divide).
    */
   domainScale?: number;
 }
@@ -63,7 +64,10 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
   public foamCutoff: number;
   public foamNoiseScale: number;
   public foamNoiseSpeed: number;
-  /** See {@link LiquidWaveMaterialInit.domainScale}. Defaults to 1.0 (numeric identity). */
+  /**
+   * See {@link LiquidWaveMaterialInit.domainScale}. Defaults to 1.0 (numeric identity).
+   * @domain reference domain size of the water surface in meters (>0); reciprocal of a node's scale keeps the look scale-invariant.
+   */
   public domainScale: number = 1.0;
   /** The `u_styleA` lane in the manifest. Presets own its meaning (see the lane table in docs/guides/liquid-wave-data-model.md). */
   protected readonly _styleAArray: number[] = [0, 0, 0, 0];

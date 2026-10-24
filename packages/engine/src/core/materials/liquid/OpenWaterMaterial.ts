@@ -44,7 +44,8 @@ export interface OpenWaterMaterialOptions {
    * wall reflection. Defaults to 4.0, the basin of Showcase 10. Travels in `u_matParam2.w`.
    */
   poolHalfExtent?: number;
-  /** See {@link LiquidWaveMaterialInit.domainScale} (E4-B). Defaults to 1.0. */
+  /** See {@link LiquidWaveMaterialInit.domainScale} (E4-B). Defaults to 1.0.
+   * @domain reference domain size of the water surface in meters (>0); reciprocal of a node's scale keeps the look scale-invariant. */
   domainScale?: number;
 }
 

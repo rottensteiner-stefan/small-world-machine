@@ -70,6 +70,7 @@ export interface FluidSurfaceMaterialOptions {
    * defaults; use the reciprocal of a node's scale to keep the pattern look invariant on a
    * scaled surface (see the R4/E4-B TDD suite). Length semantics divide by `domainScale`;
    * per-meter frequency semantics multiply by it.
+   * @domain reference domain size of the fluid surface in meters (>0); reciprocal of a node's scale keeps the look scale-invariant (length lanes divide, per-meter frequency lanes multiply).
    */
   domainScale?: number | undefined;
 }
@@ -123,7 +124,10 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
   public emissiveColor: Color;
   /** Multiplier on `emissiveColor`. */
   public emissiveStrength: number;
-  /** See {@link FluidSurfaceMaterialOptions.domainScale}. Defaults to 1.0 (numeric identity). */
+  /**
+   * See {@link FluidSurfaceMaterialOptions.domainScale}. Defaults to 1.0 (numeric identity).
+   * @domain reference domain size of the fluid surface in meters (>0); reciprocal of a node's scale keeps the look scale-invariant.
+   */
   public domainScale: number = 1.0;
 
   /** Typed semantic lane bank (see the lane table in `getRenderManifest`); the shaders read these for every look parameter. */
