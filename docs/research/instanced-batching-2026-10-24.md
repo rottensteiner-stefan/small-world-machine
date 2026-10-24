@@ -154,3 +154,24 @@ Damit die Empfehlung ehrlich bleibt, die dokumentierten Kollateralschäden (alle
 - Vollständige, nach Themen sortierte und **nach Vertrauensstufe gestufte** Quellenliste mit URL/Titel/Org/Datum/Tier und pro Quelle belegter Nutzung: **`docs/research/instanced-batching-sources-2026-10-24.md`** (dieser Bericht verlinkt darauf statt Quellen zu duplizieren).
 - Methoden-Standard wie in früheren Papieren: jede zitierte URL per HTTP-Fetch verifiziert; nicht verifizierbare Behauptungen („legendäre" Zitate) wurden **bewusst fallengelassen**, nicht übernommen. Absolute Klarheit bei zwei vom gesunden Menschenverstand abweichenden Fakten: (a) kein indirect in WebGL, (b) `WEBGL_multi_draw` nicht in Firefox.
 - Diese Untersuchung **ersetzt ADR 0046 nicht** und etabliert keine neue Architektur-Entscheidung; sie bestätigt dessen Ablehnungen mit aktueller Evidenz und definiert die Bedingungen, unter denen ein künftiger ADR (B1/B2/B3) begründet wäre.
+
+---
+
+## 9. Stand (Umsetzung & erste Messung — 2026-10-24)
+
+**A2 ist umgesetzt** (Commit `fb2a83dd`, „Order is the first law of heaven.") — wie in §7.1(a) empfohlen, aber bewusst **ohne neuen öffentlichen Parameter**: Die Geometrie-Gruppierung erfolgt renderer-seitig unmittelbar vor `partitionInstanceRuns` unter dem bestehenden `quality.autoInstancing`. Damit weder Whack-a-Mole-Fläche (keine neue `@domain`/`@derived`-Einstellung; `npm run check:doctrine` bleibt sauber) noch eine Scene-Vertragsänderung. Neue reine Helper `groupByGeometryForInstancing` in `packages/engine/src/renderers/AutoInstancing.ts` (stabile ES-2019-Sortierung, `WeakMap`-Ordinal-Scratch = keine Per-Frame-Allokation, deterministisch, nur Referenz-gleiche Geometrien — dieselbe Semantik wie ADR 0046). Eingebaut in `WebGL2Renderer.ts` (Main-Opaque) und `WebGPURenderer.ts` (`_renderSubgroup`, nährt dort zusätzlich das K6-Vertex-Puffer-Dedup).
+
+**Erste automatisierte Messung** (WebGPU-Encoder-Draw-Count, deterministisch im CI-Test `WebGPURendererHotPath.test.ts`): 12 opake Objekte, 2 verschiedene Geometrien, gemeinsames Material, **gestreut** eingefügt (nie ≥4 identische Geometrie in Folge — exakt die ADR-0046-Schwäche).
+
+| Zustand | Ergebnis |
+|---|---|
+| Naive Ordnung (ADR 0046 pur): `partitionInstanceRuns` | **0 Runs** → 12 Einzel-Draws |
+| Mit A2-Gruppierung (`autoInstancing` aktiv) | 6er-Run + 6er-Run → **2 instanced Draws** (je 6 Instanzen) |
+| `autoInstancing` deaktiviert | **12 Einzel-Draws** |
+
+→ **6-fache Draw-Reduktion auf dem zuvor unbatchbaren Fall**, als Regressionstest belegt.
+
+**Ehrliche Grenzen dieser Runde:**
+- WebGL2 nutzt dieselben geteilten pure Helper (Unit-getestet); ein eigener WebGL2-Main-Pass-Draw-Zähl-Harness bleibt offener Folgepunkt (der vorhandene WebGL2-Harness deckt nur den Schatten-Run-Pfad ab).
+- §7.1(b) bleibt offen: eine echte Welt-Szene mit Draws/Frame **und** Frame-Zeit vorher/nachher per Performance-Tier-Governor im Browser. Oben ist eine deterministische Test-basierte Zählmessung, keine Laufzeitmessung.
+- B1/B2/B3 bleiben gemäß Trigger-Matrix in §6/§7 deferiert.
