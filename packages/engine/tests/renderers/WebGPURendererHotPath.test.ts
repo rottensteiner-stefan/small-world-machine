@@ -9,6 +9,7 @@ import type { RenderManifest } from "../../src/renderers/shaders/RenderManifest.
 import { Topology } from "../../src/enums/index.js";
 import { GPUObjectRingBuffer } from "../../src/renderers/WebGPU/managers/GPUObjectRingBuffer.js";
 import { GPUInstanceRingBuffer } from "../../src/renderers/WebGPU/managers/GPUInstanceRingBuffer.js";
+import { partitionInstanceRuns } from "../../src/renderers/AutoInstancing.js";
 
 (globalThis as unknown as { GPUBufferUsage: Record<string, number> }).GPUBufferUsage ??= {
   MAP_READ: 0x0001,
@@ -90,7 +91,7 @@ function makeDrawRenderer(): {
 describe("WebGPURenderer._renderSubgroup: instance upload (K7)", () => {
   function draw(renderer: RendererInternals, rp: unknown, mesh: InstancedMesh): void {
     renderer._renderSubgroup(
-      rp as GPURenderPassEncoder,
+      rp as unknown as GPURenderPassEncoder,
       [mesh],
       true,
       "mat",
@@ -198,7 +199,7 @@ describe("WebGPURenderer._renderSubgroup: automatic instancing (ADR 0046)", () =
     mat: BasicMaterial,
   ): void {
     renderer._renderSubgroup(
-      rp as GPURenderPassEncoder,
+      rp as unknown as GPURenderPassEncoder,
       objs,
       false,
       mat.uuid,
@@ -237,6 +238,87 @@ describe("WebGPURenderer._renderSubgroup: automatic instancing (ADR 0046)", () =
     drawAll(renderer, rp, objs, mat);
 
     expect(rp["draw"]).toHaveBeenCalledTimes(6);
+  });
+});
+
+describe("WebGPURenderer._renderSubgroup: scattered geometry (ADR 0046 A2 measurement)", () => {
+  /**
+   * Two distinct geometries, same material, interleaved so that no stretch of >= 4 identical
+   * geometries exists in insertion order -- the exact case that was the ADR 0046 "consecutive
+   * only" gap and now (A2) gets grouped by geometry before run partitioning.
+   */
+  function setupScattered(): {
+    renderer: RendererInternals;
+    rp: Record<string, ReturnType<typeof vi.fn>>;
+    objs: Object3D[];
+    mat: BasicMaterial;
+  } {
+    const { renderer, rp } = makeDrawRenderer();
+    renderer._instanceRing = new GPUInstanceRingBuffer(renderer._device as GPUDevice);
+    renderer._objectRing = {
+      bindGroup: {},
+      acquireObjectSlot: vi.fn(() => 512),
+      lastAcquireCached: false,
+      write: vi.fn(),
+    };
+    renderer._packObjectUniforms = vi.fn(() => true);
+    const geoA = new Cube().getGeometryData();
+    const geoB = new Cube({ size: 2 }).getGeometryData();
+    const mat = new BasicMaterial();
+    // Pattern a,a,a b,b,b a,a,a b,b,b: 6 a's and 6 b's, never >=4 consecutive equal.
+    const objs = Array.from({ length: 12 }, (_, i) => {
+      const o = new Object3D(`o${i}`);
+      o.geometry = i % 6 < 3 ? geoA : geoB;
+      o.material = mat;
+      o.setPosition(i, 0, 0);
+      o.updateMatrixWorld(true);
+      return o;
+    });
+    return { renderer, rp, objs, mat };
+  }
+
+  it("measures the A2 delta: the scattered order would form 0 runs, A2 grouping forms 2 -> few draws", () => {
+    const { renderer, rp, objs, mat } = setupScattered();
+
+    // Without grouping (ADR 0046 as shipped): no run of >=4 in the insertion order -> 0 new
+    // instanced draws, i.e. every object would need its own draw (12).
+    const naive = { runObjects: [] as Object3D[], runs: [] as number[], rest: [] as Object3D[] };
+    partitionInstanceRuns(objs, naive.runObjects, naive.runs, naive.rest, false);
+    expect(naive.runs).toEqual([]);
+
+    // With the in-renderer A2 grouping: the 6 a's and the 6 b's become two runs -> 2 instanced
+    // draws of 6 instances each instead of 12 per-object draws.
+    renderer._renderSubgroup(
+      rp as unknown as GPURenderPassEncoder,
+      objs,
+      false,
+      mat.uuid,
+      manifest,
+      0,
+      undefined,
+      Topology.TRIANGLE_LIST,
+    );
+    expect(rp["draw"]).toHaveBeenCalledTimes(2);
+    expect(rp["draw"]).toHaveBeenNthCalledWith(1, 8, 6);
+    expect(rp["draw"]).toHaveBeenNthCalledWith(2, 8, 6);
+  });
+
+  it("falls back to 12 per-object draws when quality.autoInstancing is false", () => {
+    const { renderer, rp, objs, mat } = setupScattered();
+    renderer._quality = { ...renderer._quality, autoInstancing: false };
+
+    renderer._renderSubgroup(
+      rp as unknown as GPURenderPassEncoder,
+      objs,
+      false,
+      mat.uuid,
+      manifest,
+      0,
+      undefined,
+      Topology.TRIANGLE_LIST,
+    );
+
+    expect(rp["draw"]).toHaveBeenCalledTimes(12);
   });
 });
 
