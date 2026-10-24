@@ -863,10 +863,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.gl.enable(this.gl.DEPTH_TEST);
       this.gl.disable(this.gl.BLEND);
 
-      const cache = this._programCache.getProgram(MaterialType.DEPTH);
-      this.gl.useProgram(cache.prog);
-
-      this._renderShadowScene(cache, sortedGroups);
+      this._renderShadowScene(MaterialType.DEPTH, sortedGroups);
 
       this.gl.cullFace(this.gl.BACK);
       fbo.unbind();
@@ -901,10 +898,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.gl.enable(this.gl.DEPTH_TEST);
       this.gl.disable(this.gl.BLEND);
 
-      const cache = this._programCache.getProgram(MaterialType.DEPTH);
-      this.gl.useProgram(cache.prog);
-      this._bindDummyShadowMaps(cache);
-
       for (let i = 0; i < light.numCascades; i++) {
         const cascadeCam = light.cascadeCameras[i];
         if (!cascadeCam) continue;
@@ -916,7 +909,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
         this.updateGlobalUBO(cascadeCam.viewProjectionMatrix, cascadeCam.position, emptyLights);
 
-        this._renderShadowScene(cache, sortedGroups);
+        this._renderShadowScene(MaterialType.DEPTH, sortedGroups);
       }
 
       // EVSM (ADR 0043): render the warped variance moments into a separate RGBA32F atlas right
@@ -1141,10 +1134,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     if (!this._ensureEvsmAtlas(atlasWidth, atlasHeight)) return;
     if (!this._evsmAtlasFbo || !this._evsmAtlasTexture) return;
 
-    const evsmCache = this._programCache.getProgram(MaterialType.EVSM);
-    this.gl.useProgram(evsmCache.prog);
-    this._bindDummyShadowMaps(evsmCache);
-
     // Reuse the depth atlas (already holding this frame's cascades) as the depth test source.
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this._evsmAtlasFbo);
     this.gl.framebufferTexture2D(
@@ -1188,7 +1177,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
       this.updateGlobalUBO(cascadeCam.viewProjectionMatrix, cascadeCam.position, emptyLights);
 
-      this._renderShadowScene(evsmCache, sortedGroups);
+      this._renderShadowScene(MaterialType.EVSM, sortedGroups);
     }
 
     // Restore the scene's row clear color: the far-plane scissor clears above `gl.clearColor`d an
@@ -1207,9 +1196,15 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   }
 
   /**
-   * Helper to render the actual geometry for a shadow pass.
+   * Helper to render the actual geometry for a shadow pass with the `shaderId` depth-only program
+   * (DEPTH or EVSM). `InstancedMesh` casters switch to that program's instanced variant, so every
+   * instance casts, not just the mesh's own transform.
    */
-  private _renderShadowScene(cache: WebGLProgramCacheEntry, sortedGroups: RenderBatch[]): void {
+  private _renderShadowScene(shaderId: string, sortedGroups: RenderBatch[]): void {
+    const stdCache = this._programCache.getProgram(shaderId);
+    let instCache: WebGLProgramCacheEntry | undefined;
+    let current: WebGLProgramCacheEntry | undefined;
+
     for (let i = 0; i < sortedGroups.length; i++) {
       const batch = sortedGroups[i];
       if (batch!.shaderId === MaterialType.SKYBOX || batch!.objects.length === 0) continue;
@@ -1220,29 +1215,28 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       if (!firstObj.material) continue;
 
       const manifest = firstObj.material.getRenderManifest();
-      const uExtraLoc = cache.uniforms.get("u_extraParams");
-      const extraParams = manifest.properties["u_extraParams"] as Float32Array | number[];
-
-      let hasAlpha = false;
-      if (extraParams && extraParams[1]! > 0.0 && manifest.textures["u_diffuseMap"]) {
-        hasAlpha = true;
-        this.gl.activeTexture(this.gl.TEXTURE0);
-        const tex = manifest.textures["u_diffuseMap"] as Texture;
-        this.gl.bindTexture(this.gl.TEXTURE_2D, this._textures.getWebGLTexture(tex, this._quality));
-        const uDiffuseLoc = cache.uniforms.get("u_diffuseMap");
-        if (uDiffuseLoc) this.gl.uniform1i(uDiffuseLoc, 0);
-
-        if (uExtraLoc) {
-          this.gl.uniform4fv(uExtraLoc, extraParams as Float32Array);
-        }
-      }
-
-      if (!hasAlpha && uExtraLoc) {
-        this.gl.uniform4fv(uExtraLoc, this._zeroVec4);
-      }
+      // Program the batch uniforms (alpha test) were last set on; a switch re-sets them.
+      let batchBound: WebGLProgramCacheEntry | undefined;
 
       for (const o of objects) {
         if (!o.castShadow || !o.geometry) continue;
+        const isInstanced = o instanceof InstancedMesh;
+        if (isInstanced && o.instanceCount === 0) continue;
+
+        let cache = stdCache;
+        if (isInstanced) {
+          instCache ??= this._programCache.getProgram(shaderId, true);
+          cache = instCache;
+        }
+        if (cache !== current) {
+          this.gl.useProgram(cache.prog);
+          this._bindDummyShadowMaps(cache);
+          current = cache;
+        }
+        if (cache !== batchBound) {
+          this._bindShadowBatchUniforms(cache, manifest);
+          batchBound = cache;
+        }
 
         // NOTE: This pass deliberately does NOT acquireProgram() the DEPTH program per object.
         // The DEPTH program is renderer-infrastructure (fixed cascade/spot variants, already
@@ -1253,6 +1247,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         // is DELETED and RECOMPILED each frame (the "shader churn" stutter). Leaves the DEPTH
         // program resident across the session like any other infrastructure resource.
         this._textures.acquireTextures(o, manifest.textures);
+
+        if (isInstanced) {
+          this._renderInstancedObject(o, cache, batch!.topology);
+          continue;
+        }
 
         this._uploadModelMatrix(o.worldMatrix.data, undefined, undefined, cache.uniforms);
 
@@ -1274,6 +1273,24 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         mesh.draw(drawMode, batch!.wireframeMode);
       }
     }
+  }
+
+  /** Alpha-test uniforms of one shadow batch on `cache` (the caster material's cutout map). */
+  private _bindShadowBatchUniforms(cache: WebGLProgramCacheEntry, manifest: RenderManifest): void {
+    const uExtraLoc = cache.uniforms.get("u_extraParams");
+    const extraParams = manifest.properties["u_extraParams"] as Float32Array | number[];
+
+    if (extraParams && extraParams[1]! > 0.0 && manifest.textures["u_diffuseMap"]) {
+      this.gl.activeTexture(this.gl.TEXTURE0);
+      const tex = manifest.textures["u_diffuseMap"] as Texture;
+      this.gl.bindTexture(this.gl.TEXTURE_2D, this._textures.getWebGLTexture(tex, this._quality));
+      const uDiffuseLoc = cache.uniforms.get("u_diffuseMap");
+      if (uDiffuseLoc) this.gl.uniform1i(uDiffuseLoc, 0);
+      if (uExtraLoc) this.gl.uniform4fv(uExtraLoc, extraParams as Float32Array);
+      return;
+    }
+
+    if (uExtraLoc) this.gl.uniform4fv(uExtraLoc, this._zeroVec4);
   }
 
   /**
