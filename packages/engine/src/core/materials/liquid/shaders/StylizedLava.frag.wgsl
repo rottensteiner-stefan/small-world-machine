@@ -73,5 +73,16 @@ fn lavaSmoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
     // Negative light is meaningless in an HDR target (the unclamped lerp can undershoot).
     color = max(color, vec3<f32>(0.0));
     color *= global.exposure;
+
+    // P3/S1 R3 (burn-out fix): `brightnessTopLava` (default 4.94) pushes the top layer to HDR
+    // ~5.0. Without this guard the raw value would be sRGB-encoded straight away and clip to
+    // pure white before bloom / single-pass tonemapping can act. Mirror the Standard material:
+    // when gamma != 1.0 (post-processing disabled, quality.gamma == 2.2) a Reinhard clamp runs
+    // first; at the default gamma == 1.0 (post-processing enabled) the guard is a numeric no-op,
+    // so default output is byte-identical.
+    if (global.gamma != 1.0) {
+        color = color / (color + vec3f(1.0)); // Reinhard
+    }
+
     return vec4<f32>(linearToSRGB(color), 1.0);
 }

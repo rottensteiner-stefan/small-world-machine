@@ -42,8 +42,12 @@
     // Simple refraction offset based on normal
     let refrDir = refract(-V, N, 1.0 / ior);
     
+    // P3/S1 R2 (widescreen fix): aspect-compensate so the screen-space bokeh stays isotropic on
+    // non-square targets. At square aspect the h/w factor is 1.0 exactly (x * 1.0 is a numeric
+    // identity), so no existing golden shifts (byte-identical).
     // Distort UV
-    screenUv = screenUv + refrDir.xy * thickness * 0.05;
+    let refrAspect = screenRes.y / max(screenRes.x, 1.0); // h/w (== 1.0 at square aspect)
+    screenUv = screenUv + refrDir.xy * vec2f(refrAspect, 1.0) * thickness * 0.05;
     screenUv = clamp(screenUv, vec2f(0.001), vec2f(0.999));
     
     // Sample opaque map

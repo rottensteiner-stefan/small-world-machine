@@ -550,10 +550,12 @@ describe("DeadOptionLint (G3/G9)", () => {
       expect(mat.param4).toBe(0.9);
 
       const manifest = mat.getRenderManifest();
-      const extra = manifest.properties["u_extraParams"] as number[];
-      expect(extra[0]).toBe(0.85);
-      expect(extra[2]).toBe(1.2);
-      expect(extra[3]).toBe(1.0); // film19th mode flag
+      // E9-A: control lane u_matParam0 = [intensity, time, speed, modeFlag]; params lane
+      // u_matParam1 = [param1..4] (was u_extraParams/u_liquidParams).
+      const ctl = manifest.properties["u_matParam0"] as number[];
+      expect(ctl[0]).toBe(0.85);
+      expect(ctl[2]).toBe(1.2);
+      expect(ctl[3]).toBe(1.0); // film19th mode flag
     });
 
     it("SkyboxMaterial consumes all options", () => {

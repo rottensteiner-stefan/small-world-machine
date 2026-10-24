@@ -46,9 +46,19 @@
         var screenUV = vec2f(ndc.x * 0.5 + 0.5, ndc.y * -0.5 + 0.5);
         let V_dir = normalize(global.viewPos.xyz - i.wp);
         let refrDir = refract(-V_dir, normalize(i.n), 1.0 / ior_trans);
-        screenUV = clamp(screenUV + refrDir.xy * thickness * 0.05, vec2f(0.001), vec2f(0.999));
+        // P3/S1 R2 (widescreen fix): aspect-compensate so the screen-space refraction stays
+        // isotropic on non-square targets. At square aspect the h/w factor is 1.0 exactly
+        // (x * 1.0 is a numeric identity), so the offset is byte-identical to the old constant.
+        let refrAspect = max(global.resolution.y, 1.0) / max(global.resolution.x, 1.0); // h/w (== 1.0 at square)
+        screenUV = clamp(
+            screenUV + refrDir.xy * vec2f(refrAspect, 1.0) * thickness * 0.05,
+            vec2f(0.001),
+            vec2f(0.999),
+        );
         let transmittedColor = sRGBToLinear(textureSample(u_opaqueMap, s, screenUV).rgb);
-        let volumeTransmittance = VolumeAbsorption(albedo, attenuationDist, thickness);
+        // P3/S1 R1: feed the real attenuation colour (LINEAR/RAW lane) into Beer-Lambert absorption
+        // instead of albedo -- KHR_materials_volume was silently broken before.
+        let volumeTransmittance = VolumeAbsorption(obj.matParam11.xyz, attenuationDist, thickness);
         let finalTransmission = transmittedColor * volumeTransmittance * albedo;
         let f_refr = F_Schlick(max(dot(normalize(i.n), V_dir), 0.0), F0).x;
         let kD_refr = (1.0 - f_refr) * (1.0 - metallic);

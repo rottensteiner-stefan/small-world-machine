@@ -87,6 +87,8 @@ export interface StylizedWaterMaterialOptions {
    * blend at full weight and `rampSoftness` is ignored (ADR 0026 route (a)).
    */
   rampMap?: Texture;
+  /** See {@link LiquidWaveMaterialInit.domainScale} (E4-B). Defaults to 1.0. */
+  domainScale?: number;
 }
 
 /** Style ladder across the anime/stylized spectrum. */
@@ -212,6 +214,12 @@ export class StylizedWaterMaterial extends LiquidWaveMaterial {
    * dedicated `u_matParam7` lane and `u_color.a` is the real alpha (1.0).
    */
   private readonly _matParam7Array: number[] = [0, 0, 0, 0];
+  /**
+   * R5 owned depth lane `u_matParam8`: `[refrDepth 0.3m ÷ ds, depthCut 0.25m ÷ ds,
+   * causticsMaxDepth 6.0m ÷ ds, depthRampEnd 4.0m ÷ ds]` (StylizedWater-only, A2 attribution).
+   * Value-preserving at domainScale 1.0; pre-scaled by `domainScale` (length semantics ÷).
+   */
+  private readonly _matParam8Array: number[] = [0, 0, 0, 0];
   /** The `u_styleB` lane; subclasses may overwrite entries after `super.getRenderManifest()`. */
   protected readonly _styleBArray: number[] = [0, 0, 0, 0];
   private readonly _flagsWithRamp: string[] = [RAMP_LUT_FLAG];
@@ -238,6 +246,7 @@ export class StylizedWaterMaterial extends LiquidWaveMaterial {
       foamNoiseScale = 3.5,
       foamNoiseSpeed = 0.6,
       style = "toon",
+      domainScale = 1.0,
     } = options;
 
     const preset = style === "custom" ? STYLE_PRESETS.toon : STYLE_PRESETS[style];
@@ -270,6 +279,7 @@ export class StylizedWaterMaterial extends LiquidWaveMaterial {
       foamCutoff,
       foamNoiseScale,
       foamNoiseSpeed,
+      domainScale,
     });
 
     this.causticStrength = causticStrength;
@@ -302,6 +312,14 @@ export class StylizedWaterMaterial extends LiquidWaveMaterial {
     p7[2] = 0;
     p7[3] = 0;
     props["u_matParam7"] = p7;
+
+    // R5/E4-B: StylizedWater-only world-meter depth constants (A2 ownership), ÷ domainScale.
+    const p8 = this._matParam8Array;
+    p8[0] = 0.3 / this.domainScale; // refraction damping depth (m)
+    p8[1] = 0.25 / this.domainScale; // depth-discontinuity guard (m)
+    p8[2] = 6.0 / this.domainScale; // caustics max projection depth (m)
+    p8[3] = 4.0 / this.domainScale; // depth ramp End (m)
+    props["u_matParam8"] = p8;
 
     const d = this._deepWithCaustic;
     d[0] = this.deepWaterColor.r;

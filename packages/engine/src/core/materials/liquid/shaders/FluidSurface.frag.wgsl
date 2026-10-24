@@ -3,8 +3,9 @@
     let flowSpeed = obj.matParam2.x;
     let noiseScale = obj.matParam2.y;
 
-    // Use world position XZ for seamless tiling
-    let worldUV = i.wp.xz * 0.5; 
+    // Use world position XZ for seamless tiling. R4/E4-B: the 0.5 world-XZ noise frequency is a
+    // per-meter lane value (u_matParam5.x), pre-scaled by domainScale on the CPU.
+    let worldUV = i.wp.xz * obj.matParam5.x;
     let uv = worldUV * noiseScale;
     let uv1 = uv + vec2<f32>(time * 0.05, time * 0.02) * flowSpeed;
     let uv2 = uv + vec2<f32>(-time * 0.03, time * 0.04) * flowSpeed;
@@ -40,7 +41,8 @@
     
     let depthDiff = linBgDepth - linFragDepth;
     
-    let edgeBlend = 1.0 - saturate(depthDiff / 1.0); // Softness of 1.0 units
+    // R4/E4-B: the 1.0 m edge softness travels in u_matParam5.y (÷ domainScale on the CPU).
+    let edgeBlend = 1.0 - saturate(depthDiff / obj.matParam5.y);
     let noiseBlend = smoothstep(0.7 - softness * 0.5, 0.7 + softness * 0.5, noise);
     let finalBlend = saturate(noiseBlend + edgeBlend);
 
@@ -63,14 +65,16 @@
     let ndl = dot(N, L) * 0.5 + 0.5;
     color *= mix(1.0, ndl * ndl * 1.6 * mix(0.35, 1.0, dirShadow), obj.matParam0.x);
     let ndv = clamp(dot(N, V), 0.0, 1.0);
-    let rim = pow(1.0 - ndv, 3.0) * obj.matParam0.y;
+    // R4: rim exponent is a raw dimensionless look scalar in u_matParam5.w (default 3.0).
+    let rim = pow(1.0 - ndv, obj.matParam5.w) * obj.matParam0.y;
     color += edgeCol * rim;
     let ndh = clamp(dot(N, normalize(L + V)), 0.0, 1.0);
     color += global.dirLightColor.rgb * pow(ndh, max(obj.matParam1.x, 1.0)) * obj.matParam0.z * dirShadow;
 
     // Beer-Lambert thickness from the opaque depth capture (see the GLSL version).
     let thickness = 1.0 - exp(-obj.matParam1.y * max(depthDiff, 0.0));
-    let alpha = mix(1.0, clamp(thickness + rim, 0.25, 1.0), step(0.0001, obj.matParam1.y));
+    // R4: alpha floor is a raw dimensionless look scalar in u_matParam5.z (default 0.25).
+    let alpha = mix(1.0, clamp(thickness + rim, obj.matParam5.z, 1.0), step(0.0001, obj.matParam1.y));
 
     // Exposure
     color *= global.exposure;

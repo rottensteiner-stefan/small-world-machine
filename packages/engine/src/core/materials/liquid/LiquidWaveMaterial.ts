@@ -26,6 +26,13 @@ export interface LiquidWaveMaterialInit {
   foamCutoff: number;
   foamNoiseScale: number;
   foamNoiseSpeed: number;
+  /**
+   * Reference domain size anchor (E4-B) for the world-anchored water lanes -- depth limits and
+   * Gerstner wavelengths. `1.0` (default) is a numeric identity so every lane stays byte-identical
+   * to the legacy defaults ("value-preserving"); set the reciprocal of a node's scale to keep the
+   * water look invariant on a scaled surface. Length semantics DIVIDE by domainScale.
+   */
+  domainScale?: number;
 }
 
 /**
@@ -56,6 +63,8 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
   public foamCutoff: number;
   public foamNoiseScale: number;
   public foamNoiseSpeed: number;
+  /** See {@link LiquidWaveMaterialInit.domainScale}. Defaults to 1.0 (numeric identity). */
+  public domainScale: number = 1.0;
   /** The `u_styleA` lane in the manifest. Presets own its meaning (see the lane table in docs/guides/liquid-wave-data-model.md). */
   protected readonly _styleAArray: number[] = [0, 0, 0, 0];
   /** The `u_matParam2` lane: `[foamCutoff, foamNoiseScale, foamNoiseSpeed, <preset lane>]`; `w` is free for presets. */
@@ -99,6 +108,7 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
     this.foamCutoff = init.foamCutoff;
     this.foamNoiseScale = init.foamNoiseScale;
     this.foamNoiseSpeed = init.foamNoiseSpeed;
+    this.domainScale = init.domainScale ?? 1.0;
 
     this.transparent = true;
     this.depthWrite = false;
@@ -155,19 +165,20 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
     w1[0] = this.wave1[0];
     w1[1] = this.wave1[1];
     w1[2] = this.wave1[2];
-    w1[3] = this.wave1[3];
+    // E4-B: Gerstner wavelength is a world-meter value -- DIVIDED by domainScale (identity at 1.0).
+    w1[3] = this.wave1[3] / this.domainScale;
 
     const w2 = this._matParam4Array;
     w2[0] = this.wave2[0];
     w2[1] = this.wave2[1];
     w2[2] = this.wave2[2];
-    w2[3] = this.wave2[3];
+    w2[3] = this.wave2[3] / this.domainScale;
 
     const w3 = this._matParam5Array;
     w3[0] = this.wave3[0];
     w3[1] = this.wave3[1];
     w3[2] = this.wave3[2];
-    w3[3] = this.wave3[3];
+    w3[3] = this.wave3[3] / this.domainScale;
 
     const edge = this._matParam6Array;
     edge[0] = this.edgeColor.r;

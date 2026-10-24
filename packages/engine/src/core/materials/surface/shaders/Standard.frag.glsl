@@ -69,6 +69,11 @@ uniform float u_time;
 // flag mirroring the USE_SHEEN push basis (sheen is decoupled from u_specColor / emissive).
 uniform vec4 u_matParam10;
 
+// Typed semantic lane (ADR 0027 / 0039 / P3-S1 R1): attenuationColor -- KHR_materials_volume
+// volumetric attenuation colour (LINEAR/RAW, see StandardMaterial._LANES). Read by the shared
+// LIGHT_CALC_PBR chunk inside USE_TRANSMISSION; declared here so the WebGL2 Standard program links.
+uniform vec4 u_matParam11;
+
 void main() {
     // Reconstruct original UV for static alpha map
     vec2 original_uv = v_uv / u_texRepeat;

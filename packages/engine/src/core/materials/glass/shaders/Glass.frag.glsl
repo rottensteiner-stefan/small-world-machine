@@ -39,7 +39,10 @@ void main() {
     vec2 screenUv = gl_FragCoord.xy / vec2(texSize);
     
     vec3 refrDir = refract(-V, N, 1.0 / ior);
-    screenUv = screenUv + refrDir.xy * thickness * 0.05;
+    // P3/S1 R2 (widescreen fix): aspect-compensate so the screen-space bokeh stays isotropic on
+    // non-square targets (byte-identical at square aspect, h/w == 1.0).
+    float refrAspect = float(texSize.y) / float(texSize.x); // h/w (== 1.0 at square aspect)
+    screenUv = screenUv + refrDir.xy * vec2(refrAspect, 1.0) * thickness * 0.05;
     screenUv = clamp(screenUv, vec2(0.001), vec2(0.999));
     
     // Sample opaque map (WebGL2 doesn't auto-convert if internalformat is standard RGBA, but we'll manually sRGBToLinear to be safe and consistent)

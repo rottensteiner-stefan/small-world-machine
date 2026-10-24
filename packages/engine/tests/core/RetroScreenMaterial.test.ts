@@ -66,17 +66,19 @@ describe("RetroScreenMaterial", () => {
 
     const manifest = material.getRenderManifest();
 
-    const extraParams = manifest.properties["u_extraParams"] as number[];
-    expect(extraParams[0]).toBeCloseTo(0.7, 5);
-    expect(extraParams[1]).toBeCloseTo(42.0, 5);
-    expect(extraParams[2]).toBeCloseTo(1.5, 5);
-    expect(extraParams[3]).toBe(1.0); // film19th mode is 1.0
+    // E9-A (ADR 0027/0039): RetroScreen migrated from u_extraParams/u_liquidParams to the typed
+    // lanes -- u_matParam0 = [intensity, time, speed, modeFlag], u_matParam1 = [param1..4].
+    const control = manifest.properties["u_matParam0"] as number[];
+    expect(control[0]).toBeCloseTo(0.7, 5);
+    expect(control[1]).toBeCloseTo(42.0, 5);
+    expect(control[2]).toBeCloseTo(1.5, 5);
+    expect(control[3]).toBe(1.0); // film19th mode is 1.0
 
-    const liquidParams = manifest.properties["u_liquidParams"] as number[];
-    expect(liquidParams[0]).toBeCloseTo(2.0, 5);
-    expect(liquidParams[1]).toBeCloseTo(20.0, 5);
-    expect(liquidParams[2]).toBeCloseTo(1.2, 5);
-    expect(liquidParams[3]).toBeCloseTo(0.8, 5);
+    const params = manifest.properties["u_matParam1"] as number[];
+    expect(params[0]).toBeCloseTo(2.0, 5);
+    expect(params[1]).toBeCloseTo(20.0, 5);
+    expect(params[2]).toBeCloseTo(1.2, 5);
+    expect(params[3]).toBeCloseTo(0.8, 5);
   });
 
   it("should return valid shader definition", () => {

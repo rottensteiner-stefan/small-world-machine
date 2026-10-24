@@ -27,6 +27,10 @@ void main() {
     // supplies a normal map (same TBN path as GLSL300), otherwise use the raw vertex normal.
     #ifdef USE_NORMAL_MAP
     vec3 rawNormal = texture2D(u_normalMap, v_uv).rgb * 2.0 - 1.0;
+    // E-M9 (P3/S1 A1 hardening): restore the normal-scale multiply that wgsl/glsl300 apply. Dormant
+    // today (GlassMaterial hard-codes zw = 1,1) but a future normalScale wiring must behave on every
+    // tier -- this closes the one-line cross-tier divergence.
+    rawNormal.xy *= u_extraParams.zw;
     vec3 N = normalize(v_tbn * rawNormal);
     #else
     vec3 N = normalize(v_normal);
@@ -41,6 +45,10 @@ void main() {
 [GLASS_PBR_LOOPS]
 
     // --- Screen Space Refraction (Fallback) ---
+    // P3/S1 R2 note: GLSL ES 1.00 has neither `textureSize` nor a screen-resolution uniform, so the
+    // aspect-compensation term that wgsl/glsl300 carry cannot be expressed here. Documented tier
+    // limitation: the WebGL1 refraction offset is not aspect-compensated (the fractional NDC path
+    // below has no per-axis pixel divisor available).
     vec2 baseScreenUv = v_clipPos.xy / v_clipPos.w * 0.5 + 0.5;
     vec3 refrDir = refract(-V, N, 1.0 / ior);
     vec2 screenUv = baseScreenUv + refrDir.xy * thickness * 0.05;

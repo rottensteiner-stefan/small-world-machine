@@ -33,7 +33,7 @@
     // If the distorted sample lands in front of the water surface, fall back to the undistorted texel.
     let screenRes = vec2<f32>(textureDimensions(u_opaqueDepthMap));
     let screenUv = i.pos.xy / screenRes;
-    let refrDamping = clamp(depthDiff / 0.3, 0.0, 1.0);
+    let refrDamping = clamp(depthDiff / obj.matParam7.x, 0.0, 1.0); // R5: 0.3m refraction depth → lane
     let distortedUv = screenUv + (i.n.xz * refractionStrength * refrDamping);
     let distortedCoords = vec2<i32>(distortedUv * screenRes);
     let distortedBgDepth = textureLoad(u_opaqueDepthMap, distortedCoords, 0);
@@ -96,14 +96,15 @@
 
     // Ground-projected caustics: cells are anchored to the pool floor by following the sun ray
     // (not the view ray, which smeared them radially along the walls). Own scale, independent of foam.
-    const CAUSTICS_MAX_DEPTH: f32 = 3.0;
+    // R5/E4-B: the 3.0m max depth is an owned lane value (obj.matParam7.y), ÷ domainScale on the CPU.
+    let causticsMaxDepth = obj.matParam7.y;
     const CAUSTICS_SCALE: f32 = 1.4;
     const CAUSTICS_GAIN: f32 = 0.1;
     const CAUSTICS_FADE_EXPONENT: f32 = 0.7;
     const CAUSTICS_LIGHT_TINT: vec3<f32> = vec3<f32>(1.0, 0.98, 0.88);
 
     let toLight = normalize(global.dirLightDir.xyz);
-    let causticsDepth = min(depthDiff, CAUSTICS_MAX_DEPTH);
+    let causticsDepth = min(depthDiff, causticsMaxDepth);
     let lightVertical = max(abs(toLight.y), 0.3);
     let groundXZ = i.wp.xz - toLight.xz * (causticsDepth / lightVertical);
     let groundPos = vec3<f32>(groundXZ.x, i.wp.y - causticsDepth, groundXZ.y);

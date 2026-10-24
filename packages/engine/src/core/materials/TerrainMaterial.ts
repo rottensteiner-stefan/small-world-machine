@@ -26,7 +26,17 @@ export interface TerrainMaterialOptions {
   snowMap?: Texture | undefined;
   /** Texture repetition factors. Defaults to [20.0, 20.0]. */
   texRepeat?: [number, number];
-  /** Thresholds for biome transitions. Defaults to [2.0, 15.0, 25.0, 2.0]. */
+  /**
+   * Thresholds for biome transitions in **world Y (elevation meters)**:
+   * `[SandToGrass, GrassToRock, RockToSnow, TransitionSoftness]`. Defaults to [2.0, 15.0, 25.0, 2.0].
+   *
+   * E8-A / D2 (S1 §2.6, decision documented): these are **authoring defaults**, already parametric
+   * (`u_thresholds`) -- they are not hardcoded in the shader. The residual is the **world-Y band
+   * coupling**: the biome bands follow absolute world elevation, so a terrain mesh that is raised
+   * or placed at a different origin shifts which biome lands where. That is accepted, documented
+   * behaviour (a feature, not a bug); a local-space alternative is tracked as S5-gated and out of
+   * scope for this scale-invariance pass.
+   */
   thresholds?: [number, number, number, number];
 }
 

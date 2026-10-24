@@ -496,10 +496,14 @@ if (transmission > 0.0) {
     ivec2 texSize = textureSize(u_opaqueMap, 0);
     vec2 screenUv = gl_FragCoord.xy / vec2(texSize);
     vec3 refrDir = refract(-V, N, 1.0 / ior);
-    screenUv = clamp(screenUv + refrDir.xy * thickness * 0.05, vec2(0.001), vec2(0.999));
+    // P3/S1 R2 (widescreen fix): aspect-compensate so the screen-space refraction stays isotropic
+    // on non-square targets. At square aspect the h/w factor is 1.0 exactly (x*1.0 is a numeric
+    // identity), so the offset is byte-identical to the previous constant.
+    float refrAspect = float(texSize.y) / float(texSize.x); // h/w (== 1.0 at square aspect)
+    screenUv = clamp(screenUv + refrDir.xy * vec2(refrAspect, 1.0) * thickness * 0.05, vec2(0.001), vec2(0.999));
 
     vec3 transmittedLight = sRGBToLinear(texture(u_opaqueMap, screenUv).rgb);
-    vec3 volumeTransmittance = VolumeAbsorption(albedo, attenuationDist, thickness);
+    vec3 volumeTransmittance = VolumeAbsorption(u_matParam11.rgb, attenuationDist, thickness);
     vec3 finalTransmission = transmittedLight * volumeTransmittance * albedo;
 
     vec3 f_refr = F_Schlick(dotNV, F0);

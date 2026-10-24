@@ -16,6 +16,8 @@ uniform vec4 u_matParam0; // [shade, rimStrength, specularStrength, normalStreng
 uniform vec4 u_matParam1; // [specularPower, absorption, emissiveMask, transitionSoftness]
 uniform vec4 u_matParam2; // [flowSpeed, distortion, emissivePulse, emissivePulseSpeed]
 uniform vec4 u_matParam3; // [emissive.r*strength, emissive.g*strength, emissive.b*strength, time]
+// R4: only the values this tier reads are declared -- world-XZ frequency (x), rim exponent (w).
+uniform vec4 u_matParam5; // [worldUVFreq, (unused), (unused), rimExponent]
 
 uniform sampler2D u_diffuseMap;
 uniform sampler2D u_normalMap;
@@ -29,7 +31,8 @@ void main() {
     float flowSpeed = u_matParam2.x;
     float noiseScale = u_matParam2.y;
 
-    vec2 worldUV = v_worldPos.xz * 0.5;
+    // R4/E4-B: 0.5 is a per-meter lane value (u_matParam5.x), pre-scaled by domainScale on the CPU.
+    vec2 worldUV = v_worldPos.xz * u_matParam5.x;
     vec2 uv = worldUV * noiseScale;
 
     vec2 uv1 = uv + vec2(time * 0.05, time * 0.02) * flowSpeed;
@@ -61,7 +64,8 @@ void main() {
     float ndl = dot(N, L) * 0.5 + 0.5;
     finalColor *= mix(1.0, ndl * ndl * 1.6, u_matParam0.x);
     float ndv = clamp(dot(N, V), 0.0, 1.0);
-    finalColor += edgeColor * pow(1.0 - ndv, 3.0) * u_matParam0.y;
+    // R4: rim exponent is a raw dimensionless look scalar in u_matParam5.w (default 3.0).
+    finalColor += edgeColor * pow(1.0 - ndv, u_matParam5.w) * u_matParam0.y;
     float ndh = clamp(dot(N, normalize(L + V)), 0.0, 1.0);
     finalColor += u_dirLightColor * pow(ndh, max(u_matParam1.x, 1.0)) * u_matParam0.z;
 

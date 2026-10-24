@@ -55,6 +55,11 @@ export class RetroScreenMaterial extends AbstractMaterial {
   public param3: number;
   public param4: number;
 
+  /** Typed semantic lane bank (E9-A / ADR 0027/0039): previously the generic u_extraParams /
+   * u_liquidParams slots were hijacked. u_matParam0 (control), u_matParam1 (mode params). */
+  private readonly _matParam0 = [0, 0, 0, 0];
+  private readonly _matParam1 = [0, 0, 0, 0];
+
   /**
    * Creates a new RetroScreenMaterial.
    * @param options Configuration options.
@@ -97,17 +102,23 @@ export class RetroScreenMaterial extends AbstractMaterial {
     texs["u_diffuseMap"] = this.diffuseMap;
     this._syncTexOffsetRepeat(this.diffuseMap);
 
-    const extra = props["u_extraParams"] as number[];
-    extra[0] = this.intensity;
-    extra[1] = this.time;
-    extra[2] = this.speed;
-    extra[3] = this.mode === "tv50s" ? 0.0 : 1.0;
+    // E9-A / R6 (ADR 0027/0039): RetroScreen previously hijacked the generic u_extraParams /
+    // u_liquidParams slots. It now writes the typed bank it owns -- u_matParam0 is the control
+    // lane ([intensity, time, speed, modeFlag]), u_matParam1 the mode parameter lane
+    // ([param1, param2, param3, param4]). Values are byte-identical to the legacy one (parity).
+    const ctl = this._matParam0;
+    ctl[0] = this.intensity;
+    ctl[1] = this.time;
+    ctl[2] = this.speed;
+    ctl[3] = this.mode === "tv50s" ? 0.0 : 1.0;
+    props["u_matParam0"] = ctl;
 
-    const params = props["u_liquidParams"] as number[];
+    const params = this._matParam1;
     params[0] = this.param1;
     params[1] = this.param2;
     params[2] = this.param3;
     params[3] = this.param4;
+    props["u_matParam1"] = params;
 
     return this._renderManifest;
   }

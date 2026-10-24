@@ -32,7 +32,15 @@ export interface DecalMaterialOptions {
   roughness?: number;
   /** PBR metallic. Defaults to 0. */
   metallic?: number;
-  /** Fraction of the box (0..0.5) over which the decal fades out towards its edges. Defaults to 0.1. */
+  /**
+   * Fraction of the box (0..0.5) over which the decal fades out towards its edges. Defaults to 0.1.
+   *
+   * E7-A / D1 (S1 §2.6, decision documented, vorbehaltlich S5-Gate): this stays in **unit-box
+   * semantics** -- a fraction of the projection box, NOT world meters. On strongly non-uniform
+   * boxes (e.g. 10m x 0.2m) the fade band is anisotropic by design; a world-meter `edgeFade` is
+   * tracked as an S5-gated follow-up and is out of scope for this scale-invariance pass. The value
+   * remains an authored default (0.1), not a scale-coupled constant.
+   */
   edgeFade?: number;
   /** Surface angle (degrees, against the decal's up axis) where the decal starts fading out. Defaults to 60. */
   angleFadeStart?: number;

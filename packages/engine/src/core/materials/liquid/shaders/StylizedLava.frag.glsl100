@@ -76,5 +76,9 @@ void main() {
     color += top * lavaToLinear(u_matParam8.rgb) * u_matParam3.z;
 
     color = max(color, vec3(0.0));
+    // P3/S1 R3 tier limitation: the WebGL1 (glsl100) tier has no exposure/gamma uniform path and
+    // no HDR post/bloom stage, so the gamma-guarded Reinhard clamp of the HDR tiers (wgsl/glsl300)
+    // does not apply here -- the LDR target already clamps. The lavaSmoothstep depth edge is also
+    // absent on this tier (no scene-depth capture, edgeLine is 0), so u_matParam3.x goes unused.
     gl_FragColor = vec4(pow(color, vec3(1.0 / 2.2)), 1.0);
 }

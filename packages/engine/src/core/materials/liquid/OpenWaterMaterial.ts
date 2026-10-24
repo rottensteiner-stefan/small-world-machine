@@ -44,6 +44,8 @@ export interface OpenWaterMaterialOptions {
    * wall reflection. Defaults to 4.0, the basin of Showcase 10. Travels in `u_matParam2.w`.
    */
   poolHalfExtent?: number;
+  /** See {@link LiquidWaveMaterialInit.domainScale} (E4-B). Defaults to 1.0. */
+  domainScale?: number;
 }
 
 const SPLAT_IDLE: readonly [number, number, number, number] = [0, 0, -9999, 0];
@@ -58,6 +60,11 @@ export class OpenWaterMaterial extends LiquidWaveMaterial {
     SPLAT_IDLE[2],
     SPLAT_IDLE[3],
   ];
+  /**
+   * R5 owned depth lane `u_matParam7`: `[refrDepth 0.3m ÷ ds, causticsMaxDepth 3.0m ÷ ds, 0, 0]`.
+   * Value-preserving at domainScale 1.0; pre-scaled by `domainScale` here (length semantics ÷).
+   */
+  private readonly _matParam7Array: number[] = [0, 0, 0, 0];
 
   constructor(options: OpenWaterMaterialOptions = {}) {
     const {
@@ -77,6 +84,7 @@ export class OpenWaterMaterial extends LiquidWaveMaterial {
       foamNoiseScale = 3.0,
       foamNoiseSpeed = 0.5,
       poolHalfExtent = 4.0,
+      domainScale = 1.0,
     } = options;
 
     super(MaterialType.OPEN_WATER, {
@@ -95,6 +103,7 @@ export class OpenWaterMaterial extends LiquidWaveMaterial {
       foamCutoff,
       foamNoiseScale,
       foamNoiseSpeed,
+      domainScale,
     });
     this.poolHalfExtent = poolHalfExtent;
   }
@@ -119,6 +128,15 @@ export class OpenWaterMaterial extends LiquidWaveMaterial {
     styleA[2] = this._splat[2];
     styleA[3] = this._splat[3];
     this._matParam2Array[3] = this.poolHalfExtent;
+    // R5/E4-B: world-meter depth constants in the owned lane, ÷ domainScale (identity at 1.0).
+    const p7 = this._matParam7Array;
+    p7[0] = 0.3 / this.domainScale; // screen-space refraction damping depth (m)
+    p7[1] = 3.0 / this.domainScale; // caustics max projection depth (m)
+    p7[2] = 0;
+    p7[3] = 0;
+    // Runs at the end of the base getRenderManifest, after the manifest has been created.
+    const rm = this._renderManifest;
+    if (rm) rm.properties["u_matParam7"] = p7;
   }
 
   protected override _getLiquidWaveShaderSources(): ShaderDefinition["sources"] {

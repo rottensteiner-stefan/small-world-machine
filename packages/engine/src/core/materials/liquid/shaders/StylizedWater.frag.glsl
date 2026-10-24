@@ -14,6 +14,7 @@ uniform vec4 u_specColor;      // Deep water color (RGBA)
 // Edge shading previously rode u_texOffset/u_texRepeat, specularStrength rode u_color.a.
 uniform vec4 u_matParam6;      // [edgeColor.rgb, edgeSoftness]
 uniform vec4 u_matParam7;      // [specularStrength, 0, 0, 0]
+uniform vec4 u_matParam8;      // R5 owned depth lane [refrDepth, depthCut, causticsMaxDepth, rampEnd] ÷ ds
 // Dedicated material parameter bank (512-byte layout slots)
 uniform vec4 u_matParam0;         // [waterAbsorption.rgb, refractionStrength]
 uniform vec4 u_matParam1;         // [foamColor.rgb, foamDistance]
@@ -74,12 +75,12 @@ void main() {
     float depthDiff = max(linBgDepth - linFragDepth, 0.0);
 
     // 2. Screen-space Refraction (Masked strictly to depthDiff > 0.0)
-    float refrDamping = clamp(depthDiff / 0.3, 0.0, 1.0);
+    float refrDamping = clamp(depthDiff / u_matParam8.x, 0.0, 1.0); // R5: 0.3m → owned lane
     vec2 distortedUv = screenUv + (v_normal.xz * refractionStrength * refrDamping);
     float distortedBgDepth = texture(u_opaqueDepthMap, distortedUv).r;
     float ndcDistortedBg = distortedBgDepth * 2.0 - 1.0;
     float linDistortedBgDepth = (2.0 * near * far) / (far + near - ndcDistortedBg * (far - near));
-    vec2 refractionUv = (linDistortedBgDepth > linFragDepth && abs(linDistortedBgDepth - linBgDepth) < 0.25) ? distortedUv : screenUv; // depth-discontinuity guard: no smear across pool walls
+    vec2 refractionUv = (linDistortedBgDepth > linFragDepth && abs(linDistortedBgDepth - linBgDepth) < u_matParam8.y) ? distortedUv : screenUv; // R5: 0.25m guard → owned lane
 
     vec3 opaqueUnderwaterColor = sRGBToLinear(texture(u_opaqueMap, refractionUv).rgb);
 
@@ -93,7 +94,7 @@ void main() {
     vec2 uvCaustics = groundWorldPos.xz + (v_normal.xz * causticsDistortionStrength);
     float causticsSpeed = u_matParam2.b * 0.75;
 
-    float maxCausticsDepth = 6.0;
+    float maxCausticsDepth = u_matParam8.z; // R5: 6.0m caustics cutoff → owned lane
     float causticsFade = 1.0 - smoothstep(0.0, maxCausticsDepth, depthDiff);
     vec3 causticsColor = vec3(1.0, 0.98, 0.88);
     vec3 finalCaustics = vec3(0.0);
@@ -143,13 +144,13 @@ void main() {
     {
         // Ramp LUT (ADR 0026 route a): artist gradient replaces the hard-coded ramp at full weight (end colours reached exactly), no rampSoftness gate.
         const float RAMP_LUT_WEIGHT = 1.0;
-        float rampT = clamp(effDepth / 4.0, 0.0, 1.0);
+        float rampT = clamp(effDepth / u_matParam8.w, 0.0, 1.0); // R5: 4.0m ramp End → owned lane
         vec3 lutColor = sRGBToLinear(texture(u_rampMap, vec2((rampT * 255.0 + 0.5) / 256.0, 0.5)).rgb);
         baseWaterColor = mix(baseWaterColor, lutColor, RAMP_LUT_WEIGHT);
     }
 #else
     if (u_styleA.x > 0.05) {
-        float rampT = clamp(effDepth / 4.0, 0.0, 1.0);
+        float rampT = clamp(effDepth / u_matParam8.w, 0.0, 1.0); // R5: 4.0m ramp End → owned lane
         vec3 midColor = mix(shallowColor, deepColor, 0.5) * vec3(0.9, 1.1, 1.05);
         vec3 softRamp = mix(shallowColor, midColor, smoothstep(0.0, 0.5, rampT));
         softRamp = mix(softRamp, deepColor, smoothstep(0.4, 1.0, rampT));

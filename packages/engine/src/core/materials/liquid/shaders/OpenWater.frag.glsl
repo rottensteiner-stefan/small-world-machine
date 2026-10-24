@@ -16,6 +16,7 @@ uniform vec4 u_matParam0; // [waterAbsorption.rgb, refractionStrength]
 uniform vec4 u_matParam1; // [foamColor.rgb, foamDistance]
 uniform vec4 u_matParam2; // [foamCutoff, foamNoiseScale, foamNoiseSpeed, poolHalfExtent (vertex stage)]
 uniform vec4 u_matParam6; // [edgeColor.rgb, edgeSoftness] (ADR 0027 / 0039 semantic lane)
+uniform vec4 u_matParam7; // [refrDepth 0.3m ÷ ds, causticsMaxDepth 3.0m ÷ ds, 0, 0] (R5/E4-B owned lane)
 uniform float u_time;
 uniform sampler2D u_opaqueDepthMap;
 uniform sampler2D u_opaqueMap;
@@ -59,7 +60,7 @@ void main() {
 
     // Screen-space refraction: distort the sample point by the wave normal's horizontal
     // components, damped in shallow depth to prevent edge tear.
-    float refrDamping = clamp(depthDiff / 0.3, 0.0, 1.0);
+    float refrDamping = clamp(depthDiff / u_matParam7.x, 0.0, 1.0); // R5: 0.3m refraction depth → lane
     vec2 distortedUv = screenUv + (v_normal.xz * refractionStrength * refrDamping);
     float distortedBgDepth = texture(u_opaqueDepthMap, distortedUv).r;
     float ndcDistortedBg = distortedBgDepth * 2.0 - 1.0;
@@ -123,14 +124,14 @@ void main() {
 
     // Ground-projected caustics: cells are anchored to the pool floor by following the sun ray
     // (not the view ray, which smeared them radially along the walls). Own scale, independent of foam.
-    const float CAUSTICS_MAX_DEPTH = 3.0;
     const float CAUSTICS_SCALE = 1.4;
     const float CAUSTICS_GAIN = 0.1;
     const float CAUSTICS_FADE_EXPONENT = 0.7;
     const vec3 CAUSTICS_LIGHT_TINT = vec3(1.0, 0.98, 0.88);
+    float causticsMaxDepth = u_matParam7.y; // R5/E4-B: 3.0m max depth → owned lane (÷ domainScale)
 
     vec3 toLight = normalize(u_dirLightDir);
-    float causticsDepth = min(depthDiff, CAUSTICS_MAX_DEPTH);
+    float causticsDepth = min(depthDiff, causticsMaxDepth);
     float lightVertical = max(abs(toLight.y), 0.3);
     vec2 groundXZ = v_worldPos.xz - toLight.xz * (causticsDepth / lightVertical);
     vec3 groundPos = vec3(groundXZ.x, v_worldPos.y - causticsDepth, groundXZ.y);

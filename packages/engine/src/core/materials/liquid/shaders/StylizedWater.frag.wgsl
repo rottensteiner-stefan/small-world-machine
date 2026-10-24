@@ -43,13 +43,13 @@ fn aaStepMask(edge: f32, value: f32, softness: f32) -> f32 {
     // Screen-space Refraction (Masked strictly to depthDiff > 0.0)
     let screenRes = vec2<f32>(textureDimensions(u_opaqueDepthMap));
     let screenUv = i.pos.xy / screenRes;
-    let refrDamping = clamp(depthDiff / 0.3, 0.0, 1.0);
+    let refrDamping = clamp(depthDiff / obj.matParam8.x, 0.0, 1.0); // R5: 0.3m → owned lane
     let distortedUv = screenUv + (i.n.xz * obj.matParam0.w * refrDamping);
     let distortedCoords = vec2<i32>(distortedUv * screenRes);
     let distortedBgDepth = textureLoad(u_opaqueDepthMap, distortedCoords, 0);
     let ndcDistortedBg = distortedBgDepth * 2.0 - 1.0;
     let linDistortedBgDepth = (2.0 * near * far) / (far + near - ndcDistortedBg * (far - near));
-    let refractionUv = select(screenUv, distortedUv, linDistortedBgDepth > linFragDepth && abs(linDistortedBgDepth - linBgDepth) < 0.25); // depth-discontinuity guard: no smear across pool walls
+    let refractionUv = select(screenUv, distortedUv, linDistortedBgDepth > linFragDepth && abs(linDistortedBgDepth - linBgDepth) < obj.matParam8.y); // R5: 0.25m depth-discontinuity guard → owned lane
 
     let opaqueUnderwaterColor = sRGBToLinear(textureSample(u_opaqueMap, s, refractionUv).rgb);
 
@@ -62,7 +62,7 @@ fn aaStepMask(edge: f32, value: f32, softness: f32) -> f32 {
     let uvCaustics = groundWorldPos.xz + (i.n.xz * causticsDistortionStrength);
     let causticsSpeed = obj.matParam2.z * 0.75;
 
-    let maxCausticsDepth = 6.0;
+    let maxCausticsDepth = obj.matParam8.z; // R5: 6.0m caustics cutoff → owned lane
     let causticsFade = 1.0 - smoothstep(0.0, maxCausticsDepth, depthDiff);
     let causticsColor = vec3<f32>(1.0, 0.98, 0.88);
     var finalCaustics = vec3<f32>(0.0);
@@ -109,11 +109,11 @@ fn aaStepMask(edge: f32, value: f32, softness: f32) -> f32 {
     if (USE_RAMP_LUT) {
         // Ramp LUT (ADR 0026 route a): artist gradient replaces the hard-coded ramp at full weight (end colours reached exactly), no rampSoftness gate.
         const RAMP_LUT_WEIGHT: f32 = 1.0;
-        let rampT = clamp(effDepth / 4.0, 0.0, 1.0);
+        let rampT = clamp(effDepth / obj.matParam8.w, 0.0, 1.0); // R5: 4.0m ramp End → owned lane
         let lutColor = sRGBToLinear(textureSampleLevel(u_rampMap, s, vec2<f32>((rampT * 255.0 + 0.5) / 256.0, 0.5), 0.0).rgb);
         baseWaterColor = mix(baseWaterColor, lutColor, RAMP_LUT_WEIGHT);
     } else if (obj.styleA.x > 0.05) {
-        let rampT = clamp(effDepth / 4.0, 0.0, 1.0);
+        let rampT = clamp(effDepth / obj.matParam8.w, 0.0, 1.0); // R5: 4.0m ramp End → owned lane
         let midColor = mix(shallowColor, deepColor, 0.5) * vec3<f32>(0.9, 1.1, 1.05);
         var softRamp = mix(shallowColor, midColor, smoothstep(0.0, 0.5, rampT));
         softRamp = mix(softRamp, deepColor, smoothstep(0.4, 1.0, rampT));

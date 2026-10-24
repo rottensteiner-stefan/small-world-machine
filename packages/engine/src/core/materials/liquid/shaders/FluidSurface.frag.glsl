@@ -15,6 +15,7 @@ uniform vec4 u_matParam0; // [shade, rimStrength, specularStrength, normalStreng
 uniform vec4 u_matParam1; // [specularPower, absorption, emissiveMask, transitionSoftness]
 uniform vec4 u_matParam2; // [flowSpeed, distortion, emissivePulse, emissivePulseSpeed]
 uniform vec4 u_matParam3; // [emissive.r*strength, emissive.g*strength, emissive.b*strength, time]
+uniform vec4 u_matParam5; // [worldUVFreq, edgeSoftness, alphaFloor, rimExponent] (R4/E4-B)
 uniform sampler2D u_diffuseMap;
 uniform sampler2D u_normalMap;
 uniform sampler2D u_opaqueDepthMap;
@@ -26,8 +27,9 @@ void main() {
     float flowSpeed = u_matParam2.x;
     float noiseScale = u_matParam2.y;
 
-    // Use world position XZ for seamless tiling across objects
-    vec2 worldUV = v_worldPos.xz * 0.5;
+    // Use world position XZ for seamless tiling across objects. R4/E4-B: 0.5 is a per-meter
+    // lane value (u_matParam5.x), pre-scaled by domainScale on the CPU.
+    vec2 worldUV = v_worldPos.xz * u_matParam5.x;
     vec2 uv = worldUV * noiseScale;
 
     vec2 uv1 = uv + vec2(time * 0.05, time * 0.02) * flowSpeed;
@@ -63,7 +65,8 @@ void main() {
 
     float depthDiff = linBgDepth - linFragDepth;
 
-    float edgeBlend = 1.0 - clamp(depthDiff / 1.0, 0.0, 1.0); // Softness of 1.0 units
+    // R4/E4-B: the 1.0 m edge softness travels in u_matParam5.y (÷ domainScale on the CPU).
+    float edgeBlend = 1.0 - clamp(depthDiff / u_matParam5.y, 0.0, 1.0);
     float noiseBlend = smoothstep(0.7 - softness * 0.5, 0.7 + softness * 0.5, noise);
     float finalBlend = clamp(noiseBlend + edgeBlend, 0.0, 1.0);
 
@@ -84,7 +87,8 @@ void main() {
     float ndl = dot(N, L) * 0.5 + 0.5;
     finalColor *= mix(1.0, ndl * ndl * 1.6 * mix(0.35, 1.0, dirShadow), u_matParam0.x);
     float ndv = clamp(dot(N, V), 0.0, 1.0);
-    float rim = pow(1.0 - ndv, 3.0) * u_matParam0.y;
+    // R4: rim exponent is a raw dimensionless look scalar in u_matParam5.w (default 3.0).
+    float rim = pow(1.0 - ndv, u_matParam5.w) * u_matParam0.y;
     finalColor += edgeColor * rim;
     float ndh = clamp(dot(N, normalize(L + V)), 0.0, 1.0);
     finalColor += u_dirLightColor * pow(ndh, max(u_matParam1.x, 1.0)) * u_matParam0.z * dirShadow;
@@ -92,7 +96,8 @@ void main() {
     // Beer-Lambert thickness from the opaque depth capture: thin slime (shallow depthDiff) turns
     // see-through, thick slime stays dense. absorption 0 (default) keeps alpha at 1.
     float thickness = 1.0 - exp(-u_matParam1.y * max(depthDiff, 0.0));
-    float alpha = mix(1.0, clamp(thickness + rim, 0.25, 1.0), step(0.0001, u_matParam1.y));
+    // R4: alpha floor is a raw dimensionless look scalar in u_matParam5.z (default 0.25).
+    float alpha = mix(1.0, clamp(thickness + rim, u_matParam5.z, 1.0), step(0.0001, u_matParam1.y));
 
     finalColor *= u_exposure;
     finalColor = linearToSRGB(finalColor);
