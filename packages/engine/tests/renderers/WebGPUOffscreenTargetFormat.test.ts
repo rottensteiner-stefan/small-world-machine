@@ -8,6 +8,7 @@ import { GPURenderTargetCache } from "../../src/renderers/WebGPU/managers/GPURen
 import { OpaqueCapture } from "../../src/renderers/WebGPU/managers/OpaqueCapture.js";
 import { GPUTextureResourceCache } from "../../src/renderers/WebGPU/managers/GPUTextureResourceCache.js";
 import { GPUPipelineCache } from "../../src/renderers/WebGPU/managers/GPUPipelineCache.js";
+import { GPUInstanceRingBuffer } from "../../src/renderers/WebGPU/managers/GPUInstanceRingBuffer.js";
 import { GPUObjectRingBuffer } from "../../src/renderers/WebGPU/managers/GPUObjectRingBuffer.js";
 import { GPUGeometryCache } from "../../src/renderers/WebGPU/managers/GPUGeometryCache.js";
 import { RenderTarget } from "../../src/core/textures/index.js";
@@ -104,6 +105,7 @@ function makeRenderer(): { renderer: Internals; device: GPUDevice } {
     renderer.context.shaderRegistry,
   );
   renderer._objectRing = new GPUObjectRingBuffer(device, renderer._objectBGL);
+  renderer._instanceRing = new GPUInstanceRingBuffer(device);
   renderer._geometryCache = new GPUGeometryCache(device);
   renderer._opaqueCapture = new OpaqueCapture(device, renderer._fallback);
   renderer._globalUniformWriter = new GlobalUniformWriter(renderer);

@@ -26,7 +26,7 @@ import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js"
 import type { CubeTexture, RenderTarget } from "../../core/textures/index.js";
 import { Texture, RenderTargetCube } from "../../core/textures/index.js";
 import type { RenderManifest } from "../shaders/index.js";
-import { resolveManifestFlags } from "../shaders/index.js";
+import { VERTEX_COLOR_FLAG, resolveManifestFlags } from "../shaders/index.js";
 import { Color } from "../../core/colors/index.js";
 import type { Object3D, RenderBatch, Scene, TextureArray } from "../../core/index.js";
 import { DeviceLimit, InstancedMesh, computeClipToBox } from "../../core/index.js";
@@ -40,7 +40,8 @@ import {
   Topology,
   WireframeMode,
 } from "../../enums/index.js";
-import type { GLLineRibbon } from "../Mesh.js";
+import type { GLLineRibbon, Mesh } from "../Mesh.js";
+import { AUTO_INSTANCING_MIN_RUN, partitionInstanceRuns } from "../AutoInstancing.js";
 import { usesLineQuadShadow } from "../LineShadowRibbon.js";
 import type { ClusterGridDims } from "../../math/index.js";
 import {
@@ -58,6 +59,10 @@ import { requireGlObject } from "../gl/requireGlObject.js";
 
 /** Out-of-range clear value (octahedral encodings live in [-1, 1]): "no normal" -- see ADR 0028. */
 const NORMAL_TARGET_CLEAR: Float32Array = new Float32Array([-2, -2, 0, 0]);
+/** `u_model` of an auto-instancing run (ADR 0046): the instance matrices carry the transforms. */
+const IDENTITY_MATRIX: Float32Array = new Float32Array([
+  1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+]);
 
 /**
  * WebGL 2.0 implementation of the renderer.
@@ -76,6 +81,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
   private _instanceBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
   private _instanceDataBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
+  /** Auto-instancing (ADR 0046): one streamed matrix buffer for every run, plus its CPU staging. */
+  private _runMatrixBuffer: WebGLBuffer | undefined;
+  private _runStaging: Float32Array = new Float32Array(1024 * 16);
+  // Reused outputs of `partitionInstanceRuns()` (no per-frame allocation).
+  private readonly _scratchRunObjects: Object3D[] = [];
+  private readonly _scratchRuns: number[] = [];
+  private readonly _scratchRunRest: Object3D[] = [];
 
   private _scratchFloat4: Float32Array = new Float32Array(4);
 
@@ -313,6 +325,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._shadowMapsUsed.clear();
     this._instanceBuffers = new WeakMap();
     this._instanceDataBuffers = new WeakMap();
+    this._runMatrixBuffer = undefined;
     this._hdrFbo = undefined;
     this._postEffects = undefined;
     this._postCtx = undefined;
@@ -1262,7 +1275,48 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       // Program the batch uniforms (alpha test / line width) were last set on; a switch re-sets them.
       let batchBound: WebGLProgramCacheEntry | undefined;
 
-      for (const o of objects) {
+      // Automatic instancing (ADR 0046): same-geometry caster runs go through the instanced
+      // depth/EVSM program in one draw each; the rest stays on the per-object loop below.
+      let perObject: readonly Object3D[] = objects;
+      if (
+        !lineQuads &&
+        this._quality.autoInstancing !== false &&
+        objects.length >= AUTO_INSTANCING_MIN_RUN
+      ) {
+        const runObjects = this._scratchRunObjects;
+        const runs = this._scratchRuns;
+        partitionInstanceRuns(objects, runObjects, runs, this._scratchRunRest, true);
+        if (runs.length > 0) {
+          perObject = this._scratchRunRest;
+          const cache = (instCache ??= this._programCache.getProgram(shaderId, true));
+          if (cache !== current) {
+            this.gl.useProgram(cache.prog);
+            this._bindDummyShadowMaps(cache);
+            current = cache;
+          }
+          if (cache !== batchBound) {
+            this._bindShadowBatchUniforms(cache, manifest);
+            batchBound = cache;
+          }
+          for (let r = 0; r < runs.length; r += 2) {
+            const start = runs[r]!;
+            const end = runs[r + 1]!;
+            for (let j = start; j < end; j++) {
+              this._textures.acquireTextures(runObjects[j]!, manifest.textures);
+            }
+            this._renderInstanceRun(
+              runObjects,
+              start,
+              end,
+              cache,
+              batch!.topology,
+              batch!.wireframeMode,
+            );
+          }
+        }
+      }
+
+      for (const o of perObject) {
         if (!o.castShadow || !o.geometry) continue;
         const isInstanced = o instanceof InstancedMesh;
         if (isInstanced && o.instanceCount === 0) continue;
@@ -1449,10 +1503,43 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     const topo = batch!.topology;
 
-    if (standardObjects.length > 0) {
+    // Automatic instancing (ADR 0046): same-geometry runs become one instanced draw each; only
+    // the rest is drawn per object. Vertex colors stay per object (the instanced path binds none).
+    let perObject: Object3D[] = standardObjects;
+    if (
+      this._quality.autoInstancing !== false &&
+      standardObjects.length >= AUTO_INSTANCING_MIN_RUN &&
+      manifest.state?.isSprite !== true &&
+      manifest.state?.isDecal !== true &&
+      manifest.flags?.includes(VERTEX_COLOR_FLAG) !== true
+    ) {
+      partitionInstanceRuns(
+        standardObjects,
+        this._scratchRunObjects,
+        this._scratchRuns,
+        this._scratchRunRest,
+      );
+      if (this._scratchRuns.length > 0) {
+        perObject = this._scratchRunRest;
+        this._renderSubgroup(
+          batch!.shaderId,
+          this._scratchRunObjects,
+          true,
+          manifest,
+          vMat,
+          topo,
+          lights,
+          scene,
+          batch!.wireframeMode,
+          this._scratchRuns,
+        );
+      }
+    }
+
+    if (perObject.length > 0) {
       this._renderSubgroup(
         batch!.shaderId,
-        standardObjects,
+        perObject,
         false,
         manifest,
         vMat,
@@ -1488,10 +1575,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     lights?: LightDataInterface,
     scene?: Scene,
     wireframeMode?: WireframeMode,
+    /** Auto-instancing runs over `objects` as `[start, end)` pairs (ADR 0046). */
+    runs?: readonly number[],
   ): void {
     // --- 3. Build & Bind Shader ---
     const isInst =
-      "instanceCount" in objects[0]! && (objects[0] as InstancedMesh).instanceCount > 0;
+      runs !== undefined ||
+      ("instanceCount" in objects[0]! && (objects[0] as InstancedMesh).instanceCount > 0);
     const shaderFlags = this._buildSubgroupShaderFlags(objects[0], manifest, scene, isInst);
 
     const cache = this._programCache.getProgram(manifest.shaderId, isInst, shaderFlags);
@@ -1532,7 +1622,19 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     // --- 4. Render each object ---
     const texs = manifest.textures;
 
-    // --- 4. Render each object ---
+    if (runs) {
+      for (let r = 0; r < runs.length; r += 2) {
+        const start = runs[r]!;
+        const end = runs[r + 1]!;
+        for (let i = start; i < end; i++) {
+          this._programCache.acquireProgram(objects[i]!, programKey);
+          this._textures.acquireTextures(objects[i]!, texs);
+        }
+        this._renderInstanceRun(objects, start, end, cache, topology, wireframeMode);
+      }
+      return;
+    }
+
     for (let i = 0; i < objects.length; i++) {
       const o = objects[i]!;
       if (!o.geometry) continue;
@@ -1956,8 +2058,84 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       instMesh.instanceMatrixNeedsUpdate = false;
     }
 
-    const mesh = this._geometry.getOrCreateMesh(instMesh, instMesh.geometry!);
+    let dataBuf: WebGLBuffer | undefined;
+    if (instMesh.instanceData && cache.attributes.has("a_instanceData")) {
+      dataBuf = this._instanceDataBuffers.get(instMesh);
+      if (!dataBuf) {
+        dataBuf = this.gl.createBuffer()!;
+        this._instanceDataBuffers.set(instMesh, dataBuf);
+      }
+      if (instMesh.instanceDataNeedsUpdate) {
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
+        instMesh.instanceDataNeedsUpdate = false;
+      }
+    }
 
+    const mesh = this._geometry.getOrCreateMesh(instMesh, instMesh.geometry!);
+    this._drawInstanced(
+      mesh,
+      cache,
+      matrixBuf,
+      instMesh.instanceCount,
+      topology,
+      wireframeMode,
+      ribbon,
+      dataBuf,
+      instMesh.instanceDataSize,
+    );
+  }
+
+  /**
+   * Automatic instancing (ADR 0046): draws `objects[start..end)` (same geometry, see
+   * `partitionInstanceRuns`) as one instanced draw with an identity `u_model`; each object's world
+   * matrix is uploaded as its instance matrix.
+   */
+  private _renderInstanceRun(
+    objects: readonly Object3D[],
+    start: number,
+    end: number,
+    cache: WebGLProgramCacheEntry,
+    topology: Topology,
+    wireframeMode?: WireframeMode,
+  ): void {
+    const count = end - start;
+    if (this._runStaging.length < count * 16) this._runStaging = new Float32Array(count * 32);
+    const staging = this._runStaging;
+    let mesh: Mesh | undefined;
+    for (let i = 0; i < count; i++) {
+      const o = objects[start + i]!;
+      staging.set(o.worldMatrix.data, i * 16);
+      // Per object, so each one's geometry refcount stays tracked like on the per-object path.
+      mesh = this._geometry.getOrCreateMesh(o, o.geometry!);
+    }
+
+    this.gl.bindVertexArray(null);
+    this._uploadModelMatrix(IDENTITY_MATRIX, undefined, undefined, cache.uniforms);
+    this._runMatrixBuffer ??= this.gl.createBuffer()!;
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this._runMatrixBuffer);
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, staging.subarray(0, count * 16), this.gl.STREAM_DRAW);
+
+    this._drawInstanced(mesh!, cache, this._runMatrixBuffer, count, topology, wireframeMode);
+  }
+
+  /**
+   * Shared tail of every instanced draw on the DEFAULT VAO (never a mesh's cached VAO, whose
+   * pointers must stay pristine for the non-instanced path): binds the mesh (or a line-quad
+   * `ribbon`, ADR 0045), the per-instance matrix (and optional data) attributes, draws, and resets
+   * the attribute divisors. `wireframeMode` picks the structural edge buffer like `Mesh.draw()`.
+   */
+  private _drawInstanced(
+    mesh: Mesh,
+    cache: WebGLProgramCacheEntry,
+    matrixBuf: WebGLBuffer,
+    count: number,
+    topology: Topology,
+    wireframeMode?: WireframeMode,
+    ribbon?: GLLineRibbon,
+    dataBuf?: WebGLBuffer,
+    dataSize: number = 4,
+  ): void {
     if (ribbon) {
       mesh.bindLineRibbon(ribbon);
     } else {
@@ -1983,27 +2161,19 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     }
 
     const dataLoc = cache.attributes.get("a_instanceData");
-    if (dataLoc !== undefined && dataLoc >= 0 && instMesh.instanceData) {
-      let dataBuf = this._instanceDataBuffers.get(instMesh);
-      if (!dataBuf) {
-        dataBuf = this.gl.createBuffer()!;
-        this._instanceDataBuffers.set(instMesh, dataBuf);
-      }
+    const hasData = dataBuf !== undefined && dataLoc !== undefined && dataLoc >= 0;
+    if (hasData) {
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
-      if (instMesh.instanceDataNeedsUpdate) {
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
-        instMesh.instanceDataNeedsUpdate = false;
-      }
       this.gl.enableVertexAttribArray(dataLoc);
-      this.gl.vertexAttribPointer(dataLoc, instMesh.instanceDataSize, this.gl.FLOAT, false, 0, 0);
+      this.gl.vertexAttribPointer(dataLoc, dataSize, this.gl.FLOAT, false, 0, 0);
       this.gl.vertexAttribDivisor(dataLoc, 1);
     }
 
     const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;
     if (ribbon) {
-      this.gl.drawArraysInstanced(this.gl.TRIANGLES, 0, ribbon.vertexCount, instMesh.instanceCount);
+      this.gl.drawArraysInstanced(this.gl.TRIANGLES, 0, ribbon.vertexCount, count);
     } else {
-      mesh.drawInstanced(drawMode, instMesh.instanceCount, wireframeMode);
+      mesh.drawInstanced(drawMode, count, wireframeMode);
     }
 
     if (loc !== undefined && loc >= 0) {
@@ -2012,7 +2182,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         this.gl.disableVertexAttribArray(loc + i);
       }
     }
-    if (dataLoc !== undefined && dataLoc >= 0) {
+    if (hasData) {
       this.gl.vertexAttribDivisor(dataLoc, 0);
       this.gl.disableVertexAttribArray(dataLoc);
     }
@@ -2345,6 +2515,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       for (const fbo of this._renderTargetCubeFbos.values()) fbo.destroy();
       for (const shadowFbo of this._shadowMaps.values()) shadowFbo.destroy();
       this._dummyShadowMap?.destroy();
+      if (this._runMatrixBuffer) gl.deleteBuffer(this._runMatrixBuffer);
       if (this._rawDepthSampler) gl.deleteSampler(this._rawDepthSampler);
       this._hdrFbo?.destroy();
       if (this._opaqueNormalTexture) this.gl.deleteTexture(this._opaqueNormalTexture);

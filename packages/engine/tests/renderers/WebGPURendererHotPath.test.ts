@@ -8,6 +8,7 @@ import { BasicMaterial } from "../../src/core/materials/surface/BasicMaterial.js
 import type { RenderManifest } from "../../src/renderers/shaders/RenderManifest.js";
 import { Topology } from "../../src/enums/index.js";
 import { GPUObjectRingBuffer } from "../../src/renderers/WebGPU/managers/GPUObjectRingBuffer.js";
+import { GPUInstanceRingBuffer } from "../../src/renderers/WebGPU/managers/GPUInstanceRingBuffer.js";
 
 (globalThis as unknown as { GPUBufferUsage: Record<string, number> }).GPUBufferUsage ??= {
   MAP_READ: 0x0001,
@@ -158,6 +159,84 @@ describe("WebGPURenderer._renderSubgroup: per-draw state (A5/K6)", () => {
     expect(rp["setVertexBuffer"]).toHaveBeenCalledTimes(6); // slots 0-5 once, not once per object
     expect(rp["draw"]).toHaveBeenCalledTimes(3);
     expect(renderer._pipelineCache.acquirePipeline).toHaveBeenCalledWith(objs[0], "k");
+  });
+});
+
+describe("WebGPURenderer._renderSubgroup: automatic instancing (ADR 0046)", () => {
+  function setup(count: number): {
+    renderer: RendererInternals;
+    rp: Record<string, ReturnType<typeof vi.fn>>;
+    objs: Object3D[];
+    mat: BasicMaterial;
+  } {
+    const { renderer, rp } = makeDrawRenderer();
+    renderer._instanceRing = new GPUInstanceRingBuffer(renderer._device as GPUDevice);
+    renderer._objectRing = {
+      bindGroup: {},
+      acquireObjectSlot: vi.fn(() => 512),
+      lastAcquireCached: false,
+      write: vi.fn(),
+    };
+    renderer._packObjectUniforms = vi.fn(() => true);
+    const geo = new Cube().getGeometryData();
+    const mat = new BasicMaterial();
+    const objs = Array.from({ length: count }, (_, i) => {
+      const o = new Object3D(`o${i}`);
+      o.geometry = geo;
+      o.material = mat;
+      o.setPosition(i, 0, 0);
+      o.updateMatrixWorld(true);
+      return o;
+    });
+    return { renderer, rp, objs, mat };
+  }
+
+  function drawAll(
+    renderer: RendererInternals,
+    rp: unknown,
+    objs: Object3D[],
+    mat: BasicMaterial,
+  ): void {
+    renderer._renderSubgroup(
+      rp as GPURenderPassEncoder,
+      objs,
+      false,
+      mat.uuid,
+      manifest,
+      0,
+      undefined,
+      Topology.TRIANGLE_LIST,
+    );
+  }
+
+  it("draws a same-geometry run as one instanced draw with the world matrices as instances", () => {
+    const { renderer, rp, objs, mat } = setup(6);
+
+    drawAll(renderer, rp, objs, mat);
+
+    expect(rp["draw"]).toHaveBeenCalledTimes(1);
+    expect(rp["draw"]).toHaveBeenCalledWith(8, 6);
+    expect(
+      renderer._pipelineCache.getPipeline.mock.calls.some((c: unknown[]) => c[2] === true),
+    ).toBe(true);
+    expect(rp["setVertexBuffer"]).toHaveBeenCalledWith(6, renderer._instanceRing.buffer, 0, 6 * 64);
+    // One shared object slot with an identity model matrix, never a per-object slot.
+    expect(renderer._packObjectUniforms).toHaveBeenCalledWith(objs[0], manifest, undefined, true);
+    expect(renderer._getObjectSlotOffset).not.toHaveBeenCalled();
+    // Lifecycle bookkeeping still runs per object.
+    expect(renderer._pipelineCache.acquirePipeline).toHaveBeenCalledTimes(6);
+    expect(renderer._geometryCache.getGeoCache).toHaveBeenCalledTimes(6);
+    const upload = renderer._device.queue.writeBuffer.mock.calls.at(-1)!;
+    expect(Array.from((upload[2] as Float32Array).subarray(16 + 12, 16 + 15))).toEqual([1, 0, 0]);
+  });
+
+  it("keeps per-object draws when quality.autoInstancing is false", () => {
+    const { renderer, rp, objs, mat } = setup(6);
+    renderer._quality = { ...renderer._quality, autoInstancing: false };
+
+    drawAll(renderer, rp, objs, mat);
+
+    expect(rp["draw"]).toHaveBeenCalledTimes(6);
   });
 });
 

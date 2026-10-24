@@ -18,6 +18,30 @@ describe("HoverBehavior", () => {
     expect((obj.material as StandardMaterial).emissiveIntensity).toBe(1.0);
   });
 
+  it("keeps a shared material shared until the object is actually hovered", () => {
+    const shared = new StandardMaterial();
+    const a = new Object3D("a");
+    const b = new Object3D("b");
+    a.material = shared;
+    b.material = shared;
+    attachBehavior(a.behaviors, new HoverBehavior(1.5), a);
+    attachBehavior(b.behaviors, new HoverBehavior(1.5), b);
+
+    expect(a.material).toBe(shared);
+    expect(b.material).toBe(shared);
+
+    a.onPointerEnter?.();
+    expect(a.material).not.toBe(shared);
+    expect(b.material).toBe(shared);
+    expect(shared.emissiveIntensity).toBe(1.0);
+
+    // The private copy is made once and reused on later hovers.
+    const own = a.material;
+    a.onPointerLeave?.();
+    a.onPointerEnter?.();
+    expect(a.material).toBe(own);
+  });
+
   it("clears the target's pointer handlers on detach instead of leaving them live", () => {
     const obj = new Object3D("test");
     obj.material = new StandardMaterial();

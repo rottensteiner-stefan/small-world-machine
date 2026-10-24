@@ -15,6 +15,8 @@ export class HoverBehavior extends Behavior {
    * single-slot callbacks another behavior may have overwritten in the meantime. */
   private _onPointerEnter: (() => void) | undefined;
   private _onPointerLeave: (() => void) | undefined;
+  /** This behavior's private copy of the target's material, made on the first hover. */
+  private _ownMaterial: StandardMaterial | undefined;
 
   constructor(hoverMultiplier: number = 1.5) {
     super();
@@ -28,16 +30,16 @@ export class HoverBehavior extends Behavior {
     this._currentScale = this._baseScale;
     this._targetScale = this._baseScale;
 
-    // Clone the material before ever mutating it: many callers share one material instance
-    // across a large batch of objects (e.g. an instanced grid) for performance, and directly
-    // tinting a shared material's emissive properties would visibly glow every object using it,
-    // not just the one actually hovered.
-    if (target.material instanceof StandardMaterial) {
-      target.material = target.material.clone();
-    }
-
     this._onPointerEnter = (): void => {
       this._targetScale = this._baseScale * this._hoverMultiplier;
+      // Copy-on-write: many callers share one material across a large grid, and tinting it
+      // would glow every object. Cloning only on the first hover (instead of on attach) keeps
+      // never-hovered objects on the shared material, so the renderer can still draw them as
+      // one instanced batch. The copy is kept afterwards (e.g. for a later recolor).
+      if (target.material instanceof StandardMaterial && target.material !== this._ownMaterial) {
+        this._ownMaterial = target.material.clone();
+        target.material = this._ownMaterial;
+      }
       if (target.material instanceof StandardMaterial) {
         target.material.emissiveColor.set(0.2, 0.5, 1.0); // Glow blue
         target.material.emissiveIntensity = 2.0;

@@ -111,6 +111,13 @@ export interface QualityConfig {
    * post-processing for it.
    */
   normalBuffer?: boolean | "auto";
+  /**
+   * Automatic instancing (ADR 0046, default `true`): the renderer draws consecutive opaque objects
+   * that share a geometry and a material as one instanced draw. The scene graph is unaffected
+   * (picking, behaviors, culling stay per object). Set `false` to debug per-object draws.
+   * WebGPU and WebGL2.
+   */
+  autoInstancing?: boolean;
 }
 
 /**

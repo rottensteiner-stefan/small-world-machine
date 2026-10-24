@@ -70,6 +70,14 @@ These control the engine's graphical fidelity.
   **Checking it by eye:** Showcase 10 accepts `?aniso=N` (cap at N, `1` = off; without it the engine default of 4 applies), and `npm run build && npm run aniso:compare` renders its oblique view at several levels on both GL2 and WebGPU, writes the images, a difference image and sharpness numbers to `.agents/scratches/aniso/report.html`, and prints the GPU it ran on (run it on a real GPU, not in software rendering). On an Apple M4 Pro the detail in the far field rose by about 20 % from level 1 to 4, by 4 % more from 4 to 8 and by 1 % from 8 to 16, on both backends.
 - `hdr` (boolean): Enables high-dynamic-range (Float16) rendering pipelines.
 - `toneMapping` (string): The tone mapping algorithm to use (e.g. `aces`, `reinhard`, `none`).
+- `autoInstancing` (boolean, default `true`, ADR 0046): The renderer draws consecutive opaque
+  objects that share a geometry and a material as **one** instanced draw (main pass, shadow
+  passes, depth pre-pass; WebGPU and WebGL2). The scene graph is untouched: every object keeps
+  its own picking, behaviors, culling and bounds. Runs start at 4 objects; skinned meshes,
+  sprites, decals, vertex-colored geometry and `InstancedMesh` stay on their own paths. An
+  object with its own material instance (e.g. a recolored one) simply leaves the run. Set
+  `false` to debug per-object draws. Showcase 19 (1600 cubes): 6695 → 6 draws per frame on
+  WebGPU, 5660 → 5 on WebGL2.
 - `shadowMode` (`"pcss"` | `"evsm"`): Optional directional-shadow algorithm. `"evsm"`
   (Exponential Variance Shadow Maps, see `docs/guides/shadows.md` and ADR 0043) renders
   warped variance moments and evaluates a Chebyshev bound with light-bleeding reduction;

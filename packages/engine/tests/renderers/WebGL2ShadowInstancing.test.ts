@@ -32,6 +32,8 @@ interface Internals {
   _programCache: { getProgram: ReturnType<typeof vi.fn> };
   _bindDummyShadowMaps: ReturnType<typeof vi.fn>;
   _renderInstancedObject: ReturnType<typeof vi.fn>;
+  _renderInstanceRun: ReturnType<typeof vi.fn>;
+  _quality: { autoInstancing?: boolean };
   _uploadModelMatrix: ReturnType<typeof vi.fn>;
   _textures: { acquireTextures: ReturnType<typeof vi.fn> };
   _geometry: { getOrCreateMesh: ReturnType<typeof vi.fn> };
@@ -83,6 +85,7 @@ function setup(): Setup {
   };
   r._bindDummyShadowMaps = vi.fn();
   r._renderInstancedObject = vi.fn();
+  r._renderInstanceRun = vi.fn();
   r._uploadModelMatrix = vi.fn();
   r._textures = { acquireTextures: vi.fn() };
   r._geometry = {
@@ -187,5 +190,40 @@ describe("WebGL2 shadow pass: line casters with a shadowWidth (ADR 0045)", () =>
     expect(r.gl.useProgram).not.toHaveBeenCalledWith(line.prog);
     expect(draw).toHaveBeenCalledWith(r.gl.LINES, b.wireframeMode);
     expect(r.gl.disable).not.toHaveBeenCalled();
+  });
+});
+
+describe("WebGL2 shadow pass: automatic instancing (ADR 0046)", () => {
+  function casters(n: number): Object3D[] {
+    const geo = new Cube().getGeometryData();
+    const mat = new BasicMaterial();
+    return Array.from({ length: n }, (_, i) => {
+      const o = new Object3D(`c${i}`);
+      o.geometry = geo;
+      o.material = mat;
+      o.castShadow = true;
+      return o;
+    });
+  }
+
+  it("draws a same-geometry caster run through the instanced depth program in one call", () => {
+    const { r, inst, draw } = setup();
+    const objs = casters(5);
+
+    r._renderShadowScene(MaterialType.DEPTH, "line", 1 / 512, [batch(objs)]);
+
+    expect(r._renderInstanceRun).toHaveBeenCalledTimes(1);
+    expect(r._renderInstanceRun.mock.calls[0]!.slice(1, 4)).toEqual([0, 5, inst]);
+    expect(draw).not.toHaveBeenCalled();
+  });
+
+  it("stays per object with quality.autoInstancing false", () => {
+    const { r, draw } = setup();
+    r._quality = { ...r._quality, autoInstancing: false };
+
+    r._renderShadowScene(MaterialType.DEPTH, "line", 1 / 512, [batch(casters(5))]);
+
+    expect(r._renderInstanceRun).not.toHaveBeenCalled();
+    expect(draw).toHaveBeenCalledTimes(5);
   });
 });

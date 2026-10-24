@@ -48,7 +48,9 @@ import {
 } from "./managers/GPUPipelineCache.js";
 import { GPUObjectRingBuffer } from "./managers/GPUObjectRingBuffer.js";
 import { GPUGeometryCache } from "./managers/GPUGeometryCache.js";
-import type { WebGPULineRibbon } from "./managers/GPUGeometryCache.js";
+import type { WebGPUGeoCacheEntry, WebGPULineRibbon } from "./managers/GPUGeometryCache.js";
+import { GPUInstanceRingBuffer } from "./managers/GPUInstanceRingBuffer.js";
+import { AUTO_INSTANCING_MIN_RUN, partitionInstanceRuns } from "../AutoInstancing.js";
 import {
   MainRenderPass,
   PostProcessPass,
@@ -80,6 +82,9 @@ const VIEW_SLOT_COUNT = 9;
  */
 /** Frames a material bind group may sit unused before `_sweepMaterialBindGroups()` drops it. */
 const MATERIAL_BIND_GROUP_IDLE_FRAMES = 600;
+
+/** Model matrix of an auto-instancing run's object slot (ADR 0046). */
+const IDENTITY_MATRIX = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
 export class WebGPURenderer extends AbstractRenderer {
   public override readonly type: RendererType = RendererType.WEB_GPU;
@@ -140,6 +145,12 @@ export class WebGPURenderer extends AbstractRenderer {
   /** Per-object dynamic-offset uniform ring buffer -- see `GPUObjectRingBuffer`'s own doc
    * comment. */
   private _objectRing!: GPUObjectRingBuffer;
+  /** Per-frame instance matrices of auto-instancing runs (ADR 0046). */
+  private _instanceRing!: GPUInstanceRingBuffer;
+  // Reused outputs of `partitionInstanceRuns()` in `_renderSubgroup` (no per-frame allocation).
+  private readonly _scratchRunObjects: Object3D[] = [];
+  private readonly _scratchRuns: number[] = [];
+  private readonly _scratchRunRest: Object3D[] = [];
 
   /** Per-draw view-projection dynamic-offset buffer -- see `VIEW_SLOT_*`/`_setViewMatrix()`. */
   private _viewBGL!: GPUBindGroupLayout;
@@ -723,6 +734,7 @@ export class WebGPURenderer extends AbstractRenderer {
       ],
     });
     this._objectRing = new GPUObjectRingBuffer(this._device!, this._objectBGL);
+    this._instanceRing = new GPUInstanceRingBuffer(this._device!);
 
     // Per-draw view-projection dynamic-offset buffer -- vertex-stage only (position transform),
     // unlike `_objectBGL` which the fragment shader also reads.
@@ -986,6 +998,7 @@ export class WebGPURenderer extends AbstractRenderer {
     if (this._frameCount % MATERIAL_BIND_GROUP_IDLE_FRAMES === 0) this._sweepMaterialBindGroups();
 
     this._objectRing.beginFrame();
+    this._instanceRing.beginFrame();
     this._gpuBoneMatricesOffset = 0;
     this._boneSlotMap.clear();
 
@@ -1083,6 +1096,7 @@ export class WebGPURenderer extends AbstractRenderer {
     this.memoizeLightsFor(undefined);
 
     this._objectRing.endFrame();
+    this._instanceRing.endFrame();
     this._fallback.drainPendingDestroy();
     if (this._occlusionCullingEnabled) this._kickoffHzbMapAsync();
   }
@@ -1310,6 +1324,30 @@ export class WebGPURenderer extends AbstractRenderer {
     // Line-quad shadow draw (ADR 0045): the caster's edge ribbon replaces its own buffers.
     const lineQuads = effManifest.state?.lineQuads === true;
 
+    // Automatic instancing (ADR 0046): runs of same-geometry objects of this material become one
+    // instanced draw each (after the per-object loop below); only the rest is drawn per object.
+    // Vertex colors are excluded because the instanced pipeline has no slot left for them.
+    let drawList: readonly Object3D[] = objects;
+    let hasRuns = false;
+    if (
+      this._quality.autoInstancing !== false &&
+      !isInstanced &&
+      !lineQuads &&
+      !usesVertexColor &&
+      objects.length >= AUTO_INSTANCING_MIN_RUN &&
+      effManifest.state?.isSprite !== true &&
+      effManifest.state?.isDecal !== true
+    ) {
+      partitionInstanceRuns(
+        objects,
+        this._scratchRunObjects,
+        this._scratchRuns,
+        this._scratchRunRest,
+      );
+      hasRuns = this._scratchRuns.length > 0;
+      if (hasRuns) drawList = this._scratchRunRest;
+    }
+
     // K6 state dedup: consecutive objects sharing one geometry (the common instanced-by-hand /
     // repeated-prop case) keep the vertex/index buffers already bound. Skipped for instanced
     // subgroups, whose `ensureDummyBufferSize(instanceCount)` may swap a dummy buffer that an
@@ -1317,7 +1355,7 @@ export class WebGPURenderer extends AbstractRenderer {
     // dynamic offset into the per-frame object ring and the per-frame material/global bind
     // groups change each frame, so a recorded bundle would be invalid by the next one.
     let lastGeo: object | undefined;
-    for (const obj of objects) {
+    for (const obj of drawList) {
       if (!obj.geometry) continue;
 
       this._pipelineCache.acquirePipeline(obj, pipelineKey);
@@ -1436,44 +1474,125 @@ export class WebGPURenderer extends AbstractRenderer {
 
         if (ribbon) {
           rp.draw(ribbon.vertexCount, instMesh.instanceCount);
-        } else if (topology === Topology.LINE_LIST) {
-          if (wireframeMode === WireframeMode.STRUCTURAL && gCache.wib) {
-            rp.setIndexBuffer(gCache.wib, gCache.format!);
-            rp.drawIndexed(gCache.wireframeIndexCount, instMesh.instanceCount);
-          } else if (gCache.ib) {
-            rp.setIndexBuffer(gCache.ib, gCache.format!);
-            rp.drawIndexed(gCache.indexCount, instMesh.instanceCount);
-          } else {
-            rp.draw(gCache.vertexCount, instMesh.instanceCount);
-          }
         } else {
-          if (gCache.ib) {
-            rp.setIndexBuffer(gCache.ib, gCache.format!);
-            rp.drawIndexed(gCache.indexCount, instMesh.instanceCount);
-          } else {
-            rp.draw(gCache.vertexCount, instMesh.instanceCount);
-          }
+          this._drawGeometry(rp, gCache, topology, wireframeMode, instMesh.instanceCount);
         }
+      } else if (ribbon) {
+        rp.draw(ribbon.vertexCount);
       } else {
-        if (ribbon) {
-          rp.draw(ribbon.vertexCount);
-        } else if (topology === Topology.LINE_LIST) {
-          if (wireframeMode === WireframeMode.STRUCTURAL && gCache.wib) {
-            rp.setIndexBuffer(gCache.wib, gCache.format!);
-            rp.drawIndexed(gCache.wireframeIndexCount);
-          } else if (gCache.ib) {
-            rp.setIndexBuffer(gCache.ib, gCache.format!);
-            rp.drawIndexed(gCache.indexCount);
-          } else {
-            rp.draw(gCache.vertexCount);
-          }
-        } else if (gCache.ib) {
-          rp.setIndexBuffer(gCache.ib, gCache.format!);
-          rp.drawIndexed(gCache.indexCount);
-        } else {
-          rp.draw(gCache.vertexCount);
-        }
+        this._drawGeometry(rp, gCache, topology, wireframeMode, 1);
       }
+    }
+
+    if (hasRuns) {
+      this._renderInstanceRuns(
+        rp,
+        matUuid,
+        manifest,
+        effManifest,
+        viewOffset,
+        topology,
+        wireframeMode,
+        normalMode,
+        targetFormat,
+      );
+    }
+  }
+
+  /**
+   * Indexed or plain draw of `gCache`, `instanceCount` times. Line lists draw the structural edge
+   * buffer in `STRUCTURAL` mode, otherwise the triangle indices as line pairs.
+   */
+  private _drawGeometry(
+    rp: GPURenderPassEncoder,
+    gCache: WebGPUGeoCacheEntry,
+    topology: GPUPrimitiveTopology,
+    wireframeMode: WireframeMode | undefined,
+    instanceCount: number,
+  ): void {
+    if (
+      topology === Topology.LINE_LIST &&
+      wireframeMode === WireframeMode.STRUCTURAL &&
+      gCache.wib
+    ) {
+      rp.setIndexBuffer(gCache.wib, gCache.format!);
+      rp.drawIndexed(gCache.wireframeIndexCount, instanceCount);
+    } else if (gCache.ib) {
+      rp.setIndexBuffer(gCache.ib, gCache.format!);
+      rp.drawIndexed(gCache.indexCount, instanceCount);
+    } else {
+      rp.draw(gCache.vertexCount, instanceCount);
+    }
+  }
+
+  /**
+   * Automatic instancing (ADR 0046): draws every run found by `partitionInstanceRuns()` (left in
+   * `_scratchRuns` / `_scratchRunObjects`) as one instanced draw, through the same instanced
+   * pipeline `InstancedMesh` uses. The object slot carries an identity model matrix (shared by
+   * all runs of this material this frame); each object's world matrix is its instance matrix.
+   */
+  private _renderInstanceRuns(
+    rp: GPURenderPassEncoder,
+    matUuid: string,
+    manifest: RenderManifest,
+    effManifest: RenderManifest,
+    viewOffset: number,
+    topology: GPUPrimitiveTopology,
+    wireframeMode: WireframeMode | undefined,
+    normalMode: NormalTargetMode,
+    targetFormat: GPUTextureFormat,
+  ): void {
+    const cache = this._pipelineCache.getPipeline(
+      effManifest,
+      topology,
+      true,
+      targetFormat,
+      normalMode,
+    );
+    rp.setPipeline(cache.pipeline);
+    rp.setBindGroup(1, this._getMaterialBindGroup(matUuid, manifest, cache.bgLayouts[1]!));
+    rp.setBindGroup(3, this._viewBindGroup, [viewOffset]);
+
+    const runObjects = this._scratchRunObjects;
+    const runs = this._scratchRuns;
+
+    // Keyed by the manifest, not an object: the slot never collides with a per-object slot.
+    const slot = this._objectRing.acquireObjectSlot(manifest, matUuid);
+    if (
+      !this._objectRing.lastAcquireCached &&
+      this._packObjectUniforms(runObjects[runs[0]!]!, manifest, undefined, true)
+    ) {
+      this._objectRing.write(slot, this._scratchObjBufferData);
+    }
+    rp.setBindGroup(2, this._objectRing.bindGroup, [slot]);
+
+    for (let r = 0; r < runs.length; r += 2) {
+      const start = runs[r]!;
+      const end = runs[r + 1]!;
+      const count = end - start;
+
+      let gCache: WebGPUGeoCacheEntry | undefined;
+      for (let j = start; j < end; j++) {
+        const obj = runObjects[j]!;
+        this._pipelineCache.acquirePipeline(obj, cache.key);
+        this._textures.acquireTextures(obj, manifest.textures);
+        // Per object, so each one's geometry refcount stays tracked like on the per-object path.
+        gCache = this._geometryCache.getGeoCache(obj, obj.geometry!);
+      }
+
+      this._fallback.ensureDummyBufferSize(Math.max(gCache!.vertexCount, count));
+      rp.setVertexBuffer(0, gCache!.vb);
+      rp.setVertexBuffer(1, gCache!.nb || this._fallback.dummyNormalBuffer);
+      rp.setVertexBuffer(2, gCache!.uvb || this._fallback.dummyUvBuffer);
+      rp.setVertexBuffer(3, gCache!.tb || this._fallback.dummyTangentBuffer);
+      rp.setVertexBuffer(4, gCache!.jb || this._fallback.dummyJointsBuffer);
+      rp.setVertexBuffer(5, gCache!.wb || this._fallback.dummyWeightsBuffer);
+
+      const offset = this._instanceRing.writeRun(runObjects, start, end);
+      rp.setVertexBuffer(6, this._instanceRing.buffer, offset, count * 64);
+      rp.setVertexBuffer(7, this._fallback.dummyUvBuffer);
+
+      this._drawGeometry(rp, gCache!, topology, wireframeMode, count);
     }
   }
 
@@ -1498,12 +1617,19 @@ export class WebGPURenderer extends AbstractRenderer {
 
   /** Packs `obj`'s `ObjectUniforms` into `_scratchObjBufferData`. Returns false (leaving the
    * scratch buffer untouched) if `m.shaderId` isn't registered -- caller then skips the upload,
-   * matching the previous per-object-buffer behavior of leaving the slot's prior contents alone. */
-  protected _packObjectUniforms(o: Object3D, m: RenderManifest, vMat?: Float32Array): boolean {
+   * matching the previous per-object-buffer behavior of leaving the slot's prior contents alone.
+   * `identityModel` packs an identity model matrix (an auto-instancing run: the instance matrices
+   * carry the world transforms). */
+  protected _packObjectUniforms(
+    o: Object3D,
+    m: RenderManifest,
+    vMat?: Float32Array,
+    identityModel: boolean = false,
+  ): boolean {
     const shaderDef = this.context.shaderRegistry.get(m.shaderId);
     if (!shaderDef) return false;
 
-    this._scratchModelMatrix.set(o.worldMatrix.data);
+    this._scratchModelMatrix.set(identityModel ? IDENTITY_MATRIX : o.worldMatrix.data);
     const state = m.state;
     if (state?.isSprite && vMat) {
       const sx = Math.sqrt(
@@ -1819,6 +1945,7 @@ export class WebGPURenderer extends AbstractRenderer {
   /** @inheritdoc */
   public override destroy(): void {
     this._objectRing?.dispose();
+    this._instanceRing?.destroy();
     this._geometryCache?.dispose();
     for (const tex of this._shadowMaps.values()) tex.destroy();
     this._targetCache?.dispose();
