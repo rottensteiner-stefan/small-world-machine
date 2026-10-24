@@ -57,6 +57,9 @@ jobs:
       - name: Verified marker lint
         run: npm run check:markers
 
+      - name: Doctrine check (ADR 0047)
+        run: npm run check:doctrine
+
       - name: Unit tests
         run: npm test
 
