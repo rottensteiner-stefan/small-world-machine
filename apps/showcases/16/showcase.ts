@@ -1,4 +1,3 @@
-import type { InstancedMesh, StateMachine } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -6,11 +5,9 @@ import {
   DirectionalLight,
   DynamicReflectionProbe,
   Ground,
-  Matrix4,
   Object3D,
   PlanarReflectionNode,
   PointLight,
-  Quaternion,
   RendererType,
   Sphere,
   StandardMaterial,
@@ -19,31 +16,9 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 
-interface Ball {
-  position: { x: number; y: number; z: number };
-  velocity: { x: number; y: number; z: number };
-  radius: number;
-  stateMachine: StateMachine<"active" | "falling" | "exploding", BallContext>;
-  timeOnFloor: number;
-  lifeTime: number;
-  scale: number;
-  alpha: number;
-}
-
-interface BallContext {
-  ball: Ball;
-  example: Showcase16;
-}
-
 export class Showcase16 extends AbstractShowcase {
-  protected _balls: Ball[] = [];
-  protected _largeSpheres: { object: Object3D; radius: number; x: number; y: number; z: number }[] =
-    [];
   protected _orbitingLight!: PointLight;
   protected _time: number = 0;
-
-  // Instanced Meshes (split into 5 color groups to maintain multi-colored aesthetic)
-  protected _mainBallsMeshes: InstancedMesh[] = [];
 
   // Dynamic Reflection Probes
   protected _probes: DynamicReflectionProbe[] = [];
@@ -52,12 +27,6 @@ export class Showcase16 extends AbstractShowcase {
   protected _moonPivots: Object3D[] = [];
 
   protected _reflectionNode!: PlanarReflectionNode;
-
-  // Scratch variables to avoid per-frame allocations
-  protected _scratchPos: Vector3D = new Vector3D();
-  protected _scratchRot: Quaternion = new Quaternion();
-  protected _scratchScale: Vector3D = new Vector3D();
-  protected _tempMatrix: Matrix4 = new Matrix4();
 
   protected override async setupScene(): Promise<void> {
     this.onCanvasRecreated();
@@ -169,7 +138,7 @@ export class Showcase16 extends AbstractShowcase {
     // that same texture is bound as the render target of its own reflection sub-render.
     this._reflectionNode.excludedObjects.push(floor);
 
-    // 5. Create 3 Large Mirrored Spheres
+    // 6. Create 3 Large Mirrored Spheres
     const sphereGeom = new Sphere({
       radius: 1,
       widthSegments: 32,
@@ -196,7 +165,6 @@ export class Showcase16 extends AbstractShowcase {
     sphere1.add(probe1);
     this._probes.push(probe1);
     (sphere1.material as StandardMaterial).envMap = probe1.renderTarget;
-    this._largeSpheres.push({ object: sphere1, radius: 2.0, x: -3.5, y: 2.0, z: -1.5 });
 
     // Large Sphere 2: Pale Mint
     const sphere2 = new Object3D("LargeSphere2").setPosition(3.5, 1.5, -2.0);
@@ -218,7 +186,6 @@ export class Showcase16 extends AbstractShowcase {
     sphere2.add(probe2);
     this._probes.push(probe2);
     (sphere2.material as StandardMaterial).envMap = probe2.renderTarget;
-    this._largeSpheres.push({ object: sphere2, radius: 1.5, x: 3.5, y: 1.5, z: -2.0 });
 
     // Large Sphere 3: Pale Rose
     const sphere3 = new Object3D("LargeSphere3").setPosition(0.0, 1.0, 3.0);
@@ -240,17 +207,12 @@ export class Showcase16 extends AbstractShowcase {
     sphere3.add(probe3);
     this._probes.push(probe3);
     (sphere3.material as StandardMaterial).envMap = probe3.renderTarget;
-    this._largeSpheres.push({ object: sphere3, radius: 1.0, x: 0.0, y: 1.0, z: 3.0 });
 
-    // Large Spheres cast and receive shadows. Reflected fake spheres are removed.
-
-    // 6. Setup Moons
-    const ballColors = [
+    // 7. Setup Moons
+    const moonColors = [
       new Color(1.0, 0.45, 0.35), // Neon peach
       new Color(0.4, 0.85, 0.4), // Lime
       new Color(1.0, 0.85, 0.2), // Neon yellow
-      new Color(0.2, 0.8, 0.85), // Neon cyan
-      new Color(0.9, 0.4, 0.75), // Magenta
     ];
 
     const moonGeom = new Sphere({
@@ -261,7 +223,7 @@ export class Showcase16 extends AbstractShowcase {
 
     // Moon 1 (orbiting sphere1)
     const moonMat1 = new StandardMaterial({
-      color: ballColors[0]!,
+      color: moonColors[0]!,
       metallic: 0.0,
       roughness: 0.95,
     });
@@ -278,7 +240,7 @@ export class Showcase16 extends AbstractShowcase {
 
     // Moon 2 (orbiting sphere2)
     const moonMat2 = new StandardMaterial({
-      color: ballColors[1]!,
+      color: moonColors[1]!,
       metallic: 0.0,
       roughness: 0.95,
     });
@@ -295,7 +257,7 @@ export class Showcase16 extends AbstractShowcase {
 
     // Moon 3 (orbiting sphere3)
     const moonMat3 = new StandardMaterial({
-      color: ballColors[2]!,
+      color: moonColors[2]!,
       metallic: 0.0,
       roughness: 0.95,
     });
@@ -321,39 +283,6 @@ export class Showcase16 extends AbstractShowcase {
     const lightZ = Math.sin(this._time * 0.8) * orbitRadius;
     this._orbitingLight.position.set(lightX, 5.0, lightZ);
 
-    // 1. Tick state machine physics only for active balls
-    /*
-    const activeCount = this._activeBallCount;
-    for (let i = 0; i < activeCount; i++) {
-      this._balls[i]!.stateMachine.update(deltaTime);
-    }
-    */
-
-    // 3. Construct and upload instance matrices
-    /*
-    const active = this._activeBallCount;
-    for (let i = 0; i < Showcase16.MAX_BALLS; i++) {
-      const ball = this._balls[i]!;
-      const colorIdx = i % 5;
-      const instanceIdx = Math.floor(i / 5);
-
-      if (i >= active) {
-        // Hide this slot: scale to zero, park far off-screen
-        this._scratchPos.set(0, -9999, 0);
-        this._scratchScale.set(0, 0, 0);
-        this._tempMatrix.compose(this._scratchPos, this._scratchRot, this._scratchScale);
-        this._mainBallsMeshes[colorIdx]!.setMatrixAt(instanceIdx, this._tempMatrix);
-        continue;
-      }
-
-      // 3.1 Main Ball transform
-      this._scratchPos.set(ball.position.x, ball.position.y, ball.position.z);
-      this._scratchScale.set(ball.scale, ball.scale, ball.scale);
-      this._tempMatrix.compose(this._scratchPos, this._scratchRot, this._scratchScale);
-      this._mainBallsMeshes[colorIdx]!.setMatrixAt(instanceIdx, this._tempMatrix);
-    }
-    */
-
     // Update moons
     for (let i = 0; i < this._moonPivots.length; i++) {
       // Rotation speed offsets so they don't look completely identical
@@ -361,10 +290,10 @@ export class Showcase16 extends AbstractShowcase {
       this._moonPivots[i]!.setRotation(0, this._time * speed, 0);
     }
 
-    // 4. Update the planar reflection
+    // Update the planar reflection
     this._reflectionNode.updateReflection(this.scene, this.camera!, this.renderer);
 
-    // 5. Update dynamic probes
+    // Update dynamic probes
     for (const probe of this._probes) {
       probe.updateReflection(this.scene, this.renderer);
     }
