@@ -322,6 +322,20 @@ export class OctreeNode {
 
 /**
  * An octree for spatial partitioning.
+ *
+ * Serves as the single spatial structure for the scene graph (static/dynamic visibility
+ * culling via `FrustumCuller`, player collision via `CollisionResolution`, picking via
+ * `InteractionManager`) and, since the R5/D6 unification, also hosts non-Object3D static
+ * colliders registered through `Scene.staticColliders` (entered by `Scene.updateStaticOctree`).
+ *
+ * **Known structural limitation (accepted, decision D7):** `insert()` grows the root AABB for
+ * objects outside the initial extent, but an already-subdivided tree keeps the old child
+ * bounds. An object inserted outside the original extent after subdivision therefore cannot
+ * descend into children: it stays in `root.objects`, so for such objects the tree degrades
+ * toward a linear scan. Correctness is unaffected (queries still return every stored object);
+ * the accumulation is a documented, decision-gated performance trade-off, not a defect of the
+ * visible result. See `.agents/scratches/schwerpunkt_4_verifikations_architektur.md` §1 (D7)
+ * and the `it.todo` in `tests/core/Octree.test.ts`.
  */
 export class Octree {
   public root: OctreeNode;

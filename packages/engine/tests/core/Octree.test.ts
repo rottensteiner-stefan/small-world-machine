@@ -124,4 +124,15 @@ describe("Octree", () => {
       decal,
     );
   });
+
+  // Decision D7 / schwerpunkt_4 §101-102: accept-and-document. Known structural limitation --
+  // `Octree.insert` grows the root AABB for out-of-extent objects, but an already-subdivided
+  // tree keeps the old child bounds, so such an object stays in `root.objects` and the spatial
+  // acceleration degrades toward a linear scan for it (visibility/collision correctness is
+  // unaffected). Instead of gating the green suite, a future rebuild-capable variant should
+  // assert that out-of-extent inserts after subdivision either re-extend children or keep a
+  // bounded root fallback; tracked here so the accepted limit stays visible.
+  it.todo(
+    "structural: out-of-extent inserts after subdivision remain in root.objects (accepted, D7)",
+  );
 });

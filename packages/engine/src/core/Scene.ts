@@ -48,10 +48,16 @@ export class Scene {
   public dynamicOctree: Octree | undefined = undefined;
   public spatialHash: SpatialHash | undefined = undefined;
   /**
-   * Lightweight static colliders (e.g. `StaticCollider`) that aren't part of
-   * the `Object3D` scene graph. `PhysicsSystem` reads this in addition to
-   * walking `objects`, so non-Object3D obstacles participate in collision
-   * resolution too.
+   * Single registration channel for lightweight static colliders (e.g. `StaticCollider`)
+   * that aren't part of the `Object3D` scene graph. All consumers resolve against ONE
+   * structure derived from this channel:
+   * - `updateStaticOctree()` auto-enters them into the static octree, so the
+   *   `CollisionResolution` player/camera path, picking and frustum queries see them
+   *   (no "ghost walls");
+   * - `PhysicsSystem` drains this array into its broadphase, so rigid bodies collide with
+   *   them.
+   * Apps must call `updateStaticOctree()` after pushing colliders (same contract as adding
+   * `isStatic` Object3D obstacles), or the octree-derived consumers lag behind.
    */
   public staticColliders: Collidable[] = [];
   /** Physics joints / articulated constraints evaluated by PhysicsSystem. */
@@ -188,6 +194,29 @@ export class Scene {
     if (!this.staticOctree) return;
     this.staticOctree.clear();
     this._addObjectToOctree(this.root, true);
+    this._addStaticCollidersToOctree();
+  }
+
+  /**
+   * R5 / D6 (Whack-a-Mole): mirrors the static-octree build for `staticColliders`, the
+   * non-Object3D registration channel. Without this, an obstacle pushed to `staticColliders`
+   * blocks rigid bodies (`PhysicsSystem` drains the array) but not the player/controller,
+   * which resolves exclusively through the octrees — the "ghost wall" defect. The octree's
+   * `queryVolume` honors `isCollidable`/`isCollidable === false`, so culling-only objects
+   * (Decal etc., if ever registered here) stay non-obstacles automatically.
+   */
+  private _addStaticCollidersToOctree(): void {
+    const octree = this.staticOctree!;
+    for (let i = 0; i < this.staticColliders.length; i++) {
+      const collider = this.staticColliders[i]!;
+      if (collider instanceof Object3D && collider.geometry) {
+        // Object3D-typed entries may hold stale bounds (e.g. moved since registration).
+        collider.computeBounds();
+      }
+      if (collider.bounds) {
+        octree.insert(collider);
+      }
+    }
   }
 
   public updateDynamicOctree(): void {

@@ -21,11 +21,7 @@ import type { GridLegend } from "@small-world-machine/engine/geometry/procgen/Gr
 import { GridLevelBuilder } from "@small-world-machine/engine/geometry/procgen/GridLevelBuilder.js";
 import type { AudioSystem } from "@small-world-machine/engine/audio/index.js";
 import { EnemyBehavior } from "./behaviors/EnemyBehavior.js";
-import {
-  BoundingBox,
-  SpatialHash,
-  StaticCollider,
-} from "@small-world-machine/engine/physix/index.js";
+import { BoundingBox, StaticCollider } from "@small-world-machine/engine/physix/index.js";
 import { ObjectTags } from "../enums/ObjectTags.js";
 import { Events } from "../Events.js";
 
@@ -360,17 +356,16 @@ export class LevelBuilder {
         wallInstanced.setMatrixAt(i, mat4);
         wallInstanced.setInstanceDataAt(i, [pos.texIndex, 0, 0, 0]);
 
-        // Add a hidden collider for physics
-        if (!scene.spatialHash) {
-          scene.spatialHash = new SpatialHash(this._gridSize);
-        }
-
+        // Add a hidden collider for physics AND the player/camera path. R5/D6: this is the
+        // single registration channel -- Scene.updateStaticOctree() auto-enters staticColliders
+        // into the staticOctree, which CollisionResolution, EnemyBehavior, picking and
+        // PhysicsSystem all resolve against. No separate SpatialHash insert (a second channel
+        // would double-resolve the same obstacle for every consumer).
         const bounds = new BoundingBox(
           new Vector3D(pos.x - this._gridSize / 2, 0, pos.z - this._gridSize / 2),
           new Vector3D(pos.x + this._gridSize / 2, this._wallHeight, pos.z + this._gridSize / 2),
         );
         const collider = new StaticCollider(bounds);
-        scene.spatialHash.insert(collider);
         scene.staticColliders.push(collider);
       }
       wallInstanced.isStatic = true;
