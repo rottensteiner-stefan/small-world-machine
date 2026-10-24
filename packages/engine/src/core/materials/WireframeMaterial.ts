@@ -16,6 +16,8 @@ export interface WireframeMaterialOptions {
   color?: Color;
   /** Wireframe rendering mode ("structural" or "triangles"). Defaults to "structural". */
   wireframeMode?: WireframeMode;
+  /** World width (meters) of the cast shadow; `0` (default) casts a 1-texel line. */
+  shadowWidth?: number;
 }
 
 /**
@@ -29,9 +31,17 @@ export class WireframeMaterial extends AbstractMaterial {
       label: "Wireframe Mode",
       options: { structural: "structural", triangles: "triangles" },
     },
+    shadowWidth: { type: "number", label: "Shadow Width (m)", min: 0, max: 0.2, step: 0.001 },
   };
 
   public wireframeMode: WireframeMode = WireframeMode.DEFAULT;
+
+  /**
+   * World width (meters) of the shadow the wires cast when the object has `castShadow`. `0`
+   * keeps the cheap 1-texel line, whose width depends on the shadow resolution; `> 0` draws
+   * each edge as a quad of this width in the shadow map (at least 1.5 texels, ADR 0045).
+   */
+  public shadowWidth: number = 0;
 
   /**
    * @param optionsOrColor Line colour, or an options object (`color`, `wireframeMode`). Defaults to white.
@@ -52,6 +62,7 @@ export class WireframeMaterial extends AbstractMaterial {
     const color = options.color ?? new Color(1, 1, 1, 1);
     this.color = Object.isFrozen(color) ? color.clone() : color;
     this.wireframeMode = options.wireframeMode ?? WireframeMode.DEFAULT;
+    this.shadowWidth = options.shadowWidth ?? 0;
   }
 
   /** @inheritdoc */
@@ -81,6 +92,7 @@ export class WireframeMaterial extends AbstractMaterial {
           culling: CullMode.NONE, // Often useful for wireframes to see the back
           topology: Topology.LINE_LIST,
           wireframeMode: this.wireframeMode,
+          shadowWidth: this.shadowWidth,
         },
       };
     }
@@ -89,6 +101,7 @@ export class WireframeMaterial extends AbstractMaterial {
     props["u_color"] = this.color.toFloat32Array();
     if (this._renderManifest.state) {
       this._renderManifest.state.wireframeMode = this.wireframeMode;
+      this._renderManifest.state.shadowWidth = this.shadowWidth;
     }
 
     return this._renderManifest!;

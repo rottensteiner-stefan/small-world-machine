@@ -11,6 +11,7 @@ import type { Object3D } from "../../core/Object3D.js";
 import type { Vector3D } from "../../math/index.js";
 import { Matrix4, MathPool, Frustum } from "../../math/index.js";
 import { WebGPUGGlobalUniformLayout } from "../GlobalUniformLayout.js";
+import { usesLineQuadShadow } from "../LineShadowRibbon.js";
 
 const _scratchCasters: Object3D[] = [];
 const _scratchInstanced: InstancedMesh[] = [];
@@ -39,6 +40,9 @@ export class CascadedShadowPassGPU implements RenderPass {
   private _bindGroupNeedsShadowRebuild = true;
   private _shadowCasterBindGroupVersion = -1;
   private _depthMaterial?: DepthMaterial;
+  /** Line casters with a `shadowWidth` (ADR 0045): edges drawn as world-width quads. */
+  private _lineDepthMaterial?: DepthMaterial;
+  private _lineEvsmMaterial?: EvsmMomentMaterial;
   /**
    * A snapshot of the global bind group taken BEFORE it ever gets rebuilt to
    * reference the real shadow map (see below). Used only while rendering shadow
@@ -110,6 +114,12 @@ export class CascadedShadowPassGPU implements RenderPass {
     this._evsmMaterial ??= new EvsmMomentMaterial();
     renderer.context.shaderRegistry.ensureProvider(MaterialType.EVSM, this._evsmMaterial);
     const evsmManifest = this._evsmMaterial.getRenderManifest();
+    this._lineEvsmMaterial ??= new EvsmMomentMaterial({ lineQuads: true });
+    renderer.context.shaderRegistry.ensureProvider(
+      EvsmMomentMaterial.LINE_QUADS_SHADER_ID,
+      this._lineEvsmMaterial,
+    );
+    this._lineEvsmMaterial.shadowTexelNdc = 2 / dLight.shadowResolution;
 
     // Moment texels no caster covers must evaluate as LIT (they are "empty" background, exactly
     // like depth-1.0 texels in the depth pass), so the moment atlas is cleared to the far-plane
@@ -205,6 +215,15 @@ export class CascadedShadowPassGPU implements RenderPass {
         else if (batch!.topology === Topology.LINE_LIST) topology = Topology.LINE_LIST;
         else if (batch!.topology === Topology.LINE_STRIP) topology = Topology.LINE_STRIP;
 
+        let material: EvsmMomentMaterial = this._evsmMaterial;
+        let manifest = evsmManifest;
+        if (usesLineQuadShadow(batch!)) {
+          material = this._lineEvsmMaterial;
+          material.lineHalfWidth = batch!.shadowWidth! * 0.5;
+          manifest = material.getRenderManifest();
+          topology = Topology.TRIANGLE_LIST;
+        }
+
         const objects = batch!.objects;
 
         _scratchCasters.length = 0;
@@ -234,8 +253,8 @@ export class CascadedShadowPassGPU implements RenderPass {
             rp,
             _scratchStandard,
             false,
-            this._evsmMaterial.uuid,
-            evsmManifest,
+            material.uuid,
+            manifest,
             viewOffset,
             cascadeCam.viewMatrix,
             topology,
@@ -250,8 +269,8 @@ export class CascadedShadowPassGPU implements RenderPass {
             rp,
             _scratchInstanced,
             true,
-            this._evsmMaterial.uuid,
-            evsmManifest,
+            material.uuid,
+            manifest,
             viewOffset,
             cascadeCam.viewMatrix,
             topology,
@@ -285,6 +304,13 @@ export class CascadedShadowPassGPU implements RenderPass {
 
     this._depthMaterial ??= new DepthMaterial();
     renderer.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, this._depthMaterial);
+    this._lineDepthMaterial ??= new DepthMaterial({ lineQuads: true });
+    renderer.context.shaderRegistry.ensureProvider(
+      DepthMaterial.LINE_QUADS_SHADER_ID,
+      this._lineDepthMaterial,
+    );
+    // Every cascade is a full shadowResolution² layer, so one texel is the same NDC size in all.
+    this._lineDepthMaterial.shadowTexelNdc = 2 / dLight.shadowResolution;
 
     // The dummy color attachment must match the depth attachment's size, so it follows the
     // shadow resolution (a resolution change used to leave the first frame's size in place).
@@ -415,6 +441,15 @@ export class CascadedShadowPassGPU implements RenderPass {
         else if (batch!.topology === Topology.LINE_LIST) topology = Topology.LINE_LIST;
         else if (batch!.topology === Topology.LINE_STRIP) topology = Topology.LINE_STRIP;
 
+        let material: DepthMaterial = this._depthMaterial;
+        let manifest = depthManifest;
+        if (usesLineQuadShadow(batch!)) {
+          material = this._lineDepthMaterial;
+          material.lineHalfWidth = batch!.shadowWidth! * 0.5;
+          manifest = material.getRenderManifest();
+          topology = Topology.TRIANGLE_LIST;
+        }
+
         const objects = batch!.objects;
 
         _scratchCasters.length = 0;
@@ -442,8 +477,8 @@ export class CascadedShadowPassGPU implements RenderPass {
             rp,
             _scratchStandard,
             false,
-            this._depthMaterial.uuid,
-            depthManifest,
+            material.uuid,
+            manifest,
             viewOffset,
             cascadeCam.viewMatrix,
             topology,
@@ -456,8 +491,8 @@ export class CascadedShadowPassGPU implements RenderPass {
             rp,
             _scratchInstanced,
             true,
-            this._depthMaterial.uuid,
-            depthManifest,
+            material.uuid,
+            manifest,
             viewOffset,
             cascadeCam.viewMatrix,
             topology,

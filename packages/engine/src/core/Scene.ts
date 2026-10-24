@@ -16,6 +16,8 @@ export interface RenderBatch {
   topology: Topology;
   matUuid: string;
   wireframeMode?: WireframeMode;
+  /** World width (m) of a line caster's shadow; `0` = 1-texel line (`RenderManifest.state.shadowWidth`). */
+  shadowWidth?: number;
   objects: Object3D[];
   /** Consecutive frames this batch collected no object; the scene prunes it after `BATCH_IDLE_FRAMES`. */
   idleFrames?: number;
@@ -388,6 +390,7 @@ export class Scene {
         const topology = manifest.state?.topology || obj.geometry?.topology || Topology.DEFAULT;
         const matUuid = obj.material.uuid;
         const wireframeMode = manifest.state?.wireframeMode || WireframeMode.DEFAULT;
+        const shadowWidth = manifest.state?.shadowWidth ?? 0;
 
         if (!renderList.opaqueLookup.has(shaderId))
           renderList.opaqueLookup.set(shaderId, new Map());
@@ -398,12 +401,13 @@ export class Scene {
 
         let batch = matMap.get(matUuid);
         if (!batch) {
-          batch = { shaderId, topology, matUuid, wireframeMode, objects: [] };
+          batch = { shaderId, topology, matUuid, wireframeMode, shadowWidth, objects: [] };
           matMap.set(matUuid, batch);
           renderList.opaqueBatches.push(batch);
         } else {
           // The batch is reused to save GC, but properties like wireframeMode can change at runtime!
           batch.wireframeMode = wireframeMode;
+          batch.shadowWidth = shadowWidth;
         }
         batch!.objects.push(obj);
       }

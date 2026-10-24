@@ -1,8 +1,20 @@
 import type { GeometryDataInterface } from "../interfaces/index.js";
 import { WireframeMode } from "../enums/index.js";
+import { buildLineShadowRibbon } from "./LineShadowRibbon.js";
 
 /** Fixed WebGL2 attribute location of `a_color` (see `WebGLProgramCache`). */
 export const VERTEX_COLOR_LOCATION = 11;
+
+/** GL copy of a geometry's `LineShadowRibbon` (attribute locations 0-2 of the line-quad draw). */
+export interface GLLineRibbon {
+  positions: WebGLBuffer;
+  others: WebGLBuffer;
+  sides: WebGLBuffer;
+  vertexCount: number;
+  wireframeMode: WireframeMode;
+  /** Set by `update()`; the next request rewrites the ribbon from the new vertices. */
+  dirty: boolean;
+}
 
 /**
  * Wrapper for WebGL vertex and index buffers.
@@ -49,6 +61,9 @@ export class Mesh {
    * per attribute. Never populated on WebGL1.
    */
   public vao: WebGLVertexArrayObject | undefined = undefined;
+
+  /** Edge ribbons (one per wireframe mode) for world-width line shadows, built on first use. */
+  private readonly _lineRibbons: GLLineRibbon[] = [];
 
   private _gl: WebGLRenderingContext | WebGL2RenderingContext;
 
@@ -293,11 +308,70 @@ export class Mesh {
   }
 
   /**
+   * Returns the edge ribbon of `data` for `wireframeMode` (ADR 0045), built on first request and
+   * rewritten after `update()`. `undefined` for a geometry without edges.
+   */
+  public getLineRibbon(
+    data: GeometryDataInterface,
+    wireframeMode: WireframeMode,
+  ): GLLineRibbon | undefined {
+    const gl = this._gl;
+    let r: GLLineRibbon | undefined;
+    for (let i = 0; i < this._lineRibbons.length; i++) {
+      if (this._lineRibbons[i]!.wireframeMode === wireframeMode) r = this._lineRibbons[i];
+    }
+    if (r && !r.dirty) return r;
+
+    const ribbon = buildLineShadowRibbon(data, wireframeMode);
+    if (!r) {
+      if (ribbon.vertexCount === 0) return undefined;
+      r = {
+        positions: gl.createBuffer()!,
+        others: gl.createBuffer()!,
+        sides: gl.createBuffer()!,
+        vertexCount: ribbon.vertexCount,
+        wireframeMode,
+        dirty: false,
+      };
+      this._lineRibbons.push(r);
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, r.positions);
+    gl.bufferData(gl.ARRAY_BUFFER, ribbon.positions, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, r.others);
+    gl.bufferData(gl.ARRAY_BUFFER, ribbon.others, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, r.sides);
+    gl.bufferData(gl.ARRAY_BUFFER, ribbon.sides, gl.STATIC_DRAW);
+    r.dirty = false;
+    return r;
+  }
+
+  /**
+   * Points attribute locations 0-2 (position / normal / uv) of the currently bound VAO at `r`
+   * and disables 3-5, matching the line-quad shadow vertex shader's inputs.
+   */
+  public bindLineRibbon(r: GLLineRibbon): void {
+    const gl = this._gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER, r.positions);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, r.others);
+    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(1);
+    gl.bindBuffer(gl.ARRAY_BUFFER, r.sides);
+    gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(2);
+    gl.disableVertexAttribArray(3);
+    gl.disableVertexAttribArray(4);
+    gl.disableVertexAttribArray(5);
+  }
+
+  /**
    * Updates the GPU buffers with new geometry data.
    * Currently updates vertices, normals, tangents and vertex colors.
    * @param data The new geometry data.
    */
   public update(data: GeometryDataInterface): void {
+    for (let i = 0; i < this._lineRibbons.length; i++) this._lineRibbons[i]!.dirty = true;
     this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this.vbo ?? null);
     this._gl.bufferData(this._gl.ARRAY_BUFFER, data.vertices, this._gl.STATIC_DRAW);
 
@@ -328,6 +402,12 @@ export class Mesh {
     if (this.cbo) this._gl.deleteBuffer(this.cbo);
     if (this.jbo) this._gl.deleteBuffer(this.jbo);
     if (this.wbo) this._gl.deleteBuffer(this.wbo);
+    for (const r of this._lineRibbons) {
+      this._gl.deleteBuffer(r.positions);
+      this._gl.deleteBuffer(r.others);
+      this._gl.deleteBuffer(r.sides);
+    }
+    this._lineRibbons.length = 0;
     if (this.vao) {
       const gl = this._gl as WebGL2RenderingContext;
       if (typeof gl.deleteVertexArray === "function") gl.deleteVertexArray(this.vao);

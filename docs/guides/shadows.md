@@ -143,15 +143,23 @@ triangle edge — on WebGPU (cascades + spot) and WebGL2 alike. This is delibera
 three.js behaviour (`wireframe = true` still casts the solid body's shadow) nor the gizmo
 convention (lines never cast).
 
-Current limits (verified live on Showcase 1, cube, PCSS + EVSM, both tiers):
+### World-width wire shadows (`shadowWidth`, ADR 0045)
 
-- **The shadow is one shadow-map texel wide, not a world width.** Line rasterization is always
-  1 px, so the wire shadow thickens at low `shadowResolution` (1024: thick and beaded) and nearly
-  vanishes at high resolution (8192), and it changes width across cascades.
-- **PCF/PCSS is what makes it soft and faint** — the kernel averages one blocked texel with its
-  lit neighbours. There is no separate "wire shadow strength".
-- **EVSM** keeps the wire shadow on both tiers, but its sheared wide lattice partially steps over
-  a 1-texel caster and leaves a comb pattern along some edges.
+```typescript
+const wire = new WireframeMaterial({ color: Color.WHITE, shadowWidth: 0.02 }); // 2 cm wire
+```
+
+- `shadowWidth = 0` (default) draws each edge as a **1-texel line** into the shadow map. The width
+  then depends on the resolution: thick and beaded at 1024 px, nearly invisible at 8192 px,
+  different per cascade. EVSM's wide lattice partially steps over it (comb pattern).
+- `shadowWidth > 0` (meters) draws each edge as a **quad of that world width**, in the shadow pass
+  only (the main pass keeps 1-px lines). The width stays the same across resolutions and cascades,
+  with a floor of 1.5 texels so a thin wire never rasterizes with gaps. Works for CSM, spot lights
+  and EVSM, on WebGPU and WebGL2, including `InstancedMesh`.
+- PCF/PCSS still softens the edge; at low resolution that blur dominates a thin wire.
+- EVSM needs roughly 5 texels of width before the comb pattern disappears.
+- Not supported: skinned line casters with `shadowWidth > 0` (the ribbon carries no joints).
+- Showcase 1 has a "Wire Shadow Width" slider next to the shadow-resolution slider.
 
 `castShadow` stays opt-in (default `false`), so pure overlays never cast.
 

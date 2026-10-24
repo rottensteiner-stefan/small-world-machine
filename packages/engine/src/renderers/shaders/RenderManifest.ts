@@ -83,5 +83,15 @@ export interface RenderManifest {
      * still legitimately want to write depth in its OWN pass while staying out of the pre-pass.
      */
     skipDepthPrePass?: boolean;
+    /**
+     * World width (meters) of the shadow a LINE_LIST caster casts. `0`/unset keeps the 1-texel
+     * line; `> 0` makes the shadow passes draw the edges as quads of this width (ADR 0045).
+     */
+    shadowWidth?: number;
+    /**
+     * Set by the shadow passes' line-quad depth/EVSM materials: draw the caster's edge ribbon
+     * (`LineShadowRibbon`) instead of its own vertex/index buffers.
+     */
+    lineQuads?: boolean;
   };
 }

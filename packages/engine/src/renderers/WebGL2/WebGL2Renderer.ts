@@ -33,8 +33,15 @@ import { DeviceLimit, InstancedMesh, computeClipToBox } from "../../core/index.j
 import { DepthMaterial } from "../../core/materials/index.js";
 import { EvsmMomentMaterial } from "../../core/materials/EvsmMomentMaterial.js";
 import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
-import type { WireframeMode } from "../../enums/index.js";
-import { MaterialType, RendererType, ShadowMode, Topology } from "../../enums/index.js";
+import {
+  MaterialType,
+  RendererType,
+  ShadowMode,
+  Topology,
+  WireframeMode,
+} from "../../enums/index.js";
+import type { GLLineRibbon } from "../Mesh.js";
+import { usesLineQuadShadow } from "../LineShadowRibbon.js";
 import type { ClusterGridDims } from "../../math/index.js";
 import {
   Vector3D,
@@ -174,6 +181,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     sLights: [],
   };
   private readonly _zeroVec4: Float32Array = new Float32Array(4);
+  /** Scratch `u_extraParams` of a line-quad shadow batch: [1, 0, texel NDC, half width]. */
+  private readonly _lineShadowParams: Float32Array = new Float32Array([1, 0, 0, 0]);
   private readonly _scratchInstancedObjects: Object3D[] = [];
   private readonly _scratchStandardObjects: Object3D[] = [];
   private _dummyShadowMap!: WebGL2DepthFrameBuffer;
@@ -272,6 +281,14 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     // Internal materials the renderer draws by id (shadow/depth), not through a scene object
     this.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, new DepthMaterial());
     this.context.shaderRegistry.ensureProvider(MaterialType.EVSM, new EvsmMomentMaterial());
+    this.context.shaderRegistry.ensureProvider(
+      DepthMaterial.LINE_QUADS_SHADER_ID,
+      new DepthMaterial({ lineQuads: true }),
+    );
+    this.context.shaderRegistry.ensureProvider(
+      EvsmMomentMaterial.LINE_QUADS_SHADER_ID,
+      new EvsmMomentMaterial({ lineQuads: true }),
+    );
 
     // GlobalUniforms with std140 layout -- size and every field offset come from the single
     // GlobalUniformLayout table (u_areaLights[4] 96-byte stride ends at 2080, followed by
@@ -863,7 +880,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.gl.enable(this.gl.DEPTH_TEST);
       this.gl.disable(this.gl.BLEND);
 
-      this._renderShadowScene(MaterialType.DEPTH, sortedGroups);
+      this._renderShadowScene(
+        MaterialType.DEPTH,
+        DepthMaterial.LINE_QUADS_SHADER_ID,
+        2 / light.shadowResolution,
+        sortedGroups,
+      );
 
       this.gl.cullFace(this.gl.BACK);
       fbo.unbind();
@@ -909,7 +931,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
         this.updateGlobalUBO(cascadeCam.viewProjectionMatrix, cascadeCam.position, emptyLights);
 
-        this._renderShadowScene(MaterialType.DEPTH, sortedGroups);
+        this._renderShadowScene(
+          MaterialType.DEPTH,
+          DepthMaterial.LINE_QUADS_SHADER_ID,
+          2 / res,
+          sortedGroups,
+        );
       }
 
       // EVSM (ADR 0043): render the warped variance moments into a separate RGBA32F atlas right
@@ -1177,7 +1204,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
       this.updateGlobalUBO(cascadeCam.viewProjectionMatrix, cascadeCam.position, emptyLights);
 
-      this._renderShadowScene(MaterialType.EVSM, sortedGroups);
+      this._renderShadowScene(
+        MaterialType.EVSM,
+        EvsmMomentMaterial.LINE_QUADS_SHADER_ID,
+        2 / res,
+        sortedGroups,
+      );
     }
 
     // Restore the scene's row clear color: the far-plane scissor clears above `gl.clearColor`d an
@@ -1198,11 +1230,20 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   /**
    * Helper to render the actual geometry for a shadow pass with the `shaderId` depth-only program
    * (DEPTH or EVSM). `InstancedMesh` casters switch to that program's instanced variant, so every
-   * instance casts, not just the mesh's own transform.
+   * instance casts, not just the mesh's own transform. Line casters with a `shadowWidth` use
+   * `lineShaderId` instead and draw their edge ribbon as world-width quads (ADR 0045);
+   * `texelNdc` is one shadow-map texel in NDC, the quads' minimum width.
    */
-  private _renderShadowScene(shaderId: string, sortedGroups: RenderBatch[]): void {
+  private _renderShadowScene(
+    shaderId: string,
+    lineShaderId: string,
+    texelNdc: number,
+    sortedGroups: RenderBatch[],
+  ): void {
     const stdCache = this._programCache.getProgram(shaderId);
     let instCache: WebGLProgramCacheEntry | undefined;
+    let lineCache: WebGLProgramCacheEntry | undefined;
+    let lineInstCache: WebGLProgramCacheEntry | undefined;
     let current: WebGLProgramCacheEntry | undefined;
 
     for (let i = 0; i < sortedGroups.length; i++) {
@@ -1215,7 +1256,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       if (!firstObj.material) continue;
 
       const manifest = firstObj.material.getRenderManifest();
-      // Program the batch uniforms (alpha test) were last set on; a switch re-sets them.
+      const lineQuads = usesLineQuadShadow(batch!);
+      // The edge ribbon is two-sided triangles: never culled.
+      if (lineQuads) this.gl.disable(this.gl.CULL_FACE);
+      // Program the batch uniforms (alpha test / line width) were last set on; a switch re-sets them.
       let batchBound: WebGLProgramCacheEntry | undefined;
 
       for (const o of objects) {
@@ -1223,10 +1267,15 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         const isInstanced = o instanceof InstancedMesh;
         if (isInstanced && o.instanceCount === 0) continue;
 
-        let cache = stdCache;
-        if (isInstanced) {
-          instCache ??= this._programCache.getProgram(shaderId, true);
-          cache = instCache;
+        let cache: WebGLProgramCacheEntry;
+        if (lineQuads) {
+          cache = isInstanced
+            ? (lineInstCache ??= this._programCache.getProgram(lineShaderId, true))
+            : (lineCache ??= this._programCache.getProgram(lineShaderId));
+        } else {
+          cache = isInstanced
+            ? (instCache ??= this._programCache.getProgram(shaderId, true))
+            : stdCache;
         }
         if (cache !== current) {
           this.gl.useProgram(cache.prog);
@@ -1234,7 +1283,15 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
           current = cache;
         }
         if (cache !== batchBound) {
-          this._bindShadowBatchUniforms(cache, manifest);
+          if (lineQuads) {
+            const params = this._lineShadowParams;
+            params[2] = texelNdc;
+            params[3] = batch!.shadowWidth! * 0.5;
+            const loc = cache.uniforms.get("u_extraParams");
+            if (loc) this.gl.uniform4fv(loc, params);
+          } else {
+            this._bindShadowBatchUniforms(cache, manifest);
+          }
           batchBound = cache;
         }
 
@@ -1248,14 +1305,30 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         // program resident across the session like any other infrastructure resource.
         this._textures.acquireTextures(o, manifest.textures);
 
+        let ribbon: GLLineRibbon | undefined;
+        if (lineQuads) {
+          ribbon = this._geometry
+            .getOrCreateMesh(o, o.geometry)
+            .getLineRibbon(o.geometry, batch!.wireframeMode ?? WireframeMode.DEFAULT);
+          if (!ribbon) continue;
+        }
+
         if (isInstanced) {
-          this._renderInstancedObject(o, cache, batch!.topology);
+          this._renderInstancedObject(o, cache, batch!.topology, ribbon);
           continue;
         }
 
         this._uploadModelMatrix(o.worldMatrix.data, undefined, undefined, cache.uniforms);
 
         const mesh = this._geometry.getOrCreateMesh(o, o.geometry);
+
+        if (ribbon) {
+          // Default VAO: the mesh's cached VAO must keep its own attribute pointers.
+          this.gl.bindVertexArray(null);
+          mesh.bindLineRibbon(ribbon);
+          this.gl.drawArrays(this.gl.TRIANGLES, 0, ribbon.vertexCount);
+          continue;
+        }
 
         if (mesh.vaoCapable) {
           mesh.bindVAO();
@@ -1272,6 +1345,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         }
         mesh.draw(drawMode, batch!.wireframeMode);
       }
+
+      if (lineQuads) this.gl.enable(this.gl.CULL_FACE);
     }
   }
 
@@ -1842,11 +1917,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * Instanced draw for one `InstancedMesh`: upper-bound validation, then manual attribute setup
    * for the instance matrix/data on the DEFAULT VAO (never the mesh's cached VAO, whose pointers
    * must stay pristine for the non-instanced path), the instanced draw, and the attribute reset.
+   * With a `ribbon` (line-quad shadow draw, ADR 0045) the edge ribbon replaces the mesh buffers.
    */
   private _renderInstancedObject(
     instMesh: InstancedMesh,
     cache: WebGLProgramCacheEntry,
     topology: Topology,
+    ribbon?: GLLineRibbon,
   ): void {
     if (instMesh.instanceCount < 0) {
       throw new Error(`[WebGL2Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
@@ -1879,14 +1956,18 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     const mesh = this._geometry.getOrCreateMesh(instMesh, instMesh.geometry!);
 
-    mesh.bind(
-      cache.attributes.get("a_position")!,
-      cache.attributes.get("a_normal")!,
-      cache.attributes.get("a_uv")!,
-      cache.attributes.get("a_tangent")!,
-      cache.attributes.get("a_joints") ?? -1,
-      cache.attributes.get("a_weights") ?? -1,
-    );
+    if (ribbon) {
+      mesh.bindLineRibbon(ribbon);
+    } else {
+      mesh.bind(
+        cache.attributes.get("a_position")!,
+        cache.attributes.get("a_normal")!,
+        cache.attributes.get("a_uv")!,
+        cache.attributes.get("a_tangent")!,
+        cache.attributes.get("a_joints") ?? -1,
+        cache.attributes.get("a_weights") ?? -1,
+      );
+    }
 
     const loc = cache.attributes.get("a_instanceMatrix");
     if (loc !== undefined && loc >= 0) {
@@ -1917,7 +1998,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     }
 
     const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;
-    if (mesh.isIndexed) {
+    if (ribbon) {
+      this.gl.drawArraysInstanced(this.gl.TRIANGLES, 0, ribbon.vertexCount, instMesh.instanceCount);
+    } else if (mesh.isIndexed) {
       this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, mesh.ebo ?? null);
       this.gl.drawElementsInstanced(
         drawMode,

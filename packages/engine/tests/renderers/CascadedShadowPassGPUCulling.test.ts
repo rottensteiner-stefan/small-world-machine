@@ -5,7 +5,9 @@ import { CascadedShadowPassGPU } from "../../src/renderers/passes/CascadedShadow
 import { Object3D } from "../../src/core/Object3D.js";
 import { Matrix4, Vector3D } from "../../src/math/index.js";
 import { BoundingSphere } from "../../src/physix/index.js";
-import { WireframeMode } from "../../src/enums/index.js";
+import { MaterialType, Topology, WireframeMode } from "../../src/enums/index.js";
+import { DepthMaterial } from "../../src/core/materials/DepthMaterial.js";
+import type { RenderManifest } from "../../src/renderers/shaders/index.js";
 
 // Node/vitest has no WebGPU global; @webgpu/types only provides ambient TS types,
 // not a runtime value. Stub the bit-flag constants this pass actually reads.
@@ -153,6 +155,51 @@ describe("CascadedShadowPassGPU: per-cascade frustum culling", () => {
 
     const call = (renderer._renderSubgroup as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(call[8]).toBe(WireframeMode.STRUCTURAL);
+  });
+
+  it("routes a line batch with a shadowWidth to the line-quad depth material as triangles (ADR 0045)", () => {
+    const caster = makeCaster("wire", new BoundingSphere(new Vector3D(0, 0, 0), 0.1));
+    const renderer = makeMockRenderer([caster]);
+    const scene = {
+      getVisibleObjectsSorted: vi.fn(() => ({
+        opaqueBatches: [
+          { shaderId: "w", objects: [caster], topology: Topology.LINE_LIST, shadowWidth: 0.04 },
+        ],
+      })),
+    };
+    const ce = { beginRenderPass: vi.fn(() => ({ setBindGroup: vi.fn(), end: vi.fn() })) };
+
+    const pass = new CascadedShadowPassGPU() as Internals;
+    pass.execute(renderer, scene, ce, {}, new Float32Array(16), new Vector3D(0, 0, 0));
+
+    const call = (renderer._renderSubgroup as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const manifest = call[4] as RenderManifest;
+    expect(manifest.shaderId).toBe(DepthMaterial.LINE_QUADS_SHADER_ID);
+    expect(manifest.state?.lineQuads).toBe(true);
+    expect(call[3]).toBe(pass._lineDepthMaterial.uuid);
+    expect(call[7]).toBe(Topology.TRIANGLE_LIST);
+    // [1, alphaTest, one texel in NDC at 256 px, half width]
+    expect(manifest.properties["u_extraParams"]).toEqual([1, 0, 2 / 256, 0.02]);
+  });
+
+  it("keeps the 1-texel line path (plain depth material, line-list) for shadowWidth 0", () => {
+    const caster = makeCaster("wire", new BoundingSphere(new Vector3D(0, 0, 0), 0.1));
+    const renderer = makeMockRenderer([caster]);
+    const scene = {
+      getVisibleObjectsSorted: vi.fn(() => ({
+        opaqueBatches: [
+          { shaderId: "w", objects: [caster], topology: Topology.LINE_LIST, shadowWidth: 0 },
+        ],
+      })),
+    };
+    const ce = { beginRenderPass: vi.fn(() => ({ setBindGroup: vi.fn(), end: vi.fn() })) };
+
+    const pass = new CascadedShadowPassGPU() as Internals;
+    pass.execute(renderer, scene, ce, {}, new Float32Array(16), new Vector3D(0, 0, 0));
+
+    const call = (renderer._renderSubgroup as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect((call[4] as RenderManifest).shaderId).toBe(MaterialType.DEPTH);
+    expect(call[7]).toBe(Topology.LINE_LIST);
   });
 
   it("uploads only the cascadeMatrices/cascadeSplits/dirShadowInfo slice, not the whole 848-byte GlobalUniforms buffer", () => {

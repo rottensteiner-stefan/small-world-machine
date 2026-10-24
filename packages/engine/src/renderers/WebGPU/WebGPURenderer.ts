@@ -48,6 +48,7 @@ import {
 } from "./managers/GPUPipelineCache.js";
 import { GPUObjectRingBuffer } from "./managers/GPUObjectRingBuffer.js";
 import { GPUGeometryCache } from "./managers/GPUGeometryCache.js";
+import type { WebGPULineRibbon } from "./managers/GPUGeometryCache.js";
 import {
   MainRenderPass,
   PostProcessPass,
@@ -1306,6 +1307,8 @@ export class WebGPURenderer extends AbstractRenderer {
     rp.setBindGroup(3, this._viewBindGroup, [viewOffset]);
 
     const usesVertexColor = effManifest.flags?.includes(VERTEX_COLOR_FLAG) === true;
+    // Line-quad shadow draw (ADR 0045): the caster's edge ribbon replaces its own buffers.
+    const lineQuads = effManifest.state?.lineQuads === true;
 
     // K6 state dedup: consecutive objects sharing one geometry (the common instanced-by-hand /
     // repeated-prop case) keep the vertex/index buffers already bound. Skipped for instanced
@@ -1324,7 +1327,23 @@ export class WebGPURenderer extends AbstractRenderer {
       rp.setBindGroup(2, this._objectRing.bindGroup, [objOffset]);
 
       const gCache = this._geometryCache.getGeoCache(obj, obj.geometry!);
-      if (isInstanced || gCache !== lastGeo) {
+      let ribbon: WebGPULineRibbon | undefined;
+      if (lineQuads) {
+        ribbon = this._geometryCache.getLineRibbon(
+          obj.geometry,
+          gCache,
+          wireframeMode ?? WireframeMode.DEFAULT,
+        );
+        if (!ribbon) continue;
+        this._fallback.ensureDummyBufferSize(ribbon.vertexCount);
+        rp.setVertexBuffer(0, ribbon.positions);
+        rp.setVertexBuffer(1, ribbon.others);
+        rp.setVertexBuffer(2, ribbon.sides);
+        rp.setVertexBuffer(3, this._fallback.dummyTangentBuffer);
+        rp.setVertexBuffer(4, this._fallback.dummyJointsBuffer);
+        rp.setVertexBuffer(5, this._fallback.dummyWeightsBuffer);
+        lastGeo = undefined;
+      } else if (isInstanced || gCache !== lastGeo) {
         this._fallback.ensureDummyBufferSize(gCache.vertexCount);
         rp.setVertexBuffer(0, gCache.vb);
         rp.setVertexBuffer(1, gCache.nb || this._fallback.dummyNormalBuffer);
@@ -1415,7 +1434,9 @@ export class WebGPURenderer extends AbstractRenderer {
           rp.setVertexBuffer(7, this._fallback.dummyUvBuffer);
         }
 
-        if (topology === Topology.LINE_LIST) {
+        if (ribbon) {
+          rp.draw(ribbon.vertexCount, instMesh.instanceCount);
+        } else if (topology === Topology.LINE_LIST) {
           if (wireframeMode === WireframeMode.STRUCTURAL && gCache.wib) {
             rp.setIndexBuffer(gCache.wib, gCache.format!);
             rp.drawIndexed(gCache.wireframeIndexCount, instMesh.instanceCount);
@@ -1434,7 +1455,9 @@ export class WebGPURenderer extends AbstractRenderer {
           }
         }
       } else {
-        if (topology === Topology.LINE_LIST) {
+        if (ribbon) {
+          rp.draw(ribbon.vertexCount);
+        } else if (topology === Topology.LINE_LIST) {
           if (wireframeMode === WireframeMode.STRUCTURAL && gCache.wib) {
             rp.setIndexBuffer(gCache.wib, gCache.format!);
             rp.drawIndexed(gCache.wireframeIndexCount);

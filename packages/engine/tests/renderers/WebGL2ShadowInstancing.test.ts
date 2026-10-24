@@ -5,6 +5,7 @@ import { InstancedMesh } from "../../src/core/InstancedMesh.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Cube } from "../../src/geometry/Cube.js";
 import { BasicMaterial } from "../../src/core/materials/surface/BasicMaterial.js";
+import { WireframeMaterial } from "../../src/core/materials/WireframeMaterial.js";
 import { MaterialType, Topology } from "../../src/enums/index.js";
 import type { RenderBatch } from "../../src/core/Scene.js";
 
@@ -14,43 +15,86 @@ interface ProgramStub {
   attributes: Map<string, number>;
 }
 
+type Fn = ReturnType<typeof vi.fn>;
+
 interface Internals {
-  gl: { useProgram: ReturnType<typeof vi.fn>; uniform4fv: ReturnType<typeof vi.fn> };
+  gl: {
+    useProgram: Fn;
+    uniform4fv: Fn;
+    enable: Fn;
+    disable: Fn;
+    bindVertexArray: Fn;
+    drawArrays: Fn;
+    CULL_FACE: number;
+    TRIANGLES: number;
+    LINES: number;
+  };
   _programCache: { getProgram: ReturnType<typeof vi.fn> };
   _bindDummyShadowMaps: ReturnType<typeof vi.fn>;
   _renderInstancedObject: ReturnType<typeof vi.fn>;
   _uploadModelMatrix: ReturnType<typeof vi.fn>;
   _textures: { acquireTextures: ReturnType<typeof vi.fn> };
   _geometry: { getOrCreateMesh: ReturnType<typeof vi.fn> };
-  _renderShadowScene: (shaderId: string, batches: RenderBatch[]) => void;
+  _renderShadowScene: (
+    shaderId: string,
+    lineShaderId: string,
+    texelNdc: number,
+    batches: RenderBatch[],
+  ) => void;
 }
 
-function program(): ProgramStub {
-  return { prog: {}, uniforms: new Map([["u_extraParams", {}]]), attributes: new Map() };
+function program(name: string): ProgramStub {
+  return { prog: { name }, uniforms: new Map([["u_extraParams", {}]]), attributes: new Map() };
 }
 
-function setup(): {
+const RIBBON = { vertexCount: 72 };
+
+interface Setup {
   r: Internals;
   std: ProgramStub;
   inst: ProgramStub;
+  line: ProgramStub;
   draw: ReturnType<typeof vi.fn>;
-} {
+  bindLineRibbon: ReturnType<typeof vi.fn>;
+}
+
+function setup(): Setup {
   const r = new WebGL2Renderer() as unknown as Internals;
-  const std = program();
-  const inst = program();
+  const std = program("std");
+  const inst = program("inst");
+  const line = program("line");
   const draw = vi.fn();
-  r.gl = { useProgram: vi.fn(), uniform4fv: vi.fn() };
+  const bindLineRibbon = vi.fn();
+  r.gl = {
+    useProgram: vi.fn(),
+    uniform4fv: vi.fn(),
+    enable: vi.fn(),
+    disable: vi.fn(),
+    bindVertexArray: vi.fn(),
+    drawArrays: vi.fn(),
+    CULL_FACE: 1,
+    TRIANGLES: 4,
+    LINES: 1,
+  };
   r._programCache = {
-    getProgram: vi.fn((_id: string, isInstanced?: boolean) => (isInstanced ? inst : std)),
+    getProgram: vi.fn((id: string, isInstanced?: boolean) =>
+      id === "line" ? line : isInstanced ? inst : std,
+    ),
   };
   r._bindDummyShadowMaps = vi.fn();
   r._renderInstancedObject = vi.fn();
   r._uploadModelMatrix = vi.fn();
   r._textures = { acquireTextures: vi.fn() };
   r._geometry = {
-    getOrCreateMesh: vi.fn(() => ({ vaoCapable: true, bindVAO: vi.fn(), draw })),
+    getOrCreateMesh: vi.fn(() => ({
+      vaoCapable: true,
+      bindVAO: vi.fn(),
+      draw,
+      getLineRibbon: vi.fn(() => RIBBON),
+      bindLineRibbon,
+    })),
   };
-  return { r, std, inst, draw };
+  return { r, std, inst, line, draw, bindLineRibbon };
 }
 
 function batch(objects: Object3D[]): RenderBatch {
@@ -69,10 +113,15 @@ describe("WebGL2 shadow pass: InstancedMesh casters", () => {
     plain.material = mat;
     plain.castShadow = true;
 
-    r._renderShadowScene(MaterialType.DEPTH, [batch([plain, instMesh])]);
+    r._renderShadowScene(MaterialType.DEPTH, "line", 1 / 512, [batch([plain, instMesh])]);
 
     expect(r._programCache.getProgram).toHaveBeenCalledWith(MaterialType.DEPTH, true);
-    expect(r._renderInstancedObject).toHaveBeenCalledWith(instMesh, inst, Topology.TRIANGLE_LIST);
+    expect(r._renderInstancedObject).toHaveBeenCalledWith(
+      instMesh,
+      inst,
+      Topology.TRIANGLE_LIST,
+      undefined,
+    );
     expect(draw).toHaveBeenCalledTimes(1); // only the plain caster takes the non-instanced path
     expect(r.gl.useProgram.mock.calls.map((c) => c[0])).toEqual([std.prog, inst.prog]);
     // The alpha-test uniforms are re-set on the instanced program after the switch.
@@ -86,9 +135,56 @@ describe("WebGL2 shadow pass: InstancedMesh casters", () => {
     instMesh.castShadow = true;
     instMesh.instanceCount = 0;
 
-    r._renderShadowScene(MaterialType.EVSM, [batch([instMesh])]);
+    r._renderShadowScene(MaterialType.EVSM, "line", 1 / 512, [batch([instMesh])]);
 
     expect(r._renderInstancedObject).not.toHaveBeenCalled();
     expect(r._programCache.getProgram).not.toHaveBeenCalledWith(MaterialType.EVSM, true);
+  });
+});
+
+describe("WebGL2 shadow pass: line casters with a shadowWidth (ADR 0045)", () => {
+  function wire(shadowWidth: number): { batch: RenderBatch; obj: Object3D } {
+    const obj = new Object3D("Wire");
+    obj.geometry = new Cube().getGeometryData();
+    obj.material = new WireframeMaterial({ shadowWidth });
+    obj.castShadow = true;
+    return {
+      obj,
+      batch: {
+        shaderId: "w",
+        topology: Topology.LINE_LIST,
+        matUuid: "w",
+        shadowWidth,
+        objects: [obj],
+      },
+    };
+  }
+
+  it("draws the edge ribbon with the line program, culling off, width + texel in u_extraParams", () => {
+    const { r, line, bindLineRibbon, draw } = setup();
+    const { batch: b } = wire(0.04);
+
+    r._renderShadowScene(MaterialType.DEPTH, "line", 1 / 512, [b]);
+
+    expect(r.gl.useProgram).toHaveBeenCalledWith(line.prog);
+    expect(bindLineRibbon).toHaveBeenCalledWith(RIBBON);
+    expect(r.gl.drawArrays).toHaveBeenCalledWith(r.gl.TRIANGLES, 0, RIBBON.vertexCount);
+    expect(draw).not.toHaveBeenCalled();
+    const params = r.gl.uniform4fv.mock.calls[0]![1] as Float32Array;
+    expect(params[2]).toBeCloseTo(1 / 512);
+    expect(params[3]).toBeCloseTo(0.02);
+    expect(r.gl.disable).toHaveBeenCalledWith(r.gl.CULL_FACE);
+    expect(r.gl.enable).toHaveBeenCalledWith(r.gl.CULL_FACE);
+  });
+
+  it("keeps the 1-texel line path for shadowWidth 0", () => {
+    const { r, line, draw } = setup();
+    const { batch: b } = wire(0);
+
+    r._renderShadowScene(MaterialType.DEPTH, "line", 1 / 512, [b]);
+
+    expect(r.gl.useProgram).not.toHaveBeenCalledWith(line.prog);
+    expect(draw).toHaveBeenCalledWith(r.gl.LINES, b.wireframeMode);
+    expect(r.gl.disable).not.toHaveBeenCalled();
   });
 });

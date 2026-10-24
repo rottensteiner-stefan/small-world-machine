@@ -167,6 +167,8 @@ class Showcase1 extends AbstractShowcase {
   private _rotateSpeed: number = 1.0;
   private _isWireframe: boolean = false;
   private _wireframeCastsShadow: boolean = true;
+  /** World width (m) of the wire shadow; 0 = 1-texel line (ADR 0045). */
+  private _wireShadowWidth: number = 0.02;
 
   private _hudElement: HTMLElement | null = null;
   private _inspectorBtn: HTMLButtonElement | null = null;
@@ -194,6 +196,7 @@ class Showcase1 extends AbstractShowcase {
 
     this._wireframeMaterial = new WireframeMaterial({
       color: Color.fromHex(this._selectedColorHex),
+      shadowWidth: this._wireShadowWidth,
     });
 
     // 3. Central Interactive Mesh
@@ -265,6 +268,15 @@ class Showcase1 extends AbstractShowcase {
     const label = document.getElementById("valShadowRes");
     if (label) {
       label.textContent = `${val} px`;
+    }
+  }
+
+  private _setWireShadowWidth(val: number): void {
+    this._wireShadowWidth = val;
+    this._wireframeMaterial.shadowWidth = val;
+    const label = document.getElementById("valWireShadowWidth");
+    if (label) {
+      label.textContent = val > 0 ? `${(val * 100).toFixed(1)} cm` : "1 texel";
     }
   }
 
@@ -473,6 +485,13 @@ class Showcase1 extends AbstractShowcase {
             </div>
             <input type="range" id="sliderShadowRes" min="8" max="13" step="1" value="${Math.log2(this._shadowResolution)}" />
           </div>
+          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <label for="sliderWireShadowWidth">Wire Shadow Width</label>
+              <span class="val-label" id="valWireShadowWidth">${this._wireShadowWidth > 0 ? `${(this._wireShadowWidth * 100).toFixed(1)} cm` : "1 texel"}</span>
+            </div>
+            <input type="range" id="sliderWireShadowWidth" min="0" max="0.1" step="0.005" value="${this._wireShadowWidth}" />
+          </div>
         </div>
       </div>
     `;
@@ -527,6 +546,10 @@ class Showcase1 extends AbstractShowcase {
     document.getElementById("sliderShadowRes")?.addEventListener("input", (e) => {
       const exp = parseInt((e.target as HTMLInputElement).value, 10);
       this._setShadowResolution(2 ** exp);
+    });
+
+    document.getElementById("sliderWireShadowWidth")?.addEventListener("input", (e) => {
+      this._setWireShadowWidth(parseFloat((e.target as HTMLInputElement).value));
     });
   }
 

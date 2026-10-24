@@ -11,6 +11,7 @@ import type { SpotLight } from "../../core/lights/SpotLight.js";
 import type { Vector3D } from "../../math/index.js";
 import { Matrix4, MathPool, Frustum } from "../../math/index.js";
 import { WebGPUGGlobalUniformLayout } from "../GlobalUniformLayout.js";
+import { usesLineQuadShadow } from "../LineShadowRibbon.js";
 
 const _scratchLightCasters: SpotLight[] = [];
 const _scratchCasters: Object3D[] = [];
@@ -36,6 +37,8 @@ export class SpotShadowPassGPU implements RenderPass {
   private _bindGroupNeedsShadowRebuild = true;
   private _shadowCasterBindGroupVersion = -1;
   private _depthMaterial?: DepthMaterial;
+  /** Line casters with a `shadowWidth` (ADR 0045): edges drawn as world-width quads. */
+  private _lineDepthMaterial?: DepthMaterial;
   private _shadowCasterBindGroup?: GPUBindGroup;
   private _spotShadowTexView?: GPUTextureView | undefined;
   private _fbo?: GPUTexture | undefined;
@@ -83,6 +86,14 @@ export class SpotShadowPassGPU implements RenderPass {
     renderer.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, this._depthMaterial);
 
     const shadowRes = casters[0]?.shadowResolution || 1024;
+
+    this._lineDepthMaterial ??= new DepthMaterial({ lineQuads: true });
+    renderer.context.shaderRegistry.ensureProvider(
+      DepthMaterial.LINE_QUADS_SHADER_ID,
+      this._lineDepthMaterial,
+    );
+    // All 4 atlas layers share shadowRes, so one texel is the same NDC size for every spot light.
+    this._lineDepthMaterial.shadowTexelNdc = 2 / shadowRes;
 
     const dummyFormat = renderer.currentColorTargetFormat;
     let dummy = this._dummyTargets.get(dummyFormat);
@@ -200,7 +211,16 @@ export class SpotShadowPassGPU implements RenderPass {
         else if (batch!.topology === Topology.LINE_STRIP) topologyStr = Topology.LINE_STRIP;
         else if (typeof batch!.topology === "string")
           topologyStr = batch!.topology as GPUPrimitiveTopology;
-        const topology: GPUPrimitiveTopology = topologyStr;
+        let topology: GPUPrimitiveTopology = topologyStr;
+
+        let material: DepthMaterial = this._depthMaterial;
+        let manifest = depthManifest;
+        if (usesLineQuadShadow(batch!)) {
+          material = this._lineDepthMaterial;
+          material.lineHalfWidth = batch!.shadowWidth! * 0.5;
+          manifest = material.getRenderManifest();
+          topology = Topology.TRIANGLE_LIST;
+        }
 
         _scratchCasters.length = 0;
         _scratchInstanced.length = 0;
@@ -225,8 +245,8 @@ export class SpotShadowPassGPU implements RenderPass {
             rp,
             _scratchStandard,
             false,
-            this._depthMaterial.uuid,
-            depthManifest,
+            material.uuid,
+            manifest,
             viewOffset,
             shadowCam.viewMatrix,
             topology,
@@ -239,8 +259,8 @@ export class SpotShadowPassGPU implements RenderPass {
             rp,
             _scratchInstanced,
             true,
-            this._depthMaterial.uuid,
-            depthManifest,
+            material.uuid,
+            manifest,
             viewOffset,
             shadowCam.viewMatrix,
             topology,
