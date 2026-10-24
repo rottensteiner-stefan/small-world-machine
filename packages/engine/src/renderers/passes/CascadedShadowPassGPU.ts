@@ -1,7 +1,7 @@
 import type { Scene } from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
 import { EvsmMomentMaterial } from "../../core/materials/EvsmMomentMaterial.js";
-import { MaterialType, Topology } from "../../enums/index.js";
+import { MaterialType, ShadowMode, Topology } from "../../enums/index.js";
 import type { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
 import { VIEW_SLOT_CASCADE_BASE } from "../WebGPU/WebGPURenderer.js";
 import type { RenderPass } from "../index.js";
@@ -50,7 +50,7 @@ export class CascadedShadowPassGPU implements RenderPass {
   private _frustum: Frustum = new Frustum();
 
   // EVSM (ADR 0043): `rgba32float` 2d-array of exponentially warped variance moments, one layer
-  // per cascade. Rendered only when `renderer.quality.shadowMode === "evsm"`; it reuses the SAME
+  // per cascade. Rendered only when `renderer.quality.shadowMode === ShadowMode.EVSM`; it reuses the SAME
   // per-cascade depth array layer as its depth attachment with LEQUAL + depth-write off (see the
   // EvsmMomentMaterial manifest), so it re-emits moments for exactly the front-most surface the
   // depth pass just stored -- no second depth buffer, no self-shadowing mismatch.
@@ -472,7 +472,7 @@ export class CascadedShadowPassGPU implements RenderPass {
     // EVSM (ADR 0043): opt-in moment pass, run right after the depth pass. It renders the warped
     // variance moments per cascade, reusing the freshly stored depth array layers as its LEQUAL
     // depth test (no second depth buffer, exact front-surface extraction).
-    if (renderer.quality.shadowMode === "evsm") {
+    if (renderer.quality.shadowMode === ShadowMode.EVSM) {
       this._renderEvsmCascades(renderer, ce, dLight, numCascades, renderList);
     }
 
@@ -526,7 +526,7 @@ export class CascadedShadowPassGPU implements RenderPass {
     // on subsequent frames, so the bind group doesn't need to be rebuilt again).
     if (this._bindGroupNeedsShadowRebuild || this._evsmBindGroupNeedsRebuild) {
       renderer.defaultDirShadowTextureView = this._dirShadowTexView!;
-      if (renderer.quality.shadowMode === "evsm" && this._evsmTexView) {
+      if (renderer.quality.shadowMode === ShadowMode.EVSM && this._evsmTexView) {
         renderer.defaultEVSMTextureView = this._evsmTexView;
       }
       renderer.globalBindGroup = renderer._createGlobalBindGroup(scene);

@@ -25,6 +25,7 @@ export * from "./PostProcessingEffectType.js";
 export * from "./FogVolumeShape.js";
 export * from "./ToolEvents.js";
 export * from "./WireframeMode.js";
+export * from "./ShadowMode.js";
 export * from "./StageFacing.js";
 export * from "./TextAlign.js";
 export * from "./GradientDirection.js";

@@ -34,7 +34,7 @@ import { DepthMaterial } from "../../core/materials/index.js";
 import { EvsmMomentMaterial } from "../../core/materials/EvsmMomentMaterial.js";
 import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 import type { WireframeMode } from "../../enums/index.js";
-import { MaterialType, RendererType, Topology } from "../../enums/index.js";
+import { MaterialType, RendererType, ShadowMode, Topology } from "../../enums/index.js";
 import type { ClusterGridDims } from "../../math/index.js";
 import {
   Vector3D,
@@ -923,9 +923,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       // after the depth pass, while the CSM depth atlas is still attached. The moment FBO reuses
       // that depth texture as its depth attachment with depthWrite off + LEQUAL, so the moments
       // come from exactly the front-most surface the depth pass just stored. Opt-in only
-      // (quality.shadowMode === "evsm"); gated on EXT_color_buffer_float with an honest fallback
+      // (quality.shadowMode === ShadowMode.EVSM); gated on EXT_color_buffer_float with an honest fallback
       // (mode flag stays 0 -> the fixed-PCF/pcss default path, see _checkEvsmSupport).
-      if (this._quality.shadowMode === "evsm") {
+      if (this._quality.shadowMode === ShadowMode.EVSM) {
         this._renderEvsmMoments(
           light,
           fbo,
@@ -1064,7 +1064,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
   /**
    * Binds the EVSM uniforms + moment-atlas sampler for the current program (ADR 0043). Always a
-   * valid binding: EVSM only becomes active when opted in (quality.shadowMode === "evsm") AND
+   * valid binding: EVSM only becomes active when opted in (quality.shadowMode === ShadowMode.EVSM) AND
    * supported (EXT_color_buffer_float) AND a real atlas exists, otherwise the mode flag is 0 and
    * the sampler references the 1x1 dummy so every lit shader (incl. the GLSL300 water chunks)
    * takes its byte-identical default path. Called from BOTH branches of _bindDirectionalShadowMaps
@@ -1076,12 +1076,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     // clobbers the unit the material/light path expects, which degrades WebGL2 to a black canvas on
     // every lit program (regression caught by the Stage-C gate). Only opt-in EVSM binds the moment
     // lane + atlas here. See docs/adr/0043 for the byte-identical default guarantee.
-    if (this._quality.shadowMode !== "evsm") return;
+    if (this._quality.shadowMode !== ShadowMode.EVSM) return;
     const paramsLoc = this._cachedUniformLocation(cache, "u_evsmParams");
     const mapLoc = this._cachedUniformLocation(cache, "u_dirEVSMMap");
     if (!paramsLoc && !mapLoc) return;
     this._checkEvsmSupport();
-    const active = atlasReady && this._quality.shadowMode === "evsm" && this._evsmSupported;
+    const active =
+      atlasReady && this._quality.shadowMode === ShadowMode.EVSM && this._evsmSupported;
     if (paramsLoc) {
       this._scratchFloat4[0] = active ? 1.0 : 0.0;
       this._scratchFloat4[1] = WebGL2Renderer._EVSM_VARIANCE_FLOOR;
@@ -1121,7 +1122,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   /**
    * Renders the EVSM moment atlas (ADR 0043) per cascade, immediately after the depth pass while
    * the CSM depth atlas is still an attached depth source. Runs only for
-   * quality.shadowMode === "evsm" with EXT_color_buffer_float present. Geometry/culling/VP reuse
+   * quality.shadowMode === ShadowMode.EVSM with EXT_color_buffer_float present. Geometry/culling/VP reuse
    * the exact depth-pass conventions (same FRONT cull, per-cascade viewport + global UBO), so the
    * moments describe the same front-most surface the depth pass just recorded.
    */

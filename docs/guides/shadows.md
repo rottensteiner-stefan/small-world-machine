@@ -134,6 +134,27 @@ const engine = new Engine({
 - These knobs are **WebGPU-only today**: they are no-ops on WebGL2 (which has no PCSS, only fixed
   PCF) and WebGL1 (no shadow mapping at all).
 
+## Line casters (wireframes)
+
+An object with a `LINE_LIST` material (e.g. `WireframeMaterial`) and `castShadow = true` renders
+its **edges**, not its triangles, into the shadow map: the shadow passes forward the batch's
+`wireframeMode`, so `STRUCTURAL` draws the authored edge index buffer and `TRIANGLES` every
+triangle edge — on WebGPU (cascades + spot) and WebGL2 alike. This is deliberately neither the
+three.js behaviour (`wireframe = true` still casts the solid body's shadow) nor the gizmo
+convention (lines never cast).
+
+Current limits (verified live on Showcase 1, cube, PCSS + EVSM, both tiers):
+
+- **The shadow is one shadow-map texel wide, not a world width.** Line rasterization is always
+  1 px, so the wire shadow thickens at low `shadowResolution` (1024: thick and beaded) and nearly
+  vanishes at high resolution (8192), and it changes width across cascades.
+- **PCF/PCSS is what makes it soft and faint** — the kernel averages one blocked texel with its
+  lit neighbours. There is no separate "wire shadow strength".
+- **EVSM** keeps the wire shadow on both tiers, but its sheared wide lattice partially steps over
+  a 1-texel caster and leaves a comb pattern along some edges.
+
+`castShadow` stays opt-in (default `false`), so pure overlays never cast.
+
 ## Tuning tips
 
 - Start with `shadowNormalBias` around `0.02–0.05` and `shadowBias` around `0.001–0.005`;

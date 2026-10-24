@@ -6,6 +6,7 @@ import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../../core/index.js";
 import type { LightDataInterface } from "../../../interfaces/index.js";
 import type { Vector3D } from "../../../math/index.js";
 import { DEFAULT_CLUSTER_TILE_SIZE, MathPool, Matrix4 } from "../../../math/index.js";
+import { ShadowMode } from "../../../enums/index.js";
 
 /** Floats per light slot in the three storage buffers (must match the WGSL `PointLight`/`SpotLight`/`AreaLight` structs). */
 const POINT_LIGHT_FLOATS = 8;
@@ -14,7 +15,7 @@ const AREA_LIGHT_FLOATS = 24;
 const BYTES_PER_FLOAT = 4;
 
 /**
- * EVSM tuning defaults (only reached when `quality.shadowMode === "evsm"`; ADR 0043).
+ * EVSM tuning defaults (only reached when `quality.shadowMode === ShadowMode.EVSM`; ADR 0043).
  * These are the GL2-compatible central defaults; the shadow shaders read the same lanes.
  * `varianceFloor` is the DYNAMIC min-variance MULTIPLIER epsilon from the exponential-depth
  * chain rule: `minVariance = epsilon * (pw * pw)` where `pw` is the receiver's warped depth
@@ -324,11 +325,12 @@ export class GlobalUniformWriter {
     // w = RECEIVER depth bias before the exponential warp (three.js VSM `shadowCoord.z += shadowBias`;
     // see EVSM_RECEIVE_BIAS). See the EVSM_* constants above.
     const evsm = glob.evsmParams;
-    gData[evsm.index] = this._host.quality.shadowMode === "evsm" ? 1.0 : 0.0;
+    gData[evsm.index] = this._host.quality.shadowMode === ShadowMode.EVSM ? 1.0 : 0.0;
     gData[evsm.index + 1] = EVSM_VARIANCE_FLOOR;
     gData[evsm.index + 2] = EVSM_LIGHT_BLEED;
     // Mode-gated like the flag: the pcss-default snapshot pins lane 219 to 0.0 and EVSM is opt-in.
-    gData[evsm.index + 3] = this._host.quality.shadowMode === "evsm" ? EVSM_RECEIVE_BIAS : 0.0;
+    gData[evsm.index + 3] =
+      this._host.quality.shadowMode === ShadowMode.EVSM ? EVSM_RECEIVE_BIAS : 0.0;
 
     // Default spot shadow values
     for (let i = 0; i < glob.spotShadowInfo.count; i++) {

@@ -8,12 +8,13 @@ import {
   MathUtils,
   Object3D,
   Plane,
+  RendererType,
+  ShadowMode,
   Sphere,
   StandardMaterial,
   Vector3D,
 } from "@small-world-machine/engine";
 
-type ShadowMode = "pcss" | "evsm";
 type ProbeMode = "box" | "pole" | "steps";
 
 interface QaSwm42Sample {
@@ -102,7 +103,8 @@ export class Showcase42 extends AbstractShowcase {
     const rawSoft = rawSoftParam !== null ? Number(rawSoftParam) : NaN;
     const softness = Number.isFinite(rawSoft) ? Math.max(0, rawSoft) : probe === "steps" ? 2.5 : 1;
     const maxRadius = Math.max(1, Number(p.get("maxRadius")) || (probe === "steps" ? 10 : 4));
-    const shadowMode: ShadowMode = p.get("shadowMode") === "evsm" ? "evsm" : "pcss";
+    const shadowMode: ShadowMode =
+      p.get("shadowMode") === ShadowMode.EVSM ? ShadowMode.EVSM : ShadowMode.PCSS;
     super({
       quality: {
         shadowMode,
@@ -336,9 +338,13 @@ export class Showcase42 extends AbstractShowcase {
     this.renderer.quality.shadowMode = mode;
     // WebGL2 early-returns when leaving EVSM to avoid dummy texture unit clobbering; reload cleanly
     // with the current state in the URL if switching EVSM -> PCSS on WebGL2.
-    if (this.renderer.type === "WEB_GL2" && prev === "evsm" && mode === "pcss") {
+    if (
+      this.renderer.type === RendererType.WEB_GL2 &&
+      prev === ShadowMode.EVSM &&
+      mode === ShadowMode.PCSS
+    ) {
       const url = new URL(window.location.href);
-      url.searchParams.set("shadowMode", "pcss");
+      url.searchParams.set("shadowMode", ShadowMode.PCSS);
       url.searchParams.set("probe", this._probe);
       url.searchParams.set("softness", String(this._softness));
       url.searchParams.set("maxRadius", String(this._maxRadius));
@@ -489,17 +495,22 @@ export class Showcase42 extends AbstractShowcase {
     document.getElementById("btnProbePole")?.classList.toggle("active", this._probe === "pole");
     document.getElementById("btnProbeSteps")?.classList.toggle("active", this._probe === "steps");
 
-    document.getElementById("btnModePcss")?.classList.toggle("active", this._shadowMode === "pcss");
-    document.getElementById("btnModeEvsm")?.classList.toggle("active", this._shadowMode === "evsm");
+    document
+      .getElementById("btnModePcss")
+      ?.classList.toggle("active", this._shadowMode === ShadowMode.PCSS);
+    document
+      .getElementById("btnModeEvsm")
+      ?.classList.toggle("active", this._shadowMode === ShadowMode.EVSM);
 
     const pcssControls = document.getElementById("pcssKernelRows");
     const gl2PcssNote = document.getElementById("gl2PcssNote");
     const isWebGPU = this.renderer.type === "WEB_GPU";
     if (pcssControls) {
-      pcssControls.style.opacity = this._shadowMode === "pcss" && isWebGPU ? "1" : "0.45";
+      pcssControls.style.opacity = this._shadowMode === ShadowMode.PCSS && isWebGPU ? "1" : "0.45";
     }
     if (gl2PcssNote) {
-      gl2PcssNote.style.display = !isWebGPU && this._shadowMode === "pcss" ? "block" : "none";
+      gl2PcssNote.style.display =
+        !isWebGPU && this._shadowMode === ShadowMode.PCSS ? "block" : "none";
     }
 
     setSlider("slLiftY", "valLiftY", this._liftY, 2, " m");
@@ -522,7 +533,7 @@ export class Showcase42 extends AbstractShowcase {
       : "n/a (GL)";
     const eStr = s.evsmParams
       ? `[mode=${s.evsmParams[0]}, flr=${s.evsmParams[1].toFixed(4)}, lbr=${s.evsmParams[2].toFixed(2)}]`
-      : this._shadowMode === "evsm"
+      : this._shadowMode === ShadowMode.EVSM
         ? "active (GL2 atlas)"
         : "off";
     const nextText =
@@ -761,10 +772,10 @@ export class Showcase42 extends AbstractShowcase {
 
     document
       .getElementById("btnModePcss")
-      ?.addEventListener("click", () => this._setShadowMode("pcss"));
+      ?.addEventListener("click", () => this._setShadowMode(ShadowMode.PCSS));
     document
       .getElementById("btnModeEvsm")
-      ?.addEventListener("click", () => this._setShadowMode("evsm"));
+      ?.addEventListener("click", () => this._setShadowMode(ShadowMode.EVSM));
 
     document
       .getElementById("btnViewOverview")

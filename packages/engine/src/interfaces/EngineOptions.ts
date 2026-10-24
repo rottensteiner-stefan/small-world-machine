@@ -1,4 +1,10 @@
-import type { ProjectionType, RendererType, InputMode, ToneMappingMode } from "../enums/index.js";
+import type {
+  ProjectionType,
+  RendererType,
+  InputMode,
+  ToneMappingMode,
+  ShadowMode,
+} from "../enums/index.js";
 import type { PerformanceTier } from "../core/DeviceCaps.js";
 import type { AbstractProjection } from "../math/projections/index.js";
 /**
@@ -88,14 +94,14 @@ export interface QualityConfig {
    */
   shadowMaxPcfRadius?: number;
   /**
-   * Optional shadow algorithm for directional lights. `"evsm"` renders exponentially warped
-   * variance moments (`rgba32float`) and evaluates them with a Chebyshev bound plus light-
-   * bleeding reduction and a dynamic variance floor (ADR 0043). `"pcss"` (default) keeps the
-   * PCSS path. Opt-in: the default stays `"pcss"` so existing scenes and gates stay
+   * Optional shadow algorithm for directional lights. `ShadowMode.EVSM` renders exponentially
+   * warped variance moments (`rgba32float`) and evaluates them with a Chebyshev bound plus light-
+   * bleeding reduction and a dynamic variance floor (ADR 0043). `ShadowMode.PCSS` (default) keeps
+   * the PCSS path. Opt-in: the default stays PCSS so existing scenes and gates stay
    * byte-identical. WebGPU core and WebGL2 (gated on `EXT_color_buffer_float`, otherwise it
    * falls back to fixed-PCF with a console warning) support it; WebGL1 has no shadow mapping.
    */
-  shadowMode?: "pcss" | "evsm";
+  shadowMode?: ShadowMode;
   /**
    * Write the shading normal (world space, octahedral `rg16float`) into a second render target
    * of the main pass for decals, AO and post effects (ADR 0028). `"auto"` (default) switches it
