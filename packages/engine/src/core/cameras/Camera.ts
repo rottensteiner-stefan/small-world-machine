@@ -222,10 +222,29 @@ export class Camera implements CameraInterfaceData {
 
   /** @inheritdoc */
   public setStrategy(type: CameraStrategyType): void {
-    const oldConstraints: CameraConstraints | undefined = this._strategy?.constraints;
-    this._strategy = CameraStrategyFactory.get(type);
+    const oldStrategy: CameraStrategy | undefined = this._strategy;
+    const oldConstraints: CameraConstraints | undefined = oldStrategy?.constraints;
+    const next: CameraStrategy = CameraStrategyFactory.get(type);
+
+    // D3: explicit state transition. Entering FPS must re-derive theta/phi from the CURRENT
+    // view direction (target - position); otherwise an orbit-convention state is reused
+    // blindly and the view snaps ~180 deg (control break on strategy switch).
+    if (next.type === CameraStrategyType.FPS && oldStrategy) {
+      const fx: number = this.target.x - this.position.x;
+      const fy: number = this.target.y - this.position.y;
+      const fz: number = this.target.z - this.position.z;
+      const len: number = Math.sqrt(fx * fx + fy * fy + fz * fz);
+      if (len > 1e-6) {
+        const limit: number = Math.PI / 2 - 0.01;
+        const phi: number = Math.asin(fy / len);
+        this.phi = Math.min(limit, Math.max(-limit, phi));
+        this.theta = Math.atan2(fx / len, -fz / len);
+      }
+    }
+
+    this._strategy = next;
     if (undefined !== oldConstraints) {
-      this._strategy.constraints = oldConstraints;
+      next.constraints = oldConstraints;
     }
   }
 

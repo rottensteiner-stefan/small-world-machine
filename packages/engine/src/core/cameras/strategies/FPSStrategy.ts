@@ -15,6 +15,12 @@ export class FPSStrategy implements CameraStrategy {
   public readonly type: string = CameraStrategyType.FPS;
   /** @inheritdoc */
   public constraints?: CameraConstraints;
+  /**
+   * Inverts the vertical look direction. Defaults to `false` (industry-standard "natural pitch":
+   * mouse forward/up raises the view, mouse back/down lowers it). Set to `true` to restore the
+   * legacy inverted mapping (mouse down raises the view).
+   */
+  public invertY: boolean = false;
 
   /** @inheritdoc */
   public update(camera: CameraInterfaceData, _targetPos: Vector3D, dx: number, dy: number): void {
@@ -25,7 +31,8 @@ export class FPSStrategy implements CameraStrategy {
     // only turns the mouse deltas into orientation and derives the look target below.
     if (0 !== dx || 0 !== dy) {
       camera.theta += dx * 0.005;
-      camera.phi += dy * 0.005;
+      // Natural pitch: mouse down (dy > 0) lowers the view. invertY restores the legacy sign.
+      camera.phi += (this.invertY ? 1 : -1) * dy * 0.005;
       const limit: number = MathUtils.HALF_PI - 0.01;
       if (limit < camera.phi) camera.phi = limit;
       if (-limit > camera.phi) camera.phi = -limit;

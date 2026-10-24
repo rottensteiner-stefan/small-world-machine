@@ -32,13 +32,21 @@ export class SmoothStrategy implements CameraStrategy {
       const relX = camera.position.x - targetPos.x;
       const relY = camera.position.y - targetPos.y;
       const relZ = camera.position.z - targetPos.z;
-      this.radius = Math.max(
-        this.minRadius,
-        Math.min(this.maxRadius, Math.sqrt(relX * relX + relY * relY + relZ * relZ)),
-      );
-      if (this.radius > 0.0001) {
-        camera.theta = Math.atan2(relX, relZ);
-        camera.phi = Math.asin(relY / this.radius);
+      const trueLen: number = Math.sqrt(relX * relX + relY * relY + relZ * relZ);
+      this.radius = Math.max(this.minRadius, Math.min(this.maxRadius, trueLen));
+      if (trueLen > 0.0001) {
+        // Exact inverse of position = target + radius * (sinθ·cosφ, sinφ, cosθ·cosφ).
+        // Angles MUST be derived from the TRUE relative length (not the clamped radius),
+        // otherwise the horizontal components are skewed for non-horizontal views and the
+        // D3 explicit-transition direction is corrupted.
+        const sinPhi: number = relY / trueLen;
+        camera.phi = Math.asin(Math.min(1, Math.max(-1, sinPhi)));
+        const cosPhi: number = Math.sqrt(Math.max(0, 1 - sinPhi * sinPhi));
+        if (cosPhi > 1e-9) {
+          camera.theta = Math.atan2(relX / cosPhi, relZ / cosPhi);
+        } else {
+          camera.theta = 0;
+        }
       }
       this._isInitialized = true;
     }
