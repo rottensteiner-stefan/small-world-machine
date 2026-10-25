@@ -403,11 +403,15 @@ export class Scene {
     // Only proceed if object is visible
     if (!obj.isVisible) return;
 
-    // Frustum Culling
-    if (obj.frustumCulled && obj.bounds) {
-      if (!obj.inFrustum) {
-        return;
-      }
+    // Frustum Culling gates THIS node's own inclusion only — it must never prune the subtree.
+    // A child can be independently in-frustum while its parent's bounds failed (parent bounds
+    // are NOT auto-unioned with children in this engine; stale/manual bounds are possible), so
+    // skipping the recursion here would swallow a visible child. The per-child gate is a cheap
+    // boolean, so descending a culled branch is negligible. (HZB occlusion below IS monotonic w.r.t.
+    // containment and stays a genuine subtree-skip.)
+    if (obj.frustumCulled && obj.bounds && !obj.inFrustum) {
+      this._collectVisibleChildren(obj, renderList);
+      return;
     }
 
     this.lastFrustumVisibleObjects.push(obj);
@@ -461,6 +465,14 @@ export class Scene {
       }
     }
 
+    this._collectVisibleChildren(obj, renderList);
+  }
+
+  /**
+   * Recurses visibility collection into `obj`'s children — shared by the normal path and the
+   * frustum-failed-parent path (containment fix, see `_collectVisible` note above).
+   */
+  private _collectVisibleChildren(obj: Object3D, renderList: RenderList): void {
     for (let i: number = 0; i < obj.children.length; i++) {
       this._collectVisible(obj.children[i]!, renderList);
     }

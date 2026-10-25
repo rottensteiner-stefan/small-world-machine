@@ -8,11 +8,12 @@ import { Matrix4, Vector3D } from "../../src/math/index.js";
 /**
  * @invariant SCENE-HIERARCHICAL-CONTAINMENT: Sichtbarkeits-Containment ist hierarchisch sauber:
  *   Ein im Frustum liegender Child darf nicht durch einen Out-of-Frustum-Parent mitgecullt
- *   werden (Parent-Bound ⊇ Child-Bounds ist die Schallbedingung). BEFUND (D7/D17, genuine Gap auf
- *   HEAD): `Scene._collectVisible` early-returned auf `parent.inFrustum === false` und überspringt
- *   dadurch sichtbare Kinder (Child bleibt aus `lastFrustumVisibleObjects`/RenderList) — hier als
- *   `it.todo` (bekanntes Fail, Entscheidungsreferenz) verankert, NICHT als Engine-Fix in P5-IMPL.
- *   Der Passe-Teil verankert den Happy-Path und die per-Knoten-Weltbounds-Gating.
+ *   werden (Parent-Bound ⊇ Child-Bounds ist die Schallbedingung). BEFUND (D7/D17) auf HEAD:
+ *   `Scene._collectVisible` early-returnete auf `parent.inFrustum === false` und übersprang
+ *   dadurch sichtbare Kinder. **BEHOBEN (Commit nach P5-IMPL, campaign-lead):** das Frustum-Gate
+ *   rejected jetzt nur noch den Node selbst, die Kind-Rekursion läuft immer (Child-Marker ist ein
+ *   billiges Boolean; HZB-Occlusion-Gate bleibt ein Spar-Gate, da per Konstruktion monoton).
+ *   Der Green-Test verankert den Containment-Fall, der Happy-Path die per-Knoten-Weltbounds.
  */
 
 function makeDrawable(name: string): Object3D {
@@ -23,9 +24,26 @@ function makeDrawable(name: string): Object3D {
 }
 
 describe("SCENE-HIERARCHICAL-CONTAINMENT", () => {
-  it.todo(
-    "in-frustum child under an out-of-frustum parent is wrongly culled (hierarchical containment gap)",
-  );
+  it("collects an in-frustum child even under an out-of-frustum parent (containment fix)", () => {
+    const scene = new Scene();
+    const parent = new Object3D("Parent");
+    parent.bounds = { getBroadRadius: () => 1 } as never;
+    parent.frustumCulled = true;
+    parent.inFrustum = false; // parent bounds failed / stale (not conservative wrt the child)
+
+    const child = makeDrawable("Child");
+    child.inFrustum = true; // child is independently in-frustum
+    child.occlusionCulled = false;
+    parent.add(child);
+    scene.add(parent);
+
+    const list = scene.getVisibleObjectsSorted(new Matrix4().data, new Vector3D());
+    const names = list.opaqueBatches.flatMap((b) => b.objects.map((o) => o.name));
+
+    expect(names).toContain("Child");
+    expect(scene.lastFrustumVisibleObjects).toContain(child);
+    expect(scene.lastFrustumVisibleObjects).not.toContain(parent);
+  });
 
   it("collects an in-frustum child when its parent passes the frustum gate (happy-path traversal)", () => {
     const scene = new Scene();
