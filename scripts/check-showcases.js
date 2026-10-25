@@ -67,6 +67,7 @@ const numberedShowcases = [
   "41",
   "42",
   "43",
+  "44",
 ];
 
 // Every numbered showcase supports a `?rendererType=` override via AbstractShowcase, so each one

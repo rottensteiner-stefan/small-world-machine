@@ -301,6 +301,7 @@ export default defineConfig({
         showcase41: resolve(import.meta.dirname, "apps/showcases/41/index.html"),
         showcase42: resolve(import.meta.dirname, "apps/showcases/42/index.html"),
         showcase43: resolve(import.meta.dirname, "apps/showcases/43/index.html"),
+        showcase44: resolve(import.meta.dirname, "apps/showcases/44/index.html"),
         theWhisperHub: resolve(import.meta.dirname, "apps/sample-apps/the-whisper/index.html"),
         theWhisperPrologue: resolve(
           import.meta.dirname,

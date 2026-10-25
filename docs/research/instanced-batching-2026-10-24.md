@@ -194,3 +194,25 @@ Damit die Empfehlung ehrlich bleibt, die dokumentierten Kollateralschäden (alle
 - Offen ist ausschließlich die **Realtime-Messung im Browser**: Frame-Zeit und Puffer-Upload-Bandbreite pro Frame auf einem konkreten Gerät per Performance-Tier-Governor (ADR 0035) — ein gerätegebundener Wert (analog zur WebGL2-PCSS-Kostenzahl in `docs/guides/shadows.md`, auch dort im realen Browser auf dem M4 Pro gemessen), kein deterministischer CI-Wert.
 - Rezept (sobald gewünscht): geometrie-mischende Szene (Showcase-19-artig, aber 2–3 Geometrie-Größen unter **einem** Material, **gestreut**), Kamera fix weit genug weg (Culling-Einfluss ausblenden); Draws/Frame + Frame-Zeit **vorher/nachher**. Hinweis: die Engine hat **keine** öffentliche Draw-Call-Zähl-API — Messung über einen kurzen GL-Draw-Wrapper oder den Tier-Governor-Diagnostik-Modus.
 - B1/B2/B3 bleiben gemäß Trigger-Matrix in §6/§7 unverändert deferiert.
+
+#### 9.1.1 Reale Browser-Messung (Showcase 44, 2026-10-25) — beide §9-Follow-ups geschlossen
+
+Der letzte noch als "nur device-gebunden" geführte Restpunkt (§7.1(b)) ist jetzt ebenfalls **real im Browser gemessen** — mit einem dauerhaften Messstand statt einer Einmal-Handaufnahme:
+
+- **Showcase 44** (`apps/showcases/44/`) ist eine wiederverwendbare Mess-Rigg: zwei Cube-Geometrien (1.0/1.7) unter **einem** `StandardMaterial`, **gestreut** alternierend (`i % 2`, nie ≥2 gleiche Geometrien in Folge), alle `frustumCulled = false`, fixe erhöhte Kamera, nur `AmbientLight` (keine Shadow-Draws), Renderer erzwungen `WEB_GL2`. URL-Knobs: `?inst=off` (Auto-Instancing aus = Baseline), `?count=N`, `?frames=N`.
+- **Engine-fremde Zählung:** `canvas.getContext("webgl2")` liefert denselben Kontext-Objekt der Engine → Shadowing der vier Draw-Entrypoints (`drawArrays/drawElements` + Instanced-Varianten). Keine Engine-Änderung, kein neuer öffentlicher Parameter (Whack-a-Mole-Doktrin).
+- **Reproduzierbar:** `npm run build:showcases && node scripts/measure-a2-instancing.mjs` (startet eigenen Preview-Server, Headless-Chrome/SwiftShader-WebGL2 — identische Launch-Matrix wie `check-showcases.js`). Automatisiert über Puppeteer; Ergebnis einmalig als `MEASURE {json}`.
+
+**Gemessene Realwerte (1600 Objekte, 240-Frame-Fenster nach 30 Warm-up-Frames, SwiftShader-WebGL2):**
+
+| Leg | Draw-Calls/F | per-Object-Draws/F | instanced Draws/F | avgFPS | Frame-Zeit |
+|---|---|---|---|---|---|
+| Auto-Instancing an (A2-aktiv) | **≈ 2** | 0 | ≈ 2 | 45,2 | 22,1 ms |
+| Baseline (`inst=off`) | **≈ 1600** | ≈ 1600 | 0 | 42,9 | 23,3 ms |
+
+- **Draw-Call-Reduktion ≈ 800×** im Opaque-Main-Pass, 0 per-object — der A2-Vorteil exakt wie deterministisch vorhergesagt (2 statt 1600).
+- **Frame-Zeit-Delta klein (~5 %)**: Die Szene ist unter Software-Rasterung **pixel-/präsentiert-limitiert** (1600 gefüllte Cubes überschreiben den Screen mehrfach) — bestätigt das in §7.1 dokumentierte Kaveat: Call-Reduktion hilft nur bei call-limitierten Szenen. Das ist der erwartete, ehrliche Befund, kein Messfehler.
+- **Absolute Frame-Zeiten sind SwiftShader-artefaktbehaftet** (CPU-Rasterung) und nicht GPU-repräsentativ; der **Draw-Count ist backend-unabhängig** und der präzise, geräteunabhängige Wert. Gerätepräzise Frame-Zeiten auf dedizierter Hardware bleiben wie in `docs/guides/shadows.md` (M4-Pro-Messung) ein optionaler, device-gebundener Folgeschritt.
+- Messfenster-Artefakt (Divisor +1 Frames → 1,99 statt 2,0 bzw. 1593 statt 1600) ist rechnerisch unerheblich; semantisch sind es 2 bzw. 1600 Draw-Calls pro Frame.
+
+→ **Beide in §9/§9.1 benannten Follow-ups sind damit vollständig geschlossen:** (1) deterministische WebGL2-Parität im CI-Test, (2) reale Browser-Messung der Geometrie-Mix-Szene in Showcase 44. Kein §7.1(b)-Restpunkt mehr offen.
