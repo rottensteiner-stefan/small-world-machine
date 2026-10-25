@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### "It is the mark of an instructed mind to rest satisfied with the degree of precision which the nature of the subject admits." - Aristotle
+
+- **Features:**
+  - *Showcase 43 — „Kanon 1m Studio":* minimale deterministische Studio-Zelle (1-m-Kanon-Maßraster) mit 4 Material-Sets als stabiler visueller Probestand für Material-Arbeit (eigene goldene Baseline im `st43__*`-Pool).
+- **Architecture & Bugfixes:**
+  - *Hierarchisches Culling — Sichtbarkeits-Fix (`_collectVisible`):* In-Frustum-Objekte werden nicht mehr vom Culling verschluckt, wenn ihr Parent zuvor per Frustum ausschied (Parent-Bounds sind gegenüber In-Frustum-Kindern nicht konservativ).
+  - *E10 — per-Kaskaden-Normal-Offset-Schatten-Bias:* sichtbare Schattenqualität verbessert (Reduktion von Shadow Acne und Peter-Panning); der Koeffizient ist bewusst als Konstante eingefroren (k = 1.2, `@fixed`) statt als neuer Tuning-Knopf.
+  - *WebGPU-Fix — Bitangenten-Vorzeichen:* gespiegelte UV-Normal-Maps rendern auf WebGPU jetzt korrekt (Bitangente w = ±1, wie auf WebGL2/WebGL1).
+  - *S3 — neue Frame-Verarbeitungsreihenfolge:* Die Engine-Schleife verarbeitet Frames in der festgelegten Folge Physik → Render-Interpolation → Kamera → Lichter/Kaskaden → Culling → Rendern — Licht-Kaskaden folgen der aktuellen Kamerapose statt der Vorjahres-Position, mit verbesserter Frame-Pacing-Konsistenz und stabilisiertem Kamerabehavior-Update. Neue öffentliche API `notifyCameraTeleport()` für Integratoren, um TAA-/Nebel-/Occlusion-Zustände bei Kamerateleports zurückzusetzen.
+  - *Kollisions-Kanal-Vereinheitlichung (R5):* `Scene.staticColliders` fließt über `updateStaticOctree()` in den staticOctree — Player-/Kamera-Kollision, Picking und Physik nutzen denselben statischen Kanal, „Geisterwände" sind beseitigt. **Hinweis für Integratoren:** Apps, die statische Collider zusätzlich in einen eigenen SpatialHash eingefügt haben (z. B. das yad-Beispiel), sollten den Doppel-Eintrag entfernen.
+  - *glTF-/DCC-Import (S5):* `baseColorFactor` folgt einer konsistenten sRGB-Autoren-Konvention (sichtbar bei nicht-weißen Farbfaktoren), vec4-Tangent-Vertrag (w = ±1) für korrekte Normal-Map-Handedness, Skinned-Mesh-Posen-Bounds gegen Falsch-Culling animierter Charaktere, Unterstützung quantisierter Geometrie (EP-5/EP-7).
+  - *Material-Skaleninvarianz (S1):* `domainScale`-Konvention (Längen ÷, Frequenzen ×; Default exakt 1.0, kein Verhaltensbruch), Gamma-guarded Tonemapping (StylizedLava), Aspekt-/Kanal-Fixes in Flüssigkeits-/Glas-Shadern, RetroScreen-Lane-Migration.
+- **Housekeeping & Docs:**
+  - *Goldens-Werkzeug generalisiert:* golden-baseline capture/compare-Skripte decken nun auch Showcases ab (neue Pools `pbr38__*`/`fog39__*`); optionale FLIP-Metrik (`--metric flip`, Default bleibt pixelmatch).
+  - *Deterministische Verifikations-Suite:* FPS-Chunking-Äquivalenz-, Standing- und Mutations-Fuzz-Tests, Invarianten-Registry-Erweiterung (+15 IDs, ADR 0047), fast-check seed-gepinnt, WGSL-Härtung, Test-Realignment.
+
 ## [0.117.0] - 2026-10-23
 
 ### "Structure is the essence of freedom." - Frank Lloyd Wright

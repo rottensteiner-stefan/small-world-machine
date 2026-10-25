@@ -70,6 +70,17 @@ exakt die Menge verankerter Invarianten, keine Wunschliste):
 | 2026-10-25 | P2/P5 | `packages/engine/tests/math/MirrorReversibility.test.ts` (`TRANSFORM-REVERSIBILITY`) | A | behoben | — |
 | 2026-10-25 | P4/P5 | `SmallWorldMachine.ts` `notifyCameraTeleport` + `tests/core/SmallWorldMachineTeleport.test.ts` (`TELEPORT-RESET-SYNC`, S3-DP-4A, bereits geverankt) | A | behoben | — |
 
+## Kampagnen-Abschluss: verifizierte Marker (S3/E10, 2026-10-25)
+
+Nach Ablauf der Verifikations-Fangnetz-Phase nachgetragen (keine Duplikate): Die 15 P5-IDs oben sind
+vollständig im Ledger verankert. Die beiden folgenden Marker sind auf HEAD real verankert, fehlten im
+Ledger aber noch.
+
+| Datum | Prinzip | Fundstelle (file:line) | Typ | Status | Veto-Grund |
+|---|---|---|---|---|---|
+| 2026-10-25 | P3 | `packages/engine/tests/core/SmallWorldMachinePhaseOrder.test.ts` — Registry-ID `FRAME-ORDER` (S3 DP-1A, Phase-Order-Oracle; verifiziert nachgetragen) | A | behoben | — |
+| 2026-10-25 | P3 | `packages/engine/src/core/lights/DirectionalLight.ts:65–68,192–206` — `@fixed k = 1.2` (E10/DP-13): bewusst eingefrorener per-Kaskaden-Normal-Offset-Schatten-Bias-Koeffizient (kein Knob), gebacken in `updateCascades`; Bezug zu `CSM-C0-CONTINUITY` (derselbe `updateCascades`-Real-Pfad, per-Kaskaden-Lane); `GlobalUniformLayout.ts:133–134` | A | behoben | — |
+
 ### Fang: `SCENE-HIERARCHICAL-CONTAINMENT` (genuine Lücke, D17-escalated)
 
 Der S4-3.1-Scope-Erstlauf deckte eine **echte Lücke** auf (kein Audit-Artefakt): Der Parent-
@@ -78,7 +89,9 @@ verschlucken, wenn das Parent schon vorher per Frustum ausscheidet. Der Fokus-Te
 `it.todo` verankert (bewusster, ehrlicher roter Fleck statt stillem grünem Schein), begleitet von
 durchlaufenden Happy-Path-/Traversal-Sub-Tests. Die Lücke ist an den Moderator eskaliert (P5-IMPL-
 Blocker-Eskalation, `SCENE-HIERARCHICAL-CONTAINMENT`).
+→ Update 2026-10-25: Engine-Fix als eigener Beschluss umgesetzt (`1b8968a1`), `it.todo` auf grün
+gedreht (echter Test), Engpass geschlossen — Status `behoben`.
 
 | Datum | Prinzip | Fundstelle (file:line) | Typ | Status | Veto-Grund |
 |---|---|---|---|---|---|
-| 2026-10-25 | P2 | `packages/engine/tests/core/SceneContainment.test.ts` (`SCENE-HIERARCHICAL-CONTAINMENT` `it.todo`) | A | offen | Parent-early-return in `_collectVisible` culling In-Frustum-Kinder — Engine-Fix als eigener Beschluss (D17), Test ehrlich rot verankert |
+| 2026-10-25 | P2 | `packages/engine/tests/core/SceneContainment.test.ts` (`SCENE-HIERARCHICAL-CONTAINMENT` `it.todo`) | A | behoben | → Update 2026-10-25: Engine-Fix `1b8968a1` (Parent-Early-Return entfernt), Test grün — Lücke geschlossen (historischer Fang bleibt verbucht) |
