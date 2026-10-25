@@ -59,3 +59,15 @@ WebGL2-Hardware — das deterministische Pendant dazu ist
     (erwarteter Befund). Werte + Interpretation in
     `docs/research/instanced-batching-2026-10-24.md` §9.1.1 dokumentiert.
 - Kein CHANGELOG-Eintrag (internes Perf/Docs-Thema; Changelog kuratiert der IBL-Kampagnen-Session).
+
+### 2026-10-25 — Interaktives Benchmark- und Stresstest-Labor (HUD)
+- **Zweck-Erweiterung:** Neben der headless automatisierten Messung (`scripts/measure-a2-instancing.mjs`) wird Showcase 44 für interaktive Nutzer zu einem interaktiven Instancing- und Performance-Playground erweitert.
+- **Funktionen:**
+  - **Live Performance Monitor:** Monospace-HUD mit Live-Tracking von Draw-Calls pro Frame (Total, Instanced Batches vs. Per-Object), Reduktionsfaktor, Objektanzahl und geglätteten FPS/Frame-Zeiten.
+  - **Live Auto-Instancing Toggle (Leertaste / Button):** Echtzeit-Umschaltung zwischen Auto-Instancing (A2 Grouping) und Per-Object Baseline ohne Reload.
+  - **Objekt-Dichte:** Quick-Buttons (400, 1.6k, 3.6k, 6.4k) und stufenloser Slider (100–10.000 Objekte) mit dynamischem Gitteraufbau.
+  - **Geometrie-Muster (Tasten 1–3):** Umschaltung zwischen A/B Mix (alternierend 1,0 m / 1,7 m), Pure A (rein 1,0 m) und A/B/C Mix (Cube 1,0 m, Cube 1,7 m, Sphere 0,8 m).
+  - **Dynamischer GPU-Stresstest (Taste W):** Sinuswellen-Animation der Objekt-Y-Positionen (`updateMatrixWorld()`), die kontinuierliche Matrix-Neuberechnungen und Instance-Buffer-Uploads jedes Frame stresst.
+  - **Kamera & Navigation:** OrbitController für freie Drehung und Zoom, Taste `R` für Reset auf Übersichts-Blickwinkel, Taste `I` / `H` zum Ein-/Ausklappen des HUDs.
+- **Kompatibilität:** Headless-Messungen via `?frames=N` laufen unverändert durch und emittieren `MEASURE {...}` nach `#__measure`.
+

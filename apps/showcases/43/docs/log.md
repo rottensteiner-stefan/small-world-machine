@@ -28,3 +28,18 @@ und deterministischer Golden-Kandidat (`scripts/goldens`, Pool-Namespace `st43-*
 
 - Aufnahme (WEB_GL2, 1280×720, 60 Frames): 4/4 Zellen OK; zwei unabhängige Läufe byte-identisch
   (0,0000 %) — Deterministik numerisch verifiziert.
+
+## Einträge
+
+### 2026-10-25 — Interaktives Material- und Licht-Labor (HUD)
+- **Zweck-Erweiterung:** Im reinen interaktiven Modus (ohne `?__golden=...`) wird Showcase 43 zu einem interaktiven PBR-Studio aufgewertet, während Golden-Captures strikt unverändert und byte-deterministisch bleiben.
+- **Funktionen:**
+  - OrbitController für freie Inspektion per Maus/Touch (Key `R` für Kamera-Reset).
+  - Material-Presets (Keys `1`-`4`): Matte, Satin, Metal, Chrome.
+  - Live-Slider & Tasten für Roughness (`[` / `]`), Metallic (`Shift` + `[` / `]`) und Base-Color-Picker.
+  - Licht-Ausrichtung: Key-Light Azimut & Elevation per Slider oder Pfeiltasten (`Shift` = 1° Feinjustierung).
+  - IBL-Toggle (Key `E`): Zuschaltung von Image-Based Lighting für realistische Metall-/Chrom-Reflexionen.
+  - 1m-Grid-Toggle (Key `G`): Sichtbarmachung des metrischen Maßstabs.
+  - Reset-Button & Key `0`: Sofortige Rückkehr zum exakten Golden-Referenzzustand.
+- **Architektur:** Zero-GC im Interaktionspfad (Mutation des existierenden `StandardMaterial`, keine Re-Allokationen). Toggle-Button (`⚙`) standardkonform in `.app-footer`.
+
