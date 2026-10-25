@@ -513,15 +513,10 @@ export class IBLBaker {
   }
 
   /**
-   * Exports a cubemap as a horizontal-cross PNG. By default the float data is gamma-encoded (1/2.2) so the
-   * PNG looks right; pass `linear` to keep linear values, which is what the engine's linear pipeline expects.
+   * Exports a cubemap as a horizontal-cross PNG, sRGB-encoded (1/2.2) like every 8-bit IBL file the
+   * engine loads; the engine decodes it with sRGBToLinear (ADR 0048).
    */
-  public exportCubemapToCross(
-    texture: WebGLTexture,
-    size: number,
-    mip: number = 0,
-    linear: boolean = false,
-  ): Promise<Blob> {
+  public exportCubemapToCross(texture: WebGLTexture, size: number, mip: number = 0): Promise<Blob> {
     return new Promise((resolve) => {
       const gl = this._gl;
       const crossCanvas = document.createElement("canvas");
@@ -552,15 +547,9 @@ export class IBLBaker {
         for (let i = 0; i < size * size; i++) {
           // Convert from HDR/Float to standard 8-bit. For a real engine, we'd export HDR formats.
           // Since we're exporting PNG, we tonemap or just clamp to 255.
-          let r = pixels[i * 4]!;
-          let g = pixels[i * 4 + 1]!;
-          let b = pixels[i * 4 + 2]!;
-          // Simple gamma correction for export so it looks right in PNG
-          if (!linear) {
-            r = Math.pow(r, 1.0 / 2.2);
-            g = Math.pow(g, 1.0 / 2.2);
-            b = Math.pow(b, 1.0 / 2.2);
-          }
+          const r = Math.pow(pixels[i * 4]!, 1.0 / 2.2);
+          const g = Math.pow(pixels[i * 4 + 1]!, 1.0 / 2.2);
+          const b = Math.pow(pixels[i * 4 + 2]!, 1.0 / 2.2);
           imgData.data[i * 4] = MathUtils.clamp(r * 255, 0, 255);
           imgData.data[i * 4 + 1] = MathUtils.clamp(g * 255, 0, 255);
           imgData.data[i * 4 + 2] = MathUtils.clamp(b * 255, 0, 255);

@@ -35,7 +35,9 @@ export const IBLShaders = {
     
     void main() {
       vec2 uv = SampleSphericalMap(normalize(v_worldPos));
-      vec3 color = texture(u_equirectangularMap, uv).rgb;
+      // 8-bit panoramas are sRGB-encoded: decode with the engine's sRGBToLinear (pow 2.2) so the
+      // convolution runs on linear radiance (ADR 0048).
+      vec3 color = pow(texture(u_equirectangularMap, uv).rgb, vec3(2.2));
       FragColor = vec4(color, 1.0);
     }
   `,

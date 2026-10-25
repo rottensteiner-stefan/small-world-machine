@@ -38,7 +38,6 @@ interface CliArgs {
   height: number;
   dumpHtml: boolean;
   input: string | undefined;
-  linear: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -49,7 +48,6 @@ function parseArgs(argv: string[]): CliArgs {
     height: 256,
     dumpHtml: false,
     input: undefined,
-    linear: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
@@ -71,9 +69,6 @@ function parseArgs(argv: string[]): CliArgs {
       case "--height":
         args.height = Number(next());
         break;
-      case "--linear":
-        args.linear = true;
-        break;
       case "--input":
         args.input = path.resolve(next());
         break;
@@ -81,10 +76,10 @@ function parseArgs(argv: string[]): CliArgs {
         args.dumpHtml = true;
         break;
       case "--help":
-        console.log(`Usage: tsx scripts/ibl-bake.ts --seed <n> [--out <dir>] [--width W] [--height H] [--input pano.png] [--linear]
+        console.log(`Usage: tsx scripts/ibl-bake.ts --seed <n> [--out <dir>] [--width W] [--height H] [--input pano.png]
   Headless IBL bake with a seed-deterministic generated input panorama (P1 proof).
   --input bakes your own equirect PNG instead of the generated one (width/height come from the file).
-  --linear exports linear values instead of gamma-encoded ones (what the engine's linear pipeline expects).
+  Input and output are sRGB-encoded 8-bit, the convolution runs linear (ADR 0048).
   Writes env.png, irradiance.png, brdf_lut.png, prefilter/mipN.png + manifest.json.`);
         process.exit(0);
         break;
@@ -152,7 +147,6 @@ async function runBakeInBrowser(
   bundleText: string,
   pngBase64: string,
   options: IblGenOptions,
-  linear: boolean,
 ): Promise<Map<string, Buffer>> {
   const tmpUserDir = fs.mkdtempSync(path.join(os.tmpdir(), "sw-ibl-bake-"));
   const browser = await puppeteer.launch({
@@ -179,11 +173,10 @@ async function runBakeInBrowser(
     await page.goto(pageUrl, { waitUntil: "networkidle0" });
     await page.waitForFunction(() => typeof window.__swIblBake === "function");
     const result = await page.evaluate(
-      async (b64, bakeOptions, linearExport) => {
+      async (b64, bakeOptions) => {
         const { outputs } = await window.__swIblBake({
           pngBase64: b64,
           options: bakeOptions,
-          linear: linearExport,
         });
         return outputs;
       },
@@ -195,7 +188,6 @@ async function runBakeInBrowser(
         prefilterMips: options.prefilterMips,
         brdfResolution: options.brdfResolution,
       },
-      linear,
     );
 
     const files = new Map<string, Buffer>();
@@ -257,12 +249,7 @@ async function main(): Promise<void> {
     console.log(`[ibl-bake] harness dumped to ${dump}`);
   }
 
-  const files = await runBakeInBrowser(
-    bundleText,
-    inputPng.toString("base64"),
-    options,
-    args.linear,
-  );
+  const files = await runBakeInBrowser(bundleText, inputPng.toString("base64"), options);
 
   const manifest: IblBakeManifest = {
     tool: "ibl-bake",

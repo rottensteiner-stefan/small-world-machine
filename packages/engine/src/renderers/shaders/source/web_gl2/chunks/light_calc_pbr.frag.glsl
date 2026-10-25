@@ -427,7 +427,8 @@ vec3 kD_ambient = 1.0 - kS_ambient;
 kD_ambient *= 1.0 - metallic;
 
 // Diffuse
-vec3 irradiance = texture(u_irradianceMap, N).rgb * u_envIntensity;
+// The baked irradiance/prefilter cubes are 8-bit sRGB-encoded like u_envMap (ADR 0048).
+vec3 irradiance = sRGBToLinear(texture(u_irradianceMap, N).rgb) * u_envIntensity;
 vec3 diffuseAmbient = irradiance * albedo;
 
 // Specular -- a per-object dynamic reflection probe (u_envMap, e.g. DynamicReflectionProbe) is
@@ -445,10 +446,10 @@ if (u_useEnvMap > 0.5) {
     float lod = roughness * 5.0;
     prefilteredColor = sRGBToLinear(textureLod(u_envMap, R, lod).rgb) * u_envIntensity;
 } else {
-    prefilteredColor = textureLod(u_prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb * u_envIntensity;
+    prefilteredColor = sRGBToLinear(textureLod(u_prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb) * u_envIntensity;
 }
 #else
-prefilteredColor = textureLod(u_prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb * u_envIntensity;
+prefilteredColor = sRGBToLinear(textureLod(u_prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb) * u_envIntensity;
 #endif
 vec2 envBRDF  = texture(u_brdfLUT, vec2(max(dotNV, 0.0), roughness)).rg;
 vec3 specularAmbient = prefilteredColor * (kS_ambient * envBRDF.x + envBRDF.y);
@@ -458,7 +459,7 @@ vec3 ambient = (kD_ambient * diffuseAmbient + specularAmbient) * ao;
 #ifdef USE_CLEARCOAT
 if (clearcoat > 0.0) {
     vec3 R_cc = reflect(-V, N_cc);
-    vec3 ccPrefilter = textureLod(u_prefilterMap, R_cc, clearcoatRoughness * MAX_REFLECTION_LOD).rgb * u_envIntensity;
+    vec3 ccPrefilter = sRGBToLinear(textureLod(u_prefilterMap, R_cc, clearcoatRoughness * MAX_REFLECTION_LOD).rgb) * u_envIntensity;
     vec2 ccEnvBRDF = texture(u_brdfLUT, vec2(max(dotNV_cc, 0.0), clearcoatRoughness)).rg;
     vec3 ccSpecular = ccPrefilter * (vec3(0.04) * ccEnvBRDF.x + ccEnvBRDF.y) * clearcoat;
     ambient = ambient * (1.0 - clearcoat * F_Schlick(dotNV_cc, vec3(0.04)).r) + ccSpecular;

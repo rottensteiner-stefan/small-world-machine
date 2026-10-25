@@ -291,7 +291,8 @@ let kS_ambient = F_SchlickRoughness(dotNV, F0, roughness);
 var kD_ambient = vec3f(1.0) - kS_ambient;
 kD_ambient *= 1.0 - metallic;
 
-let irradiance = textureSampleLevel(u_irradianceMap, globalSampler, N, 0.0).rgb * global.envIntensity;
+// The baked irradiance/prefilter cubes are 8-bit sRGB-encoded like u_envMap (ADR 0048).
+let irradiance = sRGBToLinear(textureSampleLevel(u_irradianceMap, globalSampler, N, 0.0).rgb) * global.envIntensity;
 let diffuseAmbient = irradiance * albedo;
 
 // A per-object dynamic reflection probe (u_envMap, e.g. DynamicReflectionProbe) is a sharp,
@@ -308,7 +309,7 @@ if (obj.useEnvMap > 0.5) {
     let envColor = sRGBToLinear(textureSampleLevel(u_envMap, s, R, lod).rgb);
     specularAmbient = envColor * F_Schlick(dotNV, F0);
 } else {
-    let prefilteredColor = textureSampleLevel(u_prefilterMap, globalSampler, R, roughness * MAX_REFLECTION_LOD).rgb * global.envIntensity;
+    let prefilteredColor = sRGBToLinear(textureSampleLevel(u_prefilterMap, globalSampler, R, roughness * MAX_REFLECTION_LOD).rgb) * global.envIntensity;
     let envBRDF = textureSampleLevel(u_brdfLUT, globalSampler, vec2f(max(dotNV, 0.0), roughness), 0.0).rg;
     specularAmbient = prefilteredColor * (kS_ambient * envBRDF.x + envBRDF.y);
 }
@@ -316,7 +317,7 @@ if (obj.useEnvMap > 0.5) {
 var ambient = (kD_ambient * diffuseAmbient + specularAmbient) * ao;
 
 if (clearcoat > 0.0) {
-    let ccPrefilter = textureSampleLevel(u_prefilterMap, globalSampler, R, clearcoatRoughness * MAX_REFLECTION_LOD).rgb * global.envIntensity;
+    let ccPrefilter = sRGBToLinear(textureSampleLevel(u_prefilterMap, globalSampler, R, clearcoatRoughness * MAX_REFLECTION_LOD).rgb) * global.envIntensity;
     let ccEnvBRDF = textureSampleLevel(u_brdfLUT, globalSampler, vec2f(max(dotNV, 0.0), clearcoatRoughness), 0.0).rg;
     let ccSpecular = ccPrefilter * (vec3f(0.04) * ccEnvBRDF.x + ccEnvBRDF.y) * clearcoat;
     ambient = ambient * (1.0 - clearcoat * F_Schlick(dotNV, vec3f(0.04)).x) + ccSpecular;
