@@ -230,6 +230,11 @@ export class PhysicsSystem {
   }
 
   /**
+   * @invariant FPS-CHUNKING-EQUIVALENCE: Der Akkumulator teilt `dt` in feste 1/60-Sub-Steps
+   *   (maxSubSteps + Spiral-of-Death-Guard). 1/60-tilende Chunkings sind bit-exakt zustands-
+   *   invariant; Nicht-Tiling-Frames feuern `floor(acc/step)` Sub-Steps und schieben den Rest
+   *   in `interpolationAlpha` weiter — Zeit geht nie verloren, der Zustand gleicht exakt der
+   *   äquivalenten Sub-Step-Kette (physics-scoped, A8; Test physix/FpsChunkingEquivalence).
    * How far the accumulator has progressed into the next fixed timestep [0, 1).
    */
   public get interpolationAlpha(): number {

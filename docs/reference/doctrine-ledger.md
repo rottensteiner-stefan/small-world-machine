@@ -44,3 +44,41 @@ dem ersten neuen Fang ergänzt.
   eingetragen und startet den 3-Fänge-Zähler der jeweiligen Heuristik.
 - **Sunset/Rekalibrierung:** nach 2 Quartalen ohne Fang bzw. bei Reversions > Fängen (siehe oben); die
   Begründung wird in dieser Datei archiviert und nie still gelöscht (Daten-Integrität, AGENTS.md §1).
+
+## P5-Gate: Seed-Erweiterung 15 IDs (DP-1, 2026-10-25)
+
+Der P5-Beschluss (Option A) erweitert die Invarianten-Registry (ADR 0047) um **15 IDs** der
+S4-Matrix (1.1–3.2) + P4-DP-7-Fläche. Jede ID ist auf HEAD **real verankert** (Registry + ADR-0047-
+Seed-Tabelle + Test-Anker in einem Commit, damit `check:doctrine` Exit 0 bleibt — die Registry ist
+exakt die Menge verankerter Invarianten, keine Wunschliste):
+
+| Datum | Prinzip | Fundstelle (file:line) | Typ | Status | Veto-Grund |
+|---|---|---|---|---|---|
+| 2026-10-25 | P2/P5 | `scripts/check-doctrine.ts` `INVARIANT_REGISTRY` (Seed +15) + ADR-0047-Seed-Tabelle | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/physix/FpsChunkingEquivalence.test.ts` (`FPS-CHUNKING-EQUIVALENCE`, physik-scoped A8) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/physix/StandingInvariant.test.ts` (`PHYS-STANDING`) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/core/behaviors/BehaviorMutationFuzz.test.ts` (`BEHAVIOR-MUTATION-SAFETY`, seed-gepinnt) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/physix/PhysicsDeterminism.test.ts` (`STATIC-ORDER-INVARIANCE`) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/renderers/HzbReadbackWindow.test.ts` (`HZB-READBACK-WINDOW`) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/renderers/FroxelReprojection.test.ts` (`FROXEL-TELEPORT-MATH`) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/materials/PbrEnergyConservation.test.ts` (`PBR-ENERGY-CONSERVATION`) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/renderers/PcssMonotonicity.test.ts` (`SHADOW-PCSS-MONOTONICITY`) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/renderers/CsmC0Continuity.test.ts` (`CSM-C0-CONTINUITY`) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/core/CameraStrategyTransitionInvariant.test.ts` (`CAM-TRANSITION-INVARIANCE`) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/core/FrustumDualSpace.test.ts` (`FRUSTUM-DUAL-SPACE`) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/math/ClusterGrid.test.ts` (`CLUSTER-NON-SINGULAR`) | A | behoben | — |
+| 2026-10-25 | P2/P5 | `packages/engine/tests/math/MirrorReversibility.test.ts` (`TRANSFORM-REVERSIBILITY`) | A | behoben | — |
+| 2026-10-25 | P4/P5 | `SmallWorldMachine.ts` `notifyCameraTeleport` + `tests/core/SmallWorldMachineTeleport.test.ts` (`TELEPORT-RESET-SYNC`, S3-DP-4A, bereits geverankt) | A | behoben | — |
+
+### Fang: `SCENE-HIERARCHICAL-CONTAINMENT` (genuine Lücke, D17-escalated)
+
+Der S4-3.1-Scope-Erstlauf deckte eine **echte Lücke** auf (kein Audit-Artefakt): Der Parent-
+early-return in `_collectVisible` kann In-Frustum-Kinder **innerhalb eines sichtbaren Parents**
+verschlucken, wenn das Parent schon vorher per Frustum ausscheidet. Der Fokus-Test ist als
+`it.todo` verankert (bewusster, ehrlicher roter Fleck statt stillem grünem Schein), begleitet von
+durchlaufenden Happy-Path-/Traversal-Sub-Tests. Die Lücke ist an den Moderator eskaliert (P5-IMPL-
+Blocker-Eskalation, `SCENE-HIERARCHICAL-CONTAINMENT`).
+
+| Datum | Prinzip | Fundstelle (file:line) | Typ | Status | Veto-Grund |
+|---|---|---|---|---|---|
+| 2026-10-25 | P2 | `packages/engine/tests/core/SceneContainment.test.ts` (`SCENE-HIERARCHICAL-CONTAINMENT` `it.todo`) | A | offen | Parent-early-return in `_collectVisible` culling In-Frustum-Kinder — Engine-Fix als eigener Beschluss (D17), Test ehrlich rot verankert |

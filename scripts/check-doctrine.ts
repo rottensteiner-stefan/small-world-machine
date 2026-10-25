@@ -94,6 +94,24 @@ const INVARIANT_REGISTRY: readonly string[] = [
   "STATIC-INTENT",
   "PROJECTION-INVERTIBILITY",
   "FRAME-ORDER",
+  // P5-DP-1 Seed-Erweiterung (GATE 2026-10-25, Option A): 15 IDs — jede nur mit real
+  // verankertem Test-/Code-Anker (ADR 0047 §„Invarianten-Registry-Seed"). IDs 1.1–3.2 der
+  // S4-Matrix (PBR/PCSS/CSM/Cameras/Frustum/Cluster/Containment/Transformation) + P4-DP-7-Fläche.
+  "FPS-CHUNKING-EQUIVALENCE", // physics-scoped fixed-step chunking invariance (A8), Test physix/FpsChunkingEquivalence
+  "PHYS-STANDING", // parked RigidBody wandert nicht (Sleep-deterministisch), Test physix/StandingInvariant
+  "BEHAVIOR-MUTATION-SAFETY", // detach/remove-append-Folgen crash-frei + slot-stabil, Test core/behaviors/BehaviorMutationFuzz
+  "STATIC-ORDER-INVARIANCE", // Schritt-Reihenfolge der Statics/Objekte ändert Ergebnis nicht (P4-m4), Test physix/PhysicsDeterminism
+  "TELEPORT-RESET-SYNC", // notifyCameraTeleport synchron/idempotent fan-out TAA+Fog+Occlusion (P4-DP-7), Test core/SmallWorldMachineTeleport
+  "HZB-READBACK-WINDOW", // Occlusion konservativ + Readback-Fenster, Test renderers/HzbReadbackWindow
+  "FROXEL-TELEPORT-MATH", // Reproject-Kern: Out-of-Frustum => currentSample (kein History-Blut), Test renderers/FroxelReprojection
+  "PBR-ENERGY-CONSERVATION", // White-Furnace kS+kD+kT <= 1.0001, Test materials/PbrEnergyConservation
+  "SHADOW-PCSS-MONOTONICITY", // Penumbra monoton + Kontakt verhärtet (S4-1.2), Test renderers/PcssMonotonicity
+  "CSM-C0-CONTINUITY", // C0-Stetigkeit über Cascade-Split-Kreise (S4-1.3), Test renderers/CsmC0Continuity
+  "CAM-TRANSITION-INVARIANCE", // Strategiewechsel erhält Orientierung/det>0 (S4-2.1), Test core/CameraStrategyTransitionInvariant
+  "FRUSTUM-DUAL-SPACE", // contains(p) <=> p_ndc in [-1,1]^3 (S4-2.2), Test core/FrustumDualSpace
+  "CLUSTER-NON-SINGULAR", // zSlice endlich in {0..S-1} ohne NaN/Inf (S4-2.3), Test math/ClusterGrid
+  "SCENE-HIERARCHICAL-CONTAINMENT", // Parent-AABB ⊇ Kinder, kein inneres Culling (S4-3.1), Test core/SceneContainment
+  "TRANSFORM-REVERSIBILITY", // M⁻¹(M(v)) ≈ v (S4-3.2), Test math/MirrorReversibility
 ];
 const INVARIANT_REGISTRY_SET: ReadonlySet<string> = new Set<string>(INVARIANT_REGISTRY);
 

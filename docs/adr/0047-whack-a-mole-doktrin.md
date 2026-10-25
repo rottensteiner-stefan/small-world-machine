@@ -289,6 +289,25 @@ Invarianten; die S4-Matrix (IDs 1.1–3.2) wird beim P5-Gate merge-bar ergänzt 
 | `STATIC-INTENT` | `isStatic` ist Absicht, kein Optimierungs-Hebel; keine versteckte Caching-Semantik. | `Object3D.ts:104–117`, `Scene.ts:214–216` |
 | `PROJECTION-INVERTIBILITY` | `screenToWorld∘worldToScreen ≈ id` unter Toleranz; degenerierte Kamera soft-fail statt Crash. | `tests/core/CameraDegenerateSoftFail.test.ts` |
 | `FRAME-ORDER` | Feste, getestete Phasen-Reihenfolge pro Frame (`step()`): physics → Interpolation (Renderpose) → Kamera → Lights/Cascades (Ist-Pose) → Frustum-Cull → Render; ein Phasen-Reorder bricht die Oracle-Tests laut. | `SmallWorldMachine.ts` `step()` (Phasen-Kontrakt), Test `tests/core/SmallWorldMachinePhaseOrder.test.ts` |
+| `FPS-CHUNKING-EQUIVALENCE` | Physik-scoped (A8): 1/60-tilende Chunkings (60/30/20/15/12/10/6 Hz) ergeben bit-exakten Zustand; Nicht-Tiling (144 Hz) feuert 59 Sub-Stufen + 60ste in `interpolationAlpha` ≈ 1 (Render-Phase dokumentiert variabel) — Zustand identisch zur 59×(1/60)-Kette, Zeit geht nie verloren. | `Physix/PhysicsSystem.ts` `interpolationAlpha` (Akkumulator-Vertrag), Test `tests/physix/FpsChunkingEquivalence.test.ts` |
+| `PHYS-STANDING` | Ein abgestelltes RigidBody wandert bit-exakt nicht (Sleep weg vom Sim-Scope, nur 1 ULP/frame bei `allowSleep=false`); Test = Sleep → bit-exakt stabil, wach → beschränkte Wanderung, null Velocity. | Test `tests/physix/StandingInvariant.test.ts` |
+| `BEHAVIOR-MUTATION-SAFETY` | Beliebige detach/remove-append-Folgen auf den Verhaltens-Containern sind crash-frei und slot-stabil (seed-gepinntes PBT, `numRuns` ≤ 500). | Test `tests/core/behaviors/BehaviorMutationFuzz.test.ts` |
+| `STATIC-ORDER-INVARIANCE` | Einfüge-Reihenfolge mehrerer `staticColliders` UND der dynamischen Objekte ändert den bit-exakten Simulationszustand nicht (P4-m4-Fläche). | Test `tests/physix/PhysicsDeterminism.test.ts` |
+| `TELEPORT-RESET-SYNC` | `notifyCameraTeleport` ist synchron, idempotent, void-fan-out an TAA + Fog + Occlusion-Streak (Tier-ehrlich WebGL1); CPU-Netz vollständig (P4-DP-7). | `SmallWorldMachine.ts` `notifyCameraTeleport()`, Test `tests/core/SmallWorldMachineTeleport.test.ts` |
+| `HZB-READBACK-WINDOW` | Occlusion-Culling ist nach unten konservativ und zeitlich innerhalb des Readback-Fensters (≈1–3 Frames); kein Cull-Streak-Fehler. | Test `tests/renderers/HzbReadbackWindow.test.ts` |
+| `FROXEL-TELEPORT-MATH` | Reproject-Kern: Out-of-Frustum-Vorposition (`prevClip.w <= 0.001` / NDC/Slice-Fenster verfehlt) ⇒ Ergebnis bleibt `currentSample`; nur gültige Vorpositionen EMA-blenden (kein Stale-History-Blut). | Test `tests/renderers/FroxelReprojection.test.ts` |
+| `PBR-ENERGY-CONSERVATION` | White-Furnace: $k_S(\theta) + k_D(\theta) + k_T(\theta) \le 1.0001$ für alle $\theta$, Metallic, Roughness, Transmission. | Test `tests/materials/PbrEnergyConservation.test.ts` |
+| `SHADOW-PCSS-MONOTONICITY` | Penumbra-Radius monoton in der Distanzlücke, Kontakt verhärtet ($R(0)=1$, 3×3-PCF-Pfad); S4-ID 1.2. | Test `tests/renderers/PcssMonotonicity.test.ts` |
+| `CSM-C0-CONTINUITY` | Cascade-Shadow über Split-Kreise hinweg $C^0$-kontinuierlich im Blendband; S4-ID 1.3. | Test `tests/renderers/CsmC0Continuity.test.ts` |
+| `CAM-TRANSITION-INVARIANCE` | Strategiewechsel konvertiert Zustand explizit, Orientierung bleibt ($\mathbf{f}_{neu} \cdot \mathbf{f}_{alt} > 0$, $\det(M_{view}) > 0$); S4-ID 2.1. | Test `tests/core/CameraStrategyTransitionInvariant.test.ts` |
+| `FRUSTUM-DUAL-SPACE` | `contains(p)` ⇔ `p_ndc ∈ [-1,1]³` Dual-Space-Invarianz; S4-ID 2.2. | Test `tests/core/FrustumDualSpace.test.ts` |
+| `CLUSTER-NON-SINGULAR` | `zSliceFromViewDepth(z) ∈ {0,…,S−1}` ohne NaN/Infinity für alle positiven z; S4-ID 2.3. | Test `tests/math/ClusterGrid.test.ts` |
+| `SCENE-HIERARCHICAL-CONTAINMENT` | Hierarchisches Containment: Parent-Culling darf sichtbare In-Frustum-Kinder nicht verschlucken (`AABB(parent) ⊇ ⋃ AABB(child_k)`); S4-ID 3.1 — Genuine Lücke (P5-Fang, it.todo). | Test `tests/core/SceneContainment.test.ts` |
+| `TRANSFORM-REVERSIBILITY` | $M^{-1}(M(v)) \approx v$ und $M \cdot M^{-1} \approx I_{4×4}$, Reversibilität; S4-ID 3.2. | Test `tests/math/MirrorReversibility.test.ts` |
+
+Der P5-Gate-Seed-Erweiterungs-Commit (`DP-1-2026-10-25`) bringt diese 15 IDs in Registry + Tabelle
+**gemeinsam** mit ihren Anker-Tests; die Registry bleibt damit genau die Menge auf HEAD real
+verankerter Invarianten.
 
 Wer eine Invariante referenziert, deren ID nicht im Seed steht, erweitert den Seed (Check-
 Konstante + dieser Tabelle) oder nutzt den Escape-Hatch mit Begründung.
