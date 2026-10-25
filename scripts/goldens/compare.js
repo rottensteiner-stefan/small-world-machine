@@ -4,6 +4,12 @@
 //   0  all cells within tolerance and no technical errors
 //   1  technical failure (missing image, unreadable PNG, blank current cell)
 //   2  drift violation (diff ratio above threshold)
+//
+// Metric:
+//   --metric pixelmatch (default): naive per-pixel diff via pixelmatch (threshold / pool overrides).
+//   --metric flip:       in-repo perceptual reference (scripts/goldens/flip.js) — CSF-filtered, so
+//                        sub-pixel/TAA jitter is suppressed; threshold via --flip-threshold. See
+//                        flip.js and test-flip.js. Behind this switch only; never the default.
 
 import fs from "fs";
 import path from "path";
@@ -13,6 +19,7 @@ import config from "./config.json" with { type: "json" };
 import { parseShard, poolsForShard } from "./shard.js";
 import { resolveSceneSpec } from "./scene.js";
 import { writeReviewHtml } from "./review-report.js";
+import { flipScore, DEFAULT_PIXELS_PER_DEGREE as DEFAULT_FLIP_PPD } from "./flip.js";
 
 function parseArgs(argv) {
   const args = {
@@ -25,6 +32,9 @@ function parseArgs(argv) {
     pool: null,
     shard: null,
     scene: "10",
+    metric: "pixelmatch",
+    flipPpd: null,
+    flipThreshold: null,
     accept: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -57,6 +67,18 @@ function parseArgs(argv) {
         break;
       case "--scene":
         args.scene = value;
+        i++;
+        break;
+      case "--metric":
+        args.metric = value;
+        i++;
+        break;
+      case "--flip-ppd":
+        args.flipPpd = Number(value);
+        i++;
+        break;
+      case "--flip-threshold":
+        args.flipThreshold = Number(value);
         i++;
         break;
       case "--report":
@@ -177,6 +199,16 @@ try {
 const maxDiffRatio = args.maxDiffRatio ?? config.maxDiffRatio;
 const pixelmatchThreshold = args.threshold ?? config.pixelmatchThreshold;
 const scene = resolveSceneSpec(config, args.scene);
+const metric = args.metric;
+if ("pixelmatch" !== metric && "flip" !== metric) {
+  console.error(`Fatal error: unknown --metric '${metric}' (expected pixelmatch|flip)`);
+  process.exit(1);
+}
+// FLIP knobs: per-call flags win, then config.json "flip", then the port's documented default.
+const flip = {
+  pixelsPerDegree: args.flipPpd ?? config.flip?.ppd ?? DEFAULT_FLIP_PPD,
+  threshold: args.flipThreshold ?? config.flip?.threshold ?? 0.01,
+};
 
 async function main() {
   const baselineFiles = {};
@@ -249,6 +281,37 @@ async function main() {
 
     const width = img1.width;
     const height = img1.height;
+    const poolKey = label.split("__")[0];
+
+    if ("flip" === metric) {
+      // Perceptual reference (CSF-filtered): suppresses sub-pixel/TAA jitter. Per-pool pixelmatch
+      // overrides do not apply; the flip threshold is global (config "flip" or --flip-threshold).
+      const result = flipScore(img1, img2, { pixelsPerDegree: flip.pixelsPerDegree });
+      const score = result.score;
+      const allowed = flip.threshold;
+      if (score === 0) {
+        rows.push({ label, status: "OK", detail: "byte-identical", diffRatio: score, metric });
+      } else if (score <= allowed) {
+        rows.push({
+          label,
+          status: "DIFF",
+          detail: `flip ${(score * 100).toFixed(4)}% (within tolerance ${(allowed * 100).toFixed(2)}%)`,
+          diffRatio: score,
+          metric,
+        });
+      } else {
+        rows.push({
+          label,
+          status: "FAIL",
+          detail: `flip ${(score * 100).toFixed(4)}% > ${(allowed * 100).toFixed(2)}%`,
+          diffRatio: score,
+          metric,
+        });
+        driftViolation = true;
+      }
+      continue;
+    }
+
     const diff = new PNG({ width, height });
     const diffCount = pixelmatch(img1.data, img2.data, diff.data, width, height, {
       threshold: pixelmatchThreshold,
@@ -256,7 +319,6 @@ async function main() {
     const diffRatio = diffCount / (width * height);
     if (args.reportHtml) diffImages.set(label, diff);
 
-    const poolKey = label.split("__")[0];
     const override = config.poolOverrides?.[poolKey];
     const allowed = Number.isFinite(override) ? override : maxDiffRatio;
 
@@ -308,8 +370,9 @@ async function main() {
   }
 
   const okRows = rows.filter((r) => r.status === "OK" || r.status === "DIFF").length;
+  const shownThreshold = "flip" === metric ? flip.threshold : maxDiffRatio;
   console.log(
-    `\n${okRows}/${rows.length} cells within tolerance (threshold=${(maxDiffRatio * 100).toFixed(2)}%)`,
+    `\n${okRows}/${rows.length} cells within tolerance (metric=${metric}, threshold=${(shownThreshold * 100).toFixed(2)}%)`,
   );
 
   if (args.report) {
@@ -318,6 +381,8 @@ async function main() {
       current: args.current,
       maxDiffRatio,
       pixelmatchThreshold,
+      metric,
+      flip: "flip" === metric ? flip : undefined,
       rows,
       ok: !driftViolation && !technicalError,
       generatedAt: new Date().toISOString(),

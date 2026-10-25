@@ -33,6 +33,49 @@ dieselben Pixel (kein WallClock-`performance.now()`-Drift).
 
 Die committete Baseline liegt unter `.agents/goldens/liquid/baseline/` (GL2-Bilder + `manifest.json`).
 
+## Szenen (P5-Goldens-Erweiterung)
+
+Das Tooling ist seit P5 auf beliebige Showcases verallgemeinert: `capture.js`/`compare.js` kennen
+`--scene <key>` und lesen die Szene aus `config.json` → `scenes` (`url`, `poolKeys`, `views`,
+`viewport`, `frames`). Ohne `--scene` bleibt das legacy Liquid-Verhalten (Szene `10`, top-level
+Config-Keys) unverändert — die CI-Sharding-Invokationen funktionieren weiter. Die Asset-/Pool-Namen
+pro Szene sind bewusst namespaced (`pbr38-*`, `fog39-*`, `st43-*`), damit Zellen nie kollidieren.
+
+- **Scene 38 „Al-Khazneh"** (PBR + 4‑Kaskaden-PCSS-Schatten): baseline `.agents/goldens/pbr38/baseline/`
+  (5 `pbr38-*`-Zellen, 1280×720). Nach **E10** (per-Kaskaden-Normal-Offset-Bias, committet) aufgenommen.
+- **Scene 39 „Atmospheric Sanctum"** (CSPG-Schatten + volumetrischer Froxel-Fog): baseline
+  `.agents/goldens/fog39/baseline/` (4 `fog39-*`-Zellen, 1280×720).
+- **Scene 43 „1m-Studio"** (Kanon-E11B-Referenzzelle, PBR-Material-Ball): baseline `.agents/goldens/st43/baseline/`.
+
+```bash
+node scripts/goldens/capture.js --scene 38 --matrix gl2 --out .agents/goldens/pbr38/baseline
+node scripts/goldens/compare.js --scene 39 --baseline .agents/goldens/fog39/baseline \
+  --current .agents/scratches/goldens/fog39/current
+```
+
+Die gleiche Szene muss eine **eigene** Baseline-Verzeichnisstruktur verwenden (Vergleiche sind
+NIE szenenübergreifend; `compare` validiert nur gegen die übergebene `--baseline`).
+
+## FLIP-Metrik (optional, hinter `--metric flip`)
+
+Der Standard-Vergleich ist weiterhin `pixelmatch` (`maxDiffRatio`/`poolOverrides`). Für den
+Perceptual-Pfad gibt es eine **optionale** In-Repo-Referenzmetrik nach dem FLIP-Kern (Andersson
+et al. 2020) — reine PNG-Arithmetik, deterministisch, **keine** neue Hard-Dependency,
+implementiert in `scripts/goldens/flip.js` (4 Stufen: YCxCz-Gegenfarbraum-Transform, PPD-abhängige
+CSF-Filterung, Feature-/Kanten-Analyse, Potenzverkettung `dE=(dEc)^(1−dEf)`).
+
+```bash
+npm run goldens:compare -- --metric flip --baseline <dir> --current <dir> [--flip-ppd <n>] [--flip-threshold <f>]
+node scripts/goldens/test-flip.js   # Fixture-Harness: jitter-suppress + drift-flag + determinism
+```
+
+- Die CSF-Filterung nullt Subpixel-/TAA-Jitter (>CSF-Cutoff), den pixelmatch fälschlich als Drift
+  flaggt — der Fixture-Test beweist genau diese Trennung (pixelmatch 1,56 % vs. FLIP 0,48 % auf
+  demselben Paar). Echte, niederfrequente Farb-/Strukturänderungen werden weiterhin geflaggt.
+- Schwellen stammen aus `config.json` → `flip` (`ppd` 67, `threshold` 0.01), übersteuerbar per Flag.
+- Ersetzt pixelmatch nie: `--metric flip` ist strikt opt-in und für TAA-sensitive Goldens gedacht
+  (P5-DP-9; vgl. P5-Gate-Dossier). Ci bleibt manuell.
+
 ## Workflow
 
 ```bash
@@ -108,14 +151,15 @@ wurden: im selben Commit wie die Änderung, mit der neuen Browser-Version im `su
 
 ## CLI
 
-- `goldens:capture -- --matrix <gl2|gpu|gl1> --out <dir> [--pool <key>] [--view <view>] [--frames <n>] [--skip-spawn] [--allow-no-golden]`
+- `goldens:capture -- --matrix <gl2|gpu|gl1> --out <dir> [--scene <key>] [--pool <key>] [--view <view>] [--frames <n>] [--skip-spawn] [--allow-no-golden]`
   - Startet `npm run preview`, besucht jede Zelle mit den Golden-Query-Params, wartet auf `window.__goldenReady`, screentshot das `<canvas>`.
   - Schreibt `<dir>/<poolKey>__<view>.png` + `manifest.json` (Metadaten, Blank-Flag, sha256) + `summary.json`.
   - `gl1` = Smoke (`<dir>/smoke/*.png`, nur Load/Fehler/Blank-Asserts).
   - Exit 0 nur wenn alle Zellen ok.
-- `goldens:compare -- --baseline <dir> --current <dir> [--pool <key>] [--max-diff-ratio <f>] [--pixelmatch-threshold <f>] [--report <path>]`
+- `goldens:compare -- --baseline <dir> --current <dir> [--scene <key>] [--metric <pixelmatch|flip>] [--pool <key>] [--max-diff-ratio <f>] [--pixelmatch-threshold <f>] [--flip-ppd <n>] [--flip-threshold <f>] [--report <path>]`
   - `--current` ist Pflicht. Baseline-Zellen, die im Current fehlen, sind ein technischer Fehler (`--pool` schränkt die Prüfung auf einen Pool ein).
-  - Vergleicht jede Zelle per `pixelmatch`, `diffRatio` = abweichende Pixel / Gesamtpixel.
+  - Standard: Vergleicht jede Zelle per `pixelmatch`, `diffRatio` = abweichende Pixel / Gesamtpixel.
+  - Mit `--metric flip` (optional): In-Repo-Perceptual-Referenz (siehe Abschnitt FLIP-Metrik); `diffRatio` ist dann der FLIP-Score und die `flip.threshold` aus `config.json` gilt.
   - Exit **0** = alles ok, **1** = technischer Fehler (Bild fehlt/unlesbar/blank), **2** = Drift-Verletzung.
 - `goldens:skip [--baseline <dir>] [--emit-status]`
   - Diff-Gate (Goldens-Optimierung M1): beendet **ohne Build und ohne Browser**, ob ein Capture/Compare-Lauf nötig ist. Nur `git`-Kommandozeile, keine Abhängigkeiten.
@@ -135,6 +179,8 @@ wurden: im selben Commit wie die Änderung, mit der neuen Browser-Version im `su
 `scripts/goldens/config.json`: Pools, Views, Backends, Viewport (1024×576), Framecount,
 Blank-Schwelle (Luminanz-Stddev), `maxDiffRatio` (Standard 0.5 %), `pixelmatchThreshold`, sowie
 per-Pool-Toleranzen in `poolOverrides` (z.B. bei bekannten Rauschartefakten einer Wasserart).
+`flip` (optional, `--metric flip`): `ppd` (67) und `threshold` (0.01). `scenes` deklariert
+capture-fähige Showcases (siehe Abschnitt „Szenen").
 
 ## Troubleshooting
 

@@ -28,6 +28,10 @@
   "blankStddevThreshold": 2.0,
   "pixelmatchThreshold": 0.1,
   "maxDiffRatio": 0.005,
+  "flip": {
+    "ppd": 67,
+    "threshold": 0.01
+  },
   "poolOverrides": {},
   "scenes": {
     "38": {
