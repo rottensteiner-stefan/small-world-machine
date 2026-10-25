@@ -97,3 +97,82 @@ describe("Froxel reprojection shader structure", () => {
     expect(reprojectWGSL).toMatch(/clamp\(uni\.reprojectParams\.x, 0\.0, 0\.98\)/);
   });
 });
+
+describe("Froxel reprojection teleport branch (FROXEL-TELEPORT-MATH)", () => {
+  /**
+   * @invariant FROXEL-TELEPORT-MATH: Beim Teleport liegt die prev-Projection eines Frames außerhalb
+   *   des Vorgänger-Frustums (`prevClip.w <= 0.001` bzw. NDC/Slice-Fenster verfehlt). Der
+   *   Reproject-Kern initialisiert `blendedResult` mit `currentSample` und verlässt es in genau
+   *   diesen Fällen, damit KEIN ungeclamptes Stale-History-Sample durchblutet (Variance-Clamp
+   *   hätte sonst keinen gültigen AABB-Anker). Nur für gültig reprojezierbare Vorpositionen wird
+   *   EMA-geblendet.
+   */
+  it("guards the history blend behind a strict previous-frustum test (teleport => pure currentSample)", () => {
+    // Struktureller Guard gegen Regressions: Der Kern muss out-of-frustum hart auf currentSample
+    // fallen, sonst blutet History vom alten Kamerastandort in den neuen.
+    expect(reprojectWGSL).toContain("var blendedResult = currentSample;");
+    expect(reprojectWGSL).toContain("if (prevClip.w > 0.001) {");
+    expect(reprojectWGSL).toMatch(
+      /prevUV\.x >= 0\.0 && prevUV\.x <= 1\.0[\s\S]*prevUV\.y >= 0\.0 && prevUV\.y <= 1\.0[\s\S]*prevSliceW >= 0\.0 && prevSliceW <= 1\.0/,
+    );
+    expect(reprojectWGSL).toContain("textureStore(outputVolume, coord, blendedResult);");
+    // Ohne gültige Vorposition darf der Blend-Pfad gar nicht erst ausgeführt werden.
+    const mixCallIndex = reprojectWGSL.indexOf("mix(currentSample, clampedHistory, alpha)");
+    const guardIndex = reprojectWGSL.indexOf("if (prevUV.x >= 0.0");
+    expect(mixCallIndex).toBeGreaterThan(guardIndex);
+  });
+
+  it("mirrors the branch decision: out-of-frustum prev position keeps the current sample bit-exact", () => {
+    // Math-Mirror der exakten WGSL-Entscheidung (Konstanten + Relationale Semantik aus dem
+    // SHIPPED Kern). Der Mirror erzeugt denselben "blend oder nicht"-Pfad.
+    const mirrorReproject = (
+      currentSample: number,
+      clampedHistory: number,
+      alpha: number,
+      prevClipW: number,
+      prevUVx: number,
+      prevUVy: number,
+      prevSliceW: number,
+    ): number => {
+      // `var blendedResult = currentSample;` (Shader-Zeile, unverändert von Kern übernommen)
+      let result = currentSample;
+      if (prevClipW > 0.001) {
+        const prevUVIn = prevUVx >= 0.0 && prevUVx <= 1.0 && prevUVy >= 0.0 && prevUVy <= 1.0;
+        const prevSliceIn = prevSliceW >= 0.0 && prevSliceW <= 1.0;
+        if (prevUVIn && prevSliceIn) {
+          const clampedAlpha = Math.min(Math.max(alpha, 0), 0.98); // clamp(uni.reprojectParams.x, 0, 0.98)
+          result = currentSample * (1 - clampedAlpha) + clampedHistory * clampedAlpha;
+        }
+      }
+      return result;
+    };
+
+    // 1) Teleport-Fall: prevClip.w <= 0.001 (hinter der Vor-Kamera) => gar kein Blend.
+    for (const w of [0.001, 0.0, -1.0, -1e9]) {
+      const out = mirrorReproject(0.1234, 0.9876, 0.9, w, 0.5, 0.5, 0.5);
+      expect(out).toBe(0.1234); // bit-exakt = currentSample, kein Stale-Einfluss
+    }
+
+    // 2) Out-of-Normalized-Range (verfehltes Vorgänger-NDC) => ebenfalls reiner currentSample.
+    const outOfRange = [
+      [-0.01, 0.5, 0.5],
+      [1.01, 0.5, 0.5],
+      [0.5, -0.01, 0.5],
+      [0.5, 1.01, 0.5],
+      [0.5, 0.5, -0.01],
+      [0.5, 0.5, 1.01],
+    ] as const;
+    for (const [x, y, s] of outOfRange) {
+      const out = mirrorReproject(0.5, 0.9, 0.98, 5.0, x, y, s);
+      expect(out).toBe(0.5);
+    }
+
+    // 3) Gültige Vorposition => Blend findet statt (History-Clamp-Anker, EMA).
+    const blended = mirrorReproject(0.5, 0.9, 0.98, 5.0, 0.5, 0.4, 0.6);
+    expect(blended).toBeCloseTo(0.892, 3); // 0.5*(1-0.98) + 0.9*0.98 = 0.892
+
+    // 4) Alpha ist hart auf 0.98 gedeckelt (Kap self-history-freeze aus dem realen Kern).
+    const capped = mirrorReproject(0.0, 1.0, 5.0, 5.0, 0.5, 0.5, 0.5);
+    expect(capped).toBeCloseTo(0.98, 6);
+  });
+});

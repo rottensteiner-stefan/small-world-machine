@@ -233,4 +233,74 @@ describe("PhysicsDeterminism", () => {
     expect(resStaticFirst.vel.x).toBeCloseTo(resDynamicFirst.vel.x, 5);
     expect(resStaticFirst.vel.y).toBeCloseTo(resDynamicFirst.vel.y, 5);
   });
+
+  /**
+   * @invariant STATIC-ORDER-INVARIANCE: Die Einfüge-Reihenfolge mehrerer statischer Collider
+   *   (`scene.staticColliders`) UND der dynamischen Objekte beeinflusst den bit-exakten
+   *   Simulationszustand nicht — ≥2 Statics in invertierter Reihenfolge + invertierter
+   *   Objekt-Auftrag ergeben identische Positions-/Velocity-Komponenten (P4-m4).
+   */
+  it("yields bit-exact dynamic state with ≥2 statics in reversed collider/object insertion order", () => {
+    const runMultiStatic = (order: "forward" | "reverse"): number[][] => {
+      const events = new EventDispatcherImpl();
+      const physics = new PhysicsSystem(events);
+      physics.gravity.set(0, -9.81, 0);
+      const scene = new Scene();
+
+      const floor = new StaticCollider(
+        new BoundingBox(new Vector3D(-10, -1, -10), new Vector3D(10, 0, 10)),
+      );
+      floor.id = 100;
+      const platform = new StaticCollider(
+        new BoundingBox(new Vector3D(4, 0, -2), new Vector3D(6, 1, 2)),
+      );
+      platform.id = 200;
+
+      if (order === "forward") scene.staticColliders.push(floor, platform);
+      else scene.staticColliders.push(platform, floor);
+
+      const ballA = new Object3D("BallA");
+      ballA.id = 1;
+      ballA.geometry = new Sphere({ radius: 0.5 }).getGeometryData();
+      ballA.position.set(0, 5, 0);
+      ballA.rigidBody = new RigidBody(1.0);
+      ballA.rigidBody.restitution = 0.5;
+      ballA.updateMatrixWorld();
+      ballA.computeBounds();
+
+      const ballB = new Object3D("BallB");
+      ballB.id = 2;
+      ballB.geometry = new Sphere({ radius: 0.5 }).getGeometryData();
+      ballB.position.set(5, 5, 0);
+      ballB.rigidBody = new RigidBody(1.0);
+      ballB.rigidBody.restitution = 0.5;
+      ballB.updateMatrixWorld();
+      ballB.computeBounds();
+
+      if (order === "forward") scene.objects.push(ballA, ballB);
+      else scene.objects.push(ballB, ballA);
+
+      for (let f = 0; f < 60; f++) physics.step(scene, 1 / 60);
+
+      return [
+        [ballA.position.x, ballA.position.y, ballA.position.z] as number[],
+        [
+          ballA.rigidBody!.velocity.x,
+          ballA.rigidBody!.velocity.y,
+          ballA.rigidBody!.velocity.z,
+        ] as number[],
+        [ballB.position.x, ballB.position.y, ballB.position.z] as number[],
+        [
+          ballB.rigidBody!.velocity.x,
+          ballB.rigidBody!.velocity.y,
+          ballB.rigidBody!.velocity.z,
+        ] as number[],
+      ];
+    };
+
+    const forward = runMultiStatic("forward");
+    const reverse = runMultiStatic("reverse");
+
+    expect(reverse).toEqual(forward);
+  });
 });
