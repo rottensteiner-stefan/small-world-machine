@@ -120,7 +120,10 @@ band never mixes two penumbra widths.
 port of `getShadowPCSS` in `pbr_math.wgsl`) for every lit material, PBR and non-PBR, and for the
 water/liquid materials with their own header (`dir_shadow.glsl` includes the same chunk). The
 only differences come from the cascade atlas: every tap is clamped to the cascade's own cell,
-and the cell's texel count stands in for the WebGPU per-layer map size. **Spot light shadows use
+and the cell's texel count stands in for the WebGPU per-layer map size. Cost, measured with GPU
+timer queries on an Apple M4 Pro (ANGLE/Metal, showcase 42 box probe, 3024×1482): whole-frame
+GPU time ~2.1 ms with the old fixed 3×3 PCF, ~2.2 ms at `softness=0`, ~2.4 ms at `softness=3`,
+so roughly +0.3 ms per frame at 4.5 MP. **Spot light shadows use
 PCSS on WebGPU only**; on WebGL2 they stay at fixed-radius PCF. See
 [ADR 0006](/adr/0006-pcss-directional-light-only) for the scope. Only the first 4 spot lights
 get a shadow map.
