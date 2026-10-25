@@ -1865,6 +1865,18 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
           this._scratchFloat4[3] = 0.0;
           this.gl.uniform4fv(softLoc, this._scratchFloat4);
         }
+
+        // Per-cascade normal-offset bias (P3-E10 / DP-13): mirrors the WebGPU dirShadowBias lane
+        // (baked by DirectionalLight.updateCascades from k * texel size). u_dirShadowInfo.y is
+        // now reserved/no-op for directional shadows; only these per-cascade lanes are used.
+        const dirBiasLoc = cache.uniforms.get("u_dirShadowBias");
+        if (dirBiasLoc) {
+          this._scratchFloat4[0] = light.cascadeNormalBiases?.[0] ?? 0.0;
+          this._scratchFloat4[1] = light.cascadeNormalBiases?.[1] ?? 0.0;
+          this._scratchFloat4[2] = light.cascadeNormalBiases?.[2] ?? 0.0;
+          this._scratchFloat4[3] = light.cascadeNormalBiases?.[3] ?? 0.0;
+          this.gl.uniform4fv(dirBiasLoc, this._scratchFloat4);
+        }
       }
     } else {
       // No shadow-casting directional light: EVSM mode stays 0 with the dummy sampler bound.
@@ -1880,6 +1892,16 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         this._scratchFloat4[2] = 0.0;
         this._scratchFloat4[3] = 0.0;
         this.gl.uniform4fv(infoLoc, this._scratchFloat4);
+      }
+      // No shadow-casting directional light: zero the per-cascade bias lanes so a stale value
+      // from a previous frame never leaks into a program that still declares u_dirShadowBias.
+      const dirBiasLoc = cache.uniforms.get("u_dirShadowBias");
+      if (dirBiasLoc) {
+        this._scratchFloat4[0] = 0.0;
+        this._scratchFloat4[1] = 0.0;
+        this._scratchFloat4[2] = 0.0;
+        this._scratchFloat4[3] = 0.0;
+        this.gl.uniform4fv(dirBiasLoc, this._scratchFloat4);
       }
     }
   }

@@ -287,6 +287,17 @@ export class GlobalUniformWriter {
     gData[dirInfo.index + 2] = 0.0; // castShadow off by default
     gData[dirInfo.index + 3] = 4.0;
 
+    // dirShadowBias (E10 / P3): per-cascade normal-offset bias lanes. With castShadow off the
+    // directional branch never reads them, so any finite default is inert -- keep the legacy
+    // global normal offset (0.002, formerly dirShadowInfo.y) so a hypothetical partial state
+    // degrades to the exact pre-E10 look instead of a surprise. CascadedShadowPassGPU overwrites
+    // these with the baked per-cascade values (k * texel size) once shadows actually render.
+    const dirBias = glob.dirShadowBias;
+    gData[dirBias.index] = 0.002;
+    gData[dirBias.index + 1] = 0.002;
+    gData[dirBias.index + 2] = 0.002;
+    gData[dirBias.index + 3] = 0.002;
+
     gData[glob.cameraNearFar.index] = near;
     gData[glob.cameraNearFar.index + 1] = far;
 
@@ -312,7 +323,9 @@ export class GlobalUniformWriter {
     // Neutral defaults keep the pre-knob behavior byte-identical: penumbraScale 1.0 reproduces
     // the legacy clamp(1 + delta/bias, 1, 4) exactly, maxPcfRadius 4 the legacy cap. The knobs
     // only take effect when an author overrides them via `quality` (ADR 0035 override-lock);
-    // CascadedShadowPassGPU's wedge re-upload never touches this range (it ends at dirShadowInfo).
+    // CascadedShadowPassGPU's main wedge re-upload still ends at dirShadowInfo (float 200) and
+    // the per-cascade dirShadowBias tail (float 220) is uploaded separately -- neither touches
+    // this range.
     const soft = glob.shadowSoftness;
     gData[soft.index] = this._host.quality.shadowSoftness ?? 1.0;
     gData[soft.index + 1] = this._host.quality.shadowMaxPcfRadius ?? 4.0;

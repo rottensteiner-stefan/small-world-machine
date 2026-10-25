@@ -31,7 +31,9 @@
           // Normal-offset bias: push the sample point along the surface normal (scaled by
           // NdotL, so grazing angles -- where acne is worst -- get the biggest offset and
           // surfaces facing the light head-on get almost none) instead of only biasing depth.
-          vec3 dirShadowSamplePos = v_worldPos + N * u_dirShadowInfo.y * (1.0 - diff_dir);
+          // E10 (P3): per-cascade lane u_dirShadowBias[cascadeIndex] (baked from k * texel size)
+          // replaces the old single u_dirShadowInfo.y normal offset.
+          vec3 dirShadowSamplePos = v_worldPos + N * u_dirShadowBias[cascadeIndex] * (1.0 - diff_dir);
           float cols = ceil(sqrt(u_dirShadowInfo.w));
           float bias = u_dirShadowInfo.x;
 

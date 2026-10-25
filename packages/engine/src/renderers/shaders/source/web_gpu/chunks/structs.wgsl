@@ -1,8 +1,8 @@
 // WGSL Global and Object structures
 
-// GlobalUniforms: Scene-level uniforms (880 bytes / 220 floats)
+// GlobalUniforms: Scene-level uniforms (896 bytes / 224 floats)
 // Cleanly grouped into Camera & View, Environment & Fog, Shadow Maps, Clustered Light Grid,
-// and Shadow Softness / EVSM Tuning.
+// Shadow Softness / EVSM Tuning, and Per-Cascade Bias.
 struct GlobalUniforms {
     // --- 1. Camera & View (80 bytes) ---
     vp: mat4x4f,
@@ -31,6 +31,10 @@ struct GlobalUniforms {
     spotShadowInfo: array<vec4f, 4>, // [bias, normalBias, castShadow, pad]
     cascadeMatrices: array<mat4x4f, 4>,
     cascadeSplits: vec4f,
+    // x = depth bias, y = normalBias (RESERVED for directional shadows: the per-cascade lanes in
+    // dirShadowBias below replace it -- y stays in the struct so WebGL2 EVSM/legacy layout code
+    // stays intact, but directional shaders no longer read it; spot shadows have their own
+    // normalBias per spot slot, see spotShadowInfo), z = castShadow, w = numCascades.
     dirShadowInfo: vec4f, // [bias, normalBias, castShadow, numCascades]
 
     // --- 4. Clustered Light Culling & Screen Geometry (80 bytes) ---
@@ -54,6 +58,15 @@ struct GlobalUniforms {
     // precedent; counters peter-panning at the caster silhouette, see GlobalUniformWriter).
     // Lanes y/z/w are only meaningful when x > 0.5; lane w stays 0.0 under the pcss default.
     evsmParams: vec4f,
+
+    // --- 7. Per-Cascade Normal-Offset Bias (16 bytes) ---
+    // E10 (P3): one normal-offset bias per cascade, baked by DirectionalLight.updateCascades as
+    // `k * max(texelSizeX, texelSizeY)` (k = 1.2, @fixed). Near (dense) cascades get a small
+    // offset, far (sparse) cascades a larger one -- replacing the old single `dirShadowInfo.y`
+    // normal offset that over-biased near cascades (peter-panning) and under-biased far ones
+    // (acne). Indexed with the resolved cascadeIndex; lanes are only meaningful while
+    // dirShadowInfo.z > 0.5. WebGL2 mirrors this in the `u_dirShadowBias` uniform.
+    dirShadowBias: vec4f,
 }
 
 // ObjectUniforms: 512-byte uniform block (32 vec4 / 128 floats)

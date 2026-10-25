@@ -24,7 +24,8 @@
                 let blendBand = max(splitFar * 0.2, 0.0001);
                 blendToNext = smoothstep(0.0, 1.0, 1.0 - clamp((splitFar - viewDist) / blendBand, 0.0, 1.0));
             }
-            let dirShadowSamplePos = i.wp + N * global.dirShadowInfo.y * (1.0 - dotNL);
+            // E10 (P3): per-cascade normal-offset bias lane (see lighting_pbr.wgsl).
+            let dirShadowSamplePos = i.wp + N * global.dirShadowBias[cascadeIndex] * (1.0 - dotNL);
             let shadowPos = global.cascadeMatrices[cascadeIndex] * vec4f(dirShadowSamplePos, 1.0);
             let shadowA = getShadowDirMain(u_dirShadowMap, shadowSampler, shadowPos, cascadeIndex, global.dirShadowInfo.x);
             var shadowB = shadowA;

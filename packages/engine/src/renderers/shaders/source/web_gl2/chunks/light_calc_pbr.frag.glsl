@@ -94,7 +94,8 @@ vec3 Lo = vec3(0.0);
         }
 
         // Normal-offset bias (see non-PBR light_calc.frag.glsl for rationale).
-        vec3 dirShadowSamplePos = v_worldPos + N * u_dirShadowInfo.y * (1.0 - dotNL);
+        // E10 (P3): per-cascade lane (see non-PBR light_calc.frag.glsl).
+        vec3 dirShadowSamplePos = v_worldPos + N * u_dirShadowBias[cascadeIndex] * (1.0 - dotNL);
         float cols = ceil(sqrt(u_dirShadowInfo.w));
         float bias = u_dirShadowInfo.x;
 

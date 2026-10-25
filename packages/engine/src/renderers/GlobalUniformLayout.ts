@@ -93,12 +93,12 @@ export const WebGL2AreaLightLayout = {
   slotBytes: 96,
 } as const;
 
-// ── WebGPU (220 floats / 880 bytes) ───────────────────────────────────────────────────────────
+// ── WebGPU (224 floats / 896 bytes) ───────────────────────────────────────────────────────────
 // Field order and float indices match `structs.wgsl` exactly.
 
 export const WebGPUGGlobalUniformLayout = {
-  totalFloats: 220,
-  totalBytes: 880,
+  totalFloats: 224,
+  totalBytes: 896,
   fields: {
     vp: { index: 0, floats: 16 },
     viewPos: { index: 16, floats: 4 },
@@ -130,5 +130,9 @@ export const WebGPUGGlobalUniformLayout = {
     clusterDims: { index: 208, floats: 4 },
     shadowSoftness: { index: 212, floats: 4 },
     evsmParams: { index: 216, floats: 4 },
+    // E10 (P3): per-cascade normal-offset bias lanes, baked by DirectionalLight.updateCascades
+    // from `k * max(texelSizeX, texelSizeY)` (k = 1.2, @fixed). Appended at the end, like
+    // shadowSoftness/evsmParams, so every pre-existing lane index stays stable.
+    dirShadowBias: { index: 220, floats: 4 },
   },
 } as const;

@@ -69,3 +69,63 @@ describe("DirectionalLight.updateCascades view-projection matrices", () => {
     }
   });
 });
+
+describe("DirectionalLight per-cascade normal-offset bias (P3-E10 / DP-13, CsmC0Continuity anchor)", () => {
+  function makeCam(): Camera {
+    const camera = new Camera(
+      new PerspectiveProjection({ fov: Math.PI / 3, aspect: 1.5, near: 0.1, far: 120 }),
+    );
+    camera.position.set(3, 2, 8);
+    camera.target.set(0, 1, 0);
+    camera.updateViewMatrix();
+    return camera;
+  }
+
+  function makeBiasLight(shadowResolution: number): DirectionalLight {
+    const light = new DirectionalLight({
+      direction: new Vector3D(-0.45, -0.75, -0.45).normalize(),
+      numCascades: 4,
+      castShadow: true,
+      shadowResolution,
+    });
+    light.updateCascades(makeCam());
+    return light;
+  }
+
+  // C0-continuity anchor for the per-cascade bias curve (see the CSM-C0-CONTINUITY invariant
+  // family in CsmC0Continuity.test.ts): the baked offsets must be positive, finite and
+  // monotonically non-decreasing from the near cascade to the far cascade. A decreasing step at
+  // a seam would invert the E10 intent (the near side of the seam under-bias, the far side
+  // over-bias) and reintroduce a continuity break the golden baselines now pin down.
+  it("bakes a positive, finite, monotonically non-decreasing bias per cascade (near < far)", () => {
+    const biases = makeBiasLight(512).cascadeNormalBiases;
+    expect(biases).toHaveLength(4);
+    for (let i = 0; i < biases.length; i++) {
+      expect(Number.isFinite(biases[i]!)).toBe(true);
+      expect(biases[i]!).toBeGreaterThan(0);
+      if (i > 0) expect(biases[i]!).toBeGreaterThanOrEqual(biases[i - 1]!);
+    }
+  });
+
+  // The bias is derived from the cascade's own shadow-texel size (k * texel), not a constant:
+  // identical geometry at double the shadow resolution halves every cascade's texel and must
+  // therefore halve every baked bias exactly. This pins that the near/far cascade ratio is
+  // texel-bound and meaningful, not an arbitrary author-set ramp.
+  it("derives the bias from the cascade texel size: doubling the shadow resolution halves every cascade's bias", () => {
+    const low = makeBiasLight(512).cascadeNormalBiases;
+    const high = makeBiasLight(1024).cascadeNormalBiases;
+    for (let i = 0; i < low.length; i++) {
+      expect(low[i]! / high[i]!).toBeCloseTo(2, 6);
+    }
+  });
+
+  // Fail-safe: lanes stay zero (no offset, no NaN) before a shadow-casting light ever runs
+  // updateCascades or when shadows are off, so a partial state can never feed a bad bias into
+  // the shader lane.
+  it("keeps every cascade lane at zero before a shadow-casting light runs updateCascades", () => {
+    const light = new DirectionalLight({ numCascades: 4, castShadow: false });
+    expect(light.cascadeNormalBiases).toEqual([0, 0, 0, 0]);
+    light.updateCascades(makeCam());
+    expect(light.cascadeNormalBiases).toEqual([0, 0, 0, 0]);
+  });
+});

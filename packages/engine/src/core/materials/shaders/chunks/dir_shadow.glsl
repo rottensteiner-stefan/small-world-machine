@@ -6,6 +6,9 @@ uniform vec4 u_evsmParams; // x=mode flag (0/1), y=dynamic variance floor multip
 uniform mat4 u_cascadeMatrices[4];
 uniform vec4 u_cascadeSplits;
 uniform vec4 u_dirShadowInfo; // x=bias, y=normalBias, z=castShadow, w=numCascades
+// E10 (P3): per-cascade normal-offset bias lanes (baked from k * texel size), indexed by
+// cascadeIndex. u_dirShadowInfo.y is now reserved/no-op for directional shadows.
+uniform vec4 u_dirShadowBias;
 
 // EVSM (ADR 0043) helpers -- exact duplicates of the ones in BASE_FRAGMENT_HEADER (this chunk is
 // for shaders with their own header, and the two headers never mix). Cell-clamped taps, same
@@ -106,7 +109,8 @@ float sampleDirShadow(vec3 worldPos, vec3 N) {
     }
 
     float nDotL = max(dot(N, normalize(u_dirLightDir)), 0.0);
-    vec3 samplePos = worldPos + N * u_dirShadowInfo.y * (1.0 - nDotL);
+    // E10 (P3): per-cascade normal-offset bias lane (baked from k * texel size in updateCascades).
+    vec3 samplePos = worldPos + N * u_dirShadowBias[cascadeIndex] * (1.0 - nDotL);
     vec4 lightSpacePos = u_cascadeMatrices[cascadeIndex] * vec4(samplePos, 1.0);
     vec3 proj = lightSpacePos.xyz / lightSpacePos.w * 0.5 + 0.5;
     if (proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) {

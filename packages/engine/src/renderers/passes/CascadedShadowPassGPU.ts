@@ -514,7 +514,7 @@ export class CascadedShadowPassGPU implements RenderPass {
     // GlobalUniforms was never touched by the loop above (only the dedicated view-slot buffer
     // was), so it still holds this frame's real camera data from the one _updateGlobalBuffers()
     // call at the top of render() -- no restore needed. Only overlay the shadow-sampling data
-    // MainRenderPass actually needs (cascade matrices/splits/dirShadowInfo).
+    // MainRenderPass actually needs (cascade matrices/splits/dirShadowInfo/dirShadowBias).
     const gData = renderer.scratchGlobalBufferData;
     const glob = WebGPUGGlobalUniformLayout.fields;
     const dirInfo = glob.dirShadowInfo;
@@ -522,6 +522,16 @@ export class CascadedShadowPassGPU implements RenderPass {
     gData[dirInfo.index + 1] = dLight.shadowNormalBias;
     gData[dirInfo.index + 2] = 1.0; // castShadow on
     gData[dirInfo.index + 3] = numCascades;
+
+    // Per-cascade normal-offset bias (P3-E10 / DP-13): replace the old single normal offset
+    // (dirShadowInfo.y above stays reserved/no-op for directional shadows) with the per-cascade
+    // lanes baked by DirectionalLight.updateCascades (k * texel size). A missing array (legacy
+    // mock/light) or a shorter-than-numCascades array degrades to 0 -- no offset -- instead of
+    // reading out of bounds.
+    const dirBias = glob.dirShadowBias;
+    for (let i = 0; i < numCascades; i++) {
+      gData[dirBias.index + i] = dLight.cascadeNormalBiases?.[i] ?? 0.0;
+    }
 
     const rawCascadeVp = MathPool.acquireMatrix();
     const correctedCascadeVp = MathPool.acquireMatrix();
@@ -544,7 +554,7 @@ export class CascadedShadowPassGPU implements RenderPass {
 
     // Only cascadeMatrices/cascadeSplits/dirShadowInfo (the wedge from cascadeMatrices.index
     // through dirShadowInfo.index + dirShadowInfo.floats, see GlobalUniforms in structs.wgsl)
-    // were touched above -- upload just that slice instead of the whole 848-byte buffer.
+    // were touched above -- upload just that slice instead of the whole 896-byte buffer.
     // Re-uploading the untouched vp/lights/fog fields here too would be pure waste, and is one of
     // up to 3 full-buffer writes of the same buffer per frame otherwise (this pass,
     // SpotShadowPassGPU, and _updateGlobalBuffers()'s own once-per-frame write).
@@ -554,6 +564,17 @@ export class CascadedShadowPassGPU implements RenderPass {
       gData,
       glob.cascadeMatrices.index,
       dirInfo.index + dirInfo.floats - glob.cascadeMatrices.index,
+    );
+
+    // The dirShadowBias lanes (float 220-223) are NOT contiguous with the wedge above -- they sit
+    // after the untouched cluster/softness/evsm tuning lanes -- so they get their own tiny tail
+    // upload instead of re-uploading the 24 untouched floats in between.
+    renderer.gpuDevice!.queue.writeBuffer(
+      renderer.globalUniformBuffer,
+      glob.dirShadowBias.index * 4,
+      gData,
+      glob.dirShadowBias.index,
+      glob.dirShadowBias.floats,
     );
 
     // Bind the resulting texture array to the WebGPU Renderer's global bind group,

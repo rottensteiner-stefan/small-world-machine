@@ -31,7 +31,10 @@ var shadow: f32 = 1.0;
         }
 
         // Normal-offset bias, scaled by NdotL so grazing angles get the biggest offset.
-        let dirShadowSamplePos = i.wp + N * global.dirShadowInfo.y * (1.0 - diff_dir);
+        // E10 (P3): per-cascade lane (baked from k * texel size) replaces the old single
+        // dirShadowInfo.y normal offset -- near cascades no longer over-bias, far ones no longer
+        // under-bias.
+        let dirShadowSamplePos = i.wp + N * global.dirShadowBias[cascadeIndex] * (1.0 - diff_dir);
         let shadowPos = global.cascadeMatrices[cascadeIndex] * vec4f(dirShadowSamplePos, 1.0);
         let shadowA = getShadowDirMain(u_dirShadowMap, shadowSampler, shadowPos, cascadeIndex, global.dirShadowInfo.x);
 

@@ -30,7 +30,7 @@ function makeCaster(name: string, bounds: BoundingSphere | undefined): Object3D 
 }
 
 function makeMockRenderer(objects: Object3D[]): Internals {
-  const scratchGlobalBufferData = new Float32Array(216);
+  const scratchGlobalBufferData = new Float32Array(224);
   const device = {
     createTexture: vi.fn((desc: { size: number[] }) => ({
       width: desc.size[0],
@@ -48,6 +48,7 @@ function makeMockRenderer(objects: Object3D[]): Internals {
     shadowResolution: 256,
     cascadeCameras: [{ viewProjectionMatrix: identityVp, viewMatrix: identityVp }],
     cascadeSplits: [1.0],
+    cascadeNormalBiases: [0.02],
     shadowBias: 0.001,
     shadowNormalBias: 0.002,
   };
@@ -202,7 +203,7 @@ describe("CascadedShadowPassGPU: per-cascade frustum culling", () => {
     expect(call[7]).toBe(Topology.LINE_LIST);
   });
 
-  it("uploads only the cascadeMatrices/cascadeSplits/dirShadowInfo slice, not the whole 848-byte GlobalUniforms buffer", () => {
+  it("uploads only the cascadeMatrices/cascadeSplits/dirShadowInfo wedge plus a separate dirShadowBias tail, not the whole 896-byte GlobalUniforms buffer", () => {
     const inside = makeCaster("inside", new BoundingSphere(new Vector3D(0, 0, 0), 0.1));
     const renderer = makeMockRenderer([inside]);
     const scene = makeMockScene([inside]);
@@ -212,13 +213,23 @@ describe("CascadedShadowPassGPU: per-cascade frustum culling", () => {
     pass.execute(renderer, scene, ce, {}, new Float32Array(16), new Vector3D(0, 0, 0));
 
     const writeBuffer = renderer.gpuDevice.queue.writeBuffer as ReturnType<typeof vi.fn>;
-    expect(writeBuffer).toHaveBeenCalledTimes(1);
+    expect(writeBuffer).toHaveBeenCalledTimes(2);
+
+    // Call 1: the cascadeMatrices/cascadeSplits/dirShadowInfo wedge only.
     const [buffer, byteOffset, data, dataOffset, size] = writeBuffer.mock.calls[0]!;
     expect(buffer).toBe(renderer.globalUniformBuffer);
     expect(byteOffset).toBe(128 * 4); // cascadeMatrices starts at float 128
     expect(data).toBe(renderer.scratchGlobalBufferData);
     expect(dataOffset).toBe(128);
     expect(size).toBe(72); // cascadeMatrices(64) + cascadeSplits(4) + dirShadowInfo(4)
+
+    // Call 2: the separate, non-contiguous per-cascade dirShadowBias tail (float 220-223).
+    const [buffer2, byteOffset2, data2, dataOffset2, size2] = writeBuffer.mock.calls[1]!;
+    expect(buffer2).toBe(renderer.globalUniformBuffer);
+    expect(byteOffset2).toBe(220 * 4); // dirShadowBias starts at float 220
+    expect(data2).toBe(renderer.scratchGlobalBufferData);
+    expect(dataOffset2).toBe(220);
+    expect(size2).toBe(4); // dirShadowBias(4)
   });
 });
 

@@ -52,7 +52,8 @@ var Lo = vec3f(0.0);
         }
 
         // Normal-offset bias, scaled by NdotL (see lighting.wgsl for rationale).
-        let dirShadowSamplePos = i.wp + N * global.dirShadowInfo.y * (1.0 - dotNL);
+        // E10 (P3): per-cascade lane (see lighting.wgsl).
+        let dirShadowSamplePos = i.wp + N * global.dirShadowBias[cascadeIndex] * (1.0 - dotNL);
         let shadowPos = global.cascadeMatrices[cascadeIndex] * vec4f(dirShadowSamplePos, 1.0);
         let shadowA = getShadowDirMain(u_dirShadowMap, shadowSampler, shadowPos, cascadeIndex, global.dirShadowInfo.x);
 

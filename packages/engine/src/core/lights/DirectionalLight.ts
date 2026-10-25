@@ -41,6 +41,16 @@ export class DirectionalLight extends AbstractLight {
   /** The far depth split distances for each cascade. */
   public cascadeSplits: number[] = [];
 
+  /**
+   * Per-cascade normal-offset bias lanes (E10 / P3), consumed by CascadedShadowPassGPU (WebGPU)
+   * and WebGL2Renderer's `u_dirShadowBias` uniform, keyed by cascade index. Baked inside
+   * `updateCascades()` from the cascade's own shadow-texel size (see CASCADE_BIAS_K below), so a
+   * near cascade gets a small offset and a far cascade a larger one. Zero until a shadow-casting
+   * light runs `updateCascades()`, which keeps the no-shadow default (and the constructor's
+   * initial state) NaN-free.
+   */
+  public cascadeNormalBiases: number[] = [];
+
   // Pre-allocated objects to avoid GC pressure during frustum calculations
   private readonly _corners: Vector3D[] = Array.from({ length: 8 }, () => new Vector3D());
   private readonly _center: Vector3D = new Vector3D();
@@ -51,6 +61,11 @@ export class DirectionalLight extends AbstractLight {
   private readonly _farCenter: Vector3D = new Vector3D();
   private readonly _lightPos: Vector3D = new Vector3D();
   private readonly _lightUp: Vector3D = new Vector3D();
+
+  /**
+   * @fixed k = 1.2 per P3-E10: bewusst eingefrorener Antiwrinkle-Faktor ohne Knob (Standard).
+   */
+  private static readonly _CASCADE_BIAS_K = 1.2;
 
   /**
    * Creates a new DirectionalLight.
@@ -82,6 +97,7 @@ export class DirectionalLight extends AbstractLight {
       const cam = new Camera(ortho);
       this.cascadeCameras.push(cam);
       this.cascadeSplits.push(0);
+      this.cascadeNormalBiases.push(0);
     }
   }
 
@@ -172,6 +188,23 @@ export class DirectionalLight extends AbstractLight {
       const perCascadeRes = this.shadowResolution / atlasCols;
       const texelSizeX = (maxX - minX) / perCascadeRes;
       const texelSizeY = (maxY - minY) / perCascadeRes;
+
+      // Per-cascade normal-offset bias (P3-E10 / DP-13): bake k * max(texelSizeX, texelSizeY) so a
+      // near (dense, small-texel) cascade gets a small offset and a far (sparse, large-texel)
+      // cascade a larger one, instead of the old single global normal offset that over-biased near
+      // cascades (peter-panning) and under-biased far ones (acne). Uses the same conservative
+      // texel estimate as the snapping below (WebGL2 atlas density also applies to WebGPU -- a
+      // deliberately coarser estimate, see above), keeping near/far bias in the intended ratio.
+      // Degenerate frustum geometry (non-finite or non-positive texels) keeps the lane at its
+      // constructor zero, i.e. no normal offset -- the least-bad choice for a degenerate cascade.
+      this.cascadeNormalBiases[i] =
+        Number.isFinite(texelSizeX) &&
+        Number.isFinite(texelSizeY) &&
+        texelSizeX > 0 &&
+        texelSizeY > 0
+          ? DirectionalLight._CASCADE_BIAS_K * Math.max(texelSizeX, texelSizeY)
+          : 0;
+
       if (0 < texelSizeX && 0 < texelSizeY) {
         const halfWidth = (maxX - minX) * 0.5;
         const halfHeight = (maxY - minY) * 0.5;

@@ -61,6 +61,19 @@ On WebGL2, all cascades share a single shadow map **texture atlas** (packed into
 not the resolution of each individual cascade. On WebGPU, each cascade is a full-resolution
 layer of a `texture_depth_2d_array` — no atlas packing is needed there.
 
+> **E10 / P3 — per-cascade normal-offset bias:** the directional normal-offset bias is no longer a
+> single global value. `DirectionalLight.updateCascades()` bakes one offset per cascade as
+> `k * max(texelSizeX, texelSizeY)` with **k = 1.2** (a `@fixed` constant, deliberately not a
+> configurable knob), exposed to the shaders through the WebGPU `dirShadowBias` global-uniform lane
+> and the WebGL2 `u_dirShadowBias` uniform, indexed by the resolved cascade index. Near (dense)
+> cascades get a small offset and far (sparse) cascades a larger one, which removes the old
+> single-global-offset caveat: one fixed normal offset either over-biased near cascades
+> (peter-panning) or under-biased far cascades (acne). `shadowNormalBias` on a *directional* light
+> is now reserved/no-op for directional shadowing (the lane is still written for layout safety but
+> no directional shader reads it; spot lights keep their own per-slot `normalBias`). This is a
+> **visible shadow change** (E7 moderator sign-off) — shadow-bearing golden baselines were
+> re-baselined alongside it.
+
 Two polish passes run automatically, with no configuration needed:
 
 - **Texel snapping** — each cascade's light-space center is rounded to that cascade's own

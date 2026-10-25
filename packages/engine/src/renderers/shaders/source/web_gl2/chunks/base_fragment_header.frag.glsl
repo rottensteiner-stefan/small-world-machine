@@ -55,6 +55,10 @@ uniform sampler2D u_dirShadowMapRaw;
 uniform mat4 u_cascadeMatrices[4];
 uniform vec4 u_cascadeSplits;
 uniform vec4 u_dirShadowInfo; // x=bias, y=normalBias, z=castShadow, w=numCascades
+// E10 (P3): per-cascade normal-offset bias lanes, indexed by cascadeIndex (baked from k * texel
+// size in DirectionalLight.updateCascades). y in u_dirShadowInfo is now reserved/no-op for
+// directional shadows; only these lanes are used.
+uniform vec4 u_dirShadowBias;
 uniform vec4 u_shadowSoftness; // x=penumbra scale (quality.shadowSoftness), y=PCF radius cap in texels (quality.shadowMaxPcfRadius)
 
 // EVSM (ADR 0043): the exponentially warped variance moment atlas (rgba32float, same cascade grid
