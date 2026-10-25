@@ -3,6 +3,7 @@ precision highp float;
 precision highp int;
 precision highp sampler2DShadow;
 precision highp sampler2DArray;
+precision highp sampler2DArrayShadow;
 
 in vec3 v_worldPos;
 in vec3 v_normal;
@@ -44,7 +45,8 @@ uniform float u_envIntensity;
 
 // Shadow Mapping
 in vec4 v_spotLightSpacePos[4];
-uniform sampler2DShadow u_spotShadowMap[4];
+// One layer per spot slot (the first 4 sLights), same layout as the WebGPU texture_depth_2d_array.
+uniform sampler2DArrayShadow u_spotShadowMap;
 uniform vec4 u_spotShadowInfo[4]; // x=bias, y=normalBias, z=castShadow, w=pad
 
 // Cascaded Shadow Maps

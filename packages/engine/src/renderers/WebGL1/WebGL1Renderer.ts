@@ -405,6 +405,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     ctx.dirShadowTexture = null;
     ctx.spotShadowTextures = WebGL1Renderer._NO_SHADOW_TEXTURES;
     ctx.fallbackShadowTexture = null;
+    ctx.fallbackSpotShadowArray = null;
     ctx.irradianceMap = null;
     ctx.envIntensity = 0;
     ctx.pointLights = this._frameLights?.pLights ?? [];

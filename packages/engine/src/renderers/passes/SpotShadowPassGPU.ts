@@ -156,7 +156,7 @@ export class SpotShadowPassGPU implements RenderPass {
     const depthManifest = this._depthMaterial.getRenderManifest();
 
     // The shadow atlas texture is fixed at 4 array layers (see comment above), matching
-    // WebGL2Renderer's `u_spotShadowMap[4]` cap -- only the first 4 spot lights (by scene index,
+    // WebGL2Renderer's 4-layer spot shadow array -- only the first 4 spot lights (by scene index,
     // not just shadow-casting ones) get a shadow map, mirroring that renderer's loop bound.
     const maxShadowedSpotLights = Math.min(lights.sLights.length, 4);
 

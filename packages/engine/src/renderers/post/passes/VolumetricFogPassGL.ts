@@ -126,10 +126,10 @@ export class VolumetricFogPassGL {
   private readonly _scratchElementMaskSize: Float32Array = new Float32Array(4);
   private readonly _scratchFogVolumeMaskInfo: Float32Array = new Float32Array(16 * 4);
   private readonly _scratchMaskedVolumeIndices: Int32Array = new Int32Array(8);
-  /** Texture units of the 4 spot shadow samplers (0 = depth, 1 = sun shadow, 2 = irradiance). */
-  private readonly _spotShadowUnits: Int32Array = new Int32Array([3, 4, 5, 6]);
+  /** Texture unit of the spot shadow array (0 = depth, 1 = sun shadow, 2 = irradiance). */
+  private static readonly _SPOT_SHADOW_UNIT: number = 3;
 
-  // 3D density-mask texture units. WebGL2 guarantees at least 16 fragment texture units; 0..6 are
+  // 3D density-mask texture units. WebGL2 guarantees at least 16 fragment texture units; 0..3 are
   // taken by the depth/shadow/IBL/spot-shadow samplers above and the bilateral pass uses its own 0/1.
   /** Unit of the element-global density mask. */
   private static readonly _ELEMENT_MASK_UNIT: number = 7;
@@ -310,6 +310,7 @@ export class VolumetricFogPassGL {
     const spotLights = ctx.spotLights ?? ctx.lights?.sLights ?? [];
     const spotShadowTextures = ctx.spotShadowTextures ?? [];
     const fallbackShadowTexture = ctx.fallbackShadowTexture ?? null;
+    const fallbackSpotShadowArray = ctx.fallbackSpotShadowArray ?? null;
     if (!this._isWebGL2 || !element.enabled || width <= 0 || height <= 0) {
       return null;
     }
@@ -565,8 +566,10 @@ export class VolumetricFogPassGL {
     if (this._uSpotLightParamsLoc)
       gl2.uniform4fv(this._uSpotLightParamsLoc, this._scratchSpotLightParams);
 
-    // Spot shadow maps of the first 4 spots -> units 3..6. A slot without a (shadow-casting) spot
-    // binds the fallback depth texture and is switched off in the shader via its info.z flag.
+    // Spot shadow array of the first 4 spots -> unit 3 (one layer per slot). A slot without a
+    // (shadow-casting) spot is switched off in the shader via its info.z flag; with no active slot
+    // the fallback array is bound.
+    let spotShadowArray: WebGLTexture | null = null;
     for (let i = 0; i < 4; i++) {
       const sl = i < numSpots ? spotLights[i] : undefined;
       const tex = spotShadowTextures[i] ?? null;
@@ -576,10 +579,9 @@ export class VolumetricFogPassGL {
         sl !== undefined &&
         sl.castShadow &&
         sl.shadowCamera !== undefined;
-      gl2.activeTexture(gl2.TEXTURE0 + 3 + i);
-      gl2.bindTexture(gl2.TEXTURE_2D, active ? tex : fallbackShadowTexture);
       const info = i * 4;
       if (active) {
+        spotShadowArray = tex;
         this._scratchSpotShadowMatrix.set(sl.shadowCamera!.viewProjectionMatrix, i * 16);
         this._scratchSpotShadowInfo[info] = sl.shadowBias;
         this._scratchSpotShadowInfo[info + 2] = 1.0;
@@ -589,8 +591,12 @@ export class VolumetricFogPassGL {
         this._scratchSpotShadowInfo[info + 2] = 0.0;
       }
     }
+    gl2.activeTexture(gl2.TEXTURE0 + VolumetricFogPassGL._SPOT_SHADOW_UNIT);
+    gl2.bindTexture(gl2.TEXTURE_2D_ARRAY, spotShadowArray ?? fallbackSpotShadowArray);
     gl2.activeTexture(gl2.TEXTURE0);
-    if (this._uSpotShadowMapLoc) gl2.uniform1iv(this._uSpotShadowMapLoc, this._spotShadowUnits);
+    if (this._uSpotShadowMapLoc) {
+      gl2.uniform1i(this._uSpotShadowMapLoc, VolumetricFogPassGL._SPOT_SHADOW_UNIT);
+    }
     if (this._uSpotShadowMatrixLoc) {
       gl2.uniformMatrix4fv(this._uSpotShadowMatrixLoc, false, this._scratchSpotShadowMatrix);
     }

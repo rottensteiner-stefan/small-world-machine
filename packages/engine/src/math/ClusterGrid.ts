@@ -19,12 +19,11 @@ export const CLUSTER_TEX_WIDTH = 1024;
  * Fixed WebGL2 texture units for the clustered light culling grid/index textures -- plain
  * exported constants rather than renderer instance/class state, since the numbers are
  * shared by every `WebGL2Renderer` instance (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md).
- * Texture units 8-11 are reserved for spot shadows, unit 12 for directional shadows (and dummy fallback),
- * unit 13 for `WebGL2Renderer._RAW_DEPTH_UNIT` (PCSS raw depth blocker-search), and units 14-15
- * for the cluster grid and cluster indices textures.
- * This keeps the entire reserved global texture unit range strictly at 8-15 (8 units total),
- * perfectly fitting within the WebGL2 specification's guaranteed minimum `MAX_TEXTURE_IMAGE_UNITS`
- * of 16 (units 0-15), leaving units 0-7 available for material textures without unit overflow.
+ * Texture unit 11 is reserved for the spot shadow depth array, unit 12 for directional shadows (and
+ * dummy fallback), unit 13 for `WebGL2Renderer._RAW_DEPTH_UNIT` (PCSS raw depth blocker-search), and
+ * units 14-15 for the cluster grid and cluster indices textures. The reserved range 11-15 leaves
+ * units 0-10 for material/IBL samplers within WebGL2's guaranteed `MAX_TEXTURE_IMAGE_UNITS` of 16
+ * (see WebGLProgramCache._RESERVED_GLOBAL_UNIT_START).
  */
 export const CLUSTER_GRID_UNIT = 14;
 export const CLUSTER_INDEX_UNIT = 15;

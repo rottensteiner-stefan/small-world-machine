@@ -91,19 +91,20 @@ export class WebGLProgramCache {
   private readonly _globalUBO: WebGL2UniformBuffer | undefined;
 
   /**
-   * Texture units 8-15 are permanently reserved for global (non-material) samplers: 8-11 the
-   * spot shadow maps (4x), 12 the directional/CSM shadow map (and dummy fallback), 13 the
-   * directional shadow map's raw-depth read for PCSS's blocker search
-   * (`WebGL2Renderer._RAW_DEPTH_UNIT`), and 14-15 the clustered light culling grid/index
-   * textures (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md) -- all bound via
-   * hardcoded `activeTexture` calls (`WebGL2Renderer._bindDummyShadowMaps`/`_renderSubgroup`/
+   * Texture units 11-15 are permanently reserved for global (non-material) samplers: 11 the
+   * spot shadow depth array (`u_spotShadowMap`, one layer per spot slot), 12 the directional/CSM
+   * shadow map (and dummy fallback), 13 the directional shadow map's raw-depth read for PCSS's
+   * blocker search (`WebGL2Renderer._RAW_DEPTH_UNIT`), and 14-15 the clustered light culling
+   * grid/index textures (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md) -- all bound
+   * via hardcoded `activeTexture` calls (`WebGL2Renderer._bindDummyShadowMaps`/`_renderSubgroup`/
    * `WebGLClusterCullPass`) rather than through `samplerUnits`. The dynamic sampler-unit
    * assignment in `getProgram()` skips this whole range for every other sampler so an unrelated
-   * material texture can never land on the same unit as one of these. Material textures occupy
-   * units 0-7 -- 8 reserved units (8-15) plus those 8 fit completely within the WebGL2
-   * spec's guaranteed minimum `MAX_TEXTURE_IMAGE_UNITS` of 16 (units 0-15).
+   * material texture can never land on the same unit as one of these. Material, IBL and EVSM
+   * samplers occupy units 0-10 -- all within the WebGL2 spec's guaranteed minimum
+   * `MAX_TEXTURE_IMAGE_UNITS` of 16. The GLSL linker counts every active sampler against that
+   * limit, the reserved ones included, which is why spot shadows are one array, not four maps.
    */
-  private static readonly _RESERVED_GLOBAL_UNIT_START = 8;
+  private static readonly _RESERVED_GLOBAL_UNIT_START = 11;
   private static readonly _RESERVED_GLOBAL_UNIT_END = 15;
 
   /**
@@ -398,7 +399,7 @@ export class WebGLProgramCache {
       const isShadowSampler =
         "u_dirShadowMap" === info.name ||
         "u_dirShadowMapRaw" === info.name ||
-        info.name.startsWith("u_spotShadowMap[");
+        "u_spotShadowMap" === info.name;
       const isSampler = samplerTypeSet.has(info.type) && !isShadowSampler;
 
       for (const name of names) {

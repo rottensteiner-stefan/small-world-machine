@@ -2,6 +2,7 @@
 precision highp float;
 precision highp sampler2D;
 precision highp sampler2DShadow;
+precision highp sampler2DArrayShadow;
 precision highp sampler3D;
 
 in vec2 v_uv;
@@ -53,8 +54,8 @@ uniform vec4 u_spotLightDir[16];    // xyz: direction, w: decay
 uniform vec4 u_spotLightColor[16];  // rgb: color * intensity * volumetricIntensity * tint * albedo, w: pad
 uniform vec4 u_spotLightParams[16]; // x: cosOuter, y: cosInner, z: distance (range), w: decay
 
-// Spot shadow maps of the first 4 spot lights (the engine only has 4), index = spot list index.
-uniform sampler2DShadow u_spotShadowMap[4];
+// Spot shadow maps of the first 4 spot lights (the engine only has 4), layer = spot list index.
+uniform sampler2DArrayShadow u_spotShadowMap;
 uniform mat4 u_spotShadowMatrix[4];
 uniform vec4 u_spotShadowInfo[4]; // x: bias, z: 1 when this spot shadows the fog
 
@@ -69,7 +70,7 @@ uniform float u_elementMaskEnabled; // 1 when the element mask is bound and appl
 uniform float u_elementMaskAlbedo;  // element scatteringAlbedo fallback for out-of-box cells
 
 // Per-FogVolume 3D density masks, compacted onto units 8..15 (WebGL2 guarantees >= 16 fragment
-// texture units; 0-6 are taken by depth/shadow/IBL/spot-shadow samplers). `u_fogVolumeMaskInfo[v].y`
+// texture units; 0-3 are taken by depth/shadow/IBL/spot-shadow samplers). `u_fogVolumeMaskInfo[v].y`
 // holds the compacted slot of volume v, .x = 1 when a mask is bound for it. Empty slots keep the
 // identity texture bound; they are never sampled.
 uniform sampler3D u_fogVolumeMasks[8];
@@ -79,7 +80,7 @@ out vec4 fragColor;
 
 // Shadow term of spot `s` at a point in the air: 2x2 hardware PCF, same projection/depth convention as
 // the lit surfaces in light_calc.frag.glsl, no normal offset (the sample is not on a surface). Points
-// outside the map count as lit. Sampler arrays need constant indices, hence the if-chain.
+// outside the map count as lit.
 float spotFogShadow(int s, vec3 pos) {
     if (s >= 4 || u_spotShadowInfo[s].z < 0.5) return 1.0;
     vec4 clip = u_spotShadowMatrix[s] * vec4(pos, 1.0);
@@ -87,19 +88,11 @@ float spotFogShadow(int s, vec3 pos) {
     vec3 proj = clip.xyz / clip.w * 0.5 + 0.5;
     if (proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0 || proj.z > 1.0) return 1.0;
     float depthRef = proj.z - u_spotShadowInfo[s].x;
-    vec2 texel;
-    if (s == 0) texel = 0.5 / vec2(textureSize(u_spotShadowMap[0], 0));
-    else if (s == 1) texel = 0.5 / vec2(textureSize(u_spotShadowMap[1], 0));
-    else if (s == 2) texel = 0.5 / vec2(textureSize(u_spotShadowMap[2], 0));
-    else texel = 0.5 / vec2(textureSize(u_spotShadowMap[3], 0));
+    vec2 texel = 0.5 / vec2(textureSize(u_spotShadowMap, 0).xy);
     float lit = 0.0;
     for (int k = 0; k < 4; k++) {
         vec2 o = vec2((k & 1) == 0 ? -texel.x : texel.x, (k & 2) == 0 ? -texel.y : texel.y);
-        vec3 c = vec3(proj.xy + o, depthRef);
-        if (s == 0) lit += texture(u_spotShadowMap[0], c);
-        else if (s == 1) lit += texture(u_spotShadowMap[1], c);
-        else if (s == 2) lit += texture(u_spotShadowMap[2], c);
-        else lit += texture(u_spotShadowMap[3], c);
+        lit += texture(u_spotShadowMap, vec4(proj.xy + o, float(s), depthRef));
     }
     return lit * 0.25;
 }

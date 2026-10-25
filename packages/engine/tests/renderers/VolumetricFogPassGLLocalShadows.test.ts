@@ -7,7 +7,7 @@ import { Vector3D } from "../../src/math/index.js";
 
 interface Recorded {
   uniforms: Record<string, number[]>;
-  /** texture unit -> texture bound to TEXTURE_2D while that unit was active at draw time */
+  /** texture unit -> texture last bound while that unit was active at draw time */
   boundAtDraw: Record<number, unknown>;
 }
 
@@ -103,7 +103,8 @@ function run(
   ctx.element = element;
   ctx.spotLights = [spot];
   ctx.spotShadowTextures = shadowTextures;
-  ctx.fallbackShadowTexture = fallback;
+  ctx.fallbackShadowTexture = {} as WebGLTexture;
+  ctx.fallbackSpotShadowArray = fallback;
   new VolumetricFogPassGL(gl, true).execute(ctx);
   return rec;
 }
@@ -112,11 +113,10 @@ describe("VolumetricFogPassGL local light shadows", () => {
   const real = { id: "real" } as unknown as WebGLTexture;
   const fallback = { id: "fallback" } as unknown as WebGLTexture;
 
-  it("binds the spot's shadow map to unit 3 and switches slot 0 on with its bias", () => {
+  it("binds the spot shadow array to unit 3 and switches slot 0 on with its bias", () => {
     const rec = run(() => {}, [real, null, null, null], fallback);
-    expect(rec.uniforms["u_spotShadowMap"]).toEqual([3, 4, 5, 6]);
+    expect(rec.uniforms["u_spotShadowMap"]).toEqual([3]);
     expect(rec.boundAtDraw[3]).toBe(real);
-    expect(rec.boundAtDraw[4]).toBe(fallback);
     const info = rec.uniforms["u_spotShadowInfo"]!;
     expect(info[0]).toBeCloseTo(0.004, 6);
     expect(info[2]).toBe(1);
@@ -138,5 +138,6 @@ describe("VolumetricFogPassGL local light shadows", () => {
   it("switches the slot off when the renderer has no shadow texture for it", () => {
     const rec = run(() => {}, [null, null, null, null], fallback);
     expect(rec.uniforms["u_spotShadowInfo"]![2]).toBe(0);
+    expect(rec.boundAtDraw[3]).toBe(fallback);
   });
 });

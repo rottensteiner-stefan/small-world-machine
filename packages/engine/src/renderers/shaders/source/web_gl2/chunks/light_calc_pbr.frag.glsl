@@ -293,19 +293,12 @@ for(int k = 0; k < CLUSTER_MAX_LIGHTS; k++) {
                 float bias = u_spotShadowInfo[i].x;
                 float currentDepth = projCoords.z;
                 shadow = 0.0;
-                vec2 texelSize;
-                if (i == 0) texelSize = 1.0 / vec2(textureSize(u_spotShadowMap[0], 0));
-                else if (i == 1) texelSize = 1.0 / vec2(textureSize(u_spotShadowMap[1], 0));
-                else if (i == 2) texelSize = 1.0 / vec2(textureSize(u_spotShadowMap[2], 0));
-                else texelSize = 1.0 / vec2(textureSize(u_spotShadowMap[3], 0));
+                vec2 texelSize = 1.0 / vec2(textureSize(u_spotShadowMap, 0).xy);
 
                 for(int x = -1; x <= 1; ++x) {
                     for(int y = -1; y <= 1; ++y) {
                         vec3 tCoord = vec3(projCoords.xy + vec2(x, y) * texelSize, currentDepth - bias);
-                        if (i == 0) shadow += texture(u_spotShadowMap[0], tCoord);
-                        else if (i == 1) shadow += texture(u_spotShadowMap[1], tCoord);
-                        else if (i == 2) shadow += texture(u_spotShadowMap[2], tCoord);
-                        else shadow += texture(u_spotShadowMap[3], tCoord);
+                        shadow += texture(u_spotShadowMap, vec4(tCoord.xy, float(i), tCoord.z));
                     }
                 }
                 shadow /= 9.0;

@@ -56,10 +56,13 @@ export interface GLPostEffectPassContext {
   lights: LightDataInterface | undefined;
   /** Directional-light shadow texture matching `lights.dLight`, if any. */
   dirShadowTexture: WebGLTexture | null;
-  /** Spot-light shadow textures for the volumetric fog pass. */
+  /** Per spot slot (first 4 spot lights) for the volumetric fog pass: the spot shadow depth array
+   * (TEXTURE_2D_ARRAY, layer = slot) when that slot's layer holds a shadow, else null. */
   spotShadowTextures: readonly (WebGLTexture | null)[];
   /** Fallback (dummy) shadow texture. */
   fallbackShadowTexture: WebGLTexture | null;
+  /** Fallback (dummy, all lit) spot shadow depth array, bound when no spot slot is active. */
+  fallbackSpotShadowArray: WebGLTexture | null;
   /** Fog volumes of the current frame. */
   fogVolumes: FogVolume[];
   /** Point / spot lights of the current frame (volumetric fog local lighting + shadows). */
@@ -120,6 +123,7 @@ export function createGLPostEffectContext(): GLPostEffectPassContext {
     dirShadowTexture: null,
     spotShadowTextures: [],
     fallbackShadowTexture: null,
+    fallbackSpotShadowArray: null,
     fogVolumes: [],
     pointLights: [],
     spotLights: [],

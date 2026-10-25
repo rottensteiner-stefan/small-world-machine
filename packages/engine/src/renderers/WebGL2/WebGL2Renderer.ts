@@ -10,6 +10,7 @@ import { WebGLProgramCache } from "../gl/managers/WebGLProgramCache.js";
 import { WebGLTextureManager } from "../gl/managers/WebGLTextureManager.js";
 import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
 import { WebGL2DepthFrameBuffer } from "./WebGL2DepthFrameBuffer.js";
+import { WebGL2SpotShadowArray } from "./WebGL2SpotShadowArray.js";
 import { WebGL2FrameBuffer } from "./WebGL2FrameBuffer.js";
 import { NORMAL_OUTPUT_FLAG } from "../gl/managers/NormalOutputWrapperGL.js";
 import { WebGL2CubeFrameBuffer } from "./WebGL2CubeFrameBuffer.js";
@@ -146,12 +147,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private _opaqueNormalHeight = 0;
   private _opaqueDepthWidth: number = 0;
   private _opaqueDepthHeight: number = 0;
-  private static readonly _SPOT_SHADOW_MAP_NAMES: readonly string[] = [
-    "u_spotShadowMap[0]",
-    "u_spotShadowMap[1]",
-    "u_spotShadowMap[2]",
-    "u_spotShadowMap[3]",
-  ];
+  /** Fixed unit of the spot shadow depth array (`u_spotShadowMap`, sampler2DArrayShadow). */
+  private static readonly _SPOT_SHADOW_UNIT = 11;
   private _opaqueDepthFormat: number = 0;
   /** Whether the last verified blit read from the HDR FBO; `undefined` until a blit was verified. */
   private _opaqueDepthVerifiedHdr: boolean | undefined;
@@ -210,6 +207,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private readonly _scratchInstancedObjects: Object3D[] = [];
   private readonly _scratchStandardObjects: Object3D[] = [];
   private _dummyShadowMap!: WebGL2DepthFrameBuffer;
+  /** Shadow maps of the first 4 spot lights, one layer per `sLights` index (WebGPU layout). */
+  private _spotShadowArray!: WebGL2SpotShadowArray;
+  /** 1x1 all-lit stand-in bound whenever no real spot layer may be sampled (shadow passes). */
+  private _dummySpotShadowArray!: WebGL2SpotShadowArray;
+  /** Spot slots whose layer the last `renderShadowMaps()` call rendered. */
+  private readonly _spotShadowSlots: boolean[] = [false, false, false, false];
   /** Scratch: shadow depth textures of the first 4 spot lights for the volumetric fog pass. */
   private readonly _fogSpotShadowTextures: (WebGLTexture | null)[] = [null, null, null, null];
 
@@ -279,6 +282,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._dummyShadowMap.bind();
     this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
     this._dummyShadowMap.unbind();
+    this._spotShadowArray = new WebGL2SpotShadowArray(this.gl, 1);
+    this._dummySpotShadowArray = new WebGL2SpotShadowArray(this.gl, 1);
+    for (let i = 0; i < WebGL2SpotShadowArray.LAYERS; i++) this._dummySpotShadowArray.bindLayer(i);
+    this._dummySpotShadowArray.unbind();
+    this._spotShadowSlots.fill(false);
 
     // Sampler object overriding TEXTURE_COMPARE_MODE to NONE, bound once to a fixed unit so any
     // depth texture bound there afterwards reads as a plain float instead of a 0/1 comparison --
@@ -803,14 +811,18 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._opaqueDepthFormat = internalFormat;
   }
 
-  /** Shadow depth textures of the first 4 spot lights (null = no shadow), the slots the fog samples. */
+  /** Per spot slot the fog samples: the spot shadow array when that slot's layer holds this frame's
+   * shadow, else null. */
   private _collectFogSpotShadowTextures(): readonly (WebGLTexture | null)[] {
     const spots = this._frameLights?.sLights ?? [];
     for (let i = 0; i < 4; i++) {
       const light = spots[i];
       this._fogSpotShadowTextures[i] =
-        light !== undefined && light.castShadow && light.shadowCamera !== undefined
-          ? (this._shadowMaps.get(light)?.texture ?? null)
+        light !== undefined &&
+        light.castShadow &&
+        light.shadowCamera !== undefined &&
+        this._spotShadowSlots[i]
+          ? this._spotShadowArray.texture
           : null;
     }
     return this._fogSpotShadowTextures;
@@ -854,6 +866,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     ctx.dirShadowTexture = dLight ? (this._shadowMaps.get(dLight)?.texture ?? null) : null;
     ctx.spotShadowTextures = this._collectFogSpotShadowTextures();
     ctx.fallbackShadowTexture = this._dummyShadowMap.texture;
+    ctx.fallbackSpotShadowArray = this._dummySpotShadowArray.texture;
     ctx.irradianceMap = this._frameScene?.irradianceMap
       ? this._textures.getWebGLCubeTexture(this._frameScene.irradianceMap, this._quality)
       : this._blackCubeTexture;
@@ -874,8 +887,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     const emptyLights = this._emptyLights;
     this._shadowMapsUsed.clear();
 
-    // SpotLights
-    for (const light of lights.sLights) {
+    // SpotLights: only the first 4 (by sLights index, shadowing or not) own a layer, as on WebGPU
+    // (SpotShadowPassGPU). All layers share the first caster's resolution.
+    this._spotShadowSlots.fill(false);
+    const spotSlots = Math.min(lights.sLights.length, WebGL2SpotShadowArray.LAYERS);
+    for (let i = 0; i < spotSlots; i++) {
+      const light = lights.sLights[i]!;
       if (!light.castShadow) continue;
       // Creates the shadow camera on first use (castShadow may be switched on after construction)
       // and keeps it on the light, as SpotShadowPassGPU does for WebGPU.
@@ -883,18 +900,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       const shadowCamera = light.shadowCamera;
       if (!shadowCamera) continue;
 
-      let fbo = this._shadowMaps.get(light);
-      if (!fbo) {
-        fbo = new WebGL2DepthFrameBuffer(this.gl, light.shadowResolution, light.shadowResolution);
-        this._shadowMaps.set(light, fbo);
-      } else {
-        fbo.resize(light.shadowResolution, light.shadowResolution);
-      }
-      this._shadowMapsUsed.add(light);
-
-      fbo.bind();
-      this.gl.depthMask(true);
-      this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
+      const spotArray = this._spotShadowArray;
+      if (!this._spotShadowSlots.includes(true)) spotArray.resize(light.shadowResolution || 1024);
+      this._spotShadowSlots[i] = true;
+      spotArray.bindLayer(i);
 
       // Update Global UBO with light's camera
       this.updateGlobalUBO(shadowCamera.viewProjectionMatrix, shadowCamera.position, emptyLights);
@@ -908,12 +917,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this._renderShadowScene(
         MaterialType.DEPTH,
         DepthMaterial.LINE_QUADS_SHADER_ID,
-        2 / light.shadowResolution,
+        2 / spotArray.size,
         sortedGroups,
       );
 
       this.gl.cullFace(this.gl.BACK);
-      fbo.unbind();
+      spotArray.unbind();
     }
 
     // DirectionalLight (CSM Atlas)
@@ -1458,9 +1467,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.gl.uniform1i(dirMapRawLoc, WebGL2Renderer._RAW_DEPTH_UNIT);
     }
 
-    for (let i = 0; i < 4; i++) {
-      const loc = this._cachedUniformLocation(cache, WebGL2Renderer._SPOT_SHADOW_MAP_NAMES[i]!);
-      if (loc) this.gl.uniform1i(loc, dummyUnit);
+    // Own unit + own target (TEXTURE_2D_ARRAY): a sampler2DArrayShadow may not share a unit with
+    // the sampler2DShadow above. The dummy, never the real array: a shadow pass renders into it.
+    const spotMapLoc = this._cachedUniformLocation(cache, "u_spotShadowMap");
+    if (spotMapLoc) {
+      this.gl.activeTexture(this.gl.TEXTURE0 + WebGL2Renderer._SPOT_SHADOW_UNIT);
+      this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this._dummySpotShadowArray.texture);
+      this.gl.uniform1i(spotMapLoc, WebGL2Renderer._SPOT_SHADOW_UNIT);
     }
 
     // EVSM (ADR 0043): every program with an active u_dirEVSMMap sampler needs a valid binding
@@ -1739,37 +1752,34 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     return shaderFlags;
   }
 
-  /** Binds shadow maps for the up-to-4 spot lights declared by the subgroup's material/program. */
+  /** Binds the spot shadow array and the per-slot matrix/info of the up-to-4 shadowed spot lights. */
   private _bindSpotShadowMaps(cache: WebGLProgramCacheEntry, lights?: LightDataInterface): void {
     if (!lights || lights.sLights.length === 0) return;
+
+    const mapLoc = cache.uniforms.get("u_spotShadowMap");
+    if (mapLoc && this._spotShadowSlots.includes(true)) {
+      this.gl.activeTexture(this.gl.TEXTURE0 + WebGL2Renderer._SPOT_SHADOW_UNIT);
+      this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this._spotShadowArray.texture);
+      this.gl.uniform1i(mapLoc, WebGL2Renderer._SPOT_SHADOW_UNIT);
+    }
 
     for (let i = 0; i < 4; i++) {
       if (i >= lights.sLights.length) break;
       const light = lights.sLights[i]!;
-      const mapLoc = cache.uniforms.get(`u_spotShadowMap[${i}]`);
       const matLoc = cache.uniforms.get(`u_spotShadowMatrix[${i}]`);
       const infoLoc = cache.uniforms.get(`u_spotShadowInfo[${i}]`);
 
-      if (light.castShadow && light.shadowCamera) {
-        const fbo = this._shadowMaps.get(light);
-        if (fbo && fbo.texture) {
-          const texUnit = 8 + i; // TEXTURE8 to TEXTURE11
-          if (!this._ensureShadowMapUnit(texUnit, "spot shadow map")) continue;
-          this.gl.activeTexture(this.gl.TEXTURE0 + texUnit);
-          this.gl.bindTexture(this.gl.TEXTURE_2D, fbo.texture);
-          if (mapLoc) this.gl.uniform1i(mapLoc, texUnit);
-          if (matLoc)
-            this.gl.uniformMatrix4fv(matLoc, false, light.shadowCamera.viewProjectionMatrix);
-          if (infoLoc) {
-            this._scratchFloat4[0] = light.shadowBias;
-            this._scratchFloat4[1] = light.shadowNormalBias;
-            this._scratchFloat4[2] = 1.0;
-            this._scratchFloat4[3] = 0.0;
-            this.gl.uniform4fv(infoLoc, this._scratchFloat4);
-          }
+      if (light.castShadow && light.shadowCamera && this._spotShadowSlots[i]) {
+        if (matLoc)
+          this.gl.uniformMatrix4fv(matLoc, false, light.shadowCamera.viewProjectionMatrix);
+        if (infoLoc) {
+          this._scratchFloat4[0] = light.shadowBias;
+          this._scratchFloat4[1] = light.shadowNormalBias;
+          this._scratchFloat4[2] = 1.0;
+          this._scratchFloat4[3] = 0.0;
+          this.gl.uniform4fv(infoLoc, this._scratchFloat4);
         }
       } else {
-        if (mapLoc) this.gl.uniform1i(mapLoc, 12);
         if (infoLoc) {
           this._scratchFloat4[0] = 0.0;
           this._scratchFloat4[1] = 0.0;
@@ -2577,6 +2587,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       for (const fbo of this._renderTargetCubeFbos.values()) fbo.destroy();
       for (const shadowFbo of this._shadowMaps.values()) shadowFbo.destroy();
       this._dummyShadowMap?.destroy();
+      this._spotShadowArray?.destroy();
+      this._dummySpotShadowArray?.destroy();
       if (this._runMatrixBuffer) gl.deleteBuffer(this._runMatrixBuffer);
       if (this._rawDepthSampler) gl.deleteSampler(this._rawDepthSampler);
       this._hdrFbo?.destroy();
