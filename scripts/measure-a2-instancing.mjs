@@ -23,6 +23,11 @@ const __dirname = path.dirname(__filename);
 
 const COUNT = Number(process.env.A2_COUNT) || 1600;
 const FRAMES = Number(process.env.A2_FRAMES) || 240;
+// Real-GPU mode (A2_GPU=1): headed Chrome on the actual GPU (Metal/ANGLE, NOT SwiftShader) with the
+// compositor frame-rate cap disabled, so frame time reflects real GPU/driver cost instead of being
+// clamped by vsync. This is the device-bound measurement the report §9.1.1 left as a follow-up.
+const GPU = process.env.A2_GPU === "1";
+const GPU_VIEWPORT = { width: 1440, height: 900 };
 const URL_PREFIX = `${PREVIEW_ORIGIN}/apps/showcases/44/index.html`;
 const LEGS = [
   { label: "inst=on (A2-active)", suffix: "" },
@@ -52,6 +57,32 @@ async function waitForMeasure(page, timeoutMs) {
   throw new Error(`measurement did not finalize; last status: ${JSON.stringify(last)}`);
 }
 
+/**
+ * Reads the real WebGL renderer identity + drawing buffer size from a live page. Confirms a
+ * real-GPU run: a hardware renderer string (e.g. "ANGLE (Apple, Apple M..., OpenGL 4.1 Metal)") vs
+ * "SwiftShader" proves whether the measurement actually ran on the GPU. Never fails the run -- the
+ * identity is informational only.
+ */
+async function gpuIdentity(page) {
+  return page
+    .evaluate(() => {
+      // eslint-disable-next-line no-undef -- runs inside the page (Puppeteer), not Node
+      const canvas = document.querySelector("canvas");
+      const gl = canvas ? canvas.getContext("webgl2") || canvas.getContext("webgl") : null;
+      const dbg =
+        gl && typeof gl.getExtension === "function"
+          ? gl.getExtension("WEBGL_debug_renderer_info")
+          : null;
+      return {
+        renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : null,
+        vendor: dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : null,
+        width: canvas ? canvas.width : null,
+        height: canvas ? canvas.height : null,
+      };
+    })
+    .catch(() => null);
+}
+
 async function run() {
   line("server", "Starting Vite preview server on", PREVIEW_ORIGIN);
   const server = spawn("npm", PREVIEW_ARGS, { stdio: ["ignore", "pipe", "pipe"], detached: true });
@@ -64,9 +95,13 @@ async function run() {
     const tmpDir = path.join(__ROOT, ".agents", "scratches", "tmp_a2_measure_" + Date.now());
     fs.mkdirSync(tmpDir, { recursive: true });
 
-    line("browser", "Launching headless Chrome (software WebGL2)...");
+    if (GPU) {
+      line("browser", "Launching headed Chrome on the REAL GPU (Metal/ANGLE, vsync uncapped)...");
+    } else {
+      line("browser", "Launching headless Chrome (software WebGL2)...");
+    }
     const browser = await puppeteer.launch({
-      headless: true,
+      headless: !GPU,
       userDataDir: tmpDir,
       acceptInsecureCerts: true,
       protocolTimeout: 60000,
@@ -75,14 +110,31 @@ async function run() {
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--ignore-certificate-errors",
-        "--use-gl=angle",
-        "--use-angle=swiftshader",
-        "--enable-webgl",
-        "--enable-unsafe-swiftshader",
-        "--ignore-gpu-blocklist",
-        "--disable-gpu-sandbox",
-        "--enable-features=Vulkan",
-        "--enable-unsafe-webgpu",
+        ...(GPU
+          ? [
+              // Real GPU: ANGLE on Metal, no SwiftShader fallback, no vsync cap -- frame time is
+              // then the true renderer cost, not a refresh-rate clamp.
+              "--use-gl=angle",
+              "--use-angle=metal",
+              "--enable-gpu",
+              "--ignore-gpu-blocklist",
+              "--disable-gpu-sandbox",
+              "--enable-webgl",
+              "--disable-frame-rate-limit",
+              "--disable-gpu-vsync",
+              "--disable-vsync",
+            ]
+          : [
+              // Headless CI-ish path: deterministic software WebGL2 (same matrix as check-showcases).
+              "--use-gl=angle",
+              "--use-angle=swiftshader",
+              "--enable-webgl",
+              "--enable-unsafe-swiftshader",
+              "--ignore-gpu-blocklist",
+              "--disable-gpu-sandbox",
+              "--enable-features=Vulkan",
+              "--enable-unsafe-webgpu",
+            ]),
       ],
     });
 
@@ -90,6 +142,7 @@ async function run() {
       for (const leg of LEGS) {
         const page = await browser.newPage();
         const pageErrors = [];
+        if (GPU) await page.setViewport(GPU_VIEWPORT);
         page.on("console", (msg) => {
           if (msg.type() === "error") pageErrors.push(`console.error: ${msg.text()}`);
         });
@@ -99,6 +152,10 @@ async function run() {
         line("load", `${leg.label} :: ${url}`);
         try {
           await page.goto(url, { waitUntil: "load", timeout: 180000 });
+          if (GPU) {
+            const id = await gpuIdentity(page);
+            line("gpu", leg.label, JSON.stringify(id));
+          }
           const text = await waitForMeasure(page, 300000);
           const jsonText = text.slice("MEASURE ".length);
           let parsed;

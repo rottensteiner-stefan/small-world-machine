@@ -212,7 +212,26 @@ Der letzte noch als "nur device-gebunden" geführte Restpunkt (§7.1(b)) ist jet
 
 - **Draw-Call-Reduktion ≈ 800×** im Opaque-Main-Pass, 0 per-object — der A2-Vorteil exakt wie deterministisch vorhergesagt (2 statt 1600).
 - **Frame-Zeit-Delta klein (~5 %)**: Die Szene ist unter Software-Rasterung **pixel-/präsentiert-limitiert** (1600 gefüllte Cubes überschreiben den Screen mehrfach) — bestätigt das in §7.1 dokumentierte Kaveat: Call-Reduktion hilft nur bei call-limitierten Szenen. Das ist der erwartete, ehrliche Befund, kein Messfehler.
-- **Absolute Frame-Zeiten sind SwiftShader-artefaktbehaftet** (CPU-Rasterung) und nicht GPU-repräsentativ; der **Draw-Count ist backend-unabhängig** und der präzise, geräteunabhängige Wert. Gerätepräzise Frame-Zeiten auf dedizierter Hardware bleiben wie in `docs/guides/shadows.md` (M4-Pro-Messung) ein optionaler, device-gebundener Folgeschritt.
+- **Absolute Frame-Zeiten sind SwiftShader-artefaktbehaftet** (CPU-Rasterung) und nicht GPU-repräsentativ; der **Draw-Count ist backend-unabhängig** und der präzise, geräteunabhängige Wert. Die gerätepräzise Frame-Zeit auf dedizierter Hardware — der in §9.1 vorher als "optionaler, device-gebundener Folgeschritt" markierte Posten — ist inzwischen **ausgeführt** (echte GPU, M4 Pro): **§9.1.2**.
 - Messfenster-Artefakt (Divisor +1 Frames → 1,99 statt 2,0 bzw. 1593 statt 1600) ist rechnerisch unerheblich; semantisch sind es 2 bzw. 1600 Draw-Calls pro Frame.
 
 → **Beide in §9/§9.1 benannten Follow-ups sind damit vollständig geschlossen:** (1) deterministische WebGL2-Parität im CI-Test, (2) reale Browser-Messung der Geometrie-Mix-Szene in Showcase 44. Kein §7.1(b)-Restpunkt mehr offen.
+
+#### 9.1.2 Gerätepräzise Frame-Zeit auf echter GPU (M4 Pro, 2026-10-25) — device-gebundener Schritt ausgeführt
+
+Der in §9.1/§9.1.1 zuvor als "optionaler, device-gebundener Folgeschritt" markierte Posten — echte Frame-Zeit statt SwiftShader-Artefakt — ist jetzt **ausgeführt und geschlossen**.
+
+- **Setup:** Reiner `A2_GPU=1`-Modus von `scripts/measure-a2-instancing.mjs` — **headful Chrome auf der echten GPU** (ANGLE/Metal), kompositorisches Frame-Limit **abgeschaltet** (`--disable-frame-rate-limit --disable-gpu-vsync --disable-vsync`), sonst würden beide Legs am 60-Hz-Cap kleben und das Delta wäre unsichtbar. Viewport 1440×900, 1600 Objekte, 240-Frame-Fenster nach 30 Warm-up-Frames — identisches Messprotokoll wie §9.1.1.
+- **GPU-Nachweis** (`WEBGL_debug_renderer_info.UNMASKED_RENDERER_WEBGL`): `ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, ...)` — Hardware inkl. Renderer-String im Laufprotokoll, kein SwiftShader-Fall.
+
+| Leg | Draw-Calls/F | Frame-Zeit | avgFPS |
+|---|---|---|---|
+| Auto-Instancing an (A2-aktiv) | **≈ 2** | **1,55 ms** | 647 |
+| Baseline (`inst=off`) | **≈ 1600** | **2,48 ms** | 403 |
+
+- **Draw-Call-Reduktion ≈ 800×** erneut bestätigt — der Count ist unverändert geräte- und backend-unabhängig.
+- **Frame-Zeit-Delta auf echter Hardware jetzt messbar: Baseline +0,93 ms (+60 %) pro Frame** — reiner CPU/Driver-Overhead der ~800× mehr Draw-Aufrufe (identische Pixelmenge, identische Geometrie, uncapped). In vsync-gebundenen Real-Szenen schlägt dieser Overhead direkt aufs Frame-Budget (Pacing), nicht als roher FPS-Sturz.
+- **Ehrliche Einordnung:** Die Absolutwerte (1,6–2,5 ms) sind niedrig, weil die Testszene weit unter GPU-Sättigung läuft (1440×900, simple Cubes) und uncapped gemessen wird. Relevant ist der **relative Call-Overhead (+60 %)**, der über das 240-Frame-Fenster deterministisch und stabil ist — kein Rauschen. Der Befund bestätigt qualitativ das §7.1-Kaveat, präzisiert es aber: Call-Last ist selbst bei pixel-limitierter Szene auf echter Hardware als Frame-Zeit-Zuschlag nachweisbar, sobald nicht vsync-verdeckt.
+- **Reproduzierbar:** `npm run build:showcases && A2_GPU=1 node scripts/measure-a2-instancing.mjs` (startet den eigenen Preview-Server, headed Chrome, showt das Fenster). Die SwiftShader-Werte (§9.1.1) bleiben als CI-artige Kontroll-Rechenzeile dokumentiert; M4 Pro ist die gerätepräzise Referenz (analog zur `docs/guides/shadows.md`-M4-Pro-Messung).
+
+→ Damit ist im Instancing-Report **kein Posten mehr "auf später" verschoben** — deterministische Parität, reale Browser-Messung und gerätepräzise Frame-Zeit liegen vor.
