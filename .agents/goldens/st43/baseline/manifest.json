@@ -1,0 +1,78 @@
+[
+  {
+    "poolKey": "st43-matte",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "st43-matte__main.png",
+    "meta": {
+      "poolKey": "st43-matte",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 32.7216,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "54143c8f9fee9b8fc702668ec5746f8136cd05b233123a0a720ca0a04f3051b5",
+    "ok": true
+  },
+  {
+    "poolKey": "st43-satin",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "st43-satin__main.png",
+    "meta": {
+      "poolKey": "st43-satin",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 24.9138,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "056363de0af0141804312058a7f83c52499673d1b327c0d0d473c0a11eacf92d",
+    "ok": true
+  },
+  {
+    "poolKey": "st43-metal",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "st43-metal__main.png",
+    "meta": {
+      "poolKey": "st43-metal",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 18.3343,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "276f313216bf0ec9de3875fa64318ccfde20487c45687ee41b5e9bfe830690a9",
+    "ok": true
+  },
+  {
+    "poolKey": "st43-chrome",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "st43-chrome__main.png",
+    "meta": {
+      "poolKey": "st43-chrome",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 13.346,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "a271dec47bddd8f6bb1045dda179ac9bd4818b2cb179947061faa36f86697b69",
+    "ok": true
+  }
+]

@@ -53,6 +53,13 @@
       "views": ["main"],
       "viewport": { "width": 1280, "height": 720 },
       "frames": 60
+    },
+    "43": {
+      "url": "apps/showcases/43/index.html",
+      "poolKeys": ["st43-matte", "st43-satin", "st43-metal", "st43-chrome"],
+      "views": ["main"],
+      "viewport": { "width": 1280, "height": 720 },
+      "frames": 60
     }
   }
 }
