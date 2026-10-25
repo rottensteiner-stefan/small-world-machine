@@ -175,3 +175,22 @@ Damit die Empfehlung ehrlich bleibt, die dokumentierten Kollateralschäden (alle
 - WebGL2 nutzt dieselben geteilten pure Helper (Unit-getestet); ein eigener WebGL2-Main-Pass-Draw-Zähl-Harness bleibt offener Folgepunkt (der vorhandene WebGL2-Harness deckt nur den Schatten-Run-Pfad ab).
 - §7.1(b) bleibt offen: eine echte Welt-Szene mit Draws/Frame **und** Frame-Zeit vorher/nachher per Performance-Tier-Governor im Browser. Oben ist eine deterministische Test-basierte Zählmessung, keine Laufzeitmessung.
 - B1/B2/B3 bleiben gemäß Trigger-Matrix in §6/§7 deferiert.
+
+---
+
+### 9.1 WebGL2-Paritätsmessung (2026-10-25)
+
+**Der in §9 oben als offen markierte WebGL2-Main-Pass-Draw-Zähl-Harness ist umgesetzt und geschlossen** — Parität zur WebGPU-Messung aus §9, deterministisch im CI-Test `packages/engine/tests/renderers/WebGL2MainOpaqueInstancing.test.ts`. Gleicher Streuaufbau (12 opake Objekte, 2 verschiedene Geometrien, 1 gemeinsames Material, nie ≥4 identische Geometrie in Folge); die Zählung läuft über die Draw-Äquivalente `_renderInstanceRun`/`_renderStandardObject` im **echten** `renderBatch`-Entscheidungspfad (A2-Gruppierung + `partitionInstanceRuns` real; nur die GL-Blätter sind gezählte Stubs — 1:1-Draw-Äquivalent).
+
+| Zustand (WebGL2 Main-Opaque, `renderBatch`) | Ergebnis |
+|---|---|
+| Naive Ordnung: `partitionInstanceRuns` | **0 Runs** → 12 Einzel-Draws |
+| Mit A2-Gruppierung (`autoInstancing` aktiv) | 6er-Run + 6er-Run → **2 instanced Draws**, 0 per-object |
+| `autoInstancing` deaktiviert | **12 Einzel-Draws** (per-object) |
+
+→ **Identisches Messergebnis wie WebGPU (2 statt 12 Draws)**. Erwartetes Verhalten: Beide Tiers durchlaufen dieselben geteilten pure Helper (`groupByGeometryForInstancing` + `partitionInstanceRuns`) — WebGL2 bekommt denselben Algorithmus, keine degradierte Variante (Tier-Autonomie-Doktrin). Die **deterministische Call-Count-Geschichte ist damit auf beiden Tiers vollständig geschlossen.**
+
+**Verbleibender §7.1(b)-Restpunkt — jetzt präzise handoffbar (nur noch device-gebunden):**
+- Offen ist ausschließlich die **Realtime-Messung im Browser**: Frame-Zeit und Puffer-Upload-Bandbreite pro Frame auf einem konkreten Gerät per Performance-Tier-Governor (ADR 0035) — ein gerätegebundener Wert (analog zur WebGL2-PCSS-Kostenzahl in `docs/guides/shadows.md`, auch dort im realen Browser auf dem M4 Pro gemessen), kein deterministischer CI-Wert.
+- Rezept (sobald gewünscht): geometrie-mischende Szene (Showcase-19-artig, aber 2–3 Geometrie-Größen unter **einem** Material, **gestreut**), Kamera fix weit genug weg (Culling-Einfluss ausblenden); Draws/Frame + Frame-Zeit **vorher/nachher**. Hinweis: die Engine hat **keine** öffentliche Draw-Call-Zähl-API — Messung über einen kurzen GL-Draw-Wrapper oder den Tier-Governor-Diagnostik-Modus.
+- B1/B2/B3 bleiben gemäß Trigger-Matrix in §6/§7 unverändert deferiert.
