@@ -1,0 +1,97 @@
+[
+  {
+    "poolKey": "pbr38-siq",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "pbr38-siq__main.png",
+    "meta": {
+      "poolKey": "pbr38-siq",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 17.6639,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "1b61c94d66a9c9a06a854764cc07dad376fcbd0ee7da23ac3bfafcf3e2f8d760",
+    "ok": true
+  },
+  {
+    "poolKey": "pbr38-plaza",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "pbr38-plaza__main.png",
+    "meta": {
+      "poolKey": "pbr38-plaza",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 7.8167,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "711a8f54629873929115c1334acc8ba6ce61fd0d0e0a879900ab2516cb37bef3",
+    "ok": true
+  },
+  {
+    "poolKey": "pbr38-portico",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "pbr38-portico__main.png",
+    "meta": {
+      "poolKey": "pbr38-portico",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 36.3794,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "80bffcc72ecf1c318e2bc724c903fec9c77bdb0270b17080693f153aa579a33d",
+    "ok": true
+  },
+  {
+    "poolKey": "pbr38-sanctum",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "pbr38-sanctum__main.png",
+    "meta": {
+      "poolKey": "pbr38-sanctum",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 59.9808,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "5f442c95500210edef153fa1317f83e80a376e5539c28ff75a76b2958e0cc296",
+    "ok": true
+  },
+  {
+    "poolKey": "pbr38-shrine",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "pbr38-shrine__main.png",
+    "meta": {
+      "poolKey": "pbr38-shrine",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 52.1208,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "9f5f015b3a61d25baa3d4173770dc981c8ad48ca82f99242d1c7cfc07c9c6636",
+    "ok": true
+  }
+]
