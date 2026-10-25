@@ -59,3 +59,6 @@ Upgraded the flat ground plane to full PBR lighting and 3D silhouette foliage:
 - **Texture Maps:** Generated multi-scale Sobel `grass_normal.webp`, micro-roughness `grass_roughness.webp`, and cavity `grass_ao.webp` from `grass.webp`. Directional sun, point lights (lava/slime), and cascaded shadow maps now react plastically with blade micro-relief.
 - **3D Foliage & Silhouette (`BillboardInstancer`):** Generated `grass_tuft.webp` (512x512 alpha-tested blade clump). Instantiated 750 camera-facing billboard tufts hugging the concrete pool curb edges and scattered along walkways, breaking up the harsh 90-degree pool rim intersections.
 
+
+### 2026-10-25 (WebGL2: PCSS-Schatten auf Flüssigkeiten)
+- Die Liquid-Shader (`dir_shadow.glsl`, eigener Header) nutzen unter WebGL2 jetzt dieselbe PCSS-Funktion wie die Standard-Materialien (Chunk `DIR_PCSS`, ADR 0006) statt festem 3×3-PCF. `quality.shadowSoftness`/`shadowMaxPcfRadius` wirken damit auch auf Schatten auf Wasseroberflächen. Live geprüft: alle 12 Flüssigkeiten rendern unter WebGL2, Konsole fehlerfrei.

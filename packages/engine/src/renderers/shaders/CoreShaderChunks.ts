@@ -38,6 +38,7 @@ import filterThermalVisionWGSL from "../../core/materials/shaders/chunks/filter_
 import gl2BaseVsHeader from "./source/web_gl2/chunks/base_vertex_header.vert.glsl?raw";
 import gl2BaseVsMain from "./source/web_gl2/chunks/base_vertex_main.vert.glsl?raw";
 import gl2BaseFsHeader from "./source/web_gl2/chunks/base_fragment_header.frag.glsl?raw";
+import gl2DirPcss from "./source/web_gl2/chunks/dir_pcss.frag.glsl?raw";
 import gl2LightDefs from "./source/web_gl2/chunks/lights.frag.glsl?raw";
 import gl2LightCalc from "./source/web_gl2/chunks/light_calc.frag.glsl?raw";
 import gl2PbrMath from "./source/web_gl2/chunks/pbr_math.frag.glsl?raw";
@@ -91,6 +92,7 @@ export class CoreShaderChunks {
     registry.registerChunk("GLASS_PBR_LOOPS", glassPbrLoopsGlsl, "glsl300");
     registry.registerChunk("SDF_MATH", gl2SdfMath, "glsl300");
     registry.registerChunk("DIR_SHADOW", DIR_SHADOW_GLSL, "glsl300");
+    registry.registerChunk("DIR_PCSS", gl2DirPcss, "glsl300");
     registry.registerChunk("FOG_DEFS", FOG_DEFS, "glsl300");
     registry.registerChunk("FOG_CALC", FOG_CALC, "glsl300");
     registry.registerChunk("LIQUID_GERSTNER_WAVE", LIQUID_GERSTNER_WAVE_GLSL, "glsl300");

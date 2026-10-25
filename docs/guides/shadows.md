@@ -116,12 +116,12 @@ fixed sunflower disk does not destroy it for a thin occluder. A wide, box-shaped
 occluder's whole depth span. The cascade-blend sample uses the same PCSS filter, so the blend
 band never mixes two penumbra widths.
 
-**WebGL2** runs the same algorithm (`evalPCSSDir` in `base_fragment_header.frag.glsl`, a port of
-`getShadowPCSS` in `pbr_math.wgsl`) for every lit material, PBR and non-PBR. The only
-differences come from the cascade atlas: every tap is clamped to the cascade's own cell, and
-the cell's texel count stands in for the WebGPU per-layer map size. **Spot light shadows use
-PCSS on WebGPU only**; on WebGL2 they stay at fixed-radius PCF. Water/liquid materials with
-their own header (`dir_shadow.glsl`) also keep fixed 3×3 PCF on WebGL2. See
+**WebGL2** runs the same algorithm (`evalPCSSDir`, chunk `DIR_PCSS` in `dir_pcss.frag.glsl`, a
+port of `getShadowPCSS` in `pbr_math.wgsl`) for every lit material, PBR and non-PBR, and for the
+water/liquid materials with their own header (`dir_shadow.glsl` includes the same chunk). The
+only differences come from the cascade atlas: every tap is clamped to the cascade's own cell,
+and the cell's texel count stands in for the WebGPU per-layer map size. **Spot light shadows use
+PCSS on WebGPU only**; on WebGL2 they stay at fixed-radius PCF. See
 [ADR 0006](/adr/0006-pcss-directional-light-only) for the scope. Only the first 4 spot lights
 get a shadow map.
 

@@ -193,13 +193,12 @@ export async function lintGlsl(filesToCheck?: string[]): Promise<boolean> {
     const isGlsl100 = filePath.endsWith(".glsl100");
     const chunks = isGlsl100 ? chunks100 : chunks300;
 
-    // 3. Resolve [CHUNK] placeholders (only replace recognized chunks)
-    const assembled = content.replace(/\[([A-Z0-9_]+)\]/g, (match, key: string) => {
-      if (chunks.has(key)) {
-        return chunks.get(key)!;
-      }
-      return match;
-    });
+    // 3. Resolve [CHUNK] placeholders recursively, like ShaderRegistry.assemble (only recognized chunks)
+    const resolve = (source: string): string =>
+      source.replace(/\[([A-Z0-9_]+)\]/g, (match, key: string) =>
+        chunks.has(key) ? resolve(chunks.get(key)!) : match,
+      );
+    const assembled = resolve(content);
 
     // 4. Validate with Khronos glslang
     const isFragment = filePath.includes(".frag");

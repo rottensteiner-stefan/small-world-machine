@@ -37,20 +37,31 @@ describe("EVSM WebGL2 shader branches sit next to the default PCSS path", () => 
     expect(header).toContain("max(m2 - m1 * m1, u_evsmParams.y * m1 * m1)");
   });
 
-  it("the shared header ports the WebGPU getShadowPCSS penumbra estimate and softness knobs", () => {
-    expect(header).toContain("uniform vec4 u_shadowSoftness;");
-    expect(header).toContain("float evalPCSSDir(");
+  it("the DIR_PCSS chunk ports the WebGPU getShadowPCSS penumbra estimate and softness knobs", () => {
+    const pcss = readChunk(
+      "packages/engine/src/renderers/shaders/source/web_gl2/chunks/dir_pcss.frag.glsl",
+    );
+    expect(pcss).toContain("float evalPCSSDir(");
     // Same principled radius as pbr_math.wgsl (cell texel count stands in for the layer size).
-    expect(header).toContain("float radial = dz / max(depthRef, 0.00001);");
-    expect(header).toContain(
+    expect(pcss).toContain("float radial = dz / max(depthRef, 0.00001);");
+    expect(pcss).toContain(
       "clamp(1.0 + radial * cellTexels * 0.12 * u_shadowSoftness.x, 1.0, max(u_shadowSoftness.y, 1.0))",
     );
+    // Both headers declare its inputs and include it (they never mix).
+    for (const source of [header, dirShadow]) {
+      expect(source).toContain("uniform vec4 u_shadowSoftness;");
+      expect(source).toContain("uniform sampler2D u_dirShadowMapRaw;");
+      expect(source).toContain("[DIR_PCSS]");
+    }
   });
 
   it("the dir_shadow chunk (water/liquid own-header shaders) carries its own identical helpers", () => {
     expect(dirShadow).toContain("uniform sampler2D u_dirEVSMMap;");
     expect(dirShadow).toContain("chebyshevUpperBoundEVSM");
     expect(dirShadow).toContain("evalEVSMDir(atlasUV, cellMin, cellMax, proj.z)");
+    expect(dirShadow).toContain(
+      "evalPCSSDir(atlasUV, cellMin, cellMax, proj.z, u_dirShadowInfo.x, cascadeIndex)",
+    );
   });
 
   for (const file of LIT_CHUNKS) {
