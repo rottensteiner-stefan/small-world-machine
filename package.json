@@ -28,7 +28,7 @@
     "format": "prettier --write . && eslint . --fix",
     "lint": "eslint .",
     "lint:glsl": "tsx scripts/lint-glsl.ts",
-    "lint:wgsl": "tsx scripts/lint-wgsl.ts",
+    "lint:wgsl": "NODE_OPTIONS=\"--import ./scripts/_wgsl_register_loader.mjs\" tsx scripts/lint-wgsl.ts",
     "check:cycles": "madge --circular packages/engine/src",
     "check:markers": "node scripts/check-verified-markers.js",
     "check:doctrine": "tsx scripts/check-doctrine.ts",
