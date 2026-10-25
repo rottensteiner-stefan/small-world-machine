@@ -1,11 +1,16 @@
-// Liquid goldens: deterministic screenshot capture for Showcase 10 (M1 of the liquid roadmap).
+// Golden screenshots: deterministic capture for any showcase declared in config.json "scenes"
+// (M1 of the liquid roadmap shipped scene 10; the P5 goldens generalize the same pipeline to the
+// PBR/shadow showcases 38 and 39).
 //
-// Communicates with the app through the golden-capture contract implemented in
-// apps/showcases/10/showcase.ts:
+// Communicates with each app through the shared golden-capture contract (see the per-app
+// GoldenCapture.ts, e.g. apps/showcases/10/GoldenCapture.ts):
 //   URL:  .../index.html?rendererType=<BACKEND>&__golden=<poolKey>&__goldenView=<view>&__goldenFrames=<N>
 //   Ready: window.__goldenReady === true, window.__goldenMeta = { poolKey, view, frames, rendererType, error? }
 // The app steps the engine deterministically (fixed timestep, see SmallWorldMachine.step) and freezes
 // the presented frame, so the same cell renders byte-identically across runs. See README.md.
+//
+//   --scene <key>   selects the config.json "scenes" entry (url/poolKeys/views/viewport/frames).
+//                   Default "10" = the legacy liquid goldens (top-level config keys).
 
 import puppeteer from "puppeteer";
 import { spawn } from "child_process";
@@ -22,6 +27,7 @@ import {
 } from "../lib/preview-utils.js";
 import config from "./config.json" with { type: "json" };
 import { parseShard, poolsForShard } from "./shard.js";
+import { resolveSceneSpec } from "./scene.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +41,7 @@ function parseArgs(argv) {
     shard: null,
     view: null,
     frames: null,
+    scene: "10",
     skipSpawn: false,
     allowNoGolden: false,
   };
@@ -64,6 +71,10 @@ function parseArgs(argv) {
         break;
       case "--frames":
         args.frames = Number(value);
+        i++;
+        break;
+      case "--scene":
+        args.scene = value;
         i++;
         break;
       case "--skip-spawn":
@@ -111,11 +122,11 @@ function canvasRect(page) {
 
 function buildCells() {
   const cells = [];
-  const shardPools = args.shard ? poolsForShard(config.poolKeys, args.shard) : null;
-  for (const poolKey of config.poolKeys) {
+  const shardPools = args.shard ? poolsForShard(scene.poolKeys, args.shard) : null;
+  for (const poolKey of scene.poolKeys) {
     if (args.pool && poolKey !== args.pool) continue;
     if (shardPools && !shardPools.includes(poolKey)) continue;
-    for (const view of config.views) {
+    for (const view of scene.views) {
       if (args.view && view !== args.view) continue;
       cells.push({ poolKey, view });
     }
@@ -124,8 +135,9 @@ function buildCells() {
 }
 
 const args = parseArgs(process.argv.slice(2));
+const scene = resolveSceneSpec(config, args.scene);
 const backend = config.backends[args.matrix];
-const frames = args.frames ?? config.frames;
+const frames = args.frames ?? scene.frames;
 const isSmoke = args.matrix === "gl1";
 const isInformational = args.matrix === "gpu";
 
@@ -154,7 +166,7 @@ async function captureCell(browser, { poolKey, view }) {
   page.on("pageerror", (error) => errors.push(error.message));
 
   const query = `?rendererType=${backend}&__golden=${poolKey}&__goldenView=${view}&__goldenFrames=${frames}&tier=high`;
-  const url = `${PREVIEW_ORIGIN}/apps/showcases/10/index.html${query}`;
+  const url = `${PREVIEW_ORIGIN}/${scene.url}${query}`;
 
   try {
     await page.goto(url, { waitUntil: "load", timeout: 60000 });
@@ -290,7 +302,7 @@ async function main() {
       userDataDir: tmpDir,
       acceptInsecureCerts: true,
       protocolTimeout: 60000,
-      defaultViewport: config.viewport,
+      defaultViewport: scene.viewport,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -330,6 +342,8 @@ async function main() {
     const okCount = manifest.filter((e) => e.ok).length;
     const summary = {
       matrix: args.matrix,
+      scene: scene.key,
+      url: scene.url,
       backend,
       frames,
       cellsTotal: manifest.length,

@@ -11,6 +11,7 @@ import { PNG } from "pngjs";
 import pixelmatch from "pixelmatch";
 import config from "./config.json" with { type: "json" };
 import { parseShard, poolsForShard } from "./shard.js";
+import { resolveSceneSpec } from "./scene.js";
 import { writeReviewHtml } from "./review-report.js";
 
 function parseArgs(argv) {
@@ -23,6 +24,7 @@ function parseArgs(argv) {
     threshold: null,
     pool: null,
     shard: null,
+    scene: "10",
     accept: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -51,6 +53,10 @@ function parseArgs(argv) {
         break;
       case "--shard":
         args.shard = parseShard(value);
+        i++;
+        break;
+      case "--scene":
+        args.scene = value;
         i++;
         break;
       case "--report":
@@ -170,6 +176,7 @@ try {
 }
 const maxDiffRatio = args.maxDiffRatio ?? config.maxDiffRatio;
 const pixelmatchThreshold = args.threshold ?? config.pixelmatchThreshold;
+const scene = resolveSceneSpec(config, args.scene);
 
 async function main() {
   const baselineFiles = {};
@@ -179,7 +186,7 @@ async function main() {
     }
   }
 
-  const shardPools = args.shard ? poolsForShard(config.poolKeys, args.shard) : null;
+  const shardPools = args.shard ? poolsForShard(scene.poolKeys, args.shard) : null;
   const manifest = await readManifest(args.current);
   const currentSummary = readSummary(args.current);
   const cells = manifest ? [...manifest] : [];

@@ -34,6 +34,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
+import { GoldenCapture, parseGoldenSpec } from "./GoldenCapture.js";
 
 interface CameraPreset {
   readonly name: string;
@@ -115,6 +116,7 @@ class Showcase39 extends AbstractShowcase {
 
   private _sunMode: 1 | 2 = 2;
   private _time = 0;
+  private _goldenCapture: GoldenCapture | undefined;
 
   constructor(options: EngineOptions = {}) {
     super({
@@ -130,6 +132,31 @@ class Showcase39 extends AbstractShowcase {
       },
       ...options,
     });
+  }
+
+  /**
+   * Runs the regular showcase boot, then -- only when the golden query parameters are present --
+   * the deterministic per-preset capture on top of the fully-ready scene (see GoldenCapture.ts).
+   */
+  public override async start(): Promise<void> {
+    const golden = parseGoldenSpec();
+    await super.start();
+    if (golden) {
+      this._goldenCapture = new GoldenCapture(this, {
+        resetClock: (): void => {
+          this._time = 0;
+        },
+        applyPreset: (index: number): void => {
+          this._applyCameraPreset(index, true);
+        },
+      });
+      await this._goldenCapture.run(golden);
+    }
+  }
+
+  public override destroy(): void {
+    this._goldenCapture?.dispose();
+    super.destroy();
   }
 
   protected override onCanvasRecreated(): void {

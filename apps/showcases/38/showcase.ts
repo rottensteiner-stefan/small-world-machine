@@ -32,6 +32,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 import { box } from "../shared/prim.js";
+import { GoldenCapture, parseGoldenSpec } from "./GoldenCapture.js";
 
 interface CameraPreset {
   name: string;
@@ -59,6 +60,7 @@ class Showcase38 extends AbstractShowcase {
   private _activePresetIdx: number = 0;
 
   private _hudElement: HTMLElement | null = null;
+  private _goldenCapture: GoldenCapture | undefined;
 
   private readonly _cameraPresets: CameraPreset[] = [
     {
@@ -87,6 +89,29 @@ class Showcase38 extends AbstractShowcase {
       target: new Vector3D(0.0, 3.0, -22.5),
     },
   ];
+
+  /**
+   * Runs the regular showcase boot, then -- only when the golden query parameters are present --
+   * the deterministic per-preset capture on top of the fully-ready scene (see GoldenCapture.ts).
+   */
+  public override async start(): Promise<void> {
+    const golden = parseGoldenSpec();
+    await super.start();
+    if (golden) {
+      this._goldenCapture = new GoldenCapture(this, {
+        disableFlicker: (): void => {
+          this._flickerEnabled = false;
+        },
+        applyPreset: (index: number): void => {
+          const preset = this._cameraPresets[index];
+          if (!preset) return;
+          this._activePresetIdx = index;
+          this.setInitialCamera(preset.position, preset.target);
+        },
+      });
+      await this._goldenCapture.run(golden);
+    }
+  }
 
   protected override async setupScene(): Promise<void> {
     // ------------------------------------------------------------------------
@@ -1784,6 +1809,7 @@ class Showcase38 extends AbstractShowcase {
   }
 
   public override destroy(): void {
+    this._goldenCapture?.dispose();
     if (this._hudElement && this._hudElement.parentNode) {
       this._hudElement.parentNode.removeChild(this._hudElement);
     }

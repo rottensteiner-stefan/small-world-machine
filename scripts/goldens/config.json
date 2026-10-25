@@ -28,5 +28,27 @@
   "blankStddevThreshold": 2.0,
   "pixelmatchThreshold": 0.1,
   "maxDiffRatio": 0.005,
-  "poolOverrides": {}
+  "poolOverrides": {},
+  "scenes": {
+    "38": {
+      "url": "apps/showcases/38/index.html",
+      "poolKeys": [
+        "pbr38-siq",
+        "pbr38-plaza",
+        "pbr38-portico",
+        "pbr38-sanctum",
+        "pbr38-shrine"
+      ],
+      "views": ["main"],
+      "viewport": { "width": 1280, "height": 720 },
+      "frames": 60
+    },
+    "39": {
+      "url": "apps/showcases/39/index.html",
+      "poolKeys": ["fog39-nave", "fog39-altar", "fog39-portal", "fog39-carved"],
+      "views": ["main"],
+      "viewport": { "width": 1280, "height": 720 },
+      "frames": 60
+    }
+  }
 }
