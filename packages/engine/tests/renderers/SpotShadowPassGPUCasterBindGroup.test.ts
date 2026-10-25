@@ -3,6 +3,7 @@ import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
 import { describe, expect, it, vi } from "vitest";
 import { SpotShadowPassGPU } from "../../src/renderers/passes/SpotShadowPassGPU.js";
 import { Vector3D } from "../../src/math/index.js";
+import { Topology, WireframeMode } from "../../src/enums/index.js";
 
 // Node/vitest has no WebGPU global; stub the bit-flag constants this pass actually reads.
 (globalThis as unknown as { GPUTextureUsage: Record<string, number> }).GPUTextureUsage ??= {
@@ -16,7 +17,7 @@ import { Vector3D } from "../../src/math/index.js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Internals = any;
 
-function setup(): {
+function setup(opaqueBatches: unknown[] = []): {
   renderer: Internals;
   run: () => void;
   drawnGroups: () => unknown[];
@@ -60,7 +61,7 @@ function setup(): {
     globalResourcesVersion: 0,
   };
   const scene: Internals = {
-    getVisibleObjectsSorted: vi.fn(() => ({ opaqueBatches: [] })),
+    getVisibleObjectsSorted: vi.fn(() => ({ opaqueBatches })),
   };
   const renderPass = { setBindGroup: vi.fn(), end: vi.fn() };
   const ce = { beginRenderPass: vi.fn(() => renderPass) };
@@ -107,5 +108,23 @@ describe("SpotShadowPassGPU: cached caster bind group", () => {
     const afterResize = drawnGroups().at(-1);
     expect(afterResize).not.toBe(firstFrame);
     expect(afterResize).toBe(lastCreatedGroup());
+  });
+});
+
+describe("SpotShadowPassGPU: line casters", () => {
+  it("forwards the batch's wireframeMode so line casters draw the edge index buffer, not the triangle one", () => {
+    const caster = { castShadow: true };
+    const batch = {
+      shaderId: "test-batch",
+      objects: [caster],
+      topology: Topology.LINE_LIST,
+      wireframeMode: WireframeMode.STRUCTURAL,
+    };
+    const { renderer, run } = setup([batch]);
+    run();
+
+    const call = (renderer._renderSubgroup as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(call[1]).toEqual([caster]);
+    expect(call[8]).toBe(WireframeMode.STRUCTURAL);
   });
 });
