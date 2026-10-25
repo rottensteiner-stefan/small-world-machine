@@ -57,6 +57,31 @@ Die Test-Suite folgt ab sofort der **Ehrliche-Tests-Doktrin** — fünf verbindl
    (Spec-Konform) statt externer `.bin`-Fixtures — deterministisch, selbstdokumentierend,
    ohne Binärdateien im Repo.
 
+### Corpus-Konvention: Byte-Contract vs. Math-Mirror vs. Real-Probe (P5-Realignment, ADR 0044)
+
+Am P5-Gate (2026-10-25, Realignment-Entscheidung E3) wird die Test-Suite noch einmal auf die
+folgenden, klar getrennten Korpus-Arten hin strukturiert. Jeder Test datei-weit EINE Art als
+Header deklariert; eine Vermischung (z. B. „mirror-centric Datei, die nebenbei Strings bedient")
+ist zu vermeiden:
+
+1. **Byte-Contract / String-Guard**: verriegelt die exakte Verdrahtung im **ausgelieferten**
+   Shader-/Source-Text (`SpotLightPCSS.test.ts`). Keine eigene Mathematik, kein „zweites Gesetz" —
+   ein Reorder/Umbenennen bricht CI direkt.
+2. **Math-Mirror**: dupliziert eine SHIPPED Formel als reine Funktion (Konstanten identisch aus
+   dem Kern extrahiert) und assertet die mathematische Relation (`PcssMonotonicity`,
+   `FroxelReprojection`-Teleport-Mirror, `PbrEnergyConservation`). Ehrlich gekennzeichnet, weil
+   es eine zweite Quelle ist; die Konstanten/Relationen werden strukturell gegen den Kern
+   gegengecheckt (Drift-Guard).
+3. **Real-Probe**: treibt die echte Engine-API (`updateCascades`, `_updateBehaviorsRecursive`,
+   `GlobalUniformLayout`, Accumulator-`step`) und assertet beobachtbare Eigenschaften — kein
+   Duplikat, kein Mirror. Wo eine Engine-Tabelle autoritativ ist
+   (`GlobalUniformLayout.ts`), wird GEGEN sie geprüft statt sie zu reimplementieren
+   (`ClusteredLightingAlignment`).
+
+Historie: Die frühere `ClusteredLightingAlignment.test.ts`-Byte-Tabelle war eine handgeschriebene
+std140-Spiegelung und driftete vom einzigen autoritativen Layout weg; sie ist in eine
+Real-Probe gegen `WebGL2GlobalUniformLayout` umgebaut (P5-DP-6).
+
 ### Golden-Pipeline-Status (Teilentscheidung, dokumentiert)
 
 Der ~25-min-Golden-Lauf (`scripts/goldens/`) bleibt bewusst ein **manuelles Audit und KEIN

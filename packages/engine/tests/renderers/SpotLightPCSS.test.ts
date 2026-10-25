@@ -2,15 +2,22 @@ import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 
-// Regression guard for docs/adr/0006-pcss-directional-light-only.md: WebGPU spot-light shadows
-// use PCSS (getShadowPCSS is fully generic -- same signature as getShadowPCF, no directional-
-// specific uniform access -- so this is a pure function-name swap, no new bindings). The
-// directional cascade-blend sample deliberately stays on fixed PCF (avoids doubling the
-// blocker-search cost in the blend zone). With EVSM (ADR 0043) the directional path is routed
-// through mode dispatchers: getShadowDirMain (pcss branch = PCSS) and getShadowDirBlend (pcss
-// branch = fixed PCF). Each pcss branch MUST re-invoke the exact function its call site used
-// before, or the default (non-EVSM) blend band would silently change and break the byte-identical
-// gates -- that is what the blend assertion below guards.
+/**
+ * BYTE-CONTRACT / STRING-GUARD (ADR 0044 Realignment, P5): Diese Datei enthält KEINE eigene
+ * Mathematik-Spiegelung, sondern verriegelt die exakte Verkabelung im SHIPPED Shader-Quellcode
+ * (Byte-Kontrakt). Ein Reorder/Umbenennen der Dispatch-Funktionen oder der PCF/PCSS-Pfade bricht
+ * hier CI, bevor er die Byte-identischen Golden-Gates erreicht.
+ *
+ * Regression guard for docs/adr/0006-pcss-directional-light-only.md: WebGPU spot-light shadows
+ * use PCSS (getShadowPCSS is fully generic -- same signature as getShadowPCF, no directional-
+ * specific uniform access -- so this is a pure function-name swap, no new bindings). The
+ * directional cascade-blend sample deliberately stays on fixed PCF (avoids doubling the
+ * blocker-search cost in the blend zone). With EVSM (ADR 0043) the directional path is routed
+ * through mode dispatchers: getShadowDirMain (pcss branch = PCSS) and getShadowDirBlend (pcss
+ * branch = fixed PCF). Each pcss branch MUST re-invoke the exact function its call site used
+ * before, or the default (non-EVSM) blend band would silently change and break the byte-identical
+ * gates -- that is what the blend assertion below guards.
+ */
 
 function readWgsl(relativePath: string): string {
   return fs.readFileSync(path.resolve(process.cwd(), relativePath), "utf-8");

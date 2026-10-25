@@ -203,4 +203,44 @@ describe("ClusterGrid", () => {
       expect(clusterIndex(3, 2, 1, dims)).toBe(4 * 3 * 2 - 1);
     });
   });
+
+  describe("CLUSTER-NON-SINGULAR (zSliceFromViewDepth)", () => {
+    /**
+     * @invariant CLUSTER-NON-SINGULAR: `zSliceFromViewDepth` liefert für jede positive
+     *   View-Tiefe einen gültigen, endlichen Slice im {0..numSlices−1}-Bereich — keine NaN/Inf
+     *   (die Log-Formel ist für z > 0 definiert und wird für z ≤ 0 bzw. außerhalb [near, far]
+     *   gedeckelt statt singular zu werden). Ein Cluster-Off-by-One oder eine NaN-Spalte würde
+     *   Licht-Culling-Daten beschädigen.
+     */
+    const near = 0.1;
+    const far = 1000;
+    const numSlices = 24;
+
+    it("returns a finite, in-range slice for a deterministic sweep over positive depths", () => {
+      for (let i = 1; i <= 400; i++) {
+        // Logarithmisch gestaffelte Tiefen, von sub-near bis weit jenseits far.
+        const viewZ = Math.pow(10, -2 + (i / 400) * 5); // 1e-2 .. 1e3 * 10^? -> deckt [1e-2, 1e3]
+        const slice = zSliceFromViewDepth(viewZ, near, far, numSlices);
+        expect(Number.isFinite(slice)).toBe(true);
+        expect(slice).toBeGreaterThanOrEqual(0);
+        expect(slice).toBeLessThanOrEqual(numSlices - 1);
+        expect(Number.isInteger(slice)).toBe(true);
+      }
+    });
+
+    it("never produces NaN/Infinity at the degenerate inputs (0, negative, far-beyond)", () => {
+      for (const z of [0, -0.001, -1, -1e9, near - 1e-12, far, far * 10, 1e9]) {
+        const slice = zSliceFromViewDepth(z, near, far, numSlices);
+        expect(Number.isFinite(slice)).toBe(true);
+        expect(slice).toBeGreaterThanOrEqual(0);
+        expect(slice).toBeLessThanOrEqual(numSlices - 1);
+      }
+    });
+
+    it("maps near -> slice 0 and far -> last slice (clamp boundaries, already pinned by metric tests)", () => {
+      expect(zSliceFromViewDepth(near, near, far, numSlices)).toBe(0);
+      expect(zSliceFromViewDepth(far, near, far, numSlices)).toBe(numSlices - 1);
+      expect(zSliceFromViewDepth(0, near, far, numSlices)).toBe(0);
+    });
+  });
 });

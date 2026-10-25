@@ -1,60 +1,111 @@
 import { describe, it, expect } from "vitest";
+import {
+  WebGL2GlobalUniformLayout,
+  WebGL2PointLightLayout,
+  WebGL2SpotLightLayout,
+  WebGL2AreaLightLayout,
+} from "../../src/renderers/GlobalUniformLayout.js";
 
-describe("Clustered Lighting Alignment & Coordinate Conventions", () => {
-  describe("WebGL2 std140 GlobalUniforms UBO Layout", () => {
-    it("computes exact std140 byte offsets for all uniform blocks", () => {
-      // Header: mat4 u_vp (64) + 4x (vec3+int pad) (64) + 4x int/float (16) + float+pad+vec2 (16) = 160
-      const headerSize = 160;
+/**
+ * DP-6-Test-Realignment (ADR 0044, P5-Moderation): Diese Datei prüft die Clustered-Lighting-
+ * Koordinaten- UND Byte-Konventionen. Der frühere Block-1 war eine hand-geschriebene std140-
+ * Byte-Spiegelung und driftete vom einzigen autoritativen Layout (`GlobalUniformLayout.ts`).
+ * Stattdessen wird jetzt GEGEN diese Engine-Tabelle geprüft (Real-Probe der autoren Seite):
+ * die UBO ist versiegelt, die Licht-Arrays liegen kontigent & ohne Lücke an den von der Engine
+ * veröffentlichten Offsets, und kein Feld ragt über `totalBytes` hinaus. Block-2 (WebGPU
+ * NDC-Y-Flip) bleibt als explizit gekennzeichneter Konventions-Guard.
+ */
 
-      // 16 PointLights: each 32 bytes (pos+intensity = 16, col+decay = 16)
-      const pointLightsOffset = headerSize;
-      const pointLightsSize = 16 * 32; // 512
-      expect(pointLightsOffset).toBe(160);
+describe("WebGL2 GlobalUniforms UBO-Byte-Konvention (Real-Probe gegen GlobalUniformLayout)", () => {
+  it("pins the sealed total size and the contiguous light array placement of the engine layout", () => {
+    const L = WebGL2GlobalUniformLayout;
+    // Versiegelt: Die Engine-Tabelle deklariert exakt 2112 Bytes für das GlobalUniforms-UBO.
+    expect(L.totalBytes).toBe(2112);
 
-      // 16 SpotLights: each 64 bytes (pos+pad = 16, dir+pad = 16, col+pad = 16, params = 16)
-      const spotLightsOffset = pointLightsOffset + pointLightsSize; // 160 + 512 = 672
-      const spotLightsSize = 16 * 64; // 1024
-      expect(spotLightsOffset).toBe(672);
-
-      // 4 AreaLights: each 96 bytes (pos+pad, col+pad, right+pad, up+pad, norm+pad, size+pad = 6 * 16 = 96)
-      const areaLightsOffset = spotLightsOffset + spotLightsSize; // 672 + 1024 = 1696
-      const areaLightStride = 96;
-      const areaLightsSize = 4 * areaLightStride; // 384
-      expect(areaLightsOffset).toBe(1696);
-      expect(areaLightStride).toBe(96);
-
-      // Trailing Cluster Grid uniforms:
-      // vec2 u_tileSizePx (8 bytes + 8 pad to align next vec4 to 16-byte boundary) = 16
-      const tileSizePxOffset = areaLightsOffset + areaLightsSize; // 1696 + 384 = 2080
-      expect(tileSizePxOffset).toBe(2080);
-
-      // vec4 u_clusterDims (16 bytes, offset 2096 .. 2111)
-      const clusterDimsOffset = tileSizePxOffset + 16; // 2096
-      expect(clusterDimsOffset).toBe(2096);
-
-      const totalUboSize = clusterDimsOffset + 16; // 2112
-      expect(totalUboSize).toBe(2112);
-    });
+    // Die drei Licht-Arrays sind kontigent und ohne Lücken aneinander gereiht: Ende von
+    // pointLights == Anfang von spotLights == Ende spotLights == Anfang areaLights ...
+    const points = L.fields.pointLights as {
+      offset: number;
+      size: number;
+      count: number;
+      stride: number;
+    };
+    const spots = L.fields.spotLights as {
+      offset: number;
+      size: number;
+      count: number;
+      stride: number;
+    };
+    const areas = L.fields.areaLights as {
+      offset: number;
+      size: number;
+      count: number;
+      stride: number;
+    };
+    expect(spots.offset).toBe(points.offset + points.size);
+    expect(areas.offset).toBe(spots.offset + spots.size);
+    // Jeder Slot einer Array-Entität liegt vollständig innerhalb deklarierter Field-Bounds.
+    expect(points.count * points.stride).toBe(points.size);
+    expect(spots.count * spots.stride).toBe(spots.size);
+    expect(areas.count * areas.stride).toBe(areas.size);
+    // Slot-Größen (Byte) der drei Licht-Structs sind konsistent mit den Writer-Struktur-Tabellen.
+    expect(WebGL2PointLightLayout.slotBytes).toBe(points.stride);
+    expect(WebGL2SpotLightLayout.slotBytes).toBe(spots.stride);
+    expect(WebGL2AreaLightLayout.slotBytes).toBe(areas.stride);
   });
 
-  describe("WebGPU Cluster Culling Coordinate Convention", () => {
-    it("maps NDC Y-up to WebGPU Top-Left Origin (Y-down) framebuffer coordinates", () => {
-      const resolutionY = 1080;
-      const tileSizeY = 64;
+  it("keeps the trailing cluster grid uniforms after the light arrays and inside the UBO", () => {
+    const L = WebGL2GlobalUniformLayout;
+    const areas = L.fields.areaLights as { offset: number; size: number };
+    const tile = L.fields.tileSizePx as { offset: number; size: number };
+    const cluster = L.fields.clusterDims as { offset: number; size: number };
 
-      const lightCellRangeY = (ndcY: number, ndcRadius: number): [number, number] => {
-        const centerPx = (1.0 - (ndcY * 0.5 + 0.5)) * resolutionY;
-        const radiusPx = ndcRadius * 0.5 * resolutionY;
-        return [(centerPx - radiusPx) / tileSizeY, (centerPx + radiusPx) / tileSizeY];
-      };
+    // Einzig autoritative Quelle ist die Engine-Tabelle; wir spiegeln hier keine Bytes nach,
+    // sondern prüfen die INVARIANTE. `clusterDims` ist ein vec4u und std140-16-Byte-aligniert:
+    // zwischen tileSizePx (vec2u, endet bei 2088) und clusterDims (16-aligniert -> 2096) sitzt
+    // deshalb eine echte 8-Byte-ALIGNMENT-LÜCKE. Byte-Kontiquität wäre hier falsch; es zählt
+    // Ordnung + Überlappungsfreiheit + UBO-Grenzen.
+    expect(tile.offset).toBeGreaterThanOrEqual(areas.offset + areas.size); // nach den Licht-Arrays
+    expect(cluster.offset).toBeGreaterThanOrEqual(tile.offset + tile.size); // danach, ohne Überlappung
+    expect(cluster.offset % 16).toBe(0); // vec4u -> std140 16-Byte-Ausrichtung
+    // Kein Feld ragt über totalBytes hinaus (sonst lägen die Shader-Bindings daneben).
+    expect(cluster.offset + cluster.size).toBeLessThanOrEqual(L.totalBytes);
+    for (const [, f] of Object.entries(L.fields)) {
+      expect(f.offset).toBeGreaterThanOrEqual(0);
+      expect(f.offset + f.size).toBeLessThanOrEqual(L.totalBytes);
+    }
+  });
 
-      // NDC Y = +1 (top of screen) should map to pixel Y = 0 (top row of tiles)
-      const [minTop, maxTop] = lightCellRangeY(1.0, 0.1);
-      expect((minTop + maxTop) / 2).toBeCloseTo(0, 1);
+  it("std140 sub-layouts start at 0 within their slots and never exceed the slot", () => {
+    const check = (layout: Record<string, number>, slotBytes: number): void => {
+      expect(layout["slotBytes"]).toBe(slotBytes);
+      for (const [k, v] of Object.entries(layout)) {
+        if (k === "slotBytes") continue;
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThan(slotBytes);
+      }
+    };
+    check(WebGL2PointLightLayout as unknown as Record<string, number>, 32);
+    check(WebGL2SpotLightLayout as unknown as Record<string, number>, 64);
+    check(WebGL2AreaLightLayout as unknown as Record<string, number>, 96);
+  });
+});
 
-      // NDC Y = -1 (bottom of screen) should map to pixel Y = resolutionY (bottom row of tiles)
-      const [minBottom, maxBottom] = lightCellRangeY(-1.0, 0.1);
-      expect((minBottom + maxBottom) / 2).toBeCloseTo(resolutionY / tileSizeY, 1);
-    });
+describe("WebGPU Cluster-Culling-Koordinaten-Konvention (labeled convention-guard)", () => {
+  it("maps NDC Y-up to the WebGPU Top-Left Origin (Y-down) framebuffer convention", () => {
+    const resolutionY = 1080;
+    const tileSizeY = 64;
+
+    const lightCellRangeY = (ndcY: number, ndcRadius: number): [number, number] => {
+      const centerPx = (1.0 - (ndcY * 0.5 + 0.5)) * resolutionY;
+      const radiusPx = ndcRadius * 0.5 * resolutionY;
+      return [(centerPx - radiusPx) / tileSizeY, (centerPx + radiusPx) / tileSizeY];
+    };
+
+    // NDC Y = +1 (Oben) muss Pixel-Y = 0 (oberste Zeile) ergeben; NDC Y = -1 -> unterste Zeile.
+    const [minTop, maxTop] = lightCellRangeY(1.0, 0.1);
+    expect((minTop + maxTop) / 2).toBeCloseTo(0, 1);
+    const [minBottom, maxBottom] = lightCellRangeY(-1.0, 0.1);
+    expect((minBottom + maxBottom) / 2).toBeCloseTo(resolutionY / tileSizeY, 1);
   });
 });
