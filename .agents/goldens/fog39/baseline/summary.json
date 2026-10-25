@@ -1,0 +1,13 @@
+{
+  "matrix": "gl2",
+  "scene": "39",
+  "url": "apps/showcases/39/index.html",
+  "backend": "WEB_GL2",
+  "frames": 60,
+  "cellsTotal": 4,
+  "cellsOk": 4,
+  "ok": true,
+  "informational": false,
+  "browser": "Chrome/156.0.8078.47",
+  "generatedAt": "2026-10-25T02:21:42.072Z"
+}
