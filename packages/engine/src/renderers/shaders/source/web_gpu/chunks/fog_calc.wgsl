@@ -18,5 +18,5 @@ if (global.fogMode > 0.0) {
     }
     
     fogFactor = clamp(fogFactor, 0.0, 1.0);
-    color = vec3f(mix(global.fogColor.rgb, color, fogFactor));
+    color = vec3f(mix(displayToTarget(global.fogColor.rgb), color, fogFactor));
 }

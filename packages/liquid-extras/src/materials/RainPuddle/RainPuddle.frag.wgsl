@@ -76,7 +76,7 @@
         textureSampleLevel(u_reflectionMap, s, clamp(uv + vec2f(-o.y, o.x), lo, hi), 0.0).rgb +
         textureSampleLevel(u_reflectionMap, s, clamp(uv + vec2f(o.y, -o.x), lo, hi), 0.0).rgb) / 6.0;
     // The mirror pass renders the final, already exposed scene: only the light glints need exposure.
-    let reflection = sRGBToLinear(reflectionSrgb);
+    let reflection = targetToLinear(reflectionSrgb);
     let glints = final_spec * fresnel * specularStrength * global.exposure;
     let surfaceLight = final_light * global.exposure;
 

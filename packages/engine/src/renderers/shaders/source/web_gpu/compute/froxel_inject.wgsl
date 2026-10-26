@@ -211,12 +211,12 @@ fn injectFog(
             // Isotropic scattering sees the whole sphere: mean over the six axis directions
             // approximates the irradiance L0 term; sampling straight up would only see the zenith.
             ambientSky = (
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(1.0, 0.0, 0.0), 0.0).rgb +
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(-1.0, 0.0, 0.0), 0.0).rgb +
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 1.0, 0.0), 0.0).rgb +
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, -1.0, 0.0), 0.0).rgb +
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, 1.0), 0.0).rgb +
-                textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, -1.0), 0.0).rgb
+                pow(textureSampleLevel(u_irradianceMap, globalSampler, vec3f(1.0, 0.0, 0.0), 0.0).rgb, vec3f(2.2)) +
+                pow(textureSampleLevel(u_irradianceMap, globalSampler, vec3f(-1.0, 0.0, 0.0), 0.0).rgb, vec3f(2.2)) +
+                pow(textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 1.0, 0.0), 0.0).rgb, vec3f(2.2)) +
+                pow(textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, -1.0, 0.0), 0.0).rgb, vec3f(2.2)) +
+                pow(textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, 1.0), 0.0).rgb, vec3f(2.2)) +
+                pow(textureSampleLevel(u_irradianceMap, globalSampler, vec3f(0.0, 0.0, -1.0), 0.0).rgb, vec3f(2.2))
             ) * (1.0 / 6.0);
         }
         workgroupBarrier();

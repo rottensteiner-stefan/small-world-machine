@@ -163,6 +163,12 @@ struct AreaLight {
 }
 
 @group(0) @binding(0) var<uniform> global: GlobalUniforms;
+
+// ADR 0049: a display-referred sRGB colour (raw skybox/sprite/unlit output, fog colour) in the space
+// the forward pass writes -- unchanged without post-processing, linear with it.
+fn displayToTarget(color: vec3f) -> vec3f {
+    return pow(max(color, vec3f(0.0)), vec3f(2.2 / global.gamma));
+}
 @group(0) @binding(1) var<storage> pLights: array<PointLight>;
 @group(0) @binding(2) var<storage> sLights: array<SpotLight>;
 @group(0) @binding(3) var<storage> aLights: array<AreaLight>;

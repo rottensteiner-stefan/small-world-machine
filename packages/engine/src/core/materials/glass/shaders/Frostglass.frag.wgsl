@@ -48,7 +48,7 @@
     var refractedColor = vec3f(0.0);
     
     if (currentBlur <= 0.001) {
-        refractedColor = sRGBToLinear(textureSampleLevel(u_opaqueMap, s, screenUv, 0.0).rgb);
+        refractedColor = targetToLinear(textureSampleLevel(u_opaqueMap, s, screenUv, 0.0).rgb);
     } else {
         let poisson = array<vec2f, 12>(
             vec2f(-0.326212,-0.405805), vec2f(-0.840144,-0.073580),
@@ -60,7 +60,7 @@
         );
         for(var tap = 0u; tap < 12u; tap++) {
             let offsetUv = clamp(screenUv + poisson[tap] * currentBlur, vec2f(0.001), vec2f(0.999));
-            refractedColor += sRGBToLinear(textureSampleLevel(u_opaqueMap, s, offsetUv, 0.0).rgb);
+            refractedColor += targetToLinear(textureSampleLevel(u_opaqueMap, s, offsetUv, 0.0).rgb);
         }
         refractedColor /= 12.0;
     }

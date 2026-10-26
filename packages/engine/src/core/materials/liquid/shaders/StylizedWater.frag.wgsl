@@ -51,7 +51,7 @@ fn aaStepMask(edge: f32, value: f32, softness: f32) -> f32 {
     let linDistortedBgDepth = (2.0 * near * far) / (far + near - ndcDistortedBg * (far - near));
     let refractionUv = select(screenUv, distortedUv, linDistortedBgDepth > linFragDepth && abs(linDistortedBgDepth - linBgDepth) < obj.matParam8.y); // R5: 0.25m depth-discontinuity guard → owned lane
 
-    let opaqueUnderwaterColor = sRGBToLinear(textureSample(u_opaqueMap, s, refractionUv).rgb);
+    let opaqueUnderwaterColor = targetToLinear(textureSample(u_opaqueMap, s, refractionUv).rgb);
 
     // Ground Position Reconstruction for Directional Caustics Projection
     let viewDir = normalize(i.wp - global.viewPos.xyz);

@@ -133,7 +133,7 @@ class SinkingBehavior extends Behavior {
       drop.geometry = new Plane({ width: 1, height: 1 }).getGeometryData();
 
       const mat = new StandardMaterial({
-        color: new Color(0.01, 0.01, 0.01),
+        color: new Color(0.123, 0.123, 0.123),
         roughness: 0.1,
         metallic: 0.9,
       });
@@ -368,7 +368,7 @@ class Showcase12 extends AbstractShowcase {
     // A room length is 40. 1/5 of that is 8.
     this.scene.fog = new Fog({
       mode: FogMode.LINEAR,
-      color: new Color(0.0, 0.1, 0.15), // Dark abyssal teal/blue
+      color: new Color(0, 0.351, 0.422), // Dark abyssal teal/blue
       near: 7.0, // Kein Nebel in der Mitte (ca. 1/3 der Distanz)
       far: 35.0, // Dichter Nebel an den Wänden (Wände sind ca bei Distanz 20)
       height: 0.0,
@@ -594,16 +594,16 @@ class Showcase12 extends AbstractShowcase {
       roughnessMap: rockRoughness,
       roughness: 0.9,
       metallic: 0.0,
-      color: new Color(0.8, 0.8, 0.8), // Slightly darken rocks
+      color: new Color(0.904, 0.904, 0.904), // Slightly darken rocks
     });
 
     const portMaterial = new StandardMaterial({
-      color: new Color(0.2, 0.2, 0.2), // Dark base
+      color: new Color(0.481, 0.481, 0.481), // Dark base
       diffuseMap: portDiffuse,
       normalMap: portNormal,
       roughnessMap: portRoughness,
       emissiveMap: portEmissive, // Use generated emissive map!
-      emissiveColor: new Color(1.0, 0.8, 0.5), // Warm glow
+      emissiveColor: new Color(1, 0.904, 0.73), // Warm glow
       emissiveIntensity: 3.0, // Back to normal intensity
       transparent: true,
       alphaTest: 0.1,
@@ -622,7 +622,7 @@ class Showcase12 extends AbstractShowcase {
     });
 
     const oakMaterial = new StandardMaterial({
-      color: oakDiffuse ? new Color(1.0, 1.0, 1.0) : new Color(0.4, 0.25, 0.15),
+      color: oakDiffuse ? new Color(1, 1, 1) : new Color(0.659, 0.533, 0.422),
       diffuseMap: oakDiffuse,
       normalMap: oakNormal,
       roughnessMap: oakRoughness,
@@ -956,7 +956,7 @@ class Showcase12 extends AbstractShowcase {
         roughnessMap: glassRoughness, // Scratches and streaks
         roughness: 0.1, // Very smooth where there are no scratches
         metallic: 0.9, // Highly reflective
-        emissiveColor: new Color(0.0, 0.8, 1.0), // Bright glow from the ocean outside
+        emissiveColor: new Color(0, 0.904, 1), // Bright glow from the ocean outside
         emissiveMap: glassEmissive, // Glows only where there is no dirt
         emissiveIntensity: 4.0, // High intensity to fake looking outside
         transparent: false,
@@ -1007,7 +1007,7 @@ class Showcase12 extends AbstractShowcase {
 
     // 6. Dripping Water Particles
     const waterMaterial = new StandardMaterial({
-      color: new Color(0.7, 0.8, 0.9),
+      color: new Color(0.85, 0.904, 0.953),
       roughness: 0.0,
       metallic: 1.0,
     });
@@ -1038,8 +1038,8 @@ class Showcase12 extends AbstractShowcase {
 
       // Teleporter Glow Material (Simplified to StandardMaterial for debugging)
       const teleportGlowMaterial = new StandardMaterial({
-        color: new Color(0.1, 0.8, 1.0),
-        emissiveColor: new Color(0.1, 0.8, 1.0),
+        color: new Color(0.351, 0.904, 1),
+        emissiveColor: new Color(0.351, 0.904, 1),
         emissiveIntensity: 5.0,
         transparent: true,
       });

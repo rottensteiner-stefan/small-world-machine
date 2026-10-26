@@ -49,7 +49,7 @@ void main() {
     vec3 refractedColor = vec3(0.0);
     
     if (currentBlur <= 0.001) {
-        refractedColor = sRGBToLinear(textureLod(u_opaqueMap, screenUv, 0.0).rgb);
+        refractedColor = targetToLinear(textureLod(u_opaqueMap, screenUv, 0.0).rgb);
     } else {
         vec2 poisson[12];
         poisson[0] = vec2(-0.326212,-0.405805); poisson[1] = vec2(-0.840144,-0.073580);
@@ -61,7 +61,7 @@ void main() {
         
         for(int i = 0; i < 12; i++) {
             vec2 offsetUv = clamp(screenUv + poisson[i] * currentBlur, vec2(0.001), vec2(0.999));
-            refractedColor += sRGBToLinear(textureLod(u_opaqueMap, offsetUv, 0.0).rgb);
+            refractedColor += targetToLinear(textureLod(u_opaqueMap, offsetUv, 0.0).rgb);
         }
         refractedColor /= 12.0;
     }

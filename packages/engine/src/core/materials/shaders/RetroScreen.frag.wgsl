@@ -85,5 +85,5 @@ fn hash2(p: vec2f) -> f32 {
     
     var finalColor = color * obj.color.rgb;
     [WGSL_FOG_CALC]
-    return vec4f(finalColor, texCol.a * obj.color.a);
+    return vec4f(displayToTarget(finalColor), texCol.a * obj.color.a);
 }

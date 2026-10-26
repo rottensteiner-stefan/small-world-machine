@@ -93,7 +93,7 @@ const MOODS: Record<Mood, MoodPreset> = {
     neon: 1.0,
     facadeEmissive: 1.5,
     streetReflectivity: 0.35,
-    fogColor: new Color(0.015, 0.02, 0.035),
+    fogColor: new Color(0.148, 0.169, 0.218),
     fogDensity: 0.014,
     showSkybox: true,
     clearColor: new Color(0, 0, 0, 1),
@@ -119,7 +119,7 @@ const MOODS: Record<Mood, MoodPreset> = {
     facadeEmissive: 0.15,
     // Without neon there is nothing bright for the thin film to mirror; rough asphalt reads matte.
     streetReflectivity: 0.05,
-    fogColor: new Color(0.64, 0.66, 0.68),
+    fogColor: new Color(0.816, 0.828, 0.839),
     fogDensity: 0.03,
     showSkybox: false,
     clearColor: new Color(0.8, 0.82, 0.84, 1),
@@ -281,7 +281,7 @@ class Showcase30 extends AbstractShowcase {
 
     // Atmospheric Rain Haze (deep night indigo, prevents background washout)
     this._fog = new Fog({
-      color: new Color(0.015, 0.02, 0.035),
+      color: new Color(0.148, 0.169, 0.218),
       mode: FogMode.EXP2,
       density: 0.014,
     });
@@ -376,7 +376,7 @@ class Showcase30 extends AbstractShowcase {
     // film still gives the whole street a soft, Fresnel-weighted mirror sheen. Standing water is the
     // separate RainPuddleMaterial layer below.
     const wetAsphaltMat = new StandardMaterial({
-      color: new Color(0.22, 0.24, 0.28),
+      color: new Color(0.502, 0.523, 0.561),
       diffuseMap: asphaltDiffuse,
       normalMap: asphaltNormal,
       roughnessMap: asphaltRoughness,
@@ -390,12 +390,12 @@ class Showcase30 extends AbstractShowcase {
 
     // Cyberpunk building facade: rain-soaked with glossy wet sheen
     const buildingMat = new StandardMaterial({
-      color: new Color(0.65, 0.7, 0.8),
+      color: new Color(0.822, 0.85, 0.904),
       diffuseMap: facadeDiffuse,
       normalMap: facadeNormal,
       roughnessMap: facadeRoughness,
       emissiveMap: facadeEmission,
-      emissiveColor: new Color(1.0, 1.0, 1.0),
+      emissiveColor: new Color(1, 1, 1),
       emissiveIntensity: 1.5,
       roughness: 0.45,
       metallic: 0.25,
@@ -404,7 +404,7 @@ class Showcase30 extends AbstractShowcase {
 
     // Plain brushed dark metal for the conduits (no texture set: a pipe doesn't need one).
     const chromeMat = new StandardMaterial({
-      color: new Color(0.55, 0.6, 0.66),
+      color: new Color(0.762, 0.793, 0.828),
       roughness: 0.3,
       metallic: 0.9,
       envMap: envTexture,
@@ -412,22 +412,22 @@ class Showcase30 extends AbstractShowcase {
 
     // emissiveColor is already > 1 (HDR); intensity stays near 1 so bloom doesn't saturate everything.
     const neonMagentaMat = new StandardMaterial({
-      color: new Color(1.0, 0.05, 0.6),
-      emissiveColor: new Color(3.5, 0.1, 1.8),
+      color: new Color(1, 0.256, 0.793),
+      emissiveColor: new Color(1.767, 0.351, 1.306),
       emissiveIntensity: 1.2,
       roughness: 0.1,
     });
 
     const neonCyanMat = new StandardMaterial({
-      color: new Color(0.05, 0.95, 1.0),
-      emissiveColor: new Color(0.1, 3.2, 3.8),
+      color: new Color(0.256, 0.977, 1),
+      emissiveColor: new Color(0.351, 1.697, 1.835),
       emissiveIntensity: 1.2,
       roughness: 0.1,
     });
 
     const neonGoldMat = new StandardMaterial({
-      color: new Color(1.0, 0.8, 0.1),
-      emissiveColor: new Color(3.0, 2.2, 0.2),
+      color: new Color(1, 0.904, 0.351),
+      emissiveColor: new Color(1.648, 1.431, 0.481),
       emissiveIntensity: 1.0,
       roughness: 0.1,
     });
@@ -474,7 +474,7 @@ class Showcase30 extends AbstractShowcase {
     // Bare winter trees along both kerbs: fine dark branches against the sky are what makes ripple
     // distortion in the puddle mirror readable.
     const barkMat = new StandardMaterial({
-      color: new Color(0.06, 0.055, 0.05),
+      color: new Color(0.278, 0.268, 0.256),
       roughness: 0.85,
       metallic: 0.0,
     });
@@ -560,10 +560,11 @@ class Showcase30 extends AbstractShowcase {
     this._hoverCar.rotation.y = Math.PI - 0.35;
     this.scene.add(this._hoverCar);
 
-    // Soft camera-side key light to sculpt the car's metallic body contours and spoiler
+    // Soft camera-side key light to sculpt the car's metallic body contours and spoiler. The paint
+    // mirrors the night sky, which decodes dark since ADR 0049, so this light carries the shape.
     const carKeyLight = new PointLight({
       color: new Color(0.65, 0.8, 1.0),
-      intensity: 2.5,
+      intensity: 7.0,
       distance: 8.0,
     });
     carKeyLight.position.set(2.2, 1.8, 3.2);
@@ -580,14 +581,14 @@ class Showcase30 extends AbstractShowcase {
           node.castShadow = true;
           if (node.name.includes("body") || node.name.includes("spoiler")) {
             node.material = new StandardMaterial({
-              color: new Color(0.12, 0.22, 0.38),
-              roughness: 0.14,
-              metallic: 0.9,
+              color: new Color(0.381, 0.502, 0.644),
+              roughness: 0.22,
+              metallic: 0.75,
               envMap: envTexture,
             });
           } else if (node.name.includes("wheel")) {
             node.material = new StandardMaterial({
-              color: new Color(0.04, 0.04, 0.05),
+              color: new Color(0.232, 0.232, 0.256),
               roughness: 0.5,
               metallic: 0.3,
               envMap: envTexture,
@@ -606,8 +607,8 @@ class Showcase30 extends AbstractShowcase {
     underglowBar.geometry = new Cube({ size: 1 }).getGeometryData();
     underglowBar.scale.set(0.35, 0.03, 2.2);
     underglowBar.material = new StandardMaterial({
-      color: new Color(0.05, 0.95, 1.0),
-      emissiveColor: new Color(0.1, 1.1, 1.3),
+      color: new Color(0.256, 0.977, 1),
+      emissiveColor: new Color(0.351, 1.044, 1.127),
       emissiveIntensity: 1.5,
       roughness: 0.1,
     });
@@ -627,8 +628,8 @@ class Showcase30 extends AbstractShowcase {
     headlights.geometry = new Cube({ size: 1 }).getGeometryData();
     headlights.scale.set(1.15, 0.05, 0.1);
     headlights.material = new StandardMaterial({
-      color: new Color(0.9, 0.95, 1.0),
-      emissiveColor: new Color(3.0, 3.2, 4.0),
+      color: new Color(0.953, 0.977, 1),
+      emissiveColor: new Color(1.648, 1.697, 1.878),
       emissiveIntensity: 1.0,
       roughness: 0.1,
     });
@@ -647,8 +648,8 @@ class Showcase30 extends AbstractShowcase {
     tailLights.geometry = new Cube({ size: 1 }).getGeometryData();
     tailLights.scale.set(1.25, 0.06, 0.1);
     tailLights.material = new StandardMaterial({
-      color: new Color(1.0, 0.0, 0.05),
-      emissiveColor: new Color(5.0, 0.1, 0.2),
+      color: new Color(1, 0, 0.256),
+      emissiveColor: new Color(2.078, 0.351, 0.481),
       emissiveIntensity: 2.0,
       roughness: 0.1,
     });

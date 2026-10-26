@@ -18,7 +18,7 @@
         let clipPos = global.vp * vec4f(i.wp, 1.0);
         let ndc = clipPos.xy / clipPos.w;
         let screenUV = vec2f(ndc.x * 0.5 + 0.5, ndc.y * -0.5 + 0.5); // WebGPU Y is down
-        let reflectionColor = sRGBToLinear(textureSample(u_reflectionMap, s, screenUV).rgb);
+        let reflectionColor = targetToLinear(textureSample(u_reflectionMap, s, screenUV).rgb);
         let V_dir = normalize(global.viewPos.xyz - i.wp);
         let dotNV_refl = max(dot(normalize(i.n), V_dir), 0.0);
         let F0_refl = mix(vec3f(0.04), albedo, metallic);
@@ -55,7 +55,7 @@
             vec2f(0.001),
             vec2f(0.999),
         );
-        let transmittedColor = sRGBToLinear(textureSample(u_opaqueMap, s, screenUV).rgb);
+        let transmittedColor = targetToLinear(textureSample(u_opaqueMap, s, screenUV).rgb);
         // P3/S1 R1: feed the real attenuation colour (LINEAR/RAW lane) into Beer-Lambert absorption
         // instead of albedo -- KHR_materials_volume was silently broken before.
         let volumeTransmittance = VolumeAbsorption(obj.matParam11.xyz, attenuationDist, thickness);

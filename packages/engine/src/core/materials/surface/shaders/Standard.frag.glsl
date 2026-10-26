@@ -120,7 +120,7 @@ void main() {
         vec4 clipPos = u_vp * vec4(v_worldPos, 1.0);
         vec2 ndc = clipPos.xy / clipPos.w;
         vec2 screenUV = ndc * 0.5 + 0.5;
-        vec3 reflectionColor = sRGBToLinear(texture(u_reflectionMap, screenUV).rgb);
+        vec3 reflectionColor = targetToLinear(texture(u_reflectionMap, screenUV).rgb);
         
         // Blend based on reflectivity and fresnel or fixed factor
         float f = u_reflectivity * mix(1.0, F_Schlick(max(dot(normalize(v_normal), V), 0.0), F0).x, u_matParam0.x); // simple approx

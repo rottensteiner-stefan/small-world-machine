@@ -12,9 +12,8 @@
 
 @fragment fn fs(i: Out) -> @location(0) vec4f {
     // Apply scene exposure so the skybox brightness tracks the rest of the scene.
-    // The skybox cubemap is already in sRGB / display space, so we do NOT linearize or
-    // re-gamma-correct — a straight exposure scale keeps it perceptually consistent
-    // without introducing double-gamma or banding artifacts.
+    // The skybox cubemap is display-referred sRGB: displayToTarget keeps it unchanged without
+    // post-processing and linearizes it for the HDR buffer with it (ADR 0049).
     let col = textureSample(u_envMap, s, i.wp) * obj.color;
-    return vec4f(col.rgb * global.exposure, col.a);
+    return vec4f(displayToTarget(col.rgb) * global.exposure, col.a);
 }

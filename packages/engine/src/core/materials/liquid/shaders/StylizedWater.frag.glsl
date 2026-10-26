@@ -82,7 +82,7 @@ void main() {
     float linDistortedBgDepth = (2.0 * near * far) / (far + near - ndcDistortedBg * (far - near));
     vec2 refractionUv = (linDistortedBgDepth > linFragDepth && abs(linDistortedBgDepth - linBgDepth) < u_matParam8.y) ? distortedUv : screenUv; // R5: 0.25m guard → owned lane
 
-    vec3 opaqueUnderwaterColor = sRGBToLinear(texture(u_opaqueMap, refractionUv).rgb);
+    vec3 opaqueUnderwaterColor = targetToLinear(texture(u_opaqueMap, refractionUv).rgb);
 
     // 3. Ground Position Reconstruction for Directional Caustics Projection
     vec3 viewDir = normalize(v_worldPos - u_viewPos);

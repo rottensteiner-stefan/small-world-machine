@@ -135,7 +135,8 @@ class Showcase37 extends AbstractShowcase {
     this.camera.addBehavior(flyCtrl);
 
     // Custom warm IBL: baked from a procedural "dark warm room at night" equirectangular panorama
-    // (generator: .agents/scratches/gen-warm-ibl.mjs, baker: scripts/ibl-bake.ts --linear). Low
+    // (generator: .agents/scratches/gen-warm-ibl.mjs, baker: scripts/ibl-bake.ts; the linear 8-bit
+    // export was re-encoded per pixel to the sRGB IBL contract of ADR 0048/0049). Low
     // intensity on purpose -- it must only add a faint indirect warm fill and believable warm
     // reflection hints on the brass/wood, never wash out the candle-lit mood.
     await this.loadIbl("./assets/ibl/", 0.4);
@@ -267,7 +268,7 @@ class Showcase37 extends AbstractShowcase {
       roughnessMap: woodFloorRough,
       metallic: 0.0,
       roughness: 0.8,
-      color: new Color(0.7, 0.65, 0.6),
+      color: new Color(0.85, 0.822, 0.793),
     });
 
     const brickMat = new StandardMaterial({
@@ -284,31 +285,31 @@ class Showcase37 extends AbstractShowcase {
       roughnessMap: fireplaceMantelRough,
       metallic: 0.0,
       roughness: 0.38,
-      color: new Color(0.96, 0.94, 0.9),
+      color: new Color(0.982, 0.972, 0.953),
     });
 
     const brassVaseMat = new StandardMaterial({
-      color: new Color(0.92, 0.74, 0.32),
+      color: new Color(0.963, 0.872, 0.596),
       metallic: 0.98,
       roughness: 0.28,
       reflectivity: 0.0,
     });
 
     const darkTrimMat = new StandardMaterial({
-      color: new Color(0.18, 0.12, 0.08),
+      color: new Color(0.459, 0.381, 0.317),
       metallic: 0.0,
       roughness: 0.6,
     });
 
     const darkInteriorMat = new StandardMaterial({
-      color: new Color(0.015, 0.015, 0.015),
+      color: new Color(0.148, 0.148, 0.148),
       metallic: 0.0,
       roughness: 0.95,
     });
 
     const pendantShadeMat = new StandardMaterial({
-      color: new Color(0.96, 0.9, 0.75),
-      emissiveColor: new Color(1.0, 0.88, 0.68),
+      color: new Color(0.982, 0.953, 0.877),
+      emissiveColor: new Color(1, 0.944, 0.839),
       // 0.8 instead of 1.1: keeps the shade a lit fabric rather than a flat blown-out white disc
       // (the previous 1.1 flooded the whole silhouette under ACES).
       emissiveIntensity: 0.8,
@@ -320,15 +321,15 @@ class Showcase37 extends AbstractShowcase {
     // terracotta so the accent stays visible but stops fighting the warm palette (user decision:
     // "wärmer/gedämpfter").
     const floorLampShadeMat = new StandardMaterial({
-      color: new Color(0.86, 0.52, 0.46),
-      emissiveColor: new Color(0.95, 0.62, 0.5),
+      color: new Color(0.934, 0.743, 0.703),
+      emissiveColor: new Color(0.977, 0.805, 0.73),
       emissiveIntensity: 0.7,
       metallic: 0.0,
       roughness: 0.4,
     });
 
     const sofaFabricMat = new StandardMaterial({
-      color: new Color(0.12, 0.09, 0.07),
+      color: new Color(0.381, 0.335, 0.299),
       metallic: 0.0,
       roughness: 0.92,
     });
@@ -339,18 +340,18 @@ class Showcase37 extends AbstractShowcase {
       roughnessMap: woodFloorRough,
       metallic: 0.0,
       roughness: 0.36,
-      color: new Color(0.48, 0.32, 0.22),
+      color: new Color(0.716, 0.596, 0.502),
     });
 
     const candleWaxMat = new StandardMaterial({
-      color: new Color(0.95, 0.92, 0.84),
+      color: new Color(0.977, 0.963, 0.924),
       metallic: 0.0,
       roughness: 0.35,
     });
 
     const candleFlameMat = new StandardMaterial({
-      color: new Color(1.0, 0.7, 0.25),
-      emissiveColor: new Color(1.0, 0.7, 0.25),
+      color: new Color(1, 0.85, 0.533),
+      emissiveColor: new Color(1, 0.85, 0.533),
       emissiveIntensity: 3.0,
       metallic: 0.0,
       roughness: 0.1,
@@ -783,15 +784,15 @@ class Showcase37 extends AbstractShowcase {
 
     // Book rows
     const bookColors: Color[] = [
-      new Color(0.4, 0.15, 0.12),
-      new Color(0.12, 0.25, 0.2),
-      new Color(0.18, 0.18, 0.3),
-      new Color(0.35, 0.28, 0.12),
+      new Color(0.659, 0.422, 0.381),
+      new Color(0.381, 0.533, 0.481),
+      new Color(0.459, 0.459, 0.579),
+      new Color(0.621, 0.561, 0.381),
     ];
     for (let shelfIdx = 0; shelfIdx < 4; shelfIdx++) {
       const bookBlock = new Object3D(`Books_${shelfIdx}`);
       bookBlock.geometry = cubeGeom;
-      const bColor = bookColors[shelfIdx % bookColors.length] ?? new Color(0.3, 0.2, 0.1);
+      const bColor = bookColors[shelfIdx % bookColors.length] ?? new Color(0.579, 0.481, 0.351);
       bookBlock.material = new StandardMaterial({
         color: bColor,
         metallic: 0.0,
@@ -824,7 +825,7 @@ class Showcase37 extends AbstractShowcase {
       radialSegments: 12,
     }).getGeometryData();
     const bottleMat = new StandardMaterial({
-      color: new Color(0.08, 0.1, 0.06),
+      color: new Color(0.317, 0.351, 0.278),
       metallic: 0.1,
       roughness: 0.25,
     });

@@ -112,15 +112,16 @@ class Showcase32 extends AbstractShowcase {
 
     // Sickly, radiation-haze atmosphere -- EXP2 falloff hides the far street end in murk, and
     // doubles as a cheap depth cue since the scene has no volumetric fog (see AAA research #13).
-    const fogColor = new Color(0.16, 0.19, 0.14);
     this.scene.fog = new Fog({
       mode: FogMode.EXP2,
-      color: fogColor,
+      color: new Color(0.435, 0.47, 0.41),
       density: 0.028,
     });
     // There's no skybox in this ruin -- without a matching clear color the "empty sky" above the
     // rooflines renders as a pure black void instead of reading as a hazy, overcast fallout sky.
-    this.renderer.setClearColor(fogColor);
+    // The fog colour is display-referred sRGB (ADR 0049), the clear colour lands linear in the HDR
+    // target: (0.16, 0.19, 0.14) is the same haze in linear.
+    this.renderer.setClearColor(new Color(0.16, 0.19, 0.14));
 
     this.scene.add(new AmbientLight({ color: new Color(0.13, 0.16, 0.11), intensity: 0.5 }));
 
@@ -142,17 +143,17 @@ class Showcase32 extends AbstractShowcase {
 
   private _buildStreet(): void {
     const asphaltMat = new StandardMaterial({
-      color: new Color(0.12, 0.12, 0.11),
+      color: new Color(0.381, 0.381, 0.367),
       roughness: 0.95,
       metallic: 0.0,
     });
     const concreteMat = new StandardMaterial({
-      color: new Color(0.35, 0.34, 0.3),
+      color: new Color(0.621, 0.612, 0.579),
       roughness: 0.9,
       metallic: 0.0,
     });
     const rustMat = new StandardMaterial({
-      color: new Color(0.3, 0.15, 0.09),
+      color: new Color(0.579, 0.422, 0.335),
       roughness: 0.8,
       metallic: 0.4,
     });
@@ -251,19 +252,19 @@ class Showcase32 extends AbstractShowcase {
 
   private _buildHotZone(): void {
     const craterMat = new StandardMaterial({
-      color: new Color(0.08, 0.08, 0.07),
+      color: new Color(0.317, 0.317, 0.299),
       roughness: 0.95,
       metallic: 0.0,
     });
     const glowMat = new StandardMaterial({
-      color: new Color(0.4, 1.0, 0.35),
-      emissiveColor: new Color(0.6, 2.4, 0.4),
+      color: new Color(0.659, 1, 0.621),
+      emissiveColor: new Color(0.793, 1.489, 0.659),
       emissiveIntensity: 2.2,
       transparent: true,
       roughness: 0.2,
     });
     const drumMat = new StandardMaterial({
-      color: new Color(0.45, 0.32, 0.05),
+      color: new Color(0.696, 0.596, 0.256),
       roughness: 0.7,
       metallic: 0.35,
     });
@@ -345,8 +346,8 @@ class Showcase32 extends AbstractShowcase {
 
   private _buildWeather(): void {
     const ashMat = new StandardMaterial({
-      color: new Color(0.55, 0.53, 0.46),
-      emissiveColor: new Color(0.06, 0.08, 0.04),
+      color: new Color(0.762, 0.749, 0.703),
+      emissiveColor: new Color(0.278, 0.317, 0.232),
       emissiveIntensity: 0.15,
       roughness: 0.9,
     });
@@ -363,8 +364,8 @@ class Showcase32 extends AbstractShowcase {
     this.scene.add(this._ashfall.mesh);
 
     const dustMat = new StandardMaterial({
-      color: new Color(0.35, 0.4, 0.28),
-      emissiveColor: new Color(0.3, 0.6, 0.2),
+      color: new Color(0.621, 0.659, 0.561),
+      emissiveColor: new Color(0.579, 0.793, 0.481),
       emissiveIntensity: 0.4,
       transparent: true,
       roughness: 0.6,

@@ -29,7 +29,15 @@ fn linearToSRGB(color: vec3f) -> vec3f {
     return pow(color, vec3f(1.0 / global.gamma));
 }
 
+// ADR 0049: assets (textures, material colours, IBL, asset cubemaps) are 8-bit sRGB -- fixed 2.2,
+// never the output lane (which is 1.0 while post-processing encodes).
 fn sRGBToLinear(color: vec3f) -> vec3f {
+    return pow(color, vec3f(2.2));
+}
+
+// Engine render targets the forward pass wrote through linearToSRGB (opaque capture, planar
+// reflection, reflection probes) decode with that same lane: sRGB without, linear with post-processing.
+fn targetToLinear(color: vec3f) -> vec3f {
     return pow(color, vec3f(global.gamma));
 }
 

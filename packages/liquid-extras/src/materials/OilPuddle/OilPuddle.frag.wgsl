@@ -108,7 +108,7 @@ fn noise(p: vec2f) -> f32 {
     // reads as translucent film over actual pavement instead of a flat painted ring.
     let groundScreenRes = vec2f(textureDimensions(u_opaqueMap));
     let groundScreenUv = i.pos.xy / groundScreenRes;
-    let groundColor = sRGBToLinear(textureSample(u_opaqueMap, s, groundScreenUv).rgb);
+    let groundColor = targetToLinear(textureSample(u_opaqueMap, s, groundScreenUv).rgb);
     // Tint by edgeColor's hue only (normalized to its brightest channel), not its raw magnitude --
     // multiplying by edgeColor directly crushes the real floor brightness to near-zero.
     let edgeHue = edgeColor / max(max(edgeColor.r, max(edgeColor.g, edgeColor.b)), 0.0001);

@@ -306,7 +306,9 @@ let MAX_REFLECTION_LOD = 4.0;
 var specularAmbient: vec3f;
 if (obj.useEnvMap > 0.5) {
     let lod = roughness * 5.0;
-    let envColor = sRGBToLinear(textureSampleLevel(u_envMap, s, R, lod).rgb);
+    // useEnvMap 2 = a RenderTargetCube probe written through the output lane, 1 = an sRGB asset cube.
+    let envRaw = textureSampleLevel(u_envMap, s, R, lod).rgb;
+    let envColor = select(sRGBToLinear(envRaw), targetToLinear(envRaw), obj.useEnvMap > 1.5);
     specularAmbient = envColor * F_Schlick(dotNV, F0);
 } else {
     let prefilteredColor = sRGBToLinear(textureSampleLevel(u_prefilterMap, globalSampler, R, roughness * MAX_REFLECTION_LOD).rgb) * global.envIntensity;

@@ -42,6 +42,8 @@ bleibt lineare Daten. 8 Bit sRGB lösen dunkle Töne feiner auf als 8 Bit linear
 - Der Nebel-Ambient (`froxel_inject.wgsl`, `VolumetricFog.frag.glsl`) liest `u_irradianceMap` noch
   roh. Er läuft nur mit Post-Processing, wo der Decode heute ohnehin Identität ist; er wird mit dem
   Post-Processing-Fix dekodiert.
+- **Nachtrag 2026-10-25:** Alle drei Punkte sind mit [ADR 0049](./0049-decode-vs-output-gamma.md)
+  erledigt (feste Dekodierung, Showcase 37 umgerechnet, Nebel-Ambient dekodiert).
 
 ## Doctrine Compliance
 

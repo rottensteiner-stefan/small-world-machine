@@ -118,9 +118,22 @@ vec3 linearToSRGB(vec3 color) {
     return pow(color, vec3(1.0 / u_gamma));
 }
 
-// sRGB to Linear
+// sRGB to Linear for assets (textures, material colours, IBL, asset cubemaps): fixed 2.2, never the
+// output lane, which is 1.0 while post-processing encodes (ADR 0049).
 vec3 sRGBToLinear(vec3 color) {
+    return pow(color, vec3(2.2));
+}
+
+// Engine render targets the forward pass wrote through linearToSRGB (opaque capture, planar
+// reflection, reflection probes) decode with that same lane: sRGB without, linear with post-processing.
+vec3 targetToLinear(vec3 color) {
     return pow(color, vec3(u_gamma));
+}
+
+// A display-referred sRGB colour (raw skybox/sprite/unlit output, fog colour) in the space the
+// forward pass writes -- unchanged without post-processing, linear with it.
+vec3 displayToTarget(vec3 color) {
+    return pow(max(color, vec3(0.0)), vec3(2.2 / u_gamma));
 }
 
 

@@ -208,12 +208,12 @@ void main() {
     if (u_ambientInject > 0.0) {
         // Isotropic scattering sees the whole sphere: the mean of the (low-frequency) irradiance cube over the
         // six axis directions approximates its L0 term; sampling straight up would only see the zenith.
-        vec3 skyMean = texture(u_irradianceMap, vec3(1.0, 0.0, 0.0)).rgb
-                     + texture(u_irradianceMap, vec3(-1.0, 0.0, 0.0)).rgb
-                     + texture(u_irradianceMap, vec3(0.0, 1.0, 0.0)).rgb
-                     + texture(u_irradianceMap, vec3(0.0, -1.0, 0.0)).rgb
-                     + texture(u_irradianceMap, vec3(0.0, 0.0, 1.0)).rgb
-                     + texture(u_irradianceMap, vec3(0.0, 0.0, -1.0)).rgb;
+        vec3 skyMean = pow(texture(u_irradianceMap, vec3(1.0, 0.0, 0.0)).rgb, vec3(2.2))
+                     + pow(texture(u_irradianceMap, vec3(-1.0, 0.0, 0.0)).rgb, vec3(2.2))
+                     + pow(texture(u_irradianceMap, vec3(0.0, 1.0, 0.0)).rgb, vec3(2.2))
+                     + pow(texture(u_irradianceMap, vec3(0.0, -1.0, 0.0)).rgb, vec3(2.2))
+                     + pow(texture(u_irradianceMap, vec3(0.0, 0.0, 1.0)).rgb, vec3(2.2))
+                     + pow(texture(u_irradianceMap, vec3(0.0, 0.0, -1.0)).rgb, vec3(2.2));
         skyAmbient += skyMean * (u_envIntensity / 6.0);
     }
 

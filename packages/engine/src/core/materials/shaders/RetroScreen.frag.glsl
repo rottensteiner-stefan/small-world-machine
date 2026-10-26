@@ -1,4 +1,5 @@
 [BASE_FRAGMENT_HEADER]
+[LIGHT_DEFS]
 
 // E9-A / R6 (ADR 0027/0039): typed lanes -- u_matParam0 control, u_matParam1 mode params.
 uniform vec4 u_matParam0;
@@ -94,4 +95,5 @@ void main() {
     }
     
     fragColor = vec4(color, texColor.a) * u_color;
+    fragColor.rgb = displayToTarget(fragColor.rgb);
 }

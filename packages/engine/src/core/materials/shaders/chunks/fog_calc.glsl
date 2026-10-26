@@ -20,7 +20,7 @@ if (u_fogMode > 0) {
     fogFactor = clamp(fogFactor, 0.0, 1.0);
     
     #if __VERSION__ == 300
-        fragColor.rgb = mix(u_fogColor, fragColor.rgb, fogFactor);
+        fragColor.rgb = mix(displayToTarget(u_fogColor), fragColor.rgb, fogFactor);
     #else
         gl_FragColor.rgb = mix(u_fogColor, gl_FragColor.rgb, fogFactor);
     #endif

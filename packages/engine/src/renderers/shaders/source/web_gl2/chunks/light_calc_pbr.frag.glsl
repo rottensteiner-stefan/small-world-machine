@@ -437,7 +437,9 @@ vec3 prefilteredColor;
 #ifdef USE_ENV_MAP
 if (u_useEnvMap > 0.5) {
     float lod = roughness * 5.0;
-    prefilteredColor = sRGBToLinear(textureLod(u_envMap, R, lod).rgb) * u_envIntensity;
+    // u_useEnvMap 2 = a RenderTargetCube probe written through the output lane, 1 = an sRGB asset cube.
+    vec3 envRaw = textureLod(u_envMap, R, lod).rgb;
+    prefilteredColor = (u_useEnvMap > 1.5 ? targetToLinear(envRaw) : sRGBToLinear(envRaw)) * u_envIntensity;
 } else {
     prefilteredColor = sRGBToLinear(textureLod(u_prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb) * u_envIntensity;
 }
@@ -469,7 +471,8 @@ vec3 ambient = (kD_fallback * u_ambientColor * albedo) * ao;
 // Per-material envMap fallback
 if (u_useEnvMap > 0.5) {
     float lod = roughness * 5.0;
-    vec3 envColor = sRGBToLinear(textureLod(u_envMap, R, lod).rgb);
+    vec3 envRaw = textureLod(u_envMap, R, lod).rgb;
+    vec3 envColor = u_useEnvMap > 1.5 ? targetToLinear(envRaw) : sRGBToLinear(envRaw);
     ambient += (envColor * f_fallback) * ao;
 }
 #endif
@@ -497,7 +500,7 @@ if (transmission > 0.0) {
     float refrAspect = float(texSize.y) / float(texSize.x); // h/w (== 1.0 at square aspect)
     screenUv = clamp(screenUv + refrDir.xy * vec2(refrAspect, 1.0) * thickness * 0.05, vec2(0.001), vec2(0.999));
 
-    vec3 transmittedLight = sRGBToLinear(texture(u_opaqueMap, screenUv).rgb);
+    vec3 transmittedLight = targetToLinear(texture(u_opaqueMap, screenUv).rgb);
     vec3 volumeTransmittance = VolumeAbsorption(u_matParam11.rgb, attenuationDist, thickness);
     vec3 finalTransmission = transmittedLight * volumeTransmittance * albedo;
 

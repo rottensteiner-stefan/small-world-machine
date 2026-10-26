@@ -1,4 +1,5 @@
 [BASE_FRAGMENT_HEADER]
+[LIGHT_DEFS]
 void main() {
   vec4 texColor = texture(u_diffuseMap, v_uv);
   float finalAlpha = u_color.a * texColor.a;
@@ -10,5 +11,5 @@ void main() {
   if (finalAlpha < u_extraParams.y) {
     discard;
   }
-  fragColor = vec4(albedo, finalAlpha);
+  fragColor = vec4(displayToTarget(albedo), finalAlpha);
 }

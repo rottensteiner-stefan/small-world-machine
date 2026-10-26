@@ -108,7 +108,7 @@ void main() {
     // transparent pass, see WebGL2Renderer.copyToOpaqueTexture) and tint it dark by the oil, so
     // the thin rim reads as translucent film over actual pavement instead of a flat painted ring.
     vec2 screenUv = gl_FragCoord.xy / vec2(textureSize(u_opaqueMap, 0));
-    vec3 groundColor = sRGBToLinear(texture(u_opaqueMap, screenUv).rgb);
+    vec3 groundColor = targetToLinear(texture(u_opaqueMap, screenUv).rgb);
     // Tint by edgeColor's hue only (normalized to its brightest channel), not its raw magnitude --
     // edgeColor itself is a near-black tar constant, so multiplying by it directly would crush the
     // real floor brightness to near-zero regardless of floorVisibility.

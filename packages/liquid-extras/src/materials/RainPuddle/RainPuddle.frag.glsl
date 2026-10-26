@@ -85,7 +85,7 @@ void main() {
         texture(u_reflectionMap, clamp(uv + vec2(-o.y, o.x), lo, hi)).rgb +
         texture(u_reflectionMap, clamp(uv + vec2(o.y, -o.x), lo, hi)).rgb) / 6.0;
     // The mirror pass renders the final, already exposed scene: only the light glints need exposure.
-    vec3 reflection = sRGBToLinear(reflectionSrgb);
+    vec3 reflection = targetToLinear(reflectionSrgb);
     vec3 glints = specular * fresnel * specularStrength * u_exposure;
     vec3 surfaceLight = finalLight * u_exposure;
 

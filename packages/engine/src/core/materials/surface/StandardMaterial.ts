@@ -5,6 +5,7 @@ import { AbstractMaterial } from "../AbstractMaterial.js";
 import { Color } from "../../colors/index.js";
 import { MaterialType, ShaderPropertyType, BlendingMode } from "../../../enums/index.js";
 import type { Texture, CubeTexture } from "../../textures/index.js";
+import { RenderTargetCube } from "../../textures/RenderTargetCube.js";
 import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
 import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
 import { writeLane } from "../MaterialLanes.js";
@@ -431,7 +432,13 @@ export class StandardMaterial extends AbstractMaterial {
     texs["u_transmissionMap"] = this.transmissionMap;
     texs["u_thicknessMap"] = this.thicknessMap;
 
-    props["u_useEnvMap"] = this.envMap ? 1.0 : 0.0;
+    // ADR 0049: 2 = a reflection probe the forward pass rendered (decoded with the output lane),
+    // 1 = an sRGB asset cube (fixed 2.2).
+    props["u_useEnvMap"] = this.envMap
+      ? this.envMap instanceof RenderTargetCube
+        ? 2.0
+        : 1.0
+      : 0.0;
     props["u_useReflectionMap"] = this.reflectionMap ? 1.0 : 0.0;
     props["u_reflectivity"] = this.reflectivity;
     // Pack through the typed lane table -- the table entry is the single source of truth.

@@ -51,7 +51,7 @@
     screenUv = clamp(screenUv, vec2f(0.001), vec2f(0.999));
     
     // Sample opaque map
-    let refractedColor = sRGBToLinear(textureSample(u_opaqueMap, s, screenUv).rgb);
+    let refractedColor = targetToLinear(textureSample(u_opaqueMap, s, screenUv).rgb);
     
     // Apply tint (Beer's Law approximation)
     let transmittance = exp(-((vec3f(1.0) - tintColor) * thickness * 3.0));

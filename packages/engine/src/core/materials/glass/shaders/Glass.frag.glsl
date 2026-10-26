@@ -46,7 +46,7 @@ void main() {
     screenUv = clamp(screenUv, vec2(0.001), vec2(0.999));
     
     // Sample opaque map (WebGL2 doesn't auto-convert if internalformat is standard RGBA, but we'll manually sRGBToLinear to be safe and consistent)
-    vec3 refractedColor = sRGBToLinear(texture(u_opaqueMap, screenUv).rgb);
+    vec3 refractedColor = targetToLinear(texture(u_opaqueMap, screenUv).rgb);
     vec3 transmittance = exp(-((vec3(1.0) - tintColor) * thickness * 3.0));
     vec3 finalRefraction = refractedColor * transmittance * transmission;
     

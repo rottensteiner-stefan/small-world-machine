@@ -8,5 +8,6 @@
 void main() {
   vec4 texColor = texture(u_diffuseMap, v_uv);
   fragColor = u_color * texColor;
+  fragColor.rgb = displayToTarget(fragColor.rgb);
   [FOG_CALC]
 }

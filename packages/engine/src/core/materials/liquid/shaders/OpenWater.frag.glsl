@@ -67,7 +67,7 @@ void main() {
     float linDistortedBgDepth = (2.0 * near * far) / (far + near - ndcDistortedBg * (far - near));
     vec2 refractionUv = (linDistortedBgDepth > linFragDepth) ? distortedUv : screenUv;
 
-    vec3 refractedColor = sRGBToLinear(texture(u_opaqueMap, refractionUv).rgb);
+    vec3 refractedColor = targetToLinear(texture(u_opaqueMap, refractionUv).rgb);
 
     // Beer-Lambert absorption: light traveling through `depthDiff` units of water loses each
     // color channel at its own exponential rate (waterAbsorption). Ambient in-scattering prevents
