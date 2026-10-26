@@ -5,6 +5,7 @@
 ### "It is the mark of an instructed mind to rest satisfied with the degree of precision which the nature of the subject admits." - Aristotle
 
 - **Features:**
+  - *Asset-Linter CLI (`npm run lint:assets`, Backlog P2 D6):* Offline-Qualitäts- und Vertragsprüftool (`scripts/lint-assets.ts`) für alle modularen Modelle und Kits unter `public/assets/kits/**` mit 7 Kernprüfungen: 1. Geometrie-Vollständigkeit (`POSITION`, `NORMAL`, `TEXCOORD_0`, vec4-`TANGENT`), 2. Degenerierte Dreiecke (Fläche 0, NaN, kollineare Vertices, doppelte Indizes), 3. Root-Transform-Konformität (eingefrorene Root-Translation/-Rotation/-Skalierung), 4. Keine negativen Skalierungen (Invertierte Winding Orders), 5. Polycount-Budget nach ADR-0011-Tiers (Prop/Hero/Environment mit Grandfathered-Baselines für Bestands-Assets), 6. Konsistenzcheck AABB (tatsächliche Weltraum-Ausdehnungen vs. `meta.json` fängt historische Exportfehler wie die Bunker-Blast-Door ab), 7. Textur-Slot- und WebP-Namensverträge (`TextureSlotMatcher`, `.webp`-Pflicht). 10 automatisierte Tests in `tests/scripts/lintAssets.test.ts`.
   - *EXT_texture_webp (glTF-Extension):* Unterstützung der Khronos-glTF-2.0-Extension `EXT_texture_webp` im `GltfLoader` über ein dediziertes `extTextureWebp`-Plugin, wodurch glTF-Modelle WebP-Texturquellen direkt auflösen.
   - *Showcase 43 — „Kanon 1m Studio":* minimale deterministische Studio-Zelle (1-m-Kanon-Maßraster) mit 4 Material-Sets als stabiler visueller Probestand für Material-Arbeit (eigene goldene Baseline im `st43__*`-Pool).
 - **Architecture & Bugfixes:**
