@@ -10,7 +10,7 @@
       "name": "František's Heirloom Coffee Grinder",
       "category": "props",
       "path": "coffee_grinder/model.glb",
-      "preview": "coffee_grinder/preview.jpg",
+      "preview": "coffee_grinder/preview.webp",
       "meta": "coffee_grinder/meta.json"
     },
     {
@@ -18,7 +18,7 @@
       "name": "Amts-Terminal 2100 (Unit-X1)",
       "category": "electronics",
       "path": "terminal_2100/model.glb",
-      "preview": "terminal_2100/preview.jpg",
+      "preview": "terminal_2100/preview.webp",
       "meta": "terminal_2100/meta.json"
     },
     {
@@ -26,7 +26,7 @@
       "name": "Bunker Tier Bunk Bed",
       "category": "furniture",
       "path": "bunk_bed/model.glb",
-      "preview": "bunk_bed/preview.jpg",
+      "preview": "bunk_bed/preview.webp",
       "meta": "bunk_bed/meta.json"
     },
     {
@@ -34,7 +34,7 @@
       "name": "Desolate Industrial Metal Stool",
       "category": "furniture",
       "path": "metal_stool/model.glb",
-      "preview": "metal_stool/preview.jpg",
+      "preview": "metal_stool/preview.webp",
       "meta": "metal_stool/meta.json"
     },
     {
@@ -42,7 +42,7 @@
       "name": "Grandfather's Brass Kerosene Lantern",
       "category": "lighting",
       "path": "kerosene_lantern/model.glb",
-      "preview": "kerosene_lantern/preview.jpg",
+      "preview": "kerosene_lantern/preview.webp",
       "meta": "kerosene_lantern/meta.json"
     },
     {
@@ -50,7 +50,7 @@
       "name": "Novotny's Laced Leather Combat Boots",
       "category": "props",
       "path": "combat_boots/model.glb",
-      "preview": "combat_boots/preview.jpg",
+      "preview": "combat_boots/preview.webp",
       "meta": "combat_boots/meta.json"
     },
     {
@@ -58,7 +58,7 @@
       "name": "Heavy Industrial Bunker Metal Desk",
       "category": "furniture",
       "path": "metal_desk/model.glb",
-      "preview": "metal_desk/preview.jpg",
+      "preview": "metal_desk/preview.webp",
       "meta": "metal_desk/meta.json"
     },
     {
@@ -66,7 +66,7 @@
       "name": "Weathered Wall Shelf with Folded Clothes",
       "category": "furniture",
       "path": "wall_shelf_supplies/model.glb",
-      "preview": "wall_shelf_supplies/preview.jpg",
+      "preview": "wall_shelf_supplies/preview.webp",
       "meta": "wall_shelf_supplies/meta.json"
     },
     {
@@ -74,7 +74,7 @@
       "name": "Bunker Camp Tableware Mess Set",
       "category": "props",
       "path": "mess_tin_set/model.glb",
-      "preview": "mess_tin_set/preview.jpg",
+      "preview": "mess_tin_set/preview.webp",
       "meta": "mess_tin_set/meta.json"
     },
     {
@@ -82,7 +82,7 @@
       "name": "Stained Utility Towels on Wall Pegs",
       "category": "props",
       "path": "hanging_towels/model.glb",
-      "preview": "hanging_towels/preview.jpg",
+      "preview": "hanging_towels/preview.webp",
       "meta": "hanging_towels/meta.json"
     },
     {
@@ -90,7 +90,7 @@
       "name": "Frayed Vintage Oriental Bunker Rug",
       "category": "props",
       "path": "worn_rug/model.glb",
-      "preview": "worn_rug/preview.jpg",
+      "preview": "worn_rug/preview.webp",
       "meta": "worn_rug/meta.json"
     }
   ],

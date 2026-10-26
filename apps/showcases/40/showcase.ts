@@ -159,8 +159,8 @@ class DecalProbe extends AbstractShowcase {
     pedestal.material = concrete;
     this.scene.add(pedestal);
 
-    const stripes = await Texture.fromUrl("/assets/kits/flakturm/decals/hazard_stripes.png");
-    const sign = await Texture.fromUrl("/assets/kits/flakturm/decals/sign_koje42.png");
+    const stripes = await Texture.fromUrl("/assets/kits/flakturm/decals/hazard_stripes.webp");
+    const sign = await Texture.fromUrl("/assets/kits/flakturm/decals/sign_koje42.webp");
 
     const floorStripes = new Decal(
       new DecalMaterial({ unlit: UNLIT, diffuseMap: stripes }),

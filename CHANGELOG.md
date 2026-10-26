@@ -5,8 +5,10 @@
 ### "It is the mark of an instructed mind to rest satisfied with the degree of precision which the nature of the subject admits." - Aristotle
 
 - **Features:**
+  - *EXT_texture_webp (glTF-Extension):* Unterstützung der Khronos-glTF-2.0-Extension `EXT_texture_webp` im `GltfLoader` über ein dediziertes `extTextureWebp`-Plugin, wodurch glTF-Modelle WebP-Texturquellen direkt auflösen.
   - *Showcase 43 — „Kanon 1m Studio":* minimale deterministische Studio-Zelle (1-m-Kanon-Maßraster) mit 4 Material-Sets als stabiler visueller Probestand für Material-Arbeit (eigene goldene Baseline im `st43__*`-Pool).
 - **Architecture & Bugfixes:**
+  - *Repo-weite WebP-Standardisierung (Asset-Pipeline C9):* Alle ausgelieferten Texturen und Bildressourcen in Showcases (6, 30, 37, 38, 41), modularen Kits (Flakturm-PBR-Textursets und Decals, Bunker/Industrial-Previews), The Whisper (Diorama-Texturen inkl. Denoising, Concepts, Karten) sowie Doku-Assets auf WebP vereinheitlicht. Datenkarten (Normal, Roughness, Metalness, AO, Height, ORM) strikt als verlustfreies WebP (`cwebp -lossless`), Albedo und Previews mit hoher Qualität (`cwebp -q 90..92`). `kit.schema.json` auf WebP erweitert, `check:normal-maps` auf `public/` ausgedehnt (61 von 61 Normal-Maps fehlerfrei). 0 verbleibende Non-WebP-Assets im Runtime-Scope.
   - *Hierarchisches Culling — Sichtbarkeits-Fix (`_collectVisible`):* In-Frustum-Objekte werden nicht mehr vom Culling verschluckt, wenn ihr Parent zuvor per Frustum ausschied (Parent-Bounds sind gegenüber In-Frustum-Kindern nicht konservativ).
   - *E10 — per-Kaskaden-Normal-Offset-Schatten-Bias:* sichtbare Schattenqualität verbessert (Reduktion von Shadow Acne und Peter-Panning); der Koeffizient ist bewusst als Konstante eingefroren (k = 1.2, `@fixed`) statt als neuer Tuning-Knopf.
   - *WebGPU-Fix — Bitangenten-Vorzeichen:* gespiegelte UV-Normal-Maps rendern auf WebGPU jetzt korrekt (Bitangente w = ±1, wie auf WebGL2/WebGL1).

@@ -134,9 +134,9 @@ export class Showcase6 extends AbstractShowcase {
     wireMat.color = Color.CYAN;
 
     // Load Fireplace Brick PBR texture maps (Albedo, Normal, Roughness)
-    const brickAlbedo = await Texture.fromUrl("./assets/fireplace_brick_albedo.jpg");
+    const brickAlbedo = await Texture.fromUrl("./assets/fireplace_brick_albedo.webp");
     const brickNormal = await Texture.fromUrl("./assets/fireplace_brick_normal.webp");
-    const brickRoughness = await Texture.fromUrl("./assets/fireplace_brick_roughness.jpg");
+    const brickRoughness = await Texture.fromUrl("./assets/fireplace_brick_roughness.webp");
 
     const brickMat = new StandardMaterial({
       diffuseMap: brickAlbedo,

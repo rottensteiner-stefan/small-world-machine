@@ -10,7 +10,7 @@
       "name": "Industrial Bulkhead Wall Lamp",
       "category": "lighting",
       "path": "wall_lamp/model.glb",
-      "preview": "wall_lamp/preview.jpg",
+      "preview": "wall_lamp/preview.webp",
       "meta": "wall_lamp/meta.json"
     },
     {
@@ -19,7 +19,7 @@
       "category": "props",
       "hazardClass": "ADR Class 3 / Crude Oil",
       "path": "barrel_oil_black/model.glb",
-      "preview": "barrel_oil_black/preview.jpg",
+      "preview": "barrel_oil_black/preview.webp",
       "meta": "barrel_oil_black/meta.json"
     },
     {
@@ -28,7 +28,7 @@
       "category": "props",
       "hazardClass": "ADR Class 6.1 / Toxic",
       "path": "barrel_hazard_yellow/model.glb",
-      "preview": "barrel_hazard_yellow/preview.jpg",
+      "preview": "barrel_hazard_yellow/preview.webp",
       "meta": "barrel_hazard_yellow/meta.json"
     },
     {
@@ -37,7 +37,7 @@
       "category": "props",
       "hazardClass": "ADR Class 3 / Flammable Liquid",
       "path": "barrel_chemical_blue/model.glb",
-      "preview": "barrel_chemical_blue/preview.jpg",
+      "preview": "barrel_chemical_blue/preview.webp",
       "meta": "barrel_chemical_blue/meta.json"
     }
   ],

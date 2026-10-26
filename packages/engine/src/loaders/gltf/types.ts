@@ -161,6 +161,9 @@ export interface GltfJson {
       KHR_texture_basisu?: {
         source: number;
       };
+      EXT_texture_webp?: {
+        source: number;
+      };
       [key: string]: unknown;
     };
   }[];

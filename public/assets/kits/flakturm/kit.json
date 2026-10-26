@@ -10,7 +10,7 @@
       "name": "Flakturm Heavy Double Blast Door",
       "category": "doors",
       "path": "props/bunker_blast_door/model.glb",
-      "preview": "props/bunker_blast_door/preview.jpg",
+      "preview": "props/bunker_blast_door/preview.webp",
       "meta": "props/bunker_blast_door/meta.json"
     },
     {
@@ -18,7 +18,7 @@
       "name": "Flakturm Single Blast Door Leaf (animatable, rebuilt)",
       "category": "doors",
       "path": "props/bunker_blast_door_leaf/model.glb",
-      "preview": "props/bunker_blast_door_leaf/preview.jpg",
+      "preview": "props/bunker_blast_door_leaf/preview.webp",
       "meta": "props/bunker_blast_door_leaf/meta.json"
     },
     {
@@ -26,7 +26,7 @@
       "name": "Concrete Rubble & Rebar Debris Pile",
       "category": "debris",
       "path": "props/debris_rubble_pile/model.glb",
-      "preview": "props/debris_rubble_pile/preview.jpg",
+      "preview": "props/debris_rubble_pile/preview.webp",
       "meta": "props/debris_rubble_pile/meta.json"
     },
     {
@@ -34,7 +34,7 @@
       "name": "Flakturm Ventilation & Escape Mesh Hatch",
       "category": "doors",
       "path": "props/bunker_vent_hatch/model.glb",
-      "preview": "props/bunker_vent_hatch/preview.jpg",
+      "preview": "props/bunker_vent_hatch/preview.webp",
       "meta": "props/bunker_vent_hatch/meta.json"
     },
     {
@@ -42,7 +42,7 @@
       "name": "Caged Heavy Industrial Bulkhead Ceiling Lamp",
       "category": "lighting",
       "path": "props/ceiling_lamp/model.glb",
-      "preview": "props/ceiling_lamp/preview.jpg",
+      "preview": "props/ceiling_lamp/preview.webp",
       "meta": "props/ceiling_lamp/meta.json"
     },
     {
@@ -50,7 +50,7 @@
       "name": "Flakturm Ventilation Escape Shaft & Grille",
       "category": "doors",
       "path": "props/vent_wall_breach/model.glb",
-      "preview": "props/vent_wall_breach/preview.jpg",
+      "preview": "props/vent_wall_breach/preview.webp",
       "meta": "props/vent_wall_breach/meta.json"
     }
   ],
@@ -60,10 +60,10 @@
       "name": "Brettschalungs-Beton (Interior Walls & Ceilings)",
       "category": "walls",
       "maps": [
-        "albedo.png",
-        "normal.png",
-        "roughness.png",
-        "ao.png"
+        "albedo.webp",
+        "normal.webp",
+        "roughness.webp",
+        "ao.webp"
       ]
     },
     {
@@ -71,10 +71,10 @@
       "name": "Altwiener Ziegelmauerwerk (Partition Walls)",
       "category": "walls",
       "maps": [
-        "albedo.png",
-        "normal.png",
-        "roughness.png",
-        "ao.png"
+        "albedo.webp",
+        "normal.webp",
+        "roughness.webp",
+        "ao.webp"
       ]
     },
     {
@@ -82,10 +82,10 @@
       "name": "Monumentaler Außenbeton (Facade & Wash Streaks)",
       "category": "walls",
       "maps": [
-        "albedo.png",
-        "normal.png",
-        "roughness.png",
-        "ao.png"
+        "albedo.webp",
+        "normal.webp",
+        "roughness.webp",
+        "ao.webp"
       ]
     },
     {
@@ -93,10 +93,10 @@
       "name": "Glattbeton-Kassetten (Large Halls & Corridors)",
       "category": "walls",
       "maps": [
-        "albedo.png",
-        "normal.png",
-        "roughness.png",
-        "ao.png"
+        "albedo.webp",
+        "normal.webp",
+        "roughness.webp",
+        "ao.webp"
       ]
     },
     {
@@ -104,10 +104,10 @@
       "name": "Feuchtbeton mit Salpeter (Shafts & Morgue Vaults)",
       "category": "walls",
       "maps": [
-        "albedo.png",
-        "normal.png",
-        "roughness.png",
-        "ao.png"
+        "albedo.webp",
+        "normal.webp",
+        "roughness.webp",
+        "ao.webp"
       ]
     },
     {
@@ -115,11 +115,11 @@
       "name": "Rostiger Panzerstahl (Blast Doors & Girders)",
       "category": "metals",
       "maps": [
-        "albedo.png",
-        "normal.png",
-        "roughness.png",
-        "metalness.png",
-        "ao.png"
+        "albedo.webp",
+        "normal.webp",
+        "roughness.webp",
+        "metalness.webp",
+        "ao.webp"
       ]
     },
     {
@@ -127,11 +127,11 @@
       "name": "Lackierter olivgrauer Bunker-Stahl (Fittings & Frames)",
       "category": "metals",
       "maps": [
-        "albedo.png",
-        "normal.png",
-        "roughness.png",
-        "metalness.png",
-        "ao.png"
+        "albedo.webp",
+        "normal.webp",
+        "roughness.webp",
+        "metalness.webp",
+        "ao.webp"
       ]
     },
     {
@@ -139,10 +139,10 @@
       "name": "Behauener Kalkstein — Quadermauerwerk (Außenfundament)",
       "category": "walls",
       "maps": [
-        "albedo.png",
-        "normal.png",
-        "roughness.png",
-        "ao.png"
+        "albedo.webp",
+        "normal.webp",
+        "roughness.webp",
+        "ao.webp"
       ]
     },
     {
@@ -150,10 +150,10 @@
       "name": "Wiener Travertin & Kalksteinplatte (Wand & Pfeiler)",
       "category": "walls",
       "maps": [
-        "albedo.png",
-        "normal.png",
-        "roughness.png",
-        "ao.png"
+        "albedo.webp",
+        "normal.webp",
+        "roughness.webp",
+        "ao.webp"
       ]
     }
   ],
@@ -161,44 +161,44 @@
     {
       "id": "flakturm/sign_hausangehoerige",
       "name": "Stencil: Nur für Hausangehörige!",
-      "file": "sign_hausangehoerige.png",
+      "file": "sign_hausangehoerige.webp",
       "size": [0.5, 0.25, 0.5]
     },
     {
       "id": "flakturm/sign_sektor0",
       "name": "AZS Badge: Sektor 0 — Kältekammer",
-      "file": "sign_sektor0.png",
+      "file": "sign_sektor0.webp",
       "size": [0.5, 0.25, 0.5]
     },
     {
       "id": "flakturm/sign_koje42",
       "name": "Stencil: Koje 42 Arenberg",
-      "file": "sign_koje42.png",
+      "file": "sign_koje42.webp",
       "size": [0.55, 0.275, 0.5]
     },
     {
       "id": "flakturm/hazard_stripes",
       "name": "45° Safety Hazard Warning Stripes",
-      "file": "hazard_stripes.png",
+      "file": "hazard_stripes.webp",
       "size": [0.8, 0.8, 0.3]
     },
     {
       "id": "flakturm/guide_stripe_glow",
       "name": "Luminescent Blackout Guidance Stripe",
-      "file": "guide_stripe_glow.png",
+      "file": "guide_stripe_glow.webp",
       "size": [2.0, 0.5, 0.3]
     },
     {
       "id": "flakturm/wet_puddle",
       "name": "Wet Patch (dark, glossy overlay)",
-      "file": "wet_puddle.png",
-      "orm": "wet_puddle_orm.png",
+      "file": "wet_puddle.webp",
+      "orm": "wet_puddle_orm.webp",
       "size": [1.6, 1.6, 0.3]
     },
     {
       "id": "flakturm/rebar_damage",
       "name": "Concrete Spalling & Exposed Rebar Claws",
-      "file": "rebar_damage.png",
+      "file": "rebar_damage.webp",
       "size": [0.55, 0.55, 0.5]
     }
   ],

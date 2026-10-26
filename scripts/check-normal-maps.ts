@@ -89,6 +89,7 @@ const files = args.length
   : [
       ...findNormalMaps(path.join(ROOT, "apps"), []),
       ...findNormalMaps(path.join(ROOT, "packages"), []),
+      ...findNormalMaps(path.join(ROOT, "public"), []),
     ];
 
 let failures = 0;

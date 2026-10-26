@@ -367,7 +367,7 @@ export class PrologueScene extends AbstractShowcase {
 
     // Kältekammer Leichenschublade K-42 ID plate decal
     try {
-      const idPlateTexture = await Texture.fromUrl("/assets/kits/flakturm/decals/sign_koje42.png");
+      const idPlateTexture = await Texture.fromUrl("/assets/kits/flakturm/decals/sign_koje42.webp");
       const idPlate = this._morgueTrayMesh?.getObjectByName("IdPlate");
       if (idPlate && idPlate.material instanceof StandardMaterial) {
         idPlate.material.diffuseMap = idPlateTexture;
@@ -398,12 +398,12 @@ export class PrologueScene extends AbstractShowcase {
 
     const loadSet = async (name: string, withMetalness: boolean): Promise<PbrTextureSet> => {
       const [albedo, normal, roughness, ao, metalness] = await Promise.all([
-        Texture.fromUrl(`${base}/${name}/albedo.png`),
-        Texture.fromUrl(`${base}/${name}/normal.png`),
-        Texture.fromUrl(`${base}/${name}/roughness.png`),
-        Texture.fromUrl(`${base}/${name}/ao.png`),
+        Texture.fromUrl(`${base}/${name}/albedo.webp`),
+        Texture.fromUrl(`${base}/${name}/normal.webp`),
+        Texture.fromUrl(`${base}/${name}/roughness.webp`),
+        Texture.fromUrl(`${base}/${name}/ao.webp`),
         withMetalness
-          ? Texture.fromUrl(`${base}/${name}/metalness.png`)
+          ? Texture.fromUrl(`${base}/${name}/metalness.webp`)
           : Promise.resolve(undefined),
       ]);
       return { albedo, normal, roughness, ao, metalness };

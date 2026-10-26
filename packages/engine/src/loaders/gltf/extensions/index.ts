@@ -1,4 +1,5 @@
 import { registerGltfExtension } from "../GltfExtensionRegistry.js";
+import { extTextureWebp } from "./ExtTextureWebp.js";
 import { khrLightsPunctual } from "./KhrLightsPunctual.js";
 import { swmLightsAmbient } from "./SwmLightsAmbient.js";
 import { swmDecal } from "./SwmDecal.js";
@@ -10,5 +11,13 @@ registerGltfExtension(swmPrefabInstance);
 registerGltfExtension(swmStageZone);
 registerGltfExtension(swmDecal);
 registerGltfExtension(swmLightsAmbient);
+registerGltfExtension(extTextureWebp);
 
-export { khrLightsPunctual, swmDecal, swmLightsAmbient, swmPrefabInstance, swmStageZone };
+export {
+  extTextureWebp,
+  khrLightsPunctual,
+  swmDecal,
+  swmLightsAmbient,
+  swmPrefabInstance,
+  swmStageZone,
+};

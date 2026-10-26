@@ -41,8 +41,8 @@ export async function setupWetScene(scene: Scene, camera: Camera): Promise<void>
   scene.add(floor);
 
   const [albedo, orm] = await Promise.all([
-    Texture.fromUrl(`${KIT_DECALS}/wet_puddle.png`),
-    Texture.fromUrl(`${KIT_DECALS}/wet_puddle_orm.png`),
+    Texture.fromUrl(`${KIT_DECALS}/wet_puddle.webp`),
+    Texture.fromUrl(`${KIT_DECALS}/wet_puddle_orm.webp`),
   ]);
   const base = { diffuseMap: albedo, roughness: 1 };
   const wet = new Decal(new DecalMaterial({ ...base, ormMap: orm }), "WetPuddle");

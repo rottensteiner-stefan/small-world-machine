@@ -185,30 +185,30 @@ export class MetalReliefShowcase extends AbstractShowcase {
 
     // Preload realistic photographs for Before/After converter
     try {
-      this._textures["paris"] = await Texture.fromUrl("./assets/paris_photo.jpg");
+      this._textures["paris"] = await Texture.fromUrl("./assets/paris_photo.webp");
     } catch {
       try {
-        this._textures["paris"] = await Texture.fromUrl("./assets/paris.jpg");
+        this._textures["paris"] = await Texture.fromUrl("./assets/paris.webp");
       } catch {
         this._textures["paris"] = createFallbackTexture("Paris", "#e53e3e");
       }
     }
 
     try {
-      this._textures["alps"] = await Texture.fromUrl("./assets/alps_photo.jpg");
+      this._textures["alps"] = await Texture.fromUrl("./assets/alps_photo.webp");
     } catch {
       try {
-        this._textures["alps"] = await Texture.fromUrl("./assets/alps.jpg");
+        this._textures["alps"] = await Texture.fromUrl("./assets/alps.webp");
       } catch {
         this._textures["alps"] = createFallbackTexture("Alps", "#e53e3e");
       }
     }
 
     try {
-      this._textures["harbor"] = await Texture.fromUrl("./assets/harbor_photo.jpg");
+      this._textures["harbor"] = await Texture.fromUrl("./assets/harbor_photo.webp");
     } catch {
       try {
-        this._textures["harbor"] = await Texture.fromUrl("./assets/harbor.jpg");
+        this._textures["harbor"] = await Texture.fromUrl("./assets/harbor.webp");
       } catch {
         this._textures["harbor"] = createFallbackTexture("Harbor", "#3182ce");
       }

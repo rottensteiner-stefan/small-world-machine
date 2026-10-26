@@ -126,39 +126,42 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
 
     // 2. Load Textures
     try {
-      this._wallTexture = await Texture.fromUrl("/assets/the-whisper/diorama/wall_tiles.jpg", {
+      this._wallTexture = await Texture.fromUrl("/assets/the-whisper/diorama/wall_tiles.webp", {
         addressModeU: TextureWrap.REPEAT,
         addressModeV: TextureWrap.REPEAT,
       });
-      this._floorTexture = await Texture.fromUrl("/assets/the-whisper/diorama/floor_pavement.jpg", {
-        addressModeU: TextureWrap.REPEAT,
-        addressModeV: TextureWrap.REPEAT,
-      });
+      this._floorTexture = await Texture.fromUrl(
+        "/assets/the-whisper/diorama/floor_pavement.webp",
+        {
+          addressModeU: TextureWrap.REPEAT,
+          addressModeV: TextureWrap.REPEAT,
+        },
+      );
       this._floorNormalTexture = await Texture.fromUrl(
-        "/assets/the-whisper/diorama/floor_pavement_normal.jpg",
+        "/assets/the-whisper/diorama/floor_pavement_normal.webp",
         {
           addressModeU: TextureWrap.REPEAT,
           addressModeV: TextureWrap.REPEAT,
         },
       );
       this._floorRoughnessTexture = await Texture.fromUrl(
-        "/assets/the-whisper/diorama/floor_pavement_roughness.jpg",
+        "/assets/the-whisper/diorama/floor_pavement_roughness.webp",
         {
           addressModeU: TextureWrap.REPEAT,
           addressModeV: TextureWrap.REPEAT,
         },
       );
-      this._brickTexture = await Texture.fromUrl("/assets/the-whisper/diorama/brick_masonry.jpg", {
+      this._brickTexture = await Texture.fromUrl("/assets/the-whisper/diorama/brick_masonry.webp", {
         addressModeU: TextureWrap.REPEAT,
         addressModeV: TextureWrap.REPEAT,
       });
-      this._barrelTexture = await Texture.fromUrl("/assets/the-whisper/diorama/barrel_rust.jpg", {
+      this._barrelTexture = await Texture.fromUrl("/assets/the-whisper/diorama/barrel_rust.webp", {
         addressModeU: TextureWrap.REPEAT,
         addressModeV: TextureWrap.REPEAT,
         flipY: true,
       });
       this._barrelNormalTexture = await Texture.fromUrl(
-        "/assets/the-whisper/diorama/barrel_rust_normal.jpg",
+        "/assets/the-whisper/diorama/barrel_rust_normal.webp",
         {
           addressModeU: TextureWrap.REPEAT,
           addressModeV: TextureWrap.REPEAT,
@@ -166,20 +169,20 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
         },
       );
       this._barrelRoughnessTexture = await Texture.fromUrl(
-        "/assets/the-whisper/diorama/barrel_rust_roughness.jpg",
+        "/assets/the-whisper/diorama/barrel_rust_roughness.webp",
         {
           addressModeU: TextureWrap.REPEAT,
           addressModeV: TextureWrap.REPEAT,
           flipY: true,
         },
       );
-      this._crateTexture = await Texture.fromUrl("/assets/the-whisper/diorama/crate_wood.jpg", {
+      this._crateTexture = await Texture.fromUrl("/assets/the-whisper/diorama/crate_wood.webp", {
         addressModeU: TextureWrap.REPEAT,
         addressModeV: TextureWrap.REPEAT,
         flipY: true,
       });
       this._crateNormalTexture = await Texture.fromUrl(
-        "/assets/the-whisper/diorama/crate_wood_normal.jpg",
+        "/assets/the-whisper/diorama/crate_wood_normal.webp",
         {
           addressModeU: TextureWrap.REPEAT,
           addressModeV: TextureWrap.REPEAT,
@@ -187,20 +190,20 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
         },
       );
       this._crateRoughnessTexture = await Texture.fromUrl(
-        "/assets/the-whisper/diorama/crate_wood_roughness.jpg",
+        "/assets/the-whisper/diorama/crate_wood_roughness.webp",
         {
           addressModeU: TextureWrap.REPEAT,
           addressModeV: TextureWrap.REPEAT,
           flipY: true,
         },
       );
-      this._debrisTexture = await Texture.fromUrl("/assets/the-whisper/diorama/debris_pile.jpg", {
+      this._debrisTexture = await Texture.fromUrl("/assets/the-whisper/diorama/debris_pile.webp", {
         addressModeU: TextureWrap.REPEAT,
         addressModeV: TextureWrap.REPEAT,
         flipY: true,
       });
       this._debrisNormalTexture = await Texture.fromUrl(
-        "/assets/the-whisper/diorama/debris_pile_normal.jpg",
+        "/assets/the-whisper/diorama/debris_pile_normal.webp",
         {
           addressModeU: TextureWrap.REPEAT,
           addressModeV: TextureWrap.REPEAT,
@@ -208,7 +211,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
         },
       );
       this._debrisRoughnessTexture = await Texture.fromUrl(
-        "/assets/the-whisper/diorama/debris_pile_roughness.jpg",
+        "/assets/the-whisper/diorama/debris_pile_roughness.webp",
         {
           addressModeU: TextureWrap.REPEAT,
           addressModeV: TextureWrap.REPEAT,
