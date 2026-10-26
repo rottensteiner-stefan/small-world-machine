@@ -221,10 +221,13 @@ class Showcase44 extends AbstractShowcase {
       return;
     }
     this._installDrawCounter(gl);
-    this._state = "warmup";
-    this._writeStatus(`ready autoInstancing=${this._instancingOn} objects=${this._count}`);
 
-    if (!this._isAutomatedTest) {
+    // The #__measure overlay and its MEASURE sequence belong to the headless rig (?frames / ?measure);
+    // the interactive lab shows its live numbers in the HUD instead.
+    if (this._isAutomatedTest) {
+      this._state = "warmup";
+      this._writeStatus(`ready autoInstancing=${this._instancingOn} objects=${this._count}`);
+    } else {
       this._createHud();
     }
   }
