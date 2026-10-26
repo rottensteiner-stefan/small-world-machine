@@ -1,5 +1,6 @@
 import { AbstractMaterial } from "../AbstractMaterial.js";
 import type { Color } from "../../colors/index.js";
+import type { Texture } from "../../textures/index.js";
 import { ShaderPropertyType } from "../../../enums/index.js";
 import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
 import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
@@ -10,7 +11,7 @@ import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
  * `*MaterialOptions` interface with material-specific field names/defaults and map them onto
  * this shape before calling `super()`.
  */
-export interface LiquidWaveMaterialInit {
+export interface LiquidWaveMaterialInit extends LiquidReflectionConfig {
   color: Color;
   deepWaterColor: Color;
   edgeColor: Color;
@@ -34,6 +35,16 @@ export interface LiquidWaveMaterialInit {
    * @domain reference domain size of the water surface in meters (>0); reciprocal of a node's scale keeps the look scale-invariant (length lanes divide).
    */
   domainScale?: number;
+}
+
+/** Planar-reflection options every wave-displaced liquid preset exposes; see the matching fields on {@link LiquidWaveMaterial}. */
+export interface LiquidReflectionConfig {
+  /** See {@link LiquidWaveMaterial.reflectionMap}. */
+  reflectionMap?: Texture | undefined;
+  /** See {@link LiquidWaveMaterial.reflectionStrength}. */
+  reflectionStrength?: number | undefined;
+  /** See {@link LiquidWaveMaterial.reflectionDistortion}. */
+  reflectionDistortion?: number | undefined;
 }
 
 /**
@@ -69,6 +80,26 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
    * @domain reference domain size of the water surface in meters (>0); reciprocal of a node's scale keeps the look scale-invariant.
    */
   public domainScale: number = 1.0;
+  /**
+   * Live mirror image of the scene above the water, normally `PlanarReflectionNode.renderTarget`
+   * (put the water mesh into the node's `excludedObjects`). The wave normal bends the lookup and
+   * Fresnel weights it, replacing the constant sky tint. Undefined keeps the sky tint.
+   */
+  public reflectionMap: Texture | undefined;
+  /**
+   * How much of the Fresnel-weighted mirror image reaches the surface; 0 turns the reflection off
+   * even with a `reflectionMap`.
+   * @domain 0..1 multiplier of the Fresnel reflectance; 1 = physically weighted mirror.
+   */
+  public reflectionStrength: number;
+  /**
+   * How far the wave normal's horizontal slope shifts the mirror lookup, in screen UV per unit of
+   * slope.
+   * @domain screen-UV offset per unit of normal slope (>=0); larger = more wobbly reflection.
+   */
+  public reflectionDistortion: number;
+  /** The `u_matParam9` lane: `[reflectionStrength (0 without a map), reflectionDistortion, 0, 0]`. */
+  protected readonly _matParam9Array: number[] = [0, 0, 0, 0];
   /** The `u_styleA` lane in the manifest. Presets own its meaning (see the lane table in docs/guides/liquid-wave-data-model.md). */
   protected readonly _styleAArray: number[] = [0, 0, 0, 0];
   /** The `u_matParam2` lane: `[foamCutoff, foamNoiseScale, foamNoiseSpeed, <preset lane>]`; `w` is free for presets. */
@@ -113,6 +144,9 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
     this.foamNoiseScale = init.foamNoiseScale;
     this.foamNoiseSpeed = init.foamNoiseSpeed;
     this.domainScale = init.domainScale ?? 1.0;
+    this.reflectionMap = init.reflectionMap;
+    this.reflectionStrength = init.reflectionStrength ?? 1.0;
+    this.reflectionDistortion = init.reflectionDistortion ?? 0.1;
 
     this.transparent = true;
     this.depthWrite = false;
@@ -193,6 +227,13 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
     props["u_reflectivity"] = this.speed;
     props["u_time"] = this.time;
 
+    // The strength lane doubles as the "has a mirror" switch, so a map-less water never samples.
+    this._renderManifest.textures["u_reflectionMap"] = this.reflectionMap;
+    const mirror = this._matParam9Array;
+    mirror[0] = this.reflectionMap ? this.reflectionStrength : 0;
+    mirror[1] = this.reflectionDistortion;
+    props["u_matParam9"] = mirror;
+
     const mp0 = props["u_matParam0"] as number[] | undefined;
     if (mp0) {
       mp0[0] = this.waterAbsorption[0];
@@ -228,6 +269,7 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
         textures: {
           u_opaqueDepthMap: { type: ShaderPropertyType.TEXTURE },
           u_opaqueMap: { type: ShaderPropertyType.TEXTURE },
+          u_reflectionMap: { type: ShaderPropertyType.TEXTURE },
           // Optional ramp LUT (StylizedWater only; OpenWater ignores it). Must be declared unconditionally:
           // WGSL counts bindings syntactically, so the layout entry cannot depend on the flag.
           u_rampMap: { type: ShaderPropertyType.TEXTURE },

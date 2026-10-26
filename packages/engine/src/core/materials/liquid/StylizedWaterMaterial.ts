@@ -4,7 +4,7 @@ import vertGLSL from "./shaders/StylizedWater.vert.glsl?raw";
 import fragGLSL from "./shaders/StylizedWater.frag.glsl?raw";
 import vertGLSL100 from "./shaders/StylizedWater.vert.glsl100?raw";
 import fragGLSL100 from "./shaders/StylizedWater.frag.glsl100?raw";
-import { LiquidWaveMaterial } from "./LiquidWaveMaterial.js";
+import { LiquidWaveMaterial, type LiquidReflectionConfig } from "./LiquidWaveMaterial.js";
 import { Color } from "../../colors/index.js";
 import { MaterialType } from "../../../enums/index.js";
 import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
@@ -41,7 +41,7 @@ export function composeStylizedWaterSources(
   };
 }
 
-export interface StylizedWaterMaterialOptions {
+export interface StylizedWaterMaterialOptions extends LiquidReflectionConfig {
   shallowWaterColor?: Color;
   deepWaterColor?: Color;
   edgeColor?: Color;
@@ -281,6 +281,9 @@ export class StylizedWaterMaterial extends LiquidWaveMaterial {
       foamNoiseScale,
       foamNoiseSpeed,
       domainScale,
+      reflectionMap: options.reflectionMap,
+      reflectionStrength: options.reflectionStrength,
+      reflectionDistortion: options.reflectionDistortion,
     });
 
     this.causticStrength = causticStrength;

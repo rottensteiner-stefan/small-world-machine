@@ -33,6 +33,9 @@ void main() {
   vec3 finalColor = finalLight * albedo + specular * sRGBToLinear(u_specColor.rgb);
   
   finalColor *= u_exposure;
+  if (u_gamma != 1.0) {
+    finalColor = finalColor / (finalColor + vec3(1.0)); // Reinhard (the post-process pass tone-maps otherwise)
+  }
   finalColor = linearToSRGB(finalColor);
 
   fragColor = vec4(finalColor, u_color.a * texColor.a);

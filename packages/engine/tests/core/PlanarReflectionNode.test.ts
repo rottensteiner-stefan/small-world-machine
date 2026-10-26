@@ -177,3 +177,69 @@ describe("PlanarReflectionNode", () => {
     });
   });
 });
+
+describe("PlanarReflectionNode oblique clipping", () => {
+  /** Distance of `p` from the near plane in the view-projection `vp` (clip z + w): >= 0 is kept. */
+  function nearDistance(vp: Float32Array, p: [number, number, number]): number {
+    const row = (r: number): number =>
+      vp[r]! * p[0] + vp[4 + r]! * p[1] + vp[8 + r]! * p[2] + vp[12 + r]!;
+    return row(2) + row(3);
+  }
+
+  function reflect(clipBelowPlane: boolean, clipPlaneOffset = 0): Float32Array {
+    const node = new PlanarReflectionNode("Water", 64, 64);
+    node.clipBelowPlane = clipBelowPlane;
+    node.clipPlaneOffset = clipPlaneOffset;
+    node.updateMatrixWorld();
+    const camera = new Camera(new PerspectiveProjection());
+    camera.position.set(0, 5, 10);
+    camera.updateViewMatrix();
+    let captured = new Float32Array(16);
+    const renderer = {
+      activeRenderTarget: null,
+      activeCubeFace: undefined,
+      setRenderTarget: vi.fn(),
+      render: vi.fn((_scene: Scene, vp: Float32Array) => {
+        captured = Float32Array.from(vp);
+      }),
+    } as unknown as Renderer;
+    node.updateReflection(new Scene(), camera, renderer);
+    return captured;
+  }
+
+  it("keeps geometry above the plane and cuts geometry below it", () => {
+    const vp = reflect(true);
+    expect(nearDistance(vp, [0, 1, 0])).toBeGreaterThan(0);
+    expect(nearDistance(vp, [0, -1, 0])).toBeLessThan(0);
+  });
+
+  it("puts a point on the plane on the near plane", () => {
+    expect(nearDistance(reflect(true), [2, 0, -3])).toBeCloseTo(0, 4);
+  });
+
+  it("clipPlaneOffset moves the clip plane along the normal", () => {
+    const vp = reflect(true, -0.5);
+    expect(nearDistance(vp, [0, -0.25, 0])).toBeGreaterThan(0);
+    expect(nearDistance(vp, [0, -0.75, 0])).toBeLessThan(0);
+  });
+
+  it("renders the unclipped scene when clipBelowPlane is false", () => {
+    expect(nearDistance(reflect(false), [0, -1, 0])).toBeGreaterThan(0);
+  });
+
+  it("leaves the (shared) projection of the main camera untouched", () => {
+    const node = new PlanarReflectionNode("Water", 64, 64);
+    node.updateMatrixWorld();
+    const projection = new PerspectiveProjection();
+    const camera = new Camera(projection);
+    camera.position.set(0, 5, 10);
+    camera.updateViewMatrix();
+    const before = Float32Array.from(projection.getMatrix().data);
+    node.updateReflection(new Scene(), camera, {
+      activeRenderTarget: null,
+      setRenderTarget: vi.fn(),
+      render: vi.fn(),
+    } as unknown as Renderer);
+    expect(Array.from(projection.getMatrix().data)).toEqual(Array.from(before));
+  });
+});

@@ -16,8 +16,10 @@ uniform vec4 u_matParam6; // [edgeColor.rgb, edgeSoftness] (ADR 0027 / 0039 sema
 uniform vec4 u_matParam0; // [waterAbsorption.rgb, refractionStrength]
 uniform vec4 u_matParam1; // [foamColor.rgb, foamDistance]
 uniform vec4 u_matParam2; // [foamCutoff, foamNoiseScale, foamNoiseSpeed, poolHalfExtent (vertex stage)]
+uniform vec4 u_matParam9; // [reflectionStrength (0 = no mirror), reflectionDistortion, 0, 0] (LiquidWaveMaterial lane)
 uniform float u_time;
 uniform sampler2D u_opaqueMap;
+uniform sampler2D u_reflectionMap;
 
 [LIQUID_WORLEY_NOISE]
 
@@ -62,8 +64,16 @@ void main() {
     vec3 underwaterLighting = tintedSeabed * transmittance + inScatterCol * (1.0 - transmittance);
     vec3 baseColor = mix(deepWaterColor, underwaterLighting, transmittance);
 
-    vec3 skyColor = vec3(0.6, 0.8, 1.0);
-    baseColor = mix(baseColor, skyColor, fresnel * 0.5);
+    if (u_matParam9.x > 0.0) {
+        // Planar reflection (PlanarReflectionNode): the wave slope bends the lookup, Schlick with the
+        // water F0 of 0.02 weights it. It replaces the sky tint.
+        vec2 mirrorUv = clamp(screenUv + v_normal.xz * u_matParam9.y, vec2(0.001), vec2(0.999));
+        vec3 mirror = pow(texture2D(u_reflectionMap, mirrorUv).rgb, vec3(2.2));
+        baseColor = mix(baseColor, mirror, (0.02 + 0.98 * fresnel) * u_matParam9.x);
+    } else {
+        vec3 skyColor = vec3(0.6, 0.8, 1.0);
+        baseColor = mix(baseColor, skyColor, fresnel * 0.5);
+    }
 
     vec3 lightDir = normalize(u_dirLightDir);
     vec3 halfVector = normalize(lightDir + viewDir);

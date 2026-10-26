@@ -62,3 +62,8 @@ Upgraded the flat ground plane to full PBR lighting and 3D silhouette foliage:
 
 ### 2026-10-25 (WebGL2: PCSS-Schatten auf Flüssigkeiten)
 - Die Liquid-Shader (`dir_shadow.glsl`, eigener Header) nutzen unter WebGL2 jetzt dieselbe PCSS-Funktion wie die Standard-Materialien (Chunk `DIR_PCSS`, ADR 0006) statt festem 3×3-PCF. `quality.shadowSoftness`/`shadowMaxPcfRadius` wirken damit auch auf Schatten auf Wasseroberflächen. Live geprüft: alle 12 Flüssigkeiten rendern unter WebGL2, Konsole fehlerfrei.
+
+### 2026-10-26 (Planar-Reflexion auf Wasser)
+- Alle OpenWater- und StylizedWater-Becken (Noir ausgenommen) spiegeln die Szene über **einen** gemeinsamen `PlanarReflectionNode` auf `LIQUID_Y` (alle Becken teilen die Ebene); die Flächen aller Becken stehen in `excludedObjects`. Der Node schneidet per schräger Near-Plane alles unter Wasserlinie − 0,15 m ab (`REFLECTION_CLIP_DEPTH`): Beckenböden (−1,35 m) fallen raus, Gras und Randsteine bleiben.
+- `?reflection=0|1` erzwingt aus/an; ohne Parameter an, im Golden-Modus aus (die Baselines kennen die Spiegelung nicht, Golden-Aufnahmen bleiben pixelgleich). `?__golden=<pool>&__goldenView=oblique&reflection=1` liefert eine deterministische Nahaufnahme zur Sichtprüfung.
+- Live geprüft auf WebGPU, WebGL2, WebGL1 (Kiste, Ball, Fass und Himmel spiegeln sich unter der Wasserlinie, Orientierung stimmt). Kosten: eine zweite Szenen-Pass pro Frame.

@@ -76,7 +76,9 @@ void main() {
     vec3 color = ambient + Lo + finalRefraction * kD_refr;
     
     color *= u_exposure;
-    color = color / (color + vec3(1.0));
+    if (u_gamma != 1.0) {
+        color = color / (color + vec3(1.0)); // Reinhard (the post-process pass tone-maps otherwise)
+    }
     color = linearToSRGB(color);
     
     [FOG_CALC]

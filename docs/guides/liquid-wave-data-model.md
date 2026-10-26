@@ -164,6 +164,17 @@ Route (a) of ADR 0026 (Ramp-LUT statt weiterer Uniform-Lanes; die Moat-Kapazitä
 - `quality.disableTextures` turns every texture white, so the renderers drop `USE_RAMP_LUT` (`resolveManifestFlags`) and the built-in depth-to-colour blend is used instead.
 - WebGPU: `u_rampMap` always occupies binding 18 (white fallback when unset); OpenWater ignores it.
 
+### 5.2 Planar reflection (`LiquidWaveMaterial.reflectionMap`)
+
+OpenWater and StylizedWater can mirror the scene. Pass the render target of a `PlanarReflectionNode` as `reflectionMap`, place the node on the water plane, add the water meshes to its `excludedObjects`, and call `node.updateReflection(scene, camera, renderer)` once per frame (Showcase 10 does this for all pools at once: they share one plane, so one mirror pass serves them all).
+
+- **Lookup:** the water position is projected with the main camera's view-projection (screen UV); the wave normal's horizontal slope shifts it by `reflectionDistortion` (screen UV per unit of slope, default 0.1). WGSL flips Y, as `Standard` and `RainPuddle` do.
+- **Weight:** Schlick Fresnel with the water F0 of 0.02, times `reflectionStrength` (0..1, default 1). The mirror replaces the constant sky tint; without a map (or with strength 0) the shader output is unchanged and nothing is sampled.
+- **Clipping:** `PlanarReflectionNode.clipBelowPlane` (default on) cuts everything below the plane out of the mirror pass (oblique near plane, Lengyel 2004). Without it a pool floor would hide the reflection. `clipPlaneOffset` lowers the plane (meters, negative = down) so geometry just below a wavy surface, such as the grass around a pool, stays.
+- **Exposure:** the mirror pass is already exposed, so the shaders divide `u_exposure` out of the sample before the common exposure step. WebGL1 has no exposure step and decodes with a fixed 2.2.
+- **Lanes:** `u_matParam9 = [strength (0 without a map), distortion, 0, 0]` is owned by `LiquidWaveMaterial`; `u_reflectionMap` is declared in the layout of every `LiquidWaveMaterial` (WebGPU binding 15).
+- **Not covered:** the mirror shows rasterised geometry only (no water-on-water, no refraction of the reflected scene) and costs a second scene pass, so it is opt-in per material.
+
 ---
 
 ## 6. Architectural Guardrails & Invariants

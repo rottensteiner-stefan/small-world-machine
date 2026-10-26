@@ -22,6 +22,7 @@ import {
   Object3D,
   OpenWaterMaterial,
   OpenWaterSurfaceProbe,
+  PlanarReflectionNode,
   Plane,
   PointLight,
   RendererType,
@@ -78,6 +79,8 @@ const BUOYANCY_BODIES: ReadonlyArray<readonly [PropSpec, number, number, number]
 ];
 const BUOYANCY_BODY_DROP_HEIGHT = 0.8;
 
+/** Distance below the water line (m) down to which the mirror image still shows geometry. */
+const REFLECTION_CLIP_DEPTH = 0.15;
 const LAVA_LIGHT_INTENSITY_BASE = 4.5;
 const LAVA_LIGHT_INTENSITY_PULSE = 5.0;
 const LAVA_LIGHT_GREEN_BASE = 0.4;
@@ -121,6 +124,8 @@ export class Showcase10 extends AbstractShowcase {
     position: Vector3D;
     rotation: Vector3D;
   }> = [];
+  /** One mirror for all water pools: they share the plane `LIQUID_Y`. Absent in golden mode, whose baselines predate it. */
+  private _reflection: PlanarReflectionNode | undefined;
   private _golden: GoldenSpec | undefined;
   private _goldenCapture: GoldenCapture | undefined;
   /** Random source of the procedural tile textures; seeded in golden mode. */
@@ -317,10 +322,28 @@ export class Showcase10 extends AbstractShowcase {
     ]);
     const props = new PoolProps({ hazard, oil, chemical });
 
+    // `?reflection=0|1` forces it; unset it is on, except in golden mode (baselines predate it).
+    const reflectionParam = new URLSearchParams(window.location.search).get("reflection");
+    if ("1" === reflectionParam || (null === reflectionParam && undefined === this._golden)) {
+      this._reflection = new PlanarReflectionNode("PoolReflection", 1024, 1024);
+      this._reflection.position.set(0, LIQUID_Y, 0);
+      // The grass and curbs sit just below the water line; only the pool floors (-1.35 m) must go.
+      this._reflection.clipPlaneOffset = -REFLECTION_CLIP_DEPTH;
+      this.scene.add(this._reflection);
+    }
+
     this._noirPosition = poolWorldPosition("noir-graphic");
     const stylizedWaters: Record<string, StylizedWaterMaterial> = {};
     for (const preset of POOL_PRESETS) {
       const liquid = preset.createLiquid(assets);
+      // Noir water is a monochrome graphic style: a coloured mirror would break it.
+      if (
+        this._reflection &&
+        (liquid instanceof OpenWaterMaterial ||
+          (liquid instanceof StylizedWaterMaterial && !(liquid instanceof NoirWaterMaterial)))
+      ) {
+        liquid.reflectionMap = this._reflection.renderTarget;
+      }
       const built = this._buildPool(preset, liquid, tiles[preset.tiles], props);
       if (liquid instanceof StylizedWaterMaterial) stylizedWaters[preset.key] = liquid;
       if (liquid instanceof NoirWaterMaterial) {
@@ -758,6 +781,8 @@ export class Showcase10 extends AbstractShowcase {
     liquidObj.material = liquid;
     liquidObj.position.set(0, LIQUID_Y, 0);
     pool.add(liquidObj);
+    // Every surface sits in the mirror plane, so none may show up in the mirror image.
+    this._reflection?.excludedObjects.push(liquidObj);
     this._liquids.push(liquid);
 
     // Objects resting on the pool floor
@@ -853,6 +878,8 @@ export class Showcase10 extends AbstractShowcase {
     for (const liquid of this._liquids) {
       liquid.time = this._time;
     }
+
+    this._reflection?.updateReflection(this.scene, this.camera, this.renderer);
 
     if (this._lavaLight) {
       const pulse = Math.sin(this._time * this._lightPulseSpeed) * 0.5 + 0.5;

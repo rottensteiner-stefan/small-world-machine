@@ -57,8 +57,21 @@
 
     let viewDir = normalize(global.viewPos.xyz - i.wp);
     let fresnel = pow(1.0 - saturate(dot(i.n, viewDir)), 5.0);
-    let skyColor = vec3<f32>(0.6, 0.8, 1.0);
-    baseColor = mix(baseColor, skyColor, fresnel * 0.5);
+    if (obj.matParam9.x > 0.0) {
+        // Planar reflection (PlanarReflectionNode): the wave slope bends the lookup, Schlick with the
+        // water F0 of 0.02 weights it. It replaces the sky tint. The mirror pass is already exposed
+        // and the exposure is applied once more below, so it is divided out here.
+        let mirrorClip = global.vp * vec4<f32>(i.wp, 1.0);
+        let mirrorNdc = mirrorClip.xy / mirrorClip.w;
+        let mirrorUv = clamp(
+            vec2<f32>(mirrorNdc.x * 0.5 + 0.5, mirrorNdc.y * -0.5 + 0.5) + vec2<f32>(i.n.x, -i.n.z) * obj.matParam9.y,
+            vec2<f32>(0.001), vec2<f32>(0.999));
+        let mirror = targetToLinear(textureSampleLevel(u_reflectionMap, s, mirrorUv, 0.0).rgb) / max(global.exposure, 0.001);
+        baseColor = mix(baseColor, mirror, (0.02 + 0.98 * fresnel) * obj.matParam9.x);
+    } else {
+        let skyColor = vec3<f32>(0.6, 0.8, 1.0);
+        baseColor = mix(baseColor, skyColor, fresnel * 0.5);
+    }
 
     let lightDir = normalize(global.dirLightDir.xyz);
     let halfVector = normalize(lightDir + viewDir);

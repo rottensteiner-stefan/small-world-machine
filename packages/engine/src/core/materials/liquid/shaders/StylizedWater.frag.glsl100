@@ -21,8 +21,10 @@ uniform vec4 u_matParam1; // [foamColor.rgb, foamDistance]
 uniform vec4 u_matParam2; // [foamCutoff, foamNoiseScale, foamNoiseSpeed, unused]
 uniform vec4 u_styleA;
 uniform vec4 u_styleB;
+uniform vec4 u_matParam9; // [reflectionStrength (0 = no mirror), reflectionDistortion, 0, 0] (LiquidWaveMaterial lane)
 uniform float u_time;
 uniform sampler2D u_opaqueMap;
+uniform sampler2D u_reflectionMap;
 #ifdef USE_RAMP_LUT
 uniform sampler2D u_rampMap;
 #endif
@@ -130,9 +132,17 @@ void main() {
     }
 #endif
 
-    vec3 skyColor = vec3(0.65, 0.85, 1.0);
-    float skyFactor = (u_styleB.w > 0.5) ? u_styleB.y : 0.45;
-    baseColor = mix(baseColor, skyColor, fresnel * skyFactor);
+    if (u_matParam9.x > 0.0) {
+        // Planar reflection (PlanarReflectionNode): the wave slope bends the lookup, Schlick with the
+        // water F0 of 0.02 weights it. It replaces the sky tint.
+        vec2 mirrorUv = clamp(screenUv + v_normal.xz * u_matParam9.y, vec2(0.001), vec2(0.999));
+        vec3 mirror = pow(texture2D(u_reflectionMap, mirrorUv).rgb, vec3(2.2));
+        baseColor = mix(baseColor, mirror, (0.02 + 0.98 * fresnel) * u_matParam9.x);
+    } else {
+        vec3 skyColor = vec3(0.65, 0.85, 1.0);
+        float skyFactor = (u_styleB.w > 0.5) ? u_styleB.y : 0.45;
+        baseColor = mix(baseColor, skyColor, fresnel * skyFactor);
+    }
 
     vec3 lightDir = normalize(u_dirLightDir);
     vec3 halfVector = normalize(lightDir + viewDir);

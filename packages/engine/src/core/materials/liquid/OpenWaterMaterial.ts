@@ -4,12 +4,12 @@ import vertGLSL from "./shaders/OpenWater.vert.glsl?raw";
 import fragGLSL from "./shaders/OpenWater.frag.glsl?raw";
 import vertGLSL100 from "./shaders/OpenWater.vert.glsl100?raw";
 import fragGLSL100 from "./shaders/OpenWater.frag.glsl100?raw";
-import { LiquidWaveMaterial } from "./LiquidWaveMaterial.js";
+import { LiquidWaveMaterial, type LiquidReflectionConfig } from "./LiquidWaveMaterial.js";
 import { Color } from "../../colors/index.js";
 import { MaterialType } from "../../../enums/index.js";
 import type { ShaderDefinition } from "../../../renderers/shaders/index.js";
 
-export interface OpenWaterMaterialOptions {
+export interface OpenWaterMaterialOptions extends LiquidReflectionConfig {
   waterColor?: Color;
   deepWaterColor?: Color;
   edgeColor?: Color;
@@ -86,6 +86,9 @@ export class OpenWaterMaterial extends LiquidWaveMaterial {
       foamNoiseSpeed = 0.5,
       poolHalfExtent = 4.0,
       domainScale = 1.0,
+      reflectionMap,
+      reflectionStrength,
+      reflectionDistortion,
     } = options;
 
     super(MaterialType.OPEN_WATER, {
@@ -105,6 +108,9 @@ export class OpenWaterMaterial extends LiquidWaveMaterial {
       foamNoiseScale,
       foamNoiseSpeed,
       domainScale,
+      reflectionMap,
+      reflectionStrength,
+      reflectionDistortion,
     });
     this.poolHalfExtent = poolHalfExtent;
   }

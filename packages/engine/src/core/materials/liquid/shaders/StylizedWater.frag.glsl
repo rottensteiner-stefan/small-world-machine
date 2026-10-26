@@ -15,6 +15,7 @@ uniform vec4 u_specColor;      // Deep water color (RGBA)
 uniform vec4 u_matParam6;      // [edgeColor.rgb, edgeSoftness]
 uniform vec4 u_matParam7;      // [specularStrength, 0, 0, 0]
 uniform vec4 u_matParam8;      // R5 owned depth lane [refrDepth, depthCut, causticsMaxDepth, rampEnd] ÷ ds
+uniform vec4 u_matParam9;      // [reflectionStrength (0 = no mirror), reflectionDistortion, 0, 0] (LiquidWaveMaterial lane)
 // Dedicated material parameter bank (512-byte layout slots)
 uniform vec4 u_matParam0;         // [waterAbsorption.rgb, refractionStrength]
 uniform vec4 u_matParam1;         // [foamColor.rgb, foamDistance]
@@ -24,6 +25,7 @@ uniform vec4 u_styleB;             // [foamSoftness, skyTint, glitterStrength, s
 uniform float u_time;
 uniform sampler2D u_opaqueDepthMap;
 uniform sampler2D u_opaqueMap;
+uniform sampler2D u_reflectionMap;
 #ifdef USE_RAMP_LUT
 uniform sampler2D u_rampMap;
 #endif
@@ -178,9 +180,19 @@ void main() {
     // 6. Fresnel & Specular + Star Glints
     vec3 camDir = normalize(u_viewPos - v_worldPos);
     float fresnel = pow(1.0 - clamp(dot(v_normal, camDir), 0.0, 1.0), 4.0);
-    vec3 skyColor = vec3(0.65, 0.85, 1.0);
-    float skyFactor = (u_styleB.w > 0.5) ? u_styleB.y : 0.45;
-    surfaceColor = mix(surfaceColor, skyColor, fresnel * skyFactor);
+    if (u_matParam9.x > 0.0) {
+        // Planar reflection (PlanarReflectionNode): the wave slope bends the lookup, Schlick with the
+        // water F0 of 0.02 weights it. It replaces the sky tint. The mirror pass is already exposed
+        // and u_exposure is applied once more below, so it is divided out here.
+        vec4 mirrorClip = u_vp * vec4(v_worldPos, 1.0);
+        vec2 mirrorUv = clamp(mirrorClip.xy / mirrorClip.w * 0.5 + 0.5 + v_normal.xz * u_matParam9.y, vec2(0.001), vec2(0.999));
+        vec3 mirror = targetToLinear(texture(u_reflectionMap, mirrorUv).rgb) / max(u_exposure, 0.001);
+        surfaceColor = mix(surfaceColor, mirror, (0.02 + 0.98 * fresnel) * u_matParam9.x);
+    } else {
+        vec3 skyColor = vec3(0.65, 0.85, 1.0);
+        float skyFactor = (u_styleB.w > 0.5) ? u_styleB.y : 0.45;
+        surfaceColor = mix(surfaceColor, skyColor, fresnel * skyFactor);
+    }
 
     vec3 lightDir = normalize(u_dirLightDir);
     vec3 halfVector = normalize(lightDir + camDir);
