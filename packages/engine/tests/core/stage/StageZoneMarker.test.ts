@@ -38,4 +38,28 @@ describe("StageZoneMarker", () => {
     copy.zone.points[0]!.u = 0.99;
     expect(marker.zone.points[0]!.u).toBe(0);
   });
+
+  it("clone() deep-clones scaleGradient configuration", () => {
+    const zone = new StageZone({
+      id: "gradient_zone",
+      name: "Gradient Zone",
+      points: [
+        { u: 0, v: 0 },
+        { u: 1, v: 0 },
+        { u: 1, v: 1 },
+      ],
+      scaleGradient: {
+        mode: "linear",
+        start: { u: 0.5, v: 1.0, scale: 1.0 },
+        end: { u: 0.5, v: 0.0, scale: 0.3 },
+      },
+      useScaleGradient: true,
+    });
+    const marker = new StageZoneMarker(zone);
+    const copy = marker.clone();
+
+    expect(copy.zone.scaleGradient).toEqual(zone.scaleGradient);
+    expect(copy.zone.scaleGradient).not.toBe(zone.scaleGradient);
+    expect(copy.zone.useScaleGradient).toBe(true);
+  });
 });

@@ -1,4 +1,5 @@
 import type { SwmDecalPayload } from "../kit/DecalShell.js";
+import type { StageScaleGradient } from "../../core/stage/StageZone.js";
 
 /**
  * Minimal glTF 2.0 JSON document shape `WorldWriter` produces -- deliberately not the full spec,
@@ -34,7 +35,12 @@ export interface GltfNodeJson {
     SWM_lights_ambient?: { color: number[]; intensity: number };
     SWM_prefab_instance?: { source: string };
     SWM_decal?: SwmDecalPayload;
-    SWM_stage_zone?: { displayName?: string; points: { u: number; v: number; scale: number }[] };
+    SWM_stage_zone?: {
+      displayName?: string;
+      points: { u: number; v: number; scale: number }[];
+      scaleGradient?: StageScaleGradient;
+      useScaleGradient?: boolean;
+    };
   };
 }
 

@@ -238,6 +238,35 @@ describe("WorldWriter <-> GltfLoader round trip", () => {
     expect(parsedMarker.zone.points).toEqual(marker.zone.points);
   });
 
+  it("round-trips a StageZoneMarker with scaleGradient and useScaleGradient via SWM_stage_zone", async () => {
+    const marker = new StageZoneMarker(
+      new StageZone({
+        id: "zone_gradient",
+        name: "Gradient Stage Zone",
+        points: [
+          { u: 0.1, v: 0.1 },
+          { u: 0.9, v: 0.1 },
+          { u: 0.8, v: 0.9 },
+          { u: 0.2, v: 0.9 },
+        ],
+        scaleGradient: {
+          mode: "linear",
+          start: { u: 0.5, v: 0.9, scale: 1.0 },
+          end: { u: 0.5, v: 0.1, scale: 0.2 },
+        },
+        useScaleGradient: true,
+      }),
+    );
+
+    const doc = new WorldWriter().writeSingle(marker);
+    const parsedRoot = await parseDocument(doc);
+    const parsedMarker = parsedRoot.children[0]! as StageZoneMarker;
+
+    expect(parsedMarker.zone.id).toBe("zone_gradient");
+    expect(parsedMarker.zone.scaleGradient).toEqual(marker.zone.scaleGradient);
+    expect(parsedMarker.zone.useScaleGradient).toBe(true);
+  });
+
   it("round-trips directional, spot and ambient lights", async () => {
     const sun = new DirectionalLight({
       name: "SunLight",

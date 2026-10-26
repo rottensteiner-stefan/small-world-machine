@@ -176,7 +176,10 @@ export class StageZoneGizmoManager {
     // Editor helper, not real scene geometry -- must read correctly from either side regardless
     // of the fan triangulation's winding order relative to a given camera angle.
     fillMat.cullMode = CullMode.NONE;
-    fill.geometry = new PolygonFan({ points: worldPoints }).getGeometryData();
+    fill.geometry = new PolygonFan({
+      points: worldPoints,
+      indices: marker.zone.triangulationIndices,
+    }).getGeometryData();
     fill.material = fillMat;
     this.root.add(fill);
     this._fillToMarker.set(fill, marker);
@@ -230,8 +233,12 @@ export class StageZoneGizmoManager {
   private _rebuildGeometry(entry: StageZoneGizmoEntry, projection: StageUvProjection): void {
     const worldPoints = this._worldPoints(entry.marker, projection);
 
+    entry.marker.zone.retriangulate();
     entry.outline.geometry = new Polyline({ points: worldPoints, closed: true }).getGeometryData();
-    entry.fill.geometry = new PolygonFan({ points: worldPoints }).getGeometryData();
+    entry.fill.geometry = new PolygonFan({
+      points: worldPoints,
+      indices: entry.marker.zone.triangulationIndices,
+    }).getGeometryData();
 
     for (const handle of entry.handles) {
       this._handleToPoint.delete(handle);

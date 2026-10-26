@@ -11,6 +11,43 @@ export interface StagePoint2D {
 }
 
 /**
+ * Directional linear scale gradient across a stage zone.
+ */
+export interface StageLinearScaleGradient {
+  mode?: "linear";
+  /** Start anchor point in normalized image coordinates (u, v) and character scale. */
+  start: { u: number; v: number; scale: number };
+  /** End anchor point in normalized image coordinates (u, v) and character scale. */
+  end: { u: number; v: number; scale: number };
+  /** Minimum scale clamp (default: 0.01). */
+  minScale?: number;
+  /** Maximum scale clamp (default: Infinity). */
+  maxScale?: number;
+}
+
+/**
+ * Vanishing-point perspective scale gradient across a stage zone.
+ */
+export interface StageVanishingPointScaleGradient {
+  mode: "vanishing-point";
+  /** Vanishing point in normalized image coordinates (u, v) where perspective lines converge. */
+  vanishingPoint: { u: number; v: number };
+  /** Reference point in normalized image coordinates (u, v) where character scale is known. */
+  reference: { u: number; v: number; scale: number };
+  /** Target character scale at the vanishing point (default: 0). */
+  vanishingScale?: number;
+  /** Minimum scale clamp (default: 0.01). */
+  minScale?: number;
+  /** Maximum scale clamp (default: Infinity). */
+  maxScale?: number;
+}
+
+/**
+ * A continuous gradient scaling field across a 2.5D stage zone.
+ */
+export type StageScaleGradient = StageLinearScaleGradient | StageVanishingPointScaleGradient;
+
+/**
  * Configuration options for creating a StageZone.
  */
 export interface StageZoneOptions {
@@ -18,6 +55,10 @@ export interface StageZoneOptions {
   name: string;
   /** Points in order, tracing the polygon's perimeter (either winding direction). Minimum 3. */
   points: StagePoint2D[];
+  /** Optional continuous gradient scaling field across the entire zone. */
+  scaleGradient?: StageScaleGradient | undefined;
+  /** Force using scale gradient for local axes calculation even on 4-point quads (default: false). */
+  useScaleGradient?: boolean | undefined;
 }
 
 /**
@@ -25,14 +66,20 @@ export interface StageZoneOptions {
  * that image's own normalized (u, v) space -- no camera, no world coordinates, no perspective
  * reconstruction. This intentionally mirrors how classic 2.5D adventures (Grim Fandango, Monkey
  * Island) author walk masks: an artist draws a shape directly on the picture, and a small
- * per-corner `scale` fakes the size falloff a real camera would produce. There is no rectangle
- * or vanishing-point constraint on the shape -- it's exactly what you see, not a projection of
- * an assumed real-world form.
+ * per-corner `scale` or a continuous scale gradient fakes the size falloff a real camera would
+ * produce. There is no rectangle or vanishing-point constraint on the shape -- it's an arbitrary
+ * n-gon polygon decomposed into interior triangles via ear-clipping.
  */
 export class StageZone {
   public readonly id: string;
   public readonly name: string;
   public readonly points: { u: number; v: number; scale: number }[];
+  public readonly scaleGradient?: StageScaleGradient | undefined;
+  public readonly useScaleGradient: boolean;
+
+  private _triangles: [number, number, number][] = [];
+  private _triangulationIndices: number[] = [];
+  private _lastTriangulatedPointCount: number = 0;
 
   constructor(options: StageZoneOptions) {
     if (options.points.length < 3) {
@@ -42,7 +89,230 @@ export class StageZone {
     }
     this.id = options.id;
     this.name = options.name;
-    this.points = options.points.map((p) => ({ u: p.u, v: p.v, scale: p.scale ?? 1.0 }));
+    this.scaleGradient = options.scaleGradient;
+    this.useScaleGradient = options.useScaleGradient ?? false;
+
+    this.points = options.points.map((p) => {
+      let scale = p.scale;
+      if (scale === undefined) {
+        if (options.scaleGradient) {
+          scale = StageZone._evaluateGradient(p.u, p.v, options.scaleGradient);
+        } else {
+          scale = 1.0;
+        }
+      }
+      return { u: p.u, v: p.v, scale };
+    });
+
+    this.retriangulate();
+  }
+
+  /**
+   * The list of triangle vertex index triplets [i0, i1, i2] partitioning this polygon.
+   */
+  public get triangles(): readonly [number, number, number][] {
+    if (this._triangles.length === 0 || this.points.length !== this._lastTriangulatedPointCount) {
+      this.retriangulate();
+    }
+    return this._triangles;
+  }
+
+  /**
+   * Flat array of indices for direct consumption by GPU index buffers (e.g. `PolygonFan`).
+   */
+  public get triangulationIndices(): readonly number[] {
+    if (this._triangles.length === 0 || this.points.length !== this._lastTriangulatedPointCount) {
+      this.retriangulate();
+    }
+    return this._triangulationIndices;
+  }
+
+  /**
+   * Recomputes the interior triangulation of the polygon using ear clipping (or preserving the
+   * canonical 2-triangle split for convex quads).
+   */
+  public retriangulate(): void {
+    const pts = this.points;
+    const n = pts.length;
+    if (n < 3) {
+      this._triangles = [];
+      this._triangulationIndices = [];
+      this._lastTriangulatedPointCount = n;
+      return;
+    }
+
+    if (n === 3) {
+      this._triangles = [[0, 1, 2]];
+    } else if (n === 4 && this._isConvexQuad()) {
+      // Retain exact byte-identical 2-triangle fan for convex 4-point quads
+      this._triangles = [
+        [0, 1, 2],
+        [0, 2, 3],
+      ];
+    } else {
+      this._triangles = StageZone._earClip(pts);
+    }
+
+    const indices: number[] = [];
+    for (const tri of this._triangles) {
+      indices.push(tri[0], tri[1], tri[2]);
+    }
+    this._triangulationIndices = indices;
+    this._lastTriangulatedPointCount = n;
+  }
+
+  private _isConvexQuad(): boolean {
+    const pts = this.points;
+    if (pts.length !== 4) return false;
+    const p0 = pts[0]!;
+    const p1 = pts[1]!;
+    const p2 = pts[2]!;
+    const p3 = pts[3]!;
+
+    const cross = (
+      a: { u: number; v: number },
+      b: { u: number; v: number },
+      c: { u: number; v: number },
+    ): number => (b.u - a.u) * (c.v - b.v) - (b.v - a.v) * (c.u - b.u);
+
+    const c0 = cross(p3, p0, p1);
+    const c1 = cross(p0, p1, p2);
+    const c2 = cross(p1, p2, p3);
+    const c3 = cross(p2, p3, p0);
+
+    const pos = c0 > 1e-9 && c1 > 1e-9 && c2 > 1e-9 && c3 > 1e-9;
+    const neg = c0 < -1e-9 && c1 < -1e-9 && c2 < -1e-9 && c3 < -1e-9;
+    return pos || neg;
+  }
+
+  /**
+   * Ear-clips a simple 2D polygon of arbitrary point count into non-overlapping interior triangles.
+   */
+  private static _earClip(pts: readonly { u: number; v: number }[]): [number, number, number][] {
+    const n = pts.length;
+    if (n < 3) return [];
+    if (n === 3) return [[0, 1, 2]];
+
+    let area = 0;
+    for (let i = 0; i < n; i++) {
+      const p1 = pts[i]!;
+      const p2 = pts[(i + 1) % n]!;
+      area += p1.u * p2.v - p2.u * p1.v;
+    }
+    const isPositive = area > 0;
+
+    const loop: number[] = [];
+    for (let i = 0; i < n; i++) loop.push(i);
+    if (!isPositive) loop.reverse();
+
+    const triangles: [number, number, number][] = [];
+    let guard = loop.length * loop.length * 2 + 50;
+
+    while (loop.length > 3 && guard-- > 0) {
+      let earFound = false;
+      for (let i = 0; i < loop.length && !earFound; i++) {
+        const prev = loop[(i - 1 + loop.length) % loop.length]!;
+        const cur = loop[i]!;
+        const next = loop[(i + 1) % loop.length]!;
+
+        const pPrev = pts[prev]!;
+        const pCur = pts[cur]!;
+        const pNext = pts[next]!;
+
+        const crossVal =
+          (pCur.u - pPrev.u) * (pNext.v - pCur.v) - (pCur.v - pPrev.v) * (pNext.u - pCur.u);
+        if (crossVal <= 1e-9) continue;
+
+        let blocked = false;
+        for (let j = 0; j < loop.length && !blocked; j++) {
+          const v = loop[j]!;
+          if (v === prev || v === cur || v === next) continue;
+          if (StageZone._pointInTriangle(pPrev, pCur, pNext, pts[v]!)) {
+            blocked = true;
+          }
+        }
+
+        if (!blocked) {
+          triangles.push([prev, cur, next]);
+          loop.splice(i, 1);
+          earFound = true;
+        }
+      }
+
+      if (!earFound && loop.length > 3) {
+        let worst = 0;
+        let minArea = Infinity;
+        for (let i = 0; i < loop.length; i++) {
+          const prev = loop[(i - 1 + loop.length) % loop.length]!;
+          const cur = loop[i]!;
+          const next = loop[(i + 1) % loop.length]!;
+          const a = Math.abs(
+            (pts[cur]!.u - pts[prev]!.u) * (pts[next]!.v - pts[cur]!.v) -
+              (pts[cur]!.v - pts[prev]!.v) * (pts[next]!.u - pts[cur]!.u),
+          );
+          if (a < minArea) {
+            minArea = a;
+            worst = i;
+          }
+        }
+        loop.splice(worst, 1);
+      }
+    }
+
+    if (loop.length === 3) {
+      triangles.push([loop[0]!, loop[1]!, loop[2]!]);
+    }
+
+    return triangles;
+  }
+
+  private static _pointInTriangle(
+    a: { u: number; v: number },
+    b: { u: number; v: number },
+    c: { u: number; v: number },
+    p: { u: number; v: number },
+  ): boolean {
+    if (
+      (Math.abs(p.u - a.u) < 1e-9 && Math.abs(p.v - a.v) < 1e-9) ||
+      (Math.abs(p.u - b.u) < 1e-9 && Math.abs(p.v - b.v) < 1e-9) ||
+      (Math.abs(p.u - c.u) < 1e-9 && Math.abs(p.v - c.v) < 1e-9)
+    ) {
+      return false;
+    }
+    const c1 = (b.u - a.u) * (p.v - a.v) - (b.v - a.v) * (p.u - a.u);
+    const c2 = (c.u - b.u) * (p.v - b.v) - (c.v - b.v) * (p.u - b.u);
+    const c3 = (a.u - c.u) * (p.v - c.v) - (a.v - c.v) * (p.u - c.u);
+
+    return c1 >= -1e-9 && c2 >= -1e-9 && c3 >= -1e-9;
+  }
+
+  private static _evaluateGradient(u: number, v: number, gradient: StageScaleGradient): number {
+    const minScale = gradient.minScale ?? 0.01;
+    const maxScale = gradient.maxScale ?? Infinity;
+
+    if (gradient.mode === "vanishing-point") {
+      const { vanishingPoint, reference, vanishingScale = 0 } = gradient;
+      const dRefSq = (reference.u - vanishingPoint.u) ** 2 + (reference.v - vanishingPoint.v) ** 2;
+      if (dRefSq < 1e-8) {
+        return Math.max(minScale, Math.min(maxScale, reference.scale));
+      }
+      const dRef = Math.sqrt(dRefSq);
+      const dCur = Math.sqrt((u - vanishingPoint.u) ** 2 + (v - vanishingPoint.v) ** 2);
+      const t = dCur / dRef;
+      const scale = vanishingScale + t * (reference.scale - vanishingScale);
+      return Math.max(minScale, Math.min(maxScale, scale));
+    }
+
+    const { start, end } = gradient;
+    const du = end.u - start.u;
+    const dv = end.v - start.v;
+    const lenSq = du * du + dv * dv;
+    if (lenSq < 1e-8) {
+      return Math.max(minScale, Math.min(maxScale, start.scale));
+    }
+    const t = ((u - start.u) * du + (v - start.v) * dv) / lenSq;
+    const scale = start.scale + t * (end.scale - start.scale);
+    return Math.max(minScale, Math.min(maxScale, scale));
   }
 
   /**
@@ -133,22 +403,33 @@ export class StageZone {
   }
 
   /**
-   * Interpolates the character scale factor at given (u, v) coordinates using barycentric
-   * interpolation across a fan of triangles radiating from the first point (points[0], points[i],
-   * points[i+1] for i = 1..length-2) -- a quad's classic two-triangle split generalized to any
-   * polygon vertex count. Byte-identical to the pre-generalization two-triangle version for
-   * quads, since that was already exactly this fan with n=4.
+   * Interpolates the character scale factor at given (u, v) coordinates using either the
+   * continuous gradient field (if configured) or barycentric interpolation across the polygon's
+   * triangulated interior.
    */
   public getScaleAt(u: number, v: number): number {
+    if (this.scaleGradient) {
+      return StageZone._evaluateGradient(u, v, this.scaleGradient);
+    }
+
     const pts = this.points;
-    const p0 = pts[0]!;
-    for (let i = 1; i < pts.length - 1; i++) {
-      const scale = this._barycentricScale(p0, pts[i]!, pts[i + 1]!, u, v);
+    const triangles = this.triangles;
+
+    for (const [i0, i1, i2] of triangles) {
+      const scale = this._barycentricScale(pts[i0]!, pts[i1]!, pts[i2]!, u, v);
       if (scale !== null) return scale;
     }
 
-    // Fallback: average across every corner (point technically outside the polygon, e.g. a
-    // slightly-off drag or a concave shape's notch).
+    // Try clamped position on polygon boundary before falling back to flat average
+    const clamped = this.clampToPolygon(u, v);
+    if (clamped.u !== u || clamped.v !== v) {
+      for (const [i0, i1, i2] of triangles) {
+        const scale = this._barycentricScale(pts[i0]!, pts[i1]!, pts[i2]!, clamped.u, clamped.v);
+        if (scale !== null) return scale;
+      }
+    }
+
+    // Fallback: average across every corner (point outside polygon)
     let sum = 0;
     for (const p of pts) sum += p.scale;
     return sum / pts.length;
@@ -157,26 +438,48 @@ export class StageZone {
   /**
    * Derives this zone's local movement basis at a given (u, v) position: `forward` is the
    * direction in which the interpolated `scale` (see `getScaleAt`) decreases fastest -- i.e.
-   * "deeper into the painted background" -- and `right` is a 90-degree rotation of it. A zone
-   * traced onto a perspective background is rarely axis-aligned, so character input (WASD) must
-   * be mapped through this basis instead of fixed screen axes.
+   * "deeper into the painted background" -- and `right` is a 90-degree clockwise rotation in screen
+   * space (+u right, +v down). A zone traced onto a perspective background is rarely axis-aligned,
+   * so character input (WASD) must be mapped through this basis instead of fixed screen axes.
    *
-   * Every zone shipped today has exactly 4 points, so this keeps the original corner-pair basis
-   * (forward from edge P0-P1 toward P3-P2, right from edge P0-P3 toward P1-P2) byte-identical for
-   * that case -- it predates and is independent of `scale`, so switching quads to a
-   * gradient-based basis would silently change the movement feel of every existing scene. Polygons
-   * with a different vertex count use the new scale-gradient basis, computed from the same fan
-   * triangulation `getScaleAt` uses; a degenerate or near-zero gradient (e.g. a uniformly-scaled
-   * zone) falls back to a fixed basis -- no current content exercises this path since only 4-point
-   * zones exist in production today.
+   * For existing 4-point quads without an explicit `scaleGradient` or `useScaleGradient: true`,
+   * this retains the legacy corner-pair basis (forward from edge P0-P1 toward P3-P2, right from
+   * edge P0-P3 toward P1-P2) for byte-identical behavior across existing scenes. Polygons with
+   * n!=4 or explicit gradient configuration derive their axes directly from the continuous scale
+   * gradient field or the local triangle gradient.
    */
   public getLocalAxes(
     u: number,
     v: number,
   ): { forward: { u: number; v: number }; right: { u: number; v: number } } {
+    if (this.scaleGradient) {
+      if (this.scaleGradient.mode === "vanishing-point") {
+        const { vanishingPoint, reference, vanishingScale = 0 } = this.scaleGradient;
+        const ds = reference.scale - vanishingScale;
+        const toVpU = vanishingPoint.u - u;
+        const toVpV = vanishingPoint.v - v;
+        const dir = ds >= 0 ? 1 : -1;
+        const forward = StageZone._normalize2D(dir * toVpU, dir * toVpV, 0, -1);
+        return { forward, right: { u: -forward.v, v: forward.u } };
+      }
+
+      const { start, end } = this.scaleGradient;
+      const du = end.u - start.u;
+      const dv = end.v - start.v;
+      const ds = end.scale - start.scale;
+      if (Math.abs(ds) > 1e-5 && du * du + dv * dv > 1e-8) {
+        // ds < 0 means scale decreases from start to end -> forward is (du, dv)
+        // ds > 0 means scale decreases from end to start -> forward is (-du, -dv)
+        const dir = ds < 0 ? 1 : -1;
+        const forward = StageZone._normalize2D(dir * du, dir * dv, 0, -1);
+        return { forward, right: { u: -forward.v, v: forward.u } };
+      }
+      return { forward: { u: 0, v: -1 }, right: { u: 1, v: 0 } };
+    }
+
     const pts = this.points;
 
-    if (pts.length === 4) {
+    if (pts.length === 4 && !this.useScaleGradient) {
       const [p0, p1, p2, p3] = pts as [
         { u: number; v: number; scale: number },
         { u: number; v: number; scale: number },
@@ -194,12 +497,29 @@ export class StageZone {
       };
     }
 
-    const p0 = pts[0]!;
-    for (let i = 1; i < pts.length - 1; i++) {
-      const gradient = this._gradientForTriangle(p0, pts[i]!, pts[i + 1]!, u, v);
+    const triangles = this.triangles;
+    for (const [i0, i1, i2] of triangles) {
+      const gradient = this._gradientForTriangle(pts[i0]!, pts[i1]!, pts[i2]!, u, v);
       if (gradient) {
         const forward = StageZone._normalize2D(-gradient.gu, -gradient.gv, 0, -1);
-        return { forward, right: { u: forward.v, v: -forward.u } };
+        return { forward, right: { u: -forward.v, v: forward.u } };
+      }
+    }
+
+    const clamped = this.clampToPolygon(u, v);
+    if (clamped.u !== u || clamped.v !== v) {
+      for (const [i0, i1, i2] of triangles) {
+        const gradient = this._gradientForTriangle(
+          pts[i0]!,
+          pts[i1]!,
+          pts[i2]!,
+          clamped.u,
+          clamped.v,
+        );
+        if (gradient) {
+          const forward = StageZone._normalize2D(-gradient.gu, -gradient.gv, 0, -1);
+          return { forward, right: { u: -forward.v, v: forward.u } };
+        }
       }
     }
 

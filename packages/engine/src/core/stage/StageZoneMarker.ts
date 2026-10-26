@@ -1,6 +1,6 @@
 import { Object3D } from "../Object3D.js";
 import type { InspectorField } from "../Inspectable.js";
-import { StageZone } from "./StageZone.js";
+import { StageZone, type StageScaleGradient } from "./StageZone.js";
 
 /**
  * The scene-graph presence for a `StageZone`: a non-renderable marker node (no geometry/material
@@ -37,6 +37,10 @@ export class StageZoneMarker extends Object3D {
       id: this.zone.id,
       name: this.zone.name,
       points: this.zone.points.map((p) => ({ ...p })),
+      scaleGradient: this.zone.scaleGradient
+        ? (JSON.parse(JSON.stringify(this.zone.scaleGradient)) as StageScaleGradient)
+        : undefined,
+      useScaleGradient: this.zone.useScaleGradient,
     });
     return copy;
   }

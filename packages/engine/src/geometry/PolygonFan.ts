@@ -7,21 +7,23 @@ import type { Vector3D } from "../math/index.js";
 export interface PolygonFanOptions {
   /** Points in order, tracing the polygon's perimeter. Minimum 3 to produce any triangles. */
   points: Vector3D[];
+  /** Optional precomputed triangle index array. If omitted, fans from the first point. */
+  indices?: readonly number[] | undefined;
 }
 
 /**
- * A filled polygon of arbitrary point count, triangulated as a fan from the first point --
- * `(points[0], points[i], points[i+1])` for `i = 1..length-2`, the exact same triangulation
- * `StageZone.getScaleAt` uses internally. Used by Maker's `StageZoneGizmoManager` as a real,
- * triangle-based pick target for zone selection (a thin outline alone gives false-positive
- * bounding-box hits on concave shapes).
+ * A filled polygon of arbitrary point count, triangulated as a fan from the first point or
+ * using explicit triangulation indices (such as `StageZone.triangulationIndices`). Used by
+ * Maker's `StageZoneGizmoManager` as a real, triangle-based pick target for zone selection.
  */
 export class PolygonFan extends AbstractGeometry {
   public points: Vector3D[];
+  public customIndices?: readonly number[] | undefined;
 
   constructor(options: PolygonFanOptions) {
     super();
     this.points = options.points;
+    this.customIndices = options.indices;
     this.generateGeometryData();
   }
 
@@ -38,8 +40,14 @@ export class PolygonFan extends AbstractGeometry {
       uv.push(0, 0);
     }
 
-    for (let i = 1; i < n - 1; i++) {
-      idx.push(0, i, i + 1);
+    if (this.customIndices && this.customIndices.length >= 3) {
+      for (let i = 0; i < this.customIndices.length; i++) {
+        idx.push(this.customIndices[i]!);
+      }
+    } else {
+      for (let i = 1; i < n - 1; i++) {
+        idx.push(0, i, i + 1);
+      }
     }
 
     this._vertices = new Float32Array(v);

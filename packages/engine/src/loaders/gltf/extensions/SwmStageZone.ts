@@ -14,7 +14,13 @@ export const swmStageZone: GltfExtensionPlugin = {
     const def = nodeDef.extensions?.SWM_stage_zone;
     if (!def) return undefined;
     return new StageZoneMarker(
-      new StageZone({ id: name, name: def.displayName ?? name, points: def.points }),
+      new StageZone({
+        id: name,
+        name: def.displayName ?? name,
+        points: def.points,
+        scaleGradient: def.scaleGradient,
+        useScaleGradient: def.useScaleGradient,
+      }),
     );
   },
 
@@ -25,6 +31,8 @@ export const swmStageZone: GltfExtensionPlugin = {
       SWM_stage_zone: {
         displayName: obj.zone.name,
         points: obj.zone.points.map((p) => ({ u: p.u, v: p.v, scale: p.scale })),
+        ...(obj.zone.scaleGradient ? { scaleGradient: obj.zone.scaleGradient } : {}),
+        ...(obj.zone.useScaleGradient ? { useScaleGradient: true } : {}),
       },
     };
   },
