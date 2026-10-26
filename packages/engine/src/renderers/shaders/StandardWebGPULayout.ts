@@ -16,19 +16,23 @@ export const StandardWebGPULayout = {
     u_model: { type: ShaderPropertyType.MAT4 },
 
     // --- 2. Core Material & Surface Properties (64 bytes) ---
+    // Neutral defaults: StandardMaterial and the engine's own presets write every one of these,
+    // but a CustomShaderMaterial on this layout often supplies none, and a missing value made the
+    // packer warn once per field, per object, per frame. (`u_color` falls back to the material's
+    // own colour in the renderer.)
     u_color: { type: ShaderPropertyType.COLOR },
-    u_specColor: { type: ShaderPropertyType.COLOR },
-    u_texOffset: { type: ShaderPropertyType.VEC2 },
-    u_texRepeat: { type: ShaderPropertyType.VEC2 },
-    u_shininess: { type: ShaderPropertyType.FLOAT },
-    u_isTerrain: { type: ShaderPropertyType.FLOAT },
-    u_metallic: { type: ShaderPropertyType.FLOAT },
-    u_roughness: { type: ShaderPropertyType.FLOAT },
+    u_specColor: { type: ShaderPropertyType.COLOR, defaultValue: [1, 1, 1, 1] },
+    u_texOffset: { type: ShaderPropertyType.VEC2, defaultValue: [0, 0] },
+    u_texRepeat: { type: ShaderPropertyType.VEC2, defaultValue: [1, 1] },
+    u_shininess: { type: ShaderPropertyType.FLOAT, defaultValue: 32 },
+    u_isTerrain: { type: ShaderPropertyType.FLOAT, defaultValue: 0 },
+    u_metallic: { type: ShaderPropertyType.FLOAT, defaultValue: 0 },
+    u_roughness: { type: ShaderPropertyType.FLOAT, defaultValue: 0.5 },
 
     // --- 3. Pipeline, Surface Tuning & Animation (128 bytes) ---
-    u_extraParams: { type: ShaderPropertyType.VEC4 },
-    u_liquidParams: { type: ShaderPropertyType.VEC4 },
-    u_thresholds: { type: ShaderPropertyType.VEC4 },
+    u_extraParams: { type: ShaderPropertyType.VEC4, defaultValue: [0, 0, 0, 0] },
+    u_liquidParams: { type: ShaderPropertyType.VEC4, defaultValue: [0, 0, 0, 0] },
+    u_thresholds: { type: ShaderPropertyType.VEC4, defaultValue: [0, 0, 0, 0] },
     u_useEnvMap: { type: ShaderPropertyType.FLOAT, defaultValue: 0 },
     u_useReflectionMap: { type: ShaderPropertyType.FLOAT, defaultValue: 0 },
     u_reflectivity: { type: ShaderPropertyType.FLOAT, defaultValue: 1.0 },

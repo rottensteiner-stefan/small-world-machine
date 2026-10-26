@@ -24,26 +24,29 @@ in float v_light;
 // Global gamma lane + displayToTarget: this stylized shader shades display-referred (ADR 0049).
 [LIGHT_DEFS]
 
-uniform sampler2DArray u_blockAtlas;
-uniform float u_daylight;
-uniform vec3 u_sunDirection;
+// u_diffuseMap: the engine's name for the albedo map, which is what WebGPU binds as a
+// texture_2d_array (BlockMaterial.wgsl). Dynamic lanes shared with the WGSL path:
+//   u_matParam0 = [daylight, sunDirection.xyz], u_matParam1 = [lightTint.rgb, 0]
+uniform sampler2DArray u_diffuseMap;
+uniform vec4 u_matParam0;
+uniform vec4 u_matParam1;
 
 out vec4 fragColor;
 
 void main() {
-    vec4 tex = texture(u_blockAtlas, vec3(v_uv, float(v_texLayer)));
+    vec4 tex = texture(u_diffuseMap, vec3(v_uv, float(v_texLayer)));
     vec3 albedo = tex.rgb;
 
     // M3 baked daylight/point-flood light + M4 dynamic daylight multiplier and sun direction
     vec3 normal = normalize(v_normal);
-    vec3 lightDir = normalize(u_sunDirection);
+    vec3 lightDir = normalize(u_matParam0.yzw);
     float ndl = clamp(dot(normal, lightDir), 0.0, 1.0);
     float ambient = 0.34;
     float ao = clamp(v_ao, 0.0, 1.0);
-    float lightFactor = clamp(v_light, 0.0, 1.0) * clamp(u_daylight, 0.15, 1.0);
+    float lightFactor = clamp(v_light, 0.0, 1.0) * clamp(u_matParam0.x, 0.15, 1.0);
     // The ambient floor must stay inside the direct term: faces turned away from the light
     // (-X, -Y, -Z) have ndl == 0 and would otherwise render pure black.
-    vec3 lit = albedo * mix(ambient, 1.0, ao) * (ambient + (1.0 - ambient) * ndl) * lightFactor;
+    vec3 lit = albedo * mix(ambient, 1.0, ao) * (ambient + (1.0 - ambient) * ndl) * lightFactor * u_matParam1.rgb;
 
     fragColor = vec4(displayToTarget(lit), tex.a);
 }

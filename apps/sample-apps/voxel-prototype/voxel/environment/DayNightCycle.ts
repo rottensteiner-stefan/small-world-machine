@@ -90,6 +90,44 @@ export class DayNightCycle {
   }
 
   /**
+   * True direction of the sun, unlike {@link getSunDirection} (which keeps the light above the
+   * horizon) it sinks below it at night. The sky dome draws the sun with it and the moon opposite.
+   */
+  public getSkySunDirection(): [number, number, number] {
+    const angle = this._time * 2 * Math.PI;
+    const x = Math.cos(angle);
+    const y = Math.sin(angle);
+    const z = 0.25;
+    const len = Math.hypot(x, y, z) || 1;
+    return [x / len, y / len, z / len];
+  }
+
+  /**
+   * How visible the stars are: 0 by day, 1 in full night, fading through twilight.
+   */
+  public getStarVisibility(): number {
+    return smoothstep(0.05, -0.25, this.getSunElevation());
+  }
+
+  /**
+   * Colour of the direct light: white by day, amber around sunrise/sunset, blue-grey moonlight
+   * at night. Multiplies the shaded block colour on top of the baked light and daylight.
+   */
+  public getLightTint(): SkyColor {
+    return this._byElevation(DAY_LIGHT, TWILIGHT_LIGHT, NIGHT_LIGHT);
+  }
+
+  /** Sky colour at the horizon (what {@link getSkyColor} returns). */
+  public getHorizonColor(): SkyColor {
+    return this.getSkyColor();
+  }
+
+  /** Sky colour at the zenith: a deeper blue by day, dusk violet at twilight, near black at night. */
+  public getZenithColor(): SkyColor {
+    return this._byElevation(DAY_ZENITH, TWILIGHT_ZENITH, NIGHT_ZENITH);
+  }
+
+  /**
    * Descriptive phase string for HUD.
    */
   public getTimePhase(): TimePhase {
@@ -104,29 +142,39 @@ export class DayNightCycle {
    * Interpolated sky color based on sun elevation.
    */
   public getSkyColor(): SkyColor {
+    return this._byElevation(DAY_SKY, TWILIGHT_SKY, NIGHT_SKY);
+  }
+
+  /** Blends a day / twilight / night palette entry by the sun elevation. */
+  private _byElevation(day: SkyColor, twilight: SkyColor, night: SkyColor): SkyColor {
     const elevation = this.getSunElevation();
-
-    // Key sky palettes:
-    // Day: bright Minecraft sky blue
-    const daySky: SkyColor = { r: 0.45, g: 0.65, b: 0.95 };
-    // Sunset / Sunrise: warm amber/orange
-    const twilightSky: SkyColor = { r: 0.82, g: 0.42, b: 0.24 };
-    // Night: deep dark navy
-    const nightSky: SkyColor = { r: 0.03, g: 0.04, b: 0.08 };
-
     if (elevation > 0.2) {
       // Full day
-      const t = Math.min(1, (elevation - 0.2) / 0.4);
-      return lerpColor(twilightSky, daySky, t);
-    } else if (elevation >= -0.1) {
-      // Twilight (sunrise / sunset)
-      const t = (elevation - -0.1) / 0.3; // 0 at -0.1, 1 at 0.2
-      return lerpColor(nightSky, twilightSky, t);
-    } else {
-      // Full night
-      return nightSky;
+      return lerpColor(twilight, day, Math.min(1, (elevation - 0.2) / 0.4));
     }
+    if (elevation >= -0.1) {
+      // Twilight (sunrise / sunset): 0 at -0.1, 1 at 0.2
+      return lerpColor(night, twilight, (elevation - -0.1) / 0.3);
+    }
+    // Full night
+    return night;
   }
+}
+
+// Palettes. Day: bright Minecraft sky blue; twilight: warm amber/orange; night: deep navy.
+const DAY_SKY: SkyColor = { r: 0.45, g: 0.65, b: 0.95 };
+const TWILIGHT_SKY: SkyColor = { r: 0.82, g: 0.42, b: 0.24 };
+const NIGHT_SKY: SkyColor = { r: 0.03, g: 0.04, b: 0.08 };
+const DAY_ZENITH: SkyColor = { r: 0.2, g: 0.4, b: 0.82 };
+const TWILIGHT_ZENITH: SkyColor = { r: 0.28, g: 0.3, b: 0.55 };
+const NIGHT_ZENITH: SkyColor = { r: 0.005, g: 0.01, b: 0.035 };
+const DAY_LIGHT: SkyColor = { r: 1, g: 1, b: 1 };
+const TWILIGHT_LIGHT: SkyColor = { r: 1, g: 0.78, b: 0.6 };
+const NIGHT_LIGHT: SkyColor = { r: 0.55, g: 0.66, b: 1 };
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }
 
 function lerpColor(a: SkyColor, b: SkyColor, t: number): SkyColor {

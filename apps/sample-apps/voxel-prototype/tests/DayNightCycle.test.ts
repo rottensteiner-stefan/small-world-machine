@@ -63,4 +63,51 @@ describe("DayNightCycle (M4)", () => {
     expect(nightColor.g).toBeLessThan(0.1);
     expect(nightColor.b).toBeLessThan(0.1);
   });
+
+  it("moves the sky sun below the horizon at night while the light direction stays above it", () => {
+    const cycle = new DayNightCycle();
+    cycle.setTime(0.25);
+    expect(cycle.getSkySunDirection()[1]).toBeGreaterThan(0.9);
+    cycle.setTime(0.75);
+    const [x, y, z] = cycle.getSkySunDirection();
+    expect(y).toBeLessThan(-0.9);
+    expect(Math.hypot(x, y, z)).toBeCloseTo(1, 4);
+    expect(cycle.getSunDirection()[1]).toBeGreaterThan(0);
+  });
+
+  it("shows the stars only at night, fading through twilight", () => {
+    const cycle = new DayNightCycle();
+    cycle.setTime(0.25);
+    expect(cycle.getStarVisibility()).toBe(0);
+    cycle.setTime(0.75);
+    expect(cycle.getStarVisibility()).toBe(1);
+    cycle.setTime(0.52);
+    const twilight = cycle.getStarVisibility();
+    expect(twilight).toBeGreaterThan(0);
+    expect(twilight).toBeLessThan(1);
+  });
+
+  it("tints the light white by day, amber at the horizon and blue-grey by moonlight", () => {
+    const cycle = new DayNightCycle();
+    cycle.setTime(0.25);
+    expect(cycle.getLightTint()).toEqual({ r: 1, g: 1, b: 1 });
+    cycle.setTime(0.032); // sun elevation 0.2: the twilight palette at full strength
+    const dusk = cycle.getLightTint();
+    expect(dusk.r).toBeGreaterThan(dusk.b);
+    cycle.setTime(0.75);
+    const moon = cycle.getLightTint();
+    expect(moon.b).toBeGreaterThan(moon.r);
+  });
+
+  it("keeps the zenith deeper than the horizon by day and darker than the day zenith at night", () => {
+    const cycle = new DayNightCycle();
+    cycle.setTime(0.25);
+    const dayZenith = cycle.getZenithColor();
+    expect(dayZenith.b).toBeGreaterThan(dayZenith.r);
+    expect(dayZenith.r).toBeLessThan(cycle.getHorizonColor().r);
+    cycle.setTime(0.75);
+    const night = cycle.getZenithColor();
+    expect(night.b).toBeLessThan(dayZenith.b);
+    expect(cycle.getHorizonColor()).toEqual(cycle.getSkyColor());
+  });
 });

@@ -1,44 +1,43 @@
-import { CustomShaderMaterial, ShaderPropertyType } from "@small-world-machine/engine";
+import {
+  CustomShaderMaterial,
+  ShaderPropertyType,
+  StandardWebGPULayout,
+  VERTEX_COLOR_FLAG,
+} from "@small-world-machine/engine";
 import type { TextureArray } from "@small-world-machine/engine/core/textures/index.js";
 import GLSL_FRAG from "./shaders/BlockMaterial.frag.glsl?raw";
 import GLSL_VERT from "./shaders/BlockMaterial.vert.glsl?raw";
+import WGSL from "./shaders/BlockMaterial.wgsl?raw";
 
 /**
- * M0 block material: a `CustomShaderMaterial` (triplet convention) whose GLSL300 pair samples
- * the block palette through a `sampler2DArray`. Scope traceability (dossier §4.2 / Dave-Report
- * §4 M0, §5.4 asset-cleanliness):
+ * Block material: a `CustomShaderMaterial` whose shaders sample the block palette as an array
+ * texture, so atlas tiles can never bleed into each other (array layers are separate textures):
+ * `sampler2DArray` in GLSL300 (WebGL2) and `texture_2d_array` in WGSL (WebGPU, M6). WebGL1 has no
+ * array textures; a 2D-atlas fallback would be a separate material.
  *
- * - **WebGL2 only for M0** -- the dossier roadmap (§4.4 #5) fixes WebGL2 as the default and
- *   WebGPU as a later quality path. A WebGPU (`wgsl`) variant is deliberately NOT shipped yet:
- *   the engine's shared WebGPU material bind group binds a fixed set of 2D texture views
- *   (`u_diffuseMap`, ...), not arbitrary array-texture views, so `texture_2d_array` needs a
- *   small engine-side bind-group extension first -- tracked in `docs/log.md` as a follow-up,
- *   not as scope creep inside M0.
- * - **WebGL1 also deferred** -- WebGL1 has no `sampler2DArray` at all; a 2D-atlas fallback is a
- *   separate material (later milestone).
- *
- * The atlas layer index travels per-vertex in `a_color.x` (engine-fixed attribute location 11);
- * `texture()` samples `vec3(uv, layer)` in the fragment, which makes cross-tile bleeding
- * impossible by construction (array layers are separate textures).
+ * - The palette is bound as `u_diffuseMap`, the one texture name WebGPU binds as an array view
+ *   (the engine flags a `TextureArray` as `USE_TEXTURE_ARRAY` on its own).
+ * - Layer, AO and baked light travel per vertex in the vertex color (`a_color` / location 11,
+ *   `USE_VERTEX_COLOR`): `x` = atlas layer, `y` = AO, `z` = baked light.
+ * - The dynamic lanes are shared by both tiers: `u_matParam0 = [daylight, sunDirection.xyz]`,
+ *   `u_matParam1 = [lightTint.rgb, 0]`. They are written in place, nothing allocates per frame.
  */
 export class BlockMaterial extends CustomShaderMaterial {
   constructor(atlas: TextureArray) {
     super({
       sources: {
         glsl300: { vs: GLSL_VERT, fs: GLSL_FRAG },
+        wgsl: WGSL,
       },
+      // The WGSL path packs the fixed 512-byte object block (`u_matParam0/1` ride in it); GLSL
+      // reads the same lanes by name.
       layout: {
-        uniforms: {
-          u_daylight: { type: ShaderPropertyType.FLOAT },
-          u_sunDirection: { type: ShaderPropertyType.VEC3 },
-        },
-        textures: { u_blockAtlas: { type: ShaderPropertyType.TEXTURE } },
+        ...StandardWebGPULayout,
+        textures: { u_diffuseMap: { type: ShaderPropertyType.TEXTURE } },
       },
-      properties: {
-        u_daylight: 1.0,
-        u_sunDirection: [0.55, 0.82, 0.28],
-      },
-      textures: { u_blockAtlas: atlas },
+      properties: {},
+      textures: { u_diffuseMap: atlas },
+      flags: [VERTEX_COLOR_FLAG],
       // M2 water (D3): the atlas alpha drives blending per fragment. Opaque tiles sample
       // alpha 1.0 and render opaque; the water layer blends against the opaque bed. depthWrite
       // stays true so opaque geometry keeps writing depth; the rare water-over-water overlap in
@@ -46,15 +45,31 @@ export class BlockMaterial extends CustomShaderMaterial {
       transparent: true,
       depthWrite: true,
     });
+    this.properties["u_matParam0"] = this._sunLane;
+    this.properties["u_matParam1"] = this._tintLane;
   }
+
+  /** `u_matParam0`: `[daylight, sunDirection.xyz]`. */
+  private readonly _sunLane: number[] = [1, 0.55, 0.82, 0.28];
+  /** `u_matParam1`: `[lightTint.rgb, 0]`. */
+  private readonly _tintLane: number[] = [1, 1, 1, 0];
 
   /** Sets the dynamic day/night ambient multiplier [0.15, 1.0]. */
   public setDaylight(value: number): void {
-    this.properties["u_daylight"] = value;
+    this._sunLane[0] = value;
   }
 
   /** Sets the 3D direction vector of the sun. */
-  public setSunDirection(dir: [number, number, number]): void {
-    this.properties["u_sunDirection"] = dir;
+  public setSunDirection(dir: readonly [number, number, number]): void {
+    this._sunLane[1] = dir[0];
+    this._sunLane[2] = dir[1];
+    this._sunLane[3] = dir[2];
+  }
+
+  /** Sets the colour of the light (warm at sunrise, blue-grey by moonlight; white by day). */
+  public setLightTint(r: number, g: number, b: number): void {
+    this._tintLane[0] = r;
+    this._tintLane[1] = g;
+    this._tintLane[2] = b;
   }
 }

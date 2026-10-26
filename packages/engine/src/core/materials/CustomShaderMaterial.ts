@@ -1,12 +1,14 @@
 import { AbstractMaterial } from "./AbstractMaterial.js";
 import { CullMode, BlendingMode, ShaderPropertyType } from "../../enums/index.js";
 import { MathUtils } from "../../math/index.js";
-import type { Texture, CubeTexture } from "../textures/index.js";
+import type { Texture, CubeTexture, TextureArray } from "../textures/index.js";
 import type {
   RenderManifest,
   ShaderDefinition,
   ShaderLayout,
 } from "../../renderers/shaders/index.js";
+
+const TEXTURE_ARRAY_FLAG = "USE_TEXTURE_ARRAY";
 
 export interface CustomShaderMaterialOptions {
   /** Shader sources for different APIs. Provide at least one matching the active renderer. */
@@ -21,6 +23,14 @@ export interface CustomShaderMaterialOptions {
   properties?: Record<string, unknown>;
   /** Initial textures mapped to names defined in the layout. */
   textures?: Record<string, Texture | CubeTexture | undefined>;
+
+  /**
+   * Extra shader-compile flags (see `RenderManifest.flags`), e.g. `USE_VERTEX_COLOR` to receive
+   * the mesh's vertex colors (WebGPU: attribute location 11; WebGL2: `a_color`). Flags derived
+   * from the assigned textures are added automatically. `USE_TEXTURE_ARRAY` is one of them: a
+   * `TextureArray` bound to the shader's `u_diffuseMap` is a `texture_2d_array` in WGSL.
+   */
+  flags?: readonly string[];
 
   /** Whether the material is transparent. Defaults to false. */
   transparent?: boolean;
@@ -44,6 +54,7 @@ export class CustomShaderMaterial extends AbstractMaterial {
   public properties: Record<string, unknown>;
   public textures: Record<string, Texture | CubeTexture | undefined>;
 
+  private readonly _extraFlags: readonly string[];
   private readonly _textureFlags: string[] = [];
   private readonly _textureFlagByKey: Map<string, string | undefined> = new Map();
 
@@ -56,6 +67,7 @@ export class CustomShaderMaterial extends AbstractMaterial {
     this.layout = options.layout;
     this.properties = options.properties ?? {};
     this.textures = options.textures ?? {};
+    this._extraFlags = options.flags ?? [];
 
     this.transparent = options.transparent ?? false;
     this.cullMode = options.cullMode ?? CullMode.DEFAULT;
@@ -149,9 +161,20 @@ export class CustomShaderMaterial extends AbstractMaterial {
     const flags = this._textureFlags;
     flags.length = 0;
     for (const key in this.textures) {
-      if (!this.textures[key]) continue;
+      const texture = this.textures[key];
+      if (!texture) continue;
       const flag = this._flagForTextureKey(key);
       if (undefined !== flag && !flags.includes(flag)) flags.push(flag);
+      if (
+        "isTextureArray" in texture &&
+        (texture as TextureArray).isTextureArray &&
+        !flags.includes(TEXTURE_ARRAY_FLAG)
+      ) {
+        flags.push(TEXTURE_ARRAY_FLAG);
+      }
+    }
+    for (const flag of this._extraFlags) {
+      if (!flags.includes(flag)) flags.push(flag);
     }
     this._renderManifest.flags = flags;
 

@@ -1,4 +1,4 @@
-import { CameraStrategyType, RendererType } from "@small-world-machine/engine";
+import { CameraStrategyType, Cube, Object3D, RendererType } from "@small-world-machine/engine";
 import {
   Color,
   getRendererTypeFromQuery,
@@ -22,6 +22,7 @@ import { TerrainGenerator } from "./voxel/TerrainGenerator.js";
 import type { ChunkDeltaStore } from "./voxel/store/ChunkDeltaStore.js";
 import { IndexedDbChunkDeltaStore } from "./voxel/store/IndexedDbChunkDeltaStore.js";
 import { DayNightCycle } from "./voxel/environment/DayNightCycle.js";
+import { SkyMaterial } from "./voxel/environment/SkyMaterial.js";
 import { PlayerRig } from "./voxel/player/PlayerRig.js";
 import { VoxelInputActions } from "./voxel/input/VoxelInputActions.js";
 import { VoxelBlockEditor } from "./voxel/physics/VoxelBlockEditor.js";
@@ -48,8 +49,9 @@ import type { MeshClient } from "./voxel/worker/MeshWorkerProtocol.js";
  *     neighbors), the atlas is CC0 (see `voxel/palette/AtlasPixels.ts`), AO is baked per vertex
  *     and water renders transparent.
  *
- * Backend: WebGL2 default (dossier §4.4 #5); `?rendererType=WEB_GL2|WEB_GPU|WEB_GL1` overrides.
- * WebGPU array-texture material + WebGL1 atlas remain later milestones (M0 logs).
+ * Backend: WebGPU where available, else WebGL2 (the block and sky materials ship WGSL and GLSL300,
+ * M6); `?rendererType=WEB_GL2|WEB_GPU` pins one. WebGL1 has no array textures (atlas fallback later).
+ * Dev params: `?time=<0..1>` pins the time of day, `?look=<yaw>,<pitch>` turns the start view.
  */
 export class App extends SmallWorldMachine {
   private _statsEl: HTMLElement | null = null;
@@ -69,18 +71,18 @@ export class App extends SmallWorldMachine {
   private _inputActions!: VoxelInputActions;
   private _material!: BlockMaterial;
   private _dayNight!: DayNightCycle;
+  private _sky!: SkyMaterial;
+  private _time: number = 0;
   private _rig!: PlayerRig;
   private _clearColor: Color = new Color(0.45, 0.65, 0.95, 1);
   private _store: ChunkDeltaStore | null = null;
 
   constructor() {
-    // M1 ships GLSL300 only (like M0), so force WebGL2 unless the URL pins a backend.
+    // The block and sky materials ship WGSL (array texture, M6) and GLSL300, so WebGPU is used
+    // where available and WebGL2 elsewhere; `?rendererType=` pins a backend. WebGL1 has no array
+    // textures (it would need a separate 2D-atlas material).
     const rendererType = getRendererTypeFromQuery();
-    if (rendererType) {
-      super({ fullscreen: true, rendererType });
-    } else {
-      super({ fullscreen: true, rendererType: RendererType.WEB_GL2 });
-    }
+    super({ fullscreen: true, rendererType: rendererType ?? RendererType.BEST });
     const urlParams =
       typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
     this._isBenchmark = urlParams?.has("benchmark") ?? urlParams?.has("stats") ?? false;
@@ -114,8 +116,28 @@ export class App extends SmallWorldMachine {
     const palette = await createBlockPalette();
     this._material = new BlockMaterial(palette);
 
-    // M4 Day/Night cycle controller
-    this._dayNight = new DayNightCycle({ cycleDuration: 120 });
+    // M4 Day/Night cycle controller. `?time=<0..1>` pins the time of day (0 sunrise, 0.25 noon,
+    // 0.5 sunset, 0.75 midnight) instead of letting it run, `?look=<yaw>,<pitch>` (degrees) turns
+    // the start view: reproducible frames of the sky for captures and for tuning it.
+    const query = new URLSearchParams(window.location.search);
+    const pinnedTime = Number(query.get("time"));
+    this._dayNight =
+      query.has("time") && Number.isFinite(pinnedTime)
+        ? new DayNightCycle({ cycleDuration: 0, initialTime: pinnedTime })
+        : new DayNightCycle({ cycleDuration: 120 });
+    const look = (query.get("look") ?? "").split(",").map(Number);
+    if (look.length === 2 && look.every(Number.isFinite)) {
+      this.camera.theta = (look[0]! * Math.PI) / 180;
+      this.camera.phi = (look[1]! * Math.PI) / 180;
+    }
+
+    // M6 procedural sky: a cube that follows the camera (gradient, sun, moon, stars).
+    this._sky = new SkyMaterial();
+    const skyDome = new Object3D("Sky");
+    skyDome.geometry = new Cube({ size: 2 }).getGeometryData();
+    skyDome.material = this._sky;
+    skyDome.frustumCulled = false;
+    this.scene.add(skyDome);
 
     // 4. World backbone. Production uses the dedicated mesh worker; a browser without `Worker`
     //    degrades to the foreground double (meshing would run on main -- stats show the label).
@@ -235,6 +257,7 @@ export class App extends SmallWorldMachine {
 
     // M4 Day/Night cycle
     this._dayNight.update(deltaTime);
+    this._time += deltaTime;
     this._syncDaylight();
 
     this._updateHud();
@@ -246,6 +269,12 @@ export class App extends SmallWorldMachine {
     const sunDir = this._dayNight.getSunDirection();
     this._material.setDaylight(daylight);
     this._material.setSunDirection(sunDir);
+    const tint = this._dayNight.getLightTint();
+    this._material.setLightTint(tint.r, tint.g, tint.b);
+
+    this._sky.setSun(this._dayNight.getSkySunDirection(), this._dayNight.getStarVisibility());
+    this._sky.setGradient(this._dayNight.getHorizonColor(), this._dayNight.getZenithColor());
+    this._sky.setTime(this._time);
 
     const sky = this._dayNight.getSkyColor();
     this._clearColor.r = sky.r;

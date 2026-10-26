@@ -97,3 +97,14 @@ If a name in `layout.uniforms`/`layout.textures` has no matching active uniform 
 Cube vs. 2D textures are also detected automatically, based on the sampler type declared in the shader (`samplerCube` vs. `sampler2D`), not on the uniform's name - so a new cube-sampler uniform likewise needs no name-based special case.
 
 Shadow-map and IBL samplers (irradiance/prefilter/BRDF) are the one exception: they are scene-global rather than per-material, and are bound via dedicated code paths in `WebGL2Renderer` with fixed texture units, regardless of what a new material declares. Nothing needs to be done for this - it's only relevant if the shadow/IBL system itself is changed.
+
+## A `CustomShaderMaterial` with a WGSL source
+
+WGSL cannot look up uniforms by name: the per-object data is one fixed 512-byte block (`obj`), so a WGSL custom material follows a few rules (the voxel prototype's `BlockMaterial` and `SkyMaterial` are working examples):
+
+- **Layout:** spread `StandardWebGPULayout` (`layout: { ...StandardWebGPULayout, textures: {...} }`) and carry your own values in the `u_matParam0 … u_matParam15` lanes (`obj.matParamN` in WGSL, `uniform vec4 u_matParamN` in GLSL). Hand the material one array per lane and write into it in place; nothing then allocates per frame. The other standard fields have neutral defaults, so a material only sets what it uses.
+- **Textures:** the WGSL bind group knows a fixed set of texture names (`u_diffuseMap`, `u_normalMap`, … see `getOptionalMaterialTextureBindings`). A texture under another name is not bound on WebGPU.
+- **Array textures:** a `TextureArray` bound as `u_diffuseMap` becomes a `texture_2d_array` (`CustomShaderMaterial` sets `USE_TEXTURE_ARRAY` for it). Sample it with `textureSampleLevel(u_diffuseMap, s, uv, layer, 0.0)`; the pipeline cache rewrites plain `textureSample(u_diffuseMap, …)` calls for the engine's own materials only. The sampler follows the filter and wrap settings of the `u_diffuseMap` texture (nearest/clamp for pixel art). Array views have no mip chain.
+- **Vertex colours:** `flags: [VERTEX_COLOR_FLAG]` binds the mesh's colour buffer at `@location(11)` (`a_color` in GLSL). Not available together with instancing.
+- **Vertex output:** name your output struct anything but `Out` and the variable anything but `o`: the pipeline cache rewrites the engine's default output variable textually.
+- **Sky/far-plane geometry:** pin depth with `vec4(clip.xy, clip.w * 0.99999, clip.w)`; WebGPU compares `less-equal`, WebGL2 `less`.

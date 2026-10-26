@@ -1,0 +1,63 @@
+[BASE_FRAGMENT_HEADER]
+[LIGHT_DEFS]
+// Voxel sky dome (M6) -- WebGL2 / GLSL300; SkyMaterial.wgsl is the WebGPU twin and must keep the
+// same look. Lanes (written in place by SkyMaterial, shared with the WGSL path):
+//   u_matParam0 = [sunDirection.xyz, starVisibility]
+//   u_matParam1 = [horizonColor.rgb, time]
+//   u_matParam2 = [zenithColor.rgb, 0]
+// All colours are display-referred (sRGB, ADR 0049/0050): displayToTarget converts at the end.
+in vec3 v_dir;
+uniform vec4 u_matParam0;
+uniform vec4 u_matParam1;
+uniform vec4 u_matParam2;
+
+const float SUN_RADIUS = 0.045;  // angular radius in radians-ish (cos-space compare below)
+const float MOON_RADIUS = 0.034;
+const float STAR_GRID = 150.0;
+const float STAR_DENSITY = 0.0035;
+
+float starHash(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+void main() {
+  vec3 d = normalize(v_dir);
+  vec3 sunDir = normalize(u_matParam0.xyz);
+  float starVisibility = u_matParam0.w;
+  vec3 horizon = u_matParam1.rgb;
+  vec3 zenith = u_matParam2.rgb;
+  float time = u_matParam1.w;
+
+  // Gradient: horizon colour up to the zenith colour; below the horizon the horizon colour holds.
+  float up = clamp(d.y, 0.0, 1.0);
+  vec3 sky = mix(horizon, zenith, pow(up, 0.5));
+
+  // Sun: warm glow around the disc (strongest at low elevation) plus the disc itself.
+  float sunCos = dot(d, sunDir);
+  float aboveHorizon = smoothstep(-0.03, 0.04, d.y);
+  float sunVisible = smoothstep(-0.12, 0.02, sunDir.y);
+  float glow = pow(max(sunCos, 0.0), 14.0) * 0.45 * sunVisible;
+  sky += vec3(1.0, 0.72, 0.42) * glow;
+  float disc = smoothstep(cos(SUN_RADIUS * 1.25), cos(SUN_RADIUS), sunCos) * sunVisible;
+  sky = mix(sky, vec3(1.0, 0.97, 0.86), disc * aboveHorizon);
+
+  // Moon: always opposite the sun.
+  vec3 moonDir = -sunDir;
+  float moonCos = dot(d, moonDir);
+  float moonVisible = smoothstep(-0.12, 0.02, moonDir.y);
+  float moonDisc = smoothstep(cos(MOON_RADIUS * 1.3), cos(MOON_RADIUS), moonCos) * moonVisible;
+  sky = mix(sky, vec3(0.86, 0.9, 1.0), moonDisc * aboveHorizon);
+
+  // Stars: sparse points on a cell grid over the sphere, twinkling, only above the horizon.
+  vec3 cell = d * STAR_GRID;
+  float h = starHash(floor(cell));
+  float star = step(1.0 - STAR_DENSITY, h);
+  float centre = 1.0 - smoothstep(0.0, 0.42, length(fract(cell) - 0.5));
+  float twinkle = 0.65 + 0.35 * sin(time * 2.4 + h * 400.0);
+  float starAlpha = star * centre * twinkle * starVisibility * smoothstep(0.02, 0.2, d.y) * (1.0 - moonDisc);
+  sky += vec3(0.9, 0.93, 1.0) * starAlpha;
+
+  fragColor = vec4(displayToTarget(sky), 1.0);
+}

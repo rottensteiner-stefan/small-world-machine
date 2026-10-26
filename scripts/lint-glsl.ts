@@ -17,6 +17,7 @@ const shaderDirs = [
   "packages/artistic-extras/src/materials/shaders",
   "packages/artistic-extras/src/post/shaders",
   "apps/sample-apps/voxel-prototype/voxel/material/shaders",
+  "apps/sample-apps/voxel-prototype/voxel/environment/shaders",
 ].map((d) => path.resolve(d));
 
 async function loadChunks(): Promise<ShaderChunkSets> {

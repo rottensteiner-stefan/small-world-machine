@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-10-26 — M6 implementiert: WebGPU-Array-Textur, prozeduraler Himmel, Sonnen-/Mond-Lauf
+
+**Status:** ✅ abgeschlossen (WebGPU und WebGL2 sichtbar deckungsgleich). Anders als M0–M5 mit zwei kleinen Engine-Änderungen, weil das Backlog-Ziel („WebGPU-Array-Texture, Engine-Seite“) genau das verlangt.
+
+- **WebGPU-Blockshader (`voxel/material/shaders/BlockMaterial.wgsl`):** Die Palette ist ein `texture_2d_array` (`u_diffuseMap`), Layer/AO/Licht kommen im Vertex-Color-Attribut (Location 11). Atlas-Bleeding ist damit auch unter WebGPU konstruktiv ausgeschlossen. Beleuchtung 1:1 wie GLSL (Test hält beide synchron). Die dynamischen Werte (Tageslicht, Sonnenrichtung, Lichtfarbe) liegen für beide Tiers in `u_matParam0/1` und werden in place geschrieben.
+- **Engine (klein):** `CustomShaderMaterial` nimmt `flags` entgegen und setzt `USE_TEXTURE_ARRAY` selbst, sobald eine `TextureArray` gebunden ist (wie WebGL2 es schon tat). `StandardWebGPULayout` hat neutrale Defaults für `u_specColor`, `u_texOffset/Repeat`, `u_shininess`, `u_isTerrain`, `u_metallic`, `u_roughness`, `u_extraParams/liquidParams/thresholds`. Ohne sie warnte der `UniformPacker` zehnmal pro Objekt und Frame: 28 ms CPU im ersten WebGPU-Lauf, jetzt 60 fps.
+- **Himmel (`voxel/environment/SkyMaterial.ts`, `shaders/SkyMaterial.*`):** Würfel um die Kamera (Tiefe an die Far-Plane gepinnt), Verlauf Horizont → Zenit, Sonne mit Glow, Mond gegenüber, funkelnde Sterne nur nachts. GLSL300 und WGSL, drei Lanes, nichts alloziert pro Frame. `DayNightCycle` liefert dazu `getSkySunDirection()` (sinkt nachts unter den Horizont, anders als die Lichtrichtung), `getStarVisibility()`, `getHorizonColor()/getZenithColor()` und `getLightTint()` (weiß / bernstein / mondblau, multipliziert über die gebackenen Lichtwerte).
+- **App:** Renderer jetzt `BEST` (WebGPU, sonst WebGL2) statt WebGL2 fix. Dev-Parameter `?time=<0..1>` pinnt die Tageszeit, `?look=<yaw>,<pitch>` dreht die Startansicht, für reproduzierbare Himmelsaufnahmen.
+- **Verifiziert:** Sonnenaufgang, Mittag, Sonnenuntergang und Mitternacht auf WebGPU und WebGL2 aufgenommen und gesichtet; beide 60 fps, 0 Konsolenmeldungen. `lint:glsl` deckt jetzt `voxel/environment/shaders` ab.
+- **Nicht gemacht:** Wolken, Mondphasen, Nebel zum Horizont, WebGL1 (hat keine Array-Texturen, bräuchte ein 2D-Atlas-Material).
+
+---
+
 ## 2026-10-23 — M5 implementiert: Härtung, AO-kompatibles Greedy-Meshing, Voxel-Eviction & Telemetrie
 
 **Status:** ✅ M5 final abgeschlossen & abgenommen. Forschungsreport: `docs/research/voxel-m5-performance-benchmark.md`. **NUR App-Level, kein Engine-Core-Change** (Dossier-Mandat).
