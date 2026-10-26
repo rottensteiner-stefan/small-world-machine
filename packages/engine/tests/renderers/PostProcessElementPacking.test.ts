@@ -95,7 +95,7 @@ describe("PostProcess elements own their DynUniforms slices", () => {
     expectPack([grain], [[6, 0.17]]);
   });
 
-  it("BloomElement packs intensity/color and its pad at 7 and 12..15", () => {
+  it("BloomElement packs intensity, the linear-decoded tint (ADR 0049) and its pad at 7 and 12..15", () => {
     const bloom = new BloomElement();
     bloom.intensity = 1.3;
     bloom.color.set(0.2, 0.4, 0.6);
@@ -103,9 +103,9 @@ describe("PostProcess elements own their DynUniforms slices", () => {
       [bloom],
       [
         [7, 1.3],
-        [12, 0.2],
-        [13, 0.4],
-        [14, 0.6],
+        [12, Math.pow(0.2, 2.2)],
+        [13, Math.pow(0.4, 2.2)],
+        [14, Math.pow(0.6, 2.2)],
         [15, 0.0],
       ],
     );

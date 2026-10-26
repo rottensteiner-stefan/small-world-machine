@@ -53,13 +53,13 @@ class Showcase36 extends AbstractShowcase {
 
     // Lighting: a soft backlight sells the shattered glass silhouette and cracks
     const ambientLight = new AmbientLight({
-      color: new Color(0.15, 0.16, 0.2),
+      color: new Color(0.422, 0.435, 0.481),
       intensity: 0.3,
     });
     this.scene.add(ambientLight);
 
     const backLight = new DirectionalLight({
-      color: new Color(1.0, 0.97, 0.9),
+      color: new Color(1, 0.986, 0.953),
       intensity: 1.1,
     });
     backLight.position.set(0, 3, -6);
@@ -69,7 +69,7 @@ class Showcase36 extends AbstractShowcase {
     this.scene.add(backLight);
 
     const fillLight = new DirectionalLight({
-      color: new Color(0.3, 0.45, 0.7),
+      color: new Color(0.579, 0.696, 0.85),
       intensity: 0.4,
     });
     fillLight.position.set(-4, 1, 4);
@@ -78,7 +78,7 @@ class Showcase36 extends AbstractShowcase {
 
     // Warm accent light near the camera to bring out the metallic clasp/frame detail
     const accentLight = new PointLight({
-      color: new Color(1.0, 0.85, 0.6),
+      color: new Color(1, 0.929, 0.793),
       intensity: 1.5,
       distance: 5.0,
     });
@@ -94,7 +94,7 @@ class Showcase36 extends AbstractShowcase {
       skybox.geometry = new Cube({ size: 1000 }).getGeometryData();
       skybox.material = new SkyboxMaterial({
         cubeMap: envTexture,
-        color: new Color(0.28, 0.3, 0.35, 1.0),
+        color: new Color(0.561, 0.579, 0.621, 1.0),
       });
       skybox.frustumCulled = false;
       this.scene.add(skybox);

@@ -46,6 +46,30 @@ export class Color {
     return this;
   }
 
+  /**
+   * Every engine Color is sRGB-authored (ADR 0049, the Unity/Godot convention). This writes its
+   * linear-light value into `out` -- the shaders' `sRGBToLinear`, pow 2.2 -- like Unity's
+   * `Color.linear`. Alpha is copied unchanged; HDR components above 1 stay valid.
+   */
+  public toLinear(out: Color): Color {
+    return this.toTarget(1.0, out);
+  }
+
+  /**
+   * Writes this sRGB colour in the space a renderer's forward pass writes for output lane `gamma`
+   * (`displayToTarget`, ADR 0049): linear while post-processing encodes (lane 1.0), unchanged when
+   * the forward pass encodes with 2.2 itself.
+   */
+  public toTarget(gamma: number, out: Color): Color {
+    const e = 2.2 / gamma;
+    return out.set(
+      Math.pow(Math.max(this.r, 0), e),
+      Math.pow(Math.max(this.g, 0), e),
+      Math.pow(Math.max(this.b, 0), e),
+      this.a,
+    );
+  }
+
   // --- Core Frozen Base Colors (Zero-Allocation & Readonly) ---
   public static readonly BLACK: Color = Object.freeze(new Color(0, 0, 0, 1)) as Color;
   public static readonly WHITE: Color = Object.freeze(new Color(1, 1, 1, 1)) as Color;

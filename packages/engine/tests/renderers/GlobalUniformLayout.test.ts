@@ -68,14 +68,14 @@ function makeLights(): Any {
     pLights: [
       {
         worldMatrix: { data: makeWorldMatrix(1) },
-        color: { r: 1, g: 0, b: 0 },
+        linearColor: { r: 1, g: 0, b: 0 },
         intensity: 2,
         distance: 10,
         decay: 0.5,
       },
       {
         worldMatrix: { data: makeWorldMatrix(2) },
-        color: { r: 0, g: 1, b: 0 },
+        linearColor: { r: 0, g: 1, b: 0 },
         intensity: 3,
         distance: 20,
         decay: 0.25,
@@ -85,7 +85,7 @@ function makeLights(): Any {
       {
         worldMatrix: { data: makeWorldMatrix(3) },
         direction: { x: 0, y: 0, z: -1 },
-        color: { r: 1, g: 0, b: 0 },
+        linearColor: { r: 1, g: 0, b: 0 },
         intensity: 2,
         angle: 0.5,
         penumbra: 0.1,
@@ -95,7 +95,7 @@ function makeLights(): Any {
       {
         worldMatrix: { data: makeWorldMatrix(4) },
         direction: { x: 0, y: 1, z: 0 },
-        color: { r: 0, g: 0, b: 1 },
+        linearColor: { r: 0, g: 0, b: 1 },
         intensity: 1.5,
         angle: 0.7,
         penumbra: 0.2,
@@ -106,7 +106,7 @@ function makeLights(): Any {
     aLights: [
       {
         worldMatrix: { data: makeWorldMatrix(5) },
-        color: { r: 0, g: 1, b: 1 },
+        linearColor: { r: 0, g: 1, b: 1 },
         intensity: 1.2,
         width: 2,
         height: 3,
@@ -115,7 +115,7 @@ function makeLights(): Any {
       },
       {
         worldMatrix: { data: makeWorldMatrix(6) },
-        color: { r: 1, g: 1, b: 0 },
+        linearColor: { r: 1, g: 1, b: 0 },
         intensity: 0.8,
         width: 4,
         height: 5,
@@ -167,6 +167,7 @@ function captureWebGPU(): number[] {
   const host = {
     gpuDevice: device,
     postProcessing: { enabled: false },
+    outputGamma: 2.2,
     quality: { gamma: 2.2, exposure: 1.0, clusteredLighting: { tileSize: [32, 32] } },
     gpuCanvasContext: { canvas: { width: 1280, height: 720 } },
     clusterDims: { x: 12, y: 13, z: 14 },

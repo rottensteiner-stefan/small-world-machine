@@ -72,7 +72,7 @@ export class FlakturmKit {
     const intensity = options.intensity ?? 1.8;
     const lightDist = options.lightDistance ?? 6.0;
     const tubeColor = options.emissiveColor ?? new Color(0.9, 0.96, 1.0);
-    const lightColor = options.color ?? new Color(0.85, 0.92, 1.0);
+    const lightColor = options.color ?? new Color(0.929, 0.963, 1);
 
     const group = new Object3D(name);
     const cubeGeo = new Cube({ size: 1.0 }).getGeometryData();

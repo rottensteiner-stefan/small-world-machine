@@ -242,7 +242,7 @@ export class GlobalUniformWriter {
     // (gamma 1.0 disables the forward shader's Reinhard guard, exposure 1.0) and the PostProcess
     // pass applies exposure/tonemap/gamma once. Without post-processing the forward pass does it
     // itself from `quality.gamma`/`quality.exposure`. Never apply both (double tonemapping).
-    const gamma = this._host.postProcessing.enabled ? 1.0 : (this._host.quality.gamma ?? 2.2);
+    const gamma = this._host.outputGamma;
     const exposure = this._host.postProcessing.enabled ? 1.0 : (this._host.quality.exposure ?? 1.0);
     setVec4(
       gData,
@@ -369,9 +369,9 @@ export class GlobalUniformWriter {
       setVec4(
         plData,
         o + 4,
-        l.color.r * l.intensity,
-        l.color.g * l.intensity,
-        l.color.b * l.intensity,
+        l.linearColor.r * l.intensity,
+        l.linearColor.g * l.intensity,
+        l.linearColor.b * l.intensity,
         l.decay,
       );
     }
@@ -392,9 +392,9 @@ export class GlobalUniformWriter {
       setVec4(
         slData,
         o + 8,
-        l.color.r * l.intensity,
-        l.color.g * l.intensity,
-        l.color.b * l.intensity,
+        l.linearColor.r * l.intensity,
+        l.linearColor.g * l.intensity,
+        l.linearColor.b * l.intensity,
         1,
       );
       setVec4(
@@ -422,9 +422,9 @@ export class GlobalUniformWriter {
       setVec4(
         alData,
         off + 4,
-        l.color.r * l.intensity,
-        l.color.g * l.intensity,
-        l.color.b * l.intensity,
+        l.linearColor.r * l.intensity,
+        l.linearColor.g * l.intensity,
+        l.linearColor.b * l.intensity,
         1,
       );
       setVec4(alData, off + 8, m[0]!, m[1]!, m[2]!, 0);

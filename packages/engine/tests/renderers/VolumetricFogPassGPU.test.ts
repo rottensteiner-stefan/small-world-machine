@@ -531,6 +531,9 @@ function runMaskFrame(
   );
 }
 
+// Every engine Color is sRGB-authored; the passes upload its linear value (ADR 0049).
+const lin = (c: number): number => Math.pow(c, 2.2);
+
 function initElement(color = new Color(1.0, 0.5, 0.25), albedo = 0.5): VolumetricFogElement {
   const element = new VolumetricFogElement();
   element.enabled = true;
@@ -587,9 +590,9 @@ describe("VolumetricFogPassGPU density masks — no-mask regression", () => {
 
     const inj = injectUniforms(ctx);
     // The unchanged CPU path still bakes the global albedo into scatterTint...
-    expect(Array.from(inj.slice(SCATTER_TINT_INDEX, SCATTER_TINT_INDEX + 3))).toEqual([
-      0.5, 0.25, 0.125,
-    ]);
+    expect(inj[SCATTER_TINT_INDEX]).toBeCloseTo(lin(1.0) * 0.5, 6);
+    expect(inj[SCATTER_TINT_INDEX + 1]).toBeCloseTo(lin(0.5) * 0.5, 6);
+    expect(inj[SCATTER_TINT_INDEX + 2]).toBeCloseTo(lin(0.25) * 0.5, 6);
     expect(inj[SCATTER_TINT_INDEX + 3]).toBe(1);
     // ...and the new mask-box lanes hold no-op sentinels (box at origin, unit half-extents).
     expect(Array.from(inj.slice(ELEMENT_MASK_INDEX, ELEMENT_MASK_INDEX + 8))).toEqual([
@@ -608,11 +611,11 @@ describe("VolumetricFogPassGPU density masks — no-mask regression", () => {
 
     const inj = injectUniforms(ctx);
     const volBase = 32;
-    // Volume data lanes are uploaded raw; masks never perturb them when no mask is present.
+    // Volume data lanes upload the linear albedo; masks never perturb them when no mask is present.
     expect(inj[volBase + 17]).toBeCloseTo(0.2, 6); // density
-    expect(inj[volBase + 20]).toBeCloseTo(0.25, 6); // albedo.r
-    expect(inj[volBase + 21]).toBeCloseTo(0.4, 6);
-    expect(inj[volBase + 22]).toBeCloseTo(0.6, 6);
+    expect(inj[volBase + 20]).toBeCloseTo(lin(0.25), 6); // albedo.r
+    expect(inj[volBase + 21]).toBeCloseTo(lin(0.4), 6);
+    expect(inj[volBase + 22]).toBeCloseTo(lin(0.6), 6);
   });
 
   it("keeps the baked sun colour in the no-mask integration payload", () => {
@@ -624,9 +627,9 @@ describe("VolumetricFogPassGPU density masks — no-mask regression", () => {
 
     const intg = integrateUniforms(ctx);
     const sunScale = 2 * 1.5 * 0.5; // intensity * volumetricIntensity * albedo, still baked
-    expect(intg[SUN_COLOUR_INDEX]).toBeCloseTo(1.0 * sunScale, 10);
-    expect(intg[SUN_COLOUR_INDEX + 1]).toBeCloseTo(0.5 * sunScale, 10);
-    expect(intg[SUN_COLOUR_INDEX + 2]).toBeCloseTo(0.25 * sunScale, 10);
+    expect(intg[SUN_COLOUR_INDEX]).toBeCloseTo(lin(1.0) * sunScale, 6);
+    expect(intg[SUN_COLOUR_INDEX + 1]).toBeCloseTo(lin(0.5) * sunScale, 6);
+    expect(intg[SUN_COLOUR_INDEX + 2]).toBeCloseTo(lin(0.25) * sunScale, 6);
     expect(intg[SUN_COLOUR_INDEX + 3]).toBe(1); // sun active flag untouched
     expect(Array.from(intg.slice(INTEGRATE_MASK_INDEX, INTEGRATE_MASK_INDEX + 8))).toEqual([
       0, 0, 0, 0, 1, 1, 1, 0,
@@ -647,9 +650,9 @@ describe("VolumetricFogPassGPU element-global density mask", () => {
 
     const inj = injectUniforms(ctx);
     // The global albedo is NOT baked: the shader applies mask.g per cell instead.
-    expect(inj[SCATTER_TINT_INDEX]).toBeCloseTo(0.9, 6);
-    expect(inj[SCATTER_TINT_INDEX + 1]).toBeCloseTo(0.6, 6);
-    expect(inj[SCATTER_TINT_INDEX + 2]).toBeCloseTo(0.3, 6);
+    expect(inj[SCATTER_TINT_INDEX]).toBeCloseTo(lin(0.9), 6);
+    expect(inj[SCATTER_TINT_INDEX + 1]).toBeCloseTo(lin(0.6), 6);
+    expect(inj[SCATTER_TINT_INDEX + 2]).toBeCloseTo(lin(0.3), 6);
     expect(Array.from(inj.slice(ELEMENT_MASK_INDEX, ELEMENT_MASK_INDEX + 8))).toEqual([
       10, 20, 30, 0, 5, 6, 7, 0,
     ]);
@@ -657,9 +660,9 @@ describe("VolumetricFogPassGPU element-global density mask", () => {
     // Same unbake for the directional sun path: albedo left to the shader.
     const intg = integrateUniforms(ctx);
     const sunScale = 2 * 1.5; // no albedo factor
-    expect(intg[SUN_COLOUR_INDEX]).toBeCloseTo(0.9 * sunScale, 6);
-    expect(intg[SUN_COLOUR_INDEX + 1]).toBeCloseTo(0.6 * sunScale, 6);
-    expect(intg[SUN_COLOUR_INDEX + 2]).toBeCloseTo(0.3 * sunScale, 6);
+    expect(intg[SUN_COLOUR_INDEX]).toBeCloseTo(lin(0.9) * sunScale, 6);
+    expect(intg[SUN_COLOUR_INDEX + 1]).toBeCloseTo(lin(0.6) * sunScale, 6);
+    expect(intg[SUN_COLOUR_INDEX + 2]).toBeCloseTo(lin(0.3) * sunScale, 6);
     expect(Array.from(intg.slice(INTEGRATE_MASK_INDEX, INTEGRATE_MASK_INDEX + 8))).toEqual([
       10, 20, 30, 0, 5, 6, 7, 0,
     ]);
@@ -892,7 +895,7 @@ describe("VolumetricFogPassGPU uniform layout parity with the real WGSL", () => 
     expect(inj[offsetOf(injectLayout, "phase")]).toBeCloseTo(0.42, 6);
     expect(inj[offsetOf(injectLayout, "nearFar")]).toBeCloseTo(0.1, 6);
     expect(inj[offsetOf(injectLayout, "nearFar") + 2]).toBe(8); // slice count
-    expect(inj[offsetOf(injectLayout, "scatterTint")]).toBeCloseTo(0.9, 6);
+    expect(inj[offsetOf(injectLayout, "scatterTint")]).toBeCloseTo(lin(0.9), 6);
     expect(inj[offsetOf(injectLayout, "elementMaskPosition") + 2]).toBe(30);
     expect(inj[offsetOf(injectLayout, "elementMaskSize") + 1]).toBe(6);
   });
@@ -908,7 +911,7 @@ describe("VolumetricFogPassGPU uniform layout parity with the real WGSL", () => 
     const intg = integrateUniforms(ctx);
     expect(intg.length).toBe(integrateLayout.floats);
     expect(intg[offsetOf(integrateLayout, "nearFar")]).toBeCloseTo(0.1, 6);
-    expect(intg[offsetOf(integrateLayout, "sunColorIntensity")]).toBeCloseTo(0.9 * 2, 5);
+    expect(intg[offsetOf(integrateLayout, "sunColorIntensity")]).toBeCloseTo(lin(0.9) * 2, 5);
     expect(intg[offsetOf(integrateLayout, "sunColorIntensity") + 3]).toBe(1);
     expect(intg[offsetOf(integrateLayout, "elementMaskPosition")]).toBe(10);
     expect(intg[offsetOf(integrateLayout, "elementMaskSize") + 2]).toBe(7);
@@ -1010,9 +1013,9 @@ describe("VolumetricFogPassGPU robustness and resource lifetime", () => {
     const sun = new DirectionalLight({ intensity: 1, color: new Color(1.0, 0.2, 0.1) });
     runMaskFrame(ctx, el, [], sun);
     const intg = integrateUniforms(ctx);
-    expect(intg[SUN_COLOUR_INDEX]).toBeCloseTo(1.0, 5);
-    expect(intg[SUN_COLOUR_INDEX + 1]).toBeCloseTo(0.2, 5);
-    expect(intg[SUN_COLOUR_INDEX + 2]).toBeCloseTo(0.1, 5);
+    expect(intg[SUN_COLOUR_INDEX]).toBeCloseTo(lin(1.0), 5);
+    expect(intg[SUN_COLOUR_INDEX + 1]).toBeCloseTo(lin(0.2), 5);
+    expect(intg[SUN_COLOUR_INDEX + 2]).toBeCloseTo(lin(0.1), 5);
   });
 
   it("builds its own froxel grid when the cluster grid is degenerate (clusteredLighting disabled)", () => {

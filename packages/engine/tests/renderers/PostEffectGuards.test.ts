@@ -2,6 +2,7 @@
 import { describe, expect, it, vi, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { Matrix4, Vector3D } from "../../src/math/index.js";
+import { Color } from "../../src/core/colors/index.js";
 import { PostEffectPipelineGate } from "../../src/renderers/post/PostEffectPipelineGate.js";
 import { DepthOfFieldPassGPU } from "../../src/renderers/post/passes/DepthOfFieldPassGPU.js";
 import { LightShaftsPassGPU } from "../../src/renderers/post/passes/LightShaftsPassGPU.js";
@@ -197,7 +198,7 @@ describe("LightShaftsPassGPU shadow matrices (A1 shafts bullet, A10)", () => {
         enabled: true,
         maxDistance: 50,
         asymmetry: 0.5,
-        color: { r: 1, g: 1, b: 1 },
+        color: new Color(1, 1, 1),
         density: 0.1,
         samples: 16,
         depthThreshold: 0.1,

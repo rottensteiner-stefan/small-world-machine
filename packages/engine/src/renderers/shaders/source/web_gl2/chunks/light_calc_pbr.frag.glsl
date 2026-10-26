@@ -501,7 +501,7 @@ if (transmission > 0.0) {
     screenUv = clamp(screenUv + refrDir.xy * vec2(refrAspect, 1.0) * thickness * 0.05, vec2(0.001), vec2(0.999));
 
     vec3 transmittedLight = targetToLinear(texture(u_opaqueMap, screenUv).rgb);
-    vec3 volumeTransmittance = VolumeAbsorption(u_matParam11.rgb, attenuationDist, thickness);
+    vec3 volumeTransmittance = VolumeAbsorption(sRGBToLinear(u_matParam11.rgb), attenuationDist, thickness);
     vec3 finalTransmission = transmittedLight * volumeTransmittance * albedo;
 
     vec3 f_refr = F_Schlick(dotNV, F0);

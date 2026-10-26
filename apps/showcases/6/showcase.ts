@@ -107,14 +107,14 @@ export class Showcase6 extends AbstractShowcase {
     this.scene.add(sun);
 
     const fillLight: DirectionalLight = new DirectionalLight({
-      color: new Color(0.9, 0.95, 1.0),
+      color: new Color(0.953, 0.977, 1),
       intensity: 0.7,
     });
     fillLight.direction.set(1, 0.8, 1.0).normalize();
     this.scene.add(fillLight);
 
     const backLight: DirectionalLight = new DirectionalLight({
-      color: new Color(1.0, 0.95, 0.85),
+      color: new Color(1, 0.977, 0.929),
       intensity: 0.45,
     });
     backLight.direction.set(0, -0.5, 1.2).normalize();

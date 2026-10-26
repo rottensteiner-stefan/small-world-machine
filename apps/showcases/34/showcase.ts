@@ -128,9 +128,9 @@ class Showcase34 extends AbstractShowcase {
     // The imposter bake reuses exactly the same light rig as the live scene (color, intensity,
     // direction) -- bakeImposter defaults to a neutral grey/white rig, and mismatched lighting
     // would make the billboards read as cut-outs lit by another sun instead of as same-lit trees.
-    const ambientColor = new Color(0.35, 0.4, 0.32);
+    const ambientColor = new Color(0.621, 0.659, 0.596);
     const ambientIntensity = 0.6;
-    const sunColor = new Color(1.0, 0.98, 0.9);
+    const sunColor = new Color(1, 0.991, 0.953);
     const sunIntensity = 1.6;
     const sunDirection: [number, number, number] = [-0.5, -1.0, -0.4];
 

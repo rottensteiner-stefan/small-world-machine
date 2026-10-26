@@ -67,7 +67,7 @@ export function buildDetector(scene: Scene, prismRotationY: number): LabDetector
   // P1-2: the detector is a matte dark absorber panel -- NOT a white phosphor lamp. The only
   // light on it must be the spectrum band (P0-3) the fan terminates into.
   const screenMat = new StandardMaterial({
-    color: new Color(0.05, 0.05, 0.065),
+    color: new Color(0.256, 0.256, 0.289),
     metallic: 0.0,
     roughness: 0.95,
   });
@@ -161,7 +161,7 @@ export function buildDetector(scene: Scene, prismRotationY: number): LabDetector
     graticule.geometry = new Cube({ size: 1 }).getGeometryData();
     graticule.material = new StandardMaterial({
       color: screenMat.color,
-      emissiveColor: new Color(0.55, 0.55, 0.55),
+      emissiveColor: new Color(0.762, 0.762, 0.762),
       emissiveIntensity: 0.5,
       emissiveMap: graticuleTex,
     });
@@ -175,7 +175,7 @@ export function buildDetector(scene: Scene, prismRotationY: number): LabDetector
 
     // Precision anodized bezel framing the sensor window inside the absorber housing
     const bezelMat = new StandardMaterial({
-      color: new Color(0.18, 0.2, 0.23),
+      color: new Color(0.459, 0.481, 0.513),
       metallic: 0.85,
       roughness: 0.35,
     });

@@ -52,8 +52,8 @@ class Showcase33 extends AbstractShowcase {
     this.camera.target.set(0, 3, WALL_Z);
     this.camera.addBehavior(new OrbitController({ input: this.input }));
 
-    this.scene.add(new AmbientLight({ color: new Color(0.25, 0.28, 0.32), intensity: 0.55 }));
-    const sun = new DirectionalLight({ color: new Color(1, 0.98, 0.92), intensity: 1.4 });
+    this.scene.add(new AmbientLight({ color: new Color(0.533, 0.561, 0.596), intensity: 0.55 }));
+    const sun = new DirectionalLight({ color: new Color(1, 0.991, 0.963), intensity: 1.4 });
     sun.position.set(8, 18, 10);
     sun.direction.set(-0.4, -1.0, -0.3);
     sun.castShadow = true;

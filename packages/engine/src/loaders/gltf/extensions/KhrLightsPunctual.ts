@@ -7,6 +7,7 @@ import { Color } from "../../../core/colors/Color.js";
 import { Vector3D } from "../../../math/index.js";
 import type { GltfExtensionPlugin } from "../GltfExtensionPlugin.js";
 import type { GltfLightJson } from "../writerTypes.js";
+import { GltfMaterialParser } from "../GltfMaterialParser.js";
 
 interface PunctualLightDef {
   type: string;
@@ -55,11 +56,20 @@ function readDirection(extras: LightExtras | undefined): Vector3D | undefined {
   return new Vector3D(d[0]!, d[1]!, d[2]!);
 }
 
+/** The sRGB-authored engine light colour as KHR_lights_punctual's linear RGB (ADR 0049). */
+function lightColorToGltf(color: Color): number[] {
+  return [
+    GltfMaterialParser.engineSRGBToLinear(color.r),
+    GltfMaterialParser.engineSRGBToLinear(color.g),
+    GltfMaterialParser.engineSRGBToLinear(color.b),
+  ];
+}
+
 function lightToDef(obj: unknown): GltfLightJson | undefined {
   if (obj instanceof PointLight) {
     return {
       type: "point",
-      color: [obj.color.r, obj.color.g, obj.color.b],
+      color: lightColorToGltf(obj.color),
       intensity: obj.intensity,
       range: obj.distance,
     };
@@ -73,7 +83,7 @@ function lightToDef(obj: unknown): GltfLightJson | undefined {
     writeShadowExtras(obj, extras);
     return {
       type: "directional",
-      color: [obj.color.r, obj.color.g, obj.color.b],
+      color: lightColorToGltf(obj.color),
       intensity: obj.intensity,
       extras,
     };
@@ -86,7 +96,7 @@ function lightToDef(obj: unknown): GltfLightJson | undefined {
     writeShadowExtras(obj, extras);
     return {
       type: "spot",
-      color: [obj.color.r, obj.color.g, obj.color.b],
+      color: lightColorToGltf(obj.color),
       intensity: obj.intensity,
       range: obj.distance,
       spot: { innerConeAngle: obj.angle * (1 - obj.penumbra), outerConeAngle: obj.angle },
@@ -128,7 +138,14 @@ export const khrLightsPunctual: GltfExtensionPlugin = {
     if (!def) return undefined;
 
     const options: PointLightOptions = { name, ...readShadowOptions(def.extras) };
-    if (def.color) options.color = new Color(def.color[0]!, def.color[1]!, def.color[2]!);
+    // KHR_lights_punctual colours are linear; engine light colours are sRGB-authored (ADR 0049).
+    if (def.color) {
+      options.color = new Color(
+        GltfMaterialParser.linearToEngineSRGB(def.color[0]!),
+        GltfMaterialParser.linearToEngineSRGB(def.color[1]!),
+        GltfMaterialParser.linearToEngineSRGB(def.color[2]!),
+      );
+    }
     if (undefined !== def.intensity) options.intensity = def.intensity;
     const extras = def.extras;
     if ("directional" === def.type) {

@@ -91,14 +91,14 @@ class Showcase27 extends AbstractShowcase {
     // 1. Ambient Light (Low for sharp shadow contrast)
     this.scene.add(
       new AmbientLight({
-        color: new Color(0.08, 0.09, 0.12),
+        color: new Color(0.317, 0.335, 0.381),
         intensity: 0.25,
       }),
     );
 
     // 2. Cascaded Sun Light (CSM) - faint cool moonlight, the spots carry the shadows
     const sunLight = new DirectionalLight({
-      color: new Color(0.7, 0.78, 1.0),
+      color: new Color(0.85, 0.893, 1),
       intensity: 0.2,
     });
     sunLight.position.set(8, 12, 6);
@@ -111,7 +111,7 @@ class Showcase27 extends AbstractShowcase {
     // 3. Two Moving Spotlights for Cross-Shadowing
     // Spot A: Warm Amber
     this._keySpotLightA = new SpotLight({
-      color: new Color(1.0, 0.65, 0.3),
+      color: new Color(1, 0.822, 0.579),
       intensity: 5.0,
       direction: new Vector3D(0, -1, 0),
       angle: Math.PI / 4,
@@ -127,7 +127,7 @@ class Showcase27 extends AbstractShowcase {
 
     // Spot B: Cool Cyan
     this._keySpotLightB = new SpotLight({
-      color: new Color(0.3, 0.75, 1.0),
+      color: new Color(0.579, 0.877, 1),
       intensity: 4.5,
       direction: new Vector3D(0, -1, 0),
       angle: Math.PI / 4.2,
@@ -358,7 +358,7 @@ class Showcase27 extends AbstractShowcase {
       // Narrow warm uplight aimed at the pillar so the gold veins catch the light (a spot, not a point
       // light: a point light mirrors as a bright orb in the polished floor).
       const uplight = new SpotLight({
-        color: new Color(1.0, 0.74, 0.35),
+        color: new Color(1, 0.872, 0.621),
         intensity: 8.5,
         direction: new Vector3D(Math.sin(angle) * 1.4, 2.6, Math.cos(angle) * 1.4),
         angle: Math.PI / 8.5,

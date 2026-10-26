@@ -114,6 +114,9 @@ export class VolumetricFogPassGL {
   private readonly _scratchCascadeSplits: Float32Array = new Float32Array(4);
   private readonly _scratchDirShadowInfo: Float32Array = new Float32Array(4);
   private readonly _scratchSunDir: Vector3D = new Vector3D();
+  // sRGB-authored fog tint / FogVolume colours decoded to linear before upload (ADR 0049).
+  private readonly _linearTint: Color = new Color();
+  private readonly _linearVolume: Color = new Color();
   private readonly _scratchPointLightPos: Float32Array = new Float32Array(16 * 4);
   private readonly _scratchPointLightColor: Float32Array = new Float32Array(16 * 4);
   private readonly _scratchSpotLightPos: Float32Array = new Float32Array(16 * 4);
@@ -385,6 +388,7 @@ export class VolumetricFogPassGL {
     }
 
     const albedo = Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0);
+    const tint = element.color.toLinear(this._linearTint);
     // While an element mask is bound the per-cell albedo is applied inside the shader, so the CPU
     // bake keeps the albedo factor out (1.0) and the mask re-applies it per box cell; without a mask
     // the bake stays exactly the pre-mask value (regression invariant).
@@ -396,14 +400,14 @@ export class VolumetricFogPassGL {
     if (this._uSunColorLoc) {
       gl2.uniform3f(
         this._uSunColorLoc,
-        sunActive ? dirLight!.color.r * element.color.r * sunScale : 0.0,
-        sunActive ? dirLight!.color.g * element.color.g * sunScale : 0.0,
-        sunActive ? dirLight!.color.b * element.color.b * sunScale : 0.0,
+        sunActive ? dirLight!.linearColor.r * tint.r * sunScale : 0.0,
+        sunActive ? dirLight!.linearColor.g * tint.g * sunScale : 0.0,
+        sunActive ? dirLight!.linearColor.b * tint.b * sunScale : 0.0,
       );
     }
 
     if (this._uFogColorLoc) {
-      gl2.uniform3f(this._uFogColorLoc, element.color.r, element.color.g, element.color.b);
+      gl2.uniform3f(this._uFogColorLoc, tint.r, tint.g, tint.b);
     }
 
     if (this._uAmbientLightLoc) {
@@ -480,16 +484,14 @@ export class VolumetricFogPassGL {
         if (loc.invTransform) gl2.uniformMatrix4fv(loc.invTransform, false, invMat.data);
         if (loc.params)
           gl2.uniform4f(loc.params, vol.shape, vol.density, vol.edgeFade, vol.emissionIntensity);
-        if (loc.albedo)
-          gl2.uniform4f(loc.albedo, vol.albedo.r, vol.albedo.g, vol.albedo.b, vol.noiseScale);
-        if (loc.emission)
-          gl2.uniform4f(
-            loc.emission,
-            vol.emission.r,
-            vol.emission.g,
-            vol.emission.b,
-            vol.noiseAmount,
-          );
+        if (loc.albedo) {
+          const a = vol.albedo.toLinear(this._linearVolume);
+          gl2.uniform4f(loc.albedo, a.r, a.g, a.b, vol.noiseScale);
+        }
+        if (loc.emission) {
+          const e = vol.emission.toLinear(this._linearVolume);
+          gl2.uniform4f(loc.emission, e.r, e.g, e.b, vol.noiseAmount);
+        }
         if (loc.size) gl2.uniform4f(loc.size, vol.size.x, vol.size.y, vol.size.z, vol.noiseSpeed);
       }
     }
@@ -508,9 +510,9 @@ export class VolumetricFogPassGL {
         this._scratchPointLightPos[base + 3] = pl.distance;
 
         const pScale = pl.intensity * pl.volumetricIntensity * bakedAlbedo;
-        this._scratchPointLightColor[base] = pl.color.r * pScale * element.color.r;
-        this._scratchPointLightColor[base + 1] = pl.color.g * pScale * element.color.g;
-        this._scratchPointLightColor[base + 2] = pl.color.b * pScale * element.color.b;
+        this._scratchPointLightColor[base] = pl.linearColor.r * pScale * tint.r;
+        this._scratchPointLightColor[base + 1] = pl.linearColor.g * pScale * tint.g;
+        this._scratchPointLightColor[base + 2] = pl.linearColor.b * pScale * tint.b;
         this._scratchPointLightColor[base + 3] = pl.decay;
       } else {
         this._scratchPointLightPos.fill(0, base, base + 4);
@@ -543,9 +545,9 @@ export class VolumetricFogPassGL {
         this._scratchSpotLightDir[base + 3] = sl.decay;
 
         const sScale = sl.intensity * sl.volumetricIntensity * bakedAlbedo;
-        this._scratchSpotLightColor[base] = sl.color.r * sScale * element.color.r;
-        this._scratchSpotLightColor[base + 1] = sl.color.g * sScale * element.color.g;
-        this._scratchSpotLightColor[base + 2] = sl.color.b * sScale * element.color.b;
+        this._scratchSpotLightColor[base] = sl.linearColor.r * sScale * tint.r;
+        this._scratchSpotLightColor[base + 1] = sl.linearColor.g * sScale * tint.g;
+        this._scratchSpotLightColor[base + 2] = sl.linearColor.b * sScale * tint.b;
         this._scratchSpotLightColor[base + 3] = 0.0;
 
         this._scratchSpotLightParams[base] = Math.cos(sl.angle);

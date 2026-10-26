@@ -32,5 +32,7 @@ fn main_image(@builtin(global_invocation_id) id: vec3<u32>) {
     col *= step(0.1, f.x) * step(0.1, f.y);
     col *= smoothstep(0.0, 0.3, r) * (1.0 - smoothstep(0.4, 1.5, r));
     
+    // compute.toys convention: the screen is linear colour.
+    col = pow(max(col, vec3f(0.0)), vec3f(2.2));
     textureStore(screen, id.xy, vec4f(col, 1.0));
 }

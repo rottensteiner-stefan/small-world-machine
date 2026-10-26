@@ -234,7 +234,7 @@ export class App extends SmallWorldMachine {
           texture: torchTex,
           spriteScale: 1.0,
           spriteY: 1.5,
-          lightColor: new Color(1.0, 0.6, 0.2),
+          lightColor: new Color(1, 0.793, 0.481),
           lightIntensity: 3.0,
         },
         S: { type: "lavaBall" },

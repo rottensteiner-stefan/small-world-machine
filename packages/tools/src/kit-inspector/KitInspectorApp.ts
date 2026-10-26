@@ -115,27 +115,27 @@ export class KitInspectorApp extends SmallWorldMachine {
 
     this._ambientLight = new AmbientLight({
       name: "InspectorAmbient",
-      color: new Color(0.2, 0.22, 0.26),
+      color: new Color(0.481, 0.502, 0.542),
       intensity: 0.6,
     });
 
     this._keyLight = new DirectionalLight({
       name: "InspectorKeyLight",
-      color: new Color(1.0, 0.98, 0.94),
+      color: new Color(1, 0.991, 0.972),
       intensity: 1.6,
       direction: new Vector3D(1.4, 2.0, 1.2).normalize(),
     });
 
     this._fillLight = new DirectionalLight({
       name: "InspectorFillLight",
-      color: new Color(0.65, 0.8, 1.0),
+      color: new Color(0.822, 0.904, 1),
       intensity: 0.65,
       direction: new Vector3D(-1.6, 1.0, -1.0).normalize(),
     });
 
     this._rimLight = new DirectionalLight({
       name: "InspectorRimLight",
-      color: new Color(0.9, 0.85, 0.8),
+      color: new Color(0.953, 0.929, 0.904),
       intensity: 0.8,
       direction: new Vector3D(0.2, -1.0, -2.0).normalize(),
     });
@@ -343,34 +343,34 @@ export class KitInspectorApp extends SmallWorldMachine {
   public setLightingPreset(preset: LightingPreset): void {
     this._currentLightingPreset = preset;
     if (preset === "studio") {
-      this._ambientLight.color.set(0.2, 0.22, 0.26);
+      this._ambientLight.color.set(0.481, 0.502, 0.542);
       this._ambientLight.intensity = 0.6;
-      this._keyLight.color.set(1.0, 0.98, 0.94);
+      this._keyLight.color.set(1, 0.991, 0.972);
       this._keyLight.intensity = 1.6;
       this._keyLight.direction.set(1.4, 2.0, 1.2).normalize();
-      this._fillLight.color.set(0.65, 0.8, 1.0);
+      this._fillLight.color.set(0.822, 0.904, 1);
       this._fillLight.intensity = 0.65;
-      this._rimLight.color.set(0.9, 0.85, 0.8);
+      this._rimLight.color.set(0.953, 0.929, 0.904);
       this._rimLight.intensity = 0.8;
     } else if (preset === "bunker") {
-      this._ambientLight.color.set(0.08, 0.08, 0.1);
+      this._ambientLight.color.set(0.317, 0.317, 0.351);
       this._ambientLight.intensity = 0.35;
-      this._keyLight.color.set(1.0, 0.68, 0.28); // Warm Kerosene amber
+      this._keyLight.color.set(1, 0.839, 0.561); // Warm Kerosene amber
       this._keyLight.intensity = 2.4;
       this._keyLight.direction.set(1.2, 1.6, 1.0).normalize();
-      this._fillLight.color.set(0.22, 0.32, 0.45); // Deep shadow cold
+      this._fillLight.color.set(0.502, 0.596, 0.696); // Deep shadow cold
       this._fillLight.intensity = 0.45;
-      this._rimLight.color.set(0.95, 0.5, 0.15);
+      this._rimLight.color.set(0.977, 0.73, 0.422);
       this._rimLight.intensity = 1.2;
     } else if (preset === "cold") {
-      this._ambientLight.color.set(0.12, 0.16, 0.22);
+      this._ambientLight.color.set(0.381, 0.435, 0.502);
       this._ambientLight.intensity = 0.4;
-      this._keyLight.color.set(0.72, 0.88, 1.0); // Industrial fluorescent
+      this._keyLight.color.set(0.861, 0.944, 1); // Industrial fluorescent
       this._keyLight.intensity = 2.0;
       this._keyLight.direction.set(0.6, 2.2, 0.8).normalize();
-      this._fillLight.color.set(0.2, 0.6, 0.85); // Frost cyan
+      this._fillLight.color.set(0.481, 0.793, 0.929); // Frost cyan
       this._fillLight.intensity = 0.8;
-      this._rimLight.color.set(0.4, 0.75, 1.0);
+      this._rimLight.color.set(0.659, 0.877, 1);
       this._rimLight.intensity = 1.0;
     }
   }

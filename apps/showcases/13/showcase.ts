@@ -28,7 +28,7 @@ class Showcase13 extends AbstractShowcase {
       bloom.intensity = 1.8;
       bloom.threshold = 0.8; // Natural HDR bloom threshold for glowing visor
       bloom.radius = 1.0;
-      bloom.color = new Color(1.2, 0.8, 1.6);
+      bloom.color = new Color(1.086, 0.904, 1.238);
     }
 
     // Camera setup
@@ -40,13 +40,13 @@ class Showcase13 extends AbstractShowcase {
 
     // Setup Lights to showcase PBR and dramatic shadows
     const ambientLight = new AmbientLight({
-      color: new Color(0.1, 0.12, 0.15),
+      color: new Color(0.351, 0.381, 0.422),
       intensity: 0.25, // Low ambient to let shadows pop with high contrast
     });
     this.scene.add(ambientLight);
 
     const mainLight = new DirectionalLight({
-      color: new Color(1.0, 0.95, 0.9),
+      color: new Color(1, 0.977, 0.953),
       intensity: 1.5,
     });
     mainLight.position.set(5, 8, 5);
@@ -57,7 +57,7 @@ class Showcase13 extends AbstractShowcase {
 
     // Studio Key Spotlight for crisp contour shadows
     const keySpotLight = new SpotLight({
-      color: new Color(1.0, 0.85, 0.7),
+      color: new Color(1, 0.929, 0.85),
       intensity: 4.0,
       direction: new Vector3D(0, -1, -0.5),
       angle: Math.PI / 4,
@@ -72,7 +72,7 @@ class Showcase13 extends AbstractShowcase {
     this.scene.add(keySpotLight);
 
     const fillLight = new DirectionalLight({
-      color: new Color(0.3, 0.5, 0.8), // Soft blue rim/fill light
+      color: new Color(0.579, 0.73, 0.904), // Soft blue rim/fill light
       intensity: 0.5,
     });
     fillLight.position.set(-5, 2, -2);
@@ -93,7 +93,7 @@ class Showcase13 extends AbstractShowcase {
       radialSegments: 48,
     }).getGeometryData();
     pedestal.material = new StandardMaterial({
-      color: new Color(0.12, 0.12, 0.14),
+      color: new Color(0.381, 0.381, 0.409),
       roughness: 0.35,
       metallic: 0.8,
       envMap: envTexture,
@@ -111,7 +111,7 @@ class Showcase13 extends AbstractShowcase {
       radialSegments: 64,
     }).getGeometryData();
     ground.material = new StandardMaterial({
-      color: new Color(0.06, 0.07, 0.08),
+      color: new Color(0.278, 0.299, 0.317),
       roughness: 0.6,
       metallic: 0.2,
       envMap: envTexture,

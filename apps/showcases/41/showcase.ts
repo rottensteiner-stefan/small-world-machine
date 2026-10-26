@@ -171,13 +171,13 @@ export class MetalReliefShowcase extends AbstractShowcase {
 
     // --- Lighting ---
     const ambient = new AmbientLight({
-      color: new Color(0.65, 0.68, 0.75),
+      color: new Color(0.822, 0.839, 0.877),
       intensity: 0.45,
     });
     this.scene.add(ambient);
 
     const sun = new DirectionalLight({
-      color: new Color(1.0, 0.95, 0.88),
+      color: new Color(1, 0.977, 0.944),
       intensity: 0.95,
       direction: new Vector3D(0.4, 0.7, 0.5).normalize(),
     });

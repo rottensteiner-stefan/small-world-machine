@@ -142,14 +142,14 @@ export class PrologueScene extends AbstractShowcase {
 
     // 3. Lighting (Atmospheric Noir)
     const ambient = new AmbientLight({
-      color: new Color(0.12, 0.15, 0.22),
+      color: new Color(0.381, 0.422, 0.502),
       intensity: 0.35,
     });
     this.scene.add(ambient);
 
     const dirLight = new DirectionalLight({
       direction: new Vector3D(0.3, -0.9, -0.4),
-      color: new Color(0.8, 0.85, 0.95),
+      color: new Color(0.904, 0.929, 0.977),
       intensity: 0.4,
     });
     this.scene.add(dirLight);
@@ -157,7 +157,7 @@ export class PrologueScene extends AbstractShowcase {
     // Flur-Lichtstrahl durch die Tür
     this._doorSpot = new SpotLight({
       name: "HallwayDoorBeam",
-      color: new Color(1.0, 0.82, 0.45),
+      color: new Color(1, 0.914, 0.696),
       intensity: 18.0,
       distance: 14.0,
       angle: Math.PI / 4.5,
@@ -307,7 +307,7 @@ export class PrologueScene extends AbstractShowcase {
       // Prozedur-Terminals und erhält das flackernde Leuchten der Eröffnungs-Narrative.
       const screenGlow = new PointLight({
         name: "ScreenGlow",
-        color: new Color(1.0, 0.65, 0.15),
+        color: new Color(1, 0.822, 0.422),
         intensity: 1.2,
         distance: 3.0,
       });
@@ -491,7 +491,7 @@ export class PrologueScene extends AbstractShowcase {
 
     // Materials
     const concreteWallMat = new StandardMaterial({
-      color: new Color(0.18, 0.2, 0.24),
+      color: new Color(0.459, 0.481, 0.523),
       roughness: 0.92,
       metallic: 0.1,
     });
@@ -500,13 +500,13 @@ export class PrologueScene extends AbstractShowcase {
     // (matches the real Flakturm reference photos), kept as its own material instance so it
     // can take the `brick_aged` kit texture independently of the poured-concrete walls.
     const brickWallMat = new StandardMaterial({
-      color: new Color(0.35, 0.22, 0.16),
+      color: new Color(0.621, 0.502, 0.435),
       roughness: 0.88,
       metallic: 0.05,
     });
 
     const floorMat = new StandardMaterial({
-      color: new Color(0.12, 0.13, 0.16),
+      color: new Color(0.381, 0.396, 0.435),
       roughness: 0.85,
       metallic: 0.2,
     });
@@ -609,19 +609,19 @@ export class PrologueScene extends AbstractShowcase {
     morgueGroup.position.set(0, 0, -9.0);
 
     const coldSteelMat = new StandardMaterial({
-      color: new Color(0.12, 0.16, 0.2),
+      color: new Color(0.381, 0.435, 0.481),
       roughness: 0.4,
       metallic: 0.7,
     });
 
     const frostTileMat = new StandardMaterial({
-      color: new Color(0.25, 0.32, 0.38),
+      color: new Color(0.533, 0.596, 0.644),
       roughness: 0.65,
       metallic: 0.2,
     });
 
     const pipeCopperMat = new StandardMaterial({
-      color: new Color(0.2, 0.4, 0.38),
+      color: new Color(0.481, 0.659, 0.644),
       roughness: 0.45,
       metallic: 0.8,
     });
@@ -646,7 +646,7 @@ export class PrologueScene extends AbstractShowcase {
     // rahmen die Fächer/Morgue-Zone; eigener Material-Instance, damit Bob (T4) sie
     // unabhängig mit `concrete_panel_smooth` texturieren kann (Flächenkatalog F11).
     const cutPanelMat = new StandardMaterial({
-      color: new Color(0.22, 0.26, 0.3),
+      color: new Color(0.502, 0.542, 0.579),
       roughness: 0.8,
       metallic: 0.1,
     });
@@ -716,7 +716,7 @@ export class PrologueScene extends AbstractShowcase {
     const corpseMesh = new Object3D("CorpseCover");
     corpseMesh.geometry = cubeGeo;
     corpseMesh.material = new StandardMaterial({
-      color: new Color(0.4, 0.45, 0.5),
+      color: new Color(0.659, 0.696, 0.73),
       roughness: 0.95,
       metallic: 0.05,
     });
@@ -728,7 +728,7 @@ export class PrologueScene extends AbstractShowcase {
     const cyanideGlow = new Object3D("CyanideNeckMark");
     cyanideGlow.geometry = cylGeo;
     cyanideGlow.material = new StandardMaterial({
-      color: new Color(0.05, 1.0, 0.35),
+      color: new Color(0.256, 1, 0.621),
       roughness: 0.1,
       metallic: 0.9,
     });
@@ -744,7 +744,7 @@ export class PrologueScene extends AbstractShowcase {
     // 🟢 Colorkey Emerald Spotlight (Focused on Neck Mark)
     this._cyanideSpotLight = new SpotLight({
       name: "CyanideColorkeySpot",
-      color: new Color(0.1, 1.0, 0.4),
+      color: new Color(0.351, 1, 0.659),
       intensity: 0.0, // Activated upon inspection
       distance: 6.0,
       angle: Math.PI / 6.0,
@@ -759,7 +759,7 @@ export class PrologueScene extends AbstractShowcase {
       const p = new Object3D(`FrostParticle_${i}`);
       p.geometry = frostGeo;
       p.material = new StandardMaterial({
-        color: new Color(0.7, 0.9, 1.0, 0.22),
+        color: new Color(0.85, 0.953, 1, 0.22),
         roughness: 1.0,
         metallic: 0.0,
         transparent: true,
@@ -836,7 +836,7 @@ export class PrologueScene extends AbstractShowcase {
   private _buildDustParticles(): void {
     const cubeGeo = new Cube({ size: 0.008 }).getGeometryData();
     const dustMat = new StandardMaterial({
-      color: new Color(0.78, 0.72, 0.62, 0.2),
+      color: new Color(0.893, 0.861, 0.805, 0.2),
       roughness: 1.0,
       metallic: 0.0,
       transparent: true,

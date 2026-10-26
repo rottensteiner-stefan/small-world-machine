@@ -40,7 +40,7 @@ class Showcase20 extends AbstractShowcase {
       bloom.intensity = 2.5;
       bloom.threshold = 0.8;
       bloom.radius = 1.5;
-      bloom.color = new Color(0.2, 0.8, 1.5);
+      bloom.color = new Color(0.481, 0.904, 1.202);
     }
 
     // 1. Grid & Lighting
@@ -74,7 +74,7 @@ class Showcase20 extends AbstractShowcase {
     gridTexture.repeat = { x: 10, y: 10 }; // 10x10 grid tiles
 
     const gridMat = new BasicMaterial({
-      color: new Color(0.6, 1.8, 3.0), // HDR Blue for heavy Bloom!
+      color: new Color(0.6, 1.8, 3.0), // HDR Blue for heavy Bloom! (sRGB-authored HDR, decodes to ~11 in blue)
       diffuseMap: gridTexture,
     });
     floor.material = gridMat;
@@ -179,7 +179,7 @@ class Showcase20 extends AbstractShowcase {
     thruster.geometry = new Sphere({ radius: 0.3 }).getGeometryData();
     const thrusterMat = new StandardMaterial({
       color: new Color(0, 0, 0),
-      emissiveColor: new Color(0, 5.0, 5.0),
+      emissiveColor: new Color(0, 2.078, 2.078),
       metallic: 0.0,
       roughness: 1.0,
     });
@@ -195,7 +195,9 @@ class Showcase20 extends AbstractShowcase {
         smoothness: 0.2,
         onUpdate: (multiplier: number): void => {
           // Modulate the HDR emissive brightness based on flicker multiplier
-          thrusterMat.emissiveColor.set(0, multiplier * 5.0, multiplier * 5.0);
+          // Emissive colours are sRGB-authored (ADR 0049): encode the linear HDR level.
+          const level = Math.pow(multiplier * 5.0, 1 / 2.2);
+          thrusterMat.emissiveColor.set(0, level, level);
         },
       }),
     );

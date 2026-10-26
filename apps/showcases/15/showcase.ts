@@ -79,7 +79,7 @@ export class Showcase15 extends AbstractShowcase {
     this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.15 }));
 
     const sun = new DirectionalLight({
-      color: new Color(1.0, 0.95, 0.9),
+      color: new Color(1, 0.977, 0.953),
       intensity: 1.2,
     });
     sun.position.set(10, 20, 10);
@@ -89,7 +89,7 @@ export class Showcase15 extends AbstractShowcase {
 
     // Orbiting point light
     this._orbitingLight = new PointLight({
-      color: new Color(1.0, 0.6, 0.3),
+      color: new Color(1, 0.793, 0.579),
       intensity: 2.0,
       distance: 30,
     });

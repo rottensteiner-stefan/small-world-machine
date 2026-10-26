@@ -38,6 +38,11 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     return this.gl;
   }
 
+  /** WebGL1 shaders encode with a fixed 2.2 and its post pass never re-encodes (ADR 0049). */
+  public override get outputGamma(): number {
+    return 2.2;
+  }
+
   /** Shared GL manager layer: compiled-program cache, uploaded-texture state and per-geometry
    * mesh cache (see the `gl/managers` modules). WebGL1 mounts the exact same classes as
    * WebGL2Renderer, with the `glsl100` compile/upload strategy selected at construction. */
@@ -891,9 +896,9 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       if (loc?.col)
         this.gl.uniform3f(
           loc.col,
-          pl.color.r * pl.intensity,
-          pl.color.g * pl.intensity,
-          pl.color.b * pl.intensity,
+          pl.linearColor.r * pl.intensity,
+          pl.linearColor.g * pl.intensity,
+          pl.linearColor.b * pl.intensity,
         );
       if (loc?.distance) this.gl.uniform1f(loc.distance, pl.distance);
       if (loc?.decay) this.gl.uniform1f(loc.decay, pl.decay);
@@ -923,9 +928,9 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       if (loc?.col) {
         this.gl.uniform3f(
           loc.col,
-          sl.color.r * sl.intensity,
-          sl.color.g * sl.intensity,
-          sl.color.b * sl.intensity,
+          sl.linearColor.r * sl.intensity,
+          sl.linearColor.g * sl.intensity,
+          sl.linearColor.b * sl.intensity,
         );
       }
       if (loc?.params) {
@@ -956,9 +961,9 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       if (loc?.col) {
         this.gl.uniform3f(
           loc.col,
-          al.color.r * al.intensity,
-          al.color.g * al.intensity,
-          al.color.b * al.intensity,
+          al.linearColor.r * al.intensity,
+          al.linearColor.g * al.intensity,
+          al.linearColor.b * al.intensity,
         );
       }
       if (loc?.right) this.gl.uniform3f(loc.right, m[0]!, m[1]!, m[2]!);

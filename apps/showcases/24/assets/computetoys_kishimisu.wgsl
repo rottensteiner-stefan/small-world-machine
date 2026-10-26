@@ -24,5 +24,7 @@ fn main_image(@builtin(global_invocation_id) id: vec3<u32>) {
         finalColor += col * d;
     }
     
+    // compute.toys convention: the screen is linear colour.
+    finalColor = pow(max(finalColor, vec3f(0.0)), vec3f(2.2));
     textureStore(screen, id.xy, vec4f(finalColor, 1.0));
 }

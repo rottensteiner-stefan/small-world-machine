@@ -71,5 +71,5 @@
     color = min(color, vec3f(1.0));
     [WGSL_FOG_CALC]
 
-    return vec4f(color, 1.0);
+    return vec4f(displayToTarget(color), 1.0);
 }

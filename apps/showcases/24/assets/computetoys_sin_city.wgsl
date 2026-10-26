@@ -84,5 +84,7 @@ fn main_image(@builtin(global_invocation_id) id: vec3<u32>) {
         col = mix(col, vec3f(0.02, 0.0, 0.05), smoothstep(20.0, 100.0, t));
     }
     
+    // compute.toys convention: the screen is linear colour.
+    col = pow(max(col, vec3f(0.0)), vec3f(2.2));
     textureStore(screen, id.xy, vec4f(col, 1.0));
 }

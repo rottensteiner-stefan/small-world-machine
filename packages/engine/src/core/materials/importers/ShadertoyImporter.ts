@@ -13,9 +13,13 @@ export class ShadertoyImporter implements ShaderImporter {
 
     const fsGLSL300 = `#version 300 es
 precision highp float;
+precision highp int;
 
 in vec2 v_uv;
 out vec4 fragColor;
+
+// The global gamma lane and displayToTarget (ADR 0049): Shadertoy output is display-referred sRGB.
+[LIGHT_DEFS]
 
 uniform vec3 iResolution;
 uniform float iTime;
@@ -31,7 +35,9 @@ ${sourceCode}
 void main() {
     // Shadertoy expects fragCoord in pixels (0 to resolution)
     vec2 fragCoord = v_uv * iResolution.xy;
-    mainImage(fragColor, fragCoord);
+    vec4 color = vec4(0.0);
+    mainImage(color, fragCoord);
+    fragColor = vec4(displayToTarget(color.rgb), color.a);
 }`;
 
     const vsGLSL100 = `[BASE_VS]`;

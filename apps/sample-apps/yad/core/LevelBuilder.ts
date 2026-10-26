@@ -89,8 +89,8 @@ export class LevelBuilder {
     const lavaMat = new FluidSurfaceMaterial({
       noiseMap: config.lavaNoiseMap,
       normalMap: config.lavaNormalMap,
-      color: new Color(1.5, 0.5, 0.0),
-      edgeColor: new Color(0.1, 0.05, 0.05),
+      color: new Color(1.202, 0.73, 0),
+      edgeColor: new Color(0.351, 0.256, 0.256),
       flowSpeed: 0.3,
       distortion: 2.0,
       viscosity: 5.0,
@@ -276,8 +276,8 @@ export class LevelBuilder {
             lavaBall.geometry = sphereGeo;
             const ballMat = new FluidSurfaceMaterial({
               noiseMap: config.lavaNoiseMap,
-              color: new Color(2.0, 0.8, 0.0),
-              edgeColor: new Color(0.1, 0.05, 0.05),
+              color: new Color(1.37, 0.904, 0),
+              edgeColor: new Color(0.351, 0.256, 0.256),
               flowSpeed: 1.5,
               distortion: 2.0,
               viscosity: 5.0,
@@ -287,7 +287,7 @@ export class LevelBuilder {
             lavaBall.position.set(worldX, 1.5, worldZ);
 
             const light = new PointLight({
-              color: new Color(1.0, 0.4, 0.0),
+              color: new Color(1, 0.659, 0),
               intensity: 4.0,
               distance: 10,
             });

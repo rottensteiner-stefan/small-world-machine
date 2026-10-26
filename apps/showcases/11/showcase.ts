@@ -52,7 +52,7 @@ class Showcase11 extends AbstractShowcase {
 
     // Add a PointLight at the sun's position to illuminate the scene
     const sunLight: PointLight = new PointLight({
-      color: new Color(1, 0.9, 0.5),
+      color: new Color(1, 0.953, 0.73),
       intensity: 1.5,
       distance: 50,
     });

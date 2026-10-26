@@ -249,24 +249,17 @@ export class StandardMaterial extends AbstractMaterial {
     },
     // Lane 11 (engine-wide free 11..15): KHR_materials_volume attenuation colour. The shaders
     // previously passed ALBEDO into Beer-Lambert VolumeAbsorption, silently dropping the imported
-    // attenuationColor (P3/S1 R1, severity error, E1-A + E2-A). The RGB travels LINEAR/RAW (the
-    // ORM/normal 'roh' convention -- no sRGB decode ahead of the Beer-Lambert kernel). The free
-    // scalar `u_thresholds[3]` (StandardMaterial.ts:392) cannot hold a vec3, so an owned typed lane
-    // carries it and the shaders read obj.matParam11.xyz / u_matParam11.rgb only on tiers with the
-    // transmission path (WebGPU + WebGL2; WebGL1 has no transmission block, E-M13).
-    // S5/S1 color-space ruling (campaign-lead, 2026-10-24): RESOLVED as LINEAR/RAW by design. S5
-    // EP-4 established an sRGB-authored convention for the ALBEDO surface color (`Material.color`
-    // / baseColorFactor, single loader encode). attenuationColor is a distinct PHYSICAL quantity:
-    // KHR_materials_volume volume-absorption color feeding a Beer-Lambert kernel, authored in
-    // linear/raw spectral terms (e.g. incandescent material temperature curves). It must NOT be
-    // run through the sRGB albedo encode/decode pair, so the loader applies no conversion here
-    // and this lane stays LINEAR/RAW. (R1 review nit 3 closed.)
+    // attenuationColor (P3/S1 R1). The scalar `u_thresholds[3]` cannot hold a vec3, so an owned typed
+    // lane carries it, read only on tiers with the transmission path (WebGPU + WebGL2; WebGL1 has no
+    // transmission block, E-M13). Like every engine Color it is sRGB-authored (ADR 0049, superseding
+    // the 2026-10-24 LINEAR/RAW ruling): the glTF loader encodes the linear factor once, the shaders
+    // decode it with sRGBToLinear ahead of the Beer-Lambert kernel.
     {
       semantic: "attenuationColor",
       lane: "u_matParam11",
       note:
-        "rgb = volumetric attenuation colour (LINEAR/RAW — physical quantity, NOT the sRGB albedo lane " +
-        "per S5 EP-4 ruling 2026-10-24), w = 1.0. " +
+        "rgb = volumetric attenuation colour (sRGB-authored, decoded in the shader like every engine " +
+        "Color, ADR 0049), w = 1.0. " +
         "Only meaningful with USE_TRANSMISSION; never read on WebGL1 (no transmission path).",
     },
   ];

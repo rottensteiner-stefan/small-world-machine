@@ -416,7 +416,7 @@ export const POOL_PRESETS: readonly PoolPreset[] = [
     ],
     dropper: debris([0.15, 0.09, 0.08], 0.4),
     // Low over the surface: the orange light bleeds onto the frame and floaters
-    light: { color: [1.0, 0.45, 0.1], intensity: 8.5, distance: 14, y: 0.45 },
+    light: { color: [1.0, 0.696, 0.351], intensity: 8.5, distance: 14, y: 0.45 },
   },
   // South terrace: stylized NPR lava, one pool per RampLUT preset.
   stylizedLavaPool(
@@ -502,7 +502,7 @@ export const POOL_PRESETS: readonly PoolPreset[] = [
       [ball([0.2, 0.9, 0.3], 0.35), 1.0, -1.1, 0.07, 1.7],
     ],
     dropper: barrel("hazard"),
-    light: { color: [0.2, 1.0, 0.3], intensity: 6.5, distance: 14, y: 0.55 },
+    light: { color: [0.481, 1.0, 0.579], intensity: 6.5, distance: 14, y: 0.55 },
   },
   {
     key: "petroleum-oil",

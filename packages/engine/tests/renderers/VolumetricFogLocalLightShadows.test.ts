@@ -118,14 +118,14 @@ describe("VolumetricFogPassGPU local light shadows", () => {
     expect(injectUniforms((e) => (e.localLightShadows = false))[SCATTER_TINT_INDEX + 3]).toBe(0);
   });
 
-  it("keeps the tint (color * scattering albedo) in scatterTint.rgb next to the flag", () => {
+  it("keeps the tint (linear color * scattering albedo) in scatterTint.rgb next to the flag", () => {
     const u = injectUniforms((e) => {
       e.color = new Color(1.0, 0.5, 0.25);
       e.scatteringAlbedo = 0.5;
     });
-    expect(Array.from(u.slice(SCATTER_TINT_INDEX, SCATTER_TINT_INDEX + 3))).toEqual([
-      0.5, 0.25, 0.125,
-    ]);
+    // The sRGB-authored tint is decoded before the albedo bake (ADR 0049).
+    const expected = [1.0, 0.5, 0.25].map((c) => Math.pow(c, 2.2) * 0.5);
+    for (let k = 0; k < 3; k++) expect(u[SCATTER_TINT_INDEX + k]).toBeCloseTo(expected[k]!, 6);
     expect(u[SCATTER_TINT_INDEX + 3]).toBe(1);
   });
 });

@@ -115,16 +115,17 @@ describe("GltfMaterialParser", () => {
     expect(mat.emissiveIntensity).toBe(4.5);
     expect(mat.clearcoat).toBe(0.9);
     expect(mat.clearcoatRoughness).toBe(0.15);
-    expect(mat.sheenColor.r).toBeCloseTo(0.95);
-    expect(mat.sheenColor.g).toBeCloseTo(0.85);
-    expect(mat.sheenColor.b).toBeCloseTo(0.75);
+    // glTF colour factors are linear; the engine Colour is sRGB-authored (ADR 0049).
+    expect(mat.sheenColor.r).toBeCloseTo(Math.pow(0.95, 1 / 2.2));
+    expect(mat.sheenColor.g).toBeCloseTo(Math.pow(0.85, 1 / 2.2));
+    expect(mat.sheenColor.b).toBeCloseTo(Math.pow(0.75, 1 / 2.2));
     expect(mat.sheenRoughness).toBe(0.4);
     expect(mat.transmission).toBe(0.88);
     expect(mat.thickness).toBe(2.5);
     expect(mat.attenuationDistance).toBe(12.0);
-    expect(mat.attenuationColor.r).toBeCloseTo(0.1);
-    expect(mat.attenuationColor.g).toBeCloseTo(0.4);
-    expect(mat.attenuationColor.b).toBeCloseTo(0.9);
+    expect(mat.attenuationColor.r).toBeCloseTo(Math.pow(0.1, 1 / 2.2));
+    expect(mat.attenuationColor.g).toBeCloseTo(Math.pow(0.4, 1 / 2.2));
+    expect(mat.attenuationColor.b).toBeCloseTo(Math.pow(0.9, 1 / 2.2));
     expect(mat.ior).toBe(1.33);
   });
 });

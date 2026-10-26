@@ -85,9 +85,9 @@ interface MoodPreset {
 // lifted blacks, cool highlights, vignette, fine grain.
 const MOODS: Record<Mood, MoodPreset> = {
   [Mood.NIGHT]: {
-    ambientColor: new Color(0.04, 0.07, 0.14),
+    ambientColor: new Color(0.232, 0.299, 0.409),
     ambientIntensity: 0.2,
-    keyColor: new Color(0.2, 0.45, 0.7),
+    keyColor: new Color(0.481, 0.696, 0.85),
     keyIntensity: 0.4,
     spotIntensity: 2.2,
     neon: 1.0,
@@ -110,9 +110,9 @@ const MOODS: Record<Mood, MoodPreset> = {
     dripIntensity: 0.45,
   },
   [Mood.DAY]: {
-    ambientColor: new Color(0.62, 0.64, 0.68),
+    ambientColor: new Color(0.805, 0.816, 0.839),
     ambientIntensity: 0.85,
-    keyColor: new Color(0.86, 0.88, 0.92),
+    keyColor: new Color(0.934, 0.944, 0.963),
     keyIntensity: 0.55,
     spotIntensity: 0.0,
     neon: 0.12,
@@ -122,7 +122,7 @@ const MOODS: Record<Mood, MoodPreset> = {
     fogColor: new Color(0.816, 0.828, 0.839),
     fogDensity: 0.03,
     showSkybox: false,
-    clearColor: new Color(0.8, 0.82, 0.84, 1),
+    clearColor: new Color(0.904, 0.914, 0.924, 1),
     bloom: 0.12,
     vignetteDarkness: 0.95,
     vignetteOffset: 0.7,
@@ -289,14 +289,14 @@ class Showcase30 extends AbstractShowcase {
 
     // 1. Dark Rainy Night Ambient
     this._ambientLight = new AmbientLight({
-      color: new Color(0.04, 0.07, 0.14),
+      color: new Color(0.232, 0.299, 0.409),
       intensity: 0.2,
     });
     this.scene.add(this._ambientLight);
 
     // 2. Far Street Rim Light (Moonlight through rain haze; overcast sky fill in the day mood)
     this._keyLight = new DirectionalLight({
-      color: new Color(0.2, 0.45, 0.7),
+      color: new Color(0.481, 0.696, 0.85),
       intensity: 0.4,
     });
     this._keyLight.position.set(5, 15, -10);
@@ -306,7 +306,7 @@ class Showcase30 extends AbstractShowcase {
 
     // 3. Neon Cyberpunk Street Spotlights
     this._spotTeal = new SpotLight({
-      color: new Color(0.05, 0.95, 1.0),
+      color: new Color(0.256, 0.977, 1),
       intensity: 2.2,
       angle: Math.PI / 4,
       penumbra: 0.4,
@@ -318,7 +318,7 @@ class Showcase30 extends AbstractShowcase {
     this.scene.add(this._spotTeal);
 
     this._spotPink = new SpotLight({
-      color: new Color(1.0, 0.08, 0.65),
+      color: new Color(1, 0.317, 0.822),
       intensity: 2.2,
       angle: Math.PI / 4,
       penumbra: 0.4,
@@ -520,7 +520,7 @@ class Showcase30 extends AbstractShowcase {
     this.scene.add(this._neonSignMagenta);
 
     const magentaLight = new PointLight({
-      color: new Color(1.0, 0.05, 0.6),
+      color: new Color(1, 0.256, 0.793),
       intensity: 4.5,
       distance: 12.0,
     });
@@ -536,7 +536,7 @@ class Showcase30 extends AbstractShowcase {
     this.scene.add(this._neonSignCyan);
 
     const cyanLight = new PointLight({
-      color: new Color(0.05, 0.95, 1.0),
+      color: new Color(0.256, 0.977, 1),
       intensity: 4.5,
       distance: 12.0,
     });
@@ -563,7 +563,7 @@ class Showcase30 extends AbstractShowcase {
     // Soft camera-side key light to sculpt the car's metallic body contours and spoiler. The paint
     // mirrors the night sky, which decodes dark since ADR 0049, so this light carries the shape.
     const carKeyLight = new PointLight({
-      color: new Color(0.65, 0.8, 1.0),
+      color: new Color(0.822, 0.904, 1),
       intensity: 7.0,
       distance: 8.0,
     });
@@ -616,7 +616,7 @@ class Showcase30 extends AbstractShowcase {
     this._hoverCar.add(underglowBar);
 
     const underglowLight = new PointLight({
-      color: new Color(0.05, 0.95, 1.0),
+      color: new Color(0.256, 0.977, 1),
       intensity: 2.0,
       distance: 3.5,
     });
@@ -637,7 +637,7 @@ class Showcase30 extends AbstractShowcase {
     this._hoverCar.add(headlights);
 
     const headlightBeam = new PointLight({
-      color: new Color(0.85, 0.95, 1.0),
+      color: new Color(0.929, 0.977, 1),
       intensity: 1.5,
       distance: 6.0,
     });
@@ -657,7 +657,7 @@ class Showcase30 extends AbstractShowcase {
     this._hoverCar.add(tailLights);
 
     const tailLightGlow = new PointLight({
-      color: new Color(1.0, 0.05, 0.1),
+      color: new Color(1, 0.256, 0.351),
       intensity: 2.0,
       distance: 3.5,
     });

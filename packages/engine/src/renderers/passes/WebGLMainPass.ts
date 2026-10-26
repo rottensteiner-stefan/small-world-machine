@@ -50,6 +50,10 @@ export class WebGLMainPass implements WebGLRenderPass {
     // transparent / post-process draws would turn the depth clear into a no-op)
     gl.depthMask(true);
     (renderer as AbstractWebGLRenderer).resetStateCache();
+    // The sRGB clear colour in the forward pass's output space (ADR 0049); set per pass because the
+    // lane follows postProcessing.enabled and shadow passes repoint gl.clearColor.
+    const cc = renderer.targetClearColor;
+    gl.clearColor(cc.r, cc.g, cc.b, cc.a);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const writesNormals = renderer.hasNormalTarget;
     if (writesNormals) renderer.clearNormalTarget();

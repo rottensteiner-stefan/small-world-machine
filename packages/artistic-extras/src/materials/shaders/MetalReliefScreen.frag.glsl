@@ -158,6 +158,6 @@ void main() {
         shadedColor = centerTex.rgb;
     }
 
-    fragColor = vec4(shadedColor, centerTex.a);
+    fragColor = vec4(displayToTarget(shadedColor), centerTex.a);
     [FOG_CALC]
 }

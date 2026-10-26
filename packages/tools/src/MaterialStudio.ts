@@ -53,11 +53,11 @@ export class MaterialStudioApp extends SmallWorldMachine {
 
     this.scene.add(new AmbientLight({ color: new Color(1, 1, 1), intensity: 0.15 }));
 
-    const keyLight = new DirectionalLight({ color: new Color(1, 0.95, 0.9), intensity: 1.2 });
+    const keyLight = new DirectionalLight({ color: new Color(1, 0.977, 0.953), intensity: 1.2 });
     keyLight.direction.set(1.5, 1, 1).normalize();
     this.scene.add(keyLight);
 
-    const fillLight = new DirectionalLight({ color: new Color(0.6, 0.8, 1.0), intensity: 0.5 });
+    const fillLight = new DirectionalLight({ color: new Color(0.793, 0.904, 1), intensity: 0.5 });
     fillLight.direction.set(-1.5, -0.5, -1).normalize();
     this.scene.add(fillLight);
 

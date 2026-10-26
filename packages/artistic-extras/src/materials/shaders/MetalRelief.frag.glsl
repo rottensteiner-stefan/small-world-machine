@@ -176,6 +176,6 @@ void main() {
 
     vec3 shadedColor = min(diffuseLight + specularLight, vec3(1.0));
 
-    fragColor = vec4(shadedColor, baseAlbedo.a);
+    fragColor = vec4(displayToTarget(shadedColor), baseAlbedo.a);
     [FOG_CALC]
 }

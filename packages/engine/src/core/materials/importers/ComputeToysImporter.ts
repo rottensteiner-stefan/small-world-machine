@@ -77,7 +77,10 @@ fn fs(in: Out) -> @location(0) vec4f {
     let id_x = u32(clampedUV.x * custom.resolution.x);
     let id_y = u32(clampedUV.y * custom.resolution.y); // UV.y is 0 at bottom, 1 at top in Small World Machine Plane
     let id = vec3<u32>(id_x, id_y, 0u);
-    return compute_toys_main(id);
+    // compute.toys writes LINEAR colour to \`screen\` (its blit encodes to sRGB): encode it the way
+    // the forward pass does for the active gamma lane (ADR 0049).
+    let c = compute_toys_main(id);
+    return vec4f(pow(max(c.rgb, vec3f(0.0)), vec3f(1.0 / global.gamma)), c.a);
 }
 `;
 

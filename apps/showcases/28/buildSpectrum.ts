@@ -47,7 +47,7 @@ export function buildSpectrum(
       band.color.b * 2.2 * band.luminosity,
     );
     const rayMat = new StandardMaterial({
-      color: new Color(0.9, 0.9, 0.9, 0.35),
+      color: new Color(0.953, 0.953, 0.953, 0.35),
       emissiveColor: emissive,
       emissiveIntensity: 0.65,
       transparent: true,
@@ -79,7 +79,7 @@ export function buildSpectrum(
   }).getGeometryData();
   internalPath.material = new StandardMaterial({
     color: new Color(1.0, 1.0, 1.0, 0.15),
-    emissiveColor: new Color(0.85, 0.9, 0.95),
+    emissiveColor: new Color(0.929, 0.953, 0.977),
     emissiveIntensity: 0.95,
     transparent: true,
   });
@@ -128,7 +128,7 @@ export function buildSpectrum(
   // P2-2: Chromatic bounce SpotLight near the exit fan (cap <= 3 spots total in scene)
   const chromaticBounceLight = new SpotLight({
     name: "ChromaticBounceSpot",
-    color: new Color(0.2, 0.8, 0.85),
+    color: new Color(0.481, 0.904, 0.929),
     intensity: chromaticBounceIntensity,
     distance: 6.5,
     angle: Math.PI / 4,

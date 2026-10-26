@@ -83,7 +83,7 @@ export class MainRenderPass implements RenderPass {
     const color = clear ? this._clearColor : this._loadColor;
     const normal = clear ? this._clearNormal : this._loadNormal;
     color.view = targetView;
-    if (clear) color.clearValue = renderer.clearColor;
+    if (clear) color.clearValue = renderer.targetClearColor;
     attachments.length = 0;
     attachments.push(color);
     if (normalView) {

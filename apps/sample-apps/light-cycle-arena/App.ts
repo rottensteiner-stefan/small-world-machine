@@ -35,8 +35,8 @@ const MAX_TRAIL_SEGMENTS = ARENA_CELLS * ARENA_CELLS;
 const IDLE_TIME_SCALE = 0.08;
 const TIME_SCALE_LERP_SPEED = 6.0;
 
-const PLAYER_COLOR = new Color(0.25, 0.85, 0.95);
-const AI_COLOR = new Color(1.0, 0.35, 0.55);
+const PLAYER_COLOR = new Color(0.533, 0.929, 0.977);
+const AI_COLOR = new Color(1, 0.621, 0.762);
 
 /**
  * Light Cycle Arena -- a Tron-style grid duel built almost entirely out of engine primitives
@@ -82,7 +82,7 @@ export class App extends SmallWorldMachine {
     this.camera.updateProjectionMatrix();
     this.camera.setStrategy(CameraStrategyType.ISOMETRIC);
 
-    scene.add(new AmbientLight({ color: new Color(0.5, 0.55, 0.7), intensity: 0.75 }));
+    scene.add(new AmbientLight({ color: new Color(0.73, 0.762, 0.85), intensity: 0.75 }));
 
     this._grid = new ArenaGrid(GRID_SIZE, ARENA_CELLS);
     const arenaWorldSize = ARENA_CELLS * GRID_SIZE;
@@ -92,7 +92,10 @@ export class App extends SmallWorldMachine {
     // exactly the "glowing floor grid" a Tron arena needs, no texture asset required.
     const floor = new Object3D("Floor");
     floor.geometry = new Ground({ width: arenaWorldSize, depth: arenaWorldSize }).getGeometryData();
-    floor.material = new StandardMaterial({ color: new Color(0.02, 0.02, 0.04), roughness: 0.9 });
+    floor.material = new StandardMaterial({
+      color: new Color(0.169, 0.169, 0.232),
+      roughness: 0.9,
+    });
     floor.isCollidable = false;
     scene.add(floor);
 
@@ -101,15 +104,15 @@ export class App extends SmallWorldMachine {
       size: arenaWorldSize,
       divisions: ARENA_CELLS,
     }).getGeometryData();
-    gridLines.material = new WireframeMaterial(new Color(0.25, 0.85, 0.95));
+    gridLines.material = new WireframeMaterial(new Color(0.533, 0.929, 0.977));
     gridLines.position.y = 0.02; // clear of the floor plane, avoids z-fighting
     gridLines.isCollidable = false;
     scene.add(gridLines);
 
     // --- Perimeter walls: four glowing slabs marking the arena bounds ---
     const wallMat = new StandardMaterial({
-      color: new Color(0.6, 0.7, 1.0),
-      emissiveColor: new Color(0.6, 0.7, 1.0),
+      color: new Color(0.793, 0.85, 1),
+      emissiveColor: new Color(0.793, 0.85, 1),
       emissiveIntensity: 2.0,
       roughness: 0.4,
     });

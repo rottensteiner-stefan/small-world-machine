@@ -112,7 +112,7 @@ class Showcase23 extends AbstractShowcase {
     this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.2 }));
 
     const purpleLight = new PointLight({
-      color: new Color(0.69, 0.0, 1.0),
+      color: new Color(0.845, 0, 1),
       intensity: 5.0,
       distance: 50.0,
     });
@@ -120,7 +120,7 @@ class Showcase23 extends AbstractShowcase {
     scene.add(purpleLight);
 
     const blueLight = new PointLight({
-      color: new Color(0.0, 0.8, 1.0),
+      color: new Color(0, 0.904, 1),
       intensity: 3.0,
       distance: 50.0,
     });
@@ -285,7 +285,7 @@ class Showcase23 extends AbstractShowcase {
 
     // Add a point light to the marble to create a true "glow" on the environment
     const marbleGlow = new PointLight({
-      color: new Color(0.1, 0.8, 1.0),
+      color: new Color(0.351, 0.904, 1),
       intensity: 100.0, // PBR needs high intensity to visibly illuminate the floor!
       distance: 30.0,
     });

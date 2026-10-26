@@ -140,5 +140,5 @@ fn mrs_voronoiFacets(uv: vec2f, scale: f32) -> vec3f {
 
     [WGSL_FOG_CALC]
 
-    return vec4f(color, centerTex.a);
+    return vec4f(displayToTarget(color), centerTex.a);
 }

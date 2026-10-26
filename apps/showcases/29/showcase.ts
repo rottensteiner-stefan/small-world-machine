@@ -90,7 +90,7 @@ class Showcase29 extends AbstractShowcase {
       this._bloom.threshold = 0.8;
       this._bloom.softThreshold = 0.25;
       this._bloom.radius = 1.3;
-      this._bloom.color = new Color(1.0, 0.92, 0.76);
+      this._bloom.color = new Color(1, 0.963, 0.883);
     }
 
     // Horizon-Based Ambient Occlusion for deep contact shadows under moldings & flutings
@@ -134,7 +134,7 @@ class Showcase29 extends AbstractShowcase {
     // 2. Multi-Tiered Mediterranean Lighting & Crytek-Grade Chiaroscuro
     // A. Deep Ambient Shadow: Low ambient creates dark, moody shaded arcade corridors
     this._ambientLight = new AmbientLight({
-      color: new Color(0.2, 0.18, 0.16),
+      color: new Color(0.481, 0.459, 0.435),
       intensity: 0.08, // Low intensity so covered walkways are in deep shadow
     });
     this.scene.add(this._ambientLight);
@@ -143,7 +143,7 @@ class Showcase29 extends AbstractShowcase {
     // Upper gallery near-balustrade bounce: Narrow cones pointing straight up (+Y)
     for (const bx of [-9.0, -4.5, 0.0, 4.5, 9.0]) {
       const spot = new SpotLight({
-        color: new Color(1.0, 0.62, 0.22),
+        color: new Color(1, 0.805, 0.502),
         intensity: 32.0,
         distance: 12.0,
         angle: Math.PI / 2.6,
@@ -159,7 +159,7 @@ class Showcase29 extends AbstractShowcase {
     // Upper gallery opposite-balustrade bounce (pointing up into opposite arches)
     for (const bx of [-8.0, 0.0, 8.0]) {
       const spot = new SpotLight({
-        color: new Color(1.0, 0.62, 0.22),
+        color: new Color(1, 0.805, 0.502),
         intensity: 26.0,
         distance: 12.0,
         angle: Math.PI / 2.6,
@@ -175,7 +175,7 @@ class Showcase29 extends AbstractShowcase {
     // Ground floor courtyard bounce (point lights for broad upward courtyard fill)
     for (const bx of [-9.0, 0.0, 9.0]) {
       const bounce = new PointLight({
-        color: new Color(1.0, 0.7, 0.35),
+        color: new Color(1, 0.85, 0.621),
         intensity: 18.0,
         distance: 20.0,
         decay: 1.0,
@@ -187,7 +187,7 @@ class Showcase29 extends AbstractShowcase {
 
     // C. Gleaming Mediterranean Sun (strikes balustrade ledge & casts crisp diagonal column shadows)
     this._sunLight = new DirectionalLight({
-      color: new Color(1.0, 0.94, 0.78),
+      color: new Color(1, 0.972, 0.893),
       intensity: 5.5,
     });
     this._sunLight.position.set(14, 28, 12);
@@ -233,7 +233,7 @@ class Showcase29 extends AbstractShowcase {
 
         // Boost stone/tile/fabric albedo out of glTF's 0.588 grey clamp into warm Italian travertine vibrancy
         if (obj.material instanceof StandardMaterial) {
-          obj.material.color = new Color(1.18, 1.1, 0.98);
+          obj.material.color = new Color(1.078, 1.044, 0.991);
         }
 
         for (const child of obj.children) {
@@ -248,8 +248,8 @@ class Showcase29 extends AbstractShowcase {
 
     // 5. Warm Cloister Lanterns & Glowing Flame Fixtures
     const lanternMat = new StandardMaterial({
-      color: new Color(1.0, 0.8, 0.4),
-      emissiveColor: new Color(1.0, 0.65, 0.2),
+      color: new Color(1, 0.904, 0.659),
+      emissiveColor: new Color(1, 0.822, 0.481),
       emissiveIntensity: 5.0,
       roughness: 0.3,
     });
@@ -263,7 +263,7 @@ class Showcase29 extends AbstractShowcase {
     for (const side of [-1, 1]) {
       for (const bayX of [-8, 0, 8]) {
         const lanternLight = new PointLight({
-          color: new Color(1.0, 0.6, 0.18),
+          color: new Color(1, 0.793, 0.459),
           intensity: 2.8,
           distance: 9.0,
           decay: 1.0,
@@ -286,8 +286,8 @@ class Showcase29 extends AbstractShowcase {
     this.scene.add(this._godRaysGroup);
 
     const godRayMat = new StandardMaterial({
-      color: new Color(1.0, 0.95, 0.82, 0.08),
-      emissiveColor: new Color(1.0, 0.92, 0.75),
+      color: new Color(1, 0.977, 0.914, 0.08),
+      emissiveColor: new Color(1, 0.963, 0.877),
       emissiveIntensity: 0.9,
       transparent: true,
       roughness: 1.0,

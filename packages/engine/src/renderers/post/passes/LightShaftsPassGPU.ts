@@ -4,6 +4,7 @@ import BILATERAL_FRAG_WGSL from "../shaders/LightShaftsBilateral.frag.wgsl?raw";
 
 import type { LightShaftsElement } from "../elements/index.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
+import { Color } from "../../../core/colors/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
 import { PostEffectPipelineGate } from "../PostEffectPipelineGate.js";
 import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
@@ -48,6 +49,7 @@ export class LightShaftsPassGPU implements PostEffectPass {
   // Scratch math
   private readonly _scratchInvViewProj: Matrix4 = new Matrix4();
   private readonly _scratchSunDir: Vector3D = new Vector3D();
+  private readonly _linearTint: Color = new Color();
   private readonly _scratchCascadeVp: Matrix4 = new Matrix4();
   private readonly _scratchCascadeVpZO: Matrix4 = new Matrix4();
 
@@ -238,9 +240,11 @@ export class LightShaftsPassGPU implements PostEffectPass {
     d[22] = this._scratchSunDir.z;
     d[23] = element.asymmetry; // sunDir.w
 
-    d[24] = element.color.r * dirLight.intensity;
-    d[25] = element.color.g * dirLight.intensity;
-    d[26] = element.color.b * dirLight.intensity;
+    // The sRGB-authored tint scales linear HDR radiance here (ADR 0049).
+    const tint = element.color.toLinear(this._linearTint);
+    d[24] = tint.r * dirLight.intensity;
+    d[25] = tint.g * dirLight.intensity;
+    d[26] = tint.b * dirLight.intensity;
     d[27] = 1.0; // sunColor.w (intensity is cleanly applied in PostProcess composite)
 
     d[28] = element.density;

@@ -20,7 +20,7 @@ export function buildBeamSplitter(scene: Scene, splitterX: number): LabBeamSplit
   // --- 50:50 Beam Splitter System & Auxiliary Reference Detector ---
   // 1. Dovetail Optical Rail on the bench along X
   const railMat = new StandardMaterial({
-    color: new Color(0.12, 0.14, 0.16),
+    color: new Color(0.381, 0.409, 0.435),
     metallic: 0.85,
     roughness: 0.35,
   });
@@ -44,7 +44,7 @@ export function buildBeamSplitter(scene: Scene, splitterX: number): LabBeamSplit
 
   // Vertical mounting post
   const postMat = new StandardMaterial({
-    color: new Color(0.18, 0.2, 0.22),
+    color: new Color(0.459, 0.481, 0.502),
     metallic: 0.9,
     roughness: 0.25,
   });
@@ -75,11 +75,11 @@ export function buildBeamSplitter(scene: Scene, splitterX: number): LabBeamSplit
 
   // Half-silvered semi-reflective mirror plate (50:50)
   const mirrorMat = new StandardMaterial({
-    color: new Color(0.9, 0.95, 1.0, 0.55),
+    color: new Color(0.953, 0.977, 1, 0.55),
     metallic: 0.8,
     roughness: 0.05,
     transparent: true,
-    emissiveColor: new Color(0.3, 0.35, 0.4),
+    emissiveColor: new Color(0.579, 0.621, 0.659),
     emissiveIntensity: 0.2,
   });
   const mirrorPlate = new Object3D("BeamSplitterMirror");
@@ -113,7 +113,7 @@ export function buildBeamSplitter(scene: Scene, splitterX: number): LabBeamSplit
   refDetectorHousing.geometry = new Cube({ size: 1 }).getGeometryData();
   refDetectorHousing.scale.set(2.6, 0.7, 0.28);
   refDetectorHousing.material = new StandardMaterial({
-    color: new Color(0.06, 0.07, 0.085),
+    color: new Color(0.278, 0.299, 0.326),
     metallic: 0.4,
     roughness: 0.85,
   });
@@ -126,8 +126,8 @@ export function buildBeamSplitter(scene: Scene, splitterX: number): LabBeamSplit
   refSensorFace.geometry = new Cube({ size: 1 }).getGeometryData();
   refSensorFace.scale.set(2.45, 0.58, 0.02);
   refSensorFace.material = new StandardMaterial({
-    color: new Color(0.04, 0.06, 0.08),
-    emissiveColor: new Color(0.7, 0.85, 0.95),
+    color: new Color(0.232, 0.278, 0.317),
+    emissiveColor: new Color(0.85, 0.929, 0.977),
     emissiveIntensity: 0.7,
     emissiveMap: createRefSensorTexture(),
   });
@@ -137,7 +137,7 @@ export function buildBeamSplitter(scene: Scene, splitterX: number): LabBeamSplit
   // Luminous impact spot on reference detector sensor strip
   const refSpotMat = new StandardMaterial({
     color: new Color(1.0, 1.0, 1.0),
-    emissiveColor: new Color(1.5, 1.5, 1.5),
+    emissiveColor: new Color(1.202, 1.202, 1.202),
     emissiveIntensity: 1.8,
   });
   const refSensorSpot = new Object3D("RefSensorSpot");
@@ -168,7 +168,7 @@ export function buildBeams(scene: Scene, splitterX: number): LabBeams {
   // 4. Split Laser Beams (Pre-Splitter, Post-Splitter, Reflected)
   const incidentBeamMat = new StandardMaterial({
     color: new Color(1.0, 1.0, 1.0),
-    emissiveColor: new Color(1.5, 1.5, 1.5),
+    emissiveColor: new Color(1.202, 1.202, 1.202),
     emissiveIntensity: 1.1,
     transparent: true,
   });
@@ -185,7 +185,7 @@ export function buildBeams(scene: Scene, splitterX: number): LabBeams {
 
   const transmittedBeamMat = new StandardMaterial({
     color: new Color(1.0, 1.0, 1.0),
-    emissiveColor: new Color(1.4, 1.4, 1.4),
+    emissiveColor: new Color(1.165, 1.165, 1.165),
     emissiveIntensity: 0.65,
     transparent: true,
   });
@@ -202,7 +202,7 @@ export function buildBeams(scene: Scene, splitterX: number): LabBeams {
 
   const reflectedBeamMat = new StandardMaterial({
     color: new Color(1.0, 1.0, 1.0),
-    emissiveColor: new Color(1.4, 1.4, 1.4),
+    emissiveColor: new Color(1.165, 1.165, 1.165),
     emissiveIntensity: 0.65,
     transparent: true,
   });

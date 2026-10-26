@@ -128,6 +128,24 @@ export abstract class AbstractRenderer implements Renderer {
     return this._clearColor;
   }
 
+  /**
+   * The gamma the forward pass encodes its output with -- the global gamma lane (ADR 0049): 1.0
+   * while post-processing encodes, else `quality.gamma`. WebGL1 overrides it (fixed 2.2).
+   */
+  public get outputGamma(): number {
+    return this.postProcessing.enabled ? 1.0 : (this._quality.gamma ?? 2.2);
+  }
+
+  private readonly _targetClearColor: Color = new Color(0, 0, 0, 1);
+
+  /**
+   * The sRGB-authored clear colour in the space the forward pass writes (`displayToTarget`, ADR
+   * 0049), so the background shows the same colour with and without post-processing.
+   */
+  public get targetClearColor(): Color {
+    return this._clearColor.toTarget(this.outputGamma, this._targetClearColor);
+  }
+
   /** @inheritdoc */
   public get quality(): QualityConfig {
     return this._quality;

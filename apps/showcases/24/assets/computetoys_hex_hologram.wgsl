@@ -67,5 +67,7 @@ fn main_image(@builtin(global_invocation_id) id: vec3<u32>) {
     let lines = 0.9 + 0.1 * sin(f32(id.y) * 3.14159);
     col *= lines;
 
+    // compute.toys convention: the screen is linear colour.
+    col = pow(max(col, vec3f(0.0)), vec3f(2.2));
     textureStore(screen, id.xy, vec4f(col, 1.0));
 }

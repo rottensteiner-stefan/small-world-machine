@@ -265,7 +265,11 @@ export class WorldWriter {
       json.pbrMetallicRoughness!.metallicFactor = mat.metallic;
       json.pbrMetallicRoughness!.roughnessFactor = mat.roughness;
       if (0 < mat.emissiveColor.r || 0 < mat.emissiveColor.g || 0 < mat.emissiveColor.b) {
-        json.emissiveFactor = [mat.emissiveColor.r, mat.emissiveColor.g, mat.emissiveColor.b];
+        json.emissiveFactor = [
+          GltfMaterialParser.engineSRGBToLinear(mat.emissiveColor.r),
+          GltfMaterialParser.engineSRGBToLinear(mat.emissiveColor.g),
+          GltfMaterialParser.engineSRGBToLinear(mat.emissiveColor.b),
+        ];
       }
     }
     if (mat.transparent) json.alphaMode = "BLEND";

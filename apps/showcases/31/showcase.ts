@@ -105,11 +105,11 @@ class Showcase31 extends AbstractShowcase {
     this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // Dank, cool underground ambient fill -- there is no sky here, only whatever the breach lets in.
-    this.scene.add(new AmbientLight({ color: new Color(0.07, 0.09, 0.08), intensity: 0.55 }));
+    this.scene.add(new AmbientLight({ color: new Color(0.299, 0.335, 0.317), intensity: 0.55 }));
 
     // The sun shaft: a steep, narrow beam finding its way straight down through the breach.
     this._sunLight = new DirectionalLight({
-      color: new Color(1.0, 0.97, 0.85),
+      color: new Color(1, 0.986, 0.929),
       intensity: 2.6,
     });
     this._sunLight.position.set(1.5, 20, 0);
@@ -131,17 +131,17 @@ class Showcase31 extends AbstractShowcase {
 
   private _buildMaterialsAndStructure(): void {
     const tileMat = new StandardMaterial({
-      color: new Color(0.18, 0.32, 0.24),
+      color: new Color(0.459, 0.596, 0.523),
       roughness: 0.55,
       metallic: 0.02,
     });
     const tileTrimMat = new StandardMaterial({
-      color: new Color(0.55, 0.44, 0.22),
+      color: new Color(0.762, 0.689, 0.502),
       roughness: 0.35,
       metallic: 0.75,
     });
     const concreteMat = new StandardMaterial({
-      color: new Color(0.42, 0.41, 0.38),
+      color: new Color(0.674, 0.667, 0.644),
       roughness: 0.92,
       metallic: 0.0,
     });
@@ -254,7 +254,7 @@ class Showcase31 extends AbstractShowcase {
 
   private _buildTrenchesAndWater(): void {
     const rustMat = new StandardMaterial({
-      color: new Color(0.32, 0.16, 0.08),
+      color: new Color(0.596, 0.435, 0.317),
       roughness: 0.75,
       metallic: 0.55,
     });
@@ -282,9 +282,9 @@ class Showcase31 extends AbstractShowcase {
       }
 
       const water = new OpenWaterMaterial({
-        waterColor: new Color(0.05, 0.14, 0.1),
-        deepWaterColor: new Color(0.01, 0.04, 0.03),
-        edgeColor: new Color(0.3, 0.4, 0.32),
+        waterColor: new Color(0.256, 0.409, 0.351),
+        deepWaterColor: new Color(0.123, 0.232, 0.203),
+        edgeColor: new Color(0.579, 0.659, 0.596),
         edgeSoftness: 0.6,
         speed: 0.3,
         wave1: [0.6, 0.3, 0.04, 8.0],
@@ -324,7 +324,7 @@ class Showcase31 extends AbstractShowcase {
     // Weathered rocks poking through the trench water -- gives OpenWaterMaterial's refraction/
     // foam something to actually intersect, instead of an untouched open surface.
     const rockMat = new StandardMaterial({
-      color: new Color(0.24, 0.24, 0.22),
+      color: new Color(0.523, 0.523, 0.502),
       roughness: 0.9,
       metallic: 0.0,
     });
@@ -392,14 +392,14 @@ class Showcase31 extends AbstractShowcase {
 
   private _buildBreachAndVines(): void {
     const vineMat = new StandardMaterial({
-      color: new Color(0.16, 0.24, 0.1),
+      color: new Color(0.435, 0.523, 0.351),
       roughness: 0.85,
       metallic: 0.0,
     });
 
     const godRayMat = new StandardMaterial({
-      color: new Color(1.0, 0.97, 0.86, 0.16),
-      emissiveColor: new Color(0.55, 0.5, 0.35),
+      color: new Color(1, 0.986, 0.934, 0.16),
+      emissiveColor: new Color(0.762, 0.73, 0.621),
       emissiveIntensity: 0.9,
       transparent: true,
       roughness: 0.15,
@@ -472,14 +472,14 @@ class Showcase31 extends AbstractShowcase {
 
   private _buildTrainWreck(): void {
     const bodyMat = new StandardMaterial({
-      color: new Color(0.5, 0.14, 0.12),
+      color: new Color(0.73, 0.409, 0.381),
       roughness: 0.7,
       metallic: 0.2,
     });
     const wheelMat = this._rustMat;
     const glassMat = new StandardMaterial({
-      color: new Color(0.6, 0.75, 0.7),
-      emissiveColor: new Color(1.4, 0.9, 0.4),
+      color: new Color(0.793, 0.877, 0.85),
+      emissiveColor: new Color(1.165, 0.953, 0.659),
       emissiveIntensity: 1.2,
       roughness: 0.25,
       transparent: true,
@@ -541,22 +541,22 @@ class Showcase31 extends AbstractShowcase {
 
   private _buildEmergencyLights(): void {
     const lampMat = new StandardMaterial({
-      color: new Color(0.7, 0.35, 0.1),
-      emissiveColor: new Color(2.8, 1.1, 0.15),
+      color: new Color(0.85, 0.621, 0.351),
+      emissiveColor: new Color(1.597, 1.044, 0.422),
       emissiveIntensity: 3.5,
       roughness: 0.2,
     });
     const deepLampMat = new StandardMaterial({
-      color: new Color(0.15, 0.4, 0.45),
-      emissiveColor: new Color(0.3, 1.4, 1.6),
+      color: new Color(0.422, 0.659, 0.696),
+      emissiveColor: new Color(0.579, 1.165, 1.238),
       emissiveIntensity: 2.2,
       roughness: 0.2,
     });
 
     const fixtures: Array<[number, number, number, StandardMaterial, Color, number]> = [
-      [PLATFORM_HALF_WIDTH + 0.9, 3.0, -13, lampMat, new Color(1.0, 0.5, 0.15), 8.0],
-      [-(PLATFORM_HALF_WIDTH + 0.9), 3.2, 13, lampMat, new Color(1.0, 0.55, 0.18), 8.0],
-      [0, 2.4, -15.5, deepLampMat, new Color(0.25, 0.75, 0.85), 7.0],
+      [PLATFORM_HALF_WIDTH + 0.9, 3.0, -13, lampMat, new Color(1, 0.73, 0.422), 8.0],
+      [-(PLATFORM_HALF_WIDTH + 0.9), 3.2, 13, lampMat, new Color(1, 0.762, 0.459), 8.0],
+      [0, 2.4, -15.5, deepLampMat, new Color(0.533, 0.877, 0.929), 7.0],
     ];
 
     for (let i = 0; i < fixtures.length; i++) {
@@ -581,7 +581,7 @@ class Showcase31 extends AbstractShowcase {
 
   private _buildFoliageInstances(): void {
     const mossMat = new StandardMaterial({
-      color: new Color(0.14, 0.28, 0.13),
+      color: new Color(0.409, 0.561, 0.396),
       roughness: 0.95,
       metallic: 0.0,
     });
@@ -658,8 +658,8 @@ class Showcase31 extends AbstractShowcase {
 
   private _buildDustMotes(): void {
     const dustMat = new StandardMaterial({
-      color: new Color(1.0, 0.95, 0.8),
-      emissiveColor: new Color(1.2, 1.1, 0.85),
+      color: new Color(1, 0.977, 0.904),
+      emissiveColor: new Color(1.086, 1.044, 0.929),
       emissiveIntensity: 1.4,
       transparent: true,
       roughness: 0.4,

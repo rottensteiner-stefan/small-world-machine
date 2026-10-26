@@ -21,6 +21,9 @@ flat in uint v_texLayer;
 in float v_ao;
 in float v_light;
 
+// Global gamma lane + displayToTarget: this stylized shader shades display-referred (ADR 0049).
+[LIGHT_DEFS]
+
 uniform sampler2DArray u_blockAtlas;
 uniform float u_daylight;
 uniform vec3 u_sunDirection;
@@ -42,5 +45,5 @@ void main() {
     // (-X, -Y, -Z) have ndl == 0 and would otherwise render pure black.
     vec3 lit = albedo * mix(ambient, 1.0, ao) * (ambient + (1.0 - ambient) * ndl) * lightFactor;
 
-    fragColor = vec4(lit, tex.a);
+    fragColor = vec4(displayToTarget(lit), tex.a);
 }

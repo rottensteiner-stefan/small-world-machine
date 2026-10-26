@@ -218,7 +218,7 @@ class Showcase39 extends AbstractShowcase {
       this._fogElement.height = 0.0;
       this._fogElement.heightFalloff = 0.03;
       this._fogElement.asymmetry = 0.6; // Forward Mie scattering for god rays
-      this._fogElement.color = new Color(0.96, 0.97, 1.0);
+      this._fogElement.color = new Color(0.982, 0.986, 1);
       this._fogElement.castDirectionalShadow = true;
       this._fogElement.maxDistance = 65.0;
       this._fogElement.jitter = 0.25;
@@ -327,7 +327,7 @@ class Showcase39 extends AbstractShowcase {
     carvedRough.repeat = { x: 3, y: 2 };
 
     const stoneFloorMat = new StandardMaterial({
-      color: new Color(0.95, 0.94, 0.92),
+      color: new Color(0.977, 0.972, 0.963),
       diffuseMap: floorAlbedo,
       normalMap: floorNormal,
       normalScale: new Vector2D(1.15, 1.15),
@@ -339,7 +339,7 @@ class Showcase39 extends AbstractShowcase {
     });
 
     const pillarMat = new StandardMaterial({
-      color: new Color(0.96, 0.94, 0.9),
+      color: new Color(0.982, 0.972, 0.953),
       diffuseMap: marbleAlbedo,
       normalMap: marbleNormal,
       normalScale: new Vector2D(1.2, 1.2),
@@ -351,7 +351,7 @@ class Showcase39 extends AbstractShowcase {
     });
 
     const darkBasaltMat = new StandardMaterial({
-      color: new Color(0.92, 0.94, 0.98),
+      color: new Color(0.963, 0.972, 0.991),
       diffuseMap: basaltAlbedo,
       normalMap: basaltNormal,
       normalScale: new Vector2D(1.1, 1.1),
@@ -363,7 +363,7 @@ class Showcase39 extends AbstractShowcase {
     });
 
     const goldTrimMat = new StandardMaterial({
-      color: new Color(1.0, 0.94, 0.82),
+      color: new Color(1, 0.972, 0.914),
       diffuseMap: goldAlbedo,
       normalMap: goldNormal,
       normalScale: new Vector2D(1.25, 1.25),
@@ -375,7 +375,7 @@ class Showcase39 extends AbstractShowcase {
     });
 
     const hallWallMat = new StandardMaterial({
-      color: new Color(0.88, 0.85, 0.82),
+      color: new Color(0.944, 0.929, 0.914),
       diffuseMap: ashlarAlbedo,
       normalMap: ashlarNormal,
       normalScale: new Vector2D(1.3, 1.3),
@@ -386,7 +386,7 @@ class Showcase39 extends AbstractShowcase {
     });
 
     const chamberWallMat = new StandardMaterial({
-      color: new Color(0.76, 0.66, 0.58),
+      color: new Color(0.883, 0.828, 0.781),
       diffuseMap: carvedAlbedo,
       normalMap: carvedNormal,
       normalScale: new Vector2D(1.35, 1.35),
@@ -619,8 +619,8 @@ class Showcase39 extends AbstractShowcase {
       size: new Vector3D(4.2, 2.8, 4.2),
       density: 0.9,
       edgeFade: 0.35,
-      albedo: new Color(0.18, 0.95, 0.78),
-      emission: new Color(0.04, 0.5, 0.38),
+      albedo: new Color(0.459, 0.977, 0.893),
+      emission: new Color(0.232, 0.73, 0.644),
       emissionIntensity: 1.4,
       noiseScale: 0.75,
       noiseAmount: 0.7,
@@ -652,8 +652,8 @@ class Showcase39 extends AbstractShowcase {
       size: new Vector3D(2.4, 2.4, 2.4),
       density: 0.75,
       edgeFade: 0.4,
-      albedo: new Color(1.0, 0.65, 0.25),
-      emission: new Color(0.85, 0.35, 0.08),
+      albedo: new Color(1, 0.822, 0.533),
+      emission: new Color(0.929, 0.621, 0.317),
       emissionIntensity: 2.2,
       noiseScale: 0.9,
       noiseAmount: 0.8,
@@ -669,7 +669,7 @@ class Showcase39 extends AbstractShowcase {
       size: new Vector3D(5.5, 3.8, 15.0),
       density: 0.045,
       edgeFade: 0.45,
-      albedo: new Color(1.0, 0.96, 0.88),
+      albedo: new Color(1, 0.982, 0.944),
       noiseScale: 0.38,
       noiseAmount: 0.75,
       noiseSpeed: 0.35,
@@ -679,13 +679,13 @@ class Showcase39 extends AbstractShowcase {
 
     // --- 9. Dynamic Lights & CSM Cascades ---
     this._ambientLight = new AmbientLight({
-      color: new Color(0.18, 0.22, 0.28),
+      color: new Color(0.459, 0.502, 0.561),
       intensity: 0.35,
     });
     this.scene.add(this._ambientLight);
 
     this._sunLight = new DirectionalLight({
-      color: new Color(1.0, 0.94, 0.86),
+      color: new Color(1, 0.972, 0.934),
       intensity: 2.8,
       castShadow: true,
       numCascades: 4,
@@ -697,7 +697,7 @@ class Showcase39 extends AbstractShowcase {
 
     // Warm Altar point light illuminating the mystic mist
     this._altarLight = new PointLight({
-      color: new Color(0.15, 0.95, 0.75),
+      color: new Color(0.422, 0.977, 0.877),
       intensity: 1.8,
       distance: 9.0,
       volumetricIntensity: 6.0, // makes the altar glow visibly scatter in the fog (WebGPU and WebGL2)
@@ -707,7 +707,7 @@ class Showcase39 extends AbstractShowcase {
 
     // Brazier ember point light
     this._brazierLight = new PointLight({
-      color: new Color(1.0, 0.55, 0.15),
+      color: new Color(1, 0.762, 0.422),
       intensity: 2.2,
       distance: 8.0,
       volumetricIntensity: 6.0, // makes the brazier glow visibly scatter in the fog (WebGPU and WebGL2)
@@ -722,7 +722,7 @@ class Showcase39 extends AbstractShowcase {
     // warm veil that hides the relic behind its beam (the carve bounds stop just outside the
     // doorway, so a candle glow still spills into the nave fog for atmosphere).
     this._chamberLight = new PointLight({
-      color: new Color(1.0, 0.74, 0.46),
+      color: new Color(1, 0.872, 0.703),
       intensity: 2.4,
       distance: 9.0,
       volumetricIntensity: 3.2, // scatters in the fog once carving is disabled
@@ -742,8 +742,8 @@ class Showcase39 extends AbstractShowcase {
     this._leylineSpline = new CatmullRomSpline(leylinePoints);
 
     const orbMat = new StandardMaterial({
-      color: new Color(0.25, 0.98, 0.88),
-      emissiveColor: new Color(0.18, 0.95, 0.82),
+      color: new Color(0.533, 0.991, 0.944),
+      emissiveColor: new Color(0.459, 0.977, 0.914),
       emissiveIntensity: 6.0,
       roughness: 0.1,
     });
@@ -760,7 +760,7 @@ class Showcase39 extends AbstractShowcase {
     this.scene.add(this._leylineOrb);
 
     this._leylineLight = new PointLight({
-      color: new Color(0.2, 0.95, 0.82),
+      color: new Color(0.481, 0.977, 0.914),
       intensity: 2.4,
       distance: 8.0,
       volumetricIntensity: 4.5, // lights up surrounding volumetric fog!
@@ -777,9 +777,10 @@ class Showcase39 extends AbstractShowcase {
     for (let i = 0; i < NUM_MOTES; i++) {
       const frac = i / NUM_MOTES;
       // Spectral gradient along the stream: cyan -> golden amber -> emerald green
-      const r = 0.2 + 0.65 * Math.sin(frac * Math.PI);
-      const g = 0.92;
-      const b = 0.85 - 0.55 * Math.sin(frac * Math.PI);
+      // (sRGB-authored like every engine Color, ADR 0049)
+      const r = Math.pow(0.2 + 0.65 * Math.sin(frac * Math.PI), 1 / 2.2);
+      const g = 0.963;
+      const b = Math.pow(0.85 - 0.55 * Math.sin(frac * Math.PI), 1 / 2.2);
 
       const moteMat = new StandardMaterial({
         color: new Color(r, g, b),
@@ -810,14 +811,14 @@ class Showcase39 extends AbstractShowcase {
       // High noon celestial beams pouring steeply through the skylight tracery
       this._sunLight.direction.set(0.26 + swayX, -0.9, 0.35 + swayZ);
       this._sunLight.direction.normalize();
-      this._sunLight.color.set(0.95, 0.97, 1.0);
+      this._sunLight.color.set(0.977, 0.986, 1);
       this._sunLight.intensity = 3.0;
       this._sunLight.volumetricIntensity = this._baseGodRayStrength * breathe;
     } else {
       // Golden-hour sun streaming diagonally across the skylight mullions & central nave
       this._sunLight.direction.set(-0.34 + swayX, -0.84, 0.42 + swayZ);
       this._sunLight.direction.normalize();
-      this._sunLight.color.set(1.0, 0.86, 0.66);
+      this._sunLight.color.set(1, 0.934, 0.828);
       this._sunLight.intensity = 3.4;
       this._sunLight.volumetricIntensity = this._baseGodRayStrength * breathe;
     }

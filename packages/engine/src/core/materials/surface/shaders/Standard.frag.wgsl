@@ -56,9 +56,9 @@
             vec2f(0.999),
         );
         let transmittedColor = targetToLinear(textureSample(u_opaqueMap, s, screenUV).rgb);
-        // P3/S1 R1: feed the real attenuation colour (LINEAR/RAW lane) into Beer-Lambert absorption
-        // instead of albedo -- KHR_materials_volume was silently broken before.
-        let volumeTransmittance = VolumeAbsorption(obj.matParam11.xyz, attenuationDist, thickness);
+        // P3/S1 R1: feed the real attenuation colour into Beer-Lambert absorption instead of albedo.
+        // Like every engine Color it is sRGB-authored and decoded here (ADR 0049).
+        let volumeTransmittance = VolumeAbsorption(sRGBToLinear(obj.matParam11.xyz), attenuationDist, thickness);
         let finalTransmission = transmittedColor * volumeTransmittance * albedo;
         let f_refr = F_Schlick(max(dot(normalize(i.n), V_dir), 0.0), F0).x;
         let kD_refr = (1.0 - f_refr) * (1.0 - metallic);

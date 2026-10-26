@@ -112,21 +112,20 @@ class Showcase32 extends AbstractShowcase {
 
     // Sickly, radiation-haze atmosphere -- EXP2 falloff hides the far street end in murk, and
     // doubles as a cheap depth cue since the scene has no volumetric fog (see AAA research #13).
+    const fogColor = new Color(0.435, 0.47, 0.41);
     this.scene.fog = new Fog({
       mode: FogMode.EXP2,
-      color: new Color(0.435, 0.47, 0.41),
+      color: fogColor,
       density: 0.028,
     });
     // There's no skybox in this ruin -- without a matching clear color the "empty sky" above the
     // rooflines renders as a pure black void instead of reading as a hazy, overcast fallout sky.
-    // The fog colour is display-referred sRGB (ADR 0049), the clear colour lands linear in the HDR
-    // target: (0.16, 0.19, 0.14) is the same haze in linear.
-    this.renderer.setClearColor(new Color(0.16, 0.19, 0.14));
+    this.renderer.setClearColor(fogColor);
 
-    this.scene.add(new AmbientLight({ color: new Color(0.13, 0.16, 0.11), intensity: 0.5 }));
+    this.scene.add(new AmbientLight({ color: new Color(0.396, 0.435, 0.367), intensity: 0.5 }));
 
     const sun = new DirectionalLight({
-      color: new Color(0.75, 0.8, 0.6),
+      color: new Color(0.877, 0.904, 0.793),
       intensity: 1.1,
     });
     sun.position.set(-10, 25, 15);
@@ -326,7 +325,7 @@ class Showcase32 extends AbstractShowcase {
     // The one visible "geiger click" cue in the scene: an irregularly flickering green point
     // light rather than a literal HUD icon (see plan -- kept purely diegetic/visual).
     this._hotZoneLight = new PointLight({
-      color: new Color(0.5, 1.0, 0.4),
+      color: new Color(0.73, 1, 0.659),
       intensity: 3.2,
       distance: 14,
     });
@@ -336,7 +335,7 @@ class Showcase32 extends AbstractShowcase {
     // A second, dim window-light deep in one of the buildings for depth -- keeps the scene under
     // the engine's 4-point-light global cap (this is light #2 of 2).
     const windowLight = new PointLight({
-      color: new Color(0.5, 0.55, 0.4),
+      color: new Color(0.73, 0.762, 0.659),
       intensity: 0.9,
       distance: 10,
     });

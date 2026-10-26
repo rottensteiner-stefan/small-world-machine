@@ -160,7 +160,7 @@ class Showcase38 extends AbstractShowcase {
       bloom.intensity = 0.55;
       bloom.threshold = 0.78;
       bloom.radius = 0.6;
-      bloom.color = new Color(1.0, 0.86, 0.65);
+      bloom.color = new Color(1, 0.934, 0.822);
     }
 
     // Vignette (Focus on central architecture)
@@ -208,7 +208,7 @@ class Showcase38 extends AbstractShowcase {
     this._fog = new Fog({
       mode: FogMode.EXP2,
       density: 0.006,
-      color: new Color(0.55, 0.35, 0.22),
+      color: new Color(0.762, 0.621, 0.502),
     });
     this.scene.fog = this._fog;
 
@@ -346,16 +346,16 @@ class Showcase38 extends AbstractShowcase {
     });
 
     const flameMat = new StandardMaterial({
-      color: new Color(1.0, 0.65, 0.2),
-      emissiveColor: new Color(1.0, 0.55, 0.1),
+      color: new Color(1, 0.822, 0.481),
+      emissiveColor: new Color(1, 0.762, 0.351),
       emissiveIntensity: 4.0,
       metallic: 0.0,
       roughness: 0.1,
     });
 
     const emberMat = new StandardMaterial({
-      color: new Color(0.2, 0.08, 0.04),
-      emissiveColor: new Color(1.0, 0.25, 0.02),
+      color: new Color(0.481, 0.317, 0.232),
+      emissiveColor: new Color(1, 0.533, 0.169),
       emissiveIntensity: 2.2,
       metallic: 0.0,
       roughness: 0.9,
@@ -365,7 +365,7 @@ class Showcase38 extends AbstractShowcase {
     // 6. Lighting Hierarchy (Sun + Cascaded Shadows + Ambient)
     // ------------------------------------------------------------------------
     this._ambientLight = new AmbientLight({
-      color: new Color(0.18, 0.12, 0.08),
+      color: new Color(0.459, 0.381, 0.317),
       intensity: 0.25,
     });
     this.scene.add(this._ambientLight);
@@ -373,7 +373,7 @@ class Showcase38 extends AbstractShowcase {
     // Directional Sun Light angled through the Siq Canyon
     this._sunLight = new DirectionalLight({
       direction: new Vector3D(0.55, -0.65, -0.52).normalize(),
-      color: new Color(1.0, 0.88, 0.72),
+      color: new Color(1, 0.944, 0.861),
       intensity: 2.8,
       numCascades: 4,
       cascadeSplitLambda: 0.65,
@@ -549,7 +549,7 @@ class Showcase38 extends AbstractShowcase {
       // Warm PointLight (2150K color temperature)
       const torchLight = new PointLight({
         name: `${name}_Light`,
-        color: new Color(1.0, 0.58, 0.22),
+        color: new Color(1, 0.781, 0.502),
         intensity: lightIntensity,
         distance: lightDistance,
         decay: 2.0,
@@ -631,7 +631,7 @@ class Showcase38 extends AbstractShowcase {
       // Powerful central PointLight (2000K)
       const brazierLight = new PointLight({
         name: `${name}_Light`,
-        color: new Color(1.0, 0.52, 0.16),
+        color: new Color(1, 0.743, 0.435),
         intensity: 7.5,
         distance: 22.0,
         decay: 2.0,
@@ -1595,11 +1595,11 @@ class Showcase38 extends AbstractShowcase {
     if (mode === TimeOfDay.MIDDAY) {
       // Midday sun: intense, high angle, clear skies
       this._sunLight.direction.set(0.2, -0.92, -0.32).normalize();
-      this._sunLight.color.set(1.0, 0.96, 0.88);
+      this._sunLight.color.set(1, 0.982, 0.944);
       this._sunLight.intensity = 3.5;
-      this._ambientLight.color.set(0.25, 0.2, 0.16);
+      this._ambientLight.color.set(0.533, 0.481, 0.435);
       this._ambientLight.intensity = 0.4;
-      this._fog.color.set(0.65, 0.5, 0.35);
+      this._fog.color.set(0.822, 0.73, 0.621);
       this._fog.density = 0.004;
       if (this._toneMapping) this._toneMapping.exposure = 1.0;
       if (this._colorGrading) {
@@ -1610,11 +1610,11 @@ class Showcase38 extends AbstractShowcase {
     } else if (mode === TimeOfDay.MIDNIGHT) {
       // Midnight starlight: dark desert night with glowing torchlight
       this._sunLight.direction.set(0.4, -0.7, -0.6).normalize();
-      this._sunLight.color.set(0.08, 0.12, 0.22);
+      this._sunLight.color.set(0.317, 0.381, 0.502);
       this._sunLight.intensity = 0.12;
-      this._ambientLight.color.set(0.02, 0.02, 0.04);
+      this._ambientLight.color.set(0.169, 0.169, 0.232);
       this._ambientLight.intensity = 0.08;
-      this._fog.color.set(0.05, 0.06, 0.1);
+      this._fog.color.set(0.256, 0.278, 0.351);
       this._fog.density = 0.008;
       if (this._toneMapping) this._toneMapping.exposure = 1.45;
       if (this._colorGrading) {
@@ -1625,11 +1625,11 @@ class Showcase38 extends AbstractShowcase {
     } else {
       // Golden hour: warm low sun slicing through canyon
       this._sunLight.direction.set(0.55, -0.65, -0.52).normalize();
-      this._sunLight.color.set(1.0, 0.88, 0.72);
+      this._sunLight.color.set(1, 0.944, 0.861);
       this._sunLight.intensity = 2.8;
-      this._ambientLight.color.set(0.18, 0.12, 0.08);
+      this._ambientLight.color.set(0.459, 0.381, 0.317);
       this._ambientLight.intensity = 0.25;
-      this._fog.color.set(0.55, 0.35, 0.22);
+      this._fog.color.set(0.762, 0.621, 0.502);
       this._fog.density = 0.006;
       if (this._toneMapping) this._toneMapping.exposure = 1.15;
       if (this._colorGrading) {

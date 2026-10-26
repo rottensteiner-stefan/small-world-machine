@@ -29,14 +29,14 @@ export interface LabSurfaceTextures {
 export async function buildEnvironment(scene: Scene): Promise<LabSurfaceTextures> {
   // Ambient Optical Environment (Dark cleanroom lab aesthetic) -- P0-1 rebalanced down
   const ambientLight = new AmbientLight({
-    color: new Color(0.04, 0.05, 0.08),
+    color: new Color(0.232, 0.256, 0.317),
     intensity: 0.12,
   });
   scene.add(ambientLight);
 
   // Laboratory Overhead Soft Light
   const overheadLight = new DirectionalLight({
-    color: new Color(0.9, 0.95, 1.0),
+    color: new Color(0.953, 0.977, 1),
     intensity: 0.25,
   });
   overheadLight.direction.set(0.3, -1, -0.4);
@@ -53,7 +53,7 @@ export async function buildEnvironment(scene: Scene): Promise<LabSurfaceTextures
     // the texture, only darken the visible sky to a near-black lab backdrop).
     skybox.material = new SkyboxMaterial({
       cubeMap: envTexture,
-      color: new Color(0.03, 0.035, 0.05),
+      color: new Color(0.203, 0.218, 0.256),
     });
     skybox.frustumCulled = false;
     scene.add(skybox);

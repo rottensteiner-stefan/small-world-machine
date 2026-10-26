@@ -74,6 +74,6 @@ void main() {
     color += specColor * (spec * edgeFactor * 0.6);
     color = min(color, vec3(1.0));
 
-    fragColor = vec4(color, 1.0);
+    fragColor = vec4(displayToTarget(color), 1.0);
     [FOG_CALC]
 }

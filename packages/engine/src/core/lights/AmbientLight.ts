@@ -21,7 +21,7 @@ export class AmbientLight extends AbstractLight {
 
   /** @inheritdoc */
   public override applyTo(data: LightDataInterface): void {
-    data.aCol.copyFrom(this.color);
+    data.aCol.copyFrom(this.linearColor);
     data.aIntensity = this.intensity;
   }
 }

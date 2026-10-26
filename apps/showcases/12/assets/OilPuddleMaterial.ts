@@ -169,7 +169,8 @@ fn fs(in: Out) -> @location(0) vec4f {
     let litColor = finalColor * (0.2 + lightIntensity) + vec3f(1.0) * specular;
     
     // Output with transparency (alphaMask)
-    return vec4f(litColor, alphaMask * 0.9);
+    // Linear shading: encode with the forward pass's gamma lane like every lit shader (ADR 0049).
+    return vec4f(pow(max(litColor, vec3f(0.0)), vec3f(1.0 / global.gamma)), alphaMask * 0.9);
 }
 `;
 

@@ -112,6 +112,25 @@ describe("decode vs output gamma (ADR 0049)", () => {
     ).toContain("displayToTarget(global.fogColor.rgb)");
   });
 
+  for (const name of ["ImpastoStroke", "MetalRelief", "MetalReliefScreen"]) {
+    for (const ext of ["glsl", "wgsl"]) {
+      it(`artistic-extras ${name}.frag.${ext}: display-referred output goes through displayToTarget`, () => {
+        expect(
+          read(`packages/artistic-extras/src/materials/shaders/${name}.frag.${ext}`),
+        ).toContain("displayToTarget(");
+      });
+    }
+  }
+
+  it("the volume attenuation colour is decoded like every engine Color on both tiers", () => {
+    expect(
+      read("packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl"),
+    ).toContain("VolumeAbsorption(sRGBToLinear(u_matParam11.rgb)");
+    expect(read("packages/engine/src/core/materials/surface/shaders/Standard.frag.wgsl")).toContain(
+      "VolumeAbsorption(sRGBToLinear(obj.matParam11.xyz)",
+    );
+  });
+
   it("the fog ambient decodes the sRGB irradiance cube on both tiers", () => {
     for (const file of [
       "packages/engine/src/renderers/shaders/source/web_gpu/compute/froxel_inject.wgsl",

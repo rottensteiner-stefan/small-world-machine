@@ -152,7 +152,7 @@ export class LabInspector {
     if (!this._highlightMesh) {
       const hl = new Object3D("EditorHighlight");
       hl.geometry = new Cube({ size: 1 }).getGeometryData();
-      hl.material = new WireframeMaterial(new Color(0, 0.85, 1));
+      hl.material = new WireframeMaterial(new Color(0, 0.929, 1));
       hl.isVisible = false;
       this.host.scene.add(hl);
       this._highlightMesh = hl;

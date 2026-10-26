@@ -23,6 +23,7 @@ import type {
 } from "../elements/index.js";
 import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
 import { requireGlObject } from "../../gl/requireGlObject.js";
+import { Color } from "../../../core/colors/index.js";
 
 /**
  * Handles post-processing blit for WebGL1 and WebGL2.
@@ -74,6 +75,7 @@ export class PostProcessPassGL {
   private _aPos: number = -1;
   private readonly _gl: WebGLRenderingContext | WebGL2RenderingContext;
   private readonly _isWebGL2: boolean;
+  private readonly _bloomTint: Color = new Color();
   private _compiledSignature: number | undefined;
   /**
    * Whether this frame's upstream passes actually produced HBAO / light-shafts / fog textures. The
@@ -369,8 +371,12 @@ export class PostProcessPassGL {
 
     if (this._uBloomIntensity) gl.uniform1f(this._uBloomIntensity, bloom ? bloom.intensity : 0.0);
     if (this._uBloomColor) {
-      if (bloom) gl.uniform3f(this._uBloomColor, bloom.color.r, bloom.color.g, bloom.color.b);
-      else gl.uniform3f(this._uBloomColor, 1.0, 1.0, 1.0);
+      if (bloom) {
+        // WebGL2 adds bloom to linear HDR, WebGL1 to the display-encoded image: the sRGB-authored
+        // tint goes into that space (ADR 0049).
+        const tint = bloom.color.toTarget(this._isWebGL2 ? 1.0 : 2.2, this._bloomTint);
+        gl.uniform3f(this._uBloomColor, tint.r, tint.g, tint.b);
+      } else gl.uniform3f(this._uBloomColor, 1.0, 1.0, 1.0);
     }
     if (this._uExposure) gl.uniform1f(this._uExposure, tm && tm.enabled ? tm.exposure : 1.0);
     if (this._uGamma) gl.uniform1f(this._uGamma, tm && tm.enabled ? tm.gamma : 2.2);

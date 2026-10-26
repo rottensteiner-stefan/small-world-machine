@@ -107,18 +107,18 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
     );
 
     // 1. Studio & Environmental Lighting
-    const ambientLight = new DirectionalLight({ color: new Color(0.25, 0.27, 0.35) });
+    const ambientLight = new DirectionalLight({ color: new Color(0.533, 0.551, 0.621) });
     ambientLight.intensity = 0.65;
     ambientLight.position.set(1.0, 6.0, 2.0);
     this.scene.add(ambientLight);
 
-    const keySpot = new PointLight({ color: new Color(1.0, 0.92, 0.78) });
+    const keySpot = new PointLight({ color: new Color(1, 0.963, 0.893) });
     keySpot.intensity = 2.2;
     keySpot.distance = 12.0;
     keySpot.position.set(2.2, 3.8, 2.6);
     this.scene.add(keySpot);
 
-    const cyberRimLight = new PointLight({ color: new Color(0.18, 0.6, 0.85) });
+    const cyberRimLight = new PointLight({ color: new Color(0.459, 0.793, 0.929) });
     cyberRimLight.intensity = 1.4;
     cyberRimLight.distance = 8.0;
     cyberRimLight.position.set(-2.5, 2.0, -2.5);
@@ -988,7 +988,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
       lampGroupLeft.add(lampMesh1);
     }
 
-    const light1 = new PointLight({ color: new Color(1.0, 0.86, 0.62) });
+    const light1 = new PointLight({ color: new Color(1, 0.934, 0.805) });
     light1.intensity = 3.8;
     light1.distance = 11.0;
     light1.position.set(0, 0, 0.18);
@@ -1020,7 +1020,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
       lampGroupBack.add(lampMesh2);
     }
 
-    const light2 = new PointLight({ color: new Color(1.0, 0.9, 0.68) });
+    const light2 = new PointLight({ color: new Color(1, 0.953, 0.839) });
     light2.intensity = 3.8;
     light2.distance = 11.0;
     light2.position.set(0, 0, 0.18);
@@ -1353,7 +1353,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
    *  Everything else -- clip pool, crossfade, lantern hand-bone sync, character switching -- lives
    *  in `PlayerRig` and is identical across the dusk scenes. */
   private _buildPlayerRig(): void {
-    const lanternLight = new PointLight({ color: new Color(1.0, 0.8, 0.4) });
+    const lanternLight = new PointLight({ color: new Color(1, 0.904, 0.659) });
     lanternLight.intensity = 1.8;
     lanternLight.distance = 4.5;
 

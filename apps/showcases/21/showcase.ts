@@ -68,8 +68,8 @@ class Showcase21 extends AbstractShowcase {
     }
 
     // 1. Lighting Setup
-    const ambient = new AmbientLight({ color: new Color(0.1, 0.1, 0.2), intensity: 1.0 });
-    const dirLight = new DirectionalLight({ color: new Color(0.8, 0.9, 1.0), intensity: 2.0 });
+    const ambient = new AmbientLight({ color: new Color(0.351, 0.351, 0.481), intensity: 1.0 });
+    const dirLight = new DirectionalLight({ color: new Color(0.904, 0.953, 1), intensity: 2.0 });
     dirLight.position.set(10, 20, 10);
     dirLight.direction.set(-10, -20, -10).normalize();
     this.scene.add(ambient, dirLight);
@@ -81,7 +81,7 @@ class Showcase21 extends AbstractShowcase {
 
     // 3. Environment: The Plinko/Galton Board
     const glassMaterial = new GlassMaterial({
-      color: new Color(0.1, 0.1, 0.1),
+      color: new Color(0.351, 0.351, 0.351),
       metallic: 0.1,
       roughness: 0.1,
       transmission: 0.9, // Refractive Glass
@@ -160,7 +160,7 @@ class Showcase21 extends AbstractShowcase {
         color: ColorUtils.fromCSS(`hsl(${hue}, 100%, 50%)`),
         metallic: 0.9,
         roughness: 0.1,
-        emissiveColor: new Color(0.2, 0.0, 0.2),
+        emissiveColor: new Color(0.481, 0, 0.481),
       });
 
       const rb = new RigidBody(1.0);
@@ -189,7 +189,8 @@ class Showcase21 extends AbstractShowcase {
         // Flash the sphere's color based on impact
         if (objectA.material instanceof StandardMaterial) {
           const origR = objectA.material.color.r;
-          objectA.material.emissiveColor.set(origR * 2, origR, origR * 2);
+          // sRGB-authored colours (ADR 0049): twice the linear level is 2^(1/2.2) in sRGB.
+          objectA.material.emissiveColor.set(origR * 1.37, origR, origR * 1.37);
         }
 
         // Play the generative synth tone

@@ -301,7 +301,7 @@ function buildInterrogationRoom(
   });
 
   const mirrorMat = new FrostglassMaterial({
-    color: new Color(0.15, 0.2, 0.25),
+    color: new Color(0.422, 0.481, 0.533),
     roughness: 0.1, // Semi-frosted one-way observation mirror
     metallic: 0.8,
     blurRadius: 0.02,
@@ -309,7 +309,7 @@ function buildInterrogationRoom(
   });
 
   const deskTopMat = new GlassMaterial({
-    color: new Color(0.6, 0.85, 0.72, 0.35),
+    color: new Color(0.793, 0.929, 0.861, 0.35),
     roughness: 0.05, // Highly reflective glass top
     metallic: 0.2,
     ior: 1.55,
@@ -318,20 +318,20 @@ function buildInterrogationRoom(
   });
 
   const steelMat = new StandardMaterial({
-    color: new Color(0.65, 0.67, 0.7),
+    color: new Color(0.822, 0.834, 0.85),
     roughness: 0.2,
     metallic: 0.95, // Shiny metal legs
   });
 
   const plasticMat = new StandardMaterial({
-    color: new Color(0.1, 0.12, 0.15),
+    color: new Color(0.351, 0.381, 0.422),
     roughness: 0.75,
     metallic: 0.05,
   });
 
   const emissiveMat = new StandardMaterial({
     color: new Color(1.0, 1.0, 1.0),
-    emissiveColor: new Color(1.0, 0.95, 0.8),
+    emissiveColor: new Color(1, 0.977, 0.904),
     emissiveIntensity: 10.0, // High light emission for bloom
     roughness: 0.1,
     metallic: 0.0,
@@ -437,7 +437,7 @@ function buildInterrogationRoom(
   const folder = new Object3D("dossier");
   folder.geometry = cubeGeo;
   folder.material = new StandardMaterial({
-    color: new Color(0.76, 0.65, 0.45),
+    color: new Color(0.883, 0.822, 0.696),
     roughness: 0.9,
   });
   folder.scale.set(0.3, 0.01, 0.22);
@@ -464,7 +464,7 @@ function buildInterrogationRoom(
   const cup1 = new Object3D("cup1");
   cup1.geometry = cupBodyGeo;
   cup1.material = new StandardMaterial({
-    color: new Color(0.92, 0.92, 0.92),
+    color: new Color(0.963, 0.963, 0.963),
     roughness: 0.2,
   });
   cup1.position.set(-0.6, 0.865, -0.3); // Rest on table surface (0.81 + 0.055)
@@ -481,7 +481,7 @@ function buildInterrogationRoom(
   const cup2 = new Object3D("cup2");
   cup2.geometry = cupBodyGeo;
   cup2.material = new StandardMaterial({
-    color: new Color(0.12, 0.38, 0.22),
+    color: new Color(0.381, 0.644, 0.502),
     roughness: 0.3,
   });
   cup2.position.set(0.6, 0.865, 0.3); // Rest on table surface (0.81 + 0.055)
@@ -594,7 +594,7 @@ function buildInterrogationRoom(
 
   const swingLight = new SpotLight({
     name: "interrogationSpot",
-    color: new Color(1.0, 0.97, 0.88), // Warm lightbulb filament glow
+    color: new Color(1, 0.986, 0.944), // Warm lightbulb filament glow
     intensity: 15.0, // Increased from 8.0 for dramatic shadows
     distance: 12.0,
     angle: Math.PI / 5.0, // Narrower light cone (from PI/3 to PI/5) for high contrast spot
@@ -607,7 +607,7 @@ function buildInterrogationRoom(
 
   // Ambient Light (Dropped from 0.4 to 0.06 to create deep shadows and mystery)
   const ambientLight = new AmbientLight({
-    color: new Color(0.15, 0.17, 0.22), // Cold blue ambient fill
+    color: new Color(0.422, 0.447, 0.502), // Cold blue ambient fill
     intensity: 0.06,
   });
   scene.add(ambientLight);
@@ -751,7 +751,7 @@ class Showcase14 extends AbstractShowcase {
           bloom.intensity = 3.5;
           bloom.threshold = 0.25;
           bloom.radius = 1.4;
-          bloom.color = new Color(0.05, 1.8, 0.15); // Vibrant glowing phosphor green
+          bloom.color = new Color(0.256, 1.306, 0.422); // Vibrant glowing phosphor green
         }
         break;
 
@@ -790,7 +790,7 @@ class Showcase14 extends AbstractShowcase {
           bloom.intensity = 4.5; // Extreme bleed bloom
           bloom.threshold = 0.2;
           bloom.radius = 1.6;
-          bloom.color = new Color(2.0, 0.05, 1.5); // Rich glowing hot magenta
+          bloom.color = new Color(1.37, 0.256, 1.202); // Rich glowing hot magenta
         }
         if (grain) {
           grain.enabled = true;
@@ -838,7 +838,7 @@ class Showcase14 extends AbstractShowcase {
           bloom.intensity = 2.4;
           bloom.threshold = 0.45;
           bloom.radius = 1.2;
-          bloom.color = new Color(1.8, 0.8, 0.05); // Hot glowing amber orange
+          bloom.color = new Color(1.306, 0.904, 0.256); // Hot glowing amber orange
         }
         break;
 
@@ -978,16 +978,16 @@ class Showcase14 extends AbstractShowcase {
         if (cycle === 0) {
           // Red Flash
           if (this._presetName === "noir") {
-            this._redBlueLight.color.set(6.0, 6.0, 6.0); // Boosted grayscale intensity
+            this._redBlueLight.color.set(2.258, 2.258, 2.258); // Boosted grayscale intensity
           } else {
-            this._redBlueLight.color.set(8.0, 0.1, 0.1); // Stark red flash
+            this._redBlueLight.color.set(2.573, 0.351, 0.351); // Stark red flash
           }
         } else {
           // Blue Flash
           if (this._presetName === "noir") {
-            this._redBlueLight.color.set(0.1, 0.1, 0.1);
+            this._redBlueLight.color.set(0.351, 0.351, 0.351);
           } else {
-            this._redBlueLight.color.set(0.1, 0.1, 8.0); // Stark blue flash
+            this._redBlueLight.color.set(0.351, 0.351, 2.573); // Stark blue flash
           }
         }
         // Pulsing intensity

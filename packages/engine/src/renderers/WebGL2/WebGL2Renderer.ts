@@ -1251,7 +1251,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     // pass's `clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT)` and paint the whole canvas as
     // clamp(e^40)->255, clamp(e^80)->255, clamp(-e^-40)->0 -- the flat yellow Stage-C regression.
     {
-      const cc = this.clearColor;
+      const cc = this.targetClearColor;
       this.gl.clearColor(cc.r, cc.g, cc.b, cc.a);
     }
 
@@ -2357,7 +2357,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     ubo.setInt(f.numPointLights.offset, Math.min(lights.pLights.length, 16));
     ubo.setInt(f.numSpotLights.offset, Math.min(lights.sLights.length, 16));
     ubo.setInt(f.numAreaLights.offset, lights.aLights.length);
-    const gamma = this.postProcessing.enabled ? 1.0 : (this._quality.gamma ?? 2.2);
+    const gamma = this.outputGamma;
     const exposure = this.postProcessing.enabled ? 1.0 : (this._quality.exposure ?? 1.0);
     ubo.setFloat(f.gamma.offset, gamma);
     ubo.setFloat(f.exposure.offset, exposure);
@@ -2370,9 +2370,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         ubo.setVec3(offset + WebGL2PointLightLayout.pos, matData[12]!, matData[13]!, matData[14]!);
         ubo.setVec3(
           offset + WebGL2PointLightLayout.color,
-          pl.color.r * pl.intensity,
-          pl.color.g * pl.intensity,
-          pl.color.b * pl.intensity,
+          pl.linearColor.r * pl.intensity,
+          pl.linearColor.g * pl.intensity,
+          pl.linearColor.b * pl.intensity,
         );
         ubo.setFloat(offset + WebGL2PointLightLayout.distance, pl.distance);
         ubo.setFloat(offset + WebGL2PointLightLayout.decay, pl.decay);
@@ -2395,9 +2395,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         );
         ubo.setVec3(
           offset + WebGL2SpotLightLayout.color,
-          sl.color.r * sl.intensity,
-          sl.color.g * sl.intensity,
-          sl.color.b * sl.intensity,
+          sl.linearColor.r * sl.intensity,
+          sl.linearColor.g * sl.intensity,
+          sl.linearColor.b * sl.intensity,
         );
         ubo.setFloat(offset + WebGL2SpotLightLayout.angleCos, Math.cos(sl.angle));
         ubo.setFloat(
@@ -2417,9 +2417,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         ubo.setVec3(offset + WebGL2AreaLightLayout.pos, mat[12]!, mat[13]!, mat[14]!);
         ubo.setVec3(
           offset + WebGL2AreaLightLayout.color,
-          al.color.r * al.intensity,
-          al.color.g * al.intensity,
-          al.color.b * al.intensity,
+          al.linearColor.r * al.intensity,
+          al.linearColor.g * al.intensity,
+          al.linearColor.b * al.intensity,
         );
         ubo.setVec3(offset + WebGL2AreaLightLayout.u, mat[0]!, mat[1]!, mat[2]!);
         ubo.setVec3(offset + WebGL2AreaLightLayout.v, mat[4]!, mat[5]!, mat[6]!);

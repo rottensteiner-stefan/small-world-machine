@@ -278,7 +278,7 @@ class CrateSpawnerBehavior extends Behavior {
       teleporter.add(glowMesh);
 
       const spawnLight = new PointLight({
-        color: new Color(0.2, 0.8, 1.0),
+        color: new Color(0.481, 0.904, 1),
         intensity: 0.0,
         distance: 6.0,
       });
@@ -335,7 +335,7 @@ class Showcase12 extends AbstractShowcase {
   private _portLight!: SpotLight;
   private _portLightBehavior!: FlickerBehavior;
   private _portLightBaseIntensity: number = 10.0;
-  private _portLightBaseColor: Color = new Color(1.0, 0.8, 0.5);
+  private _portLightBaseColor: Color = new Color(1, 0.904, 0.73);
   private _portMaterial?: StandardMaterial;
   private _time: number = 0;
   private _gears: { obj: Object3D; speed: number }[] = [];
@@ -1120,7 +1120,7 @@ class Showcase12 extends AbstractShowcase {
 
     // Add the SpotLight back to the Baulicht
     const portLight = new SpotLight({
-      color: new Color(1.0, 0.8, 0.5),
+      color: new Color(1, 0.904, 0.73),
       intensity: 10.0,
       direction: new Vector3D(-1, -0.2, 0), // Pointing -X (from right wall to left wall)
       angle: Math.PI / 4,
@@ -1188,7 +1188,7 @@ class Showcase12 extends AbstractShowcase {
 
     // Add a small light to highlight the table in the dark corner
     const tableLight = new SpotLight({
-      color: new Color(1.0, 0.9, 0.7),
+      color: new Color(1, 0.953, 0.85),
       intensity: 3.0,
       direction: new Vector3D(0, -1, 0),
       angle: Math.PI / 3,
@@ -1362,10 +1362,10 @@ class Showcase12 extends AbstractShowcase {
     }
 
     // 7. Lighting: Ambient (Increased to balance contrast and prevent pitch-black shadows)
-    this.scene.add(new AmbientLight({ color: new Color(0.1, 0.1, 0.15), intensity: 0.4 }));
+    this.scene.add(new AmbientLight({ color: new Color(0.351, 0.351, 0.422), intensity: 0.4 }));
 
     // 7. Lighting: Moon/Ocean rays coming from above/side (Dimmed)
-    const oceanLight = new DirectionalLight({ color: new Color(0.4, 0.7, 1.0), intensity: 1.0 }); // Increased for visibility
+    const oceanLight = new DirectionalLight({ color: new Color(0.659, 0.85, 1), intensity: 1.0 }); // Increased for visibility
     oceanLight.direction.set(1, -1, 0);
     oceanLight.castShadow = true; // Enable CSM Shadows
     oceanLight.shadowBias = 0.005;

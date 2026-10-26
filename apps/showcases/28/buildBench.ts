@@ -25,7 +25,7 @@ export interface LabBench {
 export function buildBench(scene: Scene, textures: LabSurfaceTextures): LabBench {
   // 1. Heavy Optical Isolation Bench (dark anodized aluminum slab, plan P1-2: grounded, matte)
   const tableMat = new StandardMaterial({
-    color: new Color(0.14, 0.15, 0.17),
+    color: new Color(0.409, 0.422, 0.447),
     diffuseMap: textures.steel.diffuse,
     normalMap: textures.steel.normal,
     roughnessMap: textures.steel.roughness,
@@ -49,7 +49,7 @@ export function buildBench(scene: Scene, textures: LabSurfaceTextures): LabBench
   scene.add(turntable);
 
   const stageMat = new StandardMaterial({
-    color: new Color(0.15, 0.16, 0.18),
+    color: new Color(0.422, 0.435, 0.459),
     diffuseMap: textures.steel.diffuse,
     normalMap: textures.steel.normal,
     roughnessMap: textures.steel.roughness,
@@ -73,7 +73,7 @@ export function buildBench(scene: Scene, textures: LabSurfaceTextures): LabBench
   // inside the stagePlate top radius of 2.2, so the torus no longer clips the plate's sloped
   // edge), slightly proud of the surface with a near-zero contact gap for HBAO contact shading.
   const brassRingMat = new StandardMaterial({
-    color: new Color(0.7, 0.55, 0.25),
+    color: new Color(0.85, 0.762, 0.533),
     diffuseMap: textures.brass.diffuse,
     normalMap: textures.brass.normal,
     roughnessMap: textures.brass.roughness,
@@ -97,7 +97,7 @@ export function buildBench(scene: Scene, textures: LabSurfaceTextures): LabBench
   // WebGPU-only trap), no self-glow emissive -- the only light on the glass is the tight key
   // SpotLight below, which raises sharp facet glints instead of a milky self-luminous bulb.
   const glassMat = new GlassMaterial({
-    color: new Color(0.96, 0.98, 1.0),
+    color: new Color(0.982, 0.991, 1),
     ior: 1.65,
     thickness: 0.55,
     transmission: 1.0,
@@ -154,7 +154,7 @@ export function buildLaserEmitter(scene: Scene, tableMat: StandardMaterial): voi
   scene.add(emitterPillar);
 
   const laserHousingMat = new StandardMaterial({
-    color: new Color(0.1, 0.1, 0.12),
+    color: new Color(0.351, 0.351, 0.381),
     metallic: 0.9,
     roughness: 0.3,
   });
@@ -173,7 +173,7 @@ export function buildLaserEmitter(scene: Scene, tableMat: StandardMaterial): voi
   // Glowing Laser Lens Aperture -- kept modest so it doesn't flood the frame with HDR bloom
   const laserLensMat = new StandardMaterial({
     color: new Color(1, 1, 1),
-    emissiveColor: new Color(1.2, 1.2, 1.2),
+    emissiveColor: new Color(1.086, 1.086, 1.086),
     emissiveIntensity: 1.6,
     roughness: 0.1,
   });

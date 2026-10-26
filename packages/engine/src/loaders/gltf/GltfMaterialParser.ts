@@ -138,11 +138,13 @@ export class GltfMaterialParser {
       if (tex) mat.emissiveMap = tex;
     }
 
+    // emissiveFactor, sheenColorFactor and attenuationColor are glTF-linear like baseColorFactor and
+    // get the same single encode into the engine's sRGB-authored Color convention (ADR 0049).
     if (m.emissiveFactor) {
       mat.emissiveColor = new Color(
-        m.emissiveFactor[0]!,
-        m.emissiveFactor[1]!,
-        m.emissiveFactor[2]!,
+        GltfMaterialParser.linearToEngineSRGB(m.emissiveFactor[0]!),
+        GltfMaterialParser.linearToEngineSRGB(m.emissiveFactor[1]!),
+        GltfMaterialParser.linearToEngineSRGB(m.emissiveFactor[2]!),
         1.0,
       );
     }
@@ -195,9 +197,9 @@ export class GltfMaterialParser {
       const sheen = m.extensions.KHR_materials_sheen;
       if (sheen.sheenColorFactor) {
         mat.sheenColor = new Color(
-          sheen.sheenColorFactor[0]!,
-          sheen.sheenColorFactor[1]!,
-          sheen.sheenColorFactor[2]!,
+          GltfMaterialParser.linearToEngineSRGB(sheen.sheenColorFactor[0]!),
+          GltfMaterialParser.linearToEngineSRGB(sheen.sheenColorFactor[1]!),
+          GltfMaterialParser.linearToEngineSRGB(sheen.sheenColorFactor[2]!),
           1.0,
         );
       }
@@ -259,9 +261,9 @@ export class GltfMaterialParser {
       if (vol.attenuationDistance !== undefined) mat.attenuationDistance = vol.attenuationDistance;
       if (vol.attenuationColor) {
         mat.attenuationColor = new Color(
-          vol.attenuationColor[0]!,
-          vol.attenuationColor[1]!,
-          vol.attenuationColor[2]!,
+          GltfMaterialParser.linearToEngineSRGB(vol.attenuationColor[0]!),
+          GltfMaterialParser.linearToEngineSRGB(vol.attenuationColor[1]!),
+          GltfMaterialParser.linearToEngineSRGB(vol.attenuationColor[2]!),
           1.0,
         );
       }

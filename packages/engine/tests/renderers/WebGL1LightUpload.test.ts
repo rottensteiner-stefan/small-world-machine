@@ -86,7 +86,7 @@ describe("WebGL1Renderer light upload", () => {
     const spot = {
       worldMatrix: matrix(1, 2, 3),
       direction: { x: 0, y: -2, z: 0 },
-      color: { r: 1, g: 0.5, b: 0.25 },
+      linearColor: { r: 1, g: 0.5, b: 0.25 },
       intensity: 2,
       angle: Math.PI / 3,
       penumbra: 0.5,
@@ -112,7 +112,7 @@ describe("WebGL1Renderer light upload", () => {
       worldMatrix: {
         data: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4, 5, 6, 1],
       },
-      color: { r: 1, g: 1, b: 1 },
+      linearColor: { r: 1, g: 1, b: 1 },
       intensity: 3,
       width: 4,
       height: 2,
@@ -136,7 +136,7 @@ describe("WebGL1Renderer light upload", () => {
         {
           worldMatrix: matrix(0, 0, 0),
           direction: { x: 0, y: 0, z: 0 },
-          color: { r: 1, g: 1, b: 1 },
+          linearColor: { r: 1, g: 1, b: 1 },
           intensity: 1,
           angle: 1,
           penumbra: 0,

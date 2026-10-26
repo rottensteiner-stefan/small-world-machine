@@ -449,7 +449,8 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
 
   public override setClearColor(color: Color): void {
     super.setClearColor(color);
-    this.gl.clearColor(color.r, color.g, color.b, color.a);
+    const cc = this.targetClearColor;
+    this.gl.clearColor(cc.r, cc.g, cc.b, cc.a);
   }
 
   // Compiles and links a shader program (throws on a compile or link error)

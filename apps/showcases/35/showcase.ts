@@ -52,15 +52,15 @@ class Showcase35 extends AbstractShowcase {
 
     // Deliberately dim ambient plus one directional key light so metallic/roughness differences
     // stay legible -- a bright ambient term would wash the whole grid to a flat grey.
-    this.scene.add(new AmbientLight({ color: new Color(0.5, 0.5, 0.55), intensity: 0.25 }));
+    this.scene.add(new AmbientLight({ color: new Color(0.73, 0.73, 0.762), intensity: 0.25 }));
 
-    const key = new DirectionalLight({ color: new Color(1.0, 0.97, 0.9), intensity: 2.2 });
+    const key = new DirectionalLight({ color: new Color(1, 0.986, 0.953), intensity: 2.2 });
     key.direction.set(-0.4, -0.6, -0.7);
     this.scene.add(key);
 
     // A second, cooler point light from the opposite side to give the rougher/dielectric
     // spheres a visible highlight too, not just the mirror-like top-right corner.
-    const fill = new PointLight({ color: new Color(0.6, 0.75, 1.0), intensity: 12 });
+    const fill = new PointLight({ color: new Color(0.793, 0.877, 1), intensity: 12 });
     fill.position.set(center + 6, center + 3, 8);
     this.scene.add(fill);
 

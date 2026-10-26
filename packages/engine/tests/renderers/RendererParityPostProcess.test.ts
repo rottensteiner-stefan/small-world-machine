@@ -302,10 +302,12 @@ describe("Post-Processing Renderer Parity (WebGL2 vs WebGPU)", () => {
     // Bloom
     expect(uniforms.get("u_bloomIntensity")).toBeCloseTo(bloom.intensity);
     expect(gpuData![7]).toBeCloseTo(bloom.intensity);
-    expect(uniforms.get("u_bloomColor")).toEqual([bloom.color.r, bloom.color.g, bloom.color.b]);
-    expect(gpuData![12]).toBeCloseTo(bloom.color.r);
-    expect(gpuData![13]).toBeCloseTo(bloom.color.g);
-    expect(gpuData![14]).toBeCloseTo(bloom.color.b);
+    // Both tiers add bloom to linear HDR: the sRGB-authored tint arrives decoded (ADR 0049).
+    const bloomLinear = [bloom.color.r, bloom.color.g, bloom.color.b].map((c) => Math.pow(c, 2.2));
+    expect(uniforms.get("u_bloomColor")).toEqual(bloomLinear);
+    expect(gpuData![12]).toBeCloseTo(bloomLinear[0]!);
+    expect(gpuData![13]).toBeCloseTo(bloomLinear[1]!);
+    expect(gpuData![14]).toBeCloseTo(bloomLinear[2]!);
 
     // Quantize
     expect(uniforms.get("u_quantizeSteps")).toBeCloseTo(quant.steps);

@@ -39,7 +39,7 @@ class PresentationDemoApp extends AbstractShowcase {
       bloom.intensity = 1.5;
       bloom.threshold = 0.5;
       bloom.radius = 1.0;
-      bloom.color = new Color(1.2, 0.8, 1.6);
+      bloom.color = new Color(1.086, 0.904, 1.238);
     }
 
     // Explicit projection setup (built by AbstractShowcase.configureCamera)
@@ -65,7 +65,7 @@ class PresentationDemoApp extends AbstractShowcase {
     this.scene.add(ambientLight);
 
     const mainLight = new DirectionalLight({
-      color: new Color(1.0, 0.95, 0.9),
+      color: new Color(1, 0.977, 0.953),
       intensity: 2.0,
     });
     mainLight.position.set(5, 5, 5);
@@ -73,7 +73,7 @@ class PresentationDemoApp extends AbstractShowcase {
     this.scene.add(mainLight);
 
     const fillLight = new DirectionalLight({
-      color: new Color(0.5, 0.6, 1.0),
+      color: new Color(0.73, 0.793, 1),
       intensity: 0.8,
     });
     fillLight.position.set(-5, 0, 0);

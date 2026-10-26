@@ -40,10 +40,12 @@ Wir trennen die beiden Rollen:
 
 - Alle Showcases mit Post-Processing werden dunkler und satter (korrekter linearer Workflow). Szenen,
   die unter dem Doppel-Kodieren abgestimmt wurden, brauchen eventuell Licht- oder Belichtungs-Nachjustage.
-- Material- und Nebelfarben sind sRGB-Autorenwerte; Licht-, Ambient- und Clear-Farben bleiben linear.
-  Unter dem alten Identitäts-Decode geschriebene Material-/Nebel-Konstanten waren faktisch linear: Für
-  denselben Look werden sie mit `c^(1/2.2)` umgerechnet (so geschehen in Showcase 12, 30, 32, 37;
-  in 30 zusätzlich Lack und Key-Licht des Autos, das jetzt einen korrekt dunklen Nachthimmel spiegelt).
+- Material- und Nebelfarben sind sRGB-Autorenwerte. Unter dem alten Identitäts-Decode geschriebene
+  Material-/Nebel-Konstanten waren faktisch linear: Für denselben Look werden sie mit `c^(1/2.2)`
+  umgerechnet (so geschehen in Showcase 12, 30, 32, 37; in 30 zusätzlich Lack und Key-Licht des Autos,
+  das jetzt einen korrekt dunklen Nachthimmel spiegelt).
+- **Nachtrag 2026-10-26:** [ADR 0050](./0050-all-colours-srgb-authored.md) macht auch Licht-, Ambient-,
+  Clear-, Volumen-Nebel- und Post-Tint-Farben zu sRGB-Werten und migriert alle Konstanten.
 - Ohne Post-Processing ändert sich nichts, solange `quality.gamma` 2,2 ist.
 - WebGL1 dekodiert und kodiert schon fest mit 2,2 und sein Post-Pass kodiert nicht: unverändert.
 - Eigene Shader, die Farben ohne `sRGBToLinear` roh ausgeben, sind mit Post-Processing weiter

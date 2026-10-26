@@ -144,5 +144,5 @@ fn mr_voronoiFacets(uv: vec2f, scale: f32) -> vec3f {
     var color = min(diffuseLight + specularLight, vec3f(1.0));
     [WGSL_FOG_CALC]
 
-    return vec4f(color, baseAlbedo.a);
+    return vec4f(displayToTarget(color), baseAlbedo.a);
 }

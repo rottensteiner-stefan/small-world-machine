@@ -322,7 +322,7 @@ class Showcase24 extends AbstractShowcase {
     this.scene.add(dirLight);
 
     // Fill Light for the right side
-    const dirLight2 = new DirectionalLight({ color: new Color(0.8, 0.8, 1.0), intensity: 0.5 });
+    const dirLight2 = new DirectionalLight({ color: new Color(0.904, 0.904, 1), intensity: 0.5 });
     dirLight2.direction.set(1, -0.5, -1);
     this.scene.add(dirLight2);
 

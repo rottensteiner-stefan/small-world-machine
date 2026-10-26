@@ -91,7 +91,7 @@ class Showcase37 extends AbstractShowcase {
       bloom.intensity = 0.4;
       bloom.threshold = 0.95;
       bloom.radius = 0.55;
-      bloom.color = new Color(1.0, 0.92, 0.75);
+      bloom.color = new Color(1, 0.963, 0.877);
     }
 
     // Vignette (Strong corner darkening, Consensus 1 & 14)
@@ -366,7 +366,7 @@ class Showcase37 extends AbstractShowcase {
     // Minimal Warm Ambient Light -- slightly lifted (intensity 0.2 -> 0.3) so the room never
     // collapses into flat black voids; a faint simulated bounce fill, kept below the mood.
     const ambientLight = new AmbientLight({
-      color: new Color(0.09, 0.06, 0.04),
+      color: new Color(0.335, 0.278, 0.232),
       intensity: 0.3,
     });
     this.scene.add(ambientLight);
@@ -374,7 +374,7 @@ class Showcase37 extends AbstractShowcase {
     // Dominant Pendant Light (SpotLight with Shadow Map, pointing down) -- 2.6 instead of 3.6 so
     // the hero light still reads as the warm source without scorching the table into blown highs.
     const pendantLight = new SpotLight({
-      color: new Color(1.0, 0.92, 0.82),
+      color: new Color(1, 0.963, 0.914),
       intensity: 2.6,
       distance: 7.0,
       decay: 2.0,
@@ -394,7 +394,7 @@ class Showcase37 extends AbstractShowcase {
 
     // Upward Ceiling Fill Light from Pendant
     const pendantUpLight = new SpotLight({
-      color: new Color(1.0, 0.88, 0.75),
+      color: new Color(1, 0.944, 0.877),
       intensity: 0.9,
       distance: 3.0,
       decay: 2.0,
@@ -410,7 +410,7 @@ class Showcase37 extends AbstractShowcase {
     // Floor lamp accent light -- warmed (rose instead of magenta) and damped (0.28) so its wall
     // wash reads as a soft cozy accent, not a clashing magenta splash (user decision).
     const floorLampLight = new PointLight({
-      color: new Color(1.0, 0.6, 0.5),
+      color: new Color(1, 0.793, 0.73),
       intensity: 0.28,
       distance: 2.4,
       decay: 2.0,
@@ -423,7 +423,7 @@ class Showcase37 extends AbstractShowcase {
     // bed itself stays the dominant visible source; a bright hidden light with no visible fire
     // reads as a bulb behind bricks.
     const fireplaceLight = new PointLight({
-      color: new Color(1.0, 0.45, 0.12),
+      color: new Color(1, 0.696, 0.381),
       intensity: 0.45,
       distance: 3.0,
       decay: 2.0,
@@ -435,7 +435,7 @@ class Showcase37 extends AbstractShowcase {
     // Candle Cluster PointLight (Warm flickering glow on coffee table, Consensus 3) -- 0.52 keeps
     // the candles intimate instead of behaving like small high-intensity spotlights.
     const candleLight = new PointLight({
-      color: new Color(1.0, 0.65, 0.22),
+      color: new Color(1, 0.822, 0.502),
       intensity: 0.52,
       distance: 2.0,
       decay: 2.0,

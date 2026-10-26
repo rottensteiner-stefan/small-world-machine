@@ -388,7 +388,7 @@ export class DirectionalLight extends AbstractLight {
     data.dDir.set(this.direction.x, this.direction.y, this.direction.z);
     // Invert direction for lighting calculations
     data.dDir.scale(-1).normalize();
-    data.dCol.copyFrom(this.color);
+    data.dCol.copyFrom(this.linearColor);
     data.dIntensity = this.intensity;
     data.dLight = this;
   }

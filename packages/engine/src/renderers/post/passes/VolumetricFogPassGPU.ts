@@ -7,6 +7,7 @@ import FROXEL_INTEGRATE_WGSL from "../../shaders/source/web_gpu/compute/froxel_i
 import type { VolumetricFogElement } from "../elements/index.js";
 import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../../core/lights/index.js";
 import type { FogVolume } from "../../../core/objects/FogVolume.js";
+import { Color } from "../../../core/colors/index.js";
 import { VolumetricTexture } from "../../../core/textures/index.js";
 import {
   DEFAULT_CLUSTER_TILE_SIZE,
@@ -182,6 +183,9 @@ export class VolumetricFogPassGPU implements PostEffectPass {
   private readonly _scratchInvView: Matrix4 = new Matrix4();
   private readonly _scratchInvViewProj: Matrix4 = new Matrix4();
   private readonly _scratchSunDir: Vector3D = new Vector3D();
+  // sRGB-authored fog tint / FogVolume colours decoded to linear before upload (ADR 0049).
+  private readonly _linearTint: Color = new Color();
+  private readonly _linearVolume: Color = new Color();
   private readonly _scratchCascadeVp: Matrix4 = new Matrix4();
   private readonly _scratchCascadeVpZO: Matrix4 = new Matrix4();
   /** Validation guards: an invalid pipeline disables the fog instead of dropping the whole frame. */
@@ -785,13 +789,15 @@ export class VolumetricFogPassGPU implements PostEffectPass {
         inj[offset + 17] = vol.density;
         inj[offset + 18] = vol.edgeFade;
         inj[offset + 19] = vol.emissionIntensity;
-        inj[offset + 20] = vol.albedo.r;
-        inj[offset + 21] = vol.albedo.g;
-        inj[offset + 22] = vol.albedo.b;
+        const volAlbedo = vol.albedo.toLinear(this._linearVolume);
+        inj[offset + 20] = volAlbedo.r;
+        inj[offset + 21] = volAlbedo.g;
+        inj[offset + 22] = volAlbedo.b;
         inj[offset + 23] = vol.noiseScale;
-        inj[offset + 24] = vol.emission.r;
-        inj[offset + 25] = vol.emission.g;
-        inj[offset + 26] = vol.emission.b;
+        const volEmission = vol.emission.toLinear(this._linearVolume);
+        inj[offset + 24] = volEmission.r;
+        inj[offset + 25] = volEmission.g;
+        inj[offset + 26] = volEmission.b;
         inj[offset + 27] = vol.noiseAmount;
         inj[offset + 28] = vol.size.x;
         inj[offset + 29] = vol.size.y;
@@ -804,16 +810,17 @@ export class VolumetricFogPassGPU implements PostEffectPass {
     }
 
     const albedo = Math.min(Math.max(element.scatteringAlbedo, 0.0), 1.0);
+    const tint = element.color.toLinear(this._linearTint);
     if (elementMaskActive) {
       // Per-cell albedo is authored in the mask: upload the unbaked tint, the shader multiplies
       // by mask.g so each cell keeps its own albedo instead of the global scatteringAlbedo.
-      inj[SCATTER_TINT_OFFSET] = element.color.r;
-      inj[SCATTER_TINT_OFFSET + 1] = element.color.g;
-      inj[SCATTER_TINT_OFFSET + 2] = element.color.b;
+      inj[SCATTER_TINT_OFFSET] = tint.r;
+      inj[SCATTER_TINT_OFFSET + 1] = tint.g;
+      inj[SCATTER_TINT_OFFSET + 2] = tint.b;
     } else {
-      inj[SCATTER_TINT_OFFSET] = element.color.r * albedo;
-      inj[SCATTER_TINT_OFFSET + 1] = element.color.g * albedo;
-      inj[SCATTER_TINT_OFFSET + 2] = element.color.b * albedo;
+      inj[SCATTER_TINT_OFFSET] = tint.r * albedo;
+      inj[SCATTER_TINT_OFFSET + 1] = tint.g * albedo;
+      inj[SCATTER_TINT_OFFSET + 2] = tint.b * albedo;
     }
     inj[SCATTER_TINT_OFFSET + 3] = element.localLightShadows ? 1.0 : 0.0;
 
@@ -924,10 +931,11 @@ export class VolumetricFogPassGPU implements PostEffectPass {
       : 0.0;
     // The directional light's own colour tints the shafts (same as the GL fog pass): a red evening
     // sun must not produce white rays.
-    const sunColor = dirLight?.color;
-    intg[32] = element.color.r * (sunColor?.r ?? 1.0) * sunScale;
-    intg[33] = element.color.g * (sunColor?.g ?? 1.0) * sunScale;
-    intg[34] = element.color.b * (sunColor?.b ?? 1.0) * sunScale;
+    const sunColor = dirLight?.linearColor;
+    const sunTint = element.color.toLinear(this._linearTint);
+    intg[32] = sunTint.r * (sunColor?.r ?? 1.0) * sunScale;
+    intg[33] = sunTint.g * (sunColor?.g ?? 1.0) * sunScale;
+    intg[34] = sunTint.b * (sunColor?.b ?? 1.0) * sunScale;
     intg[35] = sunActive ? 1.0 : 0.0;
 
     intg[INTEGRATE_MASK_OFFSET] = maskPos.x;

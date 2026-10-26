@@ -146,13 +146,13 @@ class AndNowScene2 extends AbstractShowcase {
 
     const dirLight = new DirectionalLight({
       direction: new Vector3D(0.2, -0.8, -1.0),
-      color: new Color(1, 0.95, 0.9),
+      color: new Color(1, 0.977, 0.953),
       intensity: 2.0,
     });
     this.scene.add(dirLight);
 
     this._pointLight = new PointLight({
-      color: new Color(1, 0.7, 0.5),
+      color: new Color(1, 0.85, 0.73),
       intensity: 10,
       distance: 30,
     });

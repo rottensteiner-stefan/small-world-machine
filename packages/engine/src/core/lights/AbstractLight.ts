@@ -64,8 +64,23 @@ export abstract class AbstractLight extends Object3D {
   /** The type of the light. */
   public abstract readonly type: LightType;
 
-  /** The color of the light. */
+  /** The color of the light, sRGB-authored like every engine Color (ADR 0049). */
   public color: Color;
+
+  // `linearColor` cache: recomputed only when `color` changed since the last read (zero-GC).
+  private readonly _linearColor: Color = new Color(0, 0, 0, 1);
+  private readonly _linearSource: Color = new Color(NaN, NaN, NaN, NaN);
+
+  /** `color` in linear light -- what every renderer uploads (ADR 0049). */
+  public get linearColor(): Color {
+    const c = this.color;
+    const s = this._linearSource;
+    if (c.r !== s.r || c.g !== s.g || c.b !== s.b || c.a !== s.a) {
+      s.copyFrom(c);
+      c.toLinear(this._linearColor);
+    }
+    return this._linearColor;
+  }
 
   /** The intensity of the light. */
   public intensity: number;

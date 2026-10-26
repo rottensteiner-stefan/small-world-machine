@@ -77,8 +77,8 @@ class Showcase22 extends AbstractShowcase {
     }
 
     // 1. Lighting Setup
-    const ambient = new AmbientLight({ color: new Color(0.1, 0.1, 0.2), intensity: 1.0 });
-    const dirLight = new DirectionalLight({ color: new Color(0.8, 0.9, 1.0), intensity: 2.0 });
+    const ambient = new AmbientLight({ color: new Color(0.351, 0.351, 0.481), intensity: 1.0 });
+    const dirLight = new DirectionalLight({ color: new Color(0.904, 0.953, 1), intensity: 2.0 });
     dirLight.position.set(10, 20, 10);
     this.scene.add(ambient, dirLight);
 
@@ -145,7 +145,7 @@ class Showcase22 extends AbstractShowcase {
     }).getGeometryData();
 
     const particleMat = new BasicMaterial({
-      color: new Color(1.0, 0.5, 0.1, 1.0),
+      color: new Color(1, 0.73, 0.351, 1.0),
     });
 
     this._particleRenderer = new ParticleMeshRenderer({

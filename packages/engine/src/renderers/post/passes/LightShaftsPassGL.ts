@@ -9,6 +9,7 @@ import { pickHdrColorFormat, WebGL2FrameBuffer } from "../../WebGL2/index.js";
 import type { LightShaftsElement } from "../elements/index.js";
 import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
 import { Matrix4, Vector3D } from "../../../math/index.js";
+import { Color } from "../../../core/colors/index.js";
 import { requireGlObject } from "../../gl/requireGlObject.js";
 
 /**
@@ -21,6 +22,7 @@ import { requireGlObject } from "../../gl/requireGlObject.js";
 export class LightShaftsPassGL {
   private readonly _gl: WebGLRenderingContext | WebGL2RenderingContext;
   private readonly _isWebGL2: boolean;
+  private readonly _linearTint: Color = new Color();
 
   // WebGL2 programs & VAOs
   private _progShafts?: WebGLProgram | undefined;
@@ -277,11 +279,13 @@ export class LightShaftsPassGL {
       }
 
       if (this._uSunColorLoc) {
+        // The sRGB-authored tint scales linear HDR radiance here (ADR 0049).
+        const tint = element.color.toLinear(this._linearTint);
         gl2.uniform3f(
           this._uSunColorLoc,
-          element.color.r * dirLight.intensity,
-          element.color.g * dirLight.intensity,
-          element.color.b * dirLight.intensity,
+          tint.r * dirLight.intensity,
+          tint.g * dirLight.intensity,
+          tint.b * dirLight.intensity,
         );
       }
 
