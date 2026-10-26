@@ -36,7 +36,6 @@ import {
   StandardMaterial,
   Texture,
   Torus,
-  Vector2D,
   Vector3D,
 } from "@small-world-machine/engine";
 import { box } from "../shared/prim.js";
@@ -616,7 +615,6 @@ class Showcase12 extends AbstractShowcase {
       color: new Color(1.0, 1.0, 1.0),
       diffuseMap: crateDiffuse,
       normalMap: crateNormal,
-      normalScale: new Vector2D(1, -1), // Fix for DirectX normal map
       specularMap: crateSpecular,
       shininess: 32.0,
     });
@@ -634,7 +632,6 @@ class Showcase12 extends AbstractShowcase {
       color: new Color(1.0, 1.0, 1.0),
       diffuseMap: brandingDiffuse,
       normalMap: brandingNormal,
-      normalScale: new Vector2D(1, -1), // Fix for DirectX normal map
       specularMap: brandingSpecular,
       shininess: 32.0,
     });

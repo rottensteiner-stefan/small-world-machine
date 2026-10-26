@@ -99,6 +99,18 @@ describe("WebGPU runtime mipmap generation", () => {
     expect(device.queue.submit).toHaveBeenCalledTimes(1);
   });
 
+  it("gives normal maps the same full mip chain (they aliased into per-pixel noise without, ADR 0051)", () => {
+    const { textures, device } = makeTextures();
+    const tex = Texture.fromCanvas({ width: 16, height: 16 } as HTMLCanvasElement);
+
+    textures.getNormalTextureView(tex, { mipmapping: true } as QualityConfig);
+
+    expect(device.createTexture).toHaveBeenCalledWith(
+      expect.objectContaining({ mipLevelCount: 5 }),
+    );
+    expect(device.queue.submit).toHaveBeenCalledTimes(1);
+  });
+
   it("issues mipLevelCount - 1 blit draws per generation", () => {
     const { textures, device } = makeTextures();
     const tex = Texture.fromCanvas({ width: 16, height: 16 } as HTMLCanvasElement);

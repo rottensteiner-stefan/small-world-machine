@@ -244,10 +244,10 @@ class Showcase38 extends AbstractShowcase {
       flagstoneRough,
     ] = await Promise.all([
       Texture.fromUrl("./assets/sandstone_banded_albedo.png", wrapRepeat),
-      Texture.fromUrl("./assets/sandstone_banded_normal.png", wrapRepeat),
+      Texture.fromUrl("./assets/sandstone_banded_normal.webp", wrapRepeat),
       Texture.fromUrl("./assets/sandstone_banded_roughness.png", wrapRepeat),
       Texture.fromUrl("./assets/carved_masonry_albedo.png", wrapRepeat),
-      Texture.fromUrl("./assets/carved_masonry_normal.png", wrapRepeat),
+      Texture.fromUrl("./assets/carved_masonry_normal.webp", wrapRepeat),
       Texture.fromUrl("./assets/carved_masonry_roughness.png", wrapRepeat),
       Texture.fromUrl("./assets/weathered_cliff_albedo.png", wrapRepeat),
       Texture.fromUrl("./assets/weathered_cliff_normal.png", wrapRepeat),
@@ -256,7 +256,7 @@ class Showcase38 extends AbstractShowcase {
       Texture.fromUrl("./assets/plaza_sand_normal.png", wrapRepeat),
       Texture.fromUrl("./assets/plaza_sand_roughness.png", wrapRepeat),
       Texture.fromUrl("./assets/torch_wood_albedo.png", wrapRepeat),
-      Texture.fromUrl("./assets/torch_wood_normal.png", wrapRepeat),
+      Texture.fromUrl("./assets/torch_wood_normal.webp", wrapRepeat),
       Texture.fromUrl("./assets/torch_wood_roughness.png", wrapRepeat),
       Texture.fromUrl("./assets/forged_iron_albedo.png", wrapRepeat),
       Texture.fromUrl("./assets/forged_iron_normal.png", wrapRepeat),
@@ -1577,7 +1577,7 @@ class Showcase38 extends AbstractShowcase {
     // ------------------------------------------------------------------------
     if (this.audio) {
       try {
-        await this.audio.load("canyon_wind", "./assets/canyon_wind.mp3");
+        await this.audio.load("./assets/canyon_wind.mp3", "canyon_wind");
         this.audio.playMusic("canyon_wind", true, 0.4);
       } catch (err: unknown) {
         console.warn("[Showcase38] Canyon wind audio autoplay:", err);

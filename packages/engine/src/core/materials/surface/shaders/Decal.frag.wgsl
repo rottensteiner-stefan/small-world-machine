@@ -93,7 +93,7 @@ fn decalNeighbourDelta(centre: vec4f, forward: vec4f, backward: vec4f) -> vec3f 
         orm = textureSampleGrad(u_aoMap, s, i.uv, g_uvGradX, g_uvGradY).rgb;
     }
     let metallic = obj.metallic * orm.b;
-    let roughness = clamp(obj.roughness * orm.g, 0.05, 1.0);
+    var roughness = clamp(obj.roughness * orm.g, 0.05, 1.0);
     let ao = orm.r;
 
     // Unlit decals keep the flat albedo; lit ones run the clustered PBR chunk inside this block

@@ -1,7 +1,9 @@
 vec3 V = normalize(u_viewPos - v_worldPos);
 vec3 rawNormal = texture2D(u_normalMap, v_uv).rgb * 2.0 - 1.0;
+float normalMapLength = length(rawNormal);
 rawNormal.xy *= u_extraParams.zw;
 vec3 N = normalize(v_tbn * rawNormal);
+roughness = specularAntiAliasing(roughness, N, normalMapLength, max(abs(u_extraParams.z), abs(u_extraParams.w)));
 float dotNV = max(dot(N, V), 0.0001);
 
 float ior = u_liquidParams.x > 0.0 ? u_liquidParams.x : 1.5;

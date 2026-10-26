@@ -1,3 +1,30 @@
+// Geometric specular anti-aliasing (Tokuyoshi & Kaplanyan 2019; Filament's normalFiltering, Unity HDRP
+// "Geometric Specular AA"): widens the GGX lobe by the screen-space variance of the shading normal, so
+// normal-map and curvature detail below pixel size stops sparkling. Perceptual roughness in and out
+// (ADR 0051).
+// WebGL1 needs OES_standard_derivatives (enabled in base.frag.glsl); without it the filter is off.
+#ifdef GL_OES_standard_derivatives
+const float SPECULAR_AA_VARIANCE = 0.15; // screen-space filter kernel variance (Filament default)
+const float SPECULAR_AA_THRESHOLD = 0.2; // cap on the added roughness^2 (Filament default)
+// The normal map's own sub-pixel variance (Toksvig 2005, vMF form of Kaplanyan et al. 2016): mipmapped
+// normals average to a shorter vector, sigma^2 = 1/kappa with kappa = (3r - r^3) / (1 - r^2). Lengths
+// above 0.99 are 8-bit quantisation, not variance. `normalStrength` is the larger |normalScale|.
+float specularAntiAliasing(float perceptualRoughness, vec3 n, float normalLength, float normalStrength) {
+    vec3 du = dFdx(n);
+    vec3 dv = dFdy(n);
+    float nl = clamp(normalLength / 0.99, 0.0001, 1.0);
+    float toksvig = (1.0 - nl * nl) / (3.0 * nl - nl * nl * nl) * normalStrength * normalStrength;
+    float variance = SPECULAR_AA_VARIANCE * (dot(du, du) + dot(dv, dv)) + toksvig;
+    float kernelRoughness = min(2.0 * variance, SPECULAR_AA_THRESHOLD);
+    float r = perceptualRoughness * perceptualRoughness;
+    return sqrt(sqrt(clamp(r * r + kernelRoughness, 0.0, 1.0)));
+}
+#else
+float specularAntiAliasing(float perceptualRoughness, vec3 n, float normalLength, float normalStrength) {
+    return perceptualRoughness;
+}
+#endif
+
 // GGX Normal Distribution Function
 float D_GGX(float dotNH, float roughness) {
     float a = roughness * roughness;

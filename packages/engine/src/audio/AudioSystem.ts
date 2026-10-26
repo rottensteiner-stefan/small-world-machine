@@ -124,6 +124,8 @@ export class AudioSystem {
   public async load(url: string, name: string): Promise<void> {
     if (this._buffers.has(name)) return;
     const response = await fetch(url);
+    // Fail fast with the URL instead of handing an HTML error page to decodeAudioData.
+    if (!response.ok) throw new Error(`[AudioSystem] ${url}: HTTP ${response.status}`);
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
     this._buffers.set(name, audioBuffer);

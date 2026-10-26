@@ -6,7 +6,7 @@
     let diffuseTex = textureSample(u_diffuseMap, s, i.uv);
     let albedo = sRGBToLinear(diffuseTex.rgb) * sRGBToLinear(obj.color.rgb);
     let metallic = obj.metallic * textureSample(u_metallicMap, s, i.uv).b;
-    let roughness = clamp(obj.roughness * textureSample(u_roughnessMap, s, i.uv).g, 0.05, 1.0);
+    var roughness = clamp(obj.roughness * textureSample(u_roughnessMap, s, i.uv).g, 0.05, 1.0);
     let ao = obj.extraParams.x * textureSample(u_aoMap, s, i.uv).r;
     [WGSL_PBR_LIGHTING]
     let finalAlpha = obj.color.a * diffuseTex.a * textureSample(u_alphaMap, s, original_uv).r;

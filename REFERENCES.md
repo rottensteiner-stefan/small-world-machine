@@ -491,6 +491,17 @@ This document serves to record external sources, algorithms, mathematical deriva
   - [Schlick: "An Inexpensive BRDF Model for Physically-based Rendering" (1994)](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.50.2297&rep=rep1&type=pdf)
 - **Usage:** The core specular reflectance model used across both WebGL2 and WebGPU standard PBR pipelines. Composes the microfacet distribution $D$ (Trowbridge-Reitz/GGX for long-tailed specular highlights), geometric shadowing/masking $G$ (Smith model with Schlick-GGX approximation), and Fresnel reflectance $F$ (Schlick approximation) with energy-conserving diffuse split ($k_D = (1 - k_S) \cdot (1 - \text{metallic})$).
 
+### Geometric Specular Anti-Aliasing (Normal-Variance Roughness Filtering)
+
+- **File:** `packages/engine/src/renderers/shaders/source/web_gpu/chunks/pbr_math.wgsl`, `packages/engine/src/renderers/shaders/source/web_gl2/chunks/pbr_math.frag.glsl`, `packages/engine/src/renderers/shaders/source/web_gl1/chunks/pbr_math.frag.glsl` (ADR 0051)
+- **Authors/Gurus:** Yusuke Tokuyoshi & Anton S. Kaplanyan (2019, 2021); Romain Guy & Mathias Agopian (Filament)
+- **Source:**
+  - [Tokuyoshi & Kaplanyan: "Improved Geometric Specular Antialiasing" (I3D 2019)](https://dl.acm.org/doi/10.1145/3306131.3317025)
+  - [Filament Materials guide: "Specular anti-aliasing" / `normalFiltering`](https://google.github.io/filament/Materials.html)
+  - [Toksvig: "Mipmapping Normal Maps" (2005)](https://doi.org/10.1080/2151237X.2005.10129203)
+  - [Kaplanyan, Hill, Patney, Lefohn: "Filtering Distributions of Normals for Shading Antialiasing" (HPG 2016)](https://doi.org/10.2312/hpg.20161188)
+- **Usage:** Widens the GGX lobe by the screen-space variance of the shading normal, $\sigma^2 = 0.15\,(\lVert\partial N/\partial x\rVert^2 + \lVert\partial N/\partial y\rVert^2)$, $\alpha'^2 = \mathrm{sat}(\alpha^2 + \min(2\sigma^2, 0.2))$ with $\alpha = r_{\text{perceptual}}^2$. Adds the normal map's in-pixel variance from the mipmapped normal length (Toksvig, vMF form: $\sigma^2 = (1 - n_l^2)/(3n_l - n_l^3)$). Stops sub-pixel normal-map and curvature detail from producing single-pixel specular sparkles on all three tiers.
+
 ### Khronos PBR Material Extensions & Formulas
 
 #### 1. `KHR_materials_ior` — Index of Refraction & Fresnel Baseline ($F_0$)

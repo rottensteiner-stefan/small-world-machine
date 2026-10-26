@@ -390,9 +390,14 @@ export class GPUTextureResourceCache {
     }
   }
 
-  public getNormalTextureView(tex: Texture | undefined): GPUTextureView {
+  public getNormalTextureView(
+    tex: Texture | undefined,
+    quality: QualityConfig | undefined,
+  ): GPUTextureView {
     if (!tex || !tex.isLoaded || !tex.image) return this._fallback.flatNormalTextureView;
-    return this.getTextureView(tex, undefined);
+    // The quality config carries `mipmapping`: without it every normal map was uploaded with a
+    // single mip level and aliased into per-pixel noise under minification (ADR 0051).
+    return this.getTextureView(tex, quality);
   }
 
   public getCubeTextureView(

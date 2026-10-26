@@ -1,3 +1,23 @@
+// Geometric specular anti-aliasing (Tokuyoshi & Kaplanyan 2019; Filament's normalFiltering, Unity HDRP
+// "Geometric Specular AA"): widens the GGX lobe by the screen-space variance of the shading normal, so
+// normal-map and curvature detail below pixel size stops sparkling. Perceptual roughness in and out
+// (ADR 0051).
+const SPECULAR_AA_VARIANCE: f32 = 0.15; // screen-space filter kernel variance (Filament default)
+const SPECULAR_AA_THRESHOLD: f32 = 0.2; // cap on the added roughness^2 (Filament default)
+// The normal map's own sub-pixel variance (Toksvig 2005, vMF form of Kaplanyan et al. 2016): mipmapped
+// normals average to a shorter vector, sigma^2 = 1/kappa with kappa = (3r - r^3) / (1 - r^2). Lengths
+// above 0.99 are 8-bit quantisation, not variance. `normalStrength` is the larger |normalScale|.
+fn specularAntiAliasing(perceptualRoughness: f32, n: vec3f, normalLength: f32, normalStrength: f32) -> f32 {
+    let du = dpdx(n);
+    let dv = dpdy(n);
+    let nl = clamp(normalLength / 0.99, 0.0001, 1.0);
+    let toksvig = (1.0 - nl * nl) / (3.0 * nl - nl * nl * nl) * normalStrength * normalStrength;
+    let variance = SPECULAR_AA_VARIANCE * (dot(du, du) + dot(dv, dv)) + toksvig;
+    let kernelRoughness = min(2.0 * variance, SPECULAR_AA_THRESHOLD);
+    let r = perceptualRoughness * perceptualRoughness;
+    return sqrt(sqrt(clamp(r * r + kernelRoughness, 0.0, 1.0)));
+}
+
 fn D_GGX(dotNH: f32, roughness: f32) -> f32 {
     let a = roughness * roughness;
     let a2 = a * a;

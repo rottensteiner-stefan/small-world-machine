@@ -32,6 +32,7 @@
     "check:cycles": "madge --circular packages/engine/src",
     "check:markers": "node scripts/check-verified-markers.js",
     "check:doctrine": "tsx scripts/check-doctrine.ts",
+    "check:normal-maps": "tsx scripts/check-normal-maps.ts",
     "check:swm42-evsm": "node scripts/check-swm42-evsm.mjs",
     "check:swm42-pole": "node scripts/check-swm42-pole.mjs",
     "lint:fix": "eslint . --fix",

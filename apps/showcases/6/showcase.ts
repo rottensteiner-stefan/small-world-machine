@@ -135,7 +135,7 @@ export class Showcase6 extends AbstractShowcase {
 
     // Load Fireplace Brick PBR texture maps (Albedo, Normal, Roughness)
     const brickAlbedo = await Texture.fromUrl("./assets/fireplace_brick_albedo.jpg");
-    const brickNormal = await Texture.fromUrl("./assets/fireplace_brick_normal.jpg");
+    const brickNormal = await Texture.fromUrl("./assets/fireplace_brick_normal.webp");
     const brickRoughness = await Texture.fromUrl("./assets/fireplace_brick_roughness.jpg");
 
     const brickMat = new StandardMaterial({

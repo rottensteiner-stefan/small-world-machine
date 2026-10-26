@@ -157,9 +157,14 @@ export async function lintGlsl(filesToCheck?: string[]): Promise<boolean> {
     }
   }
 
-  // Deduplicate and filter out chunk definition files themselves (chunks are partial snippets)
+  // Deduplicate and filter out chunk definition files themselves (chunks are partial snippets).
+  // Everything under renderers/shaders/source/ is a ShaderRegistry chunk source, including the
+  // WebGL1 BASE_FS_HEADER / BASE_VS files that sit outside a chunks/ folder.
   filePaths = Array.from(new Set(filePaths)).filter(
-    (fp) => !fp.includes("/chunks/") && !fp.endsWith(".common.glsl"),
+    (fp) =>
+      !fp.includes("/chunks/") &&
+      !fp.includes("/renderers/shaders/source/") &&
+      !fp.endsWith(".common.glsl"),
   );
 
   let hasErrors = false;

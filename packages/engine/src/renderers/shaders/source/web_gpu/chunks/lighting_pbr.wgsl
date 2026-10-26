@@ -3,10 +3,12 @@
 let V = normalize(global.viewPos.xyz - i.wp);
 let TBN = mat3x3f(normalize(i.t), normalize(i.b), normalize(i.n));
 var rawNormal = sampleNormalMap(i.uv).rgb * 2.0 - 1.0;
+let normalMapLength = length(rawNormal);
 rawNormal.x *= obj.extraParams.z;
 rawNormal.y *= obj.extraParams.w;
 let N = normalize(TBN * rawNormal);
 g_shadingNormal = N;
+roughness = specularAntiAliasing(roughness, N, normalMapLength, max(abs(obj.extraParams.z), abs(obj.extraParams.w)));
 let dotNV = max(dot(N, V), 0.0001);
 
 let ior = select(1.5, obj.liquidParams.x, obj.liquidParams.x > 0.0);

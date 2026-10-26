@@ -1796,7 +1796,7 @@ export class WebGPURenderer extends AbstractRenderer {
     bindings.push(1, 3, 11, 12);
     resources.push(
       this._textures.getSampler(m.textures["u_diffuseMap"] as Texture, this._quality),
-      this._textures.getNormalTextureView(m.textures["u_normalMap"] as Texture),
+      this._textures.getNormalTextureView(m.textures["u_normalMap"] as Texture, this._quality),
       this._textures.getCubeTextureView(envOrSkybox as CubeTexture, this._quality),
       this._textures.getTextureView(m.textures["u_emissiveMap"] as Texture, this._quality),
     );

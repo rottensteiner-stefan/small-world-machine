@@ -108,6 +108,9 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       DeviceLimit.WEBGL1_MAX_TEXTURE_IMAGE_UNITS,
     );
     this._instancedArraysExt = this.gl.getExtension("ANGLE_instanced_arrays");
+    // Screen-space derivatives for geometric specular anti-aliasing (ADR 0051); the shaders fall back
+    // to the unfiltered roughness when the extension is missing.
+    this.gl.getExtension("OES_standard_derivatives");
 
     this._createGpuResources();
 
@@ -858,6 +861,9 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._postCtx = undefined;
     this._opaqueTexture = undefined;
     this._instancedArraysExt = this.gl.getExtension("ANGLE_instanced_arrays");
+    // Screen-space derivatives for geometric specular anti-aliasing (ADR 0051); the shaders fall back
+    // to the unfiltered roughness when the extension is missing.
+    this.gl.getExtension("OES_standard_derivatives");
     this._createGpuResources();
     this._reconcilePostProcess();
   }

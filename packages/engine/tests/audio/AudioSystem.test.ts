@@ -56,6 +56,7 @@ describe("AudioSystem", () => {
   it("should load and play a sound", async () => {
     global.fetch = vi.fn(() =>
       Promise.resolve({
+        ok: true,
         arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
       }),
     ) as unknown as typeof fetch;
@@ -70,6 +71,7 @@ describe("AudioSystem", () => {
   it("should not re-fetch a sound that's already loaded", async () => {
     global.fetch = vi.fn(() =>
       Promise.resolve({
+        ok: true,
         arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
       }),
     ) as unknown as typeof fetch;
@@ -82,7 +84,7 @@ describe("AudioSystem", () => {
 
   it("should dispatch AUDIO_LOADED on the injected bus after a successful load", async () => {
     global.fetch = vi.fn(() =>
-      Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+      Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
     ) as unknown as typeof fetch;
     const events: import("../../src/index.js").Events = {
       addEventListener: vi.fn(),
@@ -99,9 +101,22 @@ describe("AudioSystem", () => {
     );
   });
 
+  it("should reject a failed download with the URL instead of decoding the error page", async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: false,
+        status: 404,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+      }),
+    ) as unknown as typeof fetch;
+
+    await expect(audio.load("./missing.mp3", "missing")).rejects.toThrow("./missing.mp3: HTTP 404");
+    expect(context.decodeAudioData).not.toHaveBeenCalled();
+  });
+
   it("should propagate a failed decode to the caller instead of swallowing it", async () => {
     global.fetch = vi.fn(() =>
-      Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+      Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
     ) as unknown as typeof fetch;
     vi.mocked(context.decodeAudioData).mockRejectedValueOnce(new Error("bad audio"));
 
@@ -110,7 +125,7 @@ describe("AudioSystem", () => {
 
   it("should play a spatial sound with the given position", async () => {
     global.fetch = vi.fn(() =>
-      Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+      Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
     ) as unknown as typeof fetch;
 
     await audio.load("./explosion.wav", "explosion");

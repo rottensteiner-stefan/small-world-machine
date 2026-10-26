@@ -1,3 +1,6 @@
+#ifdef GL_OES_standard_derivatives
+#extension GL_OES_standard_derivatives : enable
+#endif
 precision highp float;
 
 varying vec3 v_worldPos;

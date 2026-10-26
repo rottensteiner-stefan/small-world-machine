@@ -291,7 +291,7 @@ class Showcase39 extends AbstractShowcase {
       Texture.fromUrl("./assets/sanctum_ashlar_normal.webp", wrapRepeat),
       Texture.fromUrl("./assets/sanctum_ashlar_roughness.webp", wrapRepeat),
       Texture.fromUrl("../38/assets/carved_masonry_albedo.png", wrapRepeat),
-      Texture.fromUrl("../38/assets/carved_masonry_normal.png", wrapRepeat),
+      Texture.fromUrl("../38/assets/carved_masonry_normal.webp", wrapRepeat),
       Texture.fromUrl("../38/assets/carved_masonry_roughness.png", wrapRepeat),
       this.loadIbl("../27/assets/ibl", 0.25),
     ]);

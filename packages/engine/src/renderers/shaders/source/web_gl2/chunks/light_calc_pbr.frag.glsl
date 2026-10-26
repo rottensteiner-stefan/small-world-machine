@@ -1,6 +1,8 @@
 vec3 V = normalize(u_viewPos - v_worldPos);
+float normalMapLength = 1.0;
 #ifdef USE_NORMAL_MAP
 vec3 rawNormal = SAMPLE_NORMAL_MAP(v_uv).rgb * 2.0 - 1.0;
+normalMapLength = length(rawNormal);
 rawNormal.xy *= u_extraParams.zw;
 vec3 N = v_tbn * rawNormal;
 if (dot(N, N) < 0.0001) {
@@ -20,6 +22,7 @@ N = normalize(N);
 #ifdef USE_NORMAL_OUT
 g_shadingNormal = N;
 #endif
+roughness = specularAntiAliasing(roughness, N, normalMapLength, max(abs(u_extraParams.z), abs(u_extraParams.w)));
 float dotNV = max(dot(N, V), 0.0001);
 
 // Base Reflectivity for non-metals from IOR (KHR_materials_ior)
