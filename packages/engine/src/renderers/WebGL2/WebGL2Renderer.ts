@@ -1742,6 +1742,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     if (this._quality.normalBuffer) shaderFlags.push(NORMAL_OUTPUT_FLAG);
 
+    // EVSM (ADR 0043): only this variant declares the moment-atlas sampler, so the default
+    // PCSS/PCF programs keep one texture unit free. A mode switch selects the other cached variant.
+    if (this._quality.shadowMode === ShadowMode.EVSM) shaderFlags.push("USE_EVSM");
+
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
     // semantics (texture-array index) stay untouched for other meshes: only an instanced mesh
     // explicitly requesting it gets the `USE_INSTANCE_COLOR` variant compiled in.

@@ -65,11 +65,11 @@ uniform vec4 u_shadowSoftness; // x=penumbra scale (quality.shadowSoftness), y=P
 
 // EVSM (ADR 0043): the exponentially warped variance moment atlas (rgba32float, same cascade grid
 // as u_dirShadowMap) and its tuning lanes. Only reached when u_evsmParams.x > 0.5
-// (quality.shadowMode === "evsm"); with the default PCSS/pcf mode these uniforms are inert but
-// must stay bound (the renderer always binds u_dirEVSMMap, at least to a dummy) because the
-// helpers below reference the sampler, which makes it active in every lit program.
-uniform sampler2D u_dirEVSMMap;
+// (quality.shadowMode === "evsm"). The sampler and helpers exist only in the USE_EVSM program
+// variant the renderer selects in that mode; the mode lane stays declared for the call sites.
 uniform vec4 u_evsmParams; // x=mode flag (0/1), y=dynamic variance floor MULTIPLIER, z=LBR amount, w=receiver depth bias
+#ifdef USE_EVSM
+uniform sampler2D u_dirEVSMMap;
 
 // One-tailed Chebyshev upper bound (Filament evaluateEVSM / chebyshevUpperBound): fully lit when
 // the receiver is in front of the filtered caster mean, otherwise the variance bound hardened by
@@ -165,6 +165,14 @@ float evalEVSMDir(vec2 atlasUV, vec2 cellMin, vec2 cellMax, float currentDepth) 
     float blend = smoothstep(0.0015, EVSM_BLEND_DEPTH, gap);
     return mix(pTight, pWide, blend);
 }
+#else
+// Default PCSS/PCF mode: no moment atlas sampler (one texture unit less in every lit program). The
+// call sites only reach this behind u_evsmParams.x > 0.5, which the renderer never sets without
+// USE_EVSM.
+float evalEVSMDir(vec2 atlasUV, vec2 cellMin, vec2 cellMax, float currentDepth) {
+    return 1.0;
+}
+#endif
 
 // PCSS for the directional cascade atlas (evalPCSSDir, shared with dir_shadow.glsl).
 [DIR_PCSS]

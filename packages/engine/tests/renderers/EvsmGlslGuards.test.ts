@@ -64,6 +64,19 @@ describe("EVSM WebGL2 shader branches sit next to the default PCSS path", () => 
     );
   });
 
+  it("both headers declare the moment-atlas sampler only in the USE_EVSM variant", () => {
+    for (const source of [header, dirShadow]) {
+      const gate = source.indexOf("#ifdef USE_EVSM");
+      const sampler = source.indexOf("uniform sampler2D u_dirEVSMMap;");
+      const stub = source.indexOf("#else", sampler);
+      expect(gate).toBeGreaterThan(-1);
+      expect(sampler).toBeGreaterThan(gate);
+      // The default variant keeps evalEVSMDir callable (all lit, dead behind u_evsmParams.x).
+      expect(source.slice(stub, source.indexOf("#endif", stub))).toContain("return 1.0;");
+      expect(source.match(/uniform sampler2D u_dirEVSMMap;/g)).toHaveLength(1);
+    }
+  });
+
   for (const file of LIT_CHUNKS) {
     const source = readChunk(file);
 

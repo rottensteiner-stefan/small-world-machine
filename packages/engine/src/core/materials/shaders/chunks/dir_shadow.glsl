@@ -3,7 +3,6 @@ precision highp sampler2DShadow;
 uniform sampler2DShadow u_dirShadowMap;
 uniform sampler2D u_dirShadowMapRaw; // non-comparison view for the PCSS blocker search
 uniform vec4 u_shadowSoftness; // x=penumbra scale, y=PCF radius cap in texels
-uniform sampler2D u_dirEVSMMap;
 uniform vec4 u_evsmParams; // x=mode flag (0/1), y=dynamic variance floor multiplier, z=LBR amount, w=receiver depth bias
 uniform mat4 u_cascadeMatrices[4];
 uniform vec4 u_cascadeSplits;
@@ -11,6 +10,9 @@ uniform vec4 u_dirShadowInfo; // x=bias, y=normalBias, z=castShadow, w=numCascad
 // E10 (P3): per-cascade normal-offset bias lanes (baked from k * texel size), indexed by
 // cascadeIndex. u_dirShadowInfo.y is now reserved/no-op for directional shadows.
 uniform vec4 u_dirShadowBias;
+
+#ifdef USE_EVSM
+uniform sampler2D u_dirEVSMMap;
 
 // EVSM (ADR 0043) helpers -- exact duplicates of the ones in BASE_FRAGMENT_HEADER (this chunk is
 // for shaders with their own header, and the two headers never mix). Cell-clamped taps, same
@@ -93,6 +95,14 @@ float evalEVSMDir(vec2 atlasUV, vec2 cellMin, vec2 cellMax, float currentDepth) 
     float blend = smoothstep(0.0015, EVSM_BLEND_DEPTH, gap);
     return mix(pTight, pWide, blend);
 }
+#else
+// Default PCSS/PCF mode: no moment atlas sampler (one texture unit less in every lit program). The
+// call sites only reach this behind u_evsmParams.x > 0.5, which the renderer never sets without
+// USE_EVSM.
+float evalEVSMDir(vec2 atlasUV, vec2 cellMin, vec2 cellMax, float currentDepth) {
+    return 1.0;
+}
+#endif
 
 [DIR_PCSS]
 
