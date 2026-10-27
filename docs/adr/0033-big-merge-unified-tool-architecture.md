@@ -79,6 +79,8 @@ Der Kit-Inspector-Validator-Dialog (Plan M4) ist nicht gebaut; `swm kit validate
 ihn beim Verlassen frei). Die Seite `public/tools/ibl-gen.html` bleibt. Splatter bekommt nur den CLI-Port
 (`swm splatter`, siehe ADR 0034); seine Seite bleibt dauerhaft standalone, ohne Shell-Panel.
 
+**M6 (2026-10-27, Index-Deep-Links):** Die Portal-Karten T-02 und T-04 in `public/index.html` zeigen auf `maker.html#material` bzw. `#ibl` (T-05 bis T-07 taten das seit M3). Kit-Inspector (T-09), Splatter (T-01) und Gamepad-Test (T-03) sind keine Shell-Modi und behalten ihre eigenen Karten. Die Seiten `pbr-gen.html` und `ibl-gen.html` bleiben als Vite-Eingänge erhalten (M7 Nicht-Ziel), sind aber vom Index aus nicht mehr verlinkt.
+
 ## Kontext & Problem
 
 Der aktuellen Werkzeuglandschaft fehlt eine einheitliche Arbeitsfläche und ein gemeinsamer Projektbegriff:

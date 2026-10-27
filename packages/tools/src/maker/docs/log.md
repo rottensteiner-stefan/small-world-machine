@@ -599,3 +599,10 @@ keine neuen Shortcuts, keine neuen Features; alle bisherigen Bindings und ihr Ve
 - **Packaging:** Root-Skript `npm run swm`; `tests/cli/swmBin.test.ts` startet die echte `bin` im Kindprozess. Dabei sichtbar geworden: `core/index.js` ist in Plain-Node nicht ladbar (`core/material.ts` importiert den Engine-Root, der `.glsl` lädt); Befehle importieren ihre Core-Module deshalb einzeln.
 - **Befunde, nicht behoben:** Die IBL-Zips nennen PNG-Inhalte `env.webp`/`irradiance.webp`/`brdf_lut.webp` (Seite und Modus identisch, Baker liefert `image/png`). In der IBL-Vorschau steht die Sonne unten (Orientierung des Bakers, Seite zeigt dasselbe). `ibl-gen.ts` startet beim Import noch `initIBLGenTool()` (Altcode der früheren Seite, tut nichts ohne ein Element `#dropzone`); im Modus ist das ein No-op.
 - **Offen:** M6 (Index-Deep-Links für die übrigen Tools), Kit-Validator-Dialog, `swm material`/`swm ibl` (IBL-Bake als Headless-Chrome-Subprozess).
+
+
+## 2026-10-27 — Big Merge M6: Index-Deep-Links
+
+- **Umgesetzt:** `public/index.html`: T-02 (PBR Map Generator) zeigt auf `maker.html#material`, T-04 (IBL Generator) auf `maker.html#ibl`. Live geprüft: Klick auf die Karte landet im richtigen Modus, 0 Konsolenmeldungen (`.agents/scratches/big-merge-m4/index-links.mjs`). Weitere Verweise auf die Seiten (README, Guides, Vite-Eingänge) sind nachgezogen bzw. bleiben bewusst.
+- **Nicht geändert:** Kit-Inspector, Splatter und Gamepad-Test haben keinen Shell-Modus; ihre Karten bleiben. Der Launcher-Tab „Kit" ist weiter deaktiviert.
+- **Offen:** Kit-Validator-Dialog, `swm material`/`swm ibl`, Textur-/Slider-State im Material-Modus.

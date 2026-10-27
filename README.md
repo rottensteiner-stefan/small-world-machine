@@ -204,9 +204,9 @@ The engine's flagship standalone 3D scene composer and level editor ([User Guide
 
 ### Standalone Development Tools
 - **T-01: Procedural Splatter Generator** (`public/tools/splatter-gen.html`): Generate procedural blood, splatters, dirt decals, and impact masks.
-- **T-02: PBR Map Generator** (`public/tools/pbr-gen.html`, also `maker.html#material`): Generate Normal, Specular, AO, and Height maps from a single diffuse image.
+- **T-02: PBR Map Generator** (`public/tools/maker.html#material`, standalone page `public/tools/pbr-gen.html` stays): Generate Normal, Specular, AO, and Height maps from a single diffuse image.
 - **T-03: Gamepad Diagnostic Tool** (`public/tools/gamepad-test.html`): Live gamepad input, axis calibration, and haptic feedback testing.
-- **T-04: IBL Generator** (`public/tools/ibl-gen.html`, also `maker.html#ibl`): Generate Image-Based Lighting (Irradiance and Radiance) environment maps.
+- **T-04: IBL Generator** (`public/tools/maker.html#ibl`, standalone page `public/tools/ibl-gen.html` stays): Generate Image-Based Lighting (Irradiance and Radiance) environment maps.
 - **T-05: Xtractor** (`public/tools/maker.html#xtractor`): AI Image Workbench to crop, slice, and assemble tile-maps and sprite atlases.
 - **T-06: Pixler** (`public/tools/maker.html#pixler`): Retro 2D pixel-art editor to draw, animate, and export sprites.
 - **T-07: Map Generator** (`public/tools/maker.html#map`): Visual grid editor to author ASCII layouts for the `GridLevelBuilder`.
