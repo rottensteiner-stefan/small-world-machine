@@ -45,6 +45,8 @@ export interface LiquidReflectionConfig {
   reflectionStrength?: number | undefined;
   /** See {@link LiquidWaveMaterial.reflectionDistortion}. */
   reflectionDistortion?: number | undefined;
+  /** See {@link LiquidWaveMaterial.reflectionRoughness}. */
+  reflectionRoughness?: number | undefined;
 }
 
 /**
@@ -98,7 +100,13 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
    * @domain screen-UV offset per unit of normal slope (>=0); larger = more wobbly reflection.
    */
   public reflectionDistortion: number;
-  /** The `u_matParam9` lane: `[reflectionStrength (0 without a map), reflectionDistortion, 0, 0]`. */
+  /**
+   * Roughness blur applied to the planar reflection (0 = mirror-sharp, 1 = fully blurred).
+   * Maps to mipmap LOD selection when `generateMipmaps` is enabled on the reflection target.
+   * @domain 0..1 roughness blur level.
+   */
+  public reflectionRoughness: number;
+  /** The `u_matParam9` lane: `[reflectionStrength (0 without a map), reflectionDistortion, reflectionRoughness, 0]`. */
   protected readonly _matParam9Array: number[] = [0, 0, 0, 0];
   /** The `u_styleA` lane in the manifest. Presets own its meaning (see the lane table in docs/guides/liquid-wave-data-model.md). */
   protected readonly _styleAArray: number[] = [0, 0, 0, 0];
@@ -147,6 +155,7 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
     this.reflectionMap = init.reflectionMap;
     this.reflectionStrength = init.reflectionStrength ?? 1.0;
     this.reflectionDistortion = init.reflectionDistortion ?? 0.1;
+    this.reflectionRoughness = init.reflectionRoughness ?? 0.0;
 
     this.transparent = true;
     this.depthWrite = false;
@@ -232,6 +241,7 @@ export abstract class LiquidWaveMaterial extends AbstractMaterial {
     const mirror = this._matParam9Array;
     mirror[0] = this.reflectionMap ? this.reflectionStrength : 0;
     mirror[1] = this.reflectionDistortion;
+    mirror[2] = this.reflectionRoughness;
     props["u_matParam9"] = mirror;
 
     const mp0 = props["u_matParam0"] as number[] | undefined;

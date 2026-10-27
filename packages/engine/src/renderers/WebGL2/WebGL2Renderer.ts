@@ -24,8 +24,8 @@ import type { GLPostEffectPassContext } from "../post/passes/index.js";
 import type { AbstractLight, DirectionalLight } from "../../core/lights/index.js";
 import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../core/lights/index.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
-import type { CubeTexture, RenderTarget } from "../../core/textures/index.js";
-import { Texture, RenderTargetCube } from "../../core/textures/index.js";
+import type { CubeTexture } from "../../core/textures/index.js";
+import { Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
 import type { RenderManifest } from "../shaders/index.js";
 import { VERTEX_COLOR_FLAG, resolveManifestFlags } from "../shaders/index.js";
 import { Color } from "../../core/colors/index.js";
@@ -523,6 +523,16 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   }
 
   /** @inheritdoc */
+  protected override _onPostRender(): void {
+    if (
+      this._activeRenderTarget instanceof RenderTarget &&
+      this._activeRenderTarget.generateMipmaps
+    ) {
+      this._renderTargetFbos.get(this._activeRenderTarget)?.generateMipmap();
+    }
+  }
+
+  /** @inheritdoc */
   public override get hasNormalTarget(): boolean {
     return (
       !this._activeRenderTarget &&
@@ -649,6 +659,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             format: this.gl.RGBA,
             internalFormat: this.gl.RGBA8,
             type: this.gl.UNSIGNED_BYTE,
+            generateMipmaps: this._activeRenderTarget.generateMipmaps,
           });
 
           this._renderTargetFbos.set(this._activeRenderTarget, fbo);

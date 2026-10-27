@@ -3,6 +3,7 @@ precision highp float;
 varying vec2 v_uv;
 varying vec3 v_worldPos;
 varying vec3 v_normal;
+varying vec4 v_clipPos;
 
 uniform vec4 u_color;
 uniform vec4 u_specColor;
@@ -18,9 +19,11 @@ uniform vec4 u_matParam2; // [flowSpeed, distortion, emissivePulse, emissivePuls
 uniform vec4 u_matParam3; // [emissive.r*strength, emissive.g*strength, emissive.b*strength, time]
 // R4: only the values this tier reads are declared -- world-XZ frequency (x), rim exponent (w).
 uniform vec4 u_matParam5; // [worldUVFreq, (unused), (unused), rimExponent]
+uniform vec4 u_matParam9; // [reflectionStrength (0 = no mirror), reflectionDistortion, reflectionRoughness, 0]
 
 uniform sampler2D u_diffuseMap;
 uniform sampler2D u_normalMap;
+uniform sampler2D u_reflectionMap;
 
 // WebGL1 has no depth-texture capture path (see WebGL1Renderer.copyToOpaqueDepthTexture), so the
 // depth-based edge/foam blend from FluidSurface.frag.wgsl/.frag.glsl is dropped entirely here --
@@ -68,6 +71,14 @@ void main() {
     finalColor += edgeColor * pow(1.0 - ndv, u_matParam5.w) * u_matParam0.y;
     float ndh = clamp(dot(N, normalize(L + V)), 0.0, 1.0);
     finalColor += u_dirLightColor * pow(ndh, max(u_matParam1.x, 1.0)) * u_matParam0.z;
+
+    if (u_matParam9.x > 0.0) {
+        vec2 screenUv = v_clipPos.xy / v_clipPos.w * 0.5 + 0.5;
+        vec2 mirrorUv = clamp(screenUv + N.xz * u_matParam9.y, vec2(0.001), vec2(0.999));
+        vec3 mirror = pow(texture2D(u_reflectionMap, mirrorUv).rgb, vec3(2.2));
+        float fresnel = pow(1.0 - ndv, 5.0);
+        finalColor = mix(finalColor, mirror, (0.02 + 0.98 * fresnel) * u_matParam9.x);
+    }
 
     finalColor = pow(finalColor, vec3(1.0 / 2.2));
 

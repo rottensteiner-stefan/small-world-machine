@@ -73,6 +73,14 @@ export interface FluidSurfaceMaterialOptions {
    * @domain reference domain size of the fluid surface in meters (>0); reciprocal of a node's scale keeps the look scale-invariant (length lanes divide, per-meter frequency lanes multiply).
    */
   domainScale?: number | undefined;
+  /** Live mirror image of the scene above the fluid, e.g. `PlanarReflectionNode.renderTarget`. */
+  reflectionMap?: Texture | undefined;
+  /** Multiplier of the Fresnel reflectance (0 turns off reflection). Defaults to 0. */
+  reflectionStrength?: number | undefined;
+  /** Normal tilt distortion for reflection lookup. Defaults to 0.05. */
+  reflectionDistortion?: number | undefined;
+  /** Roughness blur applied to planar reflection (0 sharp, 1 blurred). Defaults to 0. */
+  reflectionRoughness?: number | undefined;
 }
 
 /**
@@ -129,6 +137,14 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
    * @domain reference domain size of the fluid surface in meters (>0); reciprocal of a node's scale keeps the look scale-invariant.
    */
   public domainScale: number = 1.0;
+  /** Live mirror image of the scene above the fluid. */
+  public reflectionMap: Texture | undefined;
+  /** Multiplier of the Fresnel reflectance. 0 turns off reflection. */
+  public reflectionStrength: number;
+  /** Normal tilt distortion for reflection lookup. */
+  public reflectionDistortion: number;
+  /** Roughness blur applied to planar reflection (0 sharp, 1 blurred). */
+  public reflectionRoughness: number;
 
   /** Typed semantic lane bank (see the lane table in `getRenderManifest`); the shaders read these for every look parameter. */
   private readonly _matParam0: number[] = [0, 0, 0, 0];
@@ -137,6 +153,7 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
   private readonly _matParam3: number[] = [0, 0, 0, 0];
   private readonly _matParam4: number[] = [0, 0, 0, 0];
   private readonly _matParam5: number[] = [0, 0, 0, 0];
+  private readonly _matParam9: number[] = [0, 0, 0, 0];
 
   /**
    * Creates a new FluidSurfaceMaterial.
@@ -172,6 +189,10 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
       emissivePulseSpeed = 2.0,
       transitionSoftness = 0.2,
       domainScale = 1.0,
+      reflectionMap = undefined,
+      reflectionStrength = 0.0,
+      reflectionDistortion = 0.05,
+      reflectionRoughness = 0.0,
     } = options;
 
     this.color = color;
@@ -195,6 +216,10 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
     this.emissivePulseSpeed = emissivePulseSpeed;
     this.transitionSoftness = transitionSoftness;
     this.domainScale = domainScale;
+    this.reflectionMap = reflectionMap;
+    this.reflectionStrength = reflectionStrength;
+    this.reflectionDistortion = reflectionDistortion;
+    this.reflectionRoughness = reflectionRoughness;
 
     // Set transparency and blending
     this.transparent = true;
@@ -223,7 +248,9 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
       this._renderManifest.properties["u_matParam3"] = this._matParam3;
       this._renderManifest.properties["u_matParam4"] = this._matParam4;
       this._renderManifest.properties["u_matParam5"] = this._matParam5;
+      this._renderManifest.properties["u_matParam9"] = this._matParam9;
       this._renderManifest.textures["u_diffuseMap"] = this.noiseMap;
+      this._renderManifest.textures["u_reflectionMap"] = this.reflectionMap;
     }
 
     this._syncBaseManifestState();
@@ -277,7 +304,15 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
     p5[2] = 0.25;
     p5[3] = 3.0;
 
+    const p9 = this._matParam9;
+    p9[0] = this.reflectionMap ? this.reflectionStrength : 0;
+    p9[1] = this.reflectionDistortion;
+    p9[2] = this.reflectionRoughness;
+    p9[3] = 0;
+    props["u_matParam9"] = p9;
+
     texs["u_diffuseMap"] = this.noiseMap;
+    texs["u_reflectionMap"] = this.reflectionMap;
     if (this.normalMap) texs["u_normalMap"] = this.normalMap;
 
     // An opaque, vertex-displaced surface must not enter the WebGPU depth pre-pass: that pass
@@ -312,6 +347,7 @@ export class FluidSurfaceMaterial extends AbstractMaterial {
           u_diffuseMap: { type: ShaderPropertyType.TEXTURE },
           u_normalMap: { type: ShaderPropertyType.TEXTURE },
           u_opaqueDepthMap: { type: ShaderPropertyType.TEXTURE },
+          u_reflectionMap: { type: ShaderPropertyType.TEXTURE },
         },
       },
     };

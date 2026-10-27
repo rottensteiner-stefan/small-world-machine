@@ -62,7 +62,7 @@ export class GPUTextureResourceCache {
   private _samplerCache: Map<string, GPUSampler> = new Map();
 
   /** GPU-side mip-chain generator for runtime 2D textures -- one bilinear blit per level, see
-   * `_generateMipmaps()`. */
+   * `generateMipmaps()`. */
   private readonly _mipGenPipeline: GPURenderPipeline;
   private readonly _mipGenBGL: GPUBindGroupLayout;
   private readonly _mipGenSampler: GPUSampler;
@@ -206,7 +206,7 @@ export class GPUTextureResourceCache {
           tex.image.width,
           tex.image.height,
         ]);
-        if (mipLevelCount > 1) this._generateMipmaps(t, mipLevelCount);
+        if (mipLevelCount > 1) this.generateMipmaps(t, mipLevelCount);
         v = t.createView();
         entry = {
           texture: t,
@@ -244,7 +244,7 @@ export class GPUTextureResourceCache {
           width,
           height,
         ]);
-        if (mipLevelCount > 1) this._generateMipmaps(t, mipLevelCount);
+        if (mipLevelCount > 1) this.generateMipmaps(t, mipLevelCount);
         entry = {
           texture: t,
           view: t.createView(),
@@ -259,7 +259,7 @@ export class GPUTextureResourceCache {
           { texture: entry.texture },
           [width, height],
         );
-        if (entry.mipLevelCount > 1) this._generateMipmaps(entry.texture, entry.mipLevelCount);
+        if (entry.mipLevelCount > 1) this.generateMipmaps(entry.texture, entry.mipLevelCount);
       }
       tex.needsUpdate = false;
     }
@@ -602,7 +602,7 @@ export class GPUTextureResourceCache {
    * mid-frame, while the main render pass may already be open, and WebGPU only allows one open
    * render pass per encoder at a time. `queue` operations are ordered, so this submit is
    * guaranteed visible to the main pass's later sampling of this texture. */
-  private _generateMipmaps(texture: GPUTexture, mipLevelCount: number): void {
+  public generateMipmaps(texture: GPUTexture, mipLevelCount: number): void {
     const ce = this._device.createCommandEncoder();
     for (let level = 1; level < mipLevelCount; level++) {
       const srcView = texture.createView({ baseMipLevel: level - 1, mipLevelCount: 1 });

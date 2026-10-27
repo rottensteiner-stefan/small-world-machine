@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Camera } from "../../src/core/cameras/Camera.js";
 import { Object3D } from "../../src/core/Object3D.js";
-import { PerspectiveProjection } from "../../src/math/index.js";
+import { PerspectiveProjection, Vector3D } from "../../src/math/index.js";
 import { PlanarReflectionNode } from "../../src/core/reflection/PlanarReflectionNode.js";
 import { Scene } from "../../src/core/Scene.js";
 import type { Renderer } from "../../src/interfaces/Renderer.js";
 import type { RenderTarget } from "../../src/core/textures/index.js";
+import { BoundingBox } from "../../src/physix/BoundingBox.js";
 
 class MockRenderer {
   public renderTargetParams: unknown[] = [];
@@ -241,5 +242,96 @@ describe("PlanarReflectionNode oblique clipping", () => {
       render: vi.fn(),
     } as unknown as Renderer);
     expect(Array.from(projection.getMatrix().data)).toEqual(Array.from(before));
+  });
+
+  describe("PlanarReflectionNodeOptions & Frustum Culling", () => {
+    it("constructs with options object correctly", () => {
+      const node = new PlanarReflectionNode({
+        name: "CustomMirror",
+        width: 512,
+        height: 256,
+        generateMipmaps: true,
+        clipBelowPlane: false,
+        clipPlaneOffset: 0.1,
+        cullAgainstFrustum: false,
+      });
+
+      expect(node.name).toBe("CustomMirror");
+      expect(node.renderTarget.width).toBe(512);
+      expect(node.renderTarget.height).toBe(256);
+      expect(node.renderTarget.generateMipmaps).toBe(true);
+      expect(node.clipBelowPlane).toBe(false);
+      expect(node.clipPlaneOffset).toBe(0.1);
+      expect(node.cullAgainstFrustum).toBe(false);
+    });
+
+    it("skips rendering and returns false when reflective surface is outside main camera frustum", () => {
+      const node = new PlanarReflectionNode({ width: 256, height: 256 });
+      node.updateMatrixWorld();
+
+      // Reflective water surface far behind the camera
+      const surface = new Object3D("WaterSurface");
+      surface.position.set(0, 0, 500); // Camera will look towards -Z
+      surface.bounds = new BoundingBox(new Vector3D(-10, -1, 490), new Vector3D(10, 1, 510));
+      node.reflectiveSurfaces.push(surface);
+
+      const camera = new Camera(new PerspectiveProjection());
+      camera.position.set(0, 5, 10);
+      camera.target.set(0, 0, 0); // Looking towards -Z
+      camera.updateViewMatrix();
+
+      const renderer = new MockRenderer();
+      const rendered = node.updateReflection(new Scene(), camera, renderer as unknown as Renderer);
+
+      expect(rendered).toBe(false);
+      expect(renderer.renderCalls).toBe(0);
+    });
+
+    it("renders and returns true when reflective surface is inside main camera frustum", () => {
+      const node = new PlanarReflectionNode({ width: 256, height: 256 });
+      node.updateMatrixWorld();
+
+      // Reflective water surface directly in front of the camera
+      const surface = new Object3D("WaterSurface");
+      surface.position.set(0, 0, 0);
+      surface.bounds = new BoundingBox(new Vector3D(-10, -1, -10), new Vector3D(10, 1, 10));
+      node.reflectiveSurfaces.push(surface);
+
+      const camera = new Camera(new PerspectiveProjection());
+      camera.position.set(0, 5, 10);
+      camera.target.set(0, 0, 0);
+      camera.updateViewMatrix();
+
+      const renderer = new MockRenderer();
+      const rendered = node.updateReflection(new Scene(), camera, renderer as unknown as Renderer);
+
+      expect(rendered).toBe(true);
+      expect(renderer.renderCalls).toBe(1);
+    });
+
+    it("renders unconditionally when cullAgainstFrustum is disabled", () => {
+      const node = new PlanarReflectionNode({
+        width: 256,
+        height: 256,
+        cullAgainstFrustum: false,
+      });
+      node.updateMatrixWorld();
+
+      const surface = new Object3D("WaterSurface");
+      surface.position.set(0, 0, 500);
+      surface.bounds = new BoundingBox(new Vector3D(-10, -1, 490), new Vector3D(10, 1, 510));
+      node.reflectiveSurfaces.push(surface);
+
+      const camera = new Camera(new PerspectiveProjection());
+      camera.position.set(0, 5, 10);
+      camera.target.set(0, 0, 0);
+      camera.updateViewMatrix();
+
+      const renderer = new MockRenderer();
+      const rendered = node.updateReflection(new Scene(), camera, renderer as unknown as Renderer);
+
+      expect(rendered).toBe(true);
+      expect(renderer.renderCalls).toBe(1);
+    });
   });
 });

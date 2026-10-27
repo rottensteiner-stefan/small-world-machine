@@ -16,9 +16,11 @@ uniform vec4 u_matParam1; // [specularPower, absorption, emissiveMask, transitio
 uniform vec4 u_matParam2; // [flowSpeed, distortion, emissivePulse, emissivePulseSpeed]
 uniform vec4 u_matParam3; // [emissive.r*strength, emissive.g*strength, emissive.b*strength, time]
 uniform vec4 u_matParam5; // [worldUVFreq, edgeSoftness, alphaFloor, rimExponent] (R4/E4-B)
+uniform vec4 u_matParam9; // [reflectionStrength (0 = no mirror), reflectionDistortion, reflectionRoughness, 0]
 uniform sampler2D u_diffuseMap;
 uniform sampler2D u_normalMap;
 uniform sampler2D u_opaqueDepthMap;
+uniform sampler2D u_reflectionMap;
 
 out vec4 fragColor;
 
@@ -98,6 +100,15 @@ void main() {
     float thickness = 1.0 - exp(-u_matParam1.y * max(depthDiff, 0.0));
     // R4: alpha floor is a raw dimensionless look scalar in u_matParam5.z (default 0.25).
     float alpha = mix(1.0, clamp(thickness + rim, u_matParam5.z, 1.0), step(0.0001, u_matParam1.y));
+
+    if (u_matParam9.x > 0.0) {
+        vec4 mirrorClip = u_vp * vec4(v_worldPos, 1.0);
+        vec2 mirrorUv = clamp(mirrorClip.xy / mirrorClip.w * 0.5 + 0.5 + N.xz * u_matParam9.y, vec2(0.001), vec2(0.999));
+        float mirrorLod = clamp(u_matParam9.z * 7.0, 0.0, 7.0);
+        vec3 mirror = targetToLinear(textureLod(u_reflectionMap, mirrorUv, mirrorLod).rgb) / max(u_exposure, 0.001);
+        float fresnel = pow(1.0 - ndv, 5.0);
+        finalColor = mix(finalColor, mirror, (0.02 + 0.98 * fresnel) * u_matParam9.x);
+    }
 
     finalColor *= u_exposure;
     // Same guard as FluidSurface.frag.wgsl: without post-processing (u_gamma != 1.0) this pass is the

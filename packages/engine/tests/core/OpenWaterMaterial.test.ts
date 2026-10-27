@@ -109,4 +109,22 @@ describe("OpenWaterMaterial", () => {
     expect(material.color).toEqual(new Color(0.1, 0.2, 0.3));
     expect(material.deepWaterColor).toEqual(new Color(0.0, 0.0, 0.1));
   });
+
+  it("should pack reflectionRoughness into u_matParam9.z", () => {
+    const material = new OpenWaterMaterial({
+      reflectionStrength: 0.9,
+      reflectionDistortion: 0.15,
+      reflectionRoughness: 0.45,
+    });
+
+    let manifest = material.getRenderManifest();
+    let mp9 = manifest.properties["u_matParam9"] as number[];
+    expect(mp9[1]).toBeCloseTo(0.15);
+    expect(mp9[2]).toBeCloseTo(0.45);
+
+    material.reflectionRoughness = 0.8;
+    manifest = material.getRenderManifest();
+    mp9 = manifest.properties["u_matParam9"] as number[];
+    expect(mp9[2]).toBeCloseTo(0.8);
+  });
 });

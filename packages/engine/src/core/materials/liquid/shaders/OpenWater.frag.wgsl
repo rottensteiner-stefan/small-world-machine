@@ -66,7 +66,8 @@
         let mirrorUv = clamp(
             vec2<f32>(mirrorNdc.x * 0.5 + 0.5, mirrorNdc.y * -0.5 + 0.5) + vec2<f32>(i.n.x, -i.n.z) * obj.matParam9.y,
             vec2<f32>(0.001), vec2<f32>(0.999));
-        let mirror = targetToLinear(textureSampleLevel(u_reflectionMap, s, mirrorUv, 0.0).rgb) / max(global.exposure, 0.001);
+        let mirrorLod = clamp(obj.matParam9.z * 7.0, 0.0, 7.0);
+        let mirror = targetToLinear(textureSampleLevel(u_reflectionMap, s, mirrorUv, mirrorLod).rgb) / max(global.exposure, 0.001);
         baseColor = mix(baseColor, mirror, (0.02 + 0.98 * fresnel) * obj.matParam9.x);
     } else {
         let skyColor = vec3<f32>(0.6, 0.8, 1.0);

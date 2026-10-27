@@ -5,6 +5,7 @@ import type { GPUTextureResourceCache } from "./GPUTextureResourceCache.js";
 interface RenderTargetData {
   tex: GPUTexture;
   view: GPUTextureView;
+  mipLevelCount?: number;
   depth?: GPUTexture;
   depthView?: GPUTextureView;
 }
@@ -142,15 +143,25 @@ export class GPURenderTargetCache {
         if (data.depth) data.depth.destroy();
       }
 
+      const mipLevelCount = target.generateMipmaps
+        ? this._textures.computeMipLevelCount(target.width, target.height)
+        : 1;
+
       const tex = this._device.createTexture({
         size: [target.width, target.height],
+        mipLevelCount,
         format,
         usage:
           GPUTextureUsage.RENDER_ATTACHMENT |
           GPUTextureUsage.TEXTURE_BINDING |
           GPUTextureUsage.COPY_SRC,
       });
-      const view = tex.createView();
+      const view =
+        mipLevelCount > 1
+          ? tex.createView({ baseMipLevel: 0, mipLevelCount: 1 })
+          : tex.createView();
+      const sampleView =
+        mipLevelCount > 1 ? tex.createView({ baseMipLevel: 0, mipLevelCount }) : view;
 
       let depth: GPUTexture | undefined;
       let depthView: GPUTextureView | undefined;
@@ -167,14 +178,23 @@ export class GPURenderTargetCache {
         depthView = depth.createView();
       }
 
-      data = { tex, view };
+      data = { tex, view, mipLevelCount };
       if (depth !== undefined) data.depth = depth;
       if (depthView !== undefined) data.depthView = depthView;
       this._renderTargetTextures.set(target, data);
-      this._textures.registerRenderTargetTexture(target, tex, view);
+      this._textures.registerRenderTargetTexture(target, tex, sampleView);
       target.isLoaded = true;
     }
     return data.view;
+  }
+
+  /**
+   * Generates mipmaps for an offscreen RenderTarget if generateMipmaps was enabled.
+   */
+  public generateMipmaps(target: RenderTarget): void {
+    const data = this._renderTargetTextures.get(target);
+    if (!data || !data.mipLevelCount || data.mipLevelCount <= 1) return;
+    this._textures.generateMipmaps(data.tex, data.mipLevelCount);
   }
 
   /**

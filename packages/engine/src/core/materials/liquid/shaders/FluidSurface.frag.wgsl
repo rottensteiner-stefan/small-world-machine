@@ -76,6 +76,18 @@
     // R4: alpha floor is a raw dimensionless look scalar in u_matParam5.z (default 0.25).
     let alpha = mix(1.0, clamp(thickness + rim, obj.matParam5.z, 1.0), step(0.0001, obj.matParam1.y));
 
+    if (obj.matParam9.x > 0.0) {
+        let mirrorClip = global.vp * vec4<f32>(i.wp, 1.0);
+        let mirrorNdc = mirrorClip.xy / mirrorClip.w;
+        let mirrorUv = clamp(
+            vec2<f32>(mirrorNdc.x * 0.5 + 0.5, mirrorNdc.y * -0.5 + 0.5) + vec2<f32>(N.x, -N.z) * obj.matParam9.y,
+            vec2<f32>(0.001), vec2<f32>(0.999));
+        let mirrorLod = clamp(obj.matParam9.z * 7.0, 0.0, 7.0);
+        let mirror = targetToLinear(textureSampleLevel(u_reflectionMap, s, mirrorUv, mirrorLod).rgb) / max(global.exposure, 0.001);
+        let fresnel = pow(1.0 - ndv, 5.0);
+        color = mix(color, mirror, (0.02 + 0.98 * fresnel) * obj.matParam9.x);
+    }
+
     // Exposure
     color *= global.exposure;
 

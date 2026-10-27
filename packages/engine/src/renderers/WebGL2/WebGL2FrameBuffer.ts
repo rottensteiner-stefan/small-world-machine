@@ -21,6 +21,11 @@ export interface WebGL2FrameBufferOptions {
    * post-process targets never depth-test, so they pass `false` and save 4 bytes per pixel each.
    */
   depth?: boolean | undefined;
+  /**
+   * Whether to allocate mipmaps and set minFilter to LINEAR_MIPMAP_LINEAR.
+   * Enables `generateMipmap()` calls after rendering. Defaults to false.
+   */
+  generateMipmaps?: boolean | undefined;
 }
 
 /** Storage triple for a colour target (see {@link pickHdrColorFormat}). */
@@ -64,6 +69,7 @@ export class WebGL2FrameBuffer {
   private _type: number;
   private readonly _secondary: WebGL2FrameBufferAttachmentOptions | undefined;
   private readonly _secondaryTexture: WebGLTexture | undefined;
+  private readonly _generateMipmaps: boolean = false;
   /** Mirrors the draw-buffer state (default: COLOR_ATTACHMENT0 only) to skip redundant calls. */
   private _secondaryWriteEnabled: boolean = false;
 
@@ -80,6 +86,7 @@ export class WebGL2FrameBuffer {
     this._format = options.format ?? gl.RGBA;
     this._type = options.type ?? gl.UNSIGNED_BYTE;
     this._secondary = options.secondary;
+    this._generateMipmaps = options.generateMipmaps ?? false;
 
     this._framebuffer = requireGlObject(gl.createFramebuffer(), "framebuffer");
     gl.bindFramebuffer(gl.FRAMEBUFFER, this._framebuffer);
@@ -98,7 +105,8 @@ export class WebGL2FrameBuffer {
       this._type,
       null,
     );
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    const minFilter = this._generateMipmaps ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, minFilter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -199,6 +207,17 @@ export class WebGL2FrameBuffer {
    */
   public unbind(): void {
     this._gl.bindFramebuffer(this._gl.FRAMEBUFFER, null);
+  }
+
+  /**
+   * Generates mipmaps for the primary color attachment texture if generateMipmaps was enabled.
+   */
+  public generateMipmap(): void {
+    if (!this._generateMipmaps) return;
+    const gl = this._gl;
+    gl.bindTexture(gl.TEXTURE_2D, this._texture);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
   /**

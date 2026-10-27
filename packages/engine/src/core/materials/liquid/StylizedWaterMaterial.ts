@@ -284,6 +284,7 @@ export class StylizedWaterMaterial extends LiquidWaveMaterial {
       reflectionMap: options.reflectionMap,
       reflectionStrength: options.reflectionStrength,
       reflectionDistortion: options.reflectionDistortion,
+      reflectionRoughness: options.reflectionRoughness,
     });
 
     this.causticStrength = causticStrength;

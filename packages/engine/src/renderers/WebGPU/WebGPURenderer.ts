@@ -13,7 +13,8 @@ import {
   isSkinnedMesh,
   computeClipToBox,
 } from "../../core/index.js";
-import type { RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
+import type { RenderTargetCube } from "../../core/textures/index.js";
+import { RenderTarget } from "../../core/textures/index.js";
 import type { RenderManifest } from "../shaders/index.js";
 import { UniformPacker, VERTEX_COLOR_FLAG, resolveManifestFlags } from "../shaders/index.js";
 import type { EngineOptions, GeometryDataInterface } from "../../interfaces/index.js";
@@ -1113,6 +1114,12 @@ export class WebGPURenderer extends AbstractRenderer {
     }
 
     this._device.queue.submit([ce.finish()]);
+    if (
+      this._activeRenderTarget instanceof RenderTarget &&
+      this._activeRenderTarget.generateMipmaps
+    ) {
+      this._targetCache.generateMipmaps(this._activeRenderTarget);
+    }
     this.memoizeLightsFor(undefined);
 
     this._objectRing.endFrame();

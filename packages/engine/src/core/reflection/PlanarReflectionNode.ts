@@ -4,7 +4,20 @@ import type { Scene } from "../Scene.js";
 import { PerspectiveProjection } from "../../math/projections/index.js";
 import type { Renderer } from "../../interfaces/index.js";
 import { RenderTarget } from "../textures/index.js";
-import { MathPool, Matrix4, type Vector3D } from "../../math/index.js";
+import { Frustum, MathPool, Matrix4, type Vector3D } from "../../math/index.js";
+
+/**
+ * Options for configuring a PlanarReflectionNode.
+ */
+export interface PlanarReflectionNodeOptions {
+  name?: string;
+  width?: number;
+  height?: number;
+  generateMipmaps?: boolean;
+  clipBelowPlane?: boolean;
+  clipPlaneOffset?: number;
+  cullAgainstFrustum?: boolean;
+}
 
 /**
  * A node that renders the scene from a mirrored perspective into a RenderTarget.
@@ -27,6 +40,20 @@ export class PlanarReflectionNode extends Object3D {
   public excludedObjects: Object3D[] = [];
 
   /**
+   * Surfaces whose visibility in the main camera's frustum determines whether the reflection
+   * pass should be rendered. If set and no surface intersects the main camera frustum,
+   * `updateReflection()` skips rendering and returns `false`.
+   * Defaults to `excludedObjects` when empty.
+   */
+  public reflectiveSurfaces: Object3D[] = [];
+
+  /**
+   * Whether to check if any reflective surface is visible in the main camera frustum before
+   * rendering the reflection pass. Defaults to true.
+   */
+  public cullAgainstFrustum: boolean = true;
+
+  /**
    * Cuts everything below the mirror plane out of the reflection (oblique near-plane clipping,
    * Lengyel 2004; Unity/Godot planar reflections do the same). Without it a seabed or a pool
    * floor lies between the mirrored camera and the surface and hides the reflection of the sky
@@ -46,19 +73,64 @@ export class PlanarReflectionNode extends Object3D {
   private readonly _clipProjection: Matrix4 = new Matrix4();
   private readonly _clipInverse: Matrix4 = new Matrix4();
   private readonly _clipViewProj: Matrix4 = new Matrix4();
+  private readonly _frustum: Frustum = new Frustum();
+  private readonly _excludedWasVisible: boolean[] = [];
 
-  constructor(name: string = "PlanarReflectionNode", width: number = 1024, height: number = 1024) {
+  constructor(
+    nameOrOptions: string | PlanarReflectionNodeOptions = "PlanarReflectionNode",
+    width: number = 1024,
+    height: number = 1024,
+  ) {
+    const isOptions = typeof nameOrOptions === "object";
+    const name = isOptions ? (nameOrOptions.name ?? "PlanarReflectionNode") : nameOrOptions;
+    const w = isOptions ? (nameOrOptions.width ?? 1024) : width;
+    const h = isOptions ? (nameOrOptions.height ?? 1024) : height;
+    const generateMipmaps = isOptions ? (nameOrOptions.generateMipmaps ?? true) : true;
+
     super(name);
-    this.renderTarget = RenderTarget.create({ width, height });
+    this.renderTarget = RenderTarget.create({ width: w, height: h, generateMipmaps });
     this.mirrorCamera = new Camera(new PerspectiveProjection());
+
+    if (isOptions) {
+      if (nameOrOptions.clipBelowPlane !== undefined)
+        this.clipBelowPlane = nameOrOptions.clipBelowPlane;
+      if (nameOrOptions.clipPlaneOffset !== undefined)
+        this.clipPlaneOffset = nameOrOptions.clipPlaneOffset;
+      if (nameOrOptions.cullAgainstFrustum !== undefined)
+        this.cullAgainstFrustum = nameOrOptions.cullAgainstFrustum;
+    }
   }
 
   /**
    * Updates the reflection texture by rendering the scene from a mirrored camera.
    * Call this in your update loop before the main render.
+   * @returns true if the reflection was rendered, false if skipped by frustum culling.
    */
-  public updateReflection(scene: Scene, mainCamera: Camera, renderer: Renderer): void {
-    if (!mainCamera.projection) return;
+  public updateReflection(scene: Scene, mainCamera: Camera, renderer: Renderer): boolean {
+    if (!mainCamera.projection) return false;
+
+    // 0. Frustum Culling: skip sub-render if no reflective surface is visible
+    if (this.cullAgainstFrustum) {
+      const surfaces =
+        this.reflectiveSurfaces.length > 0 ? this.reflectiveSurfaces : this.excludedObjects;
+      if (surfaces.length > 0) {
+        this._frustum.setFromMatrix(mainCamera.viewProjectionMatrix4);
+        let anyVisible = false;
+        for (let i = 0; i < surfaces.length; i++) {
+          const s = surfaces[i]!;
+          if (!s.isVisible) continue;
+          if (!s.bounds) {
+            s.updateMatrixWorld?.();
+          }
+          if (!s.bounds || this._frustum.intersectsVolume(s.bounds)) {
+            anyVisible = true;
+            break;
+          }
+        }
+        if (!anyVisible) return false;
+      }
+    }
+
     this.mirrorCamera.aspect = mainCamera.aspect;
     this.mirrorCamera.projection = mainCamera.projection;
 
@@ -68,7 +140,6 @@ export class PlanarReflectionNode extends Object3D {
     const planeNormal = MathPool.acquireVector().set(0, 1, 0);
 
     const wasVisible = this.isVisible;
-    let excludedWasVisible: boolean[] = [];
 
     try {
       // 1. Calculate mirror plane based on this object's world matrix. Only ever read within this
@@ -115,8 +186,13 @@ export class PlanarReflectionNode extends Object3D {
 
       // 5b. Also hide every object that samples `renderTarget` in its own material -- see
       // `excludedObjects`'s doc comment for why this can't be inferred from the scene graph.
-      excludedWasVisible = this.excludedObjects.map((obj) => obj.isVisible);
-      for (const obj of this.excludedObjects) obj.isVisible = false;
+      const excludedLen = this.excludedObjects.length;
+      this._excludedWasVisible.length = excludedLen;
+      for (let i = 0; i < excludedLen; i++) {
+        const obj = this.excludedObjects[i]!;
+        this._excludedWasVisible[i] = obj.isVisible;
+        obj.isVisible = false;
+      }
 
       // 5c. Clip everything below the plane out of the mirror image.
       const viewProjection = this.clipBelowPlane
@@ -138,10 +214,15 @@ export class PlanarReflectionNode extends Object3D {
 
       // Restore visibility
       this.isVisible = wasVisible;
-      if (excludedWasVisible.length > 0) {
-        this.excludedObjects.forEach((obj, i) => (obj.isVisible = excludedWasVisible[i]!));
+      for (let i = 0; i < this._excludedWasVisible.length; i++) {
+        const obj = this.excludedObjects[i];
+        if (obj) {
+          obj.isVisible = this._excludedWasVisible[i]!;
+        }
       }
     }
+
+    return true;
   }
 
   /**

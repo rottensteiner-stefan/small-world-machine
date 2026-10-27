@@ -153,7 +153,14 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
         this._frameProjMatrix,
       );
     }
+    this._onPostRender();
   }
+
+  /**
+   * Hook invoked at the very end of `render()`, after all passes executed.
+   * Used by subclasses e.g. for post-render mipmap generation on offscreen render targets.
+   */
+  protected _onPostRender(): void {}
 
   private _releaseRemovedObjects(removed: Object3D[]): void {
     for (const obj of removed) {

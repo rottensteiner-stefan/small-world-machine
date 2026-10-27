@@ -17,7 +17,7 @@ uniform vec4 u_matParam1; // [foamColor.rgb, foamDistance]
 uniform vec4 u_matParam2; // [foamCutoff, foamNoiseScale, foamNoiseSpeed, poolHalfExtent (vertex stage)]
 uniform vec4 u_matParam6; // [edgeColor.rgb, edgeSoftness] (ADR 0027 / 0039 semantic lane)
 uniform vec4 u_matParam7; // [refrDepth 0.3m ÷ ds, causticsMaxDepth 3.0m ÷ ds, 0, 0] (R5/E4-B owned lane)
-uniform vec4 u_matParam9; // [reflectionStrength (0 = no mirror), reflectionDistortion, 0, 0] (LiquidWaveMaterial lane)
+uniform vec4 u_matParam9; // [reflectionStrength (0 = no mirror), reflectionDistortion, reflectionRoughness, 0] (LiquidWaveMaterial lane)
 uniform float u_time;
 uniform sampler2D u_opaqueDepthMap;
 uniform sampler2D u_opaqueMap;
@@ -91,7 +91,8 @@ void main() {
         // and u_exposure is applied once more below, so it is divided out here.
         vec4 mirrorClip = u_vp * vec4(v_worldPos, 1.0);
         vec2 mirrorUv = clamp(mirrorClip.xy / mirrorClip.w * 0.5 + 0.5 + v_normal.xz * u_matParam9.y, vec2(0.001), vec2(0.999));
-        vec3 mirror = targetToLinear(texture(u_reflectionMap, mirrorUv).rgb) / max(u_exposure, 0.001);
+        float mirrorLod = clamp(u_matParam9.z * 7.0, 0.0, 7.0);
+        vec3 mirror = targetToLinear(textureLod(u_reflectionMap, mirrorUv, mirrorLod).rgb) / max(u_exposure, 0.001);
         baseColor = mix(baseColor, mirror, (0.02 + 0.98 * fresnel) * u_matParam9.x);
     } else {
         vec3 skyColor = vec3(0.6, 0.8, 1.0);

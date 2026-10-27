@@ -13,6 +13,7 @@ uniform vec4 u_matParam4;
 varying vec2 v_uv;
 varying vec3 v_worldPos;
 varying vec3 v_normal;
+varying vec4 v_clipPos;
 
 void main() {
     v_uv = a_uv;
@@ -39,4 +40,5 @@ void main() {
     v_worldPos = worldPos.xyz;
     v_normal = normalize((u_model * vec4(a_normal, 0.0)).xyz - vec3(slope.x, 0.0, slope.y));
     gl_Position = u_vp * worldPos;
+    v_clipPos = gl_Position;
 }

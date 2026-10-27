@@ -89,6 +89,7 @@ export class OpenWaterMaterial extends LiquidWaveMaterial {
       reflectionMap,
       reflectionStrength,
       reflectionDistortion,
+      reflectionRoughness,
     } = options;
 
     super(MaterialType.OPEN_WATER, {
@@ -111,6 +112,7 @@ export class OpenWaterMaterial extends LiquidWaveMaterial {
       reflectionMap,
       reflectionStrength,
       reflectionDistortion,
+      reflectionRoughness,
     });
     this.poolHalfExtent = poolHalfExtent;
   }
