@@ -53,12 +53,9 @@ const CSS_FILES = [
 const TOOL_HTML_FILES = [
   'public/tools/pbr-gen.html',
   'public/tools/splatter-gen.html',
-  'public/tools/xtractor.html',
-  'public/tools/pixler.html',
   'public/tools/kit-inspector.html',
   'public/tools/ibl-gen.html',
   'public/tools/maker.html',
-  'public/tools/map-gen.html',
   'public/tools/gamepad-test.html',
 ];
 

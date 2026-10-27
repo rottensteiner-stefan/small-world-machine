@@ -18,7 +18,7 @@ app.start();
 Press **Ctrl+Alt+G** (or **Cmd+Alt+G**) to open the Forge overlay, where Xtractor appears as the "Asset Extractor" window.
 
 ::: tip Standalone page
-Xtractor is also available as a self-contained page at `/tools/xtractor.html`. The page instantiates the same `Xtractor` class (`new Xtractor({ parent: container })`), so there is no duplicated code. It has no shared event bus, so it cannot hand crops off to Pixler (see [Limitations](#einschraenkungen) below).
+Xtractor is also available as the `xtractor` mode of the Maker shell (`/tools/maker.html#xtractor`). The shell instantiates the same `Xtractor` class and gives it the app's event bus, so "Send to Pixler" switches to the Pixler mode with the crop loaded. Leaving the mode and coming back restores the working image; the undo history starts fresh.
 :::
 
 ::: tip Own package since ADR 0024
@@ -32,7 +32,7 @@ All routes land at the same 1:1 pixel-scale canvas (on-screen zoom is CSS scalin
 - **Upload** — click the dropzone to open a file picker.
 - **Drag & drop** — drop onto the dropzone or anywhere on the window. Besides images it accepts ZIP archives, SVG, PBR sets and text/JSON.
 - **URL** — paste a URL into the text field and click "Load". Cross-origin images without permissive CORS headers won't load; Xtractor shows an explanatory message instead of proxying — downloading and uploading locally is the fallback.
-- **Paste from clipboard** — `Ctrl/Cmd+V` pastes an image directly (also on the standalone page, since paste is part of the dropzone).
+- **Paste from clipboard** — `Ctrl/Cmd+V` pastes an image directly (also in the Maker shell, since paste is part of the dropzone).
 
 ## Selecting a region
 
@@ -66,4 +66,4 @@ Export paths: the slice gallery offers a PNG download per cut, normal/depth maps
 - **No PDF support.** The dropzone does not accept PDFs (no PDF code exists).
 - **Slicing is vertical strips only:** `[SLICE: N]` cuts N (1–64) equal strips; there is no row/column grid and no atlas/metadata export. `[AUTO_SPRITES]` detects sprites via connected components instead.
 - **No state persistence.** `getState()` returns `null`; reopening the Forge window loses your loaded image, selection and chat history (in-session undo history exists).
-- **The standalone `xtractor.html` page has no event bus** — no Pixler handoff.
+- **In the Maker shell, undo history is per mount** — switching modes keeps the image, not the history.

@@ -37,6 +37,7 @@ import {
   KitRegistry,
   Quaternion,
   Matrix4,
+  ToolEvents,
 } from "@small-world-machine/engine";
 
 import type { OrbitCameraView } from "./OrbitCameraController.js";
@@ -70,6 +71,19 @@ import { ContentDrawer } from "./ContentDrawer.js";
 import { ToolModeHost } from "./ToolModeHost.js";
 import { ModeHashRouter } from "./ModeHashRouter.js";
 import { WorldModeAdapter } from "./WorldModeAdapter.js";
+import { ForgeToolMode } from "./ForgeToolMode.js";
+import { MAP_MODE_ID, PIXLER_MODE_ID, XTRACTOR_MODE_ID } from "./ToolMode.js";
+import { MapGenerator } from "../MapGenerator.js";
+import { Pixler } from "../Pixler.js";
+import { Xtractor } from "../Xtractor.js";
+
+/** Level the Map Generator mode opens with when it holds no document yet. */
+const DEFAULT_MAP = `WWWWWWWWWW
+W........W
+W..P.....W
+W.....E..W
+W........W
+WWWWWWWWWW`;
 
 export interface MakerAppOptions extends EngineOptions {
   hierarchyContainer: HTMLElement;
@@ -77,7 +91,7 @@ export interface MakerAppOptions extends EngineOptions {
   paletteContainer: HTMLElement;
   statusContainer: HTMLElement;
   contentDrawerContainer?: HTMLElement;
-  /** Element secondary tool modes mount into; defaults to `document.body` until a layout slot exists. */
+  /** Element secondary tool modes mount into (shown while one is active); defaults to a `div` appended to `document.body`. */
   modeHostContainer?: HTMLElement;
 }
 
@@ -254,13 +268,54 @@ export class MakerApp extends SmallWorldMachine {
 
   private readonly _modeHost: ToolModeHost;
   private readonly _modeRouter: ModeHashRouter;
+  private _onCropToPixler: ((event: Record<string, unknown>) => void) | undefined;
 
   constructor(private readonly _makerOptions: MakerAppOptions) {
     super(_makerOptions);
-    this._modeHost = new ToolModeHost(this._makerOptions.modeHostContainer ?? document.body);
+    this._modeHost = new ToolModeHost(
+      this._makerOptions.modeHostContainer ?? this._createModeSurface(),
+    );
     this._modeHost.register(new WorldModeAdapter());
+    this._registerToolModes();
     this._modeRouter = new ModeHashRouter(this._modeHost);
     this._modeRouter.start();
+  }
+
+  /** Fallback mode surface for pages without a layout slot; the host shows it only while a tool mode is active. */
+  private _createModeSurface(): HTMLElement {
+    const surface = document.createElement("div");
+    surface.hidden = true;
+    document.body.appendChild(surface);
+    return surface;
+  }
+
+  /** Map, Pixler and Xtractor live in the shell (ADR 0033 M3); the rest of the tools stay standalone pages. */
+  private _registerToolModes(): void {
+    const pixlerMode = new ForgeToolMode(PIXLER_MODE_ID, (parent) => new Pixler({ parent }));
+    this._modeHost.register(pixlerMode);
+    this._modeHost.register(
+      new ForgeToolMode(XTRACTOR_MODE_ID, (parent) => new Xtractor(this.events, { parent })),
+    );
+    this._modeHost.register(
+      new ForgeToolMode(
+        MAP_MODE_ID,
+        (parent) => {
+          const map = new MapGenerator({ parent });
+          map.loadMapString(DEFAULT_MAP);
+          return map;
+        },
+        (map) => map.dispose(),
+      ),
+    );
+    // Xtractor's "send crop to Pixler": Pixler is not mounted while Xtractor is, so park the crop
+    // in the Pixler mode and switch -- it loads the image when it mounts.
+    this._onCropToPixler = (event: Record<string, unknown>): void => {
+      const base64 = event["base64"];
+      if (typeof base64 !== "string") return;
+      pixlerMode.setState(base64);
+      this.launchMode(PIXLER_MODE_ID);
+    };
+    this.events.addEventListener(ToolEvents.Pixler.LOAD_BASE64, this._onCropToPixler);
   }
 
   /** Editor-only scene children: hidden in the hierarchy and never written to `scene.gltf`. */
@@ -1808,6 +1863,9 @@ export class MakerApp extends SmallWorldMachine {
     this._abortController = new AbortController();
     this._modeRouter.stop();
     this._modeHost.dispose();
+    if (this._onCropToPixler) {
+      this.events.removeEventListener(ToolEvents.Pixler.LOAD_BASE64, this._onCropToPixler);
+    }
     this._trashBin.remove(...this._trashBin.children);
     this._undo.clear();
     super.destroy();

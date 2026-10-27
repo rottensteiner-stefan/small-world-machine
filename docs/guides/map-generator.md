@@ -18,7 +18,7 @@ app.start();
 Press **Ctrl+Alt+G** (or **Cmd+Alt+G**) to show/hide the Forge overlay.
 
 ::: tip Standalone page
-Map Generator is also available as a self-contained page at `/tools/map-gen.html` — the same class, just embedded directly in the page instead of a Forge window. It preloads a small demo room instead of reading from `localStorage`.
+Map Generator is also available as the `map` mode of the Maker shell (`/tools/maker.html#map`) — the same class, mounted into the shell's mode surface instead of a Forge window. It preloads a small demo room instead of reading from `localStorage`. Leaving the mode and coming back restores the map (`getState`/`setState`).
 :::
 
 ## Painting a map

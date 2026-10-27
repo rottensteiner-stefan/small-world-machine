@@ -46,6 +46,25 @@ Abgeändert bzw. **nicht mehr verbindlich**:
 - Herabgestuft auf Backlog-/Tracking: „alle Autoren-Werkzeuge als ToolMode-Module in einer Shell" und der
   gemeinsame Projektbegriff „Workspace/Project" (bleibt Zukunft, vgl. `CONTEXT.md`).
 
+## AMENDED 2026-10-27 — M3 umgesetzt, drei Legacy-Seiten entfernt (Maintainer-Entscheid)
+
+**[AMEND, Maintainer-Auftrag 2026-10-27]** Der Maintainer hat die Integration von **Xtractor, Pixler und Map
+Generator** in die Shell beauftragt (Business-Case-Kriterium „expliziter Nutzerwunsch" aus Punkt 1 erfüllt) und
+entschieden, deren Standalone-Seiten **zu entfernen** statt als Entry-Aliase zu halten:
+
+- Die drei Werkzeuge laufen als `ToolMode`-Module (`ForgeToolMode`, `maker.html#xtractor|pixler|map`). Die
+  Werkzeug-Klassen bleiben unverändert `ForgeTool`s (Forge-Fenster, `attachDevTools`); die Shell baut pro `mount()`
+  eine frische Instanz und trägt das Dokument über `getState()`/`setState()` durch den Moduswechsel.
+- **Punkt 2 gilt für diese drei Seiten nicht mehr:** `public/tools/xtractor.html`, `pixler.html` und `map-gen.html`
+  und ihre Vite-Eingänge sind gelöscht, alte Adressen liefern 404. Verweise (`public/index.html`, README, Guides,
+  `scripts/xtractor-e2e.mjs`) zeigen auf `maker.html#<mode>`. **M7 (Input-Deletion) bleibt für alle übrigen Seiten
+  Nicht-Ziel** (Material/PBR, IBL, Kit-Inspector, Splatter, Gamepad).
+- Der Crop→Pixler-Handoff läuft in der Shell: Xtractor sendet über den App-Event-Bus, die Shell parkt das Bild im
+  Pixler-Modus und wechselt (Pixler ist beim Senden nicht gemountet).
+- Undo bleibt pro Werkzeug und **pro Mount**: ein Moduswechsel behält das Dokument (Bild, Karte), nicht den Verlauf.
+- Verifikation: `scripts/xtractor-e2e.mjs` 33/33 gegen `maker.html#xtractor`, Moduswechsel/Deep-Link/Handoff live
+  geprüft, Forge-Pfad unverändert.
+
 ## Kontext & Problem
 
 Der aktuellen Werkzeuglandschaft fehlt eine einheitliche Arbeitsfläche und ein gemeinsamer Projektbegriff:

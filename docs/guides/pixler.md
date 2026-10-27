@@ -18,7 +18,7 @@ app.start();
 Press **Ctrl+Alt+G** (or **Cmd+Alt+G**) to show/hide the Forge overlay.
 
 ::: tip Standalone page
-Pixler is also available as a self-contained page at `/tools/pixler.html` — the same class, just embedded directly in the page instead of a Forge window. The one functional difference: the standalone page has no engine event bus, so it can't receive images pushed via [Xtractor](/guides/xtractor)'s "Send to Pixler" handoff, but it does expose `window.pixlerInstance` for console access.
+Pixler is also available as the `pixler` mode of the Maker shell (`/tools/maker.html#pixler`) — the same class, mounted into the shell's mode surface instead of a Forge window. Xtractor's "Send to Pixler" handoff works there too: the shell parks the crop in Pixler and switches to it. Leaving the mode and coming back restores the picture; the undo history starts fresh.
 :::
 
 ## Tools
@@ -69,4 +69,4 @@ There is no filesystem save — export only happens via the clipboard — and no
 - **No rotate**, only horizontal/vertical mirroring.
 - **Bucket Fill ignores symmetry mode.**
 - **Sprite content does not persist across reloads in the docked Forge window** — `getState()`/`setState()` exist on the class, but the Forge window manager never calls them, so only the window's open/closed state survives a reload, not what you drew.
-- The standalone page cannot receive pushes from Xtractor (no shared event bus); drop and paste work there as well, since they are part of the class.
+- In the Maker shell the undo history is per mount: leaving the mode keeps the picture, not the history.

@@ -571,3 +571,12 @@ keine neuen Shortcuts, keine neuen Features; alle bisherigen Bindings und ihr Ve
 
 ## 2026-10-19 — BV-Writer-Migration im Maker-Prefab-Pfeil (Wave 2, Paket D)
 `MakerPrefabPipeline` nutzt jetzt den typisierten BoundingVolume-Methodensatz (`getAabb` statt des vorherigen `_boundsToAabb`), sodass die Prefab-Verarbeitung auch für OBB/HULL-Frames korrekte Welträume liefert (zuvor undefined). Für AABB-Prefabs bleibt das Verhalten identisch. Aufgabe-2-Nacharbeit Paket D; keine neue Maker-Funktion/kein neuer Shortcut, keine Undo/Redo-Berührung.
+
+
+## 2026-10-27 — Big Merge M3: Xtractor, Pixler und Map Generator als Shell-Modi
+
+- **Gebaut:** `ForgeToolMode` (`maker/ForgeToolMode.ts`) hostet ein `ForgeTool` als `ToolMode`: frische Instanz pro `mount()`, Dokument über `getState()`/`setState()`, Mode-Surface (`#makerModeSurface` in `maker.html`) liegt über dem Editor, der seine Größe behält. `MakerApp` registriert `xtractor`, `pixler`, `map`; Launcher-Buttons aktiv und mit dem Router synchron (`hashchange`).
+- **Xtractor** hat jetzt echten State (Arbeitsbild als PNG-Data-URL). Crop→Pixler läuft über den App-Event-Bus: Shell parkt das Bild im Pixler-Modus und wechselt.
+- **Entfernt:** `public/tools/{xtractor,pixler,map-gen}.html` samt Vite-Eingängen (Maintainer-Entscheid, ADR 0033 „AMENDED 2026-10-27"). Verweise in `public/index.html`, README, Guides, `audit-css-tokens.js`, `xtractor-e2e.mjs` umgestellt.
+- **Gate:** Vitest 3291 grün (+7 `ForgeToolMode`), tsc, eslint, `check:doctrine`, `build:lib`; `xtractor-e2e` 33/33 in der Shell; Live-Rig `.agents/scratches/big-merge-m3/modes.mjs` (Moduswechsel, Deep-Link, unbekannter Hash, Handoff, 0 Konsolenmeldungen).
+- **Offen:** Der Welt-Editor rendert unter dem Mode-Surface weiter (Pause wäre ein späterer Hebel). M4 (Material), M5 (IBL, Splatter-CLI), M6 (Index-Deep-Links für die übrigen Tools) nicht begonnen.

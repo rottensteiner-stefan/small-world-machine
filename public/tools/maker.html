@@ -737,15 +737,38 @@
         opacity: 0.45;
         cursor: not-allowed;
       }
+      /* Stage: the world editor keeps its size underneath; a merged tool mode covers it. */
+      .maker-stage {
+        position: relative;
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+      .maker-stage > .maker-layout {
+        min-width: 0;
+      }
+      .maker-mode-surface {
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        justify-content: center;
+        overflow-y: auto;
+        padding: 1rem;
+        background: var(--tool-panel-solid);
+      }
+      .maker-mode-surface[hidden] {
+        display: none;
+      }
     </style>
   </head>
     <header class="tool-header maker-fused-header">
       <h1>Maker — Scene &amp; Level Editor</h1>
       <nav class="maker-mode-launcher" id="makerModeLauncher" role="tablist" aria-label="Tool modes">
         <button class="maker-mode-btn active" data-mode="world" role="tab" aria-selected="true">World</button>
-        <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">Xtractor</button>
-        <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">Pixler</button>
-        <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">Map</button>
+        <button class="maker-mode-btn" data-mode="xtractor" role="tab" aria-selected="false">Xtractor</button>
+        <button class="maker-mode-btn" data-mode="pixler" role="tab" aria-selected="false">Pixler</button>
+        <button class="maker-mode-btn" data-mode="map" role="tab" aria-selected="false">Map</button>
         <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">Material</button>
         <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">IBL</button>
         <button class="maker-mode-btn" disabled title="Merges in a later milestone" role="tab" aria-selected="false">Kit</button>
@@ -755,6 +778,7 @@
     </header>
     <script>if (window.self !== window.top || window.opener) document.body.classList.add("in-window");</script>
 
+    <div class="maker-stage">
     <div class="maker-layout">
       <aside class="maker-sidebar left">
         <div class="maker-panel-title">Hierarchy</div>
@@ -773,6 +797,9 @@
       </aside>
     </div>
 
+    <main class="maker-mode-surface" id="makerModeSurface" hidden></main>
+    </div>
+
     <footer class="maker-status" id="maker-status">Not bound to a project folder</footer>
 
     <script type="module">
@@ -787,6 +814,7 @@
         propertyContainer: document.getElementById("maker-properties"),
         paletteContainer: document.getElementById("maker-palette"),
         statusContainer: document.getElementById("maker-status"),
+        modeHostContainer: document.getElementById("makerModeSurface"),
       });
 
       window.makerApp = app;
@@ -794,6 +822,13 @@
 
       const modeLauncher = document.getElementById("makerModeLauncher");
       if (modeLauncher) {
+        const syncLauncher = () => {
+          for (const btn of modeLauncher.querySelectorAll("[data-mode]")) {
+            const active = btn.getAttribute("data-mode") === app.modeRouter.activeModeId;
+            btn.classList.toggle("active", active);
+            btn.setAttribute("aria-selected", String(active));
+          }
+        };
         modeLauncher.addEventListener("click", (event) => {
           const btn = event.target;
           if (btn instanceof HTMLElement) {
@@ -801,6 +836,9 @@
             if (mode) app.launchMode(mode);
           }
         });
+        // The router listens to `hashchange` first, so `activeModeId` is current by the time this runs.
+        window.addEventListener("hashchange", syncLauncher);
+        syncLauncher();
       }
     </script>
   </body>

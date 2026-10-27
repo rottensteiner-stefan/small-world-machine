@@ -30,3 +30,8 @@ export interface ToolMode {
 
 /** Reserved mode id of the Maker world editor; the fallback the hash router bootstraps into. */
 export const DEFAULT_MODE_ID = "world";
+
+/** Mode ids of the tools merged into the shell (`maker.html#<id>`). */
+export const XTRACTOR_MODE_ID = "xtractor";
+export const PIXLER_MODE_ID = "pixler";
+export const MAP_MODE_ID = "map";

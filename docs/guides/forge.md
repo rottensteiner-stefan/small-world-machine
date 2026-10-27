@@ -19,7 +19,7 @@ Small World Machine ships with several built-in Forge tools to speed up your wor
 5. **[Material Studio](/guides/material-studio):** A PBR texture map generator that derives normal/roughness/AO/etc. maps from a single diffuse image and previews them on a sample mesh.
 
 ::: tip Standalone tool pages
-Maker, Pixler, Xtractor, and Map Generator are also available as **standalone web pages** (`/tools/maker.html`, `/tools/pixler.html`, `/tools/map-gen.html`, `/tools/xtractor.html`) that run independently, without needing a game canvas or Forge overlay — the recommended path for a dedicated asset-editing workflow. Material Studio is available docked in the Forge overlay of a running engine, or as the standalone PBR generator `/tools/pbr-gen.html`.
+Maker, Pixler, Xtractor, and Map Generator are also available as **one web page**, the Maker shell (`/tools/maker.html`): Xtractor, Pixler, and Map are modes of it (`maker.html#xtractor`, `#pixler`, `#map`), run without a game canvas or Forge overlay — the recommended path for a dedicated asset-editing workflow. The former pages `pixler.html`, `map-gen.html`, and `xtractor.html` no longer exist. Material Studio is available docked in the Forge overlay of a running engine, or as the standalone PBR generator `/tools/pbr-gen.html`.
 :::
 
 ::: tip Own package since ADR 0024

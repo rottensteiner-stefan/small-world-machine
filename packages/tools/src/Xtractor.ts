@@ -36,6 +36,8 @@ const ARROW_DELTAS: Record<string, [number, number]> = {
 
 export class Xtractor extends ForgeTool {
   public loadFromBase64?: (base64: string) => void;
+  /** Set by `_bindLogic`: the working canvas as a PNG data URL, `null` while no image is loaded. */
+  private _snapshotImage: () => string | null = (): string | null => null;
   private _abortController = new AbortController();
 
   public override onPasteImage(base64: string): void {
@@ -393,6 +395,9 @@ export class Xtractor extends ForgeTool {
       dropOverlay.style.display = "none";
     });
 
+    this._snapshotImage = (): string | null =>
+      currentImage && canvas.width > 0 && canvas.height > 0 ? canvas.toDataURL("image/png") : null;
+
     this.loadFromBase64 = (base64: string): void => {
       const img = new Image();
       img.onload = (): void => {
@@ -687,8 +692,13 @@ export class Xtractor extends ForgeTool {
     });
   }
 
+  /** The working image, so the Maker shell can restore it after a mode round trip. */
   public getState(): unknown {
-    return null;
+    return this._snapshotImage();
   }
-  public setState(_state: unknown): void {}
+  public setState(state: unknown): void {
+    if (typeof state === "string" && state.startsWith("data:image")) {
+      this.loadFromBase64?.(state);
+    }
+  }
 }

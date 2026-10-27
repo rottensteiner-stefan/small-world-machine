@@ -206,9 +206,9 @@ The engine's flagship standalone 3D scene composer and level editor ([User Guide
 - **T-02: PBR Map Generator** (`public/tools/pbr-gen.html`): Generate Normal, Specular, AO, and Height maps from a single diffuse image.
 - **T-03: Gamepad Diagnostic Tool** (`public/tools/gamepad-test.html`): Live gamepad input, axis calibration, and haptic feedback testing.
 - **T-04: IBL Generator** (`public/tools/ibl-gen.html`): Generate Image-Based Lighting (Irradiance and Radiance) environment maps.
-- **T-05: Xtractor** (`public/tools/xtractor.html`): AI Image Workbench to crop, slice, and assemble tile-maps and sprite atlases.
-- **T-06: Pixler** (`public/tools/pixler.html`): Retro 2D pixel-art editor to draw, animate, and export sprites.
-- **T-07: Map Generator** (`public/tools/map-gen.html`): Visual grid editor to author ASCII layouts for the `GridLevelBuilder`.
+- **T-05: Xtractor** (`public/tools/maker.html#xtractor`): AI Image Workbench to crop, slice, and assemble tile-maps and sprite atlases.
+- **T-06: Pixler** (`public/tools/maker.html#pixler`): Retro 2D pixel-art editor to draw, animate, and export sprites.
+- **T-07: Map Generator** (`public/tools/maker.html#map`): Visual grid editor to author ASCII layouts for the `GridLevelBuilder`.
 - **T-08: Maker** (`public/tools/maker.html`): Standalone 3D scene and world composition environment.
 - **T-09: Kit Inspector** (`public/tools/kit-inspector.html`): Inspect modular asset kit metadata, registries, and runtime kit state.
 

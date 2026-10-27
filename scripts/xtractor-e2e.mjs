@@ -17,7 +17,7 @@ import path from "node:path";
 import puppeteer from "puppeteer";
 import { PNG } from "pngjs";
 
-const URL_ = process.env.XTRACTOR_URL ?? "https://localhost:5183/tools/xtractor.html";
+const URL_ = process.env.XTRACTOR_URL ?? "https://localhost:5183/tools/maker.html#xtractor";
 const MOCK_PORT = Number(process.env.XTRACTOR_MOCK_PORT ?? 8788);
 
 /** A 480x240 light-grey sheet with three solid coloured discs. */
@@ -105,7 +105,8 @@ await page.evaluateOnNewDocument((endpoint) => {
   );
 }, `http://localhost:${MOCK_PORT}/v1/chat/completions`);
 await page.goto(URL_, { waitUntil: "domcontentloaded" });
-await sleep(2500);
+// The Maker shell mounts Xtractor into its mode surface; wait for that marker instead of sleeping.
+await page.waitForSelector('#makerModeSurface[data-mode="xtractor"] #canvas-wrapper', { timeout: 20000 });
 
 const vis = (sel) =>
   page.evaluate((s) => {
