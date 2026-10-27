@@ -5,6 +5,7 @@
  * without touching the engine (Wave-2 territory) and without new dependencies:
  *   - `map` ......... ASCII map <-> JSON grid round-trip (`core/map.ts`)
  *   - `kit validate` . Kit manifest validation over a local directory (`core/kit.ts`)
+ *   - `splatter` ..... seed -> PNG decal (`core/splatter.ts`, `cli/splatterCommand.ts`)
  * Everything beyond that is follow-up scope by design (`ops-d-spec.md`).
  *
  * RUNNER: this module is intentionally executed through the committed ESM shim
@@ -20,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { mapToString, stringToMap } from "../core/map.js";
 import { createNodeDirectoryAssetSource, validateKitSource } from "../core/kit.js";
 import type { ValidationIssue, ValidationReport } from "../common/io/types.js";
+import { runSplatterCommand } from "./splatterCommand.js";
 
 const require = createRequire(import.meta.url);
 
@@ -63,6 +65,7 @@ Usage:
 Commands:
   map     ASCII map <-> JSON grid conversion (headless core)
   kit     Kit manifest validation (headless core)
+  splatter  Seeded splatter decal as PNG (headless core)
 
 Global options:
   -h, --help      Print this help and exit
@@ -249,6 +252,8 @@ export async function runSwm(argv: readonly string[], io?: CliIo): Promise<numbe
       return runMapCommand(rest, activeIo);
     case "kit":
       return runKitCommand(rest, activeIo);
+    case "splatter":
+      return runSplatterCommand(rest, activeIo);
     default:
       activeIo.err(`swm: error: unknown command "${command}"`);
       activeIo.err('Run "swm --help" for usage.');

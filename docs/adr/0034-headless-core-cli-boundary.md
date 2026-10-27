@@ -16,6 +16,15 @@
 > Engine-/Dependency-Touch außerhalb `packages/tools/**`, keine Verhaltensänderung am Kern. Weitere
 > Implementierungsteile bleiben offen: der IBL-Bake als Headless-Chrome-Subprozess und das reservierte
 > `--binary` GLB-Flag (Backlog-Item, Phase B).
+>
+> **Stand 2026-10-27 (M5):** `swm splatter` ist hinzugekommen (`core/splatter.ts`, `cli/splatterCommand.ts`,
+> Port der drei Splatter-Techniken mit eigenem Rasterizer + Gauß-Blur, seed-deterministisch), dazu der
+> Root-Wrapper `npm run swm` und ein Prozess-Smoke-Test der echten `bin` (`tests/cli/swmBin.test.ts`).
+> **Grenze, die der Smoke-Test sichtbar macht:** ein Core-Modul, das `@small-world-machine/engine` über den
+> Paket-Root importiert (so heute `core/material.ts` für `NormalMapFormat`), ist in Plain-Node nicht ladbar
+> (Engine-Root zieht `.glsl`-Dateien); ein künftiges `swm material` braucht dafür einen schlanken
+> Enum-Subpfad. Das Layout der Splatter-Satelliten folgt einem Integer-PRNG statt des chaotischen
+> `sin()`-Hashs der Seite (Node/Chrome weichen dort schon nach wenigen Zügen ab).
 
 ## Kontext & Problem
 

@@ -85,6 +85,7 @@ export default defineConfig({
             { text: "Maker (3D-Welteneditor)", link: "/guides/maker" },
             { text: "The Forge (Fenstermanager im Spiel)", link: "/guides/forge" },
             { text: "Material Studio", link: "/guides/material-studio" },
+            { text: "swm (Kommandozeile)", link: "/guides/swm-cli" },
             { text: "Pixler (Pixel-Art-Editor)", link: "/guides/pixler" },
             { text: "Xtractor (Sprite-Extraktor)", link: "/guides/xtractor" },
             { text: "Map Generator (ASCII-Raster-Level)", link: "/guides/map-generator" },

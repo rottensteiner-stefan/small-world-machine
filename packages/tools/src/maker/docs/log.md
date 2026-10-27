@@ -580,3 +580,22 @@ keine neuen Shortcuts, keine neuen Features; alle bisherigen Bindings und ihr Ve
 - **Entfernt:** `public/tools/{xtractor,pixler,map-gen}.html` samt Vite-Eingängen (Maintainer-Entscheid, ADR 0033 „AMENDED 2026-10-27"). Verweise in `public/index.html`, README, Guides, `audit-css-tokens.js`, `xtractor-e2e.mjs` umgestellt.
 - **Gate:** Vitest 3291 grün (+7 `ForgeToolMode`), tsc, eslint, `check:doctrine`, `build:lib`; `xtractor-e2e` 33/33 in der Shell; Live-Rig `.agents/scratches/big-merge-m3/modes.mjs` (Moduswechsel, Deep-Link, unbekannter Hash, Handoff, 0 Konsolenmeldungen).
 - **Offen:** Der Welt-Editor rendert unter dem Mode-Surface weiter (Pause wäre ein späterer Hebel). M4 (Material), M5 (IBL, Splatter-CLI), M6 (Index-Deep-Links für die übrigen Tools) nicht begonnen.
+
+
+## 2026-10-27 — Big Merge M4: Material-Modus und gemeinsame Map-Pipeline
+
+- **Gebaut:** `maker.html#material` (`MATERIAL_MODE_ID`, `ForgeToolMode` um `MaterialStudio`, Launcher-Tab aktiv). `MaterialStudio` wird ohne `parent` konstruiert und danach gemountet: `mount()` greift auf Felder zu, die erst nach dem Super-Konstruktor existieren.
+- **Umgebaut:** `public/tools/pbr-gen.html` leitet die Maps jetzt über `derivePbrMaps` und `MATERIAL_STUDIO_PRESETS` (`core/material.ts`) ab; die ~430 Zeilen Inline-Pipeline samt Preset-Kopie sind weg. Die Seite bleibt (ADR 0033: Material/PBR nicht entfernt).
+- **Golden-Gate:** `tests/core/materialGolden.test.ts` pinnt sha256 je Map für Default-/Stone-Profil und alle Verzweigungen (DirectX, Invert-Flags, Blur, Edge-Dicke); die Hashes stammen aus der Original-Inline-Pipeline (aus `git show HEAD:public/tools/pbr-gen.html` ausgeführt). Im Browser sind die Grid-Canvases von Alt- und Neu-Seite für alle vier Profile plus gekippte Flags byte-gleich (`.agents/scratches/big-merge-m4/page-compare.mjs`).
+- **Fix:** `MaterialStudioController.dispose()` räumt die Dropzone ab (Window-Drop/Paste blieben nach `unmount()` aktiv, auch im Forge-Fenster); `MaterialStudio.unmount()` stoppt den Bind-Timer.
+- **Befund, nicht behoben:** Auf `pbr-gen.html` ruft nichts `window.update3DTextures`/`update3DGeometry` auf, der 3D-Tab zeigt dort also keine aktualisierten Texturen (im Shell-Modus funktioniert die Vorschau).
+- **Offen:** Textur und Slider überleben den Moduswechsel nicht; Kit-Validator-Dialog nicht gebaut (`swm kit validate` existiert).
+
+
+## 2026-10-27 — Big Merge M5: IBL-Modus und `swm splatter`
+
+- **IBL-Modus:** `maker.html#ibl` (`IBL_MODE_ID`, `ForgeToolMode` um das neue `IblGenTool` in `ibl-gen/IblGenTool.ts`). Das Werkzeug ist die Seiten-Glue als Klasse: Dropzone, Bake, vier Vorschau-Karten, Zip-Export über `ZipAssetSink` (die Seite lädt dafür JSZip per CDN-Global). Der `IBLBaker` und sein WebGL2-Kontext entstehen erst beim ersten Bake und werden in `unmount()` freigegeben; Dropzone-Listener ebenso. Live geprüft mit synthetischem 2:1-Panorama: Bake, Vorschauen, Zip (348 KB), Moduswechsel, 0 Konsolenmeldungen (`.agents/scratches/big-merge-m4/ibl-mode.mjs`).
+- **`swm splatter`:** `core/splatter.ts` (Rasterizer + Gauß-Blur + die drei Techniken der Seite) und `cli/splatterCommand.ts`. Treue gegen Canvas2D gemessen (`splat-compare.mjs`, Zufallsanteile abgeschaltet): Alpha-IoU 0,998–0,999 bei Standardwerten, 0,985 bei Extremwerten. Das Blob-Layout kommt aus einem Integer-PRNG: der `sin()`-Hash der Seite liefert in Node 24 und Chrome 156 ab dem 8. Zug verschiedene Werte, ein Seed war nie engineübergreifend stabil.
+- **Packaging:** Root-Skript `npm run swm`; `tests/cli/swmBin.test.ts` startet die echte `bin` im Kindprozess. Dabei sichtbar geworden: `core/index.js` ist in Plain-Node nicht ladbar (`core/material.ts` importiert den Engine-Root, der `.glsl` lädt); Befehle importieren ihre Core-Module deshalb einzeln.
+- **Befunde, nicht behoben:** Die IBL-Zips nennen PNG-Inhalte `env.webp`/`irradiance.webp`/`brdf_lut.webp` (Seite und Modus identisch, Baker liefert `image/png`). In der IBL-Vorschau steht die Sonne unten (Orientierung des Bakers, Seite zeigt dasselbe). `ibl-gen.ts` startet beim Import noch `initIBLGenTool()` (Altcode der früheren Seite, tut nichts ohne ein Element `#dropzone`); im Modus ist das ein No-op.
+- **Offen:** M6 (Index-Deep-Links für die übrigen Tools), Kit-Validator-Dialog, `swm material`/`swm ibl` (IBL-Bake als Headless-Chrome-Subprozess).

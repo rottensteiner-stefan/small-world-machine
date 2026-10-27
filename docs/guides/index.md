@@ -44,6 +44,7 @@ Practical, in-depth guides for each subsystem and tool of the Small World Machin
 | [Maker (3D World Editor)](./maker.md) | Complete professional guide & reference. |
 | [The Forge (In-Game Window Manager)](./forge.md) | In-game diagnostics and tooling overlay. |
 | [Material Studio](./material-studio.md) | PBR map generator. |
+| [`swm` command line](./swm-cli.md) | Headless map, kit and splatter commands. |
 | [Pixler (Pixel Art Editor)](./pixler.md) | Retro 2D sprite editor. |
 | [Xtractor (Sprite Extractor)](./xtractor.md) | Image cropping & slicing for tile/sprite atlases. |
 | [Map Generator (ASCII Grid Levels)](./map-generator.md) | Visual grid editor for `GridLevelBuilder` layouts. |

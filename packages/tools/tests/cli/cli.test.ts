@@ -226,3 +226,55 @@ describe("swm kit", () => {
     });
   });
 });
+
+describe("swm splatter", () => {
+  const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47];
+
+  it("prints splatter usage for --help", async () => {
+    const { io, stdoutText } = makeCapturingIo();
+    expect(await runSwm(["splatter", "--help"], io)).toBe(0);
+    expect(stdoutText()).toContain("swm splatter [options] <output.png>");
+  });
+
+  it("writes a PNG of the requested size", async () => {
+    await withTempDir(async (dir) => {
+      const out = join(dir, "decal.png");
+      const { io, stdoutText } = makeCapturingIo();
+      const code = await runSwm(
+        ["splatter", "-a", "metaballs", "--seed", "3", "--size", "64", "--blur", "5", out],
+        io,
+      );
+      expect(code).toBe(0);
+      expect(stdoutText()).toContain("metaballs seed 3");
+      const bytes = await readFile(out);
+      expect(Array.from(bytes.subarray(0, 4))).toEqual(PNG_SIGNATURE);
+      // IHDR width/height, big-endian, right after the 8-byte signature + chunk header.
+      expect(bytes.readUInt32BE(16)).toBe(64);
+      expect(bytes.readUInt32BE(20)).toBe(64);
+    });
+  });
+
+  it("writes identical bytes for the same seed", async () => {
+    await withTempDir(async (dir) => {
+      const args = ["splatter", "-a", "mud-splatter", "--seed", "9", "--size", "64"];
+      await runSwm([...args, join(dir, "a.png")], makeCapturingIo().io);
+      await runSwm([...args, join(dir, "b.png")], makeCapturingIo().io);
+      expect((await readFile(join(dir, "a.png"))).equals(await readFile(join(dir, "b.png")))).toBe(
+        true,
+      );
+    });
+  });
+
+  it.each([
+    [["splatter"], "missing <output.png>"],
+    [["splatter", "-a", "ink", "x.png"], "--algorithm must be one of"],
+    [["splatter", "--blob-count", "3", "x.png"], "unknown option --blob-count for noise-warp"],
+    [["splatter", "--size", "big", "x.png"], 'needs a number, got "big"'],
+    [["splatter", "--seed"], "--seed needs a value"],
+    [["splatter", "--color", "red", "x.png"], "#rrggbb"],
+  ])("rejects %j with exit 1", async (argv, message) => {
+    const { io, stderrText } = makeCapturingIo();
+    expect(await runSwm(argv, io)).toBe(1);
+    expect(stderrText()).toContain(message);
+  });
+});

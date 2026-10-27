@@ -196,16 +196,17 @@ The engine's flagship standalone 3D scene composer and level editor ([User Guide
 
 > **Status (Big Merge, ADR 0033/0034):** Maker's M1/M2 footprint is on `main` — the
 > `packages/tools/src/maker/` suite (`ToolMode`, `ModeHashRouter`, `WorldModeAdapter`, …) and
-> `public/tools/maker.html` ship a fused mode launcher in which the **World** editor is live.
-> The other tools (Xtractor, Pixler, Map, Material, IBL, Kit) are not yet migrated into that
-> launcher — they remain available as standalone pages below. A `swm` CLI on the headless
-> `packages/tools/src/core/` is in progress. This is the current state, not a roadmap promise.
+> `public/tools/maker.html` ship a fused mode launcher with **World**, **Xtractor**, **Pixler**,
+> **Map**, **Material** and **IBL** live (`maker.html#<mode>`). Kit Inspector, Splatter and the
+> gamepad test remain standalone pages below; Material and IBL also keep their standalone pages.
+> A `swm` CLI (`npm run swm`) on the headless `packages/tools/src/core/` offers `map`, `kit
+> validate` and `splatter`. This is the current state, not a roadmap promise.
 
 ### Standalone Development Tools
 - **T-01: Procedural Splatter Generator** (`public/tools/splatter-gen.html`): Generate procedural blood, splatters, dirt decals, and impact masks.
-- **T-02: PBR Map Generator** (`public/tools/pbr-gen.html`): Generate Normal, Specular, AO, and Height maps from a single diffuse image.
+- **T-02: PBR Map Generator** (`public/tools/pbr-gen.html`, also `maker.html#material`): Generate Normal, Specular, AO, and Height maps from a single diffuse image.
 - **T-03: Gamepad Diagnostic Tool** (`public/tools/gamepad-test.html`): Live gamepad input, axis calibration, and haptic feedback testing.
-- **T-04: IBL Generator** (`public/tools/ibl-gen.html`): Generate Image-Based Lighting (Irradiance and Radiance) environment maps.
+- **T-04: IBL Generator** (`public/tools/ibl-gen.html`, also `maker.html#ibl`): Generate Image-Based Lighting (Irradiance and Radiance) environment maps.
 - **T-05: Xtractor** (`public/tools/maker.html#xtractor`): AI Image Workbench to crop, slice, and assemble tile-maps and sprite atlases.
 - **T-06: Pixler** (`public/tools/maker.html#pixler`): Retro 2D pixel-art editor to draw, animate, and export sprites.
 - **T-07: Map Generator** (`public/tools/maker.html#map`): Visual grid editor to author ASCII layouts for the `GridLevelBuilder`.

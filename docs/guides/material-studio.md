@@ -19,8 +19,10 @@ app.start();
 
 Press **Ctrl+Alt+G** (or **Cmd+Alt+G**) to show/hide the Forge overlay.
 
-::: tip Standalone page
-A close relative lives at `/tools/pbr-gen.html` — it duplicates the same image-processing pipeline and UI inline (instead of importing the `MaterialStudio` class) and only reuses the 3D preview half (`MaterialStudioApp`) from the shared module. Treat it as a separately maintained fork, not a thin wrapper.
+::: tip In Maker and as a standalone page
+Material Studio is also a mode of the Maker shell: open `maker.html#material` (or the **Material** tab). The shell builds a fresh studio on every entry and tears it down on exit, so its drop/paste listeners do not outlive the mode; the loaded texture and slider settings are not carried across a mode switch.
+
+A close relative lives at `/tools/pbr-gen.html` with its own UI (ZIP export, JSON profile). Its map derivation is no longer a copy: both it and the studio call `derivePbrMaps` from `packages/tools/src/core/material.ts`, the same function the `swm` CLI uses. A golden test (`tests/core/materialGolden.test.ts`) pins the output byte for byte against the page's original inline pipeline.
 :::
 
 ## Loading a source image

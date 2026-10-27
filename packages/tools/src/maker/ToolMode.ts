@@ -35,3 +35,5 @@ export const DEFAULT_MODE_ID = "world";
 export const XTRACTOR_MODE_ID = "xtractor";
 export const PIXLER_MODE_ID = "pixler";
 export const MAP_MODE_ID = "map";
+export const MATERIAL_MODE_ID = "material";
+export const IBL_MODE_ID = "ibl";

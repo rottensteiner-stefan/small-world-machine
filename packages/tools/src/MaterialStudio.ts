@@ -158,13 +158,14 @@ export class MaterialStudio extends ForgeTool {
   private _app: MaterialStudioApp | null = null;
   private _canvas: HTMLCanvasElement | null = null;
   private readonly _controller = new MaterialStudioController();
+  private _bindTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: ForgeToolOptions = {}) {
     super(options);
     this._injectCSS();
     buildMaterialStudioUI(this._container);
     // delay bind logic to ensure DOM is ready
-    setTimeout(() => this._controller.bind(), 100);
+    this._bindTimer = setTimeout(() => this._controller.bind(), 100);
   }
 
   public getState(): unknown {
@@ -201,6 +202,8 @@ export class MaterialStudio extends ForgeTool {
 
   public override unmount(): void {
     super.unmount();
+    clearTimeout(this._bindTimer);
+    this._controller.dispose();
     if (this._app) {
       this._app.destroy();
       this._app = null;

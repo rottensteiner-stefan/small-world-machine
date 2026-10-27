@@ -72,8 +72,16 @@ import { ToolModeHost } from "./ToolModeHost.js";
 import { ModeHashRouter } from "./ModeHashRouter.js";
 import { WorldModeAdapter } from "./WorldModeAdapter.js";
 import { ForgeToolMode } from "./ForgeToolMode.js";
-import { MAP_MODE_ID, PIXLER_MODE_ID, XTRACTOR_MODE_ID } from "./ToolMode.js";
+import {
+  IBL_MODE_ID,
+  MAP_MODE_ID,
+  MATERIAL_MODE_ID,
+  PIXLER_MODE_ID,
+  XTRACTOR_MODE_ID,
+} from "./ToolMode.js";
 import { MapGenerator } from "../MapGenerator.js";
+import { MaterialStudio } from "../MaterialStudio.js";
+import { IblGenTool } from "../ibl-gen/IblGenTool.js";
 import { Pixler } from "../Pixler.js";
 import { Xtractor } from "../Xtractor.js";
 
@@ -289,7 +297,7 @@ export class MakerApp extends SmallWorldMachine {
     return surface;
   }
 
-  /** Map, Pixler and Xtractor live in the shell (ADR 0033 M3); the rest of the tools stay standalone pages. */
+  /** Map, Pixler, Xtractor, Material and IBL live in the shell (ADR 0033 M3-M5); the rest of the tools stay standalone pages. */
   private _registerToolModes(): void {
     const pixlerMode = new ForgeToolMode(PIXLER_MODE_ID, (parent) => new Pixler({ parent }));
     this._modeHost.register(pixlerMode);
@@ -307,6 +315,15 @@ export class MakerApp extends SmallWorldMachine {
         (map) => map.dispose(),
       ),
     );
+    this._modeHost.register(
+      new ForgeToolMode(MATERIAL_MODE_ID, (parent) => {
+        // Constructed without `parent` on purpose: MaterialStudio.mount() touches fields that only exist after its constructor ran.
+        const studio = new MaterialStudio();
+        studio.mount(parent);
+        return studio;
+      }),
+    );
+    this._modeHost.register(new ForgeToolMode(IBL_MODE_ID, (parent) => new IblGenTool({ parent })));
     // Xtractor's "send crop to Pixler": Pixler is not mounted while Xtractor is, so park the crop
     // in the Pixler mode and switch -- it loads the image when it mounts.
     this._onCropToPixler = (event: Record<string, unknown>): void => {

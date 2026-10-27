@@ -65,6 +65,20 @@ entschieden, deren Standalone-Seiten **zu entfernen** statt als Entry-Aliase zu 
 - Verifikation: `scripts/xtractor-e2e.mjs` 33/33 gegen `maker.html#xtractor`, Moduswechsel/Deep-Link/Handoff live
   geprüft, Forge-Pfad unverändert.
 
+**M4 (2026-10-27, Material):** Material Studio läuft als vierter Shell-Modus (`maker.html#material`, `ForgeToolMode`
+um die bestehende `MaterialStudio`-Klasse; zweite 3D-Oberfläche = Studio-Sandbox, damit bleibt das GL-Budget bei ≤ 2).
+Die Seite `public/tools/pbr-gen.html` **bleibt** (Material/PBR ist von der Entfernung ausgenommen), ihre Inline-Pipeline
+(~430 Zeilen: Presets, Blur, Sobel/AO/Edge-Ableitung) ist aber durch `derivePbrMaps`/`MATERIAL_STUDIO_PRESETS` aus
+`core/material.ts` ersetzt. Golden-Gate: `tests/core/materialGolden.test.ts` (sha256 je Map, erzeugt aus der
+Original-Inline-Pipeline), zusätzlich Browser-Vergleich Alt gegen Neu über alle vier Profile. Gefunden und behoben:
+`MaterialStudioController` ließ die Window-Drop-/Paste-Listener seiner Dropzone beim `unmount()` stehen.
+Der Kit-Inspector-Validator-Dialog (Plan M4) ist nicht gebaut; `swm kit validate` deckt die Validierung ab.
+
+**M5 (2026-10-27, IBL + Splatter):** IBL-Gen läuft als fünfter Shell-Modus (`maker.html#ibl`, `IblGenTool` als
+`ForgeTool` um den bestehenden `IBLBaker`; der Baker erzeugt seinen WebGL2-Kontext erst beim ersten Bake und gibt
+ihn beim Verlassen frei). Die Seite `public/tools/ibl-gen.html` bleibt. Splatter bekommt nur den CLI-Port
+(`swm splatter`, siehe ADR 0034); seine Seite bleibt dauerhaft standalone, ohne Shell-Panel.
+
 ## Kontext & Problem
 
 Der aktuellen Werkzeuglandschaft fehlt eine einheitliche Arbeitsfläche und ein gemeinsamer Projektbegriff:

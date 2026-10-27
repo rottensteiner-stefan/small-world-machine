@@ -30,6 +30,7 @@ type MaterialStudioMapKey =
 export class MaterialStudioController {
   private _app: MaterialStudioApp | null = null;
   private _onBase64Image: ((b64: string) => void) | null = null;
+  private _dropzone: UniversalIngestDropzone | null = null;
 
   public setApp(app: MaterialStudioApp | null): void {
     this._app = app;
@@ -39,6 +40,13 @@ export class MaterialStudioController {
     if (this._onBase64Image) {
       this._onBase64Image(base64);
     }
+  }
+
+  /** Releases the window-level drop/paste listeners the dropzone registered in `bind()`. */
+  public dispose(): void {
+    this._dropzone?.dispose();
+    this._dropzone = null;
+    this._onBase64Image = null;
   }
 
   public bind(): void {
@@ -84,7 +92,7 @@ export class MaterialStudioController {
         document.getElementById("materialstudio-dropzone-container") ||
         document.getElementById("dropzone");
       if (dropzoneContainer) {
-        new UniversalIngestDropzone({
+        this._dropzone = new UniversalIngestDropzone({
           container: dropzoneContainer,
           label: "Textur ablegen",
           supportedKinds: ["image", "pbr-set", "zip", "files", "svg", "text"],
