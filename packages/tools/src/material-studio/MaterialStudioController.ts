@@ -21,6 +21,22 @@ const PRESETS = MATERIAL_STUDIO_PRESETS;
 type MaterialStudioMapKey =
   "original" | "height" | "normal" | "specular" | "roughness" | "ao" | "edge";
 
+/** Studio controls that hold session state; sliders and checkboxes by id, selects are restored silently. */
+const CONTROL_SELECTOR = ".swf-ms-container input[id], .swf-ms-container select[id]";
+
+/**
+ * Document state that survives leaving and re-entering the Material mode (`ForgeToolMode` carries it
+ * through `getState()`/`setState()`): the loaded source texture, every control value, the open tab and
+ * the preview geometry. `textureSrc` is the image's URL (a blob/data URL stays valid for the page's lifetime).
+ */
+export interface MaterialStudioState {
+  textureSrc: string;
+  fileName: string;
+  tab: string;
+  geometry: string;
+  controls: Record<string, string | boolean>;
+}
+
 /**
  * Owns every piece of DOM-bound PBR-Studio behaviour that used to live in `MaterialStudio._bindLogic()`:
  * preset/slider/tab wiring, drag & drop image intake, PBR map generation via `TextureFilters`, and pushing
@@ -31,6 +47,31 @@ export class MaterialStudioController {
   private _app: MaterialStudioApp | null = null;
   private _onBase64Image: ((b64: string) => void) | null = null;
   private _dropzone: UniversalIngestDropzone | null = null;
+  /** State parked by `setState()` until the (delayed) `bind()` applies it. */
+  private _pendingState: MaterialStudioState | null = null;
+  /** Reads the closure-held session (texture, file name, tab); set by `bind()`, cleared by `dispose()`. */
+  private _readSession:
+    (() => Pick<MaterialStudioState, "textureSrc" | "fileName" | "tab">) | null = null;
+
+  /** Snapshot for `getState()`; the parked state while not yet bound, null when there is none. */
+  public getState(): MaterialStudioState | null {
+    const read = this._readSession;
+    if (!read) return this._pendingState;
+    const controls: Record<string, string | boolean> = {};
+    document
+      .querySelectorAll<HTMLInputElement | HTMLSelectElement>(CONTROL_SELECTOR)
+      .forEach((el) => {
+        controls[el.id] =
+          el instanceof HTMLInputElement && el.type === "checkbox" ? el.checked : el.value;
+      });
+    const geometry = document.querySelector<HTMLElement>(".geom-btn.active")?.dataset["geom"];
+    return { ...read(), geometry: geometry ?? "sphere", controls };
+  }
+
+  /** Parks `state` for the next `bind()`; a controller that is already bound keeps its own document. */
+  public setState(state: MaterialStudioState): void {
+    if (!this._readSession) this._pendingState = state;
+  }
 
   public setApp(app: MaterialStudioApp | null): void {
     this._app = app;
@@ -47,14 +88,19 @@ export class MaterialStudioController {
     this._dropzone?.dispose();
     this._dropzone = null;
     this._onBase64Image = null;
+    this._readSession = null;
   }
 
   public bind(): void {
     try {
+      const restored = this._pendingState;
+      this._pendingState = null;
       const originalImage = new Image();
-      let originalFileName = "rock";
+      let originalFileName = restored?.fileName ?? "rock";
       let loadedData: ImageData | null = null;
       let activeTab = "grid";
+      /** Tab to reopen once the restored image defined the map canvases' size. */
+      let pendingTab = restored && restored.tab !== "grid" ? restored.tab : null;
       let isProcessing = false;
       let needsUpdate = false;
 
@@ -154,7 +200,12 @@ export class MaterialStudioController {
         createProceduralFallback();
       };
       // Load rock texture
-      originalImage.src = "/apps/showcases/10/assets/rock.webp";
+      originalImage.src = restored?.textureSrc ?? "/apps/showcases/10/assets/rock.webp";
+      this._readSession = (): Pick<MaterialStudioState, "textureSrc" | "fileName" | "tab"> => ({
+        textureSrc: originalImage.src,
+        fileName: originalFileName,
+        tab: activeTab,
+      });
 
       function createProceduralFallback(): void {
         // Simple canvas fallback texture (256x256 simple rock noise)
@@ -208,6 +259,14 @@ export class MaterialStudioController {
           loadedData = ctx.getImageData(0, 0, w, h);
         }
 
+        if (pendingTab) {
+          document
+            .querySelector<HTMLElement>(
+              `.swf-ms-container .tabs-bar .tool-tab[data-tab="${pendingTab}"]`,
+            )
+            ?.click();
+          pendingTab = null;
+        }
         triggerPBRUpdate();
       }
 
@@ -393,6 +452,27 @@ export class MaterialStudioController {
         }
         downloadMap(activeTab);
       });
+      // Restore the parked document: selects silently (`profile-select` would overwrite the sliders
+      // with its preset), sliders and checkboxes through their events so labels and maps follow.
+      if (restored) {
+        for (const [id, value] of Object.entries(restored.controls)) {
+          const el = document.getElementById(id);
+          if (el instanceof HTMLSelectElement) el.value = String(value);
+        }
+        for (const [id, value] of Object.entries(restored.controls)) {
+          const el = document.getElementById(id);
+          if (!(el instanceof HTMLInputElement)) continue;
+          if (el.type === "checkbox") {
+            el.checked = Boolean(value);
+            el.dispatchEvent(new Event("change"));
+          } else {
+            el.value = String(value);
+            el.dispatchEvent(new Event("input"));
+          }
+        }
+        document.querySelector<HTMLElement>(`.geom-btn[data-geom="${restored.geometry}"]`)?.click();
+      }
+
       // Add cursor style to indicate it's clickable
       const mainPreviewCanvas = document.getElementById("canvas-main-preview");
       if (mainPreviewCanvas) {

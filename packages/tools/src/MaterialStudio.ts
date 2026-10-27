@@ -18,7 +18,10 @@ import {
 } from "@small-world-machine/engine";
 import { MATERIAL_STUDIO_CSS } from "./material-studio/materialStudioStyles.js";
 import { buildMaterialStudioUI } from "./material-studio/MaterialStudioUiBuilder.js";
-import { MaterialStudioController } from "./material-studio/MaterialStudioController.js";
+import {
+  MaterialStudioController,
+  type MaterialStudioState,
+} from "./material-studio/MaterialStudioController.js";
 
 export class MaterialStudioApp extends SmallWorldMachine {
   private _previewObject!: Object3D;
@@ -28,6 +31,8 @@ export class MaterialStudioApp extends SmallWorldMachine {
   private _cubeGeometry!: GeometryDataInterface;
   private _torusGeometry!: GeometryDataInterface;
   private _planeGeometry!: GeometryDataInterface;
+  /** Last requested preview geometry; applied after `setupScene()` when a restore asked for it too early. */
+  private _geometryType = "sphere";
 
   constructor(canvasId: string) {
     super({
@@ -87,6 +92,7 @@ export class MaterialStudioApp extends SmallWorldMachine {
     this._previewObject.material = this._pbrMaterial;
 
     this.scene.add(this._previewObject);
+    if (this._geometryType !== "sphere") this.updateGeometry(this._geometryType);
   }
 
   public async updateTextures(
@@ -119,6 +125,7 @@ export class MaterialStudioApp extends SmallWorldMachine {
   }
 
   public updateGeometry(geomType: string): void {
+    this._geometryType = geomType;
     if (!this._previewObject) return;
     switch (geomType) {
       case "cube":
@@ -168,11 +175,13 @@ export class MaterialStudio extends ForgeTool {
     this._bindTimer = setTimeout(() => this._controller.bind(), 100);
   }
 
-  public getState(): unknown {
-    return {};
+  public getState(): MaterialStudioState | null {
+    return this._controller.getState();
   }
 
-  public setState(_state: unknown): void {}
+  public setState(state: MaterialStudioState | null): void {
+    if (state) this._controller.setState(state);
+  }
 
   private _injectCSS(): void {
     if (document.getElementById("material-studio-style")) return;
