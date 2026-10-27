@@ -72,7 +72,7 @@ Die Seite `public/tools/pbr-gen.html` **bleibt** (Material/PBR ist von der Entfe
 `core/material.ts` ersetzt. Golden-Gate: `tests/core/materialGolden.test.ts` (sha256 je Map, erzeugt aus der
 Original-Inline-Pipeline), zusätzlich Browser-Vergleich Alt gegen Neu über alle vier Profile. Gefunden und behoben:
 `MaterialStudioController` ließ die Window-Drop-/Paste-Listener seiner Dropzone beim `unmount()` stehen.
-Der Kit-Inspector-Validator-Dialog (Plan M4) ist nicht gebaut; `swm kit validate` deckt die Validierung ab.
+Der Kit-Inspector-Validator-Dialog (Plan M4) folgte nachträglich (siehe Nachtrag unten); bis dahin deckte `swm kit validate` die Validierung ab.
 
 **M5 (2026-10-27, IBL + Splatter):** IBL-Gen läuft als fünfter Shell-Modus (`maker.html#ibl`, `IblGenTool` als
 `ForgeTool` um den bestehenden `IBLBaker`; der Baker erzeugt seinen WebGL2-Kontext erst beim ersten Bake und gibt
@@ -80,6 +80,8 @@ ihn beim Verlassen frei). Die Seite `public/tools/ibl-gen.html` bleibt. Splatter
 (`swm splatter`, siehe ADR 0034); seine Seite bleibt dauerhaft standalone, ohne Shell-Panel.
 
 **M6 (2026-10-27, Index-Deep-Links):** Die Portal-Karten T-02 und T-04 in `public/index.html` zeigen auf `maker.html#material` bzw. `#ibl` (T-05 bis T-07 taten das seit M3). Kit-Inspector (T-09), Splatter (T-01) und Gamepad-Test (T-03) sind keine Shell-Modi und behalten ihre eigenen Karten. Die Seiten `pbr-gen.html` und `ibl-gen.html` bleiben als Vite-Eingänge erhalten (M7 Nicht-Ziel), sind aber vom Index aus nicht mehr verlinkt.
+
+**Nachtrag Kit (2026-10-27, Validator-Dialog):** Der Launcher-Tab „Kit" ist aktiv: `maker.html#kit` ist ein sechster Shell-Modus (`KitValidatorTool` als `ForgeTool` unter `ForgeToolMode`, reines `common/io`, **keine** 3D-Oberfläche, GL-Budget unberührt). Kit-Ordner oder ZIP ablegen, der Befund des `KitManifestValidator` (Urteil, Kit-Meta, Zähler je Severity, Liste Fehler vor Warnungen) steht inline; dieselbe Prüfung läuft headless als `swm kit validate`. Der 3D-Viewer bleibt der eigenständige Kit-Inspector (`kit-inspector.html`, T-09), der keinen Shell-Modus bekommt. Beim Bau aufgefallen und behoben: Der Validator akzeptierte nur `.jpg/.jpeg/.png`-Previews und `.png`-Texturen/Decals, das Schema (`kit.schema.json`) aber auch WebP; die drei ausgelieferten Kits (bunker, flakturm, industrial) wurden deshalb als ungültig gemeldet (Bunker: 11 Fehler). Alle drei prüfen jetzt sauber.
 
 ## Kontext & Problem
 

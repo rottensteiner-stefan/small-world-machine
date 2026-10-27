@@ -606,3 +606,11 @@ keine neuen Shortcuts, keine neuen Features; alle bisherigen Bindings und ihr Ve
 - **Umgesetzt:** `public/index.html`: T-02 (PBR Map Generator) zeigt auf `maker.html#material`, T-04 (IBL Generator) auf `maker.html#ibl`. Live geprüft: Klick auf die Karte landet im richtigen Modus, 0 Konsolenmeldungen (`.agents/scratches/big-merge-m4/index-links.mjs`). Weitere Verweise auf die Seiten (README, Guides, Vite-Eingänge) sind nachgezogen bzw. bleiben bewusst.
 - **Nicht geändert:** Kit-Inspector, Splatter und Gamepad-Test haben keinen Shell-Modus; ihre Karten bleiben. Der Launcher-Tab „Kit" ist weiter deaktiviert.
 - **Offen:** Kit-Validator-Dialog, `swm material`/`swm ibl`, Textur-/Slider-State im Material-Modus.
+
+
+## 2026-10-27 — Big Merge: Kit-Validator-Dialog (`#kit`)
+
+- **Modus:** `maker.html#kit` (`KIT_MODE_ID`, `ForgeToolMode` um das neue `KitValidatorTool` in `kit-inspector/KitValidatorTool.ts`). Dropzone (Ordner, ZIP, Dateien, Paste), Befund inline: Urteil, id/version/Zähler, Fehler/Warnungen/Infos, Liste nach Severity sortiert. Importiert nur `common/io` (`validateKitManifest`, nicht `core/kit.ts`, dessen Node-Import im Browser-Bundle nichts verloren hat). Kein GL. Launcher-Tab „Kit" aktiv. Der Kit-Inspector (3D) bleibt eigenständig.
+- **Fix (Fund):** `KitManifestValidator` lehnte WebP-Previews/-Texturen/-Decals ab, obwohl `kit.schema.json` sie erlaubt: `swm kit validate` meldete das Bunker-Kit mit 11 Fehlern. Muster jetzt `jpg|jpeg|png|webp` (Preview) und `png|webp` (Texturen, Decals); Regressionstest in `KitManifestValidator.test.ts`. Bunker, Flakturm, Industrial: 0 Befunde.
+- **Verifikation:** 5 jsdom-Tests (`tests/kit-inspector/KitValidatorTool.test.ts`); live per Puppeteer (`.agents/scratches/kit-validator/rig.mjs`): Deep-Link, ZIP über den Dateidialog, Befund, Moduswechsel räumt auf, 0 Konsolenmeldungen. Vitest 3336, tsc/eslint/doctrine/css:audit sauber.
+- **Offen:** `swm material`/`swm ibl`, Textur-/Slider-State im Material-Modus; der Validator-Befund bietet noch kein „Kopieren"/Export.

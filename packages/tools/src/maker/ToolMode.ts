@@ -37,3 +37,4 @@ export const PIXLER_MODE_ID = "pixler";
 export const MAP_MODE_ID = "map";
 export const MATERIAL_MODE_ID = "material";
 export const IBL_MODE_ID = "ibl";
+export const KIT_MODE_ID = "kit";

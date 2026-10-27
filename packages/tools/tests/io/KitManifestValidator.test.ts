@@ -127,6 +127,25 @@ describe("KitManifestValidator", () => {
       expect(report.issues.filter((i) => i.severity === "error")).toHaveLength(0);
     });
 
+    it("accepts WebP for previews, texture maps and decal files like the schema", () => {
+      const report = validateKitManifestStructure({
+        ...base,
+        items: [
+          {
+            id: "kit/i",
+            name: "I",
+            category: "c",
+            path: "i.glb",
+            preview: "i.webp",
+            meta: "i.json",
+          },
+        ],
+        textures: [{ id: "kit/t", name: "T", category: "c", maps: ["t_albedo.webp", "t_n.png"] }],
+        decals: [{ id: "kit/d", name: "D", file: "d.webp", normal: "d_n.webp" }],
+      });
+      expect(report.issues.filter((i) => i.severity === "error")).toHaveLength(0);
+    });
+
     it("rejects invalid decal extras", () => {
       const report = validateKitManifestStructure(
         decal({ normal: 3, orm: "x.jpg", size: [1, 0, 1], unlit: "yes" }),

@@ -74,6 +74,7 @@ import { WorldModeAdapter } from "./WorldModeAdapter.js";
 import { ForgeToolMode } from "./ForgeToolMode.js";
 import {
   IBL_MODE_ID,
+  KIT_MODE_ID,
   MAP_MODE_ID,
   MATERIAL_MODE_ID,
   PIXLER_MODE_ID,
@@ -82,6 +83,7 @@ import {
 import { MapGenerator } from "../MapGenerator.js";
 import { MaterialStudio } from "../MaterialStudio.js";
 import { IblGenTool } from "../ibl-gen/IblGenTool.js";
+import { KitValidatorTool } from "../kit-inspector/KitValidatorTool.js";
 import { Pixler } from "../Pixler.js";
 import { Xtractor } from "../Xtractor.js";
 
@@ -324,6 +326,9 @@ export class MakerApp extends SmallWorldMachine {
       }),
     );
     this._modeHost.register(new ForgeToolMode(IBL_MODE_ID, (parent) => new IblGenTool({ parent })));
+    this._modeHost.register(
+      new ForgeToolMode(KIT_MODE_ID, (parent) => new KitValidatorTool({ parent })),
+    );
     // Xtractor's "send crop to Pixler": Pixler is not mounted while Xtractor is, so park the crop
     // in the Pixler mode and switch -- it loads the image when it mounts.
     this._onCropToPixler = (event: Record<string, unknown>): void => {

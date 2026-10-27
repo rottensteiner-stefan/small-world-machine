@@ -13,9 +13,9 @@ const KIT_ID_PATTERN = /^[a-z][a-z0-9_-]*$/;
 const NAMESPACED_ID_PATTERN = /^[a-z][a-z0-9_-]*\/[a-z][a-z0-9_]*$/;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const GLB_PATTERN = /\.glb$/i;
-const IMAGE_PATTERN = /\.(jpg|jpeg|png)$/i;
+const IMAGE_PATTERN = /\.(jpg|jpeg|png|webp)$/i;
 const JSON_PATTERN = /\.json$/i;
-const PNG_PATTERN = /\.png$/i;
+const TEXTURE_PATTERN = /\.(png|webp)$/i;
 
 function error(message: string, path?: string): ValidationIssue {
   const issue: ValidationIssue = { message, severity: "error" };
@@ -135,7 +135,7 @@ export function validateKitManifestStructure(json: unknown): ValidationReport {
         if (typeof entry["preview"] === "string" && !IMAGE_PATTERN.test(entry["preview"])) {
           issues.push(
             error(
-              `item #${index} field 'preview' must be a .jpg/.jpeg/.png image.`,
+              `item #${index} field 'preview' must be a .jpg/.jpeg/.png/.webp image.`,
               `items[${index}].preview`,
             ),
           );
@@ -180,10 +180,10 @@ export function validateKitManifestStructure(json: unknown): ValidationReport {
           );
         } else {
           (entry["maps"] as unknown[]).forEach((map, mapIndex) => {
-            if (typeof map !== "string" || !PNG_PATTERN.test(map)) {
+            if (typeof map !== "string" || !TEXTURE_PATTERN.test(map)) {
               issues.push(
                 error(
-                  `texture #${index} map must be a .png filename.`,
+                  `texture #${index} map must be a .png/.webp filename.`,
                   `textures[${index}].maps[${mapIndex}]`,
                 ),
               );
@@ -215,18 +215,21 @@ export function validateKitManifestStructure(json: unknown): ValidationReport {
           }
         }
         validateNamespaced(entry, "decals", index);
-        if (typeof entry["file"] === "string" && !PNG_PATTERN.test(entry["file"])) {
+        if (typeof entry["file"] === "string" && !TEXTURE_PATTERN.test(entry["file"])) {
           issues.push(
-            error(`decal #${index} field 'file' must end with .png.`, `decals[${index}].file`),
+            error(
+              `decal #${index} field 'file' must end with .png or .webp.`,
+              `decals[${index}].file`,
+            ),
           );
         }
         for (const prop of ["normal", "orm", "emission"]) {
           const value = entry[prop];
           if (value === undefined) continue;
-          if (typeof value !== "string" || !PNG_PATTERN.test(value)) {
+          if (typeof value !== "string" || !TEXTURE_PATTERN.test(value)) {
             issues.push(
               error(
-                `decal #${index} field '${prop}' must be a string ending with .png.`,
+                `decal #${index} field '${prop}' must be a string ending with .png or .webp.`,
                 `decals[${index}].${prop}`,
               ),
             );

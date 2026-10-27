@@ -211,7 +211,7 @@ The engine's flagship standalone 3D scene composer and level editor ([User Guide
 - **T-06: Pixler** (`public/tools/maker.html#pixler`): Retro 2D pixel-art editor to draw, animate, and export sprites.
 - **T-07: Map Generator** (`public/tools/maker.html#map`): Visual grid editor to author ASCII layouts for the `GridLevelBuilder`.
 - **T-08: Maker** (`public/tools/maker.html`): Standalone 3D scene and world composition environment.
-- **T-09: Kit Inspector** (`public/tools/kit-inspector.html`): Inspect modular asset kit metadata, registries, and runtime kit state.
+- **T-09: Kit Inspector** (`public/tools/kit-inspector.html`): Inspect modular asset kit metadata, registries, and runtime kit state. Kit validation (drop a folder or ZIP, read the report) also runs as `maker.html#kit`.
 
 ### In-Game Overlay
 - **The Forge:** A built-in floating window manager providing runtime inspection, diagnostics, and integrated tooling directly inside your running game (toggleable via configurable shortcut, e.g. `~` or `F12`).
