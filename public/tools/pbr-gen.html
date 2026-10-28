@@ -1334,9 +1334,7 @@
           document.querySelectorAll(".geom-btn").forEach((b) => b.classList.remove("active"));
           btn.classList.add("active");
           const geom = btn.getAttribute("data-geom");
-          if (typeof window.update3DGeometry === "function") {
-            window.update3DGeometry(geom);
-          }
+          previewApp.updateGeometry(geom);
         });
       });
 
@@ -1458,23 +1456,20 @@
       }
 
       function pushTexturesTo3D() {
-        if (typeof window.update3DTextures === "function") {
-          const normalStrength =
-            parseFloat(document.getElementById("normal-strength-slider").value) / 100.0;
-          const metallicValue =
-            parseFloat(document.getElementById("metallic-slider").value) / 100.0;
-          const roughnessValue =
-            parseFloat(document.getElementById("roughness-override-slider").value) / 100.0;
+        const normalStrength =
+          parseFloat(document.getElementById("normal-strength-slider").value) / 100.0;
+        const metallicValue = parseFloat(document.getElementById("metallic-slider").value) / 100.0;
+        const roughnessValue =
+          parseFloat(document.getElementById("roughness-override-slider").value) / 100.0;
 
-          window.update3DTextures(
-            canvases.original,
-            canvases.normal,
-            canvases.roughness,
-            normalStrength,
-            metallicValue,
-            roughnessValue,
-          );
-        }
+        previewApp.updateTextures(
+          canvases.original,
+          canvases.normal,
+          canvases.roughness,
+          normalStrength,
+          metallicValue,
+          roughnessValue,
+        );
       }
 
       // ----------------------------------------------------
