@@ -10,7 +10,7 @@ npm run swm -- splatter --algorithm mud-splatter --seed 12 --size 1024 mud.png
 | Command | What it does |
 | --- | --- |
 | `swm map to-json <in> [out]` / `from-json` | ASCII map ↔ JSON grid (the Map Generator's format). `-` reads stdin. |
-| `swm kit validate <dir>` | Validates a kit manifest (`kit.json`) and its assets, exit 1 when invalid. The same report is shown in the browser at `maker.html#kit`. |
+| `swm kit validate <dir>` | Validates a kit manifest (`kit.json`) and its assets, exit 1 when invalid. The same report is shown in the browser at `maker.html#kit`, where **Befund kopieren** (or Cmd/Ctrl+C with nothing selected) puts it on the clipboard as the same text this command prints. |
 | `swm splatter [options] <out.png>` | Seeded splatter decal as a transparent PNG. |
 
 ## `swm splatter`

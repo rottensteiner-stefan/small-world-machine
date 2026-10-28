@@ -101,6 +101,80 @@ describe("KitValidatorTool", () => {
     tool.unmount();
   });
 
+  describe("copying the report", () => {
+    const brokenKit = (): Promise<IngestResult> =>
+      ingestOf({ "kit.json": JSON.stringify({ ...manifest, version: "x" }) });
+
+    /** A `copy` event whose `clipboardData` collects what the handler writes. */
+    function copyEvent(): { event: Event; written: Map<string, string> } {
+      const written = new Map<string, string>();
+      const event = new Event("copy", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", {
+        value: { setData: (type: string, data: string): void => void written.set(type, data) },
+      });
+      return { event, written };
+    }
+
+    it("copies the report text from the button, in the shape swm kit validate prints", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+      const { host, tool } = mount();
+      await (tool as unknown as IngestTarget)._onIngest(await brokenKit());
+
+      host.querySelector<HTMLButtonElement>('[data-kitval="copy"]')!.click();
+      await Promise.resolve();
+
+      const text = writeText.mock.calls[0]![0] as string;
+      expect(text).toMatch(/^\[error\] .+\n?/);
+      expect(text.split("\n").at(-1)).toMatch(/^INVALID \(Dungeon Kit, \d+ issues?\)$/);
+      tool.unmount();
+    });
+
+    it("answers Cmd/Ctrl+C with the report while nothing is selected", async () => {
+      const { tool } = mount();
+      await (tool as unknown as IngestTarget)._onIngest(await brokenKit());
+      const { event, written } = copyEvent();
+
+      document.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(written.get("text/plain")).toContain("INVALID");
+      tool.unmount();
+    });
+
+    it("leaves a real text selection and text fields alone", async () => {
+      const { host, tool } = mount();
+      await (tool as unknown as IngestTarget)._onIngest(await brokenKit());
+
+      const field = document.createElement("input");
+      host.appendChild(field);
+      const inField = copyEvent();
+      field.dispatchEvent(inField.event);
+      expect(inField.event.defaultPrevented).toBe(false);
+
+      const selected = host.querySelector(".kitval-issues li")!;
+      document.getSelection()!.selectAllChildren(selected);
+      const withSelection = copyEvent();
+      document.dispatchEvent(withSelection.event);
+      expect(withSelection.event.defaultPrevented).toBe(false);
+      expect(withSelection.written.size).toBe(0);
+      tool.unmount();
+    });
+
+    it("has nothing to copy before a kit was checked, and stops answering after unmount", async () => {
+      const { tool } = mount();
+      const early = copyEvent();
+      document.dispatchEvent(early.event);
+      expect(early.event.defaultPrevented).toBe(false);
+
+      await (tool as unknown as IngestTarget)._onIngest(await brokenKit());
+      tool.unmount();
+      const late = copyEvent();
+      document.dispatchEvent(late.event);
+      expect(late.event.defaultPrevented).toBe(false);
+    });
+  });
+
   it("removes its DOM and the dropzone's window listeners on unmount", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);

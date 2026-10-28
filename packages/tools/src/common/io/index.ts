@@ -1,6 +1,7 @@
 export type * from "./types.js";
 export * from "./Security.js";
 export * from "./KitManifestValidator.js";
+export * from "./validationReportText.js";
 export * from "./UniversalIngestTypes.js";
 export * from "./PbrSlotMatcher.js";
 export * from "./ArchiveDecompressor.js";

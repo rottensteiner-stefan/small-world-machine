@@ -20,7 +20,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mapToString, stringToMap } from "../core/map.js";
 import { createNodeDirectoryAssetSource, validateKitSource } from "../core/kit.js";
-import type { ValidationIssue, ValidationReport } from "../common/io/types.js";
+import type { ValidationReport } from "../common/io/types.js";
+import {
+  formatValidationIssue,
+  formatValidationVerdict,
+} from "../common/io/validationReportText.js";
 import { runSplatterCommand } from "./splatterCommand.js";
 
 const require = createRequire(import.meta.url);
@@ -97,11 +101,6 @@ Fails (exit 1) when no "kit.json" is found or the manifest is invalid.
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function formatIssue(issue: ValidationIssue): string {
-  const where = issue.path === undefined ? "" : ` (${issue.path})`;
-  return `[${issue.severity}] ${issue.message}${where}`;
 }
 
 function resolveVersion(): string {
@@ -194,14 +193,14 @@ async function kitValidate(args: string[], io: CliIo): Promise<number> {
 
 function printKitReport(report: ValidationReport, dirPath: string, io: CliIo): number {
   for (const issue of report.issues) {
-    io.out(formatIssue(issue));
+    io.out(formatValidationIssue(issue));
   }
-  const count = report.issues.length;
+  const verdict = `swm kit: ${formatValidationVerdict(report, dirPath)}`;
   if (report.valid) {
-    io.out(`swm kit: OK (${dirPath}, ${count} issue${count === 1 ? "" : "s"})`);
+    io.out(verdict);
     return 0;
   }
-  io.err(`swm kit: INVALID (${dirPath}, ${count} issue${count === 1 ? "" : "s"})`);
+  io.err(verdict);
   return 1;
 }
 

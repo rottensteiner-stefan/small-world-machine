@@ -4,6 +4,7 @@ import { FileAssetSource } from "../common/io/sources/FileAssetSource.js";
 import { validateKitManifest } from "../common/io/KitManifestValidator.js";
 import { UniversalIngestDropzone } from "../common/io/ui/UniversalIngestDropzone.js";
 import type { IngestResult } from "../common/io/UniversalIngestTypes.js";
+import { formatValidationReport } from "../common/io/validationReportText.js";
 import type { IAssetSource, ValidationIssue, ValidationSeverity } from "../common/io/types.js";
 
 const STYLE_ID = "kit-validator-tool-style";
@@ -30,6 +31,7 @@ const CSS = `
 .kitval-issues li[data-severity="error"] .kitval-sev { color: var(--tool-danger); }
 .kitval-issues li[data-severity="warning"] .kitval-sev { color: var(--tool-warning); }
 .kitval-issues li[data-severity="info"] .kitval-sev { color: var(--tool-info); }
+.kitval-copy { align-self: flex-start; }
 .kitval-path { display: block; font-family: var(--tool-font-mono); font-size: 0.8rem; color: var(--tool-text-muted); }
 `;
 
@@ -46,6 +48,8 @@ const HTML = `
   </div>
 </div>
 `;
+
+const COPY_LABEL = "Befund kopieren";
 
 /** Display order of severities: blocking findings first. */
 const SEVERITIES: readonly ValidationSeverity[] = ["error", "warning", "info"];
@@ -84,6 +88,10 @@ function countOf(manifest: Record<string, unknown> | null, key: string): number 
 export class KitValidatorTool extends ForgeTool {
   private _dropzone: UniversalIngestDropzone | undefined;
   private _disposed = false;
+  /** Plain-text report of the last check, what "Befund kopieren" and Cmd/Ctrl+C put on the clipboard. */
+  private _reportText: string | undefined;
+  private _copyResetTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly _onCopy = (event: ClipboardEvent): void => this._copyReport(event);
 
   constructor(options: ForgeToolOptions = {}) {
     super(options);
@@ -98,6 +106,7 @@ export class KitValidatorTool extends ForgeTool {
       onIngest: async (result: IngestResult): Promise<void> => this._onIngest(result),
       onError: (error: Error): void => this._showError(error.message),
     });
+    document.addEventListener("copy", this._onCopy);
   }
 
   public getState(): unknown {
@@ -108,6 +117,8 @@ export class KitValidatorTool extends ForgeTool {
 
   public override unmount(): void {
     this._disposed = true;
+    document.removeEventListener("copy", this._onCopy);
+    clearTimeout(this._copyResetTimer);
     this._dropzone?.dispose();
     this._dropzone = undefined;
     super.unmount();
@@ -142,8 +153,46 @@ export class KitValidatorTool extends ForgeTool {
     }
   }
 
+  /**
+   * Cmd/Ctrl+C with nothing selected (and focus outside a text field) copies the report, so the
+   * usual shortcut works without reaching for the button; a real selection keeps the default.
+   */
+  private _copyReport(event: ClipboardEvent): void {
+    const text = this._reportText;
+    if (!text || !event.clipboardData) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest("input, textarea, [contenteditable]"))
+      return;
+    if (!(document.getSelection()?.isCollapsed ?? true)) return;
+    event.clipboardData.setData("text/plain", text);
+    event.preventDefault();
+    this._flashCopyLabel("✓ Kopiert");
+  }
+
+  private async _copyButtonClicked(): Promise<void> {
+    const text = this._reportText;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      this._flashCopyLabel("✓ Kopiert");
+    } catch {
+      this._flashCopyLabel("Kopieren nicht möglich");
+    }
+  }
+
+  private _flashCopyLabel(label: string): void {
+    const button = this._container.querySelector<HTMLButtonElement>('[data-kitval="copy"]');
+    if (!button || this._disposed) return;
+    button.textContent = label;
+    clearTimeout(this._copyResetTimer);
+    this._copyResetTimer = setTimeout(() => {
+      button.textContent = COPY_LABEL;
+    }, 1500);
+  }
+
   private _showError(message: string): void {
     if (this._disposed) return;
+    this._reportText = undefined;
     const result = this._part("result");
     result.replaceChildren(this._el("h2", "Befund"), this._el("div", `Fehler: ${message}`));
   }
@@ -178,7 +227,15 @@ export class KitValidatorTool extends ForgeTool {
       counts.append(label);
     }
 
-    const children: HTMLElement[] = [heading, meta, counts];
+    this._reportText = formatValidationReport(
+      { valid, issues: [...issues] },
+      String(manifest?.["name"] ?? sourceName),
+    );
+    const copy = this._el("button", COPY_LABEL, "swf-btn kitval-copy");
+    copy.dataset["kitval"] = "copy";
+    copy.addEventListener("click", () => void this._copyButtonClicked());
+
+    const children: HTMLElement[] = [heading, meta, counts, copy];
     if (issues.length === 0) {
       children.push(this._el("div", "Keine Befunde.", "kitval-empty"));
     } else {
