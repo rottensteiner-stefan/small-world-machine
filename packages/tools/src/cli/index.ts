@@ -6,6 +6,8 @@
  *   - `map` ......... ASCII map <-> JSON grid round-trip (`core/map.ts`)
  *   - `kit validate` . Kit manifest validation over a local directory (`core/kit.ts`)
  *   - `splatter` ..... seed -> PNG decal (`core/splatter.ts`, `cli/splatterCommand.ts`)
+ *   - `material` ..... diffuse PNG -> PBR maps (`core/material.ts`, `cli/materialCommand.ts`)
+ *   - `ibl` .......... equirectangular panorama -> baked IBL maps (`core/ibl.ts`, `cli/iblCommand.ts`)
  * Everything beyond that is follow-up scope by design (`ops-d-spec.md`).
  *
  * RUNNER: this module is intentionally executed through the committed ESM shim
@@ -25,6 +27,8 @@ import {
   formatValidationIssue,
   formatValidationVerdict,
 } from "../common/io/validationReportText.js";
+import { runIblCommand } from "./iblCommand.js";
+import { runMaterialCommand } from "./materialCommand.js";
 import { runSplatterCommand } from "./splatterCommand.js";
 
 const require = createRequire(import.meta.url);
@@ -67,9 +71,11 @@ Usage:
   swm <command> [args...]
 
 Commands:
-  map     ASCII map <-> JSON grid conversion (headless core)
-  kit     Kit manifest validation (headless core)
+  map       ASCII map <-> JSON grid conversion (headless core)
+  kit       Kit manifest validation (headless core)
   splatter  Seeded splatter decal as PNG (headless core)
+  material  Derive PBR texture maps from a diffuse PNG (headless core)
+  ibl       Bake IBL cubemaps + BRDF LUT (headless core + WebGL2 bake)
 
 Global options:
   -h, --help      Print this help and exit
@@ -253,6 +259,10 @@ export async function runSwm(argv: readonly string[], io?: CliIo): Promise<numbe
       return runKitCommand(rest, activeIo);
     case "splatter":
       return runSplatterCommand(rest, activeIo);
+    case "material":
+      return runMaterialCommand(rest, activeIo);
+    case "ibl":
+      return runIblCommand(rest, activeIo);
     default:
       activeIo.err(`swm: error: unknown command "${command}"`);
       activeIo.err('Run "swm --help" for usage.');

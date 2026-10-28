@@ -14,7 +14,7 @@
  * the same pipeline, keeping a single derivation used by web and CLI.
  */
 
-import { NormalMapFormat } from "@small-world-machine/engine";
+import { NormalMapFormat } from "@small-world-machine/engine/enums/NormalMapFormat.js";
 import {
   generateAOMap,
   generateEdgeMap,
@@ -24,6 +24,8 @@ import {
   generateSpecularMap,
 } from "../common/dsp/TextureFilters.js";
 import type { RgbaImage } from "./RasterIO.js";
+
+export { NormalMapFormat };
 
 export interface MaterialStudioMapParams {
   heightBlur: number;

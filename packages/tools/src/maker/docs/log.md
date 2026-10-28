@@ -633,3 +633,11 @@ keine neuen Shortcuts, keine neuen Features; alle bisherigen Bindings und ihr Ve
 ## 2026-10-28 — `pbr-gen.html`: 3D-Tab verdrahtet
 
 - **Fix:** Die Seite erzeugte `previewApp` (`MaterialStudioApp`), rief aber `window.update3DTextures`/`update3DGeometry` auf, die nirgends gesetzt wurden (Rest der früheren Aufteilung). `pushTexturesTo3D()` und die Geometrie-Buttons rufen jetzt `previewApp.updateTextures`/`updateGeometry` direkt. Live geprüft auf der Seite: Kugel mit der abgeleiteten Textur, nach „Cube" der Würfel, 0 Konsolenmeldungen (`.agents/scratches/material-state/page3d.mjs`, Screenshots dort). Behebt den Befund aus dem M4-Eintrag.
+
+
+## 2026-10-28 — `swm material` & `swm ibl` CLI
+
+- **Enum-Subpfad für Plain-Node:** `core/material.ts` und `common/dsp/TextureFilters.ts` importieren `NormalMapFormat` jetzt über `@small-world-machine/engine/enums/NormalMapFormat.js` statt über den Engine-Paket-Root (der `.glsl`-Dateien zieht). Damit ist `core/*` vollständig in Plain-Node + `tsx` ladbar.
+- **`swm material` (`cli/materialCommand.ts`):** Leitet aus einer Diffuse-PNG über `derivePbrMaps` und `MATERIAL_STUDIO_PRESETS` (`default`, `stone`, `metal`, `wood`) die PBR-Maps (`height`, `normal`, `specular`, `roughness`, `ao`, `edge`, optional `diffuse`/`albedo`) byte-identisch zur Web-UI ab. Unterstützt alle Studio-Slider als Kebab-Flags, `--maps`-Teilmengen und `--name`.
+- **`swm ibl` (`cli/iblCommand.ts`):** Bäckt `env.png`, `irradiance.png`, `brdf_lut.png`, `prefilter/mip0..N.png` und `manifest.json` aus `--input <panorama.png>` oder einem deterministischen Seed-Panorama (`core/ibl.ts`) via `IBLBaker` im Headless-Chrome-Subprozess (SwiftShader WebGL2); `--panorama-only` schreibt `input.png` + `manifest.json` rein in Node ohne Browser.
+- **Verifikation:** 13 neue CLI-Tests in `cli.test.ts` + E2E-Bin-Test in `swmBin.test.ts` sowie Live-Bake-Lauf über `npm run swm -- ibl`. Damit sind alle offenen Punkte aus Big Merge M3–M6 geschlossen.

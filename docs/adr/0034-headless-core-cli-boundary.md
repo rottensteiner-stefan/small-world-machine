@@ -25,6 +25,14 @@
 > (Engine-Root zieht `.glsl`-Dateien); ein künftiges `swm material` braucht dafür einen schlanken
 > Enum-Subpfad. Das Layout der Splatter-Satelliten folgt einem Integer-PRNG statt des chaotischen
 > `sin()`-Hashs der Seite (Node/Chrome weichen dort schon nach wenigen Zügen ab).
+>
+> **Stand 2026-10-28 (`swm material` & `swm ibl`):** `core/material.ts` und `common/dsp/TextureFilters.ts`
+> beziehen `NormalMapFormat` nun über den Subpfad `@small-world-machine/engine/enums/NormalMapFormat.js`,
+> womit der gesamte `core/*`-Barrel in Plain-Node + `tsx` ohne `.glsl`-Import ladbar ist. `swm material`
+> (`cli/materialCommand.ts`) leitet alle sechs PBR-Maps (plus optional `diffuse`/`albedo`) über
+> `derivePbrMaps` und `MATERIAL_STUDIO_PRESETS` byte-identisch zur Web-UI ab. `swm ibl` (`cli/iblCommand.ts`)
+> verbindet den reinen Panorama-/Optionen-Kern (`core/ibl.ts`) mit dem Headless-Chrome-Subprozess-Bake
+> (`IBLBaker` unter SwiftShader WebGL2, inkl. `--panorama-only` für den reinen Core-Lauf ohne Browser).
 
 ## Kontext & Problem
 

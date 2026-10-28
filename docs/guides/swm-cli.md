@@ -5,6 +5,8 @@
 ```bash
 npm run swm -- --help
 npm run swm -- splatter --algorithm mud-splatter --seed 12 --size 1024 mud.png
+npm run swm -- material --preset stone rock_diffuse.png ./out
+npm run swm -- ibl --input panorama.png ./ibl-out
 ```
 
 | Command | What it does |
@@ -12,6 +14,16 @@ npm run swm -- splatter --algorithm mud-splatter --seed 12 --size 1024 mud.png
 | `swm map to-json <in> [out]` / `from-json` | ASCII map ↔ JSON grid (the Map Generator's format). `-` reads stdin. |
 | `swm kit validate <dir>` | Validates a kit manifest (`kit.json`) and its assets, exit 1 when invalid. The same report is shown in the browser at `maker.html#kit`, where **Befund kopieren** (or Cmd/Ctrl+C with nothing selected) puts it on the clipboard as the same text this command prints. |
 | `swm splatter [options] <out.png>` | Seeded splatter decal as a transparent PNG. |
+| `swm material [gen] [options] <diffuse.png> <out-dir>` | Derives PBR texture maps (`height`, `normal`, `specular`, `roughness`, `ao`, `edge`, plus optional `diffuse`/`albedo`) from a diffuse PNG using `core/material.ts`. |
+| `swm ibl [bake] [options] <out-dir>` | Bakes `env.png`, `irradiance.png`, `brdf_lut.png`, `prefilter/mip0..N.png` and `manifest.json` from an `--input` panorama or a seeded procedural panorama (`--seed`, `--panorama-only`). |
+
+## `swm material`
+
+Runs the same `derivePbrMaps` pipeline and `MATERIAL_STUDIO_PRESETS` (`default`, `stone`, `metal`, `wood`) as `maker.html#material` and `pbr-gen.html`. Every studio slider has a matching kebab-case flag (`--normal-strength`, `--normal-format opengl|directx`, `--rough-gamma`, `--ao-soft`, `--no-edge-invert`, …); `--maps` selects a comma-separated subset of maps to write.
+
+## `swm ibl`
+
+Uses `core/ibl.ts` (`generateTestEquirect`, `resolveIblGenOptions`) for seeded panorama generation and option validation, then runs the engine's WebGL2 `IBLBaker` inside a throw-away headless Chrome subprocess (SwiftShader) to write the cross-layout cubemaps, GGX mip chain, BRDF LUT, and `manifest.json` (with `sha256` per output). Pass `--panorama-only` to emit only the deterministic `input.png` and `manifest.json` without launching a browser.
 
 ## `swm splatter`
 
@@ -23,6 +35,6 @@ The three techniques of the [Splatter page](/tools/splatter-gen.html) (`noise-wa
 
 ## Adding a command
 
-A command imports its core module directly (`../core/splatter.js`), not `../core/index.js`: `core/material.ts` pulls in the engine's enum from the package root, and the engine root imports GLSL shader files that plain Node cannot load (`Unknown file extension ".glsl"`). `tests/cli/swmBin.test.ts` runs the real bin in a child process for exactly this reason; a command that cannot load there fails that test.
+Core modules under `packages/tools/src/core/` must never import the `@small-world-machine/engine` package root, because the engine root pulls in `.glsl` shader files that plain Node cannot load (`Unknown file extension ".glsl"`). Use narrow subpath imports instead (such as `@small-world-machine/engine/enums/NormalMapFormat.js` in `core/material.ts`). `tests/cli/swmBin.test.ts` runs the real `swm.mjs` bin in a child process to guard this boundary.
 
 Design background: [ADR 0034](/adr/0034-headless-core-cli-boundary).

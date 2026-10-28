@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runSwm } from "../../src/cli/index.js";
 import type { CliIo } from "../../src/cli/index.js";
+import { runIblCommand } from "../../src/cli/iblCommand.js";
+import { NodePngRasterIO, type RgbaImage } from "../../src/core/RasterIO.js";
+import { derivePbrMaps, MATERIAL_STUDIO_PRESETS } from "../../src/core/material.js";
 
 interface CapturedIo {
   io: CliIo;
@@ -272,6 +275,217 @@ describe("swm splatter", () => {
     [["splatter", "--size", "big", "x.png"], 'needs a number, got "big"'],
     [["splatter", "--seed"], "--seed needs a value"],
     [["splatter", "--color", "red", "x.png"], "#rrggbb"],
+  ])("rejects %j with exit 1", async (argv, message) => {
+    const { io, stderrText } = makeCapturingIo();
+    expect(await runSwm(argv, io)).toBe(1);
+    expect(stderrText()).toContain(message);
+  });
+});
+
+function sampleDiffuse(width: number, height: number): RgbaImage {
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      data[i] = (x * 23 + y * 7) & 0xff;
+      data[i + 1] = (x * 11 + y * 31) & 0xff;
+      data[i + 2] = (x * 5 + y * 17) & 0xff;
+      data[i + 3] = 255;
+    }
+  }
+  return { width, height, data };
+}
+
+describe("swm material", () => {
+  it("prints material usage for --help and gen --help", async () => {
+    const a = makeCapturingIo();
+    expect(await runSwm(["material", "--help"], a.io)).toBe(0);
+    expect(a.stdoutText()).toContain("swm material [gen] [options] <diffuse.png> <out-dir>");
+
+    const b = makeCapturingIo();
+    expect(await runSwm(["material", "gen", "--help"], b.io)).toBe(0);
+    expect(b.stdoutText()).toContain("swm material [gen] [options] <diffuse.png> <out-dir>");
+  });
+
+  it("derives all 6 default PBR maps byte-identical to core/material", async () => {
+    await withTempDir(async (dir) => {
+      const rasterIo = new NodePngRasterIO();
+      const src = sampleDiffuse(16, 12);
+      const inPath = join(dir, "brick_diffuse.png");
+      const outDir = join(dir, "out");
+      await writeFile(inPath, await rasterIo.encodePng(src));
+
+      const { io, stdoutText } = makeCapturingIo();
+      const code = await runSwm(["material", "gen", "-p", "stone", inPath, outDir], io);
+      expect(code).toBe(0);
+      expect(stdoutText()).toContain("stone (height,normal,specular,roughness,ao,edge)");
+
+      const expected = derivePbrMaps(src, MATERIAL_STUDIO_PRESETS.stone);
+      for (const mapName of ["height", "normal", "specular", "roughness", "ao", "edge"] as const) {
+        const decoded = await rasterIo.decode(await readFile(join(outDir, `brick_${mapName}.png`)));
+        expect(decoded.width).toBe(16);
+        expect(decoded.height).toBe(12);
+        expect(Array.from(decoded.data)).toEqual(Array.from(expected[mapName].data));
+      }
+    });
+  });
+
+  it("supports --maps subset, albedo alias, --name stem and slider overrides", async () => {
+    await withTempDir(async (dir) => {
+      const rasterIo = new NodePngRasterIO();
+      const src = sampleDiffuse(8, 8);
+      const inPath = join(dir, "tile.png");
+      const outDir = join(dir, "custom");
+      await writeFile(inPath, await rasterIo.encodePng(src));
+
+      const { io } = makeCapturingIo();
+      const code = await runSwm(
+        [
+          "material",
+          "--diffuse",
+          inPath,
+          "--out",
+          outDir,
+          "--name",
+          "wall",
+          "--maps",
+          "albedo,normal,edge",
+          "--normal-strength",
+          "150",
+          "--normal-format",
+          "directx",
+          "--height-invert",
+          "--no-edge-invert",
+        ],
+        io,
+      );
+      expect(code).toBe(0);
+
+      const expected = derivePbrMaps(src, {
+        ...MATERIAL_STUDIO_PRESETS.default,
+        normalStrength: 150,
+        normalFormat: "directx",
+        heightInvert: true,
+        edgeInvert: false,
+      });
+      const normalImg = await rasterIo.decode(await readFile(join(outDir, "wall_normal.png")));
+      const edgeImg = await rasterIo.decode(await readFile(join(outDir, "wall_edge.png")));
+      const albedoImg = await rasterIo.decode(await readFile(join(outDir, "wall_albedo.png")));
+      expect(Array.from(normalImg.data)).toEqual(Array.from(expected.normal.data));
+      expect(Array.from(edgeImg.data)).toEqual(Array.from(expected.edge.data));
+      expect(Array.from(albedoImg.data)).toEqual(Array.from(src.data));
+    });
+  });
+
+  it.each([
+    [["material"], "missing <diffuse.png>"],
+    [["material", "in.png"], "missing <out-dir>"],
+    [["material", "-p", "plastic", "in.png", "out"], "--preset must be one of"],
+    [["material", "-m", "bogus", "in.png", "out"], 'unknown map "bogus"'],
+    [["material", "--normal-format", "vulkan", "in.png", "out"], "--normal-format must be"],
+    [["material", "--normal-strength", "abc", "in.png", "out"], 'needs a number, got "abc"'],
+    [["material", "--unknown", "1", "in.png", "out"], "unknown option --unknown"],
+  ])("rejects %j with exit 1", async (argv, message) => {
+    const { io, stderrText } = makeCapturingIo();
+    expect(await runSwm(argv, io)).toBe(1);
+    expect(stderrText()).toContain(message);
+  });
+});
+
+describe("swm ibl", () => {
+  it("prints ibl usage for --help and bake --help", async () => {
+    const a = makeCapturingIo();
+    expect(await runSwm(["ibl", "--help"], a.io)).toBe(0);
+    expect(a.stdoutText()).toContain("swm ibl [bake] [options] <out-dir>");
+
+    const b = makeCapturingIo();
+    expect(await runSwm(["ibl", "bake", "--help"], b.io)).toBe(0);
+    expect(b.stdoutText()).toContain("swm ibl [bake] [options] <out-dir>");
+  });
+
+  it("writes deterministic input.png and manifest.json in --panorama-only mode", async () => {
+    await withTempDir(async (dir) => {
+      const outA = join(dir, "a");
+      const outB = join(dir, "b");
+      const { io, stdoutText } = makeCapturingIo();
+      const code = await runSwm(
+        ["ibl", "--seed", "7", "--width", "32", "--height", "16", "--panorama-only", outA],
+        io,
+      );
+      expect(code).toBe(0);
+      expect(stdoutText()).toContain("32x16 (panorama)");
+
+      await runSwm(
+        ["ibl", "bake", "--seed", "7", "--width", "32", "--height", "16", "--panorama-only", outB],
+        makeCapturingIo().io,
+      );
+
+      const pngA = await readFile(join(outA, "input.png"));
+      const pngB = await readFile(join(outB, "input.png"));
+      expect(pngA.equals(pngB)).toBe(true);
+
+      const manifest = JSON.parse(await readFile(join(outA, "manifest.json"), "utf8")) as {
+        tool: string;
+        seed: number;
+        options: { width: number; height: number };
+        outputs: unknown[];
+      };
+      expect(manifest.tool).toBe("ibl-bake");
+      expect(manifest.seed).toBe(7);
+      expect(manifest.options.width).toBe(32);
+      expect(manifest.options.height).toBe(16);
+      expect(manifest.outputs).toEqual([]);
+    });
+  });
+
+  it("writes baked outputs and manifest hashes with a custom --input panorama", async () => {
+    await withTempDir(async (dir) => {
+      const rasterIo = new NodePngRasterIO();
+      const panoPath = join(dir, "pano.png");
+      const outDir = join(dir, "baked");
+      const panoBytes = await rasterIo.encodePng(sampleDiffuse(24, 12));
+      await writeFile(panoPath, panoBytes);
+
+      const { io, stdoutText } = makeCapturingIo();
+      const code = await runIblCommand(
+        ["bake", "--input", panoPath, "--prefilter-mips", "2", "--out", outDir],
+        io,
+        async (_input, opts) => {
+          expect(opts.prefilterMips).toBe(2);
+          return new Map<string, Uint8Array>([
+            ["env.png", panoBytes],
+            ["irradiance.png", panoBytes],
+            ["brdf_lut.png", panoBytes],
+            ["prefilter/mip0.png", panoBytes],
+            ["prefilter/mip1.png", panoBytes],
+          ]);
+        },
+      );
+      expect(code).toBe(0);
+      expect(stdoutText()).toContain("24x12 (baked 5 maps)");
+
+      const manifest = JSON.parse(await readFile(join(outDir, "manifest.json"), "utf8")) as {
+        options: { width: number; height: number; prefilterMips: number };
+        outputs: Array<{ name: string; bytes: number; sha256: string }>;
+      };
+      expect(manifest.options.width).toBe(24);
+      expect(manifest.options.height).toBe(12);
+      expect(manifest.outputs.map((o) => o.name)).toEqual([
+        "env.png",
+        "irradiance.png",
+        "brdf_lut.png",
+        "prefilter/mip0.png",
+        "prefilter/mip1.png",
+      ]);
+      expect((await readFile(join(outDir, "prefilter", "mip1.png"))).equals(panoBytes)).toBe(true);
+    });
+  });
+
+  it.each([
+    [["ibl"], "missing <out-dir>"],
+    [["ibl", "--seed", "1.5", "out"], "--seed needs an integer"],
+    [["ibl", "--width", "0", "--panorama-only", "out"], "width must be a positive integer"],
+    [["ibl", "--bogus", "1", "out"], "unknown option --bogus"],
   ])("rejects %j with exit 1", async (argv, message) => {
     const { io, stderrText } = makeCapturingIo();
     expect(await runSwm(argv, io)).toBe(1);

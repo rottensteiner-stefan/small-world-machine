@@ -30,6 +30,48 @@ describe("swm bin shim (plain Node + tsx)", () => {
     }
   });
 
+  it("derives PBR material maps and generates an IBL panorama end to end", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "swm-bin-mat-ibl-"));
+    try {
+      const iblDir = join(dir, "ibl");
+      await run("node", [
+        SWM_BIN,
+        "ibl",
+        "--seed",
+        "3",
+        "--width",
+        "16",
+        "--height",
+        "8",
+        "--panorama-only",
+        iblDir,
+      ]);
+      const inputPng = join(iblDir, "input.png");
+      expect((await readFile(inputPng)).subarray(1, 4).toString("latin1")).toBe("PNG");
+
+      const matDir = join(dir, "mat");
+      await run("node", [
+        SWM_BIN,
+        "material",
+        "gen",
+        "--preset",
+        "stone",
+        "--maps",
+        "normal,roughness",
+        inputPng,
+        matDir,
+      ]);
+      expect(
+        (await readFile(join(matDir, "input_normal.png"))).subarray(1, 4).toString("latin1"),
+      ).toBe("PNG");
+      expect(
+        (await readFile(join(matDir, "input_roughness.png"))).subarray(1, 4).toString("latin1"),
+      ).toBe("PNG");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("validates a kit directory", async () => {
     await expect(
       run("node", [SWM_BIN, "kit", "validate", "/definitely/not/a/dir"]),
