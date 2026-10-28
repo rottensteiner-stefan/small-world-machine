@@ -75,12 +75,13 @@ export interface ShowcaseLayout {
 }
 
 /**
- * Parses the `<showcase-layout>` placeholder of a showcase index.html. Attribute order is free and
- * `prev`/`next` are optional (the placeholder only needs title + subtitle-b64), so a showcase that
- * forgets one still gets its header and footer instead of an unknown element.
+ * Parses the `<showcase-layout>` placeholder of a showcase index.html. The subtitle is the element
+ * body (plain HTML, no base64). Attribute order is free and `prev`/`next` are optional (the
+ * placeholder only needs title), so a showcase that forgets one still gets its header and footer
+ * instead of an unknown element.
  */
 export function parseShowcaseLayout(html: string): ShowcaseLayout | null {
-  const match = html.match(/<showcase-layout\b([^>]*)><\/showcase-layout>/);
+  const match = html.match(/<showcase-layout\b\s*([^>]*?)\s*>\s*([\s\S]*?)\s*<\/showcase-layout>/i);
   if (!match) {
     return null;
   }
@@ -89,13 +90,12 @@ export function parseShowcaseLayout(html: string): ShowcaseLayout | null {
     attributes.set(attribute[1] as string, attribute[2] as string);
   }
   const title = attributes.get("title");
-  const subtitleB64 = attributes.get("subtitle-b64");
-  if (title === undefined || subtitleB64 === undefined) {
+  if (title === undefined) {
     return null;
   }
   return {
     tag: match[0],
     title,
-    subtitle: Buffer.from(subtitleB64, "base64").toString("utf-8"),
+    subtitle: match[2] ?? "",
   };
 }

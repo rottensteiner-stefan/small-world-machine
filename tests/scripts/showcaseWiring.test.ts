@@ -29,7 +29,7 @@ function layoutOf(id: number): { prev: string | undefined; next: string | undefi
   };
 }
 
-describe("showcase wiring (gallery + prev/next chain)", () => {
+describe("showcase wiring (gallery + curated prev/next tour)", () => {
   const ids = showcaseIds();
 
   it("every showcase is linked from the launcher gallery", () => {
@@ -43,10 +43,21 @@ describe("showcase wiring (gallery + prev/next chain)", () => {
     expect(gallery).toContain(`<span class="section-count">${ids.length} Demos</span>`);
   });
 
-  it("every showcase declares prev and next, forming one closed ring over the existing ids", () => {
-    ids.forEach((id, i) => {
-      const expectedPrev = ids[(i - 1 + ids.length) % ids.length];
-      const expectedNext = ids[(i + 1) % ids.length];
+  it("every showcase declares prev and next forming the curated didactic tour (closed ring)", () => {
+    // Kuratierte Tour (didaktische Reihung, siehe .agents/notes/codebase-search-knowledge.md §7).
+    // IDs/Ordner bleiben stabil; die Reihenfolge lebt in prev/next + Gallery.
+    const tour = [
+      11, 1, 2, 6, 7, 8, 26, 3, 5, 19, 13, 20, 9, 4, 23, 21, 22, 35, 36, 16, 15, 12, 10, 30, 32,
+      27, 29, 31, 37, 39, 38, 28, 17, 18, 33, 34, 44, 24, 14, 40, 42, 43, 41,
+    ];
+    // Tour muss vollständig sein und exakt die vorhandenen Showcase-IDs enthalten.
+    expect(tour).toHaveLength(ids.length);
+    expect([...new Set(tour)].sort((a, b) => a - b)).toEqual(ids);
+
+    ids.forEach((id) => {
+      const idx = tour.indexOf(id);
+      const expectedPrev = tour[(idx - 1 + tour.length) % tour.length];
+      const expectedNext = tour[(idx + 1) % tour.length];
       const { prev, next } = layoutOf(id);
       expect({ id, prev, next }).toEqual({
         id,
@@ -65,18 +76,24 @@ describe("showcase wiring (gallery + prev/next chain)", () => {
 });
 
 describe("parseShowcaseLayout", () => {
-  const b64 = Buffer.from("<p>Hello</p>").toString("base64");
-
-  it("accepts any attribute order and a missing next", () => {
+  it("accepts any attribute order and reads the subtitle from the element body", () => {
     const layout = parseShowcaseLayout(
-      `<showcase-layout\n prev="../1/index.html"\n subtitle-b64="${b64}"\n title="T"\n></showcase-layout>`,
+      `<showcase-layout\n prev="../1/index.html"\n title="T">\n  <p>Hello</p>\n</showcase-layout>`,
     );
     expect(layout?.title).toBe("T");
-    expect(layout?.subtitle).toBe("<p>Hello</p>");
+    expect(layout?.subtitle).toContain("Hello");
   });
 
-  it("returns null without the required attributes or without a tag", () => {
-    expect(parseShowcaseLayout(`<showcase-layout title="T"></showcase-layout>`)).toBeNull();
+  it("keeps arbitrary HTML (widget markup) in the subtitle body", () => {
+    const layout = parseShowcaseLayout(
+      `<showcase-layout title="T"><div id="scoreDisplay" style="x">1 / 10</div></showcase-layout>`,
+    );
+    expect(layout?.subtitle).toContain('id="scoreDisplay"');
+    expect(layout?.subtitle).toContain("1 / 10");
+  });
+
+  it("returns null without the required title attribute or without a tag", () => {
+    expect(parseShowcaseLayout(`<showcase-layout prev="../1/index.html"></showcase-layout>`)).toBeNull();
     expect(parseShowcaseLayout("<html></html>")).toBeNull();
   });
 });

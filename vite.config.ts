@@ -81,7 +81,7 @@ export default defineConfig({
           html = html.replace("</body>", footerHtml + "\n  </body>");
         } else if (html.includes("<showcase-layout")) {
           throw new Error(
-            "<showcase-layout> found but title/subtitle-b64 attributes could not be parsed",
+            "<showcase-layout> found but title attribute or the showcase-layout tag could not be parsed",
           );
         }
         return html;
