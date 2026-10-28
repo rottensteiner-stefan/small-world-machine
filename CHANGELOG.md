@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### "The first step binds one to the second." - French Proverb
+
+- **Features:**
+  - *Application Persistence (ADR 0041) Stufe 3 — Level-Daten von Controller-Code getrennt:* Level-Deskriptoren liegen jetzt unter `apps/<app>/levels/` (umgezogen: `koje42`, `kaeltekammer` aus `scenes/prologue/`, `$schema`-Zeiger und Lade-URLs in `prologue.ts` repariert). `LevelValidation.test.ts` erzwingt die Konvention per Scan-Regel (Stolperstein explizit geprüft: Scan findet weiterhin > 0 Dateien); `AppManifestValidation` deckt die IDs über das Manifest ab.
+  - *Application Persistence (ADR 0041) Stufe 4 — `content/<sprache>.json` mit stabilen Text-IDs:* Für `the-whisper` liegen `content/de.json` + `content/en.json` mit Story-/UI-/Karten-Texten unter stabilen, nie wiederverwendeten Text-IDs; `app.json` bindet die Pakete über `content.languages` ans Manifest (`app.schema.json` + `AppManifest` erweitert). `ContentPackage` (App-Resolver, fail-fast via `t(id)`) macht Texte adressierbar; `ContentPackageValidation.test.ts` erzwingt Schlüssel-Parität über alle Sprachen, Nicht-Leere und Manifest-Bindung (keine verwaisten Pakete).
+  - *Application Persistence (ADR 0041) Stufe 5 — Savegame-Format v1:* Reiner Format-Entwurf (Gate: Format steht vor dem ersten Speichern-Feature): `public/schemas/savegame.schema.json` + `SavegameTypes` (`SAVEGAME_SCHEMA_VERSION = 1`, `SAVEGAME_MIGRATIONS`, `SavegameDescriptor`/`SavegamePatchAction` mit `set`/`add`/`remove`/`toggle`, `SavegameStorage` IndexedDB/OPFS/File). `migrateSavegameDescriptor` migriert mit Fail-Fast bei unbekannter `schemaVersion` und Forward-Toleranz für unbekannte Felder; `backupSavegameDescriptor` setzt Backup-vor-Migration als Default um; `assertSavegameIdReferences` erzwingt die ID-Referenz-Regel (namespace:path, keine Content-Objekte). Absicherung durch `SavegameValidation.test.ts`.
+- **Architecture & Bugfixes:**
+  - *Content-Pakete kompilieren gegen das Manifest:* `ContentPackageValidation` prüft, dass jede deklarierte Sprache als `content/<lang>.json` existiert und jede Sprache im Manifest deklariert ist — keine lose daneben liegenden Text-Ressourcen (§12a-7).
+- **Housekeeping & Docs:**
+  - *CONTEXT.md-Glossar:* neue Einträge App-Manifest, Content Package / Stabile Text-ID, Savegame (Format); `Declarative Level Descriptor` verweist auf die `levels/`-Konvention (ADR 0041 Stufe 3–5).
+  - *ADR 0041 Status:* Stand-Hinweis auf Stufen 1–4 umgesetzt gesetzt, Stufe 5 (Format) abgeschlossen; `the-whisper/docs/log.md` dokumentiert Stufe 3 & 4.
+
 ## [0.118.0] - 2026-10-28
 
 ### "Man is a tool-using animal. Without tools he is nothing, with tools he is all." - Thomas Carlyle

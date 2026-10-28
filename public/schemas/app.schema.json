@@ -95,6 +95,24 @@
           "minimum": 1
         }
       }
+    },
+    "content": {
+      "type": "object",
+      "description": "Declared text content packages (ADR 0041 Stufe 4): every language in 'languages' must ship as content/<lang>.json with identical text-ID key sets (validated by ContentPackageValidation.test.ts).",
+      "additionalProperties": false,
+      "properties": {
+        "languages": {
+          "type": "array",
+          "description": "Content languages, each resolving to a content/<lang>.json file inside this app.",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+          }
+        }
+      },
+      "required": ["languages"]
     }
   }
 }

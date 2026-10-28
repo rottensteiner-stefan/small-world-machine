@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../../../public/schemas/level.schema.json",
+  "$schema": "../../../../public/schemas/level.schema.json",
   "id": "kaeltekammer_sektor0",
   "name": "Kältekammer Sektor 0",
   "version": "1.0.0",

@@ -353,6 +353,13 @@ export interface AppManifest {
   save?: {
     schemaVersion: number;
   };
+  /**
+   * Declared text content packages (ADR 0041 Stufe 4): each language ships as
+   * `content/<lang>.json` with identical text-ID key sets, validated against this manifest.
+   */
+  content?: {
+    languages: string[];
+  };
 }
 
 /**

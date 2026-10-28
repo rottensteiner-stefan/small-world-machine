@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../../../public/schemas/level.schema.json",
+  "$schema": "../../../../public/schemas/level.schema.json",
   "id": "koje_42",
   "name": "Bunker Koje 42 Arenberg",
   "version": "1.0.0",

@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-10-28 — ADR 0041 Stufe 3 & 4: Level-Dateien unter `levels/`, Content-Pakete mit stabilen Text-IDs
+
+**Status:** ✅ Format-Schritte (kein Runtime-Umbau; Runtime-Wiring ist dokumentierter Folge-Schritt).
+
+- **Stufe 3 (Level-Daten getrennt):** `koje42.level.json` und `kaeltekammer.level.json` von
+  `scenes/prologue/` nach `levels/` verschoben (`$schema`-Zeiger angepasst, Lade-URLs in
+  `prologue.ts` korrigiert). `LevelValidation.test.ts` erzwingt die Konvention
+  `apps/<app>/levels/` (Scan-Regel, Stolperstein explizit geprüft — Scan findet weiterhin > 0).
+- **Stufe 4 (Content-Pakete):** `content/de.json` + `content/en.json` mit stabilen Text-IDs für
+  Story-/UI-Texte (Koje-42- und Kältekammer-Hotspot-Dialoge, Terminal-/Hotspot-/Karten-Chrome,
+  Karten-Kerntexte). `app.json` deklariert `content.languages`; `app.schema.json` + `AppManifest`
+  tragen die `content`-Eigenschaft. `ContentPackage` (App-Resolver, fail-fast via `t(id)`) +
+  `ContentPackageValidation.test.ts` (Schlüssel-Parität über Sprachen, Manifest-Bindung, keine
+  verwaisten Pakete) + `ContentPackage.test.ts`.
+- **Dokumentierter Folge-Schritt:** UI-/Story-Call-Sites auf `ContentPackage.t(id)` umstellen
+  und die restliche Karten-Welttextur (grandfatherNotes, Archetypen-Zitate) extrahieren.
+
+---
+
 ## 2026-08-21 — Gründungs-Pitch
 
 **Prämisse:** X Jahre nachdem Europa durch einen nuklearen Schlag fast in die

@@ -265,7 +265,7 @@ export class PrologueScene extends AbstractShowcase {
     // ein Asset, ist das laut (Fail Fast), nicht stumm-grau.
     try {
       const level = await this._kitRegistry.loadLevel(
-        new URL("./koje42.level.json", import.meta.url).href,
+        new URL("../../levels/koje42.level.json", import.meta.url).href,
         this.scene,
       );
 
@@ -788,7 +788,7 @@ export class PrologueScene extends AbstractShowcase {
     if (!this._morgueGroup) return;
     try {
       await this._kitRegistry.loadLevel(
-        new URL("./kaeltekammer.level.json", import.meta.url).href,
+        new URL("../../levels/kaeltekammer.level.json", import.meta.url).href,
         this._morgueGroup,
       );
     } catch (e) {

@@ -59,6 +59,19 @@ describe("Level Schema & Level Manifest Validation", () => {
     expect(levelFiles.length).toBeGreaterThan(0);
   });
 
+  it("requires all level descriptors under apps/<app>/levels/ (ADR 0041 Stufe 3 scan rule)", () => {
+    for (const levelPath of levelFiles) {
+      const segs = path.relative(repoRoot, levelPath).split(path.sep);
+      expect(
+        segs,
+        `Level ${path.relative(repoRoot, levelPath)} must live under apps/<app>/levels/`,
+      ).toContain("levels");
+      // The scan walk must keep working after the levels/ relocation: a descriptor sits
+      // directly inside <app>/levels/, never nested deeper or outside the levels/ folder.
+      expect(segs.indexOf("levels")).toBe(segs.length - 2);
+    }
+  });
+
   for (const levelPath of levelFiles) {
     const relPath = path.relative(repoRoot, levelPath);
 

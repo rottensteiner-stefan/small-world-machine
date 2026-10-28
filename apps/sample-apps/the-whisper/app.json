@@ -13,5 +13,6 @@
     { "id": "flakturm", "version": "^1.0.0" },
     { "id": "bunker", "version": "^1.0.0" }
   ],
-  "save": { "schemaVersion": 1 }
+  "save": { "schemaVersion": 1 },
+  "content": { "languages": ["de", "en"] }
 }

@@ -8,6 +8,10 @@ The foundational domain model for the Small World Machine 3D engine. It defines 
 The unified stylized liquid and fluid pipeline within Small World Machine (`StylizedWaterMaterial`) covering toon, Ghibli-soft, painterly sparkle, dredge, and other stylized looks via parameter vectors and compile-time extension hooks.
 _Avoid_: Ghibli Water Subsystem, Liquid Fork — Ghibli is one preset on the continuous Anime continuum; non-water fluids (lava, slime, dark oil) reuse the identical shader core.
 
+**App-Manifest (Application Manifest)**:
+The single mandatory app boundary file `app.json` (schema: `public/schemas/app.schema.json`, `schemaVersion`-Kette, ADR 0041 §2 / Stufe 1): declares `id`, `version`, `entry`, owned content (`levels`, `characters`, `kits`, `content.languages`) and the `save` declaration. Verified by `assertAppManifest()` + `AppManifestValidation.test.ts`.
+_Avoid_: Project File, App Config — the manifest names the app *unit* with stable IDs and never-reused identifiers (ADR 0041), not a loose config blob.
+
 **Asset Kit**:
 A self-contained, schema-validated directory of modular 3D environment assets, props, and procedural builders sharing a unified PBR palette, scale rhythm, and metadata bindings (`kit.json`, `meta.json`).
 _Avoid_: Asset Pack, Model Bundle (informal; Asset Kit names a strictly schema-validated format, ADR 0011).
@@ -44,6 +48,10 @@ _Avoid_: Tile (tiled forward+ is a 2D-only variant of this idea that we don't us
 The overall technique: culling lights per Cluster so each fragment only evaluates the lights in its own cell's Per-Cell Light List, instead of testing every light in the scene.
 _Avoid_: Deferred Lighting — a different, unrelated technique (separates a geometry pass from a lighting pass) that's easy to conflate with this one since both exist to cut per-fragment light cost.
 
+**Content Package / Stabile Text-ID**:
+A per-app text resource file `content/<sprache>.json` (ADR 0041 Stufe 4) holding stable, never-reused text IDs (`namespace.path.*`) with non-empty string values; all language packs of an app share identical key sets (mutual key check) and are bound to the manifest via `app.json` `content.languages`. Resolved app-side through `ContentPackage.t(id)` (fail-fast on unknown IDs). Language is an Einstellung (Savegame-Setting), never game content.
+_Avoid_: Locale String Table, Hardcoded UI Labels — code references IDs, never content strings, so Lektorat/i18n never ships in code.
+
 **Context Object**:
 An explicit dependency container passed through constructors or lifecycle methods to avoid global state.
 _Avoid_: Global Singleton, Universal EventBus
@@ -61,7 +69,7 @@ The unit-cube volume of a Decal in its local space; its local -Y axis is the pro
 _Avoid_: Projector (the Decal itself is the projector; the box is only its volume).
 
 **Declarative Level Descriptor**:
-A JSON-Schema-validated scene description format (`level.schema.json`, `*.level.json`) specifying camera configuration, lighting, post-processing, and placed kit nodes (with socket light mountings and behavior bindings) without imperative scene setup code (ADR 0020).
+A JSON-Schema-validated scene description format (`level.schema.json`, `*.level.json`) specifying camera configuration, lighting, post-processing, and placed kit nodes (with socket light mountings and behavior bindings) without imperative scene setup code (ADR 0020). Level files live under `apps/<app>/levels/`, declared by ID in the app manifest (ADR 0041 Stufe 3).
 _Avoid_: Scene File (ambiguous with raw glTF `scene.gltf`).
 
 **Event Bus**:
@@ -147,6 +155,10 @@ _Avoid_: Light Grid (ambiguous with "Cluster grid", the whole 3D structure, rath
 **Post-Processing (Pipeline)**:
 The fixed, hardcoded effect order (Bloom -> HBAO -> Light Shafts -> Tonemapping -> Vignette -> Grain -> Quantize -> Flash) that every enabled effect runs through. Light Shafts in-scattering composites additively before Tonemapping so crepuscular beams contribute naturally to HDR exposure and contrast curves. Flash is deliberately last so it reads as a true full-screen overlay over everything else, not a color adjustment blended into the scene.
 _Avoid_: treating `PostProcessingEffectsConfig`'s object shape as an ordered list — enabling effects doesn't reorder them; the sequence itself is not configurable.
+
+**Savegame (Format)**:
+The persisted-runtime-state extension of the level-descriptor context (ADR 0020 / ADR 0041 §1, Stufe 5): scoped to concrete levels/instances via stable never-reused IDs plus minimal state flags — content objects are never serialized, so content updates cannot break saves. Carries an explicit `schemaVersion` + migration chain with fail-fast on unknown versions, forward-tolerant unknown fields, diff/patch semantics at the instance branch (no whole-object replacements), backup-before-migration as default, storage IndexedDB/OPFS.
+_Avoid_: Global App State, Save Serialization — a savegame references IDs and flags per instance; it is not a dump of the scene.
 
 **Scene Graph**:
 The hierarchical tree of 3D objects that defines spatial relationships, transformations, and rendering order.
