@@ -1,4 +1,5 @@
 import type { Vector3D } from "@small-world-machine/engine";
+import { formatText, type TextResolver } from "./TextResolver.js";
 
 export interface HotspotAction {
   id: string;
@@ -20,8 +21,10 @@ export class HotspotManager {
   private _isMonologueOpen: boolean = false;
   private _currentMonologueIndex: number = 0;
   private _currentMonologueLines: string[] = [];
+  private readonly _texts: TextResolver;
 
-  constructor() {
+  constructor(texts: TextResolver) {
+    this._texts = texts;
     this._bindDomElements();
     this._bindKeys();
   }
@@ -111,7 +114,7 @@ export class HotspotManager {
       this.closeMonologue();
     } else {
       const titleEl = document.getElementById("monologueTitle");
-      const title = titleEl ? titleEl.innerText : "Gedanke";
+      const title = titleEl ? titleEl.innerText : this._texts.t("ui.hotspot.thought");
       this._renderCurrentMonologuePage(title);
     }
   }
@@ -131,7 +134,7 @@ export class HotspotManager {
     if (label) {
       label.innerText = text;
     } else {
-      this._promptElement.innerText = `[E] ${text}`;
+      this._promptElement.innerText = `${this._texts.t("ui.hotspot.promptPrefix")}${text}`;
     }
     this._promptElement.style.display = "flex";
   }
@@ -153,8 +156,11 @@ export class HotspotManager {
     if (footerEl) {
       const isLast = this._currentMonologueIndex >= this._currentMonologueLines.length - 1;
       footerEl.innerText = isLast
-        ? "[E / LEERTASTE] Schließen"
-        : `[E / LEERTASTE] Weiter (${this._currentMonologueIndex + 1}/${this._currentMonologueLines.length})`;
+        ? this._texts.t("ui.hotspot.footer.close")
+        : formatText(this._texts.t("ui.hotspot.footer.next"), {
+            current: this._currentMonologueIndex + 1,
+            total: this._currentMonologueLines.length,
+          });
     }
   }
 

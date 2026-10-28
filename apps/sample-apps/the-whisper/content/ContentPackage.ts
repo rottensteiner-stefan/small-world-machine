@@ -6,9 +6,10 @@
  * `ContentPackageValidation.test.ts` (mutual key check). This class is the app-level, honest
  * resolver: it loads a package and answers `t(id)` with fail-fast on unknown or missing texts.
  *
- * NOTE (Stufe 4 scope): the interactive UI modules still render their own authored strings for
- * now; migrating those call sites to `t(id)` is the documented follow-up (runtime wiring), NOT
- * part of the format stage this ADR stage establishes.
+ * NOTE (Stufe 4 runtime wiring): wired consumers resolve their chrome through this resolver
+ * (UI-chrome in `HotspotManager`/`TerminalModal`, kältekammer hotspots + objectives in
+ * `prologue.ts`). Remaining follow-up: `ViennaMapModal` render call sites, `level.json`
+ * hotspot texts and `TerminalModal` case data still author strings in code.
  */
 export interface ContentPackageData {
   readonly id: string;

@@ -4,7 +4,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { HotspotAction } from "../ui/HotspotManager.js";
 import { HotspotManager } from "../ui/HotspotManager.js";
+import type { TextResolver } from "../ui/TextResolver.js";
 import { Vector3D } from "@small-world-machine/engine";
+
+/** Identity-Resolver: jede ID wird zum eigenen Namen — beweist, dass Chrome-Texte aus dem
+ *  injizierten Resolver kommen und nicht hartkodierte Literale sind (ADR 0041 Stufe 4). */
+function createTexts(overrides: Record<string, string> = {}): TextResolver {
+  return {
+    t: (id: string): string => overrides[id] ?? id,
+  };
+}
 
 describe("HotspotManager", () => {
   let manager: HotspotManager;
@@ -20,7 +29,7 @@ describe("HotspotManager", () => {
         <div id="monologueFooter"></div>
       </div>
     `;
-    manager = new HotspotManager();
+    manager = new HotspotManager(createTexts());
   });
 
   it("registers and detects closest hotspot within radius", () => {
@@ -84,5 +93,50 @@ describe("HotspotManager", () => {
     expect(manager.isMonologueOpen).toBe(false);
     const box = document.getElementById("monologueBox");
     expect(box?.style.display).toBe("none");
+  });
+
+  it("renders monologue footer through the injected resolver (placeholder substitution)", () => {
+    const chrome = new HotspotManager(
+      createTexts({
+        "ui.hotspot.footer.close": "CLOSE",
+        "ui.hotspot.footer.next": "NEXT {current}/{total}",
+      }),
+    );
+    const spot: HotspotAction = {
+      id: "chrome",
+      name: "Chrome",
+      position: new Vector3D(0, 0, 0),
+      interactionRadius: 2.0,
+      promptText: "Prüfen",
+      monologueTitle: "Titel",
+      monologueText: ["Seite 1", "Seite 2", "Seite 3"],
+    };
+    chrome.registerHotspot(spot);
+    chrome.update(new Vector3D(0.1, 0, 0));
+    chrome.interact();
+
+    const footer = document.getElementById("monologueFooter");
+    expect(footer?.innerText).toBe("NEXT 1/3");
+    chrome.advanceMonologue();
+    expect(footer?.innerText).toBe("NEXT 2/3");
+    chrome.advanceMonologue();
+    expect(footer?.innerText).toBe("CLOSE");
+  });
+
+  it("applies the resolver prompt prefix when the inner label element is absent", () => {
+    document.body.innerHTML = `<div id="interactionPrompt" style="display: none;"></div>`;
+    const chrome = new HotspotManager(createTexts({ "ui.hotspot.promptPrefix": "[E] " }));
+    const spot: HotspotAction = {
+      id: "pfx",
+      name: "PfX",
+      position: new Vector3D(0, 0, 0),
+      interactionRadius: 2.0,
+      promptText: "Ventil prüfen",
+    };
+    chrome.registerHotspot(spot);
+    chrome.update(new Vector3D(0.1, 0, 0));
+    const prompt = document.getElementById("interactionPrompt");
+    expect(prompt?.style.display).toBe("flex");
+    expect(prompt?.innerText).toBe("[E] Ventil prüfen");
   });
 });

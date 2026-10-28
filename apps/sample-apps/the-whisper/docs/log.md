@@ -4,6 +4,29 @@
 
 ---
 
+## 2026-10-29 — ADR 0041 Stufe 4 Runtime-Wiring: UI-Chrome & Kältekammer-Inhalte über ContentPackage
+
+**Status:** ✅ Chrome-/Story-Wiring aktiv; Rest (Karte, level.json, Terminal-Daten) dokumentierter Folge-Schritt.
+
+- **TextResolver-Vertrag:** `ui/TextResolver.ts` (minimales `t(id)`-Interface + `formatText` für
+  `{placeholder}`-Vorlagen). `HotspotManager` und `TerminalModal` nehmen den Resolver als
+  **Pflicht-Parameter** (kein Fallback, kein Dual-Source): Prompt-Präfix/-Gedanken-Fallback/Footer
+  bzw. die 4 Hardware-Button-Labels kommen jetzt aus `t(id)`.
+- **prologue.ts:** Lädt das Content-Paket asynchron (`ContentPackage.load(preferredLanguage())`)
+  vor der Modul-Konstruktion; bei Fehlschlag bleiben Terminal/Hotspots deaktiviert (lautes Log,
+  `?.`-Guards) — kein stiller Default. Kältekammer-Hotspots (Schublade K-42, Ammoniak, Ausgang)
+  und beide Objectives werden über `t(id)` aufgelöst.
+- **Content-Vervollständigung:** Fehlende Karten-Welttexte (Bezirk, Fraktion, Großvater-Notiz,
+  Archetyp-Rolle/-Zitat für 9 bzw. 7 der 10 Locations) in `content/de.json` + `en.json` ergänzt
+  (145 Text-IDs, Parität per `ContentPackageValidation`).
+- **Testnetz:** Resolver-Fixtures als Identity-Resolvers; neue Tests beweisen, dass Chrome-Texte
+  aus dem injizierten Resolver kommen (Hotspot-Footer inkl. Platzhalter-Substitution,
+  Prompt-Präfix-Fallback, Terminal-Button-Labels, `preferredLanguage`).
+- **Dokumentierter Folge-Schritt:** `ViennaMapModal`-Render (Konsum der katalogisierten
+  `map.*`-Welttexte), `level.json`-Hotspot-Texte auf IDs, `TerminalModal`-Fallakten-Daten.
+
+---
+
 ## 2026-10-28 — ADR 0041 Stufe 3 & 4: Level-Dateien unter `levels/`, Content-Pakete mit stabilen Text-IDs
 
 **Status:** ✅ Format-Schritte (kein Runtime-Umbau; Runtime-Wiring ist dokumentierter Folge-Schritt).

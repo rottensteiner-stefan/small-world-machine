@@ -35,6 +35,8 @@ import { TerminalModal } from "../../ui/TerminalModal.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
 import type { HotspotAction } from "../../ui/HotspotManager.js";
 import { HotspotManager } from "../../ui/HotspotManager.js";
+import { ContentPackage } from "../../content/ContentPackage.js";
+import { preferredLanguage } from "../../content/preferredLanguage.js";
 
 type StageArea = "koje_42" | "vent_crawl" | "kaeltekammer";
 
@@ -71,6 +73,7 @@ export class PrologueScene extends AbstractShowcase {
   private _terminalModal: TerminalModal | null = null;
   private _mapModal: ViennaMapModal | null = null;
   private _hotspotManager: HotspotManager | null = null;
+  private _texts: ContentPackage | null = null;
   private _levelHotspots: LevelHotspotDef[] = [];
 
   // Timeline & State
@@ -176,13 +179,25 @@ export class PrologueScene extends AbstractShowcase {
     this._buildKaeltekammer();
     this._buildDustParticles();
 
-    // 5. Initialize Modals & Systems
-    this._terminalModal = new TerminalModal();
+    // 5. Initialize Modals & Systems — Terminal/Hotspot brauchen den TextResolver des
+    // Content-Pakets (ADR 0041 Stufe 4), deshalb erst nach dem Laden konstruieren. Bei
+    // Load-Fehler bleiben sie null und die `?.`-Guards der Listener greifen (lautes Log oben).
     this._mapModal = new ViennaMapModal("flakturm_arenberg");
-    this._hotspotManager = new HotspotManager();
 
-    // 6. Load Kit Props via Level Descriptors, then apply PBR textures to the architecture
+    // 6. Load Content Package, then Kit Props via Level Descriptors, then PBR textures
     void (async (): Promise<void> => {
+      try {
+        this._texts = await ContentPackage.load(preferredLanguage());
+      } catch (e) {
+        console.error(
+          "[Prologue] Content-Paket nicht ladbar — Terminal & Hotspots deaktiviert:",
+          e,
+        );
+      }
+      if (this._texts) {
+        this._terminalModal = new TerminalModal(this._texts);
+        this._hotspotManager = new HotspotManager(this._texts);
+      }
       await this._loadLevelProps();
       await this._loadKaeltekammerProps();
       await this._buildPlayerCharacter();
@@ -888,7 +903,8 @@ export class PrologueScene extends AbstractShowcase {
   }
 
   private _setupKaeltekammerHotspots(): void {
-    if (!this._hotspotManager) return;
+    if (!this._hotspotManager || !this._texts) return;
+    const texts = this._texts;
     this._hotspotManager.clearHotspots();
 
     const spots: HotspotAction[] = [
@@ -897,13 +913,13 @@ export class PrologueScene extends AbstractShowcase {
         name: "Fach K-42 (František)",
         position: new Vector3D(-1.8, 0, -9.8),
         interactionRadius: 1.6,
-        promptText: "Fach K-42 untersuchen",
-        monologueTitle: "Kältekammer Fach K-42",
+        promptText: texts.t("hotspot.kaeltekammer.drawer_k42.prompt"),
+        monologueTitle: texts.t("hotspot.kaeltekammer.drawer_k42.title"),
         monologueText: [
-          "Mit klammen Fingern ziehe ich die schwere Edelstahlwanne aus der Wand... Eisdampf schlägt mir entgegen.",
-          "František. Sein Gesicht ist friedlich, fast blass wie Kalkstein. Doch als ich den Kragen seines Mantels beiseite schiebe...",
-          "🟢 [COLORKEY SMARAGDGRÜN] Am linken Halsansatz: Ein kreisrunder, grün verfärbter Einstichpunkt. Keine Altersschwäche. Hochkonzentrierte Blausäure.",
-          "Ober-Inspektor Pollak hat ihn ermordet! Aber warum?! Františeks Dienstausweis und das Medaillon fehlen... Sie müssen in der Asservatenkammer der Kanzlei liegen!",
+          texts.t("hotspot.kaeltekammer.drawer_k42.line.0"),
+          texts.t("hotspot.kaeltekammer.drawer_k42.line.1"),
+          texts.t("hotspot.kaeltekammer.drawer_k42.line.2"),
+          texts.t("hotspot.kaeltekammer.drawer_k42.line.3"),
         ],
         onInteract: (): void => {
           if (this._cyanideSpotLight) {
@@ -911,8 +927,7 @@ export class PrologueScene extends AbstractShowcase {
           }
           const objText = document.getElementById("objectiveText");
           if (objText) {
-            objText.innerText =
-              "Asservatenkammer infiltrieren & Františeks Medaillon vor der Kompostierung bergen!";
+            objText.innerText = texts.t("objective.kaeltekammer.infiltrate");
           }
         },
       },
@@ -921,11 +936,11 @@ export class PrologueScene extends AbstractShowcase {
         name: "Kühlrohre",
         position: new Vector3D(0, 0, -10.5),
         interactionRadius: 1.8,
-        promptText: "Ammoniak-Kühlsystem prüfen",
-        monologueTitle: "Nußdorf-Kühlstrang",
+        promptText: texts.t("hotspot.kaeltekammer.ammonia.prompt"),
+        monologueTitle: texts.t("hotspot.kaeltekammer.ammonia.title"),
         monologueText: [
-          "Das laute Zischen der Kühlmittelrohre übertönt meine Schritte.",
-          "Wenn hier ein Rohr bricht, füllt sich der Raum in dreißig Sekunden mit tödlichem Ammoniakgas.",
+          texts.t("hotspot.kaeltekammer.ammonia.line.0"),
+          texts.t("hotspot.kaeltekammer.ammonia.line.1"),
         ],
       },
       {
@@ -933,11 +948,11 @@ export class PrologueScene extends AbstractShowcase {
         name: "Aufgang zur Kanzlei",
         position: new Vector3D(2.2, 0, -8.5),
         interactionRadius: 1.6,
-        promptText: "Wartungsleiter zur Asservatenkammer hinaufsteigen",
-        monologueTitle: "Aufgang zur Kanzlei",
+        promptText: texts.t("hotspot.kaeltekammer.exit.prompt"),
+        monologueTitle: texts.t("hotspot.kaeltekammer.exit.title"),
         monologueText: [
-          "Eine rostige Steigleiter führt durch die Decke direkt in den Vorraum der Asservatenkammer.",
-          "Dort werden alle Besitztümer der Toten registriert, bevor die Kompostierung beginnt.",
+          texts.t("hotspot.kaeltekammer.exit.line.0"),
+          texts.t("hotspot.kaeltekammer.exit.line.1"),
         ],
       },
     ];
@@ -955,8 +970,8 @@ export class PrologueScene extends AbstractShowcase {
     this._targetCameraLook.set(0, 1.0, -9.0);
 
     const objText = document.getElementById("objectiveText");
-    if (objText) {
-      objText.innerText = "Sektor 0 / Kältekammer Fach K-42 untersuchen";
+    if (objText && this._texts) {
+      objText.innerText = this._texts.t("objective.kaeltekammer.investigate");
     }
 
     this._setupKaeltekammerHotspots();

@@ -5,6 +5,8 @@
  * LC-Display, Scanlines, Pixelfehlern und mechanischen Druckknöpfen (Non-Touch).
  */
 
+import type { TextResolver } from "./TextResolver.js";
+
 export interface TerminalData {
   caseId: string;
   deceasedName: string;
@@ -42,9 +44,11 @@ export class TerminalModal {
   private _isOpen: boolean = false;
   private _activeTab: "case" | "logbook" | "diagnostics" = "case";
   private _data: TerminalData;
+  private readonly _texts: TextResolver;
   private _onCloseCallbacks: (() => void)[] = [];
 
-  constructor(data: TerminalData = DEFAULT_TERMINAL_DATA) {
+  constructor(texts: TextResolver, data: TerminalData = DEFAULT_TERMINAL_DATA) {
+    this._texts = texts;
     this._data = data;
     this._createModal();
     this._bindGlobalKey();
@@ -202,15 +206,15 @@ export class TerminalModal {
     const tabsGroup = document.createElement("div");
     tabsGroup.style.cssText = "display: flex; gap: 0.6rem;";
 
-    const btnCase = this._createHwButton("[F1] AKTE", () => {
+    const btnCase = this._createHwButton(this._texts.t("ui.terminal.akte"), () => {
       this._activeTab = "case";
       this._renderScreenContent();
     });
-    const btnLog = this._createHwButton("[F2] LOGBUCH", () => {
+    const btnLog = this._createHwButton(this._texts.t("ui.terminal.logbuch"), () => {
       this._activeTab = "logbook";
       this._renderScreenContent();
     });
-    const btnDiag = this._createHwButton("[F3] STATUS", () => {
+    const btnDiag = this._createHwButton(this._texts.t("ui.terminal.status"), () => {
       this._activeTab = "diagnostics";
       this._renderScreenContent();
     });
@@ -220,7 +224,11 @@ export class TerminalModal {
     tabsGroup.appendChild(btnDiag);
     btnBar.appendChild(tabsGroup);
 
-    const btnClose = this._createHwButton("[ESC] SCHLIESSEN", () => this.close(), true);
+    const btnClose = this._createHwButton(
+      this._texts.t("ui.terminal.close"),
+      () => this.close(),
+      true,
+    );
     btnBar.appendChild(btnClose);
 
     casing.appendChild(btnBar);
