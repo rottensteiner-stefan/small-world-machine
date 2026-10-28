@@ -257,10 +257,23 @@ export interface LevelHotspotDef {
   action?: string;
 }
 
+export const LEVEL_SCHEMA_VERSION = 1;
+
+export type LevelMigrationStep = (raw: Record<string, unknown>) => Record<string, unknown>;
+
+/**
+ * Sequential migration chain `(fromVersion -> step returning fromVersion + 1)` for
+ * `LevelDescriptor` (ADR 0041 §4 / §7 Stufe 2). Empty at `schemaVersion = 1`.
+ */
+export const LEVEL_MIGRATIONS: ReadonlyMap<number, LevelMigrationStep> = new Map();
+
 export interface LevelDescriptor {
+  $schema?: string;
   id: string;
   name: string;
   version: string;
+  /** Format version of the level descriptor (`public/schemas/level.schema.json`, ADR 0041). */
+  schemaVersion?: number;
   description?: string;
   environment?: {
     surfaces?: LevelEnvironmentSurface[];
@@ -274,6 +287,111 @@ export interface LevelDescriptor {
     points: Array<{ u: number; v: number; scale?: number }>;
     projection?: { mode: string; width?: number; height?: number; z?: number; centerY?: number };
   };
+}
+
+/**
+ * Validates and migrates a `LevelDescriptor` to `LEVEL_SCHEMA_VERSION` along `LEVEL_MIGRATIONS`.
+ * Unversioned descriptors in memory (`schemaVersion === undefined`) default to version 1;
+ * unknown or future `schemaVersion` values fail fast (ADR 0041 §4).
+ */
+export function migrateLevelDescriptor(
+  descriptor: LevelDescriptor,
+  context: string = "KitRegistry",
+): LevelDescriptor {
+  const rawVersion = descriptor.schemaVersion ?? LEVEL_SCHEMA_VERSION;
+  if (
+    typeof rawVersion !== "number" ||
+    !Number.isInteger(rawVersion) ||
+    rawVersion < 1 ||
+    rawVersion > LEVEL_SCHEMA_VERSION
+  ) {
+    throw new Error(
+      `[${context}] Unsupported level schemaVersion '${String(descriptor.schemaVersion)}' in level '${descriptor.id || "<unknown>"}' (supported: 1..${LEVEL_SCHEMA_VERSION}).`,
+    );
+  }
+  let currentVersion = rawVersion;
+  let current: Record<string, unknown> = { ...descriptor, schemaVersion: currentVersion };
+  while (currentVersion < LEVEL_SCHEMA_VERSION) {
+    const step = LEVEL_MIGRATIONS.get(currentVersion);
+    if (!step) {
+      throw new Error(
+        `[${context}] Missing level migration step from schemaVersion ${currentVersion} in level '${descriptor.id || "<unknown>"}'.`,
+      );
+    }
+    current = step(current);
+    currentVersion += 1;
+    current["schemaVersion"] = currentVersion;
+  }
+  return current as unknown as LevelDescriptor;
+}
+
+export const APP_SCHEMA_VERSION = 1;
+
+export interface AppKitDependency {
+  id: string;
+  version: string;
+}
+
+/**
+ * Application manifest (`app.json`, `public/schemas/app.schema.json` — ADR 0041 §2 / §7 Stufe 1).
+ */
+export interface AppManifest {
+  $schema?: string;
+  id: string;
+  name: string;
+  version: string;
+  schemaVersion: number;
+  description?: string;
+  engine?: string;
+  entry: string;
+  levels: string[];
+  characters: string[];
+  kits: AppKitDependency[];
+  code?: {
+    module: string;
+  };
+  save?: {
+    schemaVersion: number;
+  };
+}
+
+/**
+ * Validates that unknown data conforms to `AppManifest` and fails fast on an unsupported
+ * `schemaVersion` (ADR 0041 §2 / §4).
+ */
+export function assertAppManifest(
+  data: unknown,
+  context: string = "AppManifest",
+): asserts data is AppManifest {
+  if (typeof data !== "object" || data === null) {
+    throw new Error(`[${context}] Invalid app manifest: expected an object.`);
+  }
+  const d = data as Partial<AppManifest>;
+  if (
+    typeof d.id !== "string" ||
+    d.id.length === 0 ||
+    typeof d.name !== "string" ||
+    d.name.length === 0 ||
+    typeof d.version !== "string" ||
+    typeof d.entry !== "string" ||
+    d.entry.length === 0 ||
+    !Array.isArray(d.levels) ||
+    !Array.isArray(d.characters) ||
+    !Array.isArray(d.kits)
+  ) {
+    throw new Error(
+      `[${context}] Invalid app manifest structure: expected id, name, version, entry, levels, characters, and kits.`,
+    );
+  }
+  if (
+    typeof d.schemaVersion !== "number" ||
+    !Number.isInteger(d.schemaVersion) ||
+    d.schemaVersion !== APP_SCHEMA_VERSION
+  ) {
+    throw new Error(
+      `[${context}] Unsupported app.json schemaVersion '${String(d.schemaVersion)}' in app '${d.id}' (supported: ${APP_SCHEMA_VERSION}).`,
+    );
+  }
 }
 
 export interface LevelInstance {

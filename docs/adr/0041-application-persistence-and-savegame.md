@@ -1,6 +1,6 @@
 # ADR 0041: Application Persistence & Savegame — Pflicht-Grundlage für App-Manifest, stabile IDs und Laufzeitzustand
 
-> **Stand-Hinweis (2026-10-21):** Stand 2026-10-21: Keine der fünf Stufen ist umgesetzt. `app.json`, App-Schema, `content/<sprache>.json` und ein Savegame-Format existieren nicht; `level.schema.json` hat kein `schemaVersion`. Der ADR ist reines Grundlagendokument.
+> **Stand-Hinweis (2026-10-28):** Stufen 1 und 2 sind umgesetzt: `public/schemas/app.schema.json` sowie `app.json` für alle Sample-Apps (`the-whisper`, `yad`, `light-cycle-arena`, `voxel-prototype`), abgesichert durch `AppManifestValidation.test.ts` und `assertAppManifest()` (`APP_SCHEMA_VERSION = 1`). `public/schemas/level.schema.json` und alle `*.level.json`-Deskriptoren tragen `schemaVersion: 1`; `KitRegistry.loadLevel()` prüft und migriert über `migrateLevelDescriptor()` (`LEVEL_MIGRATIONS`) mit Fail-Fast bei unbekannter Version. Offen: Stufen 3 (`apps/…/levels/`), 4 (`content/<sprache>.json`) und 5 (Savegame-Format v1).
 
 > **Status: ACCEPTED** — 2026-10-19 (Maintainer-Abnahme; ursprünglich DRAFT vom 2026-10-19, Session `swm-ops-b`). Grundlage sind die
 > **verbindlichen** Entscheidungen aus `docs/research/application-persistence-whole-world-2026-09-29.md`

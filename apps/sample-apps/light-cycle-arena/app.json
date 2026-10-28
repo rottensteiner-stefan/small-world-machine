@@ -1,0 +1,16 @@
+{
+  "$schema": "../../../public/schemas/app.schema.json",
+  "id": "light-cycle-arena",
+  "name": "Light Cycle Arena",
+  "version": "0.1.0",
+  "schemaVersion": 1,
+  "description": "Isometric neon light-cycle arcade arena sample application.",
+  "engine": ">=0.115.0",
+  "entry": "index.html",
+  "levels": [],
+  "characters": [],
+  "kits": [],
+  "code": {
+    "module": "./index.ts"
+  }
+}

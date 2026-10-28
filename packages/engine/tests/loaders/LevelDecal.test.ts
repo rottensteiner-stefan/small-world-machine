@@ -253,7 +253,7 @@ describe("level.schema.json decals", () => {
   const validate = new Ajv2020({ allErrors: true, strict: false }).compile(
     JSON.parse(fs.readFileSync(schemaPath, "utf8")) as Record<string, unknown>,
   );
-  const base = { id: "l", name: "L", version: "1.0.0", props: [] };
+  const base = { id: "l", name: "L", version: "1.0.0", schemaVersion: 1, props: [] };
 
   it("accepts a full placement", () => {
     expect(

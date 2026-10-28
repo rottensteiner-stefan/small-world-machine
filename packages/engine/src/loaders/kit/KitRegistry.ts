@@ -16,6 +16,7 @@ import { GltfLoader } from "../GltfLoader.js";
 import {
   assertKitManifest,
   assertPropMeta,
+  migrateLevelDescriptor,
   type KitManifest,
   type KitManifestItem,
   type KitTextureItem,
@@ -337,6 +338,7 @@ export class KitRegistry {
     } else {
       descriptor = descriptorOrUrl;
     }
+    descriptor = migrateLevelDescriptor(descriptor);
 
     const levelRoot = new Object3D(descriptor.id || "LevelRoot");
     const propInstances = new Map<string, KitPropInstance>();

@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../public/schemas/app.schema.json",
+  "id": "the-whisper",
+  "name": "The Whisper — A Viennese Requiem",
+  "version": "0.1.0",
+  "schemaVersion": 1,
+  "description": "Story-driven 2.5D/3D mystery adventure set in post-collapse Vienna (Flakturm Arenberg).",
+  "engine": ">=0.115.0",
+  "entry": "index.html",
+  "levels": ["koje_42", "kaeltekammer_sektor0"],
+  "characters": ["male", "female", "yoshi"],
+  "kits": [
+    { "id": "flakturm", "version": "^1.0.0" },
+    { "id": "bunker", "version": "^1.0.0" }
+  ],
+  "save": { "schemaVersion": 1 }
+}

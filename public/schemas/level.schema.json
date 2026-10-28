@@ -4,7 +4,7 @@
   "title": "Small World Machine Declarative Level Descriptor",
   "description": "Schema for declarative level manifests defining prop placement, lighting, hotspots, and environment surfaces (ADR 0020). Validated by LevelValidation.test.ts.",
   "type": "object",
-  "required": ["id", "name", "version", "props"],
+  "required": ["id", "name", "version", "schemaVersion", "props"],
   "additionalProperties": false,
   "properties": {
     "$schema": { "type": "string" },
@@ -15,6 +15,11 @@
     },
     "name": { "type": "string", "minLength": 1 },
     "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version of the level descriptor format (ADR 0041)."
+    },
     "description": { "type": "string" },
     "environment": {
       "type": "object",

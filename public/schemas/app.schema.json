@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://small-world-machine.dev/schemas/app.schema.json",
+  "title": "Small World Machine Application Manifest",
+  "description": "Schema for application manifests (app.json) declaring app boundaries, stable IDs, levels, characters, and kit dependencies (ADR 0041). Validated by AppManifestValidation.test.ts.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "schemaVersion",
+    "entry",
+    "levels",
+    "characters",
+    "kits"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "type": "string",
+      "description": "Stable application identifier matching its folder under apps/sample-apps/ (e.g. 'the-whisper').",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version of the app.json manifest format (ADR 0041)."
+    },
+    "description": { "type": "string" },
+    "engine": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Supported engine version range (e.g. '>=0.115.0')."
+    },
+    "entry": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Primary entry point or start scene ID of the application."
+    },
+    "levels": {
+      "type": "array",
+      "description": "Declared level descriptor IDs belonging to this application.",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      }
+    },
+    "characters": {
+      "type": "array",
+      "description": "Declared character rig IDs belonging to this application.",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      }
+    },
+    "kits": {
+      "type": "array",
+      "description": "Modular asset kit dependencies required by this application (ADR 0011).",
+      "items": {
+        "type": "object",
+        "required": ["id", "version"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "code": {
+      "type": "object",
+      "required": ["module"],
+      "additionalProperties": false,
+      "properties": {
+        "module": { "type": "string", "minLength": 1 }
+      }
+    },
+    "save": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

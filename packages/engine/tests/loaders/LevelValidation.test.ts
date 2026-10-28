@@ -3,7 +3,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import Ajv2020 from "ajv/dist/2020.js";
 import type { ValidateFunction } from "ajv";
-import type { LevelDescriptor } from "../../src/loaders/kit/KitTypes.js";
+import {
+  KitRegistry,
+  LEVEL_SCHEMA_VERSION,
+  migrateLevelDescriptor,
+  type LevelDescriptor,
+} from "../../src/loaders/kit/KitRegistry.js";
 
 function findRepoRoot(startDir: string): string {
   let current = startDir;
@@ -76,6 +81,17 @@ describe("Level Schema & Level Manifest Validation", () => {
             .join("\n");
           expect.fail(`Schema validation errors in ${relPath}:\n${errors}`);
         }
+        expect(levelData.schemaVersion).toBe(LEVEL_SCHEMA_VERSION);
+      });
+
+      it("its own $schema pointer resolves to public/schemas/level.schema.json", () => {
+        levelData = JSON.parse(rawContent) as LevelDescriptor;
+        expect(levelData.$schema).toBeDefined();
+        const resolved = path.resolve(path.dirname(levelPath), levelData.$schema!);
+        expect(fs.existsSync(resolved), `$schema does not resolve: ${levelData.$schema}`).toBe(
+          true,
+        );
+        expect(resolved).toBe(schemaPath);
       });
 
       it("references existing kit props in public/assets/kits/", () => {
@@ -177,4 +193,36 @@ describe("Level Schema & Level Manifest Validation", () => {
       });
     });
   }
+
+  describe("schemaVersion policy & migration chain (ADR 0041 Stufe 2)", () => {
+    const baseLevel: LevelDescriptor = {
+      id: "test_level",
+      name: "Test Level",
+      version: "1.0.0",
+      schemaVersion: 1,
+      props: [],
+    };
+
+    it("accepts schemaVersion 1 and upgrades unversioned in-memory descriptors to 1", () => {
+      expect(migrateLevelDescriptor(baseLevel).schemaVersion).toBe(1);
+      const legacy: LevelDescriptor = { id: "legacy", name: "Legacy", version: "1.0.0", props: [] };
+      expect(migrateLevelDescriptor(legacy).schemaVersion).toBe(1);
+    });
+
+    it("rejects missing or unknown schemaVersion in level.schema.json", () => {
+      expect(validateLevel({ id: "l", name: "L", version: "1.0.0", props: [] })).toBe(false);
+      expect(validateLevel({ ...baseLevel, schemaVersion: 0 })).toBe(false);
+      expect(validateLevel({ ...baseLevel, schemaVersion: 2 })).toBe(false);
+    });
+
+    it.each([0, -1, 2, 99, 1.5, Number.NaN])(
+      "fails fast in migrateLevelDescriptor and KitRegistry.loadLevel for schemaVersion=%s",
+      async (badVersion) => {
+        const bad: LevelDescriptor = { ...baseLevel, schemaVersion: badVersion };
+        expect(() => migrateLevelDescriptor(bad)).toThrow(/Unsupported level schemaVersion/);
+        const registry = new KitRegistry();
+        await expect(registry.loadLevel(bad)).rejects.toThrow(/Unsupported level schemaVersion/);
+      },
+    );
+  });
 });
