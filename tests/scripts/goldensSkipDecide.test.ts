@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decide } from "../../scripts/goldens/skip-check.js";
+import { decide } from "../../.agents/scripts/goldens/skip-check.js";
 
 describe("scripts/goldens/skip-check.js decide() (Diff-Gate, keine falsch-grünen Skips)", () => {
   const head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";

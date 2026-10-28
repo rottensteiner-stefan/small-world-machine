@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const distPath = path.resolve(__dirname, "../dist/small-world-machine.js");
+const distPath = path.resolve(__dirname, "../../dist/small-world-machine.js");
 
 if (!fs.existsSync(distPath)) {
   console.log("📦 dist/small-world-machine.js not found. Running build:lib first...");

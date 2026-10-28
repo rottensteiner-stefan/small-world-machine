@@ -5,8 +5,8 @@
 // the mirror against a hand-written copy of the math, not against shader execution.
 //
 // Needs the dev server (npm run dev, port 5173). Exit code 1 if any sample exceeds its bound.
-//   node scripts/probe-gpu-parity.js                 # SwiftShader, like the golden captures
-//   ANGLE=default node scripts/probe-gpu-parity.js   # the machine's real GPU
+//   node .agents/scripts/probe-gpu-parity.js                 # SwiftShader, like the golden captures
+//   ANGLE=default node .agents/scripts/probe-gpu-parity.js   # the machine's real GPU
 import puppeteer from "puppeteer";
 
 const baseUrl = process.env.BASE_URL ?? "https://localhost:5173";
@@ -28,7 +28,7 @@ const browser = await puppeteer.launch({
 try {
   const page = await browser.newPage();
   page.on("pageerror", (e) => console.error("[page error]", e.message));
-  await page.goto(`${baseUrl}/scripts/probe-gpu-parity.html`, { waitUntil: "load" });
+  await page.goto(`${baseUrl}/.agents/scripts/probe-gpu-parity.html`, { waitUntil: "load" });
 
   // The first dynamic import can make Vite re-optimize dependencies and reload the page once.
   const evaluateWithRetry = async (fn) => {

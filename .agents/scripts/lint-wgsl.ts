@@ -22,8 +22,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { WgslReflect } from "wgsl_reflect/wgsl_reflect.module.js";
-import { ShaderRegistry } from "../packages/engine/src/renderers/shaders/ShaderRegistry.js";
-import { wrapFragmentWithNormalOutput } from "../packages/engine/src/renderers/WebGPU/managers/NormalOutputWrapper.js";
+import { ShaderRegistry } from "../../packages/engine/src/renderers/shaders/ShaderRegistry.js";
+import { wrapFragmentWithNormalOutput } from "../../packages/engine/src/renderers/WebGPU/managers/NormalOutputWrapper.js";
 
 // ── Real registry: the same chunk table the renderer resolves wgsl placeholders with. ──────────
 const registry = new ShaderRegistry();

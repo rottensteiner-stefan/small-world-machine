@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const SCRIPT_SOURCE = path.resolve(__dirname, "../../scripts/update-version.js");
+const SCRIPT_SOURCE = path.resolve(__dirname, "../../.agents/scripts/update-version.js");
 
 function git(cwd: string, args: string[]): string {
   return spawnSync("git", args, { cwd, encoding: "utf8" }).stdout.trim();
@@ -20,7 +20,7 @@ describe("scripts/update-version.js", () => {
   }
 
   function run(args: string[]): void {
-    const r = spawnSync("node", [path.join(repo, "scripts/update-version.js"), ...args], {
+    const r = spawnSync("node", [path.join(repo, ".agents/scripts/update-version.js"), ...args], {
       cwd: repo,
       encoding: "utf8",
     });
@@ -29,7 +29,7 @@ describe("scripts/update-version.js", () => {
 
   beforeEach(() => {
     repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "update-version-")));
-    write("scripts/update-version.js", fs.readFileSync(SCRIPT_SOURCE, "utf8"));
+    write(".agents/scripts/update-version.js", fs.readFileSync(SCRIPT_SOURCE, "utf8"));
     write("package.json", '{ "name": "root", "version": "2.0.0" }\n');
     write("apps/showcases/package.json", '{ "name": "s", "version": "1.0.0" }\n');
     write("apps/sample-apps/package.json", '{ "name": "a", "version": "1.0.0" }\n');

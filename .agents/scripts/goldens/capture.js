@@ -31,7 +31,7 @@ import { resolveSceneSpec } from "./scene.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ROOT = path.join(__dirname, "..", "..");
+const ROOT = path.join(__dirname, "..", "..", "..");
 
 function parseArgs(argv) {
   const args = {

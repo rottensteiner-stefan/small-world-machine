@@ -210,7 +210,7 @@ Zero-False-Positives-Erstlauf, der Escape-Hatch mit Pflicht-Begründung (`// doc
 Materials, `Object3D`, Physix, Render-Loop, Shader); Setup-/Loader-/Editor-Code ist befreit.
 Bestehende Parameter müssen **nicht** nachgetaggt werden (kein historisches Retrofitting).
 
-**Prüfmechanismus:** `npm run check:doctrine` (ein Skript `scripts/check-doctrine.ts`, Exit 0/1/2,
+**Prüfmechanismus:** `npm run check:doctrine` (ein Skript `.agents/scripts/check-doctrine.ts`, Exit 0/1/2,
 kein ESLint-Plugin, kein Framework — R6); Class-B-Heuristiken unter `--enable-advisory`. Fang- und
 Rekalibrierungs-Nachweis: committed Ledger `../reference/doctrine-ledger.md`. Jedes künftige ADR
 trägt den Pflichtabschnitt **„Doctrine Compliance"** (Vorlage in ADR 0047).

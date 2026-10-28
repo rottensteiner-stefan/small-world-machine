@@ -109,7 +109,7 @@ distance" signature: the contact line at the caster base stays hard and deep whi
 grows with distance and the far zone diffuses into a wide, shallow gradient — measured on-screen
 as near-zone umbra contrast `0.61` collapsing to `0.34` at max distance on WebGPU and `0.56` →
 `0.34` on WebGL2, versus a negative control (`softness=0`, hard 3×3 PCF) that holds `0.60`
-at distance (see `scripts/check-swm42-pole.mjs`, live gate: `SWM42 POLE GATE: OK`). The
+at distance (see `.agents/scripts/check-swm42-pole.mjs`, live gate: `SWM42 POLE GATE: OK`). The
 previously-anticipated *adaptive* blocker search proved unnecessary for that hardening — the
 fixed sunflower disk does not destroy it for a thin occluder. A wide, box-shaped blocker
 *remains* uniformly soft, which is fundamental geometry: the search disk then averages the
@@ -239,7 +239,7 @@ const engine = new Engine({
   so the `pcss` default uniform buffer stays byte-identical (see the committed snapshot).
 
 > **Status note (0.116.0):** The WebGPU EVSM path renders and is live-gated on showcase 42
-> (`scripts/check-swm42-evsm.mjs`: error-free run, `evsmParams[0]=1` mode lane under `shadowMode=evsm`,
+> (`.agents/scripts/check-swm42-evsm.mjs`: error-free run, `evsmParams[0]=1` mode lane under `shadowMode=evsm`,
 > plausible frame). WebGL2 EVSM was black on
 > the software stack at the start of Stage C; root cause was **not** a driver float-sampling issue but
 > two real engine state bugs (the material-sampler loop re-pointed `u_dirEVSMMap` to a white

@@ -180,7 +180,7 @@ Neben den klassischen „schneller/GC-frei“-Argumenten gibt es einen **spezifi
    [ADR 0018](../adr/0018-gltf-data-level-extensions-and-ecosystem-package.md) bereits beabsichtigt;
    das ist der einzige WASM-Einsatz mit klarem, unverfänglichem Nutzen. Bevorzugt etablierte
    C++→WASM-Portierungen, nicht AS.
-3. **Optional, beweis-getrieben:** Erst wenn eine Bottleneck-Messung (`scripts/perf-liquid.mjs`,
+3. **Optional, beweis-getrieben:** Erst wenn eine Bottleneck-Messung (`.agents/scripts/perf-liquid.mjs`,
    Profiling) für eine konkrete Szene belegt, dass die CPU kippt (z. B. Physik ab N Körpern),
    **einen** schmalen Kernel als isoliertes Worker-Modul mit `Float32Array`-ABI portieren —
    entweder fertige Runtime oder ein eigener AS-Batch-Kernel. **Nie Vektor-/Matrix-Typen und nie

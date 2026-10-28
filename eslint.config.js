@@ -129,15 +129,9 @@ export default [
     },
   },
 
-  // 4. Konfiguration für deine Build-Skripte (Node.js-Umgebung)
-  {
-    files: ["scripts/**/*.{js,mjs,ts}"],
-    languageOptions: {
-      globals: {
-        ...globals.node, // Erkennt process, __dirname, fs etc.
-      },
-    },
-  },
+  // 4. (ehemals Build-Skripte unter scripts/): die Repo-Tooling-Skripte liegen jetzt unter
+  //    `.agents/scripts/` und werden durch `**/.*/**` (Globale Ignorier-Regeln unten) wie alle
+  //    übrigen `.agents/*`-Werkzeuge von ESLint ausgenommen — konsistente Dot-Verzeichnis-Konvention.
 
   // 5. Globale Ignorier-Regeln (Kompilierte Dateien in Ruhe lassen)
   {

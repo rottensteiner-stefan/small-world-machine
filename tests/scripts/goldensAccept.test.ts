@@ -5,7 +5,7 @@ import path from "node:path";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 
-const COMPARE_SCRIPT = path.resolve(__dirname, "../../scripts/goldens/compare.js");
+const COMPARE_SCRIPT = path.resolve(__dirname, "../../.agents/scripts/goldens/compare.js");
 
 function writePng(dir: string, name: string, shade: number): void {
   const png = new PNG({ width: 4, height: 4 });

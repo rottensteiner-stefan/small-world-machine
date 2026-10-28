@@ -1,6 +1,6 @@
 // Lane-Contract-Registry scanner (T3).
 //
-// Reads scripts/lane-contracts/lane-contracts.json and statically checks the real engine +
+// Reads .agents/scripts/lane-contracts/lane-contracts.json and statically checks the real engine +
 // extension sources against the declared lanes. Catches: (a) a declared lane write going
 // missing (silent delete, G3), (b) a lane carrying multiple meanings without a declared
 // collision carve-out, (c) unresolved future registrations (S2/S3), (d) eviction policies
@@ -17,9 +17,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, "..", "..");
+const ROOT = path.join(__dirname, "..", "..", "..");
 
-const REGISTRY_PATH = path.join(ROOT, "scripts", "lane-contracts", "lane-contracts.json");
+const REGISTRY_PATH = path.join(ROOT, ".agents", "scripts", "lane-contracts", "lane-contracts.json");
 const SCAN_TARGETS = {
   stylizedTs: path.join(ROOT, "packages", "engine", "src", "core", "materials", "liquid", "StylizedWaterMaterial.ts"),
   fragGlsl300: path.join(ROOT, "packages", "engine", "src", "core", "materials", "liquid", "shaders", "StylizedWater.frag.glsl"),

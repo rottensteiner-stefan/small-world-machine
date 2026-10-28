@@ -10,9 +10,9 @@ import {
   parseGlb,
   type GlbData,
   type PropMeta,
-} from "../../scripts/lint-assets.js";
+} from "../../.agents/scripts/lint-assets.js";
 
-const SCRIPT_PATH = path.resolve(process.cwd(), "scripts/lint-assets.ts");
+const SCRIPT_PATH = path.resolve(process.cwd(), ".agents/scripts/lint-assets.ts");
 
 describe("Asset Linter (scripts/lint-assets.ts)", () => {
   describe("Repository baseline audit", () => {

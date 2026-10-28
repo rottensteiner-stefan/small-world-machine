@@ -84,7 +84,7 @@ Since the three sources are maintained by hand and independently, they *will* dr
 npm run test:showcases
 ```
 
-It loads each showcase headlessly and reports real GL compile/link/`GL_INVALID_OPERATION` errors - `scripts/check-showcases.js` forces all three renderer types (`WEB_GL1`/`WEB_GL2`/`WEB_GPU`) via Swiftshader flags and captures per-renderer console errors, which covers WebGL1/WebGL2 shader bugs; for WebGPU, headless Chrome remains unreliable (see the `showcases-smoke-test` CI job, intentionally non-blocking).
+It loads each showcase headlessly and reports real GL compile/link/`GL_INVALID_OPERATION` errors - `.agents/scripts/check-showcases.js` forces all three renderer types (`WEB_GL1`/`WEB_GL2`/`WEB_GPU`) via Swiftshader flags and captures per-renderer console errors, which covers WebGL1/WebGL2 shader bugs; for WebGPU, headless Chrome remains unreliable (see the `showcases-smoke-test` CI job, intentionally non-blocking).
 
 ## Uniform and Texture Binding Is Automatic
 

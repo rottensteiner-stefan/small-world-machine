@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../../scripts/goldens/skip-check.js");
+const SCRIPT = path.resolve(__dirname, "../../.agents/scripts/goldens/skip-check.js");
 
 interface RunResult {
   status: number | null;

@@ -5,7 +5,7 @@ import path from "node:path";
 import { PNG } from "pngjs";
 import { describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../../scripts/goldens/contact-sheet.js");
+const SCRIPT = path.resolve(__dirname, "../../.agents/scripts/goldens/contact-sheet.js");
 
 function writePng(dir: string, rel: string, shade: number): void {
   const abs = path.join(dir, rel);

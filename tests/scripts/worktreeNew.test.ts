@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../../scripts/worktree-new.mjs");
+const SCRIPT = path.resolve(__dirname, "../../.agents/scripts/worktree-new.mjs");
 
 interface RunResult {
   status: number | null;

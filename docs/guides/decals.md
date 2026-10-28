@@ -292,7 +292,7 @@ its own measurement.
 
 Decals sample with explicit gradients from three depth taps per axis. `?mip=1` in the probe puts a
 Plane mesh (hardware mips) and a Decal with the same 256x256 line texture side by side at a
-grazing angle; `node scripts/measure-decal-mips.mjs` compares a normalised gradient sharpness
+grazing angle; `node .agents/scratches/measure-decal-mips.mjs` compares a normalised gradient sharpness
 (decal / plane) per depth band on WebGL2 and WebGPU. With `mipBias = 0` the ratio is 0.99-1.06
 across the mid and far bands (0.89 in the nearest, magnified band), so the decal is not measurably
 blurrier. A negative bias over-sharpens (-0.25: up to 1.3x, -0.5: up to 1.6x, mid-distance) and
@@ -313,7 +313,7 @@ normal probes. Query parameters:
 - `?pool=1` drives a `DecalPool` from the check script (recycling, restacking, fade); `&shoot=1` lets real pointer clicks cast a camera ray and spawn a decal at the hit
 - `?wet=1` (+ `&sun=<intensity>`) shows the kit's wet-puddle preset against a dark-only twin on a rough floor
 
-`npm run test:decals` (`scripts/check-decals.mjs`) drives that page in a headless browser and
+`npm run test:decals` (`.agents/scripts/check-decals.mjs`) drives that page in a headless browser and
 asserts on GPU readbacks (normal buffer contents, decal pixels). WebGL2 results are blocking;
 WebGPU results are informational unless `DECAL_REQUIRE_WEBGPU=1` is set. `DECAL_ORIGIN`
 overrides the dev-server origin (default `https://localhost:5173`).

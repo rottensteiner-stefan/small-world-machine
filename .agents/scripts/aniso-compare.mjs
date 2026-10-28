@@ -20,7 +20,7 @@ import { PNG } from "pngjs";
 import pixelmatch from "pixelmatch";
 import { PREVIEW_ARGS, PREVIEW_ORIGIN, waitForServer } from "./lib/preview-utils.js";
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BACKENDS = { gl2: "WEB_GL2", gpu: "WEB_GPU", gl1: "WEB_GL1" };
 
 /** @param {string[]} argv */

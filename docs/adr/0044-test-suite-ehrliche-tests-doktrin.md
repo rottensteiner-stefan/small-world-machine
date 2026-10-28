@@ -84,10 +84,10 @@ Real-Probe gegen `WebGL2GlobalUniformLayout` umgebaut (P5-DP-6).
 
 ### Golden-Pipeline-Status (Teilentscheidung, dokumentiert)
 
-Der ~25-min-Golden-Lauf (`scripts/goldens/`) bleibt bewusst ein **manuelles Audit und KEIN
+Der ~25-min-Golden-Lauf (`.agents/scripts/goldens/`) bleibt bewusst ein **manuelles Audit und KEIN
 Push-/PR-Gate**, trotz der sonst strikten Gate-Kultur des Repos. Begründung: Das Kosten-Nutzen
 eines CI-Gates für einen Lauf dieser Länge ist ungeklärt; der Status ist in
-`scripts/goldens/README.md` als expliziter Status-Header plus Toleranz-Caveat dokumentiert.
+`.agents/scripts/goldens/README.md` als expliziter Status-Header plus Toleranz-Caveat dokumentiert.
 Die Entscheidung „Goldens dauerhaft in CI verdrahten" bleibt ein offener, dokumentierter
 Entscheidungspunkt.
 
@@ -107,7 +107,7 @@ Entscheidungspunkt.
 ## Referenzen
 
 - Umsetzung: Commit `48fd9540` („It is a capital mistake to theorize before one has data.", 2026-10-23)
-- Golden-Pipeline-Status: `scripts/goldens/README.md` (Status-Header + Toleranz-Caveat)
+- Golden-Pipeline-Status: `.agents/scripts/goldens/README.md` (Status-Header + Toleranz-Caveat)
 - Berührte Suiten: `packages/engine/tests/{core,loaders/gltf,math,physix,renderers}`,
   `packages/vfx-extras/tests` (Löschungen: `Affectors.test.ts`, `renderers/post/LightShaftsMath.test.ts`)
 - Verwandte ADRs: 0035/0036 (messungsgestützte Entscheidungen), 0043 (Quelltext-Guards + goldener

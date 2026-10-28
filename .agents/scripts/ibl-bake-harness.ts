@@ -3,8 +3,8 @@
 // the REAL engine pipeline (IBLBaker) with a generated equirectangular input and
 // returns only PNG payloads — all hashing/manifest logic stays in Node.
 
-import { IBLBaker } from "../packages/tools/src/ibl-gen/ibl-gen.js";
-import type { IblGenDefaults } from "../packages/tools/src/ibl-gen/ibl-gen-core.js";
+import { IBLBaker } from "../../packages/tools/src/ibl-gen/ibl-gen.js";
+import type { IblGenDefaults } from "../../packages/tools/src/ibl-gen/ibl-gen-core.js";
 
 export interface IblBakeOutput {
   name: string;

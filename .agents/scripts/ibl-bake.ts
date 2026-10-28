@@ -26,10 +26,10 @@ import {
   resolveIblGenOptions,
   type IblGenOptions,
   type IblBakeManifest,
-} from "../packages/tools/src/ibl-gen/ibl-gen-core.js";
+} from "../../packages/tools/src/ibl-gen/ibl-gen-core.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(__dirname, "..");
+const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 
 interface CliArgs {
   seed: number;

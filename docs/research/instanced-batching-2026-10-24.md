@@ -201,7 +201,7 @@ Der letzte noch als "nur device-gebunden" geführte Restpunkt (§7.1(b)) ist jet
 
 - **Showcase 44** (`apps/showcases/44/`) ist eine wiederverwendbare Mess-Rigg: zwei Cube-Geometrien (1.0/1.7) unter **einem** `StandardMaterial`, **gestreut** alternierend (`i % 2`, nie ≥2 gleiche Geometrien in Folge), alle `frustumCulled = false`, fixe erhöhte Kamera, nur `AmbientLight` (keine Shadow-Draws), Renderer erzwungen `WEB_GL2`. URL-Knobs: `?inst=off` (Auto-Instancing aus = Baseline), `?count=N`, `?frames=N`.
 - **Engine-fremde Zählung:** `canvas.getContext("webgl2")` liefert denselben Kontext-Objekt der Engine → Shadowing der vier Draw-Entrypoints (`drawArrays/drawElements` + Instanced-Varianten). Keine Engine-Änderung, kein neuer öffentlicher Parameter (Whack-a-Mole-Doktrin).
-- **Reproduzierbar:** `npm run build:showcases && node scripts/measure-a2-instancing.mjs` (startet eigenen Preview-Server, Headless-Chrome/SwiftShader-WebGL2 — identische Launch-Matrix wie `check-showcases.js`). Automatisiert über Puppeteer; Ergebnis einmalig als `MEASURE {json}`.
+- **Reproduzierbar:** `npm run build:showcases && node .agents/scratches/measure-a2-instancing.mjs` (startet eigenen Preview-Server, Headless-Chrome/SwiftShader-WebGL2 — identische Launch-Matrix wie `check-showcases.js`). Automatisiert über Puppeteer; Ergebnis einmalig als `MEASURE {json}`.
 
 **Gemessene Realwerte (1600 Objekte, 240-Frame-Fenster nach 30 Warm-up-Frames, SwiftShader-WebGL2):**
 
@@ -221,7 +221,7 @@ Der letzte noch als "nur device-gebunden" geführte Restpunkt (§7.1(b)) ist jet
 
 Der in §9.1/§9.1.1 zuvor als "optionaler, device-gebundener Folgeschritt" markierte Posten — echte Frame-Zeit statt SwiftShader-Artefakt — ist jetzt **ausgeführt und geschlossen**.
 
-- **Setup:** Reiner `A2_GPU=1`-Modus von `scripts/measure-a2-instancing.mjs` — **headful Chrome auf der echten GPU** (ANGLE/Metal), kompositorisches Frame-Limit **abgeschaltet** (`--disable-frame-rate-limit --disable-gpu-vsync --disable-vsync`), sonst würden beide Legs am 60-Hz-Cap kleben und das Delta wäre unsichtbar. Viewport 1440×900, 1600 Objekte, 240-Frame-Fenster nach 30 Warm-up-Frames — identisches Messprotokoll wie §9.1.1.
+- **Setup:** Reiner `A2_GPU=1`-Modus von `.agents/scratches/measure-a2-instancing.mjs` — **headful Chrome auf der echten GPU** (ANGLE/Metal), kompositorisches Frame-Limit **abgeschaltet** (`--disable-frame-rate-limit --disable-gpu-vsync --disable-vsync`), sonst würden beide Legs am 60-Hz-Cap kleben und das Delta wäre unsichtbar. Viewport 1440×900, 1600 Objekte, 240-Frame-Fenster nach 30 Warm-up-Frames — identisches Messprotokoll wie §9.1.1.
 - **GPU-Nachweis** (`WEBGL_debug_renderer_info.UNMASKED_RENDERER_WEBGL`): `ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, ...)` — Hardware inkl. Renderer-String im Laufprotokoll, kein SwiftShader-Fall.
 
 | Leg | Draw-Calls/F | Frame-Zeit | avgFPS |
@@ -232,6 +232,6 @@ Der in §9.1/§9.1.1 zuvor als "optionaler, device-gebundener Folgeschritt" mark
 - **Draw-Call-Reduktion ≈ 800×** erneut bestätigt — der Count ist unverändert geräte- und backend-unabhängig.
 - **Frame-Zeit-Delta auf echter Hardware jetzt messbar: Baseline +0,93 ms (+60 %) pro Frame** — reiner CPU/Driver-Overhead der ~800× mehr Draw-Aufrufe (identische Pixelmenge, identische Geometrie, uncapped). In vsync-gebundenen Real-Szenen schlägt dieser Overhead direkt aufs Frame-Budget (Pacing), nicht als roher FPS-Sturz.
 - **Ehrliche Einordnung:** Die Absolutwerte (1,6–2,5 ms) sind niedrig, weil die Testszene weit unter GPU-Sättigung läuft (1440×900, simple Cubes) und uncapped gemessen wird. Relevant ist der **relative Call-Overhead (+60 %)**, der über das 240-Frame-Fenster deterministisch und stabil ist — kein Rauschen. Der Befund bestätigt qualitativ das §7.1-Kaveat, präzisiert es aber: Call-Last ist selbst bei pixel-limitierter Szene auf echter Hardware als Frame-Zeit-Zuschlag nachweisbar, sobald nicht vsync-verdeckt.
-- **Reproduzierbar:** `npm run build:showcases && A2_GPU=1 node scripts/measure-a2-instancing.mjs` (startet den eigenen Preview-Server, headed Chrome, showt das Fenster). Die SwiftShader-Werte (§9.1.1) bleiben als CI-artige Kontroll-Rechenzeile dokumentiert; M4 Pro ist die gerätepräzise Referenz (analog zur `docs/guides/shadows.md`-M4-Pro-Messung).
+- **Reproduzierbar:** `npm run build:showcases && A2_GPU=1 node .agents/scratches/measure-a2-instancing.mjs` (startet den eigenen Preview-Server, headed Chrome, showt das Fenster). Die SwiftShader-Werte (§9.1.1) bleiben als CI-artige Kontroll-Rechenzeile dokumentiert; M4 Pro ist die gerätepräzise Referenz (analog zur `docs/guides/shadows.md`-M4-Pro-Messung).
 
 → Damit ist im Instancing-Report **kein Posten mehr "auf später" verschoben** — deterministische Parität, reale Browser-Messung und gerätepräzise Frame-Zeit liegen vor.

@@ -18,7 +18,7 @@ import { StylizedWaterMaterial } from "../../../src/core/materials/liquid/Styliz
 import type { RenderManifest } from "../../../src/renderers/shaders/RenderManifest.js";
 
 const REGISTRY_JSON = new URL(
-  "../../../../../scripts/lane-contracts/lane-contracts.json",
+  "../../../../../.agents/scripts/lane-contracts/lane-contracts.json",
   import.meta.url,
 );
 

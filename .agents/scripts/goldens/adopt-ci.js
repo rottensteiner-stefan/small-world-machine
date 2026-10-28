@@ -21,7 +21,7 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ROOT = path.join(__dirname, "..", "..");
+const ROOT = path.join(__dirname, "..", "..", "..");
 const DEFAULT_BASELINE = path.join(ROOT, ".agents", "goldens", "liquid", "baseline");
 
 function parseArgs(argv) {
@@ -84,7 +84,7 @@ function main() {
   }
 
   console.log(`[adopt-ci] Merging ${currentDirs.length} Shard(s) → ${merged}`);
-  const mg = run("node", [path.join(ROOT, "scripts", "goldens", "merge-shards.js"), "--out", merged, ...currentDirs]);
+  const mg = run("node", [path.join(ROOT, ".agents", "scripts", "goldens", "merge-shards.js"), "--out", merged, ...currentDirs]);
   if (mg !== 0) process.exit(mg);
 
   const reportJson = path.join(outRoot, "compare.json");
@@ -92,7 +92,7 @@ function main() {
   const cp = run(
     "node",
     [
-      path.join(ROOT, "scripts", "goldens", "compare.js"),
+      path.join(ROOT, ".agents", "scripts", "goldens", "compare.js"),
       "--baseline",
       args.baseline,
       "--current",

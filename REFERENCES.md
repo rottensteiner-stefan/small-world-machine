@@ -787,7 +787,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Split-Sum Specular IBL Approximation & 2D BRDF LUT
 
-- **File:** `packages/tools/src/ibl-gen/IBLShaders.ts`, `packages/tools/src/ibl-gen/ibl-gen.ts`, `scripts/ibl-bake.ts`, `packages/engine/src/core/showcase/AbstractShowcase.ts`
+- **File:** `packages/tools/src/ibl-gen/IBLShaders.ts`, `packages/tools/src/ibl-gen/ibl-gen.ts`, `.agents/scripts/ibl-bake.ts`, `packages/engine/src/core/showcase/AbstractShowcase.ts`
 - **Authors/Gurus:** Brian Karis (Epic Games, 2013)
 - **Source:** ["Real Shading in Unreal Engine 4"](https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf) — SIGGRAPH 2013 Course: Physically Based Shading in Theory and Practice
 - **Usage:** Splits the specular reflection integral of image-based lighting into two precomputable factors: a pre-filtered radiance environment map (GGX importance-sampled across roughness mip levels) and an analytic 2D look-up table (BRDF LUT) indexing the Fresnel scale and bias by $N \cdot V$ and roughness. Enables real-time physically based ambient reflections at 60 FPS in WebGL2 and WebGPU.
@@ -894,7 +894,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 ### Cyberpunk Facade, Asphalt & Night Sky IBL (Showcase 30 Textures)
 
 - **File:** `apps/showcases/30/assets/asphalt_*.webp`, `apps/showcases/30/assets/facade_*.webp`, `apps/showcases/30/assets/ibl/*`
-- **Source:** Generated via Gemini (`gemini-3.1-flash-image`) and baked into full PBR maps (diffuse, normal, roughness, emissive) and IBL cubemaps/LUT via Small World Machine's `scripts/ibl-bake.ts`:
+- **Source:** Generated via Gemini (`gemini-3.1-flash-image`) and baked into full PBR maps (diffuse, normal, roughness, emissive) and IBL cubemaps/LUT via Small World Machine's `.agents/scripts/ibl-bake.ts`:
   - `facade_*`: Modular cyberpunk high-rise elevation with glowing warm yellow and cyan window apertures (emissive map isolating windows).
   - `asphalt_*`: Gritty wet tarmac with subtle aggregate texture and wet sheen specular response.
   - `ibl/*`: 360-degree equirectangular rainy cyberpunk city night sky with deep indigo zenith, distant magenta/cyan horizon haze and skyscraper silhouette baked to specular prefilter mips, diffuse irradiance and BRDF LUT.
@@ -1033,7 +1033,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Stylized Lava Surface & Subtractive Fissure Shading
 
-- **File:** `packages/engine/src/core/materials/liquid/StylizedLavaMaterial.ts`, `packages/engine/src/core/materials/liquid/shaders/StylizedLava.{vert,frag}.{glsl,glsl100,wgsl}`, `scripts/gen-lava-textures.mjs` (stand-ins for the shader's two input textures)
+- **File:** `packages/engine/src/core/materials/liquid/StylizedLavaMaterial.ts`, `packages/engine/src/core/materials/liquid/shaders/StylizedLava.{vert,frag}.{glsl,glsl100,wgsl}`, `scripts/gen-lava-textures.mjs` (stand-ins for the shader's two input textures; generator entfernt im Scripts-Umzug, Assets sind committet)
 - **Authors/Gurus:** Joyce / MinionsArt (Joyce[MinionsArt] on Patreon / Twitter / Bluesky)
 - **Source:**
   - ["Stylized Lava Shader" (Patreon Post 32245619)](https://www.patreon.com/posts/stylized-lava-32245619)

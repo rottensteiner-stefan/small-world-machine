@@ -28,7 +28,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { detectTextureMapSlot } from "../packages/engine/src/loaders/kit/TextureSlotMatcher.js";
+import { detectTextureMapSlot } from "../../packages/engine/src/loaders/kit/TextureSlotMatcher.js";
 
 export type LintRule =
   | "geometry-completeness"

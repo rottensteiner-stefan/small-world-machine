@@ -20,8 +20,14 @@ import { fileURLToPath } from "url";
 const execFileAsync = promisify(execFile);
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
-const SCAN_JS = path.join(REPO_ROOT, "scripts", "lane-contracts", "scan.js");
-const REGISTRY_JSON = path.join(REPO_ROOT, "scripts", "lane-contracts", "lane-contracts.json");
+const SCAN_JS = path.join(REPO_ROOT, ".agents", "scripts", "lane-contracts", "scan.js");
+const REGISTRY_JSON = path.join(
+  REPO_ROOT,
+  ".agents",
+  "scripts",
+  "lane-contracts",
+  "lane-contracts.json",
+);
 
 interface ContractLane {
   lane: string;

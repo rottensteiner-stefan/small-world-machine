@@ -6,7 +6,7 @@
 > **R6**.
 
 > **Status: ACCEPTED (draft pending gate review)** — 2026-10-24 (Moderatoren-Ruling R6 des P1-Gates;
-> Umsetzungsschritt Stufe-1: ADR + `scripts/check-doctrine.ts` + committed Doctrine-Ledger, uncommitted
+> Umsetzungsschritt Stufe-1: ADR + `.agents/scripts/check-doctrine.ts` + committed Doctrine-Ledger, uncommitted
 > im Working Tree zur Freigabe. CI-Hartschaltung ist ein separater, post-gate Schritt — siehe
 > „Konsequenzen").
 >
@@ -62,7 +62,7 @@ autoritativ entschieden (Gate-Dossier §8; Rulings R6 sowie angenommene Standard
 
 | Punkt | Ruling | Inhalt (verbindlich) |
 |---|---|---|
-| Durchsetzungs-Apparat | **R6** | Pragmatische Richtlinie gegen Schleichkomplexität; **ein** CI-Prüfskript `scripts/check-doctrine.ts` (Exit 0/1/2, kein Fremd-Framework, kein ESLint-Plugin), `npm run check:doctrine`; ADR als committed Dokument. Schützt ADR 0041 vor `schemaVersion`-Churn (keine neue Config-/Schema-Grammatik). |
+| Durchsetzungs-Apparat | **R6** | Pragmatische Richtlinie gegen Schleichkomplexität; **ein** CI-Prüfskript `.agents/scripts/check-doctrine.ts` (Exit 0/1/2, kein Fremd-Framework, kein ESLint-Plugin), `npm run check:doctrine`; ADR als committed Dokument. Schützt ADR 0041 vor `schemaVersion`-Churn (keine neue Config-/Schema-Grammatik). |
 | Klassifikations-Scope (Q1) | **D9** | Pflicht-Klassifikation (A1) nur im **auditierten Hot-Scope** (§ „Scope" unten), nicht der gesamten Public-API. |
 | Rule-of-Three (Q3) | **D10** | „≥3 konkrete Konsumenten" gilt ausschließlich für **Abstraktions-Extraktion**. Renderer-Shared-Infrastructure (ADR-0038-GL-Ebene, Fan-in 2 durch zwei GL-Tiers konstruktionsbedingt) ist **ausgenommen**; jede geteilte Infrastruktur benennt aber ihren geteilten invarianten Mathe-Block im ADR. |
 | Metamorphic/PBT (Q4) | **D11** | Interims-Tests rein in TypeScript, determiniert, metamorphe Relationen; **fast-check/PBT wird an das P5-Gate geschoben** (dort evaluiert, nicht vorausgesetzt). |
@@ -167,7 +167,7 @@ Warnung.
 
 ### D8 — Der eine Durchsetzungs-Apparat (R6) und die Anti-Dogma-Kalibrierung
 
-- **Ein** Instrument: `scripts/check-doctrine.ts` (Exit 0/1/2, kein Fremd-Framework, kein
+- **Ein** Instrument: `.agents/scripts/check-doctrine.ts` (Exit 0/1/2, kein Fremd-Framework, kein
   ESLint-Plugin — ESLint-Custom-Rules bleiben für Code-Struktur, nicht für die Doktrin), verdrahtet als
   `npm run check:doctrine` im Root-`package.json`. Keine neue Config-/Schema-Grammatik (schützt ADR
   0041). Adoptionszustand transparent: harte Phase-0-Checks laufen immer; Class-B-Heuristiken sind
@@ -454,7 +454,7 @@ und Sunset; `.agents/notes/backlog.md` bleibt nur operative Tracking-Stelle.
   (Tier-Politik: Perf-Tier skaliert Budgets, nie Domänen-Parameter), ADR 0026/0027/0013 (Uniform-/
   Material-Parallelität), ADR 0041 (persistierte Schemas — von dieser Doktrin unberührt).
 - **Ledger:** `docs/reference/doctrine-ledger.md` (Fang-/Rekalibrierungs-Nachweis, committed, Deutsch).
-- **Tooling:** `scripts/check-doctrine.ts` (`npm run check:doctrine`), Muster `scripts/check-verified-markers.js`.
+- **Tooling:** `.agents/scripts/check-doctrine.ts` (`npm run check:doctrine`), Muster `.agents/scripts/check-verified-markers.js`.
 - **Verteidigung der Registry-Seed-Einzigkeit:** Die 7 Seed-IDs (Tabelle oben) sind ausschließlich an
   HEAD real verankert; eine künftige S4-Matrix (IDs 1.1–3.2) wird als additive Erweiterung am P5-Gate
   übernommen, nicht ersatzweise eingeführt.

@@ -15,7 +15,7 @@ import { execFileSync } from "child_process";
 import { readdirSync, statSync } from "fs";
 import path from "path";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
+const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const MAX_NEIGHBOUR_DEG = 20; // repaired assets sit at 5-11 degrees, the broken ones at 25-50
 const NORMAL_NAME = /(^|[_-])normal\.(png|jpe?g|webp)$/i;
 

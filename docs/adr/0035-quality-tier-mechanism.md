@@ -66,7 +66,7 @@ ursprünglichen „keine Score-Veränderung in V1"-Zeile korrigiert, weil er sys
 - Neu: GPU-Klasse aus dem unmasked Renderer-String (`GpuClass.ts`, Regex-Tabelle: ±2 Punkte,
   unbekannt = neutral). Software-Renderer (SwiftShader/llvmpipe) zählen als LOW.
 - Neu: Test-/Debug-Override `DeviceCaps.forcedTier` bzw. URL-Parameter `?tier=low|medium|high`
-  (Device-Simulation, z. B. Redmi-Gegenprobe). Der Golden-Capture (`scripts/goldens/capture.js`)
+  (Device-Simulation, z. B. Redmi-Gegenprobe). Der Golden-Capture (`.agents/scripts/goldens/capture.js`)
   erzwingt `tier=high`, weil SwiftShader sonst auf LOW fiele und die Baselines verändern würde.
 Die AGENTS.md-Architektur-Law „Tiered Renderer Autonomy" (aktualisiert 2026-10-18) trennt explizit
 **API-Tier** (WebGPU/WebGL2/WebGL1 = Fähigkeiten) von **Performance-Tier** (schwaches/starkes Gerät =

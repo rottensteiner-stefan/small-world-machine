@@ -45,7 +45,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Type check (src, showcases, tests, scripts)
+      - name: Type check (src, showcases, tests, .agents/scripts)
         run: npm run typecheck
 
       - name: Lint (src, showcases, tests)
@@ -201,7 +201,7 @@ jobs:
       # Fehlerrichtung konservativ: nur skippen, wenn es beweisbar nichts Output-Relevantes gibt.
       - name: Skip gate when nothing output-relevant changed
         id: skip
-        run: node scripts/goldens/skip-check.js --emit-status
+        run: node .agents/scripts/goldens/skip-check.js --emit-status
         shell: bash
 
       - name: Install dependencies

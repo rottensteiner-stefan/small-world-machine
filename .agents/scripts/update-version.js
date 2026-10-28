@@ -5,9 +5,9 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const pkgPath = path.resolve(__dirname, "../package.json");
+const pkgPath = path.resolve(__dirname, "../../package.json");
 const swRelative = "packages/engine/src/core/SmallWorldMachine.ts";
-const swPath = path.resolve(__dirname, "../" + swRelative);
+const swPath = path.resolve(__dirname, "../../" + swRelative);
 
 // Staging is an explicit opt-in (`--stage`, used by .husky/pre-commit). A plain `npm run build`
 // (prebuild) only rewrites the file and must never touch the git index.
@@ -20,7 +20,7 @@ const VERSION_PATTERN = /export const ENGINE_VERSION = "[^"]*";/;
 const APP_PACKAGES = ["apps/showcases/package.json", "apps/sample-apps/package.json"];
 
 function syncAppVersion(relative, version) {
-  const file = path.resolve(__dirname, "../" + relative);
+  const file = path.resolve(__dirname, "../../" + relative);
   const raw = fs.readFileSync(file, "utf8");
   const updated = raw.replace(/("version":\s*")[^"]*(")/, `$1${version}$2`);
   if (updated === raw) {

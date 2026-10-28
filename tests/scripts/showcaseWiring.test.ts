@@ -7,7 +7,7 @@ import {
   isInsideRoot,
   parseShowcaseLayout,
   showcasesRedirectTarget,
-} from "../../scripts/lib/dev-redirects.js";
+} from "../../.agents/scripts/lib/dev-redirects.js";
 
 const ROOT = path.resolve(__dirname, "../..");
 const SHOWCASES = path.join(ROOT, "apps/showcases");

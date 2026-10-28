@@ -26,7 +26,7 @@ import {
 } from "./lib/preview-utils.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, "..");
+const ROOT = path.join(__dirname, "..", "..");
 const BASE_URL = `${PREVIEW_ORIGIN}/apps/showcases/42/index.html`;
 const FRAME_DIR = path.join(ROOT, ".agents", "scratches", "soft-shadows", "gate-frames");
 

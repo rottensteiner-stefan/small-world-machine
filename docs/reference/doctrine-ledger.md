@@ -54,7 +54,7 @@ exakt die Menge verankerter Invarianten, keine Wunschliste):
 
 | Datum | Prinzip | Fundstelle (file:line) | Typ | Status | Veto-Grund |
 |---|---|---|---|---|---|
-| 2026-10-25 | P2/P5 | `scripts/check-doctrine.ts` `INVARIANT_REGISTRY` (Seed +15) + ADR-0047-Seed-Tabelle | A | behoben | — |
+| 2026-10-25 | P2/P5 | `.agents/scripts/check-doctrine.ts` `INVARIANT_REGISTRY` (Seed +15) + ADR-0047-Seed-Tabelle | A | behoben | — |
 | 2026-10-25 | P2/P5 | `packages/engine/tests/physix/FpsChunkingEquivalence.test.ts` (`FPS-CHUNKING-EQUIVALENCE`, physik-scoped A8) | A | behoben | — |
 | 2026-10-25 | P2/P5 | `packages/engine/tests/physix/StandingInvariant.test.ts` (`PHYS-STANDING`) | A | behoben | — |
 | 2026-10-25 | P2/P5 | `packages/engine/tests/core/behaviors/BehaviorMutationFuzz.test.ts` (`BEHAVIOR-MUTATION-SAFETY`, seed-gepinnt) | A | behoben | — |

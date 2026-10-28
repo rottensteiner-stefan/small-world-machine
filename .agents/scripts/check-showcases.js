@@ -13,7 +13,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SCREENSHOT_DIR = path.join(__dirname, "..", ".agents", "scratches", "screenshots");
+const SCREENSHOT_DIR = path.join(__dirname, "..", "..", ".agents", "scratches", "screenshots");
 // Below this per-pixel luminance standard deviation, we treat the canvas as
 // "effectively a single flat color" -- i.e. nothing was actually rendered,
 // even though no console/page error was thrown (this is exactly the kind of
@@ -335,7 +335,7 @@ async function run() {
 
   console.log("Launching Puppeteer...");
   // Use a strictly temporary user data dir that we clean up later
-  const tmpDir = path.join(__dirname, "..", ".agents", "scratches", "tmp_puppeteer_" + Date.now());
+  const tmpDir = path.join(__dirname, "..", "..", ".agents", "scratches", "tmp_puppeteer_" + Date.now());
   fs.mkdirSync(tmpDir, { recursive: true });
 
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });

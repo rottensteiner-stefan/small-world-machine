@@ -17,7 +17,7 @@ import { OilSlickMaterial } from "../src/materials/OilSlick/OilSlickMaterial.js"
 const testShaderRegistry = new ShaderRegistry();
 
 const REGISTRY_JSON = new URL(
-  "../../../scripts/lane-contracts/lane-contracts.json",
+  "../../../.agents/scripts/lane-contracts/lane-contracts.json",
   import.meta.url,
 );
 

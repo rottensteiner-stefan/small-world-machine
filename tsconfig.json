@@ -9,6 +9,6 @@
     "packages/*/tests/**/*",
     "apps/**/*",
     "tests/**/*",
-    "scripts/**/*.ts"
+    ".agents/scripts/**/*.ts"
   ]
 }

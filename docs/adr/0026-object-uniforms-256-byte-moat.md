@@ -1,6 +1,6 @@
 # ADR 0026: `ObjectUniforms` 256-Byte-Slot als MOAT — kein blindes Aufblähen
 
-> **Stand-Hinweis (2026-10-21):** Abgelöst durch [ADR 0027](./0027-object-uniforms-512-byte-expansion.md). Die S2-Splat-Lane und der S3-Wall-Contract sind inzwischen `active` (`scripts/lane-contracts/lane-contracts.json`), nicht mehr `reserved`; `poolHalfExtent` reist in `u_matParam2.w`.
+> **Stand-Hinweis (2026-10-21):** Abgelöst durch [ADR 0027](./0027-object-uniforms-512-byte-expansion.md). Die S2-Splat-Lane und der S3-Wall-Contract sind inzwischen `active` (`.agents/scripts/lane-contracts/lane-contracts.json`), nicht mehr `reserved`; `poolHalfExtent` reist in `u_matParam2.w`.
 
 > Status: **SUPERSEDED** — durch ADR 0027 auf 512 Byte erweitert. Dieser Eintrag bleibt als
 > historische Begründung der ursprünglichen 256-Byte-Moat erhalten (ursprünglich ACCEPTED, 2026-10-06).

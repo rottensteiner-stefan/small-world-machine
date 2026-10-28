@@ -20,7 +20,7 @@ bleibt lineare Daten. 8 Bit sRGB lösen dunkle Töne feiner auf als 8 Bit linear
   `u_irradianceMap`-/`u_prefilterMap`-Sample (Diffus, Spekular, Clearcoat). Guard:
   `IblColorspaceContract.test.ts`.
 - `ibl-gen` (`IBLShaders.equirectangularFragmentShader`) dekodiert das Eingangs-Panorama mit
-  `pow(2.2)`, faltet linear und exportiert sRGB. Die Option `--linear` (`scripts/ibl-bake.ts`,
+  `pow(2.2)`, faltet linear und exportiert sRGB. Die Option `--linear` (`.agents/scripts/ibl-bake.ts`,
   Harness, `exportCubemapToCross`) ist entfernt.
 - **Kein Neu-Backen nötig** für die mit dem Tool-Default gebackenen Sätze (13, 15, 16, 27, 28, 30, 36):
   Das alte Tool faltete die rohen Panorama-Bytes und kodierte beim Export mit `1/2.2`. Bezogen auf
