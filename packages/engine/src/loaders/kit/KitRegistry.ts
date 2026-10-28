@@ -31,6 +31,7 @@ import {
 import { pickKitTextureMap, type TextureMapSlot } from "./TextureSlotMatcher.js";
 
 export * from "./KitTypes.js";
+export * from "./SavegameTypes.js";
 
 export interface KitRegistryOptions {
   /** Base path prepended to kit queries. Defaults to "/assets/kits/". */

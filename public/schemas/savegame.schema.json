@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://small-world-machine.dev/schemas/savegame.schema.json",
+  "title": "Small World Machine Savegame Descriptor",
+  "description": "Schema for savegame descriptors (ADR 0041 Stufe 5, format v1). A savegame extends the level-descriptor context (ADR 0020): it stores runtime state referencing concrete levels/instances by stable ids — patch actions and minimal state flags, never copies of content objects. Validated by SavegameValidation.test.ts.",
+  "type": "object",
+  "required": ["id", "app", "schemaVersion", "storage", "settings", "levels"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*:[a-zA-Z0-9._/-]+$",
+      "description": "Stable savegame id in namespace:path form (ADR 0041 §2), e.g. 'the-whisper:slot-01'. Never reused."
+    },
+    "app": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "description": "App namespace this savegame belongs to (the app's stable id from app.json, ADR 0041 §2)."
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version of the savegame format (ADR 0041 §4). Unknown or future values fail fast on load."
+    },
+    "storage": {
+      "type": "string",
+      "enum": ["indexeddb", "opfs", "file"],
+      "description": "Format-level storage hint (ADR 0041 §1): IndexedDB/OPFS are the standard, file export is optional; never localStorage for everything."
+    },
+    "createdAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+      "description": "ISO 8601 timestamp of the savegame's creation."
+    },
+    "updatedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+      "description": "ISO 8601 timestamp of the savegame's last update."
+    },
+    "settings": {
+      "type": "object",
+      "description": "User settings. Language is a setting, not content (ADR 0041 §1/§3). Unknown setting keys are tolerated so newer engines may add preferences without breaking older loaders (forward tolerance, ADR 0041 §4).",
+      "properties": {
+        "language": {
+          "type": "string",
+          "minLength": 2,
+          "description": "UI/dialogue language (e.g. 'de', 'en'). A setting, not game content."
+        }
+      }
+    },
+    "levels": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Runtime state per referenced level/instance (ADR 0041 §1): stable ids plus minimal state flags and patch actions.",
+      "items": { "$ref": "#/$defs/levelState" }
+    }
+  },
+  "$defs": {
+    "levelState": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "description": "Stable level/instance id as declared in the app manifest (ADR 0041 §2)."
+        },
+        "flags": {
+          "type": "object",
+          "description": "Minimal state flags restricted to JSON primitives — never content objects (ADR 0041 §1).",
+          "additionalProperties": {
+            "type": ["boolean", "number", "string", "null"]
+          }
+        },
+        "patches": {
+          "type": "array",
+          "description": "Instance-branch overrides (Roblox-/Content-Patcher pattern, ADR 0041 §6) — never whole-object replacements.",
+          "items": { "$ref": "#/$defs/patchAction" }
+        }
+      }
+    },
+    "patchAction": {
+      "type": "object",
+      "required": ["op", "target"],
+      "description": "One override referencing an ID. Unknown fields are permitted and preserved (forward tolerance, ADR 0041 §4).",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": ["set", "add", "remove", "toggle"],
+          "description": "Action verb applied at the instance branch."
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A declared level/instance id from 'levels[]' or a stable namespace:path id (e.g. 'flakturm/bunker_blast_door'). Enforced testably by assertSavegameIdReferences (ADR 0041 §15.5)."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Dotted path of the state slot inside the target (e.g. 'door.blasted')."
+        },
+        "value": {
+          "description": "Payload of a set/add action. Any JSON value; may be omitted."
+        }
+      }
+    }
+  }
+}
