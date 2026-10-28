@@ -1,8 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.118.0] - 2026-10-28
 
-### "It is the mark of an instructed mind to rest satisfied with the degree of precision which the nature of the subject admits." - Aristotle
+### "Man is a tool-using animal. Without tools he is nothing, with tools he is all." - Thomas Carlyle
 
 - **Features:**
   - *Application Persistence Stufe 1 & 2 (ADR 0041):* Formales App-Manifest-Schema (`public/schemas/app.schema.json`, `APP_SCHEMA_VERSION = 1`, `AppManifest`, `assertAppManifest`) und `app.json`-Manifeste für alle vier Sample-Apps (`the-whisper`, `yad`, `light-cycle-arena`, `voxel-prototype`), validiert inkl. Datei-, Kit- und Level-Referenzprüfung in `AppManifestValidation.test.ts`. `public/schemas/level.schema.json` sowie die Level-Deskriptoren (`koje42.level.json`, `kaeltekammer.level.json`) führen `schemaVersion: 1` als Pflichtfeld; `KitRegistry.loadLevel()` validiert und migriert über `migrateLevelDescriptor()` (`LEVEL_MIGRATIONS`) mit Fail-Fast bei unbekannter `schemaVersion`.

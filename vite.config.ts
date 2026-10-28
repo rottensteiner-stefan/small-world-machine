@@ -10,7 +10,7 @@ import {
   directoryRedirectTarget,
   parseShowcaseLayout,
   showcasesRedirectTarget,
-} from "./scripts/lib/dev-redirects.ts";
+} from "./.agents/scripts/lib/dev-redirects.ts";
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -40,12 +40,13 @@ export default defineConfig({
         "**/.husky/**",
         "**/coverage/**",
         "**/dist/**",
-        "**/scripts/**",
         ...(process.env.VITEST ? [] : ["**/tests/**"]),
       ],
     },
     fs: {
-      deny: [".env*", "**/.claude/**", "**/.agents/**", "**/.husky/**"],
+      // Note: `.agents/scripts/` (committed repo tooling, incl. `probe-gpu-parity.html`) IS served;
+      // the deny list covers only the local-only working dirs under `.agents/`.
+      deny: [".env*", "**/.claude/**", "**/.agents/scratches/**", "**/.agents/notes/**", "**/.agents/collaborate/**", "**/.agents/skills/**", "**/.husky/**"],
     },
   },
   test: {
