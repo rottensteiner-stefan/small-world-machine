@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-10-28 — Restpunkte aus dem 7-Tage-Code-Review abgeschlossen (H2, H4, M2, M3, M4, M7, M11, K5, K9)
+
+**Status:** ✅ Alle offenen Review-Punkte aus `.agents/scratches/code-review-7d/E-voxel-whisper.md` (und dem Log-Vermerk vom 2026-10-21) behoben und mit Unit-Tests abgesichert (reine App-Level-Fixes, kein Engine-Change):
+
+- **Kaltstart-Guard (`H2` — `ChunkWorld.hasChunkDataAt` + `VoxelPlayerCollision.update`):** Solange der Chunk unter dem Spieler noch keine generierten Voxel-Daten hat (`rec?.chunk == null`), hält `VoxelPlayerCollision` das Streaming-Zentrum und die Kamerapose aktiv, pausiert aber Gravitation und Sweep (`_velocity = 0`). Der Spieler kann beim Kaltstart oder nach Respawn nicht mehr durch noch ungeladene Chunks fallen.
+- **Gamepad-Deduplizierung & radiale Deadzone (`H4` — `VoxelInputActions.ts`):** Analoge Sticks nutzen eine radiale Deadzone (`Math.hypot(x, y) > dz`). Ist `input.gamepadController.getActiveDevice()` in der Engine bereits aktiv, addiert `VoxelInputActions` linken Stick, rechten Stick (bei Pointer-Lock) und Button 0 (Jump) nicht ein zweites Mal auf `getAxis`/`mouse.dx/dy`/`isPressed(SPACE)`, sondern liest aus `navigator.getGamepads()` nur `L2`/`R2`/`L1`/`R1`.
+- **System-Modifier-Filter (`M11` — `VoxelInputActions.ts`):** Bei gehaltenem `Meta`, `Ctrl` oder `Alt` (`MetaLeft`/`Right`, `ControlLeft`/`Right`, `AltLeft`/`Right`) sind `F`/`Q`/`E`/`R`, `Digit1..5`, `Space` sowie `Ctrl+LMB` für Spielaktionen gesperrt (`Cmd+R` Reload, `Cmd+F` Suche, `Cmd+1..5` Tab-Wechsel oder `Ctrl+Klick` lösen kein Break/Place/Slot-Wechsel mehr aus).
+- **Host-Node- & Delta-Sicherheit bei `_onError`, Eviction und `destroy` (`M2` & `M3` — `ChunkWorld.ts`):** `ChunkRecord.hosted` merkt sich, ob `onMeshReady` bereits ein `Object3D` im Host angelegt hat (bleibt auch über Edit-Remeshes in Phase `"data"`/`"meshing"` erhalten). Eviction, `destroy()` und `_onError()` rufen bei `rec.hosted` zuverlässig `onUnload` auf und sichern `rec.deltas` vor dem Löschen via `_saveDelta(rec)`.
+- **Diagonaler Corner-Remesh (`M4` — `ChunkWorld._scheduleRemesh`):** Edits an einer der vier Chunk-Ecken (`lx ∈ {0,15} ∧ lz ∈ {0,15}`) planen neben den beiden axialen Nachbarn auch den einzelnen diagonalen Nachbarn ein (maximal 4 Chunks gesamt, weiterhin `≤ 5`), sodass die AO-Eckspalten naht-exakt bleiben.
+- **Seed-Prüfung & Stale-Record-Guard (`M7`, `K5`, `K9`):** `_applyStoredEdits` verwirft gespeicherte Deltas mit fremdem Seed (`data.seed !== this._seed`); `_onData` prüft Objektidentität (`this._chunks.get(key) !== rec`); `App.ts` fragt `heightAt(Math.floor(SPAWN_X), Math.floor(SPAWN_Z))` zellgenau ab.
+
+---
+
 ## 2026-10-26 — M6 implementiert: WebGPU-Array-Textur, prozeduraler Himmel, Sonnen-/Mond-Lauf
 
 **Status:** ✅ abgeschlossen (WebGPU und WebGL2 sichtbar deckungsgleich). Anders als M0–M5 mit zwei kleinen Engine-Änderungen, weil das Backlog-Ziel („WebGPU-Array-Texture, Engine-Seite“) genau das verlangt.
@@ -95,6 +108,7 @@
   Der Test pinnte vorher den Fehler (`{x: 1, z: -1}`) und prüft jetzt `|move| == 1`.
 - **Offen aus dem Review (nicht angefasst):** Spieler fällt beim Kaltstart durch ungeladene Chunks,
   Gamepad evtl. doppelt gezählt, Modifier-Filter (Cmd+R/F/1..5), Chunk-Mesh-Lecks bei `_onError`.
+  → Update 2026-10-28: ✅ Alle vier Punkte (plus M3/M4/M7/K5/K9) behoben, siehe Eintrag 2026-10-28 oben.
 
 ---
 

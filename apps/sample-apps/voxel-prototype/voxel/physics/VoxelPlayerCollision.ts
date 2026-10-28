@@ -201,6 +201,22 @@ export class VoxelPlayerCollision extends Behavior<Camera> {
       cam.pendingDy += actions ? actions.look.dy : input.mouse.dy;
     }
 
+    // Cold-start guard (H2): keep streaming centered on the player, but do not run gravity/sweep
+    // while the chunk column directly beneath the player still lacks generated voxel data.
+    const hasColumnData =
+      typeof this._options.world.hasChunkDataAt === "function"
+        ? this._options.world.hasChunkDataAt(this._body.x, this._body.z)
+        : true;
+    if (!hasColumnData) {
+      this._velocity = { x: 0, y: 0, z: 0 };
+      this._options.world.setFocus(this._body.x, this._body.z);
+      this._options.world.update();
+      cam.position.x = this._body.x;
+      cam.position.y = this._body.y + this._options.eyeHeight;
+      cam.position.z = this._body.z;
+      return;
+    }
+
     // 2. Desired planar velocity from WASD / actions, in the camera's yaw frame (FPSController parity).
     const moveZ = actions ? actions.move.z : input.getAxis(Keys.W, Keys.S); // W / forward is -1
     const strafe = actions ? actions.move.x : input.getAxis(Keys.A, Keys.D);

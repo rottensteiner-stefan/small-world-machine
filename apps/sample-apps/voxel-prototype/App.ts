@@ -212,7 +212,7 @@ export class App extends SmallWorldMachine {
 
     // 6. Player: FPS look via the FPS strategy, feet standing on the generated surface.
     const generator = new TerrainGenerator({ seed: WORLD_SEED });
-    const surface = generator.heightAt(SPAWN_X, SPAWN_Z); // topmost solid y
+    const surface = generator.heightAt(Math.floor(SPAWN_X), Math.floor(SPAWN_Z)); // topmost solid y
     this._player = new VoxelPlayerCollision({
       world: this._world,
       input: this.input,
@@ -286,7 +286,7 @@ export class App extends SmallWorldMachine {
   private _doRespawn(): void {
     this._rig.respawn();
     const generator = new TerrainGenerator({ seed: WORLD_SEED });
-    const surface = generator.heightAt(SPAWN_X, SPAWN_Z);
+    const surface = generator.heightAt(Math.floor(SPAWN_X), Math.floor(SPAWN_Z));
     this._player.setSpawn(SPAWN_X, surface + 1, SPAWN_Z);
     if (this._deathEl) this._deathEl.style.display = "none";
     if (!this.input.isPointerLocked) {

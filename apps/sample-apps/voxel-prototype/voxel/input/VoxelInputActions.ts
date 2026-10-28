@@ -36,6 +36,14 @@ export interface VoxelInputActionsOptions {
 }
 
 const DIGIT_KEYS: readonly Keys[] = [Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5];
+const SYSTEM_MODIFIER_CODES: readonly string[] = [
+  "MetaLeft",
+  "MetaRight",
+  Keys.CTRL_L,
+  Keys.CTRL_R,
+  Keys.ALT_L,
+  Keys.ALT_R,
+];
 
 /**
  * Semantic input translator for the Voxel prototype.
@@ -94,6 +102,17 @@ export class VoxelInputActions {
     let gpBumperL1 = false;
     let gpBumperR1 = false;
 
+    // System modifier guard (M11): Cmd/Ctrl/Alt shortcuts (e.g. Cmd+R reload, Cmd+1..5 tab switch,
+    // Ctrl+Click on macOS) must never trigger block break/place or hotbar slot selection.
+    const hasSystemModifier = SYSTEM_MODIFIER_CODES.some((code) => input.isPressed(code));
+    // Engine Input already maps active gamepad left stick -> getAxis, button 0 -> SPACE, and
+    // right stick -> mouse.dx/dy. Detect that so sticks/jump are never double-counted (H4).
+    const engineHasActiveGamepad = Boolean(
+      (
+        input as { gamepadController?: { getActiveDevice?: () => unknown } }
+      ).gamepadController?.getActiveDevice?.(),
+    );
+
     if (this._enableGamepad && typeof navigator !== "undefined" && navigator.getGamepads) {
       const pads = navigator.getGamepads();
       for (let i = 0; i < pads.length; i++) {
@@ -101,20 +120,24 @@ export class VoxelInputActions {
         if (!pad || !pad.connected) continue;
 
         const dz = this._gamepadDeadzone;
-        // Left stick: axes[0] = strafe (X), axes[1] = forward/back (Y, where -1 is forward)
-        if (Math.abs(pad.axes[0] ?? 0) > dz) gpMoveX += pad.axes[0]!;
-        if (Math.abs(pad.axes[1] ?? 0) > dz) gpMoveZ += pad.axes[1]!;
-
-        // Right stick: axes[2] = look X, axes[3] = look Y
-        if (Math.abs(pad.axes[2] ?? 0) > dz) {
-          gpLookX += pad.axes[2]! * this._gamepadLookSensitivity * (deltaTime * 60);
+        // Left stick with radial deadzone: axes[0] = strafe (X), axes[1] = forward/back (Y)
+        const lx = pad.axes[0] ?? 0;
+        const lz = pad.axes[1] ?? 0;
+        if (!engineHasActiveGamepad && Math.hypot(lx, lz) > dz) {
+          gpMoveX += lx;
+          gpMoveZ += lz;
         }
-        if (Math.abs(pad.axes[3] ?? 0) > dz) {
-          gpLookY += pad.axes[3]! * this._gamepadLookSensitivity * (deltaTime * 60);
+
+        // Right stick with radial deadzone: axes[2] = look X, axes[3] = look Y
+        const rx = pad.axes[2] ?? 0;
+        const ry = pad.axes[3] ?? 0;
+        if (!(engineHasActiveGamepad && input.isPointerLocked) && Math.hypot(rx, ry) > dz) {
+          gpLookX += rx * this._gamepadLookSensitivity * (deltaTime * 60);
+          gpLookY += ry * this._gamepadLookSensitivity * (deltaTime * 60);
         }
 
         // Standard buttons: 0 = ✕/A (Jump), 6 = L2 (Place), 7 = R2 (Break), 4 = L1, 5 = R1
-        if (pad.buttons[0]?.pressed) gpJump = true;
+        if (!engineHasActiveGamepad && pad.buttons[0]?.pressed) gpJump = true;
         if ((pad.buttons[7]?.value ?? 0) > 0.25 || pad.buttons[7]?.pressed) gpBreak = true;
         if ((pad.buttons[6]?.value ?? 0) > 0.25 || pad.buttons[6]?.pressed) gpPlace = true;
         if (pad.buttons[4]?.pressed) gpBumperL1 = true;
@@ -144,24 +167,30 @@ export class VoxelInputActions {
     };
 
     // 4. Jump
-    const jump = input.isPressed(Keys.SPACE) || gpJump;
+    const jump = (!hasSystemModifier && input.isPressed(Keys.SPACE)) || gpJump;
 
-    // 5. Break Block (LMB + KeyF + KeyQ + Gamepad R2)
+    // 5. Break Block (LMB + KeyF + KeyQ + Gamepad R2; suppressed under Cmd/Ctrl/Alt)
     const isBreakDown =
-      input.mouse.left || input.isPressed(Keys.F) || input.isPressed(Keys.Q) || gpBreak;
+      (!hasSystemModifier &&
+        (input.mouse.left || input.isPressed(Keys.F) || input.isPressed(Keys.Q))) ||
+      gpBreak;
     const breakEdge = isBreakDown && !this._prevBreak;
     this._prevBreak = isBreakDown;
 
-    // 6. Place Block (RMB + KeyE + KeyR + Gamepad L2)
+    // 6. Place Block (RMB + KeyE + KeyR + Gamepad L2; keyboard suppressed under Cmd/Ctrl/Alt)
     const isPlaceDown =
-      input.mouse.right || input.isPressed(Keys.E) || input.isPressed(Keys.R) || gpPlace;
+      input.mouse.right ||
+      (!hasSystemModifier && (input.isPressed(Keys.E) || input.isPressed(Keys.R))) ||
+      gpPlace;
     const placeEdge = isPlaceDown && !this._prevPlace;
     this._prevPlace = isPlaceDown;
 
-    // 7. Explicit Hand Slot (Digits 1..5)
+    // 7. Explicit Hand Slot (Digits 1..5; suppressed under Cmd/Ctrl/Alt)
     let digitMask = 0;
-    for (let i = 0; i < DIGIT_KEYS.length; i++) {
-      if (input.isPressed(DIGIT_KEYS[i]!)) digitMask |= 1 << i;
+    if (!hasSystemModifier) {
+      for (let i = 0; i < DIGIT_KEYS.length; i++) {
+        if (input.isPressed(DIGIT_KEYS[i]!)) digitMask |= 1 << i;
+      }
     }
     const newlyPressedDigits = digitMask & ~this._prevDigitMask;
     this._prevDigitMask = digitMask;

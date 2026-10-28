@@ -141,6 +141,46 @@ describe("ChunkWorld — setBlock semantics", () => {
     world.destroy();
   });
 
+  it("schedules the diagonal neighbor on a corner-cell edit so AO corner columns stay seam-exact (M4)", async () => {
+    const { world, remeshlag } = harness({ seed: 11, radius: 2 });
+    world.setFocus(32, 32); // chunk (2,2)
+    await pump(world, 30);
+    const before = remeshlag.length;
+
+    // Corner cell (lx=0, lz=0) of chunk (2,2) -> touches (1,2), (2,1), and diagonal (1,1) = 4 chunks
+    const gx = 32;
+    const gz = 32;
+    const gy = groundY(world, gx, gz);
+    expect(world.setBlock(gx, gy, gz, BLOCK_STONE)).toBe(true);
+    await pump(world, 5);
+    const touched = remeshlag.slice(before);
+    expect(touched).toEqual(expect.arrayContaining(["2,2", "1,2", "2,1", "1,1"]));
+    expect(touched.length).toBe(4);
+    world.destroy();
+  });
+
+  it("unloads hosted scene nodes even if evicted or destroyed while in 'data'/'meshing' after an edit (M2/M3)", async () => {
+    const client = new ControllableMeshClient();
+    const { world, hosts, unloads } = harness({ seed: 5, radius: 1, client });
+    world.setFocus(8, 8); // chunk (0,0)
+    await pump(world, 8);
+    await client.flush();
+    await pump(world, 2);
+    expect(hosts.has("0,0")).toBe(true);
+
+    // Edit puts chunk (0,0) back into "data" -> "meshing" (pending in ControllableMeshClient)
+    const gy = groundY(world, 8, 8);
+    expect(world.setBlock(8, gy, 8, BLOCK_AIR)).toBe(true);
+    await pump(world, 1);
+
+    // Evict chunk (0,0) while its remesh is still in flight -> must still call onUnload!
+    world.setFocus(8 + 10 * 16, 8);
+    await pump(world, 1);
+    expect(unloads).toContain("0,0");
+    expect(hosts.has("0,0")).toBe(false);
+    world.destroy();
+  });
+
   it("never meshes an unloaded column (no-op) and ignores out-of-band Y edits", async () => {
     const { world } = harness({ seed: 1, radius: 2 });
     world.setFocus(32, 32);

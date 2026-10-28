@@ -100,4 +100,37 @@ describe("VoxelPlayerCollision — Step-Up & Survival Rig (M4)", () => {
     expect(feet.y).toBe(20);
     expect(feet.z).toBe(10);
   });
+
+  it("suspends gravity and sweep while the spawn column has no chunk data yet (cold-start guard H2)", () => {
+    let chunkLoaded = false;
+    const world = {
+      isSolidAt: (x: number, y: number, z: number): boolean =>
+        chunkLoaded && y < 10 && x === 0 && z === 0,
+      hasChunkDataAt: vi.fn((): boolean => chunkLoaded),
+      setFocus: vi.fn(),
+      update: vi.fn(),
+    } as unknown as ChunkWorld;
+
+    const player = new VoxelPlayerCollision({
+      world,
+      input: makeFakeInput(),
+    });
+    const cam = new Camera(new PerspectiveProjection());
+    player.target = cam;
+    player.setSpawn(0.5, 10, 0.5);
+
+    // Frame 1 & 2 while worker has not delivered chunk data yet: player must NOT fall through y=10
+    player.update(0.5);
+    player.update(0.5);
+    expect(player.getFeetPosition().y).toBe(10);
+    expect(world.setFocus).toHaveBeenCalledWith(0.5, 0.5);
+    expect(world.update).toHaveBeenCalledTimes(2);
+    expect(cam.position.y).toBeCloseTo(11.62, 5);
+
+    // Once chunk data arrives, sweep runs and lands the player on the solid y=9 block (feet at 10)
+    chunkLoaded = true;
+    player.update(0.016);
+    expect(player.getFeetPosition().y).toBe(10);
+    expect(player.isOnGround()).toBe(true);
+  });
 });

@@ -40,6 +40,8 @@ interface ChunkRecord {
   cz: number;
   phase: Phase;
   chunk: Chunk | null; // non-null once phase >= "data", may be evicted to null when far (S4)
+  /** True once `onMeshReady` has hosted a scene node for this record (stays true across edit remeshes). */
+  hosted: boolean;
   voxelEvicted?: boolean;
   reloadingVoxels?: boolean;
   /** Set while a mesh is in flight if an edit mutated the voxels; the loop remeshes afterwards. */
@@ -212,7 +214,7 @@ export class ChunkWorld {
     // 1. Evict far chunks (only after their host was removed).
     for (const [key, rec] of Array.from(this._chunks)) {
       if (chebyshev(rec.cx, rec.cz, fx, fz) > this._unloadRadius) {
-        if (rec.phase === "ready") this._callbacks.onUnload(rec.cx, rec.cz);
+        if (rec.hosted) this._callbacks.onUnload(rec.cx, rec.cz);
         this._saveDelta(rec); // M3: persist edited cells BEFORE the record is dropped (D3)
         this._chunks.delete(key);
       }
@@ -274,6 +276,12 @@ export class ChunkWorld {
         }
       }
     }
+  }
+
+  /** Whether the chunk column containing `(wx, wz)` currently holds loaded voxel data. */
+  public hasChunkDataAt(wx: number, wz: number): boolean {
+    const rec = this._chunks.get(keyOf(Math.floor(wx / CHUNK_SIZE), Math.floor(wz / CHUNK_SIZE)));
+    return rec?.chunk !== null && rec?.chunk !== undefined;
   }
 
   /** World-space voxel lookup used by the player sweep. Unloaded chunk / out of column -> air. */
@@ -381,7 +389,7 @@ export class ChunkWorld {
 
   public destroy(): void {
     for (const rec of this._chunks.values()) {
-      if (rec.phase === "ready") this._callbacks.onUnload(rec.cx, rec.cz);
+      if (rec.hosted) this._callbacks.onUnload(rec.cx, rec.cz);
       this._saveDelta(rec); // M3: persist edited cells even on hard teardown
     }
     this._chunks.clear();
@@ -416,6 +424,7 @@ export class ChunkWorld {
       cz,
       phase: "generating",
       chunk: null,
+      hosted: false,
       dirty: false,
       deltas: new Map(),
     };
@@ -465,8 +474,9 @@ export class ChunkWorld {
     chunk.voxels.set(data);
     rec.chunk = chunk;
     await this._applyStoredEdits(cx, cz, rec);
-    if (!this._chunks.has(keyOf(cx, cz))) {
-      // Evicted while the store read was in flight -- persist the fully applied edits, skip mesh.
+    if (this._chunks.get(keyOf(cx, cz)) !== rec) {
+      // Evicted (and possibly re-requested) while the store read was in flight -- persist the
+      // fully applied edits of this record and skip meshing the stale instance.
       this._saveDelta(rec);
       void this._persistSeed();
       return;
@@ -507,6 +517,12 @@ export class ChunkWorld {
       );
       return;
     }
+    if (data.seed !== this._seed) {
+      console.warn(
+        `[ChunkWorld] discarding stored delta for (${cx}, ${cz}): seed mismatch (${data.seed} !== ${this._seed})`,
+      );
+      return;
+    }
     let applied = 0;
     for (const edit of data.edits) {
       const index = chunk.indexOf(edit.x, edit.y, edit.z);
@@ -539,6 +555,11 @@ export class ChunkWorld {
     if (lx === CHUNK_SIZE - 1) schedule(cx + 1, cz);
     if (lz === 0) schedule(cx, cz - 1);
     if (lz === CHUNK_SIZE - 1) schedule(cx, cz + 1);
+    // Corner edits also touch the single diagonal neighbor whose AO corner column is (lx, lz).
+    if (lx === 0 && lz === 0) schedule(cx - 1, cz - 1);
+    if (lx === CHUNK_SIZE - 1 && lz === 0) schedule(cx + 1, cz - 1);
+    if (lx === 0 && lz === CHUNK_SIZE - 1) schedule(cx - 1, cz + 1);
+    if (lx === CHUNK_SIZE - 1 && lz === CHUNK_SIZE - 1) schedule(cx + 1, cz + 1);
   }
 
   /**
@@ -584,15 +605,23 @@ export class ChunkWorld {
       return;
     }
     rec.phase = "ready";
+    rec.hosted = true;
     this._meshMsLast = outcome.meshMs;
     this._meshMsTotal += outcome.meshMs;
     this._callbacks.onMeshReady(cx, cz, outcome.mesh);
   }
 
   private _onError(cx: number, cz: number, err: unknown): void {
-    // Keep the world robust: drop the record so the next tick regenerates it (transient worker
-    // errors self-heal). Persistent bugs surface in the console.
-    this._chunks.delete(keyOf(cx, cz));
+    // Keep the world robust: unload any previously hosted node and persist pending edit deltas
+    // before dropping the record so the next tick can regenerate it cleanly without leaking
+    // scene nodes or losing player edits.
+    const key = keyOf(cx, cz);
+    const rec = this._chunks.get(key);
+    if (rec) {
+      if (rec.hosted) this._callbacks.onUnload(rec.cx, rec.cz);
+      this._saveDelta(rec);
+      this._chunks.delete(key);
+    }
     console.warn(`[ChunkWorld] task failed for chunk (${cx}, ${cz}):`, err);
   }
 

@@ -244,4 +244,75 @@ describe("ChunkWorld — persistence (M3)", () => {
     expect(world.getWorldBlock(40, 14, 40)).toBe(BLOCK_STONE);
     world.destroy();
   });
+
+  it("discards stored deltas whose seed does not match the current world seed (M7)", async () => {
+    const store = new MemoryChunkDeltaStore();
+    await store.setSeed(999);
+    await store.saveChunkDelta(
+      2,
+      2,
+      encodeChunkDelta(999, [{ x: 8, y: 14, z: 8, id: BLOCK_STONE }]),
+    );
+
+    const world = harness(store, 7);
+    world.setFocus(32, 32);
+    await pump(world, 20);
+    // Foreign-seed delta at (8,14,8) must not be applied to seed-7 terrain
+    expect(world.getWorldBlock(40, 14, 40)).toBe(BLOCK_AIR);
+    world.destroy();
+  });
+
+  it("persists pending deltas and unloads hosted mesh when a worker mesh task fails in _onError (M2)", async () => {
+    const store = new MemoryChunkDeltaStore();
+    const baseClient = new ForegroundMeshClient();
+    let failNextMesh = false;
+    const unloads: string[] = [];
+    const registry = new BlockRegistry();
+    BlockRegistry.seed(registry);
+    const world = new ChunkWorld({
+      client: {
+        configure: (s, d): void => baseClient.configure(s, d),
+        generate: (cx, cz): Promise<Uint8Array> => baseClient.generate(cx, cz),
+        mesh: (
+          cx,
+          cz,
+          v,
+          n,
+          c,
+        ): Promise<import("../voxel/worker/MeshWorkerProtocol.js").MeshOutcome> =>
+          failNextMesh
+            ? Promise.reject(new Error("simulated worker mesh error"))
+            : baseClient.mesh(cx, cz, v, n, c),
+        destroy: (): void => baseClient.destroy(),
+      },
+      descriptor: descriptorFromRegistry(registry),
+      seed: 7,
+      store,
+      generateRadius: 1,
+      maxTasksPerTick: 64,
+      callbacks: {
+        onMeshReady: (): void => {},
+        onUnload: (cx, cz): void => {
+          unloads.push(`${cx},${cz}`);
+        },
+      },
+    });
+
+    world.setFocus(8, 8); // chunk (0,0)
+    await pump(world, 15);
+    expect(world.hasChunkDataAt(8, 8)).toBe(true);
+
+    // Edit chunk (0,0), but make the remesh fail
+    failNextMesh = true;
+    expect(world.setBlock(8, 14, 8, BLOCK_STONE)).toBe(true);
+    await pump(world, 3);
+    await world.flushStore();
+
+    // _onError unloaded the hosted node AND saved the edit delta to the store
+    expect(unloads).toContain("0,0");
+    const delta = await viewDelta(store, 0, 0);
+    expect(delta).not.toBeNull();
+    expect(delta!.edits).toContainEqual({ x: 8, y: 14, z: 8, id: BLOCK_STONE });
+    world.destroy();
+  });
 });
