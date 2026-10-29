@@ -1,5 +1,8 @@
-import type { CameraInterfaceData } from "@small-world-machine/engine";
+import type { CameraInterfaceData, PointLight } from "@small-world-machine/engine";
 import { Behavior, Vector3D } from "@small-world-machine/engine";
+
+/** Rank offset for lights whose whole range lies behind the camera: picked only if slots remain. */
+const BEHIND_CAMERA_PENALTY = 1e12;
 import type { FireLightBehavior } from "./FireLightBehavior.js";
 
 /**
@@ -28,6 +31,7 @@ export class FireLightBudget extends Behavior<CameraInterfaceData> {
   private _distances: Float32Array = new Float32Array(0);
   private _selected: Uint8Array = new Uint8Array(0);
   private readonly _scratch: Vector3D = new Vector3D(0, 0, 0);
+  private readonly _forward: Vector3D = new Vector3D(0, 0, 0);
 
   constructor(options: FireLightBudgetOptions = {}) {
     super();
@@ -68,6 +72,26 @@ export class FireLightBudget extends Behavior<CameraInterfaceData> {
     }
   }
 
+  // Distance ranks the fires, but a light whose whole range sphere lies behind the camera cannot
+  // reach anything visible, so it only gets a slot after every fire that can. Lights just behind
+  // the camera still rank normally: they light the wall in front of it.
+  private _rank(
+    light: PointLight | undefined,
+    cameraPosition: Vector3D,
+    forward: Vector3D,
+    hasForward: boolean,
+  ): number {
+    if (!light) {
+      return Infinity;
+    }
+    const offset = light.getWorldPosition(this._scratch).sub(cameraPosition);
+    const distanceSq = offset.lengthSq();
+    if (hasForward && offset.dot(forward) < -light.distance) {
+      return BEHIND_CAMERA_PENALTY + distanceSq;
+    }
+    return distanceSq;
+  }
+
   /** @inheritdoc */
   public update(deltaTime: number): void {
     const camera = this.target;
@@ -79,11 +103,12 @@ export class FireLightBudget extends Behavior<CameraInterfaceData> {
     const distances = this._distances;
     const selected = this._selected;
 
+    const forward = this._forward.copyFrom(camera.target).sub(camera.position);
+    const forwardLength = forward.length();
+    if (forwardLength > 1e-6) forward.scale(1 / forwardLength);
+
     for (let i = 0; i < count; i++) {
-      const light = fires[i]!.light;
-      distances[i] = light
-        ? light.getWorldPosition(this._scratch).distanceToSq(camera.position)
-        : Infinity;
+      distances[i] = this._rank(fires[i]!.light, camera.position, forward, forwardLength > 1e-6);
       selected[i] = 0;
     }
 

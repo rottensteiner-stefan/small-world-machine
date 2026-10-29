@@ -56,6 +56,28 @@ describe("FireFlickerProfile", () => {
   });
 });
 
+describe("FireFlickerProfile at capture frame rates", () => {
+  // The 13 Hz micro jitter must not alias into a slow, visible beat when recorded. Compare a
+  // 1 s moving average (everything faster is invisible as a "beat") of the capture against a
+  // densely sampled reference: an alias would show up as extra low-frequency drift.
+  it.each([24, 25, 30, 60])("shows no low-frequency alias at %i fps", (fps) => {
+    const p = new FireFlickerProfile(11);
+    const seconds = 20;
+    let worst = 0;
+    for (let start = 0; start + 1 <= seconds; start += 0.5) {
+      let capture = 0;
+      for (let f = 0; f < fps; f++) capture += p.sample(start + f / fps);
+      capture /= fps;
+      let reference = 0;
+      const steps = 2000;
+      for (let k = 0; k < steps; k++) reference += p.sample(start + k / steps);
+      reference /= steps;
+      worst = Math.max(worst, Math.abs(capture - reference));
+    }
+    expect(worst).toBeLessThan(0.02);
+  });
+});
+
 describe("FireLightBehavior", () => {
   it("captures base intensity and position on attach", () => {
     const { fire } = makeFire(2);
@@ -127,8 +149,11 @@ describe("FireLightBehavior", () => {
 });
 
 describe("FireLightBudget", () => {
-  function camera(x: number): CameraInterfaceData {
-    return { position: new Vector3D(x, 1, 0) } as unknown as CameraInterfaceData;
+  function camera(x: number, lookX: number = x, lookZ: number = -10): CameraInterfaceData {
+    return {
+      position: new Vector3D(x, 1, 0),
+      target: new Vector3D(lookX, 1, lookZ),
+    } as unknown as CameraInterfaceData;
   }
 
   it("keeps the nearest fires lit and fades the rest out of the light list", () => {
@@ -170,6 +195,47 @@ describe("FireLightBudget", () => {
     expect(near.fire.fade).toBe(0);
     expect(near.light.isVisible).toBe(false);
     expect(far.fire.fade).toBe(1);
+  });
+
+  it("gives no slot to a fire whose whole range lies behind the camera while one ahead waits", () => {
+    // makeFire places lights on z = 0 at x; put one 10 m behind (range 8 m) and one 12 m ahead.
+    const behind = makeFire(0);
+    behind.light.position.set(0, 1, 10);
+    behind.light.updateMatrixWorld(true);
+    behind.fire.basePosition.set(0, 1, 10);
+    const ahead = makeFire(0);
+    ahead.light.position.set(0, 1, -12);
+    ahead.light.updateMatrixWorld(true);
+    ahead.fire.basePosition.set(0, 1, -12);
+    const budget = new FireLightBudget({ maxActive: 1, fadeTime: 0.5 });
+    budget.register(behind.fire);
+    budget.register(ahead.fire);
+    const cam = camera(0, 0, -10);
+    budget.onAttach(cam);
+    for (let frame = 0; frame < 40; frame++) budget.update(DT);
+    expect(ahead.fire.fade).toBe(1);
+    expect(behind.fire.fade).toBe(0);
+
+    // Turning around over the back line hands the slot over again.
+    cam.target.set(0, 1, 10);
+    for (let frame = 0; frame < 40; frame++) budget.update(DT);
+    expect(behind.fire.fade).toBe(1);
+    expect(ahead.fire.fade).toBe(0);
+  });
+
+  it("still ranks a fire just behind the camera that lights the scene ahead", () => {
+    const near = makeFire(0);
+    near.light.position.set(0, 1, 2);
+    near.light.updateMatrixWorld(true);
+    const far = makeFire(0);
+    far.light.position.set(0, 1, -30);
+    far.light.updateMatrixWorld(true);
+    const budget = new FireLightBudget({ maxActive: 1 });
+    budget.register(near.fire);
+    budget.register(far.fire);
+    budget.onAttach(camera(0, 0, -10));
+    for (let frame = 0; frame < 40; frame++) budget.update(DT);
+    expect(near.fire.fade).toBe(1);
   });
 
   it("restores a fire to fully lit when it leaves budget control", () => {
