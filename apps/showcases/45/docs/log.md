@@ -78,3 +78,24 @@ P6 Goldens. Nachtszene vor einer Steinwand, damit Emission, Bloom und Lichtwurf 
   braucht damit nur noch: Ordner, `prev`/`next` in der Tour-Kette, Galerie-Kachel + Zähler, Tour-Liste
   im Wiring-Test.
 - Verhaltensänderung: ◀/▶ springen jetzt in Tour-Reihenfolge statt numerisch.
+
+## 2026-10-29 · Fire-Lab-Panel (HUD) · `FireLightBehavior.flicker`
+
+- Korrektur zum P2-Eintrag: Es waren 15 Feuer, nicht 19 (10 Reihe + 3 Vergleich + Lagerfeuer + Kerze);
+  mit `CURSED` jetzt 16.
+- Neues Seitenpanel `FireLabHud.ts` (Muster `swm-inspector-drawer` wie 38/44): Live-Readout, Vorher/Nachher-Schalter
+  (Flackern, Flamme, Glow, Lichter, Bloom), Zeit (Pause, ×0,1–×2), Farbe (Original/Blackbody/Spectral/Wisp/Cursed),
+  Flamme (Temperatur, Intensität, Unruhe, Fluss), Wind (Stärke, Richtung), Licht-Budget (Regler, Markierung
+  unbeleuchteter Feuer), Tag/Nacht. Einstellungen skalieren den authored Look jedes Feuers, überschreiben ihn nicht.
+- `FireLightBehavior.flicker` (0..1, Bibliothek): 0 = ruhiges Licht für den A/B-Vergleich. Temperatur-Abbildung
+  stückweise linear, damit Basisintensität exakt Basistemperatur ergibt.
+- Zeitlupe/Pause erreichen auch das Licht: Die Behaviors laufen mit `isActive = false` und werden in
+  `update()` mit skalierter Zeit über `time`/`apply()` getrieben.
+- Tastenkürzel layoutneutral (deutsches Mac-Layout hat kein `=`, `[ ]` nur mit Alt): Symbole über
+  `event.key` (`+ - , .`), Buchstaben/Ziffern über `event.code`. Tempo: T (Zyklus).
+- Wind kippt jede Flamme starr um ihre Basis. `FireMaterial.lean` verschiebt die Flamme innerhalb jeder Card
+  und spaltet gekreuzte Cards (die Card quer zum Wind kann sich nicht neigen) — sichtbar als zwei Zungen.
+  Saubere Lösung: Vertex-Scherung in Weltkoordinaten, geplant mit der getragenen Fackel (P4).
+- Fallstrick vermieden: Lichter bekommen eine Kopie der Palettenfarbe, sonst schriebe `FireLightBehavior`
+  beim Umschalten auf Blackbody in die globale `FlamePalettes`-Konstante.
+- Bekannt: Das Panel überdeckt den ▶-Button (gleiches Verhalten wie Showcase 44).

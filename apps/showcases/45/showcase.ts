@@ -5,6 +5,7 @@ import {
   Color,
   Cube,
   Cylinder,
+  DirectionalLight,
   Object3D,
   Plane,
   PointLight,
@@ -23,10 +24,27 @@ import {
   FlamePalettes,
   createFlameCardGeometry,
 } from "@small-world-machine/vfx-extras";
+import type { FireLabSettings, PaletteChoice } from "./FireLabHud.js";
+import { FireLabHud, defaultFireLabSettings } from "./FireLabHud.js";
 
-/** Torch spacing along the long wall; with 19 fires the budget visibly hands lights over. */
+/** Torch spacing along the long wall; 16 fires in total, so the budget visibly hands lights over. */
 const TORCH_ROW_X = [-20, -16, -12, -8, -5, 5, 8, 12, 16, 20];
 const BLACKBODY_K = 2000;
+const DEFAULT_LIGHT_BUDGET = 10;
+/** Flame tilt in radians at full wind strength (~29°). */
+const WIND_TILT = 0.5;
+const READOUT_INTERVAL = 0.25;
+const BUDGET_DEBUG_TINT = new Color(1, 0.05, 0.05);
+const NIGHT_AMBIENT = 0.08;
+const DAY_AMBIENT = 0.9;
+const DAY_SUN = 2.2;
+
+const PALETTE_OVERRIDES: Record<Exclude<PaletteChoice, "original">, FlamePalette | undefined> = {
+  blackbody: undefined,
+  spectral: FlamePalettes.SPECTRAL,
+  wisp: FlamePalettes.WISP,
+  cursed: FlamePalettes.CURSED,
+};
 
 interface FlameSpec {
   readonly name: string;
@@ -75,11 +93,18 @@ function rowTorchVariation(index: number): TorchVariation {
   };
 }
 
-/** One fire's parts the frame loop keeps in sync with its light flicker. */
+/** One fire's parts and its authored look, which lab settings scale but never overwrite. */
 interface FireRig {
   readonly flame: FireMaterial;
   readonly glow: FlameGlowMaterial;
   readonly light: FireLightBehavior;
+  readonly flameObject: Object3D;
+  readonly glowObject: Object3D;
+  readonly pointLight: PointLight;
+  readonly palette: FlamePalette | undefined;
+  readonly temperatureK: number;
+  readonly turbulence: number;
+  readonly flowSpeed: number;
   readonly flameIntensity: number;
   readonly glowIntensity: number;
 }
@@ -92,14 +117,39 @@ interface FireRig {
  */
 export class Showcase45 extends AbstractShowcase {
   private readonly _fires: FireRig[] = [];
-  private readonly _budget: FireLightBudget = new FireLightBudget({ maxActive: 10 });
+  private readonly _budget: FireLightBudget = new FireLightBudget({
+    maxActive: DEFAULT_LIGHT_BUDGET,
+  });
+  private readonly _settings: FireLabSettings = defaultFireLabSettings(DEFAULT_LIGHT_BUDGET);
+  private readonly _ambient: AmbientLight = new AmbientLight({
+    color: new Color(0.35, 0.4, 0.6),
+    intensity: NIGHT_AMBIENT,
+  });
+  private readonly _sun: DirectionalLight = new DirectionalLight({
+    color: new Color(1, 0.96, 0.88),
+    intensity: 0,
+  });
+  private _bloom: BloomElement | undefined = undefined;
+  private _hud: FireLabHud | undefined = undefined;
   private _time: number = 0;
+  private _readoutTimer: number = 0;
 
   public override async start(): Promise<void> {
     await super.start();
     // Only after start(): AbstractShowcase installs its fly controller solely on a camera that has
     // no behaviors yet, so attaching the budget earlier silently disables camera movement.
     this.camera.addBehavior(this._budget);
+    this._hud = new FireLabHud(this._settings, this._fires.length, () => this._applySettings());
+    this._applySettings();
+  }
+
+  protected override onKeyDown(event: KeyboardEvent): void {
+    super.onKeyDown(event);
+    if (event.altKey || event.metaKey || event.ctrlKey) return;
+    if (document.activeElement?.tagName === "INPUT") return;
+    if (this._hud?.handleKey(event)) {
+      event.preventDefault();
+    }
   }
 
   protected override async setupScene(): Promise<void> {
@@ -114,8 +164,11 @@ export class Showcase45 extends AbstractShowcase {
       bloom.threshold = 0.85;
       bloom.radius = 0.6;
     }
+    this._bloom = bloom;
 
-    this.scene.add(new AmbientLight({ color: new Color(0.35, 0.4, 0.6), intensity: 0.08 }));
+    this.scene.add(this._ambient);
+    this._sun.direction.set(-0.4, -1, -0.6).normalize();
+    this.scene.add(this._sun);
 
     const [ashlar, masonry, wood] = await Promise.all([
       this._loadSurface("stone_ashlar", 12, 3.5, 0.85),
@@ -185,16 +238,88 @@ export class Showcase45 extends AbstractShowcase {
   }
 
   protected override update(deltaTime: number): void {
-    this._time += deltaTime;
+    const s = this._settings;
+    const dt = s.paused ? 0 : deltaTime * s.timeScale;
+    this._time += dt;
     const fires = this._fires;
+    let lit = 0;
     for (let i = 0; i < fires.length; i++) {
       const rig = fires[i]!;
+      // Driven here instead of by the engine so pause and slow motion reach the flicker too.
+      rig.light.time += dt;
+      rig.light.apply();
       // The flame body breathes with the light, but far less: it is the light that should dance.
       const value = rig.light.value;
       rig.flame.time = this._time;
-      rig.flame.intensity = rig.flameIntensity * (0.8 + 0.2 * value);
-      rig.glow.intensity = rig.glowIntensity * (0.6 + 0.4 * value);
+      rig.flame.intensity = rig.flameIntensity * s.intensityScale * (0.8 + 0.2 * value);
+      rig.glow.intensity = rig.glowIntensity * s.intensityScale * (0.6 + 0.4 * value);
+      const unlit = rig.light.fade < 0.999;
+      if (!unlit) lit++;
+      if (s.showBudget) {
+        rig.glow.tint = unlit ? BUDGET_DEBUG_TINT : this._glowTintOf(rig);
+      }
     }
+
+    this._readoutTimer -= deltaTime;
+    if (this._hud && this._readoutTimer <= 0) {
+      this._readoutTimer = READOUT_INTERVAL;
+      const speed = s.paused ? "eingefroren" : `×${s.timeScale}`;
+      this._hud.setReadout(
+        `Feuer mit Licht:  ${lit} / ${fires.length}  (Budget ${s.lights ? s.maxActiveLights : 0})\n` +
+          `Zeit:             ${speed}\n` +
+          `Renderer:         ${this.renderer.type}`,
+      );
+    }
+  }
+
+  private _applySettings(): void {
+    const s = this._settings;
+    // Wind tilts each flame rigidly about its base. FireMaterial.lean shifts the flame within each
+    // card, which splits crossed cards (the card across the wind cannot lean); a world-space
+    // vertex shear is the proper fix and is planned with the carried torch (P4).
+    const windRad = (s.windAngleDeg * Math.PI) / 180;
+    const tilt = s.windStrength * WIND_TILT;
+    const tiltX = -Math.cos(windRad) * tilt;
+    const tiltZ = -Math.sin(windRad) * tilt;
+
+    for (let i = 0; i < this._fires.length; i++) {
+      const rig = this._fires[i]!;
+      const palette = s.palette === "original" ? rig.palette : PALETTE_OVERRIDES[s.palette];
+      const temperatureK = rig.temperatureK * s.temperatureScale;
+
+      rig.flame.palette = palette;
+      rig.flame.temperatureK = temperatureK;
+      rig.flame.turbulence = rig.turbulence * s.turbulenceScale;
+      rig.flame.flowSpeed = rig.flowSpeed * s.flowScale;
+      rig.flameObject.rotation.set(tiltX, 0, tiltZ);
+
+      rig.glow.temperatureK = temperatureK * 0.95;
+      rig.glow.tint = palette?.body;
+
+      rig.light.flicker = s.flicker ? 1 : 0;
+      rig.light.temperatureK = palette ? undefined : temperatureK;
+      if (palette) {
+        rig.pointLight.color.copyFrom(palette.body);
+      }
+
+      rig.flameObject.isVisible = s.flame;
+      rig.glowObject.isVisible = s.glow;
+    }
+
+    this._budget.maxActive = s.lights ? s.maxActiveLights : 0;
+    if (this._bloom) {
+      this._bloom.enabled = s.bloom;
+    }
+    this._ambient.intensity = s.daylight ? DAY_AMBIENT : NIGHT_AMBIENT;
+    this._sun.intensity = s.daylight ? DAY_SUN : 0;
+  }
+
+  private _glowTintOf(rig: FireRig): Color | undefined {
+    const palette =
+      this._settings.palette === "original"
+        ? rig.palette
+        : PALETTE_OVERRIDES[this._settings.palette];
+    return palette?.body;
   }
 
   private _addWallTorch(
@@ -270,7 +395,8 @@ export class Showcase45 extends AbstractShowcase {
 
     const light = new PointLight({
       name: `${spec.name}_Light`,
-      color: glowColor ?? Color.fromTemperature(temperatureK),
+      // Own copy: FireLightBehavior writes the light colour in place, never into a shared palette.
+      color: glowColor ? glowColor.clone() : Color.fromTemperature(temperatureK),
       intensity: spec.lightIntensity,
       distance: spec.lightDistance,
       decay: 2,
@@ -285,12 +411,21 @@ export class Showcase45 extends AbstractShowcase {
       temperatureK: spec.palette ? undefined : temperatureK,
     });
     light.addBehavior(lightBehavior);
+    // update() advances it with the lab's time scale instead.
+    lightBehavior.isActive = false;
     this._budget.register(lightBehavior);
 
     this._fires.push({
       flame: fire,
       glow: glowMat,
       light: lightBehavior,
+      flameObject: flame,
+      glowObject: glow,
+      pointLight: light,
+      palette: spec.palette,
+      temperatureK,
+      turbulence: fire.turbulence,
+      flowSpeed: fire.flowSpeed,
       flameIntensity: fire.intensity,
       glowIntensity: glowMat.intensity,
     });

@@ -42,6 +42,8 @@ export class FireLightBehavior extends Behavior<Object3D> {
   public time: number = 0;
   /** @derived 0..1 visibility weight written by `FireLightBudget`; 1 when no budget is used. */
   public fade: number = 1;
+  /** @domain flicker depth 0..1; 0 = steady light at base intensity and position (A/B comparison). */
+  public flicker: number = 1;
   /** @derived current flicker multiplier; read it to sync flame and glow intensity. */
   public value: number = 1;
 
@@ -88,23 +90,28 @@ export class FireLightBehavior extends Behavior<Object3D> {
       return;
     }
 
-    const value = this._profile.sample(this.time);
+    const value = 1 + (this._profile.sample(this.time) - 1) * this.flicker;
     this.value = value;
     light.intensity = this.baseIntensity * value * this.fade;
 
     if (this.temperatureK !== undefined) {
-      const t =
-        (value - FireFlickerProfile.MIN) / (FireFlickerProfile.MAX - FireFlickerProfile.MIN);
-      const ratio = COOL_TEMPERATURE_RATIO + (HOT_TEMPERATURE_RATIO - COOL_TEMPERATURE_RATIO) * t;
-      Color.fromTemperature(this.temperatureK * ratio, light.color);
+      Color.fromTemperature(this.temperatureK * temperatureRatio(value), light.color);
     }
 
     const s = this.time * JITTER_FREQ;
-    const j = this.jitter * 2;
+    const j = this.jitter * this.flicker * 2;
     light.position.set(
       this.basePosition.x + (this._profile.noise(s, 3) - 0.5) * j,
       this.basePosition.y + (this._profile.noise(s, 4) - 0.5) * j * 0.33,
       this.basePosition.z + (this._profile.noise(s, 5) - 0.5) * j,
     );
   }
+}
+
+/** Piecewise linear so the base intensity (1) maps exactly to the base temperature. */
+export function temperatureRatio(value: number): number {
+  if (value < 1) {
+    return 1 - ((1 - value) / (1 - FireFlickerProfile.MIN)) * (1 - COOL_TEMPERATURE_RATIO);
+  }
+  return 1 + ((value - 1) / (FireFlickerProfile.MAX - 1)) * (HOT_TEMPERATURE_RATIO - 1);
 }

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { CameraInterfaceData } from "@small-world-machine/engine";
 import { Color, PointLight, Vector3D } from "@small-world-machine/engine";
 import { FireFlickerProfile } from "../src/fire/FireFlickerProfile.js";
-import { FireLightBehavior } from "../src/fire/FireLightBehavior.js";
+import { FireLightBehavior, temperatureRatio } from "../src/fire/FireLightBehavior.js";
 import { FireLightBudget } from "../src/fire/FireLightBudget.js";
 
 const DT = 1 / 60;
@@ -65,7 +65,6 @@ describe("FireLightBehavior", () => {
 
   it("flickers intensity, cools the colour when dim and sways within the jitter radius", () => {
     const { light, fire } = makeFire(0, 5);
-    const span = FireFlickerProfile.MAX - FireFlickerProfile.MIN;
     let dimmest = Infinity;
     let dimmestGreen = 0;
     let brightest = -Infinity;
@@ -75,13 +74,38 @@ describe("FireLightBehavior", () => {
       expect(light.intensity).toBeCloseTo(3 * fire.value, 6);
       expect(Math.abs(light.position.x)).toBeLessThanOrEqual(fire.jitter + 1e-9);
       expect(Math.abs(light.position.z)).toBeLessThanOrEqual(fire.jitter + 1e-9);
-      const ratio = 0.86 + 0.22 * ((fire.value - FireFlickerProfile.MIN) / span);
+      const ratio = temperatureRatio(fire.value);
       expect(light.color.g).toBeCloseTo(Color.fromTemperature(2000 * ratio).g, 6);
       if (fire.value < dimmest) [dimmest, dimmestGreen] = [fire.value, light.color.g];
       if (fire.value > brightest) [brightest, brightestGreen] = [fire.value, light.color.g];
     }
     // Dimmer flame = lower temperature = less green in the light (deeper orange-red).
     expect(dimmestGreen).toBeLessThan(brightestGreen);
+  });
+
+  it("maps base, dimmest and brightest flicker onto the documented temperatures", () => {
+    expect(temperatureRatio(1)).toBe(1);
+    expect(temperatureRatio(FireFlickerProfile.MIN)).toBeCloseTo(0.86, 10);
+    expect(temperatureRatio(FireFlickerProfile.MAX)).toBeCloseTo(1.08, 10);
+  });
+
+  it("holds a steady light at base intensity, colour and position with flicker 0", () => {
+    const { light, fire } = makeFire(2, 4);
+    fire.flicker = 0;
+    for (let frame = 0; frame < 120; frame++) {
+      fire.update(DT);
+      expect(light.intensity).toBe(3);
+      expect(light.position.x).toBe(2);
+      expect(light.color.g).toBe(Color.fromTemperature(2000).g);
+    }
+    // and back: flicker resumes without any reset
+    fire.flicker = 1;
+    let moved = false;
+    for (let frame = 0; frame < 120; frame++) {
+      fire.update(DT);
+      moved = moved || light.intensity !== 3;
+    }
+    expect(moved).toBe(true);
   });
 
   it("leaves the colour alone without a temperature (palette fire)", () => {
