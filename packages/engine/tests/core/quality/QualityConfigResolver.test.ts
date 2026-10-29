@@ -24,6 +24,7 @@ describe("QualityConfigResolver (ADR 0035, statischer Tier-Resolver)", () => {
     expect(resolved.quality.msaa).toBe(0);
     expect(resolved.quality.maxAnisotropy).toBe(1);
     expect(resolved.quality.maxPixelRatio).toBe(1);
+    expect(resolved.quality.maxShadowedPointLights).toBe(0);
     expect(resolved.postProcessing.effects?.hbao?.enabled).toBe(false);
     expect(resolved.postProcessing.effects?.volumetricFog?.enabled).toBe(false);
     expect(resolved.postProcessing.effects?.lightShafts?.enabled).toBe(false);
@@ -33,6 +34,7 @@ describe("QualityConfigResolver (ADR 0035, statischer Tier-Resolver)", () => {
     const resolved = QualityConfigResolver.resolve(PerformanceTier.MEDIUM);
     expect(resolved.quality.msaa).toBe(2);
     expect(resolved.quality.maxAnisotropy).toBe(2);
+    expect(resolved.quality.maxShadowedPointLights).toBe(1);
     expect(resolved.quality.hdr).toBeUndefined();
   });
 

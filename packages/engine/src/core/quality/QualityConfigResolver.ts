@@ -24,6 +24,7 @@ const TIER_MATRIX: Readonly<Record<PerformanceTier, TierQualityPolicy>> = {
       msaa: 0,
       maxAnisotropy: 1,
       maxPixelRatio: 1,
+      maxShadowedPointLights: 0,
     },
     postProcessing: {
       effects: {
@@ -40,6 +41,7 @@ const TIER_MATRIX: Readonly<Record<PerformanceTier, TierQualityPolicy>> = {
     quality: {
       msaa: 2,
       maxAnisotropy: 2,
+      maxShadowedPointLights: 1,
     },
     postProcessing: {},
   },

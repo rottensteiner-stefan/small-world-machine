@@ -119,6 +119,13 @@ export interface QualityConfig {
    * WebGPU and WebGL2.
    */
   autoInstancing?: boolean;
+  /**
+   * @domain Upper bound of shadow-casting point lights per frame (ADR 0052). Each one renders six
+   * cube faces into the spot-shadow array; among lights with `castShadow` the ones nearest the
+   * camera win. Default 2 (also the hard cap), the quality tiers lower it (LOW 0, MEDIUM 1).
+   * WebGPU and WebGL2; WebGL1 has no shadow mapping.
+   */
+  maxShadowedPointLights?: number;
 }
 
 /**
