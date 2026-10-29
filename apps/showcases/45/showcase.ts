@@ -39,6 +39,40 @@ interface FlameSpec {
   readonly lightDistance: number;
   readonly glowSize: number;
   readonly jitter: number;
+  readonly temperatureK?: number | undefined;
+  readonly turbulence?: number | undefined;
+  readonly flowSpeed?: number | undefined;
+}
+
+/** Per-torch look so the row does not read as clones. */
+interface TorchVariation {
+  readonly temperatureK: number;
+  readonly scale: number;
+  readonly turbulence: number;
+  readonly flowSpeed: number;
+}
+
+const DEFAULT_TORCH: TorchVariation = {
+  temperatureK: BLACKBODY_K,
+  scale: 1,
+  turbulence: 1,
+  flowSpeed: 1,
+};
+
+/** Deterministic 0..1 per (torch, channel), so golden captures see the same row every run. */
+function variation01(index: number, channel: number): number {
+  let h = Math.imul(index + 1, 0x9e3779b1) ^ Math.imul(channel + 1, 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 15), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function rowTorchVariation(index: number): TorchVariation {
+  return {
+    temperatureK: 1850 + 350 * variation01(index, 0),
+    scale: 0.85 + 0.3 * variation01(index, 1),
+    turbulence: 0.8 + 0.45 * variation01(index, 2),
+    flowSpeed: 0.85 + 0.35 * variation01(index, 3),
+  };
 }
 
 /** One fire's parts the frame loop keeps in sync with its light flicker. */
@@ -52,7 +86,7 @@ interface FireRig {
 
 /**
  * Showcase 45: Fire VFX lab. Procedural crossed-card flames (FireMaterial) with a billboard glow
- * (FlameGlowMaterial) and a FireLightBehavior-driven point light: blackbody, spectral and wisp
+ * (FlameGlowMaterial) and a FireLightBehavior-driven point light: blackbody, spectral, wisp and cursed
  * torches, a row of wall torches under a FireLightBudget, a small campfire and a candle, at night
  * on ashlar slabs against a masonry wall.
  */
@@ -61,10 +95,16 @@ export class Showcase45 extends AbstractShowcase {
   private readonly _budget: FireLightBudget = new FireLightBudget({ maxActive: 10 });
   private _time: number = 0;
 
+  public override async start(): Promise<void> {
+    await super.start();
+    // Only after start(): AbstractShowcase installs its fly controller solely on a camera that has
+    // no behaviors yet, so attaching the budget earlier silently disables camera movement.
+    this.camera.addBehavior(this._budget);
+  }
+
   protected override async setupScene(): Promise<void> {
     this.configureCamera();
     this.setInitialCamera(new Vector3D(0, 1.6, 5.5), new Vector3D(0, 0.9, 0));
-    this.camera.addBehavior(this._budget);
 
     this.renderer.postProcessing.enabled = true;
     const bloom = this.renderer.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
@@ -87,17 +127,18 @@ export class Showcase45 extends AbstractShowcase {
     this._addBox("Wall", masonry, new Vector3D(0, 1.75, -1.6), new Vector3D(44, 3.5, 0.4));
 
     for (let i = 0; i < TORCH_ROW_X.length; i++) {
-      this._addWallTorch(`RowTorch${i}`, wood, TORCH_ROW_X[i]!, undefined);
+      this._addWallTorch(`RowTorch${i}`, wood, TORCH_ROW_X[i]!, undefined, rowTorchVariation(i));
     }
 
-    const torchX = [-2.4, 0, 2.4];
+    const torchX = [-3.3, -1.1, 1.1, 3.3];
     const palettes: Array<FlamePalette | undefined> = [
       undefined,
       FlamePalettes.SPECTRAL,
       FlamePalettes.WISP,
+      FlamePalettes.CURSED,
     ];
     for (let i = 0; i < torchX.length; i++) {
-      this._addWallTorch(`Torch${i}`, wood, torchX[i]!, palettes[i]);
+      this._addWallTorch(`Torch${i}`, wood, torchX[i]!, palettes[i], DEFAULT_TORCH);
     }
 
     for (let log = 0; log < 5; log++) {
@@ -161,19 +202,23 @@ export class Showcase45 extends AbstractShowcase {
     wood: StandardMaterial,
     x: number,
     palette: FlamePalette | undefined,
+    look: TorchVariation,
   ): void {
     this._addCylinder(`${name}_Shaft`, wood, new Vector3D(x, 1.55, -1.25), 0.035, 0.6);
     this._addFlame({
       name,
       position: new Vector3D(x, 1.86, -1.25),
       cards: 2,
-      width: 0.15,
-      height: 0.45,
+      width: 0.15 * look.scale,
+      height: 0.45 * look.scale,
       palette,
-      lightIntensity: 3,
+      lightIntensity: 3 * look.scale,
       lightDistance: 8,
-      glowSize: 0.9,
+      glowSize: 0.9 * look.scale,
       jitter: 0.015,
+      temperatureK: look.temperatureK,
+      turbulence: look.turbulence,
+      flowSpeed: look.flowSpeed,
     });
   }
 
@@ -197,10 +242,13 @@ export class Showcase45 extends AbstractShowcase {
 
   private _addFlame(spec: FlameSpec): void {
     const seed = this._fires.length;
+    const temperatureK = spec.temperatureK ?? BLACKBODY_K;
     const fire = new FireMaterial({
       palette: spec.palette,
+      temperatureK,
       seed: seed * 7.31,
-      turbulence: spec.cards > 2 ? 1.3 : 1,
+      turbulence: spec.turbulence ?? (spec.cards > 2 ? 1.3 : 1),
+      flowSpeed: spec.flowSpeed ?? 1,
     });
 
     const flame = new Object3D(`${spec.name}_Flame`);
@@ -210,7 +258,9 @@ export class Showcase45 extends AbstractShowcase {
     this.scene.add(flame);
 
     const glowColor = spec.palette?.body;
-    const glowMat = new FlameGlowMaterial(glowColor ? { tint: glowColor } : {});
+    const glowMat = new FlameGlowMaterial(
+      glowColor ? { tint: glowColor } : { temperatureK: temperatureK * 0.95 },
+    );
     const glow = new Object3D(`${spec.name}_Glow`);
     glow.geometry = new Plane().getGeometryData();
     glow.material = glowMat;
@@ -220,7 +270,7 @@ export class Showcase45 extends AbstractShowcase {
 
     const light = new PointLight({
       name: `${spec.name}_Light`,
-      color: glowColor ?? Color.fromTemperature(BLACKBODY_K),
+      color: glowColor ?? Color.fromTemperature(temperatureK),
       intensity: spec.lightIntensity,
       distance: spec.lightDistance,
       decay: 2,
@@ -232,7 +282,7 @@ export class Showcase45 extends AbstractShowcase {
       seed,
       jitter: spec.jitter,
       // Palette fire keeps its own light colour; blackbody fire cools as it dims.
-      temperatureK: spec.palette ? undefined : BLACKBODY_K,
+      temperatureK: spec.palette ? undefined : temperatureK,
     });
     light.addBehavior(lightBehavior);
     this._budget.register(lightBehavior);

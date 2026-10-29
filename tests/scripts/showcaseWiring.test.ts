@@ -38,6 +38,25 @@ describe("showcase wiring (gallery + curated prev/next tour)", () => {
     expect(missing).toEqual([]);
   });
 
+  it("every showcase is in the hand-kept registries (in-scene ◀/▶ buttons, smoke test, build)", () => {
+    const read = (file: string): string => fs.readFileSync(path.join(ROOT, file), "utf8");
+    const navList = read("packages/engine/src/core/showcase/AbstractShowcase.ts").match(
+      /const VALID_SHOWCASE_IDS = \[([^\]]*)\]/,
+    )?.[1];
+    const smokeList = read(".agents/scripts/check-showcases.js").match(
+      /const numberedShowcases = \[([^\]]*)\]/,
+    )?.[1];
+    const numbers = (list: string | undefined): number[] =>
+      (list ?? "")
+        .match(/\d+/g)
+        ?.map(Number)
+        .sort((a, b) => a - b) ?? [];
+    expect(numbers(navList)).toEqual(ids);
+    expect(numbers(smokeList)).toEqual(ids);
+    const viteConfig = read("vite.config.ts");
+    expect(ids.filter((id) => !viteConfig.includes(`apps/showcases/${id}/index.html`))).toEqual([]);
+  });
+
   it("the gallery section counter matches the number of showcases", () => {
     const gallery = fs.readFileSync(path.join(ROOT, "public/index.html"), "utf8");
     expect(gallery).toContain(`<span class="section-count">${ids.length} Demos</span>`);

@@ -17,6 +17,8 @@
 - **Architecture & Bugfixes:**
   - *Content-Pakete kompilieren gegen das Manifest:* `ContentPackageValidation` prüft, dass jede deklarierte Sprache als `content/<lang>.json` existiert und jede Sprache im Manifest deklariert ist — keine lose daneben liegenden Text-Ressourcen (§12a-7).
   - *Chrome-Texte sind Resolver-bewiesen:* Neue Tests verwenden Identity-Resolvers und belegen, dass Hotspot-Footer/Prompt-Präfix und Terminal-Labels aus dem injizierten Resolver stammen (inkl. `{current}/{total}`-Platzhalter-Substitution und `preferredLanguage`-Fallback) — hartkodierte Literale fallen sofort auf.
+  - *Showcase-Registries abgesichert:* Showcase 45 fehlte in `VALID_SHOWCASE_IDS` (`AbstractShowcase`, steuert die ◀/▶-Buttons) und in `check-showcases.js`; `showcaseWiring.test.ts` gleicht beide Listen und die Vite-Inputs jetzt gegen die Showcase-Ordner ab.
+  - *Showcase 45 bewegungslos:* Das an die Kamera gehängte `FireLightBudget` verhinderte die Installation des Standard-Fly-Controllers (`AbstractShowcase.start()` installiert ihn nur bei Kameras ohne Behaviors); Budget wird jetzt nach `start()` angehängt. Showcase 45 zeigt zusätzlich `CURSED` und eine deterministisch variierte Fackelreihe.
   - *Shader-Lints decken `vfx-extras` ab:* `lint:glsl` und `lint:wgsl` prüfen `packages/vfx-extras/src/fire` (GLSL 300/100 bzw. Assembly über die echte `ShaderRegistry`).
 - **Housekeeping & Docs:**
   - *CONTEXT.md-Glossar:* neue Einträge App-Manifest, Content Package / Stabile Text-ID, Savegame (Format); `Declarative Level Descriptor` verweist auf die `levels/`-Konvention (ADR 0041 Stufe 3–5).

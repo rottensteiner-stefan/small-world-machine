@@ -54,3 +54,15 @@ P6 Goldens. Nachtszene vor einer Steinwand, damit Emission, Bloom und Lichtwurf 
   `stone_ashlar` aus dem Flakturm-Kit (`public/assets/kits/flakturm/textures/stone_ashlar/`).
   Alles nach `45/assets/` kopiert, damit der Showcase eigenständig bleibt.
 - Browser-Check WebGPU/WebGL2/WebGL1 ohne Konsolenfehler.
+
+## 2026-10-29 · Fixes: Navigation, Kamerabewegung · CURSED, variierte Fackelreihe
+
+- **Keine ◀/▶-Buttons:** `AbstractShowcase` erzeugt sie nur für IDs in `VALID_SHOWCASE_IDS`; 45 fehlte
+  dort und in `check-showcases.js` (Smoke-Test). Nachgetragen; `showcaseWiring.test.ts` prüft jetzt
+  beide Listen und die Vite-Inputs gegen die vorhandenen Showcase-Ordner.
+- **Keine Kamerabewegung:** `AbstractShowcase.start()` installiert den Fly-Controller nur, wenn die
+  Kamera noch keine Behaviors hat. Das `FireLightBudget` hing schon in `setupScene()` an der Kamera →
+  Controller fiel weg. Budget jetzt erst nach `super.start()`.
+- Vier Vergleichsfackeln: Blackbody, SPECTRAL, WISP, CURSED.
+- Fackelreihe deterministisch variiert (Integer-Hash je Fackel): 1850–2200 K, Größe ×0,85–1,15,
+  Unruhe 0,8–1,25, Flussgeschwindigkeit 0,85–1,2. Licht und Glow übernehmen die Temperatur.
