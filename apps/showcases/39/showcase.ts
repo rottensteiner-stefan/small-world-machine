@@ -35,6 +35,7 @@ import {
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 import { GoldenCapture, parseGoldenSpec } from "./GoldenCapture.js";
+import { SanctumHud } from "./Hud.js";
 
 interface CameraPreset {
   readonly name: string;
@@ -906,7 +907,7 @@ class Showcase39 extends AbstractShowcase {
 
   public override resetCamera(): void {
     this._applyCameraPreset(this._activePresetIdx, false);
-    this._updateHudText();
+    this._syncHud();
   }
 
   protected override onKeyDown(event: KeyboardEvent): void {
@@ -936,17 +937,19 @@ class Showcase39 extends AbstractShowcase {
       }
     }
 
+    if (this._hud?.handleKey(event)) return;
+
     switch (event.code) {
       case Keys.F:
         if (this._fogElement) {
           this._fogElement.enabled = !this._fogElement.enabled;
-          this._updateHudText();
+          this._syncHud();
         }
         break;
       case Keys.C:
         if (!this._isFlyMode) {
           this._chamberCarverVolume.enabled = !this._chamberCarverVolume.enabled;
-          this._updateHudText();
+          this._syncHud();
         }
         break;
       case Keys.N: {
@@ -954,106 +957,107 @@ class Showcase39 extends AbstractShowcase {
         this._altarMistVolume.noiseAmount = activeNoise ? 0.0 : 0.7;
         this._brazierMistVolume.noiseAmount = activeNoise ? 0.0 : 0.8;
         this._skylightMistVolume.noiseAmount = activeNoise ? 0.0 : 0.75;
-        this._updateHudText();
+        this._syncHud();
         break;
       }
       case Keys.D1:
         this._sunMode = 1;
         this._updateSunAngle();
-        this._updateHudText();
+        this._syncHud();
         break;
       case Keys.D2:
         this._sunMode = 2;
         this._updateSunAngle();
-        this._updateHudText();
+        this._syncHud();
         break;
       case Keys.V:
         this._setCameraMode(!this._isFlyMode);
-        this._updateHudText();
+        this._syncHud();
         break;
       case Keys.L:
         this._leylineActive = !this._leylineActive;
-        this._updateHudText();
-        break;
-      case Keys.I:
-        this._toggleInspector();
+        this._syncHud();
         break;
     }
   }
 
-  private _hudElement?: HTMLElement;
-  private _inspectorBtn?: HTMLButtonElement;
-
-  private _toggleInspector(force?: boolean): void {
-    if (!this._hudElement) return;
-    const isCurrentlyOpen = this._hudElement.classList.contains("open");
-    const open = undefined !== force ? force : !isCurrentlyOpen;
-    if (open) {
-      this._hudElement.classList.add("open");
-      this._inspectorBtn?.classList.add("active");
-    } else {
-      this._hudElement.classList.remove("open");
-      this._inspectorBtn?.classList.remove("active");
-    }
-  }
+  private _hud?: SanctumHud;
 
   private _createHud(): void {
-    const existingHud = document.getElementById("showcase-hud");
-    if (existingHud) existingHud.remove();
-    const existingBtn = document.getElementById("sanctumInspectorBtn");
-    if (existingBtn) existingBtn.remove();
+    this._hud?.dispose();
+    const rendererBackend = this.renderer.constructor.name.includes("GPU")
+      ? "WebGPU (Froxel)"
+      : "WebGL2 (Raymarch)";
+    const hud = new SanctumHud(rendererBackend, {
+      onFog: (enabled: boolean): void => {
+        if (this._fogElement) this._fogElement.enabled = enabled;
+      },
+      onCarver: (enabled: boolean): void => {
+        this._chamberCarverVolume.enabled = enabled;
+      },
+      onNoise: (enabled: boolean): void => {
+        this._altarMistVolume.noiseAmount = enabled ? 0.7 : 0.0;
+        this._brazierMistVolume.noiseAmount = enabled ? 0.8 : 0.0;
+        this._skylightMistVolume.noiseAmount = enabled ? 0.75 : 0.0;
+      },
+      onLeyline: (enabled: boolean): void => {
+        this._leylineActive = enabled;
+      },
+      onDensity: (value: number): void => {
+        if (this._fogElement) this._fogElement.density = value;
+        this._syncHud();
+      },
+      onGodRayStrength: (value: number): void => {
+        this._baseGodRayStrength = value;
+        this._updateSunAngle();
+        this._syncHud();
+      },
+      onAsymmetry: (value: number): void => {
+        if (this._fogElement) this._fogElement.asymmetry = value;
+        this._syncHud();
+      },
+      onSunMode: (mode: 1 | 2): void => {
+        this._sunMode = mode;
+        this._updateSunAngle();
+        this._syncHud();
+      },
+      onCameraMode: (flyMode: boolean): void => {
+        this._setCameraMode(flyMode);
+        this._syncHud();
+      },
+      onCameraPreset: (index: number): void => {
+        this._applyCameraPreset(index);
+        this._syncHud();
+      },
+    });
+    this._hud = hud;
 
-    const hud = document.createElement("aside");
-    hud.id = "showcase-hud";
-    hud.className = "swm-inspector-drawer";
-    document.body.appendChild(hud);
-    this._hudElement = hud;
-
-    // Stop events from leaking to camera controllers
-    const stopEvents = [
-      "mousedown",
-      "mouseup",
-      "mousemove",
-      "pointerdown",
-      "pointerup",
-      "pointermove",
+    // Besides the drawer's own event shielding, the camera controllers must pause while the
+    // pointer is over or dragging inside the panel, and wheel deltas must not dolly the camera.
+    hud.root.addEventListener(
       "wheel",
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "click",
-      "dblclick",
-      "contextmenu",
-    ];
-    for (const ev of stopEvents) {
-      hud.addEventListener(
-        ev,
-        (e) => {
-          e.stopPropagation();
-          if ("wheel" === ev) {
-            this.input.mouse.zoom = 0;
-            this.input.mouse.wheelX = 0;
-            this.input.mouse.wheelY = 0;
-          }
-        },
-        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
-      );
-    }
+      () => {
+        this.input.mouse.zoom = 0;
+        this.input.mouse.wheelX = 0;
+        this.input.mouse.wheelY = 0;
+      },
+      { passive: true },
+    );
 
-    hud.addEventListener("pointerenter", () => {
+    hud.root.addEventListener("pointerenter", () => {
       this._isHoveringHud = true;
       if (this._flyController) this._flyController.enabled = false;
       if (this._orbitController) this._orbitController.enabled = false;
     });
 
-    hud.addEventListener("pointerleave", (e: PointerEvent) => {
+    hud.root.addEventListener("pointerleave", (e: PointerEvent) => {
       if (0 === e.buttons && !this._isDraggingHud) {
         this._isHoveringHud = false;
         this._syncCameraStrategy();
       }
     });
 
-    hud.addEventListener("pointerdown", () => {
+    hud.root.addEventListener("pointerdown", () => {
       this._isHoveringHud = true;
       this._isDraggingHud = true;
       if (this._flyController) this._flyController.enabled = false;
@@ -1067,218 +1071,27 @@ class Showcase39 extends AbstractShowcase {
     window.addEventListener("pointerup", () => {
       if (!this._isDraggingHud) return;
       this._isDraggingHud = false;
-      if (!this._hudElement?.matches(":hover")) {
+      if (!this._hud?.root.matches(":hover")) {
         this._isHoveringHud = false;
         this._syncCameraStrategy();
       }
     });
 
-    // Footer toggle button
-    const toggleBtn = document.createElement("button");
-    toggleBtn.id = "sanctumInspectorBtn";
-    toggleBtn.className = "swm-inspector-btn";
-    toggleBtn.innerHTML = "<span>⚙</span>";
-    toggleBtn.title = "Settings (Toggle)";
-    toggleBtn.setAttribute("aria-label", "Toggle Inspector");
-    toggleBtn.onclick = (): void => {
-      this._toggleInspector();
-    };
-    this._inspectorBtn = toggleBtn;
-
-    const footer = document.querySelector(".app-footer");
-    if (footer) {
-      footer.appendChild(toggleBtn);
-    } else {
-      document.body.appendChild(toggleBtn);
-    }
-
-    this._updateHudText();
+    this._syncHud();
   }
 
-  private _updateHudText(): void {
-    if (!this._hudElement) return;
-    const fogOn = this._fogElement?.enabled ?? false;
-    const carverOn = this._chamberCarverVolume.enabled;
-    const noiseOn = this._altarMistVolume.noiseAmount > 0.0;
-    const rendererBackend = this.renderer.constructor.name.includes("GPU")
-      ? "WebGPU (Froxel)"
-      : "WebGL2 (Raymarch)";
-
-    this._hudElement.innerHTML = `
-      <div class="bottom-sheet-grabber"></div>
-      <div class="hud-header">
-        <div class="hud-title">
-          <span>🌫️</span> Atmospheric Sanctum
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="hud-badge">${rendererBackend}</span>
-          <button id="sanctumHudClose" class="hud-close-btn" title="Close Panel">✕</button>
-        </div>
-      </div>
-      <div class="hud-body">
-        <div class="hud-section">
-          <div class="section-title">🌫️ Volumetric Fog & Mist</div>
-          <div class="hud-row">
-            <label for="swFog">Volumetric Fog</label>
-            <label class="hud-switch">
-              <input type="checkbox" id="swFog" ${fogOn ? "checked" : ""}>
-              <span class="hud-switch-slider"></span>
-            </label>
-          </div>
-          <div class="hud-row">
-            <label for="swCarver">Interior Carving</label>
-            <label class="hud-switch">
-              <input type="checkbox" id="swCarver" ${carverOn ? "checked" : ""}>
-              <span class="hud-switch-slider"></span>
-            </label>
-          </div>
-          <div class="hud-row">
-            <label for="swNoise">3D Rolling Mist</label>
-            <label class="hud-switch">
-              <input type="checkbox" id="swNoise" ${noiseOn ? "checked" : ""}>
-              <span class="hud-switch-slider"></span>
-            </label>
-          </div>
-          <div class="hud-row">
-            <label for="swLeyline">✨ Mystic Leyline [L]</label>
-            <label class="hud-switch">
-              <input type="checkbox" id="swLeyline" ${this._leylineActive ? "checked" : ""}>
-              <span class="hud-switch-slider"></span>
-            </label>
-          </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:6px;">
-            <div style="display:flex;justify-content:space-between;font-size:12px;">
-              <label for="rngDensity">Fog Density</label>
-              <span id="valDensity">${(this._fogElement?.density ?? 0.024).toFixed(3)}</span>
-            </div>
-            <input type="range" id="rngDensity" min="0.005" max="0.060" step="0.001" value="${this._fogElement?.density ?? 0.024}">
-          </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:4px;">
-            <div style="display:flex;justify-content:space-between;font-size:12px;">
-              <label for="rngShafts">God Ray Strength</label>
-              <span id="valShafts">${this._baseGodRayStrength.toFixed(1)}</span>
-            </div>
-            <input type="range" id="rngShafts" min="0.0" max="8.0" step="0.1" value="${this._baseGodRayStrength}">
-          </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:4px;">
-            <div style="display:flex;justify-content:space-between;font-size:12px;">
-              <label for="rngAsymmetry">Mie Asymmetry (g)</label>
-              <span id="valAsymmetry">${(this._fogElement?.asymmetry ?? 0.6).toFixed(2)}</span>
-            </div>
-            <input type="range" id="rngAsymmetry" min="0.0" max="0.85" step="0.01" value="${this._fogElement?.asymmetry ?? 0.6}">
-          </div>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title">☀️ Sun & Navigation</div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
-            <label>Sun Alignment</label>
-            <div class="preset-group">
-              <button class="btn-preset ${this._sunMode === 1 ? "active" : ""}" id="btnSunNoon">High Noon</button>
-              <button class="btn-preset ${this._sunMode === 2 ? "active" : ""}" id="btnSunGolden">Golden Hour</button>
-            </div>
-          </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
-            <label>Camera Mode [V]</label>
-            <div class="preset-group">
-              <button class="btn-preset ${this._isFlyMode ? "active" : ""}" id="btnCamFly">Free-Fly (WASD)</button>
-              <button class="btn-preset ${!this._isFlyMode ? "active" : ""}" id="btnCamOrbit">Orbit Mode</button>
-            </div>
-          </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
-            <label>Camera Viewpoints</label>
-            <div class="preset-group">
-              <button class="btn-preset ${this._activePresetIdx === 0 ? "active" : ""}" data-cam="0">Nave</button>
-              <button class="btn-preset ${this._activePresetIdx === 1 ? "active" : ""}" data-cam="1">Altar</button>
-              <button class="btn-preset ${this._activePresetIdx === 2 ? "active" : ""}" data-cam="2">Portal</button>
-              <button class="btn-preset ${this._activePresetIdx === 3 ? "active" : ""}" data-cam="3">Carved Room</button>
-            </div>
-          </div>
-        </div>
-
-        <div style="font-size: 11px; color: #94a3b8; line-height: 1.4; padding: 2px 4px;">
-          Use <strong>WASD / Arrows</strong> + <strong>Drag</strong> (or <strong>Scroll</strong>) to fly into the carved chamber (Z = -21), or pick a viewpoint above.
-        </div>
-      </div>
-    `;
-
-    document.getElementById("sanctumHudClose")?.addEventListener("click", () => {
-      this._toggleInspector(false);
-    });
-
-    // Hook up switch listeners
-    document.getElementById("swFog")?.addEventListener("change", (e) => {
-      if (this._fogElement) {
-        this._fogElement.enabled = (e.target as HTMLInputElement).checked;
-      }
-    });
-
-    document.getElementById("swCarver")?.addEventListener("change", (e) => {
-      this._chamberCarverVolume.enabled = (e.target as HTMLInputElement).checked;
-    });
-
-    document.getElementById("swNoise")?.addEventListener("change", (e) => {
-      const active = (e.target as HTMLInputElement).checked;
-      this._altarMistVolume.noiseAmount = active ? 0.7 : 0.0;
-      this._brazierMistVolume.noiseAmount = active ? 0.8 : 0.0;
-      this._skylightMistVolume.noiseAmount = active ? 0.75 : 0.0;
-    });
-
-    document.getElementById("swLeyline")?.addEventListener("change", (e) => {
-      this._leylineActive = (e.target as HTMLInputElement).checked;
-    });
-
-    document.getElementById("rngDensity")?.addEventListener("input", (e) => {
-      const v = parseFloat((e.target as HTMLInputElement).value);
-      if (this._fogElement) this._fogElement.density = v;
-      const lbl = document.getElementById("valDensity");
-      if (lbl) lbl.textContent = v.toFixed(3);
-    });
-
-    document.getElementById("rngShafts")?.addEventListener("input", (e) => {
-      const v = parseFloat((e.target as HTMLInputElement).value);
-      this._baseGodRayStrength = v;
-      this._updateSunAngle();
-      const lbl = document.getElementById("valShafts");
-      if (lbl) lbl.textContent = v.toFixed(1);
-    });
-
-    document.getElementById("rngAsymmetry")?.addEventListener("input", (e) => {
-      const v = parseFloat((e.target as HTMLInputElement).value);
-      if (this._fogElement) this._fogElement.asymmetry = v;
-      const lbl = document.getElementById("valAsymmetry");
-      if (lbl) lbl.textContent = v.toFixed(2);
-    });
-
-    // Hook up preset buttons
-    document.getElementById("btnSunNoon")?.addEventListener("click", () => {
-      this._sunMode = 1;
-      this._updateSunAngle();
-      this._updateHudText();
-    });
-
-    document.getElementById("btnSunGolden")?.addEventListener("click", () => {
-      this._sunMode = 2;
-      this._updateSunAngle();
-      this._updateHudText();
-    });
-
-    document.getElementById("btnCamOrbit")?.addEventListener("click", () => {
-      this._setCameraMode(false);
-      this._updateHudText();
-    });
-
-    document.getElementById("btnCamFly")?.addEventListener("click", () => {
-      this._setCameraMode(true);
-      this._updateHudText();
-    });
-
-    this._hudElement.querySelectorAll<HTMLButtonElement>("button[data-cam]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const camIdx = parseInt(btn.dataset["cam"] ?? "0", 10);
-        this._applyCameraPreset(camIdx);
-        this._updateHudText();
-      });
+  private _syncHud(): void {
+    this._hud?.sync({
+      fog: this._fogElement?.enabled ?? false,
+      carver: this._chamberCarverVolume.enabled,
+      noise: this._altarMistVolume.noiseAmount > 0.0,
+      leyline: this._leylineActive,
+      density: this._fogElement?.density ?? 0.024,
+      godRayStrength: this._baseGodRayStrength,
+      asymmetry: this._fogElement?.asymmetry ?? 0.6,
+      sunMode: this._sunMode,
+      flyMode: this._isFlyMode,
+      activePresetIdx: this._activePresetIdx,
     });
   }
 
