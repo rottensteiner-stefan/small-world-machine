@@ -42,7 +42,7 @@ import {
   RainPuddleMaterial,
 } from "@small-world-machine/liquid-extras";
 import { attachDevTools } from "@small-world-machine/tools";
-import { CyberpunkHud } from "./Hud.js";
+import { Hud } from "./Hud.js";
 
 enum Mood {
   NIGHT = "night",
@@ -888,7 +888,7 @@ export class Showcase extends AbstractShowcase {
     }
   }
 
-  private _hud?: CyberpunkHud;
+  private _hud?: Hud;
 
   protected override onKeyDown(event: KeyboardEvent): void {
     super.onKeyDown(event);
@@ -899,7 +899,7 @@ export class Showcase extends AbstractShowcase {
 
   private _createHud(): void {
     this._hud?.dispose();
-    this._hud = new CyberpunkHud(FLUID_CYCLE, {
+    this._hud = new Hud(FLUID_CYCLE, {
       onNight: (night: boolean): void => this._applyMood(night ? Mood.NIGHT : Mood.DAY),
       onPuddleCamera: (puddle: boolean): void =>
         this._applyCameraView(puddle ? CameraView.PUDDLE : CameraView.STREET),

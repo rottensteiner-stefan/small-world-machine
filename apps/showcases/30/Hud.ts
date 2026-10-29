@@ -1,14 +1,14 @@
 import { ShowcaseDrawer, hudSwitch } from "../shared/ShowcaseDrawer.js";
 
 /** Scene state the panel mirrors. */
-export interface CyberpunkHudState {
+export interface HudState {
   night: boolean;
   puddleCamera: boolean;
   fluidIndex: number;
 }
 
-/** Scene actions the panel triggers; the showcase applies them and calls {@link CyberpunkHud.sync}. */
-export interface CyberpunkHudCallbacks {
+/** Scene actions the panel triggers; the showcase applies them and calls {@link Hud.sync}. */
+export interface HudActions {
   onNight(night: boolean): void;
   onPuddleCamera(puddle: boolean): void;
   onFluid(index: number): void;
@@ -18,13 +18,13 @@ export interface CyberpunkHudCallbacks {
  * Cyberpunk Albedo panel of showcase 30 on the shared {@link ShowcaseDrawer}. Owns only its
  * controls; mood, camera and liquid state stay in the showcase.
  */
-export class CyberpunkHud {
+export class Hud {
   private readonly _drawer: ShowcaseDrawer;
   private readonly _mood: HTMLInputElement;
   private readonly _puddle: HTMLInputElement;
   private readonly _fluid: HTMLSelectElement;
 
-  constructor(fluidNames: readonly string[], callbacks: CyberpunkHudCallbacks) {
+  constructor(fluidNames: readonly string[], callbacks: HudActions) {
     const options = fluidNames
       .map(
         (fluid, idx) =>
@@ -35,8 +35,9 @@ export class CyberpunkHud {
       id: "cyberpunk-hud",
       title: "Cyberpunk Albedo",
       icon: "🌧️",
-      badge: "SSR & Wetness",
       open: false,
+      footerIcon: "⚙",
+      buttonId: "cyberpunkInspectorBtn",
       body: `
         <div class="hud-section">
           <div class="section-title">🌃 Environment & Camera</div>
@@ -65,7 +66,7 @@ export class CyberpunkHud {
   }
 
   /** Reflects the scene state in every control. */
-  public sync(state: CyberpunkHudState): void {
+  public sync(state: HudState): void {
     this._mood.checked = state.night;
     this._puddle.checked = state.puddleCamera;
     this._fluid.value = String(state.fluidIndex);
