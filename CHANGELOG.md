@@ -1,10 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [0.120.0] - 2026-10-29
 
-### "Motion is the cause of all life." - Leonardo da Vinci
+### "He who would learn to fly one day must first learn to stand and walk." - Friedrich Nietzsche
 
 - **Features:**
+  - *Showcases 38 & 39 — Kameraflug & Viewpoint-Vereinheitlichung:* Showcase 38 fliegt ausgewählte Kamerapositionen nun analog zu Showcase 39 via `camera.flyTo(...)` kinematisch und kollisionsfrei (zentrierte Portal-Wegpunkte an $Z = -3.3$, Überflug des Atrium-Feuerbeckens an $Z = -10.5$) an. Tastatur-Navigation (WASD, Pfeile) bricht den Flug ab und übergibt die manuelle Kontrolle; Tasten 1–5 fliegen die Presets an, R setzt die aktuelle Position zurück. Einheitlicher HUD-Titel „Camera Viewpoint“ in beiden Showcases.
   - *Punktlicht-Schatten (ADR 0052):* `PointLight.castShadow` wirft jetzt Rundum-Schatten auf WebGPU und WebGL2 (WebGL1 ehrlich ohne). Bis zu `quality.maxShadowedPointLights` (Default 2; LOW 0, MEDIUM 1) Lichter pro Frame, die nächsten zuerst, Lichter ganz hinter der Kamera zuletzt. Je Licht sechs 90°-Würfelseiten als Layer 4–15 des Spot-Schatten-Arrays — gleicher Pass, Vergleichs-Sampler und PCF wie Spots, keine neue Textur-Unit; Caster aus der ganzen Szene innerhalb der Reichweite, Seiten ohne Sichtbezug übersprungen, Layer nur bei Bedarf. Gemeinsamer Kern `core/lights/PointLightShadow.ts`; ohne schattenwerfende Punktlichter bleibt das Bild unverändert (Faktor exakt 1,0, Guard-Tests). Guide: `docs/guides/shadows.md`.
   - *Punktlicht-Schatten: Bias in Metern statt Tiefe:* `shadowBias` wirkt bei Punktlichtern als Weltabstand zum Licht (Default 0,01 m) plus 1,5 Schatten-Texel in Empfängerdistanz. Ein Tiefen-Bias wie bei Spots hätte mit der 5-cm-Near-Plane in 2 m Entfernung rund 0,4 m Abstand bedeutet (abgelöste Schatten).
   - *Showcase 45:* Schalter „Punktlicht-Schatten“ (X) im Fire Lab; Boden und Wand empfangen, Schäfte, Scheite, Kerze und eine Kiste neben dem Lagerfeuer werfen Schatten.
