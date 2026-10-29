@@ -13,8 +13,8 @@ export type ShadowLabSlider =
   | "Bias"
   | "NormalBias";
 
-/** What the panel reflects; read from the showcase on every {@link ShadowLabHud.sync}. */
-export interface ShadowLabState {
+/** What the panel reflects; read from the showcase on every {@link Hud.sync}. */
+export interface HudState {
   probe: ProbeMode;
   pcss: boolean;
   liftY: number;
@@ -29,7 +29,7 @@ export interface ShadowLabState {
 }
 
 /** Showcase actions the panel triggers. */
-export interface ShadowLabActions {
+export interface HudActions {
   setProbe(probe: ProbeMode): void;
   setPcss(pcss: boolean): void;
   applyView(preset: ViewPreset): void;
@@ -54,15 +54,12 @@ const SLIDERS = Object.keys(SLIDER_FORMAT) as ShadowLabSlider[];
  * Soft Shadow Lab panel of showcase 42 on the shared {@link ShowcaseDrawer}. Owns only its
  * controls; probes, lights and shadow settings stay in the showcase.
  */
-export class ShadowLabHud {
+export class Hud {
   private readonly _drawer: ShowcaseDrawer;
   private readonly _readout: HTMLElement;
   private _hovering: boolean = false;
 
-  constructor(
-    rendererType: string,
-    private readonly _actions: ShadowLabActions,
-  ) {
+  constructor(private readonly _actions: HudActions) {
     document.getElementById("shadowLabStyle")?.remove();
     const style = document.createElement("style");
     style.id = "shadowLabStyle";
@@ -86,8 +83,9 @@ export class ShadowLabHud {
       id: "showcase-hud",
       title: "Soft Shadow Lab",
       icon: "🌒",
-      badge: rendererType,
       open: false,
+      footerIcon: "⚙",
+      buttonId: "shadowLabInspectorBtn",
       body: `
         <div class="hud-section">
           <div class="section-title">
@@ -182,7 +180,6 @@ export class ShadowLabHud {
         </div>
       `,
     });
-    this._drawer.toggleButton.id = "shadowLabInspectorBtn";
     this._readout = this._drawer.query<HTMLElement>("#shadowLabReadout")!;
     this._bind();
   }
@@ -212,7 +209,7 @@ export class ShadowLabHud {
   }
 
   /** Reflects the current showcase state in every control. */
-  public sync(state: ShadowLabState): void {
+  public sync(state: HudState): void {
     const d = this._drawer;
     d.query("#btnProbeBox")?.classList.toggle("active", state.probe === "box");
     d.query("#btnProbePole")?.classList.toggle("active", state.probe === "pole");

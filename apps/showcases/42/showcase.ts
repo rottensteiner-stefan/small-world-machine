@@ -14,7 +14,7 @@ import {
   StandardMaterial,
   Vector3D,
 } from "@small-world-machine/engine";
-import { ShadowLabHud, type ProbeMode, type ShadowLabSlider, type ViewPreset } from "./Hud.js";
+import { Hud, type ProbeMode, type ShadowLabSlider, type ViewPreset } from "./Hud.js";
 
 interface QaSwm42Sample {
   rendererType: string;
@@ -88,7 +88,7 @@ export class Showcase extends AbstractShowcase {
   private _sun?: DirectionalLight;
   private _ambient?: AmbientLight;
   private _casterObjects: Object3D[] = [];
-  private _hud?: ShadowLabHud;
+  private _hud?: Hud;
   private _isOrbitDragging: boolean = false;
   private _lastPointer: { x: number; y: number } = { x: 0, y: 0 };
 
@@ -480,7 +480,7 @@ export class Showcase extends AbstractShowcase {
   }
 
   private _createControlHud(): void {
-    this._hud = new ShadowLabHud(String(this.renderer.type), {
+    this._hud = new Hud({
       setProbe: (probe: ProbeMode): void => this._setProbeMode(probe, true),
       setPcss: (pcss: boolean): void =>
         this._setShadowMode(pcss ? ShadowMode.PCSS : ShadowMode.EVSM),
