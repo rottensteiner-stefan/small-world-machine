@@ -3,8 +3,8 @@ import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
 export type MaterialLabSlider =
   "Roughness" | "Metallic" | "Azimuth" | "Elevation" | "KeyIntensity" | "Ambient";
 
-/** What the panel reflects; read from the showcase on every {@link MaterialLabHud.sync}. */
-export interface MaterialLabState {
+/** What the panel reflects; read from the showcase on every {@link Hud.sync}. */
+export interface HudState {
   presetIndex: number;
   roughness: number;
   metallic: number;
@@ -18,7 +18,7 @@ export interface MaterialLabState {
 }
 
 /** Showcase actions the panel triggers; the showcase re-syncs the panel afterwards. */
-export interface MaterialLabActions {
+export interface HudActions {
   applyPreset(index: number): void;
   toggleIbl(): void;
   toggleGrid(): void;
@@ -40,16 +40,15 @@ const SLIDERS: readonly MaterialLabSlider[] = [
  * Material Lab panel of showcase 43 on the shared {@link ShowcaseDrawer}. Owns only its
  * controls; material, light and studio state stay in the showcase.
  */
-export class MaterialLabHud {
+export class Hud {
   private readonly _drawer: ShowcaseDrawer;
   private readonly _style: HTMLStyleElement;
   private readonly _presetCount: number;
 
   constructor(
-    rendererType: string,
     presetNames: readonly string[],
     elevationRange: { min: number; max: number },
-    private readonly _actions: MaterialLabActions,
+    private readonly _actions: HudActions,
   ) {
     const style = document.createElement("style");
     style.textContent = `
@@ -70,7 +69,7 @@ export class MaterialLabHud {
       id: "showcase-hud",
       title: "Material Lab",
       icon: "⚪",
-      badge: rendererType,
+      footerIcon: "⚙",
       body: `
         <div class="hud-section">
           <div class="section-title"><span>🎨 Material</span><span style="font-size:9px;color:#64748b;">Keys 1–4 · [ ]</span></div>
@@ -140,7 +139,7 @@ export class MaterialLabHud {
   }
 
   /** Pushes the current state into the controls; event-driven only, never per frame. */
-  public sync(state: MaterialLabState): void {
+  public sync(state: HudState): void {
     for (let i = 0; i < this._presetCount; i++) {
       this._drawer.query(`#st43Preset${i}`)?.classList.toggle("active", i === state.presetIndex);
     }

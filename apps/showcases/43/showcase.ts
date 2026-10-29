@@ -14,7 +14,7 @@ import {
   WireframeMaterial,
 } from "@small-world-machine/engine";
 import { GoldenCapture, parseGoldenSpec, type GoldenSpec } from "./GoldenCapture.js";
-import { MaterialLabHud, type MaterialLabSlider } from "./Hud.js";
+import { Hud, type MaterialLabSlider } from "./Hud.js";
 
 interface MaterialSpec {
   name: string;
@@ -63,7 +63,7 @@ export class Showcase extends AbstractShowcase {
   private _gridVisible: boolean = false;
   private _iblEnabled: boolean = false;
   private _iblLoad: Promise<void> | undefined;
-  private _hud: MaterialLabHud | undefined;
+  private _hud: Hud | undefined;
 
   /** The ball's material variants exposed as golden pools (`st43-*`, see GoldenCapture.ts). */
   private readonly _materials: readonly MaterialSpec[] = [
@@ -392,8 +392,7 @@ export class Showcase extends AbstractShowcase {
   }
 
   private _createHud(): void {
-    this._hud = new MaterialLabHud(
-      String(this.renderer.type),
+    this._hud = new Hud(
       this._materials.map((spec) => spec.name),
       { min: ELEVATION_MIN_DEG, max: ELEVATION_MAX_DEG },
       {

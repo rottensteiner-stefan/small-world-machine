@@ -48,3 +48,4 @@ und deterministischer Golden-Kandidat (`scripts/goldens`, Pool-Namespace `st43-*
 - Material-Lab-Panel (Markup, Bindings, Sync) aus `showcase.ts` in `Hud.ts` (`MaterialLabHud`) verschoben, aufgebaut auf dem gemeinsamen `apps/showcases/shared/ShowcaseDrawer.ts`. Material-/Licht-/Studio-Zustand bleibt in `showcase.ts` (Actions + `sync(state)`).
 - Entfallen: handgebautes Aside/Header/Close-Button, stopPropagation-Schleife, Footer-Button-Erzeugung, I-Toggle, duplizierte Drawer-CSS. Lokal bleibt nur die Color-Input-Regel.
 - IDs unverändert (`#showcase-hud`, `st43*`); Panel startet offen, Golden-Modus baut weiterhin kein Panel. Panel-Toggle jetzt einheitlich I **und** H (H war frei); Footer-Button zeigt das Header-Icon ⚪ statt ⚙.
+- 2026-10-29 Hud-Namen: `MaterialLabHud`/`MaterialLabState`/`MaterialLabActions` → `Hud`/`HudState`/`HudActions`; Footer-Button wieder ⚙ (`footerIcon`); Renderer-Badge im Header entfernt.
