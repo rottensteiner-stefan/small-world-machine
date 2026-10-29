@@ -1,3 +1,11 @@
+import {
+  ShowcaseDrawer,
+  hudNote,
+  hudSection,
+  hudSlider,
+  hudSwitch,
+} from "../shared/ShowcaseDrawer.js";
+
 /** Colour override for every fire; "original" keeps each fire's own palette. */
 export type PaletteChoice = "original" | "blackbody" | "spectral" | "wisp" | "cursed";
 
@@ -74,12 +82,12 @@ interface SliderSpec {
 const percent = (value: number): string => `${Math.round(value * 100)} %`;
 
 /**
- * Side drawer of showcase 45 (shared `swm-inspector-drawer` look). Owns only the DOM and the
- * settings object; the showcase reads the settings and applies them in `onChange`.
+ * Fire Lab panel of showcase 45 on the shared {@link ShowcaseDrawer}. Owns only its controls and
+ * the settings object; the showcase reads the settings and applies them in `onChange`.
  */
 export class FireLabHud {
+  private readonly _drawer: ShowcaseDrawer;
   private readonly _root: HTMLElement;
-  private readonly _toggleButton: HTMLButtonElement;
   private readonly _readout: HTMLElement;
   private readonly _sliders: SliderSpec[];
 
@@ -128,14 +136,6 @@ export class FireLabHud {
 
     const style = document.createElement("style");
     style.textContent = `
-      #fire-lab-hud .preset-group.five-col { grid-template-columns: repeat(5, 1fr); }
-      #fire-lab-hud .preset-group.four-col { grid-template-columns: repeat(4, 1fr); }
-      #fire-lab-hud .hud-note { font-size: 10px; line-height: 1.4; color: #94a3b8; margin-top: 6px; }
-      #fire-lab-hud .hud-keys { font-size: 10px; line-height: 1.7; color: #94a3b8; }
-      #fire-lab-hud .hud-keys kbd {
-        font-family: var(--font-mono, "JetBrains Mono", monospace);
-        border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 3px; padding: 0 4px;
-      }
       #fireLabReadout {
         font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 11px; line-height: 1.5;
         color: #fdba74; background: rgba(2, 6, 23, 0.75); border: 1px solid rgba(251, 146, 60, 0.25);
@@ -144,108 +144,69 @@ export class FireLabHud {
     `;
     document.head.appendChild(style);
 
-    const root = document.createElement("aside");
-    root.id = "fire-lab-hud";
-    root.className = "swm-inspector-drawer open";
-    root.innerHTML = `
-      <div class="bottom-sheet-grabber"></div>
-      <div class="hud-header">
-        <div class="hud-title"><span>🔥</span> Fire Lab</div>
-        <button id="fireLabClose" class="hud-close-btn" title="Panel schließen (I / H)">✕</button>
-      </div>
-      <div class="hud-body">
-        <div class="hud-section">
-          <pre id="fireLabReadout"></pre>
-        </div>
-        <div class="hud-section">
-          <div class="section-title"><span>⚖️ Vorher / Nachher</span><span style="font-size:9px;color:#64748b;">F · G · L</span></div>
-          ${this._switchRow("flicker", "Flackern (Licht)")}
-          ${this._switchRow("flame", "Flammenkörper")}
-          ${this._switchRow("glow", "Glow-Halo")}
-          ${this._switchRow("lights", "Punktlichter")}
-          ${this._switchRow("bloom", "Bloom")}
-          <div class="hud-note">💡 Schalte das Flackern aus: Ein starres Licht wirkt sofort wie eine Glühbirne.</div>
-        </div>
-        <div class="hud-section">
-          <div class="section-title"><span>⏱️ Zeit</span><span style="font-size:9px;color:#64748b;">P · T</span></div>
-          <div class="preset-group five-col">
-            ${TIME_SCALES.map((s) => `<button class="btn-preset" data-time="${s}" title="Tempo ×${s}">×${s}</button>`).join("")}
-          </div>
-          <button id="fireLabPause" class="btn-preset" style="width:100%;margin-top:6px;" title="Einfrieren (P)"></button>
-        </div>
-        <div class="hud-section">
-          <div class="section-title"><span>🎨 Farbe</span><span style="font-size:9px;color:#64748b;">0–4</span></div>
-          <div class="preset-group five-col">
+    const times = TIME_SCALES.map(
+      (t) => `<button class="btn-preset" data-time="${t}" title="Tempo ×${t}">×${t}</button>`,
+    ).join("");
+    this._drawer = new ShowcaseDrawer({
+      id: "fire-lab-hud",
+      title: "Fire Lab",
+      icon: "🔥",
+      body: `
+        <div class="hud-section"><pre id="fireLabReadout"></pre></div>
+        ${hudSection(
+          "⚖️ Vorher / Nachher",
+          "F · G · L",
+          hudSwitch("sw_flicker", "Flackern (Licht)") +
+            hudSwitch("sw_flame", "Flammenkörper") +
+            hudSwitch("sw_glow", "Glow-Halo") +
+            hudSwitch("sw_lights", "Punktlichter") +
+            hudSwitch("sw_bloom", "Bloom") +
+            hudNote(
+              "💡 Schalte das Flackern aus: Ein starres Licht wirkt sofort wie eine Glühbirne.",
+            ),
+        )}
+        ${hudSection(
+          "⏱️ Zeit",
+          "P · T",
+          `<div class="preset-group five-col">${times}</div>
+           <button id="fireLabPause" class="btn-preset" style="width:100%;margin-top:6px;" title="Einfrieren (P)"></button>`,
+        )}
+        ${hudSection(
+          "🎨 Farbe",
+          "0–4",
+          `<div class="preset-group five-col">
             <button class="btn-preset" data-palette="original" title="Jedes Feuer in seiner Farbe (0)">Orig.</button>
             <button class="btn-preset" data-palette="blackbody" title="Blackbody / Temperatur (1)">🔥</button>
             <button class="btn-preset" data-palette="spectral" title="Spectral, Gespensterblau (2)">👻</button>
             <button class="btn-preset" data-palette="wisp" title="Wisp, Irrlichtgrün (3)">🍀</button>
             <button class="btn-preset" data-palette="cursed" title="Cursed, Violett (4)">🔮</button>
-          </div>
-          <div class="hud-note">Temperatur wirkt nur auf Blackbody-Feuer; Paletten sind freie Farben.</div>
-        </div>
-        <div class="hud-section">
-          <div class="section-title"><span>🕯️ Flamme</span><span style="font-size:9px;color:#64748b;">alle Feuer</span></div>
-          ${this._sliderRow(0)}${this._sliderRow(1)}${this._sliderRow(2)}${this._sliderRow(3)}
-        </div>
-        <div class="hud-section">
-          <div class="section-title"><span>🌬️ Wind</span><span style="font-size:9px;color:#64748b;">, . Richtung · + − Stärke</span></div>
-          ${this._sliderRow(4)}${this._sliderRow(5)}
-        </div>
-        <div class="hud-section">
-          <div class="section-title"><span>💡 Licht-Budget</span><span style="font-size:9px;color:#64748b;">V</span></div>
-          ${this._sliderRow(6)}
-          ${this._switchRow("showBudget", "Feuer ohne Licht markieren")}
-          <div class="hud-note">WebGL1/2 schattieren nur 16 Punktlichter. Fliege seitlich die Fackelreihe entlang und sieh zu, wie die Lichter weitergereicht werden.</div>
-        </div>
-        <div class="hud-section">
-          <div class="section-title"><span>🌗 Umgebung</span><span style="font-size:9px;color:#64748b;">N</span></div>
-          ${this._switchRow("daylight", "Tageslicht")}
-        </div>
+          </div>` +
+            hudNote("Temperatur wirkt nur auf Blackbody-Feuer; Paletten sind freie Farben."),
+        )}
+        ${hudSection("🕯️ Flamme", "alle Feuer", this._sliderRows(0, 4))}
+        ${hudSection("🌬️ Wind", ", . Richtung · + − Stärke", this._sliderRows(4, 6))}
+        ${hudSection(
+          "💡 Licht-Budget",
+          "V",
+          this._sliderRows(6, 7) +
+            hudSwitch("sw_showBudget", "Feuer ohne Licht markieren") +
+            hudNote(
+              "WebGL1/2 schattieren nur 16 Punktlichter. Fliege seitlich die Fackelreihe entlang und sieh zu, wie die Lichter weitergereicht werden.",
+            ),
+        )}
+        ${hudSection("🌗 Umgebung", "N", hudSwitch("sw_daylight", "Tageslicht"))}
         <div class="hud-section hud-keys">
           <kbd>F</kbd> Flackern · <kbd>G</kbd> Glow · <kbd>L</kbd> Lichter · <kbd>P</kbd> Pause · <kbd>T</kbd> Tempo ·
           <kbd>0–4</kbd> Farbe · <kbd>,</kbd><kbd>.</kbd> Windrichtung · <kbd>+</kbd><kbd>−</kbd> Windstärke · <kbd>V</kbd> Budget ·
           <kbd>N</kbd> Tag/Nacht · <kbd>I</kbd> Panel · <kbd>WASD</kbd> Fliegen
         </div>
-      </div>
-    `;
-    document.body.appendChild(root);
-    this._root = root;
-    this._readout = root.querySelector("#fireLabReadout") as HTMLElement;
-
-    // Keep clicks and drags inside the panel from reaching the fly camera.
-    for (const eventName of [
-      "mousedown",
-      "mouseup",
-      "mousemove",
-      "pointerdown",
-      "pointerup",
-      "pointermove",
-      "click",
-      "dblclick",
-      "contextmenu",
-    ]) {
-      root.addEventListener(eventName, (e: Event): void => e.stopPropagation());
-    }
-    root.addEventListener("wheel", (e: Event): void => e.stopPropagation(), { passive: true });
-
-    this._toggleButton = document.createElement("button");
-    this._toggleButton.className = "swm-inspector-btn active";
-    this._toggleButton.innerHTML = "<span>🔥</span>";
-    this._toggleButton.title = "Fire Lab (I / H)";
-    this._toggleButton.setAttribute("aria-label", "Fire Lab ein-/ausblenden");
-    this._toggleButton.onclick = (): void => this.toggle();
-    (document.querySelector(".app-footer") ?? document.body).appendChild(this._toggleButton);
+      `,
+    });
+    this._root = this._drawer.root;
+    this._readout = this._root.querySelector("#fireLabReadout") as HTMLElement;
 
     this._bind();
     this.sync();
-  }
-
-  /** Shows or hides the drawer. */
-  public toggle(force?: boolean): void {
-    const open = force ?? !this._root.classList.contains("open");
-    this._root.classList.toggle("open", open);
-    this._toggleButton.classList.toggle("active", open);
   }
 
   /** Writes the live status text (call a few times per second, not every frame). */
@@ -259,6 +220,9 @@ export class FireLabHud {
    * Applies a lab shortcut. Returns true when the key was consumed.
    */
   public handleKey(event: KeyboardEvent): boolean {
+    if (this._drawer.handleKey(event)) {
+      return true;
+    }
     if (!this._applyShortcut(event)) {
       return false;
     }
@@ -314,10 +278,6 @@ export class FireLabHud {
         s.timeScale = this._nextTimeScale();
         s.paused = false;
         return true;
-      case "KeyI":
-      case "KeyH":
-        this.toggle();
-        return true;
       default:
         return false;
     }
@@ -332,7 +292,7 @@ export class FireLabHud {
     }
     for (const spec of this._sliders) {
       const input = this._root.querySelector(`#sl_${spec.key}`) as HTMLInputElement | null;
-      const label = this._root.querySelector(`#val_${spec.key}`) as HTMLElement | null;
+      const label = this._root.querySelector(`#sl_${spec.key}_val`) as HTMLElement | null;
       if (input) input.value = String(s[spec.key]);
       if (label) label.textContent = spec.format(s[spec.key]);
     }
@@ -386,7 +346,6 @@ export class FireLabHud {
       this.sync();
       this._onChange();
     });
-    this._root.querySelector("#fireLabClose")?.addEventListener("click", () => this.toggle(false));
   }
 
   private _set(key: SwitchKey, value: boolean): void {
@@ -402,21 +361,12 @@ export class FireLabHud {
     return cycle[(index + 1) % cycle.length]!;
   }
 
-  private _switchRow(key: SwitchKey, label: string): string {
-    return `
-      <div class="hud-row">
-        <label for="sw_${key}">${label}</label>
-        <label class="hud-switch"><input type="checkbox" id="sw_${key}"><span class="hud-switch-slider"></span></label>
-      </div>`;
-  }
-
-  private _sliderRow(index: number): string {
-    const spec = this._sliders[index]!;
-    return `
-      <div class="hud-row">
-        <label for="sl_${spec.key}">${spec.label}</label>
-        <input id="sl_${spec.key}" type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" />
-        <span id="val_${spec.key}" class="val-label"></span>
-      </div>`;
+  private _sliderRows(from: number, to: number): string {
+    let html = "";
+    for (let i = from; i < to; i++) {
+      const spec = this._sliders[i]!;
+      html += hudSlider(`sl_${spec.key}`, spec.label, spec.min, spec.max, spec.step);
+    }
+    return html;
   }
 }

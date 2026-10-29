@@ -108,3 +108,10 @@ P6 Goldens. Nachtszene vor einer Steinwand, damit Emission, Bloom und Lichtwurf 
 - Fix (alle drei Shader): Form verjüngt sich bis `y = 0,95`, und jede Spalte brennt bei einer eigenen, langsam
   wandernden Höhe aus (`tip = 0,68 + 0,27 · noise(x, t)`, weicher Auslauf über 0,2). Erste Variante (0,6–0,92)
   machte die Flamme sichtbar kürzer und wurde nach oben verschoben.
+
+## 2026-10-29 · Panel auf gemeinsamen `ShowcaseDrawer`, Datei `Hud.ts`
+
+- Nutzerentscheidung: Jeder Showcase mit Panel bekommt `Hud.ts`; das kopierte Grundgerüst wandert nach
+  `apps/showcases/shared/ShowcaseDrawer.ts`. 45 ist die Referenz: `FireLabHud.ts` → `Hud.ts` (git mv), Drawer,
+  Event-Abschirmung, Footer-Button und I/H kommen aus dem Baustein; Slider-Wertlabels heißen jetzt `sl_<key>_val`.
+- Browser-Check: I/H, Farbtasten, Regler, ein Footer-Button, keine Konsolenfehler.

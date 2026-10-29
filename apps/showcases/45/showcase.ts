@@ -24,8 +24,8 @@ import {
   FlamePalettes,
   createFlameCardGeometry,
 } from "@small-world-machine/vfx-extras";
-import type { FireLabSettings, PaletteChoice } from "./FireLabHud.js";
-import { FireLabHud, defaultFireLabSettings } from "./FireLabHud.js";
+import type { FireLabSettings, PaletteChoice } from "./Hud.js";
+import { FireLabHud, defaultFireLabSettings } from "./Hud.js";
 
 /** Torch spacing along the long wall; 16 fires in total, so the budget visibly hands lights over. */
 const TORCH_ROW_X = [-20, -16, -12, -8, -5, 5, 8, 12, 16, 20];
