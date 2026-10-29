@@ -32,8 +32,8 @@ import { Hud, defaultHudState } from "./Hud.js";
 const TORCH_ROW_X = [-20, -16, -12, -8, -5, 5, 8, 12, 16, 20];
 const BLACKBODY_K = 2000;
 const DEFAULT_LIGHT_BUDGET = 10;
-/** Flame tilt in radians at full wind strength (~29°). */
-const WIND_TILT = 0.5;
+/** Tip offset at full wind strength, as a fraction of the flame height (≈ 30° bend). */
+const WIND_LEAN = 0.55;
 const READOUT_INTERVAL = 0.25;
 const BUDGET_DEBUG_TINT = new Color(1, 0.05, 0.05);
 const NIGHT_AMBIENT = 0.08;
@@ -108,6 +108,7 @@ interface FireRig {
   readonly temperatureK: number;
   readonly turbulence: number;
   readonly flowSpeed: number;
+  readonly height: number;
   readonly flameIntensity: number;
   readonly glowIntensity: number;
 }
@@ -288,13 +289,11 @@ export class Showcase extends AbstractShowcase {
 
   private _applySettings(): void {
     const s = this._settings;
-    // Wind tilts each flame rigidly about its base. FireMaterial.lean shifts the flame within each
-    // card, which splits crossed cards (the card across the wind cannot lean); a world-space
-    // vertex shear is the proper fix and is planned with the carried torch (P4).
+    // Wind bends each flame with FireMaterial.lean (world-space vertex shear, base fixed, tip
+    // displaced), so both crossed cards lean together and the base stays on the fuel.
     const windRad = (s.windAngleDeg * Math.PI) / 180;
-    const tilt = s.windStrength * WIND_TILT;
-    const tiltX = -Math.cos(windRad) * tilt;
-    const tiltZ = -Math.sin(windRad) * tilt;
+    const windX = Math.sin(windRad) * s.windStrength * WIND_LEAN;
+    const windZ = -Math.cos(windRad) * s.windStrength * WIND_LEAN;
 
     for (let i = 0; i < this._fires.length; i++) {
       const rig = this._fires[i]!;
@@ -305,7 +304,7 @@ export class Showcase extends AbstractShowcase {
       rig.flame.temperatureK = temperatureK;
       rig.flame.turbulence = rig.turbulence * s.turbulenceScale;
       rig.flame.flowSpeed = rig.flowSpeed * s.flowScale;
-      rig.flameObject.rotation.set(tiltX, 0, tiltZ);
+      rig.flame.lean.set(windX * rig.height, 0, windZ * rig.height);
 
       rig.glow.temperatureK = temperatureK * 0.95;
       rig.glow.tint = palette?.body;
@@ -468,6 +467,7 @@ export class Showcase extends AbstractShowcase {
       temperatureK,
       turbulence: fire.turbulence,
       flowSpeed: fire.flowSpeed,
+      height: spec.height,
       flameIntensity: fire.intensity,
       glowIntensity: glowMat.intensity,
     });

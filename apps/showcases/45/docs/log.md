@@ -149,3 +149,15 @@ P6 Goldens. Nachtszene vor einer Steinwand, damit Emission, Bloom und Lichtwurf 
 - Gates: `tsc`, ESLint, 80/80 vfx-extras-Tests, volle Suite grün (1 spurious Timeout in `lintAssets`, isoliert grün),
   `build:lib`, `check:doctrine` sauber.
 - 2026-10-29 Hud-Namen: `FireLabHud`/`FireLabSettings`/`defaultFireLabSettings` → `Hud`/`HudState`/`defaultHudState`; Panel-Toggle nur noch `I` (`toggleKeys`), weil `H` seit der Glut-Schicht die Glut schaltet und vorher vom Drawer verschluckt wurde.
+
+## 2026-10-29 · Punktlicht-Schatten (ADR 0052) · Wind über Welt-Scherung
+
+- Schalter „Punktlicht-Schatten“ (X), Default an; die Engine wählt die nächsten zwei Feuer
+  (`quality.maxShadowedPointLights`). Boden/Wand empfangen, Schäfte, Scheite, Kerze und eine Kiste werfen.
+- Sichtprüfung WebGPU + WebGL2: Kontaktschatten direkt an den Holzscheiten (kein Ablösen nach dem
+  Bias-Fix `d6890462`), Kistenschatten an der Wand, Kerze wirft einen Schattenteller um den Fuß
+  (physikalisch korrekt, Licht 4,5 cm über dem Docht). WebGL1 ohne Schatten, ohne Fehler.
+- Beobachtung: Lagerfeuer und Kerze liegen ~4,4 m von der Startkamera; welches Feuer den zweiten
+  Schatten-Slot bekommt, kann mit dem Licht-Jitter wechseln (Hinweis für Goldens an antigravity).
+- Wind: statt starrem Kippen jetzt `FireMaterial.lean` (Welt-Scherung von antigravity, `3b26b206`);
+  Spitzenversatz = 0,55 × Flammenhöhe × Windstärke. Basis bleibt am Brennstoff, keine Kartenspaltung.
