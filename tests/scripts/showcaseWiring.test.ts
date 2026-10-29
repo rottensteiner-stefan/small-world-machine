@@ -47,8 +47,8 @@ describe("showcase wiring (gallery + curated prev/next tour)", () => {
     // Kuratierte Tour (didaktische Reihung, siehe .agents/notes/codebase-search-knowledge.md §7).
     // IDs/Ordner bleiben stabil; die Reihenfolge lebt in prev/next + Gallery.
     const tour = [
-      11, 1, 2, 6, 7, 8, 26, 3, 5, 19, 13, 20, 9, 4, 23, 21, 22, 35, 36, 16, 15, 12, 10, 30, 32,
-      27, 29, 31, 37, 39, 38, 28, 17, 18, 33, 34, 44, 24, 14, 40, 42, 43, 41,
+      11, 1, 2, 6, 7, 8, 26, 3, 5, 19, 13, 20, 9, 4, 23, 21, 22, 35, 36, 16, 15, 12, 10, 30, 32, 27,
+      29, 31, 37, 39, 38, 28, 17, 18, 33, 34, 44, 45, 24, 14, 40, 42, 43, 41,
     ];
     // Tour muss vollständig sein und exakt die vorhandenen Showcase-IDs enthalten.
     expect(tour).toHaveLength(ids.length);
@@ -93,7 +93,9 @@ describe("parseShowcaseLayout", () => {
   });
 
   it("returns null without the required title attribute or without a tag", () => {
-    expect(parseShowcaseLayout(`<showcase-layout prev="../1/index.html"></showcase-layout>`)).toBeNull();
+    expect(
+      parseShowcaseLayout(`<showcase-layout prev="../1/index.html"></showcase-layout>`),
+    ).toBeNull();
     expect(parseShowcaseLayout("<html></html>")).toBeNull();
   });
 });

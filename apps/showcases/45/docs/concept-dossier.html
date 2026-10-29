@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showcase 45 – Fire VFX Lab – Concept Dossier</title>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --fg: #e2e8f0;
+    --muted: #8b949e;
+    --card: #14181f;
+    --border: #2a3038;
+    --accent: #58a6ff;
+    --cyan: #39c5bb;
+    --amber: #f0883e;
+  }
+  body {
+    margin: 0;
+    padding: 40px 20px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    color: #fff;
+  }
+  p.lead {
+    font-size: 17px;
+    color: var(--muted);
+    margin-top: 0;
+    margin-bottom: 28px;
+  }
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 32px 0 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+    color: var(--accent);
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+  }
+  .card h3 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    color: var(--cyan);
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9em;
+    background: #1a1f27;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--amber);
+  }
+  ul { margin: 8px 0 0; padding-left: 20px; }
+  li { margin-bottom: 8px; }
+  .warn {
+    border: 1px solid var(--amber);
+    color: #f0c59a;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 20px 0;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Showcase 45 – Fire VFX Lab</h1>
+  <p class="lead">Practical fire for small narrative scenes: torches, a campfire, a candle. Layered like every production engine does it, built to run on WebGPU, WebGL2 and WebGL1.</p>
+
+  <h2>Design pillars</h2>
+  <ul>
+    <li><b>Layers, not one effect:</b> flame body, glow, embers, smoke, light, grounding, atmosphere, audio.</li>
+    <li><b>Flame as shader card:</b> crossed vertical cards with procedural noise erosion. One draw call per flame, no overdraw storm.</li>
+    <li><b>Colour by temperature:</b> blackbody ramp by default (core 2800 K, body 2000 K, tip 1300 K), explicit palettes for unnatural fire.</li>
+    <li><b>Stylized-indie look (ADR 0012):</b> crisp tongues, readable silhouette, warm bloom.</li>
+  </ul>
+
+  <h2>Palettes</h2>
+  <table>
+    <tr><th>Name</th><th>Core</th><th>Body</th><th>Tip</th></tr>
+    <tr><td>Blackbody 2000 K</td><td style="background:#ffaa5f;color:#000">#FFAA5F</td><td style="background:#ff890e;color:#000">#FF890E</td><td style="background:#ff5e00;color:#000">#FF5E00</td></tr>
+    <tr><td>SPECTRAL</td><td style="background:#d9f7ff;color:#000">#D9F7FF</td><td style="background:#338cff;color:#000">#338CFF</td><td style="background:#401a99">#401A99</td></tr>
+    <tr><td>WISP</td><td style="background:#e6ffbf;color:#000">#E6FFBF</td><td style="background:#4df259;color:#000">#4DF259</td><td style="background:#05594d">#05594D</td></tr>
+    <tr><td>CURSED</td><td style="background:#ffd9ff;color:#000">#FFD9FF</td><td style="background:#cc40ff;color:#000">#CC40FF</td><td style="background:#4d0566">#4D0566</td></tr>
+  </table>
+
+  <h2>Controls</h2>
+  <ul>
+    <li>WASD + mouse: fly camera, R: reset camera.</li>
+    <li>Alt+1 / Alt+2 / Alt+3: WebGL1 / WebGL2 / WebGPU.</li>
+  </ul>
+
+  <h2>Architecture</h2>
+  <pre>
+Fire (planned P4, Object3D container)
+ ├─ FireMaterial on createFlameCardGeometry   (P1, done)
+ ├─ FlameGlowMaterial on billboard Plane      (P1, done)
+ ├─ PointLight + FireLightBehavior            (P2)
+ ├─ ParticleEmitter: embers / smoke           (P3)
+ └─ ember bed, soot decal, audio              (P4)
+  </pre>
+</main>
+</body>
+</html>

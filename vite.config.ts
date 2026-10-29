@@ -46,7 +46,15 @@ export default defineConfig({
     fs: {
       // Note: `.agents/scripts/` (committed repo tooling, incl. `probe-gpu-parity.html`) IS served;
       // the deny list covers only the local-only working dirs under `.agents/`.
-      deny: [".env*", "**/.claude/**", "**/.agents/scratches/**", "**/.agents/notes/**", "**/.agents/collaborate/**", "**/.agents/skills/**", "**/.husky/**"],
+      deny: [
+        ".env*",
+        "**/.claude/**",
+        "**/.agents/scratches/**",
+        "**/.agents/notes/**",
+        "**/.agents/collaborate/**",
+        "**/.agents/skills/**",
+        "**/.husky/**",
+      ],
     },
   },
   test: {
@@ -303,6 +311,7 @@ export default defineConfig({
         showcase42: resolve(import.meta.dirname, "apps/showcases/42/index.html"),
         showcase43: resolve(import.meta.dirname, "apps/showcases/43/index.html"),
         showcase44: resolve(import.meta.dirname, "apps/showcases/44/index.html"),
+        showcase45: resolve(import.meta.dirname, "apps/showcases/45/index.html"),
         theWhisperHub: resolve(import.meta.dirname, "apps/sample-apps/the-whisper/index.html"),
         theWhisperPrologue: resolve(
           import.meta.dirname,

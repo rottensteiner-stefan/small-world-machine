@@ -1,0 +1,10 @@
+[BASE_FS_HEADER]
+
+uniform vec4 u_matParam0; // [intensity, falloff, unused, unused]
+uniform vec4 u_matParam1; // [color.rgb, unused]
+
+void main() {
+    float r = length(v_uv - 0.5) * 2.0;
+    float glow = exp(-r * r * u_matParam0.y) * (1.0 - smoothstep(0.75, 1.0, r));
+    gl_FragColor = vec4(u_matParam1.rgb * (glow * u_matParam0.x), glow);
+}

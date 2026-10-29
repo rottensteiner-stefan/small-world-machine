@@ -42,6 +42,7 @@ const SCAN_ROOTS = [
   "packages/engine/src/core/materials/glass/shaders",
   "packages/engine/src/renderers/post/shaders",
   "packages/engine/src/renderers/shaders/source/web_gpu",
+  "packages/vfx-extras/src/fire",
 ].map((d) => path.resolve(d));
 
 interface LintTarget {

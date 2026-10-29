@@ -14,6 +14,7 @@ const shaderDirs = [
   "packages/engine/src/core/materials/glass/shaders",
   "packages/engine/src/renderers/post/shaders",
   "packages/liquid-extras/src/materials",
+  "packages/vfx-extras/src/fire",
   "packages/artistic-extras/src/materials/shaders",
   "packages/artistic-extras/src/post/shaders",
   "apps/sample-apps/voxel-prototype/voxel/material/shaders",
