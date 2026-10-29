@@ -10,7 +10,7 @@ import {
 export type PaletteChoice = "original" | "blackbody" | "spectral" | "wisp" | "cursed";
 
 /** Everything the viewer can change in the Fire VFX lab. */
-export interface FireLabSettings {
+export interface HudState {
   flicker: boolean;
   flame: boolean;
   glow: boolean;
@@ -31,7 +31,7 @@ export interface FireLabSettings {
   daylight: boolean;
 }
 
-export function defaultFireLabSettings(maxActiveLights: number): FireLabSettings {
+export function defaultHudState(maxActiveLights: number): HudState {
   return {
     flicker: true,
     flame: true,
@@ -96,14 +96,14 @@ const percent = (value: number): string => `${Math.round(value * 100)} %`;
  * Fire Lab panel of showcase 45 on the shared {@link ShowcaseDrawer}. Owns only its controls and
  * the settings object; the showcase reads the settings and applies them in `onChange`.
  */
-export class FireLabHud {
+export class Hud {
   private readonly _drawer: ShowcaseDrawer;
   private readonly _root: HTMLElement;
   private readonly _readout: HTMLElement;
   private readonly _sliders: SliderSpec[];
 
   constructor(
-    private readonly _settings: FireLabSettings,
+    private readonly _settings: HudState,
     totalFires: number,
     private readonly _onChange: () => void,
   ) {
@@ -162,6 +162,8 @@ export class FireLabHud {
       id: "fire-lab-hud",
       title: "Fire Lab",
       icon: "🔥",
+      // H toggles the ember layer here, so only I opens the panel.
+      toggleKeys: ["KeyI"],
       body: `
         <div class="hud-section"><pre id="fireLabReadout"></pre></div>
         ${hudSection(

@@ -148,3 +148,4 @@ P6 Goldens. Nachtszene vor einer Steinwand, damit Emission, Bloom und Lichtwurf 
 - Bewusst NICHT in P3: Rauch-Schicht, Welt-Scherung (2b), Golden-Render-Gate (5), ADR/Guide (7) — nächste Schritte.
 - Gates: `tsc`, ESLint, 80/80 vfx-extras-Tests, volle Suite grün (1 spurious Timeout in `lintAssets`, isoliert grün),
   `build:lib`, `check:doctrine` sauber.
+- 2026-10-29 Hud-Namen: `FireLabHud`/`FireLabSettings`/`defaultFireLabSettings` → `Hud`/`HudState`/`defaultHudState`; Panel-Toggle nur noch `I` (`toggleKeys`), weil `H` seit der Glut-Schicht die Glut schaltet und vorher vom Drawer verschluckt wurde.

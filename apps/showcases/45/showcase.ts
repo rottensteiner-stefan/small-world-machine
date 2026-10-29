@@ -25,8 +25,8 @@ import {
   FlamePalettes,
   createFlameCardGeometry,
 } from "@small-world-machine/vfx-extras";
-import type { FireLabSettings, PaletteChoice } from "./Hud.js";
-import { FireLabHud, defaultFireLabSettings } from "./Hud.js";
+import type { HudState, PaletteChoice } from "./Hud.js";
+import { Hud, defaultHudState } from "./Hud.js";
 
 /** Torch spacing along the long wall; 16 fires in total, so the budget visibly hands lights over. */
 const TORCH_ROW_X = [-20, -16, -12, -8, -5, 5, 8, 12, 16, 20];
@@ -123,7 +123,7 @@ export class Showcase extends AbstractShowcase {
   private readonly _budget: FireLightBudget = new FireLightBudget({
     maxActive: DEFAULT_LIGHT_BUDGET,
   });
-  private readonly _settings: FireLabSettings = defaultFireLabSettings(DEFAULT_LIGHT_BUDGET);
+  private readonly _settings: HudState = defaultHudState(DEFAULT_LIGHT_BUDGET);
   private readonly _ambient: AmbientLight = new AmbientLight({
     color: new Color(0.35, 0.4, 0.6),
     intensity: NIGHT_AMBIENT,
@@ -133,7 +133,7 @@ export class Showcase extends AbstractShowcase {
     intensity: 0,
   });
   private _bloom: BloomElement | undefined = undefined;
-  private _hud: FireLabHud | undefined = undefined;
+  private _hud: Hud | undefined = undefined;
   private _time: number = 0;
   private _readoutTimer: number = 0;
 
@@ -142,7 +142,7 @@ export class Showcase extends AbstractShowcase {
     // Only after start(): AbstractShowcase installs its fly controller solely on a camera that has
     // no behaviors yet, so attaching the budget earlier silently disables camera movement.
     this.camera.addBehavior(this._budget);
-    this._hud = new FireLabHud(this._settings, this._fires.length, () => this._applySettings());
+    this._hud = new Hud(this._settings, this._fires.length, () => this._applySettings());
     this._applySettings();
   }
 
