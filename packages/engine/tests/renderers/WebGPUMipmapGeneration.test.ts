@@ -162,3 +162,24 @@ describe("WebGPU runtime mipmap generation", () => {
     expect(device.queue.submit).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("GPUTextureResourceCache.generateMipmaps colour format", () => {
+  it("builds the blit pipeline for the texture's own format (bgra8 RenderTargets, rgba8 textures)", () => {
+    const { textures, device } = makeTextures();
+    const create = vi.mocked(device.createRenderPipeline);
+    create.mockClear();
+    const textureOf = (format: GPUTextureFormat): GPUTexture =>
+      ({ format, createView: vi.fn().mockReturnValue({}) }) as unknown as GPUTexture;
+
+    textures.generateMipmaps(textureOf("bgra8unorm"), 3);
+    textures.generateMipmaps(textureOf("rgba8unorm"), 3);
+    textures.generateMipmaps(textureOf("bgra8unorm"), 3);
+
+    const formats = create.mock.calls.map(
+      (call) => (call[0] as GPURenderPipelineDescriptor).fragment!.targets[0]!.format,
+    );
+    // One pipeline per format, reused afterwards; a single rgba8 pipeline invalidated every
+    // planar-reflection mip pass on macOS (attachment state mismatch, frame dropped).
+    expect(formats).toEqual(["bgra8unorm", "rgba8unorm"]);
+  });
+});

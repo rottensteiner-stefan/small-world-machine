@@ -63,7 +63,13 @@ export class GPUTextureResourceCache {
 
   /** GPU-side mip-chain generator for runtime 2D textures -- one bilinear blit per level, see
    * `generateMipmaps()`. */
-  private readonly _mipGenPipeline: GPURenderPipeline;
+  // One pipeline per colour format: runtime textures are rgba8unorm, but mip-mapped RenderTargets
+  // (planar reflections) use the canvas format, bgra8unorm on macOS. A single rgba8 pipeline made
+  // every RenderTarget mip pass invalid and took the whole frame's command buffer down with it.
+  private readonly _mipGenPipelines: Map<GPUTextureFormat, GPURenderPipeline> = new Map();
+  private readonly _mipGenVertex: GPUShaderModule;
+  private readonly _mipGenFragment: GPUShaderModule;
+  private readonly _mipGenLayout: GPUPipelineLayout;
   private readonly _mipGenBGL: GPUBindGroupLayout;
   private readonly _mipGenSampler: GPUSampler;
 
@@ -77,19 +83,9 @@ export class GPUTextureResourceCache {
         { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} },
       ],
     });
-    this._mipGenPipeline = device.createRenderPipeline({
-      layout: device.createPipelineLayout({ bindGroupLayouts: [this._mipGenBGL] }),
-      vertex: {
-        module: device.createShaderModule({ code: fullscreenVertWGSL }),
-        entryPoint: "vs_main",
-      },
-      fragment: {
-        module: device.createShaderModule({ code: mipDownsampleWGSL }),
-        entryPoint: "fs_main",
-        targets: [{ format: "rgba8unorm" }],
-      },
-      primitive: { topology: "triangle-list" },
-    });
+    this._mipGenLayout = device.createPipelineLayout({ bindGroupLayouts: [this._mipGenBGL] });
+    this._mipGenVertex = device.createShaderModule({ code: fullscreenVertWGSL });
+    this._mipGenFragment = device.createShaderModule({ code: mipDownsampleWGSL });
     // Always clamp-to-edge, independent of the texture's own wrap mode -- prevents edge
     // bleeding while downsampling. Separate from `getSampler()`'s draw-time sampler cache.
     this._mipGenSampler = device.createSampler({
@@ -603,6 +599,7 @@ export class GPUTextureResourceCache {
    * render pass per encoder at a time. `queue` operations are ordered, so this submit is
    * guaranteed visible to the main pass's later sampling of this texture. */
   public generateMipmaps(texture: GPUTexture, mipLevelCount: number): void {
+    const pipeline = this._mipGenPipelineFor(texture.format);
     const ce = this._device.createCommandEncoder();
     for (let level = 1; level < mipLevelCount; level++) {
       const srcView = texture.createView({ baseMipLevel: level - 1, mipLevelCount: 1 });
@@ -624,12 +621,26 @@ export class GPUTextureResourceCache {
           },
         ],
       });
-      rp.setPipeline(this._mipGenPipeline);
+      rp.setPipeline(pipeline);
       rp.setBindGroup(0, bg);
       rp.draw(3);
       rp.end();
     }
     this._device.queue.submit([ce.finish()]);
+  }
+
+  private _mipGenPipelineFor(format: GPUTextureFormat): GPURenderPipeline {
+    let pipeline = this._mipGenPipelines.get(format);
+    if (!pipeline) {
+      pipeline = this._device.createRenderPipeline({
+        layout: this._mipGenLayout,
+        vertex: { module: this._mipGenVertex, entryPoint: "vs_main" },
+        fragment: { module: this._mipGenFragment, entryPoint: "fs_main", targets: [{ format }] },
+        primitive: { topology: "triangle-list" },
+      });
+      this._mipGenPipelines.set(format, pipeline);
+    }
+    return pipeline;
   }
 
   public dispose(): void {
