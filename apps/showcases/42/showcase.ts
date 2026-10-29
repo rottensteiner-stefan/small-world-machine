@@ -14,8 +14,7 @@ import {
   StandardMaterial,
   Vector3D,
 } from "@small-world-machine/engine";
-
-type ProbeMode = "box" | "pole" | "steps";
+import { ShadowLabHud, type ProbeMode, type ShadowLabSlider, type ViewPreset } from "./Hud.js";
 
 interface QaSwm42Sample {
   rendererType: string;
@@ -63,7 +62,7 @@ function parseNum(p: URLSearchParams, key: string, fallback: number): number {
  * `quality.shadowSoftness` / `quality.shadowMaxPcfRadius` knobs actually widen the PCSS penumbra
  * on screen, on WebGPU and WebGL2 alike (`?softness=0` = hard 3x3 PCF, the negative control).
  *
- * For interactive sessions, a collapsible Tuning HUD (`#shadowLabHud`, toggle via key `I` or the
+ * For interactive sessions, a collapsible Tuning HUD (`Hud.ts`, `#showcase-hud`, toggle via key `I` or the
  * bottom-right button) lets users switch probes (`1` Box, `2` Pole, `3` Step Rig), lift the caster
  * off the floor to watch PCSS contact-hardening soften in real time, toggle `PCSS` vs. `EVSM`,
  * adjust penumbra softness / max PCF radius, steer the sun, and orbit the camera.
@@ -89,8 +88,7 @@ export class Showcase42 extends AbstractShowcase {
   private _sun?: DirectionalLight;
   private _ambient?: AmbientLight;
   private _casterObjects: Object3D[] = [];
-  private _hudToggleBtn?: HTMLButtonElement;
-  private _isHoveringHud: boolean = false;
+  private _hud?: ShadowLabHud;
   private _isOrbitDragging: boolean = false;
   private _lastPointer: { x: number; y: number } = { x: 0, y: 0 };
 
@@ -353,7 +351,7 @@ export class Showcase42 extends AbstractShowcase {
     this._syncHudControlsFromState();
   }
 
-  private _applyCameraViewPreset(preset: "overview" | "contact" | "far"): void {
+  private _applyCameraViewPreset(preset: ViewPreset): void {
     if (preset === "overview") {
       this.setInitialCamera(
         new Vector3D(this._camPos.x, this._camPos.y, this._camPos.z),
@@ -371,9 +369,7 @@ export class Showcase42 extends AbstractShowcase {
       this.camera.target.set(-0.6, 0.0, -4.2);
       this.camera.updateViewMatrix();
     }
-    document.getElementById("btnViewOverview")?.classList.toggle("active", preset === "overview");
-    document.getElementById("btnViewContact")?.classList.toggle("active", preset === "contact");
-    document.getElementById("btnViewFar")?.classList.toggle("active", preset === "far");
+    this._hud?.setView(preset);
   }
 
   private _setupCanvasOrbitInteraction(): void {
@@ -381,7 +377,7 @@ export class Showcase42 extends AbstractShowcase {
     if (!canvas) return;
 
     canvas.addEventListener("pointerdown", (e: PointerEvent) => {
-      if (this._isHoveringHud || e.button !== 0) return;
+      if (this._hud?.isHovering || e.button !== 0) return;
       this._isOrbitDragging = true;
       this._lastPointer = { x: e.clientX, y: e.clientY };
     });
@@ -416,7 +412,7 @@ export class Showcase42 extends AbstractShowcase {
     canvas.addEventListener(
       "wheel",
       (e: WheelEvent) => {
-        if (this._isHoveringHud) return;
+        if (this._hud?.isHovering) return;
         e.preventDefault();
         const offset = this.camera.position.clone().sub(this.camera.target);
         const radius = offset.length();
@@ -436,9 +432,10 @@ export class Showcase42 extends AbstractShowcase {
     const activeTag = document.activeElement?.tagName;
     if (activeTag === "INPUT" || activeTag === "SELECT") return;
 
-    if (event.code === "KeyI") {
-      this._toggleHud();
-    } else if (event.code === "Digit1") {
+    if (this._hud?.handleKey(event)) {
+      return;
+    }
+    if (event.code === "Digit1") {
       this._setProbeMode("box", true);
     } else if (event.code === "Digit2") {
       this._setProbeMode("pole", true);
@@ -447,79 +444,24 @@ export class Showcase42 extends AbstractShowcase {
     }
   }
 
-  private _toggleHud(force?: boolean): void {
-    const hud = document.getElementById("showcase-hud");
-    if (!hud) return;
-    const isOpen = hud.classList.contains("open");
-    const nextOpen = force !== undefined ? force : !isOpen;
-    hud.classList.toggle("open", nextOpen);
-    this._hudToggleBtn?.classList.toggle("active", nextOpen);
-    if (!nextOpen) {
-      this._isHoveringHud = false;
-    }
-  }
-
-  private _bindSlider(
-    sliderId: string,
-    labelId: string,
-    decimals: number,
-    suffix: string,
-    onChange: (val: number) => void,
-  ): void {
-    const slider = document.getElementById(sliderId) as HTMLInputElement | null;
-    const label = document.getElementById(labelId);
-    if (!slider || !label) return;
-    slider.addEventListener("input", () => {
-      const val = parseFloat(slider.value);
-      label.textContent = `${val.toFixed(decimals)}${suffix}`;
-      onChange(val);
+  private _syncHudControlsFromState(): void {
+    this._hud?.sync({
+      probe: this._probe,
+      pcss: this._shadowMode === ShadowMode.PCSS,
+      liftY: this._liftY,
+      softness: this._softness,
+      maxRadius: this._maxRadius,
+      sunElevationDeg: this._sunElevationDeg,
+      sunAzimuthDeg: this._sunAzimuthDeg,
+      sunIntensity: this._sunIntensity,
+      ambientIntensity: this._ambientIntensity,
+      shadowBias: this._shadowBias,
+      shadowNormalBias: this._shadowNormalBias,
     });
   }
 
-  private _syncHudControlsFromState(): void {
-    const setSlider = (
-      sliderId: string,
-      labelId: string,
-      val: number,
-      decimals: number,
-      suffix: string = "",
-    ): void => {
-      const s = document.getElementById(sliderId) as HTMLInputElement | null;
-      const l = document.getElementById(labelId);
-      if (s) s.value = String(val);
-      if (l) l.textContent = `${val.toFixed(decimals)}${suffix}`;
-    };
-
-    document.getElementById("btnProbeBox")?.classList.toggle("active", this._probe === "box");
-    document.getElementById("btnProbePole")?.classList.toggle("active", this._probe === "pole");
-    document.getElementById("btnProbeSteps")?.classList.toggle("active", this._probe === "steps");
-
-    document
-      .getElementById("btnModePcss")
-      ?.classList.toggle("active", this._shadowMode === ShadowMode.PCSS);
-    document
-      .getElementById("btnModeEvsm")
-      ?.classList.toggle("active", this._shadowMode === ShadowMode.EVSM);
-
-    const pcssControls = document.getElementById("pcssKernelRows");
-    if (pcssControls) {
-      pcssControls.style.opacity = this._shadowMode === ShadowMode.PCSS ? "1" : "0.45";
-    }
-
-    setSlider("slLiftY", "valLiftY", this._liftY, 2, " m");
-    setSlider("slSoftness", "valSoftness", this._softness, 2);
-    setSlider("slMaxRadius", "valMaxRadius", this._maxRadius, 0, " px");
-    setSlider("slSunElev", "valSunElev", this._sunElevationDeg, 0, "°");
-    setSlider("slSunAzim", "valSunAzim", this._sunAzimuthDeg, 0, "°");
-    setSlider("slSunInt", "valSunInt", this._sunIntensity, 2);
-    setSlider("slAmbInt", "valAmbInt", this._ambientIntensity, 2);
-    setSlider("slBias", "valBias", this._shadowBias, 4);
-    setSlider("slNormalBias", "valNormalBias", this._shadowNormalBias, 3);
-  }
-
   private _refreshReadoutUI(): void {
-    const el = document.getElementById("shadowLabReadout");
-    if (!el || !window.__qaSwm42) return;
+    if (!this._hud || !window.__qaSwm42) return;
     const s = window.__qaSwm42.sample();
     const uStr = s.uniform
       ? `[${s.uniform[0].toFixed(2)}, ${s.uniform[1].toFixed(0)}px]`
@@ -534,277 +476,60 @@ export class Showcase42 extends AbstractShowcase {
       `Mode:     ${s.shadowMode.toUpperCase()} (${s.probe})\n` +
       `PCSS UBO: ${uStr}\n` +
       `EVSM UBO: ${eStr}`;
-    if (el.textContent !== nextText) {
-      el.textContent = nextText;
-    }
+    this._hud.setReadout(nextText);
   }
 
   private _createControlHud(): void {
-    document.getElementById("showcase-hud")?.remove();
-    document.getElementById("shadowLabStyle")?.remove();
-    document.getElementById("shadowLabInspectorBtn")?.remove();
-
-    const style = document.createElement("style");
-    style.id = "shadowLabStyle";
-    style.textContent = `
-      #showcase-hud .preset-group.three-col {
-        grid-template-columns: repeat(3, 1fr);
-      }
-      #showcase-hud .preset-group.two-col {
-        grid-template-columns: repeat(2, 1fr);
-      }
-      #showcase-hud .hud-note {
-        font-size: 10px;
-        line-height: 1.35;
-        color: #94a3b8;
-        margin-top: 6px;
-      }
-      #shadowLabReadout {
-        font-family: var(--font-mono, "JetBrains Mono", monospace);
-        font-size: 10px;
-        line-height: 1.45;
-        color: #a5f3fc;
-        background: rgba(2, 6, 23, 0.65);
-        border: 1px solid rgba(56, 189, 248, 0.2);
-        border-radius: 6px;
-        padding: 7px 9px;
-        margin: 8px 0 0 0;
-        white-space: pre;
-      }
-    `;
-    document.head.appendChild(style);
-
-    const hud = document.createElement("aside");
-    hud.id = "showcase-hud";
-    hud.className = "swm-inspector-drawer";
-    hud.innerHTML = `
-      <div class="bottom-sheet-grabber"></div>
-      <div class="hud-header">
-        <div class="hud-title">
-          <span>🌒</span> Soft Shadow Lab
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="hud-badge">${this.renderer.type}</span>
-          <button id="btnCloseShadowHud" class="hud-close-btn" title="Close Panel (Key: I)">✕</button>
-        </div>
-      </div>
-      <div class="hud-body">
-        <div class="hud-section">
-          <div class="section-title">
-            <span>📐 Probe Geometry</span>
-            <span style="font-size: 9px; color: #64748b;">Keys 1–3</span>
-          </div>
-          <div class="preset-group three-col" style="margin-bottom: 8px;">
-            <button id="btnProbeBox" class="btn-preset" title="2.2m Cube: uniform edge feathering (Key 1)">1 · Box</button>
-            <button id="btnProbePole" class="btn-preset" title="Thin Pole: sharp contact -> wide far penumbra (Key 2)">2 · Pole</button>
-            <button id="btnProbeSteps" class="btn-preset" title="Multi-height bars + sphere: compare blocker distances (Key 3)">3 · Step Rig</button>
-          </div>
-          <div class="hud-row">
-            <label for="slLiftY" title="Lift the caster off the floor to watch the contact shadow soften">Caster Lift Y</label>
-            <input id="slLiftY" type="range" min="0" max="2.5" step="0.02" value="0" />
-            <span id="valLiftY" class="val-label">0.00 m</span>
-          </div>
-          <div class="hud-note">
-            💡 <b>Try lifting the caster:</b> Under PCSS, the sharp contact shadow immediately softens as distance to the floor grows.
-          </div>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title">
-            <span>🌗 Shadow Technique</span>
-            <span style="font-size: 9px; color: #64748b;">ADR 0006 / 0043</span>
-          </div>
-          <div class="preset-group two-col" style="margin-bottom: 8px;">
-            <button id="btnModePcss" class="btn-preset" title="Percentage-Closer Soft Shadows (Contact Hardening + 16-Tap Vogel Disk)">PCSS (Contact)</button>
-            <button id="btnModeEvsm" class="btn-preset" title="Exponential Variance Shadow Maps (Warped Moment Filtering)">EVSM (Moments)</button>
-          </div>
-          <div id="pcssKernelRows">
-            <div class="hud-row">
-              <label for="slSoftness" title="Scales penumbra growth with blocker distance (quality.shadowSoftness)">Penumbra Softness</label>
-              <input id="slSoftness" type="range" min="0" max="5" step="0.05" value="1" />
-              <span id="valSoftness" class="val-label">1.00</span>
-            </div>
-            <div class="hud-row">
-              <label for="slMaxRadius" title="Maximum PCF kernel radius in shadow-map texels (quality.shadowMaxPcfRadius)">Max PCF Radius</label>
-              <input id="slMaxRadius" type="range" min="1" max="16" step="1" value="4" />
-              <span id="valMaxRadius" class="val-label">4 px</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title">
-            <span>☀️ Sun & Shadow Bias</span>
-          </div>
-          <div class="hud-row">
-            <label for="slSunElev" title="Sun elevation angle above the horizon">Sun Elevation</label>
-            <input id="slSunElev" type="range" min="12" max="75" step="1" value="45" />
-            <span id="valSunElev" class="val-label">45°</span>
-          </div>
-          <div class="hud-row">
-            <label for="slSunAzim" title="Horizontal sun direction angle">Sun Azimuth</label>
-            <input id="slSunAzim" type="range" min="-90" max="90" step="1" value="25" />
-            <span id="valSunAzim" class="val-label">25°</span>
-          </div>
-          <div class="hud-row">
-            <label for="slSunInt" title="Directional light intensity">Sun Intensity</label>
-            <input id="slSunInt" type="range" min="0.5" max="8" step="0.1" value="2.6" />
-            <span id="valSunInt" class="val-label">2.60</span>
-          </div>
-          <div class="hud-row">
-            <label for="slAmbInt" title="Ambient fill light intensity (controls shadow darkness)">Ambient Fill</label>
-            <input id="slAmbInt" type="range" min="0" max="0.5" step="0.01" value="0.12" />
-            <span id="valAmbInt" class="val-label">0.12</span>
-          </div>
-          <div class="hud-row">
-            <label for="slBias" title="Depth bias: too low = shadow acne, too high = peter-panning">Depth Bias</label>
-            <input id="slBias" type="range" min="0" max="0.005" step="0.0001" value="0.0006" />
-            <span id="valBias" class="val-label">0.0006</span>
-          </div>
-          <div class="hud-row">
-            <label for="slNormalBias" title="Normal-offset bias along surface normal">Normal Bias</label>
-            <input id="slNormalBias" type="range" min="0" max="0.08" step="0.002" value="0.02" />
-            <span id="valNormalBias" class="val-label">0.020</span>
-          </div>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title">
-            <span>🎥 Camera & GPU Readout</span>
-            <span style="font-size: 9px; color: #64748b;">Drag / Wheel / R</span>
-          </div>
-          <div class="preset-group three-col">
-            <button id="btnViewOverview" class="btn-preset active" title="Standard calibrated stage view (Key R)">Overview</button>
-            <button id="btnViewContact" class="btn-preset" title="Zoom into the contact line at the caster base">Contact Base</button>
-            <button id="btnViewFar" class="btn-preset" title="Inspect the distant diffused penumbra zone">Far Penumbra</button>
-          </div>
-          <pre id="shadowLabReadout"></pre>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(hud);
-
-    // Stop events from leaking to camera orbit (same convention as Showcases 39 & 41)
-    const stopEvents = [
-      "mousedown",
-      "mouseup",
-      "mousemove",
-      "pointerdown",
-      "pointerup",
-      "pointermove",
-      "wheel",
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "click",
-      "dblclick",
-      "contextmenu",
-    ];
-    for (const ev of stopEvents) {
-      hud.addEventListener(
-        ev,
-        (e) => {
-          e.stopPropagation();
-        },
-        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
-      );
-    }
-
-    // Standardized footer toggle button (.swm-inspector-btn appended to .app-footer)
-    const toggleBtn = document.createElement("button");
-    toggleBtn.id = "shadowLabInspectorBtn";
-    toggleBtn.className = "swm-inspector-btn";
-    toggleBtn.innerHTML = "<span>⚙</span>";
-    toggleBtn.title = "Settings (Toggle, Key: I)";
-    toggleBtn.setAttribute("aria-label", "Toggle Inspector");
-    toggleBtn.onclick = (): void => {
-      this._toggleHud();
-    };
-    this._hudToggleBtn = toggleBtn;
-
-    const footer = document.querySelector(".app-footer");
-    if (footer) {
-      footer.appendChild(toggleBtn);
-    } else {
-      document.body.appendChild(toggleBtn);
-    }
-
-    hud.addEventListener("pointerenter", () => {
-      this._isHoveringHud = true;
+    this._hud = new ShadowLabHud(String(this.renderer.type), {
+      setProbe: (probe: ProbeMode): void => this._setProbeMode(probe, true),
+      setPcss: (pcss: boolean): void =>
+        this._setShadowMode(pcss ? ShadowMode.PCSS : ShadowMode.EVSM),
+      applyView: (preset: ViewPreset): void => this._applyCameraViewPreset(preset),
+      setSlider: (name: ShadowLabSlider, value: number): void => this._setSlider(name, value),
     });
-    hud.addEventListener("pointerleave", () => {
-      this._isHoveringHud = false;
-    });
-
-    document
-      .getElementById("btnCloseShadowHud")
-      ?.addEventListener("click", () => this._toggleHud(false));
-    document
-      .getElementById("btnProbeBox")
-      ?.addEventListener("click", () => this._setProbeMode("box", true));
-    document
-      .getElementById("btnProbePole")
-      ?.addEventListener("click", () => this._setProbeMode("pole", true));
-    document
-      .getElementById("btnProbeSteps")
-      ?.addEventListener("click", () => this._setProbeMode("steps", true));
-
-    document
-      .getElementById("btnModePcss")
-      ?.addEventListener("click", () => this._setShadowMode(ShadowMode.PCSS));
-    document
-      .getElementById("btnModeEvsm")
-      ?.addEventListener("click", () => this._setShadowMode(ShadowMode.EVSM));
-
-    document
-      .getElementById("btnViewOverview")
-      ?.addEventListener("click", () => this._applyCameraViewPreset("overview"));
-    document
-      .getElementById("btnViewContact")
-      ?.addEventListener("click", () => this._applyCameraViewPreset("contact"));
-    document
-      .getElementById("btnViewFar")
-      ?.addEventListener("click", () => this._applyCameraViewPreset("far"));
-
-    this._bindSlider("slLiftY", "valLiftY", 2, " m", (val) => {
-      this._liftY = val;
-      this._rebuildCasterGeometry();
-    });
-    this._bindSlider("slSoftness", "valSoftness", 2, "", (val) => {
-      this._softness = val;
-      this.renderer.quality.shadowSoftness = val;
-    });
-    this._bindSlider("slMaxRadius", "valMaxRadius", 0, " px", (val) => {
-      this._maxRadius = Math.round(val);
-      this.renderer.quality.shadowMaxPcfRadius = this._maxRadius;
-    });
-    this._bindSlider("slSunElev", "valSunElev", 0, "°", (val) => {
-      this._sunElevationDeg = val;
-      this._applySunAnglesToLight();
-    });
-    this._bindSlider("slSunAzim", "valSunAzim", 0, "°", (val) => {
-      this._sunAzimuthDeg = val;
-      this._applySunAnglesToLight();
-    });
-    this._bindSlider("slSunInt", "valSunInt", 2, "", (val) => {
-      this._sunIntensity = val;
-      if (this._sun) this._sun.intensity = val;
-    });
-    this._bindSlider("slAmbInt", "valAmbInt", 2, "", (val) => {
-      this._ambientIntensity = val;
-      if (this._ambient) this._ambient.intensity = val;
-    });
-    this._bindSlider("slBias", "valBias", 4, "", (val) => {
-      this._shadowBias = val;
-      if (this._sun) this._sun.shadowBias = val;
-    });
-    this._bindSlider("slNormalBias", "valNormalBias", 3, "", (val) => {
-      this._shadowNormalBias = val;
-      if (this._sun) this._sun.shadowNormalBias = val;
-    });
-
     this._syncHudControlsFromState();
     this._refreshReadoutUI();
+  }
+
+  private _setSlider(name: ShadowLabSlider, value: number): void {
+    switch (name) {
+      case "LiftY":
+        this._liftY = value;
+        this._rebuildCasterGeometry();
+        break;
+      case "Softness":
+        this._softness = value;
+        this.renderer.quality.shadowSoftness = value;
+        break;
+      case "MaxRadius":
+        this._maxRadius = Math.round(value);
+        this.renderer.quality.shadowMaxPcfRadius = this._maxRadius;
+        break;
+      case "SunElev":
+        this._sunElevationDeg = value;
+        this._applySunAnglesToLight();
+        break;
+      case "SunAzim":
+        this._sunAzimuthDeg = value;
+        this._applySunAnglesToLight();
+        break;
+      case "SunInt":
+        this._sunIntensity = value;
+        if (this._sun) this._sun.intensity = value;
+        break;
+      case "AmbInt":
+        this._ambientIntensity = value;
+        if (this._ambient) this._ambient.intensity = value;
+        break;
+      case "Bias":
+        this._shadowBias = value;
+        if (this._sun) this._sun.shadowBias = value;
+        break;
+      case "NormalBias":
+        this._shadowNormalBias = value;
+        if (this._sun) this._sun.shadowNormalBias = value;
+        break;
+    }
   }
 
   private _installQAHook(): void {

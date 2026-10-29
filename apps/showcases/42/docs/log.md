@@ -158,3 +158,8 @@ PCSS-Penumbre real verbreitern — und dass sie auf WebGL2 eine dokumentierte No
 - **Umsetzung:** `evalPCSSDir` in `base_fragment_header.frag.glsl` portiert `getShadowPCSS` (`pbr_math.wgsl`) auf den Kaskaden-Atlas (zellgeklemmte Taps, Zell-Texelzahl statt Layer-Größe), neuer Uniform `u_shadowSoftness`. Beide Licht-Chunks nutzen sie für Haupt- und Blend-Sample.
 - **HUD:** Der WebGL2-Hinweis „Softness-Slider WebGPU-only“ ist entfernt, die Slider wirken auf beiden Tiers.
 - **Pole-Gate neu:** Negativkontrolle ist `softness=0` auf WebGL2 statt „WebGL2 = festes PCF“. Messwerte: WebGPU soft3 nah `0.61` / fern `0.34`, WebGL2 soft3 `0.56` / `0.34`, Kontrolle `0.56` / `0.60`. `SWM42 POLE GATE: OK`, `SWM42 EVSM GATE: OK`.
+
+### 2026-10-29 — Seitenpanel nach `Hud.ts` ausgelagert
+- Tuning-Panel (Markup, Bindings, Sync, GPU-Readout-Ausgabe) aus `showcase.ts` in `Hud.ts` (`ShadowLabHud`) verschoben, aufgebaut auf dem gemeinsamen `apps/showcases/shared/ShowcaseDrawer.ts`. Probe-/Schatten-/Licht-Zustand und QA-Hook `__qaSwm42` bleiben in `showcase.ts` (Actions + `sync(state)`).
+- Entfallen: handgebautes Aside/Header/Close-Button, stopPropagation-Schleife, Footer-Button-Erzeugung, I-Toggle, duplizierte Drawer-CSS (`.preset-group`, `.hud-note`).
+- Verhalten unverändert: Panel startet eingeklappt, IDs bleiben (`#showcase-hud`, `#shadowLabInspectorBtn`, `#shadowLabReadout`, alle `sl*`/`val*`/`btn*`), Hover-Sperre für Canvas-Orbit/Wheel jetzt `ShadowLabHud.isHovering` (nur bei offenem Panel). Panel-Toggle einheitlich I **und** H; Footer-Button zeigt das Header-Icon 🌒 statt ⚙.
