@@ -132,7 +132,6 @@ export class BehaviorLabHud {
       id: "behavior-lab-hud",
       title: "Behavior Lab",
       icon: "🕹️",
-      badge: "Showcase 20",
       open: false,
       footerIcon: "⚙",
       buttonId: "behaviorLabHudBtn",

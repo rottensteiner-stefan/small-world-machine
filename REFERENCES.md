@@ -382,6 +382,22 @@ This document serves to record external sources, algorithms, mathematical deriva
   - Quasi-Monte Carlo sequence: $\Xi_i = \left(\frac{i}{N}, \Phi_2(i)\right)$
 - **Usage:** Used in the IBL baking shader pipeline to generate low-discrepancy 2D point distributions across the hemisphere without precomputing or uploading random sample textures. Provides rapid convergence when importance-sampling the GGX normal distribution function.
 
+### `Catmull-Rom Spline Interpolation`
+
+- **File:** `packages/engine/src/math/CatmullRomSpline.ts`
+- **Authors/Gurus:** Edwin Catmull, Raphael Rom (1974)
+- **Source:** [A Class of Local Interpolating Splines](https://www.sciencedirect.com/science/article/pii/B9780121410506500205)
+- **Formulas:** $P(t) = 0.5 \cdot \left( 2P_1 + (-P_0 + P_2)t + (2P_0 - 5P_1 + 4P_2 - P_3)t^2 + (-P_0 + 3P_1 - 3P_2 + P_3)t^3 \right)$
+- **Usage:** Evaluates $C^1$-continuous cubic spline curves passing directly through all control points with local control. Used in `PathFollowerBehavior` for smooth patrol flights, animated camera dolly rails, and particle path evaluation.
+
+### `Frame-Rate Independent Exponential Dampening (SpringLerp)`
+
+- **File:** `packages/engine/src/core/behaviors/SpringLerpBehavior.ts`
+- **Authors/Gurus:** Freya Holmér (2020), Inigo Quilez
+- **Source:** [Lerp Smoothing is Broken — Here's How to Fix It](https://www.youtube.com/watch?v=LSNQuFEDOyQ)
+- **Formulas:** $t = 1.0 - (1.0 - f)^{\Delta t \cdot 60}$ (discrete frame-step formulation) or $v(t) = v_{\text{target}} + (v_0 - v_{\text{target}}) \cdot e^{-\lambda \Delta t}$
+- **Usage:** Guarantees frame-rate independent position and rotation convergence towards moving targets without stuttering or velocity drift across variable refresh rates (30, 60, 120+ Hz). Used in `SpringLerpBehavior` for trailing companions, camera smoothing, and soft inertia physics.
+
 ## Physics & Collision Detection
 
 ### Gravitational Lensing (Black Hole Shadow & Einstein Ring)

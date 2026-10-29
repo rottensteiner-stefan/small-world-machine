@@ -4,6 +4,10 @@
 
 ### "Motion is the cause of all life." - Leonardo da Vinci
 
+- **Housekeeping & Docs:**
+  - *Showcase-HUDs: Badge entfernt:* Das `badge: "Showcase 20"` im Header des Behavior Labs entfernt (Showcase-Nummern werden nirgends im Header gedoppelt).
+  - *`REFERENCES.md`:* Einträge für `Catmull-Rom Spline Interpolation` (Edwin Catmull & Raphael Rom, 1974) und `Frame-Rate Independent Exponential Dampening` (`SpringLerpBehavior`, Freya Holmér / Inigo Quilez) unter `Geometry & Mathematics` ergänzt.
+
 ## [0.119.0] - 2026-10-29
 
 ### "The first step binds one to the second." - French Proverb
