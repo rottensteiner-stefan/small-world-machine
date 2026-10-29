@@ -61,3 +61,11 @@ Ausbau von Showcase 41 zum vollwertigen Foto-zu-Metallrelief-Konverter mit authe
   - `KeyM`: Wechsel zwischen Foto-Konverter und 2.5D-Assemblage-Diorama.
   - `1-3`: Direktwahl der drei Fotomotive.
   - Volle Verifikation via Puppeteer in WebGPU, WebGL2 und WebGL1 erfolgreich bestanden.
+
+---
+
+## 2026-10-29 — Seitenpanel nach `Hud.ts` ausgelagert
+
+- Das „Metal Relief Lab“-Panel lebt jetzt in `apps/showcases/41/Hud.ts` (Klasse `MetalReliefHud`) auf dem gemeinsamen Baustein `apps/showcases/shared/ShowcaseDrawer.ts` (Drawer-Markup, Event-Abschirmung, Footer-Button, I/H).
+- `showcase.ts` behält Szene, Materialien und Hover-/Orbit-Logik; das Panel meldet sich über das Host-Interface `MetalReliefHudHost` (`setMode`, `setParam`, `onPanelClosed` …) und synchronisiert per `syncMode`/`syncSplit`/`syncPreset`.
+- Entfernt: eigenes Panel-/Button-CSS (Duplikate von `shared.css`). Behalten: dichtere Zeilen/Buttons, Select-Rahmen, Tool-Theme-Akzent am Footer-Button (`#reliefPanelOpenBtn`, Icon ⚙), Drop-Zone. Alle Element-IDs unverändert; neu ist nur `H` als zweite Panel-Taste.

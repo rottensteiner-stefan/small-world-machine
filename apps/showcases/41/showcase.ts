@@ -20,6 +20,8 @@ import {
   rasterizeSplatDirection,
 } from "@small-world-machine/artistic-extras";
 import type { StrokePoint } from "@small-world-machine/artistic-extras";
+import { MetalReliefHud } from "./Hud.js";
+import type { MetalReliefHudHost, ReliefParam } from "./Hud.js";
 
 function createBoxMesh(
   name: string,
@@ -118,7 +120,7 @@ export class MetalReliefShowcase extends AbstractShowcase {
   private _screenMaterial!: MetalReliefScreenMaterial;
   private _activePreset: string = "paris";
   private _orbitController?: OrbitController;
-  private _reliefPanelBtn?: HTMLButtonElement;
+  private _hud!: MetalReliefHud;
   private _isHoveringHud: boolean = false;
   private _isDraggingHud: boolean = false;
   private _isDraggingSplit: boolean = false;
@@ -291,7 +293,7 @@ export class MetalReliefShowcase extends AbstractShowcase {
     this._orbitController = orbit;
     this.camera.addBehavior(orbit);
 
-    this._createReliefControlUI();
+    this._createReliefHud();
     this._createWipeOverlayUI();
     this._setupKeyboardShortcuts();
     this._setupCanvasWipeInteraction();
@@ -313,15 +315,7 @@ export class MetalReliefShowcase extends AbstractShowcase {
     const wasStudio = this._displayMode === "studio";
     this._displayMode = mode;
     const overlay = document.getElementById("wipeDividerOverlay");
-    const selMode = document.getElementById("selMode") as HTMLSelectElement | null;
-    if (selMode && selMode.value !== mode) {
-      selMode.value = mode;
-    }
-
-    const studioSection = document.getElementById("studioSection");
-    if (studioSection) {
-      studioSection.style.display = mode === "studio" ? "flex" : "none";
-    }
+    this._hud.syncMode(mode);
 
     const isStudio = mode === "studio";
     this._dioramaRoot.isVisible = mode === "diorama";
@@ -671,20 +665,14 @@ export class MetalReliefShowcase extends AbstractShowcase {
 
   private _setupKeyboardShortcuts(): void {
     window.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (this._hud.handleKey(e)) return;
       const activeTag = document.activeElement?.tagName;
       if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT") return;
 
-      const hud = document.getElementById("reliefTuningHud");
+      const hud = this._hud.root;
       const isHudActive =
-        (hud?.classList.contains("open") ?? false) &&
-        (this._isHoveringHud ||
-          this._isDraggingHud ||
-          (null !== hud && hud.contains(document.activeElement)));
-
-      if (e.code === "KeyI") {
-        this._toggleReliefPanel();
-        return;
-      }
+        this._hud.isOpen &&
+        (this._isHoveringHud || this._isDraggingHud || hud.contains(document.activeElement));
 
       if (isHudActive) {
         return;
@@ -756,39 +744,17 @@ export class MetalReliefShowcase extends AbstractShowcase {
     });
   }
 
-  private _toggleReliefPanel(force?: boolean): void {
-    const hud = document.getElementById("reliefTuningHud");
-    if (!hud) return;
-    const isCurrentlyOpen = hud.classList.contains("open");
-    const open = undefined !== force ? force : !isCurrentlyOpen;
-    if (open) {
-      hud.classList.add("open");
-      this._reliefPanelBtn?.classList.add("active");
-    } else {
-      hud.classList.remove("open");
-      this._reliefPanelBtn?.classList.remove("active");
-      this._isHoveringHud = false;
-      this._isDraggingHud = false;
-      if (this._orbitController) {
-        this._orbitController.enabled = true;
-      }
+  private _onReliefPanelClosed(): void {
+    this._isHoveringHud = false;
+    this._isDraggingHud = false;
+    if (this._orbitController) {
+      this._orbitController.enabled = true;
     }
   }
 
   private _setActivePreset(presetId: string): void {
     this._activePreset = presetId;
-    const btns = document.querySelectorAll("#reliefTuningHud .btn-preset");
-    btns.forEach((b) => b.classList.remove("active"));
-    const activeBtn = document.getElementById(
-      presetId === "paris"
-        ? "btnPresetParis"
-        : presetId === "alps"
-          ? "btnPresetAlps"
-          : presetId === "harbor"
-            ? "btnPresetHarbor"
-            : "btnPresetCustom",
-    );
-    activeBtn?.classList.add("active");
+    this._hud.syncPreset(presetId);
 
     if (presetId === "paris") this._buildParisMotif();
     else if (presetId === "alps") this._buildAlpsMotif();
@@ -880,22 +846,84 @@ export class MetalReliefShowcase extends AbstractShowcase {
     if (this._screenMaterial) {
       this._screenMaterial.splitPosition = clamped;
     }
-    const slider = document.getElementById("slSplit") as HTMLInputElement | null;
-    const label = document.getElementById("valSplit");
-    if (slider) slider.value = clamped.toFixed(2);
-    if (label) label.textContent = clamped.toFixed(2);
-
+    this._hud.syncSplit(clamped);
     this._updateDividerLinePosition();
-
-    const btnHalf = document.getElementById("btnSplitHalf");
-    const btnPhoto = document.getElementById("btnSplitPhoto");
-    const btnMetal = document.getElementById("btnSplitMetal");
-    btnHalf?.classList.toggle("active", Math.abs(clamped - 0.5) < 0.03);
-    btnPhoto?.classList.toggle("active", clamped >= 0.98);
-    btnMetal?.classList.toggle("active", clamped <= 0.02);
   }
 
   private _createWipeOverlayUI(): void {
+    const existingStyle = document.getElementById("reliefTuningStyle");
+    if (existingStyle) existingStyle.remove();
+    const style = document.createElement("style");
+    style.id = "reliefTuningStyle";
+    style.textContent = `
+      #wipeDividerOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        z-index: 90;
+      }
+      .wipe-pill {
+        position: fixed;
+        top: 96px;
+        padding: 6px 14px;
+        background: rgba(14, 18, 28, 0.88);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 20px;
+        font-family: var(--font-ui, "Rajdhani", sans-serif);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: #f1f5f9;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        user-select: none;
+        pointer-events: none;
+      }
+      .wipe-pill-before {
+        left: 24px;
+        border-left: 3px solid #38bdf8;
+      }
+      .wipe-pill-after {
+        right: 24px;
+        border-right: 3px solid #b000ff;
+      }
+      .wipe-divider-line {
+        position: fixed;
+        width: 2px;
+        background: #ffffff;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(176, 0, 255, 0.5);
+        transform: translateX(-50%);
+        pointer-events: auto;
+        cursor: ew-resize;
+      }
+      .wipe-handle {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: #0f172a;
+        border: 2px solid #ffffff;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 700;
+        cursor: ew-resize;
+        user-select: none;
+      }
+    `;
+    document.head.appendChild(style);
+
     const existing = document.getElementById("wipeDividerOverlay");
     if (existing) existing.remove();
 
@@ -967,18 +995,15 @@ export class MetalReliefShowcase extends AbstractShowcase {
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect = "copy";
       }
-      const dropzone = document.getElementById("dropZoneHud");
-      dropzone?.classList.add("dragover");
+      this._hud.setDropHighlight(true);
     });
     window.addEventListener("dragleave", () => {
-      const dropzone = document.getElementById("dropZoneHud");
-      dropzone?.classList.remove("dragover");
+      this._hud.setDropHighlight(false);
     });
 
     window.addEventListener("drop", async (e: DragEvent) => {
       prevent(e);
-      const dropzone = document.getElementById("dropZoneHud");
-      dropzone?.classList.remove("dragover");
+      this._hud.setDropHighlight(false);
       const files = e.dataTransfer?.files;
       if (!files || files.length === 0) return;
       const file = files[0];
@@ -1007,501 +1032,34 @@ export class MetalReliefShowcase extends AbstractShowcase {
     }
   }
 
-  private _bindSlider(sliderId: string, labelId: string, callback: (val: number) => void): void {
-    const slider = document.getElementById(sliderId) as HTMLInputElement | null;
-    const label = document.getElementById(labelId);
-    if (!slider || !label) return;
-    slider.addEventListener("input", () => {
-      const val = parseFloat(slider.value);
-      label.textContent = val.toFixed(2);
-      callback(val);
-    });
-  }
-
-  private _createReliefControlUI(): void {
-    const existingHud = document.getElementById("reliefTuningHud");
-    if (existingHud) existingHud.remove();
-    const existingStyle = document.getElementById("reliefTuningStyle");
-    if (existingStyle) existingStyle.remove();
-
-    const style = document.createElement("style");
-    style.id = "reliefTuningStyle";
-    style.textContent = `
-      #reliefTuningHud {
-        position: fixed;
-        top: 0;
-        right: 0;
-        width: 320px;
-        height: calc(100vh - 36px);
-        overflow-y: auto;
-        background: var(--tool-panel, rgba(14, 18, 28, 0.95));
-        border-left: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
-        border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
-        box-shadow: -6px 0 32px rgba(0, 0, 0, 0.6);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        color: #e2e8f0;
-        font-family: var(--font-ui, "Rajdhani", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-        font-size: 12px;
-        z-index: 10000;
-        user-select: none;
-        transform: translateX(100%);
-        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-        display: flex;
-        flex-direction: column;
-      }
-      #reliefTuningHud.open {
-        transform: translateX(0);
-      }
-      @media (max-width: 768px) {
-        #reliefTuningHud {
-          top: auto;
-          bottom: 36px;
-          left: 0;
-          right: 0;
-          width: 100vw;
-          max-height: calc(100vh - 80px);
-          border-left: none;
-          border-right: none;
-          border-bottom: none;
-          border-top: 1px solid var(--tool-border, rgba(148, 163, 184, 0.25));
-          border-radius: 14px 14px 0 0;
-          box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.7);
-          transform: translateY(100%);
-          transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        #reliefTuningHud.open {
-          transform: translateY(0);
-        }
-      }
-      .swm-inspector-btn {
-        position: fixed;
-        bottom: 5px;
-        right: 14px;
-        width: 26px;
-        height: 26px;
-        z-index: 10001;
-        pointer-events: auto;
-        background: var(--tool-card, rgba(22, 29, 45, 0.85));
-        color: var(--tool-text, #f8fafc);
-        border: 1px solid var(--tool-border, rgba(148, 163, 184, 0.25));
-        border-radius: var(--tool-radius-sm, 4px);
-        padding: 0;
-        font-size: 0.95rem;
-        cursor: pointer;
-        backdrop-filter: blur(8px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-      }
-      .swm-inspector-btn:hover {
-        border-color: var(--tool-accent, #b000ff);
-        color: var(--tool-accent, #b000ff);
-        box-shadow: 0 0 10px rgba(176, 0, 255, 0.4);
-      }
-      .swm-inspector-btn.active {
-        background: rgba(176, 0, 255, 0.2);
-        border-color: var(--tool-accent, #b000ff);
-        color: var(--tool-accent, #b000ff);
-        box-shadow: 0 0 8px rgba(176, 0, 255, 0.3);
-      }
-      #reliefTuningHud .hud-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 14px;
-        background: rgba(255, 255, 255, 0.04);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      }
-      #reliefTuningHud .hud-title {
-        font-weight: 700;
-        font-size: 13px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: #f8fafc;
-      }
-      #reliefTuningHud .hud-badge {
-        font-size: 10px;
-        background: rgba(176, 0, 255, 0.2);
-        color: #d884ff;
-        padding: 2px 6px;
-        border-radius: 4px;
-        border: 1px solid rgba(176, 0, 255, 0.35);
-      }
-      #reliefTuningHud .hud-body {
-        padding: 12px 14px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-      #reliefTuningHud .hud-section {
-        background: rgba(0, 0, 0, 0.25);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
-        padding: 8px 10px;
-      }
-      #reliefTuningHud .section-title {
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: #94a3b8;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      #reliefTuningHud .hud-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 6px;
-        gap: 8px;
-      }
-      #reliefTuningHud .hud-row:last-child {
-        margin-bottom: 0;
-      }
-      #reliefTuningHud label {
-        color: #cbd5e1;
-        font-size: 11px;
-        flex: 1;
-      }
-      #reliefTuningHud .val-label {
-        font-family: var(--font-mono, "JetBrains Mono", monospace);
-        font-size: 11px;
-        color: #38bdf8;
-        min-width: 38px;
-        text-align: right;
-      }
-      #reliefTuningHud input[type="range"] {
-        flex: 1.3;
-        accent-color: #b000ff;
-        cursor: pointer;
-      }
-      #reliefTuningHud select {
-        flex: 1.3;
-        background: #1a202c;
-        border: 1px solid #4a5568;
-        color: #edf2f7;
-        padding: 3px 6px;
-        border-radius: 4px;
-        font-size: 11px;
-      }
-      #reliefTuningHud .preset-group {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 6px;
-      }
-      #reliefTuningHud .btn-preset {
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        color: #e2e8f0;
-        padding: 6px 4px;
-        border-radius: 6px;
-        font-size: 10px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s, border-color 0.15s;
-        text-align: center;
-      }
-      #reliefTuningHud .btn-preset:hover {
-        background: rgba(176, 0, 255, 0.25);
-        border-color: #b000ff;
-        color: #fff;
-      }
-      #reliefTuningHud .btn-preset.active {
-        background: #b000ff;
-        color: #fff;
-        border-color: #b000ff;
-      }
-      #wipeDividerOverlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        pointer-events: none;
-        z-index: 90;
-      }
-      .wipe-pill {
-        position: fixed;
-        top: 96px;
-        padding: 6px 14px;
-        background: rgba(14, 18, 28, 0.88);
-        border: 1px solid rgba(148, 163, 184, 0.25);
-        border-radius: 20px;
-        font-family: var(--font-ui, "Rajdhani", sans-serif);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.8px;
-        text-transform: uppercase;
-        color: #f1f5f9;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        user-select: none;
-        pointer-events: none;
-      }
-      .wipe-pill-before {
-        left: 24px;
-        border-left: 3px solid #38bdf8;
-      }
-      .wipe-pill-after {
-        right: 24px;
-        border-right: 3px solid #b000ff;
-      }
-      .wipe-divider-line {
-        position: fixed;
-        width: 2px;
-        background: #ffffff;
-        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(176, 0, 255, 0.5);
-        transform: translateX(-50%);
-        pointer-events: auto;
-        cursor: ew-resize;
-      }
-      .wipe-handle {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: #0f172a;
-        border: 2px solid #ffffff;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #ffffff;
-        font-size: 10px;
-        font-weight: 700;
-        cursor: ew-resize;
-        user-select: none;
-      }
-      .hud-dropzone {
-        border: 1px dashed rgba(148, 163, 184, 0.35);
-        border-radius: 6px;
-        padding: 8px 10px;
-        text-align: center;
-        cursor: pointer;
-        background: rgba(255, 255, 255, 0.03);
-        transition: all 0.2s ease;
-      }
-      .hud-dropzone:hover, .hud-dropzone.dragover {
-        border-color: #b000ff;
-        background: rgba(176, 0, 255, 0.12);
-        color: #fff;
-      }
-    `;
-    document.head.appendChild(style);
-
-    const hud = document.createElement("div");
-    hud.id = "reliefTuningHud";
-    hud.className = "swm-inspector-drawer";
-    hud.innerHTML = `
-      <div class="bottom-sheet-grabber"></div>
-      <div class="hud-header" id="hudHeader">
-        <div class="hud-title">
-          <span>🎨</span> Metal Relief Lab
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="hud-badge">Inspector</span>
-          <button id="reliefHudClose" title="Close Panel" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;padding:0 4px;line-height:1;">✕</button>
-        </div>
-      </div>
-      <div class="hud-body">
-        <!-- Display Mode -->
-        <div class="hud-section">
-          <div class="section-title">🖼️ Mode & Technique</div>
-          <div class="hud-row">
-            <label for="selMode">Display Mode</label>
-            <select id="selMode">
-              <option value="fullscreen" selected>Photo-to-Metal Converter (Split)</option>
-              <option value="diorama">2.5D Diorama (3D Layered)</option>
-              <option value="studio">🎨 Palette Knife Studio (Paint)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Before / After Wipe -->
-        <div class="hud-section">
-          <div class="section-title">↔️ Before / After Split Wipe</div>
-          <div class="hud-row">
-            <label>Divider Position</label>
-            <input type="range" id="slSplit" min="0" max="1" step="0.01" value="0.50" />
-            <span class="val-label" id="valSplit">0.50</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px;">
-            <button class="btn-preset active" id="btnSplitHalf">50% Split</button>
-            <button class="btn-preset" id="btnSplitPhoto">Photo Only</button>
-            <button class="btn-preset" id="btnSplitMetal">Metal Only</button>
-          </div>
-        </div>
-
-        <!-- Presets & Upload -->
-        <div class="hud-section">
-          <div class="section-title">⚡ Realistic Photo Presets</div>
-          <div class="preset-group">
-            <button class="btn-preset active" id="btnPresetParis">🗼 Paris</button>
-            <button class="btn-preset" id="btnPresetAlps">🚡 Alps</button>
-            <button class="btn-preset" id="btnPresetHarbor">⛵ Harbor</button>
-          </div>
-          <div id="dropZoneHud" class="hud-dropzone" style="margin-top:8px;">
-            <span>📁 Drop any photo or <u style="color:#b000ff;">browse</u></span>
-            <input type="file" id="filePickerInput" accept="image/*" style="display:none;" />
-          </div>
-        </div>
-
-        <!-- Palette Knife & Relief Depth -->
-        <div class="hud-section">
-          <div class="section-title">🔪 Impasto & Relief Depth</div>
-          <div class="hud-row">
-            <label>Sobel Relief</label>
-            <input type="range" id="slSobel" min="0" max="3" step="0.05" value="1.50" />
-            <span class="val-label" id="valSobel">1.50</span>
-          </div>
-          <div class="hud-row">
-            <label>Palette Knife</label>
-            <input type="range" id="slRelief" min="0" max="2" step="0.05" value="0.50" />
-            <span class="val-label" id="valRelief">0.50</span>
-          </div>
-          <div class="hud-row">
-            <label>Grind Marks (Flex)</label>
-            <input type="range" id="slScratches" min="0" max="1" step="0.05" value="0.40" />
-            <span class="val-label" id="valScratches">0.40</span>
-          </div>
-          <div class="hud-row">
-            <label>Welded Edge Glint</label>
-            <input type="range" id="slBevel" min="0" max="2.5" step="0.05" value="1.20" />
-            <span class="val-label" id="valBevel">1.20</span>
-          </div>
-        </div>
-
-        <!-- Industrial Patina -->
-        <div class="hud-section">
-          <div class="section-title">⚙️ Industrial Patina & Pop</div>
-          <div class="hud-row">
-            <label>Iron Oxide Rust</label>
-            <input type="range" id="slRust" min="0" max="1" step="0.05" value="0.80" />
-            <span class="val-label" id="valRust">0.80</span>
-          </div>
-          <div class="hud-row">
-            <label>Desaturation</label>
-            <input type="range" id="slDesat" min="0" max="1" step="0.05" value="0.95" />
-            <span class="val-label" id="valDesat">0.95</span>
-          </div>
-          <div class="hud-row">
-            <label>Accent Hue Pop</label>
-            <input type="range" id="slHue" min="0" max="1" step="0.01" value="0.00" />
-            <span class="val-label" id="valHue">0.00</span>
-          </div>
-          <div class="hud-row">
-            <label>Wet Rain Sheen</label>
-            <input type="range" id="slRain" min="0" max="1" step="0.05" value="0.50" />
-            <span class="val-label" id="valRain">0.50</span>
-          </div>
-        </div>
-
-        <!-- Palette Knife Studio -->
-        <div class="hud-section" id="studioSection" style="display:none;">
-          <div class="section-title">🎨 Palette Knife Studio</div>
-          <div class="hud-row">
-            <label>Brush Size</label>
-            <input type="range" id="slBrushSize" min="3" max="120" step="1" value="12" />
-            <span class="val-label" id="valBrushSize">12</span>
-          </div>
-          <div class="hud-row">
-            <label>Impasto Height</label>
-            <input type="range" id="slBrushRelief" min="0" max="2" step="0.05" value="1.00" />
-            <span class="val-label" id="valBrushRelief">1.00</span>
-          </div>
-          <div class="hud-row">
-            <label>Knife Smear</label>
-            <input type="range" id="slBrushSmear" min="0" max="1" step="0.02" value="0.28" />
-            <span class="val-label" id="valBrushSmear">0.28</span>
-          </div>
-          <div class="hud-row">
-            <label>Metallic</label>
-            <input type="range" id="slBrushMetallic" min="0" max="1" step="0.05" value="0.55" />
-            <span class="val-label" id="valBrushMetallic">0.55</span>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:6px;">
-            <button class="btn-preset active" id="swatch1" style="background:#c0392b;" title="Oxide Red (1)"></button>
-            <button class="btn-preset" id="swatch2" style="background:#d4af37;" title="Gold Leaf (2)"></button>
-            <button class="btn-preset" id="swatch3" style="background:#b000ff;" title="Engine Violet (3)"></button>
-            <button class="btn-preset" id="swatch4" style="background:#38bdf8;" title="Steel Blue (4)"></button>
-            <button class="btn-preset" id="swatch5" style="background:#f1e9d8;" title="Bone White (5)"></button>
-            <button class="btn-preset" id="swatch6" style="background:#1e2b26;" title="Charcoal Bronze (6)"></button>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:6px;">
-            <button class="btn-preset" id="btnErase">✕ Erase (X)</button>
-            <button class="btn-preset" id="btnUndo">↩ Undo (Z)</button>
-            <button class="btn-preset" id="btnClear">🗑 Clear (C)</button>
-            <button class="btn-preset" id="btnBaseToggle">🖼 Base</button>
-          </div>
-          <div class="hud-row" style="margin-top:8px;">
-            <span style="font-size:11px;color:#94a3b8;">Keys: [ ] size · 1-6 palette · Q base (steel/photo) · P leave studio</span>
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(hud);
-
-    // Footer toggle button (standardized .swm-inspector-btn as in Sponza Showcase 29)
-    const toggleBtn = document.createElement("button");
-    toggleBtn.id = "reliefPanelOpenBtn";
-    toggleBtn.className = "swm-inspector-btn";
-    toggleBtn.innerHTML = "<span>⚙</span>";
-    toggleBtn.title = "Open Relief Controls (Key: I)";
-    toggleBtn.setAttribute("aria-label", "Open Relief Controls");
-    toggleBtn.onclick = (): void => {
-      this._toggleReliefPanel();
+  private _createReliefHud(): void {
+    const host: MetalReliefHudHost = {
+      setMode: (mode) => this._setMode(mode),
+      setSplitPosition: (value) => this._setSplitPosition(value),
+      setActivePreset: (presetId) => this._setActivePreset(presetId),
+      loadImageFile: (file) => {
+        this._loadCustomImageFile(file);
+      },
+      setParam: (param, value) => this._applyReliefParam(param, value),
+      undoStudio: () => this._undoStudio(),
+      clearStudio: () => this._clearStudio(),
+      toggleEraser: () => {
+        this._eraserMode = !this._eraserMode;
+        return this._eraserMode;
+      },
+      toggleStudioBase: () => {
+        this._setStudioBase(this._studioBaseMode === "steel" ? "photo" : "steel");
+        return this._studioBaseMode === "photo";
+      },
+      pickSwatch: (index) => {
+        this._paintColor = this._swatches[index]!;
+        this._eraserMode = false;
+      },
+      onPanelClosed: () => this._onReliefPanelClosed(),
     };
-    this._reliefPanelBtn = toggleBtn;
+    this._hud = new MetalReliefHud(host);
 
-    const footer = document.querySelector(".app-footer");
-    if (footer) {
-      footer.appendChild(toggleBtn);
-    } else {
-      document.body.appendChild(toggleBtn);
-    }
-
-    // Stop events from leaking to camera orbit
-    const stopEvents = [
-      "mousedown",
-      "mouseup",
-      "mousemove",
-      "pointerdown",
-      "pointerup",
-      "pointermove",
-      "wheel",
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "keydown",
-      "keyup",
-      "click",
-      "dblclick",
-      "contextmenu",
-    ];
-    for (const ev of stopEvents) {
-      hud.addEventListener(
-        ev,
-        (e) => {
-          e.stopPropagation();
-          if ("wheel" === ev) {
-            this.input.mouse.zoom = 0;
-            this.input.mouse.wheelX = 0;
-            this.input.mouse.wheelY = 0;
-          }
-        },
-        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
-      );
-    }
-
+    const hud = this._hud.root;
     hud.addEventListener("pointerenter", () => {
       this._isHoveringHud = true;
       if (this._orbitController) {
@@ -1532,145 +1090,61 @@ export class MetalReliefShowcase extends AbstractShowcase {
 
     window.addEventListener("pointerup", () => {
       this._isDraggingHud = false;
-      const curHud = document.getElementById("reliefTuningHud");
-      if (!curHud?.matches(":hover")) {
+      if (!this._hud.root.matches(":hover")) {
         this._isHoveringHud = false;
         if (this._orbitController && this._displayMode === "diorama") {
           this._orbitController.enabled = true;
         }
       }
     });
+  }
 
-    // Close button
-    document.getElementById("reliefHudClose")?.addEventListener("click", () => {
-      this._toggleReliefPanel(false);
-    });
-
-    // Mode dropdown
-    const selMode = document.getElementById("selMode") as HTMLSelectElement | null;
-    selMode?.addEventListener("change", () => {
-      this._setMode(selMode.value as "fullscreen" | "diorama" | "studio");
-    });
-
-    // Split buttons
-    this._bindSlider("slSplit", "valSplit", (v) => {
-      this._setSplitPosition(v);
-    });
-    document.getElementById("btnSplitHalf")?.addEventListener("click", () => {
-      this._setSplitPosition(0.5);
-    });
-    document.getElementById("btnSplitPhoto")?.addEventListener("click", () => {
-      this._setSplitPosition(1.0);
-    });
-    document.getElementById("btnSplitMetal")?.addEventListener("click", () => {
-      this._setSplitPosition(0.0);
-    });
-
-    // Presets
-    document.getElementById("btnPresetParis")?.addEventListener("click", () => {
-      this._setActivePreset("paris");
-    });
-    document.getElementById("btnPresetAlps")?.addEventListener("click", () => {
-      this._setActivePreset("alps");
-    });
-    document.getElementById("btnPresetHarbor")?.addEventListener("click", () => {
-      this._setActivePreset("harbor");
-    });
-
-    // File picker in HUD
-    const dropZone = document.getElementById("dropZoneHud");
-    const filePicker = document.getElementById("filePickerInput") as HTMLInputElement | null;
-    dropZone?.addEventListener("click", () => {
-      filePicker?.click();
-    });
-    filePicker?.addEventListener("change", () => {
-      if (filePicker.files?.[0]) {
-        this._loadCustomImageFile(filePicker.files[0]);
-      }
-    });
-
-    // Sliders
-    this._bindSlider("slSobel", "valSobel", (v) => {
-      if (this._screenMaterial) {
-        this._screenMaterial.reliefStrength = v;
-      }
-    });
-
-    this._bindSlider("slRelief", "valRelief", (v) => {
-      for (const m of this._materials) m.paletteKnifeStrength = v;
-      if (this._screenMaterial) {
-        this._screenMaterial.paletteKnifeStrength = v;
-      }
-    });
-
-    this._bindSlider("slScratches", "valScratches", (v) => {
-      for (const m of this._materials) m.scratchIntensity = v;
-      if (this._screenMaterial) this._screenMaterial.scratchIntensity = v;
-    });
-
-    this._bindSlider("slBevel", "valBevel", (v) => {
-      for (const m of this._materials) m.edgeBevelStrength = v;
-      if (this._screenMaterial) this._screenMaterial.edgeGlintStrength = v;
-    });
-
-    this._bindSlider("slRust", "valRust", (v) => {
-      for (const m of this._materials) m.rustStrength = v;
-      if (this._screenMaterial) this._screenMaterial.rustStrength = v;
-    });
-
-    this._bindSlider("slDesat", "valDesat", (v) => {
-      if (this._screenMaterial) this._screenMaterial.desaturation = v;
-    });
-
-    this._bindSlider("slHue", "valHue", (v) => {
-      if (this._screenMaterial) this._screenMaterial.targetHue = v;
-    });
-
-    this._bindSlider("slRain", "valRain", (v) => {
-      for (const m of this._materials) {
-        if (m.wetRainStreaks > 0.1) m.wetRainStreaks = v;
-      }
-      if (this._screenMaterial) this._screenMaterial.wetRainStreaks = v;
-    });
-
-    // ---- Palette Knife Studio controls ----
-    this._bindSlider("slBrushSize", "valBrushSize", (v) => {
-      this._brushSizeBase = v;
-    });
-    this._bindSlider("slBrushRelief", "valBrushRelief", (v) => {
-      if (this._studioMaterial) this._studioMaterial.brushRelief = v;
-    });
-    this._bindSlider("slBrushSmear", "valBrushSmear", (v) => {
-      if (this._studioMaterial) this._studioMaterial.smearDistance = v;
-    });
-    this._bindSlider("slBrushMetallic", "valBrushMetallic", (v) => {
-      if (this._studioMaterial) this._studioMaterial.metallic = v;
-    });
-
-    document.getElementById("btnUndo")?.addEventListener("click", () => {
-      this._undoStudio();
-    });
-    document.getElementById("btnClear")?.addEventListener("click", () => {
-      this._clearStudio();
-    });
-    const btnErase = document.getElementById("btnErase");
-    btnErase?.addEventListener("click", () => {
-      this._eraserMode = !this._eraserMode;
-      btnErase.classList.toggle("active", this._eraserMode);
-    });
-    const btnBase = document.getElementById("btnBaseToggle");
-    btnBase?.addEventListener("click", () => {
-      this._setStudioBase(this._studioBaseMode === "steel" ? "photo" : "steel");
-      btnBase.classList.toggle("active", this._studioBaseMode === "photo");
-    });
-
-    for (let i = 0; i < this._swatches.length; i++) {
-      const btn = document.getElementById(`swatch${i + 1}`);
-      btn?.addEventListener("click", () => {
-        this._paintColor = this._swatches[i]!;
-        this._eraserMode = false;
-        btnErase?.classList.remove("active");
-      });
+  private _applyReliefParam(param: ReliefParam, v: number): void {
+    const screen = this._screenMaterial;
+    switch (param) {
+      case "sobel":
+        if (screen) screen.reliefStrength = v;
+        break;
+      case "relief":
+        for (const m of this._materials) m.paletteKnifeStrength = v;
+        if (screen) screen.paletteKnifeStrength = v;
+        break;
+      case "scratches":
+        for (const m of this._materials) m.scratchIntensity = v;
+        if (screen) screen.scratchIntensity = v;
+        break;
+      case "bevel":
+        for (const m of this._materials) m.edgeBevelStrength = v;
+        if (screen) screen.edgeGlintStrength = v;
+        break;
+      case "rust":
+        for (const m of this._materials) m.rustStrength = v;
+        if (screen) screen.rustStrength = v;
+        break;
+      case "desat":
+        if (screen) screen.desaturation = v;
+        break;
+      case "hue":
+        if (screen) screen.targetHue = v;
+        break;
+      case "rain":
+        for (const m of this._materials) {
+          if (m.wetRainStreaks > 0.1) m.wetRainStreaks = v;
+        }
+        if (screen) screen.wetRainStreaks = v;
+        break;
+      case "brushSize":
+        this._brushSizeBase = v;
+        break;
+      case "brushRelief":
+        if (this._studioMaterial) this._studioMaterial.brushRelief = v;
+        break;
+      case "brushSmear":
+        if (this._studioMaterial) this._studioMaterial.smearDistance = v;
+        break;
+      case "brushMetallic":
+        if (this._studioMaterial) this._studioMaterial.metallic = v;
+        break;
     }
   }
 
