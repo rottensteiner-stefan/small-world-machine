@@ -1,9 +1,9 @@
 import type { CameraInterfaceData, PointLight } from "@small-world-machine/engine";
 import { Behavior, Vector3D } from "@small-world-machine/engine";
+import type { FireLightBehavior } from "./FireLightBehavior.js";
 
 /** Rank offset for lights whose whole range lies behind the camera: picked only if slots remain. */
 const BEHIND_CAMERA_PENALTY = 1e12;
-import type { FireLightBehavior } from "./FireLightBehavior.js";
 
 /**
  * Configuration options for {@link FireLightBudget}.
