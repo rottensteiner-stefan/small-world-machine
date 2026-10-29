@@ -72,12 +72,24 @@ describe("FireMaterial", () => {
 
   it("ships the same flame model to all three backends", () => {
     const sources = new FireMaterial().getShaderDefinition().sources;
-    for (const fs of [sources.glsl300?.fs, sources.glsl100?.fs, sources.wgsl]) {
+    for (const fs of [sources.glsl300?.fs, sources.glsl100?.fs]) {
       expect(fs).toContain("fireFbm");
       expect(fs).toContain("edgeFade");
-      expect(fs).toContain("cardTangent");
       // Staggered per-column burn-out keeps tongue tips off the card's top edge.
       expect(fs).toMatch(/tip = 0\.68 \+ 0\.27 \* fireNoise/);
+      // Lean is a WORLD-space vertex shear now; no card-relative fragment shear may remain.
+      expect(fs).not.toContain("cardTangent");
+    }
+    // WGSL bundles structs + vertex + fragment into one source.
+    const wgsl = sources.wgsl;
+    expect(wgsl).toContain("fireFbm");
+    expect(wgsl).toContain("edgeFade");
+    expect(wgsl).toMatch(/tip = 0\.68 \+ 0\.27 \* fireNoise/);
+    expect(wgsl).not.toContain("cardTangent");
+
+    // The world-space lean shear must ship to every vertex stage identically (review item 2b).
+    for (const vs of [sources.glsl300?.vs, sources.glsl100?.vs, sources.wgsl]) {
+      expect(vs).toContain("// World-space fire lean shear (2b)");
     }
   });
 });

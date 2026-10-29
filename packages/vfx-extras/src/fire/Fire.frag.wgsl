@@ -23,7 +23,8 @@ fn fireFbm(p: vec2f) -> f32 {
 }
 
 // Lanes: matParam0 [time, intensity, turbulence, flowSpeed], matParam1 [core.rgb, seed],
-// matParam2 [body.rgb, edgeFadeAngle], matParam3 [tip.rgb, -], matParam4 [lean.xyz world, -].
+// matParam2 [body.rgb, edgeFadeAngle], matParam3 [tip.rgb, -], matParam4 [lean.xyz world shear, one-time]
+// (matParam4 is consumed by the VERTEX shader — world-space lean shear, see Fire.vert.*).
 @fragment fn fs(i: Out) -> @location(0) vec4f {
     let time = obj.matParam0.x * obj.matParam0.w;
     let intensity = obj.matParam0.y;
@@ -35,12 +36,8 @@ fn fireFbm(p: vec2f) -> f32 {
     // Crossed cards seen edge-on collapse to a bright line; fade each card by its facing ratio.
     let edgeFade = smoothstep(0.0, obj.matParam2.w, abs(dot(n, viewDir)));
 
-    // Lean projected onto the card's horizontal axis (cross(up, n) matches the geometry's +u).
-    let cardTangent = normalize(cross(vec3f(0.0, 1.0, 0.0), n) + vec3f(1e-5, 0.0, 0.0));
-    let lean = dot(obj.matParam4.xyz, cardTangent);
-
     let y = i.uv.y;
-    let x = i.uv.x - 0.5 - lean * y * y;
+    let x = i.uv.x - 0.5;
 
     // Two layers scroll upward at different speeds; layer A displaces layer B (flow distortion).
     let nA = fireFbm(vec2f(x * 3.0 + seed, y * 2.0 - time * 1.3));

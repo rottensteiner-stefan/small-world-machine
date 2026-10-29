@@ -1,6 +1,9 @@
 import fragGLSL from "./Fire.frag.glsl?raw";
 import fragGLSL100 from "./Fire.frag.glsl100?raw";
 import fragWGSL from "./Fire.frag.wgsl?raw";
+import vertGLSL from "./Fire.vert.glsl?raw";
+import vertGLSL100 from "./Fire.vert.glsl100?raw";
+import vertWGSL from "./Fire.vert.wgsl?raw";
 import type { RenderManifest, ShaderDefinition } from "@small-world-machine/engine";
 import {
   AbstractMaterial,
@@ -89,7 +92,10 @@ export class FireMaterial extends AbstractMaterial {
   public turbulence: number;
   /** @domain upward flow speed multiplier (>=0). */
   public flowSpeed: number;
-  /** @domain world-space tip offset in card widths per unit height (e.g. wind or carry velocity). */
+  /** World-space lean direction of the flame tip in meters, with a quadratic falloff to zero at
+   *  the base. Applied as a vertex shear in WORLD space on every tier, so all crossed cards lean
+   *  identically — the card-relative fragment shear this replaces could not lean a card
+   *  perpendicular to the wind and visibly split the flame. */
   public lean: Vector3D;
   /** @domain per-instance noise offset, any real number. */
   public seed: number;
@@ -163,9 +169,9 @@ export class FireMaterial extends AbstractMaterial {
     return {
       id: FireMaterial.TYPE,
       sources: {
-        glsl300: { vs: "[BASE_VERTEX_HEADER][BASE_VERTEX_MAIN]", fs: fragGLSL },
-        glsl100: { vs: "[BASE_VS]", fs: fragGLSL100 },
-        wgsl: `[WGSL_STRUCTS]\n[WGSL_VS]\n${fragWGSL}`,
+        glsl300: { vs: vertGLSL, fs: fragGLSL },
+        glsl100: { vs: vertGLSL100, fs: fragGLSL100 },
+        wgsl: `[WGSL_STRUCTS]\n${vertWGSL}\n${fragWGSL}`,
       },
       layout: StandardWebGPULayout,
     };

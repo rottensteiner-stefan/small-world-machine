@@ -5,7 +5,7 @@ uniform vec4 u_matParam0; // [time, intensity, turbulence, flowSpeed]
 uniform vec4 u_matParam1; // [coreColor.rgb, seed]
 uniform vec4 u_matParam2; // [bodyColor.rgb, edgeFadeAngle]
 uniform vec4 u_matParam3; // [tipColor.rgb, unused]
-uniform vec4 u_matParam4; // [lean.xyz (world), unused]
+// u_matParam4 [lean.xyz] is consumed by the VERTEX shader (world-space lean shear, see Fire.vert.glsl).
 
 float fireHash(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -42,12 +42,8 @@ void main() {
     // Crossed cards seen edge-on collapse to a bright line; fade each card by its facing ratio.
     float edgeFade = smoothstep(0.0, u_matParam2.w, abs(dot(n, viewDir)));
 
-    // Lean projected onto the card's horizontal axis (cross(up, n) matches the geometry's +u).
-    vec3 cardTangent = normalize(cross(vec3(0.0, 1.0, 0.0), n) + vec3(1e-5, 0.0, 0.0));
-    float lean = dot(u_matParam4.xyz, cardTangent);
-
     float y = v_uv.y;
-    float x = v_uv.x - 0.5 - lean * y * y;
+    float x = v_uv.x - 0.5;
 
     // Two layers scroll upward at different speeds; layer A displaces layer B (flow distortion).
     float nA = fireFbm(vec2(x * 3.0 + seed, y * 2.0 - time * 1.3));
