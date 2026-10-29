@@ -110,6 +110,35 @@ fn getShadowPCF(map: texture_depth_2d_array, samp: sampler_comparison, shadowPos
     return shadow / 9.0;
 }
 
+// Cube face of a light-to-fragment direction (ADR 0052). Must match cubeFaceForDirection in
+// core/lights/PointLightShadow.ts exactly: major axis, ties X before Y before Z.
+fn pointShadowFace(d: vec3f) -> u32 {
+    let a = abs(d);
+    if (a.x >= a.y && a.x >= a.z) {
+        return select(1u, 0u, d.x >= 0.0);
+    }
+    if (a.y >= a.z) {
+        return select(3u, 2u, d.y >= 0.0);
+    }
+    return select(5u, 4u, d.z >= 0.0);
+}
+
+// Shadow factor of pLights[lightIndex] (ADR 0052): 1.0 unless the light holds a point shadow slot
+// this frame (pointShadowInfo.w), so scenes without shadowed point lights shade as before. The
+// face is picked from the normal-offset sample, so the offset never leaves the chosen face. 3x3
+// PCF on layer 4 + slot * 6 + face; PCSS would cost 16 more taps per light for little gain here.
+fn getPointShadow(map: texture_depth_2d_array, samp: sampler_comparison, lightIndex: u32, lightPos: vec3f, wp: vec3f, N: vec3f, dotNL: f32) -> f32 {
+    for (var slot = 0u; slot < 2u; slot++) {
+        let info = global.pointShadowInfo[slot];
+        if (info.w > 0.5 && info.z == f32(lightIndex)) {
+            let samplePos = wp + N * info.y * (1.0 - dotNL);
+            let m = slot * 6u + pointShadowFace(samplePos - lightPos);
+            return getShadowPCF(map, samp, global.pointShadowMatrices[m] * vec4f(samplePos, 1.0), 4u + m, info.x);
+        }
+    }
+    return 1.0;
+}
+
 // PCSS: (1) blocker search via textureLoad -- an exact texel fetch straight off the same depth
 // texture already bound for comparison sampling, no separate raw-depth binding needed, unlike
 // WebGL2 where TEXTURE_COMPARE_MODE is baked onto the texture object itself; (2) derive a

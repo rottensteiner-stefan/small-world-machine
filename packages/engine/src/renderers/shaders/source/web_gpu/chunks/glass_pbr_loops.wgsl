@@ -76,7 +76,8 @@
         if (pLights[j].col.w > 0.0) {
             attenuation = (1.0 / max(dist * dist, 0.01)) * pWindow * pWindow;
         }
-        let radiance = pLights[j].col.xyz * attenuation;
+        let pShadow = getPointShadow(u_spotShadowMap, shadowSampler, j, pLights[j].pos.xyz, i.wp, N, max(dot(N, L), 0.0));
+        let radiance = pLights[j].col.xyz * attenuation * pShadow;
 
         let dotNL = max(dot(N, L), 0.0);
         let dotNH = max(dot(N, H), 0.0);

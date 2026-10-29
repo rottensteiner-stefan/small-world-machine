@@ -133,7 +133,8 @@ for(var k=0u; k<pointCluster.y; k++) {
     
     if (attenuation > 0.0) {
         let H = normalize(V + L);
-        let radiance = pLights[j].col.xyz * attenuation;
+        let pShadow = getPointShadow(u_spotShadowMap, shadowSampler, j, pLights[j].pos.xyz, i.wp, N, max(dot(N, L), 0.0));
+        let radiance = pLights[j].col.xyz * attenuation * pShadow;
         
         let dotNL = max(dot(N, L), 0.0);
         let dotNH = max(dot(N, H), 0.0);

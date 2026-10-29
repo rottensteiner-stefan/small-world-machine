@@ -88,9 +88,10 @@ for(var k=0u; k<pointCluster.y; k++) {
   if (atten > 0.0) {
       let L = lVec/max(d, 0.0001);
       let diff = max(dot(N, L), 0.0); 
-      fL += diff * pLights[j].col.xyz * atten;
+      let pShadow = getPointShadow(u_spotShadowMap, shadowSampler, j, pLights[j].pos.xyz, i.wp, N, diff);
+      fL += diff * pLights[j].col.xyz * atten * pShadow;
       if (obj.shininess > 0.0 && diff > 0.0) { 
-        spec += pow(max(dot(V, reflect(-L, N)), 0.0), obj.shininess) * pLights[j].col.xyz * atten; 
+        spec += pow(max(dot(V, reflect(-L, N)), 0.0), obj.shininess) * pLights[j].col.xyz * atten * pShadow; 
       }
   }
 }
