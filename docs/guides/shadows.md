@@ -90,6 +90,31 @@ Two polish passes run automatically, with no configuration needed:
 its own `angle`/`penumbra`/`distance` values. No cascades, no texel snapping (a single
 perspective frustum doesn't flicker the same way CSM's tiled ortho frustums do).
 
+## Point light shadows (ADR 0052)
+
+`PointLight` casts omnidirectional shadows on WebGPU and WebGL2 (WebGL1 has no shadow maps at all):
+
+```typescript
+const torchLight = new PointLight({ distance: 8, intensity: 3 });
+torchLight.castShadow = true; // default false
+```
+
+- **Budget:** at most `quality.maxShadowedPointLights` lights per frame (default 2, which is also
+  the hard cap; LOW tier 0, MEDIUM 1). Among all `castShadow` point lights the engine picks the
+  nearest ones each frame; a light whose whole range lies behind the camera ranks last, and a
+  light with no caster in range gets no slot.
+- **How:** six 90° perspective cube faces per light, stored as layers 4–15 of the spot shadow
+  array (spots keep layers 0–3), so points use the same comparison sampler and depth pass as
+  spots and need no extra texture unit. Faces are re-rendered every frame from the light's
+  current position (moving fire lights move their shadows) and faces whose range cannot reach
+  the view are skipped.
+- **Casters:** every `castShadow` object within the light's range, also off-screen ones.
+- **Filtering:** fixed 3×3 PCF (no PCSS for points). `shadowResolution` defaults to 256 for
+  point lights; the shared array uses the largest resolution among active casters.
+- **Known limits:** volumetric fog does not sample point shadows yet; depth bias shares the spot
+  meaning — with the 5 cm near plane a large `shadowBias` can detach shadows from their casters,
+  lower it for point lights if you see that.
+
 ## Filtering: PCF and PCSS
 
 Both light types use **Percentage-Closer Filtering** (PCF) — a 3x3-tap average around the
