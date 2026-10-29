@@ -17,6 +17,7 @@ export interface HudState {
   lights: boolean;
   bloom: boolean;
   embers: boolean;
+  shadows: boolean;
   paused: boolean;
   timeScale: number;
   palette: PaletteChoice;
@@ -39,6 +40,7 @@ export function defaultHudState(maxActiveLights: number): HudState {
     lights: true,
     bloom: true,
     embers: true,
+    shadows: true,
     paused: false,
     timeScale: 1,
     palette: "original",
@@ -69,6 +71,7 @@ const SWITCHES = [
   "lights",
   "bloom",
   "embers",
+  "shadows",
   "showBudget",
   "daylight",
 ] as const;
@@ -175,6 +178,7 @@ export class Hud {
             hudSwitch("sw_lights", "Punktlichter") +
             hudSwitch("sw_bloom", "Bloom") +
             hudSwitch("sw_embers", "Glut / Funken") +
+            hudSwitch("sw_shadows", "Punktlicht-Schatten") +
             hudNote(
               "💡 Schalte das Flackern aus: Ein starres Licht wirkt sofort wie eine Glühbirne.",
             ),
@@ -210,7 +214,7 @@ export class Hud {
         )}
         ${hudSection("🌗 Umgebung", "N", hudSwitch("sw_daylight", "Tageslicht"))}
         <div class="hud-section hud-keys">
-          <kbd>F</kbd> Flackern · <kbd>G</kbd> Glow · <kbd>L</kbd> Lichter · <kbd>H</kbd> Glut · <kbd>P</kbd> Pause · <kbd>T</kbd> Tempo ·
+          <kbd>F</kbd> Flackern · <kbd>G</kbd> Glow · <kbd>L</kbd> Lichter · <kbd>H</kbd> Glut · <kbd>X</kbd> Schatten · <kbd>P</kbd> Pause · <kbd>T</kbd> Tempo ·
           <kbd>0–4</kbd> Farbe · <kbd>,</kbd><kbd>.</kbd> Windrichtung · <kbd>+</kbd><kbd>−</kbd> Windstärke · <kbd>V</kbd> Budget ·
           <kbd>N</kbd> Tag/Nacht · <kbd>I</kbd> Panel · <kbd>WASD</kbd> Fliegen
         </div>
@@ -287,6 +291,9 @@ export class Hud {
         return true;
       case "KeyH":
         s.embers = !s.embers;
+        return true;
+      case "KeyX":
+        s.shadows = !s.shadows;
         return true;
       case "KeyP":
         s.paused = !s.paused;

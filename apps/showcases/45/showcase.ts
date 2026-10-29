@@ -181,6 +181,14 @@ export class Showcase extends AbstractShowcase {
 
     this._addBox("Ground", ashlar, new Vector3D(0, -0.05, 0), new Vector3D(48, 0.1, 14));
     this._addBox("Wall", masonry, new Vector3D(0, 1.75, -1.6), new Vector3D(44, 3.5, 0.4));
+    // A crate beside the campfire makes the omnidirectional shadow readable on floor and wall.
+    const crate = this._addBox(
+      "Crate",
+      wood,
+      new Vector3D(-1.05, 0.25, 0.75),
+      new Vector3D(0.5, 0.5, 0.5),
+    );
+    crate.castShadow = true;
 
     for (let i = 0; i < TORCH_ROW_X.length; i++) {
       this._addWallTorch(`RowTorch${i}`, wood, TORCH_ROW_X[i]!, undefined, rowTorchVariation(i));
@@ -312,6 +320,8 @@ export class Showcase extends AbstractShowcase {
       rig.glowObject.isVisible = s.glow;
       // The ember layer spawns only while enabled; hiding the mesh makes the A/B toggle instant
       // instead of waiting out live particles.
+      // The engine picks the nearest shadowed fires itself (ADR 0052, quality.maxShadowedPointLights).
+      rig.pointLight.castShadow = s.shadows;
       rig.embers.enabled = s.embers;
       rig.embers.mesh.isVisible = s.embers;
     }
@@ -469,6 +479,7 @@ export class Showcase extends AbstractShowcase {
     obj.material = mat;
     obj.position.copyFrom(pos);
     obj.scale.copyFrom(size);
+    obj.receiveShadow = true;
     this.scene.add(obj);
     return obj;
   }
@@ -488,6 +499,8 @@ export class Showcase extends AbstractShowcase {
     }).getGeometryData();
     obj.material = mat;
     obj.position.copyFrom(pos);
+    obj.castShadow = true;
+    obj.receiveShadow = true;
     this.scene.add(obj);
     return obj;
   }
