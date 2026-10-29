@@ -1,23 +1,29 @@
 import { requireGlObject } from "../gl/requireGlObject.js";
+import { SHADOW_ARRAY_LAYERS, SPOT_SHADOW_LAYERS } from "../../core/lights/PointLightShadow.js";
 
 /**
- * Depth texture array holding the shadow maps of the first 4 spot lights, one layer per spot slot
- * (index into `LightDataInterface.sLights`), sampled as one `sampler2DArrayShadow`. Mirrors the
- * WebGPU `texture_depth_2d_array` in SpotShadowPassGPU: one texture unit instead of four, which is
- * what keeps a fully mapped PBR program within the 16 fragment texture units WebGL2 guarantees.
- * All layers share one resolution (the first caster's, as on WebGPU).
+ * Depth texture array holding the shadow maps of the first 4 spot lights (layers 0..3, index into
+ * `LightDataInterface.sLights`) and the cube faces of up to two shadowed point lights (layers
+ * 4..15, `pointShadowLayer`, ADR 0052), sampled as one `sampler2DArrayShadow`. Mirrors the WebGPU
+ * `texture_depth_2d_array` in SpotShadowPassGPU: one texture unit for all of them, which is what
+ * keeps a fully mapped PBR program within the 16 fragment texture units WebGL2 guarantees. All
+ * layers share one resolution. The point-face layers are only allocated while a point light needs
+ * them, so spot-only scenes keep the 4-layer footprint.
  */
 export class WebGL2SpotShadowArray {
-  public static readonly LAYERS = 4;
+  /** @derived layer capacity: 4 spot slots + 2 x 6 point-light faces. */
+  public static readonly LAYERS = SHADOW_ARRAY_LAYERS;
 
   private _gl: WebGL2RenderingContext;
   private _framebuffer: WebGLFramebuffer;
   private _depthTexture: WebGLTexture;
   private _size: number;
+  private _layers: number;
 
-  constructor(gl: WebGL2RenderingContext, size: number) {
+  constructor(gl: WebGL2RenderingContext, size: number, layers: number = SPOT_SHADOW_LAYERS) {
     this._gl = gl;
     this._size = size;
+    this._layers = layers;
 
     this._depthTexture = requireGlObject(gl.createTexture(), "texture");
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, this._depthTexture);
@@ -45,7 +51,7 @@ export class WebGL2SpotShadowArray {
       gl.DEPTH_COMPONENT24,
       this._size,
       this._size,
-      WebGL2SpotShadowArray.LAYERS,
+      this._layers,
       0,
       gl.DEPTH_COMPONENT,
       gl.UNSIGNED_INT,
@@ -71,10 +77,11 @@ export class WebGL2SpotShadowArray {
     this._gl.bindFramebuffer(this._gl.FRAMEBUFFER, null);
   }
 
-  /** Reallocates every layer (content is lost) when the resolution changes. */
-  public resize(size: number): void {
-    if (this._size === size) return;
+  /** Reallocates every layer (content is lost) when the resolution or layer count changes. */
+  public resize(size: number, layers: number = this._layers): void {
+    if (this._size === size && this._layers === layers) return;
     this._size = size;
+    this._layers = layers;
     this._gl.bindTexture(this._gl.TEXTURE_2D_ARRAY, this._depthTexture);
     this._allocate();
     this._gl.bindTexture(this._gl.TEXTURE_2D_ARRAY, null);
@@ -82,6 +89,11 @@ export class WebGL2SpotShadowArray {
 
   public get size(): number {
     return this._size;
+  }
+
+  /** Allocated layers (`SPOT_SHADOW_LAYERS`, or `LAYERS` while point-light faces are in use). */
+  public get layers(): number {
+    return this._layers;
   }
 
   public get texture(): WebGLTexture {

@@ -124,6 +124,7 @@
         float attenuation = (decay > 0.0) ? (distanceFalloff * cutoff) : clamp(1.0 - dist / lightDistance, 0.0, 1.0);
         
         if (attenuation > 0.0) {
+            attenuation *= pointShadowFactor(i, u_pointLights[i].pos, v_worldPos, v_normal);
             vec3 L_pt = lightVec / dist;
             float diff_pt = max(dot(N, L_pt), 0.0);
             finalLight += diff_pt * u_pointLights[i].color * attenuation;

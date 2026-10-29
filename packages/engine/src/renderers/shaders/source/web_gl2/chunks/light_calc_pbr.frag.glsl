@@ -221,7 +221,7 @@ for(int k = 0; k < CLUSTER_MAX_LIGHTS; k++) {
     
     // If decay is 0, we don't fall off physically, we just do linear/constant
     float attenuation = (decay > 0.0) ? (distanceFalloff * cutoff) : clamp(1.0 - dist / lightDistance, 0.0, 1.0);
-    vec3 radiance = u_pointLights[i].color * attenuation;
+    vec3 radiance = u_pointLights[i].color * attenuation * pointShadowFactor(i, u_pointLights[i].pos, v_worldPos, v_normal);
 
     float dotNL = max(dot(N, L), 0.0);
     float dotNH = max(dot(N, H), 0.0);

@@ -49,6 +49,48 @@ in vec4 v_spotLightSpacePos[4];
 uniform sampler2DArrayShadow u_spotShadowMap;
 uniform vec4 u_spotShadowInfo[4]; // x=bias, y=normalBias, z=castShadow, w=pad
 
+// Point-light shadows (ADR 0052): six 90 degree cube faces per shadow slot in layers
+// 4 + slot * 6 + face of u_spotShadowMap. Light-space position is computed here from the world
+// position (12 more varyings would not fit). Face matrices: slot * 6 + face.
+uniform mat4 u_pointShadowMatrix[12];
+uniform vec4 u_pointShadowInfo[2]; // x=bias, y=normalBias, z=u_pointLights index, w=castShadow
+
+// Must match cubeFaceForDirection in core/lights/PointLightShadow.ts: major axis, ties X > Y > Z.
+int pointShadowFace(vec3 d) {
+    vec3 a = abs(d);
+    if (a.x >= a.y && a.x >= a.z) return d.x >= 0.0 ? 0 : 1;
+    if (a.y >= a.z) return d.y >= 0.0 ? 2 : 3;
+    return d.z >= 0.0 ? 4 : 5;
+}
+
+// Shadow factor of point light `lightIndex` (1.0 = lit, exactly 1.0 when it has no shadow slot).
+// worldPos/geomNormal are parameters because decals remap v_worldPos/v_normal after this header.
+float pointShadowFactor(int lightIndex, vec3 lightPos, vec3 worldPos, vec3 geomNormal) {
+    for (int s = 0; s < 2; s++) {
+        vec4 info = u_pointShadowInfo[s];
+        if (info.w < 0.5 || int(info.z + 0.5) != lightIndex) continue;
+        int face = pointShadowFace(worldPos - lightPos);
+        // Normal-offset bias scaled by 1 - NdotL, as for spot lights (base_vertex_main).
+        vec3 n = normalize(geomNormal);
+        float ndotl = max(dot(n, normalize(lightPos - worldPos)), 0.0);
+        vec3 samplePos = worldPos + n * info.y * (1.0 - ndotl);
+        vec4 ls = u_pointShadowMatrix[s * 6 + face] * vec4(samplePos, 1.0);
+        vec3 projCoords = ls.xyz / ls.w * 0.5 + 0.5;
+        if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0 || projCoords.z > 1.0) return 1.0;
+        float layer = float(4 + s * 6 + face);
+        float ref = projCoords.z - info.x;
+        vec2 texelSize = 1.0 / vec2(textureSize(u_spotShadowMap, 0).xy);
+        float shadow = 0.0;
+        for (int x = -1; x <= 1; ++x) {
+            for (int y = -1; y <= 1; ++y) {
+                shadow += texture(u_spotShadowMap, vec4(projCoords.xy + vec2(x, y) * texelSize, layer, ref));
+            }
+        }
+        return shadow / 9.0;
+    }
+    return 1.0;
+}
+
 // Cascaded Shadow Maps
 uniform sampler2DShadow u_dirShadowMap;
 // Same depth texture as u_dirShadowMap, bound through a non-comparison sampler (TEXTURE_COMPARE_MODE

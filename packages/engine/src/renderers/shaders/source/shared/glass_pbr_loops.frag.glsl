@@ -1,6 +1,10 @@
 // Shared glsl100 + glsl300 Glass/Frostglass PBR light loop (ADR 0039). Light data is read through
 // the GLASS_* accessor macros each dialect defines next to its light uniforms (LIGHT_DEFS), so the
 // loop body exists exactly once.
+#ifndef GLASS_POINT_SHADOW
+// Point-light shadow factor (ADR 0052); dialects without point shadows (glsl100) stay fully lit.
+#define GLASS_POINT_SHADOW(i) 1.0
+#endif
     // --- Directional Light ---
     vec3 L = normalize(u_dirLightDir);
     vec3 H = normalize(V + L);
@@ -34,7 +38,7 @@
         float pRatio = dist / pRange;
         float pWindow = clamp(1.0 - pRatio * pRatio * pRatio * pRatio, 0.0, 1.0);
         float attenuation = (pDecay > 0.0) ? (pFalloff * pWindow * pWindow) : clamp(1.0 - dist / pRange, 0.0, 1.0);
-        vec3 pRadiance = GLASS_POINT_COLOR(i) * attenuation;
+        vec3 pRadiance = GLASS_POINT_COLOR(i) * attenuation * GLASS_POINT_SHADOW(i);
 
         float pDotNL = max(dot(N, L_p), 0.0);
         float pDotNH = max(dot(N, H_p), 0.0);

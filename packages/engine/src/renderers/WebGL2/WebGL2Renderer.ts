@@ -11,6 +11,7 @@ import { WebGLTextureManager } from "../gl/managers/WebGLTextureManager.js";
 import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
 import { WebGL2DepthFrameBuffer } from "./WebGL2DepthFrameBuffer.js";
 import { WebGL2SpotShadowArray } from "./WebGL2SpotShadowArray.js";
+import { WebGL2PointShadows } from "./WebGL2PointShadows.js";
 import { WebGL2FrameBuffer } from "./WebGL2FrameBuffer.js";
 import { NORMAL_OUTPUT_FLAG } from "../gl/managers/NormalOutputWrapperGL.js";
 import { WebGL2CubeFrameBuffer } from "./WebGL2CubeFrameBuffer.js";
@@ -23,6 +24,12 @@ import { GLPostEffects, createGLPostEffectContext } from "../post/passes/index.j
 import type { GLPostEffectPassContext } from "../post/passes/index.js";
 import type { AbstractLight, DirectionalLight } from "../../core/lights/index.js";
 import { MAX_CLUSTERED_LIGHTS_PER_TYPE } from "../../core/lights/index.js";
+import {
+  CUBE_FACE_COUNT,
+  MAX_SHADOWED_POINT_LIGHTS,
+  SPOT_SHADOW_LAYERS,
+  pointShadowLayer,
+} from "../../core/lights/PointLightShadow.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
 import type { CubeTexture } from "../../core/textures/index.js";
 import { Texture, RenderTarget, RenderTargetCube } from "../../core/textures/index.js";
@@ -202,6 +209,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     sLights: [],
   };
   private readonly _zeroVec4: Float32Array = new Float32Array(4);
+  /** Scratch view-projection of the point-light cube face being rendered. */
+  private readonly _pointFaceMatrix: Float32Array = new Float32Array(16);
   /** Scratch `u_extraParams` of a line-quad shadow batch: [1, 0, texel NDC, half width]. */
   private readonly _lineShadowParams: Float32Array = new Float32Array([1, 0, 0, 0]);
   private readonly _scratchInstancedObjects: Object3D[] = [];
@@ -213,6 +222,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private _dummySpotShadowArray!: WebGL2SpotShadowArray;
   /** Spot slots whose layer the last `renderShadowMaps()` call rendered. */
   private readonly _spotShadowSlots: boolean[] = [false, false, false, false];
+  /** Point-light cube faces in the spot array's layers 4..15 (ADR 0052). */
+  private readonly _pointShadows: WebGL2PointShadows = new WebGL2PointShadows();
   /** Scratch: shadow depth textures of the first 4 spot lights for the volumetric fog pass. */
   private readonly _fogSpotShadowTextures: (WebGLTexture | null)[] = [null, null, null, null];
 
@@ -283,7 +294,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
     this._dummyShadowMap.unbind();
     this._spotShadowArray = new WebGL2SpotShadowArray(this.gl, 1);
-    this._dummySpotShadowArray = new WebGL2SpotShadowArray(this.gl, 1);
+    this._dummySpotShadowArray = new WebGL2SpotShadowArray(
+      this.gl,
+      1,
+      WebGL2SpotShadowArray.LAYERS,
+    );
     for (let i = 0; i < WebGL2SpotShadowArray.LAYERS; i++) this._dummySpotShadowArray.bindLayer(i);
     this._dummySpotShadowArray.unbind();
     this._spotShadowSlots.fill(false);
@@ -899,9 +914,35 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._shadowMapsUsed.clear();
 
     // SpotLights: only the first 4 (by sLights index, shadowing or not) own a layer, as on WebGPU
-    // (SpotShadowPassGPU). All layers share the first caster's resolution.
+    // (SpotShadowPassGPU). Point lights (ADR 0052) add six cube-face layers per shadow slot. All
+    // layers share the largest caster's resolution.
     this._spotShadowSlots.fill(false);
-    const spotSlots = Math.min(lights.sLights.length, WebGL2SpotShadowArray.LAYERS);
+    const spotSlots = Math.min(lights.sLights.length, SPOT_SHADOW_LAYERS);
+    const pointShadows = this._pointShadows;
+    const pointSlots = pointShadows.prepare(
+      lights.pLights,
+      this._frameViewProj,
+      this._frameCamPos,
+      this._quality.maxShadowedPointLights ?? MAX_SHADOWED_POINT_LIGHTS,
+      this._frameScene?.root,
+      sortedGroups,
+    );
+    let arraySize = 0;
+    for (let i = 0; i < spotSlots; i++) {
+      const light = lights.sLights[i]!;
+      if (light.castShadow) arraySize = Math.max(arraySize, light.shadowResolution || 1024);
+    }
+    for (let s = 0; s < pointSlots; s++) {
+      arraySize = Math.max(arraySize, pointShadows.lights[s]!.shadowResolution || 256);
+    }
+    const spotArray = this._spotShadowArray;
+    if (arraySize > 0) {
+      spotArray.resize(
+        arraySize,
+        pointSlots > 0 ? WebGL2SpotShadowArray.LAYERS : SPOT_SHADOW_LAYERS,
+      );
+    }
+
     for (let i = 0; i < spotSlots; i++) {
       const light = lights.sLights[i]!;
       if (!light.castShadow) continue;
@@ -911,8 +952,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       const shadowCamera = light.shadowCamera;
       if (!shadowCamera) continue;
 
-      const spotArray = this._spotShadowArray;
-      if (!this._spotShadowSlots.includes(true)) spotArray.resize(light.shadowResolution || 1024);
       this._spotShadowSlots[i] = true;
       spotArray.bindLayer(i);
 
@@ -935,6 +974,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.gl.cullFace(this.gl.BACK);
       spotArray.unbind();
     }
+
+    for (let s = 0; s < pointSlots; s++) this._renderPointShadowFaces(s, emptyLights);
 
     // DirectionalLight (CSM Atlas)
     if (lights.dLight && lights.dLight.castShadow && lights.dLight.numCascades > 0) {
@@ -1014,6 +1055,49 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       shadowFbo.destroy();
       this._shadowMaps.delete(light);
     }
+  }
+
+  /**
+   * Renders the cube faces of point-shadow slot `slot` into layers `pointShadowLayer(slot, face)`
+   * with the spot path (front-face culling, instancing, line casters). A face whose region cannot
+   * reach the view is skipped (never sampled); a face without casters is only cleared (lit). The
+   * global UBO is written once per light and only `u_vp` (64 bytes) is re-uploaded per face.
+   */
+  private _renderPointShadowFaces(slot: number, emptyLights: LightDataInterface): void {
+    const pointShadows = this._pointShadows;
+    const spotArray = this._spotShadowArray;
+    const vpOffset = WebGL2GlobalUniformLayout.fields.vp.offset;
+    let uboReady = false;
+    for (let face = 0; face < CUBE_FACE_COUNT; face++) {
+      if (!pointShadows.isFaceVisible(slot, face)) continue;
+      const casters = pointShadows.faceCasters(slot, face);
+      spotArray.bindLayer(pointShadowLayer(slot, face));
+      if (casters.length === 0) continue;
+
+      const vp = this._pointFaceMatrix;
+      const base = (slot * CUBE_FACE_COUNT + face) * 16;
+      for (let k = 0; k < 16; k++) vp[k] = pointShadows.matrices[base + k]!;
+      if (uboReady) {
+        this._globalUBO.setMatrix(vpOffset, vp);
+        this._globalUBO.updateRange(vpOffset, 64);
+      } else {
+        this.updateGlobalUBO(vp, pointShadows.position(slot), emptyLights);
+        uboReady = true;
+      }
+
+      this.gl.enable(this.gl.CULL_FACE);
+      this.gl.cullFace(this.gl.FRONT);
+      this.gl.enable(this.gl.DEPTH_TEST);
+      this.gl.disable(this.gl.BLEND);
+      this._renderShadowScene(
+        MaterialType.DEPTH,
+        DepthMaterial.LINE_QUADS_SHADER_ID,
+        2 / spotArray.size,
+        casters,
+      );
+      this.gl.cullFace(this.gl.BACK);
+    }
+    spotArray.unbind();
   }
 
   /**
@@ -1767,16 +1851,27 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     return shaderFlags;
   }
 
-  /** Binds the spot shadow array and the per-slot matrix/info of the up-to-4 shadowed spot lights. */
+  /**
+   * Binds the spot shadow array, the per-slot matrix/info of the up-to-4 shadowed spot lights and
+   * the point-light face table (ADR 0052: `u_pointShadowMatrix[12]`, `u_pointShadowInfo[2]`).
+   */
   private _bindSpotShadowMaps(cache: WebGLProgramCacheEntry, lights?: LightDataInterface): void {
-    if (!lights || lights.sLights.length === 0) return;
-
+    const pointSlots = this._pointShadows.slotCount;
     const mapLoc = cache.uniforms.get("u_spotShadowMap");
-    if (mapLoc && this._spotShadowSlots.includes(true)) {
+    if (mapLoc && (pointSlots > 0 || this._spotShadowSlots.includes(true))) {
       this.gl.activeTexture(this.gl.TEXTURE0 + WebGL2Renderer._SPOT_SHADOW_UNIT);
       this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this._spotShadowArray.texture);
       this.gl.uniform1i(mapLoc, WebGL2Renderer._SPOT_SHADOW_UNIT);
     }
+    // Always written (zeros when unused): uniform values persist per program across frames.
+    const pointInfoLoc = cache.uniforms.get("u_pointShadowInfo[0]");
+    if (pointInfoLoc) this.gl.uniform4fv(pointInfoLoc, this._pointShadows.info);
+    const pointMatLoc = cache.uniforms.get("u_pointShadowMatrix[0]");
+    if (pointMatLoc && pointSlots > 0) {
+      this.gl.uniformMatrix4fv(pointMatLoc, false, this._pointShadows.matrices);
+    }
+
+    if (!lights || lights.sLights.length === 0) return;
 
     for (let i = 0; i < 4; i++) {
       if (i >= lights.sLights.length) break;

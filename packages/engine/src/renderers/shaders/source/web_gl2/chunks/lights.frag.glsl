@@ -146,3 +146,6 @@ vec3 displayToTarget(vec3 color) {
 #define GLASS_SPOT_DIR(i) u_spotLights[i].dir
 #define GLASS_SPOT_COLOR(i) u_spotLights[i].color
 #define GLASS_SPOT_PARAMS(i) u_spotLights[i].params
+// Point-light shadow (ADR 0052); pointShadowFactor lives in BASE_FRAGMENT_HEADER, which every
+// glass program includes.
+#define GLASS_POINT_SHADOW(i) pointShadowFactor(i, u_pointLights[i].pos, v_worldPos, v_normal)

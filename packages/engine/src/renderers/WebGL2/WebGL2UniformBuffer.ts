@@ -135,6 +135,19 @@ export class WebGL2UniformBuffer {
     this._gl.bindBuffer(this._gl.UNIFORM_BUFFER, null);
   }
 
+  /** Uploads only `byteLength` bytes at `byteOffset` (both multiples of 4) of the local data. */
+  public updateRange(byteOffset: number, byteLength: number): void {
+    this._gl.bindBuffer(this._gl.UNIFORM_BUFFER, this._buffer);
+    this._gl.bufferSubData(
+      this._gl.UNIFORM_BUFFER,
+      byteOffset,
+      this._data,
+      byteOffset / 4,
+      byteLength / 4,
+    );
+    this._gl.bindBuffer(this._gl.UNIFORM_BUFFER, null);
+  }
+
   /**
    * Destroys the underlying buffer.
    */
