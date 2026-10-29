@@ -39,6 +39,7 @@ function mockGl2(): WebGL2RenderingContext {
     texParameteri: vi.fn(),
     texImage2D: vi.fn(),
     pixelStorei: vi.fn(),
+    getParameter: vi.fn(() => 16384),
     TEXTURE_2D: 1,
     TEXTURE_MIN_FILTER: 2,
     TEXTURE_MAG_FILTER: 3,

@@ -185,6 +185,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   public get clusterMaxLightsPerCluster(): number {
     return this._clusterMaxLightsPerCluster;
   }
+  private _clusterIndexCapacity = CLUSTER_TEX_WIDTH;
+  /** Index slots (texels) the allocated cluster index texture really holds -- see `_allocateClusterTextures`. */
+  public get clusterIndexCapacity(): number {
+    return this._clusterIndexCapacity;
+  }
   private _clusterGridTex!: WebGLTexture;
   public get clusterGridTex(): WebGLTexture {
     return this._clusterGridTex;
@@ -401,7 +406,15 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     const numClusters = Math.max(1, dims.x * dims.y * dims.z);
     const gridHeight = Math.max(1, Math.ceil(numClusters / CLUSTER_TEX_WIDTH));
     const indexCount = numClusters * Math.max(1, maxLightsPerCluster);
-    const indexHeight = Math.max(1, Math.ceil(indexCount / CLUSTER_TEX_WIDTH));
+    // A fine grid (e.g. 8 px tiles x 64 slices on a 2K canvas) asks for more index rows than
+    // MAX_TEXTURE_SIZE: texImage2D then fails and every texSubImage2D into the unallocated texture
+    // raises INVALID_OPERATION. Lit cells are packed from slot 0 (see WebGLClusterCullPass), so a
+    // clamped table only drops cells beyond the capacity instead of breaking all clustered lights.
+    const maxTextureSize = this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE) as number;
+    const indexHeight = Math.min(
+      Math.max(1, Math.ceil(indexCount / CLUSTER_TEX_WIDTH)),
+      maxTextureSize,
+    );
 
     // setSize() re-allocates whenever the grid dims change: free the previous pair first.
     if (this._clusterGridTex) this.gl.deleteTexture(this._clusterGridTex);
@@ -411,6 +424,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     this._clusterDims = dims;
     this._clusterMaxLightsPerCluster = Math.max(1, maxLightsPerCluster);
+    this._clusterIndexCapacity = indexHeight * CLUSTER_TEX_WIDTH;
   }
 
   /**

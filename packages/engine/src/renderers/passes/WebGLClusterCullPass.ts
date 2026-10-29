@@ -66,8 +66,10 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
     const tileSizePx = renderer.quality.clusteredLighting?.tileSize ?? DEFAULT_CLUSTER_TILE_SIZE;
     const numClusters = dims.x * dims.y * dims.z;
     const gridHeight = Math.max(1, Math.ceil(numClusters / CLUSTER_TEX_WIDTH));
-    const indexCount = numClusters * maxLightsPerCluster;
-    const indexHeight = Math.max(1, Math.ceil(indexCount / CLUSTER_TEX_WIDTH));
+    // The renderer clamps the index texture to MAX_TEXTURE_SIZE rows, so size everything from
+    // what it really allocated, never from numClusters * maxLightsPerCluster.
+    const indexCapacity = renderer.clusterIndexCapacity;
+    const indexHeight = indexCapacity / CLUSTER_TEX_WIDTH;
 
     renderer.writeClusterGridUniforms(tileSizePx);
 
@@ -112,6 +114,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
         renderer,
         dims,
         maxLightsPerCluster,
+        indexCapacity,
         near,
         far,
       );
@@ -129,6 +132,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
         renderer,
         dims,
         maxLightsPerCluster,
+        indexCapacity,
         near,
         far,
       );
@@ -149,6 +153,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
     renderer: WebGL2Renderer,
     dims: { x: number; y: number; z: number },
     maxLightsPerCluster: number,
+    indexCapacity: number,
     near: number,
     far: number,
   ): void {
@@ -190,6 +195,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
           const count = this._pointCounts[cell]!;
           if (count >= maxLightsPerCluster) continue;
           if (0 === count) {
+            if (this._pointNext + maxLightsPerCluster > indexCapacity) continue;
             this._grid[cell * 4 + 0] = this._pointNext;
             this._pointNext += maxLightsPerCluster;
           }
@@ -213,6 +219,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
     renderer: WebGL2Renderer,
     dims: { x: number; y: number; z: number },
     maxLightsPerCluster: number,
+    indexCapacity: number,
     near: number,
     far: number,
   ): void {
@@ -254,6 +261,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
           const count = this._spotCounts[cell]!;
           if (count >= maxLightsPerCluster) continue;
           if (0 === count) {
+            if (this._spotNext + maxLightsPerCluster > indexCapacity) continue;
             this._grid[cell * 4 + 2] = this._spotNext;
             this._spotNext += maxLightsPerCluster;
           }

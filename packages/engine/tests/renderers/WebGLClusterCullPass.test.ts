@@ -47,6 +47,8 @@ function makeMockWebGL2Renderer(numClusters: { x: number; y: number; z: number }
     webglContext: gl,
     clusterDims: numClusters,
     clusterMaxLightsPerCluster: 16,
+    clusterIndexCapacity:
+      Math.ceil((numClusters.x * numClusters.y * numClusters.z * 16) / 1024) * 1024,
     quality: { clusteredLighting: { tileSize: 64 } },
     writeClusterGridUniforms: vi.fn(),
     clusterGridTexture: {},
@@ -166,5 +168,79 @@ describe("WebGLClusterCullPass (BLK-R1 Regression)", () => {
     const indexUpload = gl.texSubImage2D.mock.calls[1]!;
     expect(indexUpload[5]).toBe(Math.max(1, Math.ceil(internals._pointNext / 1024)));
     expect(indexUpload[5]).toBeLessThan(713);
+  });
+
+  it("clamps the index texture to MAX_TEXTURE_SIZE and never uploads or indexes past it", () => {
+    // Showcase 39 on a 2268x1029 canvas: 8 px tiles x 64 slices = 284x129x64 clusters, whose
+    // 16-slot index table needs 36636 rows -- far beyond MAX_TEXTURE_SIZE (16384 there).
+    const dims = { x: 284, y: 129, z: 64 };
+    const maxTextureSize = 64;
+    const gl = {
+      MAX_TEXTURE_SIZE: 0x0d33,
+      RGBA32UI: 1,
+      RG32UI: 2,
+      RGBA_INTEGER: 3,
+      RG_INTEGER: 4,
+      getParameter: vi.fn(() => maxTextureSize),
+      createTexture: vi.fn(() => ({})),
+      deleteTexture: vi.fn(),
+      bindTexture: vi.fn(),
+      texParameteri: vi.fn(),
+      texImage2D: vi.fn(),
+    };
+    const owner = Object.create(WebGL2Renderer.prototype) as { gl: unknown };
+    owner.gl = gl;
+    (
+      owner as unknown as { _allocateClusterTextures(d: typeof dims, m: number): void }
+    )._allocateClusterTextures(dims, 16);
+    const indexAlloc = gl.texImage2D.mock.calls.find((c) => c[2] === gl.RG32UI)!;
+    expect(indexAlloc[4]).toBe(maxTextureSize);
+    const capacity = (owner as unknown as WebGL2Renderer).clusterIndexCapacity;
+    expect(capacity).toBe(maxTextureSize * 1024);
+
+    const pass = new WebGLClusterCullPass();
+    const mock = makeMockWebGL2Renderer({ x: 16, y: 16, z: 16 });
+    const renderer = mock.renderer as { clusterIndexCapacity: number; quality: unknown };
+    // 4096 clusters x 16 slots would need 64 rows; give it only 2 rows (128 lit cells).
+    renderer.clusterIndexCapacity = 2 * 1024;
+    renderer.quality = { clusteredLighting: { tileSize: [16, 16] } };
+    const light = new PointLight({ distance: 50 });
+    light.position.set(0, 0, -5);
+    light.updateMatrixWorld();
+    const vp = new Float32Array(16);
+    vp[0] = 1;
+    vp[5] = 1;
+    vp[10] = 1;
+    vp[15] = 1;
+    const projMatrix = new Float32Array(16);
+    projMatrix[0] = 1;
+    projMatrix[5] = 1;
+    pass.execute(
+      renderer as unknown as WebGL2Renderer,
+      new Scene(),
+      vp,
+      new Vector3D(0, 0, 0),
+      undefined,
+      { opaqueLookup: new Map(), opaqueBatches: [], transparent: [], decals: [] },
+      {
+        pLights: [light],
+        sLights: [],
+        aLights: [],
+        aCol: new Color(0, 0, 0),
+        aIntensity: 0,
+        dDir: new Vector3D(0, -1, 0),
+        dCol: new Color(1, 1, 1),
+        dIntensity: 0,
+      },
+      0.1,
+      100,
+      projMatrix,
+    );
+
+    const internals = pass as unknown as { _pointNext: number; _indices: Uint32Array };
+    expect(internals._pointNext).toBe(2 * 1024);
+    expect(internals._indices.length).toBe(2 * 1024 * 2);
+    const indexUpload = mock.gl.texSubImage2D.mock.calls[1]!;
+    expect(indexUpload[5]).toBe(2);
   });
 });
