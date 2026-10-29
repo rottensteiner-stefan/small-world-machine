@@ -45,14 +45,14 @@ HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
 import { BoundingBox, Texture } from "@small-world-machine/engine";
 
 describe("Showcase 6 - Complete Plaque & Geometry Verification", () => {
-  let Showcase6Class: typeof import("../6/showcase.js").Showcase6;
+  let Showcase6Class: typeof import("../6/showcase.js").Showcase;
 
   beforeAll(async () => {
     vi.spyOn(Texture, "fromUrl").mockResolvedValue(
       Texture.fromCanvas(document.createElement("canvas")),
     );
     const mod = await import("../6/showcase.js");
-    Showcase6Class = mod.Showcase6;
+    Showcase6Class = mod.Showcase;
   }, 20000);
 
   const expectedGeometries = [

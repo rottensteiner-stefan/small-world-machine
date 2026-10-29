@@ -25,7 +25,7 @@ import {
   TurbulenceAffector,
 } from "@small-world-machine/vfx-extras";
 
-class Showcase22 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _accretionDisk!: AccretionDiskEmitter;
   private _particleRenderer!: ParticleMeshRenderer;
 
@@ -168,5 +168,5 @@ class Showcase22 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase22();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase22] Failed to start:", err));

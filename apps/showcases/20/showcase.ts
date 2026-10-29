@@ -30,7 +30,7 @@ import {
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 
-class Showcase20 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   protected async setupScene(): Promise<void> {
     // 0. Enable Post Processing for Tron Bloom!
     this.renderer.postProcessing.enabled = true;
@@ -238,6 +238,6 @@ class Showcase20 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase20();
+const app = new Showcase();
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase20] Failed to start:", err));

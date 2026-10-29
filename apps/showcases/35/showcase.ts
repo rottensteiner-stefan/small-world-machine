@@ -26,7 +26,7 @@ const SPACING = 1.4;
  * roughness increases bottom-to-top, all sharing one base color. Lets the same shading model be
  * compared visually across WebGL1/WebGL2/WebGPU via `?rendererType=`.
  */
-class Showcase35 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   constructor(options: EngineOptions = {}) {
     super({
       canvasId: "SmallWorldMachine",
@@ -92,6 +92,6 @@ class Showcase35 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase35();
+const app = new Showcase();
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase35] Failed to start:", err));

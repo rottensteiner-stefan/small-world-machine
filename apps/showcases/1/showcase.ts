@@ -151,7 +151,7 @@ const COLOR_SWATCHES = [
   { name: "Pure White", hex: "#ffffff" },
 ];
 
-class Showcase1 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _activeMesh!: Object3D;
   private _phongMaterial!: PhongMaterial;
   private _wireframeMaterial!: WireframeMaterial;
@@ -316,5 +316,5 @@ class Showcase1 extends AbstractShowcase {
 }
 
 // === START THE ENGINE ===
-const app = new Showcase1();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase1] Failed to start:", err));

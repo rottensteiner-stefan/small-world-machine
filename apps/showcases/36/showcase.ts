@@ -21,7 +21,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 
-class Showcase36 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {
     // Post-Processing pipeline: ACES Filmic Tone Mapping + sharp glass edge Bloom
     this.renderer.postProcessing.enabled = true;
@@ -136,7 +136,7 @@ class Showcase36 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase36({
+const app = new Showcase({
   rendererType: RendererType.WEB_GPU,
 });
 app.start().catch((err: unknown) => console.error("[Showcase36] Failed to start:", err));

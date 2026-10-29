@@ -63,7 +63,7 @@ interface CameraPreset {
  *    - [1] / [2]: Switch Sun Angle (High Noon vs. Low Dramatic Golden Angle)
  *    - [V]: Switch Camera Navigation (Orbit vs. Free-Fly)
  */
-class Showcase39 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _sunLight!: DirectionalLight;
   private _ambientLight!: AmbientLight;
   private _altarLight!: PointLight;
@@ -1175,10 +1175,10 @@ class Showcase39 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase39();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase39] Failed to start:", err));
 // QA instrumentation hook for the browser capture scripts (same convention as Showcase 28).
 if (typeof window !== "undefined") {
-  const w = window as Window & { __showcase39?: Showcase39 };
+  const w = window as Window & { __showcase39?: Showcase };
   w.__showcase39 = app;
 }

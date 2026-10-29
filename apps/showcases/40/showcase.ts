@@ -83,7 +83,7 @@ function normalBufferMode(): boolean | "auto" {
 /** `?unlit=1` makes every probe decal unlit (flat albedo, no light loop). */
 const UNLIT = new URLSearchParams(location.search).get("unlit") === "1";
 
-class DecalProbe extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {
     this.defaultFov = (60 * Math.PI) / 180;
     this.defaultFar = 100;
@@ -276,8 +276,8 @@ class DecalProbe extends AbstractShowcase {
   }
 }
 
-const app = new DecalProbe({
+const app = new Showcase({
   quality: { normalBuffer: normalBufferMode() },
 });
-(window as unknown as { app: DecalProbe }).app = app;
+(window as unknown as { app: Showcase }).app = app;
 app.start().catch((err: unknown) => console.error("[DecalProbe] Failed to start:", err));

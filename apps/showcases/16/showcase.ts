@@ -16,7 +16,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 
-export class Showcase16 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   protected _orbitingLight!: PointLight;
   protected _time: number = 0;
 
@@ -301,7 +301,7 @@ export class Showcase16 extends AbstractShowcase {
 }
 
 // === START THE ENGINE ===
-const app = new Showcase16({
+const app = new Showcase({
   rendererType: RendererType.BEST,
 });
 app.start().catch((err: unknown) => console.error("[Showcase16] Failed to start:", err));

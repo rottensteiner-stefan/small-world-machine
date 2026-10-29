@@ -14,7 +14,7 @@ import {
   WireframeMaterial,
 } from "@small-world-machine/engine";
 
-class Showcase3 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _carModel: Object3D | undefined;
 
   protected override async setupScene(): Promise<void> {
@@ -81,5 +81,5 @@ class Showcase3 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase3();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase3] Failed to start:", err));

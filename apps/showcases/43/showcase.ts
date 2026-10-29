@@ -50,7 +50,7 @@ const CUSTOM_PRESET = -1;
  * camera, material presets and roughness/metallic/color, key-light angles, optional IBL and a 1m
  * grid. Key `0` restores the exact golden reference state.
  */
-class Showcase43 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private readonly _golden: GoldenSpec | undefined;
   private _ballMaterial: StandardMaterial | undefined;
   private _key: DirectionalLight | undefined;
@@ -414,5 +414,5 @@ class Showcase43 extends AbstractShowcase {
 }
 
 // === START THE ENGINE ===
-const app = new Showcase43();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase43] Failed to start:", err));

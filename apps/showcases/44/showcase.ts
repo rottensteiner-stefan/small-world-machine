@@ -71,7 +71,7 @@ interface MutableDrawContext {
   drawElementsInstanced: (...args: number[]) => void;
 }
 
-class Showcase44 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _instancingOn: boolean;
   private _count: number;
   private readonly _targetFrames: number;
@@ -444,7 +444,7 @@ class Showcase44 extends AbstractShowcase {
     };
     const message = `MEASURE ${JSON.stringify(result)}`;
     this._writeStatus(message);
-    console.info(`[Showcase44 MEASURE] ${JSON.stringify(result)}`);
+    console.info(`[Showcase MEASURE] ${JSON.stringify(result)}`);
   }
 
   private _writeStatus(message: string): void {
@@ -462,5 +462,5 @@ class Showcase44 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase44();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase44] failed to start:", err));

@@ -63,7 +63,7 @@ export function parseGoldenSpec(): GoldenSpec | undefined {
   return { poolKeyRaw, view: "main", frames };
 }
 
-/** Showcase-specific actions the capture needs but that touch private members of {@link Showcase38}. */
+/** Showcase-specific actions the capture needs but that touch private members of {@link Showcase}. */
 export interface GoldenCaptureOptions {
   /** Freezes every torch/brazier flame to its base intensity and scale (removes flicker nondeterminism). */
   disableFlicker(): void;

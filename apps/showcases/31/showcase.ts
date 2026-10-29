@@ -49,7 +49,7 @@ const PILLAR_SPACING = 4;
  * tiled crevices, bloom on the light shaft/emissive moss/emergency lamps, `OpenWaterMaterial`
  * on the flooded trenches, and instanced foliage/debris.
  */
-class Showcase31 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _sunLight!: DirectionalLight;
   private _emergencyLights: PointLight[] = [];
   private _vineRoots: Object3D[] = [];
@@ -756,6 +756,6 @@ class Showcase31 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase31();
+const app = new Showcase();
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase31] Failed to start:", err));

@@ -377,7 +377,7 @@ export const POOL_PRESETS: readonly PoolPreset[] = [
       [crate(), -0.9, -0.6],
       [ball([0.92, 0.92, 0.92], 0.32), 0.9, 0.5],
     ],
-    // The first two floaters and the dropper drive the three ripple centers (see Showcase10.update).
+    // The first two floaters and the dropper drive the three ripple centers (see Showcase.update).
     floating: [
       [ball([0.96, 0.96, 0.96], 0.36), -1.1, 1.1, 0.1, 1.8],
       [crate(), 1.1, -0.9, 0.09, 2.2],

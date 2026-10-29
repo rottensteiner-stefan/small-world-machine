@@ -28,7 +28,7 @@ import fragGLSL100 from "@small-world-machine/engine/core/materials/surface/shad
 import { MarbleController } from "./MarbleController.js";
 import { DroneController } from "./DroneController.js";
 
-class Showcase23 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   protected override defaultCameraController = "none" as const;
 
   private _marble: Object3D | null = null;
@@ -632,5 +632,5 @@ class Showcase23 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase23();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase23] Failed to start:", err));

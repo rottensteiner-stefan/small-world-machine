@@ -18,7 +18,7 @@ import {
  * Showcase 2: Interactive camera (FPS-style) and keyboard input.
  * Shows how to move the camera with mouse and keyboard.
  */
-export class Showcase2 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _moveSpeed: number = 10.0;
 
   /** @inheritdoc */
@@ -112,5 +112,5 @@ export class Showcase2 extends AbstractShowcase {
 }
 
 // === START THE ENGINE ===
-const app = new Showcase2();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase2] Failed to start:", err));

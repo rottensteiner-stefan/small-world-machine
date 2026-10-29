@@ -14,7 +14,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 
-class Showcase13 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _helmet?: Object3D;
   private _keySpotLight?: SpotLight;
   private _time: number = 0;
@@ -172,7 +172,7 @@ class Showcase13 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase13({
+const app = new Showcase({
   rendererType: RendererType.WEB_GPU,
 });
 app.start().catch((err: unknown) => console.error("[Showcase13] Failed to start:", err));

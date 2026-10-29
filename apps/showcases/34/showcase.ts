@@ -76,7 +76,7 @@ function buildTree(): Object3D {
  * call), plus a row of `ImposterSprite` trees -- baked once at startup via `bakeImposter()` --
  * standing right next to real 3D comparison trees so the swap is visible up close.
  */
-class Showcase34 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _grass!: BillboardInstancer;
   private _imposterTrees: ImposterSprite[] = [];
 
@@ -252,6 +252,6 @@ class Showcase34 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase34();
+const app = new Showcase();
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase34] Failed to start:", err));

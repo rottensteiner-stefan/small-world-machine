@@ -630,7 +630,7 @@ function buildInterrogationRoom(
 // 4. Monitor View Application
 // ============================================================================
 
-class Showcase14 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _lightBulb?: Object3D;
   private _swingLight?: SpotLight;
   private _redBlueLight?: PointLight;
@@ -1006,17 +1006,17 @@ class Showcase14 extends AbstractShowcase {
 // 5. Bootstrapping
 // ============================================================================
 
-const cleanApp = new Showcase14("SmallWorldMachine-1", "clean");
-const nvApp = new Showcase14("SmallWorldMachine-2", "nightvision");
-const noirApp = new Showcase14("SmallWorldMachine-3", "noir");
-const cyberApp = new Showcase14("SmallWorldMachine-4", "cyber");
-const tapeApp = new Showcase14("SmallWorldMachine-5", "tape");
-const amberApp = new Showcase14("SmallWorldMachine-6", "underworld");
-const projectorApp = new Showcase14("SmallWorldMachine-7", "projector");
-const thermalApp = new Showcase14("SmallWorldMachine-8", "thermal");
-const comicApp = new Showcase14("SmallWorldMachine-9", "comic");
+const cleanApp = new Showcase("SmallWorldMachine-1", "clean");
+const nvApp = new Showcase("SmallWorldMachine-2", "nightvision");
+const noirApp = new Showcase("SmallWorldMachine-3", "noir");
+const cyberApp = new Showcase("SmallWorldMachine-4", "cyber");
+const tapeApp = new Showcase("SmallWorldMachine-5", "tape");
+const amberApp = new Showcase("SmallWorldMachine-6", "underworld");
+const projectorApp = new Showcase("SmallWorldMachine-7", "projector");
+const thermalApp = new Showcase("SmallWorldMachine-8", "thermal");
+const comicApp = new Showcase("SmallWorldMachine-9", "comic");
 
-const apps: Showcase14[] = [
+const apps: Showcase[] = [
   cleanApp,
   nvApp,
   noirApp,

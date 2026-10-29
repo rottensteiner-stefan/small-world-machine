@@ -186,7 +186,7 @@ export class GoldenCapture {
       await new Promise<void>((resolve) => window.setTimeout(resolve, GOLDEN_SOAK_MS));
       this._applyCamera(poolWorldPosition(spec.poolKeyRaw as PoolKey), spec.view);
       this._resetSimulation();
-      // Pool behaviors were attached frozen (see `Showcase10._attachPoolBehavior`) so the pre-golden
+      // Pool behaviors were attached frozen (see `Showcase._attachPoolBehavior`) so the pre-golden
       // realtime frames could not advance them by an unknown amount. Wake them now: they are
       // still in their pristine constructor state, so the fixed-timestep simulation below is
       // fully reproducible.

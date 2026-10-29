@@ -9,7 +9,7 @@ import {
   TextTexture,
 } from "@small-world-machine/engine";
 
-class Showcase26 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _textTexture: TextTexture | undefined;
   private _time: number = 0;
   private _lastUpdate: number = 0;
@@ -63,5 +63,5 @@ class Showcase26 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase26();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase26] Failed to start:", err));

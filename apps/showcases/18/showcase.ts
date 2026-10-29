@@ -12,7 +12,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 
-class Showcase18 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _threadPool: ThreadPool;
   private _calculating: boolean = false;
   private _terrainMesh: Object3D | null = null;
@@ -165,10 +165,10 @@ class Showcase18 extends AbstractShowcase {
     try {
       if (useWorker) {
         // Run on background thread. Arrays are passed back via zero-copy transferables.
-        result = await this._threadPool.execute(Showcase18._generateTerrainChunk, terrainSettings);
+        result = await this._threadPool.execute(Showcase._generateTerrainChunk, terrainSettings);
       } else {
         // Block main thread!
-        result = Showcase18._generateTerrainChunk(terrainSettings);
+        result = Showcase._generateTerrainChunk(terrainSettings);
       }
 
       const elapsed = performance.now() - startTime;
@@ -221,7 +221,7 @@ class Showcase18 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase18({
+const app = new Showcase({
   rendererType: RendererType.BEST,
 });
 app.start().catch((err: unknown) => console.error("[Showcase18] Failed to start:", err));

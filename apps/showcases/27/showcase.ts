@@ -28,7 +28,7 @@ import {
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 
-class Showcase27 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _ringGroup!: Object3D;
   private _innerRings: Object3D[] = [];
   private _planetOrbit!: Object3D;
@@ -518,11 +518,11 @@ class Showcase27 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase27();
+const app = new Showcase();
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase27] Failed to start:", err));
 // QA instrumentation hook for the browser capture scripts (same convention as Showcases 28/39).
 if (typeof window !== "undefined") {
-  const w = window as Window & { __showcase27?: Showcase27 };
+  const w = window as Window & { __showcase27?: Showcase };
   w.__showcase27 = app;
 }

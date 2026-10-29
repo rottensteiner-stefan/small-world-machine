@@ -32,10 +32,10 @@ interface Ball {
 
 interface BallContext {
   ball: Ball;
-  example: Showcase15;
+  example: Showcase;
 }
 
-export class Showcase15 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   protected _balls: Ball[] = [];
   protected _largeSpheres: { object: Object3D; radius: number; x: number; y: number; z: number }[] =
     [];
@@ -277,7 +277,7 @@ export class Showcase15 extends AbstractShowcase {
         `MainBalls_${c}`,
         ballGeom,
         ballMat,
-        Showcase15.MAX_PER_GROUP,
+        Showcase.MAX_PER_GROUP,
       );
       mainMesh.frustumCulled = false;
       this.scene.add(mainMesh);
@@ -285,7 +285,7 @@ export class Showcase15 extends AbstractShowcase {
     }
 
     // 7. Spawn Bouncing Ball Data (pre-allocate full capacity; only _activeBallCount are simulated)
-    for (let i = 0; i < Showcase15.MAX_BALLS; i++) {
+    for (let i = 0; i < Showcase.MAX_BALLS; i++) {
       const ball: Partial<Ball> = {
         position: { x: 0, y: 0, z: 0 },
         velocity: { x: 0, y: 0, z: 0 },
@@ -467,7 +467,7 @@ export class Showcase15 extends AbstractShowcase {
 
     // 3. Construct and upload instance matrices
     const active = this._activeBallCount;
-    for (let i = 0; i < Showcase15.MAX_BALLS; i++) {
+    for (let i = 0; i < Showcase.MAX_BALLS; i++) {
       const ball = this._balls[i]!;
       const colorIdx = i % 5;
       const instanceIdx = Math.floor(i / 5);
@@ -499,7 +499,7 @@ export class Showcase15 extends AbstractShowcase {
 }
 
 // === START THE ENGINE ===
-const app = new Showcase15({
+const app = new Showcase({
   rendererType: RendererType.BEST,
 });
 app.start().catch((err: unknown) => console.error("[Showcase15] Failed to start:", err));

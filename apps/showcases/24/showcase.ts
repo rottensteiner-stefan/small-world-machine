@@ -275,7 +275,7 @@ class ScreenCurvatureBehavior extends Behavior {
   }
 }
 
-class Showcase24 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _api: "webgl2" | "webgpu";
 
   constructor(container: HTMLElement) {
@@ -747,7 +747,7 @@ function init(): void {
   const container = document.getElementById("container") as HTMLElement;
   container.innerHTML = '<canvas id="canvas23"></canvas>';
 
-  const engine = new Showcase24(document.getElementById("canvas23") as HTMLElement);
+  const engine = new Showcase(document.getElementById("canvas23") as HTMLElement);
   engine.start().catch((err: unknown) => console.error("[Showcase24] Failed to start:", err));
 }
 

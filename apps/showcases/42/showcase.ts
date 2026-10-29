@@ -67,7 +67,7 @@ function parseNum(p: URLSearchParams, key: string, fallback: number): number {
  * off the floor to watch PCSS contact-hardening soften in real time, toggle `PCSS` vs. `EVSM`,
  * adjust penumbra softness / max PCF radius, steer the sun, and orbit the camera.
  */
-export class Showcase42 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _softness: number;
   private _maxRadius: number;
   /** "pcss" (default) keeps the legacy path byte-identical; "evsm" renders EVSM moments (ADR 0043). */
@@ -594,5 +594,5 @@ export class Showcase42 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase42();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase42] Failed to start:", err));

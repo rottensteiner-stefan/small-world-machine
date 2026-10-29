@@ -102,7 +102,7 @@ interface BuiltPool {
  * on a lush meadow landscape, showcasing all engine-known liquid materials, shader presets, and
  * extension hooks side-by-side. The pools themselves are data: see `PoolPresets.ts`.
  */
-export class Showcase10 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private readonly _moveSpeed: number = 12.0;
   private readonly _startEyeHeight: number = 18.0;
   private readonly _minEyeHeight: number = 0.1;
@@ -941,5 +941,5 @@ export class Showcase10 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase10();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase10] Failed to start:", err));

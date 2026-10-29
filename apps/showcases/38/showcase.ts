@@ -41,7 +41,7 @@ interface CameraPreset {
   target: Vector3D;
 }
 
-class Showcase38 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _sunLight!: DirectionalLight;
   private _ambientLight!: AmbientLight;
   private _toneMapping!: ToneMappingElement;
@@ -1685,7 +1685,7 @@ class Showcase38 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase38({
+const app = new Showcase({
   rendererType: RendererType.BEST,
 });
 app.start().catch((err: unknown) => console.error("[Showcase38] Failed to start:", err));

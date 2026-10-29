@@ -64,7 +64,7 @@ export function parseGoldenSpec(): GoldenSpec | undefined {
   return { poolKeyRaw, view: "main", frames };
 }
 
-/** Showcase-specific actions the capture needs but that touch private members of {@link Showcase39}. */
+/** Showcase-specific actions the capture needs but that touch private members of {@link Showcase}. */
 export interface GoldenCaptureOptions {
   /** Resets the showcase's animation clock (`_time`) to its pristine origin. */
   resetClock(): void;

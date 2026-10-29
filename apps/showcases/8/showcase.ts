@@ -15,7 +15,7 @@ import {
 /**
  * Showcase 8: Clean rebuild with Skydome, Reference Cubes, WASD/QE movement.
  */
-export class Showcase8 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private readonly _moveSpeed: number = 15.0;
   private readonly _eyeHeight: number = 2.0;
 
@@ -82,5 +82,5 @@ export class Showcase8 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase8();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase8] Failed to start:", err));

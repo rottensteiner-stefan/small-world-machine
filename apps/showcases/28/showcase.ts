@@ -31,7 +31,7 @@ import { SPECTRAL_RAY_LENGTH, computeSpectralRays } from "./optics.js";
  * Benchmark testing transmission, optical dispersion, spectral split,
  * and high-refractive glass polyhedra under coherent laser illumination.
  */
-class Showcase28 extends AbstractShowcase implements LabInspectorHost {
+export class Showcase extends AbstractShowcase implements LabInspectorHost {
   private _turntable!: Object3D;
   private _prismMesh!: Object3D;
   private _laserLight!: SpotLight;
@@ -632,13 +632,13 @@ class Showcase28 extends AbstractShowcase implements LabInspectorHost {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase28();
+const app = new Showcase();
 attachDevTools(app);
 // QA instrumentation hook for the browser capture scripts. Set unconditionally -- the example is
 // browser-only, the property is inert, and the repo typechecks without "vite/client" in the
 // tsconfig "types", so an import.meta.env guard would only trip the compiler for no gain here.
 if (typeof window !== "undefined") {
-  const w = window as Window & { __showcase28?: Showcase28 };
+  const w = window as Window & { __showcase28?: Showcase };
   w.__showcase28 = app;
 }
 app.start().catch((err: unknown) => console.error("[Showcase28] Failed to start:", err));

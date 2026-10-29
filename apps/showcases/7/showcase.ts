@@ -14,7 +14,7 @@ import {
  * Showcase 7: Skybox & FPS Controls.
  * This example showcases a pure skybox environment without a physical floor.
  */
-export class Showcase7 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _moveSpeed: number = 15.0;
   private _eyeHeight: number = 2.0;
 
@@ -59,5 +59,5 @@ export class Showcase7 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase7();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase7] Failed to start:", err));

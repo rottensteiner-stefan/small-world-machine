@@ -46,7 +46,7 @@ const HOT_ZONE_Z = -16;
  * ground-hugging toxic dust layer around the hot zone, both `InstancedMesh`-backed with zero
  * renderer changes. Also exercises the engine's built-in `Fog` (EXP2) for the toxic haze.
  */
-class Showcase32 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _hotZoneLight!: PointLight;
   private _ashfall!: WeatherEmitter;
   private _groundDust!: WeatherEmitter;
@@ -402,6 +402,6 @@ class Showcase32 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase32();
+const app = new Showcase();
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase32] Failed to start:", err));

@@ -193,7 +193,7 @@ const PUDDLE_BASINS = [
  *
  * Keys: C = street / puddle camera, N = night / day mood, F = next liquid (drop-impact system).
  */
-class Showcase30 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _neonSignMagenta!: Object3D;
   private _neonSignCyan!: Object3D;
   private _spotTeal!: SpotLight;
@@ -928,7 +928,7 @@ class Showcase30 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase30();
+const app = new Showcase();
 attachDevTools(app);
-(window as unknown as { __app: Showcase30 }).__app = app;
+(window as unknown as { __app: Showcase }).__app = app;
 app.start().catch((err: unknown) => console.error("[Showcase30] Failed to start:", err));

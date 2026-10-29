@@ -115,7 +115,7 @@ interface FireRig {
  * torches, a row of wall torches under a FireLightBudget, a small campfire and a candle, at night
  * on ashlar slabs against a masonry wall.
  */
-export class Showcase45 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private readonly _fires: FireRig[] = [];
   private readonly _budget: FireLightBudget = new FireLightBudget({
     maxActive: DEFAULT_LIGHT_BUDGET,
@@ -461,5 +461,5 @@ export class Showcase45 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase45();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase45] Failed to start:", err));

@@ -106,7 +106,7 @@ function createFallbackTexture(name: string, accentColor: string): Texture {
  * 1) 2.5D Diorama (Layered 3D geometry with camera orbit & parallax)
  * 2) Full-Screen Canvas Shader (Single flat 2D image transformed into metal relief)
  */
-export class MetalReliefShowcase extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   protected override defaultCameraController: "fly" | "orbit" | "none" = "orbit";
 
   private _displayMode: "fullscreen" | "diorama" | "studio" = "fullscreen";
@@ -1362,8 +1362,8 @@ export class MetalReliefShowcase extends AbstractShowcase {
 
 // Auto-boot if not in a test runner
 if (typeof window !== "undefined" && !("__VITEST__" in window)) {
-  const showcase = new MetalReliefShowcase();
+  const showcase = new Showcase();
   showcase.start().catch((err: unknown) => {
-    console.error("MetalReliefShowcase boot error:", err);
+    console.error("Showcase boot error:", err);
   });
 }

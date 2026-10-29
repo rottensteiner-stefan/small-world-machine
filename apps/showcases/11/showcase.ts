@@ -18,7 +18,7 @@ import {
  * Showcase 11: Orientation
  * Displays a ground grid centered at (0,0,0) to showcasesnstrate the coordinate system.
  */
-class Showcase11 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {
     // Setup input listeners (e.g. pointer lock)
     this.onCanvasRecreated();
@@ -89,5 +89,5 @@ class Showcase11 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase11();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase11] Failed to start:", err));

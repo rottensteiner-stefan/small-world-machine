@@ -28,7 +28,7 @@ import {
 } from "@small-world-machine/engine";
 import { box } from "../shared/prim.js";
 
-class Showcase37 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _refCamPos = new Vector3D(0.65, 1.15, 2.45);
   private _refCamTarget = new Vector3D(-0.1, 0.85, -0.5);
 
@@ -1173,7 +1173,7 @@ class Showcase37 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase37({
+const app = new Showcase({
   rendererType: RendererType.BEST,
 });
 app.start().catch((err: unknown) => console.error("[Showcase37] Failed to start:", err));

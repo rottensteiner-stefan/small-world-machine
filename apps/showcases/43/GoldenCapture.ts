@@ -62,7 +62,7 @@ export function parseGoldenSpec(): GoldenSpec | undefined {
   return { poolKeyRaw, view: "main", frames };
 }
 
-/** Showcase-specific action the capture needs but that touches private members of {@link Showcase43}. */
+/** Showcase-specific action the capture needs but that touches private members of {@link Showcase}. */
 export interface GoldenCaptureOptions {
   /** Applies one material variant (index into the showcase's `_MATERIALS`) to the PBR ball. */
   applyMaterial(index: number): void;

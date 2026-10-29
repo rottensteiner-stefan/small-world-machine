@@ -38,7 +38,7 @@ import type { SponzaLightingHudHost, SponzaParam, SponzaToggle } from "./Hud.js"
  * simulated diffuse GI bounce, warm cloister lanterns, and atmospheric god rays (off by
  * default -- toggle with [V] or the "God Rays" checkbox in the tuning HUD).
  */
-class Showcase29 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _sunLight!: DirectionalLight;
   private _ambientLight!: AmbientLight;
   private _archBounceLights: (PointLight | SpotLight)[] = [];
@@ -565,7 +565,7 @@ class Showcase29 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase29();
-(window as unknown as { swApp: Showcase29 }).swApp = app;
+const app = new Showcase();
+(window as unknown as { swApp: Showcase }).swApp = app;
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase29] Failed to start:", err));

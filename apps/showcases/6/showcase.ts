@@ -71,7 +71,7 @@ import { attachDevTools } from "@small-world-machine/tools";
 /**
  * Showcase 6: Geometry Showcase.
  */
-export class Showcase6 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _moveSpeed: number = 10.0;
 
   /** @inheritdoc */
@@ -746,6 +746,6 @@ export class Showcase6 extends AbstractShowcase {
   protected override update(): void {}
 }
 
-const app = new Showcase6();
+const app = new Showcase();
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase6] Failed to start:", err));

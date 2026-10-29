@@ -44,7 +44,7 @@ const PENTATONIC_SCALE = [
   880.0, // A5
 ];
 
-class Showcase21 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _spheres: Object3D[] = [];
   private _spherePool: Object3D[] = [];
   private _spawnTimer: number = 0;
@@ -258,5 +258,5 @@ class Showcase21 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase21();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase21] Failed to start:", err));

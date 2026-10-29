@@ -17,7 +17,7 @@ import {
 
 const CAR_SPEED: number = 10.0; // The car's speed
 
-export class Showcase4 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _targetPos: Vector3D = new Vector3D();
   private _car: Object3D | undefined = undefined; // The car object
   private _terrainManager: TerrainManager | undefined = undefined;
@@ -131,5 +131,5 @@ export class Showcase4 extends AbstractShowcase {
 }
 
 // === START THE ENGINE ===
-const app = new Showcase4();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase4] Failed to start:", err));

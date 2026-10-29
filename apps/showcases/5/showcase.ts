@@ -18,7 +18,7 @@ import {
 /**
  * Showcase 5: Grid-based Movement with Enemies.
  */
-export class Showcase5 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   protected override defaultCameraController = "none" as const;
 
   private _player!: Object3D;
@@ -203,5 +203,5 @@ export class Showcase5 extends AbstractShowcase {
 }
 
 // === START THE ENGINE ===
-const app = new Showcase5();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase5] Failed to start:", err));

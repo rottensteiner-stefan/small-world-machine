@@ -16,7 +16,7 @@ import {
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 
-class Showcase19 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   constructor(options: EngineOptions = {}) {
     super({
       canvasId: "SmallWorldMachine",
@@ -142,6 +142,6 @@ class Showcase19 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase19();
+const app = new Showcase();
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase19] Failed to start:", err));

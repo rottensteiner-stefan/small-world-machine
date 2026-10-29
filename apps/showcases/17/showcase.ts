@@ -11,7 +11,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 
-class Showcase17 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _cubes: Object3D[] = [];
   private _threadPool: ThreadPool;
   private _calculating: boolean = false;
@@ -105,7 +105,7 @@ class Showcase17 extends AbstractShowcase {
     const startTime = performance.now();
     // Blocking the main thread!
     // The browser will freeze, the cubes will stop spinning.
-    const result = Showcase17._heavyMathLogic({ limit: 5000000 });
+    const result = Showcase._heavyMathLogic({ limit: 5000000 });
     const elapsed = performance.now() - startTime;
 
     this._setUiResult(`Main Thread finished in ${elapsed.toFixed(0)}ms. Primes found: ${result}`);
@@ -121,7 +121,7 @@ class Showcase17 extends AbstractShowcase {
     // Non-blocking! Handing off to the ThreadPool.
     // The cubes will continue spinning smoothly.
     try {
-      const result = await this._threadPool.execute(Showcase17._heavyMathLogic, { limit: 5000000 });
+      const result = await this._threadPool.execute(Showcase._heavyMathLogic, { limit: 5000000 });
       const elapsed = performance.now() - startTime;
       this._setUiResult(
         `Worker Thread finished in ${elapsed.toFixed(0)}ms. Primes found: ${result}`,
@@ -154,7 +154,7 @@ class Showcase17 extends AbstractShowcase {
   }
 }
 
-const app = new Showcase17({
+const app = new Showcase({
   rendererType: RendererType.BEST,
 });
 app.start().catch((err: unknown) => console.error("[Showcase17] Failed to start:", err));

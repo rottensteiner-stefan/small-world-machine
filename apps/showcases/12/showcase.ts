@@ -330,7 +330,7 @@ class CrateSpawnerBehavior extends Behavior {
   }
 }
 
-class Showcase12 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _portLight!: SpotLight;
   private _portLightBehavior!: FlickerBehavior;
   private _portLightBaseIntensity: number = 10.0;
@@ -1464,5 +1464,5 @@ class Showcase12 extends AbstractShowcase {
 }
 
 // === START THE ENGINE ===
-const app = new Showcase12();
+const app = new Showcase();
 app.start().catch((err: unknown) => console.error("[Showcase12] Failed to start:", err));

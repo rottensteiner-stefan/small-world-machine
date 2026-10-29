@@ -30,7 +30,7 @@ const WALL_Z = -8;
  * you orbit around the wall's edge -- and the console readout confirms the pipeline is doing
  * real work even when nothing visibly changes.
  */
-class Showcase33 extends AbstractShowcase {
+export class Showcase extends AbstractShowcase {
   private _logTimer = 0;
 
   constructor(options: EngineOptions = {}) {
@@ -139,6 +139,6 @@ class Showcase33 extends AbstractShowcase {
 // ----------------------------------------------------------------------------
 // Bootstrap the example
 // ----------------------------------------------------------------------------
-const app = new Showcase33();
+const app = new Showcase();
 attachDevTools(app);
 app.start().catch((err: unknown) => console.error("[Showcase33] Failed to start:", err));
