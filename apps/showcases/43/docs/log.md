@@ -43,3 +43,8 @@ und deterministischer Golden-Kandidat (`scripts/goldens`, Pool-Namespace `st43-*
   - Reset-Button & Key `0`: Sofortige Rückkehr zum exakten Golden-Referenzzustand.
 - **Architektur:** Zero-GC im Interaktionspfad (Mutation des existierenden `StandardMaterial`, keine Re-Allokationen). Toggle-Button (`⚙`) standardkonform in `.app-footer`.
 
+
+### 2026-10-29 — Seitenpanel nach `Hud.ts` ausgelagert
+- Material-Lab-Panel (Markup, Bindings, Sync) aus `showcase.ts` in `Hud.ts` (`MaterialLabHud`) verschoben, aufgebaut auf dem gemeinsamen `apps/showcases/shared/ShowcaseDrawer.ts`. Material-/Licht-/Studio-Zustand bleibt in `showcase.ts` (Actions + `sync(state)`).
+- Entfallen: handgebautes Aside/Header/Close-Button, stopPropagation-Schleife, Footer-Button-Erzeugung, I-Toggle, duplizierte Drawer-CSS. Lokal bleibt nur die Color-Input-Regel.
+- IDs unverändert (`#showcase-hud`, `st43*`); Panel startet offen, Golden-Modus baut weiterhin kein Panel. Panel-Toggle jetzt einheitlich I **und** H (H war frei); Footer-Button zeigt das Header-Icon ⚪ statt ⚙.

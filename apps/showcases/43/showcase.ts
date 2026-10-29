@@ -14,6 +14,7 @@ import {
   WireframeMaterial,
 } from "@small-world-machine/engine";
 import { GoldenCapture, parseGoldenSpec, type GoldenSpec } from "./GoldenCapture.js";
+import { MaterialLabHud, type MaterialLabSlider } from "./Hud.js";
 
 interface MaterialSpec {
   name: string;
@@ -62,9 +63,7 @@ class Showcase43 extends AbstractShowcase {
   private _gridVisible: boolean = false;
   private _iblEnabled: boolean = false;
   private _iblLoad: Promise<void> | undefined;
-  private _hud: HTMLElement | undefined;
-  private _hudStyle: HTMLStyleElement | undefined;
-  private _hudToggleBtn: HTMLButtonElement | undefined;
+  private _hud: MaterialLabHud | undefined;
 
   /** The ball's material variants exposed as golden pools (`st43-*`, see GoldenCapture.ts). */
   private readonly _materials: readonly MaterialSpec[] = [
@@ -190,9 +189,7 @@ class Showcase43 extends AbstractShowcase {
 
   public override destroy(): void {
     this._goldenCapture?.dispose();
-    this._hud?.remove();
-    this._hudStyle?.remove();
-    this._hudToggleBtn?.remove();
+    this._hud?.dispose();
     super.destroy();
   }
 
@@ -200,6 +197,10 @@ class Showcase43 extends AbstractShowcase {
     super.onKeyDown(event);
     if (this._golden || event.altKey || event.metaKey || event.ctrlKey) return;
     if (document.activeElement?.tagName === "INPUT") return;
+    if (this._hud?.handleKey(event)) {
+      event.preventDefault();
+      return;
+    }
 
     const shift = event.shiftKey;
     const angleStep = shift ? ANGLE_STEP_FINE_DEG : ANGLE_STEP_DEG;
@@ -236,9 +237,6 @@ class Showcase43 extends AbstractShowcase {
         break;
       case "KeyG":
         this._setGridVisible(!this._gridVisible);
-        break;
-      case "KeyI":
-        this._toggleHud();
         break;
       default:
         return;
@@ -347,232 +345,70 @@ class Showcase43 extends AbstractShowcase {
     this._syncHud();
   }
 
-  private _toggleHud(force?: boolean): void {
-    if (!this._hud) return;
-    const open = force ?? !this._hud.classList.contains("open");
-    this._hud.classList.toggle("open", open);
-    this._hudToggleBtn?.classList.toggle("active", open);
-  }
-
-  private _setSliderValue(name: string, value: number, decimals: number, suffix: string): void {
-    const slider = document.getElementById(`st43Sl${name}`) as HTMLInputElement | null;
-    const label = document.getElementById(`st43Val${name}`);
-    if (slider) slider.value = String(value);
-    if (label) label.textContent = `${value.toFixed(decimals)}${suffix}`;
-  }
-
   /** Pushes the current state into the HUD controls; event-driven only, never per frame. */
   private _syncHud(): void {
-    if (!this._hud) return;
-    for (let i = 0; i < this._materials.length; i++) {
-      document
-        .getElementById(`st43Preset${i}`)
-        ?.classList.toggle("active", i === this._presetIndex);
-    }
     const material = this._ballMaterial;
-    if (material) {
-      this._setSliderValue("Roughness", material.roughness, 2, "");
-      this._setSliderValue("Metallic", material.metallic, 2, "");
-      const colorInput = document.getElementById("st43Color") as HTMLInputElement | null;
-      if (colorInput) colorInput.value = material.color.toHex().toLowerCase();
-    }
-    this._setSliderValue("Azimuth", this._azimuthDeg, 0, "°");
-    this._setSliderValue("Elevation", this._elevationDeg, 0, "°");
-    this._setSliderValue("KeyIntensity", this._key?.intensity ?? 0, 2, "");
-    this._setSliderValue("Ambient", this._ambient?.intensity ?? 0, 2, "");
-    document.getElementById("st43BtnIbl")?.classList.toggle("active", this._iblEnabled);
-    document.getElementById("st43BtnGrid")?.classList.toggle("active", this._gridVisible);
+    if (!this._hud || !material) return;
+    this._hud.sync({
+      presetIndex: this._presetIndex,
+      roughness: material.roughness,
+      metallic: material.metallic,
+      colorHex: material.color.toHex().toLowerCase(),
+      azimuthDeg: this._azimuthDeg,
+      elevationDeg: this._elevationDeg,
+      keyIntensity: this._key?.intensity ?? 0,
+      ambient: this._ambient?.intensity ?? 0,
+      iblEnabled: this._iblEnabled,
+      gridVisible: this._gridVisible,
+    });
   }
 
-  private _bindSlider(name: string, onInput: (value: number) => void): void {
-    const slider = document.getElementById(`st43Sl${name}`) as HTMLInputElement | null;
-    if (!slider) return;
-    slider.addEventListener("input", (): void => {
-      onInput(parseFloat(slider.value));
-      this._syncHud();
-    });
-    // Hand keyboard focus back to the shortcuts once the drag ends.
-    slider.addEventListener("change", (): void => slider.blur());
+  private _setSlider(name: MaterialLabSlider, value: number): void {
+    switch (name) {
+      case "Roughness":
+        if (this._ballMaterial) this._ballMaterial.roughness = value;
+        this._presetIndex = CUSTOM_PRESET;
+        break;
+      case "Metallic":
+        if (this._ballMaterial) this._ballMaterial.metallic = value;
+        this._presetIndex = CUSTOM_PRESET;
+        break;
+      case "Azimuth":
+        this._azimuthDeg = value;
+        this._applyLightAngles();
+        break;
+      case "Elevation":
+        this._elevationDeg = value;
+        this._applyLightAngles();
+        break;
+      case "KeyIntensity":
+        if (this._key) this._key.intensity = value;
+        break;
+      case "Ambient":
+        if (this._ambient) this._ambient.intensity = value;
+        break;
+    }
+    this._syncHud();
   }
 
   private _createHud(): void {
-    const style = document.createElement("style");
-    style.textContent = `
-      #showcase-hud .preset-group.four-col { grid-template-columns: repeat(4, 1fr); }
-      #showcase-hud .preset-group.two-col { grid-template-columns: repeat(2, 1fr); }
-      #showcase-hud .hud-note { font-size: 10px; line-height: 1.4; color: #94a3b8; margin-top: 6px; }
-      #showcase-hud .hud-keys { font-size: 10px; line-height: 1.6; color: #94a3b8; }
-      #showcase-hud .hud-keys kbd {
-        font-family: var(--font-mono, "JetBrains Mono", monospace);
-        border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 3px; padding: 0 4px;
-      }
-      #showcase-hud input[type="color"] { width: 100%; height: 22px; border: none; background: none; }
-    `;
-    document.head.appendChild(style);
-    this._hudStyle = style;
-
-    const presetButtons = this._materials
-      .map(
-        (spec, i) =>
-          `<button id="st43Preset${i}" class="btn-preset" title="${spec.name} (Key ${i + 1})">${i + 1} · ${spec.name}</button>`,
-      )
-      .join("");
-
-    const hud = document.createElement("aside");
-    hud.id = "showcase-hud";
-    hud.className = "swm-inspector-drawer open";
-    hud.innerHTML = `
-      <div class="bottom-sheet-grabber"></div>
-      <div class="hud-header">
-        <div class="hud-title"><span>⚪</span> Material Lab</div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="hud-badge">${this.renderer.type}</span>
-          <button id="st43BtnClose" class="hud-close-btn" title="Close Panel (Key: I)">✕</button>
-        </div>
-      </div>
-      <div class="hud-body">
-        <div class="hud-section">
-          <div class="section-title"><span>🎨 Material</span><span style="font-size:9px;color:#64748b;">Keys 1–4 · [ ]</span></div>
-          <div class="preset-group four-col" style="margin-bottom:8px;">${presetButtons}</div>
-          <div class="hud-row">
-            <label for="st43SlRoughness" title="Micro-surface roughness ([ / ])">Roughness</label>
-            <input id="st43SlRoughness" type="range" min="0" max="1" step="0.01" />
-            <span id="st43ValRoughness" class="val-label"></span>
-          </div>
-          <div class="hud-row">
-            <label for="st43SlMetallic" title="Dielectric (0) to metal (1) (Shift + [ / ])">Metallic</label>
-            <input id="st43SlMetallic" type="range" min="0" max="1" step="0.01" />
-            <span id="st43ValMetallic" class="val-label"></span>
-          </div>
-          <div class="hud-row">
-            <label for="st43Color">Base Color</label>
-            <input id="st43Color" type="color" />
-            <span class="val-label"></span>
-          </div>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title"><span>☀️ Key Light</span><span style="font-size:9px;color:#64748b;">Arrows · Shift = fine</span></div>
-          <div class="hud-row">
-            <label for="st43SlAzimuth">Azimuth</label>
-            <input id="st43SlAzimuth" type="range" min="-180" max="180" step="1" />
-            <span id="st43ValAzimuth" class="val-label"></span>
-          </div>
-          <div class="hud-row">
-            <label for="st43SlElevation">Elevation</label>
-            <input id="st43SlElevation" type="range" min="${ELEVATION_MIN_DEG}" max="${ELEVATION_MAX_DEG}" step="1" />
-            <span id="st43ValElevation" class="val-label"></span>
-          </div>
-          <div class="hud-row">
-            <label for="st43SlKeyIntensity">Intensity</label>
-            <input id="st43SlKeyIntensity" type="range" min="0" max="5" step="0.05" />
-            <span id="st43ValKeyIntensity" class="val-label"></span>
-          </div>
-          <div class="hud-row">
-            <label for="st43SlAmbient" title="Flat fill light; controls how dark the shadow gets">Ambient</label>
-            <input id="st43SlAmbient" type="range" min="0" max="1" step="0.01" />
-            <span id="st43ValAmbient" class="val-label"></span>
-          </div>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title"><span>🧭 Studio</span></div>
-          <div class="preset-group two-col">
-            <button id="st43BtnIbl" class="btn-preset" title="Image-based lighting (Key E)">E · IBL</button>
-            <button id="st43BtnGrid" class="btn-preset" title="1 m grid on the floor (Key G)">G · 1 m Grid</button>
-          </div>
-          <div class="hud-note">💡 <b>Try Chrome without IBL, then press E:</b> a mirror can only show what surrounds it.</div>
-          <button id="st43BtnReset" class="btn-preset" style="width:100%;margin-top:8px;" title="Golden reference state (Key 0)">0 · Reset to Reference</button>
-        </div>
-
-        <div class="hud-section hud-keys">
-          <kbd>Drag</kbd> orbit · <kbd>Wheel</kbd> zoom · <kbd>R</kbd> camera reset · <kbd>I</kbd> panel
-        </div>
-      </div>
-    `;
-    document.body.appendChild(hud);
-    this._hud = hud;
-
-    // Keep HUD pointer input away from the window-level orbit input (same as Showcases 39/41/42).
-    const stopEvents = [
-      "mousedown",
-      "mouseup",
-      "mousemove",
-      "pointerdown",
-      "pointerup",
-      "pointermove",
-      "wheel",
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "click",
-      "dblclick",
-      "contextmenu",
-    ];
-    for (const eventName of stopEvents) {
-      hud.addEventListener(eventName, (e: Event): void => e.stopPropagation(), {
-        passive: eventName === "wheel" || eventName === "touchstart" || eventName === "touchmove",
-      });
-    }
-
-    const toggleBtn = document.createElement("button");
-    toggleBtn.className = "swm-inspector-btn active";
-    toggleBtn.innerHTML = "<span>⚙</span>";
-    toggleBtn.title = "Material Lab (Toggle, Key: I)";
-    toggleBtn.setAttribute("aria-label", "Toggle Material Lab");
-    toggleBtn.onclick = (): void => this._toggleHud();
-    (document.querySelector(".app-footer") ?? document.body).appendChild(toggleBtn);
-    this._hudToggleBtn = toggleBtn;
-
-    document
-      .getElementById("st43BtnClose")
-      ?.addEventListener("click", () => this._toggleHud(false));
-    for (let i = 0; i < this._materials.length; i++) {
-      document
-        .getElementById(`st43Preset${i}`)
-        ?.addEventListener("click", () => this._applyPreset(i));
-    }
-    document
-      .getElementById("st43BtnIbl")
-      ?.addEventListener("click", () => this._setIbl(!this._iblEnabled));
-    document
-      .getElementById("st43BtnGrid")
-      ?.addEventListener("click", () => this._setGridVisible(!this._gridVisible));
-    document
-      .getElementById("st43BtnReset")
-      ?.addEventListener("click", () => this._resetToReference());
-
-    this._bindSlider("Roughness", (value) => {
-      if (this._ballMaterial) this._ballMaterial.roughness = value;
-      this._presetIndex = CUSTOM_PRESET;
-    });
-    this._bindSlider("Metallic", (value) => {
-      if (this._ballMaterial) this._ballMaterial.metallic = value;
-      this._presetIndex = CUSTOM_PRESET;
-    });
-    this._bindSlider("Azimuth", (value) => {
-      this._azimuthDeg = value;
-      this._applyLightAngles();
-    });
-    this._bindSlider("Elevation", (value) => {
-      this._elevationDeg = value;
-      this._applyLightAngles();
-    });
-    this._bindSlider("KeyIntensity", (value) => {
-      if (this._key) this._key.intensity = value;
-    });
-    this._bindSlider("Ambient", (value) => {
-      if (this._ambient) this._ambient.intensity = value;
-    });
-
-    const colorInput = document.getElementById("st43Color") as HTMLInputElement | null;
-    colorInput?.addEventListener("input", (): void => {
-      this._ballMaterial?.color.copyFrom(Color.fromHex(colorInput.value));
-      this._presetIndex = CUSTOM_PRESET;
-      this._syncHud();
-    });
-    colorInput?.addEventListener("change", (): void => colorInput.blur());
-
+    this._hud = new MaterialLabHud(
+      String(this.renderer.type),
+      this._materials.map((spec) => spec.name),
+      { min: ELEVATION_MIN_DEG, max: ELEVATION_MAX_DEG },
+      {
+        applyPreset: (index: number): void => this._applyPreset(index),
+        toggleIbl: (): void => this._setIbl(!this._iblEnabled),
+        toggleGrid: (): void => this._setGridVisible(!this._gridVisible),
+        resetToReference: (): void => this._resetToReference(),
+        setSlider: (name: MaterialLabSlider, value: number): void => this._setSlider(name, value),
+        setColor: (hex: string): void => {
+          this._ballMaterial?.color.copyFrom(Color.fromHex(hex));
+          this._presetIndex = CUSTOM_PRESET;
+          this._syncHud();
+        },
+      },
+    );
     this._syncHud();
   }
 }
