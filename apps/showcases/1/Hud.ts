@@ -14,7 +14,7 @@ export interface ColorSwatch {
 }
 
 /** Initial control values; the panel keeps its own labels in step afterwards. */
-export interface ShapeMaterialState {
+export interface HudState {
   geometryId: string;
   colorHex: string;
   shininess: number;
@@ -27,7 +27,7 @@ export interface ShapeMaterialState {
 }
 
 /** Showcase actions the panel triggers. */
-export interface ShapeMaterialActions {
+export interface HudActions {
   setGeometry(id: string): void;
   setColor(hex: string): void;
   setShininess(value: number): void;
@@ -46,14 +46,14 @@ const formatWireShadowWidth = (meters: number): string =>
  * Shape & Material panel of showcase 1 on the shared {@link ShowcaseDrawer}. Owns only its
  * controls and their labels; mesh, materials and light stay in the showcase.
  */
-export class ShapeMaterialHud {
+export class Hud {
   private readonly _drawer: ShowcaseDrawer;
 
   constructor(
     geometries: readonly GeometryOption[],
     swatches: readonly ColorSwatch[],
-    state: ShapeMaterialState,
-    private readonly _actions: ShapeMaterialActions,
+    state: HudState,
+    private readonly _actions: HudActions,
   ) {
     this._drawer = new ShowcaseDrawer({
       id: "showcase1-inspector",
@@ -61,6 +61,8 @@ export class ShapeMaterialHud {
       icon: "🔷",
       badge: "Showcase 01",
       open: false,
+      footerIcon: "⚙",
+      buttonId: "showcase1InspectorBtn",
       body: `
         <!-- Section 1: Geometry -->
         <div class="hud-section">
@@ -168,7 +170,6 @@ export class ShapeMaterialHud {
         </div>
       `,
     });
-    this._drawer.toggleButton.id = "showcase1InspectorBtn";
     this._bind();
   }
 

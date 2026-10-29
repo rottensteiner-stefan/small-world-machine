@@ -25,7 +25,7 @@ import {
   TriStar,
   WireframeMaterial,
 } from "@small-world-machine/engine";
-import { ShapeMaterialHud, type GeometryOption } from "./Hud.js";
+import { Hud, type GeometryOption } from "./Hud.js";
 
 interface GeometryEntry extends GeometryOption {
   create: () => GeometryDataInterface;
@@ -168,7 +168,7 @@ export class Showcase extends AbstractShowcase {
   /** World width (m) of the wire shadow; 0 = 1-texel line (ADR 0045). */
   private _wireShadowWidth: number = 0.02;
 
-  private _hud: ShapeMaterialHud | null = null;
+  private _hud: Hud | null = null;
 
   protected override async setupScene(): Promise<void> {
     this.defaultFov = (75 * Math.PI) / 180;
@@ -269,7 +269,7 @@ export class Showcase extends AbstractShowcase {
   }
 
   private _createInspectorUI(): void {
-    this._hud = new ShapeMaterialHud(
+    this._hud = new Hud(
       GEOMETRY_REGISTRY,
       COLOR_SWATCHES,
       {
