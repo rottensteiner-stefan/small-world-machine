@@ -17,6 +17,8 @@ export interface HudState {
   lights: boolean;
   bloom: boolean;
   embers: boolean;
+  smoke: boolean;
+  emberBed: boolean;
   shadows: boolean;
   paused: boolean;
   timeScale: number;
@@ -40,6 +42,8 @@ export function defaultHudState(maxActiveLights: number): HudState {
     lights: true,
     bloom: true,
     embers: true,
+    smoke: true,
+    emberBed: true,
     shadows: true,
     paused: false,
     timeScale: 1,
@@ -71,6 +75,8 @@ const SWITCHES = [
   "lights",
   "bloom",
   "embers",
+  "smoke",
+  "emberBed",
   "shadows",
   "showBudget",
   "daylight",
@@ -171,13 +177,15 @@ export class Hud {
         <div class="hud-section"><pre id="fireLabReadout"></pre></div>
         ${hudSection(
           "⚖️ Vorher / Nachher",
-          "F · G · L · H",
+          "F · G · L · H · R · B",
           hudSwitch("sw_flicker", "Flackern (Licht)") +
             hudSwitch("sw_flame", "Flammenkörper") +
             hudSwitch("sw_glow", "Glow-Halo") +
             hudSwitch("sw_lights", "Punktlichter") +
             hudSwitch("sw_bloom", "Bloom") +
             hudSwitch("sw_embers", "Glut / Funken") +
+            hudSwitch("sw_smoke", "Rauch / Qualm") +
+            hudSwitch("sw_emberBed", "Glutbett") +
             hudSwitch("sw_shadows", "Punktlicht-Schatten") +
             hudNote(
               "💡 Schalte das Flackern aus: Ein starres Licht wirkt sofort wie eine Glühbirne.",
@@ -214,7 +222,7 @@ export class Hud {
         )}
         ${hudSection("🌗 Umgebung", "N", hudSwitch("sw_daylight", "Tageslicht"))}
         <div class="hud-section hud-keys">
-          <kbd>F</kbd> Flackern · <kbd>G</kbd> Glow · <kbd>L</kbd> Lichter · <kbd>H</kbd> Glut · <kbd>X</kbd> Schatten · <kbd>P</kbd> Pause · <kbd>T</kbd> Tempo ·
+          <kbd>F</kbd> Flackern · <kbd>G</kbd> Glow · <kbd>L</kbd> Lichter · <kbd>H</kbd> Glut · <kbd>R</kbd> Rauch · <kbd>B</kbd> Glutbett · <kbd>X</kbd> Schatten · <kbd>P</kbd> Pause · <kbd>T</kbd> Tempo ·
           <kbd>0–4</kbd> Farbe · <kbd>,</kbd><kbd>.</kbd> Windrichtung · <kbd>+</kbd><kbd>−</kbd> Windstärke · <kbd>V</kbd> Budget ·
           <kbd>N</kbd> Tag/Nacht · <kbd>I</kbd> Panel · <kbd>WASD</kbd> Fliegen
         </div>
@@ -291,6 +299,12 @@ export class Hud {
         return true;
       case "KeyH":
         s.embers = !s.embers;
+        return true;
+      case "KeyR":
+        s.smoke = !s.smoke;
+        return true;
+      case "KeyB":
+        s.emberBed = !s.emberBed;
         return true;
       case "KeyX":
         s.shadows = !s.shadows;

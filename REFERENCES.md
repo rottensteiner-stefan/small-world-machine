@@ -1015,6 +1015,20 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Source:** ["Creating a Stylized 3D Water Shader"](https://gameidea.org/2026/02/01/creating-a-stylized-3d-water-shader/) — gameidea, published 2026-02-01
 - **Usage:** Reference for the stylized (Sea of Thieves-inspired) open-water look: simple sine/noise-based Gerstner-like vertex wave displacement combined with fragment-side depth fade (mixing toward an underwater fog color with scene depth) and screen-space foam near intersections with other geometry, instead of a physically simulated ocean (no FFT).
 
+### Fire VFX Layer Stack (Smoke Plume, Ember Bed, Soot Decal)
+
+- **File:** `packages/vfx-extras/src/fire/{FireSmokeEmitter,SmokeSpriteMaterial,EmberBed,soot}.ts`, `Smoke.frag.{glsl,glsl100,wgsl}`, `packages/vfx-extras/src/affectors/SizeGrowthAffector.ts`, `packages/vfx-extras/src/ParticleMeshRenderer.ts` (`foldAlphaIntoScale` opt-in), `apps/showcases/45/showcase.ts`
+- **Authors/Gurus:** Industry-standard layering after Unreal Engine Niagara, Unity VFX Graph and Godot 4 GPUParticles3D conventions; deterministic PRNG after the mulberry32 public-domain construction (bryc's widely ported 32-bit PRNG, `Math.imul`-only for cross-engine reproducibility).
+- **Source:** [mulberry32 – PRNG, public domain](https://gist.github.com/bryc/code/2c226a1f5b54f7c1f01e1f2c4a9e9c4a) — the canonical 32-bit integer PRNG used (two-line core duplicated with a sync comment) wherever a deterministic, golden-friendly random sequence is required.
+- **Formulas / Architecture:**
+  - Smoke opacity is straight-alpha per-instance: the renderer writes `alpha` as instance opacity (`foldAlphaIntoScale=false`) and the fragment fades the quad through `blob · rough · inst.a` — never a size fold, so the quad keeps its authored size.
+  - Soft dissolving edge: radial blob `1 − smoothstep(0.28, 0.5, d)` eroded by scrolling value-noise `n` with a dissolve strength that grows as `inst.a → 0` (`mix(0.1, 0.9, 1 − smoothstep(0, 0.22, a))`) — industry-style dissipation without a depth texture.
+  - Multiplicative smoke growth: `size(t+dt) = size(t) · (1 + rate·dt)` clamped to `maxScale` preserves the birth-size ratio between puffs (test-gated) — the correct "proportionally growing plume" alternative to additive size growth.
+  - Ember-bed breathing: a slow seeded noise channel (`FireFlickerProfile`, ≈0.35 Hz) maps into the clamped emissive band `[1 − breathStrength, 1] × intensity`.
+  - Soot coverage in alpha, brightness in RGB (decals alpha-blend against opaque depth, ADR 0029), generated from a deterministic 2-D hash (`imul`-based, no `Math.random`).
+- **Usage:** `FireSmokeEmitter` builds a world-anchored plume (buoyancy + drag + growth + color-over-life affectors, wind-fed via `update(dt, anchor, camera, wind)`), rendered through `SmokeSpriteMaterial` with `foldAlphaIntoScale=false`; `EmberBed` provides the opaque emissive fuel bed; `createSootDecalTexture` + a box-projected `Decal` (native WEB_GPU/WEB_GL2, `bakeSceneDecals` only on WEB_GL1) grounds the fire. All layers are seeded-deterministic (`dt=0` freeze, golden-compatible), world-anchored, zero-GC and one draw call per layer — the documented divergence is the deferred soft-particle depth fade (HIGH-tier follow-up), replaced by the procedural soft edge + dissolution.
+
+
 ### Physical Gerstner Waves & Deep-Water Dispersion Relation
 
 - **File:** `packages/engine/src/core/materials/shaders/chunks/liquid_gerstner_wave.glsl`, `packages/engine/src/core/materials/shaders/chunks/liquid_gerstner_wave.wgsl`

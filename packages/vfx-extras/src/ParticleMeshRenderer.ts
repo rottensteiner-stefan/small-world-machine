@@ -23,6 +23,13 @@ export interface ParticleMeshRendererOptions {
    * `none`. Requires passing a camera position to {@link ParticleMeshRenderer.sync}.
    */
   billboard?: ParticleBillboardMode | undefined;
+  /**
+   * Whether the per-particle alpha is folded into the instance scale (default `true`, embers erode
+   * away as they fade). Set `false` when the material itself consumes the instance alpha as
+   * opacity (e.g. alpha-blended smoke): the quad then keeps its authored size and only fades.
+   * Existing callers are unaffected.
+   */
+  foldAlphaIntoScale?: boolean | undefined;
 }
 
 /**
@@ -41,6 +48,7 @@ export class ParticleMeshRenderer {
   private readonly _tempEuler: Vector3D = new Vector3D(0, 0, 0);
   private readonly _enableColorBuffer: boolean;
   private readonly _billboard: Exclude<ParticleBillboardMode, "none"> | undefined;
+  private readonly _foldAlphaIntoScale: boolean;
 
   constructor(options: ParticleMeshRendererOptions) {
     this.system = options.system;
@@ -51,6 +59,7 @@ export class ParticleMeshRenderer {
       this.system.capacity,
     );
     this._enableColorBuffer = options.enableColorBuffer ?? true;
+    this._foldAlphaIntoScale = options.foldAlphaIntoScale ?? true;
     this._billboard =
       options.billboard === undefined || options.billboard === "none"
         ? undefined
@@ -86,7 +95,11 @@ export class ParticleMeshRenderer {
       const offset16 = i * 16;
       if (arrays.aliveFlags[i] === 1 && arrays.alphas[i]! > 0.001) {
         const o = i * 3;
-        const s = arrays.sizes[i]! * arrays.alphas[i]!;
+        // Alpha is either folded into the instance scale (embers shrink as they fade) or carried
+        // purely by the instance color for materials that read it as opacity (smoke).
+        const s = this._foldAlphaIntoScale
+          ? arrays.sizes[i]! * arrays.alphas[i]!
+          : arrays.sizes[i]!;
         this._tempScale.set(s, s, s);
         this._tempPosition.set(
           arrays.positions[o]!,

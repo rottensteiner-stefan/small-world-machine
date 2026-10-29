@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.121.0] - 2026-10-29
+
+### "Fire is the test of gold; adversity, of strong men." - Seneca
+
+- **Features:**
+  - *Feuer L3 — Rauchfahne (`@small-world-machine/vfx-extras`):* `FireSmokeEmitter` emittiert eine **Welt-verankerte**, geseedet-deterministische Plume über die neue `ParticleSystem`-Kette (Auftrieb als `GravityAffector`, `DragAffector`, neuer `SizeGrowthAffector` mit **multiplikativem** Wachstum unter Erhalt der Geburtsgrößen-Variation, `ColorOverLifeAffector` von warm-hell aus der Flamme zu kalt-dunkel). Gerendert durch das neue texturlose `SmokeSpriteMaterial` (GLSL300/GLSL100/WGSL, Straight-Alpha): weicher radialer Blob, durch scrollendes Value-Noise zu zerfasernden Wisps zerrieben, die beim Verblassen dissoziieren — kein harter Quad-Rand. Der Per-Instance-Buffer wird als **Opazität**, nicht als Größenfaltung gelesen: darum das neue, byte-identische Opt-in `ParticleMeshRenderer({ foldAlphaIntoScale: false })` (Default bleibt `true`, bestehende Funken-Nutzer unverändert). Wind aus dem Lab-Regler neigt die Plume über `update(dt, anchor, camera, wind)` in dieselbe Richtung, in die die Flamme lehnt. Soft-Particle-Depth-Fade ist als HIGH-Tier-Folge ehrlich dokumentiert (die prozeduralen Weichkanten ersetzen den harten Schnitt).
+  - *Feuer L5 — Glutbett (`EmberBed`):* opakes, emissives `StandardMaterial`-Zylinderbett unter dem Brennstoff (Lagerfeuer ganz, Fackelkranz klein, Kerze keins) mit **langsamem**, geseedetem Noise-Atmen aus `FireFlickerProfile` (≈0,35 Hz, `breathStrength`-Klammer, kein Heartbeat) — die Emissiv-Fuel-Bed-Konvention; ein prozeduraler Kohle-Shader bleibt dokumentierte HIGH-Tier-Option.
+  - *Feuer L5 — Ruß/Asche-Grundierung:* `createSootDecalTexture()` (prozedurale Scorch-Textur, deterministischer Hash, Deckkraft in Alpha, headless `undefined`) als box-projiziertes `Decal` **strikt nach ADR 0029**: nativ auf WEB_GPU/WEB_GL2, `bakeSceneDecals` nur auf WEB_GL1. Statisch, kein Laufzeit-Zustand — ganz im Gegensatz zu einer zweiten Schatten-Lüge.
+  - *Showcase 45:* Rauch-, Glutbett- und Ruß-Schicht für alle 16 Feuer (Budgets aus der Flammengröße skaliert — Kerze nur ein träger Wisp, Lagerfeuer dichte Plume und volles Bett); neue HUD-Schalter „Rauch / Qualm" (`R`) und „Glutbett" (`B`) im Vorher/Nachher-Block, Wind-Slider speist zusätzlich die Rauchfahne. Pause/Zeitlupe frieren auch Rauch und Bett ein (Golden-tauglich: mulberry32, dt=0-Freeze).
+- **Architecture & Bugfixes:**
+  - *Showcase 45: Ruß-Decal tier-konform korrigiert:* Die erste Integration bäkte das Decal auf **allen** Tiers — das weicht von ADR 0029 ab (dort nativ auf WebGPU/WebGL2, Baken nur für WebGL1 ohne Opaque-Depth-Box-Decals) und ersetzt die echte Box-Projektion durch einen flachen Clip. Beim Browser-Abnahme-Pfad gefunden und auf den ADR-0029-Pfad umgestellt: natives Box-Decal auf WEB_GPU/WEB_GL2, `bakeSceneDecals` nur im `WEB_GL1`-Zweig.
+- **Housekeeping & Docs:**
+  - *Feuer-Schichten dokumentiert:* neuer Guide `docs/guides/vfx-fire.md` (Layer-Stack, Laufzeit-Verträge, Determinismus, Industrie-Benchmark-Mapping mit ehrlichen Divergenzen), ADR 0053 (mit Pflichtabschnitt Doctrine Compliance), `REFERENCES.md` (mulberry32, Feuer-Layer-Stack-Formeln), `CONTEXT.md` (Glutbett, Rauchfahne, Ruß-Grundierung), Showcase-45-Log.
+  - *Abnahme:* `check-showcases.js 45` grün auf allen drei Tiers; Browser-Verifikation von Rauch, Glutbett und Ruß auf WEB_GPU/WEB_GL2/WEB_GL1 ohne Konsolenfehler (Sicht/Unsichtbarkeit des Ruß beim Tages-/Nachtdurchgang ehrlich dokumentiert).
+
 ## [0.120.0] - 2026-10-29
 
 ### "He who would learn to fly one day must first learn to stand and walk." - Friedrich Nietzsche

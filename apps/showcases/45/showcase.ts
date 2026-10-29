@@ -5,25 +5,32 @@ import {
   Color,
   Cube,
   Cylinder,
+  Decal,
+  DecalMaterial,
   DirectionalLight,
   Object3D,
   Plane,
   PointLight,
   PostProcessingEffectType,
+  RendererType,
   StandardMaterial,
   Texture,
   TextureWrap,
   Vector3D,
+  bakeSceneDecals,
 } from "@small-world-machine/engine";
 import type { FlamePalette } from "@small-world-machine/vfx-extras";
 import {
+  EmberBed,
   FireEmberEmitter,
   FireLightBehavior,
   FireLightBudget,
   FireMaterial,
+  FireSmokeEmitter,
   FlameGlowMaterial,
   FlamePalettes,
   createFlameCardGeometry,
+  createSootDecalTexture,
 } from "@small-world-machine/vfx-extras";
 import type { HudState, PaletteChoice } from "./Hud.js";
 import { Hud, defaultHudState } from "./Hud.js";
@@ -61,6 +68,8 @@ interface FlameSpec {
   readonly temperatureK?: number | undefined;
   readonly turbulence?: number | undefined;
   readonly flowSpeed?: number | undefined;
+  /** Build a glowing fuel bed at the flame base (campfire: full, torch: small, candle: none). */
+  readonly emberBed?: boolean | undefined;
 }
 
 /** Per-torch look so the row does not read as clones. */
@@ -101,6 +110,9 @@ interface FireRig {
   readonly light: FireLightBehavior;
   readonly embers: FireEmberEmitter;
   readonly emberAnchor: Vector3D;
+  readonly smoke: FireSmokeEmitter;
+  readonly smokeAnchor: Vector3D;
+  readonly emberBed: EmberBed | undefined;
   readonly flameObject: Object3D;
   readonly glowObject: Object3D;
   readonly pointLight: PointLight;
@@ -137,6 +149,8 @@ export class Showcase extends AbstractShowcase {
   private _hud: Hud | undefined = undefined;
   private _time: number = 0;
   private _readoutTimer: number = 0;
+  /** World wind vector (m/s, horizontal) for the smoke plume; recomputed when the lab wind changes. */
+  private readonly _smokeWind: Vector3D = new Vector3D(0, 0, 0);
 
   public override async start(): Promise<void> {
     await super.start();
@@ -227,6 +241,7 @@ export class Showcase extends AbstractShowcase {
       lightDistance: 14,
       glowSize: 1.8,
       jitter: 0.035,
+      emberBed: true,
     });
 
     this._addCylinder(
@@ -247,6 +262,25 @@ export class Showcase extends AbstractShowcase {
       glowSize: 0.25,
       jitter: 0.004,
     });
+
+    // Charred soot/ash ring under the campfire: a box-projected decal (native on WebGPU and
+    // WebGL2, unlit so it only darkens). WEB_GL1 has no opaque-depth box-decals (ADR 0029), so
+    // the decal is baked into the floor geometry there via the mesh-decal baker — the grounding
+    // mark a real fire leaves behind, on every tier.
+    const sootTexture = createSootDecalTexture();
+    if (sootTexture) {
+      const soot = new Decal(
+        new DecalMaterial({ unlit: true, diffuseMap: sootTexture }),
+        "CampfireSoot",
+      );
+      soot.position.set(0, 0.02, 1.2);
+      soot.scale.set(1.6, 0.35, 1.6);
+      this.scene.add(soot);
+      if (this.renderer.type === RendererType.WEB_GL1) {
+        // Bake after the whole scene exists so the decal clips only against the floor box.
+        bakeSceneDecals(this.scene.root);
+      }
+    }
   }
 
   protected override update(deltaTime: number): void {
@@ -273,6 +307,10 @@ export class Showcase extends AbstractShowcase {
       // Billboards need the live camera position; the anchor is the flame base. The camera is no
       // scene-graph object in this engine, so `position` is already world-space (`CameraInterfaceData`).
       rig.embers.update(dt, rig.emberAnchor, this.camera.position);
+      // The plume spawns just below the flame tip and drifts with the lab's wind; the fuel bed
+      // breathes on its own slow seeded envelope. dt=0 freezes both (capture/pause support).
+      rig.smoke.update(dt, rig.smokeAnchor, this.camera.position, this._smokeWind);
+      rig.emberBed?.update(dt);
     }
 
     this._readoutTimer -= deltaTime;
@@ -294,6 +332,9 @@ export class Showcase extends AbstractShowcase {
     const windRad = (s.windAngleDeg * Math.PI) / 180;
     const windX = Math.sin(windRad) * s.windStrength * WIND_LEAN;
     const windZ = -Math.cos(windRad) * s.windStrength * WIND_LEAN;
+    // The plume drifts with the SAME wind the flame leans into (duck-tail coupling is wrong here:
+    // lean points downwind, smoke travels downwind). Unit magnitude at full strength.
+    this._smokeWind.set(Math.sin(windRad) * s.windStrength, 0, -Math.cos(windRad) * s.windStrength);
 
     for (let i = 0; i < this._fires.length; i++) {
       const rig = this._fires[i]!;
@@ -317,12 +358,18 @@ export class Showcase extends AbstractShowcase {
 
       rig.flameObject.isVisible = s.flame;
       rig.glowObject.isVisible = s.glow;
-      // The ember layer spawns only while enabled; hiding the mesh makes the A/B toggle instant
+      // Each layer spawns only while enabled; hiding the mesh makes the A/B toggle instant
       // instead of waiting out live particles.
       // The engine picks the nearest shadowed fires itself (ADR 0052, quality.maxShadowedPointLights).
       rig.pointLight.castShadow = s.shadows;
       rig.embers.enabled = s.embers;
       rig.embers.mesh.isVisible = s.embers;
+      rig.smoke.enabled = s.smoke;
+      rig.smoke.mesh.isVisible = s.smoke;
+      if (rig.emberBed) {
+        rig.emberBed.enabled = s.emberBed;
+        rig.emberBed.mesh.isVisible = s.emberBed;
+      }
     }
 
     this._budget.maxActive = s.lights ? s.maxActiveLights : 0;
@@ -363,6 +410,8 @@ export class Showcase extends AbstractShowcase {
       temperatureK: look.temperatureK,
       turbulence: look.turbulence,
       flowSpeed: look.flowSpeed,
+      // The charred fuel wrap at the tip glows like coals; every torch gets one.
+      emberBed: true,
     });
   }
 
@@ -454,12 +503,54 @@ export class Showcase extends AbstractShowcase {
     });
     this.scene.add(embers.mesh);
 
+    // Smoke plume: spawns just below the flame tip, rises with drag and buoyancy, expands and
+    // dissolves. Scaled from the authored flame size (candle: a faint wisp, campfire: the slow
+    // drift above the logs); wind comes from the lab's slider via `_applySettings`.
+    const smokeAnchor = new Vector3D(
+      spec.position.x,
+      spec.position.y + spec.height * 0.8,
+      spec.position.z,
+    );
+    const smoke = new FireSmokeEmitter({
+      name: `${spec.name}_Smoke`,
+      seed: seed * 3.11 + 7,
+      rate: Math.min(10, Math.max(1, spec.height * 11)),
+      capacity: Math.min(14, Math.max(3, Math.round(spec.height * 16))),
+      lifeRange: [0.8, Math.min(2.4, 0.8 + spec.height * 1.8)],
+      speedRange: [0.3, Math.min(0.8, 0.3 + spec.height * 0.6)],
+      sizeRange: [spec.width * 0.16, spec.width * 0.32],
+      spawnRadius: Math.max(0.02, spec.width * 0.22),
+      growthRate: 0.45,
+      maxScale: Math.max(0.5, Math.min(2.4, spec.height * 2.6)),
+    });
+    this.scene.add(smoke.mesh);
+
+    // Glowing fuel bed: full under the campfire, a charred wrap on the torches, none on the candle
+    // (its wick IS the fire). The bed sits at the flame base, beneath the logs/tip.
+    let emberBed: EmberBed | undefined;
+    if (spec.emberBed) {
+      const bed = new EmberBed({
+        name: `${spec.name}_EmberBed`,
+        position: new Vector3D(spec.position.x, spec.position.y - 0.03, spec.position.z),
+        radius: Math.max(0.05, spec.width * 0.72),
+        height: Math.max(0.03, spec.height * 0.05),
+        emissiveIntensity: Math.max(1, Math.min(2.2, spec.height * 2.4)),
+        breathStrength: 0.2,
+        seed: seed * 1.73 + 3,
+      });
+      this.scene.add(bed.mesh);
+      emberBed = bed;
+    }
+
     this._fires.push({
       flame: fire,
       glow: glowMat,
       light: lightBehavior,
       embers,
       emberAnchor,
+      smoke,
+      smokeAnchor,
+      emberBed,
       flameObject: flame,
       glowObject: glow,
       pointLight: light,

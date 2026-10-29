@@ -6,3 +6,7 @@ export * from "./FireLightBehavior.js";
 export * from "./FireLightBudget.js";
 export * from "./EmberSpriteMaterial.js";
 export * from "./FireEmberEmitter.js";
+export * from "./SmokeSpriteMaterial.js";
+export * from "./FireSmokeEmitter.js";
+export * from "./EmberBed.js";
+export * from "./soot.js";

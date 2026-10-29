@@ -9,4 +9,5 @@ export * from "./ColorOverLifeAffector.js";
 export * from "./SizeOverLifeAffector.js";
 export * from "./BouncePlaneAffector.js";
 export * from "./GravityAffector.js";
+export * from "./SizeGrowthAffector.js";
 export * from "./BatchedAffector.js";

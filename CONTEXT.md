@@ -72,6 +72,10 @@ _Avoid_: Projector (the Decal itself is the projector; the box is only its volum
 A JSON-Schema-validated scene description format (`level.schema.json`, `*.level.json`) specifying camera configuration, lighting, post-processing, and placed kit nodes (with socket light mountings and behavior bindings) without imperative scene setup code (ADR 0020). Level files live under `apps/<app>/levels/`, declared by ID in the app manifest (ADR 0041 Stufe 3).
 _Avoid_: Scene File (ambiguous with raw glTF `scene.gltf`).
 
+**Ember Bed (Glutbett)**:
+The opaque, emissive fuel-bed element under a fire (`EmberBed`, `@small-world-machine/vfx-extras`): a shallow `StandardMaterial` cylinder that breathes with a slow seeded noise envelope (≈0.35 Hz, clamped emissive band, no heartbeat) — the coal bed under a campfire or the charred tip wrap of a torch. Opaque by contract: a transparent glow sticker over the logs would read as fake.
+_Avoid_: Coal Shader, Glow Sticker — the fuel bed is a solid emissive volume, not a per-pixel coal simulation (that stays a documented HIGH-tier option).
+
 **Event Bus**:
 The typed, per-`SmallWorldMachine`-instance event dispatcher (`app.events`) that replaces DOM `CustomEvent` for engine-internal notifications.
 _Avoid_: Global Event Bus, Universal EventBus — rejected under Context Object; this bus is scoped to one engine instance, never a shared global.
@@ -171,6 +175,14 @@ _Avoid_: Physical Sky Mesh
 **Semantic Socket**:
 A named transform node attached as a child to a specific skeletal bone (`mixamorig:LeftHand`, `mixamorig:RightHand`) with standardized local offsets and rotations to host props (Lanterns, Torches, Weapons) with zero jitter during animation playback.
 _Avoid_: Prop Constraint (informal)
+
+**Smoke Plume (Rauchfahne)**:
+The world-anchored, dissolving smoke effect above a fire (`FireSmokeEmitter` + `SmokeSpriteMaterial`, `@small-world-machine/vfx-extras`): seeded-deterministic (mulberry32, `dt=0` freeze) billboard puffs with buoyancy + drag + multiplicative growth + color-over-life, rendered through a texturless alpha-blended material where the per-instance alpha is pure **opacity** — the renderer therefore runs `ParticleMeshRenderer({ foldAlphaIntoScale: false })`. The procedural soft edge + dissolution replace hard quad clipping; the industry-standard soft-particle depth fade is a documented HIGH-tier follow-up.
+_Avoid_: Video-Smoke, Sprite-Atlas Smoke (procedural, no texture), Size-Folded Alpha (that is the ember contract, see `foldAlphaIntoScale`).
+
+**Soot Decal (Ruß/Asche-Grundierung)**:
+The dark grounding mark a real fire leaves (ADR 0053): a box-projected `Decal` (unlit, deterministic procedural texture, coverage in alpha) that renders natively on WEB_GPU/WEB_GL2 and is baked into the floor geometry only on WEB_GL1 (`bakeSceneDecals`, ADR 0029 Phase 5). Static by contract — it has no runtime state, so it never flickers and costs nothing while the scene stands still.
+_Avoid_: Dynamic Soot Growth, Second Shadow (the mark is baked/static, not a live simulation).
 
 **State Data**:
 The user-defined payload object passed into a Finite State Machine's `onEnter`/`onUpdate`/`onExit` callbacks.

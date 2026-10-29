@@ -161,3 +161,25 @@ P6 Goldens. Nachtszene vor einer Steinwand, damit Emission, Bloom und Lichtwurf 
   Schatten-Slot bekommt, kann mit dem Licht-Jitter wechseln (Hinweis für Goldens an antigravity).
 - Wind: statt starrem Kippen jetzt `FireMaterial.lean` (Welt-Scherung von antigravity, `3b26b206`);
   Spitzenversatz = 0,55 × Flammenhöhe × Windstärke. Basis bleibt am Brennstoff, keine Kartenspaltung.
+
+## 2026-10-29 · Rauch (L3), Glutbett + Ruß-Decal (L5), ADR/Guide
+
+- `packages/vfx-extras/src/fire/`: `FireSmokeEmitter` (Welt-verankerte Plume, mulberry32-deterministisch,
+  dt=0-Freeze), `SmokeSpriteMaterial` + `Smoke.frag.{glsl,glsl100,wgsl}` (texturlos, Straight-Alpha,
+  liest `rgbi`-Tönung + `a`-Opazität), `EmberBed` (opakes Emissiv-Zylinderbett, langsames Noise-Atmen
+  ≈0,35 Hz aus `FireFlickerProfile`), `soot.ts` (`createSootDecalTexture`, deterministischer Hash).
+- `affectors/SizeGrowthAffector` (multiplikatives Wachstum, erhält Größenvarianten); neues Opt-in
+  `ParticleMeshRenderer.foldAlphaIntoScale = false` (Default `true`, byte-identisch) — Rauch liest
+  Alpha als Opazität, nicht als Größenfaltung.
+- Showcase 45: Rauch/Glutbett/Ruß je Feuer (Budgets aus Flammengröße), HUD-Schalter `R` (Rauch) und
+  `B` (Glutbett) im Vorher/Nachher-Block; Wind-Slider speist die Plume (gleiche Richtung wie `lean`).
+- **Korrektur während der Abnahme:** Ruß-Decal war zunächst auf allen Tiers gebacken; ADR 0029 sieht
+  Box-Decals nativ auf WEB_GPU/WEB_GL2 und das Baken nur für WEB_GL1 vor. Auf den ADR-0029-Pfad
+  umgestellt — natives Decal auf WEB_GPU/WEB_GL2, `bakeSceneDecals` nur im `WEB_GL1`-Zweig.
+- Browser-Abnahme alle drei Tiers: Rauch/Bett/Ruß sichtbar und umschaltbar, `check-showcases.js 45`
+  grün, keine Konsolenfehler. Ehrliche Beobachtung: das Ruß-Dezal liest bei Tageslicht klar, im
+  Nachtschatten als Teil des Schattens (physikalisch korrekt, dokumentiert).
+- Soft-Particle-Depth-Fade, Volumenrauch, Kohle-Shader: dokumentierte HIGH-Tier-Folgen (Guide/ADR 0053).
+- Bekannt (nicht von dieser Sitzung): WebGL2 spammt beim Start `GL_INVALID_OPERATION: Vertex buffer
+  is not big enough` — auch ohne Rauch/Bett reproduzierbar (Pristine-Test), also Bestand aus
+  P3-Funken-/(ADR-0052-)Arbeit, an die zuständige Sitzung gemeldet.

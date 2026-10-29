@@ -17,6 +17,7 @@ Practical, in-depth guides for each subsystem and tool of the Small World Machin
 | [Materials & Shaders](./materials.md) | PBR material system and shader fundamentals. |
 | [Liquid Simulation & Waves](./liquid-wave-data-model.md) | Wave data model, Gerstner cascade, splats, clapotis, and buoyancy probing. |
 | [Shadows](./shadows.md) | Shadow mapping, CSM, PCSS. |
+| [Fire VFX](./vfx-fire.md) | Layer stack for fire: flame, light, embers, smoke, ember bed, soot decal. |
 | [Decals](./decals.md) | Box-projected decals, orientation rules, normal buffer, cost. |
 | [Volumetric Fog](./volumetric-fog.md) | Froxel-based true 3D volume fog (WebGPU, Stufe 3), additive composite. |
 | [Depth of Field](./depth-of-field.md) | Thin-lens bokeh depth of field (WebGPU/WebGL2 gather, WebGL1 tilt-shift). |

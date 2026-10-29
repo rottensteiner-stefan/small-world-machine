@@ -1,0 +1,42 @@
+[BASE_FS_HEADER]
+
+uniform vec4 u_matParam0; // [time, churn, unused, unused]
+
+float smokeHash(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+float smokeNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = smokeHash(i);
+    float b = smokeHash(i + vec2(1.0, 0.0));
+    float c = smokeHash(i + vec2(0.0, 1.0));
+    float d = smokeHash(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+void main() {
+    vec4 inst = vec4(1.0);
+#ifdef USE_INSTANCE_COLOR
+    inst = v_instanceColor;
+#endif
+    float d = length(v_uv - vec2(0.5));
+    float blob = 1.0 - smoothstep(0.28, 0.5, d);
+
+    float offset = floor(inst.r * 5.0 + inst.g * 3.0 + inst.b * 7.0) / 13.0;
+    float churnScroll = u_matParam0.x * 0.35 * u_matParam0.y;
+    float n = smokeNoise(vec2(
+        v_uv.x * 5.0 + offset + churnScroll,
+        v_uv.y * 5.0 - churnScroll * 1.3 + offset * 1.7
+    ));
+    float dissolve = mix(0.1, 0.9, 1.0 - smoothstep(0.0, 0.22, inst.a));
+    float rough = 1.0 - (n - 0.5) * dissolve;
+
+    // WebGL1 renders LDR without a gamma stage, so the sRGB-authored tint is written as-is.
+    float opacity = blob * rough * inst.a;
+    gl_FragColor = vec4(inst.rgb, opacity);
+}
