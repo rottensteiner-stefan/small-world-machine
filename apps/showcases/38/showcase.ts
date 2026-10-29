@@ -33,7 +33,7 @@ import {
 } from "@small-world-machine/engine";
 import { box } from "../shared/prim.js";
 import { GoldenCapture, parseGoldenSpec } from "./GoldenCapture.js";
-import { PetraHud, TimeOfDay } from "./Hud.js";
+import { Hud, TimeOfDay } from "./Hud.js";
 
 interface CameraPreset {
   name: string;
@@ -54,7 +54,7 @@ export class Showcase extends AbstractShowcase {
   private _audioMuted: boolean = false;
   private _activePresetIdx: number = 0;
 
-  private _hud: PetraHud | undefined;
+  private _hud: Hud | undefined;
   private _goldenCapture: GoldenCapture | undefined;
 
   private readonly _cameraPresets: CameraPreset[] = [
@@ -1646,7 +1646,7 @@ export class Showcase extends AbstractShowcase {
 
   private _createHud(): void {
     this._hud?.dispose();
-    this._hud = new PetraHud({
+    this._hud = new Hud({
       onTimeOfDay: (mode: TimeOfDay): void => this._setTimeOfDay(mode),
       onFlicker: (enabled: boolean): void => {
         this._flickerEnabled = enabled;

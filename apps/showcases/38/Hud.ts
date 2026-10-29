@@ -7,15 +7,15 @@ export enum TimeOfDay {
 }
 
 /** Scene state the panel mirrors. */
-export interface PetraHudState {
+export interface HudState {
   timeOfDay: TimeOfDay;
   flickerEnabled: boolean;
   audioMuted: boolean;
   activePresetIdx: number;
 }
 
-/** Scene actions the panel triggers; the showcase applies them and calls {@link PetraHud.sync}. */
-export interface PetraHudCallbacks {
+/** Scene actions the panel triggers; the showcase applies them and calls {@link Hud.sync}. */
+export interface HudActions {
   onTimeOfDay(mode: TimeOfDay): void;
   onFlicker(enabled: boolean): void;
   onAudioMuted(muted: boolean): void;
@@ -28,13 +28,13 @@ const PRESET_LABELS = ["Siq Gorge", "Plaza", "Portico", "Sanctum", "Shrine"];
  * Petra panel of showcase 38 on the shared {@link ShowcaseDrawer}. Owns only its controls; the
  * scene state stays in the showcase.
  */
-export class PetraHud {
+export class Hud {
   private readonly _drawer: ShowcaseDrawer;
   private readonly _timeOfDay: HTMLSelectElement;
   private readonly _flicker: HTMLInputElement;
   private readonly _audio: HTMLInputElement;
 
-  constructor(callbacks: PetraHudCallbacks) {
+  constructor(callbacks: HudActions) {
     const presets = PRESET_LABELS.map(
       (label, i) => `<button class="btn-preset" data-cam="${i}">${label}</button>`,
     ).join("");
@@ -43,8 +43,9 @@ export class PetraHud {
       id: "petra-hud",
       title: "Al-Khazneh — Petra",
       icon: "🏛️",
-      badge: "Petra Lab",
       open: false,
+      footerIcon: "⚙",
+      buttonId: "petraInspectorBtn",
       body: `
         <div class="hud-section">
           <div class="section-title">⚙️ Atmosphere & Audio</div>
@@ -83,7 +84,7 @@ export class PetraHud {
   }
 
   /** Reflects the scene state in every control. */
-  public sync(state: PetraHudState): void {
+  public sync(state: HudState): void {
     this._timeOfDay.value = state.timeOfDay;
     this._flicker.checked = state.flickerEnabled;
     this._audio.checked = !state.audioMuted;
