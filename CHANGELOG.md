@@ -4,6 +4,11 @@
 
 ### "Motion is the cause of all life." - Leonardo da Vinci
 
+- **Features:**
+  - *Feuer P3 — Glut/Funken (`@small-world-machine/vfx-extras`):* `FireEmberEmitter` emittiert deterministisch (Integer-Seed, Golden-tauglich) Welt-verankerte Glutspritzer über die bestehende `ParticleSystem`-Kette (`GravityAffector` + `DragAffector` + `ColorOverLifeAffector`): Funken steigen im Kegel auf, senken sich leicht, kühlen von heißem Orange zu Ascherot ab und erlöschen über den Alpha-Fade (der Renderer faltet Alpha in die Instanzgröße — sanftes Schrumpfen statt harter Clip). Rendering bewusst ohne Custom-Shader und ohne Emissiv (Emissiv addiert flach über die Quad-Silhouette, Instanzfarbe multipliziert garantiert erst am Ende des Shaders auf allen Tiers): additive `EmberSpriteMaterial`-Glutsprite mit Radial-Falloff in RGB (ADDITIVE ignoriert Alpha) + CPU-seitiges Per-Instance-Billboarding über die neuen `ParticleMeshRenderer`-Modi `billboard: "yaw" | "spherical"` (die Engine-`isSprite`-Billboarding-Pfade laufen nicht auf instanziierten Draws). Partikel sind Welt-verankert — eine bewegte Fackel (P4) lässt Funken exakt dort zurück, wo sie entstanden sind. Pro-Frame zero-allocation.
+  - *Showcase 45:* Glut-Schicht für alle 16 Feuer (Parameter aus der Flammengröße skaliert — Kerze minimal, Lagerfeuer dicht), eigener HUD-Schalter „Glut / Funken“ im Vorher/Nachher-Block (Kürzel `H`, da `E` von der Flugsteuerung belegt ist); Pause/Zeitlupe frieren auch die Funken ein, Budget- und Tag/Nacht-Umstellung bleiben unberührt.
+- **Architecture & Bugfixes:**
+  - *`GravityAffector` (`@small-world-machine/vfx-extras`):* neuer generischer Konstante-Beschleunigungs-Affektor (addiert auf `accelerations`, die das System pro Frame auf null setzt); schwache, stilistische Gravitation für Glutrückfall/Sinkschwebe statt voller 9,81 m/s².
 - **Housekeeping & Docs:**
   - *Showcase-HUDs: Badge entfernt:* Das `badge: "Showcase 20"` im Header des Behavior Labs entfernt (Showcase-Nummern werden nirgends im Header gedoppelt).
   - *`REFERENCES.md`:* Einträge für `Catmull-Rom Spline Interpolation` (Edwin Catmull & Raphael Rom, 1974) und `Frame-Rate Independent Exponential Dampening` (`SpringLerpBehavior`, Freya Holmér / Inigo Quilez) unter `Geometry & Mathematics` ergänzt.

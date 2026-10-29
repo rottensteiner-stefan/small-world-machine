@@ -17,6 +17,7 @@ import {
 } from "@small-world-machine/engine";
 import type { FlamePalette } from "@small-world-machine/vfx-extras";
 import {
+  FireEmberEmitter,
   FireLightBehavior,
   FireLightBudget,
   FireMaterial,
@@ -98,6 +99,8 @@ interface FireRig {
   readonly flame: FireMaterial;
   readonly glow: FlameGlowMaterial;
   readonly light: FireLightBehavior;
+  readonly embers: FireEmberEmitter;
+  readonly emberAnchor: Vector3D;
   readonly flameObject: Object3D;
   readonly glowObject: Object3D;
   readonly pointLight: PointLight;
@@ -258,6 +261,9 @@ export class Showcase extends AbstractShowcase {
       if (s.showBudget) {
         rig.glow.tint = unlit ? BUDGET_DEBUG_TINT : this._glowTintOf(rig);
       }
+      // Billboards need the live camera position; the anchor is the flame base. The camera is no
+      // scene-graph object in this engine, so `position` is already world-space (`CameraInterfaceData`).
+      rig.embers.update(dt, rig.emberAnchor, this.camera.position);
     }
 
     this._readoutTimer -= deltaTime;
@@ -304,6 +310,10 @@ export class Showcase extends AbstractShowcase {
 
       rig.flameObject.isVisible = s.flame;
       rig.glowObject.isVisible = s.glow;
+      // The ember layer spawns only while enabled; hiding the mesh makes the A/B toggle instant
+      // instead of waiting out live particles.
+      rig.embers.enabled = s.embers;
+      rig.embers.mesh.isVisible = s.embers;
     }
 
     this._budget.maxActive = s.lights ? s.maxActiveLights : 0;
@@ -415,10 +425,32 @@ export class Showcase extends AbstractShowcase {
     lightBehavior.isActive = false;
     this._budget.register(lightBehavior);
 
+    // Ember/glutt particles, scaled from the flame's authored size so the candle glows faintly and
+    // the campfire throws a dense spray. World-anchored + deterministic seed (per-fire index), so a
+    // moving camera sees the same sparks leave the same fire on every run (golden-compatible).
+    const emberAnchor = new Vector3D(
+      spec.position.x,
+      spec.position.y + spec.height * 0.2,
+      spec.position.z,
+    );
+    const embers = new FireEmberEmitter({
+      name: `${spec.name}_Embers`,
+      seed,
+      rate: Math.min(24, Math.max(2, spec.height * 26 * 0.9)),
+      capacity: Math.min(24, Math.max(3, Math.round(spec.height * 26))),
+      lifeRange: [0.4, Math.min(1.6, 0.4 + spec.height * 1.4)],
+      speedRange: [0.3, Math.min(2.4, 0.3 + spec.height * 2.4)],
+      sizeRange: [spec.width * 0.05, spec.width * 0.13],
+      spawnRadius: Math.max(0.015, spec.width * 0.18),
+    });
+    this.scene.add(embers.mesh);
+
     this._fires.push({
       flame: fire,
       glow: glowMat,
       light: lightBehavior,
+      embers,
+      emberAnchor,
       flameObject: flame,
       glowObject: glow,
       pointLight: light,

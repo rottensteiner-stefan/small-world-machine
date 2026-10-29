@@ -115,3 +115,36 @@ P6 Goldens. Nachtszene vor einer Steinwand, damit Emission, Bloom und Lichtwurf 
   `apps/showcases/shared/ShowcaseDrawer.ts`. 45 ist die Referenz: `FireLabHud.ts` → `Hud.ts` (git mv), Drawer,
   Event-Abschirmung, Footer-Button und I/H kommen aus dem Baustein; Slider-Wertlabels heißen jetzt `sl_<key>_val`.
 - Browser-Check: I/H, Farbtasten, Regler, ein Footer-Button, keine Konsolenfehler.
+
+## 2026-10-29 · P3: Glut/Funken-Schicht (Review-Punkt 1 — Partikel-Fundament)
+
+- Umsetzung als Kollege-Übergabe (fire-session am 5h-Limit): nach Review-Grobplan „P3 zuerst, minimal“ —
+  bewusst NICHT der volle P0-Umfang (kein Flipbook, kein voller `ParticleEmitter`, kein Custom-Shader).
+- `FireEmberEmitter` (`packages/vfx-extras/src/fire/`): Welt-verankerte Glutspritzer auf der bestehenden
+  `ParticleSystem`-SoA-Kette. Deterministisch (Integer-mulberry32, Provenienz in Kommentar, Engine-`SeededRandom`
+  ist nicht Teil der Public API); Parameter aus der Flammengröße abgeleitet, Wahl über `options`.
+  Pipeline: `GravityAffector` (Standard (0, −1,4, 0) — Glut senkt sich, kein pures 9,81) + `DragAffector`
+  + `ColorOverLifeAffector` (heißes Orange → Ascherot, Alpha → 0). Der Alpha-Fade wird im Renderer in die
+  Instanzgröße gefaltet → sanftes Erglühen statt harter Clip; daher bewusst KEIN `SizeOverLifeAffector`
+  (der überschreibt `sizes` mit dem Roh-Scale und würde die Zufalls-Partikelgröße zerstören).
+- Rendering-Architektur (Engine-Doktrin, alle Tiers):
+  - `EmberSpriteMaterial`: `StandardMaterial` + `state.blending = ADDITIVE` + `skipDepthPrePass` (idempotent pro
+    `getRenderManifest`-Call, da `_syncBaseManifestState` den State neu ableitet). Kein Emissiv: Emissiv wird
+    flach addiert (`lighting_pbr.wgsl:339-340`) und male eine helle Quad-Silhouette; Instanzfarbe dagegen ist
+    engine-garantiert als finale Multiplikation (`Standard.frag.glsl:133` / WGSL `tint`).
+  - Radiale Glutsprite mit Falloff in **RGB** (nicht Alpha): additive `ONE,ONE`-Blending ignoriert Alpha.
+  - `ParticleMeshRenderer` erweitert: `ParticleBillboardMode = "none" | "yaw" | "spherical"` + `sync(cameraPosition?)`.
+    CPU-Look-at pro Instanz (Präzedenz `BillboardInstancer`), weil die Engine-`isSprite`-Pfade auf instanziierten
+    Draws nicht laufen. Default `none` — bestehende Nutzer/Tests byte-identisch.
+  - `GravityAffector` (`affectors/`): generischer Konstante-Beschleunigungs-Affektor, addiert auf `accelerations`.
+- Tests (`FireEmber.test.ts`, 13): Determinismus (gleicher/differenter Seed), dt=0-Einfrieren, exakte Emissionsrate,
+  Pool-Cap + finite Matrizen, Abkühlen/Ausfaden, Finitheit unter Drag+Gravity, Yaw-/Spherical-Billboard-Richtung
+  (Spalten-2-Direktion, skalenunabhängig normalisiert), Dead-Slot-Kollaps auf Null-Matrizen, additiver Material-Vertrag.
+- Buddies für spätere Integration: `ParticleBillboardMode` bekommt mit dem getragenen Feuer/anderen
+  Billboard-Nutzern die nötige Konsumentenzahl (ADR 0047 Rule of Three).
+- Showcase 45: Glut-Schicht für alle 16 Feuer; HUD-Schalter „Glut / Funken“ (Kürzel `H` — `E` ist die Flug-Aufwärts-Taste
+  des `FlyController`), Teil des Vorher/Nachher-Blocks. Pause/Zeitlupe frieren die Funken ein; `enabled` + `isVisible`
+  für sofortige A/B-Umschaltung.
+- Bewusst NICHT in P3: Rauch-Schicht, Welt-Scherung (2b), Golden-Render-Gate (5), ADR/Guide (7) — nächste Schritte.
+- Gates: `tsc`, ESLint, 80/80 vfx-extras-Tests, volle Suite grün (1 spurious Timeout in `lintAssets`, isoliert grün),
+  `build:lib`, `check:doctrine` sauber.

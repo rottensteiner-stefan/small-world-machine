@@ -16,6 +16,7 @@ export interface FireLabSettings {
   glow: boolean;
   lights: boolean;
   bloom: boolean;
+  embers: boolean;
   paused: boolean;
   timeScale: number;
   palette: PaletteChoice;
@@ -37,6 +38,7 @@ export function defaultFireLabSettings(maxActiveLights: number): FireLabSettings
     glow: true,
     lights: true,
     bloom: true,
+    embers: true,
     paused: false,
     timeScale: 1,
     palette: "original",
@@ -60,7 +62,16 @@ const PALETTE_KEYS: Record<string, PaletteChoice> = {
   Digit3: "wisp",
   Digit4: "cursed",
 };
-const SWITCHES = ["flicker", "flame", "glow", "lights", "bloom", "showBudget", "daylight"] as const;
+const SWITCHES = [
+  "flicker",
+  "flame",
+  "glow",
+  "lights",
+  "bloom",
+  "embers",
+  "showBudget",
+  "daylight",
+] as const;
 type SwitchKey = (typeof SWITCHES)[number];
 
 interface SliderSpec {
@@ -155,12 +166,13 @@ export class FireLabHud {
         <div class="hud-section"><pre id="fireLabReadout"></pre></div>
         ${hudSection(
           "⚖️ Vorher / Nachher",
-          "F · G · L",
+          "F · G · L · H",
           hudSwitch("sw_flicker", "Flackern (Licht)") +
             hudSwitch("sw_flame", "Flammenkörper") +
             hudSwitch("sw_glow", "Glow-Halo") +
             hudSwitch("sw_lights", "Punktlichter") +
             hudSwitch("sw_bloom", "Bloom") +
+            hudSwitch("sw_embers", "Glut / Funken") +
             hudNote(
               "💡 Schalte das Flackern aus: Ein starres Licht wirkt sofort wie eine Glühbirne.",
             ),
@@ -196,7 +208,7 @@ export class FireLabHud {
         )}
         ${hudSection("🌗 Umgebung", "N", hudSwitch("sw_daylight", "Tageslicht"))}
         <div class="hud-section hud-keys">
-          <kbd>F</kbd> Flackern · <kbd>G</kbd> Glow · <kbd>L</kbd> Lichter · <kbd>P</kbd> Pause · <kbd>T</kbd> Tempo ·
+          <kbd>F</kbd> Flackern · <kbd>G</kbd> Glow · <kbd>L</kbd> Lichter · <kbd>H</kbd> Glut · <kbd>P</kbd> Pause · <kbd>T</kbd> Tempo ·
           <kbd>0–4</kbd> Farbe · <kbd>,</kbd><kbd>.</kbd> Windrichtung · <kbd>+</kbd><kbd>−</kbd> Windstärke · <kbd>V</kbd> Budget ·
           <kbd>N</kbd> Tag/Nacht · <kbd>I</kbd> Panel · <kbd>WASD</kbd> Fliegen
         </div>
@@ -270,6 +282,9 @@ export class FireLabHud {
         return true;
       case "KeyN":
         s.daylight = !s.daylight;
+        return true;
+      case "KeyH":
+        s.embers = !s.embers;
         return true;
       case "KeyP":
         s.paused = !s.paused;
