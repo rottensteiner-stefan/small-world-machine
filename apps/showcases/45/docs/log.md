@@ -32,3 +32,25 @@ P6 Goldens. Nachtszene vor einer Steinwand, damit Emission, Bloom und Lichtwurf 
   aktuell nur ein Konsument, die Rule of Three (ADR 0047) rechtfertigt den geteilten Chunk noch nicht.
 - Bekannte Lücken: kein Nebel-Einfluss auf additive Flammen; Licht flackert noch über
   `FlickerBehavior` (Phasenmodell) bis `FireLightBehavior` (P2) kommt.
+
+## 2026-10-29 · P2: Feuerlicht, Flackern, Licht-Budget
+
+- `FireFlickerProfile`: kontinuierliches Profil (Hüllkurve 1,1/2,7 Hz + Mikrozittern 13 Hz), Wertebereich
+  0,25–1,15, nie stabile Phase. Eigenes Integer-Hash-Value-Noise statt `Noise` (die Engine-`Noise`
+  ist per `Math.random` initialisiert, also nicht reproduzierbar) und statt sin()-Hash (weicht
+  zwischen JS-Engines ab) → reine Funktion von (Seed, Zeit), Golden-tauglich.
+- `FireLightBehavior` am `PointLight`: Intensität × Profil × Budget-`fade`; Farbtemperatur folgt
+  (×0,86 gedimmt … ×1,08 hell) nur wenn `temperatureK` gesetzt ist — Palettenfeuer behalten ihre
+  Lichtfarbe. Positions-Jitter über Noise (2,3 Hz) statt Sinus-Summen (sichtbare Periodik).
+  `value` wird gelesen, um Flamme (±10 %) und Glow (±20 %) synchron atmen zu lassen.
+- `FireLightBudget` an der Kamera: nur die nächsten N Feuer sind echte Lichter, der Rest fällt per
+  `isVisible = false` aus der Lichtliste (Intensität 0 würde auf WebGL1/2 trotzdem einen der 16
+  Slots belegen). Ein-/Ausblenden über 0,5 s.
+- Szene: 10 zusätzliche Wandfackeln (Wand 44 m) → 19 Feuer > 16 GL-Slots; Budget 10. Erste Wahl 8
+  ließ in der Startansicht eine sichtbare Fackel (x = 8, Gleichstand mit x = −8) unbeleuchtet — wirkte
+  wie ein Bug, daher 10.
+- Texturen (Nutzerwunsch): `carved_masonry` (Wand) und `torch_wood` (Schäfte, Scheite) aus
+  Showcase 38. Boden zuerst `paved_flagstone` (38) — gefiel nicht; ersetzt durch Steinplatten
+  `stone_ashlar` aus dem Flakturm-Kit (`public/assets/kits/flakturm/textures/stone_ashlar/`).
+  Alles nach `45/assets/` kopiert, damit der Showcase eigenständig bleibt.
+- Browser-Check WebGPU/WebGL2/WebGL1 ohne Konsolenfehler.
