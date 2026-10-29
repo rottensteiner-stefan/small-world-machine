@@ -32,6 +32,15 @@ Bis zu **zwei** schattenwerfende Punktlichter pro Frame (WebGPU, WebGL2). Jedes 
 - Bis zu 12 zusätzliche Depth-Passes pro Frame auf HIGH; gemessen und per Leistungsstufe begrenzt.
 - `GlobalUniformLayout`-Tests, `VIEW_SLOT_COUNT` (9 → 21) und die Lit-Shader-Schleifen beider Tiers ändern sich; der Default ohne schattenwerfende Punktlichter bleibt bytes-identisch (Guard-Test wie bei ADR 0043).
 
+## Doctrine Compliance
+
+- Neue öffentliche Parameter (Hot-Scope): `quality.maxShadowedPointLights` (`@domain`, Anzahl schattenwerfender Punktlichter, Tier-Default LOW 0 / MEDIUM 1 / HIGH 2). Konstanten in `PointLightShadow.ts` als `@fixed`/`@derived` klassifiziert (`SPOT_SHADOW_LAYERS`, `MAX_SHADOWED_POINT_LIGHTS`, `CUBE_FACE_COUNT`, `SHADOW_ARRAY_LAYERS`, `POINT_SHADOW_NEAR`).
+- Geteilte Abstraktion eingeführt/verbreitert? `core/lights/PointLightShadow.ts` — ein Kern für zwei Renderer (WebGPU, WebGL2) plus Tests; ADR-0038-Renderer-Infrastruktur, keine Rule-of-Three-Abstraktion über Fachkonsumenten.
+- Modeful Objekt? Kein neuer Modus; ein Licht ist pro Frame „mit Slot“ oder „ohne Slot“, neu entschieden durch `selectShadowedPointLights` (zustandslos).
+- Mathematische Behauptungen: Seitenwahl = Hauptachse mit Gleichstand X > Y > Z, Shader-Implementierungen per Quell-Guard gegen `cubeFaceForDirection` geprüft (WebGL2: 512 Richtungen inkl. ±0); Seiten-Matrizen bilden die Seitenachse auf die Clip-Mitte ab und decken 90° ab (`tests/core/PointLightShadow.test.ts`). Keine Registry-ID.
+- Neue Skalar-Eingänge / tier-gated Capability: WebGL1 ohne Shadow-Maps → ehrlicher Rückfall ohne Punktschatten (wie Spots); ohne schattenwerfende Punktlichter bleibt der Shader-Pfad numerisch identisch (Faktor exakt 1.0, Guard-Tests).
+- Ausnahmen: keine.
+
 ## Umsetzungsplan
 
 0. **Gemeinsamer Kern** `core/lights/PointLightShadow.ts`: Layer-Layout (`pointShadowLayer`), Seiten-Matrizen (`writePointShadowFaceMatrices`, GL-Clip-Space), Seitenwahl-Referenz (`cubeFaceForDirection`, Shader müssen exakt folgen), Lichtauswahl (`selectShadowedPointLights`); Tests `tests/core/PointLightShadow.test.ts`.
