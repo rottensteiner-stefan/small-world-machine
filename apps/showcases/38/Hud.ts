@@ -62,7 +62,7 @@ export class Hud {
         </div>
 
         <div class="hud-section">
-          <div class="section-title">📍 Camera Positions</div>
+          <div class="section-title">📍 Camera Viewpoint</div>
           <div class="preset-group">${presets}</div>
         </div>
       `,
@@ -81,6 +81,11 @@ export class Hud {
         callbacks.onCameraPreset(parseInt(btn.dataset["cam"] ?? "0", 10)),
       );
     });
+  }
+
+  /** The drawer element; the showcase tracks hover/drag on it to pause camera controllers. */
+  public get root(): HTMLElement {
+    return this._drawer.root;
   }
 
   /** Reflects the scene state in every control. */

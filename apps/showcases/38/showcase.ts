@@ -19,6 +19,7 @@ import {
   FlyController,
   Fog,
   FogMode,
+  Keys,
   Object3D,
   PointLight,
   PostProcessingEffectType,
@@ -53,6 +54,9 @@ export class Showcase extends AbstractShowcase {
   private _flickerBehaviors: FlickerBehavior[] = [];
   private _audioMuted: boolean = false;
   private _activePresetIdx: number = 0;
+  private _flyController?: FlyController;
+  private _isHoveringHud = false;
+  private _isDraggingHud = false;
 
   private _hud: Hud | undefined;
   private _goldenCapture: GoldenCapture | undefined;
@@ -98,10 +102,7 @@ export class Showcase extends AbstractShowcase {
           this._flickerEnabled = false;
         },
         applyPreset: (index: number): void => {
-          const preset = this._cameraPresets[index];
-          if (!preset) return;
-          this._activePresetIdx = index;
-          this.setInitialCamera(preset.position, preset.target);
+          this._applyCameraPreset(index, true);
         },
       });
       await this._goldenCapture.run(golden);
@@ -183,10 +184,7 @@ export class Showcase extends AbstractShowcase {
     this.configureCamera();
 
     this.camera.setStrategy(CameraStrategyType.FPS);
-    const initialPreset = this._cameraPresets[0]!;
-    this.setInitialCamera(initialPreset.position, initialPreset.target);
-
-    const flyCtrl = new FlyController({
+    this._flyController = new FlyController({
       input: this.input,
       moveSpeed: 4.5,
       fastMultiplier: 2.5,
@@ -195,7 +193,8 @@ export class Showcase extends AbstractShowcase {
       enableVertical: true,
       flyInLookDirection: true,
     });
-    this.camera.addBehavior(flyCtrl);
+    this.camera.addBehavior(this._flyController);
+    this._applyCameraPreset(0, true);
 
     // ------------------------------------------------------------------------
     // 3. Desert Dust Fog & Environment Atmosphere
@@ -1637,16 +1636,133 @@ export class Showcase extends AbstractShowcase {
     this._syncHud();
   }
 
+  private _applyCameraPreset(index: number, instant = false): void {
+    const preset = this._cameraPresets[index];
+    if (!preset) return;
+    this._activePresetIdx = index;
+
+    if (instant) {
+      this.camera.cancelFlight?.();
+      this.setInitialCamera(preset.position, preset.target);
+      this._syncCameraStrategy();
+      return;
+    }
+
+    const startZ = this.camera.position.z;
+    const endZ = preset.position.z;
+
+    const crossingPortal = (startZ > -3.0 && endZ < -3.6) || (startZ < -3.6 && endZ > -3.0);
+    const crossingBrazier = (startZ > -10.0 && endZ < -11.0) || (startZ < -11.0 && endZ > -10.0);
+
+    let waypoints: Vector3D[] | undefined;
+
+    if (crossingPortal && crossingBrazier) {
+      if (startZ > endZ) {
+        waypoints = [
+          new Vector3D(0.0, 2.4, -2.0),
+          new Vector3D(0.0, 2.4, -4.5),
+          new Vector3D(0.0, 3.2, -10.5),
+        ];
+      } else {
+        waypoints = [
+          new Vector3D(0.0, 3.2, -10.5),
+          new Vector3D(0.0, 2.4, -4.5),
+          new Vector3D(0.0, 2.4, -2.0),
+        ];
+      }
+    } else if (crossingPortal) {
+      if (startZ > endZ) {
+        waypoints = [new Vector3D(0.0, 2.4, -2.0), new Vector3D(0.0, 2.4, -4.5)];
+      } else {
+        waypoints = [new Vector3D(0.0, 2.4, -4.5), new Vector3D(0.0, 2.4, -2.0)];
+      }
+    } else if (crossingBrazier) {
+      waypoints = [new Vector3D(0.0, 3.2, -10.5)];
+    }
+
+    this._syncCameraStrategy();
+
+    this.camera.flyTo?.({
+      position: preset.position,
+      target: preset.target,
+      waypoints,
+      onComplete: () => {
+        this._syncCameraStrategy();
+      },
+      onCancel: () => {
+        this._syncCameraStrategy();
+      },
+    });
+  }
+
+  private _syncCameraStrategy(): void {
+    const isFlying = this.camera.isFlying ?? false;
+    const canControl = !this._isHoveringHud && !this._isDraggingHud && !isFlying;
+    this.camera.setStrategy(CameraStrategyType.FPS);
+    if (this._flyController) this._flyController.enabled = canControl;
+    this.camera.updateViewMatrix();
+  }
+
+  public override resetCamera(): void {
+    this._applyCameraPreset(this._activePresetIdx, false);
+    this._syncHud();
+  }
+
   protected override onKeyDown(event: KeyboardEvent): void {
     super.onKeyDown(event);
-    if (this._hud?.handleKey(event)) {
-      event.preventDefault();
+    if (event.altKey || event.metaKey || event.ctrlKey) return;
+    const active = document.activeElement;
+    if (active && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return;
+
+    // Movement keys interrupt a camera fly-through so the user immediately has manual control
+    if (this.camera.isFlying) {
+      const isNav = (
+        [
+          Keys.W,
+          Keys.A,
+          Keys.S,
+          Keys.D,
+          Keys.UP,
+          Keys.DOWN,
+          Keys.LEFT,
+          Keys.RIGHT,
+        ] as readonly string[]
+      ).includes(event.code);
+      if (isNav) {
+        this.camera.cancelFlight?.();
+        this._syncCameraStrategy();
+      }
+    }
+
+    if (this._hud?.handleKey(event)) return;
+
+    switch (event.code) {
+      case Keys.D1:
+        this._applyCameraPreset(0);
+        this._syncHud();
+        break;
+      case Keys.D2:
+        this._applyCameraPreset(1);
+        this._syncHud();
+        break;
+      case Keys.D3:
+        this._applyCameraPreset(2);
+        this._syncHud();
+        break;
+      case Keys.D4:
+        this._applyCameraPreset(3);
+        this._syncHud();
+        break;
+      case Keys.D5:
+        this._applyCameraPreset(4);
+        this._syncHud();
+        break;
     }
   }
 
   private _createHud(): void {
     this._hud?.dispose();
-    this._hud = new Hud({
+    const hud = new Hud({
       onTimeOfDay: (mode: TimeOfDay): void => this._setTimeOfDay(mode),
       onFlicker: (enabled: boolean): void => {
         this._flickerEnabled = enabled;
@@ -1658,14 +1774,55 @@ export class Showcase extends AbstractShowcase {
         }
       },
       onCameraPreset: (index: number): void => {
-        const preset = this._cameraPresets[index];
-        if (preset) {
-          this._activePresetIdx = index;
-          this.setInitialCamera(preset.position, preset.target);
-          this._syncHud();
-        }
+        this._applyCameraPreset(index);
+        this._syncHud();
       },
     });
+    this._hud = hud;
+
+    // Besides the drawer's own event shielding, the camera controllers must pause while the
+    // pointer is over or dragging inside the panel, and wheel deltas must not dolly the camera.
+    hud.root.addEventListener(
+      "wheel",
+      () => {
+        this.input.mouse.zoom = 0;
+        this.input.mouse.wheelX = 0;
+        this.input.mouse.wheelY = 0;
+      },
+      { passive: true },
+    );
+
+    hud.root.addEventListener("pointerenter", () => {
+      this._isHoveringHud = true;
+      if (this._flyController) this._flyController.enabled = false;
+    });
+
+    hud.root.addEventListener("pointerleave", (e: PointerEvent) => {
+      if (0 === e.buttons && !this._isDraggingHud) {
+        this._isHoveringHud = false;
+        this._syncCameraStrategy();
+      }
+    });
+
+    hud.root.addEventListener("pointerdown", () => {
+      this._isHoveringHud = true;
+      this._isDraggingHud = true;
+      if (this._flyController) this._flyController.enabled = false;
+      this.input.mouse.dx = 0;
+      this.input.mouse.dy = 0;
+      this.input.mouse.zoom = 0;
+      this.input.mouse.left = false;
+    });
+
+    window.addEventListener("pointerup", () => {
+      if (!this._isDraggingHud) return;
+      this._isDraggingHud = false;
+      if (!this._hud?.root.matches(":hover")) {
+        this._isHoveringHud = false;
+        this._syncCameraStrategy();
+      }
+    });
+
     this._syncHud();
   }
 

@@ -89,7 +89,7 @@ export class Hud {
             </div>
           </div>
           <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
-            <label>Camera Viewpoints</label>
+            <label>Camera Viewpoint</label>
             <div class="preset-group">${presets}</div>
           </div>
         </div>
