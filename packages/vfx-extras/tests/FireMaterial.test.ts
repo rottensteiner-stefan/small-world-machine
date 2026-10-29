@@ -76,6 +76,8 @@ describe("FireMaterial", () => {
       expect(fs).toContain("fireFbm");
       expect(fs).toContain("edgeFade");
       expect(fs).toContain("cardTangent");
+      // Staggered per-column burn-out keeps tongue tips off the card's top edge.
+      expect(fs).toMatch(/tip = 0\.68 \+ 0\.27 \* fireNoise/);
     }
   });
 });

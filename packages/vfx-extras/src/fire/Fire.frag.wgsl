@@ -46,13 +46,16 @@ fn fireFbm(p: vec2f) -> f32 {
     let nA = fireFbm(vec2f(x * 3.0 + seed, y * 2.0 - time * 1.3));
     let nB = fireFbm(vec2f(x * 4.0 + (nA - 0.5) * turbulence + seed * 1.7, y * 3.0 - time * 2.4));
 
-    let halfWidth = 0.46 * pow(max(1.0 - y, 0.0), 0.75) * smoothstep(-0.1, 0.25, y);
+    // The body tapers out below the card's top edge, so no tongue is ever clipped by the quad.
+    let halfWidth = 0.46 * pow(max(0.95 - y, 0.0) / 0.95, 0.75) * smoothstep(-0.1, 0.25, y);
     let wobble = (nA - 0.5) * 0.3 * turbulence * y;
     let body = 1.0 - abs(x + wobble) / max(halfWidth, 1e-3);
     // Erosion grows with height: the base stays solid, the tip tears into tongues.
     let heat = clamp(body - (1.0 - nB) * 1.1 * pow(y, 0.8) + 0.25 * (1.0 - y), 0.0, 1.0);
 
-    let mask = smoothstep(0.0, 0.12, heat) * smoothstep(0.0, 0.06, y);
+    // Each column burns out at its own slowly wandering height: tongues end staggered, not on one line.
+    let tip = 0.68 + 0.27 * fireNoise(vec2f(x * 7.0 + seed * 3.1, time * 1.7));
+    let mask = smoothstep(0.0, 0.12, heat) * smoothstep(0.0, 0.06, y) * (1.0 - smoothstep(tip - 0.2, tip, y));
     var color = mix(obj.matParam3.rgb, obj.matParam2.rgb, smoothstep(0.05, 0.35, heat));
     color = mix(color, obj.matParam1.rgb, smoothstep(0.45, 0.85, heat));
 

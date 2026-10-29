@@ -99,3 +99,12 @@ P6 Goldens. Nachtszene vor einer Steinwand, damit Emission, Bloom und Lichtwurf 
 - Fallstrick vermieden: Lichter bekommen eine Kopie der Palettenfarbe, sonst schriebe `FireLightBehavior`
   beim Umschalten auf Blackbody in die globale `FlamePalettes`-Konstante.
 - Bekannt: Das Panel überdeckt den ▶-Button (gleiches Verhalten wie Showcase 44).
+
+## 2026-10-29 · Flammenspitzen enden nicht mehr auf einer Linie (Nutzer-Feedback)
+
+- Befund (Nutzer, Nahaufnahme Lagerfeuer): Alle Zungen enden auf derselben Höhe. Ursache: Die Tropfenmaske lief
+  erst bei `y = 1` auf null, schmale Zungen in Kartenmitte reichten bis an den oberen Quad-Rand und wurden dort
+  hart abgeschnitten.
+- Fix (alle drei Shader): Form verjüngt sich bis `y = 0,95`, und jede Spalte brennt bei einer eigenen, langsam
+  wandernden Höhe aus (`tip = 0,68 + 0,27 · noise(x, t)`, weicher Auslauf über 0,2). Erste Variante (0,6–0,92)
+  machte die Flamme sichtbar kürzer und wurde nach oben verschoben.
