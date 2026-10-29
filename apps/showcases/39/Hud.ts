@@ -1,7 +1,7 @@
 import { ShowcaseDrawer, hudSwitch } from "../shared/ShowcaseDrawer.js";
 
 /** Scene state the panel mirrors. */
-export interface SanctumHudState {
+export interface HudState {
   fog: boolean;
   carver: boolean;
   noise: boolean;
@@ -14,8 +14,8 @@ export interface SanctumHudState {
   activePresetIdx: number;
 }
 
-/** Scene actions the panel triggers; the showcase applies them and calls {@link SanctumHud.sync}. */
-export interface SanctumHudCallbacks {
+/** Scene actions the panel triggers; the showcase applies them and calls {@link Hud.sync}. */
+export interface HudActions {
   onFog(enabled: boolean): void;
   onCarver(enabled: boolean): void;
   onNoise(enabled: boolean): void;
@@ -45,10 +45,10 @@ function sliderRow(id: string, valueId: string, label: string, range: string, to
  * Atmospheric Sanctum panel of showcase 39 on the shared {@link ShowcaseDrawer}. Owns only its
  * controls; fog, sun and camera state stay in the showcase.
  */
-export class SanctumHud {
+export class Hud {
   private readonly _drawer: ShowcaseDrawer;
 
-  constructor(badge: string, callbacks: SanctumHudCallbacks) {
+  constructor(callbacks: HudActions) {
     const presets = PRESET_LABELS.map(
       (label, i) => `<button class="btn-preset" data-cam="${i}">${label}</button>`,
     ).join("");
@@ -57,8 +57,9 @@ export class SanctumHud {
       id: "showcase-hud",
       title: "Atmospheric Sanctum",
       icon: "🌫️",
-      badge,
       open: false,
+      footerIcon: "⚙",
+      buttonId: "sanctumInspectorBtn",
       body: `
         <div class="hud-section">
           <div class="section-title">🌫️ Volumetric Fog & Mist</div>
@@ -123,7 +124,7 @@ export class SanctumHud {
   }
 
   /** Reflects the scene state in every control. */
-  public sync(state: SanctumHudState): void {
+  public sync(state: HudState): void {
     this._setChecked("#swFog", state.fog);
     this._setChecked("#swCarver", state.carver);
     this._setChecked("#swNoise", state.noise);

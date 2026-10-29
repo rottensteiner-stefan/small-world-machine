@@ -88,3 +88,7 @@ With the WebGL2 fog now scattering local lights (v0.111.0) the altar and brazier
 
 - **Panel ausgelagert:** Das Seitenpanel lebt jetzt in `apps/showcases/39/Hud.ts` (`SanctumHud`) auf dem gemeinsamen Baustein `apps/showcases/shared/ShowcaseDrawer.ts` (Drawer-Markup, Event-Abschirmung, Footer-Button, I/H). `showcase.ts` behält Nebel-, Sonnen- und Kamerazustand und verbindet sich über Callbacks + `sync(state)`; statt `innerHTML`-Neuaufbau bei jeder Änderung werden die Controls nur noch synchronisiert.
 - Verhalten unverändert: gleiche Controls, Tasten, IDs (`#showcase-hud` bleibt wegen `GoldenCapture.ts`), Panel startet geschlossen; Hover/Drag-Sperre der Kamera-Controller und Wheel-Nullung bleiben in `showcase.ts`. Neu: Footer-Button zeigt 🌫️ statt ⚙, `H` schaltet das Panel zusätzlich zu `I`.
+
+## 2026-10-29 — Hud-Namen
+
+- `SanctumHud`/`SanctumHudState`/`SanctumHudCallbacks` → `Hud`/`HudState`/`HudActions`; Footer-Button wieder ⚙ (`footerIcon`) mit alter ID `#sanctumInspectorBtn` (`buttonId`); Renderer-Badge im Header entfernt.

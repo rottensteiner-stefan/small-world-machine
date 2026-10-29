@@ -35,7 +35,7 @@ import {
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
 import { GoldenCapture, parseGoldenSpec } from "./GoldenCapture.js";
-import { SanctumHud } from "./Hud.js";
+import { Hud } from "./Hud.js";
 
 interface CameraPreset {
   readonly name: string;
@@ -981,14 +981,11 @@ export class Showcase extends AbstractShowcase {
     }
   }
 
-  private _hud?: SanctumHud;
+  private _hud?: Hud;
 
   private _createHud(): void {
     this._hud?.dispose();
-    const rendererBackend = this.renderer.constructor.name.includes("GPU")
-      ? "WebGPU (Froxel)"
-      : "WebGL2 (Raymarch)";
-    const hud = new SanctumHud(rendererBackend, {
+    const hud = new Hud({
       onFog: (enabled: boolean): void => {
         if (this._fogElement) this._fogElement.enabled = enabled;
       },
