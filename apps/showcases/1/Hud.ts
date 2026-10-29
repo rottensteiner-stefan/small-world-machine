@@ -59,7 +59,6 @@ export class Hud {
       id: "showcase1-inspector",
       title: "Shape & Material",
       icon: "🔷",
-      badge: "Showcase 01",
       open: false,
       footerIcon: "⚙",
       buttonId: "showcase1InspectorBtn",
