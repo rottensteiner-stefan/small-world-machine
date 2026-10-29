@@ -2,9 +2,14 @@
 
 ## [Unreleased]
 
+### "Motion is the cause of all life." - Leonardo da Vinci
+
+## [0.119.0] - 2026-10-29
+
 ### "The first step binds one to the second." - French Proverb
 
 - **Features:**
+  - *Showcase 20 „Behavior Lab“ (`apps/showcases/20/`):* Interaktives HUD-Panel auf Basis des `ShowcaseDrawer` (`I` / `H` / ⚙️-Footer-Button) zur Live-Steuerung aller Ready-Made-Behaviors: Bobbing (Amplitude, Frequenz), Rotator (Drehtempo), Rainbow (Farbwechsel-Tempo), PathFollower (Umlaufzeit, Pause, Look-Forward, Ping-Pong), Flicker (Triebwerk), TrailRenderer (Lichtschweif), SpringLerp (Dämpfung, Abstand) sowie zielverfolgender Suchscheinwerfer (LookAt) mit Target-Grid (Raumschiff, Kristall, Begleiter, Zentrum) und Bloom-Steuerung.
   - *Application Persistence (ADR 0041) Stufe 3 — Level-Daten von Controller-Code getrennt:* Level-Deskriptoren liegen jetzt unter `apps/<app>/levels/` (umgezogen: `koje42`, `kaeltekammer` aus `scenes/prologue/`, `$schema`-Zeiger und Lade-URLs in `prologue.ts` repariert). `LevelValidation.test.ts` erzwingt die Konvention per Scan-Regel (Stolperstein explizit geprüft: Scan findet weiterhin > 0 Dateien); `AppManifestValidation` deckt die IDs über das Manifest ab.
   - *Application Persistence (ADR 0041) Stufe 4 — `content/<sprache>.json` mit stabilen Text-IDs:* Für `the-whisper` liegen `content/de.json` + `content/en.json` mit Story-/UI-/Karten-Texten unter stabilen, nie wiederverwendeten Text-IDs; `app.json` bindet die Pakete über `content.languages` ans Manifest (`app.schema.json` + `AppManifest` erweitert). `ContentPackage` (App-Resolver, fail-fast via `t(id)`) macht Texte adressierbar; `ContentPackageValidation.test.ts` erzwingt Schlüssel-Parität über alle Sprachen, Nicht-Leere und Manifest-Bindung (keine verwaisten Pakete).
   - *Application Persistence (ADR 0041) Stufe 5 — Savegame-Format v1:* Reiner Format-Entwurf (Gate: Format steht vor dem ersten Speichern-Feature): `public/schemas/savegame.schema.json` + `SavegameTypes` (`SAVEGAME_SCHEMA_VERSION = 1`, `SAVEGAME_MIGRATIONS`, `SavegameDescriptor`/`SavegamePatchAction` mit `set`/`add`/`remove`/`toggle`, `SavegameStorage` IndexedDB/OPFS/File). `migrateSavegameDescriptor` migriert mit Fail-Fast bei unbekannter `schemaVersion` und Forward-Toleranz für unbekannte Felder; `backupSavegameDescriptor` setzt Backup-vor-Migration als Default um; `assertSavegameIdReferences` erzwingt die ID-Referenz-Regel (namespace:path, keine Content-Objekte). Absicherung durch `SavegameValidation.test.ts`.
@@ -17,6 +22,12 @@
   - *`FireLightBehavior.flicker`:* Flackertiefe 0..1 (0 = ruhiges Licht auf Basisintensität, -farbe und -position) für A/B-Vergleiche.
   - *Showcase 45:* Steinplatten- (`stone_ashlar`), Mauer- und Holztexturen; lange Fackelreihe (16 Feuer insgesamt) unter Licht-Budget; Flackern über `FireLightBehavior` statt `FlickerBehavior`.
 - **Architecture & Bugfixes:**
+  - *Showcase 20 Geometrie-, Schatten- & Hot-Path-Sanierung:*
+    - **Raumschiff-Ausrichtung:** `body.rotation.x = -Math.PI / 2` richtet den Cone im rechtshändigen SWM-System (`-Z` Vorne) mit der Spitze nach vorne aus; vorher zeigte die Spitze mit `+PI / 2` nach hinten in das Triebwerk (`+Z`), sodass das Schiff rückwärts flog.
+    - **Gitterboden & Schattenwurf:** Umstellung von unbeleuchtetem `BasicMaterial` auf `StandardMaterial` mit `diffuseMap` + `emissiveMap` (HDR-Blau) und `roughness`. Der Boden empfängt nun echte Schatten (`floor.receiveShadow = true`), und das Spotlight zeichnet einen dynamischen Lichtkegel auf den Boden.
+    - **Begleiter Zero-GC & Kamerarelation:** Neues `CompanionFollowBehavior` berechnet den kamerarelativen Offset (vorne + rechts) über gepoolte Scratch-Vektoren ohne Allokationen im Hot-Path (vorher 3 `Vector3D` pro Frame und starrer Welt-X-Offset).
+    - **Pointer-Lock-Zwang entfernt:** Klick auf das Canvas sperrt den Mauszeiger nicht mehr ein; Orbit-Steuerung bleibt natürlich bedienbar, während der Cursor frei für das HUD bleibt.
+    - **State-Resets:** Deaktivieren einzelner Behaviors setzt Position (Bobbing auf `y = 3.0`), Sollemission (Triebwerk voll leuchtend) oder Materialfarben (Kristall auf `Color.RED`) definiert zurück; Deaktivieren des Schweifs leert den Pool via `clear()`.
   - *WebGPU: Mipmaps von RenderTargets brachen den ganzen Frame (Showcase 30, Auto verschwunden):* Die Mip-Blit-Pipeline war fest auf `rgba8unorm` gebaut, mip-gemappte RenderTargets (Planar-Reflexion Stufe 2) haben aber das Canvas-Format (`bgra8unorm` auf macOS) → „Attachment state … not compatible“, ungültiger Command-Buffer pro Frame. Jetzt eine Pipeline je Texturformat (`GPUTextureResourceCache`), Regressionstest in `WebGPUMipmapGeneration.test.ts`.
   - *Showcase 30: Hover-Auto lud nicht:* Die WebP-Massenkonvertierung (`5bd278fe`) hatte `Textures/colormap.png` ersetzt, beide `.glb` verwiesen aber weiter auf die PNG (404 → Modell übersprungen). Bild-URIs in den GLB-JSON-Chunks auf `colormap.webp` umgestellt.
   - *Content-Pakete kompilieren gegen das Manifest:* `ContentPackageValidation` prüft, dass jede deklarierte Sprache als `content/<lang>.json` existiert und jede Sprache im Manifest deklariert ist — keine lose daneben liegenden Text-Ressourcen (§12a-7).
@@ -26,6 +37,7 @@
   - *`FireMaterial`: Flammenspitzen nicht mehr auf einer Linie:* Die Zungen liefen bis an den oberen Card-Rand und wurden dort gerade abgeschnitten. Jetzt verjüngt sich die Form vor dem Rand, und jede Spalte brennt bei einer eigenen, wandernden Höhe aus.
   - *Shader-Lints decken `vfx-extras` ab:* `lint:glsl` und `lint:wgsl` prüfen `packages/vfx-extras/src/fire` (GLSL 300/100 bzw. Assembly über die echte `ShaderRegistry`).
 - **Housekeeping & Docs:**
+  - *Showcase 20 Doku & Tests:* Neues `apps/showcases/20/docs/log.md` gemäß App-Docs-Convention; neuer Unit-Test `apps/showcases/20/tests/BehaviorLab.test.ts` sichert Geometrie-Formel, Settings und Behavior-Verhalten ab.
   - *Showcase-Panels: gemeinsamer `ShowcaseDrawer` + `Hud.ts` je Showcase:* Neues `apps/showcases/shared/ShowcaseDrawer.ts` bündelt das bisher in jedem Panel kopierte Grundgerüst (Drawer-Markup mit Header/Badge/Schließen-Knopf, Abschirmen von Maus-/Touch-Events gegen die Kamera, Footer-Button inkl. verspätetem Footer, I/H-Shortcut, gemeinsame Layout-Styles) plus Zeilen-Helfer (`hudSection`, `hudSwitch`, `hudSlider`, `hudNote`). Konvention: Panel-Inhalt lebt in `apps/showcases/<n>/Hud.ts`; Showcase 45 (`FireLabHud`) ist migriert, die übrigen Panels folgen einzeln.
   - *Alle Showcase-Panels auf `ShowcaseDrawer` migriert:* 1, 28, 29, 30, 38, 39, 41, 42, 43, 44 (je ein Commit) — rund 2.900 Zeilen kopierter Panel-Code entfernt. `ShowcaseDrawer` kann jetzt zusätzlich ein eigenes Footer-Icon (`footerIcon`), eine Button-ID (`buttonId`), frei wählbare Toggle-Tasten (`toggleKeys`, z. B. nur I, wo H belegt ist), Tastatur-Abschirmung (`shieldKeys`) und einen Open/Close-Callback (`onToggle`).
   - *Einheitliche Klassennamen:* Die Hauptklasse jeder `showcase.ts` heißt jetzt `Showcase` (vorher `Showcase<N>`, `DecalProbe`, `MetalReliefShowcase`), überall exportiert; Log-Präfixe wie `[Showcase12]` bleiben.
