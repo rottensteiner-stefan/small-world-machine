@@ -42,6 +42,7 @@ import {
   RainPuddleMaterial,
 } from "@small-world-machine/liquid-extras";
 import { attachDevTools } from "@small-world-machine/tools";
+import { CyberpunkHud } from "./Hud.js";
 
 enum Mood {
   NIGHT = "night",
@@ -887,168 +888,39 @@ class Showcase30 extends AbstractShowcase {
     }
   }
 
-  private _hudElement?: HTMLDivElement;
-  private _inspectorBtn?: HTMLButtonElement;
+  private _hud?: CyberpunkHud;
 
-  private _toggleInspector(force?: boolean): void {
-    if (!this._hudElement) return;
-    const isCurrentlyOpen = this._hudElement.classList.contains("open");
-    const open = undefined !== force ? force : !isCurrentlyOpen;
-    if (open) {
-      this._hudElement.classList.add("open");
-      this._inspectorBtn?.classList.add("active");
-    } else {
-      this._hudElement.classList.remove("open");
-      this._inspectorBtn?.classList.remove("active");
+  protected override onKeyDown(event: KeyboardEvent): void {
+    super.onKeyDown(event);
+    if (this._hud?.handleKey(event)) {
+      event.preventDefault();
     }
   }
 
   private _createHud(): void {
-    const existingHud = document.getElementById("cyberpunk-hud");
-    if (existingHud) existingHud.remove();
-    const existingBtn = document.getElementById("cyberpunkInspectorBtn");
-    if (existingBtn) existingBtn.remove();
-    const existingStyle = document.getElementById("cyberpunkHudStyle");
-    if (existingStyle) existingStyle.remove();
-
-    const hud = document.createElement("aside") as unknown as HTMLDivElement;
-    hud.id = "cyberpunk-hud";
-    hud.className = "swm-inspector-drawer";
-    document.body.appendChild(hud);
-    this._hudElement = hud;
-
-    // Stop events from leaking to camera controllers
-    const stopEvents = [
-      "mousedown",
-      "mouseup",
-      "mousemove",
-      "pointerdown",
-      "pointerup",
-      "pointermove",
-      "wheel",
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "click",
-      "dblclick",
-      "contextmenu",
-    ];
-    for (const ev of stopEvents) {
-      hud.addEventListener(
-        ev,
-        (e) => {
-          e.stopPropagation();
-        },
-        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
-      );
-    }
-
-    // Footer toggle button
-    const toggleBtn = document.createElement("button");
-    toggleBtn.id = "cyberpunkInspectorBtn";
-    toggleBtn.className = "swm-inspector-btn";
-    toggleBtn.innerHTML = "<span>⚙</span>";
-    toggleBtn.title = "Settings (Toggle)";
-    toggleBtn.setAttribute("aria-label", "Toggle Inspector");
-    toggleBtn.onclick = (): void => {
-      this._toggleInspector();
-    };
-    this._inspectorBtn = toggleBtn;
-
-    const footer = document.querySelector(".app-footer");
-    if (footer) {
-      footer.appendChild(toggleBtn);
-    } else {
-      document.body.appendChild(toggleBtn);
-    }
-
+    this._hud?.dispose();
+    this._hud = new CyberpunkHud(FLUID_CYCLE, {
+      onNight: (night: boolean): void => this._applyMood(night ? Mood.NIGHT : Mood.DAY),
+      onPuddleCamera: (puddle: boolean): void =>
+        this._applyCameraView(puddle ? CameraView.PUDDLE : CameraView.STREET),
+      onFluid: (index: number): void => {
+        this._fluidIndex = index;
+        this._dropSystem.fluid = FLUID_PRESETS[FLUID_CYCLE[this._fluidIndex]!];
+      },
+    });
     this._updateHud();
   }
 
   private _updateHud(): void {
-    if (!this._hudElement) return;
-    const isNight = this._mood === Mood.NIGHT;
-    const isPuddle = this._cameraView === CameraView.PUDDLE;
-
-    this._hudElement.innerHTML = `
-      <div class="bottom-sheet-grabber"></div>
-      <div class="hud-header">
-        <div class="hud-title">
-          <span>🌧️</span> Cyberpunk Albedo
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="hud-badge">SSR & Wetness</span>
-          <button id="cyberpunkHudClose" class="hud-close-btn" title="Close Inspector">✕</button>
-        </div>
-      </div>
-      <div class="hud-body">
-        <div class="hud-section">
-          <div class="section-title">🌃 Environment & Camera</div>
-          <div class="hud-row">
-            <label for="swMood">Night Mood</label>
-            <label class="hud-switch">
-              <input type="checkbox" id="swMood" ${isNight ? "checked" : ""}>
-              <span class="hud-switch-slider"></span>
-            </label>
-          </div>
-          <div class="hud-row">
-            <label for="swPuddle">Puddle Camera</label>
-            <label class="hud-switch">
-              <input type="checkbox" id="swPuddle" ${isPuddle ? "checked" : ""}>
-              <span class="hud-switch-slider"></span>
-            </label>
-          </div>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title">💧 Fluid Surface</div>
-          <div class="hud-row">
-            <label for="selFluid">Liquid Preset</label>
-            <select id="selFluid">
-              ${FLUID_CYCLE.map(
-                (fluid, idx) => `
-                <option value="${idx}" ${this._fluidIndex === idx ? "selected" : ""}>
-                  ${fluid.charAt(0).toUpperCase() + fluid.slice(1).replace(/_/g, " ")}
-                </option>
-              `,
-              ).join("")}
-            </select>
-          </div>
-        </div>
-      </div>
-    `;
-
-    document.getElementById("cyberpunkHudClose")?.addEventListener("click", () => {
-      this._toggleInspector(false);
-    });
-
-    document.getElementById("swMood")?.addEventListener("change", (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this._applyMood(checked ? Mood.NIGHT : Mood.DAY);
-    });
-
-    document.getElementById("swPuddle")?.addEventListener("change", (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this._applyCameraView(checked ? CameraView.PUDDLE : CameraView.STREET);
-    });
-
-    document.getElementById("selFluid")?.addEventListener("change", (e) => {
-      this._fluidIndex = parseInt((e.target as HTMLSelectElement).value, 10);
-      this._dropSystem.fluid = FLUID_PRESETS[FLUID_CYCLE[this._fluidIndex]!];
+    this._hud?.sync({
+      night: this._mood === Mood.NIGHT,
+      puddleCamera: this._cameraView === CameraView.PUDDLE,
+      fluidIndex: this._fluidIndex,
     });
   }
 
   public override destroy(): void {
-    if (this._hudElement && this._hudElement.parentNode) {
-      this._hudElement.parentNode.removeChild(this._hudElement);
-    }
-    if (this._inspectorBtn && this._inspectorBtn.parentNode) {
-      this._inspectorBtn.parentNode.removeChild(this._inspectorBtn);
-    }
-    const style = document.getElementById("cyberpunkHudStyle");
-    if (style && style.parentNode) {
-      style.parentNode.removeChild(style);
-    }
+    this._hud?.dispose();
     super.destroy();
   }
 }
