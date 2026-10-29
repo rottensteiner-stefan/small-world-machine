@@ -34,6 +34,7 @@ import {
 } from "@small-world-machine/vfx-extras";
 import type { HudState, PaletteChoice } from "./Hud.js";
 import { Hud, defaultHudState } from "./Hud.js";
+import { GoldenCapture, parseGoldenSpec, GOLDEN_PRESETS } from "./GoldenCapture.js";
 
 /** Torch spacing along the long wall; 16 fires in total, so the budget visibly hands lights over. */
 const TORCH_ROW_X = [-20, -16, -12, -8, -5, 5, 8, 12, 16, 20];
@@ -147,18 +148,58 @@ export class Showcase extends AbstractShowcase {
   });
   private _bloom: BloomElement | undefined = undefined;
   private _hud: Hud | undefined = undefined;
+  private _goldenCapture: GoldenCapture | undefined = undefined;
   private _time: number = 0;
   private _readoutTimer: number = 0;
   /** World wind vector (m/s, horizontal) for the smoke plume; recomputed when the lab wind changes. */
   private readonly _smokeWind: Vector3D = new Vector3D(0, 0, 0);
 
   public override async start(): Promise<void> {
+    const golden = parseGoldenSpec();
     await super.start();
     // Only after start(): AbstractShowcase installs its fly controller solely on a camera that has
     // no behaviors yet, so attaching the budget earlier silently disables camera movement.
     this.camera.addBehavior(this._budget);
-    this._hud = new Hud(this._settings, this._fires.length, () => this._applySettings());
+    if (golden) {
+      this._goldenCapture = new GoldenCapture(this, {
+        freezeForCapture: (): void => this._freezeForCapture(),
+        applyPreset: (index: number): void => this._applyPreset(index),
+      });
+      await this._goldenCapture.run(golden);
+    } else {
+      this._hud = new Hud(this._settings, this._fires.length, () => this._applySettings());
+      this._applySettings();
+    }
+  }
+
+  private _freezeForCapture(): void {
+    this._time = 0;
+    this._settings.paused = false;
+    this._settings.timeScale = 1;
+    this._settings.shadows = true;
+    this._settings.bloom = true;
+    this._settings.embers = true;
+    this._settings.smoke = true;
+    this._settings.lights = true;
+    this._settings.emberBed = true;
     this._applySettings();
+    for (let i = 0; i < this._fires.length; i++) {
+      const rig = this._fires[i]!;
+      rig.light.flicker = 0;
+      rig.light.time = 0.5;
+      rig.light.apply();
+    }
+  }
+
+  private _applyPreset(index: number): void {
+    const preset = GOLDEN_PRESETS[index];
+    if (!preset) return;
+    this.setInitialCamera(preset.cameraPosition, preset.cameraTarget);
+  }
+
+  public override destroy(): void {
+    this._goldenCapture?.dispose();
+    super.destroy();
   }
 
   protected override onKeyDown(event: KeyboardEvent): void {

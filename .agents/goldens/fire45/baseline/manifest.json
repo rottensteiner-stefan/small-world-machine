@@ -1,0 +1,66 @@
+[
+  {
+    "poolKey": "fire45-overview",
+    "view": "main",
+    "backend": "WEB_GL1",
+    "file": "fire45-overview__main.png",
+    "meta": {
+      "poolKey": "fire45-overview",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL1"
+    },
+    "stddev": 29.1803,
+    "blank": false,
+    "consoleErrors": [],
+    "ok": true
+  },
+  {
+    "poolKey": "fire45-campfire",
+    "view": "main",
+    "backend": "WEB_GL1",
+    "file": "fire45-campfire__main.png",
+    "meta": {
+      "poolKey": "fire45-campfire",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL1"
+    },
+    "stddev": 38.994,
+    "blank": false,
+    "consoleErrors": [],
+    "ok": true
+  },
+  {
+    "poolKey": "fire45-budget",
+    "view": "main",
+    "backend": "WEB_GL1",
+    "file": "fire45-budget__main.png",
+    "meta": {
+      "poolKey": "fire45-budget",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL1"
+    },
+    "stddev": 62.1299,
+    "blank": false,
+    "consoleErrors": [],
+    "ok": true
+  },
+  {
+    "poolKey": "fire45-palettes",
+    "view": "main",
+    "backend": "WEB_GL1",
+    "file": "fire45-palettes__main.png",
+    "meta": {
+      "poolKey": "fire45-palettes",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL1"
+    },
+    "stddev": 27.6334,
+    "blank": false,
+    "consoleErrors": [],
+    "ok": true
+  }
+]

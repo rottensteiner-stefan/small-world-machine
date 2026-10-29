@@ -60,6 +60,18 @@
       "views": ["main"],
       "viewport": { "width": 1280, "height": 720 },
       "frames": 60
+    },
+    "45": {
+      "url": "apps/showcases/45/index.html",
+      "poolKeys": [
+        "fire45-overview",
+        "fire45-campfire",
+        "fire45-budget",
+        "fire45-palettes"
+      ],
+      "views": ["main"],
+      "viewport": { "width": 1280, "height": 720 },
+      "frames": 60
     }
   }
 }

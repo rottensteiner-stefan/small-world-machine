@@ -1,0 +1,13 @@
+{
+  "matrix": "gl1",
+  "scene": "45",
+  "url": "apps/showcases/45/index.html",
+  "backend": "WEB_GL1",
+  "frames": 60,
+  "cellsTotal": 4,
+  "cellsOk": 4,
+  "ok": true,
+  "informational": false,
+  "browser": "Chrome/156.0.8078.47",
+  "generatedAt": "2026-10-29T23:32:22.034Z"
+}
