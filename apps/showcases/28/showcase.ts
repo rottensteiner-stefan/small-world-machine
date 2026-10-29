@@ -20,8 +20,8 @@ import { buildBench, buildLaserEmitter } from "./buildBench.js";
 import { buildBeamSplitter, buildBeams } from "./buildBeamSplitter.js";
 import { buildDetector } from "./buildDetector.js";
 import { buildSpectrum } from "./buildSpectrum.js";
-import type { LabInspectorHost, LabKnobs } from "./LabInspector.js";
-import { LabInspector } from "./LabInspector.js";
+import type { LabInspectorHost, LabKnobs } from "./Hud.js";
+import { LabInspector } from "./Hud.js";
 import type { SpectralRay } from "./optics.js";
 import { SPECTRAL_RAY_LENGTH, computeSpectralRays } from "./optics.js";
 
@@ -472,7 +472,7 @@ class Showcase28 extends AbstractShowcase implements LabInspectorHost {
    *  - Shift + Arrow: high-speed nudging / fast translation & rotation.
    *  - M: toggles Beam Splitter bypass (active vs full 100% laser pass-through).
    *  - Space: toggles between manual turntable control and automatic oscillation.
-   *  - I: toggles Lab Inspector.
+   *  - I / H: toggles Lab Inspector.
    */
   protected override onKeyDown(event: KeyboardEvent): void {
     if (
@@ -481,20 +481,14 @@ class Showcase28 extends AbstractShowcase implements LabInspectorHost {
     ) {
       return;
     }
-    const isInspectorActive = this._inspector.isActive;
-    if (isInspectorActive) {
-      if ("KeyI" === event.code) {
-        event.preventDefault();
-        this._inspector.toggle();
-      }
+    if (this._inspector.handleKey(event)) {
+      event.preventDefault();
+      return;
+    }
+    if (this._inspector.isActive) {
       return;
     }
     super.onKeyDown(event);
-    if ("KeyI" === event.code) {
-      event.preventDefault();
-      this._inspector.toggle();
-      return;
-    }
     if (Keys.LEFT === event.code || Keys.RIGHT === event.code) {
       event.preventDefault();
       if (!this._knobs.manualTurntableControl && this._turntable) {

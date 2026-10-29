@@ -25,6 +25,7 @@ import {
 } from "@small-world-machine/engine";
 import { HierarchyPanel, PropertyPanel, UndoStack } from "@small-world-machine/tools";
 import { Pane } from "tweakpane";
+import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
 
 /** Lab parameters the inspector reads and writes; owned by the showcase, which applies them every frame. */
 export interface LabKnobs {
@@ -52,14 +53,148 @@ export interface LabInspectorHost {
   readonly knobs: LabKnobs;
 }
 
+const STYLE_ID = "swm-showcase28-inspector-styles";
+
+// Only what differs from shared.css: the tool-theme look of drawer, header and footer button, the
+// flat full-width sections and the hierarchy tree.
+const STYLE = `
+  .swm-inspector-btn:hover,
+  .swm-inspector-btn.active {
+    border-color: var(--tool-accent, #b000ff);
+    color: var(--tool-accent, #b000ff);
+  }
+  #labInspectorDrawer {
+    color: var(--tool-text, #f8fafc);
+    font-family: var(--tool-font-ui, sans-serif);
+  }
+  #labInspectorDrawer .hud-header {
+    border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.15));
+    background: var(--tool-panel-solid, #0e121c);
+  }
+  #labInspectorDrawer .hud-title {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  #labInspectorDrawer .hud-close-btn {
+    padding: 2px 6px;
+  }
+  #labInspectorDrawer .swm-inspector-section {
+    border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.15));
+    display: flex;
+    flex-direction: column;
+  }
+  .swm-inspector-section-header {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 8px 12px 6px;
+    color: var(--tool-accent, #d884ff);
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  }
+  .swm-inspector-pane-wrap {
+    padding: 6px;
+  }
+  .swm-inspector-hierarchy-wrap {
+    padding: 6px;
+    background: rgba(10, 14, 22, 0.6);
+  }
+  .maker-hierarchy {
+    display: flex;
+    flex-direction: column;
+  }
+  .maker-hierarchy-search-wrapper {
+    margin-bottom: 6px;
+  }
+  .maker-hierarchy-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 4px;
+    color: #f8fafc;
+    padding: 4px 8px;
+    font-size: 0.78rem;
+    font-family: inherit;
+  }
+  .maker-hierarchy-search-input:focus {
+    outline: none;
+    border-color: var(--tool-accent, #b000ff);
+  }
+  .maker-hierarchy-tree {
+    overflow-y: auto;
+    max-height: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-right: 2px;
+  }
+  .maker-hierarchy-row {
+    flex-shrink: 0;
+    height: 24px;
+    line-height: 24px;
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-right: 8px;
+    font-family: var(--tool-font-mono, monospace);
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+  }
+  .maker-hierarchy-row:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+  .maker-hierarchy-row.selected {
+    background: rgba(176, 0, 255, 0.22);
+    color: var(--tool-accent, #d884ff);
+    font-weight: 600;
+  }
+  .maker-hierarchy-rename-input {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid var(--tool-accent, #b000ff);
+    border-radius: 3px;
+    color: #fff;
+    padding: 2px 6px;
+    font-size: 0.8rem;
+    font-family: var(--tool-font-mono, monospace);
+    width: 100%;
+    height: 22px;
+    box-sizing: border-box;
+  }
+`;
+
+const BODY = `
+  <div class="swm-inspector-section">
+    <div class="swm-inspector-section-header">Lab Parameters</div>
+    <div id="swmInspectorParams" class="swm-inspector-pane-wrap"></div>
+  </div>
+  <div class="swm-inspector-section">
+    <div class="swm-inspector-section-header">Scene Hierarchy</div>
+    <div id="swmInspectorHierarchy" class="swm-inspector-hierarchy-wrap"></div>
+  </div>
+  <div class="swm-inspector-section">
+    <div class="swm-inspector-section-header">Selected Object</div>
+    <div id="swmInspectorProps" class="swm-inspector-pane-wrap"></div>
+  </div>
+`;
+
 /**
  * Showcase 28's in-viewport Lab Inspector: collapsible drawer with the Lab Knobs, a hierarchy and a
  * property panel, viewport picking and a selection highlight.
  */
 export class LabInspector {
-  private _inspectorDrawer: HTMLElement | undefined;
-  private _inspectorToggleBtn: HTMLButtonElement | undefined = undefined;
-  private _inspectorOpen = false;
+  private _drawer: ShowcaseDrawer | undefined = undefined;
   private _isHoveringInspector = false;
   private _isDraggingInspector = false;
   private _undo = new UndoStack();
@@ -74,23 +209,22 @@ export class LabInspector {
 
   /** Whether the drawer is open. */
   public get isOpen(): boolean {
-    return this._inspectorOpen;
+    return this._drawer?.isOpen ?? false;
   }
 
   /** Whether the user is interacting with the drawer (hover, drag or keyboard focus inside it). */
   public get isActive(): boolean {
     return (
-      this._inspectorOpen &&
+      this.isOpen &&
       (this._isHoveringInspector ||
         this._isDraggingInspector ||
-        (undefined !== this._inspectorDrawer &&
-          this._inspectorDrawer.contains(document.activeElement)))
+        (undefined !== this._drawer && this._drawer.root.contains(document.activeElement)))
     );
   }
 
   /** Re-syncs the selection highlight; call once per frame while an object is selected. */
   public syncSelection(): void {
-    if (this._inspectorOpen && this._selectedObject) {
+    if (this.isOpen && this._selectedObject) {
       this._syncHighlight();
     }
   }
@@ -158,7 +292,7 @@ export class LabInspector {
       this._highlightMesh = hl;
     }
     const hl = this._highlightMesh;
-    if (!this._inspectorOpen || !this._selectedObject) {
+    if (!this.isOpen || !this._selectedObject) {
       hl.isVisible = false;
       return;
     }
@@ -194,327 +328,61 @@ export class LabInspector {
   }
 
   public toggle(force?: boolean): void {
-    this._inspectorOpen = undefined !== force ? force : !this._inspectorOpen;
-    if (!this._inspectorOpen) {
-      this._isHoveringInspector = false;
-      this._isDraggingInspector = false;
-      if (this.host.orbitController) {
-        this.host.orbitController.enabled = true;
-      }
+    this._drawer?.toggle(force);
+    this._onToggled();
+  }
+
+  /** Handles the I / H panel shortcut. Returns true when the key was consumed. */
+  public handleKey(event: KeyboardEvent): boolean {
+    if (!this._drawer?.handleKey(event)) {
+      return false;
     }
-    if (this._inspectorToggleBtn) {
-      if (this._inspectorOpen) {
-        this._inspectorToggleBtn.classList.add("active");
-      } else {
-        this._inspectorToggleBtn.classList.remove("active");
-      }
+    this._onToggled();
+    return true;
+  }
+
+  private _onToggled(): void {
+    if (this.isOpen) {
+      this._hierarchyPanel?.refresh();
+      this._syncHighlight();
+      return;
     }
-    if (this._inspectorDrawer) {
-      if (this._inspectorOpen) {
-        this._inspectorDrawer.classList.add("open");
-        this._hierarchyPanel?.refresh();
-        this._syncHighlight();
-      } else {
-        this._inspectorDrawer.classList.remove("open");
-        if (this._highlightMesh) {
-          this._highlightMesh.isVisible = false;
-        }
-      }
+    this._isHoveringInspector = false;
+    this._isDraggingInspector = false;
+    if (this.host.orbitController) {
+      this.host.orbitController.enabled = true;
+    }
+    if (this._highlightMesh) {
+      this._highlightMesh.isVisible = false;
     }
   }
 
   public setup(): void {
     if (typeof document === "undefined") return;
 
-    // Inject styling for the Lab Inspector drawer and hierarchy panel
-    const styleId = "swm-showcase28-inspector-styles";
-    if (!document.getElementById(styleId)) {
+    if (!document.getElementById(STYLE_ID)) {
       const style = document.createElement("style");
-      style.id = styleId;
-      style.textContent = `
-        .swm-inspector-btn {
-          position: fixed;
-          bottom: 5px;
-          right: 14px;
-          width: 26px;
-          height: 26px;
-          z-index: 10001;
-          pointer-events: auto;
-          background: var(--tool-card, rgba(22, 29, 45, 0.85));
-          color: var(--tool-text, #f8fafc);
-          border: 1px solid var(--tool-border, rgba(148, 163, 184, 0.25));
-          border-radius: var(--tool-radius-sm, 4px);
-          padding: 0;
-          font-size: 0.95rem;
-          cursor: pointer;
-          backdrop-filter: blur(8px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
-        }
-        .swm-inspector-btn:hover {
-          border-color: var(--tool-accent, #b000ff);
-          color: var(--tool-accent, #b000ff);
-          box-shadow: 0 0 10px rgba(176, 0, 255, 0.4);
-        }
-        .swm-inspector-btn.active {
-          background: rgba(176, 0, 255, 0.2);
-          border-color: var(--tool-accent, #b000ff);
-          color: var(--tool-accent, #b000ff);
-          box-shadow: 0 0 8px rgba(176, 0, 255, 0.3);
-        }
-        .swm-inspector-drawer {
-          position: fixed;
-          top: 0;
-          right: 0;
-          width: 320px;
-          height: calc(100vh - 36px);
-          background: var(--tool-panel, rgba(14, 18, 28, 0.95));
-          backdrop-filter: blur(16px);
-          border-left: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
-          border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
-          color: var(--tool-text, #f8fafc);
-          z-index: 10000;
-          display: flex;
-          flex-direction: column;
-          box-shadow: -6px 0 32px rgba(0, 0, 0, 0.6);
-          transform: translateX(100%);
-          transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-          font-family: var(--tool-font-ui, sans-serif);
-        }
-        .swm-inspector-drawer.open {
-          transform: translateX(0);
-        }
-        @media (max-width: 768px) {
-          .swm-inspector-drawer {
-            top: auto;
-            bottom: 36px;
-            left: 0;
-            right: 0;
-            width: 100vw;
-            max-height: calc(100vh - 80px);
-            border-left: none;
-            border-right: none;
-            border-bottom: none;
-            border-top: 1px solid var(--tool-border, rgba(148, 163, 184, 0.25));
-            border-radius: 14px 14px 0 0;
-            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.7);
-            transform: translateY(100%);
-            transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-          }
-          .swm-inspector-drawer.open {
-            transform: translateY(0);
-          }
-        }
-        .swm-inspector-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 10px 14px;
-          border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.15));
-          background: var(--tool-panel-solid, #0e121c);
-        }
-        .swm-inspector-title {
-          font-size: 0.9rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          color: var(--tool-text, #f8fafc);
-          margin: 0;
-        }
-        .swm-inspector-close-btn {
-          background: none;
-          border: none;
-          color: var(--tool-text-muted, #94a3b8);
-          font-size: 1.1rem;
-          cursor: pointer;
-          padding: 2px 6px;
-          line-height: 1;
-        }
-        .swm-inspector-close-btn:hover {
-          color: var(--tool-danger, #ef4444);
-        }
-        .swm-inspector-body {
-          flex: 1;
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-        }
-        .swm-inspector-section {
-          border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.15));
-          display: flex;
-          flex-direction: column;
-        }
-        .swm-inspector-section-header {
-          font-size: 0.72rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.8px;
-          padding: 8px 12px 6px;
-          color: var(--tool-accent, #d884ff);
-          background: rgba(255, 255, 255, 0.02);
-          border-bottom: 1px solid rgba(148, 163, 184, 0.1);
-        }
-        .swm-inspector-pane-wrap {
-          padding: 6px;
-        }
-        .swm-inspector-hierarchy-wrap {
-          padding: 6px;
-          background: rgba(10, 14, 22, 0.6);
-        }
-        .maker-hierarchy {
-          display: flex;
-          flex-direction: column;
-        }
-        .maker-hierarchy-search-wrapper {
-          margin-bottom: 6px;
-        }
-        .maker-hierarchy-search-input {
-          width: 100%;
-          box-sizing: border-box;
-          background: rgba(15, 23, 42, 0.8);
-          border: 1px solid rgba(148, 163, 184, 0.25);
-          border-radius: 4px;
-          color: #f8fafc;
-          padding: 4px 8px;
-          font-size: 0.78rem;
-          font-family: inherit;
-        }
-        .maker-hierarchy-search-input:focus {
-          outline: none;
-          border-color: var(--tool-accent, #b000ff);
-        }
-        .maker-hierarchy-tree {
-          overflow-y: auto;
-          max-height: 260px;
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          padding-right: 2px;
-        }
-        .maker-hierarchy-row {
-          flex-shrink: 0;
-          height: 24px;
-          line-height: 24px;
-          padding-top: 0;
-          padding-bottom: 0;
-          padding-right: 8px;
-          font-family: var(--tool-font-mono, monospace);
-          font-size: 0.8rem;
-          color: #cbd5e1;
-          cursor: pointer;
-          user-select: none;
-          border-radius: 3px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          box-sizing: border-box;
-          display: flex;
-          align-items: center;
-        }
-        .maker-hierarchy-row:hover {
-          background: rgba(255, 255, 255, 0.08);
-          color: #fff;
-        }
-        .maker-hierarchy-row.selected {
-          background: rgba(176, 0, 255, 0.22);
-          color: var(--tool-accent, #d884ff);
-          font-weight: 600;
-        }
-        .maker-hierarchy-rename-input {
-          background: rgba(15, 23, 42, 0.95);
-          border: 1px solid var(--tool-accent, #b000ff);
-          border-radius: 3px;
-          color: #fff;
-          padding: 2px 6px;
-          font-size: 0.8rem;
-          font-family: var(--tool-font-mono, monospace);
-          width: 100%;
-          height: 22px;
-          box-sizing: border-box;
-        }
-      `;
+      style.id = STYLE_ID;
+      style.textContent = STYLE;
       document.head.appendChild(style);
     }
 
-    // Toggle button in Footer
-    const toggleBtn = document.createElement("button");
-    toggleBtn.className = "swm-inspector-btn";
-    toggleBtn.innerHTML = "<span>⚙</span>";
-    toggleBtn.title = "Toggle Lab Inspector Panel (Key: I)";
-    toggleBtn.onclick = (): void => {
-      this.toggle();
-    };
-    this._inspectorToggleBtn = toggleBtn;
-
-    const footer = document.querySelector(".app-footer");
-    if (footer) {
-      footer.appendChild(toggleBtn);
-    } else {
-      document.body.appendChild(toggleBtn);
+    this._drawer = new ShowcaseDrawer({
+      id: "labInspectorDrawer",
+      title: "Lab Inspector",
+      icon: "⚙",
+      body: BODY,
+      open: false,
+    });
+    const drawer = this._drawer.root;
+    // Focused panel controls keep their keys (arrows in Tweakpane) away from the lab shortcuts.
+    for (const eventName of ["keydown", "keyup"]) {
+      drawer.addEventListener(eventName, (e: Event): void => e.stopPropagation());
     }
-
-    // Inspector Drawer
-    const drawer = document.createElement("aside");
-    drawer.className = "swm-inspector-drawer";
-    this._inspectorDrawer = drawer;
-
-    drawer.innerHTML = `
-      <div class="bottom-sheet-grabber"></div>
-      <header class="swm-inspector-header">
-        <h3 class="swm-inspector-title">Lab Inspector</h3>
-        <button id="swmInspectorClose" class="swm-inspector-close-btn" title="Close Inspector">✕</button>
-      </header>
-      <div class="swm-inspector-body">
-        <div class="swm-inspector-section">
-          <div class="swm-inspector-section-header">Lab Parameters</div>
-          <div id="swmInspectorParams" class="swm-inspector-pane-wrap"></div>
-        </div>
-        <div class="swm-inspector-section">
-          <div class="swm-inspector-section-header">Scene Hierarchy</div>
-          <div id="swmInspectorHierarchy" class="swm-inspector-hierarchy-wrap"></div>
-        </div>
-        <div class="swm-inspector-section">
-          <div class="swm-inspector-section-header">Selected Object</div>
-          <div id="swmInspectorProps" class="swm-inspector-pane-wrap"></div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(drawer);
-
-    // Isolate mouse, wheel, touch, and pointer events inside drawer so camera orbit and zoom are never triggered
-    const stopEvents = [
-      "mousedown",
-      "mouseup",
-      "mousemove",
-      "pointerdown",
-      "pointerup",
-      "pointermove",
-      "wheel",
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "keydown",
-      "keyup",
-      "click",
-      "dblclick",
-      "contextmenu",
-    ];
-    for (const ev of stopEvents) {
-      drawer.addEventListener(
-        ev,
-        (e) => {
-          e.stopPropagation();
-          if ("wheel" === ev) {
-            this.host.input.mouse.zoom = 0;
-            this.host.input.mouse.wheelX = 0;
-            this.host.input.mouse.wheelY = 0;
-          }
-        },
-        { passive: "wheel" === ev || "touchstart" === ev || "touchmove" === ev },
-      );
-    }
+    // Runs after the drawer's own toggle handlers.
+    const onToggled = (): void => this._onToggled();
+    this._drawer.toggleButton.addEventListener("click", onToggled);
+    this._drawer.query(".hud-close-btn")?.addEventListener("click", onToggled);
 
     drawer.addEventListener("pointerenter", () => {
       this._isHoveringInspector = true;
@@ -546,16 +414,12 @@ export class LabInspector {
 
     window.addEventListener("pointerup", () => {
       this._isDraggingInspector = false;
-      if (!this._inspectorDrawer?.matches(":hover")) {
+      if (!drawer.matches(":hover")) {
         this._isHoveringInspector = false;
         if (this.host.orbitController) {
           this.host.orbitController.enabled = true;
         }
       }
-    });
-
-    drawer.querySelector("#swmInspectorClose")?.addEventListener("click", (): void => {
-      this.toggle(false);
     });
 
     // Lab quick params pane
@@ -716,7 +580,7 @@ export class LabInspector {
     });
 
     this.host.canvas.addEventListener("pointerup", (event: PointerEvent) => {
-      if (!this._inspectorOpen || 0 !== event.button || !this._pointerDownPos) {
+      if (!this.isOpen || 0 !== event.button || !this._pointerDownPos) {
         return;
       }
       const dx = event.clientX - this._pointerDownPos.x;
