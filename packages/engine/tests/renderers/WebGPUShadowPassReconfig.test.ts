@@ -6,6 +6,7 @@ import { SpotShadowPassGPU } from "../../src/renderers/passes/SpotShadowPassGPU.
 import { DirectionalLight } from "../../src/core/lights/DirectionalLight.js";
 import { SpotLight } from "../../src/core/lights/SpotLight.js";
 import { Vector3D } from "../../src/math/index.js";
+import { WebGPUGGlobalUniformLayout } from "../../src/renderers/GlobalUniformLayout.js";
 
 (globalThis as unknown as { GPUTextureUsage: Record<string, number> }).GPUTextureUsage ??= {
   COPY_SRC: 0x01,
@@ -61,7 +62,7 @@ function makeRenderer(lights: () => Internals): Internals {
     _createGlobalBindGroup: vi.fn(() => ({})),
     _setViewMatrix: vi.fn(() => 0),
     _renderSubgroup: vi.fn(),
-    scratchGlobalBufferData: new Float32Array(216),
+    scratchGlobalBufferData: new Float32Array(WebGPUGGlobalUniformLayout.totalFloats),
     globalUniformBuffer: {},
     globalBindGroup: undefined,
     globalResourcesVersion: 0,
@@ -155,7 +156,7 @@ describe("SpotShadowPassGPU follows resolution and frees an unused atlas", () =>
 
   it("recreates the atlas when the first caster's shadowResolution changes", () => {
     const spot = makeSpot(256);
-    const renderer = makeRenderer(() => ({ sLights: [spot] }));
+    const renderer = makeRenderer(() => ({ sLights: [spot], pLights: [] }));
     const pass = new SpotShadowPassGPU() as Internals;
     pass.execute(renderer, scene, ce, {}, vp, cam);
     const atlas = (renderer.__textures as MockTexture[]).find((t) => t.format === "depth32float")!;
@@ -172,20 +173,20 @@ describe("SpotShadowPassGPU follows resolution and frees an unused atlas", () =>
 
   it("releases the atlas after the idle grace period and rebuilds it on demand", () => {
     const spot = makeSpot(256);
-    let lights: Internals = { sLights: [spot] };
+    let lights: Internals = { sLights: [spot], pLights: [] };
     const renderer = makeRenderer(() => lights);
     const pass = new SpotShadowPassGPU() as Internals;
     pass.execute(renderer, scene, ce, {}, vp, cam);
     const atlas = (renderer.__textures as MockTexture[]).find((t) => t.format === "depth32float")!;
 
-    lights = { sLights: [] };
+    lights = { sLights: [], pLights: [] };
     for (let i = 0; i < 119; i++) pass.execute(renderer, scene, ce, {}, vp, cam);
     expect(renderer.deferDestroyTexture).not.toHaveBeenCalledWith(atlas);
     pass.execute(renderer, scene, ce, {}, vp, cam);
     expect(renderer.deferDestroyTexture).toHaveBeenCalledWith(atlas);
     expect(renderer.defaultSpotShadowTextureView).toBe(renderer.dummySpotShadowTextureView);
 
-    lights = { sLights: [spot] };
+    lights = { sLights: [spot], pLights: [] };
     pass.execute(renderer, scene, ce, {}, vp, cam);
     const atlases = (renderer.__textures as MockTexture[]).filter(
       (t) => t.format === "depth32float",

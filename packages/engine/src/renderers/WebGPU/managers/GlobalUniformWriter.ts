@@ -353,6 +353,14 @@ export class GlobalUniformWriter {
       gData[glob.spotShadowInfo.index + i * glob.spotShadowInfo.stride + 3] = -1.0; // layer index (-1 = no shadow)
     }
 
+    // Point-light shadow faces stay off unless SpotShadowPassGPU claims a slot this frame.
+    const pMat = glob.pointShadowMatrices;
+    gData.fill(0, pMat.index, pMat.index + pMat.floats);
+    const pInfo = glob.pointShadowInfo;
+    for (let i = 0; i < pInfo.count; i++) {
+      setVec4(gData, pInfo.index + i * pInfo.stride, 0, 0, -1, 0);
+    }
+
     const device = this._host.gpuDevice!;
     device.queue.writeBuffer(this._globalUniformBuffer, 0, gData);
 

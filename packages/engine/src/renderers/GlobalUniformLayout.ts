@@ -93,12 +93,12 @@ export const WebGL2AreaLightLayout = {
   slotBytes: 96,
 } as const;
 
-// ── WebGPU (224 floats / 896 bytes) ───────────────────────────────────────────────────────────
+// ── WebGPU (424 floats / 1696 bytes) ───────────────────────────────────────────────────────────
 // Field order and float indices match `structs.wgsl` exactly.
 
 export const WebGPUGGlobalUniformLayout = {
-  totalFloats: 224,
-  totalBytes: 896,
+  totalFloats: 424,
+  totalBytes: 1696,
   fields: {
     vp: { index: 0, floats: 16 },
     viewPos: { index: 16, floats: 4 },
@@ -134,5 +134,9 @@ export const WebGPUGGlobalUniformLayout = {
     // from `k * max(texelSizeX, texelSizeY)` (k = 1.2, @fixed). Appended at the end, like
     // shadowSoftness/evsmParams, so every pre-existing lane index stays stable.
     dirShadowBias: { index: 220, floats: 4 },
+    // ADR 0052: six cube-face matrices per shadowed point light (slot * 6 + face) and one info
+    // lane per slot [bias, normalBias, pLights index or -1, castShadow]. Appended like the above.
+    pointShadowMatrices: { index: 224, floats: 192, count: 12, stride: 16 },
+    pointShadowInfo: { index: 416, floats: 8, count: 2, stride: 4 },
   },
 } as const;

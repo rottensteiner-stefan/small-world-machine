@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SpotShadowPassGPU } from "../../src/renderers/passes/SpotShadowPassGPU.js";
 import { Vector3D } from "../../src/math/index.js";
 import { Topology, WireframeMode } from "../../src/enums/index.js";
+import { WebGPUGGlobalUniformLayout } from "../../src/renderers/GlobalUniformLayout.js";
 
 // Node/vitest has no WebGPU global; stub the bit-flag constants this pass actually reads.
 (globalThis as unknown as { GPUTextureUsage: Record<string, number> }).GPUTextureUsage ??= {
@@ -35,7 +36,7 @@ function setup(opaqueBatches: unknown[] = []): {
   };
   let nextId = 0;
   const renderer: Internals = {
-    extractLights: vi.fn(() => ({ sLights: [spotLight] })),
+    extractLights: vi.fn(() => ({ sLights: [spotLight], pLights: [] })),
     gpuDevice: {
       createTexture: vi.fn((desc: { size: number[] }) => ({
         width: desc.size[0],
@@ -45,6 +46,7 @@ function setup(opaqueBatches: unknown[] = []): {
       queue: { writeBuffer: vi.fn() },
     },
     currentColorTargetFormat: "rgba8unorm",
+    quality: {},
     deferDestroyTexture: vi.fn(),
     context: { shaderRegistry: new ShaderRegistry() },
     defaultDirShadowTextureView: {},
@@ -55,7 +57,7 @@ function setup(opaqueBatches: unknown[] = []): {
     _createGlobalBindGroup: vi.fn(() => ({ id: ++nextId })),
     _setViewMatrix: vi.fn(() => 0),
     _renderSubgroup: vi.fn(),
-    scratchGlobalBufferData: new Float32Array(216),
+    scratchGlobalBufferData: new Float32Array(WebGPUGGlobalUniformLayout.totalFloats),
     globalUniformBuffer: {},
     globalBindGroup: undefined,
     globalResourcesVersion: 0,

@@ -46,7 +46,8 @@ export class PointLight extends AbstractLight {
    */
   constructor(options: PointLightOptions = {}) {
     const { distance = 50.0, decay = 2.0, name = "PointLight" } = options;
-    super({ ...options, name });
+    // 256 per ADR 0052: six faces per light share the spot atlas layer size.
+    super({ shadowResolution: 256, ...options, name });
     this.distance = distance;
     this.decay = decay;
   }

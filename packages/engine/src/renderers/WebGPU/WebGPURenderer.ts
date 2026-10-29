@@ -68,19 +68,24 @@ import {
 import type { SkinnedMesh, Skeleton } from "../../core/animation/index.js";
 import { MAX_SKINNED_BONES } from "../../core/animation/index.js";
 import type { RenderBatch } from "../../core/Scene.js";
+import { CUBE_FACE_COUNT, MAX_SHADOWED_POINT_LIGHTS } from "../../core/lights/PointLightShadow.js";
 
 /**
  * Dynamic-offset slot layout for the per-draw view-projection uniform (group 3, `view.vp` in
  * structs.wgsl) -- one slot per camera that can be active mid-frame: the main camera, each
  * cascade of the (single, at most 4-cascade) directional shadow, and each of up to 4 shadow-
- * casting spot lights. Fixed capacity, no growth: hard-bounded by `cascadeMatrices`/
- * `spotShadowMatrices`'s `array<mat4x4f, 4>` sizes in structs.wgsl, same cap the existing code
- * already assumes. See `_setViewMatrix()`/`CascadedShadowPassGPU`/`SpotShadowPassGPU`.
+ * casting spot lights, then the six cube faces of each shadowed point light (ADR 0052). Fixed
+ * capacity, no growth: hard-bounded by `cascadeMatrices`/`spotShadowMatrices`/
+ * `pointShadowMatrices` sizes in structs.wgsl. See `_setViewMatrix()`/`CascadedShadowPassGPU`/
+ * `SpotShadowPassGPU`.
  */
 export const VIEW_SLOT_MAIN_CAMERA = 0;
 export const VIEW_SLOT_CASCADE_BASE = 1;
 export const VIEW_SLOT_SPOT_SHADOW_BASE = 5;
-const VIEW_SLOT_COUNT = 9;
+/** First point-light face slot; face `f` of shadow slot `s` uses `base + s * 6 + f`. */
+export const VIEW_SLOT_POINT_SHADOW_BASE = 9;
+export const VIEW_SLOT_COUNT =
+  VIEW_SLOT_POINT_SHADOW_BASE + MAX_SHADOWED_POINT_LIGHTS * CUBE_FACE_COUNT;
 
 /**
  * Modern WebGPU implementation with dynamic vertex updates and memory management.

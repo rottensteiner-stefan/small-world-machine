@@ -27,7 +27,7 @@ const FIXTURE_PATH = path.join(__dirname, "global-uniform-snapshot.json");
 interface PackedSnapshot {
   /** 528 floats = full 2112-byte WebGL2 GlobalUniforms UBO, _data order. */
   webgl2: number[];
-  /** 224 floats = full 896-byte WebGPU GlobalUniforms buffer (scratchGlobalBufferData). */
+  /** 424 floats = full 1696-byte WebGPU GlobalUniforms buffer (scratchGlobalBufferData). */
   webgpu: number[];
 }
 
@@ -222,9 +222,25 @@ describe("GlobalUniforms byte-identity (snapshot taken from the OLD writers befo
     expect(packed.webgl2).toHaveLength(528);
   });
 
-  it("webgpu snapshot is a full 896-byte block (224 floats)", () => {
+  it("webgpu snapshot is a full 1696-byte block (424 floats)", () => {
     const packed = captureSnapshot();
-    expect(packed.webgpu).toHaveLength(224);
+    expect(packed.webgpu).toHaveLength(424);
+  });
+
+  it("ADR 0052 appended the point-shadow section without moving any older lane", () => {
+    const f = WebGPUGGlobalUniformLayout.fields;
+    expect(f.dirShadowBias.index).toBe(220);
+    expect(f.pointShadowMatrices).toEqual({ index: 224, floats: 192, count: 12, stride: 16 });
+    expect(f.pointShadowInfo).toEqual({ index: 416, floats: 8, count: 2, stride: 4 });
+  });
+
+  it("without shadowed point lights the point section is zero matrices and unused slots", () => {
+    const packed = captureSnapshot().webgpu;
+    const f = WebGPUGGlobalUniformLayout.fields;
+    const matrices = packed.slice(f.pointShadowMatrices.index, f.pointShadowInfo.index);
+    expect(matrices.every((v) => v === 0)).toBe(true);
+    // [bias, normalBias, pLights index = -1, castShadow = 0] per slot.
+    expect(packed.slice(f.pointShadowInfo.index)).toEqual([0, 0, -1, 0, 0, 0, -1, 0]);
   });
 });
 

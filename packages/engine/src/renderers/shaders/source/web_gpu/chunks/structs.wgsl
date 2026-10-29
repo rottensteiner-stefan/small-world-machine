@@ -1,8 +1,8 @@
 // WGSL Global and Object structures
 
-// GlobalUniforms: Scene-level uniforms (896 bytes / 224 floats)
+// GlobalUniforms: Scene-level uniforms (1696 bytes / 424 floats)
 // Cleanly grouped into Camera & View, Environment & Fog, Shadow Maps, Clustered Light Grid,
-// Shadow Softness / EVSM Tuning, and Per-Cascade Bias.
+// Shadow Softness / EVSM Tuning, Per-Cascade Bias, and Point-Light Shadow Faces.
 struct GlobalUniforms {
     // --- 1. Camera & View (80 bytes) ---
     vp: mat4x4f,
@@ -67,6 +67,12 @@ struct GlobalUniforms {
     // (acne). Indexed with the resolved cascadeIndex; lanes are only meaningful while
     // dirShadowInfo.z > 0.5. WebGL2 mirrors this in the `u_dirShadowBias` uniform.
     dirShadowBias: vec4f,
+
+    // --- 8. Point-Light Shadow Faces (800 bytes) ---
+    // ADR 0052: up to 2 shadowed point lights, each six 90° cube faces stored as layers
+    // 4 + slot * 6 + face of u_spotShadowMap. Matrices are ZO-corrected like spotShadowMatrices.
+    pointShadowMatrices: array<mat4x4f, 12>,
+    pointShadowInfo: array<vec4f, 2>, // [bias, normalBias, pLights index (-1 = unused), castShadow]
 }
 
 // ObjectUniforms: 512-byte uniform block (32 vec4 / 128 floats)
