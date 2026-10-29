@@ -111,3 +111,30 @@ describe("selectShadowedPointLights", () => {
     expect(selectShadowedPointLights([light(0, -3, false)], camera, forward, 2, out)).toBe(0);
   });
 });
+
+describe("point shadow bias (ADR 0052)", () => {
+  it("defaults to 1 cm world-space bias for point lights, spots keep their depth bias", () => {
+    expect(new PointLight().shadowBias).toBe(0.01);
+    expect(new PointLight({ shadowBias: 0.03 }).shadowBias).toBe(0.03);
+  });
+
+  it("applies the bias as a world offset toward the light, never as a depth offset", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const root = path.resolve(__dirname, "../../src/renderers/shaders/source");
+    const wgsl = fs.readFileSync(path.join(root, "web_gpu/chunks/pbr_math.wgsl"), "utf8");
+    const glsl = fs.readFileSync(
+      path.join(root, "web_gl2/chunks/base_fragment_header.frag.glsl"),
+      "utf8",
+    );
+    const wgslFn = wgsl.slice(wgsl.indexOf("fn getPointShadow"), wgsl.indexOf("fn getShadowPCSS"));
+    const glslFn = glsl.slice(
+      glsl.indexOf("float pointShadowFactor"),
+      glsl.indexOf("// Cascaded Shadow Maps"),
+    );
+    expect(wgslFn).toMatch(/info\.x \+ 1\.5 \* texelWorld/);
+    expect(wgslFn).toMatch(/4u \+ m, 0\.0\)/);
+    expect(glslFn).toMatch(/info\.x \+ 1\.5 \* texelWorld/);
+    expect(glslFn).toMatch(/float ref = projCoords\.z;/);
+  });
+});

@@ -111,9 +111,11 @@ torchLight.castShadow = true; // default false
 - **Casters:** every `castShadow` object within the light's range, also off-screen ones.
 - **Filtering:** fixed 3×3 PCF (no PCSS for points). `shadowResolution` defaults to 256 for
   point lights; the shared array uses the largest resolution among active casters.
-- **Known limits:** volumetric fog does not sample point shadows yet; depth bias shares the spot
-  meaning — with the 5 cm near plane a large `shadowBias` can detach shadows from their casters,
-  lower it for point lights if you see that.
+- **Bias:** for point lights `shadowBias` is a world-space distance in metres toward the light
+  (default 0.01), plus an automatic 1.5 shadow texels at the receiver's distance. A depth-space
+  bias like the spots use would, with the 5 cm near plane, grow to decimetres a few metres out
+  and detach every shadow from its caster.
+- **Known limits:** volumetric fog does not sample point shadows yet.
 
 ## Filtering: PCF and PCSS
 

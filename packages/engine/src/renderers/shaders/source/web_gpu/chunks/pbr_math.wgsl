@@ -131,9 +131,16 @@ fn getPointShadow(map: texture_depth_2d_array, samp: sampler_comparison, lightIn
     for (var slot = 0u; slot < 2u; slot++) {
         let info = global.pointShadowInfo[slot];
         if (info.w > 0.5 && info.z == f32(lightIndex)) {
-            let samplePos = wp + N * info.y * (1.0 - dotNL);
+            // Cube faces use a 5 cm near plane, so a depth-space bias would grow to decimetres a few
+            // metres out (shadows detach). Bias in metres toward the light instead: shadowBias plus
+            // 1.5 shadow texels at this distance (ADR 0052).
+            let toLight = lightPos - wp;
+            let dist = length(toLight);
+            let texelWorld = 2.0 * dist / f32(textureDimensions(map).x);
+            let towardLight = toLight / max(dist, 1e-4) * (info.x + 1.5 * texelWorld);
+            let samplePos = wp + N * info.y * (1.0 - dotNL) + towardLight;
             let m = slot * 6u + pointShadowFace(samplePos - lightPos);
-            return getShadowPCF(map, samp, global.pointShadowMatrices[m] * vec4f(samplePos, 1.0), 4u + m, info.x);
+            return getShadowPCF(map, samp, global.pointShadowMatrices[m] * vec4f(samplePos, 1.0), 4u + m, 0.0);
         }
     }
     return 1.0;

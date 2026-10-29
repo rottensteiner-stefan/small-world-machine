@@ -72,13 +72,19 @@ float pointShadowFactor(int lightIndex, vec3 lightPos, vec3 worldPos, vec3 geomN
         int face = pointShadowFace(worldPos - lightPos);
         // Normal-offset bias scaled by 1 - NdotL, as for spot lights (base_vertex_main).
         vec3 n = normalize(geomNormal);
-        float ndotl = max(dot(n, normalize(lightPos - worldPos)), 0.0);
-        vec3 samplePos = worldPos + n * info.y * (1.0 - ndotl);
+        vec3 toLight = lightPos - worldPos;
+        float dist = length(toLight);
+        float ndotl = max(dot(n, toLight / max(dist, 1e-4)), 0.0);
+        // Cube faces use a 5 cm near plane, so a depth-space bias would grow to decimetres a few
+        // metres out (shadows detach). Bias in metres toward the light instead: shadowBias plus
+        // 1.5 shadow texels at this distance (ADR 0052).
+        float texelWorld = 2.0 * dist / float(textureSize(u_spotShadowMap, 0).x);
+        vec3 samplePos = worldPos + n * info.y * (1.0 - ndotl) + toLight / max(dist, 1e-4) * (info.x + 1.5 * texelWorld);
         vec4 ls = u_pointShadowMatrix[s * 6 + face] * vec4(samplePos, 1.0);
         vec3 projCoords = ls.xyz / ls.w * 0.5 + 0.5;
         if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0 || projCoords.z > 1.0) return 1.0;
         float layer = float(4 + s * 6 + face);
-        float ref = projCoords.z - info.x;
+        float ref = projCoords.z;
         vec2 texelSize = 1.0 / vec2(textureSize(u_spotShadowMap, 0).xy);
         float shadow = 0.0;
         for (int x = -1; x <= 1; ++x) {
