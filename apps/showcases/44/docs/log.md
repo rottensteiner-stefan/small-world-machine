@@ -71,3 +71,8 @@ WebGL2-Hardware — das deterministische Pendant dazu ist
   - **Kamera & Navigation:** OrbitController für freie Drehung und Zoom, Taste `R` für Reset auf Übersichts-Blickwinkel, Taste `I` / `H` zum Ein-/Ausklappen des HUDs.
 - **Kompatibilität:** Headless-Messungen via `?frames=N` laufen unverändert durch und emittieren `MEASURE {...}` nach `#__measure`.
 
+
+### 2026-10-29 — Seitenpanel nach `Hud.ts` ausgelagert
+- Panel-Code (Markup, Bindings, Sync) aus `showcase.ts` in `Hud.ts` (`InstancingLabHud`) verschoben, aufgebaut auf dem gemeinsamen `apps/showcases/shared/ShowcaseDrawer.ts`.
+- Entfallen: handgebautes Aside/Header/Close-Button, stopPropagation-Schleife, Footer-Button-Erzeugung, I/H-Toggle, duplizierte Drawer-CSS (`.preset-group`, `.hud-note`, `.hud-keys`).
+- Verhalten unverändert: gleiche Controls, Tasten (Space, W, 1–3, I/H), IDs (`#showcase-hud`, `#benchLiveReadout`, …), Panel startet offen. Footer-Button zeigt jetzt das Header-Icon ⚡ statt ⚙.

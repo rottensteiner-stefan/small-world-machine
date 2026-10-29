@@ -10,6 +10,8 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 import type { EngineOptions } from "@small-world-machine/engine";
+import type { PatternMode } from "./Hud.js";
+import { InstancingLabHud } from "./Hud.js";
 
 /**
  * Real-browser measurement rig for the A2 geometry-grouping instancing work
@@ -69,8 +71,6 @@ interface MutableDrawContext {
   drawElementsInstanced: (...args: number[]) => void;
 }
 
-type PatternMode = "alternating" | "single" | "multi";
-
 class Showcase44 extends AbstractShowcase {
   private _instancingOn: boolean;
   private _count: number;
@@ -103,9 +103,7 @@ class Showcase44 extends AbstractShowcase {
   private _smoothedFps: number = 60;
   private _smoothedFrameMs: number = 16.6;
 
-  private _hud: HTMLElement | undefined;
-  private _hudStyle: HTMLStyleElement | undefined;
-  private _hudToggleBtn: HTMLButtonElement | undefined;
+  private _hud: InstancingLabHud | undefined;
   private _material: StandardMaterial | undefined;
 
   constructor(options: EngineOptions = {}) {
@@ -233,9 +231,7 @@ class Showcase44 extends AbstractShowcase {
   }
 
   public override destroy(): void {
-    this._hud?.remove();
-    this._hudStyle?.remove();
-    this._hudToggleBtn?.remove();
+    this._hud?.dispose();
     super.destroy();
   }
 
@@ -243,6 +239,10 @@ class Showcase44 extends AbstractShowcase {
     super.onKeyDown(event);
     if (this._isAutomatedTest || event.altKey || event.metaKey || event.ctrlKey) return;
     if (document.activeElement?.tagName === "INPUT") return;
+    if (this._hud?.handleKey(event)) {
+      event.preventDefault();
+      return;
+    }
 
     switch (event.code) {
       case "Space":
@@ -259,10 +259,6 @@ class Showcase44 extends AbstractShowcase {
         break;
       case "Digit3":
         this._setPattern("multi");
-        break;
-      case "KeyI":
-      case "KeyH":
-        this._toggleHud();
         break;
       default:
         return;
@@ -359,59 +355,17 @@ class Showcase44 extends AbstractShowcase {
     this._buildObjects(count, this._pattern);
   }
 
-  private _toggleHud(force?: boolean): void {
-    if (!this._hud) return;
-    const open = force ?? !this._hud.classList.contains("open");
-    this._hud.classList.toggle("open", open);
-    this._hudToggleBtn?.classList.toggle("active", open);
-  }
-
   private _syncHudButtons(): void {
-    if (!this._hud) return;
-    const toggleBtn = document.getElementById("btnToggleInstancing");
-    if (toggleBtn) {
-      toggleBtn.classList.toggle("active", this._instancingOn);
-      toggleBtn.innerHTML = this._instancingOn
-        ? "<span>⚡</span> Auto-Instancing: <b>ON</b> (A2 Active)"
-        : "<span>⚠️</span> Auto-Instancing: <b>OFF</b> (Per-Object Baseline)";
-      toggleBtn.style.background = this._instancingOn
-        ? "rgba(16, 185, 129, 0.25)"
-        : "rgba(239, 68, 68, 0.2)";
-      toggleBtn.style.borderColor = this._instancingOn ? "#10b981" : "#ef4444";
-      toggleBtn.style.color = this._instancingOn ? "#6ee7b7" : "#fca5a5";
-    }
-
-    const waveBtn = document.getElementById("btnToggleWave");
-    if (waveBtn) {
-      waveBtn.classList.toggle("active", this._waveActive);
-      waveBtn.innerHTML = this._waveActive
-        ? "<span>🌊</span> Sine Wave: <b>ON</b>"
-        : "<span>🌊</span> Sine Wave: <b>OFF</b>";
-    }
-
-    document
-      .getElementById("btnPatternAlt")
-      ?.classList.toggle("active", this._pattern === "alternating");
-    document
-      .getElementById("btnPatternSingle")
-      ?.classList.toggle("active", this._pattern === "single");
-    document
-      .getElementById("btnPatternMulti")
-      ?.classList.toggle("active", this._pattern === "multi");
-
-    const countPresets = [400, 1600, 3600, 6400];
-    for (const cp of countPresets) {
-      document.getElementById(`btnCount${cp}`)?.classList.toggle("active", this._count === cp);
-    }
-    const slider = document.getElementById("slCount") as HTMLInputElement | null;
-    const label = document.getElementById("valCount");
-    if (slider) slider.value = String(this._count);
-    if (label) label.textContent = `${this._count.toLocaleString()} Cubes`;
+    this._hud?.sync({
+      instancingOn: this._instancingOn,
+      waveActive: this._waveActive,
+      pattern: this._pattern,
+      count: this._count,
+    });
   }
 
   private _updateLiveReadout(): void {
-    const el = document.getElementById("benchLiveReadout");
-    if (!el) return;
+    if (!this._hud) return;
 
     const totalDraws = this._lastFrameDraws;
     const instanced = this._lastFrameInstanced;
@@ -426,173 +380,16 @@ class Showcase44 extends AbstractShowcase {
       `Framerate:          ${this._smoothedFps.toFixed(1)} FPS (${this._smoothedFrameMs.toFixed(1)} ms)\n` +
       `Auto-Instancing:    ${this._instancingOn ? "AKTIV (A2 Grouping)" : "AUS (Baseline)"}`;
 
-    if (el.textContent !== text) {
-      el.textContent = text;
-    }
+    this._hud.setReadout(text);
   }
 
   private _createHud(): void {
-    const style = document.createElement("style");
-    style.textContent = `
-      #showcase-hud .preset-group.four-col { grid-template-columns: repeat(4, 1fr); }
-      #showcase-hud .preset-group.three-col { grid-template-columns: repeat(3, 1fr); }
-      #showcase-hud .preset-group.two-col { grid-template-columns: repeat(2, 1fr); }
-      #showcase-hud .hud-note { font-size: 10px; line-height: 1.4; color: #94a3b8; margin-top: 6px; }
-      #showcase-hud .hud-keys { font-size: 10px; line-height: 1.6; color: #94a3b8; }
-      #showcase-hud .hud-keys kbd {
-        font-family: var(--font-mono, "JetBrains Mono", monospace);
-        border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 3px; padding: 0 4px;
-      }
-      #benchLiveReadout {
-        font-family: var(--font-mono, "JetBrains Mono", monospace);
-        font-size: 11px;
-        line-height: 1.5;
-        color: #67e8f9;
-        background: rgba(2, 6, 23, 0.75);
-        border: 1px solid rgba(56, 189, 248, 0.25);
-        border-radius: 6px;
-        padding: 8px 10px;
-        margin: 4px 0 8px 0;
-        white-space: pre;
-      }
-      #btnToggleInstancing {
-        width: 100%;
-        padding: 10px;
-        font-weight: 700;
-        font-size: 12px;
-        letter-spacing: 0.5px;
-        cursor: pointer;
-        border-radius: 6px;
-        transition: all 0.2s ease;
-      }
-    `;
-    document.head.appendChild(style);
-    this._hudStyle = style;
-
-    const hud = document.createElement("aside");
-    hud.id = "showcase-hud";
-    hud.className = "swm-inspector-drawer open";
-    hud.innerHTML = `
-      <div class="bottom-sheet-grabber"></div>
-      <div class="hud-header">
-        <div class="hud-title"><span>⚡</span> Instancing Benchmark Lab</div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="hud-badge">${this.renderer.type}</span>
-          <button id="btnBenchClose" class="hud-close-btn" title="Close Panel (Key: I / H)">✕</button>
-        </div>
-      </div>
-      <div class="hud-body">
-        <div class="hud-section">
-          <div class="section-title"><span>📊 Live Performance Monitor</span><span style="font-size:9px;color:#64748b;">Echte GL Calls</span></div>
-          <pre id="benchLiveReadout">Initialisiere Zähler...</pre>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title"><span>⚙️ Instancing Technik</span><span style="font-size:9px;color:#64748b;">ADR 0046 / Space</span></div>
-          <button id="btnToggleInstancing" class="btn-preset" title="Auto-Instancing an/aus (Taste: Leertaste)"></button>
-          <div class="hud-note">💡 <b>A/B-Vergleich:</b> Schalte um, um 2 instanziierte Draws gegen hunderte bis tausende Per-Object-Draw-Calls zu vergleichen.</div>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title"><span>🔢 Objekt-Dichte</span><span style="font-size:9px;color:#64748b;">Gittergröße</span></div>
-          <div class="preset-group four-col" style="margin-bottom:8px;">
-            <button id="btnCount400" class="btn-preset" title="400 Cubes (20×20)">400</button>
-            <button id="btnCount1600" class="btn-preset" title="1.600 Cubes (40×40)">1.6k</button>
-            <button id="btnCount3600" class="btn-preset" title="3.600 Cubes (60×60)">3.6k</button>
-            <button id="btnCount6400" class="btn-preset" title="6.400 Cubes (80×80)">6.4k</button>
-          </div>
-          <div class="hud-row">
-            <label for="slCount">Anzahl Objekte</label>
-            <input id="slCount" type="range" min="100" max="10000" step="100" />
-            <span id="valCount" class="val-label"></span>
-          </div>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title"><span>📐 Geometrie-Muster</span><span style="font-size:9px;color:#64748b;">Tasten 1–3</span></div>
-          <div class="preset-group three-col">
-            <button id="btnPatternAlt" class="btn-preset" title="Alternating A/B: Härtetest für Geometrie-Gruppierung (Taste 1)">1 · A/B Mix</button>
-            <button id="btnPatternSingle" class="btn-preset" title="Pure A: Alle identisch (Taste 2)">2 · Pure A</button>
-            <button id="btnPatternMulti" class="btn-preset" title="Multi A/B/C: Cube 1m, Cube 1.7m, Sphere 0.8m (Taste 3)">3 · A/B/C Mix</button>
-          </div>
-          <div class="hud-note">Bei <b>A/B Mix</b> alternieren Geometrien in der Einfügereihenfolge. Naives Instancing scheitert hier komplett — nur A2 gruppiert!</div>
-        </div>
-
-        <div class="hud-section">
-          <div class="section-title"><span>🌊 Dynamischer Stresstest</span><span style="font-size:9px;color:#64748b;">Taste W</span></div>
-          <button id="btnToggleWave" class="btn-preset" style="width:100%;" title="Sinuswelle animieren (Taste W)"><span>🌊</span> Sine Wave: <b>OFF</b></button>
-          <div class="hud-note">Erzwingt kontinuierliche Matrix-Neuberechnungen und Instance-Buffer-Uploads jedes Frame.</div>
-        </div>
-
-        <div class="hud-section hud-keys">
-          <kbd>Space</kbd> Instancing · <kbd>W</kbd> Welle · <kbd>1–3</kbd> Muster · <kbd>Drag</kbd> Orbit · <kbd>R</kbd> Reset · <kbd>I</kbd> HUD
-        </div>
-      </div>
-    `;
-    document.body.appendChild(hud);
-    this._hud = hud;
-
-    const stopEvents = [
-      "mousedown",
-      "mouseup",
-      "mousemove",
-      "pointerdown",
-      "pointerup",
-      "pointermove",
-      "wheel",
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "click",
-      "dblclick",
-      "contextmenu",
-    ];
-    for (const eventName of stopEvents) {
-      hud.addEventListener(eventName, (e: Event): void => e.stopPropagation(), {
-        passive: eventName === "wheel" || eventName === "touchstart" || eventName === "touchmove",
-      });
-    }
-
-    const toggleBtn = document.createElement("button");
-    toggleBtn.className = "swm-inspector-btn active";
-    toggleBtn.innerHTML = "<span>⚙</span>";
-    toggleBtn.title = "Benchmark Lab (Toggle, Key: I / H)";
-    toggleBtn.setAttribute("aria-label", "Toggle Benchmark Lab");
-    toggleBtn.onclick = (): void => this._toggleHud();
-    (document.querySelector(".app-footer") ?? document.body).appendChild(toggleBtn);
-    this._hudToggleBtn = toggleBtn;
-
-    document
-      .getElementById("btnBenchClose")
-      ?.addEventListener("click", () => this._toggleHud(false));
-    document
-      .getElementById("btnToggleInstancing")
-      ?.addEventListener("click", () => this._toggleAutoInstancing());
-    document.getElementById("btnToggleWave")?.addEventListener("click", () => this._toggleWave());
-
-    document
-      .getElementById("btnPatternAlt")
-      ?.addEventListener("click", () => this._setPattern("alternating"));
-    document
-      .getElementById("btnPatternSingle")
-      ?.addEventListener("click", () => this._setPattern("single"));
-    document
-      .getElementById("btnPatternMulti")
-      ?.addEventListener("click", () => this._setPattern("multi"));
-
-    const countPresets = [400, 1600, 3600, 6400];
-    for (const cp of countPresets) {
-      document
-        .getElementById(`btnCount${cp}`)
-        ?.addEventListener("click", () => this._setObjectCount(cp));
-    }
-
-    const slider = document.getElementById("slCount") as HTMLInputElement | null;
-    slider?.addEventListener("input", () => {
-      this._setObjectCount(parseInt(slider.value, 10));
+    this._hud = new InstancingLabHud(String(this.renderer.type), {
+      toggleAutoInstancing: (): void => this._toggleAutoInstancing(),
+      toggleWave: (): void => this._toggleWave(),
+      setPattern: (pattern: PatternMode): void => this._setPattern(pattern),
+      setObjectCount: (count: number): void => this._setObjectCount(count),
     });
-    slider?.addEventListener("change", () => slider.blur());
-
     this._syncHudButtons();
     this._updateLiveReadout();
   }
