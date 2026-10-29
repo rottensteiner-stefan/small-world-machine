@@ -20,8 +20,8 @@ import {
   rasterizeSplatDirection,
 } from "@small-world-machine/artistic-extras";
 import type { StrokePoint } from "@small-world-machine/artistic-extras";
-import { MetalReliefHud } from "./Hud.js";
-import type { MetalReliefHudHost, ReliefParam } from "./Hud.js";
+import { Hud } from "./Hud.js";
+import type { HudActions, ReliefParam } from "./Hud.js";
 
 function createBoxMesh(
   name: string,
@@ -120,7 +120,7 @@ export class Showcase extends AbstractShowcase {
   private _screenMaterial!: MetalReliefScreenMaterial;
   private _activePreset: string = "paris";
   private _orbitController?: OrbitController;
-  private _hud!: MetalReliefHud;
+  private _hud!: Hud;
   private _isHoveringHud: boolean = false;
   private _isDraggingHud: boolean = false;
   private _isDraggingSplit: boolean = false;
@@ -1033,7 +1033,7 @@ export class Showcase extends AbstractShowcase {
   }
 
   private _createReliefHud(): void {
-    const host: MetalReliefHudHost = {
+    const host: HudActions = {
       setMode: (mode) => this._setMode(mode),
       setSplitPosition: (value) => this._setSplitPosition(value),
       setActivePreset: (presetId) => this._setActivePreset(presetId),
@@ -1057,7 +1057,7 @@ export class Showcase extends AbstractShowcase {
       },
       onPanelClosed: () => this._onReliefPanelClosed(),
     };
-    this._hud = new MetalReliefHud(host);
+    this._hud = new Hud(host);
 
     const hud = this._hud.root;
     hud.addEventListener("pointerenter", () => {

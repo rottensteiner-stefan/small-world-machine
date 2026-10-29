@@ -18,7 +18,7 @@ export type ReliefParam =
   | "brushMetallic";
 
 /** What the panel asks of the showcase; scene state and logic stay there. */
-export interface MetalReliefHudHost {
+export interface HudActions {
   setMode(mode: ReliefDisplayMode): void;
   setSplitPosition(value: number): void;
   setActivePreset(presetId: string): void;
@@ -226,12 +226,12 @@ const BODY = `
 
 /**
  * Metal Relief Lab panel of showcase 41 on the shared {@link ShowcaseDrawer}. Owns the controls
- * and their sync; every change goes to the {@link MetalReliefHudHost}.
+ * and their sync; every change goes to the {@link HudActions}.
  */
-export class MetalReliefHud {
+export class Hud {
   private readonly _drawer: ShowcaseDrawer;
 
-  constructor(private readonly _host: MetalReliefHudHost) {
+  constructor(private readonly _host: HudActions) {
     document.getElementById("reliefTuningHudStyle")?.remove();
     const style = document.createElement("style");
     style.id = "reliefTuningHudStyle";
@@ -242,22 +242,16 @@ export class MetalReliefHud {
       id: "reliefTuningHud",
       title: "Metal Relief Lab",
       icon: "🎨",
-      badge: "Inspector",
       body: BODY,
       open: false,
+      footerIcon: "⚙",
+      buttonId: "reliefPanelOpenBtn",
+      // Focused panel controls keep their keys (arrows on sliders) away from camera and shortcuts.
+      shieldKeys: true,
+      onToggle: (open: boolean): void => {
+        if (!open) this._host.onPanelClosed();
+      },
     });
-    const button = this._drawer.toggleButton;
-    button.id = "reliefPanelOpenBtn";
-    button.innerHTML = "<span>⚙</span>";
-
-    // Focused panel controls keep their keys (arrows on sliders) away from camera and shortcuts.
-    for (const eventName of ["keydown", "keyup"]) {
-      this.root.addEventListener(eventName, (e: Event): void => e.stopPropagation());
-    }
-    // Runs after the drawer's own toggle handlers.
-    const notifyClosed = (): void => this._notifyIfClosed();
-    button.addEventListener("click", notifyClosed);
-    this._drawer.query(".hud-close-btn")?.addEventListener("click", notifyClosed);
 
     this._bind();
   }
@@ -273,11 +267,7 @@ export class MetalReliefHud {
 
   /** Handles the I / H panel shortcut. Returns true when the key was consumed. */
   public handleKey(event: KeyboardEvent): boolean {
-    if (!this._drawer.handleKey(event)) {
-      return false;
-    }
-    this._notifyIfClosed();
-    return true;
+    return this._drawer.handleKey(event);
   }
 
   public syncMode(mode: ReliefDisplayMode): void {
@@ -312,12 +302,6 @@ export class MetalReliefHud {
   /** Highlights the drop zone while a file is dragged over the window. */
   public setDropHighlight(active: boolean): void {
     this._drawer.query("#dropZoneHud")?.classList.toggle("dragover", active);
-  }
-
-  private _notifyIfClosed(): void {
-    if (!this._drawer.isOpen) {
-      this._host.onPanelClosed();
-    }
   }
 
   private _bind(): void {
