@@ -254,3 +254,7 @@ Verified: typecheck, lint, 1927 unit tests, `check-showcases 28` on WebGL1/WebGL
 `LabInspector.ts` was renamed to `Hud.ts` (class `LabInspector` and the `LabInspectorHost` interface keep their names) and now builds its panel on `apps/showcases/shared/ShowcaseDrawer.ts`: drawer markup, event shielding, footer button and the I / H shortcut come from there. Dropped: the hand-built aside/header/close button, the stopPropagation loop and every CSS rule that only repeated `public/assets/shared.css`. Kept, scoped to the new drawer id `#labInspectorDrawer`: tool-theme colours/font of drawer and header, uppercase title, flat sections, section headers and the hierarchy tree styles. Element ids `swmInspectorParams/Hierarchy/Props` unchanged; only `swmInspectorClose` is gone (the shared close button). Visible changes: the header shows the ⚙ icon, H also toggles the panel.
 
 Verified: typecheck, eslint, `tests/scripts`; browser: computed styles of drawer, header and all 247 body elements identical to before, footer button once, I/H/close/footer toggles, Tweakpane "Splitter Engaged" and hierarchy selection work, no console errors.
+
+## 2026-10-29 – Hud naming
+
+`LabInspector` / `LabInspectorHost` / `LabKnobs` renamed to `Hud` / `HudActions` / `HudState`; the local key stopPropagation and the extra footer/close click listeners + post-`handleKey` hook are replaced by the drawer options `shieldKeys` and `onToggle` (hierarchy refresh on open still works).

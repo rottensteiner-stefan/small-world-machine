@@ -20,8 +20,8 @@ import { buildBench, buildLaserEmitter } from "./buildBench.js";
 import { buildBeamSplitter, buildBeams } from "./buildBeamSplitter.js";
 import { buildDetector } from "./buildDetector.js";
 import { buildSpectrum } from "./buildSpectrum.js";
-import type { LabInspectorHost, LabKnobs } from "./Hud.js";
-import { LabInspector } from "./Hud.js";
+import type { HudActions, HudState } from "./Hud.js";
+import { Hud } from "./Hud.js";
 import type { SpectralRay } from "./optics.js";
 import { SPECTRAL_RAY_LENGTH, computeSpectralRays } from "./optics.js";
 
@@ -31,7 +31,7 @@ import { SPECTRAL_RAY_LENGTH, computeSpectralRays } from "./optics.js";
  * Benchmark testing transmission, optical dispersion, spectral split,
  * and high-refractive glass polyhedra under coherent laser illumination.
  */
-export class Showcase extends AbstractShowcase implements LabInspectorHost {
+export class Showcase extends AbstractShowcase implements HudActions {
   private _turntable!: Object3D;
   private _prismMesh!: Object3D;
   private _laserLight!: SpotLight;
@@ -64,7 +64,7 @@ export class Showcase extends AbstractShowcase implements LabInspectorHost {
 
   private _time = 0;
   /** Lab parameters shared with the inspector. */
-  private readonly _knobs: LabKnobs = {
+  private readonly _knobs: HudState = {
     // Secret manual-control mode: Ctrl+T pauses the automatic wobble and lets LEFT/RIGHT spin
     // the turntable by hand instead.
     manualTurntableControl: false,
@@ -74,10 +74,10 @@ export class Showcase extends AbstractShowcase implements LabInspectorHost {
     causticIntensity: 0.65,
     chromaticBounceIntensity: 1.2,
   };
-  private readonly _inspector = new LabInspector(this);
+  private readonly _inspector = new Hud(this);
 
-  // LabInspectorHost: scene objects are created in setupScene(), hence getters.
-  public get knobs(): LabKnobs {
+  // HudActions: scene objects are created in setupScene(), hence getters.
+  public get knobs(): HudState {
     return this._knobs;
   }
   public get orbitController(): OrbitController | undefined {

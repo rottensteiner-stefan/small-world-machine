@@ -28,7 +28,7 @@ import { Pane } from "tweakpane";
 import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
 
 /** Lab parameters the inspector reads and writes; owned by the showcase, which applies them every frame. */
-export interface LabKnobs {
+export interface HudState {
   manualTurntableControl: boolean;
   manualTurntableAngle: number;
   splitterX: number;
@@ -38,7 +38,7 @@ export interface LabKnobs {
 }
 
 /** What the inspector needs from the showcase (scene objects are created late, hence the getters). */
-export interface LabInspectorHost {
+export interface HudActions {
   readonly scene: Scene;
   readonly camera: Camera;
   readonly canvas: HTMLCanvasElement;
@@ -50,7 +50,7 @@ export interface LabInspectorHost {
   readonly laserLight: SpotLight | undefined;
   readonly floorCausticMesh: Object3D | undefined;
   readonly chromaticBounceLight: SpotLight | undefined;
-  readonly knobs: LabKnobs;
+  readonly knobs: HudState;
 }
 
 const STYLE_ID = "swm-showcase28-inspector-styles";
@@ -193,7 +193,7 @@ const BODY = `
  * Showcase 28's in-viewport Lab Inspector: collapsible drawer with the Lab Knobs, a hierarchy and a
  * property panel, viewport picking and a selection highlight.
  */
-export class LabInspector {
+export class Hud {
   private _drawer: ShowcaseDrawer | undefined = undefined;
   private _isHoveringInspector = false;
   private _isDraggingInspector = false;
@@ -205,7 +205,7 @@ export class LabInspector {
   private _highlightMesh: Object3D | undefined = undefined;
   private readonly _raycaster = new Raycaster();
   private _pointerDownPos: { x: number; y: number } | null = null;
-  constructor(private readonly host: LabInspectorHost) {}
+  constructor(private readonly host: HudActions) {}
 
   /** Whether the drawer is open. */
   public get isOpen(): boolean {
@@ -329,16 +329,11 @@ export class LabInspector {
 
   public toggle(force?: boolean): void {
     this._drawer?.toggle(force);
-    this._onToggled();
   }
 
   /** Handles the I / H panel shortcut. Returns true when the key was consumed. */
   public handleKey(event: KeyboardEvent): boolean {
-    if (!this._drawer?.handleKey(event)) {
-      return false;
-    }
-    this._onToggled();
-    return true;
+    return this._drawer?.handleKey(event) ?? false;
   }
 
   private _onToggled(): void {
@@ -373,16 +368,11 @@ export class LabInspector {
       icon: "⚙",
       body: BODY,
       open: false,
+      // Focused panel controls keep their keys (arrows in Tweakpane) away from the lab shortcuts.
+      shieldKeys: true,
+      onToggle: (): void => this._onToggled(),
     });
     const drawer = this._drawer.root;
-    // Focused panel controls keep their keys (arrows in Tweakpane) away from the lab shortcuts.
-    for (const eventName of ["keydown", "keyup"]) {
-      drawer.addEventListener(eventName, (e: Event): void => e.stopPropagation());
-    }
-    // Runs after the drawer's own toggle handlers.
-    const onToggled = (): void => this._onToggled();
-    this._drawer.toggleButton.addEventListener("click", onToggled);
-    this._drawer.query(".hud-close-btn")?.addEventListener("click", onToggled);
 
     drawer.addEventListener("pointerenter", () => {
       this._isHoveringInspector = true;
