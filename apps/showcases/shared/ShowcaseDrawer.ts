@@ -14,6 +14,18 @@ export interface ShowcaseDrawerOptions {
   body?: string | undefined;
   /** Whether the drawer starts open. Defaults to true. */
   open?: boolean | undefined;
+  /** Emoji on the footer button when it should differ from `icon` (e.g. the classic ⚙). */
+  footerIcon?: string | undefined;
+  /** DOM id for the footer button, for showcases whose scripts or CSS address it. */
+  buttonId?: string | undefined;
+  /** `KeyboardEvent.code`s that toggle the drawer. Defaults to I and H; pass ["KeyI"] where H is taken. */
+  toggleKeys?: readonly string[] | undefined;
+  /** Stops keydown/keyup inside the drawer from reaching the page, so typing or arrow keys in
+   * panel widgets cannot steer the camera. Off by default: a focused panel button would
+   * otherwise swallow WASD. */
+  shieldKeys?: boolean | undefined;
+  /** Called after every open/close, from any source (key, close button, footer button, code). */
+  onToggle?: ((open: boolean) => void) | undefined;
 }
 
 /** Pointer/touch events that must not reach the camera controller while the drawer is used. */
@@ -64,8 +76,13 @@ export class ShowcaseDrawer {
   public readonly toggleButton: HTMLButtonElement;
 
   private readonly _badge: HTMLElement;
+  private readonly _toggleKeys: readonly string[];
+  private readonly _onToggle: ((open: boolean) => void) | undefined;
 
   constructor(options: ShowcaseDrawerOptions) {
+    this._toggleKeys = options.toggleKeys ?? ["KeyI", "KeyH"];
+    this._onToggle = options.onToggle;
+    const keyHint = this._toggleKeys.map((code) => code.replace("Key", "")).join(" / ");
     ShowcaseDrawer._injectSharedStyle();
     document.getElementById(options.id)?.remove();
 
@@ -78,7 +95,7 @@ export class ShowcaseDrawer {
         <div class="hud-title"><span>${options.icon}</span> ${options.title}</div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="hud-badge"></span>
-          <button class="hud-close-btn" title="Panel schließen (I / H)">✕</button>
+          <button class="hud-close-btn" title="Panel schließen (${keyHint})">✕</button>
         </div>
       </div>
       <div class="hud-body"></div>
@@ -87,6 +104,10 @@ export class ShowcaseDrawer {
       root.addEventListener(eventName, (e: Event): void => e.stopPropagation(), {
         passive: PASSIVE_EVENTS.has(eventName),
       });
+    }
+    if (options.shieldKeys) {
+      root.addEventListener("keydown", (e: Event): void => e.stopPropagation());
+      root.addEventListener("keyup", (e: Event): void => e.stopPropagation());
     }
     document.body.appendChild(root);
     this.root = root;
@@ -98,8 +119,11 @@ export class ShowcaseDrawer {
 
     const button = document.createElement("button");
     button.className = "swm-inspector-btn";
-    button.innerHTML = `<span>${options.icon}</span>`;
-    button.title = `${options.title} (I / H)`;
+    if (options.buttonId) {
+      button.id = options.buttonId;
+    }
+    button.innerHTML = `<span>${options.footerIcon ?? options.icon}</span>`;
+    button.title = `${options.title} (${keyHint})`;
     button.setAttribute("aria-label", `${options.title} ein-/ausblenden`);
     button.onclick = (): void => this.toggle();
     this.toggleButton = button;
@@ -108,7 +132,7 @@ export class ShowcaseDrawer {
     if (options.body !== undefined) {
       this.setBody(options.body);
     }
-    this.toggle(options.open ?? true);
+    this._apply(options.open ?? true);
   }
 
   /** Whether the drawer is currently open. */
@@ -127,22 +151,21 @@ export class ShowcaseDrawer {
     this._badge.style.display = text ? "" : "none";
   }
 
-  /** Opens, closes or flips the drawer. */
+  /** Opens, closes or flips the drawer and notifies `onToggle`. */
   public toggle(force?: boolean): void {
-    const open = force ?? !this.isOpen;
-    this.root.classList.toggle("open", open);
-    this.toggleButton.classList.toggle("active", open);
+    this._apply(force ?? !this.isOpen);
+    this._onToggle?.(this.isOpen);
   }
 
   /**
-   * Handles the shared I / H toggle shortcut. Returns true when the key was consumed. Ignores
+   * Handles the toggle shortcut (`toggleKeys`, default I / H). Returns true when the key was consumed. Ignores
    * modifier combos (Alt+digits switch the renderer) and keys typed into form fields.
    */
   public handleKey(event: KeyboardEvent): boolean {
     if (event.altKey || event.metaKey || event.ctrlKey || isTypingTarget()) {
       return false;
     }
-    if (event.code !== "KeyI" && event.code !== "KeyH") {
+    if (!this._toggleKeys.includes(event.code)) {
       return false;
     }
     this.toggle();
@@ -152,6 +175,12 @@ export class ShowcaseDrawer {
   /** Typed lookup inside the drawer. */
   public query<T extends HTMLElement>(selector: string): T | null {
     return this.root.querySelector<T>(selector);
+  }
+
+  // Initial state is applied without onToggle: the showcase is still constructing the Hud.
+  private _apply(open: boolean): void {
+    this.root.classList.toggle("open", open);
+    this.toggleButton.classList.toggle("active", open);
   }
 
   /** Removes drawer and footer button (showcase teardown, canvas recreation). */
