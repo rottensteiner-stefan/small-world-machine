@@ -8,8 +8,6 @@ export interface ShowcaseDrawerOptions {
   title: string;
   /** Emoji shown in the header and on the footer toggle button. */
   icon: string;
-  /** Optional small badge next to the close button (renderer, showcase number, ...). */
-  badge?: string | undefined;
   /** Inner HTML of the drawer body; can be replaced later with {@link ShowcaseDrawer.setBody}. */
   body?: string | undefined;
   /** Whether the drawer starts open. Defaults to true. */
@@ -62,8 +60,8 @@ const SHARED_STYLE = `
 `;
 
 /**
- * The standard showcase side panel (`swm-inspector-drawer` from shared.css): header with title,
- * badge and close button, a body for the showcase's own controls, a footer toggle button, I/H
+ * The standard showcase side panel (`swm-inspector-drawer` from shared.css): header with title
+ * and close button, a body for the showcase's own controls, a footer toggle button, I/H
  * shortcut handling and shielding so clicks and drags inside the panel never move the camera.
  * Each showcase's `Hud.ts` composes one of these and owns only its content and wiring.
  */
@@ -75,7 +73,6 @@ export class ShowcaseDrawer {
   /** Footer button that toggles the drawer. */
   public readonly toggleButton: HTMLButtonElement;
 
-  private readonly _badge: HTMLElement;
   private readonly _toggleKeys: readonly string[];
   private readonly _onToggle: ((open: boolean) => void) | undefined;
 
@@ -94,7 +91,6 @@ export class ShowcaseDrawer {
       <div class="hud-header">
         <div class="hud-title"><span>${options.icon}</span> ${options.title}</div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <span class="hud-badge"></span>
           <button class="hud-close-btn" title="Panel schließen (${keyHint})">✕</button>
         </div>
       </div>
@@ -112,8 +108,6 @@ export class ShowcaseDrawer {
     document.body.appendChild(root);
     this.root = root;
     this.body = root.querySelector(".hud-body") as HTMLElement;
-    this._badge = root.querySelector(".hud-badge") as HTMLElement;
-    this.setBadge(options.badge);
     (root.querySelector(".hud-close-btn") as HTMLButtonElement).onclick = (): void =>
       this.toggle(false);
 
@@ -143,12 +137,6 @@ export class ShowcaseDrawer {
   /** Replaces the body content (re-render); re-bind control listeners afterwards. */
   public setBody(html: string): void {
     this.body.innerHTML = html;
-  }
-
-  /** Sets or clears the header badge. */
-  public setBadge(text: string | undefined): void {
-    this._badge.textContent = text ?? "";
-    this._badge.style.display = text ? "" : "none";
   }
 
   /** Opens, closes or flips the drawer and notifies `onToggle`. */
