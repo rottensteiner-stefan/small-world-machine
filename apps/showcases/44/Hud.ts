@@ -2,8 +2,8 @@ import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
 
 export type PatternMode = "alternating" | "single" | "multi";
 
-/** What the panel reflects; read from the showcase on every {@link InstancingLabHud.sync}. */
-export interface InstancingLabState {
+/** What the panel reflects; read from the showcase on every {@link Hud.sync}. */
+export interface HudState {
   instancingOn: boolean;
   waveActive: boolean;
   pattern: PatternMode;
@@ -11,7 +11,7 @@ export interface InstancingLabState {
 }
 
 /** Showcase actions the panel triggers; the showcase calls `sync` afterwards. */
-export interface InstancingLabActions {
+export interface HudActions {
   toggleAutoInstancing(): void;
   toggleWave(): void;
   setPattern(pattern: PatternMode): void;
@@ -24,16 +24,13 @@ const COUNT_PRESETS = [400, 1600, 3600, 6400];
  * Instancing Benchmark Lab panel of showcase 44 on the shared {@link ShowcaseDrawer}. Owns only
  * its controls; scene state and the draw counter stay in the showcase.
  */
-export class InstancingLabHud {
+export class Hud {
   private readonly _drawer: ShowcaseDrawer;
   private readonly _root: HTMLElement;
   private readonly _readout: HTMLElement;
   private readonly _style: HTMLStyleElement;
 
-  constructor(
-    rendererType: string,
-    private readonly _actions: InstancingLabActions,
-  ) {
+  constructor(private readonly _actions: HudActions) {
     const style = document.createElement("style");
     style.textContent = `
       #benchLiveReadout {
@@ -66,7 +63,7 @@ export class InstancingLabHud {
       id: "showcase-hud",
       title: "Instancing Benchmark Lab",
       icon: "⚡",
-      badge: rendererType,
+      footerIcon: "⚙",
       body: `
         <div class="hud-section">
           <div class="section-title"><span>📊 Live Performance Monitor</span><span style="font-size:9px;color:#64748b;">Echte GL Calls</span></div>
@@ -133,7 +130,7 @@ export class InstancingLabHud {
   }
 
   /** Reflects the current showcase state in every control. */
-  public sync(state: InstancingLabState): void {
+  public sync(state: HudState): void {
     const toggleBtn = this._drawer.query<HTMLButtonElement>("#btnToggleInstancing");
     if (toggleBtn) {
       toggleBtn.classList.toggle("active", state.instancingOn);

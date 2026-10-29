@@ -76,3 +76,4 @@ WebGL2-Hardware — das deterministische Pendant dazu ist
 - Panel-Code (Markup, Bindings, Sync) aus `showcase.ts` in `Hud.ts` (`InstancingLabHud`) verschoben, aufgebaut auf dem gemeinsamen `apps/showcases/shared/ShowcaseDrawer.ts`.
 - Entfallen: handgebautes Aside/Header/Close-Button, stopPropagation-Schleife, Footer-Button-Erzeugung, I/H-Toggle, duplizierte Drawer-CSS (`.preset-group`, `.hud-note`, `.hud-keys`).
 - Verhalten unverändert: gleiche Controls, Tasten (Space, W, 1–3, I/H), IDs (`#showcase-hud`, `#benchLiveReadout`, …), Panel startet offen. Footer-Button zeigt jetzt das Header-Icon ⚡ statt ⚙.
+- 2026-10-29 Hud-Namen: `InstancingLabHud`/`InstancingLabState`/`InstancingLabActions` → `Hud`/`HudState`/`HudActions`; Footer-Button wieder ⚙ (`footerIcon`); Renderer-Badge im Header entfernt.

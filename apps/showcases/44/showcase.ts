@@ -11,7 +11,7 @@ import {
 } from "@small-world-machine/engine";
 import type { EngineOptions } from "@small-world-machine/engine";
 import type { PatternMode } from "./Hud.js";
-import { InstancingLabHud } from "./Hud.js";
+import { Hud } from "./Hud.js";
 
 /**
  * Real-browser measurement rig for the A2 geometry-grouping instancing work
@@ -103,7 +103,7 @@ export class Showcase extends AbstractShowcase {
   private _smoothedFps: number = 60;
   private _smoothedFrameMs: number = 16.6;
 
-  private _hud: InstancingLabHud | undefined;
+  private _hud: Hud | undefined;
   private _material: StandardMaterial | undefined;
 
   constructor(options: EngineOptions = {}) {
@@ -384,7 +384,7 @@ export class Showcase extends AbstractShowcase {
   }
 
   private _createHud(): void {
-    this._hud = new InstancingLabHud(String(this.renderer.type), {
+    this._hud = new Hud({
       toggleAutoInstancing: (): void => this._toggleAutoInstancing(),
       toggleWave: (): void => this._toggleWave(),
       setPattern: (pattern: PatternMode): void => this._setPattern(pattern),
