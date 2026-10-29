@@ -66,3 +66,15 @@ P6 Goldens. Nachtszene vor einer Steinwand, damit Emission, Bloom und Lichtwurf 
 - Vier Vergleichsfackeln: Blackbody, SPECTRAL, WISP, CURSED.
 - Fackelreihe deterministisch variiert (Integer-Hash je Fackel): 1850–2200 K, Größe ×0,85–1,15,
   Unruhe 0,8–1,25, Flussgeschwindigkeit 0,85–1,2. Licht und Glow übernehmen die Temperatur.
+
+## 2026-10-29 · Showcase-Navigation ohne ID-Listen (Nutzerentscheidung)
+
+- Nutzervorschlag `INVALID_SHOWCASE_IDS` statt `VALID_SHOWCASE_IDS`; Gegenvorschlag angenommen: Die
+  ◀/▶-Buttons folgen den ohnehin vorhandenen `prev`/`next`-Attributen (kuratierte Tour, per Test als
+  geschlossener Ring erzwungen). Das `showcase-layout`-Plugin schreibt sie als `data-prev`/`data-next`
+  an `<header id="info">`, `AbstractShowcase` liest sie aus. `VALID_SHOWCASE_IDS` entfällt.
+- Vite-Rollup-Inputs (`showcaseInputs()` in `.agents/scripts/lib/dev-redirects.ts`) und die
+  Smoke-Liste in `check-showcases.js` lesen die Showcase-Ordner von der Platte. Ein neuer Showcase
+  braucht damit nur noch: Ordner, `prev`/`next` in der Tour-Kette, Galerie-Kachel + Zähler, Tour-Liste
+  im Wiring-Test.
+- Verhaltensänderung: ◀/▶ springen jetzt in Tour-Reihenfolge statt numerisch.

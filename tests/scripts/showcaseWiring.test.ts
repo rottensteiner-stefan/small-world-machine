@@ -6,6 +6,7 @@ import {
   directoryRedirectTarget,
   isInsideRoot,
   parseShowcaseLayout,
+  showcaseInputs,
   showcasesRedirectTarget,
 } from "../../.agents/scripts/lib/dev-redirects.js";
 
@@ -38,23 +39,31 @@ describe("showcase wiring (gallery + curated prev/next tour)", () => {
     expect(missing).toEqual([]);
   });
 
-  it("every showcase is in the hand-kept registries (in-scene ◀/▶ buttons, smoke test, build)", () => {
-    const read = (file: string): string => fs.readFileSync(path.join(ROOT, file), "utf8");
-    const navList = read("packages/engine/src/core/showcase/AbstractShowcase.ts").match(
-      /const VALID_SHOWCASE_IDS = \[([^\]]*)\]/,
-    )?.[1];
-    const smokeList = read(".agents/scripts/check-showcases.js").match(
-      /const numberedShowcases = \[([^\]]*)\]/,
-    )?.[1];
-    const numbers = (list: string | undefined): number[] =>
-      (list ?? "")
-        .match(/\d+/g)
-        ?.map(Number)
-        .sort((a, b) => a - b) ?? [];
-    expect(numbers(navList)).toEqual(ids);
-    expect(numbers(smokeList)).toEqual(ids);
-    const viteConfig = read("vite.config.ts");
-    expect(ids.filter((id) => !viteConfig.includes(`apps/showcases/${id}/index.html`))).toEqual([]);
+  it("every showcase folder becomes a build input (no hand-kept registry)", () => {
+    const inputs = showcaseInputs(ROOT);
+    expect(
+      Object.keys(inputs)
+        .map((key) => Number(key.replace("showcase", "")))
+        .sort((a, b) => a - b),
+    ).toEqual(ids);
+    expect(inputs["showcase45"]).toBe(path.join(SHOWCASES, "45", "index.html"));
+  });
+
+  it("hands the curated prev/next tour to the in-scene ◀/▶ buttons", () => {
+    expect(
+      parseShowcaseLayout(
+        `<showcase-layout title="T" prev="../44/index.html" next="../24/index.html"></showcase-layout>`,
+      ),
+    ).toMatchObject({ prev: "../44/index.html", next: "../24/index.html" });
+    const vite = fs.readFileSync(path.join(ROOT, "vite.config.ts"), "utf8");
+    expect(vite).toContain('data-prev="${layout.prev}"');
+    expect(vite).toContain('data-next="${layout.next}"');
+    const showcase = fs.readFileSync(
+      path.join(ROOT, "packages/engine/src/core/showcase/AbstractShowcase.ts"),
+      "utf8",
+    );
+    expect(showcase).toContain('dataset["prev"]');
+    expect(showcase).not.toMatch(/SHOWCASE_IDS/);
   });
 
   it("the gallery section counter matches the number of showcases", () => {

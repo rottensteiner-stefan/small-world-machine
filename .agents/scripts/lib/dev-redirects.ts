@@ -72,6 +72,10 @@ export interface ShowcaseLayout {
   tag: string;
   title: string;
   subtitle: string;
+  /** Previous stop of the curated tour (relative URL), drives the in-scene ◀ button. */
+  prev: string | undefined;
+  /** Next stop of the curated tour (relative URL), drives the in-scene ▶ button. */
+  next: string | undefined;
 }
 
 /**
@@ -97,5 +101,23 @@ export function parseShowcaseLayout(html: string): ShowcaseLayout | null {
     tag: match[0],
     title,
     subtitle: match[2] ?? "",
+    prev: attributes.get("prev"),
+    next: attributes.get("next"),
   };
+}
+
+/**
+ * Vite build inputs for every numbered showcase folder (`apps/showcases/<n>/index.html`), so a new
+ * showcase needs no hand-kept registry entry.
+ */
+export function showcaseInputs(root: string): Record<string, string> {
+  const dir = path.join(root, "apps/showcases");
+  const inputs: Record<string, string> = {};
+  for (const name of fs.readdirSync(dir)) {
+    const index = path.join(dir, name, "index.html");
+    if (/^\d+$/.test(name) && fs.existsSync(index)) {
+      inputs[`showcase${name}`] = index;
+    }
+  }
+  return inputs;
 }

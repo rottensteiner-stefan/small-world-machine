@@ -54,18 +54,6 @@ export function getCaptureFrameRateFromQuery(): number | undefined {
   return Number.isFinite(raw) && raw > 0 ? raw : undefined;
 }
 
-/**
- * IDs of the actually-existing numbered showcases (`apps/showcases/<id>/`), in navigation order.
- * Not a contiguous 1..N range -- 25 was retired (absorbed into Showcase 10's Waterworld rebuild)
- * and the gap was intentionally kept instead of renumbering everything after it. Kept as an
- * explicit list (mirrors the showcase registries already hand-maintained in vite.config.ts and
- * scripts/check-showcases.js) so PREV/NEXT skips the gap instead of computing a dead ID.
- */
-const VALID_SHOWCASE_IDS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28,
-  29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
-];
-
 export abstract class AbstractShowcase extends SmallWorldMachine {
   /**
    * Renderer-switch hotkeys: Option/Alt+1 opens WebGL1, +2 WebGL2, +3 WebGPU. The digits are
@@ -268,17 +256,15 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
   }
 
   /**
-   * Initializes the NEXT/PREV pointers for numeric showcases.
+   * Creates the ◀/▶ buttons from the curated tour the `showcase-layout` Vite plugin writes onto the
+   * header (`data-prev`/`data-next`, sourced from each index.html's `prev`/`next`). No ID list to
+   * maintain: a page without tour attributes simply gets no buttons.
    */
   private _initShowcaseNavigation(): void {
-    const match = window.location.pathname.match(/\/apps\/showcases\/(\d+)\/?/);
-    if (!match) return;
-
-    const currentId = parseInt(match[1]!, 10);
-    if (isNaN(currentId)) return;
-
-    const currentIndex = VALID_SHOWCASE_IDS.indexOf(currentId);
-    if (currentIndex === -1) return;
+    const header = document.getElementById("info");
+    const prev = header?.dataset["prev"];
+    const next = header?.dataset["next"];
+    if (!prev && !next) return;
 
     const createButton = (
       text: string,
@@ -336,25 +322,12 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
       this._navButtons.push(btn);
     };
 
-    createButton("◀", "left", () => {
-      const prevIndex = (currentIndex - 1 + VALID_SHOWCASE_IDS.length) % VALID_SHOWCASE_IDS.length;
-      const nextId = VALID_SHOWCASE_IDS[prevIndex];
-      const newPath = window.location.pathname.replace(
-        /\/apps\/showcases\/\d+\/?(.*)/,
-        `/apps/showcases/${nextId}/$1`,
-      );
-      window.location.href = newPath;
-    });
-
-    createButton("▶", "right", () => {
-      const nextIndex = (currentIndex + 1) % VALID_SHOWCASE_IDS.length;
-      const nextId = VALID_SHOWCASE_IDS[nextIndex];
-      const newPath = window.location.pathname.replace(
-        /\/apps\/showcases\/\d+\/?(.*)/,
-        `/apps/showcases/${nextId}/$1`,
-      );
-      window.location.href = newPath;
-    });
+    // Path only: a renderer override (?rendererType=) is a per-page choice and is not carried along.
+    const goTo = (relative: string): void => {
+      window.location.href = new URL(relative, window.location.href).pathname;
+    };
+    if (prev) createButton("◀", "left", () => goTo(prev));
+    if (next) createButton("▶", "right", () => goTo(next));
   }
 
   /**

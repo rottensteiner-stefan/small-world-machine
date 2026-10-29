@@ -9,6 +9,7 @@ import path from "path";
 import {
   directoryRedirectTarget,
   parseShowcaseLayout,
+  showcaseInputs,
   showcasesRedirectTarget,
 } from "./.agents/scripts/lib/dev-redirects.ts";
 
@@ -79,8 +80,12 @@ export default defineConfig({
       transformIndexHtml(html) {
         const layout = parseShowcaseLayout(html);
         if (layout) {
+          // The curated tour rides on the header so AbstractShowcase's ◀/▶ buttons need no ID list.
+          const tourAttrs =
+            (layout.prev ? ` data-prev="${layout.prev}"` : "") +
+            (layout.next ? ` data-next="${layout.next}"` : "");
           const headerHtml = `
-<header id="info">
+<header id="info"${tourAttrs}>
   <h1>${layout.title}</h1>
   ${layout.subtitle}
 </header>`;
@@ -268,50 +273,7 @@ export default defineConfig({
     },
     rollupOptions: {
       input: {
-        showcase1: resolve(import.meta.dirname, "apps/showcases/1/index.html"),
-        showcase2: resolve(import.meta.dirname, "apps/showcases/2/index.html"),
-        showcase3: resolve(import.meta.dirname, "apps/showcases/3/index.html"),
-        showcase4: resolve(import.meta.dirname, "apps/showcases/4/index.html"),
-        showcase5: resolve(import.meta.dirname, "apps/showcases/5/index.html"),
-        showcase6: resolve(import.meta.dirname, "apps/showcases/6/index.html"),
-        showcase7: resolve(import.meta.dirname, "apps/showcases/7/index.html"),
-        showcase8: resolve(import.meta.dirname, "apps/showcases/8/index.html"),
-        showcase9: resolve(import.meta.dirname, "apps/showcases/9/index.html"),
-        showcase10: resolve(import.meta.dirname, "apps/showcases/10/index.html"),
-        showcase11: resolve(import.meta.dirname, "apps/showcases/11/index.html"),
-        showcase12: resolve(import.meta.dirname, "apps/showcases/12/index.html"),
-        showcase13: resolve(import.meta.dirname, "apps/showcases/13/index.html"),
-        showcase14: resolve(import.meta.dirname, "apps/showcases/14/index.html"),
-        showcase15: resolve(import.meta.dirname, "apps/showcases/15/index.html"),
-        showcase16: resolve(import.meta.dirname, "apps/showcases/16/index.html"),
-        showcase17: resolve(import.meta.dirname, "apps/showcases/17/index.html"),
-        showcase18: resolve(import.meta.dirname, "apps/showcases/18/index.html"),
-        showcase19: resolve(import.meta.dirname, "apps/showcases/19/index.html"),
-        showcase20: resolve(import.meta.dirname, "apps/showcases/20/index.html"),
-        showcase21: resolve(import.meta.dirname, "apps/showcases/21/index.html"),
-        showcase22: resolve(import.meta.dirname, "apps/showcases/22/index.html"),
-        showcase23: resolve(import.meta.dirname, "apps/showcases/23/index.html"),
-        showcase24: resolve(import.meta.dirname, "apps/showcases/24/index.html"),
-        showcase26: resolve(import.meta.dirname, "apps/showcases/26/index.html"),
-        showcase27: resolve(import.meta.dirname, "apps/showcases/27/index.html"),
-        showcase28: resolve(import.meta.dirname, "apps/showcases/28/index.html"),
-        showcase29: resolve(import.meta.dirname, "apps/showcases/29/index.html"),
-        showcase30: resolve(import.meta.dirname, "apps/showcases/30/index.html"),
-        showcase31: resolve(import.meta.dirname, "apps/showcases/31/index.html"),
-        showcase32: resolve(import.meta.dirname, "apps/showcases/32/index.html"),
-        showcase33: resolve(import.meta.dirname, "apps/showcases/33/index.html"),
-        showcase34: resolve(import.meta.dirname, "apps/showcases/34/index.html"),
-        showcase35: resolve(import.meta.dirname, "apps/showcases/35/index.html"),
-        showcase36: resolve(import.meta.dirname, "apps/showcases/36/index.html"),
-        showcase37: resolve(import.meta.dirname, "apps/showcases/37/index.html"),
-        showcase38: resolve(import.meta.dirname, "apps/showcases/38/index.html"),
-        showcase39: resolve(import.meta.dirname, "apps/showcases/39/index.html"),
-        showcase40: resolve(import.meta.dirname, "apps/showcases/40/index.html"),
-        showcase41: resolve(import.meta.dirname, "apps/showcases/41/index.html"),
-        showcase42: resolve(import.meta.dirname, "apps/showcases/42/index.html"),
-        showcase43: resolve(import.meta.dirname, "apps/showcases/43/index.html"),
-        showcase44: resolve(import.meta.dirname, "apps/showcases/44/index.html"),
-        showcase45: resolve(import.meta.dirname, "apps/showcases/45/index.html"),
+        ...showcaseInputs(import.meta.dirname),
         theWhisperHub: resolve(import.meta.dirname, "apps/sample-apps/the-whisper/index.html"),
         theWhisperPrologue: resolve(
           import.meta.dirname,

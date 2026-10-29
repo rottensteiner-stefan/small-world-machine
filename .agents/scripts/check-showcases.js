@@ -24,52 +24,13 @@ function detectBlankCanvas(pngBuffer) {
   return measureBlank(pngBuffer, BLANK_CANVAS_STDDEV_THRESHOLD);
 }
 
-const numberedShowcases = [
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
-  "7",
-  "8",
-  "9",
-  "10",
-  "11",
-  "12",
-  "13",
-  "14",
-  "15",
-  "16",
-  "17",
-  "18",
-  "19",
-  "20",
-  "21",
-  "22",
-  "23",
-  "24",
-  "26",
-  "27",
-  "28",
-  "29",
-  "30",
-  "31",
-  "32",
-  "33",
-  "34",
-  "35",
-  "36",
-  "37",
-  "38",
-  "39",
-  "40",
-  "41",
-  "42",
-  "43",
-  "44",
-  "45",
-];
+// Every numbered showcase folder, read from disk so a new showcase is smoke-tested without a
+// registry entry.
+const SHOWCASES_DIR = path.join(__dirname, "..", "..", "apps", "showcases");
+const numberedShowcases = fs
+  .readdirSync(SHOWCASES_DIR)
+  .filter((name) => /^\d+$/.test(name) && fs.existsSync(path.join(SHOWCASES_DIR, name, "index.html")))
+  .sort((a, b) => Number(a) - Number(b));
 
 // Every numbered showcase supports a `?rendererType=` override via AbstractShowcase, so each one
 // is checked under all three renderer backends -- not just whichever one `RendererType.BEST`
