@@ -7,7 +7,7 @@ export type SponzaToggle = "hbao" | "gi" | "godRays";
 export type SponzaPreset = "crytek" | "noon" | "overcast";
 
 /** What the panel asks of the showcase; lights and post effects stay there. */
-export interface SponzaLightingHudHost {
+export interface HudActions {
   setParam(param: SponzaParam, value: number): void;
   setSunDirection(x: number, y: number, z: number): void;
   setToggle(toggle: SponzaToggle, enabled: boolean): void;
@@ -160,12 +160,12 @@ const formatValue = (value: number): string =>
 
 /**
  * Sponza Lighting Lab panel of showcase 29 on the shared {@link ShowcaseDrawer}. Owns the controls
- * and their sync; every change goes to the {@link SponzaLightingHudHost}.
+ * and their sync; every change goes to the {@link HudActions}.
  */
-export class SponzaLightingHud {
+export class Hud {
   private readonly _drawer: ShowcaseDrawer;
 
-  constructor(private readonly _host: SponzaLightingHudHost) {
+  constructor(private readonly _host: HudActions) {
     document.getElementById("sponzaTuningHudStyle")?.remove();
     const style = document.createElement("style");
     style.id = "sponzaTuningHudStyle";
@@ -176,26 +176,17 @@ export class SponzaLightingHud {
       id: "sponzaTuningHud",
       title: "Sponza Lighting Lab",
       icon: "🏛️",
-      badge: "Inspector",
       body: BODY,
       open: false,
+      footerIcon: "⚙",
+      // H toggles HBAO in this showcase, so only I opens the panel.
+      toggleKeys: ["KeyI"],
+      // Focused panel controls keep their keys away from the fly camera and the shortcuts.
+      shieldKeys: true,
+      onToggle: (open: boolean): void => {
+        if (!open) this._host.onPanelClosed();
+      },
     });
-    // H toggles HBAO in this showcase, so only I opens the panel.
-    const button = this._drawer.toggleButton;
-    button.innerHTML = "<span>⚙</span>";
-    button.title = "Toggle Sponza Lighting Lab (Key: I)";
-    const closeButton = this._drawer.query(".hud-close-btn");
-    closeButton?.setAttribute("title", "Close Panel");
-
-    // Focused panel controls keep their keys away from the fly camera and the shortcuts.
-    for (const eventName of ["keydown", "keyup"]) {
-      this.root.addEventListener(eventName, (e: Event): void => e.stopPropagation());
-    }
-    // Runs after the drawer's own toggle handlers.
-    const notifyClosed = (): void => this._notifyIfClosed();
-    button.addEventListener("click", notifyClosed);
-    closeButton?.addEventListener("click", notifyClosed);
-
     this._bind();
   }
 
@@ -210,11 +201,7 @@ export class SponzaLightingHud {
 
   /** Handles the I panel shortcut. Returns true when the key was consumed. */
   public handleKey(event: KeyboardEvent): boolean {
-    if (event.code !== "KeyI" || !this._drawer.handleKey(event)) {
-      return false;
-    }
-    this._notifyIfClosed();
-    return true;
+    return this._drawer.handleKey(event);
   }
 
   public getValue(param: SponzaParam): number {
@@ -235,12 +222,6 @@ export class SponzaLightingHud {
   public setChecked(toggle: SponzaToggle, checked: boolean): void {
     const input = this._drawer.query<HTMLInputElement>(`#${TOGGLE_IDS[toggle]}`);
     if (input) input.checked = checked;
-  }
-
-  private _notifyIfClosed(): void {
-    if (!this._drawer.isOpen) {
-      this._host.onPanelClosed();
-    }
   }
 
   private _bind(): void {

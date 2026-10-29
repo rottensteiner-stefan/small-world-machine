@@ -28,8 +28,8 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 import { attachDevTools } from "@small-world-machine/tools";
-import { SponzaLightingHud } from "./Hud.js";
-import type { SponzaLightingHudHost, SponzaParam, SponzaToggle } from "./Hud.js";
+import { Hud } from "./Hud.js";
+import type { HudActions, SponzaParam, SponzaToggle } from "./Hud.js";
 
 /**
  * Showcase 29: "Sponza Atrium: Global Illumination & Volumetric Light Shafts"
@@ -51,7 +51,7 @@ export class Showcase extends AbstractShowcase {
   private _bloom: BloomElement | undefined = undefined;
   private _hbao: HbaoElement | undefined = undefined;
   private _vignette: VignetteElement | undefined = undefined;
-  private _hud!: SponzaLightingHud;
+  private _hud!: Hud;
   private _flyController: FlyController | undefined = undefined;
   private _isHoveringLab = false;
   private _isDraggingLab = false;
@@ -373,7 +373,7 @@ export class Showcase extends AbstractShowcase {
   }
 
   private _createLiveTuningUI(): void {
-    const host: SponzaLightingHudHost = {
+    const host: HudActions = {
       setParam: (param, value) => this._applyParam(param, value),
       setSunDirection: (x, y, z) => {
         this._sunLight.direction.set(x, y, z).normalize();
@@ -390,7 +390,7 @@ export class Showcase extends AbstractShowcase {
       },
       onPanelClosed: () => this._onLightingLabClosed(),
     };
-    this._hud = new SponzaLightingHud(host);
+    this._hud = new Hud(host);
 
     const hud = this._hud.root;
     hud.addEventListener("pointerenter", () => {
