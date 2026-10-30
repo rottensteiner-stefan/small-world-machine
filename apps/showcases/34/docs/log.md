@@ -40,6 +40,25 @@ Vergleichsbäumen**, damit der Geometrie-Swap auf kurze Distanz sichtbar ist.
 
 ## Changelog
 
+### 2026-10-30 — 100 Billboard-Bäume & Interaktives HUD-Panel
+- **100 Billboard-Bäume (Grove Scaling):** Baum-Bestand von zuvor 5 auf 100 Bäume erweitert.
+  Drei prozedurale Baum-Archetypen (Standard-Eiche, schlanke Birke/Espe, breite Krone) werden
+  einmalig beim Start vorab gebacken (`bakeImposter()` mit 8 Blickwinkeln bei 256px). Alle 100
+  Bäume teilen diese drei Textur-Sets (minimale GPU-Last & blitzschneller Start).
+- **Deterministische Lichtung:** Bäume stehen in Flanken und dichtem Hintergrund mit Mindestabstand
+  (1.6 m) fest im 40x40-Bodenbereich. Die ersten 5 Bäume entsprechen exakt der historischen
+  Showcase-34-Positionierung.
+- **Interaktives HUD-Panel (`Hud.ts` via `ShowcaseDrawer`):**
+  - *Vegetation:* Billboard-Bäume umschalten, Schieberegler für Baum-Anzahl (5 bis 100, live ohne Rerender),
+    echte 3D-Vergleichsbäume ein-/ausblenden, Grasfeld umschalten, sanftes Wind-Schwanken.
+  - *Atmosphäre:* Lichtstimmungen (Sonniger Tag, Goldene Stunde, Morgennebel, Dämmerung mit Sprite-Tinting),
+    Horizont-Haze/Fog Toggle & Distanz-Slider, Sonnen-Intensität.
+  - *Kamera & Rundflug:* Presets (Lichtung, 3D vs. Billboard Nahvergleich, Vogelperspektive, Im Dickicht)
+    inkl. weichem `camera.flyTo(...)` und zuschaltbarem automatischen 360°-Orbit-Rundflug.
+  - *Bedienung:* Tastenkürzel `I` / `H` zum Ein-/Ausklappen, Fußzeilen-Button ⚙.
+- **Verifikation:** `npm run typecheck`, `npm run lint` und Puppeteer-Gate `npm run test:showcases 34`
+  erfolgreich auf allen drei Grafik-Backends (WEB_GPU, WEB_GL1, WEB_GL2).
+
 ### 2026-10-22 (Folge) — Sprite-Shader Fog + Grünflächen-Überlauf + Imposter-Erdung
 - **Engine-Feature (Sprite-Shader Fog):** `Sprite.frag.{wgsl,glsl,glsl100}` wenden jetzt denselben
   Szenen-Fog an wie die lit-PBR-Shader (`[WGSL_FOG_CALC]`/`[FOG_DEFS]`+`[FOG_CALC]`, inkl.
