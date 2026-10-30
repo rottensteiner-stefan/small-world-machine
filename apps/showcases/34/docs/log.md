@@ -40,6 +40,11 @@ Vergleichsbäumen**, damit der Geometrie-Swap auf kurze Distanz sichtbar ist.
 
 ## Changelog
 
+### 2026-10-30 — Billboard-Bäume Alpha-Cutout & Tiefenokklusion (Gras-Durchscheinen behoben)
+- **Engine-Fix (`SpriteMaterial` & `ImposterSprite`):** `SpriteMaterial` unterstützt nun `alphaTest` (Option + Property). Sobald `alphaTest > 0` gesetzt ist, wird das Material automatisch als opake Cutout-Fläche behandelt (`transparent: false`, `depthWrite: true`, `blending: OPAQUE`), während Pixel unter dem Schwellenwert im Fragment-Shader (`u_extraParams.y` / `obj.extraParams.y` in GLSL & WGSL) per `discard` verworfen werden.
+- **`ImposterSprite`:** Verwendet standardmäßig `alphaTest: 0.5`. Vorher wurden die Billboard-Bäume als semitransparente Sprites im transparenten Pass ohne Depth-Write gerendert, wodurch der instanziierte Grasbestand (`BillboardInstancer`) dahinter durch Stamm und Blätterkrone durchschien.
+- **Verifikation:** Neuer Unit-Test `SpriteAlphaTest.test.ts` (4/4 Tests), Testsuite grün (478 Testdateien, 3583 Tests), Puppeteer-Gate `check-showcases 34` auf allen 3 Backends (WEB_GPU, WEB_GL1, WEB_GL2) verifiziert.
+
 ### 2026-10-30 — 100 Billboard-Bäume & Interaktives HUD-Panel
 - **100 Billboard-Bäume (Grove Scaling):** Baum-Bestand von zuvor 5 auf 100 Bäume erweitert.
   Drei prozedurale Baum-Archetypen (Standard-Eiche, schlanke Birke/Espe, breite Krone) werden

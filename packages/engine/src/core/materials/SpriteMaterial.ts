@@ -18,6 +18,11 @@ export interface SpriteMaterialOptions {
   color?: Color | undefined;
   /** Whether the sprite is transparent. Defaults to true. */
   transparent?: boolean | undefined;
+  /** Alpha-cutout threshold. When `> 0` the sprite renders as an OPAQUE, depth-writing surface
+   * whose pixels below the threshold are discarded, instead of an alpha-blended one -- the mode a
+   * solid billboard/imposter needs so it occludes (and is occluded by) the scene like the mesh it
+   * replaces. Defaults to 0 (alpha-blended). */
+  alphaTest?: number | undefined;
 }
 
 /**
@@ -29,6 +34,10 @@ export class SpriteMaterial extends AbstractMaterial {
 
   /** Whether the sprite is transparent. Defaults to true. */
   public override transparent: boolean = true;
+
+  /** Alpha-cutout threshold. `> 0` turns the sprite into an opaque, depth-writing cutout surface
+   * (the shader discards pixels below the threshold); 0 keeps it alpha-blended. Defaults to 0. */
+  public alphaTest: number = 0;
 
   /**
    * Creates a new SpriteMaterial.
@@ -45,6 +54,13 @@ export class SpriteMaterial extends AbstractMaterial {
       }
       if (options.transparent !== undefined) {
         this.transparent = options.transparent;
+      }
+      if (options.alphaTest !== undefined) {
+        this.alphaTest = options.alphaTest;
+      }
+      // A cutout surface discards instead of blending -- it can never be transparent.
+      if (this.alphaTest > 0) {
+        this.transparent = false;
       }
     }
   }
@@ -63,7 +79,7 @@ export class SpriteMaterial extends AbstractMaterial {
           u_isTerrain: 0.0,
           u_metallic: 0.0,
           u_roughness: 0.5,
-          u_extraParams: [1.0, 0, 0, 0],
+          u_extraParams: [1.0, this.alphaTest, 0, 0],
           u_liquidParams: [0, 0, 0, 0],
           u_thresholds: [0, 0, 0, 0],
         },
@@ -78,6 +94,8 @@ export class SpriteMaterial extends AbstractMaterial {
           // Sprites do their own billboarding in the vertex shader, which the shared GPU depth
           // pre-pass pipeline cannot reproduce -- and semi-transparent sprites shouldn't write
           // solid depth for the pre-pass anyway. Kept out via skipDepthPrePass (not shaderId).
+          // Cutout (alphaTest > 0) sprites still skip the pre-pass and write their own solid
+          // depth on the opaque pass, which they enter because `transparent` is forced false.
           skipDepthPrePass: true,
           culling: CullMode.NONE,
         },
@@ -104,9 +122,16 @@ export class SpriteMaterial extends AbstractMaterial {
 
     texs["u_diffuseMap"] = this.texture;
 
-    state.transparent = this.transparent;
-    state.blending = this.transparent ? BlendingMode.ALPHA : BlendingMode.OPAQUE;
-    state.depthWrite = !this.transparent;
+    // A cutout sprite is opaque: it must sit in the opaque pass writing depth so it occludes
+    // (and is occluded by) the rest of the scene. Guard against a later `transparent = true`
+    // assignment overriding that invariant.
+    const cutout = this.alphaTest > 0;
+    const transparent = cutout ? false : this.transparent;
+
+    (props["u_extraParams"] as number[])[1] = this.alphaTest;
+    state.transparent = transparent;
+    state.blending = transparent ? BlendingMode.ALPHA : BlendingMode.OPAQUE;
+    state.depthWrite = !transparent;
     state.isSprite = true;
     state.culling = CullMode.NONE;
 

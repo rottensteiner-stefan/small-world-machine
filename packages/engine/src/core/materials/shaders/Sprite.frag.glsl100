@@ -3,5 +3,9 @@
 void main() {
   vec4 texColor = texture2D(u_diffuseMap, v_uv);
   gl_FragColor = u_color * texColor;
+  // Cutout mode (SpriteMaterial.alphaTest > 0): discard below the material's threshold so an
+  // opaque imposter/billboard writes only its solid silhouette into color and depth. In the
+  // transparent (blended) mode the threshold is 0 and nothing is discarded.
+  if (texColor.a < u_extraParams.y) discard;
   [FOG_CALC]
 }
