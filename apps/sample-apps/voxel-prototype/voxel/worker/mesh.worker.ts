@@ -6,7 +6,8 @@ import type { MeshWorkerRequest, MeshWorkerResponse } from "./MeshWorkerProtocol
 
 /**
  * Dedicated mesh worker (M1, dossier §5 S2: world generation and mesh building live here, never
- * on the main thread). Imported by `MeshWorkerClient` via Vite's module-worker pattern
+ * on the main thread). Imported by the M1 `MeshWorkerClient` and the M7 `MeshWorkerPoolClient`
+ * (N arena instances) via Vite's module-worker pattern
  * (`new Worker(new URL(...), { type: "module" })`), which bundles this file as its own chunk.
  *
  * The worker hosts TWO kept-apart roles -- seeded column generation and neighbor-aware meshing --

@@ -2,12 +2,15 @@
 
 ## [Unreleased]
 
+- **Features:**
+  - *Voxel Prototype M7 — Multi-Worker-Pool & OPFS-Persistenz:* `MeshWorkerPoolClient` (`@small-world-machine`-App-level) spannt einen Pool dedizierter `mesh.worker.ts`-Arenen hinter dem unveränderten `MeshClient`-Vertrag auf (global eindeutige Task-IDs, Round-Robin, per-Arena-Crash-Isolation mit In-Place-Respawn, `?workers=N` pinnt). Neuer `OpfsChunkDeltaStore` hinter dem bestehenden `ChunkDeltaStore`-Interface (OPFS bevorzugt, IndexedDB-Fallback, sonst ohne Persistenz). Ehrliche Node-Tests (Pool 7, OPFS 14), Vite-Worker-Chunk-Beweis und Live-Gate `npm run check:voxel-m7` (headless Chrome: echter 2-Arenen-Pool + OPFS-Seed/Edit/Reload-Roundtrip, GATE GREEN).
 - **Architecture & Bugfixes:**
   - *Build Optimization:* Vite production build accelerated (~14x faster, 4.3s down to ~300ms) by switching from two-pass Terser to esbuild minifier, preventing redundant full public asset wiping/copying via incremental checks, and isolating JavaScript asset cleanup.
   - *Showcase 42 Script Consolidation:* Unified soft shadow contact-hardening and EVSM live-gates into `.agents/scripts/check-swm42.mjs` (`--pole`, `--evsm`, or both), and removed obsolete one-off scripts (`perf-liquid.mjs`, `webgpu-resize-stress.js`, `aniso-compare.mjs`).
 - **Housekeeping & Docs:**
   - *Documentation & AI Optimization Standards:* Codified the AI-Optimized Markdown & Language Standard in `AGENTS.md` (compact technical English, token efficiency, Rule-First, exact backticked symbols, zero slop).
   - *Repository Memory & Backlog:* Restructured `.agents/MEMORY.md` into high-density technical English tables and subsystem invariants (~80% token reduction), and reorganized `.agents/BACKLOG.md` with top-level active roadmap.
+  - *Voxel Backlog-Korrektur:* Block-Texturen/Atlas (M2) und Tag/Nacht-Mechanik (M4/M6) waren bereits umgesetzt — Active-Roadmap-Status auf ✅ mit Referenzen korrigiert (nur Pool+OPFS waren real offen).
 
 ## [0.121.0] - 2026-10-30
 

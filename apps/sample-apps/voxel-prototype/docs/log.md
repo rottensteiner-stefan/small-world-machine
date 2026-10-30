@@ -1,9 +1,70 @@
-# Log — Voxel Prototype (M0–M5 Kandieferung in SWM)
+# Log — Voxel Prototype (M0–M7 Kandieferung in SWM)
 
 > Entwicklungslog für die Voxel-Kampagne (Dossier-Basis: `.agents/collaborate/minecraft/dossier.md`
 > + `docs/log` dieser App). Einträge werden nie gelöscht; neue Einträge oben.
 
 ---
+
+## 2026-10-30 — M7 implementiert: Multi-Worker-Pool + OPFS-Delta-Store (Pair-Work)
+
+**Status:** ✅ M7 vollständig umgesetzt & end-to-end verifiziert (Pair-Session: Haupt-Agent + ein
+Sub-Agent; **NUR App-Level, kein Engine-Core-Change**). Die beiden zuvor als offen geführten
+Backlog-Punkte "Multi-Worker-Pool" und "OPFS-Speicherung" sind damit abgearbeitet.
+
+### Was gebaut wurde (alles app-level, `apps/sample-apps/voxel-prototype/`)
+
+- **Worker-Pool (`voxel/worker/MeshWorkerPoolClient.ts`):** `MeshClient`-Transport über N
+  dedizierte `mesh.worker.ts`-Arenen (Default `clamp(hardwareConcurrency-1, 1, 4)`,
+  `?workers=N` pinnt die Anzahl). **Global eindeutige Task-IDs über den gesamten Pool**
+  (ein Per-Worker-Zähler würde kollidieren, sobald zwei Worker mit derselben ID antworten);
+  Round-Robin-Verteilung, Antwort-Routing strikt per Arena-Closure. **Crash-Isolation:**
+  `onerror` rejiziert nur die In-Flight-Tasks der betroffenen Arena und ersetzt sie durch einen
+  frisch konfigurierten Worker (Pool-Größe bleibt erhalten, Routing ohne Index-Drift).
+  `destroy()` terminiert alle Arenen und rejiziert alle Pending-Tasks. `MeshWorkerClient`
+  bleibt als dokumentierter Single-Arena-Fallback (Message-Protokoll unverändert).
+- **OPFS-Driver (`voxel/store/OpfsChunkDeltaStore.ts`):** vollständige `ChunkDeltaStore`-
+  Implementierung über `navigator.storage.getDirectory()` (`seed.json` + `chunkdeltas/<cx>_<cz>.bin`,
+  negative Koordinaten gültig), ausschließlich async Handle-API, kohärente Durability-Barriere
+  (`flush()` wartet jede In-Flight-Write, `close()` propagiert den ersten Fehler), Fail-Soft-
+  Semantik spiegelbildlich zum IDB-Driver (NotFoundError → `null`, korrupte Seed → `null`, keine
+  Unhandled Rejections), injizierbare `getDirectory`-Factory für ehrliche Node-Tests.
+- **Store-Auswahl (`App.ts`):** bevorzugt `OpfsChunkDeltaStore`, Fallback `IndexedDbChunkDeltaStore`,
+  sonst "no persistence" — kein Browser-Storage crasht die App. Stats-Zeile `dedicated worker pool
+  (N)`, QA-Oberfläche um `workers` + `getStoreBackend()` erweitert.
+- **Verdrahtung:** Vite-Bundle-Beweis grün (Produktions-Build emittiert `mesh.worker-*.js` als
+  eigenen Modul-Worker-Chunk; die App referenziert genau einen). `check:voxel-m7` als npm-Script
+  registriert.
+
+### Tests (ehrlich, node-testbar)
+
+- `tests/MeshWorkerPoolClient.test.ts` — 7 Tests über injizierte Fake-Worker-Factory:
+  Configure-Reach, Round-Robin-Verteilung `[2,2,1]`, globale ID-Kollisionsfreiheit,
+  Cross-Arena-Antwort-Routing, Crash-Replacement mit Re-Configure, Teardown (alle terminiert +
+  reject), Pool-Instanz-Isolation, Count-Clamp.
+- `tests/OpfsChunkDeltaStore.test.ts` — 14 Tests über minimale In-Memory-OPFS-Fassade:
+  Seed/Deltas-Roundtrips (verbatim, auch leer + negative Koordinaten), Last-write-wins-Overwrite,
+  `clearChunkDelta`/`clearAll`, Flush-Barriere (erst nach vollständigem Commit), idempotentes
+  `close`, Fehler-Surfacing, Factory-Isolation, synchroner Constructor-Throw ohne OPFS.
+- **Verifikation:** Voxel-Suite 26 Dateien / **189 Tests grün**, `npx tsc --noEmit` exit 0,
+  `npm run lint:fix` sauber, `npm run build:showcases` ok.
+
+### Live-Gate `npm run check:voxel-m7` (`.agents/scripts/check-voxel-m7.mjs`, headless Chrome)
+
+- **LEG 1 (Pool, `?workers=2`):** exakt 2 Arenen aktiv, Streaming bis ready=121,
+  worker-seitiges Meshing (`meshMsTotal` > 0), Spieler grounded, Canvas nicht-blank
+  (stddev ≈ 44,7), 0 Console-/Page-Errors.
+- **LEG 2 (Persistenz):** aktiver Backend **`opfs`**, Seed=777 persistiert, editierte Zelle
+  überlebt einen vollen Page-Reload, 0 Console-/Page-Errors.
+- **GATE GREEN** auf beiden Legs (mehrfach wiedergegeben inkl. nach Rebuild).
+
+### Bewusste Scope-Grenzen
+
+- Pool-Transport ist pure App-Ebene; `ChunkWorld`/Streaming-Logik blieb unangetastet
+  (`MeshClient`-Vertrag unverändert — Parallelität ist reines Transport-Thema).
+- Kein OPFS-Sync-Access-Handle (bewusst nur async API), keine Transferables im Protokoll
+  (M1-Dokumentation hält: 4–6-KB-Payloads, Zero-Copy ohne messbaren Gewinn).
+- Wiederholte Stale-`mesh.worker-*.js`-Hashes in `dist/assets/` sind Folge von
+  `emptyOutDir: false` (Build-Invariant), kein Duplikat im App-Bundle.
 
 ## 2026-10-28 — Restpunkte aus dem 7-Tage-Code-Review abgeschlossen (H2, H4, M2, M3, M4, M7, M11, K5, K9)
 

@@ -37,6 +37,7 @@
     "check:swm42": "node .agents/scripts/check-swm42.mjs",
     "check:swm42-evsm": "node .agents/scripts/check-swm42.mjs --evsm",
     "check:swm42-pole": "node .agents/scripts/check-swm42.mjs --pole",
+    "check:voxel-m7": "node .agents/scripts/check-voxel-m7.mjs",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "prebuild": "node .agents/scripts/update-version.js",

@@ -21,6 +21,7 @@ import { descriptorFromRegistry } from "./voxel/mesh/NaiveMesher.js";
 import { TerrainGenerator } from "./voxel/TerrainGenerator.js";
 import type { ChunkDeltaStore } from "./voxel/store/ChunkDeltaStore.js";
 import { IndexedDbChunkDeltaStore } from "./voxel/store/IndexedDbChunkDeltaStore.js";
+import { OpfsChunkDeltaStore } from "./voxel/store/OpfsChunkDeltaStore.js";
 import { DayNightCycle } from "./voxel/environment/DayNightCycle.js";
 import { SkyMaterial } from "./voxel/environment/SkyMaterial.js";
 import { PlayerRig } from "./voxel/player/PlayerRig.js";
@@ -28,7 +29,7 @@ import { VoxelInputActions } from "./voxel/input/VoxelInputActions.js";
 import { VoxelBlockEditor } from "./voxel/physics/VoxelBlockEditor.js";
 import { VoxelPlayerCollision } from "./voxel/physics/VoxelPlayerCollision.js";
 import { ForegroundMeshClient } from "./voxel/worker/ForegroundMeshClient.js";
-import { MeshWorkerClient } from "./voxel/worker/MeshWorkerClient.js";
+import { MeshWorkerPoolClient } from "./voxel/worker/MeshWorkerPoolClient.js";
 import type { MeshClient } from "./voxel/worker/MeshWorkerProtocol.js";
 
 /**
@@ -37,9 +38,10 @@ import type { MeshClient } from "./voxel/worker/MeshWorkerProtocol.js";
  * baked AO:
  *
  *   - `TerrainGenerator` (seeded, deterministic) + `ChunkWorld` (pure streaming/lifecycle core).
- *   - Meshing runs on a dedicated Vite module worker (`MeshWorkerClient`); the main thread ONLY
- *     decides and dispatches -- proof in the stats overlay (`mesh total` grows, worker-side
- *     `performance.now()` time, never a main-thread mesher call).
+ *   - Meshing runs on a small pool of dedicated Vite module workers (`MeshWorkerPoolClient`, M7;
+ *     `?workers=N` pins the arena count); the main thread ONLY decides and dispatches -- proof in
+ *     the stats overlay (`mesh total` grows, worker-side `performance.now()` time, never a
+ *     main-thread mesher call).
  *   - Neighbor-aware culling (`buildNeighborRim`) makes chunk borders seamless (pinned by the
  *     seam tests); the host materializes each outcome as the standard "one Object3D per chunk".
  *   - `VoxelPlayerCollision` (app-level Behavior) runs the Luanti-derived swept AABB resolver
@@ -51,7 +53,8 @@ import type { MeshClient } from "./voxel/worker/MeshWorkerProtocol.js";
  *
  * Backend: WebGPU where available, else WebGL2 (the block and sky materials ship WGSL and GLSL300,
  * M6); `?rendererType=WEB_GL2|WEB_GPU` pins one. WebGL1 has no array textures (atlas fallback later).
- * Dev params: `?time=<0..1>` pins the time of day, `?look=<yaw>,<pitch>` turns the start view.
+ * Dev params: `?time=<0..1>` pins the time of day, `?look=<yaw>,<pitch>` turns the start view,
+ * `?workers=N` pins the pool size (>= 1).
  */
 export class App extends SmallWorldMachine {
   private _statsEl: HTMLElement | null = null;
@@ -76,6 +79,10 @@ export class App extends SmallWorldMachine {
   private _rig!: PlayerRig;
   private _clearColor: Color = new Color(0.45, 0.65, 0.95, 1);
   private _store: ChunkDeltaStore | null = null;
+  /** Active persistence backend label ("opfs" | "indexeddb" | "none") -- QA/gate proof. */
+  private _storeBackend: string = "none";
+  /** M7 worker pool (null in foreground-degraded environments) -- stats/QA proof of the pool. */
+  private _pool: MeshWorkerPoolClient | null = null;
 
   constructor() {
     // The block and sky materials ship WGSL (array texture, M6) and GLSL300, so WebGPU is used
@@ -139,19 +146,30 @@ export class App extends SmallWorldMachine {
     skyDome.frustumCulled = false;
     this.scene.add(skyDome);
 
-    // 4. World backbone. Production uses the dedicated mesh worker; a browser without `Worker`
-    //    degrades to the foreground double (meshing would run on main -- stats show the label).
+    // 4. World backbone (M7): production uses a small pool of dedicated mesh workers (N = default
+    //    hardware-derived arena count, or `?workers=N` to pin one -- pools of 1 behave exactly
+    //    like the M1 single worker). A browser without `Worker` degrades to the foreground double
+    //    (meshing would run on main -- stats show the label).
     const client: MeshClient =
-      typeof Worker !== "undefined" ? new MeshWorkerClient() : new ForegroundMeshClient();
+      typeof Worker !== "undefined" ? this._createWorkerClient() : new ForegroundMeshClient();
     this._host = new ChunkWorldHost(this.scene, this._material);
-    // M3 persistence (D2/D3): IndexedDB edit-delta store -- the ONLY current driver behind the
-    // interface; the app runs fully fine when no browser storage exists (offline/workers-only
-    // contexts degrade to "no persistence", never crash).
+    // M3 persistence (D2/D3): edit-delta store behind the interface. M7 prefers the OPFS driver
+    // (dedicated per-origin file system, secure contexts only); the IndexedDB driver stays as the
+    // honest fallback, and "no persistence" when neither exists -- a browser without storage never
+    // crashes the world (offline/workers-only contexts degrade gracefully).
     try {
-      this._store = new IndexedDbChunkDeltaStore();
+      this._store = new OpfsChunkDeltaStore();
+      this._storeBackend = "opfs";
     } catch (err: unknown) {
-      console.warn("[voxel-prototype] IndexedDB unavailable, persistence disabled:", err);
-      this._store = null;
+      console.warn("[voxel-prototype] OPFS unavailable, falling back to IndexedDB:", err);
+      try {
+        this._store = new IndexedDbChunkDeltaStore();
+        this._storeBackend = "indexeddb";
+      } catch (err2: unknown) {
+        console.warn("[voxel-prototype] IndexedDB unavailable, persistence disabled:", err2);
+        this._store = null;
+        this._storeBackend = "none";
+      }
     }
     this._world = new ChunkWorld({
       client,
@@ -348,6 +366,7 @@ export class App extends SmallWorldMachine {
           edits: s.edits,
           persistCount: s.persistCount,
           persistBytes: s.persistBytes,
+          workers: this._pool ? this._pool.workerCount : 0,
           focus: this._world.getFocusChunk(),
         };
       },
@@ -393,6 +412,7 @@ export class App extends SmallWorldMachine {
         }),
       getStoredSeed: async (): Promise<number | null> =>
         this._store ? this._store.getSeed() : null,
+      getStoreBackend: (): string => this._storeBackend,
       // M4 survival & day/night reads/controls
       getHealth: (): number => this._rig.health,
       isDead: (): boolean => this._rig.isDead,
@@ -407,6 +427,19 @@ export class App extends SmallWorldMachine {
     };
   }
 
+  /** M7: builds the worker-pool transport. `?workers=N` pins the arena count (>= 1); without it
+   *  the pool derives the count from the hardware. The first worker is created synchronously so a
+   *  spawn failure surfaces here (the caller falls back to `ForegroundMeshClient`). */
+  private _createWorkerClient(): MeshClient {
+    const query = new URLSearchParams(window.location.search);
+    const pinned = Number(query.get("workers"));
+    const workerCount =
+      query.has("workers") && Number.isInteger(pinned) && pinned >= 1 ? pinned : undefined;
+    const pool = new MeshWorkerPoolClient(workerCount !== undefined ? { workerCount } : undefined);
+    this._pool = pool;
+    return pool;
+  }
+
   private _updateStats(force: boolean): void {
     if (!this._statsEl) return;
     const now = performance.now();
@@ -416,7 +449,12 @@ export class App extends SmallWorldMachine {
     const backend = renderer ? renderer.type : "n/a";
     const stats = this._world.getStats();
     const feet = this._player.getFeetPosition();
-    const workerMode = typeof Worker !== "undefined" ? "dedicated worker" : "foreground (main!)";
+    const workerMode =
+      typeof Worker !== "undefined"
+        ? this._pool
+          ? `dedicated worker pool (${this._pool.workerCount})`
+          : "dedicated worker"
+        : "foreground (main!)";
     const n = this._frameTimes.length;
     const sum = n > 0 ? this._frameTimes.reduce((a, b) => a + b, 0) : 16.6;
     const avgDt = n > 0 ? sum / n : 16.6;
@@ -424,7 +462,7 @@ export class App extends SmallWorldMachine {
 
     this._statsEl.innerHTML =
       `<div class="stat-row"><span>renderer</span><b>${backend}</b></div>` +
-      `<div class="stat-row"><span>engine</span><b>voxel M5 (Greedy + S4)</b></div>` +
+      `<div class="stat-row"><span>engine</span><b>voxel M7 (pool + Greedy + S4)</b></div>` +
       `<div class="stat-row"><span>fps</span><b>${fps} (${avgDt.toFixed(1)} ms)</b></div>` +
       `<div class="stat-row"><span>day / phase</span><b>${this._dayNight.getTimePhase()} (${(this._dayNight.time * 24).toFixed(1)}h)</b></div>` +
       `<div class="stat-row"><span>daylight</span><b>${(this._dayNight.getDaylight() * 100).toFixed(0)}%</b></div>` +
@@ -482,6 +520,8 @@ export interface WorldQaStats {
   edits: number;
   persistCount: number;
   persistBytes: number;
+  /** M7: live worker-pool arena count (>= 1 proves the pool, not a single worker, is active). */
+  workers: number;
   focus: { cx: number; cz: number };
 }
 
@@ -510,6 +550,8 @@ export interface VoxelM1QaApi {
   getLightFactor(x: number, y: number, z: number): number;
   forcePersist(): Promise<{ persistCount: number; persistBytes: number }>;
   getStoredSeed(): Promise<number | null>;
+  /** Active persistence backend label ("opfs" | "indexeddb" | "none") for store-gate proofs. */
+  getStoreBackend(): string;
   // M4 Survival & Day/Night extensions
   getHealth(): number;
   isDead(): boolean;

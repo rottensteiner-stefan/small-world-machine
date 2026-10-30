@@ -21,8 +21,10 @@ import type {
  *     main-thread `Chunk` data intact by receiving COPIEs, and the output arrays would be
  *     consumed exactly once anyway. Zero-copy would complicate ownership for no measurable gain
  *     at M1 scale (benchmarked later in M5).
- *   - One worker, one mesh task at a time. A worker pool is M5 hardening; M1 proves the
- *     architecture with a single background role.
+ *   - One worker, one mesh task at a time. A worker pool is the M7 hardening; M1 proves the
+ *     architecture with a single background role. `MeshWorkerPoolClient` (M7) now runs the SAME
+ *     protocol over N workers -- the message shapes below are unchanged, only the transport
+ *     distributes tasks and keeps task ids GLOBALLY unique across the whole pool.
  */
 
 export interface MeshInitMessage {
@@ -86,9 +88,12 @@ export interface MeshErrorResponse {
 export type MeshWorkerResponse = MeshDataResponse | MeshResultResponse | MeshErrorResponse;
 
 /**
- * The background-work surface `ChunkWorld` consumes. Two implementations share it:
+ * The background-work surface `ChunkWorld` consumes. Implementations share the SAME protocol:
  *
- *   - `MeshWorkerClient`  -- the M1 production path (dedicated Vite module worker).
+ *   - `MeshWorkerPoolClient` -- the M7 production path (a pool of dedicated Vite module workers;
+ *     `?workers=1` degenerates to the M1 single-arena behavior).
+ *   - `MeshWorkerClient` -- the M1 single-worker transport, kept as the documented fallback
+ *     implementation of the same protocol (superseded in-app by the pool).
  *   - `ForegroundMeshClient` -- synchronous test/fallback double that runs the SAME pure
  *     `TerrainGenerator` + `buildMesh` code paths on the calling thread (node tests have no
  *     `Worker`). Single source of truth everywhere.

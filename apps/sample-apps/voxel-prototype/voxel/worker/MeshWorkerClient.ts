@@ -6,7 +6,9 @@ import type { MeshClient, MeshOutcome, MeshWorkerResponse } from "./MeshWorkerPr
  * (`new Worker(new URL(...), { type: "module" })`); Vite bundles `mesh.worker.ts` as a separate
  * chunk for both dev and build. Promises resolve per request id; results are structured-cloned
  * typed arrays (see `MeshWorkerProtocol` for the documented M1 simplifications: no explicit
- * transferables, single worker instance).
+ * transferables, single worker instance). SINGLE-WORKER transport: the M7 production path is
+ * `MeshWorkerPoolClient` (N arenas of the same worker + same protocol); this class remains the
+ * documented single-arena fallback and the fixed transport for `?workers=1`.
  */
 export class MeshWorkerClient implements MeshClient {
   private readonly _worker: Worker;
