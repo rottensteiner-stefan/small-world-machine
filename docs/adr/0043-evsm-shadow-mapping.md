@@ -114,7 +114,7 @@ Der Mensch hat am 2026-10-22 die folgenden verbindlichen Entscheidungen getroffe
   renderer-eigene Sampler müssen aus der Material-Sampler-Schleife ausgenommen und auf einer
   kollisionsfreien Einheit gebunden werden (siehe die behobenen Stage-C-Bugs oben).
 - **Messbarkeit:** Das Showcase-42-Gate (
-  `.agents/scripts/check-swm42-evsm.mjs`) prüft: (a) fehlerfreier Lauf (keine Pipeline-/Kompilier-Fehler),
+  `.agents/scripts/check-swm42.mjs --evsm`) prüft: (a) fehlerfreier Lauf (keine Pipeline-/Kompilier-Fehler),
   (b) Mode-Flag-Lane `evsmParams[0] = 1` unter `shadowMode=evsm` und `= 0` unter dem pcss-Default,
   (c) plausibler Frame (keine leere/aufgeblasene Bühne, Schattenpräsenz oberhalb Toleranz).
 - **Tuning-Look & Anti-Peter-Panning / Anti-Light-Bleed (gelöst, 0.116.0):** Der initiale
@@ -145,7 +145,7 @@ Der Mensch hat am 2026-10-22 die folgenden verbindlichen Entscheidungen getroffe
      erzeugt an der Pole-Basis `z_backface == z_floor` (`d → 0`, garantierter Chebyshev-Kollaps zu
      `1.0`). WebGL2 rendert den EVSM-Momenten-Pass nun wie WebGPU mit `cullFace(BACK)` +
      skaliertem synthetischen Kontakt-Varianz-Floor (`rawVar` bleibt zu 100% erhalten).
-  - **Messung Pole-Probe (`.agents/scripts/check-swm42-evsm.mjs`):**
+  - **Messung Pole-Probe (`.agents/scripts/check-swm42.mjs --evsm`):**
     - **WebGPU EVSM:** `baseGapRows = 0.609` ab Pixel 1 (exakt wie PCSS `0.609`, null Peter-Panning),
       `nearContrast = 0.589`, `farContrast = 0.375` (`spread = 0.214 > 0.20`).
     - **WebGL2 EVSM:** `baseGapRows = 0.607` ab Pixel 1 (vorher `0.129`), `nearContrast = 0.588`,

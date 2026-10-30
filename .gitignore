@@ -34,3 +34,5 @@ docs/.vitepress/cache/
 !/.agents/collaborate/.gitkeep
 /.agents/notes/*
 !/.agents/notes/.gitkeep
+/.agents/MEMORY.md
+/.agents/BACKLOG.md

@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+- **Architecture & Bugfixes:**
+  - *Build Optimization:* Vite production build accelerated (~14x faster, 4.3s down to ~300ms) by switching from two-pass Terser to esbuild minifier, preventing redundant full public asset wiping/copying via incremental checks, and isolating JavaScript asset cleanup.
+  - *Showcase 42 Script Consolidation:* Unified soft shadow contact-hardening and EVSM live-gates into `.agents/scripts/check-swm42.mjs` (`--pole`, `--evsm`, or both), and removed obsolete one-off scripts (`perf-liquid.mjs`, `webgpu-resize-stress.js`, `aniso-compare.mjs`).
+- **Housekeeping & Docs:**
+  - *Documentation & AI Optimization Standards:* Codified the AI-Optimized Markdown & Language Standard in `AGENTS.md` (compact technical English, token efficiency, Rule-First, exact backticked symbols, zero slop).
+  - *Repository Memory & Backlog:* Restructured `.agents/MEMORY.md` into high-density technical English tables and subsystem invariants (~80% token reduction), and reorganized `.agents/BACKLOG.md` with top-level active roadmap.
+
 ## [0.121.0] - 2026-10-30
 
 ### "Fire is catching! If we suffer arson, we shall have to die." - Emily Dickinson

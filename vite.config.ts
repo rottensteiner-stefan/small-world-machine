@@ -224,6 +224,16 @@ export default defineConfig({
       },
     },
     {
+      name: "clean-dist-js",
+      apply: "build",
+      buildStart() {
+        const jsDir = path.resolve(import.meta.dirname, "dist/js");
+        if (fs.existsSync(jsDir)) {
+          fs.rmSync(jsDir, { recursive: true, force: true });
+        }
+      },
+    },
+    {
       name: "copy-assets",
       closeBundle() {
         const copyRecursiveSync = (src: string, dest: string, copyDocsHtml = false) => {
@@ -240,7 +250,13 @@ export default defineConfig({
             const isEntryHtml = src.endsWith("index.html");
             const isDocHtml = copyDocsHtml && src.endsWith(".html") && !isEntryHtml;
             if (!src.endsWith(".ts") && (!src.endsWith(".html") || isDocHtml)) {
-              fs.copyFileSync(src, dest);
+              if (
+                !fs.existsSync(dest) ||
+                stats.mtimeMs > fs.statSync(dest).mtimeMs ||
+                stats.size !== fs.statSync(dest).size
+              ) {
+                fs.copyFileSync(src, dest);
+              }
             }
           }
         };
@@ -251,25 +267,23 @@ export default defineConfig({
           "dist/packages/tools/src/maker/docs",
           true,
         );
+        // Incrementally sync public assets/schemas/favicon without re-copying unchanged 1.5 GB binaries.
+        copyRecursiveSync("public/assets", "dist/assets");
+        copyRecursiveSync("public/schemas", "dist/schemas");
+        copyRecursiveSync("public/favicon.webp", "dist/favicon.webp");
       },
     },
     ...(process.env.VITEST ? [] : [mkcert()]),
   ],
   build: {
     outDir: "dist",
-    emptyOutDir: true,
-    chunkSizeWarningLimit: 800,
-    minify: "terser",
-    terserOptions: {
-      format: {
-        comments: false,
-      },
-      compress: {
-        drop_console: false,
-        drop_debugger: true,
-        passes: 2,
-      },
-      mangle: true,
+    emptyOutDir: false,
+    copyPublicDir: false,
+    chunkSizeWarningLimit: 1500,
+    minify: "esbuild",
+    esbuild: {
+      drop: ["debugger"],
+      legalComments: "none",
     },
     rollupOptions: {
       input: {

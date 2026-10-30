@@ -139,8 +139,8 @@ export class Showcase extends AbstractShowcase {
       fullscreen: true,
       enablePhysics: true, // the buoyancy pools (FluidVolume) need the physics step
       ...options,
-      // `?aniso=N` caps anisotropic filtering at N (1 = off) so it can be compared by eye
-      // (`npm run aniso:compare`). The textures ask for 16, the engine default cap is 4.
+      // `?aniso=N` caps anisotropic filtering at N (1 = off) so it can be compared by eye.
+      // The textures ask for 16, the engine default cap is 4.
       ...(Number.isFinite(aniso) && aniso >= 1
         ? { quality: { ...options.quality, maxAnisotropy: aniso } }
         : {}),
