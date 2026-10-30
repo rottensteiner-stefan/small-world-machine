@@ -1,7 +1,20 @@
-import { describe, it, expect } from "vitest";
+/**
+ * @vitest-environment jsdom
+ */
+import { describe, it, expect, beforeEach } from "vitest";
 import { VIENNA_LOCATIONS, ViennaMapModal, type MapLocation } from "../ui/ViennaMapModal.js";
+import type { TextResolver } from "../ui/TextResolver.js";
+
+function createTexts(overrides: Record<string, string> = {}): TextResolver {
+  return {
+    t: (id: string): string => overrides[id] ?? id,
+  };
+}
 
 describe("ViennaMap & Locations Data Model", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
   it("should contain all key Vienna 2100 canonical locations", () => {
     const ids = VIENNA_LOCATIONS.map((loc) => loc.id);
     expect(ids).toContain("flakturm_arenberg");
@@ -40,7 +53,7 @@ describe("ViennaMap & Locations Data Model", () => {
   });
 
   it("should toggle open and closed state on ViennaMapModal instance", () => {
-    const modal = new ViennaMapModal("flakturm_arenberg");
+    const modal = new ViennaMapModal(createTexts(), "flakturm_arenberg");
     expect(modal.isOpen).toBe(false);
 
     modal.open();
@@ -51,6 +64,32 @@ describe("ViennaMap & Locations Data Model", () => {
 
     modal.toggle();
     expect(modal.isOpen).toBe(true);
+
+    modal.destroy();
+  });
+
+  it("should render top bar, pins, and drawer content through injected TextResolver", () => {
+    const modal = new ViennaMapModal(createTexts(), "flakturm_arenberg");
+    modal.open();
+
+    const root = document.getElementById("viennaMapModalContainer");
+    expect(root).not.toBeNull();
+    expect(root?.innerHTML).toContain("ui.map.title");
+    expect(root?.innerHTML).toContain("ui.map.subtitle");
+    expect(root?.innerHTML).toContain("ui.map.closeHint");
+
+    // Check that pin overlays resolve location titles
+    expect(root?.innerHTML).toContain("map.flakturm_arenberg.title");
+
+    // Drawer should display currently selected location (flakturm_arenberg)
+    const drawer = document.getElementById("drawerContent");
+    expect(drawer?.innerHTML).toContain("map.flakturm_arenberg.district");
+    expect(drawer?.innerHTML).toContain("map.flakturm_arenberg.statusLabel");
+    expect(drawer?.innerHTML).toContain("map.flakturm_arenberg.grandfatherNote");
+    expect(drawer?.innerHTML).toContain("ui.map.controllingFaction");
+    expect(drawer?.innerHTML).toContain("ui.map.threatLabel");
+    expect(drawer?.innerHTML).toContain("ui.map.noteTag");
+    expect(drawer?.innerHTML).toContain("ui.map.currentLocation");
 
     modal.destroy();
   });

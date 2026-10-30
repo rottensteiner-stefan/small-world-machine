@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-10-30 — ADR 0041 Stufe 4 Teil 2: ViennaMapModal, TerminalModal Fallakten & Level Hotspot Text-IDs
+
+**Status:** ✅ Vollständig umgesetzt; alle Call-Sites auf `TextResolver` / `ContentPackage.t(id)` migriert.
+
+- **ViennaMapModal:** Nimmt `TextResolver` als Pflicht-Parameter im Konstruktor. Top-Bar, Pin-Labels,
+  Detail-Drawer (Bezirk, Status, Titel, Fraktion, Gefahrenstufe, Františeks Notiz, Archetyp) und
+  Schnellreise-Transit-Bildschirm lösen 100% dynamisch über `this._texts.t(id)` auf. Alle 10 Standorte
+  nutzen die katalogisierten `map.*`-Schlüssel.
+- **TerminalModal:** Casing-Header, Akten-Felder (Labels & Standardwerte für Sektor, Fach K-42, Frist,
+  Sachbearbeiter, Brandstätter-Anweisung, Notizen), Logbuch (Auto-Journal Aufgaben) und Diagnostik-Screen
+  (Dosimetrie, KI-Kernel, Notstrom) laufen vollständig über `this._texts.t(id)`.
+- **Level Hotspots (koje42 & kaeltekammer):** In `koje42.level.json` wurden alle Hartkodierungen in
+  `promptText`, `monologueTitle` und `monologueText` durch stabile `hotspot.koje42.*`-Schlüssel ersetzt.
+  In `kaeltekammer.level.json` wurde das deklarative `"hotspots"`-Array ergänzt. `prologue.ts` löst
+  Level-Hotspots beim Laden über `texts.t(id)` auf und delegiert Kältekammer-Hotspots deklarativ an
+  `_setupLevelHotspots`.
+- **Content Parität:** 53 neue UI- und Terminal-Schlüssel in `content/de.json` und `content/en.json`
+  eingepflegt (198 Text-IDs total, 100% Schlüsselparität via `ContentPackageValidation`).
+- **Verifikation:** `ViennaMap.test.ts` und `TerminalModal.test.ts` beweisen die dynamische Auflösung
+  über den injizierten Resolver. `ContentPackageValidation`, `LevelValidation`, `lint`, `typecheck` und
+  die gesamte Whisper-Testsuite (44 Tests) laufen fehlerfrei durch.
+
+---
+
 ## 2026-10-29 — ADR 0041 Stufe 4 Runtime-Wiring: UI-Chrome & Kältekammer-Inhalte über ContentPackage
 
 **Status:** ✅ Chrome-/Story-Wiring aktiv; Rest (Karte, level.json, Terminal-Daten) dokumentierter Folge-Schritt.

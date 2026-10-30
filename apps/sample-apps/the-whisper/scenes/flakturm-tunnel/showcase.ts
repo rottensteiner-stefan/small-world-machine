@@ -15,6 +15,8 @@ import {
 } from "@small-world-machine/engine";
 import { AbstractShowcase } from "@small-world-machine/engine/core/index.js";
 import { attachDevTools } from "@small-world-machine/tools";
+import { ContentPackage } from "../../content/ContentPackage.js";
+import { preferredLanguage } from "../../content/preferredLanguage.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
 import { PlayerRig } from "../shared/PlayerRig.js";
 import type { PlayerRigType } from "../shared/PlayerRig.js";
@@ -120,7 +122,8 @@ class AndNowScene2 extends AbstractShowcase {
   }
 
   protected override async setupScene(): Promise<void> {
-    this._mapModal = new ViennaMapModal("flakturm_arenberg");
+    const texts = await ContentPackage.load(preferredLanguage());
+    this._mapModal = new ViennaMapModal(texts, "flakturm_arenberg");
     this._zoneBadgeEl = document.getElementById("zoneBadge");
     this._charDescEl = document.getElementById("charDesc");
     this._editorSvg = document.getElementById("editorSvgOverlay") as unknown as SVGElement;

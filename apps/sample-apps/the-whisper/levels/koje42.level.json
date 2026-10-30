@@ -180,12 +180,12 @@
       "name": "Františeks Kaffeemühle",
       "position": [-0.35, 0, -0.8],
       "interactionRadius": 1.2,
-      "promptText": "Kaffeemühle untersuchen",
-      "monologueTitle": "Františeks Kaffeemühle",
+      "promptText": "hotspot.koje42.grinder.prompt",
+      "monologueTitle": "hotspot.koje42.grinder.title",
       "monologueText": [
-        "Aus massivem Nussbaumholz und Messing. Großvater František hat sie vor 50 Jahren aus der alten Welt gerettet.",
-        "Er hat mir beigebracht, getrocknete Gerste und geröstete Eicheln zu mahlen... 'Ein Wiener ohne seinen Kaffee ist kein Mensch, Novotny.'",
-        "Im doppelten Mahlwerk-Boden: Eine Packung trockene Zündhölzer. Ich stecke sie ein."
+        "hotspot.koje42.grinder.line.0",
+        "hotspot.koje42.grinder.line.1",
+        "hotspot.koje42.grinder.line.2"
       ]
     },
     {
@@ -193,12 +193,12 @@
       "name": "Schreibtisch & Vorräte",
       "position": [-0.7, 0, -0.6],
       "interactionRadius": 1.3,
-      "promptText": "Arbeitsplatz & Vorräte durchsuchen",
-      "monologueTitle": "Františeks Arbeitsplatz",
+      "promptText": "hotspot.koje42.desk_supplies.prompt",
+      "monologueTitle": "hotspot.koje42.desk_supplies.title",
       "monologueText": [
-        "Ein abgewetzter Stahltisch mit Emaillegeschirr, gefalteten Wollpullovern und der Messing-Petroleumlampe.",
-        "Auf einem Zettel unter der Lampe stehen Notizen über ungewöhnliche Stromschwankungen in Sektor 0.",
-        "František wusste, dass in der Kältekammer etwas nicht stimmte."
+        "hotspot.koje42.desk_supplies.line.0",
+        "hotspot.koje42.desk_supplies.line.1",
+        "hotspot.koje42.desk_supplies.line.2"
       ]
     },
     {
@@ -206,11 +206,11 @@
       "name": "Stockbett & Stiefel",
       "position": [1.2, 0, -0.6],
       "interactionRadius": 1.4,
-      "promptText": "Františeks Lager & Stiefel untersuchen",
-      "monologueTitle": "Das leere Lager",
+      "promptText": "hotspot.koje42.bed.prompt",
+      "monologueTitle": "hotspot.koje42.bed.title",
       "monologueText": [
-        "Die raue Wolldecke ist noch zerknittert. Gestern Abend saß er hier und summte ein altes Lied über den Wienerwald.",
-        "Seine schweren Lederstiefel stehen noch unterm Bett. Er hat sie extra stehen lassen, um im Schacht keine lauten Schritte zu machen."
+        "hotspot.koje42.bed.line.0",
+        "hotspot.koje42.bed.line.1"
       ]
     },
     {
@@ -218,11 +218,11 @@
       "name": "Amts-Terminal 2100",
       "position": [0, 0, 0.8],
       "interactionRadius": 1.3,
-      "promptText": "Amts-Terminal 2100 öffnen",
-      "monologueTitle": "Amtsrat 4.1 Feldcomputer",
+      "promptText": "hotspot.koje42.terminal.prompt",
+      "monologueTitle": "hotspot.koje42.terminal.title",
       "monologueText": [
-        "Das gepanzerte Amts-Terminal, das Hawelka mir zugeworfen hat. Der Bildschirm flackert bernsteinfarben.",
-        "Akte GZ 2100-AZS/STERBEFALL-0815 ist versiegelt. Todesursache offiziell: Herz-Kreislauf-Versagen... Angeordnet von Hofrat Brandstätter."
+        "hotspot.koje42.terminal.line.0",
+        "hotspot.koje42.terminal.line.1"
       ],
       "action": "open_terminal"
     },
@@ -231,11 +231,11 @@
       "name": "Gepanzerte Panzertür",
       "position": [-2.2, 0, 0.5],
       "interactionRadius": 1.3,
-      "promptText": "Schleusentür prüfen",
-      "monologueTitle": "Verriegelter Flur",
+      "promptText": "hotspot.koje42.door.prompt",
+      "monologueTitle": "hotspot.koje42.door.title",
       "monologueText": [
-        "Schwere Stahlriegel halten die Tür von außen zu. Hawelka hat sie nach dem Alarm zugeworfen.",
-        "Auf dem Gang patrouillieren Pollaks Schleusenwachen. Ein Ausbruch durch die Haupttür wäre Selbstmord."
+        "hotspot.koje42.door.line.0",
+        "hotspot.koje42.door.line.1"
       ]
     },
     {
@@ -243,11 +243,11 @@
       "name": "Lüftungsschacht / Fluchtweg",
       "position": [2.0, 0, 0.8],
       "interactionRadius": 1.3,
-      "promptText": "Lüftungsgitter öffnen & in Schacht klettern",
-      "monologueTitle": "Der geheime Fluchtweg",
+      "promptText": "hotspot.koje42.vent.prompt",
+      "monologueTitle": "hotspot.koje42.vent.title",
       "monologueText": [
-        "An der Ostwand, dicht über dem feuchten Boden: Das schwere Eisengitter ist bereits aufgeschraubt.",
-        "Dahinter pfeift eisige Ammoniakluft herauf: Der Schacht führt direkt in die Kältekammer K-42..."
+        "hotspot.koje42.vent.line.0",
+        "hotspot.koje42.vent.line.1"
       ],
       "action": "transition_kaeltekammer"
     }

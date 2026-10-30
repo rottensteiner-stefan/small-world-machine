@@ -1,4 +1,5 @@
 import { isEditingTextInput } from "@small-world-machine/engine";
+import { type TextResolver, formatText } from "./TextResolver.js";
 
 export type MapLocationStatus = "available" | "current" | "locked" | "in_development" | "target";
 
@@ -261,8 +262,10 @@ export class ViennaMapModal {
   private _selectedLocation: MapLocation | null = null;
   private _transitInProgress = false;
   private _boundKeyHandler: (e: KeyboardEvent) => void;
+  private readonly _texts: TextResolver;
 
-  constructor(currentLocationId = "flakturm_arenberg") {
+  constructor(texts: TextResolver, currentLocationId = "flakturm_arenberg") {
+    this._texts = texts;
     this._currentLocationId = currentLocationId;
     this._boundKeyHandler = (e: KeyboardEvent): void => {
       if (isEditingTextInput(e.target) || isEditingTextInput()) return;
@@ -373,16 +376,16 @@ export class ViennaMapModal {
             <span style="font-size: 1.4rem;">🗺️</span>
             <div>
               <div style="font-size: 1rem; font-weight: 800; letter-spacing: 1.5px; color: #ffb84d; text-transform: uppercase;">
-                Wien 2100 // Großvaters Faltplan
+                ${this._texts.t("ui.map.title")}
               </div>
               <div style="font-size: 0.75rem; color: #94a3b8;">
-                Vorkriegs-Stadtkarte mit handschriftlichen Rötelstift-Notizen & Schleichrouten
+                ${this._texts.t("ui.map.subtitle")}
               </div>
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 16px;">
             <div style="font-size: 0.75rem; color: #cbd5e1; background: rgba(0,0,0,0.4); padding: 4px 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);">
-              Taste <kbd style="background: rgba(255,184,77,0.2); color: #ffb84d; padding: 2px 6px; border-radius: 3px; font-weight: bold;">[M]</kbd> oder <kbd style="background: rgba(255,255,255,0.15); color: #fff; padding: 2px 6px; border-radius: 3px;">[ESC]</kbd> zum Schließen
+              ${this._texts.t("ui.map.closeHint")}
             </div>
             <button id="mapCloseBtn" style="
               background: transparent;
@@ -453,7 +456,7 @@ export class ViennaMapModal {
           ">
             <div id="drawerContent">
               <div style="color: #64748b; font-size: 0.9rem; text-align: center; margin-top: 40px;">
-                Wähle einen markierten Ort auf der Karte, um Großvaters Notizen einzusehen.
+                ${this._texts.t("ui.map.emptyHint")}
               </div>
             </div>
           </div>
@@ -485,7 +488,7 @@ export class ViennaMapModal {
             <img src="${resolveAssetUrl("/assets/the-whisper/map/transit_tunnel.jpg")}" alt="Transit Vignette" style="width: 100%; height: auto; display: block;" />
           </div>
           <div id="transitLocationTitle" style="font-size: 1.4rem; font-weight: bold; color: #ffb84d; letter-spacing: 1px; margin-bottom: 8px;">
-            SCHNELLREISE...
+            ${this._texts.t("ui.map.quickTravel")}
           </div>
           <div id="transitStoryText" style="
             font-family: var(--font-mono, "JetBrains Mono", monospace);
@@ -600,6 +603,9 @@ export class ViennaMapModal {
               ? "#a855f7"
               : "#ffb84d";
 
+      const locTitle = this._texts.t(`map.${loc.id}.title`);
+      const pinLabel = (locTitle.split("(")[0] ?? locTitle).trim();
+
       pinEl.innerHTML = `
         <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
           <!-- Pulsing Halo for active/target -->
@@ -642,7 +648,7 @@ export class ViennaMapModal {
           white-space: nowrap;
           box-shadow: 0 2px 8px rgba(0,0,0,0.8);
         ">
-          ${(loc.title.split("(")[0] ?? loc.title).trim()}
+          ${pinLabel}
         </div>
       `;
 
@@ -699,6 +705,20 @@ export class ViennaMapModal {
     const drawer = this._container.querySelector("#drawerContent");
     if (!drawer) return;
 
+    const locTitle = this._texts.t(`map.${loc.id}.title`);
+    const locDistrict = this._texts.t(`map.${loc.id}.district`);
+    const locSubtitle = this._texts.t(`map.${loc.id}.subtitle`);
+    const locFaction = this._texts.t(`map.${loc.id}.faction`);
+    const locStatusLabel = this._texts.t(`map.${loc.id}.statusLabel`);
+    const locThreat = this._texts.t(`map.${loc.id}.threat`);
+    const locNote = this._texts.t(`map.${loc.id}.grandfatherNote`);
+    const locArchetypeRole = loc.archetypeRole
+      ? this._texts.t(`map.${loc.id}.archetypeRole`)
+      : this._texts.t("ui.map.archetypeFallback");
+    const locArchetypeQuote = loc.archetypeQuote
+      ? this._texts.t(`map.${loc.id}.archetypeQuote`)
+      : "";
+
     const isCurrent = loc.id === this._currentLocationId;
     const canTravel = loc.status === "available" && !isCurrent;
 
@@ -717,7 +737,7 @@ export class ViennaMapModal {
           text-align: center;
           font-family: var(--font-mono, "JetBrains Mono", monospace);
         ">
-          📍 AKTUELLER STANDORT
+          ${this._texts.t("ui.map.currentLocation")}
         </div>
       `;
     } else if (canTravel) {
@@ -737,7 +757,7 @@ export class ViennaMapModal {
           box-shadow: 0 4px 15px rgba(255, 184, 77, 0.3);
           transition: all 0.2s ease;
         ">
-          ➔ SCHNELLREISE ANTRETEN
+          ${this._texts.t("ui.map.startTravel")}
         </button>
       `;
     } else if (loc.status === "in_development") {
@@ -754,7 +774,7 @@ export class ViennaMapModal {
           text-align: center;
           font-family: var(--font-mono, "JetBrains Mono", monospace);
         ">
-          🚧 ORT IN ENTWICKLUNG (DEMNÄCHST BETRETBAR)
+          ${this._texts.t("ui.map.inDevelopment")}
         </div>
       `;
     } else if (loc.status === "locked") {
@@ -771,7 +791,7 @@ export class ViennaMapModal {
           text-align: center;
           font-family: var(--font-mono, "JetBrains Mono", monospace);
         ">
-          🔒 SPERRZONE (AUFTRAG NOCH NICHT ERFÜLLT)
+          ${this._texts.t("ui.map.locked")}
         </div>
       `;
     } else if (loc.status === "target") {
@@ -779,7 +799,7 @@ export class ViennaMapModal {
         <div style="
           width: 100%;
           padding: 10px;
-          background: rgba(16, 185, 129, 0.15);
+          background: rgba(168, 85, 247, 0.15);
           border: 1px solid #10b981;
           border-radius: 6px;
           color: #6ee7b7;
@@ -788,7 +808,7 @@ export class ViennaMapModal {
           text-align: center;
           font-family: var(--font-mono, "JetBrains Mono", monospace);
         ">
-          ⚰️ HAUPTZIEL DER REISE (URNEN-BESTATTUNG)
+          ${this._texts.t("ui.map.targetObjective")}
         </div>
       `;
     }
@@ -805,7 +825,7 @@ export class ViennaMapModal {
           font-size: 0.7rem;
           font-weight: bold;
           text-transform: uppercase;
-        ">${loc.district}</span>
+        ">${locDistrict}</span>
         <span style="
           background: rgba(255, 255, 255, 0.08);
           color: ${loc.status === "available" ? "#4ade80" : loc.status === "target" ? "#10b981" : "#fca5a5"};
@@ -814,13 +834,13 @@ export class ViennaMapModal {
           border-radius: 4px;
           font-size: 0.7rem;
           font-weight: bold;
-        ">${loc.statusLabel}</span>
+        ">${locStatusLabel}</span>
       </div>
 
       <!-- Title & Subtitle -->
-      <h2 style="margin: 0 0 4px 0; font-size: 1.3rem; color: #fff; line-height: 1.3;">${loc.title}</h2>
+      <h2 style="margin: 0 0 4px 0; font-size: 1.3rem; color: #fff; line-height: 1.3;">${locTitle}</h2>
       <div style="font-size: 0.8rem; color: #94a3b8; font-family: var(--font-mono, "JetBrains Mono", monospace); margin-bottom: 12px;">
-        ${loc.subtitle}
+        ${locSubtitle}
       </div>
 
       ${
@@ -837,7 +857,7 @@ export class ViennaMapModal {
         margin-bottom: 12px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.6);
       ">
-        <img src="${resolveAssetUrl(loc.conceptImage)}" alt="${loc.title}" style="
+        <img src="${resolveAssetUrl(loc.conceptImage)}" alt="${locTitle}" style="
           width: 100%;
           height: 100%;
           object-fit: cover;
@@ -853,7 +873,7 @@ export class ViennaMapModal {
           font-family: var(--font-mono, "JetBrains Mono", monospace);
           padding: 2px 6px;
           border-radius: 3px;
-        ">VISUELLER SCHAUPLATZ</div>
+        ">${this._texts.t("ui.map.visualScene")}</div>
       </div>
       `
           : ""
@@ -872,12 +892,12 @@ export class ViennaMapModal {
         margin-bottom: 12px;
       ">
         <div>
-          <div style="color: #64748b; font-size: 0.65rem; text-transform: uppercase;">Kontrollierende Fraktion</div>
-          <div style="color: ${loc.factionColor}; font-weight: bold; margin-top: 2px;">${loc.faction}</div>
+          <div style="color: #64748b; font-size: 0.65rem; text-transform: uppercase;">${this._texts.t("ui.map.controllingFaction")}</div>
+          <div style="color: ${loc.factionColor}; font-weight: bold; margin-top: 2px;">${locFaction}</div>
         </div>
         <div>
-          <div style="color: #64748b; font-size: 0.65rem; text-transform: uppercase;">Gefahrenstufe</div>
-          <div style="color: #e2e8f0; font-weight: bold; margin-top: 2px;">⚠️ ${loc.threatLevel}</div>
+          <div style="color: #64748b; font-size: 0.65rem; text-transform: uppercase;">${this._texts.t("ui.map.threatLabel")}</div>
+          <div style="color: #e2e8f0; font-weight: bold; margin-top: 2px;">⚠️ ${locThreat}</div>
         </div>
       </div>
 
@@ -895,7 +915,7 @@ export class ViennaMapModal {
         padding: 8px 10px;
         margin-bottom: 12px;
       ">
-        <img src="${resolveAssetUrl(loc.archetypeImage)}" alt="${loc.archetypeRole ?? "Fraktions-Figur"}" style="
+        <img src="${resolveAssetUrl(loc.archetypeImage)}" alt="${locArchetypeRole}" style="
           width: 44px;
           height: 44px;
           border-radius: 4px;
@@ -904,10 +924,10 @@ export class ViennaMapModal {
         " />
         <div style="flex: 1; min-width: 0;">
           <div style="font-size: 0.75rem; font-weight: bold; color: #ffb84d; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
-            ${loc.archetypeRole ?? "Fraktions-Figur"}
+            ${locArchetypeRole}
           </div>
           <div style="font-size: 0.7rem; color: #94a3b8; font-style: italic; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
-            ${loc.archetypeQuote ?? ""}
+            ${locArchetypeQuote}
           </div>
         </div>
       </div>
@@ -943,8 +963,8 @@ export class ViennaMapModal {
           padding: 1px 6px;
           border-radius: 2px;
           transform: rotate(2deg);
-        ">FRANTIŠEKS NOTIZ</div>
-        ${loc.grandfatherNote}
+        ">${this._texts.t("ui.map.noteTag")}</div>
+        ${locNote}
       </div>
 
       <!-- Fast Travel Action -->
@@ -983,8 +1003,12 @@ export class ViennaMapModal {
     const timerEl = this._container.querySelector("#transitTimer");
 
     if (transitOverlay && titleEl && storyEl && progressBar && timerEl) {
-      titleEl.textContent = `REISE NACH: ${loc.title.toUpperCase()}`;
-      storyEl.textContent = loc.transitText;
+      const locTitle = this._texts.t(`map.${loc.id}.title`);
+      const locTransit = this._texts.t(`map.${loc.id}.transit`);
+      titleEl.textContent = formatText(this._texts.t("ui.map.travelTo"), {
+        title: locTitle.toUpperCase(),
+      });
+      storyEl.textContent = locTransit;
       transitOverlay.style.display = "flex";
 
       let progress = 0;

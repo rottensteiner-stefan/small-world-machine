@@ -39,6 +39,26 @@ export const DEFAULT_TERMINAL_DATA: TerminalData = {
   ],
 };
 
+export function createDefaultTerminalData(texts: TextResolver): TerminalData {
+  return {
+    caseId: "GZ 2100-AZS/S-3/STERBEFALL-0815",
+    deceasedName: "František Novotny",
+    birthYear: 2005,
+    deathYear: 2100,
+    sector: texts.t("terminal.case.sector"),
+    storageSlot: texts.t("terminal.case.storageSlot"),
+    disposalDeadline: texts.t("terminal.case.disposalDeadline"),
+    assignedOfficer: texts.t("terminal.case.assignedOfficer"),
+    authorizingBureaucrat: texts.t("terminal.case.authorizingBureaucrat"),
+    radiationLevel: texts.t("terminal.case.radiationLevel"),
+    notes: [
+      texts.t("terminal.case.note.0"),
+      texts.t("terminal.case.note.1"),
+      texts.t("terminal.case.note.2"),
+    ],
+  };
+}
+
 export class TerminalModal {
   private _container: HTMLDivElement | null = null;
   private _isOpen: boolean = false;
@@ -47,9 +67,9 @@ export class TerminalModal {
   private readonly _texts: TextResolver;
   private _onCloseCallbacks: (() => void)[] = [];
 
-  constructor(texts: TextResolver, data: TerminalData = DEFAULT_TERMINAL_DATA) {
+  constructor(texts: TextResolver, data?: TerminalData) {
     this._texts = texts;
-    this._data = data;
+    this._data = data ?? createDefaultTerminalData(texts);
     this._createModal();
     this._bindGlobalKey();
   }
@@ -147,9 +167,9 @@ export class TerminalModal {
     header.innerHTML = `
       <div style="display: flex; align-items: center; gap: 0.8rem;">
         <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 10px #22c55e;"></span>
-        <strong style="color: #e2e8f0; font-size: 0.95rem; letter-spacing: 1px;">AMTSRAT 4.1 // AZS-FELDTERMINAL 2100</strong>
+        <strong style="color: #e2e8f0; font-size: 0.95rem; letter-spacing: 1px;">${this._texts.t("terminal.header.title")}</strong>
       </div>
-      <span style="font-size: 0.75rem; color: #64748b; letter-spacing: 1px;">SN-AZS-4288-B</span>
+      <span style="font-size: 0.75rem; color: #64748b; letter-spacing: 1px;">${this._texts.t("terminal.header.serial")}</span>
     `;
     casing.appendChild(header);
 
@@ -278,16 +298,16 @@ export class TerminalModal {
     if (this._activeTab === "case") {
       el.innerHTML = `
         <div style="border-bottom: 1px dashed rgba(255, 184, 77, 0.4); padding-bottom: 0.5rem; margin-bottom: 0.8rem; display: flex; justify-content: space-between;">
-          <span>AZS-REGISTER // REFERAT 3 (ARENBERG)</span>
-          <span style="color: #ef4444; font-weight: bold;">[VERSIEGELT]</span>
+          <span>${this._texts.t("terminal.case.header")}</span>
+          <span style="color: #ef4444; font-weight: bold;">${this._texts.t("terminal.case.sealed")}</span>
         </div>
-        <div style="margin-bottom: 0.4rem;"><strong>AKTENZEICHEN:</strong> ${this._data.caseId}</div>
-        <div style="margin-bottom: 0.4rem;"><strong>BÜRGER:</strong> ${this._data.deceasedName} (*${this._data.birthYear} — †${this._data.deathYear})</div>
-        <div style="margin-bottom: 0.4rem;"><strong>AUFFINDESTELLE:</strong> ${this._data.sector}</div>
-        <div style="margin-bottom: 0.4rem; color: #fbbf24;"><strong>LAGERORT:</strong> ${this._data.storageSlot}</div>
-        <div style="margin-bottom: 0.8rem; color: #f87171;"><strong>FRIST:</strong> ${this._data.disposalDeadline}</div>
-        <div style="margin-bottom: 0.4rem; font-size: 0.8rem; color: #94a3b8;"><strong>SACHBEARBEITER:</strong> ${this._data.assignedOfficer}</div>
-        <div style="margin-bottom: 0.8rem; font-size: 0.8rem; color: #94a3b8;"><strong>ANWEISUNG DURCH:</strong> ${this._data.authorizingBureaucrat}</div>
+        <div style="margin-bottom: 0.4rem;"><strong>${this._texts.t("terminal.case.lblCaseId")}</strong> ${this._data.caseId}</div>
+        <div style="margin-bottom: 0.4rem;"><strong>${this._texts.t("terminal.case.lblCitizen")}</strong> ${this._data.deceasedName} (*${this._data.birthYear} — †${this._data.deathYear})</div>
+        <div style="margin-bottom: 0.4rem;"><strong>${this._texts.t("terminal.case.lblSector")}</strong> ${this._data.sector}</div>
+        <div style="margin-bottom: 0.4rem; color: #fbbf24;"><strong>${this._texts.t("terminal.case.lblStorage")}</strong> ${this._data.storageSlot}</div>
+        <div style="margin-bottom: 0.8rem; color: #f87171;"><strong>${this._texts.t("terminal.case.lblDeadline")}</strong> ${this._data.disposalDeadline}</div>
+        <div style="margin-bottom: 0.4rem; font-size: 0.8rem; color: #94a3b8;"><strong>${this._texts.t("terminal.case.lblOfficer")}</strong> ${this._data.assignedOfficer}</div>
+        <div style="margin-bottom: 0.8rem; font-size: 0.8rem; color: #94a3b8;"><strong>${this._texts.t("terminal.case.lblAuthority")}</strong> ${this._data.authorizingBureaucrat}</div>
         <div style="border-top: 1px dashed rgba(255, 184, 77, 0.3); padding-top: 0.6rem; font-size: 0.82rem; color: #fdba74;">
           ${this._data.notes.map((n) => `<div>&bull; ${n}</div>`).join("")}
         </div>
@@ -295,32 +315,32 @@ export class TerminalModal {
     } else if (this._activeTab === "logbook") {
       el.innerHTML = `
         <div style="border-bottom: 1px dashed rgba(255, 184, 77, 0.4); padding-bottom: 0.5rem; margin-bottom: 0.8rem;">
-          <span>AUTO-JOURNAL // AKT I (FLAKTURM ARENBERG)</span>
+          <span>${this._texts.t("terminal.logbook.header")}</span>
         </div>
         <div style="margin-bottom: 0.8rem;">
-          <span style="color: #22c55e;">[AKTIV]</span> <strong>INFILTRATION SEKTOR 0:</strong><br/>
-          &rarr; Františeks Überreste in Kältekammer Fach K-42 untersuchen.<br/>
-          &rarr; Lüftungsschacht in Koje 42 nutzen, um Schleusenwache Pollak zu umgehen.
+          <span style="color: #22c55e;">${this._texts.t("terminal.logbook.active")}</span> <strong>${this._texts.t("terminal.logbook.task1.title")}</strong><br/>
+          &rarr; ${this._texts.t("terminal.logbook.task1.line0")}<br/>
+          &rarr; ${this._texts.t("terminal.logbook.task1.line1")}
         </div>
         <div style="margin-bottom: 0.8rem;">
-          <span style="color: #94a3b8;">[OFFEN]</span> <strong>ASSERVATENKAMMER HEIST:</strong><br/>
-          &rarr; Františeks Medaillon & Dienstwaffe aus der Kanzlei bergen.
+          <span style="color: #94a3b8;">${this._texts.t("terminal.logbook.pending")}</span> <strong>${this._texts.t("terminal.logbook.task2.title")}</strong><br/>
+          &rarr; ${this._texts.t("terminal.logbook.task2.line0")}
         </div>
         <div style="font-size: 0.82rem; color: #94a3b8; border-top: 1px dashed rgba(255, 184, 77, 0.3); padding-top: 0.6rem;">
-          *Hinweis: Alle entdeckten Codes und Frequenzen werden automatisch gespeichert.*
+          ${this._texts.t("terminal.logbook.hint")}
         </div>
       `;
     } else {
       el.innerHTML = `
         <div style="border-bottom: 1px dashed rgba(255, 184, 77, 0.4); padding-bottom: 0.5rem; margin-bottom: 0.8rem;">
-          <span>SYSTEM-STATUS & DOSIMETRIE</span>
+          <span>${this._texts.t("terminal.diag.header")}</span>
         </div>
-        <div style="margin-bottom: 0.5rem;"><strong>GERÄTE-STATUS:</strong> OK // AKKU: 78% (Blei-Säure)</div>
-        <div style="margin-bottom: 0.5rem;"><strong>LOKAL-STRAHLUNG:</strong> ${this._data.radiationLevel}</div>
-        <div style="margin-bottom: 0.5rem;"><strong>AMTS-KI:</strong> AMTSRAT 4.1 (Verwaltungs-Kernel v2050.8)</div>
-        <div style="margin-bottom: 0.8rem; color: #fbbf24;"><strong>NOTSTROM-QUELLE:</strong> Freudenau Wasserkraft-Relais 04</div>
+        <div style="margin-bottom: 0.5rem;"><strong>${this._texts.t("terminal.diag.lblStatus")}</strong> ${this._texts.t("terminal.diag.statusVal")}</div>
+        <div style="margin-bottom: 0.5rem;"><strong>${this._texts.t("terminal.diag.lblRad")}</strong> ${this._data.radiationLevel}</div>
+        <div style="margin-bottom: 0.5rem;"><strong>${this._texts.t("terminal.diag.lblAi")}</strong> ${this._texts.t("terminal.diag.aiVal")}</div>
+        <div style="margin-bottom: 0.8rem; color: #fbbf24;"><strong>${this._texts.t("terminal.diag.lblPower")}</strong> ${this._texts.t("terminal.diag.powerVal")}</div>
         <div style="border-top: 1px dashed rgba(255, 184, 77, 0.3); padding-top: 0.6rem; font-size: 0.82rem; color: #64748b;">
-          *Systemmeldung: Unautorisierter Offline-Modus aktiv. Funk-Verbindung zur Rossauer Kaserne getrennt.*
+          ${this._texts.t("terminal.diag.msg")}
         </div>
       `;
     }

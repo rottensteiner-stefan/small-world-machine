@@ -25,6 +25,8 @@ import {
 import { OrbitController } from "@small-world-machine/engine/core/controllers/OrbitController.js";
 import { OilPuddleMaterial } from "@small-world-machine/liquid-extras";
 import { Vector2D } from "@small-world-machine/engine/math/index.js";
+import { ContentPackage } from "../../content/ContentPackage.js";
+import { preferredLanguage } from "../../content/preferredLanguage.js";
 import { ViennaMapModal } from "../../ui/ViennaMapModal.js";
 import { PlayerRig } from "../shared/PlayerRig.js";
 import type { PlayerRigType } from "../shared/PlayerRig.js";
@@ -252,7 +254,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
     // 5. Player rig + initial character (all shared player plumbing lives in `PlayerRig` -- see
     // `scenes/shared/PlayerRig.ts`; `C` cycles the skin, see `_cycleCharacter`).
     this._buildPlayerRig();
-    this._initHUD();
+    await this._initHUD();
     await this._playerRig!.switchCharacter("male");
   }
 
@@ -1456,13 +1458,14 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
     }
   }
 
-  private _initHUD(): void {
+  private async _initHUD(): Promise<void> {
     // The giant keyboard-shortcut boxes (`.info-badge` + `.deck-panel`, see index.html) cover the
     // barrel and the oil puddle -- hidden by default; [H] brings them back for interactive sessions.
     this._hudBoxes = Array.from(document.querySelectorAll<HTMLElement>(".info-badge, .deck-panel"));
     this._setHudVisible(false);
 
-    this._mapModal = new ViennaMapModal("character_diorama");
+    const texts = await ContentPackage.load(preferredLanguage());
+    this._mapModal = new ViennaMapModal(texts, "character_diorama");
     this._lblChar = document.getElementById("lbl-char")!;
     this._lblTorch = document.getElementById("lbl-torch")!;
     this._lblTurntable = document.getElementById("lbl-turntable")!;

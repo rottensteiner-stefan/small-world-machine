@@ -75,6 +75,7 @@ export class PrologueScene extends AbstractShowcase {
   private _hotspotManager: HotspotManager | null = null;
   private _texts: ContentPackage | null = null;
   private _levelHotspots: LevelHotspotDef[] = [];
+  private _kaelteHotspots: LevelHotspotDef[] = [];
 
   // Timeline & State
   private _currentArea: StageArea = "koje_42";
@@ -179,10 +180,9 @@ export class PrologueScene extends AbstractShowcase {
     this._buildKaeltekammer();
     this._buildDustParticles();
 
-    // 5. Initialize Modals & Systems — Terminal/Hotspot brauchen den TextResolver des
+    // 5. Initialize Modals & Systems — Terminal/Hotspot/Map brauchen den TextResolver des
     // Content-Pakets (ADR 0041 Stufe 4), deshalb erst nach dem Laden konstruieren. Bei
     // Load-Fehler bleiben sie null und die `?.`-Guards der Listener greifen (lautes Log oben).
-    this._mapModal = new ViennaMapModal("flakturm_arenberg");
 
     // 6. Load Content Package, then Kit Props via Level Descriptors, then PBR textures
     void (async (): Promise<void> => {
@@ -197,6 +197,7 @@ export class PrologueScene extends AbstractShowcase {
       if (this._texts) {
         this._terminalModal = new TerminalModal(this._texts);
         this._hotspotManager = new HotspotManager(this._texts);
+        this._mapModal = new ViennaMapModal(this._texts, "flakturm_arenberg");
       }
       await this._loadLevelProps();
       await this._loadKaeltekammerProps();
@@ -802,10 +803,14 @@ export class PrologueScene extends AbstractShowcase {
   private async _loadKaeltekammerProps(): Promise<void> {
     if (!this._morgueGroup) return;
     try {
-      await this._kitRegistry.loadLevel(
+      const level = await this._kitRegistry.loadLevel(
         new URL("../../levels/kaeltekammer.level.json", import.meta.url).href,
         this._morgueGroup,
       );
+      this._kaelteHotspots = level.hotspots;
+      if (this._currentArea === "kaeltekammer") {
+        this._setupKaeltekammerHotspots();
+      }
     } catch (e) {
       console.error("[Prologue] KAELTEKAMMER: Kit-Props nicht ladbar:", e);
     }
@@ -874,6 +879,7 @@ export class PrologueScene extends AbstractShowcase {
   private _setupLevelHotspots(hotspotDefs: LevelHotspotDef[]): void {
     if (!this._hotspotManager) return;
     this._hotspotManager.clearHotspots();
+    const texts = this._texts;
 
     for (const def of hotspotDefs) {
       let onInteract: (() => void) | undefined;
@@ -885,16 +891,34 @@ export class PrologueScene extends AbstractShowcase {
         onInteract = (): void => {
           this.transitionToKaeltekammer();
         };
+      } else if (def.action === "investigate_drawer") {
+        onInteract = (): void => {
+          if (this._cyanideSpotLight) {
+            this._cyanideSpotLight.intensity = 8.0;
+          }
+          const objText = document.getElementById("objectiveText");
+          if (objText && texts) {
+            objText.innerText = texts.t("objective.kaeltekammer.infiltrate");
+          }
+        };
       }
+
+      const promptText = texts ? texts.t(def.promptText) : def.promptText;
+      const monologueTitle =
+        def.monologueTitle && texts ? texts.t(def.monologueTitle) : def.monologueTitle;
+      const monologueText =
+        def.monologueText && texts
+          ? def.monologueText.map((line) => texts.t(line))
+          : def.monologueText;
 
       const hotspot: HotspotAction = {
         id: def.id,
         name: def.name,
         position: new Vector3D(def.position[0], def.position[1], def.position[2]),
         interactionRadius: def.interactionRadius ?? 1.3,
-        promptText: def.promptText,
-        monologueTitle: def.monologueTitle,
-        monologueText: def.monologueText,
+        promptText,
+        monologueTitle,
+        monologueText,
         onInteract,
       };
 
@@ -903,61 +927,9 @@ export class PrologueScene extends AbstractShowcase {
   }
 
   private _setupKaeltekammerHotspots(): void {
-    if (!this._hotspotManager || !this._texts) return;
-    const texts = this._texts;
-    this._hotspotManager.clearHotspots();
-
-    const spots: HotspotAction[] = [
-      {
-        id: "drawer_k42",
-        name: "Fach K-42 (František)",
-        position: new Vector3D(-1.8, 0, -9.8),
-        interactionRadius: 1.6,
-        promptText: texts.t("hotspot.kaeltekammer.drawer_k42.prompt"),
-        monologueTitle: texts.t("hotspot.kaeltekammer.drawer_k42.title"),
-        monologueText: [
-          texts.t("hotspot.kaeltekammer.drawer_k42.line.0"),
-          texts.t("hotspot.kaeltekammer.drawer_k42.line.1"),
-          texts.t("hotspot.kaeltekammer.drawer_k42.line.2"),
-          texts.t("hotspot.kaeltekammer.drawer_k42.line.3"),
-        ],
-        onInteract: (): void => {
-          if (this._cyanideSpotLight) {
-            this._cyanideSpotLight.intensity = 8.0;
-          }
-          const objText = document.getElementById("objectiveText");
-          if (objText) {
-            objText.innerText = texts.t("objective.kaeltekammer.infiltrate");
-          }
-        },
-      },
-      {
-        id: "ammonia_pipes",
-        name: "Kühlrohre",
-        position: new Vector3D(0, 0, -10.5),
-        interactionRadius: 1.8,
-        promptText: texts.t("hotspot.kaeltekammer.ammonia.prompt"),
-        monologueTitle: texts.t("hotspot.kaeltekammer.ammonia.title"),
-        monologueText: [
-          texts.t("hotspot.kaeltekammer.ammonia.line.0"),
-          texts.t("hotspot.kaeltekammer.ammonia.line.1"),
-        ],
-      },
-      {
-        id: "morgue_exit",
-        name: "Aufgang zur Kanzlei",
-        position: new Vector3D(2.2, 0, -8.5),
-        interactionRadius: 1.6,
-        promptText: texts.t("hotspot.kaeltekammer.exit.prompt"),
-        monologueTitle: texts.t("hotspot.kaeltekammer.exit.title"),
-        monologueText: [
-          texts.t("hotspot.kaeltekammer.exit.line.0"),
-          texts.t("hotspot.kaeltekammer.exit.line.1"),
-        ],
-      },
-    ];
-
-    spots.forEach((s) => this._hotspotManager?.registerHotspot(s));
+    if (this._kaelteHotspots.length > 0) {
+      this._setupLevelHotspots(this._kaelteHotspots);
+    }
   }
 
   public transitionToKaeltekammer(): void {

@@ -59,5 +59,46 @@
         "metallic": 0.35
       }
     }
+  ],
+  "hotspots": [
+    {
+      "id": "drawer_k42",
+      "name": "Fach K-42 (František)",
+      "position": [-1.8, 0, -9.8],
+      "interactionRadius": 1.6,
+      "promptText": "hotspot.kaeltekammer.drawer_k42.prompt",
+      "monologueTitle": "hotspot.kaeltekammer.drawer_k42.title",
+      "monologueText": [
+        "hotspot.kaeltekammer.drawer_k42.line.0",
+        "hotspot.kaeltekammer.drawer_k42.line.1",
+        "hotspot.kaeltekammer.drawer_k42.line.2",
+        "hotspot.kaeltekammer.drawer_k42.line.3"
+      ],
+      "action": "investigate_drawer"
+    },
+    {
+      "id": "ammonia_pipes",
+      "name": "Nußdorf-Kühlstrang",
+      "position": [0, 0, -10.5],
+      "interactionRadius": 1.8,
+      "promptText": "hotspot.kaeltekammer.ammonia.prompt",
+      "monologueTitle": "hotspot.kaeltekammer.ammonia.title",
+      "monologueText": [
+        "hotspot.kaeltekammer.ammonia.line.0",
+        "hotspot.kaeltekammer.ammonia.line.1"
+      ]
+    },
+    {
+      "id": "morgue_exit",
+      "name": "Aufgang zur Kanzlei",
+      "position": [2.2, 0, -8.5],
+      "interactionRadius": 1.6,
+      "promptText": "hotspot.kaeltekammer.exit.prompt",
+      "monologueTitle": "hotspot.kaeltekammer.exit.title",
+      "monologueText": [
+        "hotspot.kaeltekammer.exit.line.0",
+        "hotspot.kaeltekammer.exit.line.1"
+      ]
+    }
   ]
 }
