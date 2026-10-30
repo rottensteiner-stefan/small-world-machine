@@ -53,4 +53,20 @@ describe("InstancedMesh", () => {
     expect(outMat.data[13]).toBe(20);
     expect(outMat.data[14]).toBe(30);
   });
+
+  it("marks instanceDataNeedsUpdate when initializing instance data", () => {
+    const dummyGeometry: GeometryDataInterface = {
+      vertices: new Float32Array([0, 0, 0]),
+      getBoundingVolume: () => null as unknown as BoundingVolume,
+    } as GeometryDataInterface;
+
+    const dummyMaterial = new StandardMaterial();
+    const mesh = new InstancedMesh("testInstanced", dummyGeometry, dummyMaterial, 4);
+
+    expect(mesh.instanceDataNeedsUpdate).toBe(false);
+    mesh.initInstanceData(4);
+    expect(mesh.instanceData).toBeDefined();
+    expect(mesh.instanceData!.length).toBe(16);
+    expect(mesh.instanceDataNeedsUpdate).toBe(true);
+  });
 });

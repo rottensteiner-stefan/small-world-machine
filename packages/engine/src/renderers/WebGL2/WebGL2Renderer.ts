@@ -2217,6 +2217,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     if (instMesh.instanceCount < 0) {
       throw new Error(`[WebGL2Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
     }
+    if (instMesh.instanceCount === 0) {
+      return;
+    }
     if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
       throw new Error(
         `[WebGL2Renderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
@@ -2233,12 +2236,14 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._uploadModelMatrix(instMesh.worldMatrix.data, undefined, undefined, cache.uniforms);
 
     let matrixBuf = this._instanceBuffers.get(instMesh);
+    let matrixNeedsUpload = instMesh.instanceMatrixNeedsUpdate;
     if (!matrixBuf) {
       matrixBuf = this.gl.createBuffer()!;
       this._instanceBuffers.set(instMesh, matrixBuf);
+      matrixNeedsUpload = true;
     }
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
-    if (instMesh.instanceMatrixNeedsUpdate) {
+    if (matrixNeedsUpload) {
       this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceMatrices, this.gl.DYNAMIC_DRAW);
       instMesh.instanceMatrixNeedsUpdate = false;
     }
@@ -2246,11 +2251,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     let dataBuf: WebGLBuffer | undefined;
     if (instMesh.instanceData && cache.attributes.has("a_instanceData")) {
       dataBuf = this._instanceDataBuffers.get(instMesh);
+      let dataNeedsUpload = instMesh.instanceDataNeedsUpdate;
       if (!dataBuf) {
         dataBuf = this.gl.createBuffer()!;
         this._instanceDataBuffers.set(instMesh, dataBuf);
+        dataNeedsUpload = true;
       }
-      if (instMesh.instanceDataNeedsUpdate) {
+      if (dataNeedsUpload) {
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
         this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
         instMesh.instanceDataNeedsUpdate = false;

@@ -48,6 +48,7 @@ export class InstancedMesh extends Object3D {
   public initInstanceData(sizePerInstance: number): void {
     this.instanceDataSize = sizePerInstance;
     this.instanceData = new Float32Array(this.instanceCount * sizePerInstance);
+    this.instanceDataNeedsUpdate = true;
   }
 
   public setMatrixAt(index: number, matrix: Matrix4): void {

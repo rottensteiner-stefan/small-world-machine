@@ -599,6 +599,9 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         if (instMesh.instanceCount < 0) {
           throw new Error(`[WebGL1Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
         }
+        if (instMesh.instanceCount === 0) {
+          continue;
+        }
         if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
           throw new Error(
             `[WebGL1Renderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
@@ -618,12 +621,14 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         if (uModel) this.gl.uniformMatrix4fv(uModel, false, instMesh.worldMatrix.data);
 
         let matrixBuf = this._instanceMatrixBuffers.get(instMesh);
+        let matrixNeedsUpload = instMesh.instanceMatrixNeedsUpdate;
         if (!matrixBuf) {
           matrixBuf = this.gl.createBuffer()!;
           this._instanceMatrixBuffers.set(instMesh, matrixBuf);
+          matrixNeedsUpload = true;
         }
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
-        if (instMesh.instanceMatrixNeedsUpdate) {
+        if (matrixNeedsUpload) {
           this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceMatrices, this.gl.DYNAMIC_DRAW);
           instMesh.instanceMatrixNeedsUpdate = false;
         }
@@ -660,12 +665,14 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         const dataLoc = cache.attributes.get("a_instanceData");
         if (dataLoc !== undefined && dataLoc >= 0 && instMesh.instanceData) {
           let dataBuf = this._instanceDataBuffers.get(instMesh);
+          let dataNeedsUpload = instMesh.instanceDataNeedsUpdate;
           if (!dataBuf) {
             dataBuf = this.gl.createBuffer()!;
             this._instanceDataBuffers.set(instMesh, dataBuf);
+            dataNeedsUpload = true;
           }
           this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
-          if (instMesh.instanceDataNeedsUpdate) {
+          if (dataNeedsUpload) {
             this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
             instMesh.instanceDataNeedsUpdate = false;
           }
