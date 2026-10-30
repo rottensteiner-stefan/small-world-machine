@@ -116,6 +116,34 @@ vfx-extras shader path. Documented as a HIGH-tier follow-up — not silently omi
 - Wind slider recomputes `_smokeWind` (same direction as the flame lean) and feeds `smoke.update(...)`.
 - HUD: `R` = smoke, `B` = ember bed, in the ⚖️ Vorher/Nachher block.
 
+## Fire composition node — the `Fire` prefab
+
+`packages/vfx-extras/src/fire/Fire.ts` composes the whole layer stack from ONE construction call
+(the P-compose plan item, now shipped): flame body + glow + driven practical light + embers + smoke
++ ember bed + soot, from presets (`candle`/`torch`/`campfire`) that are pure data (per-field
+`data` overrides are merged, e.g. `width`/`height`/`smoke:false`/`emberBed:false`). Used by
+`apps/showcases/37` (hearth), `apps/showcases/38` (hall torches + brazier) and `the-whisper`'s
+carried torch — the Rule of Three that earned it prefab status.
+
+Hard contracts the consumers must respect:
+
+- **One driver per scene.** The prefab's `update(dt, ...)` is driven externally from the app frame
+  loop exactly once per frame (like every layer above). A rig that moves a carried torch exposes a
+  dedicated driver (e.g. `PlayerRig.updateTorch(dt, camera?)`) so the fire never advances twice.
+- **Injected lights must be parented before construction.** `FireLightBehavior` captures
+  `light.position` (local base) and `light.intensity` on attach; reparent the scene's light into
+  the flame root/head BEFORE `new Fire(...)`. `preserveLightColor: true` keeps an injected scene
+  light's authored colour (temperature-driven flicker only applies to prefab-owned lights).
+- **World-anchored trails.** `embers`/`smoke` meshes are world-simulated and must be added to the
+  identity scene root; they only spawn when `update` receives a camera position (a carried torch in
+  a tunnel drives the flame/light/lean without trails).
+- **Lean.** Passing a world-space `lean` to `update` imposes the flame tip shear for that frame
+  (e.g. derived from the carrying rig's own velocity; invert against the motion so the flame
+  trails). The lean vector is world-space in the fire shader and must be matched to the rig's
+  actual frame.
+- **Budget.** In scenes with many fires, register each `fire.lightBehavior` in a `FireLightBudget`
+  (showcase 38: 11 fires / budget maxActive 11) so the hardware practical-light cap is respected.
+
 ## Quality & budget
 
 - One draw call per layer (instanced billboards / single mesh); no per-frame allocations.
@@ -140,4 +168,3 @@ vfx-extras shader path. Documented as a HIGH-tier follow-up — not silently omi
 - Soft-particle depth fade for smoke (HIGH tier; needs depth texture in the particle path).
 - Procedural coal shader for the ember bed (HIGH-tier option; `StandardMaterial` emissive is the
   current, honest baseline).
-- Trailing/loopable `Fire` composition node that composes the layers from one API (plan P-compose).

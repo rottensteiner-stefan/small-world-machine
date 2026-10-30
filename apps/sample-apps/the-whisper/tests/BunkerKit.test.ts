@@ -105,11 +105,11 @@ describe("BunkerKit Prop Builder", () => {
     expect(caseCornerX).toBeGreaterThan(bezelX);
   });
 
-  it("creates a handheld lantern with handle, top cap, and glowing body", () => {
-    const lantern = BunkerKit.createHeldLantern({ name: "StormLantern" });
-    expect(lantern.name).toBe("StormLantern");
-    expect(lantern.getObjectByName("LanternHandle")).toBeDefined();
-    expect(lantern.getObjectByName("LanternTopCap")).toBeDefined();
-    expect(lantern.getObjectByName("LanternBody")).toBeDefined();
+  it("creates a handheld torch with staff, grip wrap, and iron head", () => {
+    const torch = BunkerKit.createHeldTorch({ name: "StormTorch" });
+    expect(torch.name).toBe("StormTorch");
+    expect(torch.getObjectByName("TorchStaff")).toBeDefined();
+    expect(torch.getObjectByName("TorchGrip")).toBeDefined();
+    expect(torch.getObjectByName("TorchHead")).toBeDefined();
   });
 });

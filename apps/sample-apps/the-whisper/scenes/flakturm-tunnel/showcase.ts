@@ -83,7 +83,7 @@ const CHARACTER_DESC: Record<PlayerRigType, string> = {
 };
 
 class AndNowScene2 extends AbstractShowcase {
-  /** Shared player rig owning every character/clip/lantern/crossfade concern -- see
+  /** Shared player rig owning every character/clip/torch/crossfade concern -- see
    * `scenes/shared/PlayerRig.ts`. Reads through `root`/`movementBehavior`/`currentType` etc. */
   private _playerRig: PlayerRig | undefined;
   private _pointLight!: PointLight;
@@ -217,16 +217,27 @@ class AndNowScene2 extends AbstractShowcase {
     await this._playerRig!.switchCharacter(initialChar);
 
     this._setupEditorEvents();
+
+    // QA surface for the automated live gate -- proves the carried torch fire actually advances in
+    // the browser even though this tunnel drives it WITHOUT a camera (trails dormant, flame live):
+    // a static still would keep the injected light intensity and the flame clock frozen.
+    (window as unknown as Record<string, unknown>)["__qaSwmWhisper"] = {
+      sample: (): { torchOn: boolean; torchLight: number; flame: number } => ({
+        torchOn: this._playerRig?.torchEnabled ?? false,
+        torchLight: this._playerRig?.torchFire?.light.intensity ?? -1,
+        flame: this._playerRig?.torchFire?.flame.time ?? -1,
+      }),
+    };
   }
 
   /** Builds the shared player rig with this scene's per-scene settings (scales, the movement
-   *  factory bound to the tunnel zones, the material pass, the lantern light). Everything else --
-   *  clip pool, crossfade, lantern hand-bone sync, character switching -- lives in `PlayerRig`
+   *  factory bound to the tunnel zones, the material pass, the torch light). Everything else --
+   *  clip pool, crossfade, torch hand-bone sync, character switching -- lives in `PlayerRig`
    *  and is identical across the dusk scenes. */
   private _buildPlayerRig(): void {
     this._playerRig = new PlayerRig({
       parent: this.scene.root,
-      lanternParent: this.scene.root,
+      torchParent: this.scene.root,
       input: this.input,
       defaultStartUV: { u: 0.65, v: 0.85 },
       characters: {
@@ -243,7 +254,7 @@ class AndNowScene2 extends AbstractShowcase {
           scale: 1.35,
         },
       },
-      lanternLight: this._pointLight,
+      torchLight: this._pointLight,
       adjustMaterials: (player: Object3D): void => {
         // The tunnel renders the mannequin against a painted backdrop, so the flat unlit
         // BasicMaterial was switched to StandardMaterial (matching the diorama's look) so the
@@ -613,17 +624,17 @@ class AndNowScene2 extends AbstractShowcase {
     this._zoneBadgeEl.textContent = zone.name;
   }
 
-  /** Ermittelt anhand von Bewegungsstatus (IDLE, WALK, RUN), Laternenzustand
+  /** Ermittelt anhand von Bewegungsstatus (IDLE, WALK, RUN), Fackelzustand
    * und aktiver Zone (z. B. Treppe Auf/Ab) die exakt passende Animation. */
   private _resolveDesiredAnimation(): string {
     const movement = this._playerRig?.movementBehavior;
     const state = movement?.state ?? "IDLE";
     const zone = movement?.activeZone;
     const isStairs = zone?.id === "zone_c";
-    const isLantern = this._playerRig?.lanternEnabled ?? true;
+    const isTorch = this._playerRig?.torchEnabled ?? true;
 
     if (state === "IDLE") {
-      return isLantern ? "idle_torch" : this._idleVariation;
+      return isTorch ? "idle_torch" : this._idleVariation;
     }
 
     if (isStairs) {
@@ -632,11 +643,11 @@ class AndNowScene2 extends AbstractShowcase {
     }
 
     if (state === "RUN") {
-      return isLantern ? "run_torch" : "run_1";
+      return isTorch ? "run_torch" : "run_1";
     }
 
     // state === "WALK"
-    return isLantern ? "walk_torch" : "walk";
+    return isTorch ? "walk_torch" : "walk";
   }
 
   private _syncActiveAnimation(fadeSeconds?: number): void {
@@ -678,11 +689,11 @@ class AndNowScene2 extends AbstractShowcase {
       movement.enabled = true;
     }
 
-    // Toggle Laterne mit Taste 'L' -- Mesh und Punktlicht hängen beide im Shared Rig an der
+    // Toggle Fackel mit Taste 'L' -- Mesh, Fackellicht und Trails hängen alle im Shared Rig an der
     // Hand-Bone, also reicht ein gemeinsames isVisible statt separater An/Aus-Logik pro Teil.
     const isLPressed = this.input.isPressed("KeyL");
     if (isLPressed && !this._lastLState) {
-      if (this._playerRig) this._playerRig.setLanternEnabled(!this._playerRig.lanternEnabled);
+      if (this._playerRig) this._playerRig.setTorchEnabled(!this._playerRig.torchEnabled);
       this._syncActiveAnimation();
     }
     this._lastLState = isLPressed;
@@ -700,9 +711,9 @@ class AndNowScene2 extends AbstractShowcase {
     }
     this._lastNState = isNPressed;
 
-    // Idle-Variations-Timer (Wechsel zwischen idle_1 und idle_2 bei inaktiver Laterne)
+    // Idle-Variations-Timer (Wechsel zwischen idle_1 und idle_2 bei inaktiver Fackel)
     const movementState = this._playerRig?.movementBehavior?.state;
-    if (movementState === "IDLE" && !this._playerRig?.lanternEnabled) {
+    if (movementState === "IDLE" && !this._playerRig?.torchEnabled) {
       this._idleTimer += deltaTime;
       if (this._idleTimer >= this._idleSwitchDuration) {
         this._idleTimer = 0;
@@ -736,8 +747,12 @@ class AndNowScene2 extends AbstractShowcase {
       this._updateEditorUI();
     }
 
-    // Clip crossfade, Animation-Playback und Laternen-Sync leben im Shared Rig.
+    // Clip crossfade, Animation-Playback und Fackel-Sync leben im Shared Rig.
     this._playerRig?.update(deltaTime);
+
+    // The carried torch is driven here WITHOUT a camera: the tunnel's fires never spawn world
+    // trails (embers/smoke stay dormant). Single driver -- the rig's `update` never advances it.
+    this._playerRig?.updateTorch(deltaTime);
 
     // Status-Anzeige der Spielfigur -- fix am oberen Bildschirmrand (CSS in index.html), folgt
     // der Figur bewusst NICHT mehr über die Bühne (verdeckte sie sonst z.B. weit oben auf der
@@ -781,7 +796,7 @@ class AndNowScene2 extends AbstractShowcase {
         Blickrichtung: <b style="color:#38bdf8;">${dirName} (${deg.toFixed(0)}°)</b><br>
         State: <b style="color:#fff;">${movement?.state ?? "IDLE"}</b> | Zone: <b style="color:#fff;">${activeZone?.id ?? "none"}</b><br>
         Position: <b style="color:#7dd3fc;">${uvStr}</b> | Skalierung: <b style="color:#7dd3fc;">${scaleStr}</b><br>
-        Laterne: <b style="color:#ffb84d;">${rig.lanternEnabled ? "AN" : "AUS"}</b> (Anatomisch: Links)<br>
+        Fackel: <b style="color:#ffb84d;">${rig.torchEnabled ? "AN" : "AUS"}</b> (Anatomisch: Links)<br>
         Renderer: <b style="color: #38bdf8;">${this.renderer.type}</b>
       `;
     }

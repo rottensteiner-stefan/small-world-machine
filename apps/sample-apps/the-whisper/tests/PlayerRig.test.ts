@@ -5,6 +5,7 @@ import {
   MathPool,
   PointLight,
   Color,
+  Vector3D,
 } from "@small-world-machine/engine";
 import { AnimationClip, Bone } from "@small-world-machine/engine/core/animation/index.js";
 import { KeyframeTrack } from "@small-world-machine/engine/core/animation/KeyframeTrack.js";
@@ -29,6 +30,10 @@ const FAKE_INPUT: InputInterface = {
   isPressed: (): boolean => false,
   getAxis: (): number => 0,
 };
+
+/** Camera position passed to the carried-fire driver, so the world-anchored trails can face a
+ *  billboard -- a static shared vector (the driver only reads it). */
+const CAMERA_POSITION = new Vector3D(0, 1.6, 3);
 
 const CLIP_URLS: readonly string[] = [
   "/assets/the-whisper/mannequin/shared/anim/idle_1.glb",
@@ -111,21 +116,21 @@ class FakePlayerRigLoader implements PlayerRigLoader {
 interface RigHarness {
   rig: PlayerRig;
   parent: Object3D;
-  lanternParent: Object3D;
+  torchParent: Object3D;
   loader: FakePlayerRigLoader;
 }
 
 function buildRig(options: { loader?: FakePlayerRigLoader } = {}): RigHarness {
   const parent = new Object3D("parent-root");
-  const lanternParent = new Object3D("scene-root");
+  const torchParent = new Object3D("scene-root");
   const loader = options.loader ?? new FakePlayerRigLoader();
   const rig = new PlayerRig({
     parent,
-    lanternParent,
+    torchParent,
     input: FAKE_INPUT,
     characters: CHARACTERS,
     defaultStartUV: { u: 0.5, v: 0.5 },
-    lanternLight: new PointLight({ color: new Color(1, 0.8, 0.4) }),
+    torchLight: new PointLight({ color: new Color(1, 0.8, 0.4) }),
     adjustMaterials: (): void => {},
     createMovementBehavior: (startUv): StageMovementBehavior =>
       new StageMovementBehavior({
@@ -135,7 +140,7 @@ function buildRig(options: { loader?: FakePlayerRigLoader } = {}): RigHarness {
       }),
     loader,
   });
-  return { rig, parent, lanternParent, loader };
+  return { rig, parent, torchParent, loader };
 }
 
 describe("PlayerRig state machine", () => {
@@ -227,8 +232,8 @@ describe("PlayerRig state machine", () => {
   });
 });
 
-describe("PlayerRig lantern", () => {
-  it("attaches the lantern under the identity scene root and syncs it to the hand bone, allocation-free", async () => {
+describe("PlayerRig torch", () => {
+  it("attaches the torch + fire under the identity scene root, syncs to the hand bone and drives the fire, allocation-free", async () => {
     // MathPool is a shared static pool; this file runs isolated per worker, and this test runs
     // first in the file, so the pool is fresh. A pool-based sync puts its two scratch vectors
     // back after the first frame (growth) and then stays put across thousands of frames
@@ -236,7 +241,7 @@ describe("PlayerRig lantern", () => {
     const poolBefore = (MathPool as unknown as { readonly _VECTOR_POOL: unknown[] })._VECTOR_POOL
       .length;
 
-    const { rig, lanternParent } = buildRig();
+    const { rig, torchParent } = buildRig();
     await rig.switchCharacter("male");
 
     // Complete the rig's scene-graph matrices so the bone world matrix is current.
@@ -244,47 +249,67 @@ describe("PlayerRig lantern", () => {
 
     // First frame -- warms the pool with the sync's scratch vectors on every valid implementation.
     rig.update(0.016);
+    rig.updateTorch(0.016, CAMERA_POSITION);
     const poolAfterWarm = (MathPool as unknown as { readonly _VECTOR_POOL: unknown[] })._VECTOR_POOL
       .length;
     // The sync acquires and returns vectors to the pool (it does NOT allocate fresh vectors per
-    // frame -- that is the old diorama bug this rig fixes).
+    // frame -- that is the old diorama bug this rig fixes). `updateTorch` adds none (its lean and
+    // scratch vectors are persistent members, not pool vectors).
     expect(poolAfterWarm).toBeGreaterThan(poolBefore);
     const warmLevel = poolAfterWarm;
 
-    // The lantern hangs from the finger-bone grip: hand at (0,1,0), finger offset (0,+0.01,0),
+    // The torch hangs from the finger-bone grip: hand at (0,1,0), finger offset (0,+0.01,0),
     // bone scale 1 -> world grip stays at the hand plus the tiny forward offset.
-    const lantern = rig.lantern;
-    expect(lantern).toBeDefined();
-    expect(lantern!.parent).toBe(lanternParent);
-    expect(lantern!.position.y).toBeCloseTo(1.01, 6);
-    expect(lantern!.position.x).toBeCloseTo(0, 6);
-    expect(lantern!.position.z).toBeCloseTo(0, 6);
+    const torch = rig.torch;
+    expect(torch).toBeDefined();
+    expect(torch!.parent).toBe(torchParent);
+    expect(torch!.position.y).toBeCloseTo(1.01, 6);
+    expect(torch!.position.x).toBeCloseTo(0, 6);
+    expect(torch!.position.z).toBeCloseTo(0, 6);
 
-    // Thousands of sync frames: the pool must stay EXACTLY at its warm level (acquire/release is
-    // strictly balanced -- no per-frame allocation, no pool leak).
+    // The carried fire is assembled with the scene's light reparented into the head and preserved
+    // in colour, and the flame/glow/trails ride the torch.
+    const fire = rig.torchFire;
+    expect(fire).toBeDefined();
+    expect(fire!.root.parent).toBe(torch);
+    expect(fire!.light.isVisible).toBe(true);
+    expect(fire!.flame.time).toBeGreaterThan(0);
+    expect(fire!.lightBehavior.time).toBeGreaterThan(0);
+
+    // Thousands of sync + fire frames: the pool must stay EXACTLY at its warm level
+    // (acquire/release is strictly balanced -- no per-frame allocation, no pool leak), and the
+    // carried fire keeps advancing (a frozen flame would fail the living-light contract).
     for (let i = 0; i < 1000; i++) {
       rig.update(0.016);
+      rig.updateTorch(0.016, CAMERA_POSITION);
     }
     const poolAfter = (MathPool as unknown as { readonly _VECTOR_POOL: unknown[] })._VECTOR_POOL
       .length;
     expect(poolAfter).toBe(warmLevel);
-    expect(lantern!.position.y).toBeCloseTo(1.01, 6);
+    expect(torch!.position.y).toBeCloseTo(1.01, 6);
+    expect(fire!.flame.time).toBeCloseTo(1001 * 0.016, 4);
+    expect(fire!.lightBehavior.time).toBeCloseTo(1001 * 0.016, 4);
   });
 
-  it("setLanternEnabled toggles the mesh AND the attached scene light together", async () => {
+  it("setTorchEnabled toggles the mesh AND the fire's attached scene light together", async () => {
     const { rig } = buildRig();
     await rig.switchCharacter("male");
-    const lantern = rig.lantern;
-    expect(lantern).toBeDefined();
-    expect(rig.lanternEnabled).toBe(true);
-    expect(lantern!.isVisible).toBe(true);
+    const torch = rig.torch;
+    const fire = rig.torchFire;
+    expect(torch).toBeDefined();
+    expect(fire).toBeDefined();
+    expect(rig.torchEnabled).toBe(true);
+    expect(torch!.isVisible).toBe(true);
+    expect(fire!.light.isVisible).toBe(true);
 
-    rig.setLanternEnabled(false);
-    expect(rig.lanternEnabled).toBe(false);
-    expect(lantern!.isVisible).toBe(false);
+    rig.setTorchEnabled(false);
+    expect(rig.torchEnabled).toBe(false);
+    expect(torch!.isVisible).toBe(false);
+    expect(fire!.light.isVisible).toBe(false);
 
-    rig.setLanternEnabled(true);
-    expect(rig.lanternEnabled).toBe(true);
-    expect(lantern!.isVisible).toBe(true);
+    rig.setTorchEnabled(true);
+    expect(rig.torchEnabled).toBe(true);
+    expect(torch!.isVisible).toBe(true);
+    expect(fire!.light.isVisible).toBe(true);
   });
 });

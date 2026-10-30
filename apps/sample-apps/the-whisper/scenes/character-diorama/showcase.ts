@@ -20,6 +20,7 @@ import {
   Texture,
   TextureWrap,
   Torus,
+  Vector3D,
 } from "@small-world-machine/engine";
 import { OrbitController } from "@small-world-machine/engine/core/controllers/OrbitController.js";
 import { OilPuddleMaterial } from "@small-world-machine/liquid-extras";
@@ -39,7 +40,7 @@ const FLOOR_HALF_SIZE = 1.9;
 
 export class CharacterDioramaShowcase extends AbstractShowcase {
   private _dioramaRoot: Object3D | undefined;
-  /** Player rig owning every character/clip/lantern/crossfade concern -- see `scenes/shared/PlayerRig.ts`. */
+  /** Player rig owning every character/clip/torch/crossfade concern -- see `scenes/shared/PlayerRig.ts`. */
   private _playerRig: PlayerRig | undefined;
   /** Guards the one-shot default showcase pose (the original `_loadCharacter`'s first-load
    * `root.rotation.y = -0.5` line) so it is applied exactly once, right after the first switch
@@ -1352,17 +1353,17 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
   }
 
   /** Builds the shared player rig with this scene's per-scene settings (scales, the movement
-   *  factory bound to this diorama's floor zone, the matte material pass, the lantern light).
-   *  Everything else -- clip pool, crossfade, lantern hand-bone sync, character switching -- lives
+   *  factory bound to this diorama's floor zone, the matte material pass, the torch light).
+   *  Everything else -- clip pool, crossfade, torch hand-bone sync, character switching -- lives
    *  in `PlayerRig` and is identical across the dusk scenes. */
   private _buildPlayerRig(): void {
-    const lanternLight = new PointLight({ color: new Color(1, 0.904, 0.659) });
-    lanternLight.intensity = 1.8;
-    lanternLight.distance = 4.5;
+    const torchLight = new PointLight({ color: new Color(1, 0.904, 0.659) });
+    torchLight.intensity = 1.8;
+    torchLight.distance = 4.5;
 
     this._playerRig = new PlayerRig({
       parent: this._dioramaRoot!,
-      lanternParent: this.scene.root,
+      torchParent: this.scene.root,
       input: this.input,
       defaultStartUV: { u: 0.526, v: 0.526 },
       characters: {
@@ -1379,7 +1380,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
           scale: 1.35,
         },
       },
-      lanternLight,
+      torchLight,
       adjustMaterials: (player: Object3D): void => {
         // Matte Oberflächen für Kleidung und Haut (verhindert unnatürlichen Latex-/Speck-Glanz) --
         // in-place auf dem StandardMaterial, nicht Ersetzung (anders als der Tunnel-Showcase).
@@ -1425,7 +1426,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
           this._playerRig!.root.rotation.y = -0.5;
         }
         this._updateHUDLabels();
-        this._playAnimation(this._playerRig!.lanternEnabled ? "idle_torch" : "idle_1", 0);
+        this._playAnimation(this._playerRig!.torchEnabled ? "idle_torch" : "idle_1", 0);
       },
     });
   }
@@ -1525,6 +1526,25 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
       this._rotateLeftHeld = false;
       this._rotateRightHeld = false;
     });
+
+    // QA surface for the automated live gate -- proves the carried torch fire actually runs in the
+    // browser (a static still would keep the injected light intensity and the flame clock frozen)
+    // and points the camera at the player for the visual/art pass.
+    (window as unknown as Record<string, unknown>)["__qaSwmWhisper"] = {
+      sample: (): { torchOn: boolean; torchLight: number; flame: number } => ({
+        torchOn: this._playerRig?.torchEnabled ?? false,
+        torchLight: this._playerRig?.torchFire?.light.intensity ?? -1,
+        flame: this._playerRig?.torchFire?.flame.time ?? -1,
+      }),
+      focusPlayer: (): void => {
+        if (!this._playerRig || !this.camera) return;
+        const p = this._playerRig.root.position;
+        this.setInitialCamera(
+          new Vector3D(p.x + 0.9, p.y + 1.35, p.z + 0.75),
+          new Vector3D(p.x, p.y + 1.15, p.z),
+        );
+      },
+    };
   }
 
   private _setHudVisible(visible: boolean): void {
@@ -1547,21 +1567,21 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
 
   private _toggleTorch(): void {
     if (!this._playerRig) return;
-    this._playerRig.setLanternEnabled(!this._playerRig.lanternEnabled);
-    const lanternOn = this._playerRig.lanternEnabled;
+    this._playerRig.setTorchEnabled(!this._playerRig.torchEnabled);
+    const torchOn = this._playerRig.torchEnabled;
     const active = this._playerRig.activeAnimation;
 
     if (active === "idle_1" || active === "idle_2") {
-      if (lanternOn) this._playAnimation("idle_torch");
+      if (torchOn) this._playAnimation("idle_torch");
     } else if (active === "idle_torch") {
-      if (!lanternOn) this._playAnimation("idle_1");
-    } else if (active === "walk" && lanternOn) {
+      if (!torchOn) this._playAnimation("idle_1");
+    } else if (active === "walk" && torchOn) {
       this._playAnimation("walk_torch");
-    } else if (active === "walk_torch" && !lanternOn) {
+    } else if (active === "walk_torch" && !torchOn) {
       this._playAnimation("walk");
-    } else if ((active === "run_1" || active === "run_2") && lanternOn) {
+    } else if ((active === "run_1" || active === "run_2") && torchOn) {
       this._playAnimation("run_torch");
-    } else if (active === "run_torch" && !lanternOn) {
+    } else if (active === "run_torch" && !torchOn) {
       this._playAnimation("run_1");
     }
 
@@ -1575,7 +1595,7 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
 
   private _updateHUDLabels(): void {
     const charType = this._playerRig?.currentType ?? "male";
-    const lanternOn = this._playerRig?.lanternEnabled ?? true;
+    const torchOn = this._playerRig?.torchEnabled ?? true;
     if (this._lblChar) {
       this._lblChar.textContent =
         charType === "male"
@@ -1585,8 +1605,8 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
             : "🦖 Yoshi";
     }
     if (this._lblTorch) {
-      this._lblTorch.textContent = lanternOn ? "AN" : "AUS";
-      this._lblTorch.style.color = lanternOn ? "#ffb84d" : "#8a99ad";
+      this._lblTorch.textContent = torchOn ? "AN" : "AUS";
+      this._lblTorch.style.color = torchOn ? "#ffb84d" : "#8a99ad";
     }
     if (this._lblTurntable) {
       this._lblTurntable.textContent = this._turntableActive ? "AN" : "AUS";
@@ -1632,8 +1652,13 @@ export class CharacterDioramaShowcase extends AbstractShowcase {
       this._oilSlickMaterial.time += deltaTime;
     }
 
-    // Clip crossfade, animation playback and lantern hand-bone sync all live in the shared rig.
+    // Clip crossfade, animation playback and torch hand-bone sync all live in the shared rig.
     this._playerRig?.update(deltaTime);
+
+    // The carried torch is driven here — with the live camera so its world-anchored embers/smoke
+    // trails can follow the player. This is the SINGLE driver of the carried fire (the rig's own
+    // `update` never advances it), so the flame never beats twice per frame.
+    this._playerRig?.updateTorch(deltaTime, this.camera.position);
 
     const time = performance.now() * 0.001;
 

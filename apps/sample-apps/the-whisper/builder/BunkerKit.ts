@@ -1,18 +1,12 @@
 import type { Texture } from "@small-world-machine/engine";
-import {
-  Object3D,
-  Cube,
-  Cylinder,
-  Torus,
-  BasicMaterial,
-  StandardMaterial,
-  Color,
-} from "@small-world-machine/engine";
+import { Object3D, Cube, Cylinder, StandardMaterial, Color } from "@small-world-machine/engine";
 
-export interface HeldLanternOptions {
+export interface HeldTorchOptions {
   name?: string;
-  brassColor?: Color;
-  glowColor?: Color;
+  /** Staff wood colour. */
+  woodColor?: Color;
+  /** Iron head / grip-wrap colour. */
+  ironColor?: Color;
 }
 
 export interface RivetOptions {
@@ -323,51 +317,58 @@ export class BunkerKit {
   }
 
   /**
-   * Creates a handheld oil / kerosene lantern placeholder with a torus handle and brass casing.
+   * Creates a handheld torch whose grip sits at the local origin: the wooden staff runs from the
+   * butt (-Y) up to the iron basket head (+Y), where the scene's Fire prefab is placed. The staff
+   * uses `StandardMaterial` so the carried firelight actually falls on its own wood.
    */
-  public static createHeldLantern(options: HeldLanternOptions = {}): Object3D {
-    const lantern = new Object3D(options.name ?? "HeldLantern");
-    const brassMat = new BasicMaterial({
-      color: options.brassColor ?? new Color(0.9, 0.65, 0.25),
+  public static createHeldTorch(options: HeldTorchOptions = {}): Object3D {
+    const torch = new Object3D(options.name ?? "HeldTorch");
+    const woodMat = new StandardMaterial({
+      color: options.woodColor ?? new Color(0.42, 0.28, 0.16),
+      roughness: 0.85,
+      metallic: 0.0,
     });
-    const glowGlassMat = new BasicMaterial({
-      color: options.glowColor ?? new Color(1.0, 0.9, 0.6),
+    const ironMat = new StandardMaterial({
+      color: options.ironColor ?? new Color(0.16, 0.15, 0.14),
+      roughness: 0.55,
+      metallic: 0.7,
     });
 
-    const handle = new Object3D("LanternHandle");
-    handle.geometry = new Torus({
-      radius: 0.045,
-      tube: 0.006,
-      radialSegments: 8,
+    const staff = new Object3D("TorchStaff");
+    staff.geometry = new Cylinder({
+      radiusTop: 0.016,
+      radiusBottom: 0.024,
+      height: 0.62,
+      radialSegments: 10,
     }).getGeometryData();
-    handle.material = brassMat;
-    handle.rotation.z = Math.PI / 2;
-    handle.position.set(0, -0.02, 0);
-    lantern.add(handle);
+    staff.material = woodMat;
+    staff.position.set(0, 0.02, 0);
+    torch.add(staff);
 
-    const topCap = new Object3D("LanternTopCap");
-    topCap.geometry = new Cylinder({
-      radiusTop: 0.02,
-      radiusBottom: 0.06,
-      height: 0.04,
+    const grip = new Object3D("TorchGrip");
+    grip.geometry = new Cylinder({
+      radiusTop: 0.024,
+      radiusBottom: 0.024,
+      height: 0.1,
+      radialSegments: 10,
     }).getGeometryData();
-    topCap.material = brassMat;
-    topCap.position.set(0, -0.05, 0);
-    lantern.add(topCap);
+    grip.material = ironMat;
+    torch.add(grip);
 
-    const body = new Object3D("LanternBody");
-    body.geometry = new Cylinder({
-      radiusTop: 0.05,
-      radiusBottom: 0.07,
-      height: 0.18,
+    const head = new Object3D("TorchHead");
+    head.geometry = new Cylinder({
+      radiusTop: 0.028,
+      radiusBottom: 0.05,
+      height: 0.12,
+      radialSegments: 12,
     }).getGeometryData();
-    body.material = glowGlassMat;
-    body.position.set(0, -0.16, 0);
-    lantern.add(body);
+    head.material = ironMat;
+    head.position.set(0, 0.39, 0);
+    torch.add(head);
 
-    lantern.position.set(0, 0, 0);
-    lantern.rotation.set(0, 0, 0);
+    torch.position.set(0, 0, 0);
+    torch.rotation.set(0, 0, 0);
 
-    return lantern;
+    return torch;
   }
 }

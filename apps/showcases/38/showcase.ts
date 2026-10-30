@@ -15,13 +15,11 @@ import {
   Cube,
   Cylinder,
   DirectionalLight,
-  FlickerBehavior,
   FlyController,
   Fog,
   FogMode,
   Keys,
   Object3D,
-  PointLight,
   PostProcessingEffectType,
   Pyramid,
   RendererType,
@@ -35,6 +33,7 @@ import {
 import { box } from "../shared/prim.js";
 import { GoldenCapture, parseGoldenSpec } from "./GoldenCapture.js";
 import { Hud, TimeOfDay } from "./Hud.js";
+import { Fire, FireLightBudget } from "@small-world-machine/vfx-extras";
 
 interface CameraPreset {
   name: string;
@@ -51,7 +50,13 @@ export class Showcase extends AbstractShowcase {
 
   private _timeOfDayMode: TimeOfDay = TimeOfDay.GOLDEN_HOUR;
   private _flickerEnabled: boolean = true;
-  private _flickerBehaviors: FlickerBehavior[] = [];
+  /** Every fire built in this hall (torches + the centrepiece brazier), driven externally. */
+  private readonly _fires: Fire[] = [];
+  /** Keeps only the fires nearest to the camera as real lights (WebGL1/2 shade 16 max); with 11
+   *  fires and the hardware budget undrawn it engages automatically once the scene grows. */
+  private readonly _budget: FireLightBudget = new FireLightBudget({
+    maxActive: 11,
+  });
   private _audioMuted: boolean = false;
   private _activePresetIdx: number = 0;
   private _flyController?: FlyController;
@@ -96,10 +101,14 @@ export class Showcase extends AbstractShowcase {
   public override async start(): Promise<void> {
     const golden = parseGoldenSpec();
     await super.start();
+    // Only after start(): AbstractShowcase installs its fly controller solely on a camera that has
+    // no behaviors yet, so attaching the budget earlier would silently disable camera movement.
+    this.camera.addBehavior(this._budget);
     if (golden) {
       this._goldenCapture = new GoldenCapture(this, {
         disableFlicker: (): void => {
           this._flickerEnabled = false;
+          this._applyFlicker();
         },
         applyPreset: (index: number): void => {
           this._applyCameraPreset(index, true);
@@ -339,22 +348,6 @@ export class Showcase extends AbstractShowcase {
       roughness: 0.38,
     });
 
-    const flameMat = new StandardMaterial({
-      color: new Color(1, 0.822, 0.481),
-      emissiveColor: new Color(1, 0.762, 0.351),
-      emissiveIntensity: 4.0,
-      metallic: 0.0,
-      roughness: 0.1,
-    });
-
-    const emberMat = new StandardMaterial({
-      color: new Color(0.481, 0.317, 0.232),
-      emissiveColor: new Color(1, 0.533, 0.169),
-      emissiveIntensity: 2.2,
-      metallic: 0.0,
-      roughness: 0.9,
-    });
-
     // ------------------------------------------------------------------------
     // 6. Lighting Hierarchy (Sun + Cascaded Shadows + Ambient)
     // ------------------------------------------------------------------------
@@ -530,52 +523,25 @@ export class Showcase extends AbstractShowcase {
       basket.castShadow = true;
       torchGroup.add(basket);
 
-      // Emissive flame core
-      const flameCore = new Object3D(`${name}_FlameCore`);
-      flameCore.geometry = sphereGeom;
-      flameCore.material = flameMat;
-      flameCore.scale.set(0.14, 0.28, 0.14);
-      flameCore.position.set(staffPos.x, staffPos.y + 0.62, staffPos.z);
-      torchGroup.add(flameCore);
-
       this.scene.add(torchGroup);
 
-      // Warm PointLight (2150K color temperature)
-      const torchLight = new PointLight({
-        name: `${name}_Light`,
-        color: new Color(1, 0.781, 0.502),
-        intensity: lightIntensity,
-        distance: lightDistance,
-        decay: 2.0,
-      });
-      torchLight.position.set(x + staffPos.x, y + staffPos.y + 0.65, z + staffPos.z);
-      this.scene.add(torchLight);
-
-      // Organic flame flicker behavior (unique per torch)
-      const baseIntensity = lightIntensity;
-      const flicker = new FlickerBehavior({
-        minStableTime: 0.05,
-        maxStableTime: 0.35,
-        minFlickerTime: 0.5,
-        maxFlickerTime: 2.0,
-        minMultiplier: 0.22,
-        smoothness: 0.45,
-        frequency: 14.0 + Math.random() * 6.0,
-        noiseOffset: Math.random() * 10000.0,
-        onUpdate: (multiplier: number): void => {
-          if (!this._flickerEnabled) {
-            torchLight.intensity = baseIntensity;
-            flameCore.scale.set(0.14, 0.28, 0.14);
-            return;
-          }
-          torchLight.intensity = baseIntensity * multiplier;
-          const s = 0.14 * (0.6 + multiplier * 0.8);
-          const sy = 0.28 * (0.5 + multiplier * 1.0);
-          flameCore.scale.set(s, sy, s);
+      // The real flame replaces the emissive sphere dummy: composed through the shared Fire
+      // prefab (plan P-compose) at the basket tip, preserving this torch's authored light budget.
+      // The seed is its position in the hall (deterministic, golden-stable).
+      const fire = new Fire({
+        name,
+        preset: "torch",
+        position: new Vector3D(x + staffPos.x, y + staffPos.y + 0.73, z + staffPos.z),
+        seed: this._fires.length,
+        data: {
+          lightIntensity,
+          lightDistance,
+          // The grand hall stays crisp: the wall torches carry the flame, glow and embers, only
+          // the centrepiece brazier smokes.
+          smoke: false,
         },
       });
-      torchGroup.addBehavior(flicker);
-      this._flickerBehaviors.push(flicker);
+      this._addFire(fire);
     };
 
     const buildFireBrazier = (name: string, x: number, y: number, z: number): void => {
@@ -604,58 +570,27 @@ export class Showcase extends AbstractShowcase {
       bowl.castShadow = true;
       brazierGroup.add(bowl);
 
-      // Glowing charcoal bed
-      const embers = new Object3D(`${name}_Embers`);
-      embers.geometry = cylinderGeom;
-      embers.material = emberMat;
-      embers.scale.set(0.85, 0.15, 0.85);
-      embers.position.set(0, 0.98, 0);
-      brazierGroup.add(embers);
-
-      // Central roaring flame cone
-      const mainFlame = new Object3D(`${name}_MainFlame`);
-      mainFlame.geometry = coneGeom;
-      mainFlame.material = flameMat;
-      mainFlame.scale.set(0.48, 0.95, 0.48);
-      mainFlame.position.set(0, 1.45, 0);
-      brazierGroup.add(mainFlame);
-
       this.scene.add(brazierGroup);
 
-      // Powerful central PointLight (2000K)
-      const brazierLight = new PointLight({
-        name: `${name}_Light`,
-        color: new Color(1, 0.743, 0.435),
-        intensity: 7.5,
-        distance: 22.0,
-        decay: 2.0,
-      });
-      brazierLight.position.set(x, y + 1.5, z);
-      this.scene.add(brazierLight);
-
-      const flicker = new FlickerBehavior({
-        minStableTime: 0.08,
-        maxStableTime: 0.45,
-        minFlickerTime: 0.6,
-        maxFlickerTime: 2.2,
-        minMultiplier: 0.32,
-        smoothness: 0.52,
-        frequency: 11.5 + Math.random() * 3.0,
-        noiseOffset: Math.random() * 10000.0,
-        onUpdate: (multiplier: number): void => {
-          if (!this._flickerEnabled) {
-            brazierLight.intensity = 7.5;
-            mainFlame.scale.set(0.48, 0.95, 0.48);
-            return;
-          }
-          brazierLight.intensity = 7.5 * multiplier;
-          const s = 0.48 * (0.65 + multiplier * 0.7);
-          const sy = 0.95 * (0.55 + multiplier * 0.9);
-          mainFlame.scale.set(s, sy, s);
+      // The glowing charcoal pad and flame cone placeholders give way to the full Fire prefab
+      // (plan P-compose): burning coals (ember bed) sit in the iron bowl, the smoke rises above
+      // the central flame. No soot on the plaza — the bowl catches everything.
+      const fire = new Fire({
+        name,
+        preset: "campfire",
+        position: new Vector3D(x, y + 1.03, z),
+        seed: this._fires.length,
+        data: {
+          width: 0.4,
+          height: 0.7,
+          glowSize: 1.4,
+          glowIntensity: 0.6,
+          lightIntensity: 7.5,
+          lightDistance: 22,
+          soot: false,
         },
       });
-      brazierGroup.addBehavior(flicker);
-      this._flickerBehaviors.push(flicker);
+      this._addFire(fire);
     };
 
     // ------------------------------------------------------------------------
@@ -1582,6 +1517,20 @@ export class Showcase extends AbstractShowcase {
     // 17. HUD Overlay Initialization
     // ------------------------------------------------------------------------
     this._createHud();
+
+    // QA surface for the automated live gate -- proves the prefab fires actually move (a static
+    // still would keep every light intensity and flame time identical across samples) and lets
+    // the gate point the camera at the hall / shrine for visual review of the torches and brazier.
+    (window as unknown as Record<string, unknown>)["__qaSwm38"] = {
+      sample: (): { fires: number; fire: number[]; flame: number[] } => ({
+        fires: this._fires.length,
+        fire: this._fires.map((f) => f.light.intensity),
+        flame: this._fires.map((f) => f.flame.time),
+      }),
+      applyPreset: (index: number): void => {
+        this._applyCameraPreset(index, true);
+      },
+    };
   }
 
   private _setTimeOfDay(mode: TimeOfDay): void {
@@ -1766,6 +1715,7 @@ export class Showcase extends AbstractShowcase {
       onTimeOfDay: (mode: TimeOfDay): void => this._setTimeOfDay(mode),
       onFlicker: (enabled: boolean): void => {
         this._flickerEnabled = enabled;
+        this._applyFlicker();
       },
       onAudioMuted: (muted: boolean): void => {
         this._audioMuted = muted;
@@ -1833,6 +1783,33 @@ export class Showcase extends AbstractShowcase {
       audioMuted: this._audioMuted,
       activePresetIdx: this._activePresetIdx,
     });
+  }
+
+  /** Adds one fire to the scene and the light budget: scene-root parts (embers/smoke meshes are
+   *  world-anchored, instance matrices are world-space; the ground bed is world-placed), while
+   *  `root` keeps the flame/glow/light hierarchy. */
+  private _addFire(fire: Fire): void {
+    this.scene.add(fire.root);
+    if (fire.embers) this.scene.add(fire.embers.mesh);
+    if (fire.smoke) this.scene.add(fire.smoke.mesh);
+    if (fire.emberBed) this.scene.add(fire.emberBed.mesh);
+    this._budget.register(fire.lightBehavior);
+    this._fires.push(fire);
+  }
+
+  private _applyFlicker(): void {
+    for (let i = 0; i < this._fires.length; i++) {
+      this._fires[i]!.lightBehavior.flicker = this._flickerEnabled ? 1 : 0;
+    }
+  }
+
+  protected override update(deltaTime: number): void {
+    super.update(deltaTime);
+    // The Fire prefabs must be driven from the frame loop (pause/slow-motion support, golden
+    // freeze) — never left to the engine's behavior loop.
+    for (let i = 0; i < this._fires.length; i++) {
+      this._fires[i]!.update(deltaTime, this.camera.position);
+    }
   }
 
   public override destroy(): void {

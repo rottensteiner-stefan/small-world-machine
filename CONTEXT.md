@@ -80,6 +80,10 @@ _Avoid_: Coal Shader, Glow Sticker — the fuel bed is a solid emissive volume, 
 The typed, per-`SmallWorldMachine`-instance event dispatcher (`app.events`) that replaces DOM `CustomEvent` for engine-internal notifications.
 _Avoid_: Global Event Bus, Universal EventBus — rejected under Context Object; this bus is scoped to one engine instance, never a shared global.
 
+**Fire Composition Node (`Fire`-Prefab)**:
+The single construction entry point (`Fire` in `@small-world-machine/vfx-extras`) that composes the whole fire layer stack — flame body, glow halo, driven practical light, embers, smoke plume, ember bed and soot decal — from pure-data presets (`candle`/`torch`/`campfire`) with per-field overrides. A scene may inject its own practical light (`light:` option) — parented before construction, the fire light behavior captures the local base position on attach — and `preserveLightColor` keeps that light's authored colour (temperature-coupled flicker only applies to prefab-owned lights). One driver per scene: the prefab's `update(dt, camera?, wind?, lean?)` runs exactly once per frame from the app loop; world-anchored embers/smoke spawn only when a camera position is supplied. Rule of Three: showcases 37, 38 and the-whisper's carried torch.
+_Avoid_: FireRig, FireSystem, FireKit — the prefab is one composable `Fire` node, not a monolithic subsystem; per-showcase rigs (showcase 45's `FireRig`) predate it and are not the new convention.
+
 **FogVolume / Interior Carving**:
 An analytical geometric volume (`FogVolume`: Box, Sphere, Cylinder) placed into the 3D scene graph that injects localized scattering, emission, or negative density into the global Froxel grid or raymarching volume. Negative density values carve out fog from interior spaces (e.g. rooms, vaults, caverns) without requiring complex geometry meshes or stencil cuts ($\text{extinction} = \max(0.0, \text{global} + \sum \text{positive} + \sum \text{negative})$, so carving does not depend on volume order).
 _Avoid_: Fog Mesh, Stencil Volume — carving is achieved through continuous analytical SDF evaluation and additive density clamping in shaders, not geometry clipping.

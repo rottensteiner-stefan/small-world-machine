@@ -10,3 +10,4 @@ export * from "./SmokeSpriteMaterial.js";
 export * from "./FireSmokeEmitter.js";
 export * from "./EmberBed.js";
 export * from "./soot.js";
+export * from "./Fire.js";

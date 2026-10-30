@@ -4,9 +4,10 @@ import type {
 } from "@small-world-machine/engine/core/animation/index.js";
 import { AnimationMixer, Bone } from "@small-world-machine/engine/core/animation/index.js";
 import { GltfLoader } from "@small-world-machine/engine/loaders/GltfLoader.js";
-import { MathPool, Object3D } from "@small-world-machine/engine";
+import { MathPool, Object3D, Vector3D } from "@small-world-machine/engine";
 import type { PointLight, StageMovementBehavior } from "@small-world-machine/engine";
 import type { InputInterface } from "@small-world-machine/engine/core/input/Input.js";
+import { Fire } from "@small-world-machine/vfx-extras";
 import { BunkerKit } from "../../builder/BunkerKit.js";
 
 /** Player character skins available in the-whisper's player showcases. */
@@ -19,11 +20,11 @@ export interface PlayerCharacterSpec {
   readonly scale: number;
 }
 
-/** Prioritized candidate bones for left-hand lantern attachment across different rigs -- the
+/** Prioritized candidate bones for left-hand torch attachment across different rigs -- the
  *  canonical list both player showcases previously copy/pasted (agreed in
  *  `.agents/collaborate/lantern.md`'s consensus proposal): first the finger bones (grip center in
  *  palm), then wrist bones (Mixamo fallback), then the Tripo/Yoshi arm bones. */
-const LANTERN_HAND_BONE_CANDIDATES: readonly string[] = [
+const TORCH_HAND_BONE_CANDIDATES: readonly string[] = [
   // 1. Finger bones (grip center in palm / fingers)
   "mixamorig:LeftHandMiddle1",
   "mixamorig1:LeftHandMiddle1",
@@ -37,6 +38,21 @@ const LANTERN_HAND_BONE_CANDIDATES: readonly string[] = [
   "tripo::0_Left_Limb_2",
   "tripo::0_Left_Limb_3",
 ];
+
+/** Carried-torch geometry: the BunkerKit torch's grip sits at the local origin, its iron basket
+ *  head tops out at +0.44, so the Fire root (flame base) rises from there. The injected practical
+ *  light must sit at the flame CENTRE before the prefab is constructed -- the fire light behavior
+ *  captures that local base position on attach. */
+const TORCH_FLAME_BASE_Y = 0.44;
+const TORCH_FLAME_HEIGHT = 0.4;
+const TORCH_FLAME_CENTER_Y = TORCH_FLAME_BASE_Y + TORCH_FLAME_HEIGHT * 0.5;
+
+/** Flame-lean thresholds in the rig's own position units per second: nothing below MIN (a switch
+ *  or first-frame position jump must not pop the flame), full lean at MIN + RAMP. */
+const TORCH_LEAN_MIN_SPEED = 0.02;
+const TORCH_LEAN_RAMP_SPEED = 0.35;
+/** Max world-space tip shear in meters while sprinting (a carried torch trails, it never whips). */
+const TORCH_LEAN_MAX = 0.3;
 
 /**
  * THE canonical animation-clip table for the-whisper's player rigs. The two showcases previously
@@ -55,7 +71,7 @@ const ANIMATION_CLIP_URLS: Readonly<Record<string, string>> = {
   walk: "/assets/the-whisper/mannequin/shared/anim/walking.glb",
   run_1: "/assets/the-whisper/mannequin/shared/anim/running_1.glb",
   run_2: "/assets/the-whisper/mannequin/shared/anim/running_2.glb",
-  // Walk & Run (with lantern / torch)
+  // Walk & Run (with torch)
   walk_torch: "/assets/the-whisper/mannequin/shared/anim/walking_torch.glb",
   run_torch: "/assets/the-whisper/mannequin/shared/anim/running_torch.glb",
   // Stairs -- there is no usable descending clip (see the-whisper docs/log.md #147): the neutral
@@ -88,11 +104,11 @@ export interface PlayerRigOptions {
   /** Scene node that owns the rig (`scene` for the tunnel, the diorama root for the diorama).
    *  The rig object is added under this node. */
   readonly parent: Object3D;
-  /** The TRUE top-level scene root (identity transform). The lantern MUST be parented here -- its
+  /** The TRUE top-level scene root (identity transform). The torch MUST be parented here -- its
    *  per-frame sync assigns a world position, which is only correct under an identity parent (a
    *  rotated/scaled intermediate such as the diorama's turntable root would drift it, the exact
    *  bug this convention encodes). */
-  readonly lanternParent: Object3D;
+  readonly torchParent: Object3D;
   /** Input source forwarded into every StageMovementBehavior. */
   readonly input: InputInterface;
   /** Per-skin GLB URLs and scene scales. */
@@ -107,10 +123,11 @@ export interface PlayerRigOptions {
   ) => StageMovementBehavior;
   /** Post-load material pass for a matte cloth-and-skin look; differs per scene. */
   readonly adjustMaterials: (player: Object3D) => void;
-  /** Optional scene-owned point light attached inside the lantern group (moves with the hand).
-   *  Its world position is repurposed to the lantern-local (0, -0.16, 0) at attach time -- the
-   *  same spot both showcases already placed it. */
-  readonly lanternLight?: PointLight;
+  /** Optional scene-owned point light the carried torch drives (the flame's practical light). It is
+   *  reparented into the torch head before the Fire prefab is constructed, so its authored colour
+   *  and intensity stay (preserved, not temperature-driven); its world position is repurposed to
+   *  the torch-local flame centre. */
+  readonly torchLight?: PointLight;
   /** Called once after every successful character switch; the scene resets its HUD and picks the
    *  starting animation here. Runs with the new character fully in place, after the clips pool was
    *  loaded -- a throw here rejects the switch promise (the scene catches it at its key handler). */
@@ -135,15 +152,18 @@ interface RigFade {
  * 2. ONE animation-clip pool loaded once with `Promise.all` and reused across character switches
  *    (before, every switch re-fetched ~10 clips sequentially, and failures were swallowed).
  * 3. Crossfade playback (`play(name, { loop, fadeSeconds })` + `update(dt)`).
- * 4. Lantern attach: hand-bone lookup via the canonical candidate list, and a zero-allocation
- *    per-frame world-position sync via `MathPool` scratch vectors.
+ * 4. Carried torch: hand-bone lookup via the canonical candidate list, a zero-allocation
+ *    per-frame world-position sync via `MathPool` scratch vectors, and the scene-driven Fire
+ *    prefab (flame, glow, injected practical light, optionally world trails) whose flame leans
+ *    against the rig's own horizontal motion.
  * 5. The engine-facing rotation convention (`facingOffset = Math.PI` is supplied by each scene's
  *    movement factory; `root.rotation.y` is the only axis the rig/behavior ever writes).
  * 6. StageMovementBehavior re-attach: the previous behavior is removed before the new one is
  *    added, preserving the walkable (u,v) position across a switch.
  *
- * Scenes keep calling `update(dt)` (drives the fade, the mixer and the lantern sync) and
- * `switchCharacter(...)`; all other player plumbing lives here.
+ * Scenes keep calling `update(dt)` (drives the fade, the mixer and the torch sync) and, once per
+ * frame, `updateTorch(dt, camera?)` (the single driver of the carried fire); `switchCharacter`
+ * stays here too.
  */
 export class PlayerRig {
   /** The rig node; scenes may read/write `rotation.y` (e.g. manual SHIFT+arrow rotation). */
@@ -160,9 +180,16 @@ export class PlayerRig {
   private _fade: RigFade | undefined;
   private _movementBehavior: StageMovementBehavior | undefined;
 
-  private _lantern: Object3D | undefined;
-  private _lanternHandBone: Bone | undefined;
-  private _lanternOn: boolean = true;
+  private _torch: Object3D | undefined;
+  private _torchFire: Fire | undefined;
+  private _torchHandBone: Bone | undefined;
+  private _torchOn: boolean = true;
+
+  // Zero-allocation flame-lean derivation: the previous rig position and the derived lean are
+  // persistent members (a MathPool scratch cannot outlive the frame the fire consumes it in).
+  private readonly _lastRigPosition: Vector3D = new Vector3D(0, 0, 0);
+  private readonly _torchLean: Vector3D = new Vector3D(0, 0, 0);
+  private _leanReady: boolean = false;
 
   private _clipPoolPromise: Promise<ReadonlyMap<string, AnimationClip>> | undefined;
   private _switchInFlight: Promise<void> | undefined;
@@ -199,14 +226,19 @@ export class PlayerRig {
     return this._movementBehavior;
   }
 
-  /** Whether the lantern is currently shown (also drives the attached point light). */
-  public get lanternEnabled(): boolean {
-    return this._lanternOn;
+  /** Whether the carried torch is currently shown (also drives its point light and trails). */
+  public get torchEnabled(): boolean {
+    return this._torchOn;
   }
 
-  /** The lantern group (only exists once a hand bone was found), or undefined. */
-  public get lantern(): Object3D | undefined {
-    return this._lantern;
+  /** The carried torch group (only exists once a hand bone was found), or undefined. */
+  public get torch(): Object3D | undefined {
+    return this._torch;
+  }
+
+  /** The carried torch's Fire prefab (flame, glow, light, trails), or undefined. */
+  public get torchFire(): Fire | undefined {
+    return this._torchFire;
   }
 
   /**
@@ -253,17 +285,36 @@ export class PlayerRig {
     this._activeAnimation = name;
   }
 
-  /** Advances the crossfade, animates the active player and re-locks the lantern to the hand bone. */
+  /** Advances the crossfade, animates the active player and re-locks the torch to the hand bone. */
   public update(deltaTime: number): void {
     this._advanceFade(deltaTime);
     if (this._mixer) this._mixer.update(deltaTime);
-    this._syncLantern();
+    this._syncTorch(deltaTime);
   }
 
-  /** Shows/hides the lantern mesh and its attached point light. */
-  public setLanternEnabled(enabled: boolean): void {
-    this._lanternOn = enabled;
-    this._applyLanternState();
+  /** Shows/hides the carried torch (mesh, its point light and the world trails). */
+  public setTorchEnabled(enabled: boolean): void {
+    this._torchOn = enabled;
+    this._applyTorchState();
+  }
+
+  /**
+   * The SINGLE per-frame driver of the carried fire: advances the flame, glow and the injected
+   * practical light and applies the rig's velocity-derived lean. Exactly one call per frame from
+   * the owning scene (never from the rig's own `update`) so the fire never beats twice.
+   *
+   * Pass a camera position to also simulate the world-anchored embers/smoke trails (they spawn at
+   * the live torch world position); omit it (or run with the torch switched off) to leave the
+   * trails dormant. Zero allocations.
+   */
+  public updateTorch(deltaTime: number, camera?: Readonly<Vector3D>): void {
+    if (!this._torchFire) return;
+    this._torchFire.update(
+      deltaTime,
+      this._torchOn ? camera : undefined,
+      undefined,
+      this._torchLean,
+    );
   }
 
   private async _performSwitch(type: PlayerRigType): Promise<void> {
@@ -278,7 +329,7 @@ export class PlayerRig {
     this._options.adjustMaterials(player);
 
     const handBone: Bone | undefined = PlayerRig._resolveHandBone(player);
-    if (handBone) this._ensureLantern();
+    if (handBone) this._ensureTorch();
 
     // --- swap: everything below is synchronous and only runs after all loads succeeded ---
     const rig = this.root;
@@ -297,10 +348,10 @@ export class PlayerRig {
     this._mixer = new AnimationMixer(player);
     this._fade = undefined;
     this._activeAnimation = undefined;
-    this._lanternHandBone = handBone;
+    this._torchHandBone = handBone;
     this._currentType = type;
 
-    if (handBone) this._applyLanternState();
+    if (handBone) this._applyTorchState();
     this._options.onCharacterReady?.(type);
   }
 
@@ -335,30 +386,62 @@ export class PlayerRig {
   }
 
   private static _resolveHandBone(character: Object3D): Bone | undefined {
-    for (const boneName of LANTERN_HAND_BONE_CANDIDATES) {
+    for (const boneName of TORCH_HAND_BONE_CANDIDATES) {
       const found = character.getObjectByName(boneName);
       if (found instanceof Bone) return found;
     }
     return undefined;
   }
 
-  /** Creates the shared lantern (via BunkerKit, the single implementation both scenes use) exactly
-   *  once, attaches the scene's point light into it and parents it under the identity scene root. */
-  private _ensureLantern(): void {
-    if (this._lantern) return;
-    const lantern = BunkerKit.createHeldLantern({ name: "LanternPlaceholder" });
-    if (this._options.lanternLight) {
-      this._options.lanternLight.position.set(0, -0.16, 0);
-      lantern.add(this._options.lanternLight);
+  /** Builds the carried torch (BunkerKit mesh + the shared Fire prefab) exactly once and parents it
+   *  under the identity scene root. The scene's point light is reparented into the torch head at
+   *  the flame centre BEFORE the prefab is constructed (the fire light behavior captures that local
+   *  base position on attach), and its authored colour stays (`preserveLightColor`). */
+  private _ensureTorch(): void {
+    if (this._torch) return;
+    const torch = BunkerKit.createHeldTorch({ name: "HeldTorch" });
+
+    const torchLight = this._options.torchLight;
+    if (torchLight) {
+      torchLight.position.set(0, TORCH_FLAME_CENTER_Y, 0);
+      torch.add(torchLight);
     }
-    this._options.lanternParent.add(lantern);
-    this._lantern = lantern;
+
+    const fire = new Fire({
+      name: "HeldTorch",
+      preset: "torch",
+      position: new Vector3D(0, TORCH_FLAME_BASE_Y, 0),
+      seed: 5,
+      // The scene owns the light and its colour; only the flame itself stays a standard torch.
+      preserveLightColor: true,
+      light: torchLight,
+      data: {
+        width: 0.14,
+        height: TORCH_FLAME_HEIGHT,
+        // A carried torch leaves no fuel bed behind -- no ground-fixed ember bed on a moving root.
+        emberBed: false,
+      },
+    });
+    torch.add(fire.root);
+
+    const torchParent = this._options.torchParent;
+    torchParent.add(torch);
+    // World-anchored embers/smoke ride the identity root; driven only when a scene passes a camera.
+    if (fire.embers) torchParent.add(fire.embers.mesh);
+    if (fire.smoke) torchParent.add(fire.smoke.mesh);
+
+    this._torch = torch;
+    this._torchFire = fire;
   }
 
-  private _applyLanternState(): void {
-    if (!this._lantern) return;
-    this._lantern.isVisible = this._lanternOn;
-    if (this._options.lanternLight) this._options.lanternLight.isVisible = this._lanternOn;
+  private _applyTorchState(): void {
+    if (!this._torch) return;
+    this._torch.isVisible = this._torchOn;
+    const fire = this._torchFire;
+    if (!fire) return;
+    fire.light.isVisible = this._torchOn;
+    if (fire.embers) fire.embers.mesh.isVisible = this._torchOn;
+    if (fire.smoke) fire.smoke.mesh.isVisible = this._torchOn;
   }
 
   private _advanceFade(deltaTime: number): void {
@@ -383,11 +466,11 @@ export class PlayerRig {
     }
   }
 
-  /** Keeps the lantern's world POSITION locked to the hand bone's grip point every frame, via a
-   *  bone-local offset transformed through the bone's full world matrix (rotation included) --
-   *  this stays correct through character rotation/scale, unlike a raw world-space additive
-   *  offset. Never touches `lantern.rotation` (left at the identity BunkerKit sets), so it always
-   *  hangs straight down instead of tumbling with the hand.
+  /** Locks the torch's world POSITION to the hand bone's grip point every frame, via a bone-local
+   *  offset transformed through the bone's full world matrix (rotation included) -- this stays
+   *  correct through character rotation/scale, unlike a raw world-space additive offset. The torch
+   *  keeps BunkerKit's identity rotation (never tumbles with the hand), so the flame cards and the
+   *  injected light stay world-upright while carried.
    *
    *  Mixamo-rigged hand bones (player-male/player-female) carry a large accumulated world-space
    *  scale (~94x, a leftover cm-to-m FBX unit conversion baked into the skeleton -- see
@@ -401,12 +484,23 @@ export class PlayerRig {
    *  `mixamorig:LeftHandIndex1` like the humans; his bone scale is already ~1, so the `/ boneScale`
    *  division is a no-op, not a special case (see the-whisper docs/log.md #77).
    *
-   *  Hot path is zero-allocation: both vectors come from `MathPool` and are returned after use.
+   *  Every frame the flame lean is also re-derived from the rig's motion: the torch trails the
+   *  movement, so the tip shears opposite to the velocity. The delta is read in the rig's OWN
+   *  coordinate frame -- the floor frame the character walks on -- which is the correct trailing
+   *  reference even while the diorama's optional turntable rotates the surroundings underneath
+   *  (world motion would wrongly report almost no lean while walking on a spinning floor). Lean is
+   *  world-space in the fire shader; the rig frame differs from world only by that slow optional
+   *  turntable, far under the shears own tolerance. No lean on the first frame, so a character
+   *  switch or first load never pops the flame.
+   *
+   *  Hot path is zero-allocation: the grip vectors come from `MathPool` and are returned after
+   *  use; the derived lean lives in persistent members because the fire consumes it on the scene's
+   *  later `updateTorch` call (a MathPool scratch cannot outlive the frame).
    */
-  private _syncLantern(): void {
-    const lantern = this._lantern;
-    if (!lantern || !this._player) return;
-    const bone = this._lanternHandBone;
+  private _syncTorch(deltaTime: number): void {
+    const torch = this._torch;
+    if (!torch || !this._player) return;
+    const bone = this._torchHandBone;
     if (!bone) return;
 
     // Finger bones (Middle1/Index1) have their origin at the finger base inside the palm already;
@@ -423,10 +517,26 @@ export class PlayerRig {
     const worldPos = MathPool.acquireVector();
     bone.worldMatrix.transformVector(localOffset, worldPos);
 
-    lantern.position.copyFrom(worldPos);
-    lantern.updateMatrixWorld();
+    torch.position.copyFrom(worldPos);
+    torch.updateMatrixWorld();
 
     MathPool.releaseVector(localOffset);
     MathPool.releaseVector(worldPos);
+
+    // Flame lean from the rig's horizontal motion (X/Z only: vertical motion never tilts a flame).
+    const pos = this.root.position;
+    const dx = pos.x - this._lastRigPosition.x;
+    const dz = pos.z - this._lastRigPosition.z;
+    this._lastRigPosition.set(pos.x, pos.y, pos.z);
+    const speed = deltaTime > 0 ? Math.hypot(dx, dz) / deltaTime : 0;
+    if (this._leanReady && speed > TORCH_LEAN_MIN_SPEED) {
+      const amount =
+        Math.min(1, (speed - TORCH_LEAN_MIN_SPEED) / TORCH_LEAN_RAMP_SPEED) * TORCH_LEAN_MAX;
+      const invLen = amount / Math.hypot(dx, dz);
+      this._torchLean.set(-dx * invLen, 0, -dz * invLen);
+    } else {
+      this._torchLean.set(0, 0, 0);
+    }
+    this._leanReady = true;
   }
 }

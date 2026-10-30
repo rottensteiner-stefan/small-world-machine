@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.121.1] - 2026-10-30
+
+### "Wood already touched by fire is not hard to set alight." - Chinua Achebe, Things Fall Apart
+
+- **Features:**
+  - *Feuer — `Fire`-Kompositions-Prefab (`@small-world-machine/vfx-extras`):* EIN Konstruktionsaufruf komponiert den gesamten Feuer-Layer-Stack (Flamme, Glow, Praktikallicht, Embers, Rauch, Glutbett, Ruß) aus reinen Daten-Presets (`candle`/`torch`/`campfire`); `data`-Overrides bleiben pro Feuer möglich (z. B. `smoke:false`, `emberBed:false`). Mit `light:` kann eine Szene ihr eigenes Praktikallicht injizieren — es MUSS vor der Konstruktion in den Flammenkopf eingehangen werden (die `FireLightBehavior` captured beim Attach die lokale Basisposition); `preserveLightColor: true` erhält die autorische Lichtfarbe der Szene bei weiterlaufendem Flackern (die Farbtemperatur-Kopplung greift nur für Prefab-eigene Lichter). `update(dt, camera?, wind?, lean?)` treibt alle Schichten des von EINEM einzigen Treiber pro Szene; Welt-verankerte Embers/Smoke spawnen nur mit Kameraposition. Eingesetzt in 37, 38 und the-whisper (Rule of Three: drei semantische Konsumenten).
+  - *the-whisper — getragene Fackel statt Laternen-Platzhalter:* Voll-Rename auf `torch*` (Options `torchParent`/`torchLight`, API `torch`/`torchEnabled`/`setTorchEnabled`/`updateTorch(dt, camera?)`, HUD „Fackel“), `BunkerKit.createHeldTorch` (Holzstab + Eisenkorb-Kopf, Grip am lokalen Ursprung, Holz als `StandardMaterial` — das getragene Feuer beleuchtet sein eigenes Holz), Fire-Prefab am Hand-Bone mit velocity-abgeleitetem Flammen-Nachlauf (rig-eigenes Bezugssystem, korrekt auch bei laufendem Diorama-Turntable, erster Frame lean-frei) und **genau einem Treiber pro Szene** (Diorama mit Kamera-Trails, Tunnel ohne — kein Doppel-Treiben). Zero-Alloc-Vertrag gehalten: MathPool-Bilanz über 1000 Frames exakt stabil, Lean über persistente Member-Vektoren.
+  - *Showcase 37 — Kamin:* Feuerraum-Feuer auf das `Fire`-Prefab (campfire, injiziertes `fireplaceLight` mit `preserveLightColor`) gestellt; sealed firebox ohne Rauch (die Plume clippte in die Esse und das Kaminlicht blies sie zu einer hellen Wand auf — per Pixel-Probe verworfen). Neues QA-Gate `__qaSwm37` (Oszillations-Nachweis + Hearth-Camera).
+  - *Showcase 38 — Halle:* 10 Wandfackeln + Center-Brazier vollständig auf das `Fire`-Prefab umgestellt (Flame/Glow/Praktikallicht einheitlich); erster Szenen-Einsatz von `FireLightBudget` (maxActive 11, installiert nach `start()`); Golden-freeze-kompatibel über `_applyFlicker`; QA-Gate `__qaSwm38` (Sample + Kamera-Presets).
+- **Housekeeping & Docs:**
+  - *Fire-Prefab dokumentiert:* `docs/guides/vfx-fire.md` um die Prefab-Sektion erweitert (Kompositions-Verträge: ein Treiber, Injektion vor Konstruktion, world-anchored Trails, Lean, Budget) und den erledigten P-compose-Follow-up gestrichen.
+  - *App-Logs:* `apps/showcases/37/docs/log.md` und `apps/showcases/38/docs/log.md` angelegt (initialer Eintrag incl. Verifikationsblöcken), the-whisper `docs/log.md` #149 (Rename-Begründung, Rig-Verdrahtung, Verifikationsblock).
+  - *pbr38-Goldens regeneriert:* alte Baseline (Vor-Prefab-Stand) gegen den neuen Build neu aufgenommen — die angezündeten Feuer verändern alle 5 Zellen bewusst (portico/sanctum/shrine 39–61 %); zweiter Capture-Lauf byte-identisch (Determinismus bestätigt, eine Zelle 0.0001 % < 0,5 %-Schwelle).
+  - *Abnahme:* Live-Gates für 37, 38 und beide the-whisper-Szenen auf allen drei Tiers grün (keine Seiten-/Konsolenfehler, nicht blank, Feuer-Nachweis: Licht oszilliert, Flammen-Clocks steigen); Pixel-Verifikation der Kamin-, Fackel-/Brazier- und getragenen-Fackel-Shots (warme, kompakte Flammen-Kerne, kein „Glühbirnen“-Artefakt, 0.0 % weiße Überstrahlung); Whisper-Suite 42/42, vfx-extras 115/115, `tsc`, `lint:fix`, `build` grün.
+
 ## [0.121.0] - 2026-10-29
 
 ### "Fire is the test of gold; adversity, of strong men." - Seneca

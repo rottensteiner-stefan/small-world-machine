@@ -2061,3 +2061,43 @@ befüllen.
   Mesh+Licht). `build` + Browser-Check beider Szenen (WebGL2, 4× `C`-Zyklen, 0 Konsolenfehler,
   Canvas nicht leer) grün; `test:showcases` 117 Checks / 0 failed grün. Commit folgt auf Branch
   `wave1-d` (Worktree, kein Push).
+
+## 149. Getragene Fackel statt Laternen-Platzhalter — `torch*`-Rename + Fire-Prefab am Hand-Bone (2026-10-30)
+
+- **Voll-Rename `lantern*` → `torch*` (shared Rig, Diorama, Tunnel):** Die Tunnel-Logik
+  (`_resolveDesiredAnimation`) gate-te bereits die Torch-Animationsclips (`idle_torch`/
+  `walk_torch`/`run_torch`) über `lanternEnabled` — semantisch war das getragene Teil längst eine
+  Fackel, nur Mesh (`BunkerKit.createHeldLantern`) und HUD-Label („Laterne") waren Platzhalter.
+  Umbenannt: Options `torchParent`/`torchLight`, API `torch`/`torchEnabled`/
+  `setTorchEnabled`/`updateTorch(dt, camera?)`, HUD „Fackel".
+- **`BunkerKit.createHeldTorch` (ersetzt Lantern):** Holzstab mit Eisengriff (Grip am lokalen
+  Ursprung; Stab −0.28…+0.34, Eisenkorb-Kopf bis +0.45). Holz als `StandardMaterial`, damit das
+  getragene Feuer sein eigenes Holz beleuchtet; `Torus`/`BasicMaterial`-Import entfernt.
+- **Fire-Prefab am Hand-Bone (`PlayerRig._ensureTorch`):** `torch` unter dem identity scene root
+  (`torchParent`), `torchLight` wird VOR der Fire-Konstruktion in den Kopf reparentet
+  (`(0, TORCH_FLAME_CENTER_Y, 0)` — die FireLightBehavior captured die lokale Basis beim Attach)
+  und via `preserveLightColor` in Szenen-Farbe behalten; `fire.root` als Kind des Torch auf
+  `(0, 0.44, 0)`, Embers/Smoke world-anchored unter `torchParent`. Daten-Override
+  `{ width: 0.14, height: 0.4, emberBed: false }` (getragene Fackel hat kein ground-fixed Glutbett).
+- **EIN Treiber pro Szene (kein Doppel-Treiben):** `PlayerRig.update(dt)` bewegt das Rig nur
+  (Fade/Mixer/Torch-Sync + Lean-Derivation); die Szene ruft `updateTorch(dt, camera?)` — Diorama
+  MIT Kamera (Embers/Smoke-Trails folgen dem getragenen Feuer), Tunnel OHNE Kamera (Trails
+  dormant). Der Zero-Alloc-Vertrag bleibt: MathPool-Bilanz über 1000 Frames exakt stabil, Lean
+  über persistente Member-Vektoren (kein MathPool-Scratch, das die Fire-Later im Frame überlebt).
+- **Lean-Derivation:** Flammen-Nachlauf aus dem `rig.root.position`-Delta (rig-eigenes/
+  Fußboden-Bezugssystem, korrekt auch bei laufendem Diorama-Turntable — Welt-Bewegung würde auf
+  rotierendem Boden fälschlich „kein Lean" melden). Schwellen `TORCH_LEAN_MIN_SPEED 0.02 /
+  RAMP 0.35 / MAX 0.3`; erster Frame lean-frei (kein Pop bei Switch/Erstlast).
+- **QA-Hooks (`__qaSwmWhisper`):** beide Szenen exponieren `sample()` (torchOn, Licht-Intensität,
+  Flame-Clock); Diorama zusätzlich `focusPlayer()` (setInitialCamera auf den Spieler) für den
+  Art-Pass — konsistent mit 37/38.
+- **Verifikationsblock (live-Gate `.agents/scratches/check-whisper.mjs`):** beide Szenen auf allen
+  3 Tiers ✅ — keine Seiten-/Konsolenfehler, Canvas nicht leer, `torchOn` durchgängig, injiziertes
+  Fackellicht oszilliert live (Diorama 1.16–1.82, Tunnel 7.75–9.28) und die Flammen-Clocks steigen
+  (getriebenes Feuer, kein eingefrorener Zustand; Tunnel beweist: Flamme läuft auch ohne
+  Kamerapfad). Pixel-Probe des Diorama-Nah-Shots: kompakter warmer Fackelkern an der Hand
+  (234,217,140 hellgelb / 129,83,33 orange) mit lokaler Warm-Ausleuchtung der Figur — liest als
+  getragene Fackel, kein Bulb.
+- **Gates:** `tsc`, eslint, Whisper-Suite 42/42, vfx-extras 115/115, `build:showcases` +
+  37/38-Gates + pbr38-Goldens-Regeneration grün. Commit mit einzigartigem Quote auf
+  `wave1-d`-Arbeit.

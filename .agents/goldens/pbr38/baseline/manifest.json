@@ -10,12 +10,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 17.6639,
+    "stddev": 12.0521,
     "blank": false,
     "consoleErrors": [],
     "width": 1280,
     "height": 720,
-    "sha256": "1b61c94d66a9c9a06a854764cc07dad376fcbd0ee7da23ac3bfafcf3e2f8d760",
+    "sha256": "184d227545c3fa27ce67f46a93c852a1e8a7954d1dead0565ce40dcb7cbd776b",
     "ok": true
   },
   {
@@ -29,12 +29,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 7.8167,
+    "stddev": 5.138,
     "blank": false,
     "consoleErrors": [],
     "width": 1280,
     "height": 720,
-    "sha256": "711a8f54629873929115c1334acc8ba6ce61fd0d0e0a879900ab2516cb37bef3",
+    "sha256": "315a1995c48fb17377600ca0764143ef7149cdf2244e466644167ea886cd4928",
     "ok": true
   },
   {
@@ -48,12 +48,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 36.3794,
+    "stddev": 21.2077,
     "blank": false,
     "consoleErrors": [],
     "width": 1280,
     "height": 720,
-    "sha256": "80bffcc72ecf1c318e2bc724c903fec9c77bdb0270b17080693f153aa579a33d",
+    "sha256": "e4bd4410bdbd3cfc4d0025eb542a6dd01696f6e48c54f91b5f4bb9ed1abf5ee0",
     "ok": true
   },
   {
@@ -67,12 +67,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 59.9808,
+    "stddev": 42.8911,
     "blank": false,
     "consoleErrors": [],
     "width": 1280,
     "height": 720,
-    "sha256": "5f442c95500210edef153fa1317f83e80a376e5539c28ff75a76b2958e0cc296",
+    "sha256": "fb5b81e5c3e429f1ca31a0ef8354f30ab87562e43699cb0766366292792b55b3",
     "ok": true
   },
   {
@@ -86,12 +86,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 52.1208,
+    "stddev": 33.939,
     "blank": false,
     "consoleErrors": [],
     "width": 1280,
     "height": 720,
-    "sha256": "9f5f015b3a61d25baa3d4173770dc981c8ad48ca82f99242d1c7cfc07c9c6636",
+    "sha256": "5731c36c4105339695dec1af3e2948546f03900b562c85d02c7569af91653663",
     "ok": true
   }
 ]

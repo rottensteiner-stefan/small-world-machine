@@ -9,6 +9,7 @@ import type {
 import {
   AbstractShowcase,
   AmbientLight,
+  bakeSceneDecals,
   CameraStrategyType,
   Color,
   Cube,
@@ -27,6 +28,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 import { box } from "../shared/prim.js";
+import { Fire } from "@small-world-machine/vfx-extras";
 
 export class Showcase extends AbstractShowcase {
   private _refCamPos = new Vector3D(0.65, 1.15, 2.45);
@@ -39,6 +41,7 @@ export class Showcase extends AbstractShowcase {
   private _candleLight: PointLight | undefined;
   private _fireplaceLight: PointLight | undefined;
   private _flameMats: StandardMaterial[] = [];
+  private _hearthFire: Fire | undefined;
 
   protected override async setupScene(): Promise<void> {
     // ------------------------------------------------------------------------
@@ -419,13 +422,14 @@ export class Showcase extends AbstractShowcase {
     this._floorLampLight = floorLampLight;
     this.scene.add(floorLampLight);
 
-    // Fireplace Ember Glow (Warm Orange inside hearth, Consensus 15) -- base kept LOW so the fire
-    // bed itself stays the dominant visible source; a bright hidden light with no visible fire
-    // reads as a bulb behind bricks.
+    // Fireplace fire light (Warm firelight inside hearth, Consensus 15) -- there is now a real
+    // HearthFire below (see section 7), so the light is no longer a hidden "bulb behind bricks":
+    // it is driven by the fire's FireLightBehavior (temperature follows the flicker). Base kept at
+    // a hearth-appropriate 1.6 so the room mood stays cozy instead of a blown-out fire glare.
     const fireplaceLight = new PointLight({
       color: new Color(1, 0.696, 0.381),
-      intensity: 0.45,
-      distance: 3.0,
+      intensity: 1.6,
+      distance: 6.0,
       decay: 2.0,
     });
     fireplaceLight.position.set(2.15, 0.35, -0.15);
@@ -632,18 +636,92 @@ export class Showcase extends AbstractShowcase {
     chimneyUpper.castShadow = true;
     fireplace.add(chimneyUpper);
 
-    // Firebox: a solid dark plug that reads as an unlit empty opening (the baseline the scene
-    // shipped with). All deeper fire treatment was dropped after a/v passes: without a particle or
-    // VFX system, every primitive attempt (flat glow plane, quads, packed glowing spheres) read as
-    // an hard CG artifact (bar / white cube / LED strip). The fire here is expressed purely through
-    // the flickering fireplace light below -- low, warm, organic -- which is the feature that adds
-    // "living" life without any broken geometry.
-    const firebox = new Object3D("Firebox");
-    firebox.geometry = cubeGeom;
-    firebox.material = darkInteriorMat;
-    firebox.scale.set(0.82, 0.72, 0.56);
-    firebox.position.set(0, 0.36, 0.1);
-    fireplace.add(firebox);
+    // Hearth cavity: the dark plug from the shipping baseline becomes a real recessed firebox the
+    // camera can look into. Thin cavity panels replace the solid cube ("no flat glow plane, no
+    // packed glowing spheres" stays doctrine -- the fire below is what lives here now).
+    const hearthFloor = new Object3D("HearthFloor");
+    hearthFloor.geometry = cubeGeom;
+    hearthFloor.material = darkInteriorMat;
+    hearthFloor.scale.set(0.8, 0.05, 0.52);
+    hearthFloor.position.set(0, 0.025, 0.26);
+    hearthFloor.receiveShadow = true;
+    fireplace.add(hearthFloor);
+
+    const hearthBack = new Object3D("HearthBack");
+    hearthBack.geometry = cubeGeom;
+    hearthBack.material = darkInteriorMat;
+    hearthBack.scale.set(0.8, 0.7, 0.05);
+    hearthBack.position.set(0, 0.36, 0.5);
+    fireplace.add(hearthBack);
+
+    const hearthSideL = new Object3D("HearthSideL");
+    hearthSideL.geometry = cubeGeom;
+    hearthSideL.material = darkInteriorMat;
+    hearthSideL.scale.set(0.05, 0.7, 0.5);
+    hearthSideL.position.set(-0.4, 0.36, 0.26);
+    fireplace.add(hearthSideL);
+
+    const hearthSideR = new Object3D("HearthSideR");
+    hearthSideR.geometry = cubeGeom;
+    hearthSideR.material = darkInteriorMat;
+    hearthSideR.scale.set(0.05, 0.7, 0.5);
+    hearthSideR.position.set(0.4, 0.36, 0.26);
+    fireplace.add(hearthSideR);
+
+    // Logs laid in the cavity for the fire to burn on, reusing the scene's beam material.
+    const hearthLogGeom = new Cylinder({
+      radiusTop: 0.045,
+      radiusBottom: 0.045,
+      height: 0.5,
+      radialSegments: 10,
+    }).getGeometryData();
+    const hearthLogs: ReadonlyArray<readonly [number, number, number, number]> = [
+      [-0.16, 0.06, 0.18, 0.5],
+      [0.16, 0.06, 0.32, -0.4],
+      [-0.1, 0.06, 0.36, 0.15],
+      [0.04, 0.12, 0.2, -0.25],
+      [0.12, 0.12, 0.3, 0.7],
+    ];
+    for (let i = 0; i < hearthLogs.length; i++) {
+      const placement = hearthLogs[i]!;
+      const log = new Object3D(`HearthLog_${i}`);
+      log.geometry = hearthLogGeom;
+      log.material = beamMat;
+      log.rotation.z = Math.PI / 2;
+      log.rotation.y = placement[3]!;
+      log.position.set(placement[0]!, placement[1]!, placement[2]!);
+      log.castShadow = true;
+      fireplace.add(log);
+    }
+
+    // HearthFire fills the cavity through the shared Fire prefab (plan P-compose): flame cards,
+    // glow, embers, smoke, ember bed and soot. Positioned in fireplace-local coordinates (the
+    // group rotates them with the mantel); the embers/smoke meshes go to the scene root because
+    // their instance matrices are world-space. Driven externally in update() so the room's other
+    // living-light rig is untouched.
+    const hearthFire = new Fire({
+      name: "HearthFire",
+      preset: "campfire",
+      position: new Vector3D(0.05, 0.05, 0.25),
+      seed: 1,
+      temperatureK: 1950,
+      // No smoke in the sealed masonry firebox: without a chimney shaft the plume clips the hood
+      // and the firelight (distance 6) blows the puffs out into a uniform bright wall across the
+      // opening. The flame/glow/embers/bed/soot carry the fire; smoke stays a showcase-45 demo.
+      data: { width: 0.44, height: 0.6, glowSize: 1.05, glowIntensity: 0.5, smoke: false },
+      light: fireplaceLight,
+    });
+    fireplace.add(hearthFire.root);
+    // Bed and soot were authored in the same local frame — parent them here so they rotate with
+    // the hearth; the injected light stays scene-level at its authored hearth position.
+    fireplace.add(hearthFire.emberBed!.mesh);
+    hearthFire.emberBed!.mesh.position.set(0, 0.065, 0.25);
+    fireplace.add(hearthFire.soot!);
+    hearthFire.soot!.position.set(0, 0.06, 0.25);
+    hearthFire.soot!.scale.set(0.7, 0.12, 0.4);
+    this.scene.add(hearthFire.embers!.mesh);
+    if (hearthFire.smoke) this.scene.add(hearthFire.smoke.mesh);
+    this._hearthFire = hearthFire;
 
     // Limestone Mantel Top Shelf
     const mantelShelf = new Object3D("MantelShelf");
@@ -1110,6 +1188,12 @@ export class Showcase extends AbstractShowcase {
 
     this.scene.add(floorLamp);
 
+    // The hearth soot decal has no opaque-depth box-decals on WEB_GL1 (ADR 0029): bake it into the
+    // floor geometry only there, after the whole scene exists so it clips against nothing else.
+    if (this.renderer.type === RendererType.WEB_GL1 && this._hearthFire?.soot) {
+      bakeSceneDecals(this.scene.root);
+    }
+
     // QA surface for the automated live gate -- proves the living-light rig actually moves
     // (a static still would keep these identical across samples).
     (window as unknown as Record<string, unknown>)["__qaSwm37"] = {
@@ -1138,9 +1222,11 @@ export class Showcase extends AbstractShowcase {
     if (this._candleLight) {
       this._candleLight.intensity = 0.52 * this._flicker(t, 21.0, 0.16, 7.3);
     }
-    // Fireplace wood fire: slower, wide luminous swings with occasional flares.
-    if (this._fireplaceLight) {
-      this._fireplaceLight.intensity = 0.45 * this._flicker(t, 8.5, 0.45, 2.1);
+    // Fireplace wood fire: the full HearthFire prefab (flame, glow, embers, smoke, bed, soot) is
+    // driven here with the live camera — pause/slow-motion are not part of this room's rig, so raw
+    // deltaTime is correct. Its FireLightBehavior takes over the fireplace light intensity/colour.
+    if (this._hearthFire) {
+      this._hearthFire.update(deltaTime, this.camera.position);
     }
     // Floor lamp: faint mains hum.
     if (this._floorLampLight) {
