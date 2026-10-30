@@ -5,6 +5,7 @@ import {
   MATERIAL_STUDIO_PRESETS,
   type MaterialStudioMapParams,
 } from "../core/material.js";
+import type { StudioPbrMaterialData } from "../maker/ContentDrawer.js";
 import { UniversalIngestDropzone } from "../common/io/ui/UniversalIngestDropzone.js";
 import type { IngestResult } from "../common/io/UniversalIngestTypes.js";
 import {
@@ -49,6 +50,11 @@ export class MaterialStudioController {
   private _dropzone: UniversalIngestDropzone | null = null;
   /** State parked by `setState()` until the (delayed) `bind()` applies it. */
   private _pendingState: MaterialStudioState | null = null;
+  /**
+   * Handoff target for "In Content Drawer übernehmen" (wired by the hosting `MaterialStudio` from
+   * its options). `null` in the standalone showcase -- the send button is hidden then.
+   */
+  public onSendToDrawer: ((material: StudioPbrMaterialData) => void) | null = null;
   /** Reads the closure-held session (texture, file name, tab); set by `bind()`, cleared by `dispose()`. */
   private _readSession:
     (() => Pick<MaterialStudioState, "textureSrc" | "fileName" | "tab">) | null = null;
@@ -486,6 +492,39 @@ export class MaterialStudioController {
           downloadMap(mapType);
         });
       });
+
+      // "In Content Drawer übernehmen": snapshot the THREE preview canvases exactly as authored
+      // (diffuse/original, normal, roughness) plus the live PBR slider values, and hand them to
+      // the host hook. Standalone showcase: the button is hidden when no hook was wired.
+      const sendDrawerBtn = document.getElementById("btn-send-drawer") as HTMLButtonElement | null;
+      if (sendDrawerBtn && this.onSendToDrawer) {
+        sendDrawerBtn.addEventListener("click", () => {
+          const send = this.onSendToDrawer;
+          if (!send) return;
+          const readScaled = (id: string): number => {
+            const el = document.getElementById(id) as HTMLInputElement | null;
+            return (parseFloat(el?.value ?? "0") || 0) / 100.0;
+          };
+          const payload: StudioPbrMaterialData = {
+            name: originalFileName,
+            diffuseMap: canvases.original,
+            normalMap: canvases.normal,
+            roughnessMap: canvases.roughness,
+            normalStrength: readScaled("normal-strength-slider"),
+            metallic: readScaled("metallic-slider"),
+            roughness: readScaled("roughness-override-slider"),
+          };
+          send(payload);
+          // Transient confirmation on the button (tool UI language is German).
+          const originalLabel = sendDrawerBtn.innerText;
+          sendDrawerBtn.innerText = "✓ In Content Drawer übernommen";
+          setTimeout(() => {
+            sendDrawerBtn.innerText = originalLabel;
+          }, 1500);
+        });
+      } else {
+        sendDrawerBtn?.remove();
+      }
 
       function downloadMap(mapType: string): void {
         const canvas = canvases[mapType as MaterialStudioMapKey];

@@ -22,6 +22,15 @@ import {
   MaterialStudioController,
   type MaterialStudioState,
 } from "./material-studio/MaterialStudioController.js";
+import type { StudioPbrMaterialData } from "./maker/ContentDrawer.js";
+
+/** `MaterialStudio` construction options: the `ForgeTool` shell plus the Maker handoff hook. The
+ *  tool stays ContentDrawer-agnostic -- the host (MakerApp) wires the hook, the standalone
+ *  showcase simply leaves it unset (the send button is hidden then). */
+export interface MaterialStudioOptions extends ForgeToolOptions {
+  /** Invoked on "In Content Drawer übernehmen" with the captured PBR material (canvases + params). */
+  onSendToDrawer?: ((material: StudioPbrMaterialData) => void) | undefined;
+}
 
 export class MaterialStudioApp extends SmallWorldMachine {
   private _previewObject!: Object3D;
@@ -167,8 +176,9 @@ export class MaterialStudio extends ForgeTool {
   private readonly _controller = new MaterialStudioController();
   private _bindTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(options: ForgeToolOptions = {}) {
+  constructor(options: MaterialStudioOptions = {}) {
     super(options);
+    this._controller.onSendToDrawer = options.onSendToDrawer ?? null;
     this._injectCSS();
     buildMaterialStudioUI(this._container);
     // delay bind logic to ensure DOM is ready

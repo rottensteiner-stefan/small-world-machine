@@ -4,6 +4,7 @@ import {
   MaterialStudioController,
   type MaterialStudioState,
 } from "../../src/material-studio/MaterialStudioController.js";
+import type { StudioPbrMaterialData } from "../../src/maker/ContentDrawer.js";
 import { buildMaterialStudioUI } from "../../src/material-studio/MaterialStudioUiBuilder.js";
 
 afterEach(() => {
@@ -117,5 +118,45 @@ describe("MaterialStudioController state", () => {
     controller.setState(parked);
 
     expect(controller.getState()?.fileName).not.toBe("granite");
+  });
+});
+
+describe("MaterialStudioController send-to-drawer handoff", () => {
+  it("fires the wired hook with the captured canvases and PBR parameters on button click", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    buildMaterialStudioUI(host);
+    const controller = new MaterialStudioController();
+    const onSendToDrawer = vi.fn();
+    controller.onSendToDrawer = onSendToDrawer;
+    controller.bind();
+
+    const btn = document.getElementById("btn-send-drawer") as HTMLButtonElement | null;
+    expect(btn).not.toBeNull();
+    btn!.click();
+
+    expect(onSendToDrawer).toHaveBeenCalledTimes(1);
+    const payload = onSendToDrawer.mock.calls[0]![0] as StudioPbrMaterialData;
+    expect(payload.diffuseMap).toBeInstanceOf(HTMLCanvasElement);
+    expect(payload.normalMap).toBeInstanceOf(HTMLCanvasElement);
+    expect(payload.roughnessMap).toBeInstanceOf(HTMLCanvasElement);
+    expect(typeof payload.name).toBe("string");
+    expect(payload.name.length).toBeGreaterThan(0);
+    expect(payload.normalStrength).toBeGreaterThanOrEqual(0);
+    expect(payload.normalStrength).toBeLessThanOrEqual(1);
+    expect(payload.metallic).toBeGreaterThanOrEqual(0);
+    expect(payload.roughness).toBeGreaterThanOrEqual(0);
+    // Transient button confirmation happens synchronously (reverts after 1.5s).
+    expect(btn!.innerText).toContain("übernommen");
+  });
+
+  it("hides the send button when no hook is wired (standalone showcase stays unpolluted)", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    buildMaterialStudioUI(host);
+    const controller = new MaterialStudioController();
+    controller.bind();
+
+    expect(document.getElementById("btn-send-drawer")).toBeNull();
   });
 });

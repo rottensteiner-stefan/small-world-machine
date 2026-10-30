@@ -5,6 +5,36 @@
 
 ---
 
+## 2026-10-30 — Content-Drawer-Handoff: PBR-Materialien aus dem Material Studio
+
+Backlog-Punkt „Content-Drawer-Prefabs an PBR-Pipeline" umgesetzt: Generierte PBR-Materialien aus
+dem Material-Studio-Modus werden direkt in den Maker Content Drawer übergeben (In-Memory, kein
+Persistenz-Scope — bewusste Grenze, analog zu `refreshPrefabs`).
+
+- **Datenfluss:** Material-Studio-Modus → Button „In Content Drawer übernehmen" (`btn-send-drawer`)
+  schnappt die drei Preview-Canvases (Diffuse/Original, Normal, Roughness) **exakt wie im Studio
+  gefeuert** plus die live PBR-Slider-Werte (normalized 0..1) → `MaterialStudio.onSendToDrawer`-Hook
+  → MakerApp verdrahtet den Hook auf `ContentDrawer.addMaterial()` → Drawer-Asset-Typ `material`
+  (Ordner „PBR Materials", gleiche Filter-Kategorie wie Kit-Texturen).
+- **ContentDrawer (`packages/tools/src/maker/ContentDrawer.ts`):** neuer `ContentAssetType "material"`,
+  `StudioPbrMaterialData`-Payload (Canvas-Referenzen + Parameter), `addMaterial()` als Upsert nach
+  Name (erneutes Senden ersetzt, kein Duplikat-Haufen — UE5-Save-once-Semantik), Thumbnail einmalig
+  beim Capture (Cover-Fit 128px, sonst 🎨-Icon), DnD löst den **Live-Eintrag per id** auf (JSON
+  verliert Canvases — Pointer-Identität bleibt erhalten), Doppelklick/Drop appliziert via neuem
+  `applyMaterial`-Callback auf Selektion bzw. Drop-Target.
+- **MakerApp:** `_applyCapturedMaterial()` baut `StandardMaterial` aus den Live-Canvases
+  (`createImageBitmap` + `Texture.fromImage`, `normalScale`/`metallic`/`roughness` aus dem Payload)
+  und committet über den Undo-Stack (`setMaterialOnObject`) — gleiche Semantik wie der Kit-`applyTexture`-Pfad.
+- **Standalone-Isolation:** Ohne `onSendToDrawer`-Hook (Showcase 10) ist der Button in `bind()`
+  ausgeblendet — keine tote UI außerhalb des Makers.
+- **Verifikation:** Unit-Tests erweitert (ContentDrawer 4 neue: addMaterial-Andwendung, Upsert,
+  PBR-Materials-Filter, DnD-Live-Lookup; Controller 2 neue: Hook-Feuerung mit Canvas-Payload +
+  Button-ausgeblendet) — Tools-Suite 556/556 grün, `tsc --noEmit` sauber. Entwickler-Smoke im
+  echten Browser: Material-Modus → Send → World → Drawer zeigt MATERIAL-Karte, 0 Fehler (SCRATCH:
+  `.agents/scratches/smoke-contentdrawer-handoff.mjs`).
+
+---
+
 ## 2026-09-01 — Phase 3: Konsolidierung & Integration (ADR 0010 §5)
 
 Paritäts-Gate gegen ADR 0010 §5 erfolgreich abgeschlossen und Maker fest im Gesamtsystem verankert:

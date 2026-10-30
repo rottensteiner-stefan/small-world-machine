@@ -20,7 +20,28 @@ import {
   pickKitTextureMap,
 } from "@small-world-machine/engine";
 
-export type ContentAssetType = "prop" | "texture" | "decal" | "primitive" | "light" | "prefab";
+export type ContentAssetType =
+  "prop" | "texture" | "decal" | "primitive" | "light" | "prefab" | "material";
+
+/**
+ * A PBR material captured from the Material Studio ("In Content Drawer übernehmen"): the THREE
+ * generated map canvases exactly as the user saw them on the preview plus the live PBR parameters.
+ * The canvases stay valid after the studio mode unmounts (plain document canvases, never destroyed),
+ * so the drawer keeps them as an immutable snapshot of the authored material. In-memory only, like
+ * `refreshPrefabs` -- deliberately NOT persisted to the project file.
+ */
+export interface StudioPbrMaterialData {
+  name: string;
+  diffuseMap: HTMLCanvasElement;
+  normalMap: HTMLCanvasElement;
+  roughnessMap: HTMLCanvasElement;
+  /** 0..1, already normalized (studio UI percent / 100). */
+  normalStrength: number;
+  /** 0..1, already normalized (studio UI percent / 100). */
+  metallic: number;
+  /** 0..1, already normalized (studio UI percent / 100). */
+  roughness: number;
+}
 
 export interface ContentRaycastHit {
   position: Vector3D;
@@ -39,6 +60,8 @@ export interface ContentAssetItem {
   folderPath: string; // e.g. "Kits/Flakturm/Props", "Primitives/3D", "Prefabs"
   factory?: (() => Object3D) | undefined;
   raw?: unknown;
+  /** Captured Material-Studio PBR payload (type "material" only) -- canvases + PBR parameters. */
+  material?: StudioPbrMaterialData | undefined;
 }
 
 export interface ContentDrawerCallbacks {
@@ -48,6 +71,8 @@ export interface ContentDrawerCallbacks {
   createPrimitive(factory: () => Object3D, worldPos?: Vector3D): Object3D;
   /** Apply a PBR texture to a target object or create preview */
   applyTexture(kitId: string, textureItem: unknown, targetObject?: Object3D): Promise<void>;
+  /** Apply a Material-Studio-captured PBR material to a target object or the current selection */
+  applyMaterial(material: StudioPbrMaterialData, targetObject?: Object3D): void;
   /** Add a decal into the scene */
   createDecal(kitId: string, decalItem: unknown, worldPos?: Vector3D): Promise<void>;
   /** Instantiate a project prefab */
@@ -63,6 +88,30 @@ export interface ContentDrawerOptions {
   canvas: HTMLCanvasElement;
   kitRegistry?: KitRegistry;
   callbacks: ContentDrawerCallbacks;
+}
+
+/** Cover-fit 128px thumbnail of a studio map canvas for the asset tile (one-off at capture time,
+ *  never re-computed per grid render). Returns "" when the canvas is empty/unavailable, in which
+ *  case the tile falls back to the asset icon. */
+function thumbnailFromCanvas(source: HTMLCanvasElement): string {
+  try {
+    const size = 128;
+    if (source.width <= 0 || source.height <= 0) return "";
+    const thumb = document.createElement("canvas");
+    thumb.width = size;
+    thumb.height = size;
+    const ctx = thumb.getContext("2d");
+    if (!ctx) return "";
+    const scale = Math.min(size / source.width, size / source.height);
+    const dw = source.width * scale;
+    const dh = source.height * scale;
+    ctx.fillStyle = "#101010";
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(source, (size - dw) / 2, (size - dh) / 2, dw, dh);
+    return thumb.toDataURL("image/png");
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -264,6 +313,45 @@ export class ContentDrawer {
       });
     }
     this._folders.add("Prefabs");
+    this._renderTree();
+    this._renderGrid();
+  }
+
+  /**
+   * Adds a Material-Studio-captured PBR material to the drawer ("PBR Materials" folder, same
+   * visual category as the kit textures). UPSERT by generated id: re-sending the same name replaces
+   * the existing entry -- an in-memory material is a single asset, not a pile-up (UE5 save-once
+   * semantics). The live entry keeps the canvas references; a JSON drag payload drops them, so the
+   * drop path resolves the LIVE entry by id (see `_setupCanvasDrop`) instead of trusting the clone.
+   */
+  public addMaterial(material: StudioPbrMaterialData): void {
+    const slug =
+      material.name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-") || "material";
+    const id = `material/${slug}`;
+    const entry: ContentAssetItem = {
+      id,
+      name: material.name,
+      type: "material",
+      category: "PBR Materials",
+      folderPath: "PBR Materials",
+      icon: "🎨",
+      previewUrl: thumbnailFromCanvas(material.diffuseMap),
+      material,
+    };
+    const existing = this._assets.findIndex((a) => a.type === "material" && a.id === id);
+    if (existing >= 0) {
+      this._assets[existing] = entry;
+      this._countBadge.textContent = `${this._assets.length} Assets`;
+      this._renderTree();
+      this._renderGrid();
+      return;
+    }
+    this._assets.push(entry);
+    this._folders.add("PBR Materials");
+    this._countBadge.textContent = `${this._assets.length} Assets`;
     this._renderTree();
     this._renderGrid();
   }
@@ -609,8 +697,14 @@ export class ContentDrawer {
       if (this._currentFolder !== "All") {
         if (!asset.folderPath.startsWith(this._currentFolder)) return false;
       }
-      // 2. Type filter
-      if (this._activeFilter !== "all" && asset.type !== this._activeFilter) return false;
+      // 2. Type filter -- the "PBR Materials" pill (filter "texture") covers BOTH kit textures and
+      //    captured studio materials (same visual category; they are interchangeable on a mesh).
+      if (this._activeFilter !== "all") {
+        const matchesType =
+          asset.type === this._activeFilter ||
+          (this._activeFilter === "texture" && asset.type === "material");
+        if (!matchesType) return false;
+      }
       // 3. Search query
       if (this._searchQuery) {
         const matchName = asset.name.toLowerCase().includes(this._searchQuery);
@@ -711,6 +805,11 @@ export class ContentDrawer {
           await this._options.callbacks.applyTexture(item.kitId, item.raw);
         }
         break;
+      case "material":
+        if (item.material) {
+          this._options.callbacks.applyMaterial(item.material);
+        }
+        break;
       case "decal":
         if (item.kitId && item.raw) {
           await this._options.callbacks.createDecal(item.kitId, item.raw, worldPos);
@@ -754,6 +853,13 @@ export class ContentDrawer {
         if (asset.type === "texture") {
           if (asset.kitId && asset.raw) {
             void this._options.callbacks.applyTexture(asset.kitId, asset.raw, hit.targetObject);
+          }
+        } else if (asset.type === "material") {
+          // The JSON drag payload carries no canvases: resolve the LIVE in-memory entry by id so the
+          // drop applies the real captured maps (pointer identity) to the hovered target object.
+          const live = this._assets.find((a) => a.type === "material" && a.id === asset.id);
+          if (live?.material) {
+            this._options.callbacks.applyMaterial(live.material, hit.targetObject);
           }
         } else {
           void this._instantiateAsset(asset, hit.position);

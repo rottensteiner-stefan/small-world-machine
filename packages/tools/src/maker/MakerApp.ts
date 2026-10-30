@@ -34,6 +34,7 @@ import {
   Vector3D,
   MathPool,
   StandardMaterial,
+  Texture,
   KitRegistry,
   Quaternion,
   Matrix4,
@@ -68,6 +69,7 @@ import { MakerImportAndZoneTools } from "./MakerImportAndZoneTools.js";
 import { MakerToolbarBuilder } from "./MakerToolbarBuilder.js";
 import { DecalStampTool, type DecalStampHit } from "./DecalStampTool.js";
 import { ContentDrawer } from "./ContentDrawer.js";
+import type { StudioPbrMaterialData } from "./ContentDrawer.js";
 import { ToolModeHost } from "./ToolModeHost.js";
 import { ModeHashRouter } from "./ModeHashRouter.js";
 import { WorldModeAdapter } from "./WorldModeAdapter.js";
@@ -320,7 +322,13 @@ export class MakerApp extends SmallWorldMachine {
     this._modeHost.register(
       new ForgeToolMode(MATERIAL_MODE_ID, (parent) => {
         // Constructed without `parent` on purpose: MaterialStudio.mount() touches fields that only exist after its constructor ran.
-        const studio = new MaterialStudio();
+        const studio = new MaterialStudio({
+          // Handoff into the editor's Content Drawer (in-memory, no persistence). `_contentDrawer`
+          // is guaranteed to exist once the user can interact with a mounted studio mode.
+          onSendToDrawer: (material): void => {
+            if (this._contentDrawer) this._contentDrawer.addMaterial(material);
+          },
+        });
         studio.mount(parent);
         return studio;
       }),
@@ -563,6 +571,11 @@ export class MakerApp extends SmallWorldMachine {
           } catch (err) {
             console.error("[Maker] Failed to apply texture:", err);
           }
+        },
+        applyMaterial: (material, targetObject): void => {
+          const target = targetObject ?? this._selected;
+          if (!target) return;
+          void this._applyCapturedMaterial(target, material);
         },
         createDecal: (_kitId, decalItem): Promise<void> => {
           // A click on a kit decal arms the stamp tool (no decal is created until the user clicks
@@ -1195,6 +1208,38 @@ export class MakerApp extends SmallWorldMachine {
         obj.material = oldMaterial;
       },
     );
+  }
+
+  /**
+   * Builds a `StandardMaterial` from a Material-Studio-captured PBR payload and commits it on the
+   * target through the undo stack. Same map application semantics as the kit-texture path
+   * (`applyTexture`), but the maps come from the LIVE studio canvases -- never re-derived, so the
+   * object receives exactly the authored material the user approved on the studio preview.
+   */
+  private async _applyCapturedMaterial(
+    target: Object3D,
+    material: StudioPbrMaterialData,
+  ): Promise<void> {
+    try {
+      const [diffuse, normal, roughness] = await Promise.all([
+        createImageBitmap(material.diffuseMap),
+        createImageBitmap(material.normalMap),
+        createImageBitmap(material.roughnessMap),
+      ]);
+      const mat = new StandardMaterial({
+        color: Color.WHITE,
+        metallic: material.metallic,
+        roughness: material.roughness,
+      });
+      mat.diffuseMap = Texture.fromImage(diffuse, { generateMipmaps: true });
+      mat.normalMap = Texture.fromImage(normal, { generateMipmaps: true });
+      mat.roughnessMap = Texture.fromImage(roughness, { generateMipmaps: true });
+      mat.normalScale.x = material.normalStrength;
+      mat.normalScale.y = material.normalStrength;
+      this.setMaterialOnObject(target, mat);
+    } catch (err) {
+      console.error("[Maker] Failed to apply captured studio material:", err);
+    }
   }
 
   private _onPointerDown(event: PointerEvent): void {
