@@ -1,6 +1,7 @@
 import type { EngineOptions } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
+  AmbientLight,
   Color,
   Cube,
   DirectionalLight,
@@ -11,6 +12,16 @@ import {
   ThreadPool,
   Vector3D,
 } from "@small-world-machine/engine";
+
+interface TerrainChunkPayload {
+  positions: Float32Array;
+  uvs: Float32Array;
+  normals: Float32Array;
+  tangents: Float32Array;
+  indices: Uint32Array;
+  wireframeIndices: Uint32Array;
+  bounds: { min: [number, number, number]; max: [number, number, number] };
+}
 
 export class Showcase extends AbstractShowcase {
   private _threadPool: ThreadPool;
@@ -25,8 +36,10 @@ export class Showcase extends AbstractShowcase {
 
   protected async setupScene(): Promise<void> {
     // 1. Setup Camera and Lighting
-    this.camera.position.set(0, 30, 60);
-    this.camera.target.set(0, 0, 0);
+    this.setInitialCamera(new Vector3D(0, 30, 60), new Vector3D(0, 0, 0));
+
+    const ambient = new AmbientLight({ color: Color.WHITE, intensity: 0.35 });
+    this.scene.add(ambient);
 
     const sun = new DirectionalLight({ color: Color.WHITE, intensity: 1.0 });
     sun.position.set(20, 50, 20);
@@ -53,8 +66,16 @@ export class Showcase extends AbstractShowcase {
     const btnWorker = document.getElementById("btnWorkerThread");
     const btnClear = document.getElementById("btnClear");
 
-    if (btnMain) btnMain.addEventListener("click", () => this._generate(false));
-    if (btnWorker) btnWorker.addEventListener("click", () => this._generate(true));
+    if (btnMain) {
+      btnMain.addEventListener("click", () => {
+        void this._generate(false);
+      });
+    }
+    if (btnWorker) {
+      btnWorker.addEventListener("click", () => {
+        void this._generate(true);
+      });
+    }
     if (btnClear) {
       btnClear.addEventListener("click", () => {
         if (this._terrainMesh) {
@@ -64,6 +85,11 @@ export class Showcase extends AbstractShowcase {
         }
       });
     }
+  }
+
+  public override destroy(): void {
+    this._threadPool.destroy();
+    super.destroy();
   }
 
   protected override update(deltaTime: number): void {
@@ -78,22 +104,31 @@ export class Showcase extends AbstractShowcase {
 
   /**
    * Extremely heavy procedural generation logic using Fractal Brownian Motion (fBm) with pure sine waves.
-   * Runs self-contained (no external imports) so it can be safely transferred to a worker.
+   * Runs self-contained (no external imports) so it can be safely transferred to a worker, including
+   * smooth vertex normals, UVs, tangents, wireframe indices, and AABB bounds so main-thread assembly is O(1).
    */
   private static _generateTerrainChunk(data: {
     width: number;
     depth: number;
     resolution: number;
-  }): { positions: Float32Array; normals: Float32Array; indices: Uint32Array } {
+  }): TerrainChunkPayload {
     const { width, depth, resolution } = data;
     const sizeX = width * resolution;
     const sizeZ = depth * resolution;
-    const numVertices = (sizeX + 1) * (sizeZ + 1);
+    const cols = sizeX + 1;
+    const rows = sizeZ + 1;
+    const numVertices = cols * rows;
     const numFaces = sizeX * sizeZ * 2;
 
     const positions = new Float32Array(numVertices * 3);
+    const uvs = new Float32Array(numVertices * 2);
     const normals = new Float32Array(numVertices * 3);
+    const tangents = new Float32Array(numVertices * 4);
     const indices = new Uint32Array(numFaces * 3);
+    const wireframeIndices = new Uint32Array(numFaces * 6);
+
+    let minY = Infinity;
+    let maxY = -Infinity;
 
     let vIdx = 0;
     for (let z = 0; z <= sizeZ; z++) {
@@ -107,7 +142,7 @@ export class Showcase extends AbstractShowcase {
           const freq = Math.pow(1.5, octave) * 0.1;
           const amp = Math.pow(0.6, octave) * 15;
 
-          // Extra useless iterations to make it artificially heavy for showcasesnstration
+          // Extra iterations to make it artificially heavy for demonstration
           for (let k = 0; k < 50; k++) {
             const noiseX = Math.sin(px * freq + k * 0.001);
             const noiseZ = Math.cos(pz * freq - k * 0.001);
@@ -115,25 +150,67 @@ export class Showcase extends AbstractShowcase {
           }
         }
 
+        if (py < minY) minY = py;
+        if (py > maxY) maxY = py;
+
         positions[vIdx * 3] = px;
         positions[vIdx * 3 + 1] = py;
         positions[vIdx * 3 + 2] = pz;
 
-        // Simple up-vector normal for now (real normal calculation would need neighboring vertices)
-        normals[vIdx * 3] = 0;
-        normals[vIdx * 3 + 1] = 1;
-        normals[vIdx * 3 + 2] = 0;
+        uvs[vIdx * 2] = x / sizeX;
+        uvs[vIdx * 2 + 1] = z / sizeZ;
 
         vIdx++;
       }
     }
 
+    // Compute smooth vertex normals and tangents from height grid differences
+    const step = 1.0 / resolution;
+    for (let z = 0; z <= sizeZ; z++) {
+      const zPrev = z > 0 ? z - 1 : z;
+      const zNext = z < sizeZ ? z + 1 : z;
+      const dz = (zNext - zPrev) * step;
+
+      for (let x = 0; x <= sizeX; x++) {
+        const xPrev = x > 0 ? x - 1 : x;
+        const xNext = x < sizeX ? x + 1 : x;
+        const dx = (xNext - xPrev) * step;
+
+        const idx = z * cols + x;
+        const hL = positions[(z * cols + xPrev) * 3 + 1]!;
+        const hR = positions[(z * cols + xNext) * 3 + 1]!;
+        const hD = positions[(zPrev * cols + x) * 3 + 1]!;
+        const hU = positions[(zNext * cols + x) * 3 + 1]!;
+
+        const dhdx = (hR - hL) / dx;
+        const dhdz = (hU - hD) / dz;
+
+        const nx = -dhdx;
+        const ny = 1.0;
+        const nz = -dhdz;
+        const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        const invN = 1.0 / nLen;
+
+        normals[idx * 3] = nx * invN;
+        normals[idx * 3 + 1] = ny * invN;
+        normals[idx * 3 + 2] = nz * invN;
+
+        // Tangent along +X slope: (1, dhdx, 0)
+        const tLen = Math.sqrt(1.0 + dhdx * dhdx);
+        tangents[idx * 4] = 1.0 / tLen;
+        tangents[idx * 4 + 1] = dhdx / tLen;
+        tangents[idx * 4 + 2] = 0.0;
+        tangents[idx * 4 + 3] = 1.0;
+      }
+    }
+
     let iIdx = 0;
+    let wIdx = 0;
     for (let z = 0; z < sizeZ; z++) {
       for (let x = 0; x < sizeX; x++) {
-        const topLeft = z * (sizeX + 1) + x;
+        const topLeft = z * cols + x;
         const topRight = topLeft + 1;
-        const bottomLeft = (z + 1) * (sizeX + 1) + x;
+        const bottomLeft = (z + 1) * cols + x;
         const bottomRight = bottomLeft + 1;
 
         indices[iIdx++] = topLeft;
@@ -143,10 +220,35 @@ export class Showcase extends AbstractShowcase {
         indices[iIdx++] = topRight;
         indices[iIdx++] = bottomLeft;
         indices[iIdx++] = bottomRight;
+
+        wireframeIndices[wIdx++] = topLeft;
+        wireframeIndices[wIdx++] = bottomLeft;
+        wireframeIndices[wIdx++] = bottomLeft;
+        wireframeIndices[wIdx++] = topRight;
+        wireframeIndices[wIdx++] = topRight;
+        wireframeIndices[wIdx++] = topLeft;
+
+        wireframeIndices[wIdx++] = topRight;
+        wireframeIndices[wIdx++] = bottomLeft;
+        wireframeIndices[wIdx++] = bottomLeft;
+        wireframeIndices[wIdx++] = bottomRight;
+        wireframeIndices[wIdx++] = bottomRight;
+        wireframeIndices[wIdx++] = topRight;
       }
     }
 
-    return { positions, normals, indices };
+    return {
+      positions,
+      uvs,
+      normals,
+      tangents,
+      indices,
+      wireframeIndices,
+      bounds: {
+        min: [-width / 2, minY, -depth / 2],
+        max: [width / 2, maxY, depth / 2],
+      },
+    };
   }
 
   private async _generate(useWorker: boolean): Promise<void> {
@@ -158,9 +260,16 @@ export class Showcase extends AbstractShowcase {
       this._terrainMesh = null;
     }
 
+    if (!useWorker) {
+      // Yield one painted frame so the UI renders "Generating High-Poly Terrain..." before main-thread freeze
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+    }
+
     const terrainSettings = { width: 40, depth: 40, resolution: 8 };
     const startTime = performance.now();
-    let result: { positions: Float32Array; normals: Float32Array; indices: Uint32Array };
+    let result: TerrainChunkPayload;
 
     try {
       if (useWorker) {
@@ -171,26 +280,29 @@ export class Showcase extends AbstractShowcase {
         result = Showcase._generateTerrainChunk(terrainSettings);
       }
 
+      const geometry = new ModelGeometry(
+        result.positions,
+        result.uvs,
+        result.normals,
+        result.indices,
+        {
+          tangents: result.tangents,
+          wireframeIndices: result.wireframeIndices,
+          headerBounds: result.bounds,
+        },
+      ).getGeometryData();
+
       const elapsed = performance.now() - startTime;
       this._setUiResult(
         `${useWorker ? "Worker" : "Main"} Thread finished in ${elapsed.toFixed(0)}ms.`,
       );
-
-      const geometry = new ModelGeometry(
-        result.positions,
-        new Float32Array(0), // uvs
-        result.normals,
-        result.indices,
-      ).getGeometryData();
 
       const material = new StandardMaterial({ color: Color.GREEN, roughness: 0.8, metallic: 0.1 });
       this._terrainMesh = new Object3D("ProceduralTerrain");
       this._terrainMesh.geometry = geometry;
       this._terrainMesh.material = material;
 
-      if (this._terrainMesh) {
-        this.scene.add(this._terrainMesh);
-      }
+      this.scene.add(this._terrainMesh);
     } catch (err: unknown) {
       this._setUiResult(`Error: ${err instanceof Error ? err.message : String(err)}`);
     }

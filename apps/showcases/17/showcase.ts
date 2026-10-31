@@ -1,6 +1,7 @@
 import type { EngineOptions } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
+  AmbientLight,
   Color,
   Cube,
   DirectionalLight,
@@ -23,8 +24,10 @@ export class Showcase extends AbstractShowcase {
 
   protected async setupScene(): Promise<void> {
     // 1. Setup Camera and Lighting
-    this.camera.position.set(0, 10, 20);
-    this.camera.target.set(0, 0, 0);
+    this.setInitialCamera(new Vector3D(0, 10, 20), new Vector3D(0, 0, 0));
+
+    const ambient = new AmbientLight({ color: Color.WHITE, intensity: 0.35 });
+    this.scene.add(ambient);
 
     const sun = new DirectionalLight({ color: Color.WHITE, intensity: 1.0 });
     sun.position.set(10, 20, 10);
@@ -58,11 +61,20 @@ export class Showcase extends AbstractShowcase {
     const btnWorker = document.getElementById("btnWorkerThread");
 
     if (btnMain) {
-      btnMain.addEventListener("click", () => this._runOnMainThread());
+      btnMain.addEventListener("click", () => {
+        void this._runOnMainThread();
+      });
     }
     if (btnWorker) {
-      btnWorker.addEventListener("click", () => this._runOnWorkerThread());
+      btnWorker.addEventListener("click", () => {
+        void this._runOnWorkerThread();
+      });
     }
+  }
+
+  public override destroy(): void {
+    this._threadPool.destroy();
+    super.destroy();
   }
 
   protected override update(deltaTime: number): void {
@@ -98,9 +110,14 @@ export class Showcase extends AbstractShowcase {
     return primeCount;
   }
 
-  private _runOnMainThread(): void {
+  private async _runOnMainThread(): Promise<void> {
     if (this._calculating) return;
     this._setUiState(true);
+
+    // Yield one painted frame so the disabled buttons and "Calculating..." status render before freezing
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
 
     const startTime = performance.now();
     // Blocking the main thread!

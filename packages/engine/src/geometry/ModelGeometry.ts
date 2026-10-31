@@ -19,6 +19,11 @@ export interface ModelGeometryOptions {
    */
   tangents?: number[] | Float32Array | undefined;
   /**
+   * Optional pre-built wireframe line-segment indices. When provided, `getGeometryData()`
+   * uses them directly instead of running `computeWireframeIndices()` on the main thread.
+   */
+  wireframeIndices?: Uint16Array | Uint32Array | undefined;
+  /**
    * Authoritative bounds from the source-file header (glTF `accessor.min/max`),
    * used instead of a CPU vertex scan. ONLY valid for unquantized Float32
    * POSITION; callers must not pass it for quantized accessors, whose header
@@ -78,6 +83,9 @@ export class ModelGeometry extends AbstractGeometry {
         options.tangents instanceof Float32Array
           ? options.tangents
           : new Float32Array(options.tangents);
+    }
+    if (options?.wireframeIndices) {
+      this._wireframeIndices = options.wireframeIndices;
     }
     if (options?.headerBounds) {
       const hb = options.headerBounds;
