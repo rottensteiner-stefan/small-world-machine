@@ -60,3 +60,48 @@ die Showcase-Struktur integriert (Nummer 40 war frei; höchste bisherige Nummer:
   Preview-Laufs, kein Rename-Befund — Seiteninhalt unverändert, Standard-Showcase-Check läuft sauber.
 - Navigation-Ring per Grep auf den gebauten wie Quell-`index.html`-Attributen verifiziert
   (39→40→1, Header-Injektion für 39/40/1 im Build bestätigt).
+
+---
+
+## 2026-10-31 — Interaktives „Decal Probe Lab" (HUD/Panel)
+
+Showcase 40 erhielt ein interaktives HUD-Panel im etablierten Showcase-Lab-Muster
+(`ShowcaseDrawer`-basiertes `Hud.ts`, Präzedenz 1/20/43/44/45), um die bislang nur per
+Query-Parameter erreichbaren Decal-Parameter direkt ausprobierbar zu machen.
+
+### Umfang (freigegeben: Kern-Lab Hauptszene, Panel-Sprache Englisch)
+
+- **`apps/showcases/40/Hud.ts`** (neu): Panel „Decal Probe Lab" (🏷, Footer ⚙, I/H-Toggle) —
+  Sektionen Lighting (Sun/Ambient-Slider), Floor Surface (Bump-Presets None/Tilt/Stripes =
+  `?bump` 0/1/2), Probe Decals (NormalProbe Opacity + Edge Fade, Unlit-Switch), HBAO
+  (Toggle + Radius/Intensity), Reset-to-Reference (0). Event-driven `sync`, nie pro Frame.
+- **`apps/showcases/40/showcase.ts`**: Feld-Refaktoren + Verdrahtung. Lab nur in der
+  interaktiven Hauptszene (Probe-Query fehlt); `start()`-Override mountet nach
+  `super.start()`, `destroy()` disposed, `onKeyDown` (0 = Reset, 1–3 = Bump, U = Unlit).
+  Kein Konflikt mit `AbstractShowcase`-Keys (B = Debug, Alt+1..3 = Renderer-Switch, R = Reset).
+- **Laufzeit-Mutation engine-gestützt** (verifiziert, MEMORY §4-H): `DecalMaterial`
+  `unlit`/`normalMap`/`edgeFade`/`color.a` — Renderer lesen `getRenderManifest()` pro
+  Objekt/Frame, `flags` fließen in Programm-/Pipeline-Keys (`programCacheKey`,
+  `getMaterialBGL`). Post zur Laufzeit auf allen Tiers (WebGL1 `_reconcilePostProcess`);
+  HBAO-Toggle disables laute Default-Siblings (Vignette/Grain/Bloom), damit der AO-Knopf
+  nur HBAO (+ ToneMapping) zeigt.
+
+### Bewusst NICHT (QA-Integrität)
+
+- QA-Probes `?pool=1` (+`shoot`), `?wet=1`, `?orm=1`, `?mip=1` bleiben byte-identisch und
+  HUD-frei für `check-decals.mjs` / `measure-decal-mips.mjs`.
+- Query-Param-Kontrakt (`?nb`, `?pp`, `?hbao`, `?unlit`, `?bump`, `?spot`, `?bake`,
+  `?rendererType`) vollständig erhalten.
+- `?bump=1/2`-Init-Verhalten unverändert (nur Registrierung des Materials, keine Look-Änderung).
+
+### Verifikation
+
+- `lint:fix` 0 Fehler, `typecheck` 0 Fehler, `build:showcases` grün.
+- `check-showcases.js 40` grün auf WEB_GL2/WEB_GPU/WEB_GL1 (Default-Szene inkl. neuem HUD,
+  Canvas-Clip-Screenshot ungestört).
+- `npm run test:decals` — alle WebGPU-Assertions grün; die 2 bekannten Umgebungs-Blocks
+  (`AO texture unavailable`, nur Headless-Preview) unverändert; Backend-Parität (Bump-
+  Normalen, Probe-Normalen, Sky-Sentinel) grün.
+- `measure-decal-mips.mjs` gegen Preview-Server — Mip-Bias-Reaktion intakt.
+- Voll-Suite `npm run test`: 487 Dateien / 3674 Tests grün.
+- MEMORY.md §4-H + §5 (Lab-Muster, Laufzeit-Mutations-Invarianten, Showcase-40-Eintrag) gepflegt.
