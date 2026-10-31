@@ -266,6 +266,12 @@ export class ParticleSystem {
         }
       }
     }
+
+    // Post-integration hook for position-correcting affectors (e.g. SDF collision push-out),
+    // invoked after integration so corrected state is final for the frame.
+    for (let a = 0; a < affectors.length; a++) {
+      affectors[a]!.postIntegrate?.(arrays, total, dt);
+    }
   }
 
   /**

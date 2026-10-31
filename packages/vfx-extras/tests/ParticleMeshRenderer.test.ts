@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ParticleSystem } from "../src/ParticleSystem.js";
 import { ParticleMeshRenderer } from "../src/ParticleMeshRenderer.js";
+import { createOctagonBillboardGeometry } from "../src/geometry/OctagonBillboardGeometry.js";
 import { Sphere, BasicMaterial, InstancedMesh, Vector3D } from "@small-world-machine/engine";
 
 describe("ParticleMeshRenderer", () => {
@@ -120,5 +121,131 @@ describe("ParticleMeshRenderer after ParticleSystem.clear()", () => {
     expect(Array.from(renderer.mesh.instanceMatrices.subarray(16, 48))).toEqual(
       new Array(32).fill(0),
     );
+  });
+
+  it("constructs OctagonBillboardGeometry (8 verts, 6 tris) and supports geometryMode: 'octagon'", () => {
+    const oct = createOctagonBillboardGeometry({ size: 1.0 });
+    expect(oct.vertices.length).toBe(8 * 3);
+    expect(oct.normals?.length).toBe(8 * 3);
+    expect(oct.uvs?.length).toBe(8 * 2);
+    expect(oct.indices?.length).toBe(6 * 3);
+
+    for (let i = 0; i < 8; i++) {
+      const r = Math.hypot(oct.vertices[i * 3]!, oct.vertices[i * 3 + 1]!);
+      expect(r).toBeCloseTo(0.5, 5);
+      expect(oct.vertices[i * 3 + 2]).toBe(0);
+      expect(oct.normals![i * 3 + 2]).toBe(1);
+    }
+
+    const system = new ParticleSystem({ capacity: 4 });
+    const renderer = new ParticleMeshRenderer({
+      system,
+      geometryMode: "octagon",
+      material: new BasicMaterial(),
+    });
+    expect(renderer.mesh.geometry?.vertices.length).toBe(24);
+    expect(renderer.mesh.geometry?.indices?.length).toBe(18);
+  });
+
+  it("aligns and elongates local +Y along velocity in billboard: 'velocityStretched' mode", () => {
+    const system = new ParticleSystem({ capacity: 4 });
+    const renderer = new ParticleMeshRenderer({
+      system,
+      material: new BasicMaterial(),
+      billboard: "velocityStretched",
+      stretchFactor: 0.25,
+      foldAlphaIntoScale: false,
+    });
+
+    // Particle at origin moving at (3, 4, 0) -> speed = 5, unit vel = (0.6, 0.8, 0)
+    system.emit({
+      position: new Vector3D(0, 0, 0),
+      velocity: new Vector3D(3, 4, 0),
+      size: 2.0,
+      alpha: 1.0,
+    });
+    // Stationary particle at (1, 2, 3) -> falls back to spherical facing without NaN
+    system.emit({
+      position: new Vector3D(1, 2, 3),
+      velocity: new Vector3D(0, 0, 0),
+      size: 1.0,
+      alpha: 1.0,
+    });
+
+    const cam = new Vector3D(0, 0, 10);
+    renderer.sync(cam);
+
+    const m = renderer.mesh.instanceMatrices;
+    // Expected stretched +Y scale = size * (1 + speed * stretchFactor) = 2 * (1 + 5 * 0.25) = 4.5
+    const col1Len = Math.hypot(m[4]!, m[5]!, m[6]!);
+    expect(col1Len).toBeCloseTo(4.5, 5);
+    expect(m[4]! / col1Len).toBeCloseTo(0.6, 5);
+    expect(m[5]! / col1Len).toBeCloseTo(0.8, 5);
+    expect(m[6]! / col1Len).toBeCloseTo(0.0, 5);
+
+    // Local +X (col 0) has length `size` (2.0) and is orthogonal to velocity
+    const col0Len = Math.hypot(m[0]!, m[1]!, m[2]!);
+    expect(col0Len).toBeCloseTo(2.0, 5);
+    const dotRightVel = m[0]! * 3 + m[1]! * 4 + m[2]! * 0;
+    expect(dotRightVel).toBeCloseTo(0, 5);
+
+    // Stationary particle (slot 1, offset 16..31) has finite orthonormal columns of length 1.0
+    for (let k = 16; k < 32; k++) {
+      expect(Number.isFinite(m[k]!)).toBe(true);
+    }
+    expect(Math.hypot(m[16]!, m[17]!, m[18]!)).toBeCloseTo(1.0, 5);
+    expect(Math.hypot(m[20]!, m[21]!, m[22]!)).toBeCloseTo(1.0, 5);
+    expect(Math.hypot(m[24]!, m[25]!, m[26]!)).toBeCloseTo(1.0, 5);
+  });
+
+  it("syncs 10,000 spherical-billboard particles with zero TypedArray allocations and fast CPU time (T3)", () => {
+    const N = 10_000;
+    const system = new ParticleSystem({ capacity: N });
+    const renderer = new ParticleMeshRenderer({
+      system,
+      geometryMode: "octagon",
+      material: new BasicMaterial(),
+      billboard: "spherical",
+    });
+
+    const pos = new Vector3D();
+    for (let i = 0; i < N; i++) {
+      pos.set((i % 100) * 0.1, Math.floor(i / 100) * 0.1, (i % 10) * -0.2);
+      system.emit({ position: pos, size: 0.15, alpha: 0.9 });
+    }
+
+    const cam = new Vector3D(5, 5, 15);
+    // Warmup frame
+    renderer.sync(cam);
+    expect(renderer.mesh.instanceCount).toBe(N);
+
+    const origF32 = globalThis.Float32Array;
+    let f32Allocs = 0;
+    // Spy on Float32Array allocations during steady-state sync frames
+    const PatchedF32 = new Proxy(origF32, {
+      construct(target, args, newTarget): Float32Array {
+        f32Allocs++;
+        return Reflect.construct(target, args, newTarget) as Float32Array;
+      },
+    });
+    globalThis.Float32Array = PatchedF32;
+
+    const samples: number[] = [];
+    try {
+      for (let f = 0; f < 15; f++) {
+        cam.x = 5 + f * 0.1;
+        const t0 = performance.now();
+        renderer.sync(cam);
+        samples.push(performance.now() - t0);
+      }
+    } finally {
+      globalThis.Float32Array = origF32;
+    }
+
+    expect(f32Allocs).toBe(0);
+    samples.sort((a, b) => a - b);
+    const p50 = samples[Math.floor(samples.length * 0.5)]!;
+    // Typical trig-free p50 is ~0.25-0.6ms; keep generous 10ms ceiling for heavily loaded CI workers
+    expect(p50).toBeLessThan(10);
   });
 });

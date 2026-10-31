@@ -16,4 +16,12 @@ export interface ParticleAffector {
    * Implementations must skip `aliveFlags[i] === 0` slots and stay bit-identical to `apply`.
    */
   applyBatch?(arrays: ParticleArrays, count: number, dt: number): void;
+
+  /**
+   * Optional post-integration hook: invoked after `ParticleSystem` has integrated velocity and
+   * position, once per frame with the frame-start slot count. Position-correcting forces (SDF
+   * collision push-out, hard constraints) run here so their results are final for the frame.
+   * Implementations must skip `aliveFlags[i] === 0` slots. Absence leaves `update()` unchanged.
+   */
+  postIntegrate?(arrays: ParticleArrays, count: number, dt: number): void;
 }

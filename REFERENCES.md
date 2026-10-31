@@ -998,10 +998,25 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Raymarching & SDFs
 
-- **File:** `packages/engine/src/renderers/shaders/source/web_gl2/chunks/sdf_math.glsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/sdf_math.wgsl`, `apps/showcases/24/showcase.ts`
+- **File:** `packages/engine/src/renderers/shaders/source/web_gl2/chunks/sdf_math.glsl`, `packages/engine/src/renderers/shaders/source/web_gpu/chunks/sdf_math.wgsl`, `packages/vfx-extras/src/affectors/SdfColliderAffector.ts`, `apps/showcases/24/showcase.ts`
 - **Authors/Gurus:** Inigo Quilez
-- **Source:** [Inigo Quilez - Computer Graphics, Mathematics, Shaders](https://iquilezles.org/)
-- **Usage:** Provides core Signed Distance Field (SDF) mathematical primitives (sphere, box, torus, cylinder, capsule, plane), polynomial smooth CSG operators (smooth union, subtraction, intersection), and domain modifiers (twist, repetition, rotation). Standardizes raymarching and procedural distance evaluations across WebGL2 and WebGPU shaders.
+- **Source:** [Inigo Quilez - Distance Functions (`distfunctions`)](https://iquilezles.org/articles/distfunctions/) and [Smooth Minimum (`smin`)](https://iquilezles.org/articles/smin/)
+- **Formulas:**
+  - Quadratic Polynomial Smooth Minimum: $\text{smin}(a, b, k) = \min(a, b) - \frac{\max(k - |a - b|, 0)^2}{4k}$
+  - Tetrahedral Finite-Difference Gradient: $\nabla \phi(\mathbf{p}) \approx \sum_{i=1}^{4} \mathbf{k}_i \phi(\mathbf{p} + \varepsilon \mathbf{k}_i)$ over the 4 vertices $\mathbf{k}_i \in \{(1,-1,-1), (-1,-1,1), (-1,1,-1), (1,1,1)\}$ (4 evaluations instead of 6 central differences).
+  - Coulomb Impulse-Momentum Collision Response: $\mathbf{v}' = \mathbf{v}_t \cdot \max\left(0, 1 - \mu \frac{(1 + \epsilon)|v_n|}{\|\mathbf{v}_t\|}\right) - \epsilon v_n \mathbf{n}$
+- **Usage:** Provides core Signed Distance Field (SDF) mathematical primitives (sphere, box, torus, cylinder, capsule, plane), polynomial smooth CSG operators (smooth union, subtraction, intersection), and domain modifiers across WebGL2/WebGPU shaders as well as zero-GC CPU particle collision (`SdfColliderAffector` in `@small-world-machine/vfx-extras`, `@invariant SDF-NON-PENETRATION`).
+
+### Curl-Noise for Procedural Fluid Flow (Divergence-Free Particle Advection)
+
+- **File:** `packages/vfx-extras/src/affectors/CurlNoiseAffector.ts`
+- **Authors/Gurus:** Robert Bridson, Jim Hourihan, Marcus Nordenstam (University of British Columbia / Tweak Films)
+- **Source:** ["Curl-Noise for Procedural Fluid Flow" (ACM SIGGRAPH 2007)](https://www.cs.ubc.ca/~rbridson/docs/bridson-siggraph2007-curlnoise.pdf)
+- **Formulas:**
+  - Vector Potential Curl: $\mathbf{v}(\mathbf{x}) = \nabla \times \boldsymbol{\Psi}(\mathbf{x}) = \left(\frac{\partial \Psi_z}{\partial y} - \frac{\partial \Psi_y}{\partial z}, \ \frac{\partial \Psi_x}{\partial z} - \frac{\partial \Psi_z}{\partial x}, \ \frac{\partial \Psi_y}{\partial x} - \frac{\partial \Psi_x}{\partial y}\right)$
+  - Incompressibility Identity: $\nabla \cdot (\nabla \times \boldsymbol{\Psi}) \equiv 0$ everywhere for any $C^2$-continuous potential $\boldsymbol{\Psi}$ (guaranteed via Perlin quintic fade $u(t) = 6t^5 - 15t^4 + 10t^3$, $u'(t) = 30t^2(t-1)^2$).
+  - Obstacle Boundary Ramp (Bridson §3.2): $\boldsymbol{\Psi}_{\text{eff}}(\mathbf{x}) = r(\phi(\mathbf{x}) / d_0) \cdot \boldsymbol{\Psi}(\mathbf{x})$ with smoothstep ramp $r(s) = \text{clamp}(s, 0, 1)^2 (3 - 2\,\text{clamp}(s, 0, 1))$, ensuring slip-free, non-penetrating tangential flow around SDF obstacles while preserving $\nabla \cdot \mathbf{v} \equiv 0$.
+- **Usage:** Drives organic, swirling, non-bunching turbulence for smoke plumes, embers, dust motes, and magical particle streams in `@small-world-machine/vfx-extras` (`@invariant CURL-DIVERGENCE-FREE`).
 
 ### Retro Synthwave Grid
 

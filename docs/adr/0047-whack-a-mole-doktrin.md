@@ -304,6 +304,9 @@ Invarianten; die S4-Matrix (IDs 1.1–3.2) wird beim P5-Gate merge-bar ergänzt 
 | `CLUSTER-NON-SINGULAR` | `zSliceFromViewDepth(z) ∈ {0,…,S−1}` ohne NaN/Infinity für alle positiven z; S4-ID 2.3. | Test `tests/math/ClusterGrid.test.ts` |
 | `SCENE-HIERARCHICAL-CONTAINMENT` | Hierarchisches Containment: Parent-Culling darf sichtbare In-Frustum-Kinder nicht verschlucken (`AABB(parent) ⊇ ⋃ AABB(child_k)`); S4-ID 3.1 — Genuine Lücke (P5-Fang, it.todo). | Test `tests/core/SceneContainment.test.ts` |
 | `TRANSFORM-REVERSIBILITY` | $M^{-1}(M(v)) \approx v$ und $M \cdot M^{-1} \approx I_{4×4}$, Reversibilität; S4-ID 3.2. | Test `tests/math/MirrorReversibility.test.ts` |
+| `LIFETIME-CURVE-KEY-EXACTNESS` | `Curve1D.evaluate(t)` / `ColorRamp.evaluateInto(t, out)` liefern an den Keys/Stops die gespeicherten Werte bit-exakt (Segment-Exaktheit) und extrapolieren nie; `t` wird hart geclampt. | `packages/vfx-extras/src/math/Curve1D.ts`, `packages/vfx-extras/src/math/ColorRamp.ts`, Tests `packages/vfx-extras/tests/Curve1D.test.ts`, `packages/vfx-extras/tests/ColorRamp.test.ts` |
+| `SDF-NON-PENETRATION` | `SdfColliderAffector`: Nach `postIntegrate` gilt $\phi(\vec{p}) \ge r_{\text{eff}} - 10^{-4}$ für jedes lebende Partikel und $\|\vec{v}_{\text{after}}\| \le \|\vec{v}_{\text{before}}\|$ für $\epsilon \le 1, \mu \ge 0$. | `packages/vfx-extras/src/affectors/SdfColliderAffector.ts`, Test `packages/vfx-extras/tests/SdfColliderAffector.test.ts` |
+| `CURL-DIVERGENCE-FREE` | `CurlNoiseAffector`: $\nabla \cdot (\nabla \times (\text{ramp}(\phi)\vec{\Psi})) = 0$ überall (inkl. SDF-Hindernis-Rampen), Normalenkomponente verschwindet an $\phi = 0$. | `packages/vfx-extras/src/affectors/CurlNoiseAffector.ts`, Test `packages/vfx-extras/tests/CurlNoiseAndSubEmitter.test.ts` |
 
 Der P5-Gate-Seed-Erweiterungs-Commit (`DP-1-2026-10-25`) bringt diese 15 IDs in Registry + Tabelle
 **gemeinsam** mit ihren Anker-Tests; die Registry bleibt damit genau die Menge auf HEAD real

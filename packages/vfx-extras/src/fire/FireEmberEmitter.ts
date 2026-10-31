@@ -1,5 +1,6 @@
 import type { AbstractMaterial, InstancedMesh } from "@small-world-machine/engine";
 import { Color, Plane, Vector3D } from "@small-world-machine/engine";
+import { mulberry32 } from "@small-world-machine/engine/utils/SeededRandom.js";
 import { ParticleMeshRenderer } from "../ParticleMeshRenderer.js";
 import type { ParticleBillboardMode } from "../ParticleMeshRenderer.js";
 import { ParticleSystem } from "../ParticleSystem.js";
@@ -105,7 +106,7 @@ export class FireEmberEmitter {
     this._hotColor = hotColor.clone();
     const cool = coolColor.clone();
 
-    this._rng = mulberry32Relative(seed);
+    this._rng = mulberry32(seed);
 
     this.system = new ParticleSystem({ capacity: Math.max(0, Math.floor(capacity)) });
     this.system.addAffector(new GravityAffector({ acceleration: gravity }));
@@ -180,20 +181,4 @@ export class FireEmberEmitter {
       color: this._hotColor,
     });
   }
-}
-
-/**
- * Deterministic 32-bit PRNG (mulberry32) — same seed, same sequence, integer-only so it is
- * identical across JS engines. The engine's `SeededRandom.ts` is not part of the public API, so
- * the two-line core is repeated here (keep both in sync); the ember path needs reproducibility
- * for golden captures and tests, exactly like `FireFlickerProfile`.
- */
-function mulberry32Relative(seed: number): () => number {
-  let a: number = seed | 0;
-  return (): number => {
-    let t: number = (a += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }

@@ -180,6 +180,18 @@ _Avoid_: Physical Sky Mesh
 A named transform node attached as a child to a specific skeletal bone (`mixamorig:LeftHand`, `mixamorig:RightHand`) with standardized local offsets and rotations to host props (Lanterns, Torches, Weapons) with zero jitter during animation playback.
 _Avoid_: Prop Constraint (informal)
 
+**SDF Collider Affector (`SdfColliderAffector`)**:
+The post-integration (`postIntegrate`) particle collision affector in `@small-world-machine/vfx-extras` evaluating up to 16 analytical Signed Distance Field primitives (`sphere`, `box`, `capsule`, `plane`) with optional quadratic polynomial smooth-union (`smin`), 4-sample tetrahedral gradient normals, and Coulomb restitution/friction response (`@invariant SDF-NON-PENETRATION`).
+_Avoid_: Raycast Particle Collider, Mesh Triangle Particle Collider.
+
+**Curl-Noise Affector (`CurlNoiseAffector`)**:
+The divergence-free ($\nabla \cdot \vec{v} = 0$, `@invariant CURL-DIVERGENCE-FREE`) 3D procedural turbulence affector in `@small-world-machine/vfx-extras` based on Bridson et al. (SIGGRAPH 2007): evaluates the analytical curl of a $C^2$-continuous quintic vector potential $\vec{\Psi}$ with optional SDF obstacle boundary ramping $\vec{\Psi}_{\text{eff}} = \text{ramp}(\phi/d_0)\vec{\Psi}$.
+_Avoid_: Random Jitter Affector, Perlin Force Field (un-curled noise has non-zero divergence and causes artificial particle clumping/sinks).
+
+**Sub-Emitter (`SubEmitter`)**:
+A pre-allocated, zero-GC event ring buffer (`Float32Array`) in `@small-world-machine/vfx-extras` that records parent particle `death` and `collision` events (position, incident normal/velocity, color) and flushes child particle bursts in a deterministic post-update pass.
+_Avoid_: Recursive Particle Spawner, Callback-Allocating Emitter.
+
 **Smoke Plume (Rauchfahne)**:
 The world-anchored, dissolving smoke effect above a fire (`FireSmokeEmitter` + `SmokeSpriteMaterial`, `@small-world-machine/vfx-extras`): seeded-deterministic (mulberry32, `dt=0` freeze) billboard puffs with buoyancy + drag + multiplicative growth + color-over-life, rendered through a texturless alpha-blended material where the per-instance alpha is pure **opacity** — the renderer therefore runs `ParticleMeshRenderer({ foldAlphaIntoScale: false })`. The procedural soft edge + dissolution replace hard quad clipping; the industry-standard soft-particle depth fade is a documented HIGH-tier follow-up.
 _Avoid_: Video-Smoke, Sprite-Atlas Smoke (procedural, no texture), Size-Folded Alpha (that is the ember contract, see `foldAlphaIntoScale`).

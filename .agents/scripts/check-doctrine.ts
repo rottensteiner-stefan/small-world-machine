@@ -112,6 +112,9 @@ const INVARIANT_REGISTRY: readonly string[] = [
   "CLUSTER-NON-SINGULAR", // zSlice endlich in {0..S-1} ohne NaN/Inf (S4-2.3), Test math/ClusterGrid
   "SCENE-HIERARCHICAL-CONTAINMENT", // Parent-AABB ⊇ Kinder, kein inneres Culling (S4-3.1), Test core/SceneContainment
   "TRANSFORM-REVERSIBILITY", // M⁻¹(M(v)) ≈ v (S4-3.2), Test math/MirrorReversibility
+  "LIFETIME-CURVE-KEY-EXACTNESS", // Curve1D/ColorRamp: evaluate(keys[i]) === values[i] bit-exact, keine Extrapolation (clamp), Tests math/Curve1D + math/ColorRamp
+  "SDF-NON-PENETRATION", // SdfColliderAffector: evaluate(p) >= rEff - 1e-4 & speed_after <= speed_before, Test SdfColliderAffector
+  "CURL-DIVERGENCE-FREE", // CurlNoiseAffector: div(curl(ramp(phi)*Psi)) === 0 everywhere, Test CurlNoiseAndSubEmitter
 ];
 const INVARIANT_REGISTRY_SET: ReadonlySet<string> = new Set<string>(INVARIANT_REGISTRY);
 
