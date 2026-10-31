@@ -1,5 +1,9 @@
-import type { GeometryDataInterface, AbstractMaterial } from "@small-world-machine/engine";
-import { InstancedMesh, Matrix4, Vector3D, Quaternion } from "@small-world-machine/engine";
+import type {
+  GeometryDataInterface,
+  AbstractMaterial,
+  Vector3D,
+} from "@small-world-machine/engine";
+import { InstancedMesh } from "@small-world-machine/engine";
 import type { ParticleSystem } from "./ParticleSystem.js";
 
 /** Per-instance facing mode for particle quads. `none` keeps authored orientation (identity). */
@@ -41,14 +45,10 @@ export class ParticleMeshRenderer {
   public readonly mesh: InstancedMesh;
   public readonly system: ParticleSystem;
 
-  private readonly _tempPosition: Vector3D = new Vector3D();
-  private readonly _tempMatrix: Matrix4 = new Matrix4();
-  private readonly _tempScale: Vector3D = new Vector3D(1, 1, 1);
-  private readonly _tempRotation: Quaternion = new Quaternion();
-  private readonly _tempEuler: Vector3D = new Vector3D(0, 0, 0);
   private readonly _enableColorBuffer: boolean;
   private readonly _billboard: Exclude<ParticleBillboardMode, "none"> | undefined;
   private readonly _foldAlphaIntoScale: boolean;
+  private _prevLiveCount = 0;
 
   constructor(options: ParticleMeshRendererOptions) {
     this.system = options.system;
@@ -58,6 +58,9 @@ export class ParticleMeshRenderer {
       options.material,
       this.system.capacity,
     );
+    // Zero-initialize matrix slots once up front so unwritten/dead tail slots never hold the
+    // constructor's default identity matrices.
+    this.mesh.instanceMatrices.fill(0);
     this._enableColorBuffer = options.enableColorBuffer ?? true;
     this._foldAlphaIntoScale = options.foldAlphaIntoScale ?? true;
     this._billboard =
@@ -73,8 +76,9 @@ export class ParticleMeshRenderer {
   }
 
   /**
-   * Synchronizes live particle transforms and colors into the GPU instance buffers. Zero
-   * allocation: reads the system's SoA arrays directly and reuses scratch objects.
+   * Synchronizes live particle transforms and colors into a compacted `0..liveCount` prefix of the
+   * GPU instance buffers and sets `mesh.instanceCount = liveCount`. Zero allocation: writes matrix
+   * basis vectors directly in-place without trigonometric (`atan2`/`sin`/`cos`) calls.
    * @param cameraPosition World position of the camera; only used for billboard modes.
    */
   public sync(cameraPosition?: Vector3D): void {
@@ -83,6 +87,8 @@ export class ParticleMeshRenderer {
 
     const matrices = this.mesh.instanceMatrices;
     const instanceData = this.mesh.instanceData;
+    const writeColor = instanceData !== undefined && this._enableColorBuffer;
+    const foldAlpha = this._foldAlphaIntoScale;
 
     const billboard = this._billboard;
     const camX = billboard ? cameraPosition?.x : undefined;
@@ -91,62 +97,105 @@ export class ParticleMeshRenderer {
     const hasCamera =
       billboard !== undefined && camX !== undefined && camY !== undefined && camZ !== undefined;
 
+    let liveCount = 0;
+
     for (let i = 0; i < capacity; i++) {
-      const offset16 = i * 16;
-      if (arrays.aliveFlags[i] === 1 && arrays.alphas[i]! > 0.001) {
-        const o = i * 3;
-        // Alpha is either folded into the instance scale (embers shrink as they fade) or carried
-        // purely by the instance color for materials that read it as opacity (smoke).
-        const s = this._foldAlphaIntoScale
-          ? arrays.sizes[i]! * arrays.alphas[i]!
-          : arrays.sizes[i]!;
-        this._tempScale.set(s, s, s);
-        this._tempPosition.set(
-          arrays.positions[o]!,
-          arrays.positions[o + 1]!,
-          arrays.positions[o + 2]!,
-        );
+      if (arrays.aliveFlags[i] !== 1) continue;
+      const alpha = arrays.alphas[i]!;
+      if (alpha <= 0.001) continue;
 
-        if (hasCamera) {
-          // CPU-side look-at, mirroring BillBoardInstancer's math: plane geometry faces +Z, so the
-          // yaw-only formula is the standard atan2(dx, dz) for a +Z-forward quad.
-          const dx = camX! - arrays.positions[o]!;
-          const dy = camY! - arrays.positions[o + 1]!;
-          const dz = camZ! - arrays.positions[o + 2]!;
-          const yaw = Math.atan2(dx, dz);
-          if (billboard === "spherical") {
-            const xz = Math.hypot(dx, dz);
-            this._tempEuler.set(-Math.atan2(dy, xz), yaw, 0);
-          } else {
-            this._tempEuler.set(0, yaw, 0);
-          }
-          // Compose TRS with the per-instance euler facing (BillBoardInstancer precedent).
-          this._tempMatrix.compose(this._tempPosition, this._tempEuler, this._tempScale);
+      const offset16 = liveCount * 16;
+      const o = i * 3;
+      const px = arrays.positions[o]!;
+      const py = arrays.positions[o + 1]!;
+      const pz = arrays.positions[o + 2]!;
+      const s = foldAlpha ? arrays.sizes[i]! * alpha : arrays.sizes[i]!;
+
+      if (hasCamera) {
+        const dx = camX - px;
+        const dz = camZ - pz;
+        const xz = Math.hypot(dx, dz);
+        const sY = xz > 0 ? dx / xz : 0;
+        const cY = xz > 0 ? dz / xz : 1;
+
+        if (billboard === "spherical") {
+          const dy = camY - py;
+          const dist = Math.hypot(xz, dy);
+          const sX = dist > 0 ? -dy / dist : 0;
+          const cX = dist > 0 ? xz / dist : 1;
+
+          matrices[offset16] = cY * s;
+          matrices[offset16 + 1] = 0;
+          matrices[offset16 + 2] = -sY * s;
+          matrices[offset16 + 3] = 0;
+
+          matrices[offset16 + 4] = sY * sX * s;
+          matrices[offset16 + 5] = cX * s;
+          matrices[offset16 + 6] = cY * sX * s;
+          matrices[offset16 + 7] = 0;
+
+          matrices[offset16 + 8] = sY * cX * s;
+          matrices[offset16 + 9] = -sX * s;
+          matrices[offset16 + 10] = cY * cX * s;
+          matrices[offset16 + 11] = 0;
         } else {
-          // Build TRS matrix without GC allocations (identity orientation).
-          this._tempMatrix.composeFromQuaternion(
-            this._tempPosition,
-            this._tempRotation,
-            this._tempScale,
-          );
-        }
-        matrices.set(this._tempMatrix.data, offset16);
+          matrices[offset16] = cY * s;
+          matrices[offset16 + 1] = 0;
+          matrices[offset16 + 2] = -sY * s;
+          matrices[offset16 + 3] = 0;
 
-        if (instanceData && this._enableColorBuffer) {
-          const offset4 = i * 4;
-          instanceData[offset4] = arrays.colors[offset4]!;
-          instanceData[offset4 + 1] = arrays.colors[offset4 + 1]!;
-          instanceData[offset4 + 2] = arrays.colors[offset4 + 2]!;
-          instanceData[offset4 + 3] = arrays.alphas[i]!;
+          matrices[offset16 + 4] = 0;
+          matrices[offset16 + 5] = s;
+          matrices[offset16 + 6] = 0;
+          matrices[offset16 + 7] = 0;
+
+          matrices[offset16 + 8] = sY * s;
+          matrices[offset16 + 9] = 0;
+          matrices[offset16 + 10] = cY * s;
+          matrices[offset16 + 11] = 0;
         }
       } else {
-        // Zero-scale matrix collapses dead/invisible instances
-        matrices.fill(0, offset16, offset16 + 16);
+        matrices[offset16] = s;
+        matrices[offset16 + 1] = 0;
+        matrices[offset16 + 2] = 0;
+        matrices[offset16 + 3] = 0;
+
+        matrices[offset16 + 4] = 0;
+        matrices[offset16 + 5] = s;
+        matrices[offset16 + 6] = 0;
+        matrices[offset16 + 7] = 0;
+
+        matrices[offset16 + 8] = 0;
+        matrices[offset16 + 9] = 0;
+        matrices[offset16 + 10] = s;
+        matrices[offset16 + 11] = 0;
       }
+
+      matrices[offset16 + 12] = px;
+      matrices[offset16 + 13] = py;
+      matrices[offset16 + 14] = pz;
+      matrices[offset16 + 15] = 1;
+
+      if (writeColor) {
+        const src4 = i * 4;
+        const dst4 = liveCount * 4;
+        instanceData[dst4] = arrays.colors[src4]!;
+        instanceData[dst4 + 1] = arrays.colors[src4 + 1]!;
+        instanceData[dst4 + 2] = arrays.colors[src4 + 2]!;
+        instanceData[dst4 + 3] = alpha;
+      }
+
+      liveCount++;
     }
 
+    if (liveCount < this._prevLiveCount) {
+      matrices.fill(0, liveCount * 16, this._prevLiveCount * 16);
+    }
+    this._prevLiveCount = liveCount;
+    this.mesh.instanceCount = liveCount;
+
     this.mesh.instanceMatrixNeedsUpdate = true;
-    if (instanceData && this._enableColorBuffer) {
+    if (writeColor) {
       this.mesh.instanceDataNeedsUpdate = true;
     }
   }

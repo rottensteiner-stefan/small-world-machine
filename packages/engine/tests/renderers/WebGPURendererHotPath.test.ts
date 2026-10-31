@@ -132,6 +132,38 @@ describe("WebGPURenderer._renderSubgroup: instance upload (K7)", () => {
       6 * 16,
     );
   });
+
+  it("uploads instanceCount * stride floats for instanceData, not the whole capacity", () => {
+    const { renderer, writeBuffer, rp } = makeDrawRenderer();
+    const mesh = new InstancedMesh("m", new Cube().getGeometryData(), new BasicMaterial(), 10);
+    mesh.initInstanceData(4);
+    mesh.instanceCount = 3;
+
+    draw(renderer, rp, mesh);
+    expect(writeBuffer).toHaveBeenCalledTimes(2); // matrices + instanceData
+    expect(writeBuffer).toHaveBeenLastCalledWith(expect.anything(), 0, mesh.instanceData, 0, 3 * 4);
+
+    draw(renderer, rp, mesh); // nothing changed
+    expect(writeBuffer).toHaveBeenCalledTimes(2);
+
+    // Growing instanceCount inside capacity must expose the new tail of instanceData too.
+    mesh.instanceCount = 5;
+    draw(renderer, rp, mesh);
+    expect(writeBuffer).toHaveBeenCalledTimes(4);
+    expect(writeBuffer).toHaveBeenLastCalledWith(expect.anything(), 0, mesh.instanceData, 0, 5 * 4);
+  });
+
+  it("skips an InstancedMesh with instanceCount === 0 before acquiring object slots or drawing", () => {
+    const { renderer, writeBuffer, rp } = makeDrawRenderer();
+    const mesh = new InstancedMesh("m", new Cube().getGeometryData(), new BasicMaterial(), 10);
+    mesh.instanceCount = 0;
+
+    draw(renderer, rp, mesh);
+    expect(writeBuffer).not.toHaveBeenCalled();
+    expect(renderer._getObjectSlotOffset).not.toHaveBeenCalled();
+    expect(rp["drawIndexed"]).not.toHaveBeenCalled();
+    expect(rp["draw"]).not.toHaveBeenCalled();
+  });
 });
 
 describe("WebGPURenderer._renderSubgroup: per-draw state (A5/K6)", () => {

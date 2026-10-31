@@ -84,5 +84,41 @@ describe("ParticleMeshRenderer after ParticleSystem.clear()", () => {
         new Array(16).fill(0),
       );
     }
+    expect(renderer.mesh.instanceCount).toBe(0);
+  });
+
+  it("compacts sparse live slots into a contiguous 0..liveCount prefix and sets mesh.instanceCount", () => {
+    const system = new ParticleSystem({ capacity: 5 });
+    const geometry = new Sphere({ radius: 0.1 }).getGeometryData();
+    const renderer = new ParticleMeshRenderer({ system, geometry, material: new BasicMaterial() });
+
+    // Emit 3 particles at slots 0, 1, 2
+    system.emit({ position: new Vector3D(1, 0, 0), alpha: 1 });
+    system.emit({ position: new Vector3D(2, 0, 0), alpha: 1 });
+    const idx2 = system.emit({ position: new Vector3D(3, 4, 5), alpha: 0.9 });
+    system.arrays.colors[idx2 * 4] = 0.25;
+    system.arrays.colors[idx2 * 4 + 1] = 0.5;
+    system.arrays.colors[idx2 * 4 + 2] = 0.75;
+
+    renderer.sync();
+    expect(renderer.mesh.instanceCount).toBe(3);
+
+    // Kill slots 0 and 1 so only slot 2 remains alive
+    system.arrays.aliveFlags[0] = 0;
+    system.arrays.aliveFlags[1] = 0;
+    renderer.sync();
+
+    expect(renderer.mesh.instanceCount).toBe(1);
+    expect(renderer.mesh.instanceMatrices[12]).toBe(3);
+    expect(renderer.mesh.instanceMatrices[13]).toBe(4);
+    expect(renderer.mesh.instanceMatrices[14]).toBe(5);
+    expect(renderer.mesh.instanceData![0]).toBeCloseTo(0.25);
+    expect(renderer.mesh.instanceData![1]).toBeCloseTo(0.5);
+    expect(renderer.mesh.instanceData![2]).toBeCloseTo(0.75);
+    expect(renderer.mesh.instanceData![3]).toBeCloseTo(0.9);
+    // Shrunk tail slots 1 and 2 must be zeroed
+    expect(Array.from(renderer.mesh.instanceMatrices.subarray(16, 48))).toEqual(
+      new Array(32).fill(0),
+    );
   });
 });

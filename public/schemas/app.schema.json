@@ -113,6 +113,33 @@
         }
       },
       "required": ["languages"]
+    },
+    "retiredIds": {
+      "type": "object",
+      "description": "Tombstone registry of retired stable IDs that must never be reused in levels, characters, level placements, or text packages (ADR 0041 §2 / §Konsequenzen: 'IDs werden nie wiederverwendet').",
+      "additionalProperties": false,
+      "properties": {
+        "levels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "characters": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "props": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "texts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
     }
   }
 }

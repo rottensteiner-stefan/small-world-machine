@@ -4,11 +4,21 @@ import * as path from "node:path";
 import Ajv2020 from "ajv/dist/2020.js";
 import type { ValidateFunction } from "ajv";
 import {
+  FileSavegameStore,
+  IndexedDbSavegameStore,
+  OpfsSavegameStore,
   SAVEGAME_MIGRATIONS,
   SAVEGAME_SCHEMA_VERSION,
+  assertNoRetiredIdReuse,
   assertSavegameIdReferences,
+  assertUniqueLevelEntityIds,
   backupSavegameDescriptor,
+  createSavegameStore,
   migrateSavegameDescriptor,
+  parseSavegameFromFile,
+  serializeSavegameToFile,
+  type AppManifest,
+  type LevelDescriptor,
   type SavegameDescriptor,
   type SavegameLevelState,
   type SavegamePatchAction,
@@ -221,5 +231,391 @@ describe("Savegame Schema & Format Validation (ADR 0041 Stufe 5)", () => {
         );
       },
     );
+  });
+
+  describe("ID tombstone & uniqueness validation ('IDs werden nie wiederverwendet', ADR 0041 §2)", () => {
+    function baseManifest(): AppManifest {
+      return {
+        id: "the-whisper",
+        name: "The Whisper",
+        version: "0.1.0",
+        schemaVersion: 1,
+        entry: "index.html",
+        levels: ["koje_42", "kaeltekammer"],
+        characters: ["novotny"],
+        kits: [],
+      };
+    }
+
+    it("passes when retiredIds has no overlap with active levels, characters, props, or texts", () => {
+      const manifest: AppManifest = {
+        ...baseManifest(),
+        retiredIds: {
+          levels: ["old_bunker_alpha"],
+          characters: ["old_guard_01"],
+          props: ["prop_removed_crate_99"],
+          texts: ["dialogue.legacy.intro"],
+        },
+      };
+      expect(() =>
+        assertNoRetiredIdReuse(manifest, {
+          levels: ["koje_42", "kaeltekammer"],
+          characters: ["novotny"],
+          props: ["prop_bed_01", "hotspot_desk"],
+          texts: ["terminal.header.title"],
+        }),
+      ).not.toThrow();
+    });
+
+    it("fails fast if a retired level ID reappears in manifest.levels or discovered levels", () => {
+      const manifest: AppManifest = {
+        ...baseManifest(),
+        retiredIds: { levels: ["koje_42"] },
+      };
+      expect(() => assertNoRetiredIdReuse(manifest)).toThrow(
+        /retired levels ID 'koje_42' must never be reused/,
+      );
+    });
+
+    it("fails fast if a retired character, prop, or text ID is reused", () => {
+      const charManifest: AppManifest = {
+        ...baseManifest(),
+        retiredIds: { characters: ["novotny"] },
+      };
+      expect(() => assertNoRetiredIdReuse(charManifest)).toThrow(
+        /retired characters ID 'novotny' must never be reused/,
+      );
+
+      const propManifest: AppManifest = {
+        ...baseManifest(),
+        retiredIds: { props: ["prop_bunker_door"] },
+      };
+      expect(() =>
+        assertNoRetiredIdReuse(propManifest, { props: ["prop_bed_01", "prop_bunker_door"] }),
+      ).toThrow(/retired props ID 'prop_bunker_door' must never be reused/);
+
+      const textManifest: AppManifest = {
+        ...baseManifest(),
+        retiredIds: { texts: ["hotspot.koje42.cot.prompt"] },
+      };
+      expect(() =>
+        assertNoRetiredIdReuse(textManifest, { texts: ["hotspot.koje42.cot.prompt"] }),
+      ).toThrow(/retired texts ID 'hotspot.koje42.cot.prompt' must never be reused/);
+    });
+
+    it("rejects duplicate entries inside retiredIds", () => {
+      const manifest: AppManifest = {
+        ...baseManifest(),
+        retiredIds: { props: ["old_prop", "old_prop"] },
+      };
+      expect(() => assertNoRetiredIdReuse(manifest)).toThrow(/duplicate retired ID 'old_prop'/);
+    });
+
+    it("assertUniqueLevelEntityIds enforces unique IDs across props, decals, lights, and hotspots", () => {
+      const validLevel: LevelDescriptor = {
+        id: "koje_42",
+        name: "Koje 42",
+        version: "1.0.0",
+        schemaVersion: 1,
+        props: [{ id: "prop_cot", kitProp: "bunker/cot" }],
+        lights: [{ name: "light_ceiling", type: "point", color: "#ffffff", intensity: 1 }],
+        hotspots: [
+          {
+            id: "hotspot_cot",
+            name: "Cot",
+            position: [0, 0, 0],
+            promptText: "hotspot.cot.prompt",
+          },
+        ],
+      };
+      expect(() => assertUniqueLevelEntityIds(validLevel)).not.toThrow();
+
+      const collidingLevel: LevelDescriptor = {
+        ...validLevel,
+        hotspots: [
+          {
+            id: "prop_cot",
+            name: "Colliding ID",
+            position: [0, 0, 0],
+            promptText: "hotspot.cot.prompt",
+          },
+        ],
+      };
+      expect(() => assertUniqueLevelEntityIds(collidingLevel)).toThrow(
+        /duplicate entity ID 'prop_cot' shared by prop and hotspot/,
+      );
+    });
+  });
+
+  describe("SavegameStore Drivers: OPFS, IndexedDB & File (ADR 0041 §1 / §7 Stufe 5)", () => {
+    /** Minimal in-memory OPFS double matching FileSystemDirectoryHandle / FileSystemFileHandle. */
+    function createFakeOpfsRoot(): () => Promise<FileSystemDirectoryHandle> {
+      const dirs = new Map<string, Map<string, Uint8Array>>();
+
+      const makeDirHandle = (dirName: string): FileSystemDirectoryHandle => {
+        let files = dirs.get(dirName);
+        if (!files) {
+          files = new Map<string, Uint8Array>();
+          dirs.set(dirName, files);
+        }
+        return {
+          kind: "directory",
+          name: dirName,
+          async getDirectoryHandle(
+            subName: string,
+            options?: { create?: boolean },
+          ): Promise<FileSystemDirectoryHandle> {
+            const key = `${dirName}/${subName}`;
+            if (!dirs.has(key) && !options?.create) {
+              const err = new Error("Directory not found");
+              err.name = "NotFoundError";
+              throw err;
+            }
+            return makeDirHandle(key);
+          },
+          async getFileHandle(
+            fileName: string,
+            options?: { create?: boolean },
+          ): Promise<FileSystemFileHandle> {
+            if (!files.has(fileName) && !options?.create) {
+              const err = new Error(`File not found: ${fileName}`);
+              err.name = "NotFoundError";
+              throw err;
+            }
+            if (!files.has(fileName)) {
+              files.set(fileName, new Uint8Array(0));
+            }
+            return {
+              kind: "file",
+              name: fileName,
+              async getFile(): Promise<File> {
+                const bytes = files.get(fileName) ?? new Uint8Array(0);
+                return {
+                  async text(): Promise<string> {
+                    return new TextDecoder().decode(bytes);
+                  },
+                } as unknown as File;
+              },
+              async createWritable(): Promise<FileSystemWritableFileStream> {
+                let staged = new Uint8Array(0);
+                return {
+                  async write(data: BufferSource): Promise<void> {
+                    if (data instanceof ArrayBuffer) {
+                      staged = new Uint8Array(data.slice(0));
+                    } else if (ArrayBuffer.isView(data)) {
+                      staged = new Uint8Array(
+                        data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+                      );
+                    }
+                  },
+                  async close(): Promise<void> {
+                    files.set(fileName, staged);
+                  },
+                } as unknown as FileSystemWritableFileStream;
+              },
+            } as unknown as FileSystemFileHandle;
+          },
+          async removeEntry(fileName: string): Promise<void> {
+            if (!files.has(fileName)) {
+              const err = new Error(`File not found: ${fileName}`);
+              err.name = "NotFoundError";
+              throw err;
+            }
+            files.delete(fileName);
+          },
+          async *keys(): AsyncIterableIterator<string> {
+            for (const k of files.keys()) {
+              yield k;
+            }
+          },
+        } as unknown as FileSystemDirectoryHandle;
+      };
+
+      const root = makeDirHandle("root");
+      return async () => root;
+    }
+
+    /** Minimal in-memory IndexedDB double supporting open, objectStore, put, get, delete, getAllKeys. */
+    function createFakeIdbFactory(): IDBFactory {
+      const databases = new Map<string, Map<string, Map<IDBValidKey, unknown>>>();
+
+      interface FakeReq {
+        result: unknown;
+        error: DOMException | null;
+        onupgradeneeded: (() => void) | null;
+        onsuccess: (() => void) | null;
+        onerror: (() => void) | null;
+      }
+
+      interface FakeTx {
+        error: DOMException | null;
+        oncomplete: (() => void) | null;
+        onabort: (() => void) | null;
+        onerror: (() => void) | null;
+        objectStore: (storeName: string) => IDBObjectStore;
+      }
+
+      return {
+        open(dbName: string): IDBOpenDBRequest {
+          const req: FakeReq = {
+            result: null,
+            error: null,
+            onupgradeneeded: null,
+            onsuccess: null,
+            onerror: null,
+          };
+
+          queueMicrotask(() => {
+            let isNew = false;
+            let stores = databases.get(dbName);
+            if (!stores) {
+              isNew = true;
+              stores = new Map();
+              databases.set(dbName, stores);
+            }
+
+            const db = {
+              objectStoreNames: {
+                contains: (name: string): boolean => stores.has(name),
+              },
+              createObjectStore: (name: string): IDBObjectStore => {
+                if (!stores.has(name)) stores.set(name, new Map());
+                return {} as IDBObjectStore;
+              },
+              transaction: (_storeNames: string[]): IDBTransaction => {
+                const tx: FakeTx = {
+                  error: null,
+                  oncomplete: null,
+                  onabort: null,
+                  onerror: null,
+                  objectStore: (storeName: string): IDBObjectStore => {
+                    const map = stores.get(storeName) ?? new Map<IDBValidKey, unknown>();
+                    return {
+                      put(val: unknown, key: IDBValidKey): IDBRequest {
+                        map.set(key, val);
+                        return {} as IDBRequest;
+                      },
+                      get(key: IDBValidKey): IDBRequest {
+                        const r: FakeReq = {
+                          result: map.get(key),
+                          error: null,
+                          onupgradeneeded: null,
+                          onsuccess: null,
+                          onerror: null,
+                        };
+                        queueMicrotask(() => {
+                          if (r.onsuccess) r.onsuccess();
+                        });
+                        return r as unknown as IDBRequest;
+                      },
+                      delete(key: IDBValidKey): IDBRequest {
+                        map.delete(key);
+                        return {} as IDBRequest;
+                      },
+                      getAllKeys(): IDBRequest {
+                        const r: FakeReq = {
+                          result: Array.from(map.keys()),
+                          error: null,
+                          onupgradeneeded: null,
+                          onsuccess: null,
+                          onerror: null,
+                        };
+                        queueMicrotask(() => {
+                          if (r.onsuccess) r.onsuccess();
+                        });
+                        return r as unknown as IDBRequest;
+                      },
+                    } as unknown as IDBObjectStore;
+                  },
+                };
+                queueMicrotask(() => {
+                  if (tx.oncomplete) tx.oncomplete();
+                });
+                return tx as unknown as IDBTransaction;
+              },
+              close(): void {},
+            };
+
+            req.result = db;
+            if (isNew && req.onupgradeneeded) {
+              req.onupgradeneeded();
+            }
+            if (req.onsuccess) {
+              req.onsuccess();
+            }
+          });
+
+          return req as unknown as IDBOpenDBRequest;
+        },
+      } as unknown as IDBFactory;
+    }
+
+    it("serializes and parses savegame files with Backup-vor-Migration", () => {
+      const fixture = validFixture();
+      const json = serializeSavegameToFile(fixture);
+      expect(json.endsWith("\n")).toBe(true);
+      const parsed = parseSavegameFromFile(json);
+      expect(parsed.savegame.id).toBe("the-whisper:slot-01");
+      expect(parsed.backup).toEqual(fixture);
+    });
+
+    it("OpfsSavegameStore: round-trips save, load, list, delete, and flush/close", async () => {
+      const store = new OpfsSavegameStore(createFakeOpfsRoot());
+      expect(store.backend).toBe("opfs");
+
+      expect(await store.load("the-whisper:slot-01")).toBeNull();
+
+      await store.save(validFixture());
+      await store.save({ ...validFixture(), id: "the-whisper:slot-02" });
+      await store.flush();
+
+      expect(await store.list()).toEqual(["the-whisper:slot-01", "the-whisper:slot-02"]);
+
+      const loaded = await store.load("the-whisper:slot-01");
+      expect(loaded).not.toBeNull();
+      expect(loaded!.savegame.storage).toBe("opfs");
+      expect(loaded!.savegame.levels[0]?.flags?.["completed"]).toBe(true);
+      expect(loaded!.backup).toBeDefined();
+
+      await store.delete("the-whisper:slot-01");
+      expect(await store.load("the-whisper:slot-01")).toBeNull();
+      expect(await store.list()).toEqual(["the-whisper:slot-02"]);
+      await store.close();
+    });
+
+    it("IndexedDbSavegameStore: round-trips save, load, list, delete, and close", async () => {
+      const store = new IndexedDbSavegameStore(createFakeIdbFactory(), "test-savegames");
+      expect(store.backend).toBe("indexeddb");
+
+      expect(await store.load("the-whisper:slot-01")).toBeNull();
+
+      await store.save(validFixture());
+      expect(await store.list()).toEqual(["the-whisper:slot-01"]);
+
+      const loaded = await store.load("the-whisper:slot-01");
+      expect(loaded).not.toBeNull();
+      expect(loaded!.savegame.storage).toBe("indexeddb");
+      expect(loaded!.savegame.settings.language).toBe("de");
+
+      await store.delete("the-whisper:slot-01");
+      expect(await store.load("the-whisper:slot-01")).toBeNull();
+      await store.close();
+    });
+
+    it("FileSavegameStore & createSavegameStore fallback: exports/imports JSON and selects available driver", async () => {
+      const store = createSavegameStore({ prefer: ["opfs", "indexeddb", "file"] });
+      expect(store.backend).toBe("file");
+      expect(store).toBeInstanceOf(FileSavegameStore);
+
+      await store.save(validFixture());
+      expect(await store.list()).toEqual(["the-whisper:slot-01"]);
+
+      const fileStore = store as FileSavegameStore;
+      const exported = fileStore.exportSlotToJson("the-whisper:slot-01");
+      expect(exported).toContain('"the-whisper:slot-01"');
+
+      const loaded = await store.load("the-whisper:slot-01");
+      expect(loaded?.savegame.storage).toBe("file");
+    });
   });
 });

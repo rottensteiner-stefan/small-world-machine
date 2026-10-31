@@ -333,6 +333,18 @@ export interface AppKitDependency {
 }
 
 /**
+ * Tombstone registry of retired stable IDs per category (ADR 0041 §2 / §Konsequenzen:
+ * "IDs werden nie wiederverwendet"). Once an ID is retired into this list, it must never
+ * reappear in active levels, characters, level placements, or localized text packages.
+ */
+export interface AppRetiredIds {
+  levels?: string[];
+  characters?: string[];
+  props?: string[];
+  texts?: string[];
+}
+
+/**
  * Application manifest (`app.json`, `public/schemas/app.schema.json` — ADR 0041 §2 / §7 Stufe 1).
  */
 export interface AppManifest {
@@ -360,6 +372,10 @@ export interface AppManifest {
   content?: {
     languages: string[];
   };
+  /**
+   * Tombstone registry of retired stable IDs that must never be reused (ADR 0041 §2).
+   */
+  retiredIds?: AppRetiredIds;
 }
 
 /**

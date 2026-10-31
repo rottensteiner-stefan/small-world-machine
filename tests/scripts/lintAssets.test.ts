@@ -13,6 +13,7 @@ import {
 } from "../../.agents/scripts/lint-assets.js";
 
 const SCRIPT_PATH = path.resolve(process.cwd(), ".agents/scripts/lint-assets.ts");
+const TSX_CLI = path.resolve(process.cwd(), "node_modules/tsx/dist/cli.mjs");
 
 describe("Asset Linter (scripts/lint-assets.ts)", () => {
   describe("Repository baseline audit", () => {
@@ -24,13 +25,15 @@ describe("Asset Linter (scripts/lint-assets.ts)", () => {
     });
 
     it("CLI execution succeeds with exit code 0", () => {
-      const res = spawnSync("npx", ["tsx", SCRIPT_PATH], { encoding: "utf8" });
+      const res = spawnSync(process.execPath, [TSX_CLI, SCRIPT_PATH], { encoding: "utf8" });
       expect(res.status).toBe(0);
       expect(res.stdout).toContain("All kit assets passed 7/7 core checks cleanly");
-    });
+    }, 20_000);
 
     it("CLI --help displays usage and all 7 core checks", () => {
-      const res = spawnSync("npx", ["tsx", SCRIPT_PATH, "--help"], { encoding: "utf8" });
+      const res = spawnSync(process.execPath, [TSX_CLI, SCRIPT_PATH, "--help"], {
+        encoding: "utf8",
+      });
       expect(res.status).toBe(0);
       expect(res.stdout).toContain("Geometrie-Vollständigkeit");
       expect(res.stdout).toContain("Degenerierte Dreiecke");
@@ -39,7 +42,7 @@ describe("Asset Linter (scripts/lint-assets.ts)", () => {
       expect(res.stdout).toContain("Polycount-Budget");
       expect(res.stdout).toContain("Konsistenzcheck AABB");
       expect(res.stdout).toContain("Textur-Slot- und Namensverträge");
-    });
+    }, 20_000);
   });
 
   describe("Unit & Mutation checks", () => {

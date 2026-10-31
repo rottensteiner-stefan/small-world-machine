@@ -268,6 +268,8 @@ export class WebGPURenderer extends AbstractRenderer {
   /** Per-mesh high-water mark of instances whose matrices are on the GPU (see `_renderSubgroup`). */
   private _instanceMatricesUploaded = new WeakMap<InstancedMesh, number>();
   protected _gpuInstanceDataBuffers: WeakMap<InstancedMesh, GPUBuffer> = new WeakMap();
+  /** Per-mesh high-water mark of instances whose `instanceData` is on the GPU (see `_renderSubgroup`). */
+  private _instanceDataUploaded = new WeakMap<InstancedMesh, number>();
   protected _frameCount = 0;
   protected _scratchModelMatrix = new Float32Array(16);
   protected _scratchColorArray = new Float32Array(4);
@@ -1397,6 +1399,13 @@ export class WebGPURenderer extends AbstractRenderer {
     let lastGeo: object | undefined;
     for (const obj of drawList) {
       if (!obj.geometry) continue;
+      if (isInstanced) {
+        const instMesh = obj as InstancedMesh;
+        if (instMesh.instanceCount < 0) {
+          throw new Error(`[WebGPURenderer] Invalid instanceCount: ${instMesh.instanceCount}`);
+        }
+        if (instMesh.instanceCount === 0) continue;
+      }
 
       this._pipelineCache.acquirePipeline(obj, pipelineKey);
       this._textures.acquireTextures(obj, manifest.textures);
@@ -1435,9 +1444,6 @@ export class WebGPURenderer extends AbstractRenderer {
 
       if (isInstanced) {
         const instMesh = obj as InstancedMesh;
-        if (instMesh.instanceCount < 0) {
-          throw new Error(`[WebGPURenderer] Invalid instanceCount: ${instMesh.instanceCount}`);
-        }
         if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
           throw new Error(
             `[WebGPURenderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
@@ -1500,10 +1506,25 @@ export class WebGPURenderer extends AbstractRenderer {
             });
             this._gpuInstanceDataBuffers.set(instMesh, instanceDataBuf);
             instMesh.instanceDataNeedsUpdate = true;
+            this._instanceDataUploaded.delete(instMesh);
           }
 
-          if (instMesh.instanceDataNeedsUpdate) {
-            this._device!.queue.writeBuffer(instanceDataBuf, 0, instMesh.instanceData);
+          const dataUploaded = this._instanceDataUploaded.get(instMesh) ?? 0;
+          if (instMesh.instanceDataNeedsUpdate || instMesh.instanceCount > dataUploaded) {
+            const stride = instMesh.instanceDataSize || 4;
+            this._device!.queue.writeBuffer(
+              instanceDataBuf,
+              0,
+              instMesh.instanceData,
+              0,
+              instMesh.instanceCount * stride,
+            );
+            this._instanceDataUploaded.set(
+              instMesh,
+              instMesh.instanceDataNeedsUpdate
+                ? instMesh.instanceCount
+                : Math.max(dataUploaded, instMesh.instanceCount),
+            );
             instMesh.instanceDataNeedsUpdate = false;
           }
           rp.setVertexBuffer(7, instanceDataBuf);

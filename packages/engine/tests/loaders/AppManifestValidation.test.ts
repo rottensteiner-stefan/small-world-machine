@@ -6,9 +6,11 @@ import type { ValidateFunction } from "ajv";
 import {
   APP_SCHEMA_VERSION,
   assertAppManifest,
+  assertNoRetiredIdReuse,
+  assertUniqueLevelEntityIds,
   type AppManifest,
   type LevelDescriptor,
-} from "../../src/loaders/kit/KitTypes.js";
+} from "../../src/loaders/kit/KitRegistry.js";
 
 function findRepoRoot(startDir: string): string {
   let current = startDir;
@@ -131,12 +133,42 @@ describe("Application Manifests & Schema Validation (ADR 0041 Stufe 1)", () => {
         ).toBe(true);
       }
       // Every .level.json in the app must be accounted for in app.json (no orphan levels).
+      const allEntityIds = new Set<string>();
       for (const [discoveredId, filePath] of discoveredLevels) {
         expect(
           manifest.levels,
           `Orphan level '${discoveredId}' (${path.relative(repoRoot, filePath)}) not listed in ${appName}/app.json`,
         ).toContain(discoveredId);
+
+        const levelDesc = JSON.parse(fs.readFileSync(filePath, "utf8")) as LevelDescriptor;
+        assertUniqueLevelEntityIds(levelDesc, appName);
+        for (const p of levelDesc.props) allEntityIds.add(p.id);
+        for (const d of levelDesc.decals ?? []) allEntityIds.add(d.id);
+        for (const l of levelDesc.lights ?? []) allEntityIds.add(l.name);
+        for (const h of levelDesc.hotspots ?? []) allEntityIds.add(h.id);
       }
+
+      const allTextIds = new Set<string>();
+      for (const lang of manifest.content?.languages ?? []) {
+        const langPath = path.join(appDir, "content", `${lang}.json`);
+        if (fs.existsSync(langPath)) {
+          const catalog = JSON.parse(fs.readFileSync(langPath, "utf8")) as Record<string, unknown>;
+          for (const key of Object.keys(catalog)) {
+            if (key !== "$schema") allTextIds.add(key);
+          }
+        }
+      }
+
+      assertNoRetiredIdReuse(
+        manifest,
+        {
+          levels: discoveredLevels.keys(),
+          characters: manifest.characters,
+          props: allEntityIds,
+          texts: allTextIds,
+        },
+        appName,
+      );
     });
   });
 

@@ -1,10 +1,12 @@
 /**
- * Savegame descriptor types, schema-version policy and migration chain (ADR 0041 Stufe 5).
+ * Savegame descriptor types, schema-version policy, migration chain, and ID tombstone registry
+ * validation (ADR 0041 Stufe 5).
  *
  * A savegame is an extension of the level-descriptor context (ADR 0020): it stores runtime state
  * that REFERENCES concrete levels/instances by stable ids — patch actions and minimal state flags,
  * never copies of content objects (props/lights are not serialized).
  */
+import type { AppManifest, AppRetiredIds, LevelDescriptor } from "./KitTypes.js";
 
 export const SAVEGAME_SCHEMA_VERSION = 1;
 
@@ -165,4 +167,98 @@ export function assertSavegameIdReferences(
       );
     }
   }
+}
+
+/**
+ * Snapshot of active IDs across an application's levels, characters, level placements
+ * (props, decals, lights, hotspots), and localized text keys (ADR 0041 §2 / §Konsequenzen).
+ */
+export interface AppIdSnapshot {
+  levels?: Iterable<string>;
+  characters?: Iterable<string>;
+  props?: Iterable<string>;
+  texts?: Iterable<string>;
+}
+
+/**
+ * Enforces the hard rule "IDs werden nie wiederverwendet" (ADR 0041 §2 / §3 / §Konsequenzen):
+ * verifies that no active ID in `manifest` (`levels`, `characters`) or `snapshot`
+ * (`levels`, `characters`, `props`, `texts`) collides with any tombstone entry in
+ * `manifest.retiredIds`. Also rejects duplicate entries within `manifest.retiredIds`.
+ */
+export function assertNoRetiredIdReuse(
+  manifest: AppManifest,
+  snapshot: AppIdSnapshot = {},
+  context: string = "IdRegistryValidation",
+): void {
+  const retired = manifest.retiredIds;
+  if (!retired) {
+    return;
+  }
+
+  const checkCategory = (
+    category: keyof AppRetiredIds,
+    retiredList: readonly string[] | undefined,
+    activeItems: Iterable<string>,
+  ): void => {
+    if (!retiredList || retiredList.length === 0) {
+      return;
+    }
+    const retiredSet = new Set<string>();
+    for (const id of retiredList) {
+      if (retiredSet.has(id)) {
+        throw new Error(
+          `[${context}] App '${manifest.id}': duplicate retired ID '${id}' in retiredIds.${category}.`,
+        );
+      }
+      retiredSet.add(id);
+    }
+    for (const activeId of activeItems) {
+      if (retiredSet.has(activeId)) {
+        throw new Error(
+          `[${context}] App '${manifest.id}': retired ${category} ID '${activeId}' must never be reused (ADR 0041 §2).`,
+        );
+      }
+    }
+  };
+
+  const activeLevels = new Set<string>(manifest.levels);
+  if (snapshot.levels) {
+    for (const id of snapshot.levels) activeLevels.add(id);
+  }
+
+  const activeCharacters = new Set<string>(manifest.characters);
+  if (snapshot.characters) {
+    for (const id of snapshot.characters) activeCharacters.add(id);
+  }
+
+  checkCategory("levels", retired.levels, activeLevels);
+  checkCategory("characters", retired.characters, activeCharacters);
+  checkCategory("props", retired.props, snapshot.props ?? []);
+  checkCategory("texts", retired.texts, snapshot.texts ?? []);
+}
+
+/**
+ * Verifies that all entity/placement IDs inside a `LevelDescriptor` (`props`, `decals`, `lights`,
+ * `hotspots`) are unique across the level so savegame patch targets are unambiguous (ADR 0041 §1/§2).
+ */
+export function assertUniqueLevelEntityIds(
+  level: LevelDescriptor,
+  context: string = "IdRegistryValidation",
+): void {
+  const seen = new Map<string, string>();
+  const register = (kind: string, id: string): void => {
+    const prevKind = seen.get(id);
+    if (prevKind !== undefined) {
+      throw new Error(
+        `[${context}] Level '${level.id}': duplicate entity ID '${id}' shared by ${prevKind} and ${kind} (ADR 0041 §2).`,
+      );
+    }
+    seen.set(id, kind);
+  };
+
+  for (const prop of level.props) register("prop", prop.id);
+  for (const decal of level.decals ?? []) register("decal", decal.id);
+  for (const light of level.lights ?? []) register("light", light.name);
+  for (const hotspot of level.hotspots ?? []) register("hotspot", hotspot.id);
 }

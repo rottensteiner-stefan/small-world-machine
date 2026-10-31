@@ -83,7 +83,11 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   private _instancedArraysExt: ANGLE_instanced_arrays | null = null;
   private _warnedNoInstancedArrays = false;
   private _instanceMatrixBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
+  private _instanceMatrixBufferSizes: WeakMap<InstancedMesh, number> = new WeakMap();
+  private _instanceMatricesUploaded: WeakMap<InstancedMesh, number> = new WeakMap();
   private _instanceDataBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
+  private _instanceDataBufferSizes: WeakMap<InstancedMesh, number> = new WeakMap();
+  private _instanceDataUploaded: WeakMap<InstancedMesh, number> = new WeakMap();
 
   /** @inheritdoc */
   public async initialize(
@@ -587,6 +591,15 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     // --- Render each object ---
     for (const o of objects) {
       if (!o.geometry) continue;
+      if (isInstanced) {
+        const instMesh = o as InstancedMesh;
+        if (instMesh.instanceCount < 0) {
+          throw new Error(`[WebGL1Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
+        }
+        if (instMesh.instanceCount === 0) {
+          continue;
+        }
+      }
 
       this._programCache.acquireProgram(o, programKey);
       this._textures.acquireTextures(o, texs);
@@ -596,12 +609,6 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
 
       if (isInstanced) {
         const instMesh = o as InstancedMesh;
-        if (instMesh.instanceCount < 0) {
-          throw new Error(`[WebGL1Renderer] Invalid instanceCount: ${instMesh.instanceCount}`);
-        }
-        if (instMesh.instanceCount === 0) {
-          continue;
-        }
         if (instMesh.instanceMatrices.byteLength < instMesh.instanceCount * 64) {
           throw new Error(
             `[WebGL1Renderer] InstancedMesh matrix buffer too small: required at least ${instMesh.instanceCount * 64} bytes for ${instMesh.instanceCount} instances, but buffer is ${instMesh.instanceMatrices.byteLength} bytes.`,
@@ -621,15 +628,51 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         if (uModel) this.gl.uniformMatrix4fv(uModel, false, instMesh.worldMatrix.data);
 
         let matrixBuf = this._instanceMatrixBuffers.get(instMesh);
-        let matrixNeedsUpload = instMesh.instanceMatrixNeedsUpdate;
-        if (!matrixBuf) {
-          matrixBuf = this.gl.createBuffer()!;
-          this._instanceMatrixBuffers.set(instMesh, matrixBuf);
-          matrixNeedsUpload = true;
+        const matrixByteLength = instMesh.instanceMatrices.byteLength;
+        const allocatedMatrixBytes = this._instanceMatrixBufferSizes.get(instMesh) ?? 0;
+        if (!matrixBuf || allocatedMatrixBytes < matrixByteLength) {
+          if (!matrixBuf) {
+            matrixBuf = this.gl.createBuffer()!;
+            this._instanceMatrixBuffers.set(instMesh, matrixBuf);
+          }
+          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
+          if (typeof this.gl.bufferSubData === "function") {
+            this.gl.bufferData(this.gl.ARRAY_BUFFER, matrixByteLength, this.gl.DYNAMIC_DRAW);
+          } else {
+            this.gl.bufferData(
+              this.gl.ARRAY_BUFFER,
+              instMesh.instanceMatrices,
+              this.gl.DYNAMIC_DRAW,
+            );
+          }
+          this._instanceMatrixBufferSizes.set(instMesh, matrixByteLength);
+          this._instanceMatricesUploaded.delete(instMesh);
+          instMesh.instanceMatrixNeedsUpdate = true;
+        } else {
+          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
         }
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
-        if (matrixNeedsUpload) {
-          this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceMatrices, this.gl.DYNAMIC_DRAW);
+
+        const uploadedMatrices = this._instanceMatricesUploaded.get(instMesh) ?? 0;
+        if (instMesh.instanceMatrixNeedsUpdate || instMesh.instanceCount > uploadedMatrices) {
+          if (typeof this.gl.bufferSubData === "function") {
+            this.gl.bufferSubData(
+              this.gl.ARRAY_BUFFER,
+              0,
+              instMesh.instanceMatrices.subarray(0, instMesh.instanceCount * 16),
+            );
+          } else {
+            this.gl.bufferData(
+              this.gl.ARRAY_BUFFER,
+              instMesh.instanceMatrices,
+              this.gl.DYNAMIC_DRAW,
+            );
+          }
+          this._instanceMatricesUploaded.set(
+            instMesh,
+            instMesh.instanceMatrixNeedsUpdate
+              ? instMesh.instanceCount
+              : Math.max(uploadedMatrices, instMesh.instanceCount),
+          );
           instMesh.instanceMatrixNeedsUpdate = false;
         }
 
@@ -665,15 +708,44 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         const dataLoc = cache.attributes.get("a_instanceData");
         if (dataLoc !== undefined && dataLoc >= 0 && instMesh.instanceData) {
           let dataBuf = this._instanceDataBuffers.get(instMesh);
-          let dataNeedsUpload = instMesh.instanceDataNeedsUpdate;
-          if (!dataBuf) {
-            dataBuf = this.gl.createBuffer()!;
-            this._instanceDataBuffers.set(instMesh, dataBuf);
-            dataNeedsUpload = true;
+          const dataByteLength = instMesh.instanceData.byteLength;
+          const allocatedDataBytes = this._instanceDataBufferSizes.get(instMesh) ?? 0;
+          if (!dataBuf || allocatedDataBytes < dataByteLength) {
+            if (!dataBuf) {
+              dataBuf = this.gl.createBuffer()!;
+              this._instanceDataBuffers.set(instMesh, dataBuf);
+            }
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
+            if (typeof this.gl.bufferSubData === "function") {
+              this.gl.bufferData(this.gl.ARRAY_BUFFER, dataByteLength, this.gl.DYNAMIC_DRAW);
+            } else {
+              this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
+            }
+            this._instanceDataBufferSizes.set(instMesh, dataByteLength);
+            this._instanceDataUploaded.delete(instMesh);
+            instMesh.instanceDataNeedsUpdate = true;
+          } else {
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
           }
-          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
-          if (dataNeedsUpload) {
-            this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
+
+          const uploadedData = this._instanceDataUploaded.get(instMesh) ?? 0;
+          if (instMesh.instanceDataNeedsUpdate || instMesh.instanceCount > uploadedData) {
+            const stride = instMesh.instanceDataSize || 4;
+            if (typeof this.gl.bufferSubData === "function") {
+              this.gl.bufferSubData(
+                this.gl.ARRAY_BUFFER,
+                0,
+                instMesh.instanceData.subarray(0, instMesh.instanceCount * stride),
+              );
+            } else {
+              this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
+            }
+            this._instanceDataUploaded.set(
+              instMesh,
+              instMesh.instanceDataNeedsUpdate
+                ? instMesh.instanceCount
+                : Math.max(uploadedData, instMesh.instanceCount),
+            );
             instMesh.instanceDataNeedsUpdate = false;
           }
           this.gl.enableVertexAttribArray(dataLoc);
@@ -858,7 +930,12 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._renderTargetDepthBuffers.clear();
     this._renderTargetCubeFbos.clear();
     this._renderTargetCubeDepthBuffers.clear();
+    this._instanceMatrixBuffers = new WeakMap();
+    this._instanceMatrixBufferSizes = new WeakMap();
+    this._instanceMatricesUploaded = new WeakMap();
     this._instanceDataBuffers = new WeakMap();
+    this._instanceDataBufferSizes = new WeakMap();
+    this._instanceDataUploaded = new WeakMap();
     this._hdrFbo = undefined;
     this._hdrTexture = undefined;
     this._hdrRenderBuffer = undefined;
