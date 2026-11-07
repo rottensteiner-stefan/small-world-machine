@@ -132,7 +132,7 @@ Zur Ergänzung der bisher rein prozeduralen Squash/Stretch- und Dämpfungsverfor
 * **Neue Block-Texturen aus Kenney „Pixel Platformer" (v1.2) + „Pixel Platformer Blocks" (CC0):** `ground-top.webp` (Gras-Kante, `tile_0022` Zeilen 3–17 → passt zur 0.85-Body-Höhe), `ground.webp` (Erd-Füllung, `tile_0122`), `block-exclaim.webp` (Ausrufezeichen-Block, `tile_0010`), `block-brick.webp` (grauer Ziegel, `Rock/tile_0017`). 18-px-Tiles ×4 nearest-neighbour, transparente Ecken auf Outline-Farbe geflattet, lossless WebP.
 * Ersetzt `grass.webp`, `dirt.webp` (CC0-Set ATeshGames) sowie die eigenen `smileblock.webp`/`stonebrick.webp`.
 * **Komposition vereinfacht:** freiliegender Boden = Gras-Kanten-Body (0.85) + flacher Gras-Slab (`#36E377`, 0.15); verdeckter Boden jetzt volle Höhe (vorher 0.85 → 0.15-Lücke zwischen gestapelten Blöcken); Ausrufezeichen- und Ziegelblock als volle Würfel ohne Slab (Bevel-Tiles wirken auch oben als Block). `createBlockWithSlab` → `addBlockPart`.
-* Vollständige Packs: Original-ZIPs in `small-world-machine-assets/raw/tilesets/`, entpackt in `tilesets/` (mit `License.txt`, sha256 im README). Quelle/Lizenz in `REFERENCES.md`.
+* Original-ZIPs liegen per ADR 0058 außerhalb von git (Drive-Backup); Quelle, Lizenz und sha256 in `REFERENCES.md`.
 
 ### 2. Known Limitations
 * `brick-1..3.webp` in `assets/` sind weiterhin unreferenziert (nicht angefasst).

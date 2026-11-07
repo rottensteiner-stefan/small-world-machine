@@ -129,7 +129,7 @@ The merged-app mode lifecycle: every authoring tool is hosted as a Maker Mode mo
 _Avoid_: ForgeTool (the in-game overlay contract, stays strictly in-game; ADR 0024), Standalone Tool Page (the ADR 0010 §3 decision that ADR 0033 amends), Panel/Plugin (informal).
 
 **Mannequin (Asset Root)**:
-The canonical folder structure (`public/assets/<app>/mannequin/<character>/` and `raw/mannequin/`) organizing game-ready rigged characters and shared mocap pools per character namespace rather than by asset type.
+The canonical folder structure (`public/assets/<app>/mannequin/<character>/` and `raw/mannequin/`, the latter local-only and git-ignored per ADR 0058) organizing game-ready rigged characters and shared mocap pools per character namespace rather than by asset type.
 _Avoid_: Asset Type Root (e.g. splitting into `/models/` and `/textures/` across different folders).
 
 **Material**:

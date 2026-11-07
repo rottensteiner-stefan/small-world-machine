@@ -1,5 +1,7 @@
 # Charakter-Pipeline-Architektur & Mixamo-Rigging-Standard
 
+> **Geändert durch ADR 0058 (2026-11-07):** `raw/` ist nur noch lokales, git-ignoriertes Staging; Originale (Konzepte, Tripo-Mesh, Mixamo-Pakete, `character_rigged.fbx`) werden in Google Drive (`Small-World-Machine/<repo>/…`) gesichert, committet werden nur `character.glb` und Animations-GLBs.
+
 > **Stand-Hinweis (2026-10-21):** Der Laternen-Sync (`_syncLanternTransform()`) liegt jetzt in `PlayerRig._syncLantern()` (im Spiel-Repo). Der Hand-Socket ist eine priorisierte Kandidatenliste (`LANTERN_HAND_BONE_CANDIDATES`, zuerst `LeftHandMiddle1`, `LeftHandIndex1`, dann `mixamorig:LeftHand` u. a.). Der Rig-Wrapper `_characterRig` mit fester 1,8-Skalierung ist durch `PlayerCharacterSpec.scale` pro Szene ersetzt. Die Prinzipien (Weltposition, Division durch die akkumulierte Weltskalierung) gelten weiter.
 
 ## Kontext & Problem
