@@ -32,6 +32,7 @@ import {
   StylizedWaterMaterial,
   Texture,
   TextureWrap,
+  ToneMappingMode,
   Vector3D,
   ZoomController,
   FluidVolume,
@@ -191,6 +192,9 @@ export class Showcase extends AbstractShowcase {
 
   protected override async setupScene(): Promise<void> {
     this.onCanvasRecreated();
+    // Pinned curve (engine default is PBR_NEUTRAL): per-channel Reinhard gives the hot emissive
+    // lava/slime pools their red -> yellow -> white path; Neutral desaturates them toward pink.
+    this.renderer.quality.toneMapping = ToneMappingMode.REINHARD;
 
     const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
     // Start framing: as close as possible while the near pool row (outer pools + signs, +-21 m

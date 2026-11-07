@@ -1,4 +1,4 @@
-import type { BloomElement } from "@small-world-machine/engine";
+import type { BloomElement, ToneMappingElement } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -16,6 +16,7 @@ import {
   StandardMaterial,
   Texture,
   TextureWrap,
+  ToneMappingMode,
   Vector3D,
   bakeSceneDecals,
 } from "@small-world-machine/engine";
@@ -219,6 +220,12 @@ export class Showcase extends AbstractShowcase {
     this.setInitialCamera(new Vector3D(0, 1.6, 5.5), new Vector3D(0, 0.9, 0));
 
     this.renderer.postProcessing.enabled = true;
+    // Pinned curve (engine default is PBR_NEUTRAL): ACES gives flames the blackbody-like
+    // red -> yellow -> white path; Neutral desaturates bright orange toward pink.
+    const tone = this.renderer.postProcessing.get<ToneMappingElement>(
+      PostProcessingEffectType.TONE_MAPPING,
+    );
+    if (tone) tone.mode = ToneMappingMode.ACES_FILMIC;
     const bloom = this.renderer.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
     if (bloom) {
       bloom.enabled = true;

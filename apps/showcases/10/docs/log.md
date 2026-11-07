@@ -86,3 +86,8 @@ Upgraded the flat ground plane to full PBR lighting and 3D silhouette foliage:
   console errors; old baseline was Chrome 152).
 - Noted, not traced: in a live frame the crude-oil pool looked grey-blue on WebGPU vs reddish on WebGL2
   (may be animation timing) — audit ledger item S9.
+
+## 2026-11-07 · Tone Curve Pinned to Reinhard
+
+* Engine default tone curve became `PBR_NEUTRAL`; this showcase pins `quality.toneMapping = ToneMappingMode.REINHARD` (its former implicit forward curve). Per-channel Reinhard keeps the emissive lava/slime pools on the red -> yellow -> white path; Neutral turned the lava cracks salmon-pink (goldens 2-10 % drift).
+* Verification: liquid goldens 32/32 within tolerance again (gl2).

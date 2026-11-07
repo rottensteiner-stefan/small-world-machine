@@ -195,3 +195,8 @@ Translated user-facing strings to English.
 - `GoldenCapture.ts` now delegates query parsing, surface pinning, resize handler, ready signal, frame stepping and repaint to `apps/showcases/shared/GoldenCapture.ts` (`GoldenSession`, `parseGoldenSpec`, `lookupOwn`); only the showcase-specific mapping/hooks stay here. Public API (`GoldenCapture`, `parseGoldenSpec`, options) unchanged, `showcase.ts` untouched.
 - Pool-key lookups are prototype-safe (`__golden=constructor` -> `Unknown __golden pool` in `meta.error`, no TypeError).
 - Byte-stability verified: pre/post gl2 captures pixel-identical (see `apps/showcases/tests/GoldenCapture.test.ts` for parser/session tests).
+
+## 2026-11-07 · Tone Curve Pinned to ACES Filmic
+
+* Engine default tone curve became `PBR_NEUTRAL`; this showcase pins `ToneMappingElement.mode = ACES_FILMIC` (its former implicit post default). ACES keeps the flames on the blackbody-like red -> yellow -> white path; Neutral turned the campfire and the yellow torch pink (goldens 1.5-20 % drift).
+* Verification: fire45 goldens 4/4 within tolerance again (gl2).
