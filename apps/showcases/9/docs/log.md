@@ -136,3 +136,17 @@ Zur Ergänzung der bisher rein prozeduralen Squash/Stretch- und Dämpfungsverfor
 
 ### 2. Known Limitations
 * `brick-1..3.webp` in `assets/` sind weiterhin unreferenziert (nicht angefasst).
+
+## 2026-11-07 · Little Dino Character & Clip Normalization
+
+### 1. Implemented Features
+* **Neue Standard-Spielfigur `assets/character.glb`:** eigener kleiner Dino (Gemini-Konzept → Tripo3D → Mixamo-Auto-Rig, 28 Joints ohne Finger/Daumen, 780 KB). Ersetzt den grünen Fallback-Würfel auf Pages; `DEFAULT_CHARACTER_PLACEMENT` (`scale 1.2`, `offsetY -0.5`) passt unverändert, da das Modell auf 1.0 Einheiten Höhe mit Füßen bei `y = 0` normalisiert ist.
+* **FBX-Konvertierung repariert:** FBX2glTF lieferte das Modell in Zentimeter-Einheiten (0.009 hoch) und mit einem konstanten 90°-Yaw + Versatz zwischen Bind-Space und Joint-Ruhepose (Tripo-Knoten mit `eInheritRrSs`). Skalierung in Positionen, Joint-Translationen und Inverse-Bind-Matrizen eingebacken (statt Root-Scale → sonst falsch skalierte Normalen, dunkles Shading); Yaw in das Mesh gefaltet, sodass Bind-Pose = Ruhepose (Bedingung für die Mixamo-Clips, die nur Rotationen setzen).
+* **`jump.glb`, `crouch.glb`, `crawl.glb` normalisiert (Bugfix, betraf jede Figur):** Die Blender-exportierten Clips trugen Translation- und Scale-Spuren aller Knochen in Zentimetern sowie eine `Armature`-Spur (Rx 90°, Scale 0.01). Beim Ducken/Kriechen/Springen wurde das Mesh dadurch auf Bildschirmgröße zerrissen. Jetzt nur noch Rotationsspuren der `mixamorig:`-Knochen; die Armature-Korrektur ist in die Hips-Rotation gefaltet — gleiche Konvention wie `idle.glb`/`running.glb` (FBX2glTF).
+
+### 2. Verification
+* `npm run build:showcases` + `node .agents/scripts/check-showcases.js 9`: WebGL1, WebGL2, WebGPU alle ✅ OK (Standardpfad ohne `assets/local/` getestet).
+* Puppeteer-Sequenz Idle → Laufen → Sprung → Ducken/Slide mit Dino und lokaler Override-Figur: keine Konsolenfehler, keine Mesh-Explosion mehr.
+
+### 3. Known Limitations
+* Der Dino wirkt im Spiel dunkler (Orange → Braun) als im Konzept, da die Textur selbst gedeckt ist und die matte PBR-Einstellung (`roughness 0.88`) greift.
