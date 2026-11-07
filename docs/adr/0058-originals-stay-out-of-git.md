@@ -20,3 +20,12 @@
 - Character pipeline (ADR 0009): `raw/mannequin/<character>/` stays the local working location, backed up to Drive instead of git; only the exported `character.glb` and animation GLBs are committed.
 - Reproducing a derived asset requires access to the Drive folder.
 - Rejected: keeping originals in LFS (cost, leak risk), a separate private originals repo (still git/LFS, no real backup semantics beyond Drive).
+
+## Doctrine Compliance
+
+- **New public hot-scope parameters (classification):** none. Repository/asset policy only; no engine API, shader or runtime change.
+- **Shared abstraction >= 3 consumers?** n/a (no code abstraction; the `.gitignore` rule block is applied identically in all five repos).
+- **Modeful object?** n/a.
+- **Mathematical claims:** n/a.
+- **New scalar inputs / tier-gated capability:** n/a.
+- **Exceptions:** none.
