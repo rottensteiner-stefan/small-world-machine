@@ -6,7 +6,16 @@ import { formatSlider } from "../42/Hud.js";
 import { Hud as Hud45, defaultHudState as state45 } from "../45/Hud.js";
 import { Hud as Hud46, defaultHudState as state46 } from "../46/Hud.js";
 
+// HUDs mount their drawer with a 100 ms footer re-check timer; dispose them so no timer outlives
+// the jsdom environment (late `document` access after teardown = unhandled error in CI).
+const liveHuds: { dispose(): void }[] = [];
+const track = <T extends { dispose(): void }>(hud: T): T => {
+  liveHuds.push(hud);
+  return hud;
+};
+
 afterEach(() => {
+  for (const hud of liveHuds.splice(0)) hud.dispose();
   document.head.innerHTML = "";
   document.body.innerHTML = "";
 });
@@ -125,7 +134,7 @@ describe("45 Hud shortcuts", () => {
   const make = (): { hud: Hud45; s: ReturnType<typeof state45>; onChange: () => void } => {
     const s = state45(4);
     const onChange = vi.fn();
-    const hud = new Hud45(s, 6, onChange);
+    const hud = track(new Hud45(s, 6, onChange));
     return { hud, s, onChange };
   };
 
@@ -182,7 +191,7 @@ describe("46 Hud shortcuts", () => {
   it("1-6 select variants, 7-9 pools, P pauses, T cycles slow-motion first", () => {
     const s = state46();
     const onChange = vi.fn();
-    const hud = new Hud46(s, onChange);
+    const hud = track(new Hud46(s, onChange));
     hud.handleKey(key("Digit4"));
     expect(s.variant).toBe("trails");
     hud.handleKey(key("Digit8"));
@@ -198,7 +207,7 @@ describe("46 Hud shortcuts", () => {
 
   it("sync marks exactly the active variant and pool button", () => {
     const s = state46();
-    const hud = new Hud46(s, () => undefined);
+    const hud = track(new Hud46(s, () => undefined));
     s.variant = "smoke";
     s.pool = "budget";
     hud.sync();
@@ -213,7 +222,7 @@ describe("46 Hud shortcuts", () => {
   it("slider input updates state and notifies", () => {
     const s = state46();
     const onChange = vi.fn();
-    new Hud46(s, onChange);
+    track(new Hud46(s, onChange));
     const input = document.querySelector("#sl_smokeScale") as HTMLInputElement;
     input.value = "1.5";
     input.dispatchEvent(new Event("input"));
