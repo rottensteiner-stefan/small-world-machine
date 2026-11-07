@@ -261,7 +261,8 @@ export class Showcase extends AbstractShowcase {
     sun.direction.set(0.5, -1, -0.5).normalize();
     this.scene.add(sun);
 
-    // 3. Texturen laden (CC0 pixel tileset, classic 16-bit platformer look, lossless WebP, NEAREST)
+    // 3. Texturen laden (Kenney "Pixel Platformer" + "Pixel Platformer Blocks", CC0; 18 px tiles
+    // upscaled x4 as lossless WebP, sampled with NEAREST)
     const loadPixelTexture = async (url: string): Promise<Texture> => {
       const tex = await Texture.fromUrl(url);
       tex.magFilter = TextureFilter.NEAREST;
@@ -269,34 +270,28 @@ export class Showcase extends AbstractShowcase {
       return tex;
     };
 
-    const grassTex = await loadPixelTexture("./assets/grass.webp");
-    const dirtTex = await loadPixelTexture("./assets/dirt.webp");
-    const smileblockTex = await loadPixelTexture("./assets/smileblock.webp");
-    const stoneTex = await loadPixelTexture("./assets/stonebrick.webp");
+    const groundTopTex = await loadPixelTexture("./assets/ground-top.webp");
+    const groundTex = await loadPixelTexture("./assets/ground.webp");
+    const exclaimTex = await loadPixelTexture("./assets/block-exclaim.webp");
+    const brickTex = await loadPixelTexture("./assets/block-brick.webp");
 
-    // Flat, unlit pixel-art look (classic 16-bit platformer look): BasicMaterial ignores scene
-    // lights and reproduces the textures 1:1 on every renderer tier.
+    // Flat, unlit pixel-art look: BasicMaterial ignores scene lights and reproduces the
+    // textures 1:1 on every renderer tier.
     const createBlockMaterial = (diffuseMap: Texture): BasicMaterial =>
       new BasicMaterial({ color: Color.WHITE, diffuseMap });
 
-    const grassMat = createBlockMaterial(grassTex);
-    const dirtMat = createBlockMaterial(dirtTex);
-    const smileblockMat = createBlockMaterial(smileblockTex);
-    const stoneMat = createBlockMaterial(stoneTex);
+    const groundTopMat = createBlockMaterial(groundTopTex);
+    const groundMat = createBlockMaterial(groundTex);
+    const exclaimMat = createBlockMaterial(exclaimTex);
+    const brickMat = createBlockMaterial(brickTex);
 
-    // 16-bit platformer block composition: a textured body plus a thin top slab that keeps the
-    // exposed top surface clean. Engine limits: one material per Object3D, cube faces map
-    // full UVs -- so a square face tile would also repeat on the top; the slab (grass for
-    // the ground, flat color for decorative blocks) is a separate body, no per-face atlas.
+    // Exposed ground = grass-edge body + thin flat grass slab. Engine limits: one material per
+    // Object3D, cube faces map full UVs -- the grass-edge tile would otherwise repeat on the
+    // top face. ground-top.webp is cropped to 15 of 18 tile rows to match the body height.
     const blockBodyHeight = 0.85;
     const topSlabHeight = 1 - blockBodyHeight;
-
-    // Flat unlit tops for the decorative blocks (their faces carry the pattern only).
-    const smileTopMat = new BasicMaterial({
-      color: new Color(92 / 255, 182 / 255, 236 / 255),
-    });
-    const stoneTopMat = new BasicMaterial({
-      color: new Color(150 / 255, 152 / 255, 162 / 255),
+    const grassSlabMat = new BasicMaterial({
+      color: new Color(0x36 / 255, 0xe3 / 255, 0x77 / 255),
     });
 
     // 4. Level aufbauen
@@ -305,34 +300,20 @@ export class Showcase extends AbstractShowcase {
     const rows = this._levelMap.length;
     const cols = this._levelMap[0]!.length;
 
-    // Composes a block from a textured body + a thin top slab on exposed tops (shared by
-    // ground, smile and stone blocks). The slab keeps the walkable/visible top surface
-    // clean instead of repeating the face texture there (single-material constraint).
-    const createBlockWithSlab = (
-      prefix: string,
+    const addBlockPart = (
+      name: string,
       x: number,
-      blockY: number,
-      topExposed: boolean,
-      bodyMat: BasicMaterial,
-      topMat: BasicMaterial,
+      centerY: number,
+      height: number,
+      mat: BasicMaterial,
     ): void => {
-      const body = new Object3D(`${prefix}_${x}_${blockY}`);
-      body.geometry = blockGeo;
-      body.material = bodyMat;
-      body.scale.set(1, blockBodyHeight, 1);
-      body.position.set(x, blockY - topSlabHeight / 2, 0);
-      this.scene.add(body);
-      this._blocks.push(body);
-
-      if (topExposed) {
-        const slab = new Object3D(`${prefix}Top_${x}_${blockY}`);
-        slab.geometry = blockGeo;
-        slab.material = topMat;
-        slab.scale.set(1, topSlabHeight, 1);
-        slab.position.set(x, blockY + 0.5 - topSlabHeight / 2, 0);
-        this.scene.add(slab);
-        this._blocks.push(slab);
-      }
+      const part = new Object3D(name);
+      part.geometry = blockGeo;
+      part.material = mat;
+      part.scale.set(1, height, 1);
+      part.position.set(x, centerY, 0);
+      this.scene.add(part);
+      this._blocks.push(part);
     };
 
     for (let y = 0; y < rows; y++) {
@@ -344,12 +325,18 @@ export class Showcase extends AbstractShowcase {
         // Exposed when no block covers this cell from above (world space)
         const topExposed = y === 0 || this._levelMap[y - 1]![x] === 0;
 
-        if (cellType === 1) {
-          createBlockWithSlab("Ground", x, blockY, topExposed, dirtMat, grassMat);
+        if (cellType === 1 && topExposed) {
+          const bodyY = blockY - topSlabHeight / 2;
+          addBlockPart(`Ground_${x}_${blockY}`, x, bodyY, blockBodyHeight, groundTopMat);
+          const slabY = blockY + 0.5 - topSlabHeight / 2;
+          addBlockPart(`GroundTop_${x}_${blockY}`, x, slabY, topSlabHeight, grassSlabMat);
+        } else if (cellType === 1) {
+          addBlockPart(`Ground_${x}_${blockY}`, x, blockY, 1, groundMat);
         } else if (cellType === 2) {
-          createBlockWithSlab("Smile", x, blockY, topExposed, smileblockMat, smileTopMat);
+          // Bevelled tiles read as solid 3D blocks, so the face may repeat on the top.
+          addBlockPart(`Exclaim_${x}_${blockY}`, x, blockY, 1, exclaimMat);
         } else if (cellType === 3) {
-          createBlockWithSlab("Stone", x, blockY, topExposed, stoneMat, stoneTopMat);
+          addBlockPart(`Brick_${x}_${blockY}`, x, blockY, 1, brickMat);
         }
 
         // Precompute static collision bounds once (Zero-GC in frame-loop)

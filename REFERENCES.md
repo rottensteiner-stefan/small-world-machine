@@ -1209,11 +1209,10 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Source:** [DeepSeek-V4-Flash (Hugging Face)](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash)
 - **Usage:** A fast Mixture-of-Experts (MoE) model (284B total / 13B activated parameters) used as a lightweight, high-throughput reference assistant for iterative coding and localized architecture checks during active development, trading deep reasoning for speed on routine code generation and short refactors within the engine.
 
-### "Super Mario World Style Tiles" by ATeshGames (Showcase 9 Pixel Textures)
+### "Pixel Platformer" & "Pixel Platformer Blocks" by Kenney (Showcase 9 Pixel Textures)
 
-- **File:** `apps/showcases/9/assets/grass.webp`, `apps/showcases/9/assets/dirt.webp`
-- **Authors/Gurus:** ATeshGames
-- **Source:** [OpenGameArt: "Super Mario World Style Tiles"](https://opengameart.org/content/super-mario-world-style-tiles)
-- **License:** [CC0 (Creative Commons Zero)](https://creativecommons.org/publicdomain/zero/1.0/) — public domain, no attribution required (credited here anyway).
-- **Usage:** Source art for the grass and dirt textures (classic 16-bit platformer look) in Showcase 9; the smile-block and stone-brick faces are original pixel art. Cropped directly from `TilesAlpha.png` (600×1000 px sheet, 100–200 px tiles): seamless dirt band and solid grass rows are sampled as-is. Both re-encoded as 100×100 fully opaque lossless WebP, sampled with NEAREST filters and rendered via unlit `BasicMaterial` on every renderer tier.
-
+- **File:** `apps/showcases/9/assets/ground-top.webp`, `apps/showcases/9/assets/ground.webp`, `apps/showcases/9/assets/block-exclaim.webp`, `apps/showcases/9/assets/block-brick.webp`
+- **Authors/Gurus:** Kenney ([www.kenney.nl](https://www.kenney.nl))
+- **Source:** [Kenney: Pixel Platformer](https://kenney.nl/assets/pixel-platformer) (v1.2), [Kenney: Pixel Platformer Blocks](https://kenney.nl/assets/pixel-platformer-blocks); full packs (original zips + extracted) in the [Small World Machine Assets](https://github.com/rottensteiner-stefan/small-world-machine-assets) repo under `raw/tilesets/` and `tilesets/`.
+- **License:** [CC0 (Creative Commons Zero)](https://creativecommons.org/publicdomain/zero/1.0/) — public domain, attribution optional (credited here anyway, as the author asks).
+- **Usage:** Block faces of the 2.5D platformer in Showcase 9: grass-edge ground (`tile_0022`, rows 3–17, matching the 0.85 body height under a flat grass slab), dirt fill for covered ground (`tile_0122`), exclamation block (`tile_0010`) and grey brick block (`Rock/tile_0017`). 18 px tiles upscaled ×4 with nearest-neighbour filtering, transparent corners flattened onto the outline colour, lossless WebP, sampled with NEAREST filters and rendered via unlit `BasicMaterial` on every renderer tier.

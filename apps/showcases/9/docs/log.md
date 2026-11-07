@@ -78,7 +78,7 @@ Zur Ergänzung der bisher rein prozeduralen Squash/Stretch- und Dämpfungsverfor
 ## 2026-11-07 · CC0 Pixel Textures, Classic 16-bit Platformer Look (unlit)
 
 ### 1. Implemented Features
-1. **CC0 Tileset-Quelle:** Texturen aus `TilesAlpha.png` des CC0-Sets „Super Mario World Style Tiles" (ATeshGames, OpenGameArt) — Lizenz verifiziert (CC0), Quelle in `REFERENCES.md` eingetragen.
+1. **CC0 Tileset-Quelle:** Texturen aus `TilesAlpha.png` eines CC0-16-bit-Plattformer-Tilesets (ATeshGames, OpenGameArt) — Lizenz verifiziert (CC0), Quelle in `REFERENCES.md` eingetragen.
 2. **Assets (100×100, lossless WebP, opak, NEAREST):**
    * `grass.webp` — flach-grüne Oberfläche, Speckles aus echten Quellpixeln der soliden Graszeilen synthetisiert.
    * `dirt.webp` — nahtloses Dirt-Band, Innen-Fenster mit Basis-farbenen Kanten.
@@ -125,3 +125,14 @@ Zur Ergänzung der bisher rein prozeduralen Squash/Stretch- und Dämpfungsverfor
 ### 2. Verification
 * `npm run typecheck`, eslint, prettier: Grün. `npm test`: 547 Test-Files / 4419 Tests bestanden.
 * `npm run build:showcases` + `node .agents/scripts/check-showcases.js 9`: WebGL1, WebGL2, WebGPU alle ✅ OK.
+
+## 2026-11-07 · Kenney CC0 Pixel Textures
+
+### 1. Implemented Features
+* **Neue Block-Texturen aus Kenney „Pixel Platformer" (v1.2) + „Pixel Platformer Blocks" (CC0):** `ground-top.webp` (Gras-Kante, `tile_0022` Zeilen 3–17 → passt zur 0.85-Body-Höhe), `ground.webp` (Erd-Füllung, `tile_0122`), `block-exclaim.webp` (Ausrufezeichen-Block, `tile_0010`), `block-brick.webp` (grauer Ziegel, `Rock/tile_0017`). 18-px-Tiles ×4 nearest-neighbour, transparente Ecken auf Outline-Farbe geflattet, lossless WebP.
+* Ersetzt `grass.webp`, `dirt.webp` (CC0-Set ATeshGames) sowie die eigenen `smileblock.webp`/`stonebrick.webp`.
+* **Komposition vereinfacht:** freiliegender Boden = Gras-Kanten-Body (0.85) + flacher Gras-Slab (`#36E377`, 0.15); verdeckter Boden jetzt volle Höhe (vorher 0.85 → 0.15-Lücke zwischen gestapelten Blöcken); Ausrufezeichen- und Ziegelblock als volle Würfel ohne Slab (Bevel-Tiles wirken auch oben als Block). `createBlockWithSlab` → `addBlockPart`.
+* Vollständige Packs: Original-ZIPs in `small-world-machine-assets/raw/tilesets/`, entpackt in `tilesets/` (mit `License.txt`, sha256 im README). Quelle/Lizenz in `REFERENCES.md`.
+
+### 2. Known Limitations
+* `brick-1..3.webp` in `assets/` sind weiterhin unreferenziert (nicht angefasst).
