@@ -90,9 +90,9 @@ void main() {
 
     vec3 color = ambient + envSpecular + Lo + finalRefraction * kD_refr;
     
-    // Tone Mapping (Simple Reinhard)
+    // Forward tone curve (quality.toneMapping)
     color *= u_exposure;
-    color = color / (color + vec3(1.0));
+    color = forwardToneMap(color);
     
     // Gamma Correction
     color = pow(color, vec3(1.0 / 2.2));

@@ -2572,6 +2572,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     const exposure = this.postProcessing.enabled ? 1.0 : (this._quality.exposure ?? 1.0);
     ubo.setFloat(f.gamma.offset, gamma);
     ubo.setFloat(f.exposure.offset, exposure);
+    ubo.setFloat(f.toneMappingMode.offset, this.forwardToneMapping);
 
     for (let i = 0; i < f.pointLights.count; i++) {
       const offset = f.pointLights.offset + i * f.pointLights.stride;

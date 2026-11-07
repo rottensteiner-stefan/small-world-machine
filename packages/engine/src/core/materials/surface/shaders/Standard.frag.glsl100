@@ -78,11 +78,11 @@ void main() {
 
 #ifdef USE_UNLIT
     // KHR_materials_unlit: flat base color -- no direct lighting, no IBL, no emissive. WebGL1 has
-    // no post-processing pass, so the forward-chain contract (Reinhard + sRGB encode) is applied
+    // no post-processing pass, so the forward-chain contract (forwardToneMap + sRGB encode) is applied
     // here exactly like the shared LIGHT_CALC_PBR tail does for lit materials.
     vec3 color = albedo;
     color *= u_exposure;
-    color = color / (color + vec3(1.0)); // Reinhard
+    color = forwardToneMap(color);
     color = linearToSRGB(color);
     gl_FragColor = vec4(color, u_color.a * texColor.a);
     if (gl_FragColor.a < u_extraParams.y) {

@@ -27,7 +27,7 @@ const FIXTURE_PATH = path.join(__dirname, "global-uniform-snapshot.json");
 interface PackedSnapshot {
   /** 528 floats = full 2112-byte WebGL2 GlobalUniforms UBO, _data order. */
   webgl2: number[];
-  /** 424 floats = full 1696-byte WebGPU GlobalUniforms buffer (scratchGlobalBufferData). */
+  /** 428 floats = full 1712-byte WebGPU GlobalUniforms buffer (scratchGlobalBufferData). */
   webgpu: number[];
 }
 
@@ -178,6 +178,7 @@ function captureWebGPU(): number[] {
     gpuDevice: device,
     postProcessing: { enabled: false },
     outputGamma: 2.2,
+    forwardToneMapping: 1,
     quality: { gamma: 2.2, exposure: 1.0, clusteredLighting: { tileSize: [32, 32] } },
     gpuCanvasContext: { canvas: { width: 1280, height: 720 } },
     clusterDims: { x: 12, y: 13, z: 14 },
@@ -239,9 +240,15 @@ describe("GlobalUniforms packed bytes vs committed snapshot (change detector)", 
     expect(packed.webgl2).toHaveLength(528);
   });
 
-  it("webgpu snapshot is a full 1696-byte block (424 floats)", () => {
+  it("webgpu snapshot is a full 1712-byte block (428 floats)", () => {
     const packed = captureSnapshot();
-    expect(packed.webgpu).toHaveLength(424);
+    expect(packed.webgpu).toHaveLength(428);
+  });
+
+  it("both backends carry the forward tone curve lane (quality.toneMapping, default Reinhard)", () => {
+    const packed = captureSnapshot();
+    expect(packed.webgl2[WebGL2GlobalUniformLayout.fields.toneMappingMode.offset / 4]).toBe(1);
+    expect(packed.webgpu[WebGPUGGlobalUniformLayout.fields.toneMapping.index]).toBe(1);
   });
 
   it("ADR 0052 appended the point-shadow section without moving any older lane", () => {
@@ -259,7 +266,9 @@ describe("GlobalUniforms packed bytes vs committed snapshot (change detector)", 
     const matrices = packed.slice(f.pointShadowMatrices.index, f.pointShadowInfo.index);
     expect(matrices.every((v) => v === 0)).toBe(true);
     // [bias, normalBias, pLights index = -1, castShadow = 0] per slot.
-    expect(packed.slice(f.pointShadowInfo.index)).toEqual([0, 0, -1, 0, 0, 0, -1, 0]);
+    expect(
+      packed.slice(f.pointShadowInfo.index, f.pointShadowInfo.index + f.pointShadowInfo.floats),
+    ).toEqual([0, 0, -1, 0, 0, 0, -1, 0]);
   });
 });
 

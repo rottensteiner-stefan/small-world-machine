@@ -302,9 +302,9 @@ vec3 color = ambient + Lo;
 vec3 emissive = sRGBToLinear(texture2D(u_emissiveMap, v_uv).rgb) * sRGBToLinear(u_specColor.rgb) * u_specColor.a;
 color += emissive;
 
-// Exposure (A03): same forward order as GL2 -- gain, then Reinhard, then encode.
+// Exposure (A03): same forward order as GL2 -- gain, then forwardToneMap, then encode.
 color *= u_exposure;
-color = color / (color + vec3(1.0));
+color = forwardToneMap(color);
 color = linearToSRGB(color);
 
 gl_FragColor = vec4(color, u_color.a * texColor.a);

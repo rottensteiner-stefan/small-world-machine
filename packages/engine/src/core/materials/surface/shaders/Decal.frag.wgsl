@@ -107,9 +107,7 @@ fn decalNeighbourDelta(centre: vec4f, forward: vec4f, backward: vec4f) -> vec3f 
 
     var color = shaded;
     color *= global.exposure;
-    if (global.gamma != 1.0) {
-        color = color / (color + vec3f(1.0)); // Reinhard
-    }
+    color = forwardToneMap(color);
     color = linearToSRGB(color);
 
     [WGSL_FOG_CALC]

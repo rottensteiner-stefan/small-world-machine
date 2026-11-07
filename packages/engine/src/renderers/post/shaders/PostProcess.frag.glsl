@@ -68,7 +68,9 @@ vec3 toneMapReinhard(vec3 hdr, float exposure) {
 // Cineon tone mapping
 vec3 toneMapCineon(vec3 hdr, float exposure) {
     vec3 mapped = max(vec3(0.0), hdr * exposure - vec3(0.004));
-    return (mapped * (6.2 * mapped + vec3(0.5))) / (mapped * (6.2 * mapped + vec3(1.7)) + vec3(0.06));
+    // The Hejl/Burgess-Dawson fit already carries the 2.2 display encode: return linear so the
+    // shared linearToSRGB below does not encode twice.
+    return pow((mapped * (6.2 * mapped + vec3(0.5))) / (mapped * (6.2 * mapped + vec3(1.7)) + vec3(0.06)), vec3(2.2));
 }
 
 // ACES Filmic tone mapping

@@ -51,9 +51,7 @@
     color *= global.exposure;
 
     // Tonemapping guard
-    if (global.gamma != 1.0) {
-        color = color / (color + vec3f(1.0)); // Reinhard
-    }
+    color = forwardToneMap(color);
 
     // Gamma Correction (converts linear to sRGB for the render target)
     color = linearToSRGB(color);

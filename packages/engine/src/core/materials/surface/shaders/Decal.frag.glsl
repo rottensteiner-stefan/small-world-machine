@@ -148,9 +148,7 @@ void main() {
 #ifdef USE_DECAL_UNLIT
     // Flat albedo, with the same output transform the lit chunk applies at its end.
     vec3 color = albedo * u_exposure;
-    if (u_gamma != 1.0) {
-        color = color / (color + vec3(1.0)); // Reinhard
-    }
+    color = forwardToneMap(color);
     fragColor = vec4(linearToSRGB(color), u_color.a * texColor.a);
 #else
     [LIGHT_CALC_PBR]

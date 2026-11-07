@@ -65,7 +65,9 @@ fn toneMapReinhard(hdr: vec3f, exposure: f32) -> vec3f {
 // Cineon tone mapping (Optimized filmic operator by Jim Hejl and Richard Burgess-Dawson)
 fn toneMapCineon(hdr: vec3f, exposure: f32) -> vec3f {
     let mapped = max(vec3f(0.0), hdr * exposure - vec3f(0.004));
-    return (mapped * (6.2 * mapped + vec3f(0.5))) / (mapped * (6.2 * mapped + vec3f(1.7)) + vec3f(0.06));
+    // The Hejl/Burgess-Dawson fit already carries the 2.2 display encode: return linear so the
+    // shared linearToSRGB below does not encode twice.
+    return pow((mapped * (6.2 * mapped + vec3f(0.5))) / (mapped * (6.2 * mapped + vec3f(1.7)) + vec3f(0.06)), vec3f(2.2));
 }
 
 // ACES Filmic tone mapping (Narkowicz fit)

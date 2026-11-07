@@ -7,8 +7,9 @@ import type {
   QualityConfig,
   RendererContext,
 } from "../interfaces/index.js";
-import { ToneMapping, createDefaultRendererContext } from "../interfaces/index.js";
+import { createDefaultRendererContext } from "../interfaces/index.js";
 import type { RendererType } from "../enums/index.js";
+import { ToneMappingMode } from "../enums/index.js";
 import type { FrameInfo } from "../interfaces/FrameInfo.js";
 import { createFrameInfo } from "../interfaces/FrameInfo.js";
 import type { Object3D } from "../core/Object3D.js";
@@ -37,7 +38,7 @@ export abstract class AbstractRenderer implements Renderer {
     maxAnisotropy: 4,
     msaa: 4,
     hdr: false,
-    toneMapping: ToneMapping.NONE,
+    toneMapping: ToneMappingMode.REINHARD,
     gamma: 2.2,
     exposure: 1.0,
     disableTextures: false,
@@ -135,6 +136,16 @@ export abstract class AbstractRenderer implements Renderer {
    */
   public get outputGamma(): number {
     return this.postProcessing.enabled ? 1.0 : (this._quality.gamma ?? 2.2);
+  }
+
+  /**
+   * The tone curve the forward pass applies (`forwardToneMap` in the shaders): `NONE` while the
+   * post pass owns tone mapping, else `quality.toneMapping`. WebGL1 overrides it (always final).
+   */
+  public get forwardToneMapping(): ToneMappingMode {
+    return this.postProcessing.enabled
+      ? ToneMappingMode.NONE
+      : (this._quality.toneMapping ?? ToneMappingMode.REINHARD);
   }
 
   private readonly _targetClearColor: Color = new Color(0, 0, 0, 1);

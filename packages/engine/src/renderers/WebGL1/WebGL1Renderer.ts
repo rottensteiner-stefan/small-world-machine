@@ -20,7 +20,13 @@ import {
 } from "../gl/managers/WebGLProgramCache.js";
 import { WebGLTextureManager } from "../gl/managers/WebGLTextureManager.js";
 import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
-import { MaterialType, RendererType, ShaderFlag, Topology } from "../../enums/index.js";
+import {
+  MaterialType,
+  RendererType,
+  ShaderFlag,
+  Topology,
+  ToneMappingMode,
+} from "../../enums/index.js";
 import type { Vector3D } from "../../math/index.js";
 
 /**
@@ -42,6 +48,11 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   /** WebGL1 shaders encode with a fixed 2.2 and its post pass never re-encodes (ADR 0049). */
   public override get outputGamma(): number {
     return 2.2;
+  }
+
+  /** The WebGL1 forward pass always writes the final tone curve (its post pass is display-referred). */
+  public override get forwardToneMapping(): ToneMappingMode {
+    return this._quality.toneMapping ?? ToneMappingMode.REINHARD;
   }
 
   /** Shared GL manager layer: compiled-program cache, uploaded-texture state and per-geometry
@@ -556,6 +567,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         uExposure,
         this.postProcessing.enabled ? 1.0 : (this._quality.exposure ?? 1.0),
       );
+    const uToneMappingMode = u.get("u_toneMappingMode");
+    if (uToneMappingMode) this.gl.uniform1f(uToneMappingMode, this.forwardToneMapping);
 
     const uDirLightColor = u.get("u_dirLightColor");
     if (uDirLightColor)

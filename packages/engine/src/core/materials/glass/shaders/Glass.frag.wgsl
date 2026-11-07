@@ -89,9 +89,7 @@
     
     // Exposure & Tone Mapping
     color *= global.exposure;
-    if (global.gamma != 1.0) {
-        color = color / (color + vec3f(1.0)); // Reinhard
-    }
+    color = forwardToneMap(color);
     
     // Gamma Correction
     color = linearToSRGB(color);

@@ -97,12 +97,10 @@ void main() {
 
     // P3/S1 R3 (burn-out fix): `brightnessTopLava` (default 4.94) pushes the top layer to HDR
     // ~5.0; without this guard the raw value would clip to pure white. Mirror the Standard
-    // material: when u_gamma != 1.0 (post-processing disabled) a Reinhard clamp runs first; at
+    // material: when u_gamma != 1.0 (post-processing disabled) the forward tone curve (forwardToneMap) runs first; at
     // the default u_gamma == 1.0 (post-processing enabled) the guard is a numeric no-op, so
     // default output is byte-identical.
-    if (u_gamma != 1.0) {
-        color = color / (color + vec3(1.0)); // Reinhard
-    }
+    color = forwardToneMap(color);
 
     fragColor = vec4(linearToSRGB(color), 1.0);
 }

@@ -157,12 +157,10 @@ void main() {
 
 #ifdef USE_UNLIT
     // KHR_materials_unlit: flat base color -- no direct lighting, no IBL, no emissive. The
-    // output transform mirrors the shared LIGHT_CALC_PBR tail (exposure, forward-path Reinhard,
+    // output transform mirrors the shared LIGHT_CALC_PBR tail (exposure, forwardToneMap,
     // sRGB encode) so an unlit material obeys the same post-processing contracts as lit ones.
     vec3 color = albedo * u_exposure;
-    if (u_gamma != 1.0) {
-        color = color / (color + vec3(1.0)); // Reinhard
-    }
+    color = forwardToneMap(color);
     fragColor = vec4(linearToSRGB(color), u_color.a * texColor.a);
     if (fragColor.a < u_extraParams.y) {
         discard;
@@ -172,7 +170,7 @@ void main() {
 #endif
 
     // The USE_REFLECTION_MAP blend now lives inside the LIGHT_CALC_PBR chunk (pre-tail, linear
-    // space, A02); blending here after the chunk's exposure/Reinhard/sRGB tail mixed linear
+    // space, A02); blending here after the chunk's exposure/tone-curve/sRGB tail mixed linear
     // reflections into encoded values and bypassed tone mapping. Removed deliberately -- see
     // light_calc_pbr.frag.glsl. (No bracket-wrapped chunk-id token in this comment: the assembler
     // would expand it in place.)

@@ -658,10 +658,9 @@ color *= u_exposure;
 //                    as a signal that the PostProcess pass will handle tonemapping, gamma,
 //                    and exposure (see WebGL2Renderer.ts).
 // u_gamma != 1.0  →  PostProcessing is DISABLED. The forward pass IS the final pass.
-//                    Reinhard + linearToSRGB run here as a lightweight single-pass pipeline.
-if (u_gamma != 1.0) {
-    color = color / (color + vec3(1.0)); // Reinhard
-}
+//                    forwardToneMap (quality.toneMapping, default Reinhard) + linearToSRGB run
+//                    here as a lightweight single-pass pipeline.
+color = forwardToneMap(color);
 
 // Gamma Correction (when u_gamma == 1.0, 1.0 / 1.0 = 1.0, preserving linear HDR values for PostProcessPassGL)
 color = linearToSRGB(color);

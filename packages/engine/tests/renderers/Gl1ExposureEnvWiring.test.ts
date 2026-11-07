@@ -20,7 +20,7 @@ describe("WebGL1 forward exposure + env intensity wiring", () => {
     expect(renderer).toContain("scene.environmentIntensity");
   });
 
-  it("applies exposure BEFORE Reinhard on every GL1 forward tail", () => {
+  it("applies exposure BEFORE the forward tone curve on every GL1 forward tail", () => {
     for (const file of [
       `${GL1}light_calc_pbr.frag.glsl`,
       `${MAT}surface/shaders/Standard.frag.glsl100`,
@@ -29,7 +29,7 @@ describe("WebGL1 forward exposure + env intensity wiring", () => {
     ]) {
       const src = readSource(file);
       expect(src, file).toMatch(
-        /color \*= u_exposure;\s*\n\s*color = color \/ \(color \+ vec3\(1\.0\)\);/,
+        /color \*= u_exposure;\s*\n(\s*\/\/[^\n]*\n)*\s*color = forwardToneMap\(color\);/,
       );
     }
   });

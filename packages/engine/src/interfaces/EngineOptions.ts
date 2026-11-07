@@ -26,21 +26,6 @@ export interface RendererConfig {
 }
 
 /**
- * Tone mapping algorithms for HDR rendering.
- */
-export const ToneMapping = {
-  /** No tone mapping applied. */
-  NONE: "none",
-  /** Reinhard tone mapping. */
-  REINHARD: "reinhard",
-  /** ACES Filmic tone mapping. */
-  ACES: "aces",
-} as const;
-
-/** Type definition for ToneMapping. */
-export type ToneMapping = (typeof ToneMapping)[keyof typeof ToneMapping];
-
-/**
  * Configuration for clustered/tiled forward+ light culling -- see
  * `docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md`. WebGPU consumes the full grid;
  * WebGL2 uses it for performance only (still reads at most 16 raw lights); WebGL1 ignores it
@@ -69,8 +54,13 @@ export interface QualityConfig {
   msaa?: number;
   /** Whether to enable HDR rendering. Defaults to false. */
   hdr?: boolean;
-  /** The tone mapping algorithm to use. Defaults to NONE. */
-  toneMapping?: ToneMapping;
+  /**
+   * @domain Tone curve of the forward pass whenever it writes the final image (post-processing off;
+   * WebGL1 always, its post pass is display-referred). Defaults to `ToneMappingMode.REINHARD`.
+   * `NONE` keeps saturated albedo 1:1 (stylized/unlit-looking scenes). With post-processing on,
+   * WebGL2/WebGPU use `ToneMappingElement.mode` instead. Read every frame.
+   */
+  toneMapping?: ToneMappingMode;
   /** Global gamma factor for color correction. Defaults to 2.2. */
   gamma?: number;
   /** Global exposure factor for brightness control. Defaults to 1.0. */

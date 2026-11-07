@@ -1,9 +1,5 @@
 /// <reference types="vite/client" />
-import type {
-  AnimationAction,
-  AnimationClip,
-  ToneMappingElement,
-} from "@small-world-machine/engine";
+import type { AnimationAction, AnimationClip } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -17,7 +13,6 @@ import {
   Keys,
   MathUtils,
   Object3D,
-  PostProcessingEffectType,
   StandardMaterial,
   Texture,
   TextureFilter,
@@ -288,21 +283,9 @@ export class Showcase extends AbstractShowcase {
     const sun = new DirectionalLight({ color: Color.WHITE, intensity: 1.3 });
     sun.direction.set(0.4, -0.7, -1).normalize();
 
-    // Linear tone mapping: the forward-only path applies Reinhard, which halves and desaturates
-    // the character's saturated albedo (orange -> brown). The post chain runs tone mapping only
-    // (default-on vignette/grain/bloom would soften the pixel-art blocks).
-    this.renderer.postProcessing.enabled = true;
-    for (const type of Object.values(PostProcessingEffectType)) {
-      const element = this.renderer.postProcessing.get(type);
-      if (element) element.enabled = false;
-    }
-    const toneMapping = this.renderer.postProcessing.get<ToneMappingElement>(
-      PostProcessingEffectType.TONE_MAPPING,
-    );
-    if (toneMapping) {
-      toneMapping.enabled = true;
-      toneMapping.mode = ToneMappingMode.NONE;
-    }
+    // Linear forward tone curve: the default Reinhard halves and desaturates the character's
+    // saturated albedo (orange -> brown). No post pass needed; blocks are unlit either way.
+    this.renderer.quality.toneMapping = ToneMappingMode.NONE;
     this.scene.add(sun);
 
     // 3. Texturen laden (Kenney "Pixel Platformer" + "Pixel Platformer Blocks", CC0; 18 px tiles

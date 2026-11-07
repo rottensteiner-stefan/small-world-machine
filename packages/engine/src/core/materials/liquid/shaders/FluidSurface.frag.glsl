@@ -115,9 +115,7 @@ void main() {
     finalColor *= u_exposure;
     // Same guard as FluidSurface.frag.wgsl: without post-processing (u_gamma != 1.0) this pass is the
     // final one, so the HDR emissive/specular terms are clamped here; a no-op with post-processing.
-    if (u_gamma != 1.0) {
-        finalColor = finalColor / (finalColor + vec3(1.0)); // Reinhard
-    }
+    finalColor = forwardToneMap(finalColor);
     finalColor = linearToSRGB(finalColor);
 
     fragColor = vec4(finalColor, alpha);

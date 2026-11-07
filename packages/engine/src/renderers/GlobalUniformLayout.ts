@@ -49,6 +49,7 @@ export const WebGL2GlobalUniformLayout = {
     numAreaLights: { offset: 136, size: 4 },
     gamma: { offset: 140, size: 4 },
     exposure: { offset: 144, size: 4 },
+    toneMappingMode: { offset: 148, size: 4 },
     cameraNearFar: { offset: 152, size: 8 },
     pointLights: { offset: 160, size: 512, count: 16, stride: 32 },
     spotLights: { offset: 672, size: 1024, count: 16, stride: 64 },
@@ -93,12 +94,12 @@ export const WebGL2AreaLightLayout = {
   slotBytes: 96,
 } as const;
 
-// ── WebGPU (424 floats / 1696 bytes) ───────────────────────────────────────────────────────────
+// ── WebGPU (428 floats / 1712 bytes) ───────────────────────────────────────────────────────────
 // Field order and float indices match `structs.wgsl` exactly.
 
 export const WebGPUGGlobalUniformLayout = {
-  totalFloats: 424,
-  totalBytes: 1696,
+  totalFloats: 428,
+  totalBytes: 1712,
   fields: {
     vp: { index: 0, floats: 16 },
     viewPos: { index: 16, floats: 4 },
@@ -138,5 +139,7 @@ export const WebGPUGGlobalUniformLayout = {
     // lane per slot [bias, normalBias, pLights index or -1, castShadow]. Appended like the above.
     pointShadowMatrices: { index: 224, floats: 192, count: 12, stride: 16 },
     pointShadowInfo: { index: 416, floats: 8, count: 2, stride: 4 },
+    // Forward tone curve lane [mode, reserved x3], appended like the above.
+    toneMapping: { index: 424, floats: 4 },
   },
 } as const;

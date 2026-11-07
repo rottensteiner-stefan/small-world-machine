@@ -68,8 +68,13 @@ These control the engine's graphical fidelity.
 - `maxAnisotropy` (number): Anisotropic filtering level (1, 4, 8, 16) for sharper textures at shallow viewing angles. Enforced on mipmapped linear-filtered 2D textures on all backends (WebGL1/WebGL2 via the extension, WebGPU via `GPUSamplerDescriptor.maxAnisotropy`, both clamped to 16). A texture's `anisotropy` option inherits this engine level by default; `0` on a texture disables it for that texture.
 
   **Checking it by eye:** Showcase 10 accepts `?aniso=N` (cap at N, `1` = off; without it the engine default of 4 applies). On an Apple M4 Pro the detail in the far field rose by about 20 % from level 1 to 4, by 4 % more from 4 to 8 and by 1 % from 8 to 16, on both backends.
+
 - `hdr` (boolean): Enables high-dynamic-range (Float16) rendering pipelines.
-- `toneMapping` (string): The tone mapping algorithm to use (e.g. `aces`, `reinhard`, `none`).
+- `toneMapping` (`ToneMappingMode`, default `1` = `REINHARD`): Tone curve of the forward pass whenever
+  it writes the final image (post-processing off; WebGL1 always). `0` = `NONE` keeps saturated albedo
+  1:1 (stylized scenes), `2` = `CINEON`, `3` = `ACES_FILMIC`. Read every frame, so
+  `renderer.quality.toneMapping = ToneMappingMode.NONE` works at runtime. With post-processing on,
+  WebGL2/WebGPU use `postProcessing.effects.toneMapping.mode` instead.
 - `autoInstancing` (boolean, default `true`, ADR 0046): The renderer draws consecutive opaque
   objects that share a geometry and a material as **one** instanced draw (main pass, shadow
   passes, depth pre-pass; WebGPU and WebGL2). The scene graph is untouched: every object keeps
@@ -111,10 +116,10 @@ Configures the post-processing pipeline. General pipeline settings (`enabled`, `
 }
 ```
 
-> **Note — not exhaustive:** The `effects` schema above is a *selection*; the same flat
+> **Note — not exhaustive:** The `effects` schema above is a _selection_; the same flat
 > `effects` structure contains further effects (`flash`, `colorGrading`, `gravitationalLensing`,
 > `lightShafts`, `volumetricFog`, `depthOfField`) that can be configured in the same style.
-> `toneMapping.mode` here is the numeric `ToneMappingMode` (`NONE`=0, `REINHARD`=1, `CINEON`=2, `ACES_FILMIC`=3); only `quality.toneMapping` takes strings such as `"aces"`.
+> `toneMapping.mode` here is the numeric `ToneMappingMode` (`NONE`=0, `REINHARD`=1, `CINEON`=2, `ACES_FILMIC`=3), same values as `quality.toneMapping`.
 
 Every field is optional and only overrides that specific value on top of the effect's own defaults — fields that shouldn't be changed don't need to be specified.
 
@@ -122,7 +127,7 @@ Every field is optional and only overrides that specific value on top of the eff
 - **`vignette`** / **`grain`** / **`quantize`** — classic edge darkening, film-grain noise, and color banding/posterization, respectively.
 - **`hbao`** — screen-space ambient occlusion (a simplified HBAO, not GTAO — see `docs/research/aaa-engine-techniques.md` for the exact scope). WebGL/WebGPU only.
 - **`taa`** — simplified temporal anti-aliasing: sub-pixel camera jitter plus an exponential history blend, no motion-vector reprojection. Smooths edges in static/slow-moving scenes; visible ghosting during fast motion. WebGL/WebGPU only.
-- **`motionTrail`** — a *deliberate* ghost/afterimage effect (not anti-aliasing) that reuses the same history-blend mechanism as `taa` with a significantly higher feedback value. WebGL/WebGPU only.
+- **`motionTrail`** — a _deliberate_ ghost/afterimage effect (not anti-aliasing) that reuses the same history-blend mechanism as `taa` with a significantly higher feedback value. WebGL/WebGPU only.
 
 ### Projections
 
@@ -141,7 +146,7 @@ Every field is optional and only overrides that specific value on top of the eff
   "quality": {
     "maxPixelRatio": 2,
     "hdr": true,
-    "toneMapping": "aces",
+    "toneMapping": 3,
     "msaa": 4,
     "maxAnisotropy": 16
   },

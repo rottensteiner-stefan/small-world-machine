@@ -85,9 +85,7 @@ void main() {
     
     // Exposure & Tone Mapping
     color *= u_exposure;
-    if (u_gamma != 1.0) {
-        color = color / (color + vec3(1.0)); // Reinhard (the post-process pass tone-maps otherwise)
-    }
+    color = forwardToneMap(color);
     
     // Gamma Correction
     color = linearToSRGB(color);

@@ -253,6 +253,7 @@ export class GlobalUniformWriter {
       gamma,
     );
     gData[glob.exposure.index] = exposure; // exposure
+    gData[glob.toneMapping.index] = this._host.forwardToneMapping;
 
     const fog = scene.fog;
     // A05 one-owner rule: with the volumetric fog element active the post composite applies its

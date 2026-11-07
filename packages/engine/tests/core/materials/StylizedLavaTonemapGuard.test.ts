@@ -20,30 +20,21 @@ const LAVA_DIR = join(SRC_DIR, "core/materials/liquid/shaders");
 
 describe("R3: StylizedLava tonemap guard before linearToSRGB on the HDR tiers", () => {
   const sites = [
-    {
-      file: join(LAVA_DIR, "StylizedLava.frag.wgsl"),
-      guard: /if \(global\.gamma != 1\.0\)/,
-      reinhard: /color \/ \(color \+ vec3f\(1\.0\)\)/,
-    },
-    {
-      file: join(LAVA_DIR, "StylizedLava.frag.glsl"),
-      guard: /if \(u_gamma != 1\.0\)/,
-      reinhard: /color \/ \(color \+ vec3\(1\.0\)\)/,
-    },
+    join(LAVA_DIR, "StylizedLava.frag.wgsl"),
+    join(LAVA_DIR, "StylizedLava.frag.glsl"),
   ];
 
-  it("runs a gamma-guarded Reinhard clamp before linearToSRGB at both HDR sites", () => {
-    for (const site of sites) {
-      const source = readFileSync(site.file, "utf8");
-      expect(source, site.file).toMatch(site.guard);
-      expect(source, site.file).toMatch(site.reinhard);
-      // The clamp must sit between the exposure multiply and the sRGB encode.
-      const guardIdx = source.search(site.guard);
-      const reinhardIdx = source.search(site.reinhard);
-      const srgBIdx = source.indexOf("linearToSRGB");
-      expect(guardIdx, `${site.file}: guard present`).toBeGreaterThanOrEqual(0);
-      expect(reinhardIdx, `${site.file}: reinhard present`).toBeGreaterThan(guardIdx);
-      expect(srgBIdx, `${site.file}: linearToSRGB after the guard`).toBeGreaterThan(reinhardIdx);
+  // The shared forwardToneMap (gamma-lane guarded, quality.toneMapping curve) replaced the
+  // hand-rolled Reinhard clamp; it must still sit before the sRGB encode.
+  it("runs the gamma-guarded forward tone curve before linearToSRGB at both HDR sites", () => {
+    for (const file of sites) {
+      const source = readFileSync(file, "utf8");
+      const curveIdx = source.search(/color = forwardToneMap\(color\);/);
+      expect(curveIdx, `${file}: forward tone curve present`).toBeGreaterThanOrEqual(0);
+      expect(
+        source.indexOf("linearToSRGB", curveIdx),
+        `${file}: encode after curve`,
+      ).toBeGreaterThan(curveIdx);
     }
   });
 

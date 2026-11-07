@@ -58,7 +58,7 @@ layout(std140) uniform GlobalUniforms {
     int u_numAreaLights;
     float u_gamma;
     float u_exposure;
-    float _pad4;
+    float u_toneMappingMode; // forward tone curve (ToneMappingMode), 0 while post-processing owns it
     vec2 u_cameraNearFar;
     PointLight u_pointLights[16];
     SpotLight u_spotLights[16];

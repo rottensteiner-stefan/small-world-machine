@@ -1,6 +1,6 @@
 // WGSL Global and Object structures
 
-// GlobalUniforms: Scene-level uniforms (1696 bytes / 424 floats)
+// GlobalUniforms: Scene-level uniforms (1712 bytes / 428 floats)
 // Cleanly grouped into Camera & View, Environment & Fog, Shadow Maps, Clustered Light Grid,
 // Shadow Softness / EVSM Tuning, Per-Cascade Bias, and Point-Light Shadow Faces.
 struct GlobalUniforms {
@@ -73,6 +73,10 @@ struct GlobalUniforms {
     // 4 + slot * 6 + face of u_spotShadowMap. Matrices are ZO-corrected like spotShadowMatrices.
     pointShadowMatrices: array<mat4x4f, 12>,
     pointShadowInfo: array<vec4f, 2>, // [bias, normalBias, pLights index (-1 = unused), castShadow]
+
+    // --- 9. Forward Tone Curve (16 bytes) ---
+    // x = ToneMappingMode of the forward pass (0 while post-processing owns tone mapping), y/z/w reserved.
+    toneMapping: vec4f,
 }
 
 // ObjectUniforms: 512-byte uniform block (32 vec4 / 128 floats)
@@ -174,6 +178,21 @@ struct AreaLight {
 // the forward pass writes -- unchanged without post-processing, linear with it.
 fn displayToTarget(color: vec3f) -> vec3f {
     return pow(max(color, vec3f(0.0)), vec3f(2.2 / global.gamma));
+}
+
+// Forward tone curve (quality.toneMapping as ToneMappingMode: 0 none, 1 Reinhard, 2 Cineon, 3 ACES
+// filmic), applied after exposure, before linearToSRGB. Gamma lane 1.0 = post-processing tone-maps
+// and encodes -> pass-through. Same operators as the post pass (PostProcess.frag.*).
+fn forwardToneMap(c: vec3f) -> vec3f {
+    let mode = global.toneMapping.x;
+    if (global.gamma == 1.0 || mode < 0.5) { return c; }
+    if (mode < 1.5) { return c / (c + vec3f(1.0)); }
+    if (mode < 2.5) {
+        // Hejl/Burgess-Dawson filmic fit: its output already carries the 2.2 display encode.
+        let m = max(vec3f(0.0), c - vec3f(0.004));
+        return pow((m * (6.2 * m + 0.5)) / (m * (6.2 * m + 1.7) + 0.06), vec3f(2.2));
+    }
+    return clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), vec3f(0.0), vec3f(1.0)); // ACES (Narkowicz)
 }
 
 // World-space direction -> screen-plane offset in texture-UV units (WebGPU: y down). Projects the
