@@ -163,7 +163,9 @@ Rule: every step solves one *problem*; the plan above names the default candidat
 - `BillboardInstancer` stays as is; migration onto `InstanceField` is a separate decision after step 2.
 - Picking individual trees needs a CPU-side query over the field's cell grid (not provided by V1).
 
-## Doctrine compliance (pre-check, re-verify per step)
+## Doctrine Compliance
+
+Pre-check; re-verify per step when it is implemented.
 
 - **New public hot-scope parameters:** expected `@domain` (`lodPixelThresholds`, `cullPixelSize`, `cellSize`, `shadowLodBias`), `@fixed` (instance record layout, impostor grid size per bake). Classified in code when introduced.
 - **Shared abstraction ≥ 3 consumers:** `IndirectDrawSource` — GPU particles, `InstanceField`, impostor/cluster buckets. `InstanceField` itself — Minceraft, YAD, a standalone app.
