@@ -107,6 +107,44 @@
 - **6a+ (WebGPU/WebGL2, candidate):** SSILVB — screen-space indirect lighting with visibility bitmask (Therrien, Levesque & Gilet 2023), extending the GTAO-style `HbaoElement` horizon search; reference author measured ~0.7 ms with reduced precision and used it to darken forest interiors instead of distance-field AO.
 - **6b (WebGPU, research spike only):** hybrid voxel GI (scene voxelization into a clipmap via compute, cone tracing or probe update; benchmark Godot `VoxelGI`/`SDFGI`, NVIDIA VXGI, Crassin 2011). Own ADR before any implementation.
 
+### Candidate solutions per problem
+
+Rule: every step solves one *problem*; the plan above names the default candidate (**A**). Alternatives stay listed until a decision is recorded. A candidate is never removed silently — it is either chosen, kept as tier variant, or rejected with its measurement.
+
+| Problem (step) | A (default) | B | C | D |
+|---|---|---|---|---|
+| Occlusion (1) | single-phase HZB, previous frame | two-phase occlusion (Wihlidal / Haar & Aaltonen) | frustum + projected-size only | — |
+| Ground cover source (1b) | compute-generated per frame | pre-baked per-tile instance buffers, streamed | shell/fin grass for the outer ring | — |
+| Ground cover shadows (1b) | screen-space shadows + AO + N·L | shadow map (reduced cascade set) | AO only | — |
+| Foliage temporal stability (1b/2) | TAA + mip bias + smear mask | MSAA 4× + alpha-to-coverage (WebGPU/WebGL2) | TAA only | — |
+| LOD transition (2) | dithered crossfade | geomorphing (vertex morph between LODs) | hard switch + hysteresis | — |
+| Mid distance (3) | octahedral impostors | per-prototype voxel LOD (WebGPU) | billboard clouds / cross quads | mesh LOD only |
+| Far field (4) | canopy shell | HLOD aggregate impostors per cell | voxel canopy volume (WebGPU) | — |
+| Near geometry (5) | discrete LOD (step 2) | clustered LOD, HW raster, vertex pulling | — | — |
+| Forest lighting (6) | canopy ambient + baked AO + HBAO | SSILVB | voxel GI | — |
+
+### Decision protocol
+
+- **Default: decide on paper.** Build competing candidates only when all three hold: (1) references disagree or the answer depends on our content/devices, (2) each prototype fits a timebox of ≤ 3 days, (3) the deciding criterion is measurable. Otherwise pick A and move on.
+- **Spike-and-decide:** competing candidates run as throwaway spikes in showcase 51 behind a URL switch (`?<problem>=a|b|c`), same scene, same seeded camera paths (walk, fast flight, aerial). No public API for spikes.
+- **Hard gates (fail = out):** runs on its target tier without validation errors; fits the frame budget of the reference device; doctrine-compliant (ADR 0047); no CPU readback in the render path.
+- **Scored criteria** (weights set per problem *before* measuring, recorded in the decision note):
+
+| Criterion | Measure |
+|---|---|
+| GPU cost | P50 / P95 ms of the affected passes (`timestamp-query`, step 0) |
+| CPU cost | ms per frame vs. instance count (must stay flat on WebGPU) |
+| Memory / download | VRAM + asset bytes per species / per km² |
+| Image quality | ꟻLIP (NVIDIA) against a ground-truth render of the same frame (LOD0 everywhere, no culling, supersampled) |
+| Temporal stability | ꟻLIP between consecutive frames vs. the ground-truth sequence on the fast-flight path (pops, shimmer, smear) |
+| Subjective look | blind A/B screenshots/videos judged by the maintainer |
+| Tier coverage | which tiers get it (ADR 0057 matrix) |
+| Cost of ownership | LOC, new shader variants, bake time, authoring steps |
+
+- **Reference devices:** Apple M1-class Mac (WebGPU, Chrome), a mid-range Windows dGPU (WebGPU + WebGL2), Redmi 13C (WebGL2 low tier, ADR 0035).
+- **Outcome per candidate:** *chosen* (becomes the implementation), *tier variant* (kept because it wins on another API or performance tier → wired through the ADR 0035 resolver and listed in `tier-parity.json`; this is the only way two candidates coexist in the engine), or *rejected* (spike code deleted, numbers kept).
+- **Record:** measurements as `docs/research/vegetation-<problem>-<date>.md`; the decision as an amendment line in this ADR (status per step). Re-open triggers: new web API capability (e.g. mesh shaders, multi-draw-indirect, 64-bit atomics in WebGPU), new reference device class, or a consumer whose content inverts the ranking.
+
 ## Considered options
 
 - **Extend ADR 0046 auto-instancing to millions of CPU objects:** rejected — per-object CPU cost (scene walk, bounds, sort) is the bottleneck, not draw calls.
