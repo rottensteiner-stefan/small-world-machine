@@ -105,9 +105,14 @@ describe("WGSL assembly parses (same approach as .agents/scripts/lint-wgsl.ts)",
     ["WGSL_STRUCTS", chunk("chunks/structs.wgsl")],
     ["WGSL_VS", chunk("base.vert.wgsl")],
     ["WGSL_FOG_CALC", chunk("chunks/fog_calc.wgsl")],
+    ["WGSL_TONE_OPERATORS", chunk("../shared/tone_operators.wgsl")],
   ]);
+  // Recursive like ShaderRegistry.assemble (structs.wgsl pulls in WGSL_TONE_OPERATORS).
   const assemble = (code: string): string =>
-    code.replace(/\[([A-Z_]+)\]/g, (match, key: string) => chunks.get(key) ?? match);
+    code.replace(/\[([A-Z_]+)\]/g, (match, key: string) => {
+      const sub = chunks.get(key);
+      return sub === undefined ? match : assemble(sub);
+    });
 
   const materials = [
     ["MetalReliefMaterial", new MetalReliefMaterial()],

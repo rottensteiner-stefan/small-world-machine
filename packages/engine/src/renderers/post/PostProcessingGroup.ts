@@ -148,6 +148,8 @@ export class PostProcessingGroup {
       if (tm) {
         if (effects.toneMapping.enabled !== undefined) tm.enabled = effects.toneMapping.enabled;
         if (effects.toneMapping.mode !== undefined) tm.mode = effects.toneMapping.mode;
+        if (effects.toneMapping.whitePoint !== undefined)
+          tm.whitePoint = effects.toneMapping.whitePoint;
         if (effects.toneMapping.exposure !== undefined) tm.exposure = effects.toneMapping.exposure;
         if (effects.toneMapping.gamma !== undefined) tm.gamma = effects.toneMapping.gamma;
       }

@@ -38,7 +38,8 @@ export abstract class AbstractRenderer implements Renderer {
     maxAnisotropy: 4,
     msaa: 4,
     hdr: false,
-    toneMapping: ToneMappingMode.REINHARD,
+    toneMapping: ToneMappingMode.DEFAULT,
+    toneMappingWhitePoint: 4.0,
     gamma: 2.2,
     exposure: 1.0,
     disableTextures: false,
@@ -145,7 +146,12 @@ export abstract class AbstractRenderer implements Renderer {
   public get forwardToneMapping(): ToneMappingMode {
     return this.postProcessing.enabled
       ? ToneMappingMode.NONE
-      : (this._quality.toneMapping ?? ToneMappingMode.REINHARD);
+      : (this._quality.toneMapping ?? ToneMappingMode.DEFAULT);
+  }
+
+  /** White point of the forward `REINHARD_EXTENDED` curve (`quality.toneMappingWhitePoint`). */
+  public get forwardToneMappingWhitePoint(): number {
+    return this._quality.toneMappingWhitePoint ?? 4.0;
   }
 
   private readonly _targetClearColor: Color = new Color(0, 0, 0, 1);

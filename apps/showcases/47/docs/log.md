@@ -85,3 +85,8 @@ Milestone A of the Khronos showcase program: the official `MetalRoughSpheres.glb
   (geometry constraint); the "reference-sheet" composition with margins is intentional.
 - `ibl-neut` generation artifacts (`gen-ibl-pano.mjs`, bake inputs) live in `.agents/scratches/`
   (gitignored); the committed set is the baked `.webp` outputs only.
+
+## 2026-11-07 · Tone Curve Selector
+
+- The "Tone Mapping (ACES)" switch became a curve selector: one preset button per `ToneMappingMode` (derived from the enum, `DEFAULT` alias skipped), `T` / `Shift+T` cycles. Readout shows the active curve. Default is the engine default `PBR_NEUTRAL` (was ACES Narkowicz) -- the Khronos reference is now judged under the Khronos tone mapper, like the glTF Sample Viewer.
+- Verification: all nine curves cycled on WebGL2, WebGPU and WebGL1 without console errors; WebGPU differs from WebGL2 by a constant ~2 % RMSE for every curve (tier baseline, not curve-dependent).

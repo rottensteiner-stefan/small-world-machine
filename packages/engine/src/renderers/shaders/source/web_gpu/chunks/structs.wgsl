@@ -75,7 +75,8 @@ struct GlobalUniforms {
     pointShadowInfo: array<vec4f, 2>, // [bias, normalBias, pLights index (-1 = unused), castShadow]
 
     // --- 9. Forward Tone Curve (16 bytes) ---
-    // x = ToneMappingMode of the forward pass (0 while post-processing owns tone mapping), y/z/w reserved.
+    // x = ToneMappingMode of the forward pass (0 while post-processing owns tone mapping),
+    // y = REINHARD_EXTENDED white point, z/w reserved.
     toneMapping: vec4f,
 }
 
@@ -180,19 +181,14 @@ fn displayToTarget(color: vec3f) -> vec3f {
     return pow(max(color, vec3f(0.0)), vec3f(2.2 / global.gamma));
 }
 
-// Forward tone curve (quality.toneMapping as ToneMappingMode: 0 none, 1 Reinhard, 2 Cineon, 3 ACES
-// filmic), applied after exposure, before linearToSRGB. Gamma lane 1.0 = post-processing tone-maps
-// and encodes -> pass-through. Same operators as the post pass (PostProcess.frag.*).
+[WGSL_TONE_OPERATORS]
+
+// Forward tone curve: quality.toneMapping (ToneMappingMode) through the shared tone operators
+// (WGSL_TONE_OPERATORS = shared/tone_operators.wgsl), after exposure, before linearToSRGB. Gamma lane
+// 1.0 = post-processing tone-maps and encodes -> pass-through.
 fn forwardToneMap(c: vec3f) -> vec3f {
-    let mode = global.toneMapping.x;
-    if (global.gamma == 1.0 || mode < 0.5) { return c; }
-    if (mode < 1.5) { return c / (c + vec3f(1.0)); }
-    if (mode < 2.5) {
-        // Hejl/Burgess-Dawson filmic fit: its output already carries the 2.2 display encode.
-        let m = max(vec3f(0.0), c - vec3f(0.004));
-        return pow((m * (6.2 * m + 0.5)) / (m * (6.2 * m + 1.7) + 0.06), vec3f(2.2));
-    }
-    return clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), vec3f(0.0), vec3f(1.0)); // ACES (Narkowicz)
+    if (global.gamma == 1.0) { return c; }
+    return toneMapOperator(c, i32(global.toneMapping.x + 0.5), global.toneMapping.y);
 }
 
 // World-space direction -> screen-plane offset in texture-UV units (WebGPU: y down). Projects the

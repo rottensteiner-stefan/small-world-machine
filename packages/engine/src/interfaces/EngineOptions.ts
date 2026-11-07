@@ -56,11 +56,16 @@ export interface QualityConfig {
   hdr?: boolean;
   /**
    * @domain Tone curve of the forward pass whenever it writes the final image (post-processing off;
-   * WebGL1 always, its post pass is display-referred). Defaults to `ToneMappingMode.REINHARD`.
-   * `NONE` keeps saturated albedo 1:1 (stylized/unlit-looking scenes). With post-processing on,
-   * WebGL2/WebGPU use `ToneMappingElement.mode` instead. Read every frame.
+   * WebGL1 always, its post pass is display-referred). Defaults to `ToneMappingMode.DEFAULT`
+   * (`PBR_NEUTRAL`). `NONE` keeps saturated albedo 1:1 (stylized/unlit-looking scenes). With
+   * post-processing on, WebGL2/WebGPU use `ToneMappingElement.mode` instead. Read every frame.
    */
   toneMapping?: ToneMappingMode;
+  /**
+   * @domain Linear scene value that `ToneMappingMode.REINHARD_EXTENDED` maps to display white in the
+   * forward pass (> 0; ignored by every other mode). Default 4.0. Read every frame.
+   */
+  toneMappingWhitePoint?: number;
   /** Global gamma factor for color correction. Defaults to 2.2. */
   gamma?: number;
   /** Global exposure factor for brightness control. Defaults to 1.0. */
@@ -205,6 +210,8 @@ export interface PostProcessingEffectsConfig {
   toneMapping?: {
     enabled?: boolean;
     mode?: ToneMappingMode;
+    /** Linear value mapped to white by `REINHARD_EXTENDED` (> 0). Default 4.0. */
+    whitePoint?: number;
     exposure?: number;
     gamma?: number;
   };

@@ -55,6 +55,7 @@ export const WebGL2GlobalUniformLayout = {
     spotLights: { offset: 672, size: 1024, count: 16, stride: 64 },
     areaLights: { offset: 1696, size: 384, count: 4, stride: 96 },
     tileSizePx: { offset: 2080, size: 8 },
+    toneMappingWhite: { offset: 2088, size: 4 },
     clusterDims: { offset: 2096, size: 16 },
   },
 } as const;

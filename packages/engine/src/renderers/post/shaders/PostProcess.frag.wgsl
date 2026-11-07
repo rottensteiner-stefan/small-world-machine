@@ -9,6 +9,7 @@
 // taken / sample count), unlike the continuous tuning values below, which live in `dyn` instead
 // so tuning them doesn't recompile the shader.
 const u_toneMappingMode: u32 = 0u;
+const u_toneMappingWhite: f32 = 4.0;
 const u_colorGradingEnabled: u32 = 0u;
 const u_vignetteEnabled: u32 = 0u;
 const u_grainEnabled: u32 = 0u;
@@ -56,30 +57,8 @@ fn random(st: vec2f) -> f32 {
     return fract((p3.x + p3.y) * p3.z);
 }
 
-// Reinhard tone mapping (simple, proven, industry-standard fallback)
-fn toneMapReinhard(hdr: vec3f, exposure: f32) -> vec3f {
-    let mapped = hdr * exposure;
-    return mapped / (mapped + vec3f(1.0));
-}
-
-// Cineon tone mapping (Optimized filmic operator by Jim Hejl and Richard Burgess-Dawson)
-fn toneMapCineon(hdr: vec3f, exposure: f32) -> vec3f {
-    let mapped = max(vec3f(0.0), hdr * exposure - vec3f(0.004));
-    // The Hejl/Burgess-Dawson fit already carries the 2.2 display encode: return linear so the
-    // shared linearToSRGB below does not encode twice.
-    return pow((mapped * (6.2 * mapped + vec3f(0.5))) / (mapped * (6.2 * mapped + vec3f(1.7)) + vec3f(0.06)), vec3f(2.2));
-}
-
-// ACES Filmic tone mapping (Narkowicz fit)
-fn toneMapACESFilmic(hdr: vec3f, exposure: f32) -> vec3f {
-    let mapped = hdr * exposure;
-    let a = 2.51;
-    let b = 0.03;
-    let c = 2.43;
-    let d = 0.59;
-    let e = 0.14;
-    return clamp((mapped * (a * mapped + b)) / (mapped * (c * mapped + d) + e), vec3f(0.0), vec3f(1.0));
-}
+// Tone operators shared with the forward pass (shared/tone_operators.wgsl).
+[WGSL_TONE_OPERATORS]
 
 // Linear -> sRGB gamma correction
 fn linearToSRGB(linear: vec3f, invGamma: f32) -> vec3f {
@@ -307,14 +286,8 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
         }
     }
 
-    var tonemapped = hdr * u_exposure;
-    if (1u == u_toneMappingMode) {
-        tonemapped = toneMapReinhard(hdr, u_exposure);
-    } else if (2u == u_toneMappingMode) {
-        tonemapped = toneMapCineon(hdr, u_exposure);
-    } else if (3u == u_toneMappingMode) {
-        tonemapped = toneMapACESFilmic(hdr, u_exposure);
-    }
+    // Mode and white point are compile-time constants: the dispatch folds to one operator.
+    let tonemapped = toneMapOperator(hdr * u_exposure, i32(u_toneMappingMode), u_toneMappingWhite);
 
     var srgb = linearToSRGB(tonemapped, u_inverseGamma);
 

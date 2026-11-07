@@ -253,6 +253,11 @@ describe("PostProcess elements own their DynUniforms slices", () => {
     expect(tm.structuralKey()).toBe("0|0");
     tm.enabled = true;
     expect(tm.structuralKey()).toBe(`1|${ToneMappingMode.REINHARD}`);
+    // The white point is structural only for REINHARD_EXTENDED (WGSL compile-time constant).
+    tm.whitePoint = 6.0;
+    expect(tm.structuralKey()).toBe(`1|${ToneMappingMode.REINHARD}`);
+    tm.mode = ToneMappingMode.REINHARD_EXTENDED;
+    expect(tm.structuralKey()).toBe(`1|${ToneMappingMode.REINHARD_EXTENDED}|6`);
   });
 });
 

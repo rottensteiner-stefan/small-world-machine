@@ -46,6 +46,7 @@ export class PostProcessPassGL {
   private _uBloomIntensity: WebGLUniformLocation | null = null;
   private _uBloomColor: WebGLUniformLocation | null = null;
   private _uExposure: WebGLUniformLocation | null = null;
+  private _uToneMappingWhite: WebGLUniformLocation | null = null;
   private _uGamma: WebGLUniformLocation | null = null;
   private _uInverseGamma: WebGLUniformLocation | null = null;
   private _uVignetteOffset: WebGLUniformLocation | null = null;
@@ -193,6 +194,7 @@ export class PostProcessPassGL {
       "uniform int u_toneMappingMode;",
       `#define u_toneMappingMode ${tmEnabled ? tm.mode : 1}`,
     );
+
     frag = frag.replace(
       "uniform int u_vignetteEnabled;",
       `#define u_vignetteEnabled ${vigEnabled ? 1 : 0}`,
@@ -246,6 +248,7 @@ export class PostProcessPassGL {
     this._uBloomIntensity = gl.getUniformLocation(p, "u_bloomIntensity");
     this._uBloomColor = gl.getUniformLocation(p, "u_bloomColor");
     this._uExposure = gl.getUniformLocation(p, "u_exposure");
+    this._uToneMappingWhite = gl.getUniformLocation(p, "u_toneMappingWhite");
     this._uGamma = gl.getUniformLocation(p, "u_gamma");
     this._uInverseGamma = gl.getUniformLocation(p, "u_inverseGamma");
     this._uVignetteOffset = gl.getUniformLocation(p, "u_vignetteOffset");
@@ -379,6 +382,7 @@ export class PostProcessPassGL {
       } else gl.uniform3f(this._uBloomColor, 1.0, 1.0, 1.0);
     }
     if (this._uExposure) gl.uniform1f(this._uExposure, tm && tm.enabled ? tm.exposure : 1.0);
+    if (this._uToneMappingWhite) gl.uniform1f(this._uToneMappingWhite, tm ? tm.whitePoint : 4.0);
     // A04: the neutral baseline with tone mapping absent MUST be an identity passthrough, exactly
     // like the WebGPU post pass (`ToneMappingElement`/`packPostProcessNeutralUniforms` pack
     // `inverseGamma = 1.0`) and the WebGL1 post path (display-referred passthrough, see the A03

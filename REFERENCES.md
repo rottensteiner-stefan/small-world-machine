@@ -681,7 +681,7 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### Khronos PBR Neutral Tone Mapper (Color-Preserving Tone Reproduction)
 
-- **File:** `packages/engine/src/enums/ToneMappingMode.ts`, `packages/engine/src/renderers/post/shaders/PostProcess.frag.glsl`, `packages/engine/src/renderers/post/shaders/PostProcess.frag.wgsl`, `packages/engine/src/renderers/post/shaders/PostProcess100.frag.glsl`
+- **File:** `packages/engine/src/renderers/shaders/source/shared/tone_operators.glsl`, `packages/engine/src/renderers/shaders/source/shared/tone_operators.wgsl` (forward `forwardToneMap` + post pass), `packages/engine/src/enums/ToneMappingMode.ts` (`tmPbrNeutral`, mode `PBR_NEUTRAL` = engine default since 2026-11-07; the entry predated the implementation)
 - **Authors/Gurus:** Emmett Lalish (Google), Khronos 3D Commerce & 3D Formats Working Group
 - **Source:** [Khronos 3D Commerce — PBR Neutral Tone Mapper](https://github.com/KhronosGroup/ToneMapping)
 - **Formulas:**
@@ -813,12 +813,49 @@ This document serves to record external sources, algorithms, mathematical deriva
 
 ### ACES Filmic Tone Mapping (Narkowicz Analytic Fit)
 
-- **File:** `packages/engine/src/renderers/post/shaders/PostProcess.frag.glsl`, `packages/engine/src/renderers/post/shaders/PostProcess.frag.wgsl`, `packages/engine/src/renderers/post/shaders/PostProcess100.frag.glsl`, `packages/engine/src/renderers/post/elements/ToneMappingElement.ts`
+- **File:** `packages/engine/src/renderers/shaders/source/shared/tone_operators.glsl`, `packages/engine/src/renderers/shaders/source/shared/tone_operators.wgsl` (forward `forwardToneMap` + post pass), `packages/engine/src/enums/ToneMappingMode.ts` (`tmAcesNarkowicz`, mode `ACES_FILMIC`)
 - **Authors/Gurus:** Krzysztof Narkowicz (2015), Academy of Motion Picture Arts and Sciences (AMPAS)
 - **Source:** [ACES Filmic Tone Mapping Curve (Krzysztof Narkowicz)](https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/)
 - **Formulas:**
   - $f(x) = \text{saturate}\left(\frac{x(a x + b)}{x(c x + d) + e}\right)$ with $a = 2.51$, $b = 0.03$, $c = 2.43$, $d = 0.59$, $e = 0.14$.
 - **Usage:** High-performance, closed-form analytic approximation of the ACES S-curve tone mapping operator. Used across all post-processing passes to map high-dynamic-range HDR radiance to standard display ranges with filmic contrast, preserving hue consistency and smoothly compressing highlights without hard white clamping.
+
+### ACES RRT+ODT (Stephen Hill Fit)
+
+- **File:** `packages/engine/src/renderers/shaders/source/shared/tone_operators.glsl`, `packages/engine/src/renderers/shaders/source/shared/tone_operators.wgsl` (forward `forwardToneMap` + post pass), `packages/engine/src/enums/ToneMappingMode.ts` (`tmAcesHill`, modes `ACES_HILL`, `ACES_HILL_EXPOSURE_BOOST`)
+- **Authors/Gurus:** Stephen Hill (MJP BakingLab), AMPAS; exposure-boost variant as in the Khronos glTF Sample Viewer
+- **Source:** [BakingLab ACES.hlsl (TheRealMJP)](https://github.com/TheRealMJP/BakingLab/blob/master/BakingLab/ACES.hlsl), [Khronos glTF Sample Renderer](https://github.com/KhronosGroup/glTF-Sample-Renderer)
+- **Formulas:**
+  - $v = M_{in} c$ (sRGB -> AP1 incl. RRT saturation), $f(v) = \frac{v(v + 0.0245786) - 0.000090537}{v(0.983729 v + 0.4329510) + 0.238081}$, $c' = \text{saturate}(M_{out} f(v))$ (ODT -> sRGB)
+  - Exposure boost: input $c / 0.6$ (matches the Narkowicz curve's brightness).
+- **Usage:** Closer to the reference ACES 1.x RRT+ODT than the Narkowicz luminance fit: per-channel curve inside AP1 with gamut matrices, so saturated highlights roll off like the reference. ~2x the ALU of Narkowicz.
+
+### AgX (Minimal Polynomial Fit)
+
+- **File:** `packages/engine/src/renderers/shaders/source/shared/tone_operators.glsl`, `packages/engine/src/renderers/shaders/source/shared/tone_operators.wgsl` (forward `forwardToneMap` + post pass), `packages/engine/src/enums/ToneMappingMode.ts` (`tmAgx`, mode `AGX`)
+- **Authors/Gurus:** Troy Sobotka (AgX), Benjamin Wrensch (minimal real-time fit); default view transform of Blender 4.x
+- **Source:** [Wrensch: "Minimal AgX Implementation" (2023)](https://iolite-engine.com/blog_posts/minimal_agx_implementation), [sobotka/AgX](https://github.com/sobotka/AgX)
+- **Formulas:**
+  - Inset matrix $M_{in}$, $v = \text{clamp}(\log_2(M_{in} c), -12.47393, 4.026069)$ normalized to [0,1]
+  - Contrast: $15.5x^6 - 40.14x^5 + 31.96x^4 - 6.868x^3 + 0.4298x^2 + 0.1191x - 0.00232$
+  - Outset $M_{out}$, then $c' = v^{2.2}$ (the fit outputs display-encoded values; decoded to linear before the engine's shared sRGB encode).
+- **Usage:** Filmic look with a stable hue and a natural path to white for very bright saturated light (no ACES-style yellow/magenta skew).
+
+### Extended Reinhard (Luminance, White Point)
+
+- **File:** `packages/engine/src/renderers/shaders/source/shared/tone_operators.glsl`, `packages/engine/src/renderers/shaders/source/shared/tone_operators.wgsl` (forward `forwardToneMap` + post pass), `packages/engine/src/enums/ToneMappingMode.ts` (`tmReinhardExtended`, mode `REINHARD_EXTENDED`, `quality.toneMappingWhitePoint` / `ToneMappingElement.whitePoint`)
+- **Authors/Gurus:** Erik Reinhard, Michael Stark, Peter Shirley, James Ferwerda
+- **Source:** [Reinhard et al.: "Photographic Tone Reproduction for Digital Images" (SIGGRAPH 2002), eq. 4](https://www.cs.utah.edu/docs/techreports/2002/pdf/UUCS-02-001.pdf)
+- **Formulas:** $L = 0.2126R + 0.7152G + 0.0722B$, $L' = \frac{L(1 + L / L_w^2)}{1 + L}$, $c' = \text{saturate}(c \cdot L' / L)$.
+- **Usage:** Unlike per-channel Reinhard it reaches white ($L = L_w \to 1$) and scales all channels by one factor, so the hue is preserved.
+
+### Filmic Tone Mapping (Hejl / Burgess-Dawson, "Cineon")
+
+- **File:** `packages/engine/src/renderers/shaders/source/shared/tone_operators.glsl`, `packages/engine/src/renderers/shaders/source/shared/tone_operators.wgsl` (forward `forwardToneMap` + post pass), `packages/engine/src/enums/ToneMappingMode.ts` (`tmCineon`, mode `CINEON`)
+- **Authors/Gurus:** Jim Hejl, Richard Burgess-Dawson (popularized by John Hable, GDC 2010 "Uncharted 2: HDR Lighting")
+- **Source:** [John Hable: Filmic Tonemapping Operators (2010)](http://filmicworlds.com/blog/filmic-tonemapping-operators/)
+- **Formulas:** $x = \max(0, c - 0.004)$, $c' = \left(\frac{x(6.2x + 0.5)}{x(6.2x + 1.7) + 0.06}\right)^{2.2}$ -- the fit already contains the 1/2.2 display encode, hence the decode before the engine's sRGB encode (post-pass double encode fixed 2026-11-07).
+- **Usage:** Strong filmic contrast with slightly lifted blacks; stylized looks (showcase 14 noir/CRT presets).
 
 ### Data-Oriented Design (DOD)
 

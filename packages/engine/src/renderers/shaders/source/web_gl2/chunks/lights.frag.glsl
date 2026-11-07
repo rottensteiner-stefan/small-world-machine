@@ -62,6 +62,7 @@ layout(std140) uniform GlobalUniforms {
     // Clustered light culling (see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md) --
     // WebGLClusterCullPass (CPU) writes these every frame via WebGL2Renderer.writeClusterGridUniforms().
     vec2 u_tileSizePx;
+    float u_toneMappingWhite; // forward REINHARD_EXTENDED white point (std140 gap before u_clusterDims)
     vec4 u_clusterDims; // x/y/z cell counts, w = maxLightsPerCluster, all as float
 };
 
@@ -156,16 +157,12 @@ vec3 displayToTarget(vec3 color) {
 #define GLASS_DIR_SHADOW(wp, nDotL, n, viewDist) glassDirShadowFactor(wp, nDotL, n, viewDist)
 #define GLASS_SPOT_SHADOW(i) glassSpotShadowFactor(i)
 
-// Forward tone curve (quality.toneMapping as ToneMappingMode: 0 none, 1 Reinhard, 2 Cineon, 3 ACES
-// filmic), applied after exposure, before linearToSRGB. Gamma lane 1.0 = post-processing tone-maps
-// and encodes -> pass-through. Same operators as the post pass (PostProcess.frag.*).
+[TONE_OPERATORS]
+
+// Forward tone curve: quality.toneMapping (ToneMappingMode) through the shared tone operators
+// (TONE_OPERATORS = shared/tone_operators.glsl), after exposure, before linearToSRGB. Gamma lane
+// 1.0 = post-processing tone-maps and encodes -> pass-through.
 vec3 forwardToneMap(vec3 c) {
-    if (u_gamma == 1.0 || u_toneMappingMode < 0.5) return c;
-    if (u_toneMappingMode < 1.5) return c / (c + vec3(1.0));
-    if (u_toneMappingMode < 2.5) {
-        // Hejl/Burgess-Dawson filmic fit: its output already carries the 2.2 display encode.
-        vec3 m = max(vec3(0.0), c - vec3(0.004));
-        return pow((m * (6.2 * m + 0.5)) / (m * (6.2 * m + 1.7) + 0.06), vec3(2.2));
-    }
-    return clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0); // ACES (Narkowicz)
+    if (u_gamma == 1.0) return c;
+    return toneMapOperator(c, int(u_toneMappingMode + 0.5), u_toneMappingWhite);
 }

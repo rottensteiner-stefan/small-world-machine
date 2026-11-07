@@ -76,6 +76,7 @@ layout(std140) uniform GlobalUniforms {
     // has to be kept in sync by hand.
     AreaLight u_areaLights[4];
     vec2 u_tileSizePx;
+    float u_toneMappingWhite; // forward REINHARD_EXTENDED white point (std140 gap before u_clusterDims)
     vec4 u_clusterDims;
 };
 

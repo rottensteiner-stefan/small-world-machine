@@ -70,11 +70,24 @@ These control the engine's graphical fidelity.
   **Checking it by eye:** Showcase 10 accepts `?aniso=N` (cap at N, `1` = off; without it the engine default of 4 applies). On an Apple M4 Pro the detail in the far field rose by about 20 % from level 1 to 4, by 4 % more from 4 to 8 and by 1 % from 8 to 16, on both backends.
 
 - `hdr` (boolean): Enables high-dynamic-range (Float16) rendering pipelines.
-- `toneMapping` (`ToneMappingMode`, default `1` = `REINHARD`): Tone curve of the forward pass whenever
-  it writes the final image (post-processing off; WebGL1 always). `0` = `NONE` keeps saturated albedo
-  1:1 (stylized scenes), `2` = `CINEON`, `3` = `ACES_FILMIC`. Read every frame, so
-  `renderer.quality.toneMapping = ToneMappingMode.NONE` works at runtime. With post-processing on,
-  WebGL2/WebGPU use `postProcessing.effects.toneMapping.mode` instead.
+- `toneMapping` (`ToneMappingMode`, default `8` = `PBR_NEUTRAL`): Tone curve of the forward pass
+  whenever it writes the final image (post-processing off; WebGL1 also with post-processing, then
+  using `postProcessing.effects.toneMapping.mode`). Read every frame, so
+  `renderer.quality.toneMapping = ToneMappingMode.NONE` works at runtime.
+
+  | Value | Mode                       | Character                                                                                 |
+  | :---- | :------------------------- | :---------------------------------------------------------------------------------------- |
+  | 0     | `NONE`                     | linear, hard clip above 1.0 (pixel art, unlit looks)                                      |
+  | 1     | `REINHARD`                 | soft, dark, desaturating, never reaches white                                             |
+  | 2     | `CINEON`                   | Hejl/Burgess-Dawson filmic, strong contrast, lifted blacks                                |
+  | 3     | `ACES_FILMIC`              | Narkowicz fit: punchy contrast, bright saturated colors skew to yellow/white              |
+  | 4     | `REINHARD_EXTENDED`        | luminance Reinhard with white point (`toneMappingWhitePoint`, default 4.0), hue preserved |
+  | 5     | `ACES_HILL`                | ACES RRT+ODT fit with gamut matrices, closer to reference ACES                            |
+  | 6     | `ACES_HILL_EXPOSURE_BOOST` | `ACES_HILL` at input / 0.6 (Khronos Sample Viewer variant)                                |
+  | 7     | `AGX`                      | Blender 4 default look: filmic, stable hue, natural path to white                         |
+  | 8     | `PBR_NEUTRAL`              | Khronos PBR Neutral: base colors exact up to ~0.8, only highlights compress               |
+
+- `toneMappingWhitePoint` (number, default `4.0`): linear value `REINHARD_EXTENDED` maps to white.
 - `autoInstancing` (boolean, default `true`, ADR 0046): The renderer draws consecutive opaque
   objects that share a geometry and a material as **one** instanced draw (main pass, shadow
   passes, depth pre-pass; WebGPU and WebGL2). The scene graph is untouched: every object keeps
@@ -119,7 +132,7 @@ Configures the post-processing pipeline. General pipeline settings (`enabled`, `
 > **Note — not exhaustive:** The `effects` schema above is a _selection_; the same flat
 > `effects` structure contains further effects (`flash`, `colorGrading`, `gravitationalLensing`,
 > `lightShafts`, `volumetricFog`, `depthOfField`) that can be configured in the same style.
-> `toneMapping.mode` here is the numeric `ToneMappingMode` (`NONE`=0, `REINHARD`=1, `CINEON`=2, `ACES_FILMIC`=3), same values as `quality.toneMapping`.
+> `toneMapping.mode` here is the numeric `ToneMappingMode` (0-8, default `8` = `PBR_NEUTRAL`), same values as `quality.toneMapping`; `toneMapping.whitePoint` sets the `REINHARD_EXTENDED` white point.
 
 Every field is optional and only overrides that specific value on top of the effect's own defaults — fields that shouldn't be changed don't need to be specified.
 

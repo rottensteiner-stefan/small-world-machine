@@ -8,6 +8,8 @@ export class ToneMappingElement extends PostProcessingElement {
   public readonly type = PostProcessingEffectType.TONE_MAPPING;
 
   public mode: ToneMappingMode = ToneMappingMode.DEFAULT;
+  /** @domain Linear value mapped to white by `REINHARD_EXTENDED` (> 0); compiled into the post shader. */
+  public whitePoint: number = 4.0;
   public exposure: number = 1.0;
   public gamma: number = 2.2;
 
@@ -18,6 +20,11 @@ export class ToneMappingElement extends PostProcessingElement {
   }
 
   public override structuralKey(): string {
-    return `${this.enabled ? 1 : 0}|${this.enabled ? this.mode : 0}`;
+    // The white point is compiled into the WebGPU post shader, so it is structural -- but only for
+    // the one curve that reads it.
+    const base = `${this.enabled ? 1 : 0}|${this.enabled ? this.mode : 0}`;
+    return this.enabled && this.mode === ToneMappingMode.REINHARD_EXTENDED
+      ? `${base}|${this.whitePoint}`
+      : base;
   }
 }

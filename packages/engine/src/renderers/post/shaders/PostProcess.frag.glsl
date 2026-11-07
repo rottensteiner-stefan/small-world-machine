@@ -19,6 +19,7 @@ uniform vec3 u_bloomColor;
 uniform float u_exposure;
 uniform float u_gamma;
 uniform int u_toneMappingMode;
+uniform float u_toneMappingWhite;
 uniform int u_colorGradingEnabled;
 uniform float u_contrast;
 uniform float u_saturation;
@@ -59,30 +60,8 @@ float random(vec2 st) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
-// Reinhard tone mapping
-vec3 toneMapReinhard(vec3 hdr, float exposure) {
-    vec3 mapped = hdr * exposure;
-    return mapped / (mapped + vec3(1.0));
-}
-
-// Cineon tone mapping
-vec3 toneMapCineon(vec3 hdr, float exposure) {
-    vec3 mapped = max(vec3(0.0), hdr * exposure - vec3(0.004));
-    // The Hejl/Burgess-Dawson fit already carries the 2.2 display encode: return linear so the
-    // shared linearToSRGB below does not encode twice.
-    return pow((mapped * (6.2 * mapped + vec3(0.5))) / (mapped * (6.2 * mapped + vec3(1.7)) + vec3(0.06)), vec3(2.2));
-}
-
-// ACES Filmic tone mapping
-vec3 toneMapACESFilmic(vec3 hdr, float exposure) {
-    vec3 mapped = hdr * exposure;
-    float a = 2.51;
-    float b = 0.03;
-    float c = 2.43;
-    float d = 0.59;
-    float e = 0.14;
-    return clamp((mapped * (a * mapped + b)) / (mapped * (c * mapped + d) + e), 0.0, 1.0);
-}
+// Tone operators shared with the forward pass (shared/tone_operators.glsl).
+[TONE_OPERATORS]
 
 // Linear -> sRGB gamma correction
 vec3 linearToSRGB(vec3 linear, float gamma) {
@@ -279,14 +258,8 @@ void main() {
     }
 
     // Tone Mapping
-    vec3 tonemapped = hdr * u_exposure;
-    if (u_toneMappingMode == 1) {
-        tonemapped = toneMapReinhard(hdr, u_exposure);
-    } else if (u_toneMappingMode == 2) {
-        tonemapped = toneMapCineon(hdr, u_exposure);
-    } else if (u_toneMappingMode == 3) {
-        tonemapped = toneMapACESFilmic(hdr, u_exposure);
-    }
+    // Mode and white point are compile-time defines: the dispatch folds to one operator.
+    vec3 tonemapped = toneMapOperator(hdr * u_exposure, u_toneMappingMode, u_toneMappingWhite);
 
     // Gamma correction
     vec3 srgb = linearToSRGB(tonemapped, u_gamma);

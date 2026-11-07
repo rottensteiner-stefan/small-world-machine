@@ -7,6 +7,17 @@ import {
 } from "../shared/ShowcaseDrawer.js";
 import type { FrameTelemetrySource } from "../shared/ShowcaseDrawer.js";
 import { bindRange } from "../shared/hudBindings.js";
+import { ToneMappingMode } from "@small-world-machine/engine";
+
+/** Every selectable curve, derived from the engine enum (the `DEFAULT` alias is skipped). */
+export const TONE_MODES: readonly (readonly [string, ToneMappingMode])[] = Object.entries(
+  ToneMappingMode,
+).filter(([name]) => name !== "DEFAULT");
+
+/** Enum key of a tone mapping mode, for buttons and the readout. */
+export function toneModeName(mode: ToneMappingMode): string {
+  return TONE_MODES.find(([, m]) => m === mode)?.[0] ?? String(mode);
+}
 
 export type LabSlider = "KeyInt" | "AmbInt" | "RimInt";
 
@@ -16,7 +27,7 @@ export interface PbrLabState {
   keyIntensity: number;
   ambientIntensity: number;
   rimIntensity: number;
-  toneMapping: boolean;
+  toneMapping: ToneMappingMode;
   bloom: boolean;
   objects: number;
   meshes: number;
@@ -28,7 +39,7 @@ export interface PbrLabState {
 /** Showcase actions the panel triggers. */
 export interface PbrLabActions {
   setSlider(name: LabSlider, value: number): void;
-  setToneMapping(on: boolean): void;
+  setToneMapping(mode: ToneMappingMode): void;
   setBloom(on: boolean): void;
   resetView(): void;
 }
@@ -57,7 +68,10 @@ export class Hud {
   private readonly _readout: HTMLElement;
   private _hovering: boolean = false;
 
-  constructor(engine: FrameTelemetrySource, private readonly _actions: PbrLabActions) {
+  constructor(
+    engine: FrameTelemetrySource,
+    private readonly _actions: PbrLabActions,
+  ) {
     document.getElementById("pbrLabStyle")?.remove();
     const style = document.createElement("style");
     this._style = style;
@@ -106,16 +120,17 @@ export class Hud {
         )}
 
         ${hudSection(
-          "🎞 Post-Processing",
-          "toggles",
-          hudSwitch("swTone", "Tone Mapping (ACES)") + hudSwitch("swBloom", "Bloom"),
+          "🎞 Tone Mapping",
+          "T cycles",
+          `<div class="preset-group two-col" style="margin-bottom:8px;">${TONE_MODES.map(
+            ([name, mode]) =>
+              `<button class="btn-preset" data-tone="${mode}" title="ToneMappingMode.${name}">${name}</button>`,
+          ).join("")}</div>`,
         )}
 
-        ${hudSection(
-          "📊 Reference Readout",
-          "live",
-          `<pre id="pbrLabReadout"></pre>`,
-        )}
+        ${hudSection("✨ Post-Processing", "toggles", hudSwitch("swBloom", "Bloom"))}
+
+        ${hudSection("📊 Reference Readout", "live", `<pre id="pbrLabReadout"></pre>`)}
 
         ${hudNote(
           `🟢 <b>Khronos glTF-Sample-Assets</b>: <code>MetalRoughSpheres</code> (CC-BY 4.0) &mdash; soll die identische
@@ -160,8 +175,9 @@ export class Hud {
     this._setSlider("KeyInt", state.keyIntensity);
     this._setSlider("AmbInt", state.ambientIntensity);
     this._setSlider("RimInt", state.rimIntensity);
-    const tone = d.query<HTMLInputElement>("#swTone");
-    if (tone) tone.checked = state.toneMapping;
+    for (const btn of d.root.querySelectorAll<HTMLButtonElement>("[data-tone]")) {
+      btn.classList.toggle("active", Number(btn.dataset["tone"]) === state.toneMapping);
+    }
     const bloom = d.query<HTMLInputElement>("#swBloom");
     if (bloom) bloom.checked = state.bloom;
   }
@@ -184,8 +200,11 @@ export class Hud {
     });
 
     d.query("#btnResetView")?.addEventListener("click", () => a.resetView());
-    const tone = d.query<HTMLInputElement>("#swTone");
-    tone?.addEventListener("change", () => a.setToneMapping(tone.checked));
+    for (const btn of d.root.querySelectorAll<HTMLButtonElement>("[data-tone]")) {
+      btn.addEventListener("click", () =>
+        a.setToneMapping(Number(btn.dataset["tone"]) as ToneMappingMode),
+      );
+    }
     const bloom = d.query<HTMLInputElement>("#swBloom");
     bloom?.addEventListener("change", () => a.setBloom(bloom.checked));
 

@@ -13,14 +13,11 @@ import {
   PostProcessingEffectType,
   RendererType,
   StandardMaterial,
+  ToneMappingMode,
   Vector3D,
 } from "@small-world-machine/engine";
-import type {
-  BloomElement,
-  EngineOptions,
-  ToneMappingElement,
-} from "@small-world-machine/engine";
-import { Hud } from "./Hud.js";
+import type { BloomElement, EngineOptions, ToneMappingElement } from "@small-world-machine/engine";
+import { Hud, TONE_MODES, toneModeName } from "./Hud.js";
 import type { LabSlider, PbrLabState } from "./Hud.js";
 
 interface QaSwm47Sample {
@@ -141,7 +138,24 @@ export class Showcase extends AbstractShowcase {
   protected override onKeyDown(event: KeyboardEvent): void {
     super.onKeyDown(event);
     if (event.altKey || event.metaKey || event.ctrlKey) return;
+    if (event.code === "KeyT") {
+      // T / Shift+T: next / previous tone curve (Khronos Sample Viewer style comparison).
+      const current = TONE_MODES.findIndex(([, m]) => m === this._currentState().toneMapping);
+      const step = event.shiftKey ? -1 : 1;
+      const next = TONE_MODES[(current + step + TONE_MODES.length) % TONE_MODES.length]!;
+      this._setToneMapping(next[1]);
+      return;
+    }
     this._hud?.handleKey(event);
+  }
+
+  private _setToneMapping(mode: ToneMappingMode): void {
+    if (this._tone) {
+      this._tone.enabled = true;
+      this._tone.mode = mode;
+    }
+    this._hud?.sync(this._currentState());
+    this._refreshReadout();
   }
 
   private _setupFloor(): void {
@@ -187,7 +201,8 @@ export class Showcase extends AbstractShowcase {
       PostProcessingEffectType.TONE_MAPPING,
     );
     const bloom = this.renderer.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
-    // Tone mapping stays ON (engine default): HDR PBR specular clamps into blotches without it.
+    // Tone mapping stays ON (engine default curve, PBR_NEUTRAL): HDR PBR specular clamps into
+    // blotches without a curve; the HUD / T key switches between all ToneMappingMode curves.
     // Bloom starts OFF so the Khronos reference is judged without engine-added glare; both are
     // HUD-togglable.
     if (bloom) bloom.enabled = false;
@@ -260,7 +275,7 @@ export class Showcase extends AbstractShowcase {
       keyIntensity: this._keyIntensity,
       ambientIntensity: this._ambientIntensity,
       rimIntensity: this._rimIntensity,
-      toneMapping: this._tone?.enabled ?? false,
+      toneMapping: this._tone?.enabled ? this._tone.mode : ToneMappingMode.NONE,
       bloom: this._bloom?.enabled ?? false,
       objects: this._objects,
       meshes: this._meshes,
@@ -279,7 +294,8 @@ export class Showcase extends AbstractShowcase {
         `Meshes:     ${s.meshes}\n` +
         `Triangles:  ${s.triangles.toLocaleString("en-US")}\n` +
         `Visible:    ${s.visible}\n` +
-        `Post:       ${s.toneMapping ? "ACES + " : ""}${s.bloom ? "Bloom" : "off"}`,
+        `Tone curve: ${toneModeName(s.toneMapping)}\n` +
+        `Bloom:      ${s.bloom ? "on" : "off"}`,
     );
   }
 
@@ -300,11 +316,7 @@ export class Showcase extends AbstractShowcase {
   private _createControlHud(): void {
     this._hud = new Hud(this, {
       setSlider: (name: LabSlider, value: number): void => this._setSlider(name, value),
-      setToneMapping: (on: boolean): void => {
-        if (this._tone) this._tone.enabled = on;
-        this._hud?.sync(this._currentState());
-        this._refreshReadout();
-      },
+      setToneMapping: (mode: ToneMappingMode): void => this._setToneMapping(mode),
       setBloom: (on: boolean): void => {
         if (this._bloom) this._bloom.enabled = on;
         this._hud?.sync(this._currentState());

@@ -171,6 +171,10 @@ export class PostProcessPass implements RenderPass {
         `const u_toneMappingMode: u32 = ${tmEnabled ? e.tm!.mode : 1}u;`,
       ],
       [
+        "const u_toneMappingWhite: f32 = 4.0;",
+        `const u_toneMappingWhite: f32 = ${(tmEnabled ? e.tm!.whitePoint : 4.0).toFixed(6)};`,
+      ],
+      [
         "const u_vignetteEnabled: u32 = 0u;",
         `const u_vignetteEnabled: u32 = ${vigEnabled ? 1 : 0}u;`,
       ],

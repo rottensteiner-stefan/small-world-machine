@@ -22,11 +22,13 @@ import { WebGLTextureManager } from "../gl/managers/WebGLTextureManager.js";
 import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
 import {
   MaterialType,
+  PostProcessingEffectType,
   RendererType,
   ShaderFlag,
   Topology,
   ToneMappingMode,
 } from "../../enums/index.js";
+import type { ToneMappingElement } from "../post/elements/ToneMappingElement.js";
 import type { Vector3D } from "../../math/index.js";
 
 /**
@@ -50,9 +52,26 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     return 2.2;
   }
 
-  /** The WebGL1 forward pass always writes the final tone curve (its post pass is display-referred). */
+  /**
+   * The WebGL1 forward pass always writes the final tone curve (its post pass is display-referred),
+   * so with post-processing on it runs the `ToneMappingElement` curve the other tiers run in post.
+   */
   public override get forwardToneMapping(): ToneMappingMode {
-    return this._quality.toneMapping ?? ToneMappingMode.REINHARD;
+    const tm = this._postToneMapping();
+    if (tm) return tm.mode;
+    return this._quality.toneMapping ?? ToneMappingMode.DEFAULT;
+  }
+
+  /** White point of the curve {@link forwardToneMapping} picked. */
+  public override get forwardToneMappingWhitePoint(): number {
+    const tm = this._postToneMapping();
+    return tm ? tm.whitePoint : (this._quality.toneMappingWhitePoint ?? 4.0);
+  }
+
+  private _postToneMapping(): ToneMappingElement | undefined {
+    if (!this.postProcessing.enabled) return undefined;
+    const tm = this.postProcessing.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING);
+    return tm && tm.enabled ? tm : undefined;
   }
 
   /** Shared GL manager layer: compiled-program cache, uploaded-texture state and per-geometry
@@ -569,6 +588,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       );
     const uToneMappingMode = u.get("u_toneMappingMode");
     if (uToneMappingMode) this.gl.uniform1f(uToneMappingMode, this.forwardToneMapping);
+    const uToneMappingWhite = u.get("u_toneMappingWhite");
+    if (uToneMappingWhite) this.gl.uniform1f(uToneMappingWhite, this.forwardToneMappingWhitePoint);
 
     const uDirLightColor = u.get("u_dirLightColor");
     if (uDirLightColor)

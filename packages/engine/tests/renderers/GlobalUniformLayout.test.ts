@@ -178,7 +178,8 @@ function captureWebGPU(): number[] {
     gpuDevice: device,
     postProcessing: { enabled: false },
     outputGamma: 2.2,
-    forwardToneMapping: 1,
+    forwardToneMapping: 8, // ToneMappingMode.DEFAULT (PBR_NEUTRAL), as AbstractRenderer resolves it
+    forwardToneMappingWhitePoint: 4,
     quality: { gamma: 2.2, exposure: 1.0, clusteredLighting: { tileSize: [32, 32] } },
     gpuCanvasContext: { canvas: { width: 1280, height: 720 } },
     clusterDims: { x: 12, y: 13, z: 14 },
@@ -245,10 +246,14 @@ describe("GlobalUniforms packed bytes vs committed snapshot (change detector)", 
     expect(packed.webgpu).toHaveLength(428);
   });
 
-  it("both backends carry the forward tone curve lane (quality.toneMapping, default Reinhard)", () => {
+  it("both backends carry the forward tone curve lanes (mode = default PBR_NEUTRAL, white point)", () => {
     const packed = captureSnapshot();
-    expect(packed.webgl2[WebGL2GlobalUniformLayout.fields.toneMappingMode.offset / 4]).toBe(1);
-    expect(packed.webgpu[WebGPUGGlobalUniformLayout.fields.toneMapping.index]).toBe(1);
+    const gl2 = WebGL2GlobalUniformLayout.fields;
+    const gpu = WebGPUGGlobalUniformLayout.fields;
+    expect(packed.webgl2[gl2.toneMappingMode.offset / 4]).toBe(8);
+    expect(packed.webgl2[gl2.toneMappingWhite.offset / 4]).toBe(4);
+    expect(packed.webgpu[gpu.toneMapping.index]).toBe(8);
+    expect(packed.webgpu[gpu.toneMapping.index + 1]).toBe(4);
   });
 
   it("ADR 0052 appended the point-shadow section without moving any older lane", () => {

@@ -51,29 +51,47 @@ describe("forward tone curve: one shared operator on every API tier", () => {
       { cwd: ROOT, encoding: "utf-8" },
     )
       .split("\n")
-      // The three forwardToneMap definitions are the only allowed Reinhard sites.
-      .filter((l) => l && !l.includes("/post/") && !l.includes("return c / (c + vec3"));
+      // The shared tone operators are the only allowed Reinhard site.
+      .filter((l) => l && !l.includes("/post/") && !l.includes("/shared/tone_operators."));
     expect(hits).toEqual([]);
   });
 
   for (const { file, guard } of CHUNK_DEFS) {
-    it(`${path.basename(path.dirname(path.dirname(file)))}: forwardToneMap matches the post operators`, () => {
+    it(`${path.basename(path.dirname(path.dirname(file)))}: forwardToneMap dispatches into the shared operators`, () => {
       const src = read(file);
+      expect(src).toMatch(/\[(WGSL_)?TONE_OPERATORS\]/);
       expect(src).toMatch(/forwardToneMap\(/);
+      expect(src).toMatch(/toneMapOperator\(c, i(nt|32)\(/);
       if (guard) expect(src).toMatch(guard);
-      // Reinhard, Cineon (Hejl/Burgess-Dawson, decoded back to linear), ACES (Narkowicz).
-      expect(src).toMatch(/return c \/ \(c \+ vec3f?\(1\.0\)\);/);
-      expect(src).toMatch(
-        /6\.2 \* m \+ 0\.5\)\) \/ \(m \* \(6\.2 \* m \+ 1\.7\) \+ 0\.06\), vec3f?\(2\.2\)\)/,
-      );
-      expect(src).toMatch(/2\.51 \* c \+ 0\.03\)\) \/ \(c \* \(2\.43 \* c \+ 0\.59\) \+ 0\.14\)/);
     });
   }
 
-  it("post Cineon returns linear (no double display encode)", () => {
-    for (const ext of ["glsl", "wgsl"]) {
+  it("the post passes use the same shared operators (no private copies)", () => {
+    for (const [ext, token] of [
+      ["glsl", "[TONE_OPERATORS]"],
+      ["wgsl", "[WGSL_TONE_OPERATORS]"],
+    ] as const) {
       const src = read(`packages/engine/src/renderers/post/shaders/PostProcess.frag.${ext}`);
-      expect(src, ext).toMatch(/return pow\(\(mapped \* \(6\.2 \* mapped/);
+      expect(src, ext).toContain(token);
+      expect(src, ext).toMatch(/toneMapOperator\(hdr \* u_exposure, /);
+      expect(src, ext).not.toMatch(
+        /fn toneMap(Reinhard|Cineon|ACES)|vec3 toneMap(Reinhard|Cineon|ACES)/,
+      );
     }
+  });
+});
+
+describe("compute modules get the assembled structs chunk", () => {
+  it("WebGPURenderer.computeStructsChunk resolves the nested WGSL_TONE_OPERATORS token", async () => {
+    const { WebGPURenderer } = await import("../../src/renderers/WebGPU/WebGPURenderer.js");
+    const { ShaderRegistry } = await import("../../src/renderers/shaders/ShaderRegistry.js");
+    const renderer = Object.create(WebGPURenderer.prototype) as {
+      context: unknown;
+      computeStructsChunk: string;
+    };
+    Object.defineProperty(renderer, "context", { value: { shaderRegistry: new ShaderRegistry() } });
+    const chunk = renderer.computeStructsChunk;
+    expect(chunk).toContain("fn toneMapOperator(");
+    expect(chunk).not.toMatch(/\[[A-Z][A-Z0-9_]{3,}\]/);
   });
 });

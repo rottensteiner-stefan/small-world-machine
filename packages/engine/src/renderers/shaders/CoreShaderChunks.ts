@@ -58,6 +58,8 @@ import gl1WorldDirToScreen from "./source/web_gl1/chunks/world_dir_to_screen.fra
 
 // --- WebGPU ---
 import wgslStructs from "./source/web_gpu/chunks/structs.wgsl?raw";
+import toneOperatorsGlsl from "./source/shared/tone_operators.glsl?raw";
+import toneOperatorsWgsl from "./source/shared/tone_operators.wgsl?raw";
 import wgslLighting from "./source/web_gpu/chunks/lighting.wgsl?raw";
 import wgslPbrMath from "./source/web_gpu/chunks/pbr_math.wgsl?raw";
 import wgslPbrLighting from "./source/web_gpu/chunks/lighting_pbr.wgsl?raw";
@@ -90,6 +92,7 @@ export class CoreShaderChunks {
     registry.registerChunk(ShaderChunkId.BASE_VERTEX_MAIN, gl2BaseVsMain, "glsl300");
     registry.registerChunk(ShaderChunkId.BASE_FRAGMENT_HEADER, gl2BaseFsHeader, "glsl300");
     registry.registerChunk(ShaderChunkId.LIGHT_DEFS, gl2LightDefs, "glsl300");
+    registry.registerChunk(ShaderChunkId.TONE_OPERATORS, toneOperatorsGlsl, "glsl300");
     registry.registerChunk(ShaderChunkId.LIGHT_CALC, gl2LightCalc, "glsl300");
     registry.registerChunk(ShaderChunkId.PBR_MATH, gl2PbrMath, "glsl300");
     registry.registerChunk(ShaderChunkId.LIGHT_CALC_PBR, gl2LightCalcPbr, "glsl300");
@@ -115,6 +118,7 @@ export class CoreShaderChunks {
     registry.registerChunk(ShaderChunkId.BASE_VS, gl1BaseVs, "glsl100");
     registry.registerChunk(ShaderChunkId.BASE_FS_HEADER, gl1BaseFs, "glsl100");
     registry.registerChunk(ShaderChunkId.LIGHT_DEFS, gl1LightDefs, "glsl100");
+    registry.registerChunk(ShaderChunkId.TONE_OPERATORS, toneOperatorsGlsl, "glsl100");
     registry.registerChunk(ShaderChunkId.LIGHT_CALC, gl1LightCalc, "glsl100");
     registry.registerChunk(ShaderChunkId.PBR_MATH, gl1PbrMath, "glsl100");
     registry.registerChunk(ShaderChunkId.LIGHT_CALC_PBR, gl1LightCalcPbr, "glsl100");
@@ -137,6 +141,7 @@ export class CoreShaderChunks {
 
     // --- WebGPU Chunks ---
     registry.registerChunk(ShaderChunkId.WGSL_STRUCTS, wgslStructs, "wgsl");
+    registry.registerChunk(ShaderChunkId.WGSL_TONE_OPERATORS, toneOperatorsWgsl, "wgsl");
     registry.registerChunk(ShaderChunkId.WGSL_LIGHTING, wgslLighting, "wgsl");
     registry.registerChunk(ShaderChunkId.WGSL_PBR_MATH, wgslPbrMath, "wgsl");
     registry.registerChunk(ShaderChunkId.WGSL_PBR_LIGHTING, wgslPbrLighting, "wgsl");
