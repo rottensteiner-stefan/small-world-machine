@@ -1,5 +1,9 @@
 /// <reference types="vite/client" />
-import type { AnimationAction, AnimationClip } from "@small-world-machine/engine";
+import type {
+  AnimationAction,
+  AnimationClip,
+  ToneMappingElement,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -13,9 +17,11 @@ import {
   Keys,
   MathUtils,
   Object3D,
+  PostProcessingEffectType,
   StandardMaterial,
   Texture,
   TextureFilter,
+  ToneMappingMode,
   Vector3D,
 } from "@small-world-machine/engine";
 
@@ -113,11 +119,14 @@ export class Showcase extends AbstractShowcase {
 
   // Procedural Animation & Ducking State
   private _isDucking: boolean = false;
+  /** Spawn/respawn column; `?spawnX=<column>` starts mid-level (level-design testing). */
+  private readonly _spawnX: number =
+    Number(new URLSearchParams(window.location.search).get("spawnX")) || 2;
   /** Ducked at speed: momentum carries the player until it decays to crawl speed. */
   private _isSliding: boolean = false;
   private _duckAmount: number = 0;
 
-  // The Level Map (1-3 = blocks with different textures, 0 = air)
+  // The Level Map (1-3 = blocks with different textures, 4 = low ceiling slab, 0 = air)
   // Expansive 200-block stage across 10 diverse platforming zones
   private _levelMap: number[][] = Showcase._createLevelMap();
 
@@ -219,14 +228,14 @@ export class Showcase extends AbstractShowcase {
     ];
 
     const s8: number[][] = [
-      // 160..179: Sprint & High Ramps
+      // 160..179: Sprint & High Ramps, then a crawl tunnel (slide in at sprint speed)
       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0],
       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-      [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      [0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 3, 3, 3, 3, 0, 0],
+      [0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, 0, 0],
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     ];
 
@@ -263,7 +272,7 @@ export class Showcase extends AbstractShowcase {
     this.configureCamera();
 
     this.camera.setStrategy(CameraStrategyType.MANUAL);
-    this._camTarget.set(2, 2.8, 0);
+    this._camTarget.set(this._spawnX, 2.8, 0);
     this.camera.target.copyFrom(this._camTarget);
 
     const pitch = MathUtils.degToRad(5.0);
@@ -275,9 +284,25 @@ export class Showcase extends AbstractShowcase {
     );
 
     // 2. Lights
-    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.45 }));
-    const sun = new DirectionalLight({ color: Color.WHITE, intensity: 0.95 });
-    sun.direction.set(0.5, -1, -0.5).normalize();
+    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.85 }));
+    const sun = new DirectionalLight({ color: Color.WHITE, intensity: 1.3 });
+    sun.direction.set(0.4, -0.7, -1).normalize();
+
+    // Linear tone mapping: the forward-only path applies Reinhard, which halves and desaturates
+    // the character's saturated albedo (orange -> brown). The post chain runs tone mapping only
+    // (default-on vignette/grain/bloom would soften the pixel-art blocks).
+    this.renderer.postProcessing.enabled = true;
+    for (const type of Object.values(PostProcessingEffectType)) {
+      const element = this.renderer.postProcessing.get(type);
+      if (element) element.enabled = false;
+    }
+    const toneMapping = this.renderer.postProcessing.get<ToneMappingElement>(
+      PostProcessingEffectType.TONE_MAPPING,
+    );
+    if (toneMapping) {
+      toneMapping.enabled = true;
+      toneMapping.mode = ToneMappingMode.NONE;
+    }
     this.scene.add(sun);
 
     // 3. Texturen laden (Kenney "Pixel Platformer" + "Pixel Platformer Blocks", CC0; 18 px tiles
@@ -313,6 +338,10 @@ export class Showcase extends AbstractShowcase {
       color: new Color(0x36 / 255, 0xe3 / 255, 0x77 / 255),
     });
 
+    // Low ceiling slab: hangs below a block so the 1.0-high player only passes ducked (top at
+    // +0.04 above the box center); the gap underneath stays inside the head zone (+0.05..+0.5).
+    const lowCeilingHeight = 0.4;
+
     // 4. Level aufbauen
     const blockGeo = new Cube({ size: 1 }).getGeometryData();
 
@@ -342,7 +371,9 @@ export class Showcase extends AbstractShowcase {
 
         const blockY = rows - y - 1;
         // Exposed when no block covers this cell from above (world space)
-        const topExposed = y === 0 || this._levelMap[y - 1]![x] === 0;
+        // (a low ceiling slab hangs in the upper part of its cell and leaves the top exposed)
+        const above = y === 0 ? 0 : this._levelMap[y - 1]![x];
+        const topExposed = above === 0 || above === 4;
 
         if (cellType === 1 && topExposed) {
           const bodyY = blockY - topSlabHeight / 2;
@@ -356,13 +387,16 @@ export class Showcase extends AbstractShowcase {
           addBlockPart(`Exclaim_${x}_${blockY}`, x, blockY, 1, exclaimMat);
         } else if (cellType === 3) {
           addBlockPart(`Brick_${x}_${blockY}`, x, blockY, 1, brickMat);
+        } else if (cellType === 4) {
+          const slabY = blockY + 0.5 - lowCeilingHeight / 2;
+          addBlockPart(`LowCeiling_${x}_${blockY}`, x, slabY, lowCeilingHeight, brickMat);
         }
 
         // Precompute static collision bounds once (Zero-GC in frame-loop)
         this._staticBlockBounds.push({
           minX: x - 0.5,
           maxX: x + 0.5,
-          minY: blockY - 0.5,
+          minY: cellType === 4 ? blockY + 0.5 - lowCeilingHeight : blockY - 0.5,
           maxY: blockY + 0.5,
         });
       }
@@ -370,7 +404,7 @@ export class Showcase extends AbstractShowcase {
 
     // 5. Spieler & Charakter-Modell laden
     this._player = new Object3D("Player");
-    this._player.position.set(2, 1.001, 0); // Start grounded on the brick platform
+    this._player.position.set(this._spawnX, 1.001, 0); // Start grounded on the ground row
     this.scene.add(this._player);
     this._isGrounded = true;
 
@@ -581,7 +615,7 @@ export class Showcase extends AbstractShowcase {
 
     // Death Zone & Respawn
     if (this._player.position.y < -10) {
-      this._player.position.set(2, 1.001, 0);
+      this._player.position.set(this._spawnX, 1.001, 0);
       this._velocity.set(0, 0, 0);
       this._isGrounded = true;
       this._isDucking = false;

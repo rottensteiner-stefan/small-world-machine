@@ -174,3 +174,14 @@ Zur Ergänzung der bisher rein prozeduralen Squash/Stretch- und Dämpfungsverfor
 * The additional light duck squash on rigged characters is gone too. Only the static fallback cube still squashes while ducking, since it has no clip that shows the smaller hitbox.
 * Air tilt (rotation) unchanged.
 * Verification: typecheck, eslint, prettier green; `build:showcases` + `check-showcases.js 9`: WebGL1/WebGL2/WebGPU ✅.
+
+## 2026-11-07 · Crawl Tunnel & Orange Dino
+
+### 1. Implemented Features
+* **Crawl-under-ceiling was unreachable:** the player box is exactly 1.0 high, so every 1-cell gap fits it standing (0.001 margins) and the head zone (`y+0.05..+0.5`) never hit a block. New cell type `4` = low ceiling slab (0.4 high, upper part of its cell, collision `blockY+0.1..+0.5`); ducked top is `y+0.04`, so the player only passes ducked and stays down after releasing duck. Crawl tunnel in the sprint zone (columns 174–177, brick row above), reachable by a sprint slide plus crouch-walk. Ground below a slab keeps its grass top.
+* **Dev param `?spawnX=<column>`:** spawn/respawn column for level-design testing.
+* **Dino orange instead of brown:** the texture is orange (`#E07038`); the forward-only path (post off) ends in a fixed per-channel Reinhard, which halves and desaturates it. Post chain now on with tone mapping `NONE` only (all other elements disabled, default-on vignette/grain/bloom would soften the pixel blocks); lights ambient 0.85, sun 1.3 from the camera side `(0.4, -0.7, -1)`. Blocks are unlit `BasicMaterial` and unaffected.
+
+### 2. Verification
+* Typecheck, eslint, prettier: green. `npm run build:showcases` + `node .agents/scripts/check-showcases.js 9`: WebGL1, WebGL2, WebGPU ✅.
+* Puppeteer sequence (`?spawnX=170`): sprint → slide → crouch-walk into the tunnel → duck released under the slab keeps the crawl → stands up after the exit; no console errors. Default dino checked with `assets/local/` moved aside.
