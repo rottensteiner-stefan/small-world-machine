@@ -4,7 +4,10 @@
 - **Related:** ADR 0008 (HZB occlusion, WebGPU-only), ADR 0035 (quality tiers), ADR 0036 (TS stays, no WASM at runtime), ADR 0046 (automatic instancing), ADR 0047 (doctrine), ADR 0057 (tier parity matrix), ADR 0022 (GPU-instanced VFX / extras package pattern)
 - **Trigger:** custom-engine forest demo, video "Custom Engine Forest Showcase" (YouTube `uR5EvBWxN14`, 2026-11-03, 165 s) + PCGH news 2026-11-07. Unbenchmarked, single-purpose, static scene; taken as direction, not as target numbers.
   - **Author's own statements** (video description + pinned comment): CLODs (virtual geometry) with **voxels for far representations, explicitly no impostors**; screen-space + voxel hybrid GI, no ray tracing; proxies without instance data for very far representations; weather systems as design goal. RTX 3080: avg 130 fps uncapped, 200 aerial, 80 in dense forest; RTX 3070 mobile ~60 fps; minimum RTX 2060 / RX 6400 "because of the GPU features" (= DX12-Ultimate class: mesh shaders / 64-bit atomics / sampler feedback — inference, not stated).
-  - **Not from the author:** PCGH's "3 M trees with 4 M polygons each". Treat as unverified.
+  - **Author's comment replies:** D3D12 only (Vulkan maybe later); C++ engine, Luau scripting; 1440p; min spec is due to **mesh shaders**; **no hardware RT anywhere** (GI = screen space + voxel; water = planar reflections + SSR); CLOD built with **meshoptimizer, modified to also emit voxels during the CLOD build** (one offline bake for clusters and far voxels); foliage temporal artefacts handled by **mip bias on alpha-tested grass + a motion-based "smear mask" with selective sharpening** (reactive masks did not help; trees are unproblematic, grass smears); cliffs/rocks unsolved (scatter looks wrong, terrain extrusion = too much unique geometry).
+  - **Not from the author:** "3 M trees with 4 M polygons each" originates from a viewer comment, picked up by PCGH. Discarded.
+  - **Community feedback (most liked critique, ~400 likes):** visible LOD transitions, mainly in fast flight. Wind praised for not moving in unison; requested: waves travelling across the field.
+  - **Earlier Godot videos by the same author** (2025-09/11, descriptions): ground vegetation **does not render into the shadow map**, instead screen-space shadows (loosely after Bend Studio) + micro shadows blended with AO and N·L, per-object strength via an extra render target; **alpha test only in the depth pre-pass**, simplified shadow/pre-pass shaders; manual LOD crossfade because Godot's fade used the shadow camera distance (broke shadows); SSILVB as crude GI at ~0.7 ms, darkens forest interiors.
   - **Frame analysis** (in-video overlay, recording capped at 60 fps): **CPU 0.9–1.9 ms flat across all shots**, GPU 5.9–8.8 ms meadow/aerial, 10–12.8 ms dense forest. → Fully GPU-driven; CPU cost independent of scene content is the real headline.
   - **Visual content:** the dominant instance population is **dense grass + flowers + forest-floor debris (sticks, leaves)**, not trees; strong wind animation on grass; distant forest reads as a fused canopy mass; aerial perspective/height fog; volumetric clouds and overcast weather states; rock cliffs are textured heightfield (visible weakness).
 
@@ -60,6 +63,7 @@
 - Shadows: casters culled against the cascade volume extruded toward the light; shadow pass may use a coarser LOD bias (step 2).
 - Two-phase occlusion (draw last frame's visible set → rebuild HZB → test rest, Wihlidal 2015 / Haar & Aaltonen 2015) is the documented upgrade if single-phase popping is visible; not V1.
 - Renderer integration through one internal `IndirectDrawSource` contract (consumers: GPU particles, `InstanceField`, impostors/clusters) instead of per-feature branches in `WebGPURenderer`.
+- **Alpha-tested foliage keeps early-Z:** alpha test (`discard`) runs only in `DepthPrePassGPU`; the colour pass draws the same geometry with `depthCompare: "equal"`, no `discard`, no depth write. Shadow and pre-pass use stripped shaders (position + alpha UV only). Verify first whether today's colour pass still discards for alpha-cutout materials; if so this is an engine-wide win independent of `InstanceField`. WebGL2: same via `gl.EQUAL`.
 - **WebGL2/WebGL1 fallback:** CPU frustum test per cell AABB, per-cell LOD (distance of cell center), instance VBO sorted by cell, `vertexAttribPointer` offset rebinding per visible cell range (no base-instance extension needed). Budget via ADR 0035 tier.
 
 #### Step 1b — Procedural ground cover
@@ -68,10 +72,15 @@
 - Density thins with distance (stochastic drop by projected size, compensated by blade width) until the terrain material's own grass shading takes over → no visible cover edge.
 - Wind: shared global wind field (direction, gust noise texture scrolled in world space) consumed by ground cover, tree LODs and impostors alike, so all layers move coherently.
 - WebGL2/WebGL1: pre-generated per-tile instance VBOs for a smaller ring, same tile seeding, same wind math.
+- **Ground cover casts no shadow-map shadows.** It receives the shadows of trees/terrain, its own self-shadowing comes from screen-space shadows (engine feature, separate backlog item; Bend Studio *Days Gone* method) blended with AO and N·L. Removes the most expensive caster population from every cascade.
+- **Wind as travelling waves:** gust noise scrolled along the wind direction in world space, per-instance phase from position hash, so gusts visibly roll across the field and neighbours never move in unison.
+- **Temporal stability:** negative mip bias on alpha-tested ground cover textures (keeps coverage at distance) plus a motion-based smear mask (velocity buffer) that lowers TAA history weight / sharpens selectively on moving foliage before `TaaElement`. Reactive-mask approaches were reported as ineffective by the reference author; measure before adopting.
 
 #### Step 2 — LOD buckets + crossfade
 - Prototype = LOD0..LODn meshes + impostor (step 3) as final bucket; thresholds in projected pixels with per-tier bias (ADR 0035).
 - Crossfade band: instance written to both adjacent buckets with a fade factor, fragment shader does screen-door dither (Bayer/blue noise, complementary masks); TAA (`TaaElement`) resolves the dither. Benchmark: Unity `LODGroup` cross-fade, Unreal dithered LOD transition.
+- **Invariant: LOD is always selected from the main camera**, in every view including shadow passes (shadow views reuse the main camera's bucket choice, optionally biased coarser). Selecting per view (shadow camera distance) breaks shadows — the documented Godot failure the reference author had to work around.
+- Visible LOD transitions were the reference demo's most criticised artefact; the step-2 gate is therefore checked in fast flight (showcase 51 camera path at high speed), not only at walking speed.
 - LOD source: glTF meshes named `*_LOD<n>` (or `MSFT_lod`), else generated offline by a `tools` CLI command using meshoptimizer simplification (offline tooling only; runtime stays TS per ADR 0036).
 
 #### Step 3 — Octahedral impostors
@@ -87,6 +96,7 @@
 
 #### Step 5 — Clustered LOD (Nanite-like), WebGPU only
 - Offline (`tools`): split mesh into clusters (≤128 tris / ≤64 verts), group neighbours, simplify groups with locked group borders, re-split, repeat → DAG with per-cluster error bounds (Karis, "A Deep Dive into Nanite Virtualized Geometry", SIGGRAPH 2021; meshoptimizer clusterizer + simplifier).
+- **One bake for clusters and far voxels** (as in the reference: meshoptimizer extended to emit voxels during the CLOD build): when the DAG's coarsest levels stop being meaningful as triangles, the same bake emits the voxel representation used by the WebGPU voxel-LOD/far-field alternatives of steps 3 and 4. If step 5 is ever accepted, re-evaluate step 4's voxel option together with it.
 - Runtime: per-instance cull (step 1) → cluster cut selection in compute (cluster drawn iff own error < 1 px and parent error ≥ 1 px; locally decidable, no traversal order) → cluster frustum/HZB/backface-cone cull → one `drawIndirect` with vertex pulling (instance = visible cluster, vertex = triangle corner, padded to 128 tris).
 - Out of scope: software rasterization of micro-triangles and visibility buffer (no portable 64-bit atomics), streaming of cluster pages.
 - Known weakness: alpha-masked foliage and leaf cards simplify poorly; trees likely keep step-2/3 handling for leaves and use clusters for trunks/rocks/architecture.
@@ -94,6 +104,7 @@
 
 #### Step 6 — Forest lighting / GI
 - **6a (all tiers, cheap, recommended):** canopy-aware ambient: density map from step 4 darkens/tints sky + IBL ambient below the canopy; per-vertex/per-instance AO baked into prototypes; HBAO (`HbaoElement`) for contact. Most of the "forest feel" at near-zero cost.
+- **6a+ (WebGPU/WebGL2, candidate):** SSILVB — screen-space indirect lighting with visibility bitmask (Therrien, Levesque & Gilet 2023), extending the GTAO-style `HbaoElement` horizon search; reference author measured ~0.7 ms with reduced precision and used it to darken forest interiors instead of distance-field AO.
 - **6b (WebGPU, research spike only):** hybrid voxel GI (scene voxelization into a clipmap via compute, cone tracing or probe update; benchmark Godot `VoxelGI`/`SDFGI`, NVIDIA VXGI, Crassin 2011). Own ADR before any implementation.
 
 ## Considered options
@@ -110,7 +121,7 @@
 - New public API surface (`InstanceField`, prototype/LOD descriptors, impostor descriptor) must be classified per ADR 0047 when implemented.
 - Renderer gains an indirect-draw path in opaque, depth pre-pass and shadow passes on WebGPU; GL renderers gain a cell-culled instanced path.
 - Tier parity rows: `instance_field_gpu_cull` (GL2/GL1 `deliberate`, CPU fallback), `clustered_lod` (GL2/GL1 `deliberate`), `voxel_gi` (if 6b ever lands).
-- New REFERENCES.md entries per implemented step (Wihlidal 2015, Haar & Aaltonen 2015, Brucks 2018, Karis 2021, Crassin 2011).
+- New REFERENCES.md entries per implemented step (Wihlidal 2015, Haar & Aaltonen 2015, Brucks 2018, Karis 2021, Crassin 2011, Therrien et al. 2023, Bend Studio screen-space shadows).
 - `BillboardInstancer` stays as is; migration onto `InstanceField` is a separate decision after step 2.
 - Picking individual trees needs a CPU-side query over the field's cell grid (not provided by V1).
 
