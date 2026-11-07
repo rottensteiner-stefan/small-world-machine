@@ -1,0 +1,1534 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <link rel="stylesheet" href="/assets/shared.css" />
+    <link rel="stylesheet" href="/assets/tool-theme.css" />
+    <title>PBR Texture Map Generator</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--tool-bg);
+        color: var(--tool-text);
+        font-family: var(--tool-font-ui);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .app-container {
+        display: flex;
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* Sidebar controls */
+      .sidebar {
+        width: 320px;
+        background: var(--tool-panel);
+        border-right: 1px solid var(--tool-border);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        z-index: 5;
+      }
+
+      .sidebar-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.75rem;
+      }
+
+      .section-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--tool-text-muted);
+        margin: 0.9rem 0 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        border-bottom: 1px solid var(--tool-border);
+        padding-bottom: 0.35rem;
+      }
+
+      .section-title:first-child {
+        margin-top: 0;
+      }
+
+      .control-row {
+        margin-bottom: 0.6rem;
+      }
+
+      .control-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .field-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--tool-text-muted);
+        margin-bottom: 0.3rem;
+      }
+
+      .tool-select {
+        width: 100%;
+      }
+
+      /* Toggle switch row */
+      .switch-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .switch-row .field-label {
+        margin-bottom: 0;
+        cursor: pointer;
+      }
+
+      /* Sidebar action buttons */
+      .sidebar-actions {
+        padding: 0.75rem;
+        border-top: 1px solid var(--tool-border);
+        background: var(--tool-panel-solid);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+      }
+
+      .sidebar-actions .tool-btn {
+        padding: 0.55rem 0.8rem;
+        font-size: 0.85rem;
+      }
+
+      /* Main viewport & tabs */
+      .viewport {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: var(--tool-bg);
+        overflow: hidden;
+        position: relative;
+      }
+
+      .tabs-bar {
+        margin: 0.6rem 0.75rem 0;
+        overflow-x: auto;
+        flex-shrink: 0;
+      }
+
+      .tool-tab {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        white-space: nowrap;
+      }
+
+      .tool-tab.tab-engine:not(.active) {
+        color: var(--tool-accent2);
+      }
+
+      .canvas-container {
+        flex: 1;
+        padding: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: auto;
+        position: relative;
+      }
+
+      /* Transparency checkerboard behind the maps */
+      .checkerboard {
+        background-image:
+          linear-gradient(45deg, var(--tool-card-hover) 25%, transparent 25%),
+          linear-gradient(-45deg, var(--tool-card-hover) 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, var(--tool-card-hover) 75%),
+          linear-gradient(-45deg, transparent 75%, var(--tool-card-hover) 75%);
+        background-size: 20px 20px;
+        background-position:
+          0 0,
+          0 10px,
+          10px -10px,
+          -10px 0px;
+        background-color: var(--tool-panel-solid);
+        border-radius: var(--tool-radius-md);
+        border: 1px solid var(--tool-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        max-width: 100%;
+        max-height: 100%;
+        padding: 10px;
+      }
+
+      canvas {
+        max-width: 100%;
+        max-height: 70vh;
+        object-fit: contain;
+        border-radius: var(--tool-radius-sm);
+        display: block;
+        width: auto;
+        height: auto;
+      }
+
+      /* Grid view */
+      .grid-view {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 0.75rem;
+        width: 100%;
+        height: 100%;
+        overflow-y: auto;
+        align-content: start;
+      }
+
+      .grid-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: center;
+        position: relative;
+      }
+
+      .grid-item-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--tool-text-muted);
+        align-self: flex-start;
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        align-items: center;
+        border-bottom: 1px solid var(--tool-border);
+        padding-bottom: 0.3rem;
+      }
+
+      .grid-item-download {
+        cursor: pointer;
+        color: var(--tool-accent);
+        transition: color 0.15s ease;
+        display: flex;
+        align-items: center;
+      }
+
+      .grid-item-download:hover {
+        color: var(--tool-text);
+      }
+
+      .grid-item .checkerboard {
+        width: 100%;
+        aspect-ratio: 1;
+        padding: 6px;
+      }
+
+      .grid-item canvas {
+        width: 100%;
+        height: 100%;
+        max-height: 100%;
+      }
+
+      /* 3D preview */
+      .preview3d {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .preview3d-stage {
+        flex: 1;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #SmallWorldMachinePreview {
+        max-width: 100%;
+        max-height: 60vh;
+        background: var(--tool-bg);
+        border: 1px solid var(--tool-border);
+        border-radius: var(--tool-radius-md);
+      }
+
+      /* Loading overlay */
+      .loading-overlay {
+        position: absolute;
+        inset: 0;
+        background: color-mix(in srgb, var(--tool-bg) 85%, transparent);
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+
+      .loading-overlay.active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .loading-text {
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: var(--tool-text);
+      }
+
+      .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--tool-border);
+        border-top-color: var(--tool-accent);
+        border-radius: 50%;
+        animation: spin 1s infinite linear;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .tab-content-hidden {
+        position: absolute !important;
+        left: -9999px !important;
+        top: -9999px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        visibility: hidden !important;
+      }
+
+      /* Expandable sections */
+      .collapsible-header {
+        width: 100%;
+        justify-content: space-between;
+        margin-top: 0.4rem;
+      }
+
+      .collapsible-header svg {
+        transition: transform 0.15s ease;
+      }
+
+      .collapsible-header.active svg {
+        transform: rotate(90deg);
+      }
+
+      .collapsible-content {
+        max-height: 0;
+        overflow: hidden;
+        transition:
+          max-height 0.25s ease-out,
+          padding 0.25s ease;
+        padding: 0 0.25rem;
+      }
+
+      .collapsible-content.open {
+        max-height: 1000px;
+        padding: 0.6rem 0.25rem 0.75rem;
+      }
+    </style>
+  </head>
+    <header class="tool-header">
+      <h1>PBR Texture Map Generator</h1>
+      <button class="tool-close-btn" id="toolCloseBtn" title="Close Window" onclick="if (window.parent && window.parent !== window) { window.parent.postMessage({ type: 'close-tool' }, '*'); } try { window.close(); } catch(e) {}">✕</button>
+    </header>
+    <script>if (window.self !== window.top || window.opener) document.body.classList.add("in-window");</script>
+    
+    <div class="app-container">
+      <!-- Loading Screen -->
+      <div id="loading-overlay" class="loading-overlay active">
+        <div class="spinner"></div>
+        <div id="loading-text" class="loading-text">
+          Processing rock texture...
+        </div>
+      </div>
+
+      <!-- Sidebar controls -->
+      <div class="sidebar">
+        <div class="sidebar-scroll">
+          <!-- Dropzone / Universal Ingest -->
+          <div id="dropzone-container" style="margin-bottom: 0.75rem;"></div>
+
+          <!-- Preset select -->
+          <div class="section-title">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polygon points="12 2 2 7 12 12 22 7 12 2" />
+              <polyline points="2 17 12 22 22 17" />
+              <polyline points="2 12 12 17 22 12" />
+            </svg>
+            Preset Profile
+          </div>
+          <div class="control-row">
+            <select class="tool-select" id="profile-select">
+              <option value="default" selected>Default (Balanced)</option>
+              <option value="stone">Stone (High Normal, Rough)</option>
+              <option value="metal">Metal (Smooth, Shiny Spec)</option>
+              <option value="wood">Wood (Grained, Deep Relief)</option>
+            </select>
+          </div>
+
+          <div class="section-title">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+              />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            Configure Parameters
+          </div>
+
+          <!-- 1. Height Map Settings -->
+          <div class="tool-btn collapsible-header active" data-target="height-settings">
+            <span>Height Map Settings</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+          <div id="height-settings" class="collapsible-content open">
+            <div class="control-row">
+              <label class="field-label">
+                Blur Radius
+                <span id="height-blur-val" class="tool-value">0</span>
+              </label>
+              <input class="tool-slider" type="range" id="height-blur-slider" min="0" max="10" step="1" value="0" />
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                Contrast
+                <span id="height-contrast-val" class="tool-value">1.0</span>
+              </label>
+              <input class="tool-slider" type="range"
+                id="height-contrast-slider"
+                min="0.5"
+                max="3.0"
+                step="0.1"
+                value="1.0"
+              />
+            </div>
+            <div class="control-row switch-row">
+              <label class="field-label" for="height-invert">Invert Map</label>
+              <label class="tool-switch">
+                <input type="checkbox" id="height-invert" /><span class="tool-switch-track"></span></label>
+            </div>
+          </div>
+
+          <!-- 2. Normal Map Settings -->
+          <div class="tool-btn collapsible-header" data-target="normal-settings">
+            <span>Normal Map Settings</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+          <div id="normal-settings" class="collapsible-content">
+            <div class="control-row">
+              <label class="field-label">
+                Bump Strength
+                <span id="normal-strength-val" class="tool-value">100%</span>
+              </label>
+              <input class="tool-slider" type="range"
+                id="normal-strength-slider"
+                min="10"
+                max="300"
+                step="5"
+                value="100"
+              />
+            </div>
+            <div class="control-row">
+              <label class="field-label"> Format </label>
+              <select class="tool-select" id="normal-format">
+                <option value="opengl">OpenGL (+Y / Green Up)</option>
+                <option value="directx">DirectX (-Y / Green Down)</option>
+              </select>
+            </div>
+            <div class="control-row switch-row">
+              <label class="field-label" for="normal-invert-r">Invert Red (X-axis)</label>
+              <label class="tool-switch">
+                <input type="checkbox" id="normal-invert-r" /><span class="tool-switch-track"></span></label>
+            </div>
+          </div>
+
+          <!-- 3. Specular Map Settings -->
+          <div class="tool-btn collapsible-header" data-target="specular-settings">
+            <span>Specular Map Settings</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+          <div id="specular-settings" class="collapsible-content">
+            <div class="control-row">
+              <label class="field-label">
+                Sigmoidal Contrast
+                <span id="spec-contrast-val" class="tool-value">10</span>
+              </label>
+              <input class="tool-slider" type="range" id="spec-contrast-slider" min="0" max="30" step="1" value="10" />
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                Midpoint Threshold
+                <span id="spec-thresh-val" class="tool-value">50%</span>
+              </label>
+              <input class="tool-slider" type="range" id="spec-thresh-slider" min="10" max="90" step="5" value="50" />
+            </div>
+            <div class="control-row switch-row">
+              <label class="field-label" for="spec-invert">Invert Specular</label>
+              <label class="tool-switch">
+                <input type="checkbox" id="spec-invert" /><span class="tool-switch-track"></span></label>
+            </div>
+          </div>
+
+          <!-- 4. Roughness Map Settings -->
+          <div class="tool-btn collapsible-header" data-target="roughness-settings">
+            <span>Roughness Map Settings</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+          <div id="roughness-settings" class="collapsible-content">
+            <div class="control-row">
+              <label class="field-label">
+                Gamma Exponent
+                <span id="rough-gamma-val" class="tool-value">1.20</span>
+              </label>
+              <input class="tool-slider" type="range"
+                id="rough-gamma-slider"
+                min="0.20"
+                max="3.00"
+                step="0.05"
+                value="1.20"
+              />
+            </div>
+            <div class="control-row switch-row">
+              <label class="field-label" for="rough-invert">Invert Roughness</label>
+              <label class="tool-switch">
+                <input type="checkbox" id="rough-invert" /><span class="tool-switch-track"></span></label>
+            </div>
+          </div>
+
+          <!-- 5. Ambient Occlusion Settings -->
+          <div class="tool-btn collapsible-header" data-target="ao-settings">
+            <span>Ambient Occlusion Settings</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+          <div id="ao-settings" class="collapsible-content">
+            <div class="control-row">
+              <label class="field-label">
+                Soft Shadow Blur
+                <span id="ao-soft-val" class="tool-value">15px</span>
+              </label>
+              <input class="tool-slider" type="range" id="ao-soft-slider" min="3" max="40" step="1" value="15" />
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                Crevice Strength (Fine)
+                <span id="ao-fine-val" class="tool-value">1.0</span>
+              </label>
+              <input class="tool-slider" type="range" id="ao-fine-slider" min="0.0" max="3.0" step="0.1" value="1.0" />
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                AO Intensity Level
+                <span id="ao-level-val" class="tool-value">30%</span>
+              </label>
+              <input class="tool-slider" type="range" id="ao-level-slider" min="0" max="80" step="5" value="30" />
+            </div>
+          </div>
+
+          <!-- 6. Edge Map Settings -->
+          <div class="tool-btn collapsible-header" data-target="edge-settings">
+            <span>Edge Map Settings</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+          <div id="edge-settings" class="collapsible-content">
+            <div class="control-row">
+              <label class="field-label">
+                Contrast Threshold
+                <span id="edge-thresh-val" class="tool-value">90%</span>
+              </label>
+              <input class="tool-slider" type="range" id="edge-thresh-slider" min="50" max="98" step="1" value="90" />
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                Edge Thickness
+                <span id="edge-thick-val" class="tool-value">1</span>
+              </label>
+              <input class="tool-slider" type="range" id="edge-thick-slider" min="1" max="5" step="1" value="1" />
+            </div>
+            <div class="control-row switch-row">
+              <label class="field-label" for="edge-invert">Invert Colors (Dark line)</label>
+              <label class="tool-switch"><input type="checkbox" id="edge-invert" checked /><span class="tool-switch-track"></span></label>
+            </div>
+          </div>
+
+          <!-- 7. 3D Preview Settings -->
+          <div class="tool-btn collapsible-header" data-target="preview-3d-settings">
+            <span>3D Preview Settings</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+          <div id="preview-3d-settings" class="collapsible-content">
+            <div class="control-row">
+              <label class="field-label">
+                Metallic Base
+                <span id="metallic-val" class="tool-value">0%</span>
+              </label>
+              <input class="tool-slider" type="range" id="metallic-slider" min="0" max="100" step="5" value="0" />
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                Roughness Override
+                <span id="roughness-override-val" class="tool-value">60%</span>
+              </label>
+              <input class="tool-slider" type="range"
+                id="roughness-override-slider"
+                min="0"
+                max="100"
+                step="5"
+                value="60"
+              />
+            </div>
+          </div>
+
+          <!-- Global Export Size -->
+          <div class="section-title">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+            Export Properties
+          </div>
+          <div class="control-row">
+            <label class="field-label">Working Max Resolution</label>
+            <select class="tool-select" id="export-size">
+              <option value="256">256 x 256 (Ultra Fast)</option>
+              <option value="512" selected>512 x 512 (Recommended)</option>
+              <option value="1024">1024 x 1024 (HD Detail)</option>
+              <option value="original">Original Image Size (Full Resolution)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="sidebar-actions">
+          <button id="btn-download-active" class="tool-btn">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Download Active Map
+          </button>
+          <button id="btn-download-all" class="tool-btn primary">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Download All Maps
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Viewport -->
+      <div class="viewport">
+        <div class="tool-tabs tabs-bar">
+          <button class="tool-tab active" data-tab="grid">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            All Maps Grid
+          </button>
+          <button class="tool-tab" data-tab="original">Original (Diffuse)</button>
+          <button class="tool-tab" data-tab="height">Height Map</button>
+          <button class="tool-tab" data-tab="normal">Normal Map</button>
+          <button class="tool-tab" data-tab="specular">Specular Map</button>
+          <button class="tool-tab" data-tab="roughness">Roughness Map</button>
+          <button class="tool-tab" data-tab="ao">Ambient Occlusion</button>
+          <button class="tool-tab" data-tab="edge">Edge Map</button>
+          <button class="tool-tab tab-engine" data-tab="preview3d">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <path
+                d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+              />
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+              <line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
+            Small World Machine Preview
+          </button>
+        </div>
+
+        <div class="canvas-container">
+          <!-- Grid View Content -->
+          <div id="grid-view-container" class="grid-view">
+            <div class="grid-item">
+              <div class="grid-item-title">
+                <span>Original (Diffuse)</span>
+              </div>
+              <div class="checkerboard">
+                <canvas id="canvas-grid-original"></canvas>
+              </div>
+            </div>
+
+            <div class="grid-item">
+              <div class="grid-item-title">
+                <span>Height Map</span>
+                <span class="grid-item-download" data-map="height" title="Download Height Map">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                </span>
+              </div>
+              <div class="checkerboard">
+                <canvas id="canvas-grid-height"></canvas>
+              </div>
+            </div>
+
+            <div class="grid-item">
+              <div class="grid-item-title">
+                <span>Normal Map</span>
+                <span class="grid-item-download" data-map="normal" title="Download Normal Map">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                </span>
+              </div>
+              <div class="checkerboard">
+                <canvas id="canvas-grid-normal"></canvas>
+              </div>
+            </div>
+
+            <div class="grid-item">
+              <div class="grid-item-title">
+                <span>Specular Map</span>
+                <span class="grid-item-download" data-map="specular" title="Download Specular Map">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                </span>
+              </div>
+              <div class="checkerboard">
+                <canvas id="canvas-grid-specular"></canvas>
+              </div>
+            </div>
+
+            <div class="grid-item">
+              <div class="grid-item-title">
+                <span>Roughness Map</span>
+                <span
+                  class="grid-item-download"
+                  data-map="roughness"
+                  title="Download Roughness Map"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                </span>
+              </div>
+              <div class="checkerboard">
+                <canvas id="canvas-grid-roughness"></canvas>
+              </div>
+            </div>
+
+            <div class="grid-item">
+              <div class="grid-item-title">
+                <span>Ambient Occlusion</span>
+                <span class="grid-item-download" data-map="ao" title="Download AO Map">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                </span>
+              </div>
+              <div class="checkerboard">
+                <canvas id="canvas-grid-ao"></canvas>
+              </div>
+            </div>
+
+            <div class="grid-item">
+              <div class="grid-item-title">
+                <span>Edge Map</span>
+                <span class="grid-item-download" data-map="edge" title="Download Edge Map">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                </span>
+              </div>
+              <div class="checkerboard">
+                <canvas id="canvas-grid-edge"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Single Active Map Preview -->
+          <div
+            id="single-view-container"
+            class="checkerboard tab-content-hidden"
+          >
+            <canvas id="canvas-main-preview"></canvas>
+          </div>
+
+          <!-- 3D Preview Container -->
+          <div id="preview3d-container" class="preview3d tab-content-hidden">
+            <div class="tool-tabs">
+              <button class="tool-tab geom-btn active" data-geom="sphere">Sphere</button>
+              <button class="tool-tab geom-btn" data-geom="cube">Cube</button>
+              <button class="tool-tab geom-btn" data-geom="torus">Torus</button>
+              <button class="tool-tab geom-btn" data-geom="plane">Plane</button>
+            </div>
+            <div class="preview3d-stage">
+              <canvas id="SmallWorldMachinePreview" width="512" height="384"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Load SmallWorldMachine 3D Preview Engine Entry -->
+
+    <footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World Machine</footer>
+
+    <script type="module">
+      import { MaterialStudioApp } from "/packages/tools/src/MaterialStudio.ts";
+      import { derivePbrMaps, MATERIAL_STUDIO_PRESETS } from "/packages/tools/src/core/material.ts";
+      import {
+        ToastManager,
+        bindToolShortcuts,
+        ZipAssetSink,
+        downloadBlob,
+        DropAssetSource,
+        UniversalIngestRouter,
+        UniversalIngestDropzone,
+      } from "/packages/tools/src/common/io/index.ts";
+
+      const previewApp = new MaterialStudioApp("SmallWorldMachinePreview");
+      previewApp.start().catch((err) => console.error("Failed to start preview:", err));
+
+      const ioToast = new ToastManager();
+      const ingestRouter = new UniversalIngestRouter();
+
+      async function applyIngestResult(result) {
+        if (result.kind === "image" || result.kind === "svg") {
+          originalFileName = result.name.split(".")[0];
+          document.getElementById("loading-text").innerText = "Loading image...";
+          document.getElementById("loading-overlay").classList.add("active");
+          originalImage.src = result.dataUrl;
+          ioToast.show(`Textur '${result.name}' erfolgreich geladen.`, "success");
+        } else if (result.kind === "pbr-set") {
+          const mainBlob = result.pbrSet.albedo || result.pbrSet.height || result.pbrSet.normal;
+          if (mainBlob) {
+            originalFileName = result.name;
+            const dataUrl = URL.createObjectURL(mainBlob);
+            document.getElementById("loading-text").innerText = "Loading PBR Set...";
+            document.getElementById("loading-overlay").classList.add("active");
+            originalImage.src = dataUrl;
+            ioToast.show(`PBR-Set '${result.name}' erkannt & geladen!`, "success");
+          }
+        } else if (result.kind === "archive") {
+          const firstImg = result.files.find((f) => f.mimeType.startsWith("image/"));
+          if (firstImg) {
+            originalFileName = firstImg.name.split(".")[0];
+            const dataUrl = URL.createObjectURL(firstImg.blob);
+            document.getElementById("loading-text").innerText = "Loading archive image...";
+            document.getElementById("loading-overlay").classList.add("active");
+            originalImage.src = dataUrl;
+            ioToast.show(`Archiv '${result.name}' entpackt & geladen!`, "success");
+          } else {
+            ioToast.show(`Keine unterstützten Bilddateien im Archiv '${result.name}' gefunden.`, "warning");
+          }
+        } else if (result.kind === "json") {
+          if (result.data && typeof result.data === "object" && ("settings" in result.data || "heightBlur" in result.data)) {
+            const settings = result.data.settings || result.data;
+            applyPreset(settings);
+            ioToast.show(`PBR-Profil '${result.name}' erfolgreich geladen!`, "success");
+          } else {
+            ioToast.show(`JSON '${result.name}' geladen.`, "info");
+          }
+        }
+      }
+
+      // Bind shortcuts
+      bindToolShortcuts({
+        open: () => document.getElementById("file-input")?.click(),
+        save: () => document.getElementById("btn-download-active")?.click(),
+        exportAll: () => exportAllMapsZip(),
+      });
+
+      // ----------------------------------------------------
+      // Presets Configuration (single source: core/material.ts)
+      // ----------------------------------------------------
+      const PRESETS = MATERIAL_STUDIO_PRESETS;
+
+      // ----------------------------------------------------
+      // State variables
+      // ----------------------------------------------------
+      let originalImage = new Image();
+      let originalFileName = "rock";
+      let loadedData = null; // Original scaled ImageData
+      let activeTab = "grid";
+      let isProcessing = false;
+      let needsUpdate = false;
+
+      // Cache canvases
+      const canvases = {
+        original: document.createElement("canvas"),
+        height: document.createElement("canvas"),
+        normal: document.createElement("canvas"),
+        specular: document.createElement("canvas"),
+        roughness: document.createElement("canvas"),
+        ao: document.createElement("canvas"),
+        edge: document.createElement("canvas"),
+      };
+
+      // Display canvases (visible on screen)
+      const displays = {
+        original: document.getElementById("canvas-grid-original"),
+        height: document.getElementById("canvas-grid-height"),
+        normal: document.getElementById("canvas-grid-normal"),
+        specular: document.getElementById("canvas-grid-specular"),
+        roughness: document.getElementById("canvas-grid-roughness"),
+        ao: document.getElementById("canvas-grid-ao"),
+        edge: document.getElementById("canvas-grid-edge"),
+        preview: document.getElementById("canvas-main-preview"),
+      };
+
+      // ----------------------------------------------------
+      // Expandable Collapsibles UI
+      // ----------------------------------------------------
+      document.querySelectorAll(".collapsible-header").forEach((header) => {
+        header.addEventListener("click", () => {
+          header.classList.toggle("active");
+          const targetId = header.getAttribute("data-target");
+          const content = document.getElementById(targetId);
+          content.classList.toggle("open");
+        });
+      });
+
+      // ----------------------------------------------------
+      // Universal Ingest DropZone
+      // ----------------------------------------------------
+      const dropzoneContainer = document.getElementById("dropzone-container");
+      if (dropzoneContainer) {
+        new UniversalIngestDropzone({
+          container: dropzoneContainer,
+          label: "Textur ablegen",
+          supportedKinds: ["image", "pbr-set", "zip", "files", "svg", "text"],
+          enableWindowDrop: true,
+          enablePaste: false, // Handled globally below
+          onIngest: async (result) => {
+            await applyIngestResult(result);
+          },
+          onError: (err) => ioToast.show(err.message, "error"),
+        });
+      }
+
+      // Global paste handler (Cmd+V / Ctrl+V for images, URLs, SVGs, JSON)
+      window.addEventListener("paste", async (e) => {
+        const target = e.target;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+        if (e.clipboardData) {
+          if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+            try {
+              const result = await ingestRouter.routeFiles(Array.from(e.clipboardData.files));
+              await applyIngestResult(result);
+            } catch (err) {
+              ioToast.show(err.message, "error");
+            }
+            return;
+          }
+          const text = e.clipboardData.getData("text/plain");
+          if (text && text.trim()) {
+            try {
+              const result = await ingestRouter.routeText(text.trim(), "pasted_input");
+              await applyIngestResult(result);
+            } catch (err) {
+              ioToast.show(err.message, "error");
+            }
+          }
+        }
+      });
+
+      // ----------------------------------------------------
+      // Pre-load default texture
+      // ----------------------------------------------------
+      window.addEventListener("load", () => {
+        // Load standard rock image from public files
+        originalImage.onload = () => {
+          initializeImageData();
+        };
+        originalImage.onerror = () => {
+          // Fallback: draw a noise pattern if the file doesn't load
+          createProceduralFallback();
+        };
+        // Load rock texture
+        originalImage.src = "/apps/showcases/10/assets/rock.webp";
+      });
+
+      function createProceduralFallback() {
+        // Simple canvas fallback texture (256x256 simple rock noise)
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d");
+        for (let y = 0; y < 256; y++) {
+          for (let x = 0; x < 256; x++) {
+            const v = Math.floor(
+              128 + Math.sin(x * 0.1) * 30 + Math.cos(y * 0.1) * 30 + Math.random() * 20,
+            );
+            // tool-theme: allow generated-texture
+            ctx.fillStyle = `rgb(${v},${v - 10},${v - 20})`;
+            ctx.fillRect(x, y, 1, 1);
+          }
+        }
+        originalFileName = "procedural_fallback";
+        originalImage.src = canvas.toDataURL();
+      }
+
+      // Initialize dimensions and read data
+      function initializeImageData() {
+        const maxRes = document.getElementById("export-size").value;
+        let w = originalImage.naturalWidth;
+        let h = originalImage.naturalHeight;
+
+        if (maxRes !== "original") {
+          const sizeLimit = parseInt(maxRes, 10);
+          if (w > sizeLimit || h > sizeLimit) {
+            if (w > h) {
+              h = Math.round((h * sizeLimit) / w);
+              w = sizeLimit;
+            } else {
+              w = Math.round((w * sizeLimit) / h);
+              h = sizeLimit;
+            }
+          }
+        }
+
+        // Set offscreen sizes
+        for (let k in canvases) {
+          canvases[k].width = w;
+          canvases[k].height = h;
+        }
+
+        const ctx = canvases.original.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(originalImage, 0, 0, w, h);
+        loadedData = ctx.getImageData(0, 0, w, h);
+
+        // Trigger update
+        triggerPBRUpdate();
+      }
+
+      // ----------------------------------------------------
+      // UI Slider Input Handlers
+      // ----------------------------------------------------
+      const sliders = [
+        { id: "height-blur", suffix: "" },
+        { id: "height-contrast", suffix: "" },
+        { id: "normal-strength", suffix: "%" },
+        { id: "spec-contrast", suffix: "" },
+        { id: "spec-thresh", suffix: "%" },
+        { id: "rough-gamma", suffix: "" },
+        { id: "ao-soft", suffix: "px" },
+        { id: "ao-fine", suffix: "" },
+        { id: "ao-level", suffix: "%" },
+        { id: "edge-thresh", suffix: "%" },
+        { id: "edge-thick", suffix: "" },
+        { id: "metallic", suffix: "%" },
+        { id: "roughness-override", suffix: "%" },
+      ];
+
+      sliders.forEach((s) => {
+        const slider = document.getElementById(s.id + "-slider");
+        const valDisp = document.getElementById(s.id + "-val");
+
+        slider.addEventListener("input", () => {
+          valDisp.innerText = slider.value + s.suffix;
+          triggerPBRUpdate();
+        });
+      });
+
+      document.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        cb.addEventListener("change", triggerPBRUpdate);
+      });
+
+      document.getElementById("normal-format").addEventListener("change", triggerPBRUpdate);
+      document.getElementById("export-size").addEventListener("change", initializeImageData);
+
+      // Profile select changes preset values
+      document.getElementById("profile-select").addEventListener("change", (e) => {
+        const profile = e.target.value;
+        if (PRESETS[profile]) {
+          applyPreset(PRESETS[profile], profile);
+        }
+      });
+
+      function applyPreset(preset, profile = document.getElementById("profile-select")?.value) {
+        // Loop sliders and checkboxes
+        document.getElementById("height-blur-slider").value = preset.heightBlur;
+        document.getElementById("height-blur-val").innerText = preset.heightBlur;
+
+        document.getElementById("height-contrast-slider").value = preset.heightContrast;
+        document.getElementById("height-contrast-val").innerText = preset.heightContrast;
+
+        document.getElementById("height-invert").checked = preset.heightInvert;
+
+        document.getElementById("normal-strength-slider").value = preset.normalStrength;
+        document.getElementById("normal-strength-val").innerText = preset.normalStrength + "%";
+
+        document.getElementById("normal-format").value = preset.normalFormat;
+        document.getElementById("normal-invert-r").checked = preset.normalInvertR;
+
+        document.getElementById("spec-contrast-slider").value = preset.specContrast;
+        document.getElementById("spec-contrast-val").innerText = preset.specContrast;
+
+        document.getElementById("spec-thresh-slider").value = preset.specThresh;
+        document.getElementById("spec-thresh-val").innerText = preset.specThresh + "%";
+
+        document.getElementById("spec-invert").checked = preset.specInvert;
+
+        document.getElementById("rough-gamma-slider").value = preset.roughGamma;
+        document.getElementById("rough-gamma-val").innerText = preset.roughGamma;
+
+        document.getElementById("rough-invert").checked = preset.roughInvert;
+
+        document.getElementById("ao-soft-slider").value = preset.aoSoft;
+        document.getElementById("ao-soft-val").innerText = preset.aoSoft + "px";
+
+        document.getElementById("ao-fine-slider").value = preset.aoFine;
+        document.getElementById("ao-fine-val").innerText = preset.aoFine;
+
+        document.getElementById("ao-level-slider").value = preset.aoLevel;
+        document.getElementById("ao-level-val").innerText = preset.aoLevel + "%";
+
+        document.getElementById("edge-thresh-slider").value = preset.edgeThresh;
+        document.getElementById("edge-thresh-val").innerText = preset.edgeThresh + "%";
+
+        document.getElementById("edge-thick-slider").value = preset.edgeThick;
+        document.getElementById("edge-thick-val").innerText = preset.edgeThick;
+
+        document.getElementById("edge-invert").checked = preset.edgeInvert;
+
+        // Adjust preview material based on preset
+        if (profile === "metal") {
+          document.getElementById("metallic-slider").value = 90;
+          document.getElementById("metallic-val").innerText = "90%";
+        } else {
+          document.getElementById("metallic-slider").value = 0;
+          document.getElementById("metallic-val").innerText = "0%";
+        }
+
+        triggerPBRUpdate();
+      }
+
+      // Tab switcher
+      document.querySelectorAll(".tabs-bar .tool-tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document.querySelectorAll(".tabs-bar .tool-tab").forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+
+          activeTab = tab.getAttribute("data-tab");
+
+          const gridView = document.getElementById("grid-view-container");
+          const singleView = document.getElementById("single-view-container");
+          const preview3dContainer = document.getElementById("preview3d-container");
+
+          if (activeTab === "grid") {
+            gridView.classList.remove("tab-content-hidden");
+            singleView.classList.add("tab-content-hidden");
+            preview3dContainer.classList.add("tab-content-hidden");
+          } else if (activeTab === "preview3d") {
+            gridView.classList.add("tab-content-hidden");
+            singleView.classList.add("tab-content-hidden");
+            preview3dContainer.classList.remove("tab-content-hidden");
+            // Trigger immediate push of textures to 3D view
+            pushTexturesTo3D();
+          } else {
+            gridView.classList.add("tab-content-hidden");
+            singleView.classList.remove("tab-content-hidden");
+            preview3dContainer.classList.add("tab-content-hidden");
+
+            // Draw active map onto preview canvas
+            const mainPreview = displays.preview;
+            mainPreview.width = canvases[activeTab].width;
+            mainPreview.height = canvases[activeTab].height;
+            const ctx = mainPreview.getContext("2d");
+            ctx.drawImage(canvases[activeTab], 0, 0);
+          }
+        });
+      });
+
+      // 3D Geometry Swap buttons
+      document.querySelectorAll(".geom-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".geom-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const geom = btn.getAttribute("data-geom");
+          previewApp.updateGeometry(geom);
+        });
+      });
+
+      // Individual downloads in grid view
+      document.querySelectorAll(".grid-item-download").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const mapType = btn.getAttribute("data-map");
+          downloadMap(mapType);
+        });
+      });
+
+      // Global action downloads
+      document.getElementById("btn-download-active").addEventListener("click", () => {
+        if (activeTab === "grid" || activeTab === "preview3d") {
+          ioToast.show(
+            'Please select a specific texture map tab to download it, or click "Download All Maps".',
+            "warning",
+          );
+          return;
+        }
+        downloadMap(activeTab);
+      });
+
+      document.getElementById("btn-download-all").addEventListener("click", () => {
+        exportAllMapsZip();
+      });
+
+      async function exportAllMapsZip() {
+        try {
+          ioToast.show("Exportiere PBR-Map-Pack als ZIP...", "info");
+          const sink = new ZipAssetSink();
+          const maps = ["original", "height", "normal", "specular", "roughness", "ao", "edge"];
+          for (const mapType of maps) {
+            const canvas = canvases[mapType];
+            const name = mapType === "original" ? "albedo" : mapType;
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+            if (blob) {
+              const buffer = new Uint8Array(await blob.arrayBuffer());
+              await sink.write(`${originalFileName}_${name}.png`, buffer);
+            }
+          }
+
+          // Export current settings as JSON profile
+          const profileData = {
+            name: originalFileName,
+            exportedAt: new Date().toISOString(),
+            settings: {
+              heightBlur: parseInt(document.getElementById("height-blur-slider").value, 10),
+              heightContrast: parseFloat(document.getElementById("height-contrast-slider").value),
+              heightInvert: document.getElementById("height-invert").checked,
+              normalStrength: parseFloat(document.getElementById("normal-strength-slider").value),
+              normalFormat: document.getElementById("normal-format").value,
+              normalInvertR: document.getElementById("normal-invert-r").checked,
+              specContrast: parseInt(document.getElementById("spec-contrast-slider").value, 10),
+              specThresh: parseInt(document.getElementById("spec-thresh-slider").value, 10),
+              specInvert: document.getElementById("spec-invert").checked,
+              roughGamma: parseFloat(document.getElementById("rough-gamma-slider").value),
+              roughInvert: document.getElementById("rough-invert").checked,
+              aoSoft: parseInt(document.getElementById("ao-soft-slider").value, 10),
+              aoFine: parseFloat(document.getElementById("ao-fine-slider").value),
+              aoLevel: parseInt(document.getElementById("ao-level-slider").value, 10),
+              edgeThresh: parseInt(document.getElementById("edge-thresh-slider").value, 10),
+              edgeThick: parseInt(document.getElementById("edge-thick-slider").value, 10),
+              edgeInvert: document.getElementById("edge-invert").checked,
+            },
+          };
+          const jsonBytes = new TextEncoder().encode(JSON.stringify(profileData, null, 2));
+          await sink.write("pbr-profile.json", jsonBytes);
+
+          const zipBytes = await sink.build();
+          const zipBlob = new Blob([zipBytes], { type: "application/zip" });
+          downloadBlob(zipBlob, `${originalFileName}_pbr_pack.zip`);
+          ioToast.show(`ZIP-Export '${originalFileName}_pbr_pack.zip' erfolgreich!`, "success");
+        } catch (err) {
+          ioToast.show(`Export-Fehler: ${err.message}`, "error");
+        }
+      }
+
+      function downloadMap(mapType) {
+        const canvas = canvases[mapType];
+        const link = document.createElement("a");
+        link.download = `${originalFileName}_${mapType}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      }
+
+      // ----------------------------------------------------
+      // Update Trigger
+      // ----------------------------------------------------
+      function triggerPBRUpdate() {
+        needsUpdate = true;
+        if (!isProcessing) {
+          requestAnimationFrame(updateLoop);
+        }
+      }
+
+      function updateLoop() {
+        if (needsUpdate && loadedData) {
+          needsUpdate = false;
+          isProcessing = true;
+
+          document.getElementById("loading-overlay").classList.add("active");
+          document.getElementById("loading-text").innerText = "Recalculating maps...";
+
+          // Use timeout to let browser render loading overlay before blocking thread
+          setTimeout(() => {
+            generatePBRMaps();
+            pushTexturesTo3D();
+            isProcessing = false;
+            document.getElementById("loading-overlay").classList.remove("active");
+
+            // Recurse if needed
+            if (needsUpdate) {
+              triggerPBRUpdate();
+            }
+          }, 30);
+        }
+      }
+
+      function pushTexturesTo3D() {
+        const normalStrength =
+          parseFloat(document.getElementById("normal-strength-slider").value) / 100.0;
+        const metallicValue = parseFloat(document.getElementById("metallic-slider").value) / 100.0;
+        const roughnessValue =
+          parseFloat(document.getElementById("roughness-override-slider").value) / 100.0;
+
+        previewApp.updateTextures(
+          canvases.original,
+          canvases.normal,
+          canvases.roughness,
+          normalStrength,
+          metallicValue,
+          roughnessValue,
+        );
+      }
+
+      // ----------------------------------------------------
+      // Main Processing Pipeline (derivation lives in core/material.ts, shared with the CLI)
+      // ----------------------------------------------------
+      const MAP_KEYS = ["height", "normal", "specular", "roughness", "ao", "edge"];
+
+      function readMapParams() {
+        const num = (id) => parseFloat(document.getElementById(id).value);
+        const flag = (id) => document.getElementById(id).checked;
+        return {
+          heightBlur: num("height-blur-slider"),
+          heightContrast: num("height-contrast-slider"),
+          heightInvert: flag("height-invert"),
+          normalStrength: num("normal-strength-slider"),
+          normalFormat: document.getElementById("normal-format").value,
+          normalInvertR: flag("normal-invert-r"),
+          specContrast: num("spec-contrast-slider"),
+          specThresh: num("spec-thresh-slider"),
+          specInvert: flag("spec-invert"),
+          roughGamma: num("rough-gamma-slider"),
+          roughInvert: flag("rough-invert"),
+          aoSoft: num("ao-soft-slider"),
+          aoFine: num("ao-fine-slider"),
+          aoLevel: num("ao-level-slider"),
+          edgeThresh: num("edge-thresh-slider"),
+          edgeThick: num("edge-thick-slider"),
+          edgeInvert: flag("edge-invert"),
+        };
+      }
+
+      function generatePBRMaps() {
+        const w = loadedData.width;
+        const h = loadedData.height;
+        const maps = derivePbrMaps(loadedData, readMapParams(), { copyDiffuse: false });
+        for (const key of MAP_KEYS) {
+          canvases[key].getContext("2d").putImageData(new ImageData(maps[key].data, w, h), 0, 0);
+        }
+
+        // Draw to grid views
+        for (let key in displays) {
+          if (key === "preview") continue;
+
+          const canvas = displays[key];
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(canvases[key], 0, 0);
+        }
+
+        // Draw active single view if active
+        if (activeTab !== "grid" && activeTab !== "preview3d") {
+          const mainPreview = displays.preview;
+          mainPreview.width = w;
+          mainPreview.height = h;
+          const ctx = mainPreview.getContext("2d");
+          ctx.drawImage(canvases[activeTab], 0, 0);
+        }
+      }
+    </script>
+  </body>
+</html>

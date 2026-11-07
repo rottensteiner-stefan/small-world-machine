@@ -1,0 +1,90 @@
+{
+  "poolKeys": [
+    "clear-water",
+    "toon-water",
+    "bold-anime",
+    "soft-watercolor",
+    "painterly-sparkle",
+    "dredge",
+    "noir-graphic",
+    "molten-lava",
+    "toxic-slime",
+    "petroleum-oil",
+    "wave-rider",
+    "dead-sea",
+    "lava-volcanic",
+    "lava-infernal",
+    "lava-plasma",
+    "lava-toxic"
+  ],
+  "views": ["top", "oblique"],
+  "backends": {
+    "gl2": "WEB_GL2",
+    "gpu": "WEB_GPU",
+    "gl1": "WEB_GL1"
+  },
+  "viewport": { "width": 1024, "height": 576 },
+  "frames": 60,
+  "blankStddevThreshold": 2.0,
+  "pixelmatchThreshold": 0.1,
+  "maxDiffRatio": 0.005,
+  "flip": {
+    "ppd": 67,
+    "threshold": 0.01
+  },
+  "poolOverrides": {},
+  "scenes": {
+    "38": {
+      "url": "apps/showcases/38/index.html",
+      "poolKeys": [
+        "pbr38-siq",
+        "pbr38-plaza",
+        "pbr38-portico",
+        "pbr38-sanctum",
+        "pbr38-shrine"
+      ],
+      "views": ["main"],
+      "viewport": { "width": 1280, "height": 720 },
+      "frames": 60
+    },
+    "39": {
+      "url": "apps/showcases/39/index.html",
+      "poolKeys": ["fog39-nave", "fog39-altar", "fog39-portal", "fog39-carved"],
+      "views": ["main"],
+      "viewport": { "width": 1280, "height": 720 },
+      "frames": 60
+    },
+    "43": {
+      "url": "apps/showcases/43/index.html",
+      "poolKeys": ["st43-matte", "st43-satin", "st43-metal", "st43-chrome"],
+      "views": ["main"],
+      "viewport": { "width": 1280, "height": 720 },
+      "frames": 60
+    },
+    "45": {
+      "url": "apps/showcases/45/index.html",
+      "poolKeys": [
+        "fire45-overview",
+        "fire45-campfire",
+        "fire45-budget",
+        "fire45-palettes"
+      ],
+      "views": ["main"],
+      "viewport": { "width": 1280, "height": 720 },
+      "frames": 60
+    },
+    "46": {
+      "url": "apps/showcases/46/index.html",
+      "poolKeys": [
+        "part46-overview-overview",
+        "part46-forge-closeup",
+        "part46-smoke-closeup",
+        "part46-trails-closeup",
+        "part46-weather-closeup"
+      ],
+      "views": ["main"],
+      "viewport": { "width": 1280, "height": 720 },
+      "frames": 60
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LaneContractRegistry",
+  "type": "object",
+  "required": ["uniformSlot", "lanes", "registration", "rules"],
+  "properties": {
+    "uniformSlot": { "type": "object" },
+    "lanes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["lane", "meaning", "materialTypes", "styleIds", "writeOrder", "range", "evictionPolicy"],
+        "properties": {
+          "lane": { "type": "string" },
+          "meaning": { "type": "string" },
+          "materialTypes": { "type": "array", "items": { "type": "string" } },
+          "styleIds": { "type": "array", "items": { "type": "number" } },
+          "writeOrder": { "type": "string" },
+          "range": { "type": "string" },
+          "evictionPolicy": { "type": "string" },
+          "collision": { "type": "string" }
+        }
+      }
+    },
+    "registration": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "purpose"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "type": "string" },
+          "purpose": { "type": "string" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "rules": { "type": "array", "items": { "type": "string" } }
+  }
+}

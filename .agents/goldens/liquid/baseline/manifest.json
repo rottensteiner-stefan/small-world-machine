@@ -1,0 +1,610 @@
+[
+  {
+    "poolKey": "clear-water",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "clear-water__top.png",
+    "meta": {
+      "poolKey": "clear-water",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 51.1471,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "cb2eea50bdbc184598ed44106b0cdd84af23166681c3a0aa901b0ca7cdaa6682",
+    "ok": true
+  },
+  {
+    "poolKey": "clear-water",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "clear-water__oblique.png",
+    "meta": {
+      "poolKey": "clear-water",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 55.6812,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "edbb5aa910bf04625f5dc73c5e67fa15feff47dd3e069106c411cf36ce3cf4d6",
+    "ok": true
+  },
+  {
+    "poolKey": "toon-water",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "toon-water__top.png",
+    "meta": {
+      "poolKey": "toon-water",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 43.014,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "a0ea579250d39c7bd89361e7997ae39df5847fd811585b0f1f0b3ce8e03e4684",
+    "ok": true
+  },
+  {
+    "poolKey": "toon-water",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "toon-water__oblique.png",
+    "meta": {
+      "poolKey": "toon-water",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 47.7365,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "dc64a60b29f89d3874478ec52a84a39c2b0612276b8cd8bd2d44bf5e2136312e",
+    "ok": true
+  },
+  {
+    "poolKey": "bold-anime",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "bold-anime__top.png",
+    "meta": {
+      "poolKey": "bold-anime",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 47.6351,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "5255b88fcd50b7c4493898a78b0faf25ddce2f83b5da376812141501a1b883df",
+    "ok": true
+  },
+  {
+    "poolKey": "bold-anime",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "bold-anime__oblique.png",
+    "meta": {
+      "poolKey": "bold-anime",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 46.9639,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "41e155d1828df78d8fe5f24e816349c70b9dcb866246d996f78fe81de5c68f3e",
+    "ok": true
+  },
+  {
+    "poolKey": "soft-watercolor",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "soft-watercolor__top.png",
+    "meta": {
+      "poolKey": "soft-watercolor",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 31.523,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "54195ccd2f625efb69a2eb10ce9cbe64dc42be55a3d4e59397ad4afbc5e92227",
+    "ok": true
+  },
+  {
+    "poolKey": "soft-watercolor",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "soft-watercolor__oblique.png",
+    "meta": {
+      "poolKey": "soft-watercolor",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 50.8601,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "80056af1b4c665691f2c17e50332662672f4dc314c8b60df1b1cbf9db36bbd12",
+    "ok": true
+  },
+  {
+    "poolKey": "painterly-sparkle",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "painterly-sparkle__top.png",
+    "meta": {
+      "poolKey": "painterly-sparkle",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 33.6408,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "1b4dfc8f871e2e4393494271da0a9405f700411d4614fd53b58005e28403c4ef",
+    "ok": true
+  },
+  {
+    "poolKey": "painterly-sparkle",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "painterly-sparkle__oblique.png",
+    "meta": {
+      "poolKey": "painterly-sparkle",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 55.2316,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "350e0d479917eaffdff210ecb07da2ef427e9b90e6955184944f01771ade3eee",
+    "ok": true
+  },
+  {
+    "poolKey": "dredge",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "dredge__top.png",
+    "meta": {
+      "poolKey": "dredge",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 18.1385,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "602cdcee547ab3494a96fae83480bcde8d25b11e25f8c276e112cb4ec3137d13",
+    "ok": true
+  },
+  {
+    "poolKey": "dredge",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "dredge__oblique.png",
+    "meta": {
+      "poolKey": "dredge",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 24.7206,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "62b4c23dbc029d70555a8146df9585bd9579c97046257345136b2de3959fbded",
+    "ok": true
+  },
+  {
+    "poolKey": "noir-graphic",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "noir-graphic__top.png",
+    "meta": {
+      "poolKey": "noir-graphic",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 52.3685,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "696782bba0946c014615611621bd76ec6e64138daee98a73a08953d1db98bc3e",
+    "ok": true
+  },
+  {
+    "poolKey": "noir-graphic",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "noir-graphic__oblique.png",
+    "meta": {
+      "poolKey": "noir-graphic",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 60.5182,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "2efeb657d623f975fb8a6e88b589964d13a8e20dfac686fb7d5f5663b2c2818f",
+    "ok": true
+  },
+  {
+    "poolKey": "molten-lava",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "molten-lava__top.png",
+    "meta": {
+      "poolKey": "molten-lava",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 31.4153,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "6ef61f6670bae41668d39f4118e034b6eff67823d264237999cb17fd1d629f8c",
+    "ok": true
+  },
+  {
+    "poolKey": "molten-lava",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "molten-lava__oblique.png",
+    "meta": {
+      "poolKey": "molten-lava",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 34.0815,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "c01cd0ebafbe879c2ea3a28cb0405689812a8b51293f40389d288d47a44f441f",
+    "ok": true
+  },
+  {
+    "poolKey": "toxic-slime",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "toxic-slime__top.png",
+    "meta": {
+      "poolKey": "toxic-slime",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 27.5744,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "73eff1f8268621eb7d3a4ff6a66953db91524cfeee308d29bbb5b393ff925bb7",
+    "ok": true
+  },
+  {
+    "poolKey": "toxic-slime",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "toxic-slime__oblique.png",
+    "meta": {
+      "poolKey": "toxic-slime",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 29.0791,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "b5a0d9afe51c80e8aef0d480401efb1a98d1e69d593267a4ec705a6f6a365ebb",
+    "ok": true
+  },
+  {
+    "poolKey": "petroleum-oil",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "petroleum-oil__top.png",
+    "meta": {
+      "poolKey": "petroleum-oil",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 9.9898,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "f596a462834c07da1d399b89b581125cae24960b0d6a6a40c568e4f742ad793e",
+    "ok": true
+  },
+  {
+    "poolKey": "petroleum-oil",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "petroleum-oil__oblique.png",
+    "meta": {
+      "poolKey": "petroleum-oil",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 24.7703,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "f715ba14f89199e148a32d8bd1d0f6832c26353300067bf7a0a91a98914c5db7",
+    "ok": true
+  },
+  {
+    "poolKey": "wave-rider",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "wave-rider__top.png",
+    "meta": {
+      "poolKey": "wave-rider",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 52.1903,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "e893cf97e4f3f8da500db78521f990f84f41980c5d842fc9d46dcfc02ce3654d",
+    "ok": true
+  },
+  {
+    "poolKey": "wave-rider",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "wave-rider__oblique.png",
+    "meta": {
+      "poolKey": "wave-rider",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 54.076,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "a3e45e0aa5b6fa4b59190466dd21285823ef4eb2f7c468a8e91403e1ee5604b2",
+    "ok": true
+  },
+  {
+    "poolKey": "dead-sea",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "dead-sea__top.png",
+    "meta": {
+      "poolKey": "dead-sea",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 49.7668,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "a32527b23d138bb955c1e086bf2ebef5bba5265fc0f117b73f923f7acf42ebe4",
+    "ok": true
+  },
+  {
+    "poolKey": "dead-sea",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "dead-sea__oblique.png",
+    "meta": {
+      "poolKey": "dead-sea",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 60.7927,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "a65c6a7811d271316c0bf6b8beb49751233e06e5a03bee0a060580ab78050400",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-volcanic",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "lava-volcanic__top.png",
+    "meta": {
+      "poolKey": "lava-volcanic",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 52.8671,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "754d72016f0b276e54cc46222cedf82d3e4dfa16c8921c3850b6ee0616ba8213",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-volcanic",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "lava-volcanic__oblique.png",
+    "meta": {
+      "poolKey": "lava-volcanic",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 39.0458,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "e2c214b15a450c4a80f43e9f10cfb618314c1d67eb83ba82d27890228f48ca34",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-infernal",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "lava-infernal__top.png",
+    "meta": {
+      "poolKey": "lava-infernal",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 55.0038,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "14320ec3734f304a3b6e7b6af22270378f29c8fa6a3285fce025010b3b418f13",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-infernal",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "lava-infernal__oblique.png",
+    "meta": {
+      "poolKey": "lava-infernal",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 39.5349,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "f652fb1a35e3850daeea35d4902f416aa6aa4ac4d3be1cfbf04b609afbcb9a7e",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-plasma",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "lava-plasma__top.png",
+    "meta": {
+      "poolKey": "lava-plasma",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 59.7289,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "498f7ae13ce962cb5736d4d887062f4c14fb773f3623693a2bbbf6a4416850aa",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-plasma",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "lava-plasma__oblique.png",
+    "meta": {
+      "poolKey": "lava-plasma",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 44.0753,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "d1752577dace453ac842dc686d2078cef86b6b79a64adb4cb528ea23b6f1ecc7",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-toxic",
+    "view": "top",
+    "backend": "WEB_GL2",
+    "file": "lava-toxic__top.png",
+    "meta": {
+      "poolKey": "lava-toxic",
+      "view": "top",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 59.9382,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "1fce4189569add4f476dd82446ddaa38def06782eff5aa08ade38f3af140b534",
+    "ok": true
+  },
+  {
+    "poolKey": "lava-toxic",
+    "view": "oblique",
+    "backend": "WEB_GL2",
+    "file": "lava-toxic__oblique.png",
+    "meta": {
+      "poolKey": "lava-toxic",
+      "view": "oblique",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 44.5489,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1024,
+    "height": 576,
+    "sha256": "c0bdb75bd2ca57f0aaac7d430c9fb3c6c693a41e78599bd829603073bd4709e9",
+    "ok": true
+  }
+]

@@ -1,0 +1,21 @@
+[BASE_FS_HEADER]
+[LIGHT_DEFS]
+[FOG_DEFS]
+
+void main() {
+  vec4 texColor = texture2D(u_diffuseMap, v_uv);
+
+  vec3 rawNormal = texture2D(u_normalMap, v_uv).rgb * 2.0 - 1.0;
+  rawNormal.xy *= u_extraParams.zw;
+  vec3 N = normalize(v_tbn * rawNormal);
+
+  float finalAlpha = u_color.a * texColor.a;
+  if (finalAlpha < u_extraParams.y) {
+    discard;
+  }
+
+  [LIGHT_CALC]
+
+  gl_FragColor = vec4(finalLight * u_color.rgb * texColor.rgb, finalAlpha);
+  [FOG_CALC]
+}

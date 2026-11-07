@@ -1,0 +1,37 @@
+{
+  "name": "@small-world-machine/tools",
+  "version": "0.1.0",
+  "description": "Standalone development and diagnostic tools for Small World Machine (Maker world editor, Material Studio, Pixler, Xtractor, Map Generator, Forge window manager).",
+  "type": "module",
+  "license": "MIT",
+  "swm": {
+    "release": true
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "bin": {
+    "swm": "./src/cli/swm.mjs"
+  },
+  "dependencies": {
+    "@small-world-machine/engine": "*",
+    "@kitschpatrol/tweakpane-plugin-camerakit": "^0.3.1-beta.3",
+    "fflate": "^0.8.2",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.23.5",
+    "tweakpane": "^4.0.5"
+  },
+  "peerDependencies": {
+    "esbuild": "^0.28.0",
+    "puppeteer": "^25.4.0"
+  },
+  "peerDependenciesMeta": {
+    "esbuild": {
+      "optional": true
+    },
+    "puppeteer": {
+      "optional": true
+    }
+  }
+}

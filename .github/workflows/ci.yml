@@ -1,0 +1,269 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  # The visual jobs (liquid goldens, showcase smoke test, capture determinism) are heavy and need software rendering, so they
+  # run only when asked for: Actions tab > CI > "Run workflow". Push and pull requests run `verify` only.
+  workflow_dispatch:
+    inputs:
+      goldens:
+        description: 'Liquid goldens: GL2, 4 shards, compared against the committed baseline'
+        type: boolean
+        default: true
+      smoke:
+        description: 'Showcase smoke test: WebGL1/WebGL2, 4 shards'
+        type: boolean
+        default: true
+      capture:
+        description: 'Capture-mode determinism: Showcases 39 + 28, WebGL1/WebGL2, two fresh loads compared'
+        type: boolean
+        default: true
+
+# One group per event type, so a manual visual run is not cancelled by a push (and does not cancel one).
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check (src, showcases, tests, .agents/scripts)
+        run: npm run typecheck
+
+      - name: Lint (src, showcases, tests)
+        run: npm run lint
+
+      - name: Lint WGSL
+        run: npm run lint:wgsl
+
+      - name: Verified marker lint
+        run: npm run check:markers
+
+      - name: Doctrine check (ADR 0047)
+        run: npm run check:doctrine
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  showcases-smoke-test:
+    if: github.event_name == 'workflow_dispatch' && inputs.smoke
+    name: showcases-smoke-test (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Four parallel shards of the same checks (SHOWCASE_SHARD): wall-clock time is the slowest shard instead of
+    # the sum. The job name now carries the shard, so no branch rule may require the old plain name (it is
+    # informational and never blocks anyway).
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    # Informational only: headless Chrome in CI can't reliably init WebGPU pipelines
+    # (software-rendering texture-limit issues), so this job is expected to be flaky
+    # for WebGPU-path showcases. Never block merges on it.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache mkcert (certificate tool of `vite preview`)
+        # Without the cache every fresh runner downloads mkcert from GitHub at server start; with many jobs
+        # starting at once that request occasionally fails (ECONNRESET) and the preview server never comes up.
+        uses: actions/cache@v4
+        with:
+          path: ~/.vite-plugin-mkcert
+          key: mkcert-${{ runner.os }}-v1
+
+      - name: Build
+        run: npm run build
+
+      - name: Showcase visual smoke test
+        run: npm run test:showcases
+        env:
+          SHOWCASE_SHARD: ${{ matrix.shard }}/4
+          # The runner has no real GPU: every WebGPU leg fails there (and is retried), so leave them to local
+          # runs (`npm run test:showcases`, `npm run test:decals`).
+          SHOWCASE_SKIP_WEBGPU: "1"
+          # One page at a time: the software GPU (SwiftShader) shares the runner's 4 vCPUs, and parallel pages starve each
+          # other. Measured on the runner, 76 checks per shard set: concurrency 4 failed 21 to 33 checks on the first try
+          # and needed 206 to 276 s; concurrency 1 failed 0 to 2 and needed 76 to 105 s.
+          SHOWCASE_TEST_CONCURRENCY: "1"
+
+  # Capture-mode determinism (`?captureFps=60`): each showcase is loaded twice in fresh pages and the canvas
+  # hashes at frames 10/30/120 must match. Hashes are only compared within this one runner (SwiftShader), never
+  # against another machine. The build is frozen by construction (`vite preview` over the job's own `dist/`),
+  # which is what makes the comparison meaningful: a dev server serving an edited tree does not.
+  # Informational for now: it has been verified locally on WebGL1/WebGL2/WebGPU but not yet on a runner; flip
+  # `continue-on-error` off after a few green runs.
+  capture-determinism:
+    if: github.event_name == 'workflow_dispatch' && inputs.capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache mkcert (certificate tool of `vite preview`)
+        uses: actions/cache@v4
+        with:
+          path: ~/.vite-plugin-mkcert
+          key: mkcert-${{ runner.os }}-v1
+
+      - name: Build
+        run: npm run build
+
+      - name: Capture-mode determinism check
+        run: npm run test:fog-capture
+        env:
+          # No real GPU on the runner: WebGPU is skipped here and covered by local runs.
+          SHOWCASE_SKIP_WEBGPU: "1"
+          # First runner run (39032374471): 120 frames of Showcase 39 on WebGL2 (raymarched fog with local lights)
+          # did not finish within the default 60 s on the software GPU (WebGL1 and Showcase 28 did). Generous
+          # per-run limit; a real hang still ends in TIMEOUT well inside the job's 30 minutes.
+          RUN_TIMEOUT_MS: "300000"
+
+  # Deterministic Liquid goldens (M1). Engine stepping is driven by the fixed-step
+  # `SmallWorldMachine.step(dt)` hook, so the GL2 captures are fully reproducible. Run on request only (see
+  # `workflow_dispatch` above); a failing run still fails the job, but nothing starts it automatically.
+  # The 16 pools are split over 4 parallel jobs (`--shard`): the cells are independent, so the pixels do not
+  # change, only the wall-clock time (about 5 instead of 14 minutes).
+  liquid-goldens:
+    if: github.event_name == 'workflow_dispatch' && inputs.goldens
+    name: liquid-goldens (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      # fetch-depth: 0 ist hier Pflicht (nicht nur Komfort): das Diff-Gate (skip-check.js) löst den
+      # Baseline-Commit über die Historie auf. Ein Shallow-Clone (Default depth 1) lässt `git log`
+      # fälschlich HEAD als Baseline melden -> Diff leer -> falsches Grün trotz geänderter Shader.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: npm
+
+      # Diff-Gate (goldens-optimization M1): SKIP wenn seit dem Baseline-Commit kein Build-Input
+      # von Showcase 10 geändert wurde. Läuft ohne node_modules (keine Abhängigkeiten) und beendet
+      # den Job in wenigen Sekunden grün statt npm ci + Build + Capture (~25 min) zu verbrennen.
+      # Fehlerrichtung konservativ: nur skippen, wenn es beweisbar nichts Output-Relevantes gibt.
+      - name: Skip gate when nothing output-relevant changed
+        id: skip
+        run: node .agents/scripts/goldens/skip-check.js --emit-status
+        shell: bash
+
+      - name: Install dependencies
+        if: steps.skip.outputs.should_run == 'true'
+        run: npm ci
+
+      - name: Cache mkcert (certificate tool of `vite preview`)
+        # Without the cache every fresh runner downloads mkcert from GitHub at server start; with many jobs
+        # starting at once that request occasionally fails (ECONNRESET) and the preview server never comes up.
+        uses: actions/cache@v4
+        if: steps.skip.outputs.should_run == 'true'
+        with:
+          path: ~/.vite-plugin-mkcert
+          key: mkcert-${{ runner.os }}-v1
+
+      - name: Build
+        if: steps.skip.outputs.should_run == 'true'
+        run: npm run build
+
+      # Capture this shard of the authoritative GL2 matrix (16 pools x 2 views = 32 deterministic
+      # screenshots in total). GL2 is the binding comparison backend. Should a single run still
+      # flake on the SwiftShader software-GL2 up-load despite the deterministic
+      # fixed-step, a rescue option is to re-run only that pool via a single
+      # `--pool <key>` retry -- deliberately NOT implemented here (keep it minimal).
+      - name: Capture Liquid GL2 goldens
+        if: steps.skip.outputs.should_run == 'true'
+        run: npm run goldens:capture -- --matrix gl2 --shard ${{ matrix.shard }}/4 --out "${{ runner.temp }}/liquid-goldens/current"
+
+      # Compare against the committed baseline. No continue-on-error: any cell above
+      # the drift threshold, or a technical/blank error, fails the build.
+      - name: Compare Liquid GL2 goldens against baseline
+        if: steps.skip.outputs.should_run == 'true'
+        run: npm run goldens:compare -- --baseline .agents/goldens/liquid/baseline --current "${{ runner.temp }}/liquid-goldens/current" --shard ${{ matrix.shard }}/4
+
+      # A skipped run is green by construction: deterministic pixels are byte-identical to the
+      # committed baseline when no build input changed, so there is nothing to archive.
+      - name: Gate skipped - nothing output-relevant changed
+        if: steps.skip.outputs.should_run == 'false'
+        run: echo "SKIPPED - no output-relevant change since the baseline commit; gate green without a capture."
+
+      # Fail-closed guard (M1): das Diff-Gate muss ein verbindliches Ergebnis haben. `should_run`
+      # wird vom Skript in jedem Pfad gesetzt; bleibt es dennoch leer (z.B. GITHUB_OUTPUT nicht
+      # verfügbar), darf der Job NICHT grün durchrutschen, ohne dass ein Capture existiert.
+      - name: Gate must have produced an outcome
+        if: always()
+        run: |
+          set -e
+          if [ "${{ steps.skip.outputs.should_run }}" = "false" ]; then
+            echo "Gate skipped by design - green."
+            exit 0
+          fi
+          if [ ! -d "${{ runner.temp }}/liquid-goldens/current" ]; then
+            echo "Gate produced no capture - failing closed."
+            exit 1
+          fi
+          echo "Gate captured a shard under ${{ runner.temp }}/liquid-goldens/current."
+
+      # Diagnostic artifact (current captures + manifest/summary), kept even on failure.
+      - name: Upload Liquid goldens diagnostic artifacts
+        uses: actions/upload-artifact@v4
+        if: steps.skip.outputs.should_run == 'true'
+        with:
+          name: liquid-goldens-${{ matrix.shard }}
+          path: ${{ runner.temp }}/liquid-goldens
+          if-no-files-found: warn

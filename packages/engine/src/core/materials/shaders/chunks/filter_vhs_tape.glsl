@@ -1,0 +1,9 @@
+float luma = dot(srgb, vec3(0.299, 0.587, 0.114));
+srgb = mix(srgb, vec3(luma), 0.45);
+float scanline = sin(distortUv.y * 280.0) * 0.06;
+srgb -= vec3(scanline);
+srgb.r *= 1.15;
+srgb.g *= 0.95;
+srgb.b *= 0.82;
+float lineNoise = step(0.99, random(vec2(u_time, distortUv.y)));
+srgb += vec3(lineNoise * 0.2);

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Small World Machine Showcase 24 - The Shader Gallery</title>
+    <link rel="stylesheet" href="/assets/shared.css" />
+    <style>
+
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #111; /* Changed to dark grey to verify cache refresh */
+    }
+    canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 10;
+    }
+    </style>
+  </head>
+  <body>
+    <showcase-layout title="The Shader Gallery" prev="../50/index.html" next="../14/index.html"><p>WebGL2 (GLSL) vs WebGPU (WGSL) shader gallery.</p></showcase-layout>
+
+    <div id="container" style="width: 100vw; height: 100vh;"></div>
+
+    <script type="module" src="./showcase.ts"></script>
+  </body>
+</html>

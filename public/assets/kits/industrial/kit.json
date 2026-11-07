@@ -1,0 +1,46 @@
+{
+  "$schema": "../../../schemas/kit.schema.json",
+  "id": "industrial",
+  "name": "Underground & Industrial Kit",
+  "version": "1.0.0",
+  "description": "Standard modular kit of industrial and underground bunker assets with authentic ADR/GHS hazard labeling for Small World Machine.",
+  "items": [
+    {
+      "id": "industrial/wall_lamp",
+      "name": "Industrial Bulkhead Wall Lamp",
+      "category": "lighting",
+      "path": "wall_lamp/model.glb",
+      "preview": "wall_lamp/preview.webp",
+      "meta": "wall_lamp/meta.json"
+    },
+    {
+      "id": "industrial/barrel_oil_black",
+      "name": "Corrugated Rusted Oil Barrel (Black)",
+      "category": "props",
+      "hazardClass": "ADR Class 3 / Crude Oil",
+      "path": "barrel_oil_black/model.glb",
+      "preview": "barrel_oil_black/preview.webp",
+      "meta": "barrel_oil_black/meta.json"
+    },
+    {
+      "id": "industrial/barrel_hazard_yellow",
+      "name": "Corrugated Hazard Steel Barrel (Yellow)",
+      "category": "props",
+      "hazardClass": "ADR Class 6.1 / Toxic",
+      "path": "barrel_hazard_yellow/model.glb",
+      "preview": "barrel_hazard_yellow/preview.webp",
+      "meta": "barrel_hazard_yellow/meta.json"
+    },
+    {
+      "id": "industrial/barrel_chemical_blue",
+      "name": "Corrugated Chemical Steel Barrel (Blue)",
+      "category": "props",
+      "hazardClass": "ADR Class 3 / Flammable Liquid",
+      "path": "barrel_chemical_blue/model.glb",
+      "preview": "barrel_chemical_blue/preview.webp",
+      "meta": "barrel_chemical_blue/meta.json"
+    }
+  ],
+  "author": "Small World Machine Studio",
+  "license": "CC0-1.0"
+}

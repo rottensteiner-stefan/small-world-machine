@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Debug Showcases & Portal (Chrome)",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}"
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Debug VitePress Docs (Chrome)",
+      "url": "http://localhost:5174",
+      "webRoot": "${workspaceFolder}/docs"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Current Vitest Test File",
+      "autoAttachChildProcesses": true,
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": ["run", "${relativeFile}"],
+      "smartStep": true,
+      "console": "integratedTerminal"
+    }
+  ]
+}

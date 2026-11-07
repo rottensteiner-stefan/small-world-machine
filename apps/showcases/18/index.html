@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Small World Machine - Showcase 18</title>
+    <link rel="stylesheet" href="/assets/shared.css" />
+    <style>
+
+      .ui-panel {
+        position: absolute;
+        bottom: 50px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--tool-panel, rgba(14, 18, 28, 0.95));
+        border: 1px solid var(--tool-border, rgba(148, 163, 184, 0.2));
+        border-radius: 8px;
+        color: #e2e8f0;
+        font-family: var(--font-ui, "Rajdhani", sans-serif);
+        font-size: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        width: 380px;
+        overflow: hidden;
+        user-select: none;
+        z-index: 1000;
+      }
+      .hud-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        background: rgba(255, 255, 255, 0.04);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .hud-title {
+        font-weight: 700;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #f8fafc;
+      }
+      .hud-badge {
+        font-size: 10px;
+        background: rgba(176, 0, 255, 0.2);
+        color: #d884ff;
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid rgba(176, 0, 255, 0.35);
+      }
+      .hud-body {
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .hud-section {
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+      .section-title {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #94a3b8;
+        margin-bottom: 8px;
+        text-align: left;
+      }
+      .preset-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+      }
+      .btn-preset {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #e2e8f0;
+        padding: 7px 6px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        transition: background 0.15s, border-color 0.15s;
+        text-align: center;
+      }
+      .btn-preset:hover:not(:disabled) {
+        background: rgba(176, 0, 255, 0.25);
+        border-color: #b000ff;
+        color: #fff;
+        box-shadow: 0 0 10px rgba(176, 0, 255, 0.4);
+      }
+      .btn-preset:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+      #resultText {
+        margin-top: 8px;
+        font-family: var(--font-mono, "JetBrains Mono", monospace);
+        font-size: 11px;
+        color: #38bdf8;
+        min-height: 18px;
+        text-align: center;
+      }
+    
+    </style>
+  </head>
+  <body>
+    <showcase-layout title="Procedural Terrain (Multithreaded)" prev="../17/index.html" next="../33/index.html"><p>High-poly terrain generation on a worker thread.</p></showcase-layout>
+
+    <div class="ui-panel">
+      <div class="hud-header">
+        <div class="hud-title">
+          <span>⛰️</span> Terrain Generator
+        </div>
+        <span class="hud-badge">Worker Pool</span>
+      </div>
+      <div class="hud-body">
+        <div class="hud-section">
+          <div class="section-title">⚡ Generation Mode</div>
+          <div class="preset-group">
+            <button id="btnMainThread" class="btn-preset">Main Thread</button>
+            <button id="btnWorkerThread" class="btn-preset">Worker Thread</button>
+            <button id="btnClear" class="btn-preset">Clear Terrain</button>
+          </div>
+          <div id="resultText">Waiting... (Move the camera to see stuttering)</div>
+        </div>
+      </div>
+    </div>
+
+    <canvas id="SmallWorldMachine"></canvas>
+
+    <script type="module" src="./showcase.ts"></script>
+  </body>
+</html>

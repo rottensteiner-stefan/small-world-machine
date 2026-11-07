@@ -1,0 +1,25 @@
+[BASE_FS_HEADER]
+[LIGHT_DEFS]
+[FOG_DEFS]
+void main() {
+  vec4 texColor = texture2D(u_diffuseMap, v_uv);
+  float specMapValue = texture2D(u_specularMap, v_uv).r;
+  vec3 normalMapValue = texture2D(u_normalMap, v_uv).rgb;
+  
+  vec3 normalMap = normalize(normalMapValue * 2.0 - 1.0);
+  normalMap.xy *= u_extraParams.zw;
+  vec3 N = normalize(v_tbn * normalMap);
+
+  [LIGHT_CALC]
+
+  vec3 albedo = texColor.rgb * u_color.rgb;
+  vec3 finalColor = finalLight * albedo + specular * u_specColor.rgb * specMapValue;
+  
+  float finalAlpha = u_color.a * texColor.a;
+  if (finalAlpha < u_extraParams.y) {
+    discard;
+  }
+
+  gl_FragColor = vec4(finalColor, finalAlpha);
+  [FOG_CALC]
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../../schemas/prop-meta.schema.json",
+  "id": "industrial/barrel_hazard_yellow",
+  "name": "Corrugated Hazard Steel Barrel (Yellow)",
+  "category": "props",
+  "kit": "industrial",
+  "version": "1.0.0",
+  "description": "Weathered industrial 200L steel drum with two 3-rib corrugated bands, caution yellow paint, diagonal black warning stripes, and toxic skull ADR/GHS hazard diamond.",
+  "triangles": 9680,
+  "materials": 1,
+  "textures": [
+    "diffuse",
+    "normal",
+    "roughness_metallic"
+  ],
+  "hazardClass": "ADR Class 6.1 (Toxic) / GHS06",
+  "dimensions": {
+    "radius": 0.34,
+    "height": 1.0
+  },
+  "recommendedScale": 0.82,
+  "author": "Small World Machine Studio",
+  "license": "CC0-1.0"
+}

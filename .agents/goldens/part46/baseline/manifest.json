@@ -1,0 +1,97 @@
+[
+  {
+    "poolKey": "part46-overview-overview",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "part46-overview-overview__main.png",
+    "meta": {
+      "poolKey": "part46-overview-overview",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 31.8147,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "73cb0cf8ab07f4c0c03b69b2808e9871e0b6edf323891e41fc5482bdca2c50ec",
+    "ok": true
+  },
+  {
+    "poolKey": "part46-forge-closeup",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "part46-forge-closeup__main.png",
+    "meta": {
+      "poolKey": "part46-forge-closeup",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 14.9799,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "6760a49107ecc6482c6a84e2cb44d99b4797ea4484966250494608271f6bff8f",
+    "ok": true
+  },
+  {
+    "poolKey": "part46-smoke-closeup",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "part46-smoke-closeup__main.png",
+    "meta": {
+      "poolKey": "part46-smoke-closeup",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 49.8128,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "45fbb51f0c3660ff5d694f08ea51ce92a706f2e5d4d72fdeab118c10aee4da19",
+    "ok": true
+  },
+  {
+    "poolKey": "part46-trails-closeup",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "part46-trails-closeup__main.png",
+    "meta": {
+      "poolKey": "part46-trails-closeup",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 22.3589,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "68f5e29bd6187dfd5d039109d9771f1f049048e64452ff28b4c951c790508172",
+    "ok": true
+  },
+  {
+    "poolKey": "part46-weather-closeup",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "part46-weather-closeup__main.png",
+    "meta": {
+      "poolKey": "part46-weather-closeup",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 19.7173,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "5a38909eda513d5ab6608080c2f11806f5e4467a31e5bc1444301e93deb786b3",
+    "ok": true
+  }
+]

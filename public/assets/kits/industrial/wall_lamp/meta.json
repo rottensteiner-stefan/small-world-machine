@@ -1,0 +1,40 @@
+{
+  "$schema": "../../../../schemas/prop-meta.schema.json",
+  "id": "industrial/wall_lamp",
+  "name": "Industrial Bulkhead Wall Lamp",
+  "category": "lighting",
+  "kit": "industrial",
+  "version": "1.0.0",
+  "description": "Weathered cast-iron bulkhead cage lamp with ribbed glass dome diffuser and mounting flange for underground bunkers and sewers.",
+  "triangles": 9852,
+  "materials": 1,
+  "textures": [
+    "diffuse",
+    "normal",
+    "roughness_metallic"
+  ],
+  "dimensions": {
+    "width": 0.42,
+    "height": 1.0,
+    "depth": 0.55
+  },
+  "recommendedScale": 0.38,
+  "sockets": [
+    {
+      "name": "LightBulb",
+      "position": [
+        0,
+        0,
+        0.18
+      ],
+      "recommendedLight": {
+        "type": "PointLight",
+        "color": "#ffe0a3",
+        "intensity": 3.8,
+        "distance": 11.0
+      }
+    }
+  ],
+  "author": "Small World Machine Studio",
+  "license": "CC0-1.0"
+}

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://small-world-machine.dev/schemas/prop-meta.schema.json",
+  "title": "Small World Machine Asset Kit — Prop Meta",
+  "description": "Schema for one item's meta.json (the spec sheet next to its model.glb) — see docs/adr/0011-modular-asset-kits-and-remote-catalog.md. Validated by packages/engine/tests/loaders/AssetKitValidation.test.ts, which also cross-checks that `id`/`kit` actually match the owning kit.json.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "category",
+    "kit",
+    "version",
+    "description",
+    "triangles",
+    "materials",
+    "textures",
+    "dimensions",
+    "recommendedScale",
+    "author",
+    "license"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "type": "string",
+      "description": "Must equal '<kit>/<own-slug>' and match this item's entry in the kit's kit.json.",
+      "pattern": "^[a-z][a-z0-9_-]*/[a-z][a-z0-9_]*$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "category": { "type": "string", "minLength": 1 },
+    "kit": {
+      "type": "string",
+      "description": "Must equal the owning kit.json's own id.",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "description": { "type": "string", "minLength": 1 },
+    "triangles": { "type": "integer", "exclusiveMinimum": 0, "maximum": 25000 },
+    "materials": { "type": "integer", "minimum": 0 },
+    "textures": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "dimensions": {
+      "type": "object",
+      "description": "A box (width/height/depth) or a radial prop (radius/height) — not both.",
+      "oneOf": [
+        {
+          "required": ["width", "height", "depth"],
+          "additionalProperties": false,
+          "properties": {
+            "width": { "type": "number", "exclusiveMinimum": 0 },
+            "height": { "type": "number", "exclusiveMinimum": 0 },
+            "depth": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        {
+          "required": ["radius", "height"],
+          "additionalProperties": false,
+          "properties": {
+            "radius": { "type": "number", "exclusiveMinimum": 0 },
+            "height": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        }
+      ]
+    },
+    "recommendedScale": { "type": "number", "exclusiveMinimum": 0 },
+    "sockets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "position"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "position": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "rotation": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Euler angles in radians; for a decal socket the local +Y axis is the surface normal."
+          },
+          "recommendedLight": {
+            "type": "object",
+            "required": ["type", "color", "intensity", "distance"],
+            "additionalProperties": false,
+            "properties": {
+              "type": { "type": "string", "minLength": 1 },
+              "color": { "type": "string", "minLength": 1 },
+              "intensity": { "type": "number", "exclusiveMinimum": 0 },
+              "distance": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "hazardClass": { "type": "string", "minLength": 1 },
+    "author": { "type": "string", "minLength": 1 },
+    "license": { "type": "string", "minLength": 1 }
+  }
+}

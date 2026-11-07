@@ -1,0 +1,25 @@
+[BASE_FS_HEADER]
+[LIGHT_DEFS]
+[FOG_DEFS]
+uniform vec2 u_texRepeat;
+void main() {
+  vec3 blendWeights = abs(v_normal);
+  blendWeights = pow(blendWeights, vec3(4.0));
+  blendWeights /= (blendWeights.x + blendWeights.y + blendWeights.z);
+  vec2 coordX = v_worldPos.zy * u_texRepeat;
+  vec2 coordY = v_worldPos.xz * u_texRepeat;
+  vec2 coordZ = v_worldPos.xy * u_texRepeat;
+  if (v_normal.x < 0.0) coordX.x = -coordX.x;
+  if (v_normal.y < 0.0) coordY.x = -coordY.x;
+  if (v_normal.z >= 0.0) coordZ.x = -coordZ.x;
+  vec4 colX = texture2D(u_diffuseMap, coordX);
+  vec4 colY = texture2D(u_diffuseMap, coordY);
+  vec4 colZ = texture2D(u_diffuseMap, coordZ);
+  vec4 finalTexColor = colX * blendWeights.x + colY * blendWeights.y + colZ * blendWeights.z;
+  vec3 N = normalize(v_normal);
+  [LIGHT_CALC]
+  // Same linear-light pipeline as the GLSL300/WGSL variants; WebGL1 has no exposure uniform.
+  vec3 albedo = pow(finalTexColor.rgb, vec3(2.2)) * pow(u_color.rgb, vec3(2.2));
+  gl_FragColor = vec4(pow(finalLight * albedo, vec3(1.0 / 2.2)), u_color.a * finalTexColor.a);
+  [FOG_CALC]
+}

@@ -1,0 +1,396 @@
+#version 300 es
+precision highp float;
+precision highp sampler2D;
+precision highp sampler2DShadow;
+precision highp sampler2DArrayShadow;
+precision highp sampler3D;
+
+in vec2 v_uv;
+
+uniform sampler2D u_opaqueDepthMap;
+uniform sampler2DShadow u_dirShadowMap;
+
+uniform mat4 u_invViewProj;
+uniform vec3 u_camPos;
+uniform vec3 u_sunDir;
+uniform vec3 u_sunColor;
+uniform vec3 u_fogColor;
+uniform vec3 u_ambientLight; // scene ambient colour * intensity
+uniform float u_ambientInject;
+uniform float u_fogHeight;        // baseline of the exponential height layer
+uniform float u_fogHeightFalloff; // falloff above the baseline (0 = uniform)
+uniform samplerCube u_irradianceMap; // IBL diffuse irradiance (black cube when the scene has none)
+uniform float u_envIntensity;
+uniform float u_intensity;
+uniform float u_density;
+uniform float u_asymmetry;
+uniform float u_maxDistance;
+uniform int u_samples;
+uniform float u_jitter; // VolumetricFogElement.jitter: 0 = fixed, deterministic samples
+
+uniform mat4 u_cascadeMatrices[4];
+uniform vec4 u_cascadeSplits;
+uniform vec4 u_dirShadowInfo; // x=bias, y=unused, z=castShadow, w=numCascades
+
+struct FogVolumeData {
+    mat4 invTransform;
+    vec4 params;   // [shape, density, edgeFade, emissionIntensity]
+    vec4 albedo;   // [r, g, b, pad]
+    vec4 emission; // [r, g, b, pad]
+    vec4 size;     // [size.x, size.y, size.z, pad]
+};
+
+uniform int u_numFogVolumes;
+uniform FogVolumeData u_fogVolumes[16];
+uniform float u_time;
+
+uniform int u_numPointLights;
+uniform vec4 u_pointLightPos[16];   // xyz: position, w: distance (range)
+uniform vec4 u_pointLightColor[16]; // rgb: color * intensity * volumetricIntensity * tint * albedo, w: decay
+
+uniform int u_numSpotLights;
+uniform vec4 u_spotLightPos[16];    // xyz: position, w: distance (range)
+uniform vec4 u_spotLightDir[16];    // xyz: direction, w: decay
+uniform vec4 u_spotLightColor[16];  // rgb: color * intensity * volumetricIntensity * tint * albedo, w: pad
+uniform vec4 u_spotLightParams[16]; // x: cosOuter, y: cosInner, z: distance (range), w: decay
+
+// Spot shadow maps of the first 4 spot lights (the engine only has 4), layer = spot list index.
+uniform sampler2DArrayShadow u_spotShadowMap;
+uniform mat4 u_spotShadowMatrix[4];
+uniform vec4 u_spotShadowInfo[4]; // x: bias, z: 1 when this spot shadows the fog
+
+// Element-global 3D density mask (RGBA8): R scales the global height-fog extinction inside the
+// world box `u_elementMaskBox` +/- `u_elementMaskSize`, G replaces the global scattering albedo for
+// the local-light, ambient and sun terms of in-box cells. Out-of-box cells keep the unmodulated
+// medium (R = 1, G = u_elementMaskAlbedo, matching the no-mask CPU-baked uniforms).
+uniform sampler3D u_elementMask; // unit 7
+uniform vec4 u_elementMaskBox;   // xyz: world-space mask centre
+uniform vec4 u_elementMaskSize;  // xyz: world-space mask half extents
+uniform float u_elementMaskEnabled; // 1 when the element mask is bound and applied
+uniform float u_elementMaskAlbedo;  // element scatteringAlbedo fallback for out-of-box cells
+
+// Per-FogVolume 3D density masks, compacted onto units 8..15 (WebGL2 guarantees >= 16 fragment
+// texture units; 0-3 are taken by depth/shadow/IBL/spot-shadow samplers). `u_fogVolumeMaskInfo[v].y`
+// holds the compacted slot of volume v, .x = 1 when a mask is bound for it. Empty slots keep the
+// identity texture bound; they are never sampled.
+uniform sampler3D u_fogVolumeMasks[8];
+uniform vec4 u_fogVolumeMaskInfo[16]; // x: 1 when this volume has a bound mask, y: mask slot (0..7)
+
+out vec4 fragColor;
+
+// Shadow term of spot `s` at a point in the air: 2x2 hardware PCF, same projection/depth convention as
+// the lit surfaces in light_calc.frag.glsl, no normal offset (the sample is not on a surface). Points
+// outside the map count as lit.
+float spotFogShadow(int s, vec3 pos) {
+    if (s >= 4 || u_spotShadowInfo[s].z < 0.5) return 1.0;
+    vec4 clip = u_spotShadowMatrix[s] * vec4(pos, 1.0);
+    if (clip.w <= 0.0) return 1.0;
+    vec3 proj = clip.xyz / clip.w * 0.5 + 0.5;
+    if (proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0 || proj.z > 1.0) return 1.0;
+    float depthRef = proj.z - u_spotShadowInfo[s].x;
+    vec2 texel = 0.5 / vec2(textureSize(u_spotShadowMap, 0).xy);
+    float lit = 0.0;
+    for (int k = 0; k < 4; k++) {
+        vec2 o = vec2((k & 1) == 0 ? -texel.x : texel.x, (k & 2) == 0 ? -texel.y : texel.y);
+        lit += texture(u_spotShadowMap, vec4(proj.xy + o, float(s), depthRef));
+    }
+    return lit * 0.25;
+}
+
+float boxSDF(vec3 p, vec3 b) {
+    vec3 q = abs(p) - b;
+    return length(max(q, vec3(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+float sphereSDF(vec3 p, float r) {
+    return length(p) - r;
+}
+
+float cylinderSDF(vec3 p, float r, float h) {
+    vec2 d = vec2(length(p.xz), abs(p.y)) - vec2(r, h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, vec2(0.0)));
+}
+
+// Analytical procedural 3D noise for animated rolling mist and billowy cloud pockets.
+float hash13(vec3 p) {
+    vec3 q = fract(p * 0.1031);
+    float d = dot(q, q.zyx + vec3(31.32));
+    return fract((q.x + q.y) * q.z * d);
+}
+
+float valueNoise3D(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    vec3 u = f * f * (3.0 - 2.0 * f);
+
+    float n000 = hash13(i + vec3(0.0, 0.0, 0.0));
+    float n100 = hash13(i + vec3(1.0, 0.0, 0.0));
+    float n010 = hash13(i + vec3(0.0, 1.0, 0.0));
+    float n110 = hash13(i + vec3(1.0, 1.0, 0.0));
+    float n001 = hash13(i + vec3(0.0, 0.0, 1.0));
+    float n101 = hash13(i + vec3(1.0, 0.0, 1.0));
+    float n011 = hash13(i + vec3(0.0, 1.0, 1.0));
+    float n111 = hash13(i + vec3(1.0, 1.0, 1.0));
+
+    float nx0 = mix(mix(n000, n100, u.x), mix(n010, n110, u.x), u.y);
+    float nx1 = mix(mix(n001, n101, u.x), mix(n011, n111, u.x), u.y);
+    return mix(nx0, nx1, u.z);
+}
+
+float fbm3D(vec3 p) {
+    return 0.65 * valueNoise3D(p) + 0.35 * valueNoise3D(p * 2.05 + vec3(1.7, 3.2, 5.1));
+}
+
+float getIGN(vec2 screenPos) {
+    vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+    return fract(magic.z * fract(dot(screenPos, magic.xy)));
+}
+
+float sampleShadow(vec3 pos) {
+    if (u_dirShadowInfo.z < 0.5 || u_dirShadowInfo.w < 1.0) {
+        return 1.0;
+    }
+
+    int numCascades = int(u_dirShadowInfo.w);
+    int cascadeIndex = numCascades - 1;
+    float viewDist = length(u_camPos - pos);
+
+    for (int c = 0; c < 4; c++) {
+        if (c >= numCascades) break;
+        if (viewDist < u_cascadeSplits[c]) {
+            cascadeIndex = c;
+            break;
+        }
+    }
+
+    vec4 lightSpacePos = u_cascadeMatrices[cascadeIndex] * vec4(pos, 1.0);
+    vec3 proj = lightSpacePos.xyz / lightSpacePos.w * 0.5 + 0.5;
+    if (proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) {
+        return 1.0;
+    }
+
+    float cols = ceil(sqrt(u_dirShadowInfo.w));
+    vec2 cell = vec2(mod(float(cascadeIndex), cols), floor(float(cascadeIndex) / cols));
+    vec2 cellMin = cell / cols;
+    vec2 cellMax = cellMin + vec2(1.0 / cols);
+    vec2 atlasUV = clamp((proj.xy + cell) / cols, cellMin, cellMax);
+
+    return texture(u_dirShadowMap, vec3(atlasUV, proj.z - u_dirShadowInfo.x));
+}
+
+void main() {
+    float rawDepth = texture(u_opaqueDepthMap, v_uv).r;
+
+    // Reconstruct world position from depth buffer
+    vec4 ndc = vec4(v_uv * 2.0 - 1.0, rawDepth * 2.0 - 1.0, 1.0);
+    vec4 worldH = u_invViewProj * ndc;
+    vec3 worldPos = worldH.xyz / worldH.w;
+
+    vec3 toPos = worldPos - u_camPos;
+    float distToSurface = length(toPos);
+    vec3 rayDir = toPos / max(distToSurface, 0.0001);
+
+    // If depth is at far plane (sky / unhit), march out to u_maxDistance
+    float marchDist = (rawDepth >= 0.99999) ? u_maxDistance : min(distToSurface, u_maxDistance);
+    if (marchDist <= 0.001) {
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    int steps = clamp(u_samples, 4, 32);
+    float dt = marchDist / float(steps);
+
+    // Henyey-Greenstein phase function for participating media scattering (matching WebGPU froxel_inject / froxel_integrate)
+    float g = clamp(u_asymmetry, -0.95, 0.95);
+
+    // Ambient inject: scene ambient colour plus the IBL irradiance from above (same as WebGPU).
+    vec3 skyAmbient = u_ambientLight;
+    if (u_ambientInject > 0.0) {
+        // Isotropic scattering sees the whole sphere: the mean of the (low-frequency) irradiance cube over the
+        // six axis directions approximates its L0 term; sampling straight up would only see the zenith.
+        vec3 skyMean = pow(texture(u_irradianceMap, vec3(1.0, 0.0, 0.0)).rgb, vec3(2.2))
+                     + pow(texture(u_irradianceMap, vec3(-1.0, 0.0, 0.0)).rgb, vec3(2.2))
+                     + pow(texture(u_irradianceMap, vec3(0.0, 1.0, 0.0)).rgb, vec3(2.2))
+                     + pow(texture(u_irradianceMap, vec3(0.0, -1.0, 0.0)).rgb, vec3(2.2))
+                     + pow(texture(u_irradianceMap, vec3(0.0, 0.0, 1.0)).rgb, vec3(2.2))
+                     + pow(texture(u_irradianceMap, vec3(0.0, 0.0, -1.0)).rgb, vec3(2.2));
+        skyAmbient += skyMean * (u_envIntensity / 6.0);
+    }
+
+    // The WebGL2 tier has no temporal accumulation, so the spatial dither must stay at full
+    // strength from the documented default (0.25) upwards; below it the dither fades out and at 0
+    // the samples sit at fixed mid-step positions (deterministic volume for golden screenshots).
+    // The sun phase depends only on the ray direction: evaluate it once, not per step.
+    float cosSun = dot(rayDir, normalize(u_sunDir));
+    float sunPhase = (1.0 - g * g) / (12.566370614359172 * max(pow(1.0 + g * g - 2.0 * g * cosSun, 1.5), 0.00001));
+
+    float jitter = mix(0.5, getIGN(gl_FragCoord.xy), clamp(u_jitter * 4.0, 0.0, 1.0));
+    vec3 accumulatedLight = vec3(0.0);
+    float transmittance = 1.0;
+
+    for (int i = 0; i < 32; i++) {
+        if (i >= steps) break;
+        float t = (float(i) + jitter) * dt;
+        if (t > marchDist) break;
+
+        vec3 samplePos = u_camPos + rayDir * t;
+        float shadow = sampleShadow(samplePos);
+
+        // Element-global mask lookup per step. In-box cells the R channel scales the global
+        // height-fog extinction and the G channel replaces the global scattering albedo; the light
+        // uniforms are uploaded unbaked in this state, so out-of-box cells reconstruct the exact
+        // baked value through the albedo fallback (identity with the no-mask path).
+        float elemMaskR = 1.0;
+        float elemFactorG = 1.0;
+        if (u_elementMaskEnabled > 0.5) {
+            vec3 toBox = samplePos - u_elementMaskBox.xyz;
+            if (all(lessThanEqual(abs(toBox), u_elementMaskSize.xyz))) {
+                vec3 maskUv = clamp(toBox / max(2.0 * u_elementMaskSize.xyz, 0.0001) + 0.5, 0.0, 1.0);
+                vec4 maskSample = texture(u_elementMask, maskUv);
+                elemMaskR = maskSample.r;
+                elemFactorG = clamp(maskSample.g, 0.0, 1.0);
+            } else {
+                elemFactorG = u_elementMaskAlbedo;
+            }
+        }
+
+        float localDensity =
+            u_density * exp(-u_fogHeightFalloff * max(samplePos.y - u_fogHeight, 0.0)) * elemMaskR;
+        float baseExtinction = localDensity;
+        float posDensity = 0.0;
+        float negDensity = 0.0;
+        vec3 volumeScatter = vec3(0.0);
+
+        for (int v = 0; v < 16; v++) {
+            if (v >= u_numFogVolumes) break;
+            vec3 pLocal = (u_fogVolumes[v].invTransform * vec4(samplePos, 1.0)).xyz;
+            int shape = int(u_fogVolumes[v].params.x);
+            float sdf = 1.0;
+            if (shape == 0) {
+                sdf = boxSDF(pLocal, u_fogVolumes[v].size.xyz);
+            } else if (shape == 1) {
+                sdf = sphereSDF(pLocal, u_fogVolumes[v].size.x);
+            } else if (shape == 2) {
+                sdf = cylinderSDF(pLocal, u_fogVolumes[v].size.x, u_fogVolumes[v].size.y);
+            }
+
+            if (sdf <= 0.0) {
+                float minDim = min(u_fogVolumes[v].size.x, min(u_fogVolumes[v].size.y, u_fogVolumes[v].size.z));
+                float fadeDist = max(minDim * u_fogVolumes[v].params.z, 0.0001);
+                float falloff = clamp(-sdf / fadeDist, 0.0, 1.0);
+                falloff = falloff * falloff * (3.0 - 2.0 * falloff);
+
+                float volDensity = u_fogVolumes[v].params.y * falloff;
+
+                // Per-volume mask inside the volume's local box: R scales the density (a negative,
+                // carving density simply scales -- the carve semantics are preserved), G replaces
+                // the volume's per-cell scattering albedo factor. Emission is unaffected.
+                float volAlbedoFactor = 1.0;
+                if (u_fogVolumeMaskInfo[v].x > 0.5) {
+                    vec3 maskUv = clamp(pLocal / max(u_fogVolumes[v].size.xyz, 0.0001) * 0.5 + 0.5, 0.0, 1.0);
+                    // GLSL ES 3.00 requires constant-index samplers: branch the 8 slots explicitly
+                    // (sampler arrays indexed with a runtime value are rejected by SwiftShader/ANGLE).
+                    int maskIdx = int(u_fogVolumeMaskInfo[v].y + 0.5);
+                    vec4 maskSample = vec4(1.0);
+                    if (maskIdx == 0) maskSample = texture(u_fogVolumeMasks[0], maskUv);
+                    else if (maskIdx == 1) maskSample = texture(u_fogVolumeMasks[1], maskUv);
+                    else if (maskIdx == 2) maskSample = texture(u_fogVolumeMasks[2], maskUv);
+                    else if (maskIdx == 3) maskSample = texture(u_fogVolumeMasks[3], maskUv);
+                    else if (maskIdx == 4) maskSample = texture(u_fogVolumeMasks[4], maskUv);
+                    else if (maskIdx == 5) maskSample = texture(u_fogVolumeMasks[5], maskUv);
+                    else if (maskIdx == 6) maskSample = texture(u_fogVolumeMasks[6], maskUv);
+                    else maskSample = texture(u_fogVolumeMasks[7], maskUv);
+                    volDensity *= maskSample.r;
+                    volAlbedoFactor = clamp(maskSample.g, 0.0, 1.0);
+                }
+
+                float noiseAmount = u_fogVolumes[v].emission.w;
+                float noiseScale = u_fogVolumes[v].albedo.w;
+                if (noiseAmount > 0.0 && noiseScale > 0.0 && volDensity > 0.0) {
+                    vec3 drift = vec3(1.0, 0.15, 0.4) * (u_fogVolumes[v].size.w * u_time);
+                    vec3 pNoise = pLocal * noiseScale - drift;
+                    float turb = fbm3D(pNoise);
+                    volDensity = volDensity * mix(1.0, clamp(turb * 1.8, 0.0, 3.0), noiseAmount);
+                }
+
+                if (volDensity > 0.0) {
+                    posDensity += volDensity;
+                    volumeScatter += u_fogVolumes[v].albedo.rgb * volAlbedoFactor * volDensity + u_fogVolumes[v].emission.rgb * u_fogVolumes[v].params.w * falloff;
+                } else {
+                    negDensity += volDensity;
+                }
+            }
+        }
+
+        float uncarved = baseExtinction + posDensity;
+        localDensity = max(0.0, uncarved + negDensity);
+        if (uncarved > 0.00001) {
+            volumeScatter *= (localDensity / uncarved);
+        } else {
+            volumeScatter = vec3(0.0);
+        }
+
+        // Local Point Lights in-scattering
+        vec3 localLightScatter = vec3(0.0);
+        for (int p = 0; p < 16; p++) {
+            if (p >= u_numPointLights) break;
+            vec3 toLight = u_pointLightPos[p].xyz - samplePos;
+            float lightDist = max(length(toLight), 0.0001);
+            float maxRange = u_pointLightPos[p].w;
+            if (maxRange > 0.0 && lightDist >= maxRange) continue;
+            vec3 ldir = toLight / lightDist;
+            float phase = (1.0 - g * g) / (12.566370614359172 * max(pow(1.0 + g * g - 2.0 * g * dot(ldir, rayDir), 1.5), 0.00001));
+            float ratio = lightDist / max(maxRange, 0.001);
+            float window = clamp(1.0 - ratio * ratio * ratio * ratio, 0.0, 1.0);
+            float atten = (window * window) / (1.0 + lightDist * lightDist);
+            localLightScatter += u_pointLightColor[p].rgb * atten * phase;
+        }
+
+        // Local Spot Lights in-scattering
+        for (int s = 0; s < 16; s++) {
+            if (s >= u_numSpotLights) break;
+            vec3 toLight = u_spotLightPos[s].xyz - samplePos;
+            float lightDist = max(length(toLight), 0.0001);
+            float maxDist = u_spotLightParams[s].z;
+            if (maxDist > 0.0 && lightDist >= maxDist) continue;
+            vec3 ldir = toLight / lightDist;
+            vec3 spotDir = u_spotLightDir[s].xyz;
+            float theta = dot(-ldir, spotDir);
+            float cosOuter = u_spotLightParams[s].x;
+            float cosInner = u_spotLightParams[s].y;
+            if (theta <= cosOuter) continue;
+            float cone = smoothstep(cosOuter, cosInner, theta);
+            float phase = (1.0 - g * g) / (12.566370614359172 * max(pow(1.0 + g * g - 2.0 * g * dot(ldir, rayDir), 1.5), 0.00001));
+            float atten = 1.0 / (1.0 + lightDist * lightDist);
+            if (maxDist > 0.0) {
+                atten *= pow(clamp(1.0 - lightDist / maxDist, 0.0, 1.0), max(u_spotLightParams[s].w, 1.0));
+            }
+            localLightScatter += u_spotLightColor[s].rgb * atten * cone * phase * spotFogShadow(s, samplePos);
+        }
+
+        // The element mask's per-cell albedo replaces the global scattering albedo for all local
+        // lights. The factor is 1 (and the light uniforms stay CPU-baked) with no mask bound.
+        localLightScatter *= elemFactorG;
+
+        float stepOpticalDepth = localDensity * dt;
+        float stepTau = clamp(stepOpticalDepth, 0.0, 10.0);
+        float stepTransmittance = exp(-stepTau);
+
+        // Decima Powder effect: forward-scattering highlights along edges
+        float powder = mix(1.0, 1.0 - exp(-stepTau * 2.0), 0.35);
+
+        // Directional sunlight in-scattering
+        vec3 sunScattering = shadow * u_sunColor * sunPhase * elemFactorG;
+
+        vec3 directScattering = (localLightScatter + sunScattering) * powder;
+        vec3 ambientScattering = skyAmbient * (u_ambientInject * u_fogColor) * elemFactorG + volumeScatter;
+        vec3 stepLight = directScattering + ambientScattering;
+
+        accumulatedLight += transmittance * stepLight * (1.0 - stepTransmittance);
+        transmittance *= stepTransmittance;
+
+        if (transmittance < 0.001) break;
+    }
+
+    fragColor = vec4(accumulatedLight * u_intensity, transmittance);
+}

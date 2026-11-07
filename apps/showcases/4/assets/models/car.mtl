@@ -1,0 +1,37 @@
+# Materialdatei für das Schuhschachtel-Auto
+
+newmtl BodyPaint
+# Ein schönes, kräftiges Rot
+Kd 0.8 0.1 0.1
+Ks 0.3 0.3 0.3
+Ns 30
+
+newmtl WindowGlass
+# Hellblau für die Fenster
+Kd 0.2 0.6 0.9
+Ks 0.8 0.8 0.8
+Ns 80
+
+newmtl WheelRubber
+# Dunkelgrau/Schwarz für die Reifen
+Kd 0.1 0.1 0.1
+Ks 0.1 0.1 0.1
+Ns 10
+
+newmtl RimMetal
+# Helles Grau/Silber für die Radkappen
+Kd 0.8 0.8 0.8
+Ks 0.9 0.9 0.9
+Ns 90
+
+newmtl Headlight
+# Strahlendes Gelb/Weiß für die Lichter
+Kd 1.0 0.9 0.2
+Ks 1.0 1.0 1.0
+Ns 100
+
+newmtl FrontGrill
+# Dunkles Grau für den Kühlergrill
+Kd 0.2 0.2 0.2
+Ks 0.3 0.3 0.3
+Ns 20

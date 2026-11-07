@@ -1,0 +1,9 @@
+let luma = dot(srgb, vec3f(0.299, 0.587, 0.114));
+srgb = mix(srgb, vec3f(luma), 0.45);
+let scanline = sin(distortUv.y * 280.0) * 0.06;
+srgb -= vec3f(scanline);
+srgb.x *= 1.15;
+srgb.y *= 0.95;
+srgb.z *= 0.82;
+let lineNoise = step(0.99, random(vec2f(u_time, distortUv.y)));
+srgb += vec3f(lineNoise * 0.2);

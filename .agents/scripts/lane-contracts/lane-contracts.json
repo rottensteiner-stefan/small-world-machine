@@ -1,0 +1,194 @@
+{
+  "$schema": "./lane-contracts.schema.json",
+  "copyright": "Lane-Contract-Registry: canonical mapping of every repurposed ObjectUniforms lane for the liquid style struct. Engine <-> liquid-extras (Noir/Oil). Part of T3 of the liquid roadmap (see .agents/collaborate/liquid-roadmap.md §8.2 T3).",
+  "uniformSlot": {
+    "id": "ObjectUniforms",
+    "sizeBytes": 512,
+    "note": "512 bytes (ADR 0027, supersedes the 256-byte moat of ADR 0026). Base lanes u_styleA/u_styleB stay; semantic/material lanes ride u_matParam0..15. New parameters travel via repurposed lanes or per-style constants.",
+    "structMembers": {
+      "u_styleA": [
+        "x=rampSoftness",
+        "y=washAmount",
+        "z=lineDensity",
+        "w=lineWidth(base)"
+      ],
+      "u_styleB": [
+        "w=styleId (float selector)",
+        "xyz=(reserved/doc)"
+      ],
+      "u_matParam0..15": "vec4 semantic material lanes, per-preset (e.g. OpenWater poolHalfExtent in u_matParam2.w)"
+    },
+    "baseMeanings": {
+      "u_styleA.w": "lineWidth (style 0,1,2,4,5)",
+      "u_styleB.w": "styleId selector"
+    }
+  },
+  "lanes": [
+    {
+      "lane": "u_styleA.x",
+      "meaning": "rampSoftness",
+      "materialTypes": [
+        "StylizedWaterMaterial"
+      ],
+      "styleIds": [
+        0,
+        1,
+        2,
+        4,
+        5
+      ],
+      "writeOrder": "base:pack",
+      "range": "0..1 softness",
+      "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)"
+    },
+    {
+      "lane": "u_styleA.y",
+      "meaning": "washAmount",
+      "materialTypes": [
+        "StylizedWaterMaterial"
+      ],
+      "styleIds": [
+        0,
+        1,
+        2,
+        4,
+        5
+      ],
+      "writeOrder": "base:pack",
+      "range": "0..1 painterly wash",
+      "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)"
+    },
+    {
+      "lane": "u_styleA.z",
+      "meaning": "lineDensity",
+      "materialTypes": [
+        "StylizedWaterMaterial"
+      ],
+      "styleIds": [
+        0,
+        1,
+        2,
+        4,
+        5
+      ],
+      "writeOrder": "base:pack",
+      "range": "0..1 stroke density",
+      "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)"
+    },
+    {
+      "lane": "u_styleA.w",
+      "meaning": "lineWidth",
+      "materialTypes": [
+        "StylizedWaterMaterial"
+      ],
+      "styleIds": [
+        0,
+        1,
+        2,
+        4,
+        5
+      ],
+      "writeOrder": "base:pack",
+      "range": "stroke width / ripple frequency",
+      "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)"
+    },
+    {
+      "lane": "u_styleB.w",
+      "meaning": "styleId (float selector)",
+      "materialTypes": [
+        "StylizedWaterMaterial",
+        "NoirWaterMaterial",
+        "OilSlickMaterial"
+      ],
+      "styleIds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "writeOrder": "base:pack",
+      "range": "integer-valued float [0..5]; 3.0 = isExtension",
+      "evictionPolicy": "never evicted; selector lane"
+    },
+    {
+      "lane": "u_styleA.w",
+      "meaning": "posterizeSteps (extension carve-out)",
+      "materialTypes": [
+        "NoirWaterMaterial"
+      ],
+      "styleIds": [
+        3
+      ],
+      "writeOrder": "extension:override (after base pack in same instance)",
+      "range": "2..8 integer-valued float",
+      "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)",
+      "collision": "overrides base lineWidth meaning; valid ONLY because styleId==3.0 dispatches extension branch"
+    },
+    {
+      "lane": "u_styleA.w",
+      "meaning": "iridescenceStrength (extension carve-out)",
+      "materialTypes": [
+        "OilSlickMaterial"
+      ],
+      "styleIds": [
+        3
+      ],
+      "writeOrder": "extension:override (after base pack in same instance)",
+      "range": "0..1",
+      "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)",
+      "collision": "overrides base lineWidth meaning; valid ONLY because styleId==3.0 dispatches extension branch"
+    },
+    {
+      "lane": "u_styleA.xyzw",
+      "meaning": "splat (OpenWater impact ring)",
+      "materialTypes": [
+        "OpenWaterMaterial"
+      ],
+      "styleIds": [],
+      "writeOrder": "hook:_packVariantLanes (after base pack)",
+      "range": "[x, z, spawnTime, energy]; ring active for 0..4 s after spawnTime when energy > 0",
+      "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)"
+    },
+    {
+      "lane": "u_matParam2.w",
+      "meaning": "poolHalfExtent (OpenWater clapotis walls)",
+      "materialTypes": [
+        "OpenWaterMaterial"
+      ],
+      "styleIds": [],
+      "writeOrder": "hook:_packVariantLanes (after base pack)",
+      "range": "world units, > 0 enables wall reflection, 0 = off; default 4.0",
+      "evictionPolicy": "rehome-to-per-style-constant, never silent delete (G3)"
+    }
+  ],
+  "registration": [
+    {
+      "id": "s2-splat-lane",
+      "status": "active",
+      "purpose": "S2 SurfaceRippleField: single registered splat lane vec4 = pos.xz + spawnTime + energy; max 1 active splat per water surface; upload only on impact.",
+      "note": "Active on OpenWaterMaterial u_styleA [x, z, spawnTime, energy]."
+    },
+    {
+      "id": "s3-wall-contract",
+      "status": "active",
+      "purpose": "S3 Clapotis wall contract: square basin centred on the world origin, half extent travels in u_matParam2.w (0 = off, default 4.0); wall normal, fade band and amplitude scale are shader constants.",
+      "note": "Active on OpenWater vertex shaders (GLSL300, GLSL100, WGSL); mirrored by OpenWaterSurfaceProbe (poolHalfExtent lane)."
+    },
+    {
+      "id": "s1-surface-probe",
+      "status": "active",
+      "owner": "bob-s1",
+      "purpose": "S1 Wellen-Sonde: OpenWaterSurfaceProbe is the CPU 'same-field' surface-truth probe -- reads the exact u_extraParams/u_liquidParams/u_thresholds/u_reflectivity lanes the OpenWater shader consumes, no re-derived constants; feeds Auftriebswahrheit in the buoyancy solver.",
+      "note": "Mirror audited op-for-op against OpenWater.vert.glsl + liquid_gerstner_wave.glsl; golden-vector + G2 constants-equality manifest live in packages/engine/tests/core/materials/OpenWaterSurfaceProbe.test.ts."
+    }
+  ],
+  "rules": [
+    "no two different meanings may occupy the same (lane, materialType) cell unless styleId/mat.type dispatch makes exactly one active",
+    "every lane write must be listed here (engine base lanes + extension carve-outs)",
+    "eviction of a lane requires re-homing to a per-style constant; silent deletion is forbidden",
+    "write order: base pack first, extension override after (single upload path per material instance)",
+    "future lanes (S2/S3) must be registered here before implementation"
+  ]
+}

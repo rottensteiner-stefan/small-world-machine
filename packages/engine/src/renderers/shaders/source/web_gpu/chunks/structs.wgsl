@@ -1,0 +1,313 @@
+// WGSL Global and Object structures
+
+// GlobalUniforms: Scene-level uniforms (1696 bytes / 424 floats)
+// Cleanly grouped into Camera & View, Environment & Fog, Shadow Maps, Clustered Light Grid,
+// Shadow Softness / EVSM Tuning, Per-Cascade Bias, and Point-Light Shadow Faces.
+struct GlobalUniforms {
+    // --- 1. Camera & View (80 bytes) ---
+    vp: mat4x4f,
+    viewPos: vec4f,
+
+    // --- 2. Environment, Direct Light & Atmospheric Fog (112 bytes) ---
+    ambientColor: vec4f,
+    dirLightColor: vec4f,
+    dirLightDir: vec4f,
+    numPointLights: f32,
+    numSpotLights: f32,
+    numAreaLights: f32,
+    gamma: f32,
+    exposure: f32,
+    fogMode: f32,
+    fogDensity: f32,
+    fogNear: f32,
+    fogFar: f32,
+    fogHeight: f32,
+    fogHeightFalloff: f32,
+    envIntensity: f32,
+    fogColor: vec4f,
+
+    // --- 3. Shadow Matrices & Projection (576 bytes) ---
+    spotShadowMatrices: array<mat4x4f, 4>,
+    spotShadowInfo: array<vec4f, 4>, // [bias, normalBias, castShadow, pad]
+    cascadeMatrices: array<mat4x4f, 4>,
+    cascadeSplits: vec4f,
+    // x = depth bias, y = normalBias (RESERVED for directional shadows: the per-cascade lanes in
+    // dirShadowBias below replace it -- y stays in the struct so WebGL2 EVSM/legacy layout code
+    // stays intact, but directional shaders no longer read it; spot shadows have their own
+    // normalBias per spot slot, see spotShadowInfo), z = castShadow, w = numCascades.
+    dirShadowInfo: vec4f, // [bias, normalBias, castShadow, numCascades]
+
+    // --- 4. Clustered Light Culling & Screen Geometry (80 bytes) ---
+    cameraNearFar: vec2f,
+    resolution: vec2f,    // canvas size in pixels, for clustered light culling
+    projScale: vec2f,     // projection matrix diagonal terms [0][0]/[1][1], for view-space reconstruction
+    tileSizePx: vec2f,    // clustered light grid screen-space tile size in pixels
+    clusterDims: vec4f, // [x, y, z cell counts, maxLightsPerCluster], all as f32
+
+    // --- 5. Shadow Softness Tuning (16 bytes) ---
+    // PCSS softness knobs (WebGL2 mirrors them in u_shadowSoftness): x = penumbra scale multiplier (1 = legacy),
+    // y = cap on the variable-radius PCF kernel in shadow-map texels (default 4), z/w = reserved.
+    shadowSoftness: vec4f,
+
+    // --- 6. EVSM Tuning (16 bytes) ---
+    // EVSM (Exponential Variance Shadow Maps, see docs/shadows.md / ADR 0043):
+    // x = mode flag (0 = PCSS/PCF, 1 = EVSM), y = dynamic min-variance MULTIPLIER (chain-rule
+    // epsilon, Filament uses 0.002 -- the floor is `y * (warpedDepth)²` and replaces the depth
+    // bias for acne control in EVSM), z = light-bleeding-reduction amount (LBR remap), w = tiny
+    // RECEIVER depth bias applied to the receiver depth before the warp (three.js VSM bias
+    // precedent; counters peter-panning at the caster silhouette, see GlobalUniformWriter).
+    // Lanes y/z/w are only meaningful when x > 0.5; lane w stays 0.0 under the pcss default.
+    evsmParams: vec4f,
+
+    // --- 7. Per-Cascade Normal-Offset Bias (16 bytes) ---
+    // E10 (P3): one normal-offset bias per cascade, baked by DirectionalLight.updateCascades as
+    // `k * max(texelSizeX, texelSizeY)` (k = 1.2, @fixed). Near (dense) cascades get a small
+    // offset, far (sparse) cascades a larger one -- replacing the old single `dirShadowInfo.y`
+    // normal offset that over-biased near cascades (peter-panning) and under-biased far ones
+    // (acne). Indexed with the resolved cascadeIndex; lanes are only meaningful while
+    // dirShadowInfo.z > 0.5. WebGL2 mirrors this in the `u_dirShadowBias` uniform.
+    dirShadowBias: vec4f,
+
+    // --- 8. Point-Light Shadow Faces (800 bytes) ---
+    // ADR 0052: up to 2 shadowed point lights, each six 90° cube faces stored as layers
+    // 4 + slot * 6 + face of u_spotShadowMap. Matrices are ZO-corrected like spotShadowMatrices.
+    pointShadowMatrices: array<mat4x4f, 12>,
+    pointShadowInfo: array<vec4f, 2>, // [bias, normalBias, pLights index (-1 = unused), castShadow]
+}
+
+// ObjectUniforms: 512-byte uniform block (32 vec4 / 128 floats)
+// Cleanly grouped into Transform, Core Material, Pipeline/Animation, and Semantic Material Parameters.
+struct ObjectUniforms {
+    // --- 1. Transform Block (64 bytes) ---
+    model: mat4x4f,
+
+    // --- 2. Core Material & Surface Properties (64 bytes) ---
+    color: vec4f,
+    specColor: vec4f, 
+    texOffset: vec2f,
+    texRepeat: vec2f,
+    shininess: f32,
+    isTerrain: f32,
+    metallic: f32,
+    roughness: f32,
+
+    // --- 3. Pipeline, Surface Tuning & Animation (128 bytes) ---
+    extraParams: vec4f,   // [ao, time, flowSpeed, noiseScale]
+    liquidParams: vec4f,  // [waveFreq, waveAmp, 0, 0]
+    thresholds: vec4f,    // [sandToGrass, grassToRock, rockToSnow, softness]
+    useEnvMap: f32,
+    useReflectionMap: f32,
+    reflectivity: f32,
+    time: f32,
+    isSkinned: f32,
+    boneOffset: f32,
+    texRotation: f32,     // UV rotation in radians (KHR_texture_transform); 0 = identity
+    pad2: f32,
+    pad3: f32,
+    styleA: vec4f,
+    styleB: vec4f,
+
+    // --- 4. Semantic Material Parameters: matParam0..15 (256 bytes) ---
+    // Dedicated parameter bank for modern materials (OpenWater, StylizedWater, PBR extensions, etc.)
+    matParam0: vec4f,  // e.g. OpenWater: [waterAbsorption.rgb, refractionStrength]
+    matParam1: vec4f,  // e.g. OpenWater: [foamColor.rgb, foamDistance]
+    matParam2: vec4f,  // e.g. OpenWater: [foamCutoff, foamNoiseScale, foamNoiseSpeed, poolHalfExtent]
+    matParam3: vec4f,
+    matParam4: vec4f,
+    matParam5: vec4f,
+    matParam6: vec4f,
+    matParam7: vec4f,
+    matParam8: vec4f,
+    matParam9: vec4f,
+    matParam10: vec4f,
+    matParam11: vec4f,
+    matParam12: vec4f,
+    matParam13: vec4f,
+    matParam14: vec4f,
+    matParam15: vec4f
+}
+
+// Per-draw view-projection matrix, dynamic-offset-indexed -- one slot for the main camera,
+// one per shadow cascade/spot light, so a single frame-shared command encoder can record every
+// pass without a per-cascade/light queue.writeBuffer()+submit() dance. See WebGPURenderer's
+// VIEW_SLOT_* constants and _setViewMatrix().
+struct ViewUniforms {
+    vp: mat4x4f,
+}
+
+struct Out {
+    @builtin(position) pos: vec4f,
+    @location(0) wp: vec3f,
+    @location(1) n: vec3f,
+    @location(2) uv: vec2f,
+    @location(3) t: vec3f,
+    @location(4) b: vec3f,
+    @location(5) original_uv: vec2f,
+    @location(6) texIndex: f32,
+    @location(7) instColor: vec4f
+}
+
+struct PointLight {
+    pos: vec4f,
+    col: vec4f
+}
+
+struct SpotLight {
+    pos: vec4f,
+    dir: vec4f,
+    col: vec4f,
+    params: vec4f 
+}
+
+struct AreaLight {
+    pos: vec4f,
+    col: vec4f,
+    right: vec4f,
+    up: vec4f,
+    normal: vec4f,
+    size: vec4f
+}
+
+@group(0) @binding(0) var<uniform> global: GlobalUniforms;
+
+// ADR 0049: a display-referred sRGB colour (raw skybox/sprite/unlit output, fog colour) in the space
+// the forward pass writes -- unchanged without post-processing, linear with it.
+fn displayToTarget(color: vec3f) -> vec3f {
+    return pow(max(color, vec3f(0.0)), vec3f(2.2 / global.gamma));
+}
+
+// World-space direction -> screen-plane offset in texture-UV units (WebGPU: y down). Projects the
+// direction through the view-projection (w = 0) and divides by the vertical focal term: FOV-independent,
+// x already aspect-compensated (h/w). Replaces raw world `.xz` screen offsets that rotated with the camera.
+fn worldDirToScreen(dir: vec3f) -> vec2f {
+    let clipDir = (global.vp * vec4f(dir, 0.0)).xy;
+    let focalY = length(vec3f(global.vp[0][1], global.vp[1][1], global.vp[2][1]));
+    return vec2f(clipDir.x, -clipDir.y) / max(focalY, 1e-6);
+}
+@group(0) @binding(1) var<storage> pLights: array<PointLight>;
+@group(0) @binding(2) var<storage> sLights: array<SpotLight>;
+@group(0) @binding(3) var<storage> aLights: array<AreaLight>;
+@group(0) @binding(4) var u_irradianceMap: texture_cube<f32>;
+@group(0) @binding(5) var u_prefilterMap: texture_cube<f32>;
+@group(0) @binding(6) var u_brdfLUT: texture_2d<f32>;
+@group(0) @binding(7) var globalSampler: sampler;
+@group(0) @binding(8) var u_dirShadowMap: texture_depth_2d_array;
+@group(0) @binding(9) var u_spotShadowMap: texture_depth_2d_array;
+@group(0) @binding(10) var shadowSampler: sampler_comparison;
+// Clustered/tiled forward+ light culling (WebGL2/WebGPU only, see
+// docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md). Fixed-capacity-per-cluster, no
+// atomics: ClusterCullPassGPU (compute) writes these, the lighting chunk below only reads them.
+// vec2u per cluster is (offset, count) into the matching index array.
+@group(0) @binding(11) var<storage, read_write> pointClusterGrid: array<vec2u>;
+@group(0) @binding(12) var<storage, read_write> pointClusterIndices: array<u32>;
+@group(0) @binding(13) var<storage, read_write> spotClusterGrid: array<vec2u>;
+@group(0) @binding(14) var<storage, read_write> spotClusterIndices: array<u32>;
+@group(0) @binding(15) var<storage, read> boneMatrices: array<mat4x4f>;
+
+// EVSM moment map (ADR 0043): rgba32float 2d-array holding 4 exponentially warped variance
+// moments per texel (same per-cascade layers as u_dirShadowMap). Only reached (fragment stage)
+// when quality.shadowMode === "evsm"; written by CascadedShadowPassGPU's moment pass and sampled
+// by getEVSM() in pbr_math.wgsl. evsmSampler uses linear filtering + clamp-to-edge so moment
+// filtering never bleeds across map edges.
+@group(0) @binding(16) var u_dirEvsmMap: texture_2d_array<f32>;
+@group(0) @binding(17) var evsmSampler: sampler;
+
+@group(1) @binding(1) var s: sampler;
+@group(1) @binding(2) var u_diffuseMap: texture_2d<f32>;
+@group(1) @binding(3) var u_normalMap: texture_2d<f32>;
+@group(1) @binding(4) var u_specularMap: texture_2d<f32>;
+@group(1) @binding(5) var u_sandMap: texture_2d<f32>;
+@group(1) @binding(6) var u_grassMap: texture_2d<f32>;
+@group(1) @binding(7) var u_rockMap: texture_2d<f32>;
+@group(1) @binding(8) var u_snowMap: texture_2d<f32>;
+@group(1) @binding(9) var u_metallicMap: texture_2d<f32>;
+@group(1) @binding(10) var u_roughnessMap: texture_2d<f32>;
+@group(1) @binding(11) var u_envMap: texture_cube<f32>;
+@group(1) @binding(12) var u_emissiveMap: texture_2d<f32>;
+@group(1) @binding(13) var u_alphaMap: texture_2d<f32>;
+@group(1) @binding(14) var u_opaqueMap: texture_2d<f32>;
+@group(1) @binding(15) var u_reflectionMap: texture_2d<f32>;
+@group(1) @binding(16) var u_opaqueDepthMap: texture_depth_2d;
+@group(1) @binding(17) var u_aoMap: texture_2d<f32>;
+@group(1) @binding(18) var u_rampMap: texture_2d<f32>;
+@group(1) @binding(19) var u_distortMap: texture_2d<f32>;
+@group(1) @binding(20) var u_normalBufferMap: texture_2d<f32>;
+
+// ── Flag-gated extension maps (ADR 0054 revisit, bindings 21-29) ────────────────────────────────
+// KHR_materials_clearcoat / sheen / transmission / specular maps. Each binding is declared only
+// under the matching compile flag (`preprocessConditionals` strips the branch otherwise), so the
+// shader statically references exactly the samplers its per-flag material bind group layout
+// carries (bindings are added there only under the same flag, and the budget fit may drop whole
+// groups). The specular weight is packed into the colour map's alpha when the shared layout is
+// active (one unit, not two, as on WebGL2, ADR 0054).
+#ifdef USE_CLEARCOAT_MAP
+@group(1) @binding(21) var u_clearcoatMap: texture_2d<f32>;
+#endif
+#ifdef USE_CLEARCOAT_ROUGHNESS_MAP
+@group(1) @binding(22) var u_clearcoatRoughnessMap: texture_2d<f32>;
+#endif
+#ifdef USE_CLEARCOAT_NORMAL_MAP
+@group(1) @binding(23) var u_clearcoatNormalMap: texture_2d<f32>;
+#endif
+#ifdef USE_SHEEN_COLOR_MAP
+@group(1) @binding(24) var u_sheenColorMap: texture_2d<f32>;
+#endif
+#ifdef USE_SHEEN_ROUGHNESS_MAP
+@group(1) @binding(25) var u_sheenRoughnessMap: texture_2d<f32>;
+#endif
+#ifdef USE_TRANSMISSION_MAP
+@group(1) @binding(26) var u_transmissionMap: texture_2d<f32>;
+#endif
+#ifdef USE_THICKNESS_MAP
+@group(1) @binding(27) var u_thicknessMap: texture_2d<f32>;
+#endif
+#ifdef USE_SPECULAR_WEIGHT_MAP
+#ifndef USE_SPECULAR_MAPS_SHARED
+@group(1) @binding(28) var u_specularWeightMap: texture_2d<f32>;
+#endif
+#endif
+#ifdef USE_SPECULAR_COLOR_MAP
+@group(1) @binding(29) var u_specularColorMap: texture_2d<f32>;
+#endif
+
+@group(2) @binding(0) var<uniform> obj: ObjectUniforms;
+
+@group(3) @binding(0) var<uniform> view: ViewUniforms;
+
+
+// Explicit UV derivatives for materials that shade from a depth-reconstructed UV (decals): their
+// implicit derivatives are garbage across depth discontinuities. USE_DECAL_GRADIENTS is a constant
+// per pipeline, so the branch below stays in uniform control flow.
+var<private> g_uvGradX: vec2f = vec2f(0.0);
+var<private> g_uvGradY: vec2f = vec2f(0.0);
+
+fn sampleNormalMap(uv: vec2f) -> vec4f {
+    if (USE_DECAL_GRADIENTS) {
+        return textureSampleGrad(u_normalMap, s, uv, g_uvGradX, g_uvGradY);
+    }
+    return textureSample(u_normalMap, s, uv);
+}
+
+fn sampleEmissiveMap(uv: vec2f) -> vec4f {
+    if (USE_DECAL_GRADIENTS) {
+        return textureSampleGrad(u_emissiveMap, s, uv, g_uvGradX, g_uvGradY);
+    }
+    return textureSample(u_emissiveMap, s, uv);
+}
+
+// Shading normal (world space) the normal-buffer wrapper writes; lit chunks overwrite it with
+// the normal-mapped result, everything else leaves it at the geometry normal.
+var<private> g_shadingNormal: vec3f = vec3f(0.0, 1.0, 0.0);
+
+fn octEncode(n: vec3f) -> vec2f {
+    let p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
+    let folded = (vec2f(1.0) - abs(p.yx)) * select(vec2f(-1.0), vec2f(1.0), p >= vec2f(0.0));
+    return select(p, folded, n.z < 0.0);
+}
+
+fn octDecode(e: vec2f) -> vec3f {
+    let n = vec3f(e.x, e.y, 1.0 - abs(e.x) - abs(e.y));
+    let folded = (vec2f(1.0) - abs(n.yx)) * select(vec2f(-1.0), vec2f(1.0), n.xy >= vec2f(0.0));
+    let xy = select(n.xy, folded, n.z < 0.0);
+    return normalize(vec3f(xy, n.z));
+}

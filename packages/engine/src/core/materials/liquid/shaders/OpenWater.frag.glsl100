@@ -1,0 +1,143 @@
+precision highp float;
+
+varying vec3 v_worldPos;
+varying vec3 v_normal;
+varying vec2 v_uv;
+varying vec4 v_clipPos;
+varying float v_crest;
+
+[LIGHT_DEFS]
+[WORLD_DIR_TO_SCREEN]
+
+uniform vec3 u_viewPos;
+uniform vec4 u_color;
+uniform vec4 u_specColor;
+uniform vec4 u_matParam6; // [edgeColor.rgb, edgeSoftness] (ADR 0027 / 0039 semantic lane)
+// Dedicated material parameter bank (512-byte layout slots)
+uniform vec4 u_matParam0; // [waterAbsorption.rgb, refractionStrength]
+uniform vec4 u_matParam1; // [foamColor.rgb, foamDistance]
+uniform vec4 u_matParam2; // [foamCutoff, foamNoiseScale, foamNoiseSpeed, poolHalfExtent (vertex stage)]
+uniform vec4 u_matParam9; // [reflectionStrength (0 = no mirror), reflectionDistortion, 0, 0] (LiquidWaveMaterial lane)
+uniform float u_time;
+uniform sampler2D u_opaqueMap;
+uniform sampler2D u_reflectionMap;
+
+[LIQUID_WORLEY_NOISE]
+
+// WebGL1 has no depth-texture capture path (see WebGL1Renderer.copyToOpaqueDepthTexture),
+// so the depth-based underwater fade from OpenWater.frag.wgsl/.frag.glsl is approximated
+// with a Fresnel mix instead -- same simplification tradeoff as Glass.frag.glsl100 dropping
+// TBN normal mapping. The opaque *color* capture IS available on WebGL1 though (see
+// WebGL1Renderer.copyToOpaqueTexture), so refraction still works -- distorted with the mesh UV
+// as a screen-space stand-in, same approximation Glass.frag.glsl100 already uses (GLSL ES 100 has
+// no textureSize()/gl_FragCoord-normalization to get a real screen UV).
+void main() {
+    vec3 waterColor = pow(u_color.rgb, vec3(2.2));
+    vec3 deepWaterColor = pow(u_specColor.rgb, vec3(2.2));
+
+    vec3 edgeColor = u_matParam6.rgb;
+    float edgeSoftness = max(u_matParam6.a, 0.001);
+
+    // Unpack from dedicated material parameter slots (512-byte layout)
+    vec3 waterAbsorption = u_matParam0.rgb;
+    float refractionStrength = u_matParam0.a;
+    vec3 foamColor = pow(u_matParam1.rgb, vec3(2.2));
+    float foamDistance = max(u_matParam1.a, 0.001);
+    float foamCutoff = u_matParam2.r;
+    float foamNoiseScale = u_matParam2.g;
+    float foamNoiseSpeed = u_matParam2.b;
+
+    // Real screen UV from the clip-space varying (the mesh UV sampled the capture as a sub-rectangle)
+    vec2 screenUv = v_clipPos.xy / v_clipPos.w * 0.5 + 0.5;
+    vec2 refractionUv = clamp(screenUv + worldDirToScreen(vec3(v_normal.x, 0.0, v_normal.z)) * refractionStrength, vec2(0.001), vec2(0.999));
+    vec3 refractedColor = texture2D(u_opaqueMap, refractionUv).rgb;
+    refractedColor = pow(refractedColor, vec3(2.2));
+
+    vec3 viewDir = normalize(u_viewPos - v_worldPos);
+    float fresnel = pow(1.0 - clamp(dot(v_normal, viewDir), 0.0, 1.0), 5.0);
+
+    // No real depth buffer on WebGL1 (see comment above), so `fresnel` doubles as the "how deep
+    // does this pixel look" proxy that OpenWater.frag.glsl/.wgsl get from the real depth capture.
+    // Scaled by 10 to land in roughly the same absorption range as those depth-based versions.
+    vec3 transmittance = exp(-fresnel * 10.0 * waterAbsorption);
+    vec3 tintedSeabed = refractedColor * mix(vec3(1.0), waterColor, 0.6);
+    // Single Beer-Lambert pass: the seabed is attenuated once by T and the water body's own (deep)
+    // colour fills the absorbed share. An outer mix(deep, ..., T) on top squared the attenuation.
+    vec3 baseColor = tintedSeabed * transmittance + deepWaterColor * (1.0 - transmittance);
+
+    if (u_matParam9.x > 0.0) {
+        // Planar reflection (PlanarReflectionNode): the wave slope bends the lookup, Schlick with the
+        // water F0 of 0.02 weights it. It replaces the sky tint.
+        vec2 mirrorUv = clamp(screenUv + worldDirToScreen(vec3(v_normal.x, 0.0, v_normal.z)) * u_matParam9.y, vec2(0.001), vec2(0.999));
+        vec3 mirror = pow(texture2D(u_reflectionMap, mirrorUv).rgb, vec3(2.2));
+        baseColor = mix(baseColor, mirror, (0.02 + 0.98 * fresnel) * u_matParam9.x);
+    } else {
+        vec3 skyColor = vec3(0.6, 0.8, 1.0);
+        baseColor = mix(baseColor, skyColor, fresnel * 0.5);
+    }
+
+    vec3 lightDir = normalize(u_dirLightDir);
+    vec3 halfVector = normalize(lightDir + viewDir);
+    float nDotH = clamp(dot(v_normal, halfVector), 0.0, 1.0);
+    float specular = smoothstep(0.9993, 0.9999, nDotH) * 0.25;
+    baseColor += u_dirLightColor * specular;
+
+    // Fresnel proxy only at grazing angles: top-down fresnel is ~0 and the old pow term tinted the whole pool.
+    float edgeBlend = smoothstep(0.04, 0.04 + 0.5 * edgeSoftness, fresnel) * 0.5;
+    vec3 edgeColLinear = pow(edgeColor, vec3(2.2));
+    vec3 finalColor = mix(baseColor, edgeColLinear, edgeBlend * 0.3);
+
+    // Procedural foam: an anisotropic lace pattern drifting in world-space XZ, masked to its own
+    // shoreline/intersection band (foamDistance) instead of edgeBlend.
+    float foamBlend = smoothstep(0.04, 0.04 + 0.5 * foamDistance, fresnel) * 0.6;
+    vec2 foamUv = v_worldPos.xz * foamNoiseScale + u_time * foamNoiseSpeed;
+    float foamCell = waterCellNoise(foamUv);
+    float foamPattern = 1.0 - smoothstep(foamCutoff, foamCutoff + 0.15, foamCell);
+
+    // Splash pulse: modulates intersection foam intensity over time instead of a static band, so
+    // it reads as water repeatedly slapping the object rather than a painted-on ring. Traveling
+    // in wave1's rough direction (baked in as a constant here, not a uniform -- re-deriving the
+    // exact vertex-shader phase would mean duplicating its wave uniforms into the fragment stage).
+    float splashPhase = dot(normalize(vec2(1.0, 0.4)), v_worldPos.xz) * 0.8 - u_time * 1.6;
+    float splashPulse = 0.6 + 0.4 * sin(splashPhase);
+    float foamMask = foamPattern * foamBlend * splashPulse;
+
+    // Wave-crest foam: v_crest is the vertex-shader Jacobian (wave-folding) metric, 0 on flat
+    // water -> 1 where the Gerstner crests pinch together (replaces the parked normal.y
+    // threshold, which only picked up high-frequency curvature noise).
+    // Anisotropic lace edge network: combines two frequencies of Worley cell walls.
+    // Named constants mirror the shared liquid shader set (OpenWater.frag.glsl/.wgsl).
+    const float CREST_FOAM_THRESHOLD_LOW = 0.65;
+    const float CREST_FOAM_THRESHOLD_HIGH = 0.95;
+    const float CREST_FOAM_INTENSITY = 0.9;
+    vec2 crestCellUv = foamUv * 2.7 + 11.0;
+    float crestCell2 = waterCellNoise(crestCellUv);
+    float crestMask = smoothstep(CREST_FOAM_THRESHOLD_LOW, CREST_FOAM_THRESHOLD_HIGH, v_crest);
+    float crestLace = max(smoothstep(0.35, 0.85, foamCell), smoothstep(0.35, 0.85, crestCell2));
+    float crestFoam = clamp(crestMask * crestLace + crestMask * crestMask * 0.6, 0.0, 1.0) * CREST_FOAM_INTENSITY;
+    foamMask = max(foamMask, crestFoam);
+
+    finalColor = mix(finalColor, foamColor, foamMask);
+
+    // Procedural caustics: a lighter second Worley-noise layer.
+    // Named constants mirror the shared liquid shader set (OpenWater.frag.glsl/.wgsl). The
+    // depth-based constants of the other backends -- CAUSTICS_MAX_DEPTH, CAUSTICS_FADE_EXPONENT,
+    // SPECULAR_EXPONENT, SPECULAR_INTENSITY -- are intentionally NOT declared here: this WebGL1
+    // path has no real depth capture, so it uses a Fresnel-proxy fade and a cheaper specular
+    // approximation instead of the pow-exponent model (see "No real depth buffer on WebGL1" and
+    // "Fresnel proxy" notes above); they exist only where the algorithm actually uses them.
+    const float CAUSTICS_SCALE = 1.4;
+    const float CAUSTICS_GAIN = 0.1;
+    const vec3 CAUSTICS_LIGHT_TINT = vec3(1.0, 0.98, 0.88);
+    vec2 causticsUv1 = (v_worldPos.xz + v_normal.xz * 0.25) * CAUSTICS_SCALE + vec2(u_time * foamNoiseSpeed * 0.35, u_time * foamNoiseSpeed * 0.2);
+    vec2 causticsUv2 = (v_worldPos.xz - v_normal.xz * 0.2) * 1.96 - vec2(u_time * foamNoiseSpeed * 0.25, u_time * foamNoiseSpeed * 0.4);
+    float caustics1 = 1.0 - waterCellNoise(causticsUv1);
+    float caustics2 = 1.0 - waterCellNoise(causticsUv2);
+    float causticsValue = pow(caustics1 * caustics2, 1.6) * 3.2;
+    float causticsFade = 1.0 - smoothstep(0.0, 1.0, fresnel);
+    finalColor += CAUSTICS_LIGHT_TINT * causticsValue * causticsFade * CAUSTICS_GAIN;
+
+    finalColor = pow(finalColor, vec3(1.0 / 2.2));
+
+    gl_FragColor = vec4(finalColor, 1.0);
+}

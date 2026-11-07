@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showcase 10 - Waterworld &amp; Liquid Gallery - Concept</title>
+<style>
+  :root { --bg: #0e1a24; --fg: #e8f1f6; --muted: #8fa9b8; --card: #16293a; --accent: #38bdf8; }
+  body { margin: 0; padding: 32px 16px; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; } h2 { margin-top: 36px; color: var(--accent); }
+  p.lead { color: var(--muted); margin-top: 0; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 16px 0; }
+  .cell { background: var(--card); border-radius: 6px; padding: 10px 6px; font-size: 13px; text-align: center; border-top: 4px solid var(--c); }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sw { width: 64px; height: 40px; border-radius: 4px; font-size: 11px; display: flex; align-items: end; padding: 2px 4px; box-sizing: border-box; color: #000; }
+  @media (max-width: 600px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Waterworld &amp; Liquid Gallery</h1>
+  <p class="lead">An open-air gallery: square, half-sunk pool basins on a meadow, one liquid per pool, so every liquid material of the engine can be compared side by side under the same sun.</p>
+
+  <h2>Layout</h2>
+  <p>A 4 x 4 grid, centered on the origin. Rows go from realistic to exotic. Each pool has a signboard beside it.</p>
+  <div class="grid">
+    <div class="cell" style="--c:#2aaedc">Clear Water</div><div class="cell" style="--c:#2a8fb0">Wave Rider</div><div class="cell" style="--c:#4fc7c0">Dead Sea</div><div class="cell" style="--c:#38bdf8">Toon</div>
+    <div class="cell" style="--c:#1a8fcc">Bold Anime</div><div class="cell" style="--c:#2ec4c4">Soft Watercolor</div><div class="cell" style="--c:#00e0f0">Painterly Sparkle</div><div class="cell" style="--c:#1a4a40">Dredge</div>
+    <div class="cell" style="--c:#999">Noir Graphic</div><div class="cell" style="--c:#ff5a0a">Molten Lava</div><div class="cell" style="--c:#26e04a">Toxic Slime</div><div class="cell" style="--c:#222">Petroleum Oil</div>
+    <div class="cell" style="--c:#ff7a10">Stylized Volcano</div><div class="cell" style="--c:#e03010">Inferno</div><div class="cell" style="--c:#19b3f2">Plasma</div><div class="cell" style="--c:#8ce626">Toxic Lava</div>
+  </div>
+
+  <h2>Frames</h2>
+  <p>Ceramic tile rims (procedural canvas textures). Palette follows the liquid: bright pool cyan for water, dark ceramics for dark fluids, basalt for lava, salt white for the Dead Sea, inked comic tiles for Noir.</p>
+  <div class="swatches">
+    <div class="sw" style="background:#36c3e6">pool</div><div class="sw" style="background:#34544d;color:#fff">murk</div>
+    <div class="sw" style="background:#39302a;color:#fff">basalt</div><div class="sw" style="background:#4f5d2d;color:#fff">toxic</div>
+    <div class="sw" style="background:#32373f;color:#fff">graphite</div><div class="sw" style="background:#dbd3c1">salt</div>
+  </div>
+
+  <h2>Props</h2>
+  <p>Each pool carries crates and balls on the floor, two bobbing floaters and a periodic dropper that splashes in. The two buoyancy pools use real rigid bodies riding the wave field, so the Dead Sea visibly floats them higher.</p>
+
+  <h2>Tools</h2>
+  <p>Golden-capture mode for deterministic screenshots (<code>__golden=&lt;pool&gt;</code>), and <code>?tune=1</code> for live tuning of the toon pool (keys 0, G, arrows).</p>
+
+  <h2>Honest status</h2>
+  <p>The gallery is a technical comparison, not a finished scene: lighting is one sun plus colored point lights at lava and slime, the meadow is a single tiled texture, and several older texture maps in the asset folder are unused.</p>
+</main>
+</body>
+</html>

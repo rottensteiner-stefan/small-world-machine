@@ -1,0 +1,1261 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <link rel="stylesheet" href="/assets/shared.css" />
+    <link rel="stylesheet" href="/assets/tool-theme.css" />
+    <title>Procedural Splatter Generator</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--tool-bg);
+        color: var(--tool-text);
+        font-family: var(--tool-font-ui);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .app-container {
+        display: flex;
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* Sidebar controls */
+      .sidebar {
+        width: 320px;
+        background: var(--tool-panel);
+        border-right: 1px solid var(--tool-border);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        z-index: 5;
+      }
+
+      .sidebar-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.75rem;
+      }
+
+      .section-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--tool-text-muted);
+        margin: 0.9rem 0 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        border-bottom: 1px solid var(--tool-border);
+        padding-bottom: 0.35rem;
+      }
+
+      .section-title:first-child {
+        margin-top: 0;
+      }
+
+      .control-group .section-title {
+        margin-top: 0;
+      }
+
+      .control-group {
+        margin-bottom: 0.6rem;
+      }
+
+      .control-row {
+        margin-bottom: 0.6rem;
+      }
+
+      .control-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .field-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--tool-text);
+        margin-bottom: 0.3rem;
+      }
+
+      .tool-select,
+      .tool-input {
+        width: 100%;
+      }
+
+      .color-picker {
+        width: 48px;
+        height: 2rem;
+        padding: 2px;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+
+      .color-hex {
+        flex: 1;
+      }
+
+      /* Preset color swatches */
+      .color-presets {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.4rem;
+        margin-top: 0.5rem;
+      }
+
+      .color-presets .tool-swatch {
+        width: auto;
+        height: 24px;
+      }
+
+      .sidebar-actions {
+        padding: 0.75rem;
+        border-top: 1px solid var(--tool-border);
+        background: var(--tool-panel-solid);
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      .sidebar-actions .tool-btn {
+        flex: 1;
+        padding: 0.55rem 0.8rem;
+        font-size: 0.85rem;
+      }
+
+      /* Main viewport area */
+      .viewport {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: var(--tool-bg);
+        padding: 0.75rem;
+        position: relative;
+        min-width: 0;
+      }
+
+      .canvas-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--tool-panel-solid);
+        border: 1px solid var(--tool-border);
+        border-radius: var(--tool-radius-md);
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* Checkerboard pattern for transparency */
+      .checkerboard {
+        position: absolute;
+        width: 512px;
+        height: 512px;
+        background-color: var(--tool-panel-solid);
+        background-image:
+          linear-gradient(45deg, var(--tool-card-hover) 25%, transparent 25%),
+          linear-gradient(-45deg, var(--tool-card-hover) 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, var(--tool-card-hover) 75%),
+          linear-gradient(-45deg, transparent 75%, var(--tool-card-hover) 75%);
+        background-size: 20px 20px;
+        background-position:
+          0 0,
+          0 10px,
+          10px -10px,
+          -10px 0px;
+        border-radius: var(--tool-radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      canvas {
+        position: relative;
+        width: auto;
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: var(--tool-radius-md);
+        z-index: 2;
+      }
+
+      /* Bottom info & code panel */
+      .code-panel {
+        margin-top: 0.75rem;
+        border-radius: var(--tool-radius-md);
+        height: 250px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .code-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.4rem 0.6rem;
+        border-bottom: 1px solid var(--tool-border);
+      }
+
+      .code-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--tool-text-muted);
+      }
+
+      .code-tabs {
+        display: flex;
+        gap: 0.35rem;
+      }
+
+      pre {
+        flex: 1;
+        overflow: auto;
+        padding: 0.75rem;
+        font-family: var(--tool-font-mono);
+        font-size: 0.8rem;
+        line-height: 1.5;
+        color: var(--tool-text);
+        background: var(--tool-inset);
+      }
+
+      /* Utility styles */
+      .d-none {
+        display: none !important;
+      }
+
+      .preset-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+    </style>
+  </head>
+    <header class="tool-header">
+      <h1>Procedural Splatter Generator</h1>
+      <button class="tool-close-btn" id="toolCloseBtn" title="Close Window" onclick="if (window.parent && window.parent !== window) { window.parent.postMessage({ type: 'close-tool' }, '*'); } try { window.close(); } catch(e) {}">✕</button>
+    </header>
+    <script>if (window.self !== window.top || window.opener) document.body.classList.add("in-window");</script>
+    
+    <div class="app-container">
+      <div class="sidebar">
+        <div class="sidebar-scroll">
+          <!-- Algorithm settings -->
+          <div class="section-title">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polygon points="12 2 2 7 12 12 22 7 12 2" />
+              <polyline points="2 17 12 22 22 17" />
+              <polyline points="2 12 12 17 22 12" />
+            </svg>
+            Generation Method
+          </div>
+          <div class="control-row">
+            <select class="tool-select" id="algorithm-select">
+              <option value="noise-warp">Seamless Noise-Warped Circle</option>
+              <option value="metaballs">Liquid Metaballs</option>
+              <option value="mud-splatter">Combined Mud Splatter (Recommended)</option>
+            </select>
+          </div>
+
+          <div class="section-title">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
+              <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+              <path
+                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
+              />
+            </svg>
+            Splatter Parameters
+          </div>
+
+          <!-- Shared Parameters -->
+          <div class="control-group">
+            <div class="control-row">
+              <label class="field-label">
+                Base Radius
+                <span id="radius-val" class="tool-value">120</span>
+              </label>
+              <input class="tool-slider" type="range" id="radius-slider" min="30" max="200" value="120" />
+            </div>
+
+            <!-- tool-theme: allow-begin splatter-preset-data -->
+            <div class="control-row">
+              <label class="field-label">
+                Color
+                <span id="color-val" class="tool-value">#4a3728</span>
+              </label>
+              <div class="preset-row">
+                <input class="tool-input color-picker" type="color" id="color-picker" value="#4a3728" />
+                <input class="tool-input mono color-hex" type="text" id="color-hex" value="#4a3728" />
+              </div>
+              <div class="color-presets">
+                <div
+                  class="tool-swatch color-preset"
+                  style="background: #4a3728"
+                  title="Mud Brown"
+                  data-color="#4a3728"
+                ></div>
+                <div
+                  class="tool-swatch color-preset"
+                  style="background: #17181c"
+                  title="Oil Black"
+                  data-color="#17181c"
+                ></div>
+                <div
+                  class="tool-swatch color-preset"
+                  style="background: #102a43"
+                  title="Dirty Ink"
+                  data-color="#102a43"
+                ></div>
+                <div
+                  class="tool-swatch color-preset"
+                  style="background: #8b0000"
+                  title="Dried Blood"
+                  data-color="#8b0000"
+                ></div>
+                <div
+                  class="tool-swatch color-preset"
+                  style="background: #2d4a22"
+                  title="Moss Green"
+                  data-color="#2d4a22"
+                ></div>
+              </div>
+            </div>
+            <!-- tool-theme: allow-end -->
+
+            <div class="control-row">
+              <label class="field-label"> Output Size </label>
+              <select class="tool-select" id="size-select">
+                <option value="256">256 x 256 (Fast)</option>
+                <option value="512" selected>512 x 512 (Recommended)</option>
+                <option value="1024">1024 x 1024 (HD)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Algorithm specific panels -->
+          <div id="panel-noise-warp" class="control-group">
+            <div class="section-title">
+              Noise Warp Details
+            </div>
+
+            <div class="control-row">
+              <label class="field-label">
+                Noise Frequency (Detail)
+                <span id="noise-freq-val" class="tool-value">2.5</span>
+              </label>
+              <input
+                class="tool-slider"
+                type="range"
+                id="noise-freq-slider"
+                min="0.5"
+                max="10.0"
+                step="0.1"
+                value="2.5"
+              />
+            </div>
+
+            <div class="control-row">
+              <label class="field-label">
+                Warp Amplitude (Strength)
+                <span id="noise-amp-val" class="tool-value">40</span>
+              </label>
+              <input class="tool-slider" type="range" id="noise-amp-slider" min="5" max="100" value="40" />
+            </div>
+
+            <div class="control-row">
+              <label class="field-label">
+                Satellite Droplets
+                <span id="warp-sat-val" class="tool-value">15</span>
+              </label>
+              <input class="tool-slider" type="range" id="warp-sat-slider" min="0" max="40" value="15" />
+            </div>
+
+            <div class="control-row">
+              <label class="field-label">
+                Satellite Distance
+                <span id="warp-sat-dist-val" class="tool-value">1.5</span>
+              </label>
+              <input
+                class="tool-slider"
+                type="range"
+                id="warp-sat-dist-slider"
+                min="1.0"
+                max="2.5"
+                step="0.1"
+                value="1.5"
+              />
+            </div>
+          </div>
+
+          <div id="panel-metaballs" class="control-group d-none">
+            <div class="section-title">
+              Metaball Liquid Details
+            </div>
+
+            <div class="control-row">
+              <label class="field-label">
+                Blob Count
+                <span id="blob-count-val" class="tool-value">10</span>
+              </label>
+              <input class="tool-slider" type="range" id="blob-count-slider" min="3" max="30" value="10" />
+            </div>
+
+            <div class="control-row">
+              <label class="field-label">
+                Gaussian Blur Radius
+                <span id="blur-val" class="tool-value">20</span>
+              </label>
+              <input class="tool-slider" type="range" id="blur-slider" min="5" max="40" value="20" />
+            </div>
+
+            <div class="control-row">
+              <label class="field-label">
+                Edge Threshold (Size)
+                <span id="threshold-val" class="tool-value">110</span>
+              </label>
+              <input class="tool-slider" type="range" id="threshold-slider" min="20" max="240" value="110" />
+            </div>
+
+            <div class="control-row">
+              <label class="field-label">
+                Satellite Drops
+                <span id="meta-sat-val" class="tool-value">8</span>
+              </label>
+              <input class="tool-slider" type="range" id="meta-sat-slider" min="0" max="30" value="8" />
+            </div>
+          </div>
+
+          <div id="panel-mud-splatter" class="control-group d-none">
+            <div class="section-title">
+              Mud Splatter Settings
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                Blob Count
+                <span id="mud-blob-val" class="tool-value">12</span>
+              </label>
+              <input class="tool-slider" type="range" id="mud-blob-slider" min="3" max="30" value="12" />
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                Warp Amplitude
+                <span id="mud-warp-val" class="tool-value">25</span>
+              </label>
+              <input class="tool-slider" type="range" id="mud-warp-slider" min="0" max="80" value="25" />
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                Blur Radius
+                <span id="mud-blur-val" class="tool-value">15</span>
+              </label>
+              <input class="tool-slider" type="range" id="mud-blur-slider" min="5" max="40" value="15" />
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                Edge Threshold
+                <span id="mud-thresh-val" class="tool-value">100</span>
+              </label>
+              <input class="tool-slider" type="range" id="mud-thresh-slider" min="20" max="240" value="100" />
+            </div>
+            <div class="control-row">
+              <label class="field-label">
+                Radial Satellites
+                <span id="mud-sat-val" class="tool-value">18</span>
+              </label>
+              <input class="tool-slider" type="range" id="mud-sat-slider" min="0" max="50" value="18" />
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-actions">
+          <button id="btn-seed" class="tool-btn">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+            </svg>
+            Seed Random
+          </button>
+          <button id="btn-download" class="tool-btn primary">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Download PNG
+          </button>
+        </div>
+      </div>
+
+      <div class="viewport">
+        <div class="canvas-container">
+          <div class="checkerboard">
+            <canvas id="splat-canvas" width="512" height="512"></canvas>
+          </div>
+        </div>
+
+        <!-- Code Inspector -->
+        <div class="code-panel tool-panel">
+          <div class="code-header">
+            <span class="code-title">Drawing Algorithm Code</span>
+            <div class="tool-tabs code-tabs">
+              <button class="tool-tab code-tab active" data-tab="js">JavaScript (Canvas 2D)</button>
+              <button class="tool-tab code-tab" data-tab="shader">Shader Logic (Conceptual)</button>
+            </div>
+            <button
+              id="btn-copy"
+              class="tool-btn"
+            >
+              Copy Code
+            </button>
+          </div>
+          <pre><code id="code-content"></code></pre>
+        </div>
+      </div>
+    </div>
+
+    <footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World Machine</footer>
+
+    <script>
+      // ----------------------------------------------------
+      // Simple 2D Perlin Noise Implementation (Pure JS)
+      // ----------------------------------------------------
+      class Perlin {
+        constructor(seedValue) {
+          this.p = new Uint8Array(256);
+          this.permutation = new Uint8Array(512);
+          this.init(seedValue);
+        }
+
+        init(seedValue) {
+          // Simple LCG pseudo-random generator based on seed
+          let seed = seedValue || Math.random();
+          const rand = () => {
+            const x = Math.sin(seed++) * 10000;
+            return x - Math.floor(x);
+          };
+
+          for (let i = 0; i < 256; i++) {
+            this.p[i] = i;
+          }
+
+          // Shuffle using seed
+          for (let i = 255; i > 0; i--) {
+            const j = Math.floor(rand() * (i + 1));
+            const tmp = this.p[i];
+            this.p[i] = this.p[j];
+            this.p[j] = tmp;
+          }
+
+          // Populate double permutation array
+          for (let i = 0; i < 512; i++) {
+            this.permutation[i] = this.p[i & 255];
+          }
+        }
+
+        fade(t) {
+          return t * t * t * (t * (t * 6 - 15) + 10);
+        }
+
+        lerp(t, a, b) {
+          return a + t * (b - a);
+        }
+
+        grad(hash, x, y) {
+          const h = hash & 7;
+          const gradX = [1, -1, 0, 0, 1, -1, 1, -1][h];
+          const gradY = [0, 0, 1, -1, 1, 1, -1, -1][h];
+          return x * gradX + y * gradY;
+        }
+
+        noise(x, y) {
+          const X = Math.floor(x) & 255;
+          const Y = Math.floor(y) & 255;
+
+          x -= Math.floor(x);
+          y -= Math.floor(y);
+
+          const u = this.fade(x);
+          const v = this.fade(y);
+
+          const A = this.permutation[X] + Y;
+          const B = this.permutation[X + 1] + Y;
+
+          return this.lerp(
+            v,
+            this.lerp(
+              u,
+              this.grad(this.permutation[A], x, y),
+              this.grad(this.permutation[B], x - 1, y),
+            ),
+            this.lerp(
+              u,
+              this.grad(this.permutation[A + 1], x, y - 1),
+              this.grad(this.permutation[B + 1], x - 1, y - 1),
+            ),
+          );
+        }
+      }
+
+      // Helper: Hex color to RGB object
+      function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result
+          ? {
+              r: parseInt(result[1], 16),
+              g: parseInt(result[2], 16),
+              b: parseInt(result[3], 16),
+            }
+          : null;
+      }
+
+      // ----------------------------------------------------
+      // Drawing Implementations
+      // ----------------------------------------------------
+
+      // Technique 1: Noise-Warped Circle
+      function drawNoiseWarpedCircle(ctx, width, height, options, perlinInstance) {
+        const { radius, frequency, amplitude, satellites, satelliteRange, color } = options;
+
+        const cx = width / 2;
+        const cy = height / 2;
+
+        ctx.fillStyle = color;
+
+        // Draw main blob
+        ctx.beginPath();
+        const numPoints = 200;
+        for (let i = 0; i <= numPoints; i++) {
+          const angle = (i / numPoints) * Math.PI * 2;
+          const nx = Math.cos(angle);
+          const ny = Math.sin(angle);
+
+          // Circular sample path in 2D noise space to ensure seam-free shape
+          const noiseVal = perlinInstance.noise(nx * frequency + 1.2, ny * frequency + 3.7);
+          const r = radius + noiseVal * amplitude;
+
+          const x = cx + Math.cos(angle) * r;
+          const y = cy + Math.sin(angle) * r;
+
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw radial satellite droplets
+        const randSeed = options.seed * 9.87;
+        let randVal = Math.sin(randSeed);
+        const seededRand = () => {
+          randVal = Math.sin(randVal * 10000);
+          return randVal - Math.floor(randVal);
+        };
+
+        for (let i = 0; i < satellites; i++) {
+          const angle = seededRand() * Math.PI * 2;
+          const distanceVal = radius * (1.1 + seededRand() * (satelliteRange - 1.0));
+          const satRadius = (3 + seededRand() * 6) * (radius / 120);
+
+          const sx = cx + Math.cos(angle) * distanceVal;
+          const sy = cy + Math.sin(angle) * distanceVal;
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(angle);
+          ctx.scale(1.4, 0.7); // Stretched radially to represent fly-off momentum
+          ctx.beginPath();
+          ctx.arc(0, 0, satRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      // Technique 2: Metaballs
+      function drawMetaballs(ctx, width, height, options) {
+        const { radius, blobCount, blur, threshold, color, satellites } = options;
+
+        const offscreen = document.createElement("canvas");
+        offscreen.width = width;
+        offscreen.height = height;
+        const octx = offscreen.getContext("2d");
+
+        // tool-theme: allow mask-buffer-data
+        octx.fillStyle = "#ffffff";
+        octx.clearRect(0, 0, width, height);
+
+        const cx = width / 2;
+        const cy = height / 2;
+
+        // Seeded random helper
+        let randVal = Math.sin(options.seed);
+        const seededRand = () => {
+          randVal = Math.sin(randVal * 9876.54);
+          return randVal - Math.floor(randVal);
+        };
+
+        // Draw central circle
+        octx.beginPath();
+        octx.arc(cx, cy, radius * 0.85, 0, Math.PI * 2);
+        octx.fill();
+
+        // Draw secondary clustered circles
+        for (let i = 0; i < blobCount; i++) {
+          const angle = seededRand() * Math.PI * 2;
+          const dist = radius * (0.2 + seededRand() * 0.65);
+          const blobRadius = radius * (0.2 + seededRand() * 0.3);
+
+          const bx = cx + Math.cos(angle) * dist;
+          const by = cy + Math.sin(angle) * dist;
+
+          octx.beginPath();
+          octx.arc(bx, by, blobRadius, 0, Math.PI * 2);
+          octx.fill();
+        }
+
+        // Draw satellites
+        for (let i = 0; i < satellites; i++) {
+          const angle = seededRand() * Math.PI * 2;
+          const dist = radius * (1.1 + seededRand() * 0.5);
+          const satRadius = radius * (0.05 + seededRand() * 0.1);
+
+          octx.beginPath();
+          octx.arc(
+            cx + Math.cos(angle) * dist,
+            cy + Math.sin(angle) * dist,
+            satRadius,
+            0,
+            Math.PI * 2,
+          );
+          octx.fill();
+        }
+
+        // Blur the circles onto the destination canvas
+        ctx.clearRect(0, 0, width, height);
+        ctx.filter = `blur(${blur}px)`;
+        ctx.drawImage(offscreen, 0, 0);
+        ctx.filter = "none";
+
+        // Apply alpha thresholding and replace color
+        const imgData = ctx.getImageData(0, 0, width, height);
+        const pixels = imgData.data;
+        const rgb = hexToRgb(color) || { r: 74, g: 55, b: 40 };
+
+        for (let i = 0; i < pixels.length; i += 4) {
+          const alpha = pixels[i + 3];
+          if (alpha > threshold) {
+            // Antialiased edge transition
+            const smoothRange = 6;
+            if (alpha < threshold + smoothRange) {
+              const factor = (alpha - threshold) / smoothRange;
+              pixels[i] = rgb.r;
+              pixels[i + 1] = rgb.g;
+              pixels[i + 2] = rgb.b;
+              pixels[i + 3] = Math.floor(factor * 255);
+            } else {
+              pixels[i] = rgb.r;
+              pixels[i + 1] = rgb.g;
+              pixels[i + 2] = rgb.b;
+              pixels[i + 3] = 255;
+            }
+          } else {
+            pixels[i + 3] = 0;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+      }
+
+      // Technique 3: Mud Splatter (Warped Circles + Blurred Metaballs + Thresholding)
+      function drawMudSplatter(ctx, width, height, options, perlinInstance) {
+        const { radius, blobCount, blur, threshold, warpStrength, satellites, color } = options;
+
+        const offscreen = document.createElement("canvas");
+        offscreen.width = width;
+        offscreen.height = height;
+        const octx = offscreen.getContext("2d");
+
+        // tool-theme: allow mask-buffer-data
+        octx.fillStyle = "#ffffff";
+        octx.clearRect(0, 0, width, height);
+
+        const cx = width / 2;
+        const cy = height / 2;
+
+        // Seeded random helper
+        let randVal = Math.sin(options.seed * 3.4);
+        const seededRand = () => {
+          randVal = Math.sin(randVal * 12345.6);
+          return randVal - Math.floor(randVal);
+        };
+
+        // Draw warped main blob and warped cluster blobs
+        const drawWarpedArc = (ctxDest, x, y, baseRadius, freq, seedOffset) => {
+          ctxDest.beginPath();
+          const pts = 80;
+          for (let j = 0; j <= pts; j++) {
+            const angle = (j / pts) * Math.PI * 2;
+            const nx = Math.cos(angle);
+            const ny = Math.sin(angle);
+            const n = perlinInstance.noise(nx * freq + seedOffset, ny * freq - seedOffset);
+            const r = baseRadius + n * warpStrength;
+
+            const px = x + Math.cos(angle) * r;
+            const py = y + Math.sin(angle) * r;
+            if (j === 0) ctxDest.moveTo(px, py);
+            else ctxDest.lineTo(px, py);
+          }
+          ctxDest.closePath();
+          ctxDest.fill();
+        };
+
+        // Draw warped central body
+        drawWarpedArc(octx, cx, cy, radius * 0.8, 2.0, 1.25);
+
+        // Draw warped secondary blobs
+        for (let i = 0; i < blobCount; i++) {
+          const angle = seededRand() * Math.PI * 2;
+          const dist = radius * (0.2 + seededRand() * 0.65);
+          const subRadius = radius * (0.15 + seededRand() * 0.25);
+          const bx = cx + Math.cos(angle) * dist;
+          const by = cy + Math.sin(angle) * dist;
+          drawWarpedArc(octx, bx, by, subRadius, 2.5, 12.5 + i * 4.3);
+        }
+
+        // Draw flying droplets (ellipses stretched radially)
+        for (let i = 0; i < satellites; i++) {
+          const angle = seededRand() * Math.PI * 2;
+          const dist = radius * (1.1 + seededRand() * 0.7);
+          const satRadius = radius * (0.04 + seededRand() * 0.08);
+
+          const sx = cx + Math.cos(angle) * dist;
+          const sy = cy + Math.sin(angle) * dist;
+
+          octx.save();
+          octx.translate(sx, sy);
+          octx.rotate(angle);
+          octx.scale(1.4, 0.75); // Teardrop/flying shape
+          octx.beginPath();
+          octx.arc(0, 0, satRadius, 0, Math.PI * 2);
+          octx.fill();
+          octx.restore();
+        }
+
+        // Blur offscreen canvas into main canvas
+        ctx.clearRect(0, 0, width, height);
+        ctx.filter = `blur(${blur}px)`;
+        ctx.drawImage(offscreen, 0, 0);
+        ctx.filter = "none";
+
+        // Threshold
+        const imgData = ctx.getImageData(0, 0, width, height);
+        const pixels = imgData.data;
+        const rgb = hexToRgb(color) || { r: 74, g: 55, b: 40 };
+
+        for (let i = 0; i < pixels.length; i += 4) {
+          const alpha = pixels[i + 3];
+          if (alpha > threshold) {
+            const smoothRange = 6;
+            if (alpha < threshold + smoothRange) {
+              const factor = (alpha - threshold) / smoothRange;
+              pixels[i] = rgb.r;
+              pixels[i + 1] = rgb.g;
+              pixels[i + 2] = rgb.b;
+              pixels[i + 3] = Math.floor(factor * 255);
+            } else {
+              pixels[i] = rgb.r;
+              pixels[i + 1] = rgb.g;
+              pixels[i + 2] = rgb.b;
+              pixels[i + 3] = 255;
+            }
+          } else {
+            pixels[i + 3] = 0;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+      }
+
+      // ----------------------------------------------------
+      // State & UI Handlers
+      // ----------------------------------------------------
+
+      let currentSeed = Math.random() * 1000;
+      const canvas = document.getElementById("splat-canvas");
+      const ctx = canvas.getContext("2d");
+      let perlin = new Perlin(currentSeed);
+
+      const inputs = {
+        algorithm: document.getElementById("algorithm-select"),
+        radius: document.getElementById("radius-slider"),
+        colorPicker: document.getElementById("color-picker"),
+        colorHex: document.getElementById("color-hex"),
+        size: document.getElementById("size-select"),
+
+        // Noise Warp
+        noiseFreq: document.getElementById("noise-freq-slider"),
+        noiseAmp: document.getElementById("noise-amp-slider"),
+        warpSat: document.getElementById("warp-sat-slider"),
+        warpSatDist: document.getElementById("warp-sat-dist-slider"),
+
+        // Metaballs
+        blobCount: document.getElementById("blob-count-slider"),
+        blur: document.getElementById("blur-slider"),
+        threshold: document.getElementById("threshold-slider"),
+        metaSat: document.getElementById("meta-sat-slider"),
+
+        // Mud
+        mudBlob: document.getElementById("mud-blob-slider"),
+        mudWarp: document.getElementById("mud-warp-slider"),
+        mudBlur: document.getElementById("mud-blur-slider"),
+        mudThresh: document.getElementById("mud-thresh-slider"),
+        mudSat: document.getElementById("mud-sat-slider"),
+      };
+
+      const valueDisplays = {
+        radius: document.getElementById("radius-val"),
+        color: document.getElementById("color-val"),
+        noiseFreq: document.getElementById("noise-freq-val"),
+        noiseAmp: document.getElementById("noise-amp-val"),
+        warpSat: document.getElementById("warp-sat-val"),
+        warpSatDist: document.getElementById("warp-sat-dist-val"),
+        blobCount: document.getElementById("blob-count-val"),
+        blur: document.getElementById("blur-val"),
+        threshold: document.getElementById("threshold-val"),
+        metaSat: document.getElementById("meta-sat-val"),
+        mudBlob: document.getElementById("mud-blob-val"),
+        mudWarp: document.getElementById("mud-warp-val"),
+        mudBlur: document.getElementById("mud-blur-val"),
+        mudThresh: document.getElementById("mud-thresh-val"),
+        mudSat: document.getElementById("mud-sat-val"),
+      };
+
+      // Toggle panels based on selected algorithm
+      function updateActivePanel() {
+        const algo = inputs.algorithm.value;
+
+        document.getElementById("panel-noise-warp").classList.add("d-none");
+        document.getElementById("panel-metaballs").classList.add("d-none");
+        document.getElementById("panel-mud-splatter").classList.add("d-none");
+
+        if (algo === "noise-warp") {
+          document.getElementById("panel-noise-warp").classList.remove("d-none");
+        } else if (algo === "metaballs") {
+          document.getElementById("panel-metaballs").classList.remove("d-none");
+        } else if (algo === "mud-splatter") {
+          document.getElementById("panel-mud-splatter").classList.remove("d-none");
+        }
+      }
+
+      // Main Draw Trigger
+      function draw() {
+        const algo = inputs.algorithm.value;
+        const width = canvas.width;
+        const height = canvas.height;
+        const color = inputs.colorHex.value;
+
+        const baseOptions = {
+          radius: parseInt(inputs.radius.value),
+          color: color,
+          seed: currentSeed,
+        };
+
+        if (algo === "noise-warp") {
+          const options = {
+            ...baseOptions,
+            frequency: parseFloat(inputs.noiseFreq.value),
+            amplitude: parseInt(inputs.noiseAmp.value),
+            satellites: parseInt(inputs.warpSat.value),
+            satelliteRange: parseFloat(inputs.warpSatDist.value),
+          };
+          drawNoiseWarpedCircle(ctx, width, height, options, perlin);
+        } else if (algo === "metaballs") {
+          const options = {
+            ...baseOptions,
+            blobCount: parseInt(inputs.blobCount.value),
+            blur: parseInt(inputs.blur.value),
+            threshold: parseInt(inputs.threshold.value),
+            satellites: parseInt(inputs.metaSat.value),
+          };
+          drawMetaballs(ctx, width, height, options);
+        } else if (algo === "mud-splatter") {
+          const options = {
+            ...baseOptions,
+            blobCount: parseInt(inputs.mudBlob.value),
+            warpStrength: parseInt(inputs.mudWarp.value),
+            blur: parseInt(inputs.mudBlur.value),
+            threshold: parseInt(inputs.mudThresh.value),
+            satellites: parseInt(inputs.mudSat.value),
+          };
+          drawMudSplatter(ctx, width, height, options, perlin);
+        }
+
+        updateCodeDisplay();
+      }
+
+      // Update Slider text display
+      function updateValueDisplays() {
+        valueDisplays.radius.innerText = inputs.radius.value;
+        valueDisplays.color.innerText = inputs.colorHex.value;
+        valueDisplays.noiseFreq.innerText = inputs.noiseFreq.value;
+        valueDisplays.noiseAmp.innerText = inputs.noiseAmp.value;
+        valueDisplays.warpSat.innerText = inputs.warpSat.value;
+        valueDisplays.warpSatDist.innerText = inputs.warpSatDist.value;
+        valueDisplays.blobCount.innerText = inputs.blobCount.value;
+        valueDisplays.blur.innerText = inputs.blur.value;
+        valueDisplays.threshold.innerText = inputs.threshold.value;
+        valueDisplays.metaSat.innerText = inputs.metaSat.value;
+        valueDisplays.mudBlob.innerText = inputs.mudBlob.value;
+        valueDisplays.mudWarp.innerText = inputs.mudWarp.value;
+        valueDisplays.mudBlur.innerText = inputs.mudBlur.value;
+        valueDisplays.mudThresh.innerText = inputs.mudThresh.value;
+        valueDisplays.mudSat.innerText = inputs.mudSat.value;
+      }
+
+      // Code Generation & Display
+      let activeTab = "js";
+
+      // tool-theme: allow-begin generated-code-template
+      function updateCodeDisplay() {
+        const codeBox = document.getElementById("code-content");
+        const algo = inputs.algorithm.value;
+        const color = inputs.colorHex.value;
+        const radius = inputs.radius.value;
+
+        if (activeTab === "js") {
+          if (algo === "noise-warp") {
+            codeBox.innerText = `// JavaScript & Canvas 2D: Seamless Noise-Warped Splatter
+function drawWarpedSplatter(ctx, cx, cy) {
+  const baseRadius = ${radius};
+  const freq = ${inputs.noiseFreq.value};
+  const amp = ${inputs.noiseAmp.value};
+  const numPoints = 200;
+
+  ctx.fillStyle = "${color}";
+  ctx.beginPath();
+  for (let i = 0; i <= numPoints; i++) {
+    const angle = (i / numPoints) * Math.PI * 2;
+    const nx = Math.cos(angle);
+    const ny = Math.sin(angle);
+    
+    // Sample Perlin noise along circle to make it seamless
+    const noiseVal = noise2D(nx * freq, ny * freq);
+    const r = baseRadius + noiseVal * amp;
+    
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}`;
+          } else if (algo === "metaballs") {
+            codeBox.innerText = `// JavaScript & Canvas 2D: Liquid Metaballs
+function drawMetaballs(ctx, cx, cy) {
+  const radius = ${radius};
+  const blobCount = ${inputs.blobCount.value};
+  const blur = ${inputs.blur.value};
+  const threshold = ${inputs.threshold.value};
+  
+  // 1. Draw circles on offscreen canvas
+  const offscreen = document.createElement('canvas');
+  const octx = offscreen.getContext('2d');
+  octx.fillStyle = '#ffffff';
+  
+  // Draw center and secondary circles
+  octx.arc(cx, cy, radius * 0.85, 0, Math.PI * 2);
+  // ... Draw secondary randomly distributed circles ...
+  
+  // 2. Render to main canvas with blur filter
+  ctx.filter = \`blur(\${blur}px)\`;
+  ctx.drawImage(offscreen, 0, 0);
+  ctx.filter = 'none';
+  
+  // 3. Threshold pixel alpha to form sharp liquid shapes
+  const imgData = ctx.getImageData(0, 0, width, height);
+  const data = imgData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] > threshold) {
+      data[i] = 74; // R color
+      data[i + 1] = 55; // G color
+      data[i + 2] = 40; // B color
+      data[i + 3] = 255;
+    } else {
+      data[i + 3] = 0;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}`;
+          } else {
+            codeBox.innerText = `// JavaScript & Canvas 2D: Combined Mud Splatter
+// Draws multiple warped circle blobs, blurs them, and thresholds the alpha.
+function drawMudSplatter(ctx, cx, cy) {
+  const radius = ${radius};
+  const blurVal = ${inputs.mudBlur.value};
+  const thresholdVal = ${inputs.mudThresh.value};
+  
+  // 1. Draw warped circles onto an offscreen canvas
+  // 2. Draw flying teardrop scale/rotated ellipses (satellites)
+  // 3. Draw offscreen to destination canvas using: ctx.filter = "blur(" + blurVal + "px)"
+  // 4. Run a threshold loop on alpha channel:
+  //    if (alpha > thresholdVal) alpha = 255; else alpha = 0;
+}`;
+          }
+        } else {
+          // Shader Code View
+          codeBox.innerText = `// WebGPU WGSL Conceptual Fragment Shader
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+  let uv = in.uv - vec2f(0.5);
+  let dist = length(uv);
+  let angle = atan2(uv.y, uv.x);
+  
+  // Sample 2D simplex noise seamlessly in a circle
+  let noise_coord = vec2f(cos(angle), sin(angle)) * ${inputs.noiseFreq?.value || "2.5"};
+  let n = snoise(noise_coord);
+  
+  // Distort circle boundary
+  let radius = 0.25 + n * ${(inputs.noiseAmp?.value || "40") / 500};
+  
+  // Hard edge thresholding using smoothstep
+  let edge = smoothstep(radius + 0.005, radius - 0.005, dist);
+  
+  let splatter_color = vec3f(0.29, 0.215, 0.15); // Mud brown
+  return vec4f(splatter_color, edge);
+}`;
+        }
+      }
+      // tool-theme: allow-end
+
+      // ----------------------------------------------------
+      // Event Listeners
+      // ----------------------------------------------------
+
+      // Sliders & Inputs
+      Object.values(inputs).forEach((input) => {
+        input.addEventListener("input", () => {
+          if (input === inputs.colorPicker) {
+            inputs.colorHex.value = inputs.colorPicker.value;
+          } else if (input === inputs.colorHex) {
+            inputs.colorPicker.value = inputs.colorHex.value;
+          }
+          updateActivePanel();
+          updateValueDisplays();
+          draw();
+        });
+      });
+
+      inputs.algorithm.addEventListener("change", () => {
+        updateActivePanel();
+        draw();
+      });
+
+      inputs.size.addEventListener("change", () => {
+        const s = parseInt(inputs.size.value);
+        canvas.width = s;
+        canvas.height = s;
+        document.querySelector(".checkerboard").style.width = s + "px";
+        document.querySelector(".checkerboard").style.height = s + "px";
+        draw();
+      });
+
+      // Preset color buttons
+      document.querySelectorAll(".color-preset").forEach((preset) => {
+        preset.addEventListener("click", () => {
+          const color = preset.getAttribute("data-color");
+          inputs.colorHex.value = color;
+          inputs.colorPicker.value = color;
+          updateValueDisplays();
+          draw();
+        });
+      });
+
+      // Re-seed button
+      document.getElementById("btn-seed").addEventListener("click", () => {
+        currentSeed = Math.random() * 1000;
+        perlin = new Perlin(currentSeed);
+        draw();
+      });
+
+      // Download PNG Button
+      document.getElementById("btn-download").addEventListener("click", () => {
+        const link = document.createElement("a");
+        link.download = `splatter_${Date.now()}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      });
+
+      // Tabs
+      document.querySelectorAll(".code-tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document.querySelectorAll(".code-tab").forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+          activeTab = tab.getAttribute("data-tab");
+          updateCodeDisplay();
+        });
+      });
+
+      // Copy Code Button
+      document.getElementById("btn-copy").addEventListener("click", () => {
+        const code = document.getElementById("code-content").innerText;
+        navigator.clipboard.writeText(code).then(() => {
+          const btn = document.getElementById("btn-copy");
+          btn.innerText = "Copied!";
+          setTimeout(() => {
+            btn.innerText = "Copy Code";
+          }, 1500);
+        });
+      });
+
+      // Initial setup
+      updateActivePanel();
+      updateValueDisplays();
+      draw();
+    </script>
+  </body>
+</html>

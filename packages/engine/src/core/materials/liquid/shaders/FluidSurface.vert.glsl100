@@ -1,0 +1,44 @@
+
+attribute vec3 a_position;
+attribute vec2 a_uv;
+attribute vec3 a_normal;
+
+uniform mat4 u_vp;
+uniform mat4 u_model;
+// Typed semantic lane bank (ADR 0027 / 0039) -- see FluidSurfaceMaterial.getRenderManifest.
+uniform vec4 u_matParam2;
+uniform vec4 u_matParam3;
+uniform vec4 u_matParam4;
+
+varying vec2 v_uv;
+varying vec3 v_worldPos;
+varying vec3 v_normal;
+varying vec4 v_clipPos;
+
+void main() {
+    v_uv = a_uv;
+    vec3 pos = a_position;
+
+    float time = u_matParam3.w;
+    float flowSpeed = u_matParam2.x;
+    float waveFrequency = u_matParam4.x;
+    float waveAmplitude = u_matParam4.y;
+
+    vec4 worldPos = u_model * vec4(pos, 1.0);
+    float displacementSpeed = time * flowSpeed * 0.5;
+
+    // Wave based on world coordinates for seamless tiling
+    float px = worldPos.x * waveFrequency + displacementSpeed;
+    float pz = worldPos.z * waveFrequency + displacementSpeed;
+    float wave = sin(px) * cos(pz) * waveAmplitude;
+    pos.y += wave;
+    // Analytic slope of the wave above -- tilts the normal so the fragment stage can light it.
+    vec2 slope = vec2(cos(px) * cos(pz), -sin(px) * sin(pz)) * (waveAmplitude * waveFrequency);
+
+    // Re-calculate worldPos with displacement
+    worldPos = u_model * vec4(pos, 1.0);
+    v_worldPos = worldPos.xyz;
+    v_normal = normalize((u_model * vec4(a_normal, 0.0)).xyz - vec3(slope.x, 0.0, slope.y));
+    gl_Position = u_vp * worldPos;
+    v_clipPos = gl_Position;
+}

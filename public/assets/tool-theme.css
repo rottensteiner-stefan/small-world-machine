@@ -1,0 +1,744 @@
+/* public/assets/tool-theme.css
+ * Gemeinsames Stylesheet aller Tools (Referenz: public/tools/kit-inspector.html).
+ * Ladereihenfolge im <head>: /assets/shared.css, dann /assets/tool-theme.css.
+ * Besitz: Abschnitt "tokens" = Alice, Abschnitt "components" = Bob (siehe .agents/collaborate/tool-styling.md, P2).
+ * Regeln: Nur ein Dunkelthema, kein Hell-Theme. Neue Tokens nur auf Anforderung (keine Vorratstokens).
+ */
+@import url("fonts.css");
+
+/* tokens */
+:root {
+  /* Flaechen */
+  --tool-bg: #07090e;
+  --tool-panel: rgba(14, 18, 28, 0.94);
+  --tool-panel-solid: #0e121c;
+  --tool-card: rgba(22, 29, 45, 0.7);
+  --tool-card-hover: rgba(32, 43, 68, 0.9);
+  --tool-card-active: rgba(255, 184, 77, 0.12);
+  --tool-inset: rgba(0, 0, 0, 0.4);
+  --tool-hover: rgba(255, 255, 255, 0.05);
+
+  /* Raender */
+  --tool-border: rgba(148, 163, 184, 0.14);
+  --tool-border-active: rgba(255, 184, 77, 0.5);
+
+  /* Text */
+  --tool-text: #f8fafc;
+  --tool-text-muted: #94a3b8;
+  --tool-on-accent: #000;
+
+  /* Akzente */
+  --tool-accent: #ffb84d;
+  --tool-accent-glow: rgba(255, 184, 77, 0.25);
+  --tool-accent2: #00e5ff;
+  --tool-accent2-glow: rgba(0, 229, 255, 0.2);
+
+  /* Semantik */
+  --tool-success: #22c55e;
+  --tool-warning: #f59e0b;
+  --tool-danger: #ef4444;
+  --tool-info: #38bdf8;
+
+  /* Schriften */
+  --tool-font-ui: "Rajdhani", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --tool-font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+
+  /* Radien (-lg nur Modal/Overlay) */
+  --tool-radius-sm: 4px;
+  --tool-radius-md: 6px;
+  --tool-radius-lg: 12px;
+
+  /* Schatten (abgeleitet, nur Forge-Fenster und Modal) */
+  --tool-shadow-float: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* components */
+/* Besitz: Bob. Nur Klassen .tool-*, header.tool-header, header.kit-header und --tp-* (Tweakpane); kein Elementselektor ausser
+ * Scrollbar unter html[data-theme="dark"], damit Seiten, die diese Datei nur wegen der Tokens laden
+ * (Showcases mit Forge), nicht umgestaltet werden. Werte ausschliesslich aus var(--tool-*).
+ * Toast, Modal, Drop-Overlay und Forge-Fenster bleiben in ioStyles.ts / ForgeTheme.ts auf var(--tool-*) abgebildet. */
+
+/* Kopfleiste (standardisiert über alle Tools) */
+header.tool-header,
+header.kit-header {
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 1rem;
+  gap: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--tool-panel-solid);
+  border-bottom: 1px solid var(--tool-border);
+  font-family: var(--tool-font-ui);
+  user-select: none;
+  z-index: 50;
+}
+header.tool-header h1,
+header.kit-header h1,
+header.tool-header .tool-title,
+header.kit-header .tool-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--tool-text);
+}
+
+.tool-close-btn {
+  display: none;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--tool-text-muted);
+  font-family: var(--tool-font-mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+  border-radius: var(--tool-radius-sm);
+  transition: all 0.15s ease;
+}
+.tool-close-btn:hover {
+  background: color-mix(in srgb, var(--tool-danger) 20%, transparent);
+  border-color: color-mix(in srgb, var(--tool-danger) 40%, transparent);
+  color: var(--tool-danger);
+}
+
+body.in-window .tool-close-btn,
+.tool-close-btn.visible {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Button: Standard = sekundaer; .primary gefuellt; .ghost transparent; .icon quadratisch; .active = Umschalter an */
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  box-sizing: border-box;
+  padding: 0.4rem 0.7rem;
+  background: var(--tool-card);
+  border: 1px solid var(--tool-border);
+  border-radius: var(--tool-radius-md);
+  color: var(--tool-text-muted);
+  font-family: var(--tool-font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tool-btn:hover {
+  background: var(--tool-card-hover);
+  border-color: var(--tool-text-muted);
+  color: var(--tool-text);
+}
+.tool-btn:focus-visible {
+  outline: 1px solid var(--tool-accent);
+  outline-offset: 1px;
+}
+.tool-btn.active {
+  background: var(--tool-accent2-glow);
+  border-color: var(--tool-accent2);
+  color: var(--tool-accent2);
+}
+.tool-btn.primary {
+  background: var(--tool-accent);
+  border-color: var(--tool-accent);
+  color: var(--tool-on-accent);
+  font-weight: 700;
+}
+.tool-btn.primary:hover {
+  box-shadow: 0 0 10px var(--tool-accent-glow);
+  color: var(--tool-on-accent);
+}
+.tool-btn.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.tool-btn.ghost:hover {
+  background: var(--tool-hover);
+}
+.tool-btn.icon {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+.tool-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Tabs: exklusive Auswahl, aktiv = gefuellt */
+.tool-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 3px;
+  background: var(--tool-inset);
+  border: 1px solid var(--tool-border);
+  border-radius: var(--tool-radius-md);
+}
+.tool-tab {
+  padding: 0.35rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--tool-radius-sm);
+  color: var(--tool-text-muted);
+  font-family: var(--tool-font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tool-tab:hover {
+  background: var(--tool-hover);
+  color: var(--tool-text);
+}
+.tool-tab:focus-visible {
+  outline: 1px solid var(--tool-accent);
+  outline-offset: -1px;
+}
+.tool-tab.active {
+  background: var(--tool-accent);
+  color: var(--tool-on-accent);
+  font-weight: 700;
+}
+
+/* Pill: Filter/Umschalter, aktiv = getoent */
+.tool-pill {
+  padding: 0.2rem 0.5rem;
+  background: var(--tool-hover);
+  border: 1px solid var(--tool-border);
+  border-radius: var(--tool-radius-sm);
+  color: var(--tool-text-muted);
+  font-family: var(--tool-font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.tool-pill:hover {
+  color: var(--tool-text);
+}
+.tool-pill:focus-visible {
+  outline: 1px solid var(--tool-accent);
+  outline-offset: 1px;
+}
+.tool-pill.active {
+  background: var(--tool-card-active);
+  border-color: var(--tool-accent);
+  color: var(--tool-accent);
+}
+
+/* Eingabe, Suche, Select */
+.tool-input,
+.tool-select {
+  box-sizing: border-box;
+  padding: 0.35rem 0.65rem;
+  background: var(--tool-inset);
+  border: 1px solid var(--tool-border);
+  border-radius: var(--tool-radius-md);
+  color: var(--tool-text);
+  font-family: var(--tool-font-ui);
+  font-size: 0.9rem;
+  outline: none;
+}
+.tool-input::placeholder {
+  color: var(--tool-text-muted);
+}
+.tool-input:focus-visible,
+.tool-select:focus-visible {
+  border-color: var(--tool-accent);
+  box-shadow: 0 0 10px var(--tool-accent-glow);
+}
+.tool-input:disabled,
+.tool-select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.tool-select {
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tool-input.mono {
+  font-family: var(--tool-font-mono);
+}
+/* Wertanzeige neben Slidern */
+.tool-value {
+  font-family: var(--tool-font-mono);
+  font-size: 0.75rem;
+  color: var(--tool-accent);
+}
+
+/* Slider (WebKit und Firefox) */
+.tool-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  background: var(--tool-card-hover);
+  border-radius: var(--tool-radius-sm);
+  outline: none;
+  cursor: pointer;
+}
+.tool-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+}
+.tool-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tool-accent);
+  transition: box-shadow 0.15s ease;
+}
+.tool-slider::-moz-range-track {
+  height: 4px;
+  background: transparent;
+}
+.tool-slider::-moz-range-progress {
+  height: 4px;
+  background: var(--tool-border-active);
+  border-radius: var(--tool-radius-sm);
+}
+.tool-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tool-accent);
+}
+.tool-slider:hover::-webkit-slider-thumb,
+.tool-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 10px var(--tool-accent-glow);
+}
+.tool-slider:hover::-moz-range-thumb,
+.tool-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 10px var(--tool-accent-glow);
+}
+.tool-slider:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Checkbox */
+.tool-check {
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  background: var(--tool-inset);
+  border: 1px solid var(--tool-border-active);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.tool-check::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--tool-accent);
+  transform: scale(0);
+  transition: transform 0.1s ease;
+}
+.tool-check:checked::before {
+  transform: scale(1);
+}
+.tool-check:focus-visible {
+  outline: 1px solid var(--tool-accent);
+  outline-offset: 1px;
+}
+.tool-check:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Schalter 36x20: <label class="tool-switch"><input type="checkbox"><span class="tool-switch-track"></span></label> */
+.tool-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.tool-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.tool-switch-track {
+  position: absolute;
+  inset: 0;
+  background: var(--tool-card-hover);
+  border: 1px solid var(--tool-border);
+  border-radius: 10px;
+  pointer-events: none;
+  transition: all 0.15s ease;
+}
+.tool-switch-track::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--tool-text-muted);
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+.tool-switch input:checked + .tool-switch-track {
+  background: var(--tool-card-active);
+  border-color: var(--tool-accent);
+}
+.tool-switch input:checked + .tool-switch-track::before {
+  background: var(--tool-accent);
+  transform: translateX(16px);
+}
+.tool-switch input:focus-visible + .tool-switch-track {
+  outline: 1px solid var(--tool-accent);
+  outline-offset: 1px;
+}
+.tool-switch input:disabled + .tool-switch-track {
+  opacity: 0.45;
+}
+
+/* Karte, Panel, Badge, Swatch */
+.tool-card {
+  box-sizing: border-box;
+  padding: 0.6rem;
+  background: var(--tool-card);
+  border: 1px solid var(--tool-border);
+  border-radius: var(--tool-radius-md);
+  transition: all 0.15s ease;
+}
+.tool-card.interactive {
+  cursor: pointer;
+}
+.tool-card.interactive:hover {
+  background: var(--tool-card-hover);
+  border-color: var(--tool-text-muted);
+}
+.tool-card.active {
+  background: var(--tool-card-active);
+  border-color: var(--tool-accent);
+  box-shadow: 0 0 16px var(--tool-accent-glow);
+}
+.tool-panel {
+  box-sizing: border-box;
+  background: var(--tool-panel-solid);
+  border: 1px solid var(--tool-border);
+  color: var(--tool-text);
+  font-family: var(--tool-font-ui);
+}
+.tool-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  background: var(--tool-accent-glow);
+  border: 1px solid var(--tool-accent);
+  border-radius: var(--tool-radius-sm);
+  color: var(--tool-accent);
+  font-family: var(--tool-font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.tool-swatch {
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--tool-border);
+  border-radius: var(--tool-radius-sm);
+  cursor: pointer;
+}
+.tool-swatch:hover {
+  border-color: var(--tool-text-muted);
+}
+.tool-swatch.active {
+  border-color: var(--tool-accent);
+  box-shadow: 0 0 10px var(--tool-accent-glow);
+}
+
+/* Scrollbar (nur Tool-Seiten mit data-theme="dark" und Forge-Fenster) */
+html[data-theme="dark"] ::-webkit-scrollbar,
+.swf-window ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+html[data-theme="dark"] ::-webkit-scrollbar-track,
+.swf-window ::-webkit-scrollbar-track {
+  background: transparent;
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb,
+.swf-window ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--tool-text-muted) 20%, transparent);
+  border-radius: var(--tool-radius-sm);
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover,
+.swf-window ::-webkit-scrollbar-thumb:hover {
+  background: var(--tool-accent);
+}
+
+/* Tweakpane (Maker und Forge): gleiche Farben aus den Tokens. Form/Abstaende bleiben Tweakpane-eigen. */
+.tp-rotv.tp-rotv {
+  --tp-base-background-color: transparent;
+  --tp-base-shadow-color: transparent;
+  --tp-button-background-color: var(--tool-card);
+  --tp-button-background-color-active: var(--tool-accent);
+  --tp-button-background-color-focus: var(--tool-card-hover);
+  --tp-button-background-color-hover: var(--tool-card-hover);
+  --tp-button-foreground-color: var(--tool-text);
+  --tp-container-background-color: var(--tool-inset);
+  --tp-container-background-color-active: var(--tool-card-hover);
+  --tp-container-background-color-focus: var(--tool-card);
+  --tp-container-background-color-hover: var(--tool-card);
+  --tp-container-foreground-color: var(--tool-text);
+  --tp-groove-foreground-color: var(--tool-border);
+  --tp-input-background-color: var(--tool-inset);
+  --tp-input-background-color-active: var(--tool-card-hover);
+  --tp-input-background-color-focus: var(--tool-card-hover);
+  --tp-input-background-color-hover: var(--tool-card-hover);
+  --tp-input-foreground-color: var(--tool-accent);
+  --tp-label-foreground-color: var(--tool-text-muted);
+  --tp-monitor-background-color: var(--tool-inset);
+  --tp-monitor-foreground-color: var(--tool-accent);
+  --tp-folder-background-color: var(--tool-panel-solid);
+  --tp-folder-background-color-active: var(--tool-card-hover);
+  --tp-folder-background-color-focus: var(--tool-card);
+  --tp-folder-background-color-hover: var(--tool-card);
+}
+
+/* Dropzone (einheitliche Upload- und Drag-and-Drop-Komponente für alle Tools) */
+.dropzone {
+  border: 2px dashed var(--tool-border);
+  border-radius: var(--tool-radius-lg);
+  padding: 1.5rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  background: var(--tool-card);
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.dropzone:hover,
+.dropzone.dragover {
+  border-color: var(--tool-accent);
+  background: var(--tool-hover);
+  box-shadow: 0 0 16px var(--tool-accent-glow);
+}
+
+.dropzone-icon {
+  color: var(--tool-accent);
+  transition: transform 0.25s ease;
+  flex-shrink: 0;
+}
+
+.dropzone:hover .dropzone-icon,
+.dropzone.dragover .dropzone-icon {
+  transform: translateY(-3px);
+}
+
+.dropzone-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--tool-text);
+  letter-spacing: 0.5px;
+}
+
+.dropzone-sub {
+  font-size: 0.72rem;
+  color: var(--tool-text-muted);
+}
+
+.dropzone.compact {
+  padding: 0.85rem 0.75rem;
+  border-radius: var(--tool-radius-md);
+  gap: 0.35rem;
+}
+
+.dropzone.compact .dropzone-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.dropzone.compact .dropzone-text {
+  font-size: 0.78rem;
+}
+
+.dropzone.compact .dropzone-sub {
+  font-size: 0.68rem;
+}
+
+.dropzone.hero {
+  padding: 3rem 2rem;
+  max-width: 480px;
+  width: 90%;
+  margin: auto;
+}
+
+.dropzone.hero .dropzone-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.dropzone.hero .dropzone-text {
+  font-size: 1.1rem;
+}
+
+.dropzone.hero .dropzone-sub {
+  font-size: 0.85rem;
+}
+
+/* Multi-Source Ingest (Datei / URL / Direkt-Code Tabs & Panels) */
+.dropzone-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.dropzone-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--tool-inset);
+  padding: 3px;
+  border-radius: var(--tool-radius-md);
+  border: 1px solid var(--tool-border);
+}
+
+.dropzone-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--tool-text-muted);
+  padding: 5px 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--tool-font-ui);
+  border-radius: var(--tool-radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  user-select: none;
+}
+
+.dropzone-tab:hover {
+  color: var(--tool-text);
+  background: var(--tool-card-hover);
+}
+
+.dropzone-tab.active {
+  background: var(--tool-card);
+  color: var(--tool-accent);
+  box-shadow: 0 0 10px var(--tool-accent-glow);
+  font-weight: 600;
+}
+
+.dropzone-panel {
+  display: none;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.dropzone-panel.active {
+  display: flex;
+}
+
+.dropzone-input-row {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  align-items: center;
+}
+
+.dropzone-input {
+  flex: 1;
+  background: var(--tool-inset);
+  border: 1px solid var(--tool-border);
+  border-radius: var(--tool-radius-sm);
+  color: var(--tool-text);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-family: var(--tool-font-ui);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.dropzone-input:focus {
+  border-color: var(--tool-border-active);
+}
+
+.dropzone-textarea {
+  width: 100%;
+  min-height: 100px;
+  background: var(--tool-inset);
+  border: 1px solid var(--tool-border);
+  border-radius: var(--tool-radius-sm);
+  color: var(--tool-text);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-family: var(--tool-font-mono);
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.dropzone-textarea:focus {
+  border-color: var(--tool-border-active);
+}
+
+.dropzone-btn {
+  background: var(--tool-accent);
+  color: var(--tool-on-accent);
+  border: 1px solid var(--tool-accent);
+  border-radius: var(--tool-radius-sm);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: var(--tool-font-ui);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.dropzone-btn:hover {
+  box-shadow: 0 0 10px var(--tool-accent-glow);
+}
+
+

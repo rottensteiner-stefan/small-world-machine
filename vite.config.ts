@@ -1,0 +1,345 @@
+import { defineConfig } from "vitest/config";
+import { resolve } from "path";
+import mkcert from "vite-plugin-mkcert";
+import http from "http";
+import net from "net";
+import EventEmitter from "events";
+import fs from "fs";
+import path from "path";
+import {
+  directoryRedirectTarget,
+  parseShowcaseLayout,
+  showcaseInputs,
+  showcasesRedirectTarget,
+} from "./.agents/scripts/lib/dev-redirects.ts";
+import { pruneStaleEntries, removeFilesWithExtension } from "./.agents/scripts/lib/dist-sync.ts";
+
+EventEmitter.defaultMaxListeners = 50;
+
+// The port everyone actually types/bookmarks (unchanged from before). The real Vite dev server
+// listens on INTERNAL_HTTPS_PORT instead -- see the "https-only-port-5173" plugin below, which
+// puts a raw TCP multiplexer on PUBLIC_PORT that inspects each connection's first byte and either
+// forwards a genuine TLS handshake straight through to the internal server, or -- for plain-text
+// HTTP -- answers with a redirect to the https:// URL itself. This is what makes
+// `http://localhost:5173/...` (the same port the HTTPS dev server "appears" to run on) redirect
+// instead of just failing to connect, which a same-process https.Server alone can't do: a single
+// TCP port can't natively speak both plain HTTP and TLS at once.
+const PUBLIC_PORT = 5173;
+const INTERNAL_HTTPS_PORT = 5183;
+
+export default defineConfig({
+  base: "./",
+  publicDir: "public",
+  server: {
+    // The real dev server binds here, internally -- see PUBLIC_PORT's doc comment above.
+    port: INTERNAL_HTTPS_PORT,
+    strictPort: true,
+    watch: {
+      ignored: [
+        "**/.claude/**",
+        "**/.agents/**",
+        "**/.idea/**",
+        "**/.husky/**",
+        "**/coverage/**",
+        "**/dist/**",
+        ...(process.env.VITEST ? [] : ["**/tests/**"]),
+      ],
+    },
+    fs: {
+      // Note: `.agents/scripts/` (committed repo tooling, incl. `probe-gpu-parity.html`) IS served;
+      // the deny list covers only the local-only working dirs under `.agents/`.
+      deny: [
+        ".env*",
+        "**/.claude/**",
+        "**/.agents/scratches/**",
+        "**/.agents/notes/**",
+        "**/.agents/collaborate/**",
+        "**/.agents/skills/**",
+        "**/.husky/**",
+      ],
+    },
+  },
+  test: {
+    globals: true,
+    environment: "node",
+    setupFiles: ["tests/setup.ts"],
+    include: ["tests/**/*.test.ts", "packages/*/tests/**/*.test.ts", "apps/**/tests/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      include: ["packages/*/src/**/*.ts", "apps/**/*.ts"],
+      exclude: [
+        "packages/*/src/**/*.d.ts",
+        "packages/engine/src/enums/**",
+        "packages/engine/src/interfaces/**",
+      ],
+      reporter: ["text", "html"],
+    },
+  },
+  plugins: [
+    {
+      name: "showcase-layout",
+      transformIndexHtml(html) {
+        const layout = parseShowcaseLayout(html);
+        if (layout) {
+          // The curated tour rides on the header so AbstractShowcase's ◀/▶ buttons need no ID list.
+          const tourAttrs =
+            (layout.prev ? ` data-prev="${layout.prev}"` : "") +
+            (layout.next ? ` data-next="${layout.next}"` : "");
+          const headerHtml = `
+<header id="info"${tourAttrs}>
+  <h1>${layout.title}</h1>
+  ${layout.subtitle}
+</header>`;
+          const footerHtml = `<footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World Machine</footer>`;
+          html = html.replace(layout.tag, headerHtml);
+          html = html.replace("</body>", footerHtml + "\n  </body>");
+        } else if (html.includes("<showcase-layout")) {
+          throw new Error(
+            "<showcase-layout> found but title attribute or the showcase-layout tag could not be parsed",
+          );
+        }
+        return html;
+      },
+    },
+    {
+      name: "serve-index-from-public",
+      configureServer(server) {
+        const createDirectoryIndexMiddleware = (root: string) => {
+          return (req: http.IncomingMessage, res: http.ServerResponse, next: () => void) => {
+            if (!req.url) {
+              return next();
+            }
+
+            if (req.url === "/" || req.url.startsWith("/?")) {
+              req.url = "/index.html" + (req.url.startsWith("/?") ? req.url.slice(1) : "");
+              return next();
+            }
+
+            const [pathname, search] = req.url.split("?");
+            if (!pathname) {
+              return next();
+            }
+
+            const target =
+              showcasesRedirectTarget(pathname, search) ??
+              directoryRedirectTarget(root, pathname, search);
+            if (target) {
+              res.writeHead(302, { Location: target, "Content-Type": "text/html" });
+              res.end();
+              return;
+            }
+
+            next();
+          };
+        };
+
+        server.middlewares.use(createDirectoryIndexMiddleware(server.config.root));
+      },
+      configurePreviewServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (!req.url) return next();
+          const [pathname, search] = req.url.split("?");
+          if (!pathname) return next();
+          const target =
+            showcasesRedirectTarget(pathname, search) ??
+            directoryRedirectTarget(server.config.root, pathname, search);
+          if (target) {
+            res.writeHead(302, { Location: target, "Content-Type": "text/html" });
+            res.end();
+            return;
+          }
+          next();
+        });
+      },
+    },
+    {
+      // Makes PUBLIC_PORT itself redirect plain HTTP to HTTPS instead of just failing to
+      // connect -- see PUBLIC_PORT's doc comment up top for why a same-process https.Server
+      // alone can't do this, and why the real dev server binds to INTERNAL_HTTPS_PORT instead.
+      name: "https-only-port-5173",
+      configureServer(server) {
+        server.httpServer?.once("listening", () => {
+          // Vite would otherwise print the internal port nobody is meant to connect to directly.
+          server.printUrls = () => {
+            console.log(`\n  ➜  Local:   https://localhost:${PUBLIC_PORT}/`);
+          };
+
+          // Peeks at each connection's first byte: 0x16 is a TLS ClientHello's content type, so
+          // a connection starting with it is forwarded byte-for-byte to the real internal HTTPS
+          // server (HMR websocket upgrades happen *inside* that forwarded TLS stream, so they
+          // work completely transparently -- this never parses HTTP itself for the TLS case).
+          // Anything else is plain-text HTTP, answered directly with a redirect.
+          const multiplexer = net.createServer((socket) => {
+            socket.once("data", (chunk: Buffer) => {
+              if (chunk.length > 0 && chunk[0] === 0x16) {
+                const upstream = net.connect(INTERNAL_HTTPS_PORT, "127.0.0.1", () => {
+                  upstream.write(chunk);
+                  socket.pipe(upstream);
+                  upstream.pipe(socket);
+                });
+                upstream.on("error", () => socket.destroy());
+              } else {
+                const text = chunk.toString("utf8");
+                const hostMatch = text.match(/^Host:\s*([^\r\n]+)/im);
+                const host = hostMatch ? hostMatch[1]!.split(":")[0] : "localhost";
+                const pathMatch = text.match(/^[A-Z]+\s+(\S+)/);
+                const reqPath = pathMatch ? pathMatch[1] : "/";
+                const location = `https://${host}:${PUBLIC_PORT}${reqPath}`;
+                const body = `Redirecting to ${location}`;
+                socket.end(
+                  `HTTP/1.1 301 Moved Permanently\r\n` +
+                    `Location: ${location}\r\n` +
+                    `Content-Type: text/plain\r\n` +
+                    `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+                    `Connection: close\r\n\r\n${body}`,
+                );
+              }
+            });
+            socket.on("error", () => socket.destroy());
+          });
+          multiplexer.on("error", (err: NodeJS.ErrnoException) => {
+            console.error(
+              `\n  ✖  Could not bind port ${PUBLIC_PORT} for the HTTP/HTTPS multiplexer: ${err.message}`,
+            );
+          });
+          multiplexer.listen(PUBLIC_PORT);
+
+          // Best-effort plain-HTTP redirect on port 80, for anyone who doesn't even know the dev
+          // port (e.g. typing "http://localhost/"). Requires elevated privileges on most
+          // systems, so this is allowed to silently fail -- the multiplexer above, not this, is
+          // what guarantees every request that reaches PUBLIC_PORT gets redirected.
+          const port80Redirect = http.createServer((req, res) => {
+            const host = req.headers.host ? req.headers.host.split(":")[0] : "localhost";
+            res.writeHead(301, { Location: `https://${host}:${PUBLIC_PORT}${req.url || "/"}` });
+            res.end();
+          });
+          port80Redirect.on("error", () => {
+            /* Needs root on most systems -- fine, the multiplexer above already covers it. */
+          });
+          port80Redirect.listen(80, () => {
+            console.log(
+              `\n  ➜  HTTP Redirect: http://localhost/ -> https://localhost:${PUBLIC_PORT}/`,
+            );
+          });
+        });
+      },
+    },
+    {
+      name: "clean-dist-js",
+      apply: "build",
+      buildStart() {
+        const jsDir = path.resolve(import.meta.dirname, "dist/js");
+        if (fs.existsSync(jsDir)) {
+          fs.rmSync(jsDir, { recursive: true, force: true });
+        }
+        // emptyOutDir is false (keeps the 1.5 GB asset copy incremental): tool entry pages are
+        // re-emitted every build, so drop old ones or removed tools stay served from dist.
+        removeFilesWithExtension(path.resolve(import.meta.dirname, "dist/tools"), ".html");
+        // Deletion-mirror for the pure-copy dirs (removed public assets must not ship stale).
+        // Runs at buildStart -- BEFORE the bundler emits into `dist/assets` -- so freshly emitted
+        // bundler chunks (e.g. a `mesh.worker-*.js` module worker under `assetFileNames`)
+        // are never mistaken for stale leftovers and wiped again (regression 2026-11-02: worker
+        // 404'd on every production build; a WebGL1 gate caught it).
+        pruneStaleEntries("public/assets", "dist/assets");
+        pruneStaleEntries("public/schemas", "dist/schemas");
+      },
+    },
+    {
+      name: "copy-assets",
+      closeBundle() {
+        const copyRecursiveSync = (src: string, dest: string, copyDocsHtml = false) => {
+          if (!fs.existsSync(src)) return;
+          const stats = fs.statSync(src);
+          if (stats.isDirectory()) {
+            fs.mkdirSync(dest, { recursive: true });
+            fs.readdirSync(src).forEach((child) => {
+              copyRecursiveSync(path.join(src, child), path.join(dest, child), copyDocsHtml);
+            });
+          } else {
+            // Never copy raw .ts source files or overwrite Vite-bundled index.html entry points.
+            // Copy all binary/static assets and standalone doc HTML files (e.g. concept-dossier.html).
+            const isEntryHtml = src.endsWith("index.html");
+            const isDocHtml = copyDocsHtml && src.endsWith(".html") && !isEntryHtml;
+            if (!src.endsWith(".ts") && (!src.endsWith(".html") || isDocHtml)) {
+              if (
+                !fs.existsSync(dest) ||
+                stats.mtimeMs > fs.statSync(dest).mtimeMs ||
+                stats.size !== fs.statSync(dest).size
+              ) {
+                fs.copyFileSync(src, dest);
+              }
+            }
+          }
+        };
+        copyRecursiveSync("apps/showcases", "dist/apps/showcases");
+        copyRecursiveSync("apps/sample-apps", "dist/apps/sample-apps", true);
+        copyRecursiveSync(
+          "packages/tools/src/maker/docs",
+          "dist/packages/tools/src/maker/docs",
+          true,
+        );
+        // Incrementally sync public assets/schemas/favicon without re-copying unchanged 1.5 GB binaries.
+        // Bundler output (e.g. `mesh.worker-*.js` module workers under `assetFileNames`) lands in
+        // `dist/assets` too, so the deletion-mirror runs at buildStart -- BEFORE emission -- not
+        // here. Pruning after closeBundle wiped freshly-emitted bundler chunks (regression
+        // 2026-11-02: a module worker 404'd on every production build; the WebGL1 gate caught it).
+        copyRecursiveSync("public/assets", "dist/assets");
+        copyRecursiveSync("public/schemas", "dist/schemas");
+        copyRecursiveSync("public/favicon.webp", "dist/favicon.webp");
+      },
+    },
+    ...(process.env.VITEST ? [] : [mkcert()]),
+  ],
+  build: {
+    outDir: "dist",
+    emptyOutDir: false,
+    copyPublicDir: false,
+    chunkSizeWarningLimit: 1500,
+    minify: "esbuild",
+    esbuild: {
+      drop: ["debugger"],
+      legalComments: "none",
+    },
+    rollupOptions: {
+      input: {
+        ...showcaseInputs(import.meta.dirname),
+        lightCycleArena: resolve(
+          import.meta.dirname,
+          "apps/sample-apps/light-cycle-arena/index.html",
+        ),
+        pbrgen: resolve(import.meta.dirname, "public/tools/pbr-gen.html"),
+        iblgen: resolve(import.meta.dirname, "public/tools/ibl-gen.html"),
+        splattergen: resolve(import.meta.dirname, "public/tools/splatter-gen.html"),
+        gamepadtest: resolve(import.meta.dirname, "public/tools/gamepad-test.html"),
+        maker: resolve(import.meta.dirname, "public/tools/maker.html"),
+        kitinspector: resolve(import.meta.dirname, "public/tools/kit-inspector.html"),
+        presentation: resolve(import.meta.dirname, "public/presentation.html"),
+        main: resolve(import.meta.dirname, "public/index.html"),
+      },
+      output: {
+        entryFileNames: (chunk) => {
+          const toolNames = [
+            "pbrgen",
+            "iblgen",
+            "splattergen",
+            "gamepadtest",
+            "maker",
+            "kitinspector",
+          ];
+          if (toolNames.includes(chunk.name)) {
+            return `js/tools/[name].js`;
+          }
+          if (chunk.name === "main" || chunk.name === "presentation") {
+            return `js/[name].js`;
+          }
+          if (chunk.name === "lightCycleArena") {
+            return "apps/sample-apps/light-cycle-arena/App.js";
+          }
+          return `apps/showcases/[name]/showcase.js`;
+        },
+        assetFileNames: "assets/[name].[ext]",
+        chunkFileNames: "js/[name].js",
+      },
+    },
+  },
+});

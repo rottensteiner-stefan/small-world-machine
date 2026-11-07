@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showcase 44 – Instancing Measurement Rig – Concept Dossier</title>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --fg: #e2e8f0;
+    --muted: #8b949e;
+    --card: #14181f;
+    --border: #2a3038;
+    --accent: #58a6ff;
+    --cyan: #39c5bb;
+    --amber: #f0883e;
+  }
+  body {
+    margin: 0;
+    padding: 40px 20px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    color: #fff;
+  }
+  p.lead {
+    font-size: 17px;
+    color: var(--muted);
+    margin-top: 0;
+    margin-bottom: 28px;
+  }
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 32px 0 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+    color: var(--accent);
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+  }
+  .card h3 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    color: var(--cyan);
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9em;
+    background: #1a1f27;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--amber);
+  }
+  ul { margin: 8px 0 0; padding-left: 20px; }
+  li { margin-bottom: 8px; }
+  .warn {
+    border: 1px solid var(--amber);
+    color: #f0c59a;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 20px 0;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Showcase 44 — Instancing Measurement Rig</h1>
+  <p class="lead">Real-browser measurement stand for the A2 geometry-grouping work. Not a page for
+  eyes — a reproducible instrument that reports real WebGL2 draw calls per frame for a geometry-mix
+  scene, with and without automatic instancing (ADR 0046).</p>
+
+  <h2>Why</h2>
+  <p><code>docs/research/instanced-batching-2026-10-24.md</code> §7.1(b) asked for an in-browser
+  measurement of a scene whose benefit comes from <em>geometry grouping</em> (A2), not from
+  "consecutive identical objects". That scenario cannot be expressed by naive ADR-0046 instancing —
+  it needs a measurement scene that intersperses geometries so only A2 can batche them — plus a way
+  to count the real draw calls the renderer issues. This showcase is that rig.</p>
+
+  <h2>Scene design</h2>
+  <div class="card-grid">
+    <div class="card">
+      <h3>Geometry mix</h3>
+      <ul>
+        <li>Two cube geometries (1.0 / 1.7), <strong>one</strong> shared <code>StandardMaterial</code>.</li>
+        <li>Scattered in alternating insertion order (<code>i % 2</code>): never two equal geometries
+        in a row → naive instancing finds nothing, A2's grouping is what merges the batch.</li>
+        <li><code>frustumCulled = false</code> on every cube, fixed 3/4 camera → visibility cannot
+        bias the count.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Clean draw budget</h3>
+      <ul>
+        <li>Ambient light only → no shadow passes.</li>
+        <li>No post-processing, no IBL, no sprites.</li>
+        <li>Counted draws = pure opaque main-pass draws of the cubes.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Instrumentation</h3>
+      <ul>
+        <li>Renderer pinned to <code>WEB_GL2</code> (WEB_GPU draws don't go through GL entry points).</li>
+        <li><code>canvas.getContext("webgl2")</code> returns the engine's own context → shadow
+        <code>drawArrays/drawElements/drawArraysInstanced/drawElementsInstanced</code> with a tally.</li>
+        <li>No engine change, no new public parameter (Whack-a-Mole doctrine).</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Measurement contract</h2>
+  <ul>
+    <li><code>?inst=off</code> — disable autoInstancing (per-object baseline, "before").</li>
+    <li><code>?count=N</code> (default 1600), <code>?frames=N</code> (default 240).</li>
+    <li>30 warm-up frames, then a sampling window; the result is emitted exactly once as
+    <code>MEASURE {json}</code> to the <code>#__measure</code> overlay and the console.</li>
+    <li>Machine consumer: <code>scripts/measure-a2-instancing.mjs</code>.</li>
+  </ul>
+
+  <div class="warn">
+    The frame-time delta between the two legs is often small: both legs rasterize the same pixels.
+    The crisp metric is <strong>draw calls per frame</strong> (2 vs 1600 here). A negligible
+    frame-time delta on this pixel-limited scene is itself the expected, documented finding — exact
+    follow-ups live in <code>docs/research/instanced-batching-2026-10-24.md</code> §9.1.
+  </div>
+
+  <h2>Runbook</h2>
+  <ul>
+    <li><code>npm run build:showcases</code> — bake the rig into <code>dist/</code>.</li>
+    <li><code>node scripts/measure-a2-instancing.mjs</code> — starts the preview server itself,
+    measures <code>inst=on</code> (A2-active) and <code>inst=off</code> (baseline), prints both
+    records.</li>
+  </ul>
+</main>
+</body>
+</html>

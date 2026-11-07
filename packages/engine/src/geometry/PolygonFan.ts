@@ -1,0 +1,71 @@
+import { AbstractGeometry } from "./AbstractGeometry.js";
+import type { Vector3D } from "../math/index.js";
+
+/**
+ * Configuration options for polygon-fan geometry.
+ */
+export interface PolygonFanOptions {
+  /** Points in order, tracing the polygon's perimeter. Minimum 3 to produce any triangles. */
+  points: Vector3D[];
+  /** Optional precomputed triangle index array. If omitted, fans from the first point. */
+  indices?: readonly number[] | undefined;
+}
+
+/**
+ * A filled polygon of arbitrary point count, triangulated as a fan from the first point or
+ * using explicit triangulation indices (such as `StageZone.triangulationIndices`). Used by
+ * Maker's `StageZoneGizmoManager` as a real, triangle-based pick target for zone selection.
+ */
+export class PolygonFan extends AbstractGeometry {
+  public points: Vector3D[];
+  public customIndices?: readonly number[] | undefined;
+
+  constructor(options: PolygonFanOptions) {
+    super();
+    this.points = options.points;
+    this.customIndices = options.indices;
+    this.generateGeometryData();
+  }
+
+  /** @inheritdoc */
+  protected override generateGeometryData(): void {
+    const v: number[] = [];
+    const uv: number[] = [];
+    const idx: number[] = [];
+    const n = this.points.length;
+
+    for (let i = 0; i < n; i++) {
+      const p = this.points[i]!;
+      v.push(p.x, p.y, p.z);
+      uv.push(0, 0);
+    }
+
+    // Empty/undefined = "not specified" -> fan. Anything else must be a valid triangle list.
+    if (this.customIndices && this.customIndices.length > 0) {
+      const ci = this.customIndices;
+      if (ci.length % 3 !== 0) {
+        throw new Error(
+          `[PolygonFan] indices length must be a multiple of 3 (triangle list), got ${ci.length}.`,
+        );
+      }
+      for (let i = 0; i < ci.length; i++) {
+        const index = ci[i]!;
+        if (!Number.isInteger(index) || index < 0 || index >= n) {
+          throw new Error(`[PolygonFan] indices[${i}] = ${index} is out of range for ${n} points.`);
+        }
+      }
+      for (let i = 0; i < this.customIndices.length; i++) {
+        idx.push(this.customIndices[i]!);
+      }
+    } else {
+      for (let i = 1; i < n - 1; i++) {
+        idx.push(0, i, i + 1);
+      }
+    }
+
+    this._vertices = new Float32Array(v);
+    this._uvs = new Float32Array(uv);
+    this._indices = this._createIndexArray(idx.length);
+    this._indices.set(idx);
+  }
+}

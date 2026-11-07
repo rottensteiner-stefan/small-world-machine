@@ -1,0 +1,103 @@
+
+
+[BASE_FS_HEADER]
+[FOG_DEFS]
+[LIGHT_DEFS]
+[WORLD_DIR_TO_SCREEN]
+[PBR_MATH]
+
+uniform float u_metallic;
+uniform float u_roughness;
+uniform vec4 u_liquidParams;
+uniform sampler2D u_opaqueMap;
+// E01: model-scale mirror of the vertex-stage uniform (same convention as Standard.glsl100) --
+// the refraction march must convert mesh-local thickness to world units like the Standard volume ray.
+uniform highp mat4 u_model;
+
+void main() {
+    float ior = u_liquidParams.x;
+    float thickness = u_liquidParams.y;
+    float transmission = u_liquidParams.z;
+    
+    vec3 tintColor = u_color.rgb;
+    // Assume input color is sRGB, approximate linear conversion (WebGL1 lacks fast sRGB)
+    tintColor = pow(tintColor, vec3(2.2));
+    
+    float metallic = u_metallic;
+    float roughness = clamp(u_roughness, 0.05, 1.0);
+    
+    vec3 V = normalize(u_viewPos - v_worldPos);
+    // Mirror the Frostglass GLSL100 fallback guard: honor USE_NORMAL_MAP when the material
+    // supplies a normal map (same TBN path as GLSL300), otherwise use the raw vertex normal.
+    #ifdef USE_NORMAL_MAP
+    vec3 rawNormal = texture2D(u_normalMap, v_uv).rgb * 2.0 - 1.0;
+    // E-M9 (P3/S1 A1 hardening): restore the normal-scale multiply that wgsl/glsl300 apply. Dormant
+    // today (GlassMaterial hard-codes zw = 1,1) but a future normalScale wiring must behave on every
+    // tier -- this closes the one-line cross-tier divergence.
+    rawNormal.xy *= u_extraParams.zw;
+    vec3 N = normalize(v_tbn * rawNormal);
+    #else
+    vec3 N = normalize(v_normal);
+    #endif
+    // Double-sided glass (cullMode NONE also renders the far wall): face the shading normal toward the
+    // viewer. Otherwise back faces see dot(N, V) < 0, the Fresnel term saturates to 1 and the whole far
+    // wall mirrors the environment (uniform opaque-looking sheet). No-op for front faces.
+    if (dot(N, V) < 0.0) N = -N;
+    float dotNV = max(dot(N, V), 0.0001);
+
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, tintColor, metallic);
+
+    vec3 Lo = vec3(0.0);
+
+    // Transmitted light replaces the diffuse lobe (KHR_materials_transmission semantics): only the
+    // non-transmitted share scatters diffusely. The shared light loops read diffuseColor.
+    vec3 diffuseColor = tintColor * (1.0 - transmission);
+[GLASS_PBR_LOOPS]
+
+    // --- Refraction (projected volume ray) ---
+    // March the refracted view ray `thickness` world units through the glass and sample the opaque
+    // snapshot where it exits -- the StandardMaterial KHR_materials_transmission model. The former
+    // offset added the x/y of the WORLD-space refraction direction to screen UV, so the distortion rotated with the camera.
+    // (u_vp is shared with the vertex stage via the WebGL1 LIGHT_DEFS chunk; the projection is
+    // aspect-correct by construction, which also lifts the former WebGL1 no-aspect limitation.)
+    // E01: thickness is mesh-local, so the march converts it to world units via the model scale --
+    // exactly the Standard volume ray. Unit-scale models are unaffected; non-uniformly scaled
+    // meshes now match Standard instead of diverging (refraction distance + Beer absorption).
+    vec3 modelScale = vec3(length(u_model[0].xyz), length(u_model[1].xyz), length(u_model[2].xyz));
+    vec3 refrDir = refract(-V, N, 1.0 / ior);
+    vec3 refrMarch = refrDir * thickness * modelScale;
+    vec4 exitClip = u_vp * vec4(v_worldPos + refrMarch, 1.0);
+    vec2 screenUv = clamp(exitClip.xy / exitClip.w * 0.5 + 0.5, vec2(0.001), vec2(0.999));
+    
+    // WebGL1 expects texture2D, approximate linear conversion
+    vec3 refractedColor = texture2D(u_opaqueMap, screenUv).rgb;
+    refractedColor = pow(refractedColor, vec3(2.2));
+    
+    vec3 transmittance = exp(-((vec3(1.0) - tintColor) * length(refrMarch) * 3.0));
+    vec3 finalRefraction = refractedColor * transmittance * transmission;
+    
+    // Ambient Light
+    vec3 ambient = u_ambientColor * diffuseColor * u_extraParams.x; // u_extraParams.x is AO
+
+    vec3 F_refr = F_Schlick(dotNV, F0);
+    vec3 kD_refr = (vec3(1.0) - F_refr) * (1.0 - metallic);
+    
+    // Fresnel environment reflection: glass is read mostly through what it reflects (bright rims at grazing
+    // angles). WebGL1 has no IBL: the uniform ambient stands in for the environment
+    // radiance. The refraction is already weighted by (1 - F), so the sum stays energy-conserving.
+    vec3 envSpecular = u_ambientColor * F_Schlick(dotNV, F0);
+
+    vec3 color = ambient + envSpecular + Lo + finalRefraction * kD_refr;
+    
+    // Tone Mapping (Simple Reinhard)
+    color *= u_exposure;
+    color = color / (color + vec3(1.0));
+    
+    // Gamma Correction
+    color = pow(color, vec3(1.0 / 2.2));
+    
+    [FOG_CALC]
+    
+    gl_FragColor = vec4(color, 1.0);
+}

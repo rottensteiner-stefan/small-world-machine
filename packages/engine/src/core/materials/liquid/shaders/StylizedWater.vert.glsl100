@@ -1,0 +1,57 @@
+precision highp float;
+
+attribute vec3 a_position;
+attribute vec3 a_normal;
+attribute vec2 a_uv;
+attribute vec3 a_tangent;
+
+uniform mat4 u_vp;
+uniform mat4 u_model;
+uniform vec4 u_matParam3; // wave1 [dirX, dirY, steepness (Q), wavelength]
+uniform vec4 u_matParam4; // wave2 [dirX, dirY, steepness (Q), wavelength]
+uniform vec4 u_matParam5; // wave3 [dirX, dirY, steepness (Q), wavelength]
+uniform float u_time;
+uniform float u_reflectivity;
+
+varying vec3 v_worldPos;
+varying vec3 v_normal;
+varying vec2 v_uv;
+varying vec4 v_clipPos;
+
+[LIQUID_GERSTNER_WAVE]
+
+void main() {
+    float time = u_time;
+    float speed = u_reflectivity;
+
+    vec4 worldPosInit = u_model * vec4(a_position, 1.0);
+    vec3 wp = worldPosInit.xyz;
+
+    vec4 w1 = u_matParam3;
+    vec4 w2 = u_matParam4;
+    vec4 w3 = u_matParam5;
+    vec4 w4 = vec4(w1.y, -w1.x, w1.z * 0.45, w1.w * 0.42);
+    vec4 w5 = vec4(-w2.y, w2.x, w2.z * 0.35, w2.w * 0.35);
+    vec4 w6 = vec4(w1.x * 0.5 - w1.y * 0.866, w1.x * 0.866 + w1.y * 0.5, w1.z * 0.25, w1.w * 0.22);
+
+    vec3 t = vec3(1.0, 0.0, 0.0);
+    vec3 b = vec3(0.0, 0.0, 1.0);
+    vec3 displacement = vec3(0.0);
+
+    displacement += gerstnerWave(w1, wp, speed, time, t, b);
+    displacement += gerstnerWave(w2, wp, speed, time, t, b);
+    if (w3.w > 0.001) {
+        displacement += gerstnerWave(w3, wp, speed, time, t, b);
+    }
+    displacement += gerstnerWave(w4, wp, speed, time, t, b);
+    displacement += gerstnerWave(w5, wp, speed, time, t, b);
+    displacement += gerstnerWave(w6, wp, speed, time, t, b);
+
+    wp += displacement;
+    v_worldPos = wp;
+    gl_Position = u_vp * vec4(wp, 1.0);
+    v_clipPos = gl_Position;
+
+    v_uv = a_uv;
+    v_normal = normalize(cross(b, t));
+}

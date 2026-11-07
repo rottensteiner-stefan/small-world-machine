@@ -1,0 +1,50 @@
+{
+  "_doc": "Machine-readable tier capability matrix. Verified by packages/engine/tests/renderers/TierParityMatrix.test.ts. cell.state 'present' => regex MUST match in file; 'absent' => regex MUST NOT match (implementing a gap flips the test red, forcing a matrix update). absent cells need cell.class: 'gap' (+ finding id, fix wanted) | 'deliberate' (tier absence by design, reason required) | 'undecided' (needs owner decision). state 'na' = feature does not apply to the tier (reason required).",
+  "features": {
+    "forward_exposure": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "global\\.exposure" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "u_exposure" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "color \\*= u_exposure" }
+    },
+    "env_intensity": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "global\\.envIntensity" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "u_envIntensity" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "\\* u_envIntensity" }
+    },
+    "ibl_irradiance_map": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "u_irradianceMap" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "u_irradianceMap" },
+      "webgl1": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "u_irradianceMap", "reason": "GL1 has no IBL; u_ambientColor stands in (comment in light_calc_pbr.frag.glsl)" }
+    },
+    "brdf_lut": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "u_brdfLUT" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "u_brdfLUT" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "EnvBRDFApprox\\(roughness", "note": "analytic Karis fit (EnvBrdfApproxGl1.test.ts); scene.brdfLUT upgrades to the real LUT via USE_BRDF_LUT when texture units are free (dropped first by the sampler budget)" }
+    },
+    "csm_dir_shadow": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "cascadeSplits" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "u_cascadeSplits" },
+      "webgl1": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "[Cc]ascade", "reason": "glsl100 dialect has no shadow/array samplers (WebGLProgramCache._buildGlsl100 doc)" }
+    },
+    "glass_dir_shadow": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/glass_pbr_loops.wgsl", "pattern": "cascadeSplits" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/shared/glass_pbr_loops.frag.glsl", "pattern": "GLASS_DIR_SHADOW" },
+      "webgl1": { "state": "na", "reason": "shared glass loops: dialects without shadow maps (glsl100) stay fully lit (header comment of glass_pbr_loops.frag.glsl)" }
+    },
+    "sheen_energy_comp": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "sheenEnergyComp" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "sheenEnergyComp" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "sheenEnergyComp" }
+    },
+    "reflection_map_standard": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/core/materials/surface/shaders/Standard.frag.wgsl", "pattern": "u_reflectionMap" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/core/materials/surface/shaders/Standard.frag.glsl", "pattern": "u_reflectionMap" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/core/materials/surface/shaders/Standard.frag.glsl100", "pattern": "u_reflectionMap" }
+    },
+    "sampler_budget_fit": {
+      "webgpu": { "state": "na", "reason": "WebGPU binding limits handled by SamplerBudget.ts at layout level" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/gl/managers/WebGLProgramCache.ts", "pattern": "this\\._buildGlsl300\\(\\s*def,\\s*isInstanced,\\s*this\\._fitTextureUnits" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/renderers/gl/managers/WebGLProgramCache.ts", "pattern": "this\\._buildGlsl100\\(\\s*def,\\s*shaderId,\\s*isInstanced,\\s*this\\._fitTextureUnits" }
+    }
+  }
+}

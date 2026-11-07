@@ -1,0 +1,4 @@
+{
+  "$schema": "../../schemas/kits-index.schema.json",
+  "kits": ["industrial"]
+}

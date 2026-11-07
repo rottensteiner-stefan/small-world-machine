@@ -1,0 +1,59 @@
+{
+  "name": "Small World Machine (PhpStorm DevContainer)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "workspaceFolder": "/workspaces/small-world-machine",
+  "remoteUser": "node",
+  "forwardPorts": [
+    5173,
+    5174,
+    4173,
+    4174
+  ],
+  "portsAttributes": {
+    "5173": {
+      "label": "Vite Dev Server (Showcases/App)",
+      "onAutoForward": "notify"
+    },
+    "5174": {
+      "label": "VitePress Docs Dev Server",
+      "onAutoForward": "notify"
+    },
+    "4173": {
+      "label": "Vite Preview (Showcases/App)",
+      "onAutoForward": "silent"
+    },
+    "4174": {
+      "label": "VitePress Docs Preview",
+      "onAutoForward": "silent"
+    }
+  },
+  "containerEnv": {
+    "NODE_ENV": "development"
+  },
+  "postCreateCommand": "npm install",
+  "customizations": {
+    "jetbrains": {
+      "backend": "PhpStorm"
+    },
+    "vscode": {
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "typescript.tsdk": "node_modules/typescript/lib"
+      },
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-typescript-next",
+        "vitest.explorer",
+        "ggsimm.wgsl",
+        "slevesque.shader"
+      ]
+    }
+  }
+}

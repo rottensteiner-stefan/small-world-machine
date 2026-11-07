@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <link rel="stylesheet" href="/assets/shared.css" />
+    <link rel="stylesheet" href="/assets/tool-theme.css" />
+    <title>IBL Generator — Small World Machine</title>
+    <style>
+      body { margin: 0; font-family: var(--tool-font-ui); background-color: var(--tool-bg); color: var(--tool-text); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+      .container {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
+      .panel {
+        padding: 1.5rem;
+        background: var(--tool-panel);
+        border-right: 1px solid var(--tool-border);
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        width: 300px;
+        backdrop-filter: blur(10px);
+      }
+      .preview-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 2rem;
+        gap: 1rem;
+        overflow-y: auto;
+      }
+      .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+      label { font-weight: 600; font-size: 0.9rem; text-transform: uppercase; color: var(--tool-text-muted); }
+      input[type="file"] {
+        padding: 0.5rem;
+        background: var(--tool-inset);
+        border: 1px solid var(--tool-border);
+        border-radius: var(--tool-radius-sm);
+        color: var(--tool-text);
+      }
+      .swf-btn:disabled {
+        background: var(--tool-card);
+        color: var(--tool-text-muted);
+        border-color: transparent;
+        box-shadow: none;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+      .canvas-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(256px, 1fr));
+        gap: 1rem;
+      }
+      .card {
+        background: var(--tool-inset);
+        padding: 1rem;
+        border-radius: var(--tool-radius-lg);
+        border: 1px solid var(--tool-border);
+        text-align: center;
+      }
+      .card h3 { margin-top: 0; font-size: 1rem; color: var(--tool-accent); }
+      .preview-canvas {
+        max-width: 100%;
+        max-height: 250px;
+        border-radius: var(--tool-radius-md);
+        background: var(--tool-on-accent);
+        box-shadow: 0 4px 6px var(--tool-inset);
+        width: 100%;
+        object-fit: contain;
+        image-rendering: pixelated;
+      }
+      .hidden { display: none !important; }
+      .progress { display: none; font-size: 0.9rem; color: var(--tool-accent); }
+    </style>
+  </head>
+    <header class="tool-header">
+      <h1>IBL Generator</h1>
+      <button class="tool-close-btn" id="toolCloseBtn" title="Close Window" onclick="if (window.parent && window.parent !== window) { window.parent.postMessage({ type: 'close-tool' }, '*'); } try { window.close(); } catch(e) {}">✕</button>
+    </header>
+    <script>if (window.self !== window.top || window.opener) document.body.classList.add("in-window");</script>
+    
+    <div class="container">
+      <div class="panel">
+        <div class="control-group">
+          <label>1. Select HDR/Panorama (Equirectangular)</label>
+          <div id="dropzone-container"></div>
+          <small style="color:#666; margin-top:0.5rem;">Note: Must be a 2:1 aspect ratio image (e.g. 2048x1024).</small>
+        </div>
+        
+        <div class="control-group">
+          <label>2. Generate Maps</label>
+          <button id="generateBtn" class="swf-btn" disabled>Bake IBL</button>
+          <div id="progressText" class="progress">Processing...</div>
+        </div>
+        
+        <div class="control-group">
+          <label>3. Export</label>
+          <button id="exportBtn" class="swf-btn" disabled>Download Maps (.zip)</button>
+        </div>
+      </div>
+      
+      <div class="preview-area">
+        <h2>Generated Textures</h2>
+        <div class="canvas-container">
+          <div class="card">
+            <h3>Environment (Base)</h3>
+            <canvas id="envCanvas" width="256" height="256" class="preview-canvas"></canvas>
+            <small>Face: +Z</small>
+          </div>
+          <div class="card">
+            <h3>Irradiance (Diffuse)</h3>
+            <canvas id="irradianceCanvas" width="256" height="256" class="preview-canvas"></canvas>
+            <small>Face: +Z</small>
+          </div>
+          <div class="card">
+            <h3>Prefiltered (Roughness = 0.5)</h3>
+            <canvas id="prefilterCanvas" width="256" height="256" class="preview-canvas"></canvas>
+            <small>Face: +Z (MipLevel 2)</small>
+          </div>
+          <div class="card">
+            <h3>BRDF LUT</h3>
+            <canvas id="brdfCanvas" width="256" height="256" class="preview-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="app-footer">Copyright 2026 Stefan Rottensteiner // Small World Machine</footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script type="module">
+      import { IBLBaker } from "/packages/tools/src/ibl-gen/ibl-gen.ts";
+      import { UniversalIngestDropzone } from "/packages/tools/src/common/io/ui/UniversalIngestDropzone.ts";
+      import { primaryPbrTexture, firstImageItem } from "/packages/tools/src/common/io/ingestResultHelpers.ts";
+
+      let loadedBlob = null;
+      let baker = null;
+
+      try {
+        baker = new IBLBaker();
+      } catch (e) {
+        console.error(e);
+        alert("Initialization failed: " + e.message);
+      }
+
+      const generateBtn = document.getElementById("generateBtn");
+      const exportBtn = document.getElementById("exportBtn");
+      const progressText = document.getElementById("progressText");
+
+      new UniversalIngestDropzone({
+        container: document.getElementById("dropzone-container"),
+        label: "HDR ablegen",
+        supportedKinds: ["image", "pbr-set", "zip", "files", "svg", "text"],
+        enableWindowDrop: true,
+        enablePaste: true,
+        onIngest: async (result) => {
+          if (result.kind === "image" || result.kind === "svg") {
+            loadedBlob = result.blob;
+            generateBtn.disabled = false;
+          } else if (result.kind === "pbr-set") {
+            const primary = primaryPbrTexture(result.pbrSet);
+            if (primary) {
+              loadedBlob = primary;
+              generateBtn.disabled = false;
+            }
+          } else if (result.kind === "archive" || result.kind === "files") {
+            const img = firstImageItem(result);
+            if (img) {
+              loadedBlob = img.blob;
+              generateBtn.disabled = false;
+            }
+          }
+        },
+        onError: (err) => console.error("IBL Ingest Error:", err),
+      });
+
+      let generatedEnvCube = null;
+      let generatedIrradianceCube = null;
+      let generatedPrefilteredCube = null;
+
+      generateBtn.addEventListener("click", async () => {
+        if (!baker || !loadedBlob) return;
+        generateBtn.disabled = true;
+        exportBtn.disabled = true;
+        progressText.style.display = "block";
+        progressText.innerText = "Generating BRDF LUT...";
+
+        try {
+          await baker.generateBRDF("brdfCanvas");
+          progressText.innerText = "BRDF LUT Generated! Loading Panorama...";
+
+          const equiTex = await baker.loadEquirectangularImage(loadedBlob);
+          progressText.innerText = "Generating Environment CubeMap...";
+          generatedEnvCube = await baker.generateEnvironmentCubemap(equiTex, "envCanvas");
+
+          progressText.innerText = "Base CubeMap Generated! Generating Irradiance Convolution...";
+          generatedIrradianceCube = await baker.generateIrradianceCubemap(
+            generatedEnvCube,
+            "irradianceCanvas",
+          );
+
+          progressText.innerText = "Irradiance Map Generated! Generating GGX Prefilter...";
+          generatedPrefilteredCube = await baker.generatePrefilteredCubemap(
+            generatedEnvCube,
+            "prefilterCanvas",
+          );
+
+          progressText.innerText = "All Maps Generated! Ready for Export.";
+          exportBtn.disabled = false;
+        } catch (e) {
+          console.error(e);
+          progressText.innerText = "Error occurred: " + e.message;
+        }
+      });
+
+      exportBtn.addEventListener("click", async () => {
+        if (!baker || !generatedEnvCube || !generatedIrradianceCube || !generatedPrefilteredCube)
+          return;
+        exportBtn.disabled = true;
+        const originalText = exportBtn.innerText;
+        exportBtn.innerText = "Zipping...";
+
+        try {
+          // @ts-expect-error - JSZip is loaded globally
+          const zip = new JSZip();
+          zip.file("env.webp", await baker.exportCubemapToCross(generatedEnvCube, 512, 0));
+          zip.file("irradiance.webp", await baker.exportCubemapToCross(generatedIrradianceCube, 32, 0));
+
+          const prefilterFolder = zip.folder("prefilter");
+          let prefilterSize = 128;
+          for (let i = 0; i < 5; i++) {
+            prefilterFolder.file(
+              `mip${i}.png`,
+              await baker.exportCubemapToCross(generatedPrefilteredCube, prefilterSize, i),
+            );
+            prefilterSize = Math.floor(prefilterSize / 2);
+          }
+
+          zip.file("brdf_lut.webp", await baker.exportBRDFToBlob("brdfCanvas"));
+
+          const content = await zip.generateAsync({ type: "blob" });
+          const url = URL.createObjectURL(content);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "ibl_maps.zip";
+          a.click();
+          URL.revokeObjectURL(url);
+
+          exportBtn.innerText = "Export Complete!";
+          setTimeout(() => {
+            exportBtn.innerText = originalText;
+            exportBtn.disabled = false;
+          }, 2000);
+        } catch (e) {
+          console.error(e);
+          alert("Error during export.");
+          exportBtn.innerText = originalText;
+          exportBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

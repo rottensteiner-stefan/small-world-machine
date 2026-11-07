@@ -1,0 +1,22 @@
+{
+  "name": "@small-world-machine/engine",
+  "private": true,
+  "version": "0.122.0",
+  "description": "A lightweight 3D engine for hybrid WebGL/WebGPU rendering pipelines.",
+  "type": "module",
+  "license": "MIT",
+  "swm": {
+    "release": true
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "build": "vite build --config vite.lib.config.ts"
+  },
+  "dependencies": {
+    "joy-con-webhid": "^0.11.0"
+  }
+}
+

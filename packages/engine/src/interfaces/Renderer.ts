@@ -1,0 +1,130 @@
+import type { EngineOptions } from "./EngineOptions.js";
+import type { Scene } from "../core/index.js";
+import type { Color } from "../core/colors/index.js";
+import type { Vector3D } from "../math/index.js";
+import type { RendererType } from "../enums/index.js";
+import type { FrameInfo } from "./FrameInfo.js";
+
+/**
+ * Interface for all renderer implementations.
+ */
+export interface Renderer {
+  /** The type of the renderer. */
+  readonly type: RendererType;
+
+  /** Timing context of the current frame, written by the application before `render()`. */
+  frameInfo: FrameInfo;
+
+  /** The global post-processing volume/group. */
+  postProcessing: import("../renderers/post/index.js").PostProcessingGroup;
+
+  /**
+   * Initializes the renderer.
+   */
+  initialize(
+    canvas: HTMLCanvasElement,
+    attributes?: Record<string, unknown>,
+    config?: EngineOptions,
+  ): Promise<void>;
+
+  /**
+   * Renders a scene.
+   */
+  render(
+    scene: Scene,
+    vpMatrix: Float32Array,
+    camPos?: Vector3D,
+    viewMatrix?: Float32Array,
+    near?: number,
+    far?: number,
+    /** The camera's raw projection matrix, used by HBAO to reconstruct view-space position from depth. */
+    projMatrix?: Float32Array,
+  ): void;
+
+  /**
+   * Sets the size of the render viewport.
+   */
+  setSize(width: number, height: number): void;
+
+  /**
+   * Sets the active render target for off-screen rendering.
+   * If null, the renderer targets the screen/post-processing buffer.
+   * @param target The target to render into.
+   * @param activeCubeFace Optional. Which face (0-5) of the RenderTargetCube to render into.
+   */
+  setRenderTarget(
+    target:
+      | import("../core/textures/index.js").RenderTarget
+      | import("../core/textures/index.js").RenderTargetCube
+      | null,
+    activeCubeFace?: number,
+  ): void;
+
+  /** The currently active off-screen render target, or null if rendering to the default framebuffer. */
+  readonly activeRenderTarget?:
+    | import("../core/textures/index.js").RenderTarget
+    | import("../core/textures/index.js").RenderTargetCube
+    | null;
+
+  /** The currently active cube face index (0-5) if rendering to a RenderTargetCube. */
+  readonly activeCubeFace?: number;
+
+  /**
+   * Sets the clear color of the renderer.
+   */
+  setClearColor(color: Color): void;
+
+  /**
+   * Gets the clear color of the renderer.
+   */
+  readonly clearColor: Color;
+
+  /**
+   * Gets the global quality settings of the renderer.
+   */
+  readonly quality: import("./index.js").QualityConfig;
+
+  /**
+   * Destroys the renderer and releases its resources.
+   */
+  destroy?(): void;
+
+  /**
+   * Frees the GPU resources of an offscreen target the app stops rendering to (a removed planar
+   * reflection or probe). Without it they live until `destroy()`. Safe for targets that were never
+   * rendered; must not be called for the currently active target.
+   */
+  releaseRenderTarget?(
+    target:
+      | import("../core/textures/index.js").RenderTarget
+      | import("../core/textures/index.js").RenderTargetCube,
+  ): void;
+
+  /** Whether the underlying GPU device or context has been lost. */
+  readonly isContextLost?: boolean;
+  /** Optional callback triggered when the GPU context is lost. */
+  onContextLost?: ((info: { reason?: string; message?: string }) => void) | undefined;
+  /** WebGPU Device (only for WebGPU renderer) */
+  readonly gpuDevice?: GPUDevice | undefined;
+  /** WebGL Context (for WebGL1/2 renderers) */
+  readonly webglContext?: WebGLRenderingContext | WebGL2RenderingContext | undefined;
+
+  /**
+   * Applies the previous frame's Hierarchical-Z occlusion culling results (if ready) by setting
+   * `occlusionCulled` on the tested objects. Called once per frame, before `FrustumCuller.cull()`.
+   * WebGPU-only (see docs/adr/0008-hzb-occlusion-culling-webgpu-only.md); a no-op on WebGL1/WebGL2
+   * and whenever occlusion culling isn't enabled.
+   */
+  applyPendingOcclusionResults?(scene: Scene): void;
+
+  /**
+   * Invalidates renderer-side temporal/occlusion state that assumes a continuous camera path
+   * (S3 DP-4A). Optional because the API is tier-honest:
+   *  - WebGPU: resets TAA + volumetric-fog history and the HZB `_occludedStreak`;
+   *  - WebGL2: resets the TAA/motion-trail history-blend pass (ghosts identically to WebGPU);
+   *  - WebGL1: honest no-op (no temporal or occlusion state there -- ADR 0043).
+   * Called synchronously by `SmallWorldMachine.notifyCameraTeleport()`. The scene-wide
+   * `occlusionCulled = false` walk is the engine's responsibility, not the renderer's.
+   */
+  notifyCameraTeleport?(scene: Scene): void;
+}

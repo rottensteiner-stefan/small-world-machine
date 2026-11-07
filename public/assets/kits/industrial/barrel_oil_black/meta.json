@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../../schemas/prop-meta.schema.json",
+  "id": "industrial/barrel_oil_black",
+  "name": "Corrugated Rusted Oil Barrel (Black)",
+  "category": "props",
+  "kit": "industrial",
+  "version": "1.0.0",
+  "description": "Weathered industrial 200L steel drum with two 3-rib corrugated reinforcement bands, chipped paint, heavy rust, and dripping black oil streaks.",
+  "triangles": 9680,
+  "materials": 1,
+  "textures": [
+    "diffuse",
+    "normal",
+    "roughness_metallic"
+  ],
+  "dimensions": {
+    "radius": 0.34,
+    "height": 1.0
+  },
+  "recommendedScale": 0.82,
+  "author": "Small World Machine Studio",
+  "license": "CC0-1.0"
+}

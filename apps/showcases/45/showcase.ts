@@ -1,0 +1,645 @@
+import type { BloomElement } from "@small-world-machine/engine";
+import {
+  AbstractShowcase,
+  AmbientLight,
+  Color,
+  Cube,
+  Cylinder,
+  Decal,
+  DecalMaterial,
+  DirectionalLight,
+  Object3D,
+  Plane,
+  PointLight,
+  PostProcessingEffectType,
+  RendererType,
+  StandardMaterial,
+  Texture,
+  TextureWrap,
+  Vector3D,
+  bakeSceneDecals,
+} from "@small-world-machine/engine";
+import type { FlamePalette } from "@small-world-machine/vfx-extras";
+import {
+  EmberBed,
+  FireEmberEmitter,
+  FireLightBehavior,
+  FireLightBudget,
+  FireMaterial,
+  FireSmokeEmitter,
+  FlameGlowMaterial,
+  FlamePalettes,
+  createFlameCardGeometry,
+  createSootDecalTexture,
+} from "@small-world-machine/vfx-extras";
+import type { HudState, PaletteChoice } from "./Hud.js";
+import { Hud, defaultHudState } from "./Hud.js";
+import { GoldenCapture, parseGoldenSpec, GOLDEN_PRESETS } from "./GoldenCapture.js";
+
+/** Torch spacing along the long wall; 16 fires in total, so the budget visibly hands lights over. */
+const TORCH_ROW_X = [-20, -16, -12, -8, -5, 5, 8, 12, 16, 20];
+const BLACKBODY_K = 2000;
+const DEFAULT_LIGHT_BUDGET = 10;
+/** Tip offset at full wind strength, as a fraction of the flame height (≈ 30° bend). */
+const WIND_LEAN = 0.55;
+const READOUT_INTERVAL = 0.25;
+const BUDGET_DEBUG_TINT = new Color(1, 0.05, 0.05);
+const NIGHT_AMBIENT = 0.08;
+const DAY_AMBIENT = 0.9;
+const DAY_SUN = 2.2;
+
+const PALETTE_OVERRIDES: Record<Exclude<PaletteChoice, "original">, FlamePalette | undefined> = {
+  blackbody: undefined,
+  spectral: FlamePalettes.SPECTRAL,
+  wisp: FlamePalettes.WISP,
+  cursed: FlamePalettes.CURSED,
+};
+
+interface FlameSpec {
+  readonly name: string;
+  readonly position: Vector3D;
+  readonly cards: number;
+  readonly width: number;
+  readonly height: number;
+  readonly palette?: FlamePalette | undefined;
+  readonly lightIntensity: number;
+  readonly lightDistance: number;
+  readonly glowSize: number;
+  readonly jitter: number;
+  readonly temperatureK?: number | undefined;
+  readonly turbulence?: number | undefined;
+  readonly flowSpeed?: number | undefined;
+  /** Build a glowing fuel bed at the flame base (campfire: full, torch: small, candle: none). */
+  readonly emberBed?: boolean | undefined;
+}
+
+/** Per-torch look so the row does not read as clones. */
+interface TorchVariation {
+  readonly temperatureK: number;
+  readonly scale: number;
+  readonly turbulence: number;
+  readonly flowSpeed: number;
+}
+
+const DEFAULT_TORCH: TorchVariation = {
+  temperatureK: BLACKBODY_K,
+  scale: 1,
+  turbulence: 1,
+  flowSpeed: 1,
+};
+
+/** Deterministic 0..1 per (torch, channel), so golden captures see the same row every run. */
+function variation01(index: number, channel: number): number {
+  let h = Math.imul(index + 1, 0x9e3779b1) ^ Math.imul(channel + 1, 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 15), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function rowTorchVariation(index: number): TorchVariation {
+  return {
+    temperatureK: 1850 + 350 * variation01(index, 0),
+    scale: 0.85 + 0.3 * variation01(index, 1),
+    turbulence: 0.8 + 0.45 * variation01(index, 2),
+    flowSpeed: 0.85 + 0.35 * variation01(index, 3),
+  };
+}
+
+/** One fire's parts and its authored look, which lab settings scale but never overwrite. */
+interface FireRig {
+  readonly flame: FireMaterial;
+  readonly glow: FlameGlowMaterial;
+  readonly light: FireLightBehavior;
+  readonly embers: FireEmberEmitter;
+  readonly emberAnchor: Vector3D;
+  readonly smoke: FireSmokeEmitter;
+  readonly smokeAnchor: Vector3D;
+  readonly emberBed: EmberBed | undefined;
+  readonly flameObject: Object3D;
+  readonly glowObject: Object3D;
+  readonly pointLight: PointLight;
+  readonly palette: FlamePalette | undefined;
+  readonly temperatureK: number;
+  readonly turbulence: number;
+  readonly flowSpeed: number;
+  readonly height: number;
+  readonly flameIntensity: number;
+  readonly glowIntensity: number;
+}
+
+/**
+ * Showcase 45: Fire VFX lab. Procedural crossed-card flames (FireMaterial) with a billboard glow
+ * (FlameGlowMaterial) and a FireLightBehavior-driven point light: blackbody, spectral, wisp and cursed
+ * torches, a row of wall torches under a FireLightBudget, a small campfire and a candle, at night
+ * on ashlar slabs against a masonry wall.
+ */
+export class Showcase extends AbstractShowcase {
+  private readonly _fires: FireRig[] = [];
+  private readonly _budget: FireLightBudget = new FireLightBudget({
+    maxActive: DEFAULT_LIGHT_BUDGET,
+  });
+  private readonly _settings: HudState = defaultHudState(DEFAULT_LIGHT_BUDGET);
+  private readonly _ambient: AmbientLight = new AmbientLight({
+    color: new Color(0.35, 0.4, 0.6),
+    intensity: NIGHT_AMBIENT,
+  });
+  private readonly _sun: DirectionalLight = new DirectionalLight({
+    color: new Color(1, 0.96, 0.88),
+    intensity: 0,
+  });
+  private _bloom: BloomElement | undefined = undefined;
+  private _hud: Hud | undefined = undefined;
+  private _goldenCapture: GoldenCapture | undefined = undefined;
+  private _time: number = 0;
+  private _readoutTimer: number = 0;
+  /** World wind vector (m/s, horizontal) for the smoke plume; recomputed when the lab wind changes. */
+  private readonly _smokeWind: Vector3D = new Vector3D(0, 0, 0);
+
+  public override async start(): Promise<void> {
+    const golden = parseGoldenSpec();
+    await super.start();
+    // Only after start(): AbstractShowcase installs its fly controller solely on a camera that has
+    // no behaviors yet, so attaching the budget earlier silently disables camera movement.
+    this.camera.addBehavior(this._budget);
+    if (golden) {
+      this._goldenCapture = new GoldenCapture(this, {
+        freezeForCapture: (): void => this._freezeForCapture(),
+        applyPreset: (index: number): void => this._applyPreset(index),
+      });
+      await this._goldenCapture.run(golden);
+    } else {
+      this._hud = new Hud(this._settings, this._fires.length, () => this._applySettings());
+      this._applySettings();
+    }
+  }
+
+  private _freezeForCapture(): void {
+    this._time = 0;
+    this._settings.paused = false;
+    this._settings.timeScale = 1;
+    this._settings.shadows = true;
+    this._settings.bloom = true;
+    this._settings.embers = true;
+    this._settings.smoke = true;
+    this._settings.lights = true;
+    this._settings.emberBed = true;
+    this._applySettings();
+    for (let i = 0; i < this._fires.length; i++) {
+      const rig = this._fires[i]!;
+      rig.light.flicker = 0;
+      rig.light.time = 0.5;
+      rig.light.apply();
+    }
+  }
+
+  private _applyPreset(index: number): void {
+    const preset = GOLDEN_PRESETS[index];
+    if (!preset) return;
+    this.setInitialCamera(preset.cameraPosition, preset.cameraTarget);
+  }
+
+  public override destroy(): void {
+    this._goldenCapture?.dispose();
+    this._hud?.dispose();
+    super.destroy();
+  }
+
+  protected override onKeyDown(event: KeyboardEvent): void {
+    // HUD keys (R smoke, B ember bed) must be consumed BEFORE the base class, whose B toggles debug
+    // and R resets the camera; consumed keys never reach `super`.
+    const modified = event.altKey || event.metaKey || event.ctrlKey;
+    if (!modified && document.activeElement?.tagName !== "INPUT" && this._hud?.handleKey(event)) {
+      event.preventDefault();
+      return;
+    }
+    super.onKeyDown(event);
+  }
+
+  protected override async setupScene(): Promise<void> {
+    this.configureCamera();
+    this.setInitialCamera(new Vector3D(0, 1.6, 5.5), new Vector3D(0, 0.9, 0));
+
+    this.renderer.postProcessing.enabled = true;
+    const bloom = this.renderer.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
+    if (bloom) {
+      bloom.enabled = true;
+      bloom.intensity = 0.6;
+      bloom.threshold = 0.85;
+      bloom.radius = 0.6;
+    }
+    this._bloom = bloom;
+
+    this.scene.add(this._ambient);
+    this._sun.direction.set(-0.4, -1, -0.6).normalize();
+    this.scene.add(this._sun);
+
+    const [ashlar, masonry, wood] = await Promise.all([
+      this._loadSurface("stone_ashlar", 12, 3.5, 0.85),
+      this._loadSurface("carved_masonry", 17, 1.4, 0.8),
+      this._loadSurface("torch_wood", 1, 1, 0.8),
+    ]);
+
+    this._addBox("Ground", ashlar, new Vector3D(0, -0.05, 0), new Vector3D(48, 0.1, 14));
+    this._addBox("Wall", masonry, new Vector3D(0, 1.75, -1.6), new Vector3D(44, 3.5, 0.4));
+    // A crate beside the campfire makes the omnidirectional shadow readable on floor and wall.
+    const crate = this._addBox(
+      "Crate",
+      wood,
+      new Vector3D(-1.05, 0.25, 0.75),
+      new Vector3D(0.5, 0.5, 0.5),
+    );
+    crate.castShadow = true;
+
+    for (let i = 0; i < TORCH_ROW_X.length; i++) {
+      this._addWallTorch(`RowTorch${i}`, wood, TORCH_ROW_X[i]!, undefined, rowTorchVariation(i));
+    }
+
+    const torchX = [-3.3, -1.1, 1.1, 3.3];
+    const palettes: Array<FlamePalette | undefined> = [
+      undefined,
+      FlamePalettes.SPECTRAL,
+      FlamePalettes.WISP,
+      FlamePalettes.CURSED,
+    ];
+    for (let i = 0; i < torchX.length; i++) {
+      this._addWallTorch(`Torch${i}`, wood, torchX[i]!, palettes[i], DEFAULT_TORCH);
+    }
+
+    for (let log = 0; log < 5; log++) {
+      const angle = (log / 5) * Math.PI * 2;
+      const logObj = this._addCylinder(
+        `Log${log}`,
+        wood,
+        new Vector3D(Math.cos(angle) * 0.18, 0.1, 1.2 + Math.sin(angle) * 0.18),
+        0.05,
+        0.55,
+      );
+      logObj.rotation.set(0, -angle, Math.PI / 2 - 0.35);
+    }
+    this._addFlame({
+      name: "Campfire",
+      position: new Vector3D(0, 0.08, 1.2),
+      cards: 3,
+      width: 0.5,
+      height: 0.8,
+      lightIntensity: 5,
+      lightDistance: 14,
+      glowSize: 1.8,
+      jitter: 0.035,
+      emberBed: true,
+    });
+
+    this._addCylinder(
+      "Candle",
+      new StandardMaterial({ color: new Color(0.9, 0.86, 0.75) }),
+      new Vector3D(1.6, 0.1, 1.6),
+      0.03,
+      0.2,
+    );
+    this._addFlame({
+      name: "CandleFlame",
+      position: new Vector3D(1.6, 0.2, 1.6),
+      cards: 2,
+      width: 0.035,
+      height: 0.09,
+      lightIntensity: 0.4,
+      lightDistance: 2,
+      glowSize: 0.25,
+      jitter: 0.004,
+    });
+
+    // Charred soot/ash ring under the campfire: a box-projected decal (native on WebGPU and
+    // WebGL2, unlit so it only darkens). WEB_GL1 has no opaque-depth box-decals (ADR 0029), so
+    // the decal is baked into the floor geometry there via the mesh-decal baker — the grounding
+    // mark a real fire leaves behind, on every tier.
+    const sootTexture = createSootDecalTexture();
+    if (sootTexture) {
+      const soot = new Decal(
+        new DecalMaterial({ unlit: true, diffuseMap: sootTexture }),
+        "CampfireSoot",
+      );
+      soot.position.set(0, 0.02, 1.2);
+      soot.scale.set(1.6, 0.35, 1.6);
+      this.scene.add(soot);
+      if (this.renderer.type === RendererType.WEB_GL1) {
+        // Bake after the whole scene exists so the decal clips only against the floor box.
+        bakeSceneDecals(this.scene.root);
+      }
+    }
+  }
+
+  protected override update(deltaTime: number): void {
+    const s = this._settings;
+    const dt = s.paused ? 0 : deltaTime * s.timeScale;
+    this._time += dt;
+    const fires = this._fires;
+    let lit = 0;
+    for (let i = 0; i < fires.length; i++) {
+      const rig = fires[i]!;
+      // Driven here instead of by the engine so pause and slow motion reach the flicker too.
+      rig.light.time += dt;
+      rig.light.apply();
+      // The flame body breathes with the light, but far less: it is the light that should dance.
+      const value = rig.light.value;
+      rig.flame.time = this._time;
+      rig.flame.intensity = rig.flameIntensity * s.intensityScale * (0.8 + 0.2 * value);
+      rig.glow.intensity = rig.glowIntensity * s.intensityScale * (0.6 + 0.4 * value);
+      const unlit = rig.light.fade < 0.999;
+      if (!unlit) lit++;
+      if (s.showBudget) {
+        rig.glow.tint = unlit ? BUDGET_DEBUG_TINT : this._glowTintOf(rig);
+      }
+      // Billboards need the live camera position; the anchor is the flame base. The camera is no
+      // scene-graph object in this engine, so `position` is already world-space (`CameraInterfaceData`).
+      rig.embers.update(dt, rig.emberAnchor, this.camera.position);
+      // The plume spawns just below the flame tip and drifts with the lab's wind; the fuel bed
+      // breathes on its own slow seeded envelope. dt=0 freezes both (capture/pause support).
+      rig.smoke.update(dt, rig.smokeAnchor, this.camera.position, this._smokeWind);
+      rig.emberBed?.update(dt);
+    }
+
+    this._readoutTimer -= deltaTime;
+    if (this._hud && this._readoutTimer <= 0) {
+      this._readoutTimer = READOUT_INTERVAL;
+      const speed = s.paused ? "frozen" : `×${s.timeScale}`;
+      this._hud.setReadout(
+        `Fires lit:        ${lit} / ${fires.length}  (Budget ${s.lights ? s.maxActiveLights : 0})\n` +
+          `Time:             ${speed}\n` +
+          `Renderer:         ${this.renderer.type}`,
+      );
+    }
+  }
+
+  private _applySettings(): void {
+    const s = this._settings;
+    // Wind bends each flame with FireMaterial.lean (world-space vertex shear, base fixed, tip
+    // displaced), so both crossed cards lean together and the base stays on the fuel.
+    const windRad = (s.windAngleDeg * Math.PI) / 180;
+    const windX = Math.sin(windRad) * s.windStrength * WIND_LEAN;
+    const windZ = -Math.cos(windRad) * s.windStrength * WIND_LEAN;
+    // The plume drifts with the SAME wind the flame leans into (duck-tail coupling is wrong here:
+    // lean points downwind, smoke travels downwind). Unit magnitude at full strength.
+    this._smokeWind.set(Math.sin(windRad) * s.windStrength, 0, -Math.cos(windRad) * s.windStrength);
+
+    for (let i = 0; i < this._fires.length; i++) {
+      const rig = this._fires[i]!;
+      const palette = s.palette === "original" ? rig.palette : PALETTE_OVERRIDES[s.palette];
+      const temperatureK = rig.temperatureK * s.temperatureScale;
+
+      rig.flame.palette = palette;
+      rig.flame.temperatureK = temperatureK;
+      rig.flame.turbulence = rig.turbulence * s.turbulenceScale;
+      rig.flame.flowSpeed = rig.flowSpeed * s.flowScale;
+      rig.flame.lean.set(windX * rig.height, 0, windZ * rig.height);
+
+      rig.glow.temperatureK = temperatureK * 0.95;
+      rig.glow.tint = palette?.body;
+
+      rig.light.flicker = s.flicker ? 1 : 0;
+      rig.light.temperatureK = palette ? undefined : temperatureK;
+      if (palette) {
+        rig.pointLight.color.copyFrom(palette.body);
+      }
+
+      rig.flameObject.isVisible = s.flame;
+      rig.glowObject.isVisible = s.glow;
+      // Each layer spawns only while enabled; hiding the mesh makes the A/B toggle instant
+      // instead of waiting out live particles.
+      // The engine picks the nearest shadowed fires itself (ADR 0052, quality.maxShadowedPointLights).
+      rig.pointLight.castShadow = s.shadows;
+      rig.embers.enabled = s.embers;
+      rig.embers.mesh.isVisible = s.embers;
+      rig.smoke.enabled = s.smoke;
+      rig.smoke.mesh.isVisible = s.smoke;
+      if (rig.emberBed) {
+        rig.emberBed.enabled = s.emberBed;
+        rig.emberBed.mesh.isVisible = s.emberBed;
+      }
+    }
+
+    this._budget.maxActive = s.lights ? s.maxActiveLights : 0;
+    if (this._bloom) {
+      this._bloom.enabled = s.bloom;
+    }
+    this._ambient.intensity = s.daylight ? DAY_AMBIENT : NIGHT_AMBIENT;
+    this._sun.intensity = s.daylight ? DAY_SUN : 0;
+  }
+
+  private _glowTintOf(rig: FireRig): Color | undefined {
+    const palette =
+      this._settings.palette === "original"
+        ? rig.palette
+        : PALETTE_OVERRIDES[this._settings.palette];
+    return palette?.body;
+  }
+
+  private _addWallTorch(
+    name: string,
+    wood: StandardMaterial,
+    x: number,
+    palette: FlamePalette | undefined,
+    look: TorchVariation,
+  ): void {
+    this._addCylinder(`${name}_Shaft`, wood, new Vector3D(x, 1.55, -1.25), 0.035, 0.6);
+    this._addFlame({
+      name,
+      position: new Vector3D(x, 1.86, -1.25),
+      cards: 2,
+      width: 0.15 * look.scale,
+      height: 0.45 * look.scale,
+      palette,
+      lightIntensity: 3 * look.scale,
+      lightDistance: 8,
+      glowSize: 0.9 * look.scale,
+      jitter: 0.015,
+      temperatureK: look.temperatureK,
+      turbulence: look.turbulence,
+      flowSpeed: look.flowSpeed,
+      // The charred fuel wrap at the tip glows like coals; every torch gets one.
+      emberBed: true,
+    });
+  }
+
+  private async _loadSurface(
+    name: string,
+    repeatX: number,
+    repeatY: number,
+    roughness: number,
+  ): Promise<StandardMaterial> {
+    const wrap = { addressModeU: TextureWrap.REPEAT, addressModeV: TextureWrap.REPEAT };
+    const [diffuseMap, normalMap, roughnessMap] = await Promise.all([
+      Texture.fromUrl(`./assets/${name}_albedo.webp`, wrap),
+      Texture.fromUrl(`./assets/${name}_normal.webp`, wrap),
+      Texture.fromUrl(`./assets/${name}_roughness.webp`, wrap),
+    ]);
+    for (const map of [diffuseMap, normalMap, roughnessMap]) {
+      map.repeat = { x: repeatX, y: repeatY };
+    }
+    return new StandardMaterial({ diffuseMap, normalMap, roughnessMap, metallic: 0, roughness });
+  }
+
+  private _addFlame(spec: FlameSpec): void {
+    const seed = this._fires.length;
+    const temperatureK = spec.temperatureK ?? BLACKBODY_K;
+    const fire = new FireMaterial({
+      palette: spec.palette,
+      temperatureK,
+      seed: seed * 7.31,
+      turbulence: spec.turbulence ?? (spec.cards > 2 ? 1.3 : 1),
+      flowSpeed: spec.flowSpeed ?? 1,
+    });
+
+    const flame = new Object3D(`${spec.name}_Flame`);
+    flame.geometry = createFlameCardGeometry(spec).getGeometryData();
+    flame.material = fire;
+    flame.position.copyFrom(spec.position);
+    this.scene.add(flame);
+
+    const glowColor = spec.palette?.body;
+    const glowMat = new FlameGlowMaterial(
+      glowColor ? { tint: glowColor } : { temperatureK: temperatureK * 0.95 },
+    );
+    const glow = new Object3D(`${spec.name}_Glow`);
+    glow.geometry = new Plane().getGeometryData();
+    glow.material = glowMat;
+    glow.scale.set(spec.glowSize, spec.glowSize, spec.glowSize);
+    glow.position.set(spec.position.x, spec.position.y + spec.height * 0.4, spec.position.z);
+    this.scene.add(glow);
+
+    const light = new PointLight({
+      name: `${spec.name}_Light`,
+      // Own copy: FireLightBehavior writes the light colour in place, never into a shared palette.
+      color: glowColor ? glowColor.clone() : Color.fromTemperature(temperatureK),
+      intensity: spec.lightIntensity,
+      distance: spec.lightDistance,
+      decay: 2,
+    });
+    light.position.set(spec.position.x, spec.position.y + spec.height * 0.5, spec.position.z);
+    this.scene.add(light);
+
+    const lightBehavior = new FireLightBehavior({
+      seed,
+      jitter: spec.jitter,
+      // Palette fire keeps its own light colour; blackbody fire cools as it dims.
+      temperatureK: spec.palette ? undefined : temperatureK,
+    });
+    light.addBehavior(lightBehavior);
+    // update() advances it with the lab's time scale instead.
+    lightBehavior.isActive = false;
+    this._budget.register(lightBehavior);
+
+    // Ember/glutt particles, scaled from the flame's authored size so the candle glows faintly and
+    // the campfire throws a dense spray. World-anchored + deterministic seed (per-fire index), so a
+    // moving camera sees the same sparks leave the same fire on every run (golden-compatible).
+    const emberAnchor = new Vector3D(
+      spec.position.x,
+      spec.position.y + spec.height * 0.2,
+      spec.position.z,
+    );
+    const embers = new FireEmberEmitter({
+      name: `${spec.name}_Embers`,
+      seed,
+      rate: Math.min(24, Math.max(2, spec.height * 26 * 0.9)),
+      capacity: Math.min(24, Math.max(3, Math.round(spec.height * 26))),
+      lifeRange: [0.4, Math.min(1.6, 0.4 + spec.height * 1.4)],
+      speedRange: [0.3, Math.min(2.4, 0.3 + spec.height * 2.4)],
+      sizeRange: [spec.width * 0.05, spec.width * 0.13],
+      spawnRadius: Math.max(0.015, spec.width * 0.18),
+    });
+    this.scene.add(embers.mesh);
+
+    // Smoke plume: spawns just below the flame tip, rises with drag and buoyancy, expands and
+    // dissolves. Scaled from the authored flame size (candle: a faint wisp, campfire: the slow
+    // drift above the logs); wind comes from the lab's slider via `_applySettings`.
+    const smokeAnchor = new Vector3D(
+      spec.position.x,
+      spec.position.y + spec.height * 0.8,
+      spec.position.z,
+    );
+    const smoke = new FireSmokeEmitter({
+      name: `${spec.name}_Smoke`,
+      seed: seed * 3.11 + 7,
+      rate: Math.min(10, Math.max(1, spec.height * 11)),
+      capacity: Math.min(14, Math.max(3, Math.round(spec.height * 16))),
+      lifeRange: [0.8, Math.min(2.4, 0.8 + spec.height * 1.8)],
+      speedRange: [0.3, Math.min(0.8, 0.3 + spec.height * 0.6)],
+      sizeRange: [spec.width * 0.16, spec.width * 0.32],
+      spawnRadius: Math.max(0.02, spec.width * 0.22),
+      growthRate: 0.45,
+      maxScale: Math.max(0.5, Math.min(2.4, spec.height * 2.6)),
+    });
+    this.scene.add(smoke.mesh);
+
+    // Glowing fuel bed: full under the campfire, a charred wrap on the torches, none on the candle
+    // (its wick IS the fire). The bed sits at the flame base, beneath the logs/tip.
+    let emberBed: EmberBed | undefined;
+    if (spec.emberBed) {
+      const bed = new EmberBed({
+        name: `${spec.name}_EmberBed`,
+        position: new Vector3D(spec.position.x, spec.position.y - 0.03, spec.position.z),
+        radius: Math.max(0.05, spec.width * 0.72),
+        height: Math.max(0.03, spec.height * 0.05),
+        emissiveIntensity: Math.max(1, Math.min(2.2, spec.height * 2.4)),
+        breathStrength: 0.2,
+        seed: seed * 1.73 + 3,
+      });
+      this.scene.add(bed.mesh);
+      emberBed = bed;
+    }
+
+    this._fires.push({
+      flame: fire,
+      glow: glowMat,
+      light: lightBehavior,
+      embers,
+      emberAnchor,
+      smoke,
+      smokeAnchor,
+      emberBed,
+      flameObject: flame,
+      glowObject: glow,
+      pointLight: light,
+      palette: spec.palette,
+      temperatureK,
+      turbulence: fire.turbulence,
+      flowSpeed: fire.flowSpeed,
+      height: spec.height,
+      flameIntensity: fire.intensity,
+      glowIntensity: glowMat.intensity,
+    });
+  }
+
+  private _addBox(name: string, mat: StandardMaterial, pos: Vector3D, size: Vector3D): Object3D {
+    const obj = new Object3D(name);
+    obj.geometry = new Cube({ size: 1 }).getGeometryData();
+    obj.material = mat;
+    obj.position.copyFrom(pos);
+    obj.scale.copyFrom(size);
+    obj.receiveShadow = true;
+    this.scene.add(obj);
+    return obj;
+  }
+
+  private _addCylinder(
+    name: string,
+    mat: StandardMaterial,
+    pos: Vector3D,
+    radius: number,
+    height: number,
+  ): Object3D {
+    const obj = new Object3D(name);
+    obj.geometry = new Cylinder({
+      radiusTop: radius,
+      radiusBottom: radius,
+      height,
+    }).getGeometryData();
+    obj.material = mat;
+    obj.position.copyFrom(pos);
+    obj.castShadow = true;
+    obj.receiveShadow = true;
+    this.scene.add(obj);
+    return obj;
+  }
+}
+
+const app = new Showcase();
+app.start().catch((err: unknown) => console.error("[Showcase45] Failed to start:", err));

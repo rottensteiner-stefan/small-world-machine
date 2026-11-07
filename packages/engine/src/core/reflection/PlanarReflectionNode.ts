@@ -1,0 +1,359 @@
+import { Object3D } from "../Object3D.js";
+import { Camera } from "../cameras/Camera.js";
+import type { Scene } from "../Scene.js";
+import { PerspectiveProjection } from "../../math/projections/index.js";
+import type { Renderer } from "../../interfaces/index.js";
+import { RenderTarget } from "../textures/index.js";
+import { Frustum, MathPool, Matrix4, type Vector3D } from "../../math/index.js";
+
+/**
+ * Options for configuring a PlanarReflectionNode.
+ */
+export interface PlanarReflectionNodeOptions {
+  name?: string;
+  width?: number;
+  height?: number;
+  generateMipmaps?: boolean;
+  clipBelowPlane?: boolean;
+  clipPlaneOffset?: number;
+  cullAgainstFrustum?: boolean;
+  /**
+   * Fractional resolution multiplier in (0,1]: `1` renders at the configured `width`/`height`,
+   * smaller values downscale the reflection target (e.g. `0.5` = half resolution per axis,
+   * a quarter of the pixels). The LOW performance tier drives this through the engine quality
+   * config (`QualityConfig.reflectionResolutionScale`, ADR 0035); app code can also set the
+   * `resolutionScale` property after construction. Set once, before the first render -- resizing
+   * later recreates the GPU resources on the next frame.
+   * @domain multiplier in (0,1]; values outside clamp to 1 (never upscale, never 0 pixels).
+   */
+  resolutionScale?: number;
+}
+
+/**
+ * A node that renders the scene from a mirrored perspective into a RenderTarget.
+ */
+export class PlanarReflectionNode extends Object3D {
+  public renderTarget: RenderTarget;
+  public mirrorCamera: Camera;
+
+  /**
+   * Objects to hide (alongside this node itself) while rendering the reflection -- typically the
+   * visible mesh whose material samples `renderTarget` (e.g. a mirror floor's `reflectionMap`).
+   * Unlike `DynamicReflectionProbe`, which can just hide its own parent (a probe is always a
+   * child of the reflective object it orbits), a `PlanarReflectionNode` and the mesh that samples
+   * its texture are typically unrelated siblings in the scene graph, so there's no structural
+   * relationship to hide automatically. Leaving the reflective mesh visible during its own
+   * reflection sub-render both looks wrong (it would show its own stale reflection recursively)
+   * and is invalid on WebGPU: `renderTarget`'s texture would be bound as a `RenderAttachment`
+   * (this render) and a `TextureBinding` (this mesh's material) in the same pass.
+   */
+  public excludedObjects: Object3D[] = [];
+
+  /**
+   * Surfaces whose visibility in the main camera's frustum determines whether the reflection
+   * pass should be rendered. If set and no surface intersects the main camera frustum,
+   * `updateReflection()` skips rendering and returns `false`.
+   * Defaults to `excludedObjects` when empty.
+   */
+  public reflectiveSurfaces: Object3D[] = [];
+
+  /**
+   * Whether to check if any reflective surface is visible in the main camera frustum before
+   * rendering the reflection pass. Defaults to true.
+   */
+  public cullAgainstFrustum: boolean = true;
+
+  /**
+   * Cuts everything below the mirror plane out of the reflection (oblique near-plane clipping,
+   * Lengyel 2004; Unity/Godot planar reflections do the same). Without it a seabed or a pool
+   * floor lies between the mirrored camera and the surface and hides the reflection of the sky
+   * and the shore. Costs nothing per pixel; `false` renders the unclipped scene.
+   * @domain true clips below the plane (water, mirror floor); false keeps the whole scene.
+   */
+  public clipBelowPlane: boolean = true;
+
+  /**
+   * Distance of the clip plane from the mirror plane along its normal, in meters (positive = up).
+   * A small negative value keeps the foot of shoreline geometry that sits just below a wavy
+   * surface from being cut away.
+   * @domain world meters along the plane normal; 0 = exactly the mirror plane.
+   */
+  public clipPlaneOffset: number = 0;
+
+  private readonly _clipProjection: Matrix4 = new Matrix4();
+  private readonly _clipInverse: Matrix4 = new Matrix4();
+  private readonly _clipViewProj: Matrix4 = new Matrix4();
+  private readonly _frustum: Frustum = new Frustum();
+  private readonly _excludedWasVisible: boolean[] = [];
+  /** Configured full-resolution size of the reflection target; `renderTarget` stays scale × this. */
+  private readonly _baseWidth: number;
+  private readonly _baseHeight: number;
+  /** Effective fractional resolution multiplier on `_baseWidth`/`_baseHeight` (0,1], clamped. */
+  private _resolutionScale: number = 1;
+
+  constructor(
+    nameOrOptions: string | PlanarReflectionNodeOptions = "PlanarReflectionNode",
+    width: number = 1024,
+    height: number = 1024,
+  ) {
+    const isOptions = typeof nameOrOptions === "object";
+    const name = isOptions ? (nameOrOptions.name ?? "PlanarReflectionNode") : nameOrOptions;
+    const w = isOptions ? (nameOrOptions.width ?? 1024) : width;
+    const h = isOptions ? (nameOrOptions.height ?? 1024) : height;
+    const generateMipmaps = isOptions ? (nameOrOptions.generateMipmaps ?? true) : true;
+
+    super(name);
+    this._baseWidth = w;
+    this._baseHeight = h;
+    if (isOptions && nameOrOptions.resolutionScale !== undefined) {
+      this._resolutionScale = clampReflectionResolutionScale(nameOrOptions.resolutionScale);
+    }
+    this.renderTarget = RenderTarget.create({
+      width: scaledReflectionResolution(w, this._resolutionScale),
+      height: scaledReflectionResolution(h, this._resolutionScale),
+      generateMipmaps,
+    });
+    this.mirrorCamera = new Camera(new PerspectiveProjection());
+
+    if (isOptions) {
+      if (nameOrOptions.clipBelowPlane !== undefined)
+        this.clipBelowPlane = nameOrOptions.clipBelowPlane;
+      if (nameOrOptions.clipPlaneOffset !== undefined)
+        this.clipPlaneOffset = nameOrOptions.clipPlaneOffset;
+      if (nameOrOptions.cullAgainstFrustum !== undefined)
+        this.cullAgainstFrustum = nameOrOptions.cullAgainstFrustum;
+    }
+  }
+
+  /**
+   * Effective fractional resolution multiplier on the configured base size (0,1], clamped by
+   * {@link clampReflectionResolutionScale}. `renderTarget` is always `scale` × the base size, so
+   * repeated sets never accumulate.
+   */
+  public get resolutionScale(): number {
+    return this._resolutionScale;
+  }
+
+  /**
+   * Changes the reflection target resolution to `scale` × the configured base size (`RenderTarget.
+   * resize`, GPU resources are recreated on the next frame -- set it before the first render where
+   * possible). `1` restores full resolution; values outside (0,1] clamp to 1. `renderTarget`'s
+   * texture is sampled bilinearly (and mip-mapped when `generateMipmaps` is on), so downscaling is
+   * masked by the existing roughness-blur path and does not require a change in the sampling
+   * shaders.
+   * @domain multiplier in (0,1]; set is clamped, never throws.
+   */
+  public set resolutionScale(scale: number) {
+    const clamped = clampReflectionResolutionScale(scale);
+    if (clamped === this._resolutionScale) return;
+    this._resolutionScale = clamped;
+    this.renderTarget.resize(
+      scaledReflectionResolution(this._baseWidth, clamped),
+      scaledReflectionResolution(this._baseHeight, clamped),
+    );
+  }
+
+  /**
+   * Updates the reflection texture by rendering the scene from a mirrored camera.
+   * Call this in your update loop before the main render.
+   * @returns true if the reflection was rendered, false if skipped by frustum culling.
+   */
+  public updateReflection(scene: Scene, mainCamera: Camera, renderer: Renderer): boolean {
+    if (!mainCamera.projection) return false;
+
+    // 0. Frustum Culling: skip sub-render if no reflective surface is visible
+    if (this.cullAgainstFrustum) {
+      const surfaces =
+        this.reflectiveSurfaces.length > 0 ? this.reflectiveSurfaces : this.excludedObjects;
+      if (surfaces.length > 0) {
+        this._frustum.setFromMatrix(mainCamera.viewProjectionMatrix4);
+        let anyVisible = false;
+        for (let i = 0; i < surfaces.length; i++) {
+          const s = surfaces[i]!;
+          if (!s.isVisible) continue;
+          if (!s.bounds) {
+            s.updateMatrixWorld?.();
+          }
+          if (!s.bounds || this._frustum.intersectsVolume(s.bounds)) {
+            anyVisible = true;
+            break;
+          }
+        }
+        if (!anyVisible) return false;
+      }
+    }
+
+    this.mirrorCamera.aspect = mainCamera.aspect;
+    this.mirrorCamera.projection = mainCamera.projection;
+
+    const prevRenderTarget = renderer.activeRenderTarget ?? null;
+    const prevCubeFace = renderer.activeCubeFace;
+    const pos = MathPool.acquireVector().set(0, 0, 0);
+    const planeNormal = MathPool.acquireVector().set(0, 1, 0);
+
+    const wasVisible = this.isVisible;
+
+    try {
+      // 1. Calculate mirror plane based on this object's world matrix. Only ever read within this
+      // method (recomputed fresh every call from the current world matrix), so these live as local
+      // MathPool-backed scratch values rather than instance fields.
+      this.worldMatrix.transformVector(pos);
+
+      this.worldMatrix.transformVector(planeNormal);
+      planeNormal.sub(pos).normalize();
+      let planeConstant = -planeNormal.dot(pos);
+
+      // 2. Mirror the camera position
+      const camPos = mainCamera.position;
+      let dist = planeNormal.dot(camPos) + planeConstant;
+      if (dist < 0) {
+        // Camera below the plane: treat the plane as a two-sided mirror and reflect the underside.
+        // Flipping the normal keeps the mirror math valid and makes the oblique clip (and
+        // `clipPlaneOffset`, applied along the normal) keep the half-space the camera is in.
+        planeNormal.set(-planeNormal.x, -planeNormal.y, -planeNormal.z);
+        planeConstant = -planeConstant;
+        dist = -dist;
+      }
+      this.mirrorCamera.position.set(
+        camPos.x - 2.0 * planeNormal.x * dist,
+        camPos.y - 2.0 * planeNormal.y * dist,
+        camPos.z - 2.0 * planeNormal.z * dist,
+      );
+
+      // 3. Mirror the camera target
+      const targetPos = mainCamera.target;
+      const distTarget = planeNormal.dot(targetPos) + planeConstant;
+      this.mirrorCamera.target.set(
+        targetPos.x - planeNormal.x * 2 * distTarget,
+        targetPos.y - planeNormal.y * 2 * distTarget,
+        targetPos.z - planeNormal.z * 2 * distTarget,
+      );
+
+      // 4. Mirror the camera UP vector (must be set BEFORE updateViewMatrix)
+      const up = mainCamera.up;
+      const upDist = planeNormal.dot(up);
+      this.mirrorCamera.up.set(
+        up.x - 2.0 * planeNormal.x * upDist,
+        up.y - 2.0 * planeNormal.y * upDist,
+        up.z - 2.0 * planeNormal.z * upDist,
+      );
+
+      // Update view and projection internally
+      this.mirrorCamera.updateViewMatrix();
+
+      // 5. Hide this reflection node (and its children) so it doesn't occlude the reflection
+      this.isVisible = false;
+
+      // 5b. Also hide every object that samples `renderTarget` in its own material -- see
+      // `excludedObjects`'s doc comment for why this can't be inferred from the scene graph.
+      const excludedLen = this.excludedObjects.length;
+      this._excludedWasVisible.length = excludedLen;
+      for (let i = 0; i < excludedLen; i++) {
+        const obj = this.excludedObjects[i]!;
+        this._excludedWasVisible[i] = obj.isVisible;
+        obj.isVisible = false;
+      }
+
+      // 5c. Clip everything below the plane out of the mirror image.
+      const viewProjection = this.clipBelowPlane
+        ? this._obliqueViewProjection(pos, planeNormal)
+        : this.mirrorCamera.viewProjectionMatrix;
+
+      // 6. Render to target
+      renderer.setRenderTarget(this.renderTarget);
+      renderer.render(
+        scene,
+        viewProjection,
+        this.mirrorCamera.position,
+        this.mirrorCamera.viewMatrix,
+      );
+    } finally {
+      MathPool.releaseVector(pos);
+      MathPool.releaseVector(planeNormal);
+      renderer.setRenderTarget(prevRenderTarget, prevCubeFace);
+
+      // Restore visibility
+      this.isVisible = wasVisible;
+      for (let i = 0; i < this._excludedWasVisible.length; i++) {
+        const obj = this.excludedObjects[i];
+        if (obj) {
+          obj.isVisible = this._excludedWasVisible[i]!;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * View-projection of the mirror camera whose near plane is replaced by the mirror plane
+   * (`pos`, `normal` in world space, normal pointing to the visible side). The camera's own
+   * projection is shared with the main camera and stays untouched.
+   */
+  private _obliqueViewProjection(pos: Vector3D, normal: Vector3D): Float32Array {
+    const view = this.mirrorCamera.viewMatrix4.data;
+    const proj = this._clipProjection;
+    proj.copy(this.mirrorCamera.projection.getMatrix());
+    const p = proj.data;
+
+    // Plane in camera space: normal = rotation part of the view matrix, point = view * position.
+    const nx = normal.x;
+    const ny = normal.y;
+    const nz = normal.z;
+    const cx = view[0]! * nx + view[4]! * ny + view[8]! * nz;
+    const cy = view[1]! * nx + view[5]! * ny + view[9]! * nz;
+    const cz = view[2]! * nx + view[6]! * ny + view[10]! * nz;
+    const px = pos.x + nx * this.clipPlaneOffset;
+    const py = pos.y + ny * this.clipPlaneOffset;
+    const pz = pos.z + nz * this.clipPlaneOffset;
+    const vx = view[0]! * px + view[4]! * py + view[8]! * pz + view[12]!;
+    const vy = view[1]! * px + view[5]! * py + view[9]! * pz + view[13]!;
+    const vz = view[2]! * px + view[6]! * py + view[10]! * pz + view[14]!;
+    const cw = -(vx * cx + vy * cy + vz * cz);
+
+    // Corner of the clip volume opposite the plane, back in camera space: q = P^-1 * (sgn(c.xy), 1, 1).
+    if (!proj.invert(this._clipInverse)) return this.mirrorCamera.viewProjectionMatrix;
+    const inv = this._clipInverse.data;
+    const sx = Math.sign(cx);
+    const sy = Math.sign(cy);
+    const qx = inv[0]! * sx + inv[4]! * sy + inv[8]! + inv[12]!;
+    const qy = inv[1]! * sx + inv[5]! * sy + inv[9]! + inv[13]!;
+    const qz = inv[2]! * sx + inv[6]! * sy + inv[10]! + inv[14]!;
+    const qw = inv[3]! * sx + inv[7]! * sy + inv[11]! + inv[15]!;
+    const scale = 2 / (cx * qx + cy * qy + cz * qz + cw * qw);
+
+    // The third row of the projection becomes plane - fourth row (column-major storage).
+    p[2] = cx * scale - p[3]!;
+    p[6] = cy * scale - p[7]!;
+    p[10] = cz * scale - p[11]!;
+    p[14] = cw * scale - p[15]!;
+
+    Matrix4.multiply(proj, this.mirrorCamera.viewMatrix4, this._clipViewProj);
+    return this._clipViewProj.data;
+  }
+
+  /**
+   * Releases the GPU resources of `renderTarget` on `renderer`. Call it when the node is removed
+   * for good (or before replacing the renderer): the target is owned by this node, so nothing else
+   * frees it before `renderer.destroy()`. Rendering again afterwards simply re-allocates it.
+   */
+  public dispose(renderer: Renderer): void {
+    renderer.releaseRenderTarget?.(this.renderTarget);
+  }
+}
+
+/**
+ * Clamps a planar-reflection resolution multiplier to (0,1]: values outside (including 0 and
+ * negative) fall back to 1 so the reflection target is never 0 pixels wide and never upscales
+ * above the configured base. `PlanarReflectionNode.resolutionScale`'s setter and constructor both
+ * route through here, so the render target size is always a well-formed `scale × base`.
+ * @domain multiplier in (0,1]; everything else degrades to 1 (full resolution).
+ */
+function clampReflectionResolutionScale(scale: number): number {
+  return scale > 0 && scale <= 1 ? scale : 1;
+}
+
+/** `base` downscaled by `scale`, never below 1 px (a 0-wide render target would break binding). */
+function scaledReflectionResolution(base: number, scale: number): number {
+  return Math.max(1, Math.round(base * scale));
+}

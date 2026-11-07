@@ -1,0 +1,61 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate API Docs
+        run: npm run docs:api
+
+      - name: Build VitePress
+        run: npm run docs:build
+
+      - name: Build Showcases
+        run: |
+          npx vite build --base=/small-world-machine/showcases/
+          cp -a dist/public/. dist/
+          rm -rf dist/public
+          mv dist docs/.vitepress/dist/showcases
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/.vitepress/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

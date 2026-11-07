@@ -1,0 +1,45 @@
+# IDE
+.idea
+
+# Code
+node_modules/
+
+# Misc develop stuff
+/*.sh
+/collected.txt
+/var/
+**/.DS_Store
+/.claude/
+# OpenCode system skills (materialized into the workspace at session start, never part of the repo)
+/skills/
+/*.png
+/*.jpg
+
+# Build output (GitHub Pages workflow builds this fresh from source; see .github/workflows/deploy-docs.yml)
+/dist/
+/release/
+
+# vitest --coverage output
+/coverage/
+
+# Docs
+docs/public/api/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+/.agents/scratches/
+.tripo/
+/.playwright-mcp/
+/skills/
+
+# Local working dirs (.agents/collaborate, .agents/notes): only the directories
+# themselves belong in the repo (kept via .gitkeep); all contents stay local.
+/.agents/collaborate/*
+!/.agents/collaborate/.gitkeep
+/.agents/notes/*
+!/.agents/notes/.gitkeep
+/.agents/MEMORY.md
+/.agents/BACKLOG.md
+
+# Showcase 9 local character override (dev only, never committed)
+/apps/showcases/9/assets/local/

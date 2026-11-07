@@ -1,0 +1,14 @@
+{
+  "name": "@small-world-machine/artistic-extras",
+  "version": "0.1.0",
+  "description": "Artistic, stylized, and mixed-media shaders and post-processors (Metal Relief, Palette Knife Impasto, Selective Color Pop) for Small World Machine.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@small-world-machine/engine": "*"
+  }
+}

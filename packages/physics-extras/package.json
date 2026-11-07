@@ -1,0 +1,15 @@
+{
+  "name": "@small-world-machine/physics-extras",
+  "version": "0.1.0",
+  "description": "Physics-side extensions for Small World Machine that need both @small-world-machine/engine and one of its geometry packages (e.g. Voronoi fracture).",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@small-world-machine/engine": "*",
+    "@small-world-machine/geometry-extras": "*"
+  }
+}

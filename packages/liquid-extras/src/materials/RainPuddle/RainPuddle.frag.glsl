@@ -1,0 +1,117 @@
+[BASE_FRAGMENT_HEADER]
+[FOG_DEFS]
+[LIGHT_DEFS]
+[WORLD_DIR_TO_SCREEN]
+
+uniform vec4 u_matParam0; // [time, pixelAngle, rainIntensity, dripIntensity]
+uniform vec4 u_matParam1; // [asphaltTilePeriod.xy, heightContrastMm, edgeNoise]
+uniform vec4 u_matParam2; // [ior, wetDarkening (bottomTransmission), reflectionDistortion, reflectionBlur]
+uniform vec4 u_matParam3; // [basinDepthMm, dampWidthMm, dampDarkening, specularStrength]
+uniform vec4 u_matParam4; // puddle basin 0 [x, z, radiusX, radiusZ]
+uniform vec4 u_matParam5; // puddle basin 1
+uniform vec4 u_matParam6; // puddle basin 2
+uniform vec4 u_matParam7; // puddle basin 3
+uniform vec4 u_matParam8; // [sigmaOverRho, kinematicViscosity, scatteringPerMm, bubbleLifetime]
+uniform vec4 u_matParam9; // [absorptionPerMm.rgb, 0]
+uniform vec4 u_matParam10; // [scatterAlbedo.rgb, 0]
+uniform vec4 u_matParam11; // rain layer [diameterMin, diameterMax, slopeScale, daughterProbability]
+uniform vec4 u_matParam12; // drip layer [diameterMin, diameterMax, slopeScale, daughterProbability]
+uniform vec4 u_matParam13; // [rain crownStrength, rain bubbleProbability, drip crown, drip bubble]
+uniform sampler2D u_reflectionMap;
+
+#define RP_BUBBLES
+[RAIN_PUDDLE_COMMON]
+
+void main() {
+    float time = u_matParam0.x;
+    float pixelAngle = u_matParam0.y;
+    float rainIntensity = u_matParam0.z;
+    float dripIntensity = u_matParam0.w;
+    vec2 asphaltTilePeriod = u_matParam1.xy;
+    float heightContrastMm = u_matParam1.z;
+    float edgeNoise = u_matParam1.w;
+    float ior = u_matParam2.x;
+    float bottomTransmission = u_matParam2.y;
+    float reflectionDistortion = u_matParam2.z;
+    float reflectionBlur = u_matParam2.w;
+    float basinDepthMm = u_matParam3.x;
+    float dampWidthMm = u_matParam3.y;
+    float dampDarkening = u_matParam3.z;
+    float specularStrength = u_matParam3.w;
+    vec4 fluid = rpFluid(u_matParam8.x, u_matParam8.y);
+    float scatteringPerMm = u_matParam8.z;
+    float bubbleLifetime = u_matParam8.w;
+    vec3 absorptionPerMm = u_matParam9.rgb;
+    vec3 scatterAlbedo = u_matParam10.rgb;
+
+    vec2 p = v_worldPos.xz;
+    vec3 asphalt = texture(u_diffuseMap, p / asphaltTilePeriod).rgb;
+    float asphaltLuma = dot(asphalt, vec3(0.2126, 0.7152, 0.0722));
+    float waterDepthMm = rpWaterDepthMm(p, asphaltLuma, u_matParam4, u_matParam5, u_matParam6, u_matParam7,
+                                        basinDepthMm, heightContrastMm, edgeNoise);
+    float waterMask = smoothstep(0.0, 0.3, waterDepthMm);
+    float dampMask = smoothstep(-dampWidthMm, 0.0, waterDepthMm) * (1.0 - waterMask);
+    if (waterMask + dampMask < 0.002) {
+        discard;
+    }
+
+    float waterDepth = clamp(waterDepthMm, 0.5, 6.0) * 0.001;
+    vec3 toEye = u_viewPos - v_worldPos;
+    vec3 viewDir = normalize(toEye);
+    float footprint = pixelAngle * length(toEye) / max(viewDir.y, 0.15);
+    vec4 ripple = vec4(0.0);
+    if (waterMask > 0.001) {
+        ripple = rpRainField(p, time, rainIntensity, dripIntensity, u_matParam11, u_matParam12, u_matParam13,
+                             fluid, bubbleLifetime, waterDepth, footprint) * waterMask;
+    }
+    vec3 N = normalize(vec3(-ripple.x, 1.0, -ripple.y));
+
+    [LIGHT_CALC]
+
+    float fresnel = rpFresnelDielectric(dot(N, viewDir), ior);
+
+    vec4 clipPos = u_vp * vec4(v_worldPos, 1.0);
+    vec2 screenUV = clipPos.xy / clipPos.w * 0.5 + 0.5;
+    // World-space ripples are screen offsets only after projection (S3/ADR-0049 doctrine): the raw
+    // normal .xz would rotate with camera yaw and stretch with aspect (LIQ-02).
+    vec2 uv = screenUV + worldDirToScreen(vec3(N.x, 0.0, N.z)) * reflectionDistortion;
+    // Unresolved micro-ripples act as roughness: blur the mirror image by their
+    // rms slope instead of letting them alias.
+    float blurRadius = min(reflectionBlur * sqrt(ripple.z), 0.03);
+    vec2 o = vec2(blurRadius, blurRadius * 0.6);
+    vec2 lo = vec2(0.001);
+    vec2 hi = vec2(0.999);
+    vec3 reflectionSrgb = (
+        2.0 * texture(u_reflectionMap, clamp(uv, lo, hi)).rgb +
+        texture(u_reflectionMap, clamp(uv + o, lo, hi)).rgb +
+        texture(u_reflectionMap, clamp(uv - o, lo, hi)).rgb +
+        texture(u_reflectionMap, clamp(uv + vec2(-o.y, o.x), lo, hi)).rgb +
+        texture(u_reflectionMap, clamp(uv + vec2(o.y, -o.x), lo, hi)).rgb) / 6.0;
+    // The mirror pass renders the final, already exposed scene: only the light glints need exposure.
+    vec3 reflection = targetToLinear(reflectionSrgb);
+    vec3 glints = specular * fresnel * specularStrength * u_exposure;
+    vec3 surfaceLight = finalLight * u_exposure;
+
+    // Straight-alpha over the street: F of the mirror image plus (1-F) of what comes out of the
+    // liquid -- light scattered by its body, and the street seen through the column (Beer-Lambert
+    // per channel times the wet-ground darkening). Blending can only darken the street by one scalar,
+    // the weakest channel; the other channels' surplus is added back from an estimate of the lit
+    // street (its own texture under this pixel's light).
+    float opticalDepthMm = max(waterDepthMm, 0.0);
+    vec3 transmission = bottomTransmission * rpColumnTransmission(viewDir.y, ior, opticalDepthMm, absorptionPerMm);
+    float minTransmission = min(transmission.r, min(transmission.g, transmission.b));
+    float bodyOpacity = 1.0 - exp(-scatteringPerMm * opticalDepthMm);
+    float throughBody = (1.0 - fresnel) * (1.0 - bodyOpacity);
+    vec3 body = (1.0 - fresnel) * bodyOpacity * scatterAlbedo * surfaceLight;
+    vec3 tint = throughBody * (transmission - minTransmission) * sRGBToLinear(asphalt) * surfaceLight;
+    // Crown rims, jet points and bubble rims: bright, mostly mirror-like specks.
+    vec3 sparkle = min(ripple.w, 1.5) * (0.6 * reflection + 0.4 * surfaceLight);
+    float waterAlpha = waterMask * (1.0 - throughBody * minTransmission);
+    float dampAlpha = dampMask * dampDarkening;
+    vec3 contribution = waterMask * (fresnel * reflection + glints + body + tint + sparkle) +
+                        dampMask * 0.3 * fresnel * reflection;
+    float alpha = clamp(waterAlpha + dampAlpha, 0.0, 1.0);
+    fragColor = vec4(linearToSRGB(contribution / max(alpha, 1.0e-3)), alpha);
+
+    [FOG_CALC]
+}

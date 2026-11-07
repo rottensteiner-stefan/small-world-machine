@@ -1,0 +1,12 @@
+{
+  "name": "@small-world-machine/showcases",
+  "private": true,
+  "version": "0.122.0",
+  "type": "module",
+  "dependencies": {
+    "@small-world-machine/engine": "*",
+    "@small-world-machine/geometry-extras": "*",
+    "@small-world-machine/liquid-extras": "*",
+    "@small-world-machine/tools": "*"
+  }
+}

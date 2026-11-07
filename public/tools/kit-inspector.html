@@ -1,0 +1,1334 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <link rel="stylesheet" href="/assets/shared.css" />
+    <link rel="stylesheet" href="/assets/tool-theme.css" />
+    <title>Asset Kit Inspector — Small World Machine</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--tool-font-ui);
+        background-color: var(--tool-bg);
+        color: var(--tool-text);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+        user-select: none;
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--tool-border);
+        border-radius: var(--tool-radius-sm);
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--tool-accent);
+      }
+
+      /* Top Navigation Bar */
+      header.kit-header {
+        height: 38px;
+        background: var(--tool-panel-solid);
+        border-bottom: 1px solid var(--tool-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 1rem;
+        z-index: 40;
+        gap: 0.75rem;
+      }
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-shrink: 0;
+      }
+
+      .tool-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        color: var(--tool-text-bright);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        text-transform: uppercase;
+      }
+
+      .badge-tool {
+        background: var(--tool-accent-glow);
+        border: 1px solid var(--tool-accent);
+        color: var(--tool-accent);
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: var(--tool-radius-sm);
+        font-family: var(--tool-font-mono);
+        font-weight: 700;
+      }
+
+      /* Kit Filter Tabs */
+      .kit-tabs {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: var(--tool-inset);
+        padding: 3px;
+        border-radius: var(--tool-radius-md);
+        border: 1px solid var(--tool-border);
+      }
+
+      .tab-btn {
+        background: transparent;
+        border: none;
+        color: var(--tool-text-muted);
+        padding: 0.35rem 0.75rem;
+        border-radius: var(--tool-radius-sm);
+        font-family: var(--tool-font-ui);
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .tab-btn:hover {
+        color: var(--tool-text-bright);
+        background: var(--tool-hover);
+      }
+      .tab-btn.active {
+        color: var(--tool-on-accent);
+        background: var(--tool-accent);
+        font-weight: 700;
+      }
+
+      /* Viewport Toolbar */
+      .viewport-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .btn-icon-toggle {
+        background: var(--tool-card);
+        border: 1px solid var(--tool-border);
+        color: var(--tool-text-muted);
+        padding: 0.4rem 0.7rem;
+        border-radius: var(--tool-radius-md);
+        font-size: 0.8rem;
+        font-family: var(--tool-font-ui);
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        transition: all 0.15s ease;
+      }
+      .btn-icon-toggle:hover {
+        background: var(--tool-card-hover);
+        color: var(--tool-text-bright);
+        border-color: color-mix(in srgb, var(--tool-text-bright) 30%, transparent);
+      }
+      .btn-icon-toggle.active {
+        background: var(--tool-accent2-glow);
+        border-color: var(--tool-accent2);
+        color: var(--tool-accent2);
+      }
+
+      .select-preset {
+        background: var(--tool-card);
+        border: 1px solid var(--tool-border);
+        color: var(--tool-text);
+        padding: 0.35rem 0.6rem;
+        border-radius: var(--tool-radius-md);
+        font-family: var(--tool-font-ui);
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        outline: none;
+      }
+      .select-preset:focus {
+        border-color: var(--tool-accent);
+      }
+
+      /* Main App Layout */
+      .kit-layout {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 320px 1fr 340px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* Left Sidebar: Catalog */
+      aside.kit-catalog-panel {
+        background: var(--tool-panel-solid);
+        border-right: 1px solid var(--tool-border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .catalog-search-row {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--tool-border);
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .search-box {
+        display: flex;
+        align-items: center;
+        background: var(--tool-inset);
+        border: 1px solid var(--tool-border);
+        border-radius: var(--tool-radius-md);
+        padding: 0.35rem 0.65rem;
+        gap: 0.5rem;
+      }
+      .search-box:focus-within {
+        border-color: var(--tool-accent);
+        box-shadow: 0 0 10px var(--tool-accent-glow);
+      }
+      .search-box input {
+        background: transparent;
+        border: none;
+        color: var(--tool-text-bright);
+        font-family: var(--tool-font-ui);
+        font-size: 0.9rem;
+        outline: none;
+        width: 100%;
+      }
+      .search-box input::placeholder {
+        color: var(--tool-text-muted);
+      }
+
+      .type-filter-row {
+        display: flex;
+        gap: 0.3rem;
+      }
+      .pill-btn {
+        background: var(--tool-hover);
+        border: 1px solid var(--tool-border);
+        color: var(--tool-text-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 0.2rem 0.5rem;
+        border-radius: var(--tool-radius-sm);
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .pill-btn *,
+      .tab-btn * {
+        pointer-events: none;
+      }
+      .pill-btn:hover {
+        color: var(--tool-text-bright);
+      }
+      .pill-btn.active {
+        background: var(--tool-accent-glow);
+        border-color: var(--tool-accent);
+        color: var(--tool-accent);
+      }
+
+      .catalog-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .asset-card {
+        background: var(--tool-card);
+        border: 1px solid var(--tool-border);
+        border-radius: var(--tool-radius-md);
+        padding: 0.6rem;
+        display: flex;
+        gap: 0.75rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        position: relative;
+        overflow: hidden;
+      }
+      .asset-card:hover {
+        background: var(--tool-card-hover);
+        border-color: color-mix(in srgb, var(--tool-text-bright) 25%, transparent);
+        transform: translateY(-1px);
+      }
+      .asset-card.active {
+        background: var(--tool-card-active);
+        border-color: var(--tool-accent);
+        box-shadow: 0 0 16px var(--tool-accent-glow);
+      }
+      .asset-card.active::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: var(--tool-accent);
+      }
+
+      .asset-thumb {
+        width: 58px;
+        height: 58px;
+        border-radius: var(--tool-radius-sm);
+        object-fit: cover;
+        background: var(--tool-inset);
+        border: 1px solid var(--tool-border);
+        flex-shrink: 0;
+      }
+
+      .asset-meta-summary {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .asset-title {
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: var(--tool-text-bright);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 0.25rem;
+      }
+
+      .asset-badges {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+      }
+
+      .asset-tag {
+        font-size: 0.65rem;
+        font-family: var(--tool-font-mono);
+        padding: 0.1rem 0.35rem;
+        border-radius: 3px;
+        background: var(--tool-hover);
+        color: var(--tool-text-muted);
+        text-transform: uppercase;
+      }
+      .asset-tag.kit {
+        color: var(--tool-accent);
+        background: var(--tool-card-active);
+      }
+      .asset-tag.tris {
+        color: var(--tool-success);
+        background: color-mix(in srgb, var(--tool-success) 12%, transparent);
+      }
+      .asset-tag.maps {
+        color: var(--tool-info);
+        background: color-mix(in srgb, var(--tool-info) 12%, transparent);
+      }
+
+      /* Center Viewport */
+      main.kit-viewport-panel {
+        position: relative;
+        background: radial-gradient(circle at center, var(--tool-panel-solid) 0%, var(--tool-bg) 100%);
+        overflow: hidden;
+      }
+
+      canvas#InspectorCanvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        outline: none;
+      }
+
+      .viewport-overlay-hud {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      .hud-asset-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--tool-text-bright);
+        text-shadow: 0 2px 10px var(--tool-modal-overlay);
+      }
+      .hud-asset-subtitle {
+        font-size: 0.8rem;
+        color: var(--tool-accent);
+        font-family: var(--tool-font-mono);
+      }
+
+      .viewport-bottom-legend {
+        position: absolute;
+        bottom: 0.75rem;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--tool-panel);
+        border: 1px solid var(--tool-border);
+        backdrop-filter: blur(8px);
+        padding: 0.3rem 0.85rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-family: var(--tool-font-mono);
+        color: var(--tool-text-muted);
+        pointer-events: none;
+        z-index: 10;
+        white-space: nowrap;
+      }
+      .viewport-bottom-legend span {
+        color: var(--tool-accent);
+        font-weight: 700;
+      }
+
+      .loading-scrim {
+        position: absolute;
+        inset: 0;
+        background: var(--tool-modal-overlay);
+        backdrop-filter: blur(4px);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 20;
+        gap: 0.8rem;
+      }
+      .loading-spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--tool-accent-glow);
+        border-top-color: var(--tool-accent);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .loading-text {
+        font-size: 0.9rem;
+        font-family: var(--tool-font-mono);
+        color: var(--tool-accent);
+      }
+
+      /* Right Sidebar: Inspector */
+      aside.kit-metadata-panel {
+        background: var(--tool-panel-solid);
+        border-left: 1px solid var(--tool-border);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        padding: 1.25rem;
+        gap: 1.2rem;
+      }
+
+      .preview-hero-container {
+        width: 100%;
+        height: 180px;
+        border-radius: var(--tool-radius-md);
+        overflow: hidden;
+        border: 1px solid var(--tool-border);
+        background: var(--tool-inset);
+        position: relative;
+      }
+      .preview-hero-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .meta-header-box h2 {
+        font-size: 1.25rem;
+        color: var(--tool-text-bright);
+        line-height: 1.3;
+        margin-bottom: 0.2rem;
+      }
+      .meta-kit-id {
+        font-size: 0.75rem;
+        color: var(--tool-accent);
+        font-family: var(--tool-font-mono);
+        word-break: break-all;
+      }
+
+      .meta-badges-row {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+      }
+      .pill-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: var(--tool-radius-sm);
+        background: var(--tool-hover);
+        color: var(--tool-text);
+        border: 1px solid var(--tool-border);
+      }
+
+      .meta-desc {
+        font-size: 0.85rem;
+        line-height: 1.5;
+        color: var(--tool-text-muted);
+        background: var(--tool-inset);
+        padding: 0.75rem;
+        border-radius: var(--tool-radius-md);
+        border-left: 3px solid var(--tool-accent);
+      }
+
+      .specs-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.6rem;
+      }
+      .spec-cell {
+        background: var(--tool-hover);
+        border: 1px solid var(--tool-border);
+        padding: 0.5rem 0.65rem;
+        border-radius: var(--tool-radius-sm);
+      }
+      .spec-label {
+        font-size: 0.65rem;
+        color: var(--tool-text-muted);
+        text-transform: uppercase;
+        margin-bottom: 0.15rem;
+      }
+      .spec-val {
+        font-size: 0.85rem;
+        font-weight: 700;
+        font-family: var(--tool-font-mono);
+        color: var(--tool-text-bright);
+      }
+
+      .sockets-box {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+      .section-heading {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--tool-accent);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .socket-row {
+        background: var(--tool-inset);
+        border: 1px solid var(--tool-border);
+        border-radius: var(--tool-radius-sm);
+        padding: 0.45rem 0.6rem;
+        font-size: 0.78rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .socket-swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.35rem;
+      }
+
+      .code-snippet-box {
+        background: var(--tool-bg);
+        border: 1px solid var(--tool-border);
+        border-radius: var(--tool-radius-md);
+        padding: 0.65rem;
+        position: relative;
+      }
+      .snippet-pre {
+        font-family: var(--tool-font-mono);
+        font-size: 0.72rem;
+        color: var(--tool-info);
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 120px;
+        overflow-y: auto;
+      }
+
+      .btn-copy-snippet {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        background: var(--tool-hover);
+        border: 1px solid var(--tool-border);
+        color: var(--tool-text-bright);
+        padding: 0.2rem 0.45rem;
+        border-radius: 3px;
+        font-size: 0.68rem;
+        cursor: pointer;
+      }
+      .btn-copy-snippet:hover {
+        background: var(--tool-accent);
+        color: var(--tool-on-accent);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Top Header -->
+    <header class="kit-header">
+      <div class="header-left">
+        <div class="tool-title">
+          <span>Kit Inspector</span>
+          <span class="badge-tool">T-09</span>
+        </div>
+
+        <nav class="kit-tabs" id="kitTabs">
+          <button class="tab-btn active" data-kit="all">Alle Kits</button>
+          <button class="tab-btn" data-kit="bunker">Bunker</button>
+          <button class="tab-btn" data-kit="industrial">Industrial</button>
+        </nav>
+      </div>
+
+      <div class="viewport-toolbar">
+        <select class="select-preset" id="selectPreset" title="Beleuchtungs-Preset">
+          <option value="studio">☀️ Studio Neutral</option>
+          <option value="bunker">🏮 Bunker Kerosin</option>
+          <option value="cold">❄️ Bunker Kalt</option>
+        </select>
+        <button class="btn-icon-toggle active" id="btnTurntable" title="Turntable Rotation (R)">
+          🔄 Rotate
+        </button>
+        <button class="btn-icon-toggle" id="btnWireframe" title="Drahtgitter-Modus (W)">
+          🕸️ Wire
+        </button>
+        <button class="btn-icon-toggle active" id="btnSockets" title="Sockets Gizmos (S)">
+          💡 Sockets
+        </button>
+        <button class="btn-icon-toggle active" id="btnGrid" title="Bodenraster (G)">
+          📐 Grid
+        </button>
+        <button class="btn-icon-toggle" id="btnFocus" title="Fokus zentrieren (F)">
+          🎯 Focus
+        </button>
+        <button class="btn-icon-toggle" id="btnImportKit" title="Kit aus Ordner importieren (Cmd+O)">
+          📦 Import
+        </button>
+        <button class="btn-icon-toggle" id="btnExportKit" title="Aktives Kit als ZIP exportieren (Cmd+Shift+E)">
+          💾 Export
+        </button>
+        <button class="tool-close-btn" id="toolCloseBtn" title="Close Window" onclick="if (window.parent && window.parent !== window) { window.parent.postMessage({ type: 'close-tool' }, '*'); } try { window.close(); } catch(e) {}">✕</button>
+      </div>
+    </header>
+    <script>if (window.self !== window.top || window.opener) document.body.classList.add("in-window");</script>
+
+    <!-- Main Layout -->
+    <div class="kit-layout">
+      <!-- Left: Catalog & Search -->
+      <aside class="kit-catalog-panel">
+        <div class="catalog-search-row">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="searchInput" placeholder="Assets filtern (z. B. desk, lamp, concrete)..." />
+          </div>
+          <div class="type-filter-row">
+            <button class="pill-btn active" data-type="all">Alle (<span id="countAll">0</span>)</button>
+            <button class="pill-btn" data-type="prop">Props (<span id="countProps">0</span>)</button>
+            <button class="pill-btn" data-type="texture">PBR (<span id="countTextures">0</span>)</button>
+            <button class="pill-btn" data-type="decal">Decals (<span id="countDecals">0</span>)</button>
+          </div>
+        </div>
+
+        <div id="kitDropzone" style="margin: 0.5rem 0.75rem 0.25rem;"></div>
+
+        <div class="catalog-list" id="catalogList">
+          <!-- Dynamically populated cards -->
+        </div>
+      </aside>
+
+      <!-- Center: 3D Viewport -->
+      <main class="kit-viewport-panel">
+        <div class="viewport-overlay-hud">
+          <h1 class="hud-asset-title" id="hudTitle">Asset wählen</h1>
+          <div class="hud-asset-subtitle" id="hudSubtitle">Small World Machine Kit Registry</div>
+        </div>
+
+        <canvas id="InspectorCanvas"></canvas>
+
+        <div class="viewport-bottom-legend">
+          <span>[L-Drag]</span> Orbit &nbsp;•&nbsp; <span>[R-Drag / Wheel]</span> Pan/Zoom &nbsp;•&nbsp; <span>[F]</span> Focus &nbsp;•&nbsp; <span>[R]</span> Turntable &nbsp;•&nbsp; <span>[W]</span> Wireframe
+        </div>
+
+        <div class="loading-scrim" id="loadingScrim">
+          <div class="loading-spinner"></div>
+          <div class="loading-text" id="loadingText">Lade Asset...</div>
+        </div>
+      </main>
+
+      <!-- Right: Inspector & Metadata -->
+      <aside class="kit-metadata-panel" id="metaPanel">
+        <div class="preview-hero-container">
+          <img id="metaHeroImg" class="preview-hero-img" src="" alt="Vorschau" />
+        </div>
+
+        <div class="meta-header-box">
+          <h2 id="metaTitle">—</h2>
+          <div class="meta-kit-id" id="metaId">—</div>
+        </div>
+
+        <div class="meta-badges-row">
+          <span class="pill-badge" id="metaCategoryBadge">Category</span>
+          <span class="pill-badge" id="metaKitBadge">Kit</span>
+          <span class="pill-badge" id="metaLicenseBadge">CC0-1.0</span>
+          <span class="pill-badge" id="metaVersionBadge">v1.0.0</span>
+        </div>
+
+        <div class="meta-desc" id="metaDesc">
+          Wähle ein Asset aus dem linken Katalog, um seine 3D-Geometrie, Sockets, PBR-Texturen und Metadaten zu inspizieren.
+        </div>
+
+        <!-- Specs Grid for Props -->
+        <div id="propSpecsSection">
+          <div class="section-heading">Spezifikationen</div>
+          <div class="specs-grid" style="margin-top: 0.4rem;">
+            <div class="spec-cell">
+              <div class="spec-label">Dreiecke (Tris)</div>
+              <div class="spec-val" id="specTris">—</div>
+            </div>
+            <div class="spec-cell">
+              <div class="spec-label">Materialien</div>
+              <div class="spec-val" id="specMats">—</div>
+            </div>
+            <div class="spec-cell">
+              <div class="spec-label">Maße (B × H × T)</div>
+              <div class="spec-val" id="specDims">—</div>
+            </div>
+            <div class="spec-cell">
+              <div class="spec-label">Rec. Scale</div>
+              <div class="spec-val" id="specScale">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sockets Section -->
+        <div id="socketsSection" style="display: none;">
+          <div class="section-heading">
+            <span>Anbau-Sockets</span>
+            <span id="socketCountBadge" style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--accent);">0</span>
+          </div>
+          <div class="sockets-box" id="socketsList" style="margin-top: 0.4rem;"></div>
+        </div>
+
+        <!-- Textures Section -->
+        <div id="texturesSection" style="display: none;">
+          <div class="section-heading">Texturkanäle</div>
+          <div class="sockets-box" id="texturesList" style="margin-top: 0.4rem;"></div>
+        </div>
+
+        <!-- Code Snippet -->
+        <div>
+          <div class="section-heading">Deklarativer Level-Deskriptor</div>
+          <div class="code-snippet-box" style="margin-top: 0.4rem;">
+            <button class="btn-copy-snippet" id="btnCopySnippet">Copy JSON</button>
+            <pre class="snippet-pre" id="snippetPre">// Wähle ein Prop</pre>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Application Script -->
+    <script type="module">
+      import { KitInspectorApp } from "/packages/tools/src/kit-inspector/KitInspectorApp.ts";
+      import { RendererType } from "/packages/engine/src/enums/index.ts";
+      import {
+        DirectoryAssetSource,
+        FileAssetSource,
+        ToastManager,
+        ToolDropOverlay,
+        UniversalIngestDropzone,
+        ValidationReportModal,
+        bindToolShortcuts,
+      } from "/packages/tools/src/common/io/index.ts";
+
+      // Catalog Data State
+      let allAssets = [];
+      let activeKitFilter = "all";
+      let activeTypeFilter = "all";
+      let searchQuery = "";
+      let selectedAssetId = null;
+
+      const CUSTOM_KIT_TAB_ID = "__custom__";
+      const ioToasts = new ToastManager();
+
+      function matchesKitFilter(asset) {
+        if (activeKitFilter === "all") return true;
+        if (activeKitFilter === CUSTOM_KIT_TAB_ID) {
+          return app.hasCustomKit && asset.kitId === app.customKitId;
+        }
+        return asset.kitId === activeKitFilter;
+      }
+
+      const scrim = document.getElementById("loadingScrim");
+      const loadingText = document.getElementById("loadingText");
+      const hudTitle = document.getElementById("hudTitle");
+      const hudSubtitle = document.getElementById("hudSubtitle");
+
+      // Initialize App
+      const app = new KitInspectorApp({
+        canvasId: "InspectorCanvas",
+        rendererType: RendererType.BEST,
+        onLoadingStateChange: (isLoading, msg) => {
+          if (scrim && loadingText) {
+            scrim.style.display = isLoading ? "flex" : "none";
+            loadingText.textContent = msg || "Lade Asset...";
+          }
+        },
+        onAssetLoaded: (info) => {
+          updateInspectorMetadata(info);
+          hudTitle.textContent = info.name;
+          hudSubtitle.textContent = `${info.id} • ${info.category.toUpperCase()}`;
+        },
+        onError: (err) => {
+          console.error("[KitInspector] Error:", err);
+          ioToasts.error(`Fehler beim Laden des Assets: ${err.message}`);
+        },
+      });
+
+      window.kitInspectorApp = app;
+      await app.start();
+
+      // UI Controls Binding
+      const btnTurntable = document.getElementById("btnTurntable");
+      const btnWireframe = document.getElementById("btnWireframe");
+      const btnSockets = document.getElementById("btnSockets");
+      const btnGrid = document.getElementById("btnGrid");
+      const btnFocus = document.getElementById("btnFocus");
+      const selectPreset = document.getElementById("selectPreset");
+
+      btnTurntable.addEventListener("click", () => {
+        const active = !app.isTurntable();
+        app.setTurntable(active);
+        btnTurntable.classList.toggle("active", active);
+      });
+
+      btnWireframe.addEventListener("click", () => {
+        const active = !app.isWireframe();
+        app.setWireframe(active);
+        btnWireframe.classList.toggle("active", active);
+      });
+
+      btnSockets.addEventListener("click", () => {
+        const active = !app.areSocketsVisible();
+        app.setSocketsVisible(active);
+        btnSockets.classList.toggle("active", active);
+      });
+
+      btnGrid.addEventListener("click", () => {
+        const active = !app.isGridVisible();
+        app.setGridVisible(active);
+        btnGrid.classList.toggle("active", active);
+      });
+
+      btnFocus.addEventListener("click", () => {
+        app.focusCamera();
+      });
+
+      // Unified I/O: import / export entry points (button, dropzone, drop overlay, shortcuts)
+      document.getElementById("btnImportKit").addEventListener("click", pickKitFolder);
+      document.getElementById("btnExportKit").addEventListener("click", exportKit);
+
+      const kitDropEl = document.getElementById("kitDropzone");
+      if (kitDropEl) {
+        new UniversalIngestDropzone({
+          container: kitDropEl,
+          label: "Kit ablegen",
+          supportedKinds: ["archive", "gltf", "files"],
+          enableWindowDrop: false,
+          enablePaste: true,
+          onIngest: async (result) => {
+            if (result.kind === "archive") {
+              await importKit(
+                new FileAssetSource(
+                  result.files.map((item) => ({
+                    path: item.path,
+                    file: new File([item.blob], item.name, { type: item.mimeType }),
+                  })),
+                  { name: result.name },
+                ),
+              );
+            } else if (result.kind === "gltf") {
+              await importKit(result.source);
+            } else if (result.kind === "files") {
+              await importKit(
+                new FileAssetSource(
+                  result.files.map((file) => ({ path: file.webkitRelativePath || file.name, file })),
+                  { name: result.name },
+                ),
+              );
+            }
+          },
+          onError: (err) => ioToasts.error(`Import fehlgeschlagen: ${err.message}`),
+        });
+      }
+
+      new ToolDropOverlay({
+        label: "Kit-Ordner oder ZIP hier ablegen",
+        onSource: (source) => importKit(source),
+        onError: (err) => ioToasts.error(`Drop fehlgeschlagen: ${err.message}`),
+      });
+
+      bindToolShortcuts({
+        open: pickKitFolder,
+        exportAll: exportKit,
+      });
+
+      selectPreset.addEventListener("change", (e) => {
+        app.setLightingPreset(e.target.value);
+      });
+
+      // Pushes items, textures and decals of a manifest into the catalog.
+      function pushManifestAssets(kitId, manifest, assets, isCustom, basePath) {
+        if (manifest.items) {
+          for (const item of manifest.items) {
+            assets.push({
+              type: "prop",
+              id: item.id,
+              kitId,
+              name: item.name,
+              category: item.category,
+              preview: `${basePath}${kitId}/${item.preview}`,
+              raw: item,
+              custom: isCustom,
+            });
+          }
+        }
+
+        if (manifest.textures) {
+          for (const tex of manifest.textures) {
+            const albedoMap = tex.maps.find(m => m.includes("albedo") || m.includes("diffuse")) || tex.maps[0];
+            const texSlug = tex.id.includes("/") ? tex.id.split("/").pop() : tex.id;
+            assets.push({
+              type: "texture",
+              id: tex.id,
+              kitId,
+              name: tex.name,
+              category: tex.category || "surfaces",
+              preview: albedoMap ? `${basePath}${kitId}/textures/${texSlug}/${albedoMap}` : "",
+              raw: tex,
+              custom: isCustom,
+            });
+          }
+        }
+
+        if (manifest.decals) {
+          for (const decal of manifest.decals) {
+            assets.push({
+              type: "decal",
+              id: decal.id,
+              kitId,
+              name: decal.name,
+              category: "decals",
+              preview: `${basePath}${kitId}/decals/${decal.file}`,
+              raw: decal,
+              custom: isCustom,
+            });
+          }
+        }
+      }
+
+      // --- Unified I/O: Kit Import / Export (AP-3a) ---
+
+      async function importKit(source) {
+        try {
+          const result = await app.mountCustomKit(source);
+          if (!result.ok) {
+            if (result.report.issues.length > 0) {
+              await ValidationReportModal.show(result.report, `Kit '${result.name}' nicht gültig`);
+            }
+            source.dispose?.();
+            ioToasts.error(`Kit '${result.name}' hat kein gültiges manifest (kit.json).`);
+            return;
+          }
+          if (result.report.issues.length > 0) {
+            await ValidationReportModal.show(result.report, `Kit '${result.name}' importiert — Befundliste`);
+          }
+          syncCustomTab();
+          await loadAllKits();
+          ioToasts.success(`Kit '${result.name}' importiert.`);
+        } catch (err) {
+          ioToasts.error(`Import fehlgeschlagen: ${err.message}`);
+        }
+      }
+
+      async function pickKitFolder() {
+        const source = await DirectoryAssetSource.pick();
+        if (source) await importKit(source);
+      }
+
+      async function exportKit() {
+        const ok = await app.exportActiveKit();
+        if (ok) ioToasts.success("Kit als ZIP exportiert.");
+        else ioToasts.info("Kein importiertes Kit aktiv — zuerst einen Ordner importieren.");
+      }
+
+      function syncCustomTab() {
+        const tabs = document.getElementById("kitTabs");
+        const existing = tabs.querySelector(`[data-kit="${CUSTOM_KIT_TAB_ID}"]`);
+        if (app.hasCustomKit) {
+          if (!existing) {
+            const btn = document.createElement("button");
+            btn.className = "tab-btn";
+            btn.dataset.kit = CUSTOM_KIT_TAB_ID;
+            btn.textContent = `★ ${app.customKitName || app.customKitId}`;
+            btn.addEventListener("click", () => {
+              document.querySelectorAll("#kitTabs .tab-btn").forEach(b => b.classList.remove("active"));
+              btn.classList.add("active");
+              activeKitFilter = CUSTOM_KIT_TAB_ID;
+              renderCatalog();
+            });
+            tabs.appendChild(btn);
+          }
+        } else if (existing) {
+          existing.remove();
+        }
+      }
+
+      // Load Manifests
+      async function loadAllKits() {
+        const kitsToLoad = ["bunker", "industrial"];
+        const assets = [];
+
+        for (const kitId of kitsToLoad) {
+          try {
+            const manifest = await app.presetRegistry.getKitManifest(kitId);
+            
+            pushManifestAssets(kitId, manifest, assets, false, app.presetRegistry.basePath);
+          } catch (err) {
+            console.warn(`[KitInspector] Could not load kit '${kitId}':`, err);
+          }
+        }
+
+        // Custom kit (imported via unified I/O)
+        if (app.hasCustomKit && app.customKitId) {
+          const kitId = app.customKitId;
+          try {
+            const manifest = await app.kitRegistry.getKitManifest(kitId);
+            pushManifestAssets(kitId, manifest, assets, true, app.kitRegistry.basePath);
+          } catch (err) {
+            console.warn(`[KitInspector] Could not load custom kit '${kitId}':`, err);
+          }
+        }
+
+        allAssets = assets;
+        updateCounts();
+        renderCatalog();
+
+        // Auto-select first asset
+        if (allAssets.length > 0) {
+          selectAsset(allAssets[0]);
+        }
+      }
+
+      function updateCounts() {
+        const kitAssets = allAssets.filter(a => {
+          if (!matchesKitFilter(a)) return false;
+          if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            const matchName = a.name.toLowerCase().includes(q);
+            const matchId = a.id.toLowerCase().includes(q);
+            const matchCat = a.category.toLowerCase().includes(q);
+            if (!matchName && !matchId && !matchCat) return false;
+          }
+          return true;
+        });
+
+        const props = kitAssets.filter(a => a.type === "prop").length;
+        const textures = kitAssets.filter(a => a.type === "texture").length;
+        const decals = kitAssets.filter(a => a.type === "decal").length;
+
+        document.getElementById("countAll").textContent = kitAssets.length;
+        document.getElementById("countProps").textContent = props;
+        document.getElementById("countTextures").textContent = textures;
+        document.getElementById("countDecals").textContent = decals;
+      }
+
+      function renderCatalog() {
+        updateCounts();
+
+        const list = document.getElementById("catalogList");
+        list.innerHTML = "";
+
+        const filtered = allAssets.filter(asset => {
+          if (!matchesKitFilter(asset)) return false;
+          if (activeTypeFilter !== "all" && asset.type !== activeTypeFilter) return false;
+          if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            const matchName = asset.name.toLowerCase().includes(q);
+            const matchId = asset.id.toLowerCase().includes(q);
+            const matchCat = asset.category.toLowerCase().includes(q);
+            if (!matchName && !matchId && !matchCat) return false;
+          }
+          return true;
+        });
+
+        if (filtered.length === 0) {
+          const empty = document.createElement("div");
+          empty.style.cssText = "padding: 2rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;";
+          empty.textContent = "Keine passenden Assets gefunden.";
+          list.appendChild(empty);
+          return;
+        }
+
+        for (const asset of filtered) {
+          const card = document.createElement("div");
+          card.className = `asset-card ${asset.id === selectedAssetId ? "active" : ""}`;
+          card.dataset.id = asset.id;
+
+          const img = document.createElement("img");
+          img.className = "asset-thumb";
+          img.alt = asset.name;
+          img.loading = "lazy";
+          if (asset.custom) {
+            app.resolveAssetUrl(asset.preview || "").then((url) => {
+              img.src = url;
+            });
+          } else {
+            img.src = asset.preview || "/favicon.webp";
+          }
+
+          const metaDiv = document.createElement("div");
+          metaDiv.className = "asset-meta-summary";
+
+          const title = document.createElement("div");
+          title.className = "asset-title";
+          title.textContent = asset.name;
+
+          const badges = document.createElement("div");
+          badges.className = "asset-badges";
+
+          const kitTag = document.createElement("span");
+          kitTag.className = "asset-tag kit";
+          kitTag.textContent = asset.kitId;
+          badges.appendChild(kitTag);
+
+          const catTag = document.createElement("span");
+          catTag.className = "asset-tag";
+          catTag.textContent = asset.category;
+          badges.appendChild(catTag);
+
+          if (asset.type === "texture") {
+            const mapsTag = document.createElement("span");
+            mapsTag.className = "asset-tag maps";
+            mapsTag.textContent = `${asset.raw.maps.length} Maps`;
+            badges.appendChild(mapsTag);
+          } else if (asset.type === "decal") {
+            const decTag = document.createElement("span");
+            decTag.className = "asset-tag tris";
+            decTag.textContent = "PNG";
+            badges.appendChild(decTag);
+          }
+
+          metaDiv.appendChild(title);
+          metaDiv.appendChild(badges);
+
+          card.appendChild(img);
+          card.appendChild(metaDiv);
+
+          card.addEventListener("click", () => selectAsset(asset));
+          list.appendChild(card);
+        }
+      }
+
+      async function selectAsset(asset) {
+        selectedAssetId = asset.id;
+
+        // Highlight card
+        document.querySelectorAll(".asset-card").forEach(c => {
+          c.classList.toggle("active", c.dataset.id === asset.id);
+        });
+
+        if (asset.type === "prop") {
+          await app.inspectProp(asset.id);
+        } else if (asset.type === "texture") {
+          await app.inspectPbrTexture(asset.kitId, asset.raw);
+        } else if (asset.type === "decal") {
+          await app.inspectDecal(asset.kitId, asset.raw);
+        }
+      }
+
+      function updateInspectorMetadata(info) {
+        const hero = document.getElementById("metaHeroImg");
+        if (app.hasCustomKit && info.kitId === app.customKitId && info.previewUrl) {
+          app.resolveAssetUrl(info.previewUrl).then((url) => {
+            hero.src = url;
+          });
+        } else {
+          hero.src = info.previewUrl || "";
+        }
+        document.getElementById("metaTitle").textContent = info.name;
+        document.getElementById("metaId").textContent = info.id;
+
+        document.getElementById("metaCategoryBadge").textContent = info.category.toUpperCase();
+        document.getElementById("metaKitBadge").textContent = info.kitId.toUpperCase();
+        document.getElementById("metaLicenseBadge").textContent = info.license;
+        document.getElementById("metaVersionBadge").textContent = `v${info.version}`;
+
+        document.getElementById("metaDesc").textContent = info.description;
+
+        const propSpecs = document.getElementById("propSpecsSection");
+        const socketsSec = document.getElementById("socketsSection");
+        const texturesSec = document.getElementById("texturesSection");
+
+        if (info.type === "prop") {
+          propSpecs.style.display = "block";
+          document.getElementById("specTris").textContent = info.triangles ? info.triangles.toLocaleString("de-DE") : "—";
+          document.getElementById("specMats").textContent = info.materialsCount ?? "1";
+          
+          if (info.dimensions) {
+            const d = info.dimensions;
+            document.getElementById("specDims").textContent = `${d.width.toFixed(2)} × ${d.height.toFixed(2)} × ${d.depth.toFixed(2)} m`;
+          } else {
+            document.getElementById("specDims").textContent = "—";
+          }
+          document.getElementById("specScale").textContent = info.recommendedScale ? `${info.recommendedScale}×` : "1.0×";
+
+          // Sockets
+          if (info.sockets && info.sockets.length > 0) {
+            socketsSec.style.display = "block";
+            document.getElementById("socketCountBadge").textContent = info.sockets.length;
+            const sockList = document.getElementById("socketsList");
+            sockList.innerHTML = "";
+
+            for (const s of info.sockets) {
+              const row = document.createElement("div");
+              row.className = "socket-row";
+              const col = s.recommendedLight?.color || "#ffd273";
+              row.innerHTML = `
+                <div>
+                  <span class="socket-swatch" style="background: ${col}"></span>
+                  <strong>${s.name}</strong>
+                  <span style="opacity: 0.6; font-size: 0.7rem; margin-left: 0.3rem;">[${s.position.map(n => n.toFixed(2)).join(", ")}]</span>
+                </div>
+                <span style="color: var(--accent); font-family: var(--font-mono); font-size: 0.72rem;">${s.recommendedLight?.type || "Socket"}</span>
+              `;
+              sockList.appendChild(row);
+            }
+          } else {
+            socketsSec.style.display = "none";
+          }
+
+          texturesSec.style.display = "none";
+
+          // Snippet
+          const slug = info.id.split("/")[1] || "prop";
+          const pascalId = slug.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join("");
+          const snippet = JSON.stringify({
+            id: pascalId,
+            kitProp: info.id,
+            position: [0, 0, 0],
+            scale: info.recommendedScale ?? 1.0,
+          }, null, 2);
+          document.getElementById("snippetPre").textContent = snippet;
+        } else if (info.type === "texture") {
+          propSpecs.style.display = "none";
+          socketsSec.style.display = "none";
+          texturesSec.style.display = "block";
+
+          const texList = document.getElementById("texturesList");
+          texList.innerHTML = "";
+          if (info.textureMaps) {
+            for (const mapPath of info.textureMaps) {
+              const fileName = mapPath.split("/").pop();
+              const row = document.createElement("div");
+              row.className = "socket-row";
+              const nameSpan = document.createElement("span");
+              nameSpan.textContent = `📄 ${fileName}`;
+              row.appendChild(nameSpan);
+              const link = document.createElement("a");
+              link.href = mapPath;
+              link.target = "_blank";
+              link.style.cssText = "color: var(--cyan); text-decoration: none; font-size: 0.7rem;";
+              link.textContent = "Öffnen ↗";
+              if (app.hasCustomKit) {
+                app.resolveAssetUrl(mapPath).then((url) => {
+                  link.href = url;
+                });
+              }
+              row.appendChild(link);
+              texList.appendChild(row);
+            }
+          }
+
+          document.getElementById("snippetPre").textContent = `// Textursatz '${info.id}'\n// Maps: ${info.textureMaps?.length || 0} Kanäle`;
+        } else {
+          // Decal
+          propSpecs.style.display = "none";
+          socketsSec.style.display = "none";
+          texturesSec.style.display = "none";
+          document.getElementById("snippetPre").textContent = `// Decal '${info.id}'\n// File: ${info.decalFile}`;
+        }
+      }
+
+      // Copy Snippet Button
+      document.getElementById("btnCopySnippet").addEventListener("click", () => {
+        const text = document.getElementById("snippetPre").textContent;
+        navigator.clipboard.writeText(text).then(() => {
+          const btn = document.getElementById("btnCopySnippet");
+          btn.textContent = "Kopiert! ✓";
+          setTimeout(() => btn.textContent = "Copy JSON", 1500);
+        });
+      });
+
+      // Filter Tabs
+      document.querySelectorAll("#kitTabs .tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll("#kitTabs .tab-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          activeKitFilter = btn.dataset.kit || "all";
+          renderCatalog();
+        });
+      });
+
+      // Type Pills
+      document.querySelectorAll(".type-filter-row .pill-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".type-filter-row .pill-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          activeTypeFilter = btn.dataset.type || "all";
+          renderCatalog();
+        });
+      });
+
+      // Search Filter
+      document.getElementById("searchInput").addEventListener("input", (e) => {
+        searchQuery = e.target.value.trim();
+        renderCatalog();
+      });
+
+      // Keyboard navigation
+      window.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+          e.preventDefault();
+          document.getElementById("searchInput").focus();
+        }
+      });
+
+      await loadAllKits();
+    </script>
+  </body>
+</html>

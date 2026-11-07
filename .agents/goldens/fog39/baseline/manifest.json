@@ -1,0 +1,78 @@
+[
+  {
+    "poolKey": "fog39-nave",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "fog39-nave__main.png",
+    "meta": {
+      "poolKey": "fog39-nave",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 61.6133,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "16611f4e1e2b1c4ba9f760b1bc117fc33abbd3a016fdf70fd23f760b1b1f076d",
+    "ok": true
+  },
+  {
+    "poolKey": "fog39-altar",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "fog39-altar__main.png",
+    "meta": {
+      "poolKey": "fog39-altar",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 43.2797,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "31864c193c5c088ea55047d8911f88d24cb10b265f7173b988d6852e4888c702",
+    "ok": true
+  },
+  {
+    "poolKey": "fog39-portal",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "fog39-portal__main.png",
+    "meta": {
+      "poolKey": "fog39-portal",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 31.0779,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "663337317da24c15ceda32ffad743b256f5b15660399bd4044b2fc4ccbc90a24",
+    "ok": true
+  },
+  {
+    "poolKey": "fog39-carved",
+    "view": "main",
+    "backend": "WEB_GL2",
+    "file": "fog39-carved__main.png",
+    "meta": {
+      "poolKey": "fog39-carved",
+      "view": "main",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 40.0222,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "29c5dc30bc844286b4075b3eb4ca1fd479e95e6c0d5ec4f7cc4f2b1437abf0dd",
+    "ok": true
+  }
+]

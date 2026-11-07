@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://small-world-machine.dev/schemas/level.schema.json",
+  "title": "Small World Machine Declarative Level Descriptor",
+  "description": "Schema for declarative level manifests defining prop placement, lighting, hotspots, and environment surfaces (ADR 0020). Validated by LevelValidation.test.ts.",
+  "type": "object",
+  "required": ["id", "name", "version", "schemaVersion", "props"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "type": "string",
+      "description": "Unique level identifier (e.g. 'room1', 'room2').",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version of the level descriptor format (ADR 0041)."
+    },
+    "description": { "type": "string" },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "surfaces": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/surface" }
+        }
+      }
+    },
+    "props": {
+      "type": "array",
+      "description": "Kit props instantiated in the level.",
+      "items": { "$ref": "#/$defs/propPlacement" }
+    },
+    "decals": {
+      "type": "array",
+      "description": "Box-projected decals (ADR 0029) referencing kit decals.",
+      "items": { "$ref": "#/$defs/decalPlacement" }
+    },
+    "lights": {
+      "type": "array",
+      "description": "Free or narrative scene lights not tied to a single prop socket.",
+      "items": { "$ref": "#/$defs/light" }
+    },
+    "hotspots": {
+      "type": "array",
+      "description": "Interactive point-and-click or proximity inspection triggers.",
+      "items": { "$ref": "#/$defs/hotspot" }
+    },
+    "stageZone": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "displayName": { "type": "string" },
+        "points": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["u", "v"],
+            "additionalProperties": false,
+            "properties": {
+              "u": { "type": "number" },
+              "v": { "type": "number" },
+              "scale": { "type": "number" }
+            }
+          }
+        },
+        "projection": {
+          "type": "object",
+          "required": ["mode"],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "type": "string", "enum": ["flat-plane", "ground-plane", "custom"] },
+            "width": { "type": "number" },
+            "height": { "type": "number" },
+            "depth": { "type": "number" },
+            "z": { "type": "number" },
+            "y": { "type": "number" },
+            "centerY": { "type": "number" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "vec3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number" }
+    },
+    "vec2": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "number" }
+    },
+    "decalPlacement": {
+      "type": "object",
+      "required": ["id", "kitDecal"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kitDecal": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*/[a-z][a-z0-9_]*$",
+          "description": "Namespaced kit decal id, e.g. 'bunker/sign_room1'."
+        },
+        "position": { "$ref": "#/$defs/vec3" },
+        "rotation": { "$ref": "#/$defs/vec3" },
+        "size": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number", "exclusiveMinimum": 0 }
+        },
+        "fade": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "angleStart": { "type": "number", "minimum": 0, "maximum": 90 },
+            "angleEnd": { "type": "number", "minimum": 0, "maximum": 90 },
+            "edge": { "type": "number", "minimum": 0, "maximum": 0.5 }
+          }
+        },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "priority": { "type": "integer" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "parent": { "type": "string", "minLength": 1 },
+        "socket": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of a socket on the parent prop (meta.sockets); position and rotation are then offsets local to it."
+        }
+      },
+      "dependentRequired": { "socket": ["parent"] }
+    },
+    "propPlacement": {
+      "type": "object",
+      "required": ["id", "kitProp"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kitProp": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*/[a-z][a-z0-9_]*$"
+        },
+        "position": { "$ref": "#/$defs/vec3" },
+        "rotation": { "$ref": "#/$defs/vec3" },
+        "scale": {
+          "oneOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "$ref": "#/$defs/vec3" }
+          ]
+        },
+        "lightOverrides": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "boolean", "const": false },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "type": { "type": "string" },
+                  "color": { "type": "string" },
+                  "intensity": { "type": "number" },
+                  "distance": { "type": "number" }
+                }
+              }
+            ]
+          }
+        },
+        "materialOverrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "roughness": { "type": "number", "minimum": 0, "maximum": 1 },
+            "metallic": { "type": "number", "minimum": 0, "maximum": 1 },
+            "emissiveIntensity": { "type": "number", "minimum": 0 },
+            "emissiveColor": { "type": "string" }
+          }
+        }
+      }
+    },
+    "surface": {
+      "type": "object",
+      "required": ["name", "geometry"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "geometry": { "type": "string", "enum": ["cube", "plane", "cylinder"] },
+        "size": { "$ref": "#/$defs/vec3" },
+        "position": { "$ref": "#/$defs/vec3" },
+        "rotation": { "$ref": "#/$defs/vec3" },
+        "material": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "textureSet": { "type": "string" },
+            "repeat": { "$ref": "#/$defs/vec2" },
+            "color": { "type": "string" },
+            "roughness": { "type": "number", "minimum": 0, "maximum": 1 },
+            "metallic": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+    "light": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "enum": ["spot", "point", "directional", "ambient"] },
+        "color": { "type": "string" },
+        "intensity": { "type": "number" },
+        "distance": { "type": "number" },
+        "position": { "$ref": "#/$defs/vec3" },
+        "target": { "$ref": "#/$defs/vec3" },
+        "direction": { "$ref": "#/$defs/vec3" },
+        "angle": { "type": "number" },
+        "penumbra": { "type": "number" },
+        "decay": { "type": "number" }
+      }
+    },
+    "hotspot": {
+      "type": "object",
+      "required": ["id", "name", "position", "promptText"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "position": { "$ref": "#/$defs/vec3" },
+        "interactionRadius": { "type": "number", "minimum": 0 },
+        "promptText": { "type": "string", "minLength": 1 },
+        "monologueTitle": { "type": "string" },
+        "monologueText": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "action": { "type": "string" }
+      }
+    }
+  }
+}

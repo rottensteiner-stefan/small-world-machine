@@ -1,0 +1,29 @@
+precision highp float;
+
+attribute vec3 a_position;
+attribute vec4 a_color;
+
+uniform mat4 u_vp;
+uniform mat4 u_model;
+uniform float u_time;
+
+// u_matParam4: [waveSpeed, waveAmount, waveHeight, unused]
+uniform vec4 u_matParam4;
+
+varying vec3 v_worldPos;
+varying vec4 v_color;
+
+void main() {
+    // Unity's _Time.z is 2 * t.
+    float timeZ = u_time * 2.0;
+
+    // Wave movement multiplied by the red vertex color (object-space X*Z diagonal).
+    vec4 localPos = vec4(a_position, 1.0);
+    localPos.y += sin(timeZ * u_matParam4.x + (a_position.x * a_position.z * u_matParam4.y))
+        * u_matParam4.z * a_color.r;
+
+    vec4 worldPos = u_model * localPos;
+    v_worldPos = worldPos.xyz;
+    v_color = a_color;
+    gl_Position = u_vp * worldPos;
+}

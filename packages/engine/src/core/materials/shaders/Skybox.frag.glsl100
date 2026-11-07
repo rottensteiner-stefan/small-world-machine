@@ -1,0 +1,12 @@
+precision highp float;
+
+varying vec3 v_uvw;
+uniform samplerCube u_skybox;
+uniform vec4 u_color;
+
+void main() {
+    // G05 tier note: WebGL1 has no u_exposure uniform anywhere (S5 -- its forward chain is
+    // gamma-tuned without exposure), so the skybox is NOT exposure-scaled here. This matches every
+    // other WebGL1 object and is the documented GL1 limitation, not a divergence.
+    gl_FragColor = textureCube(u_skybox, v_uvw) * u_color;
+}

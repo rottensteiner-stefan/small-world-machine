@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Showcase 24 – The Shader Gallery – Concept Dossier</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --fg: #e2e8f0;
+    --muted: #8492a6;
+    --card: #12161f;
+    --card2: #0f131b;
+    --border: #232b3a;
+    --accent: #38bdf8;
+    --accent2: #a855f7;
+    --ok: #22e655;
+    --warn: #ffb020;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px 80px;
+    background:
+      radial-gradient(1200px 600px at 70% -10%, rgba(56,189,248,0.10), transparent 60%),
+      radial-gradient(900px 500px at 10% 110%, rgba(168,85,247,0.10), transparent 60%),
+      var(--bg);
+    color: var(--fg);
+    font: 15px/1.7 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 940px; margin: 0 auto; }
+  h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; color: #fff; }
+  p.lead { font-size: 17px; color: var(--muted); margin: 0 0 30px; }
+  h2 {
+    font-size: 19px; font-weight: 700; margin: 42px 0 14px; color: var(--accent);
+    border-bottom: 1px solid var(--border); padding-bottom: 8px;
+  }
+  h3 { font-size: 15px; margin: 22px 0 8px; color: #fff; }
+  p { margin: 10px 0; }
+  code {
+    background: #0a0d13; border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 6px; font-size: 13px; color: #9fd0ff;
+  }
+  .card {
+    background: linear-gradient(180deg, var(--card), var(--card2));
+    border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 14px 0; }
+  .tile { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .tile h3 { margin-top: 0; }
+  .tag {
+    display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .04em;
+    padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted);
+    margin: 2px 4px 2px 0;
+  }
+  .tag.webgl2 { color: var(--ok); border-color: rgba(34,230,85,.4); }
+  .tag.webgpu { color: #38bdf8; border-color: rgba(56,189,248,.4); }
+  .tag.trick { color: var(--warn); border-color: rgba(255,176,32,.45); }
+  ul { margin: 8px 0 8px 20px; padding: 0; }
+  li { margin: 5px 0; }
+  kbd {
+    background: #0a0d13; border: 1px solid #33415a; border-bottom-width: 2px; border-radius: 5px;
+    padding: 1px 7px; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: #cbd8ec;
+  }
+  .warn-block {
+    background: rgba(255,176,32,.06); border: 1px solid rgba(255,176,32,.35); border-radius: 10px;
+    padding: 14px 18px; margin: 16px 0;
+  }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>The Shader Gallery</h1>
+  <p class="lead">Showcase 24 — a “planetarium of shaders”: The observer stands inside a
+  sphere and looks at monitors fitted to the curvature of the sphere’s inner surface.</p>
+
+  <div>
+    <span class="tag webgl2">WebGL2 · Shadertoy / GLSLSandbox (GLSL)</span>
+    <span class="tag webgpu">WebGPU · ComputeToys (WGSL)</span>
+    <span class="tag trick">optical trick · observer at the inner wall</span>
+  </div>
+
+  <h2>The Concept</h2>
+  <p>The original idea of Showcase 24: An observer stands <strong>inside a sphere</strong>.
+  All around, on the inside of the sphere’s surface, hang several “monitors”, each running a
+  different shader — an immersive tour through the engine’s shader collection, presented
+  like a domed planetarium gallery.</p>
+  <p>Each monitor is <strong>geometrically fitted to the sphere’s inner surface</strong>: Its plane geometry is
+  bent along the sphere by <code>ScreenCurvatureBehavior</code>, so at rest it lies exactly on the
+  line of the wireframe reference sphere — not as a flat image, but as part of the surface.</p>
+
+  <div class="grid">
+    <div class="tile">
+      <h3>VR-like Environment</h3>
+      <p>24 monitors in three rings (+35°/0°/−35°), spread over 360°. You stand <em>in</em> the
+      gallery and turn through a full 360° with mouselook.</p>
+    </div>
+    <div class="tile">
+      <h3>Focus Mode</h3>
+      <p>Clicking a monitor zooms in and flattens it for reading; clicking empty space or
+      <kbd>Esc</kbd> returns to the start position and curves it back onto the sphere.</p>
+    </div>
+    <div class="tile">
+      <h3>Backend Showdown</h3>
+      <p>WebGL2 shows GLSL shaders (Shadertoy/GLSLSandbox), WebGPU the WGSL counterparts (ComputeToys).
+      Layout and geometry are identical — only the shader source differs.</p>
+    </div>
+  </div>
+
+  <h2>The Optical Trick</h2>
+  <div class="warn-block">
+    <strong>Why the curvature becomes visible:</strong> A monitor 3&nbsp;units wide on a
+    sphere of radius 10 sags only ~0.2 units at the edges — invisible from 10+ units away.
+    The solution is <em>geometric</em>: The sphere is made smaller (radius 5.5) and the
+    observer stands <strong>not in the centre</strong>, but with their back close to the inner wall.
+    This way the surrounding monitors are seen from very close and strongly foreshortened
+    in perspective — their curvature unmistakably follows the lines of the wireframe model.
+  </div>
+  <p>This is the core detail of the staging (<code>OBSERVER_BASE</code> in <code>showcase.ts</code>): The viewer’s
+  position decides whether the geometry “fitted” to the sphere works as an illusion or
+  not. An eccentric point inside the sphere is the only honest way to get there — the
+  curvature itself is not the spectacle, the perspective on it is.</p>
+
+  <h2>Interaction</h2>
+  <ul>
+    <li><kbd>Mouse</kbd> — 360° mouselook (the observer stays fixed at the inner wall)</li>
+    <li><kbd>Click on monitor</kbd> — fly in, flatten the monitor (reading mode)</li>
+    <li><kbd>Click on empty space</kbd> / <kbd>Esc</kbd> — back to the inner wall, the monitor curves again</li>
+  </ul>
+
+  <h2>Implementation Notes / Architecture</h2>
+  <ul>
+    <li><code>GALLERY_RADIUS = 5.5</code> — gallery sphere; every monitor is bent onto exactly this sphere.</li>
+    <li><code>WIREFRAME_RADIUS = GALLERY_RADIUS + 0.03</code> — the wireframe reference sphere sits a
+    hair outside the monitor surfaces so edges and grid lines do not overdraw each other (z-fighting avoidance).</li>
+    <li><strong>True grid curvature instead of simple bending:</strong> Every monitor is a real
+    sphere patch. Its <em>left/right edge runs along a line of longitude</em> (meridian,
+    constant θ), its <em>top/bottom edge along a line of latitude</em> (parallel,
+    constant φ) — exactly on the line of the wireframe model (<code>ScreenCurvatureBehavior</code>).
+    At <code>curvature 1</code> all vertices lie on the sphere, at <code>0</code> in the flat
+    tangent plane (reading mode on click).</li>
+    <li>Orientation via an explicit basis (Matrix4→Quaternion): local <code>+X</code> = latitude,
+    <code>+Y</code> = longitude tangent, <code>+Z</code> = toward the sphere centre. Verified empirically with an engine probe.</li>
+    <li>Quality hook <code>window.__showcase24.report()</code> returns, per monitor, the orientation
+    dot products, a bend-probe vertex and the observer distances — for reproducible audits.</li>
+    <li>Interaction via raycaster on the (collidable) monitor objects; focus and zoom logic
+    unchanged from the earlier version.</li>
+  </ul>
+
+  <h2>Aesthetics &amp; Tone</h2>
+  <p>Dark, technical look: the blue wireframe sphere as the gallery’s “architecture”, the glowing
+  animated shader monitors as the scene’s only light sources. Deliberately sparse lighting
+  (directional + ambient only for surface detail) — the focus is entirely on the shaders.</p>
+
+  <h2>References</h2>
+  <p>Details &amp; change history: <code>docs/log.md</code>. Source code: <code>showcase.ts</code>.</p>
+
+</main>
+</body>
+</html>

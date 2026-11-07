@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../../schemas/prop-meta.schema.json",
+  "id": "industrial/barrel_chemical_blue",
+  "name": "Corrugated Chemical Steel Barrel (Blue)",
+  "category": "props",
+  "kit": "industrial",
+  "version": "1.0.0",
+  "description": "Weathered industrial 200L steel drum with two 3-rib corrugated bands, dark teal-blue enamel paint, flammable red ADR Class 3 hazard diamond, and German 'ENTZÜNDBAR GEFAHRGUT' stencils.",
+  "triangles": 9680,
+  "materials": 1,
+  "textures": [
+    "diffuse",
+    "normal",
+    "roughness_metallic"
+  ],
+  "hazardClass": "ADR Class 3 (Flammable Liquid) / GHS02",
+  "dimensions": {
+    "radius": 0.34,
+    "height": 1.0
+  },
+  "recommendedScale": 0.82,
+  "author": "Small World Machine Studio",
+  "license": "CC0-1.0"
+}

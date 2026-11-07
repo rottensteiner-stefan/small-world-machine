@@ -1,0 +1,10 @@
+[BASE_FS_HEADER]
+
+void main() {
+    float alpha = texture2D(u_diffuseMap, v_uv).a;
+    if (alpha < u_extraParams.y) {
+        discard;
+    }
+    
+    gl_FragColor = vec4(1.0);
+}

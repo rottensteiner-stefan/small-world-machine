@@ -1,0 +1,14 @@
+{
+  "name": "@small-world-machine/geometry-extras",
+  "version": "0.1.0",
+  "description": "Exotic and procedural geometries for Small World Machine (supershapes, torus knots, and more).",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@small-world-machine/engine": "*"
+  }
+}

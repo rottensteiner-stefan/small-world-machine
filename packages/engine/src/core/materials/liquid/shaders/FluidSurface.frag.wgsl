@@ -1,0 +1,105 @@
+@fragment fn fs(i: Out) -> @location(0) vec4<f32> {
+    let time = obj.matParam3.w;
+    let flowSpeed = obj.matParam2.x;
+    let noiseScale = obj.matParam2.y;
+
+    // Use world position XZ for seamless tiling. R4/E4-B: the 0.5 world-XZ noise frequency is a
+    // per-meter lane value (u_matParam5.x), pre-scaled by domainScale on the CPU.
+    let worldUV = i.wp.xz * obj.matParam5.x;
+    let uv = worldUV * noiseScale;
+    let uv1 = uv + vec2<f32>(time * 0.05, time * 0.02) * flowSpeed;
+    let uv2 = uv + vec2<f32>(-time * 0.03, time * 0.04) * flowSpeed;
+
+    let tex1 = textureSample(u_diffuseMap, s, uv1).rgb;
+    let tex2 = textureSample(u_diffuseMap, s, uv2).rgb;
+    let n1 = dot(tex1, vec3<f32>(0.299, 0.587, 0.114));
+    let n2 = dot(tex2, vec3<f32>(0.299, 0.587, 0.114));
+    let noise = (n1 + n2) * 0.5;
+
+    // Surface normal: mesh normal (displaced analytically in the vertex stage) tilted by the
+    // flowing normal map. normalStrength 0 (default) leaves it untouched.
+    let nm = textureSample(u_normalMap, s, uv1).rgb * 2.0 - 1.0;
+    let N = normalize(i.n + vec3<f32>(nm.x, 0.0, nm.y) * obj.matParam0.w);
+    let V = normalize(global.viewPos.xyz - i.wp);
+    let softness = max(obj.matParam1.w, 0.01);
+
+    let baseColor = sRGBToLinear(obj.color.rgb) * (1.0 - smoothstep(0.0, 0.6, noise)) * 1.5;
+    let edgeCol = sRGBToLinear(obj.specColor.rgb); 
+
+    // Depth Fade
+    let fragPosCoords = vec2<i32>(i.pos.xy);
+    let bgDepth = textureLoad(u_opaqueDepthMap, fragPosCoords, 0);
+    
+    let near = global.cameraNearFar.x;
+    let far = global.cameraNearFar.y;
+    
+    let ndcBg = bgDepth * 2.0 - 1.0;
+    let linBgDepth = (2.0 * near * far) / (far + near - ndcBg * (far - near));
+    
+    let ndcFrag = i.pos.z * 2.0 - 1.0;
+    let linFragDepth = (2.0 * near * far) / (far + near - ndcFrag * (far - near));
+    
+    let depthDiff = linBgDepth - linFragDepth;
+    
+    // R4/E4-B: the 1.0 m edge softness travels in u_matParam5.y (÷ domainScale on the CPU).
+    let edgeBlend = 1.0 - saturate(depthDiff / obj.matParam5.y);
+    let noiseBlend = smoothstep(0.7 - softness * 0.5, 0.7 + softness * 0.5, noise);
+    let finalBlend = saturate(noiseBlend + edgeBlend);
+
+    var color = mix(baseColor, edgeCol, finalBlend);
+
+    // Emissive glow (lava/molten presets) -- obj.matParam3.rgb carries emissiveColor
+    // pre-multiplied by emissiveStrength (see FluidSurfaceMaterial.ts). Zero by default, a no-op.
+    let emissive = obj.matParam3.xyz;
+    // Noise-driven mask: hot where the noise is low (cracks), dark crust where it is high, with a
+    // soft falloff. emissiveMask (obj.matParam1.z) 0 keeps the legacy constant glow; the pulse
+    // (obj.matParam2.z amplitude, obj.matParam2.w speed) rolls along the noise.
+    let hot = 1.0 - smoothstep(0.5 - softness, 0.5 + softness, noise);
+    let pulse = 1.0 + obj.matParam2.z * 0.5 * sin(time * obj.matParam2.w + noise * 6.2831853);
+    color += sRGBToLinear(emissive) * mix(1.0, hot, obj.matParam1.z) * pulse;
+
+    // Optional lighting: wrapped diffuse shade (obj.matParam0.x), Fresnel rim, specular
+    // (obj.matParam0.y/z, specular power obj.matParam1.x).
+    let L = normalize(global.dirLightDir.xyz);
+    let dirShadow = sampleDirShadow(i.wp, N);
+    let ndl = dot(N, L) * 0.5 + 0.5;
+    color *= mix(1.0, ndl * ndl * 1.6 * mix(0.35, 1.0, dirShadow), obj.matParam0.x);
+    let ndv = clamp(dot(N, V), 0.0, 1.0);
+    // R4: rim exponent is a raw dimensionless look scalar in u_matParam5.w (default 3.0).
+    let rim = pow(1.0 - ndv, obj.matParam5.w) * obj.matParam0.y;
+    color += edgeCol * rim;
+    let ndh = clamp(dot(N, normalize(L + V)), 0.0, 1.0);
+    color += global.dirLightColor.rgb * pow(ndh, max(obj.matParam1.x, 1.0)) * obj.matParam0.z * dirShadow;
+
+    // Beer-Lambert thickness from the opaque depth capture (see the GLSL version).
+    let thickness = 1.0 - exp(-obj.matParam1.y * max(depthDiff, 0.0));
+    // R4: alpha floor is a raw dimensionless look scalar in u_matParam5.z (default 0.25).
+    let alpha = mix(1.0, clamp(thickness + rim, obj.matParam5.z, 1.0), step(0.0001, obj.matParam1.y));
+
+    if (obj.matParam9.x > 0.0) {
+        let mirrorClip = global.vp * vec4<f32>(i.wp, 1.0);
+        let mirrorNdc = mirrorClip.xy / mirrorClip.w;
+        let mirrorUv = clamp(
+            vec2<f32>(mirrorNdc.x * 0.5 + 0.5, mirrorNdc.y * -0.5 + 0.5) + worldDirToScreen(vec3f(N.x, 0.0, N.z)) * obj.matParam9.y,
+            vec2<f32>(0.001), vec2<f32>(0.999));
+        let mirrorLod = clamp(obj.matParam9.z * 7.0, 0.0, 7.0);
+        let mirror = targetToLinear(textureSampleLevel(u_reflectionMap, s, mirrorUv, mirrorLod).rgb) / max(global.exposure, 0.001);
+        let fresnel = pow(1.0 - ndv, 5.0);
+        color = mix(color, mirror, (0.02 + 0.98 * fresnel) * obj.matParam9.x);
+    }
+
+    // Exposure
+    color *= global.exposure;
+
+    // Tonemapping guard
+    if (global.gamma != 1.0) {
+        color = color / (color + vec3f(1.0)); // Reinhard
+    }
+
+    // Gamma correction
+    color = linearToSRGB(color);
+
+    [WGSL_FOG_CALC]
+
+    return vec4<f32>(color, alpha);
+}

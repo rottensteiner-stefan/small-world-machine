@@ -1,0 +1,17 @@
+{
+  "name": "@small-world-machine/gltf-extensions",
+  "version": "0.106.0",
+  "description": "Community and data-level glTF extensions for Small World Machine.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./register": "./src/register.ts",
+    "./draco": "./src/draco/index.ts",
+    "./basisu": "./src/basisu/index.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@small-world-machine/engine": "*"
+  }
+}

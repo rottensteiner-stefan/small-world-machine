@@ -1,0 +1,1109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Small World Machine — Project Presentation</title>
+    <!-- Lokale Schriften (Rajdhani, JetBrains Mono), kein Netz-Laden -->
+    <link rel="stylesheet" href="/assets/fonts.css" />
+
+    <style>
+      :root {
+        --font-ui: "Rajdhani", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+        --bg-color: #050505;
+        --text-color: #d1fdff;
+        --text-muted: #88d4e0;
+        --primary: #00e5ff;
+        --primary-glow: rgba(0, 229, 255, 0.6);
+        --accent: #ff6600;
+        --accent-glow: rgba(255, 102, 0, 0.6);
+        --glass-bg: rgba(0, 15, 25, 0.85);
+        --glass-border: #00e5ff;
+        --card-glow: rgba(0, 229, 255, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: var(--font-ui);
+        background-color: var(--bg-color);
+        background-image:
+          linear-gradient(rgba(0, 229, 255, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0, 229, 255, 0.05) 1px, transparent 1px);
+        background-size: 30px 30px;
+        color: var(--text-color);
+        height: 100vh;
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* Animated Glowing Backgrounds */
+      .bg-glows {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .glow-orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(140px);
+        opacity: 0.45;
+        mix-blend-mode: screen;
+        animation: float 25s infinite alternate ease-in-out;
+      }
+
+      .glow-orb-1 {
+        width: 600px;
+        height: 600px;
+        background: radial-gradient(circle, var(--primary) 0%, rgba(0, 0, 0, 0) 70%);
+        top: -10%;
+        left: -10%;
+      }
+
+      .glow-orb-2 {
+        width: 700px;
+        height: 700px;
+        background: radial-gradient(circle, var(--accent) 0%, rgba(0, 0, 0, 0) 70%);
+        bottom: -15%;
+        right: -10%;
+        animation-delay: -5s;
+        animation-duration: 30s;
+      }
+
+      .glow-orb-3 {
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(circle, #ec4899 0%, rgba(0, 0, 0, 0) 70%);
+        top: 40%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0.25;
+        animation-delay: -10s;
+        animation-duration: 20s;
+      }
+
+      @keyframes float {
+        0% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(40px, -60px) scale(1.1);
+        }
+        100% {
+          transform: translate(-20px, 30px) scale(0.9);
+        }
+      }
+
+      /* Slides Viewer Container */
+      .slides-wrapper {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        z-index: 5;
+      }
+
+      .slides-container {
+        display: flex;
+        width: 500%; /* 5 Slides */
+        height: 100%;
+        transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+      }
+
+      .slide {
+        width: 100vw;
+        height: 100%;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 3rem 6rem;
+        box-sizing: border-box;
+      }
+
+      /* Typography & Headers */
+      h1,
+      h2,
+      h3 {
+        font-family: var(--font-ui);
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        text-shadow: 0 0 10px var(--primary-glow);
+      }
+
+      /* Navigation UI overlay */
+      .nav-overlay {
+        position: absolute;
+        bottom: 2rem;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 4rem;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      .nav-btn {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        color: var(--primary);
+        width: 4rem;
+        height: 3.5rem;
+        border-radius: 4px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        font-size: 1.5rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: auto;
+        box-shadow:
+          0 0 10px var(--primary-glow),
+          inset 0 0 10px var(--card-glow);
+      }
+
+      .nav-btn:hover {
+        background: var(--primary);
+        color: #000;
+        transform: translateY(-2px);
+        box-shadow:
+          0 0 20px var(--primary-glow),
+          0 0 40px var(--primary-glow);
+      }
+
+      .nav-btn:active {
+        transform: translateY(1px);
+      }
+
+      .nav-btn.disabled {
+        opacity: 0.3;
+        pointer-events: none;
+      }
+
+      .progress-bar-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.05);
+        z-index: 10;
+      }
+
+      .progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
+        width: 20%;
+        transition: width 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+        box-shadow: 0 1px 8px var(--accent-glow);
+      }
+
+      .slide-counter {
+        font-family: var(--font-ui);
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: var(--text-color);
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        padding: 0.4rem 1rem;
+        border-radius: 4px;
+        box-shadow: 0 0 10px var(--primary-glow);
+      }
+
+      /* Home Link */
+      .home-link {
+        position: absolute;
+        top: 2rem;
+        left: 4rem;
+        z-index: 15;
+        font-family: var(--font-ui);
+        color: var(--text-color);
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 1.2rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        transition: all 0.3s;
+        box-shadow: 0 0 10px var(--primary-glow);
+      }
+
+      .home-link:hover {
+        color: var(--text-color);
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+
+      .glass-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid var(--glass-border);
+        border-radius: 4px;
+        padding: 3rem;
+        min-width: 1100px;
+        max-width: 1100px;
+        width: 100%;
+        min-height: 580px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+        position: relative;
+        z-index: 10;
+        transition: all 0.5s ease;
+        box-sizing: border-box;
+      }
+
+      .glass-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 24px;
+        background: linear-gradient(
+          135deg,
+          rgba(255, 255, 255, 0.05) 0%,
+          rgba(255, 255, 255, 0) 100%
+        );
+        pointer-events: none;
+      }
+
+      /* Title Slide */
+      .title-slide-content {
+        text-align: center;
+      }
+
+      .title-slide h1 {
+        font-size: 5rem;
+        font-weight: 700;
+        letter-spacing: 5px;
+        color: var(--primary);
+        text-shadow:
+          0 0 20px var(--primary-glow),
+          0 0 40px var(--primary-glow);
+        line-height: 1.1;
+        margin-bottom: 1.5rem;
+      }
+
+      .title-slide h2 {
+        font-size: 1.5rem;
+        font-weight: 400;
+        color: var(--text-muted);
+        margin-bottom: 3rem;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 0.4rem 1.2rem;
+        background: rgba(0, 229, 255, 0.15);
+        border: 1px solid var(--primary);
+        color: var(--primary);
+        font-family: var(--font-ui);
+        font-size: 1rem;
+        font-weight: 700;
+        border-radius: 2px;
+        margin-bottom: 2rem;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        box-shadow: 0 0 10px var(--primary-glow);
+      }
+
+      /* Slide 2 Grid layout */
+      .features-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-top: 1.5rem;
+      }
+
+      .feature-col h3 {
+        color: var(--accent);
+        font-size: 1.3rem;
+        margin-bottom: 0.8rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .feature-list {
+        list-style: none;
+        padding-left: 1.2rem;
+      }
+
+      .feature-list li {
+        margin-bottom: 0.8rem;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: var(--text-color);
+        position: relative;
+        text-align: left;
+      }
+
+      .feature-list li::before {
+        content: "✦";
+        color: var(--primary);
+        font-weight: bold;
+        position: absolute;
+        left: -1.2rem;
+        top: 0;
+      }
+
+      /* Co-Creation Slides */
+      .slide-title {
+        font-size: 3.2rem;
+        color: var(--primary);
+        text-shadow:
+          0 0 10px var(--primary-glow),
+          0 0 20px var(--primary-glow);
+        margin-bottom: 1rem;
+      }
+
+      .slide-subtitle {
+        color: var(--text-muted);
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+        font-weight: 400;
+      }
+
+      .co-creation-body {
+        font-size: 1.05rem;
+        line-height: 1.6;
+        color: var(--text-color);
+        margin-bottom: 2.5rem;
+      }
+
+      .user-notes-section {
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px dashed var(--glass-border);
+        border-radius: 16px;
+        padding: 1.5rem;
+        position: relative;
+      }
+
+      .user-notes-section h4 {
+        font-family: var(--font-ui);
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 1rem;
+        letter-spacing: 0.05em;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .user-notes-list {
+        list-style: none;
+      }
+
+      .user-notes-list li {
+        margin-bottom: 0.6rem;
+        font-size: 0.95rem;
+        color: #e5e7eb;
+        padding: 0.3rem 0.6rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .user-notes-list li::before {
+        content: "✦";
+        font-size: 0.85rem;
+        color: var(--accent);
+      }
+
+      /* Slide 5: Cinematic Demo */
+      .showcases-slide {
+        padding: 1.5rem;
+      }
+
+      .cinematic-container {
+        position: relative;
+        width: 90vw;
+        height: 75vh;
+        background: #000;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow:
+          0 25px 60px rgba(0, 0, 0, 0.8),
+          0 0 30px rgba(79, 70, 229, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+      }
+
+      /* Letterbox black bars */
+      .cinema-bar {
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 8%; /* Adjust for cinematic letterbox aspect ratio */
+        background: #000;
+        z-index: 20;
+        transition: transform 1s ease-in-out;
+      }
+
+      .cinema-bar.top {
+        top: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        transform: translateY(-100%);
+      }
+
+      .cinema-bar.bottom {
+        bottom: 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        transform: translateY(100%);
+      }
+
+      /* When slide is active, close the cinematic letterbox format slightly */
+      .slide-active-5 .cinema-bar.top {
+        transform: translateY(0);
+      }
+
+      .slide-active-5 .cinema-bar.bottom {
+        transform: translateY(0);
+      }
+
+      .cinematic-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        cursor: grab;
+      }
+
+      .cinematic-canvas:active {
+        cursor: grabbing;
+      }
+
+      .cinema-overlay {
+        position: absolute;
+        bottom: 10%;
+        left: 5%;
+        right: 5%;
+        z-index: 25;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        pointer-events: none;
+        transition: opacity 0.8s ease;
+        opacity: 0;
+      }
+
+      .slide-active-5 .cinema-overlay {
+        opacity: 1;
+        transition-delay: 0.8s;
+      }
+
+      .cinema-meta {
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        pointer-events: auto;
+      }
+
+      .cinema-title {
+        font-family: var(--font-ui);
+        font-weight: 700;
+        font-size: 1.2rem;
+        color: #fff;
+      }
+
+      .cinema-subtitle {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-top: 0.15rem;
+      }
+
+      .cinema-tips {
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        color: #a5b4fc;
+        font-size: 0.85rem;
+        font-family: var(--font-ui);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      /* Ambient Light/Reflections in Canvas frame */
+      .ambient-beam {
+        position: absolute;
+        width: 150px;
+        height: 150px;
+        background: radial-gradient(circle, var(--accent) 0%, rgba(6, 182, 212, 0) 70%);
+        opacity: 0.2;
+        border-radius: 50%;
+        filter: blur(40px);
+        pointer-events: none;
+        z-index: 15;
+      }
+
+      .ambient-beam-1 {
+        top: 15%;
+        left: 20%;
+      }
+
+      .ambient-beam-2 {
+        bottom: 15%;
+        right: 20%;
+        background: radial-gradient(circle, var(--primary) 0%, rgba(79, 70, 229, 0) 70%);
+      }
+
+      /* Keyboard navigation guide in title slide */
+      .key-guide {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 1rem 1.5rem;
+        margin-top: 2rem;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+      }
+
+      .key-cap {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
+        font-family: monospace;
+        color: #fff;
+        box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+      }
+
+      /* Loader overlay inside canvas container */
+      .canvas-loader {
+        position: absolute;
+        inset: 0;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 30;
+        transition: opacity 0.5s ease;
+      }
+
+      .spinner {
+        width: 50px;
+        height: 50px;
+        border: 3px solid rgba(79, 70, 229, 0.1);
+        border-top: 3px solid var(--accent);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 1.5rem;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .canvas-loader p {
+        font-family: var(--font-ui);
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        letter-spacing: 0.05em;
+      }
+
+      .repo-link-container {
+        margin-bottom: 2rem;
+      }
+
+      .github-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        color: var(--text-muted);
+        text-decoration: none;
+        font-family: var(--font-ui);
+        font-size: 0.95rem;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--glass-border);
+        padding: 0.5rem 1.1rem;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+      }
+
+      .github-link:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
+        transform: translateY(-2px);
+      }
+
+      .github-icon {
+        color: var(--text-color);
+      }
+
+      /* Title Slide grid & Assembler Terminal */
+
+      .title-slide-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 3rem;
+        align-items: center;
+        text-align: left;
+      }
+
+      .title-slide-text h1 {
+        font-size: 3.6rem !important;
+      }
+
+      .title-slide-text h2 {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        text-align: left;
+      }
+
+      .title-slide-text .key-guide {
+        justify-content: flex-start !important;
+      }
+
+      .title-slide-visual {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .terminal-container {
+        width: 100%;
+        max-width: 360px;
+        background: #05070c;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        border-radius: 12px;
+        box-shadow:
+          0 15px 35px rgba(0, 0, 0, 0.6),
+          0 0 20px rgba(16, 185, 129, 0.05);
+        overflow: hidden;
+        font-family: var(--font-mono);
+        text-align: left;
+      }
+
+      .terminal-header {
+        background: #0d111d;
+        padding: 0.6rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .terminal-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      .terminal-dot.red {
+        background: #ef4444;
+      }
+
+      .terminal-dot.yellow {
+        background: #f59e0b;
+      }
+
+      .terminal-dot.green {
+        background: #10b981;
+      }
+
+      .terminal-title {
+        color: #6b7280;
+        font-size: 0.72rem;
+        margin-left: 6px;
+        font-weight: 500;
+      }
+
+      .terminal-code {
+        padding: 1.2rem;
+        color: #10b981; /* Glowing green */
+        font-size: 0.82rem;
+        line-height: 1.45;
+        text-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+        margin: 0;
+        overflow-x: auto;
+      }
+
+      .terminal-code code {
+        font-family: var(--font-mono);
+      }
+
+      .slide-timer {
+        font-family: var(--font-mono);
+        font-size: 0.9rem;
+        color: var(--accent);
+        background: var(--glass-bg);
+        border: 1px solid rgba(6, 182, 212, 0.3);
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        text-shadow: 0 0 4px var(--accent-glow);
+        min-width: 3.8rem;
+        text-align: center;
+        font-weight: 500;
+        transition: all 0.3s ease;
+      }
+
+      /* Ensure Tweakpane's Gadget Inspector panel floats above the slides deck */
+      .tp-dfgv,
+      .tp-dfwv,
+      .td-dfwv {
+        z-index: 999999 !important;
+      }
+
+      @media print {
+        body {
+          height: auto !important;
+          overflow: visible !important;
+          background: #0b0f19 !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .bg-glows,
+        .nav-overlay,
+        .home-link,
+        .progress-bar-container,
+        .key-guide,
+        .cinema-bar {
+          display: none !important;
+        }
+
+        .slides-wrapper {
+          width: 100vw !important;
+          height: auto !important;
+          overflow: visible !important;
+        }
+
+        .slides-container {
+          display: block !important;
+          width: 100% !important;
+          transform: none !important;
+        }
+
+        .slide {
+          width: 100vw !important;
+          height: 100vh !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          display: flex !important;
+          justify-content: center !important;
+          align-items: center !important;
+          box-sizing: border-box !important;
+          padding: 2rem !important;
+        }
+
+        .glass-card {
+          max-width: 90% !important;
+          min-width: 0 !important;
+          min-height: 0 !important;
+          box-shadow: none !important;
+          border: 1px solid rgba(255, 255, 255, 0.15) !important;
+          background: rgba(17, 24, 39, 0.8) !important;
+        }
+      }
+
+      @media (max-width: 1200px) {
+        .glass-card {
+          min-width: auto !important;
+          max-width: 90% !important;
+          width: 90% !important;
+          min-height: auto !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Background glowing nodes -->
+    <div class="bg-glows">
+      <div class="glow-orb glow-orb-1"></div>
+      <div class="glow-orb glow-orb-2"></div>
+      <div class="glow-orb glow-orb-3"></div>
+    </div>
+
+    <!-- Navigation Header link -->
+    <a href="/" class="home-link"> <span>←</span> Back to Overview </a>
+
+    <!-- Top Progress Bar -->
+    <div class="progress-bar-container">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <!-- Main slides wrapper -->
+    <div class="slides-wrapper">
+      <div class="slides-container" id="slidesContainer">
+        <!-- SLIDE 1: Title Slide -->
+        <div class="slide title-slide">
+          <div class="glass-card title-slide-grid">
+            <div class="title-slide-text">
+              <span class="badge">TypeScript 3D Engine</span>
+              <h1>Small World Machine</h1>
+              <h2>
+                A modular, high-performance 3D engine for WebGL & WebGPU. Co-designed with
+                <a
+                  href="https://gemini.google.com"
+                  target="_blank"
+                  style="
+                    color: var(--accent);
+                    text-decoration: none;
+                    border-bottom: 1px dashed var(--accent);
+                    transition: color 0.3s;
+                  "
+                  onmouseover="this.style.color = '#fff'"
+                  onmouseout="this.style.color = 'var(--accent)'"
+                  >Gemini</a
+                >.
+              </h2>
+              <div class="repo-link-container">
+                <a
+                  href="https://github.com/rottensteiner-stefan/small-world-machine"
+                  target="_blank"
+                  class="github-link"
+                >
+                  <svg
+                    class="github-icon"
+                    viewBox="0 0 16 16"
+                    width="18"
+                    height="18"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+                    ></path>
+                  </svg>
+                  github.com/rottensteiner-stefan/small-world-machine
+                </a>
+              </div>
+              <div class="key-guide">
+                <span
+                  >Next Slide: <span class="key-cap">Space</span> or
+                  <span class="key-cap">→</span></span
+                >
+                <span>Previous Slide: <span class="key-cap">←</span></span>
+              </div>
+            </div>
+            <div class="title-slide-visual">
+              <div class="terminal-container">
+                <div class="terminal-header">
+                  <span class="terminal-dot red"></span>
+                  <span class="terminal-dot yellow"></span>
+                  <span class="terminal-dot green"></span>
+                  <span class="terminal-title">vga_pixel.asm</span>
+                </div>
+                <pre class="terminal-code"><code>mov ax, 0013h   ; Mode 13h (320x200)
+int 10h         ; VGA BIOS Service
+mov ax, 0A000h  ; VRAM Segment
+mov es, ax      ; ES Points to VRAM
+mov di, 320*100 ; Line 100, Col 0
+mov cx, 320     ; Draw full line (320px)
+mov al, 04h     ; Pixel Color (Red)
+draw_line:
+mov [es:di], al ; Write pixel to VRAM
+inc di          ; Go to next pixel
+loop draw_line  ; Loop until CX = 0
+xor ah, ah      ; Wait for keypress
+int 16h         ; BIOS Keyboard Interrupt</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 2: Features & Architecture -->
+        <div class="slide">
+          <div class="glass-card">
+            <span class="badge">Architecture & Features</span>
+            <h2 class="slide-title">Features & Architecture</h2>
+            <p class="slide-subtitle">
+              Modular structure, modern graphics pipelines, and flexible control mechanisms
+            </p>
+
+            <div class="features-grid">
+              <div class="feature-col">
+                <h3>Hybrid Rendering Pipeline</h3>
+                <ul class="feature-list">
+                  <li>
+                    Support for state-of-the-art <strong>WebGPU</strong> with seamless fallback to
+                    WebGL 2 and WebGL 1.
+                  </li>
+                  <li>
+                    Physically-based PBR shading pipeline (Cook-Torrance BRDF) for high-precision
+                    metalness and roughness representation.
+                  </li>
+                  <li>
+                    Advanced glass effects with screen-space refraction (SSR) and light absorption
+                    (Beer's law).
+                  </li>
+                  <li>
+                    Shadow mapping with PCF (Percentage-Closer Filtering) for soft, smooth shadows.
+                  </li>
+                </ul>
+              </div>
+              <div class="feature-col">
+                <h3>Camera & Behavior System</h3>
+                <ul class="feature-list">
+                  <li>
+                    <strong>Strategy-based Cameras</strong>: Flexible switching between
+                    Smooth-Follow, stiff fixed, Isometric, or FPS control.
+                  </li>
+                  <li>
+                    Modular ZoomController, Camera-Shake (earthquake effects), and Camera-Flash
+                    (procedural lightning effects).
+                  </li>
+                  <li>
+                    Callback-driven Component Behaviors to encapsulate application logic like
+                    <code>FlickerBehavior</code>
+                    or collision sensors.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 3: Co-Creation Phase 1 -->
+        <div class="slide">
+          <div class="glass-card">
+            <span class="badge">Co-Creation Part I</span>
+            <h2 class="slide-title">Co-Creation with Gemini</h2>
+            <p class="slide-subtitle">From initial draft to a clean architectural skeleton</p>
+
+            <p class="co-creation-body">
+              The entire project was conceived and implemented from the ground up in close
+              partnership with Gemini. Gemini acted not just as a coding assistant, but as a true
+              co-architect: from planning the folder structure and defining strictly typed
+              interfaces (TypeScript <code>strict: true</code>) to aligning on design patterns (like
+              the modular camera strategy system).
+            </p>
+
+            <div class="user-notes-section">
+              <h4>📌 Key Takeaways</h4>
+              <ul class="user-notes-list">
+                <li>Precise and polite</li>
+                <li>Anything that can go wrong will go wrong - just faster with an AI</li>
+                <li>Set clear boundaries</li>
+                <li>Planning mode and well-thought-out work packages</li>
+                <li>Adhere to official best practices of the domain</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 4: Co-Creation Phase 2 -->
+        <div class="slide">
+          <div class="glass-card">
+            <span class="badge">Co-Creation Part II</span>
+            <h2 class="slide-title">Co-Creation with Gemini</h2>
+            <p class="slide-subtitle">Complex Algorithms, Hot-Path Optimization & Resume</p>
+
+            <p class="co-creation-body">
+              To maximize render performance, time-critical paths were optimized: Gemini assisted in
+              developing highly efficient WGSL/GLSL shaders, implementing screen-space refraction
+              for real-time glass, and designing a <code>MathPool</code>. This object pool
+              completely eliminates garbage collection overhead during the render loop.
+            </p>
+
+            <div class="user-notes-section">
+              <h4>📌 Key Takeaways</h4>
+              <ul class="user-notes-list">
+                <li>Blue or red pill? Desires, lies & hallucinations</li>
+                <li>Analyze strengths, habits, and weaknesses (Sun Tzu)</li>
+                <li>Working with AI is teamwork, with you as the leader.</li>
+                <li>AGENTS.md</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 5: Interactive 3D Demo (Damaged Helmet) -->
+        <div class="slide showcases-slide">
+          <div class="cinematic-container">
+            <!-- Cinematic bars overlay -->
+            <div class="cinema-bar top"></div>
+            <div class="cinema-bar bottom"></div>
+
+            <!-- Ambient lights glows in canvas frame -->
+            <div class="ambient-beam ambient-beam-1"></div>
+            <div class="ambient-beam ambient-beam-2"></div>
+
+            <!-- Loader inside canvas -->
+            <div class="canvas-loader" id="canvasLoader">
+              <div class="spinner"></div>
+              <p>LOADING DAMAGED HELMET PBR MODEL (WebGPU / WebGL)...</p>
+            </div>
+
+            <!-- Small World Machine Canvas -->
+            <canvas id="SmallWorldMachineCanvas" class="cinematic-canvas"></canvas>
+
+            <!-- Cinematic overlays -->
+            <div class="cinema-overlay">
+              <div class="cinema-meta">
+                <div class="cinema-title">GLTF Damaged Helmet Showcase</div>
+                <div class="cinema-subtitle">
+                  Real-time PBR StandardMaterial, Roughness/Metallic & Environment Mapping
+                </div>
+              </div>
+              <div class="cinema-tips">🕹️ Drag with mouse to rotate | WASD to move</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation HUD overlay -->
+    <div class="nav-overlay">
+      <div class="nav-btn" id="prevBtn">←</div>
+
+      <div style="display: flex; align-items: center; gap: 0.8rem; pointer-events: auto">
+        <div class="slide-counter" id="slideCounter">1 / 5</div>
+        <div class="slide-timer" id="slideTimer">00:00</div>
+      </div>
+      <div class="nav-btn" id="nextBtn">→</div>
+    </div>
+
+    <!-- Link the presentation engine logic script -->
+    <script type="module" src="/apps/showcases/presentation/presentation.ts"></script>
+    <style>
+      /* Ensure Tweakpane's Gadget Inspector panel floats above the slides deck */
+      .tp-dfgv,
+      .td-dfwv {
+        z-index: 999999 !important;
+      }
+    </style>
+  </body>
+</html>

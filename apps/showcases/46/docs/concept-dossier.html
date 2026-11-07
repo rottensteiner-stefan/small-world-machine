@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Particle Physics Lab — Concept Dossier</title>
+    <style>
+      :root {
+        --bg: #101014;
+        --panel: #191920;
+        --text: #e8e2d8;
+        --accent: #f2a04a;
+        --accent2: #6a8ba8;
+        --muted: #9a938a;
+        --danger: #e06a5a;
+        --ok: #7fc97f;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 system-ui, -apple-system, Segoe UI, sans-serif; }
+      main { max-width: 900px; margin: 0 auto; padding: 40px 24px 120px; }
+      h1 { font-size: 30px; letter-spacing: .5px; }
+      h2 { margin-top: 48px; border-bottom: 1px solid #2c2c36; padding-bottom: 8px; font-size: 20px; }
+      .pill { display: inline-block; border: 1px solid #333; border-radius: 99px; padding: 2px 12px; font-size: 12px; color: var(--muted); margin-right: 6px; }
+      .pill.ok { border-color: var(--ok); color: var(--ok); }
+      .pill.wip { border-color: var(--accent); color: var(--accent); }
+      .card { background: var(--panel); border: 1px solid #262630; border-radius: 10px; padding: 18px 20px; margin: 18px 0; }
+      code { background: #23232c; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+      kbd { background: #2b2b36; border: 1px solid #3a3a46; border-radius: 4px; padding: 1px 7px; font: 12px ui-monospace, Menlo; }
+      table { border-collapse: collapse; margin: 14px 0; }
+      td, th { border: 1px solid #2c2c36; padding: 6px 12px; font-size: 13px; text-align: left; }
+      .swatches span { display: inline-block; width: 120px; height: 22px; border-radius: 4px; margin: 2px 6px 2px 0; vertical-align: middle; border: 1px solid #000; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Particle Variant Lab</h1>
+      <div>
+        <span class="pill ok">Stage 1+2 baseline</span>
+        <span class="pill ok">Stage-3+4 wiring (T1–T4 + T9 live)</span>
+        <span class="pill ok">Variant Lab (fire-45 style)</span>
+        <span class="pill ok">GPU lane: honest WebGPU wiring</span>
+        <span class="pill">showcase 46</span>
+      </div>
+
+      <h2>Elevator Pitch &amp; Design Pillars</h2>
+      <p>An interactive laboratory that makes Small World Machine's next-generation particle
+      system explorable — extended into a <strong>fire-45-style variant lab</strong>: the viewer
+      (or a golden capture) selects one of six curated <strong>effect variants</strong>
+      (<code>overview</code>/<code>forge</code>/<code>smoke</code>/<code>trails</code>/
+      <code>weather</code>/<code>gpu</code>) and one of three <strong>camera pools</strong>
+      (overview/closeup/budget). The technical core stays: physics-grade SDF collision,
+      divergence-free aerodynamic swirl, soft-particle depth integration, procedural volume smoke
+      lighting, pooled particle lights, ribbon trails, WebGPU compute autonomy and roof-aware
+      weather collision — composed from SWM's Godot/PlayCanvas-derived <code>Affector</code>
+      architecture.</p>
+      <ul>
+        <li><strong>Demonstrate, don't decorate:</strong> every lane is a real, inspectable capability with live toggle — no pre-baked movie.</li>
+        <li><strong>Zero-GC honesty:</strong> the lab runs the same hot paths tests assert (allocation-free frames).</li>
+        <li><strong>Variant = composition, not rebuild:</strong> switching toggles lane visibility/emission + camera; systems are never disposed/recreated (no resource flips).</li>
+        <li><strong>Tier honesty:</strong> the <code>gpu</code> variant is a real WebGPU compute lane behind <code>WebGPURenderer</code>+<code>navigator.gpu</code>; without a device (or when disabled) it honestly degrades to <code>forge</code>.</li>
+        <li><strong>Golden-safe:</strong> deterministic captures via <code>?__golden=part46-&lt;variant&gt;-&lt;pool&gt;</code>; does not perturb <code>fire45</code>/<code>pbr38</code> baselines.</li>
+      </ul>
+
+      <h2>Art Direction &amp; Mood</h2>
+      <div class="swatches">
+        <span style="background:#101014"></span><span style="background:#191920"></span>
+        <span style="background:#f2a04a"></span><span style="background:#e8e2d8"></span>
+        <span style="background:#6a8ba8"></span><span style="background:#7fc97f"></span>
+      </div>
+      <p>Industrial forge-atelier ambience: warm ember light on dark, grounded geometry; the webgl
+      atlas-grey palette keeps silhouette and scatter readable. UI follows the Showcase Drawer
+      convention (dark panels, monospace telemetry).</p>
+
+      <h2>Interactive Controls &amp; UX</h2>
+      <div class="card"><ul>
+        <li><kbd>1–6</kbd> — effect variant (Übersicht / Schmiede / Rauch / Spuren / Wetter / GPU)</li>
+        <li><kbd>7–9</kbd> — camera pool (overview / closeup / budget)</li>
+        <li><kbd>P</kbd> pause · <kbd>T</kbd> tempo cycle · <kbd>R</kbd> camera reset · <kbd>I</kbd> panel</li>
+        <li><kbd>SPACE</kbd> — forge spark burst (SDF collision + sub-emitter impacts, variants with sparks)</li>
+        <li><kbd>SHIFT</kbd> — spawn tracer (ribbon trail through the same physics lane, trails variant)</li>
+        <li><kbd>WASD</kbd> + <kbd>Mouse</kbd> — FPS fly (FlyController)</li>
+        <li>Live sliders: Funken-Menge, Rauch-Dichte, Niederschlag + WebGPU-Lane-Schalter (honest fallback)</li>
+      </ul></div>
+
+      <h2>Technical Architecture</h2>
+      <div class="card"><p>Lanes are independent <code>ParticleSystem</code> SoA simulations composed
+      from <code>Affector</code> building blocks (<code>SdfColliderAffector</code>,
+      <code>CurlNoiseAffector</code>, <code>GravityAffector</code>), rendered through
+      <code>ParticleMeshRenderer</code> (active-prefix compaction, octagon cutout). Impact events
+      flow through the <code>SubEmitter</code> ring buffer (zero-alloc). The lab layer:
+      <code>Variants.ts</code> is the single spec source (variants, camera pools, robust resolver),
+      <code>Hud.ts</code> owns the ShowcaseDrawer panel (shortcuts, sliders, readout),
+      <code>GoldenCapture.ts</code> runs deterministic 1280×720 capture pools
+      (<code>part46-&lt;variant&gt;-&lt;pool&gt;</code>). Emission is seed-pinned
+      (<code>mulberry32</code>) and rate-based so every variant is observable and goldens are
+      byte-stable. Invariants: <code>SDF-NON-PENETRATION</code>,
+      <code>CURL-DIVERGENCE-FREE</code>, <code>LIFETIME-CURVE-KEY-EXACTNESS</code>,
+      <code>S34-POOL-PARTITION</code>.</p></div>
+
+      <h2>Acceptance (Plan for Stage 3+4 Completion)</h2>
+      <table>
+        <tr><th>Capability</th><th>Gate</th></tr>
+        <tr><td>SDF anvil collision + impact sub-emitter</td><td>✅ live (v0)</td></tr>
+        <tr><td>Curl swirl smoke</td><td>✅ live (v0)</td></tr>
+        <tr><td>Soft particles + 6-way volume lighting</td><td>✅ wired (Dave T2/T3, `0d63badb`) — pixel-Gate nach Merge</td></tr>
+        <tr><td>Ribbon trails (tracer)</td><td>✅ wired (Dave T4, `0d63badb`; dispose-reuse-Fix `aaf6b4d6`)</td></tr>
+        <tr><td>Pooled particle lights (T1)</td><td>✅ wired (Heat-Ranking, Budget-shared)</td></tr>
+        <tr><td>Roof-aware rain (T9)</td><td>✅ wired (`e5e33998`) — WeatherEmitter + Heightfield-Roof + Splash</td></tr>
+        <tr><td>WebGPU compute lane (T5/T7)</td><td>✅ honest wiring — echte Registration hinter Device, ehrenvoller Fallback auf forge</td></tr>
+        <tr><td>Variant Lab (fire-45 style)</td><td>✅ 6 Varianten × 3 Kamerapools, HUD (1–9/P/T), determinist. Auto-Emission</td></tr>
+        <tr><td>Golden captures</td><td>✅ 5 `part46-*`-Pools konfiguriert (Browser-Audit nach Merge)</td></tr>
+      </table>
+
+      <h2>Controls</h2>
+      <div class="card"><ul>
+        <li><kbd>1–6</kbd> — effect variant · <kbd>7–9</kbd> — camera pool</li>
+        <li><kbd>P</kbd> pause · <kbd>T</kbd> tempo cycle · <kbd>R</kbd> camera reset · <kbd>I</kbd> panel</li>
+        <li><kbd>SPACE</kbd> — forge spark burst · <kbd>SHIFT</kbd> — spawn tracer</li>
+        <li><kbd>WASD</kbd> + <kbd>Mouse</kbd> — FPS fly</li>
+      </ul></div>
+
+      <h2>References</h2>
+      <p><code>.agents/collaborate/particle-system-s34-requirements.md</code> ·
+      <code>docs/adr/0022-gpu-instanced-vfx-pipeline-and-extras-package.md</code> ·
+      <code>docs/adr/0047-whack-a-mole-doktrin.md</code> (annex) ·
+      <code>docs/research/particle-architecture-and-sdf-collision-2026-10-30.md</code></p>
+    </main>
+  </body>
+</html>

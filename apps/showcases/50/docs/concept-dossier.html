@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Interactive Chess Set — Concept Dossier</title>
+    <style>
+      :root {
+        --bg: #0d0d12;
+        --panel: #181820;
+        --text: #ece6dc;
+        --accent: #b000ff;
+        --accent2: #7dd3fc;
+        --muted: #9a938a;
+        --ok: #7fc97f;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 system-ui, -apple-system, Segoe UI, sans-serif; }
+      main { max-width: 940px; margin: 0 auto; padding: 40px 24px 120px; }
+      h1 { font-size: 30px; letter-spacing: .5px; }
+      h2 { margin-top: 48px; border-bottom: 1px solid #2c2c36; padding-bottom: 8px; font-size: 20px; }
+      .pill { display: inline-block; border: 1px solid #333; border-radius: 99px; padding: 2px 12px; font-size: 12px; color: var(--muted); margin-right: 6px; }
+      .pill.ok { border-color: var(--ok); color: var(--ok); }
+      .pill.wip { border-color: var(--accent); color: var(--accent); }
+      .card { background: var(--panel); border: 1px solid #262630; border-radius: 10px; padding: 18px 20px; margin: 18px 0; }
+      code { background: #23232c; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+      kbd { background: #2b2b36; border: 1px solid #3a3a46; border-radius: 4px; padding: 1px 7px; font: 12px ui-monospace, Menlo; }
+      table { border-collapse: collapse; margin: 14px 0; }
+      td, th { border: 1px solid #2c2c36; padding: 6px 12px; font-size: 13px; text-align: left; }
+      .swatches span { display: inline-block; width: 120px; height: 22px; border-radius: 4px; margin: 2px 6px 2px 0; vertical-align: middle; border: 1px solid #000; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>The Interactive Chess Set</h1>
+      <div>
+        <span class="pill ok">Remote glTF streaming (12 MB)</span>
+        <span class="pill ok">Load-progress indicator (first public)</span>
+        <span class="pill ok">Draco + KTX2 via opt-in package</span>
+        <span class="pill ok">32 draggable pieces + square snap</span>
+        <span class="pill">showcase 50</span>
+      </div>
+
+      <h2>Elevator Pitch &amp; Design Pillars</h2>
+      <p>The engine's first <strong>runtime asset-streaming experience</strong>: the official Khronos
+      <code>ABeautifulGame</code> chess set (KTX-ETC1S-Draco GLB, ~12 MB) is pulled straight from
+      GitHub in the browser with a visible, honest byte-stream progress bar, decoded live through
+      the opt-in Draco + Basis Universal plugins, and handed over as a <strong>grabbable 3D chess
+      board</strong> — every one of the 32 pieces can be picked up, dragged across the board and
+      placed; a snap toggle locks them onto the 8×8 square lattice that is <em>derived from the
+      model's own piece positions</em>, never from hardcoded constants.</p>
+      <ul>
+        <li><strong>Progress is honest:</strong> the indicator shows real downloaded bytes and the
+        decode/prepare phases — the first public demonstration of how asset-load progress can be
+        visualized in SWM (<code>AssetManager.streamBinary</code>).</li>
+        <li><strong>Grab, don't click:</strong> pieces react with hover/grab scaling and lift; orbit
+        camera yields while a piece is held (<code>canRotate</code> guard) so dragging never fights
+        the view.</li>
+        <li><strong>Derived, not hardcoded:</strong> the square lattice and field labels
+        (<code>a1</code>..<code>h8</code>) come from the decoded scene data.</li>
+        <li><strong>Opt-in package in its natural habitat:</strong> this is the first in-app consumer
+        of <code>@small-world-machine/gltf-extensions</code> — compressed Khronos content decoded by
+        the engine's own plugin registry.</li>
+        <li><strong>Zero local footprint:</strong> the 43 MB uncompressed sibling stays uncommitted;
+        nothing but the 56 KB IBL is part of the build.</li>
+      </ul>
+
+      <h2>Art Direction &amp; Mood</h2>
+      <div class="swatches">
+        <span style="background:#0f1117"></span><span style="background:#cdd2dd"></span>
+        <span style="background:#3a3f4c"></span><span style="background:#c8a060"></span>
+        <span style="background:#181820"></span>
+      </div>
+      <p>A quiet, focused studio tableau: neutral graphite backdrop and neutral IBL put the marble
+      and glass of the official set front and center. The dark theme of the load overlay and the
+      Showcase Drawer panel follows the established lab convention (monospace telemetry), while the
+      chess interaction itself stays completely free of UI chrome — grab, move, release.</p>
+
+      <h2>Interactive Controls &amp; UX</h2>
+      <div class="card"><ul>
+        <li><kbd>Left&nbsp;mouse</kbd> — grab / drag a piece (hover feedback, lifted while moved)</li>
+        <li><kbd>R</kbd> — reset camera · <kbd>Shift&nbsp;R</kbd> — reset board (all pieces home)</li>
+        <li><kbd>I</kbd> / <kbd>H</kbd> — Interactive Chess Lab panel (Reset Board, Grid Snap toggle, live readout)</li>
+        <li><kbd>Option/Alt</kbd> + <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> — renderer swap (WebGL1/2/WebGPU)</li>
+      </ul></div>
+
+      <h2>Technical Architecture</h2>
+      <div class="card"><p>The load path is the engine's own streaming pipeline, composed — not a
+      bespoke loader:</p>
+      <ul>
+        <li><code>AssetManager.streamBinary(url, onChunk, onProgress)</code> — read-stream fetch with
+        byte-level progress (throttled to ~4 Hz for the overlay DOM).</li>
+        <li><code>GltfBinaryParser.parseGlb(bytes)</code> → <code>GltfLoader.parse(data, url)</code> —
+        Draco mesh decode + Basis Universal transcode happen inside the registered opt-in plugins
+        (main-thread WASM by design of the package).</li>
+        <li><code>ChessSet</code> (<code>Pieces.ts</code>) — inventory scan by node-name regex,
+        lattice derivation from home positions, leaf-mesh picking forwarded to piece roots,
+        snap/clamp constraint, reset/dispose.</li>
+      </ul>
+      <p>Invariants: <code>GLTF-ROOT-IDENTITY</code> (verified), <code>LATTICE-DERIVED</code>,
+      <code>PIECE-MESH-LEAF-PICKING</code>, <code>SINGLE-CONSUMER-PER-LEAF</code>.</p></div>
+
+      <h2>Acceptance &amp; Gate</h2>
+      <table>
+        <tr><th>Capability</th><th>Gate</th></tr>
+        <tr><td>Remote 12 MB stream with byte-level progress overlay</td><td>production gate + vision QA</td></tr>
+        <tr><td>Draco + Basis Universal decode via opt-in package (first consumer)</td><td>production gate + vision QA</td></tr>
+        <tr><td>32 pieces draggable, snap + free mode, board reset</td><td>QA hook + vision QA</td></tr>
+        <tr><td>Tour/gallery wiring, closed ring, gate tolerance</td><td><code>showcaseWiring.test.ts</code> + <code>check-showcases.js</code></td></tr>
+      </table>
+
+      <h2>Attribution</h2>
+      <div class="card">Asset: <code>ABeautifulGame</code> — Khronos glTF-Sample-Assets
+      (<code>Models/ABeautifulGame/glTF-Binary-KTX-ETC1S-Draco/</code>), CC-BY 4.0
+      (© ASWF 2020, Ed Mackey 2022). Streaming from
+      <code>raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets</code> at runtime.</div>
+    </main>
+  </body>
+</html>

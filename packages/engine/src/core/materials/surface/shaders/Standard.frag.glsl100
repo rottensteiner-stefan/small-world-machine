@@ -1,0 +1,103 @@
+[BASE_FS_HEADER]
+[FOG_DEFS]
+[LIGHT_DEFS]
+[PBR_MATH]
+
+uniform float u_metallic;
+uniform float u_roughness;
+uniform vec4 u_liquidParams;
+uniform vec4 u_thresholds;
+
+uniform sampler2D u_metallicMap;
+uniform sampler2D u_roughnessMap;
+uniform sampler2D u_emissiveMap;
+uniform sampler2D u_alphaMap;
+uniform samplerCube u_envMap;
+uniform sampler2D u_reflectionMap;
+
+uniform vec2 u_texOffset;
+uniform vec2 u_texRepeat;
+uniform float u_useEnvMap;
+uniform float u_useReflectionMap;
+uniform float u_reflectivity;
+uniform float u_time;
+
+// Typed semantic lane (ADR 0027 / 0039): sheenColor -- rgb tint (sRGB, linearized below), w = enable
+// flag mirroring the USE_SHEEN push basis (sheen is decoupled from u_specColor / emissive).
+uniform vec4 u_matParam10;
+
+// Typed semantic lanes (KHR_materials_specular): u_matParam12.rgb = linear f0(ior) x specularColor,
+// w = enable flag; u_matParam13.x = specularFactor (F90).
+uniform vec4 u_matParam12;
+uniform vec4 u_matParam13;
+
+// Typed semantic lanes of the optional PBR extensions, declared only for programs compiled with the feature.
+#ifdef USE_IRIDESCENCE
+// KHR_materials_iridescence: (factor, film ior, thickness min nm, thickness max nm).
+uniform vec4 u_matParam14;
+#endif
+
+#ifdef USE_ANISOTROPY
+// KHR_materials_anisotropy: (strength, cos(rotation), sin(rotation), 0).
+uniform vec4 u_matParam15;
+#endif
+
+#ifdef USE_TRANSMISSION
+// KHR_materials_transmission/volume on WebGL1: the fragment stage needs the view-projection and
+// model matrices to project the refracted volume ray (Khronos getVolumeTransmissionRay). GLSL ES
+// 1.00 shares a uniform's location across stages when name/type/precision match, so these mirror the
+// vertex-stage declarations (base.vert.glsl) and cost no extra program uniform.
+uniform highp mat4 u_vp;
+uniform highp mat4 u_model;
+// Typed semantic lane (P3/S1 R1): volumetric attenuation colour for the Beer-Lambert kernel, read by
+// the shared LIGHT_CALC_PBR chunk inside USE_TRANSMISSION (WebGL2 parity, ADR 0049 sRGB-authored).
+uniform vec4 u_matParam11;
+uniform sampler2D u_opaqueMap;
+#endif
+#ifdef USE_TRANSMISSION_MAP
+uniform sampler2D u_transmissionMap;
+#endif
+#ifdef USE_THICKNESS_MAP
+uniform sampler2D u_thicknessMap;
+#endif
+
+void main() {
+    // The alpha map shares the carrier texture's transform: same transformed v_uv as the diffuse map.
+    vec4 texColor = texture2D(u_diffuseMap, v_uv);
+    texColor.a *= texture2D(u_alphaMap, v_uv).r;
+
+    if (texColor.a < u_extraParams.y) {
+        discard;
+    }
+
+    vec3 albedo = sRGBToLinear(texColor.rgb) * sRGBToLinear(u_color.rgb);
+    
+    float metallic = u_metallic * texture2D(u_metallicMap, v_uv).b;
+    float roughness = clamp(u_roughness * texture2D(u_roughnessMap, v_uv).g, 0.05, 1.0);
+    float ao = u_extraParams.x;
+
+#ifdef USE_UNLIT
+    // KHR_materials_unlit: flat base color -- no direct lighting, no IBL, no emissive. WebGL1 has
+    // no post-processing pass, so the forward-chain contract (Reinhard + sRGB encode) is applied
+    // here exactly like the shared LIGHT_CALC_PBR tail does for lit materials.
+    vec3 color = albedo;
+    color *= u_exposure;
+    color = color / (color + vec3(1.0)); // Reinhard
+    color = linearToSRGB(color);
+    gl_FragColor = vec4(color, u_color.a * texColor.a);
+    if (gl_FragColor.a < u_extraParams.y) {
+        discard;
+    }
+#else
+    [LIGHT_CALC_PBR]
+#endif
+
+    // Screen-space reflections (u_useReflectionMap) are not available on WebGL1: they need the
+    // view-projection matrix in the fragment stage, which requires a varying here (no UBO on
+    // GLSL100) -- same simplification tradeoff as dropping TBN mapping in Glass.frag.glsl100.
+
+    [FOG_CALC]
+#ifdef USE_INSTANCE_COLOR
+    gl_FragColor.rgb *= v_instanceColor.rgb;
+#endif
+}

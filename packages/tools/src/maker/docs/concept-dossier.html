@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Maker — Visuelles Concept Dossier</title>
+    <style>
+      :root {
+        --bg-dark: #0a0c14;
+        --bg-card: #10131e;
+        --bg-card-hover: #161a28;
+        --accent-teal: #4ecdc4;
+        --accent-amber: #d49a3d;
+        --text-main: #e2e8f0;
+        --text-muted: #8a99ad;
+        --border-subtle: #1e2436;
+        --border-highlight: #2e3a52;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background-color: var(--bg-dark);
+        color: var(--text-main);
+        line-height: 1.6;
+        padding: 2.5rem 1.5rem;
+      }
+      .container { max-width: 1200px; margin: 0 auto; }
+      header.hero {
+        text-align: center;
+        padding: 0 1rem 3rem;
+        background: radial-gradient(circle at center, #141828 0%, var(--bg-dark) 75%);
+        border-bottom: 1px solid var(--border-subtle);
+        margin-bottom: 3.5rem;
+        border-radius: 16px;
+      }
+      header.hero img {
+        width: 100%; max-height: 340px; object-fit: cover;
+        border-radius: 12px; margin-bottom: 2.5rem; opacity: 0.85;
+      }
+      .badge {
+        display: inline-block;
+        background: rgba(78,205,196,0.12); color: var(--accent-teal);
+        border: 1px solid rgba(78,205,196,0.35);
+        padding: 0.35rem 1rem; border-radius: 999px;
+        font-size: 0.8rem; font-weight: 600; letter-spacing: 1px;
+        text-transform: uppercase; margin-bottom: 1.2rem;
+      }
+      h1.title {
+        font-size: 3.2rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 1rem;
+        background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, var(--accent-teal) 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      }
+      p.tagline { font-size: 1.2rem; color: var(--text-muted); max-width: 700px; margin: 0 auto; }
+      h2.section-title {
+        font-size: 1.4rem; font-weight: 700; color: var(--accent-teal);
+        border-bottom: 1px solid var(--border-subtle);
+        padding-bottom: 0.6rem; margin-bottom: 1.5rem;
+      }
+      .section { margin-bottom: 3.5rem; }
+      .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.2rem; }
+      .card {
+        background: var(--bg-card); border: 1px solid var(--border-subtle);
+        border-radius: 12px; padding: 1.4rem 1.6rem;
+        transition: border-color 0.2s, background 0.2s;
+      }
+      .card:hover { background: var(--bg-card-hover); border-color: var(--border-highlight); }
+      .card-icon { font-size: 1.8rem; margin-bottom: 0.7rem; }
+      .card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.4rem; }
+      .card p { font-size: 0.9rem; color: var(--text-muted); }
+      .pill {
+        display: inline-block; padding: 0.2rem 0.7rem; border-radius: 999px;
+        font-size: 0.78rem; font-weight: 600; margin: 0.2rem;
+      }
+      .pill-done   { background: rgba(78,205,196,0.15); color: var(--accent-teal);  border: 1px solid rgba(78,205,196,0.3); }
+      .pill-next   { background: rgba(212,154,61,0.15); color: var(--accent-amber); border: 1px solid rgba(212,154,61,0.3); }
+      .pill-future { background: rgba(139,148,163,0.12); color: var(--text-muted);  border: 1px solid var(--border-subtle); }
+      .adrs { display: flex; flex-direction: column; gap: 0.8rem; }
+      .adr-item {
+        background: var(--bg-card); border-left: 3px solid var(--accent-teal);
+        border-radius: 0 8px 8px 0; padding: 0.8rem 1.2rem; font-size: 0.9rem;
+      }
+      .adr-item strong { color: var(--text-main); }
+      .adr-item span   { color: var(--text-muted); }
+      .philosophy-block {
+        background: var(--bg-card); border: 1px solid var(--border-subtle);
+        border-radius: 12px; padding: 2rem; font-size: 1.1rem;
+        line-height: 1.9; color: var(--text-muted);
+      }
+      .philosophy-block em { color: var(--text-main); font-style: normal; font-weight: 600; }
+      footer {
+        text-align: center; padding: 2rem 0 1rem; color: var(--text-muted);
+        font-size: 0.82rem; border-top: 1px solid var(--border-subtle);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header class="hero">
+        <img src="concept-hero.webp" alt="Maker – 3D Level Editor Concept" />
+        <div class="badge">Small World Machine · Tool</div>
+        <h1 class="title">Maker</h1>
+        <p class="tagline">
+          Endlich ein richtiger Editor. Szenen visuell aufbauen, Prefabs verwalten,
+          und direkt in ein glTF-Projekt speichern — ohne Build-Schritt, ohne Kompromisse.
+        </p>
+      </header>
+
+      <section class="section">
+        <h2 class="section-title">Philosophie</h2>
+        <div class="philosophy-block">
+          Maker entstand aus einem simplen Unbehagen: Szenen nur durch Code aufzubauen ist mühsam.
+          Ein <em>richtiger Editor</em> erlaubt es, eine Welt zu <em>sehen</em>, während man sie baut.
+          Maker ist kein Unity-Klon — er ist ein leichtgewichtiges, opinioniertes Werkzeug, das
+          <em>exakt auf Small World Machine</em> zugeschnitten ist. Kein Overkill, keine Plugin-Architektur,
+          kein Electron. Nur ein Browser-Tab mit File System Access API und einem sauberen glTF-Workflow.
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Implementierte Features</h2>
+        <div class="card-grid">
+          <div class="card"><div class="card-icon">🎯</div><h3>Always-on-Top Gizmo</h3><p>Translate / Rotate / Scale mit depthTest: false — verschwindet nie mehr im Inneren von Meshes.</p></div>
+          <div class="card"><div class="card-icon">⌨️</div><h3>Camera-Cardinal Nudge</h3><p>Pfeiltasten-Transformation in Blickrichtung der Kamera, Höhenanpassung via Shift+Pfeil/PgUp/PgDn.</p></div>
+          <div class="card"><div class="card-icon">⬇️</div><h3>Snap to Ground</h3><p>End-Taste setzt die Bounding-Box-Unterkante der Selektion bündig auf Y = 0.</p></div>
+          <div class="card"><div class="card-icon">🌲</div><h3>Hierarchy-Panel</h3><p>Vollständiger Szenenbaum mit Klick-Selektion und Live-Sync.</p></div>
+          <div class="card"><div class="card-icon">🔧</div><h3>Property-Panel</h3><p>Position, Rotation, Scale numerisch editierbar. Undo bei jedem Commit.</p></div>
+          <div class="card"><div class="card-icon">🧱</div><h3>Objekt-Palette</h3><p>Eingebaute Geometrien (Cube, Sphere, Grid …) und Lichter per Klick platzieren.</p></div>
+          <div class="card"><div class="card-icon">📦</div><h3>Prefab-Pipeline</h3><p>Selektion als Prefab speichern, isolierte 3D-Thumbnails rendern, instanziieren.</p></div>
+          <div class="card"><div class="card-icon">💾</div><h3>Autosave & glTF 2.0</h3><p>500ms Debounced write via File System Access API mit SWM_*-Erweiterungen.</p></div>
+          <div class="card"><div class="card-icon">↩️</div><h3>Undo-Stack & Soft-Delete</h3><p>Command-Pattern mit Off-Scene TrashBin zur GPU-Puffer-Schonung.</p></div>
+          <div class="card"><div class="card-icon">🗺️</div><h3>ASCII-Map-Import</h3><p>Level aus Text-Map modular generieren mit konfigurierbarer Legende.</p></div>
+          <div class="card"><div class="card-icon">⧉</div><h3>Duplicate / Group</h3><p>Ctrl+D klont Selektionen inkl. Behaviors. Ctrl+G gruppiert um den Centroid.</p></div>
+          <div class="card"><div class="card-icon">📷</div><h3>Kamera-Bookmarks</h3><p>9 Slots, Links/1-9 = springen, Rechts/Ctrl+1-9 = speichern.</p></div>
+          <div class="card"><div class="card-icon">⛶</div><h3>Multi-Selektion & Marquee</h3><p>Lasso-Rechteck, Shift/Ctrl-Klick, Cyan/Amber-Wireframes, Pivot-relativer Gruppen-Transform.</p></div>
+          <div class="card"><div class="card-icon">🧲</div><h3>Dynamic Snapping</h3><p>0.5m Default, Stufenweises Schalten via [ und ] (0.1m–2.0m), 15° Winkel, 0.25 Scale. Toggle: X.</p></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Roadmap</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+          <span class="pill pill-done">✅ Transform-Gizmo (Always-on-Top)</span>
+          <span class="pill pill-done">✅ Hierarchy-Panel</span>
+          <span class="pill pill-done">✅ Property-Panel</span>
+          <span class="pill pill-done">✅ Prefabs & isolierte 3D-Thumbnails</span>
+          <span class="pill pill-done">✅ Autosave (glTF 2.0 + SWM_*)</span>
+          <span class="pill pill-done">✅ Undo-Stack & Soft-Delete</span>
+          <span class="pill pill-done">✅ ASCII-Map-Import</span>
+          <span class="pill pill-done">✅ Gadget-Inspector Ablösung</span>
+          <span class="pill pill-done">✅ Licht- & Behavior-Platzierung</span>
+          <span class="pill pill-done">✅ Duplicate / Group (Batch)</span>
+          <span class="pill pill-done">✅ Kamera-Bookmarks (1-9)</span>
+          <span class="pill pill-done">✅ Multi-Selektion & Marquee</span>
+          <span class="pill pill-done">✅ Dynamic Grid-Stepping ([ & ])</span>
+          <span class="pill pill-done">✅ Camera-Cardinal Keyboard Nudge</span>
+          <span class="pill pill-done">✅ Snap to Ground (End)</span>
+          <span class="pill pill-done">✅ Inline Renaming (F2 & Hierarchy)</span>
+          <span class="pill pill-done">✅ Hierarchy Search & Filter (Ctrl+F)</span>
+          <span class="pill pill-done">✅ Icon-Matrix Palette (20 Primitives/Lights/Helpers)</span>
+          <span class="pill pill-done">✅ 3D Light Gizmos & Selection Range Bounds</span>
+          <span class="pill pill-done">✅ Player SpawnPoint (1.8m Silhouette)</span>
+          <span class="pill pill-done">✅ Smart Viewport-Center Spawning & Ground Resting</span>
+          <span class="pill pill-done">✅ Behavior Removal & Inspector Detach</span>
+          <span class="pill pill-done">✅ Full Material Management (Switch, Reset, Remove & Add)</span>
+          <span class="pill pill-done">✅ Multi-Column Inspector Layout (Transform Trios & Pairs)</span>
+          <span class="pill pill-future">◻ Play-in-Browser</span>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Architektur-Entscheidungen</h2>
+        <div class="adrs">
+          <div class="adr-item">
+            <strong>ADR 0010 — Maker Editor Architecture (Delivered)</strong><br />
+            <span>MakerApp als schlanker Orchestrator. GadgetInspector vollständig abgelöst.
+            Stamped-copies für Prefabs mit isoliertem 3D-Thumbnail-Rendering.</span>
+          </div>
+          <div class="adr-item">
+            <strong>File System Access API — kein Server</strong><br />
+            <span>Direkter Zugriff auf <code>scene.gltf</code> + <code>prefabs/</code> im Browser.
+            Abstrakte Interfaces in ProjectBinding ermöglichen vollständige Testbarkeit ohne echtes Dateisystem.</span>
+          </div>
+          <div class="adr-item">
+            <strong>Trash-Bin-Pattern (Soft Delete)</strong><br />
+            <span>Gelöschte Objekte wandern in einen Off-Scene-Container, nie in <code>Scene.remove()</code>.
+            Verhindert GPU-Buffer-Disposal und hält Undo sauber und sicher.</span>
+          </div>
+          <div class="adr-item">
+            <strong><code>Inspectable</code>-Reflection-Layer</strong><br />
+            <span>Das <code>Behavior.inspector</code>-Schema-Pattern generalisiert auf <code>Object3D</code>,
+            Materialien und Lichter via <code>collectInspectorSchema()</code>. Ein einheitlicher Panel-Renderer.</span>
+          </div>
+        </div>
+      </section>
+
+      <footer>Small World Machine · Maker Tool · Concept Dossier · Stand: September 2026</footer>
+    </div>
+  </body>
+</html>
