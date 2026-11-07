@@ -21,7 +21,7 @@ import {
 
 /** Placement of the player character model inside the 1x1 collision box. */
 interface CharacterPlacement {
-  /** Uniform base scale (procedural squash/stretch multiplies on top). */
+  /** Uniform base scale (the static fallback adds a duck squash on top). */
   readonly scale: number;
   /** Vertical offset so the feet sit on the bottom of the collision box. */
   readonly offsetY: number;
@@ -116,8 +116,6 @@ export class Showcase extends AbstractShowcase {
   /** Ducked at speed: momentum carries the player until it decays to crawl speed. */
   private _isSliding: boolean = false;
   private _duckAmount: number = 0;
-  private _jumpStretch: number = 0;
-  private _prevVelocityY: number = 0;
 
   // The Level Map (1-3 = blocks with different textures, 0 = air)
   // Expansive 200-block stage across 10 diverse platforming zones
@@ -540,10 +538,7 @@ export class Showcase extends AbstractShowcase {
       }
     }
 
-    // --- 2. VERTIKALE BEWEGUNG (Y) & JUMP STRETCH / SQUASH ---
-    const wasGrounded = this._isGrounded;
-    this._prevVelocityY = this._velocity.y;
-
+    // --- 2. VERTIKALE BEWEGUNG (Y) ---
     const midAirFastFall = !this._isGrounded && wantsDuck;
     const effectiveGravity = midAirFastFall ? this._gravity * 1.5 : this._gravity;
     this._velocity.y += effectiveGravity * deltaTime;
@@ -556,7 +551,6 @@ export class Showcase extends AbstractShowcase {
     ) {
       this._velocity.y = this._jumpForce;
       this._isGrounded = false;
-      this._jumpStretch = 0.42; // Launch stretch
     }
 
     this._player.position.y += this._velocity.y * deltaTime;
@@ -585,24 +579,6 @@ export class Showcase extends AbstractShowcase {
       }
     }
 
-    // Landing detection for procedural impact squash
-    if (!wasGrounded && this._isGrounded && this._prevVelocityY < -3.0) {
-      this._jumpStretch = -MathUtils.clamp(-this._prevVelocityY * 0.022, 0.15, 0.42);
-    }
-
-    // Target stretch in air vs grounded
-    let targetStretch = 0;
-    if (!this._isGrounded) {
-      if (midAirFastFall) {
-        targetStretch = -0.28;
-      } else if (this._velocity.y > 0) {
-        targetStretch = MathUtils.clamp(this._velocity.y * 0.026, 0.0, 0.35);
-      } else {
-        targetStretch = MathUtils.clamp(this._velocity.y * 0.012, -0.15, 0.0);
-      }
-    }
-    this._jumpStretch += (targetStretch - this._jumpStretch) * this._expDecay(14.0, deltaTime);
-
     // Death Zone & Respawn
     if (this._player.position.y < -10) {
       this._player.position.set(2, 1.001, 0);
@@ -611,11 +587,9 @@ export class Showcase extends AbstractShowcase {
       this._isDucking = false;
       this._isSliding = false;
       this._duckAmount = 0;
-      this._jumpStretch = 0;
-      this._prevVelocityY = 0;
     }
 
-    // --- 3. CHARAKTER-AUSRICHTUNG, DUCK & SQUASH/STRETCH ---
+    // --- 3. CHARAKTER-AUSRICHTUNG & DUCK ---
     if (this._characterModel) {
       // Smooth facing turn with frame-rate independent exponential decay
       const targetRotY = this._facingRight ? MathUtils.HALF_PI : -MathUtils.HALF_PI;
@@ -635,16 +609,12 @@ export class Showcase extends AbstractShowcase {
       this._characterModel.rotation.z +=
         (targetTilt - this._characterModel.rotation.z) * this._expDecay(14.0, deltaTime);
 
-      // Procedural Squash & Stretch (Scale). A rigged character only gets a light squash on top
-      // of its crouch clips; the static fallback squashes fully to show the smaller hitbox.
+      // The skeletal clips carry jump and duck poses, so a rigged character keeps its base
+      // scale; only the static fallback squashes to show the smaller duck hitbox.
       const baseScale = this._characterBaseScale;
-      const duckY = 1.0 - (skeletal ? 0.15 : 0.46) * this._duckAmount;
-      const duckXZ = 1.0 + (skeletal ? 0.05 : 0.32) * this._duckAmount;
-      const jumpY = 1.0 + this._jumpStretch;
-      const jumpXZ = 1.0 - this._jumpStretch * 0.38;
-
-      const finalScaleY = baseScale * duckY * jumpY;
-      const finalScaleXZ = baseScale * duckXZ * jumpXZ;
+      const fallbackDuck = skeletal ? 0 : this._duckAmount;
+      const finalScaleY = baseScale * (1.0 - 0.46 * fallbackDuck);
+      const finalScaleXZ = baseScale * (1.0 + 0.32 * fallbackDuck);
       this._characterModel.scale.set(finalScaleXZ, finalScaleY, finalScaleXZ);
       // Hips translation is stripped from the clips: lower the model by the clip's hips drop.
       this._characterModel.position.y = this._characterOffsetY - this._duckDrop * finalScaleY;

@@ -167,3 +167,10 @@ Zur Ergänzung der bisher rein prozeduralen Squash/Stretch- und Dämpfungsverfor
 
 ### 3. Known Limitations
 * Die Clips sind auf die Dino-Proportionen retargeted; andere Figuren (lokaler Override) übernehmen sie unverändert.
+
+## 2026-11-07 · Procedural Squash & Stretch Removed
+
+* Jump/landing squash & stretch (`_jumpStretch`, `_prevVelocityY`) removed entirely; the skeletal jump/crouch/crawl/slide clips carry the poses, so a rigged character keeps its base scale.
+* The additional light duck squash on rigged characters is gone too. Only the static fallback cube still squashes while ducking, since it has no clip that shows the smaller hitbox.
+* Air tilt (rotation) unchanged.
+* Verification: typecheck, eslint, prettier green; `build:showcases` + `check-showcases.js 9`: WebGL1/WebGL2/WebGPU ✅.
