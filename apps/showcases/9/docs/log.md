@@ -150,3 +150,20 @@ Zur Ergänzung der bisher rein prozeduralen Squash/Stretch- und Dämpfungsverfor
 
 ### 3. Known Limitations
 * Der Dino wirkt im Spiel dunkler (Orange → Braun) als im Konzept, da die Textur selbst gedeckt ist und die matte PBR-Einstellung (`roughness 0.88`) greift.
+
+## 2026-11-07 · Mixamo Duck Motions: Crouch, Crouch-Walk, Crawl & Slide
+
+### 1. Implemented Features
+* **Vier neue Mixamo-Clips, auf den Dino retargeted:** `crouch.glb` (Crouch Idle, ersetzt den alten Clip), `crouch-walk.glb` (Crouch Walk Forward), `crawl.glb` (Crawling, ersetzt den alten Clip), `slide.glb` (Running Slide). FBX2glTF-Konvention wie `idle.glb`/`running.glb` (nur Rotationen + Hips-Translation, die beim Laden entfernt wird).
+* **Tabellengetriebene Lokomotion:** `LOCOMOTION_CLIPS` (Zustand, URL, Hüft-Absenkung) ersetzt fünf Einzel-Actions; Laden per `Promise.all`, Blending in einer Zero-GC-Indexschleife.
+* **Zustandswahl:** Luft → `jump`; Slide → `slide`; geduckt in Bewegung → `crawl` unter niedriger Decke (Kopfzone blockiert), sonst `crouchWalk`; geduckt im Stand → `crouch`; sonst `run`/`idle`. Gehgeschwindigkeit skaliert `timeScale` (`|v| / 2.2`).
+* **Crouch-Slide als eigener Zustand:** Ducken aus vollem Lauf (`|v| > 3.2`, am Boden) startet `_isSliding`: Richtungseingaben werden ignoriert, Schwung zerfällt exponentiell (`rate 1.1`) bis Kriechtempo, dann Übergang in Crouch-Walk/Crawl. Der Slide-Clip startet bei Eintritt neu und hält die tiefe Endpose.
+* **Hüft-Absenkung statt Hips-Translation:** Da die Hips-Translation entfernt wird, senkt `_duckDrop` (geglättet, Anteil der Figurenhöhe aus der Hips-Spur gemessen: crouch 0.145, crouchWalk 0.067, crawl 0.122, slide 0.11) das ganze Modell ab — Füße bleiben am Boden, unabhängig von der Figurengröße. Die prozedurale Duck-Stauchung ist für geriggte Figuren auf `0.15`/`0.05` reduziert, der Ducken-Neigungswinkel entfällt; der Fallback-Würfel behält beides.
+
+### 2. Verification
+* `npm run typecheck`, eslint, prettier: Grün. `vitest run apps/showcases`: 14 Files / 255 Tests bestanden.
+* `npm run build:showcases` + `node .agents/scripts/check-showcases.js 9`: WebGL1, WebGL2, WebGPU alle ✅ OK.
+* Puppeteer-Sequenz mit Dino (Standardpfad): Ducken, Crouch-Walk, Sprint → Slide → Kriechen → Aufstehen; keine Konsolenfehler, Füße am Boden.
+
+### 3. Known Limitations
+* Die Clips sind auf die Dino-Proportionen retargeted; andere Figuren (lokaler Override) übernehmen sie unverändert.

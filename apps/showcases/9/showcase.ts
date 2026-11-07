@@ -55,6 +55,24 @@ function resolveCharacter(): { readonly url: string; readonly placement: Charact
   return { url: localUrl, placement: { ...DEFAULT_CHARACTER_PLACEMENT, ...local } };
 }
 
+/**
+ * Skeletal locomotion states, one looping Mixamo clip each (rotation tracks drive the pose).
+ * Hips translation is stripped from every clip, so the hips keep their standing height; `drop`
+ * (fraction of character height, measured from the clip's hips track) lowers the whole model
+ * instead, which keeps the feet on the ground for any character size.
+ */
+const LOCOMOTION_CLIPS = [
+  { state: "idle", url: "./assets/idle.glb", drop: 0 },
+  { state: "run", url: "./assets/running.glb", drop: 0 },
+  { state: "jump", url: "./assets/jump.glb", drop: 0 },
+  { state: "crouch", url: "./assets/crouch.glb", drop: 0.145 },
+  { state: "crouchWalk", url: "./assets/crouch-walk.glb", drop: 0.067 },
+  { state: "crawl", url: "./assets/crawl.glb", drop: 0.122 },
+  { state: "slide", url: "./assets/slide.glb", drop: 0.11 },
+] as const;
+
+type LocomotionState = (typeof LOCOMOTION_CLIPS)[number]["state"];
+
 interface StaticBlockAABB {
   readonly minX: number;
   readonly maxX: number;
@@ -71,13 +89,14 @@ export class Showcase extends AbstractShowcase {
   private _player!: Object3D;
   private _characterModel?: Object3D;
   private _mixer?: AnimationMixer;
-  private _runAction?: AnimationAction;
-  private _idleAction?: AnimationAction;
-  private _jumpAction?: AnimationAction;
-  private _crouchAction?: AnimationAction;
-  private _crawlAction?: AnimationAction;
+  /** Indexed like `LOCOMOTION_CLIPS`; `undefined` where a clip failed to load. */
+  private readonly _actions: (AnimationAction | undefined)[] = [];
+  private _locomotion: LocomotionState = "idle";
   private _facingRight: boolean = true;
   private _characterBaseScale: number = DEFAULT_CHARACTER_PLACEMENT.scale;
+  private _characterOffsetY: number = DEFAULT_CHARACTER_PLACEMENT.offsetY;
+  /** Smoothed model drop (fraction of character height) of the current ducking clip. */
+  private _duckDrop: number = 0;
   private readonly _camTarget: Vector3D = new Vector3D(2, 2.8, 0);
 
   private readonly _blocks: Object3D[] = [];
@@ -94,6 +113,8 @@ export class Showcase extends AbstractShowcase {
 
   // Procedural Animation & Ducking State
   private _isDucking: boolean = false;
+  /** Ducked at speed: momentum carries the player until it decays to crawl speed. */
+  private _isSliding: boolean = false;
   private _duckAmount: number = 0;
   private _jumpStretch: number = 0;
   private _prevVelocityY: number = 0;
@@ -361,6 +382,7 @@ export class Showcase extends AbstractShowcase {
       const character = await gltfLoader.load(url);
       character.name = "Character";
       this._characterBaseScale = placement.scale;
+      this._characterOffsetY = placement.offsetY;
       character.scale.set(placement.scale, placement.scale, placement.scale);
       // Offset so the feet align precisely with the bottom of the 1x1 collision box
       character.position.set(0, placement.offsetY, 0);
@@ -383,13 +405,9 @@ export class Showcase extends AbstractShowcase {
 
       // Skeletal animations
       try {
-        const [idleClips, runClips, jumpClips, crouchClips, crawlClips] = await Promise.all([
-          gltfLoader.loadAnimations("./assets/idle.glb"),
-          gltfLoader.loadAnimations("./assets/running.glb"),
-          gltfLoader.loadAnimations("./assets/jump.glb"),
-          gltfLoader.loadAnimations("./assets/crouch.glb"),
-          gltfLoader.loadAnimations("./assets/crawl.glb"),
-        ]);
+        const clipSets = await Promise.all(
+          LOCOMOTION_CLIPS.map((entry) => gltfLoader.loadAnimations(entry.url)),
+        );
 
         const stripHipsTranslation = (clip: AnimationClip): void => {
           clip.tracks = clip.tracks.filter(
@@ -397,37 +415,17 @@ export class Showcase extends AbstractShowcase {
           );
         };
 
-        if (idleClips[0]) stripHipsTranslation(idleClips[0]);
-        if (runClips[0]) stripHipsTranslation(runClips[0]);
-        if (jumpClips[0]) stripHipsTranslation(jumpClips[0]);
-        if (crouchClips[0]) stripHipsTranslation(crouchClips[0]);
-        if (crawlClips[0]) stripHipsTranslation(crawlClips[0]);
-
-        this._mixer = new AnimationMixer(character);
-        if (idleClips[0]) {
-          this._idleAction = this._mixer.clipAction(idleClips[0]);
-          this._idleAction.play();
-        }
-        if (runClips[0]) {
-          this._runAction = this._mixer.clipAction(runClips[0]);
-          this._runAction.weight = 0;
-          this._runAction.play();
-        }
-        if (jumpClips[0]) {
-          this._jumpAction = this._mixer.clipAction(jumpClips[0]);
-          this._jumpAction.weight = 0;
-          this._jumpAction.play();
-        }
-        if (crouchClips[0]) {
-          this._crouchAction = this._mixer.clipAction(crouchClips[0]);
-          this._crouchAction.weight = 0;
-          this._crouchAction.play();
-        }
-        if (crawlClips[0]) {
-          this._crawlAction = this._mixer.clipAction(crawlClips[0]);
-          this._crawlAction.weight = 0;
-          this._crawlAction.play();
-        }
+        const mixer = new AnimationMixer(character);
+        this._mixer = mixer;
+        clipSets.forEach((clips, i) => {
+          const clip = clips[0];
+          if (!clip) return;
+          stripHipsTranslation(clip);
+          const action = mixer.clipAction(clip);
+          action.weight = LOCOMOTION_CLIPS[i]!.state === "idle" ? 1 : 0;
+          action.play();
+          this._actions[i] = action;
+        });
       } catch (animErr) {
         console.warn(
           "[Showcase 9] Animation clips could not be loaded, using static pose:",
@@ -458,9 +456,10 @@ export class Showcase extends AbstractShowcase {
     // --- 1. DUCKING & HORIZONTALE BEWEGUNG (X) ---
     const wantsDuck = this.input.isPressed(Keys.S) || this.input.isPressed(Keys.DOWN);
 
-    // Head clearance check when attempting to stand up under low ceilings
-    let hasCeilingObstacle = false;
-    if (!wantsDuck && this._isDucking) {
+    // Head clearance: blocks inside the standing head zone keep the player ducked (no stand-up
+    // under low ceilings) and switch ducked movement from crouch-walk to crawl.
+    let headBlocked = false;
+    if (wantsDuck || this._isDucking) {
       const headMinX = this._player.position.x - 0.45;
       const headMaxX = this._player.position.x + 0.45;
       const headMinY = this._player.position.y + 0.05;
@@ -468,18 +467,32 @@ export class Showcase extends AbstractShowcase {
       for (let i = 0; i < this._staticBlockBounds.length; i++) {
         const b = this._staticBlockBounds[i]!;
         if (headMinX <= b.maxX && headMaxX >= b.minX && headMinY <= b.maxY && headMaxY >= b.minY) {
-          hasCeilingObstacle = true;
+          headBlocked = true;
           break;
         }
       }
     }
-    this._isDucking = wantsDuck || hasCeilingObstacle;
+    const wasDucking = this._isDucking;
+    this._isDucking = wantsDuck || (this._isDucking && headBlocked);
+
+    // Ducking at speed starts a slide that keeps the momentum (any direction input is ignored).
+    const crawlSpeed = 2.2;
+    if (
+      this._isDucking &&
+      !wasDucking &&
+      this._isGrounded &&
+      Math.abs(this._velocity.x) > crawlSpeed + 1.0
+    ) {
+      this._isSliding = true;
+    }
+    if (!this._isDucking || !this._isGrounded || Math.abs(this._velocity.x) <= crawlSpeed) {
+      this._isSliding = false;
+    }
 
     const targetDuck = this._isDucking ? 1.0 : 0.0;
     this._duckAmount += (targetDuck - this._duckAmount) * this._expDecay(18.0, deltaTime);
 
     const isSprinting = this.input.isPressed(Keys.SHIFT_L) || this.input.isPressed(Keys.SHIFT_R);
-    const crawlSpeed = 2.2;
     this._moveSpeed = this._isDucking
       ? crawlSpeed
       : isSprinting
@@ -487,16 +500,13 @@ export class Showcase extends AbstractShowcase {
         : this._jogSpeed;
 
     let inputX = 0;
-    if (this.input.isPressed(Keys.A) || this.input.isPressed(Keys.LEFT)) {
-      inputX = -1;
-      this._facingRight = false;
-    }
-    if (this.input.isPressed(Keys.D) || this.input.isPressed(Keys.RIGHT)) {
-      inputX = 1;
-      this._facingRight = true;
-    }
+    if (this.input.isPressed(Keys.A) || this.input.isPressed(Keys.LEFT)) inputX = -1;
+    if (this.input.isPressed(Keys.D) || this.input.isPressed(Keys.RIGHT)) inputX = 1;
+    if (inputX !== 0 && !this._isSliding) this._facingRight = inputX > 0;
 
-    if (inputX !== 0) {
+    if (this._isSliding) {
+      this._velocity.x += (0 - this._velocity.x) * this._expDecay(1.1, deltaTime);
+    } else if (inputX !== 0) {
       this._velocity.x = inputX * this._moveSpeed;
     } else if (this._isDucking && this._isGrounded) {
       // Crouch-slide deceleration
@@ -599,6 +609,7 @@ export class Showcase extends AbstractShowcase {
       this._velocity.set(0, 0, 0);
       this._isGrounded = true;
       this._isDucking = false;
+      this._isSliding = false;
       this._duckAmount = 0;
       this._jumpStretch = 0;
       this._prevVelocityY = 0;
@@ -613,80 +624,64 @@ export class Showcase extends AbstractShowcase {
       while (diff > Math.PI) diff -= Math.PI * 2;
       this._characterModel.rotation.y += diff * this._expDecay(18.0, deltaTime);
 
-      // Dynamic tilt during air flight and forward lean during crouch-slide
+      // Dynamic tilt during air flight; ducking poses come from the skeletal clips.
+      const skeletal = this._mixer !== undefined;
       const airTilt = this._isGrounded ? 0 : MathUtils.clamp(this._velocity.y * 0.022, -0.22, 0.28);
       const duckTilt =
-        this._isDucking && this._isGrounded
+        !skeletal && this._isDucking && this._isGrounded
           ? (this._facingRight ? 0.14 : -0.14) * (Math.abs(this._velocity.x) > 0.1 ? 1.0 : 0.4)
           : 0;
       const targetTilt = (this._facingRight ? airTilt : -airTilt) + duckTilt;
       this._characterModel.rotation.z +=
         (targetTilt - this._characterModel.rotation.z) * this._expDecay(14.0, deltaTime);
 
-      // Procedural Squash & Stretch (Scale)
+      // Procedural Squash & Stretch (Scale). A rigged character only gets a light squash on top
+      // of its crouch clips; the static fallback squashes fully to show the smaller hitbox.
       const baseScale = this._characterBaseScale;
-      const duckY = 1.0 - 0.46 * this._duckAmount;
-      const duckXZ = 1.0 + 0.32 * this._duckAmount;
+      const duckY = 1.0 - (skeletal ? 0.15 : 0.46) * this._duckAmount;
+      const duckXZ = 1.0 + (skeletal ? 0.05 : 0.32) * this._duckAmount;
       const jumpY = 1.0 + this._jumpStretch;
       const jumpXZ = 1.0 - this._jumpStretch * 0.38;
 
       const finalScaleY = baseScale * duckY * jumpY;
       const finalScaleXZ = baseScale * duckXZ * jumpXZ;
       this._characterModel.scale.set(finalScaleXZ, finalScaleY, finalScaleXZ);
+      // Hips translation is stripped from the clips: lower the model by the clip's hips drop.
+      this._characterModel.position.y = this._characterOffsetY - this._duckDrop * finalScaleY;
     }
 
     if (this._mixer) {
       this._mixer.update(deltaTime);
-      const isMoving = Math.abs(this._velocity.x) > 0.1 && this._isGrounded;
+      const speed = Math.abs(this._velocity.x);
+      const isMoving = speed > 0.1 && this._isGrounded;
 
-      // Target weights for the 5 locomotion states
-      let targetIdle = 0.0;
-      let targetRun = 0.0;
-      let targetJump = 0.0;
-      let targetCrouch = 0.0;
-      let targetCrawl = 0.0;
+      let next: LocomotionState;
+      if (!this._isGrounded) next = "jump";
+      else if (this._isSliding) next = "slide";
+      else if (this._isDucking) next = isMoving ? (headBlocked ? "crawl" : "crouchWalk") : "crouch";
+      else next = isMoving ? "run" : "idle";
 
-      if (!this._isGrounded) {
-        targetJump = 1.0;
-      } else if (this._isDucking) {
-        if (isMoving) {
-          targetCrawl = 1.0;
-        } else {
-          targetCrouch = 1.0;
-        }
-      } else if (isMoving) {
-        targetRun = 1.0;
-      } else {
-        targetIdle = 1.0;
-      }
-
-      const blendSpeed = 14.0;
-      if (this._idleAction) {
-        this._idleAction.weight +=
-          (targetIdle - this._idleAction.weight) * this._expDecay(blendSpeed, deltaTime);
-      }
-      if (this._runAction) {
-        this._runAction.weight +=
-          (targetRun - this._runAction.weight) * this._expDecay(blendSpeed, deltaTime);
-        if (isMoving && !this._isDucking) {
-          this._runAction.timeScale = Math.abs(this._velocity.x) * 0.245;
+      const blend = this._expDecay(14.0, deltaTime);
+      let targetDrop = 0;
+      for (let i = 0; i < LOCOMOTION_CLIPS.length; i++) {
+        const entry = LOCOMOTION_CLIPS[i]!;
+        const action = this._actions[i];
+        const active = entry.state === next;
+        if (active) targetDrop = entry.drop;
+        if (!action) continue;
+        if (active && entry.state !== this._locomotion && entry.state === "slide") action.reset();
+        action.weight += ((active ? 1 : 0) - action.weight) * blend;
+        if (!active) continue;
+        if (entry.state === "run") action.timeScale = speed * 0.245;
+        else if (entry.state === "crouchWalk" || entry.state === "crawl")
+          action.timeScale = speed / 2.2;
+        else if (entry.state === "slide") {
+          // One-shot: hold the low end pose instead of looping back to the run-in.
+          action.timeScale = action.time >= action.clip.duration - 0.05 ? 0 : 1;
         }
       }
-      if (this._jumpAction) {
-        this._jumpAction.weight +=
-          (targetJump - this._jumpAction.weight) * this._expDecay(blendSpeed, deltaTime);
-      }
-      if (this._crouchAction) {
-        this._crouchAction.weight +=
-          (targetCrouch - this._crouchAction.weight) * this._expDecay(blendSpeed, deltaTime);
-      }
-      if (this._crawlAction) {
-        this._crawlAction.weight +=
-          (targetCrawl - this._crawlAction.weight) * this._expDecay(blendSpeed, deltaTime);
-        if (isMoving && this._isDucking) {
-          this._crawlAction.timeScale = Math.abs(this._velocity.x) * 0.45;
-        }
-      }
+      this._locomotion = next;
+      this._duckDrop += (targetDrop - this._duckDrop) * blend;
     }
 
     // --- 4. KLASSISCHE RUN & JUMP KAMERAFÜHRUNG ---
