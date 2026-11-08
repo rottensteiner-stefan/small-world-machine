@@ -19,10 +19,8 @@
 
 | Device | API tier | Lane | Verified? |
 | :--- | :--- | :--- | :--- |
-| ADR target class: Apple M1-class laptop, Chrome | WebGPU | ambition (≥250 k, 60 fps) — NOT the measurement host; M4-Pro absolutes = upper-bound evidence only | ⬜ |
-| Measurement host: **MacBook Pro M4 Pro (2024-11), macOS 26.7.2, Chrome 157.0.8103.39** | WebGPU | operator session (real GPU; headless lane = Dawn/SwiftShader software, §8) | ⬜ |
+| **MacBook Pro M4 Pro (2024-11), macOS 26.7.2, Chrome 157.0.8103.39 — PRIMARY TARGET** (moderator re-anchor 2026-11-08) | WebGPU | 1080p 60 fps ≥ 250 k ambition; operator session (real GPU, §8) + automated Dawn/SwiftShader software lane | ⬜ |
 | macOS (this repo host: MacBook Pro M4 Pro), headless Chrome SwiftShader | WebGL2 | automated `veg-bench.mjs` | ⬜ |
-| macOS (this repo host: MacBook Pro M4 Pro), headless Chrome SwiftShader | WebGPU | automated `veg-bench.mjs` (ring `gpuMs` needs real device) | ⬜ |
 | (Windows dGPU WebGPU + WebGL2) | WebGPU / WebGL2 | waiting on host | ⬜ |
 | Redmi 13C WebGL2 low tier | WebGL2 | waiting on host | ⬜ |
 
@@ -35,7 +33,7 @@
 
 ## 4. Baseline table (filled at S2)
 
-**Lane:** WebGL2, headless Chrome SwiftShader (this host, M1-class Mac), `veg-bench.mjs` cells
+**Lane:** WebGL2, headless Chrome SwiftShader (this host — MacBook Pro M4 Pro, macOS 26.7.2), `veg-bench.mjs` cells
 (`--frames 60` @20k, `--frames 30` @100k; warm-up 30; real CC0 asset `tree_pineTallA.glb`, 2 parts/tree;
 shadows on). `P50`/`P95` from page `frameTimesMs[]` (CPU-observed); `wall` = MEASURE wall seconds.
 
@@ -75,18 +73,18 @@ CI-reproducible structure + the n-slope.
 
 - [x] All three paths reproducible on WebGL2 (automated) + WebGL1 spot + WebGPU software lane (automated, §8; ring needs a `timestamp-query` device). Zero console errors in every cell.
 - [x] CPU ms vs `?n=` curve recorded (SwiftShader lane): ~linear in n (20k→100k = 5× n → ≈4.6× ms); autoinst ≈ instanced (GPU-bound lane).
-- [ ] Target numbers calibrated with moderator (ADR step 0 targets: WebGPU M1-class laptop 1080p 60 fps ≥ 250 k field instances as P1 ambition — **measurement host is MacBook Pro M4 Pro, whose absolutes are NOT M1 evidence**, see §7/§8; WebGL2 ≥ 20 k). **Pending moderator session — see BACKLOG.**
+- [ ] Target numbers calibrated with moderator (ADR step 0 targets, **re-anchored to MacBook Pro M4 Pro 2026-11-08**: WebGPU 1080p 60 fps ≥ 250 k field instances as P1/P2 ambition; WebGL2 same device ≥ 20 k). **Pending operator session — see BACKLOG.**
 - [x] Showcase 51 golden baseline captured once (`.agents/goldens/veg51/baseline/forest-baseline__base.png`, `sha256 ba3801…c527`, 2026-11-08, LFS; only intentional visual changes re-baseline).
 - [ ] Open follow-ups documented (WebGPU real-GPU runs, FLIP reference-bin validation, P1 entrance decision). **See BACKLOG.**
 
 ## 6. Delta vs ADR targets (2026-11-08, lead reading)
 
-- ADR step-0 ambition: WebGPU M1-class laptop 1080p 60 fps @ ≥ 250 k; WebGL2 ≥ 20 k. On the ONLY automated lane available today (host SwiftShader, MacBook Pro M4 Pro) the scene reaches **0.8 fps @ 20 k and 0.2 fps @ 100 k** — these are software-rasterizer solids, NOT the transferable target numbers. The transferable P0 facts: (a) instancing lane choice is invisible on a GPU-bound rasterizer, (b) cost scales ≈ linear with instance count, (c) per-tree ~78–402 tris is far too heavy for the 250 k ambition (≈ 90 M raw tris worst case at 250 k before culling/occlusion) — GPU-side culling/LOD (P1+) is what reaches the target, not CPU-side scene-graph work alone.
-- Real-GPU calibration (host Chrome WebGPU — **MacBook Pro M4 Pro**, macOS 26.7.2, Chrome 157.0.8103.39 — + a low-tier Android WebGL2) is the P0→P1 hand-off measurement and the decisive gate for the CPU-side numbers; the SwiftShader lane stays as CI-reproducible structure lane. **M1↔M4 caveat:** M4-Pro absolutes are upper-bound evidence for the M1-class ambition; the M1-class target either needs an M1 test device or an explicit M1↔M4 transfer note at the P1 gate (see §7).
+- ADR step-0 ambition (**moderator re-anchor 2026-11-08**): WebGPU **MacBook Pro M4 Pro** (macOS 26, Chrome) 1080p 60 fps @ ≥ 250 k; WebGL2 same device ≥ 20 k; measured M4-Pro absolutes ARE the target evidence. On the ONLY automated lane available today (host SwiftShader, MacBook Pro M4 Pro) the scene reaches **0.8 fps @ 20 k and 0.2 fps @ 100 k** — these are software-rasterizer solids, NOT the transferable target numbers. The transferable P0 facts: (a) instancing lane choice is invisible on a GPU-bound rasterizer, (b) cost scales ≈ linear with instance count, (c) per-tree ~78–402 tris is far too heavy for the 250 k ambition (≈ 90 M raw tris worst case at 250 k before culling/occlusion) — GPU-side culling/LOD (P1+) is what reaches the target, not CPU-side scene-graph work alone.
+- Real-GPU calibration (host Chrome WebGPU — **MacBook Pro M4 Pro**, macOS 26.7.2, Chrome 157.0.8103.39 — + a low-tier Android WebGL2) is the P0→P1 hand-off measurement and the decisive gate for the CPU-side numbers; the SwiftShader lane stays as CI-reproducible structure lane. The earlier M1↔M4 transfer caveat is **void** since the target class = the measured device (moderator re-anchor).
 
 ## 7. Moderator calibration (2026-11-08, user decision)
 
-- **ADR step-0 targets stay P1/P2 PHASE AMBITIONS, not step-0 gates** (moderator go): WebGPU M1-class 1080p 60 fps ≥ 250 k and WebGL2 ≥ 20 k remain goals AFTER GPU culling (P1) + LOD buckets (P2); the step-0 gate is the *recorded, reproducible baseline* (this note + showcase 51 + golden veg51), which is MET. **2026-11-08 host correction:** ALL measurements run on **MacBook Pro M4 Pro (2024-11), macOS 26.7.2, Chrome 157.0.8103.39** — the M1-class ambition needs an explicit M4-Pro-vs-M1 transfer treatment at the P1 gate (M4 absolutes are upper bounds only).
+- **ADR step-0 targets stay P1/P2 PHASE AMBITIONS, not step-0 gates** (moderator go 2026-11-08): WebGPU **MacBook Pro M4 Pro** (macOS 26, Chrome) 1080p 60 fps ≥ 250 k and WebGL2 same device ≥ 20 k remain goals AFTER GPU culling (P1) + LOD buckets (P2); the step-0 gate is the *recorded, reproducible baseline* (this note + showcase 51 + golden veg51), which is MET. **2026-11-08 decision (moderator): target class re-anchored from "M1-class laptop" to this repo's device — MacBook Pro M4 Pro (2024-11), macOS 26.7.2, Chrome 157.0.8103.39.** The M1↔M4 transfer treatment is void; measured absolutes are direct target evidence.
 - **Real-GPU measurement is a standing BACKLOG task before the P1 decision** (this Mac's Chrome WebGPU + a low-tier Android WebGL2), because the automated SwiftShader lane is rasterization-bound and masks the CPU-side autoinst-vs-instanced contrast.
 - P0 closes with commit `af6aee0` ("If you cannot measure it, you cannot improve it.", branch `veg-p0`, amended from `fc2bc92` to fold in this calibration section; ADR status accepted-in-shape). Merged to `main` + pushed 2026-11-08.
 
@@ -112,4 +110,4 @@ CI-reproducible structure + the n-slope.
 - **Cells** (`frames=60` @20 k, `frames=240` at real-GPU frame rates; identical URLs between rows): `rendererType=WEB_GPU&mode=autoinst&n=20000&path=walk|flight|aerial&frames=60&gputimings=1` (+ the `instanced` twins), plus the `n=100000&path=flight` autoinst/instanced pair.
 - **Collection (2 s, per cell):** right-click the console message `[Showcase MEASURE]` → *Copy message contents*, or `copy(document.getElementById('__measure')?.textContent || '')`; paste into §4 (P50/P95 from `frameTimesMs[]`, `gpuMs`/`gpuPassesMs` from the ring). Keep raw JSON in `.agents/scratches/veg/rgpu/`.
 - **Low-tier Android WebGL2 (spot):** same URLs with `rendererType=WEB_GL2` on Android Chrome; identical collection.
-- **Decision value:** real-`gpuMs` vs `frameTimesMs` splits rasterization vs CPU cost — decisive for the P1 (GPU culling) go/no-go; `P50` absolutes calibrate the SwiftShader lanes (see §7; the 60 fps @ ≥ 250 k ambition is **M1-class** — M4-Pro session numbers are upper-bound evidence, an M1↔M4 transfer note is required at the P1 gate).
+- **Decision value:** real-`gpuMs` vs `frameTimesMs` splits rasterization vs CPU cost — decisive for the P1 (GPU culling) go/no-go; `P50` absolutes calibrate the SwiftShader lanes (see §7). The 60 fps @ ≥ 250 k ambition is **M4-Pro-anchored** (moderator decision 2026-11-08) — session numbers ARE direct target evidence.
