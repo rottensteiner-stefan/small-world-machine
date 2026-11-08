@@ -199,3 +199,24 @@ overlap (throughput baseline, not placement art) — accepted.
   cell. Android low-tier spot: not available on this host (no device) — open, does not block P1.
 - Verified: typecheck clean, eslint clean, `build:lib` + full suite green, real-GPU cells 0 console
   errors, `gpuMs` ≈ `frameMs` post-fix on every cell.
+
+## 2026-11-08 (late) — gpuMs truth correction: engine spec-name typo, not an adapter quirk
+
+- **Finding (mailbox flag, review-agent; conclusive probe `probe-timestamp-name-conclusive.mjs`):** the
+  "Chrome 157 never writes the begin slot" claim in the previous entry was an **engine typo**. `GpuTimer`
+  spelled `beginOfPassWriteIndex`; the shipped W3C/WebIDL member is `beginningOfPassWriteIndex`.
+  WebIDL silently ignores the unknown key → begin slot stayed 0 while end held an absolute counter.
+  Probe result: spec-name writes begin (796 329 220 505 600), engine-name leaves it 0.
+- **Fix (`GpuTimer.ts` + tests):** shipped member name used everywhere; the successive-end-delta
+  fallback (`_segmentEndBaseline`) is **removed** — it measured **wall clock**, producing the
+  tautological `gpuMs` ≈ `frameMs` that faked the "GPU-bound" narrative. `_publish` is back to clean
+  `end-begin`; `probeTimestampPeriodNs` null-guard stays. GpuTimer suite 19/19 green, typecheck + eslint
+  clean.
+- **Re-measure (real Metal, corrected ring, `PREVIEW_PORT=4174`, `recorrect-*.json` local):** real GPU
+  work is 1.3–4.0 ms @20 k and 3.7–6.0 ms @100 k — **2–34 % of each frame window; no cell is GPU-bound.**
+  autoinst is **CPU-bound** (36 726 / 182 928 scene objects: ~40 ms CPU overhead @20 k, ~275 ms @100 k);
+  the autoinst-vs-instanced gap (5.2× @20 k / 26× @100 k) is CPU-side, not rasterization.
+- **Corrected P1 verdict:** the GPU rasterizes **100 k instances in <6 ms** — the dominant cost is
+  CPU-side per-object work, exactly what P1 (`InstanceField` GPU culling + indirect draw) removes.
+  Priority **confirmed and strengthened**; ADR 0059 step 1 scope unchanged. Baseline note
+  `docs/research/vegetation-baseline-2026-11-07.md` §4/§6/§7/§8 corrected accordingly (credit: review-agent).

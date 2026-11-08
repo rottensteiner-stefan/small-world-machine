@@ -72,16 +72,18 @@ export interface GpuTimingSnapshot {
 }
 
 /**
- * Final shipped WebGPU timestamp-write shape. `@webgpu/types` is pinned at 0.1.74, which still
- * spells the draft name `beginningOfPassWriteIndex` (renamed in the spec before shipping) and
- * lacks `GPUQueue.getTimestampPeriod()`. Browsers implement the final names, so this file speaks
- * them explicitly; `TimestampWritesFinal` is structurally assignable to the pinned
- * `GPURenderPassTimestampWrites` (the draft-named field is optional in that type, the extra
- * final-named field is allowed), so no type escape hatches are needed.
+ * Final shipped WebGPU timestamp-write shape. The pinned `@webgpu/types` (0.1.74) declares the
+ * member as `beginningOfPassWriteIndex` — which IS the shipped W3C/WebIDL name (empirically
+ * verified 2026-11-08: Chrome 157 / Metal-3 writes the slot with this key; the variant
+ * `beginOfPassWriteIndex` is silently ignored by the WebIDL dictionary and leaves the slot 0).
+ * The pinned types additionally lack `GPUQueue.getTimestampPeriod()`; that is probed separately
+ * (`probeTimestampPeriodNs`), so this file speaks the shipped names explicitly.
+ * `TimestampWritesFinal` is structurally assignable to the pinned `GPURenderPassTimestampWrites`
+ * (the field is optional in that type), so no type escape hatches are needed.
  */
 interface TimestampWritesFinal {
   querySet: GPUQuerySet;
-  beginOfPassWriteIndex: number;
+  beginningOfPassWriteIndex: number;
   endOfPassWriteIndex: number;
 }
 
@@ -155,18 +157,6 @@ export class GpuTimer {
   private _pendingKick: TimingSlot | undefined = undefined;
   /** Timestamp period in ns per counter tick; probed once at resource creation. */
   private _timestampPeriodNs = 1;
-  /**
-   * begin=0 adapter quirk (probe `probe-timestamp-two-passes.mjs`, 2026-11-08): Chrome 157 /
-   * Metal-3 (`timestamp-writes-inside-passes`) never writes the begin-of-pass slot (stays 0)
-   * while end-of-pass carries an ABSOLUTE monotonic counter. `end - begin` then yields the
-   * absolute counter, not a duration. On such adapters the only valid segment duration is the
-   * delta of successive end counters per name across contiguous frames. Baselines live here
-   * (per name); they are dropped on a frame gap, so a published segment is either a clean
-   * single-frame measure or absent — never a span across dropped frames.
-   */
-  private readonly _segmentEndBaseline = new Map<string, bigint>();
-  /** Frame index of the last published baseline frame (contiguity guard). */
-  private _baselineFrameIndex = -1;
   /** Stable monomorphic segment objects (never truncated) from which published views are filled. */
   private readonly _segmentPool: MutableSegment[] = [];
   /** Published snapshot view: references into `_segmentPool`, sized to the latest frame's count. */
@@ -182,7 +172,7 @@ export class GpuTimer {
    * pass). */
   private readonly _twScratch: TimestampWritesFinal = {
     querySet: undefined as unknown as GPUQuerySet,
-    beginOfPassWriteIndex: 0,
+    beginningOfPassWriteIndex: 0,
     endOfPassWriteIndex: 0,
   };
 
@@ -278,7 +268,7 @@ export class GpuTimer {
     slot.segmentCount = index + 1;
     const writes = this._twScratch;
     writes.querySet = slot.querySet!;
-    writes.beginOfPassWriteIndex = index * 2;
+    writes.beginningOfPassWriteIndex = index * 2;
     writes.endOfPassWriteIndex = index * 2 + 1;
     return writes;
   }
@@ -352,8 +342,6 @@ export class GpuTimer {
     this._snapshot.frameIndex = -1;
     this._snapshotSegments.length = 0;
     this._timestampPeriodNs = probeTimestampPeriodNs(device.queue);
-    this._segmentEndBaseline.clear();
-    this._baselineFrameIndex = -1;
   }
 
   private _destroyResources(): void {
@@ -388,44 +376,23 @@ export class GpuTimer {
     const pool = this._segmentPool;
     const segments = this._snapshotSegments;
     let count = 0;
-    // Contiguity guard for the begin=0 quirk below: the successive-end delta is only a clean
-    // per-frame measure when this slot directly follows the last published frame. A gap (late/
-    // dropped readback) invalidates every per-name baseline — fresh baselines are re-established
-    // from this frame, the gap frame itself contributes no segment.
-    const contiguous = slot.frameIndex === this._baselineFrameIndex + 1;
-    if (slot.frameIndex > this._baselineFrameIndex && !contiguous) {
-      this._segmentEndBaseline.clear();
-    }
     for (let i = 0; i < slot.segmentCount; i++) {
       const begin = mapped[i * 2];
       const end = mapped[i * 2 + 1];
       if (begin === undefined || end === undefined || end <= begin) continue;
-      const name = slot.names[i] ?? "";
-      let duration = end - begin;
-      if (begin === 0n) {
-        // Adapter quirk (see `_segmentEndBaseline`): begin unwritten, end is absolute. Derive
-        // the duration from the successive end counters of the same segment name. Without a
-        // baseline (first frame, or right after a gap) this frame only establishes one.
-        const last = this._segmentEndBaseline.get(name);
-        if (last === undefined || end <= last) {
-          this._segmentEndBaseline.set(name, end);
-          continue;
-        }
-        duration = end - last;
-        this._segmentEndBaseline.set(name, end);
-      }
       const segment = pool[count]!;
-      segment.name = name;
-      segment.ms = Number(duration) * this._timestampPeriodNs * 1e-6;
+      segment.name = slot.names[i] ?? "";
+      // Absolute GPU-pass duration: begin/end are written under the SHIPPED member names
+      // (`beginningOfPassWriteIndex` / `endOfPassWriteIndex`); the earlier `beginOfPassWriteIndex`
+      // spelling silently left begin=0 and required a cross-frame end-delta fallback that measured
+      // wall time instead. Corrected 2026-11-08 (probe-verified on Chrome 157 / Metal-3).
+      segment.ms = Number(end - begin) * this._timestampPeriodNs * 1e-6;
       // Copy only the reference; the pool object itself stays stable across frames.
       segments[count] = segment;
       count++;
     }
     segments.length = count;
     this._snapshot.frameIndex = slot.frameIndex;
-    if (slot.frameIndex > this._baselineFrameIndex) {
-      this._baselineFrameIndex = slot.frameIndex;
-    }
   }
 
   private _kickPendingMap(): void {
