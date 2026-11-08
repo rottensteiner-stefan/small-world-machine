@@ -30,6 +30,7 @@ docs/.vitepress/cache/
 /.agents/scratches/
 .tripo/
 /.playwright-mcp/
+/.mcp.json
 /skills/
 
 # Local working dirs (.agents/collaborate, .agents/notes): only the directories
