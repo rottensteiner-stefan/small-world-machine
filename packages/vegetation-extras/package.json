@@ -1,11 +1,14 @@
 {
   "name": "@small-world-machine/vegetation-extras",
   "version": "0.1.0",
-  "description": "Vegetation building blocks for Small World Machine: a shared wind field (travelling gust waves) for ground cover, trees and impostors.",
+  "description": "Vegetation building blocks for Small World Machine: shared wind field (travelling gust waves) and foliage look presets.",
   "type": "module",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
     "./*": "./src/*"
+  },
+  "dependencies": {
+    "@small-world-machine/engine": "*"
   }
 }
