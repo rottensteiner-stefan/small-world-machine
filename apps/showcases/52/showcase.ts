@@ -3,6 +3,7 @@ import {
   AmbientLight,
   Color,
   DirectionalLight,
+  FlyController,
   Fog,
   FogMode,
   GltfLoader,
@@ -147,6 +148,12 @@ const SUNS: Record<SunKey, SunSituation> = {
   },
 };
 
+/** Flight speeds in m/s: walking pace through the forest, wheel scales it per notch. */
+const FLY_SPEED_DEFAULT = 12;
+const FLY_SPEED_MIN = 1;
+const FLY_SPEED_MAX = 120;
+const FLY_SPEED_STEP = 1.25;
+
 const CAMERA_POSITION = new Vector3D(0, 1.7, 22);
 const CAMERA_TARGET = new Vector3D(0, 4, -30);
 
@@ -165,6 +172,7 @@ export class Showcase extends AbstractShowcase {
   private _sunKey: SunKey = "noon";
   private _abReference: boolean = false;
   private _objects: number = 0;
+  private _fly: FlyController | undefined = undefined;
 
   constructor(options: EngineOptions = {}) {
     super({
@@ -174,7 +182,9 @@ export class Showcase extends AbstractShowcase {
       quality: { maxPixelRatio: 1.5 },
       ...options,
     });
-    this.defaultCameraController = "orbit";
+    // Spectator flight (WASD, Space/E up, C/Q down, Shift boost, Alt slow, click = mouse look).
+    this.defaultCameraController = "fly";
+    this.defaultMoveSpeed = FLY_SPEED_DEFAULT;
     this.defaultFov = MathUtils.degToRad(55);
     this.defaultFar = 600;
   }
@@ -218,9 +228,11 @@ export class Showcase extends AbstractShowcase {
     this._applyLook();
     this._installQaHook();
     this._createHud();
+    this.canvas.addEventListener("wheel", this._onWheel, { passive: false });
   }
 
   public override destroy(): void {
+    this.canvas?.removeEventListener("wheel", this._onWheel);
     this._hud?.dispose();
     delete window.__qaSwm52;
     super.destroy();
@@ -236,17 +248,29 @@ export class Showcase extends AbstractShowcase {
       return;
     }
     switch (event.code) {
-      case "KeyB":
+      // V, not B: the engine base class already toggles its debug overlay on B.
+      case "KeyV":
         this._setReference(!this._abReference);
         break;
       case "KeyL":
         this._setSun(SUN_KEYS[(SUN_KEYS.indexOf(this._sunKey) + 1) % SUN_KEYS.length]!);
         break;
-      case "KeyR":
-        this.resetCamera();
-        break;
     }
   }
+
+  /** Mouse wheel scales the base flight speed (Unity/Unreal scene-view convention). */
+  private readonly _onWheel = (event: WheelEvent): void => {
+    this._fly ??= this.camera.behaviors.find((b): b is FlyController => b instanceof FlyController);
+    if (!this._fly) return;
+    event.preventDefault();
+    const factor = event.deltaY < 0 ? FLY_SPEED_STEP : 1 / FLY_SPEED_STEP;
+    this._fly.moveSpeed = MathUtils.clamp(
+      this._fly.moveSpeed * factor,
+      FLY_SPEED_MIN,
+      FLY_SPEED_MAX,
+    );
+    this._syncHud();
+  };
 
   private _setLook(look: LookKey): void {
     this._look = look;
@@ -300,6 +324,7 @@ export class Showcase extends AbstractShowcase {
         `Contrast:   ${look.contrast.toFixed(2)}   Saturation: ${look.saturation.toFixed(2)}\n` +
         `Temp/Tint:  ${look.temperature.toFixed(2)} / ${look.tint.toFixed(2)}\n` +
         `Sun:        ${this._sunKey}\n` +
+        `Fly speed:  ${(this._fly?.moveSpeed ?? FLY_SPEED_DEFAULT).toFixed(1)} m/s (wheel)\n` +
         `Objects:    ${this._objects}   Renderer: ${this.renderer.type}`,
     );
   }

@@ -15,3 +15,9 @@ Trigger: ADR 0059 addendum (reference forest demo critique): tonemapping / colou
   - `OVERCAST`: AgX, exposure 1.2, slightly cool, contrast 0.98 — soft and believable.
 - **Sun situations:** high sun, low backlight, overcast (`L`). Backlight exposes the missing leaf translucency: sun-facing canopies are near black from the camera side → next step (foliage material, needs a lighting-chunk flag).
 - **Controls:** `1–4` presets, `B` A/B against neutral, `L` sun, `R` reset view. QA hook `window.__qaSwm52` (`setLook`, `setSun`, `setReference`, `tune(patch)` for live tuning, `sample`).
+
+## 2026-11-09 — Fly navigation
+
+- Default camera = engine spectator flight (`defaultCameraController = "fly"`): WASD/arrows, Space/E up, C/Q down, Shift ×2.5, Alt ×0.35, click = pointer-lock mouse look, Esc releases. Base speed 12 m/s.
+- Mouse wheel over the canvas scales the base speed ×1.25 per notch (1–120 m/s), shown in the readout.
+- A/B reference moved from `B` to `V`: the engine base class toggles its debug overlay on `B`.

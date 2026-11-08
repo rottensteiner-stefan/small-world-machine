@@ -71,10 +71,10 @@ export class Hud {
       body: `
         ${hudSection(
           "🎨 Look Preset",
-          "1–4 · B = A/B",
+          "1–4 · V = A/B",
           `<div class="preset-group two-col" style="margin-bottom:6px;">${lookButtons}</div>
           <div class="preset-group two-col">
-            <button id="btnReference" class="btn-preset" title="Key B: hold the neutral engine default for comparison">A/B Reference</button>
+            <button id="btnReference" class="btn-preset" title="Key V: hold the neutral engine default for comparison">A/B Reference</button>
           </div>`,
         )}
         ${hudSection(
@@ -84,8 +84,9 @@ export class Hud {
         )}
         ${hudSection(
           "🔭 View",
-          "Orbit · R reset",
-          `<div class="preset-group two-col"><button id="btnResetView" class="btn-preset">Reset View</button></div>`,
+          "Fly · R reset",
+          `<div class="preset-group two-col"><button id="btnResetView" class="btn-preset">Reset View</button></div>
+          <div class="hud-note">🕹 <b>Click</b> the scene for mouse look (Esc releases) · <b>WASD</b> / arrows move · <b>Space/E</b> up · <b>C/Q</b> down · <b>Shift</b> fast · <b>Alt</b> slow · <b>Wheel</b> base speed</div>`,
         )}
         ${hudSection("📊 Active Look", "live", `<pre id="lookLabReadout" style="font:10px/1.45 var(--font-mono, monospace);color:#a5f3fc;background:rgba(2,6,23,0.65);border:1px solid rgba(56,189,248,0.2);border-radius:6px;padding:7px 9px;margin:8px 0 0;white-space:pre;"></pre>`)}
         ${hudNote(
