@@ -90,13 +90,18 @@ const FIRST_PASS = { navigationMs: FIRST_PASS_TIMEOUT_MS, screenshotMs: FIRST_PA
 const RETRY_PASS = { navigationMs: 60000, screenshotMs: 60000 };
 // Showcase 14 (video wall with post-processing) alone needs 12 to 15 s until `load` with software
 // rendering on a fast machine, so even the first pass gets a longer navigation budget for it.
-const SLOW_SHOWCASE_NAVIGATION_MS = { 14: 60000, 50: 120000 };
+// Showcase 51 (vegetation baseline) builds up to 2× n scene-graph nodes at `?n=20000` (veg-p0 S1,
+// finding F4): software-rendered first frame can take tens of seconds, so it gets the same budget
+// as showcase 50.
+const SLOW_SHOWCASE_NAVIGATION_MS = { 14: 60000, 50: 120000, 51: 120000 };
 
 // Heavy-asset showcases (Khronos reference models) must NOT be judged after the fixed 1 s sleep:
 // the glTF load + first software-rendered frame can take longer, so the screenshot would sample a
 // blank canvas. For these, the checker waits for the engine's `small-world-machine:scene-ready`
 // event (dispatched after setup AND a stable painted frame) before taking the screenshot.
-const SHOWCASE_WAIT_READY = { 47: true, 48: true, 49: true, 50: true };
+// Showcase 51 (finding F4): the fixed 1 s sleep sampled a ground-only frame of the n=20000 forest;
+// the blank check passes on ground+sky, so the gate false-passed -- wait for the real first frame.
+const SHOWCASE_WAIT_READY = { 47: true, 48: true, 49: true, 50: true, 51: true };
 
 /** Rejects if `promise` has not settled after `ms` (the underlying call keeps running until the page closes). */
 async function withTimeout(promise, ms, what) {

@@ -301,7 +301,7 @@ async function main() {
       headless: true,
       userDataDir: tmpDir,
       acceptInsecureCerts: true,
-      protocolTimeout: 60000,
+      protocolTimeout: Number(process.env.GOLDEN_PROTOCOL_TIMEOUT_MS) || 120000,
       defaultViewport: scene.viewport,
       args: [
         "--no-sandbox",

@@ -1057,6 +1057,21 @@ This document serves to record external sources, algorithms, mathematical deriva
   - _Phase-Shifted Tail Wave Kinematics:_ $\theta_Y(s, t) = \sin(2.8t + s \cdot 0.75) \cdot (0.16 + s \cdot 0.09)$ across $s \in [0, 5]$ cylinder vertebra nodes to achieve organic whip/serpentine momentum without skeletal skinning.
 - **Usage:** Provides lightweight, zero-rigging procedural living creature ambient animations running at 60 FPS with zero bundle overhead.
 
+### Kenney CC0 Vegetation Kit (Showcase 51, ADR 0059 P0 Baseline)
+
+- **File:** `apps/showcases/51/assets/*.glb` (21 files, 218 KB total; full per-file manifest + checksums: `apps/showcases/51/assets/MANIFEST.json`), usage contract for the scene: `apps/showcases/51/assets/README.md`. License texts shipped: `LICENSE-kenney-nature-kit.txt`, `LICENSE-kenney-foliage-sprites.txt`.
+- **Authors/Gurus:** Kenney ([www.kenney.nl](https://www.kenney.nl))
+- **Sources (both verified CC0):**
+  - [Kenney: Nature Kit](https://kenney.nl/assets/nature-kit) v2.1 (2020-04-29) — 17 low-poly models (`Models/GLTF format/*.glb`): 3 tree species LOD0 `tree_pineTallA.glb` (78 tris, conifer) / `tree_oak.glb` (196 tris) / `tree_detailed.glb` (402 tris); ground cover `grass.glb` 132, `grass_large.glb` 224, `grass_leafs.glb` 36, `flower_yellowA/redA/purpleA.glb` 76 each; debris `log.glb` 200, `log_large.glb` 96, `log_stack.glb` 184, `rock_smallA.glb` 16, `rock_smallFlatA.glb` 20, `mushroom_red.glb` 48, `mushroom_tan.glb` 48, `tree_pineGroundA.glb` 82 (wrecked stump). Source download `kenney_nature-kit.zip` sha256 `fa7974a0d342bfe63c38664ba9f8ec1a4aab8ea25f099bdc56870e33588c4d9d`.
+  - [Kenney: Foliage Sprites](https://kenney.nl/assets/foliage-sprites) (2020-02-08) — source sprites `PNG/Flat/sprite_0001/0020/0040/0050.png` for the 4 alpha-cutout cards. Source download `kenney_foliage-sprites.zip` sha256 `8e3e944acaa731a90e0b004846d2ce99ee8a65d5479b4c2f421cab7cdde128e5`.
+- **License:** [CC0 (Creative Commons Zero)](https://creativecommons.org/publicdomain/zero/1.0/) — verified from the verbatim `License.txt` inside each zip; public domain, attribution optional (credited here anyway).
+- **Conversion notes (veg-p0 T2, Frank):**
+  - Kenney GLBs shipped as **uncompressed core glTF 2.0 GLB, no Draco/KTX2** (deterministic measurement baseline, ADR 0059 step 0). Source ships `extensionsUsed: KHR_materials_unlit` **file-level only** (no per-material extension) → the engine parses them as PBR-lit; `metallicFactor` normalized `1 → 0` (roughness `1`) via `.agents/scratches/glb-normalize.mjs` so they render as matte lit props, not bare metal. Geometry byte-identical.
+  - `card_grass.glb` / `card_flower_a.glb` / `card_bush.glb` / `leaf_pile.glb` self-built (`.agents/scratches/glb-cards.mjs`): crossed upright or ground quads, `alphaMode MASK` + `doubleSided`, **WebP textures embedded via `EXT_texture_webp`** (engine-internal extension). Sprites trimmed + downscaled to ≤512² and encoded lossy WebP q90 / alpha_q100 (`cwebp`), per repo WebP convention C9.
+  - No LOD chain exists in the Kenney source (LOD0 only) — P2 `swm lod` (meshoptimizer) will generate LODs.
+  - **Originals duty (ADR 0058):** both zips kept out of git; back up to Google Drive (`small-world-machine-assets/…`). Raw sprites/PNG intermediates in `.agents/scratches/`.
+- **Usage:** Showcase 51 forest P0 measurement baseline (ADR 0059 step 0 / P0-2). Dominant instance population: opaque low-poly tufts + flowers + debris (tier-1 polycounts, 16–224 tris) plus 4 alpha-cutout cards (2–4 tris) as the only alpha-masked population. Verified: all 21 GLBs engine-side-parse through `GltfLoader` (geometry + materials; card WebP resolves to `diffuseMap`). Browser/GPU rendering not verified by T2 (Erin/Charly runtime gate).
+
 ## Shaders & Procedural Art
 
 ### Star Nest (Volumetric Cosmic Raymarching)

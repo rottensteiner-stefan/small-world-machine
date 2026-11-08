@@ -1,0 +1,21 @@
+[
+  {
+    "poolKey": "forest-baseline",
+    "view": "base",
+    "backend": "WEB_GL2",
+    "file": "forest-baseline__base.png",
+    "meta": {
+      "poolKey": "forest-baseline",
+      "view": "base",
+      "frames": 60,
+      "rendererType": "WEB_GL2"
+    },
+    "stddev": 57.3611,
+    "blank": false,
+    "consoleErrors": [],
+    "width": 1280,
+    "height": 720,
+    "sha256": "ba380136fc1d43eef0d5b7d7adf42e45dea653c85ad4aa138d684d544eb5c527",
+    "ok": true
+  }
+]

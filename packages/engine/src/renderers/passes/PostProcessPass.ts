@@ -1,6 +1,7 @@
 import FULLSCREEN_VERT_WGSL from "../post/shaders/PostProcess.vert.wgsl?raw";
 import POST_PROCESS_FRAG_WGSL from "../post/shaders/PostProcess.frag.wgsl?raw";
 import type { Scene } from "../../core/index.js";
+import { GpuTimingSlot } from "../WebGPU/managers/GpuTimer.js";
 import type { WebGPURenderer } from "../WebGPU/index.js";
 import type { RenderPass } from "../index.js";
 import type { Vector3D } from "../../math/index.js";
@@ -400,9 +401,11 @@ export class PostProcessPass implements RenderPass {
     // No verified pipeline yet (first build still validating, or failed): skip the blit this frame.
     if (!this._pipeline) return;
 
-    // Final blit directly to the swap-chain (canvas)
+    // Final blit directly to the swap-chain (canvas). This descriptor is built fresh per frame
+    // (existing behaviour); wire the opt-in GPU timer pair (K5) only when recording is active --
+    // no stale-key handling needed since the descriptor never outlives this call.
     const screenView = renderer.gpuCanvasContext.getCurrentTexture().createView();
-    const rp = ce.beginRenderPass({
+    const descriptor: GPURenderPassDescriptor = {
       colorAttachments: [
         {
           view: screenView,
@@ -411,7 +414,10 @@ export class PostProcessPass implements RenderPass {
           clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
         },
       ],
-    });
+    };
+    const tw = renderer.gpuTimings?.recordPass(GpuTimingSlot.POST_UBER);
+    if (tw !== undefined) descriptor.timestampWrites = tw;
+    const rp = ce.beginRenderPass(descriptor);
 
     rp.setPipeline(this._pipeline!);
     rp.setBindGroup(0, this._bindGroup!);

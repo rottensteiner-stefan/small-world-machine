@@ -1,0 +1,170 @@
+{
+  "card_bush.glb": {
+    "bytes": 9336,
+    "sha256": "762126b3bd7384b750b55a562caefe9456b6042322b3605ccf73caa281bd494a",
+    "tris": 4,
+    "verts": 8,
+    "alphaMasks": 1,
+    "webpEmbedded": true
+  },
+  "card_flower_a.glb": {
+    "bytes": 17720,
+    "sha256": "ab32e2662e7db6659ab63ca9228e70841cae0360fca5a5d41ac462f4a69e1c21",
+    "tris": 4,
+    "verts": 8,
+    "alphaMasks": 1,
+    "webpEmbedded": true
+  },
+  "card_grass.glb": {
+    "bytes": 9816,
+    "sha256": "b7fd1c69bf607a6960a4b1811b6ceeb378051ceff8aced98ca8b670815584735",
+    "tris": 4,
+    "verts": 8,
+    "alphaMasks": 1,
+    "webpEmbedded": true
+  },
+  "flower_purpleA.glb": {
+    "bytes": 7112,
+    "sha256": "5972cb64ba5a0898d9658118a4151b98214a4ef6809a45b075d1b9ec065743b7",
+    "tris": 76,
+    "verts": 268,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "flower_redA.glb": {
+    "bytes": 7104,
+    "sha256": "388679f213a131619370debd604706813a05db02c45aa8f3a070bda7661bb385",
+    "tris": 76,
+    "verts": 268,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "flower_yellowA.glb": {
+    "bytes": 7120,
+    "sha256": "46cb9b1206c90c3d0a7754309b974b6826e083469527db57687c449beedc2285",
+    "tris": 76,
+    "verts": 268,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "grass.glb": {
+    "bytes": 11496,
+    "sha256": "63434210e7fe2efccf1568aedbca19650fc665049267100920f37938d9e253cb",
+    "tris": 132,
+    "verts": 264,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "grass_large.glb": {
+    "bytes": 18504,
+    "sha256": "69ada2c066c8a204ca0dd9f0102b648138a49f77ddec9f883d530acef5b0fd3f",
+    "tris": 224,
+    "verts": 448,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "grass_leafs.glb": {
+    "bytes": 4608,
+    "sha256": "aa789ab0c6c1415e34d755a15b2d6a5e629e4ea28d7d69145aa3bd91656d41c4",
+    "tris": 36,
+    "verts": 84,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "leaf_pile.glb": {
+    "bytes": 18968,
+    "sha256": "ed37177629dc6d4ca31f30ea7c30ee1cbd95a06209f4745a94462e1ed2b26fc2",
+    "tris": 2,
+    "verts": 4,
+    "alphaMasks": 1,
+    "webpEmbedded": true
+  },
+  "log.glb": {
+    "bytes": 14288,
+    "sha256": "0af40e998ce1836a7f9ab39f457f5064f535b41375c38a5ced3c0f848c8fb112",
+    "tris": 200,
+    "verts": 624,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "log_large.glb": {
+    "bytes": 7924,
+    "sha256": "9bd757b155eabccc6d2e2c04f01e0a973d35e7e6bf3fbcea68ad12d4b54ad464",
+    "tris": 96,
+    "verts": 304,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "log_stack.glb": {
+    "bytes": 10896,
+    "sha256": "f226ae4a8246c8e2b8ddf0365198501fca2d4dc4f58edca4f7a386391f8b3c7a",
+    "tris": 184,
+    "verts": 424,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "mushroom_red.glb": {
+    "bytes": 6364,
+    "sha256": "173e23da521d209ef3124cdb09c73e4f0079f16716df2c77035f254a996b13e8",
+    "tris": 48,
+    "verts": 244,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "mushroom_tan.glb": {
+    "bytes": 5804,
+    "sha256": "0462c86099cede5e27b08f61fde15f9bd3bbc041d511e3a1b550d8890ce26891",
+    "tris": 48,
+    "verts": 208,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "rock_smallA.glb": {
+    "bytes": 3044,
+    "sha256": "2f26bf55575a24bc54aa468426d4be67a8e0003129e479a1519049216b0ed8b8",
+    "tris": 16,
+    "verts": 60,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "rock_smallFlatA.glb": {
+    "bytes": 3300,
+    "sha256": "6e52d4e226b899388b877237b9ce649bc661be0110046793eaa1103848506de9",
+    "tris": 20,
+    "verts": 72,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_detailed.glb": {
+    "bytes": 31412,
+    "sha256": "60647f77a24f572b1407df47b10f03a2d0e2bd8ac2e6bd493547878e4bda62ad",
+    "tris": 402,
+    "verts": 2274,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_oak.glb": {
+    "bytes": 14644,
+    "sha256": "e40de0c66501792d5d3b5e99bad6cf63b0bb0a263d868c7571086ebefc871456",
+    "tris": 196,
+    "verts": 648,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_pineGroundA.glb": {
+    "bytes": 6704,
+    "sha256": "c9139478ca418e6ef4490fe54252288bcc7738caacb1bf8677afcb539df226f2",
+    "tris": 82,
+    "verts": 132,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_pineTallA.glb": {
+    "bytes": 7200,
+    "sha256": "1efa0434f6dcef622497e223a2a5884be78428e3e360d5913573ba9e0d9b7707",
+    "tris": 78,
+    "verts": 272,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  }
+}

@@ -75,6 +75,7 @@ import {
 } from "../passes/index.js";
 import { GpuParticlesPassGPU } from "../passes/GpuParticlesPassGPU.js";
 import type { GpuParticleDrawable, GpuParticlePassHost } from "./managers/GpuParticleSystemHost.js";
+import { GpuTimer } from "./managers/GpuTimer.js";
 import type { SkinnedMesh, Skeleton } from "../../core/animation/index.js";
 import { MAX_SKINNED_BONES } from "../../core/animation/index.js";
 import type { RenderBatch } from "../../core/Scene.js";
@@ -121,6 +122,16 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
   /** True when the device was created with the optional `timestamp-query` feature (K5). */
   public get supportsTimestampQuery(): boolean {
     return this._device?.features.has("timestamp-query") === true;
+  }
+
+  /**
+   * Opt-in per-pass GPU timing via `timestamp-query` (ADR 0059 step 0, DECISION K5): read by
+   * HUD/runners for the last completed frame's per-pass GPU ms. Owns the query ring + async
+   * resolve/readback itself; `enable()` creates it, `disable()` restores the zero-cost path.
+   * Always present (device-less before `initialize()`), so consumers may bind it unconditionally.
+   */
+  public get gpuTimings(): GpuTimer {
+    return this._gpuTimer;
   }
 
   /** Satisfies Renderer interface */
@@ -350,6 +361,10 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
   // are plain chain delegates kept public because the final uber pass (`PostProcessPass`) reads
   // them as inputs.
   private readonly _postFxChain = new PostFxChain(this);
+
+  /** Opt-in per-pass GPU timing (ADR 0059 step 0, DECISION K5): owns the query ring + async
+   * resolve/readback; zero GPU cost while disabled. See `gpuTimings`. */
+  private readonly _gpuTimer = new GpuTimer();
 
   public get bloomTextureView(): GPUTextureView | undefined {
     return this._postFxChain.bloomTextureView;
@@ -607,9 +622,10 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
           "texture-compression-etc2",
           "texture-compression-astc",
           // GPU pass timing is opt-in per adapter. DECISION (K5): only the feature is requested
-          // and surfaced via `supportsTimestampQuery`; no query sets are created, so there is no
-          // per-frame cost. The frame-time governor stays CPU-timed until a consumer wires
-          // `timestampWrites` into a pass (async resolve/readback is its own piece of work).
+          // and surfaced via `supportsTimestampQuery`/`gpuTimings.supported`; `GpuTimer` creates
+          // its query ring only while `renderer.gpuTimings.enable()`d, so the stock render path
+          // stays byte-identical (no query sets, no per-frame cost). Async resolve/readback and
+          // the two guarded pass hook points live in `GpuTimer` / the passes, ADR 0059 step 0.
           "timestamp-query",
         ] as const
       ).filter((feature) => this._adapter!.features.has(feature)),
@@ -649,6 +665,9 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     this._device.onuncapturederror = (event: GPUUncapturedErrorEvent): void => {
       console.error("[WebGPU Error]:", event.error.message);
     };
+
+    // Bind the opt-in GPU timer to the live device (creates nothing while disabled, K5).
+    this._gpuTimer.attachDevice(this._device);
 
     if (config?.quality) {
       this._quality = { ...this._quality, ...config.quality };
@@ -1104,6 +1123,9 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     this._frameCount++;
     if (this._frameCount % MATERIAL_BIND_GROUP_IDLE_FRAMES === 0) this._sweepMaterialBindGroups();
 
+    // Opt-in GPU pass timing (K5): no-op while disabled.
+    this._gpuTimer.beginFrame();
+
     this._objectRing.beginFrame();
     this._instanceRing.beginFrame();
     this._gpuBoneMatricesOffset = 0;
@@ -1198,6 +1220,10 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
       const nextPass: RenderPass = pass;
       nextPass.execute(this, scene, ce, renderTargetView, vp, camPos, vMat);
     }
+
+    // Record this frame's timestamp resolve (if timing is enabled and segments were recorded)
+    // as the last command of the encoder, so `resolveQuerySet` ordering is guaranteed.
+    this._gpuTimer.endFrame(ce);
 
     this._device.queue.submit([ce.finish()]);
     if (
@@ -2133,6 +2159,9 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     // Tears down every GPU post-effect pass in the chain's registry, in one sweep (see
     // `PostFxChain` / the `PostEffectPass` contract, ADR 0037).
     this._postFxChain.destroy();
+
+    // Release the GPU-timing query ring (buffers with a pending map are unmapped on destroy).
+    this._gpuTimer.dispose();
 
     this._opaqueCapture?.dispose();
 

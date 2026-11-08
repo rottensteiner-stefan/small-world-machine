@@ -85,6 +85,13 @@
       "views": ["main"],
       "viewport": { "width": 1280, "height": 720 },
       "frames": 60
+    },
+    "51": {
+      "url": "apps/showcases/51/index.html",
+      "poolKeys": ["forest-baseline"],
+      "views": ["base"],
+      "viewport": { "width": 1280, "height": 720 },
+      "frames": 60
     }
   }
 }

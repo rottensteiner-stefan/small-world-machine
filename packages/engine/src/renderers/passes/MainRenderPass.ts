@@ -2,6 +2,7 @@ import type { Scene } from "../../core/index.js";
 import type { RenderBatch } from "../../core/Scene.js";
 import { MaterialType, Topology, NormalTargetMode } from "../../enums/index.js";
 import { NORMAL_TARGET_CLEAR } from "../WebGPU/managers/NormalOutputWrapper.js";
+import { GpuTimingSlot } from "../WebGPU/managers/GpuTimer.js";
 import type { WebGPURenderer } from "../WebGPU/index.js";
 import type { RenderPass } from "../index.js";
 import type { Vector3D } from "../../math/index.js";
@@ -71,13 +72,19 @@ export class MainRenderPass implements RenderPass {
     depthStencilAttachment: this._depthAttachment,
   };
 
-  /** Begins a pass over the reused attachment set; `clear` selects the clearing variant. */
+  /** Begins a pass over the reused attachment set; `clear` selects the clearing variant. The
+   * `segment` name is recorded into the renderer's opt-in GPU timer (K5) -- `recordPass()`
+   * returns either a reused timestamp-write pair (consumed synchronously by `beginRenderPass`) or
+   * `undefined` when timing is off, and the shared descriptor's `timestampWrites` is cleared
+   * accordingly so a stale pair from a previously enabled frame can never leak into the current
+   * one (byte-identical stream while disabled). */
   private _beginPass(
     ce: GPUCommandEncoder,
     renderer: WebGPURenderer,
     targetView: GPUTextureView,
     normalView: GPUTextureView | undefined,
     clear: boolean,
+    segment: string,
   ): GPURenderPassEncoder {
     const attachments = clear ? this._clearAttachments : this._loadAttachments;
     const color = clear ? this._clearColor : this._loadColor;
@@ -91,7 +98,15 @@ export class MainRenderPass implements RenderPass {
       attachments.push(normal);
     }
     this._depthAttachment.view = renderer.activeDepthView;
-    return ce.beginRenderPass(clear ? this._clearDescriptor : this._loadDescriptor);
+    const descriptor = clear ? this._clearDescriptor : this._loadDescriptor;
+    // Defensive `?.`: production renderers always expose `gpuTimings`; partial test mocks may not.
+    const writes = renderer.gpuTimings?.recordPass(segment);
+    if (writes !== undefined) {
+      descriptor.timestampWrites = writes;
+    } else if (descriptor.timestampWrites !== undefined) {
+      delete descriptor.timestampWrites;
+    }
+    return ce.beginRenderPass(descriptor);
   }
 
   public execute(
@@ -112,7 +127,14 @@ export class MainRenderPass implements RenderPass {
     // DepthPrePassGPU already cleared and populated this depth buffer with the frontmost depth
     // for every opaque object this frame -- "load" instead of "clear" builds on top of that,
     // which is what lets depthCompare:"less-equal" reject occluded fragments via early-Z.
-    const rp = this._beginPass(ce, renderer, targetView, normalView, true);
+    const rp = this._beginPass(
+      ce,
+      renderer,
+      targetView,
+      normalView,
+      true,
+      GpuTimingSlot.MAIN_COLOR_OPAQUE,
+    );
 
     // 1. Skybox first
     for (let i = 0; i < renderList.opaqueBatches.length; i++) {
@@ -142,7 +164,14 @@ export class MainRenderPass implements RenderPass {
       depthCaptured = true;
       if (normalView) renderer.captureOpaqueNormal(ce);
 
-      const rpDecal = this._beginPass(ce, renderer, targetView, normalView, false);
+      const rpDecal = this._beginPass(
+        ce,
+        renderer,
+        targetView,
+        normalView,
+        false,
+        GpuTimingSlot.MAIN_COLOR_DECAL,
+      );
       const decalMode = normalView ? NormalTargetMode.BLEND : NormalTargetMode.NONE;
       for (const decal of renderList.decals) {
         this._scratchDecalObjects[0] = decal;
@@ -162,7 +191,14 @@ export class MainRenderPass implements RenderPass {
       if (!depthCaptured) renderer.captureOpaqueDepth(ce);
 
       // Start transparent pass
-      const rpTransparent = this._beginPass(ce, renderer, targetView, normalView, false);
+      const rpTransparent = this._beginPass(
+        ce,
+        renderer,
+        targetView,
+        normalView,
+        false,
+        GpuTimingSlot.MAIN_COLOR_TRANSPARENT,
+      );
 
       // 3. Transparent objects
       for (const obj of renderList.transparent) {
