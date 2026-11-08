@@ -53,7 +53,7 @@
 - New showcase `apps/showcases/51` "forest": terrain + `InstanceField` stub, procedural or 2–3 CC0 tree species, scalable instance count via URL param (`?n=`), fly-through camera path for reproducible runs.
 - Wire `timestamp-query` (feature already requested, K5 in `WebGPURenderer`) into a per-pass GPU timing ring (async resolve, no stall); HUD shows ms per pass + visible instances/triangles per bucket.
 - Baseline with today's tools (ADR 0046 auto-instancing, `InstancedMesh`) to quantify the gap.
-- HUD layout like the reference overlay: `fps | cpu ms | gpu ms` always visible, so screenshots/videos carry their own numbers. Key acceptance curve: CPU ms vs. `?n=` must stay flat once step 1 lands. Initial targets, calibrated after measurement: WebGPU M1-class laptop 1080p 60 fps with ≥250 k field instances; WebGL2 same device ≥20 k.
+- HUD layout like the reference overlay: `fps | cpu ms | gpu ms` always visible, so screenshots/videos carry their own numbers. Key acceptance curve: CPU ms vs. `?n=` must stay flat once step 1 lands. Initial targets, calibrated after measurement: WebGPU **M1-class** laptop 1080p 60 fps with ≥250 k field instances; WebGL2 same device ≥20 k. **Measurement-host note (2026-11-08):** this repo's Apple-silicon host is a MacBook Pro M4 Pro (macOS 26.7.2, Chrome 157.0.8103.39) — measured absolutes are M4-Pro evidence (upper bounds for the M1-class target); an explicit M1↔M4 transfer note is required at the step-1 gate unless an M1 device becomes available.
 
 #### Step 1 — GPU instance culling + indirect draw (WebGPU)
 - Per frame, per *view* (main camera, each CSM cascade, spot/point shadow faces that see the field): one compute dispatch over the field's instances.
@@ -141,7 +141,7 @@ Rule: every step solves one *problem*; the plan above names the default candidat
 | Tier coverage | which tiers get it (ADR 0057 matrix) |
 | Cost of ownership | LOC, new shader variants, bake time, authoring steps |
 
-- **Reference devices:** Apple M1-class Mac (WebGPU, Chrome), a mid-range Windows dGPU (WebGPU + WebGL2), Redmi 13C (WebGL2 low tier, ADR 0035).
+- **Reference devices:** Apple M1-class Mac (WebGPU, Chrome; available host: MacBook Pro M4 Pro, macOS 26.7.2, Chrome 157.0.8103.39 — M4 absolutes are upper bounds for the M1 class), a mid-range Windows dGPU (WebGPU + WebGL2), Redmi 13C (WebGL2 low tier, ADR 0035).
 - **Outcome per candidate:** *chosen* (becomes the implementation), *tier variant* (kept because it wins on another API or performance tier → wired through the ADR 0035 resolver and listed in `tier-parity.json`; this is the only way two candidates coexist in the engine), or *rejected* (spike code deleted, numbers kept).
 - **Record:** measurements as `docs/research/vegetation-<problem>-<date>.md`; the decision as an amendment line in this ADR (status per step). Re-open triggers: new web API capability (e.g. mesh shaders, multi-draw-indirect, 64-bit atomics in WebGPU), new reference device class, or a consumer whose content inverts the ranking.
 
