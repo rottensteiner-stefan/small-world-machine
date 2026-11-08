@@ -482,6 +482,9 @@ async function runTruth(browser) {
 
 async function main() {
   let server = null;
+  // Scratch dir used as the puppeteer user-data dir; removed in `finally` (review-agent hygiene
+  // note 2026-11-08) — declared outside `try` so the cleanup can reach it.
+  let tmpDir = null;
   if (!args.keepServer) {
     server = spawn("npm", PREVIEW_ARGS, { cwd: ROOT, stdio: "pipe", detached: true });
     server.stdout.on("data", (d) => process.stdout.write(d.toString()));
@@ -490,7 +493,7 @@ async function main() {
   try {
     await waitForServer(`${PREVIEW_ORIGIN}/`);
 
-    const tmpDir = path.join(ROOT, ".agents", "scratches", "tmp_vegbench_" + Date.now());
+    tmpDir = path.join(ROOT, ".agents", "scratches", "tmp_vegbench_" + Date.now());
     fs.mkdirSync(tmpDir, { recursive: true });
     const browser = await puppeteer.launch(
       args.realGpu
@@ -666,6 +669,13 @@ async function main() {
         process.kill(-server.pid, "SIGTERM");
       } catch {
         server.kill();
+      }
+    }
+    if (tmpDir) {
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        // Cleanup is best-effort; a leftover scratch dir is harmless (gitignored).
       }
     }
   }

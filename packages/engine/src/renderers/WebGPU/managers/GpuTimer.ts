@@ -359,7 +359,8 @@ export class GpuTimer {
    * the map promise, which is only guaranteed to resolve *eventually*). A readback for an older
    * frame arriving after a newer one was already published is discarded (monotonicity guard). */
   private _consumeMappedSlots(): void {
-    for (const slot of this._slots) {
+    for (let i = 0; i < this._slots.length; i++) {
+      const slot = this._slots[i]!;
       if (!slot.pendingMap) continue;
       const buffer = slot.stagingBuffer;
       if (!buffer || buffer.mapState !== "mapped") continue;

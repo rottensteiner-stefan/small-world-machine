@@ -989,6 +989,13 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Source:** [Tanner Helland: "How to Convert Temperature (K) to RGB: Algorithm and Code"](https://tannerhelland.com/2012/09/18/subtractive-color-temperature-algorithm.html)
 - **Usage:** Used in `Color.fromTemperature()` and `Color.blackbody()` to compute physically accurate thermal radiation spectra, star temperatures, and glowing accretion disk colors across temperature gradients from $1000\,\text{K}$ to $40000\,\text{K}$.
 
+### FLIP (Flicker, Image Quality, and Perceptual)
+
+- **File:** `.agents/scripts/lib/veg-flip.mjs` (showcase 51 ground-truth comparison + golden pipeline)
+- **Authors/Gurus:** Pontus Andersson, Jim Nilsson, Tomas Akenine-Möller (NVIDIA Research + Chalmers, SIGGRAPH 2020)
+- **Source:** [FLIP: A Difference Estimator for Image Comparisons](https://research.nvidia.com/publication/2020-07_flip-difference-estimator-image-comparisons) (MIT-licensed reference implementation)
+- **Usage:** Perceptual image-difference metric (flicker, color, and spatial artifacts; HDR-aware) used by `veg-bench.mjs --truth` to compare ground-truth captures against per-path renders on showcase 51. Tolerances are perceptual rather than raw pixel deltas.
+
 ## Assets & Fonts
 
 

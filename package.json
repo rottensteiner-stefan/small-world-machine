@@ -49,6 +49,8 @@
     "test:fog-capture": "node .agents/scripts/check-fog-capture.js",
     "test:decals": "node .agents/scripts/check-decals.mjs",
     "probe:gpu-parity": "node .agents/scripts/probe-gpu-parity.js",
+"veg:bench": "node .agents/scripts/veg-bench.mjs",
+"veg:flip": "node .agents/scripts/lib/veg-flip.mjs",
     "goldens:capture": "node .agents/scripts/goldens/capture.js",
     "goldens:compare": "node .agents/scripts/goldens/compare.js",
     "goldens:skip": "node .agents/scripts/goldens/skip-check.js",
