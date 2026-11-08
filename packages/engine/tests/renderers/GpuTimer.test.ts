@@ -63,7 +63,7 @@ function makeBuffer(): FakeBuffer {
   return buffer;
 }
 
-function makeDevice(opts: { feature: boolean; periodNs?: number }): {
+function makeDevice(opts: { feature: boolean; periodNs?: number | null }): {
   device: Internals;
   querySets: FakeQuerySet[];
   /** `MAP_READ|COPY_DST` staging copies (one per ring slot; the only buffers ever mapped). */
@@ -89,7 +89,11 @@ function makeDevice(opts: { feature: boolean; periodNs?: number }): {
       else resolve.push(b);
       return b;
     }),
-    queue: { getTimestampPeriod: vi.fn(() => opts.periodNs ?? 1) },
+    // `undefined` keeps the historical default `1`; `null` reproduces the Chrome 157 / Metal-3
+    // reality where the method exists but returns nothing usable.
+    queue: {
+      getTimestampPeriod: vi.fn(() => (opts.periodNs === undefined ? 1 : opts.periodNs)),
+    },
   } as Internals;
   return { device, querySets, staging, resolve };
 }
@@ -451,6 +455,145 @@ describe("GpuTimer", () => {
 
       expect(timer.snapshot.frameIndex).toBe(3);
       expect(timer.snapshot.segments[0]!.ms).toBeCloseTo(500, 6);
+    });
+  });
+
+  describe("begin=0 adapter quirk (Chrome 157 / Metal-3, 2026-11-08)", () => {
+    // The begin-of-pass slot is never written on this target class (stays 0); end-of-pass holds an
+    // ABSOLUTE monotonic counter (~7.9e14, ~9 days of uptime in ns). `end - begin` would yield the
+    // absolute counter. The fix derives the duration from successive end counters per name across
+    // CONTIGUOUS frames; a gap drops the baselines (segment honestly absent, never multi-frame).
+    const ABS_1 = 789_932_469_518_336n;
+    const ABS_2 = ABS_1 + 8_323_072n; // ~8.3 ms
+
+    it("skips the baseline frame, then derives the per-frame duration from successive end counters", () => {
+      const { device, staging } = makeDevice({ feature: true, periodNs: 1 });
+      const timer = new GpuTimer();
+      timer.attachDevice(device as never);
+      timer.enable();
+
+      // Frame 1 (slot 1) records; its map is kicked on frame 2.
+      timer.beginFrame();
+      timer.recordPass(GpuTimingSlot.MAIN_COLOR_OPAQUE);
+      const { ce } = makeCe();
+      timer.endFrame(ce as never);
+      timer.beginFrame();
+      timer.recordPass(GpuTimingSlot.MAIN_COLOR_OPAQUE);
+      const { ce: ce2 } = makeCe();
+      timer.endFrame(ce2 as never);
+
+      // GPU completes frame 1: begin=0, end=ABS_1 (absolute counter).
+      staging[1]!.backing[0] = 0n;
+      staging[1]!.backing[1] = ABS_1;
+      staging[1]!.mapState = "mapped";
+
+      // Frame 3 consumes it: no baseline yet -> establishes one, contributes no segment.
+      timer.beginFrame();
+      timer.recordPass("next");
+      const { ce: ce3 } = makeCe();
+      timer.endFrame(ce3 as never);
+      expect(timer.snapshot.frameIndex).toBe(1);
+      expect(timer.snapshot.segments).toHaveLength(0);
+
+      // Frame 2 (slot 2) completes: begin=0, end=ABS_2 (> ABS_1).
+      staging[2]!.backing[0] = 0n;
+      staging[2]!.backing[1] = ABS_2;
+      staging[2]!.mapState = "mapped";
+
+      // Frame 4 consumes it (contiguous after frame 1) -> duration = ABS_2 - ABS_1.
+      timer.beginFrame();
+      timer.recordPass("next2");
+      const { ce: ce4 } = makeCe();
+      timer.endFrame(ce4 as never);
+      expect(timer.snapshot.frameIndex).toBe(2);
+      expect(timer.snapshot.segments).toHaveLength(1);
+      expect(timer.snapshot.segments[0]!.name).toBe(GpuTimingSlot.MAIN_COLOR_OPAQUE);
+      expect(timer.snapshot.segments[0]!.ms).toBeCloseTo(8.323072, 4);
+    });
+
+    it("drops baselines across a dropped frame and resumes with a clean delta (no multi-frame span)", () => {
+      const { device, staging } = makeDevice({ feature: true, periodNs: 1 });
+      const timer = new GpuTimer();
+      timer.attachDevice(device as never);
+      timer.enable();
+
+      const ABS_3 = ABS_1 + 20_000_000n;
+      const ABS_4 = ABS_3 + 8_000_000n;
+
+      // Frame 1 (slot 1): record, map kicked, readback completes -> baseline established only.
+      timer.beginFrame();
+      timer.recordPass(GpuTimingSlot.MAIN_COLOR_OPAQUE);
+      const { ce } = makeCe();
+      timer.endFrame(ce as never);
+      timer.beginFrame();
+      timer.recordPass(GpuTimingSlot.MAIN_COLOR_OPAQUE);
+      const { ce: ce2 } = makeCe();
+      timer.endFrame(ce2 as never);
+      staging[1]!.backing[0] = 0n;
+      staging[1]!.backing[1] = ABS_1;
+      staging[1]!.mapState = "mapped";
+      timer.beginFrame();
+      timer.recordPass(GpuTimingSlot.MAIN_COLOR_OPAQUE);
+      const { ce: ce3 } = makeCe();
+      timer.endFrame(ce3 as never);
+      expect(timer.snapshot.frameIndex).toBe(1);
+      expect(timer.snapshot.segments).toHaveLength(0);
+
+      // Frame 2 (slot 2) readback NEVER completes (dropped/lost).
+
+      // Frame 3 (slot 3): readback completes -> gap vs frame 1 -> baselines dropped, new baseline.
+      timer.beginFrame();
+      timer.recordPass(GpuTimingSlot.MAIN_COLOR_OPAQUE);
+      const { ce: ce4 } = makeCe();
+      timer.endFrame(ce4 as never);
+      staging[3]!.backing[0] = 0n;
+      staging[3]!.backing[1] = ABS_3;
+      staging[3]!.mapState = "mapped";
+      timer.beginFrame();
+      timer.recordPass(GpuTimingSlot.MAIN_COLOR_OPAQUE);
+      const { ce: ce5 } = makeCe();
+      timer.endFrame(ce5 as never);
+      expect(timer.snapshot.frameIndex).toBe(3);
+      expect(timer.snapshot.segments).toHaveLength(0);
+
+      // Frame 4 (slot 4): contiguous after frame 3 -> clean single-frame delta, NOT ABS_4 - ABS_1.
+      timer.beginFrame();
+      timer.recordPass(GpuTimingSlot.MAIN_COLOR_OPAQUE);
+      const { ce: ce6 } = makeCe();
+      timer.endFrame(ce6 as never);
+      staging[4]!.backing[0] = 0n;
+      staging[4]!.backing[1] = ABS_4;
+      staging[4]!.mapState = "mapped";
+      timer.beginFrame();
+      timer.recordPass(GpuTimingSlot.MAIN_COLOR_OPAQUE);
+      const { ce: ce7 } = makeCe();
+      timer.endFrame(ce7 as never);
+      expect(timer.snapshot.frameIndex).toBe(4);
+      expect(timer.snapshot.segments).toHaveLength(1);
+      expect(timer.snapshot.segments[0]!.ms).toBeCloseTo(8, 4);
+    });
+
+    it("falls back to period 1 when getTimestampPeriod exists but returns null (M4-Pro reality)", () => {
+      const { device, staging } = makeDevice({ feature: true, periodNs: null });
+      const timer = new GpuTimer();
+      timer.attachDevice(device as never);
+      timer.enable();
+
+      timer.beginFrame();
+      timer.recordPass("a");
+      const { ce } = makeCe();
+      timer.endFrame(ce as never);
+      timer.beginFrame();
+      timer.recordPass("b");
+      const { ce: ce2 } = makeCe();
+      timer.endFrame(ce2 as never);
+      completeMap(staging[1]!, 0, 10_000_000n); // 10 ms at period 1
+      timer.beginFrame();
+      timer.recordPass("c");
+      const { ce: ce3 } = makeCe();
+      timer.endFrame(ce3 as never);
+      expect(timer.snapshot.frameIndex).toBe(1);
+      expect(timer.snapshot.segments[0]!.ms).toBeCloseTo(10, 6);
     });
   });
 });

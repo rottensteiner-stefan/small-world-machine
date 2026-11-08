@@ -465,7 +465,10 @@ export class Showcase extends AbstractShowcase {
       if (explicit || (interactiveHud && this.renderer.type === RendererType.WEB_GPU)) {
         gpuTimer.enable();
       }
-      if (interactiveHud) {
+      // Keep a reference whenever the ring can be active: interactive HUD (auto-enabled) OR an
+      // explicit `?gputimings=1` diagnostic run (`?frames=`/`?measure=`, where the HUD is absent
+      // but `_finalize()` must still attach `gpuMs`/`gpuPassesMs` to the MEASURE contract).
+      if (interactiveHud || explicit) {
         this._gpuTimer = gpuTimer;
       }
     }

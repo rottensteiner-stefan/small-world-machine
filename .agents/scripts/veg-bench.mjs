@@ -37,6 +37,12 @@
 //   --timeout-ms <n>                 per-cell readiness timeout (default 120000)
 //   --keep-server                    do not spawn/kill the preview server (assume it is running)
 //   --skip-webgpu-probe              skip the WebGPU usability probe (assume usable)
+//   --real-gpu                       real-GPU operator session: launch the SYSTEM Google Chrome
+//                                    (headed window, Metal adapter incl. timestamp-query) instead of
+//                                    the headless SwiftShader flags. Same protocol + cells; the only
+//                                    difference is the backend. Requires a GUI Chrome: the system
+//                                    browser is looked up in the standard macOS location, override
+//                                    via CHROME_PATH. Use with --keep-server.
 //
 // Example:
 //   npm run build:showcases   # coordinator; veg-bench only needs dist/
@@ -91,6 +97,7 @@ function parseArgs(argv) {
     timeoutMs: 120000,
     keepServer: false,
     skipWebGpuProbe: false,
+    realGpu: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -153,6 +160,9 @@ function parseArgs(argv) {
         break;
       case "--skip-webgpu-probe":
         args.skipWebGpuProbe = true;
+        break;
+      case "--real-gpu":
+        args.realGpu = true;
         break;
       default:
         throw new Error(`Unknown argument: ${arg}`);
@@ -482,26 +492,49 @@ async function main() {
 
     const tmpDir = path.join(ROOT, ".agents", "scratches", "tmp_vegbench_" + Date.now());
     fs.mkdirSync(tmpDir, { recursive: true });
-    const browser = await puppeteer.launch({
-      headless: true,
-      userDataDir: tmpDir,
-      acceptInsecureCerts: true,
-      protocolTimeout: 60000,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--ignore-certificate-errors",
-        "--use-gl=angle",
-        "--use-angle=swiftshader",
-        "--enable-webgl",
-        "--enable-unsafe-swiftshader",
-        "--ignore-gpu-blocklist",
-        "--disable-gpu-sandbox",
-        "--enable-features=Vulkan",
-        "--enable-unsafe-webgpu",
-      ],
-    });
+    const browser = await puppeteer.launch(
+      args.realGpu
+        ? {
+            // Real-GPU operator session: headed system Chrome on the real Metal adapter (incl.
+            // timestamp-query for the gpuMs ring). Chromium works only with the SwiftShader flags;
+            // the system browser is required here. Same protocol, same cells as the headless lane.
+            headless: false,
+            userDataDir: tmpDir,
+            acceptInsecureCerts: true,
+            protocolTimeout: 60000,
+            executablePath:
+              process.env.CHROME_PATH ||
+              "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            args: [
+              "--no-sandbox",
+              "--disable-setuid-sandbox",
+              "--disable-dev-shm-usage",
+              "--ignore-certificate-errors",
+              "--ignore-gpu-blocklist",
+              "--disable-gpu-sandbox",
+            ],
+          }
+        : {
+            headless: true,
+            userDataDir: tmpDir,
+            acceptInsecureCerts: true,
+            protocolTimeout: 60000,
+            args: [
+              "--no-sandbox",
+              "--disable-setuid-sandbox",
+              "--disable-dev-shm-usage",
+              "--ignore-certificate-errors",
+              "--use-gl=angle",
+              "--use-angle=swiftshader",
+              "--enable-webgl",
+              "--enable-unsafe-swiftshader",
+              "--ignore-gpu-blocklist",
+              "--disable-gpu-sandbox",
+              "--enable-features=Vulkan",
+              "--enable-unsafe-webgpu",
+            ],
+          },
+    );
 
     let webgpuUsable = true;
     if (args.renderer === "webgpu" && !args.skipWebGpuProbe) {
