@@ -31,6 +31,12 @@ docs/.vitepress/cache/
 .tripo/
 /.playwright-mcp/
 /.mcp.json
+
+# Local-only tooling (moderator decision 2026-11-08): only `.agents/scripts/local/` is kept out
+# of git. Everything with a package.json/Make/CI consumer (the documented command surface)
+# stays committed -- via its transitive import closure. `local/` = benchmarks, ad-hoc tools,
+# lane-contracts, release helpers, unused libs without a committed consumer.
+/.agents/scripts/local/
 /skills/
 
 # Local working dirs (.agents/collaborate, .agents/notes): only the directories
