@@ -149,7 +149,12 @@ function main() {
 
   if (args.install) {
     console.log("\nnpm ci (this takes a minute) ...");
-    execFileSync("npm", ["ci"], { cwd: dir, stdio: "inherit" });
+    // `npm run` propagates every npm config as npm_config_* into the child env; an `allow-scripts`
+    // entry in the user .npmrc then surfaces in `npm ci` as a CLI/env policy and throws EALLOWSCRIPTS
+    // in project-scoped installs (npm 11). The allowlist lives in package.json#allowScripts — drop
+    // the propagated var so the inner `npm ci` reads only that source.
+    const { npm_config_allow_scripts: _dropped, ...ciEnv } = process.env;
+    execFileSync("npm", ["ci"], { cwd: dir, stdio: "inherit", env: ciEnv });
   }
 
   console.log(`

@@ -137,8 +137,8 @@
     ]
   },
   "allowScripts": {
-    "puppeteer@25.4.0": true,
-    "esbuild@0.28.1": true,
+    "puppeteer@25.16.0": true,
+    "esbuild@0.28.2": true,
     "fsevents@2.3.3": true
   }
 }
