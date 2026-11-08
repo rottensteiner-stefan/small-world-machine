@@ -11,7 +11,7 @@
 - URL contract: `?mode=`, `?n=`, `?seed=` (fixed default), `?rendererType=`, `?frames=` (bench), `?qa=1` (HUD-free, stable vantage).
 - Camera paths (seeded, deterministic): `walk`, `flight` (fast flight = pop-sensitive), `aerial`. Same scene, same seeds → comparable runs.
 - Scene seed pinned in the showcase; terrain y≈0 flat; scatter box bounded (documented in showcase log).
-- **Lane semantics (2026-11-08):** SwiftShader absolutes ARE the honest software-rasterizer numbers, NOT real-GPU numbers — the per-cell ratios (autoinst vs instanced) and the `?n=` slope are the transferable signal on this lane; the real-GPU WebGPU lane (manual/observer-AI, pending a device host) supplies the calibration absolutes per ADR targets.
+- **Lane semantics (2026-11-08):** SwiftShader absolutes ARE the honest software-rasterizer numbers, NOT real-GPU numbers — the per-cell ratios (autoinst vs instanced) and the `?n=` slope are the transferable signal on this lane; the real-GPU WebGPU lane (operator session, see §8) supplies the calibration absolutes per ADR targets.
 - **Timing reality (2026-11-08, M1 SwiftShader):** n=20 000 autoinst ≈ **1.16 s/frame (0.9 fps)** at 18 363 placed trees (2 parts each → 36 726 scene objects). Grid sizing therefore uses `--frames 60` at 20k and `--frames 30` at 100k (P50/P95 statistical floor only on this lane; full 240-sample cells are for the real-GPU lane).
 - **Measurement integrity notes (2026-11-08):** (1) `?pausedAt=`/`?qa=1`/`?truth=1` runs are HUD-free — the DOM HUD pollutes clipped screenshots and the FLIP compare (verified: with HUD the truth FLIP read 0.43 mean; without it 0.0 exactly). (2) All URL knobs guard absent params (`Number(null) === 0` bug class fixed) — a missing `?n=` must keep the documented default, never silently empty the population.
 
@@ -19,8 +19,9 @@
 
 | Device | API tier | Lane | Verified? |
 | :--- | :--- | :--- | :--- |
-| Apple M1-class Mac, Chrome | WebGPU | manual / observer-AI (no headless `navigator.gpu` in this workspace) | ⬜ |
+| Apple M1-class Mac, Chrome | WebGPU | operator session (real GPU; headless lane = Dawn/SwiftShader software, §8) | ⬜ |
 | macOS (this repo host), headless Chrome SwiftShader | WebGL2 | automated `veg-bench.mjs` | ⬜ |
+| macOS (this repo host), headless Chrome SwiftShader | WebGPU | automated `veg-bench.mjs` (ring `gpuMs` needs real device) | ⬜ |
 | (Windows dGPU WebGPU + WebGL2) | WebGPU / WebGL2 | waiting on host | ⬜ |
 | Redmi 13C WebGL2 low tier | WebGL2 | waiting on host | ⬜ |
 
@@ -49,18 +50,29 @@ shadows on). `P50`/`P95` from page `frameTimesMs[]` (CPU-observed); `wall` = MEA
 | instanced | 91 464 / 100 000 | flight | 5552 | 5991 | 0.2 | 2 | 2026-11-08 |
 | autoinst (GL1 spot) | 18 363 / 20 000 | flight | 601 | 657 | 1.7 | 36 726 | 2026-11-08, `--frames 40` |
 | instanced (GL1 spot) | 18 363 / 20 000 | flight | 567 | 619 | 1.8 | 2 | 2026-11-08, `--frames 40` |
+| autoinst (WGPU soft) | 18 363 / 20 000 | walk | 1314 | 1333 | 0.8 | 36 726 | 2026-11-08, Dawn/SwiftShader |
+| autoinst (WGPU soft) | 18 363 / 20 000 | flight | 1264 | 1343 | 0.8 | 36 726 | 2026-11-08 |
+| autoinst (WGPU soft) | 18 363 / 20 000 | aerial | 1417 | 1461 | 0.7 | 36 726 | 2026-11-08 |
+| instanced (WGPU soft) | 18 363 / 20 000 | walk | 1286 | 1342 | 0.8 | 2 | 2026-11-08 |
+| instanced (WGPU soft) | 18 363 / 20 000 | flight | 1264 | 1332 | 0.8 | 2 | 2026-11-08 |
+| instanced (WGPU soft) | 18 363 / 20 000 | aerial | 1417 | 1634 | 0.7 | 2 | 2026-11-08 |
+| autoinst (WGPU soft) | 91 464 / 100 000 | flight | 6201 | 9179 | 0.1 | 182 928 | 2026-11-08, `--frames 30` |
+| instanced (WGPU soft) | 91 464 / 100 000 | flight | 8312 | 8773 | 0.1 | 2 | 2026-11-08, `--frames 30` |
 
-**READING (2026-11-08, lead):** this lane is GPU/rasterization-bound (SwiftShader), so autoinst vs
-instanced is identical within noise (CPU-side gap of 36 726 vs 2 scene objects is REAL but masked on
-the software rasterizer); the `?n=` slope is ≈ linear in instance count (20k→100k = 5× n → ≈4.6×
-frame time), i.e. rasterization dominates. `aerial` is consistently ~10–15 % slower than walk/flight
-(more frustum coverage). **Lane transferability:** the CPU-side autoinst-vs-instanced contrast and
-the absolute ADR targets must be measured on the real-GPU WebGPU lane (M1 Chrome, pending device
-host); the SwiftShader lane supplies CI-reproducible relative structure + the n-slope.
+**READING (2026-11-08, lead):** GL2 + GL1 + WebGPU software lanes all GPU/rasterization-bound: at 20 k
+autoinst ≈ instanced within noise (CPU-side gap of 36 726 vs 2 scene objects masked on the software
+rasterizers), the `?n=` slope is ≈ linear (20k→100k = 5× n → ≈4.6× ms), `aerial` ~10–15 % slower than
+walk/flight (more frustum coverage). **NEW signal (WebGPU 100 k, 30 samples, low confidence):**
+`instanced` read **P50 8312 ms vs autoinst 6201 ms (≈34 % slower)** while GL2 stayed equal — a
+per-cell observation on the WebGPU lane only, plausibly a per-draw overhead on the WebGPU/Dawn path
+(not visible on GL2's software GL). Not conclusive at 30 samples; **the real-GPU WebGPU run (§8) is
+decisive for whether this is engine overhead worth P1 attention or a lane artifact.** The real-Metal
+absolutes (and the `gpuMs` ring data) remain operator-session scope; SwiftShader lanes supply
+CI-reproducible structure + the n-slope.
 
 ## 5. Exit-gate checklist (P0)
 
-- [x] All three paths reproducible on WebGL2 (automated) + WebGL1 spot; WebGPU lane awaits a device host (no headless `navigator.gpu` in this workspace). Zero console errors in every cell.
+- [x] All three paths reproducible on WebGL2 (automated) + WebGL1 spot + WebGPU software lane (automated, §8; ring needs a `timestamp-query` device). Zero console errors in every cell.
 - [x] CPU ms vs `?n=` curve recorded (SwiftShader lane): ~linear in n (20k→100k = 5× n → ≈4.6× ms); autoinst ≈ instanced (GPU-bound lane).
 - [ ] Target numbers calibrated with moderator (ADR step 0 targets: WebGPU M1 1080p 60 fps ≥ 250 k field instances as P1 ambition; WebGL2 ≥ 20 k). **Pending moderator session — see BACKLOG.**
 - [x] Showcase 51 golden baseline captured once (`.agents/goldens/veg51/baseline/forest-baseline__base.png`, `sha256 ba3801…c527`, 2026-11-08, LFS; only intentional visual changes re-baseline).
@@ -76,3 +88,27 @@ host); the SwiftShader lane supplies CI-reproducible relative structure + the n-
 - **ADR step-0 targets stay P1/P2 PHASE AMBITIONS, not step-0 gates** (moderator go): WebGPU M1 1080p 60 fps ≥ 250 k and WebGL2 ≥ 20 k remain goals AFTER GPU culling (P1) + LOD buckets (P2); the step-0 gate is the *recorded, reproducible baseline* (this note + showcase 51 + golden veg51), which is MET.
 - **Real-GPU measurement is a standing BACKLOG task before the P1 decision** (this Mac's Chrome WebGPU + a low-tier Android WebGL2), because the automated SwiftShader lane is rasterization-bound and masks the CPU-side autoinst-vs-instanced contrast.
 - P0 closes with commit `af6aee0` ("If you cannot measure it, you cannot improve it.", branch `veg-p0`, amended from `fc2bc92` to fold in this calibration section; ADR status accepted-in-shape). Merged to `main` + pushed 2026-11-08.
+
+## 8. WebGPU lane: headless automation WORKS (2026-11-08, corrected) + real-GPU runbook
+
+### Corrected finding — do not let the earlier negative mislead you
+
+- **`navigator.gpu` IS available in terminal-launched headless Chrome here** — but ONLY on a **secure context**. The earlier negative probes (2026-11-08, probes 1–5) tested on `about:blank` which is NOT a secure context → `navigator.gpu` is absent there. Probed against `https://localhost:4174` (secure) with the SwiftShader+Vulkan flags: adapter present, device + submit + `onSubmittedWorkDone` functional. **Verdict: WebGPU code-path validation IS automatable (Dawn/SwiftShader software adapter, `vendor: google`); the earlier "operator-bound by design" claim is void.**
+- **Two REAL engine bugs found + fixed via this lane** (would have broken the ring on every real device that supports `timestamp-query`):
+  1. `GpuTimer` resolve buffer lacked `GPUBufferUsage.QUERY_RESOLVE` → `resolveQuerySet` validation error, whole frame's command buffer invalid (false-fast P50 ~16.7 ms = dropped frames).
+  2. Combined `MAP_READ` with `QUERY_RESOLVE`/`COPY_SRC` — per spec `MAP_READ` is only combinable with `COPY_DST` → `CreateBuffer` validation error. Fixed with the in-repo `HzbOcclusionSystem` two-buffer pattern (resolve dest `QUERY_RESOLVE|COPY_SRC` + separate `MAP_READ|COPY_DST` staging + `copyBufferToBuffer`).
+  - Headless adapter does **not** support `timestamp-query` (1 feature only) → ring stays honestly `disabled`, `gpuMs`/`gpuPassesMs` stay absent on the automated lane; the REAL ring run + `gpuMs` split needs the operator session below.
+- WebGL2 headed without SwiftShader flags is unavailable in this environment (only `gl1`) — irrelevant for the automated lane, which runs headless+SwiftShader.
+
+### Automated lane (CI-reproducible, NOW RUNNABLE)
+
+- `PREVIEW_PORT=4174 node .agents/scripts/veg-bench.mjs --renderer webgpu …` — full grid, same protocol as the GL2 lane; WebGPU cells automatically add `?gputimings=1` (ring encode path runs clean, fields honestly absent without the feature). Numbers land in §4 as the WebGPU-software lane.
+
+### Real-GPU runbook (operator session, for ABSOLUTE numbers + `gpuMs` ring)
+
+- Page emits `MEASURE {…}` into the DOM overlay `#__measure` (not in `?qa=1`) and `console.info("[Showcase MEASURE] {…}")` (always). `?gputimings=1` adds `gpuMs` + `gpuPassesMs` on a device with `timestamp-query`.
+- **Host:** preview up (`npm run preview -- --port 4174 --strictPort`, dist built); open in the user's normal Chrome `https://localhost:4174/apps/showcases/51/index.html?…` (accept self-signed cert once).
+- **Cells** (`frames=60` @20 k, `frames=240` at real-GPU frame rates; identical URLs between rows): `rendererType=WEB_GPU&mode=autoinst&n=20000&path=walk|flight|aerial&frames=60&gputimings=1` (+ the `instanced` twins), plus the `n=100000&path=flight` autoinst/instanced pair.
+- **Collection (2 s, per cell):** right-click the console message `[Showcase MEASURE]` → *Copy message contents*, or `copy(document.getElementById('__measure')?.textContent || '')`; paste into §4 (P50/P95 from `frameTimesMs[]`, `gpuMs`/`gpuPassesMs` from the ring). Keep raw JSON in `.agents/scratches/veg/rgpu/`.
+- **Low-tier Android WebGL2 (spot):** same URLs with `rendererType=WEB_GL2` on Android Chrome; identical collection.
+- **Decision value:** real-`gpuMs` vs `frameTimesMs` splits rasterization vs CPU cost — decisive for the P1 (GPU culling) go/no-go; `P50` absolutes calibrate the SwiftShader lanes (see §7; 60 fps @ ≥ 250 k stays a P1/P2 ambition).

@@ -155,3 +155,23 @@ overlap (throughput baseline, not placement art) — accepted.
   (Bob's unit coverage 18/18 stands in for headless; real device lane next, see research note).
 - Open: WebGL1 bench cells not yet run (SW lane exists); golden baseline capture for 51 pending
   S2 numbers; `instanced`/`autoinst` high-n (100k) grid running (S2).
+
+## 2026-11-08 — CORRECTION + GpuTimer fix (headless WebGPU lane is real; ring was broken)
+
+- **Correction:** the S1 "Not verified (no `navigator.gpu` headless)" claim is WRONG. `navigator.gpu`
+  IS available in headless terminal-launched Chrome here — but only on a **secure context**
+  (`https://localhost:*`). The P0-era negative probes ran on `about:blank`, which is not a secure
+  context. Verified functionally on the Dawn/SwiftShader software adapter (`vendor: google`,
+  device + submit + `onSubmittedWorkDone`). → WebGPU code-path + baseline runs ARE automated;
+  only the real-Metal absolutes and the `gpuMs` ring data need the operator session (research note §8).
+- **Critical fix (engine `GpuTimer.ts`, found via the now-runnable WebGPU lane):** the ring produced
+  an **Invalid CommandBuffer** that silently dropped every frame at heavy n (P50 read ~16.7 ms =
+  false-fast no-op frames VS ~53 ms once fixed). Two spec violations, both would have hit every real
+  `timestamp-query` device:
+  1. resolve buffer lacked `QUERY_RESOLVE` usage;
+  2. `MAP_READ` combined with more than `COPY_DST` (spec: `MAP_READ` only pairs with `COPY_DST`).
+  Fixed with the in-repo `HzbOcclusionSystem` two-buffer pattern (resolve dest + `copyBufferToBuffer`
+  into a `MAP_READ` staging). Unit tests updated (18/18) to the two-buffer contract. The headless
+  Dawn adapter exposes no `timestamp-query`, so `gpuMs` honestly stays absent on the automated lane.
+- Verified post-fix: veg-bench WebGPU cells OK (0 console errors), forest renders (vision-confirmed),
+  P50 ≈ 53 ms @ n=480 — real rendering restored.

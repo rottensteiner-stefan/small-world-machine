@@ -95,14 +95,17 @@ const TIMESTAMP_BYTES = 8;
 /** One ring slot: its own query set, resolve staging buffer and the frame it recorded. */
 interface TimingSlot {
   querySet: GPUQuerySet | undefined;
+  /** `resolveQuerySet` destination (`QUERY_RESOLVE | COPY_SRC`). */
   resolveBuffer: GPUBuffer | undefined;
+  /** `MAP_READ | COPY_DST` copy target; the only buffer ever mapped (see `endFrame`). */
+  stagingBuffer: GPUBuffer | undefined;
   /** Timer-local frame index of the frame this slot last recorded; `-1` while unused. */
   frameIndex: number;
   /** Segment names recorded this cycle; `names[i]` pairs with write indices `2*i, 2*i+1`. */
   names: (string | undefined)[];
   /** Number of segments recorded in the current cycle. */
   segmentCount: number;
-  /** True while a `mapAsync()` on `resolveBuffer` is outstanding. */
+  /** True while a `mapAsync()` on `stagingBuffer` is outstanding. */
   pendingMap: boolean;
 }
 
@@ -265,17 +268,30 @@ export class GpuTimer {
 
   /** Renderer render-loop hook, once right before `queue.submit()` after every pass has recorded:
    * resolves the current frame's timestamps into its staging buffer (last command of this
-   * encoder, so ordering against the pass work is guaranteed). No-op while disabled, or when the
-   * frame recorded no segments, or when the staging buffer is still mapped (clean sample skip --
-   * the ring's next cycle resolves fresh data into it). */
+   * encoder, so ordering against the pass work is guaranteed), then copies into the `MAP_READ`
+   * target for CPU readback. No-op while disabled, or when the frame recorded no segments, or
+   * when the staging buffer is still mapped (clean sample skip -- the ring's next cycle resolves
+   * fresh data into it). */
   public endFrame(ce: GPUCommandEncoder): void {
     if (!this._enabled) return;
     const slot = this._slots[this._head]!;
     if (slot.segmentCount === 0 || !!slot.pendingMap) return;
     const querySet = slot.querySet;
-    const buffer = slot.resolveBuffer;
-    if (!querySet || !buffer) return;
-    ce.resolveQuerySet(querySet, 0, slot.segmentCount * 2, buffer, 0);
+    const resolveBuffer = slot.resolveBuffer;
+    const stagingBuffer = slot.stagingBuffer;
+    if (!querySet || !resolveBuffer || !stagingBuffer) return;
+    // Two buffers, never one: per spec `MAP_READ` may only be combined with `COPY_DST`, while
+    // `resolveQuerySet` destinations require `QUERY_RESOLVE`. The proven in-repo pattern is
+    // `HzbOcclusionSystem` (staging readback via `copyBufferToBuffer`) — honored here. A single
+    // `COPY_DST|MAP_READ|QUERY_RESOLVE` buffer is rejected by Dawn with a CreateBuffer error.
+    ce.resolveQuerySet(querySet, 0, slot.segmentCount * 2, resolveBuffer, 0);
+    ce.copyBufferToBuffer(
+      resolveBuffer,
+      0,
+      stagingBuffer,
+      0,
+      slot.segmentCount * 2 * TIMESTAMP_BYTES,
+    );
     this._pendingKick = slot;
   }
 
@@ -296,9 +312,16 @@ export class GpuTimer {
       for (let s = 0; s < MAX_SEGMENTS_PER_FRAME; s++) names.push(undefined);
       this._slots.push({
         querySet: device.createQuerySet({ type: "timestamp", count: queryCount }),
+        // `resolveQuerySet` destination must carry `QUERY_RESOLVE`; the `MAP_READ` target is a
+        // separate buffer because `MAP_READ` may only be combined with `COPY_DST` (spec; Dawn
+        // validates both — see `endFrame`). Both found + fixed via headless Dawn lane 2026-11-08.
         resolveBuffer: device.createBuffer({
           size: queryCount * TIMESTAMP_BYTES,
-          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+          usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+        }),
+        stagingBuffer: device.createBuffer({
+          size: queryCount * TIMESTAMP_BYTES,
+          usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
         }),
         frameIndex: -1,
         names,
@@ -318,6 +341,7 @@ export class GpuTimer {
     for (const slot of this._slots) {
       slot.querySet?.destroy();
       slot.resolveBuffer?.destroy();
+      slot.stagingBuffer?.destroy();
     }
     this._slots.length = 0;
     this._pendingKick = undefined;
@@ -330,7 +354,7 @@ export class GpuTimer {
   private _consumeMappedSlots(): void {
     for (const slot of this._slots) {
       if (!slot.pendingMap) continue;
-      const buffer = slot.resolveBuffer;
+      const buffer = slot.stagingBuffer;
       if (!buffer || buffer.mapState !== "mapped") continue;
       const mapped = new BigUint64Array(buffer.getMappedRange());
       if (slot.frameIndex > this._snapshot.frameIndex) {
@@ -364,7 +388,7 @@ export class GpuTimer {
     const slot = this._pendingKick;
     this._pendingKick = undefined;
     if (!slot || slot.pendingMap) return;
-    const buffer = slot.resolveBuffer;
+    const buffer = slot.stagingBuffer;
     if (!buffer) return;
     slot.pendingMap = true;
     // Fire-and-forget (mirrors `HzbOcclusionSystem.kickoffMapAsync`): consumption polls

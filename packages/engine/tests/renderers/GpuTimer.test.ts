@@ -8,7 +8,9 @@ import { MainRenderPass } from "../../src/renderers/passes/MainRenderPass.js";
 // HzbOcclusionPassGPU.test.ts). Nothing here requires a real GPU or `navigator.gpu`.
 (globalThis as unknown as { GPUBufferUsage: Record<string, number> }).GPUBufferUsage ??= {
   MAP_READ: 0x0001,
+  COPY_SRC: 0x0004,
   COPY_DST: 0x0008,
+  QUERY_RESOLVE: 0x0010,
 };
 (globalThis as unknown as { GPUMapMode: Record<string, number> }).GPUMapMode ??= {
   READ: 0x1,
@@ -64,10 +66,16 @@ function makeBuffer(): FakeBuffer {
 function makeDevice(opts: { feature: boolean; periodNs?: number }): {
   device: Internals;
   querySets: FakeQuerySet[];
-  buffers: FakeBuffer[];
+  /** `MAP_READ|COPY_DST` staging copies (one per ring slot; the only buffers ever mapped). */
+  staging: FakeBuffer[];
+  /** `QUERY_RESOLVE|COPY_SRC` resolveQuerySet destinations (one per ring slot). */
+  resolve: FakeBuffer[];
 } {
   const querySets: FakeQuerySet[] = [];
-  const buffers: FakeBuffer[] = [];
+  const staging: FakeBuffer[] = [];
+  const resolve: FakeBuffer[] = [];
+  const gpuBufferUsage = (globalThis as unknown as { GPUBufferUsage: Record<string, number> })
+    .GPUBufferUsage;
   const device = {
     features: { has: vi.fn(() => opts.feature) },
     createQuerySet: vi.fn(() => {
@@ -75,18 +83,21 @@ function makeDevice(opts: { feature: boolean; periodNs?: number }): {
       querySets.push(qs);
       return qs;
     }),
-    createBuffer: vi.fn(() => {
+    createBuffer: vi.fn((desc: { usage?: number }) => {
       const b = makeBuffer();
-      buffers.push(b);
+      if ((desc.usage ?? 0) & (gpuBufferUsage["MAP_READ"] ?? 0)) staging.push(b);
+      else resolve.push(b);
       return b;
     }),
     queue: { getTimestampPeriod: vi.fn(() => opts.periodNs ?? 1) },
   } as Internals;
-  return { device, querySets, buffers };
+  return { device, querySets, staging, resolve };
 }
 
 function makeCe(): { ce: Internals } {
-  return { ce: { resolveQuerySet: vi.fn() } };
+  return {
+    ce: { resolveQuerySet: vi.fn(), copyBufferToBuffer: vi.fn() },
+  };
 }
 
 /** First render-pass descriptor recorded via `ce.beginRenderPass` (mock-call extraction). */
@@ -119,12 +130,13 @@ describe("GpuTimer", () => {
     });
 
     it("is fully inert before enable(): no GPU objects are created and endFrame records nothing", () => {
-      const { device, querySets, buffers } = makeDevice({ feature: true });
+      const { device, querySets, staging, resolve } = makeDevice({ feature: true });
       const timer = new GpuTimer();
       timer.attachDevice(device as never);
 
       expect(querySets).toHaveLength(0);
-      expect(buffers).toHaveLength(0);
+      expect(staging).toHaveLength(0);
+      expect(resolve).toHaveLength(0);
       expect(timer.enabled).toBe(false);
       expect(timer.recordPass("x")).toBeUndefined();
 
@@ -150,7 +162,7 @@ describe("GpuTimer", () => {
     });
 
     it("enable() on a supported device creates the ring; disable() destroys it and reverts to inert", () => {
-      const { device, querySets, buffers } = makeDevice({ feature: true });
+      const { device, querySets, staging, resolve } = makeDevice({ feature: true });
       const timer = new GpuTimer();
       timer.attachDevice(device as never);
 
@@ -158,7 +170,10 @@ describe("GpuTimer", () => {
       expect(timer.enabled).toBe(true);
       expect(timer.snapshot.enabled).toBe(true);
       expect(querySets).toHaveLength(RING_DEPTH);
-      expect(buffers).toHaveLength(RING_DEPTH);
+      // Two buffers per slot: the QUERY_RESOLVE destination and the MAP_READ copy target (see
+      // `GpuTimer.endFrame` — MAP_READ may only pair with COPY_DST, so they cannot be one buffer).
+      expect(staging).toHaveLength(RING_DEPTH);
+      expect(resolve).toHaveLength(RING_DEPTH);
       expect(device.createBuffer).toHaveBeenCalledWith(
         expect.objectContaining({ size: MAX_SEGMENTS * 2 * 8 }),
       );
@@ -166,7 +181,8 @@ describe("GpuTimer", () => {
       timer.disable();
       expect(timer.enabled).toBe(false);
       expect(querySets[0]!.destroy).toHaveBeenCalledTimes(1);
-      expect(buffers[0]!.destroy).toHaveBeenCalledTimes(1);
+      expect(staging[0]!.destroy).toHaveBeenCalledTimes(1);
+      expect(resolve[0]!.destroy).toHaveBeenCalledTimes(1);
       expect(timer.recordPass("x")).toBeUndefined();
 
       // Stale flush: a resolve into the (reused) descriptor must no longer happen.
@@ -252,7 +268,7 @@ describe("GpuTimer", () => {
 
   describe("endFrame resolve recording", () => {
     it("resolves exactly the recorded segment count of the current frame into its staging buffer", () => {
-      const { device, querySets, buffers } = makeDevice({ feature: true });
+      const { device, querySets, staging, resolve } = makeDevice({ feature: true });
       const timer = new GpuTimer();
       timer.attachDevice(device as never);
       timer.enable();
@@ -264,7 +280,9 @@ describe("GpuTimer", () => {
       timer.endFrame(ce as never);
 
       expect(ce.resolveQuerySet).toHaveBeenCalledTimes(1);
-      expect(ce.resolveQuerySet).toHaveBeenCalledWith(querySets[1], 0, 4, buffers[1], 0);
+      expect(ce.resolveQuerySet).toHaveBeenCalledWith(querySets[1], 0, 4, resolve[1], 0);
+      expect(ce.copyBufferToBuffer).toHaveBeenCalledTimes(1);
+      expect(ce.copyBufferToBuffer).toHaveBeenCalledWith(resolve[1], 0, staging[1], 0, 4 * 8);
     });
 
     it("records nothing when the frame had no segments", () => {
@@ -306,7 +324,7 @@ describe("GpuTimer", () => {
 
   describe("async readback pipeline", () => {
     it("kicks mapAsync once per frame and parses a completed readback into the snapshot", () => {
-      const { device, buffers } = makeDevice({ feature: true, periodNs: 1 });
+      const { device, staging } = makeDevice({ feature: true, periodNs: 1 });
       const timer = new GpuTimer();
       timer.attachDevice(device as never);
       timer.enable();
@@ -322,10 +340,10 @@ describe("GpuTimer", () => {
       timer.recordPass("other");
       const { ce: ce2 } = makeCe();
       timer.endFrame(ce2 as never);
-      expect(buffers[1]!.mapAsync).toHaveBeenCalledTimes(1);
+      expect(staging[1]!.mapAsync).toHaveBeenCalledTimes(1);
 
-      // GPU finishes: the resolve buffer becomes mapped with a 1s segment.
-      completeMap(buffers[1]!, 0, 1_000_000_000n);
+      // GPU finishes: the staging buffer becomes mapped with a 1s segment.
+      completeMap(staging[1]!, 0, 1_000_000_000n);
 
       // Frame 3 consumes the completed readback.
       timer.beginFrame();
@@ -343,7 +361,7 @@ describe("GpuTimer", () => {
     });
 
     it("applies the device timestamp period in the ms conversion", () => {
-      const { device, buffers } = makeDevice({ feature: true, periodNs: 100 });
+      const { device, staging } = makeDevice({ feature: true, periodNs: 100 });
       const timer = new GpuTimer();
       timer.attachDevice(device as never);
       timer.enable();
@@ -358,7 +376,7 @@ describe("GpuTimer", () => {
       const { ce: ce2 } = makeCe();
       timer.endFrame(ce2 as never);
 
-      completeMap(buffers[1]!, 0, 10_000_000n); // 10 ms at period 1, * 100 period = 1000 ms
+      completeMap(staging[1]!, 0, 10_000_000n); // 10 ms at period 1, * 100 period = 1000 ms
       timer.beginFrame();
       timer.recordPass("c");
       const { ce: ce3 } = makeCe();
@@ -369,7 +387,7 @@ describe("GpuTimer", () => {
     });
 
     it("drops a segment whose delta is not positive (end <= begin => not measured)", () => {
-      const { device, buffers } = makeDevice({ feature: true });
+      const { device, staging } = makeDevice({ feature: true });
       const timer = new GpuTimer();
       timer.attachDevice(device as never);
       timer.enable();
@@ -384,9 +402,9 @@ describe("GpuTimer", () => {
       const { ce: ce2 } = makeCe();
       timer.endFrame(ce2 as never);
 
-      buffers[1]!.backing[0] = 1_000_000_000n;
-      buffers[1]!.backing[1] = 1_000_000_000n; // zero delta
-      buffers[1]!.mapState = "mapped";
+      staging[1]!.backing[0] = 1_000_000_000n;
+      staging[1]!.backing[1] = 1_000_000_000n; // zero delta
+      staging[1]!.mapState = "mapped";
       timer.beginFrame();
       timer.recordPass("y");
       const { ce: ce3 } = makeCe();
@@ -397,7 +415,7 @@ describe("GpuTimer", () => {
     });
 
     it("keeps the newest published frame when an older readback arrives late (monotonic guard)", () => {
-      const { device, buffers } = makeDevice({ feature: true });
+      const { device, staging } = makeDevice({ feature: true });
       const timer = new GpuTimer();
       timer.attachDevice(device as never);
       timer.enable();
@@ -415,7 +433,7 @@ describe("GpuTimer", () => {
       timer.beginFrame();
       timer.recordPass("f5");
       timer.endFrame(ce4 as never);
-      completeMap(buffers[3]!, 0, 500_000_000n);
+      completeMap(staging[3]!, 0, 500_000_000n);
       const { ce: ce5 } = makeCe();
       timer.beginFrame();
       timer.recordPass("f6");
@@ -423,9 +441,9 @@ describe("GpuTimer", () => {
       expect(timer.snapshot.frameIndex).toBe(3);
 
       // Now an OLDER readback (slot 1, frame 1) arrives late: it must not regress the snapshot.
-      buffers[1]!.backing[0] = 1_000_000_000n;
-      buffers[1]!.backing[1] = 1_500_000_000n;
-      buffers[1]!.mapState = "mapped";
+      staging[1]!.backing[0] = 1_000_000_000n;
+      staging[1]!.backing[1] = 1_500_000_000n;
+      staging[1]!.mapState = "mapped";
       const { ce: ce6 } = makeCe();
       timer.beginFrame();
       timer.recordPass("f7");
@@ -486,7 +504,7 @@ describe("MainRenderPass gpuTimings hook (K5)", () => {
   });
 
   it("integrates with the real GpuTimer end-to-end (headless, fake device)", () => {
-    const { device, querySets, buffers } = makeDevice({ feature: true });
+    const { device, querySets, resolve, staging } = makeDevice({ feature: true });
     const timer = new GpuTimer();
     timer.attachDevice(device as never);
     timer.enable();
@@ -494,7 +512,11 @@ describe("MainRenderPass gpuTimings hook (K5)", () => {
     const renderer = makePassRenderer(timer.recordPass.bind(timer));
     const pass = new MainRenderPass() as Internals;
     const rp = { end: vi.fn() };
-    const ce = { beginRenderPass: vi.fn(() => rp), resolveQuerySet: vi.fn() };
+    const ce = {
+      beginRenderPass: vi.fn(() => rp),
+      resolveQuerySet: vi.fn(),
+      copyBufferToBuffer: vi.fn(),
+    };
 
     timer.beginFrame();
     pass._beginPass(ce, renderer, { mock: "target" }, undefined, true, "main");
@@ -502,6 +524,7 @@ describe("MainRenderPass gpuTimings hook (K5)", () => {
 
     expect(querySets[1]).toBeDefined();
     expect(firstDescriptor(ce).timestampWrites).toBeDefined();
-    expect(ce.resolveQuerySet).toHaveBeenCalledWith(querySets[1], 0, 2, buffers[1], 0);
+    expect(ce.resolveQuerySet).toHaveBeenCalledWith(querySets[1], 0, 2, resolve[1], 0);
+    expect(ce.copyBufferToBuffer).toHaveBeenCalledWith(resolve[1], 0, staging[1], 0, 2 * 8);
   });
 });

@@ -530,7 +530,14 @@ async function main() {
       }
     }
     if (args.renderer === "webgpu" && !webgpuUsable && !args.skipWebGpuProbe) {
-      console.error("veg-bench: WebGPU unusable in this environment -> no cells to run.");
+      console.error(
+        "veg-bench: WebGPU unusable in this launch -> no cells to run.",
+        "\n  The probe failed on a non-secure context or the Dawn adapter. NOTE: navigator.gpu only",
+        "\n  exists on SECURE contexts — probing about:blank reports false-negative. Headless Dawn/",
+        "\n  SwiftShader WebGPU works here when the page is https://localhost:* (see",
+        "\n  docs/research/vegetation-baseline-2026-11-07.md §8). Real-Metal numbers still need the",
+        "\n  interactive operator session in the user's own Chrome.",
+      );
       await browser.close();
       process.exitCode = 2;
       return;
@@ -555,6 +562,11 @@ async function main() {
         path: cell.path,
         frames: String(args.frames),
       });
+      // WebGPU cells additionally enable the opt-in per-pass GPU timing ring (?gputimings=1) —
+      // headless Dawn/SwiftShader IS a secure context on https://localhost, so navigator.gpu and
+      // the full ring path are exercisable in CI (see vegetation-baseline note §8 for the evidence
+      // that about:blank probes are NOT — navigator.gpu only exists on secure contexts).
+      if (backend === "WEB_GPU") query.set("gputimings", "1");
       const { measure, ready, rafStats, errors } = await runCell(
         browser,
         `${SHOWCASE_URL(args.showcase)}?${query.toString()}`,
