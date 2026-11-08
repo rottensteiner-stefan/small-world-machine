@@ -1247,6 +1247,17 @@ This document serves to record external sources, algorithms, mathematical deriva
   - Sampling keeps the unrotated local direction (`o.wp = pos`), so cheap frames stay pixel-identical to prior releases and the cube-map horizon does not rotate when the camera turns.
 - **Usage:** Renders an infinitely-far environment on WebGPU, WebGL2 and WebGL1 with `depthWrite: false` and back-face culling disabled, so a moving camera (or a `far` plane closer than the cube) can never cut, walk out of, or z-fight the sky; regression-pinned in `SkyboxDepthPin.test.ts` and `SkyboxCameraBinding.test.ts`.
 
+### Vegetation Wind Field (Travelling Gust Waves)
+
+- **File:** `packages/vegetation-extras/src/wind/WindField.ts`, `packages/vegetation-extras/src/wind/shaders/chunks/wind_field.{wgsl,glsl}`
+- **Authors/Gurus:** Tiago Sousa (Crytek), *GPU Gems 3* ch. 16 "Vegetation Procedural Animation and Shading in Crysis" (2007, main bending + detail flutter split); Dave Hoskins, "Hash without Sine" (Shadertoy 4djSRW, `hash12`); Inigo Quilez, value noise with cubic Hermite fade. Design input: ADR 0059 step 1b + community critique of the reference forest demo (uniform sine wiggle breaks realism).
+- **Formulas / Architecture:**
+  - Gust envelope: $n = \tfrac{1}{3}\big(2\,N(\tfrac{a}{L} - s,\ \tfrac{c}{L\,k}) + N(2(\tfrac{a}{L} - s),\ 2\tfrac{c}{L\,k} + 17)\big)$ with $a = \mathbf{x}\cdot\hat{\mathbf{d}}$, $c = \mathbf{x}\cdot\hat{\mathbf{d}}_\perp$, gust length $L$, across-stretch $k$, scroll $s$ (cells, $\dot{s} = v/L$); $g = \text{smoothstep}\big(\text{sat}((n - \text{calm})/(1 - \text{calm}))\big)$ → fronts travel downwind at speed $v$, calm gaps in between.
+  - Seamless wrap: $N$ is periodic in x with $P = 256$ cells (lattice index $\bmod P$, octave 2 with $2P$), so $s$ wraps at $P$ without a pop and stays f32-precise forever.
+  - Lean (tangent): $\boldsymbol\ell = \big(\hat{\mathbf{d}}(\text{strength} + \text{gust}\,g + f\sin\varphi) + \hat{\mathbf{d}}_\perp\,0.35 f\cos\varphi\big)\cdot\text{profile}(h)\cdot(1 - \text{shelter})$, $f = \text{flutter}(0.25 + g)$, $\varphi = \varphi_t + 2\pi\,\text{hash}(\text{root})$, profile $= \text{mix}(\text{ground}, 1, \text{sat}(h/h_b))$, $|\boldsymbol\ell| \le \text{maxLean}$.
+  - Bend: $\mathbf{d} = \boldsymbol\ell\,h\,k^2$ with $k = \text{sat}(y/h)$; $y' = y - \tfrac{1}{2}|\mathbf{d}|^2/h$ (approximate stem-length preservation).
+- **Usage:** One `WindField` drives ground cover, tree LODs and impostors coherently; the consumer binds the 4×vec4 `SwmWind` block and calls `swmWindLean` / `swmWindBend` in its vertex stage. CPU mirror (`gust`, `sampleLean`) for CPU consumers and tests (`WindField.test.ts`, dialect parity + glslang/wgsl_reflect validation in `WindShaders.test.ts`).
+
 ## AI Coding & Architecture Assistants
 
 
