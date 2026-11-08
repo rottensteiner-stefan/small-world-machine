@@ -175,3 +175,27 @@ overlap (throughput baseline, not placement art) — accepted.
   Dawn adapter exposes no `timestamp-query`, so `gpuMs` honestly stays absent on the automated lane.
 - Verified post-fix: veg-bench WebGPU cells OK (0 console errors), forest renders (vision-confirmed),
   P50 ≈ 53 ms @ n=480 — real rendering restored.
+
+## 2026-11-08 (evening) — Real-GPU operator session EXECUTED; gpuMs ring truthful on M4 Pro
+
+- **Session:** 8/8 WebGPU cells on the real Metal adapter (MacBook Pro M4 Pro, Chrome 157.0.8103.39,
+  headed system Chrome, `veg-bench.mjs --real-gpu`, `frames=240`, zero console errors). Raw JSON in
+  `.agents/scratches/veg/rgpu/session-wg*.json` (gitignored). Numbers folded into
+  `docs/research/vegetation-baseline-2026-11-07.md` §4 (+§8 verdict).
+- **Showcase fix (P0-critical, `showcase.ts`):** `this._gpuTimer` was only kept on the interactive-HUD
+  path, so explicit `?gputimings=1` runs (`?frames=`/`?measure=`, HUD-free) recorded the ring but
+  NEVER attached `gpuMs`/`gpuPassesMs` to the MEASURE contract — the session would have had no ring
+  evidence. Reference is now kept whenever the ring can be active (HUD OR explicit).
+- **Engine quirk + fix (`GpuTimer.ts`):** Chrome 157 / Metal-3 grants `timestamp-query` but never
+  writes the begin-of-pass slot (stays 0) while end-of-pass holds an ABSOLUTE monotonic counter
+  (~7.9e14). `end - begin` therefore yielded the absolute counter (`gpuMs ≈ 788 639 077 ms` on an
+  ~8 ms frame). `_publish` now detects `begin == 0` and derives the duration from the delta of
+  successive end counters per segment name across CONTIGUOUS frames (baselines dropped on a gap →
+  a published segment is always a clean single-frame measure or absent). Healthy adapters unchanged.
+  `probeTimestampPeriodNs` additionally falls back to 1 for a present-but-invalid return.
+  3 new unit tests (21/21 green), full suite 4484 pass.
+- **Result (decisive for P1):** all 8 cells GPU/rasterization-bound (`gpuMs` = 0.86–0.98 × `frameMs`);
+  autoinst vs instanced 5.4× (20 k) / 27× (100 k). P1 (GPU culling) priority confirmed; no CPU-limited
+  cell. Android low-tier spot: not available on this host (no device) — open, does not block P1.
+- Verified: typecheck clean, eslint clean, `build:lib` + full suite green, real-GPU cells 0 console
+  errors, `gpuMs` ≈ `frameMs` post-fix on every cell.
