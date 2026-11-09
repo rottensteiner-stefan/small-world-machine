@@ -1,6 +1,6 @@
-// Instance-field GPU cull + segment-table reset -- ADR 0059 step 1 (P1-2), WebGPU lane.
+// Instance-field GPU cull + segment-table reset -- ADR 0059 step 1 (P1-2) / step 2 (P2), WebGPU lane.
 // Runtime assembly (composed by the renderer, mirrored by lint-wgsl.ts):
-//   chunk instance_field_structs.wgsl   // SOLE declaration of FieldInfo/CullParams + the 11
+//   chunk instance_field_structs.wgsl   // SOLE declaration of FieldInfo/CullParams + the 12
 //                                       // @group(2) bindings (INSTANCE_FIELD_BIND_GROUP, frozen)
 //   + WGSL_SCREEN_FOOTPRINT chunk       // `worldRadiusToNdcRadius`
 //   + this file                         // helpers + entries only, nothing re-declared
@@ -80,16 +80,36 @@ fn fieldProjectedDiameterPx(radius: f32, viewDist: f32) -> f32 {
     return (radius * cullParams.viewportHeightPx) / (halfTan * viewDist);
 }
 
-// Ascending per-prototype bucket maxima (`lodBucketMaxima[p][b]`); select the finest bucket whose
-// upper band is not exceeded. Bucket 0 is the finest. P1 fields route through this path from day
-// 1 (bucketed compaction); drawn buckets today are 0..(authorized set) -- IF-CULL-ROUTING.
-fn fieldSelectBucket(prototype: u32, diam: f32) -> u32 {
+// Deterministic per-instance threshold jitter in [-1, 1): the stateless hysteresis discriminator
+// of candidate C (ADR 0059 step 2). Pure mirror of `instanceLodJitter` (InstanceField.ts) --
+// identical finalizer constants, so the CPU reference reproduces the same effective thresholds
+// (IF-CULL-DETERMINISM). Frame-stable because `inst` is the record index of the static V1
+// population; identical in every view (shadows reuse the main camera's choice unchanged).
+fn fieldLodJitter(inst: u32) -> f32 {
+    var h = (inst ^ 0x9E3779B9u) * 0x85EBCA6Bu;
+    h = (h ^ (h >> 13u)) * 0xC2B2AE35u;
+    h = h ^ (h >> 16u);
+    return (f32(h & 0x00FFFFFFu) * (1.0 / 8388608.0)) - 1.0;
+}
+
+// Effective upper band bound of one bucket: authored max + per-tier bias + per-instance hysteresis
+// jitter (`effectiveBucketMaxPx` in InstanceField.ts). At default knobs (bias 0, hysteresis 0)
+// this equals the authored max exactly -- the frozen IF-PROJECTED-SIZE selection is unchanged.
+fn fieldEffectiveMaxPx(prototype: u32, bucket: u32, jitter: f32) -> f32 {
+    let maxPx = fieldLodMaxima[prototype * 2u + bucket / 4u][bucket % 4u];
+    return maxPx * (1.0 + cullParams.lodHysteresis * jitter) + cullParams.lodBiasPx;
+}
+
+// Ascending per-prototype bucket maxima, EFFECTIVE (bias + hysteresis adjusted); select the
+// finest band whose upper bound is not exceeded. Bucket 0 is the smallest projected-size band
+// (farthest under the near=detail authoring convention); the hidden coarsest band holds every
+// diameter above all authored maxima. P1 fields route through this path from day 1 (bucketed
+// compaction) -- IF-CULL-ROUTING.
+fn fieldSelectBucket(prototype: u32, diam: f32, jitter: f32) -> u32 {
     let bucketCount = min(fieldPrototypeRange[prototype].z, 8u);
     var bucket = 0u;
     for (var b = 0u; b + 1u < bucketCount; b++) {
-        // lodBucketMaxima is packed row-major: prototype p, bucket b -> row p*2 + b/4, lane b%4.
-        let maxPx = fieldLodMaxima[prototype * 2u + b / 4u][b % 4u];
-        if (diam > maxPx) {
+        if (diam > fieldEffectiveMaxPx(prototype, b, jitter)) {
             bucket = b + 1u;
         }
     }
@@ -154,6 +174,17 @@ fn fieldHzbVisible(center: vec3f, radius: f32) -> bool {
 // table is atomic because `instanceCount` is the compaction cursor.
 @group(2) @binding(2) var<storage, read_write> fieldIndirectArgs: array<atomic<u32>>; // 128 x 8 words
 @group(2) @binding(3) var<storage, read_write> fieldVisibleIndices: array<u32>;       // pages [bv * pageCapacity, +cap)
+// P2 crossfade channel (ADR 0059 step 2, candidate A): one SIGNED f32 per (segment, instance)
+// slot, at the SAME page address as the visible index (page-indexed exactly like
+// `fieldVisibleIndices`). Per-slot value [blend contract, aligned with the pull fragment
+// `fieldLodDitherDiscard`, veg-p2-erin committed 2026-11-09 (5e44515)]:
+//   +p (0 < p < 1) = FINE-side entry of a crossfade band pair (keeps dither >= p)
+//   -p (0 < p < 1) = COARSE-side entry (keeps dither < p)
+//   both slots of one pair carry the SAME magnitude p = 1 - t (t = band position, 0 at the
+//   coarse end -> 1 at the fine end): the two draws' kept pixels are an exact partition.
+//   0 = settled single-write / unwritten zero-filled slot: keep all (fail-closed = P1).
+// The draw reads only slots < the segment's instanceCount, so no per-frame reset is needed.
+@group(2) @binding(11) var<storage, read_write> fieldLodBlend: array<f32>;
 
 @compute @workgroup_size(64)
 fn resetFieldCounters(@builtin(global_invocation_id) id: vec3u) {
@@ -170,9 +201,25 @@ fn resetFieldCounters(@builtin(global_invocation_id) id: vec3u) {
 
 // ── cull entry ────────────────────────────────────────────────────────────────────────────────
 
+// Emits one survivor into the (segment, slot) page of `bucket`: the draw-index atomic cursor
+// reserves the slot, then index AND blend are written at the SAME page address (one writer per
+// slot -> no cross-invocation race). Clamp-at-capacity: slot >= pageCapacity drops both writes
+// (IF-BUDGET, no OOB, draw arg == compacted count exactly).
+fn fieldEmit(bucket: u32, inst: u32, blend: f32) {
+    let bv = cullParams.segmentBase + bucket;
+    let argsBase = bv * 8u;
+    let slot = atomicAdd(&fieldIndirectArgs[argsBase + 1u], 1u);
+    if (slot < fieldInfo.pageCapacity) {
+        let page = bv * fieldInfo.pageCapacity + slot;
+        fieldVisibleIndices[page] = inst;
+        fieldLodBlend[page] = blend;
+    }
+}
+
 // One invocation per instance record. Order: range resolve -> conservative sphere-frustum ->
-// projected-size sub-pixel drop -> LOD bucket selection -> (mode A/B) previous-frame HZB skip ->
-// clamp-at-capacity atomic compaction into the (view x bucket) segment page.
+// projected-size sub-pixel drop -> (mode A/B) previous-frame HZB skip -> P2 LOD selection +
+// crossfade-band split -> clamp-at-capacity atomic compaction into the (view x bucket) segment
+// page (dual-write inside a transition band, ADR 0059 step 2 candidate A).
 @compute @workgroup_size(64)
 fn cullInstances(@builtin(global_invocation_id) id: vec3u) {
     let inst = id.x;
@@ -198,7 +245,6 @@ fn cullInstances(@builtin(global_invocation_id) id: vec3u) {
         let diam = fieldProjectedDiameterPx(radius, viewDist);
         keep = diam >= fieldInfo.cullPixelSize;
         if (keep) {
-            let bucket = fieldSelectBucket(prototype, diam);
             // Mode A/B previous-frame HZB skip (main-camera view only; coordinator never sets
             // `hzbEnabled` for shadow views). Mode 2 uses the mode-A path until the 2B split.
             if (cullParams.cullMode == 1u || cullParams.cullMode == 2u) {
@@ -209,11 +255,58 @@ fn cullInstances(@builtin(global_invocation_id) id: vec3u) {
                 }
             }
             if (keep) {
-                let bv = cullParams.segmentBase + bucket;
-                let argsBase = bv * 8u;
-                let slot = atomicAdd(&fieldIndirectArgs[argsBase + 1u], 1u);
-                if (slot < fieldInfo.pageCapacity) {
-                    fieldVisibleIndices[bv * fieldInfo.pageCapacity + slot] = inst;
+                // P2: selection + crossfade band through the EFFECTIVE (main-camera-metric)
+                // thresholds. The jitter is per-record, so every view derives the SAME band/pair
+                // as the main camera; shadow views only shift the targets toward the coarse end
+                // by `lodBiasBuckets` (authored `shadowLodBias`, 0 = reuse the main choice).
+                let jitter = fieldLodJitter(inst);
+                let bucketCount = min(fieldPrototypeRange[prototype].z, 8u);
+                let bias = min(cullParams.lodBiasBuckets, bucketCount - 1u);
+                let bucket = fieldSelectBucket(prototype, diam, jitter);
+                let band = cullParams.lodCrossfadeBand;
+
+                // Crossfade band (candidate A): diameter STRICTLY inside `(T*(1-band), T*(1+band))`
+                // of an EFFECTIVE boundary T -> dual-write into the adjacent {coarse, fine} pair
+                // with the SHARED magnitude p = 1 - t (t: 0 at the coarse end -> 1 at the fine
+                // end), written FINE +p / COARSE -p per the pull-fragment contract: fine keeps
+                // dither >= p, coarse keeps dither < p on the SAME 8x8 Bayer -> kept sets are an
+                // exact partition of the mask range (no holes, no overdraw; the fine share grows
+                // with t). Strict membership keeps p in (0,1) -- the band edges fall to the single
+                // write path below, so no slot ever carries the ambiguous p = 0/p = 1 endpoint.
+                // Single prototype bands never apply (no coarser neighbour). band <= 0 = hard
+                // switch (candidate C): always single-write, jitter-only decorrelation.
+                var inBand = band > 0.0;
+                var coarseBucket = bucket;
+                var blend = 0.0;
+                if (inBand) {
+                    inBand = false;
+                    for (var bl = 0u; bl + 1u < bucketCount; bl++) {
+                        let eff = fieldEffectiveMaxPx(prototype, bl, jitter);
+                        let lo = eff * (1.0 - band);
+                        let hi = eff * (1.0 + band);
+                        if (diam > lo && diam < hi) {
+                            let t = clamp((diam - lo) / max(hi - lo, 1e-6), 0.0, 1.0);
+                            inBand = true;
+                            coarseBucket = bl;
+                            blend = 1.0 - t;
+                            break;
+                        }
+                    }
+                }
+                if (inBand) {
+                    let fineBucket = coarseBucket + 1u;
+                    let coarse = max(coarseBucket, bias) - bias;
+                    let fine = max(fineBucket, bias) - bias;
+                    if (coarse == fine) {
+                        // Biased onto the same (coarsest) segment: settle on it, keep-all (0).
+                        fieldEmit(fine, inst, 0.0);
+                    } else {
+                        fieldEmit(coarse, inst, -blend);
+                        fieldEmit(fine, inst, blend);
+                    }
+                } else {
+                    let selected = max(bucket, bias) - bias;
+                    fieldEmit(selected, inst, 0.0);
                 }
             }
         }

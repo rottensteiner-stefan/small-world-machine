@@ -8,6 +8,11 @@
  *   [3] GPU particle system (3rd consumer, `GpuParticleSystemHost`) — interface-alignment only,
  *       no `gpu_particles.wgsl` semantic change (ADR 0059 step 1).
  * Implementers code against EXACTLY these names. No field may be renamed by a lane.
+ * P2 (ADR 0059 step 2, Bob veg-p2): ADDITIVE extensions only — new OPTIONAL authors/mirror
+ * fields (`lodCrossfadeBand`/`lodHysteresis`/`lodBiasPx`, `CullParams.lodBiasBuckets`/knob
+ * mirrors), the P2 shared cull helpers (`instanceLodJitter`/`effectiveBucketMaxPx`/
+ * `lodTransitionBand`) and the IF-CULL-ROUTING dual-write exception (crossfade band). All P1
+ * names, semantics and defaults are untouched.
  *
  * Right-handed world space (+X right, +Y up, +Z backward). All instance data is world space.
  * Frustum plane convention: planes face INWARD, inside iff `n·p + d >= 0` — identical to the
@@ -141,7 +146,11 @@ export function unpackInstancePose(packed: number, out: InstancePose): void {
 
 /**
  * One LOD bucket of a prototype: a projected-size band mapped to one geometry slot.
- * Bands within one prototype are contiguous and ascend; bucket 0 is the finest.
+ * Bands within one prototype are contiguous and ascend; bucket 0 has the SMALLEST projected-size
+ * band and geometry is bound by BUCKET INDEX (`geometryTable[p][b]`), so a monotone LOD chain is
+ * authored with the COARSEST geometry at bucket 0 and the FINEST at the highest index (near =
+ * detail: the projected-size band ascends with the bucket index). `lodIndex` is descriptive
+ * metadata (`0 = finest`), not a routing key — the system never maps by it.
  *
  * @invariant IF-PROJECTED-SIZE: bucket selection and `cullPixelSize` are evaluated in projected
  * sphere diameter in pixels (see {@link projectedDiameterPixels}) through the primary view's
@@ -311,8 +320,40 @@ export interface InstanceFieldOptions {
   /**
    * @domain LOD bucket offset applied ONLY in shadow/cascade views (0 = reuse the main camera's
    *         bucket choice). LOD selection is always driven by the main camera (ADR 0059 step 2).
+   *         P2 semantics (buckets ascend with projected size, geometry bound by bucket index):
+   *         a positive value shifts the shadow view's choice toward the COARSE end (lower bucket
+   *         index), so with the near=detail authoring convention shadows render fewer triangles.
+   *         Applied as `max(selectedBucket - shadowLodBias, 0)` in the cull.
    */
   shadowLodBias: number;
+  /**
+   * @domain [0,1] — ADR 0059 step 2 transition-band width as a FRACTION of each bucket threshold
+   *         (candidate A): an instance whose projected diameter lands inside
+   *         `(T·(1−band), T·(1+band))` of a threshold `T` is compacted into BOTH adjacent buckets
+   *         with a signed per-instance blend channel (see {@link lodTransitionBand}; the pulled
+   *         material screen-doors the pair). `0` = hard switch (candidate C) — the SAME machinery
+   *         with no dual write. Bands never apply where a prototype has fewer buckets. Absent =
+   *         0 (fail-closed: P1-identical single routing for any field that does not opt in; the
+   *         showcase and the P2-4 reference enable the band explicitly — candidate A remains the
+   *         standing feature decision, it is simply not the zero-config engine default).
+   */
+  lodCrossfadeBand?: number;
+  /**
+   * @domain [0,1] — per-instance deterministic hysteresis jitter as a FRACTION of each threshold
+   *         (candidate C knob): every instance's effective threshold is offset by
+   *         `±(lodHysteresis · threshold · instanceLodJitter(recordIndex))` — stateless (a pure
+   *         function of the record index, no per-frame history), frame-stable, and identical in
+   *         every view, which decorrelates hard switches across the population. `0` = no jitter
+   *         (coherent switching). Absent = 0.
+   */
+  lodHysteresis?: number;
+  /**
+   * @domain px — additive per-tier threshold bias on EVERY bucket threshold (ADR 0035 tier
+   *         scalar): a negative value shifts selection toward coarser buckets (a weak tier
+   *         engages coarser LOD levels at the same pixel footprint). `0` = authored thresholds
+   *         unchanged. Absent = 0.
+   */
+  lodBiasPx?: number;
   /**
    * @domain Count — cap on concurrent per-frame culling views for this field (tier-scalable
    *         budget, ≤ {@link MAX_INDIRECT_VIEWS}); overflow views are not field-culled.
@@ -553,6 +594,93 @@ export function sphereOcclusionSkipConservative(
 }
 
 // ---------------------------------------------------------------------------
+// P2 shared cull math — LOD transition band + hysteresis (ADR 0059 step 2, candidate A/C).
+// Single source for the decision branch in `instance_cull.wgsl` (`fieldLodJitter` /
+// `fieldEffectiveMaxPx` / the in-band dual-write); the P2-4 CPU reference MUST use these.
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic per-instance threshold jitter in [-1, 1) — the stateless hysteresis discriminator
+ * of candidate C. Pure CPU mirror of `fieldLodJitter` in `instance_cull.wgsl` (identical finalizer
+ * constants below). A pure function of `recordIndex` (static V1 population → frame-stable,
+ * lane-reproducible, identical in every view).
+ * @invariant IF-CULL-DETERMINISM: the jitter value depends ONLY on `recordIndex`, so the
+ * CPU reference and the GPU lane derive byte-identical jitter for the same record.
+ */
+export function instanceLodJitter(recordIndex: number): number {
+  let h = (Math.imul(recordIndex ^ 0x9e3779b9, 0x85ebca6b) >>> 0) >>> 0;
+  h = (Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  return (h & 0x00ffffff) / 8388608 - 1;
+}
+
+/**
+ * Effective threshold of one bucket boundary after per-tier bias + per-instance hysteresis:
+ * `effectiveMax = authoredMaxPx · (1 + lodHysteresis · instanceLodJitter(recordIndex)) + lodBiasPx`.
+ * Mirror of `fieldEffectiveMaxPx` in `instance_cull.wgsl`; bucket selection and the transition
+ * band (IF-PROJECTED-SIZE) are evaluated against these EFFECTIVE thresholds, never the authored
+ * ones, so the tier knob and the hysteresis knob stay single-path (no fork).
+ */
+export function effectiveBucketMaxPx(
+  authoredMaxPx: number,
+  lodHysteresis: number,
+  lodBiasPx: number,
+  recordIndex: number,
+): number {
+  return authoredMaxPx * (1 + lodHysteresis * instanceLodJitter(recordIndex)) + lodBiasPx;
+}
+
+/** ADR 0059 step 2 dual-write split of one instance inside a transition band. */
+export interface LodTransitionBandSplit {
+  /** Lower bucket index of the adjacent pair (the COARSE side at the band's coarse end). */
+  coarseBucket: number;
+  /** `coarseBucket + 1` (the FINE side at the band's fine end). */
+  fineBucket: number;
+  /**
+   * Shared signed-channel magnitude p ∈ (0,1) — `1 − t` (t = band position, 0 at the coarse end →
+   * 1 at the fine end). The cull writes FINE `+blend` and COARSE `−blend` (ONE magnitude for the
+   * pair, aligned with the pull fragment `fieldLodDitherDiscard` contract, veg-p2-erin): the
+   * fragment keeps fine where dither ≥ p and coarse where dither < p on the SAME 8x8 Bayer, so
+   * the two draws' kept pixels partition the mask range exactly (no holes, no overdraw) and the
+   * fine share grows monotonically with band position.
+   */
+  blend: number;
+}
+
+/**
+ * Crossfade-band split mirroring `instance_cull.wgsl`: returns the adjacent bucket pair when
+ * `diameterPx` lands STRICTLY inside `(T·(1−band), T·(1+band))` of one EFFECTIVE boundary `T`
+ * (`effectiveMaxima` = `effectiveBucketMaxPx` per boundary), with `t` routed monotonically toward
+ * the FINE end (0 at the coarse end → 1 at the fine end) and the SHARED magnitude
+ * `blend = 1 − t` for the pair. `undefined` = outside any band → single-write (keep-all);
+ * `band <= 0` therefore always single-writes (candidate C). Strict membership keeps `blend` in
+ * (0,1): the exact band edges are NOT in-band, so no slot ever carries the ambiguous p=0/p=1
+ * endpoint (they fall to the single-write path into the correctly selected bucket).
+ * Search order is the finest boundary first; at most one boundary can contain `diameterPx` for
+ * sane bands (ascending thresholds, no overlapping bands). The GPU lane MUST agree with this pair
+ * and these blends (IF-CULL-DETERMINISM / IF-CULL-ROUTING).
+ */
+export function lodTransitionBand(
+  diameterPx: number,
+  effectiveMaxima: readonly number[],
+  crossfadeBand: number,
+): LodTransitionBandSplit | undefined {
+  if (!(crossfadeBand > 0)) {
+    return undefined;
+  }
+  for (let b = 0; b + 1 < effectiveMaxima.length; b++) {
+    const bound = effectiveMaxima[b]!;
+    const lo = bound * (1 - crossfadeBand);
+    const hi = bound * (1 + crossfadeBand);
+    if (diameterPx > lo && diameterPx < hi) {
+      const t = Math.min(Math.max((diameterPx - lo) / (hi - lo), 0), 1);
+      return { coarseBucket: b, fineBucket: b + 1, blend: 1 - t };
+    }
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // 6. Cull params and the composed field info (GPU-visible data roles)
 // ---------------------------------------------------------------------------
 
@@ -593,6 +721,29 @@ export interface CullParams {
    *         selector is a compile-time page base, never a dynamic offset.
    */
   segmentBase: number;
+  /**
+   * @derived Coarsening offset in LOD levels THIS view applies on top of the main-camera bucket
+   *         choice (shadow/cascade views only; mirror of `InstanceFieldOptions.shadowLodBias`;
+   *         absent/0 = reuse the main choice, the required default). Positive shifts toward the
+   *         COARSE end (lower bucket index). The GL CPU-cell lane does not consume it (its LOD is
+   *         a per-cell tier variant).
+   */
+  lodBiasBuckets?: number;
+  /**
+   * @derived Mirror of `InstanceFieldOptions.lodCrossfadeBand` (fraction of each threshold);
+   *         the WebGPU coordinator writes it into every view block.
+   */
+  lodCrossfadeBand?: number;
+  /**
+   * @derived Mirror of `InstanceFieldOptions.lodHysteresis` (fraction of each threshold); the
+   *         WebGPU coordinator writes it into every view block.
+   */
+  lodHysteresis?: number;
+  /**
+   * @derived Mirror of `InstanceFieldOptions.lodBiasPx` (additive px threshold bias); the WebGPU
+   *         coordinator writes it into every view block.
+   */
+  lodBiasPx?: number;
 }
 
 /**
@@ -841,9 +992,13 @@ export interface IndirectResetContract {
  *
  * @invariant IF-CULL-ROUTING: every survivor is routed to exactly the segment of its
  * `(view * MAX_LOD_BUCKETS + bucket)` — bucket = LOD bucket selected by the main camera (shadow
- * views reuse it, optionally coarser via `shadowLodBias`) — and every written index is in range
- * `[0, field instance count)`; page-internal ORDER of indices within a segment is NOT part of the
- * contract (atomicAdd race).
+ * views reuse it, optionally biased coarser via `shadowLodBias`) — and every written index is in
+ * range `[0, field instance count)`; page-internal ORDER of indices within a segment is NOT part
+ * of the contract (atomicAdd race). P2 (ADR 0059 step 2) exception, candidate A: an instance
+ * inside a transition band is routed to EXACTLY TWO ADJACENT segments `(view, bucket)` AND
+ * `(view, bucket+1)` (the {coarse, fine} pair of {@link lodTransitionBand}), with the signed
+ * blend word written into both pages at the survivor's slot; the two counts then account for the
+ * same instance twice by design (crossfaded double-draw, consumed by the pulled material).
  */
 export interface IndirectDrawSource {
   /**
