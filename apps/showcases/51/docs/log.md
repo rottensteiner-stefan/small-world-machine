@@ -268,3 +268,16 @@ overlap (throughput baseline, not placement art) — accepted.
   (URL knob only sets the START state, `?wind=0` still valid for load-time isolation).
 - tsc + eslint clean; `InstanceFieldSystemDevice` +2 live-toggle tests. Pending: user re-test
   of wind A/B from the new vantage.
+
+## 2026-11-09 — Wind device gate CLOSED (no measurable cost, no mitigation)
+
+- Reproducible A/B on a FROZEN vantage (`?path=aerial&pausedAt=0.3`, same statics, tab foreground,
+  no throttle outliers): real M4 Pro / Chrome Metal, 166 784 records (182 728 minus clearing),
+  `main:opaque` timestamp ring: **wind on = wind off = 5.833 ms → delta 0.000 ms**. The early
+  18-k "1.1 ms delta" was camera-path + tab-throttle noise, not wind.
+- Verdict recorded in ADR 0059 step 1b: pulled-vertex wind is FREE on the reference device; the
+  documented per-instance lean cache in the cull stays dormant. Ground-cover ring remains the
+  open step-1b remainder.
+- Methodology learned (applies to all future field-lane cost gates on this rig): `pausedAt`
+  frozen camera + foreground tab; `gpuMs` = LAST frame only, so a moving camera makes it random;
+  discard runs with `frameTimesMs` 1000+ outliers.
