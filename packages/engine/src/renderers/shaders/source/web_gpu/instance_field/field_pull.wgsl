@@ -285,7 +285,7 @@ fn fieldLodDitherDiscard(blend: f32, fragPx: vec2f) -> bool {
     // Fine side (blend > 0, fades out) discards the low masks (m < p); coarse side (blend < 0,
     // fades in) discards the high masks (m >= p). Kept sets are complementary: fine keeps
     // [p, 1], coarse keeps [0, p) at the SAME p -- an exact partition of the unit mask range.
-    return select(m < p, m >= p, blend < 0.0);
+    return select((m < p), (m >= p), blend < 0.0);
 }
 
 @fragment
