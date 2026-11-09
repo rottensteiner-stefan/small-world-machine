@@ -45,6 +45,8 @@ export interface VegHudStats {
   readonly triangles: number;
   /** Live field-lane wind state (true = wind applying, false = hard wind-off). */
   readonly wind: boolean;
+  /** Ground-cover ring instances this frame (ADR 0059 step 1b; 0 when the cover is inactive). */
+  readonly cover: number;
 }
 
 export interface VegHudOptions {
@@ -255,7 +257,7 @@ export class Hud {
     const cpu = stats.cpuMs;
     const lines = [
       `${stats.fps >= 0 ? stats.fps.toFixed(1) : "--"} | ${fmtMs(cpu)} | ${fmtMs(gpu)} | ${fmtCount(stats.visible)} / ${fmtCount(stats.triangles)}`,
-      `?n=${stats.instances.toLocaleString("en-US")}  mode=${stats.mode}  path=${this._path}  wind=${stats.wind ? "on" : "off"}`,
+      `?n=${stats.instances.toLocaleString("en-US")}  mode=${stats.mode}  path=${this._path}  wind=${stats.wind ? "on" : "off"}${stats.cover > 0 ? `  cover=${fmtCount(stats.cover)}` : ""}`,
     ];
     const passes = this._options.gpuTimings?.passesMs;
     if (passes && this._options.gpuTimings?.available === true) {

@@ -269,6 +269,7 @@ overlap (throughput baseline, not placement art) — accepted.
 - tsc + eslint clean; `InstanceFieldSystemDevice` +2 live-toggle tests. Pending: user re-test
   of wind A/B from the new vantage.
 
+
 ## 2026-11-09 — Wind device gate CLOSED (no measurable cost, no mitigation)
 
 - Reproducible A/B on a FROZEN vantage (`?path=aerial&pausedAt=0.3`, same statics, tab foreground,
@@ -281,3 +282,31 @@ overlap (throughput baseline, not placement art) — accepted.
 - Methodology learned (applies to all future field-lane cost gates on this rig): `pausedAt`
   frozen camera + foreground tab; `gpuMs` = LAST frame only, so a moving camera makes it random;
   discard runs with `frameTimesMs` 1000+ outliers.
+
+## 2026-11-09 — Ground-cover ring LANDED (V1, source B)
+
+- Second, camera-centred `InstanceFieldSystem` for grass (ADR 0059 step 1b source B): new
+  `vegetation-extras/src/groundcover/GroundCover.ts` generates a tile ring around the camera with
+  stable per-tile hash seeds (blades glued to the world — no swimming) and stochastic distance
+  thinning toward the ring edge; records fed per frame through the NEW engine zero-GC
+  `InstanceFieldSystem.uploadRecords()` (single-prototype O(1) range fast path, preallocated
+  `maxInstances` — no buffer regrow; only the WRITTEN prefix is uploaded via a subarray view, a
+  full-capacity upload would draw the zero tail as an origin blob).
+- Grass geometry = real tapered two-crossed-pair blade card (no alpha-cutout texture in V1; the
+  existing `card_grass.glb` cards are the documented material upgrade). `maxViews: 1` keeps grass
+  out of all shadow-map passes (no casting); the pulled shading still RECEIVES shadows.
+- Wind: shares the tree `WindField`'s `SwmWind` block at the grass height profile (0.5 m =
+  scale-1 blade top); `_applyWindState` gates BOTH fields with the live `F` toggle.
+- URL knobs: `?cover=0` off, `?coverDensity=` (blades/m²), `?coverRadius=` (m). `MEASURE` now
+  carries `coverInstances` / `coverRadius` / `coverDensity`; HUD readout shows the cover count.
+- Engine `uploadRecords()` verified by `InstanceFieldSystemDevice` (+1 live-feed test: bytes reach
+  the preallocated buffer, `instanceCount` mirrored, no regrow) with a writeBuffer-mock fix for the
+  raw-ArrayBuffer form; `GroundCover` pinned by 4 tests (determinism, world-glue under two ring
+  centres, pose validity incl. the frozen 1/256 scale quantization, capacity + camera-clear disc).
+- Headless SwiftShader self-test (frozen aerial vantage, n=4000): ring capacity 67 600, live
+  population 37 913 records, `main:opaque` 0.92 ms (cover off) → 1.64 ms (cover on) — real
+  cull + draw cost. Gates green: typecheck 0, eslint 0, check:doctrine 0, build:lib ok, full suite
+  4635 tests. Headless Playwright screenshots do NOT capture the WebGPU surface (Dawn compositor
+  blank) — pixel QA happens on the real device.
+- PENDING: real-M4Pro frozen-vantage measurement of the ring's marginal GPU cost vs the ≤ 2 ms
+  ring gate (user re-test, same methodology as the wind gate).

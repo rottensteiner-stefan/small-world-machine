@@ -76,9 +76,22 @@ function makeDevice(rec: Recorded): GPUDevice {
     createRenderPipeline: (): object => ({}),
     createSampler: (): object => ({}),
     queue: {
-      writeBuffer: (buffer: MockBuffer, offset: number, data: ArrayBufferView): void => {
-        // Copy: the system reuses its scratch block, the test inspects every upload later.
-        const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice();
+      writeBuffer: (
+        buffer: MockBuffer,
+        offset: number,
+        data: ArrayBufferView | ArrayBuffer,
+        dataOffset = 0,
+        size?: number,
+      ): void => {
+        // Copy: the system reuses its scratch block, the test inspects every upload later. The
+        // real API also accepts a raw `ArrayBuffer` + byte range (record feed), mirror it.
+        let bytes: Uint8Array;
+        if (data instanceof ArrayBuffer) {
+          const len = size ?? data.byteLength - dataOffset;
+          bytes = new Uint8Array(data.slice(dataOffset, dataOffset + len));
+        } else {
+          bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice();
+        }
         rec.writes.push({ buffer, offset, data: bytes });
       },
     },
@@ -378,5 +391,59 @@ describe("InstanceFieldSystem on a recording device", () => {
     expect(() => system.setWind(new Float32Array(8), 5)).toThrow(/windUniforms/);
     // Valid no-op swap keeps the lane consistent.
     expect(() => system.setWind(undefined, 0)).not.toThrow();
+  });
+
+  it("lives-uploads replaced record bytes into the preallocated buffer (no regrow, count mirrored)", () => {
+    const { system, rec } = makeSetup(4);
+    // With maxInstances 4 the records buffer is the only 64-B buffer the system owns.
+    const recordsBuffer = rec.buffers.find((b) => b.size === 4 * 16)!;
+    expect(recordsBuffer).toBeDefined();
+
+    const fresh = new Float32Array(3 * 4);
+    const pose = new Uint32Array(1);
+    pose[0] = packInstancePose(0, 1);
+    const poseF = new Float32Array(pose.buffer)[0]!;
+    for (let i = 0; i < 3; i++) {
+      fresh[i * 4] = 10 + i;
+      fresh[i * 4 + 1] = 2 + i;
+      fresh[i * 4 + 2] = 3;
+      fresh[i * 4 + 3] = poseF;
+    }
+
+    const buffersBefore = rec.buffers.length;
+    system.setPopulationData(fresh);
+    system.uploadRecords();
+
+    // No allocation/regrow on the live path: buffer set is untouched.
+    expect(rec.buffers.length).toBe(buffersBefore);
+    expect(rec.buffers).toContain(recordsBuffer);
+
+    // The new record bytes reached the (same) GPU buffer.
+    const recordWrites = rec.writes.filter((w) => w.buffer === recordsBuffer && w.offset === 0);
+    const last = recordWrites[recordWrites.length - 1]!;
+    expect(last.data.byteLength).toBe(3 * 16);
+    const floats = new Float32Array((last.data as Uint8Array).slice().buffer);
+    expect(Array.from(floats.subarray(0, 12))).toEqual([
+      10,
+      2,
+      3,
+      poseF,
+      11,
+      3,
+      3,
+      poseF,
+      12,
+      4,
+      3,
+      poseF,
+    ]);
+
+    // The instance-count mirror followed the swap (FieldInfo word 2, offset 8).
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1)!;
+    const infoWrites = rec.writes.filter((w) => w.buffer === fieldInfo && w.offset === 0);
+    const infoWords = new Uint32Array(
+      (infoWrites[infoWrites.length - 1]!.data as Uint8Array).slice().buffer,
+    );
+    expect(infoWords[8 / 4]).toBe(3);
   });
 });

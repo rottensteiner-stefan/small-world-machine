@@ -590,6 +590,31 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     if (this._gpu) this._rebuildGpuBuffers();
   }
 
+  /**
+   * Live-replaces the population RECORD BYTES in place (zero-GC hot path, P1b ground-cover feed):
+   * re-derives the ranges and re-uploads the current `_instanceRecords` into the ALREADY-SIZED
+   * record buffer, then refreshes the `FieldInfo` mirror. No static-table rewrite, no buffer
+   * regrow, no bind-group/pipeline rebuild — capacity MUST be preallocated via `maxInstances`
+   * (a larger population still requires `setPopulationData` + {@link rebuild}).
+   * Single-prototype fields take an O(1) range fast path (the whole population maps to
+   * prototype 0); multi-prototype fields fall back to the full sorted-map walk of
+   * {@link _deriveRanges}. The engine never copies:
+   * {@link _uploadRecords} memcpy's the caller's array synchronously via `writeBuffer`.
+   */
+  public uploadRecords(): void {
+    if (!this._gpu) return;
+    if (this._protoCount === 1) {
+      const total = this._instanceRecords.length / 4;
+      this._instanceCount = total;
+      this._protoRange.fill(0);
+      this._protoRange[1] = total;
+    } else {
+      this._deriveRanges();
+    }
+    this._uploadRecords();
+    this._writeFieldInfo();
+  }
+
   /** @inheritdoc -- field-scoped one-frame HZB skip; idempotent (IF-CAMERA-CUT-HZB-SKIP). The
    * flag is consumed by the next main-view prepare; N consecutive calls still skip one frame. */
   public notifyCameraTeleport(): void {

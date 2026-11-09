@@ -34,7 +34,7 @@ import type {
   PrototypeDescriptor,
 } from "@small-world-machine/engine/core/InstanceField.js";
 import { InstanceFieldSystem } from "@small-world-machine/engine/renderers/WebGPU/managers/InstanceFieldSystem.js";
-import { WindField } from "@small-world-machine/vegetation-extras";
+import { GroundCover, WindField } from "@small-world-machine/vegetation-extras";
 import { getCameraPath, type CameraPath, type PathName } from "./CameraPaths.js";
 import { Hud, hudFreeMode, type HudGpuTimings, type VegHudStats } from "./Hud.js";
 import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCapture.js";
@@ -83,6 +83,9 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  *   `?cutEvery=N`                  teleport period in sampled frames (default 60; `?occlusion=c`)
  *   `?wind=0`                      disable the field-lane wind (cost isolation / static A/B);
  *                                  default on for the field lane
+ *   `?cover=0`                     disable the ground-cover ring (step 1b, source B; default on)
+ *   `?coverDensity=N`              ring blade density in blades/m² (clamped to 8; default 0.5)
+ *   `?coverRadius=N`               ring outer radius in metres (clamped to [20, 400]; default 160)
  *
  * The population is deterministic: a fixed default seed drives the scatter jitter (engine
  * `mulberry32`), and nothing in the static lanes is time-dependent, so identical URLs on the
@@ -150,6 +153,22 @@ const FIELD_CULL_PIXEL_SIZE = 2;
 const FIELD_CELL_SIZE = 12;
 /** Leaf transmission tint of the field lane (sRGB, same value as showcase 52's leaves). */
 const FIELD_LEAF_BACKLIGHT: readonly [number, number, number] = [0.55, 0.72, 0.2];
+// ADR 0059 step 1b, source B: camera-centred ground-cover ring constants. The grass card is REAL
+// tapered geometry (two crossed blade pairs) authored at `COVER_BLADE_HEIGHT` — no alpha-cutout
+// texture in V1, so the proven merged-geometry field path applies unchanged.
+/** Grass-card blade height in metres at uniform scale 1 (the pulled bend's wind-height base). */
+const COVER_BLADE_HEIGHT = 0.5;
+/** Ground-cover ring default outer radius (m) and blade density (blades per m²). */
+const COVER_DEFAULT_RADIUS = 160;
+const COVER_DEFAULT_DENSITY = 0.5;
+/** Ground-cover tile edge (m); the ring's per-tile hash cells. */
+const COVER_TILE_CELL = 5;
+/** sRGB albedo of the grass base / tip vertices (converted to linear at geometry build). */
+const COVER_ALBEDO_BASE: readonly [number, number, number] = [0.3, 0.47, 0.22];
+const COVER_ALBEDO_TIP: readonly [number, number, number] = [0.42, 0.56, 0.26];
+/** Foliage-mask alpha of the base / tip vertices (leaf-backlight transmission weighting). */
+const COVER_ALPHA_BASE = 1;
+const COVER_ALPHA_TIP = 0.85;
 /** Fixed baseline seed; `?seed=` overrides. Chosen to match the showcase number. */
 const DEFAULT_SEED = 51;
 /** Hard cap so `?n=999999999` cannot OOM the instance-matrix pool. */
@@ -231,6 +250,11 @@ interface MeasureResult {
   fieldTeleports?: number;
   /** S2/1b field lane: 1 = shared wind field active, 0 = static (measuring isolation `?wind=0`). */
   wind?: number;
+  /** S2/1b ground-cover ring (source B): live instance count of the cover field. */
+  coverInstances?: number;
+  /** S2/1b ground-cover ring: active ring radius (m) and blade density (blades per m²). */
+  coverRadius?: number;
+  coverDensity?: number;
   /** S2 dual-lane audit (`?popcount=1`): last resolved GPU survivor counts + optional CPU
    *  reference verdict (`?cullref=1`). Readbacks lag the live frame by design (no CPU stall). */
   populationAudit?: {
@@ -416,6 +440,19 @@ export class Showcase extends AbstractShowcase {
   private _windLive: boolean;
   /** Crown-top height at scale 1 cached at field build — the re-arm height for live `setWind`. */
   private _fieldWindHeight = 0;
+  // ADR 0059 step 1b, source B: camera-centred procedural ground-cover ring (CPU-generated records
+  // fed into a SECOND `InstanceFieldSystem` via `uploadRecords()`). `?cover=0` disables it;
+  // `?coverDensity=` / `?coverRadius=` retune the generator. WebGPU field lane only.
+  private _cover: GroundCover | undefined = undefined;
+  private _coverSystem: InstanceFieldSystem | undefined = undefined;
+  /** `?cover=0` disables the ground-cover ring; default on (field lane only). */
+  private readonly _coverEnabled: boolean;
+  /** `?coverDensity=` blades per m² (clamped); default `COVER_DEFAULT_DENSITY`. */
+  private readonly _coverDensity: number;
+  /** `?coverRadius=` ring outer radius in metres (clamped); default `COVER_DEFAULT_RADIUS`. */
+  private readonly _coverRadius: number;
+  /** Scale-1 blade height cached at cover build — the re-arm height for live `setWind`. */
+  private _coverWindHeight = 0;
   /** Latest optically-probed cull frame (kept 1: the dual-lane audit samples the LAST frame). */
   private _lastProbeSet: FieldVisibleSets | undefined = undefined;
   private _lastCpuTotal = 0;
@@ -474,6 +511,19 @@ export class Showcase extends AbstractShowcase {
     // `_windLive` mirrors the knob at startup; the HUD toggle can flip it at runtime.
     this._windEnabled = params.get("wind") !== "0";
     this._windLive = this._windEnabled;
+    // ADR 0059 step 1b: ground-cover ring knobs (field lane only; absent params stay on defaults,
+    // same guard discipline as `?n=` above — `?coverDensity=` without a value is a no-op).
+    this._coverEnabled = params.get("cover") !== "0";
+    const rawDensity = Number(params.get("coverDensity"));
+    this._coverDensity =
+      params.has("coverDensity") && Number.isFinite(rawDensity) && rawDensity > 0
+        ? Math.min(8, rawDensity)
+        : COVER_DEFAULT_DENSITY;
+    const rawCoverRadius = Number(params.get("coverRadius"));
+    this._coverRadius =
+      params.has("coverRadius") && Number.isFinite(rawCoverRadius)
+        ? Math.min(400, Math.max(20, rawCoverRadius))
+        : COVER_DEFAULT_RADIUS;
 
     const pathValue = params.get("path");
     this._path =
@@ -560,6 +610,9 @@ export class Showcase extends AbstractShowcase {
       // WebGPU-only lane; a non-WebGPU `?mode=field` falls back to `autoinst` (documented).
       if (this._buildFieldLane(instances, this._prototype)) {
         this._treeCount = instances.length;
+        // ADR 0059 step 1b, source B: second camera-centred field for the ground-cover ring
+        // (optional, `?cover=0` to disable; non-fatal when the device cannot host a second field).
+        this._buildGroundCover();
       } else {
         this._buildAutoInstances(instances, this._prototype);
       }
@@ -901,6 +954,162 @@ export class Showcase extends AbstractShowcase {
     return true;
   }
 
+  /**
+   * Second, camera-centred instance field for the procedural ground-cover ring (ADR 0059 step 1b,
+   * source B). Records are CPU-generated every frame by `GroundCover` (stable per-tile hashes, no
+   * swimming) and fed via the engine's `uploadRecords()` zero-GC live path into a SECOND
+   * `InstanceFieldSystem` with its own grass-card geometry + material. `maxViews: 1` is the only
+   * "no shadow casting" lever on the field lane (cascade/spot/point shadow draws are skipped,
+   * while main depth + color still run and the pulled shading RECEIVES shadows). Shares the tree
+   * `WindField`'s `SwmWind` block at the grass height profile so gust waves move both layers
+   * coherently. Non-fatal: any setup/registration error disables the cover and logs.
+   */
+  private _buildGroundCover(): boolean {
+    if (this._mode !== "field" || this._fieldSystem === undefined) return false;
+    if (!(this.renderer instanceof WebGPURenderer)) return false;
+    if (!this._coverEnabled) return false;
+    const cell = COVER_TILE_CELL;
+    const cover = new GroundCover({
+      radius: this._coverRadius,
+      cellSize: cell,
+      bladesPerTile: Math.max(1, Math.round(this._coverDensity * cell * cell)),
+      seed: this._seed + 1000,
+      fullDensityRadius: Math.min(140, this._coverRadius * 0.4),
+      minDensity: 0.3,
+      cameraClearRadius: 2,
+      scaleRange: [0.7, 1.8],
+    });
+    const merged = this._buildCoverGeometry();
+    const prototype: PrototypeDescriptor = {
+      id: "s51-cover",
+      boundingRadius: COVER_BLADE_HEIGHT,
+      lodBuckets: [
+        {
+          name: "L0",
+          lodIndex: 0,
+          minProjectedSize: FIELD_CULL_PIXEL_SIZE + 1,
+          maxProjectedSize: 1e6,
+          geometrySlot: 0,
+        },
+      ],
+      materialSlot: 0,
+      maxInstances: cover.capacity,
+    };
+    const system = new InstanceFieldSystem(null, {
+      instanceRecords: cover.records,
+      prototypes: [prototype],
+      geometryTable: [[merged]],
+      options: {
+        cellSize: cell,
+        maxInstances: cover.capacity,
+        cullPixelSize: FIELD_CULL_PIXEL_SIZE,
+        // Main view only: grass never lands in the shadow-map passes (no shadow casting).
+        maxViews: 1,
+      },
+      // NOTE: no `windUniforms`/`windHeight` — the shared tree wind block is applied below via
+      // `_applyWindState()` (same gusts, grass height profile, honours the live `F` toggle).
+    });
+    try {
+      this.renderer.registerInstanceField(system);
+    } catch (error) {
+      system.dispose();
+      console.info(
+        `[Showcase51] ground cover unavailable ` +
+          `(${error instanceof Error ? error.message : String(error)}) — disabled`,
+      );
+      return false;
+    }
+    this._cover = cover;
+    this._coverSystem = system;
+    this._coverWindHeight = COVER_BLADE_HEIGHT;
+    this._applyWindState();
+    console.info(
+      `[Showcase51] ground cover: capacity=${cover.capacity}, radius=${this._coverRadius} m, ` +
+        `density=${this._coverDensity}/m², wind=${this._windLive ? "on" : "off"} (shared block)`,
+    );
+    return true;
+  }
+
+  /** Builds the grass-card geometry: TWO crossed tapered blade pairs (taller + shorter, 45°
+   *  apart) so every instance reads as a small X-shaped tuft. REAL geometry — V1 deliberately
+   *  skips alpha-cutout textures (no `alphaMap`): the proven merged-geometry field path applies
+   *  unchanged, and the sub-pixel cull + distance thinning hide the hard silhouette. Normals are
+   *  world-up (grass reads as ground-hugging, never edge-on-black), the colour stream carries
+   *  linear green albedo (base darker, tip lighter) + foliage mask for leaf backlight. */
+  private _buildCoverGeometry(): GeometryDataInterface {
+    const h = COVER_BLADE_HEIGHT;
+    // 10 unique vertices: [A0,A1,B0,B1,Tip1, C0,C1,D0,D1,Tip2]. Pair 1 spans world X resp. world
+    // Z (crossed), pair 2 spans the two 45° diagonals — each base pair widens along the ground.
+    const pos: number[] = [
+      -0.09,
+      0,
+      0,
+      0.09,
+      0,
+      0,
+      0,
+      0,
+      -0.09,
+      0,
+      0,
+      0.09,
+      0,
+      h,
+      0,
+      -0.0495,
+      0,
+      -0.0495,
+      0.0495,
+      0,
+      0.0495,
+      -0.0495,
+      0,
+      0.0495,
+      0.0495,
+      0,
+      -0.0495,
+      0,
+      h * 0.62,
+      0,
+    ];
+    const indices = new Uint32Array([0, 1, 4, 2, 3, 4, 5, 6, 9, 7, 8, 9]);
+    const base = [
+      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_BASE[0]!),
+      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_BASE[1]!),
+      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_BASE[2]!),
+    ];
+    const tip = [
+      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_TIP[0]!),
+      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_TIP[1]!),
+      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_TIP[2]!),
+    ];
+    const vertexCount = pos.length / 3;
+    const vertices = new Float32Array(pos);
+    const normals = new Float32Array(vertexCount * 3);
+    const uvs = new Float32Array(vertexCount * 2);
+    const colors = new Float32Array(vertexCount * 4);
+    for (let v = 0; v < vertexCount; v++) {
+      normals[v * 3 + 1] = 1;
+      const isTip = v === 4 || v === 9;
+      const tint = isTip ? tip : base;
+      const alpha = isTip ? COVER_ALPHA_TIP : COVER_ALPHA_BASE;
+      colors[v * 4] = tint[0]!;
+      colors[v * 4 + 1] = tint[1]!;
+      colors[v * 4 + 2] = tint[2]!;
+      colors[v * 4 + 3] = alpha;
+      uvs[v * 2] = 0.5;
+      uvs[v * 2 + 1] = isTip ? 1 : 0;
+    }
+    return {
+      vertices,
+      indices,
+      normals,
+      uvs,
+      colors,
+      getBoundingVolume: (): BoundingVolume => BoundingBox.fromVertices(vertices),
+    };
+  }
+
   /** Applies the CURRENT live wind state to the registered field system (`setWind` patch, hard
    *  off = height 0 -> pulled shader gate static). No-op without a field or a wind field. */
   private _applyWindState(): void {
@@ -911,6 +1120,15 @@ export class Showcase extends AbstractShowcase {
       this._windLive ? field.uniforms : undefined,
       this._windLive ? this._fieldWindHeight : 0,
     );
+    // Ground-cover ring shares the SAME wind block (gust waves must move trees and grass
+    // coherently) with its own per-field blade-height profile; the live `F` toggle gates both.
+    const coverSystem = this._coverSystem;
+    if (coverSystem !== undefined && this._coverWindHeight > 0) {
+      coverSystem.setWind(
+        this._windLive ? field.uniforms : undefined,
+        this._windLive ? this._coverWindHeight : 0,
+      );
+    }
   }
 
   /** HUD `F` toggle: flips the live wind state and re-arms the system immediately (no re-create,
@@ -1109,6 +1327,15 @@ export class Showcase extends AbstractShowcase {
     }
     this._fieldSystem.dispose();
     this._fieldSystem = undefined;
+    // Ground-cover ring (second field system) releases with the same fan-out.
+    if (this._coverSystem !== undefined) {
+      if (this.renderer instanceof WebGPURenderer) {
+        this.renderer.unregisterInstanceField(this._coverSystem);
+      }
+      this._coverSystem.dispose();
+      this._coverSystem = undefined;
+    }
+    this._cover = undefined;
   }
 
   /**
@@ -1183,6 +1410,20 @@ export class Showcase extends AbstractShowcase {
       this.camera.updateViewMatrix();
     }
 
+    // ADR 0059 step 1b, source B: regenerate the camera-centred ground-cover ring from the CURRENT
+    // camera position and feed the new records into the second field system via the engine's
+    // zero-GC `uploadRecords()` live path. This must run BEFORE the renderer's field pass records
+    // the frame's cull/draws (showcase `update()` precedes the render), so the GPU lane always
+    // consumes the current ring bytes. Stable per-tile hashes keep blades glued to the world —
+    // the ring follows the camera, blades never swim under it. Only the WRITTEN prefix is fed
+    // (`subarray` is a zero-copy view sized to the live count; a full-capacity upload would draw
+    // the zero tail as a 67k-blob at the origin).
+    if (this._cover !== undefined && this._coverSystem !== undefined) {
+      this._cover.update(this.camera.position.x, this.camera.position.z);
+      this._coverSystem.setPopulationData(this._cover.records.subarray(0, this._cover.count * 4));
+      this._coverSystem.uploadRecords();
+    }
+
     // `?truth=1` ground-truth mode: signal readiness once after the first full frame. Today the
     // scene IS the truth (no LOD/culling optimizations exist); P1+ must gate this flag on the
     // un-optimized path.
@@ -1239,6 +1480,8 @@ export class Showcase extends AbstractShowcase {
       triangles: -1,
       // Live wind state (field lane; false on every other lane / windless geometry).
       wind: this._windField !== undefined && this._windLive,
+      // Ground-cover ring instances (field lane source B; 0 when inactive).
+      cover: this._coverSystem?.instanceCount ?? 0,
     };
     this._hud?.sync(stats);
   }
@@ -1278,6 +1521,12 @@ export class Showcase extends AbstractShowcase {
       result.fieldShading = "lambert-csm";
       // Live wind state (URL knob or HUD toggle) — the honest isolation flag for cost tables.
       result.wind = this._windField !== undefined && this._windLive ? 1 : 0;
+      // Ground-cover ring (ADR 0059 step 1b, source B): live record count + ring knobs.
+      if (this._coverSystem !== undefined && this._cover !== undefined) {
+        result.coverInstances = this._coverSystem.instanceCount;
+        result.coverRadius = this._cover.radius;
+        result.coverDensity = this._coverDensity;
+      }
       if (this._teleportCount > 0) {
         result.fieldTeleports = this._teleportCount;
       }
