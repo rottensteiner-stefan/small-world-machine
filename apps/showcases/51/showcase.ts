@@ -23,6 +23,7 @@ import { mulberry32 } from "@small-world-machine/engine/utils/SeededRandom.js";
 import { BoundingBox } from "@small-world-machine/engine/physix/BoundingBox.js";
 import type { BoundingVolume } from "@small-world-machine/engine/interfaces/BoundingVolume.js";
 import {
+  MAX_LOD_BUCKETS,
   packInstancePose,
   projectedDiameterPixels,
   sphereVisibleConservative,
@@ -30,7 +31,9 @@ import {
 } from "@small-world-machine/engine/core/InstanceField.js";
 import type {
   FieldVisibleSets,
+  InstanceFieldOptions,
   InstancePose,
+  LodBucketDescriptor,
   PrototypeDescriptor,
 } from "@small-world-machine/engine/core/InstanceField.js";
 import { InstanceFieldSystem } from "@small-world-machine/engine/renderers/WebGPU/managers/InstanceFieldSystem.js";
@@ -38,6 +41,30 @@ import { GroundCover, WindField } from "@small-world-machine/vegetation-extras";
 import { getCameraPath, type CameraPath, type PathName } from "./CameraPaths.js";
 import { Hud, hudFreeMode, type HudGpuTimings, type VegHudStats } from "./Hud.js";
 import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCapture.js";
+
+// P2 engine-surface note (ADR 0059 step 2): the app compiles against the PACKAGE export, which
+// resolves the node_modules link (the merged engine's P1 surface in this worktree) — the
+// worktree engine's additive P2 surface is NOT visible here. The local intersections below
+// declare that NEW surface so the showcase type-checks against the P1 base; post-merge they
+// coincide with the real API. The optional-typed members keep calls inert when a host engine
+// predates P2 (no-op, fail-closed).
+/** P2 additive `InstanceFieldOptions` (worktree engine only; absent on the P1 package export).
+ * Extends the PARTIAL options shape because the showcase setup passes a subset (the engine
+ * fills `prototypes`/`cpuBudget`/`populationMode` defaults internally). */
+interface P2FieldOptions extends Partial<InstanceFieldOptions> {
+  lodCrossfadeBand?: number;
+  lodHysteresis?: number;
+  lodBiasPx?: number;
+}
+/** P2 additive runtime API of `InstanceFieldSystem` (worktree engine only). */
+interface P2FieldLodApi {
+  setLodTransition?: (opts: {
+    crossfadeBand?: number;
+    hysteresis?: number;
+    biasPx?: number;
+  }) => void;
+  setLodDitherMode?: (mode: "crossfade" | "hard") => void;
+}
 
 /**
  * Showcase 51 — Forest Measurement Baseline ("forest", ADR 0059 step 0 / veg-p0 P0-3).
@@ -149,6 +176,21 @@ const DEFAULT_CUT_EVERY = 60;
 const CUT_T_JUMP = 0.18;
 /** S2 field lane: sub-pixel cull gate in px (frozen `cullPixelSize` must sit below the band floor). */
 const FIELD_CULL_PIXEL_SIZE = 2;
+// P2 (ADR 0059 step 2, Bob veg-p2): LOD-transition demo knobs of the field lane. The tree
+// prototype now authors THREE ascending projected-size buckets (coarse proxy -> mid proxy ->
+// full merged tree) and the cull crossfade band / hysteresis / tier bias / shadow coarsening
+// are demo-tuned via URL. Absent knobs stay on the ENGINE fail-closed defaults (band 0 =
+// P1-identical single routing) unless the showcase opts in below.
+/** Default (demo) band width as a fraction of each threshold (opt-in; `?lodband=` overrides). */
+const DEFAULT_LOD_BAND = 0.12;
+/** Default per-instance hysteresis jitter fraction (`?lodhyst=` overrides; 0 = none). */
+const DEFAULT_LOD_HYSTERESIS = 0;
+/** Default shadow-view coarsening offset in LOD levels (0 = reuse the main camera's choice). */
+const DEFAULT_SHADOW_LOD_BIAS = 0;
+/** Authored ascending bucket maxima in px (near=detail: bucket 0 = farthest = coarsest). */
+const FIELD_LOD_MAXIMA_PX: readonly number[] = [24, 96, 1e6];
+/** Load-time triangle-stride decimation per proxy bucket (bucket 0 = stride 3, bucket 1 = 2). */
+const FIELD_LOD_PROXY_STRIDE: readonly number[] = [3, 2];
 /** S2 field lane: population grid cell edge in meters (cells drive the CPU/GL cell fallback). */
 const FIELD_CELL_SIZE = 12;
 /** Leaf transmission tint of the field lane (sRGB, same value as showcase 52's leaves). */
@@ -451,6 +493,21 @@ export class Showcase extends AbstractShowcase {
   private readonly _coverDensity: number;
   /** `?coverRadius=` ring outer radius in metres (clamped); default `COVER_DEFAULT_RADIUS`. */
   private readonly _coverRadius: number;
+  // P2 (ADR 0059 step 2): LOD-transition demo knobs of the field lane (URL `?lodband=`,
+  // `?lodhyst=`, `?lodbias=`, `?shadowlod=`; absent = engine fail-closed defaults). Passed into
+  // the `InstanceFieldSystem` options at build and demo-tunable live via the HUD LOD section.
+  private readonly _lodBand: number;
+  private readonly _lodHysteresis: number;
+  private readonly _lodBiasPx: number;
+  private readonly _shadowLodBias: number;
+  /** P2 APPLIED LOD knobs of the tree field (mirror of the URL knobs; the HUD LOD section reads
+   *  and live-toggles these via {@link InstanceFieldSystem.setLodTransition}). */
+  private _fieldLodBand = 0;
+  private _fieldLodHysteresis = 0;
+  private _fieldLodBiasPx = 0;
+  /** P2 candidate-C live state: `true` = the HUD `L` toggle pinned the lane to a hard switch
+   *  (band 0 + fragment dither off), `false` = crossfade band (candidate A). */
+  private _lodHard = false;
   /** Scale-1 blade height cached at cover build — the re-arm height for live `setWind`. */
   private _coverWindHeight = 0;
   /** Latest optically-probed cull frame (kept 1: the dual-lane audit samples the LAST frame). */
@@ -528,6 +585,27 @@ export class Showcase extends AbstractShowcase {
       params.has("coverRadius") && Number.isFinite(rawCoverRadius)
         ? Math.min(400, Math.max(20, rawCoverRadius))
         : COVER_DEFAULT_RADIUS;
+
+    // P2 (ADR 0059 step 2): LOD-transition knobs (field lane only). Fractions clamp into [0,1];
+    // `?lodbias=`/`?shadowlod=` are unaudited numbers. Same `params.has(...)` guard discipline
+    // as `?n=` above — an absent knob MUST stay on the engine fail-closed default (band 0).
+    const rawLodBand = Number(params.get("lodband"));
+    this._lodBand =
+      params.has("lodband") && Number.isFinite(rawLodBand)
+        ? Math.min(1, Math.max(0, rawLodBand))
+        : DEFAULT_LOD_BAND;
+    const rawLodHyst = Number(params.get("lodhyst"));
+    this._lodHysteresis =
+      params.has("lodhyst") && Number.isFinite(rawLodHyst)
+        ? Math.min(1, Math.max(0, rawLodHyst))
+        : DEFAULT_LOD_HYSTERESIS;
+    const rawLodBias = Number(params.get("lodbias"));
+    this._lodBiasPx = params.has("lodbias") && Number.isFinite(rawLodBias) ? rawLodBias : 0;
+    const rawShadowLod = Number(params.get("shadowlod"));
+    this._shadowLodBias =
+      params.has("shadowlod") && Number.isFinite(rawShadowLod) && rawShadowLod > 0
+        ? Math.min(MAX_LOD_BUCKETS - 1, Math.floor(rawShadowLod))
+        : DEFAULT_SHADOW_LOD_BIAS;
 
     const pathValue = params.get("path");
     this._path =
@@ -672,6 +750,7 @@ export class Showcase extends AbstractShowcase {
         getCpuTime: (): number => this.lastCpuTimeMs,
         onSelectPath: (path: PathName): void => this._selectPath(path),
         onToggleWind: (): void => this._toggleWindLive(),
+        onCycleLodMode: (): void => this._toggleLodMode(),
       });
     }
   }
@@ -853,18 +932,40 @@ export class Showcase extends AbstractShowcase {
     }
     const merged = this._mergeTreeGeometry(proto);
     const radius = this._treeBoundingRadius(merged);
+    // P2 (ADR 0059 step 2): load-time stepped LOD proxies of the merged tree. Bucket index
+    // ASCENDS with projected diameter (near=detail), and geometry is bound by bucket index —
+    // so the COARSEST proxy sits at bucket 0 (farthest tier), the FULL tree at the highest
+    // index. The gaps between `FIELD_LOD_MAXIMA_PX` bytes are where the cull's (URL-tuned)
+    // crossfade band dual-writes adjacent {coarse, fine} pairs with DISTINCT geometry.
+    const coarse = this._buildLodProxyGeometry(merged, FIELD_LOD_PROXY_STRIDE[0]!);
+    const mid = this._buildLodProxyGeometry(merged, FIELD_LOD_PROXY_STRIDE[1]!);
+    const bands: LodBucketDescriptor[] = [
+      {
+        name: "L2-far",
+        lodIndex: 2,
+        minProjectedSize: FIELD_CULL_PIXEL_SIZE + 1,
+        maxProjectedSize: FIELD_LOD_MAXIMA_PX[0]!,
+        geometrySlot: 0,
+      },
+      {
+        name: "L1-mid",
+        lodIndex: 1,
+        minProjectedSize: FIELD_LOD_MAXIMA_PX[0]! + 1,
+        maxProjectedSize: FIELD_LOD_MAXIMA_PX[1]!,
+        geometrySlot: 1,
+      },
+      {
+        name: "L0-near",
+        lodIndex: 0,
+        minProjectedSize: FIELD_LOD_MAXIMA_PX[1]! + 1,
+        maxProjectedSize: FIELD_LOD_MAXIMA_PX[2]!,
+        geometrySlot: 2,
+      },
+    ];
     const prototype: PrototypeDescriptor = {
       id: `s51-${proto.name}`,
       boundingRadius: radius,
-      lodBuckets: [
-        {
-          name: "L0",
-          lodIndex: 0,
-          minProjectedSize: FIELD_CULL_PIXEL_SIZE + 1,
-          maxProjectedSize: 1e6,
-          geometrySlot: 0,
-        },
-      ],
+      lodBuckets: bands,
       materialSlot: 0,
       maxInstances: instances.length,
     };
@@ -872,6 +973,9 @@ export class Showcase extends AbstractShowcase {
     this._fieldRecords = records;
     this._fieldBoundingRadius = radius;
     this._fieldCullPixelSize = FIELD_CULL_PIXEL_SIZE;
+    this._fieldLodBand = this._lodBand;
+    this._fieldLodHysteresis = this._lodHysteresis;
+    this._fieldLodBiasPx = this._lodBiasPx;
 
     // ADR 0059 step 1b: shared wind field for the field lane. A gentle forest breeze with
     // travelling gust fronts + calm phases (the reference-demo critique #1). `windHeight`
@@ -898,16 +1002,25 @@ export class Showcase extends AbstractShowcase {
         maxLean: 0.6,
       });
     }
+    // P2 (ADR 0059 step 2): LOD-transition knobs (URL `?lodband=`/`?lodhyst=`/`?lodbias=`/
+    // `?shadowlod=`; absent = engine fail-closed defaults). The cull selects the bucket and
+    // the crossfade band through these; the HUD LOD section re-tunes them live. Typed via
+    // `P2FieldOptions` (additive P2 surface, see the note above).
+    const lodOptions: P2FieldOptions = {
+      cellSize: FIELD_CELL_SIZE,
+      maxInstances: instances.length,
+      cullPixelSize: FIELD_CULL_PIXEL_SIZE,
+      maxViews: 4,
+      lodCrossfadeBand: this._lodBand,
+      lodHysteresis: this._lodHysteresis,
+      lodBiasPx: this._lodBiasPx,
+      shadowLodBias: this._shadowLodBias,
+    };
     const system = new InstanceFieldSystem(null, {
       instanceRecords: records,
       prototypes: [prototype],
-      geometryTable: [[merged]],
-      options: {
-        cellSize: FIELD_CELL_SIZE,
-        maxInstances: instances.length,
-        cullPixelSize: FIELD_CULL_PIXEL_SIZE,
-        maxViews: 4,
-      },
+      geometryTable: [[coarse, mid, merged]],
+      options: lodOptions,
       // Leaf transmission (ADR 0060), linear; the colour-stream alpha masks it to the foliage.
       backlight: [
         GltfMaterialParser.engineSRGBToLinear(FIELD_LEAF_BACKLIGHT[0]),
@@ -953,7 +1066,9 @@ export class Showcase extends AbstractShowcase {
       `[Showcase51] field lane: ${instances.length} records, cullRadius=${radius.toFixed(2)} m, ` +
         `occlusion=${this._occlusionMode}` +
         `, wind=${this._windField !== undefined && this._windLive ? "on" : "off"}` +
-        `${this._popcount ? ", popcount" : ""}${this._cullref ? ", cullref" : ""}`,
+        `${this._popcount ? ", popcount" : ""}${this._cullref ? ", cullref" : ""}` +
+        `, LOD band=${this._lodBand.toFixed(2)} hyst=${this._lodHysteresis.toFixed(2)} ` +
+        `bias=${this._lodBiasPx.toFixed(1)}px shadow=${this._shadowLodBias}`,
     );
     return true;
   }
@@ -1135,12 +1250,77 @@ export class Showcase extends AbstractShowcase {
     }
   }
 
+  /**
+   * P2 load-time stepped LOD proxy of the merged tree geometry (ADR 0059 step 2): deterministic
+   * triangle-stride decimation at load, pure CPU, zero runtime cost. Every `stride`-th triangle
+   * is kept from the source index list; the vertex/normal/uv/colour streams are REUSED as-is
+   * (a subset of triangles simply stops referencing the pruned vertices). `stride <= 1` returns
+   * the source unchanged. The result is genuinely DISTINCT geometry per bucket — the cull's
+   * crossfade band cross-dissolves these stepped variants, not the same mesh twice.
+   */
+  private _buildLodProxyGeometry(
+    merged: GeometryDataInterface,
+    stride: number,
+  ): GeometryDataInterface {
+    if (stride <= 1) return merged;
+    const src = merged.indices;
+    if (src === undefined) {
+      // Indexed geometry is contract-required for field buckets (`_mergeTreeGeometry` enforces
+      // it); a defensive identity passthrough keeps this builder total.
+      return merged;
+    }
+    const triCount = Math.floor(src.length / 3);
+    const out = new Uint32Array(Math.ceil(triCount / stride) * 3);
+    let o = 0;
+    for (let t = 0; t < triCount; t += stride) {
+      out[o++] = src[t * 3]!;
+      out[o++] = src[t * 3 + 1]!;
+      out[o++] = src[t * 3 + 2]!;
+    }
+    return {
+      vertices: merged.vertices,
+      indices: o === out.length ? out : out.slice(0, o),
+      normals: merged.normals,
+      uvs: merged.uvs,
+      colors: merged.colors,
+      getBoundingVolume: (): BoundingVolume => BoundingBox.fromVertices(merged.vertices),
+    };
+  }
+
   /** HUD `F` toggle: flips the live wind state and re-arms the system immediately (no re-create,
    *  no pop on re-enable — the wind field keeps advancing while off). */
   private _toggleWindLive(): void {
     if (this._windField === undefined) return;
     this._windLive = !this._windLive;
     this._applyWindState();
+  }
+
+  /**
+   * HUD `L` toggle (P2, ADR 0059 step 2): cycles the field lane between candidate A (dither
+   * crossfade band, URL knob) and candidate C (hard switch: band 0 + fragment dither off).
+   * The re-tune is pushed LIVE via the P2 system API (`setLodTransition` / `setLodDitherMode`)
+   * and takes effect on the next cull frame. Guarded through the `P2FieldLodApi` optional
+   * surface — inert while the app runs against a host engine that predates P2.
+   */
+  private _toggleLodMode(): void {
+    const system = this._fieldSystem;
+    if (system === undefined) return;
+    this._lodHard = !this._lodHard;
+    if (this._lodHard) {
+      // Candidate C: zero the band (cull hard-switches; hysteresis jitter still decorrelates).
+      this._fieldLodBand = 0;
+    } else {
+      // Candidate A: re-arm the URL band (default when the URL knob is absent).
+      this._fieldLodBand = this._lodBand;
+    }
+    (system as InstanceFieldSystem & P2FieldLodApi).setLodTransition?.({
+      crossfadeBand: this._fieldLodBand,
+      hysteresis: this._fieldLodHysteresis,
+      biasPx: this._fieldLodBiasPx,
+    });
+    (system as InstanceFieldSystem & P2FieldLodApi).setLodDitherMode?.(
+      this._lodHard ? "hard" : "crossfade",
+    );
   }
 
   /**
@@ -1486,6 +1666,17 @@ export class Showcase extends AbstractShowcase {
       wind: this._windField !== undefined && this._windLive,
       // Ground-cover ring instances (field lane source B; 0 when inactive).
       cover: this._coverSystem?.instanceCount ?? 0,
+      // P2 LOD-transition live state (field lane only): the applied band/hysteresis/bias knobs.
+      // Key omitted when the field lane is inactive (`exactOptionalPropertyTypes` contract).
+      ...(this._fieldSystem !== undefined
+        ? {
+            lod: {
+              band: this._fieldLodBand,
+              hyst: this._fieldLodHysteresis,
+              biasPx: this._fieldLodBiasPx,
+            },
+          }
+        : {}),
     };
     this._hud?.sync(stats);
   }

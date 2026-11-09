@@ -47,6 +47,13 @@ export interface VegHudStats {
   readonly wind: boolean;
   /** Ground-cover ring instances this frame (ADR 0059 step 1b; 0 when the cover is inactive). */
   readonly cover: number;
+  /** Optional P2 LOD-transition live state of the field lane (ADR 0059 step 2); absent when the
+   *  field lane is inactive. `band` 0 = candidate C (hard switch), > 0 = candidate A band. */
+  readonly lod?: {
+    readonly band: number;
+    readonly hyst: number;
+    readonly biasPx: number;
+  };
 }
 
 export interface VegHudOptions {
@@ -58,6 +65,9 @@ export interface VegHudOptions {
   onSelectPath(path: PathName): void;
   /** Called when the user toggles the field-lane wind (key `F` or the button). */
   onToggleWind?(): void;
+  /** Called when the user cycles the P2 LOD transition mode (candidate A <-> C; key `L` or the
+   *  button). No-op when the host engine / field lane predates the P2 surface. */
+  onCycleLodMode?(): void;
 }
 
 /** Drawer toggle shortcuts. `H` opens/closes the panel (ADR step 0 layout: keys 1-3 + H). */
@@ -161,8 +171,16 @@ export class Hud {
               "Field-lane wind on/off (`F`); hard off = static lane for cost isolation (`?wind=0` at load).",
             ),
         )}
+        ${hudSection(
+          "🔬 LOD mix",
+          "L",
+          `<div class="preset-group"><button class="btn-preset" data-lod>LOD: crossfade</button></div>` +
+            hudNote(
+              "P2 LOD transition mode (ADR 0059 step 2): crossfade band (candidate A) or hard switch (candidate C, `L` cycles). URL `?lodband=`/`?lodhyst=`/`?lodbias=`/`?shadowlod=` tune it.",
+            ),
+        )}
         <div class="hud-section hud-keys">
-          <kbd>1</kbd> Walk · <kbd>2</kbd> Flight · <kbd>3</kbd> Aerial · <kbd>F</kbd> Wind · <kbd>H</kbd> Panel · <kbd>WASD</kbd>/<kbd>Mouse</kbd> Free fly
+          <kbd>1</kbd> Walk · <kbd>2</kbd> Flight · <kbd>3</kbd> Aerial · <kbd>F</kbd> Wind · <kbd>L</kbd> LOD · <kbd>H</kbd> Panel · <kbd>WASD</kbd>/<kbd>Mouse</kbd> Free fly
         </div>
       `,
     });
@@ -179,6 +197,12 @@ export class Hud {
         this._options.onToggleWind?.();
       });
     });
+    this._root.querySelectorAll<HTMLButtonElement>("[data-lod]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this._options.onCycleLodMode?.();
+        this.sync(this._lastStats);
+      });
+    });
     this.sync(undefined);
   }
 
@@ -190,7 +214,8 @@ export class Hud {
 
   /**
    * Applies a lab shortcut. Returns true when the key was consumed. Digits select the camera
-   * path, `F` toggles the field-lane wind, `I`/`H` toggle the panel (handled by the shared drawer).
+   * path, `F` toggles the field-lane wind, `L` cycles the P2 LOD transition mode, `I`/`H`
+   * toggle the panel (handled by the shared drawer).
    */
   public handleKey(event: KeyboardEvent): boolean {
     if (this._drawer.handleKey(event)) return true;
@@ -202,6 +227,11 @@ export class Hud {
     }
     if (event.code === "KeyF") {
       this._options.onToggleWind?.();
+      return true;
+    }
+    if (event.code === "KeyL") {
+      this._options.onCycleLodMode?.();
+      this.sync(this._lastStats);
       return true;
     }
     return false;
@@ -222,6 +252,15 @@ export class Hud {
     this._root.querySelectorAll<HTMLButtonElement>("[data-wind]").forEach((btn) => {
       btn.classList.toggle("active", windOn);
       const label = `Wind: ${windOn ? "on" : "off"}`;
+      if (btn.textContent !== label) btn.textContent = label;
+    });
+    // P2 LOD transition mode mirrors the live field-lane state pushed by the showcase (no local
+    // echo): crossfade when a band is armed, hard switch when `band` is 0.
+    const lod = stats?.lod;
+    const lodHard = lod !== undefined && lod.band <= 0;
+    this._root.querySelectorAll<HTMLButtonElement>("[data-lod]").forEach((btn) => {
+      btn.classList.toggle("active", lod !== undefined && lodHard);
+      const label = lod === undefined ? "LOD: --" : `LOD: ${lodHard ? "hard" : "crossfade"}`;
       if (btn.textContent !== label) btn.textContent = label;
     });
     this._refreshReadout();
@@ -259,6 +298,12 @@ export class Hud {
       `${stats.fps >= 0 ? stats.fps.toFixed(1) : "--"} | ${fmtMs(cpu)} | ${fmtMs(gpu)} | ${fmtCount(stats.visible)} / ${fmtCount(stats.triangles)}`,
       `?n=${stats.instances.toLocaleString("en-US")}  mode=${stats.mode}  path=${this._path}  wind=${stats.wind ? "on" : "off"}${stats.cover > 0 ? `  cover=${fmtCount(stats.cover)}` : ""}`,
     ];
+    const lod = stats.lod;
+    if (lod !== undefined) {
+      lines.push(
+        `LOD: band=${lod.band.toFixed(2)} hyst=${lod.hyst.toFixed(2)} bias=${lod.biasPx.toFixed(1)}px  (${lod.band <= 0 ? "hard" : "crossfade"})`,
+      );
+    }
     const passes = this._options.gpuTimings?.passesMs;
     if (passes && this._options.gpuTimings?.available === true) {
       const entries = Object.entries(passes).filter(([, ms]) => ms >= 0);

@@ -39,6 +39,19 @@
 // may only read storage (`read-only-storage` in the draw layout).
 @group(2) @binding(3) var<storage, read> fieldVisibleIndices: array<u32>; // pages [bv * pageCapacity, +cap)
 
+// P2 LOD-blend pages (ADR 0059 step 2), per-consumer declaration of slot 11 (see
+// instance_field_structs.wgsl visibility contract; the cull declares its own write on this slot in
+// instance_cull.wgsl, the binding-2/3 pattern). Page-indexed EXACTLY like `fieldVisibleIndices`
+// ([bv * pageCapacity + slot]); per-slot signed value [CONTRACT veg-p2-bob, published 2026-11-09:
+//   +p (0 < p < 1) = FINE-side entry of a crossfade band pair (fades out)
+//   -p (0 < p < 1) = COARSE-side entry (fades in)
+//   both magnitudes |p| = the SHARED crossfade position between the two buckets: the pair's two
+//   slots carry the SAME |p| at any band state -- this is what makes the two draws' kept pixels
+//   an exact partition (see `fieldLodDitherDiscard`, complementary-by-construction).
+//   0            = settled (single-write outside any band) / unwritten zero-filled slot: keep all.
+// The buffer is zero-filled at creation (InstanceFieldSystem); the cull rewrites live records.
+@group(2) @binding(11) var<storage, read> fieldLodBlend: array<f32>;
+
 struct FieldVertOut {
     @builtin(position) pos: vec4f,
     @location(0) wp: vec3f,
@@ -48,6 +61,10 @@ struct FieldVertOut {
     @location(3) color: vec4f,
     // Per-instance albedo variation (position hash), constant across the instance.
     @location(4) @interpolate(flat) tint: f32,
+    // P2 LOD-mix channel: signed per-(segment x slot) crossfade position forwarded from the
+    // record page (see `fieldLodBlend`); 0 = settled/unwritten (keep always). Flat: one decision
+    // per instance, never perspective-smoothed across a plant.
+    @location(5) @interpolate(flat) lodBlend: f32,
 }
 
 // Optional alpha-cutout gate for the pulled fragments (P1 early-Z conservatism): when the field
@@ -161,6 +178,7 @@ fn fieldPullVertex(
         o.n = vec3f(0.0, 1.0, 0.0);
         o.color = vec4f(0.0);
         o.tint = 1.0;
+        o.lodBlend = 0.0;
         return o;
     }
     let bv = cullParams.segmentBase;
@@ -197,6 +215,8 @@ fn fieldPullVertex(
     o.color = color;
     let h = fieldPositionHash(record.xyz);
     o.tint = 0.85 + 0.3 * (f32(h & 0x00FFFFFFu) * (1.0 / 16777216.0));
+    // Same page lane the cull compacted into: the slot's signed blend rides beside its index.
+    o.lodBlend = fieldLodBlend[bv * fieldInfo.pageCapacity + instanceIndex];
     return o;
 }
 
@@ -214,9 +234,66 @@ fn vsFieldPull(
 // ── depth variant (depth pre-pass + cascade/spot/point depth) ─────────────────────────────────
 // Fragment writes the throwaway color attachment a constant; the depth-stencil state owns the
 // actual depth write. Alpha test runs only when the field authors one (early-Z conservatism).
+
+// ── LOD-mix dither crossfade (ADR 0059 step 2, P2-2) ─────────────────────────────────────────
+// Complementary 8x8 Bayer mask split between the two bucket draws of a crossfade band, applied in
+// EVERY fragment variant (color, normal-color, depth pre-pass, EVSM) so a fading instance keeps
+// its silhouette, depth and shadow in step -- a variant that skipped the dither would leave a
+// ghost depth/shadow that outlives the shaded surface. Grass is REAL geometry (P1b decision: no
+// alpha-cutout, no alphaMap): this fades LOD bucket GEOMETRIES, it is not alpha-to-coverage.
+//
+// Complementary by construction: the two slots of one band pair carry the SAME |p| (crossfade
+// position) and the fragment applies OPPOSITE comparisons per side -- the FINE-side entry
+// discards the low masks (`m < |p|`, fades out), the COARSE-side entry discards the high masks
+// (`m >= |p|`, fades in). Kept sets are exactly disjoint AND jointly cover the silhouette
+// wherever both rasterize: no holes, no overdraw (P2 exit gate). The pattern is high-frequency
+// per-pixel (period 8 px; a large static low-frequency mask is what TAA amplifies into shimmer)
+// and screen-anchored, so TAA temporally averages the band instead of tracking a fixed grid. The
+// mask is registered per FRAMEBUFFER pixel (`i.pos.xy`): the depth/prepass rasterizes the same
+// viewport, so the discard set matches the color pass pixel-for-pixel per instance.
+//
+// Gate semantics: 0 (settled single-write / unwritten zero-filled page) or
+// `fieldInfo.lodDitherMode != 0` (candidate C hard switch) keep EVERY fragment -- the dither is
+// inert outside a band, and BEFORE the cull publishes writes the field draws exactly like P1.
+// `|p| = 1` degenerates to the band edge: the fine side is fully gone, the coarse side fully
+// shown (correct complement halves).
+const FIELD_BAYER_8: array<u32, 64> = array<u32, 64>(
+    0u, 32u, 8u, 40u, 2u, 34u, 10u, 42u,
+    48u, 16u, 56u, 24u, 50u, 18u, 58u, 26u,
+    12u, 44u, 4u, 36u, 14u, 46u, 6u, 38u,
+    60u, 28u, 52u, 20u, 62u, 30u, 54u, 22u,
+    3u, 35u, 11u, 43u, 1u, 33u, 9u, 41u,
+    51u, 19u, 59u, 27u, 49u, 17u, 57u, 25u,
+    15u, 47u, 7u, 39u, 13u, 45u, 5u, 37u,
+    63u, 31u, 55u, 23u, 61u, 29u, 53u, 21u,
+);
+
+// True = drop this fragment under the LOD-mix dither. `fragPx` = framebuffer position (`i.pos.xy`).
+// Sign convention is Bob's published one (slots of one pair share |p|; + = fine side, - = coarse
+// side). Branch-free (select(f, t, c) = c ? t : f).
+fn fieldLodDitherDiscard(blend: f32, fragPx: vec2f) -> bool {
+    if (fieldInfo.lodDitherMode != 0u) {
+        return false; // candidate C (hard switch + hysteresis in the cull): never dither
+    }
+    if (blend == 0.0) {
+        return false; // settled slot / unwritten zero-filled page: keep
+    }
+    let p = abs(blend);
+    let px = vec2u(fragPx);
+    let idx = (px.y % 8u) * 8u + (px.x % 8u);
+    let m = (f32(FIELD_BAYER_8[idx]) + 0.5) * (1.0 / 64.0);
+    // Fine side (blend > 0, fades out) discards the low masks (m < p); coarse side (blend < 0,
+    // fades in) discards the high masks (m >= p). Kept sets are complementary: fine keeps
+    // [p, 1], coarse keeps [0, p) at the SAME p -- an exact partition of the unit mask range.
+    return select(m < p, m >= p, blend < 0.0);
+}
+
 @fragment
 fn fsFieldDepth(i: FieldVertOut) -> @location(0) vec4f {
     fieldAlphaDiscard(i.uv);
+    if (fieldLodDitherDiscard(i.lodBlend, i.pos.xy)) {
+        discard;
+    }
     return vec4f(0.0, 0.0, 0.0, 1.0);
 }
 
@@ -227,6 +304,9 @@ fn fsFieldDepth(i: FieldVertOut) -> @location(0) vec4f {
 @fragment
 fn fsFieldEvsm(i: FieldVertOut) -> @location(0) vec4f {
     fieldAlphaDiscard(i.uv);
+    if (fieldLodDitherDiscard(i.lodBlend, i.pos.xy)) {
+        discard;
+    }
     let depth = clamp(i.pos.z, 0.0, 1.0);
     let d = clamp(depth * 2.0 - 1.0, -1.0, 1.0);
     let c = 40.0;
@@ -251,6 +331,9 @@ fn fieldShadingNormal(i: FieldVertOut, frontFacing: bool) -> vec3f {
 
 fn fieldColorShade(i: FieldVertOut, frontFacing: bool) -> vec4f {
     fieldAlphaDiscard(i.uv);
+    if (fieldLodDitherDiscard(i.lodBlend, i.pos.xy)) {
+        discard;
+    }
     let N = fieldShadingNormal(i, frontFacing);
     let albedo = i.color.rgb * i.tint;
     let L = normalize(global.dirLightDir.xyz);

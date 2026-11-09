@@ -1,8 +1,8 @@
 /**
- * ADR 0059 step 1 (P1-2) -- WebGPU lane of the `InstanceField` contract: ONE per-field node
- * manager that owns the GPU cull-compute + indirect-draw path (`instance_cull.wgsl` +
- * `field_pull.wgsl`). Implements the frozen `InstanceFieldRuntimeApi` (core/InstanceField.ts
- * is the single contract surface). GL CPU-cell fallback: Frank's
+ * ADR 0059 step 1 (P1-2) / step 2 (P2-1) -- WebGPU lane of the `InstanceField` contract: ONE
+ * per-field node manager that owns the GPU cull-compute + indirect-draw path
+ * (`instance_cull.wgsl` + `field_pull.wgsl`). Implements the frozen `InstanceFieldRuntimeApi`
+ * (core/InstanceField.ts is the single contract surface). GL CPU-cell fallback: Frank's
  * `renderers/gl/managers/InstanceFieldGL.ts`; 3rd consumer of the indirect-draw contract:
  * `GpuParticleSystemHost` (interface alignment only).
  *
@@ -10,6 +10,11 @@
  * frustum+size, mode-C shadow views (frustum+size only, no HZB), bucket-routed compaction from
  * day 1 (IF-CULL-ROUTING), clamp-at-capacity (IF-BUDGET), one-frame camera-cut HZB skip
  * (IF-CAMERA-CUT-HZB-SKIP). Two-phase mode 2B is spec'd in `instance_cull.wgsl`, not built.
+ * SCOPE (P2-1): per-view LOD-transition knobs in the cull-param pad words (band width /
+ * hysteresis / tier bias + the shadow-only bucket offset), written per frame into every view
+ * block; the CULL computes the LOD buckets + crossfade-band dual writes (candidate A/C). The
+ * fragment-side dither gate (`lodDitherMode`) and the draw-side blend channel belong to
+ * veg-p2-erin's P2-2 surface (`field_pull.wgsl`, untouched here).
  *
  * RENDERER RELATION: the renderer owns a registration LIST (`_instanceFields`, mirroring the
  * particle list) and drives the per-frame coordinator + single-point pass hooks; this system is
@@ -19,9 +24,11 @@
  * sources, the previous-frame pyramid handle and the geometry-cache pinning bridge.
  *
  * WGSL SINGLE SOURCE: `chunks/instance_field_structs.wgsl` is the SOLE declaration of
- * `FieldInfo`/`CullParams` and the 11 `@group(2)` bindings shared by the cull compute module
+ * `FieldInfo`/`CullParams` and the 12 `@group(2)` bindings shared by the cull compute module
  * and the pulled-draw module -- the host composes both module sources from it, so the blob
  * layout and the bind-group slot numbering can never drift between the two consumers.
+ * Binding 11 (P2 `fieldLodBlend`) is declared PER CONSUMER (cull writes `read_write`, pull
+ * vertex reads) exactly like bindings 2/3 -- the layout entries exist on both sides.
  * (S2 fold, lead-authorized: the field-data group moved from 4 to 2 so the lane fits the
  * `maxBindGroups` spec minimum of 4 = slots {0,2,3}; the shared-view slot stays at group 3.)
  *
@@ -84,6 +91,13 @@ const CULL_OFFSET_HZB_ENABLED = 104;
 const CULL_OFFSET_HZB_SKIP = 108;
 const CULL_OFFSET_SEGMENT_BASE = 112;
 const CULL_OFFSET_CULL_MODE = 116;
+/** P2 pad words (bytes 120/124/128/132, see the WGSL `CullParams`): per-view LOD transition
+ * knobs. `lodBiasBuckets` differs per view (shadow coarsening offset, main writes 0); the rest
+ * are field-scoped and identical across views. All 4 are refreshed at every view prepare. */
+const CULL_OFFSET_LOD_BIAS_BUCKETS = 120;
+const CULL_OFFSET_LOD_CROSSFADE_BAND = 124;
+const CULL_OFFSET_LOD_HYSTERESIS = 128;
+const CULL_OFFSET_LOD_BIAS_PX = 132;
 
 /** Word offsets inside the `FieldInfo` uniform (bytes). */
 const INFO_OFFSET_PAGE_CAPACITY = 0;
@@ -94,6 +108,8 @@ const INFO_OFFSET_CULL_PIXEL_SIZE = 16;
 const INFO_OFFSET_ALPHA_TEST = 20;
 const INFO_OFFSET_BACKLIGHT = 32;
 const INFO_OFFSET_WIND_HEIGHT = 48;
+/** Word 52 -- previously a struct pad; now the P2 `lodDitherMode` (0 = dither, != 0 = hard C). */
+const INFO_OFFSET_LOD_DITHER_MODE = 52;
 const INFO_OFFSET_WIND = 64;
 
 /** Compute workgroup width of the cull / reset entries (`@workgroup_size(64)`). */
@@ -208,6 +224,13 @@ export interface InstanceFieldSystemSetup {
    *         `FieldInfo.wind` words stay zero while this is 0.
    */
   windHeight?: number;
+  /**
+   * @domain P2 LOD-transition mode (ADR 0059 step 2): `"crossfade"` (default) = dither crossfade
+   *         between bucket geometries in the pulled fragments; `"hard"` = candidate C (hard switch
+   *         + hysteresis lives in the CULL; the fragment skips the dither — `FieldInfo.lodDitherMode`
+   *         word). Runtime-toggleable via {@link InstanceFieldSystem.setLodDitherMode}.
+   */
+  lodDitherMode?: "crossfade" | "hard";
 }
 
 /** Vertex streams bound per bucket: slot 1 normal, 2 uv, 3 colour (slot 0 = the cached position).
@@ -251,6 +274,10 @@ interface FieldGpuState {
   lodMaxima: GPUBuffer;
   indirectArgs: GPUBuffer;
   visibleIndices: GPUBuffer;
+  /** P2: per-(segment x slot) signed LOD blend pages, page-indexed like `visibleIndices`
+   *  ([bv * pageCapacity + slot]). Zero-filled; the cull compute rewrites live values
+   *  (`fieldLodBlend`, declared per-consumer on slot 11 -- bindings 2/3 pattern). */
+  fieldLodBlend: GPUBuffer;
   cullParams: GPUBuffer;
   fieldInfo: GPUBuffer;
   cullFieldBGL: GPUBindGroupLayout;
@@ -363,6 +390,23 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   /** Live `SwmWind` block (16 floats, borrowed reference) uploaded once per frame at the header.
    *  Live-swappable via {@link setWind} (undefined + height 0 = hard wind-off). */
   private _windUniforms: Float32Array | undefined;
+  /** P2 LOD dither mode word (`FieldInfo.lodDitherMode`): 0 = crossfade, 1 = hard (candidate C). */
+  private _lodDitherMode: number;
+  /** P2 band-width knob (cull pad word @124, candidate A): [0,1] fraction of each EFFECTIVE
+   *  threshold; 0 = hard switch (candidate C, single routing). Default 0 = fail-closed, P1-
+   *  identical single routing for every field unless explicitly opted in. Live via
+   *  {@link setLodTransition}; takes effect next frame (view blocks refresh per prepare). */
+  private _lodCrossfadeBand: number;
+  /** P2 hysteresis knob (cull pad word @128, candidate C): [0,1] per-instance deterministic
+   *  jitter fraction of each EFFECTIVE threshold (decorrelates hard switches, stateless). */
+  private _lodHysteresis: number;
+  /** P2 tier-bias knob (cull pad word @132): additive px bias on EVERY threshold (negative =
+   *  coarser selection at the same pixel footprint). Any finite float, default 0. */
+  private _lodBiasPx: number;
+  /** Authored `shadowLodBias` (frozen option): coarsening offset in LOD levels written ONLY
+   *  into shadow-view blocks (`0` = reuse the main camera's choice, the required default);
+   *  clamped into `[0, MAX_LOD_BUCKETS-1]`. The cull applies `max(bucket - bias, 0)`. */
+  private readonly _shadowLodBias: number;
   /** Completed vertex streams per bucket (built at attach, see `FieldBucketStreams`). */
   private readonly _bucketStreams: (FieldBucketStreams | undefined)[] = new Array(MAX_LOD_BUCKETS);
 
@@ -397,6 +441,53 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
    */
   public setOcclusionEnabled(enabled: boolean): void {
     this._occlusionOverride = enabled;
+  }
+
+  /**
+   * @domain P2 decisive-spike knob (ADR 0059 step 2): switches LOD transitions between the dither
+   *         crossfade (candidate A) and the hard switch (candidate C). Candidate C's hysteresis /
+   *         band-width live in the CULL (Bob's P2-1 surface); this only toggles the fragment-side
+   *         dither gate. Patches the `FieldInfo.lodDitherMode` word immediately (this frame).
+   */
+  public setLodDitherMode(mode: "crossfade" | "hard"): void {
+    this._lodDitherMode = mode === "hard" ? 1 : 0;
+    this._writeFieldInfoWord(INFO_OFFSET_LOD_DITHER_MODE, this._lodDitherMode);
+  }
+
+  /**
+   * @domain P2 decisive-spike knob (ADR 0059 step 2): live-overrides the field's LOD transition
+   *         tuning (candidate A band width / candidate C jitter + tier bias). Field-scoped and
+   *         identical across views; takes effect on the NEXT cull frame, because every view
+   *         block is re-written (knobs + shadow bias) at each prepare. `undefined` leaves a knob
+   *         untouched; out-of-range band/hysteresis fail fast.
+   */
+  public setLodTransition(opts: {
+    crossfadeBand?: number;
+    hysteresis?: number;
+    biasPx?: number;
+  }): void {
+    if (opts.crossfadeBand !== undefined) {
+      if (!(opts.crossfadeBand >= 0 && opts.crossfadeBand <= 1)) {
+        throw new Error(
+          `[InstanceFieldSystem] crossfadeBand must be in [0,1], got "${opts.crossfadeBand}".`,
+        );
+      }
+      this._lodCrossfadeBand = opts.crossfadeBand;
+    }
+    if (opts.hysteresis !== undefined) {
+      if (!(opts.hysteresis >= 0 && opts.hysteresis <= 1)) {
+        throw new Error(
+          `[InstanceFieldSystem] hysteresis must be in [0,1], got "${opts.hysteresis}".`,
+        );
+      }
+      this._lodHysteresis = opts.hysteresis;
+    }
+    if (opts.biasPx !== undefined) {
+      if (!Number.isFinite(opts.biasPx)) {
+        throw new Error(`[InstanceFieldSystem] biasPx must be finite, got "${opts.biasPx}".`);
+      }
+      this._lodBiasPx = opts.biasPx;
+    }
   }
 
   // --- GPU state (created on attach; rebuilt on rebuild()) ---
@@ -453,6 +544,36 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     }
     this._windHeight = windHeight;
     this._windUniforms = windUniforms;
+
+    const lodDitherMode = setup.lodDitherMode ?? "crossfade";
+    if (lodDitherMode !== "crossfade" && lodDitherMode !== "hard") {
+      throw new Error(
+        `[InstanceFieldSystem] lodDitherMode must be "crossfade" or "hard", got "${lodDitherMode}".`,
+      );
+    }
+    this._lodDitherMode = lodDitherMode === "hard" ? 1 : 0;
+
+    // P2 LOD-transition knobs (cull pad words 120-132; authored mirror fields are optional).
+    const crossfadeBand = options.lodCrossfadeBand ?? 0;
+    if (!(crossfadeBand >= 0 && crossfadeBand <= 1)) {
+      throw new Error(
+        `[InstanceFieldSystem] lodCrossfadeBand must be in [0,1], got "${crossfadeBand}".`,
+      );
+    }
+    this._lodCrossfadeBand = crossfadeBand;
+    const hysteresis = options.lodHysteresis ?? 0;
+    if (!(hysteresis >= 0 && hysteresis <= 1)) {
+      throw new Error(
+        `[InstanceFieldSystem] lodHysteresis must be in [0,1], got "${hysteresis}".`,
+      );
+    }
+    this._lodHysteresis = hysteresis;
+    const biasPx = options.lodBiasPx ?? 0;
+    if (!Number.isFinite(biasPx)) {
+      throw new Error(`[InstanceFieldSystem] lodBiasPx must be finite, got "${biasPx}".`);
+    }
+    this._lodBiasPx = biasPx;
+    this._shadowLodBias = Math.min(Math.max(0, Math.floor(options.shadowLodBias)), MAX_LOD_BUCKETS - 1);
 
     const prototypes = setup.prototypes ?? options.prototypes ?? [];
     const protoCount = prototypes.length;
@@ -556,6 +677,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         hzbEnabled: false,
         hzbSkip: false,
         segmentBase: 0,
+        lodBiasBuckets: 0,
+        lodCrossfadeBand: this._lodCrossfadeBand,
+        lodHysteresis: this._lodHysteresis,
+        lodBiasPx: this._lodBiasPx,
       };
       this._mirror.push({ planes, params });
       this._cullParams.push(params);
@@ -697,7 +822,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     const hzEnabled = this._occlusionOverride ?? hzb.available;
     const skip = this._pendingTeleportSkip;
     this._pendingTeleportSkip = false;
-    this._writeViewParams(0, vp, viewportHeightPx, fovRadiansY, hzEnabled, skip, 1);
+    // Main view: `lodBiasBuckets` = 0 (shadow views apply `shadowLodBias` on top of THIS choice).
+    this._writeViewParams(0, vp, viewportHeightPx, fovRadiansY, hzEnabled, skip, 1, 0);
   }
 
   /** Culls the MAIN view (view 0): records the once-per-frame counter reset, then the mode-A
@@ -708,7 +834,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
 
   /** Prepares a SHADOW view (viewIndex >= 1): frustum from the RAW VP, mode C (no HZB),
    * metric inputs anchored to the main camera. Overflow views (>= `maxViews`) are ignored per
-   * the frozen contract wording ("overflow views are not field-culled"). */
+   * the frozen contract wording ("overflow views are not field-culled"). The P2 shadow-only
+   * LOD coarsening (`shadowLodBias`, 0 = reuse the main choice) rides into `lodBiasBuckets`. */
   public prepareShadowView(viewIndex: number, vp: Float32Array): void {
     this._writeViewParams(
       viewIndex,
@@ -718,6 +845,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       false,
       false,
       0,
+      this._shadowLodBias,
     );
   }
 
@@ -857,6 +985,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       gpu.lodMaxima.destroy();
       gpu.indirectArgs.destroy();
       gpu.visibleIndices.destroy();
+      gpu.fieldLodBlend.destroy();
       gpu.cullParams.destroy();
       gpu.fieldInfo.destroy();
     }
@@ -987,6 +1116,14 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       size: visibleBytes,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     });
+    // P2 LOD-blend pages, same size/page math as `visibleIndices`. ZERO-FILLED at creation
+    // (fail-closed: an unwritten slot reads 0 -> the fragment keeps the instance unconditionally,
+    // exactly the P1 behavior until the cull's P2-1 band writes land).
+    const fieldLodBlend = device.createBuffer({
+      size: visibleBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(fieldLodBlend, 0, new Uint8Array(visibleBytes));
     const cullParams = device.createBuffer({
       size: cullParamsBytes,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -1017,6 +1154,11 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         },
         { binding: 9, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
         { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+        // P2 LOD-blend pages: the CULL writes the signed crossfade blends (compute `read_write`;
+        // the pull VERTEX only reads them -- its own declaration + VERTEX-visible read-only-
+        // storage entry, bindings 2/3 pattern). Present in this layout because the cull module
+        // declares binding 11 at module scope (the reset entry shares this layout).
+        { binding: 11, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
       ],
     });
     const drawFieldBGL = this._createDrawFieldBGL(device);
@@ -1061,6 +1203,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       lodMaxima,
       indirectArgs,
       visibleIndices,
+      fieldLodBlend,
       cullParams,
       fieldInfo,
     };
@@ -1080,6 +1223,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       lodMaxima,
       indirectArgs,
       visibleIndices,
+      fieldLodBlend,
       cullParams,
       fieldInfo,
       cullFieldBGL,
@@ -1137,6 +1281,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       lodMaxima: gpu.lodMaxima,
       indirectArgs: gpu.indirectArgs,
       visibleIndices: gpu.visibleIndices,
+      fieldLodBlend: gpu.fieldLodBlend,
       cullParams: gpu.cullParams,
       fieldInfo: gpu.fieldInfo,
     };
@@ -1226,6 +1371,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     floats[INFO_OFFSET_ALPHA_TEST / 4] = this._alphaTest;
     floats.set(this._backlight, INFO_OFFSET_BACKLIGHT / 4);
     floats[INFO_OFFSET_WIND_HEIGHT / 4] = this._windHeight;
+    words[INFO_OFFSET_LOD_DITHER_MODE / 4] = this._lodDitherMode;
     device.queue.writeBuffer(gpu.fieldInfo, 0, info);
   }
 
@@ -1289,6 +1435,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         lodMaxima: gpu.lodMaxima,
         indirectArgs: gpu.indirectArgs,
         visibleIndices: gpu.visibleIndices,
+        fieldLodBlend: gpu.fieldLodBlend,
         cullParams: gpu.cullParams,
         fieldInfo: gpu.fieldInfo,
       },
@@ -1310,6 +1457,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     hzbEnabled: boolean,
     hzbSkip: boolean,
     cullMode: number,
+    lodBiasBuckets: number,
   ): void {
     if (viewIndex < 0 || viewIndex >= this._viewCount) return;
     const host = this._host;
@@ -1341,6 +1489,13 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     words[CULL_OFFSET_HZB_SKIP / 4] = hzbSkip ? 1 : 0;
     words[CULL_OFFSET_SEGMENT_BASE / 4] = viewIndex * MAX_LOD_BUCKETS;
     words[CULL_OFFSET_CULL_MODE / 4] = cullMode;
+    // P2 LOD-transition knobs (pad words, see the WGSL `CullParams`). The bucket offset differs
+    // per view (shadow views coarsen via `shadowLodBias`, the main view writes 0 = reuse its
+    // choice); band/hysteresis/bias are field-scoped, identical in every view block.
+    words[CULL_OFFSET_LOD_BIAS_BUCKETS / 4] = lodBiasBuckets;
+    block[CULL_OFFSET_LOD_CROSSFADE_BAND / 4] = this._lodCrossfadeBand;
+    block[CULL_OFFSET_LOD_HYSTERESIS / 4] = this._lodHysteresis;
+    block[CULL_OFFSET_LOD_BIAS_PX / 4] = this._lodBiasPx;
 
     device.queue.writeBuffer(
       gpu.cullParams,
@@ -1354,6 +1509,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     params.hzbEnabled = hzbEnabled;
     params.hzbSkip = hzbSkip;
     params.segmentBase = viewIndex * MAX_LOD_BUCKETS;
+    params.lodBiasBuckets = lodBiasBuckets;
+    params.lodCrossfadeBand = this._lodCrossfadeBand;
+    params.lodHysteresis = this._lodHysteresis;
+    params.lodBiasPx = this._lodBiasPx;
   }
 
   /** Records the once-per-frame counter reset + the cull dispatch for `viewIndex` (mode comes
@@ -1509,6 +1668,14 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         },
         { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d" } },
         { binding: 8, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+        // P2 LOD-blend pages: the pull VERTEX reads the signed blend beside the visible index
+        // (declared in `field_pull.wgsl`, per-consumer binding-2/3 pattern -- the slot also
+        // exists in the cull layout for Bob's compute write).
+        {
+          binding: 11,
+          visibility: GPUShaderStage.VERTEX,
+          buffer: { type: "read-only-storage" },
+        },
       ],
     });
   }
@@ -1548,6 +1715,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         },
         { binding: 9, resource: { buffer: l.lodMaxima } },
         { binding: 10, resource: { buffer: l.prototypeRange } },
+        { binding: 11, resource: { buffer: l.fieldLodBlend } },
       ],
     });
   }
@@ -1572,6 +1740,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         },
         { binding: 7, resource: alphaView },
         { binding: 8, resource: alphaSampler },
+        { binding: 11, resource: { buffer: l.fieldLodBlend } },
       ],
     });
   }
@@ -1614,6 +1783,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         hzbEnabled: slot.params.hzbEnabled,
         hzbSkip: slot.params.hzbSkip,
         segmentBase: slot.params.segmentBase,
+        lodBiasBuckets: slot.params.lodBiasBuckets ?? 0,
+        lodCrossfadeBand: slot.params.lodCrossfadeBand ?? 0,
+        lodHysteresis: slot.params.lodHysteresis ?? 0,
+        lodBiasPx: slot.params.lodBiasPx ?? 0,
       });
     }
     this._probeParamsSnapshot = snapshot;
@@ -1628,6 +1801,7 @@ interface FieldLocals {
   lodMaxima: GPUBuffer;
   indirectArgs: GPUBuffer;
   visibleIndices: GPUBuffer;
+  fieldLodBlend: GPUBuffer;
   cullParams: GPUBuffer;
   fieldInfo: GPUBuffer;
 }
