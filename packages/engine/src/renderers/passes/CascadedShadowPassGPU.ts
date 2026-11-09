@@ -12,10 +12,13 @@ import type { Vector3D } from "../../math/index.js";
 import { Matrix4, MathPool, Frustum } from "../../math/index.js";
 import { WebGPUGGlobalUniformLayout } from "../GlobalUniformLayout.js";
 import { usesLineQuadShadow } from "../LineShadowRibbon.js";
+import { splitByInstancing } from "../AutoInstancing.js";
+import type { InstancingSplit } from "../AutoInstancing.js";
 
 const _scratchCasters: Object3D[] = [];
-const _scratchInstanced: InstancedMesh[] = [];
+const _scratchInstanced: Object3D[] = [];
 const _scratchStandard: Object3D[] = [];
+const _split: InstancingSplit = { standard: [], instanced: [] };
 
 export class CascadedShadowPassGPU implements RenderPass {
   public name = "CascadedShadowPassGPU";
@@ -236,32 +239,36 @@ export class CascadedShadowPassGPU implements RenderPass {
 
         const objects = batch!.objects;
 
-        _scratchCasters.length = 0;
+        // Index writes + final `length = n`: `length = 0` makes V8 drop the backing store, so these
+        // per-cascade lists used to regrow from zero for every batch of every cascade.
+        // Pass the batch through when every object casts into this cascade (no copy); filter
+        // into the scratch list only otherwise.
+        let casters: Object3D[] = objects;
+        let nCasters = 0;
         for (let j = 0; j < objects.length; j++) {
           const o = objects[j]!;
-          if (o.castShadow && this._inCascade(o)) {
-            _scratchCasters.push(o);
-          }
+          if (o.castShadow && this._inCascade(o)) nCasters++;
         }
-        if (_scratchCasters.length === 0) continue;
-
-        _scratchInstanced.length = 0;
-        _scratchStandard.length = 0;
-        for (let j = 0; j < _scratchCasters.length; j++) {
-          const obj = _scratchCasters[j]!;
-          if (obj instanceof InstancedMesh) {
-            _scratchInstanced.push(obj);
-          } else {
-            _scratchStandard.push(obj);
+        if (nCasters === 0) continue;
+        if (nCasters !== objects.length) {
+          let n = 0;
+          for (let j = 0; j < objects.length; j++) {
+            const o = objects[j]!;
+            if (o.castShadow && this._inCascade(o)) _scratchCasters[n++] = o;
           }
+          _scratchCasters.length = n;
+          casters = _scratchCasters;
         }
+        splitByInstancing(casters, _scratchStandard, _scratchInstanced, _split);
+        const standardCasters = _split.standard;
+        const instancedCasters = _split.instanced;
 
-        if (_scratchStandard.length > 0) {
+        if (standardCasters.length > 0) {
           // `"rgba32float"` overrides the derived main-target format so the moment pipeline's
           // color target matches this pass's rgba32float attachment (see _renderSubgroup).
           renderer._renderSubgroup(
             rp,
-            _scratchStandard,
+            standardCasters,
             false,
             material.uuid,
             manifest,
@@ -274,10 +281,10 @@ export class CascadedShadowPassGPU implements RenderPass {
           );
         }
 
-        if (_scratchInstanced.length > 0) {
+        if (instancedCasters.length > 0) {
           renderer._renderSubgroup(
             rp,
-            _scratchInstanced,
+            instancedCasters,
             true,
             material.uuid,
             manifest,
@@ -467,30 +474,34 @@ export class CascadedShadowPassGPU implements RenderPass {
 
         const objects = batch!.objects;
 
-        _scratchCasters.length = 0;
+        // Index writes + final `length = n`: `length = 0` makes V8 drop the backing store, so these
+        // per-cascade lists used to regrow from zero for every batch of every cascade.
+        // Pass the batch through when every object casts into this cascade (no copy); filter
+        // into the scratch list only otherwise.
+        let casters: Object3D[] = objects;
+        let nCasters = 0;
         for (let i = 0; i < objects.length; i++) {
           const o = objects[i]!;
-          if (o.castShadow && this._inCascade(o)) {
-            _scratchCasters.push(o);
-          }
+          if (o.castShadow && this._inCascade(o)) nCasters++;
         }
-        if (_scratchCasters.length === 0) continue;
-
-        _scratchInstanced.length = 0;
-        _scratchStandard.length = 0;
-        for (let i = 0; i < _scratchCasters.length; i++) {
-          const obj = _scratchCasters[i]!;
-          if (obj instanceof InstancedMesh) {
-            _scratchInstanced.push(obj);
-          } else {
-            _scratchStandard.push(obj);
+        if (nCasters === 0) continue;
+        if (nCasters !== objects.length) {
+          let n = 0;
+          for (let i = 0; i < objects.length; i++) {
+            const o = objects[i]!;
+            if (o.castShadow && this._inCascade(o)) _scratchCasters[n++] = o;
           }
+          _scratchCasters.length = n;
+          casters = _scratchCasters;
         }
+        splitByInstancing(casters, _scratchStandard, _scratchInstanced, _split);
+        const standardCasters = _split.standard;
+        const instancedCasters = _split.instanced;
 
-        if (_scratchStandard.length > 0) {
+        if (standardCasters.length > 0) {
           renderer._renderSubgroup(
             rp,
-            _scratchStandard,
+            standardCasters,
             false,
             material.uuid,
             manifest,
@@ -501,10 +512,10 @@ export class CascadedShadowPassGPU implements RenderPass {
           );
         }
 
-        if (_scratchInstanced.length > 0) {
+        if (instancedCasters.length > 0) {
           renderer._renderSubgroup(
             rp,
-            _scratchInstanced,
+            instancedCasters,
             true,
             material.uuid,
             manifest,

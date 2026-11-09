@@ -129,7 +129,7 @@ describe("WebGPU capacity fail-fast validation", () => {
       pipelineCacheKey: vi.fn(() => "test-key"),
       acquirePipeline: vi.fn(),
     };
-    renderer._textures = { acquireTextures: vi.fn() };
+    renderer._textures = { acquireTextures: vi.fn(), textureSetVersion: vi.fn(() => -1) };
     renderer._geometryCache = {
       getGeoCache: vi.fn(() => ({
         vertexCount: 8,

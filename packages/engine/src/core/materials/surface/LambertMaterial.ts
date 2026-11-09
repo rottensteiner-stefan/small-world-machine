@@ -67,9 +67,10 @@ export class LambertMaterial extends AbstractMaterial {
     texs["u_diffuseMap"] = this.diffuseMap;
     texs["u_normalMap"] = this.normalMap;
 
-    const flags: string[] = [];
+    const flags = this._manifestFlags;
+    flags.length = 0;
     if (this.normalMap) flags.push(ShaderFlag.NORMAL_MAP);
-    this._renderManifest.flags = flags;
+    this._commitFlags();
 
     return this._renderManifest;
   }

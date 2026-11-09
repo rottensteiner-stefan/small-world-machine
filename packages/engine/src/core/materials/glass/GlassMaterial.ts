@@ -69,9 +69,10 @@ export class GlassMaterial extends AbstractMaterial {
 
     this._renderManifest.textures["u_normalMap"] = this.normalMap;
 
-    const flags: string[] = [];
+    const flags = this._manifestFlags;
+    flags.length = 0;
     if (this.normalMap) flags.push(ShaderFlag.NORMAL_MAP);
-    this._renderManifest.flags = flags;
+    this._commitFlags();
 
     if (this._renderManifest.state) {
       this._renderManifest.state.transparent = true;

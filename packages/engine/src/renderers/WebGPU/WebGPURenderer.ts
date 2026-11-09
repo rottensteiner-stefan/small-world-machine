@@ -63,7 +63,9 @@ import {
   AUTO_INSTANCING_MIN_RUN,
   groupByGeometryForInstancing,
   partitionInstanceRuns,
+  splitByInstancing,
 } from "../AutoInstancing.js";
+import type { InstancingSplit } from "../AutoInstancing.js";
 import {
   MainRenderPass,
   PostProcessPass,
@@ -296,10 +298,11 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
   protected _scratchColorArray = new Float32Array(4);
   protected _scratchUniformValues: Record<string, unknown> = {};
 
-  // Reused across every _renderBatch() call (cleared via .length = 0) instead of allocating two
+  // Reused across every _renderBatch() call (refilled by index, see there) instead of allocating two
   // fresh arrays per batch -- same pattern as CascadedShadowPassGPU's _scratchInstanced/_scratchStandard.
   private _scratchInstancedObjects: Object3D[] = [];
   private _scratchStandardObjects: Object3D[] = [];
+  private readonly _batchSplit: InstancingSplit = { standard: [], instanced: [] };
 
   /** Reused every frame (never reallocated) -- see `GlobalUniformWriter`. */
   public get scratchGlobalBufferData(): Float32Array {
@@ -1346,19 +1349,10 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
 
     rp.setBindGroup(0, this._globalBindGroup);
 
-    const instancedObjects = this._scratchInstancedObjects;
-    const standardObjects = this._scratchStandardObjects;
-    instancedObjects.length = 0;
-    standardObjects.length = 0;
-
-    for (let i = 0; i < objects.length; i++) {
-      const o = objects[i];
-      if (o instanceof InstancedMesh) {
-        instancedObjects.push(o!);
-      } else {
-        standardObjects.push(o!);
-      }
-    }
+    const split = this._batchSplit;
+    splitByInstancing(objects, this._scratchStandardObjects, this._scratchInstancedObjects, split);
+    const instancedObjects = split.instanced;
+    const standardObjects = split.standard;
 
     const mat = objects[0]?.material;
     if (!mat) return;
@@ -1515,6 +1509,7 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     // dynamic offset into the per-frame object ring and the per-frame material/global bind
     // groups change each frame, so a recorded bundle would be invalid by the next one.
     let lastGeo: object | undefined;
+    const texVersion = this._textures.textureSetVersion(manifest.textures);
     for (const obj of drawList) {
       if (!obj.geometry) continue;
       if (isInstanced) {
@@ -1526,7 +1521,7 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
       }
 
       this._pipelineCache.acquirePipeline(obj, pipelineKey);
-      this._textures.acquireTextures(obj, manifest.textures);
+      this._textures.acquireTextures(obj, manifest.textures, texVersion);
 
       const objOffset = this._getObjectSlotOffset(obj, manifest, matUuid, vMat);
       rp.setBindGroup(2, this._objectRing.bindGroup, [objOffset]);
@@ -1753,33 +1748,36 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     }
     rp.setBindGroup(2, this._objectRing.bindGroup, [slot]);
 
+    const texVersion = this._textures.textureSetVersion(manifest.textures);
     for (let r = 0; r < runs.length; r += 2) {
       const start = runs[r]!;
       const end = runs[r + 1]!;
       const count = end - start;
 
-      let gCache: WebGPUGeoCacheEntry | undefined;
+      // One buffer lookup per run (all members share the geometry); every member still holds its
+      // own geometry/pipeline/texture reference, each an O(1) check once it is resident.
+      const geo = runObjects[start]!.geometry!;
+      const gCache = this._geometryCache.getGeoCache(runObjects[start]!, geo);
       for (let j = start; j < end; j++) {
         const obj = runObjects[j]!;
         this._pipelineCache.acquirePipeline(obj, cache.key);
-        this._textures.acquireTextures(obj, manifest.textures);
-        // Per object, so each one's geometry refcount stays tracked like on the per-object path.
-        gCache = this._geometryCache.getGeoCache(obj, obj.geometry!);
+        this._textures.acquireTextures(obj, manifest.textures, texVersion);
+        this._geometryCache.holdGeometry(obj, geo, gCache);
       }
 
-      this._fallback.ensureDummyBufferSize(Math.max(gCache!.vertexCount, count));
-      rp.setVertexBuffer(0, gCache!.vb);
-      rp.setVertexBuffer(1, gCache!.nb || this._fallback.dummyNormalBuffer);
-      rp.setVertexBuffer(2, gCache!.uvb || this._fallback.dummyUvBuffer);
-      rp.setVertexBuffer(3, gCache!.tb || this._fallback.dummyTangentBuffer);
-      rp.setVertexBuffer(4, gCache!.jb || this._fallback.dummyJointsBuffer);
-      rp.setVertexBuffer(5, gCache!.wb || this._fallback.dummyWeightsBuffer);
+      this._fallback.ensureDummyBufferSize(Math.max(gCache.vertexCount, count));
+      rp.setVertexBuffer(0, gCache.vb);
+      rp.setVertexBuffer(1, gCache.nb || this._fallback.dummyNormalBuffer);
+      rp.setVertexBuffer(2, gCache.uvb || this._fallback.dummyUvBuffer);
+      rp.setVertexBuffer(3, gCache.tb || this._fallback.dummyTangentBuffer);
+      rp.setVertexBuffer(4, gCache.jb || this._fallback.dummyJointsBuffer);
+      rp.setVertexBuffer(5, gCache.wb || this._fallback.dummyWeightsBuffer);
 
       const offset = this._instanceRing.writeRun(runObjects, start, end);
       rp.setVertexBuffer(6, this._instanceRing.buffer, offset, count * 64);
       rp.setVertexBuffer(7, this._fallback.dummyUvBuffer);
 
-      this._drawGeometry(rp, gCache!, topology, wireframeMode, count);
+      this._drawGeometry(rp, gCache, topology, wireframeMode, count);
     }
   }
 

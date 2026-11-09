@@ -53,10 +53,11 @@ export class GPUGeometryCache {
   }
 
   public getGeoCache(obj: Object3D, geo: GeometryDataInterface): WebGPUGeoCacheEntry {
+    // Hot path: runs per object and per pass (tens of thousands of calls per frame). No closure
+    // may live in this function body -- a closure capturing `this`, even in the untaken upload
+    // branch, makes V8 allocate a context object on EVERY call (~20 B, measured).
     let c = this._geoCache.get(geo);
     if (!c || geo.needsUpdate) {
-      const createBuf = (data: ArrayBufferView, usage: number): GPUBuffer =>
-        this._createBuffer(data, usage);
       if (c && geo.needsUpdate) {
         this._device.queue.writeBuffer(c.vb, 0, geo.vertices);
         if (c.nb && geo.normals) this._device.queue.writeBuffer(c.nb, 0, geo.normals);
@@ -64,36 +65,36 @@ export class GPUGeometryCache {
         if (c.cb && geo.colors?.length) this._device.queue.writeBuffer(c.cb, 0, geo.colors);
         for (const r of c.lineRibbons) r.dirty = true;
         geo.needsUpdate = false;
-        this._acquireGeoCache(obj, geo, c);
+        this.holdGeometry(obj, geo, c);
         return c;
       }
       c = {
-        vb: createBuf(geo.vertices, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST),
+        vb: this._createBuffer(geo.vertices, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST),
         nb: geo.normals?.length
-          ? createBuf(geo.normals, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST)
+          ? this._createBuffer(geo.normals, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST)
           : undefined,
-        uvb: geo.uvs?.length ? createBuf(geo.uvs, GPUBufferUsage.VERTEX) : undefined,
+        uvb: geo.uvs?.length ? this._createBuffer(geo.uvs, GPUBufferUsage.VERTEX) : undefined,
         tb: geo.tangents?.length
-          ? createBuf(geo.tangents, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST)
+          ? this._createBuffer(geo.tangents, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST)
           : undefined,
         cb: geo.colors?.length
-          ? createBuf(geo.colors, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST)
+          ? this._createBuffer(geo.colors, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST)
           : undefined,
         jb: geo.joints?.length
-          ? createBuf(
+          ? this._createBuffer(
               geo.joints instanceof Float32Array ? geo.joints : new Float32Array(geo.joints),
               GPUBufferUsage.VERTEX,
             )
           : undefined,
         wb: geo.weights?.length
-          ? createBuf(
+          ? this._createBuffer(
               geo.weights instanceof Float32Array ? geo.weights : new Float32Array(geo.weights),
               GPUBufferUsage.VERTEX,
             )
           : undefined,
-        ib: geo.indices?.length ? createBuf(geo.indices, GPUBufferUsage.INDEX) : undefined,
+        ib: geo.indices?.length ? this._createBuffer(geo.indices, GPUBufferUsage.INDEX) : undefined,
         wib: geo.wireframeIndices?.length
-          ? createBuf(geo.wireframeIndices, GPUBufferUsage.INDEX)
+          ? this._createBuffer(geo.wireframeIndices, GPUBufferUsage.INDEX)
           : undefined,
         indexCount: geo.indices?.length || 0,
         wireframeIndexCount: geo.wireframeIndices?.length || 0,
@@ -108,7 +109,7 @@ export class GPUGeometryCache {
       this._geoCache.set(geo, c);
       geo.needsUpdate = false;
     }
-    this._acquireGeoCache(obj, geo, c);
+    this.holdGeometry(obj, geo, c);
     return c;
   }
 
@@ -179,12 +180,9 @@ export class GPUGeometryCache {
    * Tracks per-object geometry references so `releaseGeometryFor` can correctly
    * free buffers once nothing references them anymore -- even when geometry is shared
    * across many objects (see apps/showcases/19) or swapped on a live object at runtime.
+   * Public for instance runs: one `getGeoCache()` per run, then this O(1) check per member.
    */
-  private _acquireGeoCache(
-    obj: Object3D,
-    geo: GeometryDataInterface,
-    c: WebGPUGeoCacheEntry,
-  ): void {
+  public holdGeometry(obj: Object3D, geo: GeometryDataInterface, c: WebGPUGeoCacheEntry): void {
     const lastGeo = this._lastKnownGeometry.get(obj);
     if (lastGeo !== geo) {
       if (lastGeo) this.releaseGeometryFor(obj);

@@ -13,7 +13,7 @@ import type { Texture, CubeTexture } from "../../textures/index.js";
 import { RenderTargetCube } from "../../textures/RenderTargetCube.js";
 import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
 import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
-import { writeLane } from "../MaterialLanes.js";
+import { writeLane4 } from "../MaterialLanes.js";
 import type { MaterialLane } from "../MaterialLanes.js";
 import { Vector2D } from "../../../math/index.js";
 import type { InspectorField } from "../../Inspectable.js";
@@ -630,58 +630,73 @@ export class StandardMaterial extends AbstractMaterial {
     props["u_useReflectionMap"] = this.reflectionMap ? 1.0 : 0.0;
     props["u_reflectivity"] = this.reflectivity;
     // Pack through the typed lane table -- the table entry is the single source of truth.
-    writeLane(this._renderManifest, StandardMaterial._LANES[0], [
+    writeLane4(
+      this._renderManifest,
+      StandardMaterial._LANES[0],
       this.reflectionFresnelBlend,
       0,
       0,
       0,
-    ]);
+    );
     // Sheen travels decoupled from u_specColor (emissive) in _LANES[1]; see the lane's contract note.
-    writeLane(this._renderManifest, StandardMaterial._LANES[1], [
+    writeLane4(
+      this._renderManifest,
+      StandardMaterial._LANES[1],
       this.sheenColor.r,
       this.sheenColor.g,
       this.sheenColor.b,
       this.hasSheenSetup ? 1 : 0,
-    ]);
+    );
     // P3/S1 R1: attenuationColor travels LINEAR/RAW in _LANES[2] so the Beer-Lambert kernel gets the
     // real volumetric absorption colour instead of albedo (see the lane table contract note).
-    writeLane(this._renderManifest, StandardMaterial._LANES[2], [
+    writeLane4(
+      this._renderManifest,
+      StandardMaterial._LANES[2],
       this.attenuationColor.r,
       this.attenuationColor.g,
       this.attenuationColor.b,
       1.0,
-    ]);
+    );
     const specularSetup = this.hasSpecularSetup;
     const specularLinear = this.specularColor.toLinear(StandardMaterial._specularLinear);
     const f0Ior = Math.pow((this.ior - 1) / (this.ior + 1), 2);
-    writeLane(this._renderManifest, StandardMaterial._LANES[3], [
+    writeLane4(
+      this._renderManifest,
+      StandardMaterial._LANES[3],
       f0Ior * specularLinear.r,
       f0Ior * specularLinear.g,
       f0Ior * specularLinear.b,
       specularSetup ? 1 : 0,
-    ]);
-    writeLane(this._renderManifest, StandardMaterial._LANES[4], [this.specularFactor, 0, 0, 0]);
-    writeLane(this._renderManifest, StandardMaterial._LANES[5], [
+    );
+    writeLane4(this._renderManifest, StandardMaterial._LANES[4], this.specularFactor, 0, 0, 0);
+    writeLane4(
+      this._renderManifest,
+      StandardMaterial._LANES[5],
       this.anisotropyStrength,
       Math.cos(this.anisotropyRotation),
       Math.sin(this.anisotropyRotation),
       0,
-    ]);
-    writeLane(this._renderManifest, StandardMaterial._LANES[6], [
+    );
+    writeLane4(
+      this._renderManifest,
+      StandardMaterial._LANES[6],
       this.iridescenceFactor,
       this.iridescenceIor,
       this.iridescenceThicknessMinimum,
       this.iridescenceThicknessMaximum,
-    ]);
-    writeLane(this._renderManifest, StandardMaterial._LANES[7], [
+    );
+    writeLane4(
+      this._renderManifest,
+      StandardMaterial._LANES[7],
       this.backlight.r,
       this.backlight.g,
       this.backlight.b,
       this.backlightThickness,
-    ]);
+    );
     props["u_time"] = this.time;
 
-    const flags: string[] = [];
+    const flags = this._manifestFlags;
+    flags.length = 0;
     if (
       this.diffuseMap &&
       "isTextureArray" in this.diffuseMap &&
@@ -735,7 +750,7 @@ export class StandardMaterial extends AbstractMaterial {
     if (this.unlit) flags.push(ShaderFlag.UNLIT);
     if (this.hasBacklight) flags.push(ShaderFlag.BACKLIGHT);
 
-    this._renderManifest.flags = flags;
+    this._commitFlags();
 
     if (this._renderManifest.state) {
       this._renderManifest.state.blending = this.transparent

@@ -35,7 +35,10 @@ interface Internals {
   _renderInstanceRun: ReturnType<typeof vi.fn>;
   _quality: { autoInstancing?: boolean };
   _uploadModelMatrix: ReturnType<typeof vi.fn>;
-  _textures: { acquireTextures: ReturnType<typeof vi.fn> };
+  _textures: {
+    acquireTextures: ReturnType<typeof vi.fn>;
+    textureSetVersion: ReturnType<typeof vi.fn>;
+  };
   _geometry: { getOrCreateMesh: ReturnType<typeof vi.fn> };
   _renderShadowScene: (
     shaderId: string,
@@ -87,7 +90,7 @@ function setup(): Setup {
   r._renderInstancedObject = vi.fn();
   r._renderInstanceRun = vi.fn();
   r._uploadModelMatrix = vi.fn();
-  r._textures = { acquireTextures: vi.fn() };
+  r._textures = { acquireTextures: vi.fn(), textureSetVersion: vi.fn(() => -1) };
   r._geometry = {
     getOrCreateMesh: vi.fn(() => ({
       vaoCapable: true,

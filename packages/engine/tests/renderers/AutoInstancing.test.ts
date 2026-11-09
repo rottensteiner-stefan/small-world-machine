@@ -3,7 +3,9 @@ import {
   AUTO_INSTANCING_MIN_RUN,
   groupByGeometryForInstancing,
   partitionInstanceRuns,
+  splitByInstancing,
 } from "../../src/renderers/AutoInstancing.js";
+import type { InstancingSplit } from "../../src/renderers/AutoInstancing.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Cube } from "../../src/geometry/Cube.js";
 import { SkinnedMesh } from "../../src/core/animation/SkinnedMesh.js";
@@ -78,13 +80,7 @@ describe("groupByGeometryForInstancing", () => {
   it(`ADRs the scattered-stretch gap (ADR 0046 A2): interleaved same-geometry objects that never
       formed a run before become one run after grouping`, () => {
     // No stretch of >=4 identical geometries in the input order, but 7 a's and 6 b's in total.
-    const list = [
-      ...objs(a, 3),
-      ...objs(b, 3),
-      ...objs(a, 3),
-      ...objs(b, 3),
-      ...objs(a, 1),
-    ];
+    const list = [...objs(a, 3), ...objs(b, 3), ...objs(a, 3), ...objs(b, 3), ...objs(a, 1)];
     expect(split(list).runs).toEqual([]); // the naive order yields no run
 
     const grouped = list.slice();
@@ -126,5 +122,67 @@ describe("groupByGeometryForInstancing", () => {
     expect(seed).toBe(2); // exactly two unique geometries were recorded
     const reseed = groupByGeometryForInstancing([...objs(a, 4), ...objs(b, 4)], ordinals, seed);
     expect(reseed).toBe(2); // known geometries are not re-ordered by a fresh traversal
+  });
+});
+
+describe("zero-GC reuse (per-frame scratch lists)", () => {
+  const a = new Cube().getGeometryData();
+  const b = new Cube({ size: 2 }).getGeometryData();
+
+  it("partitionInstanceRuns shrinks reused scratch lists to the new content", () => {
+    const out = { runObjects: [] as Object3D[], runs: [] as number[], rest: [] as Object3D[] };
+    partitionInstanceRuns(objs(a, 12), out.runObjects, out.runs, out.rest);
+    const small = objs(b, 5);
+    partitionInstanceRuns(small, out.runObjects, out.runs, out.rest);
+    expect(out.runs).toEqual([0, 5]);
+    expect(out.runObjects).toEqual(small);
+    expect(out.rest).toEqual([]);
+  });
+
+  it("groupByGeometryForInstancing leaves an already grouped list untouched (no sort)", () => {
+    const list = [...objs(a, 4), ...objs(b, 4)];
+    const ordinals = new WeakMap<GeometryDataInterface, number>();
+    groupByGeometryForInstancing(list, ordinals, 0);
+    const sortSpy = { called: false };
+    const original = list.sort.bind(list);
+    list.sort = ((cmp?: (x: Object3D, y: Object3D) => number) => {
+      sortSpy.called = true;
+      return original(cmp);
+    }) as typeof list.sort;
+    groupByGeometryForInstancing(list, ordinals, 2);
+    expect(sortSpy.called).toBe(false);
+  });
+
+  it("splitByInstancing passes a uniform list through without copying", () => {
+    const out: InstancingSplit = { standard: [], instanced: [] };
+    const plain = objs(a, 6);
+    splitByInstancing(plain, [], [], out);
+    expect(out.standard).toBe(plain);
+    expect(out.instanced).toHaveLength(0);
+
+    const inst = [
+      new InstancedMesh("inst", a, new BasicMaterial(), 4),
+      new InstancedMesh("inst", a, new BasicMaterial(), 4),
+    ];
+    splitByInstancing(inst, [], [], out);
+    expect(out.instanced).toBe(inst);
+    expect(out.standard).toHaveLength(0);
+  });
+
+  it("splitByInstancing copies a mixed list into the scratch lists", () => {
+    const out: InstancingSplit = { standard: [], instanced: [] };
+    const plain = objs(a, 3);
+    const inst = new InstancedMesh("inst", a, new BasicMaterial(), 4);
+    const standardScratch: Object3D[] = [];
+    const instancedScratch: Object3D[] = [];
+    splitByInstancing(
+      [plain[0]!, inst, plain[1]!, plain[2]!],
+      standardScratch,
+      instancedScratch,
+      out,
+    );
+    expect(out.standard).toBe(standardScratch);
+    expect(out.standard).toEqual(plain);
+    expect(out.instanced).toEqual([inst]);
   });
 });

@@ -37,6 +37,10 @@ export abstract class AbstractMaterial implements ShaderProvider {
 
   /** Cached render manifest to avoid frequent allocations. */
   protected _renderManifest: RenderManifest | undefined = undefined;
+  /** Reused per `getRenderManifest()` call: subclasses collect their shader flags here. */
+  protected readonly _manifestFlags: string[] = [];
+  /** Last committed flag list; handed out unchanged while the flags stay equal (zero-GC). */
+  private _committedFlags: string[] | undefined = undefined;
 
   /**
    * Creates a new material. It does not register itself anywhere: the renderer that draws it hands
@@ -117,6 +121,23 @@ export abstract class AbstractMaterial implements ShaderProvider {
   }
 
   /**
+   * Publishes `_manifestFlags` as `manifest.flags` without allocating while the flag set is stable:
+   * a fresh copy is made only when the content changed, so no consumer ever sees a published
+   * array mutate. `getRenderManifest()` runs per object and per pass (thousands of times per frame
+   * for a shared material), so a new array per call was a dominant GC source.
+   */
+  protected _commitFlags(): void {
+    if (!this._renderManifest) return;
+    const scratch = this._manifestFlags;
+    let committed = this._committedFlags;
+    if (!committed || committed.length !== scratch.length || !sameEntries(committed, scratch)) {
+      committed = scratch.slice();
+      this._committedFlags = committed;
+    }
+    this._renderManifest.flags = committed;
+  }
+
+  /**
    * Helper to synchronize the base material state (color, culling, etc.) without allocating new objects.
    */
   protected _syncBaseManifestState(): void {
@@ -159,4 +180,11 @@ export abstract class AbstractMaterial implements ShaderProvider {
       props["u_texRotation"] = 0;
     }
   }
+}
+
+function sameEntries(a: readonly string[], b: readonly string[]): boolean {
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }

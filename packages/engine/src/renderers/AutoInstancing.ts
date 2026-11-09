@@ -32,9 +32,11 @@ export function partitionInstanceRuns(
   rest: Object3D[],
   requireCastShadow: boolean = false,
 ): void {
-  runObjects.length = 0;
-  runs.length = 0;
-  rest.length = 0;
+  // Index writes + one final `length = n` instead of `length = 0` + push(): V8 drops an array's
+  // backing store on `length = 0`, so these per-pass scratch lists regrew from zero every frame.
+  let nRun = 0;
+  let nRuns = 0;
+  let nRest = 0;
 
   let i = 0;
   while (i < objects.length) {
@@ -51,14 +53,17 @@ export function partitionInstanceRuns(
     }
 
     if (end - i >= AUTO_INSTANCING_MIN_RUN) {
-      runs.push(runObjects.length);
-      for (let j = i; j < end; j++) runObjects.push(objects[j]!);
-      runs.push(runObjects.length);
+      runs[nRuns++] = nRun;
+      for (let j = i; j < end; j++) runObjects[nRun++] = objects[j]!;
+      runs[nRuns++] = nRun;
     } else {
-      for (let j = i; j < end; j++) rest.push(objects[j]!);
+      for (let j = i; j < end; j++) rest[nRest++] = objects[j]!;
     }
     i = end;
   }
+  runObjects.length = nRun;
+  runs.length = nRuns;
+  rest.length = nRest;
 }
 
 /**
@@ -87,12 +92,83 @@ export function groupByGeometryForInstancing(
       ordinals.set(geometry, nextOrdinal++);
     }
   }
-  objects.sort((a, b) => {
-    const ga = a.geometry;
-    const gb = b.geometry;
-    if (ga === undefined) return gb === undefined ? 0 : 1;
-    if (gb === undefined) return -1;
-    return (ordinals.get(ga) ?? 0) - (ordinals.get(gb) ?? 0);
-  });
+  // The same list is grouped again by every pass of a frame (main, pre-pass, each cascade) and
+  // scene order is often grouped already: an O(n) check skips the sort and its temp buffers.
+  _sortOrdinals = ordinals;
+  if (!isGrouped(objects)) objects.sort(compareByGeometryOrdinal);
+  _sortOrdinals = undefined;
   return nextOrdinal;
+}
+
+/** Ordinal table of the running `groupByGeometryForInstancing` call (module-level comparator, so
+ * no closure is allocated per call; only ever set synchronously around the sort). */
+let _sortOrdinals: WeakMap<GeometryDataInterface, number> | undefined;
+
+/** Sort key: geometry ordinal; objects without geometry go last (matches the comparator). */
+function geometryKey(o: Object3D): number {
+  const g = o.geometry;
+  return g === undefined ? Number.POSITIVE_INFINITY : (_sortOrdinals!.get(g) ?? 0);
+}
+
+function compareByGeometryOrdinal(a: Object3D, b: Object3D): number {
+  const ka = geometryKey(a);
+  const kb = geometryKey(b);
+  return ka === kb ? 0 : ka < kb ? -1 : 1;
+}
+
+function isGrouped(objects: readonly Object3D[]): boolean {
+  let prev = geometryKey(objects[0]!);
+  for (let i = 1; i < objects.length; i++) {
+    const key = geometryKey(objects[i]!);
+    if (key < prev) return false;
+    prev = key;
+  }
+  return true;
+}
+
+/** Reused result slots of {@link splitByInstancing} (zero-GC). */
+export interface InstancingSplit {
+  standard: Object3D[];
+  instanced: Object3D[];
+}
+
+const NO_OBJECTS: Object3D[] = [];
+
+/**
+ * Splits a draw list into plain objects and `InstancedMesh`es. A uniform list (the common case:
+ * one batch = one material, no hand-built instancing) is passed through as-is instead of being
+ * copied into a scratch list -- per pass and per cascade that copy dominated the remaining
+ * per-frame allocation. Only a mixed list is copied (index writes, trimmed once).
+ */
+export function splitByInstancing(
+  objects: Object3D[],
+  standardScratch: Object3D[],
+  instancedScratch: Object3D[],
+  out: InstancingSplit,
+): void {
+  let nInstanced = 0;
+  for (let i = 0; i < objects.length; i++) {
+    if (objects[i] instanceof InstancedMesh) nInstanced++;
+  }
+  if (nInstanced === 0) {
+    out.standard = objects;
+    out.instanced = NO_OBJECTS;
+    return;
+  }
+  if (nInstanced === objects.length) {
+    out.standard = NO_OBJECTS;
+    out.instanced = objects;
+    return;
+  }
+  let nI = 0;
+  let nS = 0;
+  for (let i = 0; i < objects.length; i++) {
+    const o = objects[i]!;
+    if (o instanceof InstancedMesh) instancedScratch[nI++] = o;
+    else standardScratch[nS++] = o;
+  }
+  instancedScratch.length = nI;
+  standardScratch.length = nS;
+  out.standard = standardScratch;
+  out.instanced = instancedScratch;
 }

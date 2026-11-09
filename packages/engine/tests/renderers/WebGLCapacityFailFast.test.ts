@@ -89,7 +89,7 @@ describe("WebGL2 capacity fail-fast validation", () => {
       acquireProgram: vi.fn(),
       programCacheKey: vi.fn(() => "testKey"),
     };
-    renderer._textures = { acquireTextures: vi.fn() };
+    renderer._textures = { acquireTextures: vi.fn(), textureSetVersion: vi.fn(() => -1) };
     renderer._instanceBuffers = new WeakMap();
     renderer._instanceDataBuffers = new WeakMap();
     renderer._geometry = {
@@ -190,7 +190,7 @@ describe("WebGL1 capacity fail-fast validation", () => {
       programCacheKey: vi.fn(() => "testKey"),
       acquireProgram: vi.fn(),
     };
-    renderer._textures = { acquireTextures: vi.fn() };
+    renderer._textures = { acquireTextures: vi.fn(), textureSetVersion: vi.fn(() => -1) };
     renderer._geometry = {
       getOrCreateMesh: vi.fn(() => ({
         bind: vi.fn(),

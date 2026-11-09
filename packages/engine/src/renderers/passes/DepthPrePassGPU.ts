@@ -9,6 +9,8 @@ import type { Object3D } from "../../core/Object3D.js";
 import type { Vector3D } from "../../math/index.js";
 import { MathUtils } from "../../math/index.js";
 import type { Texture } from "../../core/textures/index.js";
+import type { AbstractMaterial } from "../../core/materials/AbstractMaterial.js";
+import type { RenderManifest } from "../shaders/RenderManifest.js";
 
 const _scratchInstanced: InstancedMesh[] = [];
 const _scratchStandard: Object3D[] = [];
@@ -47,6 +49,12 @@ export class DepthPrePassGPU implements RenderPass {
    * across frames so `_getMaterialBindGroup`'s cache (and the object-uniform ring's per-slot
    * cache, both keyed by matUuid) actually get reused instead of rebuilding every frame. */
   private readonly _alphaGroupUuids = new WeakMap<Texture, string>();
+
+  /** Copies the plain prefix `objects[0..end)` into the scratch list; returns its length. */
+  private _leavePassThrough(objects: readonly Object3D[], end: number): number {
+    for (let k = 0; k < end; k++) _scratchStandard[k] = objects[k]!;
+    return end;
+  }
 
   public execute(
     renderer: WebGPURenderer,
@@ -101,9 +109,16 @@ export class DepthPrePassGPU implements RenderPass {
       else if (batch!.topology === Topology.LINE_STRIP) topology = Topology.LINE_STRIP;
 
       const objects = batch!.objects;
-      _scratchInstanced.length = 0;
-      _scratchStandard.length = 0;
+      // Index writes + final `length = n` (V8 drops the backing store on `length = 0`).
+      let nInstanced = 0;
+      let nStandard = 0;
+      // While every object takes the plain opaque path, the batch list itself is that path (no
+      // copy); the first deviating object switches to the scratch list (prefix copied once).
+      let passThrough = true;
       this._alphaGroups.clear();
+      // A batch is keyed by material, so consecutive objects share it: build its manifest once.
+      let lastMaterial: AbstractMaterial | undefined = undefined;
+      let objManifest: RenderManifest | undefined = undefined;
 
       // Split into the fast opaque path (no per-object texture -- everything that doesn't
       // alpha-test) and one group per alpha-cutout diffuseMap: a shared depth-only pipeline
@@ -115,7 +130,10 @@ export class DepthPrePassGPU implements RenderPass {
       // lifecycle).
       for (let i = 0; i < objects.length; i++) {
         const obj = objects[i]!;
-        const objManifest = obj.material?.getRenderManifest();
+        if (obj.material !== lastMaterial) {
+          lastMaterial = obj.material;
+          objManifest = lastMaterial?.getRenderManifest();
+        }
         if (
           objManifest?.state?.skipDepthPrePass === true ||
           objManifest?.state?.depthWrite === false ||
@@ -123,6 +141,8 @@ export class DepthPrePassGPU implements RenderPass {
           obj.material?.depthWrite === false ||
           obj.material?.depthTest === false
         ) {
+          if (passThrough) nStandard = this._leavePassThrough(objects, i);
+          passThrough = false;
           continue;
         }
         const extraParams = objManifest?.properties["u_extraParams"] as number[] | undefined;
@@ -132,6 +152,10 @@ export class DepthPrePassGPU implements RenderPass {
             ? (objManifest!.textures["u_diffuseMap"] as Texture | undefined)
             : undefined;
 
+        if (passThrough && (diffuseMap || obj instanceof InstancedMesh)) {
+          nStandard = this._leavePassThrough(objects, i);
+          passThrough = false;
+        }
         if (diffuseMap) {
           let group = this._alphaGroups.get(diffuseMap);
           if (!group) {
@@ -146,22 +170,25 @@ export class DepthPrePassGPU implements RenderPass {
           if (obj instanceof InstancedMesh) group.instanced.push(obj);
           else group.standard.push(obj);
         } else if (obj instanceof InstancedMesh) {
-          _scratchInstanced.push(obj);
-        } else {
-          _scratchStandard.push(obj);
+          _scratchInstanced[nInstanced++] = obj;
+        } else if (!passThrough) {
+          _scratchStandard[nStandard++] = obj;
         }
       }
+      _scratchInstanced.length = nInstanced;
+      if (!passThrough) _scratchStandard.length = nStandard;
+      const standardList = passThrough ? objects : _scratchStandard;
 
       // Slot 0 (VIEW_SLOT_MAIN_CAMERA) is already correct this frame, written once by
       // _updateGlobalBuffers() -- its offset is always 0, no _setViewMatrix() call needed.
-      if (_scratchStandard.length > 0 || _scratchInstanced.length > 0) {
+      if (standardList.length > 0 || _scratchInstanced.length > 0) {
         this._depthMaterial.diffuseMap = undefined;
         const opaqueManifest = this._depthMaterial.getRenderManifest();
 
-        if (_scratchStandard.length > 0) {
+        if (standardList.length > 0) {
           renderer._renderSubgroup(
             rp,
-            _scratchStandard,
+            standardList,
             false,
             this._depthMaterial.uuid,
             opaqueManifest,

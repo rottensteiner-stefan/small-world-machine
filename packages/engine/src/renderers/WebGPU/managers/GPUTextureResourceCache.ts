@@ -1,6 +1,7 @@
 import type { Object3D, Texture, TextureArray } from "../../../core/index.js";
 import { CubeTexture } from "../../../core/index.js";
 import { RenderTarget, RenderTargetCube } from "../../../core/textures/index.js";
+import { TextureHoldings } from "../../TextureHoldings.js";
 import type { QualityConfig } from "../../../interfaces/index.js";
 import type { CompressedTextureFormat } from "../../../enums/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
@@ -57,8 +58,7 @@ export class GPUTextureResourceCache {
   >();
   private _texRefCounts: Map<Texture, number> = new Map();
   private _texCubeRefCounts: Map<CubeTexture, number> = new Map();
-  private _lastKnownTextures: WeakMap<Object3D, Record<string, Texture | CubeTexture | undefined>> =
-    new WeakMap();
+  private readonly _holdings: TextureHoldings<Texture | CubeTexture>;
   private _samplerCache: Map<string, GPUSampler> = new Map();
 
   /** GPU-side mip-chain generator for runtime 2D textures -- one bilinear blit per level, see
@@ -76,6 +76,10 @@ export class GPUTextureResourceCache {
   constructor(device: GPUDevice, fallback: GPUFallbackResources) {
     this._device = device;
     this._fallback = fallback;
+    this._holdings = new TextureHoldings(
+      (tex) => this._acquireTexture(tex),
+      (tex) => this._releaseTexture(tex),
+    );
 
     this._mipGenBGL = device.createBindGroupLayout({
       entries: [
@@ -494,8 +498,9 @@ export class GPUTextureResourceCache {
 
   /**
    * Tracks that `obj` currently depends on the textures in `textures` (typically
-   * `material.getRenderManifest().textures`). Called once per object per frame from
-   * the render loop -- but not always from the same pass: `MainRenderPass`,
+   * `material.getRenderManifest().textures`). Called per object and pass from the render
+   * loop; with `setVersion` (`textureSetVersion()` once per batch) an object that already holds the
+   * record's current contents skips the per-key diff -- but not always from the same pass: `MainRenderPass`,
    * `DepthPrePassGPU`, `CascadedShadowPassGPU` and `SpotShadowPassGPU` all call this for the
    * same `obj` with DIFFERENT manifests (the depth/shadow passes use a single shared
    * depth-only material, so their manifest only carries the texture keys that material
@@ -511,22 +516,15 @@ export class GPUTextureResourceCache {
   public acquireTextures(
     obj: Object3D,
     textures: Record<string, Texture | CubeTexture | undefined>,
+    setVersion = -1,
   ): void {
-    let lastTextures = this._lastKnownTextures.get(obj);
-    if (!lastTextures) {
-      lastTextures = {};
-      this._lastKnownTextures.set(obj, lastTextures);
-    }
+    this._holdings.acquire(obj, textures, setVersion);
+  }
 
-    for (const key in textures) {
-      const current = textures[key];
-      const last = lastTextures[key];
-      if (current !== last) {
-        if (last) this._releaseTexture(last);
-        if (current) this._acquireTexture(current);
-        lastTextures[key] = current;
-      }
-    }
+  /** Version of `textures`' current contents for `acquireTextures(obj, textures, version)`:
+   * call once per batch so each object of the batch skips the per-key diff (`TextureHoldings`). */
+  public textureSetVersion(textures: Record<string, Texture | CubeTexture | undefined>): number {
+    return this._holdings.setVersion(textures);
   }
 
   /**
@@ -545,13 +543,7 @@ export class GPUTextureResourceCache {
   }
 
   public releaseObjectTextures(obj: Object3D): void {
-    const textures = this._lastKnownTextures.get(obj);
-    if (!textures) return;
-    this._lastKnownTextures.delete(obj);
-    for (const key in textures) {
-      const tex = textures[key];
-      if (tex) this._releaseTexture(tex);
-    }
+    this._holdings.releaseObject(obj);
   }
 
   private _acquireTexture(tex: Texture | CubeTexture): void {

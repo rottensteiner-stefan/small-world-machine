@@ -1,6 +1,7 @@
 import type { Object3D, TextureArray, Texture } from "../../../core/index.js";
 import { CubeTexture } from "../../../core/index.js";
 import { RenderTarget, RenderTargetCube } from "../../../core/textures/index.js";
+import { TextureHoldings } from "../../TextureHoldings.js";
 import type { QualityConfig } from "../../../interfaces/index.js";
 import type { CompressedTextureFormat } from "../../../enums/index.js";
 import { TextureFilter, TextureWrap } from "../../../enums/index.js";
@@ -41,10 +42,7 @@ export class WebGLTextureManager {
   private _texCubeCache = new Map<CubeTexture, WebGLTexture>();
   private _texRefCounts = new Map<Texture, number>();
   private _texCubeRefCounts = new Map<CubeTexture, number>();
-  private _lastKnownTextures = new WeakMap<
-    Object3D,
-    Record<string, Texture | CubeTexture | undefined>
-  >();
+  private readonly _holdings: TextureHoldings<Texture | CubeTexture>;
 
   constructor(
     gl: WebGLRenderingContext | WebGL2RenderingContext,
@@ -55,6 +53,10 @@ export class WebGLTextureManager {
   ) {
     this._gl = gl;
     this._texCache = texCache;
+    this._holdings = new TextureHoldings(
+      (tex) => this._acquireTexture(tex),
+      (tex) => this._releaseTexture(tex),
+    );
     this._defaultTexture = defaultTexture;
     this._defaultCubeTexture = defaultCubeTexture;
     this._dialect = options.dialect ?? "glsl300";
@@ -651,40 +653,28 @@ export class WebGLTextureManager {
 
   /**
    * Tracks that `obj` currently depends on the textures in `textures` (typically
-   * `material.getRenderManifest().textures`). Called once per object per frame from
-   * the render loop. `textures` is diffed key-by-key against `obj`'s last-known
+   * `material.getRenderManifest().textures`). Called per object and pass from the render
+   * loop; with `setVersion` (`textureSetVersion()` once per batch) an object that already holds the
+   * record's current contents skips the per-key diff. `textures` is diffed key-by-key against `obj`'s last-known
    * snapshot rather than by container reference, since a material's manifest object
    * is created once and mutated in place on every `getRenderManifest()` call.
    */
   public acquireTextures(
     obj: Object3D,
     textures: Record<string, Texture | CubeTexture | undefined>,
+    setVersion = -1,
   ): void {
-    let lastTextures = this._lastKnownTextures.get(obj);
-    if (!lastTextures) {
-      lastTextures = {};
-      this._lastKnownTextures.set(obj, lastTextures);
-    }
+    this._holdings.acquire(obj, textures, setVersion);
+  }
 
-    for (const key in textures) {
-      const current = textures[key];
-      const last = lastTextures[key];
-      if (current !== last) {
-        if (last) this._releaseTexture(last);
-        if (current) this._acquireTexture(current);
-        lastTextures[key] = current;
-      }
-    }
+  /** Version of `textures`' current contents for `acquireTextures(obj, textures, version)`:
+   * call once per batch so each object of the batch skips the per-key diff (`TextureHoldings`). */
+  public textureSetVersion(textures: Record<string, Texture | CubeTexture | undefined>): number {
+    return this._holdings.setVersion(textures);
   }
 
   public releaseObjectTextures(obj: Object3D): void {
-    const textures = this._lastKnownTextures.get(obj);
-    if (!textures) return;
-    this._lastKnownTextures.delete(obj);
-    for (const key in textures) {
-      const tex = textures[key];
-      if (tex) this._releaseTexture(tex);
-    }
+    this._holdings.releaseObject(obj);
   }
 
   private _acquireTexture(tex: Texture | CubeTexture): void {

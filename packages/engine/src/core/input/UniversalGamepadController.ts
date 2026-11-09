@@ -209,6 +209,9 @@ export class UniversalGamepadController {
   private _lastUpdateFrameTime: number = -1;
   private _pollIntervalId: ReturnType<typeof setInterval> | null = null;
   private _devicesBuilt: boolean = false;
+  /** Connected-pad snapshot of the last rebuild (reused, compared in place: zero-GC per frame). */
+  private readonly _padIds: string[] = [];
+  private _openJoyCons: number = 0;
 
   constructor() {
     this._loadModule();
@@ -292,9 +295,19 @@ export class UniversalGamepadController {
     }
     this._lastUpdateFrameTime = now;
 
+    const pads =
+      typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : null;
+    // The device list only changes when pads (dis)connect: rebuilding it every frame allocated
+    // arrays, device wrappers and Sets per frame.
+    if (!force && this._devicesBuilt && !this._padsChanged(pads)) {
+      for (let i = 0; i < this._devices.length; i++) this._devices[i]!.update();
+      return;
+    }
+    this._rememberPads(pads);
+
     const standardDevices: GamepadDevice[] = [];
-    if (typeof navigator !== "undefined" && navigator.getGamepads) {
-      const gps = navigator.getGamepads();
+    if (pads) {
+      const gps = pads;
       for (let i = 0; i < gps.length; i++) {
         const gp = gps[i];
         if (gp && gp.connected) {
@@ -375,6 +388,41 @@ export class UniversalGamepadController {
     for (const dev of this._devices) {
       dev.update();
     }
+  }
+
+  private _padsChanged(pads: readonly (Gamepad | null)[] | null): boolean {
+    if (this._countOpenJoyCons() !== this._openJoyCons) return true;
+    let n = 0;
+    if (pads) {
+      for (let i = 0; i < pads.length; i++) {
+        const gp = pads[i];
+        if (!gp || !gp.connected) continue;
+        if (this._padIds[n] !== gp.id) return true;
+        n++;
+      }
+    }
+    return n !== this._padIds.length;
+  }
+
+  private _rememberPads(pads: readonly (Gamepad | null)[] | null): void {
+    this._padIds.length = 0;
+    if (pads) {
+      for (let i = 0; i < pads.length; i++) {
+        const gp = pads[i];
+        if (gp && gp.connected) this._padIds.push(gp.id);
+      }
+    }
+    this._openJoyCons = this._countOpenJoyCons();
+  }
+
+  private _countOpenJoyCons(): number {
+    const connectedMap = this._joyConModule?.connectedJoyCons;
+    if (!connectedMap) return 0;
+    let n = 0;
+    for (const jc of connectedMap.values()) {
+      if (jc.device.opened) n++;
+    }
+    return n;
   }
 
   private _hasOpenWebHIDDevice(): boolean {

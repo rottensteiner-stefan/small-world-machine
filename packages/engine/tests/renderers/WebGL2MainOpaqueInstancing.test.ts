@@ -22,7 +22,7 @@ type Fn = ReturnType<typeof vi.fn>;
 interface Internals {
   gl: { useProgram: Fn; uniform1i: Fn; uniform4fv: Fn };
   _programCache: { getProgram: Fn; programCacheKey: Fn; acquireProgram: Fn };
-  _textures: { acquireTextures: Fn };
+  _textures: { acquireTextures: Fn; textureSetVersion: Fn };
   _bindDummyShadowMaps: Fn;
   _bindSpotShadowMaps: Fn;
   _bindDirectionalShadowMaps: Fn;
@@ -53,7 +53,7 @@ function setup(): { r: Internals; instancedRun: Fn; standardObject: Fn } {
     programCacheKey: vi.fn(() => "k"),
     acquireProgram: vi.fn(),
   };
-  r._textures = { acquireTextures: vi.fn() };
+  r._textures = { acquireTextures: vi.fn(), textureSetVersion: vi.fn(() => -1) };
   r._bindDummyShadowMaps = vi.fn();
   r._bindSpotShadowMaps = vi.fn();
   r._bindDirectionalShadowMaps = vi.fn();

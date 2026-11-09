@@ -10,6 +10,8 @@ import { SkinnedMesh } from "./animation/SkinnedMesh.js";
 import type { Collidable } from "../interfaces/index.js";
 import { compareDecals } from "./decals/DecalMath.js";
 import type { Decal } from "./objects/Decal.js";
+import type { AbstractMaterial } from "./materials/AbstractMaterial.js";
+import type { RenderManifest } from "../renderers/shaders/RenderManifest.js";
 
 export interface RenderBatch {
   shaderId: string;
@@ -21,6 +23,8 @@ export interface RenderBatch {
   objects: Object3D[];
   /** Consecutive frames this batch collected no object; the scene prunes it after `BATCH_IDLE_FRAMES`. */
   idleFrames?: number;
+  /** Scene-internal fill cursor of `objects` during a collection (see `getVisibleObjectsSorted`). */
+  fill?: number;
 }
 
 /** Empty opaque batches survive this many frames (cheap re-show) before the scene drops them. */
@@ -80,6 +84,11 @@ export class Scene {
    * candidate list, which must include currently-occlusion-culled objects too so they can be
    * re-tested and un-culled -- can read this instead of walking the scene tree a second time. */
   public lastFrustumVisibleObjects: Object3D[] = [];
+  /** Collection cursors (see `getVisibleObjectsSorted`): fill index of the frustum list and the
+   * last material whose manifest was built, so a run of objects sharing it builds it once. */
+  private _frustumFill: number = 0;
+  private _collectMaterial: AbstractMaterial | undefined = undefined;
+  private _collectManifest: RenderManifest | undefined = undefined;
 
   // Global Environment (IBL)
   public irradianceMap?: import("./textures/index.js").CubeTexture;
@@ -169,8 +178,10 @@ export class Scene {
     if (obj instanceof SkinnedMesh && obj.skeleton) {
       obj.skeleton.update(obj.worldMatrix);
     }
-    for (const child of obj.children) {
-      this._updateSkinnedMeshesRecursive(child);
+    // Indexed loop: for-of allocates an iterator per node in this per-frame walk.
+    const children = obj.children;
+    for (let i = 0; i < children.length; i++) {
+      this._updateSkinnedMeshesRecursive(children[i]!);
     }
   }
 
@@ -185,8 +196,9 @@ export class Scene {
     if (obj instanceof DirectionalLight) {
       obj.updateCascades(camera);
     }
-    for (const child of obj.children) {
-      this._updateLightsRecursive(child, camera);
+    const children = obj.children;
+    for (let i = 0; i < children.length; i++) {
+      this._updateLightsRecursive(children[i]!, camera);
     }
   }
 
@@ -341,17 +353,27 @@ export class Scene {
     this._lastCamZ = camPos.z;
     this._lastVp = vp;
 
-    // Clear the persistent list without destroying the structures (Monomorphism/GC optimization)
+    // Refill the persistent lists by index and trim once at the end: `length = 0` would make V8
+    // drop the backing stores, so the (thousands-long) lists regrew from zero every frame.
     this._renderList.transparent.length = 0;
     this._renderList.decals.length = 0;
     const batches = this._renderList.opaqueBatches;
     for (let i = 0; i < batches.length; i++) {
-      batches[i]!.objects.length = 0;
+      batches[i]!.fill = 0;
     }
     this.lastOcclusionCulledCount = 0;
-    this.lastFrustumVisibleObjects.length = 0;
+    this._frustumFill = 0;
+    this._collectMaterial = undefined;
+    this._collectManifest = undefined;
 
     this._collectVisible(this.root, this._renderList);
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i]!;
+      batch.objects.length = batch.fill ?? 0;
+    }
+    this.lastFrustumVisibleObjects.length = this._frustumFill;
+    this._collectMaterial = undefined;
+    this._collectManifest = undefined;
     this._pruneIdleBatches(this._renderList);
 
     (this._renderList.decals as Decal[]).sort(compareDecals);
@@ -414,7 +436,7 @@ export class Scene {
       return;
     }
 
-    this.lastFrustumVisibleObjects.push(obj);
+    this.lastFrustumVisibleObjects[this._frustumFill++] = obj;
 
     // Hierarchical-Z occlusion culling (WebGPU-only, see docs/adr/0008-...) -- a second,
     // independent gate: frustum-culled objects never reach here, and this never overrides
@@ -428,13 +450,18 @@ export class Scene {
       (obj.geometry || (obj as Object3D & { positionBuffer?: unknown }).positionBuffer) &&
       obj.material
     ) {
-      const manifest = obj.material.getRenderManifest();
+      // Scene order keeps parts sharing a material together: build each manifest once per run.
+      if (obj.material !== this._collectMaterial) {
+        this._collectMaterial = obj.material;
+        this._collectManifest = obj.material.getRenderManifest();
+      }
+      const manifest = this._collectManifest!;
 
       if (manifest.state?.isDecal) {
         renderList.decals.push(obj);
       } else if (manifest.state?.transparent) {
         renderList.transparent.push(obj);
-      } else if ((manifest.flags ?? []).includes(ShaderFlag.TRANSMISSION)) {
+      } else if (manifest.flags?.includes(ShaderFlag.TRANSMISSION) === true) {
         // KHR_materials_transmission: the fragment block samples `u_opaqueMap`, which the
         // renderers only populate via the opaque-scene capture of the TRANSPARENT pass
         // (`copyToOpaqueTexture` / `captureOpaqueTexture`). A transmission material left in the
@@ -462,7 +489,7 @@ export class Scene {
 
         let batch = matMap.get(matUuid);
         if (!batch) {
-          batch = { shaderId, topology, matUuid, wireframeMode, shadowWidth, objects: [] };
+          batch = { shaderId, topology, matUuid, wireframeMode, shadowWidth, objects: [], fill: 0 };
           matMap.set(matUuid, batch);
           renderList.opaqueBatches.push(batch);
         } else {
@@ -470,7 +497,9 @@ export class Scene {
           batch.wireframeMode = wireframeMode;
           batch.shadowWidth = shadowWidth;
         }
-        batch!.objects.push(obj);
+        const fill = batch.fill ?? 0;
+        batch.objects[fill] = obj;
+        batch.fill = fill + 1;
       }
     }
 

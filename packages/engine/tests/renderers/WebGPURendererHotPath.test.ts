@@ -60,9 +60,9 @@ function makeDrawRenderer(): {
     }),
     acquirePipeline: vi.fn(),
   };
-  renderer._textures = { acquireTextures: vi.fn() };
+  renderer._textures = { acquireTextures: vi.fn(), textureSetVersion: vi.fn(() => -1) };
   const geoCache = { vertexCount: 8, vb: {}, format: "uint16" };
-  renderer._geometryCache = { getGeoCache: vi.fn(() => geoCache) };
+  renderer._geometryCache = { getGeoCache: vi.fn(() => geoCache), holdGeometry: vi.fn() };
   renderer._fallback = {
     ensureDummyBufferSize: vi.fn(),
     dummyNormalBuffer: {},
@@ -258,7 +258,9 @@ describe("WebGPURenderer._renderSubgroup: automatic instancing (ADR 0046)", () =
     expect(renderer._getObjectSlotOffset).not.toHaveBeenCalled();
     // Lifecycle bookkeeping still runs per object.
     expect(renderer._pipelineCache.acquirePipeline).toHaveBeenCalledTimes(6);
-    expect(renderer._geometryCache.getGeoCache).toHaveBeenCalledTimes(6);
+    // One buffer lookup per run, a geometry hold per member.
+    expect(renderer._geometryCache.getGeoCache).toHaveBeenCalledTimes(1);
+    expect(renderer._geometryCache.holdGeometry).toHaveBeenCalledTimes(6);
     const upload = renderer._device.queue.writeBuffer.mock.calls.at(-1)!;
     expect(Array.from((upload[2] as Float32Array).subarray(16 + 12, 16 + 15))).toEqual([1, 0, 0]);
   });

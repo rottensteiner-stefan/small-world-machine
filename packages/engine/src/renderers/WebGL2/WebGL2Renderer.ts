@@ -1408,6 +1408,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       if (!firstObj.material) continue;
 
       const manifest = firstObj.material.getRenderManifest();
+      const texVersion = this._textures.textureSetVersion(manifest.textures);
       const lineQuads = usesLineQuadShadow(batch!);
       // The edge ribbon is two-sided triangles: never culled.
       if (lineQuads) this.gl.disable(this.gl.CULL_FACE);
@@ -1441,7 +1442,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             const start = runs[r]!;
             const end = runs[r + 1]!;
             for (let j = start; j < end; j++) {
-              this._textures.acquireTextures(runObjects[j]!, manifest.textures);
+              this._textures.acquireTextures(runObjects[j]!, manifest.textures, texVersion);
             }
             this._renderInstanceRun(
               runObjects,
@@ -1496,7 +1497,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         // and when the object is the last holder of that material program, the shared program
         // is DELETED and RECOMPILED each frame (the "shader churn" stutter). Leaves the DEPTH
         // program resident across the session like any other infrastructure resource.
-        this._textures.acquireTextures(o, manifest.textures);
+        this._textures.acquireTextures(o, manifest.textures, texVersion);
 
         let ribbon: GLLineRibbon | undefined;
         if (lineQuads) {
@@ -1779,6 +1780,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     // --- 4. Render each object ---
     const texs = manifest.textures;
+    const texVersion = this._textures.textureSetVersion(texs);
 
     if (runs) {
       for (let r = 0; r < runs.length; r += 2) {
@@ -1786,7 +1788,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         const end = runs[r + 1]!;
         for (let i = start; i < end; i++) {
           this._programCache.acquireProgram(objects[i]!, programKey);
-          this._textures.acquireTextures(objects[i]!, texs);
+          this._textures.acquireTextures(objects[i]!, texs, texVersion);
         }
         this._renderInstanceRun(objects, start, end, cache, topology, wireframeMode);
       }
@@ -1799,7 +1801,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       if (isInstanced && (o as InstancedMesh).instanceCount === 0) continue;
 
       this._programCache.acquireProgram(o, programKey);
-      this._textures.acquireTextures(o, texs);
+      this._textures.acquireTextures(o, texs, texVersion);
 
       if (isInstanced) {
         this._renderInstancedObject(o as InstancedMesh, cache, topology, wireframeMode);

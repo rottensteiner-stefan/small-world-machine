@@ -80,9 +80,9 @@ export class InteractionManager {
 
     this._raycaster.setFromCamera(this._ndcCoords, this.camera);
 
-    this._pickables.length = 0;
     this._pickableSet.clear();
     if (this.scene.staticOctree || this.scene.dynamicOctree || this.scene.spatialHash) {
+      this._pickables.length = 0;
       this._queryHits.length = 0;
       if (this.scene.staticOctree) {
         this.scene.staticOctree.queryRay(this._raycaster.ray, this._queryHits);
@@ -101,9 +101,12 @@ export class InteractionManager {
         }
       }
     } else {
-      for (const obj of this.scene.objects) {
-        this._getPickableObjects(obj, this._pickables);
+      const roots = this.scene.objects;
+      let n = 0;
+      for (let i = 0; i < roots.length; i++) {
+        n = this._getPickableObjects(roots[i]!, this._pickables, n);
       }
+      this._pickables.length = n;
     }
 
     const intersects: Intersection[] = this._raycaster.intersectObjects(this._pickables, true);
@@ -174,13 +177,17 @@ export class InteractionManager {
     }
   }
 
-  private _getPickableObjects(parent: Object3D, out: Object3D[]): void {
+  /** Appends pickables below `parent` at `out[n..]`, returns the new count. Index writes and an
+   * indexed loop: this walk runs over the whole scene every frame the pointer is over the canvas. */
+  private _getPickableObjects(parent: Object3D, out: Object3D[], n: number): number {
     if (parent.isPickable) {
       parent.computeBounds();
-      out.push(parent);
+      out[n++] = parent;
     }
-    for (const child of parent.children) {
-      this._getPickableObjects(child, out);
+    const children = parent.children;
+    for (let i = 0; i < children.length; i++) {
+      n = this._getPickableObjects(children[i]!, out, n);
     }
+    return n;
   }
 }

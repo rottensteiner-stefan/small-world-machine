@@ -533,6 +533,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     const mat = firstObj.material!;
     const manifest = mat.getRenderManifest();
     const texs = manifest.textures;
+    const texVersion = this._textures.textureSetVersion(texs);
     // Copy: `resolveManifestFlags` may return the manifest's own array and `push` below mutates.
     const flags = [...(resolveManifestFlags(manifest.flags, this._quality.disableTextures) ?? [])];
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
@@ -674,7 +675,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       }
 
       this._programCache.acquireProgram(o, programKey);
-      this._textures.acquireTextures(o, texs);
+      this._textures.acquireTextures(o, texs, texVersion);
 
       const mesh = this._geometry.getOrCreateMesh(o, o.geometry);
       const drawMode = topology === Topology.LINE_LIST ? this.gl.LINES : this.gl.TRIANGLES;

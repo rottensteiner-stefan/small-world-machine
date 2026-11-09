@@ -49,3 +49,27 @@ export function writeLane(
   arr[3] = value[3];
   return arr;
 }
+
+/**
+ * Allocation-free variant of {@link writeLane} for per-call packing (`getRenderManifest()` runs per
+ * object and per pass): scalars instead of a `[x, y, z, w]` literal per call.
+ */
+export function writeLane4(
+  manifest: RenderManifest,
+  lane: `u_matParam${number}` | MaterialLane,
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+): void {
+  const key = typeof lane === "string" ? lane : lane.lane;
+  let arr = manifest.properties[key] as number[] | undefined;
+  if (undefined === arr) {
+    arr = [0, 0, 0, 0];
+    manifest.properties[key] = arr;
+  }
+  arr[0] = x;
+  arr[1] = y;
+  arr[2] = z;
+  arr[3] = w;
+}
