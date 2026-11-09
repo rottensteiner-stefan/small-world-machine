@@ -325,3 +325,13 @@ Review-Checkliste („Doctrine Gate Checklist", architecture.md §6) mit fünf F
 `docs/reference/doctrine-ledger.md` (committed, D15).
 _Avoid_: Doctrine Formular, KPI-Meeting — ein Frageformular von einer Seite, kein Prozessbüro; KPIs
 werden von `npm run check:doctrine` emittiert und nur an Gates konsumiert.
+
+**Ground Cover Ring**:
+The per-frame, camera-centred, tile-ring instance population for low vegetation around the player
+(ADR 0059 step 1b, source B): each tile's instances are seeded by a stable per-tile hash (no
+swimming when the camera moves), with distance thinning and width compensation; candidates flow
+through the same GPU cull + LOD-bucket compaction as the main `InstanceField` (real blade geometry,
+no alpha-cutout). Contract owner: `vegetation-extras/src/groundcover/GroundCover.ts`.
+_Avoid_: Grass Field, Procedural Scatter — the Ring names the camera-centred *streaming* population
+feeding `InstanceField` cull with stable per-tile hashing, not a static geometry scatter (pre-baked
+source A, rejected in ADR 0059 step-1b result).
