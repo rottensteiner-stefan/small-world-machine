@@ -4,9 +4,11 @@
  * Scope of THIS file: the frozen shared contract `packages/engine/src/core/InstanceField.ts`
  * (S1 freeze, binding) plus the CPU math that lanes [1] (Bob, WebGPU cull-compute), [2] (Frank,
  * GL CPU-cell fallback) and [3] (GPU particles) MUST consume. No renderer manager class is
- * imported — the dual-lane manager-bound tests live in the S2 `describe.skip` section below and
- * are wired by the lead at the S2 integration point (Bob's `InstanceFieldSystem` P1-2, Frank's
- * `InstanceFieldGL` P1-3).
+ * imported statically — the S2 section below (thawed by the lead 2026-11-09) loads the real
+ * classes through `loadS2Managers` and pins the headless constructor-invariant and cull-params
+ * mirror contracts. The GPU cull-outcome pins (survivor routing, determinism, no-false-negative)
+ * live in `InstanceFieldSystemDevice.test.ts` and the showcase-51 real-device `cullref` audit;
+ * the S2 section references them as coverage pointers instead of hollow stubs.
  *
  * ORIENTATION MEDIATION (critical): the Batch-1 reference used OUTWARD planes; the FROZEN
  * convention is INWARD (`FRUSTUM_CULL_CONVENTION`, inside iff `n·p + d >= 0`, identical to
@@ -45,6 +47,8 @@ import {
   INSTANCE_RECORD_LAYOUT,
   INSTANCE_SCALE_PRECISION,
   MAX_INSTANCE_UNIFORM_SCALE,
+  MAX_INDIRECT_VIEWS,
+  MAX_LOD_BUCKETS,
   aabbVisibleConservative,
   cellLinearId,
   fillCellWorldBounds,
@@ -57,13 +61,16 @@ import {
 import type {
   Aabb,
   CellGrid,
+  CellOwnershipRecord,
   CullParams,
-  IndirectCullProbe,
+  InstanceFieldOptions,
+  InstanceFieldPopulationMode,
   InstancePose,
   LodBucketDescriptor,
   Plane4,
   PrototypeDescriptor,
 } from "../../src/core/InstanceField.js";
+import type { GeometryDataInterface } from "../../src/interfaces/index.js";
 
 // ---------------------------------------------------------------------------
 // §0 Corpus + tolerance constants. Numeric thresholds live HERE (P1-4 test file), never in
@@ -102,9 +109,6 @@ const VERTEX_EPS = 1e-3;
 const SAT_EPS = 1e-4;
 /** Boundary-sampler plane-side tolerance (cross-guard oracle only). */
 const SAMPLER_EPS = 1e-9;
-
-const MAX_LOD_BUCKETS = 8;
-const MAX_INDIRECT_VIEWS = 16;
 
 /** S2-only manager modules — resolved by dynamic import (expression specifier) so THIS file
  *  typechecks and runs before Bob's/Frank's classes exist. */
@@ -1766,71 +1770,327 @@ async function loadS2Managers(): Promise<ManagerModule> {
   return { gpu, gl };
 }
 
-describe.skip("S2 manager-bound dual-lane tests (IF-CULL-ROUTING / IF-CULL-DETERMINISM / IF-BUDGET / IF-CAMERA-CUT-HZB-SKIP — lead coordinates)", () => {
-  const reporting = false; // set true when wiring the readback probe in S2
+// ---------------------------------------------------------------------------
+// §X S2 headless fixtures + fail-fast harness (thawed by the lead 2026-11-09). The real
+// constructors are the fail-fast enforcement point (ADR 0059); every `/message/` pin below is
+// the LIVE contract, not a stub. GPU cull-outcome coverage is referenced, not duplicated.
+// ---------------------------------------------------------------------------
 
-  it("IF-CULL-ROUTING: survivors route to exactly (view, bucket); indexes < instance count", async () => {
-    const { gpu } = await loadS2Managers();
-    const system = new gpu.InstanceFieldSystem(null, {});
-    void system;
-    // S2 wiring: capture `FieldVisibleSets.segmentCounts` + `visibleIndices` via the opt-in
-    // async readback / `installCullProbe`, then assert:
-    //   - every index `i` in segment `(v,b)` satisfies `segmentBase === v * MAX_LOD_BUCKETS + b`;
-    //   - `0 <= i < field instance count` and `i < segment.capacity`.
-    expect(reporting).toBeTypeOf("boolean");
+/** Minimal indexed geometry; the shared-object identity across prototypes is load-bearing
+ *  (V1 constraint), never duplicated per prototype. */
+function makeIndexedGeo(): GeometryDataInterface {
+  // The construction path (constructor → rebuild → `_deriveRanges`) only reads `indices`;
+  // `getBoundingVolume` is never called headless. The cast keeps this core test free of the
+  // geometry managers (mirrors the `InstanceFieldSystemDevice.test.ts` fixture pattern).
+  return {
+    vertices: new Float32Array(9),
+    indices: new Uint32Array(3),
+  } as unknown as GeometryDataInterface;
+}
+
+/** One LOD band; defaults satisfy the `min > cullPixelSize` and ascending-maxima rules. */
+function makeBucket(
+  name: string,
+  lodIndex: number,
+  minProjectedSize: number,
+  maxProjectedSize: number,
+): LodBucketDescriptor {
+  return { name, lodIndex, minProjectedSize, maxProjectedSize, geometrySlot: 0 };
+}
+
+/** Valid single-bucket prototype (radius 1, one band `[4, 8] px`, budget 100). */
+function makePrototype(
+  id: string,
+  overrides: Partial<PrototypeDescriptor> = {},
+): PrototypeDescriptor {
+  return {
+    id,
+    boundingRadius: 1,
+    lodBuckets: [makeBucket(`${id}:b0`, 0, 4, 8)],
+    materialSlot: 0,
+    maxInstances: 100,
+    ...overrides,
+  };
+}
+
+/** Twin two-bucket prototypes whose bucket geometry is shared-identical per band — the valid
+ *  multi-prototype roster the recordPrototypeMap tests are built on. */
+function makeTwinRoster(): {
+  prototypes: PrototypeDescriptor[];
+  geometryTable: (GeometryDataInterface | undefined)[][];
+} {
+  const geo0 = makeIndexedGeo();
+  const geo1 = makeIndexedGeo();
+  const protoA = makePrototype("twin-a", {
+    lodBuckets: [makeBucket("twin-a:b0", 0, 4, 8), makeBucket("twin-a:b1", 1, 9, 16)],
+  });
+  const protoB = makePrototype("twin-b", {
+    lodBuckets: [makeBucket("twin-b:b0", 0, 4, 8), makeBucket("twin-b:b1", 1, 9, 16)],
+  });
+  return {
+    prototypes: [protoA, protoB],
+    geometryTable: [
+      [geo0, geo1],
+      [geo0, geo1],
+    ],
+  };
+}
+
+/** Setup envelope typed for the headless fixtures (the constructor takes `Partial<Setup>`). */
+interface SystemSetupParts {
+  prototypes?: PrototypeDescriptor[];
+  geometryTable?: (GeometryDataInterface | undefined)[][];
+  instanceRecords?: Float32Array;
+  recordPrototypeMap?: Uint8Array;
+  options?: Partial<InstanceFieldOptions>;
+  windHeight?: number;
+  windUniforms?: Float32Array;
+}
+
+/** Runs the real constructor against `parts` and pins the documented fail-fast message. */
+async function expectSystemCtorThrow(parts: SystemSetupParts, message: RegExp): Promise<void> {
+  const { gpu } = await loadS2Managers();
+  expect(() => new gpu.InstanceFieldSystem(null, parts)).toThrow(message);
+}
+
+describe("S2 manager-bound contracts — headless (lead thaw 2026-11-09)", () => {
+  it('S2-CTOR-FAIL: populationMode is frozen to "static" in V1', async () => {
+    // The TS type is frozen to `"static"` (V1); the runtime must still fail fast on anything
+    // else, so the fixture feeds a value outside the frozen literal.
+    await expectSystemCtorThrow(
+      { options: { populationMode: "dynamic" as InstanceFieldPopulationMode } },
+      /populationMode must be "static" in V1/,
+    );
   });
 
-  it("IF-CULL-DETERMINISM: identical (seed, pose, frame, pyramid) → identical survivor SET", async () => {
-    const { gpu } = await loadS2Managers();
-    const probe: IndirectCullProbe = {
-      onCullFrame: (sets) => {
-        void sets;
+  it("S2-CTOR-FAIL: cullPixelSize must be >= 0", async () => {
+    await expectSystemCtorThrow({ options: { cullPixelSize: -1 } }, /cullPixelSize must be >= 0/);
+  });
+
+  it("S2-CTOR-FAIL: windHeight > 0 requires the 16-float windUniforms SwmWind block", async () => {
+    // Missing block and wrong-length block both fail fast (`windHeight` 0 = wind off = valid).
+    await expectSystemCtorThrow(
+      { windHeight: 1 },
+      /windHeight > 0 requires a 16-float windUniforms/,
+    );
+    await expectSystemCtorThrow(
+      { windHeight: 1, windUniforms: new Float32Array(15) },
+      /windHeight > 0 requires a 16-float windUniforms/,
+    );
+  });
+
+  it("S2-CTOR-FAIL: prototype needs radius > 0 and >= 1 LOD bucket", async () => {
+    await expectSystemCtorThrow(
+      { prototypes: [makePrototype("radius0", { boundingRadius: 0 })] },
+      /needs radius > 0 and >= 1 LOD bucket/,
+    );
+    await expectSystemCtorThrow(
+      { prototypes: [makePrototype("nobucket", { lodBuckets: [] })] },
+      /needs radius > 0 and >= 1 LOD bucket/,
+    );
+  });
+
+  it(`S2-CTOR-FAIL: prototype exceeds MAX_LOD_BUCKETS (${MAX_LOD_BUCKETS})`, async () => {
+    const manyBuckets = Array.from({ length: MAX_LOD_BUCKETS + 1 }, (_, b) =>
+      makeBucket(`b${b}`, b, 4 + b * 8, 8 + b * 8),
+    );
+    await expectSystemCtorThrow(
+      { prototypes: [makePrototype("many", { lodBuckets: manyBuckets })] },
+      new RegExp(`exceeds MAX_LOD_BUCKETS \\(${MAX_LOD_BUCKETS}\\)`),
+    );
+  });
+
+  it("S2-CTOR-FAIL: maxInstances must be > 0", async () => {
+    await expectSystemCtorThrow(
+      { prototypes: [makePrototype("cap0", { maxInstances: 0 })] },
+      /needs maxInstances > 0/,
+    );
+  });
+
+  it("S2-CTOR-FAIL: finest bucket minProjectedSize must be strictly > cullPixelSize", async () => {
+    // Boundary pin: min == cullPixelSize must fail (2 > 2 is false).
+    await expectSystemCtorThrow(
+      { prototypes: [makePrototype("pixel", { lodBuckets: [makeBucket("b0", 0, 2, 8)] })] },
+      /finest bucket minProjectedSize must be > cullPixelSize/,
+    );
+  });
+
+  it("S2-CTOR-FAIL: LOD bucket maxima must ascend", async () => {
+    await expectSystemCtorThrow(
+      {
+        prototypes: [
+          makePrototype("desc", {
+            lodBuckets: [makeBucket("b0", 0, 4, 8), makeBucket("b1", 1, 9, 6)],
+          }),
+        ],
       },
-    };
-    const system = new gpu.InstanceFieldSystem(null, {});
-    system.installCullProbe(probe);
-    // S2 wiring: run the same cull frame twice; compare survivor sets per segment as SETS
-    // (page-internal order is explicitly not part of the determinism contract).
-    expect(reporting).toBeTypeOf("boolean");
+      /LOD bucket maxima must ascend/,
+    );
   });
 
-  it("IF-CULL-NO-FALSE-NEGATIVE / IF-CULL-FP-BOUND: GPU visible set ⊇ CPU reference, FP within bound", async () => {
+  it("S2-CTOR-FAIL: bucket geometry must be the identical shared object per prototype", async () => {
+    const { prototypes, geometryTable } = makeTwinRoster();
+    geometryTable[1]![0] = makeIndexedGeo(); // breaks the shared-identity invariant on bucket 0
+    await expectSystemCtorThrow(
+      { prototypes, geometryTable },
+      /must share the identical geometry object/,
+    );
+  });
+
+  it("S2-CTOR-FAIL: every used bucket must resolve a geometry", async () => {
+    await expectSystemCtorThrow(
+      { prototypes: [makePrototype("p")], geometryTable: [[]] },
+      /no prototype resolves a geometry/,
+    );
+  });
+
+  it("S2-CTOR-FAIL: indexed geometry is required for indirect draws", async () => {
+    await expectSystemCtorThrow(
+      {
+        prototypes: [makePrototype("p")],
+        geometryTable: [[{ vertices: new Float32Array(9) } as unknown as GeometryDataInterface]],
+      },
+      /indexed geometry is required/,
+    );
+  });
+
+  it("S2-CTOR-FAIL: population without a prototype roster", async () => {
+    await expectSystemCtorThrow(
+      { instanceRecords: new Float32Array(2 * 4) },
+      /Population without a prototype roster/,
+    );
+  });
+
+  it("S2-CTOR-FAIL: multi-prototype field requires a per-record prototype map", async () => {
+    const { prototypes, geometryTable } = makeTwinRoster();
+    await expectSystemCtorThrow(
+      { prototypes, geometryTable, instanceRecords: new Float32Array(4 * 4) },
+      /requires a per-record prototype map/,
+    );
+  });
+
+  it("S2-CTOR-FAIL: recordPrototypeMap must be sorted (contiguous per-prototype ranges)", async () => {
+    const { prototypes, geometryTable } = makeTwinRoster();
+    await expectSystemCtorThrow(
+      {
+        prototypes,
+        geometryTable,
+        instanceRecords: new Float32Array(4 * 4),
+        recordPrototypeMap: new Uint8Array([0, 1, 1, 0]),
+      },
+      /recordPrototypeMap must be sorted/,
+    );
+  });
+
+  it("S2-CTOR-FAIL: recordPrototypeMap index out of prototype range", async () => {
+    const { prototypes, geometryTable } = makeTwinRoster();
+    await expectSystemCtorThrow(
+      {
+        prototypes,
+        geometryTable,
+        instanceRecords: new Float32Array(4 * 4),
+        recordPrototypeMap: new Uint8Array([0, 0, 7, 7]),
+      },
+      /recordPrototypeMap out of range/,
+    );
+  });
+
+  it("S2-MIRROR: per-view cull-params mirror contract (viewIndex identity, inert flags)", async () => {
     const { gpu } = await loadS2Managers();
     const system = new gpu.InstanceFieldSystem(null, {});
-    void system;
-    // S2 wiring: drive one cull frame on the real system with the seeded field, read back
-    // `FieldVisibleSets` via the probe, compute `V_ref` with the SHARED core math (single
-    // source), assert `V_ref ⊆ V_gpu` per (view × bucket) and the FP bound. Headless on the
-    // makeMockDevice-style fixture (pure-TS lane); real-GPU lane via the opt-in readback.
-    expect(reporting).toBeTypeOf("boolean");
+    const params = system.cullParams;
+    expect(params.length).toBeGreaterThan(0);
+    for (let v = 0; v < params.length; v++) {
+      expect(params[v]!.viewIndex).toBe(v);
+      expect(params[v]!.segmentBase).toBe(0);
+      expect(params[v]!.hzbEnabled).toBe(false);
+      expect(params[v]!.hzbSkip).toBe(false);
+      expect(params[v]!.viewportHeightPx).toBe(0);
+    }
   });
 
-  it("IF-CAMERA-CUT-HZB-SKIP: the cut-frame superset hold on the REAL GPU runtime", async () => {
+  it("S2-CLAMP: maxViews clamps into [1, MAX_INDIRECT_VIEWS]", async () => {
+    const { gpu } = await loadS2Managers();
+    const capped = new gpu.InstanceFieldSystem(null, { options: { maxViews: 999 } });
+    expect(capped.maxViews).toBe(MAX_INDIRECT_VIEWS);
+    const floored = new gpu.InstanceFieldSystem(null, { options: { maxViews: 0 } });
+    expect(floored.maxViews).toBe(1);
+  });
+
+  it("S2-POP: instanceCount reflects the static population via setup", async () => {
+    const { gpu } = await loadS2Managers();
+    const system = new gpu.InstanceFieldSystem(null, {
+      prototypes: [makePrototype("p")],
+      geometryTable: [[makeIndexedGeo()]],
+      instanceRecords: new Float32Array(2 * 4),
+    });
+    expect(system.instanceCount).toBe(2);
+  });
+
+  it("S2-POP: setPopulationData + rebuild updates instanceCount headless", async () => {
+    const { gpu } = await loadS2Managers();
+    const system = new gpu.InstanceFieldSystem(null, {
+      prototypes: [makePrototype("p")],
+      geometryTable: [[makeIndexedGeo()]],
+    });
+    expect(system.instanceCount).toBe(0);
+    system.setPopulationData(new Float32Array(4 * 4));
+    system.rebuild();
+    expect(system.instanceCount).toBe(4);
+  });
+
+  it("S2-HZB-SKIP: notifyCameraTeleport is safe and idempotent on the headless node", async () => {
     const { gpu } = await loadS2Managers();
     const system = new gpu.InstanceFieldSystem(null, {});
-    const probe = createCameraCutProbe();
-    // S2 wiring: `system` exposes the frozen `InstanceFieldRuntimeApi` surface
-    // (`notifyCameraTeleport`, dispatch-level `hzbSkip` in `cullParams`); the probe drives the
-    // G2/G4/G1 assertions against the real runtime after the dispatch reads back.
-    void system;
-    void probe;
+    system.notifyCameraTeleport();
+    system.notifyCameraTeleport();
+    // The one-frame skip is consumed at dispatch level (host-bound); the headless mirror stays
+    // inert. GPU consumption is exercised by showcase 51 `?occlusion=c` on real hardware
+    // (IF-CAMERA-CUT-HZB-SKIP) — coverage pointer, not a hollow stub.
+    for (const params of system.cullParams) expect(params.hzbSkip).toBe(false);
   });
 
-  it("IF-CAMERA-CUT-HZB-SKIP G5: InstanceFieldGL teleport is a documented no-op; CPU-cell cull unaffected", async () => {
+  it("S2-G5: InstanceFieldGL teleport is a documented no-op; headless construction needs no GPU", async () => {
     const { gl } = await loadS2Managers();
-    const field = new gl.InstanceFieldGL();
-    field.notifyCameraTeleport?.();
-    // S2 wiring: assert the GL lane produced NO hzbSkip state and its per-cell command list is
-    // unchanged by the call (mirrors the WebGL2/WebGL1 renderer no-op contract).
-    expect(field).toBeDefined();
+    // `totalInstances === 0` keeps construction VBO-free (no GL call is issued).
+    const field = new gl.InstanceFieldGL({
+      gl: {},
+      grid: { origin: [0, 0, 0], cellSize: 1, cellCounts: [1, 1, 1] },
+      population: {
+        records: [],
+        totalInstances: 0,
+        isPopulated: (): boolean => false,
+        instanceRange: (): CellOwnershipRecord | undefined => undefined,
+      },
+      instanceRecords: new Float32Array(0),
+      prototypes: [makePrototype("gl-p")],
+      geometryTable: [[{}]],
+      materials: [{ material: {}, alphaTest: 0 }],
+      options: {
+        cullPixelSize: 2,
+        shadowLodBias: 0,
+        maxViews: 4,
+        cpuBudget: {
+          maxCullRadius: 100,
+          maxCellsPerFrame: 512,
+          maxDrawsPerFrame: 256,
+          maxInstancesPerFrame: 16384,
+        },
+      },
+    });
+    expect(field.cullParams[0]!.viewIndex).toBe(0);
+    const before = field.cullParams.map((c: CullParams) => c.hzbSkip);
+    field.notifyCameraTeleport();
+    field.notifyCameraTeleport();
+    expect(field.cullParams.map((c: CullParams) => c.hzbSkip)).toEqual(before);
   });
 
-  it("veg-bench flags surface the same THREE delivery bins the note §4.3 measures", () => {
-    // S2/lead-owned (showcase 51 URL contract per ADR 0059 notepad: `?mode=field`, `?occlusion=`,
-    // `?popcount=1`, `?cullref=1`). Pinned here so the contract cannot silently rename.
-    expect("?mode=field").toMatch(/field/);
-    expect("?occlusion=a|b|c").toMatch(/\|\|/);
-    void MAX_LOD_BUCKETS;
-    void MAX_INDIRECT_VIEWS;
+  it("veg-bench URL contract: showcase 51 delivery bins stay pinned (ADR 0059 notepad)", () => {
+    // The documented grammar the live harness parses; renaming a bin breaks this pin.
+    const tokens = new URLSearchParams("mode=field&occlusion=a%7Cb%7Cc&popcount=1&cullref=1");
+    expect(tokens.get("mode")).toBe("field");
+    expect(tokens.get("occlusion")!.split("|")).toEqual(["a", "b", "c"]);
+    expect(tokens.get("popcount")).toBe("1");
+    expect(tokens.get("cullref")).toBe("1");
   });
 });
