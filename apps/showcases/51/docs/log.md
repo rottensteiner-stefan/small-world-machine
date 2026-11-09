@@ -310,3 +310,27 @@ overlap (throughput baseline, not placement art) — accepted.
   blank) — pixel QA happens on the real device.
 - PENDING: real-M4Pro frozen-vantage measurement of the ring's marginal GPU cost vs the ≤ 2 ms
   ring gate (user re-test, same methodology as the wind gate).
+
+## 2026-11-09 — Step 2: LOD buckets + crossfade (ADR 0059, phase veg-p2, merged to main)
+
+- Showcase 51 now exercises the full LOD path: three ascending stride-decimated proxy buckets
+  (coarse / mid / merged fine) with URL knobs `?lodband=` / `?lodhyst=` / `?lodbias=` /
+  `?shadowlod=` and a HUD LOD section (`L` toggle cycles crossfade ↔ hard). Bucket geometry is
+  additive and separate from the `__swm51` QA surface.
+- Engine (merged from the veg-p2 parallel phase): cull-side bucket selection via the frozen
+  projected-px metric + per-tier bias; fork-A dual-bucket crossfade-band write (fine +p / coarse
+  -p, shared |p| exact partition); shadow views reuse the main camera's bucket choice (optional
+  coarser bias); per-bucket geometry binding; fragment-side complementary 8×8 Bayer dither in all
+  four `field_pull` variants + candidate-C hard-switch config. Engine default
+  `lodCrossfadeBand = 0` = fail-closed / P1-identical until configured.
+- GL2/GL1 remain on the CPU cell-LOD hard switch (deliberate tier cap, no per-instance blend
+  channel); `tier-parity.json` `instance_field_lod_crossfade` webgpu → `present`, GL rows →
+  `deliberate`.
+- Verification: full gates green (4694 tests; tsc/eslint/doctrine/lint:wgsl 116/116/build:lib).
+  Real-browser compile found one WGSL-only defect escaped by all static gates (`select(<cmp>, …)`
+  template-list ambiguity under strict tint) — fixed with parenthesised operands, zero semantic
+  change (`b918a92`). Headless SwiftShader-Dawn compile + render re-verified on `?path=flight`
+  and aerial with the band active: 0 shader errors, grass + field render.
+- PENDING: live pop measurement under TAA on/off on the real device (protocol in
+  `docs/research/veg-p2-lod-transitions.md` §6) and the moderator decide spike A/B/C (dither vs.
+  hard+hysteresis); `?lodband` default stays 0 until then.
