@@ -6,4 +6,5 @@ export * from "./CascadedShadowPassGPU.js";
 export * from "./SpotShadowPassGPU.js";
 export * from "./DepthPrePassGPU.js";
 export * from "./HzbOcclusionPassGPU.js";
+export * from "./FieldHzbBuildPassGPU.js";
 export * from "./GpuParticlesPassGPU.js";

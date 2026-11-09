@@ -75,6 +75,18 @@ interface LintTarget {
 async function collectTargets(): Promise<LintTarget[]> {
   const targets: LintTarget[] = [];
 
+  // Shared instance-field structs chunk: sole declaration of FieldInfo/CullParams + the 11
+  // @group(2) bindings, consumed by the cull compute AND the pull draw module. It lives under
+  // `chunks/` so it is never linted standalone -- read once here and prepended to exactly those
+  // two modules, mirroring the renderer's `?raw` imports (`fieldCullModuleSource` /
+  // `fieldPullModuleSource`).
+  const instanceFieldStructs = await fs.readFile(
+    path.resolve(
+      "packages/engine/src/renderers/shaders/source/web_gpu/chunks/instance_field_structs.wgsl",
+    ),
+    "utf8",
+  );
+
   async function walk(dir: string): Promise<void> {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
@@ -111,8 +123,10 @@ async function collectTargets(): Promise<LintTarget[]> {
         // Compute pipelines are NOT uniformly assembled: each renderer site builds its module with
         // a distinct prepend. Mirror the real sites so the linter parses exactly what the device
         // compiles (honest Real-Probe, ADR 0044):
-        //   - cluster_cull.wgsl:       renderer.computeStructsChunk + WGSL_SCREEN_FOOTPRINT + src  (WebGPURenderer._initClusterCulling)
+        //   - cluster_cull.wgsl:        renderer.computeStructsChunk + WGSL_SCREEN_FOOTPRINT + src  (WebGPURenderer._initClusterCulling)
         //   - hzb_visibility_test.wgsl: renderer.computeStructsChunk + WGSL_SCREEN_FOOTPRINT + src  (WebGPURenderer._initHzb)
+        //   - instance_cull.wgsl:       renderer.computeStructsChunk + instanceFieldStructsChunk + WGSL_SCREEN_FOOTPRINT + src
+        //                                                              (WebGPURenderer.fieldCullModuleSource)
         //   - froxel_inject.wgsl:       renderer.computeStructsChunk + src                       (VolumetricFogPassGPU._ensureInjectPipeline)
         //   - froxel_reproject.wgsl:    standalone (own group-0 bindings)                        (VolumetricFogPassGPU._buildPipelines)
         //   - froxel_integrate.wgsl:    standalone (own group-0 bindings)                        (VolumetricFogPassGPU._buildPipelines)
@@ -120,9 +134,19 @@ async function collectTargets(): Promise<LintTarget[]> {
         //   - hzb_downsample_max.wgsl:  standalone (own group-0 bindings)                        (HzbOcclusionSystem)
         //   - gpu_particles / gpu_particles_draw: `computeStructsChunk() + this file`            (GPUParticleSystem)
         const base = path.basename(full);
-        if (base === "cluster_cull.wgsl" || base === "hzb_visibility_test.wgsl") {
+        if (
+          base === "cluster_cull.wgsl" ||
+          base === "hzb_visibility_test.wgsl" ||
+          base === "instance_cull.wgsl"
+        ) {
           const footprint = registry.getChunk(ShaderChunkId.WGSL_SCREEN_FOOTPRINT, "wgsl") ?? "";
-          source = registry.assemble(computeStructsChunk() + "\n" + footprint + "\n" + raw, "wgsl");
+          // instance_cull additionally consumes the shared @group(2) field-data chunk (FieldInfo /
+          // CullParams + bindings) -- the file itself no longer declares them.
+          const fieldStructs = base === "instance_cull.wgsl" ? instanceFieldStructs + "\n" : "";
+          source = registry.assemble(
+            computeStructsChunk() + "\n" + fieldStructs + footprint + "\n" + raw,
+            "wgsl",
+          );
         } else if (base === "froxel_inject.wgsl") {
           source = registry.assemble(computeStructsChunk() + "\n" + raw, "wgsl");
         } else if (rel.includes("/web_gpu/particles/")) {
@@ -136,6 +160,15 @@ async function collectTargets(): Promise<LintTarget[]> {
         } else {
           source = registry.assemble(raw, "wgsl");
         }
+      } else if (rel.includes("/web_gpu/instance_field/")) {
+        // Field pull (webgpu-vert kind): `computeStructsChunk()` + the shared instance-field
+        // structs chunk + raw -- NOT `[WGSL_STRUCTS]`, which would duplicate the FieldInfo /
+        // CullParams structs AND the @group(3) view this module declares on its own. Mirror
+        // `WebGPURenderer.fieldPullModuleSource` exactly.
+        source = registry.assemble(
+          computeStructsChunk() + "\n" + instanceFieldStructs + "\n" + raw,
+          "wgsl",
+        );
       } else {
         // Standalone WebGPU vertex shaders reference `global`/`obj`/`Out` from the structs chunk.
         source = registry.assemble("[WGSL_STRUCTS]\n" + raw, "wgsl");

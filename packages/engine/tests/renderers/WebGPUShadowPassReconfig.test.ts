@@ -62,6 +62,8 @@ function makeRenderer(lights: () => Internals): Internals {
     _createGlobalBindGroup: vi.fn(() => ({})),
     _setViewMatrix: vi.fn(() => 0),
     _renderSubgroup: vi.fn(),
+    _cullFieldShadowView: vi.fn(),
+    _recordFieldDraws: vi.fn(),
     scratchGlobalBufferData: new Float32Array(WebGPUGGlobalUniformLayout.totalFloats),
     globalUniformBuffer: {},
     globalBindGroup: undefined,

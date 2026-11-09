@@ -10,6 +10,30 @@ import type { Fog } from "../core/Fog.js";
 import type { Texture } from "../core/textures/index.js";
 import { BlendingMode, CullMode } from "../enums/index.js";
 import type { RenderManifest } from "./shaders/RenderManifest.js";
+import type { InstanceFieldGL } from "./gl/managers/InstanceFieldGL.js";
+import type { CpuIndirectDrawSource } from "../core/InstanceField.js";
+
+/** ADR 0059 GL field draw passes — the pass selects the program and binding set the backend
+ * draw loop uses: `opaque` = the material's own program, `shadow` = the depth-only shadow
+ * program (MaterialType.DEPTH), `evsm` = the variance-moment program (MaterialType.EVSM). */
+export type InstanceFieldDrawPass = "opaque" | "shadow" | "evsm";
+
+/** Binding inputs the single-point field draw hook forwards to the backend draw loop. */
+export interface InstanceFieldDrawContext {
+  /** Opaque pass only: the frame's extracted lights. */
+  readonly lights?: LightDataInterface;
+  /** Opaque pass only: the current scene. */
+  readonly scene?: Scene;
+  /** Opaque pass only: the current view matrix (billboard sprite support). */
+  readonly vMat?: Float32Array;
+  /** Opaque pass only: the current view-projection matrix (glsl100 binds it manually). */
+  readonly vp?: Float32Array;
+  /** Opaque pass only: the current camera position (glsl100 binds it manually). */
+  readonly camPos?: Vector3D;
+  /** Shadow/EVSM passes only: the depth (`MaterialType.DEPTH`) or moment (`MaterialType.EVSM`)
+   * program id the shadow path is currently executing. */
+  readonly shaderId?: string;
+}
 export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   // WebGL2 context inherits from WebGL1 context
   protected gl!: WebGLRenderingContext | WebGL2RenderingContext;
@@ -61,6 +85,112 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   /** Inverse of this frame's view-projection: decals unproject opaque depth with it. */
   protected readonly _frameInvViewProj: Matrix4 = new Matrix4();
   protected readonly _frameViewProj: Matrix4 = new Matrix4();
+
+  /** Registered ADR 0059 CPU-cell fallback fields (GL tiers), culled + drawn each frame. */
+  private readonly _instanceFields: Set<InstanceFieldGL> = new Set();
+  /** Per-field shadow-view index allocation, reset on every main cull; consumes the field's own
+   * `maxViews` budget (view cap > reachable shadow cameras are simply not field-culled). */
+  private readonly _fieldShadowViewIndex = new Map<InstanceFieldGL, number>();
+
+  /**
+   * Registers a CPU-cell field lane. The field's VBOs must have been created on THIS renderer's
+   * GL context. The field is culled once per frame from the main camera (before any pass) and
+   * emitted through the single-point {@link drawInstanceFieldView} hook — never called directly.
+   */
+  public registerInstanceField(field: InstanceFieldGL): void {
+    this._instanceFields.add(field);
+    this._fieldShadowViewIndex.set(field, 0);
+  }
+
+  /** Unregisters a field. The field's own VBOs are released by the field's `dispose()`, not here. */
+  public unregisterInstanceField(field: InstanceFieldGL): void {
+    this._instanceFields.delete(field);
+    this._fieldShadowViewIndex.delete(field);
+  }
+
+  /**
+   * Culls the MAIN view of every registered field ONCE per frame, BEFORE any pass runs: the main
+   * camera anchors LOD selection, the frame-shared CPU budget and the HZB-free cell cull, and
+   * `WebGLShadowPass` (the first field-consuming pass) needs the main buckets for its shadow
+   * views. Skipped for offscreen/probe renders (they call `render()` without a `projMatrix`
+   * anyway) so a probe camera never clobbers the main frame's cull state, and fields stay out of
+   * P1's offscreen targets.
+   */
+  protected _cullInstanceFieldMainViews(): void {
+    if (this._instanceFields.size === 0 || this.isOffscreenRenderTarget) return;
+    const proj = this._frameProjMatrix;
+    if (!proj || proj[5] === 0) return;
+    const fovRadiansY = 2 * Math.atan(1 / proj[5]!);
+    const viewportHeightPx = this.gl.canvas.height;
+    for (const field of this._instanceFields) {
+      this._fieldShadowViewIndex.set(field, 0);
+      field.prepareMainView(
+        this._frameViewProj.data,
+        { x: this._frameCamPos.x, y: this._frameCamPos.y, z: this._frameCamPos.z },
+        viewportHeightPx,
+        fovRadiansY,
+      );
+      field.cullMainView();
+    }
+  }
+
+  /**
+   * Single-point GL draw surface of the ADR 0059 field lane: draws every registered field's
+   * `viewIndex` source in `pass`, and (main view, opaque) flushes the opt-in cull probe once all
+   * views of the frame were culled. The pass hook never branches on backend specifics — the
+   * subclass implements {@link _drawCpuIndirectSource} against the frozen `CpuIndirectDrawSource`.
+   * Called by `WebGLMainPass` (view 0, `opaque`) on both GL tiers; the shadow passes call it per
+   * shadow view through {@link _drawFieldShadowView} (GL2 only).
+   */
+  public drawInstanceFieldView(
+    viewIndex: number,
+    pass: InstanceFieldDrawPass,
+    ctx: InstanceFieldDrawContext = {},
+  ): void {
+    if (this.isOffscreenRenderTarget) return;
+    for (const field of this._instanceFields) {
+      const source = field.getSource(viewIndex);
+      if (!source) continue;
+      this._drawCpuIndirectSource(field, source, pass, ctx);
+    }
+    // Probe snapshot needs every view of the frame already culled — only true at the opaque draw.
+    if (viewIndex === 0 && pass === "opaque") {
+      for (const field of this._instanceFields) field.flushCullProbe();
+    }
+  }
+
+  /**
+   * Prepares, culls and draws ONE shadow view of every registered field (called once per shadow
+   * camera from the GL2 shadow paths). Each field consumes its own shadow-view index within its
+   * authored `maxViews` budget; a field without headroom is skipped, it never over-draws views.
+   * LOD selection stays main-camera-driven (`shadowLodBias` is applied inside the field cull).
+   */
+  protected _drawFieldShadowView(
+    shaderId: string,
+    vp: Float32Array,
+    camPos: Vector3D,
+    pass: InstanceFieldDrawPass,
+  ): void {
+    for (const field of this._instanceFields) {
+      const v = this._fieldShadowViewIndex.get(field) ?? 0;
+      if (v >= field.maxViews) continue;
+      this._fieldShadowViewIndex.set(field, v + 1);
+      field.prepareShadowView(v, vp, { x: camPos.x, y: camPos.y, z: camPos.z });
+      field.cullShadowView(v);
+      const source = field.getSource(v);
+      if (!source) continue;
+      this._drawCpuIndirectSource(field, source, pass, { shaderId });
+    }
+  }
+
+  /** Backend-specific draw loop for one field's CPU command source (glsl300 native / glsl100
+   * ANGLE-suffixed instancing). Implemented by WebGL2Renderer + WebGL1Renderer. */
+  protected abstract _drawCpuIndirectSource(
+    field: InstanceFieldGL,
+    source: CpuIndirectDrawSource,
+    pass: InstanceFieldDrawPass,
+    ctx: InstanceFieldDrawContext,
+  ): void;
 
   public addPass(pass: WebGLRenderPass): void {
     this._passes.push(pass);
@@ -135,6 +265,8 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     this._frameLights = extractedLights;
     this._frameScene = scene;
     this.extractFogVolumes(scene);
+    // ADR 0059: main-view field cull BEFORE any pass (shadow views consume the main buckets).
+    this._cullInstanceFieldMainViews();
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
     this._registerRenderListProviders(renderList);
     if (renderList.decals.length > 0 && !this.isOffscreenRenderTarget) this.requestNormalBuffer();

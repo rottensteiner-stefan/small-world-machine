@@ -4,6 +4,7 @@ import { MaterialType, Topology, NormalTargetMode } from "../../enums/index.js";
 import { NORMAL_TARGET_CLEAR } from "../WebGPU/managers/NormalOutputWrapper.js";
 import { GpuTimingSlot } from "../WebGPU/managers/GpuTimer.js";
 import type { WebGPURenderer } from "../WebGPU/index.js";
+import { VIEW_SLOT_MAIN_CAMERA } from "../WebGPU/WebGPURenderer.js";
 import type { RenderPass } from "../index.js";
 import type { Vector3D } from "../../math/index.js";
 import type { Object3D } from "../../core/Object3D.js";
@@ -151,6 +152,18 @@ export class MainRenderPass implements RenderPass {
         renderer._renderBatch(rp, batch!, vMat, opaqueMode);
       }
     }
+
+    // ADR 0059 P1-2: pulled field draws for the main view into the opaque pass (fragment reads
+    // the shared global group; the normal target is attached exactly when `normalView` is).
+    // The field's main-view culls ran at the frame head, and its depth pre-pass already wrote
+    // the shared depth buffer, so the unchanged less-equal test rejects occluded foliage.
+    renderer._recordFieldDraws(
+      rp,
+      0,
+      VIEW_SLOT_MAIN_CAMERA,
+      true,
+      normalView ? "colorNormal" : "color",
+    );
 
     // Decals read the finished opaque depth/normals, so they get their own pass right after the
     // opaque one (and before the transparents, which then see them in their refraction capture).

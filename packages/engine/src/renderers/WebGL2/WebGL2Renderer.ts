@@ -15,7 +15,13 @@ import { WebGL2PointShadows } from "./WebGL2PointShadows.js";
 import { WebGL2FrameBuffer } from "./WebGL2FrameBuffer.js";
 import { NORMAL_OUTPUT_FLAG } from "../gl/managers/NormalOutputWrapperGL.js";
 import { WebGL2CubeFrameBuffer } from "./WebGL2CubeFrameBuffer.js";
-import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
+import {
+  AbstractWebGLRenderer,
+  type InstanceFieldDrawContext,
+  type InstanceFieldDrawPass,
+} from "../AbstractWebGLRenderer.js";
+import type { InstanceFieldGL } from "../gl/managers/InstanceFieldGL.js";
+import { INSTANCE_RECORD_BYTES, type CpuIndirectDrawSource } from "../../core/InstanceField.js";
 import { WebGLShadowPass } from "../passes/WebGLShadowPass.js";
 import { WebGLMainPass } from "../passes/WebGLMainPass.js";
 import { WebGLPostProcessPass } from "../passes/WebGLPostProcessPass.js";
@@ -993,6 +999,15 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         2 / spotArray.size,
         sortedGroups,
       );
+      // ADR 0059 field lane: draw the field casters for this spot-light shadow view (its own
+      // cull + budget share); inherits the shadow state (FRONT culling, depth on), so it runs
+      // AFTER the shadow scene and before the cull/state reset below.
+      this._drawFieldShadowView(
+        MaterialType.DEPTH,
+        shadowCamera.viewProjectionMatrix,
+        shadowCamera.position,
+        "shadow",
+      );
 
       this.gl.cullFace(this.gl.BACK);
       spotArray.unbind();
@@ -1045,6 +1060,15 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
           DepthMaterial.LINE_QUADS_SHADER_ID,
           2 / res,
           sortedGroups,
+        );
+        // ADR 0059 field lane: each cascade direction is one field shadow view (LOD stays
+        // main-anchored; `shadowLodBias` applies inside the field cull). Inherits the shadow
+        // state -- runs after the shadow scene, while this cascade's viewport/UBO are active.
+        this._drawFieldShadowView(
+          MaterialType.DEPTH,
+          cascadeCam.viewProjectionMatrix,
+          cascadeCam.position,
+          "shadow",
         );
       }
 
@@ -1118,6 +1142,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         2 / spotArray.size,
         casters,
       );
+      // ADR 0059 field lane: this cube face is one field shadow view (own cull, shared budget).
+      this._drawFieldShadowView(MaterialType.DEPTH, vp, pointShadows.position(slot), "shadow");
       this.gl.cullFace(this.gl.BACK);
     }
     spotArray.unbind();
@@ -1362,6 +1388,14 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         2 / res,
         sortedGroups,
       );
+      // ADR 0059 field lane: EVSM moments of the field casters for this cascade (same warp as
+      // the shadow scene's EVSM program; front faces, matching the moment-pass cull setup).
+      this._drawFieldShadowView(
+        MaterialType.EVSM,
+        cascadeCam.viewProjectionMatrix,
+        cascadeCam.position,
+        "evsm",
+      );
     }
 
     // Restore the scene's row clear color: the far-plane scissor clears above `gl.clearColor`d an
@@ -1542,6 +1576,168 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
       if (lineQuads) this.gl.enable(this.gl.CULL_FACE);
     }
+  }
+
+  /**
+   * @inheritdoc — glsl300 field draw loop (ADR 0059 CPU-cell lane, option (i)): ONE static
+   * cell-sorted 16-byte record VBO per field, `vertexAttribPointer` BYTE OFFSET per command, no
+   * per-frame instance uploads. `opaque` uses the material's own program (+`USE_INSTANCE_FIELD`),
+   * `shadow`/`evsm` the depth/moment programs. Every command draws one contiguous VBO range on
+   * the DEFAULT VAO; the per-instance divisors are reset right after each draw so no stale
+   * instanced pointer leaks into the non-instanced paths.
+   */
+  protected override _drawCpuIndirectSource(
+    field: InstanceFieldGL,
+    source: CpuIndirectDrawSource,
+    pass: InstanceFieldDrawPass,
+    ctx: InstanceFieldDrawContext,
+  ): void {
+    if (source.commands.length === 0) return;
+    const gl = this.gl;
+    const instanceVbo = field.instanceVbo;
+    if (!instanceVbo) return;
+    // Never a mesh's cached VAO: the record pointers must be rebound per command range.
+    gl.bindVertexArray(null);
+
+    let currentProgram: WebGLProgramCacheEntry | undefined;
+    for (const cmd of source.commands) {
+      const mesh = field.getGeometry(cmd.geometrySlot);
+      if (!mesh) continue;
+      const material = field.getMaterial(cmd.materialSlot);
+      if (!material) continue;
+      const manifest = material.material.getRenderManifest();
+
+      let cache: WebGLProgramCacheEntry;
+      if (pass === "opaque") {
+        // `isInstanced = false`: never `USE_INSTANCING`, the field records bind their own
+        // attributes (fixed 12/13) and `useProgram` below is the program switch guard only.
+        const flags = this._buildFieldShaderFlags(manifest, ctx.scene);
+        cache = this._programCache.getProgram(manifest.shaderId, false, flags);
+        if (cache !== currentProgram) {
+          gl.useProgram(cache.prog);
+          this._bindDummyShadowMaps(cache);
+          currentProgram = cache;
+          if (this._normalWriteRequested) {
+            this._hdrFbo?.setSecondaryWriteEnabled(cache.writesNormalOutput);
+          }
+          // The clustered-light cull textures were bound by WebGLClusterCullPass (fixed units);
+          // each program that converges them needs to know its units.
+          const clusterGridLoc = cache.uniforms.get("u_clusterGrid");
+          if (clusterGridLoc) gl.uniform1i(clusterGridLoc, CLUSTER_GRID_UNIT);
+          const clusterIndexLoc = cache.uniforms.get("u_clusterIndices");
+          if (clusterIndexLoc) gl.uniform1i(clusterIndexLoc, CLUSTER_INDEX_UNIT);
+          this._bindSpotShadowMaps(cache, ctx.lights);
+          this._bindDirectionalShadowMaps(cache, ctx.lights);
+          this._bindFogUniforms(
+            cache.uniforms,
+            this.postProcessing.volumetricFogOwnsFog ? undefined : ctx.scene?.fog,
+          );
+          this._bindGlobalIblUniforms(cache, ctx.scene);
+        }
+        this._bindMaterialState(manifest.state);
+        this._bindGenericMaterialProperties(cache.uniforms, manifest.properties, false);
+        this._bindSubgroupTextures(cache, manifest.shaderId, manifest);
+      } else {
+        cache = this._programCache.getProgram(ctx.shaderId ?? MaterialType.DEPTH, false, [
+          ShaderFlag.INSTANCE_FIELD,
+        ]);
+        if (cache !== currentProgram) {
+          gl.useProgram(cache.prog);
+          this._bindDummyShadowMaps(cache);
+          currentProgram = cache;
+        }
+        // Alpha-test foliage: the caster material's cutout map + threshold (DEPTH/EVSM programs).
+        this._bindShadowBatchUniforms(cache, manifest);
+      }
+
+      this._drawFieldCommand(gl, mesh, cache, cmd, instanceVbo);
+    }
+  }
+
+  /** Binds one field command's geometry + record range and performs the instanced draw. */
+  private _drawFieldCommand(
+    gl: WebGL2RenderingContext,
+    mesh: Mesh,
+    cache: WebGLProgramCacheEntry,
+    cmd: CpuIndirectDrawSource["commands"][number],
+    instanceVbo: WebGLBuffer,
+  ): void {
+    mesh.bind(
+      cache.attributes.get("a_position")!,
+      cache.attributes.get("a_normal") ?? -1,
+      cache.attributes.get("a_uv") ?? -1,
+      cache.attributes.get("a_tangent") ?? -1,
+      cache.attributes.get("a_joints") ?? -1,
+      cache.attributes.get("a_weights") ?? -1,
+      cache.attributes.get("a_color") ?? -1,
+    );
+
+    const posLoc = cache.attributes.get("a_instancePos");
+    const poseLoc = cache.attributes.get("a_instancePose");
+    if ((posLoc === undefined || posLoc < 0) && (poseLoc === undefined || poseLoc < 0)) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, instanceVbo);
+    if (posLoc !== undefined && posLoc >= 0) {
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(
+        posLoc,
+        3,
+        gl.FLOAT,
+        false,
+        INSTANCE_RECORD_BYTES,
+        cmd.instanceAttrByteOffset,
+      );
+      gl.vertexAttribDivisor(posLoc, 1);
+    }
+    if (poseLoc !== undefined && poseLoc >= 0) {
+      gl.enableVertexAttribArray(poseLoc);
+      // u32 bits are NOT an IEEE float: `vertexAttribIPointer` on the same record buffer.
+      gl.vertexAttribIPointer(
+        poseLoc,
+        1,
+        gl.UNSIGNED_INT,
+        INSTANCE_RECORD_BYTES,
+        cmd.instanceAttrByteOffset + 12,
+      );
+      gl.vertexAttribDivisor(poseLoc, 1);
+    }
+
+    mesh.drawInstanced(gl.TRIANGLES, cmd.instanceCount);
+
+    if (posLoc !== undefined && posLoc >= 0) {
+      gl.vertexAttribDivisor(posLoc, 0);
+      gl.disableVertexAttribArray(posLoc);
+    }
+    if (poseLoc !== undefined && poseLoc >= 0) {
+      gl.vertexAttribDivisor(poseLoc, 0);
+      gl.disableVertexAttribArray(poseLoc);
+    }
+  }
+
+  /**
+   * Shader-variant flags of ONE field material's program: the material's manifest flags (resolved
+   * against the tier quality like `_buildSubgroupShaderFlags`), IBL, normal output and EVSM, plus
+   * `INSTANCE_FIELD`. `TEXTURE_ARRAY` is stripped: the field vertex stage declares no
+   * `v_texIndex` output (the pose consumes the whole model transform, see base_vertex_header).
+   */
+  private _buildFieldShaderFlags(manifest: RenderManifest, scene?: Scene): string[] {
+    const flags = manifest.flags
+      ? [
+          ...(resolveManifestFlags(
+            manifest.flags,
+            this._quality.disableTextures,
+            this._quality.cheapIridescence,
+          ) ?? []),
+        ]
+      : [];
+    if (scene?.irradianceMap || scene?.prefilterMap) {
+      if (!flags.includes(ShaderFlag.IBL)) flags.push(ShaderFlag.IBL);
+    }
+    if (this._quality.normalBuffer) flags.push(NORMAL_OUTPUT_FLAG);
+    if (this._quality.shadowMode === ShadowMode.EVSM) flags.push(ShaderFlag.EVSM);
+    const ta = flags.indexOf(ShaderFlag.TEXTURE_ARRAY);
+    if (ta >= 0) flags.splice(ta, 1);
+    flags.push(ShaderFlag.INSTANCE_FIELD);
+    return flags;
   }
 
   /** Alpha-test uniforms of one shadow batch on `cache` (the caster material's cutout map). */

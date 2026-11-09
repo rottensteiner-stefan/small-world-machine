@@ -32,6 +32,10 @@ _Avoid_: Coarse/Fine pass — this project's docs consistently say Broadphase/Na
 The pattern (e.g. STIFF, SMOOTH, FPS, ISOMETRIC) that governs how a camera's transform updates each frame.
 _Avoid_: Controller — a Controller is a Behavior that drives input; Strategy is the update math itself, a different layer on the same camera.
 
+**Cell (Instance Field)**:
+The world-aligned population-grid cell of an `InstanceField` (uniform cube of `cellSize`, linearized row-major X-fastest): the unit for CPU cell culling (GL fallback), cell-ordered 16-B instance records, streaming and far-field aggregation. GPU culling goes per instance, never per cell; the pre-sorted cell order is what makes the zero-upload GL VBO with `vertexAttribPointer` offsets work.
+_Avoid_: Cluster (the 3D light-culling grid) and Froxel (frustum-aligned fog/light-medium grid) — unrelated named grids; an Instance Field cell is a fixed world-space population cell, never screen- or frustum-aligned.
+
 **Capture-Frame-Rate (`captureFrameRate`)**:
 A deterministic simulation mode (`SmallWorldMachine.captureFrameRate`) in which the main loop advances gameplay and animation by an exact fixed timestep $\Delta t = 1.0 / \text{captureFrameRate}$ per frame, completely decoupled from wall-clock execution duration (analogous to Unity's `Time.captureFramerate` or Godot's `--fixed-fps`). Makes recordings and screenshot baselines reproducible on the same device and driver; temporal effects (fog history, TAA) additionally need a few warm-up `step()` frames to converge.
 _Avoid_: Fixed Timestep (ambiguous: physics has an internal fixed sub-step, whereas capture frame rate locks the outer engine step and frame clock for recording).
@@ -112,6 +116,10 @@ _Avoid_: GTAO — an earlier draft was named `GtaoElement`, but that overstates 
 A pure data or transform operation on the shared headless core (`core/*`) that runs identically in the browser UI and the CLI, free of DOM, GL, and browser dependencies.
 _Avoid_: CLI Operation — the CLI is only one consumer; the identical operation also powers the web UI. Browser Operation, Standalone Tool Logic.
 
+**Instance Field**:
+A single scene-graph node owning N instances of 1..k prototypes (`PrototypeDescriptor`, ADR 0059): per-instance GPU culling (conservative frustum + projected-size, previous-frame HZB skip) and `atomicAdd` compaction into per-(view × LOD bucket) `IndirectDrawSource` segments — no CPU readback in the render path. Instances are NOT scene-graph objects (no per-instance picking, behaviors or octree entry); records are static 16-B (position + packed yaw/scale), cell-ordered, engine-owned sort, full rebuild as the only mutation path. WebGL2/1 fall back to CPU cell culling via the same contract. Deliberate counterpart to ADR 0046 auto-instancing: "many objects" vs "a population".
+_Avoid_: InstancedMesh / ADR-0046 auto-instancing (per-object CPU lane, wrong at 10⁵–10⁶), Mesh Merging per cell (no per-instance culling), billboard scatter.
+
 **Kit Registry**:
 The engine subsystem (`KitRegistry`) that discovers, caches, instantiates, and manages procedural kit fallbacks and prop assemblies for declarative level descriptors.
 _Avoid_: Asset Manager — `AssetManager` handles low-level glTF/texture downloads and caching; `KitRegistry` resolves higher-level modular kit nodes, sockets, and metadata (ADR 0020).
@@ -123,6 +131,10 @@ _Avoid_: Light Bounds, Footprint
 **Liquid Extension Hook**:
 Compile-time shader injection slots (`[WATER_EXT_DECL]`, `[WATER_EXT_SURFACE]`) allowing extension packages (such as `liquid-extras`) to inject custom procedural looks (e.g. Noir comic-book ink) without modifying or branching engine core shaders (ADR 0025).
 _Avoid_: Dynamic Shader Patching, Runtime Shader Interception.
+
+**LOD Bucket**:
+A projected-size band of a prototype's LOD chain (contiguous, ascending; bucket 0 = finest): an instance routes to the bucket containing its projected sphere diameter in pixels (`projectedDiameterPixels`, pinhole, primary-view projection) — selected BY THE MAIN CAMERA in every view, shadow/cascade views reuse the choice, optionally coarser via `shadowLodBias`. The bucket index is the bucket dimension of the per-(view × bucket) `IndirectDrawSource` segment table (`MAX_LOD_BUCKETS`).
+_Avoid_: Distance-based LOD selection, per-view LOD selection (breaks shadows — the documented Godot failure the reference author worked around); world-distance thresholds masquerading as pixel budgets.
 
 **Maker Mode / ToolHost**:
 The merged-app mode lifecycle: every authoring tool is hosted as a Maker Mode module, mounted and unmounted by the ToolHost inside the Maker app shell; a mode is neither a standalone page nor a Forge window.
@@ -163,6 +175,10 @@ _Avoid_: Light Grid (ambiguous with "Cluster grid", the whole 3D structure, rath
 **Post-Processing (Pipeline)**:
 The fixed, hardcoded effect order (Bloom -> HBAO -> Light Shafts -> Tonemapping -> Vignette -> Grain -> Quantize -> Flash) that every enabled effect runs through. Light Shafts in-scattering composites additively before Tonemapping so crepuscular beams contribute naturally to HDR exposure and contrast curves. Flash is deliberately last so it reads as a true full-screen overlay over everything else, not a color adjustment blended into the scene.
 _Avoid_: treating `PostProcessingEffectsConfig`'s object shape as an ordered list — enabling effects doesn't reorder them; the sequence itself is not configurable.
+
+**Prototype**:
+The smallest authored unit of an Instance Field population (ADR 0059): LOD chain (`LodBucketDescriptor` list, contiguous ascending projected-size bands) + shared material slot + base bounding sphere (`boundingRadius`). Instances reference a prototype by CONTIGUOUS RANGE in the cell-ordered record buffer — the 16-B record carries no prototype id and the per-instance cull radius is `prototypeBounds[p] × recordScale` (range-implicit resolution, contract `InstanceField.ts`).
+_Avoid_: Prefab (scene-graph object template), Model — a prototype is a cull/LOD/population unit, not an object to instantiate.
 
 **Savegame (Format)**:
 The persisted-runtime-state extension of the level-descriptor context (ADR 0020 / ADR 0041 §1, Stufe 5): scoped to concrete levels/instances via stable never-reused IDs plus minimal state flags — content objects are never serialized, so content updates cannot break saves. Carries an explicit `schemaVersion` + migration chain with fail-fast on unknown versions, forward-tolerant unknown fields, diff/patch semantics at the instance branch (no whole-object replacements), backup-before-migration as default, storage IndexedDB/OPFS.

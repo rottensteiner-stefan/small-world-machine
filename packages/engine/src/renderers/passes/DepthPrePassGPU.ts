@@ -245,6 +245,12 @@ export class DepthPrePassGPU implements RenderPass {
       }
     }
 
+    // ADR 0059 P1-2: pulled field depth draws for the main view (their cutout alpha writes this
+    // same shared depth buffer right after the scene casters, so the color pass's unchanged
+    // early-Z rejects occluded foliage like any other occluder). The main-view culls ran at the
+    // frame head; the pass already bound group 0 above.
+    renderer._recordFieldDraws(rp, 0, VIEW_SLOT_MAIN_CAMERA, false, "depth");
+
     rp.end();
   }
 }

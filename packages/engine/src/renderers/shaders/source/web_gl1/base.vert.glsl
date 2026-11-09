@@ -17,6 +17,29 @@ varying vec4 v_instanceColor;
 #endif
 #endif
 
+// ADR 0059 field lane (WebGL1): WebGL1 has NO integer attributes, so the frozen 16-byte record's
+// packed pose word is replaced by an unpacked f32 companion fill (yaw/scale as two float
+// attributes) produced by `InstanceFieldGL` from the engine's own `unpackInstancePose`; the record
+// storage stays byte-identical on every tier. The pose decode matches the frozen bit layout
+// (INSTANCE_POSE_BITS) and the WebGL2/WGSL lanes: yaw around world +Y (toward +Z, right-handed),
+// uniform scale prototype-relative.
+#ifdef USE_INSTANCE_FIELD
+attribute vec3 a_instancePos;
+attribute float a_instanceYaw;
+attribute float a_instanceScale;
+
+mat4 buildInstanceFieldMatrix(vec3 pos, float yaw, float scale) {
+    float c = cos(yaw);
+    float s = sin(yaw);
+    return mat4(
+        scale * c, 0.0, scale * s, 0.0,
+        0.0, scale, 0.0, 0.0,
+        -scale * s, 0.0, scale * c, 0.0,
+        pos.x, pos.y, pos.z, 1.0
+    );
+}
+#endif
+
 uniform mat4 u_vp;
 uniform mat4 u_model;
 uniform vec2 u_texOffset;
@@ -34,6 +57,9 @@ mat3 extractMat3(mat4 m) {
 }
 
 void main() {
+#ifdef USE_INSTANCE_FIELD
+    mat4 modelMat = buildInstanceFieldMatrix(a_instancePos, a_instanceYaw, a_instanceScale);
+#else
 #ifdef USE_INSTANCING
     mat4 modelMat = u_model * a_instanceMatrix;
 #ifdef USE_INSTANCE_COLOR
@@ -41,6 +67,7 @@ void main() {
 #endif
 #else
     mat4 modelMat = u_model;
+#endif
 #endif
 #ifdef USE_SKINNING
     // GPU skinning, mirroring the web_gl2 / web_gpu vertex stages: linear blend of the four

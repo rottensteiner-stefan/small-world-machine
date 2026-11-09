@@ -44,6 +44,7 @@ class TestWebGLRenderer extends AbstractWebGLRenderer {
   public override copyToOpaqueTexture(): void {}
   public override copyToOpaqueDepthTexture(): void {}
   public override flushPostProcess(): void {}
+  protected override _drawCpuIndirectSource(): void {}
 }
 
 describe("AbstractWebGLRenderer Pass System", () => {

@@ -298,6 +298,11 @@ export class CascadedShadowPassGPU implements RenderPass {
         }
       }
 
+      // ADR 0059 P1-2: pulled field draws for this cascade's EVSM moments (rgba32float target,
+      // LEQUAL against the stored depth; the culls for view VIEW_SLOT_CASCADE_BASE + i ran in the
+      // depth loop above).
+      renderer._recordFieldDraws(rp, viewOffset, VIEW_SLOT_CASCADE_BASE + i, false, "evsm");
+
       rp.end();
     }
   }
@@ -427,6 +432,15 @@ export class CascadedShadowPassGPU implements RenderPass {
         cascadeCam.viewProjectionMatrix,
       );
 
+      // ADR 0059 P1-2: cull this cascade's field segments (mode C, frustum+size only) into the
+      // shared encoder BEFORE the render pass opens -- the compute dispatch cannot sit inside an
+      // open render pass.
+      renderer._cullFieldShadowView(
+        ce,
+        VIEW_SLOT_CASCADE_BASE + i,
+        cascadeCam.viewProjectionMatrix,
+      );
+
       const rp = ce.beginRenderPass({
         colorAttachments: [
           {
@@ -526,6 +540,10 @@ export class CascadedShadowPassGPU implements RenderPass {
           );
         }
       }
+
+      // ADR 0059 P1-2: pulled field draws for this cascade (depth variant into this cascade's
+      // layer; the pass bound the dummy-referencing global snapshot, so `bindGlobal` stays off).
+      renderer._recordFieldDraws(rp, viewOffset, VIEW_SLOT_CASCADE_BASE + i, false, "depth");
 
       rp.end();
     }

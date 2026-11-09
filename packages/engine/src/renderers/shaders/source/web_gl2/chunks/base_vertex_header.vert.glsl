@@ -21,6 +21,32 @@ out float v_texIndex;
 #endif
 #endif
 
+// ADR 0059 field lane (WebGL2): the frozen 16-byte instance record (INSTANCE_RECORD_LAYOUT)
+// binds as `a_instancePos` (bytes 0..11, vec3 f32) + `a_instancePose` (bytes 12..15, u32 read
+// via `vertexAttribIPointer`). Decode is the frozen bit layout (INSTANCE_POSE_BITS), bit-identical
+// to the CPU packer `packInstancePose`, the cull unpack in `InstanceFieldGL` and the WebGPU pull
+// shader `field_pull.wgsl`: yaw = [15:0] / 0xFFFF * 2pi around world +Y (toward +Z, right-handed,
+// +X right, +Y up, +Z backward), uniformScale = [31:16] / 256. The pose matrix replaces `u_model`
+// entirely; no material flag may put `a_instanceData`-driven outputs (v_texIndex/v_instanceColor)
+// on a field program (the renderer strips TEXTURE_ARRAY/INSTANCE_COLOR from field flags).
+#ifdef USE_INSTANCE_FIELD
+in vec3 a_instancePos;
+in uint a_instancePose;
+
+mat4 buildInstanceFieldMatrix(vec3 pos, uint packedPose) {
+    float yaw = (float(packedPose & 0xFFFFu) / 65535.0) * 6.283185307179586;
+    float scale = float(packedPose >> 16u) * (1.0 / 256.0);
+    float c = cos(yaw);
+    float s = sin(yaw);
+    return mat4(
+        scale * c, 0.0, scale * s, 0.0,
+        0.0, scale, 0.0, 0.0,
+        -scale * s, 0.0, scale * c, 0.0,
+        pos.x, pos.y, pos.z, 1.0
+    );
+}
+#endif
+
 struct PointLight {
     vec3 pos;
     float distance;

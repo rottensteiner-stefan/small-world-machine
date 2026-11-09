@@ -31,6 +31,7 @@ describe("WebGLMainPass depth clear", () => {
       resetStateCache: vi.fn(() => calls.push("resetStateCache")),
       targetClearColor: { r: 0, g: 0, b: 0, a: 1 },
       renderBatch: vi.fn(),
+      drawInstanceFieldView: vi.fn(),
       copyToOpaqueDepthTexture: vi.fn(),
       copyToOpaqueTexture: vi.fn(),
       postProcessing: { get: vi.fn(() => undefined) },

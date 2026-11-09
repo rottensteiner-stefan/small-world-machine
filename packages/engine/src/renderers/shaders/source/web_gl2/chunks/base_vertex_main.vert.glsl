@@ -15,6 +15,10 @@ void main() {
   vec3 localTangent = a_tangent.xyz;
 #endif
 
+#ifdef USE_INSTANCE_FIELD
+  // ADR 0059 field lane: per-instance pose from the 16-byte record, never `u_model`.
+  mat4 modelMat = buildInstanceFieldMatrix(a_instancePos, a_instancePose);
+#else
 #ifdef USE_INSTANCING
   mat4 modelMat = u_model * a_instanceMatrix;
 #ifdef USE_TEXTURE_ARRAY
@@ -25,6 +29,7 @@ void main() {
 #endif
 #else
   mat4 modelMat = u_model;
+#endif
 #endif
 
   vec4 wp = modelMat * localPos;

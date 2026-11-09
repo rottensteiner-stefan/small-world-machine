@@ -36,6 +36,7 @@ function run(opts: {
     resetStateCache: vi.fn(),
     targetClearColor: { r: 0, g: 0, b: 0, a: 1 },
     renderBatch: vi.fn(),
+    drawInstanceFieldView: vi.fn(),
     copyToOpaqueDepthTexture: depth,
     copyToOpaqueTexture: color,
     requiresOpaqueDepth: vi.fn(opts.needsDepth),

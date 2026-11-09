@@ -1,15 +1,9 @@
 // Removed Fog import
-import type {
-  CubeTexture,
-  DirectionalLight,
-  Object3D,
-  Scene,
-  SpotLight,
-  Texture,
-} from "../../core/index.js";
+import type { CubeTexture, DirectionalLight, Scene, SpotLight, Texture } from "../../core/index.js";
 import {
   InstancedMesh,
   MAX_CLUSTERED_LIGHTS_PER_TYPE,
+  Object3D,
   isSkinnedMesh,
   computeClipToBox,
 } from "../../core/index.js";
@@ -33,6 +27,9 @@ import clusterCullWGSL from "../shaders/source/web_gpu/compute/cluster_cull.wgsl
 import hzbVisibilityTestWGSL from "../shaders/source/web_gpu/compute/hzb_visibility_test.wgsl?raw";
 import gpuParticlesWGSL from "../shaders/source/web_gpu/particles/gpu_particles.wgsl?raw";
 import gpuParticlesDrawWGSL from "../shaders/source/web_gpu/particles/gpu_particles_draw.wgsl?raw";
+import instanceFieldStructsWGSL from "../shaders/source/web_gpu/chunks/instance_field_structs.wgsl?raw";
+import instanceCullWGSL from "../shaders/source/web_gpu/compute/instance_cull.wgsl?raw";
+import fieldPullWGSL from "../shaders/source/web_gpu/instance_field/field_pull.wgsl?raw";
 import {
   RendererType,
   ShaderChunkId,
@@ -49,6 +46,7 @@ import { GPUFallbackResources } from "./managers/GPUFallbackResources.js";
 import { GPURenderTargetCache } from "./managers/GPURenderTargetCache.js";
 import { GPUTextureResourceCache } from "./managers/GPUTextureResourceCache.js";
 import { HzbOcclusionSystem } from "./managers/HzbOcclusionSystem.js";
+import type { HzbFieldPyramidAccess } from "./managers/HzbOcclusionSystem.js";
 import { PostFxChain } from "./managers/PostFxChain.js";
 import { OpaqueCapture } from "./managers/OpaqueCapture.js";
 import {
@@ -74,12 +72,19 @@ import {
   ClusterCullPassGPU,
   DepthPrePassGPU,
   HzbOcclusionPassGPU,
+  FieldHzbBuildPassGPU,
 } from "../passes/index.js";
 import { GpuParticlesPassGPU } from "../passes/GpuParticlesPassGPU.js";
 import type { GpuParticleDrawable, GpuParticlePassHost } from "./managers/GpuParticleSystemHost.js";
+import type {
+  InstanceFieldSystem,
+  FieldDrawVariant,
+  InstanceFieldRenderHost,
+} from "./managers/InstanceFieldSystem.js";
 import { GpuTimer } from "./managers/GpuTimer.js";
 import type { SkinnedMesh, Skeleton } from "../../core/animation/index.js";
 import { MAX_SKINNED_BONES } from "../../core/animation/index.js";
+import { INSTANCE_FIELD_BIND_GROUP } from "../../core/InstanceField.js";
 import type { RenderBatch } from "../../core/Scene.js";
 import { CUBE_FACE_COUNT, MAX_SHADOWED_POINT_LIGHTS } from "../../core/lights/PointLightShadow.js";
 
@@ -109,7 +114,10 @@ const MATERIAL_BIND_GROUP_IDLE_FRAMES = 600;
 /** Model matrix of an auto-instancing run's object slot (ADR 0046). */
 const IDENTITY_MATRIX = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
-export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassHost {
+export class WebGPURenderer
+  extends AbstractRenderer
+  implements GpuParticlePassHost, InstanceFieldRenderHost
+{
   public override readonly type: RendererType = RendererType.WEB_GPU;
   protected _adapter: GPUAdapter | undefined = undefined;
   private _device: GPUDevice | undefined = undefined;
@@ -504,6 +512,236 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     for (let i = 0; i < systems.length; i++) systems[i]!.recordIndirectDraw(rp);
   }
 
+  // ---------------------------------------------------------------------------
+  // Instance fields (ADR 0059 step 1, P1-2) -- registration list + host accessors
+  // ---------------------------------------------------------------------------
+
+  /** Fields registered through `registerInstanceField()` (never mutated during a frame --
+   * registration happens at setup time, the coordinator iterates read-only). */
+  private readonly _instanceFields: InstanceFieldSystem[] = [];
+
+  /** Scratch-object pin per field geometry (see `acquireFieldGeometry`): keeps the geometry
+   * alive in `_geometryCache` for exactly one pin; released on `releaseFieldGeometry`. */
+  private readonly _fieldGeometryPins = new WeakMap<GeometryDataInterface, Object3D>();
+
+  public get instanceFieldCount(): number {
+    return this._instanceFields.length;
+  }
+
+  /** Composed cull module source: compute-structs chunk + screen footprint + shared field
+   * chunk + `instance_cull.wgsl` (single source of the `@group(2)` bindings). */
+  public get fieldCullModuleSource(): string {
+    return (
+      this._computeStructsChunk() +
+      "\n" +
+      (this.context.shaderRegistry.getChunk(ShaderChunkId.WGSL_SCREEN_FOOTPRINT, "wgsl") ?? "") +
+      "\n" +
+      instanceFieldStructsWGSL +
+      "\n" +
+      instanceCullWGSL
+    );
+  }
+
+  /** Composed pulled-draw module source: compute-structs chunk + shared field chunk +
+   * `field_pull.wgsl`. */
+  public get fieldPullModuleSource(): string {
+    return this._computeStructsChunk() + "\n" + instanceFieldStructsWGSL + "\n" + fieldPullWGSL;
+  }
+
+  /** Per-draw view-projection bind-group layout (group 3 of the field pull pipelines). */
+  public get viewBGL(): GPUBindGroupLayout {
+    return this._viewBGL;
+  }
+
+  /** Per-draw view-projection bind group (group 3; bound with the pass-provided dynamic offset). */
+  public get viewBindGroup(): GPUBindGroup {
+    return this._viewBindGroup;
+  }
+
+  /** Texture view with the renderer's quality fallbacks (white when unloaded / disableTextures). */
+  public getTextureView(tex: Texture | undefined): GPUTextureView {
+    return this._textures.getTextureView(tex, this._quality);
+  }
+
+  /** Destroys `buffer` after this frame's submit (draws recorded earlier may still use it). */
+  public deferDestroyBuffer(buffer: GPUBuffer): void {
+    this._fallback.deferDestroyBuffer(buffer);
+  }
+
+  /** Previous-frame pyramid handle for the field cull lane (delegates to the HZB system). A
+   * not-yet-initialized / lost device hands back the inert `available: false` fallback with the
+   * white-texture view -- the field lane gates on `hzbEnabled` and never samples it then. */
+  public getPreviousFrameHzb(): HzbFieldPyramidAccess {
+    const hzb = this._hzbSystem;
+    if (!hzb) {
+      return {
+        available: false,
+        frameIndex: 0,
+        readHandle: { slot: 0, view: this._fallback.whiteTextureView, mipLevelCount: 1 },
+      };
+    }
+    return hzb.getPreviousFrameHzb();
+  }
+
+  /**
+   * Pins `geometry` in the geometry cache via one per-geometry scratch object (ADR 0059 P1-2
+   * field lane; the cache refcounts per `Object3D`, so a dedicated object gives exactly one
+   * pin). Returns the GPU cache entry (vertex/index buffers) the field draw path binds.
+   */
+  public acquireFieldGeometry(geometry: GeometryDataInterface): WebGPUGeoCacheEntry {
+    let scratch = this._fieldGeometryPins.get(geometry);
+    if (!scratch) {
+      scratch = new Object3D();
+      scratch.geometry = geometry;
+      this._fieldGeometryPins.set(geometry, scratch);
+    }
+    return this._geometryCache.getGeoCache(scratch, geometry);
+  }
+
+  /** Releases the pin acquired by {@link acquireFieldGeometry} (frees the cache entry when its
+   * refcount reaches zero). */
+  public releaseFieldGeometry(geometry: GeometryDataInterface): void {
+    const scratch = this._fieldGeometryPins.get(geometry);
+    if (!scratch) return;
+    this._geometryCache.releaseGeometryFor(scratch);
+    this._fieldGeometryPins.delete(geometry);
+  }
+
+  /**
+   * Registers a field node: attaches the renderer host (creating its GPU resources on first
+   * call) and adds it to the per-frame cull/draw list. Fails closed with a loud error only when
+   * the device caps `maxBindGroups` below the spec minimum of 4 — the field's draw pipeline
+   * uses slots {0, 2, 3} (S2 fold, `INSTANCE_FIELD_BIND_GROUP` = 2), so the highest slot is 3.
+   * A 4-cap adapter (the WebGPU default; verified on real `apple/metal-3`) hosts the lane
+   * natively with no limit raise. Also inserts the hidden pyramid-build pass when occlusion
+   * culling is off and no pyramid would otherwise exist.
+   */
+  public registerInstanceField(system: InstanceFieldSystem): void {
+    if (this._instanceFields.includes(system)) return;
+    if ((this._device?.limits.maxBindGroups ?? 0) < INSTANCE_FIELD_BIND_GROUP + 2) {
+      throw new Error(
+        "[WebGPURenderer] This device caps maxBindGroups below 4 (the WebGPU spec minimum); " +
+          "the instance-field lane needs slots {0,2,3} (`INSTANCE_FIELD_BIND_GROUP` = 2 plus the " +
+          "shared view group 3).",
+      );
+    }
+    system.attachHost(this);
+    this._instanceFields.push(system);
+    this._syncFieldHzbPass();
+  }
+
+  /** Detaches and disposes `system` (frees every buffer/pipeline it created) and removes it
+   * from the cull/draw list. No-op when the system was never registered. */
+  public unregisterInstanceField(system: InstanceFieldSystem): void {
+    const i = this._instanceFields.indexOf(system);
+    if (i < 0) return;
+    this._instanceFields.splice(i, 1);
+    system.dispose();
+    this._syncFieldHzbPass();
+  }
+
+  /**
+   * Keeps the hidden pyramid-build pass in sync with the field list: present (after
+   * `DepthPrePassGPU`) while fields exist AND occlusion culling is off, absent otherwise. With
+   * occlusion enabled `HzbOcclusionPassGPU` already builds the pyramid every frame.
+   */
+  private _syncFieldHzbPass(): void {
+    const want = this._instanceFields.length > 0 && !this._occlusionCullingEnabled;
+    const found = this._passes.findIndex((p) => p.name === "FieldHzbBuildPassGPU");
+    if (want && found < 0) {
+      // DepthPrePassGPU is always _passes[3] when occlusion is off (FieldHzbBuildPassGPU only
+      // exists in that configuration), so index 4 is right before MainRenderPass.
+      this._passes.splice(4, 0, new FieldHzbBuildPassGPU());
+    } else if (!want && found >= 0) {
+      this._passes.splice(found, 1);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // ADR 0059 P1-2 frame coordinator + single-point pass hooks
+  // ---------------------------------------------------------------------------
+
+  /** Frame-head coordinator: per-field main-view prepare + cull (mode A), recorded right after
+   * the frame encoder is created -- before EVERY pass, so the main-view segments are ready when
+   * `DepthPrePassGPU`/`MainRenderPass` draw them. `vp` is the RAW (non-ZO-corrected) main
+   * camera view-projection (the engine frustum extraction expects the raw matrix); the frozen
+   * projected-size inputs are derived from the canvas height + `projMatrix[5]`. No-op for
+   * offscreen sub-renders (no reflection vegetation in P1). */
+  public _recordInstanceFieldFrame(
+    ce: GPUCommandEncoder,
+    vp: Float32Array,
+    camPos: Vector3D,
+    projMatrix?: Float32Array,
+  ): void {
+    if (this._activeRenderTarget) return;
+    const fields = this._instanceFields;
+    if (fields.length === 0) return;
+    const viewportHeightPx = this._context.canvas.height;
+    const proj05 = projMatrix && projMatrix.length >= 16 ? (projMatrix[5] ?? 1) : 1;
+    const fovRadiansY = proj05 > 0 ? 2 * Math.atan(1 / proj05) : 0;
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i]!;
+      f.prepareMainView(vp, camPos, viewportHeightPx, fovRadiansY);
+      f.cullMainView(ce);
+    }
+  }
+
+  /** Prepares + culls one SHADOW view (mode C) across every registered field. Called by the
+   * shadow passes right before the field's depth/EVSM draws. `rawVp` is the shadow camera's RAW
+   * view-projection. No-op offscreen (no field culls -> stale segments). */
+  public _cullFieldShadowView(ce: GPUCommandEncoder, viewIndex: number, rawVp: Float32Array): void {
+    if (this._activeRenderTarget) return;
+    const fields = this._instanceFields;
+    if (fields.length === 0) return;
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i]!;
+      f.prepareShadowView(viewIndex, rawVp);
+      f.cullShadowView(ce, viewIndex);
+    }
+  }
+
+  /** Single-point field draw hook consumed by the passes: records every registered field's
+   * pulled indirect draws for `viewIndex` into the open render pass. See
+   * `InstanceFieldSystem.recordDraw` for the `viewOffset`/`bindGlobal`/`variant` semantics.
+   * No-op offscreen. */
+  public _recordFieldDraws(
+    rp: GPURenderPassEncoder,
+    viewOffset: number,
+    viewIndex: number,
+    bindGlobal: boolean,
+    variant: FieldDrawVariant,
+  ): void {
+    if (this._activeRenderTarget) return;
+    const fields = this._instanceFields;
+    if (fields.length === 0) return;
+    for (let i = 0; i < fields.length; i++) {
+      fields[i]!.recordDraw(rp, viewOffset, viewIndex, bindGlobal, variant);
+    }
+  }
+
+  /** Records the opt-in cull-probe staging copies for every probed field, right before
+   * `ce.finish()` (render path never depends on them). */
+  public _recordFieldProbeCopies(ce: GPUCommandEncoder): void {
+    const fields = this._instanceFields;
+    if (fields.length === 0) return;
+    for (let i = 0; i < fields.length; i++) fields[i]!.recordProbeStaging(ce, this._frameCount);
+  }
+
+  /** Kicks the probed fields' staging `mapAsync()` right after `queue.submit()`. */
+  public _kickoffFieldProbeReadbacks(): void {
+    const fields = this._instanceFields;
+    if (fields.length === 0) return;
+    for (let i = 0; i < fields.length; i++) fields[i]!.kickoffProbeReadback();
+  }
+
+  /** Polls the probed fields' staging maps at the NEXT frame head (previous frame's readback;
+   * `onCullFrame` fires when both buffers are mapped). */
+  public _pollFieldProbeReadbacks(): void {
+    const fields = this._instanceFields;
+    if (fields.length === 0) return;
+    for (let i = 0; i < fields.length; i++) fields[i]!.pollProbeReadback();
+  }
+
   private _globalBGL!: GPUBindGroupLayout;
   private _objectBGL!: GPUBindGroupLayout;
   private _boneMatricesBuffer!: GPUBuffer;
@@ -595,9 +833,11 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
       requiredLimits["maxComputeWorkgroupStorageSize"] =
         this._adapter.limits.maxComputeWorkgroupStorageSize;
     }
-    if (this._adapter.limits.maxBindGroups) {
-      requiredLimits["maxBindGroups"] = this._adapter.limits.maxBindGroups;
-    }
+    // `maxBindGroups` is deliberately NOT raised (P1-2 had raised it to
+    // `min(adapter.maxBindGroups, 8)` for the pre-fold `@group(4)`): the S2 fold moved the
+    // instance-field lane into slots {0,2,3}, and no engine subsystem uses a slot above the
+    // spec minimum of 4 — so the default 4-cap serves everything (verified on real
+    // `apple/metal-3`), and requesting the adapter's own max again would be a no-op.
     if (this._adapter.limits.maxBindingsPerBindGroup) {
       requiredLimits["maxBindingsPerBindGroup"] = this._adapter.limits.maxBindingsPerBindGroup;
     }
@@ -892,25 +1132,24 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     );
 
     // Hierarchical-Z occlusion culling -- see docs/adr/0008-hzb-occlusion-culling-webgpu-only.md.
-    // Everything here is opt-in: skipped entirely (zero pipelines/buffers created) unless
-    // `enableOcclusionCulling` was set at init. The pyramid texture itself is allocated in
-    // `HzbOcclusionSystem.resize()` (called from `setSize()`), once the canvas's real dimensions
-    // are known. The visibility-test module is composed here from the renderer's shader chunks
-    // because those live on its shader registry; the system owns all the GPU resources it makes.
-    if (this._occlusionCullingEnabled) {
-      this._hzbSystem = new HzbOcclusionSystem(
-        this._device!,
-        this._fallback,
-        this._computeStructsChunk() +
-          "\n" +
-          (this.context.shaderRegistry.getChunk(ShaderChunkId.WGSL_SCREEN_FOOTPRINT, "wgsl") ??
-            "") +
-          "\n" +
-          hzbVisibilityTestWGSL,
-        this._globalBGL,
-        (width: number, height: number) => this._textures.computeMipLevelCount(width, height),
-      );
-    }
+    // Constructed UNCONDITIONALLY since ADR 0059 step 1 (P1-2): the instance-field cull lane
+    // depends on the previous-frame pyramid regardless of `enableOcclusionCulling`, so the
+    // per-object visibility test must simply never dispatch while occlusion stays off. The
+    // pyramid texture itself is allocated in `HzbOcclusionSystem.resize()` (called from
+    // `setSize()`), once the canvas's real dimensions are known. The visibility-test module is
+    // composed here from the renderer's shader chunks because those live on its shader
+    // registry; the system owns all the GPU resources it makes.
+    this._hzbSystem = new HzbOcclusionSystem(
+      this._device!,
+      this._fallback,
+      this._computeStructsChunk() +
+        "\n" +
+        (this.context.shaderRegistry.getChunk(ShaderChunkId.WGSL_SCREEN_FOOTPRINT, "wgsl") ?? "") +
+        "\n" +
+        hzbVisibilityTestWGSL,
+      this._globalBGL,
+      (width: number, height: number) => this._textures.computeMipLevelCount(width, height),
+    );
   }
 
   /** Writes an already ZO-corrected view-projection matrix into `slot`'s bytes. Called by
@@ -940,9 +1179,12 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
   // Hierarchical-Z occlusion culling -- the whole GPU subsystem (pyramid pipelines, depth texture,
   // packed buffers, ping-pong staging pair, per-frame build/dispatch/readback) lives in
   // `HzbOcclusionSystem`. These delegates keep the exact public surface intact: `HzbOcclusionPassGPU`
-  // calls `_buildHzbPyramid()`/`_dispatchHzbTest()`, and `SmallWorldMachine` calls the optional
-  // `Renderer.applyPendingOcclusionResults()`. All of them are safe no-ops when the system is
-  // absent (`enableOcclusionCulling` was never set), matching the old field-undefined guards.
+  // calls `_buildHzbPyramid()`/`_dispatchHzbTest()`, `FieldHzbBuildPassGPU` calls
+  // `_buildHzbPyramid()`, and `SmallWorldMachine` calls the optional
+  // `Renderer.applyPendingOcclusionResults()`. The system is constructed unconditionally since
+  // ADR 0059 P1-2 (the instance-field lane needs the pyramid even with occlusion off); the
+  // per-object visibility test simply never dispatches then. All delegates are safe no-ops when
+  // the system is absent (device init never completed).
 
   public _buildHzbPyramid(ce: GPUCommandEncoder): void {
     this._hzbSystem?.buildPyramid(ce, this._activeRenderTarget !== null);
@@ -977,6 +1219,11 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
   public override notifyCameraTeleport(_scene: Scene): void {
     this._postFxChain.resetHistory();
     this._hzbSystem?.resetOcclusionStreak();
+    // ADR 0059 P1-2 (IF-CAMERA-CUT-HZB-SKIP): the previous-frame pyramid is stale after a cut;
+    // invalidate it AND arm each field's one-frame skip so no cull consumes stale data.
+    this._hzbSystem?.invalidatePyramid();
+    const fields = this._instanceFields;
+    for (let i = 0; i < fields.length; i++) fields[i]!.notifyCameraTeleport();
   }
 
   public _createGlobalBindGroup(scene?: Scene): GPUBindGroup {
@@ -1145,6 +1392,12 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     this._globalUniformWriter.update(vp, camPos, lights, scene, near, far, projMatrix);
     const ce = this._device.createCommandEncoder();
 
+    // ADR 0059 P1-2: resolve the probe readback of the PREVIOUS frame, then record the per-field
+    // main-view culls (mode A) before any pass records a draw that consumes their segments.
+    // No-op while no field is registered / offscreen.
+    this._pollFieldProbeReadbacks();
+    this._recordInstanceFieldFrame(ce, vp, camPos, projMatrix);
+
     if (
       this.postProcessing.enabled &&
       !this._hdrTexture &&
@@ -1231,6 +1484,10 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     // as the last command of the encoder, so `resolveQuerySet` ordering is guaranteed.
     this._gpuTimer.endFrame(ce);
 
+    // ADR 0059 P1-2: opt-in cull-probe staging (renders nothing; the render path never depends
+    // on the readback completing).
+    this._recordFieldProbeCopies(ce);
+
     this._device.queue.submit([ce.finish()]);
     if (
       this._activeRenderTarget instanceof RenderTarget &&
@@ -1244,6 +1501,7 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     this._instanceRing.endFrame();
     this._fallback.drainPendingDestroy();
     if (this._occlusionCullingEnabled) this._kickoffHzbMapAsync();
+    this._kickoffFieldProbeReadbacks();
   }
 
   /**
@@ -2071,10 +2329,11 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     this._depthTextureView = this._depthTexture.createView();
 
     // HZB occlusion pyramid update as the canvas resized -- the system reallocates its depth
-    // texture at the new dimensions and rebuilds its bind groups. The mip-0 copy group needs the
-    // SCREEN depth view, so it is passed explicitly: `activeDepthView` would resolve to an
+    // texture pair at the new dimensions and rebuilds its bind groups. The mip-0 copy group needs
+    // the SCREEN depth view, so it is passed explicitly: `activeDepthView` would resolve to an
     // offscreen target's depth if one happens to be bound when the app calls `setSize()`.
-    // No-op when occlusion culling is disabled (`_hzbSystem` is never constructed then).
+    // Always constructed since ADR 0059 P1-2 (the instance-field lane needs the pyramid); the
+    // per-object visibility test just never dispatches while `enableOcclusionCulling` is off.
     this._hzbSystem?.resize(
       this._context.canvas.width,
       this._context.canvas.height,
@@ -2171,6 +2430,11 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
     const particles = this._gpuParticleSystems;
     for (let i = 0; i < particles.length; i++) particles[i]!.dispose();
     particles.length = 0;
+
+    // Same for every registered instance field (frees buffers/pipelines + geometry pins).
+    const fields = this._instanceFields;
+    for (let i = 0; i < fields.length; i++) fields[i]!.dispose();
+    fields.length = 0;
 
     this._materialBindGroups.clear();
     this._shadowMaps.clear();

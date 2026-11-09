@@ -255,6 +255,8 @@ describe("Shadow passes' dummy color attachment tracks the active target's forma
       _createGlobalBindGroup: vi.fn(() => ({})),
       _setViewMatrix: vi.fn(() => 0),
       _renderSubgroup: vi.fn(),
+      _cullFieldShadowView: vi.fn(),
+      _recordFieldDraws: vi.fn(),
       scratchGlobalBufferData: new Float32Array(216),
       globalUniformBuffer: {},
       globalBindGroup: undefined,

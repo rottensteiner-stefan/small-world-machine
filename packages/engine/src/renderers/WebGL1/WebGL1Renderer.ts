@@ -1,4 +1,8 @@
-import { AbstractWebGLRenderer } from "../AbstractWebGLRenderer.js";
+import {
+  AbstractWebGLRenderer,
+  type InstanceFieldDrawContext,
+  type InstanceFieldDrawPass,
+} from "../AbstractWebGLRenderer.js";
 import { WebGLMainPass } from "../passes/WebGLMainPass.js";
 import { WebGLPostProcessPass } from "../passes/WebGLPostProcessPass.js";
 import { GLPostEffects, createGLPostEffectContext } from "../post/passes/index.js";
@@ -9,7 +13,7 @@ import {
   type CubeTexture,
   type RenderTarget,
 } from "../../core/textures/index.js";
-import { resolveManifestFlags } from "../shaders/index.js";
+import { resolveManifestFlags, type RenderManifest } from "../shaders/index.js";
 import type { Object3D, RenderBatch, Scene } from "../../core/index.js";
 import { DeviceLimit, InstancedMesh } from "../../core/index.js";
 import { isSkinnedMesh, MAX_SKINNED_BONES } from "../../core/animation/index.js";
@@ -20,6 +24,8 @@ import {
 } from "../gl/managers/WebGLProgramCache.js";
 import { WebGLTextureManager } from "../gl/managers/WebGLTextureManager.js";
 import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
+import type { InstanceFieldGL } from "../gl/managers/InstanceFieldGL.js";
+import { INSTANCE_RECORD_BYTES, type CpuIndirectDrawSource } from "../../core/InstanceField.js";
 import {
   MaterialType,
   PostProcessingEffectType,
@@ -1065,6 +1071,243 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
    * has no clustering (docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md) and only a handful
    * of uniform slots, so exceeding a limit fails fast.
    */
+  /**
+   * @inheritdoc — glsl100 field draw loop (ADR 0059 CPU-cell lane, option (i)). WebGL1 has no
+   * shadow maps, so only the `opaque` pass runs (the dual hooks are WebGL2-only). Same single
+   * static record VBO + BYTE-OFFSET rebinding as GL2, plus the unpacked pose companion VBO
+   * (yaw/scale as two f32 per record, the frozen contract's WebGL1 mapping); instancing runs
+   * through `ANGLE_instanced_arrays` and FAILS CLOSED (warn once, skip the field — never a
+   * broken frame) when the extension is absent. 32-bit indexed meshes without
+   * `OES_element_index_uint` are skipped with the same one-time warning as the standard path.
+   */
+  protected override _drawCpuIndirectSource(
+    field: InstanceFieldGL,
+    source: CpuIndirectDrawSource,
+    pass: InstanceFieldDrawPass,
+    ctx: InstanceFieldDrawContext,
+  ): void {
+    if (pass !== "opaque" || source.commands.length === 0) return;
+    const gl = this.gl;
+    const instanceVbo = field.instanceVbo;
+    const companionVbo = field.gl1CompanionVbo;
+    if (!instanceVbo || !companionVbo) return;
+    const ext = this._instancedArraysExt;
+    if (!ext) {
+      if (!this._warnedNoInstancedArrays) {
+        console.warn(
+          "[WebGL1Renderer] ANGLE_instanced_arrays not supported by this device -- InstanceField " +
+            "draws are skipped (fail-closed, ADR 0043).",
+        );
+        this._warnedNoInstancedArrays = true;
+      }
+      return;
+    }
+
+    let currentProgram: WebGLProgramCacheEntry | undefined;
+    for (const cmd of source.commands) {
+      const mesh = field.getGeometry(cmd.geometrySlot);
+      if (!mesh) continue;
+      const material = field.getMaterial(cmd.materialSlot);
+      if (!material) continue;
+      const manifest = material.material.getRenderManifest();
+
+      const cache = this._programCache.getProgram(
+        manifest.shaderId,
+        false,
+        this._buildFieldShaderFlags(manifest, ctx.scene),
+      );
+      if (cache !== currentProgram) {
+        gl.useProgram(cache.prog);
+        currentProgram = cache;
+        this._bindFieldGlobalUniforms(cache, ctx);
+      }
+
+      this._bindMaterialState(manifest.state);
+      this._bindGenericMaterialProperties(cache.uniforms, manifest.properties, true);
+      this._bindFieldTextures(cache, manifest, ctx.scene);
+
+      mesh.bind(
+        cache.attributes.get("a_position")!,
+        cache.attributes.get("a_normal")!,
+        cache.attributes.get("a_uv")!,
+        cache.attributes.get("a_tangent")!,
+        -1,
+        -1,
+        cache.attributes.get("a_color")!,
+      );
+
+      const posLoc = cache.attributes.get("a_instancePos");
+      const yawLoc = cache.attributes.get("a_instanceYaw");
+      const scaleLoc = cache.attributes.get("a_instanceScale");
+      if (
+        posLoc === undefined ||
+        posLoc < 0 ||
+        yawLoc === undefined ||
+        yawLoc < 0 ||
+        scaleLoc === undefined ||
+        scaleLoc < 0
+      ) {
+        continue;
+      }
+
+      // Record positions: bytes 0..11 as one vec3 (byte offset per command, like GL2).
+      gl.bindBuffer(gl.ARRAY_BUFFER, instanceVbo);
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(
+        posLoc,
+        3,
+        gl.FLOAT,
+        false,
+        INSTANCE_RECORD_BYTES,
+        cmd.instanceAttrByteOffset,
+      );
+      ext.vertexAttribDivisorANGLE(posLoc, 1);
+      // Unpacked pose companion (yaw, scale as two f32; stride 8, offset per record index).
+      gl.bindBuffer(gl.ARRAY_BUFFER, companionVbo);
+      gl.enableVertexAttribArray(yawLoc);
+      gl.vertexAttribPointer(yawLoc, 1, gl.FLOAT, false, 8, cmd.instanceBase * 8);
+      ext.vertexAttribDivisorANGLE(yawLoc, 1);
+      gl.enableVertexAttribArray(scaleLoc);
+      gl.vertexAttribPointer(scaleLoc, 1, gl.FLOAT, false, 8, cmd.instanceBase * 8 + 4);
+      ext.vertexAttribDivisorANGLE(scaleLoc, 1);
+
+      // ADR 0043 honest fallback layered onto the field lane: without OES_element_index_uint a
+      // 32-bit-indexed field mesh cannot be drawn (INVALID_ENUM per draw).
+      if (mesh.isIndexed && mesh.indexType === gl.UNSIGNED_INT && !this._elementIndexUintExt) {
+        if (!this._warnedNoElementIndexUint) {
+          console.warn(
+            "[WebGL1Renderer] OES_element_index_uint not supported by this device -- 32-bit " +
+              "indexed InstanceField meshes (>65535 vertices) will not be drawn.",
+          );
+          this._warnedNoElementIndexUint = true;
+        }
+      } else if (mesh.isIndexed) {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ebo ?? null);
+        ext.drawElementsInstancedANGLE(
+          gl.TRIANGLES,
+          mesh.count,
+          mesh.indexType,
+          0,
+          cmd.instanceCount,
+        );
+      } else {
+        ext.drawArraysInstancedANGLE(gl.TRIANGLES, 0, mesh.count, cmd.instanceCount);
+      }
+
+      // Divisor + array reset always runs (also on the OES skip exit).
+      ext.vertexAttribDivisorANGLE(posLoc, 0);
+      gl.disableVertexAttribArray(posLoc);
+      ext.vertexAttribDivisorANGLE(yawLoc, 0);
+      gl.disableVertexAttribArray(yawLoc);
+      ext.vertexAttribDivisorANGLE(scaleLoc, 0);
+      gl.disableVertexAttribArray(scaleLoc);
+    }
+  }
+
+  /**
+   * Shader-variant flags of ONE field material's WebGL1 program. glsl100 has no normal buffer, no
+   * EVSM and no instance-matrix variant for the pose (see `_buildGlsl100`): manifest flags, the
+   * scene BRDF LUT upgrade, and `INSTANCE_FIELD`. `TEXTURE_ARRAY` is stripped like on GL2 (no
+   * `v_texIndex` output under `USE_INSTANCE_FIELD`).
+   */
+  private _buildFieldShaderFlags(manifest: RenderManifest, scene: Scene | undefined): string[] {
+    const flags = [...(resolveManifestFlags(manifest.flags, this._quality.disableTextures) ?? [])];
+    const ta = flags.indexOf(ShaderFlag.TEXTURE_ARRAY);
+    if (ta >= 0) flags.splice(ta, 1);
+    if (scene?.brdfLUT && manifest.textures?.["u_envMap"]) flags.push(ShaderFlag.BRDF_LUT);
+    flags.push(ShaderFlag.INSTANCE_FIELD);
+    return flags;
+  }
+
+  /** Per-program global (non-material) uniforms glsl100 binds manually — no UBO on WebGL1. */
+  private _bindFieldGlobalUniforms(
+    cache: WebGLProgramCacheEntry,
+    ctx: InstanceFieldDrawContext,
+  ): void {
+    const gl = this.gl;
+    const u = cache.uniforms;
+    const vp = ctx.vp;
+    const camPos = ctx.camPos;
+    const lights = ctx.lights;
+    if (vp) {
+      const uVp = u.get("u_vp");
+      if (uVp) gl.uniformMatrix4fv(uVp, false, vp);
+    }
+    if (camPos) {
+      const uViewPos = u.get("u_viewPos");
+      if (uViewPos) gl.uniform3f(uViewPos, camPos.x, camPos.y, camPos.z);
+    }
+    if (lights) {
+      const uAmbientColor = u.get("u_ambientColor");
+      if (uAmbientColor)
+        gl.uniform3f(
+          uAmbientColor,
+          lights.aCol.r * lights.aIntensity,
+          lights.aCol.g * lights.aIntensity,
+          lights.aCol.b * lights.aIntensity,
+        );
+      const uDirLightColor = u.get("u_dirLightColor");
+      if (uDirLightColor)
+        gl.uniform3f(
+          uDirLightColor,
+          lights.dCol.r * lights.dIntensity,
+          lights.dCol.g * lights.dIntensity,
+          lights.dCol.b * lights.dIntensity,
+        );
+      const uDirLightDir = u.get("u_dirLightDir");
+      if (uDirLightDir) gl.uniform3f(uDirLightDir, lights.dDir.x, lights.dDir.y, lights.dDir.z);
+      this._bindLights(u, cache, lights);
+    }
+    const uEnvIntensity = u.get("u_envIntensity");
+    if (uEnvIntensity) gl.uniform1f(uEnvIntensity, ctx.scene?.environmentIntensity ?? 0);
+    const uExposure = u.get("u_exposure");
+    if (uExposure)
+      gl.uniform1f(uExposure, this.postProcessing.enabled ? 1.0 : (this._quality.exposure ?? 1.0));
+    const uToneMappingMode = u.get("u_toneMappingMode");
+    if (uToneMappingMode) gl.uniform1f(uToneMappingMode, this.forwardToneMapping);
+    const uToneMappingWhite = u.get("u_toneMappingWhite");
+    if (uToneMappingWhite) gl.uniform1f(uToneMappingWhite, this.forwardToneMappingWhitePoint);
+    this._bindFogUniforms(u, ctx.scene?.fog);
+  }
+
+  /** Binds the field material's textures onto the program's sampler units (glsl100 layout) --
+   * mirror of `_renderSubgroup`'s inline texture loop, including the `u_brdfLUT` scene override
+   * and the normal-map fallback. */
+  private _bindFieldTextures(
+    cache: WebGLProgramCacheEntry,
+    manifest: RenderManifest,
+    scene: Scene | undefined,
+  ): void {
+    const gl = this.gl;
+    const u = cache.uniforms;
+    const texs = manifest.textures;
+    for (const [uniformName, unit] of cache.samplerUnits) {
+      const loc = u.get(uniformName);
+      if (!loc || !this._isTextureUnitAvailable(unit, uniformName)) continue;
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      if (gl.SAMPLER_CUBE === cache.samplerTypes.get(uniformName)) {
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        const ct = texs[uniformName] as CubeTexture;
+        gl.bindTexture(
+          gl.TEXTURE_CUBE_MAP,
+          ct ? this._textures.getWebGLCubeTexture(ct, this._quality) : this.defaultCubeTexture,
+        );
+      } else {
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+        const t = (uniformName === "u_brdfLUT" ? scene?.brdfLUT : texs[uniformName]) as Texture;
+        let fallback: WebGLTexture = this.defaultTexture;
+        if (uniformName === "u_normalMap") fallback = this.defaultNormalMap;
+        else if (uniformName === "u_opaqueMap")
+          fallback = this._opaqueTexture ?? this.defaultTexture;
+        gl.bindTexture(
+          gl.TEXTURE_2D,
+          t ? this._textures.getWebGLTexture(t, this._quality) : fallback,
+        );
+      }
+      gl.uniform1i(loc, unit);
+    }
+  }
+
   private _bindLights(
     u: Map<string, WebGLUniformLocation | undefined>,
     cache: WebGLProgramCacheEntry,

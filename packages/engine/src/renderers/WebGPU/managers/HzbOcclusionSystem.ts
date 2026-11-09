@@ -23,6 +23,24 @@ const MAX_HZB_TESTED_OBJECTS = 8192;
 const HZB_RADIUS_PADDING = 1.15;
 const HZB_OCCLUDED_FRAMES_TO_CULL = 2;
 
+/** Concrete ping-pong read handle the instance-field cull lane binds (ADR 0059) -- the
+ * renderer/host surfaces it where the frozen contract's `HzbPyramidAccess.readHandle` stays
+ * opaque. `slot` selects the per-slot bind-group A/B pair, `view` is the whole mip chain for the
+ * cull's `textureLoad`, `mipLevelCount` bounds the mip clamp. */
+export interface HzbFieldReadHandle {
+  slot: 0 | 1;
+  view: GPUTextureView;
+  mipLevelCount: number;
+}
+
+/** Previous-frame pyramid access handed to the instance-field cull lane at the frame head.
+ * Shape-compatible with the frozen contract `HzbPyramidAccess` (whose `readHandle` is `unknown`). */
+export interface HzbFieldPyramidAccess {
+  available: boolean;
+  frameIndex: number;
+  readHandle: HzbFieldReadHandle;
+}
+
 /**
  * Owns the entire Hierarchical-Z (HZB) occlusion-culling GPU subsystem that used to live inside
  * `WebGPURenderer`: the pyramid's copy/downsample/visibility-test pipelines, the depth-pyramid
@@ -30,17 +48,45 @@ const HZB_OCCLUDED_FRAMES_TO_CULL = 2;
  * per-slot pending/object snapshots, plus the per-frame build/dispatch/readback flow
  * (`buildPyramid()`/`dispatchTest()`/`kickoffMapAsync()`/`applyOcclusionResults()`).
  *
+ * The pyramid is a PING-PONG PAIR (`_hzbTextures`), not a single overwritten texture: the
+ * instance-field cull lane (ADR 0059) tests instances against the PREVIOUS frame's pyramid at the
+ * frame head, while this frame's pyramid is only built mid-frame from the just-finished depth
+ * pre-pass -- both consumers read a different slot, so the pair is the only depth history that
+ * persists (full-res depth is not retained). `buildPyramid()` alternates the write slot and flips
+ * `_lastWriteSlot`; the per-object visibility test (`dispatchTest()`) reads the just-built slot;
+ * `getPreviousFrameHzb()` hands the OTHER slot to the field cull lane. The pyramid is decoupled
+ * from `enableOcclusionCulling`: it exists whenever the renderer constructs this system.
+ *
  * The renderer is the only caller; to keep this manager free of a host reference, the renderer
  * passes in everything that lives outside the subsystem at call/construction time: the composed
  * visibility-test shader module code (structs chunk + screen-footprint chunk + WGSL, assembled
  * from the renderer's shader registry), the shared `GlobalUniforms` bind-group layout (group 0
- * of the test pipeline) and, per dispatch, the frame's live global bind group. All of this stays
- * unallocated unless the renderer opts in (`enableOcclusionCulling`) -- the renderer simply never
- * constructs this system otherwise. See docs/adr/0008-hzb-occlusion-culling-webgpu-only.md.
+ * of the test pipeline) and, per dispatch, the frame's live global bind group. The system is
+ * constructed on every WebGPU renderer (the instance-field lane depends on the pyramid regardless
+ * of `enableOcclusionCulling`, ADR 0059); the per-object visibility test simply never dispatches
+ * while occlusion culling stays off. See docs/adr/0008-hzb-occlusion-culling-webgpu-only.md.
  */
 export class HzbOcclusionSystem {
-  private _hzbTexture?: GPUTexture;
-  private _hzbSampledView?: GPUTextureView; // whole mip chain, for the visibility test's textureLoad
+  /** Ping-pong pyramid PAIR -- see the class doc / `getPreviousFrameHzb()`. Index 0 and 1 are
+   * the same pyramid dimensions; the write slot alternates per `buildPyramid()` call and the
+   * previous-frame slot is exposed to the instance-field cull lane. */
+  private _hzbTextures: GPUTexture[] = [];
+  /** Whole mip chain per slot, for the visibility test's / field cull's `textureLoad`. */
+  private _hzbSampledViews: GPUTextureView[] = [];
+  /** Pyramid slot written by the most recent successful `buildPyramid()` (0 = none yet after
+   * resize/invalidate, so the first build writes slot 1 -- the "previous" slot is then the never-
+   * written slot 0 and stays unavailable until the second build). */
+  private _lastWriteSlot: 0 | 1 = 0;
+  /** Monotone count of builds since the last resize/invalidate; `_slotWriteCount[s] > 0` means
+   * slot s holds real pyramid data (stale previous-frame reads are the IF-CAMERA-CUT-HZB-SKIP /
+   * availability hazard this guards). */
+  private _slotWriteCount: [number, number] = [0, 0];
+  /** Build counter at which each slot was last written (the `HzbPyramidAccess.frameIndex` value). */
+  private _slotBuiltFrame: [number, number] = [0, 0];
+  private _buildCounter = 0;
+  /** False after `resize()`/`invalidatePyramid()` until the next `buildPyramid()` succeeds;
+   * `getPreviousFrameHzb().available` additionally requires the other slot to have data. */
+  private _hzbAvailable = false;
   private _hzbMipLevelCount = 1;
   private _canvasWidth = 0;
   private _canvasHeight = 0;
@@ -50,15 +96,14 @@ export class HzbOcclusionSystem {
   private _hzbDownsampleBGL?: GPUBindGroupLayout;
   private _hzbTestPipeline?: GPUComputePipeline;
   private _hzbTestBGL?: GPUBindGroupLayout;
-  /** Rebuilt once per `resize()` call (see `_rebuildBindGroups()`), not per frame -- every
-   * resource these bind: `_hzbTexture`'s mip views and `_hzbSampledView` only change on resize;
-   * the copy group's depth view is the one the renderer passed in at resize time, which is safe
-   * because `buildPyramid()` (the only copy-group caller) already bails out whenever an offscreen
-   * render target is active; and the HZB buffers are allocated once in the constructor and never
-   * recreated. */
-  private _hzbCopyBindGroup?: GPUBindGroup;
-  private _hzbDownsampleBindGroups: GPUBindGroup[] = [];
-  private _hzbTestBindGroup?: GPUBindGroup;
+  /** Per-slot copies of everything `buildPyramid()`/`dispatchTest()` bind -- see `_rebuildBindGroups()`.
+   * Rebuilt once per `resize()` call, not per frame: every resource they bind (the per-slot mip
+   * views and the renderer-passed main-depth view) only changes on resize, the buffers are
+   * allocated once in the constructor, and `buildPyramid()` (the only copy-group caller) already
+   * bails out for offscreen render targets. */
+  private _hzbCopyBindGroups: (GPUBindGroup | undefined)[] = [undefined, undefined];
+  private _hzbDownsampleBindGroups: GPUBindGroup[][] = [[], []];
+  private _hzbTestBindGroups: (GPUBindGroup | undefined)[] = [undefined, undefined];
   private _hzbAabbBuffer?: GPUBuffer;
   private _hzbResultsBuffer?: GPUBuffer;
   private _hzbTestParamsBuffer?: GPUBuffer;
@@ -183,100 +228,130 @@ export class HzbOcclusionSystem {
     ];
   }
 
-  /** (Re)allocates the pyramid texture for the new canvas dimensions and (re)builds every bind
-   * group that references it or `activeDepthView` -- called once per `setSize()`, not per frame
-   * (see `_hzbCopyBindGroup`'s doc comment). The old texture is freed through the renderer's
-   * deferred-destroy queue, which `setSize()` drains before allocating fresh resources. */
+  /** (Re)allocates BOTH pyramid textures for the new canvas dimensions and (re)builds every
+   * per-slot bind group that references them or `activeDepthView` -- called once per `setSize()`,
+   * not per frame (see `_hzbCopyBindGroups`'s doc comment). The old pair is freed through the
+   * renderer's deferred-destroy queue, which `setSize()` drains before allocating fresh
+   * resources. A degenerate 0/1px size (initialization order, hidden tab) keeps the previous
+   * pair: WebGPU textures cannot be created at size 0, and wiping a usable pyramid for a
+   * transient resize would silently lose the previous-frame slot the field lane consumes. */
   public resize(canvasWidth: number, canvasHeight: number, activeDepthView: GPUTextureView): void {
-    if (this._hzbTexture) this._fallback.deferDestroyTexture(this._hzbTexture);
+    if (canvasWidth < 1 || canvasHeight < 1) return;
+    for (const t of this._hzbTextures) {
+      if (t) this._fallback.deferDestroyTexture(t);
+    }
     this._canvasWidth = canvasWidth;
     this._canvasHeight = canvasHeight;
     this._hzbMipLevelCount = this._computeMipLevelCount(canvasWidth, canvasHeight);
-    this._hzbTexture = this._device.createTexture({
-      size: [canvasWidth, canvasHeight],
-      format: "r32float",
-      mipLevelCount: this._hzbMipLevelCount,
-      // STORAGE_BINDING: each mip is written once, individually, by buildPyramid().
-      // TEXTURE_BINDING: the whole chain is then read back (any mip) by the visibility test.
-      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
-    });
-    this._hzbSampledView = this._hzbTexture.createView();
+    for (let slot = 0; slot < 2; slot++) {
+      this._hzbTextures[slot] = this._device.createTexture({
+        size: [canvasWidth, canvasHeight],
+        format: "r32float",
+        mipLevelCount: this._hzbMipLevelCount,
+        // STORAGE_BINDING: each mip is written once, individually, by buildPyramid().
+        // TEXTURE_BINDING: the whole chain is then read back (any mip) by the visibility test.
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      this._hzbSampledViews[slot] = this._hzbTextures[slot]!.createView();
+    }
+    // Fresh pair: neither slot holds data, so the first build writes slot 1 (`_lastWriteSlot`
+    // stays 0) and the previous-frame slot only becomes available after the SECOND build.
+    this._lastWriteSlot = 0;
+    this._slotWriteCount = [0, 0];
+    this._slotBuiltFrame = [0, 0];
+    this._buildCounter = 0;
+    this._hzbAvailable = false;
     this._rebuildBindGroups(activeDepthView);
   }
 
-  /** (Re)builds the bind groups `buildPyramid()`/`dispatchTest()` use, once per resize (see
-   * `_hzbCopyBindGroup`'s doc comment). Called from `resize()` right after `_hzbTexture` /
-   * `_hzbSampledView` are (re)allocated there. */
+  /** (Re)builds the per-slot bind groups `buildPyramid()`/`dispatchTest()` use, once per resize
+   * (see `_hzbCopyBindGroups`'s doc comment). Called from `resize()` right after both slots'
+   * textures/views are (re)allocated there. Every resource the groups bind is either per-slot
+   * (mip views) or allocated once in the constructor (AABB/results/params buffers, the renderer-
+   * passed active depth view), so no `createBindGroup` ever happens per frame. */
   private _rebuildBindGroups(activeDepthView: GPUTextureView): void {
-    if (this._hzbCopyBGL && this._hzbTexture) {
-      this._hzbCopyBindGroup = this._device.createBindGroup({
-        layout: this._hzbCopyBGL,
-        entries: [
-          { binding: 0, resource: activeDepthView },
-          {
-            binding: 1,
-            resource: this._hzbTexture.createView({ baseMipLevel: 0, mipLevelCount: 1 }),
-          },
-        ],
-      });
-    }
+    for (let slot = 0; slot < 2; slot++) {
+      const pyramid = this._hzbTextures[slot];
 
-    this._hzbDownsampleBindGroups = [];
-    if (this._hzbDownsampleBGL && this._hzbTexture) {
-      for (let level = 1; level < this._hzbMipLevelCount; level++) {
-        this._hzbDownsampleBindGroups.push(
-          this._device.createBindGroup({
-            layout: this._hzbDownsampleBGL,
-            entries: [
-              {
-                binding: 0,
-                resource: this._hzbTexture.createView({
-                  baseMipLevel: level - 1,
-                  mipLevelCount: 1,
-                }),
-              },
-              {
-                binding: 1,
-                resource: this._hzbTexture.createView({ baseMipLevel: level, mipLevelCount: 1 }),
-              },
-            ],
-          }),
-        );
+      if (this._hzbCopyBGL && pyramid) {
+        this._hzbCopyBindGroups[slot] = this._device.createBindGroup({
+          layout: this._hzbCopyBGL,
+          entries: [
+            { binding: 0, resource: activeDepthView },
+            {
+              binding: 1,
+              resource: pyramid.createView({ baseMipLevel: 0, mipLevelCount: 1 }),
+            },
+          ],
+        });
+      } else {
+        this._hzbCopyBindGroups[slot] = undefined;
       }
-    }
 
-    if (
-      this._hzbTestBGL &&
-      this._hzbAabbBuffer &&
-      this._hzbSampledView &&
-      this._hzbResultsBuffer &&
-      this._hzbTestParamsBuffer
-    ) {
-      this._hzbTestBindGroup = this._device.createBindGroup({
-        layout: this._hzbTestBGL,
-        entries: [
-          { binding: 0, resource: { buffer: this._hzbAabbBuffer } },
-          { binding: 1, resource: this._hzbSampledView },
-          { binding: 2, resource: { buffer: this._hzbResultsBuffer } },
-          { binding: 3, resource: { buffer: this._hzbTestParamsBuffer } },
-        ],
-      });
+      const levelGroups: GPUBindGroup[] = [];
+      if (this._hzbDownsampleBGL && pyramid) {
+        for (let level = 1; level < this._hzbMipLevelCount; level++) {
+          levelGroups.push(
+            this._device.createBindGroup({
+              layout: this._hzbDownsampleBGL,
+              entries: [
+                {
+                  binding: 0,
+                  resource: pyramid.createView({ baseMipLevel: level - 1, mipLevelCount: 1 }),
+                },
+                {
+                  binding: 1,
+                  resource: pyramid.createView({ baseMipLevel: level, mipLevelCount: 1 }),
+                },
+              ],
+            }),
+          );
+        }
+      }
+      this._hzbDownsampleBindGroups[slot] = levelGroups;
+
+      if (
+        this._hzbTestBGL &&
+        pyramid &&
+        this._hzbAabbBuffer &&
+        this._hzbResultsBuffer &&
+        this._hzbTestParamsBuffer
+      ) {
+        this._hzbTestBindGroups[slot] = this._device.createBindGroup({
+          layout: this._hzbTestBGL,
+          entries: [
+            { binding: 0, resource: { buffer: this._hzbAabbBuffer } },
+            { binding: 1, resource: this._hzbSampledViews[slot]! },
+            { binding: 2, resource: { buffer: this._hzbResultsBuffer } },
+            { binding: 3, resource: { buffer: this._hzbTestParamsBuffer } },
+          ],
+        });
+      } else {
+        this._hzbTestBindGroups[slot] = undefined;
+      }
     }
   }
 
   /**
-   * Builds this frame's HZB pyramid: mip 0 seeded from the renderer's just-finished opaque depth
-   * (already written by `DepthPrePassGPU` earlier in `_passes`), then mips 1..N max-reduced from
-   * the level below, one dispatch per level inside a single compute pass -- see hzb_copy_depth.wgsl/hzb_downsample_max.wgsl.
+   * Builds this frame's HZB pyramid into the PING-PONG slot the previous build did NOT write:
+   * mip 0 seeded from the renderer's just-finished opaque depth (already written by
+   * `DepthPrePassGPU` earlier in `_passes`), then mips 1..N max-reduced from the level below,
+   * one dispatch per level inside a single compute pass -- see hzb_copy_depth.wgsl/hzb_downsample_max.wgsl.
    * Recorded into the frame's shared command encoder: unlike `GPUTextureResourceCache`'s texture
    * mip generation (which needs its own throwaway encoder+submit since callers run it mid-frame
    * while a render pass may already be open), this runs between two whole passes, never inside
    * one. No-ops for offscreen render targets -- see
    * docs/adr/0008-hzb-occlusion-culling-webgpu-only.md's main-canvas-only scope.
+   *
+   * After the chain is recorded, the write slot flips (`_lastWriteSlot`) and the slot's build
+   * timestamp advances -- both consumers key off that ordering: `dispatchTest()` reads the
+   * just-built slot, `getPreviousFrameHzb()` hands the OTHER slot to the instance-field cull lane.
    */
   public buildPyramid(ce: GPUCommandEncoder, offscreen: boolean): void {
     if (offscreen) return;
-    if (!this._hzbTexture || !this._hzbCopyPipeline || !this._hzbCopyBindGroup) return;
+    const slot = this._lastWriteSlot === 0 ? 1 : 0;
+    const copyGroup = this._hzbCopyBindGroups[slot];
+    if (!copyGroup || !this._hzbCopyPipeline) return;
 
     const w0 = this._canvasWidth;
     const h0 = this._canvasHeight;
@@ -285,13 +360,14 @@ export class HzbOcclusionSystem {
     // texture read without ending the pass. Saves N pass begin/end pairs per frame.
     const pass = ce.beginComputePass({ label: "HzbBuildPyramid" });
     pass.setPipeline(this._hzbCopyPipeline);
-    pass.setBindGroup(0, this._hzbCopyBindGroup);
+    pass.setBindGroup(0, copyGroup);
     pass.dispatchWorkgroups(Math.ceil(w0 / 8), Math.ceil(h0 / 8));
 
     if (this._hzbDownsamplePipeline) {
       pass.setPipeline(this._hzbDownsamplePipeline);
+      const levelGroups = this._hzbDownsampleBindGroups[slot]!;
       for (let level = 1; level < this._hzbMipLevelCount; level++) {
-        const bg = this._hzbDownsampleBindGroups[level - 1];
+        const bg = levelGroups[level - 1];
         if (!bg) continue;
         const w = Math.max(1, w0 >> level);
         const h = Math.max(1, h0 >> level);
@@ -300,6 +376,14 @@ export class HzbOcclusionSystem {
       }
     }
     pass.end();
+
+    // The write is committed on the encoder; flip the slot and stamp the generation so the two
+    // consumers resolve the just-built vs. previous-frame slot without an extra flag.
+    this._buildCounter++;
+    this._slotWriteCount[slot]++;
+    this._slotBuiltFrame[slot] = this._buildCounter;
+    this._lastWriteSlot = slot;
+    this._hzbAvailable = true;
   }
 
   /** Filters `scene.lastFrustumVisibleObjects` (a byproduct of the `isVisible && inFrustum` walk
@@ -368,7 +452,7 @@ export class HzbOcclusionSystem {
     if (offscreen) return;
     if (
       !this._hzbTestPipeline ||
-      !this._hzbTestBindGroup ||
+      !this._hzbTestBindGroups[this._lastWriteSlot] ||
       !this._hzbAabbBuffer ||
       !this._hzbResultsBuffer ||
       !this._hzbTestParamsBuffer ||
@@ -376,6 +460,9 @@ export class HzbOcclusionSystem {
     ) {
       return;
     }
+    // The visibility test reads the JUST-BUILT pyramid slot (`_lastWriteSlot`); the previous-
+    // frame slot is exclusively the instance-field cull lane's (`getPreviousFrameHzb()`).
+    const testBindGroup = this._hzbTestBindGroups[this._lastWriteSlot]!;
 
     const slot = this._hzbStagingSlot;
     if (this._hzbStagingPending[slot]) return;
@@ -403,7 +490,7 @@ export class HzbOcclusionSystem {
     const pass = ce.beginComputePass({ label: "HzbVisibilityTest" });
     pass.setPipeline(this._hzbTestPipeline);
     pass.setBindGroup(0, globalBindGroup);
-    pass.setBindGroup(1, this._hzbTestBindGroup);
+    pass.setBindGroup(1, testBindGroup);
     pass.dispatchWorkgroups(Math.ceil(count / 64));
     pass.end();
 
@@ -489,7 +576,7 @@ export class HzbOcclusionSystem {
    * still-mapped buffer per spec -- safe even if a `mapAsync()` from a not-yet-applied readback
    * is still pending on one of the staging pair. */
   public dispose(): void {
-    this._hzbTexture?.destroy();
+    for (const texture of this._hzbTextures) texture?.destroy();
     this._hzbAabbBuffer?.destroy();
     this._hzbResultsBuffer?.destroy();
     this._hzbTestParamsBuffer?.destroy();
@@ -497,5 +584,48 @@ export class HzbOcclusionSystem {
       this._hzbStagingBuffers[0].destroy();
       this._hzbStagingBuffers[1].destroy();
     }
+  }
+
+  /**
+   * Hands the instance-field cull lane (ADR 0059) read access to the PREVIOUS frame's pyramid
+   * slot -- the one `buildPyramid()` did NOT just write. The field cull runs at the frame head,
+   * before this frame's depth pre-pass, so it can only ever consume last frame's depth.
+   *
+   * `available` requires BOTH a successful prior build (`_hzbAvailable`) AND the other slot to
+   * have been written at least once (`_slotWriteCount[other] > 0`): the very first build writes
+   * slot 1 while `_lastWriteSlot` stays 0, so the never-written slot 0 only becomes available
+   * after the SECOND build -- the first frame after resize/invalidate therefore keeps the field
+   * lane on frustum-only culling (fail-closed, no stale pyramid). `frameIndex` is the unique
+   * generation stamp of the slot; the cull coordinator compares it against the last culled frame
+   * to detect one-frame-stale previous-frame data independently of the telement flag. The
+   * returned handle MUST be read within the same frame: the next `buildPyramid()` flips the
+   * write slot and this handle becomes the just-built one.
+   */
+  public getPreviousFrameHzb(): HzbFieldPyramidAccess {
+    const other: 0 | 1 = this._lastWriteSlot === 0 ? 1 : 0;
+    const otherCulled = this._slotWriteCount[other]! > 0;
+    return {
+      available: this._hzbAvailable && otherCulled,
+      frameIndex: this._slotBuiltFrame[other]!,
+      readHandle: {
+        slot: other,
+        view: this._hzbSampledViews[other]!,
+        mipLevelCount: this._hzbMipLevelCount,
+      },
+    };
+  }
+
+  /**
+   * Marks the whole pyramid pair stale (camera cut / teleport). Without this the field cull lane
+   * would consume the PRE-CUT camera's previous-frame slot in the very frame after
+   * `notifyCameraTeleport()` -- the exact wrong-cull hazard `IF-CAMERA-CUT-HZB-SKIP` guards.
+   * `getPreviousFrameHzb()` then returns `available: false` until the next `buildPyramid()`
+   * succeeds, and `_slotBuiltFrame` keeps counting so a stale slot's `frameIndex` can never be
+   * mistaken for a fresh one. The readback chain and the per-object `occlusionCulled` flags are
+   * untouched (`resetOcclusionStreak()` is the sibling the renderer already fans out). Besides
+   * this system-wide invalidation, each field additionally consumes its field-scoped one-frame
+   * cull skip (`InstanceFieldSystem.notifyCameraTeleport`, defense in depth). Idempotent. */
+  public invalidatePyramid(): void {
+    this._hzbAvailable = false;
   }
 }

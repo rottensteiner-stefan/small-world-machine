@@ -74,6 +74,8 @@ function makeMockRenderer(objects: Object3D[]): Internals {
     _createGlobalBindGroup: vi.fn(() => ({})),
     _setViewMatrix: vi.fn(() => 0),
     _renderSubgroup: vi.fn(),
+    _cullFieldShadowView: vi.fn(),
+    _recordFieldDraws: vi.fn(),
     scratchGlobalBufferData,
     globalUniformBuffer: {},
     globalBindGroup: undefined,

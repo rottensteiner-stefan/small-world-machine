@@ -270,6 +270,13 @@ export class SpotShadowPassGPU implements RenderPass {
         shadowCam.viewProjectionMatrix,
       );
 
+      // ADR 0059 P1-2: cull this spot's field segments (mode C) before the render pass opens.
+      renderer._cullFieldShadowView(
+        ce,
+        VIEW_SLOT_SPOT_SHADOW_BASE + j,
+        shadowCam.viewProjectionMatrix,
+      );
+
       const rp = ce.beginRenderPass({
         colorAttachments: [
           {
@@ -288,6 +295,8 @@ export class SpotShadowPassGPU implements RenderPass {
 
       rp.setBindGroup(0, this._shadowCasterBindGroup!);
       this._drawCasters(renderer, rp, renderList.opaqueBatches, viewOffset, shadowCam.viewMatrix);
+      // ADR 0059 P1-2: pulled field draws for this spot (depth variant; segment already culled).
+      renderer._recordFieldDraws(rp, viewOffset, VIEW_SLOT_SPOT_SHADOW_BASE + j, false, "depth");
       rp.end();
     }
 
@@ -441,6 +450,10 @@ export class SpotShadowPassGPU implements RenderPass {
         this._frustum.setFromMatrix(mat);
         const viewOffset = renderer._setViewMatrix(VIEW_SLOT_POINT_SHADOW_BASE + m, mat.data);
 
+        // ADR 0059 P1-2: cull this cube face's field segments (mode C; overflow views beyond
+        // `maxViews` are ignored by the field, matching the frozen contract wording).
+        renderer._cullFieldShadowView(ce, VIEW_SLOT_POINT_SHADOW_BASE + m, mat.data);
+
         const rp = ce.beginRenderPass({
           colorAttachments: [
             {
@@ -459,6 +472,8 @@ export class SpotShadowPassGPU implements RenderPass {
         rp.setBindGroup(0, this._shadowCasterBindGroup!);
         // No view matrix: only sprite billboards read it, and they never cast into the cube.
         this._drawCasters(renderer, rp, casters.batches, viewOffset, undefined);
+        // ADR 0059 P1-2: pulled field draws for this cube face (depth variant; already culled).
+        renderer._recordFieldDraws(rp, viewOffset, VIEW_SLOT_POINT_SHADOW_BASE + m, false, "depth");
         rp.end();
       }
     }

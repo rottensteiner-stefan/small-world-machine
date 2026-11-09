@@ -8,6 +8,12 @@
   - **Not from the author:** "3 M trees with 4 M polygons each" originates from a viewer comment, picked up by PCGH. Discarded.
   - **Community feedback (most liked critique, ~400 likes):** visible LOD transitions, mainly in fast flight. Wind praised for not moving in unison; requested: waves travelling across the field.
   - **Earlier Godot videos by the same author** (2025-09/11, descriptions): ground vegetation **does not render into the shadow map**, instead screen-space shadows (loosely after Bend Studio) + micro shadows blended with AO and N·L, per-object strength via an extra render target; **alpha test only in the depth pre-pass**, simplified shadow/pre-pass shaders; manual LOD crossfade because Godot's fade used the shadow camera distance (broke shadows); SSILVB as crude GI at ~0.7 ms, darkens forest interiors.
+  - **Godot-era baseline = our realistic target class** (author videos + full 2026-11-08 read of 1060 comments + 567 replies): conventional techniques only, ~600 draw calls, ~1.8 GB VRAM, **60 fps capped on RTX 3090 / Ryzen 5800X** (~175–180 fps uncapped).
+    - Trees: **LOD0 + LOD1 + billboard only**; LOD switch distances **aligned to CSM cascade splits** (shadow renderer picks the LOD) to minimise visible transitions.
+    - Ground clutter: instances **batched into tiles, culled per tile** (no per-instance culling) — maps 1:1 onto our cell model and the WebGL2 fallback.
+    - Screen-space shadows **only for grass + terrain, ≤ 30 m**, per-object opt-in via an extra render target (on trees SSS looked too sharp and revealed leaf cards).
+    - Biggest wins: simplified shadow/pre-pass shaders + **alpha test only in the depth pre-pass** (colour pass `depthCompare: "equal"`), see Step 1.
+  - **Community critique ranking (full comment read):** what breaks realism first — (1) **wind**: a uniform fast sine is a defect; wanted travelling gust waves with calm phases, weaker wind near ground and under canopy, independent branch motion; (2) **hard LOD/shadow-range line** when flying → dithered/fade transitions mandatory; (3) water/clouds outside ADR 0059 scope; (4) most praised after foliage: **tonemapping / view transform / colour management** (cheap lever, independent of geometry; Step 6a).
   - **Frame analysis** (in-video overlay, recording capped at 60 fps): **CPU 0.9–1.9 ms flat across all shots**, GPU 5.9–8.8 ms meadow/aerial, 10–12.8 ms dense forest. → Fully GPU-driven; CPU cost independent of scene content is the real headline.
   - **Visual content:** the dominant instance population is **dense grass + flowers + forest-floor debris (sticks, leaves)**, not trees; strong wind animation on grass; distant forest reads as a fused canopy mass; aerial perspective/height fog; volumetric clouds and overcast weather states; rock cliffs are textured heightfield (visible weakness).
 
@@ -64,7 +70,37 @@
 - Two-phase occlusion (draw last frame's visible set → rebuild HZB → test rest, Wihlidal 2015 / Haar & Aaltonen 2015) is the documented upgrade if single-phase popping is visible; not V1.
 - Renderer integration through one internal `IndirectDrawSource` contract (consumers: GPU particles, `InstanceField`, impostors/clusters) instead of per-feature branches in `WebGPURenderer`.
 - **Alpha-tested foliage keeps early-Z:** alpha test (`discard`) runs only in `DepthPrePassGPU`; the colour pass draws the same geometry with `depthCompare: "equal"`, no `discard`, no depth write. Shadow and pre-pass use stripped shaders (position + alpha UV only). Verify first whether today's colour pass still discards for alpha-cutout materials; if so this is an engine-wide win independent of `InstanceField`. WebGL2: same via `gl.EQUAL`.
-- **WebGL2/WebGL1 fallback:** CPU frustum test per cell AABB, per-cell LOD (distance of cell center), instance VBO sorted by cell, `vertexAttribPointer` offset rebinding per visible cell range (no base-instance extension needed). Budget via ADR 0035 tier.
+- **WebGL2/WebGL1 fallback:** CPU frustum test per cell AABB, per-cell LOD (distance of cell center), instance VBO sorted by cell, `vertexAttribPointer` offset rebinding per visible cell range (no base-instance extension needed). Budget via ADR 0035 tier. Per-cell (tile) culling is not merely the low-tier fallback — it met the author's Godot-showcase quality bar (see Trigger); keep cell size tunable per field.
+
+##### Step 1 result (2026-11-09, real device) — ACCEPTED
+- **Gate met** on Apple M4 Pro / Chrome / Metal, showcase 51 `walk` path: `?mode=field` with **182 728 trees at 58 fps, CPU 0.1 ms, GPU 6.8 ms** vs. `?mode=autoinst` with **18 363 trees at 60 fps, CPU 20.9 ms** (10× population at the same frame time). CPU frame time flat vs. instance count: 0.6 ms @18 k, 0.1 ms @91 k, 0.1 ms @183 k.
+- **Dual-lane audit:** GPU visible count == CPU conservative reference in every probed frame (`cullref` `ok(cpu=gpu)`, modes a and b, start view 5543/5347, eye level in the forest 2904): no false negatives (IF-CULL-NO-FALSE-NEGATIVE live).
+- **The lane had never run on a device before S2.** Mock/reflection gates (tsc, lint:wgsl, 4538 tests) passed with all of these defects; found only in real Chrome:
+  - `@group(4)` on a 4-cap adapter (`maxBindGroups` = 4 on Apple Metal; raising is impossible) → field data folded to `@group(2)`, field pipelines use slots {0,2,3}.
+  - `read_write` storage visible to the vertex stage, `atomicAdd` on a non-atomic `array<u32>`, `r32float` HZB declared filterable → stage-specific declarations of bindings 2/3 per module, `unfilterable-float`.
+  - Cull bound the full `globalBGL` (13 storage buffers in compute > limit 10) → own 1-entry group 0 (`GlobalUniforms` only).
+  - No `setPipeline` before `drawIndexedIndirect`; uv vertex buffer bound to slot 2 instead of 1.
+  - `_paramBlockU32` was a separate array, not a view of the uploaded `_paramBlock` → `segmentBase`/`cullMode`/HZB flags never reached the GPU (shadow culls counted into the main segment, HZB never enabled).
+  - Page capacity `max(1024, maxInstances/16)` < visible count → random survivor drop + foreign-page reads (flicker, stripes). Capacity is now `maxInstances`; pages only for addressable segments; vertex guard clips instances past the page.
+  - Probe re-armed `mapAsync` while pending.
+  - Pinned by `tests/renderers/InstanceFieldSystemDevice.test.ts` (recording mock device).
+- **Open for later steps (not blockers):** shading is a placeholder (flat white, `fieldShading: "p1-placeholder"`) → material path with step 2; sphere-vs-HZB culls nothing in showcase 51 (slender conifers on open ground: each sphere's footprint reaches sky/ground behind the front crowns) → two-phase / tighter bounds decided at the S3 occlusion spike; GL context-restore of field VBOs and field texture refcounts (Frank D5/D6) stay backlog.
+
+##### P1 contract notepad (S1 freeze, 2026-11-08 — Dave P1-1)
+
+- **Contract location:** `packages/engine/src/core/InstanceField.ts` — types only, FROZEN at sync point S1. All three lanes (Bob P1-2 WebGPU cull, Frank P1-3 GL CPU fallback, GPU particles as 3rd consumer) and the P1-4 test surface code against EXACTLY the exported names and byte layouts; no rename without a board post.
+- **Lane decisions recorded (binding):** capacity = **clamp-at-capacity with drop** (counter pins at capacity, no cross-segment overrun; `IF-BUDGET`); instance prototype resolution is **range-implicit** (16-B record carries no prototype id; `prototypeBounds[p] × recordScale`); per-view cull params are a **dynamic-offset uniform** block (`CullParams`, `hzbSkip` inspectable at dispatch level); previous-frame HZB via a single accessor **`getPreviousFrameHzb()`** (pyramid ping-pong owned by `HzbOcclusionSystem`, decoupled from `enableOcclusionCulling`, Bob adapts in P1-2); bind group **`@group(4)`** with the engine `maxBindGroups` request raised to `min(adapter.maxBindGroups, 8)` — engine-wide limit change (Bob P1-2), doctrine sign-off pending moderation; 4-cap devices fold field storage into the field-owned `@group(1)` material layout (fail-closed, ADR 0043); camera-cut skip is **field-scoped**, exactly one frame, idempotent, GL documented no-op (`InstanceField.notifyCameraTeleport()`, `IF-CAMERA-CUT-HZB-SKIP`).
+- **Invariant IDs registered (ADR 0047 registry, no `HZB-*` collision):** `IF-CULL-NO-FALSE-NEGATIVE`, `IF-CULL-FP-BOUND`, `IF-CULL-ROUTING`, `IF-CULL-DETERMINISM`, `IF-CAMERA-CUT-HZB-SKIP`, `IF-BUDGET`, `IF-PROJECTED-SIZE`. ADR 0047 seed-table rows + P1-4 test anchors land with Charly's test commit.
+- **CPU reference:** shared pure math (projected-size metric, conservative sphere/AABB frustum tests, pose packing, plane convention `inside iff n·p + d >= 0`) lives in the core contract file — single source of truth imported by tests AND the showcase; Charly's planned `packages/engine/src/renderers/culling/InstanceFieldCullRef.ts` re-exports from core (created Bob/Frank in P1-2/3).
+- **Showcase 51 S2 URL contract (frozen):** `?mode=field`, `?occlusion=a|b|c`, `?popcount=1`, `?cullref=1` in addition to the existing `?n= seed= path= pausedAt= frames= gputimings= truth=`.
+
+##### Step-1 S-point governance (Alice P1-5, 2026-11-08)
+
+- **S1 (contract freeze) — PASSED:** `packages/engine/src/core/InstanceField.ts` frozen; lead-verified gates green (typecheck, `check:doctrine` exit 0, eslint clean). T1 completed on the `veg-p1` board.
+- **S2 (integration, lead-owned):** P1-2 (Bob, WebGPU) + P1-3 (Frank, GL) implementations wired into showcase 51 `?mode=field`; URL contract per notepad above; Charly's cull-ref harness consumes the shared core math (single source, no drift).
+- **S3 (spike → decide):** occlusion candidates A/B/C (runtime `cullMode` 0/1/2 per notepad) measured per the decision protocol into `docs/research/vegetation-occlusion-<date>.md`; outcome via the board `decide` spike; amendment line lands here.
+- **Engine-wide doctrine record — `maxBindGroups` raise (lead decision 2026-11-08, presented for moderation at the S-point):** bind-group request raised to `min(adapter.maxBindGroups, 8)` — capability-derived ceiling (`@derived`, from `adapter.limits.maxBindGroups`), `@fixed` floor 4; **fail-closed per ADR 0043**: 4-cap devices fold field storage into the field-owned `@group(1)` material layout (`INSTANCE_FIELD_BIND_GROUP = 4` is `@fixed` in the contract). Existing `@group(0..3)` consumers unaffected — the raise is monotonic capacity addition, nothing is renumbered.
+- **Ambition anchors unchanged:** WebGPU M4 Pro 1080p 60 fps ≥ 250 k, WebGL2 same device ≥ 20 k (P1/P2 ambitions, §7). Real-GPU 2026-11-08 absolutes remain the target evidence (autoinst 5.4×/27× vs instanced gaps → culling is the lever).
 
 #### Step 1b — Procedural ground cover
 - Rationale: in the reference video the visible instance count is dominated by grass, flowers and floor debris. Storing these as instances wastes memory and bandwidth; they are a function of terrain + density maps.
@@ -73,7 +109,7 @@
 - Wind: shared global wind field (direction, gust noise texture scrolled in world space) consumed by ground cover, tree LODs and impostors alike, so all layers move coherently.
 - WebGL2/WebGL1: pre-generated per-tile instance VBOs for a smaller ring, same tile seeding, same wind math.
 - **Ground cover casts no shadow-map shadows.** It receives the shadows of trees/terrain, its own self-shadowing comes from screen-space shadows (engine feature, separate backlog item; Bend Studio *Days Gone* method) blended with AO and N·L. Removes the most expensive caster population from every cascade.
-- **Wind as travelling waves:** gust noise scrolled along the wind direction in world space, per-instance phase from position hash, so gusts visibly roll across the field and neighbours never move in unison.
+- **Wind as travelling waves:** gust noise scrolled along the wind direction in world space, per-instance phase from position hash, so gusts visibly roll across the field and neighbours never move in unison. **Gust envelope with calm phases** (never a constant sine); amplitude attenuated by height above ground and by a canopy-cover density mask (community-critique ranking, Trigger).
 - **Temporal stability:** negative mip bias on alpha-tested ground cover textures (keeps coverage at distance) plus a motion-based smear mask (velocity buffer) that lowers TAA history weight / sharpens selectively on moving foliage before `TaaElement`. Reactive-mask approaches were reported as ineffective by the reference author; measure before adopting.
 
 #### Step 2 — LOD buckets + crossfade
@@ -81,6 +117,7 @@
 - Crossfade band: instance written to both adjacent buckets with a fade factor, fragment shader does screen-door dither (Bayer/blue noise, complementary masks); TAA (`TaaElement`) resolves the dither. Benchmark: Unity `LODGroup` cross-fade, Unreal dithered LOD transition.
 - **Invariant: LOD is always selected from the main camera**, in every view including shadow passes (shadow views reuse the main camera's bucket choice, optionally biased coarser). Selecting per view (shadow camera distance) breaks shadows — the documented Godot failure the reference author had to work around.
 - Visible LOD transitions were the reference demo's most criticised artefact; the step-2 gate is therefore checked in fast flight (showcase 51 camera path at high speed), not only at walking speed.
+- **CSM-split-aligned LOD bands offered as an option** (the author's Godot-era practice: LOD switch distances aligned to cascade splits minimised visible transitions; see Trigger).
 - LOD source: glTF meshes named `*_LOD<n>` (or `MSFT_lod`), else generated offline by a `tools` CLI command using meshoptimizer simplification (offline tooling only; runtime stays TS per ADR 0036).
 
 #### Step 3 — Octahedral impostors
@@ -103,7 +140,7 @@
 - WebGL2/WebGL1: `deliberate` absence (no compute); discrete LOD from step 2 is the fallback.
 
 #### Step 6 — Forest lighting / GI
-- **6a (all tiers, cheap, recommended):** canopy-aware ambient: density map from step 4 darkens/tints sky + IBL ambient below the canopy; per-vertex/per-instance AO baked into prototypes; HBAO (`HbaoElement`) for contact. Most of the "forest feel" at near-zero cost.
+- **6a (all tiers, cheap, recommended):** canopy-aware ambient: density map from step 4 darkens/tints sky + IBL ambient below the canopy; per-vertex/per-instance AO baked into prototypes; HBAO (`HbaoElement`) for contact. Most of the "forest feel" at near-zero cost. **Look-dev before GI:** a tonemapping/grading review for foliage scenes (exposure, view transform, saturation) is the cheap, geometry-independent lever the reference demo's audience praised most after the foliage itself (Trigger); schedule it before any 6a+/6b work.
 - **6a+ (WebGPU/WebGL2, candidate):** SSILVB — screen-space indirect lighting with visibility bitmask (Therrien, Levesque & Gilet 2023), extending the GTAO-style `HbaoElement` horizon search; reference author measured ~0.7 ms with reduced precision and used it to darken forest interiors instead of distance-field AO.
 - **6b (WebGPU, research spike only):** hybrid voxel GI (scene voxelization into a clipmap via compute, cone tracing or probe update; benchmark Godot `VoxelGI`/`SDFGI`, NVIDIA VXGI, Crassin 2011). Own ADR before any implementation.
 

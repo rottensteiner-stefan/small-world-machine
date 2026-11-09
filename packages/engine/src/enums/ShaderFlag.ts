@@ -109,6 +109,13 @@ export const ShaderFlag = {
   DECAL_UNLIT: "USE_DECAL_UNLIT",
   /** Material renders unlit (KHR_materials_unlit): flat base color, no lighting/IBL. */
   UNLIT: "USE_UNLIT",
+  /**
+   * ADR 0059 field lane: the vertex stage sources the per-instance pose from the 16-byte
+   * cell-sorted instance record (GL CPU-cell fallback: `a_instancePos` + packed pose word) and
+   * ignores `u_model`. NEVER combined with `INSTANCING`: the field programs bind the record
+   * attributes at their own locations instead of `a_instanceMatrix`/`a_instanceData`.
+   */
+  INSTANCE_FIELD: "USE_INSTANCE_FIELD",
   /** Thin-surface sun transmission on StandardMaterial (`backlight`, ADR 0060). */
   BACKLIGHT: "USE_BACKLIGHT",
 } as const;

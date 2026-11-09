@@ -125,8 +125,10 @@ export class WebGLProgramCache {
    * per-mesh VAO (`Mesh.bindVAO`) be valid for any program; without it the driver could assign
    * different locations per program and a cached VAO would silently point at the wrong buffers.
    * `a_instanceMatrix` is a `mat4` and thus occupies locations 6-9; `a_instanceData` sits at 10;
-   * `a_color` (vertex color, white when the mesh has none) sits at 11. GLSL300 only -- WebGL1
-   * binds implicitly and looks locations up per program.
+   * `a_color` (vertex color, white when the mesh has none) sits at 11. The ADR 0059 field-lane
+   * records occupy 12 (`a_instancePos`) and 13 (`a_instancePose`); they are only declared in
+   * `USE_INSTANCE_FIELD` programs, the reservation is inert everywhere else. GLSL300 only --
+   * WebGL1 binds implicitly and looks locations up per program.
    */
   private static readonly _FIXED_ATTRIBUTE_LOCATIONS: ReadonlyArray<readonly [number, string]> = [
     [0, "a_position"],
@@ -138,6 +140,8 @@ export class WebGLProgramCache {
     [6, "a_instanceMatrix"],
     [10, "a_instanceData"],
     [VERTEX_COLOR_LOCATION, "a_color"],
+    [12, "a_instancePos"],
+    [13, "a_instancePose"],
   ];
 
   private _programs = new Map<string, WebGLProgramCacheEntry>();
@@ -258,6 +262,12 @@ export class WebGLProgramCache {
 
     const attribsToQuery = ["a_position", "a_normal", "a_uv", "a_tangent", "a_color"];
     if (isInstanced) attribsToQuery.push("a_instanceMatrix", "a_instanceData");
+    // ADR 0059 field lane (glsl100 dialect): the pose comes from the unpacked f32 companion fill
+    // (yaw/scale as two float attributes, the frozen contract's WebGL1 mapping); WebGL1 has no
+    // integer attributes, so there is no `a_instancePose` query here.
+    if (flags.includes(ShaderFlag.INSTANCE_FIELD)) {
+      attribsToQuery.push("a_instancePos", "a_instanceYaw", "a_instanceScale");
+    }
     // Skinned programs (USE_SKINNING) declare them (fixed locations 4/5 via
     // `bindAttribLocation`); for plain programs `getAttribLocation` yields -1, which `mesh.bind`
     // treats as "attribute absent" -- identical to the glsl300 query set.
@@ -455,6 +465,11 @@ export class WebGLProgramCache {
     ];
     if (isInstanced) {
       attribsToQuery.push("a_instanceMatrix", "a_instanceData");
+    }
+    // ADR 0059 field lane (glsl300 dialect): the record's packed pose word is an integer
+    // attribute read via `vertexAttribIPointer`, the frozen contract's WebGL2 mapping.
+    if (flags.includes(ShaderFlag.INSTANCE_FIELD)) {
+      attribsToQuery.push("a_instancePos", "a_instancePose");
     }
     attribsToQuery.forEach((name) => {
       attributes.set(name, gl.getAttribLocation(prog, name));

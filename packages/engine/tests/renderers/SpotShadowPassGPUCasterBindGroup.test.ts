@@ -57,6 +57,8 @@ function setup(opaqueBatches: unknown[] = []): {
     _createGlobalBindGroup: vi.fn(() => ({ id: ++nextId })),
     _setViewMatrix: vi.fn(() => 0),
     _renderSubgroup: vi.fn(),
+    _cullFieldShadowView: vi.fn(),
+    _recordFieldDraws: vi.fn(),
     scratchGlobalBufferData: new Float32Array(WebGPUGGlobalUniformLayout.totalFloats),
     globalUniformBuffer: {},
     globalBindGroup: undefined,

@@ -46,6 +46,21 @@
       "webgl2": { "state": "present", "file": "packages/engine/src/renderers/gl/managers/WebGLProgramCache.ts", "pattern": "this\\._buildGlsl300\\(\\s*def,\\s*isInstanced,\\s*this\\._fitTextureUnits" },
       "webgl1": { "state": "present", "file": "packages/engine/src/renderers/gl/managers/WebGLProgramCache.ts", "pattern": "this\\._buildGlsl100\\(\\s*def,\\s*shaderId,\\s*isInstanced,\\s*this\\._fitTextureUnits" }
     },
+    "instance_field_gpu_cull": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/instance_field/field_pull.wgsl", "pattern": "fieldPullVertex" },
+      "webgl2": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/WebGL2/WebGL2Renderer.ts", "pattern": "drawElementsIndirect", "reason": "ADR 0059 tier variant: GL tiers have no GPU indirect; the CPU-cell fallback (InstanceFieldGL computing the frozen cull math on CPU + a direct drawElementsInstanced loop over ONE static 16-byte-record VBO, zero readback) replaces the GPU cull lane honestly (WebGLClusterCullPass precedent)" },
+      "webgl1": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/WebGL1/WebGL1Renderer.ts", "pattern": "drawElementsIndirect", "reason": "ADR 0059 tier variant: same CPU-cell fallback as WebGL2 via ANGLE_instanced_arrays + the unpacked f32 pose companion (fail-closed absent extension); no GPU culling or indirect draws on GL1" }
+    },
+    "instance_field_base_vertex": {
+      "webgpu": { "state": "na", "reason": "Not a divergence: the field pose resolves in the WebGPU pull vertex stage (field_pull.wgsl) and in the per-tier base vertex chunks on GL (base_vertex_header/main + web_gl1/base.vert, USE_INSTANCE_FIELD variants of the same frozen decode)" },
+      "webgl2": { "state": "na", "reason": "Not a divergence: the field pose resolves in the WebGPU pull vertex stage (field_pull.wgsl) and in the per-tier base vertex chunks on GL (base_vertex_header/main + web_gl1/base.vert, USE_INSTANCE_FIELD variants of the same frozen decode)" },
+      "webgl1": { "state": "na", "reason": "Not a divergence: the field pose resolves in the WebGPU pull vertex stage (field_pull.wgsl) and in the per-tier base vertex chunks on GL (base_vertex_header/main + web_gl1/base.vert, USE_INSTANCE_FIELD variants of the same frozen decode)" }
+    },
+    "instance_field_lod_crossfade": {
+      "webgpu": { "state": "absent", "class": "undecided", "file": "packages/engine/src/renderers/shaders/source/web_gpu/instance_field/field_pull.wgsl", "pattern": "crossfade", "reason": "P2 feature (ADR 0059 step 2): V1 LOD pops on cell/bucket crossing on every tier; crossfade pairing needs the frozen bucket-name pairing decision first" },
+      "webgl2": { "state": "absent", "class": "undecided", "file": "packages/engine/src/renderers/WebGL2/WebGL2Renderer.ts", "pattern": "crossfade", "reason": "P2 feature (ADR 0059 step 2): V1 LOD pops on cell/bucket crossing on every tier; crossfade pairing needs the frozen bucket-name pairing decision first" },
+      "webgl1": { "state": "absent", "class": "undecided", "file": "packages/engine/src/renderers/WebGL1/WebGL1Renderer.ts", "pattern": "crossfade", "reason": "P2 feature (ADR 0059 step 2): V1 LOD pops on cell/bucket crossing on every tier; crossfade pairing needs the frozen bucket-name pairing decision first" }
+    },
     "auto_exposure": {
       "webgpu": { "state": "present", "file": "packages/engine/src/renderers/post/shaders/PostProcess.frag.wgsl", "pattern": "hdr \\*= textureLoad\\(autoExposureTexture" },
       "webgl2": { "state": "present", "file": "packages/engine/src/renderers/post/shaders/PostProcess.frag.glsl", "pattern": "hdr \\*= texelFetch\\(u_autoExposureTexture" },

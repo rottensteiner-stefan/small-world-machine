@@ -103,6 +103,18 @@ export class WebGLMainPass implements WebGLRenderPass {
       }
     }
 
+    // ADR 0059 field lane (CPU-cell GL fallback): draw every registered field's OPAQUE command
+    // source right after the regular opaque geometry -- the fields are opaque, depth-writing
+    // draws whose shared / per-field state the draw hook binds itself (single-point surface, no
+    // backend branches here). Runs while the normal buffer is write-enabled like the opaque loop.
+    (renderer as AbstractWebGLRenderer).drawInstanceFieldView(0, "opaque", {
+      lights: extractedLights,
+      scene,
+      ...(vMat ? { vMat } : {}),
+      vp,
+      camPos,
+    });
+
     if (writesNormals) renderer.setNormalWriteEnabled(false);
 
     // Decals read the finished opaque depth (and normal copy) and are drawn before the

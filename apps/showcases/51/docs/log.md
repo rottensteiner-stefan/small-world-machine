@@ -220,3 +220,10 @@ overlap (throughput baseline, not placement art) — accepted.
   CPU-side per-object work, exactly what P1 (`InstanceField` GPU culling + indirect draw) removes.
   Priority **confirmed and strengthened**; ADR 0059 step 1 scope unchanged. Baseline note
   `docs/research/vegetation-baseline-2026-11-07.md` §4/§6/§7/§8 corrected accordingly (credit: review-agent).
+
+## 2026-11-09 — Field lane on real hardware (ADR 0059 step 1 accepted)
+
+- `?mode=field` had never rendered on a device: black frame on Apple Metal (5 validation errors), then stripes + flicker. Fixed in `InstanceFieldSystem` / field WGSL (list in ADR 0059 "Step 1 result"); the decisive ones were the unaliased u32 param words (shadow culls landed in the main segment, HZB never on) and the 1024-entry page overflowing at 5.5 k visible trees.
+- Audit (`cullref=1&popcount=1`): GPU == CPU reference in every probed frame, modes a and b.
+- Gate: field 182 728 trees @ 58 fps, CPU 0.1 ms, GPU 6.8 ms vs. autoinst 18 363 trees @ 60 fps, CPU 20.9 ms.
+- Open: placeholder shading (flat white); HZB culls nothing in this scene (sphere footprints reach past the front crowns) — S3 occlusion spike.

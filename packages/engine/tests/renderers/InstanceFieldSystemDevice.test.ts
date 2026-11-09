@@ -1,0 +1,230 @@
+// Recording-mock-device tests for `InstanceFieldSystem` (ADR 0059 step 1). They pin the bugs the
+// first real-device run (Apple Metal, showcase 51 `?mode=field`) exposed and that the inert
+// (host: null) tests could not see: u32 param words never uploaded, page overflow, missing
+// `setPipeline`, wrong uv vertex slot, probe re-mapping while pending, per-frame bind groups.
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { InstanceFieldRenderHost } from "../../src/renderers/WebGPU/managers/InstanceFieldSystem.js";
+import { InstanceFieldSystem } from "../../src/renderers/WebGPU/managers/InstanceFieldSystem.js";
+import { MAX_LOD_BUCKETS, packInstancePose } from "../../src/core/InstanceField.js";
+import type { PrototypeDescriptor } from "../../src/core/InstanceField.js";
+import type { GeometryDataInterface } from "../../src/interfaces/index.js";
+
+const PARAM_BLOCK_BYTES = 256;
+const SEGMENT_BASE_WORD = 112 / 4;
+const HZB_ENABLED_WORD = 104 / 4;
+const CULL_MODE_WORD = 116 / 4;
+
+interface MockBuffer {
+  size: number;
+  label?: string | undefined;
+  mapState: "unmapped" | "pending" | "mapped";
+  mapAsync: ReturnType<typeof vi.fn>;
+  destroy: ReturnType<typeof vi.fn>;
+}
+
+interface Recorded {
+  writes: { buffer: MockBuffer; offset: number; data: ArrayBufferView }[];
+  bindGroups: number;
+  buffers: MockBuffer[];
+}
+
+beforeAll(() => {
+  const g = globalThis as Record<string, unknown>;
+  g["GPUBufferUsage"] ??= {
+    MAP_READ: 1,
+    MAP_WRITE: 2,
+    COPY_SRC: 4,
+    COPY_DST: 8,
+    INDEX: 16,
+    VERTEX: 32,
+    UNIFORM: 64,
+    STORAGE: 128,
+    INDIRECT: 256,
+    QUERY_RESOLVE: 512,
+  };
+  g["GPUShaderStage"] ??= { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
+  g["GPUMapMode"] ??= { READ: 1, WRITE: 2 };
+});
+
+function makeDevice(rec: Recorded): GPUDevice {
+  const device = {
+    createBuffer: (desc: GPUBufferDescriptor): MockBuffer => {
+      const b: MockBuffer = {
+        size: desc.size,
+        label: desc.label,
+        mapState: "unmapped",
+        mapAsync: vi.fn(function (this: void): Promise<void> {
+          b.mapState = "pending";
+          return Promise.resolve();
+        }),
+        destroy: vi.fn(),
+      };
+      rec.buffers.push(b);
+      return b;
+    },
+    createBindGroupLayout: (): object => ({}),
+    createBindGroup: (): object => {
+      rec.bindGroups++;
+      return {};
+    },
+    createPipelineLayout: (): object => ({}),
+    createShaderModule: (): object => ({}),
+    createComputePipeline: (): object => ({}),
+    createRenderPipeline: (): object => ({}),
+    createSampler: (): object => ({}),
+    queue: {
+      writeBuffer: (buffer: MockBuffer, offset: number, data: ArrayBufferView): void => {
+        // Copy: the system reuses its scratch block, the test inspects every upload later.
+        const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice();
+        rec.writes.push({ buffer, offset, data: bytes });
+      },
+    },
+  };
+  return device as unknown as GPUDevice;
+}
+
+function makeSetup(instances: number): {
+  system: InstanceFieldSystem;
+  rec: Recorded;
+  geoEntry: { vb: object; uvb: object; ib: object; indexCount: number; format: string };
+} {
+  const rec: Recorded = { writes: [], bindGroups: 0, buffers: [] };
+  const geoEntry = {
+    vb: { id: "vb" },
+    uvb: { id: "uvb" },
+    ib: { id: "ib" },
+    indexCount: 36,
+    format: "uint32",
+  };
+  const hzbViews = [{ id: "hzbA" }, { id: "hzbB" }];
+  let frame = 0;
+  const host = {
+    gpuDevice: makeDevice(rec),
+    globalBGL: {},
+    globalBindGroup: {},
+    globalUniformBuffer: { id: "global" },
+    viewBGL: {},
+    viewBindGroup: {},
+    currentColorTargetFormat: "bgra8unorm",
+    fieldCullModuleSource: "",
+    fieldPullModuleSource: "",
+    whiteTextureView: {},
+    getPreviousFrameHzb: () => ({
+      available: true,
+      frameIndex: frame,
+      readHandle: { view: hzbViews[frame++ % 2], mipLevelCount: 8 },
+    }),
+    getTextureView: () => ({}),
+    acquireFieldGeometry: () => geoEntry,
+    releaseFieldGeometry: () => {},
+  } as unknown as InstanceFieldRenderHost;
+
+  const geometry = {
+    vertices: new Float32Array(9),
+    indices: new Uint32Array(3),
+    uvs: new Float32Array(6),
+  } as unknown as GeometryDataInterface;
+  const prototype: PrototypeDescriptor = {
+    id: "tree",
+    boundingRadius: 2,
+    lodBuckets: [
+      { name: "L0", lodIndex: 0, minProjectedSize: 3, maxProjectedSize: 1e6, geometrySlot: 0 },
+    ],
+    materialSlot: 0,
+    maxInstances: instances,
+  };
+  const records = new Float32Array(instances * 4);
+  const pose = new Uint32Array(1);
+  const poseF = new Float32Array(pose.buffer);
+  for (let i = 0; i < instances; i++) {
+    records[i * 4] = i;
+    pose[0] = packInstancePose(0, 1);
+    records[i * 4 + 3] = poseF[0]!;
+  }
+  const system = new InstanceFieldSystem(null, {
+    instanceRecords: records,
+    prototypes: [prototype],
+    geometryTable: [[geometry]],
+    options: { maxInstances: instances, cellSize: 10, cullPixelSize: 2, maxViews: 4 },
+  } as never);
+  system.attachHost(host);
+  return { system, rec, geoEntry };
+}
+
+function lastParamBlock(rec: Recorded, offset: number): Uint32Array {
+  const hit = [...rec.writes]
+    .reverse()
+    .find((w) => w.offset === offset && w.data.byteLength === PARAM_BLOCK_BYTES);
+  expect(hit, `param block upload at ${offset}`).toBeDefined();
+  const bytes = hit!.data as Uint8Array;
+  return new Uint32Array(bytes.buffer, bytes.byteOffset, PARAM_BLOCK_BYTES / 4);
+}
+
+const VP = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -1, 0]);
+
+describe("InstanceFieldSystem on a recording device", () => {
+  it("uploads the u32 words of every view's param block (segment base, cull mode, HZB flag)", () => {
+    const { system, rec } = makeSetup(16);
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    system.prepareShadowView(2, VP);
+
+    const main = lastParamBlock(rec, 0);
+    expect(main[SEGMENT_BASE_WORD]).toBe(0);
+    expect(main[CULL_MODE_WORD]).toBe(1);
+    expect(main[HZB_ENABLED_WORD]).toBe(1);
+
+    const shadow = lastParamBlock(rec, 2 * MAX_LOD_BUCKETS * PARAM_BLOCK_BYTES);
+    expect(shadow[SEGMENT_BASE_WORD]).toBe(2 * MAX_LOD_BUCKETS);
+    expect(shadow[CULL_MODE_WORD]).toBe(0);
+  });
+
+  it("sizes each segment page for the whole population (one view may see every instance)", () => {
+    const n = 5000;
+    const { rec } = makeSetup(n);
+    // `FieldInfo` is the last buffer the system creates (32 B uniform); word 0 = pageCapacity.
+    const fieldInfo = rec.buffers.filter((b) => b.size === 32).at(-1);
+    const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
+    expect(info).toBeDefined();
+    const words = new Uint32Array((info!.data as Uint8Array).slice().buffer);
+    expect(words[0]).toBe(n); // pageCapacity
+    // Pages only for the addressable segments: views [0,4) x 1 bucket -> highest bv = 3*8.
+    const visible = rec.buffers.find((b) => b.size === (3 * MAX_LOD_BUCKETS + 1) * n * 4);
+    expect(visible).toBeDefined();
+  });
+
+  it("sets the pipeline and binds uv to slot 1 before every indirect draw", () => {
+    const { system, geoEntry } = makeSetup(8);
+    const calls: string[] = [];
+    const rp = {
+      setPipeline: vi.fn(() => calls.push("pipeline")),
+      setBindGroup: vi.fn(),
+      setVertexBuffer: vi.fn(),
+      setIndexBuffer: vi.fn(),
+      drawIndexedIndirect: vi.fn(() => calls.push("draw")),
+    };
+    system.recordDraw(rp as unknown as GPURenderPassEncoder, 0, 0, true, "color");
+    expect(calls).toEqual(["pipeline", "draw"]);
+    expect(rp.setVertexBuffer).toHaveBeenCalledWith(0, geoEntry.vb);
+    expect(rp.setVertexBuffer).toHaveBeenCalledWith(1, geoEntry.uvb);
+  });
+
+  it("reuses the cull bind groups of the ping-pong pyramid instead of creating one per frame", () => {
+    const { system, rec } = makeSetup(8);
+    for (let f = 0; f < 4; f++) system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    const afterWarmup = rec.bindGroups;
+    for (let f = 0; f < 20; f++) system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    expect(rec.bindGroups).toBe(afterWarmup);
+  });
+
+  it("maps the probe staging only once while a readback is pending", () => {
+    const { system, rec } = makeSetup(8);
+    system.installCullProbe({ onCullFrame: () => {} });
+    const ce = { copyBufferToBuffer: vi.fn() } as unknown as GPUCommandEncoder;
+    system.recordProbeStaging(ce, 1);
+    system.kickoffProbeReadback();
+    system.kickoffProbeReadback();
+    const staging = rec.buffers.filter((b) => b.mapAsync.mock.calls.length > 0);
+    expect(staging.length).toBe(2);
+    for (const b of staging) expect(b.mapAsync).toHaveBeenCalledTimes(1);
+  });
+});

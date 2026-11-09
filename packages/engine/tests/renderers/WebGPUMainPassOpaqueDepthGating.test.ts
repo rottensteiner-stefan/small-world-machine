@@ -24,6 +24,7 @@ function run(opts: {
     captureOpaqueNormal: vi.fn(),
     captureOpaqueTexture: vi.fn(),
     _renderBatch: vi.fn(),
+    _recordFieldDraws: vi.fn(),
   };
   const scene: Internals = {
     getVisibleObjectsSorted: vi.fn(() => ({ opaqueBatches: [], decals: [], transparent: [] })),
@@ -87,6 +88,7 @@ describe("MainRenderPass: reused pass descriptors (K1)", () => {
       canDrawDecals: true,
       postProcessing: { enabled: false, requiresOpaqueDepth: false },
       _renderBatch: vi.fn(),
+      _recordFieldDraws: vi.fn(),
     };
     const scene: Internals = {
       getVisibleObjectsSorted: vi.fn(() => ({ opaqueBatches: [], decals: [], transparent: [] })),

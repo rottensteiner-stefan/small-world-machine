@@ -128,6 +128,18 @@ const INVARIANT_REGISTRY: readonly string[] = [
   // S34 ID set = 10 canonical (Alice mediation 2026-10-31 + 2 additions accepted from Bob's WIP same day).
   "S34-POOL-PARTITION", // GPUParticleSystem: alive+dead == capacity at all times, slots in [0,capacity), storage buffers never overrun (bounded CAS pop / reap), Test gpu/GPUParticleSystemParity
   "S34-SCREEN-COLLISION-TAPS", // GPUParticleSystem csSimulate: exactly 2 texel loads per colliding particle (1 depth tap + conditional ADR 0028 normal tap), Test gpu/GPUParticleSystemParity
+  // VEG-P1 (InstanceField contract, Dave 2026-11-08, ADR 0059 step 1): registered BEFORE the
+  // P1-2/P1-3 code references (S34-v2 precedent, mediated by Alice) — the frozen contract file
+  // `packages/engine/src/core/InstanceField.ts` references them on HEAD; test anchors land in
+  // P1-4 `packages/engine/tests/renderers/InstanceField*.test.ts` (Charly). Single claim =
+  // single ID; Bob's `IF-CULL-CONSERVATIVE` merged into `IF-CULL-NO-FALSE-NEGATIVE`.
+  "IF-CULL-NO-FALSE-NEGATIVE", // conservative sphere/AABB-frustum + cell tests: no false negatives, any view, Test InstanceFieldCull (P1-4)
+  "IF-CULL-FP-BOUND", // conservative cull false positives bounded (FP_BOUND rate / FP_ABSOLUTE count, P1-4 research note), Test InstanceFieldCull (P1-4)
+  "IF-CULL-ROUTING", // survivors route to exactly their (view*MAX_LOD_BUCKETS+bucket) segment, indexes < instance count, Test InstanceFieldCull (P1-4)
+  "IF-CULL-DETERMINISM", // identical (seed, pose, frame, pyramid) inputs => byte-identical survivor SET per (view x bucket); page order unspecified, Test InstanceFieldCull (P1-4)
+  "IF-CAMERA-CUT-HZB-SKIP", // camera cut/teleport => exactly one frame HZB skip (idempotent, field-scoped, GL no-op); cut frame visible set superset of frustum+size reference, Test InstanceFieldCull (P1-4)
+  "IF-BUDGET", // per-(view x bucket) counts <= capacity, args == counts, clamp-at-capacity drop, no OOB/corruption, Test InstanceFieldCull (P1-4)
+  "IF-PROJECTED-SIZE", // projected sphere diameter in pixels (pinhole, primary view): resolution/FOV-normalized bucket selection + sub-pixel cull, Test InstanceFieldCull (P1-4)
 ];
 const INVARIANT_REGISTRY_SET: ReadonlySet<string> = new Set<string>(INVARIANT_REGISTRY);
 

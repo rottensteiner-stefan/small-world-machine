@@ -15,6 +15,7 @@ function makeMockRenderer(): Internals {
     context: { shaderRegistry: new ShaderRegistry() },
     globalBindGroup: { mock: "globalBindGroup" },
     _renderSubgroup: vi.fn(),
+    _recordFieldDraws: vi.fn(),
   };
 }
 
