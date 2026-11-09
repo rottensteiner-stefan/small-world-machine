@@ -18,6 +18,10 @@ export interface LookLabState {
   sun: SunKey;
   /** True while B holds the neutral reference instead of the selected look. */
   abReference: boolean;
+  /** Leaf/grass sun transmission (`StandardMaterial.backlight`) on. */
+  backlight: boolean;
+  /** Eye adaptation (`AutoExposureElement`) on. */
+  autoExposure: boolean;
 }
 
 /** Showcase actions the panel triggers. */
@@ -25,6 +29,8 @@ export interface LookLabActions {
   setLook(look: LookKey): void;
   setSun(sun: SunKey): void;
   toggleReference(): void;
+  toggleBacklight(): void;
+  toggleAutoExposure(): void;
   resetView(): void;
 }
 
@@ -80,7 +86,11 @@ export class Hud {
         ${hudSection(
           "☀ Sun Situation",
           "L cycles",
-          `<div class="preset-group two-col">${sunButtons}</div>`,
+          `<div class="preset-group two-col">${sunButtons}</div>
+          <div class="preset-group two-col" style="margin-top:6px;">
+            <button id="btnBacklight" class="btn-preset" title="Key K: leaf/grass sun transmission (StandardMaterial.backlight)">Leaf Backlight</button>
+            <button id="btnAutoExposure" class="btn-preset" title="Key X: eye adaptation (AutoExposureElement)">Auto Exposure</button>
+          </div>`,
         )}
         ${hudSection(
           "🔭 View",
@@ -125,6 +135,8 @@ export class Hud {
       d.query<HTMLButtonElement>(`#btnSun_${key}`)?.classList.toggle("active", key === state.sun);
     }
     d.query<HTMLButtonElement>("#btnReference")?.classList.toggle("active", state.abReference);
+    d.query<HTMLButtonElement>("#btnBacklight")?.classList.toggle("active", state.backlight);
+    d.query<HTMLButtonElement>("#btnAutoExposure")?.classList.toggle("active", state.autoExposure);
   }
 
   private _bind(): void {
@@ -143,6 +155,8 @@ export class Hud {
       d.query(`#btnSun_${key}`)?.addEventListener("click", () => a.setSun(key));
     }
     d.query("#btnReference")?.addEventListener("click", () => a.toggleReference());
+    d.query("#btnBacklight")?.addEventListener("click", () => a.toggleBacklight());
+    d.query("#btnAutoExposure")?.addEventListener("click", () => a.toggleAutoExposure());
     d.query("#btnResetView")?.addEventListener("click", () => a.resetView());
   }
 }

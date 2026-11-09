@@ -50,6 +50,7 @@ export class PostProcessPass implements RenderPass {
   private _builtHbaoTextureView?: GPUTextureView;
   private _builtShaftsTextureView?: GPUTextureView;
   private _builtVolumetricFogTextureView?: GPUTextureView;
+  private _builtAutoExposureView?: GPUTextureView;
   /** Signature of the most recently REQUESTED pipeline build (may still be validating). */
   private _requestedSignature?: string;
   /** Monotonic build id: a validation verdict for a superseded build is dropped. */
@@ -127,6 +128,7 @@ export class PostProcessPass implements RenderPass {
         { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
         { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
         { binding: 6, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+        { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
       ],
     });
 
@@ -248,6 +250,7 @@ export class PostProcessPass implements RenderPass {
     hbaoActiveView: GPUTextureView,
     shaftsActiveView: GPUTextureView,
     volumetricFogActiveView: GPUTextureView,
+    autoExposureView: GPUTextureView,
   ): void {
     const device = renderer.gpuDevice!;
     this._ensureResources(device);
@@ -262,6 +265,7 @@ export class PostProcessPass implements RenderPass {
         { binding: 4, resource: hbaoActiveView },
         { binding: 5, resource: shaftsActiveView },
         { binding: 6, resource: volumetricFogActiveView },
+        { binding: 7, resource: autoExposureView },
       ],
     });
   }
@@ -354,6 +358,8 @@ export class PostProcessPass implements RenderPass {
       e.volFog,
       renderer.volumetricFogTextureView,
     );
+    // Multiplicative like AO: white (1.0) is the neutral exposure while auto exposure is off.
+    const autoExposureView = renderer.autoExposureView ?? renderer.whiteTextureView;
 
     // Rebuild bind group ONLY if the bound texture views changed
     if (
@@ -362,7 +368,8 @@ export class PostProcessPass implements RenderPass {
       this._builtBloomTextureView !== bloomActiveView ||
       this._builtHbaoTextureView !== hbaoActiveView ||
       this._builtShaftsTextureView !== shaftsActiveView ||
-      this._builtVolumetricFogTextureView !== volFogActiveView
+      this._builtVolumetricFogTextureView !== volFogActiveView ||
+      this._builtAutoExposureView !== autoExposureView
     ) {
       this._buildBindGroup(
         renderer,
@@ -371,12 +378,14 @@ export class PostProcessPass implements RenderPass {
         hbaoActiveView,
         shaftsActiveView,
         volFogActiveView,
+        autoExposureView,
       );
       this._builtTextureView = colorView;
       this._builtBloomTextureView = bloomActiveView;
       this._builtHbaoTextureView = hbaoActiveView;
       this._builtShaftsTextureView = shaftsActiveView;
       this._builtVolumetricFogTextureView = volFogActiveView;
+      this._builtAutoExposureView = autoExposureView;
     }
 
     // Write the continuous tuning values every frame, independent of the rebuild guard above --

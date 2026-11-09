@@ -109,6 +109,8 @@ export const ShaderFlag = {
   DECAL_UNLIT: "USE_DECAL_UNLIT",
   /** Material renders unlit (KHR_materials_unlit): flat base color, no lighting/IBL. */
   UNLIT: "USE_UNLIT",
+  /** Thin-surface sun transmission on StandardMaterial (`backlight`, ADR 0060). */
+  BACKLIGHT: "USE_BACKLIGHT",
 } as const;
 
 /** Type definition for ShaderFlag. */

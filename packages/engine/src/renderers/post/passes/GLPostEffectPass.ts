@@ -79,6 +79,8 @@ export interface GLPostEffectPassContext {
   hbaoTexture: WebGLTexture | null;
   lightShaftsTexture: WebGLTexture | null;
   volumetricFogTexture: WebGLTexture | null;
+  /** 1x1 adapted exposure (r = multiplier, ADR 0061), null while auto exposure is off. */
+  autoExposureTexture: WebGLTexture | null;
 }
 
 /**
@@ -135,5 +137,6 @@ export function createGLPostEffectContext(): GLPostEffectPassContext {
     hbaoTexture: null,
     lightShaftsTexture: null,
     volumetricFogTexture: null,
+    autoExposureTexture: null,
   };
 }

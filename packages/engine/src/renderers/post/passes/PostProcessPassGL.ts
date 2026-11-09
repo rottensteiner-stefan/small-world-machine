@@ -41,6 +41,9 @@ export class PostProcessPassGL {
   private _uLightShaftsEnabled: WebGLUniformLocation | null = null;
   private _uLightShaftsIntensity: WebGLUniformLocation | null = null;
   private _uVolumetricFogTexture: WebGLUniformLocation | null = null;
+  private _uAutoExposureTexture: WebGLUniformLocation | null = null;
+  /** WebGL2: neutral 1x1 white stand-in (exposure x1.0) while auto exposure is off (ADR 0061). */
+  private _whiteTexture: WebGLTexture | undefined = undefined;
   private _uTime: WebGLUniformLocation | null = null;
 
   private _uBloomIntensity: WebGLUniformLocation | null = null;
@@ -243,6 +246,7 @@ export class PostProcessPassGL {
     this._uLightShaftsEnabled = gl.getUniformLocation(p, "u_lightShaftsEnabled");
     this._uLightShaftsIntensity = gl.getUniformLocation(p, "u_lightShaftsIntensity");
     this._uVolumetricFogTexture = gl.getUniformLocation(p, "u_volumetricFogTexture");
+    this._uAutoExposureTexture = gl.getUniformLocation(p, "u_autoExposureTexture");
     this._uTime = gl.getUniformLocation(p, "u_time");
 
     this._uBloomIntensity = gl.getUniformLocation(p, "u_bloomIntensity");
@@ -361,6 +365,13 @@ export class PostProcessPassGL {
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, volumetricFogTexture);
       if (this._uVolumetricFogTexture) gl.uniform1i(this._uVolumetricFogTexture, 4);
+    }
+
+    // Auto exposure (WebGL2 shader only): always bound -- an unbound sampler reads 0 = black frame.
+    if (this._uAutoExposureTexture) {
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, ctx.autoExposureTexture ?? this._white());
+      gl.uniform1i(this._uAutoExposureTexture, 5);
     }
 
     // Continuous Uniform Updates
@@ -484,9 +495,33 @@ export class PostProcessPassGL {
     gl.useProgram(null);
   }
 
+  private _white(): WebGLTexture {
+    if (this._whiteTexture) return this._whiteTexture;
+    const gl = this._gl;
+    const texture = requireGlObject(gl.createTexture(), "texture");
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      1,
+      1,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      new Uint8Array([255, 255, 255, 255]),
+    );
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    this._whiteTexture = texture;
+    return texture;
+  }
+
   /** Releases GPU resources (contract shape: `destroy(): void`, ADR 0037). */
   public destroy(): void {
     const gl = this._gl;
+    if (this._whiteTexture) gl.deleteTexture(this._whiteTexture);
+    this._whiteTexture = undefined;
     if (this._prog) gl.deleteProgram(this._prog);
     if (this._vb) gl.deleteBuffer(this._vb);
     if (this._isWebGL2 && this._vao) {

@@ -3,3 +3,5 @@ node_modules
 package-lock.json
 .*/
 var
+# showcase-layout must stay on one line: the vite html plugin parses it with a single-line pattern
+apps/showcases/*/index.html

@@ -369,6 +369,9 @@ export class WebGPURenderer extends AbstractRenderer implements GpuParticlePassH
   public get bloomTextureView(): GPUTextureView | undefined {
     return this._postFxChain.bloomTextureView;
   }
+  public get autoExposureView(): GPUTextureView | undefined {
+    return this._postFxChain.autoExposureView;
+  }
   public get hbaoTextureView(): GPUTextureView | undefined {
     return this._postFxChain.hbaoTextureView;
   }

@@ -17,6 +17,8 @@ uniform int u_volumetricFogEnabled;
 uniform float u_bloomIntensity;
 uniform vec3 u_bloomColor;
 uniform float u_exposure;
+// Adapted exposure multiplier in .r (ADR 0061); a white 1x1 stand-in while auto exposure is off.
+uniform sampler2D u_autoExposureTexture;
 uniform float u_gamma;
 uniform int u_toneMappingMode;
 uniform float u_toneMappingWhite;
@@ -259,6 +261,8 @@ void main() {
 
     // Tone Mapping
     // Mode and white point are compile-time defines: the dispatch folds to one operator.
+    // Auto exposure (ADR 0061) scales the scene radiance ahead of the artistic exposure bias.
+    hdr *= texelFetch(u_autoExposureTexture, ivec2(0), 0).r;
     vec3 tonemapped = toneMapOperator(hdr * u_exposure, u_toneMappingMode, u_toneMappingWhite);
 
     // Gamma correction

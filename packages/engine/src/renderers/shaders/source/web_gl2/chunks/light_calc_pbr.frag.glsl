@@ -163,6 +163,9 @@ vec3 Lo = vec3(0.0);
     float dotVH = max(dot(V, H), 0.0);
 
     float dirShadow = 1.0;
+#ifdef USE_BACKLIGHT
+    float backlightShadow = 1.0;
+#endif
     if (u_dirShadowInfo.z > 0.5 && u_dirShadowInfo.w > 0.0) {
         float depth = length(u_viewPos - v_worldPos);
         int numCascades = int(u_dirShadowInfo.w);
@@ -237,6 +240,23 @@ vec3 Lo = vec3(0.0);
         }
 
         dirShadow = mix(shadowA, shadowB, blendToNext);
+#ifdef USE_BACKLIGHT
+        // Transmission shadow sampled `thickness` metres toward the sun (ADR 0060, see lighting_pbr.wgsl).
+        vec4 blSpace = u_cascadeMatrices[cascadeIndex] * vec4(v_worldPos + L * u_matParam1.w, 1.0);
+        vec3 blCoords = blSpace.xyz / blSpace.w * 0.5 + 0.5;
+        if (blCoords.z <= 1.0 && blCoords.x >= 0.0 && blCoords.x <= 1.0 && blCoords.y >= 0.0 && blCoords.y <= 1.0) {
+            float colBl = mod(float(cascadeIndex), cols);
+            float rowBl = floor(float(cascadeIndex) / cols);
+            vec2 cellMinBl = vec2(colBl, rowBl) / cols;
+            vec2 cellMaxBl = cellMinBl + vec2(1.0) / cols;
+            vec2 atlasUVBl = (blCoords.xy + vec2(colBl, rowBl)) / cols;
+            if (u_evsmParams.x > 0.5) {
+                backlightShadow = evalEVSMDir(atlasUVBl, cellMinBl, cellMaxBl, blCoords.z);
+            } else {
+                backlightShadow = evalPCSSDir(atlasUVBl, cellMinBl, cellMaxBl, blCoords.z, bias, cascadeIndex);
+            }
+        }
+#endif
     }
 
     vec3 radiance = u_dirLightColor * dirShadow;
@@ -281,6 +301,11 @@ vec3 Lo = vec3(0.0);
 #endif
 
     Lo += directLight;
+#ifdef USE_BACKLIGHT
+    // Thin-surface transmission (Godot `backlight`): wrap from the unlit side + forward lobe toward the sun.
+    float backlightLobe = max(dot(-N, L), 0.0) + pow(max(dot(-V, L), 0.0), 6.0);
+    Lo += sRGBToLinear(u_matParam1.rgb) * diffuseAlbedo / 3.14159265359 * u_dirLightColor * (backlightShadow * backlightLobe);
+#endif
 }
 
 // Clustered light lookup -- see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md.

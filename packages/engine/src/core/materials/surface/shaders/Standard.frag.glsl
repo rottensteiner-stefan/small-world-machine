@@ -67,6 +67,10 @@ uniform float u_reflectivity;
 // See Standard.frag.wgsl's identical use of obj.matParam0.x for the full rationale.
 uniform vec4 u_matParam0;
 uniform float u_time;
+// Backlight lane (ADR 0060): rgb = transmission tint (sRGB), w = shadow escape thickness in metres.
+#ifdef USE_BACKLIGHT
+uniform vec4 u_matParam1;
+#endif
 
 // Typed semantic lane (ADR 0027 / 0039): sheenColor -- rgb tint (sRGB, linearized below), w = enable
 // flag mirroring the USE_SHEEN push basis (sheen is decoupled from u_specColor / emissive).

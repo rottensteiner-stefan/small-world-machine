@@ -96,6 +96,11 @@ function createMockGL(): {
       deleteProgram: (): void => {},
       deleteBuffer: (): void => {},
       deleteVertexArray: (): void => {},
+      // Auto exposure's neutral 1x1 white stand-in (ADR 0061).
+      createTexture: (): object => ({}),
+      texImage2D: (): void => {},
+      texParameteri: (): void => {},
+      deleteTexture: (): void => {},
       createBuffer: (): object => ({}),
       createVertexArray: (): object => ({}),
       bindVertexArray: (): void => {},

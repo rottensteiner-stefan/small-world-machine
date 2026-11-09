@@ -4,6 +4,8 @@
 @group(0) @binding(4) var hbaoTexture: texture_2d<f32>;
 @group(0) @binding(5) var lightShaftsTexture: texture_2d<f32>;
 @group(0) @binding(6) var volumetricFogTexture: texture_2d<f32>;
+// Adapted exposure multiplier in .r (ADR 0061); a white 1x1 stand-in while auto exposure is off.
+@group(0) @binding(7) var autoExposureTexture: texture_2d<f32>;
 
 // Structural constants (overwritten at compilation time) -- these gate real code paths (branch
 // taken / sample count), unlike the continuous tuning values below, which live in `dyn` instead
@@ -287,6 +289,8 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
     }
 
     // Mode and white point are compile-time constants: the dispatch folds to one operator.
+    // Auto exposure (ADR 0061) scales the scene radiance ahead of the artistic exposure bias.
+    hdr *= textureLoad(autoExposureTexture, vec2i(0, 0), 0).r;
     let tonemapped = toneMapOperator(hdr * u_exposure, i32(u_toneMappingMode), u_toneMappingWhite);
 
     var srgb = linearToSRGB(tonemapped, u_inverseGamma);

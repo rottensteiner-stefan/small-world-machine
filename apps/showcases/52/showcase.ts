@@ -12,11 +12,13 @@ import {
   MathUtils,
   mulberry32,
   Object3D,
+  PostProcessingEffectType,
   RendererType,
   StandardMaterial,
   Vector3D,
 } from "@small-world-machine/engine";
 import type {
+  AutoExposureElement,
   EngineOptions,
   GeometryDataInterface,
   AbstractMaterial,
@@ -58,11 +60,22 @@ interface SunSituation {
   fogFar: number;
 }
 
+type AutoExposureTuning = Pick<
+  AutoExposureElement,
+  "minEv" | "maxEv" | "compensationEv" | "speedDark" | "speedBright" | "centerWeight"
+>;
+
 interface QaSwm52Hook {
   sample(): { look: LookKey; sun: SunKey; abReference: boolean; objects: number; renderer: string };
   setLook(look: LookKey): void;
   setSun(sun: SunKey): void;
   setReference(on: boolean): void;
+  setBacklight(on: boolean): void;
+  setAutoExposure(on: boolean): void;
+  /** Live tuning of the eye adaptation parameters. */
+  tuneAutoExposure(patch: Partial<AutoExposureTuning>): void;
+  /** Places the orbit camera (reproducible A/B framing). */
+  setView(position: number[], target: number[]): void;
   /** Live tuning: applies the current preset overridden by `patch` (not persisted). */
   tune(patch: Partial<FoliageLook>): void;
 }
@@ -112,6 +125,18 @@ const REALISTIC_ALBEDO: Record<string, readonly [number, number, number]> = {
   "0.80,0.46,0.37": [0.24, 0.19, 0.14], // woodBarkDark
 };
 
+/** Palette entries that are leaves or grass blades: they get the `backlight` transmission. */
+const FOLIAGE_KEYS: ReadonlySet<string> = new Set([
+  "0.17,0.85,0.72",
+  "0.16,0.79,0.67",
+  "0.17,0.65,0.67",
+]);
+/** Sun light passing through leaves: brighter and more yellow than the reflected albedo. */
+const LEAF_TRANSMISSION = new Color(0.55, 0.72, 0.2);
+const BLACK = new Color(0, 0, 0);
+/** Crown/blade depth relative to the prop height, the transmission shadow's escape distance. */
+const BACKLIGHT_THICKNESS_RATIO = 0.35;
+
 const paletteKey = (c: Color): string =>
   [c.r, c.g, c.b].map((v) => GltfMaterialParser.engineSRGBToLinear(v).toFixed(2)).join(",");
 
@@ -148,6 +173,14 @@ const SUNS: Record<SunKey, SunSituation> = {
   },
 };
 
+/**
+ * Foliage scenes are darker than the 18 % average a meter assumes, so plain metering overexposes
+ * them; -1.2 EV (tuned in this lab, meadow vs. forest interior) keeps the meadow at the preset
+ * look while still opening up the forest. maxEv caps the brightening deep in the canopy.
+ */
+const FOLIAGE_EV_COMPENSATION = -1.2;
+const FOLIAGE_MAX_EV = 2;
+
 /** Flight speeds in m/s: walking pace through the forest, wheel scales it per notch. */
 const FLY_SPEED_DEFAULT = 12;
 const FLY_SPEED_MIN = 1;
@@ -172,6 +205,9 @@ export class Showcase extends AbstractShowcase {
   private _sunKey: SunKey = "noon";
   private _abReference: boolean = false;
   private _objects: number = 0;
+  private _backlight: boolean = true;
+  private _autoExposure: boolean = false;
+  private readonly _foliage: StandardMaterial[] = [];
   private _fly: FlyController | undefined = undefined;
 
   constructor(options: EngineOptions = {}) {
@@ -224,6 +260,7 @@ export class Showcase extends AbstractShowcase {
     this.scene.add(ground);
 
     await this._buildVegetation();
+    this._setBacklight(this._backlight);
     this._applySun();
     this._applyLook();
     this._installQaHook();
@@ -254,6 +291,12 @@ export class Showcase extends AbstractShowcase {
         break;
       case "KeyL":
         this._setSun(SUN_KEYS[(SUN_KEYS.indexOf(this._sunKey) + 1) % SUN_KEYS.length]!);
+        break;
+      case "KeyX":
+        this._setAutoExposure(!this._autoExposure);
+        break;
+      case "KeyK":
+        this._setBacklight(!this._backlight);
         break;
     }
   }
@@ -323,14 +366,41 @@ export class Showcase extends AbstractShowcase {
         `Exposure:   ${look.exposure.toFixed(2)}\n` +
         `Contrast:   ${look.contrast.toFixed(2)}   Saturation: ${look.saturation.toFixed(2)}\n` +
         `Temp/Tint:  ${look.temperature.toFixed(2)} / ${look.tint.toFixed(2)}\n` +
-        `Sun:        ${this._sunKey}\n` +
+        `Sun:        ${this._sunKey}   Backlight: ${this._backlight ? "on" : "off"}   Auto-EV: ${this._autoExposure ? "on" : "off"}\n` +
         `Fly speed:  ${(this._fly?.moveSpeed ?? FLY_SPEED_DEFAULT).toFixed(1)} m/s (wheel)\n` +
         `Objects:    ${this._objects}   Renderer: ${this.renderer.type}`,
     );
   }
 
+  private _setAutoExposure(on: boolean): void {
+    this._autoExposure = on;
+    const ae = this.renderer.postProcessing.get<AutoExposureElement>(
+      PostProcessingEffectType.AUTO_EXPOSURE,
+    );
+    if (ae) {
+      ae.enabled = on;
+      ae.compensationEv = FOLIAGE_EV_COMPENSATION;
+      ae.maxEv = FOLIAGE_MAX_EV;
+    }
+    this._syncHud();
+  }
+
+  private _setBacklight(on: boolean): void {
+    this._backlight = on;
+    for (const material of this._foliage) {
+      material.backlight.copyFrom(on ? LEAF_TRANSMISSION : BLACK);
+    }
+    this._syncHud();
+  }
+
   private _state(): LookLabState {
-    return { look: this._look, sun: this._sunKey, abReference: this._abReference };
+    return {
+      look: this._look,
+      sun: this._sunKey,
+      abReference: this._abReference,
+      backlight: this._backlight,
+      autoExposure: this._autoExposure,
+    };
   }
 
   private async _buildVegetation(): Promise<void> {
@@ -436,7 +506,12 @@ export class Showcase extends AbstractShowcase {
           ? REALISTIC_ALBEDO[paletteKey(node.material.color)]
           : undefined;
       if (albedo !== undefined && node.material instanceof StandardMaterial) {
+        const key = paletteKey(node.material.color);
         node.material.color.set(albedo[0], albedo[1], albedo[2]);
+        if (FOLIAGE_KEYS.has(key)) {
+          node.material.backlightThickness = targetHeight * BACKLIGHT_THICKNESS_RATIO;
+          this._foliage.push(node.material);
+        }
       }
       parts.push({ geometry: node.geometry, material: node.material, offset });
       const v = node.geometry.vertices;
@@ -459,6 +534,19 @@ export class Showcase extends AbstractShowcase {
       setLook: (look: LookKey): void => this._setLook(look),
       setSun: (sun: SunKey): void => this._setSun(sun),
       setReference: (on: boolean): void => this._setReference(on),
+      setBacklight: (on: boolean): void => this._setBacklight(on),
+      setAutoExposure: (on: boolean): void => this._setAutoExposure(on),
+      tuneAutoExposure: (patch: Partial<AutoExposureTuning>): void => {
+        const ae = this.renderer.postProcessing.get<AutoExposureElement>(
+          PostProcessingEffectType.AUTO_EXPOSURE,
+        );
+        if (ae) Object.assign(ae, patch);
+      },
+      setView: (pos: number[], target: number[]): void =>
+        this.setInitialCamera(
+          new Vector3D(pos[0]!, pos[1]!, pos[2]!),
+          new Vector3D(target[0]!, target[1]!, target[2]!),
+        ),
       tune: (patch: Partial<FoliageLook>): void =>
         applyFoliageLook(this.renderer.postProcessing, { ...FOLIAGE_LOOKS[this._look], ...patch }),
     };
@@ -469,6 +557,8 @@ export class Showcase extends AbstractShowcase {
       setLook: (look: LookKey): void => this._setLook(look),
       setSun: (sun: SunKey): void => this._setSun(sun),
       toggleReference: (): void => this._setReference(!this._abReference),
+      toggleBacklight: (): void => this._setBacklight(!this._backlight),
+      toggleAutoExposure: (): void => this._setAutoExposure(!this._autoExposure),
       resetView: (): void => this.resetCamera(),
     });
     this._syncHud();

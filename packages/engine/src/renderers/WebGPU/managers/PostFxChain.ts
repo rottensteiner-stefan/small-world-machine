@@ -3,6 +3,7 @@ import type { Scene } from "../../../core/index.js";
 import { Vector3D } from "../../../math/index.js";
 import type { LightDataInterface } from "../../../interfaces/index.js";
 import type {
+  AutoExposureElement,
   BloomElement,
   DepthOfFieldElement,
   HbaoElement,
@@ -13,6 +14,7 @@ import type {
 } from "../../post/elements/index.js";
 import {
   AOPassGPU,
+  AutoExposurePassGPU,
   BloomPassGPU,
   DepthOfFieldPassGPU,
   HistoryBlendPassGPU,
@@ -84,6 +86,7 @@ export class PostFxChain {
   private _hbaoTextureView: GPUTextureView | undefined = undefined;
   private _lightShaftsTextureView: GPUTextureView | undefined = undefined;
   private _volumetricFogTextureView: GPUTextureView | undefined = undefined;
+  private _autoExposureView: GPUTextureView | undefined = undefined;
 
   constructor(private readonly _host: WebGPURenderer) {
     // Parameter properties are assigned *after* field initializers run (ES2022
@@ -128,6 +131,12 @@ export class PostFxChain {
    * `VolumetricFogElement` is disabled or inputs are missing. */
   public get volumetricFogTextureView(): GPUTextureView | undefined {
     return this._volumetricFogTextureView;
+  }
+
+  /** Stable 1x1 adapted-exposure view (r = multiplier) of the auto-exposure pass (ADR 0061);
+   * undefined while the `AutoExposureElement` is disabled or its pipeline is still validating. */
+  public get autoExposureView(): GPUTextureView | undefined {
+    return this._autoExposureView;
   }
 
   /** Lazily creates (once) or returns the effect pass registered under `type`. The same pass
@@ -248,6 +257,17 @@ export class PostFxChain {
       this._bloomTextureView = p.execute(ctx) ?? undefined;
     } else {
       this._bloomTextureView = undefined;
+    }
+
+    // Eye adaptation meters the final pre-uber HDR color (ADR 0061); the uber pass multiplies it in.
+    const aeNode = group.get<AutoExposureElement>(PostProcessingEffectType.AUTO_EXPOSURE);
+    if (aeNode && aeNode.enabled && colorTextureView) {
+      ctx.colorView = colorTextureView;
+      ctx.element = aeNode;
+      const p = this._getOrCreatePass(PostProcessingEffectType.AUTO_EXPOSURE, AutoExposurePassGPU);
+      this._autoExposureView = p.execute(ctx) ?? undefined;
+    } else {
+      this._autoExposureView = undefined;
     }
 
     if (hbaoNode && hbaoNode.enabled && renderer.opaqueDepthView && projMatrix) {

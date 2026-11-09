@@ -1,6 +1,7 @@
 import { PostProcessingEffectType } from "../../../enums/index.js";
 import type { ShaderRegistry } from "../../shaders/index.js";
 import type {
+  AutoExposureElement,
   BloomElement,
   DepthOfFieldElement,
   HbaoElement,
@@ -11,6 +12,7 @@ import type {
 } from "../elements/index.js";
 import type { GLPostEffectPass, GLPostEffectPassContext } from "./GLPostEffectPass.js";
 import { AOPassGL } from "./AOPassGL.js";
+import { AutoExposurePassGL } from "./AutoExposurePassGL.js";
 import { BloomPassGL } from "./BloomPassGL.js";
 import { DepthOfFieldPassGL } from "./DepthOfFieldPassGL.js";
 import { HistoryBlendPassGL } from "./HistoryBlendPassGL.js";
@@ -50,6 +52,7 @@ export class GLPostEffects {
       this._passes.set(PostProcessingEffectType.LIGHT_SHAFTS, new LightShaftsPassGL(gl, true));
       this._passes.set(PostProcessingEffectType.VOLUMETRIC_FOG, new VolumetricFogPassGL(gl, true));
       this._passes.set(PostProcessingEffectType.DEPTH_OF_FIELD, new DepthOfFieldPassGL(gl, true));
+      this._passes.set(PostProcessingEffectType.AUTO_EXPOSURE, new AutoExposurePassGL(gl2));
     } else {
       // WebGL1 legacy fallback: the reduced GL1 chain (no TAA/HBAO/volumetric fog, tilt-shift DoF).
       this._passes.set(PostProcessingEffectType.BLOOM, new BloomPassGL(gl, false));
@@ -109,6 +112,17 @@ export class GLPostEffects {
       if (bloomNode && bloomNode.enabled) {
         ctx.element = bloomNode;
         ctx.bloomTexture = bloom.execute(ctx);
+      }
+    }
+
+    // Eye adaptation meters the chained pre-uber HDR color (ADR 0061); WebGL2 only.
+    ctx.autoExposureTexture = null;
+    const autoExposure = this._passes.get(PostProcessingEffectType.AUTO_EXPOSURE);
+    if (autoExposure) {
+      const aeNode = ctx.group.get<AutoExposureElement>(PostProcessingEffectType.AUTO_EXPOSURE);
+      if (aeNode && aeNode.enabled) {
+        ctx.element = aeNode;
+        ctx.autoExposureTexture = autoExposure.execute(ctx);
       }
     }
 

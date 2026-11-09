@@ -16,6 +16,17 @@ Trigger: ADR 0059 addendum (reference forest demo critique): tonemapping / colou
 - **Sun situations:** high sun, low backlight, overcast (`L`). Backlight exposes the missing leaf translucency: sun-facing canopies are near black from the camera side → next step (foliage material, needs a lighting-chunk flag).
 - **Controls:** `1–4` presets, `B` A/B against neutral, `L` sun, `R` reset view. QA hook `window.__qaSwm52` (`setLook`, `setSun`, `setReference`, `tune(patch)` for live tuning, `sample`).
 
+## 2026-11-08 — Leaf backlight (branch `veg-look`, ADR 0060)
+
+- `StandardMaterial.backlight` on leaf/grass palette materials (tint `0.55,0.72,0.2`, thickness = 0.35 × prop height). `K` toggles.
+- Low backlight + Forest Shade: canopies go from near black to translucent green; other trees' shadows stay. Noon: barely changes (wrap term only on the unlit side). Verified WebGPU, WebGL2, WebGL1 (unshadowed by tier).
+- QA hook: `__qaSwm52.setBacklight(on)`.
+
+## 2026-11-08 — Auto exposure (branch `veg-look`, ADR 0061)
+
+- `X` toggles `AutoExposureElement` (`E` is fly-up). Plain 18 % metering overexposed both meadow and forest (foliage is darker than average) → lab sets `compensationEv = -1.2`, `maxEv = 2`: meadow stays at the preset look, the forest interior opens up instead of going muddy.
+- Verified WebGPU + WebGL2 (same response), WebGL1 unchanged (static exposure by tier).
+- QA hooks: `setAutoExposure(on)`, `tuneAutoExposure(patch)`, `setView(pos, target)`.
 ## 2026-11-09 — Fly navigation
 
 - Default camera = engine spectator flight (`defaultCameraController = "fly"`): WASD/arrows, Space/E up, C/Q down, Shift ×2.5, Alt ×0.35, click = pointer-lock mouse look, Esc releases. Base speed 12 m/s.

@@ -128,6 +128,16 @@ export interface StandardMaterialOptions {
   iridescenceMap?: Texture | undefined;
   /** KHR_materials_iridescence thickness texture (green channel). WebGL2 only, see ADR 0055. */
   iridescenceThicknessMap?: Texture | undefined;
+  /**
+   * Thin-surface sun transmission tint (Godot `backlight`; leaves, paper, curtains, ears), sRGB.
+   * Black = off. Directional light only. Defaults to black.
+   */
+  backlight?: Color;
+  /**
+   * Metres the transmission shadow is sampled toward the sun, so the surface's own leaf or crown
+   * does not occlude its transmission while other casters still do. Defaults to 0.5.
+   */
+  backlightThickness?: number;
   /** Time parameter for shader animations. Defaults to 0.0. */
   time?: number;
   /** Unlit material (KHR_materials_unlit equivalent): flat base color, no lighting/IBL. Defaults to false. */
@@ -237,6 +247,10 @@ export class StandardMaterial extends AbstractMaterial {
   public iridescenceMap: Texture | undefined;
   /** Thin-film thickness texture (KHR_materials_iridescence, green channel). WebGL2 only, see ADR 0055. */
   public iridescenceThicknessMap: Texture | undefined;
+  /** @domain Sun transmission tint through thin surfaces (sRGB, black = off), Godot `backlight`. */
+  public backlight: Color;
+  /** @domain Shadow escape distance in metres for the transmission (own crown/leaf thickness). */
+  public backlightThickness: number;
 
   /** The diffuse texture map. */
   public diffuseMap: Texture | undefined;
@@ -294,6 +308,7 @@ export class StandardMaterial extends AbstractMaterial {
    * semantic or relocating a lane can never silently detach material from shader.
    */
   private static readonly _LANES: readonly [
+    MaterialLane,
     MaterialLane,
     MaterialLane,
     MaterialLane,
@@ -366,7 +381,20 @@ export class StandardMaterial extends AbstractMaterial {
         "z = thickness minimum nm, w = thickness maximum nm (the thickness used without a thickness texture). " +
         "With lane 15 (anisotropy) the last free lane of the 16-lane bank, see ADR 0055.",
     },
+    // Lane 1: per-material lane tables (ADR 0039) leave lanes 1..9 to each material; no program that
+    // shares the PBR chunk writes lane 1 (Decal: 4/6), so StandardMaterial owns it (ADR 0060).
+    {
+      semantic: "backlight",
+      lane: "u_matParam1",
+      note:
+        "rgb = transmission tint (sRGB-authored, the shaders linearize), w = backlightThickness in metres. " +
+        "Read only behind USE_BACKLIGHT (enabled iff backlight is not black), see ADR 0060.",
+    },
   ];
+
+  private get hasBacklight(): boolean {
+    return this.backlight.r > 0 || this.backlight.g > 0 || this.backlight.b > 0;
+  }
 
   private get hasAnisotropy(): boolean {
     return this.anisotropyStrength > 0;
@@ -464,6 +492,8 @@ export class StandardMaterial extends AbstractMaterial {
       iridescenceThicknessMaximum = 400.0,
       iridescenceMap = undefined,
       iridescenceThicknessMap = undefined,
+      backlight = new Color(0, 0, 0),
+      backlightThickness = 0.5,
       time = 0.0,
       unlit = false,
     } = options;
@@ -519,6 +549,8 @@ export class StandardMaterial extends AbstractMaterial {
     this.iridescenceThicknessMaximum = iridescenceThicknessMaximum;
     this.iridescenceMap = iridescenceMap;
     this.iridescenceThicknessMap = iridescenceThicknessMap;
+    this.backlight = Object.isFrozen(backlight) ? backlight.clone() : backlight;
+    this.backlightThickness = backlightThickness;
     this.time = time;
   }
 
@@ -641,6 +673,12 @@ export class StandardMaterial extends AbstractMaterial {
       this.iridescenceThicknessMinimum,
       this.iridescenceThicknessMaximum,
     ]);
+    writeLane(this._renderManifest, StandardMaterial._LANES[7], [
+      this.backlight.r,
+      this.backlight.g,
+      this.backlight.b,
+      this.backlightThickness,
+    ]);
     props["u_time"] = this.time;
 
     const flags: string[] = [];
@@ -695,6 +733,7 @@ export class StandardMaterial extends AbstractMaterial {
     }
     // KHR_materials_unlit: compile the flat-color variant that skips the PBR lighting chunk.
     if (this.unlit) flags.push(ShaderFlag.UNLIT);
+    if (this.hasBacklight) flags.push(ShaderFlag.BACKLIGHT);
 
     this._renderManifest.flags = flags;
 

@@ -13,3 +13,5 @@ export * from "./VolumetricFogPassGPU.js";
 export * from "./VolumetricFogPassGL.js";
 export * from "./DepthOfFieldPassGL.js";
 export * from "./DepthOfFieldPassGPU.js";
+export * from "./AutoExposurePassGPU.js";
+export * from "./AutoExposurePassGL.js";

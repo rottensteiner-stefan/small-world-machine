@@ -102,6 +102,12 @@ vec3 Lo = vec3(0.0);
     }
 
     Lo += directLight;
+#ifdef USE_BACKLIGHT
+    // Thin-surface transmission (ADR 0060). WebGL1's PBR chunk has no directional shadows, so the
+    // transmission is unshadowed like the rest of the tier.
+    float backlightLobe = max(dot(-N, L), 0.0) + pow(max(dot(-V, L), 0.0), 6.0);
+    Lo += sRGBToLinear(u_matParam1.rgb) * diffuseAlbedo / 3.14159265359 * u_dirLightColor * backlightLobe;
+#endif
 }
 
 // -- Point Lights --

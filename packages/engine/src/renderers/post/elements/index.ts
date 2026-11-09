@@ -13,3 +13,4 @@ export * from "./FlashElement.js";
 export * from "./LightShaftsElement.js";
 export * from "./VolumetricFogElement.js";
 export * from "./DepthOfFieldElement.js";
+export * from "./AutoExposureElement.js";

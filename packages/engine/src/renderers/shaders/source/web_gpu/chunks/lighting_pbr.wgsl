@@ -117,6 +117,9 @@ var Lo = vec3f(0.0);
     let dotVH = max(dot(V, H), 0.0);
     
     var shadow: f32 = 1.0;
+#ifdef USE_BACKLIGHT
+    var backlightShadow: f32 = 1.0;
+#endif
     if (global.dirShadowInfo.z > 0.5) {
         let numCascades = u32(global.dirShadowInfo.w);
         var cascadeIndex = max(numCascades, 1u) - 1u;
@@ -152,6 +155,12 @@ var Lo = vec3f(0.0);
         }
 
         shadow = mix(shadowA, shadowB, blendToNext);
+#ifdef USE_BACKLIGHT
+        // Transmission shadow sampled `thickness` metres toward the sun: the surface's own leaf or
+        // crown must not occlude the light passing through it, other casters still do (ADR 0060).
+        let backlightPos = global.cascadeMatrices[cascadeIndex] * vec4f(i.wp + L * obj.matParam1.w, 1.0);
+        backlightShadow = getShadowDirMain(u_dirShadowMap, shadowSampler, backlightPos, cascadeIndex, global.dirShadowInfo.x);
+#endif
     }
 
     let radiance = global.dirLightColor.xyz * shadow;
@@ -187,6 +196,12 @@ var Lo = vec3f(0.0);
     }
 
     Lo += directLight;
+#ifdef USE_BACKLIGHT
+    // Thin-surface transmission (Godot `backlight`): wrap from the unlit side + forward lobe toward the sun.
+    let backlightForwardPower = 6.0;
+    let backlightLobe = max(dot(-N, L), 0.0) + pow(max(dot(-V, L), 0.0), backlightForwardPower);
+    Lo += sRGBToLinear(obj.matParam1.rgb) * diffuseAlbedo / 3.14159265359 * global.dirLightColor.xyz * (backlightShadow * backlightLobe);
+#endif
 }
 
 // Clustered light lookup -- see docs/adr/0007-clustered-lighting-webgl2-webgpu-only.md and
