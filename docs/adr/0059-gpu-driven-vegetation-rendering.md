@@ -113,6 +113,12 @@
 - **Wind as travelling waves:** gust noise scrolled along the wind direction in world space, per-instance phase from position hash, so gusts visibly roll across the field and neighbours never move in unison. **Gust envelope with calm phases** (never a constant sine); amplitude attenuated by height above ground and by a canopy-cover density mask (community-critique ranking, Trigger).
 - **Temporal stability:** negative mip bias on alpha-tested ground cover textures (keeps coverage at distance) plus a motion-based smear mask (velocity buffer) that lowers TAA history weight / sharpens selectively on moving foliage before `TaaElement`. Reactive-mask approaches were reported as ineffective by the reference author; measure before adopting.
 
+##### Step 1b result (wind lane, 2026-11-09)
+
+- **Wind for the field lane LANDED (WebGPU only, V1):** `field_pull.wgsl` consumes `vegetation-extras` `WindField` (`SwmWind` block in a per-frame `FieldInfo.wind`, `InstanceFieldSystemSetup.windUniforms` = borrowed producer reference + `windHeight`). Per-instance lean from the root position hash, travelling gusts + calm phases, vertical profile via crown-top `windHeight`; depth/EVSM/shadow and color passes share the bent vertex (casters follow the crown). Fail-closed: `windHeight` 0 = static.
+- **Deliberate V1 approximations (documented, not blockers):** position-only bend (shading normal not tilted); shelter constant 0 (canopy-density shelter arrives with ground cover); one per-field `windHeight` for the single merged bucket mesh (per-prototype heights land with per-prototype materials); lean evaluated per vertex (a per-instance lean cache in the cull is the documented mitigation if the timestamp-ring gate shows a budget blow-up); autoinst/instanced lanes stay static (wind in the shared material vertex shaders is a cross-tier change).
+- **Not landed (unchanged scope):** the procedural ground-cover ring (grass/flowers/debris) — the dominant population of the reference demo — is still open; it consumes the SAME `SwmWind` block and the `< 2 ms` ring gate.
+
 #### Step 2 — LOD buckets + crossfade
 - Prototype = LOD0..LODn meshes + impostor (step 3) as final bucket; thresholds in projected pixels with per-tier bias (ADR 0035).
 - Crossfade band: instance written to both adjacent buckets with a fade factor, fragment shader does screen-door dither (Bayer/blue noise, complementary masks); TAA (`TaaElement`) resolves the dither. Benchmark: Unity `LODGroup` cross-fade, Unreal dithered LOD transition.

@@ -233,3 +233,18 @@ overlap (throughput baseline, not placement art) — accepted.
 - Field trees no longer white: merged tree carries per-part material colour (linear) + foliage mask (green-dominant part) as vertex colours; field backlight = showcase 52 leaf tint. `MEASURE.fieldShading` = `lambert-csm`.
 - First version was ~2× too dark: showcase 51 runs without post-processing, so the material shaders tone-map + display-encode themselves; the field wrote linear values. Fixed by the Standard output stage (exposure, `forwardToneMap`, `linearToSRGB`, fog).
 - Same view vs. autoinst: 3/255 mean abs diff per channel. 182 728 trees: GPU 10 ms, CPU 0 ms.
+
+## 2026-11-09 — Field lane wind (ADR 0059 step 1b)
+
+- Field lane now moves with the shared wind field (`vegetation-extras` `WindField`): per-instance
+  lean from the root position hash + travelling gust waves + calm phases + vertical profile,
+  applied in the pulled vertex (`field_pull.wgsl` inlines the `swmWind*` functions verbatim;
+  `WindShaders.test.ts` pins engine/extras parity). `FieldInfo` carries the per-frame `SwmWind`
+  block (`windUniforms` borrowed reference, forwarded once per frame at the main-view prepare).
+- `?wind=0` disables the lane for cost isolation (`MEASURE.wind` reports the state); default on.
+- V1 approximations (documented in ADR 0059): position-only bend (normal not tilted), shelter 0,
+  one field-wide windHeight, autoinst/instanced lanes static.
+- Gates: tsc, eslint, `lint:wgsl` 116/116, doctrine clean. Tests green (engine `InstanceFieldSystemDevice`
+  +4, extras `WindShaders` parity). Golden `veg51` unaffected (GL2 autoinst lane, no wind).
+- Open/measure on device: wind vertex cost on 182 728 trees via `?gputimings=1` (per-instance
+  lean cache in the cull is the documented mitigation if the ring shows a budget blow-up).

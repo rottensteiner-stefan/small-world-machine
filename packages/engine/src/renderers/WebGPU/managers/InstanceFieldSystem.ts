@@ -74,8 +74,8 @@ const FIELD_SEGMENTS = MAX_INDIRECT_VIEWS * MAX_LOD_BUCKETS;
 /** Per-(view x bucket) cull/param block size in bytes (see the class doc / WGSL struct). */
 const CULL_PARAM_BLOCK_BYTES = 256;
 
-/** `FieldInfo` uniform size (one vec4-aligned 32 B struct, see instance_field_structs.wgsl). */
-const FIELD_INFO_BYTES = 48;
+/** `FieldInfo` uniform size (one vec4-aligned 128 B struct, see instance_field_structs.wgsl). */
+const FIELD_INFO_BYTES = 128;
 
 /** Word offsets inside a cull-param block (bytes, little-endian, see the WGSL `CullParams`). */
 const CULL_OFFSET_VIEWPORT_HEIGHT_PX = 96;
@@ -93,6 +93,8 @@ const INFO_OFFSET_HZB_MIP_COUNT = 12;
 const INFO_OFFSET_CULL_PIXEL_SIZE = 16;
 const INFO_OFFSET_ALPHA_TEST = 20;
 const INFO_OFFSET_BACKLIGHT = 32;
+const INFO_OFFSET_WIND_HEIGHT = 48;
+const INFO_OFFSET_WIND = 64;
 
 /** Compute workgroup width of the cull / reset entries (`@workgroup_size(64)`). */
 const CULL_WORKGROUP_SIZE = 64;
@@ -193,6 +195,19 @@ export interface InstanceFieldSystemSetup {
   backlight?: readonly [number, number, number];
   /** @domain Transmission-shadow offset toward the sun in metres (ADR 0060 default 0.5). */
   backlightThickness?: number;
+  /**
+   * @domain Live `SwmWind` block producer (16 floats, `vegetation-extras` `WindField.uniforms`)
+   *         rewritten by the owner every frame. The system uploads the CURRENT bytes once per
+   *         frame at the main-view prepare (frame head) -- borrowed reference, never copied.
+   *         `windHeight > 0` with this missing is a setup error (fail fast).
+   */
+  windUniforms?: Float32Array;
+  /**
+   * @domain Crown-top height of the population prototype in metres at scale 1 (vertical wind
+   *         profile + bend normalizer). 0 disables wind entirely (fail-closed). The per-frame
+   *         `FieldInfo.wind` words stay zero while this is 0.
+   */
+  windHeight?: number;
 }
 
 /** Vertex streams bound per bucket: slot 1 normal, 2 uv, 3 colour (slot 0 = the cached position).
@@ -342,6 +357,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   private readonly _alphaMap: Texture | undefined;
   /** `FieldInfo.backlight`: linear tint rgb + transmission-shadow offset (w = 0 -> off). */
   private readonly _backlight: Float32Array = new Float32Array(4);
+  /** Crown-top height at scale 1 (metres); 0 disables wind (`FieldInfo.windHeight`, fail-closed). */
+  private readonly _windHeight: number;
+  /** Live `SwmWind` block (16 floats, borrowed reference) uploaded once per frame at the header. */
+  private readonly _windUniforms: Float32Array | undefined;
   /** Completed vertex streams per bucket (built at attach, see `FieldBucketStreams`). */
   private readonly _bucketStreams: (FieldBucketStreams | undefined)[] = new Array(MAX_LOD_BUCKETS);
 
@@ -423,6 +442,15 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       this._backlight[2] = tint[2];
       this._backlight[3] = Math.max(1e-4, setup.backlightThickness ?? 0.5);
     }
+    const windHeight = setup.windHeight ?? 0;
+    const windUniforms = setup.windUniforms;
+    if (windHeight > 0 && (windUniforms === undefined || windUniforms.length !== 16)) {
+      throw new Error(
+        "[InstanceFieldSystem] windHeight > 0 requires a 16-float windUniforms `SwmWind` block.",
+      );
+    }
+    this._windHeight = windHeight;
+    this._windUniforms = windUniforms;
 
     const prototypes = setup.prototypes ?? options.prototypes ?? [];
     const protoCount = prototypes.length;
@@ -610,6 +638,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     if (!host || !gpu) return;
     // Frame head: re-arm the once-per-frame reset and resolve the previous-frame pyramid.
     this._resetRecordedThisFrame = false;
+    // Frame head: forward the producer's CURRENT wind block (no-op while wind is disabled).
+    this._writeWind();
     const hzb = host.getPreviousFrameHzb();
     if (hzb.readHandle.mipLevelCount !== this._hzMipCount) {
       this._hzMipCount = Math.max(1, hzb.readHandle.mipLevelCount);
@@ -1133,7 +1163,9 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     );
   }
 
-  /** (Re)writes the immutable `FieldInfo` uniform (page capacity, counts, metric gate, alpha). */
+  /** (Re)writes the static `FieldInfo` uniform (page capacity, counts, metric gate, alpha,
+   *  backlight, wind height). The `wind` words are NOT here -- they change every frame and are
+   *  forwarded by `_writeWind()` at each main-view prepare. */
   private _writeFieldInfo(): void {
     const gpu = this._gpu;
     const device = this._host?.gpuDevice;
@@ -1148,7 +1180,19 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     floats[INFO_OFFSET_CULL_PIXEL_SIZE / 4] = this._cullPixelSize;
     floats[INFO_OFFSET_ALPHA_TEST / 4] = this._alphaTest;
     floats.set(this._backlight, INFO_OFFSET_BACKLIGHT / 4);
+    floats[INFO_OFFSET_WIND_HEIGHT / 4] = this._windHeight;
     device.queue.writeBuffer(gpu.fieldInfo, 0, info);
+  }
+
+  /** Uploads the CURRENT `SwmWind` bytes into `FieldInfo.wind` (frame head, main-view prepare).
+   *  The producer rewrites its 16-float block every frame; the system only forwards it -- no
+   *  copy, no allocation. No-op while wind is disabled (`windHeight` 0) or the array is absent. */
+  private _writeWind(): void {
+    const gpu = this._gpu;
+    const device = this._host?.gpuDevice;
+    const wind = this._windUniforms;
+    if (!gpu || !device || this._windHeight <= 0 || wind === undefined) return;
+    device.queue.writeBuffer(gpu.fieldInfo, INFO_OFFSET_WIND, wind);
   }
 
   /** Patches ONE u32 word of the `FieldInfo` uniform (e.g. the HZB mip count after a resize). */

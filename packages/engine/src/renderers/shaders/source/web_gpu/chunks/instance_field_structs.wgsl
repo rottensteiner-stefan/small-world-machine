@@ -11,8 +11,20 @@
 // / `global.dirLight*`); the group-3 `view` binding is consumed by the pull vertex. Groups 1 is
 // deliberately absent (null in the pipeline layout): the field declares no material bindings.
 
+// Shared vegetation wind block (ADR 0059 step 1b `SwmWind`): 4 x vec4f, written by the field's
+// producer (e.g. `@small-world-machine/vegetation-extras` `WindField`), consumed by the pull
+// vertex. Mirrors `vegetation-extras/.../wind/shaders/chunks/wind_field.wgsl`; byte parity is
+// pinned by `WindShaders.test.ts`.
+struct SwmWind {
+    p0: vec4f,
+    p1: vec4f,
+    p2: vec4f,
+    p3: vec4f,
+}
+
 // Static per-field composed data, bound once per field (non-dynamic uniform). All fields below
-// are derived at setup from the authored options (Bob D-2); nothing drifts.
+// are derived at setup from the authored options (Bob D-2); the ONLY per-frame members are the
+// `wind` words, rewritten by the system every frame (like the HZB mip-count patch).
 struct FieldInfo {
     // Count -- per-(view x bucket) page capacity in indices (clamp-at-capacity policy).
     pageCapacity: u32,
@@ -30,6 +42,13 @@ struct FieldInfo {
     // linear rgb -- leaf backlight tint (ADR 0060 semantics, black = off); w = transmission
     // shadow offset toward the sun in metres. Scaled per vertex by the colour alpha (foliage mask).
     backlight: vec4f,
+    // metres -- prototype crown-top height at scale 1 (vertical wind profile / bend normalizer);
+    // 0 disables wind entirely (fail-closed: no sway without an authored height).
+    windHeight: f32,
+    _pad2: f32,
+    _pad3: vec2f,
+    // Per-frame shared wind block (see `SwmWind` above); rewritten every frame by the system.
+    wind: SwmWind,
 }
 
 // Per-frame, per-view dynamic-offset cull parameter block (256 B, dynamic offset per view).

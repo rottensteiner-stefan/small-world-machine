@@ -7,6 +7,7 @@
     "@small-world-machine/engine": "*",
     "@small-world-machine/geometry-extras": "*",
     "@small-world-machine/liquid-extras": "*",
-    "@small-world-machine/tools": "*"
+    "@small-world-machine/tools": "*",
+    "@small-world-machine/vegetation-extras": "*"
   }
 }

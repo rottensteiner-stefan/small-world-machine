@@ -13,7 +13,9 @@ const PARAM_BLOCK_BYTES = 256;
 const SEGMENT_BASE_WORD = 112 / 4;
 const HZB_ENABLED_WORD = 104 / 4;
 const CULL_MODE_WORD = 116 / 4;
-const FIELD_INFO_SIZE = 48;
+const FIELD_INFO_SIZE = 128;
+const INFO_WIND_HEIGHT_FLOAT = 48 / 4;
+const INFO_WIND_FLOAT = 64 / 4;
 
 interface MockBuffer {
   size: number;
@@ -87,6 +89,8 @@ function makeDevice(rec: Recorded): GPUDevice {
 interface SetupExtras {
   colors?: Float32Array;
   backlight?: readonly [number, number, number];
+  windHeight?: number;
+  windUniforms?: Float32Array;
 }
 
 function makeSetup(
@@ -165,6 +169,8 @@ function makeSetup(
     geometryTable: [[geometry]],
     options: { maxInstances: instances, cellSize: 10, cullPixelSize: 2, maxViews: 4 },
     backlight: extras.backlight,
+    windHeight: extras.windHeight,
+    windUniforms: extras.windUniforms,
   } as never);
   system.attachHost(host);
   return { system, rec, geoEntry };
@@ -200,7 +206,7 @@ describe("InstanceFieldSystem on a recording device", () => {
   it("sizes each segment page for the whole population (one view may see every instance)", () => {
     const n = 5000;
     const { rec } = makeSetup(n);
-    // `FieldInfo` is the last 48 B buffer the system creates; word 0 = pageCapacity.
+    // `FieldInfo` is the last 128 B buffer the system creates; word 0 = pageCapacity.
     const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
     const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
     expect(info).toBeDefined();
@@ -277,5 +283,62 @@ describe("InstanceFieldSystem on a recording device", () => {
     expect(Array.from(rgba).map((v) => +v.toFixed(2))).toEqual([
       0.1, 0.2, 0.3, 1, 0.4, 0.5, 0.6, 1, 0.7, 0.8, 0.9, 1,
     ]);
+  });
+
+  it("keeps wind disabled by default (windHeight 0, no per-frame wind upload)", () => {
+    const { system, rec } = makeSetup(4);
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
+    const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
+    const floats = new Float32Array((info!.data as Uint8Array).slice().buffer);
+    expect(floats[INFO_WIND_HEIGHT_FLOAT]).toBe(0);
+    expect(floats[INFO_WIND_FLOAT]).toBe(0);
+    // No separate 64-B wind write while disabled.
+    expect(rec.writes.some((w) => w.buffer === fieldInfo && w.offset === INFO_WIND_FLOAT * 4)).toBe(
+      false,
+    );
+  });
+
+  it("writes the authored wind height into FieldInfo", () => {
+    const { rec } = makeSetup(4, { windHeight: 9.5, windUniforms: new Float32Array(16) });
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
+    const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
+    const floats = new Float32Array((info!.data as Uint8Array).slice().buffer);
+    expect(floats[INFO_WIND_HEIGHT_FLOAT]).toBe(9.5);
+  });
+
+  it("forwards the CURRENT wind block bytes every frame head (borrowed reference, no copy)", () => {
+    const wind = new Float32Array(16);
+    const { system, rec } = makeSetup(4, { windHeight: 9.5, windUniforms: wind });
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
+    // Frame 1: producer's initial block.
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    let windWrite = rec.writes.filter(
+      (w) => w.buffer === fieldInfo && w.offset === INFO_WIND_FLOAT * 4,
+    );
+    expect(windWrite).toHaveLength(1);
+    expect([...new Float32Array((windWrite[0]!.data as Uint8Array).slice().buffer)]).toEqual(
+      Array.from(wind),
+    );
+    // Frame 2: producer rewrites the block; the system uploads the new bytes unprompted.
+    wind[2] = 7.25;
+    wind[15] = 1;
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    windWrite = rec.writes.filter(
+      (w) => w.buffer === fieldInfo && w.offset === INFO_WIND_FLOAT * 4,
+    );
+    expect(windWrite).toHaveLength(2);
+    const last = new Float32Array(
+      (windWrite[windWrite.length - 1]!.data as Uint8Array).slice().buffer,
+    );
+    expect(last[2]).toBe(7.25);
+    expect(last[15]).toBe(1);
+    expect(Array.from(last)).toEqual(Array.from(wind));
+  });
+
+  it("rejects a wind height without a 16-float wind block (fail fast)", () => {
+    expect(() => makeSetup(4, { windHeight: 9.5 })).toThrow(/windUniforms/);
+    const short = new Float32Array(8);
+    expect(() => makeSetup(4, { windHeight: 9.5, windUniforms: short })).toThrow(/windUniforms/);
   });
 });

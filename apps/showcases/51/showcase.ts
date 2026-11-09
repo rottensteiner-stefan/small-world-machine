@@ -34,6 +34,7 @@ import type {
   PrototypeDescriptor,
 } from "@small-world-machine/engine/core/InstanceField.js";
 import { InstanceFieldSystem } from "@small-world-machine/engine/renderers/WebGPU/managers/InstanceFieldSystem.js";
+import { WindField } from "@small-world-machine/vegetation-extras";
 import { getCameraPath, type CameraPath, type PathName } from "./CameraPaths.js";
 import { Hud, hudFreeMode, type HudGpuTimings, type VegHudStats } from "./Hud.js";
 import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCapture.js";
@@ -59,10 +60,11 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  *     WebGPU `InstanceFieldSystem` — GPU frustum+size cull, optional previous-frame-HZB
  *     occlusion, bucket-routed atomic compaction and pulled `drawIndexedIndirect` from one
  *     combined single-mesh tree prototype (V1 system constraint: one geometry per bucket, one
- *     material). WebGPU only in V1. The P1 pulled-fragment shading is a documented PLACEHOLDER
- *     (position-hash tint, world-up normal, no PBR/fog — real materials land with P2) — this is
- *     a MEASUREMENT lane: it validates the cull/occlusion/indirect-draw path against the same
- *     (deterministic) population the other lanes draw.
+ *     material). WebGPU only in V1. Pulled shading is the `lambert-csm` lane (vertex-colour
+ *     albedo + foliage mask, CSM shadows, irradiance/ambient, ADR 0060 leaf backlight, Standard
+ *     output stage; no specular/textures — real materials land with P2). Since 2026-11-09 the
+ *     field lane also carries the shared wind field (step 1b) and is a LIVE, time-dependent
+ *     lane; the autoinst/instanced lanes stay static.
  *
  * S2 URL knobs (field lane):
  *   `?mode=field`                  field lane (needs WebGPU; other tiers fall back to autoinst)
@@ -79,10 +81,14 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  *                                  math, conservative) and report the per-bucket counts +
  *                                  `gpuSupersetOfCpu` / `cpuFalseNegative` verdict in `MEASURE`
  *   `?cutEvery=N`                  teleport period in sampled frames (default 60; `?occlusion=c`)
+ *   `?wind=0`                      disable the field-lane wind (cost isolation / static A/B);
+ *                                  default on for the field lane
  *
  * The population is deterministic: a fixed default seed drives the scatter jitter (engine
- * `mulberry32`), nothing in the scene is time-dependent, so identical URLs yield identical
- * output (golden/QA compatible).
+ * `mulberry32`), and nothing in the static lanes is time-dependent, so identical URLs on the
+ * autoinst/instanced lanes yield identical output (golden/QA compatible). The `field` lane is
+ * a live WebGPU lane with wind (and per-instance tint variation), not goldened — the `veg51`
+ * golden baseline captures the GL2 autoinst lane.
  *
  * Tree source — parallel-worker lane: worker Frank (P0-2) creates CC0 glTF trees in
  * `apps/showcases/51/assets/`. This file tries the expected names below via `GltfLoader` and
@@ -221,6 +227,8 @@ interface MeasureResult {
   fieldShading?: string;
   /** S2 field lane: hard camera teleports fired (`?occlusion=c`). */
   fieldTeleports?: number;
+  /** S2/1b field lane: 1 = shared wind field active, 0 = static (measuring isolation `?wind=0`). */
+  wind?: number;
   /** S2 dual-lane audit (`?popcount=1`): last resolved GPU survivor counts + optional CPU
    *  reference verdict (`?cullref=1`). Readbacks lag the live frame by design (no CPU stall). */
   populationAudit?: {
@@ -397,6 +405,10 @@ export class Showcase extends AbstractShowcase {
   private _fieldRecords: Float32Array | undefined = undefined;
   private _fieldBoundingRadius = 0;
   private _fieldCullPixelSize = 0;
+  /** ADR 0059 step 1b: shared wind field driving the field lane (`?wind=0` isolates it). */
+  private _windField: WindField | undefined = undefined;
+  /** `?wind=0` disables the field-lane wind (measurement isolation); default on. */
+  private readonly _windEnabled: boolean;
   /** Latest optically-probed cull frame (kept 1: the dual-lane audit samples the LAST frame). */
   private _lastProbeSet: FieldVisibleSets | undefined = undefined;
   private _lastCpuTotal = 0;
@@ -451,6 +463,8 @@ export class Showcase extends AbstractShowcase {
     this._isAutomated = params.has("frames") || params.has("measure");
     this._isQa = params.get("qa") === "1";
     this._shadowsOn = params.get("shadows") !== "off";
+    // ADR 0059 step 1b: field-lane wind on by default; `?wind=0` disables it for cost isolation.
+    this._windEnabled = params.get("wind") !== "0";
 
     const pathValue = params.get("path");
     this._path =
@@ -788,6 +802,28 @@ export class Showcase extends AbstractShowcase {
     this._fieldBoundingRadius = radius;
     this._fieldCullPixelSize = FIELD_CULL_PIXEL_SIZE;
 
+    // ADR 0059 step 1b: shared wind field for the field lane. A gentle forest breeze with
+    // travelling gust fronts + calm phases (the reference-demo critique #1). `windHeight`
+    // (crown top) is the vertical-profile / bend normalizer; scale-1 trees reach full wind.
+    const windHeight = this._treeMaxHeight(merged);
+    let windField: WindField | undefined = undefined;
+    if (this._windEnabled && windHeight > 0) {
+      windField = new WindField({
+        directionX: 1,
+        directionZ: 0,
+        speed: 6,
+        gustLength: 55,
+        crossStretch: 2.5,
+        calm: 0.5,
+        strength: 0.05,
+        gustStrength: 0.22,
+        flutterStrength: 0.04,
+        flutterFrequency: 1.1,
+        boundaryHeight: windHeight,
+        groundFactor: 0.45,
+        maxLean: 0.6,
+      });
+    }
     const system = new InstanceFieldSystem(null, {
       instanceRecords: records,
       prototypes: [prototype],
@@ -804,6 +840,9 @@ export class Showcase extends AbstractShowcase {
         GltfMaterialParser.engineSRGBToLinear(FIELD_LEAF_BACKLIGHT[1]),
         GltfMaterialParser.engineSRGBToLinear(FIELD_LEAF_BACKLIGHT[2]),
       ],
+      // Live wind block: the system forwards `WindField.uniforms` (borrowed reference) once per
+      // frame; omitting it keeps the lane static (fail-closed), e.g. with `?wind=0`.
+      ...(windField !== undefined ? { windUniforms: windField.uniforms, windHeight } : {}),
     });
     if (this._occlusionMode === "a") {
       system.setOcclusionEnabled(false);
@@ -826,6 +865,7 @@ export class Showcase extends AbstractShowcase {
       return false;
     }
     this._fieldSystem = system;
+    this._windField = windField;
 
     if (this._popcount || this._cullref) {
       system.installCullProbe({
@@ -835,6 +875,7 @@ export class Showcase extends AbstractShowcase {
     console.info(
       `[Showcase51] field lane: ${instances.length} records, cullRadius=${radius.toFixed(2)} m, ` +
         `occlusion=${this._occlusionMode}` +
+        `, wind=${this._windField !== undefined ? "on" : "off"}` +
         `${this._popcount ? ", popcount" : ""}${this._cullref ? ", cullref" : ""}`,
     );
     return true;
@@ -926,6 +967,17 @@ export class Showcase extends AbstractShowcase {
       if (r2 > maxR2) maxR2 = r2;
     }
     return Math.max(Math.sqrt(maxR2) * 1.1, 2);
+  }
+
+  /** Crown-top height of the merged geometry (max vertex y, base at y=0) — wind profile
+   *  normalizer at scale 1. 0 only for a degenerate flat geometry (wind stays off then). */
+  private _treeMaxHeight(geo: GeometryDataInterface): number {
+    let maxY = 0;
+    const v = geo.vertices;
+    for (let i = 1; i < v.length; i += 3) {
+      if (v[i]! > maxY) maxY = v[i]!;
+    }
+    return maxY;
   }
 
   /** Packs the population into 16-B frozen records (4×f32): xyz position + the packed u32 pose
@@ -1049,6 +1101,12 @@ export class Showcase extends AbstractShowcase {
   }
 
   protected override update(deltaTime: number): void {
+    // ADR 0059 step 1b: advance the field-lane wind field every frame (zero-GC typed-array
+    // rewrite); the system forwards the block at the next main-view prepare. Other lanes stay
+    // static in V1 (autoinst/instanced wind is a cross-tier material-shader change, documented).
+    if (this._mode === "field") {
+      this._windField?.update(deltaTime);
+    }
     // Camera-path rig: advance the loop by real seconds unless frozen via `?pausedAt=`, then
     // override the pose (the path is the only motion source once active; zero heap allocations).
     if (this._pathCam !== undefined && this._externalCameraActive) {
@@ -1176,6 +1234,7 @@ export class Showcase extends AbstractShowcase {
       result.fieldInstances = this._fieldSystem.instanceCount;
       result.fieldOcclusionMode = this._occlusionMode;
       result.fieldShading = "lambert-csm";
+      result.wind = this._windField !== undefined ? 1 : 0;
       if (this._teleportCount > 0) {
         result.fieldTeleports = this._teleportCount;
       }

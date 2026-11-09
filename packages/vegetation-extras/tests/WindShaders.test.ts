@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { validate, formatDiagnostic, LIMITS } from "@moreplease/glslang";
 import { describe, expect, it } from "vitest";
 import { WgslReflect } from "wgsl_reflect/wgsl_reflect.module.js";
@@ -54,5 +55,35 @@ describe("wind field shader chunks", () => {
       expect(WIND_FIELD_GLSL).toMatch(new RegExp(`\\b(float|vec2|vec3) ${name}\\(`));
     }
     expect(constants(WIND_FIELD_GLSL)).toEqual(constants(WIND_FIELD_WGSL));
+  });
+
+  it("pins the engine's field-lane wind code to this chunk (single source, no drift)", () => {
+    // The engine embeds a VERBATIM copy of these functions in `field_pull.wgsl` and the
+    // `SwmWind` struct in `instance_field_structs.wgsl`; a divergence would break coherent
+    // motion between the field lane and every other wind consumer.
+    const pull = readFileSync(
+      new URL(
+        "../../engine/src/renderers/shaders/source/web_gpu/instance_field/field_pull.wgsl",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const structs = readFileSync(
+      new URL(
+        "../../engine/src/renderers/shaders/source/web_gpu/chunks/instance_field_structs.wgsl",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    for (const name of FUNCTIONS) {
+      const fn = WIND_FIELD_WGSL.match(new RegExp(`(fn ${name}\\([\\s\\S]*?\\n})`));
+      expect(fn, `canonical ${name} found in chunk`).not.toBeNull();
+      expect(pull, `${name} byte-identical in the field pull module`).toContain(fn![1]!);
+    }
+    // The `SwmWind` block is the field-uniform member the engine declares for every lane.
+    expect(structs).toContain("struct SwmWind {");
+    for (const member of ["p0: vec4f", "p1: vec4f", "p2: vec4f", "p3: vec4f"]) {
+      expect(structs).toContain(member);
+    }
   });
 });
