@@ -105,6 +105,12 @@ export class MainRenderPass implements RenderPass {
     if (writes !== undefined) {
       descriptor.timestampWrites = writes;
     } else if (descriptor.timestampWrites !== undefined) {
+      // `GPURenderPassDescriptor.timestampWrites` is exact-optional (tsconfig
+      // `exactOptionalPropertyTypes`), so `delete` is the type-correct clear — assigning
+      // `undefined` is compiler-rejected (the declared type carries no `| undefined`). The
+      // shared descriptor is reused across passes; removing the own property is REQUIRED when
+      // timing turns off, else a stale `timestampWrites` re-arms timestamp queries on a pass
+      // that never calls `writeTimestamp`.
       delete descriptor.timestampWrites;
     }
     return ce.beginRenderPass(descriptor);
