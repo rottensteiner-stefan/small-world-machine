@@ -45,7 +45,11 @@ struct FieldInfo {
     // metres -- prototype crown-top height at scale 1 (vertical wind profile / bend normalizer);
     // 0 disables wind entirely (fail-closed: no sway without an authored height).
     windHeight: f32,
-    _pad2: f32,
+    // P2 (ADR 0059 step 2): 0 = dither crossfade (candidate A, `field_pull.wgsl`); != 0 =
+    // candidate C (hard switch + hysteresis in the cull) -- the fragment skips the LOD-mix
+    // dither entirely. Reuses a previously padded word: byte offsets stay frozen (default 0 =
+    // dither on matches the zeroed CPU write, no layout shift).
+    lodDitherMode: u32,
     _pad3: vec2f,
     // Per-frame shared wind block (see `SwmWind` above); rewritten every frame by the system.
     wind: SwmWind,
@@ -64,7 +68,14 @@ struct CullParams {
                                     //   per-segment 256 B param block the draw/cull binds; the cull
                                     //   adds the in-shader bucket to this view base)
     cullMode: u32,                  // 0=C, 1=A, 2=B(->A path until the S3 spike)
-    _pad: array<u32, 34>,
+    // ADR 0059 step 2 (P2) per-view LOD transition state (written by the coordinator every frame;
+    // identical across views except `lodBiasBuckets`, which shadow views set to shift the main
+    // camera's bucket choice toward the coarse end -- field-scoped knobs mirrored per view).
+    lodBiasBuckets: u32,            // coarsening offset in LOD levels (shadow views; 0 = main choice)
+    lodCrossfadeBand: f32,          // [0,1] -- transition band as a fraction of each threshold; 0 = hard switch
+    lodHysteresis: f32,             // [0,1] -- per-instance deterministic threshold jitter fraction
+    lodBiasPx: f32,                 // px -- additive per-tier threshold bias (negative = coarser earlier)
+    _pad: array<u32, 30>,
 }
 
 // Visibility-layout contract (single source for blob group 2):
@@ -79,6 +90,18 @@ struct CullParams {
 //   binding 8 alpha sampler:        FRAGMENT
 //   binding 9 lod maxima:           COMPUTE
 //   binding 10 prototype ranges:    COMPUTE
+//   binding 11 lod blend (P2):      VERTEX | COMPUTE
+//   (bindings 2, 3 and 11 are declared by each consumer module -- their access differs per stage:
+//    the cull writes them `read_write`, the pull vertex only reads them; WebGPU forbids
+//    `read_write` storage in the vertex stage, validated on real Metal.)
+//   binding 11 LOD blend pages:     VERTEX (pull reads) | COMPUTE (cull writes) -- P2 step 2
+//                                   per-(segment x slot) signed crossfade blend, page-indexed
+//                                   like `fieldVisibleIndices`. Declared PER CONSUMER (draw:
+//                                   `field_pull.wgsl`, cull: `instance_cull.wgsl`) exactly like
+//                                   bindings 2/3 -- WRITE (compute) vs READ (vertex) visibility
+//                                   cannot share one module declaration. Slot number 11 is the
+//                                   shared truth documented here; see field_pull.wgsl for the
+//                                   value/sign semantics (veg-p2-bob + veg-p2-erin contract).
 @group(2) @binding(0) var<storage, read> fieldRecords: array<vec4f>;           // 16 B/inst: xyz=pos, w=packedPose
 @group(2) @binding(1) var<storage, read> fieldPrototypeInfo: array<vec4f>;     // x = boundingRadius @ scale 1
 // bindings 2 (`fieldIndirectArgs`) and 3 (`fieldVisibleIndices`) are declared by each consumer

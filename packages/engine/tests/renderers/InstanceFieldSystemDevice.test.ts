@@ -16,6 +16,7 @@ const CULL_MODE_WORD = 116 / 4;
 const FIELD_INFO_SIZE = 128;
 const INFO_WIND_HEIGHT_FLOAT = 48 / 4;
 const INFO_WIND_FLOAT = 64 / 4;
+const INFO_LOD_DITHER_MODE_WORD = 52 / 4;
 
 interface MockBuffer {
   size: number;
@@ -104,6 +105,7 @@ interface SetupExtras {
   backlight?: readonly [number, number, number];
   windHeight?: number;
   windUniforms?: Float32Array;
+  lodDitherMode?: "crossfade" | "hard";
 }
 
 function makeSetup(
@@ -184,6 +186,7 @@ function makeSetup(
     backlight: extras.backlight,
     windHeight: extras.windHeight,
     windUniforms: extras.windUniforms,
+    lodDitherMode: extras.lodDitherMode,
   } as never);
   system.attachHost(host);
   return { system, rec, geoEntry };
@@ -391,6 +394,55 @@ describe("InstanceFieldSystem on a recording device", () => {
     expect(() => system.setWind(new Float32Array(8), 5)).toThrow(/windUniforms/);
     // Valid no-op swap keeps the lane consistent.
     expect(() => system.setWind(undefined, 0)).not.toThrow();
+  });
+
+  it("writes the default LOD dither mode 0 (crossfade) into FieldInfo", () => {
+    const { rec } = makeSetup(4);
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
+    const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
+    const words = new Uint32Array((info!.data as Uint8Array).slice().buffer);
+    expect(words[INFO_LOD_DITHER_MODE_WORD]).toBe(0);
+  });
+
+  it("writes lodDitherMode 'hard' (candidate C) into FieldInfo and fails fast on bad modes", () => {
+    const { rec } = makeSetup(4, { lodDitherMode: "hard" });
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
+    const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
+    const words = new Uint32Array((info!.data as Uint8Array).slice().buffer);
+    expect(words[INFO_LOD_DITHER_MODE_WORD]).toBe(1);
+    expect(() => makeSetup(4, { lodDitherMode: "bogus" as never })).toThrow(/lodDitherMode/);
+  });
+
+  it("live-toggles the LOD dither mode via setLodDitherMode (FieldInfo word patched this frame)", () => {
+    const { system, rec } = makeSetup(4);
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1)!;
+    const patch = (from: number, expectValue: number): void => {
+      const hit = rec.writes
+        .slice(from)
+        .find((w) => w.buffer === fieldInfo && w.offset === INFO_LOD_DITHER_MODE_WORD * 4);
+      expect(hit).toBeDefined();
+      expect(new Uint32Array((hit!.data as Uint8Array).slice().buffer)[0]).toBe(expectValue);
+    };
+    const fromHard = rec.writes.length;
+    system.setLodDitherMode("hard");
+    patch(fromHard, 1);
+    const fromCross = rec.writes.length;
+    system.setLodDitherMode("crossfade");
+    patch(fromCross, 0);
+  });
+
+  it("zero-fills the P2 LOD-blend pages at the visible-page size (fail-closed inert default)", () => {
+    const n = 4;
+    const { rec } = makeSetup(n);
+    const visibleBytes = (3 * MAX_LOD_BUCKETS + 1) * n * 4;
+    const zeroWrite = rec.writes.find(
+      (w) =>
+        w.data.byteLength === visibleBytes &&
+        new Uint8Array(w.data.buffer, w.data.byteOffset, w.data.byteLength).every((v) => v === 0),
+    );
+    // The zero-fill is the ONLY full-page write: the blend channel starts inert (every slot 0 =
+    // keep unconditionally) until the cull's band writes land.
+    expect(zeroWrite).toBeDefined();
   });
 
   it("lives-uploads replaced record bytes into the preallocated buffer (no regrow, count mirrored)", () => {
