@@ -107,7 +107,7 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  *   `?measure`                   same as `?frames=240` (automated-mode synonym)
  *   `?qa=1`                      stable headless-capture mode: fixed camera, no overlay/chrome
  *   `?path=walk|flight|aerial`   seeded camera path (P0-4, `CameraPaths.ts`); freezes the default
- *                                camera orbit and drives `setExternalCameraPose` every frame.
+ *                                fly camera and drives `setExternalCameraPose` every frame.
  *                                `flight` is the fast, pop-sensitive path of the ADR 0059 step-2 gate.
  *   `?pausedAt=<t>`              freeze the camera at `sample(t)` of the active path (loop stops;
  *                                used by veg-bench keyframe shots + truth captures; capture mode
@@ -131,8 +131,10 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  *
  * Camera hook contract (Charly, S1): `setExternalCameraPose(position, target)` — once called,
  * the showcase applies exactly that pose every frame before rendering and stops honoring the
- * orbit controller, so a camera-path sampler can drive reproducible runs without touching this
- * file. Interactive mode defaults to an orbit camera around the central clearing.
+ * fly controller, so a camera-path sampler can drive reproducible runs without touching this
+ * file. Interactive mode defaults to the engine's 6-DOF spectator camera (FlyController:
+ * WASD + mouse look + Space/C, Shift boost, Alt precision; `R` resets to the forest-edge
+ * start pose).
  */
 
 const DEFAULT_INSTANCE_COUNT = 20000;
@@ -409,6 +411,11 @@ export class Showcase extends AbstractShowcase {
   private _windField: WindField | undefined = undefined;
   /** `?wind=0` disables the field-lane wind (measurement isolation); default on. */
   private readonly _windEnabled: boolean;
+  /** Live wind state (initial = `?wind=` URL knob). The HUD `F` toggle swaps it at runtime via
+   *  `InstanceFieldSystem.setWind` (hard off = `windHeight` 0, shader gate static; no pop back on). */
+  private _windLive: boolean;
+  /** Crown-top height at scale 1 cached at field build — the re-arm height for live `setWind`. */
+  private _fieldWindHeight = 0;
   /** Latest optically-probed cull frame (kept 1: the dual-lane audit samples the LAST frame). */
   private _lastProbeSet: FieldVisibleSets | undefined = undefined;
   private _lastCpuTotal = 0;
@@ -464,7 +471,9 @@ export class Showcase extends AbstractShowcase {
     this._isQa = params.get("qa") === "1";
     this._shadowsOn = params.get("shadows") !== "off";
     // ADR 0059 step 1b: field-lane wind on by default; `?wind=0` disables it for cost isolation.
+    // `_windLive` mirrors the knob at startup; the HUD toggle can flip it at runtime.
     this._windEnabled = params.get("wind") !== "0";
+    this._windLive = this._windEnabled;
 
     const pathValue = params.get("path");
     this._path =
@@ -482,11 +491,13 @@ export class Showcase extends AbstractShowcase {
 
     this._isTruth = params.get("truth") === "1";
 
-    // Automated/QA/path/golden runs need a fixed vantage; interactive runs orbit the clearing.
+    // Automated/QA/path/golden runs need a fixed vantage; interactive runs give the full 6-DOF
+    // spectator camera (abstract-showcase default, WASD + mouse look + Space/C, `?path=` still
+    // freezes it when explicitly requested). Orbit can be re-added on request, not preemptively.
     this.defaultCameraController =
       this._isAutomated || this._isQa || this._path !== undefined || params.has("__golden")
         ? "none"
-        : "orbit";
+        : "fly";
   }
 
   protected override async setupScene(): Promise<void> {
@@ -532,8 +543,10 @@ export class Showcase extends AbstractShowcase {
     ground.receiveShadow = true;
     this.scene.add(ground);
 
-    // Default vantage: elevated 3/4 view from inside the clearing, looking over the ring.
-    const camPos = new Vector3D(60, 32, 60);
+    // Interactive start pose: low and close at the forest edge (eye level, trees readable and
+    // the wind motion clearly visible), NOT the old far elevated 3/4 overview. Fly free with
+    // WASD + mouse; `R` returns exactly here. Path/golden/automated runs never use this pose.
+    const camPos = new Vector3D(42, 5, 42);
     const camTarget = new Vector3D(0, 4, 0);
     this.setInitialCamera(camPos, camTarget);
 
@@ -601,6 +614,7 @@ export class Showcase extends AbstractShowcase {
         gpuTimings: this._gpuTimer !== undefined ? new GpuTimingsAdaptor(this._gpuTimer) : null,
         getCpuTime: (): number => this.lastCpuTimeMs,
         onSelectPath: (path: PathName): void => this._selectPath(path),
+        onToggleWind: (): void => this._toggleWindLive(),
       });
     }
   }
@@ -805,9 +819,12 @@ export class Showcase extends AbstractShowcase {
     // ADR 0059 step 1b: shared wind field for the field lane. A gentle forest breeze with
     // travelling gust fronts + calm phases (the reference-demo critique #1). `windHeight`
     // (crown top) is the vertical-profile / bend normalizer; scale-1 trees reach full wind.
+    // The wind field is ALWAYS constructed here (kept advancing every frame), but its state is
+    // applied to the system via `_applyWindState()` after registration — that makes the HUD
+    // `F` toggle a pure live swap with no field re-creation and no wind-pop on re-enable.
     const windHeight = this._treeMaxHeight(merged);
     let windField: WindField | undefined = undefined;
-    if (this._windEnabled && windHeight > 0) {
+    if (windHeight > 0) {
       windField = new WindField({
         directionX: 1,
         directionZ: 0,
@@ -840,9 +857,8 @@ export class Showcase extends AbstractShowcase {
         GltfMaterialParser.engineSRGBToLinear(FIELD_LEAF_BACKLIGHT[1]),
         GltfMaterialParser.engineSRGBToLinear(FIELD_LEAF_BACKLIGHT[2]),
       ],
-      // Live wind block: the system forwards `WindField.uniforms` (borrowed reference) once per
-      // frame; omitting it keeps the lane static (fail-closed), e.g. with `?wind=0`.
-      ...(windField !== undefined ? { windUniforms: windField.uniforms, windHeight } : {}),
+      // NOTE: no `windUniforms`/`windHeight` here — the wind state is applied right after
+      // registration via `setWind` (`_applyWindState`), so the runtime state is authoritative.
     });
     if (this._occlusionMode === "a") {
       system.setOcclusionEnabled(false);
@@ -866,6 +882,10 @@ export class Showcase extends AbstractShowcase {
     }
     this._fieldSystem = system;
     this._windField = windField;
+    this._fieldWindHeight = windHeight;
+    // Apply the initial wind state (URL knob) once the field is registered — the single
+    // source of truth for the runtime swap, never the constructor.
+    this._applyWindState();
 
     if (this._popcount || this._cullref) {
       system.installCullProbe({
@@ -875,10 +895,30 @@ export class Showcase extends AbstractShowcase {
     console.info(
       `[Showcase51] field lane: ${instances.length} records, cullRadius=${radius.toFixed(2)} m, ` +
         `occlusion=${this._occlusionMode}` +
-        `, wind=${this._windField !== undefined ? "on" : "off"}` +
+        `, wind=${this._windField !== undefined && this._windLive ? "on" : "off"}` +
         `${this._popcount ? ", popcount" : ""}${this._cullref ? ", cullref" : ""}`,
     );
     return true;
+  }
+
+  /** Applies the CURRENT live wind state to the registered field system (`setWind` patch, hard
+   *  off = height 0 -> pulled shader gate static). No-op without a field or a wind field. */
+  private _applyWindState(): void {
+    const system = this._fieldSystem;
+    const field = this._windField;
+    if (system === undefined || field === undefined) return;
+    system.setWind(
+      this._windLive ? field.uniforms : undefined,
+      this._windLive ? this._fieldWindHeight : 0,
+    );
+  }
+
+  /** HUD `F` toggle: flips the live wind state and re-arms the system immediately (no re-create,
+   *  no pop on re-enable — the wind field keeps advancing while off). */
+  private _toggleWindLive(): void {
+    if (this._windField === undefined) return;
+    this._windLive = !this._windLive;
+    this._applyWindState();
   }
 
   /**
@@ -1197,6 +1237,8 @@ export class Showcase extends AbstractShowcase {
       // other lanes keep the honest -1 (no per-frame visibility source in baseline mode).
       visible: this._mode === "field" && this._cullref ? this._lastCpuTotal : -1,
       triangles: -1,
+      // Live wind state (field lane; false on every other lane / windless geometry).
+      wind: this._windField !== undefined && this._windLive,
     };
     this._hud?.sync(stats);
   }
@@ -1234,7 +1276,8 @@ export class Showcase extends AbstractShowcase {
       result.fieldInstances = this._fieldSystem.instanceCount;
       result.fieldOcclusionMode = this._occlusionMode;
       result.fieldShading = "lambert-csm";
-      result.wind = this._windField !== undefined ? 1 : 0;
+      // Live wind state (URL knob or HUD toggle) — the honest isolation flag for cost tables.
+      result.wind = this._windField !== undefined && this._windLive ? 1 : 0;
       if (this._teleportCount > 0) {
         result.fieldTeleports = this._teleportCount;
       }

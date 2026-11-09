@@ -341,4 +341,42 @@ describe("InstanceFieldSystem on a recording device", () => {
     const short = new Float32Array(8);
     expect(() => makeSetup(4, { windHeight: 9.5, windUniforms: short })).toThrow(/windUniforms/);
   });
+
+  it("live-toggles wind off/on via setWind (height word patched, per-frame uploads gated)", () => {
+    const wind = new Float32Array(16);
+    const { system, rec } = makeSetup(4, { windHeight: 9.5, windUniforms: wind });
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1)!;
+    const windOffsetWrites = (): typeof rec.writes =>
+      rec.writes.filter((w) => w.buffer === fieldInfo && w.offset === INFO_WIND_FLOAT * 4);
+    const heightPatchBytes = (from: number): Float32Array => {
+      const patch = rec.writes
+        .slice(from)
+        .find((w) => w.buffer === fieldInfo && w.offset === INFO_WIND_HEIGHT_FLOAT * 4);
+      expect(patch).toBeDefined();
+      return new Float32Array((patch!.data as Uint8Array).slice().buffer);
+    };
+    // Baseline (wind on): one per-frame wind upload.
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    expect(windOffsetWrites()).toHaveLength(1);
+    // Live OFF: height word patched to 0 THIS frame; no further wind uploads.
+    const beforeOff = rec.writes.length;
+    system.setWind(undefined, 0);
+    expect(heightPatchBytes(beforeOff)[0]).toBe(0);
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    expect(windOffsetWrites()).toHaveLength(1);
+    // Live ON again: height word patched back; per-frame uploads resume.
+    const beforeOn = rec.writes.length;
+    system.setWind(wind, 9.5);
+    expect(heightPatchBytes(beforeOn)[0]).toBe(9.5);
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    expect(windOffsetWrites()).toHaveLength(2);
+  });
+
+  it("rejects a live-swapped wind height without a 16-float block (fail fast)", () => {
+    const { system } = makeSetup(4);
+    expect(() => system.setWind(undefined, 5)).toThrow(/windUniforms/);
+    expect(() => system.setWind(new Float32Array(8), 5)).toThrow(/windUniforms/);
+    // Valid no-op swap keeps the lane consistent.
+    expect(() => system.setWind(undefined, 0)).not.toThrow();
+  });
 });

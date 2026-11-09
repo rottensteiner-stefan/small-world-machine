@@ -357,10 +357,12 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   private readonly _alphaMap: Texture | undefined;
   /** `FieldInfo.backlight`: linear tint rgb + transmission-shadow offset (w = 0 -> off). */
   private readonly _backlight: Float32Array = new Float32Array(4);
-  /** Crown-top height at scale 1 (metres); 0 disables wind (`FieldInfo.windHeight`, fail-closed). */
-  private readonly _windHeight: number;
-  /** Live `SwmWind` block (16 floats, borrowed reference) uploaded once per frame at the header. */
-  private readonly _windUniforms: Float32Array | undefined;
+  /** Crown-top height at scale 1 (metres); 0 disables wind (`FieldInfo.windHeight`, fail-closed).
+   *  Mutable via {@link setWind} (live HUD toggle); the height word is patched on change. */
+  private _windHeight: number;
+  /** Live `SwmWind` block (16 floats, borrowed reference) uploaded once per frame at the header.
+   *  Live-swappable via {@link setWind} (undefined + height 0 = hard wind-off). */
+  private _windUniforms: Float32Array | undefined;
   /** Completed vertex streams per bucket (built at attach, see `FieldBucketStreams`). */
   private readonly _bucketStreams: (FieldBucketStreams | undefined)[] = new Array(MAX_LOD_BUCKETS);
 
@@ -614,6 +616,24 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   /** Live instance count backing the record buffer (0 until population is set). */
   public get instanceCount(): number {
     return this._instanceCount;
+  }
+
+  /**
+   * Live-swaps the wind state (HUD toggles, not just URL-time setup). `windHeight` > 0 requires
+   * a 16-float `SwmWind` block (same fail-fast contract as the constructor); height 0 = hard
+   * wind-off (the pulled shader's `fieldInfo.windHeight > 0` gate makes the lane static) and the
+   * per-frame `_writeWind()` becomes a no-op. The height word is patched into `FieldInfo`
+   * immediately -- it must take effect THIS frame, exactly like the HZB mip-count patch.
+   */
+  public setWind(wind: Float32Array | undefined, windHeight: number): void {
+    if (windHeight > 0 && (wind === undefined || wind.length !== 16)) {
+      throw new Error(
+        "[InstanceFieldSystem] windHeight > 0 requires a 16-float windUniforms `SwmWind` block.",
+      );
+    }
+    this._windHeight = windHeight;
+    this._windUniforms = wind;
+    this._writeFieldInfoWordFloat(INFO_OFFSET_WIND_HEIGHT, windHeight);
   }
 
   // ---------------------------------------------------------------------------
@@ -1201,6 +1221,16 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     const device = this._host?.gpuDevice;
     if (!gpu || !device) return;
     const word = new Uint32Array(1);
+    word[0] = value;
+    device.queue.writeBuffer(gpu.fieldInfo, offset, word);
+  }
+
+  /** Patches ONE f32 word of the `FieldInfo` uniform (the live-toggled `windHeight`). */
+  private _writeFieldInfoWordFloat(offset: number, value: number): void {
+    const gpu = this._gpu;
+    const device = this._host?.gpuDevice;
+    if (!gpu || !device) return;
+    const word = new Float32Array(1);
     word[0] = value;
     device.queue.writeBuffer(gpu.fieldInfo, offset, word);
   }

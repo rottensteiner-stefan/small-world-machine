@@ -250,3 +250,21 @@ overlap (throughput baseline, not placement art) — accepted.
   lean cache in the cull is the documented mitigation if the ring shows a budget blow-up).
 - Committed on `main` @ `05c68ec` ("Storms make trees take deeper roots."), pushed. Pending
   device verification above, then follow-ups from ADR 0059 step 1b.
+
+## 2026-11-09 — Interactive free-fly camera + wind HUD toggle (device-verification UX)
+
+- Device check showed the old interactive vantage was unusable for wind/quality inspection: far
+  elevated 3/4 orbit (60,32,60) shrinks trees to pixels, and the wind A/B (`?wind=0`) was
+  invisible from there (the isolation knob itself verified sound — `/apps/showcases/51/` is
+  served directly, query survives).
+- Interactive sessions now run the engine's 6-DOF spectator camera (`defaultCameraController =
+  "fly"`, WASD + mouse look + Space/C + Shift/Alt, `R` = reset), start pose moved to the forest
+  edge at eye level (42,5,42) → (0,4,0). Automated/QA/path/golden runs keep `none` — golden
+  `veg51`, benches and `?path=` captures byte-identical (unchanged camera).
+- Wind now lives in the HUD, not only the URL: `F` / button toggles the field-lane wind at
+  runtime via the new engine `InstanceFieldSystem.setWind(wind, windHeight)` (hard off = height
+  0, pulled-shader gate static, no wind-pop on re-enable; the wind field keeps advancing while
+  off). Live state mirrored in the readout + `MEASURE.wind`; the wind field is always built now
+  (URL knob only sets the START state, `?wind=0` still valid for load-time isolation).
+- tsc + eslint clean; `InstanceFieldSystemDevice` +2 live-toggle tests. Pending: user re-test
+  of wind A/B from the new vantage.

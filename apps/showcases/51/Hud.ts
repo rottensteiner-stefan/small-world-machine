@@ -43,6 +43,8 @@ export interface VegHudStats {
   readonly visible: number;
   /** Triangles drawn this frame; < 0 when n/a. */
   readonly triangles: number;
+  /** Live field-lane wind state (true = wind applying, false = hard wind-off). */
+  readonly wind: boolean;
 }
 
 export interface VegHudOptions {
@@ -52,6 +54,8 @@ export interface VegHudOptions {
   getCpuTime?: (() => number) | undefined;
   /** Called when the user switches the camera path (keys 1-3 or the buttons). */
   onSelectPath(path: PathName): void;
+  /** Called when the user toggles the field-lane wind (key `F` or the button). */
+  onToggleWind?(): void;
 }
 
 /** Drawer toggle shortcuts. `H` opens/closes the panel (ADR step 0 layout: keys 1-3 + H). */
@@ -147,8 +151,16 @@ export class Hud {
               "Deterministic seeded paths: walk / fast flight / aerial (seeded Catmull-Rom, ADR 0059 step 0).",
             ),
         )}
+        ${hudSection(
+          "🌬️ Wind",
+          "F",
+          `<div class="preset-group"><button class="btn-preset" data-wind>Wind: on</button></div>` +
+            hudNote(
+              "Field-lane wind on/off (`F`); hard off = static lane for cost isolation (`?wind=0` at load).",
+            ),
+        )}
         <div class="hud-section hud-keys">
-          <kbd>1</kbd> Walk · <kbd>2</kbd> Flight · <kbd>3</kbd> Aerial · <kbd>H</kbd> Panel · <kbd>WASD</kbd>/<kbd>Mouse</kbd> Free fly
+          <kbd>1</kbd> Walk · <kbd>2</kbd> Flight · <kbd>3</kbd> Aerial · <kbd>F</kbd> Wind · <kbd>H</kbd> Panel · <kbd>WASD</kbd>/<kbd>Mouse</kbd> Free fly
         </div>
       `,
     });
@@ -158,6 +170,11 @@ export class Hud {
     this._root.querySelectorAll<HTMLButtonElement>("[data-path]").forEach((btn) => {
       btn.addEventListener("click", () => {
         this._selectPath(btn.dataset["path"] as PathName);
+      });
+    });
+    this._root.querySelectorAll<HTMLButtonElement>("[data-wind]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this._options.onToggleWind?.();
       });
     });
     this.sync(undefined);
@@ -171,15 +188,21 @@ export class Hud {
 
   /**
    * Applies a lab shortcut. Returns true when the key was consumed. Digits select the camera
-   * path; `I`/`H` toggle the panel (handled by the shared drawer).
+   * path, `F` toggles the field-lane wind, `I`/`H` toggle the panel (handled by the shared drawer).
    */
   public handleKey(event: KeyboardEvent): boolean {
     if (this._drawer.handleKey(event)) return true;
     if (event.altKey || event.metaKey || event.ctrlKey) return false;
     const path = PATH_KEY_MAP[event.code];
-    if (!path) return false;
-    this._selectPath(path);
-    return true;
+    if (path) {
+      this._selectPath(path);
+      return true;
+    }
+    if (event.code === "KeyF") {
+      this._options.onToggleWind?.();
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -190,6 +213,14 @@ export class Hud {
     this._lastStats = stats;
     this._root.querySelectorAll<HTMLButtonElement>("[data-path]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset["path"] === this._path);
+    });
+    // Wind toggle mirrors the LIVE state pushed by the showcase (no local echo); hard-off is
+    // only true while the field lane actually applies wind.
+    const windOn = stats?.wind === true;
+    this._root.querySelectorAll<HTMLButtonElement>("[data-wind]").forEach((btn) => {
+      btn.classList.toggle("active", windOn);
+      const label = `Wind: ${windOn ? "on" : "off"}`;
+      if (btn.textContent !== label) btn.textContent = label;
     });
     this._refreshReadout();
   }
@@ -224,7 +255,7 @@ export class Hud {
     const cpu = stats.cpuMs;
     const lines = [
       `${stats.fps >= 0 ? stats.fps.toFixed(1) : "--"} | ${fmtMs(cpu)} | ${fmtMs(gpu)} | ${fmtCount(stats.visible)} / ${fmtCount(stats.triangles)}`,
-      `?n=${stats.instances.toLocaleString("en-US")}  mode=${stats.mode}  path=${this._path}`,
+      `?n=${stats.instances.toLocaleString("en-US")}  mode=${stats.mode}  path=${this._path}  wind=${stats.wind ? "on" : "off"}`,
     ];
     const passes = this._options.gpuTimings?.passesMs;
     if (passes && this._options.gpuTimings?.available === true) {
