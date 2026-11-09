@@ -5,8 +5,12 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { InstanceFieldRenderHost } from "../../src/renderers/WebGPU/managers/InstanceFieldSystem.js";
 import { InstanceFieldSystem } from "../../src/renderers/WebGPU/managers/InstanceFieldSystem.js";
-import { MAX_LOD_BUCKETS, packInstancePose } from "../../src/core/InstanceField.js";
-import type { PrototypeDescriptor } from "../../src/core/InstanceField.js";
+import {
+  LOD_TRANSITION_MODES,
+  MAX_LOD_BUCKETS,
+  packInstancePose,
+} from "../../src/core/InstanceField.js";
+import type { LodTransitionMode, PrototypeDescriptor } from "../../src/core/InstanceField.js";
 import type { GeometryDataInterface } from "../../src/interfaces/index.js";
 
 const PARAM_BLOCK_BYTES = 256;
@@ -17,6 +21,9 @@ const FIELD_INFO_SIZE = 128;
 const INFO_WIND_HEIGHT_FLOAT = 48 / 4;
 const INFO_WIND_FLOAT = 64 / 4;
 const INFO_LOD_DITHER_MODE_WORD = 52 / 4;
+// P2 DECISIVE MODE SWITCH pad words in the per-view CULL param block (f32, bytes 124/128).
+const CULL_LOD_CROSSFADE_BAND_WORD = 124 / 4;
+const CULL_LOD_HYSTERESIS_WORD = 128 / 4;
 
 interface MockBuffer {
   size: number;
@@ -106,6 +113,7 @@ interface SetupExtras {
   windHeight?: number;
   windUniforms?: Float32Array;
   lodDitherMode?: "crossfade" | "hard";
+  lodTransitionMode?: LodTransitionMode;
 }
 
 function makeSetup(
@@ -187,6 +195,7 @@ function makeSetup(
     windHeight: extras.windHeight,
     windUniforms: extras.windUniforms,
     lodDitherMode: extras.lodDitherMode,
+    lodTransitionMode: extras.lodTransitionMode,
   } as never);
   system.attachHost(host);
   return { system, rec, geoEntry };
@@ -497,5 +506,120 @@ describe("InstanceFieldSystem on a recording device", () => {
       (infoWrites[infoWrites.length - 1]!.data as Uint8Array).slice().buffer,
     );
     expect(infoWords[8 / 4]).toBe(3);
+  });
+
+  // ---------------------------------------------------------------------------
+  // P2 DECISIVE MODE SWITCH (moderator decision 2026-11-10): ONE declarative `LodTransitionMode`
+  // derives the raw knobs end-to-end. The pins below freeze BOTH the preset table (against the
+  // engine table) and the end-to-end application (FieldInfo gate word + cull param block).
+  // Retune a preset only via the §6 protocol, then update `LOD_TRANSITION_MODES` + these pins.
+  // ---------------------------------------------------------------------------
+
+  /** Reinterprets the last uploaded main-view param block as f32 (band/hyst pad words). */
+  function lastParamFloats(rec: Recorded): Float32Array {
+    const block = lastParamBlock(rec, 0);
+    return new Float32Array(block.buffer, block.byteOffset, block.length);
+  }
+
+  /** Reads the FieldInfo dither-gate word (52) of the initial upload. */
+  function fieldInfoGateWord(rec: Recorded): number {
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1)!;
+    const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
+    expect(info).toBeDefined();
+    return new Uint32Array((info!.data as Uint8Array).slice().buffer)[INFO_LOD_DITHER_MODE_WORD]!;
+  }
+
+  /** Frozen end-to-end literal pins (2026-11-10) — MUST match `LOD_TRANSITION_MODES`. */
+  const PINNED_APPLIED: Readonly<
+    Record<LodTransitionMode, Readonly<{ band: number; hyst: number; gate: number }>>
+  > = {
+    off: { band: 0, hyst: 0, gate: 1 },
+    hysteresis: { band: 0, hyst: 0.02, gate: 1 },
+    dither: { band: 0.25, hyst: 0, gate: 0 },
+    "dither-hysteresis": { band: 0.25, hyst: 0.02, gate: 0 },
+  };
+
+  it("applies a setup LodTransitionMode end-to-end (gate word + cull band/hysteresis derive from the preset)", () => {
+    for (const mode of Object.keys(PINNED_APPLIED) as LodTransitionMode[]) {
+      const { system, rec } = makeSetup(4, { lodTransitionMode: mode });
+      expect(system.lodTransitionMode).toBe(mode);
+      system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+      expect(fieldInfoGateWord(rec)).toBe(PINNED_APPLIED[mode].gate);
+      const floats = lastParamFloats(rec);
+      expect(floats[CULL_LOD_CROSSFADE_BAND_WORD]).toBeCloseTo(PINNED_APPLIED[mode].band, 6);
+      expect(floats[CULL_LOD_HYSTERESIS_WORD]).toBeCloseTo(PINNED_APPLIED[mode].hyst, 6);
+    }
+  });
+
+  it("the applied knobs always equal the engine preset table (no frozen-literal drift)", () => {
+    for (const mode of Object.keys(PINNED_APPLIED) as LodTransitionMode[]) {
+      const preset = LOD_TRANSITION_MODES[mode];
+      expect(PINNED_APPLIED[mode]).toEqual({
+        band: preset.crossfadeBand,
+        hyst: preset.hysteresis,
+        gate: preset.ditherGate,
+      });
+    }
+  });
+
+  it("defaults to fail-closed `off` knobs (band 0, hyst 0) with the legacy dither gate untouched", () => {
+    const { system, rec } = makeSetup(4);
+    expect(system.lodTransitionMode).toBe("off");
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    const floats = lastParamFloats(rec);
+    expect(floats[CULL_LOD_CROSSFADE_BAND_WORD]).toBe(0);
+    expect(floats[CULL_LOD_HYSTERESIS_WORD]).toBe(0);
+    // Legacy behaviour preserved: no mode armed -> the historical crossfade gate word 0 stays.
+    expect(fieldInfoGateWord(rec)).toBe(0);
+  });
+
+  it("fails fast on an unknown LodTransitionMode (fail-closed until a valid mode is set)", () => {
+    expect(() => makeSetup(4, { lodTransitionMode: "geomorph" as never })).toThrow(
+      /lodTransitionMode/,
+    );
+    // Absent mode (fail-closed default) is valid and builds cleanly.
+    expect(() => makeSetup(4, {})).not.toThrow();
+    expect(() => makeSetup(4, {}).system.setLodTransitionMode("bogus" as never)).toThrow(
+      /lodTransitionMode/,
+    );
+  });
+
+  it("live-swaps modes: the dither gate patches THIS frame, the cull knobs on the next frame", () => {
+    const { system, rec } = makeSetup(4);
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1)!;
+    const gatePatch = (from: number, value: number): void => {
+      const hit = rec.writes
+        .slice(from)
+        .find((w) => w.buffer === fieldInfo && w.offset === INFO_LOD_DITHER_MODE_WORD * 4);
+      expect(hit).toBeDefined();
+      expect(new Uint32Array((hit!.data as Uint8Array).slice().buffer)[0]).toBe(value);
+    };
+    // Crossfade modes arm the gate (word 0); hard presets disarm it (word 1) — immediately.
+    const fromDither = rec.writes.length;
+    system.setLodTransitionMode("dither");
+    gatePatch(fromDither, 0);
+    expect(system.lodTransitionMode).toBe("dither");
+    const fromOff = rec.writes.length;
+    system.setLodTransitionMode("off");
+    gatePatch(fromOff, 1);
+    expect(system.lodTransitionMode).toBe("off");
+    // The next cull frame carries the OFF knobs (band 0, hyst 0).
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    const floats = lastParamFloats(rec);
+    expect(floats[CULL_LOD_CROSSFADE_BAND_WORD]).toBe(0);
+    expect(floats[CULL_LOD_HYSTERESIS_WORD]).toBe(0);
+  });
+
+  it("raw-knob setters do not change the applied mode (each surface is last-call-wins)", () => {
+    const { system } = makeSetup(4);
+    expect(system.lodTransitionMode).toBe("off");
+    // A raw retune without a preset leaves the mode mirror at the fail-closed base.
+    system.setLodTransition({ crossfadeBand: 0.5, hysteresis: 0.5, biasPx: -3 });
+    expect(system.lodTransitionMode).toBe("off");
+    system.setLodTransitionMode("hysteresis");
+    expect(system.lodTransitionMode).toBe("hysteresis");
+    // Later raw retunes keep the last applied mode (knobs are the derived escape hatch).
+    system.setLodTransition({ crossfadeBand: 0.3 });
+    expect(system.lodTransitionMode).toBe("hysteresis");
   });
 });

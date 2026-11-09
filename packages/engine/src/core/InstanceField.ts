@@ -355,6 +355,15 @@ export interface InstanceFieldOptions {
    */
   lodBiasPx?: number;
   /**
+   * @domain — ADR 0059 step 2 DECISIVE MODE SWITCH (moderator decision 2026-11-10): ONE
+   *         declarative choice mapping to a documented transition strategy
+   *         ({@link LOD_TRANSITION_MODES}: dither crossfade / hysteresis / composite / off).
+   *         Derives the raw knobs (`lodCrossfadeBand`, `lodHysteresis`, fragment dither gate);
+   *         each mode's performance delta is bounded and documented in the preset table. Absent =
+   *         "off" (fail-closed: P1-identical single routing — the showcase opts in explicitly).
+   */
+  lodTransitionMode?: LodTransitionMode;
+  /**
    * @domain Count — cap on concurrent per-frame culling views for this field (tier-scalable
    *         budget, ≤ {@link MAX_INDIRECT_VIEWS}); overflow views are not field-culled.
    */
@@ -679,6 +688,58 @@ export function lodTransitionBand(
   }
   return undefined;
 }
+
+// ---------------------------------------------------------------------------
+// 5b. LOD transition mode switch (ADR 0059 step 2, decisive moderator decision 2026-11-10)
+// ---------------------------------------------------------------------------
+
+/**
+ * @domain — ADR 0059 step 2 DECISIVE MODE SWITCH (moderator decision 2026-11-10: multiple
+ *   transition strategies behind ONE declarative switch, each with a bounded and documented
+ *   performance delta vs the fail-closed baseline). The engine default is the `off` preset
+ *   (P1-identical: single routing, no dither, zero delta). Each preset maps to the raw tuning
+ *   knobs (`crossfadeBand`, `lodHysteresis`, fragment dither gate) via {@link LOD_TRANSITION_MODES};
+ *   the raw knobs remain available as fine-tuning overrides (last call wins).
+ */
+export type LodTransitionMode = "off" | "hysteresis" | "dither" | "dither-hysteresis";
+
+/**
+ * @fixed Preset payload of one {@link LodTransitionMode}. One authoritative source for both the
+ *   WebGPU manager and the CPU mirrors/tests; `ditherGate` mirrors the `FieldInfo.lodDitherMode`
+ *   word (0 = crossfade gate active, 1 = hard keep-all).
+ */
+export interface LodTransitionModePreset {
+  /** `lodCrossfadeBand` value (fraction of each threshold; 0 = no dual write). */
+  crossfadeBand: number;
+  /** `lodHysteresis` value (fraction of each threshold; 0 = no jitter). */
+  hysteresis: number;
+  /** `lodDitherMode` gate word (0 = crossfade, 1 = hard). */
+  ditherGate: number;
+}
+
+/**
+ * @fixed Preset table (single source of truth; retune only against the live pop-measurement
+ *   protocol in `docs/research/veg-p2-lod-transitions.md` §6, then update here).
+ *   COST MODEL (bounded per mode — "calculable performance" mandate):
+ *   - "off": band 0, hyst 0, hard gate. Cull/fragment/memory deltas = 0.
+ *   - "hysteresis": band 0, hyst 0.02, hard gate. Cull-side per-instance ALU only (deterministic
+ *     jitter compare via `instanceLodJitter`); no extra writes, no fragment change. Decouples hard
+ *     switches across the population — the structural ±1/frame bound candidate A lacks.
+ *   - "dither": band 0.25, hyst 0, crossfade gate. Cull writes ONE extra segment entry + ONE f32
+ *     blend per instance strictly inside a band (`lodTransitionBand`); fragment adds ONE 8×8 Bayer
+ *     LUT lookup + compare (ALU only). Memory delta bounded by the band population, never the
+ *     whole field.
+ *   - "dither-hysteresis": band 0.25, hyst 0.02, crossfade gate. Composite = strongest simulated
+ *     mitigation (dither blends the staged ±1/frame step). Cost = dither cost (+ cull ALU only).
+ */
+export const LOD_TRANSITION_MODES: Readonly<
+  Record<LodTransitionMode, Readonly<LodTransitionModePreset>>
+> = {
+  off: { crossfadeBand: 0, hysteresis: 0, ditherGate: 1 },
+  hysteresis: { crossfadeBand: 0, hysteresis: 0.02, ditherGate: 1 },
+  dither: { crossfadeBand: 0.25, hysteresis: 0, ditherGate: 0 },
+  "dither-hysteresis": { crossfadeBand: 0.25, hysteresis: 0.02, ditherGate: 0 },
+};
 
 // ---------------------------------------------------------------------------
 // 6. Cull params and the composed field info (GPU-visible data roles)

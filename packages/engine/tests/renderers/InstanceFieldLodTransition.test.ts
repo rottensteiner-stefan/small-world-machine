@@ -24,10 +24,12 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  LOD_TRANSITION_MODES,
   effectiveBucketMaxPx,
   instanceLodJitter,
   lodTransitionBand,
 } from "../../src/core/InstanceField.js";
+import type { LodTransitionMode } from "../../src/core/InstanceField.js";
 
 // ---------------------------------------------------------------------------
 // §0 Frozen pins (ADR 0047): the finalizer constants and the first-4 records' values are
@@ -42,10 +44,7 @@ const JITTER_SCALE = 8388608 as const; // 2^23
 
 /** Frozen jitter literals for records 0..3 (computed 2026-11-09 from the constants above). */
 const PINNED_JITTER = [
-  -0.2286745309829712,
-  -0.6435359716415405,
-  0.9325128793716431,
-  -0.882716178894043,
+  -0.2286745309829712, -0.6435359716415405, 0.9325128793716431, -0.882716178894043,
 ] as const;
 
 /** One 2-boundary prototype (3 buckets) for the band tests: ascending maxima, near=detail. */
@@ -100,10 +99,7 @@ describe("effectiveBucketMaxPx — the single threshold variant (bias + hysteres
     const authored = 200;
     const h = 0.5;
     const j = instanceLodJitter(5);
-    expect(effectiveBucketMaxPx(authored, h, 0, 5)).toBeCloseTo(
-      authored * (1 + h * j),
-      12,
-    );
+    expect(effectiveBucketMaxPx(authored, h, 0, 5)).toBeCloseTo(authored * (1 + h * j), 12);
   });
 
   it("applies the tier bias additively and unaudited (negative allowed)", () => {
@@ -195,5 +191,93 @@ describe("lodTransitionBand — strict-membership crossfade split (candidate A m
     expect(split.blend).toBeLessThan(1);
     // The interface exposes ONE magnitude — no fineBlend/coarseBlend divergence possible.
     expect(Object.keys(split).sort()).toEqual(["blend", "coarseBucket", "fineBucket"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DECISIVE MODE SWITCH (moderator decision 2026-11-10): the preset table behind `?lodMode=` /
+// `setLodTransitionMode` freezes the derived knobs. Retune ONLY against the live pop-measurement
+// protocol (docs/research/veg-p2-lod-transitions.md §6) — then update BOTH this pin and the
+// engine table (single source), plus the device-side end-to-end pin.
+// ---------------------------------------------------------------------------
+
+/** Frozen preset literals (computed 2026-11-10): the ONE authoritative derivation contract. */
+const PINNED_PRESETS: Readonly<
+  Record<
+    LodTransitionMode,
+    Readonly<{ crossfadeBand: number; hysteresis: number; ditherGate: number }>
+  >
+> = {
+  off: { crossfadeBand: 0, hysteresis: 0, ditherGate: 1 },
+  hysteresis: { crossfadeBand: 0, hysteresis: 0.02, ditherGate: 1 },
+  dither: { crossfadeBand: 0.25, hysteresis: 0, ditherGate: 0 },
+  "dither-hysteresis": { crossfadeBand: 0.25, hysteresis: 0.02, ditherGate: 0 },
+};
+
+describe("LOD_TRANSITION_MODES — the DECISIVE MODE SWITCH preset table (moderator 2026-11-10)", () => {
+  it("is the sole source with exactly the four documented modes (frozen key set)", () => {
+    expect(Object.keys(LOD_TRANSITION_MODES).sort()).toEqual([
+      "dither",
+      "dither-hysteresis",
+      "hysteresis",
+      "off",
+    ]);
+  });
+
+  it("freeze-pins every preset's derived knobs to the frozen literals", () => {
+    for (const mode of Object.keys(PINNED_PRESETS) as LodTransitionMode[]) {
+      expect(LOD_TRANSITION_MODES[mode]).toEqual(PINNED_PRESETS[mode]);
+      expect(LOD_TRANSITION_MODES[mode]).toMatchObject(PINNED_PRESETS[mode]);
+    }
+  });
+
+  it("`off` is the fail-closed P1-identical preset (no dual write, hard keep-all gate)", () => {
+    const p = LOD_TRANSITION_MODES.off;
+    expect(p.crossfadeBand).toBe(0);
+    expect(p.hysteresis).toBe(0);
+    expect(p.ditherGate).toBe(1);
+    // No band -> `lodTransitionBand` never splits: single-write P1-identical routing.
+    expect(lodTransitionBand(30, EFFECTIVE_MAXIMA, p.crossfadeBand)).toBeUndefined();
+  });
+
+  it("`hysteresis` decouples hard switches WITHOUT any dual write (band 0, gate hard)", () => {
+    const p = LOD_TRANSITION_MODES.hysteresis;
+    expect(p.crossfadeBand).toBe(0);
+    expect(p.hysteresis).toBeGreaterThan(0);
+    expect(p.ditherGate).toBe(1);
+    expect(lodTransitionBand(30, EFFECTIVE_MAXIMA, p.crossfadeBand)).toBeUndefined();
+    // The jitter is LIVE: distinct records get distinct effective thresholds (structural ±1 cap).
+    const a = effectiveBucketMaxPx(24, p.hysteresis, 0, 0);
+    const b = effectiveBucketMaxPx(24, p.hysteresis, 0, 1);
+    expect(a).not.toBe(b);
+  });
+
+  it("`dither` blends with a band but WITHOUT hysteresis (single rail, no per-record jitter)", () => {
+    const p = LOD_TRANSITION_MODES.dither;
+    expect(p.crossfadeBand).toBeGreaterThan(0);
+    expect(p.hysteresis).toBe(0);
+    expect(p.ditherGate).toBe(0);
+    // The preset's band actually splits an in-band diameter.
+    expect(lodTransitionBand(24 * 1.1, EFFECTIVE_MAXIMA, p.crossfadeBand)).toBeDefined();
+  });
+
+  it("`dither-hysteresis` is the composite: band AND hysteresis, crossfade gate (strongest)", () => {
+    const p = LOD_TRANSITION_MODES["dither-hysteresis"];
+    expect(p.crossfadeBand).toBeGreaterThan(0);
+    expect(p.hysteresis).toBeGreaterThan(0);
+    expect(p.ditherGate).toBe(0);
+    expect(lodTransitionBand(24 * 1.1, EFFECTIVE_MAXIMA, p.crossfadeBand)).toBeDefined();
+  });
+
+  it("cost model pins: ONLY the dither modes can dual-write (band > 0), never the hard modes", () => {
+    for (const mode of ["off", "hysteresis"] as const) {
+      expect(LOD_TRANSITION_MODES[mode].crossfadeBand).toBe(0);
+    }
+    for (const mode of ["dither", "dither-hysteresis"] as const) {
+      expect(LOD_TRANSITION_MODES[mode].crossfadeBand).toBeGreaterThan(0);
+    }
+    // The dual-write modes are exactly those whose fragment gate is NOT hard.
+    expect(LOD_TRANSITION_MODES.dither.ditherGate).toBe(0);
+    expect(LOD_TRANSITION_MODES["dither-hysteresis"].ditherGate).toBe(0);
   });
 });

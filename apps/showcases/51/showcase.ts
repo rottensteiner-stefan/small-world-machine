@@ -23,6 +23,7 @@ import { mulberry32 } from "@small-world-machine/engine/utils/SeededRandom.js";
 import { BoundingBox } from "@small-world-machine/engine/physix/BoundingBox.js";
 import type { BoundingVolume } from "@small-world-machine/engine/interfaces/BoundingVolume.js";
 import {
+  LOD_TRANSITION_MODES,
   MAX_LOD_BUCKETS,
   packInstancePose,
   projectedDiameterPixels,
@@ -34,6 +35,7 @@ import type {
   InstanceFieldOptions,
   InstancePose,
   LodBucketDescriptor,
+  LodTransitionMode,
   PrototypeDescriptor,
 } from "@small-world-machine/engine/core/InstanceField.js";
 import { InstanceFieldSystem } from "@small-world-machine/engine/renderers/WebGPU/managers/InstanceFieldSystem.js";
@@ -64,6 +66,9 @@ interface P2FieldLodApi {
     biasPx?: number;
   }) => void;
   setLodDitherMode?: (mode: "crossfade" | "hard") => void;
+  /** ADR 0059 step 2 DECISIVE MODE SWITCH (moderator 2026-11-10): ONE declarative transition
+   *  strategy; derives the raw knobs (band/hysteresis/dither gate) from {@link LOD_TRANSITION_MODES}. */
+  setLodTransitionMode?: (mode: LodTransitionMode) => void;
 }
 
 /**
@@ -142,6 +147,12 @@ interface P2FieldLodApi {
  *   `?pausedAt=<t>`              freeze the camera at `sample(t)` of the active path (loop stops;
  *                                used by veg-bench keyframe shots + truth captures; capture mode
  *                                = HUD-free, so the clipped shots/FLIP compare stay clean)
+ *   `?lodMode=off|hysteresis|dither|dither-hysteresis`
+ *                                P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator 2026-11-10):
+ *                                ONE documented LOD-transition strategy (derives the raw knobs;
+ *                                cost per mode bounded in `LOD_TRANSITION_MODES`). Absent = legacy
+ *                                `?lodband=`/`?lodhyst=` knobs; HUD `L` cycles the modes live.
+ *                                `off` = fail-closed P1-identical hard routing.
  *   `?truth=1`                   ground-truth mode: identical scene, frozen pose (`?pausedAt=` or
  *                                the initial camera), signals `window.__vegTruthReady` after the
  *                                first frame (P0 has no LOD/culling optimizations to disable, so
@@ -180,7 +191,10 @@ const FIELD_CULL_PIXEL_SIZE = 2;
 // prototype now authors THREE ascending projected-size buckets (coarse proxy -> mid proxy ->
 // full merged tree) and the cull crossfade band / hysteresis / tier bias / shadow coarsening
 // are demo-tuned via URL. Absent knobs stay on the ENGINE fail-closed defaults (band 0 =
-// P1-identical single routing) unless the showcase opts in below.
+// P1-identical single routing) unless the showcase opts in below. DECISIVE MODE SWITCH
+// (moderator 2026-11-10): `?lodMode=off|hysteresis|dither|dither-hysteresis` selects ONE
+// documented strategy that DERIVES the knobs (`LOD_TRANSITION_MODES`); HUD `L` cycles the modes
+// live. Absent = legacy raw-knob path (engine remains fail-closed `off`).
 /** Default (demo) band width as a fraction of each threshold (opt-in; `?lodband=` overrides). */
 const DEFAULT_LOD_BAND = 0.12;
 /** Default per-instance hysteresis jitter fraction (`?lodhyst=` overrides; 0 = none). */
@@ -505,9 +519,10 @@ export class Showcase extends AbstractShowcase {
   private _fieldLodBand = 0;
   private _fieldLodHysteresis = 0;
   private _fieldLodBiasPx = 0;
-  /** P2 candidate-C live state: `true` = the HUD `L` toggle pinned the lane to a hard switch
-   *  (band 0 + fragment dither off), `false` = crossfade band (candidate A). */
-  private _lodHard = false;
+  /** P2 DECISIVE MODE SWITCH state (ADR 0059 step 2, moderator 2026-11-10): last applied
+   *  {@link LodTransitionMode} preset; `undefined` = legacy raw-knob mode (`?lodband=` etc., not
+   *  one of the presets). `L` / `?lodMode=` drive this; MEASURE + HUD report it. */
+  private _lodMode: LodTransitionMode | undefined = undefined;
   /** Scale-1 blade height cached at cover build — the re-arm height for live `setWind`. */
   private _coverWindHeight = 0;
   /** Latest optically-probed cull frame (kept 1: the dual-lane audit samples the LAST frame). */
@@ -606,6 +621,19 @@ export class Showcase extends AbstractShowcase {
       params.has("shadowlod") && Number.isFinite(rawShadowLod) && rawShadowLod > 0
         ? Math.min(MAX_LOD_BUCKETS - 1, Math.floor(rawShadowLod))
         : DEFAULT_SHADOW_LOD_BIAS;
+
+    // P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator 2026-11-10): `?lodMode=` selects ONE
+    // documented transition strategy and DERIVES the raw knobs (single declarative surface).
+    // Absent = legacy raw-knob path (URL `?lodband=` etc. + HUD `L`); the engine stays fail-
+    // closed `off` until either source arms it.
+    const rawLodMode = params.get("lodMode");
+    this._lodMode =
+      rawLodMode === "off" ||
+      rawLodMode === "hysteresis" ||
+      rawLodMode === "dither" ||
+      rawLodMode === "dither-hysteresis"
+        ? rawLodMode
+        : undefined;
 
     const pathValue = params.get("path");
     this._path =
@@ -973,9 +1001,16 @@ export class Showcase extends AbstractShowcase {
     this._fieldRecords = records;
     this._fieldBoundingRadius = radius;
     this._fieldCullPixelSize = FIELD_CULL_PIXEL_SIZE;
-    this._fieldLodBand = this._lodBand;
-    this._fieldLodHysteresis = this._lodHysteresis;
     this._fieldLodBiasPx = this._lodBiasPx;
+    if (this._lodMode !== undefined) {
+      // Mode switch armed (`?lodMode=`): derive the APPLIED-knob mirrors from the preset so the
+      // MEASURE/HUD readout stays truthful (the engine constructor applies the mode the same way).
+      this._fieldLodBand = LOD_TRANSITION_MODES[this._lodMode].crossfadeBand;
+      this._fieldLodHysteresis = LOD_TRANSITION_MODES[this._lodMode].hysteresis;
+    } else {
+      this._fieldLodBand = this._lodBand;
+      this._fieldLodHysteresis = this._lodHysteresis;
+    }
 
     // ADR 0059 step 1b: shared wind field for the field lane. A gentle forest breeze with
     // travelling gust fronts + calm phases (the reference-demo critique #1). `windHeight`
@@ -1011,10 +1046,16 @@ export class Showcase extends AbstractShowcase {
       maxInstances: instances.length,
       cullPixelSize: FIELD_CULL_PIXEL_SIZE,
       maxViews: 4,
-      lodCrossfadeBand: this._lodBand,
-      lodHysteresis: this._lodHysteresis,
-      lodBiasPx: this._lodBiasPx,
       shadowLodBias: this._shadowLodBias,
+      // Mode switch: ONE declarative choice (derives band/hysteresis/gate; engine constructor
+      // applies it over any raw knobs below). Legacy raw knobs when no mode is armed.
+      ...(this._lodMode !== undefined
+        ? { lodTransitionMode: this._lodMode }
+        : {
+            lodCrossfadeBand: this._lodBand,
+            lodHysteresis: this._lodHysteresis,
+          }),
+      lodBiasPx: this._lodBiasPx,
     };
     const system = new InstanceFieldSystem(null, {
       instanceRecords: records,
@@ -1296,31 +1337,37 @@ export class Showcase extends AbstractShowcase {
   }
 
   /**
-   * HUD `L` toggle (P2, ADR 0059 step 2): cycles the field lane between candidate A (dither
-   * crossfade band, URL knob) and candidate C (hard switch: band 0 + fragment dither off).
-   * The re-tune is pushed LIVE via the P2 system API (`setLodTransition` / `setLodDitherMode`)
-   * and takes effect on the next cull frame. Guarded through the `P2FieldLodApi` optional
-   * surface — inert while the app runs against a host engine that predates P2.
+   * HUD `L` toggle (P2, ADR 0059 step 2): cycles the field lane through the DECISIVE MODE SWITCH
+   * (moderator 2026-11-10) — `off` (fail-closed P1-identical) → `hysteresis` → `dither` →
+   * `dither-hysteresis`. Each mode is ONE declarative strategy applied live via
+   * {@link P2FieldLodApi.setLodTransitionMode} (band/hysteresis take effect on the next cull
+   * frame; the dither gate patches this frame). Guarded through the `P2FieldLodApi` optional
+   * surface. `?lodMode=` preselects the mode at startup.
    */
   private _toggleLodMode(): void {
+    const order: readonly LodTransitionMode[] = [
+      "off",
+      "hysteresis",
+      "dither",
+      "dither-hysteresis",
+    ];
+    const next =
+      this._lodMode === undefined
+        ? "off"
+        : order[(order.indexOf(this._lodMode) + 1) % order.length]!;
+    this._applyLodMode(next);
+  }
+
+  /** Applies ONE {@link LodTransitionMode} live and mirrors its derived knobs for MEASURE/HUD. */
+  private _applyLodMode(mode: LodTransitionMode): void {
+    this._lodMode = mode;
+    const preset = LOD_TRANSITION_MODES[mode];
+    this._fieldLodBand = preset.crossfadeBand;
+    this._fieldLodHysteresis = preset.hysteresis;
     const system = this._fieldSystem;
-    if (system === undefined) return;
-    this._lodHard = !this._lodHard;
-    if (this._lodHard) {
-      // Candidate C: zero the band (cull hard-switches; hysteresis jitter still decorrelates).
-      this._fieldLodBand = 0;
-    } else {
-      // Candidate A: re-arm the URL band (default when the URL knob is absent).
-      this._fieldLodBand = this._lodBand;
+    if (system !== undefined) {
+      (system as InstanceFieldSystem & P2FieldLodApi).setLodTransitionMode?.(mode);
     }
-    (system as InstanceFieldSystem & P2FieldLodApi).setLodTransition?.({
-      crossfadeBand: this._fieldLodBand,
-      hysteresis: this._fieldLodHysteresis,
-      biasPx: this._fieldLodBiasPx,
-    });
-    (system as InstanceFieldSystem & P2FieldLodApi).setLodDitherMode?.(
-      this._lodHard ? "hard" : "crossfade",
-    );
   }
 
   /**
@@ -1666,11 +1713,13 @@ export class Showcase extends AbstractShowcase {
       wind: this._windField !== undefined && this._windLive,
       // Ground-cover ring instances (field lane source B; 0 when inactive).
       cover: this._coverSystem?.instanceCount ?? 0,
-      // P2 LOD-transition live state (field lane only): the applied band/hysteresis/bias knobs.
-      // Key omitted when the field lane is inactive (`exactOptionalPropertyTypes` contract).
+      // P2 LOD-transition live state (field lane only): the applied band/hysteresis/bias knobs
+      // and — when a DECISIVE MODE SWITCH preset is armed — the mode name. Key omitted when the
+      // field lane is inactive (`exactOptionalPropertyTypes` contract).
       ...(this._fieldSystem !== undefined
         ? {
             lod: {
+              ...(this._lodMode !== undefined ? { mode: this._lodMode } : {}),
               band: this._fieldLodBand,
               hyst: this._fieldLodHysteresis,
               biasPx: this._fieldLodBiasPx,

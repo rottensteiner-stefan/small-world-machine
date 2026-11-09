@@ -58,6 +58,7 @@
 import {
   INDIRECT_SEGMENT_HEADER_BYTES,
   INSTANCE_RECORD_BYTES,
+  LOD_TRANSITION_MODES,
   MAX_INDIRECT_VIEWS,
   MAX_LOD_BUCKETS,
   type CullParams,
@@ -66,6 +67,7 @@ import {
   type IndirectSegmentCounts,
   type InstanceFieldOptions,
   type InstanceFieldRuntimeApi,
+  type LodTransitionMode,
   type PrototypeDescriptor,
 } from "../../../core/InstanceField.js";
 import type { Texture } from "../../../core/textures/index.js";
@@ -224,6 +226,15 @@ export interface InstanceFieldSystemSetup {
    *         `FieldInfo.wind` words stay zero while this is 0.
    */
   windHeight?: number;
+  /**
+   * @domain P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator decision 2026-11-10): ONE
+   *         declarative transition strategy via {@link LOD_TRANSITION_MODES} (`off` = fail-closed
+   *         P1-identical hard routing; `dither` / `hysteresis` / `dither-hysteresis` = documented
+   *         presets with bounded cost). When present it DERIVES the raw knobs and takes precedence
+   *         over any `lodCrossfadeBand`/`lodHysteresis`/`lodDitherMode` in this setup. Runtime-
+   *         toggleable via {@link InstanceFieldSystem.setLodTransitionMode}.
+   */
+  lodTransitionMode?: LodTransitionMode;
   /**
    * @domain P2 LOD-transition mode (ADR 0059 step 2): `"crossfade"` (default) = dither crossfade
    *         between bucket geometries in the pulled fragments; `"hard"` = candidate C (hard switch
@@ -403,6 +414,11 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   /** P2 tier-bias knob (cull pad word @132): additive px bias on EVERY threshold (negative =
    *  coarser selection at the same pixel footprint). Any finite float, default 0. */
   private _lodBiasPx: number;
+  /** P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator decision 2026-11-10): last applied
+   *  {@link LodTransitionMode}; `off` = fail-closed P1-identical. `setLodTransitionMode` is the
+   *  only writer; the raw knob setters do NOT touch it (mirrors applied knobs truthfully via the
+   *  other `_lod*` fields). */
+  private _lodTransitionMode: LodTransitionMode = "off";
   /** Authored `shadowLodBias` (frozen option): coarsening offset in LOD levels written ONLY
    *  into shadow-view blocks (`0` = reuse the main camera's choice, the required default);
    *  clamped into `[0, MAX_LOD_BUCKETS-1]`. The cull applies `max(bucket - bias, 0)`. */
@@ -490,6 +506,39 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     }
   }
 
+  /**
+   * @domain P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator decision 2026-11-10): selects ONE
+   *         documented LOD-transition strategy from {@link LOD_TRANSITION_MODES} and derives the
+   *         raw knobs (`crossfadeBand`, `hysteresis`, fragment dither gate) — the single
+   *         declarative surface (multiple solutions behind one switch, each with bounded cost).
+   *         Live-safe: the dither gate word patches IMMEDIATELY (this frame);
+   *         band/hysteresis take effect on the NEXT cull frame (view blocks refresh per prepare).
+   *         Fails fast on unknown modes; `"off"` = fail-closed P1-identical hard routing.
+   *         {@link lodTransitionMode} reports the last applied mode; the raw knob setters do not
+   *         change it (last call wins for the knobs themselves).
+   */
+  public setLodTransitionMode(mode: LodTransitionMode): void {
+    if (!(mode in LOD_TRANSITION_MODES)) {
+      throw new Error(
+        `[InstanceFieldSystem] lodTransitionMode must be one of ${Object.keys(LOD_TRANSITION_MODES).join(", ")}, got "${mode}".`,
+      );
+    }
+    const preset = LOD_TRANSITION_MODES[mode];
+    this.setLodTransition({ crossfadeBand: preset.crossfadeBand, hysteresis: preset.hysteresis });
+    this._lodDitherMode = preset.ditherGate;
+    this._writeFieldInfoWord(INFO_OFFSET_LOD_DITHER_MODE, this._lodDitherMode);
+    this._lodTransitionMode = mode;
+  }
+
+  /**
+   * @domain Read-only mirror of the last applied {@link LodTransitionMode} (fail-closed `"off"`
+   *         until the switch is used). The raw knob setters do not touch it; applied knobs are
+   *         always readable through the other P2 state.
+   */
+  public get lodTransitionMode(): LodTransitionMode {
+    return this._lodTransitionMode;
+  }
+
   // --- GPU state (created on attach; rebuilt on rebuild()) ---
   private _gpu: FieldGpuState | undefined = undefined;
   /** Pull pipelines keyed `${variant}:${format}:${uv}` (created lazily per target format). */
@@ -563,9 +612,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     this._lodCrossfadeBand = crossfadeBand;
     const hysteresis = options.lodHysteresis ?? 0;
     if (!(hysteresis >= 0 && hysteresis <= 1)) {
-      throw new Error(
-        `[InstanceFieldSystem] lodHysteresis must be in [0,1], got "${hysteresis}".`,
-      );
+      throw new Error(`[InstanceFieldSystem] lodHysteresis must be in [0,1], got "${hysteresis}".`);
     }
     this._lodHysteresis = hysteresis;
     const biasPx = options.lodBiasPx ?? 0;
@@ -573,7 +620,15 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       throw new Error(`[InstanceFieldSystem] lodBiasPx must be finite, got "${biasPx}".`);
     }
     this._lodBiasPx = biasPx;
-    this._shadowLodBias = Math.min(Math.max(0, Math.floor(options.shadowLodBias)), MAX_LOD_BUCKETS - 1);
+    // P2 DECISIVE MODE SWITCH: an authored mode derives the raw knobs and takes precedence over
+    // any raw knob values above (single declarative surface; fail-closed "off" = P1-identical).
+    if (setup.lodTransitionMode !== undefined) {
+      this.setLodTransitionMode(setup.lodTransitionMode);
+    }
+    this._shadowLodBias = Math.min(
+      Math.max(0, Math.floor(options.shadowLodBias)),
+      MAX_LOD_BUCKETS - 1,
+    );
 
     const prototypes = setup.prototypes ?? options.prototypes ?? [];
     const protoCount = prototypes.length;

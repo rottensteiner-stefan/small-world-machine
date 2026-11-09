@@ -334,3 +334,21 @@ overlap (throughput baseline, not placement art) — accepted.
 - PENDING: live pop measurement under TAA on/off on the real device (protocol in
   `docs/research/veg-p2-lod-transitions.md` §6) and the moderator decide spike A/B/C (dither vs.
   hard+hysteresis); `?lodband` default stays 0 until then.
+
+## 2026-11-10 — DECISIVE MODE SWITCH (ADR 0059 step 2, moderator decide-spike resolved)
+
+- Moderator mandate ("optimal quality with calculable performance; multiple solutions behind ONE
+  switch") resolved as the DECISIVE MODE SWITCH: `?lodMode=off|hysteresis|dither|dither-hysteresis`
+  preselects one documented strategy; HUD `L` now CYCLES all four modes live (was: binary
+  crossfade/hard). Each mode derives the raw knobs from the engine's authoritative
+  `LOD_TRANSITION_MODES` table; its cost is bounded and documented (dither delta scales with the
+  band population only; hysteresis = pure cull ALU; ±1/frame structural cap via jitter).
+- MEASURE + HUD now report the applied mode (`lod.mode`) alongside the derived band/hyst/bias;
+  the raw `?lodband=`/`?lodhyst=`/`?lodbias=`/`?shadowlod=` knobs remain as fine-tuning escape
+  hatch (last call wins, mode mirror untouched). Engine default stays fail-closed `off`
+  (P1-identical) until the §6 live pop measurement on the device picks a default band.
+- Verification: full gates green (4707 tests; tsc/eslint/doctrine/lint:wgsl 116/116/build:lib).
+  Headless SwiftShader-Dawn compile + render verified for ALL FOUR `?lodMode=` presets plus the
+  flight/aerial band runs: 0 shader/validation errors, grass + field render.
+- PENDING: live A/B pop measurement under TAA on/off (research note §6) + ring-gate A-B-B-A
+  runs on the M4 Pro; B (geomorph) deferred for V1.

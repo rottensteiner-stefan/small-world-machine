@@ -48,8 +48,10 @@ export interface VegHudStats {
   /** Ground-cover ring instances this frame (ADR 0059 step 1b; 0 when the cover is inactive). */
   readonly cover: number;
   /** Optional P2 LOD-transition live state of the field lane (ADR 0059 step 2); absent when the
-   *  field lane is inactive. `band` 0 = candidate C (hard switch), > 0 = candidate A band. */
+   *  field lane is inactive. `band` 0 = candidate C (hard switch), > 0 = candidate A band.
+   *  `mode` = DECISIVE MODE SWITCH preset name when one is armed (absent = legacy raw-knob mode). */
   readonly lod?: {
+    readonly mode?: string;
     readonly band: number;
     readonly hyst: number;
     readonly biasPx: number;
@@ -174,9 +176,9 @@ export class Hud {
         ${hudSection(
           "🔬 LOD mix",
           "L",
-          `<div class="preset-group"><button class="btn-preset" data-lod>LOD: crossfade</button></div>` +
+          `<div class="preset-group"><button class="btn-preset" data-lod>LOD: --</button></div>` +
             hudNote(
-              "P2 LOD transition mode (ADR 0059 step 2): crossfade band (candidate A) or hard switch (candidate C, `L` cycles). URL `?lodband=`/`?lodhyst=`/`?lodbias=`/`?shadowlod=` tune it.",
+              "P2 DECISIVE MODE SWITCH (ADR 0059 step 2): `L` cycles the transition strategies — off / hysteresis / dither / dither-hysteresis (one declarative switch, bounded cost per mode). `?lodMode=` preselects; raw `?lodband=`/`?lodhyst=`/`?lodbias=`/`?shadowlod=` still tune it.",
             ),
         )}
         <div class="hud-section hud-keys">
@@ -255,12 +257,17 @@ export class Hud {
       if (btn.textContent !== label) btn.textContent = label;
     });
     // P2 LOD transition mode mirrors the live field-lane state pushed by the showcase (no local
-    // echo): crossfade when a band is armed, hard switch when `band` is 0.
+    // echo): a DECISIVE MODE SWITCH preset name when armed, else band-derived crossfade/hard.
     const lod = stats?.lod;
     const lodHard = lod !== undefined && lod.band <= 0;
     this._root.querySelectorAll<HTMLButtonElement>("[data-lod]").forEach((btn) => {
       btn.classList.toggle("active", lod !== undefined && lodHard);
-      const label = lod === undefined ? "LOD: --" : `LOD: ${lodHard ? "hard" : "crossfade"}`;
+      const label =
+        lod === undefined
+          ? "LOD: --"
+          : lod.mode !== undefined
+            ? `LOD: ${lod.mode}`
+            : `LOD: ${lodHard ? "hard" : "crossfade"}`;
       if (btn.textContent !== label) btn.textContent = label;
     });
     this._refreshReadout();
@@ -301,7 +308,7 @@ export class Hud {
     const lod = stats.lod;
     if (lod !== undefined) {
       lines.push(
-        `LOD: band=${lod.band.toFixed(2)} hyst=${lod.hyst.toFixed(2)} bias=${lod.biasPx.toFixed(1)}px  (${lod.band <= 0 ? "hard" : "crossfade"})`,
+        `LOD: band=${lod.band.toFixed(2)} hyst=${lod.hyst.toFixed(2)} bias=${lod.biasPx.toFixed(1)}px  ${lod.mode !== undefined ? `mode=${lod.mode} ` : ""}(${lod.band <= 0 ? "hard" : "crossfade"})`,
       );
     }
     const passes = this._options.gpuTimings?.passesMs;
