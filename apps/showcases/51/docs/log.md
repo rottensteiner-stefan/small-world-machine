@@ -227,3 +227,9 @@ overlap (throughput baseline, not placement art) — accepted.
 - Audit (`cullref=1&popcount=1`): GPU == CPU reference in every probed frame, modes a and b.
 - Gate: field 182 728 trees @ 58 fps, CPU 0.1 ms, GPU 6.8 ms vs. autoinst 18 363 trees @ 60 fps, CPU 20.9 ms.
 - Open: placeholder shading (flat white); HZB culls nothing in this scene (sphere footprints reach past the front crowns) — S3 occlusion spike.
+
+## 2026-11-09 — Field lane shading
+
+- Field trees no longer white: merged tree carries per-part material colour (linear) + foliage mask (green-dominant part) as vertex colours; field backlight = showcase 52 leaf tint. `MEASURE.fieldShading` = `lambert-csm`.
+- First version was ~2× too dark: showcase 51 runs without post-processing, so the material shaders tone-map + display-encode themselves; the field wrote linear values. Fixed by the Standard output stage (exposure, `forwardToneMap`, `linearToSRGB`, fog).
+- Same view vs. autoinst: 3/255 mean abs diff per channel. 182 728 trees: GPU 10 ms, CPU 0 ms.

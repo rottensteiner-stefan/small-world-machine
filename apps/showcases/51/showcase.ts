@@ -9,6 +9,7 @@ import {
   Fog,
   FogMode,
   GltfLoader,
+  GltfMaterialParser,
   Ground,
   InstancedMesh,
   Matrix4,
@@ -139,6 +140,8 @@ const CUT_T_JUMP = 0.18;
 const FIELD_CULL_PIXEL_SIZE = 2;
 /** S2 field lane: population grid cell edge in meters (cells drive the CPU/GL cell fallback). */
 const FIELD_CELL_SIZE = 12;
+/** Leaf transmission tint of the field lane (sRGB, same value as showcase 52's leaves). */
+const FIELD_LEAF_BACKLIGHT: readonly [number, number, number] = [0.55, 0.72, 0.2];
 /** Fixed baseline seed; `?seed=` overrides. Chosen to match the showcase number. */
 const DEFAULT_SEED = 51;
 /** Hard cap so `?n=999999999` cannot OOM the instance-matrix pool. */
@@ -213,7 +216,8 @@ interface MeasureResult {
   fieldInstances?: number;
   /** S2 field lane: active occlusion mode (`a`|`b`|`c`). */
   fieldOcclusionMode?: string;
-  /** S2 field lane: P1 pulled shading is a documented placeholder (`p1-placeholder`). */
+  /** Field lane shading model: `lambert-csm` = vertex-colour albedo, Lambert sun + cascaded
+   *  shadows, irradiance/ambient, leaf backlight, Standard output stage (no specular yet). */
   fieldShading?: string;
   /** S2 field lane: hard camera teleports fired (`?occlusion=c`). */
   fieldTeleports?: number;
@@ -794,6 +798,12 @@ export class Showcase extends AbstractShowcase {
         cullPixelSize: FIELD_CULL_PIXEL_SIZE,
         maxViews: 4,
       },
+      // Leaf transmission (ADR 0060), linear; the colour-stream alpha masks it to the foliage.
+      backlight: [
+        GltfMaterialParser.engineSRGBToLinear(FIELD_LEAF_BACKLIGHT[0]),
+        GltfMaterialParser.engineSRGBToLinear(FIELD_LEAF_BACKLIGHT[1]),
+        GltfMaterialParser.engineSRGBToLinear(FIELD_LEAF_BACKLIGHT[2]),
+      ],
     });
     if (this._occlusionMode === "a") {
       system.setOcclusionEnabled(false);
@@ -851,6 +861,9 @@ export class Showcase extends AbstractShowcase {
     const indices = new Uint32Array(indexCount);
     const normals = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
+    // Field colour stream: linear albedo of each part's material + foliage mask in alpha (the
+    // V1 field draws one merged mesh per bucket, so per-part materials travel per vertex).
+    const colors = new Float32Array(vertexCount * 4);
     let vo = 0;
     let io = 0;
     for (const part of proto.parts) {
@@ -872,6 +885,19 @@ export class Showcase extends AbstractShowcase {
       if (geo.uvs) {
         uvs.set(geo.uvs, vo * 2);
       }
+      const c = part.material.color;
+      const r = GltfMaterialParser.engineSRGBToLinear(c.r);
+      const g = GltfMaterialParser.engineSRGBToLinear(c.g);
+      const b = GltfMaterialParser.engineSRGBToLinear(c.b);
+      // Foliage = the green-dominant part (the asset contract carries no material names).
+      const foliage = g > r ? 1 : 0;
+      for (let v = 0; v < partVertexCount; v++) {
+        const dest = (vo + v) * 4;
+        colors[dest] = r;
+        colors[dest + 1] = g;
+        colors[dest + 2] = b;
+        colors[dest + 3] = foliage;
+      }
       const partIndices = geo.indices!;
       for (let i = 0; i < partIndices.length; i++) {
         indices[io + i] = partIndices[i]! + vo;
@@ -884,6 +910,7 @@ export class Showcase extends AbstractShowcase {
       indices,
       normals,
       uvs,
+      colors,
       getBoundingVolume: (): BoundingVolume => BoundingBox.fromVertices(vertices),
     };
   }
@@ -1148,7 +1175,7 @@ export class Showcase extends AbstractShowcase {
     if (this._mode === "field" && this._fieldSystem !== undefined) {
       result.fieldInstances = this._fieldSystem.instanceCount;
       result.fieldOcclusionMode = this._occlusionMode;
-      result.fieldShading = "p1-placeholder";
+      result.fieldShading = "lambert-csm";
       if (this._teleportCount > 0) {
         result.fieldTeleports = this._teleportCount;
       }

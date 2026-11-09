@@ -27,6 +27,9 @@ struct FieldInfo {
     // [0,1] -- optional alpha-cutout threshold; 0 disables the alpha test (no map needed).
     alphaTest: f32,
     _pad: vec2f,
+    // linear rgb -- leaf backlight tint (ADR 0060 semantics, black = off); w = transmission
+    // shadow offset toward the sun in metres. Scaled per vertex by the colour alpha (foliage mask).
+    backlight: vec4f,
 }
 
 // Per-frame, per-view dynamic-offset cull parameter block (256 B, dynamic offset per view).

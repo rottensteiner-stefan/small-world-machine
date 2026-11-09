@@ -44,6 +44,10 @@ struct FieldVertOut {
     @location(0) wp: vec3f,
     @location(1) uv: vec2f,
     @location(2) n: vec3f,
+    // Linear albedo (rgb) + foliage/transmission mask (a), from the vertex colour stream.
+    @location(3) color: vec4f,
+    // Per-instance albedo variation (position hash), constant across the instance.
+    @location(4) @interpolate(flat) tint: f32,
 }
 
 // Optional alpha-cutout gate for the pulled fragments (P1 early-Z conservatism): when the field
@@ -58,9 +62,8 @@ fn fieldAlphaDiscard(uv: vec2f) {
     }
 }
 
-// Stable per-instance tint variation derived from the world position hash (ADR 0059: tint is
-// derived in the shader, never stored). P1 placeholder shading; the real vegetation material
-// lands via the proto/material slot (P2).
+// Stable per-instance tint variation derived from the instance position hash (ADR 0059: tint is
+// derived in the shader, never stored); evaluated once per instance in the vertex stage.
 fn fieldPositionHash(center: vec3f) -> u32 {
     var h = bitcast<u32>(center.x) ^ (bitcast<u32>(center.y) * 0x1f123bb5u) ^ (bitcast<u32>(center.z) * 0x860aa977u);
     h = ((h >> 16u) ^ h) * 0x45d9f3bu;
@@ -69,9 +72,14 @@ fn fieldPositionHash(center: vec3f) -> u32 {
 }
 
 // Pulled geometry transform: world instance position + yaw-around-Y + uniform scale, then the
-// per-draw view-projection. The instance normal stays world-up (yaw around Y preserves +Y).
+// per-draw view-projection. The normal rotates with the yaw (uniform scale needs no inverse
+// transpose). Every bucket geometry binds all four streams: the system completes missing normals
+// (world up), uvs (zero) and colours (white, mask 1) once at setup, so one pipeline serves all.
 fn fieldPullVertex(
     localPos: vec3f,
+    localNormal: vec3f,
+    uv: vec2f,
+    color: vec4f,
     instanceIndex: u32,
 ) -> FieldVertOut {
     var o: FieldVertOut;
@@ -82,6 +90,8 @@ fn fieldPullVertex(
         o.wp = vec3f(0.0);
         o.uv = vec2f(0.0);
         o.n = vec3f(0.0, 1.0, 0.0);
+        o.color = vec4f(0.0);
+        o.tint = 1.0;
         return o;
     }
     let bv = cullParams.segmentBase;
@@ -102,28 +112,23 @@ fn fieldPullVertex(
 
     o.pos = clipPos;
     o.wp = worldPos;
-    o.uv = vec2f(0.0);
-    o.n = vec3f(0.0, 1.0, 0.0);
+    o.uv = uv;
+    o.n = vec3f(c * localNormal.x - s * localNormal.z, localNormal.y, s * localNormal.x + c * localNormal.z);
+    o.color = color;
+    let h = fieldPositionHash(record.xyz);
+    o.tint = 0.85 + 0.3 * (f32(h & 0x00FFFFFFu) * (1.0 / 16777216.0));
     return o;
 }
 
 @vertex
 fn vsFieldPull(
     @location(0) pos: vec3f,
-    @builtin(instance_index) instanceIndex: u32,
-) -> FieldVertOut {
-    return fieldPullVertex(pos, instanceIndex);
-}
-
-@vertex
-fn vsFieldPullUv(
-    @location(0) pos: vec3f,
+    @location(1) normal: vec3f,
     @location(2) uv: vec2f,
+    @location(3) color: vec4f,
     @builtin(instance_index) instanceIndex: u32,
 ) -> FieldVertOut {
-    var o = fieldPullVertex(pos, instanceIndex);
-    o.uv = uv;
-    return o;
+    return fieldPullVertex(pos, normal, uv, color, instanceIndex);
 }
 
 // ── depth variant (depth pre-pass + cascade/spot/point depth) ─────────────────────────────────
@@ -153,24 +158,72 @@ fn fsFieldEvsm(i: FieldVertOut) -> @location(0) vec4f {
 }
 
 // ── main color variant ────────────────────────────────────────────────────────────────────────
-// P1 placeholder vegetation shading (documented simplification): position-hash tint, world-up
-// normal, cheap headlight of the shared directional light over ambient. No PBR, no fog, no
-// normal map -- the real per-prototype material strand lands with P2. Two output shapes keep the
-// pass's attachment count valid (1 or 2 targets, see MainRenderPass normal buffer).
-fn fieldColorShade(i: FieldVertOut) -> vec4f {
+// Vegetation shading: Lambert sun with the engine's cascaded shadows (same cascade selection,
+// blend-free, normal-offset bias as lighting_pbr.wgsl) + irradiance/ambient, two-sided normals, and the
+// ADR 0060 leaf backlight (wrap from the unlit side + forward lobe toward the sun, transmission
+// shadow sampled `backlight.w` metres toward the sun) weighted by the colour alpha mask. No
+// specular. Two output shapes keep the pass's attachment count valid (1 or 2
+// targets, see MainRenderPass normal buffer).
+fn fieldShadingNormal(i: FieldVertOut, frontFacing: bool) -> vec3f {
+    let n = normalize(i.n);
+    return select(-n, n, frontFacing);
+}
+
+fn fieldColorShade(i: FieldVertOut, frontFacing: bool) -> vec4f {
     fieldAlphaDiscard(i.uv);
-    let h = fieldPositionHash(i.wp);
-    let variation = 0.65 + 0.35 * (f32(h & 0x00FFFFFFu) * (1.0 / 16777216.0));
-    let nrm = normalize(i.n);
-    let lightDir = normalize(global.dirLightDir.xyz);
-    let ndl = max(dot(nrm, lightDir), 0.0);
-    let lit = (global.ambientColor.rgb + ndl * global.dirLightColor.rgb) * variation;
-    return vec4f(lit, 1.0);
+    let N = fieldShadingNormal(i, frontFacing);
+    let albedo = i.color.rgb * i.tint;
+    let L = normalize(global.dirLightDir.xyz);
+    let V = normalize(global.viewPos.xyz - i.wp);
+    let dotNL = max(dot(N, L), 0.0);
+    let backlightOn = fieldInfo.backlight.w > 0.0 && i.color.a > 0.0;
+
+    var shadow: f32 = 1.0;
+    var backShadow: f32 = 1.0;
+    if (global.dirShadowInfo.z > 0.5) {
+        let numCascades = u32(global.dirShadowInfo.w);
+        var cascadeIndex = max(numCascades, 1u) - 1u;
+        let viewDist = length(global.viewPos.xyz - i.wp);
+        for (var c: u32 = 0u; c < numCascades; c++) {
+            if (viewDist < global.cascadeSplits[c]) {
+                cascadeIndex = c;
+                break;
+            }
+        }
+        let samplePos = i.wp + N * global.dirShadowBias[cascadeIndex] * (1.0 - dotNL);
+        let shadowPos = global.cascadeMatrices[cascadeIndex] * vec4f(samplePos, 1.0);
+        shadow = getShadowDirMain(u_dirShadowMap, shadowSampler, shadowPos, cascadeIndex, global.dirShadowInfo.x);
+        if (backlightOn) {
+            let backPos = global.cascadeMatrices[cascadeIndex] * vec4f(i.wp + L * fieldInfo.backlight.w, 1.0);
+            backShadow = getShadowDirMain(u_dirShadowMap, shadowSampler, backPos, cascadeIndex, global.dirShadowInfo.x);
+        }
+    }
+
+    let invPi = 0.3183098861837907;
+    let sun = global.dirLightColor.rgb * invPi;
+    // Ambient exactly like lighting_pbr.wgsl: the baked irradiance cube (sRGB-encoded, ADR 0048)
+    // when the scene has one, the flat ambient colour otherwise.
+    var ambient = sRGBToLinear(textureSampleLevel(u_irradianceMap, globalSampler, N, 0.0).rgb) * global.envIntensity;
+    if (dot(ambient, ambient) < 1e-6) {
+        ambient = global.ambientColor.rgb;
+    }
+    var lit = albedo * sun * (dotNL * shadow) + ambient * albedo;
+    if (backlightOn) {
+        let lobe = max(dot(-N, L), 0.0) + pow(max(dot(-V, L), 0.0), 6.0);
+        lit += fieldInfo.backlight.rgb * albedo * sun * (backShadow * lobe * i.color.a);
+    }
+    // Output stage identical to Standard.frag.wgsl: exposure, forward tone curve + display
+    // encoding (both pass-through while post-processing owns them, gamma lane 1.0), then fog.
+    var color = lit * global.exposure;
+    color = forwardToneMap(color);
+    color = linearToSRGB(color);
+    [WGSL_FOG_CALC]
+    return vec4f(color, 1.0);
 }
 
 @fragment
-fn fsFieldColor(i: FieldVertOut) -> @location(0) vec4f {
-    return fieldColorShade(i);
+fn fsFieldColor(i: FieldVertOut, @builtin(front_facing) frontFacing: bool) -> @location(0) vec4f {
+    return fieldColorShade(i, frontFacing);
 }
 
 // Octahedral encode of the world shading normal for the ADR 0028 normal target (rg16float), the
@@ -188,7 +241,8 @@ struct FieldColorNormalOut {
 }
 
 @fragment
-fn fsFieldColorNormal(i: FieldVertOut) -> FieldColorNormalOut {
-    let color = fieldColorShade(i);
-    return FieldColorNormalOut(color, vec4f(fieldOctEncode(normalize(i.n)), 0.0, color.a));
+fn fsFieldColorNormal(i: FieldVertOut, @builtin(front_facing) frontFacing: bool) -> FieldColorNormalOut {
+    let color = fieldColorShade(i, frontFacing);
+    let n = fieldShadingNormal(i, frontFacing);
+    return FieldColorNormalOut(color, vec4f(fieldOctEncode(n), 0.0, color.a));
 }

@@ -13,6 +13,7 @@ const PARAM_BLOCK_BYTES = 256;
 const SEGMENT_BASE_WORD = 112 / 4;
 const HZB_ENABLED_WORD = 104 / 4;
 const CULL_MODE_WORD = 116 / 4;
+const FIELD_INFO_SIZE = 48;
 
 interface MockBuffer {
   size: number;
@@ -83,10 +84,25 @@ function makeDevice(rec: Recorded): GPUDevice {
   return device as unknown as GPUDevice;
 }
 
-function makeSetup(instances: number): {
+interface SetupExtras {
+  colors?: Float32Array;
+  backlight?: readonly [number, number, number];
+}
+
+function makeSetup(
+  instances: number,
+  extras: SetupExtras = {},
+): {
   system: InstanceFieldSystem;
   rec: Recorded;
-  geoEntry: { vb: object; uvb: object; ib: object; indexCount: number; format: string };
+  geoEntry: {
+    vb: object;
+    uvb: object;
+    ib: object;
+    indexCount: number;
+    vertexCount: number;
+    format: string;
+  };
 } {
   const rec: Recorded = { writes: [], bindGroups: 0, buffers: [] };
   const geoEntry = {
@@ -94,6 +110,7 @@ function makeSetup(instances: number): {
     uvb: { id: "uvb" },
     ib: { id: "ib" },
     indexCount: 36,
+    vertexCount: 3,
     format: "uint32",
   };
   const hzbViews = [{ id: "hzbA" }, { id: "hzbB" }];
@@ -123,6 +140,7 @@ function makeSetup(instances: number): {
     vertices: new Float32Array(9),
     indices: new Uint32Array(3),
     uvs: new Float32Array(6),
+    colors: extras.colors,
   } as unknown as GeometryDataInterface;
   const prototype: PrototypeDescriptor = {
     id: "tree",
@@ -146,6 +164,7 @@ function makeSetup(instances: number): {
     prototypes: [prototype],
     geometryTable: [[geometry]],
     options: { maxInstances: instances, cellSize: 10, cullPixelSize: 2, maxViews: 4 },
+    backlight: extras.backlight,
   } as never);
   system.attachHost(host);
   return { system, rec, geoEntry };
@@ -181,8 +200,8 @@ describe("InstanceFieldSystem on a recording device", () => {
   it("sizes each segment page for the whole population (one view may see every instance)", () => {
     const n = 5000;
     const { rec } = makeSetup(n);
-    // `FieldInfo` is the last buffer the system creates (32 B uniform); word 0 = pageCapacity.
-    const fieldInfo = rec.buffers.filter((b) => b.size === 32).at(-1);
+    // `FieldInfo` is the last 48 B buffer the system creates; word 0 = pageCapacity.
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
     const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
     expect(info).toBeDefined();
     const words = new Uint32Array((info!.data as Uint8Array).slice().buffer);
@@ -192,7 +211,7 @@ describe("InstanceFieldSystem on a recording device", () => {
     expect(visible).toBeDefined();
   });
 
-  it("sets the pipeline and binds uv to slot 1 before every indirect draw", () => {
+  it("sets the pipeline and binds all four vertex streams before every indirect draw", () => {
     const { system, geoEntry } = makeSetup(8);
     const calls: string[] = [];
     const rp = {
@@ -205,7 +224,10 @@ describe("InstanceFieldSystem on a recording device", () => {
     system.recordDraw(rp as unknown as GPURenderPassEncoder, 0, 0, true, "color");
     expect(calls).toEqual(["pipeline", "draw"]);
     expect(rp.setVertexBuffer).toHaveBeenCalledWith(0, geoEntry.vb);
-    expect(rp.setVertexBuffer).toHaveBeenCalledWith(1, geoEntry.uvb);
+    expect(rp.setVertexBuffer).toHaveBeenCalledWith(2, geoEntry.uvb);
+    // Missing normals / colours are completed by the system (slots 1 and 3, own buffers).
+    const slots = rp.setVertexBuffer.mock.calls.map((c) => c[0]).sort();
+    expect(slots).toEqual([0, 1, 2, 3]);
   });
 
   it("reuses the cull bind groups of the ping-pong pyramid instead of creating one per frame", () => {
@@ -226,5 +248,34 @@ describe("InstanceFieldSystem on a recording device", () => {
     const staging = rec.buffers.filter((b) => b.mapAsync.mock.calls.length > 0);
     expect(staging.length).toBe(2);
     for (const b of staging) expect(b.mapAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes the leaf backlight (linear tint + default 0.5 m offset) into FieldInfo", () => {
+    const { rec } = makeSetup(4, { backlight: [0.3, 0.5, 0.1] });
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
+    const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
+    const floats = new Float32Array((info!.data as Uint8Array).slice().buffer);
+    expect(Array.from(floats.subarray(8, 12)).map((v) => +v.toFixed(3))).toEqual([
+      0.3, 0.5, 0.1, 0.5,
+    ]);
+  });
+
+  it("keeps the backlight off (w = 0) without a tint", () => {
+    const { rec } = makeSetup(4);
+    const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
+    const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
+    const floats = new Float32Array((info!.data as Uint8Array).slice().buffer);
+    expect(floats[11]).toBe(0);
+  });
+
+  it("expands rgb vertex colours to the rgba colour stream with foliage mask 1", () => {
+    const rgb = new Float32Array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]);
+    const { rec } = makeSetup(4, { colors: rgb });
+    const colorWrite = rec.writes.find((w) => w.data.byteLength === 3 * 16);
+    expect(colorWrite).toBeDefined();
+    const rgba = new Float32Array((colorWrite!.data as Uint8Array).slice().buffer);
+    expect(Array.from(rgba).map((v) => +v.toFixed(2))).toEqual([
+      0.1, 0.2, 0.3, 1, 0.4, 0.5, 0.6, 1, 0.7, 0.8, 0.9, 1,
+    ]);
   });
 });

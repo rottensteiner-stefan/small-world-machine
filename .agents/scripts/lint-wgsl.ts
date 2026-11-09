@@ -161,12 +161,16 @@ async function collectTargets(): Promise<LintTarget[]> {
           source = registry.assemble(raw, "wgsl");
         }
       } else if (rel.includes("/web_gpu/instance_field/")) {
-        // Field pull (webgpu-vert kind): `computeStructsChunk()` + the shared instance-field
+        // Field pull (webgpu-vert kind): `computeStructsChunk()` + PBR math (ifdefs stripped) + the shared instance-field
         // structs chunk + raw -- NOT `[WGSL_STRUCTS]`, which would duplicate the FieldInfo /
         // CullParams structs AND the @group(3) view this module declares on its own. Mirror
         // `WebGPURenderer.fieldPullModuleSource` exactly.
+        const pbrMath = preprocessConditionals(
+          registry.assemble(`[${ShaderChunkId.WGSL_PBR_MATH}]`, "wgsl"),
+          [],
+        );
         source = registry.assemble(
-          computeStructsChunk() + "\n" + instanceFieldStructs + "\n" + raw,
+          computeStructsChunk() + "\n" + pbrMath + "\n" + instanceFieldStructs + "\n" + raw,
           "wgsl",
         );
       } else {

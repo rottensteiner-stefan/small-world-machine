@@ -84,7 +84,8 @@
   - Page capacity `max(1024, maxInstances/16)` < visible count → random survivor drop + foreign-page reads (flicker, stripes). Capacity is now `maxInstances`; pages only for addressable segments; vertex guard clips instances past the page.
   - Probe re-armed `mapAsync` while pending.
   - Pinned by `tests/renderers/InstanceFieldSystemDevice.test.ts` (recording mock device).
-- **Open for later steps (not blockers):** shading is a placeholder (flat white, `fieldShading: "p1-placeholder"`) → material path with step 2; sphere-vs-HZB culls nothing in showcase 51 (slender conifers on open ground: each sphere's footprint reaches sky/ground behind the front crowns) → two-phase / tighter bounds decided at the S3 occlusion spike; GL context-restore of field VBOs and field texture refcounts (Frank D5/D6) stay backlog.
+- **Shading (2026-11-09, same day):** placeholder replaced by `lambert-csm` — vertex-colour albedo + foliage mask, Lambert sun with engine CSM shadows, irradiance/ambient, ADR 0060 leaf backlight, Standard output stage incl. fog; within 3/255 of the auto-instancing PBR path in showcase 51. Still missing vs. `StandardMaterial`: specular, textures, per-prototype materials (one merged mesh per bucket in V1).
+- **Open for later steps (not blockers):** sphere-vs-HZB culls nothing in showcase 51 (slender conifers on open ground: each sphere's footprint reaches sky/ground behind the front crowns) → two-phase / tighter bounds decided at the S3 occlusion spike; GL context-restore of field VBOs and field texture refcounts (Frank D5/D6) stay backlog.
 
 ##### P1 contract notepad (S1 freeze, 2026-11-08 — Dave P1-1)
 

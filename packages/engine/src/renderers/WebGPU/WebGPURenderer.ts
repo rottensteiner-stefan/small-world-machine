@@ -10,7 +10,12 @@ import {
 import type { RenderTargetCube } from "../../core/textures/index.js";
 import { RenderTarget } from "../../core/textures/index.js";
 import type { RenderManifest } from "../shaders/index.js";
-import { UniformPacker, VERTEX_COLOR_FLAG, resolveManifestFlags } from "../shaders/index.js";
+import {
+  UniformPacker,
+  VERTEX_COLOR_FLAG,
+  preprocessConditionals,
+  resolveManifestFlags,
+} from "../shaders/index.js";
 import type { EngineOptions, GeometryDataInterface } from "../../interfaces/index.js";
 
 import type { ClusterGridDims } from "../../math/index.js";
@@ -542,10 +547,24 @@ export class WebGPURenderer
     );
   }
 
-  /** Composed pulled-draw module source: compute-structs chunk + shared field chunk +
-   * `field_pull.wgsl`. */
+  /** Composed pulled-draw module source: compute-structs chunk + PBR math (shadow sampling,
+   * `#ifdef` feature blocks stripped -- the field shades without anisotropy/iridescence) + shared
+   * field chunk + `field_pull.wgsl`. */
   public get fieldPullModuleSource(): string {
-    return this._computeStructsChunk() + "\n" + instanceFieldStructsWGSL + "\n" + fieldPullWGSL;
+    const pbrMath = preprocessConditionals(
+      this.context.shaderRegistry.assemble(`[${ShaderChunkId.WGSL_PBR_MATH}]`, "wgsl"),
+      [],
+    );
+    return (
+      this._computeStructsChunk() +
+      "\n" +
+      pbrMath +
+      "\n" +
+      instanceFieldStructsWGSL +
+      "\n" +
+      // Resolves the `[WGSL_FOG_CALC]` token of the colour output stage.
+      this.context.shaderRegistry.assemble(fieldPullWGSL, "wgsl")
+    );
   }
 
   /** Per-draw view-projection bind-group layout (group 3 of the field pull pipelines). */

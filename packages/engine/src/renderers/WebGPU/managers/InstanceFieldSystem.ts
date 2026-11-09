@@ -75,7 +75,7 @@ const FIELD_SEGMENTS = MAX_INDIRECT_VIEWS * MAX_LOD_BUCKETS;
 const CULL_PARAM_BLOCK_BYTES = 256;
 
 /** `FieldInfo` uniform size (one vec4-aligned 32 B struct, see instance_field_structs.wgsl). */
-const FIELD_INFO_BYTES = 32;
+const FIELD_INFO_BYTES = 48;
 
 /** Word offsets inside a cull-param block (bytes, little-endian, see the WGSL `CullParams`). */
 const CULL_OFFSET_VIEWPORT_HEIGHT_PX = 96;
@@ -92,6 +92,7 @@ const INFO_OFFSET_INSTANCE_COUNT = 8;
 const INFO_OFFSET_HZB_MIP_COUNT = 12;
 const INFO_OFFSET_CULL_PIXEL_SIZE = 16;
 const INFO_OFFSET_ALPHA_TEST = 20;
+const INFO_OFFSET_BACKLIGHT = 32;
 
 /** Compute workgroup width of the cull / reset entries (`@workgroup_size(64)`). */
 const CULL_WORKGROUP_SIZE = 64;
@@ -185,6 +186,22 @@ export interface InstanceFieldSystemSetup {
    * @domain Authoring alpha-cutout texture of the field (white fallback when absent/unloaded).
    */
   alphaMap?: Texture;
+  /**
+   * @domain Leaf backlight tint (linear rgb; absent or black = off), ADR 0060 semantics. Scaled
+   *         per vertex by the colour-stream alpha, the foliage mask (trunks 0, leaves 1).
+   */
+  backlight?: readonly [number, number, number];
+  /** @domain Transmission-shadow offset toward the sun in metres (ADR 0060 default 0.5). */
+  backlightThickness?: number;
+}
+
+/** Vertex streams bound per bucket: slot 1 normal, 2 uv, 3 colour (slot 0 = the cached position).
+ * Streams the geometry lacks are completed once at setup (`owned`, destroyed on dispose). */
+interface FieldBucketStreams {
+  normal: GPUBuffer;
+  uv: GPUBuffer;
+  color: GPUBuffer;
+  owned: GPUBuffer[];
 }
 
 /** Options defaults so `{}` (S2 scaffold) builds a valid inert node (host null). */
@@ -243,6 +260,50 @@ const DRAW_VARIANT_INDEX: Readonly<Record<FieldDrawVariant, number>> = {
   colorNormal: 3,
 };
 
+/**
+ * Completes the per-vertex streams a bucket geometry lacks, once at attach: normals default to
+ * world up, uvs to zero, colours to white with foliage mask 1. The colour stream is always the
+ * field's own float32x4 copy (geometry colours may be rgb or rgba; treated as linear albedo).
+ */
+function createBucketStreams(
+  device: GPUDevice,
+  geo: GeometryDataInterface,
+  entry: WebGPUGeoCacheEntry,
+): FieldBucketStreams {
+  const vertexCount = entry.vertexCount;
+  const owned: GPUBuffer[] = [];
+  const upload = (data: Float32Array): GPUBuffer => {
+    const buffer = device.createBuffer({
+      size: Math.max(4, data.byteLength),
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(buffer, 0, data);
+    owned.push(buffer);
+    return buffer;
+  };
+
+  let normal = entry.nb;
+  if (!normal) {
+    const up = new Float32Array(vertexCount * 3);
+    for (let v = 0; v < vertexCount; v++) up[v * 3 + 1] = 1;
+    normal = upload(up);
+  }
+  const uv = entry.uvb ?? upload(new Float32Array(vertexCount * 2));
+
+  const rgba = new Float32Array(vertexCount * 4).fill(1);
+  const src = geo.colors;
+  const components = src ? src.length / vertexCount : 0;
+  if (src && (components === 3 || components === 4)) {
+    for (let v = 0; v < vertexCount; v++) {
+      rgba[v * 4] = src[v * components]!;
+      rgba[v * 4 + 1] = src[v * components + 1]!;
+      rgba[v * 4 + 2] = src[v * components + 2]!;
+      if (components === 4) rgba[v * 4 + 3] = src[v * components + 3]!;
+    }
+  }
+  return { normal, uv, color: upload(rgba), owned };
+}
+
 /** `mapAsync` rejection handler of the probe staging (aborted by unmap/destroy). */
 function ignoreMapAbort(): void {}
 
@@ -279,6 +340,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   );
   private readonly _alphaTest: number;
   private readonly _alphaMap: Texture | undefined;
+  /** `FieldInfo.backlight`: linear tint rgb + transmission-shadow offset (w = 0 -> off). */
+  private readonly _backlight: Float32Array = new Float32Array(4);
+  /** Completed vertex streams per bucket (built at attach, see `FieldBucketStreams`). */
+  private readonly _bucketStreams: (FieldBucketStreams | undefined)[] = new Array(MAX_LOD_BUCKETS);
 
   // --- Population (static; rebuild() is the only mutation path) ---
   private _instanceRecords: Float32Array;
@@ -351,6 +416,13 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     this._viewCount = Math.min(Math.max(1, Math.floor(options.maxViews)), MAX_INDIRECT_VIEWS);
     this._alphaTest = Math.max(0, setup.alphaTest ?? 0);
     this._alphaMap = setup.alphaMap;
+    const tint = setup.backlight;
+    if (tint && (tint[0] > 0 || tint[1] > 0 || tint[2] > 0)) {
+      this._backlight[0] = tint[0];
+      this._backlight[1] = tint[1];
+      this._backlight[2] = tint[2];
+      this._backlight[3] = Math.max(1e-4, setup.backlightThickness ?? 0.5);
+    }
 
     const prototypes = setup.prototypes ?? options.prototypes ?? [];
     const protoCount = prototypes.length;
@@ -612,10 +684,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     const viewBase = viewIndex * MAX_LOD_BUCKETS;
     for (let b = 0; b < this._maxBucketCount; b++) {
       const entry = this._bucketGeoEntry[b];
-      if (!entry || entry.indexCount === 0) continue;
-      const uv = entry.uvb ? 1 : 0;
-      rp.setPipeline(this._getDrawPipeline(variant, targetFormat, uv));
-      this._bindGeometry(rp, entry);
+      const streams = this._bucketStreams[b];
+      if (!entry || !streams || entry.indexCount === 0) continue;
+      rp.setPipeline(this._getDrawPipeline(variant, targetFormat));
+      this._bindGeometry(rp, entry, streams);
       const segment = viewBase + b;
       rp.setBindGroup(2, gpu.drawBg, [segment * CULL_PARAM_BLOCK_BYTES]);
       rp.drawIndexedIndirect(gpu.indirectArgs, segment * INDIRECT_SEGMENT_HEADER_BYTES);
@@ -719,6 +791,12 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       st.argsStage.destroy();
       st.indicesStage.destroy();
     }
+    for (let b = 0; b < MAX_LOD_BUCKETS; b++) {
+      const streams = this._bucketStreams[b];
+      if (!streams) continue;
+      for (const buffer of streams.owned) buffer.destroy();
+      this._bucketStreams[b] = undefined;
+    }
     if (this._host) {
       for (let b = 0; b < this._maxBucketCount; b++) {
         const geo = this._bucketGeo[b];
@@ -791,7 +869,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     // draw path only reads these entries. Releases on dispose.
     for (let b = 0; b < this._maxBucketCount; b++) {
       const geo = this._bucketGeo[b];
-      if (geo) this._bucketGeoEntry[b] = host.acquireFieldGeometry(geo);
+      if (!geo) continue;
+      const entry = host.acquireFieldGeometry(geo);
+      this._bucketGeoEntry[b] = entry;
+      this._bucketStreams[b] = createBucketStreams(device, geo, entry);
     }
 
     const recordsBytes = Math.max(1, this._instanceCount) * INSTANCE_RECORD_BYTES;
@@ -1066,6 +1147,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     words[INFO_OFFSET_HZB_MIP_COUNT / 4] = this._hzMipCount;
     floats[INFO_OFFSET_CULL_PIXEL_SIZE / 4] = this._cullPixelSize;
     floats[INFO_OFFSET_ALPHA_TEST / 4] = this._alphaTest;
+    floats.set(this._backlight, INFO_OFFSET_BACKLIGHT / 4);
     device.queue.writeBuffer(gpu.fieldInfo, 0, info);
   }
 
@@ -1220,11 +1302,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
    * reading vertex entry + the slot-2 vertex buffer (mesh attributes stay on the standard
    * vertex buffer slots 0/2 exactly like `GPUPipelineCache`).
    */
-  private _getDrawPipeline(
-    variant: FieldDrawVariant,
-    format: GPUTextureFormat,
-    uv: number,
-  ): GPURenderPipeline {
+  private _getDrawPipeline(variant: FieldDrawVariant, format: GPUTextureFormat): GPURenderPipeline {
     const gpu = this._gpu;
     const host = this._host;
     const device = host?.gpuDevice;
@@ -1236,29 +1314,23 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       byFormat = [];
       this._drawPipelines.set(format, byFormat);
     }
-    const slot = DRAW_VARIANT_INDEX[variant] * 2 + uv;
+    const slot = DRAW_VARIANT_INDEX[variant];
     let pipeline = byFormat[slot];
     if (pipeline) return pipeline;
-    const key = `${variant}:${format}:${uv}`;
+    const key = `${variant}:${format}`;
 
+    // Fixed four streams (slot = array index): position, normal, uv, colour -- every bucket binds
+    // all of them (`FieldBucketStreams` completes missing ones), so no per-geometry variants.
     const vertexBufferSlots: GPUVertexBufferLayout[] = [
-      {
-        arrayStride: 12,
-        stepMode: "vertex",
-        attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }],
-      },
+      { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
+      { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x3" }] },
+      { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }] },
+      { arrayStride: 16, attributes: [{ shaderLocation: 3, offset: 0, format: "float32x4" }] },
     ];
-    if (uv === 1) {
-      vertexBufferSlots.push({
-        arrayStride: 8,
-        stepMode: "vertex",
-        attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }],
-      });
-    }
 
     const targets: GPUColorTargetState[] = [];
     let fragmentEntry = "fsFieldDepth";
-    const vertexEntry = uv === 1 ? "vsFieldPullUv" : "vsFieldPull";
+    const vertexEntry = "vsFieldPull";
     let depthWriteEnabled = false;
     if (variant === "depth") {
       // Depth pre-pass / shadow depth: writes depth, throws the color away (writeMask 0).
@@ -1301,10 +1373,15 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
 
   /** Binds the geometry's vertex/index buffers for a pulled draw (positions slot 0, UVs slot
    * 2, index buffer slot 0 of the standard layout). */
-  private _bindGeometry(rp: GPURenderPassEncoder, entry: WebGPUGeoCacheEntry): void {
+  private _bindGeometry(
+    rp: GPURenderPassEncoder,
+    entry: WebGPUGeoCacheEntry,
+    streams: FieldBucketStreams,
+  ): void {
     rp.setVertexBuffer(0, entry.vb);
-    // Slot = index in the pipeline's `buffers` array: uv is the 2nd entry -> slot 1.
-    if (entry.uvb) rp.setVertexBuffer(1, entry.uvb);
+    rp.setVertexBuffer(1, streams.normal);
+    rp.setVertexBuffer(2, streams.uv);
+    rp.setVertexBuffer(3, streams.color);
     if (entry.ib) rp.setIndexBuffer(entry.ib, entry.format ?? "uint32");
   }
 
