@@ -248,3 +248,5 @@ overlap (throughput baseline, not placement art) — accepted.
   +4, extras `WindShaders` parity). Golden `veg51` unaffected (GL2 autoinst lane, no wind).
 - Open/measure on device: wind vertex cost on 182 728 trees via `?gputimings=1` (per-instance
   lean cache in the cull is the documented mitigation if the ring shows a budget blow-up).
+- Committed on `main` @ `05c68ec` ("Storms make trees take deeper roots."), pushed. Pending
+  device verification above, then follow-ups from ADR 0059 step 1b.
