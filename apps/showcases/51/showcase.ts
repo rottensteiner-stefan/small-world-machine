@@ -465,6 +465,10 @@ export class Showcase extends AbstractShowcase {
 
   constructor(options: EngineOptions = {}) {
     super(options);
+    // Perpetual dev/QA surface (showcase-52 `__qaSwm52` convention): the live app on `window`, so
+    // headless readbacks + user devtools can reach engine internals (renderer device, canvas
+    // context) for pixel probes without adding imports or touching the module scope.
+    (window as unknown as { __swm51?: Showcase }).__swm51 = this;
     const params = new URLSearchParams(window.location.search);
 
     const mode = params.get("mode");
