@@ -352,3 +352,21 @@ overlap (throughput baseline, not placement art) — accepted.
   flight/aerial band runs: 0 shader/validation errors, grass + field render.
 - PENDING: live A/B pop measurement under TAA on/off (research note §6) + ring-gate A-B-B-A
   runs on the M4 Pro; B (geomorph) deferred for V1.
+
+## 2026-11-10 — Ground-cover ring gate CLOSED (ADR 0059 step 1b, real M4 Pro) + protocol finding
+
+- Ring gate measured on the real device (interleaved frozen-vantage A/B, `?path=aerial&pausedAt=0.3`,
+  `occlusion=a` = constant tree draw set, `main:opaque` LAST frame, per-scenario minimum):
+  A (cover off) 6.291 / 6.291 ms; B (cover on, 28 036 blades) 2.621 / 3.211 ms →
+  `minB − minA = −3.67 ms ≤ 2.0 ms` → **gate PASSED**. The ring's NET frame impact is negative
+  (it does not burden the frame budget); the standalone marginal cost is bounded by the headless
+  SwiftShader anchor (+0.72 ms at 37 913 blades).
+- **Protocol finding (documented in ADR 0059):** the frozen-vantage `main:opaque` A/B is
+  CONFOUNDED on real silicon by a depth-pre-pass early-Z coupling — `DepthPrePassGPU` writes every
+  registered field's depth before the color pass, so the grass depth runs ahead of the tree color
+  pass and hardware early-Z discards tree fragments behind it (~2.4× `main:opaque` reduction).
+  The inversion reproduces with `occlusion=b` too and is absent under SwiftShader (no such hardware
+  path) — it is device-specific raster efficiency, not a culling/budget bug. An
+  `?coverDensity=`-sweep protocol stays the documented option if a standalone marginal is later
+  demanded.
+- Remaining PENDING: live pop A/B sighting under the LOD mode switch (task 2, `?path=flight` + `L`).
