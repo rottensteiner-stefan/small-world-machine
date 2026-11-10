@@ -38,7 +38,10 @@ struct FieldInfo {
     cullPixelSize: f32,
     // [0,1] -- optional alpha-cutout threshold; 0 disables the alpha test (no map needed).
     alphaTest: f32,
-    _pad: vec2f,
+    // Count -- layers of the bound albedo array (`field_pull.wgsl` binding 12); 0 = no array
+    // (colour-stream albedo only, alpha test via `u_fieldAlphaMap`). Former pad word.
+    albedoLayerCount: u32,
+    _pad: f32,
     // linear rgb -- leaf backlight tint (ADR 0060 semantics, black = off); w = transmission
     // shadow offset toward the sun in metres. Scaled per vertex by the colour alpha (foliage mask).
     backlight: vec4f,

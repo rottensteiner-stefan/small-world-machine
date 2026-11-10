@@ -21,6 +21,12 @@ export interface GeometryDataInterface {
   uvs?: Float32Array | undefined;
   /** Optional per-vertex color data (r, g, b, a). */
   colors?: Float32Array | undefined;
+  /**
+   * @domain Optional per-vertex material layer (one float per vertex, integral values): index into
+   *         an instance field's `albedoArray` (ADR 0059 field lane). Ignored by every other path;
+   *         absent = layer 0.
+   */
+  materialLayers?: Float32Array | undefined;
   /** Optional skinning bone index data (4 joint IDs per vertex). */
   joints?: Float32Array | Uint16Array | undefined;
   /** Optional skinning bone weight data (4 weights per vertex). */

@@ -17,6 +17,7 @@ import {
   PostProcessingEffectType,
   RendererType,
   StandardMaterial,
+  TextureArray,
   Vector3D,
   WebGPURenderer,
 } from "@small-world-machine/engine";
@@ -255,6 +256,10 @@ const COVER_ALBEDO_TIP: readonly [number, number, number] = [0.42, 0.56, 0.26];
 /** Foliage-mask alpha of the base / tip vertices (leaf-backlight transmission weighting). */
 const COVER_ALPHA_BASE = 1;
 const COVER_ALPHA_TIP = 0.85;
+/** `?tree=` species: uniform scale on top of the scatter scale (scan trees are full-size, ~19 m). */
+const SPECIES_TREE_SCALE = 0.55;
+/** `?tree=` species: cutout threshold of alpha-carrying albedo layers (leaf cards). */
+const SPECIES_ALPHA_TEST = 0.5;
 /** Fixed baseline seed; `?seed=` overrides. Chosen to match the showcase number. */
 const DEFAULT_SEED = 51;
 /** Hard cap so `?n=999999999` cannot OOM the instance-matrix pool. */
@@ -296,6 +301,18 @@ interface TreePart {
   readonly material: StandardMaterial;
   /** Local Y offset inside the tree (prototype origin = ground contact point). */
   readonly offsetY: number;
+}
+
+/** Species sidecar `<stem>.species.json` (written by the local tree bake): one entry per glTF
+ *  primitive in primitive order = part order of the engine import (material names are dropped). */
+interface SpeciesManifest {
+  readonly stem: string;
+  readonly layers: readonly {
+    readonly albedo: string;
+    readonly foliage: number;
+    /** true = the albedo carries a cutout alpha (leaf cards). */
+    readonly cutout?: boolean;
+  }[];
 }
 
 interface TreePrototype {
@@ -566,6 +583,13 @@ export class Showcase extends AbstractShowcase {
    *  siblings as its geometry chain (4 buckets), replacing the stride-decimation proxies. Absent
    *  = the proven proxy path (byte-identical default). */
   private readonly _lodReal: boolean;
+  /** `?tree=<stem>`: textured species (`<stem>.species.json` + `<stem>_LOD0..3.glb` + albedo
+   *  layers). Field lane only; implies the real LOD chain. Absent = the default asset set. */
+  private readonly _treeStem: string | undefined;
+  /** Loaded species sidecar (set by `_loadPrototype` when `?tree=` resolves). */
+  private _species: SpeciesManifest | undefined = undefined;
+  /** Albedo layers of the species (one per primitive), bound as the field's `albedoArray`. */
+  private _speciesAlbedo: TextureArray | undefined = undefined;
   /** P2 APPLIED LOD knobs of the tree field (mirror of the URL knobs; the HUD LOD section reads
    *  and live-toggles these via {@link InstanceFieldSystem.setLodTransition}). */
   private _fieldLodBand = 0;
@@ -688,6 +712,8 @@ export class Showcase extends AbstractShowcase {
     // `<stem>_LOD1..3.glb` siblings as its geometry chain (4 buckets, atomically preloaded in
     // `_tryLoadRealLodLevels`, fail-closed to the proxy path). Absent = default proxy path.
     this._lodReal = params.get("reallod") === "1";
+    const rawTree = params.get("tree");
+    this._treeStem = rawTree !== null && /^[a-z0-9_]+$/.test(rawTree) ? rawTree : undefined;
 
     // P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator 2026-11-10): `?lodMode=` selects ONE
     // documented transition strategy and DERIVES the raw knobs (single declarative surface).
@@ -783,7 +809,7 @@ export class Showcase extends AbstractShowcase {
     // right after the prototype (`_buildFieldLane` stays sync — the load happens before it). The
     // default path (no knob) skips this entirely — no loader is spun up, `realLods` stays null.
     const realLods =
-      this._lodReal && this._mode === "field"
+      (this._lodReal || this._species !== undefined) && this._mode === "field"
         ? await this._tryLoadRealLodLevels(this._prototype)
         : null;
     const instances = scatterTrees(this._targetCount, this._seed);
@@ -929,6 +955,10 @@ export class Showcase extends AbstractShowcase {
    */
   private async _loadPrototype(): Promise<TreePrototype> {
     const loader = new GltfLoader({ basePath: "./assets/" });
+    if (this._treeStem !== undefined && this._mode === "field") {
+      const species = await this._tryLoadSpecies(loader, this._treeStem);
+      if (species) return species;
+    }
     for (const asset of EXPECTED_TREE_ASSETS) {
       try {
         const root = await loader.load(asset);
@@ -946,6 +976,37 @@ export class Showcase extends AbstractShowcase {
       "[Showcase51] no CC0 tree assets present — using procedural placeholder prototype",
     );
     return buildProceduralPrototype();
+  }
+
+  /**
+   * `?tree=<stem>`: loads the species sidecar, `<stem>_LOD0.glb` and the albedo layers. Fail-
+   * closed: any missing piece or a part/layer count mismatch logs once and returns null (the
+   * default asset set is used). Sets `_species` / `_speciesAlbedo` only on full success.
+   */
+  private async _tryLoadSpecies(loader: GltfLoader, stem: string): Promise<TreePrototype | null> {
+    try {
+      const response = await fetch(`./assets/${stem}.species.json`);
+      if (!response.ok) throw new Error(`species.json HTTP ${response.status}`);
+      const manifest = (await response.json()) as SpeciesManifest;
+      const name = `${stem}_LOD0.glb`;
+      const parts = this._collectAssetParts(await loader.load(name));
+      if (parts.length !== manifest.layers.length) {
+        throw new Error(`${parts.length} parts vs ${manifest.layers.length} species layers`);
+      }
+      // glTF uv convention: no flip on decode (same rule as the engine's glTF texture path).
+      this._speciesAlbedo = await TextureArray.fromUrls(
+        manifest.layers.map((l) => `./assets/${l.albedo}`),
+        { flipY: false },
+      );
+      this._species = manifest;
+      console.info(`[Showcase51] species "${stem}": ${parts.length} parts, albedo layers`);
+      return { name, source: "asset", parts };
+    } catch (error) {
+      console.info(
+        `[Showcase51] species "${stem}" unavailable (${error instanceof Error ? error.message : String(error)}) — default assets`,
+      );
+      return null;
+    }
   }
 
   /**
@@ -994,7 +1055,7 @@ export class Showcase extends AbstractShowcase {
     proto: TreePrototype,
   ): Promise<GeometryDataInterface[] | null> {
     if (proto.source !== "asset") return null;
-    const stem = proto.name.replace(/\.glb$/i, "");
+    const stem = proto.name.replace(/(_LOD0)?\.glb$/i, "");
     const loader = new GltfLoader({ basePath: "./assets/" });
     const lods: GeometryDataInterface[] = [];
     // Coarsest first (LOD3 = furthest bucket 0). Every level must collect ≥1 mesh part.
@@ -1239,6 +1300,11 @@ export class Showcase extends AbstractShowcase {
       prototypes: [prototype],
       geometryTable: [geometryTableRow],
       options: lodOptions,
+      // `?tree=` species: per-material albedo layers (layer = part ordinal via `materialLayers`).
+      ...(this._speciesAlbedo ? { albedoArray: this._speciesAlbedo } : {}),
+      ...(this._species?.layers.some((l) => l.cutout === true)
+        ? { alphaTest: SPECIES_ALPHA_TEST }
+        : {}),
       // Leaf transmission (ADR 0060), linear; the colour-stream alpha masks it to the foliage.
       backlight: [
         GltfMaterialParser.engineSRGBToLinear(FIELD_LEAF_BACKLIGHT[0]),
@@ -1599,8 +1665,12 @@ export class Showcase extends AbstractShowcase {
     // Field colour stream: linear albedo of each part's material + foliage mask in alpha (the
     // V1 field draws one merged mesh per bucket, so per-part materials travel per vertex).
     const colors = new Float32Array(vertexCount * 4);
+    // Species mode: white albedo (the albedo array carries the colour), layer = part ordinal.
+    const species = this._species;
+    const materialLayers = species ? new Float32Array(vertexCount) : undefined;
     let vo = 0;
     let io = 0;
+    let partIndex = 0;
     for (const part of proto.parts) {
       const geo = part.geometry;
       const partVertexCount = geo.vertices.length / 3;
@@ -1624,15 +1694,19 @@ export class Showcase extends AbstractShowcase {
       const r = GltfMaterialParser.engineSRGBToLinear(c.r);
       const g = GltfMaterialParser.engineSRGBToLinear(c.g);
       const b = GltfMaterialParser.engineSRGBToLinear(c.b);
-      // Foliage = the green-dominant part (the asset contract carries no material names).
-      const foliage = g > r ? 1 : 0;
+      // Foliage = the green-dominant part (the asset contract carries no material names);
+      // species mode takes the mask from the sidecar.
+      const layer = species?.layers[partIndex];
+      const foliage = layer ? layer.foliage : g > r ? 1 : 0;
       for (let v = 0; v < partVertexCount; v++) {
         const dest = (vo + v) * 4;
-        colors[dest] = r;
-        colors[dest + 1] = g;
-        colors[dest + 2] = b;
+        colors[dest] = layer ? 1 : r;
+        colors[dest + 1] = layer ? 1 : g;
+        colors[dest + 2] = layer ? 1 : b;
         colors[dest + 3] = foliage;
       }
+      if (materialLayers) materialLayers.fill(partIndex, vo, vo + partVertexCount);
+      partIndex++;
       const partIndices = geo.indices!;
       for (let i = 0; i < partIndices.length; i++) {
         indices[io + i] = partIndices[i]! + vo;
@@ -1646,6 +1720,7 @@ export class Showcase extends AbstractShowcase {
       normals,
       uvs,
       colors,
+      ...(materialLayers ? { materialLayers } : {}),
       getBoundingVolume: (): BoundingVolume => BoundingBox.fromVertices(vertices),
     };
   }
@@ -1678,6 +1753,7 @@ export class Showcase extends AbstractShowcase {
    *  stored as the f32 whose bit pattern equals it — `field_pull.wgsl` reads `bitcast<u32>(record.w)`. */
   private _buildFieldRecords(instances: readonly ScatterInstance[]): Float32Array {
     const records = new Float32Array(instances.length * 4);
+    const speciesScale = this._species !== undefined ? SPECIES_TREE_SCALE : 1;
     const poseF = new Float32Array(1);
     const poseU32 = new Uint32Array(poseF.buffer);
     for (let i = 0; i < instances.length; i++) {
@@ -1685,7 +1761,7 @@ export class Showcase extends AbstractShowcase {
       records[i * 4] = inst.x;
       records[i * 4 + 1] = 0;
       records[i * 4 + 2] = inst.z;
-      poseU32[0] = packInstancePose(inst.yaw, inst.scale);
+      poseU32[0] = packInstancePose(inst.yaw, inst.scale * speciesScale);
       records[i * 4 + 3] = poseF[0]!;
     }
     return records;

@@ -70,6 +70,11 @@
       "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "#ifdef USE_BACKLIGHT" },
       "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "#ifdef USE_BACKLIGHT" },
       "webgl1": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "#ifdef USE_BACKLIGHT" }
+    },
+    "instance_field_albedo_array": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/instance_field/field_pull.wgsl", "pattern": "u_fieldAlbedoArray" },
+      "webgl2": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/gl/managers/InstanceFieldGL.ts", "pattern": "u_fieldAlbedoArray", "reason": "Field-lane albedo array (ADR 0059, 2026-11-10): the GL field fallback (InstanceFieldGL, CPU cell culling + instanced draws) has no per-material texture-array binding; GL tiers keep vertex-colour albedo + the single field alpha map. Deliberate cap: textured photoreal vegetation is a WebGPU-tier feature, GL tiers render the same population untextured." },
+      "webgl1": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/gl/managers/InstanceFieldGL.ts", "pattern": "u_fieldAlbedoArray", "reason": "Field-lane albedo array (ADR 0059, 2026-11-10): the GL field fallback (InstanceFieldGL, CPU cell culling + instanced draws) has no per-material texture-array binding; GL tiers keep vertex-colour albedo + the single field alpha map. Deliberate cap: textured photoreal vegetation is a WebGPU-tier feature, GL tiers render the same population untextured." }
     }
   }
 }

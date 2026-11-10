@@ -614,6 +614,13 @@ beforeAll(() => {
     QUERY_RESOLVE: 512,
   };
   g["GPUShaderStage"] ??= { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
+  g["GPUTextureUsage"] ??= {
+    COPY_SRC: 1,
+    COPY_DST: 2,
+    TEXTURE_BINDING: 4,
+    STORAGE_BINDING: 8,
+    RENDER_ATTACHMENT: 16,
+  };
   g["GPUMapMode"] ??= { READ: 1, WRITE: 2 };
 });
 
@@ -657,7 +664,9 @@ describe("IF-PROJECTED-SIZE main-camera anchor — WebGPU param-block forward (r
       createComputePipeline: (): object => ({}),
       createRenderPipeline: (): object => ({}),
       createSampler: (): object => ({}),
+      createTexture: (): object => ({ createView: (): object => ({}), destroy: vi.fn() }),
       queue: {
+        writeTexture: (): void => {},
         writeBuffer: (
           buffer: MockBuffer,
           offset: number,

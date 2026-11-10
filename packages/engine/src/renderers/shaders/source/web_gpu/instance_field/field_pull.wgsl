@@ -52,6 +52,12 @@
 // The buffer is zero-filled at creation (InstanceFieldSystem); the cull rewrites live records.
 @group(2) @binding(11) var<storage, read> fieldLodBlend: array<f32>;
 
+// Per-material albedo layers (sRGB rgb + alpha) + repeat sampler, pull-module only (the cull
+// never reads them). Layer per vertex from the slot-4 `materialLayers` stream; a 1x1x1 white
+// fallback is bound when the field authors no array (`fieldInfo.albedoLayerCount == 0`).
+@group(2) @binding(12) var u_fieldAlbedoArray: texture_2d_array<f32>;
+@group(2) @binding(13) var fieldAlbedoSampler: sampler;
+
 struct FieldVertOut {
     @builtin(position) pos: vec4f,
     @location(0) wp: vec3f,
@@ -65,14 +71,31 @@ struct FieldVertOut {
     // record page (see `fieldLodBlend`); 0 = settled/unwritten (keep always). Flat: one decision
     // per instance, never perspective-smoothed across a plant.
     @location(5) @interpolate(flat) lodBlend: f32,
+    // Material layer of the albedo array (per-vertex stream, constant per material -> flat).
+    @location(6) @interpolate(flat) layer: u32,
 }
 
 // Optional alpha-cutout gate for the pulled fragments (P1 early-Z conservatism): when the field
 // has an authored alpha map + threshold, theta fragments discard like DepthMaterial's alpha
 // groups; without a map the white fallback never discards.
-fn fieldAlphaDiscard(uv: vec2f) {
+// Albedo-array sample of the fragment's material layer (white when the field has no array).
+// Branch on a uniform word: `textureSample` stays in uniform control flow.
+fn fieldAlbedoSample(uv: vec2f, layer: u32) -> vec4f {
+    if (fieldInfo.albedoLayerCount == 0u) {
+        return vec4f(1.0);
+    }
+    return textureSample(u_fieldAlbedoArray, fieldAlbedoSampler, uv, min(layer, fieldInfo.albedoLayerCount - 1u));
+}
+
+// Cutout source: the albedo array's alpha when present, else the single field alpha map.
+fn fieldAlphaDiscard(uv: vec2f, layer: u32) {
     if (fieldInfo.alphaTest > 0.0) {
-        let a = textureSample(u_fieldAlphaMap, fieldAlphaSampler, uv).a;
+        var a: f32;
+        if (fieldInfo.albedoLayerCount > 0u) {
+            a = fieldAlbedoSample(uv, layer).a;
+        } else {
+            a = textureSample(u_fieldAlphaMap, fieldAlphaSampler, uv).a;
+        }
         if (a < fieldInfo.alphaTest) {
             discard;
         }
@@ -106,6 +129,7 @@ fn fieldPullVertex(
     localNormal: vec3f,
     uv: vec2f,
     color: vec4f,
+    layer: f32,
     instanceIndex: u32,
 ) -> FieldVertOut {
     var o: FieldVertOut;
@@ -119,6 +143,7 @@ fn fieldPullVertex(
         o.color = vec4f(0.0);
         o.tint = 1.0;
         o.lodBlend = 0.0;
+        o.layer = 0u;
         return o;
     }
     let bv = cullParams.segmentBase;
@@ -164,6 +189,7 @@ fn fieldPullVertex(
     o.wp = worldPos;
     o.uv = uv;
     o.color = color;
+    o.layer = u32(max(layer, 0.0) + 0.5);
     let h = fieldPositionHash(record.xyz);
     o.tint = 0.85 + 0.3 * (f32(h & 0x00FFFFFFu) * (1.0 / 16777216.0));
     // Same page lane the cull compacted into: the slot's signed blend rides beside its index.
@@ -177,9 +203,10 @@ fn vsFieldPull(
     @location(1) normal: vec3f,
     @location(2) uv: vec2f,
     @location(3) color: vec4f,
+    @location(4) layer: f32,
     @builtin(instance_index) instanceIndex: u32,
 ) -> FieldVertOut {
-    return fieldPullVertex(pos, normal, uv, color, instanceIndex);
+    return fieldPullVertex(pos, normal, uv, color, layer, instanceIndex);
 }
 
 // ── depth variant (depth pre-pass + cascade/spot/point depth) ─────────────────────────────────
@@ -241,7 +268,7 @@ fn fieldLodDitherDiscard(blend: f32, fragPx: vec2f) -> bool {
 
 @fragment
 fn fsFieldDepth(i: FieldVertOut) -> @location(0) vec4f {
-    fieldAlphaDiscard(i.uv);
+    fieldAlphaDiscard(i.uv, i.layer);
     if (fieldLodDitherDiscard(i.lodBlend, i.pos.xy)) {
         discard;
     }
@@ -254,7 +281,7 @@ fn fsFieldDepth(i: FieldVertOut) -> @location(0) vec4f {
 // moment pass stores -- moment variance stays correct for field casters.
 @fragment
 fn fsFieldEvsm(i: FieldVertOut) -> @location(0) vec4f {
-    fieldAlphaDiscard(i.uv);
+    fieldAlphaDiscard(i.uv, i.layer);
     if (fieldLodDitherDiscard(i.lodBlend, i.pos.xy)) {
         discard;
     }
@@ -281,12 +308,22 @@ fn fieldShadingNormal(i: FieldVertOut, frontFacing: bool) -> vec3f {
 }
 
 fn fieldColorShade(i: FieldVertOut, frontFacing: bool) -> vec4f {
-    fieldAlphaDiscard(i.uv);
+    // One albedo-array fetch serves the cutout and the albedo (sampled before any discard).
+    let tex = fieldAlbedoSample(i.uv, i.layer);
+    if (fieldInfo.alphaTest > 0.0) {
+        if (fieldInfo.albedoLayerCount > 0u) {
+            if (tex.a < fieldInfo.alphaTest) {
+                discard;
+            }
+        } else {
+            fieldAlphaDiscard(i.uv, i.layer);
+        }
+    }
     if (fieldLodDitherDiscard(i.lodBlend, i.pos.xy)) {
         discard;
     }
     let N = fieldShadingNormal(i, frontFacing);
-    let albedo = i.color.rgb * i.tint;
+    let albedo = i.color.rgb * i.tint * sRGBToLinear(tex.rgb);
     let L = normalize(global.dirLightDir.xyz);
     let V = normalize(global.viewPos.xyz - i.wp);
     let dotNL = max(dot(N, L), 0.0);

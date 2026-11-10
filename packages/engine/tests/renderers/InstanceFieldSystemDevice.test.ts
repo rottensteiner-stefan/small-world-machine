@@ -12,6 +12,7 @@ import {
 } from "../../src/core/InstanceField.js";
 import type { LodTransitionMode, PrototypeDescriptor } from "../../src/core/InstanceField.js";
 import type { GeometryDataInterface } from "../../src/interfaces/index.js";
+import { TextureArray } from "../../src/core/textures/index.js";
 
 const PARAM_BLOCK_BYTES = 256;
 const SEGMENT_BASE_WORD = 112 / 4;
@@ -54,6 +55,13 @@ beforeAll(() => {
     QUERY_RESOLVE: 512,
   };
   g["GPUShaderStage"] ??= { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
+  g["GPUTextureUsage"] ??= {
+    COPY_SRC: 1,
+    COPY_DST: 2,
+    TEXTURE_BINDING: 4,
+    STORAGE_BINDING: 8,
+    RENDER_ATTACHMENT: 16,
+  };
   g["GPUMapMode"] ??= { READ: 1, WRITE: 2 };
 });
 
@@ -83,7 +91,9 @@ function makeDevice(rec: Recorded): GPUDevice {
     createComputePipeline: (): object => ({}),
     createRenderPipeline: (): object => ({}),
     createSampler: (): object => ({}),
+    createTexture: (): object => ({ createView: (): object => ({}), destroy: vi.fn() }),
     queue: {
+      writeTexture: (): void => {},
       writeBuffer: (
         buffer: MockBuffer,
         offset: number,
@@ -116,6 +126,9 @@ interface SetupExtras {
   lodTransitionMode?: LodTransitionMode;
   lodCrossfadeBand?: number;
   lodHysteresis?: number;
+  materialLayers?: Float32Array;
+  albedoArray?: TextureArray;
+  alphaTest?: number;
 }
 
 function makeSetup(
@@ -170,6 +183,7 @@ function makeSetup(
     indices: new Uint32Array(3),
     uvs: new Float32Array(6),
     colors: extras.colors,
+    materialLayers: extras.materialLayers,
   } as unknown as GeometryDataInterface;
   const prototype: PrototypeDescriptor = {
     id: "tree",
@@ -203,6 +217,8 @@ function makeSetup(
       ...(extras.lodHysteresis !== undefined ? { lodHysteresis: extras.lodHysteresis } : {}),
     },
     backlight: extras.backlight,
+    albedoArray: extras.albedoArray,
+    alphaTest: extras.alphaTest,
     windHeight: extras.windHeight,
     windUniforms: extras.windUniforms,
     lodDitherMode: extras.lodDitherMode,
@@ -255,7 +271,7 @@ describe("InstanceFieldSystem on a recording device", () => {
     expect(visible).toBeDefined();
   });
 
-  it("sets the pipeline and binds all four vertex streams before every indirect draw", () => {
+  it("sets the pipeline and binds all five vertex streams before every indirect draw", () => {
     const { system, geoEntry } = makeSetup(8);
     const calls: string[] = [];
     const rp = {
@@ -269,9 +285,9 @@ describe("InstanceFieldSystem on a recording device", () => {
     expect(calls).toEqual(["pipeline", "draw"]);
     expect(rp.setVertexBuffer).toHaveBeenCalledWith(0, geoEntry.vb);
     expect(rp.setVertexBuffer).toHaveBeenCalledWith(2, geoEntry.uvb);
-    // Missing normals / colours are completed by the system (slots 1 and 3, own buffers).
+    // Missing normals / colours / material layers are completed by the system (slots 1, 3, 4).
     const slots = rp.setVertexBuffer.mock.calls.map((c) => c[0]).sort();
-    expect(slots).toEqual([0, 1, 2, 3]);
+    expect(slots).toEqual([0, 1, 2, 3, 4]);
   });
 
   it("reuses the cull bind groups of the ping-pong pyramid instead of creating one per frame", () => {
@@ -321,6 +337,37 @@ describe("InstanceFieldSystem on a recording device", () => {
     expect(Array.from(rgba).map((v) => +v.toFixed(2))).toEqual([
       0.1, 0.2, 0.3, 1, 0.4, 0.5, 0.6, 1, 0.7, 0.8, 0.9, 1,
     ]);
+  });
+
+  it("writes the albedo layer count into FieldInfo (0 without an array)", () => {
+    const img = { width: 4, height: 4 } as unknown as ImageBitmap;
+    const read = (extras: SetupExtras): number => {
+      const { rec } = makeSetup(4, extras);
+      const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
+      const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
+      return new Uint32Array((info!.data as Uint8Array).slice().buffer)[6]!;
+    };
+    expect(read({})).toBe(0);
+    expect(read({ albedoArray: TextureArray.fromImages([img, img, img]), alphaTest: 0.5 })).toBe(3);
+  });
+
+  it("uploads the per-vertex material layers as the slot-4 stream (zeros when absent)", () => {
+    const layers = new Float32Array([0, 1, 2]);
+    const { rec } = makeSetup(4, { materialLayers: layers });
+    const hit = rec.writes.find(
+      (w) =>
+        w.data.byteLength === 12 &&
+        Array.from(new Float32Array((w.data as Uint8Array).slice().buffer)).join() === "0,1,2",
+    );
+    expect(hit).toBeDefined();
+    const plain = makeSetup(4).rec;
+    expect(
+      plain.writes.some(
+        (w) =>
+          w.data.byteLength === 12 &&
+          Array.from(new Float32Array((w.data as Uint8Array).slice().buffer)).every((v) => v === 0),
+      ),
+    ).toBe(true);
   });
 
   it("keeps wind disabled by default (windHeight 0, no per-frame wind upload)", () => {

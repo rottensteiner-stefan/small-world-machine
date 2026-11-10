@@ -433,3 +433,19 @@ overlap (throughput baseline, not placement art) — accepted.
 - Real M4 Pro (1600×900): 120 fps (display cap) walk/flight/aerial, `main:opaque` 2.1–3.5 ms,
   0 console errors. Open: marginal-cost re-measurement of the fixed ring; ground albedo still dark
   (gaps read as soil), terrain material is the next cheap lever.
+
+## 2026-11-10 — Textured species via the field albedo array (`?tree=<stem>`)
+
+- Engine: field lane gained `albedoArray` (TextureArray, bindings 12/13) + per-vertex
+  `materialLayers` (slot 4); layer alpha drives the cutout in every draw variant.
+- Showcase: `?tree=<stem>` loads `<stem>.species.json` (albedo file, foliage mask, cutout flag per
+  primitive, in primitive order), `<stem>_LOD0.glb` as prototype + `_LOD3/2/1` as the real chain,
+  albedo layers as `TextureArray` (`flipY: false`); white vertex albedo, layer = part ordinal;
+  `SPECIES_TREE_SCALE` 0.55, `SPECIES_ALPHA_TEST` 0.5. Fail-closed to the default assets.
+- First asset: Poly Haven CC0 `jacaranda_tree` (3.86 M tris, 19 m) baked locally
+  (`.agents/scripts/local/veg-tree-bake.ts`: leaf-island thinning + meshoptimizer, sloppy fallback
+  for seam-locked wood, diffuse + separate leaf alpha merged to RGBA PNG). Real M4 Pro, n=1850:
+  walk 4.3 ms / flight 4.6 ms / aerial 13.1 ms GPU, 0 console errors.
+- Not accepted: canopy brown/thin, stray large wood triangles from the sloppy collapse, aerial
+  cutout overdraw. Assets stay local (untracked) until the bake is tuned.
+- Default path (no `?tree=`) regression-checked on WebGPU + WebGL2: unchanged, 0 errors.

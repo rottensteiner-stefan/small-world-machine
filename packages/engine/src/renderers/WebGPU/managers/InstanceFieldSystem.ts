@@ -70,7 +70,7 @@ import {
   type LodTransitionMode,
   type PrototypeDescriptor,
 } from "../../../core/InstanceField.js";
-import type { Texture } from "../../../core/textures/index.js";
+import type { Texture, TextureArray } from "../../../core/textures/index.js";
 import type { GeometryDataInterface } from "../../../interfaces/index.js";
 import { Frustum, Matrix4 } from "../../../math/index.js";
 import { NORMAL_TARGET_FORMAT } from "./NormalOutputWrapper.js";
@@ -114,6 +114,8 @@ const INFO_OFFSET_INSTANCE_COUNT = 8;
 const INFO_OFFSET_HZB_MIP_COUNT = 12;
 const INFO_OFFSET_CULL_PIXEL_SIZE = 16;
 const INFO_OFFSET_ALPHA_TEST = 20;
+/** `FieldInfo.albedoLayerCount` (u32, former pad word after `alphaTest`; 0 = no albedo array). */
+const INFO_OFFSET_ALBEDO_LAYER_COUNT = 24;
 const INFO_OFFSET_BACKLIGHT = 32;
 const INFO_OFFSET_WIND_HEIGHT = 48;
 /** Word 52 -- previously a struct pad; now the P2 `lodDitherMode` (0 = dither, != 0 = hard C). */
@@ -220,6 +222,14 @@ export interface InstanceFieldSystemSetup {
    */
   alphaMap?: Texture;
   /**
+   * @domain Per-material albedo layers of the field (sRGB rgb + alpha, all layers same size),
+   *         sampled with repeat addressing at the vertex uv and the vertex `materialLayers` index;
+   *         multiplies the colour-stream albedo. When present its alpha drives the cutout test
+   *         (`alphaTest` threshold, all draw variants incl. depth/shadow) instead of `alphaMap`.
+   *         WebGPU field lane only (GL tiers: `tier-parity.json` row `field-albedo-array`).
+   */
+  albedoArray?: TextureArray;
+  /**
    * @domain Leaf backlight tint (linear rgb; absent or black = off), ADR 0060 semantics. Scaled
    *         per vertex by the colour-stream alpha, the foliage mask (trunks 0, leaves 1).
    */
@@ -264,6 +274,8 @@ interface FieldBucketStreams {
   normal: GPUBuffer;
   uv: GPUBuffer;
   color: GPUBuffer;
+  /** Slot 4: per-vertex material layer (float32, `materialLayers`, zero-filled when absent). */
+  layer: GPUBuffer;
   owned: GPUBuffer[];
 }
 
@@ -334,6 +346,10 @@ interface FieldGpuState {
   cullBg: GPUBindGroup;
   drawBg: GPUBindGroup;
   alphaSampler: GPUSampler;
+  /** Repeat/trilinear/anisotropic sampler of the albedo array (binding 13). */
+  albedoSampler: GPUSampler;
+  /** 1x1x1 white `2d-array` fallback bound at binding 12 when no `albedoArray` is authored. */
+  albedoFallback: GPUTexture;
 }
 
 /** Pipeline slot of each draw variant (`_getDrawPipeline`). */
@@ -385,7 +401,12 @@ function createBucketStreams(
       if (components === 4) rgba[v * 4 + 3] = src[v * components + 3]!;
     }
   }
-  return { normal, uv, color: upload(rgba), owned };
+  const layers = geo.materialLayers;
+  const layer =
+    layers && layers.length === vertexCount
+      ? upload(layers)
+      : upload(new Float32Array(vertexCount));
+  return { normal, uv, color: upload(rgba), layer, owned };
 }
 
 /** `mapAsync` rejection handler of the probe staging (aborted by unmap/destroy). */
@@ -428,6 +449,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   );
   private readonly _alphaTest: number;
   private readonly _alphaMap: Texture | undefined;
+  private readonly _albedoArray: TextureArray | undefined;
   /** `FieldInfo.backlight`: linear tint rgb + transmission-shadow offset (w = 0 -> off). */
   private readonly _backlight: Float32Array = new Float32Array(4);
   /** Crown-top height at scale 1 (metres); 0 disables wind (`FieldInfo.windHeight`, fail-closed).
@@ -634,6 +656,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     this._viewCount = Math.min(Math.max(1, Math.floor(options.maxViews)), MAX_INDIRECT_VIEWS);
     this._alphaTest = Math.max(0, setup.alphaTest ?? 0);
     this._alphaMap = setup.alphaMap;
+    this._albedoArray = setup.albedoArray;
     const tint = setup.backlight;
     if (tint && (tint[0] > 0 || tint[1] > 0 || tint[2] > 0)) {
       this._backlight[0] = tint[0];
@@ -1147,6 +1170,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       gpu.fieldLodBlend.destroy();
       gpu.cullParams.destroy();
       gpu.fieldInfo.destroy();
+      gpu.albedoFallback.destroy();
     }
     const st = this._probeState;
     this._probeState = undefined;
@@ -1169,6 +1193,9 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       // now destroy the map when no other consumer holds it (see `InstanceFieldRenderHost`).
       if (this._alphaMap && this._host.releaseRetainedTexture) {
         this._host.releaseRetainedTexture(this._alphaMap);
+      }
+      if (this._albedoArray && this._host.releaseRetainedTexture) {
+        this._host.releaseRetainedTexture(this._albedoArray);
       }
     }
   }
@@ -1334,6 +1361,26 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       addressModeU: "clamp-to-edge",
       addressModeV: "clamp-to-edge",
     });
+    // Bark/leaf textures tile (uv outside [0,1]); trilinear + anisotropy for grazing ground views.
+    const albedoSampler = device.createSampler({
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+      addressModeU: "repeat",
+      addressModeV: "repeat",
+      maxAnisotropy: 8,
+    });
+    const albedoFallback = device.createTexture({
+      size: [1, 1, 1],
+      format: "rgba8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture(
+      { texture: albedoFallback },
+      new Uint8Array([255, 255, 255, 255]),
+      { bytesPerRow: 4 },
+      [1, 1, 1],
+    );
 
     const cullModule = device.createShaderModule({ code: host.fieldCullModuleSource });
     const resetPipeline = device.createComputePipeline({
@@ -1380,11 +1427,14 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       locals,
       host.getTextureView(this._alphaMap),
       alphaSampler,
+      this._albedoView(albedoFallback),
+      albedoSampler,
     );
     // The alpha map is bound outside any object's material -- retain it in the renderer's
     // texture cache so a shared/reused map cannot be destroyed underneath the draw bind group
     // when the last regular consumer releases it. Released once in `dispose()`.
     if (this._alphaMap && host.retainTexture) host.retainTexture(this._alphaMap);
+    if (this._albedoArray && host.retainTexture) host.retainTexture(this._albedoArray);
 
     this._gpu = {
       records,
@@ -1407,6 +1457,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       cullBg,
       drawBg,
       alphaSampler,
+      albedoSampler,
+      albedoFallback,
     };
 
     // Static table writes (geometry words, prototype tables, per-segment bases) + population.
@@ -1522,6 +1574,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       locals,
       host.getTextureView(this._alphaMap),
       gpu.alphaSampler,
+      this._albedoView(gpu.albedoFallback),
+      gpu.albedoSampler,
     );
     // `_cullBgByView` was cleared by the regrow path; `_rebuildCullBg` re-creates + re-caches the
     // cull group against the current pyramid handle (the `gpu.cullBg` write happens there).
@@ -1603,6 +1657,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     words[INFO_OFFSET_HZB_MIP_COUNT / 4] = this._hzMipCount;
     floats[INFO_OFFSET_CULL_PIXEL_SIZE / 4] = this._cullPixelSize;
     floats[INFO_OFFSET_ALPHA_TEST / 4] = this._alphaTest;
+    words[INFO_OFFSET_ALBEDO_LAYER_COUNT / 4] = this._albedoArray?.images.length ?? 0;
     floats.set(this._backlight, INFO_OFFSET_BACKLIGHT / 4);
     floats[INFO_OFFSET_WIND_HEIGHT / 4] = this._windHeight;
     words[INFO_OFFSET_LOD_DITHER_MODE / 4] = this._lodDitherMode;
@@ -1818,13 +1873,14 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     if (pipeline) return pipeline;
     const key = `${variant}:${format}`;
 
-    // Fixed four streams (slot = array index): position, normal, uv, colour -- every bucket binds
+    // Fixed five streams (slot = array index): position, normal, uv, colour, layer -- every bucket binds
     // all of them (`FieldBucketStreams` completes missing ones), so no per-geometry variants.
     const vertexBufferSlots: GPUVertexBufferLayout[] = [
       { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
       { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x3" }] },
       { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }] },
       { arrayStride: 16, attributes: [{ shaderLocation: 3, offset: 0, format: "float32x4" }] },
+      { arrayStride: 4, attributes: [{ shaderLocation: 4, offset: 0, format: "float32" }] },
     ];
 
     const targets: GPUColorTargetState[] = [];
@@ -1881,6 +1937,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     rp.setVertexBuffer(1, streams.normal);
     rp.setVertexBuffer(2, streams.uv);
     rp.setVertexBuffer(3, streams.color);
+    rp.setVertexBuffer(4, streams.layer);
     if (entry.ib) rp.setIndexBuffer(entry.ib, entry.format ?? "uint32");
   }
 
@@ -1909,6 +1966,14 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         },
         { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d" } },
         { binding: 8, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+        // Albedo array + its repeat sampler (declared in `field_pull.wgsl` only; the cull never
+        // reads them, so the shared cull layout stays unchanged).
+        {
+          binding: 12,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { viewDimension: "2d-array" },
+        },
+        { binding: 13, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
         // P2 LOD-blend pages: the pull VERTEX reads the signed blend beside the visible index
         // (declared in `field_pull.wgsl`, per-consumer binding-2/3 pattern -- the slot also
         // exists in the cull layout for Bob's compute write).
@@ -1968,6 +2033,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     l: FieldLocals,
     alphaView: GPUTextureView,
     alphaSampler: GPUSampler,
+    albedoView: GPUTextureView,
+    albedoSampler: GPUSampler,
   ): GPUBindGroup {
     return device.createBindGroup({
       layout: bgl,
@@ -1982,8 +2049,20 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         { binding: 7, resource: alphaView },
         { binding: 8, resource: alphaSampler },
         { binding: 11, resource: { buffer: l.fieldLodBlend } },
+        { binding: 12, resource: albedoView },
+        { binding: 13, resource: albedoSampler },
       ],
     });
+  }
+
+  /** View of the authored albedo array (texture cache, `2d-array`), else the white fallback. An
+   * array the cache cannot resolve as an array (unloaded) falls back too, never a 2d view. */
+  private _albedoView(fallback: GPUTexture): GPUTextureView {
+    const host = this._host;
+    if (this._albedoArray && host && this._albedoArray.isLoaded) {
+      return host.getTextureView(this._albedoArray);
+    }
+    return fallback.createView({ dimension: "2d-array" });
   }
 
   /** Lazily creates the probe staging pair (args 4096 B + full visible pages). */
