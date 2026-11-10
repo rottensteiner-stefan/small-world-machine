@@ -10,12 +10,12 @@
       "frames": 60,
       "rendererType": "WEB_GL2"
     },
-    "stddev": 57.3611,
+    "stddev": 57.9901,
     "blank": false,
     "consoleErrors": [],
     "width": 1280,
     "height": 720,
-    "sha256": "ba380136fc1d43eef0d5b7d7adf42e45dea653c85ad4aa138d684d544eb5c527",
+    "sha256": "2bb0f45c21ac400eb82b3d75087766a5cb02f29c2bcdf37d27dc215564f55392",
     "ok": true
   }
 ]
