@@ -47,6 +47,8 @@ export interface VegHudStats {
   readonly wind: boolean;
   /** Ground-cover ring instances this frame (ADR 0059 step 1b; 0 when the cover is inactive). */
   readonly cover: number;
+  /** Live TAA state (`?taa=1` arms the engine `TaaElement`; dither-mode sighting condition). */
+  readonly taa: boolean;
   /** Optional P2 LOD-transition live state of the field lane (ADR 0059 step 2); absent when the
    *  field lane is inactive. `band` 0 = candidate C (hard switch), > 0 = candidate A band.
    *  `mode` = DECISIVE MODE SWITCH preset name when one is armed (absent = legacy raw-knob mode). */
@@ -303,7 +305,7 @@ export class Hud {
     const cpu = stats.cpuMs;
     const lines = [
       `${stats.fps >= 0 ? stats.fps.toFixed(1) : "--"} | ${fmtMs(cpu)} | ${fmtMs(gpu)} | ${fmtCount(stats.visible)} / ${fmtCount(stats.triangles)}`,
-      `?n=${stats.instances.toLocaleString("en-US")}  mode=${stats.mode}  path=${this._path}  wind=${stats.wind ? "on" : "off"}${stats.cover > 0 ? `  cover=${fmtCount(stats.cover)}` : ""}`,
+      `?n=${stats.instances.toLocaleString("en-US")}  mode=${stats.mode}  path=${this._path}  wind=${stats.wind ? "on" : "off"}  taa=${stats.taa ? "on" : "off"}${stats.cover > 0 ? `  cover=${fmtCount(stats.cover)}` : ""}`,
     ];
     const lod = stats.lod;
     if (lod !== undefined) {

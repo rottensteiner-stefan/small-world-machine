@@ -14,6 +14,7 @@ import {
   InstancedMesh,
   Matrix4,
   Object3D,
+  PostProcessingEffectType,
   RendererType,
   StandardMaterial,
   Vector3D,
@@ -153,6 +154,9 @@ interface P2FieldLodApi {
  *                                cost per mode bounded in `LOD_TRANSITION_MODES`). Absent = legacy
  *                                `?lodband=`/`?lodhyst=` knobs; HUD `L` cycles the modes live.
  *                                `off` = fail-closed P1-identical hard routing.
+ *   `?taa=1`                     arm the engine `TaaElement` (default off) — the intended display
+ *                                condition for the P2 dither transition modes ("TAA resolves the
+ *                                dither", ADR 0059 step 2); MEASURE carries `taa` 0/1.
  *   `?truth=1`                   ground-truth mode: identical scene, frozen pose (`?pausedAt=` or
  *                                the initial camera), signals `window.__vegTruthReady` after the
  *                                first frame (P0 has no LOD/culling optimizations to disable, so
@@ -287,6 +291,8 @@ interface MeasureResult {
   wallMs: number;
   frameMs: number;
   avgFps: number;
+  /** 1 = engine `TaaElement` armed via `?taa=1` (dither-mode sighting display condition). */
+  taa?: number;
   /** Active camera path (`undefined` = fixed vantage). Consumed by veg-bench cell attribution. */
   path?: string;
   /** CPU-observed frame time per sampled frame (ms); P50/P95 basis for the ADR 0059 step-0 gate. */
@@ -523,6 +529,9 @@ export class Showcase extends AbstractShowcase {
    *  {@link LodTransitionMode} preset; `undefined` = legacy raw-knob mode (`?lodband=` etc., not
    *  one of the presets). `L` / `?lodMode=` drive this; MEASURE + HUD report it. */
   private _lodMode: LodTransitionMode | undefined = undefined;
+  /** Live TAA state (`?taa=1` arms the engine `TaaElement`; default off). Sighting knob for the
+   *  ADR 0059 step-2 dither modes — documented as TAA-dependent ("TAA resolves the dither"). */
+  private readonly _taaLive: boolean;
   /** Scale-1 blade height cached at cover build — the re-arm height for live `setWind`. */
   private _coverWindHeight = 0;
   /** Latest optically-probed cull frame (kept 1: the dual-lane audit samples the LAST frame). */
@@ -600,6 +609,12 @@ export class Showcase extends AbstractShowcase {
       params.has("coverRadius") && Number.isFinite(rawCoverRadius)
         ? Math.min(400, Math.max(20, rawCoverRadius))
         : COVER_DEFAULT_RADIUS;
+
+    // ADR 0059 step 2 sighting: `?taa=1` arms the engine `TaaElement` (engine default off). The
+    // dither transition modes are documented as TAA-dependent — the knob restores the intended
+    // display condition for the live human A/B. Applied after `super.start()` (the renderer is
+    // only assigned by `start()`); MEASURE + HUD report the live state.
+    this._taaLive = params.get("taa") === "1";
 
     // P2 (ADR 0059 step 2): LOD-transition knobs (field lane only). Fractions clamp into [0,1];
     // `?lodbias=`/`?shadowlod=` are unaudited numbers. Same `params.has(...)` guard discipline
@@ -822,6 +837,10 @@ export class Showcase extends AbstractShowcase {
   public override async start(): Promise<void> {
     const golden = parseGoldenSpec<string>((rawView) => rawView ?? "base");
     await super.start();
+    // ADR 0059 step 2 sighting: `?taa=1` arms the ENGINE `TaaElement` (default off). Applied
+    // here — every renderer's post group always carries the element and `enabled` gates the
+    // history-blend pass — not in the constructor, where `renderer` is still unassigned.
+    this._applyTaaKnob();
     if (golden === undefined) return;
     this._golden?.dispose();
     this._golden = new GoldenSession(this, {
@@ -831,6 +850,17 @@ export class Showcase extends AbstractShowcase {
       extraHiddenSelectors: [],
     });
     await this._golden.run(golden, lookupOwn(GOLDEN_POOLS, golden.poolKeyRaw) !== undefined, {});
+  }
+
+  /**
+   * Applies the constructor-parsed `?taa=` knob to the engine post-processing `TaaElement`.
+   * Guarded (`get` may be `undefined`): toggling is inert on hostile configs, never throws.
+   */
+  private _applyTaaKnob(): void {
+    const taaNode = this.renderer.postProcessing.get(PostProcessingEffectType.TAA);
+    if (taaNode !== undefined) {
+      taaNode.enabled = this._taaLive;
+    }
   }
 
   /**
@@ -1713,6 +1743,8 @@ export class Showcase extends AbstractShowcase {
       wind: this._windField !== undefined && this._windLive,
       // Ground-cover ring instances (field lane source B; 0 when inactive).
       cover: this._coverSystem?.instanceCount ?? 0,
+      // Live TAA state (`?taa=1`) — the dither-mode sighting display condition.
+      taa: this._taaLive,
       // P2 LOD-transition live state (field lane only): the applied band/hysteresis/bias knobs
       // and — when a DECISIVE MODE SWITCH preset is armed — the mode name. Key omitted when the
       // field lane is inactive (`exactOptionalPropertyTypes` contract).
@@ -1748,6 +1780,8 @@ export class Showcase extends AbstractShowcase {
       frameMs: wallMs / frames,
       avgFps: frames / (wallMs / 1000),
     };
+    // Live TAA state (`?taa=1`) — renderer-wide, reported on every lane for gate tables.
+    result.taa = this._taaLive ? 1 : 0;
     if (this._path !== undefined) {
       result.path = this._path;
     }
