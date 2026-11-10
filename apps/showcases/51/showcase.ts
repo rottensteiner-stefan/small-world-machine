@@ -122,7 +122,8 @@ interface P2FieldLodApi {
  *                                  missing level falls back to the proxy path unchanged). Absent
  *                                  = the default stride-decimation proxy path (byte-identical).
  *   `?cover=0`                     disable the ground-cover ring (step 1b, source B; default on)
- *   `?coverDensity=N`              ring blade density in blades/m² (clamped to 8; default 0.5)
+ *   `?coverDensity=N`              ring clump density in clumps/m² (clamped to 8; default 5;
+ *                                  14 blades per near clump)
  *   `?coverRadius=N`               ring outer radius in metres (clamped to [20, 400]; default 160)
  *
  * The population is deterministic: a fixed default seed drives the scatter jitter (engine
@@ -226,14 +227,26 @@ const FIELD_LOD_PROXY_STRIDE: readonly number[] = [3, 2];
 const FIELD_CELL_SIZE = 12;
 /** Leaf transmission tint of the field lane (sRGB, same value as showcase 52's leaves). */
 const FIELD_LEAF_BACKLIGHT: readonly [number, number, number] = [0.55, 0.72, 0.2];
-// ADR 0059 step 1b, source B: camera-centred ground-cover ring constants. The grass card is REAL
-// tapered geometry (two crossed blade pairs) authored at `COVER_BLADE_HEIGHT` — no alpha-cutout
-// texture in V1, so the proven merged-geometry field path applies unchanged.
-/** Grass-card blade height in metres at uniform scale 1 (the pulled bend's wind-height base). */
+// ADR 0059 step 1b, source B: camera-centred ground-cover ring constants. One cover instance is a
+// grass CLUMP of REAL curved blades authored at `COVER_BLADE_HEIGHT` — no alpha-cutout texture,
+// so the proven merged-geometry field path applies unchanged. Clumps (many blades per record)
+// raise the blade density without multiplying record/cull cost.
+/** Grass blade height in metres at uniform scale 1 (the pulled bend's wind-height base). */
 const COVER_BLADE_HEIGHT = 0.5;
-/** Ground-cover ring default outer radius (m) and blade density (blades per m²). */
+/** Blades per clump in the near bucket (5 verts / 3 tris each). */
+const COVER_CLUMP_BLADES = 14;
+/** Blades per clump in the far bucket: the first N blades of the same clump (subset, no pop of
+ *  the surviving blades at the bucket switch). */
+const COVER_CLUMP_BLADES_FAR = 5;
+/** Clump footprint radius in metres at uniform scale 1. */
+const COVER_CLUMP_RADIUS = 0.22;
+/** Projected-size threshold (px) between the far (sparse) and near (full) clump bucket. */
+const COVER_CLUMP_LOD_PX = 14;
+/** Camera travel (m) that triggers a ground-cover ring rebuild + record upload. */
+const COVER_UPDATE_STEP = 0.5;
+/** Ground-cover ring default outer radius (m) and clump density (clumps per m²). */
 const COVER_DEFAULT_RADIUS = 160;
-const COVER_DEFAULT_DENSITY = 0.5;
+const COVER_DEFAULT_DENSITY = 5;
 /** Ground-cover tile edge (m); the ring's per-tile hash cells. */
 const COVER_TILE_CELL = 5;
 /** sRGB albedo of the grass base / tip vertices (converted to linear at geometry build). */
@@ -531,10 +544,13 @@ export class Showcase extends AbstractShowcase {
   // fed into a SECOND `InstanceFieldSystem` via `uploadRecords()`). `?cover=0` disables it;
   // `?coverDensity=` / `?coverRadius=` retune the generator. WebGPU field lane only.
   private _cover: GroundCover | undefined = undefined;
+  /** Ring centre of the last cover rebuild; +Infinity forces the first rebuild. */
+  private _coverLastX = Number.POSITIVE_INFINITY;
+  private _coverLastZ = Number.POSITIVE_INFINITY;
   private _coverSystem: InstanceFieldSystem | undefined = undefined;
   /** `?cover=0` disables the ground-cover ring; default on (field lane only). */
   private readonly _coverEnabled: boolean;
-  /** `?coverDensity=` blades per m² (clamped); default `COVER_DEFAULT_DENSITY`. */
+  /** `?coverDensity=` clumps per m² (clamped); default `COVER_DEFAULT_DENSITY`. */
   private readonly _coverDensity: number;
   /** `?coverRadius=` ring outer radius in metres (clamped); default `COVER_DEFAULT_RADIUS`. */
   private readonly _coverRadius: number;
@@ -1314,17 +1330,26 @@ export class Showcase extends AbstractShowcase {
       cameraClearRadius: 2,
       scaleRange: [0.7, 1.8],
     });
-    const merged = this._buildCoverGeometry();
+    const far = this._buildCoverGeometry(COVER_CLUMP_BLADES_FAR);
+    const near = this._buildCoverGeometry(COVER_CLUMP_BLADES);
     const prototype: PrototypeDescriptor = {
       id: "s51-cover",
-      boundingRadius: COVER_BLADE_HEIGHT,
+      // Clump extent: blade height (incl. lean) and footprint radius, both at scale 1.
+      boundingRadius: Math.hypot(COVER_BLADE_HEIGHT, COVER_CLUMP_RADIUS + 0.1),
       lodBuckets: [
         {
-          name: "L0",
-          lodIndex: 0,
+          name: "L1-far",
+          lodIndex: 1,
           minProjectedSize: FIELD_CULL_PIXEL_SIZE + 1,
-          maxProjectedSize: 1e6,
+          maxProjectedSize: COVER_CLUMP_LOD_PX,
           geometrySlot: 0,
+        },
+        {
+          name: "L0-near",
+          lodIndex: 0,
+          minProjectedSize: COVER_CLUMP_LOD_PX + 1,
+          maxProjectedSize: 1e6,
+          geometrySlot: 1,
         },
       ],
       materialSlot: 0,
@@ -1333,7 +1358,7 @@ export class Showcase extends AbstractShowcase {
     const system = new InstanceFieldSystem(null, {
       instanceRecords: cover.records,
       prototypes: [prototype],
-      geometryTable: [[merged]],
+      geometryTable: [[far, near]],
       options: {
         cellSize: cell,
         maxInstances: cover.capacity,
@@ -1360,80 +1385,84 @@ export class Showcase extends AbstractShowcase {
     this._applyWindState();
     console.info(
       `[Showcase51] ground cover: capacity=${cover.capacity}, radius=${this._coverRadius} m, ` +
-        `density=${this._coverDensity}/m², wind=${this._windLive ? "on" : "off"} (shared block)`,
+        `density=${this._coverDensity} clumps/m², wind=${this._windLive ? "on" : "off"} (shared block)`,
     );
     return true;
   }
 
-  /** Builds the grass-card geometry: TWO crossed tapered blade pairs (taller + shorter, 45°
-   *  apart) so every instance reads as a small X-shaped tuft. REAL geometry — V1 deliberately
-   *  skips alpha-cutout textures (no `alphaMap`): the proven merged-geometry field path applies
-   *  unchanged, and the sub-pixel cull + distance thinning hide the hard silhouette. Normals are
-   *  world-up (grass reads as ground-hugging, never edge-on-black), the colour stream carries
-   *  linear green albedo (base darker, tip lighter) + foliage mask for leaf backlight. */
-  private _buildCoverGeometry(): GeometryDataInterface {
-    const h = COVER_BLADE_HEIGHT;
-    // 10 unique vertices: [A0,A1,B0,B1,Tip1, C0,C1,D0,D1,Tip2]. Pair 1 spans world X resp. world
-    // Z (crossed), pair 2 spans the two 45° diagonals — each base pair widens along the ground.
-    const pos: number[] = [
-      -0.09,
-      0,
-      0,
-      0.09,
-      0,
-      0,
-      0,
-      0,
-      -0.09,
-      0,
-      0,
-      0.09,
-      0,
-      h,
-      0,
-      -0.0495,
-      0,
-      -0.0495,
-      0.0495,
-      0,
-      0.0495,
-      -0.0495,
-      0,
-      0.0495,
-      0.0495,
-      0,
-      -0.0495,
-      0,
-      h * 0.62,
-      0,
+  /** Builds one grass CLUMP: `bladeCount` curved, tapered blades scattered inside
+   *  `COVER_CLUMP_RADIUS` (5 verts / 3 tris each: base pair, bent mid pair, tip). Blade layout comes
+   *  from a FIXED-seed hash, so the far bucket (`COVER_CLUMP_BLADES_FAR`) is an exact prefix of the
+   *  near bucket: surviving blades never move at the bucket switch. REAL geometry, no alpha
+   *  texture. Normals are world-up (ground-hugging shading, never edge-on black); the colour stream
+   *  carries linear albedo (base darker, tip lighter, per-blade hue jitter) + foliage mask. */
+  private _buildCoverGeometry(bladeCount: number): GeometryDataInterface {
+    const toLinear = (c: readonly [number, number, number]): number[] => [
+      GltfMaterialParser.engineSRGBToLinear(c[0]),
+      GltfMaterialParser.engineSRGBToLinear(c[1]),
+      GltfMaterialParser.engineSRGBToLinear(c[2]),
     ];
-    const indices = new Uint32Array([0, 1, 4, 2, 3, 4, 5, 6, 9, 7, 8, 9]);
-    const base = [
-      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_BASE[0]!),
-      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_BASE[1]!),
-      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_BASE[2]!),
-    ];
-    const tip = [
-      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_TIP[0]!),
-      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_TIP[1]!),
-      GltfMaterialParser.engineSRGBToLinear(COVER_ALBEDO_TIP[2]!),
-    ];
-    const vertexCount = pos.length / 3;
-    const vertices = new Float32Array(pos);
+    const base = toLinear(COVER_ALBEDO_BASE);
+    const tip = toLinear(COVER_ALBEDO_TIP);
+    // Deterministic per-blade randoms (mulberry32, fixed seed: identical for both buckets).
+    let state = 0x51c0ffee;
+    const rand = (): number => {
+      state = (state + 0x6d2b79f5) | 0;
+      let t = Math.imul(state ^ (state >>> 15), 1 | state);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const vertexCount = bladeCount * 5;
+    const vertices = new Float32Array(vertexCount * 3);
     const normals = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
     const colors = new Float32Array(vertexCount * 4);
-    for (let v = 0; v < vertexCount; v++) {
-      normals[v * 3 + 1] = 1;
-      const isTip = v === 4 || v === 9;
-      const tint = isTip ? tip : base;
-      const alpha = isTip ? COVER_ALPHA_TIP : COVER_ALPHA_BASE;
-      colors[v * 4] = tint[0]!;
-      colors[v * 4 + 1] = tint[1]!;
-      colors[v * 4 + 2] = tint[2]!;
-      colors[v * 4 + 3] = alpha;
-      uvs[v * 2] = 0.5;
-      uvs[v * 2 + 1] = isTip ? 1 : 0;
+    const indices = new Uint32Array(bladeCount * 9);
+    for (let b = 0; b < bladeCount; b++) {
+      // sqrt -> uniform disc; blade facing random; lean outward from the clump centre.
+      const r = COVER_CLUMP_RADIUS * Math.sqrt(rand());
+      const a = rand() * Math.PI * 2;
+      const cx = Math.cos(a) * r;
+      const cz = Math.sin(a) * r;
+      const facing = rand() * Math.PI;
+      const fx = Math.cos(facing);
+      const fz = Math.sin(facing);
+      const h = COVER_BLADE_HEIGHT * (0.55 + 0.45 * rand());
+      const lean = 0.15 + 0.35 * rand();
+      const lx = (r > 1e-4 ? cx / r : 1) * lean * h;
+      const lz = (r > 1e-4 ? cz / r : 0) * lean * h;
+      const w = 0.012 + 0.01 * rand();
+      const hue = 0.85 + 0.3 * rand();
+      // [x, y, z, halfWidth, t] per ring: base, mid (bent 30 % of the lean), tip.
+      const rings: readonly (readonly number[])[] = [
+        [cx, 0, cz, w, 0],
+        [cx + lx * 0.3, h * 0.55, cz + lz * 0.3, w * 0.75, 0.55],
+        [cx + lx, h, cz + lz, 0, 1],
+      ];
+      let v = b * 5;
+      const first = v;
+      for (let ring = 0; ring < 3; ring++) {
+        const [x, y, z, hw, t] = rings[ring]!;
+        const count = ring === 2 ? 1 : 2;
+        for (let side = 0; side < count; side++) {
+          const s = count === 1 ? 0 : side === 0 ? -1 : 1;
+          vertices[v * 3] = x! + fx * hw! * s;
+          vertices[v * 3 + 1] = y!;
+          vertices[v * 3 + 2] = z! + fz * hw! * s;
+          normals[v * 3 + 1] = 1;
+          uvs[v * 2] = 0.5 + 0.5 * s;
+          uvs[v * 2 + 1] = t!;
+          for (let c = 0; c < 3; c++) {
+            colors[v * 4 + c] = (base[c]! + (tip[c]! - base[c]!) * t!) * hue;
+          }
+          colors[v * 4 + 3] = COVER_ALPHA_BASE + (COVER_ALPHA_TIP - COVER_ALPHA_BASE) * t!;
+          v++;
+        }
+      }
+      // Quads base->mid (2 tris) + mid->tip (1 tri).
+      const o = b * 9;
+      indices.set([first, first + 1, first + 2, first + 1, first + 3, first + 2], o);
+      indices.set([first + 2, first + 3, first + 4], o + 6);
     }
     return {
       vertices,
@@ -1825,10 +1854,21 @@ export class Showcase extends AbstractShowcase {
     // the ring follows the camera, blades never swim under it. Only the WRITTEN prefix is fed
     // (`subarray` is a zero-copy view sized to the live count; a full-capacity upload would draw
     // the zero tail as a 67k-blob at the origin).
+    // Re-generated only after the camera moved `COVER_UPDATE_STEP` m: blade positions are
+    // world-glued, only the distance thinning drifts, so a still/slow camera skips the CPU ring
+    // rebuild + record upload (the dominant CPU cost at high clump density).
     if (this._cover !== undefined && this._coverSystem !== undefined) {
-      this._cover.update(this.camera.position.x, this.camera.position.z);
-      this._coverSystem.setPopulationData(this._cover.records.subarray(0, this._cover.count * 4));
-      this._coverSystem.uploadRecords();
+      const cx = this.camera.position.x;
+      const cz = this.camera.position.z;
+      const mx = cx - this._coverLastX;
+      const mz = cz - this._coverLastZ;
+      if (mx * mx + mz * mz >= COVER_UPDATE_STEP * COVER_UPDATE_STEP) {
+        this._coverLastX = cx;
+        this._coverLastZ = cz;
+        this._cover.update(cx, cz);
+        this._coverSystem.setPopulationData(this._cover.records.subarray(0, this._cover.count * 4));
+        this._coverSystem.uploadRecords();
+      }
     }
 
     // `?truth=1` ground-truth mode: signal readiness once after the first full frame. Today the

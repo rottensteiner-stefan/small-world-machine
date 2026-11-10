@@ -81,9 +81,10 @@ describe("GroundCover", () => {
     });
     const n = cover.update(0, 0);
     const poseOut: InstancePose = { yawRadians: 0, uniformScale: 0 };
+    // Decode exactly like the GPU: `bitcast<u32>(record.w)` -> read the BITS of the f32 slot.
+    const bits = new Uint32Array(cover.records.buffer);
     for (let i = 0; i < n; i++) {
-      const packed = cover.records[i * 4 + 3]!;
-      expect(Number.isFinite(packed)).toBe(true);
+      const packed = bits[i * 4 + 3]!;
       unpackInstancePose(packed, poseOut);
       expect(poseOut.yawRadians).toBeGreaterThanOrEqual(0);
       expect(poseOut.yawRadians).toBeLessThan(Math.PI * 2);
@@ -264,5 +265,42 @@ describe("WP-D1 GroundCover per-blade camera-clear at a tile corner (IF-PER-BLAD
       survivorsNear,
       "blades in the [2,3) m annulus survive (per-blade, not per-tile)",
     ).toBeGreaterThan(0);
+  });
+  it("spreads blades over the whole tile (no collinear jitter channels)", () => {
+    // Regression: a single-multiply hash finalizer made the x/z jitter LINEAR in the slot key, so
+    // every blade of a tile sat on one diagonal (streaks). A 4x4 sub-grid of a dense tile must be
+    // fully occupied and the x/z offsets must not be (near-)perfectly correlated.
+    const cell = 8;
+    const cover = new GroundCover({
+      radius: 60,
+      cellSize: cell,
+      bladesPerTile: 200,
+      seed: 11,
+      cameraClearRadius: 0,
+    });
+    const n = cover.update(0, 0);
+    const blades = tileRecords(cover.records, n, 2, 2, cell);
+    expect(blades.length).toBeGreaterThan(100);
+    const occupied = new Set<number>();
+    let sx = 0,
+      sz = 0,
+      sxx = 0,
+      szz = 0,
+      sxz = 0;
+    for (const b of blades) {
+      const u = (b.x - 2 * cell) / cell;
+      const v = (b.z - 2 * cell) / cell;
+      occupied.add(Math.min(3, Math.floor(u * 4)) * 4 + Math.min(3, Math.floor(v * 4)));
+      sx += u;
+      sz += v;
+      sxx += u * u;
+      szz += v * v;
+      sxz += u * v;
+    }
+    expect(occupied.size).toBe(16);
+    const k = blades.length;
+    const cov = sxz / k - (sx / k) * (sz / k);
+    const corr = cov / Math.sqrt((sxx / k - (sx / k) ** 2) * (szz / k - (sz / k) ** 2));
+    expect(Math.abs(corr)).toBeLessThan(0.3);
   });
 });

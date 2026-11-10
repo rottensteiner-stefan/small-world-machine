@@ -416,3 +416,20 @@ overlap (throughput baseline, not placement art) — accepted.
   `lodMode=dither-hysteresis` + reallod OK; `autoinst` ignores the knob; 0 console errors/warnings
   in all runs (also n=18363 with cover: console proof + 0 errors, MEASURE not reached in 280 s —
   SwiftShader speed, not a defect). Real M4 Pro sighting not done.
+
+## 2026-11-10 — Ground cover V2: two GroundCover defects fixed + grass clumps
+
+- **Found via real M4 Pro screenshots** (system Chrome, Metal): the ring on `main` rendered
+  screen-filling triangles. Root causes in `vegetation-extras` `GroundCover`:
+  1. packed pose u32 written as a numeric value into the `Float32Array` (`bitcast<u32>` in the
+     shader → scale 1.25 decoded as ~75). Fix: `Uint32Array` view (the tree records always did it).
+  2. `hash4` single-multiply finalizer → x/z jitter collinear in the slot key → all blades of a
+     tile on one diagonal. Fix: murmur3 `fmix32`.
+  The earlier ring-gate A/B ("early-Z confound", net −3.67 ms) is void: giant blades occluded trees.
+- Clumps: `_buildCoverGeometry(bladeCount)` builds 14 curved tapered blades (5 verts / 3 tris),
+  far bucket (< 14 px) = 5-blade prefix of the same layout. Default `COVER_DEFAULT_DENSITY` 5
+  clumps/m²; ring rebuild + upload only after `COVER_UPDATE_STEP` = 0.5 m camera travel (at
+  density 8 the per-frame rebuild had dropped fps to 68).
+- Real M4 Pro (1600×900): 120 fps (display cap) walk/flight/aerial, `main:opaque` 2.1–3.5 ms,
+  0 console errors. Open: marginal-cost re-measurement of the fixed ring; ground albedo still dark
+  (gaps read as soil), terrain material is the next cheap lever.

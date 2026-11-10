@@ -61,9 +61,15 @@ function hash3(a: number, b: number, c: number): number {
 
 /** Stable 32-bit integer hash of four integers (channel separation via a mixing suffix). */
 function hash4(w: number, x: number, y: number, z: number): number {
-  let h = hash3(w, x, y);
-  h = Math.imul(h ^ (z | 0), 0x85ebca6b);
-  h = (h ^ (h >>> 13)) >>> 0;
+  let h = hash3(w, x, y) ^ (z | 0);
+  // Full murmur3 fmix32 avalanche. A single multiply leaves the high bits (the ones `hash01`
+  // reads) LINEAR in a small consecutive `z` (slot key), so per-slot jitter channels became
+  // collinear and blades lined up on a few diagonals per tile (visible streaks/patches).
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
   return h >>> 0;
 }
 
@@ -75,6 +81,9 @@ function hash01(value: number): number {
 export class GroundCover {
   /** Preallocated record stream (position xyz + packed pose per blade); read by the field feed. */
   public readonly records: Float32Array;
+  /** u32 view over {@link records}: the packed pose word (`w`) is a BIT PATTERN the shader reads
+   *  via `bitcast<u32>`, never a numeric float -- it must be written through this view. */
+  private readonly _recordBits: Uint32Array;
 
   public readonly radius: number;
   public readonly cellSize: number;
@@ -122,6 +131,7 @@ export class GroundCover {
     this._tileRadius = Math.ceil(this.radius / cellSize);
     this.capacity = (2 * this._tileRadius + 1) * (2 * this._tileRadius + 1) * this.slotsPerTile;
     this.records = new Float32Array(this.capacity * 4);
+    this._recordBits = new Uint32Array(this.records.buffer);
   }
 
   /**
@@ -203,7 +213,9 @@ export class GroundCover {
           rec[o] = px;
           rec[o + 1] = 0;
           rec[o + 2] = pz;
-          rec[o + 3] = packInstancePose(
+          // Bit pattern, not a number: `rec[o + 3] = packed` would store the float VALUE of the
+          // u32 and the shader's `bitcast<u32>` would decode a garbage scale (giant blades).
+          this._recordBits[o + 3] = packInstancePose(
             yaw01 * Math.PI * 2,
             this._scaleMin + scale01 * this._scaleSpan,
           );
