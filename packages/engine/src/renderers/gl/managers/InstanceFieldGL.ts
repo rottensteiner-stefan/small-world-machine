@@ -567,8 +567,8 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
 
     // Phase A-1: reachable-cell gather (conservative outer bound, never authoritative).
     this._reachCount = 0;
-    const reachCells = this._reachCells;
-    const reachDist = this._reachDist;
+    let reachCells = this._reachCells;
+    let reachDist = this._reachDist;
     for (let c = 0; c < this._totalCells; c++) {
       const dx = this._cellsCenter[c * 3]! - mainCamX;
       const dy = this._cellsCenter[c * 3 + 1]! - mainCamY;
@@ -577,7 +577,13 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
       // Any part of the cell within the radius is testable: subtract the half diagonal.
       if (dist - this._halfCellDiagonal > this._cpuBudget.maxCullRadius) continue;
       const idx = this._reachCount++;
-      if (idx >= reachCells.length) this._growReach(idx + 1);
+      if (idx >= reachCells.length) {
+        // `_growReach` REPLACES both backing arrays — refresh the local aliases, otherwise the
+        // stale length keeps re-triggering growth on every cell past 256 (256→512→…→2^30 OOM).
+        this._growReach(idx + 1);
+        reachCells = this._reachCells;
+        reachDist = this._reachDist;
+      }
       reachCells[idx] = c;
       reachDist[idx] = dist;
     }

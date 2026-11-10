@@ -89,4 +89,96 @@ Dev server on the worktree `small-world-machine-veg-p2` (no dev server runs duri
 
 ## 9. Addendum — live results (to be filled at integration)
 
-- TODO: §6 cells 2–5 by lead/integration; verdict per exit gate. Any real-GPU deviation from the §4 anchors = lane bug (fail the cell), never a test-calibration excuse (P1 honesty rule, `vegetation-occlusion` note §2).
+> **2026-11-10 addendum — headless WebGPU measurement** (worker #2 for audit open point #5; registration + commit by lead). All numbers below come from saved artifacts under `.agents/scratches/pop-tmp/` (gitignored scratch) — no fabrication. **Deviation from §6 protocol, mandatory disclosure:** §6 prescribes `?n=182728&path=aerial` on a real M4 Pro; the available headless device forced `path=flight` + `n=20000` (task-prescribed URL) at **480×270** (the field lane `main:opaque` pass is fill-bound on SwiftShader: ~12 s/frame @720p, ~2-5 s @480×270). The §6 cells at `n=182728/aerial` remain to be run on the M4 Pro (§9.6).
+
+### 9.1 Device caveat (honest, binding for every number below)
+
+- **Device:** headless Chrome + SwiftShader–Dawn with `--enable-unsafe-webgpu`; every cell verifies `navigator.gpu` = `google/swiftshader`, `meas:rendererType=WEB_GPU`, **0 page/console/validation errors**, `window.__vegTruthReady`/`scene-ready` sane (per §6 protocol step "setup").
+- **Resolution-dependence (§5a `C = r·vp/tan(fov/2)`):** the LOD px metric is resolution-dependent by design. At `vp=270`, C ≈ 2·270/0.637 ≈ 848 px·m ⇒ bucket-1 effective threshold (24 px − bias 14 = 10 px) sits at **d ≈ 85 m**, bucket-2 (96 px − 14 = 82 px) at **d ≈ 10 m**. The `flight` path orbits at ground radius 20–70 m → close trees DO project past both thresholds every frame (see §9.4).
+- **No TAA pair, no real GPU timings** headless. Frame times are **INFORMATIONAL-ONLY** (P50/P95 in 2.4–5.8 s range at 480×270), not comparable to the M4 Pro reference.
+- **Wind:** Set A/B ran with default `?wind=1` (production path). Set C forced `?wind=0` to isolate LOD from wind (recorded in each cell URL). The `windHeight·maxLean` radius term explains the small GPU>CPU surplus in Set A (see below).
+
+### 9.2 Set A — population audit per LOD mode (`flight`, n=20000, seed=51, frames=60, 480×270)
+
+Both the prescribed URL (default `occlusion=b`, HZB on) and the HZB-free lane (`occlusion=a`) ran for **all four** modes `off` / `hysteresis` / `dither` / `dither-hysteresis` (8 cells). `cpuTotal` = pure-CPU frozen frustum+size reference (`?cullref=1`); `gpuMain` = GPU survivor count, main view, last resolved probe frame. **The superset/falseNeg gate is evaluated on the HZB-free lane only** — HZB legitimately drops occluded trees (`unexplained=…occlusion=on`), which is not a false negative (P1 doctrine).
+
+| mode | occlusion | gpuMain | cpuTotal | engine verdict | superset | falseNeg | frameTimes p50/p95 (INFORMATIONAL) |
+| :--- | :--- | ---: | ---: | :--- | :--- | :--- | :--- |
+| off | b (HZB) | 421 | 9936 | `unexplained=9515(...,occlusion=on)` | — (HZB) | — (HZB) | 2482 / 3122 ms |
+| off | a (free) | **10038** | **9901** | `ok(frustum=9901,size=0,cpu=9901,gpu=10038)` | **true** | **false** | 2694 / 3096 ms |
+| hysteresis | b (HZB) | 421 | 9936 | `unexplained=9515(...,occlusion=on)` | — (HZB) | — (HZB) | 2494 / 3839 ms |
+| hysteresis | a (free) | **10064** | **9937** | `ok(frustum=9937,size=0,cpu=9937,gpu=10064)` | **true** | **false** | 2677 / 5824 ms |
+| dither | b (HZB) | 418 | 9978 | `unexplained=9560(...,occlusion=on)` | — (HZB) | — (HZB) | 2638 / 3466 ms |
+| dither | a (free) | **10037** | **9901** | `ok(frustum=9901,size=0,cpu=9901,gpu=10037)` | **true** | **false** | 2630 / 3158 ms |
+| dither-hysteresis | b (HZB) | 421 | 9936 | `unexplained=9515(...,occlusion=on)` | — (HZB) | — (HZB) | 2426 / 2733 ms |
+| dither-hysteresis | a (free) | **10066** | **9921** | `ok(frustum=9921,size=0,cpu=9921,gpu=10066)` | **true** | **false** | 3459 / 3860 ms |
+
+- **Result:** the occlusion-free superset gate **passes all four modes** (GPU ≥ CPU, zero unexplained drops ⇒ no false negatives on the audited lane; CPU-reference itself reports `size=0` — no sub-pixel drops at 480×270 because the 2 px gate maps to 467 m ≫ world ±200 m, §9.3).
+- **Shadow/cascade views (`viewIndex` 1..2) bucket sets ⊆ main-view bucket set on EVERY captured per-frame probe snapshot of every cell** — `IF-LOD-MAIN-CAMERA` direction holds on the live lane (single-bucket variant, caveat §9.4).
+- Small GPU>CPU surplus (≈ +0.9…+1.4 %: 10037–10066 vs 9901–9937) = the wind-bent radius term in the live cull (GPU tests a LARGER radius than the frozen CPU mirror) — conservatism, never a drop.
+- **Honesty bound:** the engine `cullrefVerdict` compares against **bucket-0 only** (`_segmentCount(sets,0,0)`, P1-era reference). It therefore **cannot detect** whether survivors were mis-routed to bucket 0 instead of 1/2 — see §9.4.
+
+### 9.3 Set B — triangle curve vs `?n=` (frozen pose, `pausedAt=0.55`, `occlusion=a`, 480×270, frames=3)
+
+- **Protocol note (honest):** §4's `Δtri = 0` flat pin is a **geometry property of the File 2 harness** (additions beyond the sub-pixel horizon), not of any live scattered densification. At 480×270 the 2 px cull gate maps to **467 m** (1247 m @720p) while the world is **±200 m** ⇒ the gate never engages ⇒ scattered `?n=` densification **cannot** produce a flat live curve on this world. The strict harness-layout flat cell (`Δtri = 0` with additions beyond the horizon) remains a real-GPU cell (§9.6).
+- Measured (field counts = actual records after the grid/clearing generator; `v0` = main-view bucket-0 survivors; tri = `v0 × 26` — every survivor routed to the coarsest proxy, 78/3 = 26 tris):
+
+| `?n=` (requested) | field records | main v0 survivors | tri estimate | curve |
+| :--- | ---: | ---: | ---: | :--- |
+| 128 | 128 | 53 | 1378 | sanity: sparse population, ~41 % visible at pose |
+| 20000 | 18363 | 7928 | 206128 | — |
+| 80000 | 72864 | 31426 | 817076 | sublinear ↑ |
+| 150000 | 137070 | 59158 | 1538108 | sublinear ↑ (still rising, not flat) |
+
+- Reproducibility: n=20000 and n=150000 cells **rerun byte-identical** (7928 / 59158 survivors, same camera pose) — deterministic harness confirmed.
+- `fieldInstances` ≈ requested (grid side caps + central clearing exclusion): 18363/20000, 72864/80000, 137070/150000 — recorded, not hidden.
+- Gate-engagement sanity (the planned low-res 108-px cell) was **not captured** (capped budget) — deferred with §9.6; the n=128 sparse cell here plus the code-level gate mapping is the headless supplement.
+
+### 9.4 Set C — pixel pop proxy (wind=0, frames=24, 480×270, in-page per-frame captures)
+
+Method: in-page `canvas.toDataURL` per frame (INJECT_CAP; ~1.7 s/frame, clean canvas, per-frame aligned — replaces the CDP screenshot fallback), frame-to-frame mean-abs pixel delta, spike = delta > median + k·IQR, flip = frame-to-frame change in per-bucket GPU survivor counts (`?popcount=1`), `+2jump` = any frame pair where a record jumps ≥2 bucket indices. Modes × bias (= transition geometry forcing: at 480×270 the authored 24/96 px bands sit beyond the flight so `?lodbias=-8/-14` pulls the effective thresholds to ~16/10 px ⇒ closer to the flight cone).
+
+| variant (URL knobs) | meanΔ | maxΔ | spikes k3/k6/k10 | flips | +2 jumps |
+| :--- | ---: | ---: | :--- | ---: | ---: |
+| off | 16.31 | 37.22 | 0 / 0 / 0 | 15 | 0 |
+| off + bias −8 | 17.55 | 32.37 | 0 / 0 / 0 | 17 | 0 |
+| off + bias −14 | 19.72 | 33.62 | 0 / 0 / 0 | 16 | 0 |
+| dither + bias −8 | 17.56 | 32.39 | 0 / 0 / 0 | 16 | 0 |
+| dither + bias −14 | 17.58 | 32.39 | 0 / 0 / 0 | 16 | 0 |
+| dither band 0.33 + bias −14 (`?lodband=0.33`) | 17.78 | 37.63 | 0 / 0 / 0 | 17 | 0 |
+
+- **Every "flip" is a bucket-0-only survivor-count change** (view-0 bucket-0 counts drifting ~200–600 as the camera sweeps; occlusion + frustum edge effects). No frame ever shows a bucket-1/2 count change ⇒ **zero LOD band crossings occurred live in any variant** (consistent with §9.4 routing observation).
+- **+2 residual = 0 in all six variants** — expected: no band crossing ever engaged the routing, so the residual could not manifest. The §5a/File-3 frozen +2 geometry (fast crossing of a narrow band) was never exercised live.
+- Proxy interpretation: mean/max deltas are **dominated by camera motion + fog/low-contrast scenes at flight altitude**, not LOD events. **off vs dither are statistically indistinguishable** (means 16.3–19.7, overlapping ranges). No spike structure (k3/k6/k10 = 0 everywhere) → no pop signal of any kind was detectable headless on this device.
+
+### 9.5 Live multi-bucket routing observation — OPEN, must be re-verified (central honesty item)
+
+- `gpuPerBucket` readback shows **`bucketIndex ≥ 1` = 0 on every captured frame of every cell** (all Set A/B/C variants, all modes, all bias values): the live lane emitted only bucket-0 survivors.
+- **Code-level counter-evidence (what the deployed build *should* do):** the served bundle (`dist/js/core.js`, built 2026-11-10 10:14, before all measurements) contains the P2 multi-bucket cull verbatim — `fieldSelectBucket`/`fieldEffectiveMaxPx`, `MAX_LOD_BUCKETS = 8`, runtime mirrors `_lodBiasPx`/`_lodMaxima = [24, 96, 1e6]`, 3 authored buckets (`FIELD_LOD_MAXIMA_PX`), `cullPixelSize = 2`. The `flight` orbit (ground radius 20–70 m, height 6–20 m) over the full ±100 m square grid (spacing ~1.47 m) **geometrically guarantees** many in-frustum trees project ≫ 10/24 px every frame ⇒ a functioning live cull must emit bucket-1/2 survivors.
+- **Conclusion:** the observed bucket-0-only routing is **not explained by configuration or authored data**; root cause not isolated within the capped measurement budget (candidate: live pick/layout path makes the compiled shader see a degenerate `fieldPrototypeRange.z` or metric input; or a buckets≥1 emit/readback defect on this device/build). **Consequence for every headless verdict above:** they hold for the **bucket-0 lane only** — **band transitions were never exercised live**, so the pop metric cells are **not falsified but also not proven** headless. This is the #1 item for the M4 Pro re-verification (§9.6).
+- No engine source changes were made by this worker; this is a measurement report.
+
+### 9.6 Verdict per §6 exit gate (headless-measurable subset) + deferred M4 Pro list
+
+| §6 gate | Headless-verdict | Status |
+| :--- | :--- | :--- |
+| 2 (per-frame bucket counts, shadow ⊆ main) | shadow/cascade sets ⊆ main on every probe frame | PASSED on bucket-0 lane only; re-verify with multi-bucket routing live |
+| 3 (no visible pops, TAA on/off, LIP) | zero pop signal measurable (no spikes; off≡dither); +2 residual unexercised | NOT FALSIFIED, NOT PROVEN → M4 Pro |
+| 4 (triangle flat vs `?n=`) | not flat live — documented as harness-geometry + densification curve (§9.3) | requires strict harness-layout cell → M4 Pro |
+| A/B per §7 (blind pair) | not run (needs video) | → M4 Pro |
+
+**Deferred to real M4 Pro GPU (per §6/§7 — explicit confirmation list):**
+1. **Live multi-bucket routing re-verification** after a real rebuild at target res (the §9.5 open item — the decisive blocker).
+2. `n=182728 & path=aerial` per-frame bucket counts + shadow⊆main with real multi-bucket activity.
+3. LIP video pair per TAA setting (fast flight) + correlation with the enumerated +2 residual geometry (§5a).
+4. Blind A/B pairs per §7 (A dither vs C hysteresis, bandwidth/video matched).
+5. Visual pop verdict (TAA on/off) — the actual exit criteria for gate 3.
+6. Strict `Δtri = 0` flat harness-layout cell (far-population additions beyond the horizon) + the low-res gate-engagement sanity cell (192×108) that was capped out headless.
+7. Real GPU timings for the overdraw/bandwidth proportionality check (§4 `+0.9 % bw 0.05`).
+
+### 9.7 RECOMMENDATION (no engine code change) — LOD-transition default band/mode
+
+- **Keep the production default at hard-switch (`off` = crossfade band 0, hysteresis 0) — the P1-identical, fail-closed mode.** Do **not** enable a dither crossfade band or hysteresis margin as default yet.
+- Measured basis: on this device/res all four modes were **behaviorally identical** (bucket-0 lane, zero transitions, identical verdicts, overlapping pop-proxy deltas); dither offered **zero measurable benefit** headless (meanΔ off 16.3 vs dither 17.6, spike-free both), while its costs — dual-write overdraw (≈band-width-proportional, §4) and, per File 3, its inability to stage a +2 residual — stay unquantified live.
+- The hard-switch default is additionally the **honest choice while §9.5's multi-bucket routing is unverified**: it reproduces the P1 semantics that ARE validated (bucket-0 superset gate passes, shadow⊆main), coupling the default to the least unverified machinery.
+- **Condition to revisit:** enable candidate A/C only after M4 Pro gate-3 (LIP pair) demonstrates a visible pop to eliminate, and gate-2 confirms live multi-bucket routing works; then prefer candidate C (hysteresis, zero overdraw, ±1 rate-limit — §3 finding 3) over the dither crossfade band, per the §5a quantitative ranking.

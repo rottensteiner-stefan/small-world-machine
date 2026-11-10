@@ -48,6 +48,10 @@ declare global {
  * other under an identical studio setup. The HUD (ShowcaseDrawer + perf footer) controls studio
  * lights and the post-processing chain (ACES tone mapping, bloom) and shows a live readout of
  * scene complexity. The reference model ships untouched (single shared material, CC-BY 4.0).
+ * `?tone=off` disables the ToneMappingElement natively at load (WP-C2 parity knob): the post pass
+ * then applies the tier-identical DEFAULT fallback (exposure 1.0, gamma 2.2), so the WebGPU and
+ * WebGL2 outputs are directly comparable for the disabled-tone-mapping parity contract; the HUD/T
+ * key re-enables it interactively.
  */
 export class Showcase extends AbstractShowcase {
   private _labRoot?: Object3D;
@@ -204,8 +208,13 @@ export class Showcase extends AbstractShowcase {
     // Tone mapping stays ON (engine default curve, PBR_NEUTRAL): HDR PBR specular clamps into
     // blotches without a curve; the HUD / T key switches between all ToneMappingMode curves.
     // Bloom starts OFF so the Khronos reference is judged without engine-added glare; both are
-    // HUD-togglable.
+    // HUD-togglable. `?tone=off` natively disables the element at load (WP-C2 parity knob): the
+    // post pass then falls back to the tier-identical DEFAULT curve, which the readout still
+    // classifies as "NONE" (element state) while the rendered curve stays comparable across tiers.
     if (bloom) bloom.enabled = false;
+    if (tone && new URLSearchParams(window.location.search).get("tone") === "off") {
+      tone.enabled = false;
+    }
     this._tone = tone;
     this._bloom = bloom;
   }

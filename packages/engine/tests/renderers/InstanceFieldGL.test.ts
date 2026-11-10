@@ -281,8 +281,13 @@ function commandCells(cmds: readonly CpuDrawCommand[]): number[] {
 }
 
 /** Replicates the lane's per-view frustum keep predicate (grow AABB by max instance radius,
- *  conservative test against the VIEW's planes) — the mirror the emissions must equal. */
-function cascadeKeepsCell(vp: Float32Array, cellId: number): boolean {
+ *  conservative test against the VIEW's planes) — the mirror the emissions must equal.
+ *  `counts` mirrors the fixture grid; defaults to the 8x1x8 lane grid. */
+function cascadeKeepsCell(
+  vp: Float32Array,
+  cellId: number,
+  counts: readonly [number, number, number] = GRID_COUNTS,
+): boolean {
   const m = new Matrix4();
   m.data.set(vp);
   const frustum = new Frustum();
@@ -302,7 +307,7 @@ function cascadeKeepsCell(vp: Float32Array, cellId: number): boolean {
     {
       origin: GRID_ORIGIN,
       cellSize: CELL_SIZE,
-      cellCounts: GRID_COUNTS,
+      cellCounts: counts,
       bounds: { min: [...GRID_ORIGIN], max: [...GRID_ORIGIN] },
     },
     aabb,
@@ -663,5 +668,111 @@ describe("IF-SHADOW-REUSE — EVSM moment redraws replay an already-culled slot 
       renderer.drawCount(() => true),
       "no slot left -> cascade 2 skipped",
     ).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §4 IF-REACH-GROWTH — reachable-cell scratch must grow correctly past 256 cells
+// (audit #3 GL2 finding: the local reach alias stayed stale after `_growReach`, so every cell
+//  past 256 re-doubled the backing array 256→512→…→2^30 and OOM'd the frame; the fix refreshes
+//  both aliases at the grow site. This fixture pins the correct emitted set for 400 cells.)
+// ---------------------------------------------------------------------------
+
+/** 20x1x20 = 400 populated cells — exceeds the 256-cell reach scratch capacity. */
+const BIG_CELL_COUNTS: readonly [number, number, number] = [20, 1, 20];
+const BIG_CELL_COUNT = BIG_CELL_COUNTS[0] * BIG_CELL_COUNTS[1] * BIG_CELL_COUNTS[2];
+/** 90° vfov from above-center + slight −Z tilt: every cell is frustum-visible (full-keep pin). */
+const BIG_CAM: Pose = poseAt([200, 380, 320], [200, 0, 150], Math.PI / 2);
+
+function bigCellCenter(cellId: number): [number, number, number] {
+  const w = BIG_CELL_COUNTS[0];
+  const h = BIG_CELL_COUNTS[1];
+  const x = cellId % w;
+  const y = ((cellId / w) | 0) % h;
+  const z = (cellId / (w * h)) | 0;
+  return [
+    GRID_ORIGIN[0] + x * CELL_SIZE + CELL_SIZE / 2,
+    GRID_ORIGIN[1] + y * CELL_SIZE + CELL_SIZE / 2,
+    GRID_ORIGIN[2] + z * CELL_SIZE + CELL_SIZE / 2,
+  ];
+}
+
+function makeBigGlField(maxCullRadius: number): InstanceFieldGL {
+  const prototype = makeLodPrototype("pine", BIG_CELL_COUNT);
+  const total = BIG_CELL_COUNT;
+  const records = new Float32Array(total * 4);
+  const pose = new Uint32Array(1);
+  pose[0] = packInstancePose(0, 1);
+  const poseF = new Float32Array(pose.buffer)[0]!;
+  const idsByCell: number[] = [];
+  for (let c = 0; c < total; c++) {
+    const center = bigCellCenter(c);
+    records[c * 4] = center[0];
+    records[c * 4 + 1] = center[1];
+    records[c * 4 + 2] = center[2];
+    records[c * 4 + 3] = poseF;
+    idsByCell.push(c);
+  }
+  const ownership = idsByCell.map((cellId, i) => ({ cellId, instanceOffset: i, instanceCount: 1 }));
+  const population = {
+    records: ownership,
+    totalInstances: total,
+    isPopulated: (cellId: number): boolean => ownership.some((r) => r.cellId === cellId),
+    instanceRange: (
+      cellId: number,
+    ): { cellId: number; instanceOffset: number; instanceCount: number } | undefined =>
+      ownership.find((r) => r.cellId === cellId) ?? undefined,
+  };
+  const options: Pick<
+    InstanceFieldOptions,
+    "cullPixelSize" | "shadowLodBias" | "maxViews" | "cpuBudget"
+  > = {
+    cullPixelSize: CULL_PIXEL_SIZE,
+    shadowLodBias: 0,
+    maxViews: 4,
+    cpuBudget: {
+      maxCullRadius,
+      maxCellsPerFrame: 1_000_000,
+      maxDrawsPerFrame: 1_000_000,
+      maxInstancesPerFrame: 1_000_000,
+    },
+  };
+  return new InstanceFieldGL({
+    gl: makeGl(),
+    grid: {
+      origin: GRID_ORIGIN,
+      cellSize: CELL_SIZE,
+      cellCounts: BIG_CELL_COUNTS,
+      bounds: { min: [...GRID_ORIGIN], max: [...GRID_ORIGIN] },
+    },
+    population,
+    instanceRecords: records,
+    prototypes: [prototype],
+    geometryTable: [[makeBucketMesh(3000), makeBucketMesh(1500)] as (Mesh | undefined)[]],
+    materials: [{ material: {} as unknown as AbstractMaterial, alphaTest: 0 }],
+    options,
+  });
+}
+
+describe("IF-REACH-GROWTH — 400 reachable cells exceed the 256-cell scratch without stale-alias corruption", () => {
+  it("emits exactly the frustum-kept cells (buggy `_growReach` OOMs or drops cells 256..399)", () => {
+    const field = makeBigGlField(1_000_000);
+    const vp = perspectiveVP(BIG_CAM, 1, 0.1, 10000);
+    field.prepareMainView(
+      vp,
+      { x: BIG_CAM.eye[0], y: BIG_CAM.eye[1], z: BIG_CAM.eye[2] },
+      MAIN_VIEWPORT_HEIGHT_PX,
+      MAIN_FOV_RADIANS_Y,
+    );
+    expect(() => field.cullMainView(), "must complete, never OOM via _growReach").not.toThrow();
+
+    const emitted = new Set(commandCells(collectCommands(field, 0)));
+    const mirror = new Set<number>();
+    for (let c = 0; c < BIG_CELL_COUNT; c++) {
+      if (cascadeKeepsCell(vp, c, BIG_CELL_COUNTS)) mirror.add(c);
+    }
+    // Fixture sanity: the pin must ACTUALLY instrument past-256 reach, else it is vacuous.
+    expect(mirror.size, "fixture must keep >256 cells (full-keep coverage)").toBeGreaterThan(256);
+    expect(emitted).toEqual(mirror);
   });
 });

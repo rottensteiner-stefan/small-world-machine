@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>GL2 Instance-Field Wind Probe</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="SmallWorldMachine"></canvas>
+    <!--
+      AUDIT OPEN POINT #3 (2026-11-10, Gl2WindVerifier): proves the WebGL2 instance-field
+      wind lane actually RENDERS (bend) with a live `SwmWind` block uploaded through the real
+      `WebGL2Renderer._bindFieldWindUniforms` (u_wind.p0..p3 via 4x uniform4f + u_windHeight).
+
+      URL knobs:
+        ?wind=0   disable wind (fail-closed static; shader gate u_windHeight = 0, block skipped)
+        ?blades=N population grid count (default 1200, clamped 1..20000)
+        ?frames=N sampled engine frames before window.__gl2WindProbe.done (default 240)
+        ?cam=close  single-blade close-up diagnostic (blades forced to 1; bend unmistakable)
+        ?dbg=1      add a static red blade Object3D at the origin (sanity render lane)
+        ?noroute=1  DISABLE the engine-defect route-around -> populated cells = blades, so
+                    ?blades=400&noroute=1 reproduces `_growReach`'s 2^30-cell RangeError live
+
+      NOTE: the inline module MUST stay plain JavaScript (no TS-only syntax): Vite serializes
+      inline html-proxy scripts with a .js extension, so `import type`/annotations would survive
+      the transform and break parsing.
+
+      PROVEN FIELD FACTS (2026-11-10 audit day 3, reproducible): the lane's draw pipeline is
+      fully functional (uniform uploads per frame, correct cull commands). Blade VISIBILITY and
+      WIND BEND depend on the probe's authored geometry: (a) the record geometry MUST stand on
+      +Y (a ground-flat quad has offset.y = 0, so shader k = clamp(offset.y/windScale) = 0 and
+      the bend is identically zero), and (b) the engine's effective front face is CW seen from
+      the front side — the GL-default-CCW reading from the camera is culled away. With upright
+      + correct-winding geometry the wind lane provably bends (verified: on/off meanAbsDiff
+      ~31.5/255 over ~47% of pixels, lean direction = wind direction).
+
+      Contract (consumed by .agents/scratches/verify-gl2-wind.mjs):
+        window.__gl2WindProbe = {
+          rendererType, frames,
+          windUniformCalls: { p0, p1, p2, p3, height, lastHeight },
+          lastWindUniforms: { p0, p1, p2, p3, height },   // last uploaded SwmWind values
+          lastWindHeight, windOn, cam, blades, bladeHeight, done, error
+        }
+      -->
+    <script type="module">
+      // ---------------------------------------------------------------------
+      // 1. UNIFORM-SPY — installed BEFORE any engine code runs so every future
+      //    WebGL2 context inherits the wrappers. The GL2 renderer uploads wind
+      //    through `gl.uniform4f(WebGLUniformLocation, ...)` (u_wind.p0..p3) and
+      //    `gl.uniform1f(WebGLUniformLocation, u_windHeight)`. The location is an
+      //    OPAQUE OBJECT, not a string, so `getUniformLocation` is wrapped to map
+      //    every location back to its GLSL name (WeakMap; exact, no false hits).
+      // ---------------------------------------------------------------------
+      const __windSpy = {
+        p0: 0, p1: 0, p2: 0, p3: 0, height: 0, lastHeight: Number.NaN,
+        last: { p0: null, p1: null, p2: null, p3: null, height: null },
+      };
+      const __nameByLocation = new WeakMap();
+      const __gl2Proto = WebGL2RenderingContext.prototype;
+      const __origUniform4f = __gl2Proto.uniform4f;
+      const __origUniform1f = __gl2Proto.uniform1f;
+      const __origGetUniformLocation = __gl2Proto.getUniformLocation;
+
+      __gl2Proto.getUniformLocation = function (program, name) {
+        const loc = __origGetUniformLocation.call(this, program, name);
+        if (loc !== null) __nameByLocation.set(loc, String(name));
+        return loc;
+      };
+      __gl2Proto.uniform4f = function (loc, a, b, c, d) {
+        const name = loc === null ? null : __nameByLocation.get(loc);
+        if (typeof name === "string" && name.startsWith("u_wind")) {
+          if (name === "u_wind.p0") { __windSpy.p0++; __windSpy.last.p0 = [a, b, c, d]; }
+          else if (name === "u_wind.p1") { __windSpy.p1++; __windSpy.last.p1 = [a, b, c, d]; }
+          else if (name === "u_wind.p2") { __windSpy.p2++; __windSpy.last.p2 = [a, b, c, d]; }
+          else if (name === "u_wind.p3") { __windSpy.p3++; __windSpy.last.p3 = [a, b, c, d]; }
+        }
+        return __origUniform4f.call(this, loc, a, b, c, d);
+      };
+      __gl2Proto.uniform1f = function (loc, v) {
+        const name = loc === null ? null : __nameByLocation.get(loc);
+        if (typeof name === "string" && name.startsWith("u_wind")) {
+          __windSpy.height++;
+          __windSpy.lastHeight = v;
+          __windSpy.last.height = v;
+        }
+        return __origUniform1f.call(this, loc, v);
+      };
+
+      // ---------------------------------------------------------------------
+      // 2. Engine imports (dev server resolves the workspace sources).
+      // ---------------------------------------------------------------------
+      import {
+        AbstractShowcase,
+        AmbientLight,
+        BoundingBox,
+        Color,
+        DirectionalLight,
+        Ground,
+        Mesh,
+        Object3D,
+        RendererType,
+        StandardMaterial,
+        Vector3D,
+      } from "@small-world-machine/engine";
+      import { mulberry32 } from "@small-world-machine/engine/utils/SeededRandom.js";
+      import { packInstancePose } from "@small-world-machine/engine/core/InstanceField.js";
+      import { InstanceFieldGL } from "@small-world-machine/engine/renderers/gl/managers/InstanceFieldGL.js";
+      import { WindField } from "@small-world-machine/vegetation-extras";
+
+      // ---------------------------------------------------------------------
+      // 3. URL knobs.
+      // ---------------------------------------------------------------------
+      const __params = new URLSearchParams(window.location.search);
+      const __camClose = __params.get("cam") === "close";
+      const __windOn = __params.get("wind") !== "0";
+      const __dbgMesh = __params.get("dbg") === "1";
+      // Close-up diagnostic mode: ONE blade at the grid origin, low viewpoint so an upright
+      // (wind=0) vs bent (+X lean, wind=1) blade is unmistakable in a single frame.
+      const __blades = __camClose
+        ? 1
+        : Math.max(
+            1,
+            Math.min(20000, Math.floor(Number(__params.get("blades")) || 1200)),
+          );
+      const __frames = Math.max(
+        10,
+        Math.min(100000, Math.floor(Number(__params.get("frames")) || 240)),
+      );
+      const __bladeHeight = 3.5; // prototype geometry height at scale 1
+      const __bladeWidth = 0.3;
+      const __cellSize = 2.6;
+      const __cullPixel = 2;
+      const __seed = 20261110;
+
+      // ENGINE-DEFECT ROUTE-AROUND (documented in the audit finding): InstanceFieldGL._cullView
+      // Phase A-1 keeps a STALE local `reachCells` reference for its growth guard, so past 256
+      // reachable cells EVERY iteration calls `_growReach`, doubling the array each time
+      // (256 -> 512 -> ... -> 2^30 = 4 GiB -> "Array buffer allocation failed", RangeError).
+      // The lane's cell-sorted contract supports N instances per cell, so the probe keeps the
+      // number of POPULATED CELLS <= 256 (multi-blade clusters) while the instance count stays
+      // whatever `?blades=` requests. `?noroute=1` lifts the route-around so the field exposes
+      // one populated cell per blade and the engine defect reproduces live (blades > 256).
+      const __noRoute = __params.get("noroute") === "1";
+      const __bladesPerCell = __noRoute ? 1 : Math.max(1, Math.ceil(__blades / 256));
+      const __cellCount = __noRoute ? __blades : Math.ceil(__blades / __bladesPerCell);
+
+      const __probe = {
+        rendererType: "PENDING",
+        frames: 0,
+        windUniformCalls: {
+          p0: 0,
+          p1: 0,
+          p2: 0,
+          p3: 0,
+          height: 0,
+          lastHeight: Number.NaN,
+        },
+        lastWindUniforms: { p0: null, p1: null, p2: null, p3: null, height: null },
+        lastWindHeight: Number.NaN,
+        windOn: __windOn,
+        cam: __camClose ? "close" : "field",
+        blades: __blades,
+        bladeHeight: __bladeHeight,
+        done: false,
+      };
+      window.__gl2WindProbe = __probe;
+
+      const gridSide = () => Math.ceil(Math.sqrt(__cellCount));
+      const gridHalf = () => (gridSide() * __cellSize) / 2;
+
+      /** Deterministic, CELL-SORTED record buffer (4 floats per record): one run per cell,
+       *  `__bladesPerCell` records per cell (last cell partial), so `_totalCells <= 256`. */
+      function buildRecords() {
+        const side = gridSide();
+        const half = gridHalf();
+        const records = new Float32Array(__blades * 4);
+        const rng = mulberry32(__seed);
+        const poseBits = new Uint32Array(1);
+        let i = 0;
+        for (let c = 0; c < __cellCount; c++) {
+          const gx = c % side;
+          const gz = Math.floor(c / side);
+          const cx = -half + (gx + 0.5) * __cellSize;
+          const cz = -half + (gz + 0.5) * __cellSize;
+          const inCell = Math.min(__bladesPerCell, __blades - i);
+          for (let k = 0; k < inCell; k++) {
+            const jx = (rng() - 0.5) * 1.4;
+            const jz = (rng() - 0.5) * 1.4;
+            const x = cx + jx;
+            const z = cz + jz;
+            const yaw = (rng() - 0.5) * Math.PI * 0.5;
+            const scale = 0.92 + rng() * 0.24;
+            poseBits[0] = packInstancePose(yaw, scale);
+            const poseF = new Float32Array(poseBits.buffer)[0];
+            records[i * 4] = x;
+            records[i * 4 + 1] = 0;
+            records[i * 4 + 2] = z;
+            records[i * 4 + 3] = poseF;
+            i++;
+          }
+        }
+        return records;
+      }
+
+      function buildPopulation() {
+        const ownership = [];
+        let i = 0;
+        for (let c = 0; c < __cellCount; c++) {
+          const inCell = Math.min(__bladesPerCell, __blades - i);
+          ownership.push({ cellId: c, instanceOffset: i, instanceCount: inCell });
+          i += inCell;
+        }
+        return {
+          records: ownership,
+          totalInstances: i,
+          isPopulated: (cellId) => ownership.some((r) => r.cellId === cellId),
+          instanceRange: (cellId) => ownership.find((r) => r.cellId === cellId),
+        };
+      }
+
+      function buildGrid() {
+        const side = gridSide();
+        const half = gridHalf();
+        return {
+          origin: [-half, 0, -half],
+          cellSize: __cellSize,
+          cellCounts: [side, 1, side],
+          bounds: { min: [-half, 0, -half], max: [half, __cellSize, half] },
+        };
+      }
+
+      function buildPrototype() {
+        return {
+          id: "gl2-wind-probe-blade",
+          boundingRadius: 4.0,
+          lodBuckets: [
+            {
+              name: "L0",
+              lodIndex: 0,
+              minProjectedSize: __cullPixel + 1,
+              maxProjectedSize: 1e6,
+              geometrySlot: 0,
+            },
+          ],
+          materialSlot: 0,
+          maxInstances: __blades,
+        };
+      }
+
+      /** Real, renderable blade prototype: two crossed thin quads ("+" cross). SINGLE-sided
+       *  (the pipeline has CULL_FACE enabled, front = CCW, back faces culled): pair A's front
+       *  face points -Z, pair B's +X, so the probe camera at -Z / +X sees front-lit faces with
+       *  authored normals. HEIGHT RUNS ALONG +Y (the wind bend k = offset.y / windScale needs
+       *  y>0 per vertex; a ground-flat quad never bends). */
+      function buildBladeGeometry() {
+        const h = __bladeHeight;
+        const w = __bladeWidth;
+        const pos = [
+          // Pair A spans X, stands on +Y, front faces -Z (toward the probe camera at -Z)
+          -w / 2, 0, 0, w / 2, 0, 0, w / 2, h, 0, -w / 2, h, 0,
+          // Pair B spans Z, stands on +Y, front faces +X
+          0, 0, -w / 2, 0, 0, w / 2, 0, h, w / 2, 0, h, -w / 2,
+        ];
+        const vertices = new Float32Array(pos);
+        // EMPIRICALLY-VISIBLE single-sided winding (engine front = CW seen from the front side;
+        // the CCW readings from -Z cull away — proven by the double-sided A/B): pair A
+        // (0,2,1)+(0,3,2) faces -Z = the probe cameras, pair B (4,5,6)+(4,6,7) faces +X.
+        const indices = new Uint32Array([0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7]);
+        const normals = new Float32Array(8 * 3);
+        const uvs = new Float32Array(8 * 2);
+        const colors = new Float32Array(8 * 4);
+        const base = [0.3, 0.46, 0.18];
+        const tip = [0.42, 0.58, 0.24];
+        for (let v = 0; v < 8; v++) {
+          const pairA = v < 4;
+          normals[v * 3 + 0] = pairA ? 0 : 1;
+          normals[v * 3 + 1] = 0;
+          normals[v * 3 + 2] = pairA ? -1 : 0;
+          const isTip = v === 2 || v === 3 || v === 6 || v === 7;
+          const t = isTip ? tip : base;
+          colors[v * 4] = t[0];
+          colors[v * 4 + 1] = t[1];
+          colors[v * 4 + 2] = t[2];
+          colors[v * 4 + 3] = 1;
+          uvs[v * 2] = v % 4 === 1 || v % 4 === 2 ? 1 : 0;
+          uvs[v * 2 + 1] = isTip ? 1 : 0;
+        }
+        return {
+          vertices,
+          indices,
+          normals,
+          uvs,
+          colors,
+          getBoundingVolume: () => BoundingBox.fromVertices(vertices),
+        };
+      }
+
+      // ---------------------------------------------------------------------
+      // 4. Probe showcase (AbstractShowcase pattern from showcases 51/52).
+      // ---------------------------------------------------------------------
+      class Gl2WindProbeShowcase extends AbstractShowcase {
+        constructor(options) {
+          super({
+            fullscreen: true,
+            rendererType: RendererType.WEB_GL2,
+            postProcessing: { enabled: false },
+            quality: { maxPixelRatio: 1 },
+            ...(options || {}),
+          });
+          this.defaultCameraController = "none";
+          this.defaultFov = (65 * Math.PI) / 180;
+          this.defaultFar = 500;
+          this._field = undefined;
+          this._ambient = undefined;
+          this._sampledFrames = 0;
+          this._wind = new WindField({
+            directionX: 1,
+            directionZ: 0,
+            speed: 6,
+            gustLength: 55,
+            crossStretch: 2.5,
+            calm: 0.35,
+            strength: 0.18,
+            gustStrength: 0.3,
+            flutterStrength: 0.06,
+            flutterFrequency: 1.1,
+            boundaryHeight: __bladeHeight,
+            groundFactor: 0.45,
+            maxLean: 0.6,
+          });
+        }
+
+        _gl2Context() {
+          const r = this.renderer;
+          if (!r || !r.webglContext) {
+            throw new Error("[Gl2WindProbe] renderer exposes no WebGL context");
+          }
+          return r.webglContext;
+        }
+
+        async setupScene() {
+          this.configureCamera();
+          this.renderer.setClearColor(new Color(0.5, 0.63, 0.78));
+
+          const ambient = new AmbientLight({ color: new Color(1, 1, 1), intensity: 0.55 });
+          this.scene.add(ambient);
+          this._ambient = ambient;
+          const sun = new DirectionalLight({
+            direction: new Vector3D(-0.4, -1, -0.3).normalize(),
+            color: new Color(1, 0.98, 0.92),
+            intensity: 1.8,
+          });
+          // No shadow lane: the probe proves the WIND lane (maxViews: 1 field, no shadow draws).
+          sun.castShadow = false;
+          this.scene.add(sun);
+
+          const ground = new Object3D("ProbeGround");
+          ground.geometry = new Ground({ width: 300, depth: 300 }).getGeometryData();
+          ground.material = new StandardMaterial({
+            color: new Color(0.16, 0.21, 0.14),
+            roughness: 0.95,
+            metallic: 0,
+          });
+          this.scene.add(ground);
+
+          // Low, in-patch vantage: the blade field fills the frame and tip bending is
+          // resolvable as a large screen-space displacement (bend points +X = screen-right).
+          this.setInitialCamera(new Vector3D(4, 3.4, -17), new Vector3D(0, 4.5, 17));
+
+          // Real engine Mesh (the unit fixture's `{ count }` stubs do NOT render).
+          const gl = this._gl2Context();
+          const bladeMesh = new Mesh(gl, buildBladeGeometry());
+          const bladeMat = new StandardMaterial({
+            color: new Color(0.42, 0.6, 0.28),
+            roughness: 0.8,
+            metallic: 0,
+          });
+
+          const field = new InstanceFieldGL({
+            gl,
+            grid: buildGrid(),
+            population: buildPopulation(),
+            instanceRecords: buildRecords(),
+            prototypes: [buildPrototype()],
+            geometryTable: [[bladeMesh]],
+            materials: [{ material: bladeMat, alphaTest: 0 }],
+            options: {
+              cullPixelSize: __cullPixel,
+              shadowLodBias: 0,
+              maxViews: 1,
+              cpuBudget: {
+                maxCullRadius: 1e6,
+                maxCellsPerFrame: 1_000_000,
+                maxDrawsPerFrame: 1_000_000,
+                maxInstancesPerFrame: 1_000_000,
+              },
+            },
+          });
+          this.renderer.registerInstanceField(field);
+          this._field = field;
+
+          if (__dbgMesh) {
+            // Sanity lane: the SAME blade geometry/material as a regular scene mesh (non-field).
+            // Proves geometry, material, program and camera are renderable outside the field path.
+            const dbg = new Object3D("DbgBlade");
+            dbg.geometry = buildBladeGeometry();
+            dbg.material = new StandardMaterial({
+              color: new Color(0.95, 0.1, 0.1),
+              roughness: 0.8,
+              metallic: 0,
+            });
+            this.scene.add(dbg);
+          }
+
+          // Applied wind state: live block + blade-height gate when on; `undefined` + 0 = hard
+          // off (the renderer then skips the SwmWind block and uploads u_windHeight = 0).
+          field.setWind(__windOn ? this._wind.uniforms : undefined, __windOn ? __bladeHeight : 0);
+
+          __probe.rendererType = String(this.renderer.type);
+          if (__camClose) {
+            // Diagnostic single-blade camera: at -Z looking toward +Z (pair A front = -Z faces
+            // the lens; bend +X = screen-right). High ambient so the sheet is never black.
+            if (this._ambient) this._ambient.intensity = 1.3;
+            this.setInitialCamera(new Vector3D(0, 2.0, -4.8), new Vector3D(0, 1.9, 0.5));
+          }
+          console.info(
+            `[Gl2WindProbe] setup ok blades=${__blades} frames=${__frames} ` +
+              `wind=${__windOn ? "on" : "off"} renderer=${__probe.rendererType}`,
+          );
+        }
+
+        update(deltaTime) {
+          // The wind field ALWAYS advances (live `SwmWind` block, zero-GC); when off, the
+          // field never consumes it (`setWind(undefined, 0)`), so the shader gate stays 0.
+          this._wind.update(deltaTime);
+          this._sampledFrames++;
+
+          __probe.frames = this._sampledFrames;
+          __probe.windUniformCalls = {
+            p0: __windSpy.p0,
+            p1: __windSpy.p1,
+            p2: __windSpy.p2,
+            p3: __windSpy.p3,
+            height: __windSpy.height,
+            lastHeight: __windSpy.lastHeight,
+          };
+          __probe.lastWindUniforms = {
+            p0: __windSpy.last.p0 ? __windSpy.last.p0.slice() : null,
+            p1: __windSpy.last.p1 ? __windSpy.last.p1.slice() : null,
+            p2: __windSpy.last.p2 ? __windSpy.last.p2.slice() : null,
+            p3: __windSpy.last.p3 ? __windSpy.last.p3.slice() : null,
+            height: __windSpy.last.height,
+          };
+          __probe.lastWindHeight = __windSpy.lastHeight;
+          if (this._sampledFrames >= __frames) {
+            __probe.done = true;
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------
+      // 5. Boot.
+      // ---------------------------------------------------------------------
+      try {
+        const app = new Gl2WindProbeShowcase();
+        window.__swmGl2WindProbe = app;
+        await app.start();
+      } catch (error) {
+        __probe.error = error instanceof Error ? error.message : String(error);
+        __probe.done = true;
+        console.error("[Gl2WindProbe] failed to start:", error);
+      }
+    </script>
+  </body>
+</html>
