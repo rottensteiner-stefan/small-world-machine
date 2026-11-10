@@ -449,3 +449,15 @@ overlap (throughput baseline, not placement art) — accepted.
 - Not accepted: canopy brown/thin, stray large wood triangles from the sloppy collapse, aerial
   cutout overdraw. Assets stay local (untracked) until the bake is tuned.
 - Default path (no `?tree=`) regression-checked on WebGPU + WebGL2: unchanged, 0 errors.
+
+## 2026-11-10 — Declutter (35 → 26 URL knobs)
+
+- Removed: `?reallod` (real chain via `?tree=`), raw `?lodband/?lodhyst/?lodbias/?shadowlod`
+  (`?lodMode` is the single switch, default `hysteresis`), `?measure` (use `?frames=`), the
+  worktree-era `P2FieldOptions`/`P2FieldLodApi` shims. Consumers checked first: `veg-bench` uses
+  `mode/n/frames/path/pausedAt/truth/gputimings`, goldens/QA `__golden/qa` — all kept.
+- Kept on purpose: `?occlusion` + `?cutEvery` (S3 occlusion spike undecided), `?popcount`,
+  `?cullref` (correctness probes), cover knobs, `?taa`.
+- Bug fixed: `?lodMode=` went into `options`; the engine reads it at setup level → startup preset
+  was silently ignored. Real M4 Pro check: engine `lodTransitionMode` == URL for off/hysteresis/
+  dither, species path intact, 0 console errors.

@@ -180,7 +180,7 @@ export class Hud {
           "L",
           `<div class="preset-group"><button class="btn-preset" data-lod>LOD: --</button></div>` +
             hudNote(
-              "P2 DECISIVE MODE SWITCH (ADR 0059 step 2): `L` cycles the transition strategies — off / hysteresis / dither / dither-hysteresis (one declarative switch, bounded cost per mode). `?lodMode=` preselects; raw `?lodband=`/`?lodhyst=`/`?lodbias=`/`?shadowlod=` still tune it.",
+              "P2 DECISIVE MODE SWITCH (ADR 0059 step 2): `L` cycles the transition strategies — off / hysteresis / dither / dither-hysteresis (one declarative switch, bounded cost per mode). `?lodMode=` preselects.",
             ),
         )}
         <div class="hud-section hud-keys">

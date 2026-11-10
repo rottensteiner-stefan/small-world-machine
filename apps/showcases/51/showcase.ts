@@ -26,7 +26,6 @@ import { BoundingBox } from "@small-world-machine/engine/physix/BoundingBox.js";
 import type { BoundingVolume } from "@small-world-machine/engine/interfaces/BoundingVolume.js";
 import {
   LOD_TRANSITION_MODES,
-  MAX_LOD_BUCKETS,
   packInstancePose,
   projectedDiameterPixels,
   sphereVisibleConservative,
@@ -45,33 +44,6 @@ import { GroundCover, WindField } from "@small-world-machine/vegetation-extras";
 import { getCameraPath, type CameraPath, type PathName } from "./CameraPaths.js";
 import { Hud, hudFreeMode, type HudGpuTimings, type VegHudStats } from "./Hud.js";
 import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCapture.js";
-
-// P2 engine-surface note (ADR 0059 step 2): the app compiles against the PACKAGE export, which
-// resolves the node_modules link (the merged engine's P1 surface in this worktree) — the
-// worktree engine's additive P2 surface is NOT visible here. The local intersections below
-// declare that NEW surface so the showcase type-checks against the P1 base; post-merge they
-// coincide with the real API. The optional-typed members keep calls inert when a host engine
-// predates P2 (no-op, fail-closed).
-/** P2 additive `InstanceFieldOptions` (worktree engine only; absent on the P1 package export).
- * Extends the PARTIAL options shape because the showcase setup passes a subset (the engine
- * fills `prototypes`/`cpuBudget`/`populationMode` defaults internally). */
-interface P2FieldOptions extends Partial<InstanceFieldOptions> {
-  lodCrossfadeBand?: number;
-  lodHysteresis?: number;
-  lodBiasPx?: number;
-}
-/** P2 additive runtime API of `InstanceFieldSystem` (worktree engine only). */
-interface P2FieldLodApi {
-  setLodTransition?: (opts: {
-    crossfadeBand?: number;
-    hysteresis?: number;
-    biasPx?: number;
-  }) => void;
-  setLodDitherMode?: (mode: "crossfade" | "hard") => void;
-  /** ADR 0059 step 2 DECISIVE MODE SWITCH (moderator 2026-11-10): ONE declarative transition
-   *  strategy; derives the raw knobs (band/hysteresis/dither gate) from {@link LOD_TRANSITION_MODES}. */
-  setLodTransitionMode?: (mode: LodTransitionMode) => void;
-}
 
 /**
  * Showcase 51 — Forest Measurement Baseline ("forest", ADR 0059 step 0 / veg-p0 P0-3).
@@ -117,15 +89,12 @@ interface P2FieldLodApi {
  *   `?cutEvery=N`                  teleport period in sampled frames (default 60; `?occlusion=c`)
  *   `?wind=0`                      disable the field-lane wind (cost isolation / static A/B);
  *                                  default on for the field lane
- *   `?reallod=1`                   REAL-LOD opt-in: the field lane consumes the real generated
- *                                  `<stem>_LOD1..3.glb` siblings of the active prototype as its
- *                                  geometry chain (4 buckets, atomic fail-closed preload; any
- *                                  missing level falls back to the proxy path unchanged). Absent
- *                                  = the default stride-decimation proxy path (byte-identical).
  *   `?cover=0`                     disable the ground-cover ring (step 1b, source B; default on)
  *   `?coverDensity=N`              ring clump density in clumps/m² (clamped to 8; default 5;
  *                                  14 blades per near clump)
  *   `?coverRadius=N`               ring outer radius in metres (clamped to [20, 400]; default 160)
+ *   `?tree=<stem>`                 textured species (`<stem>.species.json`, `<stem>_LOD0..3.glb`,
+ *                                  albedo layers); real 4-bucket LOD chain, fail-closed to defaults
  *
  * The population is deterministic: a fixed default seed drives the scatter jitter (engine
  * `mulberry32`), and nothing in the static lanes is time-dependent, so identical URLs on the
@@ -147,7 +116,6 @@ interface P2FieldLodApi {
  *   `?shadows=off`               disable the sun's shadow casting (pass isolation for benches)
  *   `?frames=N`                  automated run: N sampled frames after a 30-frame warm-up,
  *                                then the `MEASURE` line is emitted once (default 240)
- *   `?measure`                   same as `?frames=240` (automated-mode synonym)
  *   `?qa=1`                      stable headless-capture mode: fixed camera, no overlay/chrome
  *   `?path=walk|flight|aerial`   seeded camera path (P0-4, `CameraPaths.ts`); freezes the default
  *                                fly camera and drives `setExternalCameraPose` every frame.
@@ -156,12 +124,8 @@ interface P2FieldLodApi {
  *                                used by veg-bench keyframe shots + truth captures; capture mode
  *                                = HUD-free, so the clipped shots/FLIP compare stay clean)
  *   `?lodMode=off|hysteresis|dither|dither-hysteresis`
- *                                P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator 2026-11-10):
- *                                ONE documented LOD-transition strategy (derives the raw knobs;
- *                                cost per mode bounded in `LOD_TRANSITION_MODES`). Absent = legacy
- *                                `?lodband=`/`?lodhyst=` knobs; HUD `L` cycles the modes live.
- *                                `off` = explicit P1-identical hard routing (opt-in; the engine
- *                                zero-config default is `hysteresis`, decision 2026-11-10).
+ *                                LOD-transition strategy (`LOD_TRANSITION_MODES`, ADR 0059 step 2);
+ *                                default = engine default `hysteresis`; HUD `L` cycles live
  *   `?taa=1`                     arm the engine `TaaElement` (default off) — the intended display
  *                                condition for the P2 dither transition modes ("TAA resolves the
  *                                dither", ADR 0059 step 2); MEASURE carries `taa` 0/1.
@@ -199,27 +163,9 @@ const DEFAULT_CUT_EVERY = 60;
 const CUT_T_JUMP = 0.18;
 /** S2 field lane: sub-pixel cull gate in px (frozen `cullPixelSize` must sit below the band floor). */
 const FIELD_CULL_PIXEL_SIZE = 2;
-// P2 (ADR 0059 step 2, Bob veg-p2): LOD-transition demo knobs of the field lane. The tree
-// prototype now authors THREE ascending projected-size buckets (coarse proxy -> mid proxy ->
-// full merged tree) and the cull crossfade band / hysteresis / tier bias / shadow coarsening
-// are demo-tuned via URL. Demo defaults below ALIGN with the decided engine default transition
-// mode (hysteresis, decision 2026-11-10): band 0 + rate-limit jitter, no dither pattern —
-// the zero-config demo must not show the screen-door moiré that triggered the decision.
-// `?lodband=`/`?lodhyst=` still expose candidate A (dither) on demand. DECISIVE MODE SWITCH
-// (moderator 2026-11-10): `?lodMode=off|hysteresis|dither|dither-hysteresis` selects ONE
-// documented strategy that DERIVES the knobs (`LOD_TRANSITION_MODES`); HUD `L` cycles the modes
-// live. Absent = legacy raw-knob path (engine zero-config default is `hysteresis`).
-/** Default (demo) band width as a fraction of each threshold (opt-in; `?lodband=` overrides).
- *  Aligned with the engine default `hysteresis` preset: 0 = no dual write / no dither. */
-const DEFAULT_LOD_BAND = 0;
-/** Default per-instance hysteresis jitter fraction (`?lodhyst=` overrides; 0 = none).
- *  Aligned with the engine default `hysteresis` preset (0.02). */
-const DEFAULT_LOD_HYSTERESIS = 0.02;
-/** Default shadow-view coarsening offset in LOD levels (0 = reuse the main camera's choice). */
-const DEFAULT_SHADOW_LOD_BIAS = 0;
 /** Authored ascending bucket maxima in px (near=detail: bucket 0 = farthest = coarsest). */
 const FIELD_LOD_MAXIMA_PX: readonly number[] = [24, 96, 1e6];
-/** Real-LOD band maxima in px (`?reallod=1` only; geometric progression 16→32→72→1e6). The band
+/** Real-LOD band maxima in px (`?tree=` species chain; geometric progression 16→32→72→1e6). The band
  *  floor must stay above `FIELD_CULL_PIXEL_SIZE` and the top max MUST stay 1e6 (hard near tile). */
 const FIELD_LOD_MAXIMA_REAL_PX: readonly number[] = [16, 32, 72, 1e6];
 /** Load-time triangle-stride decimation per proxy bucket (bucket 0 = stride 3, bucket 1 = 2). */
@@ -349,7 +295,7 @@ interface MeasureResult {
   /** S2 field lane: active occlusion mode (`a`|`b`|`c`). */
   fieldOcclusionMode?: string;
   /** S2 field lane: geometry-chain source (`proxy` = stride-decimation default, `reallod` =
-   *  `?reallod=1` real `<stem>_LOD<n>.glb` siblings). Field lane only, both values reported. */
+   *  real `<stem>_LOD<n>.glb` chain of a `?tree=` species). Field lane only, both values reported. */
   lodSource?: "proxy" | "reallod";
   /** S2 field lane, real-LOD only: per-geometry triangle counts of the active chain in bucket
    *  order (L3/L2/L1/L0) — downstream bench triangle-budget parsing basis. */
@@ -543,7 +489,7 @@ export class Showcase extends AbstractShowcase {
   private _fieldBoundingRadius = 0;
   private _fieldCullPixelSize = 0;
   /** Field-lane geometry-chain source of the LAST built field (`proxy` = stride-decimation
-   *  default, `reallod` = `?reallod=1` real GLB siblings). Reported in MEASURE as `lodSource`. */
+   *  default, `reallod` = real GLB chain of a `?tree=` species). Reported in MEASURE as `lodSource`. */
   private _lodSource: "proxy" | "reallod" = "proxy";
   /** Per-geometry triangle counts of the real-LOD chain (bucket order L3/L2/L1/L0), when active.
    *  Empty on the proxy path — `lodTris` is only emitted for `reallod`. */
@@ -571,18 +517,6 @@ export class Showcase extends AbstractShowcase {
   private readonly _coverDensity: number;
   /** `?coverRadius=` ring outer radius in metres (clamped); default `COVER_DEFAULT_RADIUS`. */
   private readonly _coverRadius: number;
-  // P2 (ADR 0059 step 2): LOD-transition demo knobs of the field lane (URL `?lodband=`,
-  // `?lodhyst=`, `?lodbias=`, `?shadowlod=`; absent = the decided zero-config demo default,
-  // aligned with the engine default `hysteresis`). Passed into the `InstanceFieldSystem` options
-  // at build and demo-tunable live via the HUD LOD section.
-  private readonly _lodBand: number;
-  private readonly _lodHysteresis: number;
-  private readonly _lodBiasPx: number;
-  private readonly _shadowLodBias: number;
-  /** `?reallod=1` OPT-IN: 1 = the field lane consumes the REAL generated `<stem>_LOD<n>.glb`
-   *  siblings as its geometry chain (4 buckets), replacing the stride-decimation proxies. Absent
-   *  = the proven proxy path (byte-identical default). */
-  private readonly _lodReal: boolean;
   /** `?tree=<stem>`: textured species (`<stem>.species.json` + `<stem>_LOD0..3.glb` + albedo
    *  layers). Field lane only; implies the real LOD chain. Absent = the default asset set. */
   private readonly _treeStem: string | undefined;
@@ -590,15 +524,9 @@ export class Showcase extends AbstractShowcase {
   private _species: SpeciesManifest | undefined = undefined;
   /** Albedo layers of the species (one per primitive), bound as the field's `albedoArray`. */
   private _speciesAlbedo: TextureArray | undefined = undefined;
-  /** P2 APPLIED LOD knobs of the tree field (mirror of the URL knobs; the HUD LOD section reads
-   *  and live-toggles these via {@link InstanceFieldSystem.setLodTransition}). */
-  private _fieldLodBand = 0;
-  private _fieldLodHysteresis = 0;
-  private _fieldLodBiasPx = 0;
-  /** P2 DECISIVE MODE SWITCH state (ADR 0059 step 2, moderator 2026-11-10): last applied
-   *  {@link LodTransitionMode} preset; `undefined` = legacy raw-knob mode (`?lodband=` etc., not
-   *  one of the presets). `L` / `?lodMode=` drive this; MEASURE + HUD report it. */
-  private _lodMode: LodTransitionMode | undefined = undefined;
+  /** LOD-transition strategy of the tree field (`?lodMode=`, HUD `L`); default = the engine's
+   *  zero-config `hysteresis`. Passed at setup level, mirrored in MEASURE + HUD. */
+  private _lodMode: LodTransitionMode = "hysteresis";
   /** Live TAA state (`?taa=1` arms the engine `TaaElement`; default off). Sighting knob for the
    *  ADR 0059 step-2 dither modes — documented as TAA-dependent ("TAA resolves the dither"). */
   private readonly _taaLive: boolean;
@@ -659,7 +587,7 @@ export class Showcase extends AbstractShowcase {
     this._targetFrames =
       Number.isFinite(rawFrames) && rawFrames > 0 ? Math.floor(rawFrames) : DEFAULT_FRAMES;
 
-    this._isAutomated = params.has("frames") || params.has("measure");
+    this._isAutomated = params.has("frames");
     this._isQa = params.get("qa") === "1";
     this._shadowsOn = params.get("shadows") !== "off";
     // ADR 0059 step 1b: field-lane wind on by default; `?wind=0` disables it for cost isolation.
@@ -686,47 +614,13 @@ export class Showcase extends AbstractShowcase {
     // only assigned by `start()`); MEASURE + HUD report the live state.
     this._taaLive = params.get("taa") === "1";
 
-    // P2 (ADR 0059 step 2): LOD-transition knobs (field lane only). Fractions clamp into [0,1];
-    // `?lodbias=`/`?shadowlod=` are unaudited numbers. Same `params.has(...)` guard discipline
-    // as `?n=` above — an absent knob MUST stay on the demo zero-config default (band 0, the
-    // hysteresis-aligned demonstration of the decided engine default).
-    const rawLodBand = Number(params.get("lodband"));
-    this._lodBand =
-      params.has("lodband") && Number.isFinite(rawLodBand)
-        ? Math.min(1, Math.max(0, rawLodBand))
-        : DEFAULT_LOD_BAND;
-    const rawLodHyst = Number(params.get("lodhyst"));
-    this._lodHysteresis =
-      params.has("lodhyst") && Number.isFinite(rawLodHyst)
-        ? Math.min(1, Math.max(0, rawLodHyst))
-        : DEFAULT_LOD_HYSTERESIS;
-    const rawLodBias = Number(params.get("lodbias"));
-    this._lodBiasPx = params.has("lodbias") && Number.isFinite(rawLodBias) ? rawLodBias : 0;
-    const rawShadowLod = Number(params.get("shadowlod"));
-    this._shadowLodBias =
-      params.has("shadowlod") && Number.isFinite(rawShadowLod) && rawShadowLod > 0
-        ? Math.min(MAX_LOD_BUCKETS - 1, Math.floor(rawShadowLod))
-        : DEFAULT_SHADOW_LOD_BIAS;
-
-    // `?reallod=1` OPT-IN (real-LOD bench): 1 = the field lane consumes the REAL generated
-    // `<stem>_LOD1..3.glb` siblings as its geometry chain (4 buckets, atomically preloaded in
-    // `_tryLoadRealLodLevels`, fail-closed to the proxy path). Absent = default proxy path.
-    this._lodReal = params.get("reallod") === "1";
     const rawTree = params.get("tree");
     this._treeStem = rawTree !== null && /^[a-z0-9_]+$/.test(rawTree) ? rawTree : undefined;
 
-    // P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator 2026-11-10): `?lodMode=` selects ONE
-    // documented transition strategy and DERIVES the raw knobs (single declarative surface).
-    // Absent = legacy raw-knob path (URL `?lodband=` etc. + HUD `L`); the engine stays fail-
-    // closed `off` until either source arms it.
     const rawLodMode = params.get("lodMode");
-    this._lodMode =
-      rawLodMode === "off" ||
-      rawLodMode === "hysteresis" ||
-      rawLodMode === "dither" ||
-      rawLodMode === "dither-hysteresis"
-        ? rawLodMode
-        : undefined;
+    if (rawLodMode !== null && rawLodMode in LOD_TRANSITION_MODES) {
+      this._lodMode = rawLodMode as LodTransitionMode;
+    }
 
     const pathValue = params.get("path");
     this._path =
@@ -805,11 +699,11 @@ export class Showcase extends AbstractShowcase {
 
     // Tree lane: asset prototype when Frank's files exist, else the procedural placeholder.
     this._prototype = await this._loadPrototype();
-    // `?reallod=1` OPT-IN (field lane only): preload the REAL `<stem>_LOD<n>.glb` siblings ASYNC
+    // `?tree=` species (field lane only): preload the REAL `<stem>_LOD<n>.glb` siblings ASYNC
     // right after the prototype (`_buildFieldLane` stays sync — the load happens before it). The
     // default path (no knob) skips this entirely — no loader is spun up, `realLods` stays null.
     const realLods =
-      (this._lodReal || this._species !== undefined) && this._mode === "field"
+      this._species !== undefined && this._mode === "field"
         ? await this._tryLoadRealLodLevels(this._prototype)
         : null;
     const instances = scatterTrees(this._targetCount, this._seed);
@@ -1042,9 +936,9 @@ export class Showcase extends AbstractShowcase {
   }
 
   /**
-   * `?reallod=1` OPT-IN loader (real-LOD bench): consumes the REAL generated LOD siblings of the
-   * active prototype — `<stem>_LOD3.glb`, `<stem>_LOD2.glb`, `<stem>_LOD1.glb` (meshoptimizer
-   * 0.5/0.2/0.08; `_LOD0` = the already-loaded prototype, never reloaded) — and merges each into
+   * `?tree=` species loader: consumes the REAL generated LOD siblings of the
+   * active prototype — `<stem>_LOD3.glb`, `<stem>_LOD2.glb`, `<stem>_LOD1.glb` (`_LOD0` = the
+   * already-loaded prototype, never reloaded) — and merges each into
    * field geometry via the shared `_collectAssetParts` / `_mergeTreeGeometry` helpers. ATOMIC and
    * fail-closed: only when ALL THREE levels yield ≥1 collectable indexed part is `[lod3, lod2,
    * lod1]` (coarsest first) returned; ANY missing file / exception / zero-part level logs ONE
@@ -1160,7 +1054,7 @@ export class Showcase extends AbstractShowcase {
     // variant sits at bucket 0 (farthest tier) and the FULL merged tree at the highest index,
     // with DISTINCT geometry per bucket (the cull's crossfade band dual-writes adjacent
     // {coarse, fine} pairs). TWO sources, identical downstream wiring: the proven load-time
-    // stride-decimation proxies (default, 3 buckets) and the `?reallod=1` OPT-IN real
+    // stride-decimation proxies (default, 3 buckets) and the `?tree=` species real
     // `<stem>_LOD<n>.glb` siblings (4 buckets, atomically preloaded in `_tryLoadRealLodLevels`,
     // `_LOD0` = the merged tree itself — never reloaded).
     const useReal = realLods !== undefined && realLods !== null && realLods.length === 3;
@@ -1239,16 +1133,6 @@ export class Showcase extends AbstractShowcase {
     this._fieldRecords = records;
     this._fieldBoundingRadius = radius;
     this._fieldCullPixelSize = FIELD_CULL_PIXEL_SIZE;
-    this._fieldLodBiasPx = this._lodBiasPx;
-    if (this._lodMode !== undefined) {
-      // Mode switch armed (`?lodMode=`): derive the APPLIED-knob mirrors from the preset so the
-      // MEASURE/HUD readout stays truthful (the engine constructor applies the mode the same way).
-      this._fieldLodBand = LOD_TRANSITION_MODES[this._lodMode].crossfadeBand;
-      this._fieldLodHysteresis = LOD_TRANSITION_MODES[this._lodMode].hysteresis;
-    } else {
-      this._fieldLodBand = this._lodBand;
-      this._fieldLodHysteresis = this._lodHysteresis;
-    }
 
     // ADR 0059 step 1b: shared wind field for the field lane. A gentle forest breeze with
     // travelling gust fronts + calm phases (the reference-demo critique #1). `windHeight`
@@ -1275,31 +1159,19 @@ export class Showcase extends AbstractShowcase {
         maxLean: 0.6,
       });
     }
-    // P2 (ADR 0059 step 2): LOD-transition knobs (URL `?lodband=`/`?lodhyst=`/`?lodbias=`/
-    // `?shadowlod=`; absent = engine fail-closed defaults). The cull selects the bucket and
-    // the crossfade band through these; the HUD LOD section re-tunes them live. Typed via
-    // `P2FieldOptions` (additive P2 surface, see the note above).
-    const lodOptions: P2FieldOptions = {
+    const lodOptions: Partial<InstanceFieldOptions> = {
       cellSize: FIELD_CELL_SIZE,
       maxInstances: instances.length,
       cullPixelSize: FIELD_CULL_PIXEL_SIZE,
       maxViews: 4,
-      shadowLodBias: this._shadowLodBias,
-      // Mode switch: ONE declarative choice (derives band/hysteresis/gate; engine constructor
-      // applies it over any raw knobs below). Legacy raw knobs when no mode is armed.
-      ...(this._lodMode !== undefined
-        ? { lodTransitionMode: this._lodMode }
-        : {
-            lodCrossfadeBand: this._lodBand,
-            lodHysteresis: this._lodHysteresis,
-          }),
-      lodBiasPx: this._lodBiasPx,
     };
     const system = new InstanceFieldSystem(null, {
       instanceRecords: records,
       prototypes: [prototype],
       geometryTable: [geometryTableRow],
       options: lodOptions,
+      // Setup-level (the engine reads the mode here, not from `options`).
+      lodTransitionMode: this._lodMode,
       // `?tree=` species: per-material albedo layers (layer = part ordinal via `materialLayers`).
       ...(this._speciesAlbedo ? { albedoArray: this._speciesAlbedo } : {}),
       ...(this._species?.layers.some((l) => l.cutout === true)
@@ -1364,8 +1236,7 @@ export class Showcase extends AbstractShowcase {
         `occlusion=${this._occlusionMode}` +
         `, wind=${this._windField !== undefined && this._windLive ? "on" : "off"}` +
         `${this._popcount ? ", popcount" : ""}${this._cullref ? ", cullref" : ""}` +
-        `, LOD band=${this._lodBand.toFixed(2)} hyst=${this._lodHysteresis.toFixed(2)} ` +
-        `bias=${this._lodBiasPx.toFixed(1)}px shadow=${this._shadowLodBias}` +
+        `, LOD mode=${this._lodMode}` +
         `, source=${this._lodSource}`,
     );
     return true;
@@ -1611,9 +1482,8 @@ export class Showcase extends AbstractShowcase {
    * (moderator 2026-11-10) — `off` (explicit P1-identical opt-in) → `hysteresis` (the decided
    * engine zero-config default) → `dither` → `dither-hysteresis`. Each mode is ONE declarative
    * strategy applied live via
-   * {@link P2FieldLodApi.setLodTransitionMode} (band/hysteresis take effect on the next cull
-   * frame; the dither gate patches this frame). Guarded through the `P2FieldLodApi` optional
-   * surface. `?lodMode=` preselects the mode at startup.
+   * {@link InstanceFieldSystem.setLodTransitionMode} (band/hysteresis take effect on the next cull
+   * frame; the dither gate patches this frame). `?lodMode=` preselects the mode at startup.
    */
   private _toggleLodMode(): void {
     const order: readonly LodTransitionMode[] = [
@@ -1622,23 +1492,14 @@ export class Showcase extends AbstractShowcase {
       "dither",
       "dither-hysteresis",
     ];
-    const next =
-      this._lodMode === undefined
-        ? "off"
-        : order[(order.indexOf(this._lodMode) + 1) % order.length]!;
+    const next = order[(order.indexOf(this._lodMode) + 1) % order.length]!;
     this._applyLodMode(next);
   }
 
   /** Applies ONE {@link LodTransitionMode} live and mirrors its derived knobs for MEASURE/HUD. */
   private _applyLodMode(mode: LodTransitionMode): void {
     this._lodMode = mode;
-    const preset = LOD_TRANSITION_MODES[mode];
-    this._fieldLodBand = preset.crossfadeBand;
-    this._fieldLodHysteresis = preset.hysteresis;
-    const system = this._fieldSystem;
-    if (system !== undefined) {
-      (system as InstanceFieldSystem & P2FieldLodApi).setLodTransitionMode?.(mode);
-    }
+    this._fieldSystem?.setLodTransitionMode(mode);
   }
 
   /**
@@ -2013,10 +1874,10 @@ export class Showcase extends AbstractShowcase {
       ...(this._fieldSystem !== undefined
         ? {
             lod: {
-              ...(this._lodMode !== undefined ? { mode: this._lodMode } : {}),
-              band: this._fieldLodBand,
-              hyst: this._fieldLodHysteresis,
-              biasPx: this._fieldLodBiasPx,
+              mode: this._lodMode,
+              band: LOD_TRANSITION_MODES[this._lodMode].crossfadeBand,
+              hyst: LOD_TRANSITION_MODES[this._lodMode].hysteresis,
+              biasPx: 0,
             },
           }
         : {}),
