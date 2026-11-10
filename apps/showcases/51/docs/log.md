@@ -399,3 +399,20 @@ overlap (throughput baseline, not placement art) — accepted.
   `--error 0.02`); meaningful reduction appears at `--error` upscales or on larger meshes.
 - Docs: ADR 0059 step-2 (P2-3 result bullet), `docs/guides/asset-pipeline.md` §6 (LOD contract),
   CHANGELOG, BACKLOG.
+
+## 2026-11-10 — Real `_LOD<n>` consumption (`?reallod=1`, opt-in)
+
+- `?reallod=1` (field lane only): `_tryLoadRealLodLevels()` preloads `<stem>_LOD3/2/1.glb`, merges
+  each via `_collectAssetParts` + `_mergeTreeGeometry`; chain `[LOD3, LOD2, LOD1, merged]`, 4 buckets,
+  bands `FIELD_LOD_MAXIMA_REAL_PX = [16, 32, 72, 1e6]`, `lodIndex` 3/2/1/0. Atomic fail-closed: any
+  missing/empty level → proxy path. `LOD0` not shipped (byte-identical to base; prototype reused).
+- Default (no knob) = stride-decimation proxy path, unchanged. MEASURE adds `lodSource`
+  (`proxy`|`reallod`, field lane) and `lodTris` (len 4, reallod only).
+- **Decision: stays opt-in.** The Kenney set barely simplifies (`tree_pineTallA` 78→74,
+  `tree_oak` 196→192, `tree_detailed` 402→380 tris) vs. proxy far bucket −66 %. Real chains pay
+  only with organic/high-poly sources (reference-gap analysis: assets are the main lever).
+- QA (headless SwiftShader Dawn, n=1850, `cover=0`, frames=10): reallod → `lodSource=reallod`,
+  `lodTris=[74,74,78,78]`; default → `lodSource=proxy`, no `lodTris`; `path=flight` +
+  `lodMode=dither-hysteresis` + reallod OK; `autoinst` ignores the knob; 0 console errors/warnings
+  in all runs (also n=18363 with cover: console proof + 0 errors, MEASURE not reached in 280 s —
+  SwiftShader speed, not a defect). Real M4 Pro sighting not done.

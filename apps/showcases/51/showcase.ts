@@ -116,6 +116,11 @@ interface P2FieldLodApi {
  *   `?cutEvery=N`                  teleport period in sampled frames (default 60; `?occlusion=c`)
  *   `?wind=0`                      disable the field-lane wind (cost isolation / static A/B);
  *                                  default on for the field lane
+ *   `?reallod=1`                   REAL-LOD opt-in: the field lane consumes the real generated
+ *                                  `<stem>_LOD1..3.glb` siblings of the active prototype as its
+ *                                  geometry chain (4 buckets, atomic fail-closed preload; any
+ *                                  missing level falls back to the proxy path unchanged). Absent
+ *                                  = the default stride-decimation proxy path (byte-identical).
  *   `?cover=0`                     disable the ground-cover ring (step 1b, source B; default on)
  *   `?coverDensity=N`              ring blade density in blades/m² (clamped to 8; default 0.5)
  *   `?coverRadius=N`               ring outer radius in metres (clamped to [20, 400]; default 160)
@@ -212,6 +217,9 @@ const DEFAULT_LOD_HYSTERESIS = 0.02;
 const DEFAULT_SHADOW_LOD_BIAS = 0;
 /** Authored ascending bucket maxima in px (near=detail: bucket 0 = farthest = coarsest). */
 const FIELD_LOD_MAXIMA_PX: readonly number[] = [24, 96, 1e6];
+/** Real-LOD band maxima in px (`?reallod=1` only; geometric progression 16→32→72→1e6). The band
+ *  floor must stay above `FIELD_CULL_PIXEL_SIZE` and the top max MUST stay 1e6 (hard near tile). */
+const FIELD_LOD_MAXIMA_REAL_PX: readonly number[] = [16, 32, 72, 1e6];
 /** Load-time triangle-stride decimation per proxy bucket (bucket 0 = stride 3, bucket 1 = 2). */
 const FIELD_LOD_PROXY_STRIDE: readonly number[] = [3, 2];
 /** S2 field lane: population grid cell edge in meters (cells drive the CPU/GL cell fallback). */
@@ -310,6 +318,12 @@ interface MeasureResult {
   fieldInstances?: number;
   /** S2 field lane: active occlusion mode (`a`|`b`|`c`). */
   fieldOcclusionMode?: string;
+  /** S2 field lane: geometry-chain source (`proxy` = stride-decimation default, `reallod` =
+   *  `?reallod=1` real `<stem>_LOD<n>.glb` siblings). Field lane only, both values reported. */
+  lodSource?: "proxy" | "reallod";
+  /** S2 field lane, real-LOD only: per-geometry triangle counts of the active chain in bucket
+   *  order (L3/L2/L1/L0) — downstream bench triangle-budget parsing basis. */
+  lodTris?: number[];
   /** Field lane shading model: `lambert-csm` = vertex-colour albedo, Lambert sun + cascaded
    *  shadows, irradiance/ambient, leaf backlight, Standard output stage (no specular yet). */
   fieldShading?: string;
@@ -498,6 +512,12 @@ export class Showcase extends AbstractShowcase {
   private _fieldRecords: Float32Array | undefined = undefined;
   private _fieldBoundingRadius = 0;
   private _fieldCullPixelSize = 0;
+  /** Field-lane geometry-chain source of the LAST built field (`proxy` = stride-decimation
+   *  default, `reallod` = `?reallod=1` real GLB siblings). Reported in MEASURE as `lodSource`. */
+  private _lodSource: "proxy" | "reallod" = "proxy";
+  /** Per-geometry triangle counts of the real-LOD chain (bucket order L3/L2/L1/L0), when active.
+   *  Empty on the proxy path — `lodTris` is only emitted for `reallod`. */
+  private _realLodTris: number[] = [];
   /** ADR 0059 step 1b: shared wind field driving the field lane (`?wind=0` isolates it). */
   private _windField: WindField | undefined = undefined;
   /** `?wind=0` disables the field-lane wind (measurement isolation); default on. */
@@ -526,6 +546,10 @@ export class Showcase extends AbstractShowcase {
   private readonly _lodHysteresis: number;
   private readonly _lodBiasPx: number;
   private readonly _shadowLodBias: number;
+  /** `?reallod=1` OPT-IN: 1 = the field lane consumes the REAL generated `<stem>_LOD<n>.glb`
+   *  siblings as its geometry chain (4 buckets), replacing the stride-decimation proxies. Absent
+   *  = the proven proxy path (byte-identical default). */
+  private readonly _lodReal: boolean;
   /** P2 APPLIED LOD knobs of the tree field (mirror of the URL knobs; the HUD LOD section reads
    *  and live-toggles these via {@link InstanceFieldSystem.setLodTransition}). */
   private _fieldLodBand = 0;
@@ -644,6 +668,11 @@ export class Showcase extends AbstractShowcase {
         ? Math.min(MAX_LOD_BUCKETS - 1, Math.floor(rawShadowLod))
         : DEFAULT_SHADOW_LOD_BIAS;
 
+    // `?reallod=1` OPT-IN (real-LOD bench): 1 = the field lane consumes the REAL generated
+    // `<stem>_LOD1..3.glb` siblings as its geometry chain (4 buckets, atomically preloaded in
+    // `_tryLoadRealLodLevels`, fail-closed to the proxy path). Absent = default proxy path.
+    this._lodReal = params.get("reallod") === "1";
+
     // P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator 2026-11-10): `?lodMode=` selects ONE
     // documented transition strategy and DERIVES the raw knobs (single declarative surface).
     // Absent = legacy raw-knob path (URL `?lodband=` etc. + HUD `L`); the engine stays fail-
@@ -734,13 +763,20 @@ export class Showcase extends AbstractShowcase {
 
     // Tree lane: asset prototype when Frank's files exist, else the procedural placeholder.
     this._prototype = await this._loadPrototype();
+    // `?reallod=1` OPT-IN (field lane only): preload the REAL `<stem>_LOD<n>.glb` siblings ASYNC
+    // right after the prototype (`_buildFieldLane` stays sync — the load happens before it). The
+    // default path (no knob) skips this entirely — no loader is spun up, `realLods` stays null.
+    const realLods =
+      this._lodReal && this._mode === "field"
+        ? await this._tryLoadRealLodLevels(this._prototype)
+        : null;
     const instances = scatterTrees(this._targetCount, this._seed);
     this._treeCount = instances.length;
     if (this._mode === "autoinst") {
       this._buildAutoInstances(instances, this._prototype);
     } else if (this._mode === "field") {
       // WebGPU-only lane; a non-WebGPU `?mode=field` falls back to `autoinst` (documented).
-      if (this._buildFieldLane(instances, this._prototype)) {
+      if (this._buildFieldLane(instances, this._prototype, realLods)) {
         this._treeCount = instances.length;
         // ADR 0059 step 1b, source B: second camera-centred field for the ground-cover ring
         // (optional, `?cover=0` to disable; non-fatal when the device cannot host a second field).
@@ -928,6 +964,47 @@ export class Showcase extends AbstractShowcase {
     return parts;
   }
 
+  /**
+   * `?reallod=1` OPT-IN loader (real-LOD bench): consumes the REAL generated LOD siblings of the
+   * active prototype — `<stem>_LOD3.glb`, `<stem>_LOD2.glb`, `<stem>_LOD1.glb` (meshoptimizer
+   * 0.5/0.2/0.08; `_LOD0` = the already-loaded prototype, never reloaded) — and merges each into
+   * field geometry via the shared `_collectAssetParts` / `_mergeTreeGeometry` helpers. ATOMIC and
+   * fail-closed: only when ALL THREE levels yield ≥1 collectable indexed part is `[lod3, lod2,
+   * lod1]` (coarsest first) returned; ANY missing file / exception / zero-part level logs ONE
+   * informative line and returns null (the caller falls back to the stride-decimation proxies).
+   * Deterministic; never throws.
+   */
+  private async _tryLoadRealLodLevels(
+    proto: TreePrototype,
+  ): Promise<GeometryDataInterface[] | null> {
+    if (proto.source !== "asset") return null;
+    const stem = proto.name.replace(/\.glb$/i, "");
+    const loader = new GltfLoader({ basePath: "./assets/" });
+    const lods: GeometryDataInterface[] = [];
+    // Coarsest first (LOD3 = furthest bucket 0). Every level must collect ≥1 mesh part.
+    for (const suffix of ["_LOD3.glb", "_LOD2.glb", "_LOD1.glb"]) {
+      const assetName = stem + suffix;
+      try {
+        const root = await loader.load(assetName);
+        const parts = this._collectAssetParts(root);
+        if (parts.length === 0) {
+          console.info(
+            `[Showcase51] real LOD "${assetName}" has no mesh parts — reallod off, proxy fallback`,
+          );
+          return null;
+        }
+        lods.push(this._mergeTreeGeometry({ name: assetName, source: "asset", parts }));
+      } catch (error) {
+        console.info(
+          `[Showcase51] real LOD "${assetName}" unavailable ` +
+            `(${error instanceof Error ? error.message : String(error)}) — reallod off, proxy fallback`,
+        );
+        return null;
+      }
+    }
+    return lods;
+  }
+
   /** `autoinst` lane: plain scene-graph nodes, part-major so identical parts stay consecutive. */
   private _buildAutoInstances(instances: readonly ScatterInstance[], proto: TreePrototype): void {
     for (const part of proto.parts) {
@@ -987,7 +1064,11 @@ export class Showcase extends AbstractShowcase {
    * false when the active renderer is not WebGPU (caller falls back to the autoinst lane) or the
    * population is empty — both documented non-goals for the field lane.
    */
-  private _buildFieldLane(instances: readonly ScatterInstance[], proto: TreePrototype): boolean {
+  private _buildFieldLane(
+    instances: readonly ScatterInstance[],
+    proto: TreePrototype,
+    realLods: readonly GeometryDataInterface[] | null | undefined = undefined,
+  ): boolean {
     if (!(this.renderer instanceof WebGPURenderer)) {
       console.info("[Showcase51] ?mode=field needs WebGPU — falling back to the autoinst lane");
       return false;
@@ -997,36 +1078,79 @@ export class Showcase extends AbstractShowcase {
     }
     const merged = this._mergeTreeGeometry(proto);
     const radius = this._treeBoundingRadius(merged);
-    // P2 (ADR 0059 step 2): load-time stepped LOD proxies of the merged tree. Bucket index
-    // ASCENDS with projected diameter (near=detail), and geometry is bound by bucket index —
-    // so the COARSEST proxy sits at bucket 0 (farthest tier), the FULL tree at the highest
-    // index. The gaps between `FIELD_LOD_MAXIMA_PX` bytes are where the cull's (URL-tuned)
-    // crossfade band dual-writes adjacent {coarse, fine} pairs with DISTINCT geometry.
-    const coarse = this._buildLodProxyGeometry(merged, FIELD_LOD_PROXY_STRIDE[0]!);
-    const mid = this._buildLodProxyGeometry(merged, FIELD_LOD_PROXY_STRIDE[1]!);
-    const bands: LodBucketDescriptor[] = [
-      {
-        name: "L2-far",
-        lodIndex: 2,
-        minProjectedSize: FIELD_CULL_PIXEL_SIZE + 1,
-        maxProjectedSize: FIELD_LOD_MAXIMA_PX[0]!,
-        geometrySlot: 0,
-      },
-      {
-        name: "L1-mid",
-        lodIndex: 1,
-        minProjectedSize: FIELD_LOD_MAXIMA_PX[0]! + 1,
-        maxProjectedSize: FIELD_LOD_MAXIMA_PX[1]!,
-        geometrySlot: 1,
-      },
-      {
-        name: "L0-near",
-        lodIndex: 0,
-        minProjectedSize: FIELD_LOD_MAXIMA_PX[1]! + 1,
-        maxProjectedSize: FIELD_LOD_MAXIMA_PX[2]!,
-        geometrySlot: 2,
-      },
-    ];
+    // P2 (ADR 0059 step 2): geometry chain + band wiring of the tree field. Bucket index ASCENDS
+    // with projected diameter (near=detail; geometry is bound by bucket index), so the COARSEST
+    // variant sits at bucket 0 (farthest tier) and the FULL merged tree at the highest index,
+    // with DISTINCT geometry per bucket (the cull's crossfade band dual-writes adjacent
+    // {coarse, fine} pairs). TWO sources, identical downstream wiring: the proven load-time
+    // stride-decimation proxies (default, 3 buckets) and the `?reallod=1` OPT-IN real
+    // `<stem>_LOD<n>.glb` siblings (4 buckets, atomically preloaded in `_tryLoadRealLodLevels`,
+    // `_LOD0` = the merged tree itself — never reloaded).
+    const useReal = realLods !== undefined && realLods !== null && realLods.length === 3;
+    const geometryTableRow: readonly GeometryDataInterface[] = useReal
+      ? [...realLods, merged]
+      : [
+          this._buildLodProxyGeometry(merged, FIELD_LOD_PROXY_STRIDE[0]!),
+          this._buildLodProxyGeometry(merged, FIELD_LOD_PROXY_STRIDE[1]!),
+          merged,
+        ];
+    // Band maxima: `FIELD_LOD_MAXIMA_PX` (proxy) resp. `FIELD_LOD_MAXIMA_REAL_PX` (real LODs);
+    // band i min = prev max + 1, bucket 0 min = `FIELD_CULL_PIXEL_SIZE + 1` (the cull gate must
+    // stay below the band floor), top max MUST stay 1e6 (hard near tile).
+    const bands: LodBucketDescriptor[] = useReal
+      ? [
+          {
+            name: "L3-far",
+            lodIndex: 3,
+            minProjectedSize: FIELD_CULL_PIXEL_SIZE + 1,
+            maxProjectedSize: FIELD_LOD_MAXIMA_REAL_PX[0]!,
+            geometrySlot: 0,
+          },
+          {
+            name: "L2",
+            lodIndex: 2,
+            minProjectedSize: FIELD_LOD_MAXIMA_REAL_PX[0]! + 1,
+            maxProjectedSize: FIELD_LOD_MAXIMA_REAL_PX[1]!,
+            geometrySlot: 1,
+          },
+          {
+            name: "L1",
+            lodIndex: 1,
+            minProjectedSize: FIELD_LOD_MAXIMA_REAL_PX[1]! + 1,
+            maxProjectedSize: FIELD_LOD_MAXIMA_REAL_PX[2]!,
+            geometrySlot: 2,
+          },
+          {
+            name: "L0-near",
+            lodIndex: 0,
+            minProjectedSize: FIELD_LOD_MAXIMA_REAL_PX[2]! + 1,
+            maxProjectedSize: FIELD_LOD_MAXIMA_REAL_PX[3]!,
+            geometrySlot: 3,
+          },
+        ]
+      : [
+          {
+            name: "L2-far",
+            lodIndex: 2,
+            minProjectedSize: FIELD_CULL_PIXEL_SIZE + 1,
+            maxProjectedSize: FIELD_LOD_MAXIMA_PX[0]!,
+            geometrySlot: 0,
+          },
+          {
+            name: "L1-mid",
+            lodIndex: 1,
+            minProjectedSize: FIELD_LOD_MAXIMA_PX[0]! + 1,
+            maxProjectedSize: FIELD_LOD_MAXIMA_PX[1]!,
+            geometrySlot: 1,
+          },
+          {
+            name: "L0-near",
+            lodIndex: 0,
+            minProjectedSize: FIELD_LOD_MAXIMA_PX[1]! + 1,
+            maxProjectedSize: FIELD_LOD_MAXIMA_PX[2]!,
+            geometrySlot: 2,
+          },
+        ];
     const prototype: PrototypeDescriptor = {
       id: `s51-${proto.name}`,
       boundingRadius: radius,
@@ -1097,7 +1221,7 @@ export class Showcase extends AbstractShowcase {
     const system = new InstanceFieldSystem(null, {
       instanceRecords: records,
       prototypes: [prototype],
-      geometryTable: [[coarse, mid, merged]],
+      geometryTable: [geometryTableRow],
       options: lodOptions,
       // Leaf transmission (ADR 0060), linear; the colour-stream alpha masks it to the foliage.
       backlight: [
@@ -1135,6 +1259,19 @@ export class Showcase extends AbstractShowcase {
     // source of truth for the runtime swap, never the constructor.
     this._applyWindState();
 
+    // Geometry-chain source bookkeeping (MEASURE `lodSource` / `lodTris`) + the source-specific
+    // diagnostics line. The `source=` suffix on the standard info line is additive, never parsed.
+    if (useReal) {
+      this._lodSource = "reallod";
+      this._realLodTris = geometryTableRow.map((g) => Math.floor((g.indices?.length ?? 0) / 3));
+      console.info(
+        `[Showcase51] field lane source=reallod buckets=4 tidy=${this._realLodTris.join("/")}`,
+      );
+    } else {
+      this._lodSource = "proxy";
+      this._realLodTris = [];
+    }
+
     if (this._popcount || this._cullref) {
       system.installCullProbe({
         onCullFrame: (sets: FieldVisibleSets): void => this._onFieldCullFrame(sets),
@@ -1146,7 +1283,8 @@ export class Showcase extends AbstractShowcase {
         `, wind=${this._windField !== undefined && this._windLive ? "on" : "off"}` +
         `${this._popcount ? ", popcount" : ""}${this._cullref ? ", cullref" : ""}` +
         `, LOD band=${this._lodBand.toFixed(2)} hyst=${this._lodHysteresis.toFixed(2)} ` +
-        `bias=${this._lodBiasPx.toFixed(1)}px shadow=${this._shadowLodBias}`,
+        `bias=${this._lodBiasPx.toFixed(1)}px shadow=${this._shadowLodBias}` +
+        `, source=${this._lodSource}`,
     );
     return true;
   }
@@ -1805,6 +1943,11 @@ export class Showcase extends AbstractShowcase {
       result.fieldInstances = this._fieldSystem.instanceCount;
       result.fieldOcclusionMode = this._occlusionMode;
       result.fieldShading = "lambert-csm";
+      // Field-lane geometry-chain source (both values reported); `lodTris` only for real LODs.
+      result.lodSource = this._lodSource;
+      if (this._lodSource === "reallod" && this._realLodTris.length === 4) {
+        result.lodTris = [...this._realLodTris];
+      }
       // Live wind state (URL knob or HUD toggle) — the honest isolation flag for cost tables.
       result.wind = this._windField !== undefined && this._windLive ? 1 : 0;
       // Ground-cover ring (ADR 0059 step 1b, source B): live record count + ring knobs.

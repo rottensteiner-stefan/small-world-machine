@@ -143,11 +143,59 @@
     "alphaMasks": 0,
     "webpEmbedded": false
   },
+  "tree_detailed_LOD1.glb": {
+    "bytes": 31720,
+    "sha256": "33f417ad7f79fbe4e6c6c53547c85a1c4b12f0902cc9ff3b73176f90df7f4c41",
+    "tris": 398,
+    "verts": 754,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_detailed_LOD2.glb": {
+    "bytes": 31456,
+    "sha256": "b2cea19d1023e0a70e79980d8731d2e1d7540c9aca07d567e7fc91ef87bbeac6",
+    "tris": 392,
+    "verts": 748,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_detailed_LOD3.glb": {
+    "bytes": 31056,
+    "sha256": "4bd4636fd7aca0408c15e5e2c3a60fe4cdc741a1be5adb00c99257e5671d00a9",
+    "tris": 380,
+    "verts": 740,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
   "tree_oak.glb": {
     "bytes": 14644,
     "sha256": "e40de0c66501792d5d3b5e99bad6cf63b0bb0a263d868c7571086ebefc871456",
     "tris": 196,
     "verts": 648,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_oak_LOD1.glb": {
+    "bytes": 14724,
+    "sha256": "76d94cef475674b3add4545d3024bfc7f702835ca2d88c35e7f28d0ece00268e",
+    "tris": 196,
+    "verts": 324,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_oak_LOD2.glb": {
+    "bytes": 14592,
+    "sha256": "26b0e47ff23e24ae8360ed9303d6399d7d77d29ab5f111bed861dfb8c17c727e",
+    "tris": 193,
+    "verts": 321,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_oak_LOD3.glb": {
+    "bytes": 14548,
+    "sha256": "11a567da2eecf6974f9338d561e4cdee7f50255266ba1bc410d4667f7c27970e",
+    "tris": 192,
+    "verts": 320,
     "alphaMasks": 0,
     "webpEmbedded": false
   },
@@ -164,6 +212,30 @@
     "sha256": "1efa0434f6dcef622497e223a2a5884be78428e3e360d5913573ba9e0d9b7707",
     "tris": 78,
     "verts": 272,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_pineTallA_LOD1.glb": {
+    "bytes": 7268,
+    "sha256": "e2fa64be3397b22d3bc95996d91e2d46db2ab1a3b5b183c2e1a126a07e038a42",
+    "tris": 78,
+    "verts": 136,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_pineTallA_LOD2.glb": {
+    "bytes": 7124,
+    "sha256": "6e919b930a96bc08fbd3187b3462dfa7ec962207cf9a37ee3d38ccf67ce64e46",
+    "tris": 74,
+    "verts": 133,
+    "alphaMasks": 0,
+    "webpEmbedded": false
+  },
+  "tree_pineTallA_LOD3.glb": {
+    "bytes": 7124,
+    "sha256": "c032dd9dac36ed740f624a3a37122b9a40c9b5a30c9cf388e0f00f5b4ccebc85",
+    "tris": 74,
+    "verts": 133,
     "alphaMasks": 0,
     "webpEmbedded": false
   }
