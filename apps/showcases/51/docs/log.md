@@ -461,3 +461,14 @@ overlap (throughput baseline, not placement art) — accepted.
 - Bug fixed: `?lodMode=` went into `options`; the engine reads it at setup level → startup preset
   was silently ignored. Real M4 Pro check: engine `lodTransitionMode` == URL for off/hysteresis/
   dither, species path intact, 0 console errors.
+
+## 2026-11-11 — Jacaranda bake v2: no more crown shards
+
+- User sighting: crowns "komplett zersplittert". Causes: (1) simplified leaf-card islands became
+  distorted textured shards, (2) thin twigs collapsed into slivers, (3) `simplifySloppy` wood
+  fallback produced huge triangles, (4) box-filtered alpha mips erased distant leaves.
+- Fixes: engine shader scales layer alpha by mip level (coverage-preserving cutout); local bake
+  v2 only THINS leaf cards (scale `sqrt(0.2/keep)`, cap 8), thins small twig islands (< 150 tris)
+  unscaled, keeps limbs and simplifies wood with meshoptimizer `Permissive` (no sloppy).
+- Chain: LOD0 141 k / 41.6 k / 13.3 k / 4.0 k tris (12.4 MB GLBs total). Real M4 Pro, n=1850:
+  walk 3.2 ms, aerial 6.8 ms GPU (was 13.1), 0 console errors. Assets still local, pending sign-off.

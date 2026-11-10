@@ -87,12 +87,25 @@ fn fieldAlbedoSample(uv: vec2f, layer: u32) -> vec4f {
     return textureSample(u_fieldAlbedoArray, fieldAlbedoSampler, uv, min(layer, fieldInfo.albedoLayerCount - 1u));
 }
 
+// Mip-coverage preservation for the albedo-array cutout (Golus, "Anti-aliased Alpha Test",
+// 2017): box-filtered mips average thin leaflets below the threshold, so distant foliage
+// vanishes. Scaling alpha by the sampled mip level keeps the coverage roughly constant.
+const FIELD_ALPHA_MIP_SCALE: f32 = 0.25;
+
+fn fieldAlbedoCoverage(uv: vec2f, alpha: f32) -> f32 {
+    let size = vec2f(textureDimensions(u_fieldAlbedoArray));
+    let dx = dpdx(uv * size);
+    let dy = dpdy(uv * size);
+    let lod = max(0.0, 0.5 * log2(max(dot(dx, dx), dot(dy, dy))));
+    return alpha * (1.0 + lod * FIELD_ALPHA_MIP_SCALE);
+}
+
 // Cutout source: the albedo array's alpha when present, else the single field alpha map.
 fn fieldAlphaDiscard(uv: vec2f, layer: u32) {
     if (fieldInfo.alphaTest > 0.0) {
         var a: f32;
         if (fieldInfo.albedoLayerCount > 0u) {
-            a = fieldAlbedoSample(uv, layer).a;
+            a = fieldAlbedoCoverage(uv, fieldAlbedoSample(uv, layer).a);
         } else {
             a = textureSample(u_fieldAlphaMap, fieldAlphaSampler, uv).a;
         }
@@ -312,7 +325,7 @@ fn fieldColorShade(i: FieldVertOut, frontFacing: bool) -> vec4f {
     let tex = fieldAlbedoSample(i.uv, i.layer);
     if (fieldInfo.alphaTest > 0.0) {
         if (fieldInfo.albedoLayerCount > 0u) {
-            if (tex.a < fieldInfo.alphaTest) {
+            if (fieldAlbedoCoverage(i.uv, tex.a) < fieldInfo.alphaTest) {
                 discard;
             }
         } else {
