@@ -241,9 +241,10 @@ export interface InstanceFieldSystemSetup {
   windHeight?: number;
   /**
    * @domain P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator decision 2026-11-10): ONE
-   *         declarative transition strategy via {@link LOD_TRANSITION_MODES} (`off` = fail-closed
-   *         P1-identical hard routing; `dither` / `hysteresis` / `dither-hysteresis` = documented
-   *         presets with bounded cost). When present it DERIVES the raw knobs and takes precedence
+   *         declarative transition strategy via {@link LOD_TRANSITION_MODES} (`off` = explicit
+   *         P1-identical hard routing; engine default = `hysteresis` — decided 2026-11-10;
+   *         `dither` / `dither-hysteresis` = TAA-pipeline opt-in presets with bounded cost).
+   *         When present it DERIVES the raw knobs and takes precedence
    *         over any `lodCrossfadeBand`/`lodHysteresis`/`lodDitherMode` in this setup. Runtime-
    *         toggleable via {@link InstanceFieldSystem.setLodTransitionMode}.
    */
@@ -265,6 +266,17 @@ interface FieldBucketStreams {
   color: GPUBuffer;
   owned: GPUBuffer[];
 }
+
+/**
+ * @domain Zero-config engine default of the DECISIVE MODE SWITCH (ADR 0059 step 2, decision
+ *   landed 2026-11-10): `hysteresis` — band 0, per-instance rate-limit jitter 0.02, HARD dither
+ *   gate (no fragment pattern). Chosen from the §6 live sighting on the real M4 Pro: the dither
+ *   presets read as a coarse moiré/flicker WITHOUT TAA (the engine-wide default display path)
+ *   and only degrade to a residual fine grain WITH TAA — neither is acceptable as a zero-config
+ *   default. Hysteresis decorrelates hard switches across the population without any visual
+ *   pattern (cull-side ALU only); `off` remains the explicit P1-identical baseline opt-in.
+ */
+const DEFAULT_LOD_TRANSITION_MODE: LodTransitionMode = "hysteresis";
 
 /** Options defaults so `{}` (S2 scaffold) builds a valid inert node (host null). */
 const DEFAULT_OPTIONS: InstanceFieldOptions = {
@@ -427,9 +439,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   /** P2 LOD dither mode word (`FieldInfo.lodDitherMode`): 0 = crossfade, 1 = hard (candidate C). */
   private _lodDitherMode: number;
   /** P2 band-width knob (cull pad word @124, candidate A): [0,1] fraction of each EFFECTIVE
-   *  threshold; 0 = hard switch (candidate C, single routing). Default 0 = fail-closed, P1-
-   *  identical single routing for every field unless explicitly opted in. Live via
-   *  {@link setLodTransition}; takes effect next frame (view blocks refresh per prepare). */
+   *  threshold; 0 = hard switch (candidate C, single routing). Knob default 0; the engine default
+   *  transition mode (hysteresis) keeps 0 and adds only the rate-limit jitter (never a band). */
   private _lodCrossfadeBand: number;
   /** P2 hysteresis knob (cull pad word @128, candidate C): [0,1] per-instance deterministic
    *  jitter fraction of each EFFECTIVE threshold (decorrelates hard switches, stateless). */
@@ -438,10 +449,11 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
    *  coarser selection at the same pixel footprint). Any finite float, default 0. */
   private _lodBiasPx: number;
   /** P2 DECISIVE MODE SWITCH (ADR 0059 step 2, moderator decision 2026-11-10): last applied
-   *  {@link LodTransitionMode}; `off` = fail-closed P1-identical. `setLodTransitionMode` is the
-   *  only writer; the raw knob setters do NOT touch it (mirrors applied knobs truthfully via the
-   *  other `_lod*` fields). */
-  private _lodTransitionMode: LodTransitionMode = "off";
+   *  {@link LodTransitionMode}. `setLodTransitionMode` is the only writer; the raw knob setters
+   *  do NOT touch it (mirrors the applied mode truthfully via the other `_lod*` fields). Engine
+   *  default = {@link DEFAULT_LOD_TRANSITION_MODE} (`hysteresis`, decision 2026-11-10); `off` is
+   *  the explicit P1-identical baseline opt-in. */
+  private _lodTransitionMode: LodTransitionMode = DEFAULT_LOD_TRANSITION_MODE;
   /** Authored `shadowLodBias` (frozen option): coarsening offset in LOD levels written ONLY
    *  into shadow-view blocks (`0` = reuse the main camera's choice, the required default);
    *  clamped into `[0, MAX_LOD_BUCKETS-1]`. The cull applies `max(bucket - bias, 0)`. */
@@ -554,7 +566,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
    *         declarative surface (multiple solutions behind one switch, each with bounded cost).
    *         Live-safe: the dither gate word patches IMMEDIATELY (this frame);
    *         band/hysteresis take effect on the NEXT cull frame (view blocks refresh per prepare).
-   *         Fails fast on unknown modes; `"off"` = fail-closed P1-identical hard routing.
+   *         Fails fast on unknown modes; `"off"` = explicit P1-identical hard routing (engine
+   *         default = `hysteresis`, decided 2026-11-10).
    *         {@link lodTransitionMode} reports the last applied mode; the raw knob setters do not
    *         change it (last call wins for the knobs themselves).
    */
@@ -572,9 +585,12 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   }
 
   /**
-   * @domain Read-only mirror of the last applied {@link LodTransitionMode} (fail-closed `"off"`
-   *         until the switch is used). The raw knob setters do not touch it; applied knobs are
-   *         always readable through the other P2 state.
+   * @domain Read-only mirror of the last applied {@link LodTransitionMode}. Engine default
+   *         `hysteresis` (decision 2026-11-10) is applied at construction ONLY for zero-config
+   *         fields (no authored mode AND no raw transition knob); authors on the legacy raw-knob
+   *         path keep their knobs (mirror stays at the engine default label). The raw knob
+   *         setters do not touch the mirror; applied knobs are always readable through the other
+   *         P2 state.
    */
   public get lodTransitionMode(): LodTransitionMode {
     return this._lodTransitionMode;
@@ -662,9 +678,20 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     }
     this._lodBiasPx = biasPx;
     // P2 DECISIVE MODE SWITCH: an authored mode derives the raw knobs and takes precedence over
-    // any raw knob values above (single declarative surface; fail-closed "off" = P1-identical).
+    // any raw knob values above (single declarative surface; documented contract: "when present
+    // it takes precedence" — absent the raw knobs are honored). WITHOUT a mode AND WITHOUT any
+    // authored raw transition knob (band/hysteresis/dither-gate), the engine applies its
+    // zero-config default (DEFAULT_LOD_TRANSITION_MODE = hysteresis, decision 2026-11-10) so the
+    // mode mirror and the applied knobs never diverge at construction. `off` = explicit
+    // P1-identical opt-in. Authors who configure raw knobs stay on the legacy raw path.
+    const authoredRawTransition =
+      options.lodCrossfadeBand !== undefined ||
+      options.lodHysteresis !== undefined ||
+      setup.lodDitherMode !== undefined;
     if (setup.lodTransitionMode !== undefined) {
       this.setLodTransitionMode(setup.lodTransitionMode);
+    } else if (!authoredRawTransition) {
+      this.setLodTransitionMode(DEFAULT_LOD_TRANSITION_MODE);
     }
     this._shadowLodBias = Math.min(
       Math.max(0, Math.floor(options.shadowLodBias)),

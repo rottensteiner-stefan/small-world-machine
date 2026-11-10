@@ -153,7 +153,8 @@ interface P2FieldLodApi {
  *                                ONE documented LOD-transition strategy (derives the raw knobs;
  *                                cost per mode bounded in `LOD_TRANSITION_MODES`). Absent = legacy
  *                                `?lodband=`/`?lodhyst=` knobs; HUD `L` cycles the modes live.
- *                                `off` = fail-closed P1-identical hard routing.
+ *                                `off` = explicit P1-identical hard routing (opt-in; the engine
+ *                                zero-config default is `hysteresis`, decision 2026-11-10).
  *   `?taa=1`                     arm the engine `TaaElement` (default off) — the intended display
  *                                condition for the P2 dither transition modes ("TAA resolves the
  *                                dither", ADR 0059 step 2); MEASURE carries `taa` 0/1.
@@ -194,15 +195,19 @@ const FIELD_CULL_PIXEL_SIZE = 2;
 // P2 (ADR 0059 step 2, Bob veg-p2): LOD-transition demo knobs of the field lane. The tree
 // prototype now authors THREE ascending projected-size buckets (coarse proxy -> mid proxy ->
 // full merged tree) and the cull crossfade band / hysteresis / tier bias / shadow coarsening
-// are demo-tuned via URL. Absent knobs stay on the ENGINE fail-closed defaults (band 0 =
-// P1-identical single routing) unless the showcase opts in below. DECISIVE MODE SWITCH
+// are demo-tuned via URL. Demo defaults below ALIGN with the decided engine default transition
+// mode (hysteresis, decision 2026-11-10): band 0 + rate-limit jitter, no dither pattern —
+// the zero-config demo must not show the screen-door moiré that triggered the decision.
+// `?lodband=`/`?lodhyst=` still expose candidate A (dither) on demand. DECISIVE MODE SWITCH
 // (moderator 2026-11-10): `?lodMode=off|hysteresis|dither|dither-hysteresis` selects ONE
 // documented strategy that DERIVES the knobs (`LOD_TRANSITION_MODES`); HUD `L` cycles the modes
-// live. Absent = legacy raw-knob path (engine remains fail-closed `off`).
-/** Default (demo) band width as a fraction of each threshold (opt-in; `?lodband=` overrides). */
-const DEFAULT_LOD_BAND = 0.12;
-/** Default per-instance hysteresis jitter fraction (`?lodhyst=` overrides; 0 = none). */
-const DEFAULT_LOD_HYSTERESIS = 0;
+// live. Absent = legacy raw-knob path (engine zero-config default is `hysteresis`).
+/** Default (demo) band width as a fraction of each threshold (opt-in; `?lodband=` overrides).
+ *  Aligned with the engine default `hysteresis` preset: 0 = no dual write / no dither. */
+const DEFAULT_LOD_BAND = 0;
+/** Default per-instance hysteresis jitter fraction (`?lodhyst=` overrides; 0 = none).
+ *  Aligned with the engine default `hysteresis` preset (0.02). */
+const DEFAULT_LOD_HYSTERESIS = 0.02;
 /** Default shadow-view coarsening offset in LOD levels (0 = reuse the main camera's choice). */
 const DEFAULT_SHADOW_LOD_BIAS = 0;
 /** Authored ascending bucket maxima in px (near=detail: bucket 0 = farthest = coarsest). */
@@ -514,8 +519,9 @@ export class Showcase extends AbstractShowcase {
   /** `?coverRadius=` ring outer radius in metres (clamped); default `COVER_DEFAULT_RADIUS`. */
   private readonly _coverRadius: number;
   // P2 (ADR 0059 step 2): LOD-transition demo knobs of the field lane (URL `?lodband=`,
-  // `?lodhyst=`, `?lodbias=`, `?shadowlod=`; absent = engine fail-closed defaults). Passed into
-  // the `InstanceFieldSystem` options at build and demo-tunable live via the HUD LOD section.
+  // `?lodhyst=`, `?lodbias=`, `?shadowlod=`; absent = the decided zero-config demo default,
+  // aligned with the engine default `hysteresis`). Passed into the `InstanceFieldSystem` options
+  // at build and demo-tunable live via the HUD LOD section.
   private readonly _lodBand: number;
   private readonly _lodHysteresis: number;
   private readonly _lodBiasPx: number;
@@ -618,7 +624,8 @@ export class Showcase extends AbstractShowcase {
 
     // P2 (ADR 0059 step 2): LOD-transition knobs (field lane only). Fractions clamp into [0,1];
     // `?lodbias=`/`?shadowlod=` are unaudited numbers. Same `params.has(...)` guard discipline
-    // as `?n=` above — an absent knob MUST stay on the engine fail-closed default (band 0).
+    // as `?n=` above — an absent knob MUST stay on the demo zero-config default (band 0, the
+    // hysteresis-aligned demonstration of the decided engine default).
     const rawLodBand = Number(params.get("lodband"));
     this._lodBand =
       params.has("lodband") && Number.isFinite(rawLodBand)
@@ -1368,8 +1375,9 @@ export class Showcase extends AbstractShowcase {
 
   /**
    * HUD `L` toggle (P2, ADR 0059 step 2): cycles the field lane through the DECISIVE MODE SWITCH
-   * (moderator 2026-11-10) — `off` (fail-closed P1-identical) → `hysteresis` → `dither` →
-   * `dither-hysteresis`. Each mode is ONE declarative strategy applied live via
+   * (moderator 2026-11-10) — `off` (explicit P1-identical opt-in) → `hysteresis` (the decided
+   * engine zero-config default) → `dither` → `dither-hysteresis`. Each mode is ONE declarative
+   * strategy applied live via
    * {@link P2FieldLodApi.setLodTransitionMode} (band/hysteresis take effect on the next cull
    * frame; the dither gate patches this frame). Guarded through the `P2FieldLodApi` optional
    * surface. `?lodMode=` preselects the mode at startup.

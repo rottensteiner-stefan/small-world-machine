@@ -370,3 +370,16 @@ overlap (throughput baseline, not placement art) — accepted.
   `?coverDensity=`-sweep protocol stays the documented option if a standalone marginal is later
   demanded.
 - Remaining PENDING: live pop A/B sighting under the LOD mode switch (task 2, `?path=flight` + `L`).
+
+## 2026-11-10 — LOD default DECIDED (ADR 0059 step 2, live sighting on the real M4 Pro)
+
+- Live human sighting (real M4 Pro, aerial flyover, `cover=0`, `?lodMode=dither-hysteresis`):
+  WITHOUT TAA the dither reads as a coarse moiré/screen-door flicker (unpleasant);
+  WITH `?taa=1` it degrades to a residual fine grain ("leicht körnig") — TAA helps but does not
+  eliminate the pattern. The `hysteresis` rail has no fragment pattern by construction.
+- **DECISION:** engine zero-config default transition mode = `hysteresis` (band 0 / hyst 0.02 /
+  hard gate). `off` = explicit P1-identical opt-in; `dither*` = documented TAA-pipeline opt-in.
+  Demo defaults of THIS showcase aligned (band 0 / hyst 0.02) so the zero-config demo shows no
+  moiré. `?lodband=`/`?lodhyst=` still expose the dither band on demand; `?taa=1` arms the
+  engine `TaaElement` for the dither display condition.
+- Recorded in ADR 0059 + research note §9.8 (supersedes §9.7's "keep hard-switch/off" stance).

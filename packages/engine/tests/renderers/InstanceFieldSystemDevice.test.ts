@@ -114,6 +114,8 @@ interface SetupExtras {
   windUniforms?: Float32Array;
   lodDitherMode?: "crossfade" | "hard";
   lodTransitionMode?: LodTransitionMode;
+  lodCrossfadeBand?: number;
+  lodHysteresis?: number;
 }
 
 function makeSetup(
@@ -190,7 +192,16 @@ function makeSetup(
     instanceRecords: records,
     prototypes: [prototype],
     geometryTable: [[geometry]],
-    options: { maxInstances: instances, cellSize: 10, cullPixelSize: 2, maxViews: 4 },
+    options: {
+      maxInstances: instances,
+      cellSize: 10,
+      cullPixelSize: 2,
+      maxViews: 4,
+      ...(extras.lodCrossfadeBand !== undefined
+        ? { lodCrossfadeBand: extras.lodCrossfadeBand }
+        : {}),
+      ...(extras.lodHysteresis !== undefined ? { lodHysteresis: extras.lodHysteresis } : {}),
+    },
     backlight: extras.backlight,
     windHeight: extras.windHeight,
     windUniforms: extras.windUniforms,
@@ -407,12 +418,14 @@ describe("InstanceFieldSystem on a recording device", () => {
     expect(() => system.setWind(undefined, 0)).not.toThrow();
   });
 
-  it("writes the default LOD dither mode 0 (crossfade) into FieldInfo", () => {
+  it("writes the DECIDED default LOD dither mode (hard, gate 1) into FieldInfo — zero-config default is hysteresis", () => {
+    // The engine zero-config default (ADR 0059 step 2, decision 2026-11-10) is `hysteresis`,
+    // whose preset uses the HARD gate (1): no fragment crossfade pattern by default.
     const { rec } = makeSetup(4);
     const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
     const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
     const words = new Uint32Array((info!.data as Uint8Array).slice().buffer);
-    expect(words[INFO_LOD_DITHER_MODE_WORD]).toBe(0);
+    expect(words[INFO_LOD_DITHER_MODE_WORD]).toBe(1);
   });
 
   it("writes lodDitherMode 'hard' (candidate C) into FieldInfo and fails fast on bad modes", () => {
@@ -564,22 +577,35 @@ describe("InstanceFieldSystem on a recording device", () => {
     }
   });
 
-  it("defaults to fail-closed `off` knobs (band 0, hyst 0) with the legacy dither gate untouched", () => {
+  it("defaults to the DECIDED engine default `hysteresis` (band 0, hyst 0.02, hard gate)", () => {
+    // Engine-zero-config default (ADR 0059 step 2, decision 2026-11-10): rate-limited hard
+    // switching, no dither pattern. `off` = explicit opt-in, no longer the default.
     const { system, rec } = makeSetup(4);
-    expect(system.lodTransitionMode).toBe("off");
+    expect(system.lodTransitionMode).toBe("hysteresis");
     system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
     const floats = lastParamFloats(rec);
     expect(floats[CULL_LOD_CROSSFADE_BAND_WORD]).toBe(0);
-    expect(floats[CULL_LOD_HYSTERESIS_WORD]).toBe(0);
-    // Legacy behaviour preserved: no mode armed -> the historical crossfade gate word 0 stays.
-    expect(fieldInfoGateWord(rec)).toBe(0);
+    expect(floats[CULL_LOD_HYSTERESIS_WORD]).toBeCloseTo(0.02, 6);
+    // Hysteresis uses the HARD gate word (1): no crossfade pattern in fragments.
+    expect(fieldInfoGateWord(rec)).toBe(1);
   });
 
-  it("fails fast on an unknown LodTransitionMode (fail-closed until a valid mode is set)", () => {
+  it("authored raw transition knobs stay on the legacy raw path (the engine default does NOT override them)", () => {
+    // Documented contract: a mode "when present takes precedence" — so ABSENT mode honors
+    // authored raw band/hysteresis knobs instead of applying the zero-config hysteresis default.
+    // This preserves the fine-tuning escape hatch (no silent clobber of explicit author intent).
+    const { system, rec } = makeSetup(4, { lodCrossfadeBand: 0.3, lodHysteresis: 0.1 });
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    const floats = lastParamFloats(rec);
+    expect(floats[CULL_LOD_CROSSFADE_BAND_WORD]).toBeCloseTo(0.3, 6);
+    expect(floats[CULL_LOD_HYSTERESIS_WORD]).toBeCloseTo(0.1, 6);
+  });
+
+  it("fails fast on an unknown LodTransitionMode (engine default applies until a valid mode is set)", () => {
     expect(() => makeSetup(4, { lodTransitionMode: "geomorph" as never })).toThrow(
       /lodTransitionMode/,
     );
-    // Absent mode (fail-closed default) is valid and builds cleanly.
+    // Absent mode (engine zero-config default hysteresis) is valid and builds cleanly.
     expect(() => makeSetup(4, {})).not.toThrow();
     expect(() => makeSetup(4, {}).system.setLodTransitionMode("bogus" as never)).toThrow(
       /lodTransitionMode/,
@@ -614,10 +640,10 @@ describe("InstanceFieldSystem on a recording device", () => {
 
   it("raw-knob setters do not change the applied mode (each surface is last-call-wins)", () => {
     const { system } = makeSetup(4);
-    expect(system.lodTransitionMode).toBe("off");
-    // A raw retune without a preset leaves the mode mirror at the fail-closed base.
+    expect(system.lodTransitionMode).toBe("hysteresis");
+    // A raw retune without a preset leaves the mode mirror at the engine default base.
     system.setLodTransition({ crossfadeBand: 0.5, hysteresis: 0.5, biasPx: -3 });
-    expect(system.lodTransitionMode).toBe("off");
+    expect(system.lodTransitionMode).toBe("hysteresis");
     system.setLodTransitionMode("hysteresis");
     expect(system.lodTransitionMode).toBe("hysteresis");
     // Later raw retunes keep the last applied mode (knobs are the derived escape hatch).

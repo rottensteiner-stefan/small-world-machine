@@ -333,9 +333,8 @@ export interface InstanceFieldOptions {
    *         with a signed per-instance blend channel (see {@link lodTransitionBand}; the pulled
    *         material screen-doors the pair). `0` = hard switch (candidate C) — the SAME machinery
    *         with no dual write. Bands never apply where a prototype has fewer buckets. Absent =
-   *         0 (fail-closed: P1-identical single routing for any field that does not opt in; the
-   *         showcase and the P2-4 reference enable the band explicitly — candidate A remains the
-   *         standing feature decision, it is simply not the zero-config engine default).
+   *         0 (no dual write; the engine default transition mode `hysteresis` adds a per-instance
+   *         rate-limit — see {@link lodTransitionMode} — but never a band/dual write).
    */
   lodCrossfadeBand?: number;
   /**
@@ -360,7 +359,9 @@ export interface InstanceFieldOptions {
    *         ({@link LOD_TRANSITION_MODES}: dither crossfade / hysteresis / composite / off).
    *         Derives the raw knobs (`lodCrossfadeBand`, `lodHysteresis`, fragment dither gate);
    *         each mode's performance delta is bounded and documented in the preset table. Absent =
-   *         "off" (fail-closed: P1-identical single routing — the showcase opts in explicitly).
+   *         the engine default `hysteresis` (decision 2026-11-10: rate-limited hard switching,
+   *         no dither pattern — see {@link LOD_TRANSITION_MODES}); `off` = explicit
+   *         P1-identical baseline opt-in.
    */
   lodTransitionMode?: LodTransitionMode;
   /**
@@ -718,10 +719,15 @@ export function lodTransitionBand(
 /**
  * @domain — ADR 0059 step 2 DECISIVE MODE SWITCH (moderator decision 2026-11-10: multiple
  *   transition strategies behind ONE declarative switch, each with a bounded and documented
- *   performance delta vs the fail-closed baseline). The engine default is the `off` preset
- *   (P1-identical: single routing, no dither, zero delta). Each preset maps to the raw tuning
- *   knobs (`crossfadeBand`, `lodHysteresis`, fragment dither gate) via {@link LOD_TRANSITION_MODES};
- *   the raw knobs remain available as fine-tuning overrides (last call wins).
+ *   performance delta). The engine default is the `hysteresis` preset — rate-limited hard
+ *   switching with NO dither pattern (declared 2026-11-10 from the §6 live sighting on the real
+ *   M4 Pro: the dither presets read as a coarse moiré/flicker without TAA and only degrade to a
+ *   residual fine grain with TAA, so neither is acceptable as a zero-config default; hysteresis
+ *   decorrelates hard switches across the population without any visual pattern). `off` remains
+ *   the explicit P1-identical baseline (single routing, no dither, zero delta). Each preset maps
+ *   to the raw tuning knobs (`crossfadeBand`, `lodHysteresis`, fragment dither gate) via
+ *   {@link LOD_TRANSITION_MODES}; the raw knobs remain available as fine-tuning overrides (last
+ *   call wins).
  */
 export type LodTransitionMode = "off" | "hysteresis" | "dither" | "dither-hysteresis";
 

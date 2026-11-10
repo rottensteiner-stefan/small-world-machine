@@ -231,7 +231,7 @@ describe("LOD_TRANSITION_MODES — the DECISIVE MODE SWITCH preset table (modera
     }
   });
 
-  it("`off` is the fail-closed P1-identical preset (no dual write, hard keep-all gate)", () => {
+  it("`off` is the explicit P1-identical baseline preset (no dual write, hard keep-all gate)", () => {
     const p = LOD_TRANSITION_MODES.off;
     expect(p.crossfadeBand).toBe(0);
     expect(p.hysteresis).toBe(0);
