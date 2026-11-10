@@ -481,3 +481,14 @@ overlap (throughput baseline, not placement art) — accepted.
   starts in free fly as before (WASD + mouse look, Space/C, Shift boost, `R` reset).
 - Real M4 Pro check: path pose advances, after `0` the camera holds still, `W` moves ~10 m in
   1.5 s, HUD shows `path=fly`, 0 console errors.
+
+## 2026-11-11 — Ground cover species: 5 grasses + 2 flowers
+
+- Draw segments are (view x bucket): one field draws one geometry per bucket, so species cannot
+  share a field. Each species gets its own `GroundCover` ring + `InstanceFieldSystem`
+  (`COVER_SPECIES`: fine, meadow, broad, straw, tuft, buttercup, daisy; own seed, density share,
+  height, width, lean, colours; wind height = species height). Records stay one per clump.
+- Flowers: stems + petal fan + centre; the disc is tilted 35–65° toward a random azimuth (a level
+  disc is edge-on from eye height). Shares 5 % / 4 % of `?coverDensity=`.
+- Real M4 Pro (n=1850 jacaranda, 1600×900): ~296 k clump records over 7 rings, walk 2.6 ms /
+  flight 5.3 ms / aerial 7.1 ms GPU, 120 fps when no other showcase tab competes, 0 errors.
