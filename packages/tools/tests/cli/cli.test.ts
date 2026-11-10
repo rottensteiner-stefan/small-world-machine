@@ -7,6 +7,7 @@ import type { CliIo } from "../../src/cli/index.js";
 import { importOptionalPeer, runIblCommand } from "../../src/cli/iblCommand.js";
 import { NodePngRasterIO, type RgbaImage } from "../../src/core/RasterIO.js";
 import { derivePbrMaps, MATERIAL_STUDIO_PRESETS } from "../../src/core/material.js";
+import { buildGridGlb } from "../lodFixture.js";
 
 interface CapturedIo {
   io: CliIo;
@@ -525,5 +526,70 @@ describe("swm ibl", () => {
     const { io, stderrText } = makeCapturingIo();
     expect(await runSwm(argv, io)).toBe(1);
     expect(stderrText()).toContain(message);
+  });
+});
+
+describe("swm lod", () => {
+  it("prints lod usage for --help", async () => {
+    const { io, stdoutText } = makeCapturingIo();
+    expect(await runSwm(["lod", "--help"], io)).toBe(0);
+    expect(stdoutText()).toContain("swm lod <input.glb> <out-dir>");
+    expect(stdoutText()).toContain("--ratios");
+    expect(stdoutText()).toContain("--verify");
+  });
+
+  it("writes _LOD0 verbatim + simplified levels and exits 0", async () => {
+    await withTempDir(async (dir) => {
+      const inputPath = join(dir, "gridInput.glb");
+      const outDir = join(dir, "out");
+      const { glb } = buildGridGlb(20, 20);
+      await writeFile(inputPath, glb);
+
+      const { io, stdoutText, stderrText } = makeCapturingIo();
+      const code = await runSwm(["lod", inputPath, outDir], io);
+      expect(code).toBe(0);
+      expect(stderrText()).toBe("");
+      expect(stdoutText()).toContain("swm lod: wrote");
+
+      const lod0 = await readFile(join(outDir, "gridInput_LOD0.glb"));
+      expect([...lod0]).toEqual([...glb]); // verbatim copy
+      for (const level of ["gridInput_LOD1.glb", "gridInput_LOD2.glb", "gridInput_LOD3.glb"]) {
+        const bytes = await readFile(join(outDir, level));
+        expect(bytes.length).toBeGreaterThan(12); // non-empty valid GLB header
+      }
+    });
+  });
+
+  it("--verify reports structure-valid output", async () => {
+    await withTempDir(async (dir) => {
+      const inputPath = join(dir, "gridInput.glb");
+      const outDir = join(dir, "out");
+      const { glb } = buildGridGlb(16, 16);
+      await writeFile(inputPath, glb);
+
+      const { io, stdoutText } = makeCapturingIo();
+      const code = await runSwm(["lod", inputPath, outDir, "--verify"], io);
+      expect(code).toBe(0);
+      expect(stdoutText()).toContain("swm lod: verify OK");
+    });
+  });
+
+  it.each([
+    [["lod"], "usage", 0],
+    [["lod", "/definitely/not/here.glb", "x"], "swm lod: error", 1],
+    [["lod", "a.glb"], "missing <out-dir>", 1],
+    [["lod", "a.glb", "out", "--ratios", "0.5,2"], "invalid --ratios", 1],
+    [["lod", "a.glb", "out", "--min-tris", "0"], "--min-tris must be an integer", 1],
+    [["lod", "a.glb", "out", "--error", "5"], "--error must be in (0,2]", 1],
+    [["lod", "a.glb", "out", "--bogus"], "unknown flag", 1],
+  ])("handles %j with exit %o", async (argv, message, expectedExit) => {
+    const { io, stdoutText, stderrText } = makeCapturingIo();
+    const code = await runSwm(argv, io);
+    expect(code).toBe(expectedExit);
+    if (typeof message === "string" && code === 1) {
+      expect(stderrText()).toContain(message);
+    } else {
+      expect(stdoutText()).toContain("swm lod");
+    }
   });
 });

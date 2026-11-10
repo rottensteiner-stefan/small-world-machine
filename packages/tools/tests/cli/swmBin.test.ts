@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { buildGridGlb } from "../lodFixture.js";
 
 const run = promisify(execFile);
 const SWM_BIN = fileURLToPath(new URL("../../src/cli/swm.mjs", import.meta.url));
@@ -78,5 +79,27 @@ describe("swm bin shim (plain Node + tsx)", () => {
     ).rejects.toMatchObject({
       code: 1,
     });
+  });
+
+  it("generates glTF LOD levels end to end (meshoptimizer WASM loads under tsx)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "swm-bin-lod-"));
+    try {
+      const inputPath = join(dir, "gridInput.glb");
+      const outDir = join(dir, "out");
+      await writeFile(inputPath, buildGridGlb(8, 8).glb);
+      const { stdout } = await run("node", [SWM_BIN, "lod", inputPath, outDir, "--verify"]);
+      expect(stdout).toContain("swm lod: verify OK");
+      for (const level of [
+        "gridInput_LOD0.glb",
+        "gridInput_LOD1.glb",
+        "gridInput_LOD2.glb",
+        "gridInput_LOD3.glb",
+      ]) {
+        const bytes = await readFile(join(outDir, level));
+        expect(bytes.subarray(0, 4).toString("latin1")).toBe("glTF");
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

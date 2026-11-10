@@ -199,7 +199,10 @@ export interface PrototypeDescriptor {
    */
   boundingRadius: number;
   /**
-   * @domain Authored LOD chain, ascending by projected size (bucket 0 = finest).
+   * @domain Authored LOD chain, ascending by projected size: bucket 0 = farthest/coarsest,
+   *         highest index = nearest/finest (geometry binds by BUCKET index, see
+   *         `LodBucketDescriptor` — each descriptor's `lodIndex` is descriptive asset level
+   *         metadata, 0 = finest, never a routing key).
    */
   lodBuckets: readonly LodBucketDescriptor[];
   /**

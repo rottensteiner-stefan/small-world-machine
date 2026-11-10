@@ -8,6 +8,7 @@
  *   - `splatter` ..... seed -> PNG decal (`core/splatter.ts`, `cli/splatterCommand.ts`)
  *   - `material` ..... diffuse PNG -> PBR maps (`core/material.ts`, `cli/materialCommand.ts`)
  *   - `ibl` .......... equirectangular panorama -> baked IBL maps (`core/ibl.ts`, `cli/iblCommand.ts`)
+ *   - `lod` .......... indexed GLB -> *_LOD<n> LOD levels (`core/lod.ts`, `cli/lodCommand.ts`)
  * Everything beyond that is follow-up scope by design (`ops-d-spec.md`).
  *
  * RUNNER: this module is intentionally executed through the committed ESM shim
@@ -28,6 +29,7 @@ import {
   formatValidationVerdict,
 } from "../common/io/validationReportText.js";
 import { runIblCommand } from "./iblCommand.js";
+import { runLodCommand } from "./lodCommand.js";
 import { runMaterialCommand } from "./materialCommand.js";
 import { runSplatterCommand } from "./splatterCommand.js";
 
@@ -76,6 +78,7 @@ Commands:
   splatter  Seeded splatter decal as PNG (headless core)
   material  Derive PBR texture maps from a diffuse PNG (headless core)
   ibl       Bake IBL cubemaps + BRDF LUT (headless core + WebGL2 bake)
+  lod       Generate *_LOD<n> glTF LOD levels (meshoptimizer, headless core)
 
 Global options:
   -h, --help      Print this help and exit
@@ -261,6 +264,8 @@ export async function runSwm(argv: readonly string[], io?: CliIo): Promise<numbe
       return runSplatterCommand(rest, activeIo);
     case "material":
       return runMaterialCommand(rest, activeIo);
+    case "lod":
+      return runLodCommand(rest, activeIo);
     case "ibl":
       return runIblCommand(rest, activeIo);
     default:

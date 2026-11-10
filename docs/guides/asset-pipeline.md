@@ -139,3 +139,36 @@ This guarantees continuous variation across modular tiling geometry with zero ru
 - `SkinnedMesh` computes **conservative pose-aware bounds** (union over bones) for culling — a character posed far from its bind pose is no longer frustum/occlusion/shadow-culled by mistake (S5 EP‑2).
 - `KHR_mesh_quantization`: quantized `POSITION` is **dequantized** onto the accessor's declared `min/max` domain on load (S5 EP‑7); accessor `min/max` is trusted for **Float32** POSITION only. Export with real-world bounds in `min/max`.
 - Cutout materials (`alphaMode = MASK`) stay in the **opaque** batch (depth-writing discard); do not author them as transparent. (`alphaMode = BLEND` is the only transparent mode.)
+
+## 6. LOD Generation (`swm lod` CLI, ADR 0059 P2-3)
+
+> The offline LOD generator for instance-field chains is the `swm lod` command
+> (`packages/tools`, meshoptimizer core). Runtime stays TypeScript (ADR 0036); the engine
+> consumes the output as per-bucket geometry **without any engine change**.
+
+- **Contract:** `swm lod <input.glb> <out-dir> [--ratios 0.5,0.2,0.08] [--min-tris 32] [--error 0.02] [--verify]`.
+  - `<stem>_LOD0.glb` = **verbatim copy** of the input (finest / near).
+  - `<stem>_LOD<n>.glb` = progressively simplified (**n descending detail**).
+  - A consumer maps `<stem>_LOD<n>` onto the engine's `LodBucketDescriptor.lodIndex`
+    (`0 = finest`) and binds geometry by **bucket index** (`InstanceField` buckets are the
+    reverse: bucket 0 = farthest/coarsest, highest index = nearest/finest — the ADR 0059
+    asset-level naming and the bucket array order are deliberately orthogonal).
+- **Input contract (V1):** indexed `TRIANGLES` only (no skins/animations/`MODELS`/point clouds).
+  Non-indexed or non-triangle primitives fail fast with a clear error.
+- **Preserved attributes:** `POSITION`, recomputed `NORMAL` (area-weighted TypeScript), `TEXCOORD_0`, `COLOR_0`.
+  `TANGENT` is **omitted** — the engine regenerates tangents at runtime (rule T1); offline
+  MikkTSpace from meshoptimizer 1.3 is not used (its tangent/normal output is sized by the
+  index count, incompatible with the compacted vertex set).
+- **Textures:** geometry-only output. `materials` are copied; embedded texture references are
+  **stripped** (output stays valid glTF 2.0) and a warning is emitted. Author texture-free
+  LOD sources or accept the warning; the repo tree assets are texture-free by contract.
+- **Fail-soft is by design:** a level reports the honest achieved triangle count when the
+  `--error` budget blocks further collapse (sharp low-poly stylized assets often cannot
+  reduce without visible damage). Defaults are calibrated (organic 4.4 k-tri mesh) to hit
+  the requested budget on meshes large enough to matter; raise `--error` for aggressive
+  reduction of small assets.
+- **Deterministic:** identical input bytes + options = identical output bytes (also pinned by `--verify`,
+  which re-parses every output and validates structure, index bounds, POSITION min/max and finite floats).
+- **4-tier budget note:** `--ratios` are explicit; the documented 4-tier polycount budgets
+  (§3) are authoring guidance, not enforced by the CLI — pick ratios per prototype.
+

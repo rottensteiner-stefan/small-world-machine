@@ -23,3 +23,4 @@ export * from "./material.js";
 export * from "./kit.js";
 export * from "./ibl.js";
 export * from "./splatter.js";
+export * from "./lod.js";

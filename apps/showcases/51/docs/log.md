@@ -383,3 +383,19 @@ overlap (throughput baseline, not placement art) — accepted.
   moiré. `?lodband=`/`?lodhyst=` still expose the dither band on demand; `?taa=1` arms the
   engine `TaaElement` for the dither display condition.
 - Recorded in ADR 0059 + research note §9.8 (supersedes §9.7's "keep hard-switch/off" stance).
+
+## 2026-11-10 — P2-3 tooling LANDED: offline `swm lod` CLI (no showcase change)
+
+- This showcase's field lane STILL uses the stride-decimated proxy buckets
+  (`FIELD_LOD_PROXY_STRIDE` in `_buildFieldLane`); the real `_LOD<n>` consumption is the
+  documented next step (asset process + LFS commit).
+- Tooling available: `swm lod <input.glb> <out-dir>` (meshoptimizer, `packages/tools`) generates
+  `<stem>_LOD0.glb` (verbatim) + `<stem>_LOD<n>.glb` (descending detail) from indexed GLBs. The
+  naming contract is `<stem>_LOD0` = finest, mapping onto the engine's `lodIndex` semantics
+  (`0 = finest`) — NOT the bucket array order (bucket 0 = farthest/coarsest; the
+  `PrototypeDescriptor.lodBuckets` JSDoc was corrected to match).
+- Verified on this showcase's `tree_detailed.glb` / `tree_oak.glb`: valid output, byte-deterministic,
+  `--verify` clean. The sharp low-poly tree set honestly fails soft (196→192 tris at default
+  `--error 0.02`); meaningful reduction appears at `--error` upscales or on larger meshes.
+- Docs: ADR 0059 step-2 (P2-3 result bullet), `docs/guides/asset-pipeline.md` §6 (LOD contract),
+  CHANGELOG, BACKLOG.
