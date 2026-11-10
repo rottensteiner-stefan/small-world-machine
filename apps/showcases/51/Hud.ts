@@ -67,6 +67,10 @@ export interface VegHudOptions {
   getCpuTime?: (() => number) | undefined;
   /** Called when the user switches the camera path (keys 1-3 or the buttons). */
   onSelectPath(path: PathName): void;
+  /** Leaves the active camera path and hands the camera to the free fly controller (`0`). */
+  onFreeFly(): void;
+  /** Camera mode at load (`?path=` value, absent = free fly). */
+  initialPath?: PathName;
   /** Called when the user toggles the field-lane wind (key `F` or the button). */
   onToggleWind?(): void;
   /** Called when the user cycles the P2 LOD transition mode (candidate A <-> C; key `L` or the
@@ -77,7 +81,11 @@ export interface VegHudOptions {
 /** Drawer toggle shortcuts. `H` opens/closes the panel (ADR step 0 layout: keys 1-3 + H). */
 export const VEG_HUD_TOGGLE_KEYS: readonly string[] = ["KeyI", "KeyH"];
 
-const PATH_KEY_MAP: Readonly<Record<string, PathName>> = {
+/** Camera mode of the lab: one of the seeded paths or the free 6-DOF fly camera. */
+type CameraMode = PathName | "fly";
+
+const PATH_KEY_MAP: Readonly<Record<string, CameraMode>> = {
+  Digit0: "fly",
   Digit1: "walk",
   Digit2: "flight",
   Digit3: "aerial",
@@ -126,10 +134,11 @@ export class Hud {
   private readonly _root: HTMLElement;
   private readonly _readout: HTMLElement;
   private readonly _options: VegHudOptions;
-  private _path: PathName = "walk";
+  private _path: CameraMode;
   private _lastStats: VegHudStats | undefined;
 
   constructor(options: VegHudOptions) {
+    this._path = options.initialPath ?? "fly";
     this._options = options;
 
     const style = document.createElement("style");
@@ -144,12 +153,14 @@ export class Hud {
     `;
     document.head.appendChild(style);
 
-    const paths = CAMERA_PATH_NAMES.map(
-      (name) =>
-        `<button class="btn-preset" data-path="${name}" title="Camera path ${name} (${
-          name === "flight" ? "fast flight, pop-sensitive" : name
-        })">${name === "walk" ? "🚶" : name === "flight" ? "✈️" : "🚁"} ${name}</button>`,
-    ).join("");
+    const paths =
+      CAMERA_PATH_NAMES.map(
+        (name) =>
+          `<button class="btn-preset" data-path="${name}" title="Camera path ${name} (${
+            name === "flight" ? "fast flight, pop-sensitive" : name
+          })">${name === "walk" ? "🚶" : name === "flight" ? "✈️" : "🚁"} ${name}</button>`,
+      ).join("") +
+      `<button class="btn-preset" data-path="fly" title="Free fly: WASD + mouse look, Space/C up/down, Shift boost">🕹️ fly</button>`;
 
     this._drawer = new ShowcaseDrawer({
       id: "veg-lab-hud",
@@ -160,11 +171,11 @@ export class Hud {
       body: `
         <div class="hud-section"><pre id="vegLabReadout"></pre></div>
         ${hudSection(
-          "📷 Camera path",
-          "1 · 2 · 3",
+          "📷 Camera",
+          "0 · 1 · 2 · 3",
           `<div class="preset-group">${paths}</div>` +
             hudNote(
-              "Deterministic seeded paths: walk / fast flight / aerial (seeded Catmull-Rom, ADR 0059 step 0).",
+              "Seeded paths walk / fast flight / aerial (1–3, ADR 0059 step 0) or free fly (0: WASD + mouse, Space/C, Shift boost).",
             ),
         )}
         ${hudSection(
@@ -193,7 +204,7 @@ export class Hud {
 
     this._root.querySelectorAll<HTMLButtonElement>("[data-path]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        this._selectPath(btn.dataset["path"] as PathName);
+        this._selectPath(btn.dataset["path"] as CameraMode);
       });
     });
     this._root.querySelectorAll<HTMLButtonElement>("[data-wind]").forEach((btn) => {
@@ -280,10 +291,11 @@ export class Hud {
     this.sync(stats);
   }
 
-  private _selectPath(path: PathName): void {
+  private _selectPath(path: CameraMode): void {
     if (this._path === path) return;
     this._path = path;
-    this._options.onSelectPath(path);
+    if (path === "fly") this._options.onFreeFly();
+    else this._options.onSelectPath(path);
     this.sync(this._lastStats);
   }
 

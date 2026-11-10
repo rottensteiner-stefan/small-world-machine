@@ -472,3 +472,12 @@ overlap (throughput baseline, not placement art) — accepted.
   unscaled, keeps limbs and simplifies wood with meshoptimizer `Permissive` (no sloppy).
 - Chain: LOD0 141 k / 41.6 k / 13.3 k / 4.0 k tris (12.4 MB GLBs total). Real M4 Pro, n=1850:
   walk 3.2 ms, aerial 6.8 ms GPU (was 13.1), 0 console errors. Assets still local, pending sign-off.
+
+## 2026-11-11 — Free fly from any camera path (`0` / HUD "fly")
+
+- HUD camera section: `0` or the "fly" button leaves the seeded path; `_enterFreeFly()` keeps the
+  current pose, derives yaw/pitch from it (no snap) and adds the engine `FlyController` on demand
+  (sessions started with `?path=` have no default controller). Without `?path=` the session
+  starts in free fly as before (WASD + mouse look, Space/C, Shift boost, `R` reset).
+- Real M4 Pro check: path pose advances, after `0` the camera holds still, `W` moves ~10 m in
+  1.5 s, HUD shows `path=fly`, 0 console errors.

@@ -5,6 +5,7 @@
 ### "The universe is under no obligation to make sense to you." - Neil deGrasse Tyson
 
 - **Features:**
+  - _Showcase 51 — free fly from any camera path:_ `0` / HUD "fly" hands the camera from a seeded path to the 6-DOF fly controller at the current pose (no snap).
   - _Field albedo-array cutout keeps its coverage over distance:_ the layer alpha is scaled by the sampled mip level (`FIELD_ALPHA_MIP_SCALE` 0.25, Golus "Anti-aliased Alpha Test") so box-filtered mips no longer erase distant leaf cards.
   - _Showcase 51 decluttered:_ 35 → 26 URL knobs, −138 lines (`?reallod`, raw `?lodband/?lodhyst/?lodbias/?shadowlod`, `?measure` removed; `?lodMode` is the single LOD switch). Fixes `?lodMode=` never reaching the engine at startup (was passed in `options` instead of the setup).
   - _Instance-field albedo texture array (ADR 0059, WebGPU):_ new `InstanceFieldSystemSetup.albedoArray` (`TextureArray`) + per-vertex `GeometryDataInterface.materialLayers` select one material layer per vertex (repeat/trilinear/anisotropic sampling, sRGB decode, layer alpha drives the cutout in colour, depth and shadow variants); `FieldInfo.albedoLayerCount` reuses a pad word. GL tiers keep vertex-colour albedo (`tier-parity.json` deliberate row). Showcase 51 `?tree=<stem>` loads a textured species (sidecar `<stem>.species.json` + `<stem>_LOD0..3.glb`).

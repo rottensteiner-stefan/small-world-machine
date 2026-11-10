@@ -6,6 +6,8 @@ import {
   Cone,
   Cylinder,
   DirectionalLight,
+  CameraStrategyType,
+  FlyController,
   Fog,
   FogMode,
   GltfLoader,
@@ -771,6 +773,8 @@ export class Showcase extends AbstractShowcase {
         gpuTimings: this._gpuTimer !== undefined ? new GpuTimingsAdaptor(this._gpuTimer) : null,
         getCpuTime: (): number => this.lastCpuTimeMs,
         onSelectPath: (path: PathName): void => this._selectPath(path),
+        onFreeFly: (): void => this._enterFreeFly(),
+        ...(this._path !== undefined ? { initialPath: this._path } : {}),
         onToggleWind: (): void => this._toggleWindLive(),
         onCycleLodMode: (): void => this._toggleLodMode(),
       });
@@ -794,6 +798,29 @@ export class Showcase extends AbstractShowcase {
     this._pathT = this._pausedAt ?? 0;
     this._externalCameraActive = true;
     this._applyPathPose();
+  }
+
+  /**
+   * Leaves the active camera path (HUD `0`): the camera keeps its current pose and is handed to the
+   * engine fly controller (created on demand when the session started on a path, where the default
+   * controller is `none`). Yaw/pitch are derived from the current view so the switch has no snap.
+   */
+  private _enterFreeFly(): void {
+    this._path = undefined;
+    this._pathCam = undefined;
+    this._externalCameraActive = false;
+    const cam = this.camera;
+    const dir = cam.target.clone().sub(cam.position);
+    const len = dir.length();
+    if (len > 1e-5) {
+      dir.scale(1 / len);
+      cam.phi = Math.asin(Math.max(-0.9999, Math.min(0.9999, dir.y)));
+      cam.theta = Math.atan2(dir.x, -dir.z);
+    }
+    if (!cam.behaviors.some((b) => b instanceof FlyController)) {
+      cam.setStrategy(CameraStrategyType.FPS);
+      cam.addBehavior(new FlyController({ input: this.input, moveSpeed: this.defaultMoveSpeed }));
+    }
   }
 
   /**
