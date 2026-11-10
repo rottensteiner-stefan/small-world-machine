@@ -53,21 +53,20 @@ fn testVisibility(@builtin(global_invocation_id) id: vec3u) {
         return;
     }
 
-    // Nearest point of the sphere toward the camera, reprojected to get an accurate NDC depth
-    // for the occlusion compare (cheaper than reconstructing the view basis, since
-    // `global.viewPos` is already available).
-    let toCam = global.viewPos.xyz - center;
-    let toCamLen = length(toCam);
-    var nearestWorld = center;
-    if (toCamLen > 0.0001) {
-        nearestWorld = center + (toCam / toCamLen) * min(radius, toCamLen);
-    }
-    let nearClip = global.vp * vec4f(nearestWorld, 1.0);
-    if (nearClip.w <= 0.0001) {
-        results[i] = 1u;
-        return;
-    }
-    let nearDepth = nearClip.z / nearClip.w;
+    // Nearest point of the sphere for the depth compare. The euclidean nearest-to-eye point
+    // minimizes EUCLIDEAN distance, not view-space depth, and 45 degrees off-axis its depth
+    // exceeds z_c - r -- an overestimated nearDepth that falsely culls. The conservative nearest
+    // point lies on the camera's VIEW AXIS through the center; clip depth is monotone in
+    // view-space z, so the sphere's extremal view depth is at one of the two axis endpoints, and
+    // taking the min of both is sign-agnostic (no camera-basis convention to get wrong) and
+    // provably no deeper than any other sphere point. The view axis is global.vp's depth row
+    // (column-major mat4x4f: element [i][2] of column i is row 2); P22's scale cancels under
+    // normalize(). `clip.w > radius` (checked above) guarantees both endpoints project with
+    // w > 0, so the divisions are well-defined.
+    let axis = normalize(vec3f(global.vp[0][2], global.vp[1][2], global.vp[2][2]));
+    let nearClipA = global.vp * vec4f(center + axis * radius, 1.0);
+    let nearClipB = global.vp * vec4f(center - axis * radius, 1.0);
+    let nearDepth = min(nearClipA.z / nearClipA.w, nearClipB.z / nearClipB.w);
 
     // Screen-space rect of the sphere (projected by view depth = clip.w, not by Euclidean distance,
     // which would shrink the footprint off-axis).
@@ -83,9 +82,16 @@ fn testVisibility(@builtin(global_invocation_id) id: vec3u) {
     // and the four corner loads below cover all of them. Taking the max (farthest) depth of those
     // texels is conservative -- it can only keep an object, never wrongly drop it.
     let mip = min(u32(ceil(log2(extentPx))), params.mipCount - 1u);
-    let mipDims = vec2f(textureDimensions(hzbTex, mip));
-    let lo = vec2i(clamp(uvMin * mipDims, vec2f(0.0), mipDims - vec2f(1.0)));
-    let hi = vec2i(clamp(uvMax * mipDims, vec2f(0.0), mipDims - vec2f(1.0)));
+    // Mip-0 texel cover of the rect, then right-shift by `mip` (hzb_downsample_max.wgsl maps
+    // mip-L texel t to mip-0 texels [t*2^L, (t+1)*2^L)). Directly computing uv * mipDims drifts
+    // by up to one full texel on NPOT bases (1080p: mip 9 is 2 px wide); deriving from BASE dims
+    // and shifting right is exact.
+    let baseDims = vec2f(textureDimensions(hzbTex, 0u));
+    let mipDimsI = vec2i(textureDimensions(hzbTex, mip));
+    let maxCoord = mipDimsI - vec2i(1);
+    let shift = vec2u(mip);
+    let lo = clamp(vec2i(uvMin * baseDims) >> shift, vec2i(0), maxCoord);
+    let hi = clamp(vec2i(uvMax * baseDims) >> shift, vec2i(0), maxCoord);
     let d00 = textureLoad(hzbTex, vec2i(lo.x, lo.y), i32(mip)).r;
     let d10 = textureLoad(hzbTex, vec2i(hi.x, lo.y), i32(mip)).r;
     let d01 = textureLoad(hzbTex, vec2i(lo.x, hi.y), i32(mip)).r;

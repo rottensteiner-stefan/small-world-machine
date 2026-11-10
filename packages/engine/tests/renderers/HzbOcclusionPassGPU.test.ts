@@ -206,6 +206,75 @@ describe("HzbOcclusionSystem.buildPyramid", () => {
   });
 });
 
+describe("HzbOcclusionSystem.getPreviousFrameHzb — ping-pong inverse (IF-HZB-PREV-SLOT)", () => {
+  it("Frame N head serves the slot COMPLETED in Frame N-1, incl. Frame 2 returning Frame 1's pyramid", () => {
+    const system = makeReadySystem();
+    // No pyramid built yet: fail-closed, never a half-written slot.
+    expect(system.getPreviousFrameHzb().available).toBe(false);
+
+    // Frame 1 build -> the NEXT frame head MUST serve Frame 1's pyramid (slot 1), NOT the
+    // never-written "other" slot 0 (the old code inverted the ping-pong and stayed unavailable).
+    system.buildPyramid(makeMockCommandEncoder().ce as unknown as GPUCommandEncoder, false);
+    const head2 = system.getPreviousFrameHzb();
+    expect(head2.available).toBe(true);
+    expect(head2.frameIndex).toBe(1);
+    expect(head2.readHandle.slot).toBe(1);
+    expect(head2.readHandle.view).toBe(system._hzbSampledViews[1]);
+
+    // Frame 2 build -> Frame 3 head serves slot 0 (the just-completed Frame 2 build), NOT the
+    // Frame-1 slot the CURRENT frame overwrites later in the same encoder (same-encoder hazard).
+    system.buildPyramid(makeMockCommandEncoder().ce as unknown as GPUCommandEncoder, false);
+    const head3 = system.getPreviousFrameHzb();
+    expect(head3.available).toBe(true);
+    expect(head3.frameIndex).toBe(2);
+    expect(head3.readHandle.slot).toBe(0);
+    expect(head3.readHandle.view).toBe(system._hzbSampledViews[0]);
+
+    // Frame 3 build -> Frame 4 head serves slot 1, generation 3.
+    system.buildPyramid(makeMockCommandEncoder().ce as unknown as GPUCommandEncoder, false);
+    const head4 = system.getPreviousFrameHzb();
+    expect(head4.available).toBe(true);
+    expect(head4.frameIndex).toBe(3);
+    expect(head4.readHandle.slot).toBe(1);
+  });
+});
+
+describe("HzbOcclusionSystem.invalidatePyramid — post-teleport pre-cut leak (IF-HZB-POST-CUT-NO-LEAK)", () => {
+  it("after a camera cut the served slot is always a POST-cut build, never the pre-cut pyramid", () => {
+    const system = makeReadySystem();
+    // Three builds so BOTH slots carry pre-cut data (slot1@f1, slot0@f2, slot1@f3) -- the leak
+    // only manifests when a pre-cut slot would otherwise still look "written since last reset".
+    const encoder = (): GPUCommandEncoder =>
+      makeMockCommandEncoder().ce as unknown as GPUCommandEncoder;
+    system.buildPyramid(encoder(), false);
+    system.buildPyramid(encoder(), false);
+    system.buildPyramid(encoder(), false);
+    const preCut = system.getPreviousFrameHzb();
+    expect(preCut.available).toBe(true);
+    expect(preCut.frameIndex).toBe(3);
+
+    // Camera cut: the pre-cut pyramid becomes unreachable despite physically written data.
+    system.invalidatePyramid();
+    expect(system.getPreviousFrameHzb().available, "fail-closed right after the cut").toBe(false);
+
+    // Post-cut Frame 4 build: the served generation MUST be the post-cut build (4) from the
+    // just-written slot -- NOT the pre-cut generation 3 of the other slot (the old code leaked
+    // it because invalidatePyramid() never reset the per-slot write counts).
+    system.buildPyramid(encoder(), false);
+    const postCut = system.getPreviousFrameHzb();
+    expect(postCut.available).toBe(true);
+    expect(postCut.frameIndex, "post-cut generation, never the pre-cut one").toBe(4);
+    expect(postCut.readHandle.slot).toBe(system._lastWriteSlot);
+
+    // One more post-cut cycle: slot 1 at generation 5 -- still post-cut data.
+    system.buildPyramid(encoder(), false);
+    const next = system.getPreviousFrameHzb();
+    expect(next.available).toBe(true);
+    expect(next.frameIndex).toBe(5);
+    expect(next.readHandle.slot).toBe(1);
+  });
+});
+
 describe("HzbOcclusionSystem.dispatchTest", () => {
   it("packs bounding-sphere AABBs for objects with bounds and skips those without", () => {
     const system = makeReadySystem(5);

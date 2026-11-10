@@ -101,6 +101,13 @@ import { CUBE_FACE_COUNT, MAX_SHADOWED_POINT_LIGHTS } from "../../core/lights/Po
  * capacity, no growth: hard-bounded by `cascadeMatrices`/`spotShadowMatrices`/
  * `pointShadowMatrices` sizes in structs.wgsl. See `_setViewMatrix()`/`CascadedShadowPassGPU`/
  * `SpotShadowPassGPU`.
+ *
+ * HARD COUPLING: `VIEW_SLOT_COUNT` (= 21, slots 0..20) MUST equal the instance-field lane's
+ * `MAX_INDIRECT_VIEWS` (core/InstanceField.ts): the field lane addresses every shadow view by
+ * these enum slots (`VIEW_SLOT_CASCADE_BASE + i`, `VIEW_SLOT_SPOT_SHADOW_BASE + j`,
+ * `VIEW_SLOT_POINT_SHADOW_BASE + m`), and its segment table / cull-param blocks are dimensioned by
+ * `MAX_INDIRECT_VIEWS`. A `MAX_INDIRECT_VIEWS < VIEW_SLOT_COUNT` silently drops every shadow slot
+ * above that cap; a mismatch the other way only over-reserves memory.
  */
 export const VIEW_SLOT_MAIN_CAMERA = 0;
 export const VIEW_SLOT_CASCADE_BASE = 1;
@@ -352,6 +359,14 @@ export class WebGPURenderer
   // set at init, so an app that never opts in pays nothing.
   private _occlusionCullingEnabled = false;
   private _hzbSystem?: HzbOcclusionSystem;
+  /** Persistent inert `HzbFieldPyramidAccess` for the no-HZB fallback of
+   * {@link getPreviousFrameHzb} (mutated + returned, zero per-frame allocations; white-view
+   * handle the field lane must never sample once `hzbEnabled` is false). */
+  private readonly _prevHzbResult: HzbFieldPyramidAccess = {
+    available: false,
+    frameIndex: 0,
+    readHandle: { slot: 0, view: undefined as unknown as GPUTextureView, mipLevelCount: 1 },
+  };
 
   private _shadowMaps = new Map<DirectionalLight | SpotLight, GPUTexture>();
   /** Same Map instance every frame -- shadow passes `.get()`/`.set()` on it directly. */
@@ -589,15 +604,19 @@ export class WebGPURenderer
 
   /** Previous-frame pyramid handle for the field cull lane (delegates to the HZB system). A
    * not-yet-initialized / lost device hands back the inert `available: false` fallback with the
-   * white-texture view -- the field lane gates on `hzbEnabled` and never samples it then. */
+   * white-texture view -- the field lane gates on `hzbEnabled` and never samples it then. The
+   * returned object is a REUSED scratch (mutable): consumers must read it synchronously within the
+   * call that received it (the field lane only does, in `prepareMainView`). */
   public getPreviousFrameHzb(): HzbFieldPyramidAccess {
     const hzb = this._hzbSystem;
     if (!hzb) {
-      return {
-        available: false,
-        frameIndex: 0,
-        readHandle: { slot: 0, view: this._fallback.whiteTextureView, mipLevelCount: 1 },
-      };
+      const out = this._prevHzbResult;
+      out.available = false;
+      out.frameIndex = 0;
+      out.readHandle.slot = 0;
+      out.readHandle.view = this._fallback.whiteTextureView;
+      out.readHandle.mipLevelCount = 1;
+      return out;
     }
     return hzb.getPreviousFrameHzb();
   }

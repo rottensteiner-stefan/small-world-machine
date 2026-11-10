@@ -873,11 +873,16 @@ export enum IndirectSegmentPhase {
 export const MAX_LOD_BUCKETS = 8 as const;
 
 /**
- * Upper bound of per-frame culling views (main camera + active CSM cascades + spot/point shadow
- * faces); pre-allocates the fixed segment table.
+ * Upper bound of per-frame culling views; pre-allocates the fixed segment table. MUST equal the
+ * WebGPU per-draw view-slot count (`WebGPURenderer.VIEW_SLOT_COUNT`, 21 = main camera + 4 CSM
+ * cascades + 4 spot shadows + 2 point lights x 6 faces): the field lane addresses shadow views by
+ * their enum slot (`VIEW_SLOT_*`), so a cap below 21 silently drops Cascade 3, every spot shadow
+ * and every point-light face for fields that author `maxViews` high enough to reach them. The two
+ * constants are coupled by contract -- a drift either side drops shadow slots or over-reserves the
+ * cull param table (`_writeViewParams` blocks at `viewIndex * MAX_LOD_BUCKETS`).
  * @fixed Freeze of the segment-table view dimension (pre-allocation bound, ADR 0035 budgets).
  */
-export const MAX_INDIRECT_VIEWS = 16 as const;
+export const MAX_INDIRECT_VIEWS = 21 as const;
 
 /**
  * The five `drawIndexedIndirect` argument words in byte-exact spec order, 5 × u32 = 20 bytes, NO

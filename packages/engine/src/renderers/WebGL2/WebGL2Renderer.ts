@@ -972,50 +972,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       );
     }
 
-    for (let i = 0; i < spotSlots; i++) {
-      const light = lights.sLights[i]!;
-      if (!light.castShadow) continue;
-      // Creates the shadow camera on first use (castShadow may be switched on after construction)
-      // and keeps it on the light, as SpotShadowPassGPU does for WebGPU.
-      light.updateShadowCamera();
-      const shadowCamera = light.shadowCamera;
-      if (!shadowCamera) continue;
-
-      this._spotShadowSlots[i] = true;
-      spotArray.bindLayer(i);
-
-      // Update Global UBO with light's camera
-      this.updateGlobalUBO(shadowCamera.viewProjectionMatrix, shadowCamera.position, emptyLights);
-
-      // Keep FRONT culling enabled for the shadow pass to prevent shadow acne!
-      this.gl.enable(this.gl.CULL_FACE);
-      this.gl.cullFace(this.gl.FRONT);
-      this.gl.enable(this.gl.DEPTH_TEST);
-      this.gl.disable(this.gl.BLEND);
-
-      this._renderShadowScene(
-        MaterialType.DEPTH,
-        DepthMaterial.LINE_QUADS_SHADER_ID,
-        2 / spotArray.size,
-        sortedGroups,
-      );
-      // ADR 0059 field lane: draw the field casters for this spot-light shadow view (its own
-      // cull + budget share); inherits the shadow state (FRONT culling, depth on), so it runs
-      // AFTER the shadow scene and before the cull/state reset below.
-      this._drawFieldShadowView(
-        MaterialType.DEPTH,
-        shadowCamera.viewProjectionMatrix,
-        shadowCamera.position,
-        "shadow",
-      );
-
-      this.gl.cullFace(this.gl.BACK);
-      spotArray.unbind();
-    }
-
-    for (let s = 0; s < pointSlots; s++) this._renderPointShadowFaces(s, emptyLights);
-
-    // DirectionalLight (CSM Atlas)
+    // DirectionalLight (CSM Atlas). Rendered BEFORE the spot/point shadows so the per-field
+    // shadow-view allocator deterministically assigns cascades the low slots `1..C`: the EVSM
+    // moment pass below must reuse the exact cascade views the depth loop culled
+    // (`VIEW_SLOT_CASCADE_BASE + i` on WebGPU), and that identity is only guaranteed when
+    // nothing else has consumed field view slots first. Spot/point field draws follow and take
+    // whatever `maxViews` headroom the cascades left.
     if (lights.dLight && lights.dLight.castShadow && lights.dLight.numCascades > 0) {
       const light = lights.dLight;
       const res = light.shadowResolution;
@@ -1064,12 +1026,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         // ADR 0059 field lane: each cascade direction is one field shadow view (LOD stays
         // main-anchored; `shadowLodBias` applies inside the field cull). Inherits the shadow
         // state -- runs after the shadow scene, while this cascade's viewport/UBO are active.
-        this._drawFieldShadowView(
-          MaterialType.DEPTH,
-          cascadeCam.viewProjectionMatrix,
-          cascadeCam.position,
-          "shadow",
-        );
+        // Cascade `i` deterministically owns field shadow view slot `1 + i`.
+        this._drawFieldShadowView(MaterialType.DEPTH, cascadeCam.viewProjectionMatrix, "shadow");
       }
 
       // EVSM (ADR 0043): render the warped variance moments into a separate RGBA32F atlas right
@@ -1094,6 +1052,46 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.gl.cullFace(this.gl.BACK);
       fbo.unbind();
     }
+
+    for (let i = 0; i < spotSlots; i++) {
+      const light = lights.sLights[i]!;
+      if (!light.castShadow) continue;
+      // Creates the shadow camera on first use (castShadow may be switched on after construction)
+      // and keeps it on the light, as SpotShadowPassGPU does for WebGPU.
+      light.updateShadowCamera();
+      const shadowCamera = light.shadowCamera;
+      if (!shadowCamera) continue;
+
+      this._spotShadowSlots[i] = true;
+      spotArray.bindLayer(i);
+
+      // Update Global UBO with light's camera
+      this.updateGlobalUBO(shadowCamera.viewProjectionMatrix, shadowCamera.position, emptyLights);
+
+      // Keep FRONT culling enabled for the shadow pass to prevent shadow acne!
+      this.gl.enable(this.gl.CULL_FACE);
+      this.gl.cullFace(this.gl.FRONT);
+      this.gl.enable(this.gl.DEPTH_TEST);
+      this.gl.disable(this.gl.BLEND);
+
+      this._renderShadowScene(
+        MaterialType.DEPTH,
+        DepthMaterial.LINE_QUADS_SHADER_ID,
+        2 / spotArray.size,
+        sortedGroups,
+      );
+      // ADR 0059 field lane: draw the field casters for this spot-light shadow view (its own
+      // cull + budget share); inherits the shadow state (FRONT culling, depth on), so it runs
+      // AFTER the shadow scene and before the cull/state reset below. Spot/point views allocate
+      // AFTER the cascades (which own slots `1..C`), so a field whose `maxViews` budget the
+      // cascades exhausted gets no spot/point field draw — the cascades have priority.
+      this._drawFieldShadowView(MaterialType.DEPTH, shadowCamera.viewProjectionMatrix, "shadow");
+
+      this.gl.cullFace(this.gl.BACK);
+      spotArray.unbind();
+    }
+
+    for (let s = 0; s < pointSlots; s++) this._renderPointShadowFaces(s, emptyLights);
 
     // Lights that were removed or stopped casting shadows no longer keep their (up to 2048^2)
     // depth map alive.
@@ -1143,7 +1141,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         casters,
       );
       // ADR 0059 field lane: this cube face is one field shadow view (own cull, shared budget).
-      this._drawFieldShadowView(MaterialType.DEPTH, vp, pointShadows.position(slot), "shadow");
+      this._drawFieldShadowView(MaterialType.DEPTH, vp, "shadow");
       this.gl.cullFace(this.gl.BACK);
     }
     spotArray.unbind();
@@ -1390,12 +1388,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       );
       // ADR 0059 field lane: EVSM moments of the field casters for this cascade (same warp as
       // the shadow scene's EVSM program; front faces, matching the moment-pass cull setup).
-      this._drawFieldShadowView(
-        MaterialType.EVSM,
-        cascadeCam.viewProjectionMatrix,
-        cascadeCam.position,
-        "evsm",
-      );
+      // Reuses the ALREADY-CULLED cascade view slot `1 + i` (assigned by the depth loop above —
+      // cascades own slots 1..C because the directional block renders first), so no
+      // prepareShadowView/cullShadowView re-run and no extra `maxViews` consumption (mirror of
+      // `CascadedShadowPassGPU` reusing `VIEW_SLOT_CASCADE_BASE + i` for the moment pull).
+      this._drawFieldShadowView(MaterialType.EVSM, cascadeCam.viewProjectionMatrix, "evsm", 1 + i);
     }
 
     // Restore the scene's row clear color: the far-plane scissor clears above `gl.clearColor`d an

@@ -100,6 +100,12 @@ const CULL_OFFSET_LOD_BIAS_BUCKETS = 120;
 const CULL_OFFSET_LOD_CROSSFADE_BAND = 124;
 const CULL_OFFSET_LOD_HYSTERESIS = 128;
 const CULL_OFFSET_LOD_BIAS_PX = 132;
+/** Word 136 (u32) -- 1 = main-camera view (size gate + HZB apply), 0 = shadow view. */
+const CULL_OFFSET_IS_MAIN_VIEW = 136;
+/** Word 144 (16 f32) -- Frame N-1 ZO-corrected main VP (the matrix the sampled pyramid's depth
+ *     pre-pass used); consumed ONLY by `fieldHzbVisible` while `hzbEnabled`. Mirrors the WGSL
+ *     `CullParams.prevVp` (mat4x4f, byte 144..208) in instance_field_structs.wgsl. */
+const CULL_OFFSET_PREV_VP = 144;
 
 /** Word offsets inside the `FieldInfo` uniform (bytes). */
 const INFO_OFFSET_PAGE_CAPACITY = 0;
@@ -260,7 +266,13 @@ const DEFAULT_OPTIONS: InstanceFieldOptions = {
   maxInstances: 0,
   cullPixelSize: 2,
   shadowLodBias: 0,
-  maxViews: 4,
+  // 21 = the full WebGPU view-slot table (`VIEW_SLOT_COUNT`): main camera + 4 CSM cascades +
+  // 4 spot shadows + 2 point lights x 6 faces. A lower default would SILENTLY drop every shadow
+  // view at or above it (cascade 3, all spots, all point faces) for any field that did not
+  // author a `maxViews` budget -- the P0 the audit surfaced. Memory trade: the segment pages are
+  // pre-allocated per USED view (21 x 8 x 2 x maxInstances x 4 B x 2 buffers worst case); authors
+  // of large fields should set `maxViews` to their reachable shadow-view count.
+  maxViews: 21,
   cpuBudget: {
     maxCullRadius: 100,
     maxCellsPerFrame: 512,
@@ -438,6 +450,14 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   // MUST alias `_paramBlock` (only that one is uploaded): a separate array silently dropped every
   // u32 word -- segmentBase/cullMode/hzb flags -- so shadow culls counted into segment 0.
   private readonly _paramBlockU32: Uint32Array = new Uint32Array(this._paramBlock.buffer);
+  /** Frame N-1 ZO-corrected main view-projection (16 floats, uploaded into `CullParams.prevVp` at
+   *  every view prepare). Lagged one frame inside `prepareMainView` -- the HZB pyramid the field
+   *  lane samples at the frame head was built from THIS matrix, so `fieldHzbVisible` must project
+   *  into exactly this space. Zero until the second main-view prepare; only consumed while
+   *  `hzbEnabled` (never on the first frame). */
+  private readonly _prevMainVp: Float32Array = new Float32Array(16);
+  /** Work matrix for `_prevMainVp = ZO_CORRECTION * rawVp` (zero-alloc roll in `prepareMainView`). */
+  private readonly _prevMainVpMatrix: Matrix4 = new Matrix4();
   private readonly _mirror: FieldCullParamsSlot[];
   private readonly _cullParams: CullParams[];
   private _mainViewportHeightPx: number = 0;
@@ -678,11 +698,16 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     this._lodMaxima = lodMaxima;
     this._maxBucketCount = maxBucketCount;
     // One (view x bucket) page must hold every instance: a single view can see the whole field
-    // (aerial camera, one shadow cascade covering it). The former `max(1024, maxInstances / 16)`
-    // overflowed at 5.5k visible trees: survivors past the page were dropped at random (atomic
-    // order) while the draw still used the full count -> flicker + instances read from foreign
-    // pages. Memory stays bounded because only the USED segments get pages (see setup).
-    this._pageCapacity = Math.max(1, this._maxInstances);
+    // (aerial camera, one shadow cascade covering it), and the AUDITED compaction worst case is
+    // the LOD crossfade band's TWO-bucket emission (the most adverse per-bucket routing writes up
+    // to 2 * maxInstances into one page) -- so the page is sized at 2 * maxInstances, and the
+    // cull's `fieldEmit` additionally clamps the drawn instanceCount to `fieldInfo.pageCapacity`
+    // (P0: `drawIndexedIndirect` can then never execute a vertex with iid >= capacity). The
+    // former `max(1024, maxInstances / 16)` overflowed at 5.5k visible trees: survivors past the
+    // page were dropped at random (atomic order) while the draw still used the full count ->
+    // flicker + instances read from foreign pages. Memory stays bounded because only the USED
+    // segments get pages (see setup).
+    this._pageCapacity = Math.max(1, this._maxInstances * 2);
 
     // Per-bucket geometry: V1 constraint = every prototype that has bucket b resolves the
     // IDENTICAL geometry object (validated). bucketGeo[b] = that object, or undefined when no
@@ -878,7 +903,25 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     const skip = this._pendingTeleportSkip;
     this._pendingTeleportSkip = false;
     // Main view: `lodBiasBuckets` = 0 (shadow views apply `shadowLodBias` on top of THIS choice).
-    this._writeViewParams(0, vp, viewportHeightPx, fovRadiansY, hzEnabled, skip, 1, 0);
+    // `prevVp` = Frame N-1's ZO-corrected main VP (see `_prevMainVp`): the pyramid the lane
+    // samples was built from it, so `fieldHzbVisible` must project into its space.
+    this._writeViewParams(
+      0,
+      vp,
+      viewportHeightPx,
+      fovRadiansY,
+      hzEnabled,
+      skip,
+      1,
+      0,
+      true,
+      this._prevMainVp,
+    );
+    // Roll the corrected main VP one frame (zero-alloc): the NEXT frame's cull needs the frame
+    // whose depth will build the pyramid the same frame. `_vpScratch` still holds the raw `vp`
+    // (`_writeViewParams` copied it for the frustum extraction above).
+    Matrix4.multiply(Matrix4.ZO_CORRECTION, this._vpScratch, this._prevMainVpMatrix);
+    this._prevMainVp.set(this._prevMainVpMatrix.data);
   }
 
   /** Culls the MAIN view (view 0): records the once-per-frame counter reset, then the mode-A
@@ -888,9 +931,11 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   }
 
   /** Prepares a SHADOW view (viewIndex >= 1): frustum from the RAW VP, mode C (no HZB),
-   * metric inputs anchored to the main camera. Overflow views (>= `maxViews`) are ignored per
-   * the frozen contract wording ("overflow views are not field-culled"). The P2 shadow-only
-   * LOD coarsening (`shadowLodBias`, 0 = reuse the main choice) rides into `lodBiasBuckets`. */
+   * metric inputs anchored to the main camera. Overflow views (>= `maxViews`, e.g. every shadow
+   * view of a `maxViews: 1` field like GroundCover) are skipped -- the frozen contract wording
+   * ("overflow views are not field-culled") is exactly what keeps `maxViews <= 1` fields out of
+   * the spot/point/cascade shadow draws. The P2 shadow-only LOD coarsening (`shadowLodBias`,
+   * 0 = reuse the main choice) rides into `lodBiasBuckets`. */
   public prepareShadowView(viewIndex: number, vp: Float32Array): void {
     this._writeViewParams(
       viewIndex,
@@ -901,6 +946,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       false,
       0,
       this._shadowLodBias,
+      false,
+      this._prevMainVp,
     );
   }
 
@@ -932,6 +979,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     const host = this._host;
     const gpu = this._gpu;
     if (!host || !gpu) return;
+    // View-index guard: a field is drawn for view N only if N is inside its allocated `maxViews`
+    // budget. This is what keeps `maxViews <= 1` fields (e.g. GroundCover) completely out of the
+    // cascade/spot/point shadow draws -- the passes prepare them, the segment table has no page
+    // beyond `_viewCount`, and `recordDraw` skips them here.
     if (viewIndex < 0 || viewIndex >= this._viewCount) return;
     if (this._maxBucketCount === 0 || this._instanceCount === 0) return;
 
@@ -1513,6 +1564,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     hzbSkip: boolean,
     cullMode: number,
     lodBiasBuckets: number,
+    isMainView: boolean,
+    prevVp: Float32Array,
   ): void {
     if (viewIndex < 0 || viewIndex >= this._viewCount) return;
     const host = this._host;
@@ -1551,6 +1604,11 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     block[CULL_OFFSET_LOD_CROSSFADE_BAND / 4] = this._lodCrossfadeBand;
     block[CULL_OFFSET_LOD_HYSTERESIS / 4] = this._lodHysteresis;
     block[CULL_OFFSET_LOD_BIAS_PX / 4] = this._lodBiasPx;
+    // Shadow views: `isMainView` (size-gate + HZB apply) and `prevVp` (frame N-1 main VP). Both
+    // are only ever consumed by `fieldHzbVisible` / the main-view size gate, so shadow views
+    // carry the harmless main-view value (never read).
+    words[CULL_OFFSET_IS_MAIN_VIEW / 4] = isMainView ? 1 : 0;
+    block.set(prevVp, CULL_OFFSET_PREV_VP / 4);
 
     device.queue.writeBuffer(
       gpu.cullParams,

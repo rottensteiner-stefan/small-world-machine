@@ -54,6 +54,18 @@ async function loadChunks(): Promise<ShaderChunkSets> {
   await loadFrom(path.resolve("packages/engine/src/core/materials/shaders/chunks"), chunks100);
   await loadFrom(path.resolve("packages/engine/src/renderers/shaders/source/shared"), chunks100);
 
+  // Shared vegetation wind field (ADR 0059 step 1b): canonical source lives in vegetation-extras
+  // and is registered into the engine ShaderRegistry; load it here so `[WIND_FIELD]` tokens in
+  // web_gl2 vertex chunks resolve with the same single source.
+  await loadFrom(
+    path.resolve("packages/vegetation-extras/src/wind/shaders/chunks"),
+    chunks300,
+  );
+  await loadFrom(
+    path.resolve("packages/vegetation-extras/src/wind/shaders/chunks"),
+    chunks100,
+  );
+
   // Base files
   try {
     const gl1BaseFs = await fs.readFile(

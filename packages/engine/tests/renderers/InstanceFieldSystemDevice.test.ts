@@ -228,7 +228,7 @@ describe("InstanceFieldSystem on a recording device", () => {
     expect(shadow[CULL_MODE_WORD]).toBe(0);
   });
 
-  it("sizes each segment page for the whole population (one view may see every instance)", () => {
+  it("sizes each segment page for the two-bucket worst case (2x population)", () => {
     const n = 5000;
     const { rec } = makeSetup(n);
     // `FieldInfo` is the last 128 B buffer the system creates; word 0 = pageCapacity.
@@ -236,9 +236,11 @@ describe("InstanceFieldSystem on a recording device", () => {
     const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
     expect(info).toBeDefined();
     const words = new Uint32Array((info!.data as Uint8Array).slice().buffer);
-    expect(words[0]).toBe(n); // pageCapacity
+    // Pages cover the audited compaction worst case: a LOD crossfade band emits into the adjacent
+    // {coarse, fine} pair, so 2x maxInstances is the per-segment capacity bound (WP-A1 2).
+    expect(words[0]).toBe(2 * n); // pageCapacity
     // Pages only for the addressable segments: views [0,4) x 1 bucket -> highest bv = 3*8.
-    const visible = rec.buffers.find((b) => b.size === (3 * MAX_LOD_BUCKETS + 1) * n * 4);
+    const visible = rec.buffers.find((b) => b.size === (3 * MAX_LOD_BUCKETS + 1) * 2 * n * 4);
     expect(visible).toBeDefined();
   });
 
@@ -443,7 +445,8 @@ describe("InstanceFieldSystem on a recording device", () => {
   it("zero-fills the P2 LOD-blend pages at the visible-page size (fail-closed inert default)", () => {
     const n = 4;
     const { rec } = makeSetup(n);
-    const visibleBytes = (3 * MAX_LOD_BUCKETS + 1) * n * 4;
+    // P2 blend pages allocate at the page-capacity bound (2x maxInstances, WP-A1 2).
+    const visibleBytes = (3 * MAX_LOD_BUCKETS + 1) * 2 * n * 4;
     const zeroWrite = rec.writes.find(
       (w) =>
         w.data.byteLength === visibleBytes &&

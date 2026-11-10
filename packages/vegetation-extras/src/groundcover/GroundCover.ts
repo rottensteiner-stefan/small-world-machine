@@ -94,6 +94,9 @@ export class GroundCover {
   private readonly _scaleMin: number;
   private readonly _scaleSpan: number;
   private readonly _tileRadius: number;
+  /** @derived Nominal blade occupancy share of the slot grid (`bladesPerTile / slotsPerTile`, ≤ 1);
+   * scales the per-tile accept threshold so every slot grid emits `bladesPerTile` blades on average. */
+  private readonly _baseSlotCoverage: number;
 
   constructor(options: GroundCoverOptions = {}) {
     const radius = options.radius ?? DEFAULT_RADIUS;
@@ -105,6 +108,7 @@ export class GroundCover {
     this.bladesPerTile = bladesPerTile;
     const grid = Math.max(1, Math.ceil(Math.sqrt(bladesPerTile)));
     this.slotsPerTile = grid * grid;
+    this._baseSlotCoverage = bladesPerTile / this.slotsPerTile;
     this._fullDensityRadius = Math.max(0, options.fullDensityRadius ?? DEFAULT_FULL_DENSITY_RADIUS);
     this._minDensity = Math.min(1, Math.max(0.05, options.minDensity ?? DEFAULT_MIN_DENSITY));
     this._cameraClearRadius = Math.max(0, options.cameraClearRadius ?? DEFAULT_CAMERA_CLEAR_RADIUS);
@@ -132,16 +136,19 @@ export class GroundCover {
     const slots = this.slotsPerTile;
     const seed = this.seed;
     const cameraClear = this._cameraClearRadius;
+    const cameraClear2 = cameraClear * cameraClear;
+    const maxR2 = this.radius * this.radius;
     const fullR = this._fullDensityRadius;
-    const radius = this.radius;
     const minDensity = this._minDensity;
-    const span = Math.max(1e-6, radius - fullR);
+    const baseCoverage = this._baseSlotCoverage;
+    const halfCell = cell * 0.5;
+    const span = Math.max(1e-6, this.radius - fullR);
     let out = 0;
 
-    const tx0 = Math.floor((cameraX - radius) / cell);
-    const tx1 = Math.floor((cameraX + radius) / cell);
-    const tz0 = Math.floor((cameraZ - radius) / cell);
-    const tz1 = Math.floor((cameraZ + radius) / cell);
+    const tx0 = Math.floor((cameraX - this.radius) / cell);
+    const tx1 = Math.floor((cameraX + this.radius) / cell);
+    const tz0 = Math.floor((cameraZ - this.radius) / cell);
+    const tz1 = Math.floor((cameraZ + this.radius) / cell);
 
     for (let tz = tz0; tz <= tz1; tz++) {
       for (let tx = tx0; tx <= tx1; tx++) {
@@ -149,19 +156,32 @@ export class GroundCover {
         const tileZ = (tz + 0.5) * cell;
         const dx = tileX - cameraX;
         const dz = tileZ - cameraZ;
-        const d2 = dx * dx + dz * dz;
-        if (d2 > radius * radius || d2 < cameraClear * cameraClear) continue;
-        const dist = Math.sqrt(d2);
+        const ax = Math.abs(dx);
+        const az = Math.abs(dz);
+        // Conservative tile cull only: the NEAREST tile corner outside the ring (whole tile too
+        // far) or the FARTHEST corner inside the camera-clear disc (whole tile dropped anyway).
+        // Exact per-blade gates below make the precise decisions -- tiles never pop as a block.
+        const nearX = Math.max(0, ax - halfCell);
+        const nearZ = Math.max(0, az - halfCell);
+        if (nearX * nearX + nearZ * nearZ > maxR2) continue;
+        const farX = ax + halfCell;
+        const farZ = az + halfCell;
+        if (farX * farX + farZ * farZ < cameraClear2) continue;
+        const dist = Math.sqrt(dx * dx + dz * dz);
 
         // Stable per-tile thinning + density variance (never a function of the slot).
         const tileK =
           TILE_DENSITY_MIN +
           hash01(hash4(seed, tx, tz, 0x10f0)) * (TILE_DENSITY_MAX - TILE_DENSITY_MIN);
         const t = dist <= fullR ? 0 : Math.min(1, (dist - fullR) / span);
-        // Smoothstep falloff: full density at t=0, thinning floor `minDensity` at t=1.
-        const thin = t <= 0 ? 1 : minDensity + (1 - minDensity) * (t * t * (3 - 2 * t));
-        if (thin <= 0) continue;
-        const threshold = thin * tileK;
+        // Smoothstep falloff: FULL density at t=0, thinning floor `minDensity` at t=1 (INVERTED
+        // from the pre-audit form that thinned near the camera and densified toward the ring).
+        const s = t * t * (3 - 2 * t);
+        const thin = 1 - (1 - minDensity) * s;
+        // Slot-grid coverage: `slotsPerTile` rounds up to a square (ceil(sqrt(bladesPerTile)))^2,
+        // so the accept probability must scale by bladesPerTile / slotsPerTile or non-square
+        // blade counts would over-spawn ~+33% inside the full-density disc.
+        const threshold = baseCoverage * thin * tileK;
 
         for (let s = 0; s < slots; s++) {
           const slotKey = s; // unique per tile; 4 hash channels below reuse it with suffixes
@@ -171,6 +191,12 @@ export class GroundCover {
           const jz = hash01(hash4(seed, tx, tz, slotKey + 0x200000));
           const px = tileX + (jx - 0.5) * cell;
           const pz = tileZ + (jz - 0.5) * cell;
+          // Exact per-blade distance gates: blades inside the camera-clear disc or past the outer
+          // ring are dropped individually -- even at tile corners the clear disc empties smoothly.
+          const bx = px - cameraX;
+          const bz = pz - cameraZ;
+          const bladeDist2 = bx * bx + bz * bz;
+          if (bladeDist2 < cameraClear2 || bladeDist2 > maxR2) continue;
           const yaw01 = hash01(hash4(seed, tx, tz, slotKey + 0x300000));
           const scale01 = hash01(hash4(seed, tx, tz, slotKey + 0x400000));
           const o = out * 4;

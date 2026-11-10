@@ -9,6 +9,10 @@ import {
 } from "../../src/renderers/post/elements/AutoExposureElement.js";
 import { PostProcessingGroup } from "../../src/renderers/post/PostProcessingGroup.js";
 import { PostProcessingEffectType } from "../../src/enums/index.js";
+import { AutoExposurePassGL } from "../../src/renderers/post/passes/AutoExposurePassGL.js";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Internals = any;
 
 const SHADERS = join(__dirname, "../../src/renderers/post/shaders");
 const read = (name: string): string => readFileSync(join(SHADERS, name), "utf8");
@@ -90,6 +94,38 @@ describe("auto exposure shaders: two-dialect parity", () => {
     });
   }
 
+  it("both Luminance dialects clamp non-finite samples instead of poisoning the grid average (defense in depth)", () => {
+    // WP-C2 scope: a NaN/Inf scene pixel must never poison the metering average (step 1 guard).
+    expect(lum.wgsl).toMatch(/select\(MIN_LUMINANCE, lum, lum == lum && lum < 65504\.0\)/);
+    expect(lum.glsl).toContain("(lum == lum && lum < 65504.0) ? lum : MIN_LUMINANCE");
+  });
+
+  it("WGSL adapt shader sanitizes targetEv and prevEv before the blend (WP-C2 NaN-poisoning fix)", () => {
+    // P0: a non-finite grid average must not make `targetEv` NaN and permanently poison the 1x1
+    // history texture. The fix guards BOTH inputs with `isFiniteF32` and falls back to a sane
+    // value (0 / safeTargetEv) -- the exact WP-C2-spec tokens.
+    expect(adapt.wgsl).toContain("safeTargetEv");
+    expect(adapt.wgsl).toContain("safePrevEv");
+    expect(adapt.wgsl).toContain("isFiniteF32");
+    expect(adapt.wgsl).toMatch(
+      /let safeTargetEv = select\(0\.0, targetEv, isFiniteF32\(targetEv\)\);/,
+    );
+    expect(adapt.wgsl).toMatch(
+      /let safePrevEv = select\(safeTargetEv, prevEv, isFiniteF32\(prevEv\)\);/,
+    );
+    // The final output must derive from the sanitized chain, never resurrect the raw NaN-able
+    // blend fallback.
+    expect(adapt.wgsl).not.toMatch(/let ev = select\(targetEv, blended/);
+  });
+
+  it("GLSL adapt shader sanitizes targetEv and prevEv with a finiteness guard (WP-C2)", () => {
+    // GLSL ES 3.00 has no `isFiniteF32`; the mirror must still apply an explicit finiteness
+    // predicate before the fallback select.
+    expect(adapt.glsl).toContain("safeTargetEv");
+    expect(adapt.glsl).toContain("safePrevEv");
+    expect(adapt.glsl).toMatch(/!isnan\(/);
+  });
+
   it("both uber shaders scale the radiance by the 1x1 exposure texture before the tone curve", () => {
     expect(read("PostProcess.frag.wgsl")).toMatch(
       /hdr \*= textureLoad\(autoExposureTexture, vec2i\(0, 0\), 0\)\.r;\s*\n\s*let tonemapped/,
@@ -98,5 +134,20 @@ describe("auto exposure shaders: two-dialect parity", () => {
       /hdr \*= texelFetch\(u_autoExposureTexture, ivec2\(0\), 0\)\.r;\s*\n\s*vec3 tonemapped/,
     );
     expect(read("PostProcess100.frag.glsl")).not.toContain("autoExposure");
+  });
+});
+
+describe("AutoExposurePassGL.resetHistory (WP-C2 NaN/reset fix)", () => {
+  it("resets the frame-timer basis so a re-enabled pass never applies a stale multi-second deltaTime", () => {
+    const pass = new AutoExposurePassGL({} as unknown as WebGL2RenderingContext) as Internals;
+    // Simulate a pass that ran, then sat idle -- on re-enable it must start adapting from a
+    // fresh frame (deltaTime == 0) instead of seeing a multi-second spike.
+    pass._lastRealTime = 5.0;
+    pass._snap = false;
+    pass.resetHistory();
+    expect(pass._snap, "camera-cut contract: the next frame snaps to the metered target").toBe(
+      true,
+    );
+    expect(pass._lastRealTime, "deltaTime basis reset to 'no previous frame'").toBe(-1);
   });
 });

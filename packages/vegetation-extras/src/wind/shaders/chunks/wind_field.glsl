@@ -60,6 +60,7 @@ vec3 swmWindBend(vec3 offset, vec2 lean, float height) {
   float h = max(height, 1e-4);
   float k = clamp(offset.y / h, 0.0, 1.0);
   vec2 d = lean * (h * k * k);
-  float drop = 0.5 * dot(d, d) / h;
+  float effY = max(offset.y, 1e-4);
+  float drop = min((2.0 / 3.0) * dot(d, d) / effY, offset.y * 0.45);
   return vec3(offset.x + d.x, offset.y - drop, offset.z + d.y);
 }

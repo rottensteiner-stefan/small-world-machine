@@ -75,7 +75,18 @@ struct CullParams {
     lodCrossfadeBand: f32,          // [0,1] -- transition band as a fraction of each threshold; 0 = hard switch
     lodHysteresis: f32,             // [0,1] -- per-instance deterministic threshold jitter fraction
     lodBiasPx: f32,                 // px -- additive per-tier threshold bias (negative = coarser earlier)
-    _pad: array<u32, 30>,
+    // byte 136: 1 = main-camera view, 0 = shadow view. The sub-pixel size gate applies ONLY to the
+    // main view (IF-PROJECTED-SIZE): a shadow caster that is sub-pixel from the main camera can
+    // still cast a visible shadow, so shadow views never size-drop (IF-SHADOW-CASTER-KEEP).
+    isMainView: u32,
+    _pad1: u32,                     // byte 140 -- vec4 alignment padding for `prevVp` below
+    // Frame N-1 main-camera view-projection (ZO-corrected -- the exact matrix the depth pre-pass
+    // used when the sampled previous-frame pyramid was built). `fieldHzbVisible` projects the
+    // sphere into THIS space so the footprint and depth compare share the pyramid's coordinate
+    // system instead of Frame N's (the frame-staleness fix; HZB data is always one frame old).
+    // Only ever read when `hzbEnabled` (main view); shadow views leave it untrusted/unused.
+    prevVp: mat4x4f,                // byte 144..208
+    _pad: array<u32, 12>,           // byte 208..256 -- block stays 256 B (dynamic-offset stride)
 }
 
 // Visibility-layout contract (single source for blob group 2):

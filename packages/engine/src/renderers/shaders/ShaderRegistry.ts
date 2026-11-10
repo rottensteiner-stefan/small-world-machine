@@ -2,11 +2,31 @@ import type { ShaderDefinition } from "./ShaderDefinition.js";
 import type { ShaderProvider } from "../../interfaces/index.js";
 import type { ShaderChunkId } from "../../enums/index.js";
 import { CoreShaderChunks } from "./CoreShaderChunks.js";
+// Single source of the shared wind field (ADR 0059 step 1b): the function chunk lives in
+// `vegetation-extras` (canonical, `WIND_FIELD_*` re-exports + CPU `WindField` mirror) and is
+// registered here so the engine's field lane (`field_pull.wgsl`) and the WebGL2 vertex chunks
+// consume the very same code instead of maintaining byte-copies that could drift. The engine
+// imports the raw file by workspace-relative path (the packages are npm workspaces; engine does
+// not declare a dependency on vegetation-extras).
+import windFieldGLSL from "../../../../vegetation-extras/src/wind/shaders/chunks/wind_field.glsl?raw";
+import windFieldWGSL from "../../../../vegetation-extras/src/wind/shaders/chunks/wind_field.wgsl?raw";
 
 /**
  * Supported shader languages.
  */
 export type ShaderLanguage = "glsl300" | "glsl100" | "wgsl";
+
+/** `struct SwmWind { ... }` block of the canonical wind chunk (WGSL). */
+const SWM_WIND_STRUCT_RE = /struct SwmWind \{\n[\s\S]*?\n\}/;
+
+/**
+ * Functions-only WGSL wind variant for the field-pull module: the composed module already declares
+ * `SwmWind` via `instance_field_structs.wgsl`, and WGSL forbids duplicate module-scope structs.
+ * Derived from the canonical chunk at registration time -- never a maintained copy.
+ */
+function windFieldFunctionsOnly(source: string): string {
+  return source.replace(SWM_WIND_STRUCT_RE, "");
+}
 
 /**
  * Central registry for shader definitions.
@@ -16,7 +36,21 @@ export class ShaderRegistry {
   private _providers: Map<string, ShaderProvider> = new Map();
   private _chunks: Map<string, Map<ShaderLanguage, string>> = new Map();
 
-  constructor() {}
+  constructor() {
+    // Shared wind field chunk (ADR 0059 step 1b) from the canonical vegetation-extras source: full
+    // block (struct + functions) for standalone/GL consumers, plus the struct-stripped WGSL
+    // functions variant the field-pull module injects (its `SwmWind` lives in
+    // `instance_field_structs.wgsl`, so a duplicate module-scope struct would be a WGSL error).
+    this._registerWindChunks();
+  }
+
+  private _registerWindChunks(): void {
+    const wgslFuncs = windFieldFunctionsOnly(windFieldWGSL);
+    this.registerChunk("WIND_FIELD", windFieldWGSL, "wgsl");
+    this.registerChunk("WIND_FIELD", windFieldGLSL, "glsl300");
+    this.registerChunk("WIND_FIELD", windFieldGLSL, "glsl100");
+    this.registerChunk("WIND_FIELD_FUNCS", wgslFuncs, "wgsl");
+  }
 
   /**
    * Registers a new shader definition.

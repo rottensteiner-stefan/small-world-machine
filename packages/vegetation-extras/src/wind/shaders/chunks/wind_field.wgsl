@@ -66,12 +66,15 @@ fn swmWindLean(w: SwmWind, rootXZ: vec2f, height: f32, shelter: f32) -> vec2f {
 }
 
 // Bends a vertex given relative to the plant root in world-aligned axes (after instance rotation and
-// scale, before translation). Quadratic profile keeps the base planted; the drop term roughly
-// preserves stem length so tips do not stretch.
+// scale, before translation). Quadratic profile keeps the base planted. For horizontal deflection
+// d(y) = lean*h*k^2 (k = y/h), the second-order inextensible vertical drop is the exact arc-length
+// integral (1/2) * integral_0^y |d'(eta)|^2 d(eta) = (2/3) * |d(y)|^2 / y -- NOT a constant divisor
+// heuristic; clamped to 45% of the vertex height so extreme leans cannot collapse the stem.
 fn swmWindBend(offset: vec3f, lean: vec2f, height: f32) -> vec3f {
   let h = max(height, 1e-4);
   let k = clamp(offset.y / h, 0.0, 1.0);
   let d = lean * (h * k * k);
-  let drop = 0.5 * dot(d, d) / h;
+  let effY = max(offset.y, 1e-4);
+  let drop = min((2.0 / 3.0) * dot(d, d) / effY, offset.y * 0.45);
   return vec3f(offset.x + d.x, offset.y - drop, offset.z + d.y);
 }

@@ -99,7 +99,9 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
    */
   public registerInstanceField(field: InstanceFieldGL): void {
     this._instanceFields.add(field);
-    this._fieldShadowViewIndex.set(field, 0);
+    // Shadow-view index base: view 0 is reserved for the main camera slot, so the first
+    // shadow view is 1 (never 0 — 0 would overwrite the main view's culled source).
+    this._fieldShadowViewIndex.set(field, 1);
   }
 
   /** Unregisters a field. The field's own VBOs are released by the field's `dispose()`, not here. */
@@ -123,7 +125,9 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     const fovRadiansY = 2 * Math.atan(1 / proj[5]!);
     const viewportHeightPx = this.gl.canvas.height;
     for (const field of this._instanceFields) {
-      this._fieldShadowViewIndex.set(field, 0);
+      // First shadow view is 1: view 0 is the main camera slot; allocating from 0 would let
+      // the first shadow view cull into slot 0 and overwrite the main camera's culled source.
+      this._fieldShadowViewIndex.set(field, 1);
       field.prepareMainView(
         this._frameViewProj.data,
         { x: this._frameCamPos.x, y: this._frameCamPos.y, z: this._frameCamPos.z },
@@ -164,19 +168,27 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
    * camera from the GL2 shadow paths). Each field consumes its own shadow-view index within its
    * authored `maxViews` budget; a field without headroom is skipped, it never over-draws views.
    * LOD selection stays main-camera-driven (`shadowLodBias` is applied inside the field cull).
+   *
+   * With `reuseView` set (EVSM moment redraws) the view is NOT re-prepared/re-culled: the slot
+   * was already culled by the cascade depth loop (the directional block renders first, so
+   * cascades deterministically own slots `1..C`), and the already-culled command list is replayed
+   * with the EVSM program. This reuses the cascade view exactly like `CascadedShadowPassGPU`
+   * reuses `VIEW_SLOT_CASCADE_BASE + i`, without consuming extra `maxViews` budget.
    */
   protected _drawFieldShadowView(
     shaderId: string,
     vp: Float32Array,
-    camPos: Vector3D,
     pass: InstanceFieldDrawPass,
+    reuseView?: number,
   ): void {
     for (const field of this._instanceFields) {
-      const v = this._fieldShadowViewIndex.get(field) ?? 0;
+      const v = reuseView ?? this._fieldShadowViewIndex.get(field) ?? 1;
       if (v >= field.maxViews) continue;
-      this._fieldShadowViewIndex.set(field, v + 1);
-      field.prepareShadowView(v, vp, { x: camPos.x, y: camPos.y, z: camPos.z });
-      field.cullShadowView(v);
+      if (reuseView === undefined) {
+        this._fieldShadowViewIndex.set(field, v + 1);
+        field.prepareShadowView(v, vp);
+        field.cullShadowView(v);
+      }
       const source = field.getSource(v);
       if (!source) continue;
       this._drawCpuIndirectSource(field, source, pass, { shaderId });

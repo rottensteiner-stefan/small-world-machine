@@ -9,7 +9,8 @@
  * by the coordinator, forwarded unchanged to every view), and a `viewDistance` measured against
  * the MAIN camera position (`global.viewPos` on the WebGPU lane). A shadow view may only reuse
  * the main-determined bucket, optionally coarser by the frozen `shadowLodBias` rule
- * (`min(main + bias, coarsest)`), never re-pick by its own projection.
+ * (`max(main - bias, 0)` — bucket 0 is the COARSEST band, InstanceField.ts), never re-pick by
+ * its own projection and never shift toward finer buckets.
  *
  * Headless coverage (this file, no browser):
  *   [1] REAL WebGL CPU-cell lane (`InstanceFieldGL`) — the CPU-side MIRROR of the bucket
@@ -25,8 +26,8 @@
  *       routing uses `cullParams.segmentBase + bucket`, and the `CullParams` struct carries NO
  *       per-view projection inputs — a regression to per-view projection breaks these pins.
  *   [4] CPU rule-set corpus: randomized (main + shadow) view sets over synthetic instances —
- *       bucket(view) == bucket(main) (or `min(main + bias, coarsest)`), the only view-dependent
- *       gate is the per-view sub-pixel drop.
+ *       bucket(view) == bucket(main) (or `max(main - bias, 0)` on shadow views), the only
+ *       view-dependent gate is the per-view sub-pixel drop.
  *
  * The browser-only half (live per-frame bucket counts during fast flight, pop metric) is the
  * headless proxy's counterpart in `InstanceFieldFastFlightPop.test.ts` + the research note
@@ -165,27 +166,29 @@ function mainProjectedPx(
 }
 
 /**
- * Exact mirror of the lane's SHADOW-view bucket branch, including its documented asymmetry:
- * the coarse bias is applied ONLY when the main view KEPT the run (`_mainBucket >= 0`, i.e.
- * the main frustum did not cull the cell). For main-frustum-culled runs the lane recomputes
- * the main-metric bucket on demand WITHOUT bias (fallback path). This asymmetry is pinned
- * here as part of the mirror contract (a candidate finding for the P2 review).
+ * Exact mirror of the lane's SHADOW-view bucket branch: the coarse bias is applied to EVERY
+ * shadow-view run — the frozen contract applies `max(selectedBucket - shadowLodBias, 0)`
+ * (InstanceField.ts), with bucket 0 the COARSEST band. Runs the main view never reached
+ * (main budget/frustum drop) are recomputed from the MAIN projection on demand and then biased
+ * exactly like main-kept runs.
  */
 function expectedShadowBucket(
   buckets: readonly LodBucketDescriptor[],
   cellId: number,
   bias: number,
 ): number {
-  const pxMain = mainProjectedPx(cellCenterOf(cellId), MAIN_EYE, MAIN_VIEWPORT_HEIGHT_PX, MAIN_FOV_RADIANS_Y);
+  const pxMain = mainProjectedPx(
+    cellCenterOf(cellId),
+    MAIN_EYE,
+    MAIN_VIEWPORT_HEIGHT_PX,
+    MAIN_FOV_RADIANS_Y,
+  );
   let b = 0;
   for (; b < buckets.length; b++) {
     if (pxMain <= buckets[b]!.maxProjectedSize) break;
   }
   if (b >= buckets.length) b = buckets.length - 1;
-  if (mainFrustumKeepsCell(cellId)) {
-    return Math.min(b + bias, buckets.length - 1);
-  }
-  return b;
+  return Math.max(0, b - bias);
 }
 
 /** True when the lane's main-view pass would KEEP the run of `cellId` (main frustum test on
@@ -289,7 +292,9 @@ function makeGlField(bias: number): GlField {
     records: ownership,
     totalInstances: total,
     isPopulated: (cellId: number): boolean => ownership.some((r) => r.cellId === cellId),
-    instanceRange: (cellId: number): { cellId: number; instanceOffset: number; instanceCount: number } | undefined =>
+    instanceRange: (
+      cellId: number,
+    ): { cellId: number; instanceOffset: number; instanceCount: number } | undefined =>
       ownership.find((r) => r.cellId === cellId) ?? undefined,
   };
 
@@ -346,11 +351,7 @@ function poseAt(
   target: readonly [number, number, number],
   vfovY: number,
 ): Pose {
-  const f: [number, number, number] = [
-    target[0] - eye[0],
-    target[1] - eye[1],
-    target[2] - eye[2],
-  ];
+  const f: [number, number, number] = [target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]];
   const len = Math.sqrt(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
   return {
     eye,
@@ -368,11 +369,7 @@ function viewProjection(cam: Pose): Matrix4 {
   const view = new Matrix4();
   Matrix4.lookAt(
     new Vector3D(cam.eye[0], cam.eye[1], cam.eye[2]),
-    new Vector3D(
-      cam.eye[0] + cam.f[0],
-      cam.eye[1] + cam.f[1],
-      cam.eye[2] + cam.f[2],
-    ),
+    new Vector3D(cam.eye[0] + cam.f[0], cam.eye[1] + cam.f[1], cam.eye[2] + cam.f[2]),
     new Vector3D(0, 1, 0),
     view,
   );
@@ -393,13 +390,14 @@ const MAIN_EYE = { x: MAIN_CAM.eye[0], y: MAIN_CAM.eye[1], z: MAIN_CAM.eye[2] } 
 const SHADOW_CAM_A: Pose = poseAt([170, 40, 40], [-50, 0, 40], Math.PI / 2);
 const SHADOW_CAM_B: Pose = poseAt([70, 60, -60], [40, 0, 40], Math.PI / 2);
 /** `SHADOW_CAM_A.eye` in object form (the shadow mirror check only needs the position). */
-const SHADOW_A_EYE = { x: SHADOW_CAM_A.eye[0], y: SHADOW_CAM_A.eye[1], z: SHADOW_CAM_A.eye[2] } as const;
+const SHADOW_A_EYE = {
+  x: SHADOW_CAM_A.eye[0],
+  y: SHADOW_CAM_A.eye[1],
+  z: SHADOW_CAM_A.eye[2],
+} as const;
 
 /** Reads every command of a GL field view (typed against the frozen `CpuDrawCommand`). */
-function collectCommands(
-  field: InstanceFieldGL,
-  viewIndex: number,
-): readonly CpuDrawCommand[] {
+function collectCommands(field: InstanceFieldGL, viewIndex: number): readonly CpuDrawCommand[] {
   const source = field.getSource(viewIndex);
   expect(source, `view ${viewIndex} source`).toBeDefined();
   return source!.commands;
@@ -410,11 +408,7 @@ function collectCommands(
 // ---------------------------------------------------------------------------
 
 describe("IF-PROJECTED-SIZE main-camera anchor — real InstanceFieldGL (CPU mirror)", () => {
-  function driveFrame(
-    field: InstanceFieldGL,
-    shadowCam: Pose,
-    shadowViewIndex = 1,
-  ): void {
+  function driveFrame(field: InstanceFieldGL, shadowCam: Pose, shadowViewIndex = 1): void {
     field.prepareMainView(
       viewProjectionData(MAIN_CAM),
       { x: MAIN_CAM.eye[0], y: MAIN_CAM.eye[1], z: MAIN_CAM.eye[2] },
@@ -422,11 +416,7 @@ describe("IF-PROJECTED-SIZE main-camera anchor — real InstanceFieldGL (CPU mir
       MAIN_FOV_RADIANS_Y,
     );
     field.cullMainView();
-    field.prepareShadowView(
-      shadowViewIndex,
-      viewProjectionData(shadowCam),
-      { x: shadowCam.eye[0], y: shadowCam.eye[1], z: shadowCam.eye[2] },
-    );
+    field.prepareShadowView(shadowViewIndex, viewProjectionData(shadowCam));
     field.cullShadowView(shadowViewIndex);
   }
 
@@ -443,11 +433,7 @@ describe("IF-PROJECTED-SIZE main-camera anchor — real InstanceFieldGL (CPU mir
       expect(field.cullParams[v]!.fovRadiansY).toBe(MAIN_FOV_RADIANS_Y);
     }
     // prepareShadowView must NOT overwrite the primary-view metric with shadow-specific values.
-    field.prepareShadowView(1, viewProjectionData(SHADOW_CAM_A), {
-      x: SHADOW_CAM_A.eye[0],
-      y: SHADOW_CAM_A.eye[1],
-      z: SHADOW_CAM_A.eye[2],
-    });
+    field.prepareShadowView(1, viewProjectionData(SHADOW_CAM_A));
     expect(field.cullParams[1]!.viewportHeightPx).toBe(MAIN_VIEWPORT_HEIGHT_PX);
     expect(field.cullParams[1]!.fovRadiansY).toBe(MAIN_FOV_RADIANS_Y);
   });
@@ -505,7 +491,7 @@ describe("IF-PROJECTED-SIZE main-camera anchor — real InstanceFieldGL (CPU mir
     expect(sensitiveCells, "fixture must contain shadow-sensitive cells").toBeGreaterThan(0);
   });
 
-  it("shadowLodBias>0 applies the frozen coarse bias to the main-derived bucket (clamped), and NOT to main-frustum-culled runs", () => {
+  it("shadowLodBias>0 applies the frozen coarse bias `max(0, b - bias)` to EVERY shadow run (main-kept and main-culled fallback)", () => {
     const bias = 1;
     const { field, prototype } = makeGlField(bias);
     driveFrame(field, SHADOW_CAM_A);
@@ -514,12 +500,14 @@ describe("IF-PROJECTED-SIZE main-camera anchor — real InstanceFieldGL (CPU mir
     for (const cmd of shadow) {
       for (let k = 0; k < cmd.instanceCount; k++) {
         const cellId = cmd.instanceBase + k;
-        // Exact lane branch mirror: bias applies only when the main view kept the run.
+        // Frozen contract: every shadow run is biased coarser (`max(0, b - bias)`), for
+        // main-kept AND main-culled fallback runs alike (fallback is recomputed from the
+        // main projection and then biased the same way).
         const expected = expectedShadowBucket(prototype.lodBuckets, cellId, bias);
         expect(cmd.bucketIndex, `cell ${cellId} biased shadow bucket`).toBe(expected);
       }
     }
-    // The fixture must exercise BOTH branches (main-kept -> biased, main-culled -> unbiased).
+    // The fixture must exercise BOTH branch types (main-kept and main-culled fallback).
     const biasedSeen = new Set<number>();
     const fallbackSeen = new Set<number>();
     for (const cmd of shadow) {
@@ -529,7 +517,7 @@ describe("IF-PROJECTED-SIZE main-camera anchor — real InstanceFieldGL (CPU mir
         else fallbackSeen.add(cellId);
       }
     }
-    expect(biasedSeen.size, "bias branch must be exercised").toBeGreaterThan(0);
+    expect(biasedSeen.size, "main-kept branch must be exercised").toBeGreaterThan(0);
     expect(fallbackSeen.size, "main-culled fallback branch must be exercised").toBeGreaterThan(0);
   });
 
@@ -547,11 +535,7 @@ describe("IF-PROJECTED-SIZE main-camera anchor — real InstanceFieldGL (CPU mir
     );
     field.cullMainView();
     expect(collectCommands(field, 0)).toHaveLength(0);
-    field.prepareShadowView(1, viewProjectionData(SHADOW_CAM_A), {
-      x: SHADOW_CAM_A.eye[0],
-      y: SHADOW_CAM_A.eye[1],
-      z: SHADOW_CAM_A.eye[2],
-    });
+    field.prepareShadowView(1, viewProjectionData(SHADOW_CAM_A));
     field.cullShadowView(1);
     const shadow = collectCommands(field, 1);
     expect(shadow.length).toBeGreaterThan(0);
@@ -730,7 +714,12 @@ describe("IF-PROJECTED-SIZE main-camera anchor — WebGPU param-block forward (r
       prototypes: [makeLodPrototype("rec", 16)],
       // All three buckets of the prototype must resolve a geometry (constructor validation).
       geometryTable: [[indexedGeo, indexedGeo, indexedGeo]],
-      options: { maxInstances: 16, cellSize: CELL_SIZE, cullPixelSize: CULL_PIXEL_SIZE, maxViews: 4 },
+      options: {
+        maxInstances: 16,
+        cellSize: CELL_SIZE,
+        cullPixelSize: CULL_PIXEL_SIZE,
+        maxViews: 4,
+      },
     } as never);
     system.attachHost(host);
     return { system, rec };
@@ -856,7 +845,6 @@ describe("IF-PROJECTED-SIZE main-camera anchor — CPU rule-set corpus (referenc
       MAIN_FOV_RADIANS_Y,
     );
     const mainBucket = selectBucket(buckets, mainPx, CULL_PIXEL_SIZE);
-    const coarsest = buckets.length - 1;
     const kept: boolean[] = [];
     const bucketOf: number[] = [];
     for (let v = 0; v < viewPositions.length; v++) {
@@ -874,12 +862,12 @@ describe("IF-PROJECTED-SIZE main-camera anchor — CPU rule-set corpus (referenc
       );
       const keep = px >= CULL_PIXEL_SIZE;
       kept.push(keep);
-      bucketOf.push(keep ? (v === 0 ? mainBucket : Math.min(mainBucket + bias, coarsest)) : -1);
+      bucketOf.push(keep ? (v === 0 ? mainBucket : Math.max(0, mainBucket - bias)) : -1);
     }
     return { kept, bucketOf };
   }
 
-  it("bucket(any view) == bucket(main), only the clamped bias distinguishes shadow views (bias 0 and > 0)", () => {
+  it("bucket(any view) == bucket(main), only the clamped coarse bias distinguishes shadow views (bias 0 and > 0)", () => {
     const prototype = makeLodPrototype("corpus");
     const mainCam: readonly [number, number, number] = [0, 5, 0];
     const views: readonly (readonly [number, number, number])[] = [
@@ -894,21 +882,13 @@ describe("IF-PROJECTED-SIZE main-camera anchor — CPU rule-set corpus (referenc
       { pos: [0, 0, -300], radius: 2 }, // far -> coarse
       { pos: [5, 0, 40], radius: 8 }, // side, larger radius -> different band
     ];
-    const coarsest = prototype.lodBuckets.length - 1;
     for (const bias of [0, 2] as const) {
       for (const inst of instances) {
-        const r = referenceRoute(
-          prototype.lodBuckets,
-          mainCam,
-          inst.pos,
-          inst.radius,
-          views,
-          bias,
-        );
+        const r = referenceRoute(prototype.lodBuckets, mainCam, inst.pos, inst.radius, views, bias);
         expect(r.bucketOf[0]!, `bias ${bias}, near main`).toBeGreaterThanOrEqual(0);
         for (let v = 0; v < views.length; v++) {
           if (!r.kept[v]!) continue;
-          const expected = v === 0 ? r.bucketOf[0]! : Math.min(r.bucketOf[0]! + bias, coarsest);
+          const expected = v === 0 ? r.bucketOf[0]! : Math.max(0, r.bucketOf[0]! - bias);
           expect(r.bucketOf[v]!, `bias ${bias}, view ${v}`).toBe(expected);
         }
       }

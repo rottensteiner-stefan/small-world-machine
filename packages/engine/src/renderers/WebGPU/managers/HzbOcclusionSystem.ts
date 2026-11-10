@@ -54,7 +54,9 @@ export interface HzbFieldPyramidAccess {
  * pre-pass -- both consumers read a different slot, so the pair is the only depth history that
  * persists (full-res depth is not retained). `buildPyramid()` alternates the write slot and flips
  * `_lastWriteSlot`; the per-object visibility test (`dispatchTest()`) reads the just-built slot;
- * `getPreviousFrameHzb()` hands the OTHER slot to the field cull lane. The pyramid is decoupled
+ * `getPreviousFrameHzb()` hands `_lastWriteSlot` -- the slot COMPLETED BY THE PREVIOUS
+ * `buildPyramid()` call, i.e. Frame N-1's pyramid at the Frame N frame head -- to the field cull
+ * lane, and the NEXT `buildPyramid()` overwrites the OTHER slot. The pyramid is decoupled
  * from `enableOcclusionCulling`: it exists whenever the renderer constructs this system.
  *
  * The renderer is the only caller; to keep this manager free of a host reference, the renderer
@@ -74,18 +76,20 @@ export class HzbOcclusionSystem {
   /** Whole mip chain per slot, for the visibility test's / field cull's `textureLoad`. */
   private _hzbSampledViews: GPUTextureView[] = [];
   /** Pyramid slot written by the most recent successful `buildPyramid()` (0 = none yet after
-   * resize/invalidate, so the first build writes slot 1 -- the "previous" slot is then the never-
-   * written slot 0 and stays unavailable until the second build). */
+   * resize/invalidate). `getPreviousFrameHzb()` serves THIS slot at the frame head: the previous
+   * build's data, which the same frame's `buildPyramid()` does NOT overwrite. */
   private _lastWriteSlot: 0 | 1 = 0;
   /** Monotone count of builds since the last resize/invalidate; `_slotWriteCount[s] > 0` means
    * slot s holds real pyramid data (stale previous-frame reads are the IF-CAMERA-CUT-HZB-SKIP /
-   * availability hazard this guards). */
+   * availability hazard this guards). Zeroed by `invalidatePyramid()` so a pre-cut slot can never
+   * be served again after a camera cut. */
   private _slotWriteCount: [number, number] = [0, 0];
   /** Build counter at which each slot was last written (the `HzbPyramidAccess.frameIndex` value). */
   private _slotBuiltFrame: [number, number] = [0, 0];
   private _buildCounter = 0;
   /** False after `resize()`/`invalidatePyramid()` until the next `buildPyramid()` succeeds;
-   * `getPreviousFrameHzb().available` additionally requires the other slot to have data. */
+   * `getPreviousFrameHzb().available` additionally requires the served slot (`_lastWriteSlot`) to
+   * have been written since the last invalidation. */
   private _hzbAvailable = false;
   private _hzbMipLevelCount = 1;
   private _canvasWidth = 0;
@@ -129,6 +133,20 @@ export class HzbOcclusionSystem {
   /** Reused every frame -- see `dispatchTest()`. */
   private readonly _hzbAabbScratch = new Float32Array(MAX_HZB_TESTED_OBJECTS * 4);
   private readonly _hzbParamsScratch = new Uint32Array(4);
+
+  /** Persistent previous-frame pyramid handle (`getPreviousFrameHzb()` mutates and returns this
+   * object every call -- zero per-frame allocations). Consumers must read it synchronously within
+   * the call that received it (the field lane only ever does: it copies `mipLevelCount`, binds the
+   * `view` and reads the flags, all inside `prepareMainView`). */
+  private readonly _prevHzbResult: HzbFieldPyramidAccess = {
+    available: false,
+    frameIndex: 0,
+    readHandle: {
+      slot: 0,
+      view: undefined as unknown as GPUTextureView,
+      mipLevelCount: 1,
+    },
+  };
 
   constructor(
     private readonly _device: GPUDevice,
@@ -255,7 +273,8 @@ export class HzbOcclusionSystem {
       this._hzbSampledViews[slot] = this._hzbTextures[slot]!.createView();
     }
     // Fresh pair: neither slot holds data, so the first build writes slot 1 (`_lastWriteSlot`
-    // stays 0) and the previous-frame slot only becomes available after the SECOND build.
+    // stays 0) and slot 0 remains unavailable -- `getPreviousFrameHzb()` serves slot 1 (Frame 1's
+    // pyramid) from the second frame's head on, never a never-written slot.
     this._lastWriteSlot = 0;
     this._slotWriteCount = [0, 0];
     this._slotBuiltFrame = [0, 0];
@@ -345,7 +364,9 @@ export class HzbOcclusionSystem {
    *
    * After the chain is recorded, the write slot flips (`_lastWriteSlot`) and the slot's build
    * timestamp advances -- both consumers key off that ordering: `dispatchTest()` reads the
-   * just-built slot, `getPreviousFrameHzb()` hands the OTHER slot to the instance-field cull lane.
+   * just-built slot, `getPreviousFrameHzb()` hands that same (now previous-frame) slot to the
+   * instance-field cull lane. The cull runs at the NEXT frame's head, before this slot is
+   * overwritten again -- no same-encoder read/write pair ever shares a slot.
    */
   public buildPyramid(ce: GPUCommandEncoder, offscreen: boolean): void {
     if (offscreen) return;
@@ -588,31 +609,37 @@ export class HzbOcclusionSystem {
 
   /**
    * Hands the instance-field cull lane (ADR 0059) read access to the PREVIOUS frame's pyramid
-   * slot -- the one `buildPyramid()` did NOT just write. The field cull runs at the frame head,
-   * before this frame's depth pre-pass, so it can only ever consume last frame's depth.
+   * slot -- the one `buildPyramid()` completed in Frame N-1, i.e. `_lastWriteSlot` at the Frame N
+   * frame head. The field cull runs at the frame head, before this frame's depth pre-pass, so it
+   * can only ever consume last frame's depth.
    *
-   * `available` requires BOTH a successful prior build (`_hzbAvailable`) AND the other slot to
-   * have been written at least once (`_slotWriteCount[other] > 0`): the very first build writes
-   * slot 1 while `_lastWriteSlot` stays 0, so the never-written slot 0 only becomes available
-   * after the SECOND build -- the first frame after resize/invalidate therefore keeps the field
-   * lane on frustum-only culling (fail-closed, no stale pyramid). `frameIndex` is the unique
-   * generation stamp of the slot; the cull coordinator compares it against the last culled frame
-   * to detect one-frame-stale previous-frame data independently of the telement flag. The
-   * returned handle MUST be read within the same frame: the next `buildPyramid()` flips the
-   * write slot and this handle becomes the just-built one.
+   * WHY `_lastWriteSlot` AND NOT THE OTHER SLOT (ping-pong inversion fix, P0): inside
+   * `buildPyramid()` the target slot is chosen as `_lastWriteSlot === 0 ? 1 : 0` and only THEN
+   * does `_lastWriteSlot` flip. At the frame head `_lastWriteSlot` therefore ALREADY names the slot
+   * completed in Frame N-1, and the slot `buildPyramid()` will overwrite later in this SAME command
+   * encoder is the other one. Reading the "other" slot would return Frame N-2's pyramid (two frames
+   * stale, and the exact slot this frame's build overwrites).
+   *
+   * `available` requires BOTH a successful prior build (`_hzbAvailable`) AND `_lastWriteSlot` to
+   * hold data written at least once since the last resize/invalidate
+   * (`_slotWriteCount[_lastWriteSlot] > 0`): the FIRST build after a resize/invalidate writes slot
+   * 1 while `_lastWriteSlot` stays 0, so slot 0 keeps `available: false` -- the field lane stays on
+   * frustum-only culling (fail-closed, no stale pyramid). `frameIndex` is the unique generation
+   * stamp of the slot; the cull coordinator compares it against the last culled frame to detect
+   * one-frame-stale previous-frame data independently of the teleport flag. The returned handle
+   * MUST be read within the same frame (synchronous reads only, the object is a reused scratch):
+   * the next `buildPyramid()` flips the write slot and this handle becomes the just-built one.
    */
   public getPreviousFrameHzb(): HzbFieldPyramidAccess {
-    const other: 0 | 1 = this._lastWriteSlot === 0 ? 1 : 0;
-    const otherCulled = this._slotWriteCount[other]! > 0;
-    return {
-      available: this._hzbAvailable && otherCulled,
-      frameIndex: this._slotBuiltFrame[other]!,
-      readHandle: {
-        slot: other,
-        view: this._hzbSampledViews[other]!,
-        mipLevelCount: this._hzbMipLevelCount,
-      },
-    };
+    const prevSlot: 0 | 1 = this._lastWriteSlot;
+    const out = this._prevHzbResult;
+    const prevWritten = this._slotWriteCount[prevSlot]! > 0;
+    out.available = this._hzbAvailable && prevWritten;
+    out.frameIndex = this._slotBuiltFrame[prevSlot]!;
+    out.readHandle.slot = prevSlot;
+    out.readHandle.view = this._hzbSampledViews[prevSlot]!;
+    out.readHandle.mipLevelCount = this._hzbMipLevelCount;
+    return out;
   }
 
   /**
@@ -621,11 +648,16 @@ export class HzbOcclusionSystem {
    * `notifyCameraTeleport()` -- the exact wrong-cull hazard `IF-CAMERA-CUT-HZB-SKIP` guards.
    * `getPreviousFrameHzb()` then returns `available: false` until the next `buildPyramid()`
    * succeeds, and `_slotBuiltFrame` keeps counting so a stale slot's `frameIndex` can never be
-   * mistaken for a fresh one. The readback chain and the per-object `occlusionCulled` flags are
-   * untouched (`resetOcclusionStreak()` is the sibling the renderer already fans out). Besides
-   * this system-wide invalidation, each field additionally consumes its field-scoped one-frame
-   * cull skip (`InstanceFieldSystem.notifyCameraTeleport`, defense in depth). Idempotent. */
+   * mistaken for a fresh one. Resetting `_slotWriteCount` closes the post-teleport pre-cut leak
+   * (post-camera-cut, the newly built post-cut slot becomes the ONLY slot with `count > 0`, so the
+   * pre-cut slot can never be served again even after another build cycle). The readback chain and
+   * the per-object `occlusionCulled` flags are untouched (`resetOcclusionStreak()` is the sibling
+   * the renderer already fans out). Besides this system-wide invalidation, each field additionally
+   * consumes its field-scoped one-frame cull skip (`InstanceFieldSystem.notifyCameraTeleport`,
+   * defense in depth). Idempotent. */
   public invalidatePyramid(): void {
     this._hzbAvailable = false;
+    this._slotWriteCount[0] = 0;
+    this._slotWriteCount[1] = 0;
   }
 }

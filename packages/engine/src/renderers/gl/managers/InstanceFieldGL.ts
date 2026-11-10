@@ -192,7 +192,6 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
   /** Frozen per-view cull-params mirror (also the `cullParams` read surface). */
   private readonly _cullParams: CullParams[];
   private readonly _viewPlanes: [number, number, number, number][][];
-  private readonly _viewCamPos: { x: number; y: number; z: number }[];
   private readonly _mainCamPos: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
   private _mainViewportHeightPx: number = 0;
   private _mainFovRadiansY: number = 0;
@@ -334,15 +333,13 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
     this._geometryTable = flat;
     this._materials = setup.materials;
 
-    // Pool per-view cull-params + plane/camPos storage (bounded by the authored view cap).
+    // Pool per-view cull-params + plane storage (bounded by the authored view cap).
     this._cullParams = [];
     this._viewPlanes = [];
-    this._viewCamPos = [];
     for (let v = 0; v < viewCount; v++) {
       const planes: [number, number, number, number][] = [];
       for (let i = 0; i < 6; i++) planes.push([0, 0, 0, 0]);
       this._viewPlanes.push(planes);
-      this._viewCamPos.push({ x: 0, y: 0, z: 0 });
       this._cullParams.push({
         viewIndex: v,
         frustumPlanes: planes,
@@ -450,23 +447,18 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
     this._probeIndexCount = 0;
     // Main bucket is frame-global (shadow views consume it, biased): reset to "unknown".
     this._mainBucket.fill(-1, 0, this._totalRuns);
-    this._cullView(0, this._mainCamPos, true);
+    this._cullView(0, true);
     this._emitViewCommands(0);
     this._viewRevision[0] = this._viewRevision[0]! + 1;
   }
 
-  /** Prepares a SHADOW view (viewIndex >= 1) cull params from its VP matrix + camera. */
-  public prepareShadowView(
-    viewIndex: number,
-    vp: Float32Array,
-    camPos: { readonly x: number; readonly y: number; readonly z: number },
-  ): void {
+  /** Prepares a SHADOW view (viewIndex >= 1) cull params from its VP matrix. The shadow
+   * camera position is NOT stored: every distance metric (reachable prefilter, projected
+   * size, LOD) is main-camera-anchored per IF-PROJECTED-SIZE, and the frustum comes from the
+   * VP planes — the same param shape as the WebGPU lane's `prepareShadowView(viewIndex, vp)`. */
+  public prepareShadowView(viewIndex: number, vp: Float32Array): void {
     if (viewIndex < 1 || viewIndex >= this._viewCount) return;
     this._fillViewParams(viewIndex, vp, this._mainViewportHeightPx, this._mainFovRadiansY);
-    const pos = this._viewCamPos[viewIndex]!;
-    pos.x = camPos.x;
-    pos.y = camPos.y;
-    pos.z = camPos.z;
   }
 
   /** Culls one shadow view and emits its command list: own reachable prefilter + conservative
@@ -474,8 +466,7 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
    * `shadowLodBias`). */
   public cullShadowView(viewIndex: number): void {
     if (viewIndex < 1 || viewIndex >= this._viewCount) return;
-    const pos = this._viewCamPos[viewIndex]!;
-    this._cullView(viewIndex, pos, false);
+    this._cullView(viewIndex, false);
     this._emitViewCommands(viewIndex);
     this._viewRevision[viewIndex] = this._viewRevision[viewIndex]! + 1;
   }
@@ -512,27 +503,29 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
 
   /** One view cull. Phase A: reachable prefilter -> distance sort -> budget + conservative
    * frustum cull + main-driven LOD bucket marks. Phase B (`_emitViewCommands`) merges runs in
-   * VBO order and emits commands. */
-  private _cullView(
-    viewIndex: number,
-    camPos: { readonly x: number; readonly y: number; readonly z: number },
-    isMain: boolean,
-  ): void {
+   * VBO order and emits commands.
+   * Distance metrics (reachable prefilter + projected size) are ALWAYS anchored to the MAIN
+   * camera (`_mainCamPos`): a directional cascade camera sits 200 m behind its box (`center -
+   * direction * 200`), so measuring `maxCullRadius` or the projected size against it would
+   * drop every cell and every run (IF-PROJECTED-SIZE is a main-camera metric by contract).
+   * The shadow frustum still gates through the per-view planes below.
+   */
+  private _cullView(viewIndex: number, isMain: boolean): void {
     const planes = this._viewPlanes[viewIndex]!;
     const viewPortH = this._cullParams[viewIndex]!.viewportHeightPx;
     const viewFov = this._cullParams[viewIndex]!.fovRadiansY;
-    const camX = camPos.x;
-    const camY = camPos.y;
-    const camZ = camPos.z;
+    const mainCamX = this._mainCamPos.x;
+    const mainCamY = this._mainCamPos.y;
+    const mainCamZ = this._mainCamPos.z;
 
     // Phase A-1: reachable-cell gather (conservative outer bound, never authoritative).
     this._reachCount = 0;
     const reachCells = this._reachCells;
     const reachDist = this._reachDist;
     for (let c = 0; c < this._totalCells; c++) {
-      const dx = this._cellsCenter[c * 3]! - camX;
-      const dy = this._cellsCenter[c * 3 + 1]! - camY;
-      const dz = this._cellsCenter[c * 3 + 2]! - camZ;
+      const dx = this._cellsCenter[c * 3]! - mainCamX;
+      const dy = this._cellsCenter[c * 3 + 1]! - mainCamY;
+      const dz = this._cellsCenter[c * 3 + 2]! - mainCamZ;
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       // Any part of the cell within the radius is testable: subtract the half diagonal.
       if (dist - this._halfCellDiagonal > this._cpuBudget.maxCullRadius) continue;
@@ -583,15 +576,18 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
         if (this._instancesSpent >= this._cpuBudget.maxInstancesPerFrame) break;
         const proto = this._runProto[run]!;
         const runRadius = this._runMaxRadius[run]!;
-        const dx = cellCenterX - camX;
-        const dy = cellCenterY - camY;
-        const dz = cellCenterZ - camZ;
+        const dx = cellCenterX - mainCamX;
+        const dy = cellCenterY - mainCamY;
+        const dz = cellCenterZ - mainCamZ;
         const runDist = Math.max(
           0,
           Math.sqrt(dx * dx + dy * dy + dz * dz) - this._halfCellDiagonal,
         );
+        // Projected size is a MAIN-camera metric (IF-PROJECTED-SIZE): `viewPortH`/`viewFov`
+        // are the primary-view inputs forwarded to every shadow view, so `px` is the main
+        // projection this view reuses — never the shadow camera's distance.
         const px = projectedDiameterPixels(runRadius, runDist, viewPortH, viewFov);
-        // Sub-pixel: dropped in EVERY view (own per-view metric) — the frozen `cullPixelSize`.
+        // Sub-pixel: dropped in EVERY view (main-camera metric) — the frozen `cullPixelSize`.
         if (px < this._cullPixelSize) {
           if (isMain) this._mainBucket[run] = this._pickBucket(proto, px);
           continue;
@@ -601,12 +597,17 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
           b = this._pickBucket(proto, px);
           this._mainBucket[run] = b;
         } else if (b < 0) {
-          // Main never reached/kept this run (main budget drop): LOD stays main-driven —
-          // compute the main metric on demand (a pure function of main distance).
-          b = this._pickBucket(proto, this._mainProjectedSize(run, cellIdx));
+          // Main never reached/kept this run (main budget/frustum drop): the bucket stays a
+          // pure function of the MAIN projection — `px` above already IS that projection.
+          b = this._pickBucket(proto, px);
           this._mainBucket[run] = b;
-        } else if (this._shadowLodBias > 0) {
-          b = Math.min(b + this._shadowLodBias, this._protoBucketMaxima[proto]!.length - 1);
+        }
+        // Coarse shadow bias, applied to main-kept AND on-demand recomputed runs (frozen
+        // contract: `max(selectedBucket - shadowLodBias, 0)`). Bucket 0 is COARSEST and
+        // bucketCount-1 finest (InstanceField.ts), so a positive bias shifts toward coarser
+        // geometry — never `b + bias` (that would make shadows finer).
+        if (!isMain && this._shadowLodBias > 0) {
+          b = Math.max(0, b - this._shadowLodBias);
         }
         keep[run] = 1;
         bucket[run] = b;
@@ -619,20 +620,6 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
         this._keptCells[k] = cellIdx;
       }
     }
-  }
-
-  /** Main-camera projected diameter of a run (LOD must NEVER come from a shadow view). */
-  private _mainProjectedSize(run: number, cellIdx: number): number {
-    const dx = this._cellsCenter[cellIdx * 3]! - this._mainCamPos.x;
-    const dy = this._cellsCenter[cellIdx * 3 + 1]! - this._mainCamPos.y;
-    const dz = this._cellsCenter[cellIdx * 3 + 2]! - this._mainCamPos.z;
-    const dist = Math.max(0, Math.sqrt(dx * dx + dy * dy + dz * dz) - this._halfCellDiagonal);
-    return projectedDiameterPixels(
-      this._runMaxRadius[run]!,
-      dist,
-      this._mainViewportHeightPx,
-      this._mainFovRadiansY,
-    );
   }
 
   /** Frozen band lookup: the ascending `maxProjectedSize` sequence picks the coarsest bucket

@@ -33,6 +33,16 @@ out float v_texIndex;
 in vec3 a_instancePos;
 in uint a_instancePose;
 
+// ADR 0059 step 1b wind field, single-sourced from the shared `vegetation-extras` chunk (same
+// code the WGSL pull lane compiles). `u_windHeight` is the runtime master switch mirroring the
+// WGSL `fieldInfo.windHeight` gate -- omitted/zero uniform keeps the lane fail-closed static.
+// Struct-declaring chunk: the GL header owns the `SwmWind` type, so the full (not
+// struct-stripped) registry variant is used.
+[WIND_FIELD]
+
+uniform SwmWind u_wind;
+uniform float u_windHeight;
+
 mat4 buildInstanceFieldMatrix(vec3 pos, uint packedPose) {
     float yaw = (float(packedPose & 0xFFFFu) / 65535.0) * 6.283185307179586;
     float scale = float(packedPose >> 16u) * (1.0 / 256.0);

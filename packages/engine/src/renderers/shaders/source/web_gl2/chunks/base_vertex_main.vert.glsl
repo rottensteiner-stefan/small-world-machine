@@ -33,7 +33,6 @@ void main() {
 #endif
 
   vec4 wp = modelMat * localPos;
-  v_worldPos = wp.xyz;
   vec3 computedNormal = mat3(modelMat) * localNormal;
   // Fallback only for a genuinely missing/zero vertex normal. The test must run on the LOCAL normal:
   // testing the transformed one made it depend on the mesh scale (a 0.008-scaled model has
@@ -41,6 +40,26 @@ void main() {
   if (dot(localNormal, localNormal) < 0.0001 || dot(computedNormal, computedNormal) < 1e-20) {
     computedNormal = vec3(0.0, 1.0, 0.0);
   }
+#ifdef USE_INSTANCE_FIELD
+  // ADR 0059 wind (WebGL2 parity with the WGSL pulled lane): arc-length-preserving quadratic bend
+  // of the instance-rotated/scaled offset (w = 0 drops the root translation), gated by
+  // `u_windHeight` like `fieldInfo.windHeight` (0 = fail-closed static; the renderer uploads the
+  // shared SwmWind block). The shading normal is sheared against the bend tangent slope
+  // 2 * lean * k -- normalization below cancels the uniform model scale, matching field_pull.wgsl.
+  if (u_windHeight > 0.0) {
+    float windScale = u_windHeight * (float(a_instancePose >> 16u) * (1.0 / 256.0));
+    vec3 windOffset = (modelMat * vec4(localPos.xyz, 0.0)).xyz;
+    vec2 windLean = swmWindLean(u_wind, a_instancePos.xz, windScale, 0.0);
+    wp = vec4(a_instancePos + swmWindBend(windOffset, windLean, windScale), 1.0);
+    float windK = clamp(windOffset.y / windScale, 0.0, 1.0);
+    computedNormal = vec3(
+      computedNormal.x - 2.0 * windLean.x * windK * computedNormal.y,
+      computedNormal.y,
+      computedNormal.z - 2.0 * windLean.y * windK * computedNormal.y
+    );
+  }
+#endif
+  v_worldPos = wp.xyz;
   v_normal = normalize(computedNormal);
   vec2 uvScaled = a_uv * u_texRepeat;
   float uvCos = 1.0;

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { validate, formatDiagnostic, LIMITS } from "@moreplease/glslang";
 import { describe, expect, it } from "vitest";
 import { WgslReflect } from "wgsl_reflect/wgsl_reflect.module.js";
+import { ShaderRegistry } from "@small-world-machine/engine/renderers/shaders/ShaderRegistry.js";
 import { WIND_FIELD_GLSL, WIND_FIELD_WGSL } from "../src/wind/windShaders.js";
 
 const FUNCTIONS = ["swmWindHash", "swmWindNoise", "swmWindGust", "swmWindLean", "swmWindBend"];
@@ -57,10 +58,11 @@ describe("wind field shader chunks", () => {
     expect(constants(WIND_FIELD_GLSL)).toEqual(constants(WIND_FIELD_WGSL));
   });
 
-  it("pins the engine's field-lane wind code to this chunk (single source, no drift)", () => {
-    // The engine embeds a VERBATIM copy of these functions in `field_pull.wgsl` and the
-    // `SwmWind` struct in `instance_field_structs.wgsl`; a divergence would break coherent
-    // motion between the field lane and every other wind consumer.
+  it("pins the engine's field-lane wind code to the registry chunk (single source, no drift)", () => {
+    // The composed field-pull module injects the `WIND_FIELD_FUNCS` functions-only registry chunk;
+    // `ShaderRegistry` derives it from THIS canonical chunk by stripping the `SwmWind` struct
+    // (the composed module already declares the struct via `instance_field_structs.wgsl`, and WGSL
+    // forbids a duplicate module-scope struct). The module must carry NO maintained copy anymore.
     const pull = readFileSync(
       new URL(
         "../../engine/src/renderers/shaders/source/web_gpu/instance_field/field_pull.wgsl",
@@ -75,12 +77,18 @@ describe("wind field shader chunks", () => {
       ),
       "utf8",
     );
+    const registry = new ShaderRegistry();
+    const funcs = registry.getChunk("WIND_FIELD_FUNCS", "wgsl");
+    expect(funcs, "registered functions-only chunk exists").toBeDefined();
     for (const name of FUNCTIONS) {
       const fn = WIND_FIELD_WGSL.match(new RegExp(`(fn ${name}\\([\\s\\S]*?\\n})`));
       expect(fn, `canonical ${name} found in chunk`).not.toBeNull();
-      expect(pull, `${name} byte-identical in the field pull module`).toContain(fn![1]!);
+      expect(funcs, `${name} byte-identical in the registry chunk`).toContain(fn![1]!);
+      expect(pull, `${name} not shadowed by a maintained copy`).not.toContain(`fn ${name}(`);
     }
-    // The `SwmWind` block is the field-uniform member the engine declares for every lane.
+    expect(funcs).not.toContain("struct SwmWind");
+    expect(pull).toContain("[WIND_FIELD_FUNCS]");
+    // The `SwmWind` struct is provided exactly once for the field-lane module.
     expect(structs).toContain("struct SwmWind {");
     for (const member of ["p0: vec4f", "p1: vec4f", "p2: vec4f", "p3: vec4f"]) {
       expect(structs).toContain(member);
