@@ -39,6 +39,8 @@ export class AutoExposurePassGPU implements PostEffectPass {
   private readonly _lumData = new Float32Array(4);
   private readonly _adaptData = new Float32Array(8);
   private _snap: boolean = true;
+  /** Frame-timer basis for the reset guard; `-1` = "no previous frame" (parity with `AutoExposurePassGL`). */
+  private _lastRealTime: number = -1;
 
   constructor(device: GPUDevice) {
     this._device = device;
@@ -54,12 +56,7 @@ export class AutoExposurePassGPU implements PostEffectPass {
     this._luminanceView = this._luminance.createView();
     this._scratchView = this._scratch.createView();
     this._currentView = this._current.createView();
-    device.queue.writeTexture(
-      { texture: this._current },
-      new Uint16Array([HALF_ONE, 0, 0, HALF_ONE]),
-      { bytesPerRow: 8 },
-      [1, 1, 1],
-    );
+    this._seedExposure();
     this._lumParams = device.createBuffer({
       size: 16,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -156,7 +153,13 @@ export class AutoExposurePassGPU implements PostEffectPass {
     a[0] = element.minEv;
     a[1] = element.maxEv;
     a[2] = element.compensationEv;
-    a[3] = ctx.renderer.frameInfo.realDeltaTime;
+    // Reset-guard parity (WP-C2, mirror of `AutoExposurePassGL.execute`): on a fresh basis
+    // ("no previous frame" after construction or `resetHistory()`) the adaptation applies delta 0
+    // instead of a stale multi-second gap. The per-frame value stays the renderer-provided
+    // `realDeltaTime` (immune to disable gaps by construction, unlike the GL lane's `realTime`
+    // difference), so only the sentinel is mirrored, not the accumulator.
+    a[3] = this._lastRealTime < 0 ? 0 : ctx.renderer.frameInfo.realDeltaTime;
+    this._lastRealTime = ctx.renderer.frameInfo.realTime;
     a[4] = element.speedDark;
     a[5] = element.speedBright;
     a[6] = this._snap ? 1 : 0;
@@ -170,9 +173,30 @@ export class AutoExposurePassGPU implements PostEffectPass {
     return this._currentView;
   }
 
-  /** Camera cut: the next frame jumps straight to the metered exposure. */
+  /**
+   * Neutral (1.0 multiplier / 0 EV, IEEE half) the stable 1x1 exposure texture. Parity mirror of
+   * `AutoExposurePassGL._seedExposureHistory`; runs from the constructor and `resetHistory()` so
+   * no frame ever blends from stale or uninitialized exposure state.
+   */
+  private _seedExposure(): void {
+    this._device.queue.writeTexture(
+      { texture: this._current },
+      new Uint16Array([HALF_ONE, 0, 0, HALF_ONE]),
+      { bytesPerRow: 8 },
+      [1, 1, 1],
+    );
+  }
+
+  /**
+   * Camera cut / re-enable: the next frame jumps straight to the metered exposure. Parity with
+   * `AutoExposurePassGL.resetHistory()` (WP-C2): reset the frame-timer basis to "no previous
+   * frame" so the first frame after a re-enable applies delta 0 (never a stale multi-second
+   * spike), and re-seed the stable 1x1 exposure texture so the blend never starts from a stale EV.
+   */
   public resetHistory(): void {
     this._snap = true;
+    this._lastRealTime = -1;
+    this._seedExposure();
   }
 
   public destroy(): void {
