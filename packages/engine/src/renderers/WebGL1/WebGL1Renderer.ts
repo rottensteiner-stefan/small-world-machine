@@ -131,6 +131,11 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   private _instanceDataBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
   private _instanceDataBufferSizes: WeakMap<InstancedMesh, number> = new WeakMap();
   private _instanceDataUploaded: WeakMap<InstancedMesh, number> = new WeakMap();
+  /** Derived field-lane shader flags per committed `manifest.flags` array reference (ADR 0059;
+   * engine contract `_commitFlags` publishes immutably, a fresh array on content change → the
+   * WeakMap key rotates). Tag-checked against the quality/BRDF bits so environment changes rebuild.
+   * Holds only plain strings — no GL objects, survives context restore. */
+  private readonly _fieldFlagsCache = new WeakMap<string[], { flags: string[]; tag: number }>();
 
   /** @inheritdoc */
   public async initialize(
@@ -1035,6 +1040,9 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
 
   /** @inheritdoc */
   protected override onContextRestored(): void {
+    // Re-arm registered field lanes FIRST (live-context VBO re-upload) so the first draw through
+    // the pass hook after restore uses live handles, never one cycle stale.
+    this._onFieldContextRestored();
     // Every handle created on the old context is dead: forget them (nothing to delete) and rebuild.
     this._texCache.clear();
     this._renderTargetFbos.clear();
@@ -1209,13 +1217,24 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
    * EVSM and no instance-matrix variant for the pose (see `_buildGlsl100`): manifest flags, the
    * scene BRDF LUT upgrade, and `INSTANCE_FIELD`. `TEXTURE_ARRAY` is stripped like on GL2 (no
    * `v_texIndex` output under `USE_INSTANCE_FIELD`).
+   *
+   * Cached per committed `manifest.flags` array reference (immutable-while-published contract)
+   * with a quality/BRDF bit tag check; hit returns the SAME cached array (WebGLProgramCache only
+   * reads it and copies on miss), keeping the per-command field draw allocation-free. WeakMap
+   * keying drops the entry with the committed array, so dynamically toggled materials never leak.
    */
   private _buildFieldShaderFlags(manifest: RenderManifest, scene: Scene | undefined): string[] {
-    const flags = [...(resolveManifestFlags(manifest.flags, this._quality.disableTextures) ?? [])];
+    const committed = manifest.flags;
+    const brdf = !!scene?.brdfLUT && !!manifest.textures?.["u_envMap"];
+    const tag = (this._quality.disableTextures ? 1 : 0) | (brdf ? 2 : 0);
+    const cached = committed ? this._fieldFlagsCache.get(committed) : undefined;
+    if (cached && cached.tag === tag) return cached.flags;
+    const flags = [...(resolveManifestFlags(committed, this._quality.disableTextures) ?? [])];
     const ta = flags.indexOf(ShaderFlag.TEXTURE_ARRAY);
     if (ta >= 0) flags.splice(ta, 1);
-    if (scene?.brdfLUT && manifest.textures?.["u_envMap"]) flags.push(ShaderFlag.BRDF_LUT);
+    if (brdf) flags.push(ShaderFlag.BRDF_LUT);
     flags.push(ShaderFlag.INSTANCE_FIELD);
+    if (committed) this._fieldFlagsCache.set(committed, { flags, tag });
     return flags;
   }
 

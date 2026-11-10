@@ -125,7 +125,9 @@ export class MainRenderPass implements RenderPass {
     camPos: Vector3D,
     vMat?: Float32Array,
   ): void {
-    const renderList = scene.getVisibleObjectsSorted(vp, camPos);
+    // Frame-frozen list computed once per frame by the renderer -- never re-collect here (the
+    // same list + ordering must reach every pass); direct/test executions fall back to the scene.
+    const renderList = renderer.frameRenderList ?? scene.getVisibleObjectsSorted(vp, camPos);
 
     const normalView = renderer.activeNormalView;
     const opaqueMode = normalView ? NormalTargetMode.WRITE : NormalTargetMode.NONE;

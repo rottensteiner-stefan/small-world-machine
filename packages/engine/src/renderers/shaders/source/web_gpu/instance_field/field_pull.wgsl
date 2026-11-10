@@ -270,11 +270,11 @@ fn fsFieldEvsm(i: FieldVertOut) -> @location(0) vec4f {
 
 // ── main color variant ────────────────────────────────────────────────────────────────────────
 // Vegetation shading: Lambert sun with the engine's cascaded shadows (same cascade selection,
-// blend-free, normal-offset bias as lighting_pbr.wgsl) + irradiance/ambient, two-sided normals, and the
-// ADR 0060 leaf backlight (wrap from the unlit side + forward lobe toward the sun, transmission
-// shadow sampled `backlight.w` metres toward the sun) weighted by the colour alpha mask. No
-// specular. Two output shapes keep the pass's attachment count valid (1 or 2
-// targets, see MainRenderPass normal buffer).
+// normal-offset bias and blend band as lighting_pbr.wgsl) + irradiance/ambient, two-sided normals,
+// and the ADR 0060 leaf backlight (wrap from the unlit side + forward lobe toward the sun,
+// transmission shadow sampled `backlight.w` metres toward the sun, cascade-blended / next-cascade
+// fallback per WP-C2) weighted by the colour alpha mask. No specular. Two output shapes keep the
+// pass's attachment count valid (1 or 2 targets, see MainRenderPass normal buffer).
 fn fieldShadingNormal(i: FieldVertOut, frontFacing: bool) -> vec3f {
     let n = normalize(i.n);
     return select(-n, n, frontFacing);
@@ -304,12 +304,40 @@ fn fieldColorShade(i: FieldVertOut, frontFacing: bool) -> vec4f {
                 break;
             }
         }
+        // Cascade blending (same band law as lighting_pbr.wgsl / every tier -- cross-tier seam-fade
+        // parity). WP-C2 extends it to the field dir shadow and the backlight transmission sample.
+        var blendToNext: f32 = 0.0;
+        if (cascadeIndex + 1u < numCascades) {
+            let splitFar = global.cascadeSplits[cascadeIndex];
+            let blendBand = max(splitFar * 0.1, 0.0001);
+            blendToNext = 1.0 - clamp((splitFar - viewDist) / blendBand, 0.0, 1.0);
+        }
         let samplePos = i.wp + N * global.dirShadowBias[cascadeIndex] * (1.0 - dotNL);
         let shadowPos = global.cascadeMatrices[cascadeIndex] * vec4f(samplePos, 1.0);
-        shadow = getShadowDirMain(u_dirShadowMap, shadowSampler, shadowPos, cascadeIndex, global.dirShadowInfo.x);
+        var shadowA = getShadowDirMain(u_dirShadowMap, shadowSampler, shadowPos, cascadeIndex, global.dirShadowInfo.x);
+        if (blendToNext > 0.0) {
+            let nextShadowPos = global.cascadeMatrices[cascadeIndex + 1u] * vec4f(samplePos, 1.0);
+            shadowA = mix(shadowA, getShadowDirMain(u_dirShadowMap, shadowSampler, nextShadowPos, cascadeIndex + 1u, global.dirShadowInfo.x), blendToNext);
+        }
+        shadow = shadowA;
         if (backlightOn) {
+            // WP-C2: the +L*thickness offset can push the sample out of `cascadeIndex`'s ortho box
+            // near a cascade split. Blend across to the next cascade in the blend band, or fall back
+            // to it entirely, instead of the 1.0 (unshadowed) halo (see lighting_pbr.wgsl).
             let backPos = global.cascadeMatrices[cascadeIndex] * vec4f(i.wp + L * fieldInfo.backlight.w, 1.0);
-            backShadow = getShadowDirMain(u_dirShadowMap, shadowSampler, backPos, cascadeIndex, global.dirShadowInfo.x);
+            let backNdc = backPos.xyz / backPos.w;
+            let backUv = vec2f(backNdc.x * 0.5 + 0.5, 0.5 - backNdc.y * 0.5);
+            let backInRange = backUv.x >= 0.0 && backUv.x <= 1.0 && backUv.y >= 0.0 && backUv.y <= 1.0 && backNdc.z >= 0.0 && backNdc.z <= 1.0;
+            if (backInRange) {
+                backShadow = getShadowDirMain(u_dirShadowMap, shadowSampler, backPos, cascadeIndex, global.dirShadowInfo.x);
+            }
+            if (backInRange && blendToNext > 0.0 && cascadeIndex + 1u < numCascades) {
+                let nextBackPos = global.cascadeMatrices[cascadeIndex + 1u] * vec4f(i.wp + L * fieldInfo.backlight.w, 1.0);
+                backShadow = mix(backShadow, getShadowDirMain(u_dirShadowMap, shadowSampler, nextBackPos, cascadeIndex + 1u, global.dirShadowInfo.x), blendToNext);
+            } else if (!backInRange && cascadeIndex + 1u < numCascades) {
+                let nextBackPos = global.cascadeMatrices[cascadeIndex + 1u] * vec4f(i.wp + L * fieldInfo.backlight.w, 1.0);
+                backShadow = getShadowDirMain(u_dirShadowMap, shadowSampler, nextBackPos, cascadeIndex + 1u, global.dirShadowInfo.x);
+            }
         }
     }
 

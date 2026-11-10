@@ -5,7 +5,7 @@ import { GpuTimingSlot } from "../WebGPU/managers/GpuTimer.js";
 import type { WebGPURenderer } from "../WebGPU/index.js";
 import type { RenderPass } from "../index.js";
 import type { Vector3D } from "../../math/index.js";
-import { TextureFilter, TextureWrap, Topology } from "../../enums/index.js";
+import { TextureFilter, TextureWrap, Topology, ToneMappingMode } from "../../enums/index.js";
 import {
   POST_PROCESS_DYNUNIFORM_FLOATS,
   packPostProcessNeutralUniforms,
@@ -27,7 +27,9 @@ import { PostEffectPipelineGate } from "../post/PostEffectPipelineGate.js";
  *
  * Consequence: if no ToneMappingElement is configured, this pass MUST still apply a tonemapper.
  * Without one the output is raw HDR × exposure = no tone curve = visibly dark / flat scene.
- * The u_toneMappingMode injection in _buildPipeline() defaults to Reinhard (1) to ensure this.
+ * The u_toneMappingMode injection in _buildPipeline() defaults to ToneMappingMode.DEFAULT (with
+ * exposure 1.0 / gamma 2.2 packed in execute()) -- the exact same fallback as the WebGL2 post pass
+ * (WP-C2 parity), so a disabled/absent tone-mapping element cannot diverge between tiers.
  *
  * ⚠️  Never add Reinhard or ACES to a WebGPU forward-pass shader without checking whether
  *     PostProcessing is active. If it is, the forward pass must NOT tonemap (double-tonemapping
@@ -165,13 +167,13 @@ export class PostProcessPass implements RenderPass {
     // can never silently disable an effect. The table keeps the injected strings byte-identical
     // to the former sequential calls.
     const constInjections: [string, string][] = [
-      // Default to Reinhard (1) when no ToneMappingElement is configured -- matches GL2 which
-      // always applies Reinhard unconditionally in the forward pass. Without this fallback,
-      // WebGPU PostProcess path with no tonemapper outputs raw HDR * exposure with no tone
-      // curve, producing a visibly darker/flat result compared to GL2.
+      // Default to ToneMappingMode.DEFAULT when no ToneMappingElement is enabled -- matches GL2
+      // (identical WP-C2 fallback), so the disabled/absent-tone-mapping tier outputs stay byte-
+      // identical in curve and encoding. Without a tonemapper the post pass would output raw
+      // HDR * exposure with no tone curve, producing a visibly darker/flat result.
       [
         "const u_toneMappingMode: u32 = 0u;",
-        `const u_toneMappingMode: u32 = ${tmEnabled ? e.tm!.mode : 1}u;`,
+        `const u_toneMappingMode: u32 = ${tmEnabled ? e.tm!.mode : ToneMappingMode.DEFAULT}u;`,
       ],
       [
         "const u_toneMappingWhite: f32 = 4.0;",
@@ -394,7 +396,15 @@ export class PostProcessPass implements RenderPass {
     // per-slot `group.get` remains here (the bundle above is the single decode).
     const d = this._uniformData;
     d[0] = renderer.frameInfo.realTime % 100.0; // a.x: time (real time: effects like grain must not freeze in hit-stop)
-    e.tm?.packUniforms?.(d, 0);
+    if (e.tm?.enabled) {
+      e.tm.packUniforms(d, 0);
+    } else {
+      // WP-C2: disabled/absent ToneMappingElement -> the DEFAULT-curve fallback with exposure 1.0
+      // and gamma 2.2, identical to the WebGL2 post pass. Do NOT reuse the element's (mutated)
+      // continuous values while it is disabled, and never leave a stale curve parameter behind.
+      d[1] = 1.0; // a.y: exposure
+      d[2] = 1.0 / 2.2; // a.z: inverseGamma
+    }
     e.vig?.packUniforms?.(d, 0);
     e.grain?.packUniforms?.(d, 0);
     e.bloom?.packUniforms?.(d, 0);

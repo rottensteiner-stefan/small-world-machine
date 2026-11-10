@@ -18,21 +18,23 @@ import type { CpuIndirectDrawSource } from "../core/InstanceField.js";
  * program (MaterialType.DEPTH), `evsm` = the variance-moment program (MaterialType.EVSM). */
 export type InstanceFieldDrawPass = "opaque" | "shadow" | "evsm";
 
-/** Binding inputs the single-point field draw hook forwards to the backend draw loop. */
+/** Binding inputs the single-point field draw hook forwards to the backend draw loop. Members are
+ * `| undefined`-tolerant on purpose: call sites distinguish present-but-nullable (e.g. a scratch
+ * ctx pre-declared with `undefined`) from absent, and every consumer null-checks before use. */
 export interface InstanceFieldDrawContext {
   /** Opaque pass only: the frame's extracted lights. */
-  readonly lights?: LightDataInterface;
+  readonly lights?: LightDataInterface | undefined;
   /** Opaque pass only: the current scene. */
-  readonly scene?: Scene;
+  readonly scene?: Scene | undefined;
   /** Opaque pass only: the current view matrix (billboard sprite support). */
-  readonly vMat?: Float32Array;
+  readonly vMat?: Float32Array | undefined;
   /** Opaque pass only: the current view-projection matrix (glsl100 binds it manually). */
-  readonly vp?: Float32Array;
+  readonly vp?: Float32Array | undefined;
   /** Opaque pass only: the current camera position (glsl100 binds it manually). */
-  readonly camPos?: Vector3D;
+  readonly camPos?: Vector3D | undefined;
   /** Shadow/EVSM passes only: the depth (`MaterialType.DEPTH`) or moment (`MaterialType.EVSM`)
    * program id the shadow path is currently executing. */
-  readonly shaderId?: string;
+  readonly shaderId?: string | undefined;
 }
 export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   // WebGL2 context inherits from WebGL1 context
@@ -91,6 +93,10 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   /** Per-field shadow-view index allocation, reset on every main cull; consumes the field's own
    * `maxViews` budget (view cap > reachable shadow cameras are simply not field-culled). */
   private readonly _fieldShadowViewIndex = new Map<InstanceFieldGL, number>();
+  /** Reused main-view camPos passthrough (zero-alloc: never boxes a fresh `{x,y,z}` per field). */
+  private readonly _fieldCamPosScratch: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
+  /** Reused shadow-draw context (`{ shaderId }`); keeps `_drawCpuIndirectSource` allocation-free. */
+  private readonly _fieldShadowCtxScratch: { shaderId?: string } = {};
 
   /**
    * Registers a CPU-cell field lane. The field's VBOs must have been created on THIS renderer's
@@ -128,12 +134,11 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
       // First shadow view is 1: view 0 is the main camera slot; allocating from 0 would let
       // the first shadow view cull into slot 0 and overwrite the main camera's culled source.
       this._fieldShadowViewIndex.set(field, 1);
-      field.prepareMainView(
-        this._frameViewProj.data,
-        { x: this._frameCamPos.x, y: this._frameCamPos.y, z: this._frameCamPos.z },
-        viewportHeightPx,
-        fovRadiansY,
-      );
+      const cam = this._fieldCamPosScratch;
+      cam.x = this._frameCamPos.x;
+      cam.y = this._frameCamPos.y;
+      cam.z = this._frameCamPos.z;
+      field.prepareMainView(this._frameViewProj.data, cam, viewportHeightPx, fovRadiansY);
       field.cullMainView();
     }
   }
@@ -191,7 +196,9 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
       }
       const source = field.getSource(v);
       if (!source) continue;
-      this._drawCpuIndirectSource(field, source, pass, { shaderId });
+      const ctx = this._fieldShadowCtxScratch;
+      ctx.shaderId = shaderId;
+      this._drawCpuIndirectSource(field, source, pass, ctx);
     }
   }
 
@@ -223,6 +230,8 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
       event.preventDefault();
       this._contextLost = true;
       console.warn("[WebGL] Context lost; rendering is paused until the browser restores it.");
+      // Dropping the dead handles up front keeps the fields re-uploadable after restore.
+      for (const field of this._instanceFields) field.onContextLost();
       this.onContextLost?.({ reason: "webglcontextlost", message: "WebGL context lost" });
     };
     const onRestored = (): void => {
@@ -241,6 +250,19 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   /** Drops every handle created on the lost context (they are dead, nothing to delete) and rebuilds the renderer's GPU resources. */
   protected onContextRestored(): void {
     // Renderers without GPU state of their own have nothing to rebuild.
+  }
+
+  /**
+   * Re-arms every registered field lane on the restored context (live-context VBO re-upload from
+   * the untouched CPU mirrors). MUST be called FIRST by the subclass `onContextRestored()`
+   * overrides, before the passes re-create their shaders/textures: the field lane draws through
+   * the pass hook and must not lag one restore cycle behind. Inert for test renderers that
+   * override `onContextRestored()` without calling `super` and register no fields (empty loop).
+   */
+  protected _onFieldContextRestored(): void {
+    const gl = this.gl;
+    if (!gl) return;
+    for (const field of this._instanceFields) field.onContextRestored(gl);
   }
 
   /** Removes the context-loss listeners; subclasses call it from `destroy()`. */
@@ -575,6 +597,11 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     scene: Scene,
   ): void;
   public override destroy(): void {
+    // Dispose every registered field lane BEFORE losing the context: `dispose()` calls
+    // `gl.deleteBuffer` which is a no-op (and potentially noisy) on the lost context.
+    for (const field of this._instanceFields) field.dispose();
+    this._instanceFields.clear();
+    this._fieldShadowViewIndex.clear();
     if (this.gl) {
       const ext: WEBGL_lose_context | undefined =
         this.gl.getExtension("WEBGL_lose_context") ?? undefined;

@@ -167,6 +167,13 @@ export interface InstanceFieldRenderHost {
   releaseFieldGeometry(geometry: GeometryDataInterface): void;
   /** Destroys `buffer` after this frame's submit (commands recorded earlier may still use it). */
   deferDestroyBuffer(buffer: GPUBuffer): void;
+  /** Optional texture-retention hook (the WebGPU renderer's texture cache): keeps `tex` alive for
+   * the life of a field-node binding that no object's material refcount covers (the alpha map).
+   * Absent on inert/test scaffolds -- callers MUST guard with `?.` and a defined-texture check. */
+  retainTexture?(tex: Texture): void;
+  /** Releases a reference taken with {@link retainTexture}; the cache destroys the texture at
+   * count zero. Same optionality contract as {@link retainTexture}. */
+  releaseRetainedTexture?(tex: Texture): void;
 }
 
 /** Setup surface of the WebGPU field node (host nullable for the pure-TS S2 scaffold). */
@@ -391,8 +398,12 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   // --- Authoring-derived immutable tables (validated at setup) ---
   private readonly _viewCount: number;
   private readonly _cullPixelSize: number;
-  private readonly _maxInstances: number;
-  private readonly _pageCapacity: number;
+  /** Effective record capacity. Grows at runtime when a live population exceeds the authored
+   * `maxInstances` (see `_ensureCapacity`) -- mutable so the growth path can re-derive it. */
+  private _maxInstances: number;
+  /** Per-(view x bucket) compaction page size: `max(1, 2 x _maxInstances)` (WP-A1 2; the LOD
+   * crossfade band's two-bucket emission is the worst case). Grows with `_maxInstances`. */
+  private _pageCapacity: number;
   private readonly _protoCount: number;
   private readonly _maxBucketCount: number;
   private readonly _protoBounds: Float32Array;
@@ -458,6 +469,16 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   private readonly _prevMainVp: Float32Array = new Float32Array(16);
   /** Work matrix for `_prevMainVp = ZO_CORRECTION * rawVp` (zero-alloc roll in `prepareMainView`). */
   private readonly _prevMainVpMatrix: Matrix4 = new Matrix4();
+  /** Pre-allocated `FieldInfo` upload scratch (one 128-B ArrayBuffer with u32/f32 views): the
+   * per-frame `_writeFieldInfo()`/`_writeFieldInfoWord*()` hot path MUST NOT allocate TypedArrays.
+   * Wind words (64..127) stay zero here forever (never aliased -- `_writeWind()` uploads the
+   * producer block directly), so the full-buffer upload mirrors the historical zero-init exactly. */
+  private readonly _fieldInfoScratch = new ArrayBuffer(FIELD_INFO_BYTES);
+  private readonly _fieldInfoU32 = new Uint32Array(this._fieldInfoScratch);
+  private readonly _fieldInfoF32 = new Float32Array(this._fieldInfoScratch);
+  /** Single-word upload scratches for the `FieldInfo` word patches. */
+  private readonly _wordScratchU32 = new Uint32Array(1);
+  private readonly _wordScratchF32 = new Float32Array(1);
   private readonly _mirror: FieldCullParamsSlot[];
   private readonly _cullParams: CullParams[];
   private _mainViewportHeightPx: number = 0;
@@ -816,6 +837,11 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     } else {
       this._deriveRanges();
     }
+    // Population beyond the authored capacity would let the cull's compaction pages overflow
+    // (`visibleIndices`/`fieldLodBlend` are sized `2 x _maxInstances`): grow the dependent
+    // buffers once (deferred-destroyed, bind groups rebuilt), never per frame. Zero-cost when
+    // the population fits (a single integer compare).
+    this._ensureCapacity(this._instanceCount);
     this._uploadRecords();
     this._writeFieldInfo();
   }
@@ -1112,6 +1138,11 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         const geo = this._bucketGeo[b];
         if (geo) this._host.releaseFieldGeometry(geo);
       }
+      // Drop the alpha-map reference taken at attach (`_buildGpuState`): the texture cache can
+      // now destroy the map when no other consumer holds it (see `InstanceFieldRenderHost`).
+      if (this._alphaMap && this._host.releaseRetainedTexture) {
+        this._host.releaseRetainedTexture(this._alphaMap);
+      }
     }
   }
 
@@ -1222,14 +1253,16 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       size: visibleBytes,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     });
-    // P2 LOD-blend pages, same size/page math as `visibleIndices`. ZERO-FILLED at creation
-    // (fail-closed: an unwritten slot reads 0 -> the fragment keeps the instance unconditionally,
-    // exactly the P1 behavior until the cull's P2-1 band writes land).
+    // P2 LOD-blend pages, same size/page math as `visibleIndices`. Fail-closed ZERO at creation:
+    // an unwritten slot reads 0 -> the fragment keeps the instance unconditionally, exactly the
+    // P1 behavior until the cull's P2-1 band writes land. `createBuffer` without
+    // `mappedAtCreation` is zero-initialized by the WebGPU spec, so no CPU-side zero-fill is
+    // needed or done -- the old `new Uint8Array(visibleBytes)` parked up to 64+ MB on the JS
+    // heap per rebuild for nothing.
     const fieldLodBlend = device.createBuffer({
       size: visibleBytes,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    device.queue.writeBuffer(fieldLodBlend, 0, new Uint8Array(visibleBytes));
     const cullParams = device.createBuffer({
       size: cullParamsBytes,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -1321,6 +1354,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       host.getTextureView(this._alphaMap),
       alphaSampler,
     );
+    // The alpha map is bound outside any object's material -- retain it in the renderer's
+    // texture cache so a shared/reused map cannot be destroyed underneath the draw bind group
+    // when the last regular consumer releases it. Released once in `dispose()`.
+    if (this._alphaMap && host.retainTexture) host.retainTexture(this._alphaMap);
 
     this._gpu = {
       records,
@@ -1354,27 +1391,88 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
 
   /** Regrows population-dependent buffers after `rebuild()` (records + fieldInfo + tables). */
   private _rebuildGpuBuffers(): void {
-    this._cullBgByView.clear();
     const gpu = this._gpu;
     const host = this._host;
     const device = host?.gpuDevice;
     if (!gpu || !device) return;
-    const recordsBytes = Math.max(1, this._instanceCount) * INSTANCE_RECORD_BYTES;
-    if (recordsBytes > gpu.records.size) {
+    // Population beyond the authored capacity (or a record buffer that no longer fits) regrows
+    // `records`/`visibleIndices`/`fieldLodBlend` + `_maxInstances`/`_pageCapacity` and refreshes
+    // BOTH field bind groups, so `gpu.cullBg` never keeps referencing a deferred-destroyed
+    // `records` buffer after the rebuild. No-op while the population fits.
+    this._ensureCapacity(this._instanceCount);
+    this._uploadRecords();
+    this._writeFieldInfo();
+    this._writeStaticTables();
+  }
+
+  /**
+   * Grows the population-dependent GPU buffers so `recordCount` records stay inside their
+   * capacity contract: the cull's per-(view x bucket) compaction pages (`visibleIndices`/
+   * `fieldLodBlend`) are sized `2 x _maxInstances` (`_pageCapacity`, WP-A1 2) and the record
+   * storage is a CPU-side copy of the live array. A population beyond `_maxInstances` would let
+   * the cull's `fieldEmit` write survivors past the page end (`atomicAdd` overflow -> OOB
+   * store), so growth re-derives `_maxInstances`/`_pageCapacity` from the actual population,
+   * re-creates the three dependent buffers, immediately rebuilds both bind groups (they
+   * reference whole buffers -- never leave `cullBg` pointing at the old one), re-sizes the probe
+   * staging and deferred-destroys the replaced buffers. No-op while everything still fits
+   * (zero allocation; the guard is a plain integer compare in the per-frame hot path).
+   */
+  private _ensureCapacity(recordCount: number): void {
+    const gpu = this._gpu;
+    const host = this._host;
+    const device = host?.gpuDevice;
+    if (!gpu || !device) return;
+    const recordsBytes = Math.max(1, recordCount) * INSTANCE_RECORD_BYTES;
+    const recordsNeedRegrow = recordsBytes > gpu.records.size;
+    const pagesNeedRegrow = recordCount > this._maxInstances;
+    if (!recordsNeedRegrow && !pagesNeedRegrow) return;
+
+    // The cached cull bind groups reference the buffers being replaced -- drop them all.
+    this._cullBgByView.clear();
+    if (pagesNeedRegrow) {
+      this._maxInstances = recordCount;
+      this._pageCapacity = Math.max(1, recordCount * 2);
+    }
+    if (recordsNeedRegrow) {
       const next = device.createBuffer({
         size: recordsBytes,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
       });
       host.deferDestroyBuffer(gpu.records);
       gpu.records = next;
-      this._rebuildBindGroups();
     }
-    this._uploadRecords();
-    this._writeFieldInfo();
-    this._writeStaticTables();
+    if (pagesNeedRegrow) {
+      const usedSegments =
+        (this._viewCount - 1) * MAX_LOD_BUCKETS + Math.max(1, this._maxBucketCount);
+      const visibleBytes = usedSegments * this._pageCapacity * 4;
+      const nextVisible = device.createBuffer({
+        size: visibleBytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      });
+      const nextLodBlend = device.createBuffer({
+        size: visibleBytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      host.deferDestroyBuffer(gpu.visibleIndices);
+      host.deferDestroyBuffer(gpu.fieldLodBlend);
+      gpu.visibleIndices = nextVisible;
+      gpu.fieldLodBlend = nextLodBlend;
+    }
+    this._rebuildBindGroups();
+    if (pagesNeedRegrow && this._probeState) {
+      // The probe's indices staging mirrors the visible-page size; re-create it against the
+      // NEW buffers (a pending readback of the old size is dropped -- latency self-corrects).
+      this._probeState.argsStage.destroy();
+      this._probeState.indicesStage.destroy();
+      this._probeState = undefined;
+      this._ensureProbeState();
+    }
   }
 
-  /** Rewrites both field bind groups after a buffer regrow (they reference whole buffers). */
+  /** Rewrites both field bind groups after a buffer regrow or capacity growth (they reference
+   * whole buffers): the draw group (static) AND the cull group against the CURRENT previous-frame
+   * pyramid handle, so `gpu.cullBg` can never keep referencing a deferred-destroyed buffer when
+   * it was replaced this call. */
   private _rebuildBindGroups(): void {
     const gpu = this._gpu;
     const host = this._host;
@@ -1398,6 +1496,9 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       host.getTextureView(this._alphaMap),
       gpu.alphaSampler,
     );
+    // `_cullBgByView` was cleared by the regrow path; `_rebuildCullBg` re-creates + re-caches the
+    // cull group against the current pyramid handle (the `gpu.cullBg` write happens there).
+    this._rebuildCullBg(host.getPreviousFrameHzb());
   }
 
   /** Writes the per-segment geometry words + per-segment `segmentBase` values (immutable after
@@ -1461,14 +1562,14 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
 
   /** (Re)writes the static `FieldInfo` uniform (page capacity, counts, metric gate, alpha,
    *  backlight, wind height). The `wind` words are NOT here -- they change every frame and are
-   *  forwarded by `_writeWind()` at each main-view prepare. */
+   *  forwarded by `_writeWind()` at each main-view prepare. Zero allocation: reuse the
+   *  pre-allocated `_fieldInfoU32`/`_fieldInfoF32` scratch (alias one 128-B ArrayBuffer). */
   private _writeFieldInfo(): void {
     const gpu = this._gpu;
     const device = this._host?.gpuDevice;
     if (!gpu || !device) return;
-    const info = new Uint8Array(FIELD_INFO_BYTES);
-    const words = new Uint32Array(info.buffer);
-    const floats = new Float32Array(info.buffer);
+    const words = this._fieldInfoU32;
+    const floats = this._fieldInfoF32;
     words[INFO_OFFSET_PAGE_CAPACITY / 4] = this._pageCapacity;
     words[INFO_OFFSET_PROTOTYPE_COUNT / 4] = this._protoCount;
     words[INFO_OFFSET_INSTANCE_COUNT / 4] = this._instanceCount;
@@ -1478,7 +1579,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     floats.set(this._backlight, INFO_OFFSET_BACKLIGHT / 4);
     floats[INFO_OFFSET_WIND_HEIGHT / 4] = this._windHeight;
     words[INFO_OFFSET_LOD_DITHER_MODE / 4] = this._lodDitherMode;
-    device.queue.writeBuffer(gpu.fieldInfo, 0, info);
+    device.queue.writeBuffer(gpu.fieldInfo, 0, words);
   }
 
   /** Uploads the CURRENT `SwmWind` bytes into `FieldInfo.wind` (frame head, main-view prepare).
@@ -1492,24 +1593,24 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     device.queue.writeBuffer(gpu.fieldInfo, INFO_OFFSET_WIND, wind);
   }
 
-  /** Patches ONE u32 word of the `FieldInfo` uniform (e.g. the HZB mip count after a resize). */
+  /** Patches ONE u32 word of the `FieldInfo` uniform (e.g. the HZB mip count after a resize).
+   *  Zero allocation: reuse the pre-allocated single-word scratch. */
   private _writeFieldInfoWord(offset: number, value: number): void {
     const gpu = this._gpu;
     const device = this._host?.gpuDevice;
     if (!gpu || !device) return;
-    const word = new Uint32Array(1);
-    word[0] = value;
-    device.queue.writeBuffer(gpu.fieldInfo, offset, word);
+    this._wordScratchU32[0] = value;
+    device.queue.writeBuffer(gpu.fieldInfo, offset, this._wordScratchU32);
   }
 
-  /** Patches ONE f32 word of the `FieldInfo` uniform (the live-toggled `windHeight`). */
+  /** Patches ONE f32 word of the `FieldInfo` uniform (the live-toggled `windHeight`). Zero
+   *  allocation: reuse the pre-allocated single-word scratch. */
   private _writeFieldInfoWordFloat(offset: number, value: number): void {
     const gpu = this._gpu;
     const device = this._host?.gpuDevice;
     if (!gpu || !device) return;
-    const word = new Float32Array(1);
-    word[0] = value;
-    device.queue.writeBuffer(gpu.fieldInfo, offset, word);
+    this._wordScratchF32[0] = value;
+    device.queue.writeBuffer(gpu.fieldInfo, offset, this._wordScratchF32);
   }
 
   /**

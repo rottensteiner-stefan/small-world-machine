@@ -224,6 +224,11 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     pLights: [],
     sLights: [],
   };
+  /** Derived field-lane shader flags per committed `manifest.flags` array reference (ADR 0059;
+   * engine contract `_commitFlags` publishes immutably, a fresh array on content change → the
+   * WeakMap key rotates). Tag-checked against the quality/IBL bits so environment changes rebuild.
+   * Holds only plain strings — survives context restore (no GL objects) like `resolveManifestFlags`. */
+  private readonly _fieldFlagsCache = new WeakMap<string[], { flags: string[]; tag: number }>();
   private readonly _zeroVec4: Float32Array = new Float32Array(4);
   /** Scratch view-projection of the point-light cube face being rendered. */
   private readonly _pointFaceMatrix: Float32Array = new Float32Array(16);
@@ -366,6 +371,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
   /** @inheritdoc */
   protected override onContextRestored(): void {
+    // Re-arm registered field lanes FIRST (live-context VBO re-upload) so the first draw through
+    // the pass hook after restore uses live handles, never one cycle stale.
+    this._onFieldContextRestored();
     // Every handle created on the old context is dead: forget them (nothing to delete) and rebuild.
     const clusterDims = this._clusterDims;
     const clusterMaxLights = this._clusterMaxLightsPerCluster;
@@ -1612,6 +1620,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         cache = this._programCache.getProgram(manifest.shaderId, false, flags);
         if (cache !== currentProgram) {
           gl.useProgram(cache.prog);
+          this._bindFieldWindUniforms(field, cache);
           this._bindDummyShadowMaps(cache);
           currentProgram = cache;
           if (this._normalWriteRequested) {
@@ -1640,6 +1649,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         ]);
         if (cache !== currentProgram) {
           gl.useProgram(cache.prog);
+          this._bindFieldWindUniforms(field, cache);
           this._bindDummyShadowMaps(cache);
           currentProgram = cache;
         }
@@ -1649,6 +1659,32 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
       this._drawFieldCommand(gl, mesh, cache, cmd, instanceVbo);
     }
+  }
+
+  /**
+   * Uploads this field's per-field wind state onto `cache`'s program (ADR 0059 step 1b; GL2 side
+   * of the WGSL `InstanceFieldSystem.setWind` lane). Scalar `uniform4f` per `SwmWind` struct
+   * member (no `subarray`/`uniform4fv` boxing) + the master-switch height. `u_windHeight` is
+   * ALWAYS written (`0` when the field's wind is disabled) so a program shared across fields can
+   * never keep a stale cross-field wind live: the first command of every field re-initializes both
+   * uniforms on its program switch. The depth/EVSM field programs consume the same `base_vertex_*`
+   * chunks, so the upload is gated on neither pass nor program kind.
+   */
+  private _bindFieldWindUniforms(field: InstanceFieldGL, cache: WebGLProgramCacheEntry): void {
+    const gl = this.gl;
+    const wind = field.windUniforms;
+    if (wind) {
+      const p0 = this._cachedUniformLocation(cache, "u_wind.p0");
+      if (p0) gl.uniform4f(p0, wind[0]!, wind[1]!, wind[2]!, wind[3]!);
+      const p1 = this._cachedUniformLocation(cache, "u_wind.p1");
+      if (p1) gl.uniform4f(p1, wind[4]!, wind[5]!, wind[6]!, wind[7]!);
+      const p2 = this._cachedUniformLocation(cache, "u_wind.p2");
+      if (p2) gl.uniform4f(p2, wind[8]!, wind[9]!, wind[10]!, wind[11]!);
+      const p3 = this._cachedUniformLocation(cache, "u_wind.p3");
+      if (p3) gl.uniform4f(p3, wind[12]!, wind[13]!, wind[14]!, wind[15]!);
+    }
+    const height = this._cachedUniformLocation(cache, "u_windHeight");
+    if (height) gl.uniform1f(height, field.windHeight);
   }
 
   /** Binds one field command's geometry + record range and performs the instanced draw. */
@@ -1715,25 +1751,36 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * against the tier quality like `_buildSubgroupShaderFlags`), IBL, normal output and EVSM, plus
    * `INSTANCE_FIELD`. `TEXTURE_ARRAY` is stripped: the field vertex stage declares no
    * `v_texIndex` output (the pose consumes the whole model transform, see base_vertex_header).
+   *
+   * Cached per committed `manifest.flags` array reference (immutable-while-published contract)
+   * with a quality/IBL tag check; hit returns the SAME cached array (WebGLProgramCache only reads
+   * it and copies on miss), keeping the per-command field draw allocation-free. WeakMap keying
+   * drops the entry with the committed array, so dynamically toggled materials never leak.
    */
   private _buildFieldShaderFlags(manifest: RenderManifest, scene?: Scene): string[] {
-    const flags = manifest.flags
-      ? [
-          ...(resolveManifestFlags(
-            manifest.flags,
-            this._quality.disableTextures,
-            this._quality.cheapIridescence,
-          ) ?? []),
-        ]
+    const committed = manifest.flags;
+    const ibl = (scene?.irradianceMap ?? scene?.prefilterMap) !== undefined;
+    const q = this._quality;
+    const tag =
+      (q.disableTextures ? 1 : 0) |
+      (q.cheapIridescence ? 2 : 0) |
+      (q.normalBuffer ? 4 : 0) |
+      (q.shadowMode === ShadowMode.EVSM ? 8 : 0) |
+      (ibl ? 16 : 0);
+    const cached = committed ? this._fieldFlagsCache.get(committed) : undefined;
+    if (cached && cached.tag === tag) return cached.flags;
+    const flags = committed
+      ? [...(resolveManifestFlags(committed, q.disableTextures, q.cheapIridescence) ?? [])]
       : [];
-    if (scene?.irradianceMap || scene?.prefilterMap) {
+    if (ibl) {
       if (!flags.includes(ShaderFlag.IBL)) flags.push(ShaderFlag.IBL);
     }
-    if (this._quality.normalBuffer) flags.push(NORMAL_OUTPUT_FLAG);
-    if (this._quality.shadowMode === ShadowMode.EVSM) flags.push(ShaderFlag.EVSM);
+    if (q.normalBuffer) flags.push(NORMAL_OUTPUT_FLAG);
+    if (q.shadowMode === ShadowMode.EVSM) flags.push(ShaderFlag.EVSM);
     const ta = flags.indexOf(ShaderFlag.TEXTURE_ARRAY);
     if (ta >= 0) flags.splice(ta, 1);
     flags.push(ShaderFlag.INSTANCE_FIELD);
+    if (committed) this._fieldFlagsCache.set(committed, { flags, tag });
     return flags;
   }
 

@@ -59,7 +59,10 @@ vec3 tmAgx(vec3 c) {
     const float maxEv = 4.026069;
     vec3 v = clamp(log2(max(inM * c, vec3(1e-10))), minEv, maxEv);
     v = outM * tmAgxContrast((v - minEv) / (maxEv - minEv));
-    return pow(max(v, vec3(0.0)), vec3(2.2));
+    vec3 e = pow(max(v, vec3(0.0)), vec3(2.2));
+    // WP-C2: saturated highlights can exceed 1.0 after the outset matrix; clamp so forward and
+    // post passes never hand the caller an out-of-range display value.
+    return clamp(e, 0.0, 1.0);
 }
 
 // Khronos PBR Neutral (Khronos 3D Commerce, 2024): base colors up to ~0.8 under unit light stay

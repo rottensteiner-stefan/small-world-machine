@@ -7,6 +7,41 @@ import type { RenderList, RenderBatch } from "../../core/Scene.js";
 import { Topology, MaterialType } from "../../enums/index.js";
 import { Color } from "../../core/colors/index.js";
 
+/** Frozen "no lights" payload of the skybox batch — `Color.BLACK`/`Vector3D.ZERO` are shared
+ * frozen constants and the empty arrays are never mutated. Read synchronously by `renderBatch`,
+ * so one module-level instance is safe across every engine instance (zero allocation per skybox). */
+const SKYBOX_EMPTY_LIGHTS: LightDataInterface = {
+  aCol: Color.BLACK,
+  aIntensity: 0,
+  dCol: Color.BLACK,
+  dIntensity: 0,
+  dDir: Vector3D.ZERO,
+  pLights: [],
+  sLights: [],
+  aLights: [],
+};
+
+/** Reused ADR 0059 opaque field-draw context. All optional members pre-declared for a stable
+ * hidden class (zero allocation per frame; absent `vMat` is passed as `undefined`, never a
+ * fresh spread object). `drawInstanceFieldView` consumes it synchronously and keeps no reference,
+ * so overwriting between calls is safe. Mutable local structural type because the public
+ * `InstanceFieldDrawContext` members are `readonly` (their type is still satisfied structurally). */
+const FIELD_CTX_SCRATCH: {
+  lights?: LightDataInterface | undefined;
+  scene?: Scene | undefined;
+  vMat?: Float32Array | undefined;
+  vp?: Float32Array | undefined;
+  camPos?: Vector3D | undefined;
+  shaderId?: string | undefined;
+} = {
+  lights: undefined,
+  scene: undefined,
+  vMat: undefined,
+  vp: undefined,
+  camPos: undefined,
+  shaderId: undefined,
+};
+
 export class WebGLMainPass implements WebGLRenderPass {
   public name = "WebGLMainPass";
 
@@ -70,16 +105,7 @@ export class WebGLMainPass implements WebGLRenderPass {
           vMat,
           vp,
           camPos,
-          {
-            aCol: Color.BLACK,
-            aIntensity: 0,
-            dCol: Color.BLACK,
-            dIntensity: 0,
-            dDir: Vector3D.ZERO,
-            pLights: [],
-            sLights: [],
-            aLights: [],
-          },
+          SKYBOX_EMPTY_LIGHTS,
           scene,
         );
       }
@@ -107,13 +133,12 @@ export class WebGLMainPass implements WebGLRenderPass {
     // source right after the regular opaque geometry -- the fields are opaque, depth-writing
     // draws whose shared / per-field state the draw hook binds itself (single-point surface, no
     // backend branches here). Runs while the normal buffer is write-enabled like the opaque loop.
-    (renderer as AbstractWebGLRenderer).drawInstanceFieldView(0, "opaque", {
-      lights: extractedLights,
-      scene,
-      ...(vMat ? { vMat } : {}),
-      vp,
-      camPos,
-    });
+    FIELD_CTX_SCRATCH.lights = extractedLights;
+    FIELD_CTX_SCRATCH.scene = scene;
+    FIELD_CTX_SCRATCH.vMat = vMat;
+    FIELD_CTX_SCRATCH.vp = vp;
+    FIELD_CTX_SCRATCH.camPos = camPos;
+    (renderer as AbstractWebGLRenderer).drawInstanceFieldView(0, "opaque", FIELD_CTX_SCRATCH);
 
     if (writesNormals) renderer.setNormalWriteEnabled(false);
 

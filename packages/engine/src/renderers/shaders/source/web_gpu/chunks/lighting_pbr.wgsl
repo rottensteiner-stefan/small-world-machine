@@ -158,8 +158,24 @@ var Lo = vec3f(0.0);
 #ifdef USE_BACKLIGHT
         // Transmission shadow sampled `thickness` metres toward the sun: the surface's own leaf or
         // crown must not occlude the light passing through it, other casters still do (ADR 0060).
+        // WP-C2: the +L*thickness offset can push the sample out of `cascadeIndex`'s ortho box near
+        // a cascade split. Blend across to the next cascade in the blend band, or fall back to it
+        // entirely when the primary sample escaped the box, instead of the 1.0 (unshadowed) halo
+        // the failed read used to leave along the split.
         let backlightPos = global.cascadeMatrices[cascadeIndex] * vec4f(i.wp + L * obj.matParam1.w, 1.0);
-        backlightShadow = getShadowDirMain(u_dirShadowMap, shadowSampler, backlightPos, cascadeIndex, global.dirShadowInfo.x);
+        let backNdc = backlightPos.xyz / backlightPos.w;
+        let backUv = vec2f(backNdc.x * 0.5 + 0.5, 0.5 - backNdc.y * 0.5);
+        let backInRange = backUv.x >= 0.0 && backUv.x <= 1.0 && backUv.y >= 0.0 && backUv.y <= 1.0 && backNdc.z >= 0.0 && backNdc.z <= 1.0;
+        if (backInRange) {
+            backlightShadow = getShadowDirMain(u_dirShadowMap, shadowSampler, backlightPos, cascadeIndex, global.dirShadowInfo.x);
+        }
+        if (backInRange && blendToNext > 0.0 && cascadeIndex + 1u < numCascades) {
+            let nextBackPos = global.cascadeMatrices[cascadeIndex + 1u] * vec4f(i.wp + L * obj.matParam1.w, 1.0);
+            backlightShadow = mix(backlightShadow, getShadowDirMain(u_dirShadowMap, shadowSampler, nextBackPos, cascadeIndex + 1u, global.dirShadowInfo.x), blendToNext);
+        } else if (!backInRange && cascadeIndex + 1u < numCascades) {
+            let nextBackPos = global.cascadeMatrices[cascadeIndex + 1u] * vec4f(i.wp + L * obj.matParam1.w, 1.0);
+            backlightShadow = getShadowDirMain(u_dirShadowMap, shadowSampler, nextBackPos, cascadeIndex + 1u, global.dirShadowInfo.x);
+        }
 #endif
     }
 

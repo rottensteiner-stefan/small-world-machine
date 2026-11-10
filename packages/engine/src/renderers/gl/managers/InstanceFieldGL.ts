@@ -124,6 +124,19 @@ export interface InstanceFieldGLSetup {
    * @domain Authoring options of the field node (subset the GL lane consumes at runtime).
    */
   options: Pick<InstanceFieldOptions, "cullPixelSize" | "shadowLodBias" | "maxViews" | "cpuBudget">;
+  /**
+   * @domain Live `SwmWind` block producer (16 floats, `vegetation-extras` `WindField.uniforms`),
+   *         rewritten by the owner like the WebGPU lane's `InstanceFieldSystem.setWind`. The GL
+   *         lane uploads the CURRENT bytes per field draw; borrowed reference, never copied.
+   *         `windHeight > 0` with this missing is a setup error (fail fast, ADR 0043).
+   */
+  windUniforms?: Float32Array;
+  /**
+   * @domain Crown-top height of the population prototype in metres at scale 1 (vertical wind
+   *         profile + bend normalizer, GL2 `u_windHeight` master switch). 0 disables wind
+   *         entirely (fail-closed static). Live-swappable via {@link InstanceFieldGL.setWind}.
+   */
+  windHeight?: number;
 }
 
 /**
@@ -178,6 +191,10 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
   private _instanceVbo: WebGLBuffer | undefined = undefined;
   private _gl1CompanionVbo: WebGLBuffer | undefined = undefined;
 
+  // --- Wind (ADR 0059 step 1b, GL2 draw-time upload; WebGPU lane: `InstanceFieldSystem.setWind`) ---
+  private _windUniforms: Float32Array | undefined = undefined;
+  private _windHeight: number = 0;
+
   /** CPU mirrors of the frozen record data (kept for `rebuild()` and the GL1 companion). */
   private _instanceRecords: Float32Array;
   private _population: CellPopulation;
@@ -224,6 +241,8 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
   // --- Opt-in cull probe (dual-lane test harness) ---
   private _probe: IndirectCullProbe | undefined = undefined;
   private readonly _frameSegments: IndirectSegmentCounts[] = [];
+  /** Cursor over `_frameSegments`: segments are POOLED and reused across frames (zero-GC). */
+  private _frameSegmentCount: number = 0;
   private _probeIndices: Uint32Array = new Uint32Array(1024);
   private _probeIndexCount: number = 0;
 
@@ -272,6 +291,16 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
     ) {
       throw new Error("[InstanceFieldGL] cpuBudget counts/radius must be positive.");
     }
+    const setupWindHeight = setup.windHeight ?? 0;
+    const setupWindUniforms = setup.windUniforms;
+    if (
+      setupWindHeight > 0 &&
+      (setupWindUniforms === undefined || setupWindUniforms.length !== 16)
+    ) {
+      throw new Error(
+        "[InstanceFieldGL] windHeight > 0 requires a 16-float windUniforms `SwmWind` block.",
+      );
+    }
 
     this._gl = setup.gl;
     this._grid = grid;
@@ -284,6 +313,8 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
     this._instanceRecords = setup.instanceRecords;
     this._population = setup.population;
     this._recordPrototypeMap = setup.recordPrototypeMap;
+    this._windUniforms = setupWindUniforms;
+    this._windHeight = setupWindHeight;
 
     const protoCount = setup.prototypes.length;
     const bounds = new Float32Array(protoCount);
@@ -394,7 +425,7 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
   /** @inheritdoc (full rebuild: re-derive run map, re-upload VBOs, static population). */
   public rebuild(): void {
     this._buildRunMap();
-    this._uploadVbos();
+    this._uploadVbos(this._gl);
   }
 
   /**
@@ -403,6 +434,22 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
    */
   public notifyCameraTeleport(): void {
     // No-op: CPU-cell cull is independent of the previous-frame occlusion pyramid.
+  }
+
+  /**
+   * Live-swaps the wind state (HUD toggles, not just setup-time options) — mirror of the WebGPU
+   * lane `InstanceFieldSystem.setWind` contract. `windHeight > 0` requires a 16-float `SwmWind`
+   * block (same fail-fast rule as the constructor); height 0 = hard wind-off (the renderer only
+   * uploads the block while this is > 0, and always writes the 0 gate otherwise).
+   */
+  public setWind(wind: Float32Array | undefined, windHeight: number): void {
+    if (windHeight > 0 && (wind === undefined || wind.length !== 16)) {
+      throw new Error(
+        "[InstanceFieldGL] windHeight > 0 requires a 16-float windUniforms `SwmWind` block.",
+      );
+    }
+    this._windUniforms = wind;
+    this._windHeight = windHeight;
   }
 
   // ---------------------------------------------------------------------------
@@ -443,7 +490,7 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
     this._instancesSpent = 0;
     this._drawsSpent = 0;
     this._frameAborted = false;
-    this._frameSegments.length = 0;
+    this._frameSegmentCount = 0;
     this._probeIndexCount = 0;
     // Main bucket is frame-global (shadow views consume it, biased): reset to "unknown".
     this._mainBucket.fill(-1, 0, this._totalRuns);
@@ -770,6 +817,9 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
    */
   public flushCullProbe(): void {
     if (!this._probe) return;
+    // Trim the pooled table to this frame's live rows before exposing it (pool reuse keeps
+    // stale tail rows otherwise; the consumer reads `.length` as the authoritative count).
+    this._frameSegments.length = this._frameSegmentCount;
     const sets: FieldVisibleSets = {
       frameIndex: this._frameIndex,
       params: this._cullParams,
@@ -830,6 +880,16 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
    * allocate shadow-view indices per field, never culling more shadow views than the budget. */
   public get maxViews(): number {
     return this._viewCount;
+  }
+
+  /** Currently bound per-field wind vector set (4 x vec4 for the shared curve), or `undefined`. */
+  public get windUniforms(): Float32Array | undefined {
+    return this._windUniforms;
+  }
+
+  /** Currently bound wind bend height (samples), `0` disables wind bending. */
+  public get windHeight(): number {
+    return this._windHeight;
   }
 
   // ---------------------------------------------------------------------------
@@ -956,9 +1016,9 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
   }
 
   /** Uploads the cell-sorted record VBO and (WebGL1) the unpacked pose companion VBO. The
-   * record buffer is byte-identical on every tier; the companion is a separate upload. */
-  private _uploadVbos(): void {
-    const gl = this._gl;
+   * record buffer is byte-identical on every tier; the companion is a separate upload. Uploads
+   * on the passed live context (never a stored reference that could lag a restore). */
+  private _uploadVbos(gl: WebGLRenderingContext | WebGL2RenderingContext): void {
     if (this._totalInstances === 0) return;
     this._instanceVbo ??= gl.createBuffer() ?? undefined;
     if (!this._instanceVbo) return;
@@ -984,13 +1044,38 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
     gl.bufferData(gl.ARRAY_BUFFER, companion, gl.STATIC_DRAW);
   }
 
-  /** Deletes the GL buffers this manager owns (teardown / context-restore paths). */
+  /** Deletes the GL buffers this manager owns (teardown path; the renderer destroys every
+   * registered field in `AbstractWebGLRenderer.destroy()`). Idempotent. */
   public dispose(): void {
     const gl = this._gl;
     if (this._instanceVbo) gl.deleteBuffer(this._instanceVbo);
     if (this._gl1CompanionVbo) gl.deleteBuffer(this._gl1CompanionVbo);
     this._instanceVbo = undefined;
     this._gl1CompanionVbo = undefined;
+  }
+
+  /**
+   * Drops the GL buffer handles on `webglcontextlost` (the old context's object store is wiped at
+   * restore). No `deleteBuffer` here: calls during the lost window are no-ops at best and the
+   * handles are dead anyway. The CPU mirrors (`_instanceRecords`, `_population`) stay intact so
+   * {@link onContextRestored} can re-upload onto the restored context.
+   */
+  public onContextLost(): void {
+    this._instanceVbo = undefined;
+    this._gl1CompanionVbo = undefined;
+  }
+
+  /**
+   * Re-arms the field on the RESTORED context: the previous handles are dead and dropped, and the
+   * record VBOs are re-uploaded from the untouched CPU mirrors (on the caller's live context `gl`).
+   * The stored `_gl` binding is intentionally unchanged — the browser restores the SAME context
+   * object, so the readonly constructor binding keeps its validity across the lost/restored cycle.
+   * Invoked by the renderer's `onContextRestored`.
+   */
+  public onContextRestored(gl: WebGLRenderingContext | WebGL2RenderingContext): void {
+    this._instanceVbo = undefined;
+    this._gl1CompanionVbo = undefined;
+    this._uploadVbos(gl);
   }
 
   // --- Capacity management (pooled, geometric growth only) ---
@@ -1048,11 +1133,13 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
   }
 
   private _nextSegment(): IndirectSegmentCounts {
-    let seg = this._frameSegments[this._frameSegments.length];
+    let seg = this._frameSegments[this._frameSegmentCount];
     if (!seg) {
+      // Grow the pooled segment table on demand (bounded: <= views x MAX_LOD_BUCKETS/frame).
       seg = { viewIndex: 0, bucketIndex: 0, count: 0 };
       this._frameSegments.push(seg);
     }
+    this._frameSegmentCount++;
     seg.viewIndex = 0;
     seg.bucketIndex = 0;
     seg.count = 0;

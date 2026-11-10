@@ -238,6 +238,12 @@ export class GPUTextureResourceCache {
       const width = tex.image.width;
       const height = tex.image.height;
       if (width !== entry.width || height !== entry.height) {
+        // The old GPU texture (and every view built from it) holds the stale dimensions -- it is
+        // unreachable once the cache entry is overwritten, so drop it NOW (spec: destroy() is
+        // idempotent and safe for textures an app may still hold a JS reference to); without this
+        // every `setText`-style resize leaked the previous texture. Optional-call guard: unit
+        // scaffolds substitute a mock texture without `destroy()` (ADR 0047 test-anchor env).
+        entry.texture.destroy?.();
         const mipLevelCount =
           quality?.mipmapping && tex.generateMipmaps ? this.computeMipLevelCount(width, height) : 1;
         const t = this._device.createTexture({

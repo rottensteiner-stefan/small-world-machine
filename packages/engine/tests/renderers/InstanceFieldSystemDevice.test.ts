@@ -442,19 +442,18 @@ describe("InstanceFieldSystem on a recording device", () => {
     patch(fromCross, 0);
   });
 
-  it("zero-fills the P2 LOD-blend pages at the visible-page size (fail-closed inert default)", () => {
+  it("creates the P2 LOD-blend pages at page capacity with NO CPU zero-fill (spec zero-init)", () => {
     const n = 4;
     const { rec } = makeSetup(n);
-    // P2 blend pages allocate at the page-capacity bound (2x maxInstances, WP-A1 2).
+    // P2 blend pages allocate at the page-capacity bound (2x maxInstances, WP-A1 2) exactly like
+    // the visible indices. The fail-closed inert invariant ("unwritten slot 0 = keep
+    // unconditionally") is guaranteed by the WebGPU spec's zero-initialization of `createBuffer`
+    // without `mappedAtCreation`; the explicit `writeBuffer(new Uint8Array(visibleBytes))` was
+    // removed (it parked up to 64 MB on the JS heap per rebuild), so no full-page CPU write may
+    // exist -- only the two buffers themselves are allocated at the page size.
     const visibleBytes = (3 * MAX_LOD_BUCKETS + 1) * 2 * n * 4;
-    const zeroWrite = rec.writes.find(
-      (w) =>
-        w.data.byteLength === visibleBytes &&
-        new Uint8Array(w.data.buffer, w.data.byteOffset, w.data.byteLength).every((v) => v === 0),
-    );
-    // The zero-fill is the ONLY full-page write: the blend channel starts inert (every slot 0 =
-    // keep unconditionally) until the cull's band writes land.
-    expect(zeroWrite).toBeDefined();
+    expect(rec.buffers.filter((b) => b.size === visibleBytes)).toHaveLength(2); // indices + blend
+    expect(rec.writes.some((w) => w.data.byteLength === visibleBytes)).toBe(false);
   });
 
   it("lives-uploads replaced record bytes into the preallocated buffer (no regrow, count mirrored)", () => {

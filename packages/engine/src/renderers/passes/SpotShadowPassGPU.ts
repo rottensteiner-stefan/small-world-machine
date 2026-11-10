@@ -240,7 +240,9 @@ export class SpotShadowPassGPU implements RenderPass {
       renderer.defaultSpotShadowTextureView = realSpotShadow;
     }
 
-    const renderList = scene.getVisibleObjectsSorted(vp, camPos);
+    // Frame-frozen list computed once per frame by the renderer -- never re-collect here (the
+    // same list + ordering must reach every pass); direct/test executions fall back to the scene.
+    const renderList = renderer.frameRenderList ?? scene.getVisibleObjectsSorted(vp, camPos);
 
     // Layers 0..3 belong to spots, matching WebGL2Renderer's spot slots -- only the first 4 spot
     // lights (by scene index, not just shadow-casting ones) get a shadow map, mirroring that

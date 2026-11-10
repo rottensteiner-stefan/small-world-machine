@@ -668,14 +668,30 @@ export interface LodTransitionBandSplit {
  * Search order is the finest boundary first; at most one boundary can contain `diameterPx` for
  * sane bands (ascending thresholds, no overlapping bands). The GPU lane MUST agree with this pair
  * and these blends (IF-CULL-DETERMINISM / IF-CULL-ROUTING).
+ *
+ * Zero-allocation overload: pass a pre-allocated `out: LodTransitionBandSplit` to receive the
+ * split in place (`true` on a band hit, `false` otherwise) instead of allocating an object. Hot
+ * consumers (per-instance cull mirrors) MUST use the `out` form.
  */
 export function lodTransitionBand(
   diameterPx: number,
   effectiveMaxima: readonly number[],
   crossfadeBand: number,
-): LodTransitionBandSplit | undefined {
+  out: LodTransitionBandSplit,
+): boolean;
+export function lodTransitionBand(
+  diameterPx: number,
+  effectiveMaxima: readonly number[],
+  crossfadeBand: number,
+): LodTransitionBandSplit | undefined;
+export function lodTransitionBand(
+  diameterPx: number,
+  effectiveMaxima: readonly number[],
+  crossfadeBand: number,
+  out?: LodTransitionBandSplit,
+): LodTransitionBandSplit | undefined | boolean {
   if (!(crossfadeBand > 0)) {
-    return undefined;
+    return out ? false : undefined;
   }
   for (let b = 0; b + 1 < effectiveMaxima.length; b++) {
     const bound = effectiveMaxima[b]!;
@@ -683,10 +699,16 @@ export function lodTransitionBand(
     const hi = bound * (1 + crossfadeBand);
     if (diameterPx > lo && diameterPx < hi) {
       const t = Math.min(Math.max((diameterPx - lo) / (hi - lo), 0), 1);
+      if (out) {
+        out.coarseBucket = b;
+        out.fineBucket = b + 1;
+        out.blend = 1 - t;
+        return true;
+      }
       return { coarseBucket: b, fineBucket: b + 1, blend: 1 - t };
     }
   }
-  return undefined;
+  return out ? false : undefined;
 }
 
 // ---------------------------------------------------------------------------

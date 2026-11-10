@@ -408,7 +408,9 @@ export class CascadedShadowPassGPU implements RenderPass {
       renderer.defaultEVSMTextureView = realEvsm;
     }
 
-    const renderList = scene.getVisibleObjectsSorted(vp, camPos);
+    // Frame-frozen list computed once per frame by the renderer -- never re-collect here (the
+    // same list + ordering must reach every pass); direct/test executions fall back to the scene.
+    const renderList = renderer.frameRenderList ?? scene.getVisibleObjectsSorted(vp, camPos);
     const depthManifest = this._depthMaterial.getRenderManifest();
 
     for (let i = 0; i < numCascades; i++) {

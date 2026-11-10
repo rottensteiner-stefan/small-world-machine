@@ -140,6 +140,10 @@ const INVARIANT_REGISTRY: readonly string[] = [
   "IF-CAMERA-CUT-HZB-SKIP", // camera cut/teleport => exactly one frame HZB skip (idempotent, field-scoped, GL no-op); cut frame visible set superset of frustum+size reference, Test InstanceFieldCull (P1-4)
   "IF-BUDGET", // per-(view x bucket) counts <= capacity, args == counts, clamp-at-capacity drop, no OOB/corruption, Test InstanceFieldCull (P1-4)
   "IF-PROJECTED-SIZE", // projected sphere diameter in pixels (pinhole, primary view): resolution/FOV-normalized bucket selection + sub-pixel cull, Test InstanceFieldCull (P1-4)
+  // AUDIT-REMEDIATION 2026-11-10 (WP-A2, lead-reviewed seed extension): new architectural
+  // invariant from the single-pass render-list remediation — registered WITH the code anchor
+  // (WebGPURenderer.render frame-frozen contract), D2 runtime anchor pending.
+  "FRAME-RENDER-LIST-FROZEN", // WebGPURenderer: CPU render list computed ONCE per frame from the frame's vp/camPos and frozen for every pass (6 call sites share it; direct-execute() fallback keeps unit scaffolds green), Test WebGPUPassRenderList (D2 runtime anchor pending)
 ];
 const INVARIANT_REGISTRY_SET: ReadonlySet<string> = new Set<string>(INVARIANT_REGISTRY);
 

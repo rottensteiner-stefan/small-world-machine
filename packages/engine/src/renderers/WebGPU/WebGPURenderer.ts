@@ -90,7 +90,7 @@ import { GpuTimer } from "./managers/GpuTimer.js";
 import type { SkinnedMesh, Skeleton } from "../../core/animation/index.js";
 import { MAX_SKINNED_BONES } from "../../core/animation/index.js";
 import { INSTANCE_FIELD_BIND_GROUP } from "../../core/InstanceField.js";
-import type { RenderBatch } from "../../core/Scene.js";
+import type { RenderBatch, RenderList } from "../../core/Scene.js";
 import { CUBE_FACE_COUNT, MAX_SHADOWED_POINT_LIGHTS } from "../../core/lights/PointLightShadow.js";
 
 /**
@@ -436,6 +436,24 @@ export class WebGPURenderer
   // Render Pass System
   protected _passes: RenderPass[] = [];
 
+  /**
+   * The frame's frozen visible-object list, computed exactly ONCE per `render()` at frame head
+   * (same `vp`/`camPos` every pass receives) and consumed by every pass instead of each pass
+   * re-walking the scene on its own (was 5 redundant `getVisibleObjectsSorted()` calls/frame).
+   * @invariant FRAME-RENDER-LIST-FROZEN: assigned once per `render()` from the frame's `vp`/`camPos`,
+   * read-only by passes during their `execute()`, cleared at the end of `render()`. Passes MUST
+   * read it through {@link frameRenderList}, never re-collect from the scene -- a mid-frame
+   * mutation (`markRenderListDirty()`, camera move, visibility toggle) must not let one pass see
+   * a different list than the passes before it (same list, same ordering as the old 6-call path).
+   */
+  private _frameRenderList: RenderList | undefined = undefined;
+
+  /** @returns the frame's frozen render list while `render()` is between collection and submit,
+   * or `undefined` outside it (direct/test `pass.execute()` calls then fall back to the scene). */
+  public get frameRenderList(): RenderList | undefined {
+    return this._frameRenderList;
+  }
+
   /** Frame-global uniform/light upload buffers live in `GlobalUniformWriter`; this getter keeps
    * their single public consumer (`SpotShadowPassGPU`/`CascadedShadowPassGPU`) working unchanged. */
   public get globalUniformBuffer(): GPUBuffer {
@@ -621,6 +639,19 @@ export class WebGPURenderer
     return hzb.getPreviousFrameHzb();
   }
 
+  /** `InstanceFieldRenderHost` hook: retains `tex` in the texture cache for the whole life of a
+   * field's alpha-map binding -- a field-scoped texture no object's material refcount covers
+   * would otherwise be destroyed underneath the draw bind group. Delegates to the cache. */
+  public retainTexture(tex: Texture): void {
+    this._textures.retainTexture(tex);
+  }
+
+  /** `InstanceFieldRenderHost` hook: releases the reference {@link retainTexture} took (called
+   * by the field's `dispose()`; the cache destroys the texture at count 0). */
+  public releaseRetainedTexture(tex: Texture): void {
+    this._textures.releaseRetainedTexture(tex);
+  }
+
   /**
    * Pins `geometry` in the geometry cache via one per-geometry scratch object (ADR 0059 P1-2
    * field lane; the cache refcounts per `Object3D`, so a dedicated object gives exactly one
@@ -687,9 +718,14 @@ export class WebGPURenderer
     const want = this._instanceFields.length > 0 && !this._occlusionCullingEnabled;
     const found = this._passes.findIndex((p) => p.name === "FieldHzbBuildPassGPU");
     if (want && found < 0) {
-      // DepthPrePassGPU is always _passes[3] when occlusion is off (FieldHzbBuildPassGPU only
-      // exists in that configuration), so index 4 is right before MainRenderPass.
-      this._passes.splice(4, 0, new FieldHzbBuildPassGPU());
+      // Insert AFTER DepthPrePassGPU by lookup, never a magic index: the pass list is assembled
+      // in `initialize()`, and a hard-coded position (was `splice(4, 0, ...)`) would silently
+      // misplace the pyramid build the day that assembly order changes. When DepthPrePassGPU is
+      // absent (unexpected), fall back to appending at the end -- the build only needs to run
+      // before MainRenderPass consumes the pyramid, and it does not.
+      const depthIdx = this._passes.findIndex((p) => p.name === "DepthPrePassGPU");
+      const insertAt = depthIdx >= 0 ? depthIdx + 1 : this._passes.length;
+      this._passes.splice(insertAt, 0, new FieldHzbBuildPassGPU());
     } else if (!want && found >= 0) {
       this._passes.splice(found, 1);
     }
@@ -1422,7 +1458,11 @@ export class WebGPURenderer
     this._gpuBoneMatricesOffset = 0;
     this._boneSlotMap.clear();
 
-    this._registerRenderListProviders(scene.getVisibleObjectsSorted(vp, camPos));
+    // Single computation of the frame's visible-object list (was 5 redundant scene re-trees via
+    // the passes): frozen for this frame, consumed by every pass through `frameRenderList`.
+    const renderList = scene.getVisibleObjectsSorted(vp, camPos);
+    this._frameRenderList = renderList;
+    this._registerRenderListProviders(renderList);
     this.memoizeLightsFor(undefined);
     const lights = this.extractLights(scene);
     // The cascaded/spot shadow passes below re-request the same lights: serve them from the memo.
@@ -1462,7 +1502,7 @@ export class WebGPURenderer
       this._hdrTextureView = undefined;
     }
 
-    if (!this._activeRenderTarget && scene.getVisibleObjectsSorted(vp, camPos).decals.length > 0) {
+    if (!this._activeRenderTarget && renderList.decals.length > 0) {
       this.requestNormalBuffer();
     }
     this._syncNormalTexture();
@@ -1540,6 +1580,8 @@ export class WebGPURenderer
     this._fallback.drainPendingDestroy();
     if (this._occlusionCullingEnabled) this._kickoffHzbMapAsync();
     this._kickoffFieldProbeReadbacks();
+    // Frame-frozen list no longer valid outside `render()` (see `_frameRenderList`).
+    this._frameRenderList = undefined;
   }
 
   /**

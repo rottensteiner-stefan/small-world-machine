@@ -242,9 +242,14 @@ vec3 Lo = vec3(0.0);
         dirShadow = mix(shadowA, shadowB, blendToNext);
 #ifdef USE_BACKLIGHT
         // Transmission shadow sampled `thickness` metres toward the sun (ADR 0060, see lighting_pbr.wgsl).
+        // WP-C2: the +L*thickness offset can push the sample out of `cascadeIndex`'s ortho box near a
+        // cascade split. Blend across to the next cascade in the blend band, or fall back to it
+        // entirely when the primary sample escaped the box, instead of the 1.0 (unshadowed) halo
+        // the failed bounds check used to leave along the split.
         vec4 blSpace = u_cascadeMatrices[cascadeIndex] * vec4(v_worldPos + L * u_matParam1.w, 1.0);
         vec3 blCoords = blSpace.xyz / blSpace.w * 0.5 + 0.5;
-        if (blCoords.z <= 1.0 && blCoords.x >= 0.0 && blCoords.x <= 1.0 && blCoords.y >= 0.0 && blCoords.y <= 1.0) {
+        bool blInRange = blCoords.x >= 0.0 && blCoords.x <= 1.0 && blCoords.y >= 0.0 && blCoords.y <= 1.0 && blCoords.z >= 0.0 && blCoords.z <= 1.0;
+        if (blInRange) {
             float colBl = mod(float(cascadeIndex), cols);
             float rowBl = floor(float(cascadeIndex) / cols);
             vec2 cellMinBl = vec2(colBl, rowBl) / cols;
@@ -254,6 +259,29 @@ vec3 Lo = vec3(0.0);
                 backlightShadow = evalEVSMDir(atlasUVBl, cellMinBl, cellMaxBl, blCoords.z);
             } else {
                 backlightShadow = evalPCSSDir(atlasUVBl, cellMinBl, cellMaxBl, blCoords.z, bias, cascadeIndex);
+            }
+        }
+        if (cascadeIndex < numCascades - 1) {
+            int nextBl = cascadeIndex + 1;
+            vec4 blSpaceB = u_cascadeMatrices[nextBl] * vec4(v_worldPos + L * u_matParam1.w, 1.0);
+            vec3 blCoordsB = blSpaceB.xyz / blSpaceB.w * 0.5 + 0.5;
+            float blB = 1.0;
+            if (blCoordsB.x >= 0.0 && blCoordsB.x <= 1.0 && blCoordsB.y >= 0.0 && blCoordsB.y <= 1.0 && blCoordsB.z >= 0.0 && blCoordsB.z <= 1.0) {
+                float colBlB = mod(float(nextBl), cols);
+                float rowBlB = floor(float(nextBl) / cols);
+                vec2 cellMinBlB = vec2(colBlB, rowBlB) / cols;
+                vec2 cellMaxBlB = cellMinBlB + vec2(1.0) / cols;
+                vec2 atlasUVBlB = (blCoordsB.xy + vec2(colBlB, rowBlB)) / cols;
+                if (u_evsmParams.x > 0.5) {
+                    blB = evalEVSMDir(atlasUVBlB, cellMinBlB, cellMaxBlB, blCoordsB.z);
+                } else {
+                    blB = evalPCSSDir(atlasUVBlB, cellMinBlB, cellMaxBlB, blCoordsB.z, bias, nextBl);
+                }
+            }
+            if (blInRange) {
+                backlightShadow = mix(backlightShadow, blB, blendToNext);
+            } else {
+                backlightShadow = blB;
             }
         }
 #endif

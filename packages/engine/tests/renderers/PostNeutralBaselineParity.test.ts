@@ -2,16 +2,17 @@ import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 
-// A04: "post processing on, tone mapping ABSENT" must be an IDENTITY passthrough on every tier --
-// the neutral baseline contract. The default group enables every element, so this only triggers when
-// an app explicitly disables the ToneMappingElement; before the fix the WebGL2 pass gamma-encoded
-// its linear HDR buffer with pow(x, 1/2.2) (`u_gamma` forced to 2.2) while WebGPU packed
-// `inverseGamma = 1.0` (no curve) and WebGL1 passed the display-referred frame through unchanged --
-// same config, three different outputs.
+// A04/WP-C2: "post processing on, tone mapping element DISABLED or absent" must apply the SAME
+// fallback on every tier that owns a post tail: `ToneMappingMode.DEFAULT` curve (PBR_NEUTRAL) +
+// exposure 1.0 + display gamma 2.2. The default group enables every element, so this only triggers
+// when an app explicitly disables the ToneMappingElement; WP-C2 supersedes the earlier A04 identity
+// passthrough (which left WebGL2 writing unencoded linear HDR to the sRGB canvas while WebGPU did
+// no gamma either and WebGL1 passed the display-referred frame through -- three outputs diverging
+// from the DEFAULT curve). WebGL1 post remains display-referred passthrough (no gamma encode; the
+// frame is already sRGB-encoded on that tier).
 //
-// References: PostProcessDynUniforms.ts ("inverseGamma is 1.0 (tone mapping absent = no gamma
-// correction; an enabled element describes an actual curve)"), the WebGPU neutral pack, and the
-// WebGL1 A03 note in PostProcess100.frag.glsl.
+// References: PostProcessPassGL.ts (default gamma 2.2 upload), PostProcessDynUniforms.ts ("the
+// identity baseline"), and the WebGL1 A03 note in PostProcess100.frag.glsl.
 
 const ROOT = path.resolve(__dirname, "../../../..");
 
@@ -31,14 +32,15 @@ const WGPU_DYN = "packages/engine/src/renderers/post/PostProcessDynUniforms.ts";
 const WGPU_FRAG = "packages/engine/src/renderers/post/shaders/PostProcess.frag.wgsl";
 const GL1_FRAG = "packages/engine/src/renderers/post/shaders/PostProcess100.frag.glsl";
 
-describe("post neutral-baseline parity with tone mapping absent (A04)", () => {
-  it("WebGL2 post sets u_gamma = 1.0 when TM is disabled (identity, no sRGB encode)", () => {
+describe("post disabled-tone-mapping parity (A04 / WP-C2)", () => {
+  it("WebGL2 post applies the DEFAULT-curve gamma 2.2 when TM is disabled (never 1.0 identity)", () => {
     const src = code(GL2_PASS);
-    // The disabled branch of the gamma upload must be 1.0 -- pow(x, 1/1) is the identity curve.
-    expect(src).toContain("tm && tm.enabled ? tm.gamma : 1.0");
-    // Exposure is already neutral (1.0) in the same branch -- no buried gamma 2.2 default may return.
+    // WP-C2: the disabled branch of the gamma upload must be 2.2 -- pow(x, 1/2.2) is the display
+    // encode the WebGPU tier performs with inverseGamma 1/2.2.
+    expect(src).toContain("tm && tm.enabled ? tm.gamma : 2.2");
+    // Exposure is already neutral (1.0) in the same branch -- no buried gamma 1.0 default may return.
     expect(src).toContain("tm && tm.enabled ? tm.exposure : 1.0");
-    expect(src).not.toContain("tm.gamma : 2.2");
+    expect(src).not.toContain("tm.gamma : 1.0)");
   });
 
   it("WebGPU packs the neutral baseline with inverseGamma = 1.0 and consumes it via linearToSRGB", () => {

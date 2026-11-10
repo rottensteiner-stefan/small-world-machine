@@ -25,9 +25,13 @@ void main() {
     float avgLog = sumLogW / max(sumW, 1e-4);
     float targetEv = clamp(LOG2_KEY - avgLog + u_paramsA.z, u_paramsA.x, u_paramsA.y);
     float prevEv = texelFetch(u_previous, ivec2(0, 0), 0).g;
-    float rate = targetEv > prevEv ? u_paramsB.x : u_paramsB.y;
-    float blended = prevEv + (targetEv - prevEv) * (1.0 - exp(-max(u_paramsA.w, 0.0) * rate));
-    bool finite = blended == blended && abs(blended) < 64.0;
-    float ev = (u_paramsB.z < 0.5 && finite) ? blended : targetEv;
+    // WP-C2: a non-finite grid average makes `targetEv` NaN and would permanently poison the 1x1
+    // history (exp2(NaN)); guard BOTH EV inputs (NaN/Inf -> safe fallback) before the blend and
+    // derive every later value from the sanitized chain -- parity with the WGSL adapt shader.
+    float safeTargetEv = (!isnan(targetEv) && !isinf(targetEv)) ? targetEv : 0.0;
+    float safePrevEv = (!isnan(prevEv) && !isinf(prevEv)) ? prevEv : safeTargetEv;
+    float rate = safeTargetEv > safePrevEv ? u_paramsB.x : u_paramsB.y;
+    float blended = safePrevEv + (safeTargetEv - safePrevEv) * (1.0 - exp(-max(u_paramsA.w, 0.0) * rate));
+    float ev = (u_paramsB.z < 0.5 && !isnan(blended) && !isinf(blended)) ? blended : safeTargetEv;
     fragColor = vec4(exp2(ev), ev, 0.0, 1.0);
 }

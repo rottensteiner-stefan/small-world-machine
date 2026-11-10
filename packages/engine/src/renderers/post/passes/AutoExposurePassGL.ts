@@ -72,6 +72,10 @@ export class AutoExposurePassGL {
       new WebGL2FrameBuffer(gl, { width: size, height: size, ...format, depth: false });
     this._luminance = target(AUTO_EXPOSURE_GRID);
     this._exposure = [target(1), target(1)];
+    // WP-C2: freshly allocated 1x1 exposure targets are uninitialized (reads as 0 EV, but also as
+    // undefined driver memory); seed the neutral multiplier now so the very first frame never
+    // blends from garbage even without an explicit resetHistory().
+    this._seedExposureHistory();
   }
 
   /** Returns the 1x1 texture holding the adapted exposure (r = multiplier), or null on fallback. */
@@ -120,9 +124,27 @@ export class AutoExposurePassGL {
     return write.texture;
   }
 
-  /** Camera cut: the next frame jumps straight to the metered exposure. */
+  /** Camera cut / re-enable: the next frame jumps straight to the metered exposure. */
   public resetHistory(): void {
     this._snap = true;
+    // WP-C2: a stale `_lastRealTime` basis would turn the first frame after a re-enable into a
+    // multi-second deltaTime adaptation spike; reset to 'no previous frame' and re-seed the 1x1
+    // exposure ping-pong with the neutral multiplier (r = 1.0, ev = 0) so the blend never starts
+    // from a stale or uninitialized previous-frame EV.
+    this._lastRealTime = -1;
+    this._seedExposureHistory();
+  }
+
+  /** Neutral (1.0 multiplier / 0 EV) the 1x1 exposure ping-pong; no-op before the targets exist. */
+  private _seedExposureHistory(): void {
+    if (!this._exposure) return;
+    const gl = this._gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this._exposure[0].framebuffer);
+    gl.clearColor(1.0, 0.0, 0.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this._exposure[1].framebuffer);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
   public destroy(): void {

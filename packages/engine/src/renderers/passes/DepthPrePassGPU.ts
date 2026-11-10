@@ -45,6 +45,47 @@ export class DepthPrePassGPU implements RenderPass {
    * their real material's diffuseMap texture -- rebuilt every batch, see `execute()`. */
   private readonly _alphaGroups = new Map<Texture, AlphaTestGroup>();
 
+  /** Reusable alpha-cutout group objects: fills come from this pool after warmup, so the per-batch
+   * `{ groupUuid, alphaTest, standard: [], instanced: [] }` object + array allocation disappears.
+   * Entries are recycled by `_recycleAlphaGroups()` at the START of each batch (the map of the
+   * batch just processed). */
+  private readonly _alphaGroupPool: AlphaTestGroup[] = [];
+  private _alphaGroupPoolSize = 0;
+
+  /** Returns the previous batch's alpha groups to the pool (their object/arrays are re-used, not
+   * dropped) and clears the batch map -- the replacement for `this._alphaGroups.clear()`. */
+  private _recycleAlphaGroups(): void {
+    for (const [, group] of this._alphaGroups) {
+      group.standard.length = 0;
+      group.instanced.length = 0;
+      if (this._alphaGroupPoolSize < this._alphaGroupPool.length) {
+        this._alphaGroupPool[this._alphaGroupPoolSize++] = group;
+      } else {
+        this._alphaGroupPool.push(group);
+      }
+    }
+    this._alphaGroups.clear();
+  }
+
+  /** Takes a pooled alpha group for `diffuseMap` (fresh single allocation only on the first
+   * encounter of that storage class) and registers it in the batch map. */
+  private _acquireAlphaGroup(
+    diffuseMap: Texture,
+    groupUuid: string,
+    alphaTest: number,
+  ): AlphaTestGroup {
+    let group: AlphaTestGroup;
+    if (this._alphaGroupPoolSize > 0) {
+      group = this._alphaGroupPool[--this._alphaGroupPoolSize]!;
+    } else {
+      group = { groupUuid: "", alphaTest: 0, standard: [], instanced: [] };
+    }
+    group.groupUuid = groupUuid;
+    group.alphaTest = alphaTest;
+    this._alphaGroups.set(diffuseMap, group);
+    return group;
+  }
+
   /** Stable synthetic matUuid per alpha-cutout diffuseMap texture, assigned once and reused
    * across frames so `_getMaterialBindGroup`'s cache (and the object-uniform ring's per-slot
    * cache, both keyed by matUuid) actually get reused instead of rebuilding every frame. */
@@ -67,7 +108,9 @@ export class DepthPrePassGPU implements RenderPass {
   ): void {
     this._depthMaterial ??= new DepthMaterial();
     renderer.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, this._depthMaterial);
-    const renderList = scene.getVisibleObjectsSorted(vp, camPos);
+    // Frame-frozen list computed once per frame by the renderer -- never re-collect here (the
+    // same list + ordering must reach every pass); direct/test executions fall back to the scene.
+    const renderList = renderer.frameRenderList ?? scene.getVisibleObjectsSorted(vp, camPos);
 
     // No early return: the depth clear must happen every frame regardless of whether there's
     // anything to draw yet, since MainRenderPass's opaque pass now relies on it (depthLoadOp
@@ -115,7 +158,7 @@ export class DepthPrePassGPU implements RenderPass {
       // While every object takes the plain opaque path, the batch list itself is that path (no
       // copy); the first deviating object switches to the scratch list (prefix copied once).
       let passThrough = true;
-      this._alphaGroups.clear();
+      this._recycleAlphaGroups();
       // A batch is keyed by material, so consecutive objects share it: build its manifest once.
       let lastMaterial: AbstractMaterial | undefined = undefined;
       let objManifest: RenderManifest | undefined = undefined;
@@ -164,8 +207,7 @@ export class DepthPrePassGPU implements RenderPass {
               groupUuid = MathUtils.generateUUID();
               this._alphaGroupUuids.set(diffuseMap, groupUuid);
             }
-            group = { groupUuid, alphaTest, standard: [], instanced: [] };
-            this._alphaGroups.set(diffuseMap, group);
+            group = this._acquireAlphaGroup(diffuseMap, groupUuid, alphaTest);
           }
           if (obj instanceof InstancedMesh) group.instanced.push(obj);
           else group.standard.push(obj);

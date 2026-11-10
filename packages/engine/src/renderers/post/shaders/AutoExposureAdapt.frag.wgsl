@@ -10,6 +10,11 @@
 const GRID: i32 = 16;
 const LOG2_KEY: f32 = -2.4739311883324; // log2(0.18)
 
+// Reliable finite test (exponent bits all ones = Inf/NaN); `x == x` may be folded by the compiler.
+fn isFiniteF32(x: f32) -> bool {
+    return (bitcast<u32>(x) & 0x7f800000u) != 0x7f800000u;
+}
+
 @fragment
 fn fs_main() -> @location(0) vec4f {
     var sumW = 0.0;
@@ -26,9 +31,13 @@ fn fs_main() -> @location(0) vec4f {
     let avgLog = sumLogW / max(sumW, 1e-4);
     let targetEv = clamp(LOG2_KEY - avgLog + a.z, a.x, a.y);
     let prevEv = textureLoad(prevTexture, vec2i(0, 0), 0).g;
-    let rate = select(b.y, b.x, targetEv > prevEv);
-    let blended = prevEv + (targetEv - prevEv) * (1.0 - exp(-max(a.w, 0.0) * rate));
-    let finite = blended == blended && abs(blended) < 64.0;
-    let ev = select(targetEv, blended, b.z < 0.5 && finite);
+    // WP-C2: a non-finite grid average makes `targetEv` NaN; the 1x1 history would then be
+    // permanently poisoned (exp2(NaN)). Sanitize BOTH EV inputs before the blend and derive every
+    // later value from the sanitized chain.
+    let safeTargetEv = select(0.0, targetEv, isFiniteF32(targetEv));
+    let safePrevEv = select(safeTargetEv, prevEv, isFiniteF32(prevEv));
+    let rate = select(b.y, b.x, safeTargetEv > safePrevEv);
+    let blended = safePrevEv + (safeTargetEv - safePrevEv) * (1.0 - exp(-max(a.w, 0.0) * rate));
+    let ev = select(safeTargetEv, blended, b.z < 0.5 && isFiniteF32(blended));
     return vec4f(exp2(ev), ev, 0.0, 1.0);
 }

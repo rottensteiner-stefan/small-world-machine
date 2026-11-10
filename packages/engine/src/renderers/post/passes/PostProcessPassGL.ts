@@ -4,7 +4,7 @@ import POST_PROCESS_FRAG_GLSL from "../shaders/PostProcess.frag.glsl?raw";
 
 import FULLSCREEN_VERT_GLSL100 from "../shaders/PostProcess100.vert.glsl?raw";
 import POST_PROCESS_FRAG_GLSL100 from "../shaders/PostProcess100.frag.glsl?raw";
-import { PostProcessingEffectType } from "../../../enums/index.js";
+import { PostProcessingEffectType, ToneMappingMode } from "../../../enums/index.js";
 import type { ShaderRegistry } from "../../shaders/index.js";
 import type { PostProcessingGroup } from "../PostProcessingGroup.js";
 import type {
@@ -195,7 +195,7 @@ export class PostProcessPassGL {
     );
     frag = frag.replace(
       "uniform int u_toneMappingMode;",
-      `#define u_toneMappingMode ${tmEnabled ? tm.mode : 1}`,
+      `#define u_toneMappingMode ${tmEnabled ? tm.mode : ToneMappingMode.DEFAULT}`,
     );
 
     frag = frag.replace(
@@ -393,16 +393,17 @@ export class PostProcessPassGL {
       } else gl.uniform3f(this._uBloomColor, 1.0, 1.0, 1.0);
     }
     if (this._uExposure) gl.uniform1f(this._uExposure, tm && tm.enabled ? tm.exposure : 1.0);
-    if (this._uToneMappingWhite) gl.uniform1f(this._uToneMappingWhite, tm ? tm.whitePoint : 4.0);
-    // A04: the neutral baseline with tone mapping absent MUST be an identity passthrough, exactly
-    // like the WebGPU post pass (`ToneMappingElement`/`packPostProcessNeutralUniforms` pack
-    // `inverseGamma = 1.0`) and the WebGL1 post path (display-referred passthrough, see the A03
-    // note in PostProcess100.frag.glsl). The old `: 2.2` gamma-encoded the linear HDR buffer with
-    // 1/2.2 even though TM was off -- a GL2-only sRGB encode no other tier performed. With a TM
-    // element enabled it still encodes via `1/gamma` and is unaffected.
-    if (this._uGamma) gl.uniform1f(this._uGamma, tm && tm.enabled ? tm.gamma : 1.0);
+    if (this._uToneMappingWhite) {
+      gl.uniform1f(this._uToneMappingWhite, tm && tm.enabled ? tm.whitePoint : 4.0);
+    }
+    // WP-C2: with tone mapping disabled or absent the post fallback is BY CONTRACT identical on both
+    // tiers: `ToneMappingMode.DEFAULT` curve (injected in _build()) + exposure 1.0 + display gamma
+    // 2.2. The old `: 1.0` gamma passthrough wrote unencoded linear HDR to the sRGB canvas while
+    // WebGPU encoded -- a GL2-only deviation this parity fix removes. With a TM element enabled the
+    // element's own gamma still applies and is unaffected.
+    if (this._uGamma) gl.uniform1f(this._uGamma, tm && tm.enabled ? tm.gamma : 2.2);
     if (this._uInverseGamma) {
-      gl.uniform1f(this._uInverseGamma, tm && tm.enabled ? 1.0 / tm.gamma : 1.0);
+      gl.uniform1f(this._uInverseGamma, tm && tm.enabled ? 1.0 / tm.gamma : 1.0 / 2.2);
     }
     if (this._uVignetteOffset) gl.uniform1f(this._uVignetteOffset, vig ? vig.offset : 0.8);
     if (this._uVignetteDarkness) gl.uniform1f(this._uVignetteDarkness, vig ? vig.darkness : 0.5);
