@@ -525,3 +525,13 @@ overlap (throughput baseline, not placement art) — accepted.
   floor 0.3 under full cover. `?canopy=0` = A/B.
 - Real M4 Pro forest-interior A/B (camera between trees at 1.7 m): clearly darker interior, crowns
   stay lit; meadow shots change only near the forest edge. Cost below the DVFS noise floor.
+
+## 2026-11-11 — P6a part 2: look preset + HBAO (interactive defaults)
+
+- `?look=meadow|forest|off` (`applyFoliageLook`, presets from `vegetation-extras`) and `?hbao=0|1`
+  (radius 0.8 m, intensity 0.9). Interactive default: meadow + HBAO; automated runs: off/off (post
+  group stays disabled, measurement path unchanged).
+- Real M4 Pro sighting: forest interior reads best with `forest` (AgX: deeper shade, bright
+  flecks), the meadow turns milky with it (grey AgX sky) and reads best with `meadow` — default
+  `meadow` because the scene is mostly meadow + forest edge. Post cost shows as ~120 → 116 fps;
+  the post pass is not part of the `main:opaque` timer.

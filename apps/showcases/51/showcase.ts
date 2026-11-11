@@ -1,4 +1,9 @@
-import type { EngineOptions, GeometryDataInterface, GpuTimer } from "@small-world-machine/engine";
+import type {
+  EngineOptions,
+  GeometryDataInterface,
+  GpuTimer,
+  HbaoElement,
+} from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
@@ -46,7 +51,9 @@ import {
   type FieldCanopy,
 } from "@small-world-machine/engine/renderers/WebGPU/managers/InstanceFieldSystem.js";
 import {
+  applyFoliageLook,
   buildCanopyCoverage,
+  FOLIAGE_LOOKS,
   GroundCover,
   WindField,
 } from "@small-world-machine/vegetation-extras";
@@ -102,6 +109,8 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  *   `?coverDensity=N`              ring clump density in clumps/m² (clamped to 8; default 5;
  *                                  14 blades per near clump)
  *   `?coverRadius=N`               ring outer radius in metres (clamped to [20, 400]; default 160)
+ *   `?look=meadow|forest|off`      foliage look preset (interactive default `meadow`, automated `off`)
+ *   `?hbao=0|1`                    screen-space AO (interactive default on, automated off)
  *   `?canopy=0`                    disable the canopy ambient occlusion (ADR 0059 step 6a A/B)
  *   `?tree=<stem>|none`            textured species (`<stem>.species.json`, `<stem>_LOD0..3.glb`,
  *                                  albedo layers); real 4-bucket LOD chain, fail-closed to defaults.
@@ -319,6 +328,9 @@ const COVER_ALPHA_BASE = 1;
 const COVER_ALPHA_TIP = 0.85;
 /** Ground-cover tile edge (m); the ring's per-tile hash cells. */
 const COVER_TILE_CELL = 5;
+/** Screen-space AO for grass/foliage contact (world radius m, strength). */
+const HBAO_RADIUS = 0.8;
+const HBAO_INTENSITY = 0.9;
 /** ADR 0059 step 6a canopy ambient: ambient kept under full cover at the ground, coverage grid
  *  cell (m), and the share of the widest branch extent that reads as closed crown. */
 const CANOPY_AMBIENT_FLOOR = 0.3;
@@ -656,6 +668,11 @@ export class Showcase extends AbstractShowcase {
   /** Live TAA state (`?taa=1` arms the engine `TaaElement`; default off). Sighting knob for the
    *  ADR 0059 step-2 dither modes — documented as TAA-dependent ("TAA resolves the dither"). */
   private readonly _taaLive: boolean;
+  /** `?look=meadow|forest|off`: foliage look preset (tone curve + exposure + grading, ADR 0059
+   *  step 6a look-dev). Interactive default `meadow`; automated runs default `off`. */
+  private readonly _look: "meadow" | "forest" | "off";
+  /** `?hbao=0|1`: screen-space AO for contact darkening. Interactive default on, automated off. */
+  private readonly _hbao: boolean;
   /** Latest optically-probed cull frame (kept 1: the dual-lane audit samples the LAST frame). */
   private _lastProbeSet: FieldVisibleSets | undefined = undefined;
   private _lastCpuTotal = 0;
@@ -751,6 +768,10 @@ export class Showcase extends AbstractShowcase {
     const rawTree = params.get("tree") ?? (interactive ? INTERACTIVE_TREE_STEM : null);
     this._treeStem =
       rawTree !== null && rawTree !== "none" && /^[a-z0-9_]+$/.test(rawTree) ? rawTree : undefined;
+
+    const rawLook = params.get("look") ?? (interactive ? "meadow" : "off");
+    this._look = rawLook === "meadow" || rawLook === "forest" ? rawLook : "off";
+    this._hbao = (params.get("hbao") ?? (interactive ? "1" : "0")) === "1";
 
     const rawLodMode = params.get("lodMode");
     if (rawLodMode !== null && rawLodMode in LOD_TRANSITION_MODES) {
@@ -980,6 +1001,7 @@ export class Showcase extends AbstractShowcase {
     // here — every renderer's post group always carries the element and `enabled` gates the
     // history-blend pass — not in the constructor, where `renderer` is still unassigned.
     this._applyTaaKnob();
+    this._applyLookKnobs();
     if (golden === undefined) return;
     this._golden?.dispose();
     this._golden = new GoldenSession(this, {
@@ -995,6 +1017,26 @@ export class Showcase extends AbstractShowcase {
    * Applies the constructor-parsed `?taa=` knob to the engine post-processing `TaaElement`.
    * Guarded (`get` may be `undefined`): toggling is inert on hostile configs, never throws.
    */
+  /** Applies `?look=` / `?hbao=` (ADR 0059 step 6a look-dev): enables the post group only when
+   *  one of them is on, so automated runs keep the post-free measurement path. */
+  private _applyLookKnobs(): void {
+    const pp = this.renderer.postProcessing;
+    if (this._look === "off" && !this._hbao) return;
+    pp.enabled = true;
+    if (this._look !== "off") {
+      applyFoliageLook(
+        pp,
+        this._look === "meadow" ? FOLIAGE_LOOKS.SUNNY_MEADOW : FOLIAGE_LOOKS.FOREST_SHADE,
+      );
+    }
+    const hbao = pp.get<HbaoElement>(PostProcessingEffectType.HBAO);
+    if (hbao !== undefined && this._hbao) {
+      hbao.enabled = true;
+      hbao.radius = HBAO_RADIUS;
+      hbao.intensity = HBAO_INTENSITY;
+    }
+  }
+
   private _applyTaaKnob(): void {
     const taaNode = this.renderer.postProcessing.get(PostProcessingEffectType.TAA);
     if (taaNode !== undefined) {
