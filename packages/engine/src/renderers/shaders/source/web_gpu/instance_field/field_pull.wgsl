@@ -59,7 +59,9 @@
 @group(2) @binding(13) var fieldAlbedoSampler: sampler;
 
 struct FieldVertOut {
-    @builtin(position) pos: vec4f,
+    // `@invariant`: the depth pre-pass and the colour pass must rasterize bit-identical depth --
+    // the colour pass tests `depthCompare: "equal"` against the pre-pass (veg-x X1).
+    @builtin(position) @invariant pos: vec4f,
     @location(0) wp: vec3f,
     @location(1) uv: vec2f,
     @location(2) n: vec3f,
@@ -320,21 +322,12 @@ fn fieldShadingNormal(i: FieldVertOut, frontFacing: bool) -> vec3f {
     return select(-n, n, frontFacing);
 }
 
+// veg-x X1 (ADR 0059): NO discard in the colour pass. The depth pre-pass already applied the
+// alpha cutout and the LOD-mix dither to the shared depth buffer; the colour pipeline tests
+// `depthCompare: "equal"` (no depth write), so exactly the surviving fragments shade. Keeping the
+// pass discard-free preserves early-Z / tile-based hidden-surface removal on every GPU.
 fn fieldColorShade(i: FieldVertOut, frontFacing: bool) -> vec4f {
-    // One albedo-array fetch serves the cutout and the albedo (sampled before any discard).
     let tex = fieldAlbedoSample(i.uv, i.layer);
-    if (fieldInfo.alphaTest > 0.0) {
-        if (fieldInfo.albedoLayerCount > 0u) {
-            if (fieldAlbedoCoverage(i.uv, tex.a) < fieldInfo.alphaTest) {
-                discard;
-            }
-        } else {
-            fieldAlphaDiscard(i.uv, i.layer);
-        }
-    }
-    if (fieldLodDitherDiscard(i.lodBlend, i.pos.xy)) {
-        discard;
-    }
     let N = fieldShadingNormal(i, frontFacing);
     let albedo = i.color.rgb * i.tint * sRGBToLinear(tex.rgb);
     let L = normalize(global.dirLightDir.xyz);

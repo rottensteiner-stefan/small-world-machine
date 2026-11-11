@@ -1919,7 +1919,9 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       depthStencil: {
         format: "depth32float",
         depthWriteEnabled,
-        depthCompare: "less-equal",
+        // veg-x X1: colour variants re-test the pre-pass depth with `equal` (bit-identical via
+        // `@invariant` position, no discard in their fragments); depth/EVSM keep `less-equal`.
+        depthCompare: variant === "color" || variant === "colorNormal" ? "equal" : "less-equal",
       },
     });
     byFormat[slot] = pipeline;

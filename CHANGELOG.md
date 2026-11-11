@@ -5,6 +5,7 @@
 ### "The universe is under no obligation to make sense to you." - Neil deGrasse Tyson
 
 - **Features:**
+  - _Instance-field colour pass without discard (veg-x X1):_ WebGPU field colour pipelines test `depthCompare: "equal"` against the depth pre-pass (which alone applies alpha cutout + LOD dither) and shade discard-free; `@invariant` position keeps the depth bit-identical. Real M4 Pro: colour pass −12 % (walk) to −31 % (flight).
   - _Showcase 51 opens on the jacaranda scene:_ interactive sessions default to `mode=field`, `tree=jacaranda`, `n=2000`; automated/QA/golden runs keep the measurement defaults; `?tree=none` restores the Kenney set.
   - _Showcase 51 — Jacaranda species assets (Poly Haven, CC0):_ 4-level LOD chain (141 k → 4 k tris) + 3 albedo layers + species sidecar, loaded by `?tree=jacaranda`; originals and bake tool backed up per ADR 0058.
   - _Showcase HUD footer — CPU pressure:_ the shared `ShowcaseDrawer` perf footer shows the Compute Pressure API state (`⚙ nominal / fair / serious / critical`, colour-coded) when `PressureObserver` exists and `observe("cpu")` succeeds; one observer per drawer, disconnected on `dispose()`, hidden elsewhere. Footer line no longer wraps.

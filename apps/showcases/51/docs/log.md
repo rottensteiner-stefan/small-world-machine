@@ -509,3 +509,11 @@ overlap (throughput baseline, not placement art) — accepted.
   QA and the `veg51` snapshot stay reproducible. Explicit params win; `?tree=none` = Kenney set.
 - Real Chrome check: (none) → field/jacaranda/1850; `?frames=10` → autoinst/Kenney/18363;
   `?tree=none` → field/Kenney; `?mode=autoinst` → autoinst/Kenney; 0 console errors.
+
+## 2026-11-11 — veg-x X1: field colour pass depth-equal, no discard
+
+- Engine change (field lane): colour pipelines `depthCompare: "equal"`, no alpha/dither discard in
+  the colour fragments, `@invariant` position. Showcase unchanged.
+- Real M4 Pro (jacaranda default scene, frozen poses, median of 3): walk 3.28 → 2.88 ms, flight
+  4.46 → 3.08 ms, aerial 7.14 → 5.18 ms `main:opaque`. Screenshot check: no holes incl. TAA jitter
+  and `?lodMode=dither`.
