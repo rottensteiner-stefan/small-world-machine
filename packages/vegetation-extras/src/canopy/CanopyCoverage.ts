@@ -7,6 +7,7 @@
  *        crown's soft disc (full opacity inside 70 % of the radius, smoothstep to 0 at the rim)
  *        times `crownOpacity`. Overlapping crowns saturate toward 1, a single crown never does.
  */
+import { Texture } from "@small-world-machine/engine";
 import {
   unpackInstancePose,
   type InstancePose,
@@ -101,4 +102,75 @@ export function buildCanopyCoverage(
 function smoothstep(t: number): number {
   const x = Math.min(1, Math.max(0, t));
   return x * x * (3 - 2 * x);
+}
+
+/** Coverage [0, 1] of `map` at world XZ (nearest cell; 0 outside the map). */
+export function canopyCoverageAt(map: CanopyCoverageMap, x: number, z: number): number {
+  const cx = Math.floor((x - map.originX) / map.cellSize);
+  const cz = Math.floor((z - map.originZ) / map.cellSize);
+  if (cx < 0 || cz < 0 || cx >= map.width || cz >= map.height) return 0;
+  return map.data[cz * map.width + cx]! / 255;
+}
+
+/**
+ * Below-canopy weight at height `y`: 1 up to 35 % of `canopyHeight`, smoothstep to 0 at the crown
+ * top (the same fade as the field shader's `fieldCanopyAmbient`).
+ */
+export function canopyHeightFade(y: number, canopyHeight: number): number {
+  const t = Math.min(1, Math.max(0, (y - 0.35 * canopyHeight) / (0.65 * canopyHeight)));
+  return 1 - t * t * (3 - 2 * t);
+}
+
+/** RGBA pixels of a canopy AO map for a square ground plane centred on the origin. */
+export interface CanopyGroundAo {
+  readonly data: Uint8ClampedArray;
+  readonly size: number;
+}
+
+/**
+ * Bakes `map` into ambient-occlusion pixels for a `groundSize` m square plane centred on the
+ * origin, one texel per `texelSize` m: grey = 1 - (1 - ambientFloor) * coverage. Row 0 is +Z
+ * (engine `Ground` uv: v = 1 at -Z). DOM-free; see `createCanopyGroundAoTexture` for a Texture.
+ */
+export function buildCanopyGroundAo(
+  map: CanopyCoverageMap,
+  ambientFloor: number,
+  groundSize: number,
+  texelSize = 1,
+): CanopyGroundAo {
+  const size = Math.max(1, Math.round(groundSize / texelSize));
+  const data = new Uint8ClampedArray(size * size * 4);
+  const half = groundSize / 2;
+  for (let row = 0; row < size; row++) {
+    const z = half - (row + 0.5) * texelSize;
+    for (let col = 0; col < size; col++) {
+      const x = -half + (col + 0.5) * texelSize;
+      const g = Math.round((1 - (1 - ambientFloor) * canopyCoverageAt(map, x, z)) * 255);
+      const o = (row * size + col) * 4;
+      data[o] = g;
+      data[o + 1] = g;
+      data[o + 2] = g;
+      data[o + 3] = 255;
+    }
+  }
+  return { data, size };
+}
+
+/** Browser helper: `buildCanopyGroundAo` as an engine `Texture` (assign to `StandardMaterial.aoMap`). */
+export function createCanopyGroundAoTexture(
+  map: CanopyCoverageMap,
+  ambientFloor: number,
+  groundSize: number,
+  texelSize = 1,
+): Texture {
+  const ao = buildCanopyGroundAo(map, ambientFloor, groundSize, texelSize);
+  const canvas = document.createElement("canvas");
+  canvas.width = ao.size;
+  canvas.height = ao.size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("[CanopyCoverage] 2D canvas unavailable.");
+  const img = ctx.createImageData(ao.size, ao.size);
+  img.data.set(ao.data);
+  ctx.putImageData(img, 0, 0);
+  return Texture.fromCanvas(canvas);
 }

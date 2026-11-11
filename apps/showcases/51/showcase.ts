@@ -24,7 +24,6 @@ import {
   PostProcessingEffectType,
   RendererType,
   StandardMaterial,
-  Texture,
   TextureArray,
   Vector3D,
   WebGPURenderer,
@@ -54,11 +53,14 @@ import {
 import {
   applyFoliageLook,
   buildCanopyCoverage,
+  canopyCoverageAt,
+  canopyHeightFade,
+  createCanopyGroundAoTexture,
   FOLIAGE_LOOKS,
+  ForestLookBlender,
   GroundCoverSystem,
   MEADOW_GRASS_VARIETIES,
   WindField,
-  type FoliageLook,
 } from "@small-world-machine/vegetation-extras";
 import { getCameraPath, type CameraPath, type PathName } from "./CameraPaths.js";
 import { Hud, hudFreeMode, type HudGpuTimings, type VegHudStats } from "./Hud.js";
@@ -535,33 +537,8 @@ export class Showcase extends AbstractShowcase {
   private _canopy: FieldCanopy | undefined = undefined;
   /** Forest-floor material (gets the canopy as `aoMap`, ambient-only darkening). */
   private _groundMaterial: StandardMaterial | undefined = undefined;
-  /** `?look=auto`: smoothed canopy coverage at the camera (0 = meadow look, 1 = forest look). */
-  private _lookBlend = 0;
-  private _lookBlendApplied = -1;
-  /** Reused blended look (zero allocation per frame). */
-  private readonly _blendLook: {
-    name: string;
-    toneMapping: FoliageLook["toneMapping"];
-    exposure: number;
-    contrast: number;
-    saturation: number;
-    temperature: number;
-    tint: number;
-    lift: [number, number, number];
-    gamma: [number, number, number];
-    gain: [number, number, number];
-  } = {
-    name: "auto",
-    toneMapping: FOLIAGE_LOOKS.SUNNY_MEADOW.toneMapping,
-    exposure: 1,
-    contrast: 1,
-    saturation: 1,
-    temperature: 0,
-    tint: 0,
-    lift: [0, 0, 0],
-    gamma: [1, 1, 1],
-    gain: [1, 1, 1],
-  };
+  /** `?look=auto`: canopy-driven meadow -> forest look blend (created by `_applyLookKnobs`). */
+  private _lookBlender: ForestLookBlender | undefined = undefined;
   /** `?coverDensity=` clumps per m² (clamped); default `COVER_DEFAULT_DENSITY`. */
   private readonly _coverDensity: number;
   /** `?coverRadius=` ring outer radius in metres (clamped); default `COVER_DEFAULT_RADIUS`. */
@@ -937,6 +914,11 @@ export class Showcase extends AbstractShowcase {
     if (this._look === "off" && !this._hbao) return;
     pp.enabled = true;
     if (this._look === "auto") {
+      this._lookBlender = new ForestLookBlender(
+        FOLIAGE_LOOKS.SUNNY_MEADOW,
+        FOLIAGE_LOOKS.FOREST_SHADE,
+        LOOK_BLEND_RATE,
+      );
       this._updateAutoLook(0);
     } else if (this._look !== "off") {
       applyFoliageLook(
@@ -952,78 +934,25 @@ export class Showcase extends AbstractShowcase {
     }
   }
 
-  /** Canopy coverage [0, 1] at a world XZ (nearest cell; 0 outside the map / without canopy). */
-  private _canopyCoverageAt(x: number, z: number): number {
-    const c = this._canopy;
-    if (c === undefined) return 0;
-    const cx = Math.floor((x - c.originX) / c.cellSize);
-    const cz = Math.floor((z - c.originZ) / c.cellSize);
-    if (cx < 0 || cz < 0 || cx >= c.width || cz >= c.height) return 0;
-    return c.data[cz * c.width + cx]! / 255;
-  }
-
-  /** `?look=auto`: eases the coverage above the camera (faded out above the crowns, like the
-   *  field shader) and blends the continuous look parameters meadow -> forest. The tone curve
-   *  stays the meadow one (switching curves would jump; AgX greys the open sky). Re-applies only
-   *  when the blend moved noticeably. */
+  /** `?look=auto`: coverage above the camera (faded above the crowns) drives the look blend. */
   private _updateAutoLook(deltaTime: number): void {
     const c = this._canopy;
     const cam = this.camera.position;
-    let target = this._canopyCoverageAt(cam.x, cam.z);
-    if (c !== undefined) {
-      const t = Math.min(1, Math.max(0, (cam.y - 0.35 * c.canopyHeight) / (0.65 * c.canopyHeight)));
-      target *= 1 - t * t * (3 - 2 * t);
-    }
-    const k = deltaTime > 0 ? Math.min(1, deltaTime * LOOK_BLEND_RATE) : 1;
-    this._lookBlend += (target - this._lookBlend) * k;
-    if (Math.abs(this._lookBlend - this._lookBlendApplied) < 0.01) return;
-    this._lookBlendApplied = this._lookBlend;
-    const a = FOLIAGE_LOOKS.SUNNY_MEADOW;
-    const b = FOLIAGE_LOOKS.FOREST_SHADE;
-    const w = this._lookBlend;
-    const L = this._blendLook;
-    const mix = (p: number, q: number): number => p + (q - p) * w;
-    L.exposure = mix(a.exposure, b.exposure);
-    L.contrast = mix(a.contrast, b.contrast);
-    L.saturation = mix(a.saturation, b.saturation);
-    L.temperature = mix(a.temperature, b.temperature);
-    L.tint = mix(a.tint, b.tint);
-    for (let i = 0; i < 3; i++) {
-      L.lift[i] = mix(a.lift[i]!, b.lift[i]!);
-      L.gamma[i] = mix(a.gamma[i]!, b.gamma[i]!);
-      L.gain[i] = mix(a.gain[i]!, b.gain[i]!);
-    }
-    applyFoliageLook(this.renderer.postProcessing, L);
+    const target =
+      c !== undefined
+        ? canopyCoverageAt(c, cam.x, cam.z) * canopyHeightFade(cam.y, c.canopyHeight)
+        : 0;
+    this._lookBlender?.update(this.renderer.postProcessing, target, deltaTime);
   }
 
-  /** Forest floor: the canopy coverage as the ground's `aoMap` (R channel scales its ambient
-   *  term only), one texel per metre over the `GROUND_SIZE` plane (uv v = 1 at -Z). */
+  /** Forest floor: the canopy coverage as the ground's `aoMap` (ambient-only darkening). */
   private _applyGroundCanopy(canopy: FieldCanopy): void {
-    const material = this._groundMaterial;
-    if (material === undefined) return;
-    const size = GROUND_SIZE;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const img = ctx.createImageData(size, size);
-    const half = size / 2;
-    for (let row = 0; row < size; row++) {
-      const z = half - (row + 0.5);
-      for (let col = 0; col < size; col++) {
-        const x = -half + (col + 0.5);
-        const ao = 1 - (1 - canopy.ambientFloor) * this._canopyCoverageAt(x, z);
-        const o = (row * size + col) * 4;
-        const g = Math.round(ao * 255);
-        img.data[o] = g;
-        img.data[o + 1] = g;
-        img.data[o + 2] = g;
-        img.data[o + 3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    material.aoMap = Texture.fromCanvas(canvas);
+    if (this._groundMaterial === undefined) return;
+    this._groundMaterial.aoMap = createCanopyGroundAoTexture(
+      canopy,
+      canopy.ambientFloor,
+      GROUND_SIZE,
+    );
   }
 
   private _applyTaaKnob(): void {

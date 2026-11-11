@@ -553,3 +553,11 @@ overlap (throughput baseline, not placement art) — accepted.
   in the package (UE "Landscape Grass Type" model). Showcase 51: 2424 -> 2075 lines, same clump
   count (296 594) on the real M4 Pro, 0 errors. Tests: prefix LOD, flower topology, footprint,
   travel gate, skip-on-register-failure.
+
+## 2026-11-11 — Extraction step 2: forest lighting helpers -> `vegetation-extras`
+
+- `canopyCoverageAt`, `canopyHeightFade`, `buildCanopyGroundAo` / `createCanopyGroundAoTexture`,
+  `ForestLookBlender` now in the package; showcase 51 2075 -> 1998 lines, same behaviour
+  (forest interior: ground AO on, look weight 1, 0 errors).
+- Measurement note (throttled 30 fps window, another tab open): post pass look-only 0.13–0.26 ms,
+  with HBAO 0.46–1.7 ms -> HBAO may push P6a over its 1 ms budget; re-measure unthrottled.

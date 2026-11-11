@@ -5,3 +5,4 @@ export * from "./groundcover/GroundCover.js";
 export * from "./canopy/CanopyCoverage.js";
 export * from "./groundcover/GrassClump.js";
 export * from "./groundcover/GroundCoverSystem.js";
+export * from "./look/ForestLookBlender.js";
