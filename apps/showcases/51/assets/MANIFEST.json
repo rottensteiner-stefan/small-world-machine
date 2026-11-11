@@ -238,5 +238,53 @@
     "verts": 133,
     "alphaMasks": 0,
     "webpEmbedded": false
+  },
+  "jacaranda.species.json": {
+    "bytes": 479,
+    "sha256": "53eb696e368e6f7a270f3c36378d611a2360f284c1a8a854aec4cc522ca2ef0c",
+    "source": "Poly Haven jacaranda_tree (CC0)"
+  },
+  "jacaranda_LOD0.glb": {
+    "bytes": 8710780,
+    "sha256": "675f00727822a8caffda8540be25a5d3d8fc8a204aa5882dea4568979afbdf39",
+    "tris": 140789,
+    "verts": 146208,
+    "source": "Poly Haven jacaranda_tree (CC0), local bake veg-tree-bake.ts"
+  },
+  "jacaranda_LOD1.glb": {
+    "bytes": 2621556,
+    "sha256": "2f0424a9f9c9b40424c73f61e92201ff15e00a5e8ba559e73fd8aebf4e6a1f74",
+    "tris": 41632,
+    "verts": 44139,
+    "source": "Poly Haven jacaranda_tree (CC0), local bake veg-tree-bake.ts"
+  },
+  "jacaranda_LOD2.glb": {
+    "bytes": 855740,
+    "sha256": "c516dd02f7e4fa0c987dba8d87d92e38cce2ff7cf6a4edab6efbb85e55f3287e",
+    "tris": 13294,
+    "verts": 14436,
+    "source": "Poly Haven jacaranda_tree (CC0), local bake veg-tree-bake.ts"
+  },
+  "jacaranda_LOD3.glb": {
+    "bytes": 264096,
+    "sha256": "5534637ef2c2480730b3a49e7e19772f4323599df908105f12a73669a36d78de",
+    "tris": 3989,
+    "verts": 4437,
+    "source": "Poly Haven jacaranda_tree (CC0), local bake veg-tree-bake.ts"
+  },
+  "jacaranda_albedo_0.jpg": {
+    "bytes": 531544,
+    "sha256": "5a4fe735f0c346cec83b6b444a0169fc14d2b31bbb7b26e26b1b6c726b6e06f6",
+    "source": "Poly Haven jacaranda_tree (CC0)"
+  },
+  "jacaranda_albedo_1.jpg": {
+    "bytes": 896938,
+    "sha256": "e5582fba664a9255252d1ee8088f75ad557f07360aa7f4513f2b2f1577e90be9",
+    "source": "Poly Haven jacaranda_tree (CC0)"
+  },
+  "jacaranda_albedo_2.png": {
+    "bytes": 1082315,
+    "sha256": "f98507fed938551ede52d61e6ce8b4091a0a4f8b3603375601d6c5e883f38f48",
+    "source": "Poly Haven jacaranda_tree (CC0)"
   }
 }

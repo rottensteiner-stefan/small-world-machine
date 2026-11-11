@@ -492,3 +492,11 @@ overlap (throughput baseline, not placement art) — accepted.
   disc is edge-on from eye height). Shares 5 % / 4 % of `?coverDensity=`.
 - Real M4 Pro (n=1850 jacaranda, 1600×900): ~296 k clump records over 7 rings, walk 2.6 ms /
   flight 5.3 ms / aerial 7.1 ms GPU, 120 fps when no other showcase tab competes, 0 errors.
+
+## 2026-11-11 — Jacaranda assets committed (user sign-off "sieht super aus")
+
+- Runtime set via LFS: `jacaranda_LOD0..3.glb`, `jacaranda_albedo_0/1.jpg`, `_2.png`,
+  `jacaranda.species.json` (~15 MB). Provenance in `REFERENCES.md`, checksums in `MANIFEST.json`.
+- Originals (Poly Haven 1k glTF + bin + textures + leaf alpha) and the local bake tool backed up to
+  Drive `Small-World-Machine/small-world-machine/` (new repo folder), 14/14 sha256 verified,
+  `MANIFEST.txt` written; local `raw/` stays git-ignored staging.

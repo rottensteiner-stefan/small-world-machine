@@ -1,0 +1,24 @@
+{
+  "stem": "jacaranda",
+  "levels": 4,
+  "layers": [
+    {
+      "albedo": "jacaranda_albedo_0.jpg",
+      "cutout": false,
+      "foliage": 0,
+      "material": "jacaranda_tree_branches"
+    },
+    {
+      "albedo": "jacaranda_albedo_1.jpg",
+      "cutout": false,
+      "foliage": 0,
+      "material": "jacaranda_tree_trunk"
+    },
+    {
+      "albedo": "jacaranda_albedo_2.png",
+      "cutout": true,
+      "foliage": 1,
+      "material": "jacaranda_tree_leaves"
+    }
+  ]
+}

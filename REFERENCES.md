@@ -1064,6 +1064,14 @@ This document serves to record external sources, algorithms, mathematical deriva
   - _Phase-Shifted Tail Wave Kinematics:_ $\theta_Y(s, t) = \sin(2.8t + s \cdot 0.75) \cdot (0.16 + s \cdot 0.09)$ across $s \in [0, 5]$ cylinder vertebra nodes to achieve organic whip/serpentine momentum without skeletal skinning.
 - **Usage:** Provides lightweight, zero-rigging procedural living creature ambient animations running at 60 FPS with zero bundle overhead.
 
+### Poly Haven "Jacaranda Tree" (Showcase 51 textured species, ADR 0059)
+
+- **File:** `apps/showcases/51/assets/jacaranda_LOD0..3.glb`, `jacaranda_albedo_0.jpg` (branches), `_1.jpg` (trunk), `_2.png` (leaves, diffuse + separate leaf alpha merged to RGBA), `jacaranda.species.json`; per-file checksums in `apps/showcases/51/assets/MANIFEST.json`. Loaded via showcase 51 `?tree=jacaranda`.
+- **Authors/Gurus:** Rico Cilliers (scan/model), Rob Tuytel (guidance) — [polyhaven.com/a/jacaranda_tree](https://polyhaven.com/a/jacaranda_tree).
+- **License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/) (Poly Haven, all assets CC0); attribution optional, credited here.
+- **Conversion notes:** source = 1k glTF (3.86 M tris: branches 1.23 M, trunk 230 k, leaf cards 2.40 M in 116 k islands) baked by the local tool `.agents/scripts/local/veg-tree-bake.ts` (backed up with the originals): leaf-card islands only thinned by a stable hash (kept cards scaled by `sqrt(0.2/keep)`, cap 8; never simplified), small twig islands (< 150 tris) thinned unscaled, limbs + trunk simplified with meshoptimizer `Permissive`; COLOR_0 rewritten to white + foliage mask. Chain LOD0..3 = 140 789 / 41 632 / 13 294 / 3 989 tris.
+- **Originals duty (ADR 0058):** originals + bake tool on Google Drive `Small-World-Machine/small-world-machine/apps/showcases/51/raw/polyhaven/jacaranda_tree/` (+ `.agents/scripts/local/veg-tree-bake.ts`), sha256 in that folder's `MANIFEST.txt`; local staging `apps/showcases/51/raw/` is git-ignored.
+
 ### Kenney CC0 Vegetation Kit (Showcase 51, ADR 0059 P0 Baseline)
 
 - **File:** `apps/showcases/51/assets/*.glb` (21 files, 218 KB total; full per-file manifest + checksums: `apps/showcases/51/assets/MANIFEST.json`), usage contract for the scene: `apps/showcases/51/assets/README.md`. License texts shipped: `LICENSE-kenney-nature-kit.txt`, `LICENSE-kenney-foliage-sprites.txt`.

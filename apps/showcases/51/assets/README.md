@@ -100,6 +100,16 @@ organic/high-poly assets (see `docs/guides/asset-pipeline.md` §6 + `docs/adr/00
 | `card_bush.glb` | 4 (2 crossed quads) | 0.60 h | bush card, cutout |
 | `leaf_pile.glb` | 2 (1 flat quad) | 0.9 × 0.9 | ground leaf litter card, cutout, nearly flat |
 
+### Textured species: Poly Haven jacaranda (`?tree=jacaranda`, CC0)
+
+| File | Content |
+|---|---|
+| `jacaranda_LOD0.glb` … `jacaranda_LOD3.glb` | 140 789 / 41 632 / 13 294 / 3 989 tris; 3 primitives in order branches, trunk, leaves |
+| `jacaranda_albedo_0.jpg` / `_1.jpg` / `_2.png` | albedo layers of the field `albedoArray` (branches, trunk, leaves RGBA cutout), 1024² |
+| `jacaranda.species.json` | per-primitive albedo file, foliage mask, cutout flag (primitive order = import part order) |
+
+Provenance + bake: `REFERENCES.md` ("Poly Haven Jacaranda Tree"); originals on Drive (ADR 0058).
+
 ## 4. Scatter guidance for the baseline (P0)
 
 - Dominant population per ADR 0059 step 0 = ground cover (grass + flowers + debris cards). Budget per prototype:
