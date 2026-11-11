@@ -15,6 +15,8 @@ import {
   StandardMaterial,
   ToneMappingMode,
   Vector3D,
+  defineShowcaseParams,
+  readShowcaseParams,
 } from "@small-world-machine/engine";
 import type { BloomElement, EngineOptions, ToneMappingElement } from "@small-world-machine/engine";
 import { Hud, TONE_MODES, toneModeName } from "./Hud.js";
@@ -53,6 +55,15 @@ declare global {
  * WebGL2 outputs are directly comparable for the disabled-tone-mapping parity contract; the HUD/T
  * key re-enables it interactively.
  */
+/** URL parameters (`?help` prints them). */
+const PARAMS = defineShowcaseParams({
+  tone: {
+    type: "bool",
+    default: true,
+    doc: "post tone mapping (off = native disable for parity checks)",
+  },
+});
+
 export class Showcase extends AbstractShowcase {
   private _labRoot?: Object3D;
   private _key?: DirectionalLight;
@@ -212,7 +223,7 @@ export class Showcase extends AbstractShowcase {
     // post pass then falls back to the tier-identical DEFAULT curve, which the readout still
     // classifies as "NONE" (element state) while the rendered curve stays comparable across tiers.
     if (bloom) bloom.enabled = false;
-    if (tone && new URLSearchParams(window.location.search).get("tone") === "off") {
+    if (tone && !readShowcaseParams(PARAMS).values.tone) {
       tone.enabled = false;
     }
     this._tone = tone;

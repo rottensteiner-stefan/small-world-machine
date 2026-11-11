@@ -1211,7 +1211,7 @@ export class Showcase extends AbstractShowcase {
       }
     }
 
-    // Automated measurement sequence (`?frames=` / `?measure`), showcase-44 pattern.
+    // Automated measurement sequence (`?frames=`).
     if (this._state === "idle" || this._state === "done") return;
 
     if (this._state === "warmup") {

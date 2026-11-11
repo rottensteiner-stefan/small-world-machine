@@ -13,6 +13,8 @@ import {
   Sphere,
   StandardMaterial,
   Vector3D,
+  defineShowcaseParams,
+  readShowcaseParams,
 } from "@small-world-machine/engine";
 import { Hud, type ProbeMode, type ShadowLabSlider, type ViewPreset } from "./Hud.js";
 
@@ -46,13 +48,24 @@ declare global {
   }
 }
 
-/** Query-float with fallback; a MISSING or non-finite value resolves to the sane default. */
-function parseNum(p: URLSearchParams, key: string, fallback: number): number {
-  const v = p.get(key);
-  if (v === null) return fallback;
-  const raw = Number(v);
-  return Number.isFinite(raw) ? raw : fallback;
-}
+/** URL parameters (`?help` prints them). */
+const PARAMS = defineShowcaseParams({
+  probe: { type: "enum", values: ["box", "pole", "steps"], default: "box", doc: "probe stage" },
+  softness: { type: "number?", min: 0, doc: "PCSS softness (default 1, steps 2.5)" },
+  maxRadius: { type: "number?", min: 1, doc: "max PCF radius (default 4, steps 10)" },
+  shadowMode: { type: "enum", values: ["pcss", "evsm"], default: "pcss", doc: "shadow technique" },
+  camX: { type: "number?", doc: "camera X (default per probe rig)" },
+  camY: { type: "number?", doc: "camera Y (default per probe rig)" },
+  camZ: { type: "number?", doc: "camera Z (default per probe rig)" },
+  lookX: { type: "number?", doc: "look-at X (default per probe rig)" },
+  lookY: { type: "number?", doc: "look-at Y (default per probe rig)" },
+  lookZ: { type: "number?", doc: "look-at Z (default per probe rig)" },
+  lightX: { type: "number?", doc: "sun direction X (default per probe rig)" },
+  lightY: { type: "number?", doc: "sun direction Y (default per probe rig)" },
+  lightZ: { type: "number?", doc: "sun direction Z (default per probe rig)" },
+  sunI: { type: "number?", doc: "sun intensity (default per probe rig)" },
+  amb: { type: "number?", doc: "ambient intensity (default per probe rig)" },
+});
 
 /**
  * Showcase 42 — Soft Shadow Lab (PCSS softness gate + interactive tuning HUD).
@@ -94,15 +107,11 @@ export class Showcase extends AbstractShowcase {
   private _lastPointer: { x: number; y: number } = { x: 0, y: 0 };
 
   constructor() {
-    const p = new URLSearchParams(window.location.search);
-    const rawProbe = p.get("probe");
-    const probe: ProbeMode = rawProbe === "pole" ? "pole" : rawProbe === "steps" ? "steps" : "box";
-    const rawSoftParam = p.get("softness");
-    const rawSoft = rawSoftParam !== null ? Number(rawSoftParam) : NaN;
-    const softness = Number.isFinite(rawSoft) ? Math.max(0, rawSoft) : probe === "steps" ? 2.5 : 1;
-    const maxRadius = Math.max(1, Number(p.get("maxRadius")) || (probe === "steps" ? 10 : 4));
-    const shadowMode: ShadowMode =
-      p.get("shadowMode") === ShadowMode.EVSM ? ShadowMode.EVSM : ShadowMode.PCSS;
+    const v = readShowcaseParams(PARAMS).values;
+    const probe: ProbeMode = v.probe;
+    const softness = v.softness ?? (probe === "steps" ? 2.5 : 1);
+    const maxRadius = v.maxRadius ?? (probe === "steps" ? 10 : 4);
+    const shadowMode: ShadowMode = v.shadowMode === "evsm" ? ShadowMode.EVSM : ShadowMode.PCSS;
     super({
       quality: {
         shadowMode,
@@ -124,23 +133,23 @@ export class Showcase extends AbstractShowcase {
     const dSunI = usePoleRig ? 5 : 2.6;
     const dAmb = usePoleRig ? 0.08 : 0.12;
     this._camPos = {
-      x: parseNum(p, "camX", dCam[0]),
-      y: parseNum(p, "camY", dCam[1]),
-      z: parseNum(p, "camZ", dCam[2]),
+      x: v.camX ?? dCam[0],
+      y: v.camY ?? dCam[1],
+      z: v.camZ ?? dCam[2],
     };
     this._camLook = {
-      x: parseNum(p, "lookX", dLook[0]),
-      y: parseNum(p, "lookY", dLook[1]),
-      z: parseNum(p, "lookZ", dLook[2]),
+      x: v.lookX ?? dLook[0],
+      y: v.lookY ?? dLook[1],
+      z: v.lookZ ?? dLook[2],
     };
     this._lightDir = {
-      x: parseNum(p, "lightX", dLight[0]),
-      y: parseNum(p, "lightY", dLight[1]),
-      z: parseNum(p, "lightZ", dLight[2]),
+      x: v.lightX ?? dLight[0],
+      y: v.lightY ?? dLight[1],
+      z: v.lightZ ?? dLight[2],
     };
     this._syncSunAnglesFromVector(this._lightDir.x, this._lightDir.y, this._lightDir.z);
-    this._sunIntensity = parseNum(p, "sunI", dSunI);
-    this._ambientIntensity = parseNum(p, "amb", dAmb);
+    this._sunIntensity = v.sunI ?? dSunI;
+    this._ambientIntensity = v.amb ?? dAmb;
     this.defaultCameraController = "none";
     this.defaultFov = MathUtils.degToRad(52);
   }

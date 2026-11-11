@@ -8,6 +8,8 @@ import {
   Sphere,
   StandardMaterial,
   Vector3D,
+  defineShowcaseParams,
+  readShowcaseParams,
 } from "@small-world-machine/engine";
 import type { EngineOptions } from "@small-world-machine/engine";
 import type { PatternMode } from "./Hud.js";
@@ -71,6 +73,18 @@ interface MutableDrawContext {
   drawElementsInstanced: (...args: number[]) => void;
 }
 
+/** URL parameters (`?help` prints them). */
+const PARAMS = defineShowcaseParams({
+  inst: { type: "bool", default: true, doc: "auto-instancing (off = comparison baseline)" },
+  count: { type: "int", default: DEFAULT_COUNT, min: 1, doc: "object count" },
+  frames: {
+    type: "int",
+    default: DEFAULT_FRAMES,
+    min: 1,
+    doc: "automated run: sampled frames, then MEASURE",
+  },
+});
+
 export class Showcase extends AbstractShowcase {
   private _instancingOn: boolean;
   private _count: number;
@@ -107,11 +121,9 @@ export class Showcase extends AbstractShowcase {
   private _material: StandardMaterial | undefined;
 
   constructor(options: EngineOptions = {}) {
-    const params = new URLSearchParams(window.location.search);
-    const instancingOn = params.get("inst") !== "off";
-    const count = Number(params.get("count"));
-    const frames = Number(params.get("frames"));
-    const isAutomated = params.has("frames") || params.has("measure");
+    const p = readShowcaseParams(PARAMS);
+    const instancingOn = p.values.inst;
+    const isAutomated = p.has("frames");
     super({
       canvasId: "SmallWorldMachine",
       fullscreen: true,
@@ -128,9 +140,8 @@ export class Showcase extends AbstractShowcase {
     this._isAutomatedTest = isAutomated;
     this.defaultCameraController = isAutomated ? "none" : "orbit";
     this._instancingOn = instancingOn;
-    this._count = Number.isFinite(count) && count > 0 ? Math.floor(count) : DEFAULT_COUNT;
-    this._targetFrames =
-      Number.isFinite(frames) && frames > 0 ? Math.floor(frames) : DEFAULT_FRAMES;
+    this._count = p.values.count;
+    this._targetFrames = p.values.frames;
   }
 
   protected override onCanvasRecreated(): void {
@@ -220,7 +231,7 @@ export class Showcase extends AbstractShowcase {
     }
     this._installDrawCounter(gl);
 
-    // The #__measure overlay and its MEASURE sequence belong to the headless rig (?frames / ?measure);
+    // The #__measure overlay and its MEASURE sequence belong to the headless rig (?frames);
     // the interactive lab shows its live numbers in the HUD instead.
     if (this._isAutomatedTest) {
       this._state = "warmup";

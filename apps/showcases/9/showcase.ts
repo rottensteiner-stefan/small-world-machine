@@ -18,6 +18,8 @@ import {
   TextureFilter,
   ToneMappingMode,
   Vector3D,
+  defineShowcaseParams,
+  readShowcaseParams,
 } from "@small-world-machine/engine";
 
 /** Placement of the player character model inside the 1x1 collision box. */
@@ -84,6 +86,11 @@ interface StaticBlockAABB {
 /**
  * Showcase 9: A classic 2.5D Jump & Run with pure code physics and collision!
  */
+/** URL parameters (`?help` prints them). */
+const PARAMS = defineShowcaseParams({
+  spawnX: { type: "int", default: 2, min: 1, doc: "spawn/respawn column (level-design testing)" },
+});
+
 export class Showcase extends AbstractShowcase {
   protected override defaultCameraController = "none" as const;
 
@@ -115,8 +122,7 @@ export class Showcase extends AbstractShowcase {
   // Procedural Animation & Ducking State
   private _isDucking: boolean = false;
   /** Spawn/respawn column; `?spawnX=<column>` starts mid-level (level-design testing). */
-  private readonly _spawnX: number =
-    Number(new URLSearchParams(window.location.search).get("spawnX")) || 2;
+  private readonly _spawnX: number = readShowcaseParams(PARAMS).values.spawnX;
   /** Ducked at speed: momentum carries the player until it decays to crawl speed. */
   private _isSliding: boolean = false;
   private _duckAmount: number = 0;
