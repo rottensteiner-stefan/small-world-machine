@@ -5,6 +5,7 @@
 ### "The universe is under no obligation to make sense to you." - Neil deGrasse Tyson
 
 - **Features:**
+  - _`vegetation-extras` — `GroundCoverSystem`, `GrassVariety`, `buildGrassClumpGeometry`, `MEADOW_GRASS_VARIETIES`:_ the multi-variety camera-centred ground cover (UE "Landscape Grass Type" model: one ring + field per variety, travel-gated rebuilds, shared wind + canopy, no shadow casting) moved out of showcase 51 into the package; showcase 51 −350 lines, identical output (296 594 clumps).
   - _Showcase 51 — forest floor + auto look (ADR 0059 step 6a):_ the canopy coverage darkens the ground via its `aoMap`; `?look=auto` (interactive default) blends the meadow look into the forest look by the canopy above the camera.
   - _Showcase 51 look-dev (ADR 0059 step 6a):_ `?look=meadow|forest|off` applies the `vegetation-extras` foliage presets and `?hbao=0|1` the engine HBAO; interactive default meadow + HBAO, automated runs unchanged (post off).
   - _Canopy ambient occlusion for instance fields (ADR 0059 step 6a):_ new `vegetation-extras` `buildCanopyCoverage` + `InstanceFieldSystemSetup.canopy` darken the ambient term below the tree crowns (coverage map, crown-height fade); showcase 51 applies it to trees and ground cover (`?canopy=0` disables).

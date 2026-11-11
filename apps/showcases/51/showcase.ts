@@ -55,7 +55,8 @@ import {
   applyFoliageLook,
   buildCanopyCoverage,
   FOLIAGE_LOOKS,
-  GroundCover,
+  GroundCoverSystem,
+  MEADOW_GRASS_VARIETIES,
   WindField,
   type FoliageLook,
 } from "@small-world-machine/vegetation-extras";
@@ -202,133 +203,11 @@ const FIELD_LOD_PROXY_STRIDE: readonly number[] = [3, 2];
 const FIELD_CELL_SIZE = 12;
 /** Leaf transmission tint of the field lane (sRGB, same value as showcase 52's leaves). */
 const FIELD_LEAF_BACKLIGHT: readonly [number, number, number] = [0.55, 0.72, 0.2];
-// ADR 0059 step 1b, source B: camera-centred ground-cover rings. One cover instance is a CLUMP of
-// REAL curved blades (no alpha texture, merged-geometry field path). Draw segments are
-// (view x bucket), so one field draws ONE geometry per bucket: every species gets its own ring +
-// field (own seed, density share, height, wind height); records stay one per clump.
-type Rgb = readonly [number, number, number];
-interface CoverSpecies {
-  readonly id: string;
-  /** Share of `?coverDensity=` (clumps per m²) this species takes. */
-  readonly share: number;
-  /** Blades per clump in the near / far bucket (far = prefix of the same layout). */
-  readonly blades: number;
-  readonly bladesFar: number;
-  /** Clump footprint radius, blade height (m, scale 1), blade half-width (m). */
-  readonly radius: number;
-  readonly height: number;
-  readonly width: number;
-  /** Outward lean as a fraction of the blade height. */
-  readonly lean: readonly [number, number];
-  /** sRGB blade colour at the base / tip. */
-  readonly base: Rgb;
-  readonly tip: Rgb;
-  /** Optional flower heads on the first `blades` stems (petal fan + centre). */
-  readonly flower?: {
-    readonly petals: number;
-    readonly size: number;
-    readonly petal: Rgb;
-    readonly centre: Rgb;
-  };
-}
-const COVER_SPECIES: readonly CoverSpecies[] = [
-  {
-    id: "fine",
-    share: 0.32,
-    blades: 16,
-    bladesFar: 6,
-    radius: 0.2,
-    height: 0.42,
-    width: 0.01,
-    lean: [0.15, 0.45],
-    base: [0.3, 0.47, 0.22],
-    tip: [0.42, 0.56, 0.26],
-  },
-  {
-    id: "meadow",
-    share: 0.26,
-    blades: 12,
-    bladesFar: 5,
-    radius: 0.25,
-    height: 0.78,
-    width: 0.012,
-    lean: [0.2, 0.5],
-    base: [0.28, 0.45, 0.2],
-    tip: [0.46, 0.6, 0.28],
-  },
-  {
-    id: "broad",
-    share: 0.14,
-    blades: 7,
-    bladesFar: 4,
-    radius: 0.2,
-    height: 0.45,
-    width: 0.03,
-    lean: [0.3, 0.65],
-    base: [0.24, 0.42, 0.18],
-    tip: [0.36, 0.55, 0.24],
-  },
-  {
-    id: "straw",
-    share: 0.14,
-    blades: 10,
-    bladesFar: 4,
-    radius: 0.22,
-    height: 0.62,
-    width: 0.011,
-    lean: [0.2, 0.55],
-    base: [0.42, 0.44, 0.24],
-    tip: [0.72, 0.66, 0.4],
-  },
-  {
-    id: "tuft",
-    share: 0.14,
-    blades: 22,
-    bladesFar: 7,
-    radius: 0.11,
-    height: 0.26,
-    width: 0.009,
-    lean: [0.1, 0.35],
-    base: [0.2, 0.36, 0.15],
-    tip: [0.32, 0.48, 0.2],
-  },
-  {
-    id: "buttercup",
-    share: 0.05,
-    blades: 3,
-    bladesFar: 3,
-    radius: 0.14,
-    height: 0.62,
-    width: 0.005,
-    lean: [0.05, 0.25],
-    base: [0.25, 0.42, 0.18],
-    tip: [0.32, 0.5, 0.22],
-    flower: { petals: 5, size: 0.05, petal: [0.96, 0.82, 0.12], centre: [0.85, 0.65, 0.1] },
-  },
-  {
-    id: "daisy",
-    share: 0.04,
-    blades: 3,
-    bladesFar: 3,
-    radius: 0.14,
-    height: 0.5,
-    width: 0.005,
-    lean: [0.05, 0.25],
-    base: [0.25, 0.42, 0.18],
-    tip: [0.32, 0.5, 0.22],
-    flower: { petals: 10, size: 0.045, petal: [0.95, 0.95, 0.92], centre: [0.95, 0.8, 0.15] },
-  },
-];
-/** Projected-size threshold (px) between the far (sparse) and near (full) clump bucket. */
-const COVER_CLUMP_LOD_PX = 14;
-/** Camera travel (m) that triggers a ground-cover ring rebuild + record upload. */
-const COVER_UPDATE_STEP = 0.5;
+// ADR 0059 step 1b: ground cover = `vegetation-extras` `GroundCoverSystem` over
+// `MEADOW_GRASS_VARIETIES` (UE "Landscape Grass Type" model).
 /** Ground-cover ring default outer radius (m) and clump density (clumps per m²). */
 const COVER_DEFAULT_RADIUS = 160;
 const COVER_DEFAULT_DENSITY = 5;
-/** Foliage-mask alpha of blade base / tip (leaf-backlight transmission weighting). */
-const COVER_ALPHA_BASE = 1;
-const COVER_ALPHA_TIP = 0.85;
 /** Ground-cover tile edge (m); the ring's per-tile hash cells. */
 const COVER_TILE_CELL = 5;
 /** Forest-floor plane edge (m); the canopy AO map covers it at 1 texel per metre. */
@@ -647,11 +526,7 @@ export class Showcase extends AbstractShowcase {
   // ADR 0059 step 1b, source B: camera-centred procedural ground-cover ring (CPU-generated records
   // fed into a SECOND `InstanceFieldSystem` via `uploadRecords()`). `?cover=0` disables it;
   // `?coverDensity=` / `?coverRadius=` retune the generator. WebGPU field lane only.
-  private _coverLayers: { cover: GroundCover; system: InstanceFieldSystem; windHeight: number }[] =
-    [];
-  /** Ring centre of the last cover rebuild; +Infinity forces the first rebuild. */
-  private _coverLastX = Number.POSITIVE_INFINITY;
-  private _coverLastZ = Number.POSITIVE_INFINITY;
+  private _groundCover: GroundCoverSystem | undefined = undefined;
   /** `?cover=0` disables the ground-cover ring; default on (field lane only). */
   private readonly _coverEnabled: boolean;
   /** `?canopy=0` disables the canopy ambient occlusion (P6a A/B); default on (field lane). */
@@ -1576,232 +1451,34 @@ export class Showcase extends AbstractShowcase {
     if (this._mode !== "field" || this._fieldSystem === undefined) return false;
     if (!(this.renderer instanceof WebGPURenderer)) return false;
     if (!this._coverEnabled) return false;
-    const renderer = this.renderer;
-    const cell = COVER_TILE_CELL;
-    COVER_SPECIES.forEach((spec, index) => {
-      const cover = new GroundCover({
-        radius: this._coverRadius,
-        cellSize: cell,
-        bladesPerTile: Math.max(1, Math.round(this._coverDensity * spec.share * cell * cell)),
-        seed: this._seed + 1000 + index * 97,
-        fullDensityRadius: Math.min(140, this._coverRadius * 0.4),
-        minDensity: 0.3,
-        cameraClearRadius: 2,
-        scaleRange: [0.7, 1.6],
-      });
-      const far = this._buildCoverGeometry(spec, index, spec.bladesFar);
-      const near = this._buildCoverGeometry(spec, index, spec.blades);
-      const prototype: PrototypeDescriptor = {
-        id: `s51-cover-${spec.id}`,
-        // Clump extent: blade height (incl. lean) and footprint radius, both at scale 1.
-        boundingRadius: Math.hypot(spec.height, spec.radius + spec.height * spec.lean[1]),
-        lodBuckets: [
-          {
-            name: "L1-far",
-            lodIndex: 1,
-            minProjectedSize: FIELD_CULL_PIXEL_SIZE + 1,
-            maxProjectedSize: COVER_CLUMP_LOD_PX,
-            geometrySlot: 0,
-          },
-          {
-            name: "L0-near",
-            lodIndex: 0,
-            minProjectedSize: COVER_CLUMP_LOD_PX + 1,
-            maxProjectedSize: 1e6,
-            geometrySlot: 1,
-          },
-        ],
-        materialSlot: 0,
-        maxInstances: cover.capacity,
-      };
-      const system = new InstanceFieldSystem(null, {
-        instanceRecords: cover.records,
-        prototypes: [prototype],
-        geometryTable: [[far, near]],
-        options: {
-          cellSize: cell,
-          maxInstances: cover.capacity,
-          cullPixelSize: FIELD_CULL_PIXEL_SIZE,
-          // Main view only: ground cover never lands in the shadow-map passes.
-          maxViews: 1,
-        },
-        ...(this._canopy ? { canopy: this._canopy } : {}),
-      });
-      try {
-        renderer.registerInstanceField(system);
-      } catch (error) {
-        system.dispose();
-        console.info(
-          `[Showcase51] ground cover "${spec.id}" unavailable ` +
-            `(${error instanceof Error ? error.message : String(error)}) — skipped`,
-        );
-        return;
-      }
-      this._coverLayers.push({ cover, system, windHeight: spec.height });
+    const cover = new GroundCoverSystem({
+      varieties: MEADOW_GRASS_VARIETIES,
+      density: this._coverDensity,
+      radius: this._coverRadius,
+      seed: this._seed + 1000,
+      cellSize: COVER_TILE_CELL,
+      cullPixelSize: FIELD_CULL_PIXEL_SIZE,
+      ...(this._canopy ? { canopy: this._canopy } : {}),
     });
+    const registered = cover.register(this.renderer);
+    if (registered === 0) {
+      cover.dispose();
+      console.info("[Showcase51] ground cover unavailable on this device — disabled");
+      return false;
+    }
+    this._groundCover = cover;
     this._applyWindState();
     console.info(
-      `[Showcase51] ground cover: ${this._coverLayers.length} species, radius=${this._coverRadius} m, ` +
-        `density=${this._coverDensity} clumps/m², wind=${this._windLive ? "on" : "off"} (shared block)`,
+      `[Showcase51] ground cover: ${registered}/${MEADOW_GRASS_VARIETIES.length} varieties, ` +
+        `radius=${this._coverRadius} m, density=${this._coverDensity} clumps/m², ` +
+        `wind=${this._windLive ? "on" : "off"} (shared block)`,
     );
-    return this._coverLayers.length > 0;
-  }
-
-  /** Builds one clump of `spec`: `bladeCount` curved, tapered blades inside `spec.radius` (5 verts /
-   *  3 tris each: base pair, bent mid pair, tip), plus a petal fan + centre on each stem tip for
-   *  flower species. The layout comes from a per-species FIXED-seed hash, so the far bucket is an
-   *  exact prefix of the near bucket (surviving blades never move at the switch). Normals are
-   *  world-up (ground-hugging shading); the colour stream carries linear albedo + foliage mask. */
-  private _buildCoverGeometry(
-    spec: CoverSpecies,
-    speciesIndex: number,
-    bladeCount: number,
-  ): GeometryDataInterface {
-    const toLinear = (c: Rgb): number[] => [
-      GltfMaterialParser.engineSRGBToLinear(c[0]),
-      GltfMaterialParser.engineSRGBToLinear(c[1]),
-      GltfMaterialParser.engineSRGBToLinear(c[2]),
-    ];
-    const base = toLinear(spec.base);
-    const tip = toLinear(spec.tip);
-    const flower = spec.flower;
-    const petal = flower ? toLinear(flower.petal) : tip;
-    const centre = flower ? toLinear(flower.centre) : tip;
-    let state = (0x51c0ffee + speciesIndex * 0x9e3779b9) | 0;
-    const rand = (): number => {
-      state = (state + 0x6d2b79f5) | 0;
-      let t = Math.imul(state ^ (state >>> 15), 1 | state);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-    const headVerts = flower ? flower.petals * 2 + 1 : 0;
-    const vertsPerBlade = 5 + headVerts;
-    const trisPerBlade = 3 + (flower ? flower.petals : 0);
-    const vertexCount = bladeCount * vertsPerBlade;
-    const vertices = new Float32Array(vertexCount * 3);
-    const normals = new Float32Array(vertexCount * 3);
-    const uvs = new Float32Array(vertexCount * 2);
-    const colors = new Float32Array(vertexCount * 4);
-    const indices = new Uint32Array(bladeCount * trisPerBlade * 3);
-    let io = 0;
-    const put = (
-      v: number,
-      x: number,
-      y: number,
-      z: number,
-      rgb: readonly number[],
-      mask: number,
-    ): void => {
-      vertices.set([x, y, z], v * 3);
-      normals[v * 3 + 1] = 1;
-      colors.set([rgb[0]!, rgb[1]!, rgb[2]!, mask], v * 4);
-    };
-    for (let b = 0; b < bladeCount; b++) {
-      const r = spec.radius * Math.sqrt(rand());
-      const a = rand() * Math.PI * 2;
-      const cx = Math.cos(a) * r;
-      const cz = Math.sin(a) * r;
-      const facing = rand() * Math.PI;
-      const fx = Math.cos(facing);
-      const fz = Math.sin(facing);
-      const h = spec.height * (0.6 + 0.4 * rand());
-      const lean = spec.lean[0] + (spec.lean[1] - spec.lean[0]) * rand();
-      const lx = (r > 1e-4 ? cx / r : 1) * lean * h;
-      const lz = (r > 1e-4 ? cz / r : 0) * lean * h;
-      const w = spec.width * (0.8 + 0.4 * rand());
-      const hue = 0.85 + 0.3 * rand();
-      const first = b * vertsPerBlade;
-      const rings: readonly (readonly number[])[] = [
-        [cx, 0, cz, w, 0],
-        [cx + lx * 0.3, h * 0.55, cz + lz * 0.3, w * 0.75, 0.55],
-        [cx + lx, h, cz + lz, 0, 1],
-      ];
-      let v = first;
-      for (let ring = 0; ring < 3; ring++) {
-        const [x, y, z, hw, t] = rings[ring]!;
-        const count = ring === 2 ? 1 : 2;
-        for (let side = 0; side < count; side++) {
-          const sgn = count === 1 ? 0 : side === 0 ? -1 : 1;
-          const rgb = [0, 1, 2].map((c) => (base[c]! + (tip[c]! - base[c]!) * t!) * hue);
-          put(
-            v,
-            x! + fx * hw! * sgn,
-            y!,
-            z! + fz * hw! * sgn,
-            rgb,
-            COVER_ALPHA_BASE + (COVER_ALPHA_TIP - COVER_ALPHA_BASE) * t!,
-          );
-          uvs.set([0.5 + 0.5 * sgn, t!], v * 2);
-          v++;
-        }
-      }
-      indices.set(
-        [
-          first,
-          first + 1,
-          first + 2,
-          first + 1,
-          first + 3,
-          first + 2,
-          first + 2,
-          first + 3,
-          first + 4,
-        ],
-        io,
-      );
-      io += 9;
-      if (flower) {
-        // Petal fan around the stem tip, the disc tilted 35-65 deg up toward a random azimuth
-        // (a level disc is edge-on from eye height and vanishes). Field draws are double-sided.
-        const hx = cx + lx;
-        const hy = h;
-        const hz = cz + lz;
-        const az = rand() * Math.PI * 2;
-        const tilt = 0.6 + 0.5 * rand();
-        // Disc basis: e1 = azimuth direction tilted up, e2 = horizontal perpendicular.
-        const e1x = Math.cos(az) * Math.cos(tilt);
-        const e1y = Math.sin(tilt);
-        const e1z = Math.sin(az) * Math.cos(tilt);
-        const e2x = -Math.sin(az);
-        const e2z = Math.cos(az);
-        const discPut = (vi: number, u: number, w2: number): void =>
-          put(
-            vi,
-            hx + (u * e1x + w2 * e2x) * flower.size,
-            hy + u * e1y * flower.size,
-            hz + (u * e1z + w2 * e2z) * flower.size,
-            petal,
-            0.5,
-          );
-        const c0 = first + 5;
-        put(c0, hx, hy, hz, centre, 0.5);
-        const spin = rand() * Math.PI * 2;
-        for (let k = 0; k < flower.petals; k++) {
-          const a0 = spin + (k / flower.petals) * Math.PI * 2;
-          const a1 = a0 + ((Math.PI * 2) / flower.petals) * 0.75;
-          const p0 = c0 + 1 + k * 2;
-          discPut(p0, Math.cos(a0), Math.sin(a0));
-          discPut(p0 + 1, Math.cos(a1), Math.sin(a1));
-          indices.set([c0, p0, p0 + 1], io);
-          io += 3;
-        }
-      }
-    }
-    return {
-      vertices,
-      indices,
-      normals,
-      uvs,
-      colors,
-      getBoundingVolume: (): BoundingVolume => BoundingBox.fromVertices(vertices),
-    };
+    return true;
   }
 
   /** Live clump records over all ground-cover species. */
   private _coverInstanceCount(): number {
-    let n = 0;
-    for (const layer of this._coverLayers) n += layer.system.instanceCount;
-    return n;
+    return this._groundCover?.instanceCount ?? 0;
   }
 
   /** Applies the CURRENT live wind state to the registered field system (`setWind` patch, hard
@@ -1816,12 +1493,7 @@ export class Showcase extends AbstractShowcase {
     );
     // Ground-cover ring shares the SAME wind block (gust waves must move trees and grass
     // coherently) with its own per-field blade-height profile; the live `F` toggle gates both.
-    for (const layer of this._coverLayers) {
-      layer.system.setWind(
-        this._windLive ? field.uniforms : undefined,
-        this._windLive ? layer.windHeight : 0,
-      );
-    }
+    this._groundCover?.setWind(this._windLive ? field.uniforms : undefined);
   }
 
   /**
@@ -2122,13 +1794,8 @@ export class Showcase extends AbstractShowcase {
     this._fieldSystem.dispose();
     this._fieldSystem = undefined;
     // Ground-cover ring (second field system) releases with the same fan-out.
-    for (const layer of this._coverLayers) {
-      if (this.renderer instanceof WebGPURenderer) {
-        this.renderer.unregisterInstanceField(layer.system);
-      }
-      layer.system.dispose();
-    }
-    this._coverLayers = [];
+    this._groundCover?.dispose();
+    this._groundCover = undefined;
   }
 
   /**
@@ -2207,32 +1874,9 @@ export class Showcase extends AbstractShowcase {
       this.camera.updateViewMatrix();
     }
 
-    // ADR 0059 step 1b, source B: regenerate the camera-centred ground-cover ring from the CURRENT
-    // camera position and feed the new records into the second field system via the engine's
-    // zero-GC `uploadRecords()` live path. This must run BEFORE the renderer's field pass records
-    // the frame's cull/draws (showcase `update()` precedes the render), so the GPU lane always
-    // consumes the current ring bytes. Stable per-tile hashes keep blades glued to the world —
-    // the ring follows the camera, blades never swim under it. Only the WRITTEN prefix is fed
-    // (`subarray` is a zero-copy view sized to the live count; a full-capacity upload would draw
-    // the zero tail as a 67k-blob at the origin).
-    // Re-generated only after the camera moved `COVER_UPDATE_STEP` m: blade positions are
-    // world-glued, only the distance thinning drifts, so a still/slow camera skips the CPU ring
-    // rebuild + record upload (the dominant CPU cost at high clump density).
-    if (this._coverLayers.length > 0) {
-      const cx = this.camera.position.x;
-      const cz = this.camera.position.z;
-      const mx = cx - this._coverLastX;
-      const mz = cz - this._coverLastZ;
-      if (mx * mx + mz * mz >= COVER_UPDATE_STEP * COVER_UPDATE_STEP) {
-        this._coverLastX = cx;
-        this._coverLastZ = cz;
-        for (const layer of this._coverLayers) {
-          layer.cover.update(cx, cz);
-          layer.system.setPopulationData(layer.cover.records.subarray(0, layer.cover.count * 4));
-          layer.system.uploadRecords();
-        }
-      }
-    }
+    // ADR 0059 step 1b: ground-cover rings follow the camera BEFORE the renderer records the
+    // frame's field culls; `GroundCoverSystem` rebuilds only after `updateStep` m of travel.
+    this._groundCover?.update(this.camera.position.x, this.camera.position.z);
 
     // `?truth=1` ground-truth mode: signal readiness once after the first full frame. Today the
     // scene IS the truth (no LOD/culling optimizations exist); P1+ must gate this flag on the
@@ -2354,7 +1998,7 @@ export class Showcase extends AbstractShowcase {
       // Live wind state (URL knob or HUD toggle) — the honest isolation flag for cost tables.
       result.wind = this._windField !== undefined && this._windLive ? 1 : 0;
       // Ground-cover ring (ADR 0059 step 1b, source B): live record count + ring knobs.
-      if (this._coverLayers.length > 0) {
+      if (this._groundCover !== undefined) {
         result.coverInstances = this._coverInstanceCount();
         result.coverRadius = this._coverRadius;
         result.coverDensity = this._coverDensity;

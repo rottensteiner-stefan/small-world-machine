@@ -3,3 +3,5 @@ export * from "./wind/windShaders.js";
 export * from "./look/FoliageLook.js";
 export * from "./groundcover/GroundCover.js";
 export * from "./canopy/CanopyCoverage.js";
+export * from "./groundcover/GrassClump.js";
+export * from "./groundcover/GroundCoverSystem.js";

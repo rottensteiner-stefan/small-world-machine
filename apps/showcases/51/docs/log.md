@@ -545,3 +545,11 @@ overlap (throughput baseline, not placement art) — accepted.
   SUNNY_MEADOW to FOREST_SHADE; tone curve fixed to the meadow curve (no jump, no grey AgX sky).
 - Real M4 Pro forest interior: ground visibly darker under crowns, `_lookBlend` 1 inside the forest,
   0 errors. The auto blend is subtle by design.
+
+## 2026-11-11 — Extraction step 1: ground cover -> `vegetation-extras`
+
+- `GrassVariety` + `buildGrassClumpGeometry` + `MEADOW_GRASS_VARIETIES` (GrassClump.ts) and
+  `GroundCoverSystem` (one ring + field per variety, `register/update/setWind/dispose`) now live
+  in the package (UE "Landscape Grass Type" model). Showcase 51: 2424 -> 2075 lines, same clump
+  count (296 594) on the real M4 Pro, 0 errors. Tests: prefix LOD, flower topology, footprint,
+  travel gate, skip-on-register-failure.
