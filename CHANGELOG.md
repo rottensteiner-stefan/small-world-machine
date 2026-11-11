@@ -5,6 +5,7 @@
 ### "The universe is under no obligation to make sense to you." - Neil deGrasse Tyson
 
 - **Features:**
+  - _Showcase 51 — comparison lanes and cull probes removed:_ `?mode` (autoinst/instanced/field), `?popcount` and `?cullref` are gone; WebGPU always runs the field lane, GL tiers fall back to auto-instancing with the light Kenney set (the species is field-lane only — loading it on GL tiers would have meant 1850 x 141 k-tri scene objects). `veg-bench` default cell label `field`. showcase.ts now 1215 lines (2424 at the start).
   - _`ShowcaseParams` rolled out to showcases 9, 10, 42, 44, 47, 50:_ every URL knob now comes from one typed `PARAMS` table per showcase (`?help` lists them). Parameter names normalized: `?measure` removed in favour of `?frames` (showcases 44/51), `?rendererType` is the only renderer key (process docs said `?renderer=`, which the engine never read).
   - _`ShowcaseParams` (engine `core/showcase`):_ declarative, typed URL parameters for showcases — `defineShowcaseParams` / `readShowcaseParams` (bool/int/number/enum/string, clamping, warning + fallback on invalid values, separate interactive vs. automated defaults keyed on `frames`/`qa`/`__golden`/`truth`) and a self-generated `?help` table (Godot exported properties / lil-gui model). Showcase 51 is the first consumer.
   - _`vegetation-extras` — `createTreeField`, `lodBucketsFromMaxima`, `buildPopulationCanopy`, `forestBreeze`, `geometryBoundingRadius`, `geometryHeight`:_ one-call tree field (UE HISM screen-size LOD model).

@@ -5,8 +5,6 @@ import type {
   HbaoElement,
   TextureArray,
   BoundingVolume,
-  FieldVisibleSets,
-  InstancePose,
   LodTransitionMode,
   FieldCanopy,
   ShowcaseParamsResult,
@@ -25,8 +23,6 @@ import {
   FogMode,
   GltfLoader,
   Ground,
-  InstancedMesh,
-  Matrix4,
   Object3D,
   PostProcessingEffectType,
   RendererType,
@@ -39,9 +35,6 @@ import {
   BoundingBox,
   LOD_TRANSITION_MODES,
   packInstancePose,
-  projectedDiameterPixels,
-  sphereVisibleConservative,
-  unpackInstancePose,
 } from "@small-world-machine/engine";
 import {
   applyFoliageLook,
@@ -77,13 +70,6 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
 /** URL parameters (`?help` prints this table). Interactive sessions (no `frames`/`qa`/`__golden`/
  *  `truth`) get the showcase scene, automated runs the reproducible measurement defaults. */
 const PARAMS = defineShowcaseParams({
-  mode: {
-    type: "enum",
-    values: ["autoinst", "instanced", "field"],
-    default: "autoinst",
-    interactive: "field",
-    doc: "scatter lane (field = GPU instance field, WebGPU)",
-  },
   tree: {
     type: "string",
     default: "none",
@@ -149,8 +135,6 @@ const PARAMS = defineShowcaseParams({
     min: 10,
     doc: "teleport period in sampled frames (occlusion=c)",
   },
-  popcount: { type: "bool", default: false, doc: "GPU survivor counts in MEASURE" },
-  cullref: { type: "bool", default: false, doc: "CPU reference cull verdict in MEASURE" },
 });
 
 const WARMUP_FRAMES = 30;
@@ -235,7 +219,7 @@ interface MeasureResult {
   gpuMs?: number;
   /** Per-pass GPU ms (only with `?gputimings=1` on WebGPU, `GpuTimingSlot` names). */
   gpuPassesMs?: Record<string, number>;
-  /** field lane diagnostics (`?mode=field`): GPU-managed instance count. */
+  /** Field lane: GPU-managed instance count. */
   fieldInstances?: number;
   /** field lane: active occlusion mode (`a`|`b`|`c`). */
   fieldOcclusionMode?: string;
@@ -254,13 +238,6 @@ interface MeasureResult {
   /** ground-cover ring: active ring radius (m) and blade density (blades per m²). */
   coverRadius?: number;
   coverDensity?: number;
-  /** dual-lane audit (`?popcount=1`): last resolved GPU survivor counts + optional CPU reference verdict (`?cullref=1`). */
-  populationAudit?: {
-    gpuPerBucket: { viewIndex: number; bucketIndex: number; count: number }[];
-    cpuTotal?: number;
-    cullrefVerdict?: string;
-    teleports: number;
-  };
 }
 
 /** Live adapter of the engine's opt-in WebGPU timing ring (`renderer.gpuTimings`, / Bob) to the HUD's guarded view ({@link HudGpuTimings}, / Charly). */
@@ -366,7 +343,8 @@ const GOLDEN_WIDTH = 1280;
 const GOLDEN_HEIGHT = 720;
 
 export class Showcase extends AbstractShowcase {
-  private readonly _mode: "autoinst" | "instanced" | "field";
+  /** `field` (WebGPU instance field) or the `autoinst` fallback on GL tiers. */
+  private _mode: "autoinst" | "field" = "field";
   private readonly _targetCount: number;
   private readonly _seed: number;
   private readonly _targetFrames: number;
@@ -410,14 +388,9 @@ export class Showcase extends AbstractShowcase {
   // field lane (ADR 0059 step 1, WebGPU only). See `_buildFieldLane`.
   private _fieldSystem: InstanceFieldSystem | undefined = undefined;
   private readonly _occlusionMode: "a" | "b" | "c";
-  private readonly _popcount: boolean;
-  private readonly _cullref: boolean;
   private readonly _cutEvery: number;
   private _teleportCount = 0;
   private _cutAccum = 0;
-  private _fieldRecords: Float32Array | undefined = undefined;
-  private _fieldBoundingRadius = 0;
-  private _fieldCullPixelSize = 0;
   /** Field-lane geometry-chain source of the LAST built field (`proxy` = stride-decimation default, `reallod` = real GLB chain of a `?tree=` species). */
   private _lodSource: "proxy" | "reallod" = "proxy";
   /** Per-geometry triangle counts of the real-LOD chain (bucket order L3/L2/L1/L0), when active. */
@@ -463,15 +436,6 @@ export class Showcase extends AbstractShowcase {
   private readonly _look: "auto" | "meadow" | "forest" | "off";
   /** `?hbao=0|1`: screen-space AO for contact darkening. Interactive default on, automated off. */
   private readonly _hbao: boolean;
-  /** Latest optically-probed cull frame (kept 1: the dual-lane audit samples the LAST frame). */
-  private _lastProbeSet: FieldVisibleSets | undefined = undefined;
-  private _lastCpuTotal = 0;
-  /** CPU-side conservative cull verdict of the last probed frame (`?cullref=1`). */
-  private _lastCullVerdict = "";
-  /** Reused pose-decode scratch (no per-record allocation in the reference cull). */
-  private readonly _poseOut: InstancePose = { yawRadians: 0, uniformScale: 0 };
-  private readonly _poseBits = new Float32Array(1);
-  private readonly _poseWord = new Uint32Array(this._poseBits.buffer);
 
   constructor(options: EngineOptions = {}) {
     super(options);
@@ -480,10 +444,7 @@ export class Showcase extends AbstractShowcase {
     const p = readShowcaseParams(PARAMS);
     const v = p.values;
     this._params = p;
-    this._mode = v.mode;
     this._occlusionMode = v.occlusion;
-    this._popcount = v.popcount;
-    this._cullref = v.cullref;
     this._cutEvery = v.cutEvery;
     this._targetCount = v.n;
     this._seed = v.seed;
@@ -557,6 +518,8 @@ export class Showcase extends AbstractShowcase {
     this.setInitialCamera(camPos, camTarget);
 
     // Tree lane: asset prototype when Frank's files exist, else the procedural placeholder.
+    // GL tiers have no field lane: decide before loading, so they get the light Kenney set.
+    if (!(this.renderer instanceof WebGPURenderer)) this._mode = "autoinst";
     this._prototype = await this._loadPrototype();
     // `?tree=` species (field lane only): preload the REAL `<stem>_LOD<n>.glb` siblings ASYNC right after the prototype (`_buildFieldLane` stays sync — the load happens before it).
     const realLods =
@@ -565,19 +528,12 @@ export class Showcase extends AbstractShowcase {
         : null;
     const instances = scatterTrees(this._targetCount, this._seed);
     this._treeCount = instances.length;
-    if (this._mode === "autoinst") {
-      this._buildAutoInstances(instances, this._prototype);
-    } else if (this._mode === "field") {
-      // WebGPU-only lane; a non-WebGPU `?mode=field` falls back to `autoinst` (documented).
-      if (this._buildFieldLane(instances, this._prototype, realLods)) {
-        this._treeCount = instances.length;
-        // ADR 0059 step 1b: second camera-centred field for the ground-cover ring (optional, `?cover=0` to disable; non-fatal when the device cannot host a second field).
-        this._buildGroundCover();
-      } else {
-        this._buildAutoInstances(instances, this._prototype);
-      }
+    // Field lane on WebGPU; GL tiers (no compute) fall back to scene-graph auto-instancing.
+    if (this._buildFieldLane(instances, this._prototype, realLods)) {
+      this._buildGroundCover();
     } else {
-      this._buildInstanced(instances, this._prototype);
+      this._mode = "autoinst";
+      this._buildAutoInstances(instances, this._prototype);
     }
 
     if (this._isAutomated) {
@@ -807,34 +763,6 @@ export class Showcase extends AbstractShowcase {
     }
   }
 
-  /** `instanced` lane: one `InstancedMesh` per part, one draw each for the whole population. */
-  private _buildInstanced(instances: readonly ScatterInstance[], proto: TreePrototype): void {
-    const matrix = new Matrix4();
-    const position = new Vector3D();
-    const rotation = new Vector3D();
-    const scale = new Vector3D();
-    for (const part of proto.parts) {
-      const mesh = new InstancedMesh(
-        `TreeInstances_${part.name}`,
-        part.geometry,
-        part.material,
-        instances.length,
-      );
-      for (let i = 0; i < instances.length; i++) {
-        const inst = instances[i]!;
-        position.set(inst.x, part.offsetY * inst.scale, inst.z);
-        rotation.set(0, inst.yaw, 0);
-        scale.set(inst.scale, inst.scale, inst.scale);
-        matrix.compose(position, rotation, scale);
-        mesh.setMatrixAt(i, matrix);
-      }
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      this.scene.add(mesh);
-      this._forestNodes.push(mesh);
-    }
-  }
-
   // ------------------------------------------------------------------------- field lane (ADR 0059 step 1, WebGPU only) -------------------------------------------------------------------------
 
   /** Registers the deterministic population as an `InstanceFieldSystem` on the WebGPU renderer: one combined single-mesh tree prototype (V1 constraint: one geometry per bucket, one material), records packed with the frozen `packInstancePose` (16 B each), GPU cull / occlusion / pulled indirect draw driven entirely by the renderer's own coordinator. */
@@ -844,7 +772,7 @@ export class Showcase extends AbstractShowcase {
     realLods: readonly GeometryDataInterface[] | null | undefined = undefined,
   ): boolean {
     if (!(this.renderer instanceof WebGPURenderer)) {
-      console.info("[Showcase51] ?mode=field needs WebGPU — falling back to the autoinst lane");
+      console.info("[Showcase51] field lane needs WebGPU — falling back to auto-instancing");
       return false;
     }
     if (instances.length === 0) {
@@ -862,9 +790,6 @@ export class Showcase extends AbstractShowcase {
           merged,
         ];
     const records = this._buildFieldRecords(instances);
-    this._fieldRecords = records;
-    this._fieldBoundingRadius = radius;
-    this._fieldCullPixelSize = FIELD_CULL_PIXEL_SIZE;
     const windHeight = geometryHeight(merged);
     this._canopy = this._canopyEnabled
       ? buildPopulationCanopy(records, merged, { ambientFloor: CANOPY_AMBIENT_FLOOR })
@@ -893,10 +818,8 @@ export class Showcase extends AbstractShowcase {
     } catch (error) {
       system.dispose();
       this._fieldSystem = undefined;
-      this._fieldRecords = undefined;
-      this._fieldBoundingRadius = 0;
       console.info(
-        `[Showcase51] ?mode=field unavailable on this device ` +
+        `[Showcase51] field lane unavailable on this device ` +
           `(${error instanceof Error ? error.message : String(error)}) — falling back to autoinst`,
       );
       return false;
@@ -919,16 +842,10 @@ export class Showcase extends AbstractShowcase {
       this._realLodTris = [];
     }
 
-    if (this._popcount || this._cullref) {
-      system.installCullProbe({
-        onCullFrame: (sets: FieldVisibleSets): void => this._onFieldCullFrame(sets),
-      });
-    }
     console.info(
       `[Showcase51] field lane: ${instances.length} records, cullRadius=${radius.toFixed(2)} m, ` +
         `occlusion=${this._occlusionMode}` +
         `, wind=${this._windField !== undefined && this._windLive ? "on" : "off"}` +
-        `${this._popcount ? ", popcount" : ""}${this._cullref ? ", cullref" : ""}` +
         `, LOD mode=${this._lodMode}` +
         `, source=${this._lodSource}`,
     );
@@ -1037,7 +954,7 @@ export class Showcase extends AbstractShowcase {
     this._fieldSystem?.setLodTransitionMode(mode);
   }
 
-  /** Merges the tree's parts into ONE indexed geometry with the per-part `offsetY` baked into the vertex positions (tree base stays at y=0), so the pull shader's pose yaw/scale reproduces the autoinst/instanced lane transforms exactly. */
+  /** Merges the tree's parts into ONE indexed geometry with the per-part `offsetY` baked into the vertex positions (tree base stays at y=0), so the pull shader's pose yaw/scale reproduces the autoinst transforms exactly. */
   private _mergeTreeGeometry(proto: TreePrototype): GeometryDataInterface {
     return mergeVegetationParts(proto.parts, this._species);
   }
@@ -1059,62 +976,6 @@ export class Showcase extends AbstractShowcase {
       records[i * 4 + 3] = poseF[0]!;
     }
     return records;
-  }
-
-  /** Probe callback: keeps the latest optical cull frame and, on `?cullref=1`, runs the pure-CPU conservative reference against the EXACT mirror planes of the same frame. */
-  private _onFieldCullFrame(sets: FieldVisibleSets): void {
-    this._lastProbeSet = sets;
-    if (this._cullref) {
-      this._runCullReference(sets);
-    }
-  }
-
-  /** CPU-side dual-lane reference (frozen core math only, `?cullref=1`): tests every record's conservative sphere against the GPU frame's EXACT mirror frustum planes and mirrors the sub-pixel size gate with `projectedDiameterPixels` (camera eye = the showcase camera, so the distance is exact for this frame). */
-  private _runCullReference(sets: FieldVisibleSets): void {
-    const params0 = sets.params[0];
-    const records = this._fieldRecords;
-    if (params0 === undefined || records === undefined) return;
-    const planes = params0.frustumPlanes;
-    const cam = this.camera.position;
-    const viewport = params0.viewportHeightPx;
-    const fov = params0.fovRadiansY;
-    let frustumKeep = 0;
-    let sizeDropped = 0;
-    let expectedKeep = 0;
-    for (let i = 0; i < records.length; i += 4) {
-      const cx = records[i]!;
-      const cy = records[i + 1]!;
-      const cz = records[i + 2]!;
-      this._poseBits[0] = records[i + 3]!;
-      unpackInstancePose(this._poseWord[0]!, this._poseOut);
-      const radius = this._fieldBoundingRadius * this._poseOut.uniformScale;
-      if (!sphereVisibleConservative(planes, [cx, cy, cz], radius)) continue;
-      frustumKeep++;
-      const dx = cx - cam.x;
-      const dy = cy - cam.y;
-      const dz = cz - cam.z;
-      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (projectedDiameterPixels(radius, dist, viewport, fov) < this._fieldCullPixelSize) {
-        sizeDropped++;
-        continue;
-      }
-      expectedKeep++;
-    }
-    const gpu = this._segmentCount(sets, 0, 0);
-    const unexplained = Math.max(0, expectedKeep - gpu);
-    this._lastCpuTotal = expectedKeep;
-    this._lastCullVerdict =
-      unexplained === 0
-        ? `ok(frustum=${frustumKeep},size=${sizeDropped},cpu=${expectedKeep},gpu=${gpu})`
-        : `unexplained=${unexplained}(frustum=${frustumKeep},size=${sizeDropped},cpu=${expectedKeep},gpu=${gpu},occlusion=${this._occlusionMode !== "a" ? "on" : "off"})`;
-  }
-
-  /** Reads ONE segment's survivor count from a probed frame (`-1` when the segment is absent). */
-  private _segmentCount(sets: FieldVisibleSets, viewIndex: number, bucketIndex: number): number {
-    for (const seg of sets.segmentCounts) {
-      if (seg.viewIndex === viewIndex && seg.bucketIndex === bucketIndex) return seg.count;
-    }
-    return -1;
   }
 
   /** Releases the registered field system (renderer list + GPU state) on destroy. */
@@ -1244,8 +1105,7 @@ export class Showcase extends AbstractShowcase {
       fps: deltaTime > 0 ? 1 / deltaTime : -1,
       cpuMs: this.lastCpuTimeMs,
       gpuMs: -1,
-      // Field lane + `?cullref=1`: expose the CPU-reference visible total (probe-driven); all other lanes keep the honest -1 (no per-frame visibility source in baseline mode).
-      visible: this._mode === "field" && this._cullref ? this._lastCpuTotal : -1,
+      visible: -1,
       triangles: -1,
       // Live wind state (field lane; false on every other lane / windless geometry).
       wind: this._windField !== undefined && this._windLive,
@@ -1294,7 +1154,7 @@ export class Showcase extends AbstractShowcase {
     if (this._frameTimesMs.length > 0) {
       result.frameTimesMs = this._frameTimesMs;
     }
-    // field-lane diagnostics (`?mode=field`): instance count, occlusion mode, teleports and — when the opt-in dual-lane audit is on — the last RESOLVED probe frame's survivor counts plus the CPU-reference verdict.
+    // Field-lane diagnostics: instance count, occlusion mode, teleports.
     if (this._mode === "field" && this._fieldSystem !== undefined) {
       result.fieldInstances = this._fieldSystem.instanceCount;
       result.fieldOcclusionMode = this._occlusionMode;
@@ -1314,27 +1174,6 @@ export class Showcase extends AbstractShowcase {
       }
       if (this._teleportCount > 0) {
         result.fieldTeleports = this._teleportCount;
-      }
-      if ((this._popcount || this._cullref) && this._lastProbeSet !== undefined) {
-        const gpuPerBucket: { viewIndex: number; bucketIndex: number; count: number }[] = [];
-        for (const seg of this._lastProbeSet.segmentCounts) {
-          gpuPerBucket.push({
-            viewIndex: seg.viewIndex,
-            bucketIndex: seg.bucketIndex,
-            count: seg.count,
-          });
-        }
-        const audit: {
-          gpuPerBucket: { viewIndex: number; bucketIndex: number; count: number }[];
-          cpuTotal?: number;
-          cullrefVerdict?: string;
-          teleports: number;
-        } = { gpuPerBucket, teleports: this._teleportCount };
-        if (this._cullref) {
-          audit.cpuTotal = this._lastCpuTotal;
-          audit.cullrefVerdict = this._lastCullVerdict;
-        }
-        result.populationAudit = audit;
       }
     }
     // `?gputimings=1` diagnostic: attach the last resolved timing frame of the ring (if any).

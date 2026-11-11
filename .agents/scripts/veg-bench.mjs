@@ -8,7 +8,7 @@
 //
 // URL contract the showcase must implement (defined here, P0-4; Erin integrates):
 //   ?rendererType=WEB_GL2|WEB_GL1|WEB_GPU   engine backend
-//   ?mode=autoinst|instanced|field          scatter baseline / mode
+//   (showcase 51 always runs the field lane on WebGPU, auto-instancing on GL tiers)
 //   ?n=<count>                              requested instance count
 //   ?path=walk|flight|aerial                seeded camera path (apps/showcases/51/CameraPaths.ts)
 //   ?frames=<N>                             sampled frames after warm-up (MEASURE contract)
@@ -25,7 +25,7 @@
 //                                      contract -- e.g. 44 -- for smoke tests)
 //   --renderer webgl2|webgl1|webgpu  (default webgl2)
 //   --n <count>                      requested instance count (default 25000)
-//   --modes <a,b>                    scatter modes (default autoinst,instanced)
+//   --modes <a,b>                    cell labels (default field; showcase 51 has no lane switch)
 //   --paths <a,b>                    camera paths (default walk,flight,aerial)
 //   --frames <N>                     sampled frames per cell (default 240)
 //   --out <file>                     OUTPUT JSON (required)
@@ -47,7 +47,7 @@
 // Example:
 //   npm run build:showcases   # coordinator; veg-bench only needs dist/
 //   node .agents/scripts/veg-bench.mjs --renderer webgl2 --n 10000 --frames 180 \
-//       --modes autoinst,instanced --paths walk --out .agents/scratches/veg/gl2-n10k.json
+//       --paths walk --out .agents/scratches/veg/gl2-n10k.json
 //
 // Exit: 0 when every requested cell produced a valid MEASURE; 1 otherwise (missing cells, console
 // errors, unreadable page). Ground-truth FLIP results never fail the run -- they are informational.
@@ -85,7 +85,7 @@ function parseArgs(argv) {
     renderer: "webgl2",
     showcase: 51,
     n: 25000,
-    modes: ["autoinst", "instanced"],
+    modes: ["field"],
     paths: ["walk", "flight", "aerial"],
     frames: 240,
     out: null,

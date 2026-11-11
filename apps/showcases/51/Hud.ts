@@ -31,7 +31,7 @@ export interface HudGpuTimings {
 export interface VegHudStats {
   /** `?n=` value (requested instance count). */
   readonly instances: number;
-  /** Scatter mode label (e.g. `autoinst` | `instanced` | `field`). */
+  /** Scatter lane: `field` (WebGPU) or the `autoinst` GL fallback. */
   readonly mode: string;
   /** Frames per second, smoothed. */
   readonly fps: number;
