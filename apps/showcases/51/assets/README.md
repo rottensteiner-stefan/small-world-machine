@@ -108,7 +108,8 @@ organic/high-poly assets (see `docs/guides/asset-pipeline.md` §6 + `docs/adr/00
 | `jacaranda_albedo_0.jpg` / `_1.jpg` / `_2.png` | albedo layers of the field `albedoArray` (branches, trunk, leaves RGBA cutout), 1024² |
 | `jacaranda.species.json` | per-primitive albedo file, foliage mask, cutout flag (primitive order = import part order) |
 
-Provenance + bake: `REFERENCES.md` ("Poly Haven Jacaranda Tree"); originals on Drive (ADR 0058).
+Provenance: `REFERENCES.md` ("Poly Haven Jacaranda Tree"); originals on Drive (ADR 0058).
+Rebake: `node packages/tools/src/cli/swm.mjs species <raw>/jacaranda_tree_1k.gltf <out> --stem jacaranda` (needs the leaf `_diff_1k.png` + `_alpha_1k.png`).
 
 ## 4. Scatter guidance for the baseline (P0)
 
