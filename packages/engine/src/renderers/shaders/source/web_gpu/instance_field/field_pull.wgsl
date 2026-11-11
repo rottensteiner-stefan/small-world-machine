@@ -57,6 +57,22 @@
 // fallback is bound when the field authors no array (`fieldInfo.albedoLayerCount == 0`).
 @group(2) @binding(12) var u_fieldAlbedoArray: texture_2d_array<f32>;
 @group(2) @binding(13) var fieldAlbedoSampler: sampler;
+// Canopy coverage map (r8unorm, ADR 0059 step 6a); 1x1 zero when the field authors no canopy.
+@group(2) @binding(14) var u_fieldCanopy: texture_2d<f32>;
+
+// Ambient visibility under the tree crowns, 1 = open sky. Coverage from the top-down map, faded
+// out from 35 % of the crown height to the crown top so upper leaves stay sky-lit. The grid is
+// coarse (metres), so a level-0 sample with bilinear filtering is enough (no derivatives).
+fn fieldCanopyAmbient(wp: vec3f) -> f32 {
+    if (fieldInfo.canopyParams.z < 0.5) {
+        return 1.0;
+    }
+    let uv = (wp.xz - fieldInfo.canopyRect.xy) * fieldInfo.canopyRect.zw;
+    let cover = textureSampleLevel(u_fieldCanopy, fieldAlphaSampler, uv, 0.0).r;
+    let h = fieldInfo.canopyParams.y;
+    let below = 1.0 - smoothstep(0.35 * h, h, wp.y);
+    return mix(1.0, fieldInfo.canopyParams.x, cover * below);
+}
 
 struct FieldVertOut {
     // `@invariant`: the depth pre-pass and the colour pass must rasterize bit-identical depth --
@@ -392,6 +408,7 @@ fn fieldColorShade(i: FieldVertOut, frontFacing: bool) -> vec4f {
     if (dot(ambient, ambient) < 1e-6) {
         ambient = global.ambientColor.rgb;
     }
+    ambient *= fieldCanopyAmbient(i.wp);
     var lit = albedo * sun * (dotNL * shadow) + ambient * albedo;
     if (backlightOn) {
         let lobe = max(dot(-N, L), 0.0) + pow(max(dot(-V, L), 0.0), 6.0);

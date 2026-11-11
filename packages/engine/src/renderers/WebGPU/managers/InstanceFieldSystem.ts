@@ -83,8 +83,8 @@ const FIELD_SEGMENTS = MAX_INDIRECT_VIEWS * MAX_LOD_BUCKETS;
 /** Per-(view x bucket) cull/param block size in bytes (see the class doc / WGSL struct). */
 const CULL_PARAM_BLOCK_BYTES = 256;
 
-/** `FieldInfo` uniform size (one vec4-aligned 128 B struct, see instance_field_structs.wgsl). */
-const FIELD_INFO_BYTES = 128;
+/** `FieldInfo` uniform size (vec4-aligned 160 B struct, see instance_field_structs.wgsl). */
+const FIELD_INFO_BYTES = 160;
 
 /** Word offsets inside a cull-param block (bytes, little-endian, see the WGSL `CullParams`). */
 const CULL_OFFSET_VIEWPORT_HEIGHT_PX = 96;
@@ -121,6 +121,10 @@ const INFO_OFFSET_WIND_HEIGHT = 48;
 /** Word 52 -- previously a struct pad; now the P2 `lodDitherMode` (0 = dither, != 0 = hard C). */
 const INFO_OFFSET_LOD_DITHER_MODE = 52;
 const INFO_OFFSET_WIND = 64;
+/** `FieldInfo.canopyRect` (originX, originZ, 1/sizeX, 1/sizeZ) and `canopyParams`
+ *  (ambientFloor, height, enabled, 0), appended after the wind block (ADR 0059 step 6a). */
+const INFO_OFFSET_CANOPY_RECT = 128;
+const INFO_OFFSET_CANOPY_PARAMS = 144;
 
 /** Compute workgroup width of the cull / reset entries (`@workgroup_size(64)`). */
 const CULL_WORKGROUP_SIZE = 64;
@@ -230,6 +234,13 @@ export interface InstanceFieldSystemSetup {
    */
   albedoArray?: TextureArray;
   /**
+   * @domain Canopy ambient occlusion (ADR 0059 step 6a, candidate A): top-down coverage map of the
+   *         tree crowns (r8, row = +Z) over a world rect. Below the crowns the ambient term is
+   *         lerped toward `ambientFloor` by coverage, fading out toward `height` (crown top, m) so
+   *         upper leaves stay sky-lit. Absent = no canopy darkening.
+   */
+  canopy?: FieldCanopy;
+  /**
    * @domain Leaf backlight tint (linear rgb; absent or black = off), ADR 0060 semantics. Scaled
    *         per vertex by the colour-stream alpha, the foliage mask (trunks 0, leaves 1).
    */
@@ -270,6 +281,22 @@ export interface InstanceFieldSystemSetup {
 
 /** Vertex streams bound per bucket: slot 1 normal, 2 uv, 3 colour (slot 0 = the cached position).
  * Streams the geometry lacks are completed once at setup (`owned`, destroyed on dispose). */
+/** Canopy coverage input of a field (`InstanceFieldSystemSetup.canopy`). */
+export interface FieldCanopy {
+  /** @domain Coverage bytes [0, 255], row-major, `width * height` (row = +Z, column = +X). */
+  readonly data: Uint8Array;
+  readonly width: number;
+  readonly height: number;
+  /** @domain World X / Z of the map's minimum corner and its cell edge (m). */
+  readonly originX: number;
+  readonly originZ: number;
+  readonly cellSize: number;
+  /** @domain Ambient fraction kept under full coverage at the ground, [0, 1]. */
+  readonly ambientFloor: number;
+  /** @domain Crown-top height (m); occlusion fades from 35 % of it to zero at it. */
+  readonly canopyHeight: number;
+}
+
 interface FieldBucketStreams {
   normal: GPUBuffer;
   uv: GPUBuffer;
@@ -350,6 +377,8 @@ interface FieldGpuState {
   albedoSampler: GPUSampler;
   /** 1x1x1 white `2d-array` fallback bound at binding 12 when no `albedoArray` is authored. */
   albedoFallback: GPUTexture;
+  /** Canopy coverage (r8unorm) at binding 14; 1x1 zero when no canopy is authored. */
+  canopyTexture: GPUTexture;
 }
 
 /** Pipeline slot of each draw variant (`_getDrawPipeline`). */
@@ -450,6 +479,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   private readonly _alphaTest: number;
   private readonly _alphaMap: Texture | undefined;
   private readonly _albedoArray: TextureArray | undefined;
+  private readonly _canopy: FieldCanopy | undefined;
   /** `FieldInfo.backlight`: linear tint rgb + transmission-shadow offset (w = 0 -> off). */
   private readonly _backlight: Float32Array = new Float32Array(4);
   /** Crown-top height at scale 1 (metres); 0 disables wind (`FieldInfo.windHeight`, fail-closed).
@@ -657,6 +687,11 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     this._alphaTest = Math.max(0, setup.alphaTest ?? 0);
     this._alphaMap = setup.alphaMap;
     this._albedoArray = setup.albedoArray;
+    const canopy = setup.canopy;
+    if (canopy !== undefined && canopy.data.length !== canopy.width * canopy.height) {
+      throw new Error("[InstanceFieldSystem] canopy.data length must equal width * height.");
+    }
+    this._canopy = canopy;
     const tint = setup.backlight;
     if (tint && (tint[0] > 0 || tint[1] > 0 || tint[2] > 0)) {
       this._backlight[0] = tint[0];
@@ -1171,6 +1206,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       gpu.cullParams.destroy();
       gpu.fieldInfo.destroy();
       gpu.albedoFallback.destroy();
+      gpu.canopyTexture.destroy();
     }
     const st = this._probeState;
     this._probeState = undefined;
@@ -1381,6 +1417,20 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       { bytesPerRow: 4 },
       [1, 1, 1],
     );
+    const canopySrc = this._canopy;
+    const canopyW = canopySrc?.width ?? 1;
+    const canopyH = canopySrc?.height ?? 1;
+    const canopyTexture = device.createTexture({
+      size: [canopyW, canopyH, 1],
+      format: "r8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture(
+      { texture: canopyTexture },
+      canopySrc?.data ?? new Uint8Array([0]),
+      { bytesPerRow: canopyW },
+      [canopyW, canopyH, 1],
+    );
 
     const cullModule = device.createShaderModule({ code: host.fieldCullModuleSource });
     const resetPipeline = device.createComputePipeline({
@@ -1429,6 +1479,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       alphaSampler,
       this._albedoView(albedoFallback),
       albedoSampler,
+      canopyTexture.createView(),
     );
     // The alpha map is bound outside any object's material -- retain it in the renderer's
     // texture cache so a shared/reused map cannot be destroyed underneath the draw bind group
@@ -1459,6 +1510,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       alphaSampler,
       albedoSampler,
       albedoFallback,
+      canopyTexture,
     };
 
     // Static table writes (geometry words, prototype tables, per-segment bases) + population.
@@ -1576,6 +1628,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       gpu.alphaSampler,
       this._albedoView(gpu.albedoFallback),
       gpu.albedoSampler,
+      gpu.canopyTexture.createView(),
     );
     // `_cullBgByView` was cleared by the regrow path; `_rebuildCullBg` re-creates + re-caches the
     // cull group against the current pyramid handle (the `gpu.cullBg` write happens there).
@@ -1661,6 +1714,16 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     floats.set(this._backlight, INFO_OFFSET_BACKLIGHT / 4);
     floats[INFO_OFFSET_WIND_HEIGHT / 4] = this._windHeight;
     words[INFO_OFFSET_LOD_DITHER_MODE / 4] = this._lodDitherMode;
+    const canopy = this._canopy;
+    if (canopy !== undefined) {
+      floats[INFO_OFFSET_CANOPY_RECT / 4] = canopy.originX;
+      floats[INFO_OFFSET_CANOPY_RECT / 4 + 1] = canopy.originZ;
+      floats[INFO_OFFSET_CANOPY_RECT / 4 + 2] = 1 / (canopy.width * canopy.cellSize);
+      floats[INFO_OFFSET_CANOPY_RECT / 4 + 3] = 1 / (canopy.height * canopy.cellSize);
+      floats[INFO_OFFSET_CANOPY_PARAMS / 4] = Math.min(1, Math.max(0, canopy.ambientFloor));
+      floats[INFO_OFFSET_CANOPY_PARAMS / 4 + 1] = Math.max(1e-3, canopy.canopyHeight);
+      floats[INFO_OFFSET_CANOPY_PARAMS / 4 + 2] = 1;
+    }
     device.queue.writeBuffer(gpu.fieldInfo, 0, words);
   }
 
@@ -1976,6 +2039,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
           texture: { viewDimension: "2d-array" },
         },
         { binding: 13, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+        // Canopy coverage (r8unorm, sampled with the clamp/linear sampler of binding 8).
+        { binding: 14, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d" } },
         // P2 LOD-blend pages: the pull VERTEX reads the signed blend beside the visible index
         // (declared in `field_pull.wgsl`, per-consumer binding-2/3 pattern -- the slot also
         // exists in the cull layout for Bob's compute write).
@@ -2037,6 +2102,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     alphaSampler: GPUSampler,
     albedoView: GPUTextureView,
     albedoSampler: GPUSampler,
+    canopyView: GPUTextureView,
   ): GPUBindGroup {
     return device.createBindGroup({
       layout: bgl,
@@ -2053,6 +2119,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         { binding: 11, resource: { buffer: l.fieldLodBlend } },
         { binding: 12, resource: albedoView },
         { binding: 13, resource: albedoSampler },
+        { binding: 14, resource: canopyView },
       ],
     });
   }

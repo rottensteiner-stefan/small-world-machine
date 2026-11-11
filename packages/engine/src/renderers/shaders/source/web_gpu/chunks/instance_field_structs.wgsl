@@ -56,6 +56,10 @@ struct FieldInfo {
     _pad3: vec2f,
     // Per-frame shared wind block (see `SwmWind` above); rewritten every frame by the system.
     wind: SwmWind,
+    // ADR 0059 step 6a canopy ambient: world rect of the coverage map (originX, originZ,
+    // 1/sizeX, 1/sizeZ) and params (ambientFloor, canopyHeight m, enabled 0/1, unused).
+    canopyRect: vec4f,
+    canopyParams: vec4f,
 }
 
 // Per-frame, per-view dynamic-offset cull parameter block (256 B, dynamic offset per view).

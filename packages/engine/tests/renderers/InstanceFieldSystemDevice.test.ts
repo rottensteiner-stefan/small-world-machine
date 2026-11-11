@@ -3,7 +3,10 @@
 // (host: null) tests could not see: u32 param words never uploaded, page overflow, missing
 // `setPipeline`, wrong uv vertex slot, probe re-mapping while pending, per-frame bind groups.
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import type { InstanceFieldRenderHost } from "../../src/renderers/WebGPU/managers/InstanceFieldSystem.js";
+import type {
+  FieldCanopy,
+  InstanceFieldRenderHost,
+} from "../../src/renderers/WebGPU/managers/InstanceFieldSystem.js";
 import { InstanceFieldSystem } from "../../src/renderers/WebGPU/managers/InstanceFieldSystem.js";
 import {
   LOD_TRANSITION_MODES,
@@ -18,7 +21,7 @@ const PARAM_BLOCK_BYTES = 256;
 const SEGMENT_BASE_WORD = 112 / 4;
 const HZB_ENABLED_WORD = 104 / 4;
 const CULL_MODE_WORD = 116 / 4;
-const FIELD_INFO_SIZE = 128;
+const FIELD_INFO_SIZE = 160;
 const INFO_WIND_HEIGHT_FLOAT = 48 / 4;
 const INFO_WIND_FLOAT = 64 / 4;
 const INFO_LOD_DITHER_MODE_WORD = 52 / 4;
@@ -129,6 +132,7 @@ interface SetupExtras {
   materialLayers?: Float32Array;
   albedoArray?: TextureArray;
   alphaTest?: number;
+  canopy?: FieldCanopy;
 }
 
 function makeSetup(
@@ -219,6 +223,7 @@ function makeSetup(
     backlight: extras.backlight,
     albedoArray: extras.albedoArray,
     alphaTest: extras.alphaTest,
+    canopy: extras.canopy,
     windHeight: extras.windHeight,
     windUniforms: extras.windUniforms,
     lodDitherMode: extras.lodDitherMode,
@@ -368,6 +373,46 @@ describe("InstanceFieldSystem on a recording device", () => {
           Array.from(new Float32Array((w.data as Uint8Array).slice().buffer)).every((v) => v === 0),
       ),
     ).toBe(true);
+  });
+
+  it("writes the canopy rect + params into FieldInfo (disabled without a canopy)", () => {
+    const read = (extras: SetupExtras): Float32Array => {
+      const { rec } = makeSetup(4, extras);
+      const fieldInfo = rec.buffers.filter((b) => b.size === FIELD_INFO_SIZE).at(-1);
+      const info = rec.writes.find((w) => w.buffer === fieldInfo && w.offset === 0);
+      return new Float32Array((info!.data as Uint8Array).slice().buffer);
+    };
+    expect(read({})[34]).toBe(0);
+    const canopy: FieldCanopy = {
+      data: new Uint8Array(8),
+      width: 4,
+      height: 2,
+      originX: -10,
+      originZ: 5,
+      cellSize: 2,
+      ambientFloor: 0.3,
+      canopyHeight: 12,
+    };
+    const f = read({ canopy });
+    expect(Array.from(f.subarray(32, 36)).map((v) => +v.toFixed(4))).toEqual([-10, 5, 0.125, 0.25]);
+    expect(Array.from(f.subarray(36, 39)).map((v) => +v.toFixed(3))).toEqual([0.3, 12, 1]);
+  });
+
+  it("rejects a canopy whose data length does not match width * height", () => {
+    expect(() =>
+      makeSetup(4, {
+        canopy: {
+          data: new Uint8Array(3),
+          width: 2,
+          height: 2,
+          originX: 0,
+          originZ: 0,
+          cellSize: 1,
+          ambientFloor: 0.5,
+          canopyHeight: 10,
+        },
+      }),
+    ).toThrow();
   });
 
   it("keeps wind disabled by default (windHeight 0, no per-frame wind upload)", () => {

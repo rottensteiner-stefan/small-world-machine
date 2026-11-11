@@ -41,8 +41,15 @@ import type {
   LodTransitionMode,
   PrototypeDescriptor,
 } from "@small-world-machine/engine/core/InstanceField.js";
-import { InstanceFieldSystem } from "@small-world-machine/engine/renderers/WebGPU/managers/InstanceFieldSystem.js";
-import { GroundCover, WindField } from "@small-world-machine/vegetation-extras";
+import {
+  InstanceFieldSystem,
+  type FieldCanopy,
+} from "@small-world-machine/engine/renderers/WebGPU/managers/InstanceFieldSystem.js";
+import {
+  buildCanopyCoverage,
+  GroundCover,
+  WindField,
+} from "@small-world-machine/vegetation-extras";
 import { getCameraPath, type CameraPath, type PathName } from "./CameraPaths.js";
 import { Hud, hudFreeMode, type HudGpuTimings, type VegHudStats } from "./Hud.js";
 import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCapture.js";
@@ -95,6 +102,7 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  *   `?coverDensity=N`              ring clump density in clumps/m² (clamped to 8; default 5;
  *                                  14 blades per near clump)
  *   `?coverRadius=N`               ring outer radius in metres (clamped to [20, 400]; default 160)
+ *   `?canopy=0`                    disable the canopy ambient occlusion (ADR 0059 step 6a A/B)
  *   `?tree=<stem>|none`            textured species (`<stem>.species.json`, `<stem>_LOD0..3.glb`,
  *                                  albedo layers); real 4-bucket LOD chain, fail-closed to defaults.
  *                                  Interactive default `jacaranda`; `none` = Kenney set
@@ -311,6 +319,11 @@ const COVER_ALPHA_BASE = 1;
 const COVER_ALPHA_TIP = 0.85;
 /** Ground-cover tile edge (m); the ring's per-tile hash cells. */
 const COVER_TILE_CELL = 5;
+/** ADR 0059 step 6a canopy ambient: ambient kept under full cover at the ground, coverage grid
+ *  cell (m), and the share of the widest branch extent that reads as closed crown. */
+const CANOPY_AMBIENT_FLOOR = 0.3;
+const CANOPY_CELL_SIZE = 1;
+const CANOPY_CROWN_FILL = 0.8;
 /** `?tree=` species: uniform scale on top of the scatter scale (scan trees are full-size, ~19 m). */
 const SPECIES_TREE_SCALE = 0.55;
 /** `?tree=` species: cutout threshold of alpha-carrying albedo layers (leaf cards). */
@@ -622,6 +635,10 @@ export class Showcase extends AbstractShowcase {
   private _coverLastZ = Number.POSITIVE_INFINITY;
   /** `?cover=0` disables the ground-cover ring; default on (field lane only). */
   private readonly _coverEnabled: boolean;
+  /** `?canopy=0` disables the canopy ambient occlusion (P6a A/B); default on (field lane). */
+  private readonly _canopyEnabled: boolean;
+  /** Canopy coverage of the tree population, shared by the tree field and every cover field. */
+  private _canopy: FieldCanopy | undefined = undefined;
   /** `?coverDensity=` clumps per m² (clamped); default `COVER_DEFAULT_DENSITY`. */
   private readonly _coverDensity: number;
   /** `?coverRadius=` ring outer radius in metres (clamped); default `COVER_DEFAULT_RADIUS`. */
@@ -713,6 +730,7 @@ export class Showcase extends AbstractShowcase {
     // ADR 0059 step 1b: ground-cover ring knobs (field lane only; absent params stay on defaults,
     // same guard discipline as `?n=` above — `?coverDensity=` without a value is a no-op).
     this._coverEnabled = params.get("cover") !== "0";
+    this._canopyEnabled = params.get("canopy") !== "0";
     const rawDensity = Number(params.get("coverDensity"));
     this._coverDensity =
       params.has("coverDensity") && Number.isFinite(rawDensity) && rawDensity > 0
@@ -1283,6 +1301,8 @@ export class Showcase extends AbstractShowcase {
     // applied to the system via `_applyWindState()` after registration — that makes the HUD
     // `F` toggle a pure live swap with no field re-creation and no wind-pop on re-enable.
     const windHeight = this._treeMaxHeight(merged);
+    // ADR 0059 step 6a (candidate A): canopy ambient occlusion from the population's crowns.
+    this._canopy = this._canopyEnabled ? this._buildCanopy(records, merged, windHeight) : undefined;
     let windField: WindField | undefined = undefined;
     if (windHeight > 0) {
       windField = new WindField({
@@ -1312,6 +1332,7 @@ export class Showcase extends AbstractShowcase {
       prototypes: [prototype],
       geometryTable: [geometryTableRow],
       options: lodOptions,
+      ...(this._canopy ? { canopy: this._canopy } : {}),
       // Setup-level (the engine reads the mode here, not from `options`).
       lodTransitionMode: this._lodMode,
       // `?tree=` species: per-material albedo layers (layer = part ordinal via `materialLayers`).
@@ -1447,6 +1468,7 @@ export class Showcase extends AbstractShowcase {
           // Main view only: ground cover never lands in the shadow-map passes.
           maxViews: 1,
         },
+        ...(this._canopy ? { canopy: this._canopy } : {}),
       });
       try {
         renderer.registerInstanceField(system);
@@ -1814,6 +1836,35 @@ export class Showcase extends AbstractShowcase {
 
   /** Crown-top height of the merged geometry (max vertex y, base at y=0) — wind profile
    *  normalizer at scale 1. 0 only for a degenerate flat geometry (wind stays off then). */
+  /** Canopy coverage map of the tree records: crown radius = the merged tree's widest XZ extent
+   *  (scale 1), crown top = tree height x mean instance scale. */
+  private _buildCanopy(
+    records: Float32Array,
+    merged: GeometryDataInterface,
+    treeHeight: number,
+  ): FieldCanopy {
+    const v = merged.vertices;
+    let crown = 0;
+    for (let i = 0; i < v.length; i += 3) crown = Math.max(crown, Math.hypot(v[i]!, v[i + 2]!));
+    const count = records.length / 4;
+    const bits = new Uint32Array(records.buffer, records.byteOffset, records.length);
+    const pose = { yawRadians: 0, uniformScale: 0 };
+    let scaleSum = 0;
+    for (let i = 0; i < count; i++) {
+      unpackInstancePose(bits[i * 4 + 3]!, pose);
+      scaleSum += pose.uniformScale;
+    }
+    const map = buildCanopyCoverage(records, count, {
+      crownRadius: Math.max(0.5, crown * CANOPY_CROWN_FILL),
+      cellSize: CANOPY_CELL_SIZE,
+    });
+    return {
+      ...map,
+      ambientFloor: CANOPY_AMBIENT_FLOOR,
+      canopyHeight: treeHeight * (count > 0 ? scaleSum / count : 1),
+    };
+  }
+
   private _treeMaxHeight(geo: GeometryDataInterface): number {
     let maxY = 0;
     const v = geo.vertices;

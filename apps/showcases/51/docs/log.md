@@ -517,3 +517,11 @@ overlap (throughput baseline, not placement art) — accepted.
 - Real M4 Pro (jacaranda default scene, frozen poses, median of 3): walk 3.28 → 2.88 ms, flight
   4.46 → 3.08 ms, aerial 7.14 → 5.18 ms `main:opaque`. Screenshot check: no holes incl. TAA jitter
   and `?lodMode=dither`.
+
+## 2026-11-11 — P6a part 1: canopy ambient occlusion
+
+- Coverage map from the tree records (`buildCanopyCoverage`, 1 m cells, crown radius = 0.8 × widest
+  XZ extent, crown top = height × mean scale), shared by the tree field + 7 cover fields; ambient
+  floor 0.3 under full cover. `?canopy=0` = A/B.
+- Real M4 Pro forest-interior A/B (camera between trees at 1.7 m): clearly darker interior, crowns
+  stay lit; meadow shots change only near the forest edge. Cost below the DVFS noise floor.
