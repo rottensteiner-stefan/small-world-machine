@@ -535,3 +535,13 @@ overlap (throughput baseline, not placement art) — accepted.
   flecks), the meadow turns milky with it (grey AgX sky) and reads best with `meadow` — default
   `meadow` because the scene is mostly meadow + forest edge. Post cost shows as ~120 → 116 fps;
   the post pass is not part of the `main:opaque` timer.
+
+## 2026-11-11 — P6a open points: forest floor + auto look
+
+- Forest floor: the canopy coverage becomes the ground `StandardMaterial.aoMap` (canvas, 1 texel/m
+  over the 240 m plane; R channel scales ambient only) — no engine change.
+- `?look=auto` (new interactive default): coverage above the camera (faded above the crowns),
+  eased at 1.5/s, blends exposure/contrast/saturation/temperature/tint/lift/gamma/gain from
+  SUNNY_MEADOW to FOREST_SHADE; tone curve fixed to the meadow curve (no jump, no grey AgX sky).
+- Real M4 Pro forest interior: ground visibly darker under crowns, `_lookBlend` 1 inside the forest,
+  0 errors. The auto blend is subtle by design.

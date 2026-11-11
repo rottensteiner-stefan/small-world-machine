@@ -24,6 +24,7 @@ import {
   PostProcessingEffectType,
   RendererType,
   StandardMaterial,
+  Texture,
   TextureArray,
   Vector3D,
   WebGPURenderer,
@@ -56,6 +57,7 @@ import {
   FOLIAGE_LOOKS,
   GroundCover,
   WindField,
+  type FoliageLook,
 } from "@small-world-machine/vegetation-extras";
 import { getCameraPath, type CameraPath, type PathName } from "./CameraPaths.js";
 import { Hud, hudFreeMode, type HudGpuTimings, type VegHudStats } from "./Hud.js";
@@ -109,7 +111,8 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  *   `?coverDensity=N`              ring clump density in clumps/m² (clamped to 8; default 5;
  *                                  14 blades per near clump)
  *   `?coverRadius=N`               ring outer radius in metres (clamped to [20, 400]; default 160)
- *   `?look=meadow|forest|off`      foliage look preset (interactive default `meadow`, automated `off`)
+ *   `?look=auto|meadow|forest|off` foliage look; `auto` blends meadow -> forest by the canopy
+ *                                  above the camera (interactive default `auto`, automated `off`)
  *   `?hbao=0|1`                    screen-space AO (interactive default on, automated off)
  *   `?canopy=0`                    disable the canopy ambient occlusion (ADR 0059 step 6a A/B)
  *   `?tree=<stem>|none`            textured species (`<stem>.species.json`, `<stem>_LOD0..3.glb`,
@@ -328,6 +331,10 @@ const COVER_ALPHA_BASE = 1;
 const COVER_ALPHA_TIP = 0.85;
 /** Ground-cover tile edge (m); the ring's per-tile hash cells. */
 const COVER_TILE_CELL = 5;
+/** Forest-floor plane edge (m); the canopy AO map covers it at 1 texel per metre. */
+const GROUND_SIZE = 240;
+/** `?look=auto` easing rate toward the coverage at the camera (1/s). */
+const LOOK_BLEND_RATE = 1.5;
 /** Screen-space AO for grass/foliage contact (world radius m, strength). */
 const HBAO_RADIUS = 0.8;
 const HBAO_INTENSITY = 0.9;
@@ -651,6 +658,35 @@ export class Showcase extends AbstractShowcase {
   private readonly _canopyEnabled: boolean;
   /** Canopy coverage of the tree population, shared by the tree field and every cover field. */
   private _canopy: FieldCanopy | undefined = undefined;
+  /** Forest-floor material (gets the canopy as `aoMap`, ambient-only darkening). */
+  private _groundMaterial: StandardMaterial | undefined = undefined;
+  /** `?look=auto`: smoothed canopy coverage at the camera (0 = meadow look, 1 = forest look). */
+  private _lookBlend = 0;
+  private _lookBlendApplied = -1;
+  /** Reused blended look (zero allocation per frame). */
+  private readonly _blendLook: {
+    name: string;
+    toneMapping: FoliageLook["toneMapping"];
+    exposure: number;
+    contrast: number;
+    saturation: number;
+    temperature: number;
+    tint: number;
+    lift: [number, number, number];
+    gamma: [number, number, number];
+    gain: [number, number, number];
+  } = {
+    name: "auto",
+    toneMapping: FOLIAGE_LOOKS.SUNNY_MEADOW.toneMapping,
+    exposure: 1,
+    contrast: 1,
+    saturation: 1,
+    temperature: 0,
+    tint: 0,
+    lift: [0, 0, 0],
+    gamma: [1, 1, 1],
+    gain: [1, 1, 1],
+  };
   /** `?coverDensity=` clumps per m² (clamped); default `COVER_DEFAULT_DENSITY`. */
   private readonly _coverDensity: number;
   /** `?coverRadius=` ring outer radius in metres (clamped); default `COVER_DEFAULT_RADIUS`. */
@@ -668,9 +704,10 @@ export class Showcase extends AbstractShowcase {
   /** Live TAA state (`?taa=1` arms the engine `TaaElement`; default off). Sighting knob for the
    *  ADR 0059 step-2 dither modes — documented as TAA-dependent ("TAA resolves the dither"). */
   private readonly _taaLive: boolean;
-  /** `?look=meadow|forest|off`: foliage look preset (tone curve + exposure + grading, ADR 0059
-   *  step 6a look-dev). Interactive default `meadow`; automated runs default `off`. */
-  private readonly _look: "meadow" | "forest" | "off";
+  /** `?look=auto|meadow|forest|off`: foliage look (tone curve + exposure + grading, ADR 0059
+   *  step 6a look-dev). `auto` blends meadow -> forest by the canopy coverage at the camera.
+   *  Interactive default `auto`; automated runs default `off`. */
+  private readonly _look: "auto" | "meadow" | "forest" | "off";
   /** `?hbao=0|1`: screen-space AO for contact darkening. Interactive default on, automated off. */
   private readonly _hbao: boolean;
   /** Latest optically-probed cull frame (kept 1: the dual-lane audit samples the LAST frame). */
@@ -769,8 +806,9 @@ export class Showcase extends AbstractShowcase {
     this._treeStem =
       rawTree !== null && rawTree !== "none" && /^[a-z0-9_]+$/.test(rawTree) ? rawTree : undefined;
 
-    const rawLook = params.get("look") ?? (interactive ? "meadow" : "off");
-    this._look = rawLook === "meadow" || rawLook === "forest" ? rawLook : "off";
+    const rawLook = params.get("look") ?? (interactive ? "auto" : "off");
+    this._look =
+      rawLook === "auto" || rawLook === "meadow" || rawLook === "forest" ? rawLook : "off";
     this._hbao = (params.get("hbao") ?? (interactive ? "1" : "0")) === "1";
 
     const rawLodMode = params.get("lodMode");
@@ -837,8 +875,8 @@ export class Showcase extends AbstractShowcase {
 
     // Flat neutral forest floor; reproducibility over art.
     const ground = new Object3D("ForestFloor");
-    ground.geometry = new Ground({ width: 240, depth: 240 }).getGeometryData();
-    ground.material = new StandardMaterial({
+    ground.geometry = new Ground({ width: GROUND_SIZE, depth: GROUND_SIZE }).getGeometryData();
+    ground.material = this._groundMaterial = new StandardMaterial({
       color: new Color(0.16, 0.21, 0.14),
       roughness: 0.95,
       metallic: 0,
@@ -1023,7 +1061,9 @@ export class Showcase extends AbstractShowcase {
     const pp = this.renderer.postProcessing;
     if (this._look === "off" && !this._hbao) return;
     pp.enabled = true;
-    if (this._look !== "off") {
+    if (this._look === "auto") {
+      this._updateAutoLook(0);
+    } else if (this._look !== "off") {
       applyFoliageLook(
         pp,
         this._look === "meadow" ? FOLIAGE_LOOKS.SUNNY_MEADOW : FOLIAGE_LOOKS.FOREST_SHADE,
@@ -1035,6 +1075,80 @@ export class Showcase extends AbstractShowcase {
       hbao.radius = HBAO_RADIUS;
       hbao.intensity = HBAO_INTENSITY;
     }
+  }
+
+  /** Canopy coverage [0, 1] at a world XZ (nearest cell; 0 outside the map / without canopy). */
+  private _canopyCoverageAt(x: number, z: number): number {
+    const c = this._canopy;
+    if (c === undefined) return 0;
+    const cx = Math.floor((x - c.originX) / c.cellSize);
+    const cz = Math.floor((z - c.originZ) / c.cellSize);
+    if (cx < 0 || cz < 0 || cx >= c.width || cz >= c.height) return 0;
+    return c.data[cz * c.width + cx]! / 255;
+  }
+
+  /** `?look=auto`: eases the coverage above the camera (faded out above the crowns, like the
+   *  field shader) and blends the continuous look parameters meadow -> forest. The tone curve
+   *  stays the meadow one (switching curves would jump; AgX greys the open sky). Re-applies only
+   *  when the blend moved noticeably. */
+  private _updateAutoLook(deltaTime: number): void {
+    const c = this._canopy;
+    const cam = this.camera.position;
+    let target = this._canopyCoverageAt(cam.x, cam.z);
+    if (c !== undefined) {
+      const t = Math.min(1, Math.max(0, (cam.y - 0.35 * c.canopyHeight) / (0.65 * c.canopyHeight)));
+      target *= 1 - t * t * (3 - 2 * t);
+    }
+    const k = deltaTime > 0 ? Math.min(1, deltaTime * LOOK_BLEND_RATE) : 1;
+    this._lookBlend += (target - this._lookBlend) * k;
+    if (Math.abs(this._lookBlend - this._lookBlendApplied) < 0.01) return;
+    this._lookBlendApplied = this._lookBlend;
+    const a = FOLIAGE_LOOKS.SUNNY_MEADOW;
+    const b = FOLIAGE_LOOKS.FOREST_SHADE;
+    const w = this._lookBlend;
+    const L = this._blendLook;
+    const mix = (p: number, q: number): number => p + (q - p) * w;
+    L.exposure = mix(a.exposure, b.exposure);
+    L.contrast = mix(a.contrast, b.contrast);
+    L.saturation = mix(a.saturation, b.saturation);
+    L.temperature = mix(a.temperature, b.temperature);
+    L.tint = mix(a.tint, b.tint);
+    for (let i = 0; i < 3; i++) {
+      L.lift[i] = mix(a.lift[i]!, b.lift[i]!);
+      L.gamma[i] = mix(a.gamma[i]!, b.gamma[i]!);
+      L.gain[i] = mix(a.gain[i]!, b.gain[i]!);
+    }
+    applyFoliageLook(this.renderer.postProcessing, L);
+  }
+
+  /** Forest floor: the canopy coverage as the ground's `aoMap` (R channel scales its ambient
+   *  term only), one texel per metre over the `GROUND_SIZE` plane (uv v = 1 at -Z). */
+  private _applyGroundCanopy(canopy: FieldCanopy): void {
+    const material = this._groundMaterial;
+    if (material === undefined) return;
+    const size = GROUND_SIZE;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const img = ctx.createImageData(size, size);
+    const half = size / 2;
+    for (let row = 0; row < size; row++) {
+      const z = half - (row + 0.5);
+      for (let col = 0; col < size; col++) {
+        const x = -half + (col + 0.5);
+        const ao = 1 - (1 - canopy.ambientFloor) * this._canopyCoverageAt(x, z);
+        const o = (row * size + col) * 4;
+        const g = Math.round(ao * 255);
+        img.data[o] = g;
+        img.data[o + 1] = g;
+        img.data[o + 2] = g;
+        img.data[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    material.aoMap = Texture.fromCanvas(canvas);
   }
 
   private _applyTaaKnob(): void {
@@ -1345,6 +1459,7 @@ export class Showcase extends AbstractShowcase {
     const windHeight = this._treeMaxHeight(merged);
     // ADR 0059 step 6a (candidate A): canopy ambient occlusion from the population's crowns.
     this._canopy = this._canopyEnabled ? this._buildCanopy(records, merged, windHeight) : undefined;
+    if (this._canopy) this._applyGroundCanopy(this._canopy);
     let windField: WindField | undefined = undefined;
     if (windHeight > 0) {
       windField = new WindField({
@@ -2046,6 +2161,10 @@ export class Showcase extends AbstractShowcase {
   }
 
   protected override update(deltaTime: number): void {
+    // ADR 0059 step 6a: `?look=auto` follows the canopy above the camera (eased, cheap).
+    if (this._look === "auto" && this.renderer.postProcessing.enabled) {
+      this._updateAutoLook(deltaTime);
+    }
     // ADR 0059 step 1b: advance the field-lane wind field every frame (zero-GC typed-array
     // rewrite); the system forwards the block at the next main-view prepare. Other lanes stay
     // static in V1 (autoinst/instanced wind is a cross-tier material-shader change, documented).
