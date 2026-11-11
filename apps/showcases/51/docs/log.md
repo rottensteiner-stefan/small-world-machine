@@ -500,3 +500,12 @@ overlap (throughput baseline, not placement art) — accepted.
 - Originals (Poly Haven 1k glTF + bin + textures + leaf alpha) and the local bake tool backed up to
   Drive `Small-World-Machine/small-world-machine/` (new repo folder), 14/14 sha256 verified,
   `MANIFEST.txt` written; local `raw/` stays git-ignored staging.
+
+## 2026-11-11 — Jacaranda scene is the interactive default
+
+- Opening showcase 51 without parameters now shows field lane + jacaranda + 2000 trees
+  (`INTERACTIVE_TREE_STEM`, `INTERACTIVE_TREE_COUNT`). Automated runs (`frames`, `qa=1`,
+  `__golden`, `truth=1`) keep the measurement defaults (autoinst, Kenney set, 20000) so veg-bench,
+  QA and the `veg51` snapshot stay reproducible. Explicit params win; `?tree=none` = Kenney set.
+- Real Chrome check: (none) → field/jacaranda/1850; `?frames=10` → autoinst/Kenney/18363;
+  `?tree=none` → field/Kenney; `?mode=autoinst` → autoinst/Kenney; 0 console errors.

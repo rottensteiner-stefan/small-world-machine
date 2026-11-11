@@ -95,8 +95,9 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  *   `?coverDensity=N`              ring clump density in clumps/m² (clamped to 8; default 5;
  *                                  14 blades per near clump)
  *   `?coverRadius=N`               ring outer radius in metres (clamped to [20, 400]; default 160)
- *   `?tree=<stem>`                 textured species (`<stem>.species.json`, `<stem>_LOD0..3.glb`,
- *                                  albedo layers); real 4-bucket LOD chain, fail-closed to defaults
+ *   `?tree=<stem>|none`            textured species (`<stem>.species.json`, `<stem>_LOD0..3.glb`,
+ *                                  albedo layers); real 4-bucket LOD chain, fail-closed to defaults.
+ *                                  Interactive default `jacaranda`; `none` = Kenney set
  *
  * The population is deterministic: a fixed default seed drives the scatter jitter (engine
  * `mulberry32`), and nothing in the static lanes is time-dependent, so identical URLs on the
@@ -112,8 +113,10 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  * handled; the final baseline simply consumes what Frank delivers.
  *
  * URL knobs:
- *   `?mode=autoinst|instanced|field`   scatter lane (default `autoinst`; `field` = ADR 0059 P1 lane)
- *   `?n=N`                       tree budget (default 20000; clamps to [0, 2000000]; `?n=0` empties the population)
+ *   `?mode=autoinst|instanced|field`   scatter lane (interactive default `field`; automated runs
+ *                                `autoinst`; `field` = ADR 0059 P1 lane, falls back off WebGPU)
+ *   `?n=N`                       tree budget (interactive default 2000, automated 20000; clamps to
+ *                                [0, 2000000]; `?n=0` empties the population)
  *   `?seed=S`                    scatter seed (default 51; deterministic per (n, seed))
  *   `?shadows=off`               disable the sun's shadow casting (pass isolation for benches)
  *   `?frames=N`                  automated run: N sampled frames after a 30-frame warm-up,
@@ -157,6 +160,9 @@ import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCaptu
  */
 
 const DEFAULT_INSTANCE_COUNT = 20000;
+/** Interactive default scene (no automation flag): textured species + its tree count. */
+const INTERACTIVE_TREE_STEM = "jacaranda";
+const INTERACTIVE_TREE_COUNT = 2000;
 const DEFAULT_FRAMES = 240;
 const WARMUP_FRAMES = 30;
 /** S2 `?occlusion=c` teleport period in sampled frames (IF-CAMERA-CUT-HZB-SKIP live exercise). */
@@ -651,7 +657,16 @@ export class Showcase extends AbstractShowcase {
     (window as unknown as { __swm51?: Showcase }).__swm51 = this;
     const params = new URLSearchParams(window.location.search);
 
-    const mode = params.get("mode");
+    // Interactive sessions (no automation/QA/golden/truth flag) default to the showcase scene:
+    // field lane + textured jacaranda + `INTERACTIVE_TREE_COUNT` trees. Automated runs keep the
+    // measurement defaults (autoinst, Kenney set, `DEFAULT_INSTANCE_COUNT`) so benches, QA and the
+    // `veg51` golden stay reproducible. Explicit params always win; `?tree=none` = Kenney set.
+    const interactive =
+      !params.has("frames") &&
+      params.get("qa") !== "1" &&
+      !params.has("__golden") &&
+      params.get("truth") !== "1";
+    const mode = params.get("mode") ?? (interactive ? "field" : null);
     this._mode = mode === "instanced" ? "instanced" : mode === "field" ? "field" : "autoinst";
 
     // S2 field-lane knobs (ADR 0059 step 1). `?occlusion=a|b|c`, `?popcount=1`, `?cullref=1` and
@@ -669,7 +684,7 @@ export class Showcase extends AbstractShowcase {
     // frozen path), which silently breaks the default and the gate. Guard every read with
     // `params.has(...)` before coercing.
     const rawN = params.get("n");
-    let targetCount = DEFAULT_INSTANCE_COUNT;
+    let targetCount = interactive ? INTERACTIVE_TREE_COUNT : DEFAULT_INSTANCE_COUNT;
     if (rawN !== null) {
       const n = Number(rawN);
       if (Number.isFinite(n) && n >= 0) {
@@ -715,8 +730,9 @@ export class Showcase extends AbstractShowcase {
     // only assigned by `start()`); MEASURE + HUD report the live state.
     this._taaLive = params.get("taa") === "1";
 
-    const rawTree = params.get("tree");
-    this._treeStem = rawTree !== null && /^[a-z0-9_]+$/.test(rawTree) ? rawTree : undefined;
+    const rawTree = params.get("tree") ?? (interactive ? INTERACTIVE_TREE_STEM : null);
+    this._treeStem =
+      rawTree !== null && rawTree !== "none" && /^[a-z0-9_]+$/.test(rawTree) ? rawTree : undefined;
 
     const rawLodMode = params.get("lodMode");
     if (rawLodMode !== null && rawLodMode in LOD_TRANSITION_MODES) {
