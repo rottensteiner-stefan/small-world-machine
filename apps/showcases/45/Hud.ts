@@ -168,7 +168,7 @@ export class Hud {
       #fireLabReadout {
         font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 11px; line-height: 1.5;
         color: #fdba74; background: rgba(2, 6, 23, 0.75); border: 1px solid rgba(251, 146, 60, 0.25);
-        border-radius: 6px; padding: 8px 10px; margin: 4px 0 0 0; white-space: pre;
+        border-radius: 6px; padding: 8px 10px; margin: 4px 0 0 0; white-space: pre-wrap; overflow-wrap: anywhere;
       }
     `;
     document.head.appendChild(style);

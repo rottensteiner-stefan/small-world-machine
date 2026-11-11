@@ -5,6 +5,8 @@
 ### "The universe is under no obligation to make sense to you." - Neil deGrasse Tyson
 
 - **Features:**
+  - _Showcase HUD footer — CPU pressure:_ the shared `ShowcaseDrawer` perf footer shows the Compute Pressure API state (`⚙ nominal / fair / serious / critical`, colour-coded) when `PressureObserver` exists and `observe("cpu")` succeeds; one observer per drawer, disconnected on `dispose()`, hidden elsewhere. Footer line no longer wraps.
+  - _Showcase HUD readouts wrap inside their box:_ the monospace readouts of showcases 42, 44–52 used `white-space: pre` and overflowed the drawer; now `pre-wrap` + `overflow-wrap: anywhere`.
   - _Showcase 51 — ground-cover species:_ five grass clump types (fine, meadow, broad, straw, tuft) and two flowers (buttercup, daisy, tilted petal discs), one camera-centred ring + field per species (`COVER_SPECIES`).
   - _Showcase 51 — free fly from any camera path:_ `0` / HUD "fly" hands the camera from a seeded path to the 6-DOF fly controller at the current pose (no snap).
   - _Field albedo-array cutout keeps its coverage over distance:_ the layer alpha is scaled by the sampled mip level (`FIELD_ALPHA_MIP_SCALE` 0.25, Golus "Anti-aliased Alpha Test") so box-filtered mips no longer erase distant leaf cards.

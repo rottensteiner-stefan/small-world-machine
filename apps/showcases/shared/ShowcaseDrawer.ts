@@ -6,6 +6,18 @@ export interface FrameTelemetrySource {
 /**
  * Options for {@link ShowcaseDrawer}.
  */
+/** Minimal Compute Pressure API surface (not yet in the TS DOM lib). */
+interface PressureRecordLike {
+  readonly state: "nominal" | "fair" | "serious" | "critical";
+}
+interface PressureObserverLike {
+  observe(source: "cpu", options?: { sampleInterval?: number }): Promise<void>;
+  disconnect(): void;
+}
+type PressureObserverCtor = new (
+  callback: (records: readonly PressureRecordLike[]) => void,
+) => PressureObserverLike;
+
 export interface ShowcaseDrawerOptions {
   /** DOM id of the drawer element (also scopes per-showcase CSS, e.g. `#fire-lab-hud .foo`). */
   id: string;
@@ -88,6 +100,7 @@ const SHARED_STYLE = `
     display: flex;
     align-items: center;
     gap: 6px;
+    white-space: nowrap;
   }
   .swm-inspector-drawer .hud-perf-indicator {
     width: 7px;
@@ -117,6 +130,11 @@ const SHARED_STYLE = `
     color: #38bdf8;
     font-weight: 500;
   }
+  .swm-inspector-drawer .hud-perf-pressure { font-weight: 500; margin-left: auto; }
+  .swm-inspector-drawer .hud-perf-pressure.nominal { color: #22c55e; }
+  .swm-inspector-drawer .hud-perf-pressure.fair { color: #38bdf8; }
+  .swm-inspector-drawer .hud-perf-pressure.serious { color: #eab308; }
+  .swm-inspector-drawer .hud-perf-pressure.critical { color: #ef4444; }
   .swm-inspector-drawer .hud-perf-sep {
     color: rgba(148, 163, 184, 0.4);
   }
@@ -164,6 +182,8 @@ export class ShowcaseDrawer {
   private readonly _perfTime?: HTMLElement;
   private readonly _perfReserve?: HTMLElement;
   private readonly _perfBarFill?: HTMLElement;
+  /** Compute Pressure observer of this drawer (absent where the browser lacks the API). */
+  private _pressureObserver: PressureObserverLike | undefined = undefined;
 
   constructor(options: ShowcaseDrawerOptions) {
     this._toggleKeys = options.toggleKeys ?? ["KeyI", "KeyH"];
@@ -195,6 +215,7 @@ export class ShowcaseDrawer {
           <span class="hud-perf-time">-- ms</span>
           <span class="hud-perf-sep">·</span>
           <span class="hud-perf-reserve">--% Reserve</span>
+                    <span class="hud-perf-pressure" hidden title="Compute Pressure API (browser): CPU pressure incl. thermal throttling and power saving — nominal / fair / serious / critical">CPU --</span>
         </div>
         <div class="hud-perf-bar"><div class="hud-perf-bar-fill"></div></div>
       </div>`
@@ -223,6 +244,7 @@ export class ShowcaseDrawer {
       this._perfReserve = root.querySelector(".hud-perf-reserve") as HTMLElement;
       this._perfBarFill = root.querySelector(".hud-perf-bar-fill") as HTMLElement;
       this._startPerfMonitoring(options.engine, options.getCpuTime);
+      this._startPressureMonitoring(root);
     }
 
     const button = document.createElement("button");
@@ -287,6 +309,8 @@ export class ShowcaseDrawer {
 
   /** Removes drawer and footer button (showcase teardown, canvas recreation). */
   public dispose(): void {
+    this._pressureObserver?.disconnect();
+    this._pressureObserver = undefined;
     if (this._perfRafId) {
       cancelAnimationFrame(this._perfRafId);
       this._perfRafId = 0;
@@ -330,6 +354,41 @@ export class ShowcaseDrawer {
     };
 
     this._perfRafId = requestAnimationFrame(tick);
+  }
+
+  /**
+   * CPU pressure readout via the Compute Pressure API (`PressureObserver`, Chromium). Shown only
+   * when the API exists AND `observe("cpu")` succeeds (permissions policy, unsupported source and
+   * non-secure contexts reject); otherwise the readout stays hidden. Coarse states only — the
+   * browser exposes no utilisation %, temperature or fan data.
+   */
+  private _startPressureMonitoring(root: HTMLElement): void {
+    const Ctor = (globalThis as { PressureObserver?: PressureObserverCtor }).PressureObserver;
+    if (Ctor === undefined) return;
+    const label = root.querySelector(".hud-perf-pressure") as HTMLElement | null;
+    if (!label) return;
+    let observer: PressureObserverLike;
+    try {
+      observer = new Ctor((records: readonly PressureRecordLike[]): void => {
+        const state = records[records.length - 1]?.state;
+        if (!state) return;
+        label.textContent = `⚙ ${state}`;
+        label.className = `hud-perf-pressure ${state}`;
+      });
+    } catch {
+      return;
+    }
+    this._pressureObserver = observer;
+    observer
+      .observe("cpu", { sampleInterval: 1000 })
+      .then((): void => {
+        if (this._pressureObserver !== observer) return;
+        label.hidden = false;
+      })
+      .catch((): void => {
+        if (this._pressureObserver === observer) this._pressureObserver = undefined;
+        observer.disconnect();
+      });
   }
 
   private _updatePerfDom(hasCpuTelemetry: boolean): void {

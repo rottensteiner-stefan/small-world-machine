@@ -87,7 +87,7 @@ export class Hud {
         border-radius: 6px;
         padding: 7px 9px;
         margin: 8px 0 0 0;
-        white-space: pre;
+        white-space: pre-wrap; overflow-wrap: anywhere;
       }
     `;
     document.head.appendChild(style);

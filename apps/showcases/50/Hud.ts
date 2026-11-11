@@ -84,7 +84,8 @@ export class Hud {
       `,
     });
     this._readout = this._drawer.query<HTMLElement>("#swm50Readout")!;
-    this._readout.style.whiteSpace = "pre";
+    this._readout.style.whiteSpace = "pre-wrap";
+    this._readout.style.overflowWrap = "anywhere";
     this._bind();
   }
 

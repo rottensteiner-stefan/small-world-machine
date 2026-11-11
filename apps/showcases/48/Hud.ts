@@ -1,9 +1,4 @@
-import {
-  hudNote,
-  hudSection,
-  hudSlider,
-  ShowcaseDrawer,
-} from "../shared/ShowcaseDrawer.js";
+import { hudNote, hudSection, hudSlider, ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
 import type { FrameTelemetrySource } from "../shared/ShowcaseDrawer.js";
 import { bindRange } from "../shared/hudBindings.js";
 
@@ -38,7 +33,10 @@ export class Hud {
   private readonly _readout: HTMLElement;
   private _hovering: boolean = false;
 
-  constructor(engine: FrameTelemetrySource, private readonly _actions: FoxLabActions) {
+  constructor(
+    engine: FrameTelemetrySource,
+    private readonly _actions: FoxLabActions,
+  ) {
     document.getElementById("foxLabStyle")?.remove();
     const style = document.createElement("style");
     this._style = style;
@@ -54,7 +52,7 @@ export class Hud {
         border-radius: 6px;
         padding: 7px 9px;
         margin: 8px 0 0 0;
-        white-space: pre;
+        white-space: pre-wrap; overflow-wrap: anywhere;
       }
     `;
     document.head.appendChild(style);
@@ -81,11 +79,7 @@ export class Hud {
           </div>`,
         )}
 
-        ${hudSection(
-          "⏱ Playback",
-          "live",
-          hudSlider("slTempo", "Tempo", 0, 3, 0.05),
-        )}
+        ${hudSection("⏱ Playback", "live", hudSlider("slTempo", "Tempo", 0, 3, 0.05))}
 
         ${hudSection(
           "🔭 View",
@@ -96,11 +90,7 @@ export class Hud {
           <div class="hud-note">💡 <b>Renderer swap:</b> Option/Alt + 1 (WebGL1) / 2 (WebGL2) / 3 (WebGPU).</div>`,
         )}
 
-        ${hudSection(
-          "📊 Skinning Readout",
-          "live",
-          `<pre id="foxLabReadout"></pre>`,
-        )}
+        ${hudSection("📊 Skinning Readout", "live", `<pre id="foxLabReadout"></pre>`)}
 
         ${hudNote(
           `🟢 <b>Khronos glTF-Sample-Assets</b>: <code>Fox</code> (CC-BY 4.0, Google) &mdash; 24-Joint-Rig, drei Clips &mdash; soll auf allen

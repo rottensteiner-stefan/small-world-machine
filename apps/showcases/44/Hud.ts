@@ -43,7 +43,7 @@ export class Hud {
         border-radius: 6px;
         padding: 8px 10px;
         margin: 4px 0 8px 0;
-        white-space: pre;
+        white-space: pre-wrap; overflow-wrap: anywhere;
       }
       #btnToggleInstancing {
         width: 100%;

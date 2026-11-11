@@ -147,7 +147,7 @@ export class Hud {
       #vegLabReadout {
         font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 11px; line-height: 1.5;
         color: #a7f3d0; background: rgba(2, 23, 12, 0.8); border: 1px solid rgba(52, 211, 153, 0.3);
-        border-radius: 6px; padding: 8px 10px; margin: 0 0 8px 0; white-space: pre;
+        border-radius: 6px; padding: 8px 10px; margin: 0 0 8px 0; white-space: pre-wrap; overflow-wrap: anywhere;
       }
       #vegLabReadout .hud-metric-line { color: #ecfdf5; font-weight: 600; }
     `;

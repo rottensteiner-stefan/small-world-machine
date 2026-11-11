@@ -99,7 +99,7 @@ export class Hud {
       #particleLabReadout {
         font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 11px; line-height: 1.5;
         color: #7dd3fc; background: rgba(2, 6, 23, 0.75); border: 1px solid rgba(56, 189, 248, 0.25);
-        border-radius: 6px; padding: 8px 10px; margin: 4px 0 0 0; white-space: pre;
+        border-radius: 6px; padding: 8px 10px; margin: 4px 0 0 0; white-space: pre-wrap; overflow-wrap: anywhere;
       }
     `;
     document.head.appendChild(style);

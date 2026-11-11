@@ -1,8 +1,4 @@
-import {
-  hudNote,
-  hudSection,
-  ShowcaseDrawer,
-} from "../shared/ShowcaseDrawer.js";
+import { hudNote, hudSection, ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
 import type { FrameTelemetrySource } from "../shared/ShowcaseDrawer.js";
 
 /** What the panel reflects; read from the showcase on every {@link Hud.sync}. */
@@ -34,7 +30,10 @@ export class Hud {
   private readonly _readout: HTMLElement;
   private _hovering: boolean = false;
 
-  constructor(engine: FrameTelemetrySource, private readonly _actions: UnlitLabActions) {
+  constructor(
+    engine: FrameTelemetrySource,
+    private readonly _actions: UnlitLabActions,
+  ) {
     document.getElementById("unlitLabStyle")?.remove();
     const style = document.createElement("style");
     this._style = style;
@@ -50,7 +49,7 @@ export class Hud {
         border-radius: 6px;
         padding: 7px 9px;
         margin: 8px 0 0 0;
-        white-space: pre;
+        white-space: pre-wrap; overflow-wrap: anywhere;
       }
     `;
     document.head.appendChild(style);
@@ -86,11 +85,7 @@ export class Hud {
           <div class="hud-note">💡 <b>Renderer swap:</b> Option/Alt + 1 (WebGL1) / 2 (WebGL2) / 3 (WebGPU).</div>`,
         )}
 
-        ${hudSection(
-          "📊 Unlit Readout",
-          "live",
-          `<pre id="unlitLabReadout"></pre>`,
-        )}
+        ${hudSection("📊 Unlit Readout", "live", `<pre id="unlitLabReadout"></pre>`)}
 
         ${hudNote(
           `🟢 <b>Khronos glTF-Sample-Assets</b>: <code>UnlitTest</code> (CC0) &mdash; the official <code>KHR_materials_unlit</code> test asset (2 unlit cubes) &mdash; shall render identical flat colors on all three renderer tiers, independent of the scene lights.`,
