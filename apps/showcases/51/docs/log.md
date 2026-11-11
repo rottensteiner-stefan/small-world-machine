@@ -575,3 +575,12 @@ overlap (throughput baseline, not placement art) — accepted.
 - Engine root now exports `InstanceFieldSystem` (WebGPU barrel) and `core/InstanceField`; showcase
   51 + `vegetation-extras` import everything from `@small-world-machine/engine` (no deep engine
   paths left in src). `check:cycles` unchanged (21 = 21), tests/build green, runtime paths verified.
+
+## 2026-11-11 — Slimming: ShowcaseParams, comments, createTreeField
+
+- URL knobs now a single `PARAMS` spec (`readShowcaseParams`, engine core/showcase); `?help`
+  prints the table, invalid values warn + fall back. Interactive vs. automated defaults unchanged.
+- 115-line header + decision-history comments removed (history lives in this log + ADR 0059).
+- Tree field via `vegetation-extras` `createTreeField` (+ `lodBucketsFromMaxima`,
+  `buildPopulationCanopy`, `forestBreeze`). showcase.ts 1826 -> 1377 lines (2424 at the start of
+  the extraction). Real M4 Pro: identical image, lodTris, clump count; knobs verified.

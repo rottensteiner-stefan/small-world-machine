@@ -7,3 +7,4 @@ export * from "./groundcover/GrassClump.js";
 export * from "./groundcover/GroundCoverSystem.js";
 export * from "./look/ForestLookBlender.js";
 export * from "./species/VegetationSpecies.js";
+export * from "./trees/TreeField.js";
