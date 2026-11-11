@@ -4,6 +4,14 @@ import type {
   GpuTimer,
   HbaoElement,
   TextureArray,
+  BoundingVolume,
+  FieldVisibleSets,
+  InstanceFieldOptions,
+  InstancePose,
+  LodBucketDescriptor,
+  LodTransitionMode,
+  PrototypeDescriptor,
+  FieldCanopy,
 } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
@@ -27,29 +35,15 @@ import {
   StandardMaterial,
   Vector3D,
   WebGPURenderer,
-} from "@small-world-machine/engine";
-import { mulberry32 } from "@small-world-machine/engine/utils/SeededRandom.js";
-import { BoundingBox } from "@small-world-machine/engine/physix/BoundingBox.js";
-import type { BoundingVolume } from "@small-world-machine/engine/interfaces/BoundingVolume.js";
-import {
+  InstanceFieldSystem,
+  mulberry32,
+  BoundingBox,
   LOD_TRANSITION_MODES,
   packInstancePose,
   projectedDiameterPixels,
   sphereVisibleConservative,
   unpackInstancePose,
-} from "@small-world-machine/engine/core/InstanceField.js";
-import type {
-  FieldVisibleSets,
-  InstanceFieldOptions,
-  InstancePose,
-  LodBucketDescriptor,
-  LodTransitionMode,
-  PrototypeDescriptor,
-} from "@small-world-machine/engine/core/InstanceField.js";
-import {
-  InstanceFieldSystem,
-  type FieldCanopy,
-} from "@small-world-machine/engine/renderers/WebGPU/managers/InstanceFieldSystem.js";
+} from "@small-world-machine/engine";
 import {
   applyFoliageLook,
   buildCanopyCoverage,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { packInstancePose } from "@small-world-machine/engine/core/InstanceField.js";
+import { packInstancePose } from "@small-world-machine/engine";
 import { buildCanopyCoverage } from "../src/canopy/CanopyCoverage.js";
 
 function records(trees: readonly [number, number, number][]): Float32Array {

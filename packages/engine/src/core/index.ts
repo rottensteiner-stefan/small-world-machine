@@ -47,3 +47,4 @@ export * from "./helpers/index.js";
 
 export * from "./showcase/index.js";
 export * from "./forge/ForgeTool.js";
+export * from "./InstanceField.js";

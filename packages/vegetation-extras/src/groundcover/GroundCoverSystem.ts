@@ -11,8 +11,8 @@
 import {
   InstanceFieldSystem,
   type FieldCanopy,
-} from "@small-world-machine/engine/renderers/WebGPU/managers/InstanceFieldSystem.js";
-import type { PrototypeDescriptor } from "@small-world-machine/engine/core/InstanceField.js";
+  type PrototypeDescriptor,
+} from "@small-world-machine/engine";
 import { GroundCover } from "./GroundCover.js";
 import { buildGrassClumpGeometry, type GrassVariety } from "./GrassClump.js";
 

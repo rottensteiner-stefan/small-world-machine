@@ -569,3 +569,9 @@ overlap (throughput baseline, not placement art) — accepted.
   `_tryLoadRealLodLevels` / `_collectAssetParts` removed. Showcase 51 1998 -> 1832 lines.
 - Real M4 Pro: jacaranda default, `?tree=none`, `?frames=10` load as before; `lodTris`
   [3989, 13294, 41632, 140789], 296 473 clumps, 0 errors.
+
+## 2026-11-11 — Root export of the instance-field API
+
+- Engine root now exports `InstanceFieldSystem` (WebGPU barrel) and `core/InstanceField`; showcase
+  51 + `vegetation-extras` import everything from `@small-world-machine/engine` (no deep engine
+  paths left in src). `check:cycles` unchanged (21 = 21), tests/build green, runtime paths verified.

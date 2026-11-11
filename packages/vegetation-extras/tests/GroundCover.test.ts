@@ -13,10 +13,7 @@
 //     disc, even when the camera sits on a tile corner — never a whole-tile pop (pre-fix code
 //     only culled tiles whose CENTER lay in the disc, so blades within 2 m of a corner survived).
 import { describe, expect, it } from "vitest";
-import {
-  unpackInstancePose,
-  type InstancePose,
-} from "@small-world-machine/engine/core/InstanceField.js";
+import { unpackInstancePose, type InstancePose } from "@small-world-machine/engine";
 import { GroundCover } from "../src/groundcover/GroundCover.js";
 
 function tileRecords(

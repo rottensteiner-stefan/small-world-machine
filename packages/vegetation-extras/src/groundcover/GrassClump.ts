@@ -6,10 +6,12 @@
  * real curved, tapered blades (no alpha texture) plus optional flower heads. Clumps raise the
  * blade density without multiplying record/cull cost.
  */
-import type { BoundingVolume } from "@small-world-machine/engine/interfaces/BoundingVolume.js";
-import type { GeometryDataInterface } from "@small-world-machine/engine";
-import { GltfMaterialParser } from "@small-world-machine/engine";
-import { BoundingBox } from "@small-world-machine/engine/physix/BoundingBox.js";
+import {
+  BoundingBox,
+  GltfMaterialParser,
+  type BoundingVolume,
+  type GeometryDataInterface,
+} from "@small-world-machine/engine";
 
 export type Rgb = readonly [number, number, number];
 
