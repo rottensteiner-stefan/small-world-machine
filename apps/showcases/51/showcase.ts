@@ -3,6 +3,7 @@ import type {
   GeometryDataInterface,
   GpuTimer,
   HbaoElement,
+  TextureArray,
 } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
@@ -24,7 +25,6 @@ import {
   PostProcessingEffectType,
   RendererType,
   StandardMaterial,
-  TextureArray,
   Vector3D,
   WebGPURenderer,
 } from "@small-world-machine/engine";
@@ -58,9 +58,14 @@ import {
   createCanopyGroundAoTexture,
   FOLIAGE_LOOKS,
   ForestLookBlender,
+  collectVegetationParts,
   GroundCoverSystem,
+  loadVegetationSpecies,
   MEADOW_GRASS_VARIETIES,
+  mergeVegetationParts,
   WindField,
+  type SpeciesManifest,
+  type VegetationPart,
 } from "@small-world-machine/vegetation-extras";
 import { getCameraPath, type CameraPath, type PathName } from "./CameraPaths.js";
 import { Hud, hudFreeMode, type HudGpuTimings, type VegHudStats } from "./Hud.js";
@@ -262,26 +267,8 @@ interface ScatterInstance {
   readonly scale: number;
 }
 
-/** One mesh part of a tree prototype (trunk, foliage, ...). All trees share these references. */
-interface TreePart {
-  readonly name: string;
-  readonly geometry: GeometryDataInterface;
-  readonly material: StandardMaterial;
-  /** Local Y offset inside the tree (prototype origin = ground contact point). */
-  readonly offsetY: number;
-}
-
-/** Species sidecar `<stem>.species.json` (written by the local tree bake): one entry per glTF
- *  primitive in primitive order = part order of the engine import (material names are dropped). */
-interface SpeciesManifest {
-  readonly stem: string;
-  readonly layers: readonly {
-    readonly albedo: string;
-    readonly foliage: number;
-    /** true = the albedo carries a cutout alpha (leaf cards). */
-    readonly cutout?: boolean;
-  }[];
-}
+/** One mesh part of a tree prototype (`vegetation-extras` `VegetationPart`). */
+type TreePart = VegetationPart;
 
 interface TreePrototype {
   readonly name: string;
@@ -550,6 +537,8 @@ export class Showcase extends AbstractShowcase {
   private _species: SpeciesManifest | undefined = undefined;
   /** Albedo layers of the species (one per primitive), bound as the field's `albedoArray`. */
   private _speciesAlbedo: TextureArray | undefined = undefined;
+  /** Merged species field geometry per LOD, finest first (`loadVegetationSpecies`). */
+  private _speciesLods: readonly GeometryDataInterface[] = [];
   /** LOD-transition strategy of the tree field (`?lodMode=`, HUD `L`); default = the engine's
    *  zero-config `hysteresis`. Passed at setup level, mirrored in MEASURE + HUD. */
   private _lodMode: LodTransitionMode = "hysteresis";
@@ -748,9 +737,10 @@ export class Showcase extends AbstractShowcase {
     // `?tree=` species (field lane only): preload the REAL `<stem>_LOD<n>.glb` siblings ASYNC
     // right after the prototype (`_buildFieldLane` stays sync — the load happens before it). The
     // default path (no knob) skips this entirely — no loader is spun up, `realLods` stays null.
+    // `?tree=` species: real chain coarsest first ([LOD3, LOD2, LOD1]); LOD0 = the prototype.
     const realLods =
-      this._species !== undefined && this._mode === "field"
-        ? await this._tryLoadRealLodLevels(this._prototype)
+      this._species !== undefined && this._mode === "field" && this._speciesLods.length === 4
+        ? [this._speciesLods[3]!, this._speciesLods[2]!, this._speciesLods[1]!]
         : null;
     const instances = scatterTrees(this._targetCount, this._seed);
     this._treeCount = instances.length;
@@ -970,13 +960,13 @@ export class Showcase extends AbstractShowcase {
   private async _loadPrototype(): Promise<TreePrototype> {
     const loader = new GltfLoader({ basePath: "./assets/" });
     if (this._treeStem !== undefined && this._mode === "field") {
-      const species = await this._tryLoadSpecies(loader, this._treeStem);
+      const species = await this._tryLoadSpecies(this._treeStem);
       if (species) return species;
     }
     for (const asset of EXPECTED_TREE_ASSETS) {
       try {
         const root = await loader.load(asset);
-        const parts = this._collectAssetParts(root);
+        const parts = collectVegetationParts(root);
         if (parts.length === 0) continue;
         console.info(`[Showcase51] tree prototype from asset "${asset}" (${parts.length} parts)`);
         return { name: asset, source: "asset", parts };
@@ -997,103 +987,22 @@ export class Showcase extends AbstractShowcase {
    * closed: any missing piece or a part/layer count mismatch logs once and returns null (the
    * default asset set is used). Sets `_species` / `_speciesAlbedo` only on full success.
    */
-  private async _tryLoadSpecies(loader: GltfLoader, stem: string): Promise<TreePrototype | null> {
+  private async _tryLoadSpecies(stem: string): Promise<TreePrototype | null> {
     try {
-      const response = await fetch(`./assets/${stem}.species.json`);
-      if (!response.ok) throw new Error(`species.json HTTP ${response.status}`);
-      const manifest = (await response.json()) as SpeciesManifest;
-      const name = `${stem}_LOD0.glb`;
-      const parts = this._collectAssetParts(await loader.load(name));
-      if (parts.length !== manifest.layers.length) {
-        throw new Error(`${parts.length} parts vs ${manifest.layers.length} species layers`);
-      }
-      // glTF uv convention: no flip on decode (same rule as the engine's glTF texture path).
-      this._speciesAlbedo = await TextureArray.fromUrls(
-        manifest.layers.map((l) => `./assets/${l.albedo}`),
-        { flipY: false },
+      const species = await loadVegetationSpecies(stem, { basePath: "./assets/" });
+      this._species = species.manifest;
+      this._speciesAlbedo = species.albedo;
+      this._speciesLods = species.lods;
+      console.info(
+        `[Showcase51] species "${stem}": ${species.lod0Parts.length} parts, ${species.lods.length} LODs`,
       );
-      this._species = manifest;
-      console.info(`[Showcase51] species "${stem}": ${parts.length} parts, albedo layers`);
-      return { name, source: "asset", parts };
+      return { name: `${stem}_LOD0.glb`, source: "asset", parts: species.lod0Parts };
     } catch (error) {
       console.info(
         `[Showcase51] species "${stem}" unavailable (${error instanceof Error ? error.message : String(error)}) — default assets`,
       );
       return null;
     }
-  }
-
-  /**
-   * Flattens a loaded tree into its mesh-bearing leaves (deterministic DFS order). Each leaf
-   * becomes one {@link TreePart} reusing the imported geometry/material references, so every
-   * clone in the population shares them (ADR 0046 runs require reference-identical geometry).
-   * Only the world-Y offset relative to the root is kept: the asset contract requires upright,
-   * vertical-axis-centered trees (base at y=0), so X/Z part offsets and part rotation are zero
-   * by construction.
-   */
-  private _collectAssetParts(root: Object3D): TreePart[] {
-    root.updateMatrixWorld(true);
-    const rootY = root.getWorldPosition().y;
-    const parts: TreePart[] = [];
-    const scratch = new Vector3D();
-
-    const visit = (node: Object3D): void => {
-      if (node.geometry && node.material) {
-        node.getWorldPosition(scratch);
-        parts.push({
-          name: node.name || "Part",
-          geometry: node.geometry,
-          material: node.material as StandardMaterial,
-          offsetY: scratch.y - rootY,
-        });
-      }
-      for (const child of node.children) {
-        visit(child);
-      }
-    };
-    visit(root);
-    return parts;
-  }
-
-  /**
-   * `?tree=` species loader: consumes the REAL generated LOD siblings of the
-   * active prototype — `<stem>_LOD3.glb`, `<stem>_LOD2.glb`, `<stem>_LOD1.glb` (`_LOD0` = the
-   * already-loaded prototype, never reloaded) — and merges each into
-   * field geometry via the shared `_collectAssetParts` / `_mergeTreeGeometry` helpers. ATOMIC and
-   * fail-closed: only when ALL THREE levels yield ≥1 collectable indexed part is `[lod3, lod2,
-   * lod1]` (coarsest first) returned; ANY missing file / exception / zero-part level logs ONE
-   * informative line and returns null (the caller falls back to the stride-decimation proxies).
-   * Deterministic; never throws.
-   */
-  private async _tryLoadRealLodLevels(
-    proto: TreePrototype,
-  ): Promise<GeometryDataInterface[] | null> {
-    if (proto.source !== "asset") return null;
-    const stem = proto.name.replace(/(_LOD0)?\.glb$/i, "");
-    const loader = new GltfLoader({ basePath: "./assets/" });
-    const lods: GeometryDataInterface[] = [];
-    // Coarsest first (LOD3 = furthest bucket 0). Every level must collect ≥1 mesh part.
-    for (const suffix of ["_LOD3.glb", "_LOD2.glb", "_LOD1.glb"]) {
-      const assetName = stem + suffix;
-      try {
-        const root = await loader.load(assetName);
-        const parts = this._collectAssetParts(root);
-        if (parts.length === 0) {
-          console.info(
-            `[Showcase51] real LOD "${assetName}" has no mesh parts — reallod off, proxy fallback`,
-          );
-          return null;
-        }
-        lods.push(this._mergeTreeGeometry({ name: assetName, source: "asset", parts }));
-      } catch (error) {
-        console.info(
-          `[Showcase51] real LOD "${assetName}" unavailable ` +
-            `(${error instanceof Error ? error.message : String(error)}) — reallod off, proxy fallback`,
-        );
-        return null;
-      }
-    }
-    return lods;
   }
 
   /** `autoinst` lane: plain scene-graph nodes, part-major so identical parts stay consecutive. */
@@ -1502,81 +1411,7 @@ export class Showcase extends AbstractShowcase {
    * to world-up when a part lacks them, uvs to (0,0) — the P1 pulled shading reads position only.
    */
   private _mergeTreeGeometry(proto: TreePrototype): GeometryDataInterface {
-    let vertexCount = 0;
-    let indexCount = 0;
-    for (const part of proto.parts) {
-      const geo = part.geometry;
-      vertexCount += geo.vertices.length / 3;
-      indexCount += geo.indices?.length ?? 0;
-    }
-    if (vertexCount === 0 || indexCount === 0) {
-      throw new Error("[Showcase51] field lane needs non-empty indexed tree geometry");
-    }
-    const vertices = new Float32Array(vertexCount * 3);
-    const indices = new Uint32Array(indexCount);
-    const normals = new Float32Array(vertexCount * 3);
-    const uvs = new Float32Array(vertexCount * 2);
-    // Field colour stream: linear albedo of each part's material + foliage mask in alpha (the
-    // V1 field draws one merged mesh per bucket, so per-part materials travel per vertex).
-    const colors = new Float32Array(vertexCount * 4);
-    // Species mode: white albedo (the albedo array carries the colour), layer = part ordinal.
-    const species = this._species;
-    const materialLayers = species ? new Float32Array(vertexCount) : undefined;
-    let vo = 0;
-    let io = 0;
-    let partIndex = 0;
-    for (const part of proto.parts) {
-      const geo = part.geometry;
-      const partVertexCount = geo.vertices.length / 3;
-      for (let v = 0; v < partVertexCount; v++) {
-        const dest = (vo + v) * 3;
-        vertices[dest] = geo.vertices[v * 3]!;
-        vertices[dest + 1] = geo.vertices[v * 3 + 1]! + part.offsetY;
-        vertices[dest + 2] = geo.vertices[v * 3 + 2]!;
-        if (geo.normals) {
-          normals[dest] = geo.normals[v * 3]!;
-          normals[dest + 1] = geo.normals[v * 3 + 1]!;
-          normals[dest + 2] = geo.normals[v * 3 + 2]!;
-        } else {
-          normals[dest + 1] = 1;
-        }
-      }
-      if (geo.uvs) {
-        uvs.set(geo.uvs, vo * 2);
-      }
-      const c = part.material.color;
-      const r = GltfMaterialParser.engineSRGBToLinear(c.r);
-      const g = GltfMaterialParser.engineSRGBToLinear(c.g);
-      const b = GltfMaterialParser.engineSRGBToLinear(c.b);
-      // Foliage = the green-dominant part (the asset contract carries no material names);
-      // species mode takes the mask from the sidecar.
-      const layer = species?.layers[partIndex];
-      const foliage = layer ? layer.foliage : g > r ? 1 : 0;
-      for (let v = 0; v < partVertexCount; v++) {
-        const dest = (vo + v) * 4;
-        colors[dest] = layer ? 1 : r;
-        colors[dest + 1] = layer ? 1 : g;
-        colors[dest + 2] = layer ? 1 : b;
-        colors[dest + 3] = foliage;
-      }
-      if (materialLayers) materialLayers.fill(partIndex, vo, vo + partVertexCount);
-      partIndex++;
-      const partIndices = geo.indices!;
-      for (let i = 0; i < partIndices.length; i++) {
-        indices[io + i] = partIndices[i]! + vo;
-      }
-      vo += partVertexCount;
-      io += partIndices.length;
-    }
-    return {
-      vertices,
-      indices,
-      normals,
-      uvs,
-      colors,
-      ...(materialLayers ? { materialLayers } : {}),
-      getBoundingVolume: (): BoundingVolume => BoundingBox.fromVertices(vertices),
-    };
+    return mergeVegetationParts(proto.parts, this._species);
   }
 
   /** Conservative per-instance cull radius at scale 1 = farthest vertex distance from the tree

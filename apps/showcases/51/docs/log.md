@@ -561,3 +561,11 @@ overlap (throughput baseline, not placement art) — accepted.
   (forest interior: ground AO on, look weight 1, 0 errors).
 - Measurement note (throttled 30 fps window, another tab open): post pass look-only 0.13–0.26 ms,
   with HBAO 0.46–1.7 ms -> HBAO may push P6a over its 1 ms budget; re-measure unthrottled.
+
+## 2026-11-11 — Extraction step 3: species loader -> `vegetation-extras`
+
+- `loadVegetationSpecies(stem, { basePath })` (sidecar + every `_LOD<n>` + albedo `TextureArray`,
+  atomic, descriptive errors), `collectVegetationParts`, `mergeVegetationParts` moved out;
+  `_tryLoadRealLodLevels` / `_collectAssetParts` removed. Showcase 51 1998 -> 1832 lines.
+- Real M4 Pro: jacaranda default, `?tree=none`, `?frames=10` load as before; `lodTris`
+  [3989, 13294, 41632, 140789], 296 473 clumps, 0 errors.

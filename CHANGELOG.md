@@ -5,6 +5,7 @@
 ### "The universe is under no obligation to make sense to you." - Neil deGrasse Tyson
 
 - **Features:**
+  - _`vegetation-extras` — `loadVegetationSpecies`, `collectVegetationParts`, `mergeVegetationParts`:_ species assets (sidecar + LOD chain + albedo layers, UE "Foliage Type" / SpeedTree model) load atomically with one call; showcase 51 now 1832 lines (from 2424 before the extraction), identical output.
   - _`vegetation-extras` — forest lighting helpers:_ `canopyCoverageAt`, `canopyHeightFade`, `buildCanopyGroundAo` / `createCanopyGroundAoTexture` (canopy as ground `aoMap`) and `ForestLookBlender` (canopy-weighted foliage look blend, UE/Unity volume-blend model) moved out of showcase 51 (−77 lines there).
   - _`vegetation-extras` — `GroundCoverSystem`, `GrassVariety`, `buildGrassClumpGeometry`, `MEADOW_GRASS_VARIETIES`:_ the multi-variety camera-centred ground cover (UE "Landscape Grass Type" model: one ring + field per variety, travel-gated rebuilds, shared wind + canopy, no shadow casting) moved out of showcase 51 into the package; showcase 51 −350 lines, identical output (296 594 clumps).
   - _Showcase 51 — forest floor + auto look (ADR 0059 step 6a):_ the canopy coverage darkens the ground via its `aoMap`; `?look=auto` (interactive default) blends the meadow look into the forest look by the canopy above the camera.
