@@ -5,6 +5,7 @@
 ### "The universe is under no obligation to make sense to you." - Neil deGrasse Tyson
 
 - **Features:**
+  - _ADR 0059 step 6a decided:_ candidate A (canopy ambient + ground AO + look preset + HBAO) accepted; moderator raised the forest-lighting budget to ≤ 1.5 ms on the M4 Pro to keep HBAO on by default.
   - _`swm species` (tools) — scan tree -> field-lane species assets:_ headless `core/species.ts` (leaf-card island thinning, twig thinning, meshoptimizer `Permissive` wood, PNG alpha merge via pngjs, `.species.json` sidecar; SpeedTree-exporter / Simplygon foliage-reduction model) replaces the local bake prototype; reproduces the committed jacaranda LOD GLBs byte-identically. Fix found by the tests: a primitive thinned to zero islands now keeps one (empty primitives broke the GLB writer).
   - _`vegetation-extras` — `loadVegetationSpecies`, `collectVegetationParts`, `mergeVegetationParts`:_ species assets (sidecar + LOD chain + albedo layers, UE "Foliage Type" / SpeedTree model) load atomically with one call; showcase 51 now 1832 lines (from 2424 before the extraction), identical output.
   - _`vegetation-extras` — forest lighting helpers:_ `canopyCoverageAt`, `canopyHeightFade`, `buildCanopyGroundAo` / `createCanopyGroundAoTexture` (canopy as ground `aoMap`) and `ForestLookBlender` (canopy-weighted foliage look blend, UE/Unity volume-blend model) moved out of showcase 51 (−77 lines there).
