@@ -242,7 +242,7 @@ export class Ray {
 
     if (BoundingType.SPHERE === volume.type) {
       const s = volume;
-      outNormal.copyFrom(outPoint).sub(s.center);
+      outNormal.copyFrom(s.center).sub(outPoint);
       const len = outNormal.length();
       if (len > 1e-8) {
         outNormal.scale(1.0 / len);

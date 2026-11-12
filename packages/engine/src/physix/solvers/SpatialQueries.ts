@@ -27,9 +27,6 @@ export class SpatialQueries {
   };
   /** Pooled RaycastHit objects for raycastAll() — zero-GC per call. */
   private readonly _scratchHits: RaycastHit[] = [];
-  /** Scratch vectors for accumulating hits before sorting. */
-  private readonly _scratchHitPoints: Vector3D[] = [];
-  private readonly _scratchHitNormals: Vector3D[] = [];
 
   constructor(private readonly _broadphase: PhysicsBroadphase) {}
 
@@ -120,7 +117,8 @@ export class SpatialQueries {
     outHits?: RaycastHit[],
     ignoreTriggers: boolean = true,
   ): RaycastHit[] {
-    const hits = outHits ?? this._scratchHits;
+    const useExternal = outHits !== undefined;
+    const hits = useExternal ? outHits : this._scratchHits;
     hits.length = 0;
 
     this._queryHits.length = 0;
@@ -129,6 +127,7 @@ export class SpatialQueries {
     const hitPt = MathPool.acquireVector();
     const hitNorm = MathPool.acquireVector();
 
+    let hitCount = 0;
     for (let i = 0; i < this._queryHits.length; i++) {
       const c = this._queryHits[i]!;
       if (!c.bounds) continue;
@@ -136,17 +135,32 @@ export class SpatialQueries {
 
       const t = ray.intersectVolumeDetailed(c.bounds, hitPt, hitNorm);
       if (t >= 0 && t <= maxDistance) {
-        // Grow pooled hit array on demand — zero GC after initial growth
-        if (hits.length >= this._scratchHits.length) {
-          const newHit: RaycastHit = {
-            distance: 0,
-            point: new Vector3D(),
-            normal: new Vector3D(),
-            collider: null as unknown as Collidable,
-          };
-          this._scratchHits.push(newHit);
+        let h: RaycastHit;
+        if (useExternal) {
+          // External array: reuse existing slots or create new ones
+          if (hitCount < hits.length) {
+            h = hits[hitCount]!;
+          } else {
+            h = {
+              distance: 0,
+              point: new Vector3D(),
+              normal: new Vector3D(),
+              collider: c,
+            };
+            hits.push(h);
+          }
+        } else {
+          // Internal pool: grow on demand — zero GC after initial growth
+          if (hitCount >= this._scratchHits.length) {
+            this._scratchHits.push({
+              distance: 0,
+              point: new Vector3D(),
+              normal: new Vector3D(),
+              collider: null as unknown as Collidable,
+            });
+          }
+          h = this._scratchHits[hitCount]!;
         }
-        const h = hits[hits.length] = this._scratchHits[hits.length];
         h.distance = t;
         h.point.copyFrom(hitPt);
         h.normal.copyFrom(hitNorm);
@@ -156,13 +170,16 @@ export class SpatialQueries {
         } else {
           delete h.object;
         }
-        hits.length++;
+        hitCount++;
       }
     }
 
     MathPool.releaseVector(hitPt);
     MathPool.releaseVector(hitNorm);
 
+    if (!useExternal) {
+      hits.length = hitCount;
+    }
     hits.sort((a, b) => a.distance - b.distance);
     return hits;
   }
