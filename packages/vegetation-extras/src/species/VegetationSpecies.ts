@@ -7,17 +7,19 @@
  * `<stem>_LOD0..N.glb` (LOD0 finest) and the albedo files it lists (bound as an instance-field
  * `albedoArray`, layer = part ordinal via `materialLayers`).
  */
+import type { BoundingVolume } from "@small-world-machine/engine/interfaces/BoundingVolume.js";
+import type {
+  GeometryDataInterface,
+  Object3D,
+  StandardMaterial,
+} from "@small-world-machine/engine";
 import {
-  BoundingBox,
   GltfLoader,
   GltfMaterialParser,
   TextureArray,
   Vector3D,
-  type BoundingVolume,
-  type GeometryDataInterface,
-  type Object3D,
-  type StandardMaterial,
 } from "@small-world-machine/engine";
+import { BoundingBox } from "@small-world-machine/engine/physix/BoundingBox.js";
 
 /** One mesh part of a vegetation prototype (trunk, branches, leaves, ...). */
 export interface VegetationPart {

@@ -172,20 +172,3 @@ This guarantees continuous variation across modular tiling geometry with zero ru
 - **4-tier budget note:** `--ratios` are explicit; the documented 4-tier polycount budgets
   (§3) are authoring guidance, not enforced by the CLI — pick ratios per prototype.
 
-
-## 7. Vegetation Species (`swm species` CLI + `loadVegetationSpecies`, ADR 0059)
-
-- **Use for scan/photogrammetry trees** (Poly Haven etc.): `swm lod` simplifies primitives as a
-  whole, which collapses leaf cards into textured shards. `swm species <in.gltf> <out-dir> [--stem]`
-  instead thins leaf-card islands (kept cards scaled by `sqrt(0.2/keep)`, cap 8, never simplified),
-  thins twig islands (< 150 tris) unscaled and simplifies limbs + trunk with meshoptimizer
-  `Permissive`. Default chain: leaf keep 5 % / 1.5 % / 0.5 % / 0.15 %, wood 25 k / 7 k / 2 k / 500 tris.
-- **Input contract:** glTF + external `.bin`; leaf primitives are named `leaf|leaves|needle|foliage`;
-  a cutout needs `<name>_alpha_<res>.png` next to a **PNG** diffuse (pngjs, no ffmpeg).
-- **Output:** `<stem>_LOD0..3.glb` (LOD0 finest, COLOR_0 = white + foliage mask), `<stem>_albedo_<i>`
-  per primitive (primitive order), `<stem>.species.json` (albedo, foliage, cutout per primitive).
-- **Runtime:** `vegetation-extras` `loadVegetationSpecies(stem, { basePath })` loads sidecar + all
-  LODs + the albedo `TextureArray` atomically; bind `albedo` as the field `albedoArray`, the merged
-  `lods` as the LOD chain (coarsest bucket first), `alphaTest` from the result.
-- **Originals:** the source glTF/bin/textures go to Drive per ADR 0058; only the baked set is
-  committed (LFS).

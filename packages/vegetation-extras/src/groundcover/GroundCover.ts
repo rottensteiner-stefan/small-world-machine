@@ -17,7 +17,7 @@
  * @fixed Record layout is the frozen engine contract: position (3 f32) + packed pose u32
  *         (`packInstancePose`); the ring never allocates after construction.
  */
-import { packInstancePose } from "@small-world-machine/engine";
+import { packInstancePose } from "@small-world-machine/engine/core/InstanceField.js";
 
 export interface GroundCoverOptions {
   /** Ring outer radius in metres. Default 160. */

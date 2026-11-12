@@ -569,28 +569,3 @@ overlap (throughput baseline, not placement art) — accepted.
   `_tryLoadRealLodLevels` / `_collectAssetParts` removed. Showcase 51 1998 -> 1832 lines.
 - Real M4 Pro: jacaranda default, `?tree=none`, `?frames=10` load as before; `lodTris`
   [3989, 13294, 41632, 140789], 296 473 clumps, 0 errors.
-
-## 2026-11-11 — Root export of the instance-field API
-
-- Engine root now exports `InstanceFieldSystem` (WebGPU barrel) and `core/InstanceField`; showcase
-  51 + `vegetation-extras` import everything from `@small-world-machine/engine` (no deep engine
-  paths left in src). `check:cycles` unchanged (21 = 21), tests/build green, runtime paths verified.
-
-## 2026-11-11 — Slimming: ShowcaseParams, comments, createTreeField
-
-- URL knobs now a single `PARAMS` spec (`readShowcaseParams`, engine core/showcase); `?help`
-  prints the table, invalid values warn + fall back. Interactive vs. automated defaults unchanged.
-- 115-line header + decision-history comments removed (history lives in this log + ADR 0059).
-- Tree field via `vegetation-extras` `createTreeField` (+ `lodBucketsFromMaxima`,
-  `buildPopulationCanopy`, `forestBreeze`). showcase.ts 1826 -> 1377 lines (2424 at the start of
-  the extraction). Real M4 Pro: identical image, lodTris, clump count; knobs verified.
-
-## 2026-11-11 — Comparison lanes + cull probes removed; parameter names normalized
-
-- Removed `?mode` (autoinst/instanced/field lanes), `?popcount`, `?cullref` and their code
-  (`_buildInstanced`, probe callback, CPU reference cull, MEASURE `populationAudit`). WebGPU =
-  field lane, GL tiers = auto-instancing fallback with the Kenney set (species is field-only).
-- `veg-bench` default `--modes field` (label only; the showcase has no lane switch any more).
-- Normalized names: `?frames` only (no `?measure`), `?rendererType` only (process docs had
-  `?renderer=`, never read by the engine — earlier "WebGL2" sightings with it actually ran WebGPU).
-- Real Chrome: WebGPU / WebGL2 / WebGL1 load clean, MEASURE + `occlusion=c` work. 1215 lines.

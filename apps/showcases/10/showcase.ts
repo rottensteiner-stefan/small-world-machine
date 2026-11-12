@@ -36,8 +36,6 @@ import {
   Vector3D,
   ZoomController,
   FluidVolume,
-  defineShowcaseParams,
-  readShowcaseParams,
 } from "@small-world-machine/engine";
 import { NoirWaterMaterial } from "@small-world-machine/liquid-extras";
 import type { GoldenSpec } from "./GoldenCapture.js";
@@ -105,22 +103,6 @@ interface BuiltPool {
  * on a lush meadow landscape, showcasing all engine-known liquid materials, shader presets, and
  * extension hooks side-by-side. The pools themselves are data: see `PoolPresets.ts`.
  */
-/** URL parameters (`?help` prints them). */
-const PARAMS = defineShowcaseParams({
-  aniso: { type: "int?", min: 1, doc: "cap anisotropic filtering at N (1 = off)" },
-  reflection: {
-    type: "enum",
-    values: ["auto", "0", "1"],
-    default: "auto",
-    doc: "pool reflection (auto = on except golden mode)",
-  },
-  tune: {
-    type: "bool",
-    default: false,
-    doc: "live tune pad for the toon pool (keys 0, G, arrows)",
-  },
-});
-
 export class Showcase extends AbstractShowcase {
   private readonly _moveSpeed: number = 12.0;
   private readonly _startEyeHeight: number = 18.0;
@@ -151,7 +133,7 @@ export class Showcase extends AbstractShowcase {
   private _random: RandomSource = (): number => Math.random();
 
   constructor(options: EngineOptions = {}) {
-    const aniso = readShowcaseParams(PARAMS).values.aniso ?? NaN;
+    const aniso = Number(new URLSearchParams(window.location.search).get("aniso"));
     super({
       canvasId: "SmallWorldMachine",
       rendererType: RendererType.BEST,
@@ -345,8 +327,8 @@ export class Showcase extends AbstractShowcase {
     const props = new PoolProps({ hazard, oil, chemical });
 
     // `?reflection=0|1` forces it; unset it is on, except in golden mode (baselines predate it).
-    const reflection = readShowcaseParams(PARAMS).values.reflection;
-    if (reflection === "1" || (reflection === "auto" && undefined === this._golden)) {
+    const reflectionParam = new URLSearchParams(window.location.search).get("reflection");
+    if ("1" === reflectionParam || (null === reflectionParam && undefined === this._golden)) {
       this._reflection = new PlanarReflectionNode({
         name: "PoolReflection",
         width: 1024,
@@ -404,7 +386,7 @@ export class Showcase extends AbstractShowcase {
 
   /** Live parameter tweaking of the toon pool (keys 0, G, arrows); only with `?tune=1`. */
   private _attachTunePad(material: StylizedWaterMaterial): void {
-    if (!readShowcaseParams(PARAMS).values.tune) return;
+    if ("1" !== new URLSearchParams(window.location.search).get("tune")) return;
     this._liveTunePad = new LiveTunePad(material);
     this._liveTunePad.attach(window);
   }

@@ -8,7 +8,10 @@
  *        times `crownOpacity`. Overlapping crowns saturate toward 1, a single crown never does.
  */
 import { Texture } from "@small-world-machine/engine";
-import { unpackInstancePose, type InstancePose } from "@small-world-machine/engine";
+import {
+  unpackInstancePose,
+  type InstancePose,
+} from "@small-world-machine/engine/core/InstanceField.js";
 
 export interface CanopyCoverageMap {
   /** Row-major coverage in [0, 255] (row = +Z, column = +X), `width * height` bytes. */

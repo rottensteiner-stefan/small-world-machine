@@ -8,7 +8,7 @@ import { CAMERA_PATH_NAMES, type PathName } from "./CameraPaths.js";
  * Surface (mirrored from the 45/46 Hud pattern): `VEG_HUD_TOGGLE_KEYS`, `Hud.handleKey`,
  * `Hud.sync`, `Hud.setReadout`, `Hud.dispose`.
  *
- * HUD-FREE MODES (golden / `?frames` / `?truth`): the showcase MUST NOT construct this Hud in
+ * HUD-FREE MODES (golden / `?measure` / `?truth`): the showcase MUST NOT construct this Hud in
  * those modes (same gating as showcase 45: `if (golden) ... else new Hud(...)`). The HUD is pure
  * overlay DOM -- it never touches the render path -- but golden byte-identity requires it to not
  * exist at capture time. See {@link hudFreeMode} for the mode predicate.
@@ -31,7 +31,7 @@ export interface HudGpuTimings {
 export interface VegHudStats {
   /** `?n=` value (requested instance count). */
   readonly instances: number;
-  /** Scatter lane: `field` (WebGPU) or the `autoinst` GL fallback. */
+  /** Scatter mode label (e.g. `autoinst` | `instanced` | `field`). */
   readonly mode: string;
   /** Frames per second, smoothed. */
   readonly fps: number;
@@ -109,7 +109,9 @@ function hudReadGpuMs(timings: HudGpuTimings | null | undefined): number {
  */
 export function hudFreeMode(search: string): boolean {
   const params = new URLSearchParams(search);
-  return params.has("__golden") || params.has("frames") || params.has("truth");
+  return (
+    params.has("__golden") || params.has("measure") || params.has("frames") || params.has("truth")
+  );
 }
 
 /** Formats one ms value; `--` for unavailable. */

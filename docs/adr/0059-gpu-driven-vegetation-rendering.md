@@ -155,8 +155,6 @@
 
 - **Step 6a candidate A, part 2 (2026-11-11): look preset + HBAO in showcase 51** (interactive defaults `?look=meadow`, `?hbao=1`; automated runs post-free). Sighting: `forest` (AgX) best inside the forest, `meadow` (PBR Neutral) best on the open meadow (AgX greys the sky) — a single global preset is a compromise; a canopy-driven look blend (coverage at the camera) is the cheap follow-up if wanted. Candidate B (SSILVB) not started; exit gate = moderator A/B of the forest interior.
 
-- **Step 6a budget DECISION (moderator 2026-11-11): ≤ 1.5 ms on the M4 Pro (was ≤ 1 ms), HBAO stays an interactive default — "der Look ist es wert".** Basis: canopy ambient below the DVFS noise floor (≤ ~0.5 ms), look preset post pass 0.13–1.6 ms, HBAO +0.2–0.9 ms (noisy medians, throttled windows excluded where flagged). Candidate A accepted as the step-6a solution; candidate B (SSILVB) stays a later option, not scheduled.
-
 #### Step 3 — Octahedral impostors
 - Bake (browser tool in `tools`, renderer needed): prototype captured from N×N (e.g. 12×12) hemi-octahedral directions (full octahedral as option for flight cameras) into two atlases: albedo+alpha, normal+depth. Export KTX2 (BC7/ASTC already supported) + JSON metadata. Benchmark: Ryan Brucks' UE ImpostorBaker (2018), Godot/three.js octahedral impostor plugins.
 - Runtime: camera-facing quad per instance; view direction → octahedral cell, blend 3 nearest frames, depth-based parallax correction; lit with stored normals through the shared PBR lighting chunk, receives shadows; alpha-tested depth write so impostors cast shadows and intersect terrain correctly.

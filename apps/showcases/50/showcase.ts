@@ -13,8 +13,6 @@ import {
   PostProcessingEffectType,
   RendererType,
   Vector3D,
-  defineShowcaseParams,
-  readShowcaseParams,
 } from "@small-world-machine/engine";
 import type {
   SmoothStrategy,
@@ -42,16 +40,8 @@ const COMPRESSED_URL =
  * the variant the Khronos Sample Viewer shows -- rendered at native pixel density. ETC1S visibly
  * flattens the normal maps (mane, rook masonry, wood grain); this isolates asset loss from engine gaps.
  */
-/** URL parameters (`?help` prints them). */
-const PARAMS = defineShowcaseParams({
-  full: { type: "bool", default: false, doc: "full-quality splat + pixel ratio 2" },
-  local: {
-    type: "bool",
-    default: false,
-    doc: "load the local splat file instead of the remote one",
-  },
-});
-const { full: FULL_QUALITY, local: USE_LOCAL } = readShowcaseParams(PARAMS).values;
+const FULL_QUALITY = new URLSearchParams(window.location.search).has("full");
+const USE_LOCAL = new URLSearchParams(window.location.search).has("local");
 const REMOTE_URL = USE_LOCAL
   ? "/assets/ABeautifulGame.glb"
   : FULL_QUALITY

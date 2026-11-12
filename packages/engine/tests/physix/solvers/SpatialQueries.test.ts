@@ -32,8 +32,12 @@ describe("SpatialQueries", () => {
 
     it("returns the closest hit along the ray", () => {
       setup();
-      const near = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)));
-      const far  = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 10), new Vector3D(1, 1, 12)));
+      const near = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)),
+      );
+      const far = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 10), new Vector3D(1, 1, 12)),
+      );
       broadphase.update([near, far]);
 
       const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1));
@@ -47,7 +51,9 @@ describe("SpatialQueries", () => {
 
     it("respects maxDistance and returns null when target is out of range", () => {
       setup();
-      const box = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 10), new Vector3D(1, 1, 12)));
+      const box = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 10), new Vector3D(1, 1, 12)),
+      );
       broadphase.update([box]);
 
       const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1));
@@ -56,9 +62,13 @@ describe("SpatialQueries", () => {
 
     it("respects collision layer mask", () => {
       setup();
-      const layerA = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)));
+      const layerA = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)),
+      );
       layerA.collisionLayer = 0b0010; // Layer 1
-      const layerB = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 5), new Vector3D(1, 1, 6)));
+      const layerB = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 5), new Vector3D(1, 1, 6)),
+      );
       layerB.collisionLayer = 0b0100; // Layer 2
       broadphase.update([layerA, layerB]);
 
@@ -73,9 +83,13 @@ describe("SpatialQueries", () => {
 
     it("ignores triggers when ignoreTriggers is true", () => {
       setup();
-      const trigger = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)));
+      const trigger = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)),
+      );
       trigger.isTrigger = true;
-      const solid = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 5), new Vector3D(1, 1, 6)));
+      const solid = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 5), new Vector3D(1, 1, 6)),
+      );
       broadphase.update([trigger, solid]);
 
       const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1));
@@ -87,9 +101,13 @@ describe("SpatialQueries", () => {
 
     it("includes triggers when ignoreTriggers is false", () => {
       setup();
-      const trigger = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)));
+      const trigger = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)),
+      );
       trigger.isTrigger = true;
-      const solid = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 5), new Vector3D(1, 1, 6)));
+      const solid = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 5), new Vector3D(1, 1, 6)),
+      );
       broadphase.update([trigger, solid]);
 
       const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1));
@@ -101,7 +119,9 @@ describe("SpatialQueries", () => {
 
     it("populates hit.point and hit.normal for AABB", () => {
       setup();
-      const box = new StaticCollider(new BoundingBox(new Vector3D(-2, -2, 5), new Vector3D(2, 2, 7)));
+      const box = new StaticCollider(
+        new BoundingBox(new Vector3D(-2, -2, 5), new Vector3D(2, 2, 7)),
+      );
       broadphase.update([box]);
 
       const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1));
@@ -128,7 +148,9 @@ describe("SpatialQueries", () => {
 
     it("writes to outHit when provided", () => {
       setup();
-      const box = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 3), new Vector3D(1, 1, 4)));
+      const box = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 3), new Vector3D(1, 1, 4)),
+      );
       broadphase.update([box]);
 
       const outHit: RaycastHit = {
@@ -153,8 +175,8 @@ describe("SpatialQueries", () => {
       expect(hit).not.toBeNull();
       expect(hit!.distance).toBeCloseTo(3); // 5 - radius 2
       expect(hit!.point.z).toBeCloseTo(3);
-      // Normal points outward from sphere center toward +Z
-      expect(hit!.normal.z).toBeCloseTo(1);
+      // Outward normal: hitPoint - center = (0,0,3) - (0,0,5) = (0,0,-2) → (0,0,-1)
+      expect(hit!.normal.z).toBeCloseTo(-1);
     });
 
     it("handles OBB bounds", () => {
@@ -193,9 +215,15 @@ describe("SpatialQueries", () => {
 
     it("returns all hits sorted by distance ascending", () => {
       setup();
-      const c1 = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 10), new Vector3D(1, 1, 12)));
-      const c2 = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)));
-      const c3 = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 20), new Vector3D(1, 1, 22)));
+      const c1 = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 10), new Vector3D(1, 1, 12)),
+      );
+      const c2 = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)),
+      );
+      const c3 = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 20), new Vector3D(1, 1, 22)),
+      );
       broadphase.update([c1, c2, c3]);
 
       const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1));
@@ -211,8 +239,12 @@ describe("SpatialQueries", () => {
 
     it("respects maxDistance filter", () => {
       setup();
-      const near = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)));
-      const far  = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 10), new Vector3D(1, 1, 12)));
+      const near = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)),
+      );
+      const far = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 10), new Vector3D(1, 1, 12)),
+      );
       broadphase.update([near, far]);
 
       const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1));
@@ -223,9 +255,13 @@ describe("SpatialQueries", () => {
 
     it("respects collision layer mask", () => {
       setup();
-      const layerA = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)));
+      const layerA = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)),
+      );
       layerA.collisionLayer = 0b0010;
-      const layerB = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 5), new Vector3D(1, 1, 6)));
+      const layerB = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 5), new Vector3D(1, 1, 6)),
+      );
       layerB.collisionLayer = 0b0100;
       broadphase.update([layerA, layerB]);
 
@@ -237,9 +273,13 @@ describe("SpatialQueries", () => {
 
     it("ignores triggers when ignoreTriggers is true", () => {
       setup();
-      const trigger = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)));
+      const trigger = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 2), new Vector3D(1, 1, 3)),
+      );
       trigger.isTrigger = true;
-      const solid = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 5), new Vector3D(1, 1, 6)));
+      const solid = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 5), new Vector3D(1, 1, 6)),
+      );
       broadphase.update([trigger, solid]);
 
       const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1));
@@ -250,7 +290,9 @@ describe("SpatialQueries", () => {
 
     it("writes to outHits array when provided", () => {
       setup();
-      const box = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 3), new Vector3D(1, 1, 4)));
+      const box = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 3), new Vector3D(1, 1, 4)),
+      );
       broadphase.update([box]);
 
       const outHits: RaycastHit[] = [];
@@ -262,7 +304,9 @@ describe("SpatialQueries", () => {
 
     it("reuses pooled hits on repeated calls (zero-GC after growth)", () => {
       setup();
-      const box = new StaticCollider(new BoundingBox(new Vector3D(-1, -1, 3), new Vector3D(1, 1, 4)));
+      const box = new StaticCollider(
+        new BoundingBox(new Vector3D(-1, -1, 3), new Vector3D(1, 1, 4)),
+      );
       broadphase.update([box]);
 
       const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1));
@@ -285,7 +329,9 @@ describe("SpatialQueries", () => {
 
     it("detects contact with a box", () => {
       setup();
-      const wall = new StaticCollider(new BoundingBox(new Vector3D(9.5, -5, -5), new Vector3D(10.5, 5, 5)));
+      const wall = new StaticCollider(
+        new BoundingBox(new Vector3D(9.5, -5, -5), new Vector3D(10.5, 5, 5)),
+      );
       broadphase.update([wall]);
 
       const hit = queries.sphereCast(new Vector3D(0, 0, 0), 1, new Vector3D(1, 0, 0), 50);
@@ -308,7 +354,9 @@ describe("SpatialQueries", () => {
 
     it("respects maxDistance", () => {
       setup();
-      const box = new StaticCollider(new BoundingBox(new Vector3D(20, -1, -1), new Vector3D(22, 1, 1)));
+      const box = new StaticCollider(
+        new BoundingBox(new Vector3D(20, -1, -1), new Vector3D(22, 1, 1)),
+      );
       broadphase.update([box]);
 
       const hit = queries.sphereCast(new Vector3D(0, 0, 0), 0.5, new Vector3D(1, 0, 0), 10);
@@ -317,31 +365,57 @@ describe("SpatialQueries", () => {
 
     it("ignores triggers when ignoreTriggers is true", () => {
       setup();
-      const trigger = new StaticCollider(new BoundingBox(new Vector3D(2, -1, -1), new Vector3D(3, 1, 1)));
+      const trigger = new StaticCollider(
+        new BoundingBox(new Vector3D(2, -1, -1), new Vector3D(3, 1, 1)),
+      );
       trigger.isTrigger = true;
-      const solid = new StaticCollider(new BoundingBox(new Vector3D(5, -1, -1), new Vector3D(6, 1, 1)));
+      const solid = new StaticCollider(
+        new BoundingBox(new Vector3D(5, -1, -1), new Vector3D(6, 1, 1)),
+      );
       broadphase.update([trigger, solid]);
 
-      const hit = queries.sphereCast(new Vector3D(0, 0, 0), 0.5, new Vector3D(1, 0, 0), 50, 0xffffffff, undefined, true);
+      const hit = queries.sphereCast(
+        new Vector3D(0, 0, 0),
+        0.5,
+        new Vector3D(1, 0, 0),
+        50,
+        0xffffffff,
+        undefined,
+        true,
+      );
       expect(hit).not.toBeNull();
       expect(hit!.collider).toBe(solid);
     });
 
     it("includes triggers when ignoreTriggers is false", () => {
       setup();
-      const trigger = new StaticCollider(new BoundingBox(new Vector3D(2, -1, -1), new Vector3D(3, 1, 1)));
+      const trigger = new StaticCollider(
+        new BoundingBox(new Vector3D(2, -1, -1), new Vector3D(3, 1, 1)),
+      );
       trigger.isTrigger = true;
-      const solid = new StaticCollider(new BoundingBox(new Vector3D(5, -1, -1), new Vector3D(6, 1, 1)));
+      const solid = new StaticCollider(
+        new BoundingBox(new Vector3D(5, -1, -1), new Vector3D(6, 1, 1)),
+      );
       broadphase.update([trigger, solid]);
 
-      const hit = queries.sphereCast(new Vector3D(0, 0, 0), 0.5, new Vector3D(1, 0, 0), 50, 0xffffffff, undefined, false);
+      const hit = queries.sphereCast(
+        new Vector3D(0, 0, 0),
+        0.5,
+        new Vector3D(1, 0, 0),
+        50,
+        0xffffffff,
+        undefined,
+        false,
+      );
       expect(hit).not.toBeNull();
       expect(hit!.collider).toBe(trigger);
     });
 
     it("populates hit.normal for box bounds", () => {
       setup();
-      const wall = new StaticCollider(new BoundingBox(new Vector3D(5, -2, -2), new Vector3D(6, 2, 2)));
+      const wall = new StaticCollider(
+        new BoundingBox(new Vector3D(5, -2, -2), new Vector3D(6, 2, 2)),
+      );
       broadphase.update([wall]);
 
       const hit = queries.sphereCast(new Vector3D(0, 0, 0), 0.5, new Vector3D(1, 0, 0), 20);
@@ -365,7 +439,9 @@ describe("SpatialQueries", () => {
 
     it("writes to outHit when provided", () => {
       setup();
-      const box = new StaticCollider(new BoundingBox(new Vector3D(3, -1, -1), new Vector3D(4, 1, 1)));
+      const box = new StaticCollider(
+        new BoundingBox(new Vector3D(3, -1, -1), new Vector3D(4, 1, 1)),
+      );
       broadphase.update([box]);
 
       const outHit: RaycastHit = {
@@ -374,7 +450,14 @@ describe("SpatialQueries", () => {
         normal: new Vector3D(),
         collider: null as unknown as StaticCollider,
       };
-      const result = queries.sphereCast(new Vector3D(0, 0, 0), 0.5, new Vector3D(1, 0, 0), 20, 0xffffffff, outHit);
+      const result = queries.sphereCast(
+        new Vector3D(0, 0, 0),
+        0.5,
+        new Vector3D(1, 0, 0),
+        20,
+        0xffffffff,
+        outHit,
+      );
       expect(result).toBe(outHit);
     });
 
@@ -406,7 +489,9 @@ describe("SpatialQueries", () => {
 
     it("normalizes direction vector before sweeping", () => {
       setup();
-      const wall = new StaticCollider(new BoundingBox(new Vector3D(9.5, -5, -5), new Vector3D(10.5, 5, 5)));
+      const wall = new StaticCollider(
+        new BoundingBox(new Vector3D(9.5, -5, -5), new Vector3D(10.5, 5, 5)),
+      );
       broadphase.update([wall]);
 
       // Non-normalized direction
