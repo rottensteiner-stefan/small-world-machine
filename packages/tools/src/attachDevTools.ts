@@ -1,4 +1,4 @@
-import type { SmallWorldMachine } from "@small-world-machine/engine";
+import type { SmallWorldMachine, SceneParams } from "@small-world-machine/engine";
 import { Forge } from "./forge/Forge.js";
 import { MapGenerator } from "./MapGenerator.js";
 import { Pixler } from "./Pixler.js";
@@ -24,6 +24,12 @@ export function attachDevTools(app: SmallWorldMachine): DevToolsHandle {
   forge.openWindow("Pixler Editor", new Pixler(app.events), 50, 200, "pixlerEditor");
   forge.openWindow("Asset Extractor", new Xtractor(app.events), 400, 60, "assetExtractor");
   forge.openWindow("Material Studio", new MaterialStudio(), 750, 60, "materialStudio");
+
+  // Auto-open SceneParams window if the app is an AbstractShowcase with registered params
+  const showcase = app as SmallWorldMachine & { sceneParams?: SceneParams };
+  if (showcase.sceneParams && showcase.sceneParams.paramCount > 0) {
+    forge.openWindow("Scene Params", showcase.sceneParams, 60, 300, "sceneParams");
+  }
 
   const onKeyDown = (event: KeyboardEvent): void => {
     if (

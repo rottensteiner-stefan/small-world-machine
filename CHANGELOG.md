@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.124.0] - 2026-11-13
+
+### "Tools should be invisible — the work is the point." - Small World Machine Doctrine
+
+- **Features:**
+  - _`SceneParams` class:_ new `ForgeTool` subclass providing live numeric sliders for runtime parameter tuning; integrated into `AbstractShowcase` as `this.sceneParams` for showcase debugging, lighting tweaks, and exploration.
+  - _Showcase 27 — live ambient light control:_ ambient light intensity exposed via `SceneParams` slider for real-time lighting adjustments.
+  - _Showcase 33 — `Hud` class for HZB occlusion culling:_ standalone drawer panel with sliders for lighting, occluder wall, ground, and hidden field material parameters; keyboard toggle `I` for open/close.
+  - _DevTools auto-integration:_ `attachDevTools` automatically opens a "Scene Params" window when an app exposes registered `SceneParams`, eliminating manual setup.
+
+- **Architecture & Bugfixes:**
+  - _`AbstractShowcase` — `sceneParams` property:_ exposes the `SceneParams` instance on the base showcase class for derived classes to register parameters.
+  - _`AbstractShowcase` barrel export:_ `SceneParams` added to `index.ts` export list.
+
 ## [0.123.0] - 2026-11-13
 
 ### "The universe is under no obligation to make sense to you." - Neil deGrasse Tyson

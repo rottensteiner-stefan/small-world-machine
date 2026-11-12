@@ -12,6 +12,7 @@ import { Cube } from "../../geometry/index.js";
 import { SkyboxMaterial } from "../materials/index.js";
 import { CubeTexture, Texture } from "../textures/index.js";
 import { FlyController, OrbitController } from "../controllers/index.js";
+import { SceneParams } from "./SceneParams.js";
 
 /**
  * Window-level event dispatched by {@link AbstractShowcase} once `start()` has finished setting up
@@ -71,6 +72,14 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
 
   private _showcaseKeyDownHandler = (event: KeyboardEvent): void => this.onKeyDown(event);
   private _navButtons: HTMLButtonElement[] = [];
+
+  /**
+   * SceneParams manager for live parameter sliders in the Forge HUD.
+   * Register sliders in {@link setupScene} via `this.sceneParams.addParam(...)`.
+   * The Forge window opens automatically when {@link attachDevTools} is called and
+   * at least one parameter is registered.
+   */
+  public readonly sceneParams: SceneParams = new SceneParams();
 
   private _initialCamPos: Vector3D = new Vector3D();
   private _initialCamTarget: Vector3D = new Vector3D();
@@ -260,6 +269,7 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
       btn.remove();
     }
     this._navButtons = [];
+    this.sceneParams.unmount();
     super.destroy();
   }
 

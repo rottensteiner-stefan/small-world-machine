@@ -36,6 +36,7 @@ export class Showcase extends AbstractShowcase {
   private _keySpotLightA!: SpotLight;
   private _keySpotLightB!: SpotLight;
   private _sunLight!: DirectionalLight;
+  private _ambientLight!: AmbientLight;
   private _time: number = 0;
 
   constructor(options: EngineOptions = {}) {
@@ -88,18 +89,17 @@ export class Showcase extends AbstractShowcase {
     this.camera.target.set(0, 2.2, 0);
     this.camera.addBehavior(new OrbitController({ input: this.input }));
 
-    // 1. Ambient Light (Low for sharp shadow contrast)
-    this.scene.add(
-      new AmbientLight({
-        color: new Color(0.317, 0.335, 0.381),
-        intensity: 0.25,
-      }),
-    );
+    // 1. Ambient Light (balanced for display variance)
+    this._ambientLight = new AmbientLight({
+      color: new Color(0.317, 0.335, 0.381),
+      intensity: 0.75,
+    });
+    this.scene.add(this._ambientLight);
 
-    // 2. Cascaded Sun Light (CSM) - faint cool moonlight, the spots carry the shadows
+    // 2. Cascaded Sun Light (CSM) - cool fill light, spots carry the shadows
     const sunLight = new DirectionalLight({
       color: new Color(0.85, 0.893, 1),
-      intensity: 0.2,
+      intensity: 0.75,
     });
     sunLight.position.set(8, 12, 6);
     sunLight.direction.set(-0.8, -1.0, -0.6);
@@ -187,7 +187,7 @@ export class Showcase extends AbstractShowcase {
       this.scene.brdfLUT = brdfTexture;
       this.scene.irradianceMap = irradianceTexture;
       this.scene.prefilterMap = prefilterTexture;
-      this.scene.environmentIntensity = 0.5;
+      this.scene.environmentIntensity = 1.5;
 
       whiteMarble = textures.slice(0, 4) as Texture[];
       blackMarble = textures.slice(4, 7) as Texture[];
@@ -456,6 +456,39 @@ export class Showcase extends AbstractShowcase {
     corePillar.material = bronzeMetal;
     corePillar.castShadow = true;
     this._ringGroup.add(corePillar);
+
+    // Register live scene params for the Forge HUD
+    this.sceneParams.addParam("Env Intensity", 0, 3, 0.05, 1.5, (v) => {
+      this.scene.environmentIntensity = v;
+    });
+    this.sceneParams.addParam("Ambient", 0, 2, 0.05, 0.75, (v) => {
+      this._ambientLight.intensity = v;
+    });
+    this.sceneParams.addParam("Sun", 0, 2, 0.05, 0.75, (v) => {
+      this._sunLight.intensity = v;
+    });
+    this.sceneParams.addParam("Spot A", 0, 15, 0.1, 5.0, (v) => {
+      this._keySpotLightA.intensity = v;
+    });
+    this.sceneParams.addParam("Spot B", 0, 15, 0.1, 4.5, (v) => {
+      this._keySpotLightB.intensity = v;
+    });
+    this.sceneParams.addParam("Bloom", 0, 2, 0.05, 0.6, (v) => {
+      const bloom = this.renderer.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
+      if (bloom) bloom.intensity = v;
+    });
+    this.sceneParams.addParam("Bloom Threshold", 0, 3, 0.05, 1.0, (v) => {
+      const bloom = this.renderer.postProcessing.get<BloomElement>(PostProcessingEffectType.BLOOM);
+      if (bloom) bloom.threshold = v;
+    });
+    this.sceneParams.addParam("HBAO Radius", 0.1, 3, 0.05, 0.8, (v) => {
+      const hbao = this.renderer.postProcessing.get<HbaoElement>(PostProcessingEffectType.HBAO);
+      if (hbao) hbao.radius = v;
+    });
+    this.sceneParams.addParam("HBAO Intensity", 0, 3, 0.05, 1.2, (v) => {
+      const hbao = this.renderer.postProcessing.get<HbaoElement>(PostProcessingEffectType.HBAO);
+      if (hbao) hbao.intensity = v;
+    });
   }
 
   protected override update(deltaTime: number): void {
@@ -519,7 +552,8 @@ export class Showcase extends AbstractShowcase {
 // Bootstrap the example
 // ----------------------------------------------------------------------------
 const app = new Showcase();
-attachDevTools(app);
+attachDevTools(app); // auto-opens Scene Params window since params are registered in setupScene()
+
 app.start().catch((err: unknown) => console.error("[Showcase27] Failed to start:", err));
 // QA instrumentation hook for the browser capture scripts (same convention as Showcases 28/39).
 if (typeof window !== "undefined") {
