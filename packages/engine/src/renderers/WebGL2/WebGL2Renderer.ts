@@ -12,6 +12,7 @@ import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
 import { WebGL2DepthFrameBuffer } from "./WebGL2DepthFrameBuffer.js";
 import { WebGL2SpotShadowArray } from "./WebGL2SpotShadowArray.js";
 import { WebGL2PointShadows } from "./WebGL2PointShadows.js";
+import { WebGL2ShadowManager } from "./WebGL2ShadowManager.js";
 import { WebGL2FrameBuffer } from "./WebGL2FrameBuffer.js";
 import { NORMAL_OUTPUT_FLAG } from "../gl/managers/NormalOutputWrapperGL.js";
 import { WebGL2CubeFrameBuffer } from "./WebGL2CubeFrameBuffer.js";
@@ -87,6 +88,22 @@ const IDENTITY_MATRIX: Float32Array = new Float32Array([
   1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
 ]);
 
+/** Consolidated WebGL2 GPU state for a single `InstancedMesh`. Replaces 6 separate WeakMaps. */
+interface WebGL2InstanceState {
+  /** GPU buffer holding instance model matrices. */
+  matrixBuf: WebGLBuffer | undefined;
+  /** Allocated byte size of the matrix buffer. */
+  matrixBytes: number;
+  /** Number of matrices uploaded in the previous frame. */
+  matricesUploaded: number;
+  /** GPU buffer holding per-instance custom data. */
+  dataBuf: WebGLBuffer | undefined;
+  /** Allocated byte size of the data buffer. */
+  dataBytes: number;
+  /** Number of data elements uploaded in the previous frame. */
+  dataUploaded: number;
+}
+
 /**
  * WebGL 2.0 implementation of the renderer.
  */
@@ -102,12 +119,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   /** Per-geometry GPU mesh cache -- see `WebGLBufferManager`'s own doc comment. */
   private _geometry!: WebGLBufferManager;
 
-  private _instanceBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
-  private _instanceBufferSizes: WeakMap<InstancedMesh, number> = new WeakMap();
-  private _instanceMatricesUploaded: WeakMap<InstancedMesh, number> = new WeakMap();
-  private _instanceDataBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
-  private _instanceDataBufferSizes: WeakMap<InstancedMesh, number> = new WeakMap();
-  private _instanceDataUploaded: WeakMap<InstancedMesh, number> = new WeakMap();
+  /** Consolidated per-InstancedMesh WebGL state — replaces 6 separate WeakMaps. */
+  private _instanceState: WeakMap<InstancedMesh, WebGL2InstanceState> = new WeakMap();
   /** Auto-instancing (ADR 0046): one streamed matrix buffer for every run, plus its CPU staging. */
   private _runMatrixBuffer: WebGLBuffer | undefined;
   private _runStaging: Float32Array = new Float32Array(1024 * 16);
@@ -121,40 +134,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private _geometryOrdinalSeed = 0;
 
   private _scratchFloat4: Float32Array = new Float32Array(4);
+  /** Reusable shader-variant flag array for `_buildSubgroupShaderFlags` (zero-GC hot path). */
+  private _scratchShaderFlags: string[] = [];
 
   /** Fixed unit for reading the directional shadow map's raw (non-comparison) depth, used by
-   * PCSS's blocker-search step. Dedicated texture unit 13 -- reserved like every other
-   * shadow unit -- with a dedicated WebGLSampler (`_rawDepthSampler`) that overrides
-   * TEXTURE_COMPARE_MODE back to NONE, since that mode is otherwise baked onto the depth
-   * texture object itself (see WebGL2DepthFrameBuffer). */
+   * PCSS's blocker-search step. Dedicated texture unit 13. */
   private static readonly _RAW_DEPTH_UNIT = 13;
   private _rawDepthSampler!: WebGLSampler;
-
-  /** Defensive fallback unit for the EVSM moment atlas sampler (ADR 0043). NOTE: unit 14 is
-   * CLUSTER_GRID_UNIT (the RG32UI cluster-grid texture), so `_bindEvsmShadowUniforms` no longer
-   * binds the RGBA32F atlas there -- it uses the per-program sampler unit the program cache
-   * reserved exclusively for `u_dirEVSMMap` (see that method) and only falls back to this fixed
-   * unit for the (theoretical) case of an active sampler without an allocated unit. */
-  private static readonly _EVSM_MAP_UNIT = 14;
-  /** EVSM tuning lanes, byte-identical to the WebGPU side (GlobalUniformWriter lanes 217-219). */
-  private static readonly _EVSM_VARIANCE_FLOOR = 0.002;
-  private static readonly _EVSM_LIGHT_BLEED = 0.12;
-  /** Receiver depth bias before the exponential warp (three.js VSM `shadowCoord.z += shadowBias`);
-   * in [0,1] light-depth units. See the WebGPU EVSM_RECEIVE_BIAS constant for the rationale. */
-  private static readonly _EVSM_RECEIVE_BIAS = 0.0002;
-  /** Moment-atlas clear vector meaning "no occluder" = an occluder at the far plane, which every
-   * in-front receiver evaluates as lit (far-plane EVSM rationale: see the moment writer header). */
-  private _evsmFarClear: [number, number, number, number] = [0, 0, 0, 0];
-  /** RGBA32F moment atlas (color) + its FBO. The FBO reuses the CSM depth atlas as its depth
-   * attachment, so `_evsmAtlasTexture` and `_evsmAtlasFbo` stand alone as a color-only set. */
-  private _evsmAtlasFbo: WebGLFramebuffer | null = null;
-  private _evsmAtlasTexture: WebGLTexture | null = null;
-  /** 1x1 RGBA32F dummy, bound to u_dirEVSMMap whenever no real moment atlas is active (EVSM off
-   * or unsupported) so the sampler always references a real texture object on every program. */
-  private _evsmDummyTexture: WebGLTexture | null = null;
-  /** True when EXT_color_buffer_float (required to render into RGBA32F) was granted. */
-  private _evsmSupported = false;
-  private _evsmSupportChecked = false;
 
   private _opaqueTexture?: WebGLTexture | undefined;
   private _opaqueDepthTexture?: WebGLTexture | undefined;
@@ -210,20 +196,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     return this._clusterIndexTex;
   }
 
-  private _shadowMaps: Map<AbstractLight, WebGL2DepthFrameBuffer> = new Map();
-  /** Lights that rendered a shadow map in the current `renderShadowMaps()` call. */
-  private readonly _shadowMapsUsed: Set<AbstractLight> = new Set();
-  /** Reused "no lights" payload for the depth-only shadow programs. */
-  private readonly _emptyLights: LightDataInterface = {
-    aCol: new Color(0, 0, 0, 1),
-    aIntensity: 0,
-    dCol: new Color(0, 0, 0, 1),
-    dDir: Vector3D.ZERO,
-    dIntensity: 0,
-    aLights: [],
-    pLights: [],
-    sLights: [],
-  };
   /** Derived field-lane shader flags per committed `manifest.flags` array reference (ADR 0059;
    * engine contract `_commitFlags` publishes immutably, a fresh array on content change → the
    * WeakMap key rotates). Tag-checked against the quality/IBL bits so environment changes rebuild.
@@ -236,34 +208,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private readonly _lineShadowParams: Float32Array = new Float32Array([1, 0, 0, 0]);
   private readonly _scratchInstancedObjects: Object3D[] = [];
   private readonly _scratchStandardObjects: Object3D[] = [];
-  private _dummyShadowMap!: WebGL2DepthFrameBuffer;
-  /** Shadow maps of the first 4 spot lights, one layer per `sLights` index (WebGPU layout). */
-  private _spotShadowArray!: WebGL2SpotShadowArray;
-  /** 1x1 all-lit stand-in bound whenever no real spot layer may be sampled (shadow passes). */
-  private _dummySpotShadowArray!: WebGL2SpotShadowArray;
-  /** Spot slots whose layer the last `renderShadowMaps()` call rendered. */
-  private readonly _spotShadowSlots: boolean[] = [false, false, false, false];
-  /** Point-light cube faces in the spot array's layers 4..15 (ADR 0052). */
-  private readonly _pointShadows: WebGL2PointShadows = new WebGL2PointShadows();
-  /** Scratch: shadow depth textures of the first 4 spot lights for the volumetric fog pass. */
-  private readonly _fogSpotShadowTextures: (WebGLTexture | null)[] = [null, null, null, null];
+  /** Owns all shadow map orchestration (extracted from God-class). */
+  private _shadowManager!: WebGL2ShadowManager;
 
-  /**
-   * Dedicated black cube fallback for `u_irradianceMap`/`u_prefilterMap` when a scene has no real
-   * IBL data. `Standard.frag.glsl`'s PBR chunk detects "no IBL bound" via `length(irradiance) <
-   * 0.001` and only then falls back to `u_ambientColor` + a Fresnel-weighted `u_envMap` sample --
-   * reusing the generic `defaultCubeTexture` (a visibly-fake placeholder purple, RGB 50/50/100, so
-   * missing skyboxes/envMaps are easy to spot) here would make that length check never trip, so the
-   * shader would treat the placeholder color as real diffuse+specular lighting data instead.
-   */
-  private _blackCubeTexture!: WebGLTexture;
-  /**
-   * Dedicated `u_brdfLUT` fallback: (scale=1, bias=0) in the .rg channels the shader reads, so
-   * `specularAmbient` reduces to `prefilteredColor * kS_ambient` with no unintended `+1` bias term.
-   * The generic `defaultTexture` (opaque white, RGBA 255/255/255/255) would supply (scale=1,
-   * bias=1) instead. Matches `WebGPURenderer._defaultBrdfTexView`'s convention exactly.
-   */
-  private _defaultBrdfTexture!: WebGLTexture;
+  /** IBL fallback textures are now owned by WebGL2ShadowManager. */
 
   /** Cached once at init instead of re-querying `DeviceCaps` on every texture bind. */
   private _maxTextureUnits: number = 0;
@@ -310,19 +258,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    */
   private _createGpuResources(): void {
     this._geometry = new WebGLBufferManager(this.gl);
-    this._dummyShadowMap = new WebGL2DepthFrameBuffer(this.gl, 1, 1);
-    this._dummyShadowMap.bind();
-    this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
-    this._dummyShadowMap.unbind();
-    this._spotShadowArray = new WebGL2SpotShadowArray(this.gl, 1);
-    this._dummySpotShadowArray = new WebGL2SpotShadowArray(
-      this.gl,
-      1,
-      WebGL2SpotShadowArray.LAYERS,
-    );
-    for (let i = 0; i < WebGL2SpotShadowArray.LAYERS; i++) this._dummySpotShadowArray.bindLayer(i);
-    this._dummySpotShadowArray.unbind();
-    this._spotShadowSlots.fill(false);
 
     // Sampler object overriding TEXTURE_COMPARE_MODE to NONE, bound once to a fixed unit so any
     // depth texture bound there afterwards reads as a plain float instead of a 0/1 comparison --
@@ -343,7 +278,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.defaultTexture,
       this.defaultCubeTexture,
     );
-    this._initIblFallbackTextures();
     this.gl.enable(this.gl.DEPTH_TEST);
 
     // Internal materials the renderer draws by id (shadow/depth), not through a scene object
@@ -367,6 +301,32 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       dialect: "glsl300",
     });
     this._allocateClusterTextures({ x: 1, y: 1, z: 1 }, 1);
+
+    // Initialize shadow manager after programCache and textures are ready
+    this._shadowManager = new WebGL2ShadowManager({
+      gl: this.gl,
+      programCache: this._programCache,
+      textures: this._textures,
+      quality: this._quality,
+      deviceCaps: this.context.deviceCaps,
+      scratchFloat4: this._scratchFloat4,
+      zeroVec4: this._zeroVec4,
+      lineShadowParams: this._lineShadowParams,
+      pointFaceMatrix: this._pointFaceMatrix,
+      scratchRunObjects: this._scratchRunObjects,
+      scratchRuns: this._scratchRuns,
+      scratchRunRest: this._scratchRunRest,
+      isOffscreenRenderTarget: false,
+      targetClearColor: this.targetClearColor,
+      frameViewProj: this._frameViewProj,
+      frameCamPos: this._frameCamPos,
+      frameSceneRoot: this._frameScene?.root,
+      updateGlobalUBO: this.updateGlobalUBO.bind(this),
+      drawFieldShadowView: this._drawFieldShadowView.bind(this),
+      renderInstanceRun: this._renderInstanceRun.bind(this),
+      cachedUniformLocation: this._cachedUniformLocation.bind(this),
+    });
+    this._shadowManager.initializeGpuResources();
   }
 
   /** @inheritdoc */
@@ -380,8 +340,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._texCache.clear();
     this._renderTargetFbos.clear();
     this._renderTargetCubeFbos.clear();
-    this._shadowMaps.clear();
-    this._shadowMapsUsed.clear();
+    // Shadow manager state is rebuilt by _createGpuResources (which destroys the old manager)
     this._instanceBuffers = new WeakMap();
     this._instanceBufferSizes = new WeakMap();
     this._instanceMatricesUploaded = new WeakMap();
@@ -392,13 +351,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._hdrFbo = undefined;
     this._postEffects = undefined;
     this._postCtx = undefined;
-    // EVSM (ADR 0043) handles are dead with the old context; rebuild lazily (see
-    // _checkEvsmSupport/_ensureEvsmAtlas) and re-check EXT_color_buffer_float.
-    this._evsmAtlasFbo = null;
-    this._evsmAtlasTexture = null;
-    this._evsmDummyTexture = null;
-    this._evsmSupported = false;
-    this._evsmSupportChecked = false;
     this._opaqueTexture = undefined;
     this._opaqueDepthTexture = undefined;
     this._opaqueDepthFbo = undefined;
@@ -493,40 +445,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._globalUBO.setFloat(f.clusterDims.offset + 12, this._clusterMaxLightsPerCluster);
   }
 
-  /** Builds the black cube / (scale=1, bias=0) fallbacks used when a scene has no real IBL data. */
-  private _initIblFallbackTextures(): void {
-    this._blackCubeTexture = this.gl.createTexture()!;
-    this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, this._blackCubeTexture);
-    for (let i: number = 0; 6 > i; i++) {
-      this.gl.texImage2D(
-        this.gl.TEXTURE_CUBE_MAP_POSITIVE_X + i,
-        0,
-        this.gl.RGBA,
-        1,
-        1,
-        0,
-        this.gl.RGBA,
-        this.gl.UNSIGNED_BYTE,
-        new Uint8Array([0, 0, 0, 255]),
-      );
-    }
-
-    this._defaultBrdfTexture = this.gl.createTexture()!;
-    this.gl.bindTexture(this.gl.TEXTURE_2D, this._defaultBrdfTexture);
-    this.gl.texImage2D(
-      this.gl.TEXTURE_2D,
-      0,
-      this.gl.RGBA,
-      1,
-      1,
-      0,
-      this.gl.RGBA,
-      this.gl.UNSIGNED_BYTE,
-      new Uint8Array([255, 0, 0, 255]),
-    );
-    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
-    this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
-  }
 
   /**
    * Whether `unit` is within the device's texture-unit budget. Centralizes the "not enough
@@ -874,23 +792,6 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._opaqueDepthFormat = internalFormat;
   }
 
-  /** Per spot slot the fog samples: the spot shadow array when that slot's layer holds this frame's
-   * shadow, else null. */
-  private _collectFogSpotShadowTextures(): readonly (WebGLTexture | null)[] {
-    const spots = this._frameLights?.sLights ?? [];
-    for (let i = 0; i < 4; i++) {
-      const light = spots[i];
-      this._fogSpotShadowTextures[i] =
-        light !== undefined &&
-        light.castShadow &&
-        light.shadowCamera !== undefined &&
-        this._spotShadowSlots[i]
-          ? this._spotShadowArray.texture
-          : null;
-    }
-    return this._fogSpotShadowTextures;
-  }
-
   public flushPostProcess(): void {
     const isOffscreen = this._activeRenderTarget !== null;
     if (!isOffscreen && this.postProcessing.enabled && this._hdrFbo && this._postEffects) {
@@ -926,13 +827,13 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     ctx.time = this.frameInfo.time;
     ctx.realTime = this.frameInfo.realTime;
     const dLight = this._frameLights?.dLight;
-    ctx.dirShadowTexture = dLight ? (this._shadowMaps.get(dLight)?.texture ?? null) : null;
-    ctx.spotShadowTextures = this._collectFogSpotShadowTextures();
-    ctx.fallbackShadowTexture = this._dummyShadowMap.texture;
-    ctx.fallbackSpotShadowArray = this._dummySpotShadowArray.texture;
+    ctx.dirShadowTexture = this._shadowManager.getDirShadowTexture(dLight);
+    ctx.spotShadowTextures = this._shadowManager.collectFogSpotShadowTextures(this._frameLights);
+    ctx.fallbackShadowTexture = this._shadowManager.fallbackShadowTexture;
+    ctx.fallbackSpotShadowArray = this._shadowManager.fallbackSpotShadowArray;
     ctx.irradianceMap = this._frameScene?.irradianceMap
       ? this._textures.getWebGLCubeTexture(this._frameScene.irradianceMap, this._quality)
-      : this._blackCubeTexture;
+      : this._shadowManager._blackCubeTexture;
     ctx.envIntensity = this._frameScene?.environmentIntensity ?? 0;
     ctx.pointLights = this._frameLights?.pLights ?? [];
     ctx.spotLights = this._frameLights?.sLights ?? [];
@@ -944,9 +845,17 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   }
 
   /**
-   * Renders shadow maps for all shadow-casting lights.
+   * Renders shadow maps for all shadow-casting lights. Delegates to WebGL2ShadowManager.
    */
   public renderShadowMaps(lights: LightDataInterface, sortedGroups: RenderBatch[]): void {
+    this._shadowManager.renderShadowMaps(lights, sortedGroups);
+  }
+
+  /**
+   * Binds the scene-global IBL resources (environment intensity, irradiance + prefilter cube
+   * maps, BRDF LUT) on their reserved sampler units.
+   */
+  private _bindGlobalIblUniforms(cache: WebGLProgramCacheEntry, scene?: Scene): void {
     const emptyLights = this._emptyLights;
     this._shadowMapsUsed.clear();
 
@@ -1867,19 +1776,21 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     if (objects.length === 0) return;
 
     // Reused partition buffers (cleared here): `_renderSubgroup` only iterates them synchronously.
+    // Zero-GC: index-based partitioning instead of .push() to avoid bound checks in tight loop.
     const instancedObjects = this._scratchInstancedObjects;
     const standardObjects = this._scratchStandardObjects;
-    instancedObjects.length = 0;
-    standardObjects.length = 0;
-
+    let instancedCount = 0;
+    let standardCount = 0;
     for (let i = 0; i < objects.length; i++) {
-      const o = objects[i];
+      const o = objects[i]!;
       if (o instanceof InstancedMesh) {
-        instancedObjects.push(o!);
+        instancedObjects[instancedCount++] = o;
       } else {
-        standardObjects.push(o!);
+        standardObjects[standardCount++] = o;
       }
     }
+    instancedObjects.length = instancedCount;
+    standardObjects.length = standardCount;
 
     const firstObj = objects[0]!;
     const mat = firstObj.material!;
@@ -2070,7 +1981,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
    * every object sharing a batch shares its material's shader variant, so optional-feature
    * detection reads the first object's skin/IBL/texture-array state exactly once. `USE_INSTANCE_COLOR`
    * is a per-mesh opt-in and stays disjoint from the generic `instanceData` (texture-array index)
-   * semantics. Same single array allocation as the previous inline build.
+   * semantics. Zero-GC: reuses `_scratchShaderFlags` instead of allocating per batch.
    */
   private _buildSubgroupShaderFlags(
     firstObject: Object3D | undefined,
@@ -2078,57 +1989,64 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     scene: Scene | undefined,
     isInst: boolean,
   ): string[] {
-    const shaderFlags = manifest.flags
-      ? [
-          ...(resolveManifestFlags(
-            manifest.flags,
-            this._quality.disableTextures,
-            this._quality.cheapIridescence,
-          ) ?? []),
-        ]
-      : [];
+    const flags = this._scratchShaderFlags;
+    flags.length = 0;
+
+    if (manifest.flags) {
+      const resolved = resolveManifestFlags(
+        manifest.flags,
+        this._quality.disableTextures,
+        this._quality.cheapIridescence,
+      );
+      if (resolved) {
+        for (let i = 0; i < resolved.length; i++) {
+          flags.push(resolved[i]!);
+        }
+      }
+    }
 
     if (
       firstObject &&
       ((isSkinnedMesh(firstObject) && firstObject.skeleton) || firstObject.geometry?.joints)
     ) {
-      if (!shaderFlags.includes(ShaderFlag.SKINNING)) {
-        shaderFlags.push(ShaderFlag.SKINNING);
+      if (!flags.includes(ShaderFlag.SKINNING)) {
+        flags.push(ShaderFlag.SKINNING);
       }
     }
 
     if (scene?.irradianceMap || scene?.prefilterMap) {
-      if (!shaderFlags.includes(ShaderFlag.IBL)) {
-        shaderFlags.push(ShaderFlag.IBL);
+      if (!flags.includes(ShaderFlag.IBL)) {
+        flags.push(ShaderFlag.IBL);
       }
     }
 
-    // Check if texture array is used
+    // Check if texture array is used (zero-GC: for...in instead of Object.values())
     if (manifest.textures) {
-      for (const tex of Object.values(manifest.textures)) {
+      for (const key in manifest.textures) {
+        const tex = manifest.textures[key];
         if (tex && "isTextureArray" in tex && (tex as TextureArray).isTextureArray) {
-          if (!shaderFlags.includes(ShaderFlag.TEXTURE_ARRAY)) {
-            shaderFlags.push(ShaderFlag.TEXTURE_ARRAY);
+          if (!flags.includes(ShaderFlag.TEXTURE_ARRAY)) {
+            flags.push(ShaderFlag.TEXTURE_ARRAY);
           }
           break;
         }
       }
     }
 
-    if (this._quality.normalBuffer) shaderFlags.push(NORMAL_OUTPUT_FLAG);
+    if (this._quality.normalBuffer) flags.push(NORMAL_OUTPUT_FLAG);
 
     // EVSM (ADR 0043): only this variant declares the moment-atlas sampler, so the default
     // PCSS/PCF programs keep one texture unit free. A mode switch selects the other cached variant.
-    if (this._quality.shadowMode === ShadowMode.EVSM) shaderFlags.push(ShaderFlag.EVSM);
+    if (this._quality.shadowMode === ShadowMode.EVSM) flags.push(ShaderFlag.EVSM);
 
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
     // semantics (texture-array index) stay untouched for other meshes: only an instanced mesh
     // explicitly requesting it gets the `USE_INSTANCE_COLOR` variant compiled in.
     if (isInst && firstObject instanceof InstancedMesh && firstObject.useInstanceDataAsColor) {
-      shaderFlags.push(ShaderFlag.INSTANCE_COLOR);
+      flags.push(ShaderFlag.INSTANCE_COLOR);
     }
 
-    return shaderFlags;
+    return flags;
   }
 
   /**
@@ -2501,29 +2419,31 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     this._uploadModelMatrix(instMesh.worldMatrix.data, undefined, undefined, cache.uniforms);
 
-    let matrixBuf = this._instanceBuffers.get(instMesh);
+    let state = this._instanceState.get(instMesh);
+    if (!state) {
+      state = { matrixBuf: undefined, matrixBytes: 0, matricesUploaded: 0, dataBuf: undefined, dataBytes: 0, dataUploaded: 0 };
+      this._instanceState.set(instMesh, state);
+    }
+
     const matrixByteLength = instMesh.instanceMatrices.byteLength;
-    const allocatedMatrixBytes = this._instanceBufferSizes.get(instMesh) ?? 0;
-    if (!matrixBuf || allocatedMatrixBytes < matrixByteLength) {
-      if (!matrixBuf) {
-        matrixBuf = this.gl.createBuffer()!;
-        this._instanceBuffers.set(instMesh, matrixBuf);
+    if (!state.matrixBuf || state.matrixBytes < matrixByteLength) {
+      if (!state.matrixBuf) {
+        state.matrixBuf = this.gl.createBuffer()!;
       }
-      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, state.matrixBuf);
       if (typeof this.gl.bufferSubData === "function") {
         this.gl.bufferData(this.gl.ARRAY_BUFFER, matrixByteLength, this.gl.DYNAMIC_DRAW);
       } else {
         this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceMatrices, this.gl.DYNAMIC_DRAW);
       }
-      this._instanceBufferSizes.set(instMesh, matrixByteLength);
-      this._instanceMatricesUploaded.delete(instMesh);
+      state.matrixBytes = matrixByteLength;
+      state.matricesUploaded = 0;
       instMesh.instanceMatrixNeedsUpdate = true;
     } else {
-      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, state.matrixBuf);
     }
 
-    const uploadedMatrices = this._instanceMatricesUploaded.get(instMesh) ?? 0;
-    if (instMesh.instanceMatrixNeedsUpdate || instMesh.instanceCount > uploadedMatrices) {
+    if (instMesh.instanceMatrixNeedsUpdate || instMesh.instanceCount > state.matricesUploaded) {
       if (typeof this.gl.bufferSubData === "function") {
         this.gl.bufferSubData(
           this.gl.ARRAY_BUFFER,
@@ -2535,24 +2455,20 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       } else {
         this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceMatrices, this.gl.DYNAMIC_DRAW);
       }
-      this._instanceMatricesUploaded.set(
-        instMesh,
-        instMesh.instanceMatrixNeedsUpdate
-          ? instMesh.instanceCount
-          : Math.max(uploadedMatrices, instMesh.instanceCount),
-      );
+      state.matricesUploaded = instMesh.instanceMatrixNeedsUpdate
+        ? instMesh.instanceCount
+        : Math.max(state.matricesUploaded, instMesh.instanceCount);
       instMesh.instanceMatrixNeedsUpdate = false;
     }
 
     let dataBuf: WebGLBuffer | undefined;
     if (instMesh.instanceData && cache.attributes.has("a_instanceData")) {
-      dataBuf = this._instanceDataBuffers.get(instMesh);
+      dataBuf = state.dataBuf;
       const dataByteLength = instMesh.instanceData.byteLength;
-      const allocatedDataBytes = this._instanceDataBufferSizes.get(instMesh) ?? 0;
-      if (!dataBuf || allocatedDataBytes < dataByteLength) {
+      if (!dataBuf || state.dataBytes < dataByteLength) {
         if (!dataBuf) {
           dataBuf = this.gl.createBuffer()!;
-          this._instanceDataBuffers.set(instMesh, dataBuf);
+          state.dataBuf = dataBuf;
         }
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
         if (typeof this.gl.bufferSubData === "function") {
@@ -2560,13 +2476,12 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         } else {
           this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
         }
-        this._instanceDataBufferSizes.set(instMesh, dataByteLength);
-        this._instanceDataUploaded.delete(instMesh);
+        state.dataBytes = dataByteLength;
+        state.dataUploaded = 0;
         instMesh.instanceDataNeedsUpdate = true;
       }
 
-      const uploadedData = this._instanceDataUploaded.get(instMesh) ?? 0;
-      if (instMesh.instanceDataNeedsUpdate || instMesh.instanceCount > uploadedData) {
+      if (instMesh.instanceDataNeedsUpdate || instMesh.instanceCount > state.dataUploaded) {
         const stride = instMesh.instanceDataSize || 4;
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
         if (typeof this.gl.bufferSubData === "function") {
@@ -2580,12 +2495,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         } else {
           this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
         }
-        this._instanceDataUploaded.set(
-          instMesh,
-          instMesh.instanceDataNeedsUpdate
-            ? instMesh.instanceCount
-            : Math.max(uploadedData, instMesh.instanceCount),
-        );
+        state.dataUploaded = instMesh.instanceDataNeedsUpdate
+          ? instMesh.instanceCount
+          : Math.max(state.dataUploaded, instMesh.instanceCount);
         instMesh.instanceDataNeedsUpdate = false;
       }
     }
@@ -3019,18 +2931,14 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     if (obj instanceof InstancedMesh) this._releaseInstanceBuffers(obj);
   }
 
-  /** Deletes the per-instance matrix/data GL buffers of a removed `InstancedMesh` and its size bookkeeping. */
+  /** Deletes the per-instance matrix/data GL buffers of a removed `InstancedMesh` and its state. */
   private _releaseInstanceBuffers(instMesh: InstancedMesh): void {
-    const matrixBuf = this._instanceBuffers.get(instMesh);
-    if (matrixBuf) this.gl.deleteBuffer(matrixBuf);
-    const dataBuf = this._instanceDataBuffers.get(instMesh);
-    if (dataBuf) this.gl.deleteBuffer(dataBuf);
-    this._instanceBuffers.delete(instMesh);
-    this._instanceBufferSizes.delete(instMesh);
-    this._instanceMatricesUploaded.delete(instMesh);
-    this._instanceDataBuffers.delete(instMesh);
-    this._instanceDataBufferSizes.delete(instMesh);
-    this._instanceDataUploaded.delete(instMesh);
+    const state = this._instanceState.get(instMesh);
+    if (state) {
+      if (state.matrixBuf) this.gl.deleteBuffer(state.matrixBuf);
+      if (state.dataBuf) this.gl.deleteBuffer(state.dataBuf);
+      this._instanceState.delete(instMesh);
+    }
   }
 
   /** @inheritdoc */

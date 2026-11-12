@@ -25,6 +25,11 @@ export class SpatialQueries {
     normal: new Vector3D(),
     collider: null as unknown as Collidable,
   };
+  /** Pooled RaycastHit objects for raycastAll() — zero-GC per call. */
+  private readonly _scratchHits: RaycastHit[] = [];
+  /** Scratch vectors for accumulating hits before sorting. */
+  private readonly _scratchHitPoints: Vector3D[] = [];
+  private readonly _scratchHitNormals: Vector3D[] = [];
 
   constructor(private readonly _broadphase: PhysicsBroadphase) {}
 
@@ -115,7 +120,7 @@ export class SpatialQueries {
     outHits?: RaycastHit[],
     ignoreTriggers: boolean = true,
   ): RaycastHit[] {
-    const hits = outHits ?? [];
+    const hits = outHits ?? this._scratchHits;
     hits.length = 0;
 
     this._queryHits.length = 0;
@@ -131,13 +136,27 @@ export class SpatialQueries {
 
       const t = ray.intersectVolumeDetailed(c.bounds, hitPt, hitNorm);
       if (t >= 0 && t <= maxDistance) {
-        hits.push({
-          distance: t,
-          point: new Vector3D(hitPt.x, hitPt.y, hitPt.z),
-          normal: new Vector3D(hitNorm.x, hitNorm.y, hitNorm.z),
-          collider: c,
-          ...(c instanceof Object3D ? { object: c } : {}),
-        });
+        // Grow pooled hit array on demand — zero GC after initial growth
+        if (hits.length >= this._scratchHits.length) {
+          const newHit: RaycastHit = {
+            distance: 0,
+            point: new Vector3D(),
+            normal: new Vector3D(),
+            collider: null as unknown as Collidable,
+          };
+          this._scratchHits.push(newHit);
+        }
+        const h = hits[hits.length] = this._scratchHits[hits.length];
+        h.distance = t;
+        h.point.copyFrom(hitPt);
+        h.normal.copyFrom(hitNorm);
+        h.collider = c;
+        if (c instanceof Object3D) {
+          h.object = c;
+        } else {
+          delete h.object;
+        }
+        hits.length++;
       }
     }
 

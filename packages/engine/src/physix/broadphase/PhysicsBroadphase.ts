@@ -40,6 +40,8 @@ export class PhysicsBroadphase {
   private _tree?: Octree;
   private _worldMin: Vector3D = new Vector3D();
   private _worldMax: Vector3D = new Vector3D();
+  /** Pre-allocated BoundingBox for Octree root — avoids .clone() allocation on first build. */
+  private _scratchRootBox: BoundingBox = new BoundingBox();
   private _fallback: Collidable[] = [];
   private _proxies: Map<Collidable, BroadphaseProxy> = new Map();
   private _activeColliders: Set<Collidable> = new Set();
@@ -182,7 +184,7 @@ export class PhysicsBroadphase {
         const isStatic = collider instanceof Object3D ? collider.isStatic : false;
         proxy = {
           collider,
-          fatBounds: new BoundingBox(new Vector3D(), new Vector3D()),
+          fatBounds: new BoundingBox(),
           inTree: false,
           isStatic,
         };
@@ -225,7 +227,9 @@ export class PhysicsBroadphase {
         this._worldMax.z += BROADPHASE_EPSILON;
 
         if (!this._tree) {
-          this._tree = new Octree(new BoundingBox(this._worldMin.clone(), this._worldMax.clone()));
+          this._scratchRootBox.min.copyFrom(this._worldMin);
+          this._scratchRootBox.max.copyFrom(this._worldMax);
+          this._tree = new Octree(this._scratchRootBox);
         } else if (this.skippedCount === 0) {
           this._tree.root.bounds.min.copyFrom(this._worldMin);
           this._tree.root.bounds.max.copyFrom(this._worldMax);
@@ -319,7 +323,7 @@ export class PhysicsBroadphase {
       const isStatic = collider instanceof Object3D ? collider.isStatic : false;
       proxy = {
         collider,
-        fatBounds: new BoundingBox(new Vector3D(), new Vector3D()),
+        fatBounds: new BoundingBox(),
         inTree: false,
         isStatic,
       };
