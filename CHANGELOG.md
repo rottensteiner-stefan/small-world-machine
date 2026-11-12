@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.123.0] - 2026-11-13
 
 ### "The universe is under no obligation to make sense to you." - Neil deGrasse Tyson
 
