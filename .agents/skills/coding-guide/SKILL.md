@@ -246,53 +246,27 @@ WGSL verbietet strikt das Shadowing von Parametern der Entry-Point-Funktion (z. 
 
 ---
 
-## 5. Testing Guide & Mocking Patterns
+## 5. Testing Scope, Timing & Integration Checks (ADR 0044)
 
-We use **Vitest** for running unit tests on behaviors, math, and materials without requiring a browser window or GPU hardware.
+We use **Vitest** for pure logic/contract tests, **`lint:glsl`/`lint:wgsl`** for shader validation, **`npm run test:canary`** for fast daily bundler + headless browser checks (`10,28,30,37,40,48,52`), and **`npm run test:spectrum`** for 100% 49-feature coverage (`4,6,10,13,14,23,26,28,30,34,37,40,41,42,48,50,51,52`).
 
-### A. Material Parameter Test Template
+### A. WHAT to Test (Signal over Volume)
 
-Tests for materials should verify that parameter modifications update CPU storage correctly, and that shaders compile.
+- **DO test (Public Contracts & Pure Logic):**
+  - Math, physics, and `@invariant` rules (`Vector3D`, `Matrix4`, momentum conservation, deterministic geometry).
+  - Binary parsers and fail-fast/capacity limits (glTF/GLB hardening with in-test `buildGlb()` builders).
+  - Buffer/UBO byte offsets and shader tier parity against shipped sources (`GlobalUniformLayout`, `TierParityMatrix.test.ts`).
+  - Non-trivial state transitions, scene/behavior lifecycles, and resource disposal/leak cleanup.
+  - **Bugfixes:** Exactly **1** minimal regression test reproducing the root cause before/with the fix.
+- **DO NOT test (Banned Noise):**
+  - **No trivial property/default tests** (e.g. `setShininess(50)` -> `expect(getShininess()).toBe(50)`); TypeScript covers this.
+  - **No delegation/wiring tests** when refactoring or splitting classes into managers.
+  - **No white-box tests** reaching into `_privateFields` or asserting exact internal variable names.
+  - **No fake GPU/WebGL-context mock suites** (`vi.fn()` stubs checking `gl.bindBuffer` call counts); mocks pass 100% even when real shaders fail to compile or Vite drops assets.
 
-```typescript
-import { describe, it, expect } from "vitest";
-import { ExampleMaterial } from "../../src/core/materials/ExampleMaterial.js";
-import { Color } from "../../src/math/Color.js";
+### B. WHEN to Write & Run Tests
 
-describe("ExampleMaterial", () => {
-  it("should store and update color and shininess parameters", () => {
-    const mat = new ExampleMaterial(Color.RED, 30);
-    expect(mat.color.equals(Color.RED)).toBe(true);
-    expect(mat.getShininess()).toBe(30);
+1. **During active implementation, exploration, or refactoring:** Write **0 new tests**. Keep the loop fast with `npm run typecheck` (and `npm run lint:glsl` / `npm run lint:wgsl` when editing shaders).
+2. **At milestone / feature completion (before commit):** Audit once against Section A above and add tests only for qualifying contracts/invariants. For pure refactors with unchanged semantics, add 0 new tests (clean up broken white-box tests instead of duplicating them).
+3. **Before committing renderer, shader, asset, or package-bundle changes:** Run `npm run test:canary` (or `npm run test:spectrum` for releases / major renderer changes). Both run across **all 3 renderer tiers** (`WEB_GL1`, `WEB_GL2`, `WEB_GPU`) — including features unsupported by lower tiers to guarantee honest, crash-free fallback with zero console errors and non-blank canvas.
 
-    mat.setShininess(50);
-    expect(mat.getShininess()).toBe(50);
-  });
-});
-```
-
-### B. Mocking WebGL/Canvas Contexts
-
-When a test instantiates parts of the renderer, mock the DOM `HTMLCanvasElement` using Vitest:
-
-```typescript
-import { vi } from "vitest";
-
-// Mock minimal canvas and WebGL context
-const mockContext = {
-  viewport: vi.fn(),
-  clearColor: vi.fn(),
-  clear: vi.fn(),
-  createShader: vi.fn(() => ({})),
-  shaderSource: vi.fn(),
-  compileShader: vi.fn(),
-  getShaderParameter: vi.fn(() => true),
-};
-
-vi.stubGlobal("document", {
-  createElement: vi.fn(() => ({
-    getContext: vi.fn(() => mockContext),
-    addEventListener: vi.fn(),
-  })),
-});
-```
