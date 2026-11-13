@@ -8,16 +8,32 @@ The foundational domain model for Small World Machine. It defines the core archi
 The unified stylized liquid and fluid pipeline within Small World Machine (`StylizedWaterMaterial`) covering toon, Ghibli-soft, painterly sparkle, dredge, and other stylized looks via parameter vectors and compile-time extension hooks.
 _Avoid_: Ghibli Water Subsystem, Liquid Fork — Ghibli is one preset on the continuous Anime continuum; non-water fluids (lava, slime, dark oil) reuse the identical shader core.
 
+**API Tier vs. Performance Tier**:
+The two orthogonal adaptation axes (ADR 0035, ADR 0057): **API Tier** (`RendererType.WEB_GPU`, `WEB_GL2`, `WEB_GL1`) defines hardware/API capabilities with no lowest-common-denominator cap (tracked in `docs/reference/tier-parity.json`); **Performance Tier** (`PerformanceTier`: `LOW` / `MEDIUM` / `HIGH` from `DeviceCaps` + `GpuClass` including software rasterizers like SwiftShader/llvmpipe → `QualityConfigResolver`) scales feature budgets and effect toggles to meet frame time.
+_Avoid_: API-Parity Cap, degrading WebGPU because a lower API tier lacks compute or storage textures.
+
 **App-Manifest (Application Manifest)**:
-The single mandatory app boundary file `app.json` (schema: `public/schemas/app.schema.json`, `schemaVersion`-Kette, ADR 0041 §2 / Stufe 1): declares `id`, `version`, `entry`, owned content (`levels`, `characters`, `kits`, `content.languages`) and the `save` declaration. Verified by `assertAppManifest()` + `AppManifestValidation.test.ts`.
-_Avoid_: Project File, App Config — the manifest names the app *unit* with stable IDs and never-reused identifiers (ADR 0041), not a loose config blob.
+The single mandatory app boundary file `app.json` (schema: `public/schemas/app.schema.json`, `schemaVersion` chain, ADR 0041 §2 / Stage 1): declares `id`, `version`, `entry`, owned content (`levels`, `characters`, `kits`, `content.languages`) and the `save` declaration. Verified by `assertAppManifest()` + `AppManifestValidation.test.ts`.
+_Avoid_: Project File, App Config — the manifest names the app _unit_ with stable IDs and never-reused identifiers (ADR 0041), not a loose config blob.
 
 **Asset Kit**:
 A self-contained, schema-validated directory of modular 3D environment assets, props, and procedural builders sharing a unified PBR palette, scale rhythm, and metadata bindings (`kit.json`, `meta.json`).
 _Avoid_: Asset Pack, Model Bundle (informal; Asset Kit names a strictly schema-validated format, ADR 0011).
 
+**Auto Exposure (Eye Adaptation)**:
+The GPU eye-adaptation pass (`AutoExposureElement`, ADR 0061, WebGPU & WebGL2): meters pre-uber HDR radiance into a 16×16 center-weighted log-luminance grid and adapts a 1×1 EV multiplier across frames (slower dark adaptation, instant snap on camera cuts), using a white 1×1 stand-in when disabled; WebGL1 stays static.
+_Avoid_: CPU luminance readback, conflating with static artistic `exposure`.
+
+**Auto-Instancing**:
+Transparent renderer-level batching (`quality.autoInstancing`, ADR 0046) that draws consecutive opaque objects sharing geometry and material (≥ 4 objects) as a single instanced draw across main, shadow, and depth pre-passes without mutating the scene graph.
+_Avoid_: Manual `InstancedMesh`, Mesh Merging, or conflating with `Instance Field` (ADR 0059, for 10⁵–10⁶ static populations without scene-graph nodes).
+
+**Backlight (Thin-Surface Sun Transmission)**:
+The Godot-style directional sun transmission term on `StandardMaterial` (`backlight` sRGB tint + `backlightThickness`, ADR 0060) and `InstanceField` foliage: combines unlit-side wrap lighting and forward sun scatter with transmission shadow sampling shifted `thickness` meters toward the sun so closed crowns do not self-shadow.
+_Avoid_: Full subsurface scattering (SSS) — Backlight is a lightweight thin-sheet approximation, not multi-scatter volumetric SSS.
+
 **Basis Transcoding**:
-The runtime process of converting universal `.basis`/`.ktx2` compressed textures into the client GPU's native hardware block-compression format (BC7, ASTC, ETC2, BC3) via WASM.
+The runtime process of converting universal `.basis`/`.ktx2` compressed textures into the client GPU's native hardware block-compression format (BC7, ASTC, ETC2, BC3) via WASM (`@small-world-machine/gltf-extensions`).
 _Avoid_: Texture Decompression — decompression implies unpacking to uncompressed RGBA; transcoding translates directly between compressed formats to keep textures compressed in GPU VRAM.
 
 **Behavior**:
@@ -32,13 +48,17 @@ _Avoid_: Coarse/Fine pass — this project's docs consistently say Broadphase/Na
 The pattern (e.g. STIFF, SMOOTH, FPS, ISOMETRIC) that governs how a camera's transform updates each frame.
 _Avoid_: Controller — a Controller is a Behavior that drives input; Strategy is the update math itself, a different layer on the same camera.
 
-**Cell (Instance Field)**:
-The world-aligned population-grid cell of an `InstanceField` (uniform cube of `cellSize`, linearized row-major X-fastest): the unit for CPU cell culling (GL fallback), cell-ordered 16-B instance records, streaming and far-field aggregation. GPU culling goes per instance, never per cell; the pre-sorted cell order is what makes the zero-upload GL VBO with `vertexAttribPointer` offsets work.
-_Avoid_: Cluster (the 3D light-culling grid) and Froxel (frustum-aligned fog/light-medium grid) — unrelated named grids; an Instance Field cell is a fixed world-space population cell, never screen- or frustum-aligned.
+**Canopy Coverage**:
+A CPU-baked top-down sky-occlusion grid (`buildCanopyCoverage`, `FieldCanopy`, `@small-world-machine/vegetation-extras`, ADR 0059 step 6a) computed from tree crown discs to darken ambient light below forest canopies (trees, ground cover, ground `aoMap`) and drive canopy-weighted `ForestLookBlender` transitions.
+_Avoid_: Global ambient dimming, voxel GI — Canopy Coverage is a static 2D top-down crown density map.
 
 **Capture-Frame-Rate (`captureFrameRate`)**:
 A deterministic simulation mode (`SmallWorldMachine.captureFrameRate`) in which the main loop advances gameplay and animation by an exact fixed timestep $\Delta t = 1.0 / \text{captureFrameRate}$ per frame, completely decoupled from wall-clock execution duration (analogous to Unity's `Time.captureFramerate` or Godot's `--fixed-fps`). Makes recordings and screenshot baselines reproducible on the same device and driver; temporal effects (fog history, TAA) additionally need a few warm-up `step()` frames to converge.
 _Avoid_: Fixed Timestep (ambiguous: physics has an internal fixed sub-step, whereas capture frame rate locks the outer engine step and frame clock for recording).
+
+**Cell (Instance Field)**:
+The world-aligned population-grid cell of an `InstanceField` (uniform cube of `cellSize`, linearized row-major X-fastest): the unit for CPU cell culling (GL fallback), cell-ordered 16-B instance records, streaming and far-field aggregation. GPU culling goes per instance, never per cell; the pre-sorted cell order is what makes the zero-upload GL VBO with `vertexAttribPointer` offsets work.
+_Avoid_: Cluster (the 3D light-culling grid) and Froxel (frustum-aligned fog/light-medium grid) — unrelated named grids; an Instance Field cell is a fixed world-space population cell, never screen- or frustum-aligned.
 
 **Character Rig (Wrapper)**:
 The parent `Object3D` node that encapsulates a humanoid model (scaled to 1.80m) to isolate its intrinsic geometry scale from runtime perspective scaling behaviors (such as `StageMovementBehavior`).
@@ -52,9 +72,13 @@ _Avoid_: Tile (tiled forward+ is a 2D-only variant of this idea that we don't us
 The overall technique: culling lights per Cluster so each fragment only evaluates the lights in its own cell's Per-Cell Light List, instead of testing every light in the scene.
 _Avoid_: Deferred Lighting — a different, unrelated technique (separates a geometry pass from a lighting pass) that's easy to conflate with this one since both exist to cut per-fragment light cost.
 
+**Color Space Contract (sRGB-Authored Colors & IBL)**:
+The engine-wide color convention (ADR 0048, ADR 0049, ADR 0050): every authored `Color` (materials, lights, fog, clear, post tints) and baked IBL texture (`env`, `irradiance`, `prefilter`) is sRGB-encoded (`c^(1/2.2)`) and decoded once to linear (`sRGBToLinear`, `Color.toLinear`, `targetToLinear`, `displayToTarget`); only `brdf_lut` and intermediate render targets hold linear/lane-encoded values.
+_Avoid_: Mixing linear and sRGB `Color` inputs or encoding gamma inside individual shaders inconsistently.
+
 **Content Package / Stabile Text-ID**:
-A per-app text resource file `content/<sprache>.json` (ADR 0041 Stufe 4) holding stable, never-reused text IDs (`namespace.path.*`) with non-empty string values; all language packs of an app share identical key sets (mutual key check) and are bound to the manifest via `app.json` `content.languages`. Resolved app-side through `ContentPackage.t(id)` (fail-fast on unknown IDs). Language is an Einstellung (Savegame-Setting), never game content.
-_Avoid_: Locale String Table, Hardcoded UI Labels — code references IDs, never content strings, so Lektorat/i18n never ships in code.
+A per-app text resource file `content/<sprache>.json` (ADR 0041 Stage 4) holding stable, never-reused text IDs (`namespace.path.*`) with non-empty string values; all language packs of an app share identical key sets (`ContentPackageValidation.test.ts`) and are bound to the manifest via `app.json` `content.languages` for app-side resolution. Language is a user setting, never game content.
+_Avoid_: Locale String Table, Hardcoded UI Labels — code references IDs, never content strings, so editing/localization never requires code changes.
 
 **Context Object**:
 An explicit dependency container passed through constructors or lifecycle methods to avoid global state.
@@ -63,6 +87,10 @@ _Avoid_: Global Singleton, Universal EventBus
 **Culling**:
 Cheaply discarding candidates before expensive work runs on the survivors. This engine has two unrelated cullings — visibility culling (`FrustumCuller`, discards whole objects) and light culling (builds a Cluster's Per-Cell Light List, discards lights) — always name which one is meant.
 _Avoid_: using "culling" bare when the subsystem isn't already obvious from context — say "visibility culling" or "light culling".
+
+**Curl-Noise Affector (`CurlNoiseAffector`)**:
+The divergence-free ($\nabla \cdot \vec{v} = 0$, `@invariant CURL-DIVERGENCE-FREE`) 3D procedural turbulence affector in `@small-world-machine/vfx-extras` based on Bridson et al. (SIGGRAPH 2007): evaluates the analytical curl of a $C^2$-continuous quintic vector potential $\vec{\Psi}$ with optional SDF obstacle boundary ramping $\vec{\Psi}_{\text{eff}} = \text{ramp}(\phi/d_0)\vec{\Psi}$.
+_Avoid_: Random Jitter Affector, Perlin Force Field (un-curled noise has non-zero divergence and causes artificial particle clumping/sinks).
 
 **Decal**:
 A lit surface layer projected from a Decal-Box onto the opaque geometry behind it, drawn in its own sub-pass between opaque and transparent (ADR 0029).
@@ -73,8 +101,12 @@ The unit-cube volume of a Decal in its local space; its local -Y axis is the pro
 _Avoid_: Projector (the Decal itself is the projector; the box is only its volume).
 
 **Declarative Level Descriptor**:
-A JSON-Schema-validated scene description format (`level.schema.json`, `*.level.json`) specifying camera configuration, lighting, post-processing, and placed kit nodes (with socket light mountings and behavior bindings) without imperative scene setup code (ADR 0020). Level files live under `apps/<app>/levels/`, declared by ID in the app manifest (ADR 0041 Stufe 3).
+A JSON-Schema-validated scene description format (`level.schema.json`, `*.level.json`) specifying camera configuration, lighting, post-processing, and placed kit nodes (with socket light mountings and behavior bindings) without imperative scene setup code (ADR 0020). Level files live under `apps/<app>/levels/`, declared by ID in the app manifest (ADR 0041 Stage 3).
 _Avoid_: Scene File (ambiguous with raw glTF `scene.gltf`).
+
+**Dichtemaske / VolumetricTexture (3D-Dichtefeld)**:
+A user-authored 3D data texture (`VolumetricTexture`, RGBA8, D3D-style bottom-up) that modulates the volumetric fog per voxel: R = per-voxel density factor (the only mask channel that changes extinction/transmittance), G = per-voxel single-scattering albedo replacing the global (`VolumetricFogElement.scatteringAlbedo`) or per-volume (`FogVolume.albedo`) value in that cell. Bound either to the whole element inside a world-aligned box (`VolumetricFogElement.densityMask`/`maskPosition`/`maskSize`) or to a single `FogVolume.densityMask` (local box), never to the camera-aligned froxel grid. Absent mask slots are bound to a 1×1×1 identity texture, so the unmodulated path stays numerically identical.
+_Avoid_: Voxel Map, 3D-Texture-Array (per-volume masks keep their own unique resolution — there is a WebGL2 slot budget of 8 masks and a WebGPU budget of 16, but no packing/atlas).
 
 **Ember Bed (Glutbett)**:
 The opaque, emissive fuel-bed element under a fire (`EmberBed`, `@small-world-machine/vfx-extras`): a shallow `StandardMaterial` cylinder that breathes with a slow seeded noise envelope (≈0.35 Hz, clamped emissive band, no heartbeat) — the coal bed under a campfire or the charred tip wrap of a torch. Opaque by contract: a transparent glow sticker over the logs would read as fake.
@@ -84,29 +116,37 @@ _Avoid_: Coal Shader, Glow Sticker — the fuel bed is a solid emissive volume, 
 The typed, per-`SmallWorldMachine`-instance event dispatcher (`app.events`) that replaces DOM `CustomEvent` for engine-internal notifications.
 _Avoid_: Global Event Bus, Universal EventBus — rejected under Context Object; this bus is scoped to one engine instance, never a shared global.
 
+**EVSM Shadow Mapping (`ShadowMode.EVSM`)**:
+The opt-in directional shadow filtering algorithm (`quality.shadowMode = "evsm"`, ADR 0043; default stays `ShadowMode.PCSS`) storing exponential warped depth moments ($e^{c \cdot d}$) and evaluating a two-sided Chebyshev bound on WebGPU and WebGL2 (`EXT_color_buffer_float`-gated with honest fallback).
+_Avoid_: Replacing PCSS as the default or capping WebGPU to WebGL1 shadow limits.
+
 **Fire Composition Node (`Fire`-Prefab)**:
-The single construction entry point (`Fire` in `@small-world-machine/vfx-extras`) that composes the whole fire layer stack — flame body, glow halo, driven practical light, embers, smoke plume, ember bed and soot decal — from pure-data presets (`candle`/`torch`/`campfire`) with per-field overrides. A scene may inject its own practical light (`light:` option) — parented before construction, the fire light behavior captures the local base position on attach — and `preserveLightColor` keeps that light's authored colour (temperature-coupled flicker only applies to prefab-owned lights). One driver per scene: the prefab's `update(dt, camera?, wind?, lean?)` runs exactly once per frame from the app loop; world-anchored embers/smoke spawn only when a camera position is supplied. Rule of Three: showcases 37, 38 and game-app's carried torch.
+The single construction entry point (`Fire` in `@small-world-machine/vfx-extras`) that composes the whole fire layer stack — flame body, glow halo, driven practical light, embers, smoke plume, ember bed and soot decal — from pure-data presets (`candle`/`torch`/`campfire`) with per-field overrides. A scene may inject its own practical light (`light:` option) — parented before construction, the fire light behavior captures the local base position on attach — and `preserveLightColor` keeps that light's authored colour (temperature-coupled flicker only applies to prefab-owned lights). One driver per scene: the prefab's `update(dt, camera?, wind?, lean?)` runs exactly once per frame from the app loop; world-anchored embers/smoke spawn only when a camera position is supplied (consumers: showcases 37, 38, and standalone game apps).
 _Avoid_: FireRig, FireSystem, FireKit — the prefab is one composable `Fire` node, not a monolithic subsystem; per-showcase rigs (showcase 45's `FireRig`) predate it and are not the new convention.
 
 **FogVolume / Interior Carving**:
 An analytical geometric volume (`FogVolume`: Box, Sphere, Cylinder) placed into the 3D scene graph that injects localized scattering, emission, or negative density into the global Froxel grid or raymarching volume. Negative density values carve out fog from interior spaces (e.g. rooms, vaults, caverns) without requiring complex geometry meshes or stencil cuts ($\text{extinction} = \max(0.0, \text{global} + \sum \text{positive} + \sum \text{negative})$, so carving does not depend on volume order).
 _Avoid_: Fog Mesh, Stencil Volume — carving is achieved through continuous analytical SDF evaluation and additive density clamping in shaders, not geometry clipping.
 
-**Dichtemaske / VolumetricTexture (3D-Dichtefeld)**:
-A user-authored 3D data texture (`VolumetricTexture`, RGBA8, D3D-style bottom-up) that modulates the volumetric fog per voxel: R = per-voxel density factor (the only mask channel that changes extinction/transmittance), G = per-voxel single-scattering albedo replacing the global (`VolumetricFogElement.scatteringAlbedo`) or per-volume (`FogVolume.albedo`) value in that cell. Bound either to the whole element inside a world-aligned box (`VolumetricFogElement.densityMask`/`maskPosition`/`maskSize`) or to a single `FogVolume.densityMask` (local box), never to the camera-aligned froxel grid. Absent mask slots are bound to a 1×1×1 identity texture, so the unmodulated path stays numerically identical.
-_Avoid_: Voxel Map, 3D-Texture-Array (per-volume masks keep their own unique resolution — there is a WebGL2 slot budget of 8 masks and a WebGPU budget of 16, but no packing/atlas).
+**Forge / ForgeTool**:
+Forge is the dockable window-manager overlay (`attachDevTools`); a `ForgeTool` is a single in-game mini-app or control panel hosted inside it (e.g. Gadget Inspector, Pixler, Material Studio, or showcase `SceneParams` slider panels). Legacy `ForgeTool`s can be wrapped for Maker's `ToolModeHost` via `ForgeToolMode`.
+_Avoid_: Panel, Plugin — `ForgeTool` names a specific in-game overlay contract, distinct from Maker's `ToolMode`.
 
 **Frame-Kontext (`FrameInfo`)**:
 The unified per-frame timing and sequence descriptor (`FrameInfo`, accessible via `renderer.frameInfo` and `app.frameInfo`) written exclusively by `SmallWorldMachine.step()`. Encapsulates hit-stop/time-scale-adjusted gameplay time (`time`, `deltaTime`), unscaled wall-clock time (`realTime`, `realDeltaTime`), and a monotonically increasing `frameIndex`. Subsystems, post-processing passes, and compute shaders (such as volumetric fog noise advection and temporal jitter) read from this context instead of querying `performance.now()`.
 _Avoid_: Engine Time, Delta Time (loose globals; `FrameInfo` is a structured context object passed per frame to enforce determinism and avoid global singletons).
 
-**Forge / ForgeTool**:
-Forge is the dockable window-manager overlay; a ForgeTool is a single mini-app hosted inside it (e.g. Gadget Inspector, Pixler, Material Studio).
-_Avoid_: Panel, Plugin — Tool names a specific contract (the `ForgeTool` class), not a generic panel.
-
 **Froxel (Volumetric Fog)**:
 A single cell ("frustum voxel") within the 3D camera-frustum grid (on WebGPU the clustered light grid itself: 16 px screen tiles x 24 log-spaced depth slices; WebGL2 raymarches the same medium per pixel instead) that stores participating medium properties (scattering, extinction, phase function parameters) and in-scattered light accumulated along camera rays (ADR 0031).
 _Avoid_: Screen-Space God Rays (Stufe 2 / `LightShaftsElement` handles crepuscular rays), Voxel Grid (froxels are frustum-aligned with exponential near-to-far logarithmic slicing, not uniform world-axis AABB voxels).
+
+**GPU Particle System (`GPUParticleSystem`)**:
+The WebGPU compute-shader particle simulation in `@small-world-machine/vfx-extras` aligned with the CPU SoA reference within documented tolerances (`@invariant S34-GPU-CPU-PARITY`, `navigator.gpu`-gated parity golden). Slot pool stays partitioned — `alive + dead == capacity`, bounded CAS free-list pop + exact reap (`@invariant S34-POOL-PARTITION`); screen-space collision = exactly two texel loads per colliding particle (`@invariant S34-SCREEN-COLLISION-TAPS`). Wired through `WebGPURenderer.registerGpuParticleSystem()`.
+_Avoid_: Treating it as a drop-in `ParticleSystem` — it is a distinct WebGPU-only drawable sharing the engine's particle vocabulary, not the CPU affector pipeline.
+
+**Ground Cover Ring**:
+The per-frame, camera-centred, tile-ring instance population for low vegetation around the player (ADR 0059 step 1b, source B; `@small-world-machine/vegetation-extras`): `GroundCover` seeds each tile by a stable per-tile hash (no swimming) with distance thinning, while `GroundCoverSystem` drives one ring + `InstanceFieldSystem` per `GrassVariety` using tapered clump geometry (`GrassClump`, no alpha-cutout) on travel-gated rebuilds.
+_Avoid_: Grass Field, Procedural Scatter — the Ring names the camera-centred _streaming_ population feeding `InstanceField` cull with stable per-tile hashing, not a static geometry scatter.
 
 **HBAO**:
 The screen-space ambient occlusion pass actually shipped (`HbaoElement`): a single max-dot-per-direction horizon search, no cosine-weighted integration, no temporal filtering.
@@ -133,12 +173,16 @@ Compile-time shader injection slots (`[WATER_EXT_DECL]`, `[WATER_EXT_SURFACE]`) 
 _Avoid_: Dynamic Shader Patching, Runtime Shader Interception.
 
 **LOD Bucket**:
-A projected-size band of a prototype's LOD chain (contiguous, ascending; bucket 0 = finest): an instance routes to the bucket containing its projected sphere diameter in pixels (`projectedDiameterPixels`, pinhole, primary-view projection) — selected BY THE MAIN CAMERA in every view, shadow/cascade views reuse the choice, optionally coarser via `shadowLodBias`. The bucket index is the bucket dimension of the per-(view × bucket) `IndirectDrawSource` segment table (`MAX_LOD_BUCKETS`).
+A projected-size band of a prototype's LOD chain (contiguous, ascending; bucket 0 = coarsest, highest index = finest): an instance routes to the bucket containing its projected sphere diameter in pixels (`projectedDiameterPixels`, pinhole, primary-view projection) — selected BY THE MAIN CAMERA in every view, shadow/cascade views reuse the choice, optionally coarser via `shadowLodBias`. The bucket index is the bucket dimension of the per-(view × bucket) `IndirectDrawSource` segment table (`MAX_LOD_BUCKETS`).
 _Avoid_: Distance-based LOD selection, per-view LOD selection (breaks shadows — the documented Godot failure the reference author worked around); world-distance thresholds masquerading as pixel budgets.
 
+**LOD Transition Mode (`LodTransitionMode`)**:
+The single declarative switch (`off`, `hysteresis` [zero-config engine default: deterministic per-instance rate-limited hard switching], `dither`, `dither-hysteresis`, ADR 0059 step 2) mapping `InstanceField` LOD bucket transitions to bounded preset rules in `LOD_TRANSITION_MODES`.
+_Avoid_: Mixing raw `lodCrossfadeBand` / `lodHysteresis` / dither flags directly when a named mode covers the behavior.
+
 **Maker Mode / ToolHost**:
-The merged-app mode lifecycle: every authoring tool is hosted as a Maker Mode module, mounted and unmounted by the ToolHost inside the Maker app shell; a mode is neither a standalone page nor a Forge window.
-_Avoid_: ForgeTool (the in-game overlay contract, stays strictly in-game; ADR 0024), Standalone Tool Page (the ADR 0010 §3 decision that ADR 0033 amends), Panel/Plugin (informal).
+The opt-in Maker lifecycle infrastructure (`ToolMode` + `ToolModeHost`, ADR 0033): authoring tools mount and unmount inside the Maker shell rather than as Forge windows (`ForgeToolMode` adapts Forge tools); the mandatory standalone-merge amendment to ADR 0010 §3 was retracted, so standalone tool pages remain valid.
+_Avoid_: ForgeTool (stays the in-game overlay contract, ADR 0024), Panel/Plugin (informal).
 
 **Mannequin (Asset Root)**:
 The canonical folder structure (`public/assets/<app>/mannequin/<character>/` and `raw/mannequin/`, the latter local-only and git-ignored per ADR 0058) organizing game-ready rigged characters and shared mocap pools per character namespace rather than by asset type.
@@ -168,73 +212,61 @@ _Avoid_: Null normal, empty normal.
 The per-pipeline variant that says how a draw treats the Normal-Buffer: `none` (no target), `write`, `masked` (attached but write-masked, e.g. transparents, skybox), `blend` (alpha-blended, used by Decals).
 _Avoid_: Normal pass mode — it selects a pipeline variant, not a render pass.
 
+**Particle Light Pool (`ParticleLightPool`)**:
+A pool of ≤ 8 pre-allocated `PointLight`s in `@small-world-machine/vfx-extras` following the hottest live particles (`heat * alpha` rank) of one `ParticleSystem`; the per-tick scan over `ParticleSystem.arrays` is strictly read-only and zero-allocation. Slots fade in/out with a monotonic envelope; on retarget the position converges instead of teleporting (`@invariant LIGHTPOOL-BUDGET-BOUND` / `LIGHTPOOL-FADE-ENVELOPE`). Draws from the shared 16-point dynamic-light budget with `FireLightBudget`.
+_Avoid_: Per-particle `PointLight` allocation, unbounded light counts.
+
 **Per-Cell Light List**:
 The stored data a Cluster reads at lookup time: an offset+count into a flat list of light indices. The read-side counterpart to Light Coverage, which is the write-side view (from a light's perspective, which cells it reaches).
 _Avoid_: Light Grid (ambiguous with "Cluster grid", the whole 3D structure, rather than one cell's list)
 
 **Post-Processing (Pipeline)**:
-The fixed, hardcoded effect order (Bloom -> HBAO -> Light Shafts -> Tonemapping -> Vignette -> Grain -> Quantize -> Flash) that every enabled effect runs through. Light Shafts in-scattering composites additively before Tonemapping so crepuscular beams contribute naturally to HDR exposure and contrast curves. Flash is deliberately last so it reads as a true full-screen overlay over everything else, not a color adjustment blended into the scene.
+The fixed, hardcoded pass and uber-shader sequence (`GLPostEffects` / `PostFxChain`): pre-uber passes run `TAA -> MotionTrail -> DepthOfField -> Bloom -> AutoExposure -> HBAO -> LightShafts -> VolumetricFog`, followed by the terminal uber pass (`GravitationalLensing / Filter-Distortion -> Bloom -> LightShafts -> VolumetricFog -> HBAO -> AutoExposure -> Tonemapping -> sRGB Encode -> ColorGrading -> Vignette -> Grain -> Filter-Color-Grading -> Quantize -> Outline -> Flash`). Light Shafts and Volumetric Fog composite in linear HDR before AutoExposure and Tonemapping; Flash is always last as a full-screen overlay.
 _Avoid_: treating `PostProcessingEffectsConfig`'s object shape as an ordered list — enabling effects doesn't reorder them; the sequence itself is not configurable.
 
 **Prototype**:
 The smallest authored unit of an Instance Field population (ADR 0059): LOD chain (`LodBucketDescriptor` list, contiguous ascending projected-size bands) + shared material slot + base bounding sphere (`boundingRadius`). Instances reference a prototype by CONTIGUOUS RANGE in the cell-ordered record buffer — the 16-B record carries no prototype id and the per-instance cull radius is `prototypeBounds[p] × recordScale` (range-implicit resolution, contract `InstanceField.ts`).
 _Avoid_: Prefab (scene-graph object template), Model — a prototype is a cull/LOD/population unit, not an object to instantiate.
 
+**Ribbon Particle Trail (`ParticleTrailRenderer`)**:
+A camera-aligned ribbon trail behind a tracked node (`@small-world-machine/vfx-extras`), one quad per segment over `InstancedMesh`. History is a fixed-capacity `Float32Array` ring; `update` is zero-allocation and compacts the live range into the instance prefix (`@invariant TRAIL-ZERO-ALLOC` / `TRAIL-GEOMETRY-VALID`). Tail fade + width taper via the instanced alpha; an empty history draws nothing.
+_Avoid_: Appending geometry per frame, unbounded trail buffers.
+
+**Sampler Budget Resolver (`SamplerBudget`)**:
+The pre-link WebGL2 fragment sampler counter (`WebGLProgramCache` / `SamplerBudget.ts`, ADR 0056) that drops lower-priority extension map groups (`iridescence` → `specular` → `anisotropy` → `sheen` → `clearcoat` → `transmission/thickness`, never core maps) with a single warning when a shader exceeds device `MAX_TEXTURE_IMAGE_UNITS`, instead of failing the program link.
+_Avoid_: Link-retry loops, hardcoded per-flag unit tables, or dropping core albedo/normal maps.
+
 **Savegame (Format)**:
-The persisted-runtime-state extension of the level-descriptor context (ADR 0020 / ADR 0041 §1, Stufe 5): scoped to concrete levels/instances via stable never-reused IDs plus minimal state flags — content objects are never serialized, so content updates cannot break saves. Carries an explicit `schemaVersion` + migration chain with fail-fast on unknown versions, forward-tolerant unknown fields, diff/patch semantics at the instance branch (no whole-object replacements), backup-before-migration as default, storage IndexedDB/OPFS.
+The persisted-runtime-state extension of the level-descriptor context (ADR 0020 / ADR 0041 §1, Stage 5; `SavegameTypes.ts`, `SavegameStore.ts`): scoped to concrete levels/instances via stable never-reused IDs plus minimal state flags — content objects are never serialized, so content updates cannot break saves. Carries an explicit `schemaVersion` + migration chain with fail-fast on unknown versions, forward-tolerant unknown fields, diff/patch semantics at the instance branch (no whole-object replacements), backup-before-migration as default, storage IndexedDB/OPFS/File.
 _Avoid_: Global App State, Save Serialization — a savegame references IDs and flags per instance; it is not a dump of the scene.
 
 **Scene Graph**:
 The hierarchical tree of 3D objects that defines spatial relationships, transformations, and rendering order.
 _Avoid_: World Map, Entity List
 
-**Skybox (kameragebundener Hintergrund)**:
-An `Object3D` with a cube geometry (`Cube`) and `SkyboxMaterial` (`depthWrite: false`, `CullMode.NONE`, `frustumCulled: false`) that surrounds the scene as an infinitely far, camera-centred background. The vertex shaders on all three backends neutralize the cube's world translation by adding the camera view position after the `u_model` transform (the view transform maps the camera position to the origin, so the translation cancels and only the orientation survives) and pin the rendered depth to the far plane (WGSL `.xyww`, GLSL `z = w * 0.99999`). A moving camera can therefore never walk out of the sky and a scene `far` plane closer than the cube never clips it; the sampled cube-map direction stays the unrotated local position, so existing scenes render pixel-identically.
-_Avoid_: Physical Sky Mesh
+**SDF Collider Affector (`SdfColliderAffector`)**:
+The post-integration (`postIntegrate`) particle collision affector in `@small-world-machine/vfx-extras` evaluating up to 16 analytical Signed Distance Field primitives (`sphere`, `box`, `capsule`, `plane`) with optional quadratic polynomial smooth-union (`smin`), 4-sample tetrahedral gradient normals, and Coulomb restitution/friction response (`@invariant SDF-NON-PENETRATION`).
+_Avoid_: Raycast Particle Collider, Mesh Triangle Particle Collider.
 
 **Semantic Socket**:
 A named transform node attached as a child to a specific skeletal bone (`mixamorig:LeftHand`, `mixamorig:RightHand`) with standardized local offsets and rotations to host props (Lanterns, Torches, Weapons) with zero jitter during animation playback.
 _Avoid_: Prop Constraint (informal)
 
-**SDF Collider Affector (`SdfColliderAffector`)**:
-The post-integration (`postIntegrate`) particle collision affector in `@small-world-machine/vfx-extras` evaluating up to 16 analytical Signed Distance Field primitives (`sphere`, `box`, `capsule`, `plane`) with optional quadratic polynomial smooth-union (`smin`), 4-sample tetrahedral gradient normals, and Coulomb restitution/friction response (`@invariant SDF-NON-PENETRATION`).
-_Avoid_: Raycast Particle Collider, Mesh Triangle Particle Collider.
+**Six-Way Smoke Volume Light (6-Way-Licht)**:
+The procedural volume lighting of `SmokeSpriteMaterial` (`@small-world-machine/vfx-extras`): analytical closed-form directional self-shadow from the 3-octave FBM density-gradient derivative plus a Henyey–Greenstein forward-scatter rim, evaluated in the existing custom fragment — 0 MB textures (`@invariant SMOKE-SIXWAY-CLOSED-FORM`). Composable with **Soft Smoke Fade**. Direction is camera-aligned (billboards face the camera).
+_Avoid_: Baked volume-light textures, separate shadow-mapping passes.
 
-**Curl-Noise Affector (`CurlNoiseAffector`)**:
-The divergence-free ($\nabla \cdot \vec{v} = 0$, `@invariant CURL-DIVERGENCE-FREE`) 3D procedural turbulence affector in `@small-world-machine/vfx-extras` based on Bridson et al. (SIGGRAPH 2007): evaluates the analytical curl of a $C^2$-continuous quintic vector potential $\vec{\Psi}$ with optional SDF obstacle boundary ramping $\vec{\Psi}_{\text{eff}} = \text{ramp}(\phi/d_0)\vec{\Psi}$.
-_Avoid_: Random Jitter Affector, Perlin Force Field (un-curled noise has non-zero divergence and causes artificial particle clumping/sinks).
-
-**Sub-Emitter (`SubEmitter`)**:
-A pre-allocated, zero-GC event ring buffer (`Float32Array`) in `@small-world-machine/vfx-extras` that records parent particle `death` and `collision` events (position, incident normal/velocity, color) and flushes child particle bursts in a deterministic post-update pass.
-_Avoid_: Recursive Particle Spawner, Callback-Allocating Emitter.
+**Skybox (kameragebundener Hintergrund)**:
+An `Object3D` with a cube geometry (`Cube`) and `SkyboxMaterial` (`depthWrite: false`, `CullMode.NONE`, `frustumCulled: false`) that surrounds the scene as an infinitely far, camera-centred background. The vertex shaders on all three backends neutralize the cube's world translation by adding the camera view position after the `u_model` transform (the view transform maps the camera position to the origin, so the translation cancels and only the orientation survives) and pin the rendered depth to the far plane (WGSL `.xyww`, GLSL `z = w * 0.99999`). A moving camera can therefore never walk out of the sky and a scene `far` plane closer than the cube never clips it; the sampled cube-map direction stays the unrotated local position, so existing scenes render pixel-identically.
+_Avoid_: Physical Sky Mesh
 
 **Smoke Plume (Rauchfahne)**:
-The world-anchored, dissolving smoke effect above a fire (`FireSmokeEmitter` + `SmokeSpriteMaterial`, `@small-world-machine/vfx-extras`): seeded-deterministic (mulberry32, `dt=0` freeze) billboard puffs with buoyancy + drag + multiplicative growth + color-over-life, rendered through a texturless alpha-blended material where the per-instance alpha is pure **opacity** — the renderer therefore runs `ParticleMeshRenderer({ foldAlphaIntoScale: false })`. The procedural soft edge + dissolution replace hard quad clipping. Soft-particle depth fade (`softFadeDistance`) and the procedural 6-way volume light are implemented — see **Soft Smoke Fade** and **Six-Way Smoke Volume Light**.
+The world-anchored, dissolving smoke effect above a fire (`FireSmokeEmitter` + `SmokeSpriteMaterial`, `@small-world-machine/vfx-extras`): seeded-deterministic (mulberry32, `dt=0` freeze) billboard puffs with buoyancy + drag + multiplicative growth + color-over-life, rendered through a textureless alpha-blended material where the per-instance alpha is pure **opacity** — the renderer therefore runs `ParticleMeshRenderer({ foldAlphaIntoScale: false })`. The procedural soft edge + dissolution replace hard quad clipping. Soft-particle depth fade (`softFadeDistance`) and the procedural 6-way volume light are implemented — see **Soft Smoke Fade** and **Six-Way Smoke Volume Light**.
 _Avoid_: Video-Smoke, Sprite-Atlas Smoke (procedural, no texture), Size-Folded Alpha (that is the ember contract, see `foldAlphaIntoScale`).
 
 **Soft Smoke Fade (Soft-Particle-Fade)**:
 The depth-aware dissolution of smoke billboards in `SmokeSpriteMaterial` (`@small-world-machine/vfx-extras`), sampling the shared opaque-scene depth: `alpha_soft = alpha * clamp((z_scene - z_particle) / d_fade, 0, 1)`, fully occluded fragments discard (`@invariant SMOKE-SOFT-DEPTH-MONOTONICITY`). `softFadeDistance = 0` (default) stays byte-identical to the pre-soft output; WEB_GL1 has no depth capture and degrades to alpha without a depth read.
 _Avoid_: Equating with opacity — the alpha is pure opacity here; the soft fade is an additional depth term.
-
-**Six-Way Smoke Volume Light (6-Way-Licht)**:
-The procedural volume lighting of `SmokeSpriteMaterial` (`@small-world-machine/vfx-extras`): analytical closed-form directional self-shadow from the 3-octave FBM density-gradient derivative plus a Henyey–Greenstein forward-scatter rim, evaluated in the existing custom fragment — 0 MB textures (`@invariant SMOKE-SIXWAY-CLOSED-FORM`). Composable with **Soft Smoke Fade**. Direction is camera-aligned (billboards face the camera).
-_Avoid_: Baked volume-light textures, separate shadow-mapping passes.
-
-**Particle Light Pool (`ParticleLightPool`)**:
-A pool of ≤ 8 pre-allocated `PointLight`s in `@small-world-machine/vfx-extras` following the hottest live particles (`heat * alpha` rank) of one `ParticleSystem`; the per-tick scan over `ParticleSystem.arrays` is strictly read-only and zero-allocation. Slots fade in/out with a monotonic envelope; on retarget the position converges instead of teleporting (`@invariant LIGHTPOOL-BUDGET-BOUND` / `LIGHTPOOL-FADE-ENVELOPE`). Draws from the shared 16-point dynamic-light budget with `FireLightBudget`.
-_Avoid_: Per-particle `PointLight` allocation, unbounded light counts.
-
-**Ribbon Particle Trail (`ParticleTrailRenderer`)**:
-A camera-aligned ribbon trail behind a tracked node (`@small-world-machine/vfx-extras`), one quad per segment over `InstancedMesh`. History is a fixed-capacity `Float32Array` ring; `update` is zero-allocation and compacts the live range into the instance prefix (`@invariant TRAIL-ZERO-ALLOC` / `TRAIL-GEOMETRY-VALID`). Tail fade + width taper via the instanced alpha; an empty history draws nothing.
-_Avoid_: Appending geometry per frame, unbounded trail buffers.
-
-**GPU Particle System (`GPUParticleSystem`)**:
-The WebGPU compute-shader particle simulation in `@small-world-machine/vfx-extras` aligned with the CPU SoA reference within documented tolerances (`@invariant S34-GPU-CPU-PARITY`, `navigator.gpu`-gated parity golden). Slot pool stays partitioned — `alive + dead == capacity`, bounded CAS free-list pop + exact reap (`@invariant S34-POOL-PARTITION`); screen-space collision = exactly two texel loads per colliding particle (`@invariant S34-SCREEN-COLLISION-TAPS`). Wired through `WebGPURenderer.registerGpuParticleSystem()`.
-_Avoid_: Treating it as a drop-in `ParticleSystem` — it is a distinct WebGPU-only drawable sharing the engine's particle vocabulary, not the CPU affector pipeline.
-
-**Weather Heightfield Collider (`WeatherHeightfieldCollider`)**:
-The roof-heightfield collider for weather particles (`@small-world-machine/engine`): a caller-supplied roof oracle baked into a 256×256 (≥2) grid; `roofY(x,z)` is a bilinear-interpolated oracle (clamped to footprint, never NaN); `isCulled` is true exactly when `y < roofY + cullEpsilon` (`@invariant HEIGHTFIELD-ROOF-CULL`). Zero-allocation queries; bake cadence is caller-governed.
-_Avoid_: Mesh roof collision — this is a heightfield oracle, not geometry intersection.
 
 **Soot Decal (Ruß/Asche-Grundierung)**:
 The dark grounding mark a real fire leaves (ADR 0053): a box-projected `Decal` (unlit, deterministic procedural texture, coverage in alpha) that renders natively on WEB_GPU/WEB_GL2 and is baked into the floor geometry only on WEB_GL1 (`bakeSceneDecals`, ADR 0029 Phase 5). Static by contract — it has no runtime state, so it never flickers and costs nothing while the scene stands still.
@@ -252,13 +284,25 @@ _Avoid_: Spec-Chasing, Tech-Demo First, 8K-Photorealism
 The single-scattering albedo parameter ($\omega = \sigma_s / \sigma_t \in [0.0, 1.0]$ on `VolumetricFogElement`) defining the ratio of the scattering coefficient $\sigma_s$ to the total extinction coefficient $\sigma_t = \sigma_s + \sigma_a$. A value of $1.0$ represents purely scattering media (bright mist, steam), while lower values introduce absorption $\sigma_a = (1.0 - \omega) \cdot \sigma_t$ to accurately simulate dark, light-attenuating media (smoke, soot, dust) that darken background geometry without self-illuminating.
 _Avoid_: Fog Darkness, Fog Absorption (informal; Streualbedo is the physically-based single-scattering ratio $\sigma_s / \sigma_t$).
 
+**Sub-Emitter (`SubEmitter`)**:
+A pre-allocated, zero-GC event ring buffer (`Float32Array`) in `@small-world-machine/vfx-extras` that records parent particle `death` and `collision` events (position, incident normal/velocity, color) and flushes child particle bursts in a deterministic post-update pass.
+_Avoid_: Recursive Particle Spawner, Callback-Allocating Emitter.
+
 **TAA (Simplified)**:
 Sub-pixel camera jitter plus an exponential history blend — deliberately without motion-vector reprojection.
 _Avoid_: "TAA" unqualified when precision matters — the missing reprojection step is the actual, documented trade-off (visible ghosting under fast movement), not an implementation detail to gloss over.
 
+**Tone Mapping (`ToneMappingMode`)**:
+The single shared HDR-to-display operator table (`TONE_OPERATORS` / `WGSL_TONE_OPERATORS`) consumed identically by the forward pass (`quality.toneMapping`) and the post-processing uber pass (`ToneMappingElement`), with `ToneMappingMode.PBR_NEUTRAL` as `DEFAULT` (alongside `AGX`, `ACES_HILL`, `ACES_HILL_EXPOSURE_BOOST`, `REINHARD_EXTENDED`, `ACES_FILMIC`, `CINEON`, `REINHARD`, `NONE`).
+_Avoid_: Hardcoded per-shader Reinhard curves or the removed string enum `ToneMapping`.
+
+**Weather Heightfield Collider (`WeatherHeightfieldCollider`)**:
+The roof-heightfield collider for weather particles (`@small-world-machine/engine`): a caller-supplied roof oracle baked into a 256×256 (≥2) grid; `roofY(x,z)` is a bilinear-interpolated oracle (clamped to footprint, never NaN); `isCulled` is true exactly when `y < roofY + cullEpsilon` (`@invariant HEIGHTFIELD-ROOF-CULL`). Zero-allocation queries; bake cadence is caller-governed.
+_Avoid_: Mesh roof collision — this is a heightfield oracle, not geometry intersection.
+
 **Workspace/Project**:
-The planned shared project-folder concept of the merged Maker — one project folder per session as the common workspace root from which all tools draw their `assets/` substructure (planned; not yet implemented, today tools bind their own folders).
-_Avoid_: Project Folder (generic, not namespaced), Content Folder; over-claiming — this names a future concept, not a shipped one (ADR 0033, F6).
+The planned shared project-folder concept across authoring tools (ADR 0033): `Maker` already binds a disk folder via `ProjectBinding` (`scene.gltf` v2 + `prefabs/`, File System Access API), while a single shared workspace root across all tools remains unimplemented.
+_Avoid_: Project Folder (generic, not namespaced), Content Folder; claiming cross-tool project sharing is already shipped.
 
 **Zero-Allocation (Hot Path)**:
 The design rule that per-frame code (physics step, event dispatch, FSM update) must not allocate new objects, so it never triggers a GC pause.
@@ -268,9 +312,9 @@ _Avoid_: Performance Optimization (generic) — this is a specific, named commit
 
 ## Whack-a-Mole-Doktrin — Begriffsschicht (ADR 0047)
 
-> *(Dieser Block ist bewusst Deutsch — konsistent zu den ADRs und zum committed Doktrin-Kontext
+> _(Dieser Block ist bewusst Deutsch — konsistent zu den ADRs und zum committed Doktrin-Kontext
 > (D14/Q7). Er erweitert das Glossar um die verbindlichen Doktrin-Begriffe; maßgeblich ist
-> [ADR 0047](docs/adr/0047-whack-a-mole-doktrin.md).)*
+> [ADR 0047](docs/adr/0047-whack-a-mole-doktrin.md).)_
 
 **Domänenparameter (Domain Parameter)**:
 Ein öffentlicher Parameter, dessen Wert eine physikalische/künstlerische Domänengröße direkt
@@ -325,13 +369,3 @@ Review-Checkliste („Doctrine Gate Checklist", architecture.md §6) mit fünf F
 `docs/reference/doctrine-ledger.md` (committed, D15).
 _Avoid_: Doctrine Formular, KPI-Meeting — ein Frageformular von einer Seite, kein Prozessbüro; KPIs
 werden von `npm run check:doctrine` emittiert und nur an Gates konsumiert.
-
-**Ground Cover Ring**:
-The per-frame, camera-centred, tile-ring instance population for low vegetation around the player
-(ADR 0059 step 1b, source B): each tile's instances are seeded by a stable per-tile hash (no
-swimming when the camera moves), with distance thinning and width compensation; candidates flow
-through the same GPU cull + LOD-bucket compaction as the main `InstanceField` (real blade geometry,
-no alpha-cutout). Contract owner: `vegetation-extras/src/groundcover/GroundCover.ts`.
-_Avoid_: Grass Field, Procedural Scatter — the Ring names the camera-centred *streaming* population
-feeding `InstanceField` cull with stable per-tile hashing, not a static geometry scatter (pre-baked
-source A, rejected in ADR 0059 step-1b result).
