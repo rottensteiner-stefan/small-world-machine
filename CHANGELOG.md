@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.125.0] - 2026-11-13
+
+### "Simplicity is about subtracting the obvious and adding the meaningful." - John Maeda
+
+- **Architecture & Bugfixes:**
+  - _`WebGL2Renderer` manager decomposition:_ extracted six cohesive manager classes under `packages/engine/src/renderers/WebGL2/managers/` (`WebGL2ClusterManager`, `WebGL2GlobalUniformWriter`, `WebGL2InstanceManager`, `WebGL2OpaqueCapture`, `WebGL2RenderTargetManager`, `WebGL2ShadowManager`).
+  - _`gltf-extensions` vendor WASM assets:_ restored tracked Basis Universal and Draco WASM decoder binaries and wrappers under `packages/gltf-extensions/vendor/`.
+
+- **Housekeeping & Docs:**
+  - _Honest test doctrine — WAS & WANN (ADR 0044, `AGENTS.md`, `coding-guide` §5):_ codified what gets unit-tested (pure math/invariants, layouts, parsers, state transitions, bug reproductions; zero trivial getter/setter, delegation, `_field` white-box, or GPU-mock tests) and when tests are written (at milestone completion, never mid-flight).
+  - _Multi-tier showcase verification (`test:canary`, `test:spectrum`):_ added `npm run test:canary` (`10,28,30,37,40,48,52`) and `npm run test:spectrum` (`4,6,10,13,14,23,26,28,30,34,37,40,41,42,48,50,51,52`) running sequentially across all three renderer tiers (`WEB_GL1`, `WEB_GL2`, `WEB_GPU`), asserting crash-free honest fallback on lower tiers.
+  - _Test suite audit & purge:_ audited all 562 test files against ADR 0044 — removed 63 pure-noise files and pruned 102 mixed files (`-14,933` lines across 167 files; 511 Vitest suites / 4,231 tests retained).
+  - _Instruction consolidation:_ merged `AGENTS.md` and `CLAUDE.md` and reduced `CLAUDE.md` to a concise `@AGENTS.md` pointer.
+
 ## [0.124.0] - 2026-11-13
 
 ### "Tools should be invisible — the work is the point." - Small World Machine Doctrine
