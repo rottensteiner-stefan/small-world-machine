@@ -40,6 +40,14 @@ const numberedShowcases = fs
 // all).
 const RENDERER_TYPES = ["WEB_GL1", "WEB_GL2", "WEB_GPU"];
 const targetArg = process.argv[2] || process.env.SHOWCASE_TARGET;
+const targetSet = targetArg
+  ? new Set(
+      targetArg
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    )
+  : undefined;
 
 // SHOWCASE_SHARD="i/N" (1-based) runs every N-th showcase, so CI can spread the checks over N parallel
 // jobs. Showcases (not single checks) are dealt round-robin, which keeps a showcase's backends together
@@ -67,7 +75,7 @@ const testCases = [
     RENDERER_TYPES.map((rendererType) => ({ showcase: n, rendererType })),
   ),
 ]
-  .filter((tc) => !targetArg || tc.showcase === targetArg)
+  .filter((tc) => !targetSet || targetSet.has(tc.showcase))
   .filter((tc) => !skipWebGpu || "WEB_GPU" !== tc.rendererType)
   .filter((tc) => !shard || showcaseOrder.indexOf(tc.showcase) % shard.total === shard.index - 1);
 

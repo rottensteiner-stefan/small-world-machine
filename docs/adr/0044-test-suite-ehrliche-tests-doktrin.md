@@ -91,6 +91,42 @@ eines CI-Gates für einen Lauf dieser Länge ist ungeklärt; der Status ist in
 Die Entscheidung „Goldens dauerhaft in CI verdrahten" bleibt ein offener, dokumentierter
 Entscheidungspunkt.
 
+### Erweiterung 2026-11-13: Test-Scope (WAS), Timing (WANN) & Canary-Smoke-Gate
+
+Die Ehrliche-Tests-Doktrin regelte bisher, *wie* Tests aufgebaut sind, aber nicht, *welche*
+Änderungen überhaupt einen Test bekommen und *wann* sie entstehen. Zu viele kleinteilige
+Mock-Tests im Renderer (>27k Zeilen) bremsen Umbauten aus und übersehen dennoch reale Integrations-
+und Bundler-Fehler (z. B. fehlende Vendor-/WASM-Assets oder Shader-Link-Fehler). Verbindliche Regeln 6–8:
+
+6. **WAS getestet wird (Signal statt Masse):**
+   - **Pflicht für Unit-/Contract-Tests:** Mathematik & `@invariant`-Zusicherungen, Physik,
+     Parser-/Binär-Hardening, Buffer-/UBO-Byte-Layouts (`GlobalUniformLayout`), Shader-Tier-Parity
+     gegen ausgelieferten Code (ADR 0057), nicht-triviale Zustandsübergänge/Lifecycles und **genau 1**
+     Repro-Test pro echtem Bugfix.
+   - **Verboten (kein Test-Spam):** Triviale Getter/Setter/Defaults/Enum-Werte, reines
+     Delegations-Wiring nach Refactorings, **neue White-Box-Tests auf `_privateFields`** sowie
+     **neue GPU-/WebGL-Context-Mock-Tests**, die nur `vi.fn()`-Aufrufe statt echter Grafik prüfen.
+     Bestehende Alt-Mocks werden bei im Weg stehenden Refactorings entkoppelt oder entfernt statt
+     mitgeschleppt.
+7. **WANN Tests entstehen (Kein Flow-Blocker):**
+   - **Während Feature-Bau, Exploration oder Refactoring:** Keine neuen Unit-Tests schreiben.
+     Schnelles Feedback läuft über `npm run typecheck`, `lint:glsl`/`lint:wgsl` und bestehende Tests.
+   - **Erst bei stabiler API am Meilenstein-Ende (vor dem Commit):** Einmal gegen Regel 6 prüfen und
+     nur für dort gelistete Punkte gezielt Tests ergänzen. Bei reinen Refactorings ohne neue Semantik:
+     0 neue Tests.
+   - **Ausnahme Bugfix:** 1 minimaler Repro-Test direkt nach Lokalisierung des Root Cause.
+8. **Canary- & Spectrum-Smoke-Gate statt Renderer-Mocks (alle 3 Renderer-Tiers):**
+   - Echte Laufzeit-, Bundler-, Asset- und Shader-Fehler werden über `npm run test:canary`
+     (`build:showcases` + `.agents/scripts/check-showcases.js 10,28,30,37,40,48,52` — mathematisches
+     Schnell-Set mit 37/49 Engine-Features ohne Netz/Schwergewichte) bzw. vor Releases/großen
+     Renderer-Umbauten über `npm run test:spectrum` (`4,6,10,13,14,23,26,28,30,34,37,40,41,42,48,50,51,52`
+     — Minimum-Set-Cover für **49/49 = 100 % Feature-Abdeckung**) plus `lint:glsl`/`lint:wgsl` abgesichert.
+   - **Pflicht über alle Tiers (`WEB_GL1`, `WEB_GL2`, `WEB_GPU`):** Jeder Smoke-Lauf prüft alle Features
+     auf **allen drei** Renderern — ausdrücklich auch dann, wenn ein niedrigerer Tier (z. B. `WEB_GL1`) ein
+     Feature höherer Tiers nicht unterstützt, um den absturzfreien Honest-Fallback (0 Console-Errors,
+     kein schwarzer Canvas) zu beweisen.
+
+
 ## Konsequenzen
 
 - **Verifikation als Honest Gate:** Nach der Reform: `tsc --noEmit` sauber, `eslint` auf allen

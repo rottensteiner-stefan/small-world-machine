@@ -46,6 +46,8 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:showcases": "node .agents/scripts/check-showcases.js",
+    "test:canary": "npm run build:showcases && SHOWCASE_TEST_CONCURRENCY=1 node .agents/scripts/check-showcases.js 10,28,30,37,40,48,52",
+    "test:spectrum": "npm run build:showcases && SHOWCASE_TEST_CONCURRENCY=1 node .agents/scripts/check-showcases.js 4,6,10,13,14,23,26,28,30,34,37,40,41,42,48,50,51,52",
     "test:fog-capture": "node .agents/scripts/check-fog-capture.js",
     "test:decals": "node .agents/scripts/check-decals.mjs",
     "probe:gpu-parity": "node .agents/scripts/probe-gpu-parity.js",
