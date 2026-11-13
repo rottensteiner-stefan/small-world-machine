@@ -4,6 +4,8 @@ export default defineConfig({
   base: "/small-world-machine/",
   // `/tools/*` pages belong to the showcase hub build, not to this VitePress site.
   ignoreDeadLinks: [/^\/tools\//],
+  // Historical changelog archive uses repo-root-relative links; exclude from VitePress site build.
+  srcExclude: ["CHANGELOG-ARCHIVE.md"],
   title: "Small World Machine",
   description:
     "Eine leichtgewichtige, hochperformante, modulare 3D-Game-Engine für das Web, gebaut mit TypeScript.",

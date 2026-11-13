@@ -25,9 +25,13 @@ Every entry in the `CHANGELOG.md` MUST strictly follow this exact structure:
 ```
 
 **Rules for the Changelog:**
-1. **No Extra Titles:** Do NOT invent a name for the update (like "The Shader Update"). The subheader (H3 `###`) MUST be exactly the quote in quotes, followed by a hyphen and the author.
-2. **Categories:** Always use exactly these three categories: `- **Features:**`, `- **Architecture & Bugfixes:**`, and `- **Housekeeping & Docs:**`. If a category is empty for a specific release, you may omit it.
-3. **Preserve History:** NEVER delete old entries. Always prepend the new version block directly under the `# Changelog` header.
+
+1. **No Extra Titles & No `[Unreleased]`:** Do NOT invent update names (like `"The Shader Update"`) and NEVER leave an `## [Unreleased]` section. Version headers MUST strictly match `## [x.y.z] - YYYY-MM-DD` in strictly descending semver order. The subheader (H3 `###`) MUST be `"Quote" - Author`.
+2. **Unique Quotes Everywhere:** Every release quote MUST be unique across `CHANGELOG.md`, `docs/CHANGELOG-ARCHIVE.md`, and every commit message in `git log`. Always search both files and `git log --all` before choosing a quote.
+3. **Strict Categories:** Always use only these three categories: `- **Features:**`, `- **Architecture & Bugfixes:**`, and `- **Housekeeping & Docs:**`. Omit empty categories cleanly — NEVER leave an empty category heading, duplicate a category within one release, or append trailing `- Version x.y.z.` lines.
+4. **Concise Technical English & Length Budget:** Write all entries in compact, high-density technical English (`_Topic:_ ...` prefix, `1–3` crisp sentences per bullet, max `480` characters per line). Preserve all breaking/behaviour notices, ADRs, invariant IDs, and concrete metrics without narrative filler.
+5. **Preserve History via Archive Split:** Active `CHANGELOG.md` covers `0.100.0+` and links to [docs/CHANGELOG-ARCHIVE.md](../../../docs/CHANGELOG-ARCHIVE.md) (`0.8.46 – 0.99.0`, excluded in `docs/.vitepress/config.mts` via `srcExclude`). NEVER delete historical releases; always prepend new versions directly under the top archive note.
+6. **Automated Enforcement:** Format, category rules, descending semver, active English/length bounds, and cross-file quote uniqueness are guarded by `tests/scripts/changelogFormat.test.ts` in `npm test` and CI `verify`.
 
 ## 2. Git Commit Rule
 
