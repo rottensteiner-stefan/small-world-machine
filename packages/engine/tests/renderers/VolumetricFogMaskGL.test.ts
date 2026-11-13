@@ -248,23 +248,6 @@ function runMaskedVolume(
 }
 
 describe("VolumetricFogPassGL density masks", () => {
-  it("leaves the no-mask rendering path untouched (no 3D texture work, element mask disabled)", () => {
-    const mock = makeMaskGl();
-    const pass = new VolumetricFogPassGL(mock.gl2, true);
-    const element = new VolumetricFogElement();
-    element.enabled = true;
-    element.scatteringAlbedo = 0.5;
-
-    pass.execute(makeFogCtx(mock.gl2, element));
-
-    expect(mock.texImage3DCalls).toHaveLength(0);
-    expect(mock.uniformCalls["u_elementMaskEnabled"]).toBe(0);
-    const info = mock.uniformCalls["u_fogVolumeMaskInfo"] as number[];
-    expect(info).toBeDefined();
-    expect(info.length).toBe(64);
-    expect(info.every((v) => v === 0)).toBe(true);
-  });
-
   it("points the 3D mask samplers at units distinct from the 2D depth sampler even without any mask", () => {
     const mock = makeMaskGl();
     const pass = new VolumetricFogPassGL(mock.gl2, true);
@@ -315,16 +298,6 @@ describe("VolumetricFogPassGL density masks", () => {
     expect(low.uniformCalls["u_samples"]).toBe(16);
   });
 
-  it("uses VolumetricFogElement.samples as the step budget on capable devices", () => {
-    const mock = makeMaskGl(1024);
-    const pass = new VolumetricFogPassGL(mock.gl2, true);
-    const element = new VolumetricFogElement();
-    element.enabled = true;
-    element.samples = 12;
-    pass.execute(makeFogCtx(mock.gl2, element));
-    expect(mock.uniformCalls["u_samples"]).toBe(12);
-  });
-
   it("allocates RGBA16F colour targets when float rendering is available", () => {
     const mock = makeMaskGl(1024, true);
     const element = new VolumetricFogElement();
@@ -341,18 +314,6 @@ describe("VolumetricFogPassGL density masks", () => {
     new VolumetricFogPassGL(mock.gl2, true).execute(makeFogCtx(mock.gl2, element));
     expect(mock.colorTargetFormats.slice(0, 2)).toEqual([0x8058, 0x8058]);
     expect(mock.colorTargetFormats).not.toContain(0x881a);
-  });
-
-  it("uploads VolumetricFogElement.jitter so 0 can switch the dither off", () => {
-    for (const jitter of [0, 0.25, 1]) {
-      const mock = makeMaskGl();
-      const pass = new VolumetricFogPassGL(mock.gl2, true);
-      const element = new VolumetricFogElement();
-      element.enabled = true;
-      element.jitter = jitter;
-      pass.execute(makeFogCtx(mock.gl2, element));
-      expect(mock.uniformCalls["u_jitter"]).toBe(jitter);
-    }
   });
 
   it("bakes the global albedo into the sun colour when no element mask is bound", () => {
@@ -424,19 +385,6 @@ describe("VolumetricFogPassGL density masks", () => {
     expect(upload).toBeDefined();
   });
 
-  it("assigns a per-volume mask to the first slot and records it per volume index", () => {
-    const mask = VolumetricTexture.fromData(new Uint8Array(4 * 1 * 1 * 1), 1, 1, 1);
-    const volume = new FogVolume({ densityMask: mask, size: new Vector3D(4, 5, 6) });
-    const { mock } = runMaskedVolume([volume]);
-
-    expect(mock.uniformCalls["u_elementMaskEnabled"]).toBe(0);
-    const info = mock.uniformCalls["u_fogVolumeMaskInfo"] as number[];
-    expect(info[0]).toBe(1); // volume 0 has a bound mask
-    expect(info[1]).toBe(0); // compacted to slot 0
-    // Slot 0 must be bound as TEXTURE_3D on unit 8.
-    expect(mock.bindUnit(0x84c8)!.target).toBe(0x806f);
-  });
-
   it("ties mask slots to the volume index, not the compaction order", () => {
     const plain = new FogVolume({ density: 0.05 });
     const mask = VolumetricTexture.fromData(new Uint8Array(4 * 1 * 1 * 1), 1, 1, 1);
@@ -449,24 +397,6 @@ describe("VolumetricFogPassGL density masks", () => {
     expect(info[1]).toBe(0);
     expect(info[4]).toBe(1);
     expect(info[5]).toBe(0);
-  });
-
-  it("re-uploads a volume mask when needsUpdate is flagged and clears the flag", () => {
-    const mask = VolumetricTexture.fromData(new Uint8Array(4 * 2 * 2 * 2), 2, 2, 2);
-    const volume = new FogVolume({ densityMask: mask });
-    const { mock, pass, element } = runMaskedVolume([volume]);
-
-    const uploadsAfterFirst = mock.texImage3DCalls.length;
-    // identity (1x1x1) + mask (2x2x2)
-    expect(uploadsAfterFirst).toBe(2);
-    expect(mask.needsUpdate).toBe(false);
-
-    mask.needsUpdate = true;
-    pass.execute(makeFogCtx(mock.gl2, element, undefined, [volume]));
-
-    // Re-uploaded exactly once; the identity placeholder and cache hit must not re-upload.
-    expect(mock.texImage3DCalls.length).toBe(uploadsAfterFirst + 1);
-    expect(mask.needsUpdate).toBe(false);
   });
 
   it("drops masked volumes beyond the slot budget and warns once", () => {

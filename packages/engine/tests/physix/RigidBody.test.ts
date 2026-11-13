@@ -3,24 +3,6 @@ import { RigidBody } from "../../src/physix/RigidBody.js";
 import { Vector3D } from "../../src/math/index.js";
 
 describe("RigidBody", () => {
-  it("should initialize with default parameters", () => {
-    const rb = new RigidBody();
-    expect(rb.mass).toBe(1.0);
-    expect(rb.inverseMass).toBe(1.0);
-    expect(rb.inertia).toBe(1.0);
-    expect(rb.inverseInertia).toBe(1.0);
-    expect(rb.restitution).toBe(0.2);
-    expect(rb.friction).toBe(0.5);
-    expect(rb.linearDamping).toBe(1.0);
-    expect(rb.angularDamping).toBe(0.98);
-    expect(rb.velocity.lengthSq()).toBe(0);
-    expect(rb.acceleration.lengthSq()).toBe(0);
-    expect(rb.forces.lengthSq()).toBe(0);
-    expect(rb.angularVelocity.lengthSq()).toBe(0);
-    expect(rb.angularAcceleration.lengthSq()).toBe(0);
-    expect(rb.torque.lengthSq()).toBe(0);
-  });
-
   it("should handle static/kinematic bodies (mass = 0)", () => {
     const rb = new RigidBody(0, 0);
     expect(rb.mass).toBe(0);

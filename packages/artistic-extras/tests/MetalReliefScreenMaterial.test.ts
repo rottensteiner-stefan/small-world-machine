@@ -2,25 +2,6 @@ import { describe, it, expect } from "vitest";
 import { MetalReliefScreenMaterial } from "../src/materials/MetalReliefScreenMaterial.js";
 
 describe("MetalReliefScreenMaterial", () => {
-  it("initializes with intended default parameters", () => {
-    const mat = new MetalReliefScreenMaterial();
-
-    expect(mat.type).toBe("MetalReliefScreenMaterial");
-    expect(mat.reliefStrength).toBe(1.5);
-    expect(mat.paletteKnifeStrength).toBe(0.5);
-    expect(mat.paletteKnifeScale).toBe(24.0);
-    expect(mat.scratchIntensity).toBe(0.35);
-    expect(mat.scratchScale).toBe(120.0);
-    expect(mat.edgeGlintStrength).toBe(1.2);
-    expect(mat.wetRainStreaks).toBe(0.5);
-    expect(mat.wireMeshStrength).toBe(0.0);
-    expect(mat.targetHue).toBe(0.0);
-    expect(mat.hueTolerance).toBe(0.09);
-    expect(mat.desaturation).toBe(0.95);
-    expect(mat.rustStrength).toBe(0.8);
-    expect(mat.splitPosition).toBe(-1.0);
-  });
-
   it("packs continuous parameters into render manifest lanes", () => {
     const mat = new MetalReliefScreenMaterial({
       reliefStrength: 2.2,

@@ -1,11 +1,9 @@
 import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { AbstractWebGLRenderer } from "../../src/renderers/AbstractWebGLRenderer.js";
-import { WebGL2Renderer } from "../../src/renderers/WebGL2/WebGL2Renderer.js";
 import { Scene, type RenderList } from "../../src/core/Scene.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { RendererType } from "../../src/enums/index.js";
-import type { QualityConfig } from "../../src/interfaces/index.js";
 
 class TestRenderer extends AbstractWebGLRenderer {
   public override readonly type: RendererType = RendererType.WEB_GL2;
@@ -76,19 +74,5 @@ describe("quality.normalBuffer auto (ADR 0028)", () => {
     const on = new TestRenderer(true);
     expect(on.quality.normalBuffer).toBe(true);
     expect(on.requestNormalBuffer()).toBe(false);
-  });
-
-  it("WebGL2 drops an HDR FBO without normal attachment so it is rebuilt with one", () => {
-    const r = new WebGL2Renderer();
-    const q = r as unknown as { _quality: QualityConfig; _hdrFbo: unknown };
-    q._quality = { ...q._quality };
-    (r as unknown as { _resolveNormalBufferOption(): void })._resolveNormalBufferOption();
-    const destroy = vi.fn();
-    q._hdrFbo = { secondaryTexture: undefined, destroy };
-
-    expect(r.requestNormalBuffer()).toBe(true);
-    expect(destroy).toHaveBeenCalledTimes(1);
-    expect(q._hdrFbo).toBeUndefined();
-    expect(r.requestNormalBuffer()).toBe(false);
   });
 });

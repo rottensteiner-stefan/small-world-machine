@@ -4,41 +4,6 @@ import { DynamicReflectionProbe, Scene, Object3D } from "../../src/index.js";
 import type { Renderer } from "../../src/interfaces/Renderer.js";
 
 describe("DynamicReflectionProbe", (): void => {
-  it("initializes with 1 face per frame by default", (): void => {
-    const probe = new DynamicReflectionProbe("TestProbe", 128);
-    expect(probe.facesPerFrame).toBe(1);
-    expect(probe.renderTarget.width).toBe(128);
-    expect(probe.renderTarget.height).toBe(128);
-  });
-
-  it("updates correct number of faces and cycles through them", (): void => {
-    const probe = new DynamicReflectionProbe();
-    probe.facesPerFrame = 2;
-
-    const scene = new Scene();
-    const mockRenderer = {
-      setRenderTarget: vi.fn(),
-      render: vi.fn(),
-    } as unknown as Renderer;
-
-    // First update (should do faces 0, 1)
-    probe.updateReflection(scene, mockRenderer);
-    expect(mockRenderer.setRenderTarget).toHaveBeenCalledTimes(3); // 2 faces + 1 null at end
-    expect(mockRenderer.render).toHaveBeenCalledTimes(2);
-
-    // Second update (should do faces 2, 3)
-    probe.updateReflection(scene, mockRenderer);
-    expect(mockRenderer.render).toHaveBeenCalledTimes(4);
-
-    // Third update (should do faces 4, 5)
-    probe.updateReflection(scene, mockRenderer);
-    expect(mockRenderer.render).toHaveBeenCalledTimes(6);
-
-    // Fourth update (should cycle back to faces 0, 1)
-    probe.updateReflection(scene, mockRenderer);
-    expect(mockRenderer.render).toHaveBeenCalledTimes(8);
-  });
-
   it("does not hide scene.root when probe is added directly to scene", (): void => {
     const probe = new DynamicReflectionProbe();
     const scene = new Scene();

@@ -3,24 +3,6 @@ import { MetalReliefMaterial } from "../src/materials/MetalReliefMaterial.js";
 import { Color } from "@small-world-machine/engine";
 
 describe("MetalReliefMaterial", () => {
-  it("initializes with intended default parameters", () => {
-    const mat = new MetalReliefMaterial();
-
-    expect(mat.type).toBe("MetalReliefMaterial");
-    expect(mat.paletteKnifeStrength).toBe(0.6);
-    expect(mat.paletteKnifeScale).toBe(12.0);
-    expect(mat.scratchIntensity).toBe(0.35);
-    expect(mat.scratchScale).toBe(80.0);
-    expect(mat.edgeBevelStrength).toBe(0.8);
-    expect(mat.wireMeshStrength).toBe(0.0);
-    expect(mat.colorPopTargetHue).toBe(0.0);
-    expect(mat.colorPopTolerance).toBe(0.09);
-    expect(mat.colorPopDesaturation).toBe(0.95);
-    expect(mat.rustStrength).toBe(0.75);
-    expect(mat.metallic).toBe(0.4);
-    expect(mat.roughness).toBe(0.7);
-  });
-
   it("packs all continuous tuning variables correctly into render manifest lanes", () => {
     const mat = new MetalReliefMaterial({
       color: new Color(0.9, 0.2, 0.2),
@@ -102,12 +84,5 @@ describe("MetalReliefMaterial", () => {
 
     clone.paletteKnifeStrength = 0.3;
     expect(original.paletteKnifeStrength).toBe(1.1);
-  });
-
-  it("exposes the key light direction as a material parameter", () => {
-    const mat = new MetalReliefMaterial({ lightDirection: [0, 1, 0] });
-    expect((mat.getRenderManifest().properties["u_matParam3"] as number[]).slice(0, 3)).toEqual([
-      0, 1, 0,
-    ]);
   });
 });

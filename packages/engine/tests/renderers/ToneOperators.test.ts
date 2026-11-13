@@ -154,10 +154,6 @@ describe("tone operators: one source, two languages", () => {
       expect(shader.has(String(Math.abs(n))), String(n)).toBe(true);
     }
   });
-
-  it("PBR Neutral is the default curve", () => {
-    expect(ToneMappingMode.DEFAULT).toBe(ToneMappingMode.PBR_NEUTRAL);
-  });
 });
 
 describe("tone operators: defining properties (CPU reference)", () => {

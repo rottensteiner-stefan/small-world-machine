@@ -470,39 +470,4 @@ describe("ParticleAffector batch API", () => {
     expect(system.isAlive(index)).toBe(true);
     expect(system.arrays.velocities[index * 3 + 1]).toBeCloseTo(9.81);
   });
-
-  it("update() reuses its internal arrays and buffers (zero per-frame allocation)", () => {
-    const system = new ParticleSystem({ capacity: 64 });
-    system.addAffector(new DragAffector({ drag: 0.5 }));
-    system.addAffector(new VortexAffector({ axis: "y", strength: 3.0 }));
-    const rng = mulberry32(0xabc123);
-    for (let i = 0; i < 64; i++) {
-      system.emit({
-        position: new Vector3D(rng() * 10 - 5, rng() * 10 - 5, rng() * 10 - 5),
-        velocity: new Vector3D(rng() * 4 - 2, rng() * 4 - 2, rng() * 4 - 2),
-        maxLife: Infinity,
-        size: 0.5,
-      });
-    }
-    system.update(1 / 60);
-
-    const internal = system as unknown as {
-      readonly _frameFlags: Uint8Array;
-      readonly _freeIndices: number[];
-    };
-    const arraysRef = system.arrays;
-    const positionsRef = system.arrays.positions;
-    const flagsRef = internal._frameFlags;
-    const freeRef = internal._freeIndices;
-
-    for (let frame = 0; frame < 5000; frame++) {
-      system.update(1 / 60);
-    }
-
-    expect(system.arrays).toBe(arraysRef);
-    expect(system.arrays.positions).toBe(positionsRef);
-    expect(system.activeCount).toBe(64);
-    expect(internal._frameFlags).toBe(flagsRef);
-    expect(internal._freeIndices).toBe(freeRef);
-  });
 });

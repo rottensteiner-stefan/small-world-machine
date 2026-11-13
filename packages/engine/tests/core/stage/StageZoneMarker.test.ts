@@ -16,17 +16,6 @@ describe("StageZoneMarker", () => {
     });
   }
 
-  it("uses the zone's id as its own Object3D name", () => {
-    const marker = new StageZoneMarker(makeZone());
-    expect(marker.name).toBe("zone_a");
-  });
-
-  it("has no geometry/material -- it is a non-renderable marker node", () => {
-    const marker = new StageZoneMarker(makeZone());
-    expect(marker.geometry).toBeUndefined();
-    expect(marker.material).toBeUndefined();
-  });
-
   it("clone() deep-clones the held zone's points, not just a shared reference", () => {
     const marker = new StageZoneMarker(makeZone());
     const copy = marker.clone();

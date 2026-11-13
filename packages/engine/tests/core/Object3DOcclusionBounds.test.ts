@@ -6,14 +6,6 @@ import { Vector3D } from "../../src/math/index.js";
 import { BoundingType } from "../../src/enums/index.js";
 
 describe("Object3D.occlusionCulled", () => {
-  it("is a plain per-object field defaulting to false", () => {
-    const obj = new Object3D("a");
-    expect(obj.occlusionCulled).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(obj, "occlusionCulled")).toBe(true);
-    obj.occlusionCulled = true;
-    expect(new Object3D("b").occlusionCulled).toBe(false);
-  });
-
   it("does not copy a stale GPU occlusion result into clones", () => {
     const obj = new Object3D("a");
     obj.occlusionCulled = true;

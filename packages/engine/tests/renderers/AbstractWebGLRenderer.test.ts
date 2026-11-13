@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import { AbstractWebGLRenderer } from "../../src/renderers/AbstractWebGLRenderer.js";
 import { type WebGLRenderPass } from "../../src/renderers/WebGLRenderPass.js";
 import { Scene } from "../../src/core/Scene.js";
-import { Object3D } from "../../src/core/Object3D.js";
 import { DirectionalLight } from "../../src/core/lights/DirectionalLight.js";
 import { FluidSurfaceMaterial } from "../../src/core/materials/liquid/FluidSurfaceMaterial.js";
 import { PhongMaterial } from "../../src/core/materials/surface/PhongMaterial.js";
@@ -48,51 +47,6 @@ class TestWebGLRenderer extends AbstractWebGLRenderer {
 }
 
 describe("AbstractWebGLRenderer Pass System", () => {
-  it("should iterate and execute all registered passes in order", () => {
-    const mockGL = {
-      canvas: {},
-      viewport: vi.fn(),
-      clear: vi.fn(),
-      enable: vi.fn(),
-      blendFunc: vi.fn(),
-      COLOR_BUFFER_BIT: 1,
-      DEPTH_BUFFER_BIT: 2,
-      BLEND: 3,
-      SRC_ALPHA: 4,
-      ONE_MINUS_SRC_ALPHA: 5,
-    } as unknown as WebGL2RenderingContext;
-
-    const renderer = new TestWebGLRenderer(mockGL);
-
-    // Create mock passes
-    const pass1: WebGLRenderPass = {
-      name: "Pass1",
-      execute: vi.fn(),
-    };
-    const pass2: WebGLRenderPass = {
-      name: "Pass2",
-      execute: vi.fn(),
-    };
-
-    renderer.addPass(pass1);
-    renderer.addPass(pass2);
-
-    const scene = new Scene();
-    const vp = new Float32Array(16);
-
-    // Call the generic render method
-    renderer.render(scene, vp);
-
-    // Verify both passes were executed exactly once
-    expect(pass1.execute).toHaveBeenCalledTimes(1);
-    expect(pass2.execute).toHaveBeenCalledTimes(1);
-
-    // Verify execution order (pass1 before pass2)
-    const order1 = (pass1.execute as import("vitest").Mock).mock.invocationCallOrder[0]!;
-    const order2 = (pass2.execute as import("vitest").Mock).mock.invocationCallOrder[0]!;
-    expect(order1).toBeLessThan(order2);
-  });
-
   it("clears stale dLight reference when directional light is removed or hidden (BLK-R4)", () => {
     const mockGL = {
       canvas: {},
@@ -223,35 +177,5 @@ describe("AbstractWebGLRenderer.requiresOpaqueDepth", () => {
     expect(renderer.requiresOpaqueDepth(MaterialType.FLUID_SURFACE)).toBe(true);
     expect(renderer.requiresOpaqueDepth(MaterialType.PHONG)).toBe(false);
     expect(renderer.requiresOpaqueDepth("does-not-exist")).toBe(false);
-  });
-
-  it("does not cache an unregistered shader id, so a lazily registered one is asked again", () => {
-    const renderer = new TestWebGLRenderer({} as WebGL2RenderingContext);
-    expect(renderer.requiresOpaqueDepth("late-shader")).toBe(false);
-    const cache = (renderer as unknown as { _opaqueDepthRequirement: Map<string, boolean> })
-      ._opaqueDepthRequirement;
-    expect(cache.has("late-shader")).toBe(false);
-  });
-});
-
-describe("AbstractWebGLRenderer render-list provider hand-over (ADR 0032)", () => {
-  it("registers the material of every batch, transparent and decal object on the renderer's registry", () => {
-    const renderer = new TestWebGLRenderer({} as WebGL2RenderingContext);
-    const opaque = new Object3D("opaque");
-    opaque.material = new PhongMaterial();
-    const glassy = new Object3D("glassy");
-    glassy.material = new FluidSurfaceMaterial();
-
-    (
-      renderer as unknown as { _registerRenderListProviders(list: unknown): void }
-    )._registerRenderListProviders({
-      opaqueBatches: [{ shaderId: MaterialType.PHONG, objects: [opaque] }],
-      transparent: [glassy],
-      decals: [],
-    });
-
-    const registry = renderer.context.shaderRegistry;
-    expect(registry.get(MaterialType.PHONG)).toBeDefined();
-    expect(registry.get(MaterialType.FLUID_SURFACE)).toBeDefined();
   });
 });

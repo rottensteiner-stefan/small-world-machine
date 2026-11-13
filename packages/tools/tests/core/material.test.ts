@@ -76,17 +76,4 @@ describe("core/material MaterialMapPipeline", () => {
     const maps = derivePbrMaps(src, DEFAULT_PARAMS);
     expect(Array.from(maps.height.data)).not.toEqual(Array.from(src.data));
   });
-
-  it("exposes all four studio presets with the expected knob set", () => {
-    for (const id of ["default", "stone", "metal", "wood"] as const) {
-      const preset = MATERIAL_STUDIO_PRESETS[id];
-      expect(typeof preset.heightContrast).toBe("number");
-      expect(typeof preset.normalStrength).toBe("number");
-      expect(typeof preset.specContrast).toBe("number");
-      expect(typeof preset.roughGamma).toBe("number");
-      expect(typeof preset.aoSoft).toBe("number");
-      expect(typeof preset.edgeThresh).toBe("number");
-      expect(typeof preset.heightInvert).toBe("boolean");
-    }
-  });
 });

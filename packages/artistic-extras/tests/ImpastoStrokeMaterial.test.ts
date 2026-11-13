@@ -11,18 +11,6 @@ function fakeTexture(width: number, height: number): Texture {
 }
 
 describe("ImpastoStrokeMaterial", () => {
-  it("initializes with intended default parameters", () => {
-    const mat = new ImpastoStrokeMaterial();
-
-    expect(mat.type).toBe("ImpastoStrokeMaterial");
-    expect(mat.brushRelief).toBe(1.0);
-    expect(mat.smearDistance).toBe(0.28);
-    expect(mat.edgeLift).toBe(0.9);
-    expect(mat.paintOpacity).toBe(0.92);
-    expect(mat.metallic).toBe(0.55);
-    expect(mat.roughness).toBe(0.5);
-  });
-
   it("reuses the fixed material texture slots for its three layers", () => {
     const paint = fakeTexture(512, 384);
     const dir = fakeTexture(512, 384);

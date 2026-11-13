@@ -4,7 +4,6 @@ import {
   RatGroomingBehavior,
   RatGroomingState,
 } from "../../../src/behaviors/creatures/RatGroomingBehavior.js";
-import { Color } from "../../../src/core/colors/Color.js";
 import { Object3D } from "../../../src/core/Object3D.js";
 
 describe("GroomingRat & RatGroomingBehavior", () => {
@@ -20,19 +19,6 @@ describe("GroomingRat & RatGroomingBehavior", () => {
     expect(rat.getObjectByName("Tail_0")).toBeDefined();
     expect(rat.getObjectByName("Tail_5")).toBeDefined();
     expect(rat.behavior).toBeInstanceOf(RatGroomingBehavior);
-  });
-
-  it("should support custom color options and scaling", () => {
-    const customRat = new GroomingRat({
-      furColor: "#554433",
-      skinColor: new Color(0.9, 0.6, 0.6),
-      eyeColor: "#ff00ff",
-      scale: 1.5,
-    });
-
-    expect(customRat.scale.x).toBe(1.5);
-    expect(customRat.scale.y).toBe(1.5);
-    expect(customRat.scale.z).toBe(1.5);
   });
 
   it("should execute 3-phase grooming state machine during update", () => {

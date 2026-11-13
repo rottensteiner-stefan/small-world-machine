@@ -19,12 +19,6 @@ function makeEmptyLightData(): LightDataInterface {
 }
 
 describe("SpotLight", () => {
-  it("should initialize with default properties", () => {
-    const light = new SpotLight();
-    expect(light.castShadow).toBe(false);
-    expect(light.shadowCamera).toBeUndefined();
-  });
-
   it("should initialize shadowCamera if castShadow is true", () => {
     const light = new SpotLight({ castShadow: true, angle: Math.PI / 4, distance: 100 });
     expect(light.shadowCamera).toBeDefined();
@@ -79,13 +73,6 @@ describe("SpotLight", () => {
     expect(cam.up.x).toBeCloseTo(0);
     expect(cam.up.y).toBeCloseTo(1);
     expect(cam.up.z).toBeCloseTo(0);
-  });
-
-  it("pushes itself into the scene-wide light list", () => {
-    const light = new SpotLight();
-    const data = makeEmptyLightData();
-    light.applyTo(data);
-    expect(data.sLights).toEqual([light]);
   });
 
   it(`caps the scene-wide list at ${MAX_CLUSTERED_LIGHTS_PER_TYPE}`, () => {

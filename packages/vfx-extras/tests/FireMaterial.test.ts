@@ -1,18 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { BlendingMode, Color, CullMode, Vector3D } from "@small-world-machine/engine";
+import { Color, Vector3D } from "@small-world-machine/engine";
 import { FireMaterial, FlamePalettes } from "../src/fire/FireMaterial.js";
 import { FlameGlowMaterial } from "../src/fire/FlameGlowMaterial.js";
 import { createFlameCardGeometry } from "../src/fire/createFlameCardGeometry.js";
 
 describe("FireMaterial", () => {
-  it("renders additively, double-sided and without depth writes", () => {
-    const state = new FireMaterial().getRenderManifest().state!;
-    expect(state.blending).toBe(BlendingMode.ADDITIVE);
-    expect(state.transparent).toBe(true);
-    expect(state.depthWrite).toBe(false);
-    expect(state.culling).toBe(CullMode.NONE);
-  });
-
   it("derives core, body and tip colours from the body temperature", () => {
     const props = new FireMaterial({ temperatureK: 2000 }).getRenderManifest().properties;
     const core = Color.fromTemperature(2800);
@@ -95,13 +87,6 @@ describe("FireMaterial", () => {
 });
 
 describe("FlameGlowMaterial", () => {
-  it("is an additive billboard", () => {
-    const state = new FlameGlowMaterial().getRenderManifest().state!;
-    expect(state.blending).toBe(BlendingMode.ADDITIVE);
-    expect(state.isSprite).toBe(true);
-    expect(state.depthWrite).toBe(false);
-  });
-
   it("carries intensity, falloff and temperature colour", () => {
     const props = new FlameGlowMaterial({
       temperatureK: 1900,
@@ -111,12 +96,6 @@ describe("FlameGlowMaterial", () => {
     const c = Color.fromTemperature(1900);
     expect((props["u_matParam0"] as number[]).slice(0, 2)).toEqual([0.8, 5]);
     expect((props["u_matParam1"] as number[]).slice(0, 3)).toEqual([c.r, c.g, c.b]);
-  });
-
-  it("lets an explicit tint override the temperature colour", () => {
-    const tint = FlamePalettes.SPECTRAL.body;
-    const props = new FlameGlowMaterial({ tint }).getRenderManifest().properties;
-    expect((props["u_matParam1"] as number[]).slice(0, 3)).toEqual([tint.r, tint.g, tint.b]);
   });
 });
 

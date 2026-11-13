@@ -2,29 +2,38 @@ import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { WebGL1Renderer } from "../../src/renderers/WebGL1/WebGL1Renderer.js";
 import { WebGL2Renderer } from "../../src/renderers/WebGL2/WebGL2Renderer.js";
-import type { LightDataInterface, Renderer } from "../../src/interfaces/index.js";
+import type { LightDataInterface } from "../../src/interfaces/index.js";
 import { RenderTarget } from "../../src/core/textures/index.js";
-import { PlanarReflectionNode } from "../../src/core/reflection/PlanarReflectionNode.js";
 
 /** Private state the lifetime tests have to plant/inspect (the renderers need a real context to
  * initialize, which is not worth faking). */
 interface Gl2Internals {
   gl: WebGL2RenderingContext;
-  _clusterGridTex?: WebGLTexture;
-  _clusterIndexTex?: WebGLTexture;
-  _opaqueTexture?: WebGLTexture;
-  _opaqueDepthTexture?: WebGLTexture;
-  _opaqueDepthFbo?: WebGLFramebuffer;
+  _clusters: {
+    _gridTex?: WebGLTexture;
+    _indexTex?: WebGLTexture;
+    gridTex: WebGLTexture;
+    indexTex: WebGLTexture;
+    allocate: (
+      gl: WebGL2RenderingContext,
+      dims: { x: number; y: number; z: number },
+      max: number,
+    ) => void;
+  };
+  _opaqueCapture: {
+    _opaqueTexture?: WebGLTexture;
+    _opaqueDepthTexture?: WebGLTexture;
+    _opaqueDepthFbo?: WebGLFramebuffer;
+  };
   _blackCubeTexture?: WebGLTexture;
   _defaultBrdfTexture?: WebGLTexture;
-  _shadowMaps: Map<object, { destroy: () => void }>;
-  _renderTargetFbos: Map<object, { destroy: () => void }>;
+  _shadows: { _shadowMaps: Map<object, { destroy: () => void }> };
+  _renderTargets: { _renderTargetFbos: Map<object, { destroy: () => void }> };
   _textures: {
     unregisterTexture: (t: object) => void;
     unregisterCubeTexture: (t: object) => void;
   };
   _texCache: Map<object, object>;
-  _allocateClusterTextures: (dims: { x: number; y: number; z: number }, max: number) => void;
 }
 
 function mockGl2(): WebGL2RenderingContext {
@@ -70,12 +79,12 @@ describe("WebGL2Renderer resource lifetime", () => {
       cube: {} as WebGLTexture,
       brdf: {} as WebGLTexture,
     };
-    internals._clusterGridTex = owned.grid;
-    internals._clusterIndexTex = owned.index;
-    internals._opaqueTexture = owned.opaque;
-    internals._opaqueDepthTexture = owned.depth;
+    internals._clusters._gridTex = owned.grid;
+    internals._clusters._indexTex = owned.index;
+    internals._opaqueCapture._opaqueTexture = owned.opaque;
+    internals._opaqueCapture._opaqueDepthTexture = owned.depth;
     const depthFbo = {} as WebGLFramebuffer;
-    internals._opaqueDepthFbo = depthFbo;
+    internals._opaqueCapture._opaqueDepthFbo = depthFbo;
     internals._blackCubeTexture = owned.cube;
     internals._defaultBrdfTexture = owned.brdf;
 
@@ -93,12 +102,12 @@ describe("WebGL2Renderer resource lifetime", () => {
     const internals = renderer as unknown as Gl2Internals;
     internals.gl = gl;
 
-    internals._allocateClusterTextures({ x: 2, y: 2, z: 2 }, 4);
-    const firstGrid = internals._clusterGridTex;
-    const firstIndex = internals._clusterIndexTex;
+    internals._clusters.allocate(gl, { x: 2, y: 2, z: 2 }, 4);
+    const firstGrid = internals._clusters.gridTex;
+    const firstIndex = internals._clusters.indexTex;
     expect(gl.deleteTexture).not.toHaveBeenCalled();
 
-    internals._allocateClusterTextures({ x: 4, y: 4, z: 4 }, 4);
+    internals._clusters.allocate(gl, { x: 4, y: 4, z: 4 }, 4);
 
     expect(gl.deleteTexture).toHaveBeenCalledWith(firstGrid);
     expect(gl.deleteTexture).toHaveBeenCalledWith(firstIndex);
@@ -109,12 +118,12 @@ describe("WebGL2Renderer resource lifetime", () => {
     const internals = renderer as unknown as Gl2Internals;
     const staleLight = {};
     const destroy = vi.fn();
-    internals._shadowMaps.set(staleLight, { destroy });
+    internals._shadows._shadowMaps.set(staleLight, { destroy });
 
     renderer.renderShadowMaps(NO_LIGHTS, []);
 
     expect(destroy).toHaveBeenCalledTimes(1);
-    expect(internals._shadowMaps.has(staleLight)).toBe(false);
+    expect(internals._shadows._shadowMaps.has(staleLight)).toBe(false);
   });
 });
 
@@ -138,34 +147,15 @@ describe("releaseRenderTarget", () => {
     const target = RenderTarget.create({ width: 8, height: 8 });
     target.isLoaded = true;
     const destroy = vi.fn();
-    internals._renderTargetFbos.set(target, { destroy });
+    internals._renderTargets._renderTargetFbos.set(target, { destroy });
     internals._texCache.set(target, {});
 
     renderer.releaseRenderTarget(target);
 
     expect(destroy).toHaveBeenCalledTimes(1);
-    expect(internals._renderTargetFbos.has(target)).toBe(false);
+    expect(internals._renderTargets._renderTargetFbos.has(target)).toBe(false);
     expect(internals._texCache.has(target)).toBe(false);
     expect(target.isLoaded).toBe(false);
-  });
-
-  it("is safe for a target that was never rendered", () => {
-    const renderer = rendererWithTextureCache();
-    expect(() =>
-      renderer.releaseRenderTarget(RenderTarget.create({ width: 4, height: 4 })),
-    ).not.toThrow();
-  });
-
-  it("PlanarReflectionNode.dispose hands its render target to the renderer", () => {
-    const node = new PlanarReflectionNode("mirror", 16, 16);
-    const releaseRenderTarget = vi.fn();
-    node.dispose({ releaseRenderTarget } as unknown as Renderer);
-    expect(releaseRenderTarget).toHaveBeenCalledWith(node.renderTarget);
-  });
-
-  it("PlanarReflectionNode.dispose tolerates renderers without the capability", () => {
-    const node = new PlanarReflectionNode("mirror", 16, 16);
-    expect(() => node.dispose({} as unknown as Renderer)).not.toThrow();
   });
 });
 

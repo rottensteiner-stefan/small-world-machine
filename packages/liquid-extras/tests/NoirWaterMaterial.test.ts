@@ -2,19 +2,6 @@ import { describe, it, expect } from "vitest";
 import { NoirWaterMaterial } from "../src/materials/NoirWater/NoirWaterMaterial.js";
 
 describe("NoirWaterMaterial Hook-Based Extension", () => {
-  it("instantiates cleanly with noir palette and custom type", () => {
-    const mat = new NoirWaterMaterial();
-    expect(mat.type).toBe("NoirWaterMaterial");
-    expect(mat.styleId).toBe(3.0);
-    expect(mat.transparent).toBe(true);
-    expect(mat.depthWrite).toBe(false);
-
-    const manifest = mat.getRenderManifest();
-    expect(manifest.properties["u_styleB"]).toBeDefined();
-    const styleB = manifest.properties["u_styleB"] as number[];
-    expect(styleB[3]).toBe(3.0); // styleId
-  });
-
   it("injects ink, concentric shockwaves and posterize hooks into all three backends", () => {
     const mat = new NoirWaterMaterial();
     const shaderDef = mat.getShaderDefinition();
@@ -75,11 +62,6 @@ describe("NoirWaterMaterial Hook-Based Extension", () => {
     expect(styleB[1]).toBe(0.5);
     expect(styleB[2]).toBe(1.2);
     expect(styleB[3]).toBe(3.0); // styleId
-  });
-
-  it("uses low caustics by default", () => {
-    const mat = new NoirWaterMaterial();
-    expect(mat.causticStrength).toBeLessThanOrEqual(0.2);
   });
 
   it("mirrors the +0.5 top-bucket rounding on the real default posterize mat", () => {

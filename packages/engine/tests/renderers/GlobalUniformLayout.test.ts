@@ -161,8 +161,7 @@ function captureWebGL2(): number[] {
   renderer._globalUBO = ubo;
   renderer.postProcessing = { enabled: false };
   renderer._quality = { gamma: 2.2, exposure: 1.0 };
-  renderer._clusterDims = { x: 12, y: 13, z: 14 };
-  renderer._clusterMaxLightsPerCluster = 32;
+  renderer._clusters = { dims: { x: 12, y: 13, z: 14 }, maxLightsPerCluster: 32 };
 
   renderer.updateGlobalUBO(makeVp(), new Vector3D(11, 12, 13), makeLights(), 0.1, 500);
   renderer.writeClusterGridUniforms([32, 32]);

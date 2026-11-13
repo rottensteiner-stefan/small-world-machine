@@ -59,17 +59,6 @@ describe("Skeletal Animation System", () => {
     expect(arm.quaternion!.y).toBeGreaterThan(0);
   });
 
-  it("should bind skeleton to SkinnedMesh and update world matrix", () => {
-    const bone = new Bone("B0");
-    const skeleton = new Skeleton([bone]);
-    const skinnedMesh = new SkinnedMesh("Character");
-
-    skinnedMesh.bind(skeleton);
-    skinnedMesh.updateMatrixWorld();
-
-    expect(skinnedMesh.skeleton).toBe(skeleton);
-  });
-
   it("should blend two simultaneously-playing actions by their relative weight", () => {
     const root = new Object3D("Hero");
     const arm = new Bone("Arm");

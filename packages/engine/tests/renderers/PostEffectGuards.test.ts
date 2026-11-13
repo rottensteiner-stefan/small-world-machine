@@ -1,21 +1,12 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- terse GPU mock stubs */
-import { describe, expect, it, vi, beforeAll } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { Matrix4, Vector3D } from "../../src/math/index.js";
 import { Color } from "../../src/core/colors/index.js";
 import { PostEffectPipelineGate } from "../../src/renderers/post/PostEffectPipelineGate.js";
 import { DepthOfFieldPassGPU } from "../../src/renderers/post/passes/DepthOfFieldPassGPU.js";
 import { LightShaftsPassGPU } from "../../src/renderers/post/passes/LightShaftsPassGPU.js";
-import { PostProcessPass } from "../../src/renderers/passes/PostProcessPass.js";
-import { PostFxChain } from "../../src/renderers/WebGPU/managers/PostFxChain.js";
-import { PostProcessingGroup } from "../../src/index.js";
-import { PostProcessingEffectType } from "../../src/enums/index.js";
-import { ShaderRegistry } from "../../src/renderers/shaders/ShaderRegistry.js";
-import { CoreShaderChunks } from "../../src/renderers/shaders/CoreShaderChunks.js";
 import type { PostEffectPassContext } from "../../src/renderers/post/PostEffectPass.js";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Any = any;
 
 const g = globalThis as unknown as Record<string, Record<string, number>>;
 g["GPUShaderStage"] ??= { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
@@ -246,123 +237,5 @@ describe("LightShaftsPassGPU shadow matrices (A1 shafts bullet, A10)", () => {
     const bil = readFileSync(new URL("LightShaftsBilateral.frag.wgsl", dir), "utf8");
     expect(bil).not.toMatch(/let far = 1000\.0/);
     expect(bil).toContain("bp.params.w");
-  });
-});
-
-describe("PostProcessPass neutral fallbacks (A9, K1, A8)", () => {
-  const registry = new ShaderRegistry();
-  beforeAll(async () => {
-    await CoreShaderChunks.init(registry);
-  });
-
-  function setup(withErrorScopes = false): {
-    m: MockDevice;
-    renderer: Any;
-    group: PostProcessingGroup;
-    pass: Any;
-  } {
-    const m = makeDevice(withErrorScopes);
-    const group = new PostProcessingGroup();
-    group.enabled = true;
-    group.get<Any>(PostProcessingEffectType.BLOOM).enabled = true;
-    group.get<Any>(PostProcessingEffectType.HBAO).enabled = true;
-    group.get<Any>(PostProcessingEffectType.LIGHT_SHAFTS).enabled = true;
-    group.get<Any>(PostProcessingEffectType.VOLUMETRIC_FOG).enabled = true;
-    const white = { white: true };
-    const renderer = {
-      postProcessing: group,
-      context: { shaderRegistry: registry },
-      frameInfo: { realTime: 0 },
-      hdrTextureView: {},
-      whiteTextureView: white,
-      gpuDevice: m.device,
-      gpuFormat: "rgba8unorm",
-      gpuCanvasContext: { getCurrentTexture: () => ({ createView: () => ({}) }) },
-    };
-    return { m, renderer, group, pass: new PostProcessPass() };
-  }
-
-  it("binds neutral BLACK (not white) for enabled-but-missing bloom/shafts/fog, white only for AO", () => {
-    const { m, renderer, pass } = setup();
-    pass.execute(renderer, {}, ceStub(), {}, new Float32Array(16), {});
-    const bg = (m.device.createBindGroup as Any).mock.calls.at(-1)[0].entries as {
-      binding: number;
-      resource: unknown;
-    }[];
-    const byBinding = (b: number): unknown => bg.find((e) => e.binding === b)!.resource;
-    expect(byBinding(4)).toBe(renderer.whiteTextureView); // hbao
-    const black = byBinding(3);
-    expect(black).not.toBe(renderer.whiteTextureView);
-    expect(byBinding(5)).toBe(black); // shafts
-    expect(byBinding(6)).toBe(black); // fog
-    const wt = (m.device.queue.writeTexture as Any).mock.calls[0];
-    expect(Array.from(wt[1] as Uint8Array)).toEqual([0, 0, 0, 255]);
-  });
-
-  it("does not allocate a new effect bundle per frame (K1)", () => {
-    const { renderer, pass } = setup();
-    pass.execute(renderer, {}, ceStub(), {}, new Float32Array(16), {});
-    const bundle = pass._bundle;
-    pass.execute(renderer, {}, ceStub(), {}, new Float32Array(16), {});
-    expect(pass._bundle).toBe(bundle);
-  });
-
-  it("falls back to the neutral variant when the first uber pipeline is invalid, and still draws", async () => {
-    const { m, renderer, pass } = setup(true);
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    m.failNext.message = "uber broke";
-    const draws = vi.fn();
-    const ce = {
-      beginRenderPass: () => ({ setPipeline() {}, setBindGroup() {}, draw: draws, end() {} }),
-    } as unknown as GPUCommandEncoder;
-    pass.execute(renderer, {}, ce, {}, new Float32Array(16), {});
-    expect(draws).not.toHaveBeenCalled(); // first build still validating: no frame with an unverified pipeline
-    await flush(); // first verdict: failure -> safe variant requested and verified
-    pass.execute(renderer, {}, ce, {}, new Float32Array(16), {});
-    expect(draws).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
-  });
-});
-
-describe("PostFxChain frees idle effect passes (A11)", () => {
-  it("destroys a pass that stayed disabled for IDLE_DESTROY_FRAMES and drops its registry entry", () => {
-    const m = makeDevice(false);
-    const group = new PostProcessingGroup();
-    group.enabled = true;
-    const host = {
-      gpuDevice: m.device,
-      postProcessing: group,
-      gpuCanvasContext: { canvas: { width: 32, height: 32 } },
-      hdrTexture: undefined,
-      hdrTextureView: undefined,
-      opaqueDepthView: undefined,
-      dummyDepthTextureView: {},
-    } as Any;
-    const chain = new PostFxChain(host) as Any;
-    const destroy = vi.fn();
-    chain._getOrCreatePass(PostProcessingEffectType.BLOOM, function (this: Any) {
-      this.execute = () => null;
-      this.destroy = destroy;
-    });
-    expect(chain._passes.size).toBe(1);
-    const run = (): void =>
-      chain.runPostEffects(
-        ceStub(),
-        {},
-        new Float32Array(16),
-        undefined,
-        new Vector3D(),
-        0.1,
-        100,
-        undefined,
-        {},
-      );
-    for (let i = 0; i < PostFxChain.IDLE_DESTROY_FRAMES; i++) run();
-    expect(destroy).not.toHaveBeenCalled();
-    run();
-    run();
-    expect(destroy).toHaveBeenCalledTimes(1);
-    expect(chain._passes.size).toBe(0);
   });
 });

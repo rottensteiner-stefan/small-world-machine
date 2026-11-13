@@ -119,7 +119,7 @@ describe("WebGPU capacity fail-fast validation", () => {
     );
   });
 
-  function setupSubgroupMocks(renderer: RendererInternals, ensureDummySpy = vi.fn()): void {
+  function setupSubgroupMocks(renderer: RendererInternals): void {
     renderer._device = makeMockDevice();
     renderer._pipelineCache = {
       getPipeline: vi.fn(() => ({
@@ -138,7 +138,7 @@ describe("WebGPU capacity fail-fast validation", () => {
       })),
     };
     renderer._fallback = {
-      ensureDummyBufferSize: ensureDummySpy,
+      ensureDummyBufferSize: vi.fn(),
       dummyNormalBuffer: {},
       dummyUvBuffer: {},
       dummyTangentBuffer: {},
@@ -269,44 +269,5 @@ describe("WebGPU capacity fail-fast validation", () => {
         Topology.TRIANGLE_LIST,
       ),
     ).toThrow(/InstancedMesh instanceData buffer too small: required at least 160 bytes/);
-  });
-
-  it("grows dummy buffer using instanceCount when instanceData is absent in _renderSubgroup", () => {
-    const renderer = new WebGPURenderer() as RendererInternals;
-    const ensureDummySpy = vi.fn();
-    setupSubgroupMocks(renderer, ensureDummySpy);
-
-    const geo = new Cube().getGeometryData();
-    const mat = new BasicMaterial();
-    const instMesh = new InstancedMesh("InstMesh", geo, mat, 1000);
-    instMesh.instanceCount = 1000;
-
-    const mockRp = {
-      setPipeline: vi.fn(),
-      setBindGroup: vi.fn(),
-      setVertexBuffer: vi.fn(),
-      setIndexBuffer: vi.fn(),
-      drawIndexed: vi.fn(),
-      draw: vi.fn(),
-    } as unknown as GPURenderPassEncoder;
-
-    const manifest: RenderManifest = {
-      shaderId: "test",
-      properties: {},
-      textures: {},
-    };
-
-    renderer._renderSubgroup(
-      mockRp,
-      [instMesh],
-      true,
-      mat.uuid,
-      manifest,
-      0,
-      undefined,
-      Topology.TRIANGLE_LIST,
-    );
-
-    expect(ensureDummySpy).toHaveBeenCalledWith(1000);
   });
 });

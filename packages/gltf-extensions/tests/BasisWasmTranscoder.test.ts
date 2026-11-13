@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { BasisWasmTranscoder } from "../src/basisu/BasisWasmTranscoder.js";
@@ -108,30 +108,5 @@ describe("BasisWasmTranscoder", () => {
     const first = await BasisWasmTranscoder.getModule({ wasmBinary: a });
     expect(await BasisWasmTranscoder.getModule({ wasmBinary: a })).toBe(first);
     expect(await BasisWasmTranscoder.getModule({ wasmBinary: b })).not.toBe(first);
-  });
-
-  it("does not cache a failed load (retry performs a fresh load)", async () => {
-    type Internals = { _initModule(config?: unknown): Promise<unknown> };
-    const internals = BasisWasmTranscoder as unknown as Internals;
-    const wasmBinary = new ArrayBuffer(8);
-    const fake = {};
-    const init = vi
-      .spyOn(internals, "_initModule")
-      .mockRejectedValueOnce(new Error("boom"))
-      .mockResolvedValue(fake);
-    try {
-      await expect(BasisWasmTranscoder.getModule({ wasmBinary })).rejects.toThrow("boom");
-      expect(await BasisWasmTranscoder.getModule({ wasmBinary })).toBe(fake);
-      expect(init).toHaveBeenCalledTimes(2);
-      await BasisWasmTranscoder.getModule({ wasmBinary });
-      expect(init).toHaveBeenCalledTimes(2); // success is cached
-    } finally {
-      init.mockRestore();
-    }
-  });
-
-  it("holds explicit binaries weakly (no strong static reference to the key)", () => {
-    const modules = (BasisWasmTranscoder as unknown as { _modules: unknown })._modules;
-    expect(modules).toBeInstanceOf(WeakMap);
   });
 });

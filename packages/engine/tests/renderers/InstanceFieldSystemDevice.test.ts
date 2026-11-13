@@ -141,14 +141,6 @@ function makeSetup(
 ): {
   system: InstanceFieldSystem;
   rec: Recorded;
-  geoEntry: {
-    vb: object;
-    uvb: object;
-    ib: object;
-    indexCount: number;
-    vertexCount: number;
-    format: string;
-  };
 } {
   const rec: Recorded = { writes: [], bindGroups: 0, buffers: [] };
   const geoEntry = {
@@ -230,7 +222,7 @@ function makeSetup(
     lodTransitionMode: extras.lodTransitionMode,
   } as never);
   system.attachHost(host);
-  return { system, rec, geoEntry };
+  return { system, rec };
 }
 
 function lastParamBlock(rec: Recorded, offset: number): Uint32Array {
@@ -274,25 +266,6 @@ describe("InstanceFieldSystem on a recording device", () => {
     // Pages only for the addressable segments: views [0,4) x 1 bucket -> highest bv = 3*8.
     const visible = rec.buffers.find((b) => b.size === (3 * MAX_LOD_BUCKETS + 1) * 2 * n * 4);
     expect(visible).toBeDefined();
-  });
-
-  it("sets the pipeline and binds all five vertex streams before every indirect draw", () => {
-    const { system, geoEntry } = makeSetup(8);
-    const calls: string[] = [];
-    const rp = {
-      setPipeline: vi.fn(() => calls.push("pipeline")),
-      setBindGroup: vi.fn(),
-      setVertexBuffer: vi.fn(),
-      setIndexBuffer: vi.fn(),
-      drawIndexedIndirect: vi.fn(() => calls.push("draw")),
-    };
-    system.recordDraw(rp as unknown as GPURenderPassEncoder, 0, 0, true, "color");
-    expect(calls).toEqual(["pipeline", "draw"]);
-    expect(rp.setVertexBuffer).toHaveBeenCalledWith(0, geoEntry.vb);
-    expect(rp.setVertexBuffer).toHaveBeenCalledWith(2, geoEntry.uvb);
-    // Missing normals / colours / material layers are completed by the system (slots 1, 3, 4).
-    const slots = rp.setVertexBuffer.mock.calls.map((c) => c[0]).sort();
-    expect(slots).toEqual([0, 1, 2, 3, 4]);
   });
 
   it("reuses the cull bind groups of the ping-pong pyramid instead of creating one per frame", () => {

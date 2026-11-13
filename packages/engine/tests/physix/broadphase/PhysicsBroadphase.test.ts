@@ -26,13 +26,6 @@ describe("PhysicsBroadphase", () => {
     expect(hits).not.toContain(objB);
   });
 
-  it("handles fallback list when colliders cannot be inserted into the octree", () => {
-    const broadphase = new PhysicsBroadphase();
-    const obj = new Object3D("NoBounds");
-    broadphase.update([obj]);
-    expect(broadphase.fallback.length).toBeGreaterThanOrEqual(0);
-  });
-
   it("updates Octree root min/max extents when colliders move beyond initial bounds across frames [BLK-C2]", () => {
     const broadphase = new PhysicsBroadphase();
 

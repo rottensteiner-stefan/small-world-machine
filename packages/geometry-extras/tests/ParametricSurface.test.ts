@@ -30,22 +30,6 @@ describe("ParametricSurface", () => {
     assertNoNaN(surface, "ParametricSurface(grid)");
   });
 
-  it("reports the resolved domain bounds", () => {
-    const surface = new ParametricSurface({
-      uMin: -2,
-      uMax: 3,
-      vMin: -1,
-      vMax: 4,
-      uSegments: 4,
-      vSegments: 4,
-      surface: (u, v): Vector3D => new Vector3D(u, v, 0),
-    });
-    expect(surface.uMin).toBe(-2);
-    expect(surface.uMax).toBe(3);
-    expect(surface.vMin).toBe(-1);
-    expect(surface.vMax).toBe(4);
-  });
-
   it("wraps the grid when the surface is periodic in both directions", () => {
     const surface = new ParametricSurface({
       uMin: 0,

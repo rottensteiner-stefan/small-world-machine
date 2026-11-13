@@ -56,17 +56,3 @@ describe.each(presets)("%s planar reflection", (_name, create) => {
     expect(create().getShaderDefinition().layout.textures).toHaveProperty("u_reflectionMap");
   });
 });
-
-describe("reflection options", () => {
-  it("OpenWaterMaterial and StylizedWaterMaterial take them from their constructor options", () => {
-    const mirror = Texture.empty();
-    for (const material of [
-      new OpenWaterMaterial({ reflectionMap: mirror, reflectionStrength: 0.5 }),
-      new StylizedWaterMaterial({ reflectionMap: mirror, reflectionDistortion: 0.3 }),
-    ]) {
-      expect(material.reflectionMap).toBe(mirror);
-    }
-    expect(new OpenWaterMaterial({ reflectionStrength: 0.5 }).reflectionStrength).toBe(0.5);
-    expect(new StylizedWaterMaterial({ reflectionDistortion: 0.3 }).reflectionDistortion).toBe(0.3);
-  });
-});

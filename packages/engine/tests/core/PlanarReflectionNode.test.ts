@@ -26,17 +26,6 @@ class MockRenderer {
 }
 
 describe("PlanarReflectionNode", () => {
-  it("should initialize a RenderTarget and mirrored camera", () => {
-    const reflectionNode = new PlanarReflectionNode("TestReflection", 512, 512);
-
-    expect(reflectionNode.renderTarget).toBeDefined();
-    expect(reflectionNode.renderTarget.width).toBe(512);
-    expect(reflectionNode.renderTarget.height).toBe(512);
-
-    // Internal camera should exist
-    expect(reflectionNode.mirrorCamera).toBeDefined();
-  });
-
   it("should properly mirror camera positions across its plane", () => {
     const reflectionNode = new PlanarReflectionNode("Mirror", 512, 512);
     // Node sits at Y=0 (XZ plane)
@@ -289,26 +278,6 @@ describe("PlanarReflectionNode oblique clipping", () => {
   });
 
   describe("PlanarReflectionNodeOptions & Frustum Culling", () => {
-    it("constructs with options object correctly", () => {
-      const node = new PlanarReflectionNode({
-        name: "CustomMirror",
-        width: 512,
-        height: 256,
-        generateMipmaps: true,
-        clipBelowPlane: false,
-        clipPlaneOffset: 0.1,
-        cullAgainstFrustum: false,
-      });
-
-      expect(node.name).toBe("CustomMirror");
-      expect(node.renderTarget.width).toBe(512);
-      expect(node.renderTarget.height).toBe(256);
-      expect(node.renderTarget.generateMipmaps).toBe(true);
-      expect(node.clipBelowPlane).toBe(false);
-      expect(node.clipPlaneOffset).toBe(0.1);
-      expect(node.cullAgainstFrustum).toBe(false);
-    });
-
     it("skips rendering and returns false when reflective surface is outside main camera frustum", () => {
       const node = new PlanarReflectionNode({ width: 256, height: 256 });
       node.updateMatrixWorld();

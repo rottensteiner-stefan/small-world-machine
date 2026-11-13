@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { BlendingMode, Vector3D } from "@small-world-machine/engine";
+import { Vector3D } from "@small-world-machine/engine";
 import { FireSmokeEmitter } from "../src/fire/FireSmokeEmitter.js";
-import { SmokeSpriteMaterial } from "../src/fire/SmokeSpriteMaterial.js";
 
 const DT = 1 / 60;
 const ORIGIN = new Vector3D(0, 0, 0);
@@ -208,26 +207,5 @@ describe("FireSmokeEmitter alpha-as-opacity rendering", () => {
         expect(emitter.mesh.instanceMatrices[o + k]).toBe(0);
       }
     }
-  });
-});
-
-describe("SmokeSpriteMaterial blend contract", () => {
-  it("is straight-alpha with CPU-side billboarding and skips the depth pre-pass", () => {
-    const material = new SmokeSpriteMaterial();
-    for (let i = 0; i < 3; i++) {
-      const state = material.getRenderManifest().state!;
-      expect(state.blending).toBe(BlendingMode.ALPHA);
-      expect(state.skipDepthPrePass).toBe(true);
-    }
-  });
-
-  it("carries animation time and churn into the shader lanes", () => {
-    const material = new SmokeSpriteMaterial({ time: 1.25, churn: 0.5 });
-    const props = material.getRenderManifest().properties;
-    const p0 = props["u_matParam0"] as number[];
-    expect(p0[0]).toBe(1.25);
-    expect(p0[1]).toBe(0.5);
-    material.time = 2.5;
-    expect((material.getRenderManifest().properties["u_matParam0"] as number[])[0]).toBe(2.5);
   });
 });

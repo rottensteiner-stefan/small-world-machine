@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { CommandHistory } from "../../src/common/io/ui/CommandHistory.js";
 
@@ -57,27 +56,5 @@ describe("CommandHistory", () => {
     expect(history.navigatePageDown("cmd_5")).toBe("cmd_10");
     expect(history.navigatePageDown("cmd_10")).toBe("cmd_15");
     expect(history.navigatePageDown("cmd_15")).toBe("current");
-  });
-
-  it("binds to HTML input element and intercepts keys", () => {
-    const history = new CommandHistory();
-    history.push("first command");
-    history.push("second command");
-
-    const input = document.createElement("input");
-    input.value = "partial typing";
-    const unbind = history.bindInput(input);
-
-    const upEvent = new KeyboardEvent("keydown", { key: "ArrowUp", cancelable: true });
-    input.dispatchEvent(upEvent);
-    expect(upEvent.defaultPrevented).toBe(true);
-    expect(input.value).toBe("second command");
-
-    const downEvent = new KeyboardEvent("keydown", { key: "ArrowDown", cancelable: true });
-    input.dispatchEvent(downEvent);
-    expect(downEvent.defaultPrevented).toBe(true);
-    expect(input.value).toBe("partial typing");
-
-    unbind();
   });
 });

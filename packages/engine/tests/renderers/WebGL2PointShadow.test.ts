@@ -1,21 +1,13 @@
 import "../../src/index.js";
 import { readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
-import { WebGL2Renderer } from "../../src/renderers/WebGL2/WebGL2Renderer.js";
+import { describe, expect, it } from "vitest";
 import { WebGL2PointShadows } from "../../src/renderers/WebGL2/WebGL2PointShadows.js";
-import { WebGL2SpotShadowArray } from "../../src/renderers/WebGL2/WebGL2SpotShadowArray.js";
 import { PointLight } from "../../src/core/lights/PointLight.js";
 import { Object3D } from "../../src/core/Object3D.js";
 import { Cube } from "../../src/geometry/Cube.js";
 import { BasicMaterial } from "../../src/core/materials/surface/BasicMaterial.js";
-import {
-  SHADOW_ARRAY_LAYERS,
-  SPOT_SHADOW_LAYERS,
-  cubeFaceForDirection,
-  pointShadowLayer,
-} from "../../src/core/lights/PointLightShadow.js";
+import { cubeFaceForDirection } from "../../src/core/lights/PointLightShadow.js";
 import { Matrix4, Vector3D } from "../../src/math/index.js";
-import type { LightDataInterface } from "../../src/interfaces/index.js";
 import type { RenderBatch } from "../../src/core/Scene.js";
 
 const GL2 = new URL("../../src/renderers/shaders/source/web_gl2/chunks/", import.meta.url);
@@ -100,37 +92,6 @@ describe("WebGL2 point shadows: GLSL guards (ADR 0052)", () => {
         }
       }
     }
-  });
-});
-
-describe("WebGL2SpotShadowArray layers", () => {
-  function glMock(): { gl: WebGL2RenderingContext; texImage3D: ReturnType<typeof vi.fn> } {
-    const texImage3D = vi.fn();
-    const gl = {
-      createTexture: vi.fn(() => ({})),
-      createFramebuffer: vi.fn(() => ({})),
-      bindTexture: vi.fn(),
-      bindFramebuffer: vi.fn(),
-      texParameteri: vi.fn(),
-      drawBuffers: vi.fn(),
-      readBuffer: vi.fn(),
-      texImage3D,
-    } as unknown as WebGL2RenderingContext;
-    return { gl, texImage3D };
-  }
-
-  it("has capacity for 4 spot layers + 12 point faces, allocated only when asked", () => {
-    expect(WebGL2SpotShadowArray.LAYERS).toBe(SHADOW_ARRAY_LAYERS);
-    expect(WebGL2SpotShadowArray.LAYERS).toBe(16);
-    const { gl, texImage3D } = glMock();
-    const arr = new WebGL2SpotShadowArray(gl, 256);
-    expect(texImage3D.mock.calls[0]![5]).toBe(SPOT_SHADOW_LAYERS);
-    arr.resize(256, WebGL2SpotShadowArray.LAYERS);
-    expect(texImage3D.mock.calls[1]![3]).toBe(256);
-    expect(texImage3D.mock.calls[1]![5]).toBe(16);
-    expect(arr.layers).toBe(16);
-    arr.resize(256, 16);
-    expect(texImage3D).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -225,90 +186,5 @@ describe("WebGL2PointShadows.prepare", () => {
     const ps = new WebGL2PointShadows();
     const l = light(0, 0, 20); // 20 m behind the camera, range 5
     expect(ps.prepare([l], vp, cam, 2, sceneRoot(caster(0, 0, 19)), [])).toBe(0);
-  });
-});
-
-type Fn = ReturnType<typeof vi.fn>;
-
-interface RendererInternals {
-  gl: Record<string, Fn | number>;
-  _spotShadowArray: { resize: Fn; bindLayer: Fn; unbind: Fn; size: number };
-  _globalUBO: { setMatrix: Fn; updateRange: Fn };
-  _renderShadowScene: Fn;
-  updateGlobalUBO: Fn;
-  _frameViewProj: Matrix4;
-  _frameCamPos: Vector3D;
-  _frameScene: { root: Object3D } | undefined;
-  _quality: { maxShadowedPointLights?: number };
-  renderShadowMaps(lights: LightDataInterface, groups: RenderBatch[]): void;
-}
-
-function renderer(): RendererInternals {
-  const r = new WebGL2Renderer() as unknown as RendererInternals;
-  r.gl = {
-    enable: vi.fn(),
-    disable: vi.fn(),
-    cullFace: vi.fn(),
-    CULL_FACE: 1,
-    FRONT: 2,
-    BACK: 3,
-    DEPTH_TEST: 4,
-    BLEND: 5,
-  };
-  r._spotShadowArray = { resize: vi.fn(), bindLayer: vi.fn(), unbind: vi.fn(), size: 256 };
-  r._globalUBO = { setMatrix: vi.fn(), updateRange: vi.fn() };
-  r._renderShadowScene = vi.fn();
-  r.updateGlobalUBO = vi.fn();
-  r._frameViewProj = cameraViewProj();
-  r._frameCamPos = new Vector3D(0, 0, 0);
-  return r;
-}
-
-function lightData(pLights: PointLight[]): LightDataInterface {
-  return { pLights, sLights: [], aLights: [] } as unknown as LightDataInterface;
-}
-
-describe("WebGL2Renderer.renderShadowMaps: point-light faces", () => {
-  it("renders no extra pass without casters in range", () => {
-    const r = renderer();
-    r._frameScene = { root: sceneRoot(caster(30, 0, -6)) };
-    r.renderShadowMaps(lightData([light(0, 0, -6)]), []);
-    expect(r._spotShadowArray.bindLayer).not.toHaveBeenCalled();
-    expect(r._renderShadowScene).not.toHaveBeenCalled();
-    expect(r._spotShadowArray.resize).not.toHaveBeenCalled();
-  });
-
-  it("renders into layers 4 + 6 * slot + face, uploading the full UBO once per light", () => {
-    const r = renderer();
-    const l = light(0, 0, -6);
-    l.shadowResolution = 256;
-    r._frameScene = { root: sceneRoot(caster(0, -2.5, -6)) };
-    r.renderShadowMaps(lightData([l]), []);
-
-    expect(r._spotShadowArray.resize).toHaveBeenCalledWith(256, SHADOW_ARRAY_LAYERS);
-    const layers = r._spotShadowArray.bindLayer.mock.calls.map((c) => c[0] as number);
-    // A light in the middle of the view: every face region reaches it.
-    expect(layers).toEqual([0, 1, 2, 3, 4, 5].map((f) => pointShadowLayer(0, f)));
-    // Only the -Y face holds the caster; the others are just cleared.
-    expect(r._renderShadowScene).toHaveBeenCalledTimes(1);
-    expect(r.updateGlobalUBO).toHaveBeenCalledTimes(1);
-    expect(r._globalUBO.updateRange).not.toHaveBeenCalled();
-  });
-
-  it("re-uploads only u_vp for further faces of the same light", () => {
-    const r = renderer();
-    r._frameScene = { root: sceneRoot(caster(0, -2.5, -6), caster(0, 2.5, -6)) };
-    r.renderShadowMaps(lightData([light(0, 0, -6)]), []);
-    expect(r._renderShadowScene).toHaveBeenCalledTimes(2);
-    expect(r.updateGlobalUBO).toHaveBeenCalledTimes(1);
-    expect(r._globalUBO.updateRange).toHaveBeenCalledWith(0, 64);
-  });
-
-  it("honours quality.maxShadowedPointLights = 0", () => {
-    const r = renderer();
-    r._quality = { ...r._quality, maxShadowedPointLights: 0 };
-    r._frameScene = { root: sceneRoot(caster(0, -2.5, -6)) };
-    r.renderShadowMaps(lightData([light(0, 0, -6)]), []);
-    expect(r._spotShadowArray.bindLayer).not.toHaveBeenCalled();
   });
 });

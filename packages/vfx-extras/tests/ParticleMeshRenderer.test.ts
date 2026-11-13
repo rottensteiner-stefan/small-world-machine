@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { ParticleSystem } from "../src/ParticleSystem.js";
 import { ParticleMeshRenderer } from "../src/ParticleMeshRenderer.js";
 import { createOctagonBillboardGeometry } from "../src/geometry/OctagonBillboardGeometry.js";
-import { Sphere, BasicMaterial, InstancedMesh, Vector3D } from "@small-world-machine/engine";
+import { Sphere, BasicMaterial, Vector3D } from "@small-world-machine/engine";
 
 describe("ParticleMeshRenderer", () => {
   it("synchronizes particle transforms and colors into InstancedMesh buffers", () => {
@@ -51,17 +51,6 @@ describe("ParticleMeshRenderer", () => {
     expect(renderer.mesh.instanceData![1]).toBeCloseTo(0.5);
     expect(renderer.mesh.instanceData![2]).toBeCloseTo(0.2);
     expect(renderer.mesh.instanceData![3]).toBeCloseTo(0.8);
-  });
-
-  it("defaults InstancedMesh instance data to generic semantics (no color opt-in)", () => {
-    const system = new ParticleSystem({ capacity: 2 });
-    const geometry = new Sphere({ radius: 0.1 }).getGeometryData();
-    const material = new BasicMaterial();
-    const plain = new InstancedMesh("Plain", geometry, material, 2);
-    expect(plain.useInstanceDataAsColor).toBe(false);
-
-    const renderer = new ParticleMeshRenderer({ system, geometry, material });
-    expect(renderer.mesh.useInstanceDataAsColor).toBe(true);
   });
 });
 

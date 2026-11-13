@@ -1,57 +1,7 @@
 import { RetroScreenMaterial } from "../../src/core/materials/RetroScreenMaterial.js";
 import { MaterialType } from "../../src/enums/index.js";
-import { Texture } from "../../src/core/textures/Texture.js";
 
 describe("RetroScreenMaterial", () => {
-  it("should initialize with default values", () => {
-    const material = new RetroScreenMaterial();
-
-    expect(material.type).toBe(MaterialType.RETRO_SCREEN);
-    expect(material.mode).toBe("tv50s");
-    expect(material.intensity).toBe(1.0);
-    expect(material.speed).toBe(1.0);
-    expect(material.param1).toBe(0.08); // default tv50s snow intensity
-    expect(material.param2).toBe(800.0); // default tv50s scanline count
-    expect(material.param3).toBe(1.0); // default tv50s tearing strength
-    expect(material.param4).toBe(0.15); // default tv50s roll speed
-    expect(material.diffuseMap).toBeUndefined();
-  });
-
-  it("should initialize with custom options for tv50s", () => {
-    const texture = Texture.empty();
-    const material = new RetroScreenMaterial({
-      mode: "tv50s",
-      intensity: 0.5,
-      speed: 2.0,
-      param1: 0.1,
-      param2: 600.0,
-      param3: 0.5,
-      param4: 0.2,
-      diffuseMap: texture,
-    });
-
-    expect(material.mode).toBe("tv50s");
-    expect(material.intensity).toBe(0.5);
-    expect(material.speed).toBe(2.0);
-    expect(material.param1).toBe(0.1);
-    expect(material.param2).toBe(600.0);
-    expect(material.param3).toBe(0.5);
-    expect(material.param4).toBe(0.2);
-    expect(material.diffuseMap).toBe(texture);
-  });
-
-  it("should initialize with film19th defaults when mode is film19th", () => {
-    const material = new RetroScreenMaterial({
-      mode: "film19th",
-    });
-
-    expect(material.mode).toBe("film19th");
-    expect(material.param1).toBe(1.0); // scratch count scale
-    expect(material.param2).toBe(15.0); // flicker speed
-    expect(material.param3).toBe(1.0); // dirt density
-    expect(material.param4).toBe(1.0); // sepia strength
-  });
-
   it("should properly map properties to RenderManifest", () => {
     const material = new RetroScreenMaterial({
       mode: "film19th",

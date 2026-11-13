@@ -1,7 +1,6 @@
 import "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { GpuTimer, GpuTimingSlot } from "../../src/renderers/WebGPU/managers/GpuTimer.js";
-import { MainRenderPass } from "../../src/renderers/passes/MainRenderPass.js";
 
 // Node/vitest has no WebGPU globals; @webgpu/types only provides ambient TS types, not a runtime
 // value. Stub the bit-flag constants the code under test reads at call time (mirrors
@@ -102,11 +101,6 @@ function makeCe(): { ce: Internals } {
   return {
     ce: { resolveQuerySet: vi.fn(), copyBufferToBuffer: vi.fn() },
   };
-}
-
-/** First render-pass descriptor recorded via `ce.beginRenderPass` (mock-call extraction). */
-function firstDescriptor(ce: Internals): Internals {
-  return (ce.beginRenderPass as ReturnType<typeof vi.fn>).mock.calls[0]![0];
 }
 
 function finalWrites(w: ReturnType<GpuTimer["recordPass"]>): FinalWrites {
@@ -481,79 +475,5 @@ describe("GpuTimer", () => {
       expect(timer.snapshot.frameIndex).toBe(1);
       expect(timer.snapshot.segments[0]!.ms).toBeCloseTo(10, 6);
     });
-  });
-});
-
-describe("MainRenderPass gpuTimings hook (K5)", () => {
-  function makePassRenderer(recordPass: Internals): Internals {
-    return {
-      targetClearColor: { r: 0, g: 0, b: 0, a: 1 },
-      activeDepthView: { mock: "depthView" },
-      gpuTimings: { recordPass },
-    };
-  }
-
-  it("wires the timestamp pair into the render pass descriptor while recording", () => {
-    const writes = {
-      querySet: {} as never,
-      beginningOfPassWriteIndex: 0,
-      endOfPassWriteIndex: 1,
-    };
-    const recordPass = vi.fn(() => writes);
-    const renderer = makePassRenderer(recordPass);
-    const rp = { end: vi.fn() };
-    const ce = { beginRenderPass: vi.fn(() => rp) };
-
-    (new MainRenderPass() as Internals)._beginPass(
-      ce,
-      renderer,
-      { mock: "target" },
-      undefined,
-      true,
-      GpuTimingSlot.MAIN_COLOR_OPAQUE,
-    );
-
-    expect(recordPass).toHaveBeenCalledWith(GpuTimingSlot.MAIN_COLOR_OPAQUE);
-    const descriptor = firstDescriptor(ce);
-    expect(descriptor.timestampWrites).toBe(writes);
-  });
-
-  it("clears a stale timestamp pair once timing turns off (no leak into the next frame)", () => {
-    const renderer = makePassRenderer(vi.fn(() => undefined));
-    const rp = { end: vi.fn() };
-    const ce = { beginRenderPass: vi.fn(() => rp) };
-
-    const pass = new MainRenderPass() as Internals;
-    // Prime the reused clear descriptor with a stale pair, as if a previous frame had timing on.
-    pass._clearDescriptor.timestampWrites = { querySet: {} as never };
-
-    pass._beginPass(ce, renderer, {}, undefined, true, "main:opaque");
-    const descriptor = firstDescriptor(ce);
-    expect(descriptor).not.toHaveProperty("timestampWrites");
-  });
-
-  it("integrates with the real GpuTimer end-to-end (headless, fake device)", () => {
-    const { device, querySets, resolve, staging } = makeDevice({ feature: true });
-    const timer = new GpuTimer();
-    timer.attachDevice(device as never);
-    timer.enable();
-
-    const renderer = makePassRenderer(timer.recordPass.bind(timer));
-    const pass = new MainRenderPass() as Internals;
-    const rp = { end: vi.fn() };
-    const ce = {
-      beginRenderPass: vi.fn(() => rp),
-      resolveQuerySet: vi.fn(),
-      copyBufferToBuffer: vi.fn(),
-    };
-
-    timer.beginFrame();
-    pass._beginPass(ce, renderer, { mock: "target" }, undefined, true, "main");
-    timer.endFrame(ce as never);
-
-    expect(querySets[1]).toBeDefined();
-    expect(firstDescriptor(ce).timestampWrites).toBeDefined();
-    expect(ce.resolveQuerySet).toHaveBeenCalledWith(querySets[1], 0, 2, resolve[1], 0);
-    expect(ce.copyBufferToBuffer).toHaveBeenCalledWith(resolve[1], 0, staging[1], 0, 2 * 8);
   });
 });

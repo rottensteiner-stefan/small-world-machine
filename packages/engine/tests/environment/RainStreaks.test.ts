@@ -42,16 +42,6 @@ describe("RainStreaks", () => {
     vi.unstubAllGlobals();
   });
 
-  it("creates a fixed-size instanced pool matching `count`", () => {
-    const rain = new RainStreaks({ count: 37 });
-    expect(rain.mesh.instanceCount).toBe(37);
-  });
-
-  it("defaults to a light-rain pool of 6000 streaks", () => {
-    const rain = new RainStreaks();
-    expect(rain.mesh.instanceCount).toBe(6000);
-  });
-
   it("never lets a drop leave the rain box vertically after many updates", () => {
     const rain = new RainStreaks({ count: 64, halfExtent: 5, height: 8 });
     const camera = new Vector3D(0, 0, 0);

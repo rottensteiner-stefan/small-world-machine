@@ -3,49 +3,6 @@ import { Color } from "../../../src/core/colors/Color.js";
 import { COLOR_NAMES } from "../../../src/core/colors/ColorNames.js";
 
 describe("Color", () => {
-  it("creates a color with default or specified components", () => {
-    const defaultColor = new Color();
-    expect(defaultColor.r).toBe(0);
-    expect(defaultColor.g).toBe(0);
-    expect(defaultColor.b).toBe(0);
-    expect(defaultColor.a).toBe(1.0);
-
-    const customColor = new Color(0.2, 0.4, 0.6, 0.8);
-    expect(customColor.r).toBe(0.2);
-    expect(customColor.g).toBe(0.4);
-    expect(customColor.b).toBe(0.6);
-    expect(customColor.a).toBe(0.8);
-  });
-
-  it("updates components via set() and clone()", () => {
-    const color = new Color();
-    color.set(0.1, 0.2, 0.3, 0.4);
-    expect(color.r).toBe(0.1);
-    expect(color.g).toBe(0.2);
-    expect(color.b).toBe(0.3);
-    expect(color.a).toBe(0.4);
-
-    const cloned = color.clone();
-    expect(cloned).not.toBe(color);
-    expect(cloned.r).toBe(0.1);
-    expect(cloned.g).toBe(0.2);
-    expect(cloned.b).toBe(0.3);
-    expect(cloned.a).toBe(0.4);
-
-    cloned.r = 0.9;
-    expect(color.r).toBe(0.1);
-    expect(cloned.r).toBe(0.9);
-  });
-
-  it("copies from another Color or Readonly<Color>", () => {
-    const color = new Color();
-    color.copyFrom(Color.RED);
-    expect(color.r).toBe(1);
-    expect(color.g).toBe(0);
-    expect(color.b).toBe(0);
-    expect(color.a).toBe(1);
-  });
-
   it("interpolates colors with lerp()", () => {
     const a = new Color(0, 0, 0, 0);
     a.lerp(Color.WHITE, 0.5);

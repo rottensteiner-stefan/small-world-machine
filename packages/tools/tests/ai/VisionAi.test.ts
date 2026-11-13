@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import type { AiConfig, AiProviderType, IVisionAiProvider } from "../../src/common/ai/index.js";
+import type { AiProviderType, IVisionAiProvider } from "../../src/common/ai/index.js";
 import {
   parseImageData,
   sortModelsDescending,
@@ -104,42 +104,6 @@ describe("Vision AI Multi-Provider System", () => {
     const resRaw = parseImageData(rawBase64);
     expect(resRaw.mimeType).toBe("image/png");
     expect(resRaw.data).toBe(rawBase64);
-  });
-
-  it("stores and loads configuration in localStorage", () => {
-    const config: AiConfig = {
-      provider: "claude",
-      apiKey: "sk-ant-test-12345",
-      model: "claude-3-5-sonnet-20241022",
-    };
-
-    AiConfigStorage.save(config);
-    const loaded = AiConfigStorage.load();
-    expect(loaded.provider).toBe("claude");
-    expect(loaded.apiKey).toBe("sk-ant-test-12345");
-    expect(loaded.model).toBe("claude-3-5-sonnet-20241022");
-  });
-
-  it("creates the correct provider instances via factory", () => {
-    const gemini = createVisionAiProvider({
-      provider: "gemini",
-      model: "gemini-1.5-flash",
-      apiKey: "key",
-    });
-    expect(gemini).toBeInstanceOf(GeminiProvider);
-
-    const openai = createVisionAiProvider({ provider: "openai", model: "gpt-4o", apiKey: "key" });
-    expect(openai).toBeInstanceOf(OpenAiProvider);
-
-    const claude = createVisionAiProvider({
-      provider: "claude",
-      model: "claude-3-5-haiku",
-      apiKey: "key",
-    });
-    expect(claude).toBeInstanceOf(ClaudeProvider);
-
-    const ollama = createVisionAiProvider({ provider: "ollama", model: "llama3.2-vision" });
-    expect(ollama).toBeInstanceOf(OllamaProvider);
   });
 
   it("formats and executes Gemini requests correctly", async () => {

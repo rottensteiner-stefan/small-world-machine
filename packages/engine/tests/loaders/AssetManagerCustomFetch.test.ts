@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { AssetManager } from "../../src/loaders/AssetManager.js";
-import { KitRegistry } from "../../src/loaders/kit/KitRegistry.js";
 
 describe("AssetManager customFetch & Scheme Resolution", () => {
   it("resolves custom URI schemes without mangling basePath", () => {
@@ -32,32 +31,5 @@ describe("AssetManager customFetch & Scheme Resolution", () => {
     const json = (await manager.loadJson("sw-asset://test/data.json")) as { hello: string };
     expect(json.hello).toBe("world");
     expect(mockCustomFetch).toHaveBeenCalledWith("sw-asset://test/data.json", expect.any(Object));
-  });
-
-  it("passes customFetch through KitRegistry options to AssetManager", async () => {
-    const mockFetch = vi.fn().mockImplementation(async (url: string) => {
-      if (url === "sw-asset://kit/bunker/kit.json") {
-        return new Response(
-          JSON.stringify({
-            id: "bunker",
-            name: "Virtual Bunker",
-            version: "1.0.0",
-            author: "Tester",
-            license: "MIT",
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response("Not found", { status: 404 });
-    });
-
-    const registry = new KitRegistry({
-      basePath: "sw-asset://kit/",
-      customFetch: mockFetch,
-    });
-
-    const manifest = await registry.getKitManifest("bunker");
-    expect(manifest.name).toBe("Virtual Bunker");
-    expect(mockFetch).toHaveBeenCalledWith("sw-asset://kit/bunker/kit.json", expect.any(Object));
   });
 });

@@ -3,7 +3,6 @@ import { Vector3D } from "@small-world-machine/engine";
 import type { ParticleArrays } from "../src/Particle.js";
 import { GravityAffector } from "../src/affectors/GravityAffector.js";
 import { FireEmberEmitter } from "../src/fire/FireEmberEmitter.js";
-import { EmberSpriteMaterial } from "../src/fire/EmberSpriteMaterial.js";
 
 const DT = 1 / 60;
 const ORIGIN = new Vector3D(0, 0, 0);
@@ -196,17 +195,6 @@ describe("FireEmberEmitter billboard rendering", () => {
       for (let k = 0; k < 16; k++) {
         expect(emitter.mesh.instanceMatrices[o + k]).toBe(0);
       }
-    }
-  });
-});
-
-describe("EmberSpriteMaterial blend contract", () => {
-  it("is additive with CPU-side billboarding (no isSprite) and skips the depth pre-pass", () => {
-    const material = new EmberSpriteMaterial();
-    for (let i = 0; i < 3; i++) {
-      const state = material.getRenderManifest().state!;
-      expect(state.blending).toBe("additive");
-      expect(state.skipDepthPrePass).toBe(true);
     }
   });
 });

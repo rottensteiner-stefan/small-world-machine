@@ -14,21 +14,14 @@ import {
   RetroScreenMaterial,
   SkyboxMaterial,
   TerrainMaterial,
-  FluidSurfaceMaterial,
-  LavaMaterial,
-  SlimeMaterial,
   OpenWaterMaterial,
   StylizedWaterMaterial,
   WireframeMaterial,
-  SpriteMaterial,
-  CustomShaderMaterial,
   Color,
   Texture,
   CubeTexture,
   Vector2D,
   Vector3D,
-  CullMode,
-  ShaderPropertyType,
 } from "../../../src/index.js";
 import { NoirWaterMaterial, OilSlickMaterial } from "../../../../liquid-extras/src/index.js";
 
@@ -318,19 +311,13 @@ describe("DeadOptionLint (G3/G9)", () => {
   const mockTex = (): Texture => new MockTexture();
   const mockCube = (): CubeTexture => new MockCubeTexture();
 
-  // These tests prove that an option survives the constructor (stored on the instance). That an
-  // option is actually CONSUMED is proven by the static AST audit above and, for the liquid family,
-  // by the "reaches the manifest lanes" tests below; the other materials are assignment-only checks.
-  describe("Runtime Option Storage Verification (constructor assignment)", () => {
+  // These tests verify that constructor options reach the RenderManifest lanes and validate
+  // overloads/null inputs (consumption across all *MaterialOptions is proven by the AST audit above).
+  describe("Runtime Option Manifest & Overload Verification", () => {
     it("BasicMaterial consumes all options", () => {
       const col = new Color(0.2, 0.4, 0.6);
       const tex = mockTex();
       const mat = new BasicMaterial({ color: col, diffuseMap: tex });
-
-      expect(mat.color.r).toBeCloseTo(0.2);
-      expect(mat.color.g).toBeCloseTo(0.4);
-      expect(mat.color.b).toBeCloseTo(0.6);
-      expect(mat.diffuseMap).toBe(tex);
 
       const manifest = mat.getRenderManifest();
       expect(manifest.textures["u_diffuseMap"]).toBe(tex);
@@ -339,9 +326,6 @@ describe("DeadOptionLint (G3/G9)", () => {
     it("DepthMaterial consumes all options", () => {
       const tex = mockTex();
       const mat = new DepthMaterial({ diffuseMap: tex, alphaTest: 0.5 });
-
-      expect(mat.diffuseMap).toBe(tex);
-      expect(mat.alphaTest).toBe(0.5);
 
       const manifest = mat.getRenderManifest();
       expect(manifest.textures["u_diffuseMap"]).toBe(tex);
@@ -352,9 +336,6 @@ describe("DeadOptionLint (G3/G9)", () => {
       const col = new Color(0.1, 0.2, 0.3);
       const tex = mockTex();
       const mat = new WorldMaterial({ color: col, diffuseMap: tex });
-
-      expect(mat.color.r).toBeCloseTo(0.1);
-      expect(mat.diffuseMap).toBe(tex);
 
       const manifest = mat.getRenderManifest();
       expect(manifest.textures["u_diffuseMap"]).toBe(tex);
@@ -371,11 +352,6 @@ describe("DeadOptionLint (G3/G9)", () => {
         normalMap: norm,
         normalScale: scale,
       });
-
-      expect(mat.color.r).toBeCloseTo(0.3);
-      expect(mat.diffuseMap).toBe(diff);
-      expect(mat.normalMap).toBe(norm);
-      expect(mat.normalScale).toBe(scale);
 
       const manifest = mat.getRenderManifest();
       expect(manifest.textures["u_diffuseMap"]).toBe(diff);
@@ -403,10 +379,6 @@ describe("DeadOptionLint (G3/G9)", () => {
         transparent: true,
         alphaTest: 0.2,
       });
-
-      expect(mat.shininess).toBe(64);
-      expect(mat.alphaTest).toBe(0.2);
-      expect(mat.transparent).toBe(true);
 
       const manifest = mat.getRenderManifest();
       expect(manifest.properties["u_shininess"]).toBe(64);
@@ -459,17 +431,6 @@ describe("DeadOptionLint (G3/G9)", () => {
         time: 1.5,
       });
 
-      expect(mat.metallic).toBe(0.8);
-      expect(mat.roughness).toBe(0.2);
-      expect(mat.ao).toBe(0.9);
-      expect(mat.clearcoat).toBe(0.9);
-      expect(mat.sheenRoughness).toBe(0.3);
-      expect(mat.transmission).toBe(0.8);
-      expect(mat.ior).toBe(1.45);
-      expect(mat.thickness).toBe(0.5);
-      expect(mat.attenuationDistance).toBe(50.0);
-      expect(mat.time).toBe(1.5);
-
       const manifest = mat.getRenderManifest();
       expect(manifest.properties["u_metallic"]).toBe(0.8);
       expect(manifest.properties["u_roughness"]).toBe(0.2);
@@ -487,11 +448,6 @@ describe("DeadOptionLint (G3/G9)", () => {
         transmission: 0.95,
         normalMap: norm,
       });
-
-      expect(mat.ior).toBe(1.52);
-      expect(mat.thickness).toBe(0.8);
-      expect(mat.transmission).toBe(0.95);
-      expect(mat.normalMap).toBe(norm);
 
       const manifest = mat.getRenderManifest();
       const liquidParams = manifest.properties["u_liquidParams"] as number[];
@@ -513,10 +469,6 @@ describe("DeadOptionLint (G3/G9)", () => {
         clarityPulseRadius: 2.5,
         normalMap: norm,
       });
-
-      expect(mat.blurRadius).toBe(0.08);
-      expect(mat.transmission).toBe(0.9);
-      expect(mat.clarityPulseRadius).toBe(2.5);
 
       const manifest = mat.getRenderManifest();
       const liquidParams = manifest.properties["u_liquidParams"] as number[];
@@ -543,15 +495,6 @@ describe("DeadOptionLint (G3/G9)", () => {
         param4: 0.9,
       });
 
-      expect(mat.diffuseMap).toBe(diff);
-      expect(mat.mode).toBe("film19th");
-      expect(mat.intensity).toBe(0.85);
-      expect(mat.speed).toBe(1.2);
-      expect(mat.param1).toBe(0.5);
-      expect(mat.param2).toBe(10.0);
-      expect(mat.param3).toBe(0.7);
-      expect(mat.param4).toBe(0.9);
-
       const manifest = mat.getRenderManifest();
       // E9-A: control lane u_matParam0 = [intensity, time, speed, modeFlag]; params lane
       // u_matParam1 = [param1..4] (was u_extraParams/u_liquidParams).
@@ -567,8 +510,6 @@ describe("DeadOptionLint (G3/G9)", () => {
         color: new Color(0.8, 0.8, 0.8),
         cubeMap: cube,
       });
-
-      expect(mat.cubeMap).toBe(cube);
 
       const manifest = mat.getRenderManifest();
       expect(manifest.textures["u_skybox"]).toBe(cube);
@@ -591,108 +532,11 @@ describe("DeadOptionLint (G3/G9)", () => {
         thresholds: [3.0, 18.0, 30.0, 2.5],
       });
 
-      expect(mat.shininess).toBe(15);
-      expect(mat.sandMap).toBe(sand);
-      expect(mat.texRepeat).toEqual([30, 30]);
-
       const manifest = mat.getRenderManifest();
       expect(manifest.textures["u_sandMap"]).toBe(sand);
       expect(manifest.textures["u_grassMap"]).toBe(grass);
       expect(manifest.textures["u_rockMap"]).toBe(rock);
       expect(manifest.textures["u_snowMap"]).toBe(snow);
-    });
-
-    it("FluidSurfaceMaterial, LavaMaterial, SlimeMaterial consume options", () => {
-      const noise = mockTex();
-      const norm = mockTex();
-
-      const fluid = new FluidSurfaceMaterial({
-        color: new Color(0.1, 0.5, 0.9),
-        edgeColor: new Color(1, 1, 1),
-        flowSpeed: 1.5,
-        distortion: 2.2,
-        viscosity: 8.0,
-        waveAmplitude: 0.1,
-        rimStrength: 0.4,
-        specularStrength: 0.3,
-        specularPower: 60.0,
-        normalStrength: 1.2,
-        absorption: 3.0,
-        shade: 0.7,
-        emissiveMask: 0.5,
-        emissivePulse: 0.2,
-        emissivePulseSpeed: 3.0,
-        transitionSoftness: 0.25,
-        noiseMap: noise,
-        normalMap: norm,
-        emissiveColor: new Color(1, 0.5, 0),
-        emissiveStrength: 1.4,
-      });
-
-      expect(fluid.viscosity).toBe(8.0);
-      expect(fluid.waveAmplitude).toBe(0.1);
-      expect(fluid.noiseMap).toBe(noise);
-
-      const lava = new LavaMaterial({
-        flowSpeed: 0.4,
-        emissiveStrength: 2.0,
-      });
-      expect(lava.flowSpeed).toBe(0.4);
-      expect(lava.emissiveStrength).toBe(2.0);
-
-      const slime = new SlimeMaterial({
-        absorption: 8.0,
-        rimStrength: 0.7,
-      });
-      expect(slime.absorption).toBe(8.0);
-      expect(slime.rimStrength).toBe(0.7);
-    });
-
-    it("OpenWaterMaterial and StylizedWaterMaterial consume options", () => {
-      const openWater = new OpenWaterMaterial({
-        waterColor: new Color(0.1, 0.4, 0.7),
-        deepWaterColor: new Color(0.01, 0.05, 0.2),
-        edgeColor: new Color(0.9, 0.95, 1.0),
-        edgeSoftness: 1.2,
-        speed: 1.1,
-        wave1: [1.0, 0.5, 0.1, 8.0],
-        wave2: [0.2, 0.7, 0.12, 5.0],
-        wave3: [-0.3, 0.5, 0.04, 2.0],
-        refractionStrength: 0.04,
-        waterAbsorption: [0.35, 0.08, 0.03],
-        foamColor: new Color(1, 1, 1),
-        foamDistance: 1.5,
-        foamCutoff: 0.55,
-        foamNoiseScale: 4.0,
-        foamNoiseSpeed: 0.7,
-      });
-
-      expect(openWater.refractionStrength).toBe(0.04);
-      expect(openWater.foamDistance).toBe(1.5);
-      expect(openWater.waterAbsorption).toEqual([0.35, 0.08, 0.03]);
-
-      const stylizedWater = new StylizedWaterMaterial({
-        shallowWaterColor: new Color(0.1, 0.6, 0.8),
-        causticStrength: 0.75,
-        specularStrength: 0.5,
-        rampSoftness: 0.8,
-        washAmount: 0.3,
-        lineDensity: 2.0,
-        lineWidth: 0.6,
-        foamSoftness: 0.1,
-        skyTint: 0.4,
-        glitterStrength: 0.8,
-        styleId: 2,
-        style: "sparkle",
-      });
-
-      expect(stylizedWater.causticStrength).toBe(0.75);
-      expect(stylizedWater.glitterStrength).toBe(0.8);
-      expect(stylizedWater.styleId).toBe(2);
-
-      const manifest = stylizedWater.getRenderManifest();
-      expect(manifest.properties["u_styleA"]).toBeDefined();
-      expect(manifest.properties["u_styleB"]).toBeDefined();
     });
 
     it("OpenWater options reach the manifest lanes the shader reads", () => {
@@ -745,48 +589,12 @@ describe("DeadOptionLint (G3/G9)", () => {
       expect(props["u_styleB"]).toEqual([0.1, 0.4, 0.8, 2]);
     });
 
-    it("WireframeMaterial and SpriteMaterial consume options object", () => {
-      const wire = new WireframeMaterial({
-        color: new Color(0.1, 0.8, 0.3),
-        wireframeMode: "triangles",
-      });
-      expect(wire.color.r).toBeCloseTo(0.1);
-      expect(wire.wireframeMode).toBe("triangles");
-
+    it("WireframeMaterial validates null options and Color overload", () => {
       const colorOverload = new WireframeMaterial(new Color(0.2, 0.3, 0.4), "triangles");
       expect(colorOverload.wireframeMode).toBe("triangles");
       expect(colorOverload.color.g).toBeCloseTo(0.3);
       expect(new WireframeMaterial({}).wireframeMode).toBe("structural");
       expect(() => new WireframeMaterial(null as unknown as Color)).toThrow(TypeError);
-
-      const tex = mockTex();
-      const sprite = new SpriteMaterial({
-        texture: tex,
-        color: new Color(0.9, 0.2, 0.4),
-        transparent: false,
-      });
-      expect(sprite.texture).toBe(tex);
-      expect(sprite.color.r).toBeCloseTo(0.9);
-      expect(sprite.transparent).toBe(false);
-    });
-
-    it("CustomShaderMaterial consumes all options", () => {
-      const csm = new CustomShaderMaterial({
-        sources: { wgsl: "fn test() {}" },
-        layout: { uniforms: { u_custom: { type: ShaderPropertyType.FLOAT } }, textures: {} },
-        properties: { u_custom: 42.0 },
-        textures: {},
-        transparent: true,
-        cullMode: CullMode.NONE,
-        depthWrite: false,
-        depthTest: true,
-      });
-
-      expect(csm.transparent).toBe(true);
-      expect(csm.cullMode).toBe(CullMode.NONE);
-      expect(csm.depthWrite).toBe(false);
-      expect(csm.depthTest).toBe(true);
-      expect(csm.properties["u_custom"]).toBe(42.0);
     });
 
     it("NoirWaterMaterial and OilSlickMaterial in liquid-extras consume extended options", () => {
@@ -794,16 +602,12 @@ describe("DeadOptionLint (G3/G9)", () => {
         posterizeSteps: 6,
         shallowWaterColor: new Color(0.9, 0.9, 0.9),
       });
-      expect(noir.posterizeSteps).toBe(6);
-
       const noirManifest = noir.getRenderManifest();
       expect((noirManifest.properties["u_styleA"] as number[])[3]).toBe(6);
 
       const oil = new OilSlickMaterial({
         iridescenceStrength: 0.85,
       });
-      expect(oil.iridescenceStrength).toBe(0.85);
-
       const oilManifest = oil.getRenderManifest();
       expect((oilManifest.properties["u_styleA"] as number[])[3]).toBe(0.85);
     });

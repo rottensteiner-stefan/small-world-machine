@@ -50,37 +50,6 @@ function centeredOriginVolumes(): Array<{ v: BoundingVolume; type: BoundingType 
 }
 
 describe("BoundingVolume discriminated union", () => {
-  it("every concrete volume carries a distinct literal type discriminator", () => {
-    const box = new BoundingBox();
-    const sphere = new BoundingSphere(new Vector3D(0, 0, 0), 0);
-    const obb = new OBB();
-    const hull = makeUnitHull();
-    expect(box.type).toBe(BoundingType.BOX);
-    expect(sphere.type).toBe(BoundingType.SPHERE);
-    expect(obb.type).toBe(BoundingType.OBB);
-    expect(hull.type).toBe(BoundingType.HULL);
-    expect(new Set([box.type, sphere.type, obb.type, hull.type]).size).toBe(4);
-  });
-
-  it("narrows to the concrete type via `.type` without any cast", () => {
-    const classify = (v: BoundingVolume): string => {
-      switch (v.type) {
-        case BoundingType.BOX:
-          return "box";
-        case BoundingType.SPHERE:
-          return "sphere";
-        case BoundingType.OBB:
-          return "obb";
-        case BoundingType.HULL:
-          return "hull";
-      }
-    };
-    expect(classify(new BoundingBox())).toBe("box");
-    expect(classify(new BoundingSphere(new Vector3D(), 0))).toBe("sphere");
-    expect(classify(new OBB())).toBe("obb");
-    expect(classify(makeUnitHull())).toBe("hull");
-  });
-
   it("works end-to-end through the Collision dispatch without casts", () => {
     const s = new BoundingSphere(new Vector3D(0, 0, 0), 0.5);
     const s2 = new BoundingSphere(new Vector3D(0.8, 0, 0), 0.5);

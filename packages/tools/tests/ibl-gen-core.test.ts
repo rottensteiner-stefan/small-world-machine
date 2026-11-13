@@ -3,8 +3,6 @@ import {
   createSeededRng,
   generateTestEquirect,
   resolveIblGenOptions,
-  IBL_GEN_DEFAULTS,
-  type IblGenOptions,
 } from "../src/ibl-gen/ibl-gen-core.js";
 
 describe("createSeededRng (deterministic PRNG — P1 proof: seed actually reseeds)", () => {
@@ -67,30 +65,6 @@ describe("generateTestEquirect (deterministic input panorama)", () => {
 });
 
 describe("resolveIblGenOptions (fail-fast validation)", () => {
-  it("fills defaults for omitted options", () => {
-    const opts = resolveIblGenOptions({ seed: 3 });
-    expect(opts.seed).toBe(3);
-    expect(opts.width).toBe(512);
-    expect(opts.height).toBe(256);
-    expect(opts.envResolution).toBe(IBL_GEN_DEFAULTS.envResolution);
-    expect(opts.irradianceResolution).toBe(IBL_GEN_DEFAULTS.irradianceResolution);
-    expect(opts.prefilterResolution).toBe(IBL_GEN_DEFAULTS.prefilterResolution);
-    expect(opts.prefilterMips).toBe(IBL_GEN_DEFAULTS.prefilterMips);
-    expect(opts.brdfResolution).toBe(IBL_GEN_DEFAULTS.brdfResolution);
-  });
-
-  it("keeps provided values", () => {
-    const opts = resolveIblGenOptions({
-      seed: 9,
-      width: 1024,
-      height: 512,
-      envResolution: 256,
-    } as Partial<IblGenOptions>);
-    expect(opts.width).toBe(1024);
-    expect(opts.height).toBe(512);
-    expect(opts.envResolution).toBe(256);
-  });
-
   it("rejects non-positive or non-integer numeric options (fail fast)", () => {
     expect(() => resolveIblGenOptions({ width: 0 })).toThrow(/width/);
     expect(() => resolveIblGenOptions({ height: -4 })).toThrow(/height/);

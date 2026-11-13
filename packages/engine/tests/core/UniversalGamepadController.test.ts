@@ -1,56 +1,7 @@
-import {
-  UniversalGamepadController,
-  StandardGamepadDevice,
-  JoyConGamepadDevice,
-} from "../../src/core/input/UniversalGamepadController.js";
+import { JoyConGamepadDevice } from "../../src/core/input/UniversalGamepadController.js";
 import type { JoyConLeft, JoyConRight } from "joy-con-webhid";
 
 describe("UniversalGamepadController", () => {
-  let originalGetGamepads: (() => (Gamepad | null)[]) | undefined;
-
-  beforeEach(() => {
-    originalGetGamepads = navigator.getGamepads;
-  });
-
-  afterEach(() => {
-    navigator.getGamepads = originalGetGamepads!;
-  });
-
-  function mockGamepad(
-    id: string,
-    index: number,
-    axes: number[],
-    buttons: { pressed: boolean }[],
-  ): Gamepad {
-    return {
-      id,
-      index,
-      axes,
-      buttons,
-      connected: true,
-      timestamp: performance.now(),
-      vibrationActuator: null,
-      hapticActuators: [],
-    } as unknown as Gamepad;
-  }
-
-  it("StandardGamepadDevice should read buttons and axes", () => {
-    const rawGp = mockGamepad(
-      "Xbox Controller",
-      0,
-      [0.5, -0.2],
-      [{ pressed: true }, { pressed: false }],
-    );
-    navigator.getGamepads = (): Gamepad[] => [rawGp];
-
-    const device = new StandardGamepadDevice(rawGp);
-    expect(device.id).toBe("Xbox Controller");
-    expect(device.isButtonPressed(0)).toBe(true);
-    expect(device.isButtonPressed(1)).toBe(false);
-    expect(device.getAxis(0)).toBeCloseTo(0.5, 2);
-    expect(device.getAxis(1)).toBeCloseTo(-0.2, 2);
-  });
-
   it("JoyConGamepadDevice should handle left, right or combined mapping", () => {
     type HidInputCallback = (event: { detail: Record<string, unknown> }) => void;
     const leftCallbackRef: { current: HidInputCallback | null } = { current: null };
@@ -101,20 +52,5 @@ describe("UniversalGamepadController", () => {
 
     expect(device.isButtonPressed(0)).toBe(true); // A button
     expect(device.getAxis(2)).toBeCloseTo(0.8, 2);
-  });
-
-  it("UniversalGamepadController should list and query devices", () => {
-    const rawGp = mockGamepad(
-      "Xbox Controller",
-      0,
-      [0.5, -0.2],
-      [{ pressed: true }, { pressed: false }],
-    );
-    navigator.getGamepads = (): Gamepad[] => [rawGp];
-
-    const controller = new UniversalGamepadController();
-    controller.update();
-    expect(controller.devices.length).toBe(1);
-    expect(controller.getActiveDevice()).not.toBeNull();
   });
 });

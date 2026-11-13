@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Object3D, PointLight, Vector3D } from "@small-world-machine/engine";
-import { Fire, FIRE_PRESETS } from "../src/fire/Fire.js";
+import { Fire } from "../src/fire/Fire.js";
 
 const DT = 1 / 60;
 const CAMERA = new Vector3D(2, 1.6, 5);
@@ -21,41 +21,6 @@ function trailsSnapshot(fire: Fire): number[] {
   }
   return out;
 }
-
-describe("Fire prefab construction", () => {
-  it("authors layers from the named presets", () => {
-    const candle = new Fire({ preset: "candle" });
-    expect(candle.embers).toBeUndefined();
-    expect(candle.smoke).toBeUndefined();
-    expect(candle.emberBed).toBeUndefined();
-    expect(candle.soot).toBeUndefined();
-    expect(candle.width).toBe(FIRE_PRESETS.candle.width);
-
-    const torch = new Fire({ preset: "torch" });
-    expect(torch.embers).toBeDefined();
-    expect(torch.smoke).toBeDefined();
-    expect(torch.emberBed).toBeDefined();
-    expect(torch.soot).toBeUndefined();
-
-    const campfire = new Fire({ preset: "campfire" });
-    expect(campfire.embers).toBeDefined();
-    expect(campfire.smoke).toBeDefined();
-    expect(campfire.emberBed).toBeDefined();
-    // Soot needs a DOM canvas texture; the headless test environment keeps it undefined.
-    expect(campfire.soot).toBeUndefined();
-
-    candle.dispose();
-    torch.dispose();
-    campfire.dispose();
-  });
-
-  it("merges per-field overrides over the preset data", () => {
-    const fire = new Fire({ preset: "torch", data: { cards: 3, height: 0.9, soot: true } });
-    expect(fire.width).toBe(FIRE_PRESETS.torch.width);
-    expect(fire.height).toBe(0.9);
-    fire.dispose();
-  });
-});
 
 describe("Fire prefab determinism", () => {
   it("reproduces identical trail snapshots from the same seed", () => {

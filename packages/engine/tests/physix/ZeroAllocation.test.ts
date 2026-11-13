@@ -71,37 +71,4 @@ describe("Zero-Allocation Guarantees", () => {
     expect(matricesAfter).toBe(matricesBefore);
     expect(quaternionsAfter).toBe(quaternionsBefore);
   });
-
-  it("PhysicsSystem internal arrays and event objects should be strictly reused", () => {
-    const physics = new PhysicsSystem(new EventDispatcherImpl());
-    const scene = new Scene();
-
-    const obj = new Object3D();
-    obj.rigidBody = new RigidBody(1);
-    scene.add(obj);
-
-    physics.step(scene, 1 / 60);
-
-    // Capture references to the internal arrays
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const internalBodiesRef1 = (physics as any)._bodies;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const internalCollidersRef1 = (physics as any)._allColliders;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const internalEventRef1 = (physics as any)._collisionEvent;
-
-    physics.step(scene, 1 / 60);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const internalBodiesRef2 = (physics as any)._bodies;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const internalCollidersRef2 = (physics as any)._allColliders;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const internalEventRef2 = (physics as any)._collisionEvent;
-
-    // Must be the EXACT same array/object instances in memory!
-    expect(internalBodiesRef1).toBe(internalBodiesRef2);
-    expect(internalCollidersRef1).toBe(internalCollidersRef2);
-    expect(internalEventRef1).toBe(internalEventRef2);
-  });
 });

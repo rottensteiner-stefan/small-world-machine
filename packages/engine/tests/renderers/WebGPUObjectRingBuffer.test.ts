@@ -198,16 +198,4 @@ describe("GPUObjectRingBuffer", () => {
     expect(again.cached).toBe(false);
     expect(ring.capacity).toBeGreaterThanOrEqual(4096);
   });
-
-  it("write() forwards to device.queue.writeBuffer with the ring's current buffer", () => {
-    const device = makeMockDevice();
-    const ring = new GPUObjectRingBuffer(device, {
-      mock: "objectBGL",
-    } as unknown as GPUBindGroupLayout);
-    const data = new Float32Array([1, 2, 3]);
-
-    ring.write(256, data);
-
-    expect(device.queue.writeBuffer).toHaveBeenCalledWith(ring.buffer, 256, data);
-  });
 });

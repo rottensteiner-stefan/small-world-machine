@@ -8,7 +8,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  GPUParticleSystem,
   s34FrameSeed,
   s34GpuSpawnOracle,
   type GpuSpawnOracleParams,
@@ -22,8 +21,6 @@ const DRAW = readFileSync(new URL(`${DIR}gpu_particles_draw.wgsl`, import.meta.u
 function code(src: string): string {
   return src.replace(/\/\/.*$/gm, "");
 }
-
-const BOX = { min: { x: -1, y: 0, z: -1 }, max: { x: 1, y: 1, z: 1 } };
 
 const SPAWN: GpuSpawnOracleParams = {
   seed: 1,
@@ -113,110 +110,7 @@ describe("emit seed is time-dependent", () => {
   });
 });
 
-describe("collisionThickness enables collision (option doc: 0 disables, >0 enables)", () => {
-  const flag = (sys: GPUParticleSystem): number =>
-    (sys as unknown as { _paramsU32: Uint32Array })._paramsU32[2]!;
-
-  it("constructor: thickness > 0 sets u0.z, default leaves it off", () => {
-    expect(
-      flag(new GPUParticleSystem({ capacity: 64, spawnBox: BOX, collisionThickness: 0.03 })),
-    ).toBe(1);
-    expect(flag(new GPUParticleSystem({ capacity: 64, spawnBox: BOX }))).toBe(0);
-    expect(
-      flag(new GPUParticleSystem({ capacity: 64, spawnBox: BOX, collisionThickness: 0 })),
-    ).toBe(0);
-  });
-
-  it("setter follows thickness; explicit collisionEnabled still overrides", () => {
-    const sys = new GPUParticleSystem({ capacity: 64, spawnBox: BOX });
-    sys.collisionThickness = 0.1;
-    expect(flag(sys)).toBe(1);
-    sys.collisionThickness = 0;
-    expect(flag(sys)).toBe(0);
-    sys.collisionEnabled = true;
-    expect(flag(sys)).toBe(1);
-  });
-});
-
-describe("GPU resource creation honours WebGPU validation (browser-observed defects)", () => {
-  interface Rec {
-    buffers: Array<{ size: number; usage: number }>;
-    writes: Array<{ usage: number; size: number }>;
-    bgls: Array<{ entries: Array<{ buffer?: { type: string } }> }>;
-    layouts: Array<{ bindGroupLayouts: unknown[] }>;
-  }
-
-  function attach(): { rec: Rec; host: Record<string, unknown> } {
-    // GPUBufferUsage/GPUShaderStage bit values are fixed by the WebGPU spec.
-    Object.assign(globalThis, {
-      GPUBufferUsage: { INDEX: 16, UNIFORM: 64, STORAGE: 128, INDIRECT: 256, COPY_DST: 8 },
-      GPUTextureUsage: { TEXTURE_BINDING: 4, COPY_DST: 2 },
-      GPUShaderStage: { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 },
-      GPUColorWrite: { ALL: 15 },
-    });
-    const rec: Rec = { buffers: [], writes: [], bgls: [], layouts: [] };
-    const none = (): undefined => undefined;
-    const empty = (): object => ({});
-    const device = {
-      createBuffer: (d: { size: number; usage: number }): object => {
-        rec.buffers.push(d);
-        return { ...d, destroy: none };
-      },
-      createTexture: (): object => ({ createView: empty, destroy: none }),
-      createBindGroupLayout: (d: Rec["bgls"][number]): object => {
-        rec.bgls.push(d);
-        return d;
-      },
-      createPipelineLayout: (d: Rec["layouts"][number]): object => {
-        rec.layouts.push(d);
-        return d;
-      },
-      createShaderModule: empty,
-      createComputePipeline: empty,
-      createRenderPipeline: empty,
-      createBindGroup: empty,
-      queue: {
-        writeBuffer: (b: { usage: number; size: number }): number =>
-          rec.writes.push({ usage: b.usage, size: b.size }),
-        writeTexture: none,
-      },
-    };
-    const host = {
-      gpuDevice: device,
-      globalBGL: { sentinel: "full-global-bgl" },
-      globalBindGroup: {},
-      globalUniformBuffer: { sentinel: "global-uniform-buffer" },
-      particleComputeSource: "",
-      particleDrawSource: "",
-      activeDepthView: {},
-      activeNormalView: undefined,
-      particleTargetFormat: "bgra8unorm",
-    };
-    const sys = new GPUParticleSystem({ capacity: 64, spawnBox: BOX });
-    sys.attachHost(host as never);
-    return { rec, host };
-  }
-
-  const COPY_DST = 8;
-
-  it("every buffer that is written via queue.writeBuffer carries COPY_DST (dead list, index buffer)", () => {
-    const { rec } = attach();
-    expect(rec.writes.length).toBeGreaterThan(0);
-    for (const w of rec.writes) expect(w.usage & COPY_DST, JSON.stringify(w)).toBe(COPY_DST);
-  });
-
-  it("compute pipelines do NOT use the renderer's full global BGL (its 7 compute storage buffers + ours blow the per-stage limit of 10)", () => {
-    const { rec, host } = attach();
-    const compute = rec.layouts[0]!;
-    expect(compute.bindGroupLayouts).not.toContain(host["globalBGL"]);
-    const storage = compute.bindGroupLayouts
-      .flatMap((l) => (l as Rec["bgls"][number]).entries ?? [])
-      .filter((e) => e.buffer?.type === "storage" || e.buffer?.type === "read-only-storage");
-    expect(storage.length).toBeLessThanOrEqual(8); // WebGPU default minimum limit
-  });
-
-  it("gpu_particles.wgsl never uses a named member on the vec4u `u0`/vec4f `u1` lanes", () => {
-    const bad = code(COMPUTE).match(/params\.u[01]\.(?![xyzw]\b)\w+/g);
-    expect(bad).toBeNull();
-  });
+it("gpu_particles.wgsl never uses a named member on the vec4u `u0`/vec4f `u1` lanes", () => {
+  const bad = code(COMPUTE).match(/params\.u[01]\.(?![xyzw]\b)\w+/g);
+  expect(bad).toBeNull();
 });

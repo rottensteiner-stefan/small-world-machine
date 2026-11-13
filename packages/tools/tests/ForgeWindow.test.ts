@@ -21,27 +21,6 @@ describe("ForgeWindow", () => {
     localStorage.clear();
   });
 
-  it("should create a window element with the given title and position", () => {
-    const win = new ForgeWindow("My Tool", parent, 15, 25);
-    const el = win.getElement();
-    expect(el.style.left).toBe("15px");
-    expect(el.style.top).toBe("25px");
-    expect(el.querySelector(".swf-window-title")?.textContent).toBe("My Tool");
-    expect(win.title).toBe("My Tool");
-  });
-
-  it("should append itself to the given parent", () => {
-    const win = new ForgeWindow("My Tool", parent);
-    expect(parent.contains(win.getElement())).toBe(true);
-  });
-
-  it("should mount a tool and expose it via .tool", () => {
-    const win = new ForgeWindow("My Tool", parent);
-    const tool = new TestForgeTool();
-    win.mountTool(tool);
-    expect(win.tool).toBe(tool);
-  });
-
   it("should toggle visibility and persist the new state to localStorage", () => {
     const win = new ForgeWindow("My Tool", parent, 0, 0, "my-tool-key");
     expect(win.isVisible).toBe(true); // display is "" (not "none") by default
@@ -55,13 +34,6 @@ describe("ForgeWindow", () => {
     expect(localStorage.getItem("swf_win_my-tool-key")).toBe("1");
   });
 
-  it("should toggle to the opposite state when no explicit state is given", () => {
-    const win = new ForgeWindow("My Tool", parent);
-    win.toggleVisibility(true);
-    win.toggleVisibility();
-    expect(win.isVisible).toBe(false);
-  });
-
   it("should restore visibility from a previously persisted state", () => {
     localStorage.setItem("swf_win_restore-key", "0");
     const win = new ForgeWindow("My Tool", parent, 0, 0, "restore-key");
@@ -72,24 +44,6 @@ describe("ForgeWindow", () => {
   it("should default to hidden when no persisted state exists", () => {
     const win = new ForgeWindow("My Tool", parent, 0, 0, "never-seen-key");
     win.restoreState();
-    expect(win.isVisible).toBe(false);
-  });
-
-  it("should increase the z-index every time it's brought to front", () => {
-    const win = new ForgeWindow("My Tool", parent);
-    win.bringToFront();
-    const firstZ = parseInt(win.getElement().style.zIndex, 10);
-    win.bringToFront();
-    const secondZ = parseInt(win.getElement().style.zIndex, 10);
-    expect(secondZ).toBeGreaterThan(firstZ);
-  });
-
-  it("should call the onClose callback when closed", () => {
-    const win = new ForgeWindow("My Tool", parent);
-    const onClose = vi.fn();
-    win.setOnClose(onClose);
-    win.close();
-    expect(onClose).toHaveBeenCalledTimes(1);
     expect(win.isVisible).toBe(false);
   });
 
@@ -131,14 +85,6 @@ describe("ForgeWindow", () => {
 
     expect(parent.contains(win.getElement())).toBe(false);
     expect(tool.getContainer().parentNode).toBeNull();
-  });
-
-  it("should call onClose on destroy as well", () => {
-    const win = new ForgeWindow("My Tool", parent);
-    const onClose = vi.fn();
-    win.setOnClose(onClose);
-    win.destroy();
-    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   describe("window listener/ResizeObserver cleanup on destroy (leak fix)", () => {

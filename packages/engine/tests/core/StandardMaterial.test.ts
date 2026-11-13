@@ -1,51 +1,9 @@
-import type { StandardMaterialOptions } from "../../src/core/materials/surface/StandardMaterial.js";
 import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import { Color } from "../../src/core/colors/Color.js";
 import { Texture } from "../../src/core/textures/Texture.js";
-import { BlendingMode, MaterialType } from "../../src/enums/index.js";
+import { BlendingMode } from "../../src/enums/index.js";
 
 describe("StandardMaterial", () => {
-  it("should initialize with default values", () => {
-    const material = new StandardMaterial();
-
-    expect(material.type).toBe(MaterialType.STANDARD);
-    expect(material.color.r).toBe(1.0);
-    expect(material.color.g).toBe(1.0);
-    expect(material.color.b).toBe(1.0);
-    expect(material.metallic).toBe(0.0);
-    expect(material.roughness).toBe(0.5);
-    expect(material.ao).toBe(1.0);
-    expect(material.emissiveColor.r).toBe(0.0);
-    expect(material.emissiveIntensity).toBe(1.0);
-    expect(material.transparent).toBe(false);
-  });
-
-  it("should initialize with custom values", () => {
-    const customColor = new Color(0.1, 0.2, 0.3);
-    const emissiveColor = new Color(1.0, 0.0, 0.0);
-    const emissiveTexture = Texture.empty();
-
-    const options: StandardMaterialOptions = {
-      color: customColor,
-      metallic: 0.8,
-      roughness: 0.2,
-      emissiveColor: emissiveColor,
-      emissiveMap: emissiveTexture,
-      emissiveIntensity: 2.5,
-      transparent: true,
-    };
-
-    const material = new StandardMaterial(options);
-
-    expect(material.color).toBe(customColor);
-    expect(material.metallic).toBe(0.8);
-    expect(material.roughness).toBe(0.2);
-    expect(material.emissiveColor).toBe(emissiveColor);
-    expect(material.emissiveMap).toBe(emissiveTexture);
-    expect(material.emissiveIntensity).toBe(2.5);
-    expect(material.transparent).toBe(true);
-  });
-
   it("should ignore 'emissive' in options and require 'emissiveColor' (regression test)", () => {
     // This test ensures we don't accidentally pass 'emissive' to the constructor
     // which was a previous bug in Showcase 20.

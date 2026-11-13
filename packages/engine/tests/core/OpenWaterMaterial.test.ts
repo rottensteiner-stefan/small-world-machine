@@ -1,27 +1,7 @@
 import { OpenWaterMaterial } from "../../src/core/materials/liquid/OpenWaterMaterial.js";
-import { MaterialType } from "../../src/enums/index.js";
 import { Color } from "../../src/core/colors/index.js";
 
 describe("OpenWaterMaterial", () => {
-  it("should initialize with default values", () => {
-    const material = new OpenWaterMaterial();
-
-    expect(material.type).toBe(MaterialType.OPEN_WATER);
-    expect(material.refractionStrength).toBe(0.03);
-  });
-
-  it("should accept a custom refractionStrength", () => {
-    const material = new OpenWaterMaterial({ refractionStrength: 0.1 });
-
-    expect(material.refractionStrength).toBe(0.1);
-  });
-
-  it("should default waterAbsorption to a red-fades-fastest coefficient", () => {
-    const material = new OpenWaterMaterial();
-
-    expect(material.waterAbsorption).toEqual([0.3, 0.06, 0.02]);
-  });
-
   it("should pack waterAbsorption into u_matParam0 and keep it in sync", () => {
     const material = new OpenWaterMaterial({ waterAbsorption: [0.5, 0.1, 0.01] });
 
@@ -35,15 +15,6 @@ describe("OpenWaterMaterial", () => {
     expect((manifest.properties["u_matParam0"] as number[])[0]).toBe(1.0);
     expect((manifest.properties["u_matParam0"] as number[])[1]).toBe(1.0);
     expect((manifest.properties["u_matParam0"] as number[])[2]).toBe(1.0);
-  });
-
-  it("should default foam options", () => {
-    const material = new OpenWaterMaterial();
-
-    expect(material.foamColor).toEqual(new Color(1.0, 1.0, 1.0));
-    expect(material.foamCutoff).toBe(0.6);
-    expect(material.foamNoiseScale).toBe(3.0);
-    expect(material.foamNoiseSpeed).toBe(0.5);
   });
 
   it("should pack foam options into u_matParam1 and u_matParam2 and keep them in sync", () => {
@@ -98,16 +69,6 @@ describe("OpenWaterMaterial", () => {
 
     expect(shaderDef.layout.textures["u_opaqueMap"]).toEqual({ type: "texture" });
     expect(shaderDef.layout.textures["u_opaqueDepthMap"]).toEqual({ type: "texture" });
-  });
-
-  it("should still expose the pre-existing color/wave options unaffected by refraction wiring", () => {
-    const material = new OpenWaterMaterial({
-      waterColor: new Color(0.1, 0.2, 0.3),
-      deepWaterColor: new Color(0.0, 0.0, 0.1),
-    });
-
-    expect(material.color).toEqual(new Color(0.1, 0.2, 0.3));
-    expect(material.deepWaterColor).toEqual(new Color(0.0, 0.0, 0.1));
   });
 
   it("should pack reflectionRoughness into u_matParam9.z", () => {

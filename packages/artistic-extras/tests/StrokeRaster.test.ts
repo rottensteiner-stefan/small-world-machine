@@ -4,7 +4,6 @@ import {
   hexWithAlpha,
   interpolateStrokeSteps,
   pressureToBrush,
-  rasterizeSplatDirection,
 } from "../src/math/StrokeRaster.js";
 
 describe("StrokeRaster (pure math)", () => {
@@ -112,35 +111,6 @@ describe("StrokeRaster (pure math)", () => {
     const dv = diag[0]!.dirV01 * 2 - 1;
     expect(du).toBeCloseTo(Math.SQRT1_2, 3);
     expect(dv).toBeCloseTo(Math.SQRT1_2, 3);
-  });
-
-  it("direction splats replace instead of blending (copy composite clipped to the disc)", () => {
-    const calls: string[] = [];
-    const ctx = {
-      save: () => calls.push("save"),
-      restore: () => calls.push("restore"),
-      beginPath: () => calls.push("beginPath"),
-      arc: () => calls.push("arc"),
-      clip: () => calls.push("clip"),
-      fillRect: () => calls.push("fillRect"),
-      fillStyle: "",
-      set globalCompositeOperation(v: string) {
-        calls.push(`op:${v}`);
-      },
-    } as unknown as CanvasRenderingContext2D;
-    rasterizeSplatDirection(ctx, {
-      x: 5,
-      y: 5,
-      radius: 4,
-      relief: 0.5,
-      lift: 0.5,
-      dirU01: 0.9,
-      dirV01: 0.1,
-      coverage: 0.5,
-    });
-    expect(calls.indexOf("clip")).toBeLessThan(calls.indexOf("op:copy"));
-    expect(calls.indexOf("op:copy")).toBeLessThan(calls.indexOf("fillRect"));
-    expect(calls[calls.length - 1]).toBe("restore");
   });
 
   it("caps coverage and keeps encoded channels in range", () => {

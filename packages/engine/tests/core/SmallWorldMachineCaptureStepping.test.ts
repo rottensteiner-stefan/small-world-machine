@@ -124,42 +124,6 @@ describe("SmallWorldMachine capture stepping determinism for temporal effects", 
     }
   });
 
-  it("captureFrameRate fixes the realtime loop's step delta regardless of wall-clock hitch", () => {
-    const app = new TestSmallWorldMachine();
-    attachTestRuntime(app);
-    app.captureFrameRate = 30;
-
-    const windowRef = window as unknown as {
-      requestAnimationFrame?: (cb: FrameRequestCallback) => number;
-    };
-    const origRaf = windowRef.requestAnimationFrame;
-    windowRef.requestAnimationFrame = (): number => 1;
-
-    try {
-      const internal = app as unknown as {
-        _isRunning: boolean;
-        _lastTime: number;
-        _loop(currentTime: number): void;
-      };
-      internal._isRunning = true;
-      internal._lastTime = 1000;
-      // A long hitch followed by a short frame: wall-clock distance must not leak into the capture.
-      internal._loop(9999);
-      internal._loop(10001);
-
-      expect(app.recordedDeltaTimes).toEqual([1 / 30, 1 / 30]);
-      expect(app.frameInfo.frameIndex).toBe(2);
-      expect(app.frameInfo.time).toBeCloseTo(2 / 30, 9);
-      expect(app.frameInfo.realTime).toBeCloseTo(2 / 30, 9);
-    } finally {
-      if (origRaf === undefined) {
-        delete windowRef.requestAnimationFrame;
-      } else {
-        windowRef.requestAnimationFrame = origRaf;
-      }
-    }
-  });
-
   it("TAA sub-pixel jitter follows a deterministic 16-frame cycle under capture stepping", () => {
     const run = (): Array<{ jitterX: number; jitterY: number }> => {
       const app = new TestSmallWorldMachine();

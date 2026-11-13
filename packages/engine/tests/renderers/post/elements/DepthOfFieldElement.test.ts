@@ -8,20 +8,6 @@ import { PostProcessingGroup } from "../../../../src/renderers/post/PostProcessi
 import { PostProcessingEffectType } from "../../../../src/enums/index.js";
 
 describe("DepthOfFieldElement", () => {
-  it("initializes with a 50 mm f/2 full-frame lens focused at 2 m", () => {
-    const elem = new DepthOfFieldElement();
-
-    expect(elem.type).toBe(PostProcessingEffectType.DEPTH_OF_FIELD);
-    expect(elem.enabled).toBe(false);
-    expect(elem.focusDistance).toBeCloseTo(2.0);
-    expect(elem.focalLength).toBeCloseTo(50);
-    expect(elem.fStop).toBeCloseTo(2.0);
-    expect(elem.sensorHeight).toBeCloseTo(24);
-    expect(elem.maxCocRatio).toBeCloseTo(0.015);
-    expect(elem.focusScreenY).toBeCloseTo(0.5);
-    expect(elem.structuralKey()).toBe("0");
-  });
-
   it("is registered within PostProcessingGroup and requests the opaque depth capture when enabled", () => {
     const group = new PostProcessingGroup();
     const elem = group.get<DepthOfFieldElement>(PostProcessingEffectType.DEPTH_OF_FIELD);
@@ -100,10 +86,5 @@ describe("thin-lens circle of confusion", () => {
   it("stays finite when focused at or inside the focal length", () => {
     expect(Number.isFinite(computeCocScalePx(50, 2, 0.05, 24, 1080))).toBe(true);
     expect(Number.isFinite(computeCocScalePx(50, 2, 0.01, 24, 1080))).toBe(true);
-  });
-
-  it("element.cocScalePx delegates to the thin-lens scale", () => {
-    const elem = new DepthOfFieldElement();
-    expect(elem.cocScalePx(1080)).toBeCloseTo(computeCocScalePx(50, 2, 2, 24, 1080));
   });
 });

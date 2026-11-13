@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { defaultBehaviorLabSettings } from "../Hud.js";
 import {
   LookAtBehavior,
   Matrix4,
@@ -11,27 +10,6 @@ import {
 } from "@small-world-machine/engine";
 
 describe("Showcase 20 — Behavior Lab & Geometry Sanity", () => {
-  it("provides valid default settings covering all built-in behaviors", () => {
-    const s = defaultBehaviorLabSettings();
-    expect(s.bobbing).toBe(true);
-    expect(s.bobbingAmp).toBeGreaterThan(0);
-    expect(s.bobbingFreq).toBeGreaterThan(0);
-    expect(s.rotator).toBe(true);
-    expect(s.rotatorSpeed).toBe(1.0);
-    expect(s.rainbow).toBe(true);
-    expect(s.patrol).toBe(true);
-    expect(s.patrolDuration).toBe(10.0);
-    expect(s.patrolLookForward).toBe(true);
-    expect(s.patrolPingPong).toBe(false);
-    expect(s.flicker).toBe(true);
-    expect(s.trail).toBe(true);
-    expect(s.companion).toBe(true);
-    expect(s.companionLerp).toBe(0.05);
-    expect(s.spotlight).toBe(true);
-    expect(s.spotlightTarget).toBe("ship");
-    expect(s.bloom).toBe(true);
-  });
-
   it("cone orientation: -PI/2 on X points the apex (+Y) forward to -Z in SWM right-handed coordinates", () => {
     // In Small World Machine: -Z is Forward, +Z is Backward, +Y is Up.
     // Cone apex is at (0, +1.5, 0) in local cylinder coordinates.

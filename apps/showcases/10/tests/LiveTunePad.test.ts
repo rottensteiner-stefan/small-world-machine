@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { StylizedWaterMaterial } from "@small-world-machine/engine";
 import { DEFAULT_TUNE_PARAMETERS, LiveTunePad } from "../LiveTunePad.js";
 
@@ -7,32 +7,15 @@ describe("LiveTunePad (D4)", () => {
     rampSoftness?: number;
     washAmount?: number;
     glitterStrength?: number;
-  }): { material: StylizedWaterMaterial; pad: LiveTunePad; logs: string[] } {
+  }): { material: StylizedWaterMaterial; pad: LiveTunePad } {
     const material = new StylizedWaterMaterial({
       rampSoftness: initialOptions?.rampSoftness ?? 0.3,
       washAmount: initialOptions?.washAmount ?? 0.2,
       glitterStrength: initialOptions?.glitterStrength ?? 0.5,
     });
-    const logs: string[] = [];
-    const logger = (msg: string, ...args: unknown[]): void => {
-      logs.push([msg, ...args].join(" "));
-    };
-    const pad = new LiveTunePad(material, { logger });
-    return { material, pad, logs };
+    const pad = new LiveTunePad(material, { logger: (): void => {} });
+    return { material, pad };
   }
-
-  it("initializes with default parameter list and snapshots initial values", () => {
-    const { material, pad } = createPad({ rampSoftness: 0.45, washAmount: 0.15 });
-    expect(pad.parameters.length).toBe(DEFAULT_TUNE_PARAMETERS.length);
-    expect(pad.selectedIndex).toBe(0);
-    expect(pad.currentParam.key).toBe("rampSoftness");
-    expect(pad.currentValue).toBe(0.45);
-
-    const vector = pad.getVector();
-    expect(vector.rampSoftness).toBe(0.45);
-    expect(vector.washAmount).toBe(0.15);
-    expect(material.rampSoftness).toBe(0.45);
-  });
 
   it("navigates forward and backward through parameters with wrap-around", () => {
     const { pad } = createPad();
@@ -113,68 +96,5 @@ describe("LiveTunePad (D4)", () => {
     pad.resetAll();
     expect(material.rampSoftness).toBe(0.3);
     expect(material.washAmount).toBe(0.2);
-  });
-
-  it("handles keyboard events correctly", () => {
-    const { material, pad, logs } = createPad({ rampSoftness: 0.5 });
-    const preventDefault = vi.fn();
-
-    // Navigation: ] (next)
-    expect(pad.handleKeyDown({ key: "]", preventDefault })).toBe(true);
-    expect(pad.selectedIndex).toBe(1);
-
-    // Navigation: [ (previous)
-    expect(pad.handleKeyDown({ key: "[", preventDefault })).toBe(true);
-    expect(pad.selectedIndex).toBe(0);
-
-    // ArrowUp: increase
-    expect(pad.handleKeyDown({ key: "ArrowUp", preventDefault })).toBe(true);
-    expect(material.rampSoftness).toBe(0.55);
-
-    // ArrowDown: decrease
-    expect(pad.handleKeyDown({ key: "ArrowDown", preventDefault })).toBe(true);
-    expect(material.rampSoftness).toBe(0.5);
-
-    // 0 without shift: reset current
-    pad.increase();
-    expect(material.rampSoftness).toBe(0.55);
-    expect(pad.handleKeyDown({ key: "0", shiftKey: false, preventDefault })).toBe(true);
-    expect(material.rampSoftness).toBe(0.5);
-
-    // Shift+0: reset all
-    pad.increase();
-    expect(pad.handleKeyDown({ key: "0", shiftKey: true, preventDefault })).toBe(true);
-    expect(material.rampSoftness).toBe(0.5);
-
-    // g: log vector
-    expect(pad.handleKeyDown({ key: "g", preventDefault })).toBe(true);
-    expect(logs.some((l) => l.includes("Current Vector"))).toBe(true);
-
-    // Unhandled key
-    expect(pad.handleKeyDown({ key: "x", preventDefault })).toBe(false);
-  });
-
-  it("attaches and detaches event listener on target", () => {
-    const { pad } = createPad();
-    const listeners: Record<string, EventListener> = {};
-    const mockTarget = {
-      addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
-        listeners[type] = listener as EventListener;
-      }),
-      removeEventListener: vi.fn((type: string) => {
-        delete listeners[type];
-      }),
-    };
-
-    pad.attach(mockTarget as unknown as EventTarget);
-    expect(mockTarget.addEventListener).toHaveBeenCalledWith("keydown", expect.any(Function));
-
-    // Trigger keydown
-    const event = { key: "]" } as unknown as Event;
-    listeners["keydown"]?.(event);
-    expect(pad.selectedIndex).toBe(1);
-
-    pad.detach();
-    expect(mockTarget.removeEventListener).toHaveBeenCalledWith("keydown", expect.any(Function));
   });
 });

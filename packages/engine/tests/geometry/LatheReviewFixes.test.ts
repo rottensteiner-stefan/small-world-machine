@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { LatheGeometry, type LatheGeometryOptions } from "../../src/geometry/LatheGeometry.js";
 import { Cylinder } from "../../src/geometry/Cylinder.js";
-import { CylinderSector } from "../../src/geometry/index.js";
 import { HollowTruncatedCone } from "../../src/geometry/HollowTruncatedCone.js";
 import { MathUtils } from "../../src/math/index.js";
 
@@ -230,22 +229,5 @@ describe("AbstractGeometry.setBuffers / rebuild (M10)", () => {
     const before = c.getGeometryData().vertices;
     c.rebuild();
     expect(c.getGeometryData().vertices).not.toBe(before);
-  });
-});
-
-describe("CylinderSector deprecated shim (M11)", () => {
-  it("is exported from the geometry index and is a Cylinder", () => {
-    const s = new CylinderSector({ thetaLength: Math.PI });
-    expect(s).toBeInstanceOf(Cylinder);
-    expect(s.thetaLength).toBe(Math.PI);
-  });
-
-  it("defaults to a full circle and matches the equivalent Cylinder", () => {
-    const s = new CylinderSector({ radiusTop: 1, radiusBottom: 2, height: 3 });
-    const c = new Cylinder({ radiusTop: 1, radiusBottom: 2, height: 3 });
-    expect(s.thetaLength).toBeCloseTo(MathUtils.TWO_PI, 9);
-    expect(Array.from(s.getGeometryData().vertices)).toEqual(
-      Array.from(c.getGeometryData().vertices),
-    );
   });
 });

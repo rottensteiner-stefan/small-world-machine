@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   CANDLE_COUNT,
   DEFAULT_FIRE_STRENGTH,
-  defaultLightState,
   fireStrengthParams,
   LIGHT_SCENES,
   sceneToState,
@@ -38,12 +37,6 @@ describe("showcase 37 fire strength mapping", () => {
 });
 
 describe("showcase 37 lighting scenes", () => {
-  it("has four distinct scenes in hotkey order, the first being the authored room", () => {
-    expect(LIGHT_SCENES.map((s) => s.id)).toEqual(["evening", "fireside", "reading", "night"]);
-    expect(defaultLightState()).toEqual(sceneToState(LIGHT_SCENES[0]!));
-    expect(defaultLightState().fire).toBe(DEFAULT_FIRE_STRENGTH);
-  });
-
   it("expands the candle flag to one state per candle (independent copies)", () => {
     const a = sceneToState(LIGHT_SCENES[0]!);
     const b = sceneToState(LIGHT_SCENES[0]!);

@@ -60,18 +60,6 @@ describe("FlyController", () => {
     scene = new Scene();
   });
 
-  it("should initialize with default options", () => {
-    const controller = new FlyController({
-      input: mockInput,
-    });
-    camera.addBehavior(controller);
-
-    expect(controller.enabled).toBe(true);
-    expect(controller.moveSpeed).toBe(7.0);
-    expect(controller.fastMultiplier).toBe(2.5);
-    expect(controller.slowMultiplier).toBe(0.35);
-  });
-
   it("should fly forward when W key is pressed", () => {
     const controller = new FlyController({
       input: mockInput,

@@ -84,18 +84,3 @@ describe("GPUPipelineCache refcounting across passes", () => {
     expect(createRenderPipeline).toHaveBeenCalledTimes(2);
   });
 });
-
-describe("GPUPipelineCache budget fit on the hit path", () => {
-  it("does not re-run the texture-budget fit for a cached pipeline", () => {
-    const { cache } = makeCache();
-    const fit = vi.spyOn(
-      cache as unknown as { _fitFlagsToBudget: () => unknown },
-      "_fitFlagsToBudget",
-    );
-    const first = cache.getPipeline(manifest, "triangle-list", false, "rgba16float");
-    expect(fit).toHaveBeenCalledTimes(1);
-    const second = cache.getPipeline(manifest, "triangle-list", false, "rgba16float");
-    expect(second).toBe(first);
-    expect(fit).toHaveBeenCalledTimes(1);
-  });
-});

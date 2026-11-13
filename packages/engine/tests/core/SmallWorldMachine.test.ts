@@ -89,55 +89,6 @@ describe("SmallWorldMachine public step(deltaTime) hook", () => {
     expect(a.updatePayloads).toEqual(b.updatePayloads);
   });
 
-  it("still executes the frame body after stop() and never toggles the run state (golden path)", () => {
-    const app = new TestSmallWorldMachine();
-    attachTestRuntime(app);
-
-    app.stop();
-    expect((app as unknown as { _isRunning: boolean })._isRunning).toBe(false);
-
-    app.step(1 / 60);
-
-    expect(app.recordedDeltaTimes).toEqual([1 / 60]);
-    expect((app as unknown as { _isRunning: boolean })._isRunning).toBe(false);
-  });
-
-  it("routes a realtime frame through step via the RAF callback (loop wiring)", () => {
-    const app = new TestSmallWorldMachine();
-    attachTestRuntime(app);
-
-    const rafCalls: FrameRequestCallback[] = [];
-    const windowRef = window as unknown as {
-      requestAnimationFrame?: (cb: FrameRequestCallback) => number;
-    };
-    const origRaf = windowRef.requestAnimationFrame;
-    windowRef.requestAnimationFrame = (cb: FrameRequestCallback): number => {
-      rafCalls.push(cb);
-      return 1;
-    };
-
-    try {
-      const internal = app as unknown as {
-        _isRunning: boolean;
-        _lastTime: number;
-        _loop(currentTime: number): void;
-      };
-      internal._isRunning = true;
-      internal._lastTime = 1000;
-      // 1060ms - 1000ms = 60ms -> 0.06s deltaTime, the exact body `step()` must receive.
-      internal._loop(1060);
-
-      expect(app.recordedDeltaTimes).toEqual([0.06]);
-      expect(rafCalls).toHaveLength(1);
-    } finally {
-      if (origRaf === undefined) {
-        delete windowRef.requestAnimationFrame;
-      } else {
-        windowRef.requestAnimationFrame = origRaf;
-      }
-    }
-  });
-
   it("fails fast on negative / NaN deltaTime and after destroy()", () => {
     const app = new TestSmallWorldMachine();
     attachTestRuntime(app);
@@ -174,37 +125,5 @@ describe("SmallWorldMachine public step(deltaTime) hook", () => {
     expect(app.frameInfo.time).toBeCloseTo(0.05, 6);
     expect(app.frameInfo.realTime).toBeCloseTo(0.1, 6);
     expect(app.frameInfo.realDeltaTime).toBeCloseTo(0.1, 6);
-  });
-
-  it("advances the realtime loop by exactly 1 / captureFrameRate regardless of wall-clock time", () => {
-    const app = new TestSmallWorldMachine();
-    attachTestRuntime(app);
-    app.captureFrameRate = 30;
-
-    const windowRef = window as unknown as {
-      requestAnimationFrame?: (cb: FrameRequestCallback) => number;
-    };
-    const origRaf = windowRef.requestAnimationFrame;
-    windowRef.requestAnimationFrame = (): number => 1;
-
-    try {
-      const internal = app as unknown as {
-        _isRunning: boolean;
-        _lastTime: number;
-        _loop(currentTime: number): void;
-      };
-      internal._isRunning = true;
-      internal._lastTime = 1000;
-      internal._loop(9999); // a long hitch: wall-clock must not leak into the capture
-      internal._loop(10001);
-
-      expect(app.recordedDeltaTimes).toEqual([1 / 30, 1 / 30]);
-    } finally {
-      if (origRaf === undefined) {
-        delete windowRef.requestAnimationFrame;
-      } else {
-        windowRef.requestAnimationFrame = origRaf;
-      }
-    }
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { WebGLClusterCullPass } from "../../src/renderers/passes/WebGLClusterCullPass.js";
 import { WebGL2Renderer } from "../../src/renderers/WebGL2/WebGL2Renderer.js";
+import { WebGL2ClusterManager } from "../../src/renderers/WebGL2/managers/WebGL2ClusterManager.js";
 import { Scene } from "../../src/core/Scene.js";
 import { Vector3D } from "../../src/math/index.js";
 import { PointLight } from "../../src/core/lights/PointLight.js";
@@ -43,12 +44,20 @@ function makeMockWebGL2Renderer(numClusters: { x: number; y: number; z: number }
     return 16;
   });
 
+  const indexCapacity =
+    Math.ceil((numClusters.x * numClusters.y * numClusters.z * 16) / 1024) * 1024;
   const renderer = {
     webglContext: gl,
+    _clusters: {
+      dims: numClusters,
+      maxLightsPerCluster: 16,
+      indexCapacity,
+      gridTex: {},
+      indexTex: {},
+    },
     clusterDims: numClusters,
     clusterMaxLightsPerCluster: 16,
-    clusterIndexCapacity:
-      Math.ceil((numClusters.x * numClusters.y * numClusters.z * 16) / 1024) * 1024,
+    clusterIndexCapacity: indexCapacity,
     quality: { clusteredLighting: { tileSize: 64 } },
     writeClusterGridUniforms: vi.fn(),
     clusterGridTexture: {},
@@ -188,11 +197,13 @@ describe("WebGLClusterCullPass (BLK-R1 Regression)", () => {
       texParameteri: vi.fn(),
       texImage2D: vi.fn(),
     };
-    const owner = Object.create(WebGL2Renderer.prototype) as { gl: unknown };
+    const owner = Object.create(WebGL2Renderer.prototype) as {
+      gl: unknown;
+      _clusters: WebGL2ClusterManager;
+    };
     owner.gl = gl;
-    (
-      owner as unknown as { _allocateClusterTextures(d: typeof dims, m: number): void }
-    )._allocateClusterTextures(dims, 16);
+    owner._clusters = new WebGL2ClusterManager();
+    owner._clusters.allocate(gl as unknown as WebGL2RenderingContext, dims, 16);
     const indexAlloc = gl.texImage2D.mock.calls.find((c) => c[2] === gl.RG32UI)!;
     expect(indexAlloc[4]).toBe(maxTextureSize);
     const capacity = (owner as unknown as WebGL2Renderer).clusterIndexCapacity;

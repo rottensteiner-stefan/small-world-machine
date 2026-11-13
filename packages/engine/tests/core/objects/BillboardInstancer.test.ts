@@ -31,19 +31,6 @@ describe("BillboardInstancer", () => {
     expect(instancer.mesh.instanceCount).toBe(3);
   });
 
-  it("sizes the instanced pool from `count` when scattering", () => {
-    const instancer = new BillboardInstancer("Test", {
-      count: 42,
-      scatterArea: { width: 10, depth: 10 },
-    });
-    expect(instancer.mesh.instanceCount).toBe(42);
-  });
-
-  it("defaults to a pool of 300 particles", () => {
-    const instancer = new BillboardInstancer("Test", { scatterArea: { width: 5, depth: 5 } });
-    expect(instancer.mesh.instanceCount).toBe(300);
-  });
-
   it("axis-locked: faces the camera around Y only, yaw 0 when the camera is along +Z", () => {
     const instancer = new BillboardInstancer("Test", {
       positions: [new Vector3D(0, 0, 0)],

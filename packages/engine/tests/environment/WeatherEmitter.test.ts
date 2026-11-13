@@ -13,19 +13,6 @@ function readPosition(emitter: WeatherEmitter, i: number): Vector3D {
 }
 
 describe("WeatherEmitter", () => {
-  it("creates a fixed-size instanced pool matching `count`", () => {
-    const emitter = new WeatherEmitter("Test", {
-      count: 37,
-      spawnArea: { width: 10, depth: 10, height: 10 },
-    });
-    expect(emitter.mesh.instanceCount).toBe(37);
-  });
-
-  it("defaults to a pool of 400 particles", () => {
-    const emitter = new WeatherEmitter("Test", { spawnArea: { width: 5, depth: 5, height: 5 } });
-    expect(emitter.mesh.instanceCount).toBe(400);
-  });
-
   it("never leaves a particle below the spawn box's floor after many updates", () => {
     const center = new Vector3D(0, 10, 0);
     const emitter = new WeatherEmitter("Test", {

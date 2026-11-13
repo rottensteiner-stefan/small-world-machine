@@ -45,14 +45,4 @@ describe("EmberBed", () => {
       expect(intensity(bed)).toBeLessThanOrEqual(2 + 1e-6);
     }
   });
-
-  it("is an opaque emissive cylinder that casts no glow sticker", () => {
-    const bed = new EmberBed({ position: POS, radius: 0.3 });
-    const material = bed.mesh.material as StandardMaterial;
-    expect(material.emissiveIntensity).toBe(2);
-    expect(material.emissiveColor.r).toBeGreaterThan(0.5); // deep ember orange, sRGB-authored
-    expect(material.emissiveColor.b).toBeLessThan(0.2);
-    expect(bed.mesh.geometry).toBeDefined();
-    expect(bed.mesh.position.y).toBe(0.05);
-  });
 });

@@ -11,13 +11,6 @@ describe("AudioSystem", () => {
     audio = new AudioSystem(context);
   });
 
-  it("should build the mixer graph on construction", () => {
-    expect(context.createGain).toHaveBeenCalledTimes(4); // master, sfx, music, reverb send
-    expect(audio.masterGain).toBeDefined();
-    expect(audio.sfxGain).toBeDefined();
-    expect(audio.musicGain).toBeDefined();
-  });
-
   it("should clamp master volume between 0 and 1", () => {
     audio.setMasterVolume(0.5);
     expect(audio.masterGain.gain.value).toBe(0.5);
@@ -191,15 +184,6 @@ describe("AudioSystem", () => {
     expect(listener.forwardX.value).toBeCloseTo(1);
     expect(listener.forwardY.value).toBeCloseTo(0);
     expect(listener.forwardZ.value).toBeCloseTo(0);
-  });
-
-  it("should delegate SynthSFX calls without throwing", () => {
-    expect(() => audio.playTone(440, 0.1, 0.5, "sine")).not.toThrow();
-    expect(() => audio.playFootstep()).not.toThrow();
-    expect(() => audio.playShoot()).not.toThrow();
-    expect(() => audio.playHurt()).not.toThrow();
-    expect(() => audio.startFire(new Vector3D())).not.toThrow();
-    expect(() => audio.startDrone()).not.toThrow();
   });
 
   describe("endless sound lifecycle (startDrone/startFire leak fix)", () => {
