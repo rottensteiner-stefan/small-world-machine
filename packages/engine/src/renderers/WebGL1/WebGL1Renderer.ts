@@ -24,6 +24,7 @@ import {
 } from "../gl/managers/WebGLProgramCache.js";
 import { WebGLTextureManager } from "../gl/managers/WebGLTextureManager.js";
 import { WebGLBufferManager } from "../gl/managers/WebGLBufferManager.js";
+import { GLInstanceBufferCache } from "../gl/managers/GLInstanceBufferCache.js";
 import type { InstanceFieldGL } from "../gl/managers/InstanceFieldGL.js";
 import { INSTANCE_RECORD_BYTES, type CpuIndirectDrawSource } from "../../core/InstanceField.js";
 import {
@@ -125,12 +126,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
    * affected meshes are skipped with a one-time warning instead of spamming `INVALID_ENUM`. */
   private _elementIndexUintExt: OES_element_index_uint | null = null;
   private _warnedNoElementIndexUint = false;
-  private _instanceMatrixBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
-  private _instanceMatrixBufferSizes: WeakMap<InstancedMesh, number> = new WeakMap();
-  private _instanceMatricesUploaded: WeakMap<InstancedMesh, number> = new WeakMap();
-  private _instanceDataBuffers: WeakMap<InstancedMesh, WebGLBuffer> = new WeakMap();
-  private _instanceDataBufferSizes: WeakMap<InstancedMesh, number> = new WeakMap();
-  private _instanceDataUploaded: WeakMap<InstancedMesh, number> = new WeakMap();
+  private readonly _instanceBuffers: GLInstanceBufferCache = new GLInstanceBufferCache(false);
   /** Derived field-lane shader flags per committed `manifest.flags` array reference (ADR 0059;
    * engine contract `_commitFlags` publishes immutably, a fresh array on content change → the
    * WeakMap key rotates). Tag-checked against the quality/BRDF bits so environment changes rebuild.
@@ -725,54 +721,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         const uModel = u.get("u_model");
         if (uModel) this.gl.uniformMatrix4fv(uModel, false, instMesh.worldMatrix.data);
 
-        let matrixBuf = this._instanceMatrixBuffers.get(instMesh);
-        const matrixByteLength = instMesh.instanceMatrices.byteLength;
-        const allocatedMatrixBytes = this._instanceMatrixBufferSizes.get(instMesh) ?? 0;
-        if (!matrixBuf || allocatedMatrixBytes < matrixByteLength) {
-          if (!matrixBuf) {
-            matrixBuf = this.gl.createBuffer()!;
-            this._instanceMatrixBuffers.set(instMesh, matrixBuf);
-          }
-          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
-          if (typeof this.gl.bufferSubData === "function") {
-            this.gl.bufferData(this.gl.ARRAY_BUFFER, matrixByteLength, this.gl.DYNAMIC_DRAW);
-          } else {
-            this.gl.bufferData(
-              this.gl.ARRAY_BUFFER,
-              instMesh.instanceMatrices,
-              this.gl.DYNAMIC_DRAW,
-            );
-          }
-          this._instanceMatrixBufferSizes.set(instMesh, matrixByteLength);
-          this._instanceMatricesUploaded.delete(instMesh);
-          instMesh.instanceMatrixNeedsUpdate = true;
-        } else {
-          this.gl.bindBuffer(this.gl.ARRAY_BUFFER, matrixBuf);
-        }
-
-        const uploadedMatrices = this._instanceMatricesUploaded.get(instMesh) ?? 0;
-        if (instMesh.instanceMatrixNeedsUpdate || instMesh.instanceCount > uploadedMatrices) {
-          if (typeof this.gl.bufferSubData === "function") {
-            this.gl.bufferSubData(
-              this.gl.ARRAY_BUFFER,
-              0,
-              instMesh.instanceMatrices.subarray(0, instMesh.instanceCount * 16),
-            );
-          } else {
-            this.gl.bufferData(
-              this.gl.ARRAY_BUFFER,
-              instMesh.instanceMatrices,
-              this.gl.DYNAMIC_DRAW,
-            );
-          }
-          this._instanceMatricesUploaded.set(
-            instMesh,
-            instMesh.instanceMatrixNeedsUpdate
-              ? instMesh.instanceCount
-              : Math.max(uploadedMatrices, instMesh.instanceCount),
-          );
-          instMesh.instanceMatrixNeedsUpdate = false;
-        }
+        const matrixBuf = this._instanceBuffers.syncMatrixBuffer(this.gl, instMesh);
 
         mesh.bind(
           cache.attributes.get("a_position")!,
@@ -805,47 +754,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         // WebGL1 shader.
         const dataLoc = cache.attributes.get("a_instanceData");
         if (dataLoc !== undefined && dataLoc >= 0 && instMesh.instanceData) {
-          let dataBuf = this._instanceDataBuffers.get(instMesh);
-          const dataByteLength = instMesh.instanceData.byteLength;
-          const allocatedDataBytes = this._instanceDataBufferSizes.get(instMesh) ?? 0;
-          if (!dataBuf || allocatedDataBytes < dataByteLength) {
-            if (!dataBuf) {
-              dataBuf = this.gl.createBuffer()!;
-              this._instanceDataBuffers.set(instMesh, dataBuf);
-            }
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
-            if (typeof this.gl.bufferSubData === "function") {
-              this.gl.bufferData(this.gl.ARRAY_BUFFER, dataByteLength, this.gl.DYNAMIC_DRAW);
-            } else {
-              this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
-            }
-            this._instanceDataBufferSizes.set(instMesh, dataByteLength);
-            this._instanceDataUploaded.delete(instMesh);
-            instMesh.instanceDataNeedsUpdate = true;
-          } else {
-            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, dataBuf);
-          }
-
-          const uploadedData = this._instanceDataUploaded.get(instMesh) ?? 0;
-          if (instMesh.instanceDataNeedsUpdate || instMesh.instanceCount > uploadedData) {
-            const stride = instMesh.instanceDataSize || 4;
-            if (typeof this.gl.bufferSubData === "function") {
-              this.gl.bufferSubData(
-                this.gl.ARRAY_BUFFER,
-                0,
-                instMesh.instanceData.subarray(0, instMesh.instanceCount * stride),
-              );
-            } else {
-              this.gl.bufferData(this.gl.ARRAY_BUFFER, instMesh.instanceData, this.gl.DYNAMIC_DRAW);
-            }
-            this._instanceDataUploaded.set(
-              instMesh,
-              instMesh.instanceDataNeedsUpdate
-                ? instMesh.instanceCount
-                : Math.max(uploadedData, instMesh.instanceCount),
-            );
-            instMesh.instanceDataNeedsUpdate = false;
-          }
+          this._instanceBuffers.syncDataBuffer(this.gl, instMesh);
           this.gl.enableVertexAttribArray(dataLoc);
           this.gl.vertexAttribPointer(
             dataLoc,
@@ -1049,12 +958,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._renderTargetDepthBuffers.clear();
     this._renderTargetCubeFbos.clear();
     this._renderTargetCubeDepthBuffers.clear();
-    this._instanceMatrixBuffers = new WeakMap();
-    this._instanceMatrixBufferSizes = new WeakMap();
-    this._instanceMatricesUploaded = new WeakMap();
-    this._instanceDataBuffers = new WeakMap();
-    this._instanceDataBufferSizes = new WeakMap();
-    this._instanceDataUploaded = new WeakMap();
+    this._instanceBuffers.resetOnContextRestored();
     this._hdrFbo = undefined;
     this._hdrTexture = undefined;
     this._hdrRenderBuffer = undefined;
@@ -1466,6 +1370,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._geometry.releaseGeometryFor(obj);
     this._programCache.releaseObjectProgram(obj);
     this._textures.releaseObjectTextures(obj);
+    if (obj instanceof InstancedMesh) this._instanceBuffers.release(this.gl, obj);
   }
 
   /** @inheritdoc */
@@ -1473,6 +1378,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this.uninstallContextLossHandling();
     const gl = this.gl;
     if (gl) {
+      this._instanceBuffers.destroy(gl);
       this._programCache?.dispose();
       this._textures?.dispose();
       this._geometry?.dispose();

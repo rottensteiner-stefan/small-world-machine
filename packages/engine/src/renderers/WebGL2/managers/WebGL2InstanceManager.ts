@@ -6,28 +6,24 @@ import { groupByGeometryForInstancing } from "../../AutoInstancing.js";
 import type { GLLineRibbon, Mesh } from "../../Mesh.js";
 import type { WebGLBufferManager } from "../../gl/managers/WebGLBufferManager.js";
 import type { WebGLProgramCacheEntry } from "../../gl/managers/WebGLProgramCache.js";
+import {
+  GLInstanceBufferCache,
+  type GLInstanceBufferState,
+} from "../../gl/managers/GLInstanceBufferCache.js";
 
 /** `u_model` of an auto-instancing run (ADR 0046): the instance matrices carry the transforms. */
 const IDENTITY_MATRIX: Float32Array = new Float32Array([
   1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
 ]);
 
-/** Consolidated WebGL2 GPU state for a single `InstancedMesh`. Replaces 6 separate WeakMaps. */
-export interface WebGL2InstanceState {
-  matrixBuf: WebGLBuffer | undefined;
-  matrixBytes: number;
-  matricesUploaded: number;
-  dataBuf: WebGLBuffer | undefined;
-  dataBytes: number;
-  dataUploaded: number;
-}
+export type WebGL2InstanceState = GLInstanceBufferState;
 
 /**
  * Owns WebGL2 per-`InstancedMesh` GPU buffer state and ADR 0046 auto-instancing run staging/
  * scratch buffers, keeping per-frame instanced draws allocation-free.
  */
 export class WebGL2InstanceManager {
-  private _instanceState: WeakMap<InstancedMesh, WebGL2InstanceState> = new WeakMap();
+  private readonly _instanceBuffers: GLInstanceBufferCache = new GLInstanceBufferCache(true);
   /** Auto-instancing (ADR 0046): one streamed matrix buffer for every run, plus its CPU staging. */
   private _runMatrixBuffer: WebGLBuffer | undefined = undefined;
   private _runStaging: Float32Array = new Float32Array(1024 * 16);
@@ -65,7 +61,7 @@ export class WebGL2InstanceManager {
 
   /** Exposed for unit tests inspecting consolidated state. */
   public get instanceStateMap(): WeakMap<InstancedMesh, WebGL2InstanceState> {
-    return this._instanceState;
+    return this._instanceBuffers.stateMap;
   }
 
   /** Reorders eligible standard objects stably by geometry ordinal for longest instancing runs. */
@@ -112,89 +108,10 @@ export class WebGL2InstanceManager {
     const uModel = cache.uniforms.get("u_model");
     if (uModel) gl.uniformMatrix4fv(uModel, false, instMesh.worldMatrix.data);
 
-    let state = this._instanceState.get(instMesh);
-    if (!state) {
-      state = {
-        matrixBuf: undefined,
-        matrixBytes: 0,
-        matricesUploaded: 0,
-        dataBuf: undefined,
-        dataBytes: 0,
-        dataUploaded: 0,
-      };
-      this._instanceState.set(instMesh, state);
-    }
-
-    const matrixByteLength = instMesh.instanceMatrices.byteLength;
-    if (!state.matrixBuf || state.matrixBytes < matrixByteLength) {
-      state.matrixBuf ??= gl.createBuffer()!;
-      gl.bindBuffer(gl.ARRAY_BUFFER, state.matrixBuf);
-      if (typeof gl.bufferSubData === "function") {
-        gl.bufferData(gl.ARRAY_BUFFER, matrixByteLength, gl.DYNAMIC_DRAW);
-      } else {
-        gl.bufferData(gl.ARRAY_BUFFER, instMesh.instanceMatrices, gl.DYNAMIC_DRAW);
-      }
-      state.matrixBytes = matrixByteLength;
-      state.matricesUploaded = 0;
-      instMesh.instanceMatrixNeedsUpdate = true;
-    } else {
-      gl.bindBuffer(gl.ARRAY_BUFFER, state.matrixBuf);
-    }
-
-    if (instMesh.instanceMatrixNeedsUpdate || instMesh.instanceCount > state.matricesUploaded) {
-      if (typeof gl.bufferSubData === "function") {
-        gl.bufferSubData(
-          gl.ARRAY_BUFFER,
-          0,
-          instMesh.instanceMatrices,
-          0,
-          instMesh.instanceCount * 16,
-        );
-      } else {
-        gl.bufferData(gl.ARRAY_BUFFER, instMesh.instanceMatrices, gl.DYNAMIC_DRAW);
-      }
-      state.matricesUploaded = instMesh.instanceMatrixNeedsUpdate
-        ? instMesh.instanceCount
-        : Math.max(state.matricesUploaded, instMesh.instanceCount);
-      instMesh.instanceMatrixNeedsUpdate = false;
-    }
-
+    const matrixBuf = this._instanceBuffers.syncMatrixBuffer(gl, instMesh);
     let dataBuf: WebGLBuffer | undefined;
     if (instMesh.instanceData && cache.attributes.has("a_instanceData")) {
-      const dataByteLength = instMesh.instanceData.byteLength;
-      if (!state.dataBuf || state.dataBytes < dataByteLength) {
-        state.dataBuf ??= gl.createBuffer()!;
-        gl.bindBuffer(gl.ARRAY_BUFFER, state.dataBuf);
-        if (typeof gl.bufferSubData === "function") {
-          gl.bufferData(gl.ARRAY_BUFFER, dataByteLength, gl.DYNAMIC_DRAW);
-        } else {
-          gl.bufferData(gl.ARRAY_BUFFER, instMesh.instanceData, gl.DYNAMIC_DRAW);
-        }
-        state.dataBytes = dataByteLength;
-        state.dataUploaded = 0;
-        instMesh.instanceDataNeedsUpdate = true;
-      }
-      dataBuf = state.dataBuf;
-
-      if (instMesh.instanceDataNeedsUpdate || instMesh.instanceCount > state.dataUploaded) {
-        const stride = instMesh.instanceDataSize || 4;
-        gl.bindBuffer(gl.ARRAY_BUFFER, dataBuf);
-        if (typeof gl.bufferSubData === "function") {
-          gl.bufferSubData(
-            gl.ARRAY_BUFFER,
-            0,
-            instMesh.instanceData,
-            0,
-            instMesh.instanceCount * stride,
-          );
-        } else {
-          gl.bufferData(gl.ARRAY_BUFFER, instMesh.instanceData, gl.DYNAMIC_DRAW);
-        }
-        state.dataUploaded = instMesh.instanceDataNeedsUpdate
-          ? instMesh.instanceCount
-          : Math.max(state.dataUploaded, instMesh.instanceCount);
-        instMesh.instanceDataNeedsUpdate = false;
-      }
+      dataBuf = this._instanceBuffers.syncDataBuffer(gl, instMesh);
     }
 
     const mesh = geometry.getOrCreateMesh(instMesh, instMesh.geometry!);
@@ -202,7 +119,7 @@ export class WebGL2InstanceManager {
       gl,
       mesh,
       cache,
-      state.matrixBuf,
+      matrixBuf,
       instMesh.instanceCount,
       topology,
       wireframeMode,
@@ -249,22 +166,18 @@ export class WebGL2InstanceManager {
 
   /** Deletes the per-instance matrix/data GL buffers of a removed `InstancedMesh`. */
   public releaseInstanceBuffers(gl: WebGL2RenderingContext, instMesh: InstancedMesh): void {
-    const state = this._instanceState.get(instMesh);
-    if (!state) return;
-    if (state.matrixBuf) gl.deleteBuffer(state.matrixBuf);
-    if (state.dataBuf) gl.deleteBuffer(state.dataBuf);
-    this._instanceState.delete(instMesh);
+    this._instanceBuffers.release(gl, instMesh);
   }
 
   public resetOnContextRestored(): void {
-    this._instanceState = new WeakMap();
+    this._instanceBuffers.resetOnContextRestored();
     this._runMatrixBuffer = undefined;
   }
 
   public destroy(gl: WebGL2RenderingContext): void {
+    this._instanceBuffers.destroy(gl);
     if (this._runMatrixBuffer) gl.deleteBuffer(this._runMatrixBuffer);
     this._runMatrixBuffer = undefined;
-    this._instanceState = new WeakMap();
   }
 
   private _drawInstanced(
