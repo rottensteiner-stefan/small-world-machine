@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fortress Inquisitorius — Concept Dossier</title>
+    <style>
+      :root {
+        --bg: #070b12;
+        --panel: #101724;
+        --text: #e6ecf5;
+        --accent: #ff2a1a;
+        --accent2: #7dd3fc;
+        --muted: #8b9ab0;
+        --ok: #7fc97f;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 system-ui, -apple-system, Segoe UI, sans-serif; }
+      main { max-width: 940px; margin: 0 auto; padding: 40px 24px 100px; }
+      h1 { font-size: 30px; letter-spacing: .5px; }
+      h2 { margin-top: 40px; border-bottom: 1px solid #223047; padding-bottom: 8px; font-size: 20px; }
+      .pill { display: inline-block; border: 1px solid #2c3e5a; border-radius: 99px; padding: 2px 12px; font-size: 12px; color: var(--muted); margin-right: 6px; }
+      .pill.ok { border-color: var(--ok); color: var(--ok); }
+      .pill.hot { border-color: var(--accent); color: var(--accent); }
+      .card { background: var(--panel); border: 1px solid #1e2a3d; border-radius: 10px; padding: 18px 20px; margin: 18px 0; }
+      code { background: #192334; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Fortress Inquisitorius (Ocean Moon Nur)</h1>
+      <div>
+        <span class="pill ok">2K CC0 PBR Armor &amp; Basalt</span>
+        <span class="pill ok">3-Tier Waterline Wetness Shader</span>
+        <span class="pill ok">OpenWater + PlanarReflection</span>
+        <span class="pill hot">HDR Crimson Visor &amp; Hangars</span>
+        <span class="pill">showcase 53</span>
+      </div>
+
+      <h2>Design Pillars</h2>
+      <div class="card">
+        <ul>
+          <li><strong>Brutalist Wedge Silhouette:</strong> Beveled multi-tier monolith rising out of a dark basalt sea foundation (`y = -6..52.8 m`), flanked by recessed crimson hangar bays, cantilevered landing pads, turbolasers, and imperial shuttles.</li>
+          <li><strong>Calibrated CC0 PBR + Waterline Wetness:</strong> 2K WebP PBR maps (`MetalPlates017A`, `Metal046B`, `dark_rock_02`) driven by a showcase-local `CustomShaderMaterial` wrapping `Standard.frag.*` with an animated wave-lap wetness band.</li>
+          <li><strong>Stormy Ocean Reflection:</strong> `OpenWaterMaterial` paired with `PlanarReflectionNode` and a deep seabed (`y = -14 m`) so Beer-Lambert absorption, shoreline foam, and red hangar reflections render cleanly across `WEB_GPU`, `WEB_GL2`, and `WEB_GL1`.</li>
+        </ul>
+      </div>
+    </main>
+  </body>
+</html>
