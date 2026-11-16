@@ -114,18 +114,18 @@ const CAMERA_VIEWS: Record<CameraPresetKey, CameraView> = {
 
 const ATMOSPHERES: Record<AtmosphereKey, AtmospherePreset> = {
   storm: {
-    moonColor: new Color(0.58, 0.75, 1.0),
-    moonIntensity: 2.6,
-    moonDirection: new Vector3D(-0.55, -0.78, -0.32).normalize(),
-    ambientColor: new Color(0.16, 0.22, 0.34),
-    ambientIntensity: 0.65,
+    moonColor: new Color(0.58, 0.76, 1.0),
+    moonIntensity: 2.9,
+    moonDirection: new Vector3D(-0.62, -0.5, -0.26).normalize(),
+    ambientColor: new Color(0.12, 0.18, 0.3),
+    ambientIntensity: 0.56,
     hangarColor: new Color(1.0, 0.16, 0.08),
-    hangarIntensity: 42,
-    fogColor: new Color(0.018, 0.028, 0.048),
-    fogDensity: 0.002,
-    volumetricDensity: 0.0046,
+    hangarIntensity: 44,
+    fogColor: new Color(0.015, 0.025, 0.045),
+    fogDensity: 0.0018,
+    volumetricDensity: 0.0018,
     exposure: 1.15,
-    envIntensity: 1.25,
+    envIntensity: 1.2,
   },
   twilight: {
     moonColor: new Color(0.72, 0.84, 1.0),
@@ -136,10 +136,10 @@ const ATMOSPHERES: Record<AtmosphereKey, AtmospherePreset> = {
     hangarColor: new Color(1.0, 0.22, 0.12),
     hangarIntensity: 32,
     fogColor: new Color(0.026, 0.04, 0.068),
-    fogDensity: 0.0018,
-    volumetricDensity: 0.0038,
+    fogDensity: 0.0016,
+    volumetricDensity: 0.0016,
     exposure: 1.25,
-    envIntensity: 1.45,
+    envIntensity: 1.4,
   },
   redAlert: {
     moonColor: new Color(0.68, 0.24, 0.24),
@@ -150,8 +150,8 @@ const ATMOSPHERES: Record<AtmosphereKey, AtmospherePreset> = {
     hangarColor: new Color(1.0, 0.08, 0.04),
     hangarIntensity: 95,
     fogColor: new Color(0.045, 0.014, 0.018),
-    fogDensity: 0.0028,
-    volumetricDensity: 0.0065,
+    fogDensity: 0.0024,
+    volumetricDensity: 0.0032,
     exposure: 1.18,
     envIntensity: 0.85,
   },
@@ -211,6 +211,7 @@ export class Showcase extends AbstractShowcase {
   protected override async setupScene(): Promise<void> {
     this.configureCamera();
     this._applyCameraPreset("wide");
+    this.renderer.setClearColor(new Color(0.012, 0.022, 0.042, 1.0));
 
     this._setupLighting();
     this._setupPostProcessing();
@@ -397,6 +398,12 @@ export class Showcase extends AbstractShowcase {
     if (this._rockMaterial) {
       updateFortressWaterlineTime(this._rockMaterial, this._elapsed);
     }
+    if (this._oceanMaterial) {
+      this._oceanMaterial.time = this._elapsed;
+    }
+    if (this._reflectionEnabled) {
+      this._reflection?.updateReflection(this.scene, this.camera, this.renderer);
+    }
 
     // Gentle hover bob on the approaching eastern shuttle (zero allocation)
     const bobOffset = Math.sin(this._elapsed * 1.4) * 0.45;
@@ -503,11 +510,11 @@ export class Showcase extends AbstractShowcase {
     const vfog = pp.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
     if (vfog) {
       vfog.enabled = true;
-      vfog.density = 0.0055;
-      vfog.maxDistance = 220;
-      vfog.heightFalloff = 0.025;
-      vfog.asymmetry = 0.55;
-      vfog.ambientInject = 0.14;
+      vfog.density = 0.0018;
+      vfog.maxDistance = 240;
+      vfog.heightFalloff = 0.036;
+      vfog.asymmetry = 0.22;
+      vfog.ambientInject = 0.08;
     }
 
     const tone = pp.get<ToneMappingElement>(PostProcessingEffectType.TONE_MAPPING);
@@ -522,15 +529,15 @@ export class Showcase extends AbstractShowcase {
     // Deep ocean floor keeps OpaqueCapture depth finite for Beer-Lambert & shoreline foam
     const seaBed = new Object3D("NurSeaBed");
     seaBed.geometry = new Ground({
-      width: OCEAN_SIZE + 80,
-      depth: OCEAN_SIZE + 80,
+      width: OCEAN_SIZE + 260,
+      depth: OCEAN_SIZE + 260,
     }).getGeometryData();
     seaBed.material = new StandardMaterial({
-      color: new Color(0.01, 0.02, 0.035),
+      color: new Color(0.004, 0.01, 0.02),
       roughness: 0.95,
       metallic: 0.0,
     });
-    seaBed.position.set(0, -14.0, 0);
+    seaBed.position.set(0, -18.0, 0);
     seaBed.receiveShadow = false;
     this.scene.add(seaBed);
 
@@ -541,24 +548,40 @@ export class Showcase extends AbstractShowcase {
       resolutionScale: this.renderer.quality.reflectionResolutionScale ?? 1,
     });
     this._reflection.position.set(0, FORTRESS_WATER_Y, 0);
-    this._reflection.clipPlaneOffset = -0.25;
+    this._reflection.clipPlaneOffset = -0.35;
     this.scene.add(this._reflection);
 
     const ocean = new Object3D("NurOcean");
-    ocean.geometry = new Ground({
-      width: OCEAN_SIZE,
-      depth: OCEAN_SIZE,
+    const oceanHalf = (OCEAN_SIZE + 60) * 0.5;
+    const oceanGeo = new Ground({
+      width: OCEAN_SIZE + 60,
+      depth: OCEAN_SIZE + 60,
       widthSegments: OCEAN_SEGMENTS,
       depthSegments: OCEAN_SEGMENTS,
     }).getGeometryData();
+    // Concentrate vertex resolution (~0.95 m spacing) around the fortress & camera corridor
+    // while keeping total vertex count <= 65,535 for Uint16 WebGL1 compatibility.
+    const verts = oceanGeo.vertices;
+    for (let i = 0; i < verts.length; i += 3) {
+      const nx = verts[i]! / oceanHalf;
+      const nz = verts[i + 2]! / oceanHalf;
+      verts[i] = oceanHalf * (0.28 * nx + 0.72 * nx * nx * nx);
+      verts[i + 2] = oceanHalf * (0.28 * nz + 0.72 * nz * nz * nz);
+    }
+    ocean.geometry = oceanGeo;
     this._oceanMaterial = createStormOceanMaterial(this._reflection, {
-      waterColor: new Color(0.008, 0.02, 0.038),
-      deepWaterColor: new Color(0.002, 0.008, 0.018),
-      edgeColor: new Color(0.04, 0.07, 0.11),
-      foamColor: new Color(0.16, 0.22, 0.28),
-      foamDistance: 3.1,
-      foamCutoff: 0.5,
-      reflectionStrength: 0.58,
+      waterColor: new Color(0.01, 0.036, 0.072),
+      deepWaterColor: new Color(0.003, 0.01, 0.025),
+      edgeColor: new Color(0.12, 0.2, 0.3),
+      edgeSoftness: 1.4,
+      foamColor: new Color(0.68, 0.78, 0.86),
+      foamDistance: 2.8,
+      foamCutoff: 0.46,
+      foamNoiseScale: 1.15,
+      foamNoiseSpeed: 1.15,
+      reflectionStrength: 0.84,
+      reflectionDistortion: 0.14,
+      reflectionRoughness: 0.03,
     });
     ocean.material = this._oceanMaterial;
     ocean.position.set(0, FORTRESS_WATER_Y, 0);
@@ -719,7 +742,7 @@ export class Showcase extends AbstractShowcase {
     }
     if (this.scene.fog) {
       this.scene.fog.color.copyFrom(preset.fogColor);
-      this.scene.fog.density = this._fogEnabled ? preset.volumetricDensity * 0.35 : 0;
+      this.scene.fog.density = this._fogEnabled ? preset.fogDensity : 0;
     }
     this.scene.environmentIntensity = preset.envIntensity;
 
@@ -745,7 +768,7 @@ export class Showcase extends AbstractShowcase {
     this._reflectionEnabled = on;
     if (this._oceanMaterial) {
       this._oceanMaterial.reflectionMap = on ? this._reflection?.renderTarget : undefined;
-      this._oceanMaterial.reflectionStrength = on ? 0.65 : 0.0;
+      this._oceanMaterial.reflectionStrength = on ? 0.84 : 0.0;
     }
     this._syncHud();
   }
