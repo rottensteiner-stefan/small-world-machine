@@ -2,6 +2,21 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.126.0] - 2026-11-18
+
+### "The sea is everything. It covers seven tenths of the terrestrial globe. Its breath is pure and healthy." - Jules Verne
+
+- **Features:**
+  - _Open ocean subsystem (`OceanGridGeometry`, `OceanMaterial` & `OceanFftSystem`, ADR 0062):_ 3-tier ocean mesh (`2400 m` radius, `30,721` `Uint16` verts, `snapToTarget`) and `OceanMaterial` (`MaterialType.OCEAN`) with 5-octave Gerstner swells, WebGPU `256x256` JONSWAP IFFT (`ShaderFlag.OCEAN_FFT`), 3-layer normal cascade (`OceanWaveNormalGenerator`), Tokuyoshi Specular AA, Fresnel IBL + planar reflection, crest SSS, Worley foam/caustics, downwash, and CPU `sampleWaveAt`.
+  - _`RainStreaks` — camera-Y tracking:_ added `RainStreaksOptions.followCameraY` so precipitation boxes wrap vertically around `[cameraY - height / 2, cameraY + height / 2)` for elevated and flying cameras.
+  - _Showcase 53 — Fortress Inquisitorius (Ocean Moon Nur):_ added the canonical 76 m split-blade Imperial fortress showcase featuring 2K CC0 PBR durasteel/basalt materials with `boreSurge` + `drainFilm` waterline wetness, camera-tracked JONSWAP FFT storm ocean, `PlanarReflectionNode`, buoyant perimeter signal buoys, shuttle rotor downwash, shallow-water caustics, storm lightning flashes (`F`), `RainStreaks`, and `SmokeSpriteMaterial` sea-spray mist.
+
+- **Architecture & Bugfixes:**
+  - _Opaque-ocean render sub-phase (`"main:ocean"`, ADR 0062):_ `MainRenderPass` (WebGPU) and `WebGLMainPass` (WebGL2/WebGL1) capture pre-ocean solid color and depth immediately before drawing `MaterialType.OCEAN` batches and preserve ocean depth and `g_shadingNormal` writes for downstream decals, transparents, HBAO, and Volumetric Fog; `WebGPURenderer` also selects `REPEAT` samplers when a material binds `u_normalMap` without `u_diffuseMap`.
+
+- **Housekeeping & Docs:**
+  - _ADR 0062, domain glossary & mathematical references:_ recorded ADR 0062 (Phases 1–3), added **Open Ocean** to `CONTEXT.md`, and documented Tessendorf/JONSWAP FFT, Cooley-Tukey Radix-2 IFFT, Worley cellular foam/caustics, and Tokuyoshi Specular AA in `REFERENCES.md`.
+
 ## [0.125.0] - 2026-11-13
 
 ### "Simplicity is about subtracting the obvious and adding the meaningful." - John Maeda

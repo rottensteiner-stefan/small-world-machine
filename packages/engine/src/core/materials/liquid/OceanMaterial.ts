@@ -17,6 +17,42 @@ import { Vector2D } from "../../../math/index.js";
 import { generateOceanWaveNormalTexture } from "./OceanWaveNormalGenerator.js";
 
 /**
+ * Zero-allocation output record filled by {@link OceanMaterial.sampleWaveAt} for CPU-side
+ * buoyancy, hull splash emitters, and camera-above-water clamping.
+ */
+export interface OceanWaveSample {
+  /** Displaced vertical wave height in world meters relative to the undisturbed ocean plane. */
+  height: number;
+  /** Lateral Gerstner X displacement in world meters. */
+  displacementX: number;
+  /** Lateral Gerstner Z displacement in world meters. */
+  displacementZ: number;
+  /** Surface normal X component. */
+  normalX: number;
+  /** Surface normal Y component. */
+  normalY: number;
+  /** Surface normal Z component. */
+  normalZ: number;
+  /** Normalized breaking crest / Jacobian pinch metric in `[0, 1]`. */
+  crest: number;
+}
+
+const OCEAN_PI = Math.PI;
+const OCEAN_G = 9.81;
+const WAVE_ANGLES: readonly [number, number, number, number, number] = [
+  0.0, 0.42, -0.58, 1.17, -1.4,
+];
+const WAVE_STEEPNESS: readonly [number, number, number, number, number] = [
+  0.19, 0.16, 0.13, 0.1, 0.08,
+];
+const WAVE_WAVELENGTH_RATIOS: readonly [number, number, number, number, number] = [
+  1.0, 0.64, 0.43, 0.27, 0.17,
+];
+const WAVE_PHASES: readonly [number, number, number, number, number] = [
+  0.0, 1.37, 2.91, 4.13, 5.48,
+];
+
+/**
  * Configuration options for the 3-tier horizon-scale {@link OceanMaterial} (ADR 0062).
  */
 export interface OceanMaterialOptions {
@@ -68,6 +104,14 @@ export interface OceanMaterialOptions {
   reflectionDistortion?: number;
   /** @domain Planar reflection mip-blur roughness in [0, 1] (defaults to 0.04). */
   reflectionRoughness?: number;
+  /** @domain Shallow-water underwater caustics intensity >= 0 (defaults to 0.38). */
+  causticsStrength?: number;
+  /** World XZ center of rotor downwash / point shockwave disturbance (defaults to (0, 0)). */
+  downwashCenter?: Vector2D;
+  /** @domain Outer radius in meters of rotor downwash disturbance >= 0 (defaults to 0, disabled). */
+  downwashRadius?: number;
+  /** @domain Intensity of concentric rotor downwash ripples and spray ring in [0, 2] (defaults to 0). */
+  downwashStrength?: number;
   /** @domain Enables WebGPU compute JONSWAP 2D IFFT wavefield synthesis when available (defaults to true). */
   fftEnabled?: boolean;
   /** @domain Fundamental JONSWAP FFT periodic tile width in meters > 16 (defaults to 180.0). */
@@ -157,6 +201,14 @@ export class OceanMaterial extends AbstractMaterial {
   public reflectionDistortion: number;
   /** @domain Planar reflection mip-blur factor in [0, 1]. */
   public reflectionRoughness: number;
+  /** @domain Shallow-water underwater caustics intensity >= 0 (defaults to 0.38). */
+  public causticsStrength: number;
+  /** World XZ center of rotor downwash / point shockwave disturbance (defaults to (0, 0)). */
+  public downwashCenter: Vector2D;
+  /** @domain Outer radius in meters of rotor downwash disturbance >= 0 (defaults to 0, disabled). */
+  public downwashRadius: number;
+  /** @domain Intensity of concentric rotor downwash ripples and spray ring in [0, 2] (defaults to 0). */
+  public downwashStrength: number;
   /** @domain Enables WebGPU compute JONSWAP 2D IFFT wavefield synthesis when available. */
   public fftEnabled: boolean;
   /** @domain Fundamental JONSWAP FFT periodic tile width in meters > 16. */
@@ -182,7 +234,9 @@ export class OceanMaterial extends AbstractMaterial {
   private readonly _matParam4Array: number[] = [0, 0, 0, 0];
   /** @derived Packed lane `u_matParam5`: `[detailStrength, fftEnabled, fftPatchSize, choppiness]`. */
   private readonly _matParam5Array: number[] = [0, 0, 0, 0];
-  /** @derived Packed lane `u_matParam9`: `[reflectionStrength, reflectionDistortion, reflectionRoughness, 0]`. */
+  /** @derived Packed lane u_matParam6: [downwashCenter.x, downwashCenter.y, downwashRadius, downwashStrength]. */
+  private readonly _matParam6Array: number[] = [0, 0, 0, 0];
+  /** @derived Packed lane `u_matParam9`: `[reflectionStrength, reflectionDistortion, reflectionRoughness, causticsStrength]`. */
   private readonly _matParam9Array: number[] = [0, 0, 0, 0];
 
   constructor(options: OceanMaterialOptions = {}) {
@@ -226,6 +280,10 @@ export class OceanMaterial extends AbstractMaterial {
     this.reflectionStrength = options.reflectionStrength ?? 0.78;
     this.reflectionDistortion = options.reflectionDistortion ?? 0.11;
     this.reflectionRoughness = options.reflectionRoughness ?? 0.04;
+    this.causticsStrength = options.causticsStrength ?? 0.38;
+    this.downwashCenter = options.downwashCenter?.clone() ?? new Vector2D(0, 0);
+    this.downwashRadius = options.downwashRadius ?? 0.0;
+    this.downwashStrength = options.downwashStrength ?? 0.0;
     this.fftEnabled = options.fftEnabled ?? true;
     this.fftPatchSize = options.fftPatchSize ?? 180.0;
     this.choppiness = options.choppiness ?? 1.15;
@@ -250,6 +308,7 @@ export class OceanMaterial extends AbstractMaterial {
       m.properties["u_matParam3"] = this._matParam3Array;
       m.properties["u_matParam4"] = this._matParam4Array;
       m.properties["u_matParam5"] = this._matParam5Array;
+      m.properties["u_matParam6"] = this._matParam6Array;
       m.properties["u_matParam9"] = this._matParam9Array;
       this._renderManifest = m;
     }
@@ -336,11 +395,17 @@ export class OceanMaterial extends AbstractMaterial {
     p5[2] = Math.max(this.fftPatchSize, 16.0);
     p5[3] = Math.max(this.choppiness, 0.0);
 
+    const p6 = this._matParam6Array;
+    p6[0] = this.downwashCenter.x;
+    p6[1] = this.downwashCenter.y;
+    p6[2] = Math.max(this.downwashRadius, 0.0);
+    p6[3] = Math.max(this.downwashStrength, 0.0);
+
     const p9 = this._matParam9Array;
     p9[0] = this.reflectionMap ? this.reflectionStrength : 0.0;
     p9[1] = this.reflectionDistortion;
     p9[2] = this.reflectionRoughness;
-    p9[3] = 0.0;
+    p9[3] = Math.max(this.causticsStrength, 0.0);
 
     // `_syncBaseManifestState()` resets `u_color` to `this.color.toFloat32Array()`, so restore
     // the pre-allocated `_colorArray` reference afterward (zero allocations per frame).
@@ -352,6 +417,121 @@ export class OceanMaterial extends AbstractMaterial {
 
     this._commitFlags();
     return manifest;
+  }
+
+  /**
+   * Evaluates the analytical 5-wave Gerstner swell dispersion and group envelope at `(worldX, worldZ)`
+   * without heap allocations, matching `Ocean.vert.wgsl`.
+   */
+  public sampleWaveAt(
+    worldX: number,
+    worldZ: number,
+    out: OceanWaveSample,
+    cameraX: number = worldX,
+    cameraZ: number = worldZ,
+  ): OceanWaveSample {
+    const rawWx = this.windDirection.x;
+    const rawWz = this.windDirection.y;
+    const wLen = Math.hypot(rawWx, rawWz);
+    const wx = wLen > 1e-4 ? rawWx / wLen : 0.84;
+    const wz = wLen > 1e-4 ? rawWz / wLen : 0.54;
+
+    const waveScale = Math.max(this.waveScale, 0.0);
+    const lambda = Math.max(this.waveWavelength, 2.0);
+    const fadeStart = this.swellFadeStart;
+    const fadeEnd = Math.max(this.swellFadeEnd, fadeStart + 1.0);
+    const radialDist = Math.hypot(worldX - cameraX, worldZ - cameraZ);
+    const uRaw = (radialDist - fadeStart) / (fadeEnd - fadeStart);
+    const u = uRaw < 0.0 ? 0.0 : uRaw > 1.0 ? 1.0 : uRaw;
+    const swellFade = 1.0 - u * u * (3.0 - 2.0 * u);
+
+    let tx = 1.0;
+    let ty = 0.0;
+    let tz = 0.0;
+    let bx = 0.0;
+    let by = 0.0;
+    let bz = 1.0;
+    let dispX = 0.0;
+    let dispY = 0.0;
+    let dispZ = 0.0;
+
+    const speed = this.windSpeed;
+    const time = this.time;
+    const scaledFade = waveScale * swellFade;
+
+    for (let i = 0; i < 5; i++) {
+      const steepness = WAVE_STEEPNESS[i]! * scaledFade;
+      const wavelength = lambda * WAVE_WAVELENGTH_RATIOS[i]!;
+      if (steepness <= 0.0001 || wavelength <= 0.001) {
+        continue;
+      }
+      const angle = WAVE_ANGLES[i]!;
+      const ca = Math.cos(angle);
+      const sa = Math.sin(angle);
+      const dx = wx * ca - wz * sa;
+      const dz = wx * sa + wz * ca;
+      const phaseOffset = WAVE_PHASES[i]!;
+
+      const k = (2.0 * OCEAN_PI) / wavelength;
+      const c = Math.sqrt(OCEAN_G / k) * speed;
+      const perpX = -dz;
+      const perpZ = dx;
+      const dotPerp = worldX * perpX + worldZ * perpZ;
+      const groupEnv = 0.78 + 0.22 * Math.cos(dotPerp * (k * 0.19) + time * 0.28 + phaseOffset);
+      const amp = (steepness / k) * groupEnv;
+      const dotDir = dx * worldX + dz * worldZ;
+      const f = k * (dotDir - c * time) + phaseOffset;
+      const sinF = Math.sin(f);
+      const cosF = Math.cos(f);
+      const qRaw = steepness * groupEnv;
+      const q = qRaw < 0.0 ? 0.0 : qRaw > 0.85 ? 0.85 : qRaw;
+
+      const qSin = q * sinF;
+      const qCos = q * cosF;
+      tx += -dx * dx * qSin;
+      ty += dx * qCos;
+      tz += -dx * dz * qSin;
+
+      bx += -dx * dz * qSin;
+      by += dz * qCos;
+      bz += -dz * dz * qSin;
+
+      const ampCos = amp * cosF;
+      dispX += dx * ampCos;
+      dispY += amp * sinF;
+      dispZ += dz * ampCos;
+    }
+
+    const jacobian = tx * bz - tz * bx;
+    const heightDenom = Math.max(waveScale * 1.4, 0.15);
+    const heightRaw = dispY / heightDenom;
+    const heightMetric = heightRaw < 0.0 ? 0.0 : heightRaw > 1.0 ? 1.0 : heightRaw;
+    const pinchRaw = (1.0 - jacobian) * 1.4;
+    const pinchMetric = pinchRaw < 0.0 ? 0.0 : pinchRaw > 1.0 ? 1.0 : pinchRaw;
+    const crestRaw = (heightMetric * 0.65 + pinchMetric * 0.55) * swellFade;
+    const crestMetric = crestRaw < 0.0 ? 0.0 : crestRaw > 1.0 ? 1.0 : crestRaw;
+
+    const crossX = by * tz - bz * ty;
+    const crossY = bz * tx - bx * tz;
+    const crossZ = bx * ty - by * tx;
+    const crossLen = Math.hypot(crossX, crossY, crossZ);
+    const waveNx = crossLen > 1e-6 ? crossX / crossLen : 0.0;
+    const waveNy = crossLen > 1e-6 ? crossY / crossLen : 1.0;
+    const waveNz = crossLen > 1e-6 ? crossZ / crossLen : 0.0;
+
+    const mixNx = waveNx * swellFade;
+    const mixNy = 1.0 + (waveNy - 1.0) * swellFade;
+    const mixNz = waveNz * swellFade;
+    const mixLen = Math.hypot(mixNx, mixNy, mixNz);
+
+    out.height = dispY;
+    out.displacementX = dispX;
+    out.displacementZ = dispZ;
+    out.normalX = mixLen > 1e-6 ? mixNx / mixLen : 0.0;
+    out.normalY = mixLen > 1e-6 ? mixNy / mixLen : 1.0;
+    out.normalZ = mixLen > 1e-6 ? mixNz / mixLen : 0.0;
+    out.crest = crestMetric;
+    return out;
   }
 
   /** @inheritdoc */
@@ -381,6 +561,10 @@ export class OceanMaterial extends AbstractMaterial {
       reflectionStrength: this.reflectionStrength,
       reflectionDistortion: this.reflectionDistortion,
       reflectionRoughness: this.reflectionRoughness,
+      causticsStrength: this.causticsStrength,
+      downwashCenter: this.downwashCenter.clone(),
+      downwashRadius: this.downwashRadius,
+      downwashStrength: this.downwashStrength,
       fftEnabled: this.fftEnabled,
       fftPatchSize: this.fftPatchSize,
       choppiness: this.choppiness,

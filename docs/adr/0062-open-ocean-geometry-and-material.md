@@ -4,7 +4,7 @@ status: accepted
 
 # 0062: Open Ocean Geometry, Material & Opaque-Depth Sub-Phase ("Open Ocean")
 
-- **Status:** Accepted (Phase 1 Core + Phase 2 WebGPU Compute JONSWAP 2D IFFT + Phase 2b Fragment Foam Model)
+- **Status:** Accepted (Phase 1 Core + Phase 2 WebGPU Compute JONSWAP 2D IFFT + Phase 2b Fragment Foam Model + Phase 3 CPU Wave Sampling, Shallow-Water Caustics & Rotor Downwash)
 - **Date:** 2026-11-18
 - **Trigger:** Showcase 53 (`Fortress Inquisitorius` — Ocean Moon Nur) exposed structural limits of stretching pool-scale `OpenWaterMaterial` on a small rectangular `Ground` slab over a vast stormy ocean: visible square horizon edges at 380 m, striped Gerstner wave crests, absent distant IBL horizon continuity, flat shadow-dark surfaces lacking crest subsurface scattering, and missing multi-scale normal cascades.
 
@@ -48,7 +48,8 @@ Introduce **Open Ocean** as a first-class core subsystem in `@small-world-machin
    - `u_matParam3` ← `[swellFadeStart, swellFadeEnd, foamCoverage, detailScale]`
    - `u_matParam4` ← `[scatterColor.r, scatterColor.g, scatterColor.b, scatterStrength]`
    - `u_matParam5` ← `[detailStrength, fftEnabled ? 1 : 0, fftPatchSize, choppiness]`
-   - `u_matParam9` ← `[reflectionMap ? reflectionStrength : 0, reflectionDistortion, reflectionRoughness, 0]`
+   - `u_matParam6` ← `[downwashCenter.x, downwashCenter.y, downwashRadius, downwashStrength]`
+   - `u_matParam9` ← `[reflectionMap ? reflectionStrength : 0, reflectionDistortion, reflectionRoughness, causticsStrength]`
    - Zero legacy slot reads (`u_extraParams`, `u_liquidParams`, `u_thresholds`, `u_texOffset`, `u_texRepeat`).
 
 ## Rejected
@@ -66,10 +67,10 @@ Introduce **Open Ocean** as a first-class core subsystem in `@small-world-machin
 
 - **New public hot-scope parameters (classification):**
   - `OceanGridGeometryOptions` (`radius`, `radialSegments`, `angularSegments`, `radialExponent`, `detailRadius`) → `@domain`.
-  - `OceanMaterialOptions` (`waterColor`, `deepWaterColor`, `scatterColor`, `scatterStrength`, `roughness`, `windSpeed`, `windDirection`, `waveScale`, `waveWavelength`, `swellFadeStart`, `swellFadeEnd`, `detailScale`, `detailStrength`, `foamColor`, `foamDistance`, `foamCoverage`, `waterAbsorption`, `refractionStrength`, `normalMap`, `envMap`, `reflectionMap`, `reflectionStrength`, `reflectionDistortion`, `reflectionRoughness`, `fftEnabled`, `fftPatchSize`, `choppiness`) → `@domain`.
+  - `OceanMaterialOptions` (`waterColor`, `deepWaterColor`, `scatterColor`, `scatterStrength`, `roughness`, `windSpeed`, `windDirection`, `waveScale`, `waveWavelength`, `swellFadeStart`, `swellFadeEnd`, `detailScale`, `detailStrength`, `foamColor`, `foamDistance`, `foamCoverage`, `waterAbsorption`, `refractionStrength`, `normalMap`, `envMap`, `reflectionMap`, `reflectionStrength`, `reflectionDistortion`, `reflectionRoughness`, `causticsStrength`, `downwashCenter`, `downwashRadius`, `downwashStrength`, `fftEnabled`, `fftPatchSize`, `choppiness`) → `@domain`.
   - `RainStreaksOptions.followCameraY` → `@domain`.
   - `OCEAN_FFT_RESOLUTION` (`256`), `OceanMaterial.DEFAULT_*` constants, octave angle/wavelength ratios (`[1.0, 0.64, 0.43, 0.27, 0.17]`), dielectric `F0 = 0.02`, JONSWAP $\gamma = 3.3$, and `skipDepthPrePass = true` → `@fixed`.
-  - Packed typed-array lanes (`_matParam0Array.._matParam5Array`, `_matParam9Array`), cached JONSWAP initialization dirty-check state, and FFT output textures (`dispTexture`, `normFoamTexture`) → `@derived`.
+  - Packed typed-array lanes (`_matParam0Array.._matParam6Array`, `_matParam9Array`), cached JONSWAP initialization dirty-check state, and FFT output textures (`dispTexture`, `normFoamTexture`) → `@derived`.
 - **Shared abstraction >= 3 consumers?** No speculative cross-material abstraction introduced; `OceanMaterial` directly implements `AbstractMaterial` and reuses existing engine shader chunks (`[WGSL_PBR_MATH]`, `[WGSL_DIR_SHADOW]`, `[WGSL_FOG_CALC]`, `[LIGHT_DEFS]`, `[PBR_MATH]`, `[DIR_SHADOW]`, `[FOG_CALC]`, `[WORLD_DIR_TO_SCREEN]`).
 - **Modeful object?** Single boolean presence gating on `normalMap`, `envMap`, `reflectionMap`, and `fftEnabled` (`USE_OCEAN_FFT`); no multi-mode enum state machine.
 - **Mathematical claims:** Horizon smoothness (`swellFade` reaches 0 at `swellFadeEnd`), radial monotonicity of `OceanGridGeometry`, `Uint16` vertex cap (`<= 65535`), camera-centered radial distance across all 3 dialects, JONSWAP directional energy peak, and 256-point Radix-2 DIT IFFT Hermitian parity are tested directly in `OceanGridGeometry.test.ts`, `OceanMaterial.test.ts`, and `OceanFftSystem.test.ts`; no new registered `@invariant` IDs claimed.
@@ -94,4 +95,20 @@ Pure fragment-shader upgrade of the foam in `Ocean.frag.{wgsl,glsl,glsl100}`; no
 | WebGL2 (`Ocean.frag.glsl`) | yes | no (analytic `crestCaps` only) | yes |
 | WebGL1 (`Ocean.frag.glsl100`) | yes (reduced) | no | no — WebGL1 has no shore/depth terms (no opaque depth capture), so there is no `depthDiff` to drive a bore |
 
-**Verification:** `OceanMaterial.test.ts` asserts the per-dialect identifier contract (`oceanFoamCells`, `foamLace`, `crestTexture` everywhere; `boreFront`/`contactSplash` in WGSL + GLSL300 only; `fftCrestAccum`/`foldCaps`/`nfA.z` in WGSL only; no legacy `matParam6..8` reads). `OceanFoamMath.test.ts` is a CPU mirror of the bore-front shape (range `[0, 1]`, zero at phase 0 and `>= 0.55`, peak at `0.07`, contours travel toward the rock) and of the Worley F1 cells (range `[0, sqrt(2)]`, ~0 at feature points). Classification: all constants (`0.21`, `0.35`, `0.9`, `0.07`, `0.55`, lace thresholds) → `@fixed` shader look-tuning; no new `@domain` parameters; no new `@invariant` IDs.
+**Verification:** `OceanMaterial.test.ts` asserts the per-dialect identifier contract (`oceanFoamCells`, `foamLace`, `crestTexture` everywhere; `boreFront`/`contactSplash` in WGSL + GLSL300 only; `fftCrestAccum`/`foldCaps`/`nfA.z` in WGSL only; no legacy `matParam7..8` reads). `OceanFoamMath.test.ts` is a CPU mirror of the bore-front shape (range `[0, 1]`, zero at phase 0 and `>= 0.55`, peak at `0.07`, contours travel toward the rock) and of the Worley F1 cells (range `[0, sqrt(2)]`, ~0 at feature points). Classification: all constants (`0.21`, `0.35`, `0.9`, `0.07`, `0.55`, lace thresholds) → `@fixed` shader look-tuning; no new `@domain` parameters; no new `@invariant` IDs.
+
+## Phase 3: CPU Wave Sampling, Shallow-Water Caustics & Rotor Downwash
+
+- **Zero-Allocation CPU Wave Sampling (`OceanMaterial.sampleWaveAt(worldX, worldZ, out, cameraX, cameraZ)`):**
+  - Evaluates the exact 5-wave Gerstner dispersion ($\omega_i = \sqrt{g k_i}$), cross-wave group envelope (`0.78 + 0.22 * cos(...)`), analytical tangent/bitangent surface normal, horizontal Jacobian crest pinch (`crest`), and camera-centered horizon `swellFade` into a caller-supplied `OceanWaveSample` record with zero heap allocations.
+  - Enables CPU-side buoyancy, wave-riding emitter placement, and camera-above-water clamping synchronized with `Ocean.vert.{wgsl,glsl,glsl100}`.
+- **Shallow-Water Dual-Worley Caustics (`Ocean.frag.{wgsl,glsl}`, `u_matParam9.w` = `causticsStrength`):**
+  - Evaluates a wave-refracted dual-layer F1 Worley ridge intersection (`cA`, `cB` via `oceanFoamCells` at incommensurate scales and counter-scrolled wind axes; `causticNet = smoothstep(0.14, 0.48, min(cA, cB)) * smoothstep(0.22, 0.58, max(cA, cB)) * 2.3`) on submerged solid geometry (`depthDiff < 12.0`).
+  - Modulated by Beer-Lambert `transmittance`, `causticDepthEnv`, directional shadow `surfaceShadow`, and `(1 - fresnel)` on `WEB_GPU` and `WEB_GL2`; omitted on `WEB_GL1` where `u_opaqueDepthMap` is absent (ADR 0057).
+- **Guarded Rotor Downwash / Point Shockwave (`Ocean.frag.{wgsl,glsl,glsl100}`, `u_matParam6`):**
+  - Packs `[downwashCenter.x, downwashCenter.y, downwashRadius, downwashStrength]` into `u_matParam6`.
+  - Guarded by `if (downwashRadius > 0.1 && downwashStrength > 0.001 && dwNorm < 1.0)` across all 3 shader dialects (`WEB_GPU`, `WEB_GL2`, `WEB_GL1`), adding outward-propagating radial capillary normal ripples (`detailTangent += dwDir * (cos(dwPhase) * 0.45 * dwEnv)`) and an annular spindrift ring (`downwashFoam * crestTexture`) with zero ALU overhead when disabled (`downwashRadius = 0`).
+- **Doctrine Classification:**
+  - `causticsStrength`, `downwashCenter`, `downwashRadius`, `downwashStrength` → `@domain`.
+  - `_matParam6Array` → `@derived`.
+

@@ -165,42 +165,52 @@ export interface EmissiveAccentOptions {
 }
 
 const WGSL_WATERLINE_BLOCK = `
-    // Fortress Inquisitorius waterline wetness + dark salt/spray band (showcase-local)
+    // Fortress Inquisitorius waterline wetness + synchronized bore-front surge & drainage film
     {
         let waterY = obj.matParam2.x;
         let wetBand = max(obj.matParam2.y, 0.001);
         let waveAmp = obj.matParam2.z;
         let wetAlbedoScale = obj.matParam2.w;
         let waveLap = sin(i.wp.x * 0.45 + obj.time * 1.4) * cos(i.wp.z * 0.45 - obj.time * 1.1) * waveAmp;
-        let tideHeight = waterY + waveLap;
+        let spatialWave = sin(i.wp.x * 0.18 + i.wp.z * 0.14) * 0.35 + cos(i.wp.x * 0.31 - i.wp.z * 0.27) * 0.2;
+        let borePhase = fract(obj.time * 0.21 - spatialWave);
+        let boreSurge = smoothstep(0.0, 0.10, borePhase) * (1.0 - smoothstep(0.10, 0.78, borePhase));
+        let tideHeight = waterY + waveLap + boreSurge * waveAmp * 2.2;
         let distAboveWater = i.wp.y - tideHeight;
         let wetMask = 1.0 - smoothstep(-0.15, wetBand, distAboveWater);
+        let drainFilm = (1.0 - smoothstep(-0.1, wetBand * 0.58, distAboveWater)) * (0.35 + 0.65 * boreSurge);
         let saltBand = smoothstep(wetBand * 0.45, wetBand * 0.78, distAboveWater) *
                        (1.0 - smoothstep(wetBand * 0.78, wetBand * 1.05, distAboveWater));
-        let albedoFactor = mix(1.0, wetAlbedoScale, wetMask) * (1.0 - 0.18 * saltBand);
+        let albedoFactor = mix(1.0, wetAlbedoScale, wetMask) * (1.0 - 0.14 * drainFilm) * (1.0 - 0.18 * saltBand);
         albedo = albedo * albedoFactor;
         let wetRoughness = clamp(roughness * 0.25, 0.06, 0.12);
-        roughness = mix(roughness, wetRoughness, wetMask);
+        let filmRoughness = mix(wetRoughness, 0.04, drainFilm);
+        roughness = mix(roughness, filmRoughness, wetMask);
     }
 `;
 
 const GLSL_WATERLINE_BLOCK = `
-    // Fortress Inquisitorius waterline wetness + dark salt/spray band (showcase-local)
+    // Fortress Inquisitorius waterline wetness + synchronized bore-front surge & drainage film
     {
         float waterY = u_matParam2.x;
         float wetBand = max(u_matParam2.y, 0.001);
         float waveAmp = u_matParam2.z;
         float wetAlbedoScale = u_matParam2.w;
         float waveLap = sin(v_worldPos.x * 0.45 + u_time * 1.4) * cos(v_worldPos.z * 0.45 - u_time * 1.1) * waveAmp;
-        float tideHeight = waterY + waveLap;
+        float spatialWave = sin(v_worldPos.x * 0.18 + v_worldPos.z * 0.14) * 0.35 + cos(v_worldPos.x * 0.31 - v_worldPos.z * 0.27) * 0.2;
+        float borePhase = fract(u_time * 0.21 - spatialWave);
+        float boreSurge = smoothstep(0.0, 0.10, borePhase) * (1.0 - smoothstep(0.10, 0.78, borePhase));
+        float tideHeight = waterY + waveLap + boreSurge * waveAmp * 2.2;
         float distAboveWater = v_worldPos.y - tideHeight;
         float wetMask = 1.0 - smoothstep(-0.15, wetBand, distAboveWater);
+        float drainFilm = (1.0 - smoothstep(-0.1, wetBand * 0.58, distAboveWater)) * (0.35 + 0.65 * boreSurge);
         float saltBand = smoothstep(wetBand * 0.45, wetBand * 0.78, distAboveWater) *
                          (1.0 - smoothstep(wetBand * 0.78, wetBand * 1.05, distAboveWater));
-        float albedoFactor = mix(1.0, wetAlbedoScale, wetMask) * (1.0 - 0.18 * saltBand);
+        float albedoFactor = mix(1.0, wetAlbedoScale, wetMask) * (1.0 - 0.14 * drainFilm) * (1.0 - 0.18 * saltBand);
         albedo *= albedoFactor;
         float wetRoughness = clamp(roughness * 0.25, 0.06, 0.12);
-        roughness = mix(roughness, wetRoughness, wetMask);
+        float filmRoughness = mix(wetRoughness, 0.04, drainFilm);
+        roughness = mix(roughness, filmRoughness, wetMask);
     }
 `;
 

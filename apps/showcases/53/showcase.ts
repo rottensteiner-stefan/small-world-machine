@@ -33,6 +33,7 @@ import type {
   ToneMappingElement,
   VolumetricFogElement,
   CustomShaderMaterial,
+  OceanWaveSample,
   RainStreaks,
 } from "@small-world-machine/engine";
 import {
@@ -85,6 +86,13 @@ interface PropPart {
   offset: Vector3D;
 }
 
+interface BuoyNode {
+  root: Object3D;
+  baseX: number;
+  baseZ: number;
+  baseYaw: number;
+}
+
 interface QaSwm53Hook {
   sample(): FortressHudState & {
     renderer: string;
@@ -97,6 +105,7 @@ interface QaSwm53Hook {
   setReflection(on: boolean): void;
   setBloom(on: boolean): void;
   setFog(on: boolean): void;
+  triggerLightning(): void;
 }
 
 declare global {
@@ -216,12 +225,23 @@ export class Showcase extends AbstractShowcase {
   private readonly _hangarLights: PointLight[] = [];
   private readonly _deckLights: PointLight[] = [];
   private _hoverShuttleNodes: Object3D[] = [];
+  private readonly _buoys: BuoyNode[] = [];
+  private readonly _waveSample: OceanWaveSample = {
+    height: 0,
+    displacementX: 0,
+    displacementZ: 0,
+    normalX: 0,
+    normalY: 1,
+    normalZ: 0,
+    crest: 0,
+  };
   private _cameraPreset: CameraPresetKey = "wide";
   private _atmosphere: AtmosphereKey = "storm";
   private _reflectionEnabled: boolean = true;
   private _bloomEnabled: boolean = true;
   private _fogEnabled: boolean = true;
   private _elapsed: number = 0;
+  private _manualLightningTimer: number = 0;
   private _trisEstimate: number = 0;
 
   constructor(options: EngineOptions = {}) {
@@ -423,6 +443,9 @@ export class Showcase extends AbstractShowcase {
   protected override update(deltaTime: number): void {
     super.update(deltaTime);
     this._elapsed += deltaTime;
+    if (this._manualLightningTimer > 0) {
+      this._manualLightningTimer = Math.max(0, this._manualLightningTimer - deltaTime);
+    }
 
     if (this._armorMaterial) {
       updateFortressWaterlineTime(this._armorMaterial, this._elapsed);
@@ -430,9 +453,18 @@ export class Showcase extends AbstractShowcase {
     if (this._rockMaterial) {
       updateFortressWaterlineTime(this._rockMaterial, this._elapsed);
     }
+
+    const bobOffset = Math.sin(this._elapsed * 1.4) * 0.45;
+    for (let i = 0; i < this._hoverShuttleNodes.length; i++) {
+      const node = this._hoverShuttleNodes[i]!;
+      node.position.y = BASE_HOVER_SHUTTLE_Y + bobOffset;
+    }
+
     if (this._oceanMaterial) {
       this._oceanMaterial.time = this._elapsed;
+      this._oceanMaterial.downwashStrength = 0.92 - bobOffset * 0.18;
     }
+    this._updateBuoys();
     if (this._oceanMesh) {
       OceanGridGeometry.snapToTarget(
         this._oceanMesh,
@@ -441,19 +473,28 @@ export class Showcase extends AbstractShowcase {
         8,
       );
     }
+
+    const flash = this._evalLightningFlash(this._elapsed);
+    const preset = ATMOSPHERES[this._atmosphere];
+    if (this._moonLight) {
+      this._moonLight.intensity = preset.moonIntensity + flash * 6.5;
+    }
+    if (this._ambientLight) {
+      this._ambientLight.intensity = preset.ambientIntensity + flash * 1.35;
+    }
+    const vfog = this.renderer.postProcessing.get<VolumetricFogElement>(
+      PostProcessingEffectType.VOLUMETRIC_FOG,
+    );
+    if (vfog) {
+      vfog.ambientInject = 0.08 + flash * 0.28;
+    }
+
     if (this._rain) {
       this._rain.update(deltaTime, this._elapsed, this.camera.position);
     }
     this._stepSeaSpray(deltaTime);
     if (this._reflectionEnabled) {
       this._reflection?.updateReflection(this.scene, this.camera, this.renderer);
-    }
-
-    // Gentle hover bob on the approaching eastern shuttle (zero allocation)
-    const bobOffset = Math.sin(this._elapsed * 1.4) * 0.45;
-    for (let i = 0; i < this._hoverShuttleNodes.length; i++) {
-      const node = this._hoverShuttleNodes[i]!;
-      node.position.y = BASE_HOVER_SHUTTLE_Y + bobOffset;
     }
   }
 
@@ -469,6 +510,8 @@ export class Showcase extends AbstractShowcase {
     else if (event.code === "KeyL") {
       const nextIdx = (ATMOSPHERE_KEYS.indexOf(this._atmosphere) + 1) % ATMOSPHERE_KEYS.length;
       this._setAtmosphere(ATMOSPHERE_KEYS[nextIdx]!);
+    } else if (event.code === "KeyF") {
+      this._manualLightningTimer = 0.55;
     } else if (event.code === "KeyR") {
       this._setCameraPreset(this._cameraPreset);
     }
@@ -611,6 +654,10 @@ export class Showcase extends AbstractShowcase {
       reflectionStrength: 0.82,
       reflectionDistortion: 0.11,
       reflectionRoughness: 0.04,
+      causticsStrength: 0.52,
+      downwashCenter: new Vector2D(28.0, -8.5),
+      downwashRadius: 15.5,
+      downwashStrength: 0.92,
     });
     // On WebGPU/WebGL2 leave envMap undefined so OceanMaterial samples prefiltered IBL; on
     // WebGL1 (no u_prefilterMap) bind the skybox cube so reflections and horizon sky match.
@@ -625,6 +672,7 @@ export class Showcase extends AbstractShowcase {
     OceanGridGeometry.snapToTarget(ocean, this.camera.position.x, this.camera.position.z, 8);
     this._reflection.excludedObjects.push(ocean);
     this.scene.add(ocean);
+    this._updateBuoys();
   }
 
   private _setupWeatherAndSpray(): void {
@@ -765,6 +813,37 @@ export class Showcase extends AbstractShowcase {
     ];
     this._instantiateParts(padParts, padPlacements, 1.0, false);
 
+    const buoyPlacements: Array<{ x: number; z: number; yaw: number }> = [
+      { x: -34.0, z: 22.0, yaw: 0.3 },
+      { x: -18.0, z: 31.0, yaw: 1.1 },
+      { x: 22.0, z: 27.0, yaw: -0.6 },
+      { x: 32.0, z: -14.0, yaw: -1.4 },
+    ];
+    const buoyScale = 0.28;
+    for (const b of buoyPlacements) {
+      const root = new Object3D("ImperialSignalBuoy");
+      root.position.set(b.x, FORTRESS_WATER_Y + 0.12, b.z);
+      root.rotation.set(0, b.yaw, 0);
+      for (const part of padParts) {
+        const isBeacons = part.name === "LandingPadBeacons" || part.name.includes("Beacon");
+        const child = new Object3D(part.name);
+        child.geometry = part.geometry;
+        child.material = part.material;
+        child.position.set(
+          part.offset.x * buoyScale,
+          part.offset.y * buoyScale,
+          part.offset.z * buoyScale,
+        );
+        child.scale.set(buoyScale, buoyScale, buoyScale);
+        child.castShadow = false;
+        child.receiveShadow = !isBeacons;
+        root.add(child);
+        this._trisEstimate += Math.floor((part.geometry.indices?.length ?? 0) / 3);
+      }
+      this.scene.add(root);
+      this._buoys.push({ root, baseX: b.x, baseZ: b.z, baseYaw: b.yaw });
+    }
+
     const turretPlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [
       { x: -15.6, y: 2.85, z: 15.6, yaw: -0.78 },
       { x: 15.6, y: 2.85, z: 15.6, yaw: 0.78 },
@@ -786,6 +865,46 @@ export class Showcase extends AbstractShowcase {
       0.72,
       true,
     );
+  }
+
+  private _updateBuoys(): void {
+    const oceanMat = this._oceanMaterial;
+    if (!oceanMat) return;
+    const sample = this._waveSample;
+    const camX = this.camera.position.x;
+    const camZ = this.camera.position.z;
+    const buoys = this._buoys;
+    for (let i = 0; i < buoys.length; i++) {
+      const buoy = buoys[i]!;
+      oceanMat.sampleWaveAt(buoy.baseX, buoy.baseZ, sample, camX, camZ);
+      buoy.root.position.set(
+        buoy.baseX + sample.displacementX * 0.45,
+        FORTRESS_WATER_Y + sample.height + 0.12,
+        buoy.baseZ + sample.displacementZ * 0.45,
+      );
+      buoy.root.rotation.set(sample.normalZ * 0.65, buoy.baseYaw, -sample.normalX * 0.65);
+    }
+  }
+
+  private _evalLightningFlash(time: number): number {
+    let flash = 0;
+    if (this._atmosphere === "storm") {
+      const cycle = time % 9.5;
+      if (cycle >= 5.2 && cycle <= 5.65) {
+        const d1 = (cycle - 5.26) / 0.035;
+        const d2 = (cycle - 5.44) / 0.055;
+        flash = Math.exp(-d1 * d1) + 0.72 * Math.exp(-d2 * d2);
+      }
+    }
+    if (this._manualLightningTimer > 0) {
+      const manual =
+        (Math.sin(this._manualLightningTimer * 28.0) * 0.4 + 0.6) *
+        Math.min(1, this._manualLightningTimer * 3.0);
+      if (manual > flash) {
+        flash = manual;
+      }
+    }
+    return flash;
   }
 
   private _extractParts(
@@ -987,6 +1106,9 @@ export class Showcase extends AbstractShowcase {
       setReflection: (on: boolean): void => this._setReflection(on),
       setBloom: (on: boolean): void => this._setBloom(on),
       setFog: (on: boolean): void => this._setFog(on),
+      triggerLightning: (): void => {
+        this._manualLightningTimer = 0.55;
+      },
     };
   }
 

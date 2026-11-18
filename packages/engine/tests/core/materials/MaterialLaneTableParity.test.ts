@@ -169,7 +169,7 @@ describe("typed material lane tables reach the render manifest", () => {
     expect((props["u_color"] as number[])[3]).toBe(1.0);
   });
 
-  it("OceanMaterial: wind/swell/scatter/detail ride u_matParam0..5 and u_matParam9 without legacy slots", () => {
+  it("OceanMaterial: wind/swell/scatter/detail/downwash/caustics ride u_matParam0..6 and u_matParam9 without legacy slots", () => {
     const mat = new OceanMaterial({
       scatterColor: new Color(0.06, 0.28, 0.36),
       scatterStrength: 0.48,
@@ -180,11 +180,16 @@ describe("typed material lane tables reach the render manifest", () => {
       foamCoverage: 0.4,
       detailScale: 1.2,
       detailStrength: 1.3,
+      causticsStrength: 0.44,
+      downwashRadius: 16,
+      downwashStrength: 0.85,
     });
     const props = mat.getRenderManifest().properties;
     expect(props["u_matParam3"]).toEqual([320, 1900, 0.4, 1.2]);
     expect(props["u_matParam4"]).toEqual([0.06, 0.28, 0.36, 0.48]);
     expect(props["u_matParam5"]).toEqual([1.3, 1, 180, 1.15]);
+    expect(props["u_matParam6"]).toEqual([0, 0, 16, 0.85]);
+    expect(props["u_matParam9"]).toEqual([0, 0.11, 0.04, 0.44]);
     expect(props["u_extraParams"]).toEqual([1, 0, 1, 1]);
     expect(props["u_liquidParams"]).toEqual([0, 0, 0, 0]);
     expect(props["u_thresholds"]).toEqual([0, 0, 0, 0]);

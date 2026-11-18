@@ -61,6 +61,10 @@ fn fs(i: Out) -> @location(0) vec4f {
     let scatterColor = sRGBToLinear(obj.matParam4.xyz);
     let scatterStrength = max(obj.matParam4.w, 0.0);
     let detailStrength = max(obj.matParam5.x, 0.0);
+    let downwashCenter = obj.matParam6.xy;
+    let downwashRadius = obj.matParam6.z;
+    let downwashStrength = max(obj.matParam6.w, 0.0);
+    let causticsStrength = max(obj.matParam9.w, 0.0);
 
     let viewVec = global.viewPos.xyz - i.wp;
     let camDist = length(viewVec);
@@ -112,6 +116,18 @@ fn fs(i: Out) -> @location(0) vec4f {
     fftCrestAccum = smoothstep(0.36, 0.95, clamp(nfA.z * 0.85 + nfB.z * 0.45, 0.0, 1.3)) * radialFade;
 #endif
 
+    var downwashFoam = 0.0;
+    let dwVec = i.wp.xz - downwashCenter;
+    let dwDist = length(dwVec);
+    let dwNorm = dwDist / max(downwashRadius, 0.1);
+    if (downwashRadius > 0.1 && downwashStrength > 0.001 && dwNorm < 1.0) {
+        let dwEnv = (1.0 - smoothstep(0.18, 1.0, dwNorm)) * smoothstep(0.0, 0.12, dwNorm) * downwashStrength * radialFade;
+        let dwPhase = dwDist * 2.6 - obj.time * 9.5;
+        let dwDir = dwVec / max(dwDist, 1e-4);
+        detailTangent += dwDir * (cos(dwPhase) * 0.45 * dwEnv);
+        downwashFoam = smoothstep(0.20, 0.48, dwNorm) * (1.0 - smoothstep(0.48, 0.92, dwNorm)) * (0.5 + 0.5 * sin(dwPhase)) * clamp(downwashStrength, 0.0, 1.5) * radialFade;
+    }
+
     let macroN = normalize(i.n);
     let rawPerturbedN = normalize(vec3f(
         macroN.x + detailTangent.x,
@@ -147,7 +163,8 @@ fn fs(i: Out) -> @location(0) vec4f {
     let refractionUv = select(screenUv, distortedUv, linDistortedDepth > linFragDepth);
     let refractedColor = targetToLinear(textureSample(u_opaqueMap, s, refractionUv).rgb) / max(global.exposure, 0.001);
 
-    let validShore = step(depthDiff, foamDistance * 2.8) * select(0.0, 1.0, bgDepth < 0.99995);
+    let validShoreMask = select(0.0, 1.0, bgDepth < 0.99995);
+    let validShore = step(depthDiff, foamDistance * 2.8) * validShoreMask;
     let shallowAeration = (1.0 - smoothstep(0.0, foamDistance * 0.95, depthDiff)) * validShore * 0.28;
     let transmittance = exp(-depthDiff * waterAbsorption);
     let aeratedWater = mix(waterColor, scatterColor * 1.15, shallowAeration);
@@ -201,6 +218,17 @@ fn fs(i: Out) -> @location(0) vec4f {
     let specVal = clamp(((dBroad * 0.48 + dGlint * 0.52) * gSpec * fSpec) / specDenom, 0.0, 12.0);
     baseColor += global.dirLightColor.rgb * specVal * NdotL * surfaceShadow;
 
+    // Shallow-water underwater caustics on submerged geometry
+    if (causticsStrength > 0.0 && bgDepth < 0.99995 && depthDiff < 12.0) {
+        let causticUv = i.wp.xz * 0.42 + N.xz * (0.65 * clamp(depthDiff, 0.0, 4.0));
+        let cA = oceanFoamCells(causticUv + windDir * (t * 0.24));
+        let cB = oceanFoamCells(causticUv * 1.37 - windPerp * (t * 0.19) + vec2f(4.7, -3.1));
+        let causticNet = smoothstep(0.14, 0.48, min(cA, cB)) * smoothstep(0.22, 0.58, max(cA, cB)) * 2.3;
+        let causticDepthEnv = smoothstep(0.02, 0.30, depthDiff) * exp(-depthDiff * 0.36) * step(depthDiff, 12.0) * validShoreMask;
+        let causticTint = mix(scatterColor, max(global.dirLightColor.rgb, vec3f(0.35, 0.48, 0.65)), 0.55) * transmittance;
+        baseColor += causticTint * (causticNet * causticDepthEnv * causticsStrength * (0.28 + 0.72 * NdotL * surfaceShadow) * (1.0 - fresnel));
+    }
+
     // Backlight crest subsurface scattering (Schüler / AC4 style)
     let sssForward = pow(clamp(dot(V, normalize(-L + N * 0.45)), 0.0, 1.0), 3.0);
     let crestStrength = clamp(max(max(i.original_uv.x, fftFoamAccum * 0.65), fftCrestAccum * 0.8), 0.0, 1.0);
@@ -243,7 +271,8 @@ fn fs(i: Out) -> @location(0) vec4f {
     // Short-lived bright flash where the bore front hits the rock; >1 so Bloom picks it up.
     let contactSplash = boreFront * (1.0 - smoothstep(0.0, foamDistance * 0.5, max(shoreDepthWarp, 0.0))) * rockContactGap * validShore;
 
-    let foamMask = clamp(max(whitecaps, shoreFoam), 0.0, 1.0);
+    var foamMask = clamp(max(whitecaps, shoreFoam), 0.0, 1.0);
+    foamMask = clamp(max(foamMask, downwashFoam * crestTexture), 0.0, 1.0);
     let foamLight = foamColor * (0.35 + 0.65 * NdotL * surfaceShadow) * max(global.dirLightColor.rgb, vec3f(0.45, 0.55, 0.72));
     let litFoamColor = (foamLight + foamColor * sRGBToLinear(global.ambientColor.rgb) * 0.7) * (1.0 + contactSplash * 1.1);
     var finalColor = mix(baseColor, litFoamColor, foamMask);

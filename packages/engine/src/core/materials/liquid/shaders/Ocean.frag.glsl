@@ -24,7 +24,8 @@ uniform vec4 u_matParam2; // [windDirX, windDirZ, waveScale, waveWavelength]
 uniform vec4 u_matParam3; // [swellFadeStart, swellFadeEnd, foamCoverage, detailScale]
 uniform vec4 u_matParam4; // [scatterColor.rgb, scatterStrength]
 uniform vec4 u_matParam5; // [detailStrength, 0, 0, 0]
-uniform vec4 u_matParam9; // [reflectionStrength, reflectionDistortion, reflectionRoughness, 0]
+uniform vec4 u_matParam6; // [downwashCenterX, downwashCenterZ, downwashRadius, downwashStrength]
+uniform vec4 u_matParam9; // [reflectionStrength, reflectionDistortion, reflectionRoughness, causticsStrength]
 
 #ifdef USE_IBL
 uniform samplerCube u_prefilterMap;
@@ -115,6 +116,10 @@ void main() {
     vec3 scatterColor = sRGBToLinear(u_matParam4.rgb);
     float scatterStrength = max(u_matParam4.a, 0.0);
     float detailStrength = max(u_matParam5.x, 0.0);
+    vec2 downwashCenter = u_matParam6.xy;
+    float downwashRadius = u_matParam6.z;
+    float downwashStrength = max(u_matParam6.w, 0.0);
+    float causticsStrength = max(u_matParam9.w, 0.0);
 
     vec3 viewVec = u_viewPos - v_worldPos;
     float camDist = length(viewVec);
@@ -150,6 +155,18 @@ void main() {
 #endif
     detailTangent *= detailFade;
 
+    float downwashFoam = 0.0;
+    vec2 dwVec = v_worldPos.xz - downwashCenter;
+    float dwDist = length(dwVec);
+    float dwNorm = dwDist / max(downwashRadius, 0.1);
+    if (downwashRadius > 0.1 && downwashStrength > 0.001 && dwNorm < 1.0) {
+        float dwEnv = (1.0 - smoothstep(0.18, 1.0, dwNorm)) * smoothstep(0.0, 0.12, dwNorm) * downwashStrength * radialFade;
+        float dwPhase = dwDist * 2.6 - u_time * 9.5;
+        vec2 dwDir = dwVec / max(dwDist, 1e-4);
+        detailTangent += dwDir * (cos(dwPhase) * 0.45 * dwEnv);
+        downwashFoam = smoothstep(0.20, 0.48, dwNorm) * (1.0 - smoothstep(0.48, 0.92, dwNorm)) * (0.5 + 0.5 * sin(dwPhase)) * clamp(downwashStrength, 0.0, 1.5) * radialFade;
+    }
+
     vec3 macroN = normalize(v_normal);
     vec3 rawPerturbedN = normalize(vec3(
         macroN.x + detailTangent.x,
@@ -177,7 +194,8 @@ void main() {
     vec2 refractionUv = (linDistortedBgDepth > linFragDepth) ? distortedUv : screenUv;
     vec3 refractedColor = targetToLinear(texture(u_opaqueMap, refractionUv).rgb) / max(u_exposure, 0.001);
 
-    float validShore = step(depthDiff, foamDistance * 2.8) * (bgDepth < 0.99995 ? 1.0 : 0.0);
+    float validShoreMask = (bgDepth < 0.99995 ? 1.0 : 0.0);
+    float validShore = step(depthDiff, foamDistance * 2.8) * validShoreMask;
     float shallowAeration = (1.0 - smoothstep(0.0, foamDistance * 0.95, depthDiff)) * validShore * 0.28;
     vec3 transmittance = exp(-depthDiff * waterAbsorption);
     vec3 aeratedWater = mix(waterColor, scatterColor * 1.15, shallowAeration);
@@ -222,6 +240,16 @@ void main() {
     float specVal = clamp(((dBroad * 0.48 + dGlint * 0.52) * gSpec * fSpec) / specDenom, 0.0, 12.0);
     baseColor += u_dirLightColor * specVal * NdotL * surfaceShadow;
 
+    if (causticsStrength > 0.0 && bgDepth < 0.99995 && depthDiff < 12.0) {
+        vec2 causticUv = v_worldPos.xz * 0.42 + N.xz * (0.65 * clamp(depthDiff, 0.0, 4.0));
+        float cA = oceanFoamCells(causticUv + windDir * (t * 0.24));
+        float cB = oceanFoamCells(causticUv * 1.37 - windPerp * (t * 0.19) + vec2(4.7, -3.1));
+        float causticNet = smoothstep(0.14, 0.48, min(cA, cB)) * smoothstep(0.22, 0.58, max(cA, cB)) * 2.3;
+        float causticDepthEnv = smoothstep(0.02, 0.30, depthDiff) * exp(-depthDiff * 0.36) * step(depthDiff, 12.0) * validShoreMask;
+        vec3 causticTint = mix(scatterColor, max(u_dirLightColor, vec3(0.35, 0.48, 0.65)), 0.55) * transmittance;
+        baseColor += causticTint * (causticNet * causticDepthEnv * causticsStrength * (0.28 + 0.72 * NdotL * surfaceShadow) * (1.0 - fresnel));
+    }
+
     float sssForward = pow(clamp(dot(V, normalize(-L + N * 0.45)), 0.0, 1.0), 3.0);
     float sssFactor = v_crest * (0.28 + 0.72 * sssForward) * (1.0 - fresnel * 0.6);
     vec3 lightTint = max(u_dirLightColor, vec3(0.18, 0.24, 0.34));
@@ -260,6 +288,7 @@ void main() {
     float contactSplash = boreFront * (1.0 - smoothstep(0.0, foamDistance * 0.5, max(shoreDepthWarp, 0.0))) * rockContactGap * validShore;
 
     float foamMask = clamp(max(whitecaps, shoreFoam), 0.0, 1.0);
+    foamMask = clamp(max(foamMask, downwashFoam * crestTexture), 0.0, 1.0);
     vec3 foamLight = foamColor * (0.35 + 0.65 * NdotL * surfaceShadow) * max(u_dirLightColor, vec3(0.45, 0.55, 0.72));
     vec3 litFoamColor = (foamLight + foamColor * sRGBToLinear(u_ambientColor) * 0.7) * (1.0 + contactSplash * 1.1);
     vec3 finalColor = mix(baseColor, litFoamColor, foamMask);

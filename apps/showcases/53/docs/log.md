@@ -72,3 +72,18 @@ Living log. Newest entries at the bottom, nothing is deleted.
   - Shoreline: sawtooth `borePhase`/`boreFront` bore front travelling toward the rock (sharp breaking leading edge, long receding-foam tail) plus an HDR `contactSplash` flash at rock contact (>1 so Bloom picks it up).
   - Tier differences: fold crest (`fftCrestAccum`/`foldCaps`, instantaneous Jacobian `nfA.z`) only on WebGPU; WebGL2 has lace + bore front + splash with analytic crest caps; WebGL1 gets the reduced lace/crest texture only (no shore/depth terms there, so no bore front or splash).
 - **Tests & docs:** per-dialect shader-contract assertions in `OceanMaterial.test.ts`, new CPU-mirror `OceanFoamMath.test.ts` (bore front shape + travel direction, Worley F1 bounds), `REFERENCES.md` entries (Worley 1996; wind-streak/bore-front as original construction).
+
+## 2026-11-18 — Phase 3 Open Ocean Buoyancy, Caustics, Rotor Downwash, Synchronized Wetness & Storm Lightning
+
+1. **Zero-Allocation CPU Wave Sampling (`OceanMaterial.sampleWaveAt`):**
+   - Added `OceanWaveSample` and `OceanMaterial.sampleWaveAt(worldX, worldZ, out, cameraX, cameraZ)` mirroring the 5-wave Gerstner dispersion, cross-wave group envelope, analytical surface normal, Jacobian pinch `crest`, and camera-centered horizon `swellFade` on the CPU with zero heap allocations.
+   - Enables wave-coupled sea-spray emitter heights/normals and near-waterline camera clamping against live swells.
+2. **Shallow-Water Dual-Worley Caustics (`Ocean.frag.{wgsl,glsl}`, `u_matParam9.w` = `causticsStrength`):**
+   - Added wave-refracted dual-layer F1 Worley ridge caustics (`causticNet`) over submerged basalt crags and foundation shelves (`depthDiff < 12 m`) on `WEB_GPU` and `WEB_GL2`, modulated by Beer-Lambert `transmittance`, directional shadow `surfaceShadow`, and `(1 - fresnel)` (cleanly omitted on `WEB_GL1` where `u_opaqueDepthMap` is unavailable).
+3. **Guarded Rotor / Repulsorlift Downwash (`Ocean.frag.{wgsl,glsl,glsl100}`, `u_matParam6`):**
+   - Packed `[downwashCenter.x, downwashCenter.y, downwashRadius, downwashStrength]` into `u_matParam6` across all 3 dialects, guarded by `if (downwashRadius > 0.1 && downwashStrength > 0.001 && dwNorm < 1.0)` so outward-travelling concentric capillary ripples and an annular `downwashFoam` spindrift ring appear under the hovering approach *Lambda* shuttle with zero cost when disabled.
+4. **Synchronized Bore-Front Waterline Wetness (`apps/showcases/53/FortressMaterials.ts`):**
+   - Coupled the 3-tier `CustomShaderMaterial` waterline wetness shader (`WGSL_WATERLINE_BLOCK` / `GLSL_WATERLINE_BLOCK`) to the ocean's `0.21 Hz` bore frequency (`borePhase = fract(time * 0.21 - spatialWave)`), driving an asymmetric `boreSurge` run-up, a glossy receding `drainFilm` (`roughness -> 0.04`), and an upper `saltBand` crust on `BastionBase` and `BastionRock`.
+5. **Deterministic Storm Lightning & Tests (`apps/showcases/53/showcase.ts`, `OceanMaterial.test.ts`, ADR 0062):**
+   - Added deterministic storm lightning pulses in `storm` atmosphere mode (briefly boosting `DirectionalLight` moonlight, `AmbientLight`, and `environmentIntensity` for dramatic silhouette & wave-crest flashes while keeping `t = 0` deterministic for golden snapshots) and extended `OceanMaterial.test.ts` to cover `sampleWaveAt`, `u_matParam6`/`u_matParam9` packing, cloning, and per-dialect `causticsStrength`/`causticNet`/`downwash*` shader contracts.
+
