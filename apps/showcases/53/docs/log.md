@@ -87,3 +87,11 @@ Living log. Newest entries at the bottom, nothing is deleted.
 5. **Deterministic Storm Lightning & Tests (`apps/showcases/53/showcase.ts`, `OceanMaterial.test.ts`, ADR 0062):**
    - Added deterministic storm lightning pulses in `storm` atmosphere mode (briefly boosting `DirectionalLight` moonlight, `AmbientLight`, and `environmentIntensity` for dramatic silhouette & wave-crest flashes while keeping `t = 0` deterministic for golden snapshots) and extended `OceanMaterial.test.ts` to cover `sampleWaveAt`, `u_matParam6`/`u_matParam9` packing, cloning, and per-dialect `causticsStrength`/`causticNet`/`downwash*` shader contracts.
 
+## 2026-11-18 — Showcase 53 Sweeping Searchlights, Basalt Trench Camera & Live Ocean HUD
+
+- **Preset 5 — Basalt Trench Camera (`apps/showcases/53/showcase.ts`):**
+  - Added `CAMERA_VIEWS.trench` (`position: (-22, 3.6, 36)`, `target: (-6, 1.8, 12)`) and bound `Digit5` in `onKeyDown` for inspecting shallow-water caustics and wave-coupled Imperial signal buoys.
+- **Sweeping Imperial Searchlights (`SpotLight`):**
+  - Mounted 2 shadowless `SpotLight`s on the port/starboard hangar wing edges (`(±13.5, 31.4, 9.5)`, `color: (0.75, 0.90, 1.0)`, `intensity: 280`, `distance: 155`, `angle: 0.24`, `penumbra: 0.65`, `decay: 1.4`) and swept their normalized `direction` vectors over the swells in `update()` with zero per-frame allocations.
+- **Live Ocean & Storm Controls (`Hud` + `sceneParams` + `__qaSwm53`):**
+  - Registered `waveScale`, `windSpeed`, `choppiness`, `caustics`, and `foamCoverage` with `this.sceneParams.addParam(...)`, wired all new `FortressHudActions` (`toggleSearchlights`, `triggerLightning`, and live ocean parameter setters) and `_state()` fields, and extended `QaSwm53Hook` with `setSearchlights`.

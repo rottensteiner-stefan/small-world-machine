@@ -17,6 +17,7 @@ import {
   PointLight,
   PostProcessingEffectType,
   RendererType,
+  SpotLight,
   Texture,
   TextureWrap,
   ToneMappingMode,
@@ -93,6 +94,13 @@ interface BuoyNode {
   baseYaw: number;
 }
 
+interface SearchlightNode {
+  light: SpotLight;
+  phaseOffset: number;
+  speed: number;
+  baseYaw: number;
+}
+
 interface QaSwm53Hook {
   sample(): FortressHudState & {
     renderer: string;
@@ -105,6 +113,7 @@ interface QaSwm53Hook {
   setReflection(on: boolean): void;
   setBloom(on: boolean): void;
   setFog(on: boolean): void;
+  setSearchlights(on: boolean): void;
   triggerLightning(): void;
 }
 
@@ -130,6 +139,10 @@ const CAMERA_VIEWS: Record<CameraPresetKey, CameraView> = {
   waterline: {
     position: new Vector3D(42, 4.8, 48),
     target: new Vector3D(0, 14, 0),
+  },
+  trench: {
+    position: new Vector3D(-22, 3.6, 36),
+    target: new Vector3D(-6, 1.8, 12),
   },
 };
 
@@ -184,6 +197,7 @@ const FLY_SPEED_MAX = 180;
 const FLY_SPEED_STEP = 1.25;
 
 const BASE_HOVER_SHUTTLE_Y = 33.4;
+const SEARCHLIGHT_INTENSITY = 280;
 
 /**
  * Showcase 53 — Fortress Inquisitorius (Ocean Moon Nur).
@@ -224,6 +238,7 @@ export class Showcase extends AbstractShowcase {
   private _ambientLight?: AmbientLight;
   private readonly _hangarLights: PointLight[] = [];
   private readonly _deckLights: PointLight[] = [];
+  private readonly _searchlights: SearchlightNode[] = [];
   private _hoverShuttleNodes: Object3D[] = [];
   private readonly _buoys: BuoyNode[] = [];
   private readonly _waveSample: OceanWaveSample = {
@@ -240,6 +255,12 @@ export class Showcase extends AbstractShowcase {
   private _reflectionEnabled: boolean = true;
   private _bloomEnabled: boolean = true;
   private _fogEnabled: boolean = true;
+  private _searchlightsEnabled: boolean = true;
+  private _waveScale: number = 1.05;
+  private _windSpeed: number = 1.28;
+  private _choppiness: number = 1.15;
+  private _caustics: number = 0.52;
+  private _foamCoverage: number = 0.36;
   private _elapsed: number = 0;
   private _manualLightningTimer: number = 0;
   private _trisEstimate: number = 0;
@@ -436,6 +457,26 @@ export class Showcase extends AbstractShowcase {
     this._setupWeatherAndSpray();
     this._applyAtmosphere(this._atmosphere);
     this._setupControls();
+    this.sceneParams.addParam("Wave Scale", 0.0, 2.5, 0.05, this._waveScale, (v: number): void =>
+      this._setWaveScale(v),
+    );
+    this.sceneParams.addParam("Wind Speed", 0.0, 3.0, 0.05, this._windSpeed, (v: number): void =>
+      this._setWindSpeed(v),
+    );
+    this.sceneParams.addParam("Choppiness", 0.0, 2.5, 0.05, this._choppiness, (v: number): void =>
+      this._setChoppiness(v),
+    );
+    this.sceneParams.addParam("Caustics", 0.0, 1.5, 0.02, this._caustics, (v: number): void =>
+      this._setCaustics(v),
+    );
+    this.sceneParams.addParam(
+      "Foam Coverage",
+      0.0,
+      1.0,
+      0.02,
+      this._foamCoverage,
+      (v: number): void => this._setFoamCoverage(v),
+    );
     this._installQaHook();
     this._createHud();
   }
@@ -474,6 +515,21 @@ export class Showcase extends AbstractShowcase {
       );
     }
 
+    const searchlightIntensity = this._searchlightsEnabled ? SEARCHLIGHT_INTENSITY : 0;
+    const searchlights = this._searchlights;
+    for (let i = 0; i < searchlights.length; i++) {
+      const s = searchlights[i]!;
+      const yaw = s.baseYaw + Math.sin(this._elapsed * s.speed + s.phaseOffset) * 0.52;
+      s.light.direction
+        .set(
+          Math.sin(yaw),
+          -0.34 + 0.06 * Math.cos(this._elapsed * 0.7 + s.phaseOffset),
+          Math.cos(yaw),
+        )
+        .normalize();
+      s.light.intensity = searchlightIntensity;
+    }
+
     const flash = this._evalLightningFlash(this._elapsed);
     const preset = ATMOSPHERES[this._atmosphere];
     if (this._moonLight) {
@@ -507,6 +563,7 @@ export class Showcase extends AbstractShowcase {
     else if (event.code === "Digit2") this._setCameraPreset("hangar");
     else if (event.code === "Digit3") this._setCameraPreset("crown");
     else if (event.code === "Digit4") this._setCameraPreset("waterline");
+    else if (event.code === "Digit5") this._setCameraPreset("trench");
     else if (event.code === "KeyL") {
       const nextIdx = (ATMOSPHERE_KEYS.indexOf(this._atmosphere) + 1) % ATMOSPHERE_KEYS.length;
       this._setAtmosphere(ATMOSPHERE_KEYS[nextIdx]!);
@@ -567,6 +624,43 @@ export class Showcase extends AbstractShowcase {
       light.position.set(dx, dy, dz);
       this._deckLights.push(light);
       this.scene.add(light);
+    }
+
+    const searchlightMounts: ReadonlyArray<{
+      x: number;
+      y: number;
+      z: number;
+      baseYaw: number;
+      phaseOffset: number;
+      speed: number;
+    }> = [
+      { x: -13.5, y: 31.4, z: 9.5, baseYaw: 0.55, phaseOffset: 0.0, speed: 0.48 },
+      { x: 13.5, y: 31.4, z: 9.5, baseYaw: -0.55, phaseOffset: 1.15, speed: 0.42 },
+    ];
+    for (const cfg of searchlightMounts) {
+      const yaw = cfg.baseYaw + Math.sin(cfg.phaseOffset) * 0.52;
+      const light = new SpotLight({
+        color: new Color(0.75, 0.9, 1.0),
+        intensity: this._searchlightsEnabled ? SEARCHLIGHT_INTENSITY : 0,
+        distance: 155,
+        angle: 0.24,
+        penumbra: 0.65,
+        decay: 1.4,
+        direction: new Vector3D(
+          Math.sin(yaw),
+          -0.34 + 0.06 * Math.cos(cfg.phaseOffset),
+          Math.cos(yaw),
+        ).normalize(),
+      });
+      light.position.set(cfg.x, cfg.y, cfg.z);
+      light.castShadow = false;
+      this.scene.add(light);
+      this._searchlights.push({
+        light,
+        phaseOffset: cfg.phaseOffset,
+        speed: cfg.speed,
+        baseYaw: cfg.baseYaw,
+      });
     }
 
     this.scene.fog = new Fog({
@@ -637,24 +731,25 @@ export class Showcase extends AbstractShowcase {
       scatterColor: new Color(0.035, 0.22, 0.28),
       scatterStrength: 0.48,
       roughness: 0.068,
-      windSpeed: 1.28,
+      windSpeed: this._windSpeed,
       windDirection: new Vector2D(0.84, 0.54),
-      waveScale: 1.05,
+      waveScale: this._waveScale,
       waveWavelength: 34.0,
       swellFadeStart: 350,
       swellFadeEnd: 1950,
       detailScale: 1.05,
       detailStrength: 1.2,
+      choppiness: this._choppiness,
       foamColor: new Color(0.72, 0.81, 0.88),
       foamDistance: 3.0,
-      foamCoverage: 0.36,
+      foamCoverage: this._foamCoverage,
       waterAbsorption: [0.65, 0.28, 0.16],
       refractionStrength: 0.025,
       reflectionMap: this._reflection.renderTarget,
       reflectionStrength: 0.82,
       reflectionDistortion: 0.11,
       reflectionRoughness: 0.04,
-      causticsStrength: 0.52,
+      causticsStrength: this._caustics,
       downwashCenter: new Vector2D(28.0, -8.5),
       downwashRadius: 15.5,
       downwashStrength: 0.92,
@@ -1053,6 +1148,55 @@ export class Showcase extends AbstractShowcase {
     this._syncHud();
   }
 
+  private _setSearchlights(on: boolean): void {
+    this._searchlightsEnabled = on;
+    const intensity = on ? SEARCHLIGHT_INTENSITY : 0;
+    for (let i = 0; i < this._searchlights.length; i++) {
+      this._searchlights[i]!.light.intensity = intensity;
+    }
+    this._syncHud();
+  }
+
+  private _setWaveScale(v: number): void {
+    this._waveScale = v;
+    if (this._oceanMaterial) {
+      this._oceanMaterial.waveScale = v;
+    }
+    this._syncHud();
+  }
+
+  private _setWindSpeed(v: number): void {
+    this._windSpeed = v;
+    if (this._oceanMaterial) {
+      this._oceanMaterial.windSpeed = v;
+    }
+    this._syncHud();
+  }
+
+  private _setChoppiness(v: number): void {
+    this._choppiness = v;
+    if (this._oceanMaterial) {
+      this._oceanMaterial.choppiness = v;
+    }
+    this._syncHud();
+  }
+
+  private _setCaustics(v: number): void {
+    this._caustics = v;
+    if (this._oceanMaterial) {
+      this._oceanMaterial.causticsStrength = v;
+    }
+    this._syncHud();
+  }
+
+  private _setFoamCoverage(v: number): void {
+    this._foamCoverage = v;
+    if (this._oceanMaterial) {
+      this._oceanMaterial.foamCoverage = v;
+    }
+    this._syncHud();
+  }
+
   private _state(): FortressHudState {
     return {
       cameraPreset: this._cameraPreset,
@@ -1060,6 +1204,14 @@ export class Showcase extends AbstractShowcase {
       reflection: this._reflectionEnabled,
       bloom: this._bloomEnabled,
       fog: this._fogEnabled,
+      searchlights: this._searchlightsEnabled,
+      oceanParams: {
+        waveScale: this._waveScale,
+        windSpeed: this._windSpeed,
+        choppiness: this._choppiness,
+        caustics: this._caustics,
+        foamCoverage: this._foamCoverage,
+      },
     };
   }
 
@@ -1070,7 +1222,16 @@ export class Showcase extends AbstractShowcase {
       toggleReflection: (): void => this._setReflection(!this._reflectionEnabled),
       toggleBloom: (): void => this._setBloom(!this._bloomEnabled),
       toggleFog: (): void => this._setFog(!this._fogEnabled),
+      toggleSearchlights: (): void => this._setSearchlights(!this._searchlightsEnabled),
+      triggerLightning: (): void => {
+        this._manualLightningTimer = 0.55;
+      },
       resetView: (): void => this._applyCameraPreset(this._cameraPreset),
+      setWaveScale: (v: number): void => this._setWaveScale(v),
+      setWindSpeed: (v: number): void => this._setWindSpeed(v),
+      setChoppiness: (v: number): void => this._setChoppiness(v),
+      setCaustics: (v: number): void => this._setCaustics(v),
+      setFoamCoverage: (v: number): void => this._setFoamCoverage(v),
     });
     this._syncHud();
   }
@@ -1106,6 +1267,7 @@ export class Showcase extends AbstractShowcase {
       setReflection: (on: boolean): void => this._setReflection(on),
       setBloom: (on: boolean): void => this._setBloom(on),
       setFog: (on: boolean): void => this._setFog(on),
+      setSearchlights: (on: boolean): void => this._setSearchlights(on),
       triggerLightning: (): void => {
         this._manualLightningTimer = 0.55;
       },
