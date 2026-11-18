@@ -1290,6 +1290,20 @@ This document serves to record external sources, algorithms, mathematical deriva
   - Hermitian Dispersion Packing: $\tilde{h}(\mathbf{k}, t) = \tilde{h}_0(\mathbf{k})e^{i\omega t} + \tilde{h}_0^*(-\mathbf{k})e^{-i\omega t}$; DC and Nyquist bins are zeroed so every paired complex spectrum produces strictly real spatial displacement $(D_x, h, D_z)$, slopes $(S_x, S_z)$, and spatial Jacobian $J = (1 + Q D_{xx})(1 + Q D_{zz}) - (Q D_{xz})^2$ in a single batched $256\times 256$ horizontal + vertical pass (`rgba16float` output).
 - **Usage:** Synthesizes non-repeating, storm-scale open ocean waves on WebGPU (sampled across two incommensurate rotated octaves with persistent foam decay) while WebGL2 and WebGL1 continue to evaluate the Phase 1 analytical Gerstner + periodic normal cascade cleanly (ADR 0062 Phase 2).
 
+### Worley Cellular Texture Basis Functions (Ocean Foam Bubble Lace, F1)
+
+- **File:** `packages/engine/src/core/materials/liquid/shaders/Ocean.frag.wgsl`, `packages/engine/src/core/materials/liquid/shaders/Ocean.frag.glsl`, `packages/engine/src/core/materials/liquid/shaders/Ocean.frag.glsl100`, `packages/engine/tests/core/materials/OceanFoamMath.test.ts`
+- **Authors/Gurus:** Steven Worley (1996)
+- **Source:** [Worley: "A Cellular Texture Basis Function" (SIGGRAPH '96)](https://dl.acm.org/doi/10.1145/237170.237267)
+- **Usage:** `oceanFoamCells` evaluates the F1 (nearest feature point) distance over a 3×3 jittered-grid neighbourhood (feature points from `oceanHash2`). `foamLace = mix(1, smoothstep(0.06, 0.46, F1), 0.6 * detailFade)` carves bubble-cell holes into the lacy FBM foam so whitecaps read as lace; the effect fades with distance to avoid aliasing. Bounded in `[0, sqrt(2)]`, ~0 at feature points (verified by the CPU mirror test).
+
+### Wind-Streak Foam Modulation & Sawtooth Bore Front (Original Construction)
+
+- **File:** `packages/engine/src/core/materials/liquid/shaders/Ocean.frag.wgsl`, `packages/engine/src/core/materials/liquid/shaders/Ocean.frag.glsl`, `packages/engine/src/core/materials/liquid/shaders/Ocean.frag.glsl100`, `packages/engine/tests/core/materials/OceanFoamMath.test.ts`
+- **Authors/Gurus:** Original construction (small-world-machine); the instantaneous Jacobian fold channel it consumes on WebGPU follows Jerry Tessendorf (2001)
+- **Source:** [Tessendorf: "Simulating Ocean Water" (SIGGRAPH 2001 Course Notes)](https://people.computing.clemson.edu/~jtessen/reports/papers_files/coursenotes2004.pdf) (Jacobian foam folding only; the shaping below is original)
+- **Usage:** (1) `streakMod = 0.62 + 0.75 * smoothstep(0.3, 0.7, FBM(dot(p, windDir) * 0.22 - 0.35 t, dot(p, windPerp) * 1.35))` stretches foam noise along the wind axis so crests look wind-combed. (2) `borePhase = fract(0.21 t + 0.35 d + 0.9 a)` is a sawtooth in shore depth difference `d` (with low-frequency cell offset `a`); its constant-phase contours move at `0.21 / 0.35 = 0.6` m/s toward the rock, and `boreFront = smoothstep(0, 0.07, p) * (1 - smoothstep(0.07, 0.55, p))` gives a sharp breaking leading edge and a long receding-foam tail. `contactSplash` multiplies it by a rock-contact falloff to drive an HDR (>1) flash for Bloom.
+
 ## AI Coding & Architecture Assistants
 
 

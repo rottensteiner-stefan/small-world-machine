@@ -65,3 +65,10 @@ Living log. Newest entries at the bottom, nothing is deleted.
   - Eliminated the dark outer horizon ring on `WEB_GL1` (`Ocean.frag.glsl100` post-fog `u_envMap` skybox blend + Showcase 53 `skyCube` `envMap` wiring on `WEB_GL1`).
   - Added wind-slanted storm `RainStreaks` (`followCameraY: true`) and a zero-alloc perimeter crashing **Sea-Spray Mist** (`ParticleSystem` + `ParticleMeshRenderer` + `SmokeSpriteMaterial` soft particles & 6-way volumetric lighting, excluded from `PlanarReflectionNode`).
 
+## 2026-11-18 — Gischtkronen & Wellenbrecher: Foam Model Upgrade
+
+- **Fragment foam model (`Ocean.frag.{wgsl,glsl,glsl100}`, ADR 0062 Phase 2b):**
+  - Added `oceanFoamCells` (F1 Worley bubble lace, Worley 1996) → `foamLace`, and wind-streak modulation → `crestTexture`, so whitecaps read as streaky, wind-combed bubble lace instead of smooth blobs. Foam also gets an ambient fill term so shadowed foam stays white-ish.
+  - Shoreline: sawtooth `borePhase`/`boreFront` bore front travelling toward the rock (sharp breaking leading edge, long receding-foam tail) plus an HDR `contactSplash` flash at rock contact (>1 so Bloom picks it up).
+  - Tier differences: fold crest (`fftCrestAccum`/`foldCaps`, instantaneous Jacobian `nfA.z`) only on WebGPU; WebGL2 has lace + bore front + splash with analytic crest caps; WebGL1 gets the reduced lace/crest texture only (no shore/depth terms there, so no bore front or splash).
+- **Tests & docs:** per-dialect shader-contract assertions in `OceanMaterial.test.ts`, new CPU-mirror `OceanFoamMath.test.ts` (bore front shape + travel direction, Worley F1 bounds), `REFERENCES.md` entries (Worley 1996; wind-streak/bore-front as original construction).

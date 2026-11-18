@@ -64,6 +64,21 @@ float oceanFoamFbm(vec2 p) {
     return v;
 }
 
+// F1 Worley (cellular) distance: ~0 at bubble-cell centres, ~0.5..0.9 along cell borders.
+float oceanFoamCells(vec2 p) {
+    vec2 g = floor(p);
+    vec2 f = fract(p);
+    float m = 1.0;
+    for (int oy = -1; oy <= 1; oy++) {
+        for (int ox = -1; ox <= 1; ox++) {
+            vec2 o = vec2(float(ox), float(oy));
+            vec2 h = vec2(oceanHash2(g + o), oceanHash2(g + o + vec2(31.7, 17.3)));
+            m = min(m, length(o + h - f));
+        }
+    }
+    return m;
+}
+
 vec3 sampleOceanEnv(vec3 reflDir, float mip, float horizonMix) {
     if (u_useEnvMap > 0.5) {
         vec3 s = textureLod(u_envMap, reflDir, mip).rgb;
@@ -216,9 +231,15 @@ void main() {
     float foamNoise = oceanFoamFbm(foamNoiseUv);
     float foamDetail = oceanFoamFbm(v_worldPos.xz * 0.88 - windPerp * (t * 0.26));
     float lacyFoam = smoothstep(0.36, 0.72, foamNoise * 0.65 + foamDetail * 0.35);
+    float foamCell = oceanFoamCells(v_worldPos.xz * 1.35 + windDir * (t * 0.12));
+    float foamLace = mix(1.0, smoothstep(0.06, 0.46, foamCell), 0.6 * detailFade);
+    float windStreak = oceanFoamFbm(vec2(dot(v_worldPos.xz, windDir) * 0.22 - t * 0.35, dot(v_worldPos.xz, windPerp) * 1.35));
+    float streakMod = 0.62 + 0.75 * smoothstep(0.3, 0.7, windStreak);
+    float crestTexture = clamp(lacyFoam * foamLace * streakMod, 0.0, 1.0);
 
     float crestThresh = 0.64 - foamCoverage * 0.34;
-    float whitecaps = smoothstep(crestThresh, crestThresh + 0.26, v_crest * (0.55 + 0.65 * foamNoise)) * lacyFoam * radialFade * foamCoverage * 1.15;
+    float crestCaps = smoothstep(crestThresh, crestThresh + 0.26, v_crest * (0.55 + 0.65 * foamNoise)) * crestTexture * radialFade * foamCoverage * 1.15;
+    float whitecaps = crestCaps;
 
     float surgeCellA = oceanFoamFbm(v_worldPos.xz * 0.16 + windDir * (t * 0.22));
     float surgeCellB = oceanFoamFbm(v_worldPos.xz * 0.48 - windPerp * (t * 0.34) + vec2(9.2, -4.1));
@@ -226,14 +247,21 @@ void main() {
     float rockContactGap = smoothstep(0.0, 0.18, shoreDepthWarp + 0.12 * (surgeCellA - 0.4));
     float surfFront = (1.0 - smoothstep(0.08, foamDistance * 0.82, max(shoreDepthWarp, 0.0))) * rockContactGap;
     float surfCycle = 0.55 + 0.45 * sin(depthDiff * 2.1 - t * 2.7 + surgeCellA * 4.2);
-    float denseSurf = surfFront * surfCycle * smoothstep(0.28, 0.76, lacyFoam * 0.72 + surgeCellB * 0.45);
+    // Bore front: a sawtooth phase whose constant-phase contours travel toward the rock as t grows;
+    // the sharp leading edge reads as a breaking wave front, the long tail as receding foam.
+    float borePhase = fract(t * 0.21 + depthDiff * 0.35 + surgeCellA * 0.9);
+    float boreFront = smoothstep(0.0, 0.07, borePhase) * (1.0 - smoothstep(0.07, 0.55, borePhase));
+    float denseSurf = surfFront * max(surfCycle * 0.6, boreFront) * smoothstep(0.28, 0.76, lacyFoam * foamLace * 0.72 + surgeCellB * 0.45);
     float wakeBand = (1.0 - smoothstep(foamDistance * 0.45, foamDistance * 1.75, max(shoreDepthWarp, 0.0))) *
                      smoothstep(0.05, 0.45, depthDiff);
     float lacyWake = wakeBand * smoothstep(0.46, 0.82, foamDetail * 0.65 + surgeCellA * 0.35) * 0.52;
     float shoreFoam = clamp(max(denseSurf, lacyWake), 0.0, 1.0) * validShore;
+    // Short-lived bright flash where the bore front hits the rock; >1 so Bloom picks it up.
+    float contactSplash = boreFront * (1.0 - smoothstep(0.0, foamDistance * 0.5, max(shoreDepthWarp, 0.0))) * rockContactGap * validShore;
 
     float foamMask = clamp(max(whitecaps, shoreFoam), 0.0, 1.0);
-    vec3 litFoamColor = foamColor * (0.35 + 0.65 * NdotL * surfaceShadow) * max(u_dirLightColor, vec3(0.45, 0.55, 0.72));
+    vec3 foamLight = foamColor * (0.35 + 0.65 * NdotL * surfaceShadow) * max(u_dirLightColor, vec3(0.45, 0.55, 0.72));
+    vec3 litFoamColor = (foamLight + foamColor * sRGBToLinear(u_ambientColor) * 0.7) * (1.0 + contactSplash * 1.1);
     vec3 finalColor = mix(baseColor, litFoamColor, foamMask);
 
     float horizonBlend = smoothstep(swellFadeEnd * 0.65, swellFadeEnd, horizDist);

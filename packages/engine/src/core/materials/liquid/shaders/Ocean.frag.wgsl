@@ -23,6 +23,21 @@ fn oceanFoamFbm(p: vec2f) -> f32 {
     return v;
 }
 
+// F1 Worley (cellular) distance: ~0 at bubble-cell centres, ~0.5..0.9 along cell borders.
+fn oceanFoamCells(p: vec2f) -> f32 {
+    let g = floor(p);
+    let f = fract(p);
+    var m = 1.0;
+    for (var oy = -1; oy <= 1; oy++) {
+        for (var ox = -1; ox <= 1; ox++) {
+            let o = vec2f(f32(ox), f32(oy));
+            let h = vec2f(oceanHash2(g + o), oceanHash2(g + o + vec2f(31.7, 17.3)));
+            m = min(m, length(o + h - f));
+        }
+    }
+    return m;
+}
+
 @fragment
 fn fs(i: Out) -> @location(0) vec4f {
     let waterColor = sRGBToLinear(obj.color.rgb);
@@ -83,6 +98,7 @@ fn fs(i: Out) -> @location(0) vec4f {
     detailTangent *= detailFade;
 
     var fftFoamAccum = 0.0;
+    var fftCrestAccum = 0.0;
 #ifdef USE_OCEAN_FFT
     let patchSize = max(obj.matParam5.z, 16.0);
     let fftUvA = i.wp.xz / patchSize;
@@ -93,6 +109,7 @@ fn fs(i: Out) -> @location(0) vec4f {
     let fftTilt = (nfA.xy * 0.85 + fftTiltB * 0.42) * (0.18 + 0.82 * radialFade);
     detailTangent = detailTangent * 0.65 + fftTilt;
     fftFoamAccum = clamp(nfA.w * 0.85 + nfB.w * 0.45, 0.0, 1.0) * radialFade;
+    fftCrestAccum = smoothstep(0.36, 0.95, clamp(nfA.z * 0.85 + nfB.z * 0.45, 0.0, 1.3)) * radialFade;
 #endif
 
     let macroN = normalize(i.n);
@@ -186,20 +203,27 @@ fn fs(i: Out) -> @location(0) vec4f {
 
     // Backlight crest subsurface scattering (Schüler / AC4 style)
     let sssForward = pow(clamp(dot(V, normalize(-L + N * 0.45)), 0.0, 1.0), 3.0);
-    let crestStrength = clamp(max(i.original_uv.x, fftFoamAccum * 0.65), 0.0, 1.0);
+    let crestStrength = clamp(max(max(i.original_uv.x, fftFoamAccum * 0.65), fftCrestAccum * 0.8), 0.0, 1.0);
     let sssFactor = crestStrength * (0.28 + 0.72 * sssForward) * (1.0 - fresnel * 0.6);
     let lightTint = max(global.dirLightColor.rgb, vec3f(0.18, 0.24, 0.34));
     baseColor += scatterColor * scatterStrength * sssFactor * lightTint;
 
-    // Organic FBM whitecaps (crest + persistent FFT foam trails) + broken turbulent shoreline surf tongues
+    // Organic whitecaps: Jacobian-fold crest breaking + persistent FFT trails, Worley bubble lace
+    // (fades with distance to avoid aliasing), wind-streaked spindrift, plus broken shoreline surf.
     let foamNoiseUv = i.wp.xz * 0.24 + windDir * (t * 0.18);
     let foamNoise = oceanFoamFbm(foamNoiseUv);
     let foamDetail = oceanFoamFbm(i.wp.xz * 0.88 - windPerp * (t * 0.26));
     let lacyFoam = smoothstep(0.36, 0.72, foamNoise * 0.65 + foamDetail * 0.35);
+    let foamCell = oceanFoamCells(i.wp.xz * 1.35 + windDir * (t * 0.12));
+    let foamLace = mix(1.0, smoothstep(0.06, 0.46, foamCell), 0.6 * detailFade);
+    let windStreak = oceanFoamFbm(vec2f(dot(i.wp.xz, windDir) * 0.22 - t * 0.35, dot(i.wp.xz, windPerp) * 1.35));
+    let streakMod = 0.62 + 0.75 * smoothstep(0.3, 0.7, windStreak);
+    let crestTexture = clamp(lacyFoam * foamLace * streakMod, 0.0, 1.0);
 
     let crestThresh = 0.64 - foamCoverage * 0.34;
-    let crestCaps = smoothstep(crestThresh, crestThresh + 0.26, crestStrength * (0.55 + 0.65 * foamNoise)) * lacyFoam * radialFade * foamCoverage * 1.15;
-    let whitecaps = max(crestCaps, fftFoamAccum * lacyFoam * foamCoverage * 1.35);
+    let crestCaps = smoothstep(crestThresh, crestThresh + 0.26, crestStrength * (0.55 + 0.65 * foamNoise)) * crestTexture * radialFade * foamCoverage * 1.15;
+    let foldCaps = fftCrestAccum * crestTexture * foamCoverage * 1.25;
+    let whitecaps = max(max(crestCaps, foldCaps), fftFoamAccum * crestTexture * foamCoverage * 1.35);
 
     let surgeCellA = oceanFoamFbm(i.wp.xz * 0.16 + windDir * (t * 0.22));
     let surgeCellB = oceanFoamFbm(i.wp.xz * 0.48 - windPerp * (t * 0.34) + vec2f(9.2, -4.1));
@@ -207,14 +231,21 @@ fn fs(i: Out) -> @location(0) vec4f {
     let rockContactGap = smoothstep(0.0, 0.18, shoreDepthWarp + 0.12 * (surgeCellA - 0.4));
     let surfFront = (1.0 - smoothstep(0.08, foamDistance * 0.82, max(shoreDepthWarp, 0.0))) * rockContactGap;
     let surfCycle = 0.55 + 0.45 * sin(depthDiff * 2.1 - t * 2.7 + surgeCellA * 4.2);
-    let denseSurf = surfFront * surfCycle * smoothstep(0.28, 0.76, lacyFoam * 0.72 + surgeCellB * 0.45);
+    // Bore front: a sawtooth phase whose constant-phase contours travel toward the rock as t grows;
+    // the sharp leading edge reads as a breaking wave front, the long tail as receding foam.
+    let borePhase = fract(t * 0.21 + depthDiff * 0.35 + surgeCellA * 0.9);
+    let boreFront = smoothstep(0.0, 0.07, borePhase) * (1.0 - smoothstep(0.07, 0.55, borePhase));
+    let denseSurf = surfFront * max(surfCycle * 0.6, boreFront) * smoothstep(0.28, 0.76, lacyFoam * foamLace * 0.72 + surgeCellB * 0.45);
     let wakeBand = (1.0 - smoothstep(foamDistance * 0.45, foamDistance * 1.75, max(shoreDepthWarp, 0.0))) *
                    smoothstep(0.05, 0.45, depthDiff);
     let lacyWake = wakeBand * smoothstep(0.46, 0.82, foamDetail * 0.65 + surgeCellA * 0.35) * 0.52;
     let shoreFoam = clamp(max(denseSurf, lacyWake), 0.0, 1.0) * validShore;
+    // Short-lived bright flash where the bore front hits the rock; >1 so Bloom picks it up.
+    let contactSplash = boreFront * (1.0 - smoothstep(0.0, foamDistance * 0.5, max(shoreDepthWarp, 0.0))) * rockContactGap * validShore;
 
     let foamMask = clamp(max(whitecaps, shoreFoam), 0.0, 1.0);
-    let litFoamColor = foamColor * (0.35 + 0.65 * NdotL * surfaceShadow) * max(global.dirLightColor.rgb, vec3f(0.45, 0.55, 0.72));
+    let foamLight = foamColor * (0.35 + 0.65 * NdotL * surfaceShadow) * max(global.dirLightColor.rgb, vec3f(0.45, 0.55, 0.72));
+    let litFoamColor = (foamLight + foamColor * sRGBToLinear(global.ambientColor.rgb) * 0.7) * (1.0 + contactSplash * 1.1);
     var finalColor = mix(baseColor, litFoamColor, foamMask);
 
     // Distance horizon dissolution: in outer skirt match exact calm sky reflection cleanly

@@ -87,4 +87,34 @@ describe("OceanMaterial (ADR 0062)", () => {
     expect(sources.glsl100?.vs).toContain("uniform vec3 u_viewPos;");
     expect(sources.glsl100?.vs).toContain("length(wp.xz - u_viewPos.xz)");
   });
+
+  it("ships the upgraded foam model per dialect and reads no legacy slots", () => {
+    const sources = new OceanMaterial().getShaderDefinition().sources;
+    const dialects: Record<string, string | undefined> = {
+      wgsl: sources.wgsl,
+      glsl300: sources.glsl300?.fs,
+      glsl100: sources.glsl100?.fs,
+    };
+    for (const [name, src] of Object.entries(dialects)) {
+      expect(src, `${name} fragment source`).toBeDefined();
+      for (const id of ["oceanFoamCells", "foamLace", "crestTexture"]) {
+        expect(src, `${name} contains ${id}`).toContain(id);
+      }
+      // Only u_matParam0..5 and u_matParam9 are packed by OceanMaterial; lanes 6..8 are legacy.
+      expect(src, `${name} reads no legacy matParam6..8`).not.toMatch(/matParam[678]\b/);
+    }
+    // Bore front + contact splash need the shore depth terms: WebGPU and WebGL2 only (WebGL1 has none).
+    for (const src of [sources.wgsl, sources.glsl300?.fs]) {
+      expect(src).toContain("boreFront");
+      expect(src).toContain("contactSplash");
+    }
+    expect(sources.glsl100?.fs).not.toContain("boreFront");
+    expect(sources.glsl100?.fs).not.toContain("contactSplash");
+    // Fold (Jacobian) crest channel exists only where the FFT texture exists (WebGPU).
+    expect(sources.wgsl).toContain("fftCrestAccum");
+    expect(sources.wgsl).toContain("foldCaps");
+    expect(sources.wgsl).toContain("nfA.z");
+    expect(sources.glsl300?.fs).not.toContain("fftCrestAccum");
+    expect(sources.glsl100?.fs).not.toContain("fftCrestAccum");
+  });
 });

@@ -4,7 +4,7 @@ status: accepted
 
 # 0062: Open Ocean Geometry, Material & Opaque-Depth Sub-Phase ("Open Ocean")
 
-- **Status:** Accepted (Phase 1 Core + Phase 2 WebGPU Compute JONSWAP 2D IFFT)
+- **Status:** Accepted (Phase 1 Core + Phase 2 WebGPU Compute JONSWAP 2D IFFT + Phase 2b Fragment Foam Model)
 - **Date:** 2026-11-18
 - **Trigger:** Showcase 53 (`Fortress Inquisitorius` — Ocean Moon Nur) exposed structural limits of stretching pool-scale `OpenWaterMaterial` on a small rectangular `Ground` slab over a vast stormy ocean: visible square horizon edges at 380 m, striped Gerstner wave crests, absent distant IBL horizon continuity, flat shadow-dark surfaces lacking crest subsurface scattering, and missing multi-scale normal cascades.
 
@@ -75,3 +75,23 @@ Introduce **Open Ocean** as a first-class core subsystem in `@small-world-machin
 - **Mathematical claims:** Horizon smoothness (`swellFade` reaches 0 at `swellFadeEnd`), radial monotonicity of `OceanGridGeometry`, `Uint16` vertex cap (`<= 65535`), camera-centered radial distance across all 3 dialects, JONSWAP directional energy peak, and 256-point Radix-2 DIT IFFT Hermitian parity are tested directly in `OceanGridGeometry.test.ts`, `OceanMaterial.test.ts`, and `OceanFftSystem.test.ts`; no new registered `@invariant` IDs claimed.
 - **Fail-closed / honest fallback:** WebGL1 lacks compute shaders, an opaque depth capture, and directional shadow map (`AbstractWebGLRenderer`), so `Ocean.frag.glsl100` honestly substitutes a grazing-Fresnel absorption proxy, outer-rim `u_envMap` skybox match, and unshadowed specular/IBL fallback while keeping WebGPU and WebGL2 full-featured (ADR 0057). Headless Node omits canvas generation cleanly (`normalMap = undefined`).
 - **Exceptions:** none.
+
+## Phase 2b: Fragment Foam Model ("Gischtkronen & Wellenbrecher")
+
+Pure fragment-shader upgrade of the foam in `Ocean.frag.{wgsl,glsl,glsl100}`; no new uniforms, lanes, textures, or public parameters (`u_matParam0..5/9` unchanged).
+
+- **Bubble lace:** `oceanFoamCells` is an F1 Worley (cellular) distance (3×3 neighbourhood, `oceanHash2` feature points). `foamLace = mix(1, smoothstep(0.06, 0.46, F1), 0.6 * detailFade)` punches holes into the lacy FBM foam so crests read as bubble lace instead of smooth blobs; the lace fades out with `detailFade` so distant foam does not alias.
+- **Crest texture:** `crestTexture = lacyFoam * foamLace * streakMod`, where `streakMod` is a wind-aligned stretched FBM (`0.62 + 0.75 * smoothstep(0.3, 0.7, windStreak)`) producing streaky, wind-combed foam. It modulates every foam source (analytic crest caps, FFT fold caps, persistent FFT foam).
+- **Fold crest (WebGPU only):** `fftCrestAccum` reads the instantaneous Jacobian fold channel `nfA.z` / `nfB.z` of `u_oceanNormFoamMap` (the persistent channel `.w` stays the foam trail). `foldCaps = fftCrestAccum * crestTexture * foamCoverage * 1.25` places foam exactly where the displaced surface folds. Only `USE_OCEAN_FFT` builds have this texture.
+- **Bore front (WGSL + WebGL2):** `borePhase = fract(t * 0.21 + depthDiff * 0.35 + surgeCellA * 0.9)` is a sawtooth whose constant-phase contours move toward smaller `depthDiff` (the rock) as `t` grows; `boreFront = smoothstep(0, 0.07, p) * (1 - smoothstep(0.07, 0.55, p))` is a sharp leading edge (breaking front) with a long tail (receding foam), zero for `p >= 0.55`. It replaces the pure `surfCycle` pulse in `denseSurf` (`max(surfCycle * 0.6, boreFront)`).
+- **Contact splash (WGSL + WebGL2):** `contactSplash = boreFront * (1 - smoothstep(0, foamDistance * 0.5, shoreDepthWarp)) * rockContactGap * validShore` brightens the foam by `1 + 1.1 * contactSplash`, pushing the HDR value above 1 so Bloom picks up the flash where the bore hits the rock. Foam also receives an ambient fill (`ambientColor * 0.7`) so shadowed foam never turns grey.
+
+**Tier differences (ADR 0057, no API-parity cap):**
+
+| Tier | Lace / crest texture | Fold crest (`nfA.z`) | Bore front + contact splash |
+| --- | --- | --- | --- |
+| WebGPU (`Ocean.frag.wgsl`) | yes | **yes** (only tier with the FFT Jacobian) | yes |
+| WebGL2 (`Ocean.frag.glsl`) | yes | no (analytic `crestCaps` only) | yes |
+| WebGL1 (`Ocean.frag.glsl100`) | yes (reduced) | no | no — WebGL1 has no shore/depth terms (no opaque depth capture), so there is no `depthDiff` to drive a bore |
+
+**Verification:** `OceanMaterial.test.ts` asserts the per-dialect identifier contract (`oceanFoamCells`, `foamLace`, `crestTexture` everywhere; `boreFront`/`contactSplash` in WGSL + GLSL300 only; `fftCrestAccum`/`foldCaps`/`nfA.z` in WGSL only; no legacy `matParam6..8` reads). `OceanFoamMath.test.ts` is a CPU mirror of the bore-front shape (range `[0, 1]`, zero at phase 0 and `>= 0.55`, peak at `0.07`, contours travel toward the rock) and of the Worley F1 cells (range `[0, sqrt(2)]`, ~0 at feature points). Classification: all constants (`0.21`, `0.35`, `0.9`, `0.07`, `0.55`, lace thresholds) → `@fixed` shader look-tuning; no new `@domain` parameters; no new `@invariant` IDs.
