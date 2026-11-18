@@ -106,25 +106,25 @@ export interface FortressTrimOptions {
  * Options for the wet dark basalt foundation material.
  */
 export interface FortressRockOptions {
-  /** Base sRGB tint. Defaults to wet dark basalt `(0.13, 0.14, 0.16)`. */
+  /** Base sRGB tint. Defaults to dark Mustafar volcanic basalt `(0.085, 0.09, 0.105)`. */
   color?: Color;
-  /** @domain PBR metallic factor in [0, 1] (default 0.05). */
+  /** @domain PBR metallic factor in [0, 1] (default 0.02). */
   metallic?: number;
-  /** @domain PBR perceptual roughness in [0.05, 1] (default 0.32). */
+  /** @domain PBR perceptual roughness in [0.05, 1] (default 0.88). */
   roughness?: number;
   /** @domain Scalar ambient occlusion multiplier in [0, 1] (default 1.0). */
   ao?: number;
-  /** Tangent-space normal map scale. Defaults to `(1.25, 1.25)`. */
+  /** Tangent-space normal map scale. Defaults to `(1.55, 1.55)`. */
   normalScale?: Vector2D;
   /** When true, upgrades to the 3-tier world-Y waterline wetness shader. Defaults to false. */
   wetWaterline?: boolean;
   /** @domain World-space sea level in meters when `wetWaterline` is true. */
   waterY?: number;
-  /** @domain Height in meters of the wet splash band above `waterY` (default 4.4). */
+  /** @domain Height in meters of the wet splash band above `waterY` (default 14.0). */
   wetBandHeight?: number;
-  /** @domain Animated wave-lap vertical amplitude in meters (default 0.42). */
+  /** @domain Animated wave-lap vertical amplitude in meters (default 0.85). */
   waveLapAmplitude?: number;
-  /** @domain Albedo darkening multiplier in the wet band in (0, 1] (default 0.38). */
+  /** @domain Albedo darkening multiplier in the wet band in (0, 1] (default 0.36). */
   wetAlbedoScale?: number;
 }
 
@@ -434,11 +434,11 @@ export function createRockFoundationMaterial(
 ): StandardMaterial | CustomShaderMaterial {
   if (options.wetWaterline === true) {
     return buildWaterlineCustomMaterial(maps, {
-      color: options.color ?? new Color(0.13, 0.14, 0.16),
-      metallic: options.metallic ?? 0.05,
-      roughness: options.roughness ?? 0.32,
+      color: options.color ?? new Color(0.46, 0.49, 0.54),
+      metallic: options.metallic ?? 0.02,
+      roughness: options.roughness ?? 0.9,
       ao: options.ao ?? 1.0,
-      normalScale: options.normalScale ?? new Vector2D(1.25, 1.25),
+      normalScale: options.normalScale ?? new Vector2D(1.55, 1.55),
       texRepeat: maps.diffuseMap
         ? new Vector2D(maps.diffuseMap.repeat.x, maps.diffuseMap.repeat.y)
         : new Vector2D(1, 1),
@@ -446,9 +446,9 @@ export function createRockFoundationMaterial(
         ? new Vector2D(maps.diffuseMap.offset.x, maps.diffuseMap.offset.y)
         : new Vector2D(0, 0),
       waterY: options.waterY ?? FORTRESS_WATER_Y,
-      wetBandHeight: options.wetBandHeight ?? 4.4,
-      waveLapAmplitude: options.waveLapAmplitude ?? 0.42,
-      wetAlbedoScale: options.wetAlbedoScale ?? 0.38,
+      wetBandHeight: options.wetBandHeight ?? 14.0,
+      waveLapAmplitude: options.waveLapAmplitude ?? 0.85,
+      wetAlbedoScale: options.wetAlbedoScale ?? 0.36,
       clearcoat: 0.0,
       clearcoatRoughness: 0.1,
       emissiveColor: new Color(0, 0, 0),
@@ -457,11 +457,11 @@ export function createRockFoundationMaterial(
   }
 
   return new StandardMaterial({
-    color: options.color ?? new Color(0.13, 0.14, 0.16),
-    metallic: options.metallic ?? 0.05,
-    roughness: options.roughness ?? 0.32,
+    color: options.color ?? new Color(0.46, 0.49, 0.54),
+    metallic: options.metallic ?? 0.02,
+    roughness: options.roughness ?? 0.9,
     ao: options.ao ?? 1.0,
-    normalScale: options.normalScale ?? new Vector2D(1.25, 1.25),
+    normalScale: options.normalScale ?? new Vector2D(1.55, 1.55),
     diffuseMap: maps.diffuseMap,
     normalMap: maps.normalMap,
     metallicMap: maps.metallicMap,

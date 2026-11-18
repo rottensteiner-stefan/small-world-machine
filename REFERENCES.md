@@ -1087,6 +1087,18 @@ This document serves to record external sources, algorithms, mathematical deriva
   - **Originals duty (ADR 0058):** both zips kept out of git; back up to Google Drive (`small-world-machine-assets/…`). Raw sprites/PNG intermediates in `.agents/scratches/`.
 - **Usage:** Showcase 51 forest P0 measurement baseline (ADR 0059 step 0 / P0-2). Dominant instance population: opaque low-poly tufts + flowers + debris (tier-1 polycounts, 16–224 tris) plus 4 alpha-cutout cards (2–4 tris) as the only alpha-masked population. Verified: all 21 GLBs engine-side-parse through `GltfLoader` (geometry + materials; card WebP resolves to `diffuseMap`). Browser/GPU rendering not verified by T2 (Erin/Charly runtime gate).
 
+### Poly Haven `dark_rock` & `blue_metal_plate` + ambientCG `Metal046B` (Showcase 53 4K PBR Textures)
+
+- **File:** `public/assets/showcases/53/textures/armor_{albedo,normal,roughness,metallic,ao}.webp`, `public/assets/showcases/53/textures/trim_{albedo,normal,roughness,metallic}.webp`, `public/assets/showcases/53/textures/rock_{albedo,normal,roughness,ao}.webp`
+- **Authors/Gurus:** Poly Haven (`dark_rock`, `blue_metal_plate`), Lennart Demes / ambientCG (`Metal046B`)
+- **Sources (verified CC0, downloaded 2026-11-18):**
+  - [Poly Haven: dark_rock](https://polyhaven.com/a/dark_rock) — 4K PNG PBR maps (`diff.png`, `nor_gl.png`, `rough.png`, `ao.png`, `disp.png`).
+  - [Poly Haven: blue_metal_plate](https://polyhaven.com/a/blue_metal_plate) — 4K PNG PBR maps (`diff.png`, `nor_gl.png`, `rough.png`, `ao.png`).
+  - [ambientCG: Metal046B](https://ambientcg.com/view?id=Metal046B) — `Metal046B_4K-PNG.zip` (`metal046b.zip` sha256 `e36ecae415fda618f7a7142f903f824c5c9e7b5dde3d16b8896156afccfe773a`).
+- **License:** [CC0 (Creative Commons Zero)](https://creativecommons.org/publicdomain/zero/1.0/) — Public Domain Dedication.
+- **Derivation & Runtime Packaging:** Baked in headless Blender 5.3.0 Cycles (`bake_4k_textures.py`) from periodic `3×3` high-poly hard-surface plates/grates/louvers (`armor_*` `14 m` tile, `trim_*` `8 m` tile) and 4D-torus seamless strata overlays (`rock_*`), then encoded to `4096×4096` WebP (`-q 92` for albedo, `-lossless` for tangent normal/roughness/metallic/AO) in `public/assets/showcases/53/textures/` (Git LFS tracked via `.gitattributes`, served at runtime via `/assets/showcases/53/textures/*.webp`).
+- **Originals duty (ADR 0058):** 4K source PNGs, `metal046b.zip`, and Blender bake/build scripts are kept out of git and backed up in Google Drive `Small-World-Machine/small-world-machine/apps/showcases/53/raw/` with `sha256` entries in `MANIFEST.txt`.
+
 ## Shaders & Procedural Art
 
 ### Star Nest (Volumetric Cosmic Raymarching)

@@ -3,48 +3,378 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Fortress Inquisitorius — Concept Dossier</title>
+    <title>Showcase 53 — Fortress Inquisitorius — Concept Dossier</title>
     <style>
       :root {
-        --bg: #070b12;
-        --panel: #101724;
+        --bg: #06090f;
+        --panel: #0e1522;
+        --panel-alt: #121b2b;
+        --border: #203048;
         --text: #e6ecf5;
-        --accent: #ff2a1a;
-        --accent2: #7dd3fc;
-        --muted: #8b9ab0;
+        --muted: #8ea0b8;
+        --crimson: #ff2414;
+        --ice: #8ad8ff;
+        --basalt: #1c2026;
+        --durasteel: #323a46;
         --ok: #7fc97f;
       }
       * { box-sizing: border-box; }
-      body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 system-ui, -apple-system, Segoe UI, sans-serif; }
-      main { max-width: 940px; margin: 0 auto; padding: 40px 24px 100px; }
-      h1 { font-size: 30px; letter-spacing: .5px; }
-      h2 { margin-top: 40px; border-bottom: 1px solid #223047; padding-bottom: 8px; font-size: 20px; }
-      .pill { display: inline-block; border: 1px solid #2c3e5a; border-radius: 99px; padding: 2px 12px; font-size: 12px; color: var(--muted); margin-right: 6px; }
+      body {
+        margin: 0;
+        background: radial-gradient(circle at 50% 0%, #101b2e 0%, var(--bg) 60%);
+        color: var(--text);
+        font: 15px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      main {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 44px 24px 100px;
+      }
+      h1 { font-size: 32px; letter-spacing: 0.4px; margin: 0 0 8px; }
+      p.lead { font-size: 16px; color: var(--muted); margin: 0 0 22px; }
+      h2 {
+        margin: 42px 0 14px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 8px;
+        font-size: 20px;
+        color: var(--ice);
+      }
+      h3 { margin: 0 0 8px; font-size: 15px; color: #fff; }
+      .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+      .pill {
+        border: 1px solid var(--border);
+        border-radius: 99px;
+        padding: 3px 12px;
+        font-size: 12px;
+        color: var(--muted);
+        background: rgba(16, 23, 36, 0.7);
+      }
       .pill.ok { border-color: var(--ok); color: var(--ok); }
-      .pill.hot { border-color: var(--accent); color: var(--accent); }
-      .card { background: var(--panel); border: 1px solid #1e2a3d; border-radius: 10px; padding: 18px 20px; margin: 18px 0; }
-      code { background: #192334; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+      .pill.hot { border-color: var(--crimson); color: var(--crimson); }
+      .pill.ice { border-color: var(--ice); color: var(--ice); }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+        gap: 16px;
+        margin: 16px 0;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 18px 20px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 14px 0;
+      }
+      th, td {
+        text-align: left;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
+      }
+      th { background: var(--panel-alt); color: var(--ice); font-weight: 600; }
+      tr:last-child td { border-bottom: none; }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12.5px;
+        background: #172233;
+        border: 1px solid #24354f;
+        padding: 1px 6px;
+        border-radius: 4px;
+        color: #b7e3ff;
+      }
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+        gap: 12px;
+        margin: 14px 0;
+      }
+      .swatch {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .swatch-bar { height: 42px; }
+      .swatch-body { padding: 10px 12px; font-size: 12.5px; }
+      .swatch-body strong { display: block; color: #fff; margin-bottom: 2px; }
+      .diagram-wrap {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 18px;
+        margin: 16px 0;
+      }
+      .diagram-wrap svg { width: 100%; height: auto; display: block; }
+      ul { margin: 8px 0 0; padding-left: 18px; }
+      li { margin-bottom: 6px; }
+      pre {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px;
+        overflow-x: auto;
+        font-size: 13px;
+        color: #cfe3fa;
+      }
     </style>
   </head>
   <body>
     <main>
-      <h1>Fortress Inquisitorius (Ocean Moon Nur)</h1>
-      <div>
-        <span class="pill ok">2K CC0 PBR Armor &amp; Basalt</span>
-        <span class="pill ok">3-Tier Waterline Wetness Shader</span>
-        <span class="pill ok">OpenWater + PlanarReflection</span>
-        <span class="pill hot">HDR Crimson Visor &amp; Hangars</span>
-        <span class="pill">showcase 53</span>
+      <h1>Showcase 53 — Fortress Inquisitorius (Ocean Moon Nur)</h1>
+      <p class="lead">
+        1:1 canonical architectural reconstruction of the <em>Obi-Wan Kenobi</em> closed basalt monolith:
+        a natural ~485&nbsp;m Mustafar-like volcanic stone spire rising organically out of Nur's stormy ocean,
+        carved at mid-elevation by an engineered Imperial durasteel through-flight hangar bay.
+      </p>
+
+      <div class="pills">
+        <span class="pill ok">Decision 1A · Closed OWK Obelisk (No Top Split)</span>
+        <span class="pill ok">Decision 2A · 1:1 Canon Scale (~485 m)</span>
+        <span class="pill ok">Decision 3A · Human &amp; Prop Scale Anchors</span>
+        <span class="pill ice">Volcanic Stone Exterior vs. Durasteel Hangar</span>
+        <span class="pill hot">HDR Crimson Core &amp; Cool Gantry Trusses</span>
       </div>
 
-      <h2>Design Pillars</h2>
-      <div class="card">
-        <ul>
-          <li><strong>Brutalist Wedge Silhouette:</strong> Beveled multi-tier monolith rising out of a dark basalt sea foundation (`y = -6..52.8 m`), flanked by recessed crimson hangar bays, cantilevered landing pads, turbolasers, and imperial shuttles.</li>
-          <li><strong>Calibrated CC0 PBR + Waterline Wetness:</strong> 2K WebP PBR maps (`MetalPlates017A`, `Metal046B`, `dark_rock_02`) driven by a showcase-local `CustomShaderMaterial` wrapping `Standard.frag.*` with an animated wave-lap wetness band.</li>
-          <li><strong>Stormy Ocean Reflection:</strong> `OpenWaterMaterial` paired with `PlanarReflectionNode` and a deep seabed (`y = -14 m`) so Beer-Lambert absorption, shoreline foam, and red hangar reflections render cleanly across `WEB_GPU`, `WEB_GL2`, and `WEB_GL1`.</li>
-        </ul>
+      <h2>1. Core Creative &amp; Architectural Decisions</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Natural Monolith vs. Human Bay</h3>
+          <p>
+            The outer sloped flanks (lower bastion and unbroken upper spire) are built as dark, horizontally
+            stratified volcanic basalt stone — <em>as though the obelisk grew naturally from the ocean floor</em>.
+            Human Imperial engineering appears strictly inside the cantilevered waist hangar, blast doors,
+            pilaster frames, ceiling trusses, and waterline defensive plinths.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Closed <em>Obi-Wan Kenobi</em> Silhouette (1A)</h3>
+          <p>
+            Unlike the twin-blade apex cleft used in earlier prototypes, the upper obelisk rises continuously
+            from the hangar overhang (`y = 140 m`) to a closed, flat-topped truncated volcanic summit (`y = 485 m`)
+            at a `~2.0:1` height-to-base ratio (`485 m` vs. `248 m` waterline width), featuring only two subtle
+            recessed comms/sensor housings on the top plateau.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Detailed Interior Landing Bay + Waterline</h3>
+          <p>
+            The cantilevered mid-waist landing bay (`y = 116..140 m`) is fully modeled: wet tiled durasteel deck
+            plates (`~3.5 m` module), low perimeter safety barriers, projecting wing aprons, curved steel pilasters
+            framing carved basalt cliff walls, 3 pairs of trapezoidal blast doors with vertical crimson slits,
+            a central glowing red core portal, backlit gantry trusses, and 16 suspended TIE/ln fighters. Waterline
+            basalt crags, sentry landing pad, and 4 scaled turbolasers are preserved.
+          </p>
+        </div>
+      </div>
+
+      <h2>2. Canonical 1:1 Photogrammetry &amp; Scale Calibration (2A + 3A)</h2>
+      <p>
+        Every structural dimension was derived mathematically from canonical vehicle specs and human figures measured
+        across reference plates (Alex Nice exterior/interior paintings, Tyler Reed landing bay plates, and Part IV frames):
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Anchor / Structure</th>
+            <th>Canonical / Target Size</th>
+            <th>Derivation &amp; Role in Scene</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Stormtrooper / Officer</strong></td>
+            <td><code>1.82 m</code> height</td>
+            <td>Standing in formation ahead of the parked shuttle and flanking blast doors (`~1/13` hangar height).</td>
+          </tr>
+          <tr>
+            <td><strong>TIE/ln Starfighter</strong></td>
+            <td><code>8.82 m H × 6.70 m W × 7.24 m L</code></td>
+            <td>16 fighters suspended from ceiling trusses (`y ≈ 133.5 m`); spans ~36% of vertical hangar clearance.</td>
+          </tr>
+          <tr>
+            <td><strong><em>Lambda</em>-class T-4a Shuttle</strong></td>
+            <td><code>20.0 m L × ~19.2 m H</code> (folded)</td>
+            <td>Dorsal fin fills ~80% of the `24 m` hangar opening; dwarfed (~1/9 width) on the `~180 m` flight deck.</td>
+          </tr>
+          <tr>
+            <td><strong>Hangar Blast Doors</strong></td>
+            <td><code>4.2 m</code> clear H, <code>~10 m</code> frame W</td>
+            <td>Double trooper clearance (`~2.3×`); flanked by `~3.4 m` segmented vertical crimson light slits.</td>
+          </tr>
+          <tr>
+            <td><strong>Deck Plates &amp; Props</strong></td>
+            <td><code>3.5 m</code> tiles · <code>0.95 m</code> rail · <code>1.2–2.5 m</code> cargo</td>
+            <td>Calibrates `armor_*` UV scale (`1/14 m`), knee/hip safety barriers, fuel drums, and generator crates.</td>
+          </tr>
+          <tr>
+            <td><strong>Turbolaser Batteries</strong></td>
+            <td><code>~7.4 m</code> turret H, <code>~15.5 m</code> barrel</td>
+            <td>4 octagonal waterline corner turrets (`scale = 2.6`) scaled proportionally to the 248 m basalt base.</td>
+          </tr>
+          <tr>
+            <td><strong>Clear Hangar Opening</strong></td>
+            <td><code>24.0 m</code> (`y = 116..140 m`)</td>
+            <td>Through-flight cantilevered deck at `~24%` of total elevation above sea level (`y = 116 m`).</td>
+          </tr>
+          <tr>
+            <td><strong>Waist / Flight Deck Width</strong></td>
+            <td><code>~180 m</code> (+ `252 m` wing aprons)</td>
+            <td>`7.55:1` ratio to hangar height; central basalt/steel core spine `~92 m` wide inside.</td>
+          </tr>
+          <tr>
+            <td><strong>Monolith Base &amp; Height</strong></td>
+            <td><code>248 m</code> waterline W · <code>485 m</code> total H</td>
+            <td>Closed chamfered-octagonal obelisk (`35 m` truncated peak), anchored `45 m` below sea level.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>3. Architectural Elevation Schematic</h2>
+      <div class="diagram-wrap">
+        <svg viewBox="0 0 880 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fortress Inquisitorius 1:1 elevation schematic">
+          <defs>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#0b1524"/>
+              <stop offset="100%" stop-color="#132234"/>
+            </linearGradient>
+            <linearGradient id="rock" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#1a1e24"/>
+              <stop offset="50%" stop-color="#262c34"/>
+              <stop offset="100%" stop-color="#13161b"/>
+            </linearGradient>
+            <linearGradient id="hangarGlow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#a5ecff" stop-opacity="0.85"/>
+              <stop offset="100%" stop-color="#7cd4f8" stop-opacity="0.18"/>
+            </linearGradient>
+          </defs>
+          <rect width="880" height="420" fill="url(#sky)" rx="8"/>
+          <!-- Ocean -->
+          <rect x="0" y="346" width="880" height="74" fill="#081a24"/>
+          <line x1="0" y1="346" x2="880" y2="346" stroke="#4da4b8" stroke-width="1.5" stroke-dasharray="6 4"/>
+          <!-- Lower Bastion (Basalt) -->
+          <polygon points="316,346 564,346 530,275 350,275" fill="url(#rock)" stroke="#3c4654" stroke-width="1.5"/>
+          <!-- Front Notch -->
+          <rect x="424" y="275" width="32" height="71" fill="#0b0e14" stroke="#2c3542"/>
+          <!-- Flight Deck + Wing Aprons -->
+          <rect x="342" y="270" width="196" height="5" fill="#4f5b6b"/>
+          <rect x="318" y="271" width="24" height="3" fill="#3a4554"/>
+          <rect x="538" y="271" width="24" height="3" fill="#3a4554"/>
+          <!-- Hangar Cavity + Cool Truss Wash + Core + Crimson Portal -->
+          <rect x="350" y="253" width="180" height="17" fill="url(#hangarGlow)"/>
+          <rect x="394" y="253" width="92" height="17" fill="#171b22" stroke="#3c4654"/>
+          <rect x="416" y="263" width="48" height="6" fill="#ff2414"/>
+          <!-- Tiny 1:1 Lambda & TIE silhouettes inside bay -->
+          <polygon points="368,270 374,270 371,256" fill="#9fb0c4"/>
+          <rect x="356" y="254" width="4" height="6" fill="#0d1218"/>
+          <rect x="380" y="254" width="4" height="6" fill="#0d1218"/>
+          <rect x="496" y="254" width="4" height="6" fill="#0d1218"/>
+          <rect x="518" y="254" width="4" height="6" fill="#0d1218"/>
+          <!-- Upper Closed Basalt Spire -->
+          <polygon points="352,253 528,253 458,42 422,42" fill="url(#rock)" stroke="#3c4654" stroke-width="1.5"/>
+          <!-- Rooftop Sensor Pads -->
+          <rect x="430" y="38" width="7" height="4" fill="#3c4654"/>
+          <rect x="443" y="38" width="7" height="4" fill="#3c4654"/>
+          <!-- Turbolasers + Crags + Sentry Pad -->
+          <polygon points="292,346 312,346 306,337 297,337" fill="#232830"/>
+          <polygon points="568,346 588,346 581,337 572,337" fill="#232830"/>
+          <rect x="260" y="339" width="28" height="7" fill="#364150"/>
+          <polygon points="270,339 276,339 273,327" fill="#9fb0c4"/>
+          <!-- Dimension Callouts -->
+          <g fill="#9fb6d0" font-size="11.5" font-family="ui-monospace, monospace">
+            <line x1="620" y1="42" x2="620" y2="346" stroke="#5b789c" stroke-width="1"/>
+            <line x1="612" y1="42" x2="628" y2="42" stroke="#5b789c"/>
+            <line x1="612" y1="346" x2="628" y2="346" stroke="#5b789c"/>
+            <text x="636" y="196">485 m Total Height (Closed Peak, 35 m W)</text>
+
+            <line x1="585" y1="253" x2="585" y2="270" stroke="#8ad8ff" stroke-width="1.4"/>
+            <text x="596" y="264" fill="#8ad8ff">24 m Clear Hangar · 180 m Waist</text>
+
+            <line x1="585" y1="275" x2="585" y2="346" stroke="#5b789c" stroke-width="1"/>
+            <text x="596" y="314">116 m Basalt Bastion (248 m Base)</text>
+
+            <text x="18" y="366" fill="#70b8c9">y = 0.0 m Ocean Surface (4.4 km OceanGridGeometry)</text>
+            <text x="18" y="256" fill="#ff7366">Central Crimson Portal + Vertical Door Slits</text>
+            <text x="18" y="274" fill="#8ad8ff">Cantilevered Durasteel Deck + Wing Aprons</text>
+          </g>
+        </svg>
+      </div>
+
+      <h2>4. Color Palette &amp; Material Separation</h2>
+      <div class="swatches">
+        <div class="swatch">
+          <div class="swatch-bar" style="background: linear-gradient(90deg, #13161b, #232830);"></div>
+          <div class="swatch-body">
+            <strong>Mustafar Volcanic Basalt (4K WebP)</strong>
+            <code>rock_*</code> · 4K Poly Haven <code>dark_rock</code> + seamless Cycles strata fissures (`roughness 0.90`, `metallic 0.02`, `0..9.5 m` wet wave band).
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-bar" style="background: linear-gradient(90deg, #1d232c, #2f3846);"></div>
+          <div class="swatch-body">
+            <strong>Hangar Durasteel Deck (4K WebP)</strong>
+            <code>armor_*</code> · Cycles-baked 4K relief (`14 m` tile: beveled armor plates, hex grates, louver hatches, puddle roughness `0.09..0.76`, `metallic 0.96`).
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-bar" style="background: linear-gradient(90deg, #151920, #252c38);"></div>
+          <div class="swatch-body">
+            <strong>Structural Steel Trim (4K WebP)</strong>
+            <code>trim_*</code> · Cycles-baked 4K gunmetal ribs &amp; rivets (`8 m` tile, `metallic 0.96`, `roughness 0.88`) on pilasters, blast doors, trusses, turrets.
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-bar" style="background: linear-gradient(90deg, #8fd8ff, #c9eeff);"></div>
+          <div class="swatch-body">
+            <strong>Gantry &amp; Pilaster Strips</strong>
+            <code>#A0DCFF</code> · HDR overhead truss ribs + vertical pilaster strips starting above `2.5 m` plinths.
+          </div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-bar" style="background: linear-gradient(90deg, #b80f07, #ff2414);"></div>
+          <div class="swatch-body">
+            <strong>Inquisitorius Crimson</strong>
+            <code>#FF2414</code> · recessed core portal, segmented blast-door edge slits, deck perimeter beacons.
+          </div>
+        </div>
+      </div>
+
+      <h2>5. Controls, Camera Presets &amp; Technical Architecture</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Camera Presets &amp; Controls</h3>
+          <ul>
+            <li><code>1</code> — <strong>Monumental:</strong> ~1000 m wide exterior establishing frame showing full 485 m monolith &amp; ocean horizon.</li>
+            <li><code>2</code> — <strong>Hangar Bay:</strong> Deck-level perspective past 1.82 m Stormtrooper ranks, 20 m Lambda shuttle, hanging TIEs &amp; basalt core.</li>
+            <li><code>3</code> — <strong>Command Crown:</strong> Low-angle look along stratified volcanic rock slopes toward the unbroken peak.</li>
+            <li><code>4</code> — <strong>Waterline:</strong> Close to crashing swells, wet crags, 7.4 m turbolasers &amp; sentry landing pad.</li>
+            <li><code>5</code> — <strong>Basalt Trench:</strong> Shallow caustics, sea spray &amp; bobbing Imperial signal buoys.</li>
+            <li><code>L</code> cycles Nur Storm / Deep Twilight / Red Alert · <code>F</code> manual lightning · <code>I</code> / <code>⚙</code> inspector drawer.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Asset &amp; Shader Pipeline</h3>
+          <pre>
+.agents/scratches/fortress-prep/
+ ├─ build_fortress_blender.py (fortress, shuttle, pad, turret, deck_props)
+ └─ bake_4k_textures.py       (4K Cycles seamless armor/trim/rock WebPs)
+
+apps/showcases/53/
+ ├─ FortressMaterials.ts  (3-tier waterline wetness CustomShaderMaterial)
+ ├─ Hud.ts                (Preset/atmosphere/ocean tuning drawer)
+ └─ showcase.ts           (OceanGridGeometry 4.4 km, PlanarReflection,
+                           RainStreaks, SeaSpray, Auto-Instanced Props)
+          </pre>
+        </div>
       </div>
     </main>
   </body>
 </html>
+

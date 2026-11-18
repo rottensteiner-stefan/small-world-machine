@@ -18,6 +18,7 @@ import {
   PostProcessingEffectType,
   RendererType,
   SpotLight,
+  StandardMaterial,
   Texture,
   TextureWrap,
   ToneMappingMode,
@@ -49,10 +50,8 @@ import {
 import type { ParticleOptions } from "@small-world-machine/vfx-extras";
 import {
   createEmissiveAccentMaterial,
-  createFortressArmorMaterial,
   createRockFoundationMaterial,
   createTrimArmorMaterial,
-  createWindowTrimMaterial,
   FORTRESS_WATER_Y,
   updateFortressWaterlineTime,
 } from "./FortressMaterials.js";
@@ -125,24 +124,24 @@ declare global {
 
 const CAMERA_VIEWS: Record<CameraPresetKey, CameraView> = {
   wide: {
-    position: new Vector3D(102, 24, 138),
-    target: new Vector3D(0, 42, 0),
+    position: new Vector3D(490, 145, 870),
+    target: new Vector3D(0, 278, 0),
   },
   hangar: {
-    position: new Vector3D(26, 35.0, 22),
-    target: new Vector3D(1.0, 35.4, 0.5),
+    position: new Vector3D(106, 121.5, 52),
+    target: new Vector3D(56, 121.5, 10),
   },
   crown: {
-    position: new Vector3D(-28, 54, 74),
-    target: new Vector3D(0, 61, 0),
+    position: new Vector3D(-225, 290, 470),
+    target: new Vector3D(0, 365, 0),
   },
   waterline: {
-    position: new Vector3D(42, 4.8, 48),
-    target: new Vector3D(0, 14, 0),
+    position: new Vector3D(185, 22, 235),
+    target: new Vector3D(0, 62, 0),
   },
   trench: {
-    position: new Vector3D(-22, 3.6, 36),
-    target: new Vector3D(-6, 1.8, 12),
+    position: new Vector3D(-228, 22, 168),
+    target: new Vector3D(-132, 10, 56),
   },
 };
 
@@ -151,61 +150,62 @@ const ATMOSPHERES: Record<AtmosphereKey, AtmospherePreset> = {
     moonColor: new Color(0.58, 0.76, 1.0),
     moonIntensity: 3.1,
     moonDirection: new Vector3D(0.38, -0.4, 0.83).normalize(),
-    ambientColor: new Color(0.12, 0.18, 0.3),
-    ambientIntensity: 0.56,
+    ambientColor: new Color(0.14, 0.2, 0.32),
+    ambientIntensity: 0.62,
     hangarColor: new Color(1.0, 0.16, 0.08),
-    hangarIntensity: 44,
+    hangarIntensity: 260,
     fogColor: new Color(0.015, 0.025, 0.045),
-    fogDensity: 0.00048,
-    volumetricDensity: 0.0018,
-    exposure: 1.15,
-    envIntensity: 1.2,
+    fogDensity: 0.00022,
+    volumetricDensity: 0.00055,
+    exposure: 1.18,
+    envIntensity: 1.25,
   },
   twilight: {
     moonColor: new Color(0.72, 0.84, 1.0),
     moonIntensity: 3.3,
     moonDirection: new Vector3D(0.32, -0.48, 0.82).normalize(),
     ambientColor: new Color(0.22, 0.3, 0.42),
-    ambientIntensity: 0.85,
+    ambientIntensity: 0.88,
     hangarColor: new Color(1.0, 0.22, 0.12),
-    hangarIntensity: 32,
+    hangarIntensity: 210,
     fogColor: new Color(0.026, 0.04, 0.068),
-    fogDensity: 0.00042,
-    volumetricDensity: 0.0016,
+    fogDensity: 0.00018,
+    volumetricDensity: 0.00048,
     exposure: 1.25,
-    envIntensity: 1.4,
+    envIntensity: 1.45,
   },
   redAlert: {
     moonColor: new Color(0.68, 0.24, 0.24),
     moonIntensity: 2.3,
     moonDirection: new Vector3D(0.42, -0.46, 0.78).normalize(),
     ambientColor: new Color(0.32, 0.09, 0.11),
-    ambientIntensity: 0.72,
+    ambientIntensity: 0.75,
     hangarColor: new Color(1.0, 0.08, 0.04),
-    hangarIntensity: 95,
+    hangarIntensity: 480,
     fogColor: new Color(0.045, 0.014, 0.018),
-    fogDensity: 0.00065,
-    volumetricDensity: 0.0032,
-    exposure: 1.18,
-    envIntensity: 0.85,
+    fogDensity: 0.0003,
+    volumetricDensity: 0.00085,
+    exposure: 1.2,
+    envIntensity: 0.9,
   },
 };
 
-const FLY_SPEED_DEFAULT = 24;
+const FLY_SPEED_DEFAULT = 65;
 const FLY_SPEED_MIN = 2;
-const FLY_SPEED_MAX = 180;
+const FLY_SPEED_MAX = 600;
 const FLY_SPEED_STEP = 1.25;
 
-const BASE_HOVER_SHUTTLE_Y = 33.4;
-const SEARCHLIGHT_INTENSITY = 280;
+const BASE_HOVER_SHUTTLE_Y = 132.0;
+const SEARCHLIGHT_INTENSITY = 1200;
 
 /**
  * Showcase 53 — Fortress Inquisitorius (Ocean Moon Nur).
  *
- * Monumental 84 m obsidian-durasteel obelisk with mid-height cantilevered through-flight
- * hangar deck, central basalt/pilaster core spine, ceiling-racked TIE silhouettes,
- * 3-tier waterline wetness (`CustomShaderMaterial`), horizon-spanning `OceanGridGeometry`
- * + `OceanMaterial` with `PlanarReflectionNode`, and modular props.
+ * Canonical 1:1 485 m closed Mustafar volcanic basalt obelisk (Obi-Wan Kenobi Part IV)
+ * with mid-height cantilevered 24 m durasteel through-flight hangar bay, carved basalt
+ * core cliff bays & curved pilasters, 16 ceiling-racked 1:1 TIE/ln silhouettes,
+ * 20 m Lambda shuttles, 1.82 m Stormtrooper formation, 3-tier waterline wetness
+ * (`CustomShaderMaterial`), and horizon-spanning `OceanGridGeometry` + `OceanMaterial`.
  */
 export class Showcase extends AbstractShowcase {
   private _hud?: Hud;
@@ -228,11 +228,10 @@ export class Showcase extends AbstractShowcase {
     position: this._sprayPos,
     velocity: this._sprayVel,
     color: this._sprayColor,
-    size: 2.0,
+    size: 4.0,
     maxLife: 3.0,
     alpha: 0.24,
   };
-  private _armorMaterial: CustomShaderMaterial | undefined = undefined;
   private _rockMaterial: CustomShaderMaterial | undefined = undefined;
   private _moonLight?: DirectionalLight;
   private _ambientLight?: AmbientLight;
@@ -276,7 +275,7 @@ export class Showcase extends AbstractShowcase {
     this.defaultCameraController = "fly";
     this.defaultMoveSpeed = FLY_SPEED_DEFAULT;
     this.defaultFov = MathUtils.degToRad(40);
-    this.defaultFar = 2800;
+    this.defaultFar = 5200;
   }
 
   protected override async setupScene(): Promise<void> {
@@ -289,7 +288,7 @@ export class Showcase extends AbstractShowcase {
 
     const [, skyCube] = await Promise.all([
       this.loadIbl("/assets/showcases/53/ibl", ATMOSPHERES[this._atmosphere].envIntensity),
-      this.loadSkybox("/assets/showcases/53/ibl/env.webp", 2600),
+      this.loadSkybox("/assets/showcases/53/ibl/env.webp", 4800),
     ]);
     this._skyCube = skyCube;
 
@@ -314,10 +313,6 @@ export class Showcase extends AbstractShowcase {
       rockNormal,
       rockRoughness,
       rockAo,
-      winAlbedo,
-      winNormal,
-      winRoughness,
-      winEmissive,
     ] = await Promise.all([
       Texture.fromUrl("/assets/showcases/53/textures/armor_albedo.webp", texOpts),
       Texture.fromUrl("/assets/showcases/53/textures/armor_normal.webp", texOpts),
@@ -332,10 +327,6 @@ export class Showcase extends AbstractShowcase {
       Texture.fromUrl("/assets/showcases/53/textures/rock_normal.webp", texOpts),
       Texture.fromUrl("/assets/showcases/53/textures/rock_roughness.webp", texOpts),
       Texture.fromUrl("/assets/showcases/53/textures/rock_ao.webp", texOpts),
-      Texture.fromUrl("/assets/showcases/53/textures/window_albedo.webp", texOpts),
-      Texture.fromUrl("/assets/showcases/53/textures/window_normal.webp", texOpts),
-      Texture.fromUrl("/assets/showcases/53/textures/window_roughness.webp", texOpts),
-      Texture.fromUrl("/assets/showcases/53/textures/window_emissive.webp", texOpts),
     ]);
 
     const armorMaps: FortressPbrMaps = {
@@ -360,75 +351,64 @@ export class Showcase extends AbstractShowcase {
       aoMap: rockAo,
       envMap: this.scene.prefilterMap,
     };
-    const windowMaps: FortressPbrMaps = {
-      diffuseMap: winAlbedo,
-      normalMap: winNormal,
-      roughnessMap: winRoughness,
-      emissiveMap: winEmissive,
-      envMap: this.scene.prefilterMap,
-    };
 
-    const armorMat = createFortressArmorMaterial(armorMaps, {
-      color: new Color(0.2, 0.22, 0.26),
-      metallic: 0.72,
-      roughness: 0.56,
-      normalScale: new Vector2D(0.75, 0.75),
-      waterY: FORTRESS_WATER_Y,
-      wetBandHeight: 4.0,
-      waveLapAmplitude: 0.38,
-      wetAlbedoScale: 0.38,
-    });
+    // 3A/3C: Outer flanks + waterline crags + hangar rock bays use matte dark 4K Mustafar basalt
     const rockMat = createRockFoundationMaterial(rockMaps, {
       wetWaterline: true,
-      color: new Color(0.14, 0.15, 0.18),
-      metallic: 0.05,
-      roughness: 0.48,
+      color: new Color(0.46, 0.49, 0.54),
+      metallic: 0.02,
+      roughness: 0.9,
+      normalScale: new Vector2D(1.55, 1.55),
       waterY: FORTRESS_WATER_Y,
-      wetBandHeight: 4.4,
-      waveLapAmplitude: 0.42,
-      wetAlbedoScale: 0.35,
+      wetBandHeight: 9.5,
+      waveLapAmplitude: 0.85,
+      wetAlbedoScale: 0.36,
+    });
+    // 3B: Human-engineered 4K Cycles-baked Imperial durasteel exclusively for hangar bay deck
+    // Puddle/dry steel contrast [0.09..0.76] and edge wear live directly in armor_roughness.webp
+    const deckMat = createTrimArmorMaterial(armorMaps, {
+      color: new Color(0.76, 0.8, 0.86),
+      metallic: 0.96,
+      roughness: 0.92,
+      normalScale: new Vector2D(1.35, 1.35),
     });
     const trimMat = createTrimArmorMaterial(trimMaps, {
-      color: new Color(0.13, 0.15, 0.18),
-      metallic: 0.88,
-      roughness: 0.34,
+      color: new Color(0.64, 0.68, 0.75),
+      metallic: 0.96,
+      roughness: 0.88,
+      normalScale: new Vector2D(1.25, 1.25),
     });
-    const deckMat = createTrimArmorMaterial(trimMaps, {
-      color: new Color(0.11, 0.13, 0.16),
-      metallic: 0.9,
-      roughness: 0.22,
+    const trooperMat = new StandardMaterial({
+      color: new Color(0.86, 0.88, 0.9),
+      metallic: 0.15,
+      roughness: 0.36,
+      envMap: this.scene.prefilterMap,
     });
-    const windowMat = createWindowTrimMaterial(windowMaps, {
-      color: new Color(0.16, 0.18, 0.22),
-      emissiveColor: new Color(1.0, 1.0, 1.0),
-      emissiveIntensity: 2.8,
-    });
-    const coolLightMat = createEmissiveAccentMaterial(new Color(0.62, 0.86, 1.0), 1.65);
-    const visorMat = createEmissiveAccentMaterial(new Color(1.0, 0.14, 0.08), 3.4);
-    const hangarMat = createEmissiveAccentMaterial(new Color(1.0, 0.16, 0.08), 3.0);
-    const beaconMat = createEmissiveAccentMaterial(new Color(0.45, 0.82, 1.0), 2.5);
-    const ionMat = createEmissiveAccentMaterial(new Color(0.45, 0.85, 1.0), 3.4);
+    const coolLightMat = createEmissiveAccentMaterial(new Color(0.66, 0.88, 1.0), 2.2);
+    const visorMat = createEmissiveAccentMaterial(new Color(1.0, 0.14, 0.08), 3.8);
+    const hangarMat = createEmissiveAccentMaterial(new Color(1.0, 0.16, 0.08), 3.4);
+    const beaconMat = createEmissiveAccentMaterial(new Color(0.45, 0.82, 1.0), 2.8);
+    const ionMat = createEmissiveAccentMaterial(new Color(0.45, 0.85, 1.0), 3.6);
 
-    this._armorMaterial = armorMat;
     this._rockMaterial = rockMat;
 
     const loader = new GltfLoader();
-    const [fortressRoot, padRoot, turretRoot, shuttleRoot] = await Promise.all([
+    const [fortressRoot, padRoot, turretRoot, shuttleRoot, deckPropsRoot] = await Promise.all([
       loader.load("/assets/showcases/53/models/fortress.glb"),
       loader.load("/assets/showcases/53/models/landing_pad.glb"),
       loader.load("/assets/showcases/53/models/turbolaser.glb"),
       loader.load("/assets/showcases/53/models/imperial_shuttle.glb"),
+      loader.load("/assets/showcases/53/models/deck_props.glb"),
     ]);
 
     const fortressMaterialsByNode: Record<string, AbstractMaterial> = {
-      BastionBase: armorMat,
+      BastionBase: rockMat,
       BastionRock: rockMat,
       FlightDeck: deckMat,
-      MainWedge: armorMat,
+      MainWedge: rockMat,
       TrimFins: trimMat,
-      WindowBand: windowMat,
       HangarLights: coolLightMat,
-      CommandCrown: armorMat,
+      CommandCrown: rockMat,
       BridgeVisor: visorMat,
       HangarGlow: hangarMat,
     };
@@ -436,7 +416,7 @@ export class Showcase extends AbstractShowcase {
     fortressRoot.traverse((node): void => {
       if (!node.geometry) return;
       const key = node.name.replace(/_mesh$/, "");
-      const mat = fortressMaterialsByNode[key] ?? armorMat;
+      const mat = fortressMaterialsByNode[key] ?? rockMat;
       node.material = mat;
       const isGlowing = key === "BridgeVisor" || key === "HangarGlow" || key === "HangarLights";
       node.castShadow = !isGlowing;
@@ -445,9 +425,9 @@ export class Showcase extends AbstractShowcase {
     });
     this.scene.add(fortressRoot);
 
-    this._placeModularProps(padRoot, turretRoot, shuttleRoot, {
+    this._placeModularProps(padRoot, turretRoot, shuttleRoot, deckPropsRoot, {
       trimMat,
-      armorMat,
+      trooperMat,
       beaconMat,
       visorMat,
       ionMat,
@@ -488,14 +468,11 @@ export class Showcase extends AbstractShowcase {
       this._manualLightningTimer = Math.max(0, this._manualLightningTimer - deltaTime);
     }
 
-    if (this._armorMaterial) {
-      updateFortressWaterlineTime(this._armorMaterial, this._elapsed);
-    }
     if (this._rockMaterial) {
       updateFortressWaterlineTime(this._rockMaterial, this._elapsed);
     }
 
-    const bobOffset = Math.sin(this._elapsed * 1.4) * 0.45;
+    const bobOffset = Math.sin(this._elapsed * 1.4) * 0.75;
     for (let i = 0; i < this._hoverShuttleNodes.length; i++) {
       const node = this._hoverShuttleNodes[i]!;
       node.position.y = BASE_HOVER_SHUTTLE_Y + bobOffset;
@@ -503,7 +480,7 @@ export class Showcase extends AbstractShowcase {
 
     if (this._oceanMaterial) {
       this._oceanMaterial.time = this._elapsed;
-      this._oceanMaterial.downwashStrength = 0.92 - bobOffset * 0.18;
+      this._oceanMaterial.downwashStrength = 0.78 - bobOffset * 0.1;
     }
     this._updateBuoys();
     if (this._oceanMesh) {
@@ -593,33 +570,35 @@ export class Showcase extends AbstractShowcase {
     this._moonLight.shadowResolution = 2048;
     this.scene.add(this._moonLight);
 
-    // Central crimson bridge & blast-door glow inside mid-height canyon
+    // Central crimson bridge & blast-door glow inside the 24 m tall hangar core
     const hangarPositions: [number, number, number][] = [
-      [0.0, 33.2, 8.2],
-      [-7.2, 33.5, 0.0],
-      [7.2, 33.5, 0.0],
+      [0.0, 123.0, 56.0],
+      [-50.0, 124.0, 0.0],
+      [50.0, 124.0, 0.0],
     ];
     for (const [hx, hy, hz] of hangarPositions) {
       const light = new PointLight({
         color: new Color(1.0, 0.16, 0.08),
-        intensity: 34,
-        distance: 34,
+        intensity: 260,
+        distance: 150,
       });
       light.position.set(hx, hy, hz);
       this._hangarLights.push(light);
       this.scene.add(light);
     }
 
-    // Cool steel-cyan overhead flood lights illuminating the cantilevered flight deck
+    // Cool steel-cyan overhead flood lights illuminating the cantilevered durasteel flight deck
     const deckPositions: [number, number, number][] = [
-      [-9.6, 37.8, 1.5],
-      [9.6, 37.8, 1.5],
+      [-68.0, 136.0, 16.0],
+      [68.0, 136.0, 16.0],
+      [-26.0, 136.0, 68.0],
+      [26.0, 136.0, 68.0],
     ];
     for (const [dx, dy, dz] of deckPositions) {
       const light = new PointLight({
         color: new Color(0.68, 0.88, 1.0),
-        intensity: 48,
-        distance: 38,
+        intensity: 340,
+        distance: 160,
       });
       light.position.set(dx, dy, dz);
       this._deckLights.push(light);
@@ -634,21 +613,21 @@ export class Showcase extends AbstractShowcase {
       phaseOffset: number;
       speed: number;
     }> = [
-      { x: -13.5, y: 31.4, z: 9.5, baseYaw: 0.55, phaseOffset: 0.0, speed: 0.48 },
-      { x: 13.5, y: 31.4, z: 9.5, baseYaw: -0.55, phaseOffset: 1.15, speed: 0.42 },
+      { x: -108.0, y: 114.8, z: 42.0, baseYaw: -0.78, phaseOffset: 0.0, speed: 0.48 },
+      { x: 108.0, y: 114.8, z: 42.0, baseYaw: 0.78, phaseOffset: 1.15, speed: 0.42 },
     ];
     for (const cfg of searchlightMounts) {
-      const yaw = cfg.baseYaw + Math.sin(cfg.phaseOffset) * 0.52;
+      const yaw = cfg.baseYaw + Math.sin(cfg.phaseOffset) * 0.45;
       const light = new SpotLight({
         color: new Color(0.75, 0.9, 1.0),
         intensity: this._searchlightsEnabled ? SEARCHLIGHT_INTENSITY : 0,
-        distance: 155,
+        distance: 750,
         angle: 0.24,
         penumbra: 0.65,
-        decay: 1.4,
+        decay: 1.6,
         direction: new Vector3D(
           Math.sin(yaw),
-          -0.34 + 0.06 * Math.cos(cfg.phaseOffset),
+          -0.32 + 0.06 * Math.cos(cfg.phaseOffset),
           Math.cos(yaw),
         ).normalize(),
       });
@@ -666,7 +645,7 @@ export class Showcase extends AbstractShowcase {
     this.scene.fog = new Fog({
       mode: FogMode.EXP2,
       color: new Color(0.035, 0.055, 0.09),
-      density: 0.0042,
+      density: 0.00022,
     });
   }
 
@@ -677,7 +656,7 @@ export class Showcase extends AbstractShowcase {
     const hbao = pp.get<HbaoElement>(PostProcessingEffectType.HBAO);
     if (hbao) {
       hbao.enabled = true;
-      hbao.radius = 1.4;
+      hbao.radius = 2.8;
       hbao.intensity = 1.15;
     }
 
@@ -691,9 +670,9 @@ export class Showcase extends AbstractShowcase {
     const vfog = pp.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
     if (vfog) {
       vfog.enabled = true;
-      vfog.density = 0.0018;
-      vfog.maxDistance = 240;
-      vfog.heightFalloff = 0.036;
+      vfog.density = 0.00055;
+      vfog.maxDistance = 1200;
+      vfog.heightFalloff = 0.012;
       vfog.asymmetry = 0.22;
       vfog.ambientInject = 0.08;
     }
@@ -702,7 +681,7 @@ export class Showcase extends AbstractShowcase {
     if (tone) {
       tone.enabled = true;
       tone.mode = ToneMappingMode.AGX;
-      tone.exposure = 1.15;
+      tone.exposure = 1.18;
     }
   }
 
@@ -719,11 +698,11 @@ export class Showcase extends AbstractShowcase {
 
     const ocean = new Object3D("NurOcean");
     ocean.geometry = new OceanGridGeometry({
-      radius: 2400,
-      radialSegments: 160,
+      radius: 4400,
+      radialSegments: 168,
       angularSegments: 192,
       radialExponent: 3.4,
-      detailRadius: 380,
+      detailRadius: 900,
     }).getGeometryData();
     this._oceanMaterial = new OceanMaterial({
       waterColor: new Color(0.012, 0.048, 0.088),
@@ -734,14 +713,14 @@ export class Showcase extends AbstractShowcase {
       windSpeed: this._windSpeed,
       windDirection: new Vector2D(0.84, 0.54),
       waveScale: this._waveScale,
-      waveWavelength: 34.0,
-      swellFadeStart: 350,
-      swellFadeEnd: 1950,
+      waveWavelength: 42.0,
+      swellFadeStart: 900,
+      swellFadeEnd: 3800,
       detailScale: 1.05,
       detailStrength: 1.2,
       choppiness: this._choppiness,
       foamColor: new Color(0.72, 0.81, 0.88),
-      foamDistance: 3.0,
+      foamDistance: 5.5,
       foamCoverage: this._foamCoverage,
       waterAbsorption: [0.65, 0.28, 0.16],
       refractionStrength: 0.025,
@@ -750,9 +729,9 @@ export class Showcase extends AbstractShowcase {
       reflectionDistortion: 0.11,
       reflectionRoughness: 0.04,
       causticsStrength: this._caustics,
-      downwashCenter: new Vector2D(28.0, -8.5),
-      downwashRadius: 15.5,
-      downwashStrength: 0.92,
+      downwashCenter: new Vector2D(168.0, -48.0),
+      downwashRadius: 46.0,
+      downwashStrength: 0.78,
     });
     // On WebGPU/WebGL2 leave envMap undefined so OceanMaterial samples prefiltered IBL; on
     // WebGL1 (no u_prefilterMap) bind the skybox cube so reflections and horizon sky match.
@@ -774,8 +753,8 @@ export class Showcase extends AbstractShowcase {
     this._rain = attachRainStreaks(this.scene, {
       count: 9000,
       seed: 5301,
-      halfExtent: 15,
-      height: 20,
+      halfExtent: 28,
+      height: 32,
       followCameraY: true,
       exposure: 1 / 28,
       windX: 7.4,
@@ -793,16 +772,16 @@ export class Showcase extends AbstractShowcase {
       tintStart: sprayStart,
       tintEnd: sprayEnd,
       churn: 0.3,
-      softFadeDistance: 2.2,
+      softFadeDistance: 5.0,
       lightIntensity: 0,
     });
 
     this._spraySystem = new ParticleSystem({ capacity: 220 });
     this._spraySystem.addAffector(
-      new GravityAffector({ acceleration: new Vector3D(3.8, -0.55, 2.45) }),
+      new GravityAffector({ acceleration: new Vector3D(6.5, -1.1, 4.2) }),
     );
     this._spraySystem.addAffector(new DragAffector({ drag: 0.95 }));
-    this._spraySystem.addAffector(new SizeGrowthAffector({ rate: 0.45, maxScale: 3.6 }));
+    this._spraySystem.addAffector(new SizeGrowthAffector({ rate: 1.2, maxScale: 9.0 }));
     this._spraySystem.addAffector(
       new ColorOverLifeAffector({
         startColor: sprayStart,
@@ -849,24 +828,24 @@ export class Showcase extends AbstractShowcase {
       opts.color = this._sprayColor;
 
       for (let i = 0; i < emitCount; i++) {
-        // Bias wave-crash mist toward the windward perimeter while circling the basalt crags.
+        // Bias wave-crash mist toward the windward perimeter while circling the 248 m basalt crags.
         let angle = rand() * Math.PI * 2;
         if (rand() < 0.5) {
           angle = Math.atan2(-0.54, -0.84) + (rand() - 0.5) * 2.1;
         }
         const cosA = Math.cos(angle);
         const sinA = Math.sin(angle);
-        const radius = 18.5 + rand() * 11.5;
-        this._sprayPos.set(cosA * radius, FORTRESS_WATER_Y + 0.05 + rand() * 0.45, sinA * radius);
-        const radialBurst = 0.8 + rand() * 1.4;
+        const radius = 130.0 + rand() * 34.0;
+        this._sprayPos.set(cosA * radius, FORTRESS_WATER_Y + 0.25 + rand() * 1.4, sinA * radius);
+        const radialBurst = 2.2 + rand() * 3.4;
         this._sprayVel.set(
-          cosA * radialBurst + 3.4 + (rand() - 0.5) * 1.4,
-          0.95 + rand() * 1.25,
-          sinA * radialBurst + 2.2 + (rand() - 0.5) * 1.4,
+          cosA * radialBurst + 5.8 + (rand() - 0.5) * 2.8,
+          2.1 + rand() * 2.8,
+          sinA * radialBurst + 3.8 + (rand() - 0.5) * 2.8,
         );
         this._sprayColor.r = seedRand();
-        opts.size = 0.85 + rand() * 0.9;
-        opts.maxLife = 1.9 + rand() * 1.3;
+        opts.size = 2.8 + rand() * 2.6;
+        opts.maxLife = 2.4 + rand() * 1.6;
         sys.emit(opts);
       }
     }
@@ -882,9 +861,10 @@ export class Showcase extends AbstractShowcase {
     padRoot: Object3D,
     turretRoot: Object3D,
     shuttleRoot: Object3D,
+    deckPropsRoot: Object3D,
     mats: {
       trimMat: AbstractMaterial;
-      armorMat: AbstractMaterial;
+      trooperMat: AbstractMaterial;
       beaconMat: AbstractMaterial;
       visorMat: AbstractMaterial;
       ionMat: AbstractMaterial;
@@ -902,19 +882,27 @@ export class Showcase extends AbstractShowcase {
       ShuttleCockpit: mats.visorMat,
       ShuttleEngines: mats.ionMat,
     });
+    const allDeckParts = this._extractParts(deckPropsRoot, {
+      Stormtrooper: mats.trooperMat,
+      CargoCrate: mats.trimMat,
+      FuelDrumCluster: mats.trimMat,
+    });
+    const trooperParts = allDeckParts.filter((p) => p.name === "Stormtrooper");
+    const crateParts = allDeckParts.filter((p) => p.name === "CargoCrate");
+    const drumParts = allDeckParts.filter((p) => p.name === "FuelDrumCluster");
 
     const padPlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [
-      { x: -25.5, y: 2.32, z: 10.5, yaw: 0.4 },
+      { x: -146.0, y: 8.5, z: 58.0, yaw: 0.4 },
     ];
     this._instantiateParts(padParts, padPlacements, 1.0, false);
 
     const buoyPlacements: Array<{ x: number; z: number; yaw: number }> = [
-      { x: -34.0, z: 22.0, yaw: 0.3 },
-      { x: -18.0, z: 31.0, yaw: 1.1 },
-      { x: 22.0, z: 27.0, yaw: -0.6 },
-      { x: 32.0, z: -14.0, yaw: -1.4 },
+      { x: -195.0, z: 118.0, yaw: 0.3 },
+      { x: -95.0, z: 182.0, yaw: 1.1 },
+      { x: 148.0, z: 168.0, yaw: -0.6 },
+      { x: 192.0, z: -88.0, yaw: -1.4 },
     ];
-    const buoyScale = 0.28;
+    const buoyScale = 0.25;
     for (const b of buoyPlacements) {
       const root = new Object3D("ImperialSignalBuoy");
       root.position.set(b.x, FORTRESS_WATER_Y + 0.12, b.z);
@@ -940,26 +928,77 @@ export class Showcase extends AbstractShowcase {
     }
 
     const turretPlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [
-      { x: -15.6, y: 2.85, z: 15.6, yaw: -0.78 },
-      { x: 15.6, y: 2.85, z: 15.6, yaw: 0.78 },
-      { x: -15.6, y: 2.85, z: -15.6, yaw: -2.35 },
-      { x: 15.6, y: 2.85, z: -15.6, yaw: 2.35 },
+      { x: -114.0, y: 10.6, z: 114.0, yaw: -0.78 },
+      { x: 114.0, y: 10.6, z: 114.0, yaw: 0.78 },
+      { x: -114.0, y: 10.6, z: -114.0, yaw: -2.35 },
+      { x: 114.0, y: 10.6, z: -114.0, yaw: 2.35 },
     ];
-    this._instantiateParts(turretParts, turretPlacements, 0.9, true);
+    this._instantiateParts(turretParts, turretPlacements, 1.0, true);
 
     const landedShuttles: Array<{ x: number; y: number; z: number; yaw: number }> = [
-      { x: -25.5, y: 2.32, z: 10.5, yaw: 0.55 },
-      { x: 9.2, y: 30.8, z: 3.8, yaw: 0.65 },
-      { x: -9.4, y: 30.8, z: 3.6, yaw: -0.42 },
+      { x: -146.0, y: 8.74, z: 58.0, yaw: 0.55 },
+      { x: 68.0, y: 116.0, z: 16.0, yaw: 0.65 },
+      { x: -72.0, y: 116.0, z: 14.0, yaw: -0.45 },
     ];
-    this._instantiateParts(shuttleParts, landedShuttles, 0.72, true);
+    this._instantiateParts(shuttleParts, landedShuttles, 1.0, true);
 
     this._hoverShuttleNodes = this._instantiateParts(
       shuttleParts,
-      [{ x: 28.0, y: BASE_HOVER_SHUTTLE_Y, z: -8.5, yaw: -1.15 }],
-      0.72,
+      [{ x: 168.0, y: BASE_HOVER_SHUTTLE_Y, z: -48.0, yaw: -1.15 }],
+      1.0,
       true,
     );
+
+    // 1:1 Human-Scale Stormtrooper honor guard & blast-door sentries on FlightDeck (y = 116.0 m)
+    const trooperPlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [];
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 5; col++) {
+        trooperPlacements.push({
+          x: 74.0 + row * 2.2,
+          y: 116.0,
+          z: 24.0 + col * 2.1,
+          yaw: -2.35,
+        });
+      }
+    }
+    // Blast-door sentries flanking core doors
+    trooperPlacements.push(
+      { x: 47.6, y: 116.0, z: 25.2, yaw: Math.PI * 0.5 },
+      { x: 47.6, y: 116.0, z: 34.8, yaw: Math.PI * 0.5 },
+      { x: 47.6, y: 116.0, z: -4.8, yaw: Math.PI * 0.5 },
+      { x: 47.6, y: 116.0, z: 4.8, yaw: Math.PI * 0.5 },
+      { x: -47.6, y: 116.0, z: 25.2, yaw: -Math.PI * 0.5 },
+      { x: -47.6, y: 116.0, z: 34.8, yaw: -Math.PI * 0.5 },
+      { x: 26.2, y: 116.0, z: 50.0, yaw: 0.0 },
+      { x: -26.2, y: 116.0, z: 50.0, yaw: 0.0 },
+    );
+    this._instantiateParts(trooperParts, trooperPlacements, 1.0, true);
+
+    const cratePlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [
+      { x: 56.0, y: 116.0, z: -34.0, yaw: 0.15 },
+      { x: 59.2, y: 116.0, z: -31.0, yaw: 0.25 },
+      { x: 86.0, y: 116.0, z: -18.0, yaw: -0.4 },
+      { x: 108.0, y: 116.0, z: -8.0, yaw: 0.1 },
+      { x: 112.0, y: 116.0, z: -4.5, yaw: 0.35 },
+      { x: -58.0, y: 116.0, z: -24.0, yaw: -0.2 },
+      { x: -84.0, y: 116.0, z: -22.0, yaw: 0.5 },
+      { x: -105.0, y: 116.0, z: 4.0, yaw: -0.15 },
+      { x: 36.0, y: 116.0, z: 62.0, yaw: 0.3 },
+      { x: -36.0, y: 116.0, z: 64.0, yaw: -0.25 },
+    ];
+    this._instantiateParts(crateParts, cratePlacements, 1.0, true);
+
+    const drumPlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [
+      { x: 54.0, y: 116.0, z: -28.0, yaw: 0.4 },
+      { x: 78.0, y: 116.0, z: 42.0, yaw: 1.1 },
+      { x: 104.0, y: 116.0, z: 8.0, yaw: -0.6 },
+      { x: 115.0, y: 116.0, z: 6.0, yaw: 0.8 },
+      { x: -55.0, y: 116.0, z: -18.0, yaw: -0.9 },
+      { x: -82.0, y: 116.0, z: 28.0, yaw: 0.2 },
+      { x: 40.0, y: 116.0, z: 58.0, yaw: -0.4 },
+      { x: -40.0, y: 116.0, z: 58.0, yaw: 0.7 },
+    ];
+    this._instantiateParts(drumParts, drumPlacements, 1.0, true);
   }
 
   private _updateBuoys(): void {
@@ -1098,7 +1137,7 @@ export class Showcase extends AbstractShowcase {
       light.color.copyFrom(preset.hangarColor);
       light.intensity = preset.hangarIntensity;
     }
-    const deckIntensity = key === "redAlert" ? 16 : 48;
+    const deckIntensity = key === "redAlert" ? 110 : 340;
     for (const light of this._deckLights) {
       light.intensity = deckIntensity;
     }
