@@ -4,10 +4,12 @@ import {
   attachRainStreaks,
   Color,
   DirectionalLight,
+  Easing,
   FlyController,
   Fog,
   FogMode,
   GltfLoader,
+  Keys,
   MathUtils,
   mulberry32,
   Object3D,
@@ -105,9 +107,11 @@ interface QaSwm53Hook {
     renderer: string;
     trisEstimate: number;
     time: number;
+    isFlying: boolean;
+    cameraPosition: [number, number, number];
   };
   setView(pos: number[], target: number[]): void;
-  setCameraPreset(preset: CameraPresetKey): void;
+  setCameraPreset(preset: CameraPresetKey, instant?: boolean): void;
   setAtmosphere(atmosphere: AtmosphereKey): void;
   setReflection(on: boolean): void;
   setBloom(on: boolean): void;
@@ -198,6 +202,21 @@ const FLY_SPEED_STEP = 1.25;
 const BASE_HOVER_SHUTTLE_Y = 132.0;
 const SEARCHLIGHT_INTENSITY = 1200;
 
+const FLIGHT_NAV_KEYS: ReadonlySet<string> = new Set([
+  Keys.W,
+  Keys.A,
+  Keys.S,
+  Keys.D,
+  Keys.UP,
+  Keys.DOWN,
+  Keys.LEFT,
+  Keys.RIGHT,
+  Keys.SPACE,
+  Keys.E,
+  Keys.Q,
+  Keys.C,
+]);
+
 /**
  * Showcase 53 — Fortress Inquisitorius (Ocean Moon Nur).
  *
@@ -280,7 +299,7 @@ export class Showcase extends AbstractShowcase {
 
   protected override async setupScene(): Promise<void> {
     this.configureCamera();
-    this._applyCameraPreset("wide");
+    this._applyCameraPreset("wide", true);
     this.renderer.setClearColor(new Color(0.012, 0.022, 0.042, 1.0));
 
     this._setupLighting();
@@ -531,23 +550,32 @@ export class Showcase extends AbstractShowcase {
     }
   }
 
+  public override resetCamera(): void {
+    this._setCameraPreset(this._cameraPreset, false);
+  }
+
   protected override onKeyDown(event: KeyboardEvent): void {
+    if (event.altKey || event.metaKey || event.ctrlKey) {
+      super.onKeyDown(event);
+      return;
+    }
+    if (this.camera.isFlying && FLIGHT_NAV_KEYS.has(event.code)) {
+      this.camera.cancelFlight?.();
+      this._syncCameraController();
+    }
     super.onKeyDown(event);
-    if (event.altKey || event.metaKey || event.ctrlKey) return;
     if (this._hud?.handleKey(event)) return;
     if (event.defaultPrevented) return;
-    if (event.code === "Digit1") this._setCameraPreset("wide");
-    else if (event.code === "Digit2") this._setCameraPreset("hangar");
-    else if (event.code === "Digit3") this._setCameraPreset("crown");
-    else if (event.code === "Digit4") this._setCameraPreset("waterline");
-    else if (event.code === "Digit5") this._setCameraPreset("trench");
-    else if (event.code === "KeyL") {
+    if (event.code === Keys.D1) this._setCameraPreset("wide");
+    else if (event.code === Keys.D2) this._setCameraPreset("hangar");
+    else if (event.code === Keys.D3) this._setCameraPreset("crown");
+    else if (event.code === Keys.D4) this._setCameraPreset("waterline");
+    else if (event.code === Keys.D5) this._setCameraPreset("trench");
+    else if (event.code === Keys.L) {
       const nextIdx = (ATMOSPHERE_KEYS.indexOf(this._atmosphere) + 1) % ATMOSPHERE_KEYS.length;
       this._setAtmosphere(ATMOSPHERE_KEYS[nextIdx]!);
-    } else if (event.code === "KeyF") {
+    } else if (event.code === Keys.F) {
       this._manualLightningTimer = 0.55;
-    } else if (event.code === "KeyR") {
-      this._setCameraPreset(this._cameraPreset);
     }
   }
 
@@ -1095,7 +1123,14 @@ export class Showcase extends AbstractShowcase {
 
   private _setupControls(): void {
     this.canvas.addEventListener("wheel", this._onWheel, { passive: false });
+    this.canvas.addEventListener("pointerdown", this._onCanvasPointerDown);
   }
+
+  private readonly _onCanvasPointerDown = (): void => {
+    if (!this.camera.isFlying) return;
+    this.camera.cancelFlight?.();
+    this._syncCameraController();
+  };
 
   private readonly _onWheel = (event: WheelEvent): void => {
     this._fly ??= this.camera.behaviors.find((b): b is FlyController => b instanceof FlyController);
@@ -1108,17 +1143,104 @@ export class Showcase extends AbstractShowcase {
     );
   };
 
-  private _applyCameraPreset(preset: CameraPresetKey): void {
-    const view = CAMERA_VIEWS[preset];
-    this.setInitialCamera(view.position.clone(), view.target.clone());
-    if (this._oceanMesh) {
-      OceanGridGeometry.snapToTarget(this._oceanMesh, view.position.x, view.position.z, 8);
+  private _syncCameraController(): void {
+    this._fly ??= this.camera.behaviors.find((b): b is FlyController => b instanceof FlyController);
+    if (this._fly) {
+      this._fly.enabled = !(this.camera.isFlying ?? false);
     }
   }
 
-  private _setCameraPreset(preset: CameraPresetKey): void {
+  private _minFortressClearanceRadius(y: number): number {
+    // Keep curved fly-bys clear of the 252 m wing aprons below y=145 and tapered monolith spire above.
+    const spireT = MathUtils.clamp((y - 145) / 340, 0, 1);
+    return 178 - 120 * spireT;
+  }
+
+  private _buildCameraArcWaypoints(
+    startPos: Vector3D,
+    endPos: Vector3D,
+  ): { waypoints: Vector3D[]; duration: number } {
+    const dist = startPos.distanceTo(endPos);
+    if (dist < 1.0) {
+      return { waypoints: [], duration: 0.65 };
+    }
+
+    const rStart = Math.hypot(startPos.x, startPos.z);
+    const rEnd = Math.hypot(endPos.x, endPos.z);
+    const aStart = Math.atan2(startPos.x, startPos.z);
+    const aEnd = Math.atan2(endPos.x, endPos.z);
+    const deltaAngle = Math.atan2(Math.sin(aEnd - aStart), Math.cos(aEnd - aStart));
+    const absAngle = Math.abs(deltaAngle);
+
+    // Nearly radial moves still bank in a subtle lateral arc instead of zooming linearly.
+    const radialBlend = Math.max(0, 1 - absAngle / 0.45);
+    const swingSign = Math.abs(deltaAngle) > 0.03 ? Math.sign(deltaAngle) : endPos.x >= 0 ? 1 : -1;
+    const lateralSwirl = radialBlend * 0.24 * swingSign;
+    const lift = MathUtils.clamp(dist * 0.055, 8, 46);
+    const outwardExpandMax = Math.min(115, dist * 0.14);
+
+    const fractions = [0.34, 0.68];
+    const waypoints: Vector3D[] = [];
+    for (let i = 0; i < fractions.length; i++) {
+      const t = fractions[i]!;
+      const sinCurve = Math.sin(Math.PI * t);
+      const angle = aStart + deltaAngle * t + sinCurve * lateralSwirl;
+      const y = Math.max(16, MathUtils.lerp(startPos.y, endPos.y, t) + sinCurve * lift);
+      const safeHullRadius = this._minFortressClearanceRadius(y);
+      const minRadius =
+        rEnd < safeHullRadius && t > 0.5
+          ? MathUtils.lerp(safeHullRadius, Math.min(safeHullRadius, rEnd + 20), 0.45)
+          : safeHullRadius;
+      const radius = Math.max(
+        minRadius,
+        MathUtils.lerp(rStart, rEnd, t) + sinCurve * outwardExpandMax,
+      );
+      waypoints.push(new Vector3D(Math.sin(angle) * radius, y, Math.cos(angle) * radius));
+    }
+
+    const arcDist =
+      startPos.distanceTo(waypoints[0]!) +
+      waypoints[0]!.distanceTo(waypoints[1]!) +
+      waypoints[1]!.distanceTo(endPos);
+    const duration = MathUtils.clamp(1.35 + arcDist / 520, 1.65, 3.15);
+    return { waypoints, duration };
+  }
+
+  private _applyCameraPreset(preset: CameraPresetKey, instant: boolean = false): void {
+    const view = CAMERA_VIEWS[preset];
+    if (instant) {
+      this.camera.cancelFlight?.();
+      this.setInitialCamera(view.position.clone(), view.target.clone());
+      this._syncCameraController();
+      if (this._oceanMesh) {
+        OceanGridGeometry.snapToTarget(this._oceanMesh, view.position.x, view.position.z, 8);
+      }
+      return;
+    }
+
+    const { waypoints, duration } = this._buildCameraArcWaypoints(
+      this.camera.position,
+      view.position,
+    );
+    void this.camera.flyTo?.({
+      position: view.position,
+      target: view.target,
+      waypoints,
+      duration,
+      easing: Easing.easeInOutCubic,
+      onComplete: (): void => {
+        this._syncCameraController();
+      },
+      onCancel: (): void => {
+        this._syncCameraController();
+      },
+    });
+    this._syncCameraController();
+  }
+
+  private _setCameraPreset(preset: CameraPresetKey, instant: boolean = false): void {
     this._cameraPreset = preset;
-    this._applyCameraPreset(preset);
+    this._applyCameraPreset(preset, instant);
     this._syncHud();
   }
 
@@ -1265,7 +1387,7 @@ export class Showcase extends AbstractShowcase {
       triggerLightning: (): void => {
         this._manualLightningTimer = 0.55;
       },
-      resetView: (): void => this._applyCameraPreset(this._cameraPreset),
+      resetView: (): void => this._setCameraPreset(this._cameraPreset, false),
       setWaveScale: (v: number): void => this._setWaveScale(v),
       setWindSpeed: (v: number): void => this._setWindSpeed(v),
       setChoppiness: (v: number): void => this._setChoppiness(v),
@@ -1291,17 +1413,22 @@ export class Showcase extends AbstractShowcase {
         renderer: String(this.renderer.type),
         trisEstimate: this._trisEstimate,
         time: this._elapsed,
+        isFlying: this.camera.isFlying,
+        cameraPosition: [this.camera.position.x, this.camera.position.y, this.camera.position.z],
       }),
       setView: (pos: number[], target: number[]): void => {
+        this.camera.cancelFlight?.();
         this.setInitialCamera(
           new Vector3D(pos[0]!, pos[1]!, pos[2]!),
           new Vector3D(target[0]!, target[1]!, target[2]!),
         );
+        this._syncCameraController();
         if (this._oceanMesh) {
           OceanGridGeometry.snapToTarget(this._oceanMesh, pos[0]!, pos[2]!, 8);
         }
       },
-      setCameraPreset: (preset: CameraPresetKey): void => this._setCameraPreset(preset),
+      setCameraPreset: (preset: CameraPresetKey, instant: boolean = true): void =>
+        this._setCameraPreset(preset, instant),
       setAtmosphere: (atmosphere: AtmosphereKey): void => this._setAtmosphere(atmosphere),
       setReflection: (on: boolean): void => this._setReflection(on),
       setBloom: (on: boolean): void => this._setBloom(on),
@@ -1315,6 +1442,7 @@ export class Showcase extends AbstractShowcase {
 
   public override destroy(): void {
     this.canvas?.removeEventListener("wheel", this._onWheel);
+    this.canvas?.removeEventListener("pointerdown", this._onCanvasPointerDown);
     this._rain?.dispose();
     if (this._sprayRenderer) {
       this._sprayRenderer.mesh.parent?.remove(this._sprayRenderer.mesh);
