@@ -1,20 +1,22 @@
 import {
   AbstractShowcase,
   AmbientLight,
+  attachRainStreaks,
   Color,
   DirectionalLight,
   FlyController,
   Fog,
   FogMode,
   GltfLoader,
-  Ground,
   MathUtils,
+  mulberry32,
   Object3D,
+  OceanGridGeometry,
+  OceanMaterial,
   PlanarReflectionNode,
   PointLight,
   PostProcessingEffectType,
   RendererType,
-  StandardMaterial,
   Texture,
   TextureWrap,
   ToneMappingMode,
@@ -24,19 +26,29 @@ import {
 import type {
   AbstractMaterial,
   BloomElement,
+  CubeTexture,
   EngineOptions,
   GeometryDataInterface,
   HbaoElement,
   ToneMappingElement,
   VolumetricFogElement,
   CustomShaderMaterial,
-  OpenWaterMaterial,
+  RainStreaks,
 } from "@small-world-machine/engine";
+import {
+  ColorOverLifeAffector,
+  DragAffector,
+  GravityAffector,
+  ParticleMeshRenderer,
+  ParticleSystem,
+  SizeGrowthAffector,
+  SmokeSpriteMaterial,
+} from "@small-world-machine/vfx-extras";
+import type { ParticleOptions } from "@small-world-machine/vfx-extras";
 import {
   createEmissiveAccentMaterial,
   createFortressArmorMaterial,
   createRockFoundationMaterial,
-  createStormOceanMaterial,
   createTrimArmorMaterial,
   createWindowTrimMaterial,
   FORTRESS_WATER_Y,
@@ -115,42 +127,42 @@ const CAMERA_VIEWS: Record<CameraPresetKey, CameraView> = {
 const ATMOSPHERES: Record<AtmosphereKey, AtmospherePreset> = {
   storm: {
     moonColor: new Color(0.58, 0.76, 1.0),
-    moonIntensity: 2.9,
-    moonDirection: new Vector3D(-0.62, -0.5, -0.26).normalize(),
+    moonIntensity: 3.1,
+    moonDirection: new Vector3D(0.38, -0.4, 0.83).normalize(),
     ambientColor: new Color(0.12, 0.18, 0.3),
     ambientIntensity: 0.56,
     hangarColor: new Color(1.0, 0.16, 0.08),
     hangarIntensity: 44,
     fogColor: new Color(0.015, 0.025, 0.045),
-    fogDensity: 0.0018,
+    fogDensity: 0.00048,
     volumetricDensity: 0.0018,
     exposure: 1.15,
     envIntensity: 1.2,
   },
   twilight: {
     moonColor: new Color(0.72, 0.84, 1.0),
-    moonIntensity: 3.1,
-    moonDirection: new Vector3D(-0.48, -0.65, -0.58).normalize(),
+    moonIntensity: 3.3,
+    moonDirection: new Vector3D(0.32, -0.48, 0.82).normalize(),
     ambientColor: new Color(0.22, 0.3, 0.42),
     ambientIntensity: 0.85,
     hangarColor: new Color(1.0, 0.22, 0.12),
     hangarIntensity: 32,
     fogColor: new Color(0.026, 0.04, 0.068),
-    fogDensity: 0.0016,
+    fogDensity: 0.00042,
     volumetricDensity: 0.0016,
     exposure: 1.25,
     envIntensity: 1.4,
   },
   redAlert: {
     moonColor: new Color(0.68, 0.24, 0.24),
-    moonIntensity: 2.1,
-    moonDirection: new Vector3D(-0.55, -0.78, -0.32).normalize(),
+    moonIntensity: 2.3,
+    moonDirection: new Vector3D(0.42, -0.46, 0.78).normalize(),
     ambientColor: new Color(0.32, 0.09, 0.11),
     ambientIntensity: 0.72,
     hangarColor: new Color(1.0, 0.08, 0.04),
     hangarIntensity: 95,
     fogColor: new Color(0.045, 0.014, 0.018),
-    fogDensity: 0.0024,
+    fogDensity: 0.00065,
     volumetricDensity: 0.0032,
     exposure: 1.18,
     envIntensity: 0.85,
@@ -162,8 +174,6 @@ const FLY_SPEED_MIN = 2;
 const FLY_SPEED_MAX = 180;
 const FLY_SPEED_STEP = 1.25;
 
-const OCEAN_SIZE = 760;
-const OCEAN_SEGMENTS = 240;
 const BASE_HOVER_SHUTTLE_Y = 33.4;
 
 /**
@@ -171,14 +181,34 @@ const BASE_HOVER_SHUTTLE_Y = 33.4;
  *
  * Monumental 84 m obsidian-durasteel obelisk with mid-height cantilevered through-flight
  * hangar deck, central basalt/pilaster core spine, ceiling-racked TIE silhouettes,
- * 3-tier waterline wetness (`CustomShaderMaterial`), `OpenWaterMaterial` + `PlanarReflectionNode`,
- * and modular props.
+ * 3-tier waterline wetness (`CustomShaderMaterial`), horizon-spanning `OceanGridGeometry`
+ * + `OceanMaterial` with `PlanarReflectionNode`, and modular props.
  */
 export class Showcase extends AbstractShowcase {
   private _hud?: Hud;
   private _fly: FlyController | undefined = undefined;
   private _reflection: PlanarReflectionNode | undefined = undefined;
-  private _oceanMaterial: OpenWaterMaterial | undefined = undefined;
+  private _oceanMaterial: OceanMaterial | undefined = undefined;
+  private _oceanMesh: Object3D | undefined = undefined;
+  private _skyCube: CubeTexture | undefined = undefined;
+  private _rain: RainStreaks | undefined = undefined;
+  private _spraySystem: ParticleSystem | undefined = undefined;
+  private _sprayRenderer: ParticleMeshRenderer | undefined = undefined;
+  private _sprayMaterial: SmokeSpriteMaterial | undefined = undefined;
+  private _sprayAccumulator = 0;
+  private readonly _sprayRand = mulberry32(5302);
+  private readonly _spraySeedRand = mulberry32(5302 ^ 0x5bd1e995);
+  private readonly _sprayPos = new Vector3D();
+  private readonly _sprayVel = new Vector3D();
+  private readonly _sprayColor = new Color(0, 0, 0, 0.24);
+  private readonly _sprayEmitOpts: ParticleOptions = {
+    position: this._sprayPos,
+    velocity: this._sprayVel,
+    color: this._sprayColor,
+    size: 2.0,
+    maxLife: 3.0,
+    alpha: 0.24,
+  };
   private _armorMaterial: CustomShaderMaterial | undefined = undefined;
   private _rockMaterial: CustomShaderMaterial | undefined = undefined;
   private _moonLight?: DirectionalLight;
@@ -205,7 +235,7 @@ export class Showcase extends AbstractShowcase {
     this.defaultCameraController = "fly";
     this.defaultMoveSpeed = FLY_SPEED_DEFAULT;
     this.defaultFov = MathUtils.degToRad(40);
-    this.defaultFar = 950;
+    this.defaultFar = 2800;
   }
 
   protected override async setupScene(): Promise<void> {
@@ -216,10 +246,11 @@ export class Showcase extends AbstractShowcase {
     this._setupLighting();
     this._setupPostProcessing();
 
-    await Promise.all([
+    const [, skyCube] = await Promise.all([
       this.loadIbl("/assets/showcases/53/ibl", ATMOSPHERES[this._atmosphere].envIntensity),
-      this.loadSkybox("/assets/showcases/53/ibl/env.webp", 1200),
+      this.loadSkybox("/assets/showcases/53/ibl/env.webp", 2600),
     ]);
+    this._skyCube = skyCube;
 
     const texOpts = {
       generateMipmaps: true,
@@ -382,6 +413,7 @@ export class Showcase extends AbstractShowcase {
     });
 
     this._setupOcean();
+    this._setupWeatherAndSpray();
     this._applyAtmosphere(this._atmosphere);
     this._setupControls();
     this._installQaHook();
@@ -401,6 +433,18 @@ export class Showcase extends AbstractShowcase {
     if (this._oceanMaterial) {
       this._oceanMaterial.time = this._elapsed;
     }
+    if (this._oceanMesh) {
+      OceanGridGeometry.snapToTarget(
+        this._oceanMesh,
+        this.camera.position.x,
+        this.camera.position.z,
+        8,
+      );
+    }
+    if (this._rain) {
+      this._rain.update(deltaTime, this._elapsed, this.camera.position);
+    }
+    this._stepSeaSpray(deltaTime);
     if (this._reflectionEnabled) {
       this._reflection?.updateReflection(this.scene, this.camera, this.renderer);
     }
@@ -438,9 +482,9 @@ export class Showcase extends AbstractShowcase {
     this.scene.add(this._ambientLight);
 
     this._moonLight = new DirectionalLight({
-      direction: new Vector3D(-0.55, -0.78, -0.32).normalize(),
+      direction: new Vector3D(0.38, -0.4, 0.83).normalize(),
       color: new Color(0.62, 0.78, 1.0),
-      intensity: 2.8,
+      intensity: 3.1,
       numCascades: 3,
       cascadeSplitLambda: 0.65,
     });
@@ -526,21 +570,6 @@ export class Showcase extends AbstractShowcase {
   }
 
   private _setupOcean(): void {
-    // Deep ocean floor keeps OpaqueCapture depth finite for Beer-Lambert & shoreline foam
-    const seaBed = new Object3D("NurSeaBed");
-    seaBed.geometry = new Ground({
-      width: OCEAN_SIZE + 260,
-      depth: OCEAN_SIZE + 260,
-    }).getGeometryData();
-    seaBed.material = new StandardMaterial({
-      color: new Color(0.004, 0.01, 0.02),
-      roughness: 0.95,
-      metallic: 0.0,
-    });
-    seaBed.position.set(0, -18.0, 0);
-    seaBed.receiveShadow = false;
-    this.scene.add(seaBed);
-
     this._reflection = new PlanarReflectionNode({
       name: "NurOceanReflection",
       width: 1024,
@@ -552,42 +581,158 @@ export class Showcase extends AbstractShowcase {
     this.scene.add(this._reflection);
 
     const ocean = new Object3D("NurOcean");
-    const oceanHalf = (OCEAN_SIZE + 60) * 0.5;
-    const oceanGeo = new Ground({
-      width: OCEAN_SIZE + 60,
-      depth: OCEAN_SIZE + 60,
-      widthSegments: OCEAN_SEGMENTS,
-      depthSegments: OCEAN_SEGMENTS,
+    ocean.geometry = new OceanGridGeometry({
+      radius: 2400,
+      radialSegments: 160,
+      angularSegments: 192,
+      radialExponent: 3.4,
+      detailRadius: 380,
     }).getGeometryData();
-    // Concentrate vertex resolution (~0.95 m spacing) around the fortress & camera corridor
-    // while keeping total vertex count <= 65,535 for Uint16 WebGL1 compatibility.
-    const verts = oceanGeo.vertices;
-    for (let i = 0; i < verts.length; i += 3) {
-      const nx = verts[i]! / oceanHalf;
-      const nz = verts[i + 2]! / oceanHalf;
-      verts[i] = oceanHalf * (0.28 * nx + 0.72 * nx * nx * nx);
-      verts[i + 2] = oceanHalf * (0.28 * nz + 0.72 * nz * nz * nz);
-    }
-    ocean.geometry = oceanGeo;
-    this._oceanMaterial = createStormOceanMaterial(this._reflection, {
-      waterColor: new Color(0.01, 0.036, 0.072),
-      deepWaterColor: new Color(0.003, 0.01, 0.025),
-      edgeColor: new Color(0.12, 0.2, 0.3),
-      edgeSoftness: 1.4,
-      foamColor: new Color(0.68, 0.78, 0.86),
-      foamDistance: 2.8,
-      foamCutoff: 0.46,
-      foamNoiseScale: 1.15,
-      foamNoiseSpeed: 1.15,
-      reflectionStrength: 0.84,
-      reflectionDistortion: 0.14,
-      reflectionRoughness: 0.03,
+    this._oceanMaterial = new OceanMaterial({
+      waterColor: new Color(0.012, 0.048, 0.088),
+      deepWaterColor: new Color(0.003, 0.011, 0.026),
+      scatterColor: new Color(0.035, 0.22, 0.28),
+      scatterStrength: 0.48,
+      roughness: 0.068,
+      windSpeed: 1.28,
+      windDirection: new Vector2D(0.84, 0.54),
+      waveScale: 1.05,
+      waveWavelength: 34.0,
+      swellFadeStart: 350,
+      swellFadeEnd: 1950,
+      detailScale: 1.05,
+      detailStrength: 1.2,
+      foamColor: new Color(0.72, 0.81, 0.88),
+      foamDistance: 3.0,
+      foamCoverage: 0.36,
+      waterAbsorption: [0.65, 0.28, 0.16],
+      refractionStrength: 0.025,
+      reflectionMap: this._reflection.renderTarget,
+      reflectionStrength: 0.82,
+      reflectionDistortion: 0.11,
+      reflectionRoughness: 0.04,
     });
+    // On WebGPU/WebGL2 leave envMap undefined so OceanMaterial samples prefiltered IBL; on
+    // WebGL1 (no u_prefilterMap) bind the skybox cube so reflections and horizon sky match.
+    if (this.renderer.type === RendererType.WEB_GL1 && this._skyCube) {
+      this._oceanMaterial.envMap = this._skyCube;
+    }
     ocean.material = this._oceanMaterial;
     ocean.position.set(0, FORTRESS_WATER_Y, 0);
     ocean.receiveShadow = true;
+    ocean.frustumCulled = false;
+    this._oceanMesh = ocean;
+    OceanGridGeometry.snapToTarget(ocean, this.camera.position.x, this.camera.position.z, 8);
     this._reflection.excludedObjects.push(ocean);
     this.scene.add(ocean);
+  }
+
+  private _setupWeatherAndSpray(): void {
+    this._rain = attachRainStreaks(this.scene, {
+      count: 9000,
+      seed: 5301,
+      halfExtent: 15,
+      height: 20,
+      followCameraY: true,
+      exposure: 1 / 28,
+      windX: 7.4,
+      windZ: 4.8,
+      dropSizeRange: [0.0008, 0.0026],
+      color: new Color(0.8, 0.9, 1.0, 0.48),
+      brightness: 1.5,
+    });
+    this._rain.update(0.016, 0, this.camera.position);
+    this._reflection?.excludedObjects.push(this._rain.mesh);
+
+    const sprayStart = new Color(0.32, 0.42, 0.5, 0.085);
+    const sprayEnd = new Color(0.18, 0.25, 0.32, 0.0);
+    this._sprayMaterial = new SmokeSpriteMaterial({
+      tintStart: sprayStart,
+      tintEnd: sprayEnd,
+      churn: 0.3,
+      softFadeDistance: 2.2,
+      lightIntensity: 0,
+    });
+
+    this._spraySystem = new ParticleSystem({ capacity: 220 });
+    this._spraySystem.addAffector(
+      new GravityAffector({ acceleration: new Vector3D(3.8, -0.55, 2.45) }),
+    );
+    this._spraySystem.addAffector(new DragAffector({ drag: 0.95 }));
+    this._spraySystem.addAffector(new SizeGrowthAffector({ rate: 0.45, maxScale: 3.6 }));
+    this._spraySystem.addAffector(
+      new ColorOverLifeAffector({
+        startColor: sprayStart,
+        endColor: sprayEnd,
+        interpolateColor: false,
+      }),
+    );
+
+    this._sprayRenderer = new ParticleMeshRenderer({
+      name: "NurSeaSprayMist",
+      system: this._spraySystem,
+      geometryMode: "octagon",
+      material: this._sprayMaterial,
+      billboard: "spherical",
+      foldAlphaIntoScale: false,
+    });
+    this._sprayRenderer.mesh.frustumCulled = false;
+    this._sprayRenderer.mesh.castShadow = false;
+    this._sprayRenderer.mesh.receiveShadow = false;
+    this._reflection?.excludedObjects.push(this._sprayRenderer.mesh);
+    this.scene.add(this._sprayRenderer.mesh);
+
+    // Pre-warm crashing sea spray around the fortress rock perimeter so t=0 renders read naturally.
+    for (let i = 0; i < 24; i++) {
+      this._stepSeaSpray(1 / 12);
+    }
+  }
+
+  private _stepSeaSpray(deltaTime: number): void {
+    const sys = this._spraySystem;
+    const renderer = this._sprayRenderer;
+    if (!sys || !renderer) return;
+
+    const dt = Math.min(deltaTime, 0.05);
+    this._sprayAccumulator += dt * 48;
+    const emitCount = Math.floor(this._sprayAccumulator);
+    if (emitCount > 0) {
+      this._sprayAccumulator -= emitCount;
+      const rand = this._sprayRand;
+      const seedRand = this._spraySeedRand;
+      const opts = this._sprayEmitOpts;
+      opts.position = this._sprayPos;
+      opts.velocity = this._sprayVel;
+      opts.color = this._sprayColor;
+
+      for (let i = 0; i < emitCount; i++) {
+        // Bias wave-crash mist toward the windward perimeter while circling the basalt crags.
+        let angle = rand() * Math.PI * 2;
+        if (rand() < 0.5) {
+          angle = Math.atan2(-0.54, -0.84) + (rand() - 0.5) * 2.1;
+        }
+        const cosA = Math.cos(angle);
+        const sinA = Math.sin(angle);
+        const radius = 18.5 + rand() * 11.5;
+        this._sprayPos.set(cosA * radius, FORTRESS_WATER_Y + 0.05 + rand() * 0.45, sinA * radius);
+        const radialBurst = 0.8 + rand() * 1.4;
+        this._sprayVel.set(
+          cosA * radialBurst + 3.4 + (rand() - 0.5) * 1.4,
+          0.95 + rand() * 1.25,
+          sinA * radialBurst + 2.2 + (rand() - 0.5) * 1.4,
+        );
+        this._sprayColor.r = seedRand();
+        opts.size = 0.85 + rand() * 0.9;
+        opts.maxLife = 1.9 + rand() * 1.3;
+        sys.emit(opts);
+      }
+    }
+
+    if (this._sprayMaterial) {
+      this._sprayMaterial.time = this._elapsed;
+    }
+    sys.update(dt);
+    renderer.sync(this.camera.position);
   }
 
   private _placeModularProps(
@@ -713,6 +858,9 @@ export class Showcase extends AbstractShowcase {
   private _applyCameraPreset(preset: CameraPresetKey): void {
     const view = CAMERA_VIEWS[preset];
     this.setInitialCamera(view.position.clone(), view.target.clone());
+    if (this._oceanMesh) {
+      OceanGridGeometry.snapToTarget(this._oceanMesh, view.position.x, view.position.z, 8);
+    }
   }
 
   private _setCameraPreset(preset: CameraPresetKey): void {
@@ -768,7 +916,7 @@ export class Showcase extends AbstractShowcase {
     this._reflectionEnabled = on;
     if (this._oceanMaterial) {
       this._oceanMaterial.reflectionMap = on ? this._reflection?.renderTarget : undefined;
-      this._oceanMaterial.reflectionStrength = on ? 0.84 : 0.0;
+      this._oceanMaterial.reflectionStrength = on ? 0.82 : 0.0;
     }
     this._syncHud();
   }
@@ -830,6 +978,9 @@ export class Showcase extends AbstractShowcase {
           new Vector3D(pos[0]!, pos[1]!, pos[2]!),
           new Vector3D(target[0]!, target[1]!, target[2]!),
         );
+        if (this._oceanMesh) {
+          OceanGridGeometry.snapToTarget(this._oceanMesh, pos[0]!, pos[2]!, 8);
+        }
       },
       setCameraPreset: (preset: CameraPresetKey): void => this._setCameraPreset(preset),
       setAtmosphere: (atmosphere: AtmosphereKey): void => this._setAtmosphere(atmosphere),
@@ -841,6 +992,10 @@ export class Showcase extends AbstractShowcase {
 
   public override destroy(): void {
     this.canvas?.removeEventListener("wheel", this._onWheel);
+    this._rain?.dispose();
+    if (this._sprayRenderer) {
+      this._sprayRenderer.mesh.parent?.remove(this._sprayRenderer.mesh);
+    }
     this._hud?.dispose();
     delete window.__qaSwm53;
     super.destroy();

@@ -4,6 +4,8 @@
 export const MaterialType = {
   /** Material for open water rendering with Gerstner waves. */
   OPEN_WATER: "OpenWaterMaterial",
+  /** Horizon-scale open ocean material (ADR 0062). */
+  OCEAN: "OceanMaterial",
   /** Specialized stylized water material with toon foam and caustics projection. */
   STYLIZED_WATER: "StylizedWaterMaterial",
   /** Unlit basic material. */

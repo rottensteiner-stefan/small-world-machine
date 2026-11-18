@@ -44,4 +44,24 @@ Living log. Newest entries at the bottom, nothing is deleted.
 - **Atmosphere & Volumetric Fog Balance (`apps/showcases/53/showcase.ts`):**
   - Angled `storm.moonDirection` to grazing port moonlight `(-0.62, -0.50, -0.26)` and tuned `VolumetricFogElement` (`density: 0.0018`, `heightFalloff: 0.036`, `asymmetry: 0.22`, `ambientInject: 0.08`) so sea mist hugs the churning swells while keeping the obsidian obelisk jet-black and crisp.
 - **Verified:** `npm run typecheck`, `npm run lint`, `npm run check:doctrine`, `npm run build:showcases`, and `check-showcases.js 53` (`3/3` OK across `WEB_GL1`, `WEB_GL2`, `WEB_GPU`), with `WEB_GPU`, `WEB_GL2`, and `WEB_GL1` screenshots visually inspected (`0` errors).
+## 2026-11-18 — First-Class Open Ocean Subsystem Migration (ADR 0062)
+
+- **Core Engine Open Ocean (`@small-world-machine/engine`, ADR 0062):**
+  - Replaced the `820 m` warped `Ground` + showcase-local `NurStormOceanMaterial` patch with first-class `OceanGridGeometry` (`radius: 2400 m`, `160×192` concentric rings, `3.4` radial exponent, `380 m` near-field ring focus, `30,721` vertices within `Uint16` WebGL1 limits) and `OceanMaterial` (`MaterialType.OCEAN`).
+  - Added dedicated opaque-ocean sub-phase `"main:ocean"` in both WebGPU (`MainRenderPass`) and WebGL (`WebGLMainPass`): opaque depth/color are captured right before Ocean draws and Ocean still writes wave depth & RG16F normals prior to decals, transparents, HBAO, and VolumetricFog.
+  - Added deterministic seamless periodic `OceanWaveNormalGenerator` (3-layer world-XZ cascade), Tokuyoshi Specular AA (`specularAntiAliasing`), dual-lobe GGX moonlight glints, Schlick Fresnel IBL + smooth edge-faded `PlanarReflectionNode`, wave-crest backlight subsurface scattering, FBM whitecaps, and horizon-flush swell attenuation.
+- **Showcase 53 Scene & Lighting (`apps/showcases/53/showcase.ts`, `FortressMaterials.ts`):**
+  - Removed showcase-local `NurStormOceanMaterial`, `StormOceanOptions`, `NurSeaBed`, and shader-patching code from `FortressMaterials.ts`.
+  - Increased `defaultFar` to `2800` and skybox size to `2600` so the `2400 m` ocean radial disc meets the stormy horizon cleanly with zero far-clip cutout.
+  - Re-angled `ATMOSPHERES.*.moonDirection` to 3/4 backlight (`(0.38, -0.4, 0.83)`) so moonlight rakes across wave crests and creates a silver-blue glitter path across the water toward the camera.
+
+## 2026-11-18 — Phase 2 Open Ocean Quality Upgrade (JONSWAP FFT, Moving Grid, Storm Rain & Sea Spray)
+
+- **Camera-Tracked Ocean & WebGPU Compute JONSWAP 2D IFFT (`OceanFftSystem`, `OceanMaterial`, `Ocean.{vert,frag}.*`):**
+  - Enabled camera-centered radial swell/horizon attenuation (`wp.xz - viewPos.xz`) across all 3 shader dialects paired with `OceanGridGeometry.snapToTarget(ocean, cam.x, cam.z, 8)` in Showcase 53 so the high-detail near-field mesh follows the roving camera smoothly over infinite ocean coordinates.
+  - Added WebGPU compute `256×256` JONSWAP directional spectrum (`ocean_spectrum_init/step/ifft_pass/assemble.wgsl`, `ShaderFlag.OCEAN_FFT`) synthesizing periodic `rgba16float` displacement + slope/Jacobian/persistent-foam maps sampled at two incommensurate rotated octaves (`WEB_GPU`), with clean fallback on `WEB_GL2`/`WEB_GL1`.
+- **Shoreline Surf, WebGL1 Horizon Continuity & Storm Atmosphere (`Ocean.frag.*`, `RainStreaks`, Showcase 53):**
+  - Refined shoreline surf into broken, organic foaming tongues with open rocky contact gaps, shallow aeration, and receding foam wakes (`Ocean.frag.{wgsl,glsl}`).
+  - Eliminated the dark outer horizon ring on `WEB_GL1` (`Ocean.frag.glsl100` post-fog `u_envMap` skybox blend + Showcase 53 `skyCube` `envMap` wiring on `WEB_GL1`).
+  - Added wind-slanted storm `RainStreaks` (`followCameraY: true`) and a zero-alloc perimeter crashing **Sea-Spray Mist** (`ParticleSystem` + `ParticleMeshRenderer` + `SmokeSpriteMaterial` soft particles & 6-way volumetric lighting, excluded from `PlanarReflectionNode`).
 

@@ -153,11 +153,16 @@ export class MainRenderPass implements RenderPass {
       }
     }
 
-    // 2. All other opaque objects
+    // 2. All solid opaque objects (excluding Skybox and Ocean)
+    let hasOcean = false;
     for (let i = 0; i < renderList.opaqueBatches.length; i++) {
-      const batch = renderList.opaqueBatches[i];
-      if (batch!.shaderId !== MaterialType.SKYBOX && batch!.objects.length > 0) {
-        renderer._renderBatch(rp, batch!, vMat, opaqueMode);
+      const batch = renderList.opaqueBatches[i]!;
+      if (batch.shaderId === MaterialType.OCEAN) {
+        if (batch.objects.length > 0) hasOcean = true;
+        continue;
+      }
+      if (batch.shaderId !== MaterialType.SKYBOX && batch.objects.length > 0) {
+        renderer._renderBatch(rp, batch, vMat, opaqueMode);
       }
     }
 
@@ -173,14 +178,35 @@ export class MainRenderPass implements RenderPass {
       normalView ? "colorNormal" : "color",
     );
 
+    // 2b. Open Ocean (ADR 0062): reads solid terrain/seabed color+depth for shoreline surf &
+    // Beer-Lambert absorption, then writes wave surface depth & shading normals before decals,
+    // transparents, and post-FX opaque depth captures.
+    let opaquePassEnded = false;
+    let depthCaptured = false;
+    if (hasOcean) {
+      rp.end();
+      opaquePassEnded = true;
+      renderer.captureOpaqueTexture(ce, renderer.activeColorTexture);
+      renderer.captureOpaqueDepth(ce);
+
+      const rpOcean = this._beginPass(ce, renderer, targetView, normalView, false, "main:ocean");
+      for (let i = 0; i < renderList.opaqueBatches.length; i++) {
+        const batch = renderList.opaqueBatches[i]!;
+        if (batch.shaderId === MaterialType.OCEAN && batch.objects.length > 0) {
+          renderer._renderBatch(rpOcean, batch, vMat, opaqueMode);
+        }
+      }
+      rpOcean.end();
+    }
+
     // Decals read the finished opaque depth/normals, so they get their own pass right after the
     // opaque one (and before the transparents, which then see them in their refraction capture).
     const drawDecals = renderList.decals.length > 0 && renderer.canDrawDecals;
-    let opaquePassEnded = false;
-    let depthCaptured = false;
     if (drawDecals) {
-      rp.end();
-      opaquePassEnded = true;
+      if (!opaquePassEnded) {
+        rp.end();
+        opaquePassEnded = true;
+      }
       renderer.captureOpaqueDepth(ce);
       depthCaptured = true;
       if (normalView) renderer.captureOpaqueNormal(ce);

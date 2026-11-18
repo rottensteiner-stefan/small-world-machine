@@ -4,6 +4,7 @@ import {
   LavaMaterial,
   SlimeMaterial,
   OpenWaterMaterial,
+  OceanMaterial,
   StylizedWaterMaterial,
   Object3D,
   UniformPacker,
@@ -23,6 +24,7 @@ describe("Liquid Materials Zero-Allocation Guarantees", () => {
     { name: "LavaMaterial", instance: new LavaMaterial() },
     { name: "SlimeMaterial", instance: new SlimeMaterial() },
     { name: "OpenWaterMaterial", instance: new OpenWaterMaterial() },
+    { name: "OceanMaterial", instance: new OceanMaterial() },
     { name: "StylizedWaterMaterial", instance: new StylizedWaterMaterial() },
   ];
 
@@ -110,6 +112,7 @@ describe("Liquid Materials Zero-Allocation Guarantees", () => {
         new LavaMaterial(),
         new SlimeMaterial(),
         new OpenWaterMaterial(),
+        new OceanMaterial(),
         new StylizedWaterMaterial(),
       ];
 

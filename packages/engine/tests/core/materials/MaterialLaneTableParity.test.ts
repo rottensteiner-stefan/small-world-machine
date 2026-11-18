@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   Color,
   FluidSurfaceMaterial,
+  OceanMaterial,
   OpenWaterMaterial,
   StandardMaterial,
   StylizedWaterMaterial,
@@ -37,6 +38,12 @@ const MIGRATED_SHADER_FILES: ReadonlyArray<[string, string]> = [
   ["OpenWater.vert.glsl", join(SHADER_DIR, "liquid/shaders/OpenWater.vert.glsl")],
   ["OpenWater.vert.glsl100", join(SHADER_DIR, "liquid/shaders/OpenWater.vert.glsl100")],
   ["OpenWater.vert.wgsl", join(SHADER_DIR, "liquid/shaders/OpenWater.vert.wgsl")],
+  ["Ocean.frag.glsl", join(SHADER_DIR, "liquid/shaders/Ocean.frag.glsl")],
+  ["Ocean.frag.glsl100", join(SHADER_DIR, "liquid/shaders/Ocean.frag.glsl100")],
+  ["Ocean.frag.wgsl", join(SHADER_DIR, "liquid/shaders/Ocean.frag.wgsl")],
+  ["Ocean.vert.glsl", join(SHADER_DIR, "liquid/shaders/Ocean.vert.glsl")],
+  ["Ocean.vert.glsl100", join(SHADER_DIR, "liquid/shaders/Ocean.vert.glsl100")],
+  ["Ocean.vert.wgsl", join(SHADER_DIR, "liquid/shaders/Ocean.vert.wgsl")],
   ["StylizedWater.frag.glsl", join(SHADER_DIR, "liquid/shaders/StylizedWater.frag.glsl")],
   ["StylizedWater.frag.glsl100", join(SHADER_DIR, "liquid/shaders/StylizedWater.frag.glsl100")],
   ["StylizedWater.frag.wgsl", join(SHADER_DIR, "liquid/shaders/StylizedWater.frag.wgsl")],
@@ -160,6 +167,29 @@ describe("typed material lane tables reach the render manifest", () => {
     const props = mat.getRenderManifest().properties;
     expect(props["u_matParam7"]).toEqual([0.31, 0, 0, 0]);
     expect((props["u_color"] as number[])[3]).toBe(1.0);
+  });
+
+  it("OceanMaterial: wind/swell/scatter/detail ride u_matParam0..5 and u_matParam9 without legacy slots", () => {
+    const mat = new OceanMaterial({
+      scatterColor: new Color(0.06, 0.28, 0.36),
+      scatterStrength: 0.48,
+      waveScale: 1.35,
+      waveWavelength: 36,
+      swellFadeStart: 320,
+      swellFadeEnd: 1900,
+      foamCoverage: 0.4,
+      detailScale: 1.2,
+      detailStrength: 1.3,
+    });
+    const props = mat.getRenderManifest().properties;
+    expect(props["u_matParam3"]).toEqual([320, 1900, 0.4, 1.2]);
+    expect(props["u_matParam4"]).toEqual([0.06, 0.28, 0.36, 0.48]);
+    expect(props["u_matParam5"]).toEqual([1.3, 1, 180, 1.15]);
+    expect(props["u_extraParams"]).toEqual([1, 0, 1, 1]);
+    expect(props["u_liquidParams"]).toEqual([0, 0, 0, 0]);
+    expect(props["u_thresholds"]).toEqual([0, 0, 0, 0]);
+    expect(props["u_texOffset"]).toEqual([0, 0]);
+    expect(props["u_texRepeat"]).toEqual([1, 1]);
   });
 
   it("writeLane packs through the declared lane (single source of truth)", () => {

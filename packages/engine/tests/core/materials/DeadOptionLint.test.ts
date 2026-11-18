@@ -219,6 +219,7 @@ describe("DeadOptionLint (G3/G9)", () => {
         "LavaMaterialOptions",
         "SlimeMaterialOptions",
         "OpenWaterMaterialOptions",
+        "OceanMaterialOptions",
         "StylizedWaterMaterialOptions",
         "TerrainMaterialOptions",
         "WorldMaterialOptions",

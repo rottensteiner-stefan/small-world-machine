@@ -276,6 +276,25 @@ export function getOptionalMaterialTextureBindings(): Record<string, OptionalMat
           texture: { viewDimension: "2d", sampleType: "float" },
         },
       },
+      // WebGPU compute JONSWAP FFT wavefield textures (ADR 0062 Phase 2).
+      u_oceanDispMap: {
+        binding: 30,
+        requiredFlag: ShaderFlag.OCEAN_FFT,
+        layoutEntry: {
+          binding: 30,
+          visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+          texture: { viewDimension: "2d", sampleType: "float" },
+        },
+      },
+      u_oceanNormFoamMap: {
+        binding: 31,
+        requiredFlag: ShaderFlag.OCEAN_FFT,
+        layoutEntry: {
+          binding: 31,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { viewDimension: "2d", sampleType: "float" },
+        },
+      },
     };
   }
   return _optionalMaterialTextureBindings;
@@ -510,8 +529,11 @@ export class GPUPipelineCache {
     const key = shaderId + "_" + flags.join("|");
     let bgl = this._materialBGLCache.get(key);
     if (!bgl) {
+      const samplerVisibility = flags.includes(ShaderFlag.OCEAN_FFT)
+        ? GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT
+        : GPUShaderStage.FRAGMENT;
       const matEntries: GPUBindGroupLayoutEntry[] = [
-        { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+        { binding: 1, visibility: samplerVisibility, sampler: { type: "filtering" } },
         { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
         { binding: 11, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "cube" } },
         {

@@ -19,6 +19,8 @@ export * from "./importers/index.js";
 export * from "./liquid/LiquidWaveMaterial.js";
 export * from "./liquid/OpenWaterMaterial.js";
 export * from "./liquid/OpenWaterSurfaceProbe.js";
+export * from "./liquid/OceanMaterial.js";
+export * from "./liquid/OceanWaveNormalGenerator.js";
 export * from "./liquid/StylizedWaterMaterial.js";
 export * from "./liquid/LavaMaterial.js";
 export * from "./liquid/StylizedLavaMaterial.js";

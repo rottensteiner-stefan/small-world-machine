@@ -112,14 +112,18 @@ export class WebGLMainPass implements WebGLRenderPass {
     }
     gl.depthMask(true);
 
-    // 4. Render Opaque (the only phase that writes the normal buffer: skybox and transparents
-    // leave it untouched, matching WebGPU's MASKED mode)
+    // 4. Render Opaque (excluding Skybox and Ocean; writes the normal buffer)
     if (writesNormals) renderer.setNormalWriteEnabled(true);
+    let hasOcean = false;
     for (let i = 0; i < renderList.opaqueBatches.length; i++) {
-      const batch = renderList.opaqueBatches[i];
-      if (batch!.shaderId !== MaterialType.SKYBOX && batch!.objects.length > 0) {
+      const batch = renderList.opaqueBatches[i]!;
+      if (batch.shaderId === MaterialType.OCEAN) {
+        if (batch.objects.length > 0) hasOcean = true;
+        continue;
+      }
+      if (batch.shaderId !== MaterialType.SKYBOX && batch.objects.length > 0) {
         (renderer as AbstractWebGLRenderer).renderBatch(
-          batch!,
+          batch,
           vMat,
           vp,
           camPos,
@@ -139,6 +143,29 @@ export class WebGLMainPass implements WebGLRenderPass {
     FIELD_CTX_SCRATCH.vp = vp;
     FIELD_CTX_SCRATCH.camPos = camPos;
     (renderer as AbstractWebGLRenderer).drawInstanceFieldView(0, "opaque", FIELD_CTX_SCRATCH);
+
+    // 4b. Open Ocean (ADR 0062): captures pre-ocean solid color & depth for shoreline surf &
+    // Beer-Lambert absorption, then draws ocean writing surface depth & normals before decals,
+    // transparents, and post-FX depth captures.
+    if (hasOcean) {
+      if (writesNormals) renderer.setNormalWriteEnabled(false);
+      renderer.copyToOpaqueTexture();
+      renderer.copyToOpaqueDepthTexture();
+      if (writesNormals) renderer.setNormalWriteEnabled(true);
+      for (let i = 0; i < renderList.opaqueBatches.length; i++) {
+        const batch = renderList.opaqueBatches[i]!;
+        if (batch.shaderId === MaterialType.OCEAN && batch.objects.length > 0) {
+          (renderer as AbstractWebGLRenderer).renderBatch(
+            batch,
+            vMat,
+            vp,
+            camPos,
+            extractedLights,
+            scene,
+          );
+        }
+      }
+    }
 
     if (writesNormals) renderer.setNormalWriteEnabled(false);
 

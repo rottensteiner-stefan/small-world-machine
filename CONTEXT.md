@@ -212,6 +212,10 @@ _Avoid_: Null normal, empty normal.
 The per-pipeline variant that says how a draw treats the Normal-Buffer: `none` (no target), `write`, `masked` (attached but write-masked, e.g. transparents, skybox), `blend` (alpha-blended, used by Decals).
 _Avoid_: Normal pass mode — it selects a pipeline variant, not a render pass.
 
+**Open Ocean (`OceanGridGeometry` & `OceanMaterial`)**:
+The core 3-tier ocean subsystem (`MaterialType.OCEAN`, ADR 0062): combines a radially warped concentric ring mesh (`OceanGridGeometry`, $\le 65{,}535$ vertices reaching the horizon with dense near-field resolution) and an opaque depth-writing `OceanMaterial` rendered in its own `"main:ocean"` sub-phase (reads pre-ocean solid depth for shoreline surf & Beer-Lambert absorption, writes wave surface depth & `g_shadingNormal` for HBAO/VolumetricFog/decals) featuring 5-octave swell displacement faded smoothly toward the horizon, a 3-layer seamless periodic normal cascade, Tokuyoshi Specular AA, Schlick Fresnel IBL + planar reflection, wave-crest backlight SSS, and organic wind whitecaps.
+_Avoid_: Stretching pool-scale `OpenWaterMaterial` on small `Ground` planes for horizon-scale seas.
+
 **Particle Light Pool (`ParticleLightPool`)**:
 A pool of ≤ 8 pre-allocated `PointLight`s in `@small-world-machine/vfx-extras` following the hottest live particles (`heat * alpha` rank) of one `ParticleSystem`; the per-tick scan over `ParticleSystem.arrays` is strictly read-only and zero-allocation. Slots fade in/out with a monotonic envelope; on retarget the position converges instead of teleporting (`@invariant LIGHTPOOL-BUDGET-BOUND` / `LIGHTPOOL-FADE-ENVELOPE`). Draws from the shared 16-point dynamic-light budget with `FireLightBudget`.
 _Avoid_: Per-particle `PointLight` allocation, unbounded light counts.

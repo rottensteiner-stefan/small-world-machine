@@ -11,6 +11,7 @@ export * from "./audio/index.js";
 export * from "./environment/index.js";
 export * from "./behaviors/index.js";
 export * from "./core/materials/liquid/OpenWaterMaterial.js";
+export * from "./core/materials/liquid/OceanMaterial.js";
 export * from "./core/materials/liquid/StylizedWaterMaterial.js";
 export * from "./core/materials/liquid/LavaMaterial.js";
 export * from "./core/materials/liquid/SlimeMaterial.js";

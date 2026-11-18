@@ -59,6 +59,9 @@ export interface RainStreaksOptions {
   color?: Color;
   /** Global catch-light multiplier applied on top of the per-drop size shading. Defaults to 1. */
   brightness?: number;
+  /** Whether the vertical rain box centers around the camera's Y (`cameraY +/- height / 2`)
+   *  instead of wrapping within `[0, height)`. Defaults to `false`. */
+  followCameraY?: boolean;
 }
 
 function wrap(value: number, size: number): number {
@@ -118,6 +121,7 @@ export class RainStreaks {
   private readonly _windX: number;
   private readonly _windZ: number;
   private readonly _brightness: number;
+  private readonly _followCameraY: boolean;
 
   private readonly _x: Float32Array;
   private readonly _y: Float32Array;
@@ -152,6 +156,7 @@ export class RainStreaks {
     this._windX = options.windX ?? DEFAULT_WIND_X;
     this._windZ = options.windZ ?? DEFAULT_WIND_Z;
     this._brightness = options.brightness ?? 1;
+    this._followCameraY = options.followCameraY ?? false;
     this._x = new Float32Array(count);
     this._y = new Float32Array(count);
     this._z = new Float32Array(count);
@@ -229,6 +234,8 @@ export class RainStreaks {
     const halfExtent = this._halfExtent;
     const boxWidth = halfExtent * 2;
     const height = this._height;
+    const halfHeight = height * 0.5;
+    const followCameraY = this._followCameraY;
     const exposure = this._exposure;
     const cameraX = cameraPosition.x;
     const cameraY = cameraPosition.y;
@@ -241,7 +248,9 @@ export class RainStreaks {
       let z = zs[i]! + windZ * deltaTime;
       x = cameraX + wrap(x - cameraX + halfExtent, boxWidth) - halfExtent;
       z = cameraZ + wrap(z - cameraZ + halfExtent, boxWidth) - halfExtent;
-      y = wrap(y, height);
+      y = followCameraY
+        ? cameraY + wrap(y - cameraY + halfHeight, height) - halfHeight
+        : wrap(y, height);
       xs[i] = x;
       ys[i] = y;
       zs[i] = z;

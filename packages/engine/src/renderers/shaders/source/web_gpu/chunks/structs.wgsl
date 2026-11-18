@@ -284,6 +284,10 @@ fn worldDirToScreen(dir: vec3f) -> vec2f {
 #ifdef USE_SPECULAR_COLOR_MAP
 @group(1) @binding(29) var u_specularColorMap: texture_2d<f32>;
 #endif
+#ifdef USE_OCEAN_FFT
+@group(1) @binding(30) var u_oceanDispMap: texture_2d<f32>;
+@group(1) @binding(31) var u_oceanNormFoamMap: texture_2d<f32>;
+#endif
 
 @group(2) @binding(0) var<uniform> obj: ObjectUniforms;
 

@@ -118,6 +118,8 @@ export const ShaderFlag = {
   INSTANCE_FIELD: "USE_INSTANCE_FIELD",
   /** Thin-surface sun transmission on StandardMaterial (`backlight`, ADR 0060). */
   BACKLIGHT: "USE_BACKLIGHT",
+  /** WebGPU compute JONSWAP 2D IFFT wavefield textures (`u_oceanDispMap`, `u_oceanNormFoamMap`, ADR 0062). */
+  OCEAN_FFT: "USE_OCEAN_FFT",
 } as const;
 
 /** Type definition for ShaderFlag. */

@@ -72,6 +72,21 @@ describe("RainStreaks", () => {
     }
   });
 
+  it("centers the vertical rain box around elevated cameras when followCameraY is enabled", () => {
+    const rain = new RainStreaks({ count: 32, halfExtent: 8, height: 20, followCameraY: true });
+    const camera = new Vector3D(10, 54, -15);
+
+    for (let frame = 0; frame < 10; frame++) {
+      rain.update(0.016, frame * 0.016, camera);
+    }
+
+    for (let i = 0; i < rain.mesh.instanceCount; i++) {
+      const position = readPosition(rain, i);
+      expect(position.y).toBeGreaterThanOrEqual(camera.y - 10 - 1e-3);
+      expect(position.y).toBeLessThanOrEqual(camera.y + 10 + 1e-3);
+    }
+  });
+
   it("lets drops fall downward when there is no wind", () => {
     const rain = new RainStreaks({ count: 8, halfExtent: 20, height: 100, windX: 0, windZ: 0 });
     const camera = new Vector3D(0, 0, 0);

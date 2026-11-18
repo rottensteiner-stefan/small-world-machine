@@ -1266,6 +1266,30 @@ This document serves to record external sources, algorithms, mathematical deriva
   - Bend: $\mathbf{d} = \boldsymbol\ell\,h\,k^2$ with $k = \text{sat}(y/h)$; $y' = y - \tfrac{1}{2}|\mathbf{d}|^2/h$ (approximate stem-length preservation).
 - **Usage:** One `WindField` drives ground cover, tree LODs and impostors coherently; the consumer binds the 4×vec4 `SwmWind` block and calls `swmWindLean` / `swmWindBend` in its vertex stage. CPU mirror (`gust`, `sampleLean`) for CPU consumers and tests (`WindField.test.ts`, dialect parity + glslang/wgsl_reflect validation in `WindShaders.test.ts`).
 
+### Open Ocean Multi-Octave Spectrum, Schlick Fresnel, Crest SSS & Tokuyoshi Specular AA
+
+- **File:** `packages/engine/src/geometry/OceanGridGeometry.ts`, `packages/engine/src/core/materials/liquid/OceanWaveNormalGenerator.ts`, `packages/engine/src/core/materials/liquid/OceanMaterial.ts`, `packages/engine/src/core/materials/liquid/shaders/Ocean.{vert,frag}.{wgsl,glsl,glsl100}`
+- **Authors/Gurus:**
+  - Jerry Tessendorf (1999–2004, *Simulating Ocean Water*) — radial resolution falloff, multi-scale swell + capillary detail separation, wave crest dispersion
+  - Christophe Schlick (1994) — water dielectric Fresnel reflectance $F(\theta) = F_0 + (1 - F_0)(1 - \cos\theta)^5$ with $F_0 = 0.02$
+  - Yusuke Tokuyoshi & Anton Kaplanyan (2019, *Improved Geometric Specular Antialiasing*) — screen-space normal variance roughness filtering preventing horizon glitter buzz
+  - Christian Schüler / *Uncharted* / *Assassin's Creed IV* ocean shading — forward-scatter wave crest subsurface transmittance $\text{pow}(\text{sat}(\mathbf{V} \cdot (-\mathbf{L} + 0.45\mathbf{N})), 3)$
+- **Formulas & Architecture:**
+  - Radial concentric ring distribution: $r(t) = R\big(w t + (1 - w)t^{\alpha}\big)$ with $w = \text{clamp}(d_{\text{detail}}/R, 0.02, 0.6)$, strictly monotonic and capped at $\le 65{,}535$ vertices (`Uint16Array` WebGL1 parity).
+  - Seamless periodic heightfield normal map: exact integer lattice harmonics $(k_x, k_z) \in \mathbb{Z}^2$ summed across $[0, 2\pi)^2$ with analytic partial derivatives $\partial h/\partial u, \partial h/\partial v$, sampled at 3 incommensurate rotations and golden-ratio spatial scales.
+  - 5-octave Gerstner vertex swells scaled by distance horizon envelope $(1 - \text{smoothstep}(r_{\text{start}}, r_{\text{end}}, \|\mathbf{p}_{xz}\|))$ so outer rings converge cleanly to $Y = 0, \mathbf{N} = (0, 1, 0)$ for seam-free skybox/IBL horizon continuity.
+- **Usage:** Provides a horizon-scale, 3-tier ocean subsystem with opaque depth writing (`"main:ocean"` pass after solid geometry and before decals/transparents/post-FX) and seamless integration with HBAO, Volumetric Fog, IBL, and Planar Reflections (ADR 0062).
+
+### WebGPU Compute JONSWAP 2D IFFT Ocean Spectrum (Cooley-Tukey Radix-2 DIT)
+
+- **File:** `packages/engine/src/renderers/WebGPU/managers/OceanFftSystem.ts`, `packages/engine/src/renderers/shaders/source/web_gpu/compute/ocean_spectrum_init.wgsl`, `ocean_spectrum_step.wgsl`, `ocean_ifft_pass.wgsl`, `ocean_assemble.wgsl`
+- **Authors/Gurus:** Klaus Hasselmann et al. (1973, JONSWAP fetch-limited sea spectrum), Jerry Tessendorf (2001, *Simulating Ocean Water* Hermitian time synthesis & horizontal chop / Jacobian foam folding), James W. Cooley & John W. Tukey (1965, Radix-2 decimation-in-time FFT)
+- **Source:** [Tessendorf: "Simulating Ocean Water" (SIGGRAPH 2001 Course Notes)](https://people.computing.clemson.edu/~jtessen/reports/papers_files/coursenotes2004.pdf); [Hasselmann et al. (1973), *Measurements of wind-wave growth and swell decay during the Joint North Sea Wave Project (JONSWAP)*](https://epic.awi.de/id/eprint/38850/)
+- **Formulas:**
+  - JONSWAP Spectrum: $S(\omega) = \frac{\alpha g^2}{\omega^5} \exp\!\left(-\frac{5}{4}\left(\frac{\omega_p}{\omega}\right)^4\right) \gamma^{\exp\!\left(-\frac{(\omega-\omega_p)^2}{2\sigma^2\omega_p^2}\right)}$ with peak enhancement $\gamma = 3.3$, converted to 2D wave-vector bin variance via dispersion Jacobian $\frac{d\omega}{dk}\frac{\Delta k^2}{k} = \frac{g}{2\omega k}\Delta k^2$ (Parseval energy conservation).
+  - Hermitian Dispersion Packing: $\tilde{h}(\mathbf{k}, t) = \tilde{h}_0(\mathbf{k})e^{i\omega t} + \tilde{h}_0^*(-\mathbf{k})e^{-i\omega t}$; DC and Nyquist bins are zeroed so every paired complex spectrum produces strictly real spatial displacement $(D_x, h, D_z)$, slopes $(S_x, S_z)$, and spatial Jacobian $J = (1 + Q D_{xx})(1 + Q D_{zz}) - (Q D_{xz})^2$ in a single batched $256\times 256$ horizontal + vertical pass (`rgba16float` output).
+- **Usage:** Synthesizes non-repeating, storm-scale open ocean waves on WebGPU (sampled across two incommensurate rotated octaves with persistent foam decay) while WebGL2 and WebGL1 continue to evaluate the Phase 1 analytical Gerstner + periodic normal cascade cleanly (ADR 0062 Phase 2).
+
 ## AI Coding & Architecture Assistants
 
 

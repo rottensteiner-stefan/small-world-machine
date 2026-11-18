@@ -36,6 +36,7 @@ import instanceFieldStructsWGSL from "../shaders/source/web_gpu/chunks/instance_
 import instanceCullWGSL from "../shaders/source/web_gpu/compute/instance_cull.wgsl?raw";
 import fieldPullWGSL from "../shaders/source/web_gpu/instance_field/field_pull.wgsl?raw";
 import {
+  MaterialType,
   RendererType,
   ShaderChunkId,
   ShaderFlag,
@@ -52,6 +53,8 @@ import { GPURenderTargetCache } from "./managers/GPURenderTargetCache.js";
 import { GPUTextureResourceCache } from "./managers/GPUTextureResourceCache.js";
 import { HzbOcclusionSystem } from "./managers/HzbOcclusionSystem.js";
 import type { HzbFieldPyramidAccess } from "./managers/HzbOcclusionSystem.js";
+import { OceanFftSystem } from "./managers/OceanFftSystem.js";
+import type { OceanFftUpdateParams } from "./managers/OceanFftSystem.js";
 import { PostFxChain } from "./managers/PostFxChain.js";
 import { OpaqueCapture } from "./managers/OpaqueCapture.js";
 import {
@@ -307,6 +310,18 @@ export class WebGPURenderer
   }
   /** Cached offscreen RenderTarget backing textures -- see `GPURenderTargetCache`. */
   private _targetCache!: GPURenderTargetCache;
+  /** Lazily instantiated JONSWAP 2D IFFT wavefield compute subsystem (created on first visible ocean). */
+  private _oceanFftSystem: OceanFftSystem | undefined;
+  private _oceanRepeatSampler: GPUSampler | undefined;
+  private readonly _oceanFftParams: OceanFftUpdateParams = {
+    windDirX: 0.84,
+    windDirZ: 0.54,
+    windSpeed: 1.0,
+    waveScale: 1.0,
+    patchSize: 180.0,
+    choppiness: 1.15,
+    time: 0.0,
+  };
   protected _gpuInstanceBuffers: WeakMap<InstancedMesh, GPUBuffer> = new WeakMap();
   /** Per-mesh high-water mark of instances whose matrices are on the GPU (see `_renderSubgroup`). */
   private _instanceMatricesUploaded = new WeakMap<InstancedMesh, number>();
@@ -1475,6 +1490,7 @@ export class WebGPURenderer
     // No-op while no field is registered / offscreen.
     this._pollFieldProbeReadbacks();
     this._recordInstanceFieldFrame(ce, vp, camPos, projMatrix);
+    this._updateOceanFftIfVisible(ce, renderList);
 
     if (
       this.postProcessing.enabled &&
@@ -1762,19 +1778,29 @@ export class WebGPURenderer
     targetOverride?: GPUTextureFormat,
   ): void {
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in; the generic `instanceData`
-    // semantics (texture-array index) stay untouched for other meshes. It is injected on a local
-    // manifest copy so the shared material manifest is not polluted for other batches.
-    const useInstanceColor =
-      isInstanced && objects[0] instanceof InstancedMesh && objects[0].useInstanceDataAsColor;
+    // semantics (texture-array index) stay untouched for other meshes. WebGPU-only compute FFT
+    // wavefield (`ShaderFlag.OCEAN_FFT`) is injected similarly on a scratch manifest copy so the
+    // shared material manifest stays portable across GL2/GL1 backends.
+    const injectInstanceColor =
+      isInstanced &&
+      objects[0] instanceof InstancedMesh &&
+      objects[0].useInstanceDataAsColor &&
+      !manifest.flags?.includes(ShaderFlag.INSTANCE_COLOR);
+    const injectOceanFft =
+      manifest.shaderId === MaterialType.OCEAN &&
+      this._oceanFftSystem?.isReady === true &&
+      ((manifest.properties["u_matParam5"] as number[] | undefined)?.[1] ?? 0) > 0.5 &&
+      !manifest.flags?.includes(ShaderFlag.OCEAN_FFT);
     let effManifest = manifest;
-    if (useInstanceColor && !manifest.flags?.includes(ShaderFlag.INSTANCE_COLOR)) {
-      // Scratch copy instead of `{...manifest, flags: [...]}` per subgroup per frame; the
-      // pipeline cache reads it synchronously within the getPipeline() call below.
+    if (injectInstanceColor || injectOceanFft) {
       const flags = this._scratchInstanceColorFlags;
-      flags.length = 0;
-      if (manifest.flags)
-        for (let i = 0; i < manifest.flags.length; i++) flags.push(manifest.flags[i]!);
-      flags.push(ShaderFlag.INSTANCE_COLOR);
+      let flagLen = 0;
+      if (manifest.flags) {
+        for (let i = 0; i < manifest.flags.length; i++) flags[flagLen++] = manifest.flags[i]!;
+      }
+      if (injectInstanceColor) flags[flagLen++] = ShaderFlag.INSTANCE_COLOR;
+      if (injectOceanFft) flags[flagLen++] = ShaderFlag.OCEAN_FFT;
+      flags.length = flagLen;
       effManifest = this._scratchEffManifest;
       effManifest.shaderId = manifest.shaderId;
       effManifest.properties = manifest.properties;
@@ -2259,6 +2285,48 @@ export class WebGPURenderer
     return offset;
   }
 
+  private _updateOceanFftIfVisible(
+    encoder: GPUCommandEncoder,
+    renderList: ReturnType<Scene["getVisibleObjectsSorted"]>,
+  ): void {
+    const batches = renderList.opaqueBatches;
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i]!;
+      if (batch.shaderId !== MaterialType.OCEAN || batch.objects.length === 0) continue;
+      const mat = batch.objects[0]!.material;
+      if (!mat) continue;
+      const manifest = mat.getRenderManifest();
+      const p5 = manifest.properties["u_matParam5"] as number[] | undefined;
+      if (!p5 || (p5[1] ?? 0) <= 0.5) return;
+
+      this._oceanFftSystem ??= new OceanFftSystem(this._device!);
+      const p2 = manifest.properties["u_matParam2"] as number[] | undefined;
+      const fftParams = this._oceanFftParams;
+      fftParams.windDirX = p2?.[0] ?? 0.84;
+      fftParams.windDirZ = p2?.[1] ?? 0.54;
+      fftParams.waveScale = p2?.[2] ?? 1.0;
+      fftParams.windSpeed = (manifest.properties["u_reflectivity"] as number | undefined) ?? 1.0;
+      fftParams.patchSize = p5[2] ?? 180.0;
+      fftParams.choppiness = p5[3] ?? 1.15;
+      fftParams.time = (manifest.properties["u_time"] as number | undefined) ?? 0.0;
+      this._oceanFftSystem.update(encoder, this._frameCount, fftParams);
+      return;
+    }
+  }
+
+  private _getOceanRepeatSampler(): GPUSampler {
+    if (!this._oceanRepeatSampler) {
+      this._oceanRepeatSampler = this._device!.createSampler({
+        magFilter: "linear",
+        minFilter: "linear",
+        mipmapFilter: "linear",
+        addressModeU: "repeat",
+        addressModeV: "repeat",
+      });
+    }
+    return this._oceanRepeatSampler;
+  }
+
   /** Resolves the GPU resource for one of `getOptionalMaterialTextureBindings()`'s texture names. */
   private _resolveOptionalMaterialTexture(name: string, m: RenderManifest): GPUBindingResource {
     if ("u_opaqueMap" === name) {
@@ -2274,6 +2342,12 @@ export class WebGPURenderer
     if ("u_normalBufferMap" === name) {
       return this._opaqueCapture.opaqueNormalView || this._fallback.whiteTextureView;
     }
+    if ("u_oceanDispMap" === name) {
+      return this._oceanFftSystem?.dispView || this._fallback.whiteTextureView;
+    }
+    if ("u_oceanNormFoamMap" === name) {
+      return this._oceanFftSystem?.normFoamView || this._fallback.whiteTextureView;
+    }
     return this._textures.getTextureView(m.textures[name] as Texture, this._quality);
   }
 
@@ -2284,6 +2358,12 @@ export class WebGPURenderer
     materialTextureNames: readonly string[],
   ): GPUBindGroup {
     const envOrSkybox = m.textures["u_skybox"] || m.textures["u_envMap"];
+    const samplerTex = (m.textures["u_diffuseMap"] ?? m.textures["u_normalMap"]) as
+      Texture | undefined;
+    const sampler =
+      !samplerTex && m.shaderId === MaterialType.OCEAN
+        ? this._getOceanRepeatSampler()
+        : this._textures.getSampler(samplerTex, this._quality);
     // Scratch arrays: a cache hit (the per-frame norm) allocates nothing; only a miss copies them.
     const bindings = this._scratchBgBindings;
     const resources = this._scratchBgResources;
@@ -2291,7 +2371,7 @@ export class WebGPURenderer
     resources.length = 0;
     bindings.push(1, 3, 11, 12);
     resources.push(
-      this._textures.getSampler(m.textures["u_diffuseMap"] as Texture, this._quality),
+      sampler,
       this._textures.getNormalTextureView(m.textures["u_normalMap"] as Texture, this._quality),
       this._textures.getCubeTextureView(envOrSkybox as CubeTexture, this._quality),
       this._textures.getTextureView(m.textures["u_emissiveMap"] as Texture, this._quality),
@@ -2496,6 +2576,9 @@ export class WebGPURenderer
     // pair). destroy() implicitly unmaps a still-mapped buffer per spec -- safe even if a
     // mapAsync() from a not-yet-applied readback is still pending on one of the staging pair.
     this._hzbSystem?.dispose();
+    this._oceanFftSystem?.dispose();
+    this._oceanFftSystem = undefined;
+    this._oceanRepeatSampler = undefined;
     // Tears down every GPU post-effect pass in the chain's registry, in one sweep (see
     // `PostFxChain` / the `PostEffectPass` contract, ADR 0037).
     this._postFxChain.destroy();
