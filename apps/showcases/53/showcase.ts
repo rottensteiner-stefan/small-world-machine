@@ -325,6 +325,13 @@ export class Showcase extends AbstractShowcase {
       addressModeV: TextureWrap.REPEAT,
     };
 
+    const shuttleTexOpts = {
+      generateMipmaps: true,
+      flipY: false,
+      addressModeU: TextureWrap.CLAMP_TO_EDGE,
+      addressModeV: TextureWrap.CLAMP_TO_EDGE,
+    };
+
     const [
       armorAlbedo,
       armorNormal,
@@ -339,6 +346,9 @@ export class Showcase extends AbstractShowcase {
       rockNormal,
       rockRoughness,
       rockAo,
+      shuttleAlbedo,
+      shuttleNormal,
+      shuttleRoughness,
     ] = await Promise.all([
       Texture.fromUrl("/assets/showcases/53/textures/armor_albedo.webp", texOpts),
       Texture.fromUrl("/assets/showcases/53/textures/armor_normal.webp", texOpts),
@@ -353,6 +363,9 @@ export class Showcase extends AbstractShowcase {
       Texture.fromUrl("/assets/showcases/53/textures/rock_normal.webp", texOpts),
       Texture.fromUrl("/assets/showcases/53/textures/rock_roughness.webp", texOpts),
       Texture.fromUrl("/assets/showcases/53/textures/rock_ao.webp", texOpts),
+      Texture.fromUrl("/assets/showcases/53/textures/shuttle_albedo.webp", shuttleTexOpts),
+      Texture.fromUrl("/assets/showcases/53/textures/shuttle_normal.webp", shuttleTexOpts),
+      Texture.fromUrl("/assets/showcases/53/textures/shuttle_roughness.webp", shuttleTexOpts),
     ]);
 
     const armorMaps: FortressPbrMaps = {
@@ -410,20 +423,71 @@ export class Showcase extends AbstractShowcase {
       roughness: 0.36,
       envMap: this.scene.prefilterMap,
     });
+    const shuttleMat = new StandardMaterial({
+      color: new Color(0.95, 0.96, 0.98),
+      metallic: 0.28,
+      roughness: 0.9,
+      normalScale: new Vector2D(1.0, 1.0),
+      diffuseMap: shuttleAlbedo,
+      normalMap: shuttleNormal,
+      roughnessMap: shuttleRoughness,
+      envMap: this.scene.prefilterMap,
+    });
+    const shuttleVisorMat = new StandardMaterial({
+      color: new Color(0.015, 0.018, 0.025),
+      metallic: 0.25,
+      roughness: 0.06,
+      envMap: this.scene.prefilterMap,
+    });
+    const tieHullMat = new StandardMaterial({
+      color: new Color(0.58, 0.62, 0.68),
+      metallic: 0.42,
+      roughness: 0.42,
+      envMap: this.scene.prefilterMap,
+    });
+    const tieSolarMat = new StandardMaterial({
+      color: new Color(0.06, 0.07, 0.09),
+      metallic: 0.18,
+      roughness: 0.26,
+      envMap: this.scene.prefilterMap,
+    });
+    const tieTrimMat = new StandardMaterial({
+      color: new Color(0.24, 0.27, 0.31),
+      metallic: 0.55,
+      roughness: 0.38,
+      envMap: this.scene.prefilterMap,
+    });
+    const tieCockpitMat = new StandardMaterial({
+      color: new Color(0.02, 0.025, 0.035),
+      metallic: 0.15,
+      roughness: 0.07,
+      envMap: this.scene.prefilterMap,
+    });
     const coolLightMat = createEmissiveAccentMaterial(new Color(0.66, 0.88, 1.0), 2.2);
     const visorMat = createEmissiveAccentMaterial(new Color(1.0, 0.14, 0.08), 3.8);
     const hangarMat = createEmissiveAccentMaterial(new Color(1.0, 0.16, 0.08), 3.4);
     const beaconMat = createEmissiveAccentMaterial(new Color(0.45, 0.82, 1.0), 2.8);
     const ionMat = createEmissiveAccentMaterial(new Color(0.45, 0.85, 1.0), 3.6);
+    const tieEngineMat = createEmissiveAccentMaterial(new Color(1.0, 0.22, 0.12), 2.8);
 
     this._rockMaterial = rockMat;
 
     const loader = new GltfLoader();
-    const [fortressRoot, padRoot, turretRoot, shuttleRoot, deckPropsRoot] = await Promise.all([
+    const [
+      fortressRoot,
+      padRoot,
+      turretRoot,
+      shuttleRoot,
+      flightShuttleRoot,
+      tieRoot,
+      deckPropsRoot,
+    ] = await Promise.all([
       loader.load("/assets/showcases/53/models/fortress.glb"),
       loader.load("/assets/showcases/53/models/landing_pad.glb"),
       loader.load("/assets/showcases/53/models/turbolaser.glb"),
       loader.load("/assets/showcases/53/models/imperial_shuttle.glb"),
+      loader.load("/assets/showcases/53/models/imperial_shuttle_flight.glb"),
+      loader.load("/assets/showcases/53/models/tie_fighter.glb"),
       loader.load("/assets/showcases/53/models/deck_props.glb"),
     ]);
 
@@ -451,13 +515,27 @@ export class Showcase extends AbstractShowcase {
     });
     this.scene.add(fortressRoot);
 
-    this._placeModularProps(padRoot, turretRoot, shuttleRoot, deckPropsRoot, {
-      trimMat,
-      trooperMat,
-      beaconMat,
-      visorMat,
-      ionMat,
-    });
+    this._placeModularProps(
+      padRoot,
+      turretRoot,
+      shuttleRoot,
+      flightShuttleRoot,
+      tieRoot,
+      deckPropsRoot,
+      {
+        trimMat,
+        trooperMat,
+        shuttleMat,
+        shuttleVisorMat,
+        tieHullMat,
+        tieSolarMat,
+        tieTrimMat,
+        tieCockpitMat,
+        tieEngineMat,
+        beaconMat,
+        ionMat,
+      },
+    );
 
     this._setupOcean();
     this._setupWeatherAndSpray();
@@ -897,12 +975,20 @@ export class Showcase extends AbstractShowcase {
     padRoot: Object3D,
     turretRoot: Object3D,
     shuttleRoot: Object3D,
+    flightShuttleRoot: Object3D,
+    tieRoot: Object3D,
     deckPropsRoot: Object3D,
     mats: {
       trimMat: AbstractMaterial;
       trooperMat: AbstractMaterial;
+      shuttleMat: AbstractMaterial;
+      shuttleVisorMat: AbstractMaterial;
+      tieHullMat: AbstractMaterial;
+      tieSolarMat: AbstractMaterial;
+      tieTrimMat: AbstractMaterial;
+      tieCockpitMat: AbstractMaterial;
+      tieEngineMat: AbstractMaterial;
       beaconMat: AbstractMaterial;
-      visorMat: AbstractMaterial;
       ionMat: AbstractMaterial;
     },
   ): void {
@@ -914,9 +1000,21 @@ export class Showcase extends AbstractShowcase {
       TurbolaserBody: mats.trimMat,
     });
     const shuttleParts = this._extractParts(shuttleRoot, {
-      ShuttleHull: mats.trimMat,
-      ShuttleCockpit: mats.visorMat,
+      ShuttleHull: mats.shuttleMat,
+      ShuttleCockpit: mats.shuttleVisorMat,
       ShuttleEngines: mats.ionMat,
+    });
+    const flightShuttleParts = this._extractParts(flightShuttleRoot, {
+      ShuttleHull: mats.shuttleMat,
+      ShuttleCockpit: mats.shuttleVisorMat,
+      ShuttleEngines: mats.ionMat,
+    });
+    const tieParts = this._extractParts(tieRoot, {
+      TieHull: mats.tieHullMat,
+      TieSolar: mats.tieSolarMat,
+      TieDarkTrim: mats.tieTrimMat,
+      TieCockpit: mats.tieCockpitMat,
+      TieEngines: mats.tieEngineMat,
     });
     const allDeckParts = this._extractParts(deckPropsRoot, {
       Stormtrooper: mats.trooperMat,
@@ -971,19 +1069,36 @@ export class Showcase extends AbstractShowcase {
     ];
     this._instantiateParts(turretParts, turretPlacements, 1.0, true);
 
+    // -Z forward models rotated +Math.PI to preserve the canonical sentry pad & hangar headings
     const landedShuttles: Array<{ x: number; y: number; z: number; yaw: number }> = [
-      { x: -146.0, y: 8.74, z: 58.0, yaw: 0.55 },
-      { x: 68.0, y: 116.0, z: 16.0, yaw: 0.65 },
-      { x: -72.0, y: 116.0, z: 14.0, yaw: -0.45 },
+      { x: -146.0, y: 8.74, z: 58.0, yaw: 0.55 + Math.PI },
+      { x: 68.0, y: 116.0, z: 16.0, yaw: 0.65 + Math.PI },
+      { x: -72.0, y: 116.0, z: 14.0, yaw: -0.45 + Math.PI },
     ];
     this._instantiateParts(shuttleParts, landedShuttles, 1.0, true);
 
     this._hoverShuttleNodes = this._instantiateParts(
-      shuttleParts,
-      [{ x: 168.0, y: BASE_HOVER_SHUTTLE_Y, z: -48.0, yaw: -1.15 }],
+      flightShuttleParts,
+      [{ x: 168.0, y: BASE_HOVER_SHUTTLE_Y, z: -48.0, yaw: -1.15 + Math.PI }],
       1.0,
       true,
     );
+
+    // 16 instanced 1:1 TIE/ln Fighters suspended beneath the exact ceiling clamp pylons in fortress.glb
+    const tiePlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [];
+    for (const sx of [-1.0, 1.0]) {
+      for (const tz of [-46.0, -30.0, -14.0, 44.0]) {
+        tiePlacements.push({ x: sx * 72.0, y: 133.2, z: tz, yaw: Math.PI });
+      }
+      for (const tz of [-38.0, -22.0, 42.0]) {
+        tiePlacements.push({ x: sx * 58.0, y: 133.2, z: tz, yaw: Math.PI });
+      }
+    }
+    tiePlacements.push(
+      { x: -26.0, y: 133.2, z: 70.0, yaw: Math.PI },
+      { x: 26.0, y: 133.2, z: 70.0, yaw: Math.PI },
+    );
+    this._instantiateParts(tieParts, tiePlacements, 1.0, true);
 
     // 1:1 Human-Scale Stormtrooper honor guard & blast-door sentries on FlightDeck (y = 116.0 m)
     const trooperPlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [];
