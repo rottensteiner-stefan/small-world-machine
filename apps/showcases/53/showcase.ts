@@ -222,12 +222,12 @@ const FLIGHT_NAV_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Showcase 53 — Fortress Inquisitorius (Ocean Moon Nur).
+ * Showcase 53 — Dark Fortress (Wassermond).
  *
  * Canonical 1:1 485 m closed Mustafar volcanic basalt obelisk (Obi-Wan Kenobi Part IV)
  * with mid-height cantilevered 24 m durasteel through-flight hangar bay, carved basalt
  * core cliff bays & curved pilasters, 16 ceiling-racked 1:1 TIE/ln silhouettes,
- * 20 m Lambda shuttles, 1.82 m Stormtrooper formation, 3-tier waterline wetness
+ * 20 m Lambda shuttles, 1.82 m Space Trooper formation, 3-tier waterline wetness
  * (`CustomShaderMaterial`), and horizon-spanning `OceanGridGeometry` + `OceanMaterial`.
  */
 export class Showcase extends AbstractShowcase {
@@ -801,7 +801,7 @@ export class Showcase extends AbstractShowcase {
 
   private _setupOcean(): void {
     this._reflection = new PlanarReflectionNode({
-      name: "NurOceanReflection",
+      name: "WassermondOceanReflection",
       width: 512,
       height: 512,
       resolutionScale: this.renderer.quality.reflectionResolutionScale ?? 1,
@@ -810,7 +810,7 @@ export class Showcase extends AbstractShowcase {
     this._reflection.clipPlaneOffset = -0.35;
     this.scene.add(this._reflection);
 
-    const ocean = new Object3D("NurOcean");
+    const ocean = new Object3D("WassermondOcean");
     ocean.geometry = new OceanGridGeometry({
       radius: 4400,
       radialSegments: 128,
@@ -905,7 +905,7 @@ export class Showcase extends AbstractShowcase {
     );
 
     this._sprayRenderer = new ParticleMeshRenderer({
-      name: "NurSeaSprayMist",
+      name: "WassermondSeaSprayMist",
       system: this._spraySystem,
       geometryMode: "octagon",
       material: this._sprayMaterial,
@@ -1017,11 +1017,11 @@ export class Showcase extends AbstractShowcase {
       TieEngines: mats.tieEngineMat,
     });
     const allDeckParts = this._extractParts(deckPropsRoot, {
-      Stormtrooper: mats.trooperMat,
+      SpaceTrooper: mats.trooperMat,
       CargoCrate: mats.trimMat,
       FuelDrumCluster: mats.trimMat,
     });
-    const trooperParts = allDeckParts.filter((p) => p.name === "Stormtrooper");
+    const trooperParts = allDeckParts.filter((p) => p.name === "SpaceTrooper");
     const crateParts = allDeckParts.filter((p) => p.name === "CargoCrate");
     const drumParts = allDeckParts.filter((p) => p.name === "FuelDrumCluster");
 
@@ -1100,7 +1100,7 @@ export class Showcase extends AbstractShowcase {
     );
     this._instantiateParts(tieParts, tiePlacements, 1.0, true);
 
-    // 1:1 Human-Scale Stormtrooper honor guard & blast-door sentries on FlightDeck (y = 116.0 m)
+    // 1:1 Human-Scale Space Trooper honor guard & blast-door sentries on FlightDeck (y = 116.0 m)
     const trooperPlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [];
     for (let row = 0; row < 4; row++) {
       for (let col = 0; col < 5; col++) {

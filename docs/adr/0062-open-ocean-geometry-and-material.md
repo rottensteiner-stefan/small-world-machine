@@ -6,7 +6,7 @@ status: accepted
 
 - **Status:** Accepted (Phase 1 Core + Phase 2 WebGPU Compute JONSWAP 2D IFFT + Phase 2b Fragment Foam Model + Phase 3 CPU Wave Sampling, Shallow-Water Caustics & Rotor Downwash)
 - **Date:** 2026-11-18
-- **Trigger:** Showcase 53 (`Fortress Inquisitorius` — Ocean Moon Nur) exposed structural limits of stretching pool-scale `OpenWaterMaterial` on a small rectangular `Ground` slab over a vast stormy ocean: visible square horizon edges at 380 m, striped Gerstner wave crests, absent distant IBL horizon continuity, flat shadow-dark surfaces lacking crest subsurface scattering, and missing multi-scale normal cascades.
+- **Trigger:** Showcase 53 (`Dark Fortress` — Wassermond) exposed structural limits of stretching pool-scale `OpenWaterMaterial` on a small rectangular `Ground` slab over a vast stormy ocean: visible square horizon edges at 380 m, striped Gerstner wave crests, absent distant IBL horizon continuity, flat shadow-dark surfaces lacking crest subsurface scattering, and missing multi-scale normal cascades.
 
 ## Decision
 

@@ -12,7 +12,7 @@ import fragGLSL from "@small-world-machine/engine/core/materials/surface/shaders
 import fragGLSL100 from "@small-world-machine/engine/core/materials/surface/shaders/Standard.frag.glsl100?raw";
 
 /**
- * World-space Y elevation of Moon Nur's sea plane.
+ * World-space Y elevation of Wassermond's sea plane.
  * @domain World-space sea level in meters (default 0.0).
  */
 export const FORTRESS_WATER_Y = 0.0;
@@ -36,7 +36,7 @@ const DEFAULT_WAVE_LAP_AMPLITUDE = 0.38;
 const DEFAULT_WET_ALBEDO_SCALE = 0.42;
 
 /**
- * PBR texture bundle accepted by Fortress Inquisitorius material builders.
+ * PBR texture bundle accepted by Dark Fortress material builders.
  * All maps are optional so assets or fallback stages degrade cleanly.
  */
 export interface FortressPbrMaps {
@@ -165,7 +165,7 @@ export interface EmissiveAccentOptions {
 }
 
 const WGSL_WATERLINE_BLOCK = `
-    // Fortress Inquisitorius waterline wetness + synchronized bore-front surge & drainage film
+    // Dark Fortress waterline wetness + synchronized bore-front surge & drainage film
     {
         let waterY = obj.matParam2.x;
         let wetBand = max(obj.matParam2.y, 0.001);
@@ -190,7 +190,7 @@ const WGSL_WATERLINE_BLOCK = `
 `;
 
 const GLSL_WATERLINE_BLOCK = `
-    // Fortress Inquisitorius waterline wetness + synchronized bore-front surge & drainage film
+    // Dark Fortress waterline wetness + synchronized bore-front surge & drainage film
     {
         float waterY = u_matParam2.x;
         float wetBand = max(u_matParam2.y, 0.001);

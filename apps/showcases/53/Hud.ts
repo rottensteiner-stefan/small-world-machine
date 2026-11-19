@@ -61,7 +61,7 @@ const CAMERA_LABELS: Record<CameraPresetKey, string> = {
 };
 
 const ATMOSPHERE_LABELS: Record<AtmosphereKey, string> = {
-  storm: "Nur Storm",
+  storm: "Wassermond Storm",
   twilight: "Deep Twilight",
   redAlert: "Red Alert",
 };
@@ -112,7 +112,7 @@ const OCEAN_SLIDER_SPECS: readonly OceanSliderSpec[] = [
   },
 ];
 
-/** Controls and telemetry drawer for Showcase 53 (Fortress Inquisitorius). */
+/** Controls and telemetry drawer for Showcase 53 (Dark Fortress). */
 export class Hud {
   private readonly _drawer: ShowcaseDrawer;
   private readonly _readout: HTMLElement;
@@ -134,7 +134,7 @@ export class Hud {
 
     this._drawer = new ShowcaseDrawer({
       id: "fortress-hud",
-      title: "Fortress Inquisitorius",
+      title: "Dark Fortress",
       icon: "🏰",
       open: false,
       footerIcon: "⚙",
@@ -147,7 +147,7 @@ export class Hud {
           `<div class="preset-group two-col">${camButtons}</div>`,
         )}
         ${hudSection(
-          "🌩 Moon Nur Atmosphere",
+          "🌩 Wassermond Atmosphere",
           "L cycles",
           `<div class="preset-group two-col">${atmoButtons}</div>
           <div class="preset-group two-col" style="margin-top:6px;">
@@ -195,7 +195,7 @@ export class Hud {
           "Click to look",
           `<div class="hud-note"><b>Click</b> canvas for mouse look (Esc releases) &bull; <b>WASD</b>/Arrows fly &bull; <b>Space/E</b> up &bull; <b>C/Q</b> down &bull; <b>Shift</b> boost &bull; <b>Wheel</b> speed &bull; <b>1–5</b> views &bull; <b>F</b> lightning</div>`,
         )}
-        ${hudNote('<div id="fortressReadout" style="opacity:0.85;">Loading Nur assets...</div>')}
+        ${hudNote('<div id="fortressReadout" style="opacity:0.85;">Loading Wassermond assets...</div>')}
       `,
     });
 
