@@ -116,6 +116,8 @@ interface QaSwm53Hook {
   setReflection(on: boolean): void;
   setBloom(on: boolean): void;
   setFog(on: boolean): void;
+  setHbao(on: boolean): void;
+  setHiDpi(on: boolean): void;
   setSearchlights(on: boolean): void;
   triggerLightning(): void;
 }
@@ -201,6 +203,8 @@ const FLY_SPEED_STEP = 1.25;
 
 const BASE_HOVER_SHUTTLE_Y = 132.0;
 const SEARCHLIGHT_INTENSITY = 1200;
+const DEFAULT_MAX_PIXEL_RATIO = 1.15;
+const HIGH_DPI_MAX_PIXEL_RATIO = 1.5;
 
 const FLIGHT_NAV_KEYS: ReadonlySet<string> = new Set([
   Keys.W,
@@ -268,11 +272,14 @@ export class Showcase extends AbstractShowcase {
     normalZ: 0,
     crest: 0,
   };
+
   private _cameraPreset: CameraPresetKey = "wide";
   private _atmosphere: AtmosphereKey = "storm";
   private _reflectionEnabled: boolean = true;
   private _bloomEnabled: boolean = true;
   private _fogEnabled: boolean = true;
+  private _hbaoEnabled: boolean = false;
+  private _hiDpiEnabled: boolean = false;
   private _searchlightsEnabled: boolean = true;
   private _waveScale: number = 1.05;
   private _windSpeed: number = 1.28;
@@ -288,7 +295,7 @@ export class Showcase extends AbstractShowcase {
       fullscreen: true,
       rendererType: RendererType.BEST,
       postProcessing: { enabled: true },
-      quality: { maxPixelRatio: 1.5 },
+      quality: { maxPixelRatio: DEFAULT_MAX_PIXEL_RATIO },
       ...options,
     });
     this.defaultCameraController = "fly";
@@ -683,9 +690,9 @@ export class Showcase extends AbstractShowcase {
 
     const hbao = pp.get<HbaoElement>(PostProcessingEffectType.HBAO);
     if (hbao) {
-      hbao.enabled = true;
-      hbao.radius = 2.8;
-      hbao.intensity = 1.15;
+      hbao.enabled = this._hbaoEnabled;
+      hbao.radius = 2.2;
+      hbao.intensity = 1.1;
     }
 
     const bloom = pp.get<BloomElement>(PostProcessingEffectType.BLOOM);
@@ -698,6 +705,7 @@ export class Showcase extends AbstractShowcase {
     const vfog = pp.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
     if (vfog) {
       vfog.enabled = true;
+      vfog.samples = 12;
       vfog.density = 0.00055;
       vfog.maxDistance = 1200;
       vfog.heightFalloff = 0.012;
@@ -716,8 +724,8 @@ export class Showcase extends AbstractShowcase {
   private _setupOcean(): void {
     this._reflection = new PlanarReflectionNode({
       name: "NurOceanReflection",
-      width: 1024,
-      height: 1024,
+      width: 512,
+      height: 512,
       resolutionScale: this.renderer.quality.reflectionResolutionScale ?? 1,
     });
     this._reflection.position.set(0, FORTRESS_WATER_Y, 0);
@@ -727,8 +735,8 @@ export class Showcase extends AbstractShowcase {
     const ocean = new Object3D("NurOcean");
     ocean.geometry = new OceanGridGeometry({
       radius: 4400,
-      radialSegments: 168,
-      angularSegments: 192,
+      radialSegments: 128,
+      angularSegments: 160,
       radialExponent: 3.4,
       detailRadius: 900,
     }).getGeometryData();
@@ -779,9 +787,9 @@ export class Showcase extends AbstractShowcase {
 
   private _setupWeatherAndSpray(): void {
     this._rain = attachRainStreaks(this.scene, {
-      count: 9000,
+      count: 4500,
       seed: 5301,
-      halfExtent: 28,
+      halfExtent: 26,
       height: 32,
       followCameraY: true,
       exposure: 1 / 28,
@@ -1309,6 +1317,25 @@ export class Showcase extends AbstractShowcase {
     this._syncHud();
   }
 
+  private _setHbao(on: boolean): void {
+    this._hbaoEnabled = on;
+    const hbao = this.renderer.postProcessing.get<HbaoElement>(PostProcessingEffectType.HBAO);
+    if (hbao) hbao.enabled = on;
+    this._syncHud();
+  }
+
+  private _setHiDpi(on: boolean): void {
+    this._hiDpiEnabled = on;
+    (this.renderer.quality as { maxPixelRatio?: number }).maxPixelRatio = on
+      ? HIGH_DPI_MAX_PIXEL_RATIO
+      : DEFAULT_MAX_PIXEL_RATIO;
+    this.renderer.setSize(
+      this.canvas.clientWidth || window.innerWidth,
+      this.canvas.clientHeight || window.innerHeight,
+    );
+    this._syncHud();
+  }
+
   private _setSearchlights(on: boolean): void {
     this._searchlightsEnabled = on;
     const intensity = on ? SEARCHLIGHT_INTENSITY : 0;
@@ -1365,6 +1392,8 @@ export class Showcase extends AbstractShowcase {
       reflection: this._reflectionEnabled,
       bloom: this._bloomEnabled,
       fog: this._fogEnabled,
+      hbao: this._hbaoEnabled,
+      hiDpi: this._hiDpiEnabled,
       searchlights: this._searchlightsEnabled,
       oceanParams: {
         waveScale: this._waveScale,
@@ -1383,6 +1412,8 @@ export class Showcase extends AbstractShowcase {
       toggleReflection: (): void => this._setReflection(!this._reflectionEnabled),
       toggleBloom: (): void => this._setBloom(!this._bloomEnabled),
       toggleFog: (): void => this._setFog(!this._fogEnabled),
+      toggleHbao: (): void => this._setHbao(!this._hbaoEnabled),
+      toggleHiDpi: (): void => this._setHiDpi(!this._hiDpiEnabled),
       toggleSearchlights: (): void => this._setSearchlights(!this._searchlightsEnabled),
       triggerLightning: (): void => {
         this._manualLightningTimer = 0.55;
@@ -1433,6 +1464,8 @@ export class Showcase extends AbstractShowcase {
       setReflection: (on: boolean): void => this._setReflection(on),
       setBloom: (on: boolean): void => this._setBloom(on),
       setFog: (on: boolean): void => this._setFog(on),
+      setHbao: (on: boolean): void => this._setHbao(on),
+      setHiDpi: (on: boolean): void => this._setHiDpi(on),
       setSearchlights: (on: boolean): void => this._setSearchlights(on),
       triggerLightning: (): void => {
         this._manualLightningTimer = 0.55;

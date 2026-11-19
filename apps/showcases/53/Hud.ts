@@ -28,6 +28,8 @@ export interface FortressHudState {
   reflection: boolean;
   bloom: boolean;
   fog: boolean;
+  hbao: boolean;
+  hiDpi: boolean;
   searchlights: boolean;
   oceanParams: OceanTuningState;
 }
@@ -38,6 +40,8 @@ export interface FortressHudActions {
   toggleReflection(): void;
   toggleBloom(): void;
   toggleFog(): void;
+  toggleHbao(): void;
+  toggleHiDpi(): void;
   toggleSearchlights(): void;
   triggerLightning(): void;
   resetView(): void;
@@ -151,6 +155,8 @@ export class Hud {
             <button id="btnBloom" class="btn-preset" title="HDR bloom on crimson visor & slits">HDR Bloom</button>
             <button id="btnFog" class="btn-preset" title="Volumetric / horizon storm mist">Storm Fog</button>
             <button id="btnSearchlights" class="btn-preset" title="Sweeping imperial spotlights">Searchlights</button>
+            <button id="btnHbao" class="btn-preset" title="Screen-space HBAO (heavy GPU cost on laptops)">HBAO AO</button>
+            <button id="btnHiDpi" class="btn-preset" title="Render at 1.5× Retina resolution">HiDPI 1.5×</button>
             <button id="btnLightning" class="btn-preset" title="Key F">⚡ Lightning (F)</button>
             <button id="btnResetView" class="btn-preset" title="Key R">Reset View</button>
           </div>`,
@@ -218,6 +224,8 @@ export class Hud {
     );
     d.query("#btnBloom")?.addEventListener("click", (): void => this._actions.toggleBloom());
     d.query("#btnFog")?.addEventListener("click", (): void => this._actions.toggleFog());
+    d.query("#btnHbao")?.addEventListener("click", (): void => this._actions.toggleHbao());
+    d.query("#btnHiDpi")?.addEventListener("click", (): void => this._actions.toggleHiDpi());
     d.query("#btnSearchlights")?.addEventListener("click", (): void =>
       this._actions.toggleSearchlights(),
     );
@@ -259,6 +267,8 @@ export class Hud {
     d.query("#btnReflection")?.classList.toggle("active", state.reflection);
     d.query("#btnBloom")?.classList.toggle("active", state.bloom);
     d.query("#btnFog")?.classList.toggle("active", state.fog);
+    d.query("#btnHbao")?.classList.toggle("active", state.hbao);
+    d.query("#btnHiDpi")?.classList.toggle("active", state.hiDpi);
     d.query("#btnSearchlights")?.classList.toggle("active", state.searchlights);
 
     for (const binding of this._oceanSliders) {
