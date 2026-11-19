@@ -2,6 +2,16 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.127.1] - 2026-11-19
+
+### "Fast is fine, but accuracy is everything." - Wyatt Earp
+
+- **Architecture & Bugfixes:**
+  - _Showcase 53 — laptop GPU 60 FPS optimization (`showcase.ts`):_ set default `quality.maxPixelRatio` to `1.15` (`1987×1284`), disabled default screen-space HBAO in favor of 4K Cycles-baked `armor_ao`/`rock_ao`, reduced `PlanarReflectionNode` to `512×512`, `OceanGridGeometry` to `128×160`, `RainStreaks` to `4500`, and `vfog.samples` to `12` — lifting close-ups on Apple Silicon WebGPU from `28.2–30.4` to locked `60.0 FPS` and WebGL2 from `10.1–20.3` to `44.8–60.0 FPS`.
+
+- **Housekeeping & Docs:**
+  - _Showcase 53 — opt-in quality toggles & dev log (`Hud.ts`, `docs/log.md`):_ added live **`HBAO AO`** and **`HiDPI 1.5×`** controls inside the inspector drawer (`#btnHbao`, `#btnHiDpi`, `window.__qaSwm53.{setHbao,setHiDpi}`) so desktop GPUs can opt back into full SSAO/Retina scaling, and documented Metal GPU profiling measurements in `apps/showcases/53/docs/log.md`.
+
 ## [0.127.0] - 2026-11-19
 
 ### "Great things are done when men and mountains meet." - William Blake
