@@ -2,6 +2,21 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.127.0] - 2026-11-19
+
+### "Great things are done when men and mountains meet." - William Blake
+
+- **Features:**
+  - _Showcase 53 — 1:1 `485 m` basalt monolith & detailed hangar deck:_ scaled Fortress Inquisitorius to canonical _Obi-Wan Kenobi_ proportions (`fortress.glb`, `36,918` tris, `y = -45..485 m`), adding `20.0 m` _Lambda_ shuttles, 16 ceiling-racked TIE/ln fighters, 28 `1.82 m` Stormtrooper figures, sweeping wing `SpotLight` beams, `Digit5` _Basalt Trench_ camera, and live _Ocean & Surf_ HUD sliders.
+  - _Showcase 53 — 4K Cycles-baked WebP PBR materials:_ upgraded all 13 primary fortress maps (`armor_*`, `trim_*`, `rock_*`) to `4096×4096` WebP (`-lossless` data maps, `-q 92` albedo), pairing asymmetric Imperial durasteel plates, recessed hex grates, and rain puddles with non-periodic Mustafar obsidian-slate photogrammetry.
+  - _Showcase 53 — curved preset camera fly-throughs:_ replaced instant jumps on `1`–`5`, HUD preset buttons, and `R` with smooth Catmull-Rom polar arcs (`CameraFlyToBehavior`, `Easing.easeInOutCubic`, `1.65–3.15 s`) maintaining `y >= 16 m` wave clearance and tapered fortress hull clearance, with instant `WASD`/pointer interrupt.
+
+- **Architecture & Bugfixes:**
+  - _Showcase 53 — planar outer basalt flanks:_ removed Geometry-Nodes periodic sine strata (`strata_amp = 0.0`, `sharp_deg = 44°`) and `8×`/`16×` horizontal rock texture bands to eliminate distant Nyquist washboard ribbing across the outer obelisk walls.
+
+- **Housekeeping & Docs:**
+  - _Showcase 53 — concept dossier, ADR 0058 backups & provenance:_ added `apps/showcases/53/docs/concept-dossier.html`, recorded external Poly Haven/ambientCG CC0 sources and generator hashes in `REFERENCES.md` and Google Drive `MANIFEST.txt` (ADR 0058), and updated `apps/showcases/53/docs/log.md`.
+
 ## [0.126.0] - 2026-11-18
 
 ### "The sea is everything. It covers seven tenths of the terrestrial globe. Its breath is pure and healthy." - Jules Verne
