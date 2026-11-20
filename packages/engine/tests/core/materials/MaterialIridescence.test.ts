@@ -242,7 +242,10 @@ describe("KHR_materials_iridescence: shader parity across the three tiers", () =
     const wgsl = read("renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl");
     const glsl300 = read("renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl");
 
-    expect(wgsl).toContain("evalIridescence(1.0, obj.matParam14.y, dotNV, obj.matParam14.w, F0)");
+    expect(wgsl).toContain(
+      "evalIridescence(1.0, obj.matParam14.y, dotNV, iridescenceThickness, F0)",
+    );
+    expect(wgsl).toContain("iridescenceStrength);");
     expect(wgsl).toMatch(/#ifdef USE_IRIDESCENCE[\s\S]*evalIridescence\(1\.0, obj\.matParam14\.y/);
     expect(wgsl).toMatch(/F0 = mix\(F0, clamp\(schlickToF0\(iridescenceFresnel, 1\.0, dotNV\)/);
     expect(glsl300).toContain(

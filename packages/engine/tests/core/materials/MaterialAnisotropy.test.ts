@@ -134,7 +134,7 @@ describe("KHR_materials_anisotropy: shader parity across the three tiers", () =>
       expect(source).toContain("#ifdef USE_ANISOTROPY");
       expect(source).not.toContain("anisotropyEnabled");
     }
-    expect(read(chunks[0]![1])).toContain("let anisotropyStrength = obj.matParam15.x;");
+    expect(read(chunks[0]![1])).toContain("var anisotropyStrength = obj.matParam15.x;");
     expect(read(chunks[1]![1])).toContain("float anisotropyStrength = u_matParam15.x;");
     expect(read(chunks[2]![1])).toContain("float anisotropyStrength = u_matParam15.x;");
   });

@@ -110,15 +110,36 @@ describe("WebGPU extension-map binding names (ADR 0054 revisit)", () => {
 });
 
 describe("WebGPU budget fit drop order (ADR 0054 revisit, mirrors WebGL2 ADR 0056)", () => {
-  it("drops specular first, then sheen, then clearcoat, then transmission", () => {
+  it("drops the iridescence thickness binding in the shared layout (one unit, not two)", () => {
+    const registry = standardRegistry();
+    const separate = getMaterialTextureBindingNames("standard", registry, [
+      ShaderFlag.IRIDESCENCE_MAP,
+      ShaderFlag.IRIDESCENCE_THICKNESS_MAP,
+    ]);
+    expect(separate).toContain("u_iridescenceMap");
+    expect(separate).toContain("u_iridescenceThicknessMap");
+
+    const shared = getMaterialTextureBindingNames("standard", registry, [
+      ShaderFlag.IRIDESCENCE_MAP,
+      ShaderFlag.IRIDESCENCE_THICKNESS_MAP,
+      ShaderFlag.IRIDESCENCE_MAPS_SHARED,
+    ]);
+    expect(shared).toContain("u_iridescenceMap");
+    expect(shared).not.toContain("u_iridescenceThicknessMap");
+  });
+
+  it("drops iridescence, specular, anisotropy, sheen, clearcoat, transmission in order", () => {
     let flags: readonly string[] = [
       ShaderFlag.TRANSMISSION_MAP,
       ShaderFlag.THICKNESS_MAP,
       ShaderFlag.CLEARCOAT_MAP,
       ShaderFlag.SHEEN_COLOR_MAP,
       ShaderFlag.SHEEN_ROUGHNESS_MAP,
+      ShaderFlag.ANISOTROPY_MAP,
       ShaderFlag.SPECULAR_WEIGHT_MAP,
       ShaderFlag.SPECULAR_COLOR_MAP,
+      ShaderFlag.IRIDESCENCE_MAP,
+      ShaderFlag.IRIDESCENCE_THICKNESS_MAP,
     ];
     const dropped: string[][] = [];
     let next = dropNextWebGpuExtensionMapGroup(flags);
@@ -130,7 +151,9 @@ describe("WebGPU budget fit drop order (ADR 0054 revisit, mirrors WebGL2 ADR 005
     }
 
     expect(dropped).toEqual([
+      [ShaderFlag.IRIDESCENCE_MAP, ShaderFlag.IRIDESCENCE_THICKNESS_MAP],
       [ShaderFlag.SPECULAR_WEIGHT_MAP, ShaderFlag.SPECULAR_COLOR_MAP],
+      [ShaderFlag.ANISOTROPY_MAP],
       [ShaderFlag.SHEEN_COLOR_MAP, ShaderFlag.SHEEN_ROUGHNESS_MAP],
       [ShaderFlag.CLEARCOAT_MAP],
       [ShaderFlag.TRANSMISSION_MAP, ShaderFlag.THICKNESS_MAP],
@@ -166,6 +189,11 @@ describe("preprocessed Standard WGSL assembly (no GPU needed)", () => {
     ShaderFlag.THICKNESS_MAP,
     ShaderFlag.SPECULAR_WEIGHT_MAP,
     ShaderFlag.SPECULAR_COLOR_MAP,
+    ShaderFlag.ANISOTROPY,
+    ShaderFlag.ANISOTROPY_MAP,
+    ShaderFlag.IRIDESCENCE,
+    ShaderFlag.IRIDESCENCE_MAP,
+    ShaderFlag.IRIDESCENCE_THICKNESS_MAP,
   ];
   const standardWgsl = (flags: readonly string[]): string =>
     preprocessConditionals(
@@ -181,14 +209,16 @@ describe("preprocessed Standard WGSL assembly (no GPU needed)", () => {
   it("a feature-less Standard carries none of the 9 extension declarations or samples", () => {
     const source = standardWgsl([]);
     expect(source).not.toMatch(/^\s*#/m); // every directive branch stripped, none left behind
-    for (const name of [21, 22, 23, 24, 25, 26, 27, 28, 29]) {
+    for (const name of [21, 22, 23, 24, 25, 26, 27, 28, 29, 32, 33, 34]) {
       expect(source).not.toContain(`@binding(${name})`);
     }
     expect(source).not.toContain("u_clearcoatMap");
     expect(source).not.toContain("u_transmissionMap");
+    expect(source).not.toContain("u_anisotropyMap");
+    expect(source).not.toContain("u_iridescenceMap");
   });
 
-  it("all four groups assembled leaves no directive line and keeps every sample", () => {
+  it("all groups assembled leaves no directive line and keeps every sample", () => {
     const source = standardWgsl(FULL);
     expect(source).not.toMatch(/^\s*#/m);
     expect(source).toContain("@binding(21) var u_clearcoatMap");
@@ -196,9 +226,15 @@ describe("preprocessed Standard WGSL assembly (no GPU needed)", () => {
     expect(source).toContain("@binding(26) var u_transmissionMap");
     expect(source).toContain("@binding(28) var u_specularWeightMap");
     expect(source).toContain("@binding(29) var u_specularColorMap");
+    expect(source).toContain("@binding(32) var u_anisotropyMap");
+    expect(source).toContain("@binding(33) var u_iridescenceMap");
+    expect(source).toContain("@binding(34) var u_iridescenceThicknessMap");
     expect(source).toContain("textureSample(u_clearcoatMap, s, i.uv).r");
     expect(source).toContain("textureSample(u_sheenRoughnessMap, s, i.uv).a");
     expect(source).toContain("textureSample(u_thicknessMap, s, i.uv).g");
+    expect(source).toContain("textureSample(u_anisotropyMap, s, i.uv).rgb");
+    expect(source).toContain("textureSample(u_iridescenceMap, s, i.uv).r");
+    expect(source).toContain("textureSample(u_iridescenceThicknessMap, s, i.uv).g");
     // The clearcoat lobe runs off its own N_cc (only reachable with the normal map).
     expect(source).toContain("let N_cc = normalize(TBN * rawCcNormal);");
     expect(source).toContain("let R_cc = reflect(-V, N_cc);");

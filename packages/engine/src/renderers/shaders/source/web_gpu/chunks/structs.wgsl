@@ -288,6 +288,17 @@ fn worldDirToScreen(dir: vec3f) -> vec2f {
 @group(1) @binding(30) var u_oceanDispMap: texture_2d<f32>;
 @group(1) @binding(31) var u_oceanNormFoamMap: texture_2d<f32>;
 #endif
+#ifdef USE_ANISOTROPY_MAP
+@group(1) @binding(32) var u_anisotropyMap: texture_2d<f32>;
+#endif
+#ifdef USE_IRIDESCENCE_MAP
+@group(1) @binding(33) var u_iridescenceMap: texture_2d<f32>;
+#endif
+#ifdef USE_IRIDESCENCE_THICKNESS_MAP
+#ifndef USE_IRIDESCENCE_MAPS_SHARED
+@group(1) @binding(34) var u_iridescenceThicknessMap: texture_2d<f32>;
+#endif
+#endif
 
 @group(2) @binding(0) var<uniform> obj: ObjectUniforms;
 

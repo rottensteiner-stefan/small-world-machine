@@ -295,6 +295,33 @@ export function getOptionalMaterialTextureBindings(): Record<string, OptionalMat
           texture: { viewDimension: "2d", sampleType: "float" },
         },
       },
+      u_anisotropyMap: {
+        binding: 32,
+        requiredFlag: ShaderFlag.ANISOTROPY_MAP,
+        layoutEntry: {
+          binding: 32,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { viewDimension: "2d", sampleType: "float" },
+        },
+      },
+      u_iridescenceMap: {
+        binding: 33,
+        requiredFlag: ShaderFlag.IRIDESCENCE_MAP,
+        layoutEntry: {
+          binding: 33,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { viewDimension: "2d", sampleType: "float" },
+        },
+      },
+      u_iridescenceThicknessMap: {
+        binding: 34,
+        requiredFlag: ShaderFlag.IRIDESCENCE_THICKNESS_MAP,
+        layoutEntry: {
+          binding: 34,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { viewDimension: "2d", sampleType: "float" },
+        },
+      },
     };
   }
   return _optionalMaterialTextureBindings;
@@ -348,10 +375,12 @@ export function getMaterialTextureBindingNames(
   const bindings = getOptionalMaterialTextureBindings();
   const names: string[] = [];
   const specularShared = flags.includes(ShaderFlag.SPECULAR_MAPS_SHARED);
+  const iridescenceShared = flags.includes(ShaderFlag.IRIDESCENCE_MAPS_SHARED);
   for (const name of Object.keys(declared)) {
     const info = bindings[name];
     if (!info) continue;
     if (name === "u_specularWeightMap" && specularShared) continue;
+    if (name === "u_iridescenceThicknessMap" && iridescenceShared) continue;
     if (info.requiredFlag && !flags.includes(info.requiredFlag)) continue;
     names.push(name);
   }
@@ -382,13 +411,17 @@ const ALWAYS_BOUND_MATERIAL_TEXTURE_COUNT = 3;
 
 /**
  * Extension-map groups the WebGPU budget fit may drop, highest priority to drop first. Mirrors the
- * WebGL2 resolver order of `EXTENSION_MAP_GROUPS` (ADR 0056) restricted to the groups that already
- * have WebGPU bindings (anisotropy/iridescence maps stay WebGL2-only, ADR 0055, and therefore add
- * no bindings here). Each group drops as a whole and a dropped feature falls back to its factor
- * values with one warning per program.
+ * WebGL2 resolver order of `EXTENSION_MAP_GROUPS` (ADR 0056). Each group drops as a whole and a
+ * dropped feature falls back to its factor values with one warning per program.
  */
 const WEBGPU_EXTENSION_MAP_GROUPS: ReadonlyArray<readonly string[]> = [
+  [
+    ShaderFlag.IRIDESCENCE_MAP,
+    ShaderFlag.IRIDESCENCE_THICKNESS_MAP,
+    ShaderFlag.IRIDESCENCE_MAPS_SHARED,
+  ],
   [ShaderFlag.SPECULAR_WEIGHT_MAP, ShaderFlag.SPECULAR_COLOR_MAP, ShaderFlag.SPECULAR_MAPS_SHARED],
+  [ShaderFlag.ANISOTROPY_MAP],
   [ShaderFlag.SHEEN_COLOR_MAP, ShaderFlag.SHEEN_ROUGHNESS_MAP],
   [ShaderFlag.CLEARCOAT_MAP, ShaderFlag.CLEARCOAT_ROUGHNESS_MAP, ShaderFlag.CLEARCOAT_NORMAL_MAP],
   [ShaderFlag.TRANSMISSION_MAP, ShaderFlag.THICKNESS_MAP],

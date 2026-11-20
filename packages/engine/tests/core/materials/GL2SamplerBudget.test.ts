@@ -173,26 +173,17 @@ describe("WebGL2 sampler budget (11 free texture units)", () => {
   });
 });
 
-describe("Still-WebGL2-only extension maps stay out of WebGPU (ADR 0055 follow-up)", () => {
-  const webGl2OnlyMaps = ["u_anisotropyMap", "u_iridescenceMap", "u_iridescenceThicknessMap"];
+describe("WebGL1-only absent extension maps stay out of WebGL1 (ADR 0055 follow-up)", () => {
+  const webGl1AbsentMaps = ["u_anisotropyMap", "u_iridescenceMap", "u_iridescenceThicknessMap"];
 
-  it.each(webGl2OnlyMaps)(
-    "%s is neither in the WebGPU binding table nor in the WGSL structs",
-    (name) => {
-      expect(read("renderers/WebGPU/managers/GPUPipelineCache.ts")).not.toContain(name);
-      expect(read("renderers/shaders/source/web_gpu/chunks/structs.wgsl")).not.toContain(name);
-    },
-  );
-
-  it.each(webGl2OnlyMaps)("%s is not sampled by the WGSL or WebGL1 chunks", (name) => {
-    expect(read("renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl")).not.toContain(name);
+  it.each(webGl1AbsentMaps)("%s is not sampled by the WebGL1 chunk", (name) => {
     expect(read("renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl")).not.toContain(
       name,
     );
   });
 });
 
-describe("ADR 0054 revisit: ported maps reach WebGPU flag-gated (clearcoat/sheen/transmission/specular)", () => {
+describe("ADR 0054 revisit / T01: ported maps reach WebGPU flag-gated (clearcoat/sheen/transmission/specular/anisotropy/iridescence)", () => {
   // name -> the compile flag that must gate its declaration in `structs.wgsl`.
   const portedMaps: Record<string, string> = {
     u_clearcoatMap: "USE_CLEARCOAT_MAP",
@@ -204,6 +195,9 @@ describe("ADR 0054 revisit: ported maps reach WebGPU flag-gated (clearcoat/sheen
     u_thicknessMap: "USE_THICKNESS_MAP",
     u_specularWeightMap: "USE_SPECULAR_WEIGHT_MAP",
     u_specularColorMap: "USE_SPECULAR_COLOR_MAP",
+    u_anisotropyMap: "USE_ANISOTROPY_MAP",
+    u_iridescenceMap: "USE_IRIDESCENCE_MAP",
+    u_iridescenceThicknessMap: "USE_IRIDESCENCE_THICKNESS_MAP",
   };
 
   it.each(Object.entries(portedMaps))(

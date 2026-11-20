@@ -968,12 +968,14 @@ export class WebGPURenderer
     this._isDeviceLost = false;
     this._isDestroyed = false;
 
-    // Listen for device lost (GPU hangs, driver resets, device destruction).
+    // Listen for device lost (GPU hangs, driver resets, device destruction). Fail-closed: stop
+    // rendering (`_isDeviceLost`), notify `onContextLost`, and release all GPU managers/caches.
     this._device.lost.then((info: GPUDeviceLostInfo) => {
       this._isDeviceLost = true;
       if (!this._isDestroyed) {
         console.error(`[WebGPU Device Lost] Reason: ${info.reason}, Message: ${info.message}`);
         this.onContextLost?.({ reason: info.reason, message: info.message });
+        this.destroy();
       }
     });
 
@@ -2552,6 +2554,7 @@ export class WebGPURenderer
 
   /** @inheritdoc */
   public override destroy(): void {
+    if (this._isDestroyed) return;
     this._objectRing?.dispose();
     this._instanceRing?.destroy();
     this._geometryCache?.dispose();

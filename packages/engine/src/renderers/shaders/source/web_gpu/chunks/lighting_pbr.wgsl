@@ -53,24 +53,53 @@ let diffuseAlbedo = albedo * (1.0 - transmissionWeight);
 // KHR_materials_iridescence: matParam14 = (factor, film ior, thickness min nm, thickness max nm).
 // The thin-film Fresnel is evaluated once per fragment at the view angle with the combined base F0 and folded
 // back into F0, so every Fresnel call below picks it up (the Khronos spec leaves the per-device BRDF choice
-// open). Without a thickness texture the film has the maximum thickness; the textures are WebGL2 only.
+// open). Without a thickness texture the film has the maximum thickness; the optional textures scale the
+// factor (red) and mix the thickness range (green).
 {
-#ifdef USE_IRIDESCENCE_CHEAP
-    let iridescenceFresnel = iridescenceFresnelCheap(dotNV, obj.matParam14.y, obj.matParam14.w, F0);
-#else
-    let iridescenceFresnel = evalIridescence(1.0, obj.matParam14.y, dotNV, obj.matParam14.w, F0);
+    var iridescenceStrength = obj.matParam14.x;
+#ifdef USE_IRIDESCENCE_MAP
+    iridescenceStrength *= textureSample(u_iridescenceMap, s, i.uv).r;
 #endif
-    F0 = mix(F0, clamp(schlickToF0(iridescenceFresnel, 1.0, dotNV), vec3f(0.0), vec3f(1.0)), obj.matParam14.x);
+    var iridescenceThickness = obj.matParam14.w;
+#ifdef USE_IRIDESCENCE_THICKNESS_MAP
+#ifdef USE_IRIDESCENCE_MAPS_SHARED
+    // Same texture as the intensity map: read the green channel through that sampler (one unit, not two).
+    iridescenceThickness = mix(obj.matParam14.z, obj.matParam14.w, textureSample(u_iridescenceMap, s, i.uv).g);
+#else
+    iridescenceThickness = mix(obj.matParam14.z, obj.matParam14.w, textureSample(u_iridescenceThicknessMap, s, i.uv).g);
+#endif
+#endif
+#ifdef USE_IRIDESCENCE_CHEAP
+    let iridescenceFresnel = iridescenceFresnelCheap(dotNV, obj.matParam14.y, iridescenceThickness, F0);
+#else
+    let iridescenceFresnel = evalIridescence(1.0, obj.matParam14.y, dotNV, iridescenceThickness, F0);
+#endif
+    F0 = mix(F0, clamp(schlickToF0(iridescenceFresnel, 1.0, dotNV), vec3f(0.0), vec3f(1.0)), iridescenceStrength);
 }
 #endif
 
 #ifdef USE_ANISOTROPY
 // KHR_materials_anisotropy: matParam15 = (strength, cos(rotation), sin(rotation), 0).
-// T follows the rotated tangent direction, B = cross(geometric normal, T) (Khronos reference).
-let anisotropyStrength = obj.matParam15.x;
+// T follows the rotated tangent direction, B = cross(geometric normal, T) (Khronos reference). The optional
+// texture holds the per-texel direction (red/green, [0,1] -> [-1,1], then rotated by anisotropyRotation) and
+// multiplies the strength with its blue channel; without it the default texel is direction +X at full strength.
+var anisotropyStrength = obj.matParam15.x;
+var anisotropyDirection = vec2f(obj.matParam15.y, obj.matParam15.z);
+#ifdef USE_ANISOTROPY_MAP
+{
+    let anisotropySample = textureSample(u_anisotropyMap, s, i.uv).rgb;
+    var texelDirection = anisotropySample.rg * 2.0 - 1.0;
+    texelDirection = select(vec2f(1.0, 0.0), normalize(texelDirection), dot(texelDirection, texelDirection) > 1e-8);
+    anisotropyDirection = vec2f(
+        obj.matParam15.y * texelDirection.x - obj.matParam15.z * texelDirection.y,
+        obj.matParam15.z * texelDirection.x + obj.matParam15.y * texelDirection.y
+    );
+    anisotropyStrength *= anisotropySample.b;
+}
+#endif
 let anisoAlpha = max(roughness * roughness, 0.002);
 let anisoAlphaT = mix(anisoAlpha, 1.0, anisotropyStrength * anisotropyStrength);
-let anisoT = normalize(TBN * vec3f(obj.matParam15.y, obj.matParam15.z, 0.0));
+let anisoT = normalize(TBN * vec3f(anisotropyDirection.x, anisotropyDirection.y, 0.0));
 let anisoB = normalize(cross(normalize(i.n), anisoT));
 #endif
 

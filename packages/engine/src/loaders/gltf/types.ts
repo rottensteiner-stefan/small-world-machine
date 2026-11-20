@@ -55,6 +55,7 @@ export interface GltfJson {
       indices?: number;
       material?: number;
       mode?: number;
+      targets?: { [key: string]: number }[];
       extensions?: {
         KHR_draco_mesh_compression?: {
           bufferView: number;

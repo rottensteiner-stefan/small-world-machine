@@ -21,6 +21,17 @@ export class GltfGeometryParser {
   ): Promise<GeometryDataInterface | null> {
     const readCtx: GltfReadContext = ctx ?? { json, state: new Map() };
 
+    if (
+      primitive.targets &&
+      primitive.targets.length > 0 &&
+      !readCtx.state.get("warnedMorphTargets")
+    ) {
+      readCtx.state.set("warnedMorphTargets", true);
+      console.warn(
+        "[GltfGeometryParser] glTF morph targets (`primitive.targets`) are not supported and will be ignored.",
+      );
+    }
+
     // 1. Check if any registered extension decodes this geometry (e.g. KHR_draco_mesh_compression)
     for (const plugin of getGltfExtensions()) {
       if (plugin.decodeGeometry) {
