@@ -11,6 +11,7 @@ import { SynthSFX } from "./SynthSFX.js";
  */
 export class AudioSystem {
   public context: AudioContext;
+  private readonly _ownsContext: boolean;
   private _buffers: Map<string, AudioBuffer> = new Map();
   private _inFlightLoads: Map<string, Promise<void>> = new Map();
   private _isDisposed: boolean = false;
@@ -46,11 +47,13 @@ export class AudioSystem {
     this._events = events;
     if (context) {
       this.context = context;
+      this._ownsContext = false;
     } else {
       const AudioContextClass =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.context = new AudioContextClass();
+      this._ownsContext = true;
     }
     this._buildMixer();
     this._synthSFX = new SynthSFX(
@@ -442,10 +445,11 @@ export class AudioSystem {
   }
 
   /**
-   * Stops every still-running endless sound (`startDrone`/`startFire` graphs) and closes the
-   * `AudioContext`. Call this when tearing down the engine instance that owns this `AudioSystem`
-   * -- without it, both the endless sound graphs and the context itself outlive the instance for
-   * the lifetime of the page (browsers cap the number of concurrently open `AudioContext`s).
+   * Stops every still-running endless sound (`startDrone`/`startFire` graphs), disconnects
+   * internal mixer nodes, and closes the `AudioContext` if this `AudioSystem` created it.
+   * Call this when tearing down the engine instance that owns this `AudioSystem` -- without it,
+   * both the endless sound graphs and an owned context outlive the instance for the lifetime of
+   * the page (browsers cap the number of concurrently open `AudioContext`s).
    */
   public dispose(): void {
     this._isDisposed = true;
@@ -456,7 +460,17 @@ export class AudioSystem {
     this._buffers.clear();
     this._inFlightLoads.clear();
 
-    if (this.context.state !== "closed") {
+    try {
+      this.sfxGain.disconnect();
+      this.musicGain.disconnect();
+      this._reverbNode.disconnect();
+      this._reverbGain.disconnect();
+      this.masterGain.disconnect();
+    } catch {
+      // Ignore already-disconnected mixer nodes.
+    }
+
+    if (this._ownsContext && this.context.state !== "closed") {
       this.context.close().catch(console.error);
     }
   }

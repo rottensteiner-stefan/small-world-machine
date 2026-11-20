@@ -12,6 +12,11 @@ Packages marked `"swm": { "release": true }` in their `package.json` are release
 | `@small-world-machine/engine` | Renderers, scene graph, animation, glTF loading, input, behaviors |
 | `@small-world-machine/vfx-extras` | Particle systems, `Fire` |
 | `@small-world-machine/liquid-extras` | Specialised liquid/oil materials |
+| `@small-world-machine/vegetation-extras` | Wind field, ground cover rings, canopy coverage, foliage looks |
+| `@small-world-machine/physics-extras` | Voronoi fracture and physics-side geometry extensions |
+| `@small-world-machine/geometry-extras` | Procedural & exotic geometries (supershapes, torus knots, Voronoi, marching cubes) |
+| `@small-world-machine/artistic-extras` | Stylized shaders & post-processors (Metal Relief, Impasto) |
+| `@small-world-machine/gltf-extensions` | Community & data-level glTF extensions (`KHR_draco_mesh_compression`, `KHR_texture_basisu`) |
 | `@small-world-machine/tools` | `attachDevTools`, Maker, Material Studio and other browser tools |
 
 Each tarball ships `dist/index.js` (ES module), `.d.ts` files and a manifest with `exports` pointing at `dist`.
@@ -44,7 +49,7 @@ that plain Node cannot load. The release build rewrites those deep paths to the 
 
 Put the tarballs next to the project (for example `vendor/`) or attach them to a GitHub release, reference them as
 `file:` or URL dependencies in `package.json`, run `npm install`, then `npm run typecheck && npm test`.
-Because the engine is a peer of the extras, all four tarballs must come from the same release.
+Because the engine is a peer of the extras, all installed tarballs must come from the same release.
 
 ## Standalone Reference Projects
 

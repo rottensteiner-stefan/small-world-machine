@@ -4,6 +4,9 @@
   "description": "Community and data-level glTF extensions for Small World Machine.",
   "type": "module",
   "license": "MIT",
+  "swm": {
+    "release": true
+  },
   "exports": {
     ".": "./src/index.ts",
     "./register": "./src/register.ts",

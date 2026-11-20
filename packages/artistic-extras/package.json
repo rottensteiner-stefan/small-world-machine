@@ -4,6 +4,9 @@
   "description": "Artistic, stylized, and mixed-media shaders and post-processors (Metal Relief, Palette Knife Impasto, Selective Color Pop) for Small World Machine.",
   "type": "module",
   "license": "MIT",
+  "swm": {
+    "release": true
+  },
   "exports": {
     ".": "./src/index.ts",
     "./*": "./src/*"

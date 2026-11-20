@@ -2,6 +2,22 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.127.5] - 2026-11-21
+
+### "Well done is better than well said." - Benjamin Franklin
+
+- **Architecture & Bugfixes:**
+  - _Async init/dispose races & context-loss handling (`SmallWorldMachine.ts`, `WebGPURenderer.ts`, `AbstractShowcase.ts`):_ deduplicated concurrent `start()` via `_initPromise`, aborted zombie loops and leaked `GPUDevice` instances when `destroy()` runs during init, paused/stopped the loop on WebGL/WebGPU context loss, and cancelled pending `AbstractShowcase` ready timers on teardown.
+  - _AssetManager epoch & abortable loaders (`AssetManager.ts`, `AbstractLoader.ts`, `ImageLoader.ts`, `TextLoader.ts`, `BinaryStreamLoader.ts`):_ added an epoch counter in `AssetManager.clear()` (wired to `SmallWorldMachine.destroy()`) to prevent stale loads from polluting fresh caches, and threaded optional `AbortSignal` through `LoaderOptions` to `fetch()`.
+  - _Audio lifecycle & spatial orientation (`AudioSystem.ts`, `SynthSFX.ts`):_ disconnected one-shot playback nodes on `onended`, tracked `_ownsContext` so `dispose()` disconnects mixer nodes without closing injected contexts, deduplicated concurrent `load()` calls, cleared buffers on `dispose()`, and used `camera.up` with an orthogonal fallback when looking straight up/down.
+  - _Multi-engine input isolation & controllers (`Input.ts`, `UniversalGamepadController.ts`, `OrbitController.ts`, `FPSController.ts`, `FirstPersonController.ts`, `DeviceOrientationController.ts`):_ scoped pointer/wheel/contextmenu to canvas, kept `keyup` on `<input>`, cached gamepads per frame, cleaned up Joy-Con listeners, normalized wheel/diagonal/deadzone/sensitivity, and guarded async attach.
+  - _WebGL1 extension-map warning & tier parity (`WebGLProgramCache.ts`, `tier-parity.json`):_ logged a per-renderer one-time warning when WebGL1 materials request unsupported anisotropy or iridescence maps, and classified GL1/GL2 `instance_field_depth_equal_color` and GL1 `anisotropy_map`/`iridescence_maps` as `deliberate`.
+
+- **Housekeeping & Docs:**
+  - _Dependency audit & TypeDoc minimatch shim (`package.json`, `package-lock.json`, `.agents/scripts/typedoc-shim.mjs`):_ resolved remaining `minimatch` vulnerabilities via targeted npm overrides for `@microsoft/api-extractor` and `typedoc` to `^11.0.9`, paired with a TypeDoc glob shim restoring `Minimatch.prototype.matchOne` to achieve 0 audit vulnerabilities.
+  - _Full extras release packaging (`packages/*/package.json`, `docs/guides/consuming-the-engine.md`):_ enabled `"swm": { "release": true }` on `vegetation-extras`, `physics-extras`, `geometry-extras`, `artistic-extras`, and `gltf-extensions` so all nine workspace packages ship in GitHub releases.
+  - _Preview & canary port isolation (`preview-utils.js`, `goldens/capture.js`, `check-showcases.js`):_ allocated free ephemeral ports via `findFreePort()`, failed fast on premature preview server exit, guaranteed page teardown in `finally`, and added Showcase 30 to `SHOWCASE_WAIT_READY`.
+
 ## [0.127.4] - 2026-11-20
 
 ### "Well-typed programs cannot go wrong." - Robin Milner

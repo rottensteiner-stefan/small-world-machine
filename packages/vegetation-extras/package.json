@@ -4,6 +4,9 @@
   "description": "Vegetation building blocks for Small World Machine: wind field, ground cover (grass varieties, camera-centred rings), canopy coverage and foliage look presets.",
   "type": "module",
   "license": "MIT",
+  "swm": {
+    "release": true
+  },
   "exports": {
     ".": "./src/index.ts",
     "./*": "./src/*"

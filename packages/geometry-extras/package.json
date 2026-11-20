@@ -4,6 +4,9 @@
   "description": "Exotic and procedural geometries for Small World Machine (supershapes, torus knots, and more).",
   "type": "module",
   "license": "MIT",
+  "swm": {
+    "release": true
+  },
   "exports": {
     ".": "./src/index.ts",
     "./*": "./src/*"

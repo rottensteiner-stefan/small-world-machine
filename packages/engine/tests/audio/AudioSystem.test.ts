@@ -252,15 +252,55 @@ describe("AudioSystem", () => {
       expect(noiseSource!.stop).toHaveBeenCalledTimes(1);
     });
 
-    it("dispose() closes the AudioContext", () => {
-      audio.dispose();
-      expect(context.close).toHaveBeenCalledTimes(1);
-    });
+    const withWindowAudioContext = (mockCtx: AudioContext, fn: () => void): void => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const hadWindow = "window" in globalThis;
+      const win = (hadWindow ? globalRecord["window"] : {}) as Record<string, unknown>;
+      const origAudioContext = win["AudioContext"];
+      if (!hadWindow) {
+        Object.defineProperty(globalThis, "window", {
+          value: win,
+          configurable: true,
+          writable: true,
+        });
+      }
+      win["AudioContext"] = function MockAudioContext(): AudioContext {
+        return mockCtx;
+      };
+      try {
+        fn();
+      } finally {
+        if (!hadWindow) {
+          delete globalRecord["window"];
+        } else {
+          win["AudioContext"] = origAudioContext;
+        }
+      }
+    };
 
-    it("dispose() does not try to close an already-closed context", () => {
-      (context as unknown as { state: string }).state = "closed";
+    it("dispose() does not close an injected AudioContext (AU03)", () => {
       audio.dispose();
       expect(context.close).not.toHaveBeenCalled();
+      expect(audio.masterGain.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it("dispose() closes a self-created AudioContext (AU03)", () => {
+      const ownedContext = makeMockAudioContext();
+      withWindowAudioContext(ownedContext, () => {
+        const ownedAudio = new AudioSystem();
+        ownedAudio.dispose();
+        expect(ownedContext.close).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("dispose() does not try to close an already-closed owned context", () => {
+      const ownedContext = makeMockAudioContext();
+      (ownedContext as unknown as { state: string }).state = "closed";
+      withWindowAudioContext(ownedContext, () => {
+        const ownedAudio = new AudioSystem();
+        ownedAudio.dispose();
+        expect(ownedContext.close).not.toHaveBeenCalled();
+      });
     });
   });
 

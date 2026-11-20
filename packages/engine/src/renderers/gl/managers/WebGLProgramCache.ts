@@ -148,6 +148,7 @@ export class WebGLProgramCache {
 
   private _programs = new Map<string, WebGLProgramCacheEntry>();
   private _lastKnownProgramKey = new WeakMap<Object3D, string>();
+  private readonly _warnedGl1IgnoredFeatures = new Set<string>();
 
   constructor(
     gl: WebGLRenderingContext | WebGL2RenderingContext,
@@ -248,6 +249,32 @@ export class WebGLProgramCache {
     return { vs, fs };
   }
 
+  /**
+   * Warns once per renderer instance when a WebGL1 material requests extension maps
+   * deliberately omitted in GLSL100 due to the 8-texture-unit cap (see `tier-parity.json`).
+   */
+  private _warnGl1UnsupportedMaps(flags: readonly string[]): void {
+    if (
+      flags.includes(ShaderFlag.ANISOTROPY_MAP) &&
+      !this._warnedGl1IgnoredFeatures.has("anisotropy_map")
+    ) {
+      this._warnedGl1IgnoredFeatures.add("anisotropy_map");
+      console.warn(
+        "[WebGL1Renderer] Anisotropy map is not supported on WebGL1 (8 texture unit budget); using scalar anisotropy factors instead.",
+      );
+    }
+    if (
+      (flags.includes(ShaderFlag.IRIDESCENCE_MAP) ||
+        flags.includes(ShaderFlag.IRIDESCENCE_THICKNESS_MAP)) &&
+      !this._warnedGl1IgnoredFeatures.has("iridescence_maps")
+    ) {
+      this._warnedGl1IgnoredFeatures.add("iridescence_maps");
+      console.warn(
+        "[WebGL1Renderer] Iridescence maps are not supported on WebGL1 (8 texture unit budget); using scalar iridescence factors instead.",
+      );
+    }
+  }
+
   /** GLSL100 compile strategy (previously WebGL1Renderer._getProgram): no fixed attribute
    * locations, no global UBO, no shadow/array samplers, per-program light locations, and the
    * layout-vs-`StandardWebGPULayout` missing-uniform warning. */
@@ -257,6 +284,7 @@ export class WebGLProgramCache {
     isInstanced: boolean,
     flags: readonly string[],
   ): WebGLProgramCacheEntry {
+    this._warnGl1UnsupportedMaps(flags);
     const gl = this._gl;
     const { vs, fs } = this._assembleGlsl100(def, isInstanced, flags);
     const prog = compileProgram(gl, vs, fs, "AbstractWebGLRenderer");
@@ -568,5 +596,6 @@ export class WebGLProgramCache {
   public dispose(): void {
     for (const cache of this._programs.values()) this._gl.deleteProgram(cache.prog);
     this._programs.clear();
+    this._warnedGl1IgnoredFeatures.clear();
   }
 }

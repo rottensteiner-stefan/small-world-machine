@@ -31,7 +31,7 @@ import { PhysicsSystem } from "../physix/PhysicsSystem.js";
 let _bannerPrinted: boolean = false;
 
 /** The current engine version. */
-export const ENGINE_VERSION = "0.127.4";
+export const ENGINE_VERSION = "0.127.5";
 
 /**
  * Halton low-discrepancy sequence, used for TAA's per-frame sub-pixel camera jitter -- covers
