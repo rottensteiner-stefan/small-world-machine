@@ -2,6 +2,15 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.127.3] - 2026-11-20
+
+### "Nature does nothing uselessly." - Aristotle
+
+- **Architecture & Bugfixes:**
+  - _Scene-graph lifecycle registration (`Object3D.ts`, `Scene.ts`, `PhysicsSystem.ts`, `AbstractRenderer.ts`):_ replaced per-frame whole-tree scans and `is*` prototype getters with attach/detach-maintained lists (`lights`, `directionalLights`, `fogVolumes`, `skinnedMeshes`, `behaviorNodes`, `physicsNodes`), eliminating `O(N)` tree walks and manual type casts.
+  - _Hot-path batching, program-key & flag-mask optimization (`Scene.ts`, `AbstractMaterial.ts`, `WebGL1Renderer.ts`, `WebGL2Renderer.ts`):_ flattened `opaqueLookup` to a single `Map` with material batch caching (`_fastBatchByMat`), cached `WebGLProgramCacheEntry.key`, added `RenderManifest.flagMask` for `O(1)` flag checks, and cached `PostProcessingGroup` TAA/Flash elements.
+  - _Type guards (`TextureArray.ts`, `InstancedMesh.ts`):_ replaced `"isTextureArray" in tex` checks with `isTextureArray()` across materials and WebGL/WebGPU texture managers, and unified remaining `instanceof InstancedMesh` checks in `WebGL2Renderer`/`WebGL2PointShadows` on `isInstancedMesh()`.
+
 ## [0.127.2] - 2026-11-20
 
 ### "Efficiency is doing things right; effectiveness is doing the right things." - Peter Drucker
