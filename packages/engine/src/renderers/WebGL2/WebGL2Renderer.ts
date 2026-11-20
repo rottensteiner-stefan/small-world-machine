@@ -23,7 +23,11 @@ import type {
   RenderTargetCube,
 } from "../../core/textures/index.js";
 import type { RenderManifest } from "../shaders/index.js";
-import { VERTEX_COLOR_FLAG, resolveManifestFlags } from "../shaders/index.js";
+import {
+  MANIFEST_FLAG_VERTEX_COLOR,
+  VERTEX_COLOR_FLAG,
+  resolveManifestFlags,
+} from "../shaders/index.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
 import type { Color } from "../../core/colors/index.js";
 import type { Object3D, RenderBatch, Scene, TextureArray } from "../../core/index.js";
@@ -915,13 +919,17 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     // Automatic instancing (ADR 0046): same-geometry runs become one instanced draw each; only
     // the rest is drawn per object. Vertex colors stay per object (the instanced path binds none).
+    const hasVertexColor =
+      manifest.flagMask !== undefined
+        ? (manifest.flagMask & MANIFEST_FLAG_VERTEX_COLOR) !== 0
+        : manifest.flags?.includes(VERTEX_COLOR_FLAG) === true;
     let perObject: Object3D[] = standardObjects;
     if (
       this._quality.autoInstancing !== false &&
       standardObjects.length >= AUTO_INSTANCING_MIN_RUN &&
       manifest.state?.isSprite !== true &&
       manifest.state?.isDecal !== true &&
-      manifest.flags?.includes(VERTEX_COLOR_FLAG) !== true
+      !hasVertexColor
     ) {
       // ADR 0046 A2: consecutive same-geometry objects form the longest runs on which
       // `partitionInstanceRuns` merges -- reorder the eligible subgroup stably by geometry first.
@@ -996,7 +1004,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     const shaderFlags = this._buildSubgroupShaderFlags(objects[0], manifest, scene, isInst);
 
     const cache = this._programCache.getProgram(manifest.shaderId, isInst, shaderFlags);
-    const programKey = this._programCache.programCacheKey(manifest.shaderId, isInst, shaderFlags);
+    const programKey = cache.key;
     this.gl.useProgram(cache.prog);
     // A program the normal wrapper could not rewrite has no output 1; routing the draw buffer to
     // it would write undefined values into the normal buffer.

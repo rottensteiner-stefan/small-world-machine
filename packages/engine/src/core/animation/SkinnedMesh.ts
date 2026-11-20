@@ -7,6 +7,9 @@ import { BoundingBox } from "../../physix/index.js";
  * A mesh that is deformed by a skeletal hierarchy via GPU skinning.
  */
 export class SkinnedMesh extends Object3D {
+  public override get isSkinnedMesh(): boolean {
+    return true;
+  }
   /** The skeleton associated with this skinned mesh. */
   public skeleton?: Skeleton;
   /** The initial bind matrix of the mesh. */

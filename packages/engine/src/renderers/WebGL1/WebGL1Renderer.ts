@@ -15,9 +15,9 @@ import {
 } from "../../core/textures/index.js";
 import { resolveManifestFlags, type RenderManifest } from "../shaders/index.js";
 import { splitByInstancing, type InstancingSplit } from "../AutoInstancing.js";
-import type { Object3D, RenderBatch, Scene } from "../../core/index.js";
-import { DeviceLimit, InstancedMesh } from "../../core/index.js";
-import { isSkinnedMesh, MAX_SKINNED_BONES } from "../../core/animation/index.js";
+import type { InstancedMesh, Object3D, RenderBatch, Scene } from "../../core/index.js";
+import { DeviceLimit } from "../../core/index.js";
+import { MAX_SKINNED_BONES, type SkinnedMesh } from "../../core/animation/index.js";
 import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 import {
   WebGLProgramCache,
@@ -133,6 +133,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   private readonly _scratchInstancedObjects: Object3D[] = [];
   private readonly _batchSplit: InstancingSplit = { standard: [], instanced: [] };
   private readonly _scratchShaderFlags: string[] = [];
+  private static readonly _NO_LIGHTS: never[] = [];
   /** Derived field-lane shader flags per committed `manifest.flags` array reference (ADR 0059;
    * engine contract `_commitFlags` publishes immutably, a fresh array on content change → the
    * WeakMap key rotates). Tag-checked against the quality/BRDF bits so environment changes rebuild.
@@ -473,8 +474,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     ctx.fallbackSpotShadowArray = null;
     ctx.irradianceMap = null;
     ctx.envIntensity = 0;
-    ctx.pointLights = this._frameLights?.pLights ?? [];
-    ctx.spotLights = this._frameLights?.sLights ?? [];
+    ctx.pointLights = this._frameLights?.pLights ?? WebGL1Renderer._NO_LIGHTS;
+    ctx.spotLights = this._frameLights?.sLights ?? WebGL1Renderer._NO_LIGHTS;
     ctx.bloomTexture = null;
     ctx.hbaoTexture = null;
     ctx.lightShaftsTexture = null;
@@ -559,13 +560,20 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
     // semantics stay untouched for other meshes; only an instanced mesh explicitly requesting it
     // gets the `USE_INSTANCE_COLOR` variant compiled in.
-    if (isInstanced && firstObj instanceof InstancedMesh && firstObj.useInstanceDataAsColor) {
+    if (
+      isInstanced &&
+      firstObj.isInstancedMesh &&
+      (firstObj as InstancedMesh).useInstanceDataAsColor
+    ) {
       flags.push(ShaderFlag.INSTANCE_COLOR);
     }
 
     // Skinned meshes need the `USE_SKINNING` program variant (a_joints/a_weights attributes and
     // the u_boneMatrices array) -- same trigger rule as WebGL2Renderer.
-    if ((isSkinnedMesh(firstObj) && firstObj.skeleton) || firstObj.geometry?.joints !== undefined) {
+    if (
+      (firstObj.isSkinnedMesh && (firstObj as SkinnedMesh).skeleton) ||
+      firstObj.geometry?.joints !== undefined
+    ) {
       if (!flags.includes(ShaderFlag.SKINNING)) {
         flags.push(ShaderFlag.SKINNING);
       }
@@ -575,8 +583,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     // probe (`u_envMap`) need it. The budget resolver drops it first when texture units run short.
     if (scene.brdfLUT && texs["u_envMap"]) flags.push(ShaderFlag.BRDF_LUT);
 
-    const programKey = this._programCache.programCacheKey(shaderId, isInstanced, flags);
     const cache = this._programCache.getProgram(shaderId, isInstanced, flags);
+    const programKey = cache.key;
     this.gl.useProgram(cache.prog);
 
     const u = cache.uniforms;
@@ -806,8 +814,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       } else {
         this._uploadModelMatrix(o.worldMatrix.data, manifest.state, vMat, u);
 
-        if (isSkinnedMesh(o) && o.skeleton) {
-          const skel = o.skeleton;
+        if (o.isSkinnedMesh && (o as SkinnedMesh).skeleton) {
+          const skel = (o as SkinnedMesh).skeleton!;
           const boneLoc =
             u.get("u_boneMatrices[0]") ??
             this.gl.getUniformLocation(cache.prog, "u_boneMatrices") ??
@@ -1383,7 +1391,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._geometry.releaseGeometryFor(obj);
     this._programCache.releaseObjectProgram(obj);
     this._textures.releaseObjectTextures(obj);
-    if (obj instanceof InstancedMesh) this._instanceBuffers.release(this.gl, obj);
+    if (obj.isInstancedMesh) this._instanceBuffers.release(this.gl, obj as InstancedMesh);
   }
 
   /** @inheritdoc */

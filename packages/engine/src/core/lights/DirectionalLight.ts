@@ -23,6 +23,9 @@ export interface DirectionalLightOptions extends LightOptions {
  * Directional light that emits light in a specific direction.
  */
 export class DirectionalLight extends AbstractLight {
+  public override get isDirectionalLight(): boolean {
+    return true;
+  }
   /** @inheritdoc */
   public override readonly type: LightType = LightType.DIRECTIONAL;
 

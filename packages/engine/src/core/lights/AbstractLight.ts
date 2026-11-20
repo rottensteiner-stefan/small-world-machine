@@ -38,6 +38,9 @@ export interface LightOptions {
  * Base class for all light types.
  */
 export abstract class AbstractLight extends Object3D {
+  public override get isLight(): boolean {
+    return true;
+  }
   /** Fields common to every light, merged with `Object3D.inspector` (transform/visibility)
    * and a concrete subclass's own map (e.g. `PointLight`'s distance/decay) via
    * `collectInspectorSchema()`. */

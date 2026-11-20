@@ -1,4 +1,4 @@
-import { AbstractLight } from "../core/lights/index.js";
+import type { AbstractLight } from "../core/lights/index.js";
 import { Color } from "../core/colors/index.js";
 import type {
   Renderer,
@@ -13,7 +13,7 @@ import { ToneMappingMode } from "../enums/index.js";
 import type { FrameInfo } from "../interfaces/FrameInfo.js";
 import { createFrameInfo } from "../interfaces/FrameInfo.js";
 import type { Object3D } from "../core/Object3D.js";
-import { FogVolume } from "../core/objects/FogVolume.js";
+import type { FogVolume } from "../core/objects/FogVolume.js";
 import type { Scene, RenderList } from "../core/Scene.js";
 import { Vector3D } from "../math/index.js";
 import { PostProcessingGroup } from "./post/PostProcessingGroup.js";
@@ -233,8 +233,8 @@ export abstract class AbstractRenderer implements Renderer {
    * @private
    */
   private _traverseLights(node: Object3D): void {
-    if (node instanceof AbstractLight && node.isVisible) {
-      node.applyTo(this._lightData);
+    if (node.isLight && node.isVisible) {
+      (node as AbstractLight).applyTo(this._lightData);
     }
 
     if (undefined !== node.children) {
@@ -257,8 +257,8 @@ export abstract class AbstractRenderer implements Renderer {
   }
 
   private _traverseFogVolumes(node: Object3D): void {
-    if (node instanceof FogVolume && node.isVisible && node.enabled) {
-      this._fogVolumes.push(node);
+    if (node.isFogVolume && node.isVisible && (node as FogVolume).enabled) {
+      this._fogVolumes.push(node as FogVolume);
     }
 
     if (undefined !== node.children) {

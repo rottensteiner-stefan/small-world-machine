@@ -5,13 +5,16 @@ import type { Fog } from "./Fog.js";
 import type { Vector3D } from "../math/index.js";
 import type { BoundingBox, SpatialHash, Joint } from "../physix/index.js";
 import { BoundingType, ShaderFlag, Topology, WireframeMode } from "../enums/index.js";
-import { DirectionalLight } from "./lights/index.js";
-import { SkinnedMesh } from "./animation/SkinnedMesh.js";
+import type { DirectionalLight } from "./lights/index.js";
+import type { SkinnedMesh } from "./animation/SkinnedMesh.js";
 import type { Collidable } from "../interfaces/index.js";
 import { compareDecals } from "./decals/DecalMath.js";
 import type { Decal } from "./objects/Decal.js";
 import type { AbstractMaterial } from "./materials/AbstractMaterial.js";
-import type { RenderManifest } from "../renderers/shaders/RenderManifest.js";
+import {
+  MANIFEST_FLAG_TRANSMISSION,
+  type RenderManifest,
+} from "../renderers/shaders/RenderManifest.js";
 
 export interface RenderBatch {
   shaderId: string;
@@ -25,6 +28,9 @@ export interface RenderBatch {
   idleFrames?: number;
   /** Scene-internal fill cursor of `objects` during a collection (see `getVisibleObjectsSorted`). */
   fill?: number;
+  /** Scene-internal fast-lookup back-reference to the owning material and flat lookup key. */
+  materialRef?: AbstractMaterial;
+  lookupKey?: string;
 }
 
 /** Empty opaque batches survive this many frames (cheap re-show) before the scene drops them. */
@@ -42,7 +48,7 @@ function compareTransparentIndices(a: number, b: number): number {
 }
 
 export interface RenderList {
-  opaqueLookup: Map<string, Map<Topology, Map<string, RenderBatch>>>;
+  opaqueLookup: Map<string, RenderBatch>;
   opaqueBatches: RenderBatch[];
   transparent: Object3D[];
   /** Box-projected decals, drawn after the opaque pass and before the transparent pass. */
@@ -105,6 +111,7 @@ export class Scene {
   private _transparentScratch: Object3D[] = [];
   private _collectMaterial: AbstractMaterial | undefined = undefined;
   private _collectManifest: RenderManifest | undefined = undefined;
+  private readonly _fastBatchByMat: Map<AbstractMaterial, RenderBatch> = new Map();
 
   // Global Environment (IBL)
   public irradianceMap?: import("./textures/index.js").CubeTexture;
@@ -191,8 +198,8 @@ export class Scene {
   }
 
   private _updateSkinnedMeshesRecursive(obj: Object3D): void {
-    if (obj instanceof SkinnedMesh && obj.skeleton) {
-      obj.skeleton.update(obj.worldMatrix);
+    if (obj.isSkinnedMesh && (obj as SkinnedMesh).skeleton) {
+      (obj as SkinnedMesh).skeleton!.update(obj.worldMatrix);
     }
     // Indexed loop: for-of allocates an iterator per node in this per-frame walk.
     const children = obj.children;
@@ -209,8 +216,8 @@ export class Scene {
     obj: Object3D,
     camera: import("../interfaces/index.js").CameraInterfaceData,
   ): void {
-    if (obj instanceof DirectionalLight) {
-      obj.updateCascades(camera);
+    if (obj.isDirectionalLight) {
+      (obj as DirectionalLight).updateCascades(camera);
     }
     const children = obj.children;
     for (let i = 0; i < children.length; i++) {
@@ -450,11 +457,15 @@ export class Scene {
       batch.idleFrames = (batch.idleFrames ?? 0) + 1;
       if (batch.idleFrames < BATCH_IDLE_FRAMES) continue;
       batches.splice(i, 1);
-      const topologyMap = renderList.opaqueLookup.get(batch.shaderId);
-      const matMap = topologyMap?.get(batch.topology);
-      matMap?.delete(batch.matUuid);
-      if (matMap && matMap.size === 0) topologyMap!.delete(batch.topology);
-      if (topologyMap && topologyMap.size === 0) renderList.opaqueLookup.delete(batch.shaderId);
+      if (batch.lookupKey !== undefined) {
+        renderList.opaqueLookup.delete(batch.lookupKey);
+      }
+      if (
+        batch.materialRef !== undefined &&
+        this._fastBatchByMat.get(batch.materialRef) === batch
+      ) {
+        this._fastBatchByMat.delete(batch.materialRef);
+      }
     }
   }
 
@@ -483,22 +494,23 @@ export class Scene {
       return;
     }
 
-    if (
-      (obj.geometry || (obj as Object3D & { positionBuffer?: unknown }).positionBuffer) &&
-      obj.material
-    ) {
+    if ((obj.geometry || obj.positionBuffer) && obj.material) {
       // Scene order keeps parts sharing a material together: build each manifest once per run.
       if (obj.material !== this._collectMaterial) {
         this._collectMaterial = obj.material;
         this._collectManifest = obj.material.getRenderManifest();
       }
       const manifest = this._collectManifest!;
+      const isTransmission =
+        manifest.flagMask !== undefined
+          ? (manifest.flagMask & MANIFEST_FLAG_TRANSMISSION) !== 0
+          : manifest.flags?.includes(ShaderFlag.TRANSMISSION) === true;
 
       if (manifest.state?.isDecal) {
         renderList.decals[this._decalsFill++] = obj;
       } else if (manifest.state?.transparent) {
         renderList.transparent[this._transparentFill++] = obj;
-      } else if (manifest.flags?.includes(ShaderFlag.TRANSMISSION) === true) {
+      } else if (isTransmission) {
         // KHR_materials_transmission: the fragment block samples `u_opaqueMap`, which the
         // renderers only populate via the opaque-scene capture of the TRANSPARENT pass
         // (`copyToOpaqueTexture` / `captureOpaqueTexture`). A transmission material left in the
@@ -513,22 +525,35 @@ export class Scene {
         // hand-built GeometryData that skips it -- default to triangles rather than
         // guessing from index count (a 2-index geometry isn't reliably a line).
         const topology = manifest.state?.topology || obj.geometry?.topology || Topology.DEFAULT;
-        const matUuid = obj.material.uuid;
         const wireframeMode = manifest.state?.wireframeMode || WireframeMode.DEFAULT;
         const shadowWidth = manifest.state?.shadowWidth ?? 0;
 
-        if (!renderList.opaqueLookup.has(shaderId))
-          renderList.opaqueLookup.set(shaderId, new Map());
-        const topologyMap = renderList.opaqueLookup.get(shaderId)!;
-
-        if (!topologyMap.has(topology)) topologyMap.set(topology, new Map());
-        const matMap = topologyMap.get(topology)!;
-
-        let batch = matMap.get(matUuid);
-        if (!batch) {
-          batch = { shaderId, topology, matUuid, wireframeMode, shadowWidth, objects: [], fill: 0 };
-          matMap.set(matUuid, batch);
-          renderList.opaqueBatches.push(batch);
+        let batch = this._fastBatchByMat.get(obj.material);
+        if (!batch || batch.topology !== topology || batch.shaderId !== shaderId) {
+          const matUuid = obj.material.uuid;
+          const key = `${shaderId}|${topology}|${matUuid}`;
+          batch = renderList.opaqueLookup.get(key);
+          if (!batch) {
+            batch = {
+              shaderId,
+              topology,
+              matUuid,
+              wireframeMode,
+              shadowWidth,
+              objects: [],
+              fill: 0,
+              materialRef: obj.material,
+              lookupKey: key,
+            };
+            renderList.opaqueLookup.set(key, batch);
+            renderList.opaqueBatches.push(batch);
+            if (!this._fastBatchByMat.has(obj.material)) {
+              this._fastBatchByMat.set(obj.material, batch);
+            }
+          } else {
+            batch.wireframeMode = wireframeMode;
+            batch.shadowWidth = shadowWidth;
+          }
         } else {
           // The batch is reused to save GC, but properties like wireframeMode can change at runtime!
           batch.wireframeMode = wireframeMode;

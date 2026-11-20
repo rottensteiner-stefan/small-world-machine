@@ -14,6 +14,10 @@ export const VERTEX_COLOR_FLAG = ShaderFlag.VERTEX_COLOR;
  */
 export const RAMP_LUT_FLAG = ShaderFlag.RAMP_LUT;
 
+/** Bitmask bits for `RenderManifest.flagMask` (O(1) hot-path checks without `flags.includes()`). */
+export const MANIFEST_FLAG_TRANSMISSION = 1 << 0;
+export const MANIFEST_FLAG_VERTEX_COLOR = 1 << 1;
+
 const _flagsWithoutTextures: WeakMap<string[], string[]> = new WeakMap();
 const _flagsWithCheapIridescence: WeakMap<string[], string[]> = new WeakMap();
 
@@ -75,6 +79,9 @@ export interface RenderManifest {
 
   /** Optional shader flags to compile variants (e.g. USE_TEXTURE_ARRAY) */
   flags?: string[];
+
+  /** Optional bitmask of hot-path flags (`MANIFEST_FLAG_*`) for O(1) per-object checks. */
+  flagMask?: number;
 
   /**
    * Optional GPU state overrides for this specific draw call.

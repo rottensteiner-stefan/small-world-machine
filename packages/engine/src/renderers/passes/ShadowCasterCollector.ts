@@ -94,7 +94,7 @@ export class ShadowCasterCollector {
     if (
       obj.castShadow &&
       obj.material &&
-      (obj.geometry || (obj as Object3D & { positionBuffer?: unknown }).positionBuffer) &&
+      (obj.geometry || obj.positionBuffer) &&
       this._inAnyFrustum(obj)
     ) {
       this._add(obj);

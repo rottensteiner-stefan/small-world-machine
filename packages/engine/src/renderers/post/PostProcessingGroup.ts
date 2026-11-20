@@ -50,6 +50,8 @@ export class PostProcessingGroup {
   public singularityScreenPos: Vector3D = new Vector3D(0, 0, 1);
 
   private _elements: Map<PostProcessingEffectType, PostProcessingElement> = new Map();
+  private _taaElement: TaaElement | undefined = undefined;
+  private _flashElement: FlashElement | undefined = undefined;
 
   constructor() {
     this.add(new ToneMappingElement());
@@ -76,7 +78,22 @@ export class PostProcessingGroup {
    */
   public add(element: PostProcessingElement): this {
     this._elements.set(element.type, element);
+    if (element.type === PostProcessingEffectType.TAA) {
+      this._taaElement = element as TaaElement;
+    } else if (element.type === PostProcessingEffectType.FLASH) {
+      this._flashElement = element as FlashElement;
+    }
     return this;
+  }
+
+  /** Cached direct reference to the TAA element (zero Map lookup in frame loop). */
+  public get taaElement(): TaaElement | undefined {
+    return this._taaElement;
+  }
+
+  /** Cached direct reference to the Flash element (zero Map lookup in frame loop). */
+  public get flashElement(): FlashElement | undefined {
+    return this._flashElement;
   }
 
   /**
@@ -91,6 +108,8 @@ export class PostProcessingGroup {
    * Removes an element by its type.
    */
   public delete(type: PostProcessingEffectType): boolean {
+    if (type === PostProcessingEffectType.TAA) this._taaElement = undefined;
+    else if (type === PostProcessingEffectType.FLASH) this._flashElement = undefined;
     return this._elements.delete(type);
   }
 

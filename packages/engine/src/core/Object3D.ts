@@ -62,6 +62,25 @@ export class Object3D implements Collidable {
   public geometry: GeometryDataInterface | undefined = undefined;
   public material: AbstractMaterial | undefined = undefined;
   public bounds: BoundingVolume | undefined = undefined;
+  /** Optional custom GPU position buffer (non-standard geometry sources). */
+  public positionBuffer: unknown = undefined;
+
+  /** Monomorphic node-kind flags (prototype getters avoid per-frame `instanceof` walks). */
+  public get isInstancedMesh(): boolean {
+    return false;
+  }
+  public get isSkinnedMesh(): boolean {
+    return false;
+  }
+  public get isLight(): boolean {
+    return false;
+  }
+  public get isDirectionalLight(): boolean {
+    return false;
+  }
+  public get isFogVolume(): boolean {
+    return false;
+  }
 
   /** 32-bit collision layer bitmask this object belongs to (default: 1). */
   public collisionLayer: number = 1;

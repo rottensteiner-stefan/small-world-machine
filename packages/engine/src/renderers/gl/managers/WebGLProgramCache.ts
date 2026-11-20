@@ -55,6 +55,8 @@ export interface WebGLAreaLightUniformLocations {
 }
 
 export interface WebGLProgramCacheEntry {
+  /** Cache key under which this entry is stored in `_programs` (avoids re-computing `programCacheKey`). */
+  key: string;
   prog: WebGLProgram;
   uniforms: Map<string, WebGLUniformLocation | undefined>;
   attributes: Map<string, number>;
@@ -174,6 +176,9 @@ export class WebGLProgramCache {
   }
 
   public programCacheKey(shaderId: string, isInstanced: boolean, flags: readonly string[]): string {
+    if (flags.length === 0) {
+      return isInstanced ? `${shaderId}_instanced` : shaderId;
+    }
     // Order-independent: ["A","B"] and ["B","A"] are the same program (sort a copy only if needed).
     let sorted = true;
     for (let i = 1; i < flags.length; i++) {
@@ -183,7 +188,7 @@ export class WebGLProgramCache {
       }
     }
     const ordered = sorted ? flags : [...flags].sort();
-    const flagKey = ordered.length > 0 ? "_" + ordered.join("_") : "";
+    const flagKey = "_" + ordered.join("_");
     return isInstanced ? `${shaderId}_instanced${flagKey}` : `${shaderId}${flagKey}`;
   }
 
@@ -220,6 +225,7 @@ export class WebGLProgramCache {
           this._fitTextureUnits(def, shaderId, isInstanced, flags),
         );
       }
+      cache.key = key;
       this._programs.set(key, cache);
     }
     return cache;
@@ -344,6 +350,7 @@ export class WebGLProgramCache {
     }
 
     return {
+      key: "",
       prog,
       uniforms,
       attributes,
@@ -512,6 +519,7 @@ export class WebGLProgramCache {
     this._assertTextureUnits(def.id, nextSamplerUnit);
 
     return {
+      key: "",
       prog,
       uniforms,
       attributes,

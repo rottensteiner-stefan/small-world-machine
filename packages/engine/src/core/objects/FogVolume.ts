@@ -32,6 +32,9 @@ export interface FogVolumeOptions {
  * Procedural 3D noise (`noiseScale`, `noiseAmount`, `noiseSpeed`) creates rolling, animated mist.
  */
 export class FogVolume extends Object3D {
+  public override get isFogVolume(): boolean {
+    return true;
+  }
   public shape: FogVolumeShape;
   /**
    * Half extents (Box), radius in `x` (Sphere), radius in `x` and half height in `y` (Cylinder), all in

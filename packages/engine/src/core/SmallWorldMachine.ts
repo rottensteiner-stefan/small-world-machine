@@ -20,7 +20,7 @@ import type {
   FrameInfo,
 } from "../interfaces/index.js";
 import { createDefaultRendererContext, createFrameInfo } from "../interfaces/index.js";
-import { ProjectionType, RendererType, PostProcessingEffectType } from "../enums/index.js";
+import { ProjectionType, RendererType } from "../enums/index.js";
 import { QualityConfigResolver } from "./quality/QualityConfigResolver.js";
 import { RendererFactory } from "../renderers/index.js";
 import { ShaderBootstrap } from "../renderers/shaders/index.js";
@@ -447,9 +447,7 @@ export abstract class SmallWorldMachine {
     // below (via camera.update() -> ... -> updateViewMatrix()). Only applied while TAA is
     // enabled and the canvas has a real size, and reset to 0 otherwise so toggling TAA off
     // doesn't leave a stale offset baked into the camera.
-    const taaNode = this.renderer.postProcessing.get<
-      import("../renderers/post/index.js").TaaElement
-    >(PostProcessingEffectType.TAA);
+    const taaNode = this.renderer.postProcessing.taaElement;
     if (taaNode && taaNode.enabled && 0 < this.canvas.clientWidth && 0 < this.canvas.clientHeight) {
       this._taaFrameIndex = (this._taaFrameIndex % 16) + 1;
       const jitterScale = 1.0; // in texels
@@ -480,9 +478,7 @@ export abstract class SmallWorldMachine {
 
     // Forward the camera's aggregated flash state into the renderer's post-processing element,
     // mirroring the TAA jitter feedback above but in the opposite direction (camera -> renderer).
-    const flashNode = this.renderer.postProcessing.get<
-      import("../renderers/post/index.js").FlashElement
-    >(PostProcessingEffectType.FLASH);
+    const flashNode = this.renderer.postProcessing.flashElement;
     if (flashNode) {
       flashNode.intensity = this.camera.flashIntensity;
       flashNode.color.copyFrom(this.camera.flashColor);

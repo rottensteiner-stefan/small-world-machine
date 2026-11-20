@@ -1,7 +1,13 @@
 import { Color } from "../colors/index.js";
 import type { MaterialType } from "../../enums/index.js";
-import { CullMode } from "../../enums/index.js";
-import type { RenderManifest, ShaderDefinition } from "../../renderers/shaders/index.js";
+import { CullMode, ShaderFlag } from "../../enums/index.js";
+import {
+  MANIFEST_FLAG_TRANSMISSION,
+  MANIFEST_FLAG_VERTEX_COLOR,
+  VERTEX_COLOR_FLAG,
+  type RenderManifest,
+  type ShaderDefinition,
+} from "../../renderers/shaders/index.js";
 import type { ShaderProvider } from "../../interfaces/index.js";
 import { MathUtils } from "../../math/index.js";
 import type { InspectorField } from "../Inspectable.js";
@@ -41,6 +47,7 @@ export abstract class AbstractMaterial implements ShaderProvider {
   protected readonly _manifestFlags: string[] = [];
   /** Last committed flag list; handed out unchanged while the flags stay equal (zero-GC). */
   private _committedFlags: string[] | undefined = undefined;
+  private _committedFlagMask: number = 0;
 
   /**
    * Creates a new material. It does not register itself anywhere: the renderer that draws it hands
@@ -133,8 +140,16 @@ export abstract class AbstractMaterial implements ShaderProvider {
     if (!committed || committed.length !== scratch.length || !sameEntries(committed, scratch)) {
       committed = scratch.slice();
       this._committedFlags = committed;
+      let mask = 0;
+      for (let i = 0; i < committed.length; i++) {
+        const f = committed[i];
+        if (f === ShaderFlag.TRANSMISSION) mask |= MANIFEST_FLAG_TRANSMISSION;
+        else if (f === VERTEX_COLOR_FLAG) mask |= MANIFEST_FLAG_VERTEX_COLOR;
+      }
+      this._committedFlagMask = mask;
     }
     this._renderManifest.flags = committed;
+    this._renderManifest.flagMask = this._committedFlagMask;
   }
 
   /**
