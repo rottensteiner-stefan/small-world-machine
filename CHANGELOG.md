@@ -11,13 +11,14 @@
 
 - **Housekeeping & Docs:**
   - _Showcase 53 — opt-in quality toggles & dev log (`Hud.ts`, `docs/log.md`):_ added live **`HBAO AO`** and **`HiDPI 1.5×`** controls inside the inspector drawer (`#btnHbao`, `#btnHiDpi`, `window.__qaSwm53.{setHbao,setHiDpi}`) so desktop GPUs can opt back into full SSAO/Retina scaling, and documented Metal GPU profiling measurements in `apps/showcases/53/docs/log.md`.
+  - _Showcase 53 — CC0 Space Trooper & ship rename (`deck_props.glb`, `showcase.ts`, `REFERENCES.md`):_ replaced the deck-guard placeholder with Iar's posed BlendSwap CC0 trooper + Quaternius CC0 carbine (`12,820` tris, `1.82 m`, `minY = 0.000`) plus a `1.95 m` mirror-chrome Commander with red-trimmed shoulder cape (`1,424` tris), and renamed ships/code/GLBs to _Tri-Wing Shuttle_ (`tri_wing_shuttle*.glb`) and _Hex-Wing Fighter_ (`hex_wing_fighter.glb`).
 
 ## [0.127.0] - 2026-11-19
 
 ### "Great things are done when men and mountains meet." - William Blake
 
 - **Features:**
-  - _Showcase 53 — 1:1 `485 m` basalt monolith & detailed hangar deck:_ scaled Dark Fortress to canonical _Obi-Wan Kenobi_ proportions (`fortress.glb`, `36,918` tris, `y = -45..485 m`), adding `20.0 m` _Lambda_ shuttles, 16 ceiling-racked TIE/ln fighters, 28 `1.82 m` Space Trooper figures, sweeping wing `SpotLight` beams, `Digit5` _Basalt Trench_ camera, and live _Ocean & Surf_ HUD sliders.
+  - _Showcase 53 — 1:1 `485 m` basalt monolith & detailed hangar deck:_ scaled Dark Fortress to canonical _Obi-Wan Kenobi_ proportions (`fortress.glb`, `36,918` tris, `y = -45..485 m`), adding `20.0 m` Tri-Wing shuttles, 16 ceiling-racked Hex-Wing fighters, 28 `1.82 m` Space Trooper figures, sweeping wing `SpotLight` beams, `Digit5` _Basalt Trench_ camera, and live _Ocean & Surf_ HUD sliders.
   - _Showcase 53 — 4K Cycles-baked WebP PBR materials:_ upgraded all 13 primary fortress maps (`armor_*`, `trim_*`, `rock_*`) to `4096×4096` WebP (`-lossless` data maps, `-q 92` albedo), pairing asymmetric Imperial durasteel plates, recessed hex grates, and rain puddles with non-periodic Mustafar obsidian-slate photogrammetry.
   - _Showcase 53 — curved preset camera fly-throughs:_ replaced instant jumps on `1`–`5`, HUD preset buttons, and `R` with smooth Catmull-Rom polar arcs (`CameraFlyToBehavior`, `Easing.easeInOutCubic`, `1.65–3.15 s`) maintaining `y >= 16 m` wave clearance and tapered fortress hull clearance, with instant `WASD`/pointer interrupt.
 

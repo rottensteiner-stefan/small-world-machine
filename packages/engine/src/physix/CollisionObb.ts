@@ -201,13 +201,17 @@ export class CollisionObbSolver {
   public static testObbObb(a: OBB, b: OBB): boolean {
     const t = MathPool.acquireVector().copyFrom(b.center).sub(a.center);
 
-    // We have 15 potential separating axes:
-    // 3 from A, 3 from B, 9 cross products of A and B
     for (let i = 0; i < 3; i++) {
-      if (!this._testAxis(MathUtils.at(a.axes, i), a, b, t)) return false;
+      if (!this._testAxis(MathUtils.at(a.axes, i), a, b, t)) {
+        MathPool.releaseVector(t);
+        return false;
+      }
     }
     for (let i = 0; i < 3; i++) {
-      if (!this._testAxis(MathUtils.at(b.axes, i), a, b, t)) return false;
+      if (!this._testAxis(MathUtils.at(b.axes, i), a, b, t)) {
+        MathPool.releaseVector(t);
+        return false;
+      }
     }
 
     const crossAxis = MathPool.acquireVector();

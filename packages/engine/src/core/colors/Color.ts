@@ -47,12 +47,49 @@ export class Color {
   }
 
   /**
-   * Every engine Color is sRGB-authored (ADR 0049, the Unity/Godot convention). This writes its
-   * linear-light value into `out` -- the shaders' `sRGBToLinear`, pow 2.2 -- like Unity's
-   * `Color.linear`. Alpha is copied unchanged; HDR components above 1 stay valid.
+   * Decodes a single sRGB channel into linear light using the exact piecewise IEC 61966-2-1 transfer function.
    */
-  public toLinear(out: Color): Color {
-    return this.toTarget(1.0, out);
+  public static sRGBToLinearChannel(v: number): number {
+    const c = Math.max(v, 0);
+    if (c === 1.0) return 1.0;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  }
+
+  /**
+   * Encodes a single linear-light channel into sRGB using the exact piecewise IEC 61966-2-1 transfer function.
+   */
+  public static linearToSRGBChannel(v: number): number {
+    const c = Math.max(v, 0);
+    if (c === 1.0) return 1.0;
+    return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
+  }
+
+  /**
+   * Every engine Color is sRGB-authored (ADR 0049, the Unity/Godot convention). This writes its
+   * linear-light value into `out` using the exact piecewise IEC 61966-2-1 transfer function.
+   * Alpha is copied unchanged; HDR components above 1 stay valid.
+   */
+  public toLinear(out?: Color): Color {
+    const target = out ?? new Color();
+    return target.set(
+      Color.sRGBToLinearChannel(this.r),
+      Color.sRGBToLinearChannel(this.g),
+      Color.sRGBToLinearChannel(this.b),
+      this.a,
+    );
+  }
+
+  /**
+   * Encodes a linear-light Color back into sRGB using the exact piecewise IEC 61966-2-1 transfer function.
+   * Alpha is copied unchanged.
+   */
+  public fromLinear(linear: Color | Readonly<Color>): this {
+    return this.set(
+      Color.linearToSRGBChannel(linear.r),
+      Color.linearToSRGBChannel(linear.g),
+      Color.linearToSRGBChannel(linear.b),
+      linear.a,
+    );
   }
 
   /**
@@ -64,11 +101,17 @@ export class Color {
     if (!(gamma > 0) || !Number.isFinite(gamma)) {
       throw new Error(`[Color] toTarget: gamma must be a finite number > 0, got ${gamma}.`);
     }
-    const e = 2.2 / gamma;
+    if (gamma === 1.0) {
+      return this.toLinear(out);
+    }
+    if (gamma === 2.2) {
+      return out.set(Math.max(this.r, 0), Math.max(this.g, 0), Math.max(this.b, 0), this.a);
+    }
+    const invGamma = 1.0 / gamma;
     return out.set(
-      Math.pow(Math.max(this.r, 0), e),
-      Math.pow(Math.max(this.g, 0), e),
-      Math.pow(Math.max(this.b, 0), e),
+      Math.pow(Color.sRGBToLinearChannel(this.r), invGamma),
+      Math.pow(Color.sRGBToLinearChannel(this.g), invGamma),
+      Math.pow(Color.sRGBToLinearChannel(this.b), invGamma),
       this.a,
     );
   }

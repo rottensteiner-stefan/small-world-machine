@@ -7,7 +7,14 @@
 let clusterDimsU = vec3u(u32(global.clusterDims.x), u32(global.clusterDims.y), u32(global.clusterDims.z));
 let clusterCellX = min(u32(i.pos.x / global.tileSizePx.x), clusterDimsU.x - 1u);
 let clusterCellY = min(u32(i.pos.y / global.tileSizePx.y), clusterDimsU.y - 1u);
-let clusterViewDist = clamp(length(global.viewPos.xyz - i.wp), global.cameraNearFar.x, global.cameraNearFar.y);
+let clusterVpR3 = vec3f(global.vp[0][3], global.vp[1][3], global.vp[2][3]);
+let clusterVpR2 = -vec3f(global.vp[0][2], global.vp[1][2], global.vp[2][2]);
+let clusterCamFwd = select(
+    clusterVpR2 / max(length(clusterVpR2), 1e-6),
+    clusterVpR3,
+    dot(clusterVpR3, clusterVpR3) > 1e-8,
+);
+let clusterViewDist = clamp(dot(i.wp - global.viewPos.xyz, clusterCamFwd), global.cameraNearFar.x, global.cameraNearFar.y);
 let clusterLogRatio = max(log(global.cameraNearFar.y / global.cameraNearFar.x), 1e-6);
 let clusterSliceF = floor(log(clusterViewDist / global.cameraNearFar.x) * f32(clusterDimsU.z) / clusterLogRatio);
 let clusterCellZ = min(u32(max(clusterSliceF, 0.0)), clusterDimsU.z - 1u);

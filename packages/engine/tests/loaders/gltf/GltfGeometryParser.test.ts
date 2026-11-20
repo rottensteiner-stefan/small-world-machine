@@ -69,11 +69,11 @@ describe("GltfGeometryParser", () => {
   });
 
   describe("asset-contract fixes (EP-5, EP-7, tangent passthrough)", () => {
-    it("dequantizes quantized POSITION onto the declared min/max domain (EP-7)", async () => {
-      // KHR_mesh_quantization: normalized Int16 storage whose accessor min/max declare the
-      // real unit-space [-5, +5]. int = 32767 encodes u = 1 (→ max), int = -32767 → u = 0 (→ min).
+    it("decodes normalized INT16 POSITION strictly per glTF 2.0 §3.11 without min/max rescaling", async () => {
+      // KHR_mesh_quantization: normalized Int16 storage where accessor min/max are stored in the
+      // raw integer domain (or normalized domain), and the node transform carries any scale/offset.
       const buf = new ArrayBuffer(12);
-      new Int16Array(buf).set([-32767, -32767, -32767, 32767, -32767, 32767]);
+      new Int16Array(buf).set([16384, 0, -32767, 32767, -16384, 32767]);
 
       const json = {
         bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
@@ -85,8 +85,8 @@ describe("GltfGeometryParser", () => {
             normalized: true,
             count: 2,
             type: "VEC3",
-            min: [-5, -5, -5],
-            max: [5, 5, 5],
+            min: [-32767, -32767, -32767],
+            max: [32767, 32767, 32767],
           },
         ],
       };
@@ -98,15 +98,12 @@ describe("GltfGeometryParser", () => {
       );
 
       const positions = Array.from(geo!.vertices as Float32Array);
-      // First vertex -> min corner (-5, -5, -5).
-      expect(positions[0]).toBeCloseTo(-5, 4);
-      expect(positions[1]).toBeCloseTo(-5, 4);
-      expect(positions[2]).toBeCloseTo(-5, 4);
-      // Second vertex -> (+5, -5, +5). Without dequantization the normalized [-1,1] buffer
-      // would have yielded ±1, collapsing the geometry into a 1-unit cube.
-      expect(positions[3]).toBeCloseTo(5, 4);
-      expect(positions[4]).toBeCloseTo(-5, 4);
-      expect(positions[5]).toBeCloseTo(5, 4);
+      expect(positions[0]).toBeCloseTo(16384 / 32767, 5);
+      expect(positions[1]).toBeCloseTo(0.0, 5);
+      expect(positions[2]).toBeCloseTo(-1.0, 5);
+      expect(positions[3]).toBeCloseTo(1.0, 5);
+      expect(positions[4]).toBeCloseTo(-16384 / 32767, 5);
+      expect(positions[5]).toBeCloseTo(1.0, 5);
     });
 
     it("honors Float32 POSITION accessor min/max as authoritative header bounds (EP-5)", async () => {

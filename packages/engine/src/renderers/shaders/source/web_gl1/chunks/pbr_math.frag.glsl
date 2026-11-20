@@ -119,13 +119,31 @@ vec3 anisotropyBentNormal(vec3 B, vec3 V, vec3 N, float strength, float roughnes
 #endif
 
 // Linear to sRGB
+float linearToSRGBChannel(float color) {
+    float c = max(color, 0.0);
+    return c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1.0 / 2.4) - 0.055;
+}
+
 vec3 linearToSRGB(vec3 color) {
-    return pow(color, vec3(1.0 / 2.2));
+    return vec3(
+        linearToSRGBChannel(color.r),
+        linearToSRGBChannel(color.g),
+        linearToSRGBChannel(color.b)
+    );
 }
 
 // sRGB to Linear
+float sRGBToLinearChannel(float color) {
+    float c = max(color, 0.0);
+    return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
+}
+
 vec3 sRGBToLinear(vec3 color) {
-    return pow(color, vec3(2.2));
+    return vec3(
+        sRGBToLinearChannel(color.r),
+        sRGBToLinearChannel(color.g),
+        sRGBToLinearChannel(color.b)
+    );
 }
 
 // Charlie Sheen Distribution Function (Estevez & Kulla 2017)

@@ -65,10 +65,17 @@ describe("GltfMaterialParser", () => {
     expect(mat.color.a).toBe(0.6); // alpha is never encoded
     expect(mat.color.r).toBeCloseTo(GltfMaterialParser.linearToEngineSRGB(0.5), 6);
 
-    // A single shader decode pow(x, 2.2) round-trips to the authored linear factor ...
-    expect(Math.pow(mat.color.r, 2.2)).toBeCloseTo(0.5, 4);
-    expect(Math.pow(mat.color.g, 2.2)).toBeCloseTo(0.25, 4);
-    expect(Math.pow(mat.color.b, 2.2)).toBeCloseTo(0.75, 4);
+    // A single shader decode (exact IEC 61966-2-1 sRGB) round-trips to the authored linear factor ...
+    expect(GltfMaterialParser.engineSRGBToLinear(mat.color.r)).toBeCloseTo(0.5, 6);
+    expect(GltfMaterialParser.engineSRGBToLinear(mat.color.g)).toBeCloseTo(0.25, 6);
+    expect(GltfMaterialParser.engineSRGBToLinear(mat.color.b)).toBeCloseTo(0.75, 6);
+    // ... and dark shadow values use the linear segment (0.04 -> ~0.003096, not 0.00084):
+    expect(GltfMaterialParser.engineSRGBToLinear(0.04)).toBeCloseTo(0.04 / 12.92, 6);
+    for (const c of [0, 0.002, 0.04, 0.18, 0.5, 1.0]) {
+      const encoded = GltfMaterialParser.linearToEngineSRGB(c);
+      const decoded = GltfMaterialParser.engineSRGBToLinear(encoded);
+      expect(Math.abs(decoded - c)).toBeLessThan(1e-6);
+    }
     // ... and the stored value is raised, not darkened by a second decode.
     expect(mat.color.r).toBeGreaterThan(0.5);
   });
@@ -117,16 +124,16 @@ describe("GltfMaterialParser", () => {
     expect(mat.clearcoat).toBe(0.9);
     expect(mat.clearcoatRoughness).toBe(0.15);
     // glTF colour factors are linear; the engine Colour is sRGB-authored (ADR 0049).
-    expect(mat.sheenColor.r).toBeCloseTo(Math.pow(0.95, 1 / 2.2));
-    expect(mat.sheenColor.g).toBeCloseTo(Math.pow(0.85, 1 / 2.2));
-    expect(mat.sheenColor.b).toBeCloseTo(Math.pow(0.75, 1 / 2.2));
+    expect(mat.sheenColor.r).toBeCloseTo(GltfMaterialParser.linearToEngineSRGB(0.95));
+    expect(mat.sheenColor.g).toBeCloseTo(GltfMaterialParser.linearToEngineSRGB(0.85));
+    expect(mat.sheenColor.b).toBeCloseTo(GltfMaterialParser.linearToEngineSRGB(0.75));
     expect(mat.sheenRoughness).toBe(0.4);
     expect(mat.transmission).toBe(0.88);
     expect(mat.thickness).toBe(2.5);
     expect(mat.attenuationDistance).toBe(12.0);
-    expect(mat.attenuationColor.r).toBeCloseTo(Math.pow(0.1, 1 / 2.2));
-    expect(mat.attenuationColor.g).toBeCloseTo(Math.pow(0.4, 1 / 2.2));
-    expect(mat.attenuationColor.b).toBeCloseTo(Math.pow(0.9, 1 / 2.2));
+    expect(mat.attenuationColor.r).toBeCloseTo(GltfMaterialParser.linearToEngineSRGB(0.1));
+    expect(mat.attenuationColor.g).toBeCloseTo(GltfMaterialParser.linearToEngineSRGB(0.4));
+    expect(mat.attenuationColor.b).toBeCloseTo(GltfMaterialParser.linearToEngineSRGB(0.9));
     expect(mat.ior).toBe(1.33);
   });
 
@@ -351,8 +358,8 @@ describe("GltfMaterialParser", () => {
 
       expect(mat.specularFactor).toBe(0.4);
       expect(mat.specularColor.r).toBeCloseTo(1);
-      expect(mat.specularColor.g).toBeCloseTo(Math.pow(0.5, 1 / 2.2));
-      expect(mat.specularColor.b).toBeCloseTo(Math.pow(0.25, 1 / 2.2));
+      expect(mat.specularColor.g).toBeCloseTo(GltfMaterialParser.linearToEngineSRGB(0.5));
+      expect(mat.specularColor.b).toBeCloseTo(GltfMaterialParser.linearToEngineSRGB(0.25));
     });
 
     it("resolves specularTexture and specularColorTexture and applies their transforms", async () => {

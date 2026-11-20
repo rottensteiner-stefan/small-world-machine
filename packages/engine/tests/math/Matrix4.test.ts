@@ -209,7 +209,7 @@ describe("Matrix4", () => {
       expect(Math.abs(d)).toBeCloseTo(1, 3);
     });
 
-    it("should construct valid non-degenerate matrix when eye-target and up are collinear along Y-axis", () => {
+    it("should construct valid non-degenerate matrix when eye-target and up are collinear along Y-axis without perturbing view direction z", () => {
       const eye = new Vector3D(0, 10, 0);
       const target = new Vector3D(0, 0, 0);
       const up = new Vector3D(0, 1, 0);
@@ -218,7 +218,39 @@ describe("Matrix4", () => {
       Matrix4.lookAt(eye, target, up, m);
 
       const d = m.determinant();
-      expect(Math.abs(d)).toBeCloseTo(1, 3);
+      expect(Math.abs(d)).toBeCloseTo(1, 5);
+      // View Z axis (row 2: te[2], te[6], te[10]) must be exact (0, 1, 0) without 0.0001 tilt
+      expect(m.data[2]).toBe(0);
+      expect(m.data[6]).toBe(1);
+      expect(m.data[10]).toBe(0);
+    });
+  });
+
+  describe("numerical guards (B6)", () => {
+    it("decompose returns finite zero rotation instead of NaN when any scale axis is zero", () => {
+      const m = new Matrix4().compose(
+        new Vector3D(1, 2, 3),
+        new Vector3D(0.3, 0.4, 0.5),
+        new Vector3D(0, 1, 1),
+      );
+      const pos = new Vector3D();
+      const rot = new Vector3D();
+      const scale = new Vector3D();
+      m.decompose(pos, rot, scale);
+      expect(Number.isFinite(rot.x)).toBe(true);
+      expect(Number.isFinite(rot.y)).toBe(true);
+      expect(Number.isFinite(rot.z)).toBe(true);
+      expect(rot.z).toBe(0);
+    });
+
+    it("transformVector guards against w denominator === 0", () => {
+      const m = new Matrix4();
+      m.data[15] = 0;
+      const v = new Vector3D(1, 2, 3);
+      m.transformVector(v);
+      expect(Number.isFinite(v.x)).toBe(true);
+      expect(Number.isFinite(v.y)).toBe(true);
+      expect(Number.isFinite(v.z)).toBe(true);
     });
   });
 });

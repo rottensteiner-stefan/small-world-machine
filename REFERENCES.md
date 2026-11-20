@@ -1099,23 +1099,32 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Derivation & Runtime Packaging:** Baked in headless Blender 5.3.0 Cycles (`bake_4k_textures.py`) from periodic `3×3` high-poly hard-surface plates/grates/louvers (`armor_*` `14 m` tile, `trim_*` `8 m` tile) and 4D-torus seamless strata overlays (`rock_*`), then encoded to `4096×4096` WebP (`-q 92` for albedo, `-lossless` for tangent normal/roughness/metallic/AO) in `public/assets/showcases/53/textures/` (Git LFS tracked via `.gitattributes`, served at runtime via `/assets/showcases/53/textures/*.webp`).
 - **Originals duty (ADR 0058):** 4K source PNGs, `metal046b.zip`, and Blender bake/build scripts are kept out of git and backed up in Google Drive `Small-World-Machine/small-world-machine/apps/showcases/53/raw/` with `sha256` entries in `MANIFEST.txt`.
 
-### Daniel Andersson: "Star Wars: TIE/ln Fighter" (Showcase 53 TIE/ln Fighter)
+### Daniel Andersson: "Star Wars: TIE/ln Fighter" (Showcase 53 Hex-Wing Fighter)
 
-- **File:** `public/assets/showcases/53/models/tie_fighter.glb`
+- **File:** `public/assets/showcases/53/models/hex_wing_fighter.glb`
 - **Authors/Gurus:** Daniel Andersson ([sketchfab.com/DanielAndersson](https://sketchfab.com/DanielAndersson))
 - **Source:** [Sketchfab: Star Wars: TIE/ln Fighter](https://sketchfab.com/3d-models/star-wars-tieln-fighter-79d9403f15334c129ea5454daffe6b5c) (via `EdoEdoEdo/Death-Star-Promo` mirror; `tie_andersson.glb` sha256 `6f6dd787356a78fc36d3ad0c19a86c1a2b928d03d81275a87278eb7e531acc37`).
-- **License:** [CC BY 4.0 (Creative Commons Attribution 4.0)](https://creativecommons.org/licenses/by/4.0/) — attribution required (credited here and in `apps/showcases/53/docs/log.md`); adapted for Showcase 53.
-- **Derivation & Runtime Packaging:** Processed in headless Blender 5.3.0 (`build_tie_blender.py`): removed hidden interior screen mesh, normalized to `8.82 m` wing height facing `-Z` with cockpit origin `(0, 0, 0)`, partitioned palette UVs cleanly into 5 sub-meshes (`TieHull` `7,598`, `TieDarkTrim` `2,400`, `TieCockpit` `171`, `TieEngines` `156`, `TieSolar` `40`; `10,365` tris total, `574 KB` GLB), and instanced 16× from Showcase 53 hangar ceiling clamp pylons (`fortress.glb`).
+- **License:** [CC BY 4.0 (Creative Commons Attribution 4.0)](https://creativecommons.org/licenses/by/4.0/) — attribution required (credited here and in `apps/showcases/53/docs/log.md`); adapted for Showcase 53 as _Hex-Wing Fighter_.
+- **Derivation & Runtime Packaging:** Processed in headless Blender 5.3.0 (`build_tie_blender.py`): removed hidden interior screen mesh, normalized to `8.82 m` wing height facing `-Z` with cockpit origin `(0, 0, 0)`, partitioned palette UVs cleanly into 5 sub-meshes (`HexWingHull` `7,598`, `HexWingDarkTrim` `2,400`, `HexWingCockpit` `171`, `HexWingEngines` `156`, `HexWingSolar` `40`; `10,365` tris total, `574 KB` GLB), and instanced 16× from Showcase 53 hangar ceiling clamp pylons (`fortress.glb`).
 - **Originals duty (ADR 0058):** `tie_andersson.glb` and `build_tie_blender.py` are kept out of git and backed up in Google Drive `Small-World-Machine/small-world-machine/apps/showcases/53/raw/ships/` with `sha256` entries in `MANIFEST.txt`.
 
-### tegnemaskin: "Star Wars Lambda Imperial Shuttle" (Showcase 53 Imperial Lambda-class T-4a Shuttles)
+### tegnemaskin: "Star Wars Lambda Imperial Shuttle" (Showcase 53 Tri-Wing Shuttles)
 
-- **File:** `public/assets/showcases/53/models/imperial_shuttle.glb`, `public/assets/showcases/53/models/imperial_shuttle_flight.glb`, `public/assets/showcases/53/textures/shuttle_{albedo,normal,roughness}.webp`
+- **File:** `public/assets/showcases/53/models/tri_wing_shuttle.glb`, `public/assets/showcases/53/models/tri_wing_shuttle_flight.glb`, `public/assets/showcases/53/textures/shuttle_{albedo,normal,roughness}.webp`
 - **Authors/Gurus:** tegnemaskin ([sketchfab.com/tegnemaskin](https://sketchfab.com/tegnemaskin))
 - **Source:** [Sketchfab: Star Wars Lambda Imperial Shuttle](https://sketchfab.com/3d-models/star-wars-lambda-imperial-shuttle-4db774b7ea41489ca7bb683ed0f0b60a) (via `EdoEdoEdo/Death-Star-Promo` mirror; `lambda_tegnemaskin.glb` sha256 `134e6c592b8e1df92cdbd228fd8c07c2d60d60cf11d34a57929d6ed782147c42`).
-- **License:** [CC BY 4.0 (Creative Commons Attribution 4.0)](https://creativecommons.org/licenses/by/4.0/) — attribution required (credited here and in `apps/showcases/53/docs/log.md`); adapted into landed and flight configurations for Showcase 53.
+- **License:** [CC BY 4.0 (Creative Commons Attribution 4.0)](https://creativecommons.org/licenses/by/4.0/) — attribution required (credited here and in `apps/showcases/53/docs/log.md`); adapted into landed and flight _Tri-Wing Shuttle_ configurations for Showcase 53.
 - **Derivation & Runtime Packaging:** Processed in headless Blender 5.3.0 (`build_shuttle_blender.py`): scaled (`SCALE = 2.82`, `-Z` forward, `minY = 0.000`, landed `21.50 × 18.44 × 22.09 m` for `1.11 m` ceiling clearance in the `23.20 m` hangar), trimmed inner hinge-cam geometry (`|x| < 1.655 * SCALE`) for clean `120°` wing folding, added retractable landing skids, twin blaster cannons, recessed rear ion manifolds (`ShuttleEngines`), and smoked viewport canopies (`ShuttleVisor`), stripped duplicate UV layers down to single `UVMap`, decimated per part (`13,140` tris landed / `14,207` tris flight), and Cycles-baked a shared `1024×1024` tangent-space PBR WebP atlas (`shuttle_albedo.webp`, `shuttle_normal.webp`, `shuttle_roughness.webp`).
 - **Originals duty (ADR 0058):** `lambda_tegnemaskin.glb` and `build_shuttle_blender.py` are kept out of git and backed up in Google Drive `Small-World-Machine/small-world-machine/apps/showcases/53/raw/ships/` with `sha256` entries in `MANIFEST.txt`.
+
+### Iar & Quaternius: "Stormtroopers" & "Ultimate Modular Characters" (Showcase 53 Space Trooper)
+
+- **File:** `public/assets/showcases/53/models/deck_props.glb` (`SpaceTrooperArmor`, `SpaceTrooperUnder`, `SpaceTrooperVisor`, `SpaceTrooperGear`, `CommanderCape`, `CommanderCapeTrim`)
+- **Authors/Gurus:** Iar ([blendswap.com/profile/1322660](https://blendswap.com/profile/1322660), archived by `Books` on Printables) and Quaternius ([quaternius.com](https://quaternius.com))
+- **Source:** [Printables #290968: Stormtroopers](https://www.printables.com/model/290968-stormtroopers) (mirror of [BlendSwap #28680](https://blendswap.com/blend/28680); `iar_stormtroopers.blend` sha256 `5f5c02d1aa849fe47660a660a37499dea98fbad385683273d5c971fdbba98049`) and [Quaternius: Ultimate Modular Characters](https://quaternius.com) (`Gun_SMG.glb` sha256 `69df22d1aa8603d66366d20c46755cca2a19e1cabe8c1db1b72edb491ae48699`)
+- **License:** [CC0 (Creative Commons Zero)](https://creativecommons.org/publicdomain/zero/1.0/) — Public Domain Dedication (3D creator copyright waived under CC0; underlying franchise character design belongs to its respective IP holder).
+- **Derivation & Runtime Packaging:** Posed `metarig` humanoid armature from T-pose into a disciplined low-ready rifle stance in headless Blender 5.3.0 (`build_fortress_blender.py -- --only-deck-props`), cleared deform vertex groups, gently decimated while preserving material/UV seams, fitted a magazine-trimmed Quaternius CC0 blaster carbine (`Gun_SMG.glb`), normalized to `1.82 m` height (`minY = 0.000`, `+Z` forward, `12,820` tris), and separated cleanly by material into 4 auto-instanced nodes (`SpaceTrooperArmor`, `SpaceTrooperUnder`, `SpaceTrooperVisor`, `SpaceTrooperGear`) in `deck_props.glb`.
+- **Originals duty (ADR 0058):** `iar_stormtroopers.blend`, `Gun_SMG.glb`, and `build_fortress_blender.py` are kept out of git and backed up in Google Drive `Small-World-Machine/small-world-machine/apps/showcases/53/raw/props/` with `sha256` entries in `MANIFEST.txt`.
 
 ## Shaders & Procedural Art
 

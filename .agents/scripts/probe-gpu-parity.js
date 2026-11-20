@@ -271,7 +271,9 @@ try {
         });
       }
     }
-    return { renderer: gl.getParameter(gl.RENDERER), rows, debug };
+    const renderer = gl.getParameter(gl.RENDERER);
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return { renderer, rows, debug };
   });
 
   if (report.error) throw new Error(report.error);

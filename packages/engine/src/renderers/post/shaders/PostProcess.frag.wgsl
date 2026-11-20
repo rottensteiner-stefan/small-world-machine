@@ -62,9 +62,16 @@ fn random(st: vec2f) -> f32 {
 // Tone operators shared with the forward pass (shared/tone_operators.wgsl).
 [WGSL_TONE_OPERATORS]
 
-// Linear -> sRGB gamma correction
+// Linear -> sRGB gamma correction (exact piecewise IEC 61966-2-1 with custom gamma scaling fallback)
 fn linearToSRGB(linear: vec3f, invGamma: f32) -> vec3f {
-    return pow(clamp(linear, vec3f(0.0), vec3f(1.0)), vec3f(invGamma));
+    let c = clamp(linear, vec3f(0.0), vec3f(1.0));
+    let lo = c * 12.92;
+    let hi = 1.055 * pow(c, vec3f(1.0 / 2.4)) - vec3f(0.055);
+    let srgb = select(hi, lo, c <= vec3f(0.0031308));
+    if (abs(invGamma - (1.0 / 2.2)) < 0.001) {
+        return srgb;
+    }
+    return pow(srgb, vec3f(2.2 * invGamma));
 }
 
 @fragment
@@ -125,6 +132,7 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
     var ringGlow: f32 = 0.0;
     var beaming: f32 = 1.0;
     var colorShift: vec3f = vec3f(1.0);
+    let eh = select(0.03, dyn.singularityPos.w, dyn.singularityPos.w > 0.0);
     if (8u == u_filterMode) {
         if (dyn.singularityPos.z >= -1.0) {
             let aspect = dims.x / dims.y;
@@ -132,7 +140,6 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
             var dir = uv - center;
             dir.x *= aspect; // Make circle instead of ellipse
             let dist = length(dir);
-            let eh = select(0.03, dyn.singularityPos.w, dyn.singularityPos.w > 0.0);
             let strength = select(0.25, dyn.lensingParams.x, dyn.lensingParams.x > 0.0);
             let spaghettiFactor = select(0.15, dyn.lensingParams.y, dyn.lensingParams.y >= 0.0);
             let beamingFactor = select(1.2, dyn.lensingParams.z, dyn.lensingParams.z > 0.0);
@@ -203,17 +210,34 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
             var dir = uv - center;
             dir.x *= aspect;
             let dist = length(dir);
-            if (dist < 0.03) {
+            if (dist < eh) {
                 hdr = vec3f(0.0);
             } else {
                 if (dist < 0.35) {
-                    let diskMask = smoothstep(0.35, 0.03, dist);
+                    let diskMask = smoothstep(0.35, eh, dist);
                     hdr = hdr * mix(vec3f(1.0), beaming * colorShift, diskMask);
                 }
                 if (ringGlow > 0.0) {
                     hdr += vec3f(1.0, 0.4, 0.08) * ringGlow;
                 }
             }
+        }
+    }
+
+    // Volumetric Fog (true 3D froxel, ADR 0031) -- composited BEFORE bloom so fog transmittance
+    // attenuates the raw scene radiance rather than camera-lens bloom scatter.
+    if (1u == u_volumetricFogEnabled) {
+        let fog = textureSample(volumetricFogTexture, hdrSampler, distortUv);
+        if (isFiniteVec3(fog.rgb) && isFiniteF32(fog.a)) {
+            hdr = hdr * clamp(fog.a, 0.0, 1.0) + fog.rgb;
+        }
+    }
+
+    // Volumetric Light Shafts (In-Scattering) -- additive linear HDR lighting before bloom
+    if (1u == u_lightShaftsEnabled) {
+        let shafts = textureSample(lightShaftsTexture, hdrSampler, distortUv).rgb;
+        if (isFiniteVec3(shafts)) {
+            hdr += shafts * dyn.shaftsParams.x;
         }
     }
 
@@ -244,32 +268,13 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
                 let center = dyn.singularityPos.xy * 0.5 + vec2f(0.5);
                 var dir = uv - center;
                 dir.x *= aspect;
-                if (length(dir) < 0.03) {
+                if (length(dir) < eh) {
                     bloom = vec3f(0.0);
                 }
             }
         }
 
         hdr += bloom * u_bloomIntensity * u_bloomColor;
-    }
-
-    // Volumetric Light Shafts (In-Scattering) -- additive linear HDR lighting
-    if (1u == u_lightShaftsEnabled) {
-        let shafts = textureSample(lightShaftsTexture, hdrSampler, distortUv).rgb;
-        // Exponent-bit finite test: `x == x` is NOT a reliable NaN test in WGSL (may be folded).
-        if (isFiniteVec3(shafts)) {
-            hdr += shafts * dyn.shaftsParams.x;
-        }
-    }
-
-    // Volumetric Fog (true 3D froxel, ADR 0031) -- linear HDR, kept fully separate from the
-    // analytic `Scene.fog` on top. The pass writes in-scattering in rgb and transmittance in a:
-    // the scene is attenuated by the transmittance, then the scattered light is added.
-    if (1u == u_volumetricFogEnabled) {
-        let fog = textureSample(volumetricFogTexture, hdrSampler, distortUv);
-        if (isFiniteVec3(fog.rgb) && isFiniteF32(fog.a)) {
-            hdr = hdr * clamp(fog.a, 0.0, 1.0) + fog.rgb;
-        }
     }
 
     // Ambient Occlusion (HBAO) -- darkens the linear scene color before tonemapping, since it
@@ -295,23 +300,22 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
 
     var srgb = linearToSRGB(tonemapped, u_inverseGamma);
 
-    // Color Grading (Kontrast/Sättigung/Temperatur-Tint/Lift-Gamma-Gain) -- eigenständiger, immer
-    // verfügbarer Grading-Layer, NICHT zu verwechseln mit den FILTER_COLOR_GRADING-Kamera-Look-
-    // Presets weiter unten (filterMode-Umschalter).
+    // Color Grading (Kontrast/Sättigung/Temperatur-Tint/Lift-Gamma-Gain) in linear space BEFORE sRGB encode
     if (1u == u_colorGradingEnabled) {
-        srgb = (srgb - 0.5) * u_contrast + 0.5;
+        var graded = (tonemapped - 0.5) * u_contrast + 0.5;
 
-        let luma = dot(srgb, vec3f(0.2126, 0.7152, 0.0722));
-        srgb = mix(vec3f(luma), srgb, u_saturation);
+        let luma = dot(graded, vec3f(0.2126, 0.7152, 0.0722));
+        graded = mix(vec3f(luma), graded, u_saturation);
 
         // Leichte multiplikative Näherung des Weißabgleichs, kein physikalisches CCT/LMS-Modell.
-        srgb *= vec3f(1.0 + u_temperature * 0.4 - u_tint * 0.4,
-                      1.0 + u_tint * 0.2,
-                      1.0 - u_temperature * 0.4 - u_tint * 0.4);
+        graded *= vec3f(1.0 + u_temperature * 0.4 - u_tint * 0.4,
+                        1.0 + u_tint * 0.2,
+                        1.0 - u_temperature * 0.4 - u_tint * 0.4);
 
         // Lift/Gamma/Gain (ASC-CDL-Stil)
-        srgb = srgb * u_gainColor + u_liftColor * (1.0 - srgb);
-        srgb = pow(clamp(srgb, vec3f(0.0), vec3f(1.0)), 1.0 / max(u_gammaColor, vec3f(0.01)));
+        graded = graded * u_gainColor + u_liftColor * (1.0 - graded);
+        graded = pow(clamp(graded, vec3f(0.0), vec3f(1.0)), 1.0 / max(u_gammaColor, vec3f(0.01)));
+        srgb = linearToSRGB(graded, u_inverseGamma);
     }
 
     // Apply Vignette if enabled
@@ -344,26 +348,36 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
         srgb = floor(srgb * u_quantizeSteps) / u_quantizeSteps;
     }
 
-    // Apply Toon / Graphic Novel Outline (Sobel Edge Detection on scene luminance)
+    // Apply Toon / Graphic Novel Outline (Sobel Edge Detection on Reinhard-compressed scene luminance)
     if (1u == u_outlineEnabled) {
         let texel = vec2f(u_outlineThickness) / dims;
-        let cTL = textureSample(hdrTexture, hdrSampler, distortUv + vec2f(-texel.x,  texel.y)).rgb;
-        let cTC = textureSample(hdrTexture, hdrSampler, distortUv + vec2f( 0.0,      texel.y)).rgb;
-        let cTR = textureSample(hdrTexture, hdrSampler, distortUv + vec2f( texel.x,  texel.y)).rgb;
-        let cML = textureSample(hdrTexture, hdrSampler, distortUv + vec2f(-texel.x,  0.0)).rgb;
-        let cMR = textureSample(hdrTexture, hdrSampler, distortUv + vec2f( texel.x,  0.0)).rgb;
-        let cBL = textureSample(hdrTexture, hdrSampler, distortUv + vec2f(-texel.x, -texel.y)).rgb;
-        let cBC = textureSample(hdrTexture, hdrSampler, distortUv + vec2f( 0.0,     -texel.y)).rgb;
-        let cBR = textureSample(hdrTexture, hdrSampler, distortUv + vec2f( texel.x, -texel.y)).rgb;
+        let rTL = max(textureSample(hdrTexture, hdrSampler, distortUv + vec2f(-texel.x,  texel.y)).rgb, vec3f(0.0));
+        let rTC = max(textureSample(hdrTexture, hdrSampler, distortUv + vec2f( 0.0,      texel.y)).rgb, vec3f(0.0));
+        let rTR = max(textureSample(hdrTexture, hdrSampler, distortUv + vec2f( texel.x,  texel.y)).rgb, vec3f(0.0));
+        let rML = max(textureSample(hdrTexture, hdrSampler, distortUv + vec2f(-texel.x,  0.0)).rgb, vec3f(0.0));
+        let rMR = max(textureSample(hdrTexture, hdrSampler, distortUv + vec2f( texel.x,  0.0)).rgb, vec3f(0.0));
+        let rBL = max(textureSample(hdrTexture, hdrSampler, distortUv + vec2f(-texel.x, -texel.y)).rgb, vec3f(0.0));
+        let rBC = max(textureSample(hdrTexture, hdrSampler, distortUv + vec2f( 0.0,     -texel.y)).rgb, vec3f(0.0));
+        let rBR = max(textureSample(hdrTexture, hdrSampler, distortUv + vec2f( texel.x, -texel.y)).rgb, vec3f(0.0));
 
-        let lTL = dot(cTL, vec3f(0.299, 0.587, 0.114));
-        let lTC = dot(cTC, vec3f(0.299, 0.587, 0.114));
-        let lTR = dot(cTR, vec3f(0.299, 0.587, 0.114));
-        let lML = dot(cML, vec3f(0.299, 0.587, 0.114));
-        let lMR = dot(cMR, vec3f(0.299, 0.587, 0.114));
-        let lBL = dot(cBL, vec3f(0.299, 0.587, 0.114));
-        let lBC = dot(cBC, vec3f(0.299, 0.587, 0.114));
-        let lBR = dot(cBR, vec3f(0.299, 0.587, 0.114));
+        let cTL = rTL / (vec3f(1.0) + rTL);
+        let cTC = rTC / (vec3f(1.0) + rTC);
+        let cTR = rTR / (vec3f(1.0) + rTR);
+        let cML = rML / (vec3f(1.0) + rML);
+        let cMR = rMR / (vec3f(1.0) + rMR);
+        let cBL = rBL / (vec3f(1.0) + rBL);
+        let cBC = rBC / (vec3f(1.0) + rBC);
+        let cBR = rBR / (vec3f(1.0) + rBR);
+
+        let rec709 = vec3f(0.2126, 0.7152, 0.0722);
+        let lTL = dot(cTL, rec709);
+        let lTC = dot(cTC, rec709);
+        let lTR = dot(cTR, rec709);
+        let lML = dot(cML, rec709);
+        let lMR = dot(cMR, rec709);
+        let lBL = dot(cBL, rec709);
+        let lBC = dot(cBC, rec709);
+        let lBR = dot(cBR, rec709);
 
         let gx = (lTR + 2.0 * lMR + lBR) - (lTL + 2.0 * lML + lBL);
         let gy = (lBL + 2.0 * lBC + lBR) - (lTL + 2.0 * lTC + lTR);

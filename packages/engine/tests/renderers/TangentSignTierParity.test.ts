@@ -13,20 +13,22 @@ function read(p: string): string {
 }
 
 // EP-1 vec4-tangent contract (w = ±1) must behave IDENTICALLY on every tier: valid tangents
-// keep their authored/derived w sign, degenerate/absent tangents fold to +1. WGSL has no
-// ternary; `select(f, t, c) = c ? t : f` — so the corrected WebGPU form is
-// `select(w, 1.0, degenerate)` (degenerate -> 1.0). A swapped argument pair silently turns
-// EP-1 into a no-op on that tier (mirrored-UV meshes lose their relief), which is exactly the
-// cross-tier inconsistency this test guards against.
+// preserve their authored/derived w sign, multiplied by skin/model determinant signs, while
+// degenerate/absent tangents fold to +1. WGSL `select(f, t, c) = c ? t : f`; the fallback is
+// therefore selected only for a genuinely degenerate tangent.
 describe("EP-1 bitangent w-sign tier parity", () => {
-  it("web_gpu folds degenerate tangents to +1 and valid ones to w (select corrected)", () => {
+  it("web_gpu preserves handedness through skin/model transforms and defaults degenerate tangents to +1", () => {
     const wgsl = read(WGSL);
-    expect(wgsl).toContain("let tangentSign = select(tangent.w, 1.0, dot(localTangent, localTangent) < 0.0001);");
+    expect(wgsl).toContain(
+      "let rawTangentSign = select(tangent.w * skinSign * modelSign, 1.0, dot(localTangent, localTangent) < 0.0001);",
+    );
   });
 
-  it("web_gl2 folds degenerate tangents to +1 and valid ones to w", () => {
+  it("web_gl2 preserves handedness through skin/model transforms and defaults degenerate tangents to +1", () => {
     const gl2 = read(GL2);
-    expect(gl2).toContain("float bitangentSign = dot(tangent, tangent) < 0.0001 ? 1.0 : a_tangent.w;");
+    expect(gl2).toContain(
+      "float bitangentSign = hasTangent ? (a_tangent.w * skinSign * modelSign) : 1.0;",
+    );
   });
 
   it("web_gl1 folds degenerate tangents to +1 and valid ones to w", () => {

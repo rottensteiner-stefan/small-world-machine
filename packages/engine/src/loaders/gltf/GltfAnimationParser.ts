@@ -52,6 +52,7 @@ export class GltfAnimationParser {
               timeData,
               valueData,
               (sampler.interpolation as InterpolationType) || "LINEAR",
+              targetObj,
             );
             tracks.push(track);
           }

@@ -247,6 +247,9 @@ export class Object3D implements Collidable {
 
   public setRotation(x: number, y: number, z: number): this {
     this.rotation.set(x, y, z);
+    if (this.quaternion) {
+      this.quaternion.setFromEuler(this.rotation);
+    }
     return this;
   }
 
@@ -326,16 +329,60 @@ export class Object3D implements Collidable {
 
   public lookAt(target: Vector3D, up: Vector3D = _UNIT_UP): this {
     const m = MathPool.acquireMatrix();
-    Matrix4.lookAt(this.position, target, up, m);
-    m.invert();
-    const pos = MathPool.acquireVector();
-    const scale = MathPool.acquireVector();
-    m.decompose(pos, this.rotation, scale);
-    if (this.quaternion) {
-      this.quaternion.setFromRotationMatrix(m);
+    if (this.parent) {
+      const invParent = MathPool.acquireMatrix();
+      if (Matrix4.invert(this.parent.worldMatrix, invParent)) {
+        const localTarget = MathPool.acquireVector().copyFrom(target);
+        invParent.transformVector(localTarget);
+        const localUp = MathPool.acquireVector().copyFrom(up).transformDirection(invParent);
+        if (localUp.lengthSq() < 1e-12) {
+          localUp.set(0, 1, 0);
+        }
+        Matrix4.lookAt(this.position, localTarget, localUp, m);
+        MathPool.releaseVector(localUp);
+        MathPool.releaseVector(localTarget);
+      } else {
+        Matrix4.lookAt(this.position, target, up, m);
+      }
+      MathPool.releaseMatrix(invParent);
+    } else {
+      Matrix4.lookAt(this.position, target, up, m);
     }
-    MathPool.releaseVector(pos);
-    MathPool.releaseVector(scale);
+
+    const te = m.data;
+    const m00 = te[0]!,
+      m01 = te[4]!,
+      m02 = te[8]!;
+    const m10 = te[1]!,
+      m11 = te[5]!,
+      m12 = te[9]!;
+    const m20 = te[2]!,
+      m21 = te[6]!,
+      m22 = te[10]!;
+
+    te[0] = m00;
+    te[1] = m01;
+    te[2] = m02;
+    te[3] = 0;
+    te[4] = m10;
+    te[5] = m11;
+    te[6] = m12;
+    te[7] = 0;
+    te[8] = m20;
+    te[9] = m21;
+    te[10] = m22;
+    te[11] = 0;
+    te[12] = 0;
+    te[13] = 0;
+    te[14] = 0;
+    te[15] = 1;
+
+    const q = MathPool.acquireQuaternion().setFromRotationMatrix(m);
+    q.toEuler(this.rotation);
+    if (this.quaternion) {
+      this.quaternion.copyFrom(q);
+    }
+    MathPool.releaseQuaternion(q);
     MathPool.releaseMatrix(m);
     return this;
   }

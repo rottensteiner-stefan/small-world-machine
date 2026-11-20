@@ -403,8 +403,11 @@ function runMaskFrame(
   );
 }
 
-// Every engine Color is sRGB-authored; the passes upload its linear value (ADR 0049).
-const lin = (c: number): number => Math.pow(c, 2.2);
+// Every engine Color is sRGB-authored; the passes upload its linear value (ADR 0049, IEC 61966-2-1).
+const lin = (c: number): number => {
+  const x = Math.max(c, 0);
+  return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+};
 
 function initElement(color = new Color(1.0, 0.5, 0.25), albedo = 0.5): VolumetricFogElement {
   const element = new VolumetricFogElement();

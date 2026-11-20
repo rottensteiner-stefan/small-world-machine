@@ -18,6 +18,9 @@ export { pairKey, type ContactPair, type ContactPairState } from "../PairTracker
 /** Penetration (world units) tolerated by the positional pass before it pushes bodies apart. */
 export const PENETRATION_SLOP = 0.005;
 
+/** Baumgarte / NGS position correction factor applied per positional pass iteration. */
+export const POSITION_BAUMGARTE = 0.35;
+
 /** Per-step dependencies injected by the owner system (keeps the public API surface there). */
 export interface ContactSolverContext {
   events: EventDispatcherImpl;
@@ -129,18 +132,26 @@ export class ContactSolver {
     gravStep: number,
   ): void {
     const events = ctx.events;
+
+    // 1. Pre-PGS Narrow-Phase & Manifold Caching (executed exactly once per step)
+    for (let i = 0; i < pairs.length; i++) {
+      this._prepareManifold(pairs[i]!, ctx, scratch, gravStep);
+    }
+
+    // 2. PGS Velocity Loop (normal + friction impulses + joint velocity constraints on frozen manifolds)
     for (let iter = 0; iter < iterationCount; iter++) {
-      // Symmetric Gauss-Seidel: alternate forward and backward passes for bidirectional constraint propagation
       const isForward = iter % 2 === 0;
       const start = isForward ? 0 : pairs.length - 1;
       const end = isForward ? pairs.length : -1;
       const stepDir = isForward ? 1 : -1;
 
       for (let i = start; i !== end; i += stepDir) {
-        this._solvePair(pairs[i]!, ctx, scratch, iter, gravStep);
+        const pair = pairs[i]!;
+        if (pair.colliding) {
+          this._solvePairVelocity(pair, ctx, scratch, iter);
+        }
       }
 
-      // Solve joint velocity constraints during each PGS iteration
       for (let k = 0; k < joints.length; k++) {
         const joint = joints[k]!;
         if (joint.enabled && !joint.isBroken) {
@@ -149,7 +160,20 @@ export class ContactSolver {
       }
     }
 
-    // Solve post-solve position projection / drift compensation for joints
+    // 3. Post-Solve Position Pass (NGS / Baumgarte penetration separation)
+    const posIterations = Math.max(1, Math.min(4, iterationCount));
+    const posFactor = posIterations === 1 ? 1.0 : POSITION_BAUMGARTE;
+    for (let pIter = 0; pIter < posIterations; pIter++) {
+      const factor = pIter === posIterations - 1 ? 1.0 : posFactor;
+      for (let i = 0; i < pairs.length; i++) {
+        const pair = pairs[i]!;
+        if (pair.colliding) {
+          this._solvePairPosition(pair, ctx, scratch, factor);
+        }
+      }
+    }
+
+    // 4. Solve post-solve position projection / drift compensation for joints
     for (let k = 0; k < joints.length; k++) {
       const joint = joints[k]!;
       if (joint.enabled && !joint.isBroken) {
@@ -160,20 +184,19 @@ export class ContactSolver {
     // 5. Resting contact velocity stabilization
     this._restingVelocityStabilization(pairs, ctx);
 
-    // 6. Trigger & Collision Exit Events (dispatches exits, returns state to the pool,
-    //    rolls the current maps into next step's "previous" slot)
+    // 6. Trigger & Collision Exit Events
     ctx.tracker.endStep(events);
   }
 
   /**
-   * Solves one discovered contact pair: narrow-phase, wake-up check, trigger handling, position
-   * separation and the normal/friction impulse resolution with a world-space angular response.
+   * Executes narrow-phase collision detection once per pair before the PGS velocity loop,
+   * freezing the contact manifold (`normal`, `depth`, `contactPt`, `rA`, `rB`, `effInvMassN`)
+   * and handling trigger pairs and sleeping body wake-ups.
    */
-  private _solvePair(
+  private _prepareManifold(
     pair: ContactPair,
     ctx: ContactSolverContext,
     s: PairSolveScratch,
-    iter: number,
     gravStep: number,
   ): void {
     const first = pair.first;
@@ -189,11 +212,12 @@ export class ContactSolver {
     const invMassB = rbB && rbB.inverseMass > 0 ? rbB.inverseMass : 0;
     const totalInvMass = invMassA + invMassB;
 
-    // Skip static-static collisions
-    if (totalInvMass <= 0) return;
+    if (totalInvMass <= 0) {
+      pair.colliding = false;
+      return;
+    }
 
     const collisionFound = Collision.resolve(first.bounds!, second.bounds!, s.result);
-
     if (!collisionFound) {
       pair.colliding = false;
       return;
@@ -206,10 +230,7 @@ export class ContactSolver {
       pair.normal.copyFrom(s.result).scale(1.0 / depth);
     }
 
-    // Wake up sleeping bodies upon physical impact with an active moving body
-    if (iter === 0) {
-      this._wakeCheck(rbA, rbB, firstObj, secondObj, ctx, s, gravStep);
-    }
+    this._wakeCheck(rbA, rbB, firstObj, secondObj, ctx, s, gravStep);
 
     const isTriggerA = Boolean(
       first.isTrigger || (firstObj && (firstObj.isTrigger || rbA?.isTrigger || rbA?.isSensor)),
@@ -217,37 +238,113 @@ export class ContactSolver {
     const isTriggerB = Boolean(
       second.isTrigger || (secondObj && (secondObj.isTrigger || rbB?.isTrigger || rbB?.isSensor)),
     );
-    const isTriggerPair = isTriggerA || isTriggerB;
-
-    if (isTriggerPair) {
+    if (isTriggerA || isTriggerB) {
       pair.colliding = false;
-      if (iter === 0) {
-        this._trackTrigger(pair, ctx, firstObj, secondObj, depth);
-      }
+      this._trackTrigger(pair, ctx, firstObj, secondObj, depth);
       return;
     }
 
-    // 1. Position resolution (penetration separation)
-    // Penetration slop: ignore the last few millimetres so resting contacts do not oscillate
-    // between "separated" and "penetrating" (which flickers events and defeats sleeping).
-    const correctedDepth = depth - PENETRATION_SLOP;
+    const normal = pair.normal;
+    const centerA = firstObj ? firstObj.position : first.bounds!.center;
+    const centerB = secondObj ? secondObj.position : second.bounds!.center;
+    const volA = first.bounds!;
+    const volB = second.bounds!;
+
+    const contactPt = (pair.contactPt ??= s.contactPt.clone());
+    const rA = (pair.rA ??= s.rA.clone());
+    const rB = (pair.rB ??= s.rB.clone());
+
+    this._computeContactPoint(
+      volA,
+      volB,
+      pair,
+      centerA,
+      centerB,
+      contactPt,
+      s.supportA,
+      s.supportB,
+    );
+
+    const correctedDepth = Math.max(0, depth - PENETRATION_SLOP);
+    const corrScale = correctedDepth / totalInvMass;
+    const projCenterAX = centerA.x + normal.x * corrScale * invMassA;
+    const projCenterAY = centerA.y + normal.y * corrScale * invMassA;
+    const projCenterAZ = centerA.z + normal.z * corrScale * invMassA;
+    const projCenterBX = centerB.x - normal.x * corrScale * invMassB;
+    const projCenterBY = centerB.y - normal.y * corrScale * invMassB;
+    const projCenterBZ = centerB.z - normal.z * corrScale * invMassB;
+
+    rA.set(contactPt.x - projCenterAX, contactPt.y - projCenterAY, contactPt.z - projCenterAZ);
+    rB.set(contactPt.x - projCenterBX, contactPt.y - projCenterBY, contactPt.z - projCenterBZ);
+
+    let kRotN = 0;
+    if (invMassA > 0 && rbA && firstObj) {
+      kRotN += this._math.effectiveInvMass(rbA, firstObj.rotation, rA, normal);
+    }
+    if (invMassB > 0 && rbB && secondObj) {
+      kRotN += this._math.effectiveInvMass(rbB, secondObj.rotation, rB, normal);
+    }
+    pair.effInvMassN = totalInvMass + kRotN;
+    pair.accNormalImpulse = 0;
+    pair.accFriction.set(0, 0, 0);
+  }
+
+  /**
+   * Post-solve position correction pass (Baumgarte / NGS separation down to PENETRATION_SLOP).
+   */
+  private _solvePairPosition(
+    pair: ContactPair,
+    ctx: ContactSolverContext,
+    s: PairSolveScratch,
+    factor: number,
+  ): void {
+    const first = pair.first;
+    const second = pair.second;
+    const firstObj = first instanceof Object3D ? first : undefined;
+    const secondObj = second instanceof Object3D ? second : undefined;
+    const rbA = firstObj?.rigidBody;
+    const rbB = secondObj?.rigidBody;
+    const invMassA = rbA && rbA.inverseMass > 0 ? rbA.inverseMass : 0;
+    const invMassB = rbB && rbB.inverseMass > 0 ? rbB.inverseMass : 0;
+    const totalInvMass = invMassA + invMassB;
+    if (totalInvMass <= 0) return;
+
+    if (!Collision.resolve(first.bounds!, second.bounds!, s.result)) {
+      return;
+    }
+    const currentDepth = s.result.length();
+    const correctedDepth = (currentDepth - PENETRATION_SLOP) * factor;
     if (correctedDepth > 0) {
       const correction = correctedDepth / totalInvMass;
-
       if (invMassA > 0 && firstObj) {
         s.posCorr.copyFrom(pair.normal).scale(correction * invMassA);
         ctx.syncTransform(firstObj, s.posCorr);
       }
-
       if (invMassB > 0 && secondObj) {
         s.posCorr.copyFrom(pair.normal).scale(-correction * invMassB);
         ctx.syncTransform(secondObj, s.posCorr);
       }
     }
+  }
 
-    if (!pair.colliding) return;
+  /**
+   * Solves velocity and friction impulses for one cached contact manifold during a PGS iteration.
+   */
+  private _solvePairVelocity(
+    pair: ContactPair,
+    ctx: ContactSolverContext,
+    s: PairSolveScratch,
+    iter: number,
+  ): void {
+    const first = pair.first;
+    const second = pair.second;
+    const firstObj = first instanceof Object3D ? first : undefined;
+    const secondObj = second instanceof Object3D ? second : undefined;
+    const rbA = firstObj?.rigidBody;
+    const rbB = secondObj?.rigidBody;
+    const invMassA = rbA && rbA.inverseMass > 0 ? rbA.inverseMass : 0;
+    const invMassB = rbB && rbB.inverseMass > 0 ? rbB.inverseMass : 0;
 
-    // 2-3. Normal + Coulomb friction impulse resolution with world-space angular response
     this._resolveContactImpulse(
       pair,
       ctx,
@@ -376,26 +473,10 @@ export class ContactSolver {
     const second = pair.second;
     const normal = pair.normal;
 
-    // Accurate contact point in world coordinates
-    const centerA = firstObj ? firstObj.position : first.bounds!.center;
-    const centerB = secondObj ? secondObj.position : second.bounds!.center;
-    const volA = first.bounds!;
-    const volB = second.bounds!;
-
-    this._computeContactPoint(
-      volA,
-      volB,
-      pair,
-      centerA,
-      centerB,
-      s.contactPt,
-      s.supportA,
-      s.supportB,
-    );
-
-    // Lever arms rA = contactPt - centerA, rB = contactPt - centerB
-    s.rA.set(s.contactPt.x - centerA.x, s.contactPt.y - centerA.y, s.contactPt.z - centerA.z);
-    s.rB.set(s.contactPt.x - centerB.x, s.contactPt.y - centerB.y, s.contactPt.z - centerB.z);
+    const rA = pair.rA!;
+    const rB = pair.rB!;
+    s.rA.copyFrom(rA);
+    s.rB.copyFrom(rB);
 
     // Contact-point velocities: v_contact = v + ω x r
     if (invMassA > 0 && rbA) {
@@ -412,16 +493,7 @@ export class ContactSolver {
     s.rv.copyFrom(s.velA).sub(s.velB);
     const velAlongNormal = s.rv.dot(normal);
 
-    // Rotational effective inverse mass terms for normal (world inertia)
-    let kRotN = 0;
-    if (invMassA > 0 && rbA && firstObj) {
-      kRotN += this._math.effectiveInvMass(rbA, firstObj.rotation, s.rA, normal);
-    }
-    if (invMassB > 0 && rbB && secondObj) {
-      kRotN += this._math.effectiveInvMass(rbB, secondObj.rotation, s.rB, normal);
-    }
-
-    const effInvMassN = invMassA + invMassB + kRotN;
+    const effInvMassN = pair.effInvMassN!;
 
     // 2. Velocity resolution: accumulated normal impulse (projected Gauss-Seidel). The running
     //    sum is clamped to >= 0 (contacts push, never pull) while each iteration may *reduce*

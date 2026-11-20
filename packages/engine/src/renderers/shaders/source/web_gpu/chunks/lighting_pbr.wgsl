@@ -95,7 +95,7 @@ let dotNV_cc = max(dot(N_cc, V), 0.0001);
 // (ADR 0039 sheen decision); the runtime w-flag mirrors WebGL2's USE_SHEEN compile gate.
 var sheenColor = sRGBToLinear(obj.matParam10.rgb);
 #ifdef USE_SHEEN_COLOR_MAP
-sheenColor = sRGBToLinear(textureSample(u_sheenColorMap, s, i.uv).rgb);
+sheenColor *= sRGBToLinear(textureSample(u_sheenColorMap, s, i.uv).rgb);
 #endif
 var sheenRoughness = clamp(obj.thresholds.y, 0.05, 1.0);
 #ifdef USE_SHEEN_ROUGHNESS_MAP
@@ -123,7 +123,18 @@ var Lo = vec3f(0.0);
     if (global.dirShadowInfo.z > 0.5) {
         let numCascades = u32(global.dirShadowInfo.w);
         var cascadeIndex = max(numCascades, 1u) - 1u;
-        let viewDist = length(global.viewPos.xyz - i.wp);
+        let csmVpR3 = vec3f(global.vp[0][3], global.vp[1][3], global.vp[2][3]);
+        let csmVpR2 = -vec3f(global.vp[0][2], global.vp[1][2], global.vp[2][2]);
+        let csmCamFwd = select(
+            csmVpR2 / max(length(csmVpR2), 1e-6),
+            csmVpR3,
+            dot(csmVpR3, csmVpR3) > 1e-8,
+        );
+        let viewDist = clamp(
+            dot(i.wp - global.viewPos.xyz, csmCamFwd),
+            global.cameraNearFar.x,
+            global.cameraNearFar.y,
+        );
         for (var c: u32 = 0u; c < numCascades; c++) {
             if (viewDist < global.cascadeSplits[c]) {
                 cascadeIndex = c;
@@ -150,7 +161,8 @@ var Lo = vec3f(0.0);
         var shadowB = shadowA;
         if (blendToNext > 0.0) {
             let nextCascade = cascadeIndex + 1u;
-            let shadowPosB = global.cascadeMatrices[nextCascade] * vec4f(dirShadowSamplePos, 1.0);
+            let dirShadowSamplePosB = i.wp + N * global.dirShadowBias[nextCascade] * (1.0 - dotNL);
+            let shadowPosB = global.cascadeMatrices[nextCascade] * vec4f(dirShadowSamplePosB, 1.0);
             shadowB = getShadowDirBlend(u_dirShadowMap, shadowSampler, shadowPosB, nextCascade, global.dirShadowInfo.x);
         }
 
@@ -431,7 +443,15 @@ kD_ambient *= 1.0 - metallic;
 
 // The baked irradiance/prefilter cubes are 8-bit sRGB-encoded like u_envMap (ADR 0048).
 let irradiance = sRGBToLinear(textureSampleLevel(u_irradianceMap, globalSampler, N, 0.0).rgb) * global.envIntensity;
-let diffuseAmbient = irradiance * diffuseAlbedo;
+let noIrradiance = dot(irradiance, irradiance) < 1e-6;
+var diffuseAmbient: vec3f;
+if (noIrradiance) {
+    let f_fallback = F_Schlick90(dotNV, F0, F90);
+    let kD_fallback = (vec3f(1.0) - f_fallback) * (1.0 - metallic);
+    diffuseAmbient = kD_fallback * global.ambientColor.rgb * diffuseAlbedo;
+} else {
+    diffuseAmbient = kD_ambient * irradiance * diffuseAlbedo;
+}
 
 // A per-object dynamic reflection probe (u_envMap, e.g. DynamicReflectionProbe) is a sharp,
 // real-time capture of this object's actual surroundings, while the scene's prefilter map is a
@@ -470,7 +490,8 @@ var ambient = (kD_ambient * diffuseAmbient + specularAmbient) * ao;
 // irradiance through the analytic directional-albedo fit (Estevez & Kulla 2017, three.js IBLSheenBRDF).
 // Added before the clearcoat block so the coat attenuates it (layer order: coat > sheen > base).
 if (sheenOn) {
-    ambient = ambient * sheenEnergyComp + irradiance * sheenColor * IBLSheenBRDF(dotNV, sheenRoughness) * ao;
+    let sheenIrradiance = select(irradiance, global.ambientColor.rgb, noIrradiance);
+    ambient = ambient * sheenEnergyComp + sheenIrradiance * sheenColor * IBLSheenBRDF(dotNV, sheenRoughness) * ao;
 }
 
 if (clearcoat > 0.0) {
@@ -479,12 +500,6 @@ if (clearcoat > 0.0) {
     let ccEnvBRDF = textureSampleLevel(u_brdfLUT, globalSampler, vec2f(max(dotNV_cc, 0.0), clearcoatRoughness), 0.0).rg;
     let ccSpecular = ccPrefilter * (vec3f(0.04) * ccEnvBRDF.x + ccEnvBRDF.y) * clearcoat;
     ambient = ambient * (1.0 - clearcoat * F_Schlick(dotNV_cc, vec3f(0.04)).x) + ccSpecular;
-}
-
-if (dot(irradiance, irradiance) < 1e-6) {
-    let f_fallback = F_Schlick90(dotNV, F0, F90);
-    let kD_fallback = (vec3f(1.0) - f_fallback) * (1.0 - metallic);
-    ambient = (kD_fallback * global.ambientColor.rgb * diffuseAlbedo + specularAmbient) * ao;
 }
 
 #ifdef USE_TRANSMISSION
@@ -501,7 +516,14 @@ if (transmissionWeight > 0.0) {
     let attenuationDist = obj.thresholds.z;
 
     let modelScale = vec3f(length(obj.model[0].xyz), length(obj.model[1].xyz), length(obj.model[2].xyz));
-    let transmissionRay = normalize(refract(-V, N, 1.0 / ior)) * thickness * modelScale;
+    let refracted = refract(-V, N, 1.0 / ior);
+    let refractedLengthSquared = dot(refracted, refracted);
+    let transmissionDirection = select(
+        reflect(-V, N),
+        refracted * inverseSqrt(max(refractedLengthSquared, 1e-8)),
+        refractedLengthSquared > 1e-8,
+    );
+    let transmissionRay = transmissionDirection * thickness * modelScale;
     let exitClip = global.vp * vec4f(i.wp + transmissionRay, 1.0);
     let exitNdc = exitClip.xy / exitClip.w;
     // WebGPU texture space is y-down; NDC is y-up.

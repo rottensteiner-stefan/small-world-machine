@@ -36,7 +36,8 @@ export class AnimationMixer {
   public root: Object3D;
   private _actions: Map<AnimationClip, AnimationAction> = new Map();
   private _actionList: AnimationAction[] = [];
-  private _bindings: Map<string, Object3D | undefined> = new Map();
+  private _bindings: Map<string, Object3D | null> = new Map();
+  private _nodeBindings: Map<Object3D, Object3D | null> = new Map();
 
   // Reused per-frame blend accumulators. Instead of building a fresh list of weighted samples per
   // track/frame, each touched target's state is folded in incrementally and a generation stamp
@@ -102,14 +103,25 @@ export class AnimationMixer {
         const track = tracks[i];
         if (!track) continue;
 
-        let target = this._bindings.get(track.targetName);
-        if (target === undefined) {
-          target = this.root.getObjectByName(track.targetName);
-          if (!target) {
-            const normalized = track.targetName.replace(MIXAMO_RIG_PREFIX_RE, "");
-            target = this._findByNormalizedMixamoName(this.root, normalized);
+        let target: Object3D | null | undefined;
+        if (track.targetNode !== undefined) {
+          target = this._nodeBindings.get(track.targetNode);
+          if (target === undefined) {
+            target = this._isDescendantOrSelf(track.targetNode) ? track.targetNode : null;
+            this._nodeBindings.set(track.targetNode, target);
           }
-          this._bindings.set(track.targetName, target);
+        }
+        if (!target) {
+          target = this._bindings.get(track.targetName);
+          if (target === undefined) {
+            let resolved: Object3D | undefined = this.root.getObjectByName(track.targetName);
+            if (!resolved && track.targetName.length > 0) {
+              const normalized = track.targetName.replace(MIXAMO_RIG_PREFIX_RE, "");
+              resolved = this._findByNormalizedMixamoName(this.root, normalized);
+            }
+            target = resolved ?? null;
+            this._bindings.set(track.targetName, target);
+          }
         }
         if (!target) continue;
 
@@ -178,6 +190,15 @@ export class AnimationMixer {
       if (st.si !== frameIndex) continue;
       st.target.quaternion = (st.target.quaternion || new Quaternion()).copyFrom(st.q);
     }
+  }
+
+  private _isDescendantOrSelf(node: Object3D): boolean {
+    let cur: Object3D | null | undefined = node;
+    while (cur) {
+      if (cur === this.root) return true;
+      cur = cur.parent;
+    }
+    return false;
   }
 
   /** Last-resort target lookup for a track name that didn't match any node exactly, and whose

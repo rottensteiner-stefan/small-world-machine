@@ -156,6 +156,22 @@ describe("Color", () => {
       expect(() => c.toTarget(g, out)).toThrow(/gamma must be a finite number > 0/);
     }
     expect(c.toTarget(2.2, out).r).toBeCloseTo(0.5, 6);
-    expect(c.toTarget(1.0, out).r).toBeCloseTo(Math.pow(0.5, 2.2), 6);
+    expect(c.toTarget(1.0, out).r).toBeCloseTo(Math.pow((0.5 + 0.055) / 1.055, 2.4), 6);
+  });
+
+  it("evaluates exact piecewise IEC 61966-2-1 sRGB transfer function with < 1e-6 roundtrip error", () => {
+    // Dark Chiaroscuro shadow tone (0.04 <= 0.04045 linear segment: 0.04 / 12.92 = ~0.003095975)
+    expect(Color.sRGBToLinearChannel(0.04)).toBeCloseTo(0.04 / 12.92, 6);
+    expect(Color.sRGBToLinearChannel(0.04)).toBeGreaterThan(0.003);
+
+    const linear = new Color();
+    const roundtripped = new Color();
+    for (const v of [0, 0.001, 0.01, 0.04, 0.04045, 0.05, 0.18, 0.5, 0.8, 1.0]) {
+      const src = new Color(v, v, v, 0.75);
+      src.toLinear(linear);
+      roundtripped.fromLinear(linear);
+      expect(Math.abs(roundtripped.r - v)).toBeLessThan(1e-6);
+      expect(roundtripped.a).toBe(0.75);
+    }
   });
 });

@@ -504,6 +504,28 @@ describe("GltfBinaryParser.getBufferData edge branches", () => {
     };
     const dU32 = GltfBinaryParser.getBufferData(jU32.accessors[0], jU32, [u32]);
     expect(Array.from(dU32 as Float32Array)).toEqual([0, 1]);
+
+    // KHR_mesh_quantization spec compliance: normalized INT16 POSITION with min/max in integer
+    // domain must decode strictly per glTF 2.0 §3.11 (max(c / 32767, -1.0)), without rescaling by min/max.
+    const qPos = new Int16Array([16384, 0, -32767]).buffer;
+    const jQPos = {
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 6 }],
+      accessors: [
+        {
+          bufferView: 0,
+          componentType: 5122,
+          count: 1,
+          type: "VEC3",
+          normalized: true,
+          min: [-32767, -32767, -32767],
+          max: [32767, 32767, 32767],
+        },
+      ],
+    };
+    const dQPos = GltfBinaryParser.getBufferData(jQPos.accessors[0], jQPos, [qPos]) as Float32Array;
+    expect(dQPos[0]).toBeCloseTo(16384 / 32767, 5);
+    expect(dQPos[1]).toBeCloseTo(0.0, 5);
+    expect(dQPos[2]).toBeCloseTo(-1.0, 5);
   });
 
   it("handles count === 0 as an empty typed array without throwing", () => {

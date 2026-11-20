@@ -61,26 +61,19 @@ export class GltfBinaryParser {
    * @param accessor The accessor to read.
    * @param json The glTF JSON document.
    * @param buffers The binary buffers.
-   * @param options.dequantize When true AND the accessor is a normalized integer with both
-   * `min` and `max` declared, the normalized grid is rescaled onto the declared domain
-   * (`value = min + u * (max - min)`) -- the KHR_mesh_quantization dequantization. Callers
-   * MUST only set this for POSITION-style attributes whose `min`/`max` are the authored
-   * bounds; NORMAL/TANGENT/etc. stay in their normalized [-1,1]/[0,1] domain.
-   * An empty/absent `min`/`max` is treated as unquantized (current normalized path).
    */
   public static getBufferData(
     accessor: NonNullable<GltfJson["accessors"]>[number] | undefined,
     json: GltfJson,
     buffers: ArrayBuffer[],
-    options: { dequantize?: boolean } = {},
   ): TypedArray | null {
     if (accessor === undefined || !json.bufferViews) return null;
     if (accessor.bufferView === undefined) {
       // Spec: no bufferView means all zeros, plus the sparse substitutions if present.
-      return accessor.sparse ? this._applySparse(accessor, undefined, json, buffers, options) : null;
+      return accessor.sparse ? this._applySparse(accessor, undefined, json, buffers) : null;
     }
-    const base = this._getDenseBufferData(accessor, json, buffers, options);
-    if (base && accessor.sparse) return this._applySparse(accessor, base, json, buffers, options);
+    const base = this._getDenseBufferData(accessor, json, buffers);
+    if (base && accessor.sparse) return this._applySparse(accessor, base, json, buffers);
     return base;
   }
 
@@ -90,7 +83,6 @@ export class GltfBinaryParser {
     base: TypedArray | undefined,
     json: GltfJson,
     buffers: ArrayBuffer[],
-    options: { dequantize?: boolean },
   ): TypedArray | null {
     const sparse = accessor.sparse;
     if (!sparse) return base ?? null;
@@ -105,7 +97,6 @@ export class GltfBinaryParser {
       },
       json,
       buffers,
-      options,
     );
     const values = this._getDenseBufferData(
       {
@@ -118,7 +109,6 @@ export class GltfBinaryParser {
       },
       json,
       buffers,
-      options,
     );
     if (!indices || !values) return base ?? null;
     const OutCtor = values.constructor as new (length: number) => TypedArray;
@@ -140,7 +130,6 @@ export class GltfBinaryParser {
     accessor: NonNullable<GltfJson["accessors"]>[number],
     json: GltfJson,
     buffers: ArrayBuffer[],
-    options: { dequantize?: boolean } = {},
   ): TypedArray | null {
     if (accessor.bufferView === undefined || !json.bufferViews) return null;
     const bufferView = json.bufferViews[accessor.bufferView];
@@ -235,17 +224,6 @@ export class GltfBinaryParser {
     if (accessor.normalized) {
       const result = new Float32Array(count);
       const view = new DataView(buffer, byteOffset, requiredBytes);
-      const minArr: number[] | undefined = accessor.min;
-      const maxArr: number[] | undefined = accessor.max;
-      // KHR_mesh_quantization dequantization: only when the caller opted in AND a full
-      // per-component min/max is present. Anything else stays on the normalized path.
-      const dequant =
-        true === options.dequantize &&
-        minArr !== undefined &&
-        maxArr !== undefined &&
-        minArr.length >= numComponents &&
-        maxArr.length >= numComponents;
-      const signed = 5120 === accessor.componentType || 5122 === accessor.componentType;
       for (let i = 0; i < accessor.count; i++) {
         const elemOffset = i * stride;
         for (let c = 0; c < numComponents; c++) {
@@ -274,17 +252,7 @@ export class GltfBinaryParser {
             default:
               v = 0;
           }
-          if (dequant) {
-            // value = min[c] + u * (max[c] - min[c]). The normalized grid is mapped onto
-            // [0,1] first (signed values run [-1,1], so `u = (v + 1) / 2`), which makes
-            // the full declared [min,max] range recoverable -- the "true unit space".
-            const lo: number = minArr![c]!;
-            const hi: number = maxArr![c]!;
-            const u: number = signed ? (v + 1.0) * 0.5 : v;
-            result[outIdx] = lo + u * (hi - lo);
-          } else {
-            result[outIdx] = v;
-          }
+          result[outIdx] = v;
         }
       }
       return result;

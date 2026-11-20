@@ -1,4 +1,13 @@
+mat3 cofactor3(mat3 m) {
+  return mat3(
+    cross(m[1], m[2]),
+    cross(m[2], m[0]),
+    cross(m[0], m[1])
+  );
+}
+
 void main() {
+  float skinSign = 1.0;
 #ifdef USE_SKINNING
   mat4 skinMat =
       a_weights.x * u_boneMatrices[int(a_joints.x)] +
@@ -7,8 +16,12 @@ void main() {
       a_weights.w * u_boneMatrices[int(a_joints.w)];
 
   vec4 localPos = skinMat * vec4(a_position, 1.0);
-  vec3 localNormal = mat3(skinMat) * a_normal;
-  vec3 localTangent = mat3(skinMat) * a_tangent.xyz;
+  mat3 skinMat3 = mat3(skinMat);
+  mat3 skinCof = cofactor3(skinMat3);
+  float skinDet = dot(skinMat3[0], skinCof[0]);
+  skinSign = skinDet < 0.0 ? -1.0 : 1.0;
+  vec3 localNormal = (skinCof * a_normal) * skinSign;
+  vec3 localTangent = skinMat3 * a_tangent.xyz;
 #else
   vec4 localPos = vec4(a_position, 1.0);
   vec3 localNormal = a_normal;
@@ -33,7 +46,11 @@ void main() {
 #endif
 
   vec4 wp = modelMat * localPos;
-  vec3 computedNormal = mat3(modelMat) * localNormal;
+  mat3 m33 = mat3(modelMat);
+  mat3 mCof = cofactor3(m33);
+  float modelDet = dot(m33[0], mCof[0]);
+  float modelSign = modelDet < 0.0 ? -1.0 : 1.0;
+  vec3 computedNormal = (mCof * localNormal) * modelSign;
   // Fallback only for a genuinely missing/zero vertex normal. The test must run on the LOCAL normal:
   // testing the transformed one made it depend on the mesh scale (a 0.008-scaled model has
   // |N|^2 = 6.4e-5 < 0.0001 and every normal collapsed to +Y).
@@ -70,20 +87,20 @@ void main() {
   }
   v_uv = vec2(uvCos * uvScaled.x - uvSin * uvScaled.y, uvSin * uvScaled.x + uvCos * uvScaled.y) + u_texOffset;
 
-  vec3 tangent = localTangent;
   // Bitangent handedness w = ±1: folded into B in the VERTEX stage (fragment/material
   // shaders reconstruct the TBN unmodified). Defaults to +1 when the tangent is zero or
   // absent, so mirrored-UV islands still get their sign from authored/derived data only.
-  float bitangentSign = dot(tangent, tangent) < 0.0001 ? 1.0 : a_tangent.w;
-  if (dot(tangent, tangent) < 0.0001) {
-    if (abs(v_normal.y) < 0.999) {
-      tangent = cross(v_normal, vec3(0, 1, 0));
-    } else {
-      tangent = cross(v_normal, vec3(1, 0, 0));
-    }
+  bool hasTangent = dot(localTangent, localTangent) >= 0.0001;
+  float bitangentSign = hasTangent ? (a_tangent.w * skinSign * modelSign) : 1.0;
+  vec3 worldT = m33 * localTangent;
+  vec3 T;
+  if (!hasTangent || dot(worldT, worldT) < 1e-20) {
+    vec3 up = abs(v_normal.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    T = normalize(cross(v_normal, up));
+  } else {
+    T = normalize(worldT);
   }
 
-  vec3 T = normalize(mat3(modelMat) * tangent);
   vec3 N_v = v_normal;
   T = normalize(T - dot(T, N_v) * N_v);
   // UV rotation (KHR_texture_transform: uv' = R(theta) * (uv * repeat) + offset) also turns the tangent frame.

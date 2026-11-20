@@ -143,5 +143,14 @@ describe("Quaternion", () => {
       expect(q.z).toBeCloseTo(copy.z, 6);
       expect(q.w).toBeCloseTo(copy.w, 6);
     });
+
+    it("setFromRotationMatrix falls back cleanly without NaN on degenerate matrices", () => {
+      const zeroMat = { data: new Float32Array(16) } as unknown as import("../../src/math/Matrix4.js").Matrix4;
+      const qZero = new Quaternion().setFromRotationMatrix(zeroMat);
+      expect(qZero.x).toBe(0);
+      expect(qZero.y).toBe(0);
+      expect(qZero.z).toBe(0);
+      expect(qZero.w).toBe(1);
+    });
   });
 });

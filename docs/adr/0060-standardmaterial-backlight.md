@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # 0060: `StandardMaterial.backlight` — thin-surface sun transmission, lane `u_matParam1`

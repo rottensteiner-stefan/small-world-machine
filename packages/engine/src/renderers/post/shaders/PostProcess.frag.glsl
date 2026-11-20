@@ -65,9 +65,16 @@ float random(vec2 st) {
 // Tone operators shared with the forward pass (shared/tone_operators.glsl).
 [TONE_OPERATORS]
 
-// Linear -> sRGB gamma correction
+// Linear -> sRGB gamma correction (exact piecewise IEC 61966-2-1 with custom gamma scaling fallback)
 vec3 linearToSRGB(vec3 linear, float gamma) {
-    return pow(clamp(linear, 0.0, 1.0), vec3(1.0 / gamma));
+    vec3 c = clamp(linear, 0.0, 1.0);
+    vec3 lo = c * 12.92;
+    vec3 hi = 1.055 * pow(c, vec3(1.0 / 2.4)) - vec3(0.055);
+    vec3 srgb = mix(hi, lo, vec3(lessThanEqual(c, vec3(0.0031308))));
+    if (abs(gamma - 2.2) < 0.01) {
+        return srgb;
+    }
+    return pow(srgb, vec3(2.2 / max(gamma, 0.001)));
 }
 
 void main() {
@@ -107,6 +114,7 @@ void main() {
     float ringGlow = 0.0;
     float beaming = 1.0;
     vec3 colorShift = vec3(1.0);
+    float eh = u_lensingEventHorizon > 0.0 ? u_lensingEventHorizon : 0.03;
     if (u_filterMode == 8) {
         if (u_singularityScreenPos.z >= -1.0) {
             ivec2 dims = textureSize(u_hdrTexture, 0);
@@ -115,7 +123,6 @@ void main() {
             vec2 dir = uv - center;
             dir.x *= aspect;
             float dist = length(dir);
-            float eh = u_lensingEventHorizon > 0.0 ? u_lensingEventHorizon : 0.03;
             float strength = u_lensingStrength > 0.0 ? u_lensingStrength : 0.25;
             float spaghettiFactor = u_lensingSpaghetti >= 0.0 ? u_lensingSpaghetti : 0.15;
             float beamingFactor = u_lensingBeaming > 0.0 ? u_lensingBeaming : 1.2;
@@ -183,17 +190,34 @@ void main() {
             vec2 dir = uv - center;
             dir.x *= aspect;
             float dist = length(dir);
-            if (dist < 0.03) {
+            if (dist < eh) {
                 hdr = vec3(0.0); // Absolute pitch black Event Horizon
             } else {
                 if (dist < 0.35) {
-                    float diskMask = smoothstep(0.35, 0.03, dist);
+                    float diskMask = smoothstep(0.35, eh, dist);
                     hdr *= mix(vec3(1.0), beaming * colorShift, diskMask);
                 }
                 if (ringGlow > 0.0) {
                     hdr += vec3(1.0, 0.4, 0.08) * ringGlow; // Fiery Einstein-Ring photon sphere glow
                 }
             }
+        }
+    }
+
+    // Volumetric Fog -- composited BEFORE bloom so fog transmittance attenuates the raw scene
+    // radiance rather than camera-lens bloom scatter.
+    if (u_volumetricFogEnabled == 1) {
+        vec4 fog = texture(u_volumetricFogTexture, distortUv);
+        if (!isnan(fog.r) && !isinf(fog.r) && !isnan(fog.a)) {
+            hdr = hdr * clamp(fog.a, 0.0, 1.0) + fog.rgb;
+        }
+    }
+
+    // Volumetric Light Shafts (In-Scattering) -- additive linear HDR lighting before bloom
+    if (u_lightShaftsEnabled == 1) {
+        vec3 shafts = texture(u_lightShaftsTexture, distortUv).rgb;
+        if (!isnan(shafts.r) && !isinf(shafts.r)) {
+            hdr += shafts * u_lightShaftsIntensity;
         }
     }
 
@@ -220,28 +244,12 @@ void main() {
                 vec2 center = u_singularityScreenPos.xy * 0.5 + vec2(0.5);
                 vec2 dir = uv - center;
                 dir.x *= aspect;
-                if (length(dir) < 0.03) {
+                if (length(dir) < eh) {
                     bloom = vec3(0.0);
                 }
             }
         }
         hdr += bloom * u_bloomIntensity * u_bloomColor;
-    }
-
-    // Volumetric Light Shafts (In-Scattering) -- additive linear HDR lighting
-    if (u_lightShaftsEnabled == 1) {
-        vec3 shafts = texture(u_lightShaftsTexture, distortUv).rgb;
-        if (!isnan(shafts.r) && !isinf(shafts.r)) {
-            hdr += shafts * u_lightShaftsIntensity;
-        }
-    }
-
-    // Volumetric Fog -- scene attenuated by the transmittance (a), then in-scattering (rgb) added
-    if (u_volumetricFogEnabled == 1) {
-        vec4 fog = texture(u_volumetricFogTexture, distortUv);
-        if (!isnan(fog.r) && !isinf(fog.r) && !isnan(fog.a)) {
-            hdr = hdr * clamp(fog.a, 0.0, 1.0) + fog.rgb;
-        }
     }
 
     // Ambient Occlusion (HBAO) -- darkens the linear scene color before tonemapping, since it
@@ -265,27 +273,25 @@ void main() {
     hdr *= texelFetch(u_autoExposureTexture, ivec2(0), 0).r;
     vec3 tonemapped = toneMapOperator(hdr * u_exposure, u_toneMappingMode, u_toneMappingWhite);
 
-    // Gamma correction
-    vec3 srgb = linearToSRGB(tonemapped, u_gamma);
-
-    // Color Grading (Kontrast/Sättigung/Temperatur-Tint/Lift-Gamma-Gain) -- eigenständiger, immer
-    // verfügbarer Grading-Layer, NICHT zu verwechseln mit den FILTER_COLOR_GRADING-Kamera-Look-
-    // Presets weiter unten (filterMode-Umschalter).
+    // Color Grading (Kontrast/Sättigung/Temperatur-Tint/Lift-Gamma-Gain) in linear space BEFORE sRGB encode
     if (u_colorGradingEnabled == 1) {
-        srgb = (srgb - 0.5) * u_contrast + 0.5;
+        tonemapped = (tonemapped - 0.5) * u_contrast + 0.5;
 
-        float luma = dot(srgb, vec3(0.2126, 0.7152, 0.0722));
-        srgb = mix(vec3(luma), srgb, u_saturation);
+        float luma = dot(tonemapped, vec3(0.2126, 0.7152, 0.0722));
+        tonemapped = mix(vec3(luma), tonemapped, u_saturation);
 
         // Leichte multiplikative Näherung des Weißabgleichs, kein physikalisches CCT/LMS-Modell.
-        srgb *= vec3(1.0 + u_temperature * 0.4 - u_tint * 0.4,
-                     1.0 + u_tint * 0.2,
-                     1.0 - u_temperature * 0.4 - u_tint * 0.4);
+        tonemapped *= vec3(1.0 + u_temperature * 0.4 - u_tint * 0.4,
+                           1.0 + u_tint * 0.2,
+                           1.0 - u_temperature * 0.4 - u_tint * 0.4);
 
         // Lift/Gamma/Gain (ASC-CDL-Stil)
-        srgb = srgb * u_gainColor + u_liftColor * (1.0 - srgb);
-        srgb = pow(clamp(srgb, 0.0, 1.0), 1.0 / max(u_gammaColor, vec3(0.01)));
+        tonemapped = tonemapped * u_gainColor + u_liftColor * (1.0 - tonemapped);
+        tonemapped = pow(clamp(tonemapped, 0.0, 1.0), 1.0 / max(u_gammaColor, vec3(0.01)));
     }
+
+    // Gamma correction
+    vec3 srgb = linearToSRGB(tonemapped, u_gamma);
 
     // Apply Vignette
     if (u_vignetteEnabled == 1) {
@@ -317,26 +323,36 @@ void main() {
         srgb = floor(srgb * u_quantizeSteps) / u_quantizeSteps;
     }
 
-    // Apply Toon / Graphic Novel Outline (Sobel Edge Detection on scene luminance)
+    // Apply Toon / Graphic Novel Outline (Sobel Edge Detection on Reinhard-compressed scene luminance)
     if (u_outlineEnabled == 1) {
         vec2 texel = vec2(u_outlineThickness) / vec2(textureSize(u_hdrTexture, 0));
-        vec3 cTL = texture(u_hdrTexture, distortUv + vec2(-texel.x,  texel.y)).rgb;
-        vec3 cTC = texture(u_hdrTexture, distortUv + vec2( 0.0,      texel.y)).rgb;
-        vec3 cTR = texture(u_hdrTexture, distortUv + vec2( texel.x,  texel.y)).rgb;
-        vec3 cML = texture(u_hdrTexture, distortUv + vec2(-texel.x,  0.0)).rgb;
-        vec3 cMR = texture(u_hdrTexture, distortUv + vec2( texel.x,  0.0)).rgb;
-        vec3 cBL = texture(u_hdrTexture, distortUv + vec2(-texel.x, -texel.y)).rgb;
-        vec3 cBC = texture(u_hdrTexture, distortUv + vec2( 0.0,     -texel.y)).rgb;
-        vec3 cBR = texture(u_hdrTexture, distortUv + vec2( texel.x, -texel.y)).rgb;
+        vec3 rTL = max(texture(u_hdrTexture, distortUv + vec2(-texel.x,  texel.y)).rgb, vec3(0.0));
+        vec3 rTC = max(texture(u_hdrTexture, distortUv + vec2( 0.0,      texel.y)).rgb, vec3(0.0));
+        vec3 rTR = max(texture(u_hdrTexture, distortUv + vec2( texel.x,  texel.y)).rgb, vec3(0.0));
+        vec3 rML = max(texture(u_hdrTexture, distortUv + vec2(-texel.x,  0.0)).rgb, vec3(0.0));
+        vec3 rMR = max(texture(u_hdrTexture, distortUv + vec2( texel.x,  0.0)).rgb, vec3(0.0));
+        vec3 rBL = max(texture(u_hdrTexture, distortUv + vec2(-texel.x, -texel.y)).rgb, vec3(0.0));
+        vec3 rBC = max(texture(u_hdrTexture, distortUv + vec2( 0.0,     -texel.y)).rgb, vec3(0.0));
+        vec3 rBR = max(texture(u_hdrTexture, distortUv + vec2( texel.x, -texel.y)).rgb, vec3(0.0));
 
-        float lTL = dot(cTL, vec3(0.299, 0.587, 0.114));
-        float lTC = dot(cTC, vec3(0.299, 0.587, 0.114));
-        float lTR = dot(cTR, vec3(0.299, 0.587, 0.114));
-        float lML = dot(cML, vec3(0.299, 0.587, 0.114));
-        float lMR = dot(cMR, vec3(0.299, 0.587, 0.114));
-        float lBL = dot(cBL, vec3(0.299, 0.587, 0.114));
-        float lBC = dot(cBC, vec3(0.299, 0.587, 0.114));
-        float lBR = dot(cBR, vec3(0.299, 0.587, 0.114));
+        vec3 cTL = rTL / (vec3(1.0) + rTL);
+        vec3 cTC = rTC / (vec3(1.0) + rTC);
+        vec3 cTR = rTR / (vec3(1.0) + rTR);
+        vec3 cML = rML / (vec3(1.0) + rML);
+        vec3 cMR = rMR / (vec3(1.0) + rMR);
+        vec3 cBL = rBL / (vec3(1.0) + rBL);
+        vec3 cBC = rBC / (vec3(1.0) + rBC);
+        vec3 cBR = rBR / (vec3(1.0) + rBR);
+
+        vec3 rec709 = vec3(0.2126, 0.7152, 0.0722);
+        float lTL = dot(cTL, rec709);
+        float lTC = dot(cTC, rec709);
+        float lTR = dot(cTR, rec709);
+        float lML = dot(cML, rec709);
+        float lMR = dot(cMR, rec709);
+        float lBL = dot(cBL, rec709);
+        float lBC = dot(cBC, rec709);
+        float lBR = dot(cBR, rec709);
 
         float gx = (lTR + 2.0 * lMR + lBR) - (lTL + 2.0 * lML + lBL);
         float gy = (lBL + 2.0 * lBC + lBR) - (lTL + 2.0 * lTC + lTR);

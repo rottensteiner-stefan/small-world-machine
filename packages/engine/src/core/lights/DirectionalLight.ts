@@ -119,6 +119,9 @@ export class DirectionalLight extends AbstractLight {
     }
 
     const isPerspective = proj.type === ProjectionType.PERSPECTIVE;
+    const atlasCols = Math.ceil(Math.sqrt(this.numCascades));
+    const perCascadeRes = this.shadowResolution / atlasCols;
+    const shadowBackExtent = 200.0;
 
     let cascadeNear = isPerspective
       ? (proj as PerspectiveProjection).near
@@ -126,7 +129,7 @@ export class DirectionalLight extends AbstractLight {
     for (let i = 0; i < this.numCascades; i++) {
       const cascadeFar = this.cascadeSplits[i]!;
 
-      // 2. Compute bounding boxes for each cascade
+      // 2. Compute frustum slice corners for each cascade
       if (isPerspective) {
         this._updateFrustumCorners(cam, proj as PerspectiveProjection, cascadeNear, cascadeFar);
       } else {
@@ -138,102 +141,65 @@ export class DirectionalLight extends AbstractLight {
         );
       }
 
-      // Center of this sub-frustum slice
+      // Bounding sphere center of this sub-frustum slice
       this._center.set(0, 0, 0);
-      for (const c of this._corners) {
-        this._center.add(c);
+      for (let cIdx = 0; cIdx < 8; cIdx++) {
+        this._center.add(this._corners[cIdx]!);
       }
       this._center.scale(1 / 8);
 
-      // Position light camera at the center, pulled backwards along the light direction
-      this._lightPos.copyFrom(this._center);
-      this._lightPos.x -= this.direction.x * 200; // Pull back 200 units to catch casters behind the camera
-      this._lightPos.y -= this.direction.y * 200;
-      this._lightPos.z -= this.direction.z * 200;
+      // Rotation-invariant bounding sphere radius enclosing all 8 frustum corners
+      let maxRadiusSq = 0;
+      for (let cIdx = 0; cIdx < 8; cIdx++) {
+        const corner = this._corners[cIdx]!;
+        const dx = corner.x - this._center.x;
+        const dy = corner.y - this._center.y;
+        const dz = corner.z - this._center.z;
+        const distSq = dx * dx + dy * dy + dz * dz;
+        if (distSq > maxRadiusSq) {
+          maxRadiusSq = distSq;
+        }
+      }
+      const radius = Math.ceil(Math.sqrt(maxRadiusSq) * 16.0) / 16.0;
 
+      // World-origin-anchored light view matrix so world coordinates do not drift with camera translation
       const cascadeCam = this.cascadeCameras[i]!;
-      cascadeCam.position.copyFrom(this._lightPos);
-      cascadeCam.target.copyFrom(this._center);
+      cascadeCam.position.set(0, 0, 0);
+      cascadeCam.target.copyFrom(this.direction);
       cascadeCam.up.copyFrom(this._lightUp);
       cascadeCam.updateViewMatrix();
 
-      // Transform corners into the light's view space
-      let minX = Infinity,
-        maxX = -Infinity;
-      let minY = Infinity,
-        maxY = -Infinity;
-      let minZ = Infinity,
-        maxZ = -Infinity;
+      // Transform bounding sphere center into fixed light view space
+      this._lightPos.copyFrom(this._center);
+      cascadeCam.viewMatrix4.transformVector(this._lightPos);
 
-      for (const c of this._corners) {
-        cascadeCam.viewMatrix4.transformVector(c); // Transform world -> light view space
-        if (c.x < minX) minX = c.x;
-        if (c.x > maxX) maxX = c.x;
-        if (c.y < minY) minY = c.y;
-        if (c.y > maxY) maxY = c.y;
-        if (c.z < minZ) minZ = c.z;
-        if (c.z > maxZ) maxZ = c.z;
-      }
+      const texelSize = perCascadeRes > 0 ? (2.0 * radius) / perCascadeRes : 0;
 
-      // Texel snapping: round the frustum's light-space center to whole shadow-map texels so
-      // it doesn't drift by sub-texel amounts as the camera moves smoothly -- that sub-texel
-      // drift is what causes CSM "shimmering" (the shadow edge crawling/swimming frame to
-      // frame). Snapping the center (not min/max independently) keeps the frustum size intact.
-      // Cascades are packed into a cols x cols atlas grid on WebGL2 (see WebGL2Renderer.ts),
-      // so each cascade's true texel density is shadowResolution / cols; on WebGPU each
-      // cascade is a full-resolution array layer, so this undercounts slightly there -- a
-      // harmless, deliberately conservative approximation (coarser snap grid than strictly
-      // needed, not a finer one that would fail to snap).
-      const atlasCols = Math.ceil(Math.sqrt(this.numCascades));
-      const perCascadeRes = this.shadowResolution / atlasCols;
-      const texelSizeX = (maxX - minX) / perCascadeRes;
-      const texelSizeY = (maxY - minY) / perCascadeRes;
-
-      // Per-cascade normal-offset bias (P3-E10 / DP-13): bake k * max(texelSizeX, texelSizeY) so a
-      // near (dense, small-texel) cascade gets a small offset and a far (sparse, large-texel)
-      // cascade a larger one, instead of the old single global normal offset that over-biased near
-      // cascades (peter-panning) and under-biased far ones (acne). Uses the same conservative
-      // texel estimate as the snapping below (WebGL2 atlas density also applies to WebGPU -- a
-      // deliberately coarser estimate, see above), keeping near/far bias in the intended ratio.
-      // Degenerate frustum geometry (non-finite or non-positive texels) keeps the lane at its
-      // constructor zero, i.e. no normal offset -- the least-bad choice for a degenerate cascade.
       this.cascadeNormalBiases[i] =
-        Number.isFinite(texelSizeX) &&
-        Number.isFinite(texelSizeY) &&
-        texelSizeX > 0 &&
-        texelSizeY > 0
-          ? DirectionalLight._CASCADE_BIAS_K * Math.max(texelSizeX, texelSizeY)
+        Number.isFinite(texelSize) && texelSize > 0
+          ? DirectionalLight._CASCADE_BIAS_K * texelSize
           : 0;
 
-      if (0 < texelSizeX && 0 < texelSizeY) {
-        const halfWidth = (maxX - minX) * 0.5;
-        const halfHeight = (maxY - minY) * 0.5;
-        const snappedCenterX = Math.floor(((minX + maxX) * 0.5) / texelSizeX) * texelSizeX;
-        const snappedCenterY = Math.floor(((minY + maxY) * 0.5) / texelSizeY) * texelSizeY;
-        minX = snappedCenterX - halfWidth;
-        maxX = snappedCenterX + halfWidth;
-        minY = snappedCenterY - halfHeight;
-        maxY = snappedCenterY + halfHeight;
+      let snappedX = this._lightPos.x;
+      let snappedY = this._lightPos.y;
+      if (texelSize > 0 && Number.isFinite(texelSize)) {
+        snappedX = Math.floor(this._lightPos.x / texelSize) * texelSize;
+        snappedY = Math.floor(this._lightPos.y / texelSize) * texelSize;
       }
 
-      // Update the orthographic projection bounds
-      // Add padding to prevent tight clipping
-      const padding = 2.0;
       const ortho = cascadeCam.projection as OrthographicProjection;
-      ortho.left = minX - padding;
-      ortho.right = maxX + padding;
-      ortho.bottom = minY - padding;
-      ortho.top = maxY + padding;
+      ortho.left = snappedX - radius;
+      ortho.right = snappedX + radius;
+      ortho.bottom = snappedY - radius;
+      ortho.top = snappedY + radius;
 
-      // small-world-machine uses right-handed system (looking down -Z)
-      // minZ is the most negative (farthest), maxZ is the least negative (nearest)
-      ortho.near = -maxZ - 200;
-      ortho.far = -minZ + 200;
+      // Right-handed light view space looks down -Z: depth along view forward is -centerLS.z
+      const centerDepth = -this._lightPos.z;
+      ortho.near = centerDepth - radius - shadowBackExtent;
+      ortho.far = centerDepth + radius + shadowBackExtent;
 
       ortho.update();
       cascadeCam.updateProjectionMatrix();
-      // updateViewMatrix() above multiplied the previous frame's ortho into the cached
-      // view-projection matrix; recompute it now that the new bounds are applied.
       cascadeCam.updateViewMatrix();
 
       cascadeNear = cascadeFar;

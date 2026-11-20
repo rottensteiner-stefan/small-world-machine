@@ -226,8 +226,8 @@ const FLIGHT_NAV_KEYS: ReadonlySet<string> = new Set([
  *
  * Canonical 1:1 485 m closed Mustafar volcanic basalt obelisk (Obi-Wan Kenobi Part IV)
  * with mid-height cantilevered 24 m durasteel through-flight hangar bay, carved basalt
- * core cliff bays & curved pilasters, 16 ceiling-racked 1:1 TIE/ln silhouettes,
- * 20 m Lambda shuttles, 1.82 m Space Trooper formation, 3-tier waterline wetness
+ * core cliff bays & curved pilasters, 16 ceiling-racked 1:1 Hex-Wing fighters,
+ * 20 m Tri-Wing shuttles, 1.82 m Space Trooper formation, 3-tier waterline wetness
  * (`CustomShaderMaterial`), and horizon-spanning `OceanGridGeometry` + `OceanMaterial`.
  */
 export class Showcase extends AbstractShowcase {
@@ -417,10 +417,52 @@ export class Showcase extends AbstractShowcase {
       roughness: 0.88,
       normalScale: new Vector2D(1.25, 1.25),
     });
-    const trooperMat = new StandardMaterial({
+    const trooperArmorMat = new StandardMaterial({
       color: new Color(0.86, 0.88, 0.9),
-      metallic: 0.15,
+      metallic: 0.14,
+      roughness: 0.24,
+      envMap: this.scene.prefilterMap,
+    });
+    const trooperUnderMat = new StandardMaterial({
+      color: new Color(0.055, 0.06, 0.072),
+      metallic: 0.1,
+      roughness: 0.66,
+      envMap: this.scene.prefilterMap,
+    });
+    const trooperVisorMat = new StandardMaterial({
+      color: new Color(0.015, 0.018, 0.025),
+      metallic: 0.35,
+      roughness: 0.06,
+      envMap: this.scene.prefilterMap,
+    });
+    const trooperGearMat = new StandardMaterial({
+      color: new Color(0.11, 0.12, 0.14),
+      metallic: 0.78,
       roughness: 0.36,
+      envMap: this.scene.prefilterMap,
+    });
+    const commanderArmorMat = new StandardMaterial({
+      color: new Color(0.76, 0.8, 0.86),
+      metallic: 1.0,
+      roughness: 0.055,
+      envMap: this.scene.prefilterMap,
+    });
+    const commanderGearMat = new StandardMaterial({
+      color: new Color(0.64, 0.68, 0.74),
+      metallic: 0.96,
+      roughness: 0.14,
+      envMap: this.scene.prefilterMap,
+    });
+    const commanderCapeMat = new StandardMaterial({
+      color: new Color(0.025, 0.028, 0.036),
+      metallic: 0.03,
+      roughness: 0.82,
+      envMap: this.scene.prefilterMap,
+    });
+    const commanderCapeTrimMat = new StandardMaterial({
+      color: new Color(0.54, 0.048, 0.055),
+      metallic: 0.05,
+      roughness: 0.76,
       envMap: this.scene.prefilterMap,
     });
     const shuttleMat = new StandardMaterial({
@@ -439,25 +481,25 @@ export class Showcase extends AbstractShowcase {
       roughness: 0.06,
       envMap: this.scene.prefilterMap,
     });
-    const tieHullMat = new StandardMaterial({
+    const hexWingHullMat = new StandardMaterial({
       color: new Color(0.58, 0.62, 0.68),
       metallic: 0.42,
       roughness: 0.42,
       envMap: this.scene.prefilterMap,
     });
-    const tieSolarMat = new StandardMaterial({
+    const hexWingSolarMat = new StandardMaterial({
       color: new Color(0.06, 0.07, 0.09),
       metallic: 0.18,
       roughness: 0.26,
       envMap: this.scene.prefilterMap,
     });
-    const tieTrimMat = new StandardMaterial({
+    const hexWingTrimMat = new StandardMaterial({
       color: new Color(0.24, 0.27, 0.31),
       metallic: 0.55,
       roughness: 0.38,
       envMap: this.scene.prefilterMap,
     });
-    const tieCockpitMat = new StandardMaterial({
+    const hexWingCockpitMat = new StandardMaterial({
       color: new Color(0.02, 0.025, 0.035),
       metallic: 0.15,
       roughness: 0.07,
@@ -468,7 +510,7 @@ export class Showcase extends AbstractShowcase {
     const hangarMat = createEmissiveAccentMaterial(new Color(1.0, 0.16, 0.08), 3.4);
     const beaconMat = createEmissiveAccentMaterial(new Color(0.45, 0.82, 1.0), 2.8);
     const ionMat = createEmissiveAccentMaterial(new Color(0.45, 0.85, 1.0), 3.6);
-    const tieEngineMat = createEmissiveAccentMaterial(new Color(1.0, 0.22, 0.12), 2.8);
+    const hexWingEngineMat = createEmissiveAccentMaterial(new Color(1.0, 0.22, 0.12), 2.8);
 
     this._rockMaterial = rockMat;
 
@@ -479,15 +521,15 @@ export class Showcase extends AbstractShowcase {
       turretRoot,
       shuttleRoot,
       flightShuttleRoot,
-      tieRoot,
+      hexWingRoot,
       deckPropsRoot,
     ] = await Promise.all([
       loader.load("/assets/showcases/53/models/fortress.glb"),
       loader.load("/assets/showcases/53/models/landing_pad.glb"),
       loader.load("/assets/showcases/53/models/turbolaser.glb"),
-      loader.load("/assets/showcases/53/models/imperial_shuttle.glb"),
-      loader.load("/assets/showcases/53/models/imperial_shuttle_flight.glb"),
-      loader.load("/assets/showcases/53/models/tie_fighter.glb"),
+      loader.load("/assets/showcases/53/models/tri_wing_shuttle.glb"),
+      loader.load("/assets/showcases/53/models/tri_wing_shuttle_flight.glb"),
+      loader.load("/assets/showcases/53/models/hex_wing_fighter.glb"),
       loader.load("/assets/showcases/53/models/deck_props.glb"),
     ]);
 
@@ -520,18 +562,25 @@ export class Showcase extends AbstractShowcase {
       turretRoot,
       shuttleRoot,
       flightShuttleRoot,
-      tieRoot,
+      hexWingRoot,
       deckPropsRoot,
       {
         trimMat,
-        trooperMat,
+        trooperArmorMat,
+        trooperUnderMat,
+        trooperVisorMat,
+        trooperGearMat,
+        commanderArmorMat,
+        commanderGearMat,
+        commanderCapeMat,
+        commanderCapeTrimMat,
         shuttleMat,
         shuttleVisorMat,
-        tieHullMat,
-        tieSolarMat,
-        tieTrimMat,
-        tieCockpitMat,
-        tieEngineMat,
+        hexWingHullMat,
+        hexWingSolarMat,
+        hexWingTrimMat,
+        hexWingCockpitMat,
+        hexWingEngineMat,
         beaconMat,
         ionMat,
       },
@@ -976,18 +1025,25 @@ export class Showcase extends AbstractShowcase {
     turretRoot: Object3D,
     shuttleRoot: Object3D,
     flightShuttleRoot: Object3D,
-    tieRoot: Object3D,
+    hexWingRoot: Object3D,
     deckPropsRoot: Object3D,
     mats: {
       trimMat: AbstractMaterial;
-      trooperMat: AbstractMaterial;
+      trooperArmorMat: AbstractMaterial;
+      trooperUnderMat: AbstractMaterial;
+      trooperVisorMat: AbstractMaterial;
+      trooperGearMat: AbstractMaterial;
+      commanderArmorMat: AbstractMaterial;
+      commanderGearMat: AbstractMaterial;
+      commanderCapeMat: AbstractMaterial;
+      commanderCapeTrimMat: AbstractMaterial;
       shuttleMat: AbstractMaterial;
       shuttleVisorMat: AbstractMaterial;
-      tieHullMat: AbstractMaterial;
-      tieSolarMat: AbstractMaterial;
-      tieTrimMat: AbstractMaterial;
-      tieCockpitMat: AbstractMaterial;
-      tieEngineMat: AbstractMaterial;
+      hexWingHullMat: AbstractMaterial;
+      hexWingSolarMat: AbstractMaterial;
+      hexWingTrimMat: AbstractMaterial;
+      hexWingCockpitMat: AbstractMaterial;
+      hexWingEngineMat: AbstractMaterial;
       beaconMat: AbstractMaterial;
       ionMat: AbstractMaterial;
     },
@@ -1009,19 +1065,37 @@ export class Showcase extends AbstractShowcase {
       ShuttleCockpit: mats.shuttleVisorMat,
       ShuttleEngines: mats.ionMat,
     });
-    const tieParts = this._extractParts(tieRoot, {
-      TieHull: mats.tieHullMat,
-      TieSolar: mats.tieSolarMat,
-      TieDarkTrim: mats.tieTrimMat,
-      TieCockpit: mats.tieCockpitMat,
-      TieEngines: mats.tieEngineMat,
+    const hexWingParts = this._extractParts(hexWingRoot, {
+      HexWingHull: mats.hexWingHullMat,
+      HexWingSolar: mats.hexWingSolarMat,
+      HexWingDarkTrim: mats.hexWingTrimMat,
+      HexWingCockpit: mats.hexWingCockpitMat,
+      HexWingEngines: mats.hexWingEngineMat,
     });
     const allDeckParts = this._extractParts(deckPropsRoot, {
-      SpaceTrooper: mats.trooperMat,
+      SpaceTrooperArmor: mats.trooperArmorMat,
+      SpaceTrooperUnder: mats.trooperUnderMat,
+      SpaceTrooperVisor: mats.trooperVisorMat,
+      SpaceTrooperGear: mats.trooperGearMat,
+      CommanderCape: mats.commanderCapeMat,
+      CommanderCapeTrim: mats.commanderCapeTrimMat,
       CargoCrate: mats.trimMat,
       FuelDrumCluster: mats.trimMat,
     });
-    const trooperParts = allDeckParts.filter((p) => p.name === "SpaceTrooper");
+    const trooperParts = allDeckParts.filter((p) => p.name.startsWith("SpaceTrooper"));
+    const commanderMaterialOverrides: Record<string, AbstractMaterial> = {
+      SpaceTrooperArmor: mats.commanderArmorMat,
+      SpaceTrooperGear: mats.commanderGearMat,
+      CommanderCape: mats.commanderCapeMat,
+      CommanderCapeTrim: mats.commanderCapeTrimMat,
+    };
+    const commanderParts = allDeckParts
+      .filter((p) => p.name.startsWith("SpaceTrooper") || p.name.startsWith("CommanderCape"))
+      .map((p) => ({
+        ...p,
+        name: p.name.replace("SpaceTrooper", "ChromeCommander"),
+        material: commanderMaterialOverrides[p.name] ?? p.material,
+      }));
     const crateParts = allDeckParts.filter((p) => p.name === "CargoCrate");
     const drumParts = allDeckParts.filter((p) => p.name === "FuelDrumCluster");
 
@@ -1084,21 +1158,21 @@ export class Showcase extends AbstractShowcase {
       true,
     );
 
-    // 16 instanced 1:1 TIE/ln Fighters suspended beneath the exact ceiling clamp pylons in fortress.glb
-    const tiePlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [];
+    // 16 instanced 1:1 Hex-Wing Fighters suspended beneath the exact ceiling clamp pylons in fortress.glb
+    const hexWingPlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [];
     for (const sx of [-1.0, 1.0]) {
       for (const tz of [-46.0, -30.0, -14.0, 44.0]) {
-        tiePlacements.push({ x: sx * 72.0, y: 133.2, z: tz, yaw: Math.PI });
+        hexWingPlacements.push({ x: sx * 72.0, y: 133.2, z: tz, yaw: Math.PI });
       }
       for (const tz of [-38.0, -22.0, 42.0]) {
-        tiePlacements.push({ x: sx * 58.0, y: 133.2, z: tz, yaw: Math.PI });
+        hexWingPlacements.push({ x: sx * 58.0, y: 133.2, z: tz, yaw: Math.PI });
       }
     }
-    tiePlacements.push(
+    hexWingPlacements.push(
       { x: -26.0, y: 133.2, z: 70.0, yaw: Math.PI },
       { x: 26.0, y: 133.2, z: 70.0, yaw: Math.PI },
     );
-    this._instantiateParts(tieParts, tiePlacements, 1.0, true);
+    this._instantiateParts(hexWingParts, hexWingPlacements, 1.0, true);
 
     // 1:1 Human-Scale Space Trooper honor guard & blast-door sentries on FlightDeck (y = 116.0 m)
     const trooperPlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [];
@@ -1124,6 +1198,14 @@ export class Showcase extends AbstractShowcase {
       { x: -26.2, y: 116.0, z: 50.0, yaw: 0.0 },
     );
     this._instantiateParts(trooperParts, trooperPlacements, 1.0, true);
+
+    // Chrome Commander (1.95 m tall, mirror chrome armor + red-trimmed asymmetric cape) leading the honor guard
+    this._instantiateParts(
+      commanderParts,
+      [{ x: 72.5, y: 116.0, z: 26.8, yaw: -2.35 }],
+      1.07,
+      true,
+    );
 
     const cratePlacements: Array<{ x: number; y: number; z: number; yaw: number }> = [
       { x: 56.0, y: 116.0, z: -34.0, yaw: 0.15 },

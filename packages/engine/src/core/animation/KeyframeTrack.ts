@@ -1,3 +1,4 @@
+import type { Object3D } from "../Object3D.js";
 import { Vector3D } from "../../math/Vector3D.js";
 import { Quaternion } from "../../math/Quaternion.js";
 
@@ -13,6 +14,7 @@ export class KeyframeTrack {
   public times: Float32Array;
   public values: Float32Array;
   public interpolation: InterpolationType;
+  public targetNode: Object3D | undefined;
 
   private _tempQuatA: Quaternion = new Quaternion();
   private _tempQuatB: Quaternion = new Quaternion();
@@ -27,12 +29,14 @@ export class KeyframeTrack {
     times: Float32Array,
     values: Float32Array,
     interpolation: InterpolationType = "LINEAR",
+    targetNode?: Object3D,
   ) {
     this.targetName = targetName;
     this.property = property;
     this.times = times;
     this.values = values;
     this.interpolation = interpolation;
+    this.targetNode = targetNode;
   }
 
   /**
@@ -45,6 +49,9 @@ export class KeyframeTrack {
     if (this._segment.alpha === null) {
       this._readQuaternion(this._segment.i0, this._tempQuatA);
       return this._tempQuatA;
+    }
+    if (this.interpolation === "CUBICSPLINE") {
+      return this._sampleCubicSplineQuaternion(this._segment.i0, this._segment.i1, this._segment.alpha);
     }
     this._readQuaternion(this._segment.i0, this._tempQuatA);
     this._readQuaternion(this._segment.i1, this._tempQuatB);
@@ -62,6 +69,9 @@ export class KeyframeTrack {
     if (this._segment.alpha === null) {
       this._readVector(this._segment.i0, this._tempVecA);
       return this._tempVecA;
+    }
+    if (this.interpolation === "CUBICSPLINE") {
+      return this._sampleCubicSplineVector(this._segment.i0, this._segment.i1, this._segment.alpha);
     }
     this._readVector(this._segment.i0, this._tempVecA);
     this._readVector(this._segment.i1, this._tempVecB);
@@ -144,7 +154,7 @@ export class KeyframeTrack {
 
   private _readQuaternion(index: number, out: Quaternion): void {
     const stride = 4;
-    const offset = index * stride;
+    const offset = this.interpolation === "CUBICSPLINE" ? (index * 3 + 1) * stride : index * stride;
     if (offset + stride > this.values.length) return;
     out.set(
       this.values[offset + 0]!,
@@ -156,8 +166,96 @@ export class KeyframeTrack {
 
   private _readVector(index: number, out: Vector3D): void {
     const stride = 3;
-    const offset = index * stride;
+    const offset = this.interpolation === "CUBICSPLINE" ? (index * 3 + 1) * stride : index * stride;
     if (offset + stride > this.values.length) return;
     out.set(this.values[offset + 0]!, this.values[offset + 1]!, this.values[offset + 2]!);
+  }
+
+  private _sampleCubicSplineVector(i0: number, i1: number, s: number): Vector3D {
+    const stride = 3;
+    const v0Offset = (i0 * 3 + 1) * stride;
+    const b0Offset = (i0 * 3 + 2) * stride;
+    const a1Offset = (i1 * 3 + 0) * stride;
+    const v1Offset = (i1 * 3 + 1) * stride;
+    const values = this.values;
+    if (v1Offset + stride > values.length || b0Offset + stride > values.length) {
+      this._readVector(i0, this._tempVecA);
+      return this._tempVecA;
+    }
+
+    const dt = this.times[i1]! - this.times[i0]!;
+    const s2 = s * s;
+    const s3 = s2 * s;
+    const c0 = 2 * s3 - 3 * s2 + 1;
+    const c1 = dt * (s3 - 2 * s2 + s);
+    const c2 = -2 * s3 + 3 * s2;
+    const c3 = dt * (s3 - s2);
+
+    this._tempVecA.set(
+      c0 * values[v0Offset + 0]! +
+        c1 * values[b0Offset + 0]! +
+        c2 * values[v1Offset + 0]! +
+        c3 * values[a1Offset + 0]!,
+      c0 * values[v0Offset + 1]! +
+        c1 * values[b0Offset + 1]! +
+        c2 * values[v1Offset + 1]! +
+        c3 * values[a1Offset + 1]!,
+      c0 * values[v0Offset + 2]! +
+        c1 * values[b0Offset + 2]! +
+        c2 * values[v1Offset + 2]! +
+        c3 * values[a1Offset + 2]!,
+    );
+    return this._tempVecA;
+  }
+
+  private _sampleCubicSplineQuaternion(i0: number, i1: number, s: number): Quaternion {
+    const stride = 4;
+    const v0Offset = (i0 * 3 + 1) * stride;
+    const b0Offset = (i0 * 3 + 2) * stride;
+    const a1Offset = (i1 * 3 + 0) * stride;
+    const v1Offset = (i1 * 3 + 1) * stride;
+    const values = this.values;
+    if (v1Offset + stride > values.length || b0Offset + stride > values.length) {
+      this._readQuaternion(i0, this._tempQuatA);
+      return this._tempQuatA;
+    }
+
+    const dt = this.times[i1]! - this.times[i0]!;
+    const s2 = s * s;
+    const s3 = s2 * s;
+    const c0 = 2 * s3 - 3 * s2 + 1;
+    const c1 = dt * (s3 - 2 * s2 + s);
+    const c2 = -2 * s3 + 3 * s2;
+    const c3 = dt * (s3 - s2);
+
+    const x =
+      c0 * values[v0Offset + 0]! +
+      c1 * values[b0Offset + 0]! +
+      c2 * values[v1Offset + 0]! +
+      c3 * values[a1Offset + 0]!;
+    const y =
+      c0 * values[v0Offset + 1]! +
+      c1 * values[b0Offset + 1]! +
+      c2 * values[v1Offset + 1]! +
+      c3 * values[a1Offset + 1]!;
+    const z =
+      c0 * values[v0Offset + 2]! +
+      c1 * values[b0Offset + 2]! +
+      c2 * values[v1Offset + 2]! +
+      c3 * values[a1Offset + 2]!;
+    const w =
+      c0 * values[v0Offset + 3]! +
+      c1 * values[b0Offset + 3]! +
+      c2 * values[v1Offset + 3]! +
+      c3 * values[a1Offset + 3]!;
+
+    const lenSq = x * x + y * y + z * z + w * w;
+    if (lenSq > 0) {
+      const invLen = 1 / Math.sqrt(lenSq);
+      this._tempQuatA.set(x * invLen, y * invLen, z * invLen, w * invLen);
+    } else {
+      this._tempQuatA.set(0, 0, 0, 1);
+    }
+    return this._tempQuatA;
   }
 }

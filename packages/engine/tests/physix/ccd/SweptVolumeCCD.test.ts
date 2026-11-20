@@ -243,6 +243,23 @@ describe("SweptVolumeCCD & Continuous Collision Detection Expansion", () => {
       const t = Collision.sweepRayVolume(new Vector3D(0, 0, 0), new Vector3D(20, 0, 0), sph);
       expect(t).toBeCloseTo(9 / 20, 9);
     });
+
+    it("15-axis Dynamic-SAT does not report phantom TOI=0 hit in the empty corner of a rotated OBB's AABB (S4)", () => {
+      // Static OBB at origin with half-extents (4, 0.5, 1) rotated 45 deg in XY.
+      // Its world AABB spans [-3.18, 3.18] in X and Y, but point (-2, 2, 0) is well outside the rotated slab
+      // along its local Y normal (localYproj = |-2 * -cos45 + 2 * cos45| = 2.828 > 0.5 + 0.25).
+      const targetObb = new OBB(new Vector3D(0, 0, 0), new Vector3D(4, 0.5, 1));
+      const c = Math.SQRT1_2;
+      targetObb.axes[0].set(c, c, 0);
+      targetObb.axes[1].set(-c, c, 0);
+      targetObb.axes[2].set(0, 0, 1);
+
+      const moverObb = new OBB(new Vector3D(-2, 2, 0), new Vector3D(0.25, 0.25, 0.25));
+      // Move parallel to the rotated slab (+X/+Y diagonal) without touching it
+      const delta = new Vector3D(1, 1, 0);
+      expect(Collision.sweepObbObb(moverObb.center, delta, moverObb, targetObb)).toBe(-1);
+      expect(Collision.sweepBoxObb(moverObb.center, delta, moverObb.halfExtents, targetObb)).toBe(-1);
+    });
   });
 
   describe("SweptVolumeCCD resolver in physics step", () => {

@@ -35,6 +35,7 @@ describe("GltfAnimationParser", () => {
     expect(clips[0]!.name).toBe("Run");
     expect(clips[0]!.tracks).toHaveLength(1);
     expect(clips[0]!.tracks[0]!.targetName).toBe("HeroNode");
+    expect(clips[0]!.tracks[0]!.targetNode).toBe(targetObj);
     expect(clips[0]!.tracks[0]!.property).toBe("translation");
   });
 });

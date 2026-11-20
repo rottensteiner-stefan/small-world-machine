@@ -121,7 +121,10 @@ fn fbm3D(p: vec3f) -> f32 {
 // do not include that chunk. Keep both in sync so the fog ambient uses the exact same decode as
 // the surface lighting path (COMP-02).
 fn sRGBToLinear(color: vec3f) -> vec3f {
-    return pow(color, vec3f(2.2));
+    let c = max(color, vec3f(0.0));
+    let lo = c / 12.92;
+    let hi = pow((c + vec3f(0.055)) / 1.055, vec3f(2.4));
+    return select(hi, lo, c <= vec3f(0.04045));
 }
 
 // Shadow term of spot light `slot` (< 4, the engine only has 4 spot shadow maps) at a point in the air:
@@ -250,10 +253,10 @@ fn injectFog(
     // Analytic phase -- height falloff above the fog baseline (like an exponential height fog layer).
     let heightDelta = worldPos.y - froxel.params.y;
     let heightFactor = exp(-froxel.params.z * max(heightDelta, 0.0));
-    let dist = length(worldPos - camPos);
+    let viewZ = sliceCenterDepth(cell.z + froxel.jitter.z * 0.15, froxel.nearFar.x, froxel.nearFar.y, froxel.nearFar.z);
     var extinction = froxel.params.x * heightFactor * maskCell.r;
     // Smooth range fade over the last third of maxDistance (no pop edge); zero beyond it.
-    let rangeFade = 1.0 - smoothstep(froxel.params.w * 0.66, froxel.params.w, dist);
+    let rangeFade = 1.0 - smoothstep(froxel.params.w * 0.66, froxel.params.w, viewZ);
 
     // Evaluate localized FogVolume instances at the canonical (unjittered) froxel centre so
     // analytical SDF boundaries never strobe across coarse Z-slices. Positive and negative
@@ -366,12 +369,11 @@ fn injectFog(
             // Linear cone ramp like the surface shader (not smoothstep), so the beam edge matches the lit cone.
             let cone = clamp((theta - light.params.x) / max(light.params.y - light.params.x, 0.0001), 0.0, 1.0);
             let phase = hgPhase(dot(ldir, viewDir), froxel.phase.x);
-            // DECISION: spots keep a regularised inverse-square (1 / (1 + d^2)) that the surface shader
-            // (pow(1 - d/maxDist, decay) only) does not have: light travelling through a medium is
-            // physically attenuated with distance, and without it a spot beam would not fade along its length.
-            var atten = 1.0 / (1.0 + lightDist * lightDist);
-            if (maxDist > 0.0) {
-                atten *= pow(clamp(1.0 - lightDist / maxDist, 0.0, 1.0), max(light.params.w, 1.0));
+            let ratio = select(0.0, lightDist / max(maxDist, 0.001), maxDist > 0.0);
+            let window = clamp(1.0 - ratio * ratio * ratio * ratio, 0.0, 1.0);
+            var atten = (window * window) / max(lightDist * lightDist, 0.01);
+            if (light.params.w <= 0.0) {
+                atten = clamp(1.0 - ratio, 0.0, 1.0);
             }
             let fogScale = froxel.spotFogScale[lightIdx / 4u][lightIdx % 4u];
             var shadow = 1.0;

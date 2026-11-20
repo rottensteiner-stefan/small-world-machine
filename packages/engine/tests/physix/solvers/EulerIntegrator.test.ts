@@ -76,4 +76,43 @@ describe("EulerIntegrator", () => {
     expect(obj.rigidBody.angularVelocity.y).toBeCloseTo(0.98, 6);
     expect(obj.rotation.y).toBeGreaterThan(0);
   });
+
+  it("transforms world-space torque through rotated world inverse inertia tensor R * I^-1 * R^T (B5)", () => {
+    const obj = new Object3D("AnisotropicRod");
+    obj.rigidBody = new RigidBody(1.0);
+    obj.rigidBody.angularDamping = 1.0;
+    // Local X has invInertia = 2, Local Y has invInertia = 10
+    obj.rigidBody.inverseInertiaTensor.set(2, 10, 2);
+    // Rotate 90 degrees around Z so Local Y aligns with World -X (and Local X aligns with World +Y)
+    obj.setRotation(0, 0, Math.PI / 2);
+    // Apply world torque along World X (which is aligned with Local -Y -> invInertia = 10)
+    obj.rigidBody.torque.set(5, 0, 0);
+
+    EulerIntegrator.integrateAngular(obj, 1.0, 0.1);
+
+    // World X angular velocity must use Local Y inverse inertia (10): 5 * 10 * 0.1 = 5.0
+    expect(obj.rigidBody.angularVelocity.x).toBeCloseTo(5.0, 5);
+  });
+
+  it("applies timestep-independent damping identically across 60 Hz and 120 Hz substeps (S3)", () => {
+    const obj60 = new Object3D("Body60");
+    obj60.rigidBody = new RigidBody(1.0);
+    obj60.rigidBody.linearDamping = 0.9;
+    obj60.rigidBody.velocity.set(10, 0, 0);
+
+    const obj120 = new Object3D("Body120");
+    obj120.rigidBody = new RigidBody(1.0);
+    obj120.rigidBody.linearDamping = 0.9;
+    obj120.rigidBody.velocity.set(10, 0, 0);
+
+    const zeroG = new Vector3D(0, 0, 0);
+    const dp = new Vector3D();
+    const refDt = 1 / 60;
+
+    EulerIntegrator.integrateVelocity(obj60, zeroG, 1.0, 1 / 60, dp, refDt);
+    EulerIntegrator.integrateVelocity(obj120, zeroG, 1.0, 1 / 120, dp, refDt);
+    EulerIntegrator.integrateVelocity(obj120, zeroG, 1.0, 1 / 120, dp, refDt);
+
+    expect(obj120.rigidBody.velocity.x).toBeCloseTo(obj60.rigidBody.velocity.x, 6);
+  });
 });

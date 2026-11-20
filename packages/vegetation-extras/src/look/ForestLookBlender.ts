@@ -10,6 +10,10 @@
 import type { PostProcessingGroup } from "@small-world-machine/engine";
 import { applyFoliageLook, type FoliageLook } from "./FoliageLook.js";
 
+function mix(p: number, q: number, w: number): number {
+  return p + (q - p) * w;
+}
+
 export class ForestLookBlender {
   /** Current eased weight (0 = open look, 1 = under-canopy look). */
   public weight = 0;
@@ -64,16 +68,15 @@ export class ForestLookBlender {
     const b = this.under;
     const w = this.weight;
     const m = this._mix;
-    const mix = (p: number, q: number): number => p + (q - p) * w;
-    m.exposure = mix(a.exposure, b.exposure);
-    m.contrast = mix(a.contrast, b.contrast);
-    m.saturation = mix(a.saturation, b.saturation);
-    m.temperature = mix(a.temperature, b.temperature);
-    m.tint = mix(a.tint, b.tint);
+    m.exposure = mix(a.exposure, b.exposure, w);
+    m.contrast = mix(a.contrast, b.contrast, w);
+    m.saturation = mix(a.saturation, b.saturation, w);
+    m.temperature = mix(a.temperature, b.temperature, w);
+    m.tint = mix(a.tint, b.tint, w);
     for (let i = 0; i < 3; i++) {
-      m.lift[i] = mix(a.lift[i]!, b.lift[i]!);
-      m.gamma[i] = mix(a.gamma[i]!, b.gamma[i]!);
-      m.gain[i] = mix(a.gain[i]!, b.gain[i]!);
+      m.lift[i] = mix(a.lift[i]!, b.lift[i]!, w);
+      m.gamma[i] = mix(a.gamma[i]!, b.gamma[i]!, w);
+      m.gain[i] = mix(a.gain[i]!, b.gain[i]!, w);
     }
     applyFoliageLook(postProcessing, m);
     return true;

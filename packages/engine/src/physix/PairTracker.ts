@@ -11,6 +11,14 @@ export interface ContactPair {
   colliding: boolean;
   normal: Vector3D;
   depth: number;
+  /** World-space contact point cached during the pre-PGS narrow-phase pass. */
+  contactPt?: Vector3D;
+  /** World-space lever arm from body A center of mass to contactPt. */
+  rA?: Vector3D;
+  /** World-space lever arm from body B center of mass to contactPt. */
+  rB?: Vector3D;
+  /** Cached normal effective inverse mass (`invMassA + invMassB + kRotN`). */
+  effInvMassN?: number;
   /** Accumulated normal impulse magnitude over this step's solver iterations (always >= 0). */
   accNormalImpulse: number;
   /** Accumulated friction impulse (world vector, length <= mu * accNormalImpulse). */
@@ -118,6 +126,10 @@ export class PairTracker {
       pair.colliding = false;
       pair.normal.set(0, 0, 0);
       pair.depth = 0;
+      (pair.contactPt ??= new Vector3D()).set(0, 0, 0);
+      (pair.rA ??= new Vector3D()).set(0, 0, 0);
+      (pair.rB ??= new Vector3D()).set(0, 0, 0);
+      pair.effInvMassN = 0;
       pair.accNormalImpulse = 0;
       pair.accFriction.set(0, 0, 0);
       pair.bounceTarget = 0;
@@ -131,6 +143,10 @@ export class PairTracker {
         colliding: false,
         normal: new Vector3D(),
         depth: 0,
+        contactPt: new Vector3D(),
+        rA: new Vector3D(),
+        rB: new Vector3D(),
+        effInvMassN: 0,
         accNormalImpulse: 0,
         accFriction: new Vector3D(),
         bounceTarget: 0,

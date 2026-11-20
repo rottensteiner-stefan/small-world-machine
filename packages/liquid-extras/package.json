@@ -1,5 +1,5 @@
 {
-    "name": "@small-world-machine/liquid-extras",
+  "name": "@small-world-machine/liquid-extras",
   "version": "0.1.0",
   "description": "Specialized art-direction packs and hook-based liquid shader extensions for Small World Machine.",
   "type": "module",

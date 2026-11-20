@@ -141,6 +141,15 @@ export class RigidBodyMath {
    * isotropic inverse inertia this reduces to the legacy per-axis scaling, keeping those paths
    * bit-identical to the original solver.
    */
+  public applyInvInertiaWorld(
+    rb: RigidBody,
+    rotation: Vector3D,
+    x: Vector3D,
+    out: Vector3D,
+  ): void {
+    this._applyInvInertiaWorld(rb, rotation, x, out);
+  }
+
   private _applyInvInertiaWorld(
     rb: RigidBody,
     rotation: Vector3D,

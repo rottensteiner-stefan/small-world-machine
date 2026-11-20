@@ -1,15 +1,22 @@
 import type { Object3D } from "../../core/Object3D.js";
 import type { Vector3D } from "../../math/index.js";
-import { MathUtils, MathPool } from "../../math/index.js";
+import { MathPool } from "../../math/index.js";
+import { sharedRigidBodyMath } from "../RigidBodyMath.js";
 
 /**
- * Shortest-path angular delta from `from` to `to` (radians, wrapped into (-PI, PI]).
+ * Reference physics tick (60 Hz) used to scale legacy per-step damping factors `< 1` when
+ * `referenceDt` is explicitly supplied, while keeping raw direct calls backwards-compatible.
  */
-function shortestAngleDelta(from: number, to: number): number {
-  let delta = (to - from) % MathUtils.TWO_PI;
-  if (delta > MathUtils.PI) delta -= MathUtils.TWO_PI;
-  else if (delta < -MathUtils.PI) delta += MathUtils.TWO_PI;
-  return delta;
+const DEFAULT_DAMPING_REF_DT = 1 / 60;
+
+function computeStepDamping(dampingFactor: number, dt: number, referenceDt?: number): number {
+  if (dampingFactor >= 1 || dampingFactor <= 0) {
+    return dampingFactor;
+  }
+  if (referenceDt === undefined || Math.abs(dt - referenceDt) <= 1e-9 || referenceDt <= 0) {
+    return dampingFactor;
+  }
+  return Math.pow(dampingFactor, dt / referenceDt);
 }
 
 /**
@@ -23,6 +30,7 @@ export class EulerIntegrator {
    * @param fluidLinearDrag Damping multiplier from fluid submersion (1.0 = no fluid).
    * @param dt Substep delta time in seconds.
    * @param outDeltaP Output vector receiving the computed position displacement (v * dt).
+   * @param referenceDt Optional reference timestep (defaults to `1 / 60` when scaling across substeps) for timestep-independent damping.
    */
   public static integrateVelocity(
     obj: Object3D,
@@ -30,6 +38,7 @@ export class EulerIntegrator {
     fluidLinearDrag: number,
     dt: number,
     outDeltaP: Vector3D,
+    referenceDt?: number,
   ): void {
     const rb = obj.rigidBody!;
 
@@ -44,7 +53,8 @@ export class EulerIntegrator {
     rb.velocity.z += rb.acceleration.z * dt;
 
     // Apply linear and fluid damping
-    const damping = rb.linearDamping * fluidLinearDrag;
+    const rawDamping = rb.linearDamping * fluidLinearDrag;
+    const damping = computeStepDamping(rawDamping, dt, referenceDt);
     rb.velocity.x *= damping;
     rb.velocity.y *= damping;
     rb.velocity.z *= damping;
@@ -71,14 +81,27 @@ export class EulerIntegrator {
    * @param obj Target Object3D.
    * @param fluidAngularDrag Damping multiplier from fluid submersion (1.0 = no fluid).
    * @param dt Substep delta time in seconds.
+   * @param referenceDt Optional reference timestep for timestep-independent damping.
    */
-  public static integrateAngular(obj: Object3D, fluidAngularDrag: number, dt: number): void {
+  public static integrateAngular(
+    obj: Object3D,
+    fluidAngularDrag: number,
+    dt: number,
+    referenceDt?: number,
+  ): void {
     const rb = obj.rigidBody!;
 
-    // angularAcceleration = torque / inertia (using 3D principal moments of inertia)
-    rb.angularAcceleration.x = rb.torque.x * rb.inverseInertiaTensor.x;
-    rb.angularAcceleration.y = rb.torque.y * rb.inverseInertiaTensor.y;
-    rb.angularAcceleration.z = rb.torque.z * rb.inverseInertiaTensor.z;
+    if (obj.quaternion) {
+      obj.quaternion.toEuler(obj.rotation);
+    }
+
+    // angularAcceleration = R * I^-1 * R^T * torque (world-space inverse inertia tensor)
+    sharedRigidBodyMath.applyInvInertiaWorld(
+      rb,
+      obj.rotation,
+      rb.torque,
+      rb.angularAcceleration,
+    );
 
     // w = w + alpha * dt
     rb.angularVelocity.x += rb.angularAcceleration.x * dt;
@@ -86,7 +109,8 @@ export class EulerIntegrator {
     rb.angularVelocity.z += rb.angularAcceleration.z * dt;
 
     // Apply angular damping
-    const damping = rb.angularDamping * fluidAngularDrag;
+    const rawDamping = rb.angularDamping * fluidAngularDrag;
+    const damping = computeStepDamping(rawDamping, dt, referenceDt);
     rb.angularVelocity.x *= damping;
     rb.angularVelocity.y *= damping;
     rb.angularVelocity.z *= damping;
@@ -104,7 +128,12 @@ export class EulerIntegrator {
       const deltaQ = MathPool.acquireQuaternion();
       const currentQ = MathPool.acquireQuaternion();
       deltaQ.set(wx * s, wy * s, wz * s, Math.cos(halfAngle));
-      currentQ.setFromEuler(obj.rotation).premultiply(deltaQ).normalize();
+      if (obj.quaternion) {
+        currentQ.copyFrom(obj.quaternion);
+      } else {
+        currentQ.setFromEuler(obj.rotation);
+      }
+      currentQ.premultiply(deltaQ).normalize();
 
       if (obj.quaternion) {
         obj.quaternion.copyFrom(currentQ);
@@ -114,6 +143,18 @@ export class EulerIntegrator {
       MathPool.releaseQuaternion(deltaQ);
       MathPool.releaseQuaternion(currentQ);
     }
+  }
+
+  /**
+   * Converts a 60 Hz damping factor to the effective multiplier for an arbitrary timestep `dt`
+   * so decay over wall-clock time remains invariant across `fixedTimeStep` configurations.
+   */
+  public static getTimestepIndependentDamping(
+    dampingAt60Hz: number,
+    dt: number,
+    referenceDt: number = DEFAULT_DAMPING_REF_DT,
+  ): number {
+    return computeStepDamping(dampingAt60Hz, dt, referenceDt);
   }
 
   /**
@@ -127,7 +168,7 @@ export class EulerIntegrator {
    * @param truePos Out: copy of `obj.position` (discrete true pose).
    * @param trueRot Out: copy of `obj.rotation` (discrete true pose).
    * @param blendPos Out: lerp(prevPosition, truePos, alpha) - the render pose.
-   * @param blendRot Out: shortest-path angular lerp of prevRotation toward trueRot.
+   * @param blendRot Out: quaternion slerp of prevRotation toward trueRot converted to Euler.
    */
   public static computeInterpolatedPose(
     obj: Object3D,
@@ -140,14 +181,24 @@ export class EulerIntegrator {
     const rb = obj.rigidBody!;
 
     truePos.copyFrom(obj.position);
-    trueRot.copyFrom(obj.rotation);
+    if (obj.quaternion) {
+      obj.quaternion.toEuler(trueRot);
+    } else {
+      trueRot.copyFrom(obj.rotation);
+    }
 
     blendPos.copyFrom(rb.prevPosition).lerp(truePos, alpha);
-    blendRot.set(
-      rb.prevRotation.x + shortestAngleDelta(rb.prevRotation.x, trueRot.x) * alpha,
-      rb.prevRotation.y + shortestAngleDelta(rb.prevRotation.y, trueRot.y) * alpha,
-      rb.prevRotation.z + shortestAngleDelta(rb.prevRotation.z, trueRot.z) * alpha,
-    );
+
+    const prevQ = MathPool.acquireQuaternion().setFromEuler(rb.prevRotation);
+    const currQ = MathPool.acquireQuaternion();
+    if (obj.quaternion) {
+      currQ.copyFrom(obj.quaternion);
+    } else {
+      currQ.setFromEuler(trueRot);
+    }
+    prevQ.slerp(currQ, alpha).toEuler(blendRot);
+    MathPool.releaseQuaternion(currQ);
+    MathPool.releaseQuaternion(prevQ);
   }
 
   /**
@@ -193,3 +244,4 @@ export class EulerIntegrator {
     }
   }
 }
+

@@ -101,6 +101,35 @@ describe("Object3D", () => {
       expect(forward.z).toBeCloseTo(0);
       expect(obj.quaternion.w).not.toBe(1); // Quaternion was actively updated from identity
     });
+
+    it("should orient correctly toward a world-space target when parented under a translated and rotated parent", () => {
+      const parent = new Object3D("parent");
+      parent.position.set(10, 0, 0);
+      parent.setRotation(0, Math.PI / 2, 0);
+
+      const child = new Object3D("child");
+      child.position.set(0, 0, 0);
+      parent.add(child);
+      parent.updateMatrixWorld();
+
+      const target = new Vector3D(10, 0, -5);
+      child.lookAt(target);
+      parent.updateMatrixWorld();
+
+      const forward = new Vector3D(0, 0, -1).transformDirection(child.worldMatrix);
+      expect(forward.x).toBeCloseTo(0, 5);
+      expect(forward.y).toBeCloseTo(0, 5);
+      expect(forward.z).toBeCloseTo(-1, 5);
+    });
+
+    it("should keep quaternion synchronized when setRotation is called", () => {
+      const obj = new Object3D();
+      obj.quaternion = new Quaternion();
+      obj.setRotation(0, Math.PI / 2, 0);
+
+      expect(obj.quaternion.y).toBeCloseTo(Math.sin(Math.PI / 4), 5);
+      expect(obj.quaternion.w).toBeCloseTo(Math.cos(Math.PI / 4), 5);
+    });
   });
 });
 

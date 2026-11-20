@@ -1,6 +1,6 @@
 # Architecture & Code Showcases
 
-Small World Machine has a modular design and favors composition over deep inheritance. Below is an overview of the key classes, interfaces, and parameters you'll work with day to day, along with concrete code examples to get started.
+Small World Machine has a modular design and favors composition over deep inheritance. Below is an overview of the key classes, interfaces, and parameters you'll work with day to day, along with concrete code examples to get started. Optional domain packages (`vfx-extras`, `liquid-extras`, `vegetation-extras`, `artistic-extras`, `geometry-extras`, `physics-extras`, `gltf-extensions`) are listed in the [Modular Ecosystem guide](./extensions.md).
 
 ::: tip API Reference
 For a complete list of _all_ classes, methods, and type declarations (including constructor parameters), open the auto-generated **[API Reference](/api/index.html)**.

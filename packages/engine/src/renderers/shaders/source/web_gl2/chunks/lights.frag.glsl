@@ -107,7 +107,10 @@ int computeClusterCellIndex(vec3 viewPos, vec3 worldPos, vec4 clusterDims, vec2 
     ivec3 dims = ivec3(clusterDims.xyz);
     int cellX = min(int(gl_FragCoord.x / tileSizePx.x), dims.x - 1);
     int cellY = min(int(gl_FragCoord.y / tileSizePx.y), dims.y - 1);
-    float viewDist = clamp(length(viewPos - worldPos), cameraNearFar.x, cameraNearFar.y);
+    vec3 vpR3 = vec3(u_vp[0][3], u_vp[1][3], u_vp[2][3]);
+    vec3 vpR2 = -vec3(u_vp[0][2], u_vp[1][2], u_vp[2][2]);
+    vec3 camFwd = dot(vpR3, vpR3) > 1e-8 ? vpR3 : (vpR2 / max(length(vpR2), 1e-6));
+    float viewDist = clamp(dot(worldPos - viewPos, camFwd), cameraNearFar.x, cameraNearFar.y);
     float logRatio = max(log(cameraNearFar.y / cameraNearFar.x), 1e-6);
     float sliceF = floor(log(viewDist / cameraNearFar.x) * clusterDims.z / logRatio);
     int cellZ = min(int(max(sliceF, 0.0)), dims.z - 1);
@@ -116,19 +119,34 @@ int computeClusterCellIndex(vec3 viewPos, vec3 worldPos, vec4 clusterDims, vec2 
 
 // Linear to sRGB
 vec3 linearToSRGB(vec3 color) {
-    return pow(color, vec3(1.0 / u_gamma));
+    vec3 c = max(color, vec3(0.0));
+    if (abs(u_gamma - 2.2) < 0.001) {
+        vec3 lo = c * 12.92;
+        vec3 hi = 1.055 * pow(c, vec3(1.0 / 2.4)) - vec3(0.055);
+        return mix(hi, lo, lessThanEqual(c, vec3(0.0031308)));
+    }
+    return pow(c, vec3(1.0 / u_gamma));
 }
 
-// sRGB to Linear for assets (textures, material colours, IBL, asset cubemaps): fixed 2.2, never the
-// output lane, which is 1.0 while post-processing encodes (ADR 0049).
+// Decode encoded asset colors with the IEC 61966-2-1 sRGB transfer curve, independent of the output
+// gamma lane (which is 1.0 while post-processing encodes; ADR 0049).
 vec3 sRGBToLinear(vec3 color) {
-    return pow(color, vec3(2.2));
+    vec3 c = max(color, vec3(0.0));
+    vec3 lo = c / 12.92;
+    vec3 hi = pow((c + vec3(0.055)) / 1.055, vec3(2.4));
+    return mix(hi, lo, lessThanEqual(c, vec3(0.04045)));
 }
 
 // Engine render targets the forward pass wrote through linearToSRGB (opaque capture, planar
 // reflection, reflection probes) decode with that same lane: sRGB without, linear with post-processing.
 vec3 targetToLinear(vec3 color) {
-    return pow(color, vec3(u_gamma));
+    vec3 c = max(color, vec3(0.0));
+    if (abs(u_gamma - 2.2) < 0.001) {
+        vec3 lo = c / 12.92;
+        vec3 hi = pow((c + vec3(0.055)) / 1.055, vec3(2.4));
+        return mix(hi, lo, lessThanEqual(c, vec3(0.04045)));
+    }
+    return pow(c, vec3(u_gamma));
 }
 
 // A display-referred sRGB colour (raw skybox/sprite/unlit output, fog colour) in the space the

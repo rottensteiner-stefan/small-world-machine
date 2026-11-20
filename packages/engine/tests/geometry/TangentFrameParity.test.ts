@@ -32,7 +32,7 @@ describe("Tangent frame parity: WGSL mirrors the GLSL fallback and orthonormaliz
 
   it("GLSL stages keep the canonical cross(N, up) fallback and Gram-Schmidt", () => {
     const gl2 = readFileSync(GL2_BASE, "utf8");
-    expect(gl2).toMatch(/tangent = cross\(v_normal, vec3\(0, 1, 0\)\)/);
+    expect(gl2).toMatch(/T = normalize\(cross\(v_normal, up\)\)/);
     expect(gl2).toMatch(/T - dot\(T, N_v\) \* N_v/);
 
     const gl1 = readFileSync(GL1_BASE, "utf8");
@@ -40,3 +40,4 @@ describe("Tangent frame parity: WGSL mirrors the GLSL fallback and orthonormaliz
     expect(gl1).toMatch(/T - dot\(T, N\) \* N/);
   });
 });
+

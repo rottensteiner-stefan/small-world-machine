@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # 0061: Auto exposure (eye adaptation) — GPU-metered, GPU-adapted, no readback

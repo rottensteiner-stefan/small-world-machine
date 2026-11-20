@@ -22,24 +22,23 @@ export class GltfMaterialParser {
   }
 
   /**
-   * Encodes a glTF-linear channel into the engine's sRGB-authored color convention.
-   * This is the inverse of the shader decode (`sRGBToLinear`/`pow(x, gamma)`), so a
-   * glTF-linear `baseColorFactor` is converted ONCE here and decoded exactly once in the
-   * fragment shader -- the historical double-decode (imported tints rendered too dark)
-   * is thereby removed. Matches the engine's pow-approximation exactly for round-trips.
+   * Encodes a glTF-linear channel into the engine's sRGB-authored color convention
+   * using the exact piecewise IEC 61966-2-1 sRGB transfer function.
    */
   public static linearToEngineSRGB(v: number): number {
-    return Math.pow(v, 1.0 / 2.2);
+    const c = Math.max(v, 0);
+    if (c === 1.0) return 1.0;
+    return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
   }
 
   /**
-   * Decodes an engine-sRGB color channel back into glTF-linear baseColorFactor. This is the
-   * exact inverse of {@link linearToEngineSRGB} (pow exponent 2.2), used by `WorldWriter` so
-   * its exported `baseColorFactor` is glTF-linear and round-trips through the loader's single
-   * encode back to the authored sRGB value. Alpha is never encoded and stays untouched.
+   * Decodes an engine-sRGB color channel back into glTF-linear space using the
+   * exact piecewise IEC 61966-2-1 inverse transfer function.
    */
   public static engineSRGBToLinear(v: number): number {
-    return Math.pow(v, 2.2);
+    const c = Math.max(v, 0);
+    if (c === 1.0) return 1.0;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
   }
 
   /**

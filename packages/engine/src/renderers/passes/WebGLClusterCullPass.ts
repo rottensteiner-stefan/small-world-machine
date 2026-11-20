@@ -46,12 +46,49 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
     sliceMax: 0,
   };
 
+  private _computeViewZ(
+    lx: number,
+    ly: number,
+    lz: number,
+    vp: Float32Array,
+    camPos: Vector3D,
+    vMat: Float32Array | undefined,
+    clipW: number,
+  ): number {
+    if (vMat) {
+      const dx = lx - camPos.x;
+      const dy = ly - camPos.y;
+      const dz = lz - camPos.z;
+      return -(dx * vMat[2]! + dy * vMat[6]! + dz * vMat[10]!);
+    }
+    const r3x = vp[3]!;
+    const r3y = vp[7]!;
+    const r3z = vp[11]!;
+    const r3LenSq = r3x * r3x + r3y * r3y + r3z * r3z;
+    if (r3LenSq > 1e-8) {
+      return clipW;
+    }
+    const r2x = -vp[2]!;
+    const r2y = -vp[6]!;
+    const r2z = -vp[10]!;
+    const r2Len = Math.hypot(r2x, r2y, r2z);
+    if (r2Len > 1e-8) {
+      const invLen = 1 / r2Len;
+      return (
+        (lx - camPos.x) * (r2x * invLen) +
+        (ly - camPos.y) * (r2y * invLen) +
+        (lz - camPos.z) * (r2z * invLen)
+      );
+    }
+    return clipW;
+  }
+
   public execute(
     renderer: AbstractWebGLRenderer,
     _scene: Scene,
     vp: Float32Array,
     camPos: Vector3D,
-    _vMat: Float32Array | undefined,
+    vMat: Float32Array | undefined,
     _renderList: RenderList,
     extractedLights: LightDataInterface,
     near: number = 0.1,
@@ -109,6 +146,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
         i,
         vp,
         camPos,
+        vMat,
         projScaleX,
         projScaleY,
         renderer,
@@ -127,6 +165,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
         i,
         vp,
         camPos,
+        vMat,
         projScaleX,
         projScaleY,
         renderer,
@@ -148,6 +187,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
     lightIndex: number,
     vp: Float32Array,
     camPos: Vector3D,
+    vMat: Float32Array | undefined,
     projScaleX: number,
     projScaleY: number,
     renderer: WebGL2Renderer,
@@ -160,19 +200,16 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
     const lx = worldMatrixData[12]!;
     const ly = worldMatrixData[13]!;
     const lz = worldMatrixData[14]!;
-    const dx = lx - camPos.x;
-    const dy = ly - camPos.y;
-    const dz = lz - camPos.z;
-    const viewDist = Math.max(Math.sqrt(dx * dx + dy * dy + dz * dz), 0.0001);
 
     const clipX = vp[0]! * lx + vp[4]! * ly + vp[8]! * lz + vp[12]!;
     const clipY = vp[1]! * lx + vp[5]! * ly + vp[9]! * lz + vp[13]!;
     const clipW = vp[3]! * lx + vp[7]! * ly + vp[11]! * lz + vp[15]!;
     const ndcX = clipW !== 0 ? clipX / clipW : 0;
     const ndcY = clipW !== 0 ? clipY / clipW : 0;
+    const viewZ = this._computeViewZ(lx, ly, lz, vp, camPos, vMat, clipW);
 
     const coverage = lightClusterCoverage(
-      viewDist,
+      viewZ,
       Math.max(radius, 0.001),
       ndcX,
       ndcY,
@@ -214,6 +251,7 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
     lightIndex: number,
     vp: Float32Array,
     camPos: Vector3D,
+    vMat: Float32Array | undefined,
     projScaleX: number,
     projScaleY: number,
     renderer: WebGL2Renderer,
@@ -226,19 +264,16 @@ export class WebGLClusterCullPass implements WebGLRenderPass {
     const lx = worldMatrixData[12]!;
     const ly = worldMatrixData[13]!;
     const lz = worldMatrixData[14]!;
-    const dx = lx - camPos.x;
-    const dy = ly - camPos.y;
-    const dz = lz - camPos.z;
-    const viewDist = Math.max(Math.sqrt(dx * dx + dy * dy + dz * dz), 0.0001);
 
     const clipX = vp[0]! * lx + vp[4]! * ly + vp[8]! * lz + vp[12]!;
     const clipY = vp[1]! * lx + vp[5]! * ly + vp[9]! * lz + vp[13]!;
     const clipW = vp[3]! * lx + vp[7]! * ly + vp[11]! * lz + vp[15]!;
     const ndcX = clipW !== 0 ? clipX / clipW : 0;
     const ndcY = clipW !== 0 ? clipY / clipW : 0;
+    const viewZ = this._computeViewZ(lx, ly, lz, vp, camPos, vMat, clipW);
 
     const coverage = lightClusterCoverage(
-      viewDist,
+      viewZ,
       Math.max(radius, 0.001),
       ndcX,
       ndcY,

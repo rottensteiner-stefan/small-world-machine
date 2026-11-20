@@ -43,4 +43,23 @@ describe("OBB Frustum Culling", () => {
     expect(cloned.center.y).toBeCloseTo(23);
     expect(cloned.center.z).toBeCloseTo(34);
   });
+
+  it("getAabb() computes exact world-space AABB for a 45-degree rotated OBB via Arvo projection", () => {
+    const obb = new OBB();
+    obb.center.set(1, 2, 3);
+    obb.halfExtents.set(2, 1, 1);
+    const c = Math.SQRT1_2;
+    obb.axes[0].set(c, c, 0);
+    obb.axes[1].set(-c, c, 0);
+    obb.axes[2].set(0, 0, 1);
+
+    const aabb = obb.getAabb();
+    const expectedXY = 2 * c + 1 * c;
+    expect(aabb.min.x).toBeCloseTo(1 - expectedXY, 6);
+    expect(aabb.max.x).toBeCloseTo(1 + expectedXY, 6);
+    expect(aabb.min.y).toBeCloseTo(2 - expectedXY, 6);
+    expect(aabb.max.y).toBeCloseTo(2 + expectedXY, 6);
+    expect(aabb.min.z).toBeCloseTo(2, 6);
+    expect(aabb.max.z).toBeCloseTo(4, 6);
+  });
 });

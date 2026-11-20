@@ -183,24 +183,22 @@ export class OBB implements BoundingVolumeShape {
 
   /** @inheritdoc */
   public getAabb(): BoundingBox {
-    const min = new Vector3D(Infinity, Infinity, Infinity);
-    const max = new Vector3D(-Infinity, -Infinity, -Infinity);
-    for (const sx of [-1, 1]) {
-      for (const sy of [-1, 1]) {
-        for (const sz of [-1, 1]) {
-          const p = this.center.clone().add(this.axes[0]!.clone().scale(sx * this.halfExtents.x));
-          p.add(this.axes[1]!.clone().scale(sy * this.halfExtents.y));
-          p.add(this.axes[2]!.clone().scale(sz * this.halfExtents.z));
-          min.x = Math.min(min.x, p.x);
-          min.y = Math.min(min.y, p.y);
-          min.z = Math.min(min.z, p.z);
-          max.x = Math.max(max.x, p.x);
-          max.y = Math.max(max.y, p.y);
-          max.z = Math.max(max.z, p.z);
-        }
-      }
-    }
-    return new BoundingBox(min, max);
+    const a0 = this.axes[0];
+    const a1 = this.axes[1];
+    const a2 = this.axes[2];
+    const hx = this.halfExtents.x;
+    const hy = this.halfExtents.y;
+    const hz = this.halfExtents.z;
+    const ex = Math.abs(a0.x) * hx + Math.abs(a1.x) * hy + Math.abs(a2.x) * hz;
+    const ey = Math.abs(a0.y) * hx + Math.abs(a1.y) * hy + Math.abs(a2.y) * hz;
+    const ez = Math.abs(a0.z) * hx + Math.abs(a1.z) * hy + Math.abs(a2.z) * hz;
+    const cx = this.center.x;
+    const cy = this.center.y;
+    const cz = this.center.z;
+    return new BoundingBox(
+      new Vector3D(cx - ex, cy - ey, cz - ez),
+      new Vector3D(cx + ex, cy + ey, cz + ez),
+    );
   }
 
   /** @inheritdoc */

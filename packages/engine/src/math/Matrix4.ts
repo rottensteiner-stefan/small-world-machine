@@ -79,7 +79,8 @@ export class Matrix4 {
       e13 = e[13]!,
       e14 = e[14]!,
       e15 = e[15]!;
-    const w = 1 / (e3 * x + e7 * y + e11 * z + e15);
+    const denom = e3 * x + e7 * y + e11 * z + e15;
+    const w = Math.abs(denom) > 1e-12 ? 1 / denom : 1;
     result.x = (e0 * x + e4 * y + e8 * z + e12) * w;
     result.y = (e1 * x + e5 * y + e9 * z + e13) * w;
     result.z = (e2 * x + e6 * y + e10 * z + e14) * w;
@@ -243,9 +244,14 @@ export class Matrix4 {
     if (this.determinant() < 0) sx = -sx;
     scale.set(sx, sy, sz);
 
-    const invSX = 1 / sx;
-    const invSY = 1 / sy;
-    const invSZ = 1 / sz;
+    if (sx === 0 || sy === 0 || sz === 0) {
+      rotation.set(0, 0, 0);
+      return this;
+    }
+
+    const invSX = sx !== 0 ? 1 / sx : 0;
+    const invSY = sy !== 0 ? 1 / sy : 0;
+    const invSZ = sz !== 0 ? 1 / sz : 0;
 
     const r0 = te0 * invSX;
     const r1 = te1 * invSX;
@@ -441,13 +447,11 @@ export class Matrix4 {
 
     const x = MathPool.acquireVector().copyFrom(up).cross(z).normalize();
     if (x.lengthSq() === 0) {
-      if (Math.abs(up.z) < 0.999) {
-        z.z += 0.0001;
+      if (Math.abs(z.z) < 0.999) {
+        x.set(0, 0, 1).cross(z).normalize();
       } else {
-        z.x += 0.0001;
+        x.set(1, 0, 0).cross(z).normalize();
       }
-      z.normalize();
-      x.copyFrom(up).cross(z).normalize();
     }
     const y = MathPool.acquireVector().copyFrom(z).cross(x).normalize();
 

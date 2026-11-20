@@ -14,6 +14,7 @@ Since the npm-workspaces restructuring, the engine lives in a single package (`@
 | `@small-world-machine/vfx-extras` | `packages/vfx-extras/` | GPU-instanced particle/VFX pipeline (`ParticleSystem`, `ParticleMeshRenderer`, `AccretionDiskEmitter`, force-field affectors such as `PointAttractorAffector`/`VortexAffector`/`TurbulenceAffector`) — see [ADR 0022](/adr/0022-gpu-instanced-vfx-pipeline-and-extras-package) |
 | `@small-world-machine/artistic-extras` | `packages/artistic-extras/` | Artistic materials, math and post-processing |
 | `@small-world-machine/liquid-extras` | `packages/liquid-extras/` | Liquid drops, materials and shading |
+| `@small-world-machine/vegetation-extras` | `packages/vegetation-extras/` | Ground cover (`GroundCoverSystem`), `WindField`, `ForestLookBlender` |
 | `@small-world-machine/tools` | `packages/tools/` | Development tools (Maker, Material Studio, Pixler, Xtractor, Map Generator, Forge) — see [ADR 0024](/adr/0024-tools-ecosystem-package) |
 
 Each extras package extends central public engine contracts (`AbstractGeometry`, `GltfExtensionPlugin`, ...) and is independently testable — the same extension principle that ADR 0018 establishes for the glTF data level and ADR 0021 establishes for geometry/physics.

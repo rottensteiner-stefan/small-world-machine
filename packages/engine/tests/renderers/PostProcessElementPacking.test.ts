@@ -99,13 +99,15 @@ describe("PostProcess elements own their DynUniforms slices", () => {
     const bloom = new BloomElement();
     bloom.intensity = 1.3;
     bloom.color.set(0.2, 0.4, 0.6);
+    const iecLin = (c: number): number =>
+      c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
     expectPack(
       [bloom],
       [
         [7, 1.3],
-        [12, Math.pow(0.2, 2.2)],
-        [13, Math.pow(0.4, 2.2)],
-        [14, Math.pow(0.6, 2.2)],
+        [12, iecLin(0.2)],
+        [13, iecLin(0.4)],
+        [14, iecLin(0.6)],
         [15, 0.0],
       ],
     );

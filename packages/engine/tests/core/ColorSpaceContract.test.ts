@@ -15,7 +15,7 @@ import { Cube } from "../../src/geometry/index.js";
 // exactly once -- in the shader for material colours, on the CPU for lights, clear colour and the
 // volumetric/post tints -- and glTF's linear factors are encoded once on import.
 
-const lin = (c: number): number => Math.pow(c, 2.2);
+const lin = (c: number): number => Color.sRGBToLinearChannel(c);
 
 type LaneInternals = {
   postProcessing: { enabled: boolean };

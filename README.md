@@ -19,7 +19,7 @@ Read our full [Vision & Strategy](VISION.md).
 - **Clustered Forward+ Lighting:** The camera frustum is divided into a 3D grid of light-culling cells (WebGPU: compute-shader culled; WebGL 2: CPU-culled) so each pixel only evaluates the lights that actually reach it, raising the practical point/spot light budget well past a small fixed cap.
 - **Planar & Conformal Reflections:** Real-time planar floor reflections (virtual mirror geometries) and dynamic sphere inversion reflections ($P' = C + V \cdot \frac{R^2}{d^2 - r^2}$) for PBR objects.
 - **Component Behaviors & State Machines:** Robust, callback-driven behavior system to attach complex logic (`FlickerBehavior`, `DeviceOrientationController`, `HoverBehavior`, `DraggableBehavior`, etc.) directly to 3D objects, cameras, or materials. Includes a built-in, type-safe, zero-allocation **Finite State Machine (FSM)** framework to cleanly manage game actor lifecycles.
-- **Interactions & Gamification:** A built-in `InteractionManager` allowing objects to instantly react to mouse/touch pointer events (`onPointerEnter`, `onPointerClick`, `onPointerDown`, `onPointerMove`, etc.). Pickable elements are queried via highly performant $O(\log n)$ **Octrees** and resolved to exact pixels via the **Möller-Trumbore** intersection algorithm. 
+- **Interactions & Gamification:** A built-in `InteractionManager` allowing objects to instantly react to mouse/touch pointer events (`onPointerEnter`, `onPointerClick`, `onPointerDown`, `onPointerMove`, etc.). Pickable elements are queried via highly performant $O(\log n)$ **Octrees** and resolved to exact pixels via the **Möller-Trumbore** intersection algorithm.
 - **Stylized & Cinematic Post-Processing:** ACES Filmic, Reinhard, and Cineon Tone Mapping with parametric Color Grading (lift/gamma/gain, color temperature), plus Bloom, Screen-Space Ambient Occlusion (HBAO), Temporal Anti-Aliasing (TAA with camera jitter + history blend), Motion Trails, and retro/stylized shaders (Phosphor Night Vision, Film Noir, Cyber Glitch, VHS Tracking, Thermal Vision).
 - **Scene Graph:** Hierarchical scene management using a clean `Object3D` architecture.
 - **2D/2.5D Support:** First-class support for Sprites, Billboard rendering, and Pixel-Perfect Isometric perspectives.
@@ -75,7 +75,15 @@ class MyGame extends SmallWorldMachine {
 ### 2. Implementation Showcase
 
 ```typescript
-import { SmallWorldMachine, Cube, Color, StandardMaterial, Object3D, OrbitController, Texture } from "@small-world-machine/engine";
+import {
+  SmallWorldMachine,
+  Cube,
+  Color,
+  StandardMaterial,
+  Object3D,
+  OrbitController,
+  Texture,
+} from "@small-world-machine/engine";
 
 class MyGame extends SmallWorldMachine {
   constructor() {
@@ -152,6 +160,7 @@ For an isolated development environment, this project includes a **Dev Container
 Small World Machine is organized as a lightweight TypeScript monorepo (`packages/*`, `apps/*`, `public/*`):
 
 ### `packages/` — Engine & Extensions
+
 - **`packages/engine`**: Core 3D engine (`@small-world-machine/engine`).
   - `src/core`: Core lifecycle (`SmallWorldMachine`), Scene Graph (`Object3D`, `Scene`), `Input`, `Color`, and `EventBus`.
   - `src/core/behaviors`: Modular behavior components (e.g. `OrbitController`, `HoverBehavior`, `DraggableBehavior`, Proximity Sensors).
@@ -168,17 +177,25 @@ Small World Machine is organized as a lightweight TypeScript monorepo (`packages
 - **`packages/gltf-extensions`**: Extended glTF capabilities including `KHR_texture_basisu` (WASM-based Basis Universal / KTX2 GPU texture transcoding).
 - **`packages/geometry-extras`**: Procedural and parametric geometry extensions (`Lathe`, Platonic solids, Filled polygons).
 - **`packages/physics-extras`**: Advanced physics solvers, convex hulls, and geometric algorithms.
+- **`packages/vfx-extras`**: GPU-instanced particle/VFX pipeline (`ParticleSystem`, `GPUParticleSystem`, `Fire` prefab, affectors).
+- **`packages/liquid-extras`**: Art-direction liquid materials (noir water, oil puddle/slick, rain puddle), thin-film optics, drop impact system.
+- **`packages/vegetation-extras`**: Ground cover, wind field, and forest look blending.
+- **`packages/artistic-extras`**: Artistic materials, math, and post-processing (`ImpastoStrokeMaterial`, `MetalReliefPostProcessor`).
 
 ### `apps/` — Showcases & Sample Games
-- **`apps/showcases`**: 49 numbered interactive showcases (1–24, 26–50, #25 is intentionally absent) demonstrating engine features (PBR, IBL, Glass transmission, Post-processing, Clustered lighting, Decals, Spatial audio, VFX particles, etc.).
-- **`apps/sample-apps`**: Production vertical slices and sample games (*Light Cycle Arena*).
+
+- **`apps/showcases`**: 52 numbered interactive showcases (1–24, 26–53, #25 is intentionally absent) demonstrating engine features (PBR, IBL, Glass transmission, Post-processing, Clustered lighting, Decals, Spatial audio, VFX particles, etc.).
+- **`apps/sample-apps`**: Production vertical slices and sample games (_Light Cycle Arena_).
 
 ### 🕹️ Standalone Games & Reference Projects
+
 Full games built as independent standalone projects consuming Small World Machine as an external package:
+
 - **[YAD (Yet Another Dungeon)](https://github.com/rottensteiner-stefan/yad)**: Retro first-person grid-crawler featuring 3D billboard sprites, 2D HUD, discrete grid movement, and ambient audio.
 - **[Minceraft](https://github.com/rottensteiner-stefan/minceraft)**: Infinite chunk-streamed voxel sandbox featuring multi-worker background meshing, vertex daylight/AO, continuous AABB sweep collision, and OPFS/IndexedDB delta persistence.
 
 ### `public/` — Assets & Tools
+
 - `public/assets`, `public/resources`: Shared 3D models, textures, sound effects, and asset kits.
 - `public/schemas`: JSON Schema (draft 2020-12) validation files for declarative levels (`level.schema.json`) and asset kits.
 - `public/tools`: Standalone browser-based creative tools running client-side via File System Access API.
@@ -188,7 +205,9 @@ Full games built as independent standalone projects consuming Small World Machin
 Small World Machine includes a comprehensive suite of standalone, browser-based creative and diagnostic tools (`public/tools/`), running entirely client-side via the File System Access API without external server dependencies or build-step friction:
 
 ### 🌟 Maker — World & Scene Editor (`public/tools/maker.html`)
+
 The engine's flagship standalone 3D scene composer and level editor ([User Guide](docs/guides/maker.md)):
+
 - **Direct glTF 2.0 Persistence & Autosave:** Debounced (500ms) write-through directly into standard `scene.gltf` projects with vendor-namespaced `SWM_*` extensions for Small World Machine behaviors, physics, and custom material parameters.
 - **High-Speed Keyboard Nudging & Transformation:** Camera-perspective-aware directional nudging ($\leftarrow, \rightarrow, \uparrow, \downarrow$ on XZ ground), elevation adjustments (`Shift` + $\uparrow / \downarrow$, `PageUp`/`PageDown`), and **Snap to Ground** (<kbd>End</kbd> / `⬇ Ground`) to align bounding boxes flush with $Y = 0$.
 - **Dynamic Snapping & Grid Stepping:** Enabled by default with instant grid resolution stepping via <kbd>[</kbd> (finer) and <kbd>]</kbd> (coarser) across `0.1m` to `2.0m`, $15^\circ$ angle quantization, and $0.25$ scale steps (Toggle: <kbd>X</kbd>).
@@ -205,9 +224,10 @@ The engine's flagship standalone 3D scene composer and level editor ([User Guide
 > **Map**, **Material** and **IBL** live (`maker.html#<mode>`). Kit Inspector, Splatter and the
 > gamepad test remain standalone pages below; Material and IBL also keep their standalone pages.
 > A `swm` CLI (`npm run swm`) on the headless `packages/tools/src/core/` offers `map`, `kit
-> validate` and `splatter`. This is the current state, not a roadmap promise.
+validate` and `splatter`. This is the current state, not a roadmap promise.
 
 ### Standalone Development Tools
+
 - **T-01: Procedural Splatter Generator** (`public/tools/splatter-gen.html`): Generate procedural blood, splatters, dirt decals, and impact masks.
 - **T-02: PBR Map Generator** (`public/tools/maker.html#material`, standalone page `public/tools/pbr-gen.html` stays): Generate Normal, Specular, AO, and Height maps from a single diffuse image.
 - **T-03: Gamepad Diagnostic Tool** (`public/tools/gamepad-test.html`): Live gamepad input, axis calibration, and haptic feedback testing.
@@ -219,6 +239,7 @@ The engine's flagship standalone 3D scene composer and level editor ([User Guide
 - **T-09: Kit Inspector** (`public/tools/kit-inspector.html`): Inspect modular asset kit metadata, registries, and runtime kit state. Kit validation (drop a folder or ZIP, read the report) also runs as `maker.html#kit`.
 
 ### In-Game Overlay
+
 - **The Forge:** A built-in floating window manager providing runtime inspection, diagnostics, and integrated tooling directly inside your running game (toggleable via configurable shortcut, e.g. `~` or `F12`).
 
 ## 📚 Documentation & Guides
@@ -248,4 +269,3 @@ The majority of the codebase was developed in close collaboration with the three
 ## 📄 License
 
 This project is licensed under the MIT License.
-

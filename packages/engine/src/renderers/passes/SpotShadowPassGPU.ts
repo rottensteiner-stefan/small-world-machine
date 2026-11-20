@@ -27,6 +27,7 @@ import {
   writePointShadowFaceMatrices,
 } from "../../core/lights/PointLightShadow.js";
 import { PointShadowCastersGPU } from "./PointShadowCastersGPU.js";
+import { ShadowCasterCollector } from "./ShadowCasterCollector.js";
 
 const _scratchLightCasters: SpotLight[] = [];
 const _scratchCasters: Object3D[] = [];
@@ -102,6 +103,7 @@ export class SpotShadowPassGPU implements RenderPass {
   private readonly _faceMatrices = new Float32Array(
     MAX_SHADOWED_POINT_LIGHTS * CUBE_FACE_COUNT * 16,
   );
+  private readonly _spotCasters = new ShadowCasterCollector();
   private readonly _pointCasters = new PointShadowCastersGPU();
   /** Point faces rendered / skipped by the view test in the last frame (diagnostics, tests). */
   public pointFacesRendered = 0;
@@ -150,8 +152,9 @@ export class SpotShadowPassGPU implements RenderPass {
     const pointCount = this._selectPointLights(renderer, lights.pLights, vp, camPos);
     this.pointFacesRendered = 0;
     this.pointFacesSkipped = 0;
-    // No shadowed point light: drop the last frame's caster references (reset only runs in
-    // _renderPointFaces otherwise, so removed objects would stay strongly referenced).
+    // No shadowed spot/point light: drop the last frame's caster references (reset only runs in
+    // the render loops otherwise, so removed objects would stay strongly referenced).
+    if (casters.length === 0) this._spotCasters.reset();
     if (pointCount === 0) this._pointCasters.reset();
     if (casters.length === 0 && pointCount === 0) {
       this._releaseIdleAtlas(renderer, scene);
@@ -240,21 +243,39 @@ export class SpotShadowPassGPU implements RenderPass {
       renderer.defaultSpotShadowTextureView = realSpotShadow;
     }
 
-    // Frame-frozen list computed once per frame by the renderer -- never re-collect here (the
-    // same list + ordering must reach every pass); direct/test executions fall back to the scene.
-    const renderList = renderer.frameRenderList ?? scene.getVisibleObjectsSorted(vp, camPos);
-
     // Layers 0..3 belong to spots, matching WebGL2Renderer's spot slots -- only the first 4 spot
     // lights (by scene index, not just shadow-casting ones) get a shadow map, mirroring that
     // renderer's loop bound.
     const maxShadowedSpotLights = Math.min(lights.sLights.length, SPOT_SHADOW_LAYERS);
 
+    let spotOpaqueBatches: readonly RenderBatch[] = [];
+    if (casters.length > 0) {
+      if (scene.root) {
+        this._spotCasters.reset();
+        for (let j = 0; j < maxShadowedSpotLights; j++) {
+          const sLight = lights.sLights[j]!;
+          if (!sLight.castShadow) continue;
+          sLight.updateShadowCamera();
+          if (sLight.shadowCamera) {
+            this._spotCasters.addViewProjectionMatrix(sLight.shadowCamera.viewProjectionMatrix);
+          }
+        }
+        this._spotCasters.collect(scene.root);
+        spotOpaqueBatches = this._spotCasters.batches;
+      } else {
+        const renderList = renderer.frameRenderList ?? scene.getVisibleObjectsSorted(vp, camPos);
+        spotOpaqueBatches = renderList.opaqueBatches;
+      }
+    }
+
     for (let j = 0; j < maxShadowedSpotLights; j++) {
       const sLight = lights.sLights[j]!;
       if (!sLight.castShadow) continue;
 
-      // Also creates the shadow camera when castShadow was switched on after construction.
-      sLight.updateShadowCamera();
+      if (!scene.root) {
+        // Also creates the shadow camera when castShadow was switched on after construction.
+        sLight.updateShadowCamera();
+      }
       const shadowCam = sLight.shadowCamera;
       if (!shadowCam) continue;
 
@@ -296,7 +317,7 @@ export class SpotShadowPassGPU implements RenderPass {
       });
 
       rp.setBindGroup(0, this._shadowCasterBindGroup!);
-      this._drawCasters(renderer, rp, renderList.opaqueBatches, viewOffset, shadowCam.viewMatrix);
+      this._drawCasters(renderer, rp, spotOpaqueBatches, viewOffset, shadowCam.viewMatrix);
       // ADR 0059 P1-2: pulled field draws for this spot (depth variant; segment already culled).
       renderer._recordFieldDraws(rp, viewOffset, VIEW_SLOT_SPOT_SHADOW_BASE + j, false, "depth");
       rp.end();

@@ -133,7 +133,7 @@ export class MathUtils {
    * @returns True if value is a power of two, false otherwise.
    */
   public static isPowerOfTwo(value: number): boolean {
-    return (value & (value - 1)) === 0 && value > 0;
+    return Number.isInteger(value) && value > 0 && (value & (value - 1)) === 0;
   }
 
   /**
@@ -142,7 +142,14 @@ export class MathUtils {
    * @returns Next power of two.
    */
   public static nextPowerOfTwo(value: number): number {
-    let v = Math.max(0, value - 1);
+    if (!Number.isFinite(value) || value <= 1) {
+      return 1;
+    }
+    const ceilVal = Math.ceil(value);
+    if (ceilVal > 0x40000000) {
+      return 0x40000000 * Math.pow(2, Math.max(0, Math.ceil(Math.log2(ceilVal)) - 30));
+    }
+    let v = ceilVal - 1;
     v |= v >> 1;
     v |= v >> 2;
     v |= v >> 4;

@@ -86,9 +86,8 @@ fn sampleCascade(worldPos: vec3f, cascadeIndex: u32) -> f32 {
     );
 }
 
-// Cascaded Shadow Map evaluation per slice. Same convention as the surface shaders
-// (lighting_pbr.wgsl): cascades are selected by the Euclidean distance from the camera (NOT view
-// depth) and blended over the last 10% of a cascade's range.
+// Cascaded Shadow Map evaluation per slice. Cascades are selected by planar view-space depth
+// (matching DirectionalLight._updateFrustumCorners) and blended over the last 10% of a cascade's range.
 fn sampleCascadeShadow(worldPos: vec3f, viewDist: f32) -> f32 {
     if (uni.shadowInfo.z < 0.5 || uni.shadowInfo.w < 0.5) {
         return 1.0;
@@ -140,6 +139,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
     var accumulatedRadiance = vec3f(0.0);
     var accumulatedTransmittance = 1.0;
+    var accumTau = 0.0;
 
     // Sequential march along Z in registers.
     for (var z = 0u; z < dims.z; z++) {
@@ -184,7 +184,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
             // (same convention as the local lights in froxel_inject.wgsl).
             let cosTheta = dot(viewDir, sunDir);
             let phase = hgPhase(cosTheta, asymmetry);
-            var shadow = sampleCascadeShadow(worldPos, length(worldPos - uni.camPos.xyz));
+            var shadow = sampleCascadeShadow(worldPos, zMid);
             // Stratified sub-slab shadow quadrature across [bounds.x, bounds.y] so diagonal light
             // shafts crossing slice boundaries preserve constant energy without staircase blotches.
             for (var sub = 0u; sub < 3u; sub++) {
@@ -197,22 +197,23 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
                     let clipZSub = (far * (zSub - near)) / max(zSub * (far - near), 1e-6);
                     let worldHSub = uni.invViewProj * vec4f(ndcX, ndcY, clipZSub, 1.0);
                     let worldPosSub = worldHSub.xyz / max(worldHSub.w, 1e-6);
-                    shadow += sampleCascadeShadow(worldPosSub, length(worldPosSub - uni.camPos.xyz));
+                    shadow += sampleCascadeShadow(worldPosSub, zSub);
                 }
             }
             shadow *= (1.0 / 3.0);
             sunScatter = sunColor * (shadow * phase * extinction) * maskAlbedo;
         }
 
-        // Beer-Lambert transmittance. The Decima/Nubis powder term only brightens thin edges of
-        // the in-scattered light; it must not alter the transmittance.
+        // Beer-Lambert transmittance. The Decima/Nubis powder term depends on cumulative optical
+        // depth (slice-count-invariant) and applies only to directional sun in-scattering so that
+        // localized emissive FogVolumes are never dimmed near the camera.
         let stepTau = extinction * stepLen;
         let stepTransmittance = exp(-stepTau);
         let halfTransmittance = exp(-0.5 * stepTau);
-        let powder = mix(1.0, 1.0 - exp(-2.0 * stepTau), 0.35);
+        let powder = mix(1.0, 1.0 - exp(-2.0 * (accumTau + stepTau)), 0.35);
 
         // Analytic in-scatter integral S * (1 - T) / sigma_t over the full step and its first half.
-        let totalScatter = (localInScatter + sunScatter) * powder;
+        let totalScatter = localInScatter + sunScatter * powder;
         var stepRadiance = totalScatter * stepLen;
         var halfRadiance = totalScatter * (0.5 * stepLen);
         if (extinction > 1e-5) {
@@ -229,5 +230,6 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         );
         accumulatedRadiance += accumulatedTransmittance * stepRadiance;
         accumulatedTransmittance *= stepTransmittance;
+        accumTau += stepTau;
     }
 }

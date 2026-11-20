@@ -60,7 +60,7 @@ describe("ObliqueProjection", () => {
     expect(proj.right).toBe(10);
   });
 
-  it("should zoom correctly", () => {
+  it("should zoom correctly and clamp extreme negative delta without inverting frustum", () => {
     const proj = new ObliqueProjection({
       left: -10,
       right: 10,
@@ -72,5 +72,10 @@ describe("ObliqueProjection", () => {
     expect(proj.right).toBeCloseTo(11);
     expect(proj.bottom).toBeCloseTo(-5.5);
     expect(proj.top).toBeCloseTo(5.5);
+
+    proj.zoom(-2.0);
+    expect(proj.right).toBeGreaterThan(proj.left);
+    expect(proj.top).toBeGreaterThan(proj.bottom);
+    expect(Number.isFinite(proj.getMatrix().data[0]!)).toBe(true);
   });
 });

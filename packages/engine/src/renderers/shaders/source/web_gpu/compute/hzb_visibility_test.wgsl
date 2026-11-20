@@ -41,9 +41,12 @@ fn testVisibility(@builtin(global_invocation_id) id: vec3u) {
     let radius = aabbs[i].w;
 
     let clip = global.vp * vec4f(center, 1.0);
-    // clip.w is the view-space depth of the centre. Behind/at the camera, or a sphere that reaches
-    // the near plane, cannot be projected reliably -- assume visible.
-    if (clip.w <= radius + 0.0001) {
+    let near = global.cameraNearFar.x;
+    let far = global.cameraNearFar.y;
+    let z_near = clip.w - radius;
+    // clip.w is the planar view-space depth of the sphere center. If the sphere's frontmost
+    // planar point reaches or crosses the near plane, mark visible immediately.
+    if (z_near <= near || clip.w <= radius + 0.0001) {
         results[i] = 1u;
         return;
     }
@@ -53,28 +56,22 @@ fn testVisibility(@builtin(global_invocation_id) id: vec3u) {
         return;
     }
 
-    // Nearest point of the sphere for the depth compare. The euclidean nearest-to-eye point
-    // minimizes EUCLIDEAN distance, not view-space depth, and 45 degrees off-axis its depth
-    // exceeds z_c - r -- an overestimated nearDepth that falsely culls. The conservative nearest
-    // point lies on the camera's VIEW AXIS through the center; clip depth is monotone in
-    // view-space z, so the sphere's extremal view depth is at one of the two axis endpoints, and
-    // taking the min of both is sign-agnostic (no camera-basis convention to get wrong) and
-    // provably no deeper than any other sphere point. The view axis is global.vp's depth row
-    // (column-major mat4x4f: element [i][2] of column i is row 2); P22's scale cancels under
-    // normalize(). `clip.w > radius` (checked above) guarantees both endpoints project with
-    // w > 0, so the divisions are well-defined.
-    let axis = normalize(vec3f(global.vp[0][2], global.vp[1][2], global.vp[2][2]));
-    let nearClipA = global.vp * vec4f(center + axis * radius, 1.0);
-    let nearClipB = global.vp * vec4f(center - axis * radius, 1.0);
-    let nearDepth = min(nearClipA.z / nearClipA.w, nearClipB.z / nearClipB.w);
+    // Direct WebGPU ZO [0, 1] depth of the planar frontmost point z_near = viewZ - radius.
+    let nearDepth = (far * (z_near - near)) / (z_near * max(far - near, 1e-5));
 
-    // Screen-space rect of the sphere (projected by view depth = clip.w, not by Euclidean distance,
-    // which would shrink the footprint off-axis).
-    let ndcRadius = worldRadiusToNdcRadius(radius, clip.w);
-    let uvCenter = vec2f(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5)); // NDC Y-up -> texture V-down
-    let uvHalf = ndcRadius * 0.5;
-    let uvMin = clamp(uvCenter - uvHalf, vec2f(0.0), vec2f(1.0));
-    let uvMax = clamp(uvCenter + uvHalf, vec2f(0.0), vec2f(1.0));
+    // Conservative 2D projected sphere bounds in NDC space per Mara & McGuire (JCGT 2013).
+    let ndcBounds = projectSphereBoundsNdc(ndc.xy, clip.w, radius);
+    // NDC X [-1, 1] -> UV U [0, 1]; NDC Y-up [-1, 1] -> texture V-down [0, 1]
+    let uvMin = clamp(
+        vec2f(ndcBounds.x * 0.5 + 0.5, 1.0 - (ndcBounds.w * 0.5 + 0.5)),
+        vec2f(0.0),
+        vec2f(1.0)
+    );
+    let uvMax = clamp(
+        vec2f(ndcBounds.z * 0.5 + 0.5, 1.0 - (ndcBounds.y * 0.5 + 0.5)),
+        vec2f(0.0),
+        vec2f(1.0)
+    );
     let rectPx = (uvMax - uvMin) * global.resolution.xy;
     let extentPx = max(max(rectPx.x, rectPx.y), 1.0);
 

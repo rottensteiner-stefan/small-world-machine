@@ -57,4 +57,4 @@ Standalone HTML explainer pieces linked to from one of the guides above or from 
 
 | Explainer | Description |
 |---|---|
-| [`reference/2-5d-grundlagen.html`](../reference/2-5d-grundlagen.html) | Illustrated fundamentals explainer ("how 2.5D works"). |
+| [`reference/2-5d-grundlagen.html`](/reference/2-5d-grundlagen.html) | Illustrated fundamentals explainer ("how 2.5D works"). |

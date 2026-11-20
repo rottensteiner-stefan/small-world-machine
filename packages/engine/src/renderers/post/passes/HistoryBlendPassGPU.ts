@@ -1,14 +1,110 @@
 import FULLSCREEN_VERT_WGSL from "../shaders/PostProcess.vert.wgsl?raw";
-import HISTORY_BLEND_FRAG_WGSL from "../shaders/HistoryBlend.frag.wgsl?raw";
 import { PostEffectPipelineGate } from "../PostEffectPipelineGate.js";
 import type { PostEffectPass, PostEffectPassContext } from "../PostEffectPass.js";
-import { TextureFilter, TextureWrap, Topology } from "../../../enums/index.js";
+import { PostProcessingEffectType, TextureFilter, TextureWrap, Topology } from "../../../enums/index.js";
+import { Matrix4 } from "../../../math/index.js";
+
+const REPROJECTED_TAA_FRAG_WGSL = /* wgsl */ `
+@group(0) @binding(0) var taaSampler: sampler;
+@group(0) @binding(1) var currentTexture: texture_2d<f32>;
+@group(0) @binding(2) var historyTexture: texture_2d<f32>;
+@group(0) @binding(3) var<uniform> u: HistoryBlendUniforms;
+@group(0) @binding(4) var depthTexture: texture_depth_2d;
+
+struct HistoryBlendUniforms {
+    invViewProj: mat4x4f,
+    prevViewProj: mat4x4f,
+    params: vec4f, // [feedback, hasHistory, useReprojection, 0.0]
+}
+
+fn rgbToYCoCg(rgb: vec3f) -> vec3f {
+    let co = rgb.r - rgb.b;
+    let t = rgb.b + co * 0.5;
+    let cg = rgb.g - t;
+    let y = t + cg * 0.5;
+    return vec3f(y, co, cg);
+}
+
+fn yCoCgToRgb(ycocg: vec3f) -> vec3f {
+    let t = ycocg.x - ycocg.z * 0.5;
+    let g = ycocg.z + t;
+    let b = t - ycocg.y * 0.5;
+    let r = b + ycocg.y;
+    return max(vec3f(r, g, b), vec3f(0.0));
+}
+
+@fragment
+fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
+    let current = textureSample(currentTexture, taaSampler, uv).rgb;
+
+    if (u.params.y < 0.5) {
+        return vec4f(current, 1.0);
+    }
+
+    if (u.params.z < 0.5) {
+        let history = textureSample(historyTexture, taaSampler, uv).rgb;
+        return vec4f(mix(current, history, u.params.x), 1.0);
+    }
+
+    let dims = vec2i(textureDimensions(currentTexture, 0));
+    let maxCoord = max(dims - vec2i(1), vec2i(0));
+    let pixelCoord = clamp(vec2i(uv * vec2f(dims)), vec2i(0), maxCoord);
+    let depth = textureLoad(depthTexture, pixelCoord, 0);
+
+    if (depth >= 0.99999) {
+        return vec4f(current, 1.0);
+    }
+
+    let ndcX = uv.x * 2.0 - 1.0;
+    let ndcY = 1.0 - uv.y * 2.0;
+    let clipPos = vec4f(ndcX, ndcY, depth, 1.0);
+    let worldH = u.invViewProj * clipPos;
+    if (abs(worldH.w) < 1e-6) {
+        return vec4f(current, 1.0);
+    }
+    let worldPos = worldH.xyz / worldH.w;
+    let prevClip = u.prevViewProj * vec4f(worldPos, 1.0);
+    if (prevClip.w <= 1e-6) {
+        return vec4f(current, 1.0);
+    }
+    let prevUV = prevClip.xy / prevClip.w * vec2f(0.5, -0.5) + vec2f(0.5, 0.5);
+    if (prevUV.x < 0.0 || prevUV.x > 1.0 || prevUV.y < 0.0 || prevUV.y > 1.0) {
+        return vec4f(current, 1.0);
+    }
+
+    // 3x3 neighborhood YCoCg variance clipping (Salvi 2016, 1.25 sigma)
+    var m1 = vec3f(0.0);
+    var m2 = vec3f(0.0);
+    for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+            let tc = clamp(pixelCoord + vec2i(dx, dy), vec2i(0), maxCoord);
+            let sampleRgb = textureLoad(currentTexture, tc, 0).rgb;
+            let sampleYCoCg = rgbToYCoCg(sampleRgb);
+            m1 += sampleYCoCg;
+            m2 += sampleYCoCg * sampleYCoCg;
+        }
+    }
+    let mean = m1 / 9.0;
+    let variance = max(m2 / 9.0 - mean * mean, vec3f(0.0));
+    let stddev = sqrt(variance);
+    let gamma = 1.25;
+    let boxMin = mean - gamma * stddev;
+    let boxMax = mean + gamma * stddev;
+
+    let historyRgb = textureSample(historyTexture, taaSampler, prevUV).rgb;
+    let historyYCoCg = rgbToYCoCg(historyRgb);
+    let clampedYCoCg = clamp(historyYCoCg, boxMin, boxMax);
+    let clampedHistory = yCoCgToRgb(clampedYCoCg);
+
+    let resolved = mix(current, clampedHistory, u.params.x);
+    return vec4f(resolved, 1.0);
+}
+`;
 
 /**
- * Generic exponential history blend for WebGPU -- see HistoryBlendPassGL for the shared
- * rationale/trade-offs (used by both `TaaElement` and `MotionTrailElement`; the renderer keeps
- * one separate instance per effect type in its `PostEffectPass` registry, so each keeps its own
- * history buffer).
+ * Temporal Anti-Aliasing (S9 depth-reprojected TAA with 3x3 YCoCg 1.25-sigma variance clamping)
+ * and exponential history blend for WebGPU (used by both `TaaElement` and `MotionTrailElement`;
+ * the renderer keeps one separate instance per effect type in its `PostEffectPass` registry).
  */
 export class HistoryBlendPassGPU implements PostEffectPass {
   private _device: GPUDevice;
@@ -16,7 +112,10 @@ export class HistoryBlendPassGPU implements PostEffectPass {
   private _pipeline!: GPURenderPipeline;
   private _sampler!: GPUSampler;
   private _uniformBuffer!: GPUBuffer;
-  private _uniformData: Float32Array = new Float32Array(4);
+  /** 36 floats (144 bytes): invViewProj (16) + prevViewProj (16) + params (4). */
+  private _uniformData: Float32Array = new Float32Array(36);
+  private _dummyDepthTexture!: GPUTexture;
+  private _dummyDepthView!: GPUTextureView;
 
   private _pingPong?: [GPUTexture, GPUTexture];
   private _pingPongViews?: [GPUTextureView, GPUTextureView];
@@ -25,8 +124,12 @@ export class HistoryBlendPassGPU implements PostEffectPass {
   private _height = 0;
   private _hasHistory = false;
 
+  private readonly _scratchInvViewProj: Matrix4 = new Matrix4();
+  private readonly _prevViewProj: Float32Array = new Float32Array(16);
+
   private _bindGroups: [GPUBindGroup, GPUBindGroup] | undefined = undefined;
   private _builtCurrentView?: GPUTextureView;
+  private _builtDepthView?: GPUTextureView;
 
   constructor(device: GPUDevice) {
     this._device = device;
@@ -45,9 +148,16 @@ export class HistoryBlendPassGPU implements PostEffectPass {
     });
 
     this._uniformBuffer = this._device.createBuffer({
-      size: 16, // HistoryBlendUniforms: 4 x f32
+      size: 144, // HistoryBlendUniforms: 2 x mat4x4f (128B) + 1 x vec4f (16B) = 144 bytes
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+
+    this._dummyDepthTexture = this._device.createTexture({
+      size: [1, 1],
+      format: "depth24plus",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    this._dummyDepthView = this._dummyDepthTexture.createView();
 
     const bgl = this._device.createBindGroupLayout({
       entries: [
@@ -55,12 +165,13 @@ export class HistoryBlendPassGPU implements PostEffectPass {
         { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} },
         { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: {} },
         { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+        { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "depth" } },
       ],
     });
 
     const layout = this._device.createPipelineLayout({ bindGroupLayouts: [bgl] });
     const vertModule = this._device.createShaderModule({ code: FULLSCREEN_VERT_WGSL });
-    const fragModule = this._device.createShaderModule({ code: HISTORY_BLEND_FRAG_WGSL });
+    const fragModule = this._device.createShaderModule({ code: REPROJECTED_TAA_FRAG_WGSL });
 
     this._pipeline = this._device.createRenderPipeline({
       layout,
@@ -77,8 +188,6 @@ export class HistoryBlendPassGPU implements PostEffectPass {
   private _resize(width: number, height: number): void {
     if (this._pingPong && this._width === width && this._height === height) return;
 
-    // Release the previous ping-pong pair on resize -- WebGPU does not GC native resources
-    // automatically, so skipping this leaks VRAM for the old rgba16float textures.
     for (const old of this._pingPong ?? []) old.destroy();
 
     this._width = width;
@@ -98,24 +207,31 @@ export class HistoryBlendPassGPU implements PostEffectPass {
   }
 
   /**
-   * Resolves the current frame against history.
-   * @returns This frame's resolved HDR texture view (becomes history for the next call), or null if unavailable.
+   * Direct render entrypoint with backwards-compatible optional depth & reprojection matrices.
    */
-  public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+  public render(
+    ce: GPUCommandEncoder,
+    currentView: GPUTextureView,
+    width: number,
+    height: number,
+    feedback: number,
+    depthView?: GPUTextureView,
+    invViewProj?: Float32Array,
+    prevViewProj?: Float32Array,
+  ): GPUTextureView | null {
     if (!this._gate.ready) return null;
-    const { ce, width, height } = ctx;
-    const currentView = ctx.colorView;
-    // `PostProcessingElement`'s base type has no `feedback` member -- the renderer only ever
-    // hands this pass a `TaaElement`/`MotionTrailElement` (both of which declare it), so the
-    // cast through `unknown` is safe and pinned by the renderer's dispatch sites.
-    const config = ctx.element as unknown as { feedback: number };
     this._resize(width, height);
     if (!this._pingPong || !this._pingPongViews) return null;
 
-    // Bind groups depend on which ping-pong slot is being read as history this call, plus the
-    // (possibly-changing, e.g. on canvas resize) current-frame source view -- rebuild if either
-    // input view is different from what's currently bound.
-    if (!this._bindGroups || this._builtCurrentView !== currentView) {
+    const activeDepthView = depthView ?? this._dummyDepthView;
+    const useReprojection =
+      Boolean(depthView && depthView !== this._dummyDepthView && invViewProj && prevViewProj);
+
+    if (
+      !this._bindGroups ||
+      this._builtCurrentView !== currentView ||
+      this._builtDepthView !== activeDepthView
+    ) {
       const bgl = this._pipeline.getBindGroupLayout(0);
       this._bindGroups = [0, 1].map((i) =>
         this._device.createBindGroup({
@@ -125,14 +241,24 @@ export class HistoryBlendPassGPU implements PostEffectPass {
             { binding: 1, resource: currentView },
             { binding: 2, resource: this._pingPongViews![1 - i]! },
             { binding: 3, resource: { buffer: this._uniformBuffer } },
+            { binding: 4, resource: activeDepthView },
           ],
         }),
       ) as [GPUBindGroup, GPUBindGroup];
       this._builtCurrentView = currentView;
+      this._builtDepthView = activeDepthView;
     }
 
-    this._uniformData[0] = config.feedback;
-    this._uniformData[1] = this._hasHistory ? 1.0 : 0.0;
+    if (invViewProj) {
+      this._uniformData.set(invViewProj, 0);
+    }
+    if (prevViewProj) {
+      this._uniformData.set(prevViewProj, 16);
+    }
+    this._uniformData[32] = feedback;
+    this._uniformData[33] = this._hasHistory ? 1.0 : 0.0;
+    this._uniformData[34] = useReprojection ? 1.0 : 0.0;
+    this._uniformData[35] = 0.0;
     this._device.queue.writeBuffer(this._uniformBuffer, 0, this._uniformData);
 
     const writeView = this._pingPongViews[this._parity]!;
@@ -158,12 +284,45 @@ export class HistoryBlendPassGPU implements PostEffectPass {
   }
 
   /**
+   * Resolves the current frame against history via the PostEffectPass contract.
+   * @returns This frame's resolved HDR texture view (becomes history for the next call), or null if unavailable.
+   */
+  public execute(ctx: PostEffectPassContext): GPUTextureView | null {
+    const { ce, width, height, colorView, depthView, vp } = ctx;
+    const config = ctx.element as unknown as { type?: PostProcessingEffectType; feedback: number };
+    const isTaa = config.type === PostProcessingEffectType.TAA;
+
+    let invVpData: Float32Array | undefined = undefined;
+    let prevVpData: Float32Array | undefined = undefined;
+
+    if (isTaa && vp) {
+      this._scratchInvViewProj.data.set(vp);
+      if (Matrix4.invert(this._scratchInvViewProj, this._scratchInvViewProj)) {
+        invVpData = this._scratchInvViewProj.data;
+        prevVpData = this._hasHistory ? this._prevViewProj : vp;
+      }
+    }
+
+    const out = this.render(
+      ce,
+      colorView,
+      width,
+      height,
+      config.feedback,
+      isTaa ? depthView : undefined,
+      invVpData,
+      prevVpData,
+    );
+
+    if (vp) {
+      this._prevViewProj.set(vp);
+    }
+    return out;
+  }
+
+  /**
    * Discards the temporal history (S3 DP-4A): clears the `_hasHistory` flag so the next `execute`
-   * blends against a blank history instead of the pre-cut frame. Called by
-   * `SmallWorldMachine.notifyCameraTeleport()` on camera cuts -- without it a hard cut ghosts/smears
-   * against the stale pre-cut history (M5). Idempotent; synchronous; void; scalar-free. The ping-pong
-   * parity is intentionally left alone: with `_hasHistory` cleared the shader ignores the old
-   * buffers, so flipping parity here would add no value.
+   * blends against a blank history instead of the pre-cut frame.
    */
   public resetHistory(): void {
     this._hasHistory = false;
@@ -174,5 +333,7 @@ export class HistoryBlendPassGPU implements PostEffectPass {
     this._pingPong?.[0].destroy();
     this._pingPong?.[1].destroy();
     this._uniformBuffer?.destroy();
+    this._dummyDepthTexture?.destroy();
   }
 }
+

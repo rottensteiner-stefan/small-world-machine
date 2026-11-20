@@ -145,28 +145,48 @@ export class Quaternion {
     const m31: number = te[2]!,
       m32: number = te[6]!,
       m33: number = te[10]!;
+    const normSq: number =
+      m11 * m11 + m12 * m12 + m13 * m13 +
+      m21 * m21 + m22 * m22 + m23 * m23 +
+      m31 * m31 + m32 * m32 + m33 * m33;
+    if (normSq < 1e-12) {
+      return this.identity();
+    }
     const trace: number = m11 + m22 + m33;
 
     if (0 < trace) {
-      const s: number = 0.5 / Math.sqrt(trace + 1.0);
+      const root: number = Math.sqrt(Math.max(0, trace + 1.0));
+      if (root < 1e-12) {
+        return this.identity();
+      }
+      const s: number = 0.5 / root;
       this.w = 0.25 / s;
       this.x = (m32 - m23) * s;
       this.y = (m13 - m31) * s;
       this.z = (m21 - m12) * s;
     } else if (m11 > m22 && m11 > m33) {
-      const s: number = 2.0 * Math.sqrt(1.0 + m11 - m22 - m33);
+      const s: number = 2.0 * Math.sqrt(Math.max(0, 1.0 + m11 - m22 - m33));
+      if (s < 1e-12) {
+        return this.identity();
+      }
       this.w = (m32 - m23) / s;
       this.x = 0.25 * s;
       this.y = (m12 + m21) / s;
       this.z = (m13 + m31) / s;
     } else if (m22 > m33) {
-      const s: number = 2.0 * Math.sqrt(1.0 + m22 - m11 - m33);
+      const s: number = 2.0 * Math.sqrt(Math.max(0, 1.0 + m22 - m11 - m33));
+      if (s < 1e-12) {
+        return this.identity();
+      }
       this.w = (m13 - m31) / s;
       this.x = (m12 + m21) / s;
       this.y = 0.25 * s;
       this.z = (m23 + m32) / s;
     } else {
-      const s: number = 2.0 * Math.sqrt(1.0 + m33 - m11 - m22);
+      const s: number = 2.0 * Math.sqrt(Math.max(0, 1.0 + m33 - m11 - m22));
+      if (s < 1e-12) {
+        return this.identity();
+      }
       this.w = (m21 - m12) / s;
       this.x = (m13 + m31) / s;
       this.y = (m23 + m32) / s;
@@ -305,6 +325,11 @@ export class Quaternion {
     if (Math.abs(clampedSinX) < 0.99999) {
       out.y = Math.atan2(2 * (qz * qx + qw * qy), 1 - 2 * (qx * qx + qy * qy));
       out.z = Math.atan2(2 * (qx * qy + qw * qz), 1 - 2 * (qx * qx + qz * qz));
+      if (Math.abs(out.x) < 1e-6 && Math.abs(Math.abs(out.y) - Math.PI) < 1e-6 && Math.abs(Math.abs(out.z) - Math.PI) < 1e-6) {
+        out.x = Math.PI;
+        out.y = 0;
+        out.z = 0;
+      }
     } else {
       out.y = Math.atan2(2 * (qw * qy - qx * qz), 1 - 2 * (qy * qy + qz * qz));
       out.z = 0;

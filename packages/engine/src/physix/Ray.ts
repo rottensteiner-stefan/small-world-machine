@@ -59,27 +59,38 @@ export class Ray {
     const oriY: number = this.origin.y;
     const oriZ: number = this.origin.z;
 
-    const invDirX: number = 1.0 / (0 === dirX ? 1e-10 : dirX);
-    const invDirY: number = 1.0 / (0 === dirY ? 1e-10 : dirY);
-    const invDirZ: number = 1.0 / (0 === dirZ ? 1e-10 : dirZ);
+    if (Math.abs(dirX) <= 1e-10) {
+      if (oriX < box.min.x || oriX > box.max.x) return -1;
+    } else {
+      const invDirX: number = 1.0 / dirX;
+      const t1: number = (box.min.x - oriX) * invDirX;
+      const t2: number = (box.max.x - oriX) * invDirX;
+      tmin = Math.max(tmin, Math.min(t1, t2));
+      tmax = Math.min(tmax, Math.max(t1, t2));
+      if (tmin > tmax || tmax < 0) return -1;
+    }
 
-    let t1: number = (box.min.x - oriX) * invDirX;
-    let t2: number = (box.max.x - oriX) * invDirX;
+    if (Math.abs(dirY) <= 1e-10) {
+      if (oriY < box.min.y || oriY > box.max.y) return -1;
+    } else {
+      const invDirY: number = 1.0 / dirY;
+      const t1: number = (box.min.y - oriY) * invDirY;
+      const t2: number = (box.max.y - oriY) * invDirY;
+      tmin = Math.max(tmin, Math.min(t1, t2));
+      tmax = Math.min(tmax, Math.max(t1, t2));
+      if (tmin > tmax || tmax < 0) return -1;
+    }
 
-    tmin = Math.max(tmin, Math.min(t1, t2));
-    tmax = Math.min(tmax, Math.max(t1, t2));
-
-    t1 = (box.min.y - oriY) * invDirY;
-    t2 = (box.max.y - oriY) * invDirY;
-
-    tmin = Math.max(tmin, Math.min(t1, t2));
-    tmax = Math.min(tmax, Math.max(t1, t2));
-
-    t1 = (box.min.z - oriZ) * invDirZ;
-    t2 = (box.max.z - oriZ) * invDirZ;
-
-    tmin = Math.max(tmin, Math.min(t1, t2));
-    tmax = Math.min(tmax, Math.max(t1, t2));
+    if (Math.abs(dirZ) <= 1e-10) {
+      if (oriZ < box.min.z || oriZ > box.max.z) return -1;
+    } else {
+      const invDirZ: number = 1.0 / dirZ;
+      const t1: number = (box.min.z - oriZ) * invDirZ;
+      const t2: number = (box.max.z - oriZ) * invDirZ;
+      tmin = Math.max(tmin, Math.min(t1, t2));
+      tmax = Math.min(tmax, Math.max(t1, t2));
+      if (tmin > tmax || tmax < 0) return -1;
+    }
 
     if (tmax >= tmin && 0 <= tmax) {
       return 0 <= tmin ? tmin : tmax;

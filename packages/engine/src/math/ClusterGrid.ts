@@ -96,13 +96,13 @@ export interface LightClusterCoverage {
 
 /**
  * Computes which cluster cells a single light's bounding sphere can possibly reach, by
- * projecting the sphere's screen-space footprint (X/Y) and its radial-distance range (Z) --
+ * projecting the sphere's screen-space footprint (X/Y) and its planar view-Z range (Z) --
  * the same approach `cluster_cull.wgsl`'s `lightCoverage()` uses on WebGPU, kept here as a pure,
  * backend-neutral function so the WebGL2 CPU culling pass can reuse and unit-test it directly.
- * Falls back to covering the whole X/Y grid when the light center is behind the camera or the
- * camera sits inside the sphere (a projected NDC center would be meaningless there) --
- * over-inclusion is safe, dropping a light that's actually visible is not.
- * @param viewDist Radial distance from the camera to the light center.
+ * Falls back to covering the whole X/Y grid when the light straddles the camera near horizon
+ * (`viewZ <= radius`) while still overlapping `[near, far]`, and returns an empty X range
+ * (`cellMinX > cellMaxX`) when the sphere is completely outside the frustum.
+ * @param viewZ Planar view-space depth of the light center (`dot(lightPos - camPos, camForward)`).
  * @param radius The light's range/radius.
  * @param ndcX Light center's screen-space NDC X (only meaningful when `clipW > 0`).
  * @param ndcY Light center's screen-space NDC Y (only meaningful when `clipW > 0`).
@@ -115,9 +115,10 @@ export interface LightClusterCoverage {
  * @param dims Grid dimensions from `computeClusterCounts()`.
  * @param near Camera near-plane distance.
  * @param far Camera far-plane distance.
+ * @param out Optional reusable target object to avoid per-light heap allocation.
  */
 export function lightClusterCoverage(
-  viewDist: number,
+  viewZ: number,
   radius: number,
   ndcX: number,
   ndcY: number,
@@ -132,47 +133,6 @@ export function lightClusterCoverage(
   far: number,
   out?: LightClusterCoverage,
 ): LightClusterCoverage {
-  let cellMinX = 0;
-  let cellMaxX = dims.x - 1;
-  let cellMinY = 0;
-  let cellMaxY = dims.y - 1;
-
-  if (clipW > 0.0001 && viewDist > radius && projScaleX > 0 && projScaleY > 0) {
-    const tanX = ndcX / projScaleX;
-    const tanY = ndcY / projScaleY;
-    const vz = viewDist / Math.sqrt(1 + tanX * tanX + tanY * tanY);
-
-    if (vz > radius) {
-      const vx = tanX * vz;
-      const vy = tanY * vz;
-      const denom = vz * vz - radius * radius;
-
-      const radX = radius * Math.sqrt(Math.max(vx * vx + vz * vz - radius * radius, 0));
-      const mXMin = (vx * vz - radX) / denom;
-      const mXMax = (vx * vz + radX) / denom;
-      const ndcXMin = mXMin * projScaleX;
-      const ndcXMax = mXMax * projScaleX;
-
-      const radY = radius * Math.sqrt(Math.max(vy * vy + vz * vz - radius * radius, 0));
-      const mYMin = (vy * vz - radY) / denom;
-      const mYMax = (vy * vz + radY) / denom;
-      const ndcYMin = mYMin * projScaleY;
-      const ndcYMax = mYMax * projScaleY;
-
-      const pxX0 = (ndcXMin * 0.5 + 0.5) * screenWidth;
-      const pxX1 = (ndcXMax * 0.5 + 0.5) * screenWidth;
-      const pxY0 = (ndcYMin * 0.5 + 0.5) * screenHeight;
-      const pxY1 = (ndcYMax * 0.5 + 0.5) * screenHeight;
-
-      cellMinX = clampInt(Math.floor(pxX0 / tileSize[0]), 0, dims.x - 1);
-      cellMaxX = clampInt(Math.floor(pxX1 / tileSize[0]), 0, dims.x - 1);
-      cellMinY = clampInt(Math.floor(pxY0 / tileSize[1]), 0, dims.y - 1);
-      cellMaxY = clampInt(Math.floor(pxY1 / tileSize[1]), 0, dims.y - 1);
-    }
-  }
-
-  const dMin = Math.max(viewDist - radius, near);
-  const dMax = Math.min(viewDist + radius, far);
   const result = out ?? {
     cellMinX: 0,
     cellMaxX: 0,
@@ -181,6 +141,72 @@ export function lightClusterCoverage(
     sliceMin: 0,
     sliceMax: 0,
   };
+
+  const zNear = viewZ - radius;
+  const zFar = viewZ + radius;
+  if (zFar < near || zNear > far) {
+    result.cellMinX = 1;
+    result.cellMaxX = 0;
+    result.cellMinY = 1;
+    result.cellMaxY = 0;
+    result.sliceMin = 0;
+    result.sliceMax = 0;
+    return result;
+  }
+
+  let cellMinX = 0;
+  let cellMaxX = dims.x - 1;
+  let cellMinY = 0;
+  let cellMaxY = dims.y - 1;
+
+  if (clipW > 0.0001 && viewZ > radius && projScaleX > 0 && projScaleY > 0) {
+    const tanX = ndcX / projScaleX;
+    const tanY = ndcY / projScaleY;
+    const vz = viewZ;
+    const vx = tanX * vz;
+    const vy = tanY * vz;
+    const denom = vz * vz - radius * radius;
+
+    const radX = radius * Math.sqrt(Math.max(vx * vx + vz * vz - radius * radius, 0));
+    const mXMin = (vx * vz - radX) / denom;
+    const mXMax = (vx * vz + radX) / denom;
+    const ndcXMin = mXMin * projScaleX;
+    const ndcXMax = mXMax * projScaleX;
+
+    const radY = radius * Math.sqrt(Math.max(vy * vy + vz * vz - radius * radius, 0));
+    const mYMin = (vy * vz - radY) / denom;
+    const mYMax = (vy * vz + radY) / denom;
+    const ndcYMin = mYMin * projScaleY;
+    const ndcYMax = mYMax * projScaleY;
+
+    const pxX0 = (ndcXMin * 0.5 + 0.5) * screenWidth;
+    const pxX1 = (ndcXMax * 0.5 + 0.5) * screenWidth;
+    const pxY0 = (ndcYMin * 0.5 + 0.5) * screenHeight;
+    const pxY1 = (ndcYMax * 0.5 + 0.5) * screenHeight;
+
+    const rawMinX = Math.floor(pxX0 / tileSize[0]);
+    const rawMaxX = Math.floor(pxX1 / tileSize[0]);
+    const rawMinY = Math.floor(pxY0 / tileSize[1]);
+    const rawMaxY = Math.floor(pxY1 / tileSize[1]);
+
+    if (rawMaxX < 0 || rawMinX >= dims.x || rawMaxY < 0 || rawMinY >= dims.y) {
+      result.cellMinX = 1;
+      result.cellMaxX = 0;
+      result.cellMinY = 1;
+      result.cellMaxY = 0;
+      result.sliceMin = 0;
+      result.sliceMax = 0;
+      return result;
+    }
+
+    cellMinX = clampInt(rawMinX, 0, dims.x - 1);
+    cellMaxX = clampInt(rawMaxX, 0, dims.x - 1);
+    cellMinY = clampInt(rawMinY, 0, dims.y - 1);
+    cellMaxY = clampInt(rawMaxY, 0, dims.y - 1);
+  }
+
+  const dMin = Math.max(zNear, near);
+  const dMax = Math.min(zFar, far);
   result.cellMinX = cellMinX;
   result.cellMaxX = cellMaxX;
   result.cellMinY = cellMinY;

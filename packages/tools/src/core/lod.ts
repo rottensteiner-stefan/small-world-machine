@@ -627,6 +627,7 @@ export async function runLodGeneration(
   inputPath: string,
   options: LodOptions,
 ): Promise<LodRunResult> {
+  await MeshoptSimplifier.ready;
   const { sources, json, originalBytes, fileName } = await loadLodSources(inputPath);
   const stem = basename(fileName, extname(fileName));
   const warnings: string[] = [];

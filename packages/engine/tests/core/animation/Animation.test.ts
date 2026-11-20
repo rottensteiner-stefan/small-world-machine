@@ -220,4 +220,129 @@ describe("Skeletal Animation System", () => {
     expect(warnSpy.mock.calls[0]![0]).toContain(`${MAX_SKINNED_BONES}`);
     warnSpy.mockRestore();
   });
+
+  it("should evaluate CUBICSPLINE translation and rotation tracks using glTF 2.0 Appendix C Hermite formula", () => {
+    const times = new Float32Array([0, 1.0]);
+    // 2 keyframes * 3 (inTangent, value, outTangent) * 3 components = 18 floats
+    // k0: in=(99, 99, 99), v0=(1, 2, 3), b0=(4, 0, -2)
+    // k1: a1=(2, 4, 0), v1=(5, 6, 7), out=(88, 88, 88)
+    const transValues = new Float32Array([
+      99, 99, 99,
+      1, 2, 3,
+      4, 0, -2,
+      2, 4, 0,
+      5, 6, 7,
+      88, 88, 88,
+    ]);
+    const transTrack = new KeyframeTrack("Bone", "translation", times, transValues, "CUBICSPLINE");
+
+    // At t = 0, returns value_0 (not inTangent_0)
+    const vAt0 = transTrack.sampleVector(0);
+    expect(vAt0.x).toBeCloseTo(1);
+    expect(vAt0.y).toBeCloseTo(2);
+    expect(vAt0.z).toBeCloseTo(3);
+
+    // At t = 1, returns value_1
+    const vAt1 = transTrack.sampleVector(1.0);
+    expect(vAt1.x).toBeCloseTo(5);
+    expect(vAt1.y).toBeCloseTo(6);
+    expect(vAt1.z).toBeCloseTo(7);
+
+    // At t = 0.5 (s = 0.5, dt = 1):
+    // c0 = 2(0.125) - 3(0.25) + 1 = 0.5
+    // c1 = 1 * (0.125 - 0.5 + 0.5) = 0.125
+    // c2 = -2(0.125) + 3(0.25) = 0.5
+    // c3 = 1 * (0.125 - 0.25) = -0.125
+    // x = 0.5*1 + 0.125*4 + 0.5*5 - 0.125*2 = 0.5 + 0.5 + 2.5 - 0.25 = 3.25
+    // y = 0.5*2 + 0.125*0 + 0.5*6 - 0.125*4 = 1.0 + 0 + 3.0 - 0.5 = 3.5
+    // z = 0.5*3 + 0.125*(-2) + 0.5*7 - 0.125*0 = 1.5 - 0.25 + 3.5 - 0 = 4.75
+    const vAtHalf = transTrack.sampleVector(0.5);
+    expect(vAtHalf.x).toBeCloseTo(3.25);
+    expect(vAtHalf.y).toBeCloseTo(3.5);
+    expect(vAtHalf.z).toBeCloseTo(4.75);
+
+    // Rotation CUBICSPLINE: 2 keyframes * 3 * 4 components = 24 floats
+    // k0: in=(1,2,3,4), v0=(0,0,0,1), b0=(0,1,0,0)
+    // k1: a1=(0,1,0,0), v1=(0,0.70710678,0,0.70710678), out=(5,6,7,8)
+    const s2 = Math.SQRT1_2;
+    const rotValues = new Float32Array([
+      1, 2, 3, 4,
+      0, 0, 0, 1,
+      0, 1, 0, 0,
+      0, 1, 0, 0,
+      0, s2, 0, s2,
+      5, 6, 7, 8,
+    ]);
+    const rotTrack = new KeyframeTrack("Bone", "rotation", times, rotValues, "CUBICSPLINE");
+
+    const qAt0 = rotTrack.sampleQuaternion(0);
+    expect(qAt0.x).toBeCloseTo(0);
+    expect(qAt0.y).toBeCloseTo(0);
+    expect(qAt0.z).toBeCloseTo(0);
+    expect(qAt0.w).toBeCloseTo(1);
+
+    const qAt1 = rotTrack.sampleQuaternion(1.0);
+    expect(qAt1.x).toBeCloseTo(0);
+    expect(qAt1.y).toBeCloseTo(s2);
+    expect(qAt1.z).toBeCloseTo(0);
+    expect(qAt1.w).toBeCloseTo(s2);
+
+    // At t = 0.5: raw y = 0.5*0 + 0.125*1 + 0.5*s2 - 0.125*1 = 0.5*s2
+    // raw w = 0.5*1 + 0 + 0.5*s2 - 0 = 0.5*(1 + s2)
+    const rawY = 0.5 * s2;
+    const rawW = 0.5 * (1 + s2);
+    const len = Math.hypot(rawY, rawW);
+    const qAtHalf = rotTrack.sampleQuaternion(0.5);
+    expect(qAtHalf.x).toBeCloseTo(0);
+    expect(qAtHalf.y).toBeCloseTo(rawY / len);
+    expect(qAtHalf.z).toBeCloseTo(0);
+    expect(qAtHalf.w).toBeCloseTo(rawW / len);
+  });
+
+  it("should cache negative bone lookups in AnimationMixer and call getObjectByName only once", () => {
+    const root = new Object3D("Hero");
+    const arm = new Bone("Arm");
+    root.add(arm);
+
+    const times = new Float32Array([0, 1.0]);
+    const values = new Float32Array([0, 0, 0, 10, 0, 0]);
+    const track = new KeyframeTrack("MissingBone", "translation", times, values, "LINEAR");
+    const clip = new AnimationClip("Ghost", 1.0, [track]);
+
+    const mixer = new AnimationMixer(root);
+    const spy = vi.spyOn(root, "getObjectByName");
+    mixer.clipAction(clip).play();
+
+    mixer.update(0.1);
+    mixer.update(0.1);
+    mixer.update(0.1);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+
+  it("should bind unnamed or duplicate-named nodes unambiguously via track.targetNode when inside mixer root", () => {
+    const root = new Object3D("Root");
+    const nodeA = new Object3D("");
+    const nodeB = new Object3D("");
+    root.add(nodeA, nodeB);
+
+    const times = new Float32Array([0, 1.0]);
+    const trackB = new KeyframeTrack(
+      "",
+      "translation",
+      times,
+      new Float32Array([0, 0, 0, 10, 0, 0]),
+      "LINEAR",
+      nodeB,
+    );
+    const clip = new AnimationClip("UnnamedMove", 1.0, [trackB]);
+
+    const mixer = new AnimationMixer(root);
+    mixer.clipAction(clip).play();
+    mixer.update(0.5);
+
+    expect(nodeA.position.x).toBeCloseTo(0);
+    expect(nodeB.position.x).toBeCloseTo(5);
+  });
 });

@@ -111,4 +111,12 @@ describe("Vector3D", () => {
     expect(v.y).toBeCloseTo(-1);
     expect(v.z).toBeCloseTo(0);
   });
+
+  it("freezes Vector3D.ZERO against accidental in-place mutation", () => {
+    expect(Object.isFrozen(Vector3D.ZERO)).toBe(true);
+    expect(() => Vector3D.ZERO.add(new Vector3D(1, 2, 3))).toThrow();
+    expect(Vector3D.ZERO.x).toBe(0);
+    expect(Vector3D.ZERO.y).toBe(0);
+    expect(Vector3D.ZERO.z).toBe(0);
+  });
 });

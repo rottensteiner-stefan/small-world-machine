@@ -1,3 +1,11 @@
+fn cofactor3(m: mat3x3f) -> mat3x3f {
+    return mat3x3f(
+        cross(m[1], m[2]),
+        cross(m[2], m[0]),
+        cross(m[0], m[1])
+    );
+}
+
 @vertex fn vs(
     @location(0) pos: vec3f,
     @location(1) normal: vec3f,
@@ -11,6 +19,7 @@
     var localPos = vec4f(pos, 1.0);
     var localNormal = normal;
     var localTangent = tangent.xyz;
+    var skinSign = 1.0;
     
     if (obj.isSkinned > 0.5) {
         let bOffset = u32(obj.boneOffset);
@@ -22,7 +31,10 @@
         let skinMat = weights.x * b0 + weights.y * b1 + weights.z * b2 + weights.w * b3;
         localPos = skinMat * vec4f(pos, 1.0);
         let skinMat3 = mat3x3f(skinMat[0].xyz, skinMat[1].xyz, skinMat[2].xyz);
-        localNormal = skinMat3 * normal;
+        let skinCof = cofactor3(skinMat3);
+        let skinDet = dot(skinMat3[0], skinCof[0]);
+        skinSign = select(1.0, -1.0, skinDet < 0.0);
+        localNormal = (skinCof * normal) * skinSign;
         localTangent = skinMat3 * tangent.xyz;
     }
     
@@ -39,11 +51,14 @@
     o.uv = vec2f(uvCos * uvScaled.x - uvSin * uvScaled.y, uvSin * uvScaled.x + uvCos * uvScaled.y) + obj.texOffset;
     o.original_uv = uv;
     
-    // Improved Normal Matrix (handling scaling correctly)
+    // Improved Normal Matrix (handling non-uniform scaling and negative scale correctly)
     let m33 = mat3x3f(obj.model[0].xyz, obj.model[1].xyz, obj.model[2].xyz);
+    let mCof = cofactor3(m33);
+    let modelDet = dot(m33[0], mCof[0]);
+    let modelSign = select(1.0, -1.0, modelDet < 0.0);
     
     // Normalize normals after transformation to world space with robust fallbacks
-    let worldN = m33 * localNormal;
+    let worldN = (mCof * localNormal) * modelSign;
     if (dot(localNormal, localNormal) < 0.0001 || dot(worldN, worldN) < 1e-20) {
         o.n = vec3f(0.0, 1.0, 0.0);
     } else {
@@ -53,7 +68,7 @@
     // Bitangent handedness w = ±1, folded into B in the VERTEX stage (fragment/material
     // shaders reconstruct the TBN unmodified). Defaults to +1 when the tangent is zero or
     // absent, so mirrored-UV islands keep their authored/derived sign only.
-    let tangentSign = select(tangent.w, 1.0, dot(localTangent, localTangent) < 0.0001);
+    let rawTangentSign = select(tangent.w * skinSign * modelSign, 1.0, dot(localTangent, localTangent) < 0.0001);
     
     let worldT = m33 * localTangent;
     if (dot(localTangent, localTangent) < 0.0001 || dot(worldT, worldT) < 1e-20) {
@@ -70,7 +85,7 @@
     // this is an identity there. Tangent frames must stay right-handed orthonormal (G03).
     o.t = normalize(o.t - dot(o.t, o.n) * o.n);
     
-    let worldB = cross(o.n, o.t) * tangentSign;
+    let worldB = cross(o.n, o.t) * rawTangentSign;
     if (dot(worldB, worldB) < 1e-20) {
         let up = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(o.n.y) > 0.999);
         o.b = normalize(cross(o.n, up));

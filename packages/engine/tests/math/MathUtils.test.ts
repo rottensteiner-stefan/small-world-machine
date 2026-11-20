@@ -121,14 +121,19 @@ describe("MathUtils", () => {
     expect(MathUtils.isPowerOfTwo(-4)).toBe(false);
     expect(MathUtils.isPowerOfTwo(3)).toBe(false);
     expect(MathUtils.isPowerOfTwo(15)).toBe(false);
+    expect(MathUtils.isPowerOfTwo(1.5)).toBe(false);
+    expect(MathUtils.isPowerOfTwo(2.25)).toBe(false);
   });
 
-  it("should calculate nextPowerOfTwo correctly", () => {
+  it("should calculate nextPowerOfTwo correctly including non-integers and >32-bit values", () => {
     expect(MathUtils.nextPowerOfTwo(1)).toBe(1);
+    expect(MathUtils.nextPowerOfTwo(1.5)).toBe(2);
     expect(MathUtils.nextPowerOfTwo(2)).toBe(2);
+    expect(MathUtils.nextPowerOfTwo(2.1)).toBe(4);
     expect(MathUtils.nextPowerOfTwo(3)).toBe(4);
     expect(MathUtils.nextPowerOfTwo(4)).toBe(4);
     expect(MathUtils.nextPowerOfTwo(5)).toBe(8);
     expect(MathUtils.nextPowerOfTwo(1000)).toBe(1024);
+    expect(MathUtils.nextPowerOfTwo(0x40000001)).toBe(0x80000000);
   });
 });

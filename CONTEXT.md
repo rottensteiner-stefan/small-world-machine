@@ -198,7 +198,7 @@ _Avoid_: Temp Vector, Scratch Buffer — informal; MathPool is the one canonical
 
 **MotionTrail**:
 A deliberate ghost/afterimage post-processing effect, reusing TAA's exact history-blend mechanism with no camera jitter and a much higher feedback value.
-_Avoid_: confusing it with TAA — same underlying machinery (`HistoryBlendPass`), opposite intent: TAA hides its own feedback artifact, MotionTrail maximizes it on purpose.
+_Avoid_: confusing it with TAA — same underlying machinery (`HistoryBlendPassGL` / `HistoryBlendPassGPU`), opposite intent: TAA hides its own feedback artifact, MotionTrail maximizes it on purpose.
 
 **Normal-Buffer**:
 The thin world-space, octahedral-encoded normal target written as a second render target by the main pass (shading normal, incl. normal map), switched on automatically when a Decal is visible (ADR 0028).

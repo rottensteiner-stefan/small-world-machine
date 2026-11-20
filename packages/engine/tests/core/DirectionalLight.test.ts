@@ -129,3 +129,79 @@ describe("DirectionalLight per-cascade normal-offset bias (P3-E10 / DP-13, CsmC0
     expect(light.cascadeNormalBiases).toEqual([0, 0, 0, 0]);
   });
 });
+
+describe("DirectionalLight.updateCascades bounding-sphere texel snapping (R1)", () => {
+  function projectWorldPointToCascadeTexel(
+    light: DirectionalLight,
+    cascadeIdx: number,
+    worldPoint: Vector3D,
+  ): { u: number; v: number; width: number; height: number } {
+    const cam = light.cascadeCameras[cascadeIdx]!;
+    const ortho = cam.projection as OrthographicProjection;
+    const atlasCols = Math.ceil(Math.sqrt(light.numCascades));
+    const perCascadeRes = light.shadowResolution / atlasCols;
+    const p = worldPoint.clone();
+    cam.viewProjectionMatrix4.transformVector(p);
+    const u = (p.x * 0.5 + 0.5) * perCascadeRes;
+    const v = (p.y * 0.5 + 0.5) * perCascadeRes;
+    return {
+      u,
+      v,
+      width: ortho.right - ortho.left,
+      height: ortho.top - ortho.bottom,
+    };
+  }
+
+  it("shifts projected shadow texels by exact integer amounts under sub-texel camera translation and keeps ortho extent invariant under rotation", () => {
+    const camera = new Camera(
+      new PerspectiveProjection({ fov: Math.PI / 3, aspect: 16 / 9, near: 0.1, far: 150 }),
+    );
+    camera.position.set(0, 0, 0);
+    camera.target.set(0, 0, -10);
+    camera.updateViewMatrix();
+
+    const light = new DirectionalLight({
+      direction: new Vector3D(-0.45, -0.75, -0.45).normalize(),
+      numCascades: 4,
+      castShadow: true,
+      shadowResolution: 2048,
+    });
+
+    const fixedPoint = new Vector3D(0, 0, -5);
+    light.updateCascades(camera);
+    const base = projectWorldPointToCascadeTexel(light, 0, fixedPoint);
+
+    // Sub-texel camera translation
+    camera.position.set(0.037, -0.019, 0.023);
+    camera.target.set(0.037, -0.019, -9.977);
+    camera.updateViewMatrix();
+    light.updateCascades(camera);
+    const translated = projectWorldPointToCascadeTexel(light, 0, fixedPoint);
+
+    const du = Math.abs(translated.u - base.u);
+    const dv = Math.abs(translated.v - base.v);
+    expect(Math.abs(du - Math.round(du))).toBeLessThan(1e-3);
+    expect(Math.abs(dv - Math.round(dv))).toBeLessThan(1e-3);
+    expect(translated.width).toBeCloseTo(base.width, 5);
+    expect(translated.height).toBeCloseTo(base.height, 5);
+
+    // Camera yaw/pitch rotation by 17 degrees
+    const angle = (17 * Math.PI) / 180;
+    camera.target.set(
+      camera.position.x + Math.sin(angle) * 10,
+      camera.position.y + 1.5,
+      camera.position.z - Math.cos(angle) * 10,
+    );
+    camera.updateViewMatrix();
+    light.updateCascades(camera);
+    const rotated = projectWorldPointToCascadeTexel(light, 0, fixedPoint);
+
+    expect(rotated.width).toBeCloseTo(base.width, 5);
+    expect(rotated.height).toBeCloseTo(base.height, 5);
+    const duRot = Math.abs(rotated.u - base.u);
+    const dvRot = Math.abs(rotated.v - base.v);
+    expect(Math.abs(duRot - Math.round(duRot))).toBeLessThan(1e-3);
+    expect(Math.abs(dvRot - Math.round(dvRot))).toBeLessThan(1e-3);
+  });
+});
+

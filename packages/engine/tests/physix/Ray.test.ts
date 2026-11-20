@@ -19,6 +19,12 @@ describe("Ray", () => {
     expect(ray.intersectsBox(box)).toBe(-1);
   });
 
+  it("should return -1 for an axis-parallel ray whose origin lies just outside the slab (B4)", () => {
+    const ray = new Ray(new Vector3D(-1e-10, 1, 5), new Vector3D(0, 0, -1));
+    const box = new BoundingBox(new Vector3D(0, 0, 0), new Vector3D(2, 2, 2));
+    expect(ray.intersectsBox(box)).toBe(-1);
+  });
+
   it("should find the nearest intersection distance for a ray hitting a sphere", () => {
     const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(1, 0, 0));
     const sphere = new BoundingSphere(new Vector3D(10, 0, 0), 1.0);

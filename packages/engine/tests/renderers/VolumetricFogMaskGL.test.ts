@@ -22,6 +22,10 @@ interface TextureBinding {
   texture: unknown;
 }
 
+function srgbToLinear(value: number): number {
+  return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+}
+
 /**
  * Builds a minimal WebGL2 pass context for these unit tests (mirrors the renderer's per-frame
  * repopulation of the reusable context; see GLPostEffectPassContext).
@@ -333,9 +337,9 @@ describe("VolumetricFogPassGL density masks", () => {
     // baked: sunScale = 2 * 1.5 * 0.5 = 1.5, times the linear light/element tint (ADR 0049).
     const sunColor = mock.uniformCalls["u_sunColor"] as number[];
     expect(sunColor).toBeDefined();
-    expect(sunColor[0]).toBeCloseTo(Math.pow(0.8, 2.2) * 1.0 * 1.5, 10);
-    expect(sunColor[1]).toBeCloseTo(Math.pow(0.6, 2.2) * 1.0 * 1.5, 10);
-    expect(sunColor[2]).toBeCloseTo(Math.pow(0.4, 2.2) * 1.0 * 1.5, 10);
+    expect(sunColor[0]).toBeCloseTo(srgbToLinear(0.8) * 1.5, 10);
+    expect(sunColor[1]).toBeCloseTo(srgbToLinear(0.6) * 1.5, 10);
+    expect(sunColor[2]).toBeCloseTo(srgbToLinear(0.4) * 1.5, 10);
     expect(mock.uniformCalls["u_elementMaskEnabled"]).toBe(0);
   });
 
@@ -358,9 +362,9 @@ describe("VolumetricFogPassGL density masks", () => {
 
     // unbaked: sunScale = 2 * 1.5 * 1.0 = 3.0, the per-cell albedo is applied in the shader.
     const sunColor = mock.uniformCalls["u_sunColor"] as number[];
-    expect(sunColor[0]).toBeCloseTo(Math.pow(0.8, 2.2) * 1.0 * 3.0, 10);
-    expect(sunColor[1]).toBeCloseTo(Math.pow(0.6, 2.2) * 1.0 * 3.0, 10);
-    expect(sunColor[2]).toBeCloseTo(Math.pow(0.4, 2.2) * 1.0 * 3.0, 10);
+    expect(sunColor[0]).toBeCloseTo(srgbToLinear(0.8) * 3.0, 10);
+    expect(sunColor[1]).toBeCloseTo(srgbToLinear(0.6) * 3.0, 10);
+    expect(sunColor[2]).toBeCloseTo(srgbToLinear(0.4) * 3.0, 10);
 
     expect(mock.uniformCalls["u_elementMaskEnabled"]).toBe(1);
     expect(mock.uniformCalls["u_elementMaskAlbedo"]).toBe(0.5);

@@ -175,19 +175,34 @@ fn F_SchlickRoughness90(cosTheta: f32, F0: vec3f, F90: f32, roughness: f32) -> v
 }
 
 fn linearToSRGB(color: vec3f) -> vec3f {
-    return pow(color, vec3f(1.0 / global.gamma));
+    let c = max(color, vec3f(0.0));
+    if (abs(global.gamma - 2.2) < 0.001) {
+        let lo = c * 12.92;
+        let hi = 1.055 * pow(c, vec3f(1.0 / 2.4)) - vec3f(0.055);
+        return select(hi, lo, c <= vec3f(0.0031308));
+    }
+    return pow(c, vec3f(1.0 / global.gamma));
 }
 
-// ADR 0049: assets (textures, material colours, IBL, asset cubemaps) are 8-bit sRGB -- fixed 2.2,
-// never the output lane (which is 1.0 while post-processing encodes).
+// ADR 0049: decode encoded asset colors with the IEC 61966-2-1 sRGB transfer curve, independent of
+// the output gamma lane (which is 1.0 while post-processing encodes).
 fn sRGBToLinear(color: vec3f) -> vec3f {
-    return pow(color, vec3f(2.2));
+    let c = max(color, vec3f(0.0));
+    let lo = c / 12.92;
+    let hi = pow((c + vec3f(0.055)) / 1.055, vec3f(2.4));
+    return select(hi, lo, c <= vec3f(0.04045));
 }
 
 // Engine render targets the forward pass wrote through linearToSRGB (opaque capture, planar
 // reflection, reflection probes) decode with that same lane: sRGB without, linear with post-processing.
 fn targetToLinear(color: vec3f) -> vec3f {
-    return pow(color, vec3f(global.gamma));
+    let c = max(color, vec3f(0.0));
+    if (abs(global.gamma - 2.2) < 0.001) {
+        let lo = c / 12.92;
+        let hi = pow((c + vec3f(0.055)) / 1.055, vec3f(2.4));
+        return select(hi, lo, c <= vec3f(0.04045));
+    }
+    return pow(c, vec3f(global.gamma));
 }
 
 fn D_Charlie(dotNH: f32, roughness: f32) -> f32 {
@@ -589,6 +604,6 @@ fn getShadowDirBlend(map: texture_depth_2d_array, samp: sampler_comparison, shad
     if (global.evsmParams.x > 0.5) {
         return getEVSM(u_dirEvsmMap, shadowPos, layer);
     }
-    return getShadowPCSS(map, samp, shadowPos, layer, bias);
+    return getShadowPCF(map, samp, shadowPos, layer, bias);
 }
 

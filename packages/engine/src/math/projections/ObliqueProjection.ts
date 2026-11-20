@@ -119,7 +119,17 @@ export class ObliqueProjection extends AbstractProjection {
   }
 
   public override zoom(delta: number): void {
-    const factor: number = 1.0 + delta;
+    const factor: number = Math.max(0.05, 1.0 + delta);
+    const width: number = this.right - this.left;
+    const height: number = this.top - this.bottom;
+    const minExtent = 1e-4;
+    const maxExtent = 1e6;
+    if (
+      (factor < 1.0 && (width * factor < minExtent || height * factor < minExtent)) ||
+      (factor > 1.0 && (width * factor > maxExtent || height * factor > maxExtent))
+    ) {
+      return;
+    }
     this.left *= factor;
     this.right *= factor;
     this.top *= factor;

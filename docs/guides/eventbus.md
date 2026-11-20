@@ -68,4 +68,4 @@ export function buildHUD(app: SmallWorldMachine) {
 
 ## Why not native DOM events?
 
-Native `CustomEvent` objects in the browser are tightly bound to the DOM tree and consume memory that the garbage collector eventually has to clean up. By using a plain, generic TypeScript `EventDispatcher`, the **Small World Machine** ensures core logic stays decoupled from the browser environment — enabling predictable performance and potentially running your own logic in Web Workers.
+Native `CustomEvent` objects in the browser are tightly bound to the DOM tree and consume memory that the garbage collector eventually has to clean up. By using a plain, generic TypeScript `EventDispatcherImpl`, the **Small World Machine** ensures core logic stays decoupled from the browser environment — enabling predictable performance and potentially running your own logic in Web Workers.

@@ -14,6 +14,8 @@ import { WebGPUGGlobalUniformLayout } from "../GlobalUniformLayout.js";
 import { usesLineQuadShadow } from "../LineShadowRibbon.js";
 import { splitByInstancing } from "../AutoInstancing.js";
 import type { InstancingSplit } from "../AutoInstancing.js";
+import type { RenderBatch } from "../../core/Scene.js";
+import { ShadowCasterCollector } from "./ShadowCasterCollector.js";
 
 const _scratchCasters: Object3D[] = [];
 const _scratchInstanced: Object3D[] = [];
@@ -22,6 +24,7 @@ const _split: InstancingSplit = { standard: [], instanced: [] };
 
 export class CascadedShadowPassGPU implements RenderPass {
   public name = "CascadedShadowPassGPU";
+  private readonly _casterCollector = new ShadowCasterCollector();
 
   /**
    * Keyed by format rather than a single cached view: this pass renders both during the main
@@ -100,6 +103,7 @@ export class CascadedShadowPassGPU implements RenderPass {
     this._bindGroupNeedsShadowRebuild = true;
     renderer.defaultDirShadowTextureView = renderer.dummyDirShadowTextureView;
     // Also drop any EVSM moment map that belonged to the removed/replaced light (ADR 0043).
+    if (this._evsmTex) renderer.deferDestroyTexture(this._evsmTex);
     this._evsmTex = undefined;
     this._evsmTexView = undefined;
     this._evsmLayerViews = [];
@@ -122,7 +126,7 @@ export class CascadedShadowPassGPU implements RenderPass {
     ce: GPUCommandEncoder,
     dLight: DirectionalLight,
     numCascades: number,
-    renderList: ReturnType<Scene["getVisibleObjectsSorted"]>,
+    opaqueBatches: readonly RenderBatch[],
   ): void {
     this._evsmMaterial ??= new EvsmMomentMaterial();
     renderer.context.shaderRegistry.ensureProvider(MaterialType.EVSM, this._evsmMaterial);
@@ -219,8 +223,8 @@ export class CascadedShadowPassGPU implements RenderPass {
       // depth loop's `setBindGroup(0, ...)`.
       rp.setBindGroup(0, this._shadowCasterBindGroup!);
 
-      for (let batchIdx = 0; batchIdx < renderList.opaqueBatches.length; batchIdx++) {
-        const batch = renderList.opaqueBatches[batchIdx];
+      for (let batchIdx = 0; batchIdx < opaqueBatches.length; batchIdx++) {
+        const batch = opaqueBatches[batchIdx];
         if (batch!.shaderId === MaterialType.SKYBOX || batch!.objects.length === 0) continue;
 
         let topology: GPUPrimitiveTopology = Topology.DEFAULT;
@@ -327,7 +331,10 @@ export class CascadedShadowPassGPU implements RenderPass {
     // `numCascades` is a public field but `cascadeCameras` is built once by the light's
     // constructor: raising it later would index missing cameras, so the usable count is clamped.
     const numCascades = dLight ? Math.min(dLight.numCascades, dLight.cascadeCameras.length) : 0;
-    if (!dLight || !dLight.castShadow || numCascades === 0) return;
+    if (!dLight || !dLight.castShadow || numCascades === 0) {
+      this._casterCollector.reset();
+      return;
+    }
 
     this._depthMaterial ??= new DepthMaterial();
     renderer.context.shaderRegistry.ensureProvider(MaterialType.DEPTH, this._depthMaterial);
@@ -408,9 +415,23 @@ export class CascadedShadowPassGPU implements RenderPass {
       renderer.defaultEVSMTextureView = realEvsm;
     }
 
-    // Frame-frozen list computed once per frame by the renderer -- never re-collect here (the
-    // same list + ordering must reach every pass); direct/test executions fall back to the scene.
-    const renderList = renderer.frameRenderList ?? scene.getVisibleObjectsSorted(vp, camPos);
+    // Collect shadow casters directly from `scene.root` across all cascade frustums (R2 / ADR 0031)
+    // so off-screen and camera-occluded casters are never dropped by main-camera culling.
+    // Falls back to `frameRenderList ?? scene.getVisibleObjectsSorted` only for minimal test stubs without `scene.root`.
+    let opaqueBatches: readonly RenderBatch[];
+    if (scene.root) {
+      this._casterCollector.reset();
+      for (let i = 0; i < numCascades; i++) {
+        this._casterCollector.addViewProjectionMatrix(
+          dLight.cascadeCameras[i]!.viewProjectionMatrix,
+        );
+      }
+      this._casterCollector.collect(scene.root);
+      opaqueBatches = this._casterCollector.batches;
+    } else {
+      const renderList = renderer.frameRenderList ?? scene.getVisibleObjectsSorted(vp, camPos);
+      opaqueBatches = renderList.opaqueBatches;
+    }
     const depthManifest = this._depthMaterial.getRenderManifest();
 
     for (let i = 0; i < numCascades; i++) {
@@ -470,8 +491,8 @@ export class CascadedShadowPassGPU implements RenderPass {
       // shared DepthMaterial pipeline -- regardless of each object's own material --
       // mirroring WebGL2's "bind one depth program, source only the model matrix per
       // object" approach (WebGL2Renderer._renderShadowScene).
-      for (let batchIdx = 0; batchIdx < renderList.opaqueBatches.length; batchIdx++) {
-        const batch = renderList.opaqueBatches[batchIdx];
+      for (let batchIdx = 0; batchIdx < opaqueBatches.length; batchIdx++) {
+        const batch = opaqueBatches[batchIdx];
         if (batch!.shaderId === MaterialType.SKYBOX || batch!.objects.length === 0) continue;
 
         let topology: GPUPrimitiveTopology = Topology.DEFAULT;
@@ -554,7 +575,7 @@ export class CascadedShadowPassGPU implements RenderPass {
     // variance moments per cascade, reusing the freshly stored depth array layers as its LEQUAL
     // depth test (no second depth buffer, exact front-surface extraction).
     if (renderer.quality.shadowMode === ShadowMode.EVSM) {
-      this._renderEvsmCascades(renderer, ce, dLight, numCascades, renderList);
+      this._renderEvsmCascades(renderer, ce, dLight, numCascades, opaqueBatches);
     }
 
     // GlobalUniforms was never touched by the loop above (only the dedicated view-slot buffer

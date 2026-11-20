@@ -7,7 +7,7 @@ import type { Vector } from "../interfaces/index.js";
  */
 export class Vector3D implements Vector {
   /** Static zero vector to avoid unnecessary allocations. Should be treated as read-only. */
-  public static readonly ZERO: Vector3D = new Vector3D(0, 0, 0);
+  public static readonly ZERO: Vector3D = Object.freeze(new Vector3D(0, 0, 0));
 
   /**
    * Creates a new Vector3D.

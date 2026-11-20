@@ -289,7 +289,12 @@ if (transmissionWeight > 0.0) {
     float attenuationDist = u_thresholds.z;
 
     vec3 modelScale = vec3(length(u_model[0].xyz), length(u_model[1].xyz), length(u_model[2].xyz));
-    vec3 transmissionRay = normalize(refract(-V, N, 1.0 / ior)) * thickness * modelScale;
+    vec3 refracted = refract(-V, N, 1.0 / ior);
+    float refractedLengthSquared = dot(refracted, refracted);
+    vec3 transmissionDirection = refractedLengthSquared > 1e-8
+        ? refracted * inversesqrt(refractedLengthSquared)
+        : reflect(-V, N);
+    vec3 transmissionRay = transmissionDirection * thickness * modelScale;
     vec4 exitClip = u_vp * vec4(v_worldPos + transmissionRay, 1.0);
     vec2 screenUv = clamp(exitClip.xy / exitClip.w * 0.5 + 0.5, vec2(0.001), vec2(0.999));
 

@@ -141,7 +141,7 @@ float dotNV_cc = max(dot(N_cc, V), 0.0001);
 // StandardMaterial._LANES. The USE_SHEEN compile gate is pushed from the same basis as the lane's w-flag.
 vec3 sheenColor = sRGBToLinear(u_matParam10.rgb);
 #ifdef USE_SHEEN_COLOR_MAP
-sheenColor = sRGBToLinear(texture(u_sheenColorMap, v_uv).rgb);
+sheenColor *= sRGBToLinear(texture(u_sheenColorMap, v_uv).rgb);
 #endif
 float sheenRoughness = clamp(u_thresholds.y, 0.05, 1.0);
 #ifdef USE_SHEEN_ROUGHNESS_MAP
@@ -167,7 +167,10 @@ vec3 Lo = vec3(0.0);
     float backlightShadow = 1.0;
 #endif
     if (u_dirShadowInfo.z > 0.5 && u_dirShadowInfo.w > 0.0) {
-        float depth = length(u_viewPos - v_worldPos);
+        vec3 vpR3 = vec3(u_vp[0][3], u_vp[1][3], u_vp[2][3]);
+        vec3 vpR2 = -vec3(u_vp[0][2], u_vp[1][2], u_vp[2][2]);
+        vec3 camFwd = dot(vpR3, vpR3) > 1e-8 ? vpR3 : vpR2 / max(length(vpR2), 1e-6);
+        float depth = clamp(dot(v_worldPos - u_viewPos, camFwd), u_cameraNearFar.x, u_cameraNearFar.y);
         int numCascades = int(u_dirShadowInfo.w);
         int cascadeIndex = numCascades - 1;
         for (int i = 0; i < 4; i++) {
@@ -217,7 +220,8 @@ vec3 Lo = vec3(0.0);
         float shadowB = shadowA;
         if (blendToNext > 0.0) {
             int nextCascade = cascadeIndex + 1;
-            vec4 lightSpacePosB = u_cascadeMatrices[nextCascade] * vec4(dirShadowSamplePos, 1.0);
+            vec3 dirShadowSamplePosB = v_worldPos + N * u_dirShadowBias[nextCascade] * (1.0 - dotNL);
+            vec4 lightSpacePosB = u_cascadeMatrices[nextCascade] * vec4(dirShadowSamplePosB, 1.0);
             vec3 projCoordsB = lightSpacePosB.xyz / lightSpacePosB.w;
             projCoordsB = projCoordsB * 0.5 + 0.5;
 
@@ -660,7 +664,12 @@ if (transmissionWeight > 0.0) {
     float attenuationDist = u_thresholds.z;
 
     vec3 modelScale = vec3(length(u_model[0].xyz), length(u_model[1].xyz), length(u_model[2].xyz));
-    vec3 transmissionRay = normalize(refract(-V, N, 1.0 / ior)) * thickness * modelScale;
+    vec3 refracted = refract(-V, N, 1.0 / ior);
+    float refractedLengthSquared = dot(refracted, refracted);
+    vec3 transmissionDirection = refractedLengthSquared > 1e-8
+        ? refracted * inversesqrt(refractedLengthSquared)
+        : reflect(-V, N);
+    vec3 transmissionRay = transmissionDirection * thickness * modelScale;
     vec4 exitClip = u_vp * vec4(v_worldPos + transmissionRay, 1.0);
     vec2 screenUv = clamp(exitClip.xy / exitClip.w * 0.5 + 0.5, vec2(0.001), vec2(0.999));
 

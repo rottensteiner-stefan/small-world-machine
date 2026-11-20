@@ -85,6 +85,16 @@
       "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/instance_field/field_pull.wgsl", "pattern": "fn fieldCanopyAmbient" },
       "webgl2": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/gl/managers/InstanceFieldGL.ts", "pattern": "canopy", "reason": "Canopy ambient occlusion (ADR 0059 step 6a, 2026-11-11) lives in the WebGPU field fragment (binding 14 coverage map). The GL field fallback draws through the generic instanced material path without a per-field canopy uniform; deliberate V1 cap, GL tiers keep the uniform ambient." },
       "webgl1": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/gl/managers/InstanceFieldGL.ts", "pattern": "canopy", "reason": "Canopy ambient occlusion (ADR 0059 step 6a, 2026-11-11) lives in the WebGPU field fragment (binding 14 coverage map). The GL field fallback draws through the generic instanced material path without a per-field canopy uniform; deliberate V1 cap, GL tiers keep the uniform ambient." }
+    },
+    "anisotropy_map": {
+      "webgpu": { "state": "absent", "class": "gap", "finding": "T01", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "u_anisotropyMap", "reason": "audit-sweep 2026-11-20 T01: StandardMaterial binds the anisotropy map on every tier, only the GL2 PBR chunk samples it; WebGPU silently ignores it (doctrine: WebGPU must not lag GL2). Fix wanted: WGSL map variant in lighting_pbr.wgsl." },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "u_anisotropyMap" },
+      "webgl1": { "state": "absent", "class": "undecided", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "u_anisotropyMap", "reason": "audit-sweep 2026-11-20 T01: GL1 silently ignores the anisotropy map; implement within the GL1 sampler budget or warn once (owner decision)." }
+    },
+    "iridescence_maps": {
+      "webgpu": { "state": "absent", "class": "gap", "finding": "T01", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "u_iridescenceMap", "reason": "audit-sweep 2026-11-20 T01: StandardMaterial binds the iridescence (+thickness) maps on every tier, only the GL2 PBR chunk samples it; WebGPU silently ignores it (doctrine: WebGPU must not lag GL2). Fix wanted: WGSL map variant in lighting_pbr.wgsl." },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "u_iridescenceMap" },
+      "webgl1": { "state": "absent", "class": "undecided", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "u_iridescenceMap", "reason": "audit-sweep 2026-11-20 T01: GL1 silently ignores the iridescence (+thickness) maps; implement within the GL1 sampler budget or warn once (owner decision)." }
     }
   }
 }

@@ -150,24 +150,38 @@ export class CollisionSweepSolver {
     const oriY = ray.origin.y;
     const oriZ = ray.origin.z;
 
-    const invDirX = 1.0 / (0 === dirX ? 1e-10 : dirX);
-    const invDirY = 1.0 / (0 === dirY ? 1e-10 : dirY);
-    const invDirZ = 1.0 / (0 === dirZ ? 1e-10 : dirZ);
+    if (Math.abs(dirX) <= 1e-10) {
+      if (oriX < box.min.x || oriX > box.max.x) return -1;
+    } else {
+      const invDirX = 1.0 / dirX;
+      const t1 = (box.min.x - oriX) * invDirX;
+      const t2 = (box.max.x - oriX) * invDirX;
+      tmin = Math.max(tmin, Math.min(t1, t2));
+      tmax = Math.min(tmax, Math.max(t1, t2));
+      if (tmin > tmax || tmax < 0) return -1;
+    }
 
-    let t1 = (box.min.x - oriX) * invDirX;
-    let t2 = (box.max.x - oriX) * invDirX;
-    tmin = Math.max(tmin, Math.min(t1, t2));
-    tmax = Math.min(tmax, Math.max(t1, t2));
+    if (Math.abs(dirY) <= 1e-10) {
+      if (oriY < box.min.y || oriY > box.max.y) return -1;
+    } else {
+      const invDirY = 1.0 / dirY;
+      const t1 = (box.min.y - oriY) * invDirY;
+      const t2 = (box.max.y - oriY) * invDirY;
+      tmin = Math.max(tmin, Math.min(t1, t2));
+      tmax = Math.min(tmax, Math.max(t1, t2));
+      if (tmin > tmax || tmax < 0) return -1;
+    }
 
-    t1 = (box.min.y - oriY) * invDirY;
-    t2 = (box.max.y - oriY) * invDirY;
-    tmin = Math.max(tmin, Math.min(t1, t2));
-    tmax = Math.min(tmax, Math.max(t1, t2));
-
-    t1 = (box.min.z - oriZ) * invDirZ;
-    t2 = (box.max.z - oriZ) * invDirZ;
-    tmin = Math.max(tmin, Math.min(t1, t2));
-    tmax = Math.min(tmax, Math.max(t1, t2));
+    if (Math.abs(dirZ) <= 1e-10) {
+      if (oriZ < box.min.z || oriZ > box.max.z) return -1;
+    } else {
+      const invDirZ = 1.0 / dirZ;
+      const t1 = (box.min.z - oriZ) * invDirZ;
+      const t2 = (box.max.z - oriZ) * invDirZ;
+      tmin = Math.max(tmin, Math.min(t1, t2));
+      tmax = Math.min(tmax, Math.max(t1, t2));
+      if (tmin > tmax || tmax < 0) return -1;
+    }
 
     if (tmin < 0 || tmin > tmax) {
       return -1;
@@ -281,6 +295,114 @@ export class CollisionSweepSolver {
   }
 
   /**
+   * 15-axis Dynamic-SAT sweep between moving box A (at `origin`, moving by `delta`, axes `a0, a1, a2`,
+   * half-extents `hA`) and static box B (at `centerB`, axes `b0, b1, b2`, half-extents `hB`).
+   */
+  private static _sweepDynamicSat15(
+    origin: Vector3D,
+    delta: Vector3D,
+    a0: Vector3D,
+    a1: Vector3D,
+    a2: Vector3D,
+    hA: Vector3D,
+    centerB: Vector3D,
+    b0: Vector3D,
+    b1: Vector3D,
+    b2: Vector3D,
+    hB: Vector3D,
+  ): number {
+    const d0x = centerB.x - origin.x;
+    const d0y = centerB.y - origin.y;
+    const d0z = centerB.z - origin.z;
+
+    let tFirst = -Infinity;
+    let tLast = Infinity;
+    let minOverlap = Infinity;
+    let minInward = 0;
+
+    const testAxis = (lx: number, ly: number, lz: number): boolean => {
+      const lenSq = lx * lx + ly * ly + lz * lz;
+      if (lenSq <= 1e-8) {
+        return true;
+      }
+      const invLen = Math.abs(lenSq - 1.0) > 1e-6 ? 1.0 / Math.sqrt(lenSq) : 1.0;
+      const nx = lx * invLen;
+      const ny = ly * invLen;
+      const nz = lz * invLen;
+
+      const rA =
+        hA.x * Math.abs(nx * a0.x + ny * a0.y + nz * a0.z) +
+        hA.y * Math.abs(nx * a1.x + ny * a1.y + nz * a1.z) +
+        hA.z * Math.abs(nx * a2.x + ny * a2.y + nz * a2.z);
+      const rB =
+        hB.x * Math.abs(nx * b0.x + ny * b0.y + nz * b0.z) +
+        hB.y * Math.abs(nx * b1.x + ny * b1.y + nz * b1.z) +
+        hB.z * Math.abs(nx * b2.x + ny * b2.y + nz * b2.z);
+      const R = rA + rB;
+      const p0 = d0x * nx + d0y * ny + d0z * nz;
+      const v = -(delta.x * nx + delta.y * ny + delta.z * nz);
+
+      const overlap = R - Math.abs(p0);
+      if (overlap < minOverlap) {
+        minOverlap = overlap;
+        // Normal pointing from A towards B has sign(p0); inward velocity of A towards B is -v * sign(p0)
+        minInward = p0 >= 0 ? -v : v;
+      }
+
+      if (Math.abs(v) <= 1e-10) {
+        return Math.abs(p0) <= R;
+      }
+
+      const invV = 1.0 / v;
+      let t0 = (-R - p0) * invV;
+      let t1 = (R - p0) * invV;
+      if (t0 > t1) {
+        const tmp = t0;
+        t0 = t1;
+        t1 = tmp;
+      }
+      if (t0 > tFirst) tFirst = t0;
+      if (t1 < tLast) tLast = t1;
+      return tFirst <= tLast && tLast >= 0;
+    };
+
+    if (!testAxis(a0.x, a0.y, a0.z)) return -1;
+    if (!testAxis(a1.x, a1.y, a1.z)) return -1;
+    if (!testAxis(a2.x, a2.y, a2.z)) return -1;
+
+    if (!testAxis(b0.x, b0.y, b0.z)) return -1;
+    if (!testAxis(b1.x, b1.y, b1.z)) return -1;
+    if (!testAxis(b2.x, b2.y, b2.z)) return -1;
+
+    const aAxes = [a0, a1, a2] as const;
+    const bAxes = [b0, b1, b2] as const;
+    for (let i = 0; i < 3; i++) {
+      const u = aAxes[i]!;
+      for (let j = 0; j < 3; j++) {
+        const w = bAxes[j]!;
+        const cx = u.y * w.z - u.z * w.y;
+        const cy = u.z * w.x - u.x * w.z;
+        const cz = u.x * w.y - u.y * w.x;
+        if (!testAxis(cx, cy, cz)) return -1;
+      }
+    }
+
+    if (tFirst > tLast || tLast < 0) {
+      return -1;
+    }
+
+    if (minOverlap >= 0) {
+      return minInward > minOverlap + CCD_PENETRATION_TOLERANCE ? 0 : -1;
+    }
+
+    return tFirst >= 0 && tFirst <= 1 ? tFirst : -1;
+  }
+
+  private static readonly _AXIS_X = new Vector3D(1, 0, 0);
+  private static readonly _AXIS_Y = new Vector3D(0, 1, 0);
+  private static readonly _AXIS_Z = new Vector3D(0, 0, 1);
+
+  /**
    * Sweeps a moving AABB against a static OBB for CCD.
    * @param origin Center of moving box at the start of the step.
    * @param delta Displacement vector of the moving box.
@@ -294,36 +416,19 @@ export class CollisionSweepSolver {
     halfExtents: Vector3D,
     o: OBB,
   ): number {
-    const box = (this._sweepScratchBox ??= new BoundingBox(new Vector3D(), new Vector3D()));
-    const ray = (this._sweepScratchRay ??= new Ray());
-
-    const rel = MathPool.acquireVector().copyFrom(origin).sub(o.center);
-    const u0 = MathUtils.at(o.axes, 0);
-    const u1 = MathUtils.at(o.axes, 1);
-    const u2 = MathUtils.at(o.axes, 2);
-
-    ray.origin.set(rel.dot(u0), rel.dot(u1), rel.dot(u2));
-    MathPool.releaseVector(rel);
-
-    ray.direction.set(delta.dot(u0), delta.dot(u1), delta.dot(u2));
-
-    const r0 =
-      halfExtents.x * Math.abs(u0.x) +
-      halfExtents.y * Math.abs(u0.y) +
-      halfExtents.z * Math.abs(u0.z);
-    const r1 =
-      halfExtents.x * Math.abs(u1.x) +
-      halfExtents.y * Math.abs(u1.y) +
-      halfExtents.z * Math.abs(u1.z);
-    const r2 =
-      halfExtents.x * Math.abs(u2.x) +
-      halfExtents.y * Math.abs(u2.y) +
-      halfExtents.z * Math.abs(u2.z);
-
-    box.min.set(-o.halfExtents.x - r0, -o.halfExtents.y - r1, -o.halfExtents.z - r2);
-    box.max.set(o.halfExtents.x + r0, o.halfExtents.y + r1, o.halfExtents.z + r2);
-
-    return this._sweepRayBox(ray, box);
+    return this._sweepDynamicSat15(
+      origin,
+      delta,
+      this._AXIS_X,
+      this._AXIS_Y,
+      this._AXIS_Z,
+      halfExtents,
+      o.center,
+      MathUtils.at(o.axes, 0),
+      MathUtils.at(o.axes, 1),
+      MathUtils.at(o.axes, 2),
+      o.halfExtents,
+    );
   }
 
   /**
@@ -362,66 +467,45 @@ export class CollisionSweepSolver {
    * Sweeps a moving OBB against a static AABB for CCD.
    */
   public static sweepObbBox(origin: Vector3D, delta: Vector3D, o: OBB, b: BoundingBox): number {
-    const box = (this._sweepScratchBox ??= new BoundingBox(new Vector3D(), new Vector3D()));
-    const ray = (this._sweepScratchRay ??= new Ray());
-
-    const rel = MathPool.acquireVector().copyFrom(b.center).sub(origin);
-    const u0 = MathUtils.at(o.axes, 0);
-    const u1 = MathUtils.at(o.axes, 1);
-    const u2 = MathUtils.at(o.axes, 2);
-
-    ray.origin.set(rel.dot(u0), rel.dot(u1), rel.dot(u2));
-    MathPool.releaseVector(rel);
-
-    ray.direction.set(-delta.dot(u0), -delta.dot(u1), -delta.dot(u2));
-
-    const bhx = (b.max.x - b.min.x) * 0.5;
-    const bhy = (b.max.y - b.min.y) * 0.5;
-    const bhz = (b.max.z - b.min.z) * 0.5;
-
-    const r0 = bhx * Math.abs(u0.x) + bhy * Math.abs(u0.y) + bhz * Math.abs(u0.z);
-    const r1 = bhx * Math.abs(u1.x) + bhy * Math.abs(u1.y) + bhz * Math.abs(u1.z);
-    const r2 = bhx * Math.abs(u2.x) + bhy * Math.abs(u2.y) + bhz * Math.abs(u2.z);
-
-    box.min.set(-o.halfExtents.x - r0, -o.halfExtents.y - r1, -o.halfExtents.z - r2);
-    box.max.set(o.halfExtents.x + r0, o.halfExtents.y + r1, o.halfExtents.z + r2);
-
-    return this._sweepRayBox(ray, box);
+    const bHalf = MathPool.acquireVector().set(
+      (b.max.x - b.min.x) * 0.5,
+      (b.max.y - b.min.y) * 0.5,
+      (b.max.z - b.min.z) * 0.5,
+    );
+    const t = this._sweepDynamicSat15(
+      origin,
+      delta,
+      MathUtils.at(o.axes, 0),
+      MathUtils.at(o.axes, 1),
+      MathUtils.at(o.axes, 2),
+      o.halfExtents,
+      b.center,
+      this._AXIS_X,
+      this._AXIS_Y,
+      this._AXIS_Z,
+      bHalf,
+    );
+    MathPool.releaseVector(bHalf);
+    return t;
   }
 
   /**
    * Sweeps a moving OBB against a static OBB for CCD.
    */
   public static sweepObbObb(origin: Vector3D, delta: Vector3D, oA: OBB, oB: OBB): number {
-    const box = (this._sweepScratchBox ??= new BoundingBox(new Vector3D(), new Vector3D()));
-    const ray = (this._sweepScratchRay ??= new Ray());
-
-    const rel = MathPool.acquireVector().copyFrom(origin).sub(oB.center);
-    const uB0 = MathUtils.at(oB.axes, 0);
-    const uB1 = MathUtils.at(oB.axes, 1);
-    const uB2 = MathUtils.at(oB.axes, 2);
-
-    ray.origin.set(rel.dot(uB0), rel.dot(uB1), rel.dot(uB2));
-    MathPool.releaseVector(rel);
-
-    ray.direction.set(delta.dot(uB0), delta.dot(uB1), delta.dot(uB2));
-
-    const uA0 = MathUtils.at(oA.axes, 0);
-    const uA1 = MathUtils.at(oA.axes, 1);
-    const uA2 = MathUtils.at(oA.axes, 2);
-    const hA = oA.halfExtents;
-
-    const r0 =
-      hA.x * Math.abs(uB0.dot(uA0)) + hA.y * Math.abs(uB0.dot(uA1)) + hA.z * Math.abs(uB0.dot(uA2));
-    const r1 =
-      hA.x * Math.abs(uB1.dot(uA0)) + hA.y * Math.abs(uB1.dot(uA1)) + hA.z * Math.abs(uB1.dot(uA2));
-    const r2 =
-      hA.x * Math.abs(uB2.dot(uA0)) + hA.y * Math.abs(uB2.dot(uA1)) + hA.z * Math.abs(uB2.dot(uA2));
-
-    box.min.set(-oB.halfExtents.x - r0, -oB.halfExtents.y - r1, -oB.halfExtents.z - r2);
-    box.max.set(oB.halfExtents.x + r0, oB.halfExtents.y + r1, oB.halfExtents.z + r2);
-
-    return this._sweepRayBox(ray, box);
+    return this._sweepDynamicSat15(
+      origin,
+      delta,
+      MathUtils.at(oA.axes, 0),
+      MathUtils.at(oA.axes, 1),
+      MathUtils.at(oA.axes, 2),
+      oA.halfExtents,
+      oB.center,
+      MathUtils.at(oB.axes, 0),
+      MathUtils.at(oB.axes, 1),
+      MathUtils.at(oB.axes, 2),
+      oB.halfExtents,
+    );
   }
 
   /**

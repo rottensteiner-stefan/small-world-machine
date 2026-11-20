@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 
-// ADR 0049: assets decode with a fixed 2.2 (`sRGBToLinear`), engine render targets the forward pass
+// ADR 0049: assets decode with the IEC sRGB transfer (`sRGBToLinear`), engine render targets the forward pass
 // wrote through the gamma lane decode with that lane (`targetToLinear`), and display-referred
 // shaders convert with `displayToTarget`. Source guards -- vitest has no shader compiler.
 
@@ -127,9 +127,12 @@ describe("decode vs output gamma (ADR 0049)", () => {
   for (const { tier, file, displayFile, lane } of COLOR_CHUNKS) {
     const source = read(file);
 
-    it(`${tier}: sRGBToLinear decodes assets with a fixed 2.2, never the output lane`, () => {
+    it(`${tier}: sRGBToLinear decodes assets with the IEC transfer, never the output lane`, () => {
       const decode = body(source, "sRGBToLinear");
-      expect(decode).toContain("2.2");
+      expect(decode).toContain("0.04045");
+      expect(decode).toContain("12.92");
+      expect(decode).toContain("1.055");
+      expect(decode).toContain("2.4");
       expect(decode).not.toMatch(wordRe(lane));
     });
 

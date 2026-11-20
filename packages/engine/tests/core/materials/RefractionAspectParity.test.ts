@@ -83,9 +83,11 @@ describe("KHR_materials_transmission: projected volume ray, BTDF replaces diffus
   it("projects the refracted exit point through the view-projection", () => {
     for (const file of chunks) {
       const source = readFileSync(file, "utf8");
-      expect(source, file).toMatch(
-        /transmissionRay = normalize\(refract\(-V, N, 1\.0 \/ ior\)\) \* thickness \* modelScale/,
-      );
+      expect(source, file).toMatch(/refracted = refract\(-V, N, 1\.0 \/ ior\)/);
+      expect(source, file).toMatch(/refractedLengthSquared = dot\(refracted, refracted\)/);
+      expect(source, file).toMatch(/refractedLengthSquared > 1e-8/);
+      expect(source, file).toMatch(/reflect\(-V, N\)/);
+      expect(source, file).toMatch(/transmissionRay = transmissionDirection \* thickness \* modelScale/);
       expect(source, file).toMatch(
         /(?:u_vp|global\.vp) \* vec4f?\((?:v_worldPos|i\.wp) \+ transmissionRay, 1\.0\)/,
       );
@@ -98,7 +100,7 @@ describe("KHR_materials_transmission: projected volume ray, BTDF replaces diffus
       const source = readFileSync(file, "utf8");
       expect(source, file).toMatch(/diffuseAlbedo = albedo \* \(1\.0 - transmissionWeight\)/);
       expect(source, file).not.toMatch(/kD \* albedo \/ 3\.14159265359/);
-      expect(source, file).toMatch(/diffuseAmbient = irradiance \* diffuseAlbedo/);
+      expect(source, file).toMatch(/diffuseAmbient\s*=\s*[^;]*diffuseAlbedo/);
     }
   });
 

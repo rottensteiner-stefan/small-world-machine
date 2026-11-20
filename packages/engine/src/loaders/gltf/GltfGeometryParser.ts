@@ -49,11 +49,7 @@ export class GltfGeometryParser {
     if (!attributes || attributes["POSITION"] === undefined || !json.accessors) return null;
 
     const posAccessor = json.accessors[attributes["POSITION"]];
-    // POSITION is the one attribute whose quantized (normalized integer) storage must be
-    // dequantized into unit space; NORMAL/TANGENT/etc. keep their normalized domain.
-    const positions = GltfBinaryParser.getBufferData(posAccessor, json, buffers, {
-      dequantize: true,
-    });
+    const positions = GltfBinaryParser.getBufferData(posAccessor, json, buffers);
     if (!positions) return null;
 
     // glTF 2.0 `TANGENT` is a VEC4 whose w component is the bitangent handedness
