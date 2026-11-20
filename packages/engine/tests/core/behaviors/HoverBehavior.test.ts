@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { attachBehavior, detachBehavior } from "../../../src/core/behaviors/Behavior.js";
 import { HoverBehavior } from "../../../src/core/behaviors/HoverBehavior.js";
 import { Object3D } from "../../../src/core/Object3D.js";
 import { StandardMaterial } from "../../../src/core/materials/index.js";
@@ -13,7 +12,7 @@ describe("HoverBehavior", () => {
     const obj = new Object3D("test");
     obj.material = new StandardMaterial();
     const behavior = new HoverBehavior(1.5);
-    attachBehavior(obj.behaviors, behavior, obj);
+    obj.addBehavior(behavior);
 
     obj.onPointerEnter?.();
     expect((obj.material as StandardMaterial).emissiveIntensity).toBe(2.0);
@@ -28,8 +27,8 @@ describe("HoverBehavior", () => {
     const b = new Object3D("b");
     a.material = shared;
     b.material = shared;
-    attachBehavior(a.behaviors, new HoverBehavior(1.5), a);
-    attachBehavior(b.behaviors, new HoverBehavior(1.5), b);
+    a.addBehavior(new HoverBehavior(1.5));
+    b.addBehavior(new HoverBehavior(1.5));
 
     expect(a.material).toBe(shared);
     expect(b.material).toBe(shared);
@@ -50,8 +49,8 @@ describe("HoverBehavior", () => {
     const obj = new Object3D("test");
     obj.material = new StandardMaterial();
     const behavior = new HoverBehavior(1.5);
-    attachBehavior(obj.behaviors, behavior, obj);
-    detachBehavior(obj.behaviors, behavior);
+    obj.addBehavior(behavior);
+    obj.removeBehavior(behavior);
 
     expect(behavior.target).toBeUndefined();
     expect(obj.onPointerEnter).toBeUndefined();
@@ -66,12 +65,12 @@ describe("HoverBehavior", () => {
   it("does not clobber a different behavior's pointer handlers set after it", () => {
     const obj = new Object3D("test");
     const behavior = new HoverBehavior(1.5);
-    attachBehavior(obj.behaviors, behavior, obj);
+    obj.addBehavior(behavior);
 
     const otherHandler = (): void => {};
     obj.onPointerEnter = otherHandler;
 
-    detachBehavior(obj.behaviors, behavior);
+    obj.removeBehavior(behavior);
 
     expect(obj.onPointerEnter).toBe(otherHandler);
   });
@@ -82,7 +81,7 @@ describe("HoverBehavior", () => {
     const behavior = new HoverBehavior(1.2);
     behavior.emissiveColor.set(1.0, 0.5, 0.0);
     behavior.emissiveIntensity = 3.5;
-    attachBehavior(obj.behaviors, behavior, obj);
+    obj.addBehavior(behavior);
 
     expect(behavior.isHovered).toBe(false);
     obj.onPointerEnter?.();
@@ -103,7 +102,7 @@ describe("HoverBehavior", () => {
     obj.material = new StandardMaterial();
     obj.setScale(2);
     const behavior = new HoverBehavior(1.5);
-    attachBehavior(obj.behaviors, behavior, obj);
+    obj.addBehavior(behavior);
 
     obj.onPointerEnter?.();
     settle(behavior);
@@ -124,7 +123,7 @@ describe("HoverBehavior", () => {
     mat.emissiveColor.set(0.1, 0.2, 0.3);
     mat.emissiveIntensity = 0.7;
     obj.material = mat;
-    attachBehavior(obj.behaviors, new HoverBehavior(1.5), obj);
+    obj.addBehavior(new HoverBehavior(1.5));
 
     obj.onPointerEnter?.();
     obj.onPointerEnter?.(); // repeated enter must not overwrite the saved original with the glow
@@ -144,7 +143,7 @@ describe("HoverBehavior", () => {
     const a = new Object3D("a");
     a.material = shared;
     const behavior = new HoverBehavior(1.5);
-    attachBehavior(a.behaviors, behavior, a);
+    a.addBehavior(behavior);
 
     behavior.enabled = false;
     a.onPointerEnter?.();
@@ -155,14 +154,14 @@ describe("HoverBehavior", () => {
     expect(behavior.isHovered).toBe(false);
 
     behavior.enabled = true;
-    detachBehavior(a.behaviors, behavior); // isActive false path: re-wire handlers manually
+    a.removeBehavior(behavior); // isActive false path: re-wire handlers manually
     const b = new Object3D("b");
     b.material = shared;
     const inactive = new HoverBehavior(1.5);
-    attachBehavior(b.behaviors, inactive, b);
+    b.addBehavior(inactive);
     const enter = b.onPointerEnter;
     const leave = b.onPointerLeave;
-    detachBehavior(b.behaviors, inactive);
+    b.removeBehavior(inactive);
     enter?.();
     leave?.();
     expect(shared.emissiveColor.r).toBeCloseTo(0.4);

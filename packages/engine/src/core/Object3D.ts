@@ -85,10 +85,22 @@ export class Object3D implements Collidable {
   public localMatrix: Matrix4 = new Matrix4();
   public worldMatrix: Matrix4 = new Matrix4();
 
-  public parent: Object3D | undefined = undefined;
-  public children: Object3D[] = [];
-  public behaviors: Behavior[] = [];
+  private _parent: Object3D | undefined = undefined;
+  private _children: Object3D[] = [];
+  private _behaviors: Behavior[] = [];
   public animations: import("./animation/AnimationClip.js").AnimationClip[] = [];
+
+  public get parent(): Object3D | undefined {
+    return this._parent;
+  }
+
+  public get children(): readonly Object3D[] {
+    return this._children;
+  }
+
+  public get behaviors(): readonly Behavior[] {
+    return this._behaviors;
+  }
 
   /**
    * Set by `Scene` on its hidden root object. Lets `remove()` notify the owning scene to queue
@@ -217,7 +229,7 @@ export class Object3D implements Collidable {
    * themselves with `scene` so the frame loop avoids whole-tree type scans.
    */
   protected _onEnterScene(scene: Scene): void {
-    if (this.behaviors.length > 0) {
+    if (this._behaviors.length > 0) {
       scene._registerBehaviorNode(this);
     }
     if (this._isCollidable && (this._bounds !== undefined || this._rigidBody !== undefined)) {
@@ -228,7 +240,7 @@ export class Object3D implements Collidable {
 
   /** Lifecycle hook called when this node leaves a `Scene` graph. */
   protected _onExitScene(scene: Scene): void {
-    if (this.behaviors.length > 0) {
+    if (this._behaviors.length > 0) {
       scene._unregisterBehaviorNode(this);
     }
     if (this._isPhysicsRegistered) {
@@ -259,7 +271,7 @@ export class Object3D implements Collidable {
     if (scene !== undefined) {
       this._onEnterScene(scene);
     }
-    const children = this.children;
+    const children = this._children;
     for (let i = 0; i < children.length; i++) {
       children[i]!._propagateScene(scene);
     }
@@ -269,9 +281,9 @@ export class Object3D implements Collidable {
     for (const child of children) {
       // Re-parenting, not a discard: detach without notifying any scene, so the child's GPU
       // resources aren't released while it's still alive elsewhere in the graph.
-      if (child.parent) child.parent._detach(child);
-      child.parent = this;
-      this.children.push(child);
+      if (child._parent) child._parent._detach(child);
+      child._parent = this;
+      this._children.push(child);
       if (child._scene !== this._scene) {
         child._propagateScene(this._scene);
       }
@@ -291,17 +303,17 @@ export class Object3D implements Collidable {
 
   /** Detaches `child` from this node without notifying any scene. @returns Whether it was found. */
   private _detach(child: Object3D): boolean {
-    const index: number = this.children.indexOf(child);
+    const index: number = this._children.indexOf(child);
     if (-1 === index) return false;
-    child.parent = undefined;
-    this.children.splice(index, 1);
+    child._parent = undefined;
+    this._children.splice(index, 1);
     return true;
   }
 
   private _notifyRemoved(child: Object3D): void {
-    let current = this.parent;
-    while (current?.parent) {
-      current = current.parent;
+    let current = this._parent;
+    while (current?._parent) {
+      current = current._parent;
     }
     const root = current ?? this;
     root.pendingRemovalSink?.(child);
@@ -309,8 +321,8 @@ export class Object3D implements Collidable {
 
   public getObjectByName(name: string): Object3D | undefined {
     if (this.name === name) return this;
-    for (let i = 0; i < this.children.length; i++) {
-      const found = this.children[i]!.getObjectByName(name);
+    for (let i = 0; i < this._children.length; i++) {
+      const found = this._children[i]!.getObjectByName(name);
       if (found) return found;
     }
     return undefined;
@@ -321,24 +333,24 @@ export class Object3D implements Collidable {
    */
   public traverse(callback: (object: Object3D) => void): void {
     callback(this);
-    for (let i = 0; i < this.children.length; i++) {
-      this.children[i]!.traverse(callback);
+    for (let i = 0; i < this._children.length; i++) {
+      this._children[i]!.traverse(callback);
     }
   }
 
   public addBehavior(behavior: Behavior): this {
-    const wasEmpty = this.behaviors.length === 0;
-    attachBehavior(this.behaviors, behavior, this);
-    if (wasEmpty && this.behaviors.length > 0 && this._scene !== undefined) {
+    const wasEmpty = this._behaviors.length === 0;
+    attachBehavior(this._behaviors, behavior, this);
+    if (wasEmpty && this._behaviors.length > 0 && this._scene !== undefined) {
       this._scene._registerBehaviorNode(this);
     }
     return this;
   }
 
   public removeBehavior(behavior: Behavior): this {
-    const hadBehaviors = this.behaviors.length > 0;
-    detachBehavior(this.behaviors, behavior);
-    if (hadBehaviors && this.behaviors.length === 0 && this._scene !== undefined) {
+    const hadBehaviors = this._behaviors.length > 0;
+    detachBehavior(this._behaviors, behavior);
+    if (hadBehaviors && this._behaviors.length === 0 && this._scene !== undefined) {
       this._scene._unregisterBehaviorNode(this);
     }
     return this;
@@ -511,7 +523,7 @@ export class Object3D implements Collidable {
       this.matrixWorldNeedsUpdate = false;
       force = true;
     }
-    const children = this.children;
+    const children = this._children;
     const len = children.length;
     for (let i = 0; i < len; i++) {
       children[i]!.updateMatrixWorld(force);
@@ -552,7 +564,7 @@ export class Object3D implements Collidable {
   public clone(): Object3D {
     const copy = shallowCloneWithValueTypes(this);
     copy.id = Object3D._getNextId();
-    copy.parent = undefined;
+    copy._parent = undefined;
     copy._scene = undefined;
     copy._isPhysicsRegistered = false;
     copy._bounds = undefined;
@@ -564,17 +576,17 @@ export class Object3D implements Collidable {
     copy.material = this.material?.clone();
     copy.userData = { ...this.userData };
 
-    copy.children = this.children.map((child) => {
+    copy._children = this._children.map((child) => {
       const childCopy = child.clone();
-      childCopy.parent = copy;
+      childCopy._parent = copy;
       return childCopy;
     });
 
-    copy.behaviors = [];
-    for (const behavior of this.behaviors) {
-      attachBehavior(copy.behaviors, behavior.clone(), copy);
+    copy._behaviors = [];
+    for (const behavior of this._behaviors) {
+      attachBehavior(copy._behaviors, behavior.clone(), copy);
     }
-    const pickingCopy = copy.behaviors.find(
+    const pickingCopy = copy._behaviors.find(
       (b): b is PickingBehavior => b instanceof PickingBehavior,
     );
     if (pickingCopy) copy._pickingBehavior = pickingCopy;

@@ -380,4 +380,19 @@ describe("WorldWriter <-> GltfLoader round trip", () => {
     const doc = new WorldWriter().writeSingle(tri);
     expect(doc.bufferViews!.every((v) => 0 === v.byteOffset % 4)).toBe(true);
   });
+
+  it("skips excluded top-level children without mutating root.children", async () => {
+    const root = new Object3D("Root");
+    const keep = new Object3D("Keep");
+    const gizmo = new Object3D("EditorGizmo");
+    root.add(keep, gizmo);
+
+    const doc = new WorldWriter().write(root, {
+      exclude: (child) => child.name === "EditorGizmo",
+    });
+    expect(root.children).toEqual([keep, gizmo]);
+
+    const parsedRoot = await parseDocument(doc);
+    expect(parsedRoot.children.map((c) => c.name)).toEqual(["Keep"]);
+  });
 });

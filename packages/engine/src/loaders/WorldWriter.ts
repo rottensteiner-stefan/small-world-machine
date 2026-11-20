@@ -53,10 +53,16 @@ export class WorldWriter {
   /**
    * Serializes every child of `root` (not `root` itself -- it plays the same role as
    * `GltfLoader`'s synthetic `"glTF_Root"`, a local container rather than scene content).
+   * Pass `options.exclude` to skip specific top-level children without mutating the scene graph.
    */
-  public write(root: Object3D): GltfDocument {
+  public write(root: Object3D, options?: { exclude?: (child: Object3D) => boolean }): GltfDocument {
     this._resetState();
-    const rootIndices = root.children.map((child) => this._writeNode(child));
+    const exclude = options?.exclude;
+    const rootIndices: number[] = [];
+    for (const child of root.children) {
+      if (exclude?.(child)) continue;
+      rootIndices.push(this._writeNode(child));
+    }
     return this._finalize(rootIndices);
   }
 

@@ -13,7 +13,7 @@ import type { Color } from "../core/colors/index.js";
  */
 export interface CameraInterfaceData {
   /** The behaviors attached to this camera. */
-  behaviors: Behavior[];
+  readonly behaviors: readonly Behavior[];
 
   /** Horizontal rotation delta accumulated by behaviors. */
   pendingDx: number;

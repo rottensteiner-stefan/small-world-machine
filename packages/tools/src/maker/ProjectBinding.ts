@@ -106,10 +106,9 @@ export class ProjectBinding {
     const assetObj = json.asset as Record<string, unknown> | undefined;
     const assetExtras = assetObj?.["extras"] as { schemaVersion?: number } | undefined;
     const schemaVersion = assetExtras?.schemaVersion ?? 1;
-    if (schemaVersion < 2) {
-      root.children = root.children.filter((child) => !LEGACY_V1_EDITOR_NODE.test(child.name));
-    } else {
-      root.children = root.children.filter((child) => !MODERN_EDITOR_ROOT_NODE.test(child.name));
+    const excludePattern = schemaVersion < 2 ? LEGACY_V1_EDITOR_NODE : MODERN_EDITOR_ROOT_NODE;
+    for (const child of [...root.children]) {
+      if (excludePattern.test(child.name)) root.remove(child);
     }
     return root;
   }
@@ -135,18 +134,9 @@ export class ProjectBinding {
     }, AUTOSAVE_DEBOUNCE_MS);
   }
 
-  /** Serializes `root` with the excluded direct children temporarily taken out of its child list
-   * (synchronously, so nothing can observe the gap). */
+  /** Serializes `root` while skipping excluded direct children without mutating the scene graph. */
   private _writeWithout(root: Object3D): ReturnType<WorldWriter["write"]> {
-    const kept = root.children.filter((child) => !this.excludeFromSave(child));
-    if (kept.length === root.children.length) return new WorldWriter().write(root);
-    const all = root.children;
-    root.children = kept;
-    try {
-      return new WorldWriter().write(root);
-    } finally {
-      root.children = all;
-    }
+    return new WorldWriter().write(root, { exclude: this.excludeFromSave });
   }
 
   private async _save(root: Object3D): Promise<void> {

@@ -2,6 +2,14 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.127.4] - 2026-11-20
+
+### "Well-typed programs cannot go wrong." - Robin Milner
+
+- **Architecture & Bugfixes:**
+  - _Readonly scene-graph & behavior encapsulation (`Object3D.ts`, `Scene.ts`, `Camera.ts`, `CameraInterfaceData.ts`):_ encapsulated `_parent`, `_children`, and `_behaviors` behind `readonly` getters (`Scene.objects`, `Object3D.children`, `Object3D.behaviors`, `Camera.behaviors`) so direct array mutation bypasses fail at compile time with zero runtime overhead.
+  - _Maker behavior registration & non-mutating world export (`MakerApp.ts`, `ProjectBinding.ts`, `WorldWriter.ts`):_ routed Maker attach/detach through `Object3D.addBehavior()`/`removeBehavior()` so behaviors register in `Scene._behaviorNodes`, added `WorldWriter.write(root, { exclude })` to skip editor nodes without mutating `root.children`, and used `root.remove()` on load.
+
 ## [0.127.3] - 2026-11-20
 
 ### "Nature does nothing uselessly." - Aristotle

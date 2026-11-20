@@ -62,7 +62,7 @@ export interface RenderList {
 export class Scene {
   public readonly root: Object3D = new Object3D("SceneRoot");
 
-  public get objects(): Object3D[] {
+  public get objects(): readonly Object3D[] {
     return this.root.children;
   }
 

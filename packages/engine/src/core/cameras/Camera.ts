@@ -35,8 +35,12 @@ export class Camera implements CameraInterfaceData {
   /** @inheritdoc */
   public pendingDy: number = 0;
 
+  private readonly _behaviors: Behavior[] = [];
+
   /** @inheritdoc */
-  public behaviors: Behavior[] = [];
+  public get behaviors(): readonly Behavior[] {
+    return this._behaviors;
+  }
 
   private _projection!: AbstractProjection;
   private _aspect: number = 1;
@@ -256,12 +260,12 @@ export class Camera implements CameraInterfaceData {
   }
 
   public addBehavior(behavior: Behavior): this {
-    attachBehavior(this.behaviors, behavior, this);
+    attachBehavior(this._behaviors, behavior, this);
     return this;
   }
 
   public removeBehavior(behavior: Behavior): this {
-    detachBehavior(this.behaviors, behavior);
+    detachBehavior(this._behaviors, behavior);
     return this;
   }
 
@@ -323,10 +327,10 @@ export class Camera implements CameraInterfaceData {
     // detach itself (or an earlier-indexed sibling) from within its update, splicing the list so the
     // next behavior shifts down into slot `i`. Re-visit `i` so it is not silently skipped. Append
     // mutations never shift the current slot, so the guard cannot double-run anything.
-    for (let i = 0; i < this.behaviors.length; i++) {
-      const b = this.behaviors[i]!;
+    for (let i = 0; i < this._behaviors.length; i++) {
+      const b = this._behaviors[i]!;
       if (b.isActive) b.update(deltaTime);
-      if (this.behaviors[i] !== b) i--;
+      if (this._behaviors[i] !== b) i--;
     }
 
     const totalDx = dx + this.pendingDx;

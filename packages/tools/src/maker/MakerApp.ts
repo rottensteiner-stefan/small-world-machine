@@ -15,8 +15,6 @@ import type {
 import {
   SmallWorldMachine,
   Object3D,
-  attachBehavior,
-  detachBehavior,
   DirectionalLight,
   PointLight,
   SpotLight,
@@ -1172,12 +1170,12 @@ export class MakerApp extends SmallWorldMachine {
       `Attach ${behaviorName}${objs.length > 1 ? ` (${objs.length})` : ""}`,
       () => {
         for (const [obj, behavior] of attached) {
-          attachBehavior(obj.behaviors, behavior, obj);
+          obj.addBehavior(behavior);
         }
       },
       () => {
         for (const [obj, behavior] of attached) {
-          detachBehavior(obj.behaviors, behavior);
+          obj.removeBehavior(behavior);
         }
       },
     );
@@ -1188,10 +1186,10 @@ export class MakerApp extends SmallWorldMachine {
     this._commit(
       `Detach ${behaviorName}`,
       () => {
-        detachBehavior(obj.behaviors, behavior);
+        obj.removeBehavior(behavior);
       },
       () => {
-        attachBehavior(obj.behaviors, behavior, obj);
+        obj.addBehavior(behavior);
       },
     );
   }

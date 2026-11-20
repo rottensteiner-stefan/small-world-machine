@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { attachBehavior, detachBehavior } from "../../../src/core/behaviors/Behavior.js";
 import { DraggableBehavior } from "../../../src/core/behaviors/DraggableBehavior.js";
 import { Object3D } from "../../../src/core/Object3D.js";
 import { Camera } from "../../../src/core/cameras/Camera.js";
@@ -18,13 +17,13 @@ describe("DraggableBehavior", () => {
   it("clears the target's pointer handlers on detach instead of leaving them live", () => {
     const obj = new Object3D("test");
     const behavior = new DraggableBehavior(makeCamera());
-    attachBehavior(obj.behaviors, behavior, obj);
+    obj.addBehavior(behavior);
 
     expect(obj.onPointerDown).toBeDefined();
     expect(obj.onPointerUp).toBeDefined();
     expect(obj.onPointerMove).toBeDefined();
 
-    detachBehavior(obj.behaviors, behavior);
+    obj.removeBehavior(behavior);
 
     expect(behavior.target).toBeUndefined();
     expect(obj.onPointerDown).toBeUndefined();
@@ -39,7 +38,7 @@ describe("DraggableBehavior", () => {
     // behavior wired up in the meantime.
     const obj = new Object3D("test");
     const behavior = new DraggableBehavior(makeCamera());
-    attachBehavior(obj.behaviors, behavior, obj);
+    obj.addBehavior(behavior);
 
     const otherDown = (): void => {};
     const otherUp = (): void => {};
@@ -48,7 +47,7 @@ describe("DraggableBehavior", () => {
     obj.onPointerUp = otherUp;
     obj.onPointerMove = otherMove;
 
-    detachBehavior(obj.behaviors, behavior);
+    obj.removeBehavior(behavior);
 
     expect(obj.onPointerDown).toBe(otherDown);
     expect(obj.onPointerUp).toBe(otherUp);
@@ -59,12 +58,12 @@ describe("DraggableBehavior", () => {
     const obj = new Object3D("test");
     obj.position.set(0, 0, 0);
     const behavior = new DraggableBehavior(makeCamera());
-    attachBehavior(obj.behaviors, behavior, obj);
+    obj.addBehavior(behavior);
 
     const down = obj.onPointerDown!;
     down(new Ray(new Vector3D(0, 0, 5), new Vector3D(0, 0, -1)), new Vector3D(0, 0, 0));
 
-    detachBehavior(obj.behaviors, behavior);
+    obj.removeBehavior(behavior);
 
     // A stray move after detach must be a no-op: the handler slot itself is now undefined.
     expect(obj.onPointerMove).toBeUndefined();
@@ -82,7 +81,7 @@ describe("DraggableBehavior", () => {
     behavior.onDragEnd = (): void => {
       ended = true;
     };
-    attachBehavior(obj.behaviors, behavior, obj);
+    obj.addBehavior(behavior);
 
     expect(behavior.isDragging).toBe(false);
     obj.onPointerDown!(
@@ -104,7 +103,7 @@ describe("DraggableBehavior", () => {
     behavior.onDragEnd = (): void => {
       ended++;
     };
-    attachBehavior(obj.behaviors, behavior, obj);
+    obj.addBehavior(behavior);
 
     obj.onPointerUp!();
     expect(ended).toBe(0);
@@ -128,7 +127,7 @@ describe("DraggableBehavior", () => {
 
     const behavior = new DraggableBehavior(camera);
     behavior.mode = "ground";
-    attachBehavior(obj.behaviors, behavior, obj);
+    obj.addBehavior(behavior);
 
     // Click at origin
     obj.onPointerDown!(

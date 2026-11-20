@@ -70,7 +70,7 @@ function referencePass(script: ScriptStep[]): RefResult {
 }
 
 interface BehaviorOwner {
-  behaviors: Behavior[];
+  readonly behaviors: readonly Behavior[];
   addBehavior(b: Behavior): unknown;
   removeBehavior(b: Behavior): unknown;
 }
