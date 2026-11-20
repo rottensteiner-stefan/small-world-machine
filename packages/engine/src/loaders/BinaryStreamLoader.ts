@@ -17,6 +17,8 @@ export interface StreamOptions {
    * cache/baseUrl/headers with the rest of an engine instance.
    */
   assetManager?: AssetManager;
+  /** Optional AbortSignal to cancel the underlying fetch request. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -32,6 +34,6 @@ export class BinaryStreamLoader {
    */
   public static async stream(url: string, options: StreamOptions = {}): Promise<ArrayBuffer> {
     const assetManager = options.assetManager ?? new AssetManager();
-    return assetManager.streamBinary(url, options.onChunk, options.onProgress);
+    return assetManager.streamBinary(url, options.onChunk, options.onProgress, options.signal);
   }
 }

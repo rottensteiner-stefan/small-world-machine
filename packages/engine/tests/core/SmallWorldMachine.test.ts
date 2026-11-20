@@ -126,4 +126,57 @@ describe("SmallWorldMachine public step(deltaTime) hook", () => {
     expect(app.frameInfo.realTime).toBeCloseTo(0.1, 6);
     expect(app.frameInfo.realDeltaTime).toBeCloseTo(0.1, 6);
   });
+
+  it("deduplicates concurrent start() and aborts cleanly if destroy() runs mid-init (AR01/AR03)", async () => {
+    let resolveSetup!: () => void;
+    let setupCalls = 0;
+
+    class SlowInitApp extends TestSmallWorldMachine {
+      protected override async setupScene(): Promise<void> {
+        setupCalls++;
+        await new Promise<void>((r) => {
+          resolveSetup = r;
+        });
+      }
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.id = "SmallWorldMachine";
+    document.body.appendChild(canvas);
+    attachedCanvases.push(canvas);
+
+    const { ShaderBootstrap } = await import("../../src/renderers/shaders/index.js");
+    const { RendererFactory } = await import("../../src/renderers/index.js");
+    const { vi } = await import("vitest");
+
+    const destroySpy = vi.fn();
+    const shaderSpy = vi.spyOn(ShaderBootstrap, "init").mockResolvedValue(undefined);
+    const factorySpy = vi.spyOn(RendererFactory, "create").mockResolvedValue({
+      type: RendererType.WEB_GL2,
+      postProcessing: new PostProcessingGroup(),
+      frameInfo: createFrameInfo(),
+      render: (): void => {},
+      setSize: (): void => {},
+      destroy: destroySpy,
+    } as unknown as Renderer);
+
+    try {
+      const app = new SlowInitApp();
+      const p1 = app.start();
+      const p2 = app.start();
+      expect(p1).toBe(p2);
+
+      // Wait until setupScene is entered, then destroy mid-init.
+      await new Promise((r) => setTimeout(r, 10));
+      app.destroy();
+      resolveSetup();
+      await p1;
+
+      expect(setupCalls).toBe(1);
+      expect(destroySpy).toHaveBeenCalledTimes(1);
+    } finally {
+      shaderSpy.mockRestore();
+      factorySpy.mockRestore();
+    }
+  });
 });

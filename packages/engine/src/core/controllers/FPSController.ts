@@ -146,8 +146,11 @@ export class FPSController extends Behavior {
     if (isCamera) {
       // Removed cam.update, rely on Camera's update logic
       if (this._options.enableRotation && input.isPointerLocked) {
-        target.pendingDx += dx;
-        target.pendingDy += dy;
+        // Camera strategies apply the default 0.005 rad/px scale; ratio preserves default feel
+        // while honoring custom `lookSensitivity` values.
+        const sensitivityScale = this._options.lookSensitivity / 0.005;
+        target.pendingDx += dx * sensitivityScale;
+        target.pendingDy += dy * sensitivityScale;
       }
     } else {
       const obj = target as Object3D;

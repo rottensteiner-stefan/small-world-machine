@@ -89,6 +89,8 @@ export abstract class SmallWorldMachine {
   private _isRunning: boolean = false;
   private _isInitialized: boolean = false;
   private _isDestroyed: boolean = false;
+  private _initPromise: Promise<void> | undefined = undefined;
+  private _rafId: number | null = null;
   private _hitStopRemaining: number = 0;
   private _hitStopScale: number = 1;
   private _taaFrameIndex: number = 0;
@@ -183,11 +185,21 @@ export abstract class SmallWorldMachine {
   /**
    * Initializes and starts the application loop.
    */
-  public async start(): Promise<void> {
-    if (this._isRunning) {
-      return;
+  public start(): Promise<void> {
+    if (this._isDestroyed || this._isRunning) {
+      return Promise.resolve();
+    }
+    if (this._initPromise) {
+      return this._initPromise;
     }
 
+    this._initPromise = this._startInternal().finally(() => {
+      this._initPromise = undefined;
+    });
+    return this._initPromise;
+  }
+
+  private async _startInternal(): Promise<void> {
     if (!this._isInitialized) {
       this._context = createDefaultRendererContext();
 
@@ -224,25 +236,30 @@ export abstract class SmallWorldMachine {
             resolve();
           }
         });
+        if (this._isDestroyed) return;
         this.canvas = document.getElementById(this.config.canvasId!) as HTMLCanvasElement;
       }
 
       let retries: number = 0;
-      while (!this.canvas && 5 > retries) {
+      while (!this.canvas && 5 > retries && !this._isDestroyed) {
         await new Promise<void>((resolve: () => void): void => {
           setTimeout((): void => {
             resolve();
           }, 100);
         });
+        if (this._isDestroyed) return;
         this.canvas = document.getElementById(this.config.canvasId!) as HTMLCanvasElement;
         retries++;
       }
+
+      if (this._isDestroyed) return;
 
       if (!this.canvas) {
         throw new Error(
           `[SmallWorldMachine] Canvas element with ID '${this.config.canvasId}' not found in DOM.`,
         );
       }
+      this.input.setTargetElement(this.canvas);
       if (this.config.fullscreen) {
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
@@ -258,15 +275,25 @@ export abstract class SmallWorldMachine {
       const cssHeight = this.canvas.height;
 
       await ShaderBootstrap.init(this._context.shaderRegistry);
+      if (this._isDestroyed) {
+        window.removeEventListener("resize", this._onResize);
+        return;
+      }
 
       this._context.deviceCaps.init();
 
-      this.renderer = await RendererFactory.create(
+      const renderer = await RendererFactory.create(
         this.config.rendererType!,
         this.canvas,
         this.config,
         this._context,
       );
+      if (this._isDestroyed) {
+        renderer.destroy?.();
+        window.removeEventListener("resize", this._onResize);
+        return;
+      }
+      this.renderer = renderer;
 
       this.renderer.setSize(cssWidth, cssHeight);
 
@@ -352,14 +379,16 @@ export abstract class SmallWorldMachine {
       );
 
       await this.setupScene();
+      if (this._isDestroyed) return;
 
       this._isInitialized = true;
     }
 
+    if (this._isDestroyed) return;
     window.addEventListener("pagehide", this._onPageHide);
     this._isRunning = true;
     this._lastTime = performance.now();
-    requestAnimationFrame(this._onFrame);
+    this._rafId = requestAnimationFrame(this._onFrame);
   }
 
   /**
@@ -536,6 +565,10 @@ export abstract class SmallWorldMachine {
    */
   public stop(): void {
     this._isRunning = false;
+    if (this._rafId !== null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
   }
 
   /**
@@ -591,6 +624,7 @@ export abstract class SmallWorldMachine {
     if (this.renderer && this.renderer.destroy) {
       this.renderer.destroy();
     }
+    this._context?.assetManager.clear();
     this.audio.dispose();
   }
 
@@ -616,13 +650,26 @@ export abstract class SmallWorldMachine {
    * @param currentTime The current timestamp.
    */
   private _loop(currentTime: number): void {
-    if (!this._isRunning) {
+    this._rafId = null;
+    if (!this._isRunning || this._isDestroyed) {
       return;
     }
 
     if (this.canvas && !document.body.contains(this.canvas)) {
       console.warn("[SmallWorldMachine] Canvas removed from DOM. Auto-destroying engine.");
       this.destroy();
+      return;
+    }
+
+    if (this.renderer?.isContextLost) {
+      if (this.renderer.type === RendererType.WEB_GPU) {
+        this.stop();
+        return;
+      }
+      // WebGL context loss is recoverable: pause simulation/render steps until restored and
+      // keep `_lastTime` fresh so restoration does not inject a large deltaTime spike.
+      this._lastTime = currentTime;
+      this._rafId = requestAnimationFrame(this._onFrame);
       return;
     }
 
@@ -646,6 +693,8 @@ export abstract class SmallWorldMachine {
     this.step(deltaTime);
     this.lastCpuTimeMs = performance.now() - cpuStart;
 
-    requestAnimationFrame(this._onFrame);
+    if (this._isRunning && !this._isDestroyed) {
+      this._rafId = requestAnimationFrame(this._onFrame);
+    }
   }
 }

@@ -14,6 +14,8 @@ export interface LoaderOptions {
    * to share a cache/baseUrl/headers with the rest of an engine instance.
    */
   assetManager?: AssetManager;
+  /** Optional AbortSignal forwarded to underlying fetch requests. */
+  signal?: AbortSignal;
 }
 
 /**

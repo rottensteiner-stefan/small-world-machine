@@ -20,9 +20,12 @@ import { fileURLToPath } from "url";
 import { createHash } from "crypto";
 import { PNG } from "pngjs";
 import {
-  PREVIEW_ARGS,
   PREVIEW_ORIGIN,
+  PREVIEW_PORT,
   detectBlankCanvas as measureBlank,
+  findFreePort,
+  previewArgsForPort,
+  previewOriginForPort,
   waitForServer,
 } from "../lib/preview-utils.js";
 import config from "./config.json" with { type: "json" };
@@ -141,6 +144,8 @@ const frames = args.frames ?? scene.frames;
 const isSmoke = args.matrix === "gl1";
 const isInformational = args.matrix === "gpu";
 
+let activePreviewOrigin = PREVIEW_ORIGIN;
+
 /**
  * Captures one golden cell. `gl1` runs smoke checks only (no baseline images).
  * @returns {Promise<Record<string, unknown>>} Cell result entry for the manifest.
@@ -166,7 +171,7 @@ async function captureCell(browser, { poolKey, view }) {
   page.on("pageerror", (error) => errors.push(error.message));
 
   const query = `?rendererType=${backend}&__golden=${poolKey}&__goldenView=${view}&__goldenFrames=${frames}&tier=high`;
-  const url = `${PREVIEW_ORIGIN}/${scene.url}${query}`;
+  const url = `${activePreviewOrigin}/${scene.url}${query}`;
 
   try {
     await page.goto(url, { waitUntil: "load", timeout: 60000 });
@@ -286,12 +291,16 @@ async function main() {
 
   let server = null;
   if (!args.skipSpawn) {
+    const port = process.env.PREVIEW_PORT ? PREVIEW_PORT : await findFreePort();
+    activePreviewOrigin = previewOriginForPort(port);
     // detached: own process group, so the whole `npm -> vite preview` tree can be killed (see stopServer).
-    server = spawn("npm", PREVIEW_ARGS, { cwd: ROOT, stdio: "pipe", detached: true });
+    server = spawn("npm", previewArgsForPort(port), { cwd: ROOT, stdio: "pipe", detached: true });
     server.stdout.on("data", (d) => process.stdout.write(d.toString()));
     server.stderr.on("data", (d) => process.stderr.write(d.toString()));
+  } else {
+    activePreviewOrigin = PREVIEW_ORIGIN;
   }
-  await waitForServer(`${PREVIEW_ORIGIN}/`);
+  await waitForServer(`${activePreviewOrigin}/`, 60000, server);
 
   const tmpDir = path.join(ROOT, ".agents", "scratches", "tmp_goldens_" + Date.now());
   fs.mkdirSync(tmpDir, { recursive: true });

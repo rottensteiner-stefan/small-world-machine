@@ -90,6 +90,7 @@ export class Input implements InputInterface {
   private _lastTouchX: number = 0;
   private _lastTouchY: number = 0;
   private _isInitialized: boolean = false;
+  private _pointerTarget: EventTarget | null = null;
 
   private _onKeyDown = (e: KeyboardEvent): void => {
     if (isEditingTextInput(e.target) || isEditingTextInput()) {
@@ -99,10 +100,8 @@ export class Input implements InputInterface {
   };
 
   private _onKeyUp = (e: KeyboardEvent): void => {
-    const active = document.activeElement;
-    if (active && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) {
-      return;
-    }
+    // Never drop keyup when an input element becomes focused while a key is held,
+    // otherwise that key stays stuck in `_keys` until blur.
     this._keys.set(e.code, false);
   };
 
@@ -142,14 +141,26 @@ export class Input implements InputInterface {
   };
 
   private _onWheel = (e: WheelEvent): void => {
+    // Normalize wheel deltas across deltaMode (pixel = 0, line = 1, page = 2).
+    const scale =
+      e.deltaMode === 1
+        ? 16
+        : e.deltaMode === 2
+          ? typeof window !== "undefined" && window.innerHeight > 0
+            ? window.innerHeight
+            : 800
+          : 1;
+    const dx = e.deltaX * scale;
+    const dy = e.deltaY * scale;
+
     // Pinch-to-zoom on trackpads is often sent as a wheel event with ctrlKey
     if (e.ctrlKey) {
       e.preventDefault();
-      this.mouse.zoom += e.deltaY * 0.01;
+      this.mouse.zoom += dy * 0.01;
     } else {
-      this.mouse.wheelX += e.deltaX;
-      this.mouse.wheelY += e.deltaY;
-      this.mouse.zoom += e.deltaY * 0.001;
+      this.mouse.wheelX += dx;
+      this.mouse.wheelY += dy;
+      this.mouse.zoom += dy * 0.001;
     }
   };
 
@@ -169,6 +180,12 @@ export class Input implements InputInterface {
     this.mouse.right = false;
     this.mouse.dx = 0;
     this.mouse.dy = 0;
+  };
+
+  private _onVisibilityChange = (): void => {
+    if (typeof document !== "undefined" && document.hidden) {
+      this._onBlur();
+    }
   };
 
   private _onPointerLockChange = (): void => {
@@ -207,26 +224,70 @@ export class Input implements InputInterface {
     }
   };
 
+  private _onTouchCancel = (): void => {
+    this.mouse.left = false;
+  };
+
+  private _bindPointerTarget(target: EventTarget): void {
+    this._unbindPointerTarget();
+    this._pointerTarget = target;
+    target.addEventListener("mousedown", this._onMouseDown as EventListener);
+    target.addEventListener("wheel", this._onWheel as EventListener, { passive: false });
+    target.addEventListener("contextmenu", this._onContextMenu as EventListener);
+    target.addEventListener("touchstart", this._onTouchStart as EventListener, { passive: true });
+  }
+
+  private _unbindPointerTarget(): void {
+    if (!this._pointerTarget) return;
+    this._pointerTarget.removeEventListener("mousedown", this._onMouseDown as EventListener);
+    this._pointerTarget.removeEventListener("wheel", this._onWheel as EventListener);
+    this._pointerTarget.removeEventListener("contextmenu", this._onContextMenu as EventListener);
+    this._pointerTarget.removeEventListener("touchstart", this._onTouchStart as EventListener);
+    this._pointerTarget = null;
+  }
+
+  /**
+   * Scopes pointer-initiation (`mousedown`, `wheel`, `contextmenu`, `touchstart`) listeners to a
+   * specific DOM element (typically the engine's canvas) so multiple engine instances on one page
+   * do not interfere with each other or block right-click globally.
+   */
+  public setTargetElement(element: HTMLElement | null): void {
+    const nextTarget: EventTarget = element ?? window;
+    if (!this._isInitialized) {
+      this._pointerTarget = element;
+      return;
+    }
+    if (this._pointerTarget === nextTarget) return;
+    this._bindPointerTarget(nextTarget);
+  }
+
   /**
    * Initializes the input listeners.
+   * @param targetElement Optional element (e.g. canvas) to scope `mousedown`/`wheel`/`contextmenu`/`touchstart`.
    */
-  public init(): void {
-    if (this._isInitialized) return;
+  public init(targetElement?: HTMLElement | null): void {
+    if (this._isInitialized) {
+      if (targetElement !== undefined) {
+        this.setTargetElement(targetElement);
+      }
+      return;
+    }
     this._isInitialized = true;
+
+    const pointerTarget: EventTarget = targetElement ?? this._pointerTarget ?? window;
+    this._bindPointerTarget(pointerTarget);
 
     window.addEventListener("keydown", this._onKeyDown);
     window.addEventListener("keyup", this._onKeyUp);
-    window.addEventListener("mousedown", this._onMouseDown);
     window.addEventListener("mouseup", this._onMouseUp);
     window.addEventListener("mousemove", this._onMouseMove);
-    window.addEventListener("wheel", this._onWheel, { passive: false });
     window.addEventListener("gesturechange", this._onGestureChange);
-    window.addEventListener("contextmenu", this._onContextMenu);
     window.addEventListener("blur", this._onBlur);
+    document.addEventListener("visibilitychange", this._onVisibilityChange);
     document.addEventListener("pointerlockchange", this._onPointerLockChange);
-    window.addEventListener("touchstart", this._onTouchStart, { passive: true });
     window.addEventListener("touchmove", this._onTouchMove, { passive: true });
     window.addEventListener("touchend", this._onTouchEnd);
+    window.addEventListener("touchcancel", this._onTouchCancel);
   }
 
   /**
@@ -236,19 +297,18 @@ export class Input implements InputInterface {
     if (!this._isInitialized) return;
     this._isInitialized = false;
 
+    this._unbindPointerTarget();
     window.removeEventListener("keydown", this._onKeyDown);
     window.removeEventListener("keyup", this._onKeyUp);
-    window.removeEventListener("mousedown", this._onMouseDown);
     window.removeEventListener("mouseup", this._onMouseUp);
     window.removeEventListener("mousemove", this._onMouseMove);
-    window.removeEventListener("wheel", this._onWheel);
     window.removeEventListener("gesturechange", this._onGestureChange);
-    window.removeEventListener("contextmenu", this._onContextMenu);
     window.removeEventListener("blur", this._onBlur);
+    document.removeEventListener("visibilitychange", this._onVisibilityChange);
     document.removeEventListener("pointerlockchange", this._onPointerLockChange);
-    window.removeEventListener("touchstart", this._onTouchStart);
     window.removeEventListener("touchmove", this._onTouchMove);
     window.removeEventListener("touchend", this._onTouchEnd);
+    window.removeEventListener("touchcancel", this._onTouchCancel);
 
     this._keys.clear();
     this._gamepadController.destroy();
@@ -321,16 +381,14 @@ export class Input implements InputInterface {
     const gp = this._gamepadController.getActiveDevice();
     if (gp) {
       const deadzone = 0.15;
-      if ((neg === Keys.W || neg === Keys.UP) && (pos === Keys.S || pos === Keys.DOWN)) {
-        const val = gp.getAxis(1);
-        if (Math.abs(val) > deadzone) {
-          v += val;
+      const lx = gp.getAxis(0);
+      const ly = gp.getAxis(1);
+      if (Math.hypot(lx, ly) > deadzone) {
+        if ((neg === Keys.W || neg === Keys.UP) && (pos === Keys.S || pos === Keys.DOWN)) {
+          v += ly;
         }
-      }
-      if ((neg === Keys.A || neg === Keys.LEFT) && (pos === Keys.D || pos === Keys.RIGHT)) {
-        const val = gp.getAxis(0);
-        if (Math.abs(val) > deadzone) {
-          v += val;
+        if ((neg === Keys.A || neg === Keys.LEFT) && (pos === Keys.D || pos === Keys.RIGHT)) {
+          v += lx;
         }
       }
     }
@@ -345,7 +403,7 @@ export class Input implements InputInterface {
    * Should be called once per frame.
    */
   public update(): void {
-    this._gamepadController.update();
+    this._gamepadController.update(false, true);
     const gp = this._gamepadController.getActiveDevice();
     if (!gp) return;
 
@@ -353,11 +411,9 @@ export class Input implements InputInterface {
     const rx = gp.getAxis(2);
     const ry = gp.getAxis(3);
 
-    // Accumulate right stick movements into mouse.dx / mouse.dy
-    if (Math.abs(rx) > deadzone) {
+    // Accumulate right stick movements into mouse.dx / mouse.dy using radial deadzone
+    if (Math.hypot(rx, ry) > deadzone) {
       this.mouse.dx += rx * 15.0;
-    }
-    if (Math.abs(ry) > deadzone) {
       this.mouse.dy += ry * 15.0;
     }
 

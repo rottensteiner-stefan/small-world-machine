@@ -30,6 +30,7 @@ export class ImageLoader extends AbstractLoader<ImageBitmap | HTMLImageElement> 
           this.dispatchEvent(EventType.LOADER_PROGRESS, { url: fullUrl, loaded, total });
         },
         this.flipY,
+        this._signal,
       );
 
       this.dispatchEvent(EventType.LOADER_END, { url: fullUrl, data: image });

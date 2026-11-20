@@ -137,4 +137,43 @@ describe("AssetManager Cache-Poisoning Prevention [BLK-L1]", () => {
     expect(attempts).toBe(2);
     expect(manager.isLoaded).toBe(true);
   });
+
+  it("prevents stale pre-clear rejection from evicting a post-clear load and forwards AbortSignal (AR07/AR08)", async () => {
+    const manager = new AssetManager();
+    const url = "https://example.com/epoch.txt";
+
+    let rejectFirst!: (err: Error) => void;
+    const receivedSignals: (AbortSignal | undefined)[] = [];
+    let call = 0;
+
+    globalThis.fetch = vi.fn().mockImplementation((_u: string, init?: RequestInit) => {
+      receivedSignals.push(init?.signal ?? undefined);
+      call++;
+      if (call === 1) {
+        return new Promise((_res, rej) => {
+          rejectFirst = rej;
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: null,
+        blob: async (): Promise<Blob> => new Blob(["fresh"]),
+      } as unknown as Response);
+    });
+
+    const controller = new AbortController();
+    const first = manager.loadText(url, undefined, controller.signal);
+    manager.clear();
+    const second = manager.loadText(url);
+
+    rejectFirst(new Error("stale failure"));
+    await expect(first).rejects.toThrow("stale failure");
+    expect(await second).toBe("fresh");
+    // Post-clear entry must still be cached (a third call must NOT trigger a 3rd fetch).
+    expect(await manager.loadText(url)).toBe("fresh");
+    expect(call).toBe(2);
+    expect(receivedSignals[0]).toBe(controller.signal);
+  });
 });

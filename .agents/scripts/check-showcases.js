@@ -4,9 +4,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import {
-  PREVIEW_ARGS,
-  PREVIEW_ORIGIN,
+  PREVIEW_PORT,
   detectBlankCanvas as measureBlank,
+  findFreePort,
+  previewArgsForPort,
+  previewOriginForPort,
   waitForServer,
 } from "./lib/preview-utils.js";
 
@@ -101,7 +103,7 @@ const RETRY_PASS = { navigationMs: 60000, screenshotMs: 60000 };
 // Showcase 51 (vegetation baseline) builds up to 2× n scene-graph nodes at `?n=20000` (veg-p0 S1,
 // finding F4): software-rendered first frame can take tens of seconds, so it gets the same budget
 // as showcase 50.
-const SLOW_SHOWCASE_NAVIGATION_MS = { 14: 60000, 50: 120000, 51: 120000, 53: 60000 };
+const SLOW_SHOWCASE_NAVIGATION_MS = { 14: 60000, 30: 60000, 50: 120000, 51: 120000, 53: 60000 };
 
 // Heavy-asset showcases (Khronos reference models) must NOT be judged after the fixed 1 s sleep:
 // the glTF load + first software-rendered frame can take longer, so the screenshot would sample a
@@ -109,7 +111,7 @@ const SLOW_SHOWCASE_NAVIGATION_MS = { 14: 60000, 50: 120000, 51: 120000, 53: 600
 // event (dispatched after setup AND a stable painted frame) before taking the screenshot.
 // Showcase 51 (finding F4): the fixed 1 s sleep sampled a ground-only frame of the n=20000 forest;
 // the blank check passes on ground+sky, so the gate false-passed -- wait for the real first frame.
-const SHOWCASE_WAIT_READY = { 47: true, 48: true, 49: true, 50: true, 51: true, 53: true };
+const SHOWCASE_WAIT_READY = { 30: true, 47: true, 48: true, 49: true, 50: true, 51: true, 53: true };
 
 /** Rejects if `promise` has not settled after `ms` (the underlying call keeps running until the page closes). */
 async function withTimeout(promise, ms, what) {
@@ -156,11 +158,13 @@ async function runWithConcurrency(items, concurrency, worker) {
  * @param {import('puppeteer').Browser} browser
  * @returns {Promise<{ usable: boolean, reason: string }>}
  */
+let activePreviewOrigin = previewOriginForPort(PREVIEW_PORT);
+
 async function probeWebGpu(browser) {
   const page = await browser.newPage();
   try {
     // WebGPU needs a secure context; the preview server is served over https.
-    await page.goto(`${PREVIEW_ORIGIN}/`, { waitUntil: "load", timeout: 20000 });
+    await page.goto(`${activePreviewOrigin}/`, { waitUntil: "load", timeout: 20000 });
     return await page.evaluate(async () => {
       const gpu = navigator.gpu;
       if (!gpu) return { usable: false, reason: "navigator.gpu is undefined" };
@@ -183,7 +187,11 @@ async function probeWebGpu(browser) {
   } catch (err) {
     return { usable: false, reason: `probe threw: ${err.message}` };
   } finally {
-    await page.close();
+    try {
+      await page.close();
+    } catch {
+      // Ignore close errors if target already closed.
+    }
   }
 }
 
@@ -228,7 +236,7 @@ async function checkShowcase(browser, { showcase, rendererType }, budget) {
     const query = rendererType ? `?rendererType=${rendererType}` : "";
     // The numbered showcases live under apps/showcases/N/.
     const basePath = `apps/showcases/${showcase}`;
-    const url = `${PREVIEW_ORIGIN}/${basePath}/index.html${query}`;
+    const url = `${activePreviewOrigin}/${basePath}/index.html${query}`;
 
     const navigationMs = Math.max(budget.navigationMs, SLOW_SHOWCASE_NAVIGATION_MS[showcase] ?? 0);
     await page.goto(url, { waitUntil: "load", timeout: navigationMs });
@@ -310,15 +318,21 @@ async function checkShowcase(browser, { showcase, rendererType }, budget) {
     passed = false;
     lines.push(`Checking Showcase ${label.padEnd(16)} ... ❌ CRASHED: ${err.message}`);
   } finally {
-    await page.close();
+    try {
+      await page.close();
+    } catch {
+      // Tab/target may already be gone after a renderer crash; never mask the recorded error.
+    }
   }
 
   return { passed, lines };
 }
 
 async function run() {
-  console.log("Starting Vite preview server...");
-  const server = spawn("npm", PREVIEW_ARGS, {
+  const port = process.env.PREVIEW_PORT ? PREVIEW_PORT : await findFreePort();
+  activePreviewOrigin = previewOriginForPort(port);
+  console.log(`Starting Vite preview server on port ${port}...`);
+  const server = spawn("npm", previewArgsForPort(port), {
     stdio: "pipe", // we want to see output
     detached: true, // own process group so the whole `npm -> vite preview` tree can be killed below
   });
@@ -326,119 +340,127 @@ async function run() {
   server.stdout.on("data", (data) => console.log(data.toString()));
   server.stderr.on("data", (data) => console.error(data.toString()));
 
-  await waitForServer(`${PREVIEW_ORIGIN}/`);
-
-  console.log("Launching Puppeteer...");
-  // Use a strictly temporary user data dir that we clean up later
+  let browser;
   const tmpDir = path.join(__dirname, "..", "..", ".agents", "scratches", "tmp_puppeteer_" + Date.now());
-  fs.mkdirSync(tmpDir, { recursive: true });
-
-  fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
-
-  const browser = await puppeteer.launch({
-    headless: true,
-    userDataDir: tmpDir,
-    acceptInsecureCerts: true,
-    protocolTimeout: 60000,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--ignore-certificate-errors",
-      // Required for headless WebGL/WebGPU to actually initialize via software rendering --
-      // without these, WebGPU silently reports no adapter and every showcase falls back to
-      // WebGL2/1 regardless of which `?rendererType=` was requested.
-      "--use-gl=angle",
-      "--use-angle=swiftshader",
-      "--enable-webgl",
-      "--enable-unsafe-swiftshader",
-      "--ignore-gpu-blocklist",
-      "--disable-gpu-sandbox",
-      "--enable-features=Vulkan",
-      "--enable-unsafe-webgpu",
-    ],
-  });
-
-  // Skip (not fail) the WEB_GPU legs when the environment cannot run WebGPU at all. Set
-  // SHOWCASE_REQUIRE_WEBGPU=1 to treat an unusable WebGPU as a hard failure instead.
-  let activeCases = testCases;
-  if (testCases.some((tc) => "WEB_GPU" === tc.rendererType)) {
-    const gpu = await probeWebGpu(browser);
-    if (gpu.usable) {
-      console.log("WebGPU probe: usable.");
-    } else if (process.env.SHOWCASE_REQUIRE_WEBGPU) {
-      console.error(`WebGPU probe FAILED (${gpu.reason}) and SHOWCASE_REQUIRE_WEBGPU is set.`);
-      await browser.close();
-      process.exit(1);
-    } else {
-      const skipped = testCases.filter((tc) => "WEB_GPU" === tc.rendererType).length;
-      console.log(
-        `⚠️  WebGPU probe: unusable (${gpu.reason}) -- SKIPPING ${skipped} WEB_GPU checks.`,
-      );
-      activeCases = testCases.filter((tc) => "WEB_GPU" !== tc.rendererType);
-    }
-  }
-
-  console.log(
-    `Running ${activeCases.length} showcase checks with concurrency ${Math.min(CONCURRENCY, activeCases.length)}...`,
-  );
-
-  const checksStartedAt = Date.now();
-  const firstPass = await runWithConcurrency(activeCases, CONCURRENCY, async (testCase) => {
-    const result = await checkShowcase(browser, testCase, FIRST_PASS);
-    console.log(result.lines.join("\n"));
-    return { testCase, ...result };
-  });
-
-  // Running many pages concurrently against one shared software-rendered GPU (swiftshader) can
-  // make a single page transiently see a degenerate/contended state that has nothing to do with
-  // the showcase itself (seen in practice: a bogus 1x1 framebuffer size under GPU load). A single
-  // sequential retry -- deliberately NOT concurrent, so it doesn't just reproduce the same
-  // contention -- separates that flakiness from real regressions without masking anything: a case
-  // that fails twice in a row is reported as a real failure either way.
-  let hasErrors = false;
-  let recovered = 0;
-  for (const first of firstPass) {
-    if (first.passed) continue;
-    const label = first.testCase.rendererType
-      ? `${first.testCase.showcase} [${first.testCase.rendererType}]`
-      : first.testCase.showcase;
-    console.log(`Retrying Showcase ${label} (transient failure on first attempt)...`);
-    const retry = await checkShowcase(browser, first.testCase, RETRY_PASS);
-    console.log(retry.lines.join("\n"));
-    if (retry.passed) recovered++;
-    else hasErrors = true;
-  }
-  const firstPassFailures = firstPass.filter((r) => !r.passed).length;
-  // One machine-readable line per run, so CI experiments can compare shards and settings.
-  console.log(
-    `SUMMARY checks=${activeCases.length} concurrency=${Math.min(CONCURRENCY, activeCases.length)} firstPassFailures=${firstPassFailures} recoveredByRetry=${recovered} failed=${firstPassFailures - recovered} checksSeconds=${Math.round((Date.now() - checksStartedAt) / 1000)}`,
-  );
-
-  console.log("Closing browser...");
-  await browser.close();
-
-  console.log("Killing server...");
   try {
-    process.kill(-server.pid, "SIGTERM");
-  } catch {
-    server.kill();
-  }
+    await waitForServer(`${activePreviewOrigin}/`, 60000, server);
 
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+    console.log("Launching Puppeteer...");
+    // Use a strictly temporary user data dir that we clean up later
+    fs.mkdirSync(tmpDir, { recursive: true });
 
-  console.log(`\nScreenshots saved to: ${SCREENSHOT_DIR}`);
+    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
-  if (hasErrors) {
-    console.error("\n🚨 Showcase testing failed! See errors above.");
-    process.exit(1);
-  } else {
-    console.log("\n🎉 All showcases passed successfully!");
-    process.exit(0);
+    browser = await puppeteer.launch({
+      headless: true,
+      userDataDir: tmpDir,
+      acceptInsecureCerts: true,
+      protocolTimeout: 60000,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--ignore-certificate-errors",
+        // Required for headless WebGL/WebGPU to actually initialize via software rendering --
+        // without these, WebGPU silently reports no adapter and every showcase falls back to
+        // WebGL2/1 regardless of which `?rendererType=` was requested.
+        "--use-gl=angle",
+        "--use-angle=swiftshader",
+        "--enable-webgl",
+        "--enable-unsafe-swiftshader",
+        "--ignore-gpu-blocklist",
+        "--disable-gpu-sandbox",
+        "--enable-features=Vulkan",
+        "--enable-unsafe-webgpu",
+      ],
+    });
+
+    // Skip (not fail) the WEB_GPU legs when the environment cannot run WebGPU at all. Set
+    // SHOWCASE_REQUIRE_WEBGPU=1 to treat an unusable WebGPU as a hard failure instead.
+    let activeCases = testCases;
+    if (testCases.some((tc) => "WEB_GPU" === tc.rendererType)) {
+      const gpu = await probeWebGpu(browser);
+      if (gpu.usable) {
+        console.log("WebGPU probe: usable.");
+      } else if (process.env.SHOWCASE_REQUIRE_WEBGPU) {
+        console.error(`WebGPU probe FAILED (${gpu.reason}) and SHOWCASE_REQUIRE_WEBGPU is set.`);
+        process.exitCode = 1;
+        return;
+      } else {
+        const skipped = testCases.filter((tc) => "WEB_GPU" === tc.rendererType).length;
+        console.log(
+          `⚠️  WebGPU probe: unusable (${gpu.reason}) -- SKIPPING ${skipped} WEB_GPU checks.`,
+        );
+        activeCases = testCases.filter((tc) => "WEB_GPU" !== tc.rendererType);
+      }
+    }
+
+    console.log(
+      `Running ${activeCases.length} showcase checks with concurrency ${Math.min(CONCURRENCY, activeCases.length)}...`,
+    );
+
+    const checksStartedAt = Date.now();
+    const firstPass = await runWithConcurrency(activeCases, CONCURRENCY, async (testCase) => {
+      const result = await checkShowcase(browser, testCase, FIRST_PASS);
+      console.log(result.lines.join("\n"));
+      return { testCase, ...result };
+    });
+
+    // Running many pages concurrently against one shared software-rendered GPU (swiftshader) can
+    // make a single page transiently see a degenerate/contended state that has nothing to do with
+    // the showcase itself (seen in practice: a bogus 1x1 framebuffer size under GPU load). A single
+    // sequential retry -- deliberately NOT concurrent, so it doesn't just reproduce the same
+    // contention -- separates that flakiness from real regressions without masking anything: a case
+    // that fails twice in a row is reported as a real failure either way.
+    let hasErrors = false;
+    let recovered = 0;
+    for (const first of firstPass) {
+      if (first.passed) continue;
+      const label = first.testCase.rendererType
+        ? `${first.testCase.showcase} [${first.testCase.rendererType}]`
+        : first.testCase.showcase;
+      console.log(`Retrying Showcase ${label} (transient failure on first attempt)...`);
+      const retry = await checkShowcase(browser, first.testCase, RETRY_PASS);
+      console.log(retry.lines.join("\n"));
+      if (retry.passed) recovered++;
+      else hasErrors = true;
+    }
+    const firstPassFailures = firstPass.filter((r) => !r.passed).length;
+    // One machine-readable line per run, so CI experiments can compare shards and settings.
+    console.log(
+      `SUMMARY checks=${activeCases.length} concurrency=${Math.min(CONCURRENCY, activeCases.length)} firstPassFailures=${firstPassFailures} recoveredByRetry=${recovered} failed=${firstPassFailures - recovered} checksSeconds=${Math.round((Date.now() - checksStartedAt) / 1000)}`,
+    );
+
+    console.log(`\nScreenshots saved to: ${SCREENSHOT_DIR}`);
+
+    if (hasErrors) {
+      console.error("\n🚨 Showcase testing failed! See errors above.");
+      process.exitCode = 1;
+    } else {
+      console.log("\n🎉 All showcases passed successfully!");
+    }
+  } finally {
+    if (browser) {
+      console.log("Closing browser...");
+      try {
+        await browser.close();
+      } catch {
+        // Ignore close errors if browser already crashed.
+      }
+    }
+    console.log("Killing server...");
+    try {
+      process.kill(-server.pid, "SIGTERM");
+    } catch {
+      server.kill();
+    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
-run().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+run()
+  .then(() => process.exit(process.exitCode ?? 0))
+  .catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });

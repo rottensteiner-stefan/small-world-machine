@@ -215,6 +215,7 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
     // above both awaited `setupScene()` (which covers model/texture loading) and kicked off the
     // render loop, so this is purely about synchronizing with that loop's first painted frame.
     await this._waitForStableFrame();
+    if (this._isShowcaseDestroyed) return;
 
     const rendererType = this.renderer?.type;
     window.dispatchEvent(
@@ -224,6 +225,11 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
     );
   }
 
+  private _isShowcaseDestroyed: boolean = false;
+  private _readyRafId: number | null = null;
+  private _readyTimeoutId: number | null = null;
+  private _readyResolve: (() => void) | null = null;
+
   /**
    * Resolves after `requestAnimationFrame` has been called once, i.e. after the render loop has
    * painted at least one frame. Falls back to a short timeout in environments where
@@ -231,30 +237,54 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
    * (e.g. throttled headless setups), so readiness signalling can never dead-lock.
    */
   private async _waitForStableFrame(): Promise<void> {
+    if (this._isShowcaseDestroyed) return;
     await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        if (this._readyTimeoutId !== null) {
+          window.clearTimeout(this._readyTimeoutId);
+          this._readyTimeoutId = null;
+        }
+        if (this._readyRafId !== null && typeof window.cancelAnimationFrame === "function") {
+          window.cancelAnimationFrame(this._readyRafId);
+          this._readyRafId = null;
+        }
+        this._readyResolve = null;
+        resolve();
+      };
+      this._readyResolve = finish;
+
       const raf = (window as unknown as Record<string, unknown>)["requestAnimationFrame"] as
         ((cb: FrameRequestCallback) => number) | undefined;
       if ("function" !== typeof raf) {
-        window.setTimeout(resolve, 500);
+        this._readyTimeoutId = window.setTimeout(finish, 500);
         return;
       }
       // Each wait gets its own dead-lock backstop: clearing the timeout after the first rAF and
       // not re-arming it left the second rAF wait unprotected -- if the tab was backgrounded
       // between frame 1 and 2, `resolve` would never run and readiness signalling would hang.
       // The second rAF clears this new timeout, so it is the last clear/resolve on the happy path.
-      let timeout: number;
       const armBackstop = (): void => {
-        timeout = window.setTimeout(resolve, 1500);
+        if (this._readyTimeoutId !== null) {
+          window.clearTimeout(this._readyTimeoutId);
+        }
+        this._readyTimeoutId = window.setTimeout(finish, 1500);
       };
       armBackstop();
-      raf((): void => {
-        window.clearTimeout(timeout);
+      this._readyRafId = raf((): void => {
+        this._readyRafId = null;
+        if (settled || this._isShowcaseDestroyed) {
+          finish();
+          return;
+        }
         // Wait one more frame so the first painted frame — including any one-shot
         // post-processing like TAA history init — has fully landed before signalling.
         armBackstop();
-        raf((): void => {
-          window.clearTimeout(timeout);
-          resolve();
+        this._readyRafId = raf((): void => {
+          this._readyRafId = null;
+          finish();
         });
       });
     });
@@ -264,6 +294,8 @@ export abstract class AbstractShowcase extends SmallWorldMachine {
    * Destroys the showcase instance, freeing resources and removing showcase-specific DOM/listeners.
    */
   public override destroy(): void {
+    this._isShowcaseDestroyed = true;
+    this._readyResolve?.();
     window.removeEventListener("keydown", this._showcaseKeyDownHandler);
     for (const btn of this._navButtons) {
       btn.remove();

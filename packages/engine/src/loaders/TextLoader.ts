@@ -25,6 +25,7 @@ export class TextLoader extends AbstractLoader<string> {
         (loaded: number, total: number) => {
           this.dispatchEvent(EventType.LOADER_PROGRESS, { url: fullUrl, loaded, total });
         },
+        this._signal,
       );
 
       this.dispatchEvent(EventType.LOADER_END, { url: fullUrl, data: text });

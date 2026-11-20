@@ -22,6 +22,8 @@ export interface GamepadDevice {
   getAxis(axisIndex: number): number;
   /** Synchronizes state each frame. */
   update(): void;
+  /** Optional cleanup hook for removing event listeners on device teardown. */
+  dispose?(): void;
 }
 
 /**
@@ -31,13 +33,23 @@ export class StandardGamepadDevice implements GamepadDevice {
   public id: string;
   public connected: boolean = true;
   private _index: number;
+  private _snapshot: Gamepad | null = null;
+  private _hasSnapshot: boolean = false;
 
   constructor(gamepad: Gamepad) {
     this.id = gamepad.id;
     this._index = gamepad.index;
   }
 
+  /** Gamepad slot index in `navigator.getGamepads()`. */
+  public get index(): number {
+    return this._index;
+  }
+
   private _getGamepad(): Gamepad | null {
+    if (this._hasSnapshot) {
+      return this._snapshot;
+    }
     if (typeof navigator === "undefined" || !navigator.getGamepads) {
       return null;
     }
@@ -59,8 +71,14 @@ export class StandardGamepadDevice implements GamepadDevice {
     return val !== undefined ? val : 0;
   }
 
-  public update(): void {
-    const gp = this._getGamepad();
+  public update(snapshot?: Gamepad | null, cacheSnapshot: boolean = false): void {
+    if (cacheSnapshot) {
+      this._snapshot = snapshot ?? null;
+      this._hasSnapshot = true;
+      this.connected = this._snapshot ? this._snapshot.connected : false;
+      return;
+    }
+    const gp = snapshot !== undefined ? snapshot : this._getGamepad();
     this.connected = gp ? gp.connected : false;
   }
 }
@@ -73,6 +91,10 @@ export class JoyConGamepadDevice implements GamepadDevice {
   public connected: boolean = true;
   private _leftDevice: JoyConLeft | null = null;
   private _rightDevice: JoyConRight | null = null;
+  private _onLeftInput:
+    ((event: CustomEvent<ParsedJoyConPacketData | CompleteJoyConDataPacket>) => void) | null = null;
+  private _onRightInput:
+    ((event: CustomEvent<ParsedJoyConPacketData | CompleteJoyConDataPacket>) => void) | null = null;
 
   private _buttonStates: { [key: number]: boolean } = {};
   private _axisStates: { [key: number]: number } = {};
@@ -94,21 +116,39 @@ export class JoyConGamepadDevice implements GamepadDevice {
 
   private _setupListeners(): void {
     if (this._leftDevice) {
-      this._leftDevice.on(
-        "hidinput",
-        (event: CustomEvent<ParsedJoyConPacketData | CompleteJoyConDataPacket>) => {
-          this._handleInput(event.detail, "left");
-        },
-      );
+      this._onLeftInput = (
+        event: CustomEvent<ParsedJoyConPacketData | CompleteJoyConDataPacket>,
+      ): void => {
+        this._handleInput(event.detail, "left");
+      };
+      this._leftDevice.on("hidinput", this._onLeftInput);
     }
     if (this._rightDevice) {
-      this._rightDevice.on(
-        "hidinput",
-        (event: CustomEvent<ParsedJoyConPacketData | CompleteJoyConDataPacket>) => {
-          this._handleInput(event.detail, "right");
-        },
-      );
+      this._onRightInput = (
+        event: CustomEvent<ParsedJoyConPacketData | CompleteJoyConDataPacket>,
+      ): void => {
+        this._handleInput(event.detail, "right");
+      };
+      this._rightDevice.on("hidinput", this._onRightInput);
     }
+  }
+
+  public dispose(): void {
+    if (this._leftDevice && this._onLeftInput) {
+      if (typeof this._leftDevice.removeEventListener === "function") {
+        this._leftDevice.removeEventListener("hidinput", this._onLeftInput as EventListener);
+      }
+      this._onLeftInput = null;
+    }
+    if (this._rightDevice && this._onRightInput) {
+      if (typeof this._rightDevice.removeEventListener === "function") {
+        this._rightDevice.removeEventListener("hidinput", this._onRightInput as EventListener);
+      }
+      this._onRightInput = null;
+    }
+    this._leftDevice = null;
+    this._rightDevice = null;
+    this.connected = false;
   }
 
   private _handleInput(
@@ -209,6 +249,7 @@ export class UniversalGamepadController {
   private _lastUpdateFrameTime: number = -1;
   private _pollIntervalId: ReturnType<typeof setInterval> | null = null;
   private _devicesBuilt: boolean = false;
+  private _isDestroyed: boolean = false;
   /** Connected-pad snapshot of the last rebuild (reused, compared in place: zero-GC per frame). */
   private readonly _padIds: string[] = [];
   private _openJoyCons: number = 0;
@@ -218,16 +259,30 @@ export class UniversalGamepadController {
   }
 
   public destroy(): void {
+    this._isDestroyed = true;
     if (null !== this._pollIntervalId) {
       clearInterval(this._pollIntervalId);
       this._pollIntervalId = null;
     }
+    for (const dev of this._devices) {
+      dev.dispose?.();
+    }
+    this._devices = [];
+    this._devicesBuilt = false;
+    for (const joyCon of this._initializedJoyCons) {
+      if (joyCon.device?.opened && typeof joyCon.device.close === "function") {
+        joyCon.device.close().catch(() => {});
+      }
+    }
+    this._initializedJoyCons.clear();
   }
 
   private async _loadModule(): Promise<void> {
+    if (this._isDestroyed) return;
     if (typeof navigator !== "undefined" && "hid" in navigator) {
       try {
         this._joyConModule = await import("joy-con-webhid");
+        if (this._isDestroyed) return;
         this._initializeWebHIDDevices();
       } catch (e) {
         console.warn(
@@ -243,7 +298,9 @@ export class UniversalGamepadController {
    * MUST be called in response to a user gesture (e.g. click).
    */
   public async requestJoyConConnection(): Promise<void> {
+    if (this._isDestroyed) return;
     await this._loadModule();
+    if (this._isDestroyed) return;
     if (this._joyConModule && this._joyConModule.connectJoyCon) {
       await this._joyConModule.connectJoyCon();
     } else {
@@ -252,20 +309,28 @@ export class UniversalGamepadController {
   }
 
   private async _initializeWebHIDDevices(): Promise<void> {
-    if (!this._joyConModule) return;
+    if (this._isDestroyed || !this._joyConModule) return;
 
     const checkConnections = async (): Promise<void> => {
+      if (this._isDestroyed) return;
       const connectedMap = this._joyConModule?.connectedJoyCons;
 
       if (!connectedMap) return;
 
       for (const joyCon of connectedMap.values()) {
+        if (this._isDestroyed) return;
         if (this._initializedJoyCons.has(joyCon)) {
           continue;
         }
 
         try {
           await joyCon.open();
+          if (this._isDestroyed) {
+            if (joyCon.device?.opened && typeof joyCon.device.close === "function") {
+              joyCon.device.close().catch(() => {});
+            }
+            return;
+          }
           await joyCon.enableStandardFullMode();
           await joyCon.enableIMUMode();
           await joyCon.enableVibration();
@@ -279,6 +344,7 @@ export class UniversalGamepadController {
     };
 
     await checkConnections();
+    if (this._isDestroyed) return;
     if (null !== this._pollIntervalId) {
       clearInterval(this._pollIntervalId);
     }
@@ -287,10 +353,14 @@ export class UniversalGamepadController {
 
   /**
    * Updates all devices and scans for changes. Should be called once per frame.
+   * @param force Rebuilds the device list unconditionally.
+   * @param cacheSnapshot When true (frame-loop polling via `Input.update()`), caches each
+   *   `StandardGamepadDevice`'s `Gamepad` snapshot for the frame so subsequent `isButtonPressed`
+   *   and `getAxis` calls do not repeatedly invoke `navigator.getGamepads()`.
    */
-  public update(force: boolean = false): void {
+  public update(force: boolean = false, cacheSnapshot: boolean = false): void {
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-    if (!force && now === this._lastUpdateFrameTime) {
+    if (!force && !cacheSnapshot && now === this._lastUpdateFrameTime) {
       return;
     }
     this._lastUpdateFrameTime = now;
@@ -300,10 +370,21 @@ export class UniversalGamepadController {
     // The device list only changes when pads (dis)connect: rebuilding it every frame allocated
     // arrays, device wrappers and Sets per frame.
     if (!force && this._devicesBuilt && !this._padsChanged(pads)) {
-      for (let i = 0; i < this._devices.length; i++) this._devices[i]!.update();
+      for (let i = 0; i < this._devices.length; i++) {
+        const dev = this._devices[i]!;
+        if (dev instanceof StandardGamepadDevice) {
+          dev.update(pads ? (pads[dev.index] ?? null) : null, cacheSnapshot);
+        } else {
+          dev.update();
+        }
+      }
       return;
     }
     this._rememberPads(pads);
+
+    for (const oldDev of this._devices) {
+      oldDev.dispose?.();
+    }
 
     const standardDevices: GamepadDevice[] = [];
     if (pads) {
@@ -386,7 +467,11 @@ export class UniversalGamepadController {
     this._devicesBuilt = true;
 
     for (const dev of this._devices) {
-      dev.update();
+      if (dev instanceof StandardGamepadDevice) {
+        dev.update(pads ? (pads[dev.index] ?? null) : null, cacheSnapshot);
+      } else {
+        dev.update();
+      }
     }
   }
 

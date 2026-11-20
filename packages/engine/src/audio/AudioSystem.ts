@@ -12,6 +12,8 @@ import { SynthSFX } from "./SynthSFX.js";
 export class AudioSystem {
   public context: AudioContext;
   private _buffers: Map<string, AudioBuffer> = new Map();
+  private _inFlightLoads: Map<string, Promise<void>> = new Map();
+  private _isDisposed: boolean = false;
 
   // Audio Mixer Nodes
   public masterGain!: GainNode;
@@ -122,15 +124,31 @@ export class AudioSystem {
    * @param name The unique name to identify the sound.
    */
   public async load(url: string, name: string): Promise<void> {
-    if (this._buffers.has(name)) return;
-    const response = await fetch(url);
-    // Fail fast with the URL instead of handing an HTML error page to decodeAudioData.
-    if (!response.ok) throw new Error(`[AudioSystem] ${url}: HTTP ${response.status}`);
-    const arrayBuffer = await response.arrayBuffer();
-    const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
-    this._buffers.set(name, audioBuffer);
-    if (this._events) {
-      this._events.dispatchEvent(EventType.AUDIO_LOADED, { name, url });
+    if (this._isDisposed || this._buffers.has(name)) return;
+    const inFlight = this._inFlightLoads.get(name);
+    if (inFlight) return inFlight;
+
+    const loadPromise = (async (): Promise<void> => {
+      const response = await fetch(url);
+      // Fail fast with the URL instead of handing an HTML error page to decodeAudioData.
+      if (!response.ok) throw new Error(`[AudioSystem] ${url}: HTTP ${response.status}`);
+      const arrayBuffer = await response.arrayBuffer();
+      if (this._isDisposed) return;
+      const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
+      if (this._isDisposed) return;
+      this._buffers.set(name, audioBuffer);
+      if (this._events) {
+        this._events.dispatchEvent(EventType.AUDIO_LOADED, { name, url });
+      }
+    })();
+
+    this._inFlightLoads.set(name, loadPromise);
+    try {
+      await loadPromise;
+    } finally {
+      if (this._inFlightLoads.get(name) === loadPromise) {
+        this._inFlightLoads.delete(name);
+      }
     }
   }
 
@@ -156,6 +174,10 @@ export class AudioSystem {
 
     source.connect(gainNode);
     gainNode.connect(this.sfxGain);
+    source.onended = (): void => {
+      source.disconnect();
+      gainNode.disconnect();
+    };
 
     source.start(0);
     return source;
@@ -184,6 +206,10 @@ export class AudioSystem {
 
     source.connect(gainNode);
     gainNode.connect(this.musicGain);
+    source.onended = (): void => {
+      source.disconnect();
+      gainNode.disconnect();
+    };
 
     source.start(0);
     return source;
@@ -231,6 +257,11 @@ export class AudioSystem {
     source.connect(panner);
     panner.connect(gainNode);
     gainNode.connect(this.sfxGain);
+    source.onended = (): void => {
+      source.disconnect();
+      panner.disconnect();
+      gainNode.disconnect();
+    };
 
     source.start(0);
     return { source, panner };
@@ -276,9 +307,37 @@ export class AudioSystem {
       forwardZ = -cosTheta * cosPhi;
     }
 
-    const upX = 0;
-    const upY = 1;
-    const upZ = 0;
+    let upX = camera.up ? camera.up.x : 0;
+    let upY = camera.up ? camera.up.y : 1;
+    let upZ = camera.up ? camera.up.z : 0;
+    const upLen = Math.hypot(upX, upY, upZ);
+    if (upLen > 1e-6) {
+      upX /= upLen;
+      upY /= upLen;
+      upZ /= upLen;
+    } else {
+      upX = 0;
+      upY = 1;
+      upZ = 0;
+    }
+    // Web Audio leaves listener orientation undefined (or silent) when forward and up are
+    // collinear (e.g. looking straight up/down). Fall back to an orthogonal reference vector.
+    const dot = forwardX * upX + forwardY * upY + forwardZ * upZ;
+    if (Math.abs(dot) > 0.999) {
+      const refX = Math.abs(forwardZ) < 0.9 ? 0 : 1;
+      const refY = 0;
+      const refZ = Math.abs(forwardZ) < 0.9 ? (forwardY > 0 ? 1 : -1) : 0;
+      const refDot = refX * forwardX + refY * forwardY + refZ * forwardZ;
+      upX = refX - refDot * forwardX;
+      upY = refY - refDot * forwardY;
+      upZ = refZ - refDot * forwardZ;
+      const orthoLen = Math.hypot(upX, upY, upZ);
+      if (orthoLen > 1e-6) {
+        upX /= orthoLen;
+        upY /= orthoLen;
+        upZ /= orthoLen;
+      }
+    }
 
     if (listener.positionX) {
       listener.positionX.value = posX;
@@ -389,10 +448,13 @@ export class AudioSystem {
    * the lifetime of the page (browsers cap the number of concurrently open `AudioContext`s).
    */
   public dispose(): void {
+    this._isDisposed = true;
     for (const handle of [...this._activeEndlessSounds]) {
       handle.stop();
     }
     this._activeEndlessSounds.clear();
+    this._buffers.clear();
+    this._inFlightLoads.clear();
 
     if (this.context.state !== "closed") {
       this.context.close().catch(console.error);

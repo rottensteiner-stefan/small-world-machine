@@ -69,8 +69,11 @@ export class OrbitController extends Behavior<CameraInterfaceData> {
               ? this._options.input.mouse.left || this._options.input.mouse.right
               : this._options.input.mouse.left;
         if (this._options.input.isPointerLocked || isButtonPressed) {
-          cam.pendingDx += this._options.input.mouse.dx;
-          cam.pendingDy += this._options.input.mouse.dy;
+          // Camera strategies apply the default 0.005 rad/px scale; ratio preserves default feel
+          // while honoring custom `lookSensitivity` values.
+          const sensitivityScale = this._options.lookSensitivity / 0.005;
+          cam.pendingDx += this._options.input.mouse.dx * sensitivityScale;
+          cam.pendingDy += this._options.input.mouse.dy * sensitivityScale;
         }
       }
     }

@@ -53,4 +53,21 @@ describe("UniversalGamepadController", () => {
     expect(device.isButtonPressed(0)).toBe(true); // A button
     expect(device.getAxis(2)).toBeCloseTo(0.8, 2);
   });
+
+  it("JoyConGamepadDevice.dispose() removes hidinput listeners (IN04)", () => {
+    const removed: string[] = [];
+    const mockLeft = {
+      device: { productName: "Joy-Con (L)", opened: true },
+      on: (): void => {},
+      removeEventListener: (event: string): void => {
+        removed.push(event);
+      },
+    } as unknown as JoyConLeft;
+
+    const device = new JoyConGamepadDevice(mockLeft, null);
+    device.dispose();
+
+    expect(removed).toEqual(["hidinput"]);
+    expect(device.connected).toBe(false);
+  });
 });

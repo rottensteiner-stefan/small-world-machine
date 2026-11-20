@@ -16,6 +16,8 @@ export abstract class AbstractLoader<T> implements Events {
    * `options.assetManager` was passed -- never the deprecated process-wide singleton.
    */
   protected _assetManager: AssetManager;
+  /** Optional AbortSignal forwarded to fetch requests made by this loader. */
+  protected _signal: AbortSignal | undefined;
 
   /**
    * Creates a new AbstractLoader.
@@ -24,6 +26,7 @@ export abstract class AbstractLoader<T> implements Events {
   constructor(options: LoaderOptions = {}) {
     this.basePath = options.basePath ?? "";
     this._assetManager = options.assetManager ?? new AssetManager();
+    this._signal = options.signal;
   }
 
   /**

@@ -52,6 +52,22 @@ describe("OrbitController", () => {
     expect(cam.pendingDx).not.toBe(0);
   });
 
+  it("scales camera pendingDx/pendingDy when a custom lookSensitivity is configured (IN08)", () => {
+    const cam = new Camera(new PerspectiveProjection());
+    const input = new MockInput();
+    const controller = new OrbitController({ input, lookSensitivity: 0.01 });
+    controller.onAttach(cam);
+
+    input.isPointerLocked = true;
+    input.mouse.dx = 3;
+    input.mouse.dy = -5;
+
+    controller.update(0);
+
+    expect(cam.pendingDx).toBeCloseTo(6, 6);
+    expect(cam.pendingDy).toBeCloseTo(-10, 6);
+  });
+
   it("accumulates mouse deltas while the left mouse button is held", () => {
     const cam = new Camera(new PerspectiveProjection());
     const input = new MockInput();

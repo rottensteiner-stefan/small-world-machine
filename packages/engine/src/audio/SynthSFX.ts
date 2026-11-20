@@ -257,6 +257,10 @@ export class SynthSFX {
 
     osc.connect(gain);
     gain.connect(this._sfxGain);
+    osc.onended = (): void => {
+      osc.disconnect();
+      gain.disconnect();
+    };
 
     osc.start();
     osc.stop(this._context.currentTime + 0.1);
@@ -280,6 +284,10 @@ export class SynthSFX {
 
     osc.connect(gain);
     gain.connect(this._sfxGain);
+    osc.onended = (): void => {
+      osc.disconnect();
+      gain.disconnect();
+    };
 
     osc.start();
     osc.stop(this._context.currentTime + 0.15);
@@ -303,6 +311,10 @@ export class SynthSFX {
 
     osc.connect(gain);
     gain.connect(this._sfxGain);
+    osc.onended = (): void => {
+      osc.disconnect();
+      gain.disconnect();
+    };
 
     osc.start();
     osc.stop(this._context.currentTime + 0.3);
@@ -334,6 +346,10 @@ export class SynthSFX {
 
     osc.connect(gain);
     gain.connect(this._sfxGain);
+    osc.onended = (): void => {
+      osc.disconnect();
+      gain.disconnect();
+    };
 
     osc.start();
     osc.stop(this._context.currentTime + duration);
@@ -382,6 +398,11 @@ export class SynthSFX {
     source.connect(filter);
     filter.connect(gain);
     gain.connect(this._sfxGain);
+    source.onended = (): void => {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
 
     source.start();
     source.stop(start + duration);

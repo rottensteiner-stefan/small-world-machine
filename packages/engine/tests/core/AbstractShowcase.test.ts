@@ -149,6 +149,28 @@ describe("AbstractShowcase Scene-Ready Signal", () => {
     window.removeEventListener(SHOWCASE_READY_EVENT, listener);
     showcase.destroy();
   });
+
+  it("suppresses SHOWCASE_READY_EVENT when destroyed before the first stable frame resolves (AR04)", async () => {
+    const pendingCallbacks: FrameRequestCallback[] = [];
+    setRaf((cb: FrameRequestCallback): number => {
+      pendingCallbacks.push(cb);
+      return pendingCallbacks.length;
+    });
+
+    const showcase = new TestShowcase();
+    const listener = vi.fn();
+    window.addEventListener(SHOWCASE_READY_EVENT, listener);
+
+    const startPromise = showcase.start();
+    await Promise.resolve();
+    showcase.destroy();
+    await startPromise;
+
+    for (const cb of pendingCallbacks) cb(Date.now());
+    expect(listener).not.toHaveBeenCalled();
+
+    window.removeEventListener(SHOWCASE_READY_EVENT, listener);
+  });
 });
 
 describe("AbstractShowcase Camera Configuration (aspect from canvas size)", () => {

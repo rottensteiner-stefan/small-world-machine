@@ -131,4 +131,78 @@ describe("Input Gamepad Support", () => {
       expect(isEditingTextInput(null)).toBe(false);
     });
   });
+
+  describe("Audit E4 Input regressions", () => {
+    it("releases a held key on keyup even while an <input> is focused (IN02)", () => {
+      const liveInput = new Input();
+      liveInput.init();
+      const field = document.createElement("input");
+      document.body.appendChild(field);
+
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW" }));
+      expect(liveInput.isPressed("KeyW")).toBe(true);
+
+      field.focus();
+      window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyW" }));
+      expect(liveInput.isPressed("KeyW")).toBe(false);
+
+      document.body.removeChild(field);
+      liveInput.destroy();
+    });
+
+    it("scopes contextmenu and mousedown to target canvas when setTargetElement is used (IN01)", () => {
+      const canvas = document.createElement("canvas");
+      document.body.appendChild(canvas);
+      const liveInput = new Input();
+      liveInput.init(canvas);
+
+      const winMenu = new MouseEvent("contextmenu", { cancelable: true });
+      window.dispatchEvent(winMenu);
+      expect(winMenu.defaultPrevented).toBe(false);
+
+      const canvasMenu = new MouseEvent("contextmenu", { cancelable: true });
+      canvas.dispatchEvent(canvasMenu);
+      expect(canvasMenu.defaultPrevented).toBe(true);
+
+      liveInput.destroy();
+      document.body.removeChild(canvas);
+    });
+
+    it("normalizes wheel deltaMode line/page units and resets state on touchcancel/visibilitychange (IN05/IN06)", () => {
+      const liveInput = new Input();
+      liveInput.init();
+
+      window.dispatchEvent(new WheelEvent("wheel", { deltaY: 3, deltaMode: 1 }));
+      expect(liveInput.mouse.wheelY).toBe(48);
+
+      liveInput.mouse.left = true;
+      window.dispatchEvent(new Event("touchcancel"));
+      expect(liveInput.mouse.left).toBe(false);
+
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyA" }));
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+      expect(liveInput.isPressed("KeyA")).toBe(false);
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+
+      liveInput.destroy();
+    });
+
+    it("uses radial deadzone and snapshots navigator.getGamepads once per update() frame (IN03/IN07)", () => {
+      let calls = 0;
+      const gp = mockGamepad([0.12, 0.12, 0, 0], [{ pressed: true }]);
+      navigator.getGamepads = (): Gamepad[] => {
+        calls++;
+        return [gp];
+      };
+
+      input.update();
+      expect(calls).toBe(1);
+
+      // Diagonal (0.12, 0.12) has hypot ~0.17 > 0.15 -> radial deadzone passes, no extra getGamepads calls
+      expect(input.getAxis(Keys.A, Keys.D)).toBeCloseTo(0.12, 4);
+      expect(input.isPressed(Keys.SPACE)).toBe(true);
+      expect(calls).toBe(1);
+    });
+  });
 });

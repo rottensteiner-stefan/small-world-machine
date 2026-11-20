@@ -22,6 +22,7 @@ export class AssetManager {
   private _activeLoaders = new Map<string, AssetProgress>();
   private _onLoadedPromise: Promise<void> | undefined = undefined;
   private _resolveLoaded: (() => void) | undefined = undefined;
+  private _epoch: number = 0;
 
   private _baseUrl: string = "";
   private _headers: Record<string, string> = {};
@@ -40,6 +41,25 @@ export class AssetManager {
     this._baseUrl = url;
     if (this._baseUrl && !this._baseUrl.endsWith("/")) {
       this._baseUrl += "/";
+    }
+  }
+
+  /**
+   * Clears all cached promises and active progress tracking, and advances the epoch counter so
+   * any still in-flight requests from before the reset cannot evict or corrupt entries created
+   * after `clear()`.
+   */
+  public clear(): void {
+    this._epoch++;
+    this._imageCache.clear();
+    this._textCache.clear();
+    this._jsonCache.clear();
+    this._binaryCache.clear();
+    this._activeLoaders.clear();
+    if (this._resolveLoaded) {
+      this._resolveLoaded();
+      this._onLoadedPromise = undefined;
+      this._resolveLoaded = undefined;
     }
   }
 
@@ -133,8 +153,10 @@ export class AssetManager {
     url: string,
     trackingKey: string,
     onProgress?: ProgressCallback,
+    signal?: AbortSignal,
   ): Promise<Blob> {
     const finalUrl = this.resolveUrl(url);
+    const epoch = this._epoch;
 
     // Guarantee the progress-tracking entry is always released -- success, HTTP error, or a
     // mid-stream failure after `_activeLoaders.set` below. Previously each loader re-implemented
@@ -144,6 +166,7 @@ export class AssetManager {
       const fetchFn = this.customFetch ?? fetch;
       const response: Response = await fetchFn(finalUrl, {
         headers: this._headers,
+        ...(signal ? { signal } : {}),
       });
 
       if (!response.ok) {
@@ -153,10 +176,14 @@ export class AssetManager {
       const contentLength: string | undefined = response.headers.get("content-length") ?? undefined;
       const total: number = contentLength ? parseInt(contentLength, 10) : 0;
 
-      this._activeLoaders.set(trackingKey, { loaded: 0, total });
+      if (this._epoch === epoch) {
+        this._activeLoaders.set(trackingKey, { loaded: 0, total });
+      }
 
       const updateProgress = (loaded: number, total: number): void => {
-        this._activeLoaders.set(trackingKey, { loaded, total });
+        if (this._epoch === epoch) {
+          this._activeLoaders.set(trackingKey, { loaded, total });
+        }
         if (onProgress) onProgress(loaded, total);
       };
 
@@ -182,7 +209,9 @@ export class AssetManager {
 
       return new Blob(chunks as BlobPart[]);
     } finally {
-      this._checkCompletion(trackingKey);
+      if (this._epoch === epoch) {
+        this._checkCompletion(trackingKey);
+      }
     }
   }
 
@@ -211,8 +240,11 @@ export class AssetManager {
   ): Promise<T> {
     const existing = cache.get(key);
     if (existing) return existing;
+    const epoch = this._epoch;
     const promise = loader().catch((error: unknown) => {
-      cache.delete(key);
+      if (this._epoch === epoch && cache.get(key) === promise) {
+        cache.delete(key);
+      }
       throw error;
     });
     cache.set(key, promise);
@@ -228,6 +260,7 @@ export class AssetManager {
     url: string,
     onProgress?: ProgressCallback,
     flipY: boolean = true,
+    signal?: AbortSignal,
   ): Promise<ImageBitmap | HTMLImageElement> {
     const cacheKey: string = `${url}_${flipY}`;
     // The fallback (HTMLImageElement) lives INSIDE the cached promise: a successful fallback is
@@ -235,7 +268,7 @@ export class AssetManager {
     // `_cacheOrStart` evicts the entry so a later request reloads instead of seeing a stale error.
     return this._cacheOrStart(this._imageCache, cacheKey, async () => {
       try {
-        const blob = await this._fetchWithProgress(url, cacheKey, onProgress);
+        const blob = await this._fetchWithProgress(url, cacheKey, onProgress, signal);
 
         if (flipY) {
           return await createImageBitmap(blob, {
@@ -255,9 +288,10 @@ export class AssetManager {
           });
         }
       } catch (e: unknown) {
+        if (signal?.aborted) throw e;
         // Fall back to a plain HTMLImageElement (e.g. when createImageBitmap is unavailable).
         console.error(e);
-        const img = await this._loadImageElement(url, cacheKey, onProgress);
+        const img = await this._loadImageElement(url, cacheKey, onProgress, signal);
         // createImageBitmap's `imageOrientation: "flipY"` is not available here, so honour the
         // same flipY contract by re-rasterising the decoded element upside down.
         return flipY ? this._flipImageElement(img) : img;
@@ -270,10 +304,11 @@ export class AssetManager {
     url: string,
     cacheKey: string,
     onProgress?: ProgressCallback,
+    signal?: AbortSignal,
   ): Promise<HTMLImageElement> {
     return new Promise<HTMLImageElement>((resolve, reject) => {
       const fail = (): void => reject(new Error(`[AssetManager] Fallback failed: ${url}`));
-      this._fetchWithProgress(url, `${cacheKey}_fallback`, onProgress)
+      this._fetchWithProgress(url, `${cacheKey}_fallback`, onProgress, signal)
         .then((blob) => {
           const objectUrl = URL.createObjectURL(blob);
           const img: HTMLImageElement = new Image();
@@ -288,7 +323,11 @@ export class AssetManager {
             fail();
           };
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          if (signal?.aborted) {
+            reject(err);
+            return;
+          }
           const img: HTMLImageElement = new Image();
           img.crossOrigin = "anonymous";
           img.src = this.resolveUrl(url);
@@ -332,27 +371,39 @@ export class AssetManager {
     });
   }
 
-  public async loadText(url: string, onProgress?: ProgressCallback): Promise<string> {
+  public async loadText(
+    url: string,
+    onProgress?: ProgressCallback,
+    signal?: AbortSignal,
+  ): Promise<string> {
     const trackingKey = `text:${url}`;
     return this._cacheOrStart(this._textCache, url, async () => {
-      const blob = await this._fetchWithProgress(url, trackingKey, onProgress);
+      const blob = await this._fetchWithProgress(url, trackingKey, onProgress, signal);
       return blob.text();
     });
   }
 
-  public async loadJson(url: string, onProgress?: ProgressCallback): Promise<unknown> {
+  public async loadJson(
+    url: string,
+    onProgress?: ProgressCallback,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
     const trackingKey = `json:${url}`;
     return this._cacheOrStart(this._jsonCache, url, async () => {
-      const blob = await this._fetchWithProgress(url, trackingKey, onProgress);
+      const blob = await this._fetchWithProgress(url, trackingKey, onProgress, signal);
       const text: string = await blob.text();
       return JSON.parse(text);
     });
   }
 
-  public async loadBinary(url: string, onProgress?: ProgressCallback): Promise<ArrayBuffer> {
+  public async loadBinary(
+    url: string,
+    onProgress?: ProgressCallback,
+    signal?: AbortSignal,
+  ): Promise<ArrayBuffer> {
     const trackingKey = `binary:${url}`;
     return this._cacheOrStart(this._binaryCache, url, async () => {
-      const blob = await this._fetchWithProgress(url, trackingKey, onProgress);
+      const blob = await this._fetchWithProgress(url, trackingKey, onProgress, signal);
       return blob.arrayBuffer();
     });
   }
@@ -363,19 +414,25 @@ export class AssetManager {
    * @param url The resource URL.
    * @param onChunk Optional callback invoked when each chunk is received.
    * @param onProgress Optional progress callback.
+   * @param signal Optional AbortSignal to cancel the underlying fetch.
    */
   public async streamBinary(
     url: string,
     onChunk?: (chunk: Uint8Array, loaded: number, total: number) => void,
     onProgress?: ProgressCallback,
+    signal?: AbortSignal,
   ): Promise<ArrayBuffer> {
     const trackingKey = `stream:${url}`;
     return this._cacheOrStart(this._binaryCache, url, async () => {
+      const epoch = this._epoch;
       try {
         const finalUrl = this.resolveUrl(url);
 
         const fetchFn = this.customFetch ?? fetch;
-        const response = await fetchFn(finalUrl, { headers: this._headers });
+        const response = await fetchFn(finalUrl, {
+          headers: this._headers,
+          ...(signal ? { signal } : {}),
+        });
         if (!response.ok) {
           throw new Error(`[AssetManager] Stream error: ${response.status} at ${finalUrl}`);
         }
@@ -386,7 +443,9 @@ export class AssetManager {
         // Namespaced separately from loadBinary's "binary:" key -- both cache into _binaryCache and
         // could plausibly be called concurrently for the same url, and sharing a tracking key would
         // reintroduce the premature-completion race _fetchWithProgress's trackingKey param avoids.
-        this._activeLoaders.set(trackingKey, { loaded: 0, total });
+        if (this._epoch === epoch) {
+          this._activeLoaders.set(trackingKey, { loaded: 0, total });
+        }
 
         if (!response.body) {
           const buf = await response.arrayBuffer();
@@ -405,7 +464,9 @@ export class AssetManager {
           if (value) {
             loaded += value.length;
             chunks.push(value);
-            this._activeLoaders.set(trackingKey, { loaded, total });
+            if (this._epoch === epoch) {
+              this._activeLoaders.set(trackingKey, { loaded, total });
+            }
             if (onChunk) onChunk(value, loaded, total);
             if (onProgress) onProgress(loaded, total);
           }
@@ -422,7 +483,9 @@ export class AssetManager {
         return finalBuffer.buffer;
       } finally {
         // Mirror `_fetchWithProgress`: the tracking entry must be released even on failure.
-        this._checkCompletion(trackingKey);
+        if (this._epoch === epoch) {
+          this._checkCompletion(trackingKey);
+        }
       }
     });
   }

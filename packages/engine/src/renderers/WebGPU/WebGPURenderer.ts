@@ -898,6 +898,7 @@ export class WebGPURenderer
     config?: EngineOptions,
   ): Promise<void> {
     this._adapter = (await navigator.gpu.requestAdapter(attributes)) ?? undefined;
+    if (this._isDestroyed) return;
     if (!this._adapter) throw new Error("[WebGPURenderer] No adapter found.");
 
     const requiredLimits: Record<string, number> = {};
@@ -965,8 +966,12 @@ export class WebGPURenderer
         ] as const
       ).filter((feature) => this._adapter!.features.has(feature)),
     });
+    if (this._isDestroyed) {
+      this._device.destroy();
+      this._device = undefined!;
+      return;
+    }
     this._isDeviceLost = false;
-    this._isDestroyed = false;
 
     // Listen for device lost (GPU hangs, driver resets, device destruction). Fail-closed: stop
     // rendering (`_isDeviceLost`), notify `onContextLost`, and release all GPU managers/caches.

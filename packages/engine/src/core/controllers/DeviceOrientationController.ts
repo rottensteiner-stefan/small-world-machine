@@ -16,6 +16,7 @@ export class DeviceOrientationController extends Behavior {
   private _beta: number = 0;
   private _gamma: number = 0;
   private _isInitialized: boolean = false;
+  private _isAttached: boolean = false;
 
   private _onDeviceOrientation = (event: DeviceOrientationEvent): void => {
     this._alpha = event.alpha ? (event.alpha * Math.PI) / 180.0 : 0;
@@ -26,6 +27,7 @@ export class DeviceOrientationController extends Behavior {
 
   public override onAttach(target: Object3D | CameraInterfaceData): void {
     super.onAttach(target);
+    this._isAttached = true;
     this._initSensors();
   }
 
@@ -57,6 +59,7 @@ export class DeviceOrientationController extends Behavior {
   }
 
   private _startListening(): void {
+    if (!this._isAttached) return;
     window.addEventListener("deviceorientation", this._onDeviceOrientation);
   }
 
@@ -86,6 +89,7 @@ export class DeviceOrientationController extends Behavior {
   }
 
   public override onDetach(): void {
+    this._isAttached = false;
     window.removeEventListener("deviceorientation", this._onDeviceOrientation);
     super.onDetach();
   }

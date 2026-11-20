@@ -263,4 +263,73 @@ describe("AudioSystem", () => {
       expect(context.close).not.toHaveBeenCalled();
     });
   });
+
+  describe("Audit E4 lifecycle & spatial regressions", () => {
+    it("disconnects one-shot play/playSpatial/playFootstep nodes on onended (AU01)", async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
+      ) as unknown as typeof fetch;
+      await audio.load("./hit.wav", "hit");
+
+      const src = audio.play("hit")!;
+      expect(typeof src.onended).toBe("function");
+      src.onended?.(new Event("ended"));
+      expect(src.disconnect).toHaveBeenCalledTimes(1);
+
+      const spatial = audio.playSpatial("hit", new Vector3D(1, 2, 3))!;
+      spatial.source.onended?.(new Event("ended"));
+      expect(spatial.source.disconnect).toHaveBeenCalledTimes(1);
+      expect(spatial.panner.disconnect).toHaveBeenCalledTimes(1);
+
+      audio.playFootstep();
+      const oscs = (context.createOscillator as ReturnType<typeof vi.fn>).mock.results;
+      const lastOsc = oscs[oscs.length - 1]!.value as OscillatorNode;
+      lastOsc.onended?.(new Event("ended"));
+      expect(lastOsc.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps listener up orthogonal to forward when looking straight up or down (AU04)", () => {
+      const camera = {
+        position: new Vector3D(0, 0, 0),
+        target: new Vector3D(0, 1, 0),
+        up: new Vector3D(0, 1, 0),
+        theta: 0,
+        phi: Math.PI / 2,
+      } as unknown as import("../../src/index.js").CameraInterfaceData;
+
+      audio.updateListener(camera);
+      const l = context.listener;
+      const dot =
+        l.forwardX.value * l.upX.value +
+        l.forwardY.value * l.upY.value +
+        l.forwardZ.value * l.upZ.value;
+      const upLen = Math.hypot(l.upX.value, l.upY.value, l.upZ.value);
+      expect(Math.abs(dot)).toBeLessThan(1e-5);
+      expect(upLen).toBeCloseTo(1, 5);
+    });
+
+    it("deduplicates concurrent load() calls and clears buffers on dispose() (AU05/AU06)", async () => {
+      let resolveFetch!: (v: Response) => void;
+      global.fetch = vi.fn(
+        () =>
+          new Promise<Response>((r) => {
+            resolveFetch = r;
+          }),
+      ) as unknown as typeof fetch;
+
+      const p1 = audio.load("./boom.wav", "boom");
+      const p2 = audio.load("./boom.wav", "boom");
+      resolveFetch({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+      } as unknown as Response);
+      await Promise.all([p1, p2]);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(context.decodeAudioData).toHaveBeenCalledTimes(1);
+
+      audio.dispose();
+      expect(audio.play("boom")).toBeNull();
+    });
+  });
 });

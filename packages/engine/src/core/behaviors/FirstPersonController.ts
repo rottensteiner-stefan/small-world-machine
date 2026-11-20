@@ -137,6 +137,14 @@ export class FirstPersonController extends Behavior {
       dirX += cos * moveX;
       dirZ += sin * moveX;
 
+      if (0 !== moveZ && 0 !== moveX) {
+        const len = Math.hypot(dirX, dirZ);
+        if (len > 1e-6) {
+          dirX /= len;
+          dirZ /= len;
+        }
+      }
+
       this.target.position.x += dirX * this._options.moveSpeed * deltaTime;
       this.target.position.z += dirZ * this._options.moveSpeed * deltaTime;
     }
