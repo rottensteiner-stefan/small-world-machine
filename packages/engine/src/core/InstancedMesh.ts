@@ -7,9 +7,6 @@ import type { AbstractMaterial } from "./materials/index.js";
  * A class for rendering multiple instances of a mesh with different transforms.
  */
 export class InstancedMesh extends Object3D {
-  public override get isInstancedMesh(): boolean {
-    return true;
-  }
   public instanceCount: number;
   public instanceMatrices: Float32Array;
   public instanceMatrixNeedsUpdate: boolean = true;
@@ -77,4 +74,9 @@ export class InstancedMesh extends Object3D {
     }
     this.instanceDataNeedsUpdate = true;
   }
+}
+
+/** Type guard that checks if an object is an `InstancedMesh`. */
+export function isInstancedMesh(object: unknown): object is InstancedMesh {
+  return object instanceof InstancedMesh;
 }

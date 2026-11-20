@@ -1,5 +1,6 @@
 import type { LightOptions } from "./AbstractLight.js";
 import { AbstractLight } from "./AbstractLight.js";
+import type { Scene } from "../Scene.js";
 import { LightType, ProjectionType } from "../../enums/index.js";
 import { Vector3D, MathPool } from "../../math/index.js";
 import type { LightDataInterface } from "../../interfaces/index.js";
@@ -23,9 +24,6 @@ export interface DirectionalLightOptions extends LightOptions {
  * Directional light that emits light in a specific direction.
  */
 export class DirectionalLight extends AbstractLight {
-  public override get isDirectionalLight(): boolean {
-    return true;
-  }
   /** @inheritdoc */
   public override readonly type: LightType = LightType.DIRECTIONAL;
 
@@ -102,6 +100,16 @@ export class DirectionalLight extends AbstractLight {
       this.cascadeSplits.push(0);
       this.cascadeNormalBiases.push(0);
     }
+  }
+
+  protected override _onEnterScene(scene: Scene): void {
+    super._onEnterScene(scene);
+    scene._registerDirectionalLight(this);
+  }
+
+  protected override _onExitScene(scene: Scene): void {
+    scene._unregisterDirectionalLight(this);
+    super._onExitScene(scene);
   }
 
   /**

@@ -1,4 +1,4 @@
-import { InstancedMesh } from "../../src/core/InstancedMesh.js";
+import { InstancedMesh, isInstancedMesh } from "../../src/core/InstancedMesh.js";
 import { Matrix4 } from "../../src/math/Matrix4.js";
 import { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import type { GeometryDataInterface, BoundingVolume } from "../../src/interfaces/index.js";
@@ -16,7 +16,7 @@ describe("InstancedMesh", () => {
     const mesh = new InstancedMesh("testInstanced", dummyGeometry, dummyMaterial, count);
 
     expect(mesh.name).toBe("testInstanced");
-    expect(mesh.isInstancedMesh).toBe(true);
+    expect(isInstancedMesh(mesh)).toBe(true);
     expect(mesh.instanceCount).toBe(count);
     expect(mesh.instanceMatrices.length).toBe(count * 16);
     expect(mesh.instanceMatrixNeedsUpdate).toBe(true);

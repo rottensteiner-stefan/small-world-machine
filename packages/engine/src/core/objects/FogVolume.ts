@@ -1,4 +1,5 @@
 import { Object3D } from "../Object3D.js";
+import type { Scene } from "../Scene.js";
 import { FogVolumeShape } from "../../enums/FogVolumeShape.js";
 import { Color } from "../colors/Color.js";
 import { Vector3D, Matrix4 } from "../../math/index.js";
@@ -32,9 +33,6 @@ export interface FogVolumeOptions {
  * Procedural 3D noise (`noiseScale`, `noiseAmount`, `noiseSpeed`) creates rolling, animated mist.
  */
 export class FogVolume extends Object3D {
-  public override get isFogVolume(): boolean {
-    return true;
-  }
   public shape: FogVolumeShape;
   /**
    * Half extents (Box), radius in `x` (Sphere), radius in `x` and half height in `y` (Cylinder), all in
@@ -87,6 +85,16 @@ export class FogVolume extends Object3D {
     this.isCollidable = false;
     this.castShadow = false;
     this.receiveShadow = false;
+  }
+
+  protected override _onEnterScene(scene: Scene): void {
+    super._onEnterScene(scene);
+    scene._registerFogVolume(this);
+  }
+
+  protected override _onExitScene(scene: Scene): void {
+    scene._unregisterFogVolume(this);
+    super._onExitScene(scene);
   }
 
   /**

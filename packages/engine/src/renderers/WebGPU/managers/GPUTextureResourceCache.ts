@@ -1,5 +1,5 @@
-import type { Object3D, Texture, TextureArray } from "../../../core/index.js";
-import { CubeTexture } from "../../../core/index.js";
+import type { Object3D, Texture } from "../../../core/index.js";
+import { CubeTexture, isTextureArray } from "../../../core/index.js";
 import { RenderTarget, RenderTargetCube } from "../../../core/textures/index.js";
 import { TextureHoldings } from "../../TextureHoldings.js";
 import type { QualityConfig } from "../../../interfaces/index.js";
@@ -161,18 +161,15 @@ export class GPUTextureResourceCache {
     if (!entry) {
       let t: GPUTexture;
       let v: GPUTextureView;
-      if ("isTextureArray" in tex && (tex as TextureArray).isTextureArray) {
-        const texArray = tex as TextureArray;
-        const width = texArray.image!.width;
-        const height = texArray.image!.height;
-        const depth = texArray.images.length;
+      if (isTextureArray(tex)) {
+        const width = tex.image!.width;
+        const height = tex.image!.height;
+        const depth = tex.images.length;
         // K04: runtime texture arrays deserve the same full mip chain as single textures --
         // without it WebGPU minifies on LOD-0 only and aliases silently (tier asymmetry vs the
         // single-image path which generates mips below).
         const mipLevelCount =
-          quality?.mipmapping && texArray.generateMipmaps
-            ? this.computeMipLevelCount(width, height)
-            : 1;
+          quality?.mipmapping && tex.generateMipmaps ? this.computeMipLevelCount(width, height) : 1;
 
         t = this._device.createTexture({
           size: [width, height, depth],
@@ -187,7 +184,7 @@ export class GPUTextureResourceCache {
         for (let i = 0; i < depth; i++) {
           this._device.queue.copyExternalImageToTexture(
             {
-              source: texArray.images[i] as
+              source: tex.images[i] as
                 ImageBitmap | HTMLImageElement | HTMLCanvasElement | OffscreenCanvas,
             },
             { texture: t, origin: [0, 0, i] },
@@ -226,10 +223,7 @@ export class GPUTextureResourceCache {
         };
       }
       this._textureViewCache.set(tex, entry);
-    } else if (
-      tex.needsUpdate &&
-      !("isTextureArray" in tex && (tex as TextureArray).isTextureArray)
-    ) {
+    } else if (tex.needsUpdate && !isTextureArray(tex)) {
       // The source image may have been resized since first upload (e.g. a `TextTexture` whose
       // canvas grows/shrinks on `setText`). Copying the full current bounds into the original,
       // differently-sized GPU texture would exceed its dimensions and trigger a WebGPU validation

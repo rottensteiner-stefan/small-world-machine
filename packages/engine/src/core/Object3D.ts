@@ -1,4 +1,5 @@
 import type { AbstractMaterial } from "./materials/index.js";
+import type { Scene } from "./Scene.js";
 import type { BoundingVolume, GeometryDataInterface, Collidable } from "../interfaces/index.js";
 import type { Quaternion } from "../math/index.js";
 import { MathUtils, Matrix4, Vector3D, MathPool } from "../math/index.js";
@@ -57,30 +58,17 @@ export class Object3D implements Collidable {
   /** Custom user-defined data storage dictionary. */
   public userData: Record<string, unknown> = {};
 
-  public rigidBody?: RigidBody;
+  private _rigidBody: RigidBody | undefined = undefined;
 
   public geometry: GeometryDataInterface | undefined = undefined;
   public material: AbstractMaterial | undefined = undefined;
-  public bounds: BoundingVolume | undefined = undefined;
+  private _bounds: BoundingVolume | undefined = undefined;
   /** Optional custom GPU position buffer (non-standard geometry sources). */
   public positionBuffer: unknown = undefined;
 
-  /** Monomorphic node-kind flags (prototype getters avoid per-frame `instanceof` walks). */
-  public get isInstancedMesh(): boolean {
-    return false;
-  }
-  public get isSkinnedMesh(): boolean {
-    return false;
-  }
-  public get isLight(): boolean {
-    return false;
-  }
-  public get isDirectionalLight(): boolean {
-    return false;
-  }
-  public get isFogVolume(): boolean {
-    return false;
-  }
+  /** Owning `Scene` while attached to a scene graph; `undefined` when detached. */
+  protected _scene: Scene | undefined = undefined;
+  private _isPhysicsRegistered: boolean = false;
 
   /** 32-bit collision layer bitmask this object belongs to (default: 1). */
   public collisionLayer: number = 1;
@@ -118,7 +106,34 @@ export class Object3D implements Collidable {
    * culling (Decal, FogVolume) override `computeBounds()` to supply cull-only bounds; such
    * objects are excluded from collision queries via `Octree.queryVolume`/`resolveSphereCollisions`.
    */
-  public isCollidable: boolean = true;
+  private _isCollidable: boolean = true;
+
+  public get rigidBody(): RigidBody | undefined {
+    return this._rigidBody;
+  }
+
+  public set rigidBody(value: RigidBody | undefined) {
+    this._rigidBody = value;
+    this._syncPhysicsRegistration();
+  }
+
+  public get bounds(): BoundingVolume | undefined {
+    return this._bounds;
+  }
+
+  public set bounds(value: BoundingVolume | undefined) {
+    this._bounds = value;
+    this._syncPhysicsRegistration();
+  }
+
+  public get isCollidable(): boolean {
+    return this._isCollidable;
+  }
+
+  public set isCollidable(value: boolean) {
+    this._isCollidable = value;
+    this._syncPhysicsRegistration();
+  }
   public frustumCulled: boolean = true;
   /**
    * Declares intent that this object does not move after setup.
@@ -191,6 +206,65 @@ export class Object3D implements Collidable {
     this.name = name || MathUtils.generateUUID();
   }
 
+  /** @internal Called by `Scene` on its root node. */
+  public _setScene(scene: Scene): void {
+    this._scene = scene;
+  }
+
+  /**
+   * Lifecycle hook called when this node enters a `Scene` graph (on `add` or when an ancestor is
+   * added to a scene). Subclasses (lights, fog volumes, skinned meshes) override this to register
+   * themselves with `scene` so the frame loop avoids whole-tree type scans.
+   */
+  protected _onEnterScene(scene: Scene): void {
+    if (this.behaviors.length > 0) {
+      scene._registerBehaviorNode(this);
+    }
+    if (this._isCollidable && (this._bounds !== undefined || this._rigidBody !== undefined)) {
+      this._isPhysicsRegistered = true;
+      scene._registerPhysicsNode(this);
+    }
+  }
+
+  /** Lifecycle hook called when this node leaves a `Scene` graph. */
+  protected _onExitScene(scene: Scene): void {
+    if (this.behaviors.length > 0) {
+      scene._unregisterBehaviorNode(this);
+    }
+    if (this._isPhysicsRegistered) {
+      this._isPhysicsRegistered = false;
+      scene._unregisterPhysicsNode(this);
+    }
+  }
+
+  private _syncPhysicsRegistration(): void {
+    if (this._scene === undefined) return;
+    const shouldRegister =
+      this._isCollidable && (this._bounds !== undefined || this._rigidBody !== undefined);
+    if (shouldRegister === this._isPhysicsRegistered) return;
+    this._isPhysicsRegistered = shouldRegister;
+    if (shouldRegister) {
+      this._scene._registerPhysicsNode(this);
+    } else {
+      this._scene._unregisterPhysicsNode(this);
+    }
+  }
+
+  private _propagateScene(scene: Scene | undefined): void {
+    if (this._scene === scene) return;
+    if (this._scene !== undefined) {
+      this._onExitScene(this._scene);
+    }
+    this._scene = scene;
+    if (scene !== undefined) {
+      this._onEnterScene(scene);
+    }
+    const children = this.children;
+    for (let i = 0; i < children.length; i++) {
+      children[i]!._propagateScene(scene);
+    }
+  }
+
   public add(...children: Object3D[]): void {
     for (const child of children) {
       // Re-parenting, not a discard: detach without notifying any scene, so the child's GPU
@@ -198,12 +272,20 @@ export class Object3D implements Collidable {
       if (child.parent) child.parent._detach(child);
       child.parent = this;
       this.children.push(child);
+      if (child._scene !== this._scene) {
+        child._propagateScene(this._scene);
+      }
     }
   }
 
   public remove(...children: Object3D[]): void {
     for (const child of children) {
-      if (this._detach(child)) this._notifyRemoved(child);
+      if (this._detach(child)) {
+        if (child._scene !== undefined) {
+          child._propagateScene(undefined);
+        }
+        this._notifyRemoved(child);
+      }
     }
   }
 
@@ -245,12 +327,20 @@ export class Object3D implements Collidable {
   }
 
   public addBehavior(behavior: Behavior): this {
+    const wasEmpty = this.behaviors.length === 0;
     attachBehavior(this.behaviors, behavior, this);
+    if (wasEmpty && this.behaviors.length > 0 && this._scene !== undefined) {
+      this._scene._registerBehaviorNode(this);
+    }
     return this;
   }
 
   public removeBehavior(behavior: Behavior): this {
+    const hadBehaviors = this.behaviors.length > 0;
     detachBehavior(this.behaviors, behavior);
+    if (hadBehaviors && this.behaviors.length === 0 && this._scene !== undefined) {
+      this._scene._unregisterBehaviorNode(this);
+    }
     return this;
   }
 
@@ -463,10 +553,12 @@ export class Object3D implements Collidable {
     const copy = shallowCloneWithValueTypes(this);
     copy.id = Object3D._getNextId();
     copy.parent = undefined;
-    copy.bounds = undefined;
+    copy._scene = undefined;
+    copy._isPhysicsRegistered = false;
+    copy._bounds = undefined;
     // GPU occlusion result belongs to the source instance; a fresh clone starts visible.
     copy.occlusionCulled = false;
-    delete copy.rigidBody;
+    copy._rigidBody = undefined;
     copy.localMatrix = new Matrix4();
     copy.worldMatrix = new Matrix4();
     copy.material = this.material?.clone();

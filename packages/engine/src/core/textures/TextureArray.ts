@@ -8,7 +8,6 @@ import { AssetManager } from "../../loaders/AssetManager.js";
  */
 export class TextureArray extends Texture {
   public images: (HTMLImageElement | ImageBitmap)[];
-  public readonly isTextureArray: boolean = true;
 
   protected constructor(images: (HTMLImageElement | ImageBitmap)[], options: TextureOptions = {}) {
     super(images[0], options);
@@ -41,4 +40,9 @@ export class TextureArray extends Texture {
     );
     return new TextureArray(images, options);
   }
+}
+
+/** Type guard that checks if a value is a `TextureArray`. */
+export function isTextureArray(texture: unknown): texture is TextureArray {
+  return texture instanceof TextureArray;
 }

@@ -1,4 +1,3 @@
-import type { AbstractLight } from "../core/lights/index.js";
 import { Color } from "../core/colors/index.js";
 import type {
   Renderer,
@@ -222,51 +221,32 @@ export abstract class AbstractRenderer implements Renderer {
     this._lightData.dDir.set(0, 1, 0);
     this._lightData.dLight = undefined;
 
-    this._traverseLights(scene.root);
-
-    return this._lightData;
-  }
-
-  /**
-   * Recursively traverses the scene to find lights.
-   * @param node The current node to traverse.
-   * @private
-   */
-  private _traverseLights(node: Object3D): void {
-    if (node.isLight && node.isVisible) {
-      (node as AbstractLight).applyTo(this._lightData);
-    }
-
-    if (undefined !== node.children) {
-      const children = node.children;
-      for (let i = 0; i < children.length; i++) {
-        this._traverseLights(children[i]!);
+    const lights = scene.lights;
+    for (let i = 0; i < lights.length; i++) {
+      const light = lights[i]!;
+      if (light.isVisible) {
+        light.applyTo(this._lightData);
       }
     }
+
+    return this._lightData;
   }
 
   protected readonly _fogVolumes: FogVolume[] = [];
 
   /**
-   * Recursively extracts active FogVolume instances from the scene graph.
+   * Extracts active FogVolume instances registered on the scene.
    */
   public extractFogVolumes(scene: Scene): FogVolume[] {
     this._fogVolumes.length = 0;
-    this._traverseFogVolumes(scene.root);
-    return this._fogVolumes;
-  }
-
-  private _traverseFogVolumes(node: Object3D): void {
-    if (node.isFogVolume && node.isVisible && (node as FogVolume).enabled) {
-      this._fogVolumes.push(node as FogVolume);
-    }
-
-    if (undefined !== node.children) {
-      const children = node.children;
-      for (let i = 0; i < children.length; i++) {
-        this._traverseFogVolumes(children[i]!);
+    const volumes = scene.fogVolumes;
+    for (let i = 0; i < volumes.length; i++) {
+      const volume = volumes[i]!;
+      if (volume.isVisible && volume.enabled) {
+        this._fogVolumes.push(volume);
       }
     }
+    return this._fogVolumes;
   }
 
   /**

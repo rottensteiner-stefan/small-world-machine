@@ -35,7 +35,7 @@ describe("PhysicsSleeping", () => {
     ball.rigidBody.velocity.set(0.01, 0, 0); // Below sleepLinearThreshold (0.05)
     ball.updateMatrixWorld();
     ball.computeBounds();
-    scene.objects.push(ball);
+    scene.add(ball);
 
     // Step 1: 0.1s
     physics.step(scene, 0.1);
@@ -72,7 +72,7 @@ describe("PhysicsSleeping", () => {
     sleepingBall.rigidBody.putToSleep();
     sleepingBall.updateMatrixWorld();
     sleepingBall.computeBounds();
-    scene.objects.push(sleepingBall);
+    scene.add(sleepingBall);
 
     expect(sleepingBall.rigidBody.isSleeping).toBe(true);
 
@@ -84,7 +84,7 @@ describe("PhysicsSleeping", () => {
     bullet.rigidBody.velocity.set(5.0, 0, 0);
     bullet.updateMatrixWorld();
     bullet.computeBounds();
-    scene.objects.push(bullet);
+    scene.add(bullet);
 
     // Step physics: bullet impacts sleepingBall
     physics.step(scene, 1 / 60);
@@ -132,7 +132,7 @@ describe("PhysicsSleeping", () => {
     ball.rigidBody.velocity.set(0, 0, 0);
     ball.updateMatrixWorld();
     ball.computeBounds();
-    scene.objects.push(ball);
+    scene.add(ball);
 
     // Run for 5 seconds
     for (let i = 0; i < 10; i++) {
@@ -155,7 +155,7 @@ describe("PhysicsSleeping", () => {
     a.rigidBody = new RigidBody(1.0);
     a.updateMatrixWorld();
     a.computeBounds();
-    scene.objects.push(a);
+    scene.add(a);
 
     const b = new Object3D("JointB");
     b.geometry = new Sphere({ radius: 0.5 }).getGeometryData();
@@ -163,7 +163,7 @@ describe("PhysicsSleeping", () => {
     b.rigidBody = new RigidBody(1.0);
     b.updateMatrixWorld();
     b.computeBounds();
-    scene.objects.push(b);
+    scene.add(b);
 
     const joint = new BallSocketJoint({
       bodyA: a,

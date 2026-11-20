@@ -125,7 +125,7 @@ describe("Physics 3D Inertia Tensor & Angular Impulse Dynamics", () => {
       box.rigidBody.velocity.set(0, -6.0, 0);
       box.updateMatrixWorld();
       box.computeBounds();
-      scene.objects.push(box);
+      scene.add(box);
 
       physics.step(scene, 1 / 60);
 
@@ -158,7 +158,7 @@ describe("Physics 3D Inertia Tensor & Angular Impulse Dynamics", () => {
       sphere.rigidBody.velocity.set(0, -10.0, 0);
       sphere.updateMatrixWorld();
       sphere.computeBounds();
-      scene.objects.push(sphere);
+      scene.add(sphere);
 
       physics.step(scene, 1 / 60);
 

@@ -55,7 +55,7 @@ describe("Collision Layers, Bitmasks & Trigger-System", () => {
       player.collisionLayer = 0b0001;
       player.collisionMask = 0b0010;
 
-      scene.objects.push(bullet, player);
+      scene.add(bullet, player);
 
       let collisionFired = false;
       events.addEventListener("physics:collision", () => {
@@ -90,7 +90,7 @@ describe("Collision Layers, Bitmasks & Trigger-System", () => {
       player.bounds = new BoundingSphere(player.position, 0.5);
       player.rigidBody = new RigidBody(1.0);
       player.rigidBody.velocity.set(60, 0, 0); // moves 1 unit per 1/60s step
-      scene.objects.push(player);
+      scene.add(player);
 
       const history: string[] = [];
       events.addEventListener("physics:trigger-enter", () => history.push("enter"));
@@ -154,7 +154,7 @@ describe("Collision Layers, Bitmasks & Trigger-System", () => {
       ball.bounds = new BoundingSphere(ball.position, 0.5);
       ball.rigidBody = new RigidBody(1.0);
       ball.rigidBody.velocity.set(-1, 0, 0);
-      scene.objects.push(ball);
+      scene.add(ball);
 
       const history: string[] = [];
       events.addEventListener("physics:collision-enter", () => history.push("enter"));

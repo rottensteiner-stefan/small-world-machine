@@ -70,9 +70,9 @@ describe("PhysicsDeterminism", () => {
       scene.staticColliders.push(floor);
 
       if (order === "forward") {
-        scene.objects.push(ballA, ballB, boxC);
+        scene.add(ballA, ballB, boxC);
       } else {
-        scene.objects.push(boxC, ballB, ballA);
+        scene.add(boxC, ballB, ballA);
       }
 
       // Step simulation for 60 frames (1 second)
@@ -164,9 +164,9 @@ describe("PhysicsDeterminism", () => {
       obj3.computeBounds();
 
       if (order === "forward") {
-        scene.objects.push(obj1, obj2, obj3);
+        scene.add(obj1, obj2, obj3);
       } else {
-        scene.objects.push(obj3, obj2, obj1);
+        scene.add(obj3, obj2, obj1);
       }
 
       physics.step(scene, 1 / 60);
@@ -213,7 +213,7 @@ describe("PhysicsDeterminism", () => {
       dynamicSphere.rigidBody.velocity.set(-2, 0, 0); // Moving left into box
       dynamicSphere.updateMatrixWorld();
       dynamicSphere.computeBounds();
-      scene.objects.push(dynamicSphere);
+      scene.add(dynamicSphere);
 
       physics.step(scene, 1 / 60);
 
@@ -277,8 +277,8 @@ describe("PhysicsDeterminism", () => {
       ballB.updateMatrixWorld();
       ballB.computeBounds();
 
-      if (order === "forward") scene.objects.push(ballA, ballB);
-      else scene.objects.push(ballB, ballA);
+      if (order === "forward") scene.add(ballA, ballB);
+      else scene.add(ballB, ballA);
 
       for (let f = 0; f < 60; f++) physics.step(scene, 1 / 60);
 

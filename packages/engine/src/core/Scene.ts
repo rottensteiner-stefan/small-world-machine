@@ -5,8 +5,9 @@ import type { Fog } from "./Fog.js";
 import type { Vector3D } from "../math/index.js";
 import type { BoundingBox, SpatialHash, Joint } from "../physix/index.js";
 import { BoundingType, ShaderFlag, Topology, WireframeMode } from "../enums/index.js";
-import type { DirectionalLight } from "./lights/index.js";
+import type { AbstractLight, DirectionalLight } from "./lights/index.js";
 import type { SkinnedMesh } from "./animation/SkinnedMesh.js";
+import type { FogVolume } from "./objects/FogVolume.js";
 import type { Collidable } from "../interfaces/index.js";
 import { compareDecals } from "./decals/DecalMath.js";
 import type { Decal } from "./objects/Decal.js";
@@ -133,7 +134,105 @@ export class Scene {
   // as opposed to objects merely re-parented or temporarily hidden.
   private _pendingRemovals: Object3D[] = [];
 
+  // Scene-registered node lists maintained on attach/detach (avoids per-frame whole-tree walks).
+  private readonly _lights: AbstractLight[] = [];
+  private readonly _directionalLights: DirectionalLight[] = [];
+  private readonly _fogVolumes: FogVolume[] = [];
+  private readonly _skinnedMeshes: SkinnedMesh[] = [];
+  private readonly _behaviorNodes: Object3D[] = [];
+  private readonly _physicsNodes: Object3D[] = [];
+
+  public get lights(): readonly AbstractLight[] {
+    return this._lights;
+  }
+
+  public get directionalLights(): readonly DirectionalLight[] {
+    return this._directionalLights;
+  }
+
+  public get fogVolumes(): readonly FogVolume[] {
+    return this._fogVolumes;
+  }
+
+  public get skinnedMeshes(): readonly SkinnedMesh[] {
+    return this._skinnedMeshes;
+  }
+
+  public get behaviorNodes(): readonly Object3D[] {
+    return this._behaviorNodes;
+  }
+
+  public get physicsNodes(): readonly Object3D[] {
+    return this._physicsNodes;
+  }
+
+  /** @internal */
+  public _registerLight(light: AbstractLight): void {
+    this._lights.push(light);
+  }
+
+  /** @internal */
+  public _unregisterLight(light: AbstractLight): void {
+    Scene._unregisterFrom(this._lights, light);
+  }
+
+  /** @internal */
+  public _registerDirectionalLight(light: DirectionalLight): void {
+    this._directionalLights.push(light);
+  }
+
+  /** @internal */
+  public _unregisterDirectionalLight(light: DirectionalLight): void {
+    Scene._unregisterFrom(this._directionalLights, light);
+  }
+
+  /** @internal */
+  public _registerFogVolume(volume: FogVolume): void {
+    this._fogVolumes.push(volume);
+  }
+
+  /** @internal */
+  public _unregisterFogVolume(volume: FogVolume): void {
+    Scene._unregisterFrom(this._fogVolumes, volume);
+  }
+
+  /** @internal */
+  public _registerSkinnedMesh(mesh: SkinnedMesh): void {
+    this._skinnedMeshes.push(mesh);
+  }
+
+  /** @internal */
+  public _unregisterSkinnedMesh(mesh: SkinnedMesh): void {
+    Scene._unregisterFrom(this._skinnedMeshes, mesh);
+  }
+
+  /** @internal */
+  public _registerBehaviorNode(node: Object3D): void {
+    this._behaviorNodes.push(node);
+  }
+
+  /** @internal */
+  public _unregisterBehaviorNode(node: Object3D): void {
+    Scene._unregisterFrom(this._behaviorNodes, node);
+  }
+
+  /** @internal */
+  public _registerPhysicsNode(node: Object3D): void {
+    this._physicsNodes.push(node);
+  }
+
+  /** @internal */
+  public _unregisterPhysicsNode(node: Object3D): void {
+    Scene._unregisterFrom(this._physicsNodes, node);
+  }
+
+  private static _unregisterFrom<T>(arr: T[], item: T): void {
+    const idx = arr.indexOf(item);
+    if (idx !== -1) arr.splice(idx, 1);
+  }
+
   constructor() {
+    this.root._setScene(this);
     // Lets Object3D.remove() queue GPU-resource release even when called on a nested object
     // directly (`someParent.remove(child)`) instead of through this method -- see
     // Object3D.pendingRemovalSink.
@@ -183,45 +282,41 @@ export class Scene {
   }
 
   public update(deltaTime: number = 0): void {
-    // 1. Update behaviors
-    this._updateBehaviorsRecursive(this.root, deltaTime);
+    // 1. Update behaviors (flat list of scene-registered nodes with behaviors; re-check slot on
+    // self-removal so neither the behavior loop nor the node loop skips the shifted element).
+    const behaviorNodes = this._behaviorNodes;
+    for (let i = 0; i < behaviorNodes.length; i++) {
+      const obj = behaviorNodes[i]!;
+      const behaviors = obj.behaviors;
+      for (let j = 0; j < behaviors.length; j++) {
+        const b = behaviors[j]!;
+        if (b.isActive) b.update(deltaTime);
+        if (behaviors[j] !== b) j--;
+      }
+      if (behaviorNodes[i] !== obj) i--;
+    }
     // 2. Update matrices
     this.root.updateMatrixWorld();
     // 3. Compute skinning matrices. Must run after the full matrix pass above: a
     // SkinnedMesh's joints live elsewhere in the tree (siblings/cousins, not
     // descendants), so their worldMatrix isn't guaranteed to be current yet
     // during step 2's single top-down traversal.
-    this._updateSkinnedMeshesRecursive(this.root);
+    const skinned = this._skinnedMeshes;
+    for (let i = 0; i < skinned.length; i++) {
+      const mesh = skinned[i]!;
+      if (mesh.skeleton) {
+        mesh.skeleton.update(mesh.worldMatrix);
+      }
+    }
     if (undefined !== this.dynamicOctree) {
       this.updateDynamicOctree();
     }
   }
 
-  private _updateSkinnedMeshesRecursive(obj: Object3D): void {
-    if (obj.isSkinnedMesh && (obj as SkinnedMesh).skeleton) {
-      (obj as SkinnedMesh).skeleton!.update(obj.worldMatrix);
-    }
-    // Indexed loop: for-of allocates an iterator per node in this per-frame walk.
-    const children = obj.children;
-    for (let i = 0; i < children.length; i++) {
-      this._updateSkinnedMeshesRecursive(children[i]!);
-    }
-  }
-
   public updateLights(camera: import("../interfaces/index.js").CameraInterfaceData): void {
-    this._updateLightsRecursive(this.root, camera);
-  }
-
-  private _updateLightsRecursive(
-    obj: Object3D,
-    camera: import("../interfaces/index.js").CameraInterfaceData,
-  ): void {
-    if (obj.isDirectionalLight) {
-      (obj as DirectionalLight).updateCascades(camera);
-    }
-    const children = obj.children;
-    for (let i = 0; i < children.length; i++) {
-      this._updateLightsRecursive(children[i]!, camera);
+    const dirLights = this._directionalLights;
+    for (let i = 0; i < dirLights.length; i++) {
+      dirLights[i]!.updateCascades(camera);
     }
   }
 
@@ -319,22 +414,6 @@ export class Scene {
       }
     }
     for (const child of obj.children) this._addObjectToOctree(child, checkStatic);
-  }
-
-  private _updateBehaviorsRecursive(obj: Object3D, deltaTime: number): void {
-    for (let i = 0; i < obj.behaviors.length; i++) {
-      const b = obj.behaviors[i]!;
-      if (b.isActive) b.update(deltaTime);
-      // detachBehavior() splices the list; if `b` (or an earlier-indexed sibling) removed itself
-      // from within update(), the next behavior has shifted down into slot `i`. Re-visit `i` so
-      // it isn't silently skipped -- this preserves attach order for the common case (many
-      // showcases combine order-dependent behaviors, e.g. a mover before a LookAt) instead of
-      // just reversing the loop.
-      if (obj.behaviors[i] !== b) i--;
-    }
-    for (let i = 0; i < obj.children.length; i++) {
-      this._updateBehaviorsRecursive(obj.children[i]!, deltaTime);
-    }
   }
 
   private _lastCamX: number = NaN;

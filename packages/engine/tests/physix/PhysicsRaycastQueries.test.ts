@@ -124,7 +124,7 @@ describe("Physics Raycast & Query API", () => {
       terrain.bounds = new BoundingBox(new Vector3D(-5, -5, 9), new Vector3D(5, 5, 11));
       terrain.collisionLayer = 0b0010; // Layer 2 (Terrain)
 
-      scene.objects.push(enemy, terrain);
+      scene.add(enemy, terrain);
       physics.step(scene, 1 / 60);
 
       const ray = new Ray(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1));

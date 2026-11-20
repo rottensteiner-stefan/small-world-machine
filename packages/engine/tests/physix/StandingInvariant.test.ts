@@ -36,7 +36,7 @@ const makeRestScene = (
   box.rigidBody.allowSleep = allowSleep;
   box.updateMatrixWorld();
   box.computeBounds();
-  scene.objects.push(box);
+  scene.add(box);
 
   const floor = new StaticCollider(
     new BoundingBox(new Vector3D(-10, -1, -10), new Vector3D(10, 0, 10)),

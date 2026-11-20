@@ -35,7 +35,7 @@ describe("Physics Constraints & Joint System", () => {
       bob.rigidBody.restitution = 0.0;
       bob.updateMatrixWorld();
       bob.computeBounds();
-      scene.objects.push(bob);
+      scene.add(bob);
 
       // Distance joint with length 3.0 to world anchor (0, 0, 0)
       const joint = new DistanceJoint({
@@ -79,7 +79,7 @@ describe("Physics Constraints & Joint System", () => {
       b2.updateMatrixWorld();
       b2.computeBounds();
 
-      scene.objects.push(b1, b2);
+      scene.add(b1, b2);
 
       const joint = new DistanceJoint({
         bodyA: b1,
@@ -115,7 +115,7 @@ describe("Physics Constraints & Joint System", () => {
       b1.rigidBody.velocity.set(100, 0, 0); // huge pulling velocity
       b1.updateMatrixWorld();
       b1.computeBounds();
-      scene.objects.push(b1);
+      scene.add(b1);
 
       const joint = new DistanceJoint({
         bodyA: b1,
@@ -148,7 +148,7 @@ describe("Physics Constraints & Joint System", () => {
       bob.rigidBody.linearDamping = 0.99;
       bob.updateMatrixWorld();
       bob.computeBounds();
-      scene.objects.push(bob);
+      scene.add(bob);
 
       const spring = new SpringJoint({
         bodyA: bob,
@@ -184,7 +184,7 @@ describe("Physics Constraints & Joint System", () => {
       arm.rigidBody = new RigidBody(1.0);
       arm.updateMatrixWorld();
       arm.computeBounds();
-      scene.objects.push(arm);
+      scene.add(arm);
 
       // Ball socket anchoring arm at local offset (-1, 0, 0) to world (1, 0, 0)
       const socket = new BallSocketJoint({
@@ -224,7 +224,7 @@ describe("Physics Constraints & Joint System", () => {
       wheel.rigidBody.setInertiaForBox(1, 1, 1);
       wheel.updateMatrixWorld();
       wheel.computeBounds();
-      scene.objects.push(wheel);
+      scene.add(wheel);
 
       const hinge = new HingeJoint({
         bodyA: wheel,
@@ -257,14 +257,14 @@ describe("Physics Constraints & Joint System", () => {
       a.rigidBody = new RigidBody(1.0);
       a.updateMatrixWorld();
       a.computeBounds();
-      scene.objects.push(a);
+      scene.add(a);
 
       const b = new Object3D("B");
       b.geometry = new Cube({ size: 1 }).getGeometryData();
       b.rigidBody = new RigidBody(1.0);
       b.updateMatrixWorld();
       b.computeBounds();
-      scene.objects.push(b);
+      scene.add(b);
 
       const hinge = new HingeJoint({
         bodyA: a,
@@ -320,7 +320,7 @@ describe("Physics Constraints & Joint System", () => {
       o2.updateMatrixWorld();
       o2.computeBounds();
 
-      scene.objects.push(o1, o2);
+      scene.add(o1, o2);
 
       const joint = new DistanceJoint({
         bodyA: o1,

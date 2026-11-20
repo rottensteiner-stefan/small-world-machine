@@ -6,7 +6,7 @@ import {
   writePointShadowFaceMatrices,
 } from "../../core/lights/PointLightShadow.js";
 import type { Object3D, RenderBatch } from "../../core/index.js";
-import { InstancedMesh } from "../../core/InstancedMesh.js";
+import { isInstancedMesh } from "../../core/InstancedMesh.js";
 import { Frustum, Matrix4, Vector3D } from "../../math/index.js";
 import { MaterialType, Topology, WireframeMode } from "../../enums/index.js";
 
@@ -159,11 +159,7 @@ export class WebGL2PointShadows {
       let dst: RenderBatch | undefined;
       for (let j = 0; j < src.objects.length; j++) {
         const o = src.objects[j]!;
-        if (
-          o.bounds &&
-          !(o instanceof InstancedMesh) &&
-          !this._faceFrustum.intersectsVolume(o.bounds)
-        )
+        if (o.bounds && !isInstancedMesh(o) && !this._faceFrustum.intersectsVolume(o.bounds))
           continue;
         if (!dst) {
           dst = this._facePool[out.length];
@@ -240,7 +236,7 @@ export class WebGL2PointShadows {
     const state = manifest.state;
     if (state?.transparent || state?.isDecal || manifest.shaderId === MaterialType.SKYBOX) return;
 
-    const bounds = obj instanceof InstancedMesh ? undefined : obj.bounds;
+    const bounds = isInstancedMesh(obj) ? undefined : obj.bounds;
     let reached = false;
     for (let c = 0; c < chosen; c++) {
       if (bounds) {

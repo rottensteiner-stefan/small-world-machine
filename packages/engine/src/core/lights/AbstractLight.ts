@@ -1,6 +1,7 @@
 import { Color } from "../colors/index.js";
 import type { LightType } from "../../enums/index.js";
 import { Object3D } from "../Object3D.js";
+import type { Scene } from "../Scene.js";
 import type { LightDataInterface } from "../../interfaces/index.js";
 import type { Camera } from "../cameras/Camera.js";
 import type { InspectorField } from "../Inspectable.js";
@@ -38,9 +39,6 @@ export interface LightOptions {
  * Base class for all light types.
  */
 export abstract class AbstractLight extends Object3D {
-  public override get isLight(): boolean {
-    return true;
-  }
   /** Fields common to every light, merged with `Object3D.inspector` (transform/visibility)
    * and a concrete subclass's own map (e.g. `PointLight`'s distance/decay) via
    * `collectInspectorSchema()`. */
@@ -140,5 +138,15 @@ export abstract class AbstractLight extends Object3D {
     this.shadowBias = shadowBias;
     this.shadowNormalBias = shadowNormalBias;
     this.shadowCamera = undefined;
+  }
+
+  protected override _onEnterScene(scene: Scene): void {
+    super._onEnterScene(scene);
+    scene._registerLight(this);
+  }
+
+  protected override _onExitScene(scene: Scene): void {
+    scene._unregisterLight(this);
+    super._onExitScene(scene);
   }
 }

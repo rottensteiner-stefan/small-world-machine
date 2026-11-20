@@ -101,39 +101,35 @@ export class PhysicsSystem {
   }
 
   /**
-   * Recursively collects both dynamic rigidbodies and collidable objects in a single pass.
+   * Collects dynamic rigidbodies and collidable objects from a scene-registered physics node.
    */
-  private _collectRecursive(obj: Object3D, bodies: Object3D[], colliders: Collidable[]): void {
-    if (obj.isCollidable) {
-      if (
-        obj.rigidBody &&
-        obj.rigidBody.inverseMass > 0 &&
-        obj.parent !== undefined &&
-        obj.parent.parent !== undefined &&
-        !this._warnedObjects.has(obj)
-      ) {
-        // The integrator and solver treat `position`/`rotation` as world state (RigidBodyMath
-        // assumption): a dynamic body nested under another object is simulated in the parent's
-        // local frame, which is wrong as soon as the parent is transformed.
-        console.warn(
-          `[PhysicsSystem] Warning: dynamic body '${obj.name}' is nested below another object. Physics treats its position/rotation as world space; keep dynamic bodies at scene root.`,
-        );
-        this._warnedObjects.add(obj);
-      }
-      if (obj.bounds) {
-        colliders.push(obj);
-      }
-      if (obj.rigidBody && obj.rigidBody.inverseMass > 0) {
-        bodies.push(obj);
-      } else if (obj.bounds && !obj.rigidBody && !this._warnedObjects.has(obj)) {
-        console.warn(
-          `[PhysicsSystem] Warning: Object '${obj.name}' is collidable but lacks a RigidBody. Treating as static (mass=0). Add 'obj.rigidBody = new RigidBody(0);' to suppress this warning.`,
-        );
-        this._warnedObjects.add(obj);
-      }
+  private _collectNode(obj: Object3D, bodies: Object3D[], colliders: Collidable[]): void {
+    if (!obj.isCollidable) return;
+    if (
+      obj.rigidBody &&
+      obj.rigidBody.inverseMass > 0 &&
+      obj.parent !== undefined &&
+      obj.parent.parent !== undefined &&
+      !this._warnedObjects.has(obj)
+    ) {
+      // The integrator and solver treat `position`/`rotation` as world state (RigidBodyMath
+      // assumption): a dynamic body nested under another object is simulated in the parent's
+      // local frame, which is wrong as soon as the parent is transformed.
+      console.warn(
+        `[PhysicsSystem] Warning: dynamic body '${obj.name}' is nested below another object. Physics treats its position/rotation as world space; keep dynamic bodies at scene root.`,
+      );
+      this._warnedObjects.add(obj);
     }
-    for (let i = 0; i < obj.children.length; i++) {
-      this._collectRecursive(obj.children[i]!, bodies, colliders);
+    if (obj.bounds) {
+      colliders.push(obj);
+    }
+    if (obj.rigidBody && obj.rigidBody.inverseMass > 0) {
+      bodies.push(obj);
+    } else if (obj.bounds && !obj.rigidBody && !this._warnedObjects.has(obj)) {
+      console.warn(
+        `[PhysicsSystem] Warning: Object '${obj.name}' is collidable but lacks a RigidBody. Treating as static (mass=0). Add 'obj.rigidBody = new RigidBody(0);' to suppress this warning.`,
+      );
+      this._warnedObjects.add(obj);
     }
   }
 
@@ -187,8 +183,9 @@ export class PhysicsSystem {
     allColliders.length = 0;
     allJoints.length = 0;
 
-    for (let i = 0; i < scene.objects.length; i++) {
-      this._collectRecursive(scene.objects[i]!, bodies, allColliders);
+    const physicsNodes = scene.physicsNodes;
+    for (let i = 0; i < physicsNodes.length; i++) {
+      this._collectNode(physicsNodes[i]!, bodies, allColliders);
     }
 
     for (let i = 0; i < scene.staticColliders.length; i++) {

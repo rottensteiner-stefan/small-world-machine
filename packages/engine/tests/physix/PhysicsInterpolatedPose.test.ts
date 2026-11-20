@@ -28,7 +28,7 @@ describe("PhysicsSystem.getInterpolatedPosition (S3 DP-2A)", () => {
     body.updateMatrixWorld();
 
     const scene = new Scene();
-    scene.objects.push(body);
+    scene.add(body);
 
     // One full fixed step: prevPosition snapshotted at (0,0,0), true position advances +X.
     physics.step(scene, 1 / 60);
@@ -63,7 +63,7 @@ describe("PhysicsSystem.getInterpolatedPosition (S3 DP-2A)", () => {
     body.updateMatrixWorld();
 
     const scene = new Scene();
-    scene.objects.push(body);
+    scene.add(body);
 
     physics.step(scene, 1 / 60); // one full step, moves +X
     physics.step(scene, 1 / 120); // accumulate alpha ~0.5

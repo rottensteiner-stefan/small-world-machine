@@ -47,7 +47,7 @@ const runFrameSequence = (seq: number[]): FullState => {
   ball.rigidBody.restitution = 0.5;
   ball.updateMatrixWorld();
   ball.computeBounds();
-  scene.objects.push(ball);
+  scene.add(ball);
 
   const box = new Object3D("Box");
   box.id = 2;
@@ -57,7 +57,7 @@ const runFrameSequence = (seq: number[]): FullState => {
   box.rigidBody.restitution = 0.3;
   box.updateMatrixWorld();
   box.computeBounds();
-  scene.objects.push(box);
+  scene.add(box);
 
   const floor = new StaticCollider(
     new BoundingBox(new Vector3D(-10, -1, -10), new Vector3D(10, 0, 10)),
@@ -163,7 +163,7 @@ describe("FPS-Chunking-Äquivalenz (physics-scoped, A8)", () => {
       ball.rigidBody.restitution = 0.5;
       ball.updateMatrixWorld();
       ball.computeBounds();
-      scene.objects.push(ball);
+      scene.add(ball);
       const box = new Object3D("Box");
       box.id = 2;
       box.geometry = new Cube({ size: 1.0 }).getGeometryData();
@@ -172,7 +172,7 @@ describe("FPS-Chunking-Äquivalenz (physics-scoped, A8)", () => {
       box.rigidBody.restitution = 0.3;
       box.updateMatrixWorld();
       box.computeBounds();
-      scene.objects.push(box);
+      scene.add(box);
       const floor = new StaticCollider(
         new BoundingBox(new Vector3D(-10, -1, -10), new Vector3D(10, 0, 10)),
       );

@@ -1,4 +1,6 @@
 import type { Object3D } from "../core/Object3D.js";
+import { isInstancedMesh } from "../core/InstancedMesh.js";
+import { isSkinnedMesh } from "../core/animation/SkinnedMesh.js";
 import type { GeometryDataInterface } from "../interfaces/index.js";
 
 /** Shortest run of same-geometry objects worth one instanced draw instead of per-object draws. */
@@ -9,8 +11,8 @@ function isRunCandidate(o: Object3D, requireCastShadow: boolean): boolean {
   return (
     o.geometry !== undefined &&
     !o.geometry.joints &&
-    !o.isSkinnedMesh &&
-    !o.isInstancedMesh &&
+    !isSkinnedMesh(o) &&
+    !isInstancedMesh(o) &&
     (!requireCastShadow || o.castShadow)
   );
 }
@@ -146,7 +148,7 @@ export function splitByInstancing(
 ): void {
   let nInstanced = 0;
   for (let i = 0; i < objects.length; i++) {
-    if (objects[i]!.isInstancedMesh) nInstanced++;
+    if (isInstancedMesh(objects[i])) nInstanced++;
   }
   if (nInstanced === 0) {
     out.standard = objects;
@@ -162,7 +164,7 @@ export function splitByInstancing(
   let nS = 0;
   for (let i = 0; i < objects.length; i++) {
     const o = objects[i]!;
-    if (o.isInstancedMesh) instancedScratch[nI++] = o;
+    if (isInstancedMesh(o)) instancedScratch[nI++] = o;
     else standardScratch[nS++] = o;
   }
   instancedScratch.length = nI;

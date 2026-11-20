@@ -1,5 +1,5 @@
-import type { Object3D, TextureArray, Texture } from "../../../core/index.js";
-import { CubeTexture } from "../../../core/index.js";
+import type { Object3D, Texture, TextureArray } from "../../../core/index.js";
+import { CubeTexture, isTextureArray } from "../../../core/index.js";
 import { RenderTarget, RenderTargetCube } from "../../../core/textures/index.js";
 import { TextureHoldings } from "../../TextureHoldings.js";
 import type { QualityConfig } from "../../../interfaces/index.js";
@@ -423,8 +423,8 @@ export class WebGLTextureManager {
     if (!glTex) {
       glTex = this._gl.createTexture()!;
 
-      if ("isTextureArray" in tex && (tex as TextureArray).isTextureArray) {
-        this._uploadTextureArray(tex as TextureArray, glTex, quality);
+      if (isTextureArray(tex)) {
+        this._uploadTextureArray(tex, glTex, quality);
       } else if (tex.compressedImage) {
         try {
           this._uploadCompressedTexture(tex, glTex);
@@ -461,8 +461,8 @@ export class WebGLTextureManager {
 
       this._texCache.set(tex, glTex);
     } else if (tex.needsUpdate && !tex.compressedImage) {
-      if ("isTextureArray" in tex && (tex as TextureArray).isTextureArray) {
-        this._uploadTextureArray(tex as TextureArray, glTex, quality);
+      if (isTextureArray(tex)) {
+        this._uploadTextureArray(tex, glTex, quality);
       } else {
         this._gl.bindTexture(this._gl.TEXTURE_2D, glTex);
         this._gl.texImage2D(

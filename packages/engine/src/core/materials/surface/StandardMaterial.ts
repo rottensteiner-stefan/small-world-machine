@@ -9,7 +9,7 @@ import {
   ShaderPropertyType,
   BlendingMode,
 } from "../../../enums/index.js";
-import type { Texture, CubeTexture } from "../../textures/index.js";
+import { isTextureArray, type Texture, type CubeTexture } from "../../textures/index.js";
 import { RenderTargetCube } from "../../textures/RenderTargetCube.js";
 import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
 import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
@@ -697,11 +697,7 @@ export class StandardMaterial extends AbstractMaterial {
 
     const flags = this._manifestFlags;
     flags.length = 0;
-    if (
-      this.diffuseMap &&
-      "isTextureArray" in this.diffuseMap &&
-      (this.diffuseMap as import("../../textures/index.js").TextureArray).isTextureArray
-    ) {
+    if (isTextureArray(this.diffuseMap)) {
       flags.push(ShaderFlag.TEXTURE_ARRAY);
     }
     if (this.metallicMap) flags.push(ShaderFlag.METALLIC_MAP);

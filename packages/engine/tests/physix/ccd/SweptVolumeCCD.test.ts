@@ -258,7 +258,9 @@ describe("SweptVolumeCCD & Continuous Collision Detection Expansion", () => {
       // Move parallel to the rotated slab (+X/+Y diagonal) without touching it
       const delta = new Vector3D(1, 1, 0);
       expect(Collision.sweepObbObb(moverObb.center, delta, moverObb, targetObb)).toBe(-1);
-      expect(Collision.sweepBoxObb(moverObb.center, delta, moverObb.halfExtents, targetObb)).toBe(-1);
+      expect(Collision.sweepBoxObb(moverObb.center, delta, moverObb.halfExtents, targetObb)).toBe(
+        -1,
+      );
     });
   });
 
@@ -307,7 +309,7 @@ describe("SweptVolumeCCD & Continuous Collision Detection Expansion", () => {
       bullet.rigidBody = new RigidBody(1.0);
       bullet.rigidBody.velocity.set(300, 0, 0);
       bullet.updateMatrixWorld();
-      scene.objects.push(bullet);
+      scene.add(bullet);
 
       physics.step(scene, 1 / 60);
 

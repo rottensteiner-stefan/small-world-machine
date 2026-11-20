@@ -16,8 +16,8 @@ import {
 import { resolveManifestFlags, type RenderManifest } from "../shaders/index.js";
 import { splitByInstancing, type InstancingSplit } from "../AutoInstancing.js";
 import type { InstancedMesh, Object3D, RenderBatch, Scene } from "../../core/index.js";
-import { DeviceLimit } from "../../core/index.js";
-import { MAX_SKINNED_BONES, type SkinnedMesh } from "../../core/animation/index.js";
+import { DeviceLimit, isInstancedMesh } from "../../core/index.js";
+import { isSkinnedMesh, MAX_SKINNED_BONES } from "../../core/animation/index.js";
 import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
 import {
   WebGLProgramCache,
@@ -560,20 +560,13 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
     // semantics stay untouched for other meshes; only an instanced mesh explicitly requesting it
     // gets the `USE_INSTANCE_COLOR` variant compiled in.
-    if (
-      isInstanced &&
-      firstObj.isInstancedMesh &&
-      (firstObj as InstancedMesh).useInstanceDataAsColor
-    ) {
+    if (isInstanced && isInstancedMesh(firstObj) && firstObj.useInstanceDataAsColor) {
       flags.push(ShaderFlag.INSTANCE_COLOR);
     }
 
     // Skinned meshes need the `USE_SKINNING` program variant (a_joints/a_weights attributes and
     // the u_boneMatrices array) -- same trigger rule as WebGL2Renderer.
-    if (
-      (firstObj.isSkinnedMesh && (firstObj as SkinnedMesh).skeleton) ||
-      firstObj.geometry?.joints !== undefined
-    ) {
+    if ((isSkinnedMesh(firstObj) && firstObj.skeleton) || firstObj.geometry?.joints !== undefined) {
       if (!flags.includes(ShaderFlag.SKINNING)) {
         flags.push(ShaderFlag.SKINNING);
       }
@@ -814,8 +807,8 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       } else {
         this._uploadModelMatrix(o.worldMatrix.data, manifest.state, vMat, u);
 
-        if (o.isSkinnedMesh && (o as SkinnedMesh).skeleton) {
-          const skel = (o as SkinnedMesh).skeleton!;
+        if (isSkinnedMesh(o) && o.skeleton) {
+          const skel = o.skeleton;
           const boneLoc =
             u.get("u_boneMatrices[0]") ??
             this.gl.getUniformLocation(cache.prog, "u_boneMatrices") ??
@@ -1391,7 +1384,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._geometry.releaseGeometryFor(obj);
     this._programCache.releaseObjectProgram(obj);
     this._textures.releaseObjectTextures(obj);
-    if (obj.isInstancedMesh) this._instanceBuffers.release(this.gl, obj as InstancedMesh);
+    if (isInstancedMesh(obj)) this._instanceBuffers.release(this.gl, obj);
   }
 
   /** @inheritdoc */

@@ -42,7 +42,7 @@ describe("PhysicsCoulombFriction", () => {
     ball.rigidBody.velocity.set(10, -5, 0);
     ball.updateMatrixWorld();
     ball.computeBounds();
-    scene.objects.push(ball);
+    scene.add(ball);
 
     physics.step(scene, 1 / 60);
 
@@ -79,7 +79,7 @@ describe("PhysicsCoulombFriction", () => {
     ball.rigidBody.velocity.set(1.0, -5, 0);
     ball.updateMatrixWorld();
     ball.computeBounds();
-    scene.objects.push(ball);
+    scene.add(ball);
 
     physics.step(scene, 1 / 60);
 
@@ -122,7 +122,7 @@ describe("PhysicsCoulombFriction", () => {
     puck.rigidBody.velocity.set(12.0, -4.0, 0);
     puck.updateMatrixWorld();
     puck.computeBounds();
-    scene.objects.push(puck);
+    scene.add(puck);
 
     physics.step(scene, 1 / 60);
 
@@ -161,7 +161,7 @@ describe("PhysicsCoulombFriction", () => {
     b2.updateMatrixWorld();
     b2.computeBounds();
 
-    scene.objects.push(b1, b2);
+    scene.add(b1, b2);
 
     // Initial total momentum: P_x = 1*4 + 1*(-4) = 0, P_y = 1*2 + 1*(-2) = 0
     physics.step(scene, 1 / 60);

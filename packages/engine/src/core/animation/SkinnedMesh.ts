@@ -1,4 +1,5 @@
 import { Object3D } from "../Object3D.js";
+import type { Scene } from "../Scene.js";
 import { MAX_SKINNED_BONES, type Skeleton } from "./Skeleton.js";
 import { Matrix4, MathPool } from "../../math/index.js";
 import { BoundingBox } from "../../physix/index.js";
@@ -7,9 +8,6 @@ import { BoundingBox } from "../../physix/index.js";
  * A mesh that is deformed by a skeletal hierarchy via GPU skinning.
  */
 export class SkinnedMesh extends Object3D {
-  public override get isSkinnedMesh(): boolean {
-    return true;
-  }
   /** The skeleton associated with this skinned mesh. */
   public skeleton?: Skeleton;
   /** The initial bind matrix of the mesh. */
@@ -17,6 +15,16 @@ export class SkinnedMesh extends Object3D {
 
   constructor(name?: string) {
     super(name);
+  }
+
+  protected override _onEnterScene(scene: Scene): void {
+    super._onEnterScene(scene);
+    scene._registerSkinnedMesh(this);
+  }
+
+  protected override _onExitScene(scene: Scene): void {
+    scene._unregisterSkinnedMesh(this);
+    super._onExitScene(scene);
   }
 
   /**

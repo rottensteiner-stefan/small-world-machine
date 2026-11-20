@@ -205,11 +205,7 @@ describe("BEHAVIOR-MUTATION-SAFETY (seed-pinned mutation fuzz, Scene + Camera)",
     scene.add(host);
     const sceneI = instantiate(bounded, host);
     for (const b of sceneI.bs) host.addBehavior(b);
-    expect(() =>
-      (
-        scene as unknown as { _updateBehaviorsRecursive(o: Object3D, d: number): void }
-      )._updateBehaviorsRecursive(host, 0.016),
-    ).not.toThrow();
+    expect(() => scene.update(0.016)).not.toThrow();
 
     // ---- Camera-Pfad ----
     const camera = new Camera(

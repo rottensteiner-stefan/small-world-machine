@@ -1,7 +1,7 @@
 import { AbstractMaterial } from "./AbstractMaterial.js";
 import { CullMode, BlendingMode, ShaderFlag, ShaderPropertyType } from "../../enums/index.js";
 import { MathUtils } from "../../math/index.js";
-import type { Texture, CubeTexture, TextureArray } from "../textures/index.js";
+import { isTextureArray, type Texture, type CubeTexture } from "../textures/index.js";
 import type {
   RenderManifest,
   ShaderDefinition,
@@ -166,11 +166,7 @@ export class CustomShaderMaterial extends AbstractMaterial {
       if (!texture) continue;
       const flag = this._flagForTextureKey(key);
       if (undefined !== flag && !flags.includes(flag)) flags.push(flag);
-      if (
-        "isTextureArray" in texture &&
-        (texture as TextureArray).isTextureArray &&
-        !flags.includes(ShaderFlag.TEXTURE_ARRAY)
-      ) {
+      if (isTextureArray(texture) && !flags.includes(ShaderFlag.TEXTURE_ARRAY)) {
         flags.push(ShaderFlag.TEXTURE_ARRAY);
       }
     }

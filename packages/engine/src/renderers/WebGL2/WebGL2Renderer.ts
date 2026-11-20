@@ -30,8 +30,13 @@ import {
 } from "../shaders/index.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
 import type { Color } from "../../core/colors/index.js";
-import type { Object3D, RenderBatch, Scene, TextureArray } from "../../core/index.js";
-import { DeviceLimit, InstancedMesh, computeClipToBox } from "../../core/index.js";
+import type { InstancedMesh, Object3D, RenderBatch, Scene } from "../../core/index.js";
+import {
+  DeviceLimit,
+  computeClipToBox,
+  isInstancedMesh,
+  isTextureArray,
+} from "../../core/index.js";
 import { DepthMaterial } from "../../core/materials/index.js";
 import { EvsmMomentMaterial } from "../../core/materials/EvsmMomentMaterial.js";
 import type { EngineOptions, LightDataInterface, QualityConfig } from "../../interfaces/index.js";
@@ -547,7 +552,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
       for (const o of perObject) {
         if (!o.castShadow || !o.geometry) continue;
-        const isInstanced = o instanceof InstancedMesh;
+        const isInstanced = isInstancedMesh(o);
         if (isInstanced && o.instanceCount === 0) continue;
 
         let cache: WebGLProgramCacheEntry;
@@ -904,8 +909,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
 
     for (let i = 0; i < objects.length; i++) {
       const o = objects[i];
-      if (o instanceof InstancedMesh) {
-        instancedObjects.push(o!);
+      if (isInstancedMesh(o)) {
+        instancedObjects.push(o);
       } else {
         standardObjects.push(o!);
       }
@@ -1130,7 +1135,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     if (textures) {
       for (const key in textures) {
         const tex = textures[key];
-        if (tex && "isTextureArray" in tex && (tex as TextureArray).isTextureArray) {
+        if (isTextureArray(tex)) {
           if (!shaderFlags.includes(ShaderFlag.TEXTURE_ARRAY)) {
             shaderFlags.push(ShaderFlag.TEXTURE_ARRAY);
           }
@@ -1148,7 +1153,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
     // semantics (texture-array index) stay untouched for other meshes: only an instanced mesh
     // explicitly requesting it gets the `USE_INSTANCE_COLOR` variant compiled in.
-    if (isInst && firstObject instanceof InstancedMesh && firstObject.useInstanceDataAsColor) {
+    if (isInst && isInstancedMesh(firstObject) && firstObject.useInstanceDataAsColor) {
       shaderFlags.push(ShaderFlag.INSTANCE_COLOR);
     }
 
@@ -1326,7 +1331,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             const glTex = t
               ? this._textures.getWebGLTexture(t, this._quality)
               : this.defaultTexture;
-            if (t && "isTextureArray" in t && (t as TextureArray).isTextureArray) {
+            if (isTextureArray(t)) {
               this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, glTex);
             } else {
               this.gl.bindTexture(this.gl.TEXTURE_2D, glTex);
@@ -1502,7 +1507,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._geometry.releaseGeometryFor(obj);
     this._programCache.releaseObjectProgram(obj);
     this._textures.releaseObjectTextures(obj);
-    if (obj instanceof InstancedMesh) this._instances.releaseInstanceBuffers(this.gl, obj);
+    if (isInstancedMesh(obj)) this._instances.releaseInstanceBuffers(this.gl, obj);
   }
 
   /** @inheritdoc */
