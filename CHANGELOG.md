@@ -2,6 +2,19 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.127.2] - 2026-11-20
+
+### "Efficiency is doing things right; effectiveness is doing the right things." - Peter Drucker
+
+- **Architecture & Bugfixes:**
+  - _Zero-GC render-list & subgroup hot paths (`Scene.ts`, `WebGL1Renderer.ts`, `WebGL2Renderer.ts`):_ replaced `.length = 0` backing-store drops with fill cursors (`_transparentFill`, `_decalsFill`), hoisted transparent sorting to a Schwartzian index sort, adopted `splitByInstancing` in WebGL1, and eliminated per-subgroup `shaderFlags` spreads and `Object.values(manifest.textures)` allocations.
+  - _WebGPU anisotropy & iridescence maps (`GPUPipelineCache.ts`, `structs.wgsl`, `lighting_pbr.wgsl`):_ wired bindings 32–34 (`u_anisotropyMap`, `u_iridescenceMap`, `u_iridescenceThicknessMap`) with `IRIDESCENCE_MAPS_SHARED` and budget-drop ordering so WebGPU matches WebGL2 PBR extension map parity.
+  - _WebGPU `device.lost` fail-closed & EVSM cleanup (`WebGPURenderer.ts`, `CascadedShadowPassGPU.ts`):_ added idempotent `_isDestroyed` cleanup on unexpected `device.lost`, deferred EVSM texture destruction on light removal, and added a one-time warning when glTF assets contain unsupported morph targets.
+  - _IEC sRGB transfer, cofactor normals & planar cascades:_ aligned shader `sRGBToLinear`/`linearToSRGB` with IEC transfer curves, switched WGSL/GLSL2 vertex normals to cofactor transforms, added planar cascade selection with per-cascade normal offsets, and fixed `swm lod` Meshoptimizer WASM readiness.
+
+- **Housekeeping & Docs:**
+  - _Audit sweep & CI tour wiring (`docs/research/audit-sweep-2026-11-20.md`, `tier-parity.json`):_ wired Showcase 53 into the prev/next tour (`52 <-> 53 <-> 50`), updated showcase counts to 52, resolved docs/ADR drift, added READMEs to all extras packages, and documented cross-tier parity rows.
+
 ## [0.127.1] - 2026-11-19
 
 ### "Fast is fine, but accuracy is everything." - Wyatt Earp

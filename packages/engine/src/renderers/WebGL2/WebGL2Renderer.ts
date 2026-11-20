@@ -1071,12 +1071,14 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     }
   }
 
+  private readonly _scratchShaderFlags: string[] = [];
+
   /**
    * Builds the `USE_*` shader-variant flags for a subgroup. Grouped per subgroup (not per object):
    * every object sharing a batch shares its material's shader variant, so optional-feature
    * detection reads the first object's skin/IBL/texture-array state exactly once. `USE_INSTANCE_COLOR`
    * is a per-mesh opt-in and stays disjoint from the generic `instanceData` (texture-array index)
-   * semantics. Same single array allocation as the previous inline build.
+   * semantics. Reuses `_scratchShaderFlags` (zero-GC).
    */
   private _buildSubgroupShaderFlags(
     firstObject: Object3D | undefined,
@@ -1084,15 +1086,21 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     scene: Scene | undefined,
     isInst: boolean,
   ): string[] {
-    const shaderFlags = manifest.flags
-      ? [
-          ...(resolveManifestFlags(
-            manifest.flags,
-            this._quality.disableTextures,
-            this._quality.cheapIridescence,
-          ) ?? []),
-        ]
-      : [];
+    const shaderFlags = this._scratchShaderFlags;
+    let flagCount = 0;
+    if (manifest.flags) {
+      const resolved = resolveManifestFlags(
+        manifest.flags,
+        this._quality.disableTextures,
+        this._quality.cheapIridescence,
+      );
+      if (resolved) {
+        for (let i = 0; i < resolved.length; i++) {
+          shaderFlags[flagCount++] = resolved[i]!;
+        }
+      }
+    }
+    shaderFlags.length = flagCount;
 
     if (
       firstObject &&
@@ -1110,8 +1118,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     }
 
     // Check if texture array is used
-    if (manifest.textures) {
-      for (const tex of Object.values(manifest.textures)) {
+    const textures = manifest.textures;
+    if (textures) {
+      for (const key in textures) {
+        const tex = textures[key];
         if (tex && "isTextureArray" in tex && (tex as TextureArray).isTextureArray) {
           if (!shaderFlags.includes(ShaderFlag.TEXTURE_ARRAY)) {
             shaderFlags.push(ShaderFlag.TEXTURE_ARRAY);

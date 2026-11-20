@@ -30,6 +30,17 @@ export interface RenderBatch {
 /** Empty opaque batches survive this many frames (cheap re-show) before the scene drops them. */
 const BATCH_IDLE_FRAMES = 120;
 
+/**
+ * Distance table of the running transparent-object sort in `Scene.getVisibleObjectsSorted`.
+ * Only ever set synchronously around `Array.prototype.sort` (module-level comparator avoids
+ * per-frame closure allocations).
+ */
+let _sortTransparentDists: Float64Array | undefined;
+
+function compareTransparentIndices(a: number, b: number): number {
+  return _sortTransparentDists![b]! - _sortTransparentDists![a]!;
+}
+
 export interface RenderList {
   opaqueLookup: Map<string, Map<Topology, Map<string, RenderBatch>>>;
   opaqueBatches: RenderBatch[];
@@ -87,6 +98,11 @@ export class Scene {
   /** Collection cursors (see `getVisibleObjectsSorted`): fill index of the frustum list and the
    * last material whose manifest was built, so a run of objects sharing it builds it once. */
   private _frustumFill: number = 0;
+  private _transparentFill: number = 0;
+  private _decalsFill: number = 0;
+  private _transparentDists: Float64Array = new Float64Array(64);
+  private _transparentOrder: number[] = [];
+  private _transparentScratch: Object3D[] = [];
   private _collectMaterial: AbstractMaterial | undefined = undefined;
   private _collectManifest: RenderManifest | undefined = undefined;
 
@@ -355,8 +371,8 @@ export class Scene {
 
     // Refill the persistent lists by index and trim once at the end: `length = 0` would make V8
     // drop the backing stores, so the (thousands-long) lists regrew from zero every frame.
-    this._renderList.transparent.length = 0;
-    this._renderList.decals.length = 0;
+    this._transparentFill = 0;
+    this._decalsFill = 0;
     const batches = this._renderList.opaqueBatches;
     for (let i = 0; i < batches.length; i++) {
       batches[i]!.fill = 0;
@@ -367,6 +383,8 @@ export class Scene {
     this._collectManifest = undefined;
 
     this._collectVisible(this.root, this._renderList);
+    this._renderList.transparent.length = this._transparentFill;
+    this._renderList.decals.length = this._decalsFill;
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i]!;
       batch.objects.length = batch.fill ?? 0;
@@ -378,22 +396,41 @@ export class Scene {
 
     (this._renderList.decals as Decal[]).sort(compareDecals);
 
-    // Sort transparent objects back-to-front
-    this._renderList.transparent.sort((a, b) => {
-      const aData = a.worldMatrix.data;
-      const ax = aData[12]! - camPos.x;
-      const ay = aData[13]! - camPos.y;
-      const az = aData[14]! - camPos.z;
-      const distA = ax * ax + ay * ay + az * az;
-
-      const bData = b.worldMatrix.data;
-      const bx = bData[12]! - camPos.x;
-      const by = bData[13]! - camPos.y;
-      const bz = bData[14]! - camPos.z;
-      const distB = bx * bx + by * by + bz * bz;
-
-      return distB - distA; // Furthest first
-    });
+    // Sort transparent objects back-to-front using precomputed distances (Schwartzian sort, zero-GC).
+    const transparent = this._renderList.transparent;
+    const transparentCount = transparent.length;
+    if (transparentCount > 1) {
+      if (this._transparentDists.length < transparentCount) {
+        let cap = this._transparentDists.length;
+        while (cap < transparentCount) cap *= 2;
+        this._transparentDists = new Float64Array(cap);
+      }
+      const dists = this._transparentDists;
+      const order = this._transparentOrder;
+      const cx = camPos.x;
+      const cy = camPos.y;
+      const cz = camPos.z;
+      for (let i = 0; i < transparentCount; i++) {
+        const d = transparent[i]!.worldMatrix.data;
+        const dx = d[12]! - cx;
+        const dy = d[13]! - cy;
+        const dz = d[14]! - cz;
+        dists[i] = dx * dx + dy * dy + dz * dz;
+        order[i] = i;
+      }
+      order.length = transparentCount;
+      _sortTransparentDists = dists;
+      order.sort(compareTransparentIndices);
+      _sortTransparentDists = undefined;
+      const scratch = this._transparentScratch;
+      for (let i = 0; i < transparentCount; i++) {
+        scratch[i] = transparent[order[i]!]!;
+      }
+      scratch.length = transparentCount;
+      for (let i = 0; i < transparentCount; i++) {
+        transparent[i] = scratch[i]!;
+      }
+    }
 
     return this._renderList;
   }
@@ -458,9 +495,9 @@ export class Scene {
       const manifest = this._collectManifest!;
 
       if (manifest.state?.isDecal) {
-        renderList.decals.push(obj);
+        renderList.decals[this._decalsFill++] = obj;
       } else if (manifest.state?.transparent) {
-        renderList.transparent.push(obj);
+        renderList.transparent[this._transparentFill++] = obj;
       } else if (manifest.flags?.includes(ShaderFlag.TRANSMISSION) === true) {
         // KHR_materials_transmission: the fragment block samples `u_opaqueMap`, which the
         // renderers only populate via the opaque-scene capture of the TRANSPARENT pass
@@ -469,7 +506,7 @@ export class Scene {
         // ABeautifulGame pawn finials). Classifying it as transparent is the shader's own
         // contract on every tier; the fragment outputs full opacity, so the blend pass renders
         // it byte-identically to opaque apart from the refraction capture.
-        renderList.transparent.push(obj);
+        renderList.transparent[this._transparentFill++] = obj;
       } else {
         const shaderId = manifest.shaderId;
         // AbstractGeometry always sets .topology explicitly, so this only matters for

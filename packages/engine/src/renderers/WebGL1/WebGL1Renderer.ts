@@ -14,6 +14,7 @@ import {
   type RenderTarget,
 } from "../../core/textures/index.js";
 import { resolveManifestFlags, type RenderManifest } from "../shaders/index.js";
+import { splitByInstancing, type InstancingSplit } from "../AutoInstancing.js";
 import type { Object3D, RenderBatch, Scene } from "../../core/index.js";
 import { DeviceLimit, InstancedMesh } from "../../core/index.js";
 import { isSkinnedMesh, MAX_SKINNED_BONES } from "../../core/animation/index.js";
@@ -127,6 +128,11 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   private _elementIndexUintExt: OES_element_index_uint | null = null;
   private _warnedNoElementIndexUint = false;
   private readonly _instanceBuffers: GLInstanceBufferCache = new GLInstanceBufferCache(false);
+  /** Persistent scratch buffers for batch instancing split and subgroup shader flags (zero-GC). */
+  private readonly _scratchStandardObjects: Object3D[] = [];
+  private readonly _scratchInstancedObjects: Object3D[] = [];
+  private readonly _batchSplit: InstancingSplit = { standard: [], instanced: [] };
+  private readonly _scratchShaderFlags: string[] = [];
   /** Derived field-lane shader flags per committed `manifest.flags` array reference (ADR 0059;
    * engine contract `_commitFlags` publishes immutably, a fresh array on content change → the
    * WeakMap key rotates). Tag-checked against the quality/BRDF bits so environment changes rebuild.
@@ -492,12 +498,10 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     // plain objects the same way WebGL2Renderer.renderBatch does, instead of drawing it as a
     // single non-instanced mesh at its own (usually default/identity) transform, which is what
     // silently happened before this split existed.
-    const instancedObjects: Object3D[] = [];
-    const standardObjects: Object3D[] = [];
-    for (const o of objects) {
-      if (o instanceof InstancedMesh) instancedObjects.push(o);
-      else standardObjects.push(o);
-    }
+    const split = this._batchSplit;
+    splitByInstancing(objects, this._scratchStandardObjects, this._scratchInstancedObjects, split);
+    const instancedObjects = split.instanced;
+    const standardObjects = split.standard;
 
     if (standardObjects.length > 0) {
       this._renderSubgroup(batch, standardObjects, false, vMat, vp, camPos, lights, scene);
@@ -541,8 +545,17 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     const manifest = mat.getRenderManifest();
     const texs = manifest.textures;
     const texVersion = this._textures.textureSetVersion(texs);
-    // Copy: `resolveManifestFlags` may return the manifest's own array and `push` below mutates.
-    const flags = [...(resolveManifestFlags(manifest.flags, this._quality.disableTextures) ?? [])];
+    // Refill scratch array by index: `resolveManifestFlags` may return the manifest's own array
+    // and `push` below mutates.
+    const resolved = resolveManifestFlags(manifest.flags, this._quality.disableTextures);
+    const flags = this._scratchShaderFlags;
+    let flagCount = 0;
+    if (resolved) {
+      for (let i = 0; i < resolved.length; i++) {
+        flags[flagCount++] = resolved[i]!;
+      }
+    }
+    flags.length = flagCount;
     // Per-instance RGBA color (e.g. particle tint) is a mesh opt-in so the generic `instanceData`
     // semantics stay untouched for other meshes; only an instanced mesh explicitly requesting it
     // gets the `USE_INSTANCE_COLOR` variant compiled in.

@@ -51,7 +51,7 @@ describe("Per-object reflection probe takes priority over scene-level IBL", () =
     const rendererPath = path.resolve(__dirname, "../../src/renderers/WebGL2/WebGL2Renderer.ts");
     const rendererContent = fs.readFileSync(rendererPath, "utf-8");
     const shaderFlagsBlock = rendererContent.slice(
-      rendererContent.indexOf("const shaderFlags = manifest.flags"),
+      rendererContent.indexOf("const shaderFlags = this._scratchShaderFlags"),
     );
     // USE_IBL must be pushed onto the existing flags array, never assigned wholesale -- otherwise
     // a per-material flag like USE_ENV_MAP (added by StandardMaterial whenever `envMap` is set)
