@@ -27,6 +27,7 @@ const TIER_MATRIX: Readonly<Record<PerformanceTier, TierQualityPolicy>> = {
       maxShadowedPointLights: 0,
       cheapIridescence: true,
       reflectionResolutionScale: 0.5,
+      dynamicResolution: { enabled: true },
     },
     postProcessing: {
       effects: {
@@ -76,7 +77,8 @@ function mergeDefined<T extends object>(target: T, source: T): T {
  *
  * This is the V1 *static* tier resolver (ADR 0035, Ebene 2). It runs exactly once before the
  * renderer is created; after that the configuration is closed. Dynamic render-scale feedback
- * (ADR 0035, Ebene 4) is intentionally out of scope.
+ * (ADR 0035, Ebene 4) is configured via `quality.dynamicResolution` and executed at runtime
+ * by `PerformanceGovernor`.
  */
 export class QualityConfigResolver {
   /**
@@ -99,6 +101,14 @@ export class QualityConfigResolver {
       { ...policy.quality } as QualityConfig,
       userQuality ?? ({} as QualityConfig),
     );
+    if (policy.quality.dynamicResolution && userQuality?.dynamicResolution) {
+      quality.dynamicResolution = mergeDefined(
+        { ...policy.quality.dynamicResolution },
+        userQuality.dynamicResolution,
+      );
+    } else if (userQuality?.dynamicResolution) {
+      quality.dynamicResolution = { ...userQuality.dynamicResolution };
+    }
     const postProcessing = this._resolvePostProcessing(policy.postProcessing, userPost);
     return { quality, postProcessing };
   }

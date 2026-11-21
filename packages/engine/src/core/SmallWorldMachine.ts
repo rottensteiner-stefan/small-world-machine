@@ -22,6 +22,7 @@ import type {
 import { createDefaultRendererContext, createFrameInfo } from "../interfaces/index.js";
 import { ProjectionType, RendererType } from "../enums/index.js";
 import { QualityConfigResolver } from "./quality/QualityConfigResolver.js";
+import { PerformanceGovernor } from "./quality/PerformanceGovernor.js";
 import { RendererFactory } from "../renderers/index.js";
 import { ShaderBootstrap } from "../renderers/shaders/index.js";
 import { CollisionVisualizer, OctreeVisualizer } from "../utils/index.js";
@@ -74,6 +75,8 @@ export abstract class SmallWorldMachine {
   public interactionManager!: InteractionManager;
   public readonly input: Input = new Input();
   public readonly audio: AudioSystem;
+  /** Runtime frame-time governor & dynamic render-scale controller (ADR 0035 Phase 4). */
+  public performanceGovernor: PerformanceGovernor = new PerformanceGovernor();
   private readonly _octreeVisualizer: OctreeVisualizer = new OctreeVisualizer();
   private readonly _collisionVisualizer: CollisionVisualizer = new CollisionVisualizer();
   private readonly _frustumCuller: FrustumCuller = new FrustumCuller();
@@ -223,6 +226,7 @@ export abstract class SmallWorldMachine {
       );
       this.config.quality = resolvedQuality.quality;
       this.config.postProcessing = resolvedQuality.postProcessing;
+      this.performanceGovernor = new PerformanceGovernor(resolvedQuality.quality.dynamicResolution);
 
       this.canvas = document.getElementById(this.config.canvasId!) as HTMLCanvasElement;
       if (!this.canvas) {
@@ -295,6 +299,7 @@ export abstract class SmallWorldMachine {
       }
       this.renderer = renderer;
 
+      this.renderer.setRenderScale?.(this.performanceGovernor.renderScale);
       this.renderer.setSize(cssWidth, cssHeight);
 
       // Cosmetic once-per-module console banner. Module state instead of a `window` flag: it
@@ -634,12 +639,14 @@ export abstract class SmallWorldMachine {
 
   private _onResize = (): void => {
     if (!this.canvas) return;
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    this.canvas.width = width;
+    this.canvas.height = height;
     this.camera.aspect = this.canvas.clientWidth / this.canvas.clientHeight;
     this.camera.updateProjectionMatrix();
     if (this.renderer) {
-      this.renderer.setSize(this.canvas.width, this.canvas.height);
+      this.renderer.setSize(width, height);
     }
   };
 
@@ -692,6 +699,17 @@ export abstract class SmallWorldMachine {
     const cpuStart: number = performance.now();
     this.step(deltaTime);
     this.lastCpuTimeMs = performance.now() - cpuStart;
+
+    if (0 === this.captureFrameRate && this.performanceGovernor.enabled && this.renderer) {
+      const nextScale = this.performanceGovernor.recordFrame(
+        rawDeltaMs,
+        this.lastCpuTimeMs,
+        currentTime,
+      );
+      if (nextScale !== null) {
+        this.renderer.setRenderScale?.(nextScale);
+      }
+    }
 
     if (this._isRunning && !this._isDestroyed) {
       this._rafId = requestAnimationFrame(this._onFrame);

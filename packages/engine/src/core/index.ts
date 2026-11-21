@@ -6,6 +6,8 @@ export { Camera } from "./cameras/Camera.js";
 export * from "./Inspectable.js";
 export * from "./DeviceCaps.js";
 export * from "./GpuClass.js";
+export * from "./quality/QualityConfigResolver.js";
+export * from "./quality/PerformanceGovernor.js";
 export * from "./FPSCounter.js";
 export * from "./culling/FrustumCuller.js";
 export * from "./Fog.js";

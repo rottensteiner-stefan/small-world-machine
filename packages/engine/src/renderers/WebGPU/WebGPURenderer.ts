@@ -2619,15 +2619,19 @@ export class WebGPURenderer
 
   public override setSize(width: number, height: number): void {
     if (!this._device || width <= 0 || height <= 0) return;
+    this._logicalWidth = width;
+    this._logicalHeight = height;
     const maxRatio = this._quality.maxPixelRatio ?? 2;
     const d = Math.min(devicePixelRatio, maxRatio);
+    const scaledW = Math.max(1, Math.round(width * d * this._renderScale));
+    const scaledH = Math.max(1, Math.round(height * d * this._renderScale));
     // Identical backing size (ResizeObserver double fire, DPR rounding): everything below would
     // be a full re-allocation plus bind-group invalidation for nothing. Only when the size
     // buffers exist already -- the first call must run the full path.
     if (
       this._depthTexture &&
-      this._context.canvas.width === width * d &&
-      this._context.canvas.height === height * d &&
+      this._context.canvas.width === scaledW &&
+      this._context.canvas.height === scaledH &&
       (this.postProcessing.enabled
         ? this._hdrTexture !== undefined
         : this._hdrTexture === undefined)
@@ -2637,8 +2641,8 @@ export class WebGPURenderer
       this._syncClusterGrid();
       return;
     }
-    this._context.canvas.width = width * d;
-    this._context.canvas.height = height * d;
+    this._context.canvas.width = scaledW;
+    this._context.canvas.height = scaledH;
     // Pin the CSS size like AbstractWebGLRenderer.setSize(): without it a canvas that no
     // stylesheet sizes is displayed at its (DPR-scaled) attribute size.
     if ("style" in this._context.canvas) {

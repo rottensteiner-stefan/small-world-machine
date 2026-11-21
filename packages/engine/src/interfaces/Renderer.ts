@@ -46,6 +46,15 @@ export interface Renderer {
    */
   setSize(width: number, height: number): void;
 
+  /** Current dynamic render scale multiplier in `[0.25, 1.0]` applied on top of DPR clamping. */
+  readonly renderScale?: number;
+
+  /**
+   * Updates the dynamic render scale multiplier and resizes internal render targets while keeping
+   * the canvas CSS display size unchanged.
+   */
+  setRenderScale?(scale: number): void;
+
   /**
    * Sets the active render target for off-screen rendering.
    * If null, the renderer targets the screen/post-processing buffer.

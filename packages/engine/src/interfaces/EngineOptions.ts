@@ -139,6 +139,32 @@ export interface QualityConfig {
    * WebGPU and WebGL2; WebGL1 has no shadow mapping.
    */
   maxShadowedPointLights?: number;
+  /**
+   * Runtime frame-time governor dynamic resolution scaling (ADR 0035 Phase 4). Enabled by default
+   * on the `LOW` performance tier; disabled on `MEDIUM`/`HIGH` unless explicitly opted in. Setting
+   * `enabled: false` locks out automatic scaling on `LOW` (Ebene 3 override lock).
+   */
+  dynamicResolution?: DynamicResolutionConfig;
+}
+
+/**
+ * Configuration for the runtime dynamic render-scale governor (ADR 0035 Phase 4).
+ */
+export interface DynamicResolutionConfig {
+  /** Enables dynamic render scaling in the real-time loop. Defaults to false (`true` on `LOW` tier). */
+  enabled?: boolean;
+  /** @domain Target frame rate in Hz used to compute the frame budget. Defaults to 60. */
+  targetFps?: number;
+  /** @domain Lower clamp for dynamic render scale in `[0.25, 1.0]`. Defaults to 0.5. */
+  minScale?: number;
+  /** @domain Upper clamp for dynamic render scale in `[minScale, 1.0]`. Defaults to 1.0. */
+  maxScale?: number;
+  /** @domain Discrete scale step per adjustment in `[0.01, 0.5]`. Defaults to 0.1. */
+  step?: number;
+  /** @domain Cooldown in milliseconds between resolution changes to avoid RT thrashing. Defaults to 1500. */
+  cooldownMs?: number;
+  /** @domain Minimum frame samples required before the first scale change. Defaults to 12. */
+  warmupFrames?: number;
 }
 
 /**

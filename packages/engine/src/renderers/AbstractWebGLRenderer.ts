@@ -632,17 +632,22 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   }
 
   public setSize(w: number, h: number): void {
+    if (w <= 0 || h <= 0) return;
+    this._logicalWidth = w;
+    this._logicalHeight = h;
     const maxRatio = this._quality.maxPixelRatio ?? 2;
     const d = Math.min(devicePixelRatio, maxRatio);
-    this.gl.canvas.width = w * d;
-    this.gl.canvas.height = h * d;
+    const scaledW = Math.max(1, Math.round(w * d * this._renderScale));
+    const scaledH = Math.max(1, Math.round(h * d * this._renderScale));
+    this.gl.canvas.width = scaledW;
+    this.gl.canvas.height = scaledH;
 
     if ("style" in this.gl.canvas) {
       this.gl.canvas.style.width = `${w}px`;
       this.gl.canvas.style.height = `${h}px`;
     }
 
-    this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+    this.gl.viewport(0, 0, scaledW, scaledH);
   }
 
   public override setClearColor(color: Color): void {

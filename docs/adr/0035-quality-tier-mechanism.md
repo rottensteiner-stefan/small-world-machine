@@ -1,5 +1,7 @@
 # ADR 0035: Quality-Tier-Mechanismus (Detektion → Policy → Override-Sperre)
 
+> **Stand-Hinweis (2026-11-21):** Ebene 4 (Runtime-Feedback) umgesetzt via `core/quality/PerformanceGovernor.ts`, `EngineOptions.quality.dynamicScale`, und renderer-agnostischem `Renderer.setRenderScale()` / `WebGPURenderer` / `AbstractWebGLRenderer` (`frameTimeMs` EMA + Hysterese + Frame-Time-Governor). Static V1 Resolver weiterhin in `QualityConfigResolver.ts`.
+
 > **Stand-Hinweis (2026-10-21):** Umgesetzt (V1, statischer Resolver, 2026-10-18/19): `core/quality/QualityConfigResolver.ts`, `DeviceCaps.forcedTier` / `?tier=`; das Feld `autoDowngrade` ist entfernt. Die LOW-Matrix weicht von der Skizze ab (kein Post-Resolution-Scale; `hdr=false`, `msaa=0`, `maxAnisotropy=1`, `maxShadowResolution=512`, `maxPixelRatio=1`, HBAO/Fog/LightShafts/MotionTrail/TAA/Bloom aus) und ist unkalibriert (Redmi-Kalibrierung offen). Ebene 4 (Runtime-Feedback) ist wie vorgesehen nicht umgesetzt. Zeilenangaben im Text sind ein historischer Stand.
 
 > **Folgenachricht (2026-10-22, im Zuge EVSM/ADR 0043):** `maxShadowResolution` war ein toter

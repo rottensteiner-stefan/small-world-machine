@@ -132,4 +132,25 @@ describe("QualityConfigResolver (ADR 0035, statischer Tier-Resolver)", () => {
     const second = QualityConfigResolver.resolve(PerformanceTier.LOW);
     expect(second.postProcessing.effects?.hbao?.enabled).toBe(false);
   });
+
+  it("enables dynamicResolution on LOW tier and honors explicit Ebene 3 overrides", () => {
+    const low = QualityConfigResolver.resolve(PerformanceTier.LOW);
+    expect(low.quality.dynamicResolution?.enabled).toBe(true);
+
+    const lockedOff = QualityConfigResolver.resolve(PerformanceTier.LOW, {
+      dynamicResolution: { enabled: false },
+    });
+    expect(lockedOff.quality.dynamicResolution?.enabled).toBe(false);
+
+    const partialOverride = QualityConfigResolver.resolve(PerformanceTier.LOW, {
+      dynamicResolution: { minScale: 0.65 },
+    });
+    expect(partialOverride.quality.dynamicResolution?.enabled).toBe(true);
+    expect(partialOverride.quality.dynamicResolution?.minScale).toBe(0.65);
+
+    const highOptIn = QualityConfigResolver.resolve(PerformanceTier.HIGH, {
+      dynamicResolution: { enabled: true, targetFps: 30 },
+    });
+    expect(highOptIn.quality.dynamicResolution).toEqual({ enabled: true, targetFps: 30 });
+  });
 });

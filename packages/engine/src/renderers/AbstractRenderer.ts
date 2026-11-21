@@ -92,6 +92,29 @@ export abstract class AbstractRenderer implements Renderer {
   /** @inheritdoc */
   public abstract render(scene: Scene, vpMatrix: Float32Array, camPos?: Vector3D): void;
 
+  /** @derived Dynamic render scale multiplier in `[0.25, 1.0]` driven by `PerformanceGovernor` or caller. */
+  protected _renderScale: number = 1.0;
+  /** Last logical CSS viewport width passed to `setSize()`. */
+  protected _logicalWidth: number = 0;
+  /** Last logical CSS viewport height passed to `setSize()`. */
+  protected _logicalHeight: number = 0;
+
+  /** @inheritdoc */
+  public get renderScale(): number {
+    return this._renderScale;
+  }
+
+  /** @inheritdoc */
+  public setRenderScale(scale: number): void {
+    if (!Number.isFinite(scale)) return;
+    const clamped = Math.max(0.25, Math.min(1.0, scale));
+    if (clamped === this._renderScale) return;
+    this._renderScale = clamped;
+    if (this._logicalWidth > 0 && this._logicalHeight > 0) {
+      this.setSize(this._logicalWidth, this._logicalHeight);
+    }
+  }
+
   /** @inheritdoc */
   public abstract setSize(width: number, height: number): void;
 
